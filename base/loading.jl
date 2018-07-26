@@ -837,7 +837,7 @@ function require(into::Module, mod::Symbol)
                     full_warning_showed[] ? "" : s, "\n",
                     string("Loading $(mod) into $(where.name) from project dependency, ",
                            "future warnings for $(where.name) are suppressed.")
-                ) _module = nothing _file = nothing
+                ) _module = nothing _file = nothing _group = nothing
                 push!(modules_warned_for, where)
             end
             full_warning_showed[] = true
