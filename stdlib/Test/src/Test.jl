@@ -28,7 +28,7 @@ export TestSetException
 
 import Distributed: myid
 
-using Random: srand, AbstractRNG, GLOBAL_RNG
+using Random: AbstractRNG, GLOBAL_RNG
 using InteractiveUtils: gen_call_with_extracted_types
 
 #-----------------------------------------------------------------------
@@ -1008,7 +1008,7 @@ method, which by default will return a list of the testset objects used in
 each iteration.
 
 Before the execution of the body of a `@testset`, there is an implicit
-call to `srand(seed)` where `seed` is the current seed of the global RNG.
+call to `Random.seed(seed)` where `seed` is the current seed of the global RNG.
 Moreover, after the execution of the body, the state of the global RNG is
 restored to what it was before the `@testset`. This is meant to ease
 reproducibility in case of failure, and to allow seamless
@@ -1076,7 +1076,7 @@ function testset_beginend(args, tests, source)
         oldrng = copy(GLOBAL_RNG)
         try
             # GLOBAL_RNG is re-seeded with its own seed to ease reproduce a failed test
-            srand(GLOBAL_RNG.seed)
+            Random.seed(GLOBAL_RNG.seed)
             $(esc(tests))
         catch err
             err isa InterruptException && rethrow(err)
@@ -1142,7 +1142,7 @@ function testset_forloop(args, testloop, source)
         if !first_iteration
             pop_testset()
             push!(arr, finish(ts))
-            # it's 1000 times faster to copy from tmprng rather than calling srand
+            # it's 1000 times faster to copy from tmprng rather than calling Random.seed
             copy!(GLOBAL_RNG, tmprng)
 
         end
@@ -1163,7 +1163,7 @@ function testset_forloop(args, testloop, source)
         local first_iteration = true
         local ts
         local oldrng = copy(GLOBAL_RNG)
-        srand(GLOBAL_RNG.seed)
+        Random.seed(GLOBAL_RNG.seed)
         local tmprng = copy(GLOBAL_RNG)
         try
             $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
@@ -1557,10 +1557,10 @@ function guardsrand(f::Function, r::AbstractRNG=GLOBAL_RNG)
     end
 end
 
-"`guardsrand(f, seed)` is equivalent to running `srand(seed); f()` and
+"`guardsrand(f, seed)` is equivalent to running `Random.seed(seed); f()` and
 then restoring the state of the global RNG as it was before."
 guardsrand(f::Function, seed::Union{Vector{UInt32},Integer}) = guardsrand() do
-    srand(seed)
+    Random.seed(seed)
     f()
 end
 
