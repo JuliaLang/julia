@@ -288,9 +288,21 @@ function logmsg_code(_module, file, line, level, message, exs...)
             push!(kwargs, Expr(:kw, Symbol(ex), esc(ex)))
         end
     end
+
     # Note that it may be necessary to set `id` and `group` manually during bootstrap
     id = something(id, :(log_record_id(_module, level, $exs)))
-    group = something(group, :(Symbol(splitext(basename(something($file, "")))[1])))
+    if group == nothing
+        group = if isdefined(Base, :basename) && isa(file, String)
+            # precompute if we can
+            QuoteNode(splitext(basename(file))[1])
+        else
+            # memoized run-time execution
+            ref = Ref{Symbol}()
+            :(isassigned($ref) ? $ref[]
+                               : $ref[] = Symbol(splitext(basename(something($file, "")))[1]))
+        end
+    end
+
     quote
         level = $level
         std_level = convert(LogLevel, level)
