@@ -1560,14 +1560,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         // Julia (expression) value of current parameter
         jl_value_t *argi = ccallarg(i);
 
-        // pass the address of the argument rather than the argument itself
-        if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
-            addressOf.push_back(true);
-            argi = jl_exprarg(argi, 0);
-        }
-        else {
-            addressOf.push_back(false);
-        }
+        addressOf.push_back(false);
 
         argv[i] = emit_expr(ctx, argi);
     }

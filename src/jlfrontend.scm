@@ -109,7 +109,7 @@
 
 (define (toplevel-only-expr? e)
   (and (pair? e)
-       (or (memq (car e) '(toplevel line module import importall using export
+       (or (memq (car e) '(toplevel line module import using export
                                     error incomplete))
            (and (eq? (car e) 'global) (every symbol? (cdr e))
                 (every (lambda (x) (not (memq x '(true false)))) (cdr e))))))
@@ -117,7 +117,7 @@
 (define (expand-toplevel-expr e)
   (cond ((or (atom? e) (toplevel-only-expr? e))
          (if (underscore-symbol? e)
-             (syntax-deprecation "underscores as an rvalue" "" #f))
+             (error "all-underscore identifier used as rvalue"))
          e)
         (else
          (let ((last *in-expand*))
@@ -140,15 +140,6 @@
           (block
            ,loc
            (call (core eval) ,name ,x)))
-       (if (&& (call (top isdefined) (core Main) (quote Base))
-               (call (top isdefined) (|.| (core Main) (quote Base)) (quote @deprecate)))
-           (call eval
-                 (quote
-                  (macrocall (|.| (|.| (core Main) (quote Base)) (quote @deprecate))
-                             (line 0 none)
-                             (call eval m x)
-                             (call (|.| Core (quote eval)) m x) ; should be (core eval), but format as Core.eval(m, x) for deprecation warning
-                             false))))
        (= (call include ,x)
           (block
            ,loc
@@ -267,14 +258,21 @@
         ((length= lno 2) `(,(cadr lno) none))
         (else (cdr lno))))
 
+(define (format-loc lno)
+  (let* ((lf (extract-line-file lno)) (line (car lf)) (file (cadr lf)))
+    (format-file-line file line #f)))
+
+(define (format-file-line file line exactloc)
+  (if (or (= line 0) (eq? file 'none))
+      ""
+      (string (if exactloc " at " " around ") file ":" line)))
+
 (define (format-syntax-deprecation what instead file line exactloc)
   (string "Deprecated syntax `" what "`"
-          (if (or (= line 0) (eq? file 'none))
-            ""
-            (string (if exactloc " at " " around ") file ":" line))
+          (format-file-line file line exactloc)
           "."
           (if (equal? instead "") ""
-            (string #\newline "Use `" instead "` instead."))))
+              (string #\newline "Use `" instead "` instead."))))
 
 ; Corresponds to --depwarn 0="no", 1="yes", 2="error"
 (define *depwarn-opt* 1)

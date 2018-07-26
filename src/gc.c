@@ -2267,7 +2267,6 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp)
     if (jl_cfunction_list != NULL)
         gc_mark_queue_obj(gc_cache, sp, jl_cfunction_list);
     gc_mark_queue_obj(gc_cache, sp, jl_anytuple_type_type);
-    gc_mark_queue_obj(gc_cache, sp, jl_ANY_flag);
     for (size_t i = 0; i < N_CALL_CACHE; i++)
         if (call_cache[i])
             gc_mark_queue_obj(gc_cache, sp, call_cache[i]);

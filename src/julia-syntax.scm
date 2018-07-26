@@ -518,17 +518,7 @@
                                       (let ((T (caddr v)))
                                         `(call (core typeassert)
                                                ,rval0
-                                               ;; work around `ANY` not being a type. if arg type
-                                               ;; looks like `ANY`, test whether it is `ANY` at run
-                                               ;; time and if so, substitute `Any`. issue #21510
-                                               ,(if (or (eq? T 'ANY)
-                                                        (and (globalref? T)
-                                                             (eq? (caddr T) 'ANY)))
-                                                    `(call (core ifelse)
-                                                           (call (core ===) ,T (core ANY))
-                                                           (core Any)
-                                                           ,T)
-                                                    T)))
+                                               ,T))
                                       rval0)))
                        `(if (call (top haskey) ,kw (quote ,k))
                             ,rval
@@ -948,16 +938,14 @@
         (let* ((a     (car A))
                (isseq (and (vararg? (car F))))
                (ty    (if isseq (cadar F) (car F))))
-          (if (and isseq (not (null? (cdr F)))) (error "only the trailing ccall argument type should have '...'"))
+          (if (and isseq (not (null? (cdr F)))) (error "only the trailing ccall argument type should have \"...\""))
           (if (eq? ty 'Any)
               (loop (if isseq F (cdr F)) (cdr A) stmts (list* a C) GC)
               (let* ((g (make-ssavalue))
-                     (isamp (and (pair? a) (eq? (car a) '&)))
-                     (a (if isamp (cadr a) a))
-                     (stmts (cons `(= ,g (call (top ,(if isamp 'ptr_arg_cconvert 'cconvert)) ,ty ,a)) stmts))
-                     (ca `(call (top ,(if isamp 'ptr_arg_unsafe_convert 'unsafe_convert)) ,ty ,g)))
+                     (stmts (cons `(= ,g (call (top cconvert) ,ty ,a)) stmts))
+                     (ca `(call (top unsafe_convert) ,ty ,g)))
                 (loop (if isseq F (cdr F)) (cdr A) stmts
-                      (list* (if isamp `(& ,ca) ca) C) (list* g GC))))))))
+                      (list* ca C) (list* g GC))))))))
 
 (define (expand-function-def e)   ;; handle function definitions
   (define (just-arglist? ex)
@@ -1027,8 +1015,7 @@
           ((eq? (car name) 'call)
            (let* ((head    (cadr name))
                   (argl    (cddr name))
-                  (has-sp  (and (not where) (pair? head) (eq? (car head) 'curly)))
-                  (name    (deprecate-dotparen (if has-sp (cadr head) head)))
+                  (name    (deprecate-dotparen head))
                   (op (let ((op_ (maybe-undotop name))) ; handle .op -> broadcast deprecation
                         (if op_
                             (syntax-deprecation (string "function " (deparse name) "(...)")
@@ -1042,9 +1029,7 @@
                                (if (nospecialize-meta? a) (caddr a) a))
                              argl))
                   (argl (if op (cons `(|::| (call (core Typeof) ,op)) argl) argl))
-                  (raw-typevars (cond (has-sp (cddr head))
-                                      (where  where)
-                                      (else   '())))
+                  (raw-typevars (or where '()))
                   (sparams (map analyze-typevar raw-typevars))
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
                                             `(|::| |#self#| ,(cadr n))
@@ -1063,15 +1048,6 @@
                                                                    (eq? (caar argl) 'parameters))))))
                   (name    (if (or (decl? name) (and (pair? name) (eq? (car name) 'curly)))
                                #f name)))
-             (if has-sp
-                 (syntax-deprecation (string "parametric method syntax " (deparse (cadr e)))
-                                     (deparse `(where (call ,(or name
-                                                                 (cadr (cadr (cadr e))))
-                                                            ,@(if (has-parameters? argl)
-                                                                  (cons (car argl) (cddr argl))
-                                                                  (cdr argl)))
-                                                      ,@raw-typevars))
-                                     (function-body-lineno body)))
              (expand-forms
               (method-def-expr name sparams argl body rett))))
           (else
@@ -1108,14 +1084,6 @@
       (list (cadr e))))
 
 (define (expand-let e)
-  (if (length= e 2)
-      (begin (deprecation-message (string "The form `Expr(:let, ex)` is deprecated. "
-                                          "Use `Expr(:let, Expr(:block), ex)` instead." #\newline) #f)
-             (return (expand-let `(let (block) ,(cadr e))))))
-  (if (length> e 3)
-      (begin (deprecation-message (string "The form `Expr(:let, ex, binds...)` is deprecated. "
-                                          "Use `Expr(:let, Expr(:block, binds...), ex)` instead." #\newline) #f)
-             (return (expand-let `(let (block ,@(cddr e)) ,(cadr e))))))
   (let ((ex    (caddr e))
         (binds (let-binds e)))
     (expand-forms
@@ -1559,10 +1527,6 @@
                             (if ,g ,g
                                 ,(loop (cdr tail)))))))))))
 
-;; If true, this will warn on all `for` loop variables that overwrite outer variables.
-;; If false, this will try to warn only for uses of the last value after the loop.
-(define *warn-all-loop-vars* #f)
-
 (define (expand-for lhss itrs body)
   (define (outer? x) (and (pair? x) (eq? (car x) 'outer)))
   (let ((copied-vars  ;; variables not declared `outer` are copied in the innermost loop
@@ -1585,10 +1549,8 @@
                     (lhs   (if outer (cadar lhss) (car lhss)))
                     (body
                      `(block
-                       ;; NOTE: enable this to force loop-local var
-                       #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
                        ,@(if (not outer)
-                             (map (lambda (v) `(warn-if-existing ,v)) (lhs-vars lhs))
+                             (map (lambda (v) `(local ,v)) (lhs-vars lhs))
                              '())
                        ,(lower-tuple-assignment (list lhs state) next)
                        ,(nest (cdr lhss) (cdr itrs))))
@@ -1823,7 +1785,7 @@
                  (error (string "invalid " syntax-str " \"" (deparse el) "\""))))))))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null meta using import importall export)))
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null meta using import export)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex
@@ -1839,10 +1801,6 @@
    'let            expand-let
    'macro          expand-macro-def
    'struct         expand-struct-def
-   'type
-   (lambda (e)
-     (syntax-deprecation ":type expression head" ":struct" #f)
-     (expand-struct-def e))
    'try            expand-try
 
    'lambda
@@ -1860,11 +1818,6 @@
            (else
             (cons 'block
                   (map expand-forms (cdr e))))))
-
-   'body
-   (lambda (e)
-     (syntax-deprecation ":body expression head" ":block" #f)
-     (expand-forms (cons 'block (cdr e))))
 
    '|.|
    (lambda (e) ; e = (|.| f x)
@@ -2043,10 +1996,6 @@
         (receive (name params super) (analyze-type-sig sig)
                  (abstract-type-def-expr name params super)))))
 
-   'bitstype
-   (lambda (e)
-     (syntax-deprecation "Expr(:bitstype, nbits, name)" "Expr(:primitive, name, nbits)" #f)
-     (expand-forms `(primitive ,(caddr e) ,(cadr e))))
    'primitive
    (lambda (e)
      (let ((sig (cadr e))
@@ -2305,13 +2254,6 @@
             `(call (top typed_vcat) ,t ,@a)))))
 
    '|'|  (lambda (e) (expand-forms `(call (top adjoint) ,(cadr e))))
-   '|.'| (lambda (e) (begin (deprecation-message (string "The postfix .' syntax is deprecated. "
-                                             "For vector v in v.', use transpose(v) "
-                                             "instead. For matrix A in A.', use "
-                                             "copy(transpose(A)) instead, unless A.' "
-                                             "appears as an argument of *, / or \\. In "
-                                             "those cases, use transpose(A) instead. " #\newline) #f)
-                            (return (expand-forms `(call transpose ,(cadr e))))))
 
    'generator
    (lambda (e)
@@ -2381,11 +2323,7 @@
                   (inbounds pop)
                   (= ,idx (call (top add_int) ,idx 1)))
           `(for (= ,(cadr (car itrs)) ,(car iv))
-                (block
-                 ;; TODO: remove when all loop vars are local in 1.0
-                 ,.(map (lambda (v) `(local ,v))
-                        (lhs-vars (cadr (car itrs))))
-                 ,(construct-loops (cdr itrs) (cdr iv))))))
+                ,(construct-loops (cdr itrs) (cdr iv)))))
 
     (let ((overall-itr (if (length= itrs 1) (car iv) prod)))
       `(scope-block
@@ -2432,7 +2370,7 @@
 ;; pass 2: identify and rename local vars
 
 (define (check-dups locals others)
-  (if (pair? locals)
+  #;(if (pair? locals)
       (if (or (memq (car locals) (cdr locals)) (memq (car locals) others))
           (error (string "local \"" (car locals) "\" declared twice"))
           (check-dups (cdr locals) others)))
@@ -2475,15 +2413,10 @@
 (define (find-local-def-decls e) (find-decls 'local-def e))
 (define (find-global-decls e) (find-decls 'global e))
 
-(define (implicit-locals e env deprecated-env glob)
+(define (implicit-locals e env glob)
   ;; const decls on non-globals introduce locals
   (append! (diff (find-decls 'const e) glob)
-           (filter
-             (lambda (v)
-               (if (memq v deprecated-env)
-                   (begin (syntax-deprecation (string "implicit assignment to global variable `" v "`") (string "global " v) #f) #f)
-                   #t))
-             (find-assigned-vars e env))))
+           (find-assigned-vars e env)))
 
 (define (unbound-vars e bound tab)
   (cond ((or (eq? e 'true) (eq? e 'false) (eq? e UNUSED)) tab)
@@ -2506,7 +2439,7 @@
 ;; 3. variables assigned inside this scope-block that don't exist in outer
 ;;    scopes
 ;; returns lambdas in the form (lambda (args...) (locals...) body)
-(define (resolve-scopes- e env outerglobals implicitglobals lam renames newlam (sp '()))
+(define (resolve-scopes- e env implicitglobals lam renames newlam (sp '()))
   (cond ((symbol? e) (let ((r (assq e renames)))
                        (if r (cdr r) e))) ;; return the renaming for e, or e
         ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel global symbolicgoto symboliclabel))) e)
@@ -2518,16 +2451,11 @@
          (if (not (memq (cadr e) env))
              (error "no outer variable declaration exists for \"for outer\""))
          '(null))
-        ((eq? (car e) 'warn-if-existing)
-         (if (or (memq (cadr e) outerglobals) (memq (cadr e) implicitglobals))
-             `(warn-loop-var ,(cadr e))
-             '(null)))
         ((eq? (car e) 'lambda)
          (let* ((lv   (lam:vars e))
                 (env  (append lv env))
                 (body (resolve-scopes- (lam:body e) env
                                        ;; don't propagate implicit or outer globals
-                                       '()
                                        '()
                                        e
                                        ;; remove renames corresponding to local variables from the environment
@@ -2548,7 +2476,6 @@
                                    ;; being declared global prevents a variable
                                    ;; assignment from introducing a local
                                    (append env glob iglo locals-declared vars-def)
-                                   outerglobals
                                    (append glob iglo)))
                 (vars (delete-duplicates (append! locals-declared locals-implicit)))
                 (all-vars (append vars vars-def))
@@ -2564,9 +2491,6 @@
                                vars))))
                 (need-rename (need-rename? vars))
                 (need-rename-def (need-rename? vars-def))
-                (deprecated-loop-vars
-                 (filter (lambda (v) (and (memq v env) (not (memq v locals-declared))))
-                         (delete-duplicates (find-decls 'warn-if-existing blok))))
                 ;; new gensym names for conflicting variables
                 (renamed (map named-gensy need-rename))
                 (renamed-def (map named-gensy need-rename-def))
@@ -2585,8 +2509,7 @@
                                                           (memq var implicitglobals) ;; remove anything only added implicitly in the last scope block
                                                           (memq var glob))))) ;; remove anything that's now global
                                              renames)))
-                (new-oglo (append iglo outerglobals)) ;; list of all implicit-globals from outside blok
-                (body (resolve-scopes- blok new-env new-oglo new-iglo lam new-renames #f sp))
+                (body (resolve-scopes- blok new-env new-iglo lam new-renames #f sp))
                 (real-new-vars (append (diff vars need-rename) renamed))
                 (real-new-vars-def (append (diff vars-def need-rename-def) renamed-def)))
                (for-each (lambda (v)
@@ -2602,41 +2525,32 @@
                (if lam ;; update in-place the list of local variables in lam
                    (set-car! (cddr lam)
                              (append real-new-vars real-new-vars-def (caddr lam))))
-               (let* ((warnings (map (lambda (v) `(warn-loop-var ,v)) deprecated-loop-vars))
-                      (body (if *warn-all-loop-vars*
-                                body
-                                (if (and (pair? body) (eq? (car body) 'block))
-                                    (append body warnings)
-                                    `(block ,body ,@warnings)))))
-                 (insert-after-meta ;; return the new, expanded scope-block
-                  (blockify body)
-                  (append! (map (lambda (v) `(local ,v)) real-new-vars)
-                           (map (lambda (v) `(local-def ,v)) real-new-vars-def)
-                           (if *warn-all-loop-vars*
-                               (map (lambda (v) `(warn-loop-var ,v)) deprecated-loop-vars)
-                               '()))))))
+               (insert-after-meta ;; return the new, expanded scope-block
+                (blockify body)
+                (append! (map (lambda (v) `(local ,v)) real-new-vars)
+                         (map (lambda (v) `(local-def ,v)) real-new-vars-def)))))
         ((eq? (car e) 'module)
          (error "\"module\" expression not at top level"))
         ((eq? (car e) 'break-block)
          `(break-block ,(cadr e) ;; ignore type symbol of break-block expression
-                       ,(resolve-scopes- (caddr e) env outerglobals implicitglobals lam renames #f sp))) ;; body of break-block expression
+                       ,(resolve-scopes- (caddr e) env implicitglobals lam renames #f sp))) ;; body of break-block expression
         ((eq? (car e) 'with-static-parameters)
          `(with-static-parameters
-            ,(resolve-scopes- (cadr e) env outerglobals implicitglobals lam renames #f (cddr e))
+            ,(resolve-scopes- (cadr e) env implicitglobals lam renames #f (cddr e))
             ,@(cddr e)))
         ((and (eq? (car e) 'method) (length> e 2))
          `(method
-           ,(resolve-scopes- (cadr   e) env outerglobals implicitglobals lam renames #f)
-           ,(resolve-scopes- (caddr  e) env outerglobals implicitglobals lam renames #f)
-           ,(resolve-scopes- (cadddr e) env outerglobals implicitglobals lam renames #f
+           ,(resolve-scopes- (cadr   e) env implicitglobals lam renames #f)
+           ,(resolve-scopes- (caddr  e) env implicitglobals lam renames #f)
+           ,(resolve-scopes- (cadddr e) env implicitglobals lam renames #f
                              (append (method-expr-static-parameters e) sp))))
         (else
          (cons (car e)
                (map (lambda (x)
-                      (resolve-scopes- x env outerglobals implicitglobals lam renames #f sp))
+                      (resolve-scopes- x env implicitglobals lam renames #f sp))
                     (cdr e))))))
 
-(define (resolve-scopes e) (resolve-scopes- e '() '() '() #f '() #f))
+(define (resolve-scopes e) (resolve-scopes- e '() '() #f '() #f))
 
 ;; pass 3: analyze variables
 
@@ -2986,11 +2900,11 @@ f(x) = yt(x)
 
 (define lambda-opt-ignored-exprs
   (Set '(quote top core line inert local local-def unnecessary copyast
-         meta inbounds boundscheck simdloop decl warn-loop-var
+         meta inbounds boundscheck simdloop decl
          struct_type abstract_type primitive_type thunk with-static-parameters
          implicit-global global globalref outerref const-if-global
          const null ssavalue isdefined toplevel module lambda error
-         gc_preserve_begin gc_preserve_end import importall using export)))
+         gc_preserve_begin gc_preserve_end import using export)))
 
 (define (local-in? s lam)
   (or (assq s (car  (lam:vinfo lam)))
@@ -3094,7 +3008,7 @@ f(x) = yt(x)
                         (del! unused (cadr e)))
                  ;; in all other cases there's nothing to do except assert that
                  ;; all expression heads have been handled.
-                 #;(assert (memq (car e) '(= method new call foreigncall cfunction |::| &)))))))
+                 #;(assert (memq (car e) '(= method new call foreigncall cfunction |::|)))))))
     (visit (lam:body lam))
     ;; Finally, variables can be marked never-undef if they were set in the first block,
     ;; or are currently live, or are back in the unused set (because we've left the only
@@ -3178,7 +3092,7 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core globalref outerref line break inert module toplevel null meta warn-loop-var) e)
+          ((quote top core globalref outerref line break inert module toplevel null meta) e)
           ((=)
            (let ((var (cadr e))
                  (rhs (cl-convert (caddr e) fname lam namemap toplevel interp)))
@@ -3479,8 +3393,7 @@ f(x) = yt(x)
         (first-line #t)
         (current-loc #f)
         (rett #f)
-        (deprecated-loop-vars (table))
-        (deprecated-global-const-locs '())
+        (global-const-error #f)
         (arg-map #f)          ;; map arguments to new names if they are assigned
         (label-counter 0)     ;; counter for generating label addresses
         (label-map (table))   ;; maps label names to generated addresses
@@ -3582,7 +3495,7 @@ f(x) = yt(x)
                                          (not (simple-atom? arg))
                                          (not (simple-atom? aval))
                                          (not (and (pair? arg)
-                                                   (memq (car arg) '(& quote inert top core globalref outerref boundscheck))))
+                                                   (memq (car arg) '(quote inert top core globalref outerref boundscheck))))
                                          (not (and (symbol? aval) ;; function args are immutable and always assigned
                                                    (memq aval (lam:args lam))))
                                          (not (and (symbol? arg)
@@ -3627,12 +3540,7 @@ f(x) = yt(x)
                                (and (pair? e) (or (eq? (car e) 'outerref)
                                                   (eq? (car e) 'globalref))
                                     (underscore-symbol? (cadr e)))))
-                (syntax-deprecation "underscores as an rvalue" "" current-loc))
-            (if (and (not *warn-all-loop-vars*) (has? deprecated-loop-vars e))
-                (begin (deprecation-message
-                        (string "Use of final value of loop variable `" e "`" (linenode-string current-loc) " "
-                                "is deprecated. In the future the variable will be local to the loop instead.") current-loc)
-                       (del! deprecated-loop-vars e)))
+                (error (string "all-underscore identifier used as rvalue" (format-loc current-loc))))
             (cond (tail  (emit-return e1))
                   (value e1)
                   ((or (eq? e1 'true) (eq? e1 'false)) #f)
@@ -3644,14 +3552,6 @@ f(x) = yt(x)
             ((call new foreigncall cfunction)
              (let* ((args
                      (cond ((eq? (car e) 'foreigncall)
-                            (for-each (lambda (a)
-                                        (if (and (length= a 2) (eq? (car a) '&))
-                                            (deprecation-message
-                                             (string "Syntax `&argument`" (linenode-string current-loc)
-                                                     " is deprecated. Remove the `&` and use a `Ref` argument "
-                                                     "type instead.")
-                                             current-loc)))
-                                      (list-tail e 6))
                             ;; NOTE: 2nd to 5th arguments of ccall must be left in place
                             ;;       the 1st should be compiled if an atom.
                             (append (if (or (atom? (cadr e))
@@ -3686,8 +3586,6 @@ f(x) = yt(x)
                     (lhs (if (and arg-map (symbol? lhs))
                              (get arg-map lhs lhs)
                              lhs)))
-               (if (and (not *warn-all-loop-vars*) (has? deprecated-loop-vars lhs))
-                   (del! deprecated-loop-vars lhs))
                (if (and value rhs)
                    (let ((rr (if (or (atom? rhs) (ssavalue? rhs) (eq? (car rhs) 'null))
                                  rhs (make-ssavalue))))
@@ -3875,11 +3773,6 @@ f(x) = yt(x)
                                     (loop (cdr actions)))))))
                  val)))
 
-            ((&)
-             (if (or (not value) tail)
-                 (error "misplaced \"&\" expression"))
-             `(& ,(compile (cadr e) break-labels value tail)))
-
             ((newvar)
              ;; avoid duplicate newvar nodes
              (if (and (not (and (pair? code) (equal? (car code) e)))
@@ -3901,25 +3794,13 @@ f(x) = yt(x)
             ((implicit-global) #f)
             ((const)
              (if (local-in? (cadr e) lam)
-                 (begin
-                   (syntax-deprecation "`const` declaration on local variable" "" current-loc)
-                   '(null))
+                 (error (string "unsupported `const` declaration on local variable" (format-loc current-loc)))
                  (if (pair? (cadr lam))
-                     ;; delay these deprecation warnings to allow "misplaced struct" errors to happen first
-                     (set! deprecated-global-const-locs
-                           (cons current-loc deprecated-global-const-locs))
+                     ;; delay this error to allow "misplaced struct" errors to happen first
+                     (if (not global-const-error)
+                         (set! global-const-error current-loc))
                      (emit e))))
             ((isdefined) (if tail (emit-return e) e))
-            ((warn-loop-var)
-             (if (or *warn-all-loop-vars*
-                     (not (local-in? (cadr e) lam)))
-                 (deprecation-message
-                  (string "Loop variable `" (cadr e) "`" (linenode-string current-loc) " "
-                          "overwrites a variable in an enclosing scope. "
-                          "In the future the variable will be local to the loop instead.")
-                  current-loc)
-                 (put! deprecated-loop-vars (cadr e) #t))
-             '(null))
             ((boundscheck) (if tail (emit-return e) e))
 
             ((method)
@@ -3979,7 +3860,7 @@ f(x) = yt(x)
              '(null))
 
             ;; other top level expressions
-            ((import importall using export)
+            ((import using export)
              (check-top-level e)
              (emit e)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
@@ -4038,12 +3919,8 @@ f(x) = yt(x)
                           (else
                            (set-car! (cdr point) `(leave ,(- hl target-level))))))))
               handler-goto-fixups)
-    (for-each (lambda (loc)
-                (deprecation-message
-                 (string "`global const` declarations may no longer appear inside functions." #\newline
-                         "Instead, use a non-constant global, or a global `const var = Ref{T}()`.")
-                 loc))
-              (reverse! deprecated-global-const-locs))
+    (if global-const-error
+        (error (string "`global const` delcaration not allowed inside function" (format-loc global-const-error))))
     (let* ((stmts (reverse! code))
            (di    (definitely-initialized-vars stmts vi))
            (body  (cons 'block (filter (lambda (e)

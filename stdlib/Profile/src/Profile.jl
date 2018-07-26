@@ -215,8 +215,7 @@ function flatten(data::Vector, lidict::LineInfoDict)
         end
     end
     newdata = UInt64[]
-    for ip in data
-        local ip::UInt64
+    for ip::UInt64 in data
         if haskey(newmap, ip)
             append!(newdata, newmap[ip])
         else

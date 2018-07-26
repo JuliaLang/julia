@@ -114,44 +114,9 @@ global_logger(prev_logger)
 # BEGIN 0.7 deprecations
 
 @testset "parser syntax deprecations" begin
-    # Test empty logs for meta.parse depwarn argument.
-    @test_logs Meta.parse("1.+2", depwarn=false)
-
-    # #19089
-    @test (@test_deprecated Meta.parse("1.+2")) == :(1 .+ 2)
-
-    # #16356
-    @test (@test_deprecated Meta.parse("0xapi")) == :(0xa * pi)
-
-    # #22523 #22712
-    @test (@test_deprecated Meta.parse("a?b:c"))    == :(a ? b : c)
-    @test (@test_deprecated Meta.parse("a ?b:c"))   == :(a ? b : c)
-    @test (@test_deprecated Meta.parse("a ? b:c"))  == :(a ? b : c)
-    @test (@test_deprecated Meta.parse("a ? b :c")) == :(a ? b : c)
-    @test (@test_deprecated Meta.parse("?")) == Symbol("?")
-
-    # #13079
-    @test (@test_deprecated Meta.parse("1<<2*3")) == :(1<<(2*3))
-
-    # ([#19157], [#20418]).
-    @test remove_linenums!(@test_deprecated Meta.parse("immutable A; end")) ==
-          remove_linenums!(:(struct A; end))
-    @test remove_linenums!(@test_deprecated Meta.parse("type A; end")) ==
-          remove_linenums!(:(mutable struct A; end))
-
-    # #19987
-    @test remove_linenums!(@test_deprecated Meta.parse("try ; catch f() ; end")) ==
-          remove_linenums!(:(try ; catch; f() ; end))
-
     # #15524
     # @test (@test_deprecated Meta.parse("for a=b f() end")) == :(for a=b; f() end)
     @test_broken length(Test.collect_test_logs(()->Meta.parse("for a=b f() end"))[1]) > 0
-
-    # #23076
-    @test (@test_deprecated Meta.parse("[a,b;]")) == :([a;b])
-
-    # #24452
-    @test (@test_deprecated Meta.parse("(a...)")) == :((a...,))
 end
 
 
@@ -159,55 +124,11 @@ end
     # #16295
     @test_deprecated Meta.lower(@__MODULE__, :(A.(:+)(a,b) = 1))
 
-    # #11310
-    @test_deprecated r"parametric method syntax" Meta.lower(@__MODULE__, :(f{T}(x::T) = 1))
-
     # #17623
     @test_deprecated r"Deprecated syntax `function .+(...)`" Meta.lower(@__MODULE__, :(function .+(a,b) ; end))
 
-    # #21774 (more uniform let expressions)
-    @test_deprecated Meta.lower(@__MODULE__, Expr(:let, :a))
-    @test_deprecated Meta.lower(@__MODULE__, Expr(:let, :a, :(a=1), :(b=1)))
-
-    # #23157 (Expression heads for types renamed)
-    @test_deprecated Meta.lower(@__MODULE__, Expr(:type, true, :A, Expr(:block)))
-    @test_deprecated Meta.lower(@__MODULE__, Expr(:bitstype, 32, :A))
-
     # #15032
     @test_deprecated Meta.lower(@__MODULE__, :(a.(b) = 1))
-
-    # #5332
-    @test_deprecated Meta.lower(@__MODULE__, :(a.'))
-
-    # #19324
-    @test_deprecated r"implicit assignment to global" eval(
-           :(module M19324
-                 x=1
-                 for i=1:10
-                     x += i
-                 end
-             end))
-
-    # #24221
-    @test_deprecated r"underscores as an rvalue" Meta.lower(@__MODULE__, :(a=_))
-
-    # #22314
-    @test_deprecated r"Use of final value of loop variable `i`.*is deprecated. In the future the variable will be local to the loop instead." Meta.lower(@__MODULE__, :(
-        function f()
-            i=0
-            for i=1:10
-            end
-            i
-        end))
-    @test_deprecated r"Loop variable `i` overwrites a variable in an enclosing scope" eval(:(
-        module M22314
-            i=10
-            for i=1:10
-            end
-        end))
-
-    # #6080
-    @test_deprecated r"Syntax `&argument`.*is deprecated" Meta.lower(@__MODULE__, :(ccall(:a, Cvoid, (Cint,), &x)))
 end
 
 module LogTest

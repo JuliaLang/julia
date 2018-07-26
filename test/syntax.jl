@@ -521,7 +521,7 @@ end
               global x = 2
               local x = 1
               end")) == Expr(:error, "variable \"x\" declared both local and global")
-
+#=
 @test Meta.lower(Main, Meta.parse("let
               local x = 2
               local x = 1
@@ -534,7 +534,7 @@ end
 @test Meta.lower(Main, Meta.parse("let x = 2
                   local x = 1
               end")) == Expr(:error, "local \"x\" declared twice")
-
+=#
 # issue #23673
 @test :(let $([:(x=1),:(y=2)]...); x+y end) == :(let x = 1, y = 2; x+y end)
 
@@ -1084,7 +1084,7 @@ end
 @test_throws ParseError Meta.parse("@ time")
 
 # issue #7479
-@test Meta.lower(Main, Meta.parse("(true &&& false)")) == Expr(:error, "misplaced \"&\" expression")
+@test Meta.lower(Main, Meta.parse("(true &&& false)")) == Expr(:error, "invalid syntax &false")
 
 # if an indexing expression becomes a cat expression, `end` is not special
 @test_throws ParseError Meta.parse("a[end end]")
@@ -1584,3 +1584,58 @@ macro foo28244(sym)
 end
 @test (@macroexpand @foo28244(kw)) == Expr(:call, GlobalRef(@__MODULE__,:bar), Expr(:kw))
 @test eval(:(@macroexpand @foo28244($(Symbol("let"))))) == Expr(:error, "malformed expression")
+
+# #16356
+@test_throws ParseError Meta.parse("0xapi")
+
+# #22523 #22712
+@test_throws ParseError Meta.parse("a?b:c")
+@test_throws ParseError Meta.parse("a ?b:c")
+@test_throws ParseError Meta.parse("a ? b:c")
+@test_throws ParseError Meta.parse("a ? b :c")
+@test_throws ParseError Meta.parse("?")
+
+# #13079
+@test Meta.parse("1<<2*3") == :((1<<2)*3)
+
+# #19987
+@test_throws ParseError Meta.parse("try ; catch f() ; end")
+
+# #23076
+@test :([1,2;]) == Expr(:vect, Expr(:parameters), 1, 2)
+
+# #24452
+@test Meta.parse("(a...)") == Expr(Symbol("..."), :a)
+
+# #19324
+@test_throws UndefVarError(:x) eval(:(module M19324
+                 x=1
+                 for i=1:10
+                     x += i
+                 end
+             end))
+
+# #22314
+function f22314()
+    i = 0
+    for i = 1:10
+    end
+    i
+end
+@test f22314() == 0
+
+module M22314
+i = 0
+for i = 1:10
+end
+end
+@test M22314.i == 0
+
+# #6080
+@test Meta.lower(@__MODULE__, :(ccall(:a, Cvoid, (Cint,), &x))) == Expr(:error, "invalid syntax &x")
+
+@test_throws ParseError Meta.parse("x.'")
+@test_throws ParseError Meta.parse("0.+1")
+
+# #24221
+@test Meta.isexpr(Meta.lower(@__MODULE__, :(a=_)), :error)
