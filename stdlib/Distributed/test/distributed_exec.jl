@@ -82,6 +82,19 @@ let
     @test count == 0
 end
 
+# mitigation of issue #25220
+@everywhere begin
+mutable struct S25220
+    val
+end
+Base.hash(::S25220, h::UInt) = hash(0, h)
+end
+x25220 = S25220(1)
+@test remotecall_fetch(()->x25220, id_other).val == 1
+x25220.val = 2
+@test remotecall_fetch(()->x25220, id_other).val == 2
+
+
 # Test Futures
 function testf(id)
     f=Future(id)

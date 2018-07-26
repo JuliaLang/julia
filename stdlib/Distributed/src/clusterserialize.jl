@@ -44,6 +44,31 @@ end
 
 const known_object_data = Dict{UInt64,Any}()
 
+# Make issue #25220 less likely by ensuring we hash all internal values
+hashall(x) = hashall(x, UInt(0))
+hashall(x, h::UInt) = fieldcount(typeof(x)) == 0 ? hash(x, h) : hashfields(x, h)
+@noinline function hashfields(@nospecialize(x), h::UInt)
+    for i in 1:fieldcount(typeof(x))
+        h = hashall(isdefined(x, i) ? getfield(x, i) : 0x00e1dfd11f636805, h)
+    end
+    return h
+end
+hashall(x::Type, h::UInt) = hash(x, h)
+hashall(x::Module, h::UInt) = hash(x, h)
+function hashall(A::Array, h::UInt)
+    for i in eachindex(A)
+        h = hashall(isassigned(A, i) ? A[i] : 0x0a57083376608372, h)
+    end
+    return h
+end
+function hashall(S::String, h::UInt)
+    for c in S
+        h = hashall(c, h)
+    end
+    return h
+end
+
+
 function lookup_object_number(s::ClusterSerializer, n::UInt64)
     return get(known_object_data, n, nothing)
 end
@@ -132,7 +157,7 @@ function syms_2b_sent(s::ClusterSerializer, identifier)
             oid = objectid(v)
             if haskey(s.glbs_sent, oid)
                 # We have sent this object before, see if it has changed.
-                s.glbs_sent[oid] != hash(sym, hash(v)) && push!(lst, sym)
+                s.glbs_sent[oid] != hashall(sym, hashall(v)) && push!(lst, sym)
             else
                 push!(lst, sym)
             end
@@ -163,7 +188,7 @@ function serialize_global_from_main(s::ClusterSerializer, sym)
             end
         end
     end
-    record_v && (s.glbs_sent[oid] = hash(sym, hash(v)))
+    record_v && (s.glbs_sent[oid] = hashall(sym, hashall(v)))
 
     serialize(s, isconst(Main, sym))
     serialize(s, v)
