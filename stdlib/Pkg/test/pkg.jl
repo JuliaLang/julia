@@ -414,6 +414,32 @@ temp_pkg_dir() do project_path
     end
 end
 
+temp_pkg_dir() do project_path
+    cd(project_path) do
+        project = """
+        [deps]
+        UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+
+        [extras]
+        Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
+        Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+        [targets]
+        test = ["Markdown", "Test"]
+        """
+        write("Project.toml", project)
+        Pkg.activate(".")
+        @testset "resolve ignores extras" begin
+            Pkg.resolve()
+            @test read("Manifest.toml", String) == """
+            [[UUIDs]]
+            uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+            """
+        end
+        Pkg.activate()
+    end
+end
+
 include("repl.jl")
 
 end # module

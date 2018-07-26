@@ -348,6 +348,37 @@ function Context!(ctx::Context; kwargs...)
     end
 end
 
+# target === nothing : main dependencies
+# target === "*"     : main + all extras
+# target === "name"  : named target deps
+
+function deps_names(project::Dict, target::Union{Nothing,String}=nothing)::Vector{String}
+    deps = sort!(collect(keys(project["deps"])))
+    target == "*" && return !haskey(project, "extras") ? deps :
+        sort!(union!(deps, collect(keys(project["extras"]))))
+    haskey(project, "targets") || return deps
+    targets = project["targets"]
+    haskey(targets, target) || return deps
+    return sort!(union!(deps, targets[target]))
+end
+
+function get_deps(project::Dict, target::Union{Nothing,String}=nothing)
+    names = deps_names(project, target)
+    deps = filter(((dep, _),) -> dep in names, project["deps"])
+    extras = get(project, "extras", Dict{String,Any}())
+    for name in names
+        haskey(deps, name) && continue
+        haskey(extras, name) ||
+            cmderror("target `$target` has unlisted dependency `$name`")
+        deps[name] = extras[name]
+    end
+    return deps
+end
+get_deps(env::EnvCache, target::Union{Nothing,String}=nothing) =
+    get_deps(env.project, target)
+get_deps(ctx::Context, target::Union{Nothing,String}=nothing) =
+    get_deps(ctx.env, target)
+
 function project_compatibility(ctx::Context, name::String)
     v = VersionSpec()
     project = ctx.env.project

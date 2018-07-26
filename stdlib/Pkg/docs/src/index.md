@@ -689,13 +689,18 @@ Testing...
 
 #### Test-specific dependencies
 
-Sometimes one might want to use some packages only at testing time but not enforce a dependency on them when the package is used.
-This is possible by adding dependencies to a "test target" to the Project file. Here we add the `Test` standard library as a
-test-only dependency by adding the following to the Project file:
+Sometimes one might want to use some packages only at testing time but not
+enforce a dependency on them when the package is used. This is possible by
+adding `[extra]` dependencies and adding a a "test target" to the Project file.
+Here we add the `Test` standard library as a test-only dependency by adding the
+following to the Project file:
 
 ```
-[targets.test.deps]
+[extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
 ```
 
 We can now use `Test` in the test script and we can see that it gets installed on testing:
