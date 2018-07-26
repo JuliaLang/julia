@@ -135,7 +135,7 @@ true
 ```
 """
 MersenneTwister(seed=nothing) =
-    seed(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
+    Random.seed(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
 
 
 function copy!(dst::MersenneTwister, src::MersenneTwister)
@@ -287,7 +287,7 @@ end
 
 seed(r::MersenneTwister=GLOBAL_RNG) = seed(r, make_seed())
 seed(r::MersenneTwister, n::Integer) = seed(r, make_seed(n))
-seed(seed::Union{Integer,Vector{UInt32}}) = seed(GLOBAL_RNG, seed)
+seed(seed::Union{Integer,Vector{UInt32}}) = Random.seed(GLOBAL_RNG, seed)
 
 
 ### Global RNG (must be defined after seed)
