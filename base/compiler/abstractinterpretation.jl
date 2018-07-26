@@ -912,13 +912,11 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
                 t = Bottom
             end
             isconst &= ae isa Const
+            isconst = isconst && (ae.val isa fieldtype(t, i - 1))
         end
         if isconst
             flds = Any[ argtypes[i].val for i = 2:length(argtypes) ]
-            try
-                t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, flds, length(flds)))
-            catch ex
-            end
+            t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, flds, length(flds)))
         end
     elseif e.head === :&
         abstract_eval(e.args[1], vtypes, sv)
