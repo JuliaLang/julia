@@ -2435,6 +2435,25 @@ end
     @test hash([1,2,[3]]) != hash([1,2,[3,4]])
 end
 
+# Ensure we can hash strange custom structs — and they hash the same in arrays
+struct totally_not_five26034 end
+Base.isequal(::totally_not_five26034, x)=isequal(5,x);
+Base.isequal(x, ::totally_not_five26034)=isequal(5,x);
+Base.isequal(::totally_not_five26034, ::totally_not_five26034)=true;
+Base.hash(::totally_not_five26034, h::UInt64)=hash(5, h);
+import Base.==
+==(::totally_not_five26034, x)= (5==x);
+==(x,::totally_not_five26034)= (5==x);
+==(::totally_not_five26034,::totally_not_five26034)=true;
+@testset "issue #26034" begin
+    n5 = totally_not_five26034()
+    @test hash(n5) == hash(5)
+    @test isequal([4,n5,6], [4,5,6])
+    @test isequal(hash([4,n5,6]), hash([4,5,6]))
+    @test isequal(hash(Any[4,n5,6]), hash(Union{Int, totally_not_five26034}[4,5,6]))
+    @test isequal(hash([n5,4,n5,6]), hash([n5,4,5,6]))
+end
+
 function f27079()
     X = rand(5)
     for x in X
