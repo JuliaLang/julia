@@ -500,6 +500,8 @@ $(eval $(call LLVM_PATCH,llvm-rL327898)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
 $(eval $(call LLVM_PATCH,llvm-OProfile-line-num))
 $(eval $(call LLVM_PATCH,llvm-D44892-Perf-integration))
+$(eval $(call LLVM_PATCH,llvm-D49832-SCEVPred))
+$(eval $(call LLVM_PATCH,llvm-rL323946-LSRTy)) # Remove for 7.0
 endif # LLVM_VER
 
 # Remove hardcoded OS X requirements in compilter-rt cmake build
