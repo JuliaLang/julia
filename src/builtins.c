@@ -294,13 +294,6 @@ static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
     }
     if (dt == jl_typename_type)
         return ((jl_typename_t*)v)->hash;
-#ifdef _P64
-    if (v == jl_ANY_flag)
-        return 0x31c472f68ee30bddULL;
-#else
-    if (v == jl_ANY_flag)
-        return 0x8ee30bdd;
-#endif
     if (dt == jl_string_type) {
 #ifdef _P64
         return memhash_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
@@ -1328,8 +1321,6 @@ void jl_init_primitives(void)
 
     add_builtin("AbstractString", (jl_value_t*)jl_abstractstring_type);
     add_builtin("String", (jl_value_t*)jl_string_type);
-
-    add_builtin("ANY", jl_ANY_flag);
 }
 
 #ifdef __cplusplus

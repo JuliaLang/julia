@@ -1364,8 +1364,8 @@ end
 @test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,),)))
 @test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C), )))
 @test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), )))
-@test Expr(:error, "only the trailing ccall argument type should have '...'") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), x)))
-@test Expr(:error, "only the trailing ccall argument type should have '...'") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), x, y, z)))
+@test Expr(:error, "only the trailing ccall argument type should have \"...\"") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), x)))
+@test Expr(:error, "only the trailing ccall argument type should have \"...\"") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), x, y, z)))
 @test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C...), )))
 
 # cfunction on non-function singleton

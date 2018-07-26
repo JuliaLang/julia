@@ -81,7 +81,7 @@
                    (string #\( (deparse (caddr e)) " " (cadr e) " " (deparse (cadddr e)) #\) ))
                   (else
                    (deparse-prefix-call (cadr e) (cddr e) #\( #\)))))
-           (($ &)          (if (pair? (cadr e))
+           (($ &)          (if (and (pair? (cadr e)) (not (eq? (caadr e) 'outerref)))
                                (string (car e) "(" (deparse (cadr e)) ")")
                                (string (car e) (deparse (cadr e)))))
            ((|::|)         (if (length= e 2)
@@ -200,7 +200,7 @@
                     (string.join (map deparse (cdr (cadddr e))) "\n") "\n"
                     "end"))
            ;; misc syntax forms
-           ((import importall using)
+           ((import using)
             (define (deparse-path e)
               (cond ((and (pair? e) (eq? (car e) '|.|))
                      (let loop ((lst   (cdr e))
@@ -408,8 +408,6 @@
                            (pair? (caddr x))
                            (length> (caddr x) 1)
                            (eq? (cadr (caddr x)) 'Vararg)))))
-(define (trans?  x) (and (pair? x) (eq? (car x) '|.'|)))
-(define (ctrans? x) (and (pair? x) (eq? (car x) '|'|)))
 (define (linenum? x) (and (pair? x) (eq? (car x) 'line)))
 
 (define (make-assignment l r) `(= ,l ,r))

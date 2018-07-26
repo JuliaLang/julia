@@ -325,11 +325,6 @@ oftype(x, y) = convert(typeof(x), y)
 unsigned(x::Int) = reinterpret(UInt, x)
 signed(x::UInt) = reinterpret(Int, x)
 
-# conversions used by ccall
-ptr_arg_cconvert(::Type{Ptr{T}}, x) where {T} = cconvert(T, x)
-ptr_arg_unsafe_convert(::Type{Ptr{T}}, x) where {T} = unsafe_convert(T, x)
-ptr_arg_unsafe_convert(::Type{Ptr{Cvoid}}, x) = x
-
 """
     cconvert(T,x)
 

@@ -364,15 +364,6 @@ end
 # nfields(::Type) deprecation in builtins.c: update nfields tfunc in compiler/tfuncs.jl when it is removed.
 # also replace `_nfields` with `nfields` in summarysize.c when this is removed.
 
-# ::ANY is deprecated in src/method.c
-# also remove all instances of `jl_ANY_flag` in src/
-
-# issue #13079
-# in julia-parser.scm:
-#     move prec-bitshift after prec-rational
-#     remove parse-with-chains-warn and bitshift-warn
-# update precedence table in doc/src/manual/mathematical-operations.md
-
 # PR #22182
 @deprecate is_apple   Sys.isapple
 @deprecate is_bsd     Sys.isbsd
@@ -396,9 +387,6 @@ end
 @deprecate readstring(cmd::AbstractCmd) read(cmd, String)
 
 @deprecate_binding UVError IOError false
-
-# issue #11310
-# remove "parametric method syntax" deprecation in julia-syntax.scm
 
 @deprecate momenttype(::Type{T}) where {T} typeof((zero(T)*zero(T) + zero(T)*zero(T))/2) false
 
@@ -487,9 +475,6 @@ end
 
 # issue #5148, PR #23259
 # warning for `const` on locals should be changed to an error in julia-syntax.scm
-
-# issue #22789
-# remove code for `importall` in src/
 
 # issue #17886
 # deprecations for filter[!] with 2-arg functions are in abstractdict.jl
@@ -1720,7 +1705,6 @@ function factorial(x::Number)
 end
 
 # issue #27093
-# in src/jlfrontend.scm a call to `@deprecate` is generated for per-module `eval(m, x)`
 @eval Core Main.Base.@deprecate(eval(e), Core.eval(Main, e))
 
 @eval @deprecate $(Symbol("@schedule")) $(Symbol("@async"))

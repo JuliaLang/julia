@@ -391,18 +391,6 @@ JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
     module_import_(to, from, s, 0);
 }
 
-JL_DLLEXPORT void jl_module_importall(jl_module_t *to, jl_module_t *from)
-{
-    void **table = from->bindings.table;
-    for(size_t i=1; i < from->bindings.size; i+=2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->exportp && (b->owner==from || b->imported))
-                jl_module_import(to, from, b->name);
-        }
-    }
-}
-
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
 {
     if (to == from)

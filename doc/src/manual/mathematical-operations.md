@@ -356,11 +356,11 @@ Julia applies the following order and associativity of operations, from highest 
 |:-------------- |:------------------------------------------------------------------------------------------------- |:-------------------------- |
 | Syntax         | `.` followed by `::`                                                                              | Left                       |
 | Exponentiation | `^`                                                                                               | Right                      |
-| Unary          | `+ - √`                                                                                           | Right[^1]                   |
-| Fractions      | `//`                                                                                              | Left                       |
-| Multiplication | `* / % & \ ÷`                                                                                     | Left[^2]                    |
+| Unary          | `+ - √`                                                                                           | Right[^1]                  |
 | Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
-| Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                    |
+| Fractions      | `//`                                                                                              | Left                       |
+| Multiplication | `* / % & \ ÷`                                                                                     | Left[^2]                   |
+| Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                   |
 | Syntax         | `: ..`                                                                                            | Left                       |
 | Syntax         | `\|>`                                                                                             | Left                       |
 | Syntax         | `<\|`                                                                                             | Right                      |

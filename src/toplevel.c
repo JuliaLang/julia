@@ -513,7 +513,6 @@ int jl_is_toplevel_only_expr(jl_value_t *e)
 {
     return jl_is_expr(e) &&
         (((jl_expr_t*)e)->head == module_sym ||
-         ((jl_expr_t*)e)->head == importall_sym ||
          ((jl_expr_t*)e)->head == import_sym ||
          ((jl_expr_t*)e)->head == using_sym ||
          ((jl_expr_t*)e)->head == export_sym ||
@@ -619,31 +618,6 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     }
     else if (ex->head == module_sym) {
         return jl_eval_module_expr(m, ex);
-    }
-    else if (ex->head == importall_sym) {
-        jl_sym_t *name = NULL;
-        jl_depwarn("`importall` is deprecated, use `using` or individual `import` statements instead",
-                   (jl_value_t*)jl_symbol("importall"));
-        jl_module_t *from = eval_import_from(m, ex, "importall");
-        size_t i = 0;
-        if (from) {
-            i = 1;
-            ex = (jl_expr_t*)jl_exprarg(ex, 0);
-        }
-        for (; i < jl_expr_nargs(ex); i++) {
-            jl_value_t *a = jl_exprarg(ex, i);
-            if (jl_is_expr(a) && ((jl_expr_t*)a)->head == dot_sym) {
-                name = NULL;
-                jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)a)->args, &name, "importall");
-                if (name != NULL) {
-                    import = (jl_module_t*)jl_eval_global_var(import, name);
-                    if (!jl_is_module(import))
-                        jl_errorf("invalid %s statement: name exists but does not refer to a module", jl_symbol_name(ex->head));
-                }
-                jl_module_importall(m, import);
-            }
-        }
-        return jl_nothing;
     }
     else if (ex->head == using_sym) {
         size_t last_age = ptls->world_age;

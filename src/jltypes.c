@@ -75,7 +75,6 @@ JL_DLLEXPORT jl_value_t *jl_true;
 JL_DLLEXPORT jl_value_t *jl_false;
 
 jl_unionall_t *jl_typetype_type;
-jl_value_t    *jl_ANY_flag;
 
 jl_unionall_t *jl_array_type;
 jl_typename_t *jl_array_typename;
@@ -2167,8 +2166,6 @@ void jl_init_types(void)
     jl_typetype_type =
         (jl_unionall_t*)jl_new_struct(jl_unionall_type, typetype_tvar,
                                       jl_apply_type1((jl_value_t*)jl_type_type, (jl_value_t*)typetype_tvar));
-
-    jl_ANY_flag = (jl_value_t*)tvar("ANY");
 
     jl_abstractstring_type = jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractString"), core, jl_any_type, jl_emptysvec);
     jl_string_type = jl_new_datatype(jl_symbol("String"), core, jl_abstractstring_type, jl_emptysvec,
