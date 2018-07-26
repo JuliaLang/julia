@@ -339,6 +339,7 @@ Base.@kwdef mutable struct Context
     graph_verbose::Bool = false
     stdlibs::Dict{UUID,String} = gather_stdlib_uuids()
     # Remove next field when support for Pkg2 CI scripts is removed
+    currently_running_target::Bool = false
     old_pkg2_clone_name::String = ""
 end
 
@@ -1096,7 +1097,7 @@ function write_env(ctx::Context; display_diff=true)
     project = deepcopy(env.project)
     isempty(project["deps"]) && delete!(project, "deps")
     if !isempty(project) || ispath(env.project_file)
-        if display_diff
+        if display_diff && !(ctx.currently_running_target)
             printpkgstyle(ctx, :Updating, pathrepr(ctx, env.project_file))
             Pkg.Display.print_project_diff(ctx, old_env, env)
         end
@@ -1109,7 +1110,7 @@ function write_env(ctx::Context; display_diff=true)
     end
     # update the manifest file
     if !isempty(env.manifest) || ispath(env.manifest_file)
-        if display_diff
+        if display_diff && !(ctx.currently_running_target)
             printpkgstyle(ctx, :Updating, pathrepr(ctx, env.manifest_file))
             Pkg.Display.print_manifest_diff(ctx, old_env, env)
         end

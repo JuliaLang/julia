@@ -8,7 +8,7 @@ import LibGit2
 
 import REPL
 using REPL.TerminalMenus
-using ..Types, ..GraphType, ..Resolve, ..Pkg2, ..BinaryProvider, ..GitTools
+using ..Types, ..GraphType, ..Resolve, ..Pkg2, ..BinaryProvider, ..GitTools, ..Display
 import ..depots, ..devdir, ..Types.uuid_julia
 
 function find_installed(name::String, uuid::UUID, sha1::SHA1)
@@ -744,6 +744,7 @@ end
 function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::PackageSpec; might_need_to_resolve=false)
     # localctx is the context for the temporary environment we run the testing / building in
     localctx = deepcopy(mainctx)
+    localctx.currently_running_target = true
     # If pkg or its dependencies are checked out, we will need to resolve
     # unless we already have resolved for the current environment, which the calleer indicates
     # with `might_need_to_resolve`
@@ -830,8 +831,11 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
         end
         write_env(localctx, display_diff = false)
         will_resolve && build_versions(localctx, new)
+
         sep = Sys.iswindows() ? ';' : ':'
-        withenv(f, "JULIA_LOAD_PATH" => "@$sep$tmpdir$sep$(Types.stdlib_dir())")
+        withenv("JULIA_LOAD_PATH" => "@$sep$tmpdir$sep$(Types.stdlib_dir())") do
+            f(localctx)
+        end
     end
 end
 
@@ -1006,7 +1010,8 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
                 @error "Error building `$name`$last_lines: \n$log_show$full_log_at"
             end
         end
-        with_dependencies_loadable_at_toplevel(ctx, PackageSpec(name, uuid, version); might_need_to_resolve=might_need_to_resolve) do
+        with_dependencies_loadable_at_toplevel(ctx, PackageSpec(name, uuid, version);
+                                               might_need_to_resolve=might_need_to_resolve) do localctx
             run_build()
         end
     end
@@ -1239,7 +1244,11 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
                 push!(pkgs_errored, pkg.name)
             end
         end
-        with_dependencies_loadable_at_toplevel(ctx, pkg; might_need_to_resolve=true) do
+        with_dependencies_loadable_at_toplevel(ctx, pkg; might_need_to_resolve=true) do localctx
+            if !Types.is_project_uuid(ctx.env, pkg.uuid)
+                Display.status(localctx, PKGMODE_MANIFEST)
+            end
+
             run_test()
         end
     end
