@@ -422,21 +422,25 @@ static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var)
 {
     static jl_value_t *require_func = NULL;
     static size_t require_world = 0;
+    int build_mode = jl_generating_output();
     jl_module_t *m = NULL;
     jl_ptls_t ptls = jl_get_ptls_states();
     if (require_func == NULL && jl_base_module != NULL) {
         require_func = jl_get_global(jl_base_module, jl_symbol("require"));
-        require_world = ptls->world_age;
+        if (build_mode)
+            require_world = ptls->world_age;
     }
     if (require_func != NULL) {
         size_t last_age = ptls->world_age;
-        ptls->world_age = require_world;
+        if (build_mode)
+            ptls->world_age = require_world;
         jl_value_t *reqargs[3];
         reqargs[0] = require_func;
         reqargs[1] = (jl_value_t*)mod;
         reqargs[2] = (jl_value_t*)var;
         m = (jl_module_t*)jl_apply(reqargs, 3);
-        ptls->world_age = last_age;
+        if (build_mode)
+            ptls->world_age = last_age;
     }
     if (m == NULL || !jl_is_module(m)) {
         jl_errorf("failed to load module %s", jl_symbol_name(var));
