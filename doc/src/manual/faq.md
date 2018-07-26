@@ -575,7 +575,7 @@ Main               Module
 gvar_self 13 bytes String
 ```
 
-This does not apply to `function` or `type` declarations. However, anonymous functions bound to global
+This does not apply to `function` or `struct` declarations. However, anonymous functions bound to global
 variables are serialized as can be seen below.
 
 ```julia-repl
