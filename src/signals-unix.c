@@ -220,10 +220,18 @@ static int jl_is_on_sigstack(jl_ptls_t ptls, void *ptr, void *context)
             is_addr_on_sigstack(ptls, (void*)jl_get_rsp_from_ctx(context)));
 }
 
+volatile static int profiler_state = 0;
+static ucontext_t profiler_uc;
+
 static void segv_handler(int sig, siginfo_t *info, void *context)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(sig == SIGSEGV || sig == SIGBUS);
+
+    if (profiler_state == 1) {
+        profiler_state = 2;
+        setcontext(&profiler_uc);
+    }
 
     if (jl_addr_is_safepoint((uintptr_t)info->si_addr)) {
 #ifdef JULIA_ENABLE_THREADING
@@ -667,9 +675,16 @@ static void *signal_listener(void *arg)
             // do backtrace for profiler
             if (profile && running) {
                 if (bt_size_cur < bt_size_max - 1) {
-                    // Get backtrace data
-                    bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
-                            bt_size_max - bt_size_cur - 1, signal_context);
+                    profiler_state = 1;
+                    getcontext(&profiler_uc);
+                    if (profiler_state == 1) {
+                        // Get backtrace data
+                        bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
+                                bt_size_max - bt_size_cur - 1, signal_context);
+                    } else {
+                        jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
+                    }
+
                     // Mark the end of this block with 0
                     bt_data_prof[bt_size_cur++] = 0;
                 }
