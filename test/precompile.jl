@@ -133,6 +133,14 @@ try
               Base.convert(::Type{Ref}, ::Value18343{T}) where {T} = 3
 
 
+              # issue #28297
+              mutable struct Result
+                  result::Union{Int,Missing}
+              end
+
+              const x28297 = Result(missing)
+
+
               let some_method = which(Base.include, (String,))
                     # global const some_method // FIXME: support for serializing a direct reference to an external Method not implemented
                   global const some_linfo =
