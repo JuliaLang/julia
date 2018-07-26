@@ -338,7 +338,7 @@ julia> Point(x::T, y::T) where {T<:Real} = Point{T}(x,y);
 
 Notice that each definition looks like the form of constructor call that it handles.
 The call `Point{Int64}(1,2)` will invoke the definition `Point{T}(x,y)` inside the
-`type` block.
+`struct` block.
 The outer constructor declaration, on the other hand, defines a
 method for the general `Point` constructor which only applies to pairs of values of the same real
 type. This declaration makes constructor calls without explicit type parameters, like `Point(1,2)`
@@ -534,7 +534,7 @@ The problem is that we want `S` to be a larger type than `T`, so that we can sum
 with less information loss. For example, when `T` is [`Int32`](@ref), we would like `S` to
 be [`Int64`](@ref). Therefore we want to avoid an interface that allows the user to construct
 instances of the type `SummedArray{Int32,Int32}`. One way to do this is to provide a
-constructor only for `SummedArray`, but inside the `type` definition block to suppress
+constructor only for `SummedArray`, but inside the `struct` definition block to suppress
 generation of default constructors:
 
 ```jldoctest
