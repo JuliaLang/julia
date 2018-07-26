@@ -149,6 +149,8 @@ typedef struct {
 
 static jl_value_t *jl_idtable_type = NULL;
 static jl_typename_t *jl_idtable_typename = NULL;
+static jl_value_t *jl_bigint_type = NULL;
+static int gmp_limb_size = 0;
 static arraylist_t builtin_typenames;
 
 #define write_uint8(s, n) ios_putc((n), (s))
@@ -920,6 +922,17 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         write_uint8(s->s, TAG_LINEINFO);
         for (i = 0; i < jl_datatype_nfields(jl_lineinfonode_type); i++)
             jl_serialize_value(s, jl_get_nth_field(v, i));
+    }
+    else if (jl_bigint_type && jl_typeis(v, jl_bigint_type)) {
+        write_uint8(s->s, TAG_SHORT_GENERAL);
+        write_uint8(s->s, jl_datatype_size(jl_bigint_type));
+        jl_serialize_value(s, jl_bigint_type);
+        jl_value_t *sizefield = jl_get_nth_field(v, 1);
+        jl_serialize_value(s, sizefield);
+        void *data = jl_unbox_voidpointer(jl_get_nth_field(v, 2));
+        int32_t sz = jl_unbox_int32(sizefield);
+        size_t nb = (sz == 0 ? 1 : (sz < 0 ? -sz : sz)) * gmp_limb_size;
+        ios_write(s->s, (char*)data, nb);
     }
     else {
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
@@ -1925,6 +1938,17 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
         int nby = jl_datatype_size(dt);
         ios_read(s->s, (char*)jl_data_ptr(v), nby);
     }
+    else if ((jl_value_t*)dt == jl_bigint_type) {
+        jl_value_t *sizefield = jl_deserialize_value(s, NULL);
+        int32_t sz = jl_unbox_int32(sizefield);
+        int32_t nw = (sz == 0 ? 1 : (sz < 0 ? -sz : sz));
+        size_t nb = nw * gmp_limb_size;
+        void *buf = jl_gc_counted_malloc(nb);
+        ios_read(s->s, (char*)buf, nb);
+        jl_set_nth_field(v, 0, jl_box_int32(nw));
+        jl_set_nth_field(v, 1, sizefield);
+        jl_set_nth_field(v, 2, jl_box_voidpointer(buf));
+    }
     else {
         jl_deserialize_struct(s, v, 0);
     }
@@ -2631,6 +2655,11 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     backref_table_numel = 1;
     jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("IdDict")) : NULL;
     jl_idtable_typename = jl_base_module ? ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_idtable_type))->name : NULL;
+    jl_bigint_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("BigInt")) : NULL;
+    if (jl_bigint_type) {
+        gmp_limb_size = jl_unbox_long(jl_get_global((jl_module_t*)jl_get_global(jl_base_module, jl_symbol("GMP")),
+                                                    jl_symbol("BITS_PER_LIMB"))) / 8;
+    }
 
     int en = jl_gc_enable(0); // edges map is not gc-safe
     jl_array_t *lambdas = jl_alloc_vec_any(0);
@@ -3006,6 +3035,12 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     { // skip past the dependency list
         size_t deplen = read_uint64(f);
         ios_skip(f, deplen);
+    }
+
+    jl_bigint_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("BigInt")) : NULL;
+    if (jl_bigint_type) {
+        gmp_limb_size = jl_unbox_long(jl_get_global((jl_module_t*)jl_get_global(jl_base_module, jl_symbol("GMP")),
+                                                    jl_symbol("BITS_PER_LIMB"))) / 8;
     }
 
     // list of world counters of incremental dependencies

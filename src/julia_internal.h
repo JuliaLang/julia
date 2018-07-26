@@ -320,6 +320,7 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
 #define jl_datatype_layout_n_nonptr(layout) ((uint32_t*)(layout))[-1]
 
 jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz);
+JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz);
 
 jl_code_info_t *jl_type_infer(jl_method_instance_t **pli JL_ROOTS_TEMPORARILY, size_t world, int force);
 jl_callptr_t jl_generate_fptr(jl_method_instance_t **pli, jl_llvm_functions_t decls, size_t world);

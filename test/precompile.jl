@@ -145,6 +145,8 @@ try
 
               const abigfloat_f() = big"12.34"
               const abigfloat_x = big"43.21"
+              const abigint_f() = big"123"
+              const abigint_x = big"124"
           end
           """)
     @test_throws ErrorException Core.kwfunc(Base.nothing) # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
@@ -171,6 +173,8 @@ try
         # Issue #15722
         @test Foo.abigfloat_f()::BigFloat == big"12.34"
         @test (Foo.abigfloat_x::BigFloat + 21) == big"64.21"
+        @test Foo.abigint_f()::BigInt == big"123"
+        @test Foo.abigint_x::BigInt + 1 == big"125"
     end
 
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
