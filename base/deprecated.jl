@@ -395,6 +395,8 @@ end
 @deprecate readstring(filename::AbstractString) read(filename, String)
 @deprecate readstring(cmd::AbstractCmd) read(cmd, String)
 
+@deprecate_binding UVError IOError false
+
 # issue #11310
 # remove "parametric method syntax" deprecation in julia-syntax.scm
 

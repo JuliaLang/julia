@@ -65,7 +65,7 @@ macro stat_call(sym, arg1type, arg)
     return quote
         stat_buf = zeros(UInt8, ccall(:jl_sizeof_stat, Int32, ()))
         r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
-        r == 0 || r == Base.UV_ENOENT || r == Base.UV_ENOTDIR || throw(UVError("stat", r))
+        r == 0 || r == Base.UV_ENOENT || r == Base.UV_ENOTDIR || throw(_UVError("stat", r))
         st = StatStruct(stat_buf)
         if ispath(st) != (r == 0)
             error("stat returned zero type for a valid path")
