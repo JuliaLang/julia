@@ -1410,7 +1410,7 @@ struct Foo2509; foo::Int; end
 # issue #2517
 struct Foo2517; end
 @test repr(Foo2517()) == "$(curmod_prefix)Foo2517()"
-@test repr(Vector{Foo2517}(undef, 1)) == "$(curmod_prefix)Foo2517[$(curmod_prefix)Foo2517()]"
+@test repr(Vector{Foo2517}(undef, 1)) == "$(curmod_prefix)Foo2517[Foo2517()]"
 @test Foo2517() === Foo2517()
 
 # issue #1474
