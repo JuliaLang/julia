@@ -1806,3 +1806,49 @@ function ig27907(::Type{T}, ::Type, N::Integer, offsets...) where {T}
 end
 
 @test ig27907(Int, Int, 1, 0) == 0
+
+# issue #28279
+function f28279(b::Bool)
+    i = 1
+    while i > b
+        i -= 1
+    end
+    if b end
+    return i + 1
+end
+code28279 = code_lowered(f28279, (Bool,))[1].code
+oldcode28279 = deepcopy(code28279)
+ssachangemap = fill(0, length(code28279))
+labelchangemap = fill(0, length(code28279))
+worklist = Int[]
+let i
+    for i in 1:length(code28279)
+        stmt = code28279[i]
+        if Meta.isexpr(stmt, :gotoifnot)
+            push!(worklist, i)
+            ssachangemap[i] = 1
+            if i < length(code28279)
+                labelchangemap[i + 1] = 1
+            end
+        end
+    end
+end
+Core.Compiler.renumber_ir_elements!(code28279, ssachangemap, labelchangemap)
+@test length(code28279) === length(oldcode28279)
+offset = 1
+let i
+    for i in 1:length(code28279)
+        if i == length(code28279)
+            @test Meta.isexpr(code28279[i], :return)
+            @test Meta.isexpr(oldcode28279[i], :return)
+            @test code28279[i].args[1].id == (oldcode28279[i].args[1].id + offset - 1)
+        elseif Meta.isexpr(code28279[i], :gotoifnot)
+            @test Meta.isexpr(oldcode28279[i], :gotoifnot)
+            @test code28279[i].args[1] == oldcode28279[i].args[1]
+            @test code28279[i].args[2] == (oldcode28279[i].args[2] + offset)
+            global offset += 1
+        else
+            @test code28279[i] == oldcode28279[i]
+        end
+    end
+end
