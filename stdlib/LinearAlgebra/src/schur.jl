@@ -131,10 +131,16 @@ end
 Same as [`ordschur`](@ref) but overwrites the factorization `F`.
 """
 function ordschur!(schur::Schur, select::Union{Vector{Bool},BitVector})
-    _, _, vals = ordschur!(schur.T, schur.Z, select)
+    _, _, vals = _ordschur!(schur.T, schur.Z, select)
     schur.values[:] = vals
     return schur
 end
+
+_ordschur(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
+    _ordschur!(copy(T), copy(Z), select)
+
+_ordschur!(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
+    LinearAlgebra.LAPACK.trsen!(convert(Vector{BlasInt}, select), T, Z)[1:3]
 
 """
     ordschur(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur
@@ -147,7 +153,7 @@ subspace. In the real case, a complex conjugate pair of eigenvalues must be eith
 included or both excluded via `select`.
 """
 ordschur(schur::Schur, select::Union{Vector{Bool},BitVector}) =
-    Schur(ordschur(schur.T, schur.Z, select)...)
+    Schur(_ordschur(schur.T, schur.Z, select)...)
 
 struct GeneralizedSchur{Ty,M<:AbstractMatrix} <: Factorization{Ty}
     S::M
@@ -208,11 +214,19 @@ end
 Same as `ordschur` but overwrites the factorization `F`.
 """
 function ordschur!(gschur::GeneralizedSchur, select::Union{Vector{Bool},BitVector})
-    _, _, α, β, _, _ = ordschur!(gschur.S, gschur.T, gschur.Q, gschur.Z, select)
+    _, _, α, β, _, _ = _ordschur!(gschur.S, gschur.T, gschur.Q, gschur.Z, select)
     gschur.α[:] = α
     gschur.β[:] = β
     return gschur
 end
+
+_ordschur(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
+    Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
+        _ordschur!(copy(S), copy(T), copy(Q), copy(Z), select)
+
+_ordschur!(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
+    Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
+        LinearAlgebra.LAPACK.tgsen!(convert(Vector{BlasInt}, select), S, T, Q, Z)
 
 """
     ordschur(F::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) -> F::GeneralizedSchur
@@ -225,7 +239,7 @@ left and right orthogonal/unitary Schur vectors are also reordered such that
 and `B` can still be obtained with `F.α./F.β`.
 """
 ordschur(gschur::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) =
-    GeneralizedSchur(ordschur(gschur.S, gschur.T, gschur.Q, gschur.Z, select)...)
+    GeneralizedSchur(_ordschur(gschur.S, gschur.T, gschur.Q, gschur.Z, select)...)
 
 function getproperty(F::GeneralizedSchur, d::Symbol)
     if d == :values
