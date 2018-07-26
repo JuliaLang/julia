@@ -2424,7 +2424,15 @@ end
 end
 
 @testset "inference hash array 22740" begin
-    @inferred hash([1,2,3])
+    @test @inferred(hash([1,2,3])) == @inferred(hash(1:3))
+end
+
+@testset "hashing arrays of arrays" begin
+    # issues #27865 and #26011
+    @test hash([["asd"], ["asd"], ["asad"]]) == hash(Any[["asd"], ["asd"], ["asad"]])
+    @test hash([["asd"], ["asd"], ["asad"]]) != hash([["asd"], ["asd"], ["asadq"]])
+    @test hash([1,2,[3]]) == hash([1,2,Any[3]]) == hash([1,2,Int8[3]]) == hash([1,2,BigInt[3]]) == hash([1,2,[3.0]])
+    @test hash([1,2,[3]]) != hash([1,2,[3,4]])
 end
 
 function f27079()
