@@ -118,7 +118,7 @@ defaultport = rand(2000:4000)
         let p = fetch(port)
             otherip = getipaddr()
             if otherip != Sockets.localhost
-                @test_throws Base.UVError("connect", Base.UV_ECONNREFUSED) connect(otherip, p)
+                @test_throws Base._UVError("connect", Base.UV_ECONNREFUSED) connect(otherip, p)
             end
             for i in 1:3
                 client = connect(p)
@@ -185,7 +185,7 @@ end
     end
     @test_throws Sockets.DNSError getaddrinfo(".invalid")
     @test_throws ArgumentError getaddrinfo("localhost\0") # issue #10994
-    @test_throws Base.UVError("connect", Base.UV_ECONNREFUSED) connect(ip"127.0.0.1", 21452)
+    @test_throws Base._UVError("connect", Base.UV_ECONNREFUSED) connect(ip"127.0.0.1", 21452)
     e = (try; getaddrinfo(".invalid"); catch ex; ex; end)
     @test startswith(sprint(show, e), "DNSError:")
 end
@@ -202,7 +202,7 @@ end
     r = Channel(1)
     tsk = @async begin
         put!(r, :start)
-        @test_throws Base.UVError("accept", Base.UV_ECONNABORTED) accept(server)
+        @test_throws Base._UVError("accept", Base.UV_ECONNABORTED) accept(server)
     end
     @test fetch(r) === :start
     close(server)
@@ -216,7 +216,7 @@ let localhost = getaddrinfo("localhost")
     @async connect("localhost", randport)
     s1 = accept(server)
     @test_throws ErrorException("client TCPSocket is not in initialization state") accept(server, s1)
-    @test_throws Base.UVError("listen", Base.UV_EADDRINUSE) listen(randport)
+    @test_throws Base._UVError("listen", Base.UV_EADDRINUSE) listen(randport)
     port2, server2 = listenany(localhost, randport)
     @test randport != port2
     close(server)
@@ -348,7 +348,7 @@ end
                 wait_with_timeout(recvs)
             end
         catch e
-            if isa(e, Base.UVError) && Base.uverrorname(e) == "EPERM"
+            if isa(e, Base.IOError) && Base.uverrorname(e.code) == "EPERM"
                 @warn "UDP broadcast test skipped (permission denied upon send, restrictive firewall?)"
             else
                 rethrow()
@@ -412,7 +412,7 @@ end
     let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
         srv = listen(addr)
         r = @async close(srv)
-        @test_throws Base.UVError("accept", Base.UV_ECONNABORTED) accept(srv)
+        @test_throws Base._UVError("accept", Base.UV_ECONNABORTED) accept(srv)
         fetch(r)
     end
 
@@ -421,7 +421,7 @@ end
         s = Sockets.TCPSocket()
         Sockets.connect!(s, addr)
         r = @async close(s)
-        @test_throws Base.UVError("connect", Base.UV_ECANCELED) Sockets.wait_connected(s)
+        @test_throws Base._UVError("connect", Base.UV_ECANCELED) Sockets.wait_connected(s)
         fetch(r)
     end
 end

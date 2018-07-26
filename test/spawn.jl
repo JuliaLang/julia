@@ -70,8 +70,8 @@ end
 
 if valgrind_off
     # If --trace-children=yes is passed to valgrind, valgrind will
-    # exit here with an error code, and no UVError will be raised.
-    @test_throws Base.UVError run(`foo_is_not_a_valid_command`)
+    # exit here with an error code, and no IOError will be raised.
+    @test_throws Base.IOError run(`foo_is_not_a_valid_command`)
 end
 
 if Sys.isunix()
@@ -494,7 +494,7 @@ end
 # `kill` error conditions
 let p = run(`$sleepcmd 100`, wait=false)
     # Should throw on invalid signals
-    @test_throws Base.UVError kill(p, typemax(Cint))
+    @test_throws Base.IOError kill(p, typemax(Cint))
     kill(p)
     wait(p)
     # Should not throw if already dead
