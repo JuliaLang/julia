@@ -1,0 +1,20 @@
+--- a/src/unix/signal.c	2018-07-20 11:48:33.810322000 +0800
++++ b/src/unix/signal.c	2018-07-20 11:50:32.989729000 +0800
+@@ -80,7 +80,7 @@
+ 
+   do {
+     r = read(uv__signal_lock_pipefd[0], &data, sizeof data);
+-  } while (r < 0 && errno == EINTR);
++  } while (r < 0 && (errno == EINTR || errno == EAGAIN));
+ 
+   return (r < 0) ? -1 : 0;
+ }
+@@ -92,7 +92,7 @@
+ 
+   do {
+     r = write(uv__signal_lock_pipefd[1], &data, sizeof data);
+-  } while (r < 0 && errno == EINTR);
++  } while (r < 0 && (errno == EINTR || errno == EAGAIN));
+ 
+   return (r < 0) ? -1 : 0;
+ }
