@@ -2111,7 +2111,7 @@ function hash(A::AbstractArray, h::UInt)
         # entirely-distinct 8000-element array will have ~75% of its elements hashed,
         # with every other element hashed in the first half of the array. At the same
         # time, hashing a `typemax(Int64)`-length Float64 range takes about a second.
-        if mod(n, 4096) == 0
+        if rem(n, 4096) == 0
             fibskip, prevfibskip = fibskip + prevfibskip, fibskip
         end
 
