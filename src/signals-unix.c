@@ -220,17 +220,21 @@ static int jl_is_on_sigstack(jl_ptls_t ptls, void *ptr, void *context)
             is_addr_on_sigstack(ptls, (void*)jl_get_rsp_from_ctx(context)));
 }
 
-volatile static int profiler_state = 0;
-static ucontext_t profiler_uc;
-
 static void segv_handler(int sig, siginfo_t *info, void *context)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(sig == SIGSEGV || sig == SIGBUS);
 
-    if (profiler_state == 1) {
-        profiler_state = 2;
-        setcontext(&profiler_uc);
+    // if we're profiling, this segfault is likely caused by the unwinder.
+    // ignore the signal and jump back to where we came from.
+    if (running && ptls->safe_restore) {
+        // unblock the signal being handled
+        sigset_t sset;
+        sigemptyset(&sset);
+        sigaddset(&sset, sig);
+        sigprocmask(SIG_UNBLOCK, &sset, NULL);
+
+        jl_longjmp(*ptls->safe_restore, 1);
     }
 
     if (jl_addr_is_safepoint((uintptr_t)info->si_addr)) {
@@ -675,15 +679,21 @@ static void *signal_listener(void *arg)
             // do backtrace for profiler
             if (profile && running) {
                 if (bt_size_cur < bt_size_max - 1) {
-                    profiler_state = 1;
-                    getcontext(&profiler_uc);
-                    if (profiler_state == 1) {
+                    // unwinding can fail, so keep track of the current state
+                    // and restore from the SEGV handler if anything happens.
+                    jl_ptls_t ptls = jl_get_ptls_states();
+                    jl_jmp_buf *old_buf = ptls->safe_restore;
+                    jl_jmp_buf buf;
+
+                    ptls->safe_restore = &buf;
+                    if (jl_setjmp(buf, 0)) {
+                        jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
+                    } else {
                         // Get backtrace data
                         bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
                                 bt_size_max - bt_size_cur - 1, signal_context);
-                    } else {
-                        jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
                     }
+                    ptls->safe_restore = old_buf;
 
                     // Mark the end of this block with 0
                     bt_data_prof[bt_size_cur++] = 0;
