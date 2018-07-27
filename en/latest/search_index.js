@@ -19889,27 +19889,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random/#Random.srand",
+    "location": "stdlib/Random/#Random-Numbers-1",
     "page": "Random Numbers",
-    "title": "Random.srand",
-    "category": "function",
-    "text": "srand([rng=GLOBAL_RNG], seed) -> rng\nsrand([rng=GLOBAL_RNG]) -> rng\n\nReseed the random number generator: rng will give a reproducible sequence of numbers if and only if a seed is provided. Some RNGs don\'t accept a seed, like RandomDevice. After the call to srand, rng is equivalent to a newly created object initialized with the same seed.\n\nExamples\n\njulia> srand(1234);\n\njulia> x1 = rand(2)\n2-element Array{Float64,1}:\n 0.590845\n 0.766797\n\njulia> srand(1234);\n\njulia> x2 = rand(2)\n2-element Array{Float64,1}:\n 0.590845\n 0.766797\n\njulia> x1 == x2\ntrue\n\njulia> rng = MersenneTwister(1234); rand(rng, 2) == x1\ntrue\n\njulia> MersenneTwister(1) == srand(rng, 1)\ntrue\n\njulia> rand(srand(rng), Bool) # not reproducible\ntrue\n\njulia> rand(srand(rng), Bool)\nfalse\n\njulia> rand(MersenneTwister(), Bool) # not reproducible either\ntrue\n\n\n\n\n\n"
-},
-
-{
-    "location": "stdlib/Random/#Random.MersenneTwister",
-    "page": "Random Numbers",
-    "title": "Random.MersenneTwister",
-    "category": "type",
-    "text": "MersenneTwister(seed)\nMersenneTwister()\n\nCreate a MersenneTwister RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers. The seed may be a non-negative integer or a vector of UInt32 integers. If no seed is provided, a randomly generated one is created (using entropy from the system). See the srand function for reseeding an already existing MersenneTwister object.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> x1 = rand(rng, 2)\n2-element Array{Float64,1}:\n 0.5908446386657102\n 0.7667970365022592\n\njulia> rng = MersenneTwister(1234);\n\njulia> x2 = rand(rng, 2)\n2-element Array{Float64,1}:\n 0.5908446386657102\n 0.7667970365022592\n\njulia> x1 == x2\ntrue\n\n\n\n\n\n"
-},
-
-{
-    "location": "stdlib/Random/#Random.RandomDevice",
-    "page": "Random Numbers",
-    "title": "Random.RandomDevice",
-    "category": "type",
-    "text": "RandomDevice()\n\nCreate a RandomDevice RNG object. Two such objects will always generate different streams of random numbers. The entropy is obtained from the operating system.\n\n\n\n\n\n"
+    "title": "Random Numbers",
+    "category": "section",
+    "text": "DocTestSetup = :(using Random)Random number generation in Julia uses the Mersenne Twister library via MersenneTwister objects. Julia has a global RNG, which is used by default. Other RNG types can be plugged in by inheriting the AbstractRNG type; they can then be used to have multiple streams of random numbers. Besides MersenneTwister, Julia also provides the RandomDevice RNG type, which is a wrapper over the OS provided entropy.Most functions related to random generation accept an optional AbstractRNG object as first argument, which defaults to the global one if not provided. Moreover, some of them accept optionally dimension specifications dims... (which can be given as a tuple) to generate arrays of random values.A MersenneTwister or RandomDevice RNG can generate uniformly random numbers of the following types: Float16, Float32, Float64, BigFloat, Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt (or complex numbers of those types). Random floating point numbers are generated uniformly in 0 1). As BigInt represents unbounded integers, the interval must be specified (e.g. rand(big.(1:6))).Additionally, normal and exponential distributions are implemented for some AbstractFloat and Complex types, see randn and randexp for details."
 },
 
 {
@@ -19977,6 +19961,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/Random/#Random-generation-functions-1",
+    "page": "Random Numbers",
+    "title": "Random generation functions",
+    "category": "section",
+    "text": "Random.rand\nRandom.rand!\nRandom.bitrand\nRandom.randn\nRandom.randn!\nRandom.randexp\nRandom.randexp!\nRandom.randstring"
+},
+
+{
     "location": "stdlib/Random/#Random.randsubseq",
     "page": "Random Numbers",
     "title": "Random.randsubseq",
@@ -20041,11 +20033,115 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random/#Random-Numbers-1",
+    "location": "stdlib/Random/#Subsequences,-permutations-and-shuffling-1",
     "page": "Random Numbers",
-    "title": "Random Numbers",
+    "title": "Subsequences, permutations and shuffling",
     "category": "section",
-    "text": "DocTestSetup = :(using Random)Random number generation in Julia uses the Mersenne Twister library via MersenneTwister objects. Julia has a global RNG, which is used by default. Other RNG types can be plugged in by inheriting the AbstractRNG type; they can then be used to have multiple streams of random numbers. Besides MersenneTwister, Julia also provides the RandomDevice RNG type, which is a wrapper over the OS provided entropy.Most functions related to random generation accept an optional AbstractRNG as the first argument, rng , which defaults to the global one if not provided. Moreover, some of them accept optionally dimension specifications dims... (which can be given as a tuple) to generate arrays of random values.A MersenneTwister or RandomDevice RNG can generate random numbers of the following types: Float16, Float32, Float64, BigFloat, Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt (or complex numbers of those types). Random floating point numbers are generated uniformly in 0 1). As BigInt represents unbounded integers, the interval must be specified (e.g. rand(big.(1:6))).Random.srand\nRandom.MersenneTwister\nRandom.RandomDevice\nRandom.rand\nRandom.rand!\nRandom.bitrand\nRandom.randn\nRandom.randn!\nRandom.randexp\nRandom.randexp!\nRandom.randstring\nRandom.randsubseq\nRandom.randsubseq!\nRandom.randperm\nRandom.randperm!\nRandom.randcycle\nRandom.randcycle!\nRandom.shuffle\nRandom.shuffle!DocTestSetup = nothing"
+    "text": "Random.randsubseq\nRandom.randsubseq!\nRandom.randperm\nRandom.randperm!\nRandom.randcycle\nRandom.randcycle!\nRandom.shuffle\nRandom.shuffle!"
+},
+
+{
+    "location": "stdlib/Random/#Random.srand",
+    "page": "Random Numbers",
+    "title": "Random.srand",
+    "category": "function",
+    "text": "srand([rng=GLOBAL_RNG], seed) -> rng\nsrand([rng=GLOBAL_RNG]) -> rng\n\nReseed the random number generator: rng will give a reproducible sequence of numbers if and only if a seed is provided. Some RNGs don\'t accept a seed, like RandomDevice. After the call to srand, rng is equivalent to a newly created object initialized with the same seed.\n\nExamples\n\njulia> srand(1234);\n\njulia> x1 = rand(2)\n2-element Array{Float64,1}:\n 0.590845\n 0.766797\n\njulia> srand(1234);\n\njulia> x2 = rand(2)\n2-element Array{Float64,1}:\n 0.590845\n 0.766797\n\njulia> x1 == x2\ntrue\n\njulia> rng = MersenneTwister(1234); rand(rng, 2) == x1\ntrue\n\njulia> MersenneTwister(1) == srand(rng, 1)\ntrue\n\njulia> rand(srand(rng), Bool) # not reproducible\ntrue\n\njulia> rand(srand(rng), Bool)\nfalse\n\njulia> rand(MersenneTwister(), Bool) # not reproducible either\ntrue\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.MersenneTwister",
+    "page": "Random Numbers",
+    "title": "Random.MersenneTwister",
+    "category": "type",
+    "text": "MersenneTwister(seed)\nMersenneTwister()\n\nCreate a MersenneTwister RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers. The seed may be a non-negative integer or a vector of UInt32 integers. If no seed is provided, a randomly generated one is created (using entropy from the system). See the srand function for reseeding an already existing MersenneTwister object.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> x1 = rand(rng, 2)\n2-element Array{Float64,1}:\n 0.5908446386657102\n 0.7667970365022592\n\njulia> rng = MersenneTwister(1234);\n\njulia> x2 = rand(rng, 2)\n2-element Array{Float64,1}:\n 0.5908446386657102\n 0.7667970365022592\n\njulia> x1 == x2\ntrue\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Random.RandomDevice",
+    "page": "Random Numbers",
+    "title": "Random.RandomDevice",
+    "category": "type",
+    "text": "RandomDevice()\n\nCreate a RandomDevice RNG object. Two such objects will always generate different streams of random numbers. The entropy is obtained from the operating system.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Random/#Generators-(creation-and-seeding)-1",
+    "page": "Random Numbers",
+    "title": "Generators (creation and seeding)",
+    "category": "section",
+    "text": "Random.srand\nRandom.MersenneTwister\nRandom.RandomDevice"
+},
+
+{
+    "location": "stdlib/Random/#Hooking-into-the-Random-API-1",
+    "page": "Random Numbers",
+    "title": "Hooking into the Random API",
+    "category": "section",
+    "text": "There are two mostly orthogonal ways to extend Random functionalities:generating random values of custom types\ncreating new generatorsThe API for 1) is quite functional, but is relatively recent so it may still have to evolve in subsequent releases of the Random module. For example, it\'s typically sufficient to implement one rand method in order to have all other usual methods work automatically.The API for 2) is still rudimentary, and may require more work than strictly necessary from the implementor, in order to support usual types of generated values."
+},
+
+{
+    "location": "stdlib/Random/#Generating-random-values-of-custom-types-1",
+    "page": "Random Numbers",
+    "title": "Generating random values of custom types",
+    "category": "section",
+    "text": "There are two categories: generating values from a type (e.g. rand(Int)), or from a collection (e.g. rand(1:3)). The simple cases are explained first, and more advanced usage is presented later. We assume here that the choice of algorithm is independent of the RNG, so we use AbstractRNG in our signatures."
+},
+
+{
+    "location": "stdlib/Random/#Generating-values-from-a-type-1",
+    "page": "Random Numbers",
+    "title": "Generating values from a type",
+    "category": "section",
+    "text": "Given a type T, it\'s currently assumed that if rand(T) is defined, an object of type T will be produced. In order to define random generation of values of type T, the following method can be defined: rand(rng::AbstractRNG, ::Random.SamplerType{T}) (this should return what rand(rng, T) is expected to return).Let\'s take the following example: we implement a Die type, with a variable number n of sides, numbered from 1 to n. We want rand(Die) to produce a die with a random number of up to 20 sides (and at least 4):struct Die\n    nsides::Int # number of sides\nend\n\nRandom.rand(rng::AbstractRNG, ::Random.SamplerType{Die}) = Die(rand(rng, 4:20))\n\n# output\nScalar and array methods for Die now work as expected:julia> rand(Die)\nDie(18)\n\njulia> rand(MersenneTwister(0), Die)\nDie(4)\n\njulia> rand(Die, 3)\n3-element Array{Die,1}:\n Die(6)\n Die(11)\n Die(5)\n\njulia> a = Vector{Die}(undef, 3); rand!(a)\n3-element Array{Die,1}:\n Die(18)\n Die(6)\n Die(8)"
+},
+
+{
+    "location": "stdlib/Random/#Generating-values-from-a-collection-1",
+    "page": "Random Numbers",
+    "title": "Generating values from a collection",
+    "category": "section",
+    "text": "Given a collection type S, it\'s currently assumed that if rand(::S) is defined, an object of type eltype(S) will be produced. In order to define random generation out of objects of type S, the following method can be defined: rand(rng::AbstractRNG, sp::Random.SamplerTrivial{S}). Here, sp simply wraps an object of type S, which can be accessed via sp[]. Continuing the Die example, we want now to define rand(d::Die) to produce an Int corresponding to one of d\'s sides:julia> Random.rand(rng::AbstractRNG, d::Random.SamplerTrivial{Die}) = rand(rng, 1:d[].nsides);\n\njulia> rand(Die(4))\n3\n\njulia> rand(Die(4), 3)\n3-element Array{Any,1}:\n 3\n 4\n 2In the last example, a Vector{Any} is produced; the reason is that eltype(Die) == Any. The remedy is to define Base.eltype(::Type{Die}) = Int."
+},
+
+{
+    "location": "stdlib/Random/#Generating-values-for-an-AbstractFloat-type-1",
+    "page": "Random Numbers",
+    "title": "Generating values for an AbstractFloat type",
+    "category": "section",
+    "text": "AbstractFloat types are special-cased, because by default random values are not produced in the whole type domain, but rather in [0,1). The following method should be implemented for T <: AbstractFloat: Random.rand(::AbstractRNG, ::Random.SamplerTrivial{Random.CloseOpen01{T}})"
+},
+
+{
+    "location": "stdlib/Random/#Optimizing-generation-with-cached-computation-between-calls-1",
+    "page": "Random Numbers",
+    "title": "Optimizing generation with cached computation between calls",
+    "category": "section",
+    "text": "When repeatedly generating random values (with the same rand parameters), it happens for some types that the result of a computation is used for each call. In this case, the computation can be decoupled from actually generating the values. This is the case for example with the default implementation for AbstractArray. Assume that rand(rng, 1:20) has to be called repeatedly in a loop: the way to take advantage of this decoupling is as follows:rng = MersenneTwister()\nsp = Random.Sampler(rng, 1:20) # or Random.Sampler(MersenneTwister,1:20)\nfor x in X\n    n = rand(rng, sp) # similar to n = rand(rng, 1:20)\n    # use n\nendThis mechanism is of course used by the default implementation of random array generation (like in rand(1:20, 10)). In order to implement this decoupling for a custom type, a helper type can be used. Going back to our Die example: rand(::Die) uses random generation from a range, so there is an opportunity for this optimization:import Random: Sampler, rand\n\nstruct SamplerDie <: Sampler{Int} # generates values of type Int\n    die::Die\n    sp::Sampler{Int} # this is an abstract type, so this could be improved\nend\n\nSampler(RNG::Type{<:AbstractRNG}, die::Die, r::Random.Repetition) =\n    SamplerDie(die, Sampler(RNG, 1:die.nsides, r))\n# the `r` parameter will be explained later on\n\nrand(rng::AbstractRNG, sp::SamplerDie) = rand(rng, sp.sp)It\'s now possible to get a sampler with sp = Sampler(rng, die), and use sp instead of die in any rand call involving rng. In the simplistic example above, die doesn\'t need to be stored in SamplerDie but this is often the case in practice.This pattern is so frequent that a helper type named Random.SamplerSimple is available, saving us the definition of SamplerDie: we could have implemented our decoupling with:Sampler(RNG::Type{<:AbstractRNG}, die::Die, r::Random.Repetition) =\n    SamplerSimple(die, Sampler(RNG, 1:die.nsides, r))\n\nrand(rng::AbstractRNG, sp::SamplerSimple{Die}) = rand(rng, sp.data)Here, sp.data refers to the second parameter in the call to the SamplerSimple constructor (in this case equal to Sampler(rng, 1:die.nsides, r)), while the Die object can be accessed via sp[].Another helper type is currently available for other cases, Random.SamplerTag, but is considered as internal API, and can break at any time without proper deprecations."
+},
+
+{
+    "location": "stdlib/Random/#Using-distinct-algorithms-for-scalar-or-array-generation-1",
+    "page": "Random Numbers",
+    "title": "Using distinct algorithms for scalar or array generation",
+    "category": "section",
+    "text": "In some cases, whether one wants to generate only a handful of values or a large number of values will have an impact on the choice of algorithm. This is handled with the third parameter of the Sampler constructor. Let\'s assume we defined two helper types for Die, say SamplerDie1 which should be used to generate only few random values, and SamplerDieMany for many values. We can use those types as follows:Sampler(RNG::Type{<:AbstractRNG}, die::Die, ::Val{1}) = SamplerDie1(...)\nSampler(RNG::Type{<:AbstractRNG}, die::Die, ::Val{Inf}) = SamplerDieMany(...)Of course, rand must also be defined on those types (i.e. rand(::AbstractRNG, ::SamplerDie1) and rand(::AbstractRNG, ::SamplerDieMany)).Note: Sampler(rng, x) is simply a shorthand for Sampler(rng, x, Val(Inf)), and Random.Repetition is an alias for Union{Val{1}, Val{Inf}}."
+},
+
+{
+    "location": "stdlib/Random/#Creating-new-generators-1",
+    "page": "Random Numbers",
+    "title": "Creating new generators",
+    "category": "section",
+    "text": "The API is not clearly defined yet, but as a rule of thumb:any rand method producing \"basic\" types (isbitstype integer and floating types in Base) should be defined for this specific RNG, if they are needed;\nother documented rand methods accepting an AbstractRNG should work out of the box, (provided the methods from 1) what are relied on are implemented), but can of course be specialized for this RNG if there is room for optimization.Concerning 1), a rand method may happen to work automatically, but it\'s not officially supported and may break without warnings in a subsequent release.To define a new rand method for an hypothetical MyRNG generator, and a value specification s (e.g. s == Int, or s == 1:10) of type S==typeof(s) or S==Type{s} if s is a type, the same two methods as we saw before must be defined:Sampler(::Type{MyRNG}, ::S, ::Repetition), which returns an object of type say SamplerS\nrand(rng::MyRNG, sp::SamplerS)It can happen that Sampler(rng::AbstractRNG, ::S, ::Repetition) is already defined in the Random module. It would then be possible to skip step 1) in practice (if one wants to specialize generation for this particular RNG type), but the corresponding SamplerS type is considered as internal detail, and may be changed without warning."
+},
+
+{
+    "location": "stdlib/Random/#Specializing-array-generation-1",
+    "page": "Random Numbers",
+    "title": "Specializing array generation",
+    "category": "section",
+    "text": "In some cases, for a given RNG type, generating an array of random values can be more efficient with a specialized method than by merely using the decoupling technique explained before. This is for example the case for MersenneTwister, which natively writes random values in an array.To implement this specialization for MyRNG and for a specification s, producing elements of type S, the following method can be defined: rand!(rng::MyRNG, a::AbstractArray{S}, ::SamplerS), where SamplerS is the type of the sampler returned by Sampler(MyRNG, s, Val(Inf)). Instead of AbstractArray, it\'s possible to implement the functionality only for a subtype, e.g. Array{S}. The non-mutating array method of rand will automatically call this specialization internally.DocTestSetup = nothing"
 },
 
 {
