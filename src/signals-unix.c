@@ -89,6 +89,14 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     // checks that the syscall is made in the signal handler and that
     // the ucontext address is valid. Hopefully the value of the ucontext
     // will not be part of the validation...
+    if (!ptls->signal_stack) {
+        sigset_t sset;
+        sigemptyset(&sset);
+        sigaddset(&sset, sig);
+        sigprocmask(SIG_UNBLOCK, &sset, NULL);
+        fptr();
+        return;
+    }
     uintptr_t rsp = (uintptr_t)ptls->signal_stack + sig_stack_size;
     assert(rsp % 16 == 0);
 #if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
@@ -224,18 +232,6 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(sig == SIGSEGV || sig == SIGBUS);
-
-    // if we're profiling, this segfault is likely caused by the unwinder.
-    // ignore the signal and jump back to where we came from.
-    if (running && ptls->safe_restore) {
-        // unblock the signal being handled
-        sigset_t sset;
-        sigemptyset(&sset);
-        sigaddset(&sset, sig);
-        sigprocmask(SIG_UNBLOCK, &sset, NULL);
-
-        jl_longjmp(*ptls->safe_restore, 1);
-    }
 
     if (jl_addr_is_safepoint((uintptr_t)info->si_addr)) {
 #ifdef JULIA_ENABLE_THREADING
