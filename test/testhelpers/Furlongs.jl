@@ -1,8 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module Furlongs
+
+export Furlong
+
 # Here we implement a minimal dimensionful type Furlong, which is used
-# to test dimensional correctness of various functions in Base.  Furlong
-# is exported by the TestHelpers module.
+# to test dimensional correctness of various functions in Base.
 
 # represents a quantity in furlongs^p
 struct Furlong{p,T<:Number} <: Number
@@ -34,8 +37,6 @@ canonical_p(p) = isinteger(p) ? Int(p) : Rational{Int}(p)
 Base.abs(x::Furlong{p}) where {p} = Furlong{p}(abs(x.val))
 @generated Base.abs2(x::Furlong{p}) where {p} = :(Furlong{$(canonical_p(2p))}(abs2(x.val)))
 @generated Base.inv(x::Furlong{p}) where {p} = :(Furlong{$(canonical_p(-p))}(inv(x.val)))
-import LinearAlgebra: sylvester
-sylvester(a::Furlong,b::Furlong,c::Furlong) = -c / (a + b)
 
 for f in (:isfinite, :isnan, :isreal, :isinf)
     @eval Base.$f(x::Furlong) = $f(x.val)
@@ -76,3 +77,5 @@ for op in (:rem, :mod)
     end
 end
 Base.sqrt(x::Furlong) = _div(sqrt(x.val), x, Val(2))
+
+end

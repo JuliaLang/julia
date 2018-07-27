@@ -505,8 +505,8 @@ end
 
 # dimensional correctness
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
-using .Main.TestHelpers: Furlong
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
 
 Statistics.middle(x::Furlong{p}) where {p} = Furlong{p}(middle(x.val))
 Statistics.middle(x::Furlong{p}, y::Furlong{p}) where {p} = Furlong{p}(middle(x.val, y.val))

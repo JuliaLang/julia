@@ -7,8 +7,8 @@ import REPL.LineEdit
 using Markdown
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
-import .Main.TestHelpers
+isdefined(Main, :FakePTYs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FakePTYs.jl"))
+import .Main.FakePTYs: with_fake_pty
 
 # For curmod_*
 include(joinpath(BASE_TEST_PATH, "testenv.jl"))
@@ -719,7 +719,7 @@ ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
 let exename = Base.julia_cmd()
     # Test REPL in dumb mode
     if !Sys.iswindows()
-        TestHelpers.with_fake_pty() do slave, master
+        with_fake_pty() do slave, master
             nENV = copy(ENV)
             nENV["TERM"] = "dumb"
             p = run(setenv(`$exename --startup-file=no -q`,nENV),slave,slave,slave,wait=false)
