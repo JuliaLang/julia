@@ -1009,7 +1009,7 @@ method, which by default will return a list of the testset objects used in
 each iteration.
 
 Before the execution of the body of a `@testset`, there is an implicit
-call to `Random.seed(seed)` where `seed` is the current seed of the global RNG.
+call to `Random.seed!(seed)` where `seed` is the current seed of the global RNG.
 Moreover, after the execution of the body, the state of the global RNG is
 restored to what it was before the `@testset`. This is meant to ease
 reproducibility in case of failure, and to allow seamless
@@ -1077,7 +1077,7 @@ function testset_beginend(args, tests, source)
         oldrng = copy(GLOBAL_RNG)
         try
             # GLOBAL_RNG is re-seeded with its own seed to ease reproduce a failed test
-            Random.seed(GLOBAL_RNG.seed)
+            Random.seed!(GLOBAL_RNG.seed)
             $(esc(tests))
         catch err
             err isa InterruptException && rethrow(err)
@@ -1143,7 +1143,7 @@ function testset_forloop(args, testloop, source)
         if !first_iteration
             pop_testset()
             push!(arr, finish(ts))
-            # it's 1000 times faster to copy from tmprng rather than calling Random.seed
+            # it's 1000 times faster to copy from tmprng rather than calling Random.seed!
             copy!(GLOBAL_RNG, tmprng)
 
         end
@@ -1164,7 +1164,7 @@ function testset_forloop(args, testloop, source)
         local first_iteration = true
         local ts
         local oldrng = copy(GLOBAL_RNG)
-        Random.seed(GLOBAL_RNG.seed)
+        Random.seed!(GLOBAL_RNG.seed)
         local tmprng = copy(GLOBAL_RNG)
         try
             $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
@@ -1558,10 +1558,10 @@ function guardseed(f::Function, r::AbstractRNG=GLOBAL_RNG)
     end
 end
 
-"`guardseed(f, seed)` is equivalent to running `Random.seed(seed); f()` and
+"`guardseed(f, seed)` is equivalent to running `Random.seed!(seed); f()` and
 then restoring the state of the global RNG as it was before."
 guardseed(f::Function, seed::Union{Vector{UInt32},Integer}) = guardseed() do
-    Random.seed(seed)
+    Random.seed!(seed)
     f()
 end
 

@@ -39,4 +39,4 @@ end
 @deprecate RandomDevice(unlimited::Bool) RandomDevice(; unlimited=unlimited)
 
 # PR #28295
-@deprecate srand Random.seed
+@deprecate srand Random.seed!

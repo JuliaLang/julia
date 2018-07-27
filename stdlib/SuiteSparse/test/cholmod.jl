@@ -8,7 +8,7 @@ using Serialization
 using LinearAlgebra: issuccess, PosDefException
 
 # CHOLMOD tests
-Random.seed(123)
+Random.seed!(123)
 
 @testset "based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/" begin
 
@@ -733,7 +733,7 @@ end
 end
 
 @testset "Check that Symmetric{SparseMatrixCSC} can be constructed from CHOLMOD.Sparse" begin
-    Int === Int32 && Random.seed(124)
+    Int === Int32 && Random.seed!(124)
     A = sprandn(10, 10, 0.1)
     B = CHOLMOD.Sparse(A)
     C = B'B

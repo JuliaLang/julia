@@ -6,7 +6,7 @@ using Test, LinearAlgebra, SparseArrays, Random
 using LinearAlgebra: rmul!
 
 n= 10 #Size of matrix to test
-Random.seed(1)
+Random.seed!(1)
 
 @testset "Interconversion between special matrix types" begin
     a = [1.0:n;]

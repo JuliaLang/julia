@@ -1742,13 +1742,13 @@ end
 end
 
 @testset "sparse matrix opnormestinv" begin
-    Random.seed(1234)
+    Random.seed!(1234)
     Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
     Aci = ceil.(Int64, 100*sprand(20,20,.5)) + im*ceil.(Int64, sprand(20,20,.5))
     Ar = sprandn(20,20,.5)
     Ari = ceil.(Int64, 100*Ar)
     if Base.USE_GPL_LIBS
-        # NOTE: opnormestinv is probabilistic, so requires a fixed seed (set above in Random.seed(1234))
+        # NOTE: opnormestinv is probabilistic, so requires a fixed seed (set above in Random.seed!(1234))
         @test SparseArrays.opnormestinv(Ac,3) ≈ opnorm(inv(Array(Ac)),1) atol=1e-4
         @test SparseArrays.opnormestinv(Aci,3) ≈ opnorm(inv(Array(Aci)),1) atol=1e-4
         @test SparseArrays.opnormestinv(Ar) ≈ opnorm(inv(Array(Ar)),1) atol=1e-4
@@ -1795,7 +1795,7 @@ end
 end
 
 @testset "factorization" begin
-    Random.seed(123)
+    Random.seed!(123)
     local A
     A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2) + im*sprandn(5, 5, 0.2)
     A = A + copy(A')

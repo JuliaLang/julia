@@ -612,18 +612,18 @@ let msg = split(read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=n
     @test msg == rstrip(msg)
 end
 
-@testset "test guarded Random.seed" begin
+@testset "test guarded Random.seed!" begin
     seed = rand(UInt)
     orig = copy(Random.GLOBAL_RNG)
     @test guardseed(()->rand(), seed) == guardseed(()->rand(), seed)
     @test guardseed(()->rand(Int), seed) == guardseed(()->rand(Int), seed)
     r1, r2 = MersenneTwister(0), MersenneTwister(0)
     a, b = guardseed(r1) do
-        Random.seed(r1, 0)
+        Random.seed!(r1, 0)
         rand(r1), rand(r1, Int)
     end::Tuple{Float64,Int}
     c, d = guardseed(r2) do
-        Random.seed(r2, 0)
+        Random.seed!(r2, 0)
         rand(r2), rand(r2, Int)
     end::Tuple{Float64,Int}
     @test a == c == rand(r1) == rand(r2)
@@ -741,7 +741,7 @@ end
 @testset "@testset preserves GLOBAL_RNG's state, and re-seeds it" begin
     # i.e. it behaves as if it was wrapped in a `guardseed(GLOBAL_RNG.seed)` block
     seed = rand(UInt128)
-    Random.seed(seed)
+    Random.seed!(seed)
     a = rand()
     @testset begin
         # global RNG must re-seeded at the beginning of @testset
@@ -752,7 +752,7 @@ end
     end
     # the @testset's above must have no consequence for rand() below
     b = rand()
-    Random.seed(seed)
+    Random.seed!(seed)
     @test a == rand()
     @test b == rand()
 end

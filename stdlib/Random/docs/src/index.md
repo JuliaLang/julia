@@ -30,6 +30,12 @@ Additionally, normal and exponential distributions are implemented for some `Abs
 ## Random generation functions
 
 ```@docs
+<<<<<<< 75ff13e3183a02e622d7bb72856b5304736fd394
+=======
+Random.seed!
+Random.MersenneTwister
+Random.RandomDevice
+>>>>>>> Renamed Random.seed to Random.seed!
 Random.rand
 Random.rand!
 Random.bitrand

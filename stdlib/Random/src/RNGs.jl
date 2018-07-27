@@ -65,7 +65,7 @@ The entropy is obtained from the operating system.
 RandomDevice
 
 RandomDevice(::Nothing) = RandomDevice()
-seed(rng::RandomDevice) = rng
+seed!(rng::RandomDevice) = rng
 
 
 ## MersenneTwister
@@ -110,7 +110,7 @@ of random numbers.
 The `seed` may be a non-negative integer or a vector of
 `UInt32` integers. If no seed is provided, a randomly generated one
 is created (using entropy from the system).
-See the [`seed`](@ref) function for reseeding an already existing
+See the [`seed!`](@ref) function for reseeding an already existing
 `MersenneTwister` object.
 
 
@@ -135,7 +135,7 @@ true
 ```
 """
 MersenneTwister(seed=nothing) =
-    Random.seed(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
+    seed!(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
 
 
 function copy!(dst::MersenneTwister, src::MersenneTwister)
@@ -274,9 +274,9 @@ function make_seed(n::Integer)
     end
 end
 
-#### seed()
+#### seed!()
 
-function seed(r::MersenneTwister, seed::Vector{UInt32})
+function seed!(r::MersenneTwister, seed::Vector{UInt32})
     copyto!(resize!(r.seed, length(seed)), seed)
     dsfmt_init_by_array(r.state, r.seed)
     mt_setempty!(r)
@@ -285,12 +285,12 @@ function seed(r::MersenneTwister, seed::Vector{UInt32})
     return r
 end
 
-seed(r::MersenneTwister=GLOBAL_RNG) = seed(r, make_seed())
-seed(r::MersenneTwister, n::Integer) = seed(r, make_seed(n))
-seed(seed::Union{Integer,Vector{UInt32}}) = Random.seed(GLOBAL_RNG, seed)
+seed!(r::MersenneTwister=GLOBAL_RNG) = seed!(r, make_seed())
+seed!(r::MersenneTwister, n::Integer) = seed!(r, make_seed(n))
+seed!(seed::Union{Integer,Vector{UInt32}}) = seed!(GLOBAL_RNG, seed)
 
 
-### Global RNG (must be defined after seed)
+### Global RNG (must be defined after seed!)
 
 const GLOBAL_RNG = MersenneTwister(0)
 

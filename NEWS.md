@@ -1323,7 +1323,7 @@ Deprecated or removed
 
   * `squeeze` is deprecated in favor of `dropdims`.
 
-  * `srand` is deprecated in favor of the unexported `Random.seed` ([#27726]).
+  * `srand` is deprecated in favor of the unexported `Random.seed!` ([#27726]).
 
 Command-line option changes
 ---------------------------
