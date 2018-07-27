@@ -173,38 +173,38 @@ end
             @test isequal(T(1//4)^2, T(1//16))
             @test isequal(acos(T(1)), T(0))
             @test isequal(acosh(T(1)), T(0))
-            @test asin(T(1)) ≈ T(pi)/2 atol=eps(T)
-            @test atan(T(1)) ≈ T(pi)/4 atol=eps(T)
-            @test atan(T(1),T(1)) ≈ T(pi)/4 atol=eps(T)
+            @test asin(T(1)) ≈ T(pi)/2 atol=ulp(T)
+            @test atan(T(1)) ≈ T(pi)/4 atol=ulp(T)
+            @test atan(T(1),T(1)) ≈ T(pi)/4 atol=ulp(T)
             @test isequal(cbrt(T(0)), T(0))
             @test isequal(cbrt(T(1)), T(1))
             @test isequal(cbrt(T(1000000000)), T(1000))
             @test isequal(cos(T(0)), T(1))
-            @test cos(T(pi)/2) ≈ T(0) atol=eps(T)
+            @test cos(T(pi)/2) ≈ T(0) atol=ulp(T)
             @test isequal(cos(T(pi)), T(-1))
-            @test exp(T(1)) ≈ T(ℯ) atol=10*eps(T)
+            @test exp(T(1)) ≈ T(ℯ) atol=10*ulp(T)
             @test isequal(exp10(T(1)), T(10))
             @test isequal(exp2(T(1)), T(2))
             @test isequal(expm1(T(0)), T(0))
-            @test expm1(T(1)) ≈ T(ℯ)-1 atol=10*eps(T)
+            @test expm1(T(1)) ≈ T(ℯ)-1 atol=10*ulp(T)
             @test isequal(hypot(T(3),T(4)), T(5))
             @test isequal(log(T(1)), T(0))
             @test isequal(log(ℯ,T(1)), T(0))
-            @test log(T(ℯ)) ≈ T(1) atol=eps(T)
+            @test log(T(ℯ)) ≈ T(1) atol=ulp(T)
             @test isequal(log10(T(1)), T(0))
             @test isequal(log10(T(10)), T(1))
             @test isequal(log1p(T(0)), T(0))
-            @test log1p(T(ℯ)-1) ≈ T(1) atol=eps(T)
+            @test log1p(T(ℯ)-1) ≈ T(1) atol=ulp(T)
             @test isequal(log2(T(1)), T(0))
             @test isequal(log2(T(2)), T(1))
             @test isequal(sin(T(0)), T(0))
             @test isequal(sin(T(pi)/2), T(1))
-            @test sin(T(pi)) ≈ T(0) atol=eps(T)
+            @test sin(T(pi)) ≈ T(0) atol=ulp(T)
             @test isequal(sqrt(T(0)), T(0))
             @test isequal(sqrt(T(1)), T(1))
             @test isequal(sqrt(T(100000000)), T(10000))
             @test isequal(tan(T(0)), T(0))
-            @test tan(T(pi)/4) ≈ T(1) atol=eps(T)
+            @test tan(T(pi)/4) ≈ T(1) atol=ulp(T)
         end
         @testset "Inverses" begin
             @test acos(cos(x)) ≈ x
@@ -263,7 +263,7 @@ end
         X = map(T, vcat(-10:0.0002:10, -80:0.001:80, 2.0^-27, 2.0^-28, 2.0^-14, 2.0^-13))
         for x in X
             y, yb = exp(x), exp(big(x))
-            @test abs(y-yb) <= 1.0*eps(T(yb))
+            @test abs(y-yb) <= 1.0*ulp(T(yb))
         end
     end
     @testset "$T edge cases" begin
@@ -281,12 +281,12 @@ end
         X = map(Float64, vcat(-10:0.00021:10, -35:0.0023:100, -300:0.001:300))
         for x in X
             y, yb = exp10(x), exp10(big(x))
-            @test abs(y-yb) <= 1.2*eps(Float64(yb))
+            @test abs(y-yb) <= 1.2*ulp(Float64(yb))
         end
         X = map(Float32, vcat(-10:0.00021:10, -35:0.0023:35, -35:0.001:35))
         for x in X
             y, yb = exp10(x), exp10(big(x))
-            @test abs(y-yb) <= 1.2*eps(Float32(yb))
+            @test abs(y-yb) <= 1.2*ulp(Float32(yb))
         end
     end
     @testset "$T edge cases" for T in (Float64, Float32)
@@ -346,8 +346,8 @@ end
     @testset "$T" for T = (Float32,Float64,Rational{Int})
         fT = typeof(float(one(T)))
         for x = -400:40:400
-            @test sind(convert(T,x))::fT ≈ convert(fT,sin(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
-            @test cosd(convert(T,x))::fT ≈ convert(fT,cos(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
+            @test sind(convert(T,x))::fT ≈ convert(fT,sin(pi/180*x)) atol=ulp(deg2rad(convert(fT,x)))
+            @test cosd(convert(T,x))::fT ≈ convert(fT,cos(pi/180*x)) atol=ulp(deg2rad(convert(fT,x)))
         end
         @testset "sind" begin
             @test sind(convert(T,0.0))::fT === zero(fT)
@@ -366,8 +366,8 @@ end
 
         @testset "sinpi and cospi" begin
             for x = -3:0.3:3
-                @test sinpi(convert(T,x))::fT ≈ convert(fT,sin(pi*x)) atol=eps(pi*convert(fT,x))
-                @test cospi(convert(T,x))::fT ≈ convert(fT,cos(pi*x)) atol=eps(pi*convert(fT,x))
+                @test sinpi(convert(T,x))::fT ≈ convert(fT,sin(pi*x)) atol=ulp(pi*convert(fT,x))
+                @test cospi(convert(T,x))::fT ≈ convert(fT,cos(pi*x)) atol=ulp(pi*convert(fT,x))
             end
 
             @test sinpi(convert(T,0.0))::fT === zero(fT)
@@ -499,16 +499,16 @@ end
 
                 y = log(xt)
                 yb = log(big(xt))
-                @test abs(y-yb) <= 0.56*eps(T(yb))
+                @test abs(y-yb) <= 0.56*ulp(T(yb))
 
                 y = log1p(xt)
                 yb = log1p(big(xt))
-                @test abs(y-yb) <= 0.56*eps(T(yb))
+                @test abs(y-yb) <= 0.56*ulp(T(yb))
 
                 if n <= 0
                     y = log1p(-xt)
                     yb = log1p(big(-xt))
-                    @test abs(y-yb) <= 0.56*eps(T(yb))
+                    @test abs(y-yb) <= 0.56*ulp(T(yb))
                 end
             end
         end
@@ -609,8 +609,8 @@ end
 
 # #22742: updated isapprox semantics
 @test !isapprox(1.0, 1.0+1e-12, atol=1e-14)
-@test isapprox(1.0, 1.0+0.5*sqrt(eps(1.0)))
-@test !isapprox(1.0, 1.0+1.5*sqrt(eps(1.0)), atol=sqrt(eps(1.0)))
+@test isapprox(1.0, 1.0+0.5*sqrt(ulp(1.0)))
+@test !isapprox(1.0, 1.0+1.5*sqrt(ulp(1.0)), atol=sqrt(ulp(1.0)))
 
 # test AbstractFloat fallback pr22716
 struct Float22716{T<:AbstractFloat} <: AbstractFloat
@@ -632,9 +632,9 @@ end
         @test asin(-one(T)) === -T(pi)/2
         for x in (0.45, 0.6, 0.98)
             by = asin(big(T(x)))
-            @test T(abs(asin(T(x)) - by))/eps(T(abs(by))) <= 1
+            @test T(abs(asin(T(x)) - by))/ulp(T(abs(by))) <= 1
             bym = asin(big(T(-x)))
-            @test T(abs(asin(T(-x)) - bym))/eps(T(abs(bym))) <= 1
+            @test T(abs(asin(T(-x)) - bym))/ulp(T(abs(bym))) <= 1
         end
         @test_throws DomainError asin(-T(Inf))
         @test_throws DomainError asin(T(Inf))
@@ -655,9 +655,9 @@ end
         for x in (0.1, 0.45, 0.6, 0.75, 0.79, 0.98)
             for op in (sin, cos, tan)
                 by = T(op(big(x)))
-                @test abs(op(T(x)) - by)/eps(by) <= one(T)
+                @test abs(op(T(x)) - by)/ulp(by) <= one(T)
                 bym = T(op(big(-x)))
-                @test abs(op(T(-x)) - bym)/eps(bym) <= one(T)
+                @test abs(op(T(-x)) - bym)/ulp(bym) <= one(T)
             end
         end
         @test_throws DomainError sin(-T(Inf))
@@ -699,13 +699,13 @@ end
                   (T(39/16)+T(2)^23)/2, T(2)^23)
             x = T(7/16)
             by = T(atan(big(x)))
-            @test abs(atan(x) - by)/eps(by) <= one(T)
+            @test abs(atan(x) - by)/ulp(by) <= one(T)
             x = prevfloat(T(7/16))
             by = T(atan(big(x)))
-            @test abs(atan(x) - by)/eps(by) <= one(T)
+            @test abs(atan(x) - by)/ulp(by) <= one(T)
             x = nextfloat(T(7/16))
             by = T(atan(big(x)))
-            @test abs(atan(x) - by)/eps(by) <= one(T)
+            @test abs(atan(x) - by)/ulp(by) <= one(T)
         end
         # This case was used to find a bug, but it isn't special in itself
         @test atan(1.7581305072934137) ≈ 1.053644580517088
@@ -814,9 +814,9 @@ end
         @test acos(-one(T)) === T(pi)
         for x in (0.45, 0.6, 0.98)
             by = acos(big(T(x)))
-            @test T((acos(T(x)) - by))/eps(abs(T(by))) <= 1
+            @test T((acos(T(x)) - by))/ulp(abs(T(by))) <= 1
             bym = acos(big(T(-x)))
-            @test T(abs(acos(T(-x)) - bym))/eps(abs(T(bym))) <= 1
+            @test T(abs(acos(T(-x)) - bym))/ulp(abs(T(bym))) <= 1
         end
         @test_throws DomainError acos(-T(Inf))
         @test_throws DomainError acos(T(Inf))
@@ -838,8 +838,8 @@ import Base.Math: COSH_SMALL_X, H_SMALL_X, H_MEDIUM_X, H_LARGE_X
         @test sinh(-T(1000)) === -T(Inf)
         @test isnan_type(T, sinh(T(NaN)))
         for x in Iterators.flatten(pcnfloat.([H_SMALL_X(T), H_MEDIUM_X(T), H_LARGE_X(T)]))
-            @test sinh(x) ≈ sinh(big(x)) rtol=eps(T)
-            @test sinh(-x) ≈ sinh(big(-x)) rtol=eps(T)
+            @test sinh(x) ≈ sinh(big(x)) rtol=ulp(T)
+            @test sinh(-x) ≈ sinh(big(-x)) rtol=ulp(T)
         end
     end
 end
@@ -854,8 +854,8 @@ end
         @test cosh(-T(1000)) === T(Inf)
         @test isnan_type(T, cosh(T(NaN)))
         for x in Iterators.flatten(pcnfloat.([COSH_SMALL_X(T), H_MEDIUM_X(T), H_LARGE_X(T)]))
-            @test cosh(x) ≈ cosh(big(x)) rtol=eps(T)
-            @test cosh(-x) ≈ cosh(big(-x)) rtol=eps(T)
+            @test cosh(x) ≈ cosh(big(x)) rtol=ulp(T)
+            @test cosh(-x) ≈ cosh(big(-x)) rtol=ulp(T)
         end
     end
 end
@@ -870,8 +870,8 @@ end
         @test tanh(-T(1000)) === -one(T)
         @test isnan_type(T, tanh(T(NaN)))
         for x in Iterators.flatten(pcnfloat.([H_SMALL_X(T), T(1.0), H_MEDIUM_X(T)]))
-            @test tanh(x) ≈ tanh(big(x)) rtol=eps(T)
-            @test tanh(-x) ≈ tanh(big(-x)) rtol=eps(T)
+            @test tanh(x) ≈ tanh(big(x)) rtol=ulp(T)
+            @test tanh(-x) ≈ tanh(big(-x)) rtol=ulp(T)
         end
     end
 end
@@ -884,8 +884,8 @@ end
         @test asinh(prevfloat(zero(T))) === prevfloat(zero(T))
         @test isnan_type(T, asinh(T(NaN)))
         for x in Iterators.flatten(pcnfloat.([T(2)^-28,T(2),T(2)^28]))
-            @test asinh(x) ≈ asinh(big(x)) rtol=eps(T)
-            @test asinh(-x) ≈ asinh(big(-x)) rtol=eps(T)
+            @test asinh(x) ≈ asinh(big(x)) rtol=ulp(T)
+            @test asinh(-x) ≈ asinh(big(-x)) rtol=ulp(T)
         end
     end
 end
@@ -896,7 +896,7 @@ end
         @test acosh(one(T)) === zero(T)
         @test isnan_type(T, acosh(T(NaN)))
         for x in Iterators.flatten(pcnfloat.([nextfloat(T(1.0)), T(2), T(2)^28]))
-            @test acosh(x) ≈ acosh(big(x)) rtol=eps(T)
+            @test acosh(x) ≈ acosh(big(x)) rtol=ulp(T)
         end
     end
 end
@@ -912,8 +912,8 @@ end
         @test atanh(prevfloat(zero(T))) === prevfloat(zero(T))
         @test isnan_type(T, atanh(T(NaN)))
         for x in Iterators.flatten(pcnfloat.([T(2.0)^-28, T(0.5)]))
-            @test atanh(x) ≈ atanh(big(x)) rtol=eps(T)
-            @test atanh(-x) ≈ atanh(big(-x)) rtol=eps(T)
+            @test atanh(x) ≈ atanh(big(x)) rtol=ulp(T)
+            @test atanh(-x) ≈ atanh(big(-x)) rtol=ulp(T)
         end
     end
 end
@@ -971,9 +971,9 @@ end
                   map(x->x^3, 1.0:1.0:1024.0)...,
                   nextfloat(-T(Inf)), prevfloat(T(Inf)))
             by = cbrt(big(T(x)))
-            @test cbrt(T(x)) ≈ by rtol=eps(T)
+            @test cbrt(T(x)) ≈ by rtol=ulp(T)
             bym = cbrt(big(T(-x)))
-            @test cbrt(T(-x)) ≈ bym rtol=eps(T)
+            @test cbrt(T(-x)) ≈ bym rtol=ulp(T)
         end
     end
 end

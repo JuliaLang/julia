@@ -321,17 +321,17 @@ calendar(dt::DateTime) = ISOCalendar
 calendar(dt::Date) = ISOCalendar
 
 """
-    eps(::DateTime) -> Millisecond
-    eps(::Date) -> Day
-    eps(::Time) -> Nanosecond
+    ulp(::DateTime) -> Millisecond
+    ulp(::Date) -> Day
+    ulp(::Time) -> Nanosecond
 
 Returns `Millisecond(1)` for `DateTime` values, `Day(1)` for `Date` values, and `Nanosecond(1)` for `Time` values.
 """
-Base.eps
+Base.ulp
 
-Base.eps(dt::DateTime) = Millisecond(1)
-Base.eps(dt::Date) = Day(1)
-Base.eps(t::Time) = Nanosecond(1)
+Base.ulp(dt::DateTime) = Millisecond(1)
+Base.ulp(dt::Date) = Day(1)
+Base.ulp(t::Time) = Nanosecond(1)
 
 Base.typemax(::Union{DateTime, Type{DateTime}}) = DateTime(146138512, 12, 31, 23, 59, 59)
 Base.typemin(::Union{DateTime, Type{DateTime}}) = DateTime(-146138511, 1, 1, 0, 0, 0)

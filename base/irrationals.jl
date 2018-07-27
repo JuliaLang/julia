@@ -36,7 +36,7 @@ Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
         setprecision(BigFloat, p)
         bx = BigFloat(x)
         r = rationalize(T, bx, tol=0)
-        if abs(BigFloat(r) - bx) > eps(bx)
+        if abs(BigFloat(r) - bx) > ulp(bx)
             setprecision(BigFloat, o)
             return r
         end

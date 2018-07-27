@@ -1265,7 +1265,7 @@ for (gelsd, gelsy, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            JPVT( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), WORK( * )
-        function gelsy!(A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty}, rcond::Real=eps($elty))
+        function gelsy!(A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty}, rcond::Real=ulp($elty))
             @assert !has_offset_axes(A, B)
             chkstride1(A)
             m = size(A, 1)
@@ -1363,7 +1363,7 @@ for (gelsd, gelsy, elty, relty) in
         #       INTEGER            JPVT( * )
         #       DOUBLE PRECISION   RWORK( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
-        function gelsy!(A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty}, rcond::Real=eps($relty))
+        function gelsy!(A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty}, rcond::Real=ulp($relty))
             @assert !has_offset_axes(A, B)
             chkstride1(A, B)
             m, n = size(A)

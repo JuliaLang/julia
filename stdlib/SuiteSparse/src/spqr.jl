@@ -137,7 +137,7 @@ Base.axes(Q::QRSparseQ) = map(Base.OneTo, size(Q))
 
 # From SPQR manual p. 6
 _default_tol(A::SparseMatrixCSC) =
-    20*sum(size(A))*eps(real(eltype(A)))*maximum(norm(view(A, :, i)) for i in 1:size(A, 2))
+    20*sum(size(A))*ulp(real(eltype(A)))*maximum(norm(view(A, :, i)) for i in 1:size(A, 2))
 
 function LinearAlgebra.qr(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {Tv <: CHOLMOD.VTypes}
     R     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()

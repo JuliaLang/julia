@@ -147,7 +147,7 @@ end
         B = rand(elty, 10, 10)
         C, j = LAPACK.gelsd!(copy(A),copy(B))
         D, k = LAPACK.gelsy!(copy(A),copy(B))
-        @test C ≈ D rtol=4*eps(cond(A))
+        @test C ≈ D rtol=4*ulp(cond(A))
         @test_throws DimensionMismatch LAPACK.gelsd!(A,rand(elty,12,10))
         @test_throws DimensionMismatch LAPACK.gelsy!(A,rand(elty,12,10))
     end
@@ -202,7 +202,7 @@ end
         Bvs = eigvecs(B)
         Avs = eigvecs(A)
         Bvs = LAPACK.gebak!('S','R',ilo,ihi,scale,Bvs)
-        @test norm(diff(Avs ./ Bvs, dims=1)) < 100 * eps(abs(float(one(elty))))
+        @test norm(diff(Avs ./ Bvs, dims=1)) < 100 * ulp(abs(float(one(elty))))
     end
 end
 
@@ -359,7 +359,7 @@ end
         A = A + transpose(A) #symmetric!
         B = copy(A)
         B,ipiv = LAPACK.sytrf!('U',B)
-        @test triu(inv(A)) ≈ triu(LAPACK.sytri!('U',B,ipiv)) rtol=eps(cond(A))
+        @test triu(inv(A)) ≈ triu(LAPACK.sytri!('U',B,ipiv)) rtol=ulp(cond(A))
         @test_throws DimensionMismatch LAPACK.sytrs!('U',B,ipiv,rand(elty,11,5))
         @test LAPACK.sytrf!('U',zeros(elty,0,0)) == (zeros(elty,0,0),zeros(BlasInt,0),zero(BlasInt))
     end
@@ -370,7 +370,7 @@ end
         A = A + transpose(A) #symmetric!
         B = copy(A)
         B,ipiv = LAPACK.sytrf_rook!('U', B)
-        @test triu(inv(A)) ≈ triu(LAPACK.sytri_rook!('U', B, ipiv)) rtol=eps(cond(A))
+        @test triu(inv(A)) ≈ triu(LAPACK.sytri_rook!('U', B, ipiv)) rtol=ulp(cond(A))
         @test_throws DimensionMismatch LAPACK.sytrs_rook!('U', B, ipiv, rand(elty, 11, 5))
         @test LAPACK.sytrf_rook!('U',zeros(elty, 0, 0)) == (zeros(elty, 0, 0),zeros(BlasInt, 0),zero(BlasInt))
         A = rand(elty, 10, 10)
@@ -379,7 +379,7 @@ end
         c = A \ b
         cnd = cond(A)
         b,A = LAPACK.sysv_rook!('U', A, b)
-        @test b ≈ c rtol=eps(cnd)
+        @test b ≈ c rtol=ulp(cnd)
         @test_throws DimensionMismatch LAPACK.sysv_rook!('U',A,rand(elty,11))
 
         # syconvf_rook error handling
@@ -546,7 +546,7 @@ end
         C = copy(A)
         D = copy(B)
         X, rcond, f, b, r = LAPACK.gesvx!(C,D)
-        @test X ≈ A\B rtol=inv(rcond)*eps(real(elty))
+        @test X ≈ A\B rtol=inv(rcond)*ulp(real(elty))
     end
 end
 

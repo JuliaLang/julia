@@ -1796,7 +1796,7 @@ end
 
 # issue #9648
 let x = fill(1.5f0, 10^7)
-    @test abs(1.5f7 - cumsum(x)[end]) < 3*eps(1.5f7)
+    @test abs(1.5f7 - cumsum(x)[end]) < 3*ulp(1.5f7)
     @test cumsum(x) == cumsum!(similar(x), x)
 end
 
@@ -2343,7 +2343,7 @@ Float64(x::F21666) = Float64(x.x)
     # test that cumsum uses more stable algorithm
     # for types with unknown/rounding arithmetic
     # we make v pretty large, because stable algorithm may have a large base case
-    v = zeros(300); v[1] = 2; v[200:end] .= eps(Float32)
+    v = zeros(300); v[1] = 2; v[200:end] .= ulp(Float32)
 
     f_rounds = Float64.(cumsum(F21666{Base.ArithmeticRounds}.(v)))
     f_unknown = Float64.(cumsum(F21666{Base.ArithmeticUnknown}.(v)))

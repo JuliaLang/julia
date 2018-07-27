@@ -1577,26 +1577,26 @@ end
 end
 
 # things related to floating-point epsilon
-@test eps() == eps(Float64)
-@test eps(Float64) == eps(1.0)
-@test eps(Float64) == eps(1.5)
-@test eps(Float32) == eps(1f0)
-@test eps(float(0)) == 5e-324
-@test eps(-float(0)) == 5e-324
-@test eps(nextfloat(float(0))) == 5e-324
-@test eps(-nextfloat(float(0))) == 5e-324
-@test eps(realmin()) == 5e-324
-@test eps(-realmin()) == 5e-324
-@test eps(realmax()) ==  2.0^(1023-52)
-@test eps(-realmax()) ==  2.0^(1023-52)
-@test isnan(eps(NaN))
-@test isnan(eps(Inf))
-@test isnan(eps(-Inf))
+@test ulp() == ulp(Float64)
+@test ulp(Float64) == ulp(1.0)
+@test ulp(Float64) == ulp(1.5)
+@test ulp(Float32) == ulp(1f0)
+@test ulp(float(0)) == 5e-324
+@test ulp(-float(0)) == 5e-324
+@test ulp(nextfloat(float(0))) == 5e-324
+@test ulp(-nextfloat(float(0))) == 5e-324
+@test ulp(realmin()) == 5e-324
+@test ulp(-realmin()) == 5e-324
+@test ulp(realmax()) ==  2.0^(1023-52)
+@test ulp(-realmax()) ==  2.0^(1023-52)
+@test isnan(ulp(NaN))
+@test isnan(ulp(Inf))
+@test isnan(ulp(-Inf))
 
 @test .1+.1+.1 != .3
 @test .1+.1+.1 ≈ .3
 @test .1+.1+.1-.3 ≉ 0
-@test .1+.1+.1-.3 ≈ 0 atol=eps(.3)
+@test .1+.1+.1-.3 ≈ 0 atol=ulp(.3)
 @test 1.1 ≈ 1.1f0
 
 @test div(1e50,1) == 1e50
@@ -1782,8 +1782,8 @@ end
     @test 0xf.fP1 === 31.875
     @test -0x1.0p2 === -4.0
 end
-@testset "eps / realmin / realmax" begin
-    @test 0x1p-52 == eps()
+@testset "ulp / realmin / realmax" begin
+    @test 0x1p-52 == ulp()
     @test 0x1p-52 + 1 != 1
     @test 0x1p-53 + 1 == 1
     @test 0x1p-1022 == realmin()
@@ -1985,8 +1985,8 @@ for F in (Float16,Float32,Float64)
     @test reinterpret(Signed,one(F)) === signed(Base.exponent_one(F))
 end
 
-@test eps(realmax(Float64)) == 1.99584030953472e292
-@test eps(-realmax(Float64)) == 1.99584030953472e292
+@test ulp(realmax(Float64)) == 1.99584030953472e292
+@test ulp(-realmax(Float64)) == 1.99584030953472e292
 
 # modular multiplicative inverses of odd numbers via exponentiation
 

@@ -24,7 +24,7 @@ aimg  = randn(n,n)/2
                            (view(aa, 1:n, 1:n),
                             view(asym, 1:n, 1:n),
                             view(apd, 1:n, 1:n)))
-        ε = εa = eps(abs(float(one(eltya))))
+        ε = εa = ulp(abs(float(one(eltya))))
 
         α = rand(eltya)
         β = rand(eltya)

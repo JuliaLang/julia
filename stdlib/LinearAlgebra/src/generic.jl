@@ -720,7 +720,7 @@ end
 Compute the rank of a matrix by counting how many singular
 values of `A` have magnitude greater than `tol*σ₁` where `σ₁` is
 `A`'s largest singular values. By default, the value of `tol` is the smallest
-dimension of `A` multiplied by the [`eps`](@ref)
+dimension of `A` multiplied by the [`ulp`](@ref)
 of the [`eltype`](@ref) of `A`.
 
 # Examples
@@ -738,7 +738,7 @@ julia> rank(diagm(0 => [1, 0.001, 2]), 0.00001)
 3
 ```
 """
-function rank(A::AbstractMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
+function rank(A::AbstractMatrix, tol::Real = min(size(A)...)*ulp(real(float(one(eltype(A))))))
     s = svdvals(A)
     count(x -> x > tol*s[1], s)
 end
@@ -1366,7 +1366,7 @@ end
         rmul!(v, invnrm)
 
     else # scale elements to avoid overflow
-        εδ = eps(one(nrm))/δ
+        εδ = ulp(one(nrm))/δ
         rmul!(v, εδ)
         rmul!(v, inv(nrm*εδ))
     end

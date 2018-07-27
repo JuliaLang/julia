@@ -108,7 +108,7 @@ promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat}
 widen(::Type{Rational{T}}) where {T} = Rational{widen(T)}
 
 """
-    rationalize([T<:Integer=Int,] x; tol::Real=eps(x))
+    rationalize([T<:Integer=Int,] x; tol::Real=ulp(x))
 
 Approximate floating point number `x` as a [`Rational`](@ref) number with components
 of the given integer type. The result will differ from `x` by no more than `tol`.
@@ -184,7 +184,7 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
         return p // q
     end
 end
-rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} = rationalize(T, x, tol)::Rational{T}
+rationalize(::Type{T}, x::AbstractFloat; tol::Real = ulp(x)) where {T<:Integer} = rationalize(T, x, tol)::Rational{T}
 rationalize(x::AbstractFloat; kvs...) = rationalize(Int, x; kvs...)
 
 """

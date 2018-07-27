@@ -75,34 +75,34 @@ srand(1)
         end
 
         for func in (det, tr)
-            @test func(D) ≈ func(DM) atol=n^2*eps(relty)*(1+(elty<:Complex))
+            @test func(D) ≈ func(DM) atol=n^2*ulp(relty)*(1+(elty<:Complex))
         end
         if relty <: BlasFloat
             for func in (exp, sinh, cosh, tanh, sech, csch, coth)
-                @test func(D) ≈ func(DM) atol=n^3*eps(relty)
+                @test func(D) ≈ func(DM) atol=n^3*ulp(relty)
             end
-            @test log(Diagonal(abs.(D.diag))) ≈ log(abs.(DM)) atol=n^3*eps(relty)
+            @test log(Diagonal(abs.(D.diag))) ≈ log(abs.(DM)) atol=n^3*ulp(relty)
         end
         if elty <: BlasComplex
             for func in (logdet, sqrt, sin, cos, tan, sec, csc, cot,
                          asin, acos, atan, asec, acsc, acot,
                          asinh, acosh, atanh, asech, acsch, acoth)
-                @test func(D) ≈ func(DM) atol=n^2*eps(relty)*2
+                @test func(D) ≈ func(DM) atol=n^2*ulp(relty)*2
             end
         end
     end
 
     @testset "Linear solve" begin
         for (v, U) in ((vv, UU), (view(vv, 1:n), view(UU, 1:n, 1:2)))
-            @test D*v ≈ DM*v atol=n*eps(relty)*(1+(elty<:Complex))
-            @test D*U ≈ DM*U atol=n^2*eps(relty)*(1+(elty<:Complex))
+            @test D*v ≈ DM*v atol=n*ulp(relty)*(1+(elty<:Complex))
+            @test D*U ≈ DM*U atol=n^2*ulp(relty)*(1+(elty<:Complex))
 
             @test transpose(U)*D ≈ transpose(U)*Array(D)
             @test U'*D ≈ U'*Array(D)
 
             if relty != BigFloat
-                atol_two = 2n^2 * eps(relty) * (1 + (elty <: Complex))
-                atol_three = 2n^3 * eps(relty) * (1 + (elty <: Complex))
+                atol_two = 2n^2 * ulp(relty) * (1 + (elty <: Complex))
+                atol_three = 2n^3 * ulp(relty) * (1 + (elty <: Complex))
                 @test D\v ≈ DM\v atol=atol_two
                 @test D\U ≈ DM\U atol=atol_three
                 @test ldiv!(D, copy(v)) ≈ DM\v atol=atol_two
@@ -442,7 +442,7 @@ end
         for (transform1, transform2) in ((identity,  identity),
                 (identity,  adjoint  ), (adjoint,   identity ), (adjoint,   adjoint  ),
                 (identity,  transpose), (transpose, identity ), (transpose, transpose) )
-            @test *(transform1(D), transform2(B))::typeof(D) ≈ *(transform1(Matrix(D)), transform2(Matrix(B))) atol=2 * eps()
+            @test *(transform1(D), transform2(B))::typeof(D) ≈ *(transform1(Matrix(D)), transform2(Matrix(B))) atol=2 * ulp()
             @test *(transform1(DD), transform2(BB))::typeof(DD) == *(transform1(fullDD), transform2(fullBB))
         end
     end

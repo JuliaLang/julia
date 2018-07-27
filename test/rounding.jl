@@ -54,7 +54,7 @@ end
 
         @test pn == pd || pn == pu
         @test v > 0 ? pz == pd : pz == pu
-        @test pu - pd == eps(pz)
+        @test pu - pd == ulp(pz)
     end
 
     for T in [Float32,Float64]
@@ -73,7 +73,7 @@ end
 
             @test pn == pd || pn == pu
             @test v > 0 ? pz == pd : pz == pu
-            @test isinf(pu) || pu - pd == eps(pz)
+            @test isinf(pu) || pu - pd == ulp(pz)
         end
     end
 end

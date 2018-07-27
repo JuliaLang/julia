@@ -103,7 +103,7 @@ end
             @test exp(x) ≈ exp(big(x))
             @test exp10(x) ≈ exp10(big(x))
             @test exp2(x) ≈ exp2(big(x))
-            @test expm1(x) ≈ expm1(big(x)) atol=eps(T)
+            @test expm1(x) ≈ expm1(big(x)) atol=ulp(T)
             @test log(x) ≈ log(big(x))
             @test log10(x) ≈ log10(big(x))
             @test log1p(x) ≈ log1p(big(x))

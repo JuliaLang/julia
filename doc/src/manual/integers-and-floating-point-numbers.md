@@ -420,47 +420,50 @@ julia> (typemin(Float64),typemax(Float64))
 ### Machine epsilon
 
 Most real numbers cannot be represented exactly with floating-point numbers, and so for many purposes
-it is important to know the distance between two adjacent representable floating-point numbers,
-which is often known as [machine epsilon](https://en.wikipedia.org/wiki/Machine_epsilon).
+it is important to know the distance between two adjacent representable floating-point numbers.
 
-Julia provides [`eps`](@ref), which gives the distance between `1.0` and the next larger representable
-floating-point value:
+The [`ulp`](@ref) function takes a floating-point value as an
+argument, and gives the absolute difference between that value and the next representable
+floating point value. That is, `ulp(x)` yields a value of the same type as `x` such that
+`x + ulp(x)` is the next representable floating-point value larger than `x`:
 
 ```jldoctest
-julia> eps(Float32)
-1.1920929f-7
-
-julia> eps(Float64)
+julia> ulp(1.0)
 2.220446049250313e-16
 
-julia> eps() # same as eps(Float64)
+julia> ulp(1000.)
+1.1368683772161603e-13
+
+julia> ulp(1e-27)
+1.793662034335766e-43
+
+julia> ulp(0.0)
+5.0e-324
+```
+
+For convenience, if the argument value is omitted, it defaults to `1.0`,
+and if the argument is a type `T`, it defaults to `one(T)`. For a given floating
+point type, this value which is commonly known as the
+[machine epsilon](https://en.wikipedia.org/wiki/Machine_epsilon).
+
+```jldoctest
+julia> ulp(Float32) # same as ulp(1.0f0)
+1.1920929f-7
+
+julia> ulp(Float64) # same as ulp(1.0)
+2.220446049250313e-16
+
+julia> ulp() # same as ulp(Float64) == ulp(1.0)
 2.220446049250313e-16
 ```
 
 These values are `2.0^-23` and `2.0^-52` as [`Float32`](@ref) and [`Float64`](@ref) values,
-respectively. The [`eps`](@ref) function can also take a floating-point value as an
-argument, and gives the absolute difference between that value and the next representable
-floating point value. That is, `eps(x)` yields a value of the same type as `x` such that
-`x + eps(x)` is the next representable floating-point value larger than `x`:
-
-```jldoctest
-julia> eps(1.0)
-2.220446049250313e-16
-
-julia> eps(1000.)
-1.1368683772161603e-13
-
-julia> eps(1e-27)
-1.793662034335766e-43
-
-julia> eps(0.0)
-5.0e-324
-```
+respectively.
 
 The distance between two adjacent representable floating-point numbers is not constant, but is
 smaller for smaller values and larger for larger values. In other words, the representable floating-point
 numbers are densest in the real number line near zero, and grow sparser exponentially as one moves
-farther away from zero. By definition, `eps(1.0)` is the same as `eps(Float64)` since `1.0` is
+farther away from zero. By definition, `ulp(1.0)` is the same as `ulp(Float64)` since `1.0` is
 a 64-bit floating-point value.
 
 Julia also provides the [`nextfloat`](@ref) and [`prevfloat`](@ref) functions which return

@@ -643,10 +643,10 @@ end
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999999999999999999999999999997"
     end
 end
-@testset "eps" begin
-    x = eps(BigFloat)
+@testset "ulp" begin
+    x = ulp(BigFloat)
     @test BigFloat(1) + x == BigFloat(1) + prevfloat(x)
-    @test eps(BigFloat) == eps(BigFloat(1))
+    @test ulp(BigFloat) == ulp(BigFloat(1))
 end
 @testset "realmin/realmax" begin
     x = realmin(BigFloat)

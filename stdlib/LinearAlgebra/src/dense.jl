@@ -1248,10 +1248,10 @@ the pseudoinverse by inverting only singular values above a given threshold,
 
 The optimal choice of `tol` varies both with the value of `M` and the intended application
 of the pseudoinverse. The default value of `tol` is
-`eps(real(float(one(eltype(M)))))*minimum(size(M))`, which is essentially machine epsilon
+`ulp(real(float(one(eltype(M)))))*minimum(size(M))`, which is essentially machine epsilon
 for the real part of a matrix element multiplied by the larger matrix dimension. For
 inverting dense ill-conditioned matrices in a least-squares sense,
-`tol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
+`tol = sqrt(ulp(real(float(one(eltype(M))))))` is recommended.
 
 For more information, see [^issue8859], [^B96], [^S84], [^KY88].
 
@@ -1311,7 +1311,7 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
 function pinv(A::StridedMatrix{T}) where T
-    tol = eps(real(float(one(T))))*min(size(A)...)
+    tol = ulp(real(float(one(T))))*min(size(A)...)
     return pinv(A, tol)
 end
 function pinv(x::Number)
@@ -1327,7 +1327,7 @@ end
 Computes a basis for the nullspace of `M` by including the singular
 vectors of A whose singular have magnitude are greater than `tol*σ₁`,
 where `σ₁` is `A`'s largest singular values. By default, the value of
-`tol` is the smallest dimension of `A` multiplied by the [`eps`](@ref)
+`tol` is the smallest dimension of `A` multiplied by the [`ulp`](@ref)
 of the [`eltype`](@ref) of `A`.
 
 # Examples
@@ -1351,14 +1351,14 @@ julia> nullspace(M, 2)
  0.0  0.0  1.0
 ```
 """
-function nullspace(A::StridedMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
+function nullspace(A::StridedMatrix, tol::Real = min(size(A)...)*ulp(real(float(one(eltype(A))))))
     m, n = size(A)
     (m == 0 || n == 0) && return Matrix{T}(I, n, n)
     SVD = svd(A, full=true)
     indstart = sum(SVD.S .> SVD.S[1]*tol) + 1
     return copy(SVD.Vt[indstart:end,:]')
 end
-nullspace(a::StridedVector, tol::Real = min(size(a)...)*eps(real(float(one(eltype(a)))))) = nullspace(reshape(a, length(a), 1), tol)
+nullspace(a::StridedVector, tol::Real = min(size(a)...)*ulp(real(float(one(eltype(a)))))) = nullspace(reshape(a, length(a), 1), tol)
 
 """
     cond(M, p::Real=2)

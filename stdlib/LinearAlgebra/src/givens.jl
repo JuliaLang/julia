@@ -63,7 +63,7 @@ Base.copy(aR::Adjoint{<:Any,Rotation{T}}) where {T} = Rotation{T}(reverse!([r' f
 
 realmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
 realmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
-realmin2(::Type{T}) where {T} = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/eps(T))/log(twopar)/twopar))
+realmin2(::Type{T}) where {T} = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/ulp(T))/log(twopar)/twopar))
 
 # derived from LAPACK's dlartg
 # Copyright:
@@ -201,11 +201,11 @@ function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
         # g2 is at least safmin, and g2s is at least safmn2
         g2s = sqrt(g2)
         # error in cs from underflow in f2s is at most
-        # unfl / safmn2 .lt. sqrt(unfl*eps) .lt. eps
+        # unfl / safmn2 .lt. sqrt(unfl*ulp()) .lt. ulp()
         # if max(g2,one)=g2, then f2 .lt. g2*safmin,
         # and so cs .lt. sqrt(safmin)
         # if max(g2,one)=one, then f2 .lt. safmin
-        # and so cs .lt. sqrt(safmin)/safmn2 = sqrt(eps)
+        # and so cs .lt. sqrt(safmin)/safmn2 = sqrt(ulp())
         # therefore, cs = f2s/g2s / sqrt( 1 + (f2s/g2s)**2 ) = f2s/g2s
         cs = f2s/g2s
         # make sure abs(ff) = 1

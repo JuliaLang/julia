@@ -235,9 +235,9 @@ end
             v = convert(Vector{T}, vr)
             @test norm(v) == 5.0
             w = normalize(v)
-            @test norm(w - [0.6, 0.8], Inf) < eps(Tr)
+            @test norm(w - [0.6, 0.8], Inf) < ulp(Tr)
             @test norm(w) == 1.0
-            @test norm(normalize!(copy(v)) - w, Inf) < eps(Tr)
+            @test norm(normalize!(copy(v)) - w, Inf) < ulp(Tr)
             @test isempty(normalize!(T[]))
         end
     end
@@ -251,7 +251,7 @@ end
     w = normalize(v)
     @test w ≈ [1/√2, -1/√2]
     @test norm(w) === 1.0
-    @test norm(normalize!(v) - w, Inf) < eps()
+    @test norm(normalize!(v) - w, Inf) < ulp()
 end
 
 @testset "Issue 14657" begin
@@ -269,8 +269,8 @@ end
     @test LinearAlgebra.promote_leaf_eltypes([[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]) == ComplexF64
     @test [1, 2, 3] ≈ [1, 2, 3]
     @test [[1, 2], [3, 4]] ≈ [[1, 2], [3, 4]]
-    @test [[1, 2], [3, 4]] ≈ [[1.0-eps(), 2.0+eps()], [3.0+2eps(), 4.0-1e8eps()]]
-    @test [[1, 2], [3, 4]] ≉ [[1.0-eps(), 2.0+eps()], [3.0+2eps(), 4.0-1e9eps()]]
+    @test [[1, 2], [3, 4]] ≈ [[1.0-ulp(), 2.0+ulp()], [3.0+2ulp(), 4.0-1e8ulp()]]
+    @test [[1, 2], [3, 4]] ≉ [[1.0-ulp(), 2.0+ulp()], [3.0+2ulp(), 4.0-1e9ulp()]]
     @test [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]] ≈ [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
 end
 

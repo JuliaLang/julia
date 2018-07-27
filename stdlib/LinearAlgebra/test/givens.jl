@@ -55,17 +55,17 @@ using LinearAlgebra: rmul!, lmul!
             end
             G, r = givens(x[2], x[4], 2, 4)
             @test (G*x)[2] ≈ r
-            @test abs((G*x)[4]) < eps(real(elty))
+            @test abs((G*x)[4]) < ulp(real(elty))
             @inferred givens(x[2], x[4], 2, 4)
 
             G, r = givens(x, 2, 4)
             @test (G*x)[2] ≈ r
-            @test abs((G*x)[4]) < eps(real(elty))
+            @test abs((G*x)[4]) < ulp(real(elty))
             @inferred givens(x, 2, 4)
 
             G, r = givens(x, 4, 2)
             @test (G*x)[4] ≈ r
-            @test abs((G*x)[2]) < eps(real(elty))
+            @test abs((G*x)[2]) < ulp(real(elty))
         end
     end
 end

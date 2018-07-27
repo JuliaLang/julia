@@ -234,12 +234,12 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         end
 
         # Determinant
-        @test det(A1) ≈ det(lu(Matrix(A1))) atol=sqrt(eps(real(float(one(elty1)))))*n*n
-        @test logdet(A1) ≈ logdet(lu(Matrix(A1))) atol=sqrt(eps(real(float(one(elty1)))))*n*n
+        @test det(A1) ≈ det(lu(Matrix(A1))) atol=sqrt(ulp(real(float(one(elty1)))))*n*n
+        @test logdet(A1) ≈ logdet(lu(Matrix(A1))) atol=sqrt(ulp(real(float(one(elty1)))))*n*n
         lada, ladb = logabsdet(A1)
         flada, fladb = logabsdet(lu(Matrix(A1)))
-        @test lada ≈ flada atol=sqrt(eps(real(float(one(elty1)))))*n*n
-        @test ladb ≈ fladb atol=sqrt(eps(real(float(one(elty1)))))*n*n
+        @test lada ≈ flada atol=sqrt(ulp(real(float(one(elty1)))))*n*n
+        @test ladb ≈ fladb atol=sqrt(ulp(real(float(one(elty1)))))*n*n
 
         # Matrix square root
         @test sqrt(A1) |> t -> t*t ≈ A1
@@ -251,7 +251,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         if !(elty1 in (BigFloat, Complex{BigFloat})) # Not handled yet
             vals, vecs = eigen(A1)
             if (t1 == UpperTriangular || t1 == LowerTriangular) && elty1 != Int # Cannot really handle degenerate eigen space and Int matrices will probably have repeated eigenvalues.
-                @test vecs*diagm(0 => vals)/vecs ≈ A1 atol=sqrt(eps(float(real(one(vals[1])))))*(opnorm(A1,Inf)*n)^2
+                @test vecs*diagm(0 => vals)/vecs ≈ A1 atol=sqrt(ulp(float(real(one(vals[1])))))*(opnorm(A1,Inf)*n)^2
             end
         end
 
@@ -415,10 +415,10 @@ A2img   = randn(n, n)/2
 for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
     A = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(Areal, Aimg) : Areal)
     # a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
-    εa = eps(abs(float(one(eltya))))
+    εa = ulp(abs(float(one(eltya))))
 
     for eltyb in (Float32, Float64, ComplexF32, ComplexF64)
-        εb = eps(abs(float(one(eltyb))))
+        εb = ulp(abs(float(one(eltyb))))
         ε = max(εa,εb)
 
         debug && println("\ntype of A: ", eltya, " type of b: ", eltyb, "\n")

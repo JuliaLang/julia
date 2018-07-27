@@ -38,7 +38,7 @@ end
         aherm = a' + a                 # Hermitian indefinite
         apos  = a' * a                 # Hermitian positive definite
         aposs = apos + transpose(apos)        # Symmetric positive definite
-        ε = εa = eps(abs(float(one(eltya))))
+        ε = εa = ulp(abs(float(one(eltya))))
 
         x = randn(n)
         y = randn(n)

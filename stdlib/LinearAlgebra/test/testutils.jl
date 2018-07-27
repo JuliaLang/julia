@@ -13,12 +13,12 @@
 #
 # Inputs:
 #     a, b:: StridedVecOrMat to be compared
-#     err :: Default: m^3*(eps(S)+eps(T)), where m is the number of rows
+#     err :: Default: m^3*(ulp(S)+ulp(T)), where m is the number of rows
 #
 # Raises an error if any columnwise vector norm exceeds err. Otherwise, returns
 # nothing.
 function test_approx_eq_modphase(a::StridedVecOrMat{S}, b::StridedVecOrMat{T},
-                                 err = length(axes(a,1))^3*(eps(S)+eps(T))) where {S<:Real,T<:Real}
+                                 err = length(axes(a,1))^3*(ulp(S)+ulp(T))) where {S<:Real,T<:Real}
     @test axes(a,1) == axes(b,1) && axes(a,2) == axes(b,2)
     for i in axes(a,2)
         v1, v2 = a[:, i], b[:, i]

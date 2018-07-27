@@ -209,10 +209,10 @@ julia> mod(9, 3)
 julia> mod(8.9, 3)
 2.9000000000000004
 
-julia> mod(eps(), 3)
+julia> mod(ulp(), 3)
 2.220446049250313e-16
 
-julia> mod(-eps(), 3)
+julia> mod(-ulp(), 3)
 3.0
 ```
 """

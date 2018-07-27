@@ -76,7 +76,7 @@ end
     end
     for (I, T) in ((Int16, Float16), (Int32, Float32), (Int64, Float64))
         x = T(typemax(I))
-        Δi = ceil(I, eps(x))
+        Δi = ceil(I, ulp(x))
         for i = typemax(I)-2Δi:typemax(I)-Δi
             hi, lo = Base.splitprec(T, i)
             @test widen(hi) + widen(lo) == i
@@ -646,7 +646,7 @@ end
 
 @testset "ranges with very small endpoints for type $T" for T = (Float32, Float64)
     z = zero(T)
-    u = eps(z)
+    u = ulp(z)
     @test first(range(u, stop=u, length=0)) == u
     @test last(range(u, stop=u, length=0)) == u
     @test first(range(-u, stop=u, length=0)) == -u
@@ -716,7 +716,7 @@ end
     Rs = AbstractRange[1:1, 1:1:1, 1:2, 1:1:2,
                        map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 1:-1:0, 17:-3:0,
                        0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),
-                       1.0:eps():1.0 .+ 10eps(), 9007199254740990.:1.0:9007199254740994,
+                       1.0:ulp():1.0 .+ 10ulp(), 9007199254740990.:1.0:9007199254740994,
                        range(0, stop=1, length=20), map(Float32, range(0, stop=1, length=20))]
     for r in Rs
         local r
@@ -793,7 +793,7 @@ end
     let r = range(1/3, stop=5/7, length=6)
         @test length(r) == 6
         @test r[1] == 1/3
-        @test abs(r[end] - 5/7) <= eps(5/7)
+        @test abs(r[end] - 5/7) <= ulp(5/7)
     end
 
     let r = range(0.25, stop=0.25, length=1)

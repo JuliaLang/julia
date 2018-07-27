@@ -299,15 +299,15 @@ end
     @test rationalize(Int64, nextfloat(0.1)) == 300239975158034//3002399751580339
     @test rationalize(Int128,nextfloat(0.1)) == 300239975158034//3002399751580339
     @test rationalize(BigInt,nextfloat(0.1)) == 300239975158034//3002399751580339
-    @test rationalize(Int8,  nextfloat(0.1),tol=0.5eps(0.1)) == 1//10
-    @test rationalize(Int64, nextfloat(0.1),tol=0.5eps(0.1)) == 379250494936463//3792504949364629
-    @test rationalize(Int128,nextfloat(0.1),tol=0.5eps(0.1)) == 379250494936463//3792504949364629
-    @test rationalize(BigInt,nextfloat(0.1),tol=0.5eps(0.1)) == 379250494936463//3792504949364629
-    @test rationalize(Int8,  nextfloat(0.1),tol=1.5eps(0.1)) == 1//10
-    @test rationalize(Int64, nextfloat(0.1),tol=1.5eps(0.1)) == 1//10
-    @test rationalize(Int128,nextfloat(0.1),tol=1.5eps(0.1)) == 1//10
-    @test rationalize(BigInt,nextfloat(0.1),tol=1.5eps(0.1)) == 1//10
-    @test rationalize(BigInt,nextfloat(parse(BigFloat,"0.1")),tol=1.5eps(big(0.1))) == 1//10
+    @test rationalize(Int8,  nextfloat(0.1),tol=0.5ulp(0.1)) == 1//10
+    @test rationalize(Int64, nextfloat(0.1),tol=0.5ulp(0.1)) == 379250494936463//3792504949364629
+    @test rationalize(Int128,nextfloat(0.1),tol=0.5ulp(0.1)) == 379250494936463//3792504949364629
+    @test rationalize(BigInt,nextfloat(0.1),tol=0.5ulp(0.1)) == 379250494936463//3792504949364629
+    @test rationalize(Int8,  nextfloat(0.1),tol=1.5ulp(0.1)) == 1//10
+    @test rationalize(Int64, nextfloat(0.1),tol=1.5ulp(0.1)) == 1//10
+    @test rationalize(Int128,nextfloat(0.1),tol=1.5ulp(0.1)) == 1//10
+    @test rationalize(BigInt,nextfloat(0.1),tol=1.5ulp(0.1)) == 1//10
+    @test rationalize(BigInt,nextfloat(parse(BigFloat,"0.1")),tol=1.5ulp(big(0.1))) == 1//10
     @test rationalize(Int64, nextfloat(0.1),tol=0) == 7205759403792795//72057594037927936
     @test rationalize(Int128,nextfloat(0.1),tol=0) == 7205759403792795//72057594037927936
     @test rationalize(BigInt,nextfloat(0.1),tol=0) == 7205759403792795//72057594037927936
