@@ -165,8 +165,6 @@ Base.gcd
 Base.lcm
 Base.gcdx
 Base.ispow2
-Base.nextpow2
-Base.prevpow2
 Base.nextpow
 Base.prevpow
 Base.nextprod
