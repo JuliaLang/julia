@@ -89,14 +89,13 @@ end
     @test powermod(2, -2, -5) == -1
 end
 @testset "nextpow/prevpow" begin
-    @test nextpow2(3) == 4
     @test nextpow(2, 3) == 4
     @test nextpow(2, 4) == 4
     @test nextpow(2, 7) == 8
     @test_throws DomainError nextpow(0, 3)
     @test_throws DomainError nextpow(3, 0)
 
-    @test prevpow2(3) == 2
+    @test prevpow(2, 3) == 2
     @test prevpow(2, 4) == 4
     @test prevpow(2, 5) == 4
     @test_throws DomainError prevpow(0, 3)
