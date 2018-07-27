@@ -17,7 +17,7 @@ using Serialization
 import Serialization: serialize, deserialize
 import Base: rand, randn
 
-export zrand!, randn!,
+export rand!, randn!,
        randexp, randexp!,
        bitrand,
        randstring,
