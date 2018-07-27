@@ -340,10 +340,12 @@ function __init__()
 end
 
 module PrecompileArea
+    import ..Pkg
     using ..Types
     using UUIDs
     import LibGit2
-    import Dates
+    import REPL
+    import SHA
     include("precompile.jl")
 end
 
