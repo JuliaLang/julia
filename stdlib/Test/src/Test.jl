@@ -28,7 +28,8 @@ export TestSetException
 
 import Distributed: myid
 
-using Random: Random, AbstractRNG, GLOBAL_RNG
+using Random
+using Random: AbstractRNG, GLOBAL_RNG
 using InteractiveUtils: gen_call_with_extracted_types
 
 #-----------------------------------------------------------------------
