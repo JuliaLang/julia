@@ -1070,7 +1070,7 @@ function testset_beginend(args, tests, source)
         # which is needed for backtrace scrubbing to work correctly.
         while false; end
         push_testset(ts)
-        # we reproduce the logic of guardsrand, but this function
+        # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
         oldrng = copy(GLOBAL_RNG)
@@ -1546,9 +1546,9 @@ Base.setindex!(a::GenericArray, x, i...) = a.a[i...] = x
 
 Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
 
-"`guardsrand(f)` runs the function `f()` and then restores the
+"`guardseed(f)` runs the function `f()` and then restores the
 state of the global RNG as it was before."
-function guardsrand(f::Function, r::AbstractRNG=GLOBAL_RNG)
+function guardseed(f::Function, r::AbstractRNG=GLOBAL_RNG)
     old = copy(r)
     try
         f()
@@ -1557,9 +1557,9 @@ function guardsrand(f::Function, r::AbstractRNG=GLOBAL_RNG)
     end
 end
 
-"`guardsrand(f, seed)` is equivalent to running `Random.seed(seed); f()` and
+"`guardseed(f, seed)` is equivalent to running `Random.seed(seed); f()` and
 then restoring the state of the global RNG as it was before."
-guardsrand(f::Function, seed::Union{Vector{UInt32},Integer}) = guardsrand() do
+guardseed(f::Function, seed::Union{Vector{UInt32},Integer}) = guardseed() do
     Random.seed(seed)
     f()
 end

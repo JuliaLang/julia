@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, SparseArrays
-using Test: guardsrand
+using Test: guardseed
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
@@ -130,7 +130,7 @@ for T in [UInt32, UInt64, UInt128, Int128]
     r = rand(s, 1, 2)
     @test size(r) == (1, 2)
     @test typeof(r) == Matrix{BigInt}
-    guardsrand() do
+    guardseed() do
         Random.seed(0)
         r = rand(s)
         Random.seed(0)
@@ -223,7 +223,7 @@ randmtzig_fill_ziggurat_tables()
 @test all(fe == Random.fe)
 
 #same random numbers on for small ranges on all systems
-guardsrand() do
+guardseed() do
     seed = rand(UInt)
     Random.seed(seed)
     r = map(Int64, rand(map(Int32, 97:122)))
@@ -537,7 +537,7 @@ end
 end
 
 # test that the following is not an error (#16925)
-guardsrand() do
+guardseed() do
     Random.seed(typemax(UInt))
     Random.seed(typemax(UInt128))
 end
@@ -592,7 +592,7 @@ let seed = rand(UInt32, 10)
 end
 
 # Random.seed(rng, ...) returns rng (#21248)
-guardsrand() do
+guardseed() do
     g = Random.GLOBAL_RNG
     m = MersenneTwister(0)
     @test Random.seed() === g

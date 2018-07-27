@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Statistics, Test, Random, LinearAlgebra, SparseArrays
-using Test: guardsrand
+using Test: guardseed
 
 @testset "middle" begin
     @test middle(3) === 3.0
@@ -599,7 +599,7 @@ end
     n = 10
     p = 5
     np2 = div(n*p, 2)
-    nzvals, x_sparse = guardsrand(1) do
+    nzvals, x_sparse = guardseed(1) do
         if elty <: Real
             nzvals = randn(np2)
         else
