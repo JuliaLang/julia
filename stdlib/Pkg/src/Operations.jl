@@ -148,7 +148,7 @@ function collect_project!(ctx::Context, pkg::PackageSpec, path::String, fix_deps
     if haskey(project, "version")
         pkg.version = VersionNumber(project["version"])
     else
-        @warn "project file for $(pkg.name) is missing a `version` entry"
+        # @warn "project file for $(pkg.name) is missing a `version` entry"
         set_maximum_version_registry!(ctx.env, pkg)
     end
     return true
@@ -175,11 +175,22 @@ function collect_require!(ctx::Context, pkg::PackageSpec, path::String, fix_deps
                 push!(fix_deps, deppkg)
             end
         end
+
         # Packages from REQUIRE files need to get their UUID from the registry
         registry_resolve!(ctx.env, fix_deps)
         project_deps_resolve!(ctx.env, fix_deps)
         ensure_resolved(ctx.env, fix_deps; registry=true)
     end
+
+    # And collect the stdlibs
+    stdlibs = find_stdlib_deps(ctx, path)
+    for (uuid, stdlib) in stdlibs
+        deppkg = PackageSpec(stdlib, uuid, VersionSpec())
+        push!(fix_deps_map[pkg.uuid], deppkg)
+        push!(fix_deps, deppkg)
+    end
+
+    return
 end
 
 
@@ -217,32 +228,52 @@ function deps_graph(ctx::Context, uuid_to_name::Dict{UUID,String}, reqs::Require
                 deps_u_allvers["julia"] = uuid_julia
             end
 
+            # Collect deps + compat for stdlib
             if uuid in keys(ctx.stdlibs)
-                push!(all_versions_u, VERSION)
-                continue
-            end
+                path = Types.stdlib_path(ctx.stdlibs[uuid])
+                proj_file = projectfile_path(path)
+                @assert proj_file != nothing
+                proj = Types.read_package(proj_file)
 
-            for path in registered_paths(ctx.env, uuid)
-                version_info = load_versions(path)
-                versions = sort!(collect(keys(version_info)))
-                deps_data = load_package_data_raw(UUID, joinpath(path, "Deps.toml"))
-                compat_data = load_package_data_raw(VersionSpec, joinpath(path, "Compat.toml"))
+                v = haskey(proj, "version") ? (VersionNumber(proj["version"])) : VERSION
+                push!(all_versions_u, v)
+                vr = VersionRange(v)
 
-                union!(all_versions_u, versions)
-
-                for (vr, dd) in deps_data
-                    all_deps_u_vr = get_or_make!(all_deps_u, vr)
-                    for (name,other_uuid) in dd
-                        # check conflicts??
-                        all_deps_u_vr[name] = other_uuid
-                        other_uuid in uuids || push!(uuids, other_uuid)
-                    end
+                all_deps_u_vr = get_or_make!(all_deps_u, vr)
+                for (name, _other_uuid) in proj["deps"]
+                    other_uuid = UUID(_other_uuid)
+                    all_deps_u_vr[name] = other_uuid
+                    other_uuid in uuids || push!(uuids, other_uuid)
                 end
-                for (vr, cd) in compat_data
-                    all_compat_u_vr = get_or_make!(all_compat_u, vr)
-                    for (name,vs) in cd
-                        # check conflicts??
-                        all_compat_u_vr[name] = vs
+
+                # TODO look at compat section for stdlibs?
+                all_compat_u_vr = get_or_make!(all_compat_u, vr)
+                for (name, other_uuid) in proj["deps"]
+                    all_compat_u_vr[name] = VersionSpec()
+                end
+            else
+                for path in registered_paths(ctx.env, uuid)
+                    version_info = load_versions(path)
+                    versions = sort!(collect(keys(version_info)))
+                    deps_data = load_package_data_raw(UUID, joinpath(path, "Deps.toml"))
+                    compat_data = load_package_data_raw(VersionSpec, joinpath(path, "Compat.toml"))
+
+                    union!(all_versions_u, versions)
+
+                    for (vr, dd) in deps_data
+                        all_deps_u_vr = get_or_make!(all_deps_u, vr)
+                        for (name,other_uuid) in dd
+                            # check conflicts??
+                            all_deps_u_vr[name] = other_uuid
+                            other_uuid in uuids || push!(uuids, other_uuid)
+                        end
+                    end
+                    for (vr, cd) in compat_data
+                        all_compat_u_vr = get_or_make!(all_compat_u, vr)
+                        for (name,vs) in cd
+                            # check conflicts??
+                            all_compat_u_vr[name] = vs
+                        end
                     end
                 end
             end
@@ -640,36 +671,42 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
         info = Dict{String,Any}("uuid" => string(uuid))
         push!(infos, info)
     end
-    # We do not print out the whole dependency chain for the standard libraries right now
-    uuid in keys(ctx.stdlibs) && return info
-    info["version"] = string(version)
-    hash == nothing ? delete!(info, "git-tree-sha1") : (info["git-tree-sha1"] = string(hash))
-    path == nothing ? delete!(info, "path")          : (info["path"]          = relative_project_path_if_in_project(ctx, path))
-    if special_action == PKGSPEC_DEVELOPED
-        delete!(info, "pinned")
-        delete!(info, "repo-url")
-        delete!(info, "repo-rev")
-    elseif special_action == PKGSPEC_FREED
-        if get(info, "pinned", false)
+    is_stdlib = uuid in keys(ctx.stdlibs)
+    if !is_stdlib
+        info["version"] = string(version)
+        hash == nothing ? delete!(info, "git-tree-sha1")  : (info["git-tree-sha1"] = string(hash))
+        path == nothing ? delete!(info, "path")          : (info["path"]          = relative_project_path_if_in_project(ctx, path))
+        if special_action == PKGSPEC_DEVELOPED
             delete!(info, "pinned")
-        else
             delete!(info, "repo-url")
             delete!(info, "repo-rev")
+        elseif special_action == PKGSPEC_FREED
+            if get(info, "pinned", false)
+                delete!(info, "pinned")
+            else
+                delete!(info, "repo-url")
+                delete!(info, "repo-rev")
+            end
+        elseif special_action == PKGSPEC_PINNED
+            info["pinned"] = true
+        elseif special_action == PKGSPEC_REPO_ADDED
+            info["repo-url"] = repo.url
+            info["repo-rev"] = repo.rev
+            path = find_installed(name, uuid, hash)
         end
-    elseif special_action == PKGSPEC_PINNED
-        info["pinned"] = true
-    elseif special_action == PKGSPEC_REPO_ADDED
-        info["repo-url"] = repo.url
-        info["repo-rev"] = repo.rev
-        path = find_installed(name, uuid, hash)
-    end
-    if haskey(info, "repo-url")
-        path = find_installed(name, uuid, hash)
+        if haskey(info, "repo-url")
+            path = find_installed(name, uuid, hash)
+        end
     end
 
     delete!(info, "deps")
-    if path != nothing
-        path = joinpath(dirname(ctx.env.project_file), path)
+    if path != nothing || is_stdlib
+        if is_stdlib
+            path = Types.stdlib_path(name)
+        else
+            path = joinpath(dirname(ctx.env.project_file), path)
+        end
+
         deps = Dict{String,String}()
 
         # Check for deps in project file
@@ -711,7 +748,7 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
             break
         end
     end
-    return info
+    return
 end
 
 function prune_manifest(env::EnvCache)
@@ -768,7 +805,6 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
     else
         # Only put `pkg` and its deps (recursively) in the temp project
         collect_deps!(seen, pkg) = begin
-            pkg.uuid in keys(localctx.stdlibs) && return
             pkg.uuid in seen && return
             push!(seen, pkg.uuid)
             info = manifest_info(localctx.env, pkg.uuid)
@@ -800,13 +836,22 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
         localctx.env.project_file = joinpath(tmpdir, "Project.toml")
         localctx.env.manifest_file = joinpath(tmpdir, "Manifest.toml")
 
-        # Rewrite paths in Manifest since relative paths won't work here due to the temporary environment
-        for (_, infos) in localctx.env.manifest
-            info = infos[1]
-            if haskey(info, "path")
-                info["path"] = project_rel_path(mainctx, info["path"])
+        function rewrite_manifests(manifest)
+            # Rewrite paths in Manifest since relative paths won't work here due to the temporary environment
+            for (name, infos) in manifest
+                for iinfo in infos
+                    # Is stdlib
+                    if UUID(iinfo["uuid"]) in keys(localctx.stdlibs)
+                        iinfo["path"] = Types.stdlib_path(name)
+                    end
+                    if haskey(iinfo, "path")
+                        iinfo["path"] = project_rel_path(mainctx, iinfo["path"])
+                    end
+                end
             end
         end
+
+        rewrite_manifests(localctx.env.manifest)
 
         # Add target deps to deps (https://github.com/JuliaLang/Pkg.jl/issues/427)
         if !isempty(pkgs)
@@ -814,12 +859,15 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
             add_or_develop(localctx, pkgs)
             need_to_resolve = false # add resolves
             info = manifest_info(localctx.env, pkg.uuid)
-            !haskey(info, "deps") && info["deps"] == Dict{String, Any}()
+            !haskey(info, "deps") && (info["deps"] = Dict{String, Any}())
             deps = info["deps"]
             for deppkg in target_deps
                 deps[deppkg.name] = string(deppkg.uuid)
             end
         end
+
+        # Might have added stdlibs in `add` above
+        rewrite_manifests(localctx.env.manifest)
 
         local new
         will_resolve = might_need_to_resolve && need_to_resolve
@@ -833,7 +881,7 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
         will_resolve && build_versions(localctx, new)
 
         sep = Sys.iswindows() ? ';' : ':'
-        withenv("JULIA_LOAD_PATH" => "@$sep$tmpdir$sep$(Types.stdlib_dir())") do
+        withenv("JULIA_LOAD_PATH" => "@$sep$tmpdir", "JULIA_PROJECT"=>nothing) do
             f(localctx)
         end
     end
