@@ -61,14 +61,14 @@ julia> a = reshape(Vector(1:4),(2,2,1,1))
  1  3
  2  4
 
-julia> squeeze(a; dims=3)
+julia> dropdims(a; dims=3)
 2×2×1 Array{Int64,3}:
 [:, :, 1] =
  1  3
  2  4
 ```
 """
-squeeze(A; dims) = _squeeze(A, dims)
+dropdims(A; dims) = _squeeze(A, dims)
 function _squeeze(A::AbstractArray, dims::Dims)
     for i in 1:length(dims)
         1 <= dims[i] <= ndims(A) || throw(ArgumentError("squeezed dims must be in range 1:ndims(A)"))
