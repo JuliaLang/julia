@@ -8,6 +8,7 @@
 #include <unistd.h>
 #endif
 #include "julia_assert.h"
+#include "threading.h"
 
 #define MAX_METHLIST_COUNT 12 // this can strongly affect the sysimg size and speed!
 #define INIT_CACHE_SIZE 8 // must be a power-of-two
@@ -819,10 +820,13 @@ nomatch:
 
 jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_value_t **args, size_t n, int8_t offs, size_t world)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (n > offs) {
         jl_value_t *a1 = args[offs];
         jl_value_t *ty = (jl_value_t*)jl_typeof(a1);
         assert(jl_is_datatype(ty));
+        // Check if this enough to wrap all the RCU read
+        rcu_read_lock(ptls);
         if (ty == (jl_value_t*)jl_datatype_type && cache->targ.values != (void*)jl_nothing) {
             union jl_typemap_t ml_or_cache = mtcache_hash_lookup(&cache->targ, a1, 1, offs);
             jl_typemap_entry_t *ml = jl_typemap_assoc_exact(ml_or_cache, args, n, offs+1, world);
@@ -840,6 +844,9 @@ jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_v
     }
     if (cache->any.unknown != jl_nothing)
         return jl_typemap_assoc_exact(cache->any, args, n, offs+1, world);
+    // Check if this enough to wrap all the function read in a single memory barrier
+    rcu_read_unlock(ptls);
+    rcu_synchronize();
     return NULL;
 }
 

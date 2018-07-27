@@ -334,6 +334,41 @@ static jl_value_t *ti_run_fun(jl_callptr_t fptr, jl_method_instance_t *mfunc,
 jl_mutex_t codegen_lock;
 jl_mutex_t typecache_lock;
 
+// Init RCU global counter to zero
+int rcu_gp_ctr;
+
+void rcu_read_lock(jl_ptls_t ptls)
+{
+    int tmp = rcu_gp_ctr;
+    jl_atomic_fetch_add(&tmp, 1);
+    ptls->rcu_reader_gp = tmp;
+}
+
+void rcu_read_unlock(jl_ptls_t ptls)
+{
+    ptls->rcu_reader_gp = jl_atomic_load_acquire(&rcu_gp_ctr);
+}
+
+// rcu_synchronize will simply check that reading threads
+// are out of the critical reading section delimited by rcu_read lock-unlock.
+// This design choise has been made due to the fact that in most of our cases
+// writing is already guarded by a spin lock - mutex
+JL_DLLEXPORT void rcu_synchronize(void)
+{
+    jl_atomic_fetch_add(&rcu_gp_ctr, 2);
+    jl_ptls_t ptls;
+
+    for(size_t i = 0; i < jl_n_threads; i++){
+        ptls = jl_all_tls_states[i];
+
+        while( ((ptls->rcu_reader_gp) & 0x1) &&
+            ((ptls->rcu_reader_gp - jl_atomic_load_acquire(&rcu_gp_ctr)) < 0) )
+        {
+            jl_cpu_pause();
+        }
+    }
+}
+
 #ifdef JULIA_ENABLE_THREADING
 
 // only one thread group for now
@@ -568,6 +603,8 @@ void jl_init_threading(void)
 
     jl_all_tls_states = (jl_ptls_t*)malloc(jl_n_threads * sizeof(void*));
 
+    // Set RCU global counter to zero
+    rcu_gp_ctr = 0;
 #if PROFILE_JL_THREADING
     // set up space for profiling information
     fork_ns = (uint64_t*)jl_malloc_aligned(jl_n_threads * sizeof(uint64_t), 64);

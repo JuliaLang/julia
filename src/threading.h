@@ -54,6 +54,10 @@ void ti_threadfun(void *arg);
 // helpers for thread function
 jl_value_t *ti_runthread(jl_function_t *f, jl_svec_t *args, size_t nargs);
 
+void rcu_read_lock(jl_ptls_t ptls);
+void rcu_read_unlock(jl_ptls_t ptls);
+void rcu_synchronize(void);
+
 #ifdef __cplusplus
 }
 #endif
