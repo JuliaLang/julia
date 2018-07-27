@@ -38,5 +38,5 @@ end
 # PR #25668
 @deprecate RandomDevice(unlimited::Bool) RandomDevice(; unlimited=unlimited)
 
-# PR #Current
-@deprecate srand Random.seed
+# PR #28295
+@deprecate srand Random.seed false
