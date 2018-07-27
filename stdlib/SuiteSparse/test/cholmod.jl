@@ -3,6 +3,7 @@
 using SuiteSparse.CHOLMOD
 using DelimitedFiles
 using Test
+using Random
 using Serialization
 using LinearAlgebra: issuccess, PosDefException
 
