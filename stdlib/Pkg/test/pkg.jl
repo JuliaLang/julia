@@ -401,12 +401,6 @@ temp_pkg_dir() do project_path
     end
 end
 
-module NotPkgModule; end
-@testset "Pkg.dir" begin
-    @test Pkg.dir(Pkg, "test", "pkg.jl") == abspath(@__FILE__)
-    @test Pkg.dir(NotPkgModule) === nothing
-end
-
 include("repl.jl")
 
 end # module

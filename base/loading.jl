@@ -249,6 +249,26 @@ function locate_package(pkg::PkgId)::Union{Nothing,String}
 end
 locate_package(::Nothing) = nothing
 
+"""
+    abspath(m::Module, paths::AbstractString...)
+
+Return the path of `m.jl` file that was used to `import` module `m`,
+or `nothing` if `m` was not imported from a package. The optional
+`paths` arguments are appended to `abspath(m)`, equivalent to
+[`joinpath`](@ref)`(abspath(m), paths...)`.
+
+Note that the source directory containing the module file can be
+obtained by `abspath(m, "..")`, and the parent package directory
+is `abspath(m, "..", "..")`.
+"""
+function Base.Filesystem.abspath(m::Module, paths::AbstractString...)
+    pkgid = get(Base.module_keys, m, nothing)
+    pkgid === nothing && return nothing
+    path = Base.locate_package(pkgid)
+    path === nothing && return nothing
+    return normpath(abspath(path, paths...))
+end
+
 ## generic project & manifest API ##
 
 const project_names = ("JuliaProject.toml", "Project.toml")
