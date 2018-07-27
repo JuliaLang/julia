@@ -1347,36 +1347,44 @@ function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     return (I, J, V)
 end
 
-function _sparse_findnextnz(m::SparseMatrixCSC, i::Integer)
-    if i > length(m)
+function Base.findnext(f::Function, m::SparseMatrixCSC, idx::CartesianIndex{2})
+    if f(zero(eltype(m)))
+        return invoke(findnext, Tuple{Function, Any, Any}, f, m, idx)
+    end
+    row, col = idx.I
+    if row > size(m, 1) || col > size(m, 2)
         return nothing
     end
-    row, col = Tuple(CartesianIndices(m)[i])
     lo, hi = m.colptr[col], m.colptr[col+1]
     n = searchsortedfirst(m.rowval, row, lo, hi-1, Base.Order.Forward)
+    n = findnext(f, m.nzval, n)
+    n === nothing && return nothing
     if lo <= n <= hi-1
-        return LinearIndices(m)[m.rowval[n], col]
+        return CartesianIndex(m.rowval[n], col)
     end
-    nextcol = findnext(c->(c>hi), m.colptr, col+1)
+    nextcol = findnext(Base.Fix2(>, n), m.colptr, col+1)
     nextcol === nothing && return nothing
-    nextlo = m.colptr[nextcol-1]
-    return LinearIndices(m)[m.rowval[nextlo], nextcol-1]
+    return CartesianIndex(m.rowval[n], nextcol-1)
 end
 
-function _sparse_findprevnz(m::SparseMatrixCSC, i::Integer)
-    if iszero(i)
+function Base.findprev(f::Function, m::SparseMatrixCSC, idx::CartesianIndex{2})
+    if f(zero(eltype(m)))
+        return invoke(findprev, Tuple{Function, Any, Any}, f, m, idx)
+    end
+    row, col = idx.I
+    if row < 1 || col < 1
         return nothing
     end
-    row, col = Tuple(CartesianIndices(m)[i])
     lo, hi = m.colptr[col], m.colptr[col+1]
     n = searchsortedlast(m.rowval, row, lo, hi-1, Base.Order.Forward)
+    n = findprev(f, m.nzval, n)
+    n === nothing && return nothing
     if lo <= n <= hi-1
-        return LinearIndices(m)[m.rowval[n], col]
+        return CartesianIndex(m.rowval[n], col)
     end
-    prevcol = findprev(c->(c<lo), m.colptr, col-1)
+    prevcol = findprev(Base.Fix2(<=, n), m.colptr, col-1)
     prevcol === nothing && return nothing
-    prevhi = m.colptr[prevcol+1]
-    return LinearIndices(m)[m.rowval[prevhi-1], prevcol]
+    return CartesianIndex(m.rowval[n], prevcol)
 end
 
 function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat)

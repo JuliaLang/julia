@@ -592,6 +592,23 @@ end
     @test findall(x -> x > 1, sparse([1 2])) == [CartesianIndex(1, 2)]
 end
 
+@testset "findnext and findprev" begin
+    for A in (sparse([0 0 0; 0 0 0]), sparse([0 1 2; 3 4 0]), sparse([1 2 0; 0 3 4]), sparse([0 0 0; 1 2 3]),
+            sparse(I, 25, 25), sparse(reshape((1:17*13) .- 2, 17, 13)), sparse(reshape((1:17*13) .- (17*13) .+ 2, 17, 13)))
+        for B in (A, copy(reshape(A, 1, :)), copy(reshape(A, :, 1)), copy(reshape(A, size(A, 2), size(A, 1))))
+            C = Array(B)
+            for i in keys(B)
+                @test findnext(iszero, B, i) == findnext(iszero, C, i)
+                @test findnext(iseven, B, i) == findnext(iseven, C, i)
+                @test findnext(isodd, B, i) == findnext(isodd, C, i)
+                @test findprev(iszero, B, i) == findprev(iszero, C, i)
+                @test findprev(iseven, B, i) == findprev(iseven, C, i)
+                @test findprev(isodd, B, i) == findprev(isodd, C, i)
+            end
+        end
+    end
+end
+
 @testset "issue #5824" begin
     @test sprand(4,5,0.5).^0 == sparse(fill(1,4,5))
 end
