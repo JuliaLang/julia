@@ -134,12 +134,12 @@ function slug(x::UInt32, p::Int)
     end
 end
 
-function package_slug(uuid::UUID, p::Int=4)
+function package_slug(uuid::UUID, p::Int=5)
     crc = _crc32c(uuid)
     return slug(crc, p)
 end
 
-function version_slug(uuid::UUID, sha1::SHA1, p::Int=4)
+function version_slug(uuid::UUID, sha1::SHA1, p::Int=5)
     crc = _crc32c(uuid)
     crc = _crc32c(sha1.bytes, crc)
     return slug(crc, p)
@@ -524,10 +524,12 @@ function explicit_manifest_uuid_path(manifest_file::String, pkg::PkgId)::Union{N
             return entry_path(path, name)
         end
         hash == nothing && return nothing
-        slug = joinpath(name, version_slug(uuid, hash))
-        for depot in DEPOT_PATH
-            path = abspath(depot, "packages", slug)
-            ispath(path) && return entry_path(path, name)
+        # Keep the 4 since it used to be the default
+        for slug in (version_slug(uuid, hash, 4), version_slug(uuid, hash))
+            for depot in DEPOT_PATH
+                path = abspath(depot, "packages", name, slug)
+                ispath(path) && return entry_path(path, name)
+            end
         end
     end
 end
