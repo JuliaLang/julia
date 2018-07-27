@@ -260,7 +260,7 @@ name          size summary
 Base               Module
 Core               Module
 Main               Module
-gvar_self 13 bytes String</code></pre><p>This does not apply to <code>function</code> or <code>type</code> declarations. However, anonymous functions bound to global variables are serialized as can be seen below.</p><pre><code class="language-julia-repl">julia&gt; bar() = 1
+gvar_self 13 bytes String</code></pre><p>This does not apply to <code>function</code> or <code>struct</code> declarations. However, anonymous functions bound to global variables are serialized as can be seen below.</p><pre><code class="language-julia-repl">julia&gt; bar() = 1
 bar (generic function with 1 method)
 
 julia&gt; remotecall_fetch(bar, 2)
