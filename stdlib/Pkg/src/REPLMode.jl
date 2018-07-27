@@ -642,7 +642,6 @@ function do_add_or_develop!(ctx::Context, tokens::Vector{Token}, cmd::CommandKin
         token = popfirst!(tokens)
         if token isa String
             push!(pkgs, parse_package(token; add_or_develop=true))
-            cmd == CMD_DEVELOP && pkgs[end].repo == nothing && (pkgs[end].repo = Types.GitRepo("", ""))
         elseif token isa VersionRange
             pkgs[end].version = VersionSpec(token)
         elseif token isa Rev

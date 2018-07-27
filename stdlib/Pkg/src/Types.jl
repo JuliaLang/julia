@@ -125,21 +125,13 @@ Base.show(io::IO, err::CommandError) = print(io, err.msg)
 # PackageSpec #
 ###############
 @enum(UpgradeLevel, UPLEVEL_FIXED, UPLEVEL_PATCH, UPLEVEL_MINOR, UPLEVEL_MAJOR)
-
-function UpgradeLevel(s::Symbol)
-    s == :fixed ? UPLEVEL_FIXED :
-    s == :patch ? UPLEVEL_PATCH :
-    s == :minor ? UPLEVEL_MINOR :
-    s == :major ? UPLEVEL_MAJOR :
-    throw(ArgumentError("invalid upgrade bound: $s"))
-end
-
 @enum(PackageMode, PKGMODE_PROJECT, PKGMODE_MANIFEST, PKGMODE_COMBINED)
 @enum(PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED,
                             PKGSPEC_DEVELOPED, PKGSPEC_TESTED, PKGSPEC_REPO_ADDED)
 
 const VersionTypes = Union{VersionNumber,VersionSpec,UpgradeLevel}
 
+# The url field can also be a local path, rename?
 mutable struct GitRepo
     url::String
     rev::String
@@ -148,6 +140,8 @@ end
 
 GitRepo(url::String, revspec) = GitRepo(url, revspec, nothing)
 GitRepo(url::String) = GitRepo(url, "", nothing)
+GitRepo(;url::Union{String, Nothing}=nothing, rev::Union{String, Nothing} =nothing) =
+    GitRepo(url == nothing ? "" : url, rev == nothing ? "" : rev, nothing)
 Base.:(==)(repo1::GitRepo, repo2::GitRepo) = (repo1.url == repo2.url && repo1.rev == repo2.rev && repo1.git_tree_sha1 == repo2.git_tree_sha1)
 
 mutable struct PackageSpec
@@ -158,12 +152,11 @@ mutable struct PackageSpec
     path::Union{Nothing,String}
     special_action::PackageSpecialAction # If the package is currently being pinned, freed etc
     repo::Union{Nothing,GitRepo}
-    PackageSpec() = new("", UUID(zero(UInt128)), VersionSpec(), PKGMODE_PROJECT, nothing, PKGSPEC_NOTHING, nothing)
-    PackageSpec(name::AbstractString, uuid::UUID, version::VersionTypes,
-                mode::PackageMode=PKGMODE_PROJECT, path=nothing, special_action=PKGSPEC_NOTHING,
-                repo=nothing) =
-        new(String(name), uuid, version, mode, path, special_action, repo)
 end
+PackageSpec() = PackageSpec("", UUID(zero(UInt128)), VersionSpec(), PKGMODE_PROJECT, nothing, PKGSPEC_NOTHING, nothing)
+PackageSpec(name::AbstractString, uuid::UUID, version::VersionTypes,
+            mode::PackageMode=PKGMODE_PROJECT, path=nothing, special_action=PKGSPEC_NOTHING,
+            repo=nothing) = PackageSpec(String(name), uuid, version, mode, path, special_action, repo)
 PackageSpec(name::AbstractString, uuid::UUID) =
     PackageSpec(name, uuid, VersionSpec())
 PackageSpec(name::AbstractString, version::VersionTypes=VersionSpec()) =
@@ -176,18 +169,41 @@ function PackageSpec(repo::GitRepo)
     return pkg
 end
 
+# kwarg constructor
+function PackageSpec(;name::AbstractString="", uuid::Union{String, UUID}=UUID(0), version::Union{VersionNumber, String} = "*",
+                     url = nothing, rev = nothing, mode::PackageMode = PKGMODE_PROJECT)
+    if url !== nothing || rev !== nothing
+        repo = GitRepo(url=url, rev=rev)
+    else
+        repo = nothing
+    end
+
+    version = VersionSpec(version)
+    uuid isa String && (uuid = UUID(uuid))
+    PackageSpec(name, uuid, version, mode, nothing, PKGSPEC_NOTHING, repo)
+end
+
 has_name(pkg::PackageSpec) = !isempty(pkg.name)
 has_uuid(pkg::PackageSpec) = pkg.uuid != UUID(zero(UInt128))
 
 function Base.show(io::IO, pkg::PackageSpec)
-    print(io, "PackageSpec(")
-    has_name(pkg) && show(io, pkg.name)
-    has_name(pkg) && has_uuid(pkg) && print(io, ", ")
-    has_uuid(pkg) && show(io, pkg.uuid)
     vstr = repr(pkg.version)
-    if vstr != "VersionSpec(\"*\")"
-        (has_name(pkg) || has_uuid(pkg)) && print(io, ", ")
-        print(io, vstr)
+    f = ["name" => pkg.name, "uuid" => has_uuid(pkg) ? pkg.uuid : "", "v" => (vstr == "VersionSpec(\"*\")" ? "" : vstr)]
+    if pkg.repo !== nothing
+        if !isempty(pkg.repo.url)
+            push!(f, "url/path" => pkg.repo.url)
+        end
+        if !isempty(pkg.repo.rev)
+            push!(f, "rev" => pkg.repo.rev)
+        end
+    end
+    print(io, "PackageSpec(")
+    first = true
+    for (field, value) in f
+        value == "" && continue
+        first || print(io, ", ")
+        print(io, field, "=", value)
+        first = false
     end
     print(io, ")")
 end
@@ -658,7 +674,7 @@ function parse_package!(ctx, pkg, project_path)
             Pkg.Operations.set_maximum_version_registry!(env, pkg)
         end
     else
-        @warn "package $(pkg.name) at $(project_path) will need to have a [Julia]Project.toml file in the future"
+        # @warn "package $(pkg.name) at $(project_path) will need to have a [Julia]Project.toml file in the future"
         if !isempty(ctx.old_pkg2_clone_name) # remove when legacy CI script support is removed
             pkg.name = ctx.old_pkg2_clone_name
         else
