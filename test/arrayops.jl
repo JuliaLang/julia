@@ -2440,7 +2440,7 @@ struct totally_not_five26034 end
 Base.isequal(::totally_not_five26034, x)=isequal(5,x);
 Base.isequal(x, ::totally_not_five26034)=isequal(5,x);
 Base.isequal(::totally_not_five26034, ::totally_not_five26034)=true;
-Base.hash(::totally_not_five26034, h::UInt64)=hash(5, h);
+Base.hash(::totally_not_five26034, h::UInt)=hash(5, h);
 import Base.==
 ==(::totally_not_five26034, x)= (5==x);
 ==(x,::totally_not_five26034)= (5==x);
