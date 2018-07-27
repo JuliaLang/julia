@@ -260,7 +260,7 @@ function decimate1!(p0::Int, graph::Graph, strace::SolutionTrace, msgs::Messages
     @assert solution[p0] == 0
     @assert !graph.ignored[p0]
     fld0 = fld[p0]
-    s0 = indmax(fld0)
+    s0 = argmax(fld0)
     # only do the decimation if it is consistent with
     # the constraints...
     gconstr[p0][s0] || return 0
@@ -414,7 +414,7 @@ function converge!(graph::Graph, msgs::Messages, strace::SolutionTrace, perm::No
             # pick the first decimation candidate
             smx(p1) = secondmax(msgs.fld[p1], graph.gconstr[p1])
             p0 = reduce((p1,p2)->(smx(p1)≤smx(p2) ? p1 : p2), findall(.!(graph.ignored)))
-            s0 = indmax(fld[p0])
+            s0 = argmax(fld[p0])
             strace.staged = dec_firstcandidate(graph, msgs)
         end
         return false
