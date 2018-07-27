@@ -903,20 +903,30 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         argtypes = Any[ abstract_eval(a, vtypes, sv) for a in e.args ]
         t = abstract_eval_call(e.args, argtypes, vtypes, sv)
     elseif e.head === :new
-        argtypes = Any[ abstract_eval(a, vtypes, sv) for a in e.args ]
-        t = instanceof_tfunc(argtypes[1])[1]
-        isconst = isbitstype(t)
-        for i = 2:length(argtypes)
-            ae = argtypes[i]
-            if ae === Bottom
-                t = Bottom
+        t = instanceof_tfunc(abstract_eval(e.args[1], vtypes, sv))[1]
+        if isbitstype(t)
+            args = Vector{Any}(undef, length(e.args)-1)
+            isconst = true
+            for i = 2:length(e.args)
+                at = abstract_eval(e.args[i], vtypes, sv)
+                if at === Bottom
+                    t = Bottom
+                    isconst = false
+                    break
+                elseif at isa Const
+                    if !(at.val isa fieldtype(t, i - 1))
+                        t = Bottom
+                        isconst = false
+                        break
+                    end
+                    args[i-1] = at.val
+                else
+                    isconst = false
+                end
             end
-            isconst &= ae isa Const
-            isconst = isconst && (ae.val isa fieldtype(t, i - 1))
-        end
-        if isconst
-            flds = Any[ argtypes[i].val for i = 2:length(argtypes) ]
-            t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, flds, length(flds)))
+            if isconst
+                t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, args, length(args)))
+            end
         end
     elseif e.head === :&
         abstract_eval(e.args[1], vtypes, sv)

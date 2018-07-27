@@ -932,6 +932,13 @@ f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 @test @inferred(f21771(Val{Union{}}())) === Tuple{Union{}}
 @test @inferred(f21771(Val{Integer}())) === Tuple{Integer}
 
+# PR #28284, check that constants propagate through calls to new
+struct t28284
+  x::Int
+end
+f28284() = Val(t28284(1))
+@inferred f28284()
+
 # missing method should be inferred as Union{}, ref https://github.com/JuliaLang/julia/issues/20033#issuecomment-282228948
 @test Base.return_types(f -> f(1), (typeof((x::String) -> x),)) == Any[Union{}]
 
