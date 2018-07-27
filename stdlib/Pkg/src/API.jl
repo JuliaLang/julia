@@ -42,9 +42,6 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, k
         cmderror("Trying to $mode julia as a package")
 
     ctx.preview && preview_info()
-    if !UPDATED_REGISTRY_THIS_SESSION[]
-        update_registry(ctx)
-    end
     if mode == :develop
         new_git = handle_repos_develop!(ctx, pkgs)
     else

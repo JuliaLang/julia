@@ -10,7 +10,7 @@ import REPL
 using REPL.TerminalMenus
 
 using ..TOML
-import ..Pkg
+import ..Pkg, ..UPDATED_REGISTRY_THIS_SESSION
 import Pkg: GitTools, depots, logdir
 
 import Base: SHA1
@@ -499,7 +499,9 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
                 project_path = pkg.repo.url
                 parse_package!(ctx, pkg, project_path)
             else
-                # We save the repo in case another environment wants to
+                # Only update the registry in case of developing a non-local package
+                UPDATED_REGISTRY_THIS_SESSION[] || Pkg.API.update_registry(ctx)
+                # We save the repo in case another environement wants to
                 # develop from the same repo, this avoids having to reclone it
                 # from scratch.
                 clone_path = joinpath(depots()[1], "clones")
@@ -567,6 +569,8 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
 end
 
 function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgrade_or_add::Bool=true)
+    # Always update the registry when adding
+    UPDATED_REGISTRY_THIS_SESSION[] || Pkg.API.update_registry(ctx)
     Base.shred!(LibGit2.CachedCredentials()) do creds
         env = ctx.env
         new_uuids = UUID[]
