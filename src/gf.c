@@ -1088,13 +1088,13 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
     if (entry != NULL) {
         jl_method_t *m = entry->func.method;
         if (!jl_has_call_ambiguities((jl_value_t*)tt, m)) {
-#ifdef TRACE_COMPILE
-            if (!jl_has_free_typevars((jl_value_t*)tt)) {
-                jl_printf(JL_STDERR, "precompile(");
-                jl_static_show(JL_STDERR, (jl_value_t*)tt);
-                jl_printf(JL_STDERR, ")\n");
+            if (jl_options.trace_compile) {
+                if (!jl_has_free_typevars((jl_value_t*)tt)) {
+                    jl_printf(JL_STDERR, "precompile(");
+                    jl_static_show(JL_STDERR, (jl_value_t*)tt);
+                    jl_printf(JL_STDERR, ")\n");
+                }
             }
-#endif
             if (!mt_cache) {
                 intptr_t nspec = (mt == jl_type_type_mt ? m->nargs + 1 : mt->max_args + 2);
                 jl_compilation_sig(tt, env, m, nspec, &newparams);
