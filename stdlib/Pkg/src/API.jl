@@ -429,7 +429,7 @@ function clone(url::String, name::String = "")
     develop(ctx, [parse_package(url)])
 end
 
-function dir(pkg::String, paths::String...)
+function dir(pkg::String, paths::AbstractString...)
     Base.depwarn("`Pkg.dir(pkgname, ...)` is deprecated; instead, first import the package module `m` and then call `Pkg.dir(m, ...)`.", :dir)
     pkgid = Base.identify_package(pkg)
     pkgid === nothing && return nothing
@@ -439,14 +439,14 @@ function dir(pkg::String, paths::String...)
 end
 
 """
-    dir(m::Module, paths::String...)
+    dir(m::Module, paths::AbstractString...)
 
 Return the package directory that was used to load module `m`,
 or `nothing` if `m` was not loaded from a package.  The
 optional `paths` arguments are appended to `dir(m)`,
 equivalent to [`joinpath`](@ref)`(dir(m), paths...)`.
 """
-function dir(m::Module, paths::String...)
+function dir(m::Module, paths::AbstractString...)
     pkgid = get(Base.module_keys, m, nothing)
     pkgid === nothing && return nothing
     path = Base.locate_package(pkgid)
