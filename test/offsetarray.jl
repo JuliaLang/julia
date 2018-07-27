@@ -321,7 +321,7 @@ am = map(identity, a)
 @test isa(am, OffsetArray)
 @test am == a
 
-# squeeze
+# dropdims
 a0 = rand(1,1,8,8,1)
 a = OffsetArray(a0, (-1,2,3,4,5))
 @test @inferred(dropdims(a, dims=1)) == @inferred(dropdims(a, dims=(1,))) == OffsetArray(reshape(a, (1,8,8,1)), (2,3,4,5))

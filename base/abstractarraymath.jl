@@ -47,7 +47,7 @@ _sub(t::Tuple, ::Tuple{}) = t
 _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
 
 """
-    squeeze(A; dims)
+    dropdims(A; dims)
 
 Remove the dimensions specified by `dims` from array `A`.
 Elements of `dims` must be unique and within the range `1:ndims(A)`.
@@ -68,13 +68,13 @@ julia> dropdims(a; dims=3)
  2  4
 ```
 """
-dropdims(A; dims) = _squeeze(A, dims)
-function _squeeze(A::AbstractArray, dims::Dims)
+dropdims(A; dims) = _dropdims(A, dims)
+function _dropdims(A::AbstractArray, dims::Dims)
     for i in 1:length(dims)
-        1 <= dims[i] <= ndims(A) || throw(ArgumentError("squeezed dims must be in range 1:ndims(A)"))
-        length(axes(A, dims[i])) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
+        1 <= dims[i] <= ndims(A) || throw(ArgumentError("dropped dims must be in range 1:ndims(A)"))
+        length(axes(A, dims[i])) == 1 || throw(ArgumentError("dropped dims must all be size 1"))
         for j = 1:i-1
-            dims[j] == dims[i] && throw(ArgumentError("squeezed dims must be unique"))
+            dims[j] == dims[i] && throw(ArgumentError("dropped dims must be unique"))
         end
     end
     d = ()
@@ -85,7 +85,7 @@ function _squeeze(A::AbstractArray, dims::Dims)
     end
     reshape(A, d::typeof(_sub(axes(A), dims)))
 end
-_squeeze(A::AbstractArray, dim::Integer) = _squeeze(A, (Int(dim),))
+_dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
 
 ## Unary operators ##
 
