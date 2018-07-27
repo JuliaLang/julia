@@ -366,7 +366,7 @@ function /(z::ComplexF64, w::ComplexF64)
     cd = max(abs(c), abs(d))
     ov = realmax(a)
     un = realmin(a)
-    ϵ = eps(Float64)
+    ϵ = ulp(Float64)
     bs = two/(ϵ*ϵ)
     s = 1.0
     ab >= half*ov  && (a=half*a; b=half*b; s=two*s ) # scale down a,b
@@ -399,7 +399,7 @@ function inv(w::ComplexF64)
     cd = max(abs(c), abs(d))
     ov = realmax(c)
     un = realmin(c)
-    ϵ = eps(Float64)
+    ϵ = ulp(Float64)
     bs = two/(ϵ*ϵ)
     s = 1.0
     cd >= half*ov  && (c=half*c; d=half*d; s=s*half) # scale down c,d
@@ -424,7 +424,7 @@ function ssqs(x::T, y::T) where T<:AbstractFloat
     ρ = x*x + y*y
     if !isfinite(ρ) && (isinf(x) || isinf(y))
         ρ = convert(T, Inf)
-    elseif isinf(ρ) || (ρ==0 && (x!=0 || y!=0)) || ρ<nextfloat(zero(T))/(2*eps(T)^2)
+    elseif isinf(ρ) || (ρ==0 && (x!=0 || y!=0)) || ρ<nextfloat(zero(T))/(2*ulp(T)^2)
         m::T = max(abs(x), abs(y))
         k = m==0 ? m : exponent(m)
         xk, yk = ldexp(x,-k), ldexp(y,-k)

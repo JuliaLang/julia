@@ -281,7 +281,7 @@ This is equivalent to `!isapprox(x,y)` (see [`isapprox`](@ref)).
 ≉(args...; kws...) = !≈(args...; kws...)
 
 # default tolerance arguments
-rtoldefault(::Type{T}) where {T<:AbstractFloat} = sqrt(eps(T))
+rtoldefault(::Type{T}) where {T<:AbstractFloat} = sqrt(ulp(T))
 rtoldefault(::Type{<:Real}) = 0
 function rtoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}, atol::Real) where {T<:Number,S<:Number}
     rtol = max(rtoldefault(real(T)),rtoldefault(real(S)))

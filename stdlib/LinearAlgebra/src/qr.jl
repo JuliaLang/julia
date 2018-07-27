@@ -775,7 +775,7 @@ end
 ldiv!(A::QRPivoted{T}, B::StridedVector{T}) where {T<:BlasFloat} =
     vec(ldiv!(A,reshape(B,length(B),1)))
 ldiv!(A::QRPivoted{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
-    ldiv!(A, B, min(size(A)...)*eps(real(float(one(eltype(B))))))[1]
+    ldiv!(A, B, min(size(A)...)*ulp(real(float(one(eltype(B))))))[1]
 function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     m, n = size(A)
     minmn = min(m,n)

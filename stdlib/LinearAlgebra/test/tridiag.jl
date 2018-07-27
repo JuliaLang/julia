@@ -10,7 +10,7 @@ include("testutils.jl") # test_approx_eq_modphase
 function test_approx_eq_vecs(a::StridedVecOrMat{S}, b::StridedVecOrMat{T}, error=nothing) where {S<:Real,T<:Real}
     n = size(a, 1)
     @test n==size(b,1) && size(a,2)==size(b,2)
-    error===nothing && (error=n^3*(eps(S)+eps(T)))
+    error===nothing && (error=n^3*(ulp(S)+ulp(T)))
     for i=1:n
         ev1, ev2 = a[:,i], b[:,i]
         deviation = min(abs(norm(ev1-ev2)),abs(norm(ev1+ev2)))
@@ -55,7 +55,7 @@ end
 
     if elty != Int
         @testset "issue #1490" begin
-            @test det(fill(elty(1),3,3)) ≈ zero(elty) atol=3*eps(real(one(elty)))
+            @test det(fill(elty(1),3,3)) ≈ zero(elty) atol=3*ulp(real(one(elty)))
             @test det(SymTridiagonal(elty[],elty[])) == one(elty)
         end
     end
@@ -203,7 +203,7 @@ end
         if elty != Int
             @testset "Simple unary functions" begin
                 for func in (det, inv)
-                    @test func(A) ≈ func(fA) atol=n^2*sqrt(eps(real(one(elty))))
+                    @test func(A) ≈ func(fA) atol=n^2*sqrt(ulp(real(one(elty))))
                 end
             end
         end

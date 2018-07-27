@@ -37,7 +37,7 @@ dimg  = randn(n)/2
     else
         convert(Tridiagonal{eltya}, Tridiagonal(dlreal, dreal, dureal))
     end
-    ε = εa = eps(abs(float(one(eltya))))
+    ε = εa = ulp(abs(float(one(eltya))))
 
     if eltya <: BlasFloat
         @testset "LU factorization for Number" begin
@@ -46,9 +46,9 @@ dimg  = randn(n)/2
             @test convert(Array, lu(num)) ≈ eltya[num]
         end
         @testset "Balancing in eigenvector calculations" begin
-            A = convert(Matrix{eltya}, [ 3.0     -2.0      -0.9     2*eps(real(one(eltya)));
-                                       -2.0      4.0       1.0    -eps(real(one(eltya)));
-                                       -eps(real(one(eltya)))/4  eps(real(one(eltya)))/2  -1.0     0;
+            A = convert(Matrix{eltya}, [ 3.0     -2.0      -0.9     2*ulp(real(one(eltya)));
+                                       -2.0      4.0       1.0    -ulp(real(one(eltya)));
+                                       -ulp(real(one(eltya)))/4  ulp(real(one(eltya)))/2  -1.0     0;
                                        -0.5     -0.5       0.1     1.0])
             F = eigen(A, permute=false, scale=false)
             @test F.vectors*Diagonal(F.values)/F.vectors ≈ A
@@ -92,7 +92,7 @@ dimg  = randn(n)/2
             convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
         c  = eltyb == Int ? rand(1:5, n) :
             convert(Vector{eltyb}, eltyb <: Complex ? complex.(creal, cimg) : creal)
-        εb = eps(abs(float(one(eltyb))))
+        εb = ulp(abs(float(one(eltyb))))
         ε  = max(εa,εb)
         @testset "(Automatic) Square LU decomposition" begin
             lua   = factorize(a)

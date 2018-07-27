@@ -245,7 +245,7 @@ export
     denominator,
     div,
     divrem,
-    eps,
+    ulp,
     exp,
     exp10,
     exp2,

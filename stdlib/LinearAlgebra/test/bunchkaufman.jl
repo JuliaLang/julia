@@ -32,7 +32,7 @@ bimg  = randn(n,2)/2
                                 view(a2, 1:n, 1:n),
                                 view(aher, 1:n, 1:n),
                                 view(apd , 1:n, 1:n)))
-        ε = εa = eps(abs(float(one(eltya))))
+        ε = εa = ulp(abs(float(one(eltya))))
 
         # check that factorize gives a Bunch-Kaufman
         @test isa(factorize(asym), LinearAlgebra.BunchKaufman)
@@ -77,7 +77,7 @@ bimg  = randn(n,2)/2
         @testset "$eltyb argument B" for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
             b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
             for b in (b, view(b, 1:n, 1:2))
-                εb = eps(abs(float(one(eltyb))))
+                εb = ulp(abs(float(one(eltyb))))
                 ε = max(εa,εb)
 
                 @testset "$uplo Bunch-Kaufman factor of indefinite matrix" for uplo in (:L, :U)
@@ -98,7 +98,7 @@ bimg  = randn(n,2)/2
                         @test logabsdet(bc2)[1] ≈ log(abs(det(bc2)))
                         @test logabsdet(bc2)[2] == sign(det(bc2))
                         @test inv(bc2)*apd ≈ Matrix(I, n, n)
-                        @test apd*(bc2\b) ≈ b rtol=eps(cond(apd))
+                        @test apd*(bc2\b) ≈ b rtol=ulp(cond(apd))
                         @test ishermitian(bc2) == !issymmetric(bc2)
                     end
                 end

@@ -644,9 +644,9 @@ end
     end
 end
 @testset "eps" begin
-    x = eps(BigFloat)
+    x = ulp(BigFloat)
     @test BigFloat(1) + x == BigFloat(1) + prevfloat(x)
-    @test eps(BigFloat) == eps(BigFloat(1))
+    @test ulp(BigFloat) == ulp(BigFloat(1))
 end
 @testset "realmin/realmax" begin
     x = realmin(BigFloat)

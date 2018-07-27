@@ -368,7 +368,7 @@ function (::Type{T})(n::BigInt, ::RoundingMode{:Nearest}) where T<:CdoubleMax
     x = T(n,RoundToZero)
     if maxintfloat(T) <= abs(x) < T(Inf)
         r = n-BigInt(x)
-        h = eps(x)/2
+        h = ulp(x)/2
         if iseven(reinterpret(Unsigned,x)) # check if last bit is odd/even
             if r < -h
                 return prevfloat(x)
@@ -623,7 +623,7 @@ function ndigits0zpb(x::BigInt, b::Integer)
         lb = log2(b) # assumed accurate to <1ulp (true for openlibm)
         q,r = divrem(n,lb)
         iq = Int(q)
-        maxerr = q*eps(lb) # maximum error in remainder
+        maxerr = q*ulp(lb) # maximum error in remainder
         if r-1.0 < maxerr
             abs(x) >= big(b)^iq ? iq+1 : iq
         elseif lb-r < maxerr

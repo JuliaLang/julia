@@ -50,7 +50,7 @@ a2img  = randn(n,n)/2
     asym = aa' + aa                 # symmetric indefinite
     apd  = aa' * aa                 # symmetric positive-definite
     for (a, a2) in ((aa, aa2), (view(aa, 1:n, 1:n), view(aa2, 1:n, 1:n)))
-        ε = εa = eps(abs(float(one(eltya))))
+        ε = εa = ulp(abs(float(one(eltya))))
 
         usv = svd(a)
         @testset "singular value decomposition" begin

@@ -1614,8 +1614,8 @@ begin
         end
     end
 
-    array_eps(a::AbstractArray{Complex{T}}) where {T} = eps(float(maximum(x->(isfinite(x) ? abs(x) : T(NaN)), a)))
-    array_eps(a) = eps(float(maximum(x->(isfinite(x) ? abs(x) : oftype(x,NaN)), a)))
+    array_eps(a::AbstractArray{Complex{T}}) where {T} = ulp(float(maximum(x->(isfinite(x) ? abs(x) : T(NaN)), a)))
+    array_eps(a) = ulp(float(maximum(x->(isfinite(x) ? abs(x) : oftype(x,NaN)), a)))
 
     test_approx_eq(va, vb, astr, bstr) =
         test_approx_eq(va, vb, 1E4*length(LinearIndices(va))*max(array_eps(va), array_eps(vb)), astr, bstr)

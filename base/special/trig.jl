@@ -29,7 +29,7 @@ end
 function sin(x::T) where T<:Union{Float32, Float64}
     absx = abs(x)
     if absx < T(pi)/4 #|x| ~<= pi/4, no need for reduction
-        if absx < sqrt(eps(T))
+        if absx < sqrt(ulp(T))
             return x
         end
         return sin_kernel(x)
@@ -99,7 +99,7 @@ end
 function cos(x::T) where T<:Union{Float32, Float64}
     absx = abs(x)
     if absx < T(pi)/4
-        if absx < sqrt(eps(T)/T(2.0))
+        if absx < sqrt(ulp(T)/T(2.0))
             return T(1.0)
         end
         return cos_kernel(x)
@@ -214,7 +214,7 @@ sincos(x) = _sincos(float(x))
 function tan(x::T) where T<:Union{Float32, Float64}
     absx = abs(x)
     if absx < T(pi)/4
-        if absx < sqrt(eps(T))/2 # first order dominates, but also allows tan(-0)=-0
+        if absx < sqrt(ulp(T))/2 # first order dominates, but also allows tan(-0)=-0
             return x
         end
         return tan_kernel(x)
@@ -360,7 +360,7 @@ sincos_kernel(x::Real) = sincos(x)
 # Inverse trigonometric functions
 # asin methods
 ASIN_X_MIN_THRESHOLD(::Type{Float32}) = 2.0f0^-12
-ASIN_X_MIN_THRESHOLD(::Type{Float64}) = sqrt(eps(Float64))
+ASIN_X_MIN_THRESHOLD(::Type{Float64}) = sqrt(ulp(Float64))
 
 arc_p(t::Float64) =
     t*@horner(t,

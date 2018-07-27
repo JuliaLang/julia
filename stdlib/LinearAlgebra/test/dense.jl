@@ -41,7 +41,7 @@ bimg  = randn(n,2)/2
 @testset "For A containing $eltya" for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
     ainit = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     ainit2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
-    ε = εa = eps(abs(float(one(eltya))))
+    ε = εa = ulp(abs(float(one(eltya))))
 
     apd  = ainit'*ainit # symmetric positive-definite
     @testset "Positive definiteness" begin
@@ -54,7 +54,7 @@ bimg  = randn(n,2)/2
     end
     @testset "For b containing $eltyb" for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
         binit = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
-        εb = eps(abs(float(one(eltyb))))
+        εb = ulp(abs(float(one(eltyb))))
         ε = max(εa,εb)
         for (a, b) in ((copy(ainit), copy(binit)), (view(ainit, 1:n, 1:n), view(binit, 1:n, 1:2)))
             @testset "Solve square general system of equations" begin
@@ -389,7 +389,7 @@ end
     end
 
     @testset "Additional tests for $elty" for elty in (Float64, Complex{Float64})
-        A4  = convert(Matrix{elty}, [1/2 1/3 1/4 1/5+eps();
+        A4  = convert(Matrix{elty}, [1/2 1/3 1/4 1/5+ulp();
                                      1/3 1/4 1/5 1/6;
                                      1/4 1/5 1/6 1/7;
                                      1/5 1/6 1/7 1/8])
@@ -577,7 +577,7 @@ end
             @test coth(acoth(coth(A))) ≈ coth(A)
 
             # Definition of principal values (Aprahamian & Higham, 2016, pp. 4-5)
-            abstol = sqrt(eps(real(elty))) * norm(acosh(A))
+            abstol = sqrt(ulp(real(elty))) * norm(acosh(A))
             @test all(z -> (0 < real(z) < π ||
                             abs(real(z)) < abstol && imag(z) >= 0 ||
                             abs(real(z) - π) < abstol && imag(z) <= 0),
@@ -634,7 +634,7 @@ end
     @test log(A1) ≈ logA1
     @test exp(log(A1)) ≈ A1
 
-    A4  = convert(Matrix{elty}, [1/2 1/3 1/4 1/5+eps();
+    A4  = convert(Matrix{elty}, [1/2 1/3 1/4 1/5+ulp();
                                  1/3 1/4 1/5 1/6;
                                  1/4 1/5 1/6 1/7;
                                  1/5 1/6 1/7 1/8])

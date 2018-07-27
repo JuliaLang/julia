@@ -777,20 +777,20 @@ bound on the *relative error* of `T`, it is a "dimensionless" quantity like [`on
 
 # Examples
 ```jldoctest
-julia> eps()
+julia> ulp()
 2.220446049250313e-16
 
-julia> eps(Float32)
+julia> ulp(Float32)
 1.1920929f-7
 
-julia> 1.0 + eps()
+julia> 1.0 + ulp()
 1.0000000000000002
 
-julia> 1.0 + eps()/2
+julia> 1.0 + ulp()/2
 1.0
 ```
 """
-eps(::Type{<:AbstractFloat})
+ulp(::Type{<:AbstractFloat})
 
 """
     eps(x::AbstractFloat)
@@ -815,26 +815,26 @@ is the nearest floating point number to ``y``, then
 
 # Examples
 ```jldoctest
-julia> eps(1.0)
+julia> ulp(1.0)
 2.220446049250313e-16
 
-julia> eps(prevfloat(2.0))
+julia> ulp(prevfloat(2.0))
 2.220446049250313e-16
 
-julia> eps(2.0)
+julia> ulp(2.0)
 4.440892098500626e-16
 
 julia> x = prevfloat(Inf)      # largest finite Float64
 1.7976931348623157e308
 
-julia> x + eps(x)/2            # rounds up
+julia> x + ulp(x)/2            # rounds up
 Inf
 
-julia> x + prevfloat(eps(x)/2) # rounds down
+julia> x + prevfloat(ulp(x)/2) # rounds down
 1.7976931348623157e308
 ```
 """
-eps(::AbstractFloat)
+ulp(::AbstractFloat)
 
 
 ## byte order swaps for arbitrary-endianness serialization/deserialization ##

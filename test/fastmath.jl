@@ -11,13 +11,13 @@
     @test macroexpand(Main, :(@fastmath sincos(x))) == :(Base.FastMath.sincos_fast(x))
 end
 const one32 = one(Float32)
-const eps32 = eps(Float32)
+const eps32 = ulp(Float32)
 const eps32_2 = eps32/2
 # Note: Cannot use local functions since these are not yet optimized
 fm_ieee_32(x) = x + eps32_2 + eps32_2
 fm_fast_32(x) = @fastmath x + eps32_2 + eps32_2
 const one64 = one(Float64)
-const eps64 = eps(Float64)
+const eps64 = ulp(Float64)
 const eps64_2 = eps64/2
 # Note: Cannot use local functions since these are not yet optimized
 fm_ieee_64(x) = x + eps64_2 + eps64_2
@@ -45,7 +45,7 @@ fm_fast_64_upd(x) = @fastmath (r=x; r+=eps64_2; r+=eps64_2)
 
     for T in (Float32, Float64, BigFloat)
         zero = convert(T, 0)
-        one = convert(T, 1) + eps(T)
+        one = convert(T, 1) + ulp(T)
         two = convert(T, 2) + 1//10
         three = convert(T, 3) + 1//100
 
@@ -74,7 +74,7 @@ fm_fast_64_upd(x) = @fastmath (r=x; r+=eps64_2; r+=eps64_2)
 
     for T in (ComplexF32, ComplexF64, Complex{BigFloat})
         zero = convert(T,0)
-        one = convert(T,1) + im*eps(real(convert(T,1)))
+        one = convert(T,1) + im*ulp(real(convert(T,1)))
         two = convert(T,2) + im//10
         three = convert(T,3) + im//100
 

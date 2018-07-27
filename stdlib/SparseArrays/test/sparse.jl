@@ -184,7 +184,7 @@ end
     for i = 1:5
         a = sprand(10, 5, 0.5)
         b = rand(5)
-        @test maximum(abs.(a*b - Array(a)*b)) < 100*eps()
+        @test maximum(abs.(a*b - Array(a)*b)) < 100*ulp()
     end
 end
 
@@ -206,86 +206,86 @@ end
         d = randn(5) + im*randn(5)
         α = rand(ComplexF64)
         β = rand(ComplexF64)
-        @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
-        @test (maximum(abs.(mul!(similar(b), a, b) - Array(a)*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-        @test (maximum(abs.(mul!(similar(c), a, c) - Array(a)*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-        @test (maximum(abs.(mul!(similar(b), transpose(a), b) - transpose(Array(a))*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-        @test (maximum(abs.(mul!(similar(c), transpose(a), c) - transpose(Array(a))*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-        @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
-        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
-        @test (maximum(abs.((a'*c + d) - (Array(a)'*c + d))) < 1000*eps())
-        @test (maximum(abs.((α*transpose(a)*c + β*d) - (α*transpose(Array(a))*c + β*d))) < 1000*eps())
-        @test (maximum(abs.((transpose(a)*c + d) - (transpose(Array(a))*c + d))) < 1000*eps())
+        @test (maximum(abs.(a*b - Array(a)*b)) < 100*ulp())
+        @test (maximum(abs.(mul!(similar(b), a, b) - Array(a)*b)) < 100*ulp()) # for compatibility with present matmul API. Should go away eventually.
+        @test (maximum(abs.(mul!(similar(c), a, c) - Array(a)*c)) < 100*ulp()) # for compatibility with present matmul API. Should go away eventually.
+        @test (maximum(abs.(mul!(similar(b), transpose(a), b) - transpose(Array(a))*b)) < 100*ulp()) # for compatibility with present matmul API. Should go away eventually.
+        @test (maximum(abs.(mul!(similar(c), transpose(a), c) - transpose(Array(a))*c)) < 100*ulp()) # for compatibility with present matmul API. Should go away eventually.
+        @test (maximum(abs.(a'b - Array(a)'b)) < 100*ulp())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*ulp())
+        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*ulp())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*ulp())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*ulp())
+        @test (maximum(abs.((a'*c + d) - (Array(a)'*c + d))) < 1000*ulp())
+        @test (maximum(abs.((α*transpose(a)*c + β*d) - (α*transpose(Array(a))*c + β*d))) < 1000*ulp())
+        @test (maximum(abs.((transpose(a)*c + d) - (transpose(Array(a))*c + d))) < 1000*ulp())
         c = randn(6) + im*randn(6)
         @test_throws DimensionMismatch α*transpose(a)*c + β*c
         @test_throws DimensionMismatch α*transpose(a)*fill(1.,5) + β*c
 
         a = I + 0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2)
         b = randn(5,3)
-        @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
-        @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
-        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
+        @test (maximum(abs.(a*b - Array(a)*b)) < 100*ulp())
+        @test (maximum(abs.(a'b - Array(a)'b)) < 100*ulp())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*ulp())
+        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*ulp())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*ulp())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*ulp())
 
         a = I + tril(0.1*sprandn(5, 5, 0.2))
         b = randn(5,3) + im*randn(5,3)
-        @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
-        @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
-        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
+        @test (maximum(abs.(a*b - Array(a)*b)) < 100*ulp())
+        @test (maximum(abs.(a'b - Array(a)'b)) < 100*ulp())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*ulp())
+        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*ulp())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*ulp())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*ulp())
 
         a = I + tril(0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2))
         b = randn(5,3)
-        @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
-        @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
-        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
+        @test (maximum(abs.(a*b - Array(a)*b)) < 100*ulp())
+        @test (maximum(abs.(a'b - Array(a)'b)) < 100*ulp())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*ulp())
+        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*ulp())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*ulp())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*ulp())
 
         a = I + triu(0.1*sprandn(5, 5, 0.2))
         b = randn(5,3) + im*randn(5,3)
-        @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
-        @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
-        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
+        @test (maximum(abs.(a*b - Array(a)*b)) < 100*ulp())
+        @test (maximum(abs.(a'b - Array(a)'b)) < 100*ulp())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*ulp())
+        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*ulp())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*ulp())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*ulp())
 
         a = I + triu(0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2))
         b = randn(5,3)
-        @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
-        @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
-        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
+        @test (maximum(abs.(a*b - Array(a)*b)) < 100*ulp())
+        @test (maximum(abs.(a'b - Array(a)'b)) < 100*ulp())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*ulp())
+        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*ulp())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*ulp())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*ulp())
 
         a = I + triu(0.1*sprandn(5, 5, 0.2))
         b = randn(5,3) + im*randn(5,3)
-        @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
-        @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
-        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
+        @test (maximum(abs.(a*b - Array(a)*b)) < 100*ulp())
+        @test (maximum(abs.(a'b - Array(a)'b)) < 100*ulp())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*ulp())
+        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*ulp())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*ulp())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*ulp())
 
         # UpperTriangular/LowerTriangular solve
         a = UpperTriangular(I + triu(0.1*sprandn(5, 5, 0.2)))
         b = sprandn(5, 5, 0.2)
-        @test (maximum(abs.(a\b - Array(a)\Array(b))) < 1000*eps())
+        @test (maximum(abs.(a\b - Array(a)\Array(b))) < 1000*ulp())
         # test error throwing for bwdTrisolve
         @test_throws DimensionMismatch a\Matrix{Float64}(I, 6, 6)
         a = LowerTriangular(I + tril(0.1*sprandn(5, 5, 0.2)))
         b = sprandn(5, 5, 0.2)
-        @test (maximum(abs.(a\b - Array(a)\Array(b))) < 1000*eps())
+        @test (maximum(abs.(a\b - Array(a)\Array(b))) < 1000*ulp())
         # test error throwing for fwdTrisolve
         @test_throws DimensionMismatch a\Matrix{Float64}(I, 6, 6)
 
@@ -293,20 +293,20 @@ end
 
         a = sparse(Diagonal(randn(5) + im*randn(5)))
         b = randn(5,3)
-        @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
-        @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
-        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
+        @test (maximum(abs.(a*b - Array(a)*b)) < 100*ulp())
+        @test (maximum(abs.(a'b - Array(a)'b)) < 100*ulp())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*ulp())
+        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*ulp())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*ulp())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*ulp())
 
         b = randn(5,3) + im*randn(5,3)
-        @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
-        @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
-        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
-        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
+        @test (maximum(abs.(a*b - Array(a)*b)) < 100*ulp())
+        @test (maximum(abs.(a'b - Array(a)'b)) < 100*ulp())
+        @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*ulp())
+        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*ulp())
+        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*ulp())
+        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*ulp())
     end
     end
 end
@@ -315,9 +315,9 @@ end
     for i = 1:5
         a = sprand(10, 5, 0.7)
         b = sprand(5, 15, 0.3)
-        @test maximum(abs.(a*b - Array(a)*Array(b))) < 100*eps()
-        @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:sortcols) - Array(a)*Array(b))) < 100*eps()
-        @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:doubletranspose) - Array(a)*Array(b))) < 100*eps()
+        @test maximum(abs.(a*b - Array(a)*Array(b))) < 100*ulp()
+        @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:sortcols) - Array(a)*Array(b))) < 100*ulp()
+        @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:doubletranspose) - Array(a)*Array(b))) < 100*ulp()
         f = Diagonal(rand(5))
         @test Array(a*f) == Array(a)*f
         @test Array(f*b) == f*Array(b)
@@ -1724,7 +1724,7 @@ end
 @testset "sparse matrix cond" begin
     local A = sparse(reshape([1.0], 1, 1))
     Ac = sprandn(20, 20,.5) + im*sprandn(20, 20,.5)
-    Ar = sprandn(20, 20,.5) + eps()*I
+    Ar = sprandn(20, 20,.5) + ulp()*I
     @test cond(A, 1) == 1.0
     # For a discussion of the tolerance, see #14778
     if Base.USE_GPL_LIBS

@@ -92,7 +92,7 @@ function test_pinv(a,m,n,tol1,tol2,tol3)
     @test norm(a*apinv*a-a)/norm(a) ≈ 0 atol=tol1
     x0 = randn(n); b = a*x0; x = apinv*b
     @test norm(a*x-b)/norm(b) ≈ 0 atol=tol1
-    apinv = pinv(a,sqrt(eps(real(one(eltype(a))))))
+    apinv = pinv(a,sqrt(ulp(real(one(eltype(a))))))
 
     @test norm(a*apinv*a-a)/norm(a) ≈ 0 atol=tol2
     x0 = randn(n); b = a*x0; x = apinv*b

@@ -1311,7 +1311,7 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
 function pinv(A::StridedMatrix{T}) where T
-    tol = eps(real(float(one(T))))*min(size(A)...)
+    tol = ulp(real(float(one(T))))*min(size(A)...)
     return pinv(A, tol)
 end
 function pinv(x::Number)
@@ -1351,14 +1351,14 @@ julia> nullspace(M, 2)
  0.0  0.0  1.0
 ```
 """
-function nullspace(A::StridedMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
+function nullspace(A::StridedMatrix, tol::Real = min(size(A)...)*ulp(real(float(one(eltype(A))))))
     m, n = size(A)
     (m == 0 || n == 0) && return Matrix{T}(I, n, n)
     SVD = svd(A, full=true)
     indstart = sum(SVD.S .> SVD.S[1]*tol) + 1
     return copy(SVD.Vt[indstart:end,:]')
 end
-nullspace(a::StridedVector, tol::Real = min(size(a)...)*eps(real(float(one(eltype(a)))))) = nullspace(reshape(a, length(a), 1), tol)
+nullspace(a::StridedVector, tol::Real = min(size(a)...)*ulp(real(float(one(eltype(a)))))) = nullspace(reshape(a, length(a), 1), tol)
 
 """
     cond(M, p::Real=2)

@@ -29,11 +29,11 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
     raw_a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     asym = raw_a' + raw_a                  # symmetric indefinite
     apd  = raw_a' * raw_a                 # symmetric positive-definite
-    ε = εa = eps(abs(float(one(eltya))))
+    ε = εa = ulp(abs(float(one(eltya))))
 
     @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
         raw_b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
-        εb = eps(abs(float(one(eltyb))))
+        εb = ulp(abs(float(one(eltyb))))
         ε = max(εa, εb)
         tab = promote_type(eltya, eltyb)
 
@@ -174,7 +174,7 @@ end
 @testset "Issue 7304" begin
     A = [-√.5 -√.5; -√.5 √.5]
     Q = rectangularQ(qr(A).Q)
-    @test norm(A-Q) < eps()
+    @test norm(A-Q) < ulp()
 end
 
 @testset "qr on AbstractVector" begin
@@ -183,7 +183,7 @@ end
         for T in (Tr, Complex{Tr})
             v = convert(Vector{T}, vr)
             nv, nm = qr(v)
-            @test norm(nv - [-0.6 -0.8; -0.8 0.6], Inf) < eps(Tr)
+            @test norm(nv - [-0.6 -0.8; -0.8 0.6], Inf) < ulp(Tr)
             @test nm == fill(-5.0, 1, 1)
         end
     end

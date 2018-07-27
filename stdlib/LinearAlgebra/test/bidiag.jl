@@ -173,15 +173,15 @@ srand(1)
             if relty != BigFloat
                 x = transpose(T)\transpose(c)
                 tx = transpose(Tfull) \ transpose(c)
-                elty <: AbstractFloat && @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                elty <: AbstractFloat && @test norm(x-tx,Inf) <= 4*condT*max(ulp()*norm(tx,Inf), ulp(promty)*norm(x,Inf))
                 @test_throws DimensionMismatch transpose(T)\transpose(b)
                 x = T'\copy(transpose(c))
                 tx = Tfull'\copy(transpose(c))
-                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                @test norm(x-tx,Inf) <= 4*condT*max(ulp()*norm(tx,Inf), ulp(promty)*norm(x,Inf))
                 @test_throws DimensionMismatch T'\copy(transpose(b))
                 x = T\transpose(c)
                 tx = Tfull\transpose(c)
-                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                @test norm(x-tx,Inf) <= 4*condT*max(ulp()*norm(tx,Inf), ulp(promty)*norm(x,Inf))
                 @test_throws DimensionMismatch T\transpose(b)
             end
             offsizemat = Matrix{elty}(undef, n+1, 2)
@@ -202,7 +202,7 @@ srand(1)
                 x = T \ b
                 tx = Tfull \ b
                 @test_throws DimensionMismatch LinearAlgebra.naivesub!(T,Vector{elty}(undef,n+1))
-                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                @test norm(x-tx,Inf) <= 4*condT*max(ulp()*norm(tx,Inf), ulp(promty)*norm(x,Inf))
                 @testset "Generic Mat-vec ops" begin
                     @test T*b ≈ Tfull*b
                     @test T'*b ≈ Tfull'*b
@@ -256,7 +256,7 @@ srand(1)
                     test_approx_eq_modphase(u1, u2)
                     test_approx_eq_modphase(copy(v1), copy(v2))
                 end
-                @test 0 ≈ norm(u2*Diagonal(d2)*v2'-Tfull) atol=n*max(n^2*eps(relty),norm(u1*Diagonal(d1)*v1'-Tfull))
+                @test 0 ≈ norm(u2*Diagonal(d2)*v2'-Tfull) atol=n*max(n^2*ulp(relty),norm(u1*Diagonal(d1)*v1'-Tfull))
                 @inferred svdvals(T)
                 @inferred svd(T)
             end

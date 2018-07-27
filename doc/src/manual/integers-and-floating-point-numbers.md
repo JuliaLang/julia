@@ -427,13 +427,13 @@ Julia provides [`eps`](@ref), which gives the distance between `1.0` and the nex
 floating-point value:
 
 ```jldoctest
-julia> eps(Float32)
+julia> ulp(Float32)
 1.1920929f-7
 
-julia> eps(Float64)
+julia> ulp(Float64)
 2.220446049250313e-16
 
-julia> eps() # same as eps(Float64)
+julia> ulp() # same as ulp(Float64)
 2.220446049250313e-16
 ```
 
@@ -444,16 +444,16 @@ floating point value. That is, `eps(x)` yields a value of the same type as `x` s
 `x + eps(x)` is the next representable floating-point value larger than `x`:
 
 ```jldoctest
-julia> eps(1.0)
+julia> ulp(1.0)
 2.220446049250313e-16
 
-julia> eps(1000.)
+julia> ulp(1000.)
 1.1368683772161603e-13
 
-julia> eps(1e-27)
+julia> ulp(1e-27)
 1.793662034335766e-43
 
-julia> eps(0.0)
+julia> ulp(0.0)
 5.0e-324
 ```
 

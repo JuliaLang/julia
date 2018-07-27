@@ -52,7 +52,7 @@ end
         a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
         a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
 
-        ε = εa = eps(abs(float(one(eltya))))
+        ε = εa = ulp(abs(float(one(eltya))))
 
         # Test of symmetric pos. def. strided matrix
         apd  = a'*a
@@ -136,7 +136,7 @@ end
 
         for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
             b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
-            εb = eps(abs(float(one(eltyb))))
+            εb = ulp(abs(float(one(eltyb))))
             ε = max(εa,εb)
 
             for b in (b, view(b, 1:n, 1)) # Array and SubArray
@@ -215,8 +215,8 @@ end
     U = Matrix(LinearAlgebra._chol!(X*X', UpperTriangular)[1])
     XX = Matrix(X*X')
 
-    @test sum(sum(norm, L*L' - XX)) < eps()
-    @test sum(sum(norm, U'*U - XX)) < eps()
+    @test sum(sum(norm, L*L' - XX)) < ulp()
+    @test sum(sum(norm, U'*U - XX)) < ulp()
 end
 
 
@@ -260,7 +260,7 @@ end
     cholesky(Hermitian(apd, :L), Val(true)) \ b
     r = factorize(apd).U
     E = abs.(apd - r'*r)
-    ε = eps(abs(float(one(ComplexF32))))
+    ε = ulp(abs(float(one(ComplexF32))))
     n = 10
     for i=1:n, j=1:n
         @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))

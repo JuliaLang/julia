@@ -738,7 +738,7 @@ julia> rank(diagm(0 => [1, 0.001, 2]), 0.00001)
 3
 ```
 """
-function rank(A::AbstractMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
+function rank(A::AbstractMatrix, tol::Real = min(size(A)...)*ulp(real(float(one(eltype(A))))))
     s = svdvals(A)
     count(x -> x > tol*s[1], s)
 end
@@ -1366,7 +1366,7 @@ end
         rmul!(v, invnrm)
 
     else # scale elements to avoid overflow
-        εδ = eps(one(nrm))/δ
+        εδ = ulp(one(nrm))/δ
         rmul!(v, εδ)
         rmul!(v, inv(nrm*εδ))
     end
