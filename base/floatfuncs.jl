@@ -219,14 +219,14 @@ end
 
 # isapprox: approximate equality of numbers
 """
-    isapprox(x, y; rtol::Real=atol>0 ? 0 : √eps, atol::Real=0, nans::Bool=false, norm::Function)
+    isapprox(x, y; rtol::Real=atol>0 ? 0 : √ulp, atol::Real=0, nans::Bool=false, norm::Function)
 
 Inexact equality comparison: `true` if `norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`. The
 default `atol` is zero and the default `rtol` depends on the types of `x` and `y`. The keyword
 argument `nans` determines whether or not NaN values are considered equal (defaults to false).
 
 For real or complex floating-point values, if an `atol > 0` is not specified, `rtol` defaults to
-the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger (least precise).
+the square root of [`ulp`](@ref) of the type of `x` or `y`, whichever is bigger (least precise).
 This corresponds to requiring equality of about half of the significand digits. Otherwise,
 e.g. for integer arguments or if an `atol > 0` is supplied, `rtol` defaults to zero.
 

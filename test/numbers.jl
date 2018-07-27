@@ -1782,7 +1782,7 @@ end
     @test 0xf.fP1 === 31.875
     @test -0x1.0p2 === -4.0
 end
-@testset "eps / realmin / realmax" begin
+@testset "ulp / realmin / realmax" begin
     @test 0x1p-52 == ulp()
     @test 0x1p-52 + 1 != 1
     @test 0x1p-53 + 1 == 1

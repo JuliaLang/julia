@@ -13,7 +13,7 @@ import
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
         sum, sqrt, string, print, trunc, precision, exp10, expm1,
         log1p,
-        eps, signbit, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
+        ulp, signbit, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh,
         cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
@@ -879,7 +879,7 @@ function prevfloat(x::BigFloat)
     return z
 end
 
-eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
+ulp(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
 
 realmin(::Type{BigFloat}) = nextfloat(zero(BigFloat))
 realmax(::Type{BigFloat}) = prevfloat(BigFloat(Inf))

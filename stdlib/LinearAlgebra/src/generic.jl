@@ -720,7 +720,7 @@ end
 Compute the rank of a matrix by counting how many singular
 values of `A` have magnitude greater than `tol*σ₁` where `σ₁` is
 `A`'s largest singular values. By default, the value of `tol` is the smallest
-dimension of `A` multiplied by the [`eps`](@ref)
+dimension of `A` multiplied by the [`ulp`](@ref)
 of the [`eltype`](@ref) of `A`.
 
 # Examples

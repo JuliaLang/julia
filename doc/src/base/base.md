@@ -165,8 +165,8 @@ Base.typemax
 Base.realmin
 Base.realmax
 Base.maxintfloat
-Base.eps(::Type{<:AbstractFloat})
-Base.eps(::AbstractFloat)
+Base.ulp(::Type{<:AbstractFloat})
+Base.ulp(::AbstractFloat)
 Base.instances
 ```
 

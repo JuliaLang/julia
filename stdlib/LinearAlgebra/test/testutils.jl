@@ -13,7 +13,7 @@
 #
 # Inputs:
 #     a, b:: StridedVecOrMat to be compared
-#     err :: Default: m^3*(eps(S)+eps(T)), where m is the number of rows
+#     err :: Default: m^3*(ulp(S)+ulp(T)), where m is the number of rows
 #
 # Raises an error if any columnwise vector norm exceeds err. Otherwise, returns
 # nothing.

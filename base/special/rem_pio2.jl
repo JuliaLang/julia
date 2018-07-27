@@ -64,7 +64,7 @@ end
 
     fn = round(x*(2/pi)) # round to integer
     # on older systems, the above could be faster with
-    # rf = 1.5/eps(Float64)
+    # rf = 1.5/ulp(Float64)
     # fn = (x*(2/pi)+rf)-rf
 
     r  = muladd(-fn, pio2_1, x) # x - fn*pio2_1

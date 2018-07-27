@@ -681,7 +681,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                 end
             end
         else
-            # Here `eps(Tf(typemin(Ti))) > 1`, so the only value which can be truncated to
+            # Here `ulp(Tf(typemin(Ti))) > 1`, so the only value which can be truncated to
             # `Tf(typemin(Ti)` is itself. Similarly, `Tf(typemax(Ti))` is inexact and will
             # be rounded up. This assumes that `Tf(typemin(Ti)) > -Inf`, which is true for
             # these types, but not for `Float16` or larger integer types.
@@ -732,11 +732,11 @@ end
     realmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
     realmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
 
-    eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
-    eps(::Type{Float16}) = $(bitcast(Float16, 0x1400))
-    eps(::Type{Float32}) = $(bitcast(Float32, 0x34000000))
-    eps(::Type{Float64}) = $(bitcast(Float64, 0x3cb0000000000000))
-    eps() = eps(Float64)
+    ulp(x::AbstractFloat) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(ulp(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
+    ulp(::Type{Float16}) = $(bitcast(Float16, 0x1400))
+    ulp(::Type{Float32}) = $(bitcast(Float32, 0x34000000))
+    ulp(::Type{Float64}) = $(bitcast(Float64, 0x3cb0000000000000))
+    ulp() = ulp(Float64)
 end
 
 """
@@ -767,12 +767,12 @@ realmin() = realmin(Float64)
 realmax() = realmax(Float64)
 
 """
-    eps(::Type{T}) where T<:AbstractFloat
-    eps()
+    ulp(::Type{T}) where T<:AbstractFloat
+    ulp()
 
 Return the *machine epsilon* of the floating point type `T` (`T = Float64` by
 default). This is defined as the gap between 1 and the next largest value representable by
-`typeof(one(T))`, and is equivalent to `eps(one(T))`.  (Since `eps(T)` is a
+`typeof(one(T))`, and is equivalent to `ulp(one(T))`.  (Since `ulp(T)` is a
 bound on the *relative error* of `T`, it is a "dimensionless" quantity like [`one`](@ref).)
 
 # Examples
@@ -793,24 +793,24 @@ julia> 1.0 + ulp()/2
 ulp(::Type{<:AbstractFloat})
 
 """
-    eps(x::AbstractFloat)
+    ulp(x::AbstractFloat)
 
 Return the *unit in last place* (ulp) of `x`. This is the distance between consecutive
 representable floating point values at `x`. In most cases, if the distance on either side
 of `x` is different, then the larger of the two is taken, that is
 
-    eps(x) == max(x-prevfloat(x), nextfloat(x)-x)
+    ulp(x) == max(x-prevfloat(x), nextfloat(x)-x)
 
 The exceptions to this rule are the smallest and largest finite values
 (e.g. `nextfloat(-Inf)` and `prevfloat(Inf)` for [`Float64`](@ref)), which round to the
 smaller of the values.
 
-The rationale for this behavior is that `eps` bounds the floating point rounding
+The rationale for this behavior is that `ulp` bounds the floating point rounding
 error. Under the default `RoundNearest` rounding mode, if ``y`` is a real number and ``x``
 is the nearest floating point number to ``y``, then
 
 ```math
-|y-x| \\leq \\operatorname{eps}(x)/2.
+|y-x| \\leq \\operatorname{ulp}(x)/2.
 ```
 
 # Examples

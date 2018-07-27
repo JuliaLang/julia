@@ -643,7 +643,7 @@ end
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999999999999999999999999999997"
     end
 end
-@testset "eps" begin
+@testset "ulp" begin
     x = ulp(BigFloat)
     @test BigFloat(1) + x == BigFloat(1) + prevfloat(x)
     @test ulp(BigFloat) == ulp(BigFloat(1))

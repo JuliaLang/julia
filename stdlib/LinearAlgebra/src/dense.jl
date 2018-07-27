@@ -1248,10 +1248,10 @@ the pseudoinverse by inverting only singular values above a given threshold,
 
 The optimal choice of `tol` varies both with the value of `M` and the intended application
 of the pseudoinverse. The default value of `tol` is
-`eps(real(float(one(eltype(M)))))*minimum(size(M))`, which is essentially machine epsilon
+`ulp(real(float(one(eltype(M)))))*minimum(size(M))`, which is essentially machine epsilon
 for the real part of a matrix element multiplied by the larger matrix dimension. For
 inverting dense ill-conditioned matrices in a least-squares sense,
-`tol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
+`tol = sqrt(ulp(real(float(one(eltype(M))))))` is recommended.
 
 For more information, see [^issue8859], [^B96], [^S84], [^KY88].
 
@@ -1327,7 +1327,7 @@ end
 Computes a basis for the nullspace of `M` by including the singular
 vectors of A whose singular have magnitude are greater than `tol*σ₁`,
 where `σ₁` is `A`'s largest singular values. By default, the value of
-`tol` is the smallest dimension of `A` multiplied by the [`eps`](@ref)
+`tol` is the smallest dimension of `A` multiplied by the [`ulp`](@ref)
 of the [`eltype`](@ref) of `A`.
 
 # Examples
