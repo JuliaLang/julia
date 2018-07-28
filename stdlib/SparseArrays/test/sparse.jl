@@ -167,14 +167,14 @@ let
     end
 end
 
-@testset "squeeze" begin
+@testset "dropdims" begin
     for i = 1:5
         am = sprand(20, 1, 0.2)
-        av = squeeze(am, dims=2)
+        av = dropdims(am, dims=2)
         @test ndims(av) == 1
         @test all(av.==am)
         am = sprand(1, 20, 0.2)
-        av = squeeze(am, dims=1)
+        av = dropdims(am, dims=1)
         @test ndims(av) == 1
         @test all(av' .== am)
     end
@@ -1401,10 +1401,10 @@ end
     @test norm(Array(D) - Array(S)) == 0.0
 end
 
-@testset "error conditions for reshape, and squeeze" begin
+@testset "error conditions for reshape, and dropdims" begin
     local A = sprand(Bool, 5, 5, 0.2)
     @test_throws DimensionMismatch reshape(A,(20, 2))
-    @test_throws ArgumentError squeeze(A,dims=(1, 1))
+    @test_throws ArgumentError dropdims(A,dims=(1, 1))
 end
 
 @testset "float" begin

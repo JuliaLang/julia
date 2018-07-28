@@ -24,7 +24,7 @@ function Agen_slice(A::AbstractArray, I...)
             push!(sd, i)
         end
     end
-    squeeze(B, dims=sd)
+    dropdims(B, dims=sd)
 end
 
 _Agen(A, i1) = [A[j1] for j1 in i1]

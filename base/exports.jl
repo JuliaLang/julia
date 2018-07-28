@@ -423,7 +423,7 @@ export
     sortperm,
     sortperm!,
     sortrows,
-    squeeze,
+    dropdims,
     step,
     stride,
     strides,

@@ -1386,7 +1386,8 @@ export readandwrite
 
 @deprecate flipdim(A, d) reverse(A, dims=d)
 
-@deprecate squeeze(A, dims) squeeze(A, dims=dims)
+@deprecate squeeze dropdims
+@deprecate dropdims(A, dims) dropdims(A, dims=dims)
 
 @deprecate diff(A::AbstractMatrix, dim::Integer) diff(A, dims=dim)
 @deprecate unique(A::AbstractArray, dim::Int)    unique(A, dims=dim)
