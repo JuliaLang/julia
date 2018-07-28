@@ -725,14 +725,14 @@ end
     typemin(x::T) where {T<:Real} = typemin(T)
     typemax(x::T) where {T<:Real} = typemax(T)
 
-    realmin(::Type{Float16}) = $(bitcast(Float16, 0x0400))
-    realmin(::Type{Float32}) = $(bitcast(Float32, 0x00800000))
-    realmin(::Type{Float64}) = $(bitcast(Float64, 0x0010000000000000))
-    realmax(::Type{Float16}) = $(bitcast(Float16, 0x7bff))
-    realmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
-    realmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
+    floatmin(::Type{Float16}) = $(bitcast(Float16, 0x0400))
+    floatmin(::Type{Float32}) = $(bitcast(Float32, 0x00800000))
+    floatmin(::Type{Float64}) = $(bitcast(Float64, 0x0010000000000000))
+    floatmax(::Type{Float16}) = $(bitcast(Float16, 0x7bff))
+    floatmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
+    floatmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
 
-    eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
+    eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= floatmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
     eps(::Type{Float16}) = $(bitcast(Float16, 0x1400))
     eps(::Type{Float32}) = $(bitcast(Float32, 0x34000000))
     eps(::Type{Float64}) = $(bitcast(Float64, 0x3cb0000000000000))
@@ -745,7 +745,7 @@ end
 The smallest in absolute value non-subnormal value representable by the given
 floating-point DataType `T`.
 """
-realmin(x::T) where {T<:AbstractFloat} = realmin(T)
+floatmin(x::T) where {T<:AbstractFloat} = floatmin(T)
 
 """
     realmax(T)
@@ -754,17 +754,17 @@ The highest finite value representable by the given floating-point DataType `T`.
 
 # Examples
 ```jldoctest
-julia> realmax(Float16)
+julia> floatmax(Float16)
 Float16(6.55e4)
 
-julia> realmax(Float32)
+julia> floatmax(Float32)
 3.4028235f38
 ```
 """
-realmax(x::T) where {T<:AbstractFloat} = realmax(T)
+floatmax(x::T) where {T<:AbstractFloat} = floatmax(T)
 
-realmin() = realmin(Float64)
-realmax() = realmax(Float64)
+floatmin() = floatmin(Float64)
+floatmax() = floatmax(Float64)
 
 """
     eps(::Type{T}) where T<:AbstractFloat

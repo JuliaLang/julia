@@ -1585,10 +1585,10 @@ end
 @test eps(-float(0)) == 5e-324
 @test eps(nextfloat(float(0))) == 5e-324
 @test eps(-nextfloat(float(0))) == 5e-324
-@test eps(realmin()) == 5e-324
-@test eps(-realmin()) == 5e-324
-@test eps(realmax()) ==  2.0^(1023-52)
-@test eps(-realmax()) ==  2.0^(1023-52)
+@test eps(floatmin()) == 5e-324
+@test eps(-floatmin()) == 5e-324
+@test eps(floatmax()) ==  2.0^(1023-52)
+@test eps(-floatmax()) ==  2.0^(1023-52)
 @test isnan(eps(NaN))
 @test isnan(eps(Inf))
 @test isnan(eps(-Inf))
@@ -1786,8 +1786,8 @@ end
     @test 0x1p-52 == eps()
     @test 0x1p-52 + 1 != 1
     @test 0x1p-53 + 1 == 1
-    @test 0x1p-1022 == realmin()
-    @test 0x1.fffffffffffffp1023 == realmax()
+    @test 0x1p-1022 == floatmin()
+    @test 0x1.fffffffffffffp1023 == floatmax()
     @test isinf(nextfloat(0x1.fffffffffffffp1023))
 end
 @testset "issue #1308" begin
@@ -1985,8 +1985,8 @@ for F in (Float16,Float32,Float64)
     @test reinterpret(Signed,one(F)) === signed(Base.exponent_one(F))
 end
 
-@test eps(realmax(Float64)) == 1.99584030953472e292
-@test eps(-realmax(Float64)) == 1.99584030953472e292
+@test eps(floatmax(Float64)) == 1.99584030953472e292
+@test eps(-floatmax(Float64)) == 1.99584030953472e292
 
 # modular multiplicative inverses of odd numbers via exponentiation
 
