@@ -55,6 +55,11 @@ jl_options_t jl_options = { 0,    // quiet
                             0,    // method overwrite warning
                             1,    // can_inline
                             JL_OPTIONS_POLLY_ON, // polly
+#ifdef TRACE_COMPILE
+                            1, // trace_compile
+#else
+                            0, // trace_compile
+#endif
                             JL_OPTIONS_FAST_MATH_DEFAULT,
                             0,    // worker
                             NULL, // cookie
@@ -159,6 +164,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_warn_overwrite,
            opt_inline,
            opt_polly,
+           opt_trace_compile,
            opt_math_mode,
            opt_worker,
            opt_bind_to,
@@ -215,6 +221,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "warn-overwrite",  required_argument, 0, opt_warn_overwrite },
         { "inline",          required_argument, 0, opt_inline },
         { "polly",           required_argument, 0, opt_polly },
+        { "trace-compile",   required_argument, 0, opt_trace_compile },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
@@ -565,6 +572,15 @@ restart_switch:
                 jl_options.polly = JL_OPTIONS_POLLY_OFF;
             else {
                 jl_errorf("julia: invalid argument to --polly (%s)", optarg);
+            }
+            break;
+         case opt_trace_compile:
+            if (!strcmp(optarg,"yes"))
+                jl_options.trace_compile = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_options.trace_compile = 0;
+            else {
+                jl_errorf("julia: invalid argument to --trace-compile (%s)", optarg);
             }
             break;
         case opt_math_mode:
