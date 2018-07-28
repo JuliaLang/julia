@@ -1323,6 +1323,8 @@ Deprecated or removed
 
   * `squeeze` is deprecated in favor of `dropdims`.
 
+  * `realmin`/`realmax` are deprecated in favor of `floatmin`/`floatmax` ([#28302]).
+
 Command-line option changes
 ---------------------------
 
