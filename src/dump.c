@@ -1025,7 +1025,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                         if (!jl_field_isptr(t, i)) {
                             uint8_t sel = 0;
                             if (jl_is_uniontype(jl_field_type(t, i))) {
-                                sel = ((uint8_t*)v)[offs + fsz - 1];
+                                sel = ((uint8_t*)v)[offs + fsz - 1] + 1;
                             }
                             write_int8(s->s, sel);
                         }

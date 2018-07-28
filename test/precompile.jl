@@ -183,6 +183,8 @@ try
         @test (Foo.abigfloat_x::BigFloat + 21) == big"64.21"
         @test Foo.abigint_f()::BigInt == big"123"
         @test Foo.abigint_x::BigInt + 1 == big"125"
+
+        @test Foo.x28297.result === missing
     end
 
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
