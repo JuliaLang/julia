@@ -1647,7 +1647,6 @@ Command-line option changes
 [#26733]: https://github.com/JuliaLang/julia/issues/26733
 [#26775]: https://github.com/JuliaLang/julia/issues/26775
 [#26858]: https://github.com/JuliaLang/julia/issues/26858
-[#26859]: https://github.com/JuliaLang/julia/issues/26859
 [#26862]: https://github.com/JuliaLang/julia/issues/26862
 [#26932]: https://github.com/JuliaLang/julia/issues/26932
 [#26935]: https://github.com/JuliaLang/julia/issues/26935
@@ -1675,5 +1674,10 @@ Command-line option changes
 [#27641]: https://github.com/JuliaLang/julia/issues/27641
 [#27711]: https://github.com/JuliaLang/julia/issues/27711
 [#27746]: https://github.com/JuliaLang/julia/issues/27746
+[#27856]: https://github.com/JuliaLang/julia/issues/27856
 [#27859]: https://github.com/JuliaLang/julia/issues/27859
 [#27908]: https://github.com/JuliaLang/julia/issues/27908
+[#28045]: https://github.com/JuliaLang/julia/issues/28045
+[#28065]: https://github.com/JuliaLang/julia/issues/28065
+[#28266]: https://github.com/JuliaLang/julia/issues/28266
+[#28302]: https://github.com/JuliaLang/julia/issues/28302
