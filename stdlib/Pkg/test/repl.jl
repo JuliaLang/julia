@@ -226,6 +226,10 @@ temp_pkg_dir() do project_path; cd(project_path) do
                     pkg"develop ../SubModule2"
                     @test Pkg.installed()["SubModule1"] == v"0.1.0"
                     @test Pkg.installed()["SubModule2"] == v"0.1.0"
+                    # make sure paths to SubModule1 and SubModule2 are relative
+                    manifest = Pkg.Types.Context().env.manifest
+                    @test manifest["SubModule1"][1]["path"] == "SubModule1"
+                    @test manifest["SubModule2"][1]["path"] == "SubModule2"
                 end
             end
             cp("HelloWorld", joinpath(other_dir, "HelloWorld"))
@@ -266,6 +270,26 @@ cd(mktempdir()) do
     pkg"add Example" # non-deved deps should not be activated
     pkg"activate Example"
     @test Base.active_project() == joinpath(path, "Example", "Project.toml")
+    pkg"activate ."
+    cd(mkdir("tests"))
+    pkg"activate Foo" # activate developed Foo from another directory
+    @test Base.active_project() == joinpath(path, "modules", "Foo", "Project.toml")
+end
+
+# test relative dev paths (#490)
+cd(mktempdir()) do
+    pkg"generate HelloWorld"
+    cd("HelloWorld")
+    pkg"generate SubModule"
+    cd(mkdir("tests"))
+    pkg"activate ."
+    pkg"develop .." # HelloWorld
+    pkg"develop ../SubModule"
+    @test Pkg.installed()["HelloWorld"] == v"0.1.0"
+    @test Pkg.installed()["SubModule"] == v"0.1.0"
+    manifest = Pkg.Types.Context().env.manifest
+    @test manifest["HelloWorld"][1]["path"] == ".."
+    @test manifest["SubModule"][1]["path"] == joinpath("..", "SubModule")
 end
 
 # develop with --shared and --local
@@ -273,7 +297,7 @@ using Pkg.Types: manifest_info, EnvCache
 cd(mktempdir()) do
     uuid = UUID("7876af07-990d-54b4-ab0e-23690620f79a") # Example
     pkg"activate ."
-    pkg"develop Example" # test --shared default
+    pkg"develop Example" # test default
     @test manifest_info(EnvCache(), uuid)["path"] == joinpath(Pkg.devdir(), "Example")
     pkg"develop --shared Example"
     @test manifest_info(EnvCache(), uuid)["path"] == joinpath(Pkg.devdir(), "Example")

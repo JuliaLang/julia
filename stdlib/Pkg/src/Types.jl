@@ -493,7 +493,15 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}, 
 
             if isdir_windows_workaround(pkg.repo.url)
                 # Developing a local package, just point `pkg.path` to it
-                pkg.path = abspath(pkg.repo.url)
+                if isabspath(pkg.repo.url)
+                    # absolute paths should stay absolute
+                    pkg.path = pkg.repo.url
+                else
+                    # Relative paths are given relative pwd() so we
+                    # translate that to be relative the project instead.
+                    # `realpath` is needed to expand symlinks before taking the relative path.
+                    pkg.path = relpath(realpath(abspath(pkg.repo.url)), realpath(dirname(ctx.env.project_file)))
+                end
                 folder_already_downloaded = true
                 project_path = pkg.repo.url
                 parse_package!(ctx, pkg, project_path)
@@ -559,7 +567,9 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}, 
                     mv(project_path, dev_pkg_path; force=true)
                     push!(new_uuids, pkg.uuid)
                 end
-                pkg.path = dev_pkg_path
+                # Save the path as relative if the location is inside the project
+                # (e.g. from `dev --local`), otherwise put in the absolute path.
+                pkg.path = Pkg.Operations.relative_project_path_if_in_project(ctx, dev_pkg_path)
             end
             @assert pkg.path != nothing
         end

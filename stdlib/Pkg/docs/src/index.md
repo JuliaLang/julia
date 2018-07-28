@@ -359,6 +359,7 @@ Note the info message saying that it is using the existing path. This means that
 an already developed package.
 
 If `dev` is used on a local path, that path to that package is recorded and used when loading that package.
+The path will be recorded relative to the project file, unless it is given as an absolute path.
 
 To stop tracking a path and use the registered version again, use `free`
 

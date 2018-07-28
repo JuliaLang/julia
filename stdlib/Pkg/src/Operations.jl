@@ -91,7 +91,7 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
             @assert pkg.repo !== nothing && pkg.repo.git_tree_sha1 !== nothing
             path = find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
         elseif info !== nothing && haskey(info, "path")
-            pkg.path = project_rel_path(ctx, info["path"])
+            pkg.path = info["path"]
             path = pkg.path
         elseif info !== nothing && haskey(info, "repo-url")
             path = find_installed(pkg.name, pkg.uuid, SHA1(info["git-tree-sha1"]))
@@ -675,7 +675,7 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
     if !is_stdlib
         info["version"] = string(version)
         hash == nothing ? delete!(info, "git-tree-sha1")  : (info["git-tree-sha1"] = string(hash))
-        path == nothing ? delete!(info, "path")          : (info["path"]          = relative_project_path_if_in_project(ctx, path))
+        path == nothing ? delete!(info, "path")           : (info["path"]          = path)
         if special_action == PKGSPEC_DEVELOPED
             delete!(info, "pinned")
             delete!(info, "repo-url")
