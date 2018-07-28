@@ -61,7 +61,8 @@ end
 # Options #
 ###########
 @enum(OptionKind, OPT_ENV, OPT_PROJECT, OPT_MANIFEST, OPT_MAJOR, OPT_MINOR,
-                  OPT_PATCH, OPT_FIXED, OPT_COVERAGE, OPT_NAME)
+                  OPT_PATCH, OPT_FIXED, OPT_COVERAGE, OPT_NAME,
+                  OPT_LOCAL, OPT_SHARED)
 
 function Types.PackageMode(opt::OptionKind)
     opt == OPT_MANIFEST && return PKGMODE_MANIFEST
@@ -107,6 +108,8 @@ const opts = Dict(
     "fixed"    => OPT_FIXED,
     "coverage" => OPT_COVERAGE,
     "name"     => OPT_NAME,
+    "local"    => OPT_LOCAL,
+    "shared"   => OPT_SHARED,
 )
 
 function parse_option(word::AbstractString)::Option
@@ -547,11 +550,13 @@ const helps = Dict(
     Free a pinned package `pkg`, which allows it to be upgraded or downgraded again. If the package is checked out (see `help develop`) then this command
     makes the package no longer being checked out.
     """, CMD_DEVELOP => md"""
-        develop pkg[=uuid] [#rev] ...
+        develop [--shared|--local] pkg[=uuid] [#rev] ...
 
     Make a package available for development. If `pkg` is an existing local path that path will be recorded in
-    the manifest and used. Otherwise, a full git clone of `pkg` at rev `rev` is made. The clone is stored in `devdir`,
-    which defaults to `~/.julia/dev` and is set by the environment variable `JULIA_PKG_DEVDIR`.
+    the manifest and used. Otherwise, a full git clone of `pkg` at rev `rev` is made. The location of the clone is
+    controlled by the `--shared` (default) and `--local` arguments. The `--shared` location defaults to
+    `~/.julia/dev`, but can be controlled with the `JULIA_PKG_DEVDIR` environment variable. When `--local` is given,
+    the clone is placed in a `dev` folder in the current project.
     This operation is undone by `free`.
 
     *Example*
@@ -560,6 +565,7 @@ const helps = Dict(
     pkg> develop Example#master
     pkg> develop Example#c37b675
     pkg> develop https://github.com/JuliaLang/Example.jl#master
+    pkg> develop --local Example
     ```
     """, CMD_PRECOMPILE => md"""
         precompile
@@ -638,6 +644,7 @@ function do_add_or_develop!(ctx::Context, tokens::Vector{Token}, cmd::CommandKin
     isempty(tokens) &&
         cmderror("`$mode` – list packages to $mode")
     pkgs = PackageSpec[]
+    dev_mode = OPT_SHARED # TODO: Make this default configurable
     while !isempty(tokens)
         token = popfirst!(tokens)
         if token isa String
@@ -653,10 +660,16 @@ function do_add_or_develop!(ctx::Context, tokens::Vector{Token}, cmd::CommandKin
                 pkgs[end].repo.rev = token.rev
             end
         elseif token isa Option
-            cmderror("`$mode` doesn't take options: $token")
+            if mode === :develop && token.kind in (OPT_LOCAL, OPT_SHARED)
+                dev_mode = token.kind
+            else
+                cmderror("`$mode` doesn't take options: $token")
+            end
         end
     end
-    return API.add_or_develop(ctx, pkgs, mode=mode)
+    dev_dir = mode === :add ? nothing : dev_mode == OPT_LOCAL ?
+        joinpath(dirname(ctx.env.project_file), "dev") : nothing
+    return API.add_or_develop(ctx, pkgs, mode=mode, devdir=dev_dir)
 end
 
 function do_up!(ctx::Context, tokens::Vector{Token})

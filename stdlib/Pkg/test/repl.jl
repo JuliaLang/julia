@@ -268,6 +268,19 @@ cd(mktempdir()) do
     @test Base.active_project() == joinpath(path, "Example", "Project.toml")
 end
 
+# develop with --shared and --local
+using Pkg.Types: manifest_info, EnvCache
+cd(mktempdir()) do
+    uuid = UUID("7876af07-990d-54b4-ab0e-23690620f79a") # Example
+    pkg"activate ."
+    pkg"develop Example" # test --shared default
+    @test manifest_info(EnvCache(), uuid)["path"] == joinpath(Pkg.devdir(), "Example")
+    pkg"develop --shared Example"
+    @test manifest_info(EnvCache(), uuid)["path"] == joinpath(Pkg.devdir(), "Example")
+    pkg"develop --local Example"
+    @test manifest_info(EnvCache(), uuid)["path"] == joinpath("dev", "Example")
+end
+
 test_complete(s) = Pkg.REPLMode.completions(s,lastindex(s))
 apply_completion(str) = begin
     c, r, s = test_complete(str)
