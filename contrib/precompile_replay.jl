@@ -1,9 +1,6 @@
-Base.__init__()
-
 import REPL
 include(joinpath(Sys.STDLIB, "REPL", "test", "FakeTerminals.jl"))
 import .FakeTerminals.FakeTerminal
-include(joinpath(Sys.STDLIB, "REPL", "test", "fake_repl.jl"))
 
 const CTRL_C = '\x03'
 const UP_ARROW = "\e[A"
@@ -12,7 +9,7 @@ const DOWN_ARROW = "\e[B"
 # TODO: Have a utility to generate this from a real REPL session?
 precompile_script = """
 2+2
-println("Hello World")
+print("")
 @time 1+1
 ?reinterpret
 ;pwd
@@ -28,6 +25,26 @@ f(1,2)
 cd("complet_path\t\t$CTRL_C
 """
 
+function fake_repl(@nospecialize(f))
+    input = Pipe()
+    output = Pipe()
+    err = Pipe()
+    Base.link_pipe!(input,  reader_supports_async=true, writer_supports_async=true)
+    Base.link_pipe!(output, reader_supports_async=true, writer_supports_async=true)
+    Base.link_pipe!(err,    reader_supports_async=true, writer_supports_async=true)
+
+    repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in), true)
+
+    f(input.in, output.out, repl)
+    t = @async begin
+        close(input.in)
+        close(output.in)
+        close(err.in)
+    end
+    #print(read(output.out, String))
+    Base._wait(t)
+    nothing
+end
 
 function run_repl()
     # Writing ^C to the repl will cause sigint, so let's not die on that
@@ -41,29 +58,16 @@ function run_repl()
             REPL.run_repl(repl)
         end
 
-        global inc = false
-        global b = Condition()
-        global c = Condition()
-        mod = @__MODULE__
-        let cmd = "\"Hello REPL\""
-            write(stdin_write, "$mod.inc || wait($mod.b); r = $cmd; notify($mod.c); r\r")
-        end
-        inc = true
-        notify(b)
-        wait(c)
-
         write(stdin_write, precompile_script)
-
-        s = readavailable(stdout_read)
-
         # Close REPL ^D
         write(stdin_write, '\x04')
-        Base._wait(repltask)
 
-        nothing
+        readavailable(stdout_read)
+
+        Base._wait(repltask)
     end
+
     ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
 end
 
 run_repl()
-

@@ -1,6 +1,5 @@
-Base.__init__()
-
 # Prevent this from being put into the Main namespace
+Base.reinit_stdio()
 let
 M = Module()
 @eval M begin
@@ -22,10 +21,6 @@ function generate_precompile_statements()
     println("──────────────────────────────────────")
 
 	# Reset code loading vars
-	Base.ACTIVE_PROJECT[] = nothing
-	Base.HOME_PROJECT[] = nothing
-	empty!(LOAD_PATH)
-	empty!(DEPOT_PATH)
 	push!(LOAD_PATH, "@stdlib")
 
     tmpd = mktempdir()
@@ -44,8 +39,8 @@ function generate_precompile_statements()
         sysimg = ARGS[1]
     end
 
-    output = Pipe()
-    task = @async read(output, String)
+    tmp = tempname()
+    touch(tmp)
     have_repl =  haskey(Base.loaded_modules,
                         Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
     if have_repl
@@ -53,7 +48,7 @@ function generate_precompile_statements()
         setup = """
         include($(repr(joinpath(@__DIR__, "precompile_replay.jl"))))
         @async while true
-            sleep(0.01)
+            sleep(0.05)
             if isdefined(Base, :active_repl)
                 exit(0)
             end
@@ -62,7 +57,7 @@ function generate_precompile_statements()
         # Do not redirect stdin unless it is to a tty, because that changes code paths
         ok = try
             run(pipeline(`$(julia_cmd()) --sysimage $sysimg --trace-compile=yes -O0
-                     --startup-file=no --q -e $setup -i`; stderr=output))
+                     --startup-file=no --q -e $setup -i`; stderr=tmp))
             true
         catch
             false
@@ -71,22 +66,21 @@ function generate_precompile_statements()
         # No REPL, just record the startup
         ok = try
             run(pipeline(`$(julia_cmd()) --sysimage $sysimg --trace-compile=yes -O0
-                     --startup-file=no --q -e0`; stderr=output))
+                     --startup-file=no --q -e0`; stderr=tmp))
             true
         catch
             false
         end
     end
 
-    # Replace the FakeTerminal with a TTYTerminal and filter out everything we compiled in Main
-    close(output)
-    s = fetch(task)
+    s = read(tmp, String)
     if !ok
         error("precompilation process failed, stderr is:\n$s")
     end
     new_precompiles = Set{String}()
     for statement in split(s, '\n')
         startswith(statement, "precompile(Tuple{") || continue
+        # Replace the FakeTerminal with a TTYTerminal and filter out everything we compiled in Main
         statement = replace(statement, "FakeTerminals.FakeTerminal" => "REPL.Terminals.TTYTerminal")
         (occursin(r"Main.", statement) || occursin(r"FakeTerminals.", statement)) && continue
         # AppVeyor CI emits a single faulty precompile statement:
@@ -101,17 +95,14 @@ function generate_precompile_statements()
         end
     end
 
-    tmp = tempname()
-    write(tmp, join(sort(collect(new_precompiles)), '\n'))
-    # Load the precompile statements
     PrecompileStagingArea = Module()
     for (_pkgid, _mod) in Base.loaded_modules
         if !(_pkgid.name in ("Main", "Core", "Base"))
             eval(PrecompileStagingArea, :($(Symbol(_mod)) = $_mod))
         end
     end
-    Base.include(PrecompileStagingArea, tmp)
-    rm(tmp)
+    # Load the precompile statements
+    Base.include_string(PrecompileStagingArea, join(collect(new_precompiles), '\n'))
 
     # Add a few manual things, run `julia` with `--trace-compile` to find these.
     if have_repl
@@ -123,6 +114,16 @@ function generate_precompile_statements()
             # This is probablably important for precompilation (0.2s precompile time)
             # but doesn't seem to get caught in the script above
             precompile(Tuple{typeof(Base.create_expr_cache), String, String, Array{Base.Pair{Base.PkgId, UInt64}, 1}, Base.UUID})
+
+            # Manual things from starting and exiting julia
+            precompile(Tuple{Type{Logging.ConsoleLogger}, Base.TTY})
+            precompile(Tuple{Type{REPL.Terminals.TTYTerminal}, String, Base.TTY, Base.TTY, Base.TTY})
+            precompile(Tuple{typeof(Base.displaysize), Base.TTY})
+            precompile(Tuple{typeof(REPL.LineEdit.prompt_string), typeof(Base.input_color)})
+            precompile(Tuple{typeof(Base.input_color)})
+            precompile(Tuple{typeof(Base.eof), Base.TTY})
+            precompile(Tuple{typeof(Base.alloc_buf_hook), Base.TTY, UInt64})
+            precompile(Tuple{typeof(Base.read), Base.TTY, Type{UInt8}})
         end
     end
 
