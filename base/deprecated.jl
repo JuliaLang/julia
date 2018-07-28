@@ -1771,6 +1771,10 @@ end
 # PR #28223
 @deprecate code_llvm_raw(f, types=Tuple) code_llvm(f, types; raw=true)
 
+# PR #28302
+@deprecate realmin floatmin
+@deprecate realmax floatmax
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

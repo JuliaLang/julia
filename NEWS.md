@@ -1325,6 +1325,8 @@ Deprecated or removed
 
   * `srand` is deprecated in favor of the unexported `Random.seed!` ([#27726]).
 
+  * `realmin`/`realmax` are deprecated in favor of `floatmin`/`floatmax` ([#28302]).
+
 Command-line option changes
 ---------------------------
 

@@ -143,6 +143,8 @@ function print_diff(io::IO, ctx::Context, diff::Vector{DiffEntry}, status=false)
         pkgid = Base.PkgId(x.uuid, x.name)
         package_downloaded = pkgid in keys(Base.loaded_modules) ||
                              Base.locate_package(pkgid) !== nothing
+        # Package download detection doesnt work properly when runn running targets
+        ctx.currently_running_target && (package_downloaded = true)
         if x.old != nothing && x.new != nothing
             if x.old ≈ x.new
                 verb = ' '

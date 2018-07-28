@@ -160,24 +160,24 @@ end
 
     if eltya <: LinearAlgebra.BlasReal
         @testset "sub-normal numbers/vectors/matrices" begin
-            a = pinv(realmin(eltya)/100)
+            a = pinv(floatmin(eltya)/100)
             @test a ≈ 0.0
             # Complex subnormal
-            a = pinv(realmin(eltya)/100*(1+1im))
+            a = pinv(floatmin(eltya)/100*(1+1im))
             @test a ≈ 0.0
 
-            a = pinv([realmin(eltya); realmin(eltya)]/100)
+            a = pinv([floatmin(eltya); floatmin(eltya)]/100)
             @test a[1] ≈ 0.0
             @test a[2] ≈ 0.0
             # Complex subnormal
-            a = pinv([realmin(eltya); realmin(eltya)]/100*(1+1im))
+            a = pinv([floatmin(eltya); floatmin(eltya)]/100*(1+1im))
             @test a[1] ≈ 0.0
             @test a[2] ≈ 0.0
-            a = pinv(Diagonal([realmin(eltya); realmin(eltya)]/100))
+            a = pinv(Diagonal([floatmin(eltya); floatmin(eltya)]/100))
             @test a.diag[1] ≈ 0.0
             @test a.diag[2] ≈ 0.0
             # Complex subnormal
-            a = pinv(Diagonal([realmin(eltya); realmin(eltya)]/100*(1+1im)))
+            a = pinv(Diagonal([floatmin(eltya); floatmin(eltya)]/100*(1+1im)))
             @test a.diag[1] ≈ 0.0
             @test a.diag[2] ≈ 0.0
         end
