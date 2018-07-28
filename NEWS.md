@@ -1335,6 +1335,8 @@ Deprecated or removed
 
   * `realmin`/`realmax` are deprecated in favor of `floatmin`/`floatmax` ([#28302]).
 
+  * `sortrows`/`sortcols` have been deprecated in favor of the more general `sortslices`.
+
 Command-line option changes
 ---------------------------
 

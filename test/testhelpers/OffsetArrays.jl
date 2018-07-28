@@ -45,7 +45,7 @@ Base.eachindex(::IndexLinear, A::OffsetVector) = axes(A, 1)
 _indices(::Tuple{}, ::Tuple{}) = ()
 Base.axes1(A::OffsetArray{T,0}) where {T} = Base.Slice(1:1)  # we only need to specialize this one
 
-const OffsetAxis = Union{Integer, UnitRange, Base.Slice{<:UnitRange}}
+const OffsetAxis = Union{Integer, UnitRange, Base.Slice{<:UnitRange}, Base.OneTo}
 function Base.similar(A::OffsetArray, T::Type, dims::Dims)
     B = similar(parent(A), T, dims)
 end
