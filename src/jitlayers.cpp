@@ -631,9 +631,9 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
 void JuliaOJIT::removeModule(ModuleHandleT H)
 {
 #if JL_LLVM_VERSION >= 50000
-    CompileLayer.removeModule(H);
+    (void)CompileLayer.removeModule(H);
 #else
-    CompileLayer.removeModuleSet(H);
+    (void)CompileLayer.removeModuleSet(H);
 #endif
 }
 
