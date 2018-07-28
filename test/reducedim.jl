@@ -212,6 +212,17 @@ for (tup, rval, rind) in [((1,), [NaN 3.0 6.0], [CartesianIndex(2,1) CartesianIn
     @test isequal(Base.reducedim!(max, copy(rval), A), rval)
 end
 
+# issue #28320
+@testset "reducedim issue with abstract complex arrays" begin
+let A = Complex[1.5 0.5]
+    @test mapreduce(abs2, +, A, dims=2) == reshape([2.5], 1, 1)
+    @test sum(abs2, A, dims=2) == reshape([2.5], 1, 1)
+    @test prod(abs2, A, dims=2) == reshape([0.5625], 1, 1)
+    @test maximum(abs2, A, dims=2) == reshape([2.25], 1, 1)
+    @test minimum(abs2, A, dims=2) == reshape([0.25], 1, 1)
+end
+end
+
 A = [1.0 NaN 6.0;
      NaN 2.0 4.0]
 for (tup, rval, rind) in [((1,), [NaN NaN 4.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(2,3)]),
