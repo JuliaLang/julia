@@ -740,7 +740,7 @@ end
 end
 
 """
-    realmin(T)
+    floatmin(T)
 
 The smallest in absolute value non-subnormal value representable by the given
 floating-point DataType `T`.
@@ -748,7 +748,7 @@ floating-point DataType `T`.
 floatmin(x::T) where {T<:AbstractFloat} = floatmin(T)
 
 """
-    realmax(T)
+    floatmax(T)
 
 The highest finite value representable by the given floating-point DataType `T`.
 

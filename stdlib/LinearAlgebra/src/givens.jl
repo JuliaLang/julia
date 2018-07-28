@@ -61,9 +61,9 @@ function Base.copy(aG::Adjoint{<:Any,<:Givens})
 end
 Base.copy(aR::Adjoint{<:Any,Rotation{T}}) where {T} = Rotation{T}(reverse!([r' for r in aR.parent.rotations]))
 
-realmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
-realmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
-realmin2(::Type{T}) where {T} = (twopar = 2one(T); twopar^trunc(Integer,log(floatmin(T)/eps(T))/log(twopar)/twopar))
+floatmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
+floatmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
+floatmin2(::Type{T}) where {T} = (twopar = 2one(T); twopar^trunc(Integer,log(floatmin(T)/eps(T))/log(twopar)/twopar))
 
 # derived from LAPACK's dlartg
 # Copyright:
@@ -78,8 +78,8 @@ function givensAlgorithm(f::T, g::T) where T<:AbstractFloat
     zeropar = T0(zero(T)) # must be dimensionless
 
     # need both dimensionful and dimensionless versions of these:
-    safmn2 = realmin2(T0)
-    safmn2u = realmin2(T)
+    safmn2 = floatmin2(T0)
+    safmn2u = floatmin2(T)
     safmx2 = one(T)/safmn2
     safmx2u = oneunit(T)/safmn2
 
@@ -153,8 +153,8 @@ function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
 
     abs1(ff) = max(abs(real(ff)), abs(imag(ff)))
     safmin = floatmin(T0)
-    safmn2 = realmin2(T0)
-    safmn2u = realmin2(T)
+    safmn2 = floatmin2(T0)
+    safmn2u = floatmin2(T)
     safmx2 = one(T)/safmn2
     safmx2u = oneunit(T)/safmn2
     scalepar = max(abs1(f), abs1(g))

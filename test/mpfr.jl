@@ -648,7 +648,7 @@ end
     @test BigFloat(1) + x == BigFloat(1) + prevfloat(x)
     @test eps(BigFloat) == eps(BigFloat(1))
 end
-@testset "realmin/realmax" begin
+@testset "floatmin/floatmax" begin
     x = floatmin(BigFloat)
     @test x > 0
     @test prevfloat(x) == 0
