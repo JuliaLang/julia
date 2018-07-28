@@ -325,10 +325,8 @@ end
 @testset "preview generate" begin
     mktempdir() do tmp
         cd(tmp) do
-            withenv("USER" => "Test User") do
-                Pkg.generate("Foo"; preview=true)
-                @test !isdir(joinpath(tmp, "Foo"))
-            end
+            Pkg.generate("Foo"; preview=true)
+            @test !isdir(joinpath(tmp, "Foo"))
         end
     end
 end
@@ -393,9 +391,7 @@ temp_pkg_dir() do project_path
     @testset "invalid repo url" begin
         cd(project_path) do
             @test_throws CommandError Pkg.add("https://github.com")
-            withenv("USER" => "Test User") do
-                Pkg.generate("FooBar")
-            end
+            Pkg.generate("FooBar")
             @test_throws CommandError Pkg.add("./Foobar")
         end
     end

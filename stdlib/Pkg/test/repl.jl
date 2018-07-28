@@ -30,18 +30,16 @@ end
 
 temp_pkg_dir() do project_path
     with_pkg_env(project_path; change_dir=true) do;
-        withenv("USER" => "Test User") do
-            pkg"generate HelloWorld"
-            LibGit2.close((LibGit2.init(".")))
-            cd("HelloWorld")
-            with_current_env() do
-                pkg"st"
-                @eval using HelloWorld
-                Base.invokelatest(HelloWorld.greet)
-                @test isfile("Project.toml")
-                Pkg.REPLMode.pkgstr("develop $(joinpath(@__DIR__, "test_packages", "PackageWithBuildSpecificTestDeps"))")
-                Pkg.test("PackageWithBuildSpecificTestDeps")
-            end
+        pkg"generate HelloWorld"
+        LibGit2.close((LibGit2.init(".")))
+        cd("HelloWorld")
+        with_current_env() do
+            pkg"st"
+            @eval using HelloWorld
+            Base.invokelatest(HelloWorld.greet)
+            @test isfile("Project.toml")
+            Pkg.REPLMode.pkgstr("develop $(joinpath(@__DIR__, "test_packages", "PackageWithBuildSpecificTestDeps"))")
+            Pkg.test("PackageWithBuildSpecificTestDeps")
         end
 
         pkg"dev Example"
@@ -55,9 +53,7 @@ temp_pkg_dir() do project_path
             @test LibGit2.branch(repo) == "DO_NOT_REMOVE"
         end
 
-        withenv("USER" => "Test User") do
-            pkg"generate Foo"
-        end
+        pkg"generate Foo"
         pkg"dev Foo"
         mv(joinpath("Foo", "src", "Foo.jl"), joinpath("Foo", "src", "Foo2.jl"))
         @test_throws CommandError pkg"dev Foo"
@@ -219,28 +215,26 @@ temp_pkg_dir() do project_path; cd(project_path) do
     mktempdir() do other_dir
         mktempdir() do tmp;
             cd(tmp)
-            withenv("USER" => "Test User") do
-                pkg"generate HelloWorld"
-                cd("HelloWorld") do
-                    with_current_env() do
-                        pkg"generate SubModule1"
-                        pkg"generate SubModule2"
-                        pkg"develop SubModule1"
-                        mkdir("tests")
-                        cd("tests")
-                        pkg"develop ../SubModule2"
-                        @test Pkg.installed()["SubModule1"] == v"0.1.0"
-                        @test Pkg.installed()["SubModule2"] == v"0.1.0"
-                    end
-                end
-                cp("HelloWorld", joinpath(other_dir, "HelloWorld"))
-                cd(joinpath(other_dir, "HelloWorld"))
+            pkg"generate HelloWorld"
+            cd("HelloWorld") do
                 with_current_env() do
-                    # Check that these didn't generate absolute paths in the Manifest by copying
-                    # to another directory
-                    @test Base.find_package("SubModule1") == joinpath(pwd(), "SubModule1", "src", "SubModule1.jl")
-                    @test Base.find_package("SubModule2") == joinpath(pwd(), "SubModule2", "src", "SubModule2.jl")
+                    pkg"generate SubModule1"
+                    pkg"generate SubModule2"
+                    pkg"develop SubModule1"
+                    mkdir("tests")
+                    cd("tests")
+                    pkg"develop ../SubModule2"
+                    @test Pkg.installed()["SubModule1"] == v"0.1.0"
+                    @test Pkg.installed()["SubModule2"] == v"0.1.0"
                 end
+            end
+            cp("HelloWorld", joinpath(other_dir, "HelloWorld"))
+            cd(joinpath(other_dir, "HelloWorld"))
+            with_current_env() do
+                # Check that these didn't generate absolute paths in the Manifest by copying
+                # to another directory
+                @test Base.find_package("SubModule1") == joinpath(pwd(), "SubModule1", "src", "SubModule1.jl")
+                @test Base.find_package("SubModule2") == joinpath(pwd(), "SubModule2", "src", "SubModule2.jl")
             end
         end
     end
@@ -388,9 +382,7 @@ temp_pkg_dir() do project_path
             setup_package(parent_dir, pkg_name) = begin
                 mkdir(parent_dir)
                 cd(parent_dir) do
-                    withenv("USER" => "Test User") do
-                        Pkg.generate(pkg_name)
-                    end
+                    Pkg.generate(pkg_name)
                     cd(pkg_name) do
                         LibGit2.with(LibGit2.init(joinpath(project_path, parent_dir, pkg_name))) do repo
                             LibGit2.add!(repo, "*")
