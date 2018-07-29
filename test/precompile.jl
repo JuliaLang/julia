@@ -239,7 +239,12 @@ try
                  :Future, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
                  :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
                  :Unicode, :REPL, :InteractiveUtils, :OldPkg, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
-                 :Statistics, ]))
+                 :Statistics, ]),
+                # Plus precompilation module generated at build time
+                let id = Base.PkgId("__PackagePrecompilationStatementModule")
+                    Dict(id => Base.module_build_id(Base.root_module(id)))
+                end
+           )
         @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
