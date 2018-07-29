@@ -1799,7 +1799,6 @@ typedef struct {
     int8_t warn_overwrite;
     int8_t can_inline;
     int8_t polly;
-    int8_t trace_compile;
     int8_t fast_math;
     int8_t worker;
     const char *cookie;
