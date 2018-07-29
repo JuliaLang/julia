@@ -56,7 +56,7 @@ Random.shuffle!
 ## Generators (creation and seeding)
 
 ```@docs
-Random.srand
+Random.seed!
 Random.MersenneTwister
 Random.RandomDevice
 ```

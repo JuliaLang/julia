@@ -418,7 +418,7 @@ julia> function g()
        end
 g (generic function with 1 method)
 
-julia> srand(1); g() # the result for a single thread is 1000
+julia> Random.seed!(1); g() # the result for a single thread is 1000
 781
 ```
 

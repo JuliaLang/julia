@@ -1323,6 +1323,8 @@ Deprecated or removed
 
   * `squeeze` is deprecated in favor of `dropdims`.
 
+  * `srand` is deprecated in favor of the unexported `Random.seed!` ([#27726]).
+
   * `realmin`/`realmax` are deprecated in favor of `floatmin`/`floatmax` ([#28302]).
 
 Command-line option changes
@@ -1674,6 +1676,7 @@ Command-line option changes
 [#27635]: https://github.com/JuliaLang/julia/issues/27635
 [#27641]: https://github.com/JuliaLang/julia/issues/27641
 [#27711]: https://github.com/JuliaLang/julia/issues/27711
+[#27726]: https://github.com/JuliaLang/julia/issues/27726
 [#27746]: https://github.com/JuliaLang/julia/issues/27746
 [#27859]: https://github.com/JuliaLang/julia/issues/27859
 [#27908]: https://github.com/JuliaLang/julia/issues/27908

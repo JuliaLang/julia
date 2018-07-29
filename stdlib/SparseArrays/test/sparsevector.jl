@@ -1027,7 +1027,7 @@ end
 end
 
 @testset "dropzeros[!] with length=$m" for m in (10, 20, 30)
-    srand(123)
+    Random.seed!(123)
     nzprob, targetnumposzeros, targetnumnegzeros = 0.4, 5, 5
     v = sprand(m, nzprob)
     struczerosv = findall(x -> x == 0, v)

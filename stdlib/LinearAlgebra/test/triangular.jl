@@ -11,7 +11,7 @@ using LinearAlgebra: BlasFloat, errorbounds, full!, naivesub!, transpose!,
 debug && println("Triangular matrices")
 
 n = 9
-srand(123)
+Random.seed!(123)
 
 debug && println("Test basic type functionality")
 @test_throws DimensionMismatch LowerTriangular(randn(5, 4))

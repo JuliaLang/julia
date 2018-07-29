@@ -4,7 +4,7 @@ module TestPinv
 
 using Test, LinearAlgebra, Random
 
-srand(12345)
+Random.seed!(12345)
 
 function hilb(T::Type, n::Integer)
     a = Matrix{T}(undef, n, n)

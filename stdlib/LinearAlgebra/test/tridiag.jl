@@ -22,9 +22,9 @@ end
 
 @testset for elty in (Float32, Float64, ComplexF32, ComplexF64, Int)
     n = 12 #Size of matrix problem to test
-    srand(123)
+    Random.seed!(123)
     if elty == Int
-        srand(61516384)
+        Random.seed!(61516384)
         d = rand(1:100, n)
         dl = -rand(0:10, n-1)
         du = -rand(0:10, n-1)

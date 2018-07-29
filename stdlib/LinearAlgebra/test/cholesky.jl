@@ -39,7 +39,7 @@ end
     n1 = div(n, 2)
     n2 = 2*n1
 
-    srand(1234321)
+    Random.seed!(1234321)
 
     areal = randn(n,n)/2
     aimg  = randn(n,n)/2
@@ -73,7 +73,7 @@ end
 
         #these tests were failing on 64-bit linux when inside the inner loop
         #for eltya = ComplexF32 and eltyb = Int. The E[i,j] had NaN32 elements
-        #but only with srand(1234321) set before the loops.
+        #but only with Random.seed!(1234321) set before the loops.
         E = abs.(apd - r'*r)
         for i=1:n, j=1:n
             @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
