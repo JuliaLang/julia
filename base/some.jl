@@ -23,7 +23,7 @@ convert(::Type{Nothing}, x::Any) = throw(MethodError(convert, (Nothing, x)))
 convert(::Type{Nothing}, x::Nothing) = nothing
 
 function show(io::IO, x::Some)
-    if get(io, :typeinfo, nothing) == typeof(x)
+    if get(io, :typeinfo, Any) == typeof(x)
         show(io, x.value)
     else
         print(io, "Some(")

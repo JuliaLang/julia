@@ -457,9 +457,9 @@ typeinfo_eltype(typeinfo::Type{<:AbstractSet{T}}) where {T} = T
 
 # X not constrained, can be any iterable (cf. show_vector)
 function typeinfo_prefix(io::IO, X)
-    typeinfo = get(io, :typeinfo, nothing)::Union{Nothing,Type}
-    if typeinfo !== nothing && !(X isa typeinfo)
-        typeinfo = nothing
+    typeinfo = get(io, :typeinfo, Any)::Type
+    if !(X isa typeinfo)
+        typeinfo = Any
     end
 
     # what the context already knows about the eltype of X:

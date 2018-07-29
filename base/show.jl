@@ -324,7 +324,7 @@ function show_default(io::IO, @nospecialize(x))
     if nf != 0 || nb == 0
         if !show_circular(io, x)
             recur_io = IOContext(io, Pair{Symbol,Any}(:SHOWN_SET, x),
-                                 Pair{Symbol,Any}(:typeinfo, nothing))
+                                 Pair{Symbol,Any}(:typeinfo, Any))
             for i in 1:nf
                 f = fieldname(t, i)
                 if !isdefined(x, f)
@@ -579,13 +579,13 @@ isdelimited(io::IO, x) = true
 
 # !isdelimited means that the Pair is printed with "=>" (like in "1 => 2"),
 # without its explicit type (like in "Pair{Integer,Integer}(1, 2)")
-isdelimited(io::IO, p::Pair) = !(has_tight_type(p) || get(io, :typeinfo, nothing) == typeof(p))
+isdelimited(io::IO, p::Pair) = !(has_tight_type(p) || get(io, :typeinfo, Any) == typeof(p))
 
 function gettypeinfos(io::IO, p::Pair)
-    typeinfo = get(io, :typeinfo, nothing)
-    typeinfo !== nothing && p isa typeinfo <: Pair ?
+    typeinfo = get(io, :typeinfo, Any)
+    p isa typeinfo <: Pair ?
         fieldtype(typeinfo, 1) => fieldtype(typeinfo, 2) :
-        nothing => nothing
+        Any => Any
 end
 
 function show(io::IO, p::Pair)
@@ -691,11 +691,11 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax
             i1 -= 1
         end
         if y !== nothing
-            typeinfo = get(io, :typeinfo, nothing)
+            typeinfo = get(io, :typeinfo, Any)
             while true
                 x = y[1]
                 y = iterate(itr, y[2])
-                show(IOContext(recur_io, :typeinfo => typeinfo !== nothing && itr isa typeinfo <: Tuple ?
+                show(IOContext(recur_io, :typeinfo => itr isa typeinfo <: Tuple ?
                                              fieldtype(typeinfo, i1+i0) :
                                              typeinfo),
                      x)
