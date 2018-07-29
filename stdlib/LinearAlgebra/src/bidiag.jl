@@ -503,7 +503,8 @@ end
 const SpecialMatrix = Union{Bidiagonal,SymTridiagonal,Tridiagonal}
 # to avoid ambiguity warning, but shouldn't be necessary
 *(A::AbstractTriangular, B::SpecialMatrix) = Array(A) * Array(B)
-*(A::SpecialMatrix, B::SpecialMatrix) = mul!(spzeros(size(A)...), A, B)
+# moving this to sparsearrays since it needs spzeros
+# *(A::SpecialMatrix, B::SpecialMatrix) = mul!(spzeros(size(A)...), A, B)
 
 #Generic multiplication
 *(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = *(Array(A), B)

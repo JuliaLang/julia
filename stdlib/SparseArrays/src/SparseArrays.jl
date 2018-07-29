@@ -52,5 +52,6 @@ similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spze
 similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
+*(A::Union{Bidiagonal,SymTridiagonal,Tridiagonal}, B::Union{Bidiagonal,SymTridiagonal,Tridiagonal}) = mul!(spzeros(size(A)...), A, B)
 
 end
