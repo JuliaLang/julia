@@ -204,7 +204,7 @@ julia&gt; function g()
        end
 g (generic function with 1 method)
 
-julia&gt; srand(1); g() # the result for a single thread is 1000
+julia&gt; Random.seed!(1); g() # the result for a single thread is 1000
 781</code></pre><p>In such cases one should redesign the code to avoid the possibility of a race condition or use <a href="https://docs.julialang.org/en/latest/base/multi-threading/#Synchronization-Primitives-1">synchronization primitives</a>.</p><p>For example in order to fix <code>findfirst</code> example above one needs to have a separate copy of <code>rx</code> variable for each thread:</p><pre><code class="language-julia-repl">julia&gt; function f_fix()
              s = repeat([&quot;123&quot;, &quot;213&quot;, &quot;231&quot;], outer=1000)
              x = similar(s, Int)
