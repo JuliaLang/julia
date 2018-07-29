@@ -589,19 +589,16 @@ function gettypeinfos(io::IO, p::Pair)
 end
 
 function show(io::IO, p::Pair)
-    compact = get(io, :compact, false)
     iocompact = IOContext(io, :compact => get(io, :compact, true))
     isdelimited(io, p) && return show_default(iocompact, p)
-
-    io1, io2 = (IOContext(iocompact, :typeinfo => ti) for ti in gettypeinfos(io, p))
-    isdelimited(io1, p.first) || print(io, "(")
-    show(io1, p.first)
-    isdelimited(io1, p.first) || print(io, ")")
-    print(io, compact ? "=>" : " => ")
-    isdelimited(io2, p.second) || print(io, "(")
-    show(io2, p.second)
-    isdelimited(io2, p.second) || print(io, ")")
-    nothing
+    typeinfos = gettypeinfos(io, p)
+    for i = (1, 2)
+        io_i = IOContext(iocompact, :typeinfo => typeinfos[i])
+        isdelimited(io_i, p[i]) || print(io, "(")
+        show(io_i, p[i])
+        isdelimited(io_i, p[i]) || print(io, ")")
+        i == 1 && print(io, get(io, :compact, false) ? "=>" : " => ")
+    end
 end
 
 function show(io::IO, m::Module)
