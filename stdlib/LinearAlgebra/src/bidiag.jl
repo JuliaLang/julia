@@ -504,6 +504,7 @@ const SpecialMatrix = Union{Bidiagonal,SymTridiagonal,Tridiagonal}
 # to avoid ambiguity warning, but shouldn't be necessary
 *(A::AbstractTriangular, B::SpecialMatrix) = Array(A) * Array(B)
 *(A::SpecialMatrix, B::SpecialMatrix) = Array(A) * Array(B)
+*(A::AbstractMatrix, B::SpecialMatrix) = A_mul_B_td!(zeros(eltype(A),size(A)...), A, B)
 
 #Generic multiplication
 *(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = *(Array(A), B)

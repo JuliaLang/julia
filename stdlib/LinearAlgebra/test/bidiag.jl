@@ -290,6 +290,11 @@ srand(1)
     @test Matrix{Complex{Float64}}(BD) == BD
 end
 
+# Issue 27176
+Diag = Tridiagonal([1,],[2,2],[1,])
+Dense = [0.42 0.18; 0.08 0.58]
+@test typeof(Diag*Dense) == typeof(Dense*Diag) == typeof(Dense)
+
 # Issue 10742 and similar
 let A = Bidiagonal([1,2,3], [0,0], :U)
     @test istril(A)
