@@ -20,8 +20,8 @@ function generate_precompile_statements()
     println("Generating precompile statements...")
     println("──────────────────────────────────────")
 
-	# Reset code loading vars
-	push!(LOAD_PATH, "@stdlib")
+    # Reset code loading vars
+    push!(LOAD_PATH, "@stdlib")
 
     tmpd = mktempdir()
     push!(DEPOT_PATH, tmpd)
