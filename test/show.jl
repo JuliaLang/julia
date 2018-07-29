@@ -990,6 +990,10 @@ end
     s = IOBuffer()
     show(IOContext(s, :compact => false), (1=>2) => Pair{Any,Any}(3,4))
     @test String(take!(s)) == "(1 => 2) => Pair{Any,Any}(3, 4)"
+
+    # issue #28327
+    d = Dict(Pair{Integer,Integer}(1,2)=>Pair{Integer,Integer}(1,2))
+    @test showstr(d) == "Dict((1=>2)=>(1=>2))" # correct parenthesis
 end
 
 @testset "alignment for pairs" begin  # (#22899)
