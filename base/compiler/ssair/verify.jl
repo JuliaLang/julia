@@ -64,11 +64,7 @@ function verify_ir(ir::IRCode)
         end
         last_end = last(block.stmts)
         terminator = ir.stmts[last_end]
-        # As a special case, we allow extra statements in the BB of an :enter
-        # statement, until we can do proper CFG manipulations during compaction.
-        if isexpr(ir.stmts[first(block.stmts)], :enter)
-            terminator = ir.stmts[first(block.stmts)]
-        end
+
         for p in block.preds
             p == 0 && continue
             c = count_int(idx, ir.cfg.blocks[p].succs)
@@ -100,12 +96,22 @@ function verify_ir(ir::IRCode)
                 error()
             end
         elseif isexpr(terminator, :enter)
+            @label enter_check
             if length(block.succs) != 2 || (block.succs != [terminator.args[1], idx+1] && block.succs != [idx+1, terminator.args[1]])
                 @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
                 error()
             end
         else
             if length(block.succs) != 1 || block.succs[1] != idx + 1
+                # As a special case, we allow extra statements in the BB of an :enter
+                # statement, until we can do proper CFG manipulations during compaction.
+                for stmt in ir.stmts[first(block.stmts):last(block.stmts)]
+                    if isexpr(stmt, :enter)
+                        terminator = stmt
+                        @goto enter_check
+                    end
+                    isa(stmt, PhiNode) || break
+                end
                 @verify_error "Block $idx successors ($(block.succs)), does not match fall-through terminator"
                 error()
             end
