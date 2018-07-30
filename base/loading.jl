@@ -250,12 +250,12 @@ end
 locate_package(::Nothing) = nothing
 
 """
-    abspath(m::Module)
+    pathof(m::Module)
 
 Return the path of `m.jl` file that was used to `import` module `m`,
 or `nothing` if `m` was not imported from a package.
 """
-function Base.Filesystem.abspath(m::Module)
+function pathof(m::Module)
     pkgid = get(Base.module_keys, m, nothing)
     pkgid === nothing && return nothing
     path = Base.locate_package(pkgid)

@@ -257,9 +257,9 @@ module NotPkgModule; end
     end
     @test Foo.which == "path"
 
-    @testset "abspath" begin
-        @test abspath(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1/src/Foo.jl"))
-        @test abspath(NotPkgModule) === nothing
+    @testset "pathof" begin
+        @test pathof(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1/src/Foo.jl"))
+        @test pathof(NotPkgModule) === nothing
     end
 
 end
