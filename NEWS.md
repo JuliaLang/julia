@@ -789,6 +789,14 @@ Deprecated or removed
     (`vals, vecs = eigen(A, B)`), or as a `GeneralizedEigen` object
     (`X = eigen(A, B)`) ([#26997], [#27159], [#27212]).
 
+  * `ordschur(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector})`
+    and `ordschur(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
+    Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector})` and their respective
+    inplace versions have been deprecated.
+    Use `ordschur(schur::Schur, select::Union{Vector{Bool},BitVector})` and
+    `ordschur(gschur::GeneralizedSchur, select::Union{Vector{Bool},BitVector})` instead
+    ([#28155]).
+
   * Indexing into multidimensional arrays with more than one index but fewer indices than there are
     dimensions is no longer permitted when those trailing dimensions have lengths greater than 1.
     Instead, reshape the array or add trailing indices so the dimensionality and number of indices
