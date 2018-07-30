@@ -423,19 +423,6 @@ function _bwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat, adj::Bool)
     B
 end
 
-const LowerTriangular2{T} = Union{
-                            LowerTriangular{T,<:SparseMatrixCSCUnion{T}},
-                            Adjoint{T,<:UpperTriangular{T,<:SparseMatrixCSCUnion{T}}},
-                            Transpose{T,<:UpperTriangular{T,<:SparseMatrixCSCUnion{T}}}
-                           } where {T}
-
-const UpperTriangular2{T} = Union{
-                            UpperTriangular{T,<:SparseMatrixCSCUnion{T}},
-                            Adjoint{T,<:LowerTriangular{T,<:SparseMatrixCSCUnion{T}}},
-                            Transpose{T,<:LowerTriangular{T,<:SparseMatrixCSCUnion{T}}}
-                           } where {T}
-
-
 ldiv!(L::LowerTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where {T} = fwdTriSolve!(L.data, B)
 ldiv!(L::Adjoint{T,<:UpperTriangular{T,<:SparseMatrixCSCUnion{T}}}, B::StridedVecOrMat) where {T} = _fwdTriSolve!(L.parent.data, B, true)
 ldiv!(L::Transpose{T,<:UpperTriangular{T,<:SparseMatrixCSCUnion{T}}}, B::StridedVecOrMat) where {T} = _fwdTriSolve!(L.parent.data, B, false)
@@ -444,8 +431,15 @@ ldiv!(U::UpperTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where
 ldiv!(L::Adjoint{T,<:LowerTriangular{T,<:SparseMatrixCSCUnion{T}}}, B::StridedVecOrMat) where {T} = _bwdTriSolve!(L.parent.data, B, true)
 ldiv!(L::Transpose{T,<:LowerTriangular{T,<:SparseMatrixCSCUnion{T}}}, B::StridedVecOrMat) where {T} = _bwdTriSolve!(L.parent.data, B, false)
 
-(\)(L::LowerTriangular2{T}, B::SparseMatrixCSC) where {T} = ldiv!(L, Array(B))
-(\)(U::UpperTriangular2{T}, B::SparseMatrixCSC) where {T} = ldiv!(U, Array(B))
+(\)(L::Union{LowerTriangular{T,<:SparseMatrixCSCUnion{T}},
+             Adjoint{T,<:UpperTriangular{T,<:SparseMatrixCSCUnion{T}}},
+             Transpose{T,<:UpperTriangular{T,<:SparseMatrixCSCUnion{T}}}},
+    B::SparseMatrixCSC) where {T} = ldiv!(L, Array(B))
+
+(\)(U::Union{UpperTriangular{T,<:SparseMatrixCSCUnion{T}},
+             Adjoint{T,<:LowerTriangular{T,<:SparseMatrixCSCUnion{T}}},
+             Transpose{T,<:LowerTriangular{T,<:SparseMatrixCSCUnion{T}}}},
+    B::SparseMatrixCSC) where {T} = ldiv!(U, Array(B))
 
 \(A::Transpose{<:Real,<:Hermitian{<:Real,<:SparseMatrixCSC}}, B::Vector) = A.parent \ B
 \(A::Transpose{<:Complex,<:Hermitian{<:Complex,<:SparseMatrixCSC}}, B::Vector) = copy(A) \ B
