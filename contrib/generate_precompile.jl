@@ -1,135 +1,144 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Prevent this from being put into the Main namespace
-Base.reinit_stdio()
 let
 M = Module()
 @eval M begin
-julia_cmd() = (julia = joinpath(Sys.BINDIR, Base.julia_exename()); `$julia`)
+if !isdefined(Base, :uv_eventloop)
+    Base.reinit_stdio()
+end
+Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
+import .FakePTYs: with_fake_pty
 
-function generate_precompilable_package(path, pkgname)
-    mkpath(joinpath(path, pkgname, "src"))
-    write(joinpath(path, pkgname, "src", "$pkgname.jl"),
-          """
-          __precompile__()
-          module $pkgname
-          end
-          """)
+CTRL_C = '\x03'
+UP_ARROW = "\e[A"
+DOWN_ARROW = "\e[B"
+
+precompile_script = """
+2+2
+print("")
+@time 1+1
+; pwd
+? reinterpret
+using Ra\t$CTRL_C
+\\alpha\t$CTRL_C
+\e[200~paste here ;)\e[201~"$CTRL_C
+$UP_ARROW$DOWN_ARROW$CTRL_C
+123\b\b\b$CTRL_C
+\b\b$CTRL_C
+f(x) = x03
+f(1,2)
+[][1]
+cd("complet_path\t\t$CTRL_C
+"""
+
+julia_cmd() = (julia = joinpath(Sys.BINDIR, Base.julia_exename()); `$julia`)
+have_repl =  haskey(Base.loaded_modules,
+                    Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
+have_pkg =  haskey(Base.loaded_modules,
+                    Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
+
+if have_pkg
+    precompile_script *= """
+    tmp = mktempdir()
+    cd(tmp)
+    touch("Project.toml")
+    ] activate .
+    st
+    $CTRL_C
+    rm(tmp; recursive=true)
+    """
 end
 
 function generate_precompile_statements()
-    t = time()
-    println("Generating precompile statements...")
-    println("──────────────────────────────────────")
+    start_time = time()
 
-    # Reset code loading vars
-    push!(LOAD_PATH, "@stdlib")
-
-    tmpd = mktempdir()
-    push!(DEPOT_PATH, tmpd)
-    push!(LOAD_PATH, tmpd)
-    pkgname = "__PackagePrecompilationStatementModule"
-    generate_precompilable_package(tmpd, pkgname)
-    @eval using __PackagePrecompilationStatementModule
-    pop!(LOAD_PATH)
-    pop!(DEPOT_PATH)
-    rm(tmpd; recursive=true)
-
-    if isempty(ARGS)
-        sysimg = joinpath(dirname(Sys.BINDIR), "lib", "julia", "sys.ji")
-    else
-        sysimg = ARGS[1]
+    # Precompile a package
+    mktempdir() do prec_path
+        push!(DEPOT_PATH, prec_path)
+        push!(LOAD_PATH, prec_path)
+        pkgname = "__PackagePrecompilationStatementModule"
+        mkpath(joinpath(prec_path, pkgname, "src"))
+        write(joinpath(prec_path, pkgname, "src", "$pkgname.jl"),
+              """
+              module $pkgname
+              end
+              """)
+        @eval using __PackagePrecompilationStatementModule
+        empty!(LOAD_PATH)
+        empty!(DEPOT_PATH)
     end
 
-    tmp = tempname()
-    touch(tmp)
-    have_repl =  haskey(Base.loaded_modules,
-                        Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
-    if have_repl
-        # Have a REPL, run the repl replayer and an interactive session that we immidiately kill
-        setup = """
-        include($(repr(joinpath(@__DIR__, "precompile_replay.jl"))))
-        @async while true
-            sleep(0.05)
-            if isdefined(Base, :active_repl)
-                exit(0)
-            end
-        end
-        """
-        # Do not redirect stdin unless it is to a tty, because that changes code paths
-        ok = try
-            run(pipeline(`$(julia_cmd()) --sysimage $sysimg --trace-compile=yes -O0
-                     --startup-file=no --q -e $setup -i`; stderr=tmp))
-            true
-        catch
-            false
-        end
-    else
-        # No REPL, just record the startup
-        ok = try
-            run(pipeline(`$(julia_cmd()) --sysimage $sysimg --trace-compile=yes -O0
-                     --startup-file=no --q -e0`; stderr=tmp))
-            true
-        catch
-            false
-        end
-    end
-
-    s = read(tmp, String)
-    if !ok
-        error("precompilation process failed, stderr is:\n$s")
-    end
-    new_precompiles = Set{String}()
-    for statement in split(s, '\n')
-        startswith(statement, "precompile(Tuple{") || continue
-        # Replace the FakeTerminal with a TTYTerminal and filter out everything we compiled in Main
-        statement = replace(statement, "FakeTerminals.FakeTerminal" => "REPL.Terminals.TTYTerminal")
-        (occursin(r"Main.", statement) || occursin(r"FakeTerminals.", statement)) && continue
-        # AppVeyor CI emits a single faulty precompile statement:
-        # precompile(Tuple{getfield(precompile(Tuple{typeof(Base.uvfinalize), Base.PipeEndpoint})
-        # which lacks the correct closing brackets.
-        # Filter out such lines here.
-        for (l, r) in ('(' => ')', '{' => '}')
-            if count(isequal(l), statement) != count(isequal(r), statement)
-                continue
-            end
-            push!(new_precompiles, statement)
-        end
-    end
-
+    # Create a staging area where all the loaded packages are available
     PrecompileStagingArea = Module()
     for (_pkgid, _mod) in Base.loaded_modules
         if !(_pkgid.name in ("Main", "Core", "Base"))
             eval(PrecompileStagingArea, :($(Symbol(_mod)) = $_mod))
         end
     end
-    # Load the precompile statements
-    Base.include_string(PrecompileStagingArea, join(collect(new_precompiles), '\n'))
 
-    # Add a few manual things, run `julia` with `--trace-compile` to find these.
-    if have_repl
-        @eval PrecompileStagingArea begin
-            # Could startup with REPL banner instead but it is a bit visually noisy,
-            # so just precompile it manualally here.
-            precompile(Tuple{typeof(Base.banner), REPL.Terminals.TTYTerminal})
+    print("Generating precompile statements...")
+    sysimg = isempty(ARGS) ? joinpath(dirname(Sys.BINDIR), "lib", "julia", "sys.ji") : ARGS[1]
 
-            # This is probablably important for precompilation (0.2s precompile time)
-            # but doesn't seem to get caught in the script above
-            precompile(Tuple{typeof(Base.create_expr_cache), String, String, Array{Base.Pair{Base.PkgId, UInt64}, 1}, Base.UUID})
-
-            # Manual things from starting and exiting julia
-            precompile(Tuple{Type{Logging.ConsoleLogger}, Base.TTY})
-            precompile(Tuple{Type{REPL.Terminals.TTYTerminal}, String, Base.TTY, Base.TTY, Base.TTY})
-            precompile(Tuple{typeof(Base.displaysize), Base.TTY})
-            precompile(Tuple{typeof(REPL.LineEdit.prompt_string), typeof(Base.input_color)})
-            precompile(Tuple{typeof(Base.input_color)})
-            precompile(Tuple{typeof(Base.eof), Base.TTY})
-            precompile(Tuple{typeof(Base.alloc_buf_hook), Base.TTY, UInt64})
-            precompile(Tuple{typeof(Base.read), Base.TTY, Type{UInt8}})
+    # Run a repl process and replay our script
+    stdout_accumulator, stderr_accumulator = IOBuffer(), IOBuffer()
+    with_fake_pty() do slave, master
+        with_fake_pty() do slave_err, master_err
+            done = false
+            withenv("JULIA_HISTORY" => tempname(), "JULIA_PROJECT" => nothing,
+                    "TERM" => "") do
+                p = run(`$(julia_cmd()) -O0 --trace-compile=yes --sysimage $sysimg
+                                       --startup-file=no --color=yes`,
+                        slave, slave, slave_err; wait=false)
+                readuntil(master, "julia>", keep=true)
+                for (tty, accumulator) in (master     => stdout_accumulator,
+                                           master_err => stderr_accumulator)
+                    @async begin
+                        while true
+                            done && break
+                            write(accumulator, readavailable(tty))
+                        end
+                    end
+                end
+                if have_repl
+                    for l in split(precompile_script, '\n'; keepempty=false)
+                        write(master, l, '\n')
+                    end
+                end
+                write(master, "exit()\n")
+                wait(p)
+                done = true
+            end
         end
     end
+    stderr_output = String(take!(stderr_accumulator))
+    # println(stderr_output)
+    # stdout_output = String(take!(stdout_accumulator))
+    # println(stdout_output)
 
-    println("──────────────────────────────────────")
-    print("$(length(new_precompiles)) precompile statements generated in "), Base.time_print((time() - t) * 10^9)
+    # Extract the precompile statements from stderr
+    statements = Set{String}()
+    for statement in split(stderr_output, '\n')
+        m = match(r"(precompile\(Tuple{.*)", statement)
+        m === nothing && continue
+        statement = m.captures[1]
+        occursin(r"Main.", statement) && continue
+        push!(statements, statement)
+    end
+
+    # Load the precompile statements
+    statements_ordered = join(sort(collect(statements)), '\n')
+    # println(statements_ordered)
+    if have_repl
+        # Seems like a reasonable number right now, adjust as needed
+        @assert length(statements) > 700
+    end
+
+    Base.include_string(PrecompileStagingArea, statements_ordered)
+    print(" $(length(statements)) generated in ")
+    Base.time_print((time() - start_time) * 10^9)
     println()
+
     return
 end
 

@@ -522,9 +522,9 @@ let
             :SuiteSparse,
             :Distributed,
             :SharedArrays,
+            :Pkg,
             :Test,
             :REPL,
-            :Pkg,
             :Statistics,
         ]
 
@@ -922,6 +922,7 @@ Base.init_load_path() # want to be able to find external packages in userimg.jl
 
 let
 tot_time_userimg = @elapsed (Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
+
 
 tot_time_base = (Base.end_base_include - Base.start_base_include) * 10.0^(-9)
 tot_time = tot_time_base + Base.tot_time_stdlib[] + tot_time_userimg
