@@ -30,7 +30,6 @@ const excludedirs = [
 
 const skipfiles = [
     "../contrib/add_license_to_files.jl",
-    "../contrib/fixup_precompile.jl",
     # files to check - already copyright
     # see: https://github.com/JuliaLang/julia/pull/11073#issuecomment-98099389
     "../base/special/trig.jl",
