@@ -6418,23 +6418,6 @@ end
 @test !Base.isvatuple(Tuple{T,Vararg{Int,2}} where T)
 @test !Base.isvatuple(Tuple{Int,Int,Vararg{Int,2}})
 
-# The old iteration protocol shims deprecation test
-struct DelegateIterator{T}
-    x::T
-end
-Base.start(itr::DelegateIterator) = start(itr.x)
-Base.next(itr::DelegateIterator, state) = next(itr.x, state)
-Base.done(itr::DelegateIterator, state) = done(itr.x, state)
-let A = [1], B = [], C = DelegateIterator([1]), D = DelegateIterator([]), E = Any[1,"abc"]
-    @test next(A, start(A))[1] == 1
-    @test done(A, next(A, start(A))[2])
-    @test done(B, start(B))
-    @test next(C, start(C))[1] == 1
-    @test done(C, next(C, start(C))[2])
-    @test done(D, start(D))
-    @test next(E, next(E, start(E))[2])[1] == "abc"
-end
-
 # Issue 27103
 function f27103()
     a = @isdefined x

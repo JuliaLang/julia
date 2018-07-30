@@ -849,7 +849,11 @@ function iterate(x, state)
     return next(x, state)
 end
 const old_iterate_line_prev = (@__LINE__)
-iterate(x) = (@_inline_meta; iterate(x, start(x)))
+function iterate(x)
+    r = iterate(x, start(x))
+    depwarn("The start/next/done iteration protocol is deprecated. Implement `iterate(::$(typeof(x)))`.", :start)
+    r
+end
 
 struct LegacyIterationCompat{I,T,S}
     done::Bool
@@ -872,6 +876,7 @@ end
 const compat_start_line_prev = (@__LINE__)
 function start(itr::T) where {T}
     has_non_default_iterate(T) || throw(MethodError(iterate, (itr,)))
+    depwarn("The start/next/done iteration protocol is deprecated. Use `iterate` instead.", :start)
     y = iterate(itr)
     y === nothing && return LegacyIterationCompat{T, Union{}, Union{}}()
     val, state = y
