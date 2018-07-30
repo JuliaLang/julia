@@ -448,11 +448,13 @@ end
 
 # given type `typeinfo` extracted from context, assuming a collection
 # is being displayed, deduce the elements type; in spirit this is
-# similar to `eltype`
-typeinfo_eltype(typeinfo) = nothing
-typeinfo_eltype(typeinfo::Type{<:AbstractArray{T}}) where {T} = T
-typeinfo_eltype(typeinfo::Type{<:AbstractDict{K,V}}) where {K,V} = Pair{K,V}
-typeinfo_eltype(typeinfo::Type{<:AbstractSet{T}}) where {T} = T
+# similar to `eltype` (except that we don't want a default fall-back
+# returning Any, as this would cause incorrect printing in e.g. `Vector[Any[1]]`,
+# because eltype(Vector) == Any so `Any` wouldn't be printed in `Any[1]`)
+typeinfo_eltype(typeinfo) = nothing # element type not precisely known
+typeinfo_eltype(typeinfo::Type{<:AbstractArray{T}}) where {T} = eltype(typeinfo)
+typeinfo_eltype(typeinfo::Type{<:AbstractDict{K,V}}) where {K,V} = eltype(typeinfo)
+typeinfo_eltype(typeinfo::Type{<:AbstractSet{T}}) where {T} = eltype(typeinfo)
 
 
 # X not constrained, can be any iterable (cf. show_vector)
