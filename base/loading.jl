@@ -258,7 +258,9 @@ or `nothing` if `m` was not imported from a package.
 function Base.Filesystem.abspath(m::Module)
     pkgid = get(Base.module_keys, m, nothing)
     pkgid === nothing && return nothing
-    return normpath(Base.locate_package(pkgid))
+    path = Base.locate_package(pkgid)
+    path === nothing && return nothing
+    return normpath(path)
 end
 
 ## generic project & manifest API ##
