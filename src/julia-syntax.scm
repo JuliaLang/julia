@@ -1954,8 +1954,6 @@
           (let ((a    (cadr lhs))
                 (idxs (cddr lhs))
                 (rhs  (caddr e)))
-            (if (any assignment? idxs)
-                (syntax-deprecation "assignment inside indexing" "" #f))
             (let* ((reuse (and (pair? a)
                                (contains (lambda (x) (eq? x 'end))
                                          idxs)))
@@ -2010,8 +2008,6 @@
    'ref
    (lambda (e)
      (let ((args (cddr e)))
-       (if (any assignment? args)
-           (syntax-deprecation "assignment inside indexing" "" #f))
        (if (has-parameters? args)
            (error "unexpected semicolon in array expression")
            (expand-forms (partially-expand-ref e)))))

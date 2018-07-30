@@ -1185,7 +1185,7 @@
                    (if (null? al)
                        (loop (list 'ref ex))
                        (case (car al)
-                         ((vect)  (loop (list* 'ref ex (cdr al))))
+                         ((vect)  (loop (list* 'ref ex (map =-to-kw (cdr al)))))
                          ((hcat)  (loop (list* 'typed_hcat ex (cdr al))))
                          ((vcat)
                           (loop (list* 'typed_vcat ex (cdr al))))
