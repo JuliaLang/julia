@@ -258,9 +258,7 @@ or `nothing` if `m` was not imported from a package.
 function pathof(m::Module)
     pkgid = get(Base.module_keys, m, nothing)
     pkgid === nothing && return nothing
-    path = Base.locate_package(pkgid)
-    path === nothing && return nothing
-    return normpath(path)
+    return Base.locate_package(pkgid)
 end
 
 ## generic project & manifest API ##
