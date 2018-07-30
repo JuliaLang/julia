@@ -64,7 +64,7 @@ JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
     ptls->current_module = jl_main_module;
 
     jl_core_module->parent = jl_main_module;
-    jl_set_const(jl_main_module, jl_symbol("Core"),
+    jl_define_const(jl_main_module, jl_symbol("Core"),
                  (jl_value_t*)jl_core_module);
     jl_set_global(jl_core_module, jl_symbol("Main"),
                   (jl_value_t*)jl_main_module);

@@ -42,7 +42,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
         jl_module_using(m, jl_core_module);
     }
     // export own name, so "using Foo" makes "Foo" itself visible
-    jl_set_const(m, name, (jl_value_t*)m);
+    jl_define_const(m, name, (jl_value_t*)m);
     jl_module_export(m, name);
     JL_GC_POP();
     return m;
@@ -488,20 +488,21 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 JL_DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
-    if (!bp->constp) {
-        bp->value = val;
-        jl_gc_wb(m, val);
-    }
+    assert(!bp->constp && "Can't modify const; consider jl_checked_assignment");
+    bp->value = val;
+    jl_gc_wb(m, val);
 }
 
-JL_DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
+JL_DLLEXPORT void jl_define_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
 {
-    jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
-    if (!bp->constp) {
-        bp->value = val;
-        bp->constp = 1;
-        jl_gc_wb(m, val);
-    }
+    // Assert that it doesn't already exist.
+    jl_binding_t *bp = jl_get_binding(m, var);
+    assert(!bp && "Can't create new const; var already exists.");
+    // Create it.
+    bp = jl_get_binding_wr(m, var, 1);
+    bp->value = val;
+    bp->constp = 1;
+    jl_gc_wb(m, val);
 }
 
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)

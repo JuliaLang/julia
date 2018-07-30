@@ -616,7 +616,7 @@ JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv)
         if (args == NULL) {
             args = jl_alloc_vec_any(0);
             JL_GC_PUSH1(&args);
-            jl_set_const(jl_core_module, jl_symbol("ARGS"), (jl_value_t*)args);
+            jl_define_const(jl_core_module, jl_symbol("ARGS"), (jl_value_t*)args);
             JL_GC_POP();
         }
         assert(jl_array_len(args) == 0);
