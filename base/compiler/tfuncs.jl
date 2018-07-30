@@ -995,13 +995,29 @@ function tuple_tfunc(@nospecialize(argtype))
     return argtype
 end
 
+function array_type_undefable(@nospecialize(a))
+    if isa(a, Union)
+        return array_type_undefable(a.a) || array_type_undefable(a.b)
+    elseif isa(a, UnionAll)
+        return true
+    else
+        etype = (a::DataType).parameters[1]
+        return !(isbitstype(etype) || isbitsunion(etype))
+    end
+end
+
 function array_builtin_common_nothrow(argtypes::Array{Any,1}, first_idx_idx::Int)
     length(argtypes) >= 4 || return false
-    (argtypes[1] ⊑ Bool && argtypes[2] ⊑ Array) || return false
+    atype = argtypes[2]
+    (argtypes[1] ⊑ Bool && atype ⊑ Array) || return false
     for i = first_idx_idx:length(argtypes)
         argtypes[i] ⊑ Int || return false
     end
-    # If we have @inbounds (first argument is false), we're allowed to assume we don't throw
+    # If we could potentially throw undef ref errors, bail out now.
+    atype = widenconst(atype)
+    array_type_undefable(atype) && return false
+    # If we have @inbounds (first argument is false), we're allowed to assume
+    # we don't throw bounds errors.
     (isa(argtypes[1], Const) && !argtypes[1].val) && return true
     # Else we can't really say anything here
     # TODO: In the future we may be able to track the shapes of arrays though

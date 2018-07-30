@@ -6658,3 +6658,14 @@ end
 @test isa(foo28208(false, true), Tuple)
 @test foo28208(true, false) === missing
 @test foo28208(true, true) === nothing
+
+# Issue #28326
+function foo28326(a)
+    try
+        @inbounds a[1]
+        return false
+    catch
+        return true
+    end
+end
+@test foo28326(Vector(undef, 1))
