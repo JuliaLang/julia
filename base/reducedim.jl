@@ -99,6 +99,12 @@ reducedim_initarray(A::AbstractArray, region, init::T) where {T} = reducedim_ini
 promote_union(T::Union) = promote_type(promote_union(T.a), promote_union(T.b))
 promote_union(T) = T
 
+_realtype(::Type{<:Complex}) = Real
+_realtype(::Type{Complex{T}}) where T<:Real = T
+_realtype(T::Type) = T
+_realtype(::Union{typeof(abs),typeof(abs2)}, T) = _realtype(T)
+_realtype(::Any, T) = T
+
 function reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::AbstractArray, region)
     _reducedim_init(f, op, zero, sum, A, region)
 end
@@ -106,7 +112,7 @@ function reducedim_init(f, op::Union{typeof(*),typeof(mul_prod)}, A::AbstractArr
     _reducedim_init(f, op, one, prod, A, region)
 end
 function _reducedim_init(f, op, fv, fop, A, region)
-    T = promote_union(eltype(A))
+    T = _realtype(f, promote_union(eltype(A)))
     if T !== Any && applicable(zero, T)
         x = f(zero(T))
         z = op(fv(x), fv(x))
@@ -141,14 +147,14 @@ for (f1, f2, initval) in ((:min, :max, :Inf), (:max, :min, :(-Inf)))
             # but NaNs need to be avoided as intial values
             v0 = v0 != v0 ? typeof(v0)($initval) : v0
 
-            T = promote_union(eltype(A))
+            T = _realtype(f, promote_union(eltype(A)))
             Tr = v0 isa T ? T : typeof(v0)
             return reducedim_initarray(A, region, v0, Tr)
         end
     end
 end
 reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) where {T} =
-    reducedim_initarray(A, region, zero(f(zero(T))))
+    reducedim_initarray(A, region, zero(f(zero(T))), _realtype(f, T))
 
 reducedim_init(f, op::typeof(&), A::AbstractArray, region) = reducedim_initarray(A, region, true)
 reducedim_init(f, op::typeof(|), A::AbstractArray, region) = reducedim_initarray(A, region, false)
