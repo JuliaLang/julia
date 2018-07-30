@@ -101,7 +101,7 @@ Random.rand(rng::AbstractRNG, ::Random.SamplerType{Die}) = Die(rand(rng, 4:20))
 
 Scalar and array methods for `Die` now work as expected:
 
-```jldoctest Die; setup = :(srand(1))
+```jldoctest Die; setup = :(Random.seed!(1))
 julia> rand(Die)
 Die(18)
 
@@ -128,7 +128,7 @@ In order to define random generation out of objects of type `S`, the following m
 `rand(rng::AbstractRNG, sp::Random.SamplerTrivial{S})`. Here, `sp` simply wraps an object of type `S`, which can be accessed via `sp[]`.
 Continuing the `Die` example, we want now to define `rand(d::Die)` to produce an `Int` corresponding to one of `d`'s sides:
 
-```jldoctest Die; setup = :(srand(1))
+```jldoctest Die; setup = :(Random.seed!(1))
 julia> Random.rand(rng::AbstractRNG, d::Random.SamplerTrivial{Die}) = rand(rng, 1:d[].nsides);
 
 julia> rand(Die(4))

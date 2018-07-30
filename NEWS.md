@@ -745,7 +745,7 @@ Library improvements
   * An official API for extending `rand` is now defined ([#23964], [#25002]).
 
   * The constructor `MersenneTwister()` is re-enabled, producing a randomly initialized RNG
-    (similar to `srand(MersenneTwister(0))`) ([#21909]).
+    (similar to `Random.seed!(MersenneTwister(0))`) ([#21909]).
 
   * `BitSet` can now store any `Int` (instead of only positive ones) ([#25029]).
 
