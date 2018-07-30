@@ -430,7 +430,7 @@ function clone(url::String, name::String = "")
 end
 
 function dir(pkg::String, paths::AbstractString...)
-    @warn "`Pkg.dir(pkgname, paths...)` is deprecated; instead, do `import $pkg; abspath($pkg, \"..\", \"..\", paths...)`." maxlog=1
+    @warn "`Pkg.dir(pkgname, paths...)` is deprecated; instead, do `import $pkg; joinpath(dirname(abspath($pkg)), \"..\", paths...)`." maxlog=1
     pkgid = Base.identify_package(pkg)
     pkgid === nothing && return nothing
     path = Base.locate_package(pkgid)

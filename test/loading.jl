@@ -258,9 +258,7 @@ module NotPkgModule; end
     @test Foo.which == "path"
 
     @testset "abspath" begin
-        p = normpath(abspath(@__DIR__, "project/deps/Foo1/src/Foo.jl"))
-        @test abspath(Foo) == p
-        @test abspath(Foo, "..", "blah") == joinpath(dirname(p), "blah")
+        @test abspath(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1/src/Foo.jl"))
         @test abspath(NotPkgModule) === nothing
     end
 
