@@ -337,9 +337,9 @@ pipe_writer(p::Process) = p.in
 Get the process ID of a running process. Returns `-1` if the
 process is not running.
 """
-function Base.getpid(p::Process)
+function Libc.getpid(p::Process)
     p.handle != C_NULL || error("process not running")
-    ccall(:jl_uv_process_pid, Cint, (Ptr{Void},), p.handle)
+    ccall(:jl_uv_process_pid, Cint, (Ptr{Cvoid},), p.handle)
 end
 
 struct ProcessChain <: AbstractPipe
