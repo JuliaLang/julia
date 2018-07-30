@@ -2094,8 +2094,10 @@ function hash_range(r::AbstractRange, h::UInt)
 end
 
 function hash(a::AbstractArray{T}, h::UInt) where T
-    # O(1) hashing for types with regular step
-    if isa(a, AbstractRange) && isa(RangeStepStyle(a), RangeStepRegular)
+    # O(1) hashing for types with ArrayHashingDiff and RangeStepRegular traits
+    if isa(a, AbstractRange) &&
+       isa(ArrayHashingStyle(T), ArrayHashingDiff) &&
+       isa(RangeStepStyle(a), RangeStepRegular)
         return hash_range(a, h)
     end
 
@@ -2118,7 +2120,9 @@ function hash(a::AbstractArray{T}, h::UInt) where T
     # at the beginning of the array as such as long as they match this assumption
     # This needs to be done even for non-RangeStepRegular types since they may still be equal
     # to RangeStepRegular values (e.g. 1.0:3.0 == 1:3)
-    if isa(a, AbstractVector) && applicable(-, x2, x1)
+    if isa(a, AbstractVector) &&
+       isa(ArrayHashingStyle(x1), ArrayHashingDiff) &&
+       isa(ArrayHashingStyle(x2), ArrayHashingDiff)
         n = 1
         local step, laststep, laststate
 
@@ -2140,7 +2144,10 @@ function hash(a::AbstractArray{T}, h::UInt) where T
                 # If true, wraparound overflow happened
                 sign(step) == cmp(x2, x1) || break
             else
-                applicable(-, x2, x1) || break
+                if !isa(ArrayHashingStyle(x1), ArrayHashingDiff) ||
+                   !isa(ArrayHashingStyle(x2), ArrayHashingDiff)
+                    break
+                end
                 # widen() is here to ensure no overflow can happen
                 step = widen(x2) - widen(x1)
             end

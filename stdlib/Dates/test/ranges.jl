@@ -63,7 +63,7 @@ let
                         @test findall(in(dr), dr) == [1:len;]
                         @test length([dr;]) == len
                         @test dr == dr1
-                        @test hash(dr) == hash(dr1)
+                        @test hash(dr) == hash(dr1) == hash(convert(Vector{Any}, dr1))
                     end
                     @test !isempty(reverse(dr))
                     @test length(reverse(dr)) == len
@@ -121,7 +121,7 @@ let
                         @test findall(in(dr), dr) == [1:len;]
                         @test length([dr;]) == len
                         @test dr == dr1
-                        @test hash(dr) == hash(dr1)
+                        @test hash(dr) == hash(dr1) == hash(convert(Vector{Any}, dr1))
                     end
                     @test !isempty(reverse(dr))
                     @test length(reverse(dr)) == len
@@ -181,7 +181,7 @@ let
                             @test findall(in(dr), dr) == [1:len;]
                             @test length([dr;]) == len
                             @test dr == dr1
-                            @test hash(dr) == hash(dr1)
+                            @test hash(dr) == hash(dr1) == hash(convert(Vector{Any}, dr1))
                         end
                         @test !isempty(reverse(dr))
                         @test length(reverse(dr)) == len
@@ -239,7 +239,7 @@ let
                             @test findall(in(dr), dr) == [1:len;]
                             @test length([dr;]) == len
                             @test dr == dr1
-                            @test hash(dr) == hash(dr1)
+                            @test hash(dr) == hash(dr1) == hash(convert(Vector{Any}, dr1))
                         end
                         @test !isempty(reverse(dr))
                         @test length(reverse(dr)) == len
