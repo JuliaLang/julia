@@ -228,7 +228,7 @@ end
 let out = Pipe(), proc = run(pipeline(`$exename --startup-file=no -e 'println(getpid())`, stdout=IOContext(out,stdout)), wait=false)
     pid = getpid(proc)
     close(out.in)
-    @test parse(Int, read(out, String)) == pid
+    @test parse(Int32, read(out, String)) === pid
     @test success(proc)
     @test_throws ErrorException getpid(proc)
 end
