@@ -659,7 +659,7 @@ let A, B, C, D
     # 10 repeats of each row
     B = A[shuffle!(repeat(1:10, 10)), :]
     C = unique(B, dims=1)
-    @test sortrows(C) == sortrows(A)
+    @test sortslices(C, dims=1) == sortslices(A, dims=1)
     @test unique(B, dims=2) == B
     @test unique(B', dims=2)' == C
 
@@ -1173,11 +1173,11 @@ end
 @testset "sort on arrays" begin
     local a = rand(3,3)
 
-    asr = sortrows(a)
+    asr = sortslices(a, dims=1)
     @test isless(asr[1,:],asr[2,:])
     @test isless(asr[2,:],asr[3,:])
 
-    asc = sortcols(a)
+    asc = sortslices(a, dims=2)
     @test isless(asc[:,1],asc[:,2])
     @test isless(asc[:,2],asc[:,3])
 
@@ -1187,11 +1187,11 @@ end
     @test m == zeros(3, 4)
     @test o == fill(1, 3, 4)
 
-    asr = sortrows(a, rev=true)
+    asr = sortslices(a, dims=1, rev=true)
     @test isless(asr[2,:],asr[1,:])
     @test isless(asr[3,:],asr[2,:])
 
-    asc = sortcols(a, rev=true)
+    asc = sortslices(a, dims=2, rev=true)
     @test isless(asc[:,2],asc[:,1])
     @test isless(asc[:,3],asc[:,2])
 
@@ -1221,6 +1221,20 @@ end
 
     bs = sort(b, dims=3)
     @test all(bs[:,:,1] .<= bs[:,:,2])
+end
+
+@testset "higher dimensional sortslices" begin
+    A = permutedims(reshape([4 3; 2 1; 'A' 'B'; 'C' 'D'], (2, 2, 2)), (1, 3, 2))
+    @test sortslices(A, dims=(1, 2)) ==
+        permutedims(reshape([1 3; 2 4; 'D' 'B'; 'C' 'A'], (2, 2, 2)), (1, 3, 2))
+    @test sortslices(A, dims=(2, 1)) ==
+        permutedims(reshape([1 2; 3 4; 'D' 'C'; 'B' 'A'], (2, 2, 2)), (1, 3, 2))
+    B = reshape(1:8, (2,2,2))
+    @test sortslices(B, dims=(3,1))[:, :, 1] == [
+        1 3;
+        5 7
+    ]
+    @test sortslices(B, dims=(1,3)) == B
 end
 
 @testset "fill" begin
