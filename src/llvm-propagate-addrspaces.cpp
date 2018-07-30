@@ -222,7 +222,7 @@ Value *PropagateJuliaAddrspaces::LiftPointer(Value *V, Type *LocTy, Instruction 
         }
     }
 
-    return CollapseCastsAndLift(V, cast<Instruction>(V));
+    return CollapseCastsAndLift(V, InsertPt);
 }
 
 void PropagateJuliaAddrspaces::visitLoadInst(LoadInst &LI) {
