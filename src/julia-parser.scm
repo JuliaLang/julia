@@ -518,6 +518,8 @@
       (and (char>=? c #\u200c) (char<=? c #\u200f))
       (memv c '(#\u00ad #\u2061 #\u115f))))
 
+(define (scolno port) (string " near column " (input-port-column port)))
+
 (define (next-token port s)
   (aset! s 2 (eq? (skip-ws port whitespace-newline) #t))
   (let ((c (peek-char port)))
@@ -542,7 +544,7 @@
                         ((opchar? nextc)
                          (let ((op (read-operator port c)))
                            (if (and (eq? op '..) (opchar? (peek-char port)))
-                               (error (string "invalid operator \"" op (peek-char port) "\"")))
+                               (error (string "invalid operator \"" op (peek-char port) "\"" (scolno port))))
                            op))
                         (else '|.|)))))
 
@@ -551,8 +553,8 @@
           (else
            (read-char port)
            (if (default-ignorable-char? c)
-               (error (string "invisible character \\u" (number->string (fixnum c) 16)))
-               (error (string "invalid character \"" c "\"")))))))
+               (error (string "invisible character \\u" (number->string (fixnum c) 16) (scolno port)))
+               (error (string "invalid character \"" c "\"" (scolno port))))))))
 
 ;; --- token stream ---
 
