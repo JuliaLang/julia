@@ -217,6 +217,8 @@ macro unsafe_pure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
 end
 
+@eval const $(Symbol("@pure")) = $(Symbol("@unsafe_pure"))
+
 """
     @propagate_inbounds
 

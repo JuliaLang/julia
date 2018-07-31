@@ -172,11 +172,10 @@ end
 argtail(x, rest...) = rest
 tail(x::Tuple) = argtail(x...)
 
-<<<<<<< HEAD
-tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T::Type{<:Tuple}, 1))
+tuple_type_head(T::Type) = (@_unsafe_pure_meta; fieldtype(T::Type{<:Tuple}, 1))
 
 function tuple_type_tail(T::Type)
-    @_pure_meta
+    @_unsafe_pure_meta
     if isa(T, UnionAll)
         return UnionAll(T.var, tuple_type_tail(T.body))
     elseif isa(T, Union)
@@ -187,31 +186,6 @@ function tuple_type_tail(T::Type)
             return T
         end
         return Tuple{argtail(T.parameters...)...}
-=======
-# TODO: a better / more infer-able definition would pehaps be
-#   tuple_type_head(T::Type) = fieldtype(T::Type{<:Tuple}, 1)
-tuple_type_head(T::UnionAll) = (@_unsafe_pure_meta; UnionAll(T.var, tuple_type_head(T.body)))
-function tuple_type_head(T::Union)
-    @_unsafe_pure_meta
-    return Union{tuple_type_head(T.a), tuple_type_head(T.b)}
-end
-function tuple_type_head(T::DataType)
-    @_unsafe_pure_meta
-    T.name === Tuple.name || throw(MethodError(tuple_type_head, (T,)))
-    return unwrapva(T.parameters[1])
-end
-
-tuple_type_tail(T::UnionAll) = (@_unsafe_pure_meta; UnionAll(T.var, tuple_type_tail(T.body)))
-function tuple_type_tail(T::Union)
-    @_unsafe_pure_meta
-    return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
-end
-function tuple_type_tail(T::DataType)
-    @_unsafe_pure_meta
-    T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
-    if isvatuple(T) && length(T.parameters) == 1
-        return T
->>>>>>> Rename bootstrap version of unsafe_pure
     end
 end
 
