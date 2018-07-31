@@ -1,11 +1,77 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc.h"
+#include "julia_gcext.h"
 #include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// Linked list of callback functions
+
+typedef void (*jl_gc_cb_func_t)(void);
+
+typedef struct jl_gc_callback_list_t {
+    struct jl_gc_callback_list_t *next;
+    jl_gc_cb_func_t func;
+} jl_gc_callback_list_t;
+
+static jl_gc_callback_list_t *gc_cblist_pre_gc;
+static jl_gc_callback_list_t *gc_cblist_post_gc;
+
+#define gc_invoke_callbacks(kind, args) \
+    do { \
+        for (jl_gc_callback_list_t *cb = gc_cblist_##kind; \
+                cb != NULL; \
+                cb = cb->next) \
+        { \
+            ((jl_gc_cb_##kind##_t)(cb->func)) args; \
+        } \
+    } while (0)
+
+static void jl_gc_register_callback(jl_gc_callback_list_t **list,
+        jl_gc_cb_func_t func)
+{
+    while (*list != NULL) {
+        if ((*list)->func == func)
+            return;
+        list = &((*list)->next);
+    }
+    *list = (jl_gc_callback_list_t *)malloc(sizeof(jl_gc_callback_list_t));
+    (*list)->next = NULL;
+    (*list)->func = func;
+}
+
+static void jl_gc_deregister_callback(jl_gc_callback_list_t **list,
+        jl_gc_cb_func_t func)
+{
+    while (*list != NULL) {
+        if ((*list)->func == func) {
+            jl_gc_callback_list_t *tmp = *list;
+            (*list) = (*list)->next;
+            free(tmp);
+            return;
+        }
+        list = &((*list)->next);
+    }
+}
+
+JL_DLLEXPORT void jl_gc_set_cb_pre_gc(jl_gc_cb_pre_gc_t cb, int enable)
+{
+    if (enable)
+        jl_gc_register_callback(&gc_cblist_pre_gc, (jl_gc_cb_func_t)cb);
+    else
+        jl_gc_deregister_callback(&gc_cblist_pre_gc, (jl_gc_cb_func_t)cb);
+}
+
+JL_DLLEXPORT void jl_gc_set_cb_post_gc(jl_gc_cb_post_gc_t cb, int enable)
+{
+    if (enable)
+        jl_gc_register_callback(&gc_cblist_post_gc, (jl_gc_cb_func_t)cb);
+    else
+        jl_gc_deregister_callback(&gc_cblist_post_gc, (jl_gc_cb_func_t)cb);
+}
 
 // Protect all access to `finalizer_list_marked` and `to_finalize`.
 // For accessing `ptls->finalizers`, the lock is needed if a thread
@@ -2627,6 +2693,7 @@ JL_DLLEXPORT void jl_gc_collect(int full)
     // TODO (concurrently queue objects)
     // no-op for non-threading
     jl_gc_wait_for_the_world();
+    gc_invoke_callbacks(pre_gc, (full));
 
     if (!jl_gc_disable_counter) {
         JL_LOCK_NOGC(&finalizers_lock);
@@ -2651,6 +2718,7 @@ JL_DLLEXPORT void jl_gc_collect(int full)
         run_finalizers(ptls);
         ptls->in_finalizer = was_in_finalizer;
     }
+    gc_invoke_callbacks(post_gc, (full));
 }
 
 void gc_mark_queue_all_roots(jl_ptls_t ptls, gc_mark_sp_t *sp)
