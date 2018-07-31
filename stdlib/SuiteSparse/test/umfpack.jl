@@ -89,13 +89,15 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
         end
     end
 
-    @testset "Rectangular cases" for elty in (Float64, ComplexF64)
-        for (m, n) in ((10,5), (5, 10))
-            A = sparse([1:min(m,n); rand(1:m, 10)], [1:min(m,n); rand(1:n, 10)], elty == Float64 ? randn(min(m, n) + 10) : complex.(randn(min(m, n) + 10), randn(min(m, n) + 10)))
-            F = lu(A)
-            L, U, p, q, Rs = F.:(:)
-            @test (Diagonal(Rs) * A)[p,q] ≈ L * U
-        end
+    @testset "Rectangular cases. elty=$elty, m=$m, n=$n" for
+        elty in (Float64, ComplexF64),
+            (m, n) in ((10,5), (5, 10))
+
+        Random.seed!(30072018)
+        A = sparse([1:min(m,n); rand(1:m, 10)], [1:min(m,n); rand(1:n, 10)], elty == Float64 ? randn(min(m, n) + 10) : complex.(randn(min(m, n) + 10), randn(min(m, n) + 10)))
+        F = lu(A)
+        L, U, p, q, Rs = F.:(:)
+        @test (Diagonal(Rs) * A)[p,q] ≈ L * U
     end
 
     @testset "Issue #4523 - complex sparse \\" begin
