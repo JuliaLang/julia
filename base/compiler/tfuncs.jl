@@ -329,16 +329,11 @@ function sizeof_tfunc(@nospecialize(x),)
     return Int
 end
 add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 0)
-old_nfields(@nospecialize x) = length((isa(x, DataType) ? x : typeof(x)).types)
 add_tfunc(nfields, 1, 1,
     function (@nospecialize(x),)
-        isa(x, Const) && return Const(old_nfields(x.val))
-        isa(x, Conditional) && return Const(old_nfields(Bool))
-        if isType(x)
-            # TODO: remove with deprecation in builtins.c for nfields(::Type)
-            p = x.parameters[1]
-            issingletontype(p) && return Const(old_nfields(p))
-        elseif isa(x, DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x)) && x !== DataType
+        isa(x, Const) && return Const(nfields(x.val))
+        isa(x, Conditional) && return Const(0)
+        if isa(x, DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x))
             if !(x.name === _NAMEDTUPLE_NAME && !isconcretetype(x))
                 return Const(length(x.types))
             end

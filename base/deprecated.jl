@@ -202,48 +202,7 @@ next(p::Union{Process, ProcessChain}, i::Int) = (getindex(p, i), i + 1)
     return i == 1 ? getfield(p, p.openstream) : p
 end
 
-# also remove all support machinery in src for current_module when removing this deprecation
-# and make Base.include an error
-_current_module() = ccall(:jl_get_current_module, Ref{Module}, ())
-@noinline function binding_module(s::Symbol)
-    depwarn("`binding_module(symbol)` is deprecated, use `binding_module(module, symbol)` instead.", :binding_module)
-    return binding_module(_current_module(), s)
-end
-export expand
-@noinline function expand(@nospecialize(x))
-    depwarn("`expand(x)` is deprecated, use `Meta.lower(module, x)` instead.", :expand)
-    return Meta.lower(_current_module(), x)
-end
-@noinline function macroexpand(@nospecialize(x))
-    depwarn("`macroexpand(x)` is deprecated, use `macroexpand(module, x)` instead.", :macroexpand)
-    return macroexpand(_current_module(), x)
-end
-@noinline function isconst(s::Symbol)
-    depwarn("`isconst(symbol)` is deprecated, use `isconst(module, symbol)` instead.", :isconst)
-    return isconst(_current_module(), s)
-end
-@noinline function include_string(txt::AbstractString, fname::AbstractString)
-    depwarn("`include_string(string, fname)` is deprecated, use `include_string(module, string, fname)` instead.", :include_string)
-    return include_string(_current_module(), txt, fname)
-end
-@noinline function include_string(txt::AbstractString)
-    depwarn("`include_string(string)` is deprecated, use `include_string(module, string)` instead.", :include_string)
-    return include_string(_current_module(), txt, "string")
-end
-
-"""
-    current_module() -> Module
-
-Get the *dynamically* current `Module`, which is the `Module` code is currently being read
-from. In general, this is not the same as the module containing the call to this function.
-
-DEPRECATED: use `@__MODULE__` instead
-"""
-@noinline function current_module()
-    depwarn("`current_module()` is deprecated, use `@__MODULE__` instead.", :current_module)
-    return _current_module()
-end
-export current_module
+# remove all support machinery in src for current_module
 
 @deprecate_binding colon (:)
 
@@ -361,8 +320,6 @@ function OverflowError()
 end
 
 @deprecate fieldnames(v) fieldnames(typeof(v))
-# nfields(::Type) deprecation in builtins.c: update nfields tfunc in compiler/tfuncs.jl when it is removed.
-# also replace `_nfields` with `nfields` in summarysize.c when this is removed.
 
 # ::ANY is deprecated in src/method.c
 # also remove all instances of `jl_ANY_flag` in src/
@@ -537,24 +494,6 @@ export countnz
 function countnz(x)
     depwarn("`countnz(x)` is deprecated, use either `count(!iszero, x)` or `count(t -> t != 0, x)` instead.", :countnz)
     return count(t -> t != 0, x)
-end
-
-# issue #14470
-# TODO: More deprecations must be removed in src/cgutils.cpp:emit_array_nd_index()
-# TODO: Re-enable the disabled tests marked PLI
-# On the Julia side, this definition will gracefully supersede the new behavior (already coded)
-@inline function checkbounds_indices(::Type{Bool}, IA::Tuple{Any,Vararg{Any}}, ::Tuple{})
-    any(x->unsafe_length(x)==0, IA) && return false
-    any(x->unsafe_length(x)!=1, IA) && return _depwarn_for_trailing_indices(IA)
-    return true
-end
-function _depwarn_for_trailing_indices(n::Integer) # Called by the C boundscheck
-    depwarn("omitting indices for non-singleton trailing dimensions is deprecated. Add `1`s as trailing indices or use `reshape(A, Val($n))` to make the dimensionality of the array match the number of indices.", (:getindex, :setindex!, :view))
-    true
-end
-function _depwarn_for_trailing_indices(t::Tuple)
-    depwarn("omitting indices for non-singleton trailing dimensions is deprecated. Add `$(join(map(first, t),','))` as trailing indices or use `reshape` to make the dimensionality of the array match the number of indices.", (:getindex, :setindex!, :view))
-    true
 end
 
 # issue #22791
@@ -788,9 +727,6 @@ findprev(pred::Function, A, i::Integer) = findprev_internal(pred, A, i)
 @deprecate parse(str::AbstractString; kwargs...) Meta.parse(str; kwargs...)
 @deprecate parse(str::AbstractString, pos::Int, ; kwargs...) Meta.parse(str, pos; kwargs...)
 @deprecate_binding ParseError Meta.ParseError
-
-# issue #20899
-# TODO: delete JULIA_HOME deprecation in src/init.c
 
 # cumsum and cumprod have deprecations in multidimensional.jl
 # when the message is removed, the `dims` keyword argument should become required.
