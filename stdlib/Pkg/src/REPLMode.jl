@@ -612,28 +612,11 @@ do_up!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption}) =
     API.up(ctx, args; api_opts...)
 
 function do_activate!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption})
+    # TODO: Remove the ctx argument to this function.
     if isempty(args)
-        return API.activate()
-    end
-
-    path = args[1]
-    env = Base.active_project() === nothing ? nothing : ctx.env
-    devpath = nothing
-    if env !== nothing && haskey(env.project["deps"], path)
-        uuid = UUID(env.project["deps"][path])
-        info = manifest_info(env, uuid)
-        devpath = haskey(info, "path") ? joinpath(dirname(env.project_file), info["path"]) : nothing
-    end
-    # `pkg> activate path` does the following
-    # 1. if path exists, activate that
-    # 2. if path exists in deps, and the dep is deved, activate that path (`devpath`) above
-    # 3. activate the non-existing directory (e.g. as in `pkg> activate . for initing a new dev`)
-    if Types.isdir_windows_workaround(path)
-        API.activate(abspath(path))
-    elseif devpath !== nothing
-        API.activate(abspath(devpath))
+        return API.activate(nothing)
     else
-        API.activate(abspath(path))
+        return API.activate(args[1])
     end
 end
 

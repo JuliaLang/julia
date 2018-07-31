@@ -282,6 +282,8 @@ temp_pkg_dir() do project_path
         cd(mkdir("tests"))
         pkg"activate Foo" # activate developed Foo from another directory
         @test Base.active_project() == joinpath(path, "modules", "Foo", "Project.toml")
+        pkg"activate" # activate home project
+        @test Base.ACTIVE_PROJECT[] === nothing
     end
 end
 
