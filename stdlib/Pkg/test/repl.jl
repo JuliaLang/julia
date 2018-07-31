@@ -72,23 +72,27 @@ temp_pkg_dir() do project_path
 end
 
 @testset "tokens" begin
-    tokens = Pkg.REPLMode.tokenize("add git@github.com:JuliaLang/Example.jl.git")
-    @test tokens[1][2] ==              "git@github.com:JuliaLang/Example.jl.git"
-    tokens = Pkg.REPLMode.tokenize("add git@github.com:JuliaLang/Example.jl.git#master")
-    @test tokens[1][2] ==              "git@github.com:JuliaLang/Example.jl.git"
-    @test tokens[1][3].rev == "master"
-    tokens = Pkg.REPLMode.tokenize("add git@github.com:JuliaLang/Example.jl.git#c37b675")
-    @test tokens[1][2] ==              "git@github.com:JuliaLang/Example.jl.git"
-    @test tokens[1][3].rev == "c37b675"
-    tokens = Pkg.REPLMode.tokenize("add git@github.com:JuliaLang/Example.jl.git@v0.5.0")
-    @test tokens[1][2] ==              "git@github.com:JuliaLang/Example.jl.git"
-    @test repr(tokens[1][3]) == "VersionRange(\"0.5.0\")"
-    tokens = Pkg.REPLMode.tokenize("add git@github.com:JuliaLang/Example.jl.git@0.5.0")
-    @test tokens[1][2] ==              "git@github.com:JuliaLang/Example.jl.git"
-    @test repr(tokens[1][3]) == "VersionRange(\"0.5.0\")"
-    tokens = Pkg.REPLMode.tokenize("add git@gitlab-fsl.jsc.näsan.guvv:drats/URGA2010.jl.git@0.5.0")
-    @test tokens[1][2] ==              "git@gitlab-fsl.jsc.näsan.guvv:drats/URGA2010.jl.git"
-    @test repr(tokens[1][3]) == "VersionRange(\"0.5.0\")"
+    statement = Pkg.REPLMode.parse("add git@github.com:JuliaLang/Example.jl.git")[1]
+    @test "add" in statement.command.names
+    @test statement.arguments[1] == "git@github.com:JuliaLang/Example.jl.git"
+    statement = Pkg.REPLMode.parse("add git@github.com:JuliaLang/Example.jl.git#master")[1]
+    @test "add" in statement.command.names
+    @test length(statement.arguments) == 2
+    @test statement.arguments[1] == "git@github.com:JuliaLang/Example.jl.git"
+    @test statement.arguments[2] == "#master"
+    statement = Pkg.REPLMode.parse("add git@github.com:JuliaLang/Example.jl.git#c37b675")[1]
+    @test "add" in statement.command.names
+    @test length(statement.arguments) == 2
+    @test statement.arguments[1] == "git@github.com:JuliaLang/Example.jl.git"
+    @test statement.arguments[2] == "#c37b675"
+    statement = Pkg.REPLMode.parse("add git@github.com:JuliaLang/Example.jl.git@v0.5.0")[1]
+    @test statement.arguments[1] == "git@github.com:JuliaLang/Example.jl.git"
+    @test statement.arguments[2] == "@v0.5.0"
+    statement = Pkg.REPLMode.parse("add git@gitlab-fsl.jsc.näsan.guvv:drats/URGA2010.jl.git@0.5.0")[1]
+    @test "add" in statement.command.names
+    @test length(statement.arguments) == 2
+    @test statement.arguments[1] == "git@gitlab-fsl.jsc.näsan.guvv:drats/URGA2010.jl.git"
+    @test statement.arguments[2] == "@0.5.0"
 end
 
 temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
@@ -566,9 +570,300 @@ end
 
 @testset "`do_generate!` error paths" begin
     with_temp_env() do
-        @test_throws CommandError Pkg.REPLMode.pkgstr("generate @0.0.0")
         @test_throws CommandError Pkg.REPLMode.pkgstr("generate Example Example2")
         @test_throws CommandError Pkg.REPLMode.pkgstr("generate")
+    end
+end
+
+@testset "`parse_option` unit tests" begin
+    opt = Pkg.REPLMode.parse_option("-x")
+    @test opt.val == "x"
+    @test opt.argument === nothing
+    opt = Pkg.REPLMode.parse_option("--hello")
+    @test opt.val == "hello"
+    @test opt.argument === nothing
+    opt = Pkg.REPLMode.parse_option("--env=some")
+    @test opt.val == "env"
+    @test opt.argument == "some"
+end
+
+@testset "`parse` integration tests" begin
+    @test isempty(Pkg.REPLMode.parse(""))
+
+    statement = Pkg.REPLMode.parse("up")[1]
+    @test statement.command.kind == Pkg.REPLMode.CMD_UP
+    @test isempty(statement.meta_options)
+    @test isempty(statement.options)
+    @test isempty(statement.arguments)
+
+    statement = Pkg.REPLMode.parse("dev Example")[1]
+    @test statement.command.kind == Pkg.REPLMode.CMD_DEVELOP
+    @test isempty(statement.meta_options)
+    @test isempty(statement.options)
+    @test statement.arguments == ["Example"]
+
+    statement = Pkg.REPLMode.parse("dev Example#foo #bar")[1]
+    @test statement.command.kind == Pkg.REPLMode.CMD_DEVELOP
+    @test isempty(statement.meta_options)
+    @test isempty(statement.options)
+    @test statement.arguments == ["Example", "#foo", "#bar"]
+
+    statement = Pkg.REPLMode.parse("dev Example#foo Example@v0.0.1")[1]
+    @test statement.command.kind == Pkg.REPLMode.CMD_DEVELOP
+    @test isempty(statement.meta_options)
+    @test isempty(statement.options)
+    @test statement.arguments == ["Example", "#foo", "Example", "@v0.0.1"]
+
+    statement = Pkg.REPLMode.parse("--one -t add --first --second arg1")[1]
+    @test statement.command.kind == Pkg.REPLMode.CMD_ADD
+    @test statement.meta_options == ["--one", "-t"]
+    @test statement.options == ["--first", "--second"]
+    @test statement.arguments == ["arg1"]
+
+    statements = Pkg.REPLMode.parse("--one -t add --first -o arg1; --meta pin -x -a arg0 Example")
+    @test statements[1].command.kind == Pkg.REPLMode.CMD_ADD
+    @test statements[1].meta_options == ["--one", "-t"]
+    @test statements[1].options == ["--first", "-o"]
+    @test statements[1].arguments == ["arg1"]
+    @test statements[2].command.kind == Pkg.REPLMode.CMD_PIN
+    @test statements[2].meta_options == ["--meta"]
+    @test statements[2].options == ["-x", "-a"]
+    @test statements[2].arguments == ["arg0", "Example"]
+
+    statements = Pkg.REPLMode.parse("up; --meta -x pin --first; dev")
+    @test statements[1].command.kind == Pkg.REPLMode.CMD_UP
+    @test isempty(statements[1].meta_options)
+    @test isempty(statements[1].options)
+    @test isempty(statements[1].arguments)
+    @test statements[2].command.kind == Pkg.REPLMode.CMD_PIN
+    @test statements[2].meta_options == ["--meta", "-x"]
+    @test statements[2].options == ["--first"]
+    @test isempty(statements[2].arguments)
+    @test statements[3].command.kind == Pkg.REPLMode.CMD_DEVELOP
+    @test isempty(statements[3].meta_options)
+    @test isempty(statements[3].options)
+    @test isempty(statements[3].arguments)
+end
+
+@testset "argument count errors" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        @test_throws CommandError Pkg.REPLMode.pkgstr("activate one two")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("activate one two three")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("precompile Example")
+    end
+    end
+    end
+end
+
+@testset "invalid options" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        @test_throws CommandError Pkg.REPLMode.pkgstr("rm --minor Example")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("pin --project Example")
+    end
+    end
+    end
+end
+
+@testset "Argument order" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        @test_throws CommandError Pkg.REPLMode.pkgstr("add FooBar Example#foobar#foobar")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("up Example#foobar@0.0.0")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("pin Example@0.0.0@0.0.1")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("up #foobar")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("add @0.0.1")
+    end
+    end
+    end
+end
+
+@testset "conflicting options" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        @test_throws CommandError Pkg.REPLMode.pkgstr("up --major --minor")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("rm --project --manifest")
+    end
+    end
+    end
+end
+
+@testset "gc" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        @test_throws CommandError Pkg.REPLMode.pkgstr("gc --project")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("gc --minor")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("gc Example")
+        Pkg.REPLMode.pkgstr("gc")
+    end
+    end
+    end
+end
+
+@testset "precompile" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        @test_throws CommandError Pkg.REPLMode.pkgstr("precompile --project")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("precompile Example")
+        Pkg.REPLMode.pkgstr("precompile")
+    end
+    end
+    end
+end
+
+@testset "generate" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        @test_throws CommandError Pkg.REPLMode.pkgstr("generate --major Example")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("generate --foobar Example")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("generate Example1 Example2")
+        Pkg.REPLMode.pkgstr("generate Example")
+    end
+    end
+    end
+end
+
+@testset "test" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        Pkg.add("Example")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("test --project Example")
+        Pkg.REPLMode.pkgstr("test --coverage Example")
+        Pkg.REPLMode.pkgstr("test Example")
+    end
+    end
+    end
+end
+
+@testset "build" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        @test_throws CommandError Pkg.REPLMode.pkgstr("build --project")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("build --minor")
+    end
+    end
+    end
+end
+
+@testset "free" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        @test_throws CommandError Pkg.REPLMode.pkgstr("free --project")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("free --major")
+    end
+    end
+    end
+end
+
+@testset "unit tests for `group_words`" begin
+    # simple
+    groups = Pkg.REPLMode.group_words(["add", "Example"])
+    @test length(groups) == 1
+    @test groups[1][1] == "add"
+    @test groups[1][2] == "Example"
+    # statement break
+    groups = Pkg.REPLMode.group_words(["a", "b", "c", ";", "a", "b"])
+    @test length(groups) == 2
+    groups = Pkg.REPLMode.group_words(["a", "b", "c", ";", "a", "b", ";", "d"])
+    @test length(groups) == 3
+    # trailing statement break
+    groups = Pkg.REPLMode.group_words(["a", "b", "c", ";", "a", "b", ";"])
+    @test length(groups) == 2
+    # errors
+    @test_throws CommandError Pkg.REPLMode.group_words(["a", "b", ";", ";", "a", "b"])
+    @test_throws CommandError Pkg.REPLMode.group_words([";", "add", "Example"])
+end
+
+@testset "tests for api opts" begin
+    specs = Pkg.REPLMode.OptionSpecs(Pkg.REPLMode.OptionDeclaration[
+        (["project", "p"], Pkg.REPLMode.OPT_SWITCH, :mode => Pkg.Types.PKGMODE_PROJECT),
+        (["manifest", "m"], Pkg.REPLMode.OPT_SWITCH, :mode => Pkg.Types.PKGMODE_MANIFEST),
+        ("major", Pkg.REPLMode.OPT_SWITCH, :level => Pkg.Types.UPLEVEL_MAJOR),
+        ("minor", Pkg.REPLMode.OPT_SWITCH, :level => Pkg.Types.UPLEVEL_MINOR),
+        ("patch", Pkg.REPLMode.OPT_SWITCH, :level => Pkg.Types.UPLEVEL_PATCH),
+        ("fixed", Pkg.REPLMode.OPT_SWITCH, :level => Pkg.Types.UPLEVEL_FIXED),
+        ("rawnum", Pkg.REPLMode.OPT_ARG, :num => nothing),
+        ("plus", Pkg.REPLMode.OPT_ARG, :num => x->parse(Int,x)+1),
+    ])
+
+    api_opts = Pkg.REPLMode.APIOptions([
+        Pkg.REPLMode.Option("manifest"),
+        Pkg.REPLMode.Option("patch"),
+        Pkg.REPLMode.Option("rawnum", "5"),
+    ], specs)
+
+    @test Pkg.REPLMode.key_api(:foo, api_opts) === nothing
+    @test Pkg.REPLMode.key_api(:mode, api_opts) == Pkg.Types.PKGMODE_MANIFEST
+    @test Pkg.REPLMode.key_api(:level, api_opts) == Pkg.Types.UPLEVEL_PATCH
+    @test Pkg.REPLMode.key_api(:num, api_opts) == "5"
+
+    api_opts = Pkg.REPLMode.APIOptions([
+        Pkg.REPLMode.Option("project"),
+        Pkg.REPLMode.Option("patch"),
+        Pkg.REPLMode.Option("plus", "5"),
+    ], specs)
+
+    @test Pkg.REPLMode.key_api(:mode, api_opts) == Pkg.Types.PKGMODE_PROJECT
+    @test Pkg.REPLMode.key_api(:level, api_opts) == Pkg.Types.UPLEVEL_PATCH
+    @test Pkg.REPLMode.key_api(:num, api_opts) == 6
+
+    @test Pkg.REPLMode.key_api(:foo, api_opts) === nothing
+    Pkg.REPLMode.set_default!(:foo => "bar", api_opts)
+    @test Pkg.REPLMode.key_api(:foo, api_opts) == "bar"
+    Pkg.REPLMode.set_default!(:level => "bar", api_opts)
+    @test Pkg.REPLMode.key_api(:level, api_opts) == Pkg.Types.UPLEVEL_PATCH
+end
+
+@testset "meta option errors" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        # unregistered meta options
+        @test_throws CommandError Pkg.REPLMode.pkgstr("--foo=foo add Example")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("--bar add Example")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("-x add Example")
+        # malformed, but registered meta option
+        @test_throws CommandError Pkg.REPLMode.pkgstr("--env Example")
+    end
+    end
+    end
+end
+
+@testset "activate" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        mkdir("Foo")
+        pkg"activate"
+        default = Base.active_project()
+        pkg"activate Foo"
+        @test Base.active_project() == joinpath(pwd(), "Foo", "Project.toml")
+        pkg"activate"
+        @test Base.active_project() == default
+    end
+    end
+    end
+end
+
+@testset "subcommands" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do
+        Pkg.REPLMode.pkg"package add Example"
+        @test isinstalled(TEST_PKG)
+        Pkg.REPLMode.pkg"package rm Example"
+        @test !isinstalled(TEST_PKG)
+    end
+    end
+    end
+end
+
+@testset "`parse_quotes` unit tests" begin
+    qwords = Pkg.REPLMode.parse_quotes("\"Don't\" forget to '\"test\"'")
+    @test qwords[1].isquoted
+    @test qwords[1].word == "Don't"
+    @test !qwords[2].isquoted
+    @test qwords[2].word == "forget"
+    @test !qwords[3].isquoted
+    @test qwords[3].word == "to"
+    @test qwords[4].isquoted
+    @test qwords[4].word == "\"test\""
+    @test_throws CommandError Pkg.REPLMode.parse_quotes("Don't")
+    @test_throws CommandError Pkg.REPLMode.parse_quotes("Unterminated \"quot")
+end
+
+@testset "argument kinds" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        @test_throws CommandError pkg"pin Example#foo"
+        @test_throws CommandError pkg"test Example#foo"
+        @test_throws CommandError pkg"test Example@v0.0.1"
+    end
+    end
     end
 end
 
