@@ -602,6 +602,10 @@ Library improvements
   * The function `rand` can now pick up random elements from strings, associatives
     and sets ([#22228], [#21960], [#18155], [#22224]).
 
+  * It's now possible to specify the characters to pick from in the `randstring` function ([#22222]).
+
+  * Allow multidimensional arrays in `shuffle` and `shuffle!` functions ([#22226]).
+
   * Method lists are now printed as a numbered list. In addition, the source code of a
     method can be opened in an editor by entering the corresponding number in the REPL
     and pressing `^Q` ([#22007]).
@@ -648,6 +652,10 @@ Library improvements
 
   * `BigFloat` random numbers can now be generated ([#22720]).
 
+  * The efficiency of random generation for MersenneTwister RNGs has been improved for
+    integers, `Float64` and ranges; as a result, given a seed, the produced stream of numbers
+    has changed ([#27560], [#25277], [#25197], [#25058], [#25047]).
+
   * REPL Undo via Ctrl-/ and Ctrl-_
 
   * `diagm` now accepts several diagonal index/vector `Pair`s ([#24047]).
@@ -682,8 +690,8 @@ Library improvements
     `permutedims(v::AbstractVector)` will create a row matrix ([#24839]).
 
   * A new `replace(A, old=>new)` function is introduced to replace `old` by `new` in
-    collection `A`. There are also two other methods with a different API, and
-    a mutating variant, `replace!` ([#22324]).
+    collection `A`. There is also another method with a different API, and
+    a mutating variant, `replace!` ([#22324], [#25697], [#26206], [#27944]).
 
   * Adding integers to `CartesianIndex` objects is now deprecated. Instead of
     `i::Int + x::CartesianIndex`, use `i*one(x) + x` ([#26284]).
@@ -733,6 +741,13 @@ Library improvements
 
   * Added an optimized method of `kron` for taking the tensor product of two
     `Diagonal` matrices. ([27581])
+
+  * An official API for extending `rand` is now defined ([#23964], [#25002]).
+
+  * The constructor `MersenneTwister()` is re-enabled, producing a randomly initialized RNG
+    (similar to `srand(MersenneTwister(0))`) ([#21909]).
+
+  * `BitSet` can now store any `Int` (instead of only positive ones) ([#25029]).
 
   * The initial element `v0` in `reduce(op, v0, itr)` has been replaced with an `init`
     optional keyword argument, as in `reduce(op, itr; init=v0)`. Similarly for `foldl`,
@@ -1335,6 +1350,10 @@ Deprecated or removed
 
   * `realmin`/`realmax` are deprecated in favor of `floatmin`/`floatmax` ([#28302]).
 
+  * `sortrows`/`sortcols` have been deprecated in favor of the more general `sortslices`.
+
+  * `nextpow2`/`prevpow2` have been deprecated in favor of the more general `nextpow`/`prevpow` functions.
+
 Command-line option changes
 ---------------------------
 
@@ -1408,6 +1427,7 @@ Command-line option changes
 [#21759]: https://github.com/JuliaLang/julia/issues/21759
 [#21774]: https://github.com/JuliaLang/julia/issues/21774
 [#21825]: https://github.com/JuliaLang/julia/issues/21825
+[#21909]: https://github.com/JuliaLang/julia/issues/21909
 [#21956]: https://github.com/JuliaLang/julia/issues/21956
 [#21960]: https://github.com/JuliaLang/julia/issues/21960
 [#21973]: https://github.com/JuliaLang/julia/issues/21973
@@ -1424,7 +1444,9 @@ Command-line option changes
 [#22188]: https://github.com/JuliaLang/julia/issues/22188
 [#22194]: https://github.com/JuliaLang/julia/issues/22194
 [#22210]: https://github.com/JuliaLang/julia/issues/22210
+[#22222]: https://github.com/JuliaLang/julia/issues/22222
 [#22224]: https://github.com/JuliaLang/julia/issues/22224
+[#22226]: https://github.com/JuliaLang/julia/issues/22226
 [#22228]: https://github.com/JuliaLang/julia/issues/22228
 [#22245]: https://github.com/JuliaLang/julia/issues/22245
 [#22251]: https://github.com/JuliaLang/julia/issues/22251
@@ -1521,6 +1543,7 @@ Command-line option changes
 [#23923]: https://github.com/JuliaLang/julia/issues/23923
 [#23929]: https://github.com/JuliaLang/julia/issues/23929
 [#23960]: https://github.com/JuliaLang/julia/issues/23960
+[#23964]: https://github.com/JuliaLang/julia/issues/23964
 [#24047]: https://github.com/JuliaLang/julia/issues/24047
 [#24126]: https://github.com/JuliaLang/julia/issues/24126
 [#24153]: https://github.com/JuliaLang/julia/issues/24153
@@ -1569,22 +1592,28 @@ Command-line option changes
 [#24839]: https://github.com/JuliaLang/julia/issues/24839
 [#24844]: https://github.com/JuliaLang/julia/issues/24844
 [#24869]: https://github.com/JuliaLang/julia/issues/24869
+[#25002]: https://github.com/JuliaLang/julia/issues/25002
 [#25012]: https://github.com/JuliaLang/julia/issues/25012
 [#25021]: https://github.com/JuliaLang/julia/issues/25021
+[#25029]: https://github.com/JuliaLang/julia/issues/25029
 [#25030]: https://github.com/JuliaLang/julia/issues/25030
 [#25037]: https://github.com/JuliaLang/julia/issues/25037
 [#25046]: https://github.com/JuliaLang/julia/issues/25046
+[#25047]: https://github.com/JuliaLang/julia/issues/25047
 [#25056]: https://github.com/JuliaLang/julia/issues/25056
 [#25057]: https://github.com/JuliaLang/julia/issues/25057
+[#25058]: https://github.com/JuliaLang/julia/issues/25058
 [#25067]: https://github.com/JuliaLang/julia/issues/25067
 [#25088]: https://github.com/JuliaLang/julia/issues/25088
 [#25162]: https://github.com/JuliaLang/julia/issues/25162
 [#25165]: https://github.com/JuliaLang/julia/issues/25165
 [#25168]: https://github.com/JuliaLang/julia/issues/25168
 [#25184]: https://github.com/JuliaLang/julia/issues/25184
+[#25197]: https://github.com/JuliaLang/julia/issues/25197
 [#25210]: https://github.com/JuliaLang/julia/issues/25210
 [#25231]: https://github.com/JuliaLang/julia/issues/25231
 [#25249]: https://github.com/JuliaLang/julia/issues/25249
+[#25277]: https://github.com/JuliaLang/julia/issues/25277
 [#25278]: https://github.com/JuliaLang/julia/issues/25278
 [#25311]: https://github.com/JuliaLang/julia/issues/25311
 [#25321]: https://github.com/JuliaLang/julia/issues/25321
@@ -1613,6 +1642,7 @@ Command-line option changes
 [#25662]: https://github.com/JuliaLang/julia/issues/25662
 [#25667]: https://github.com/JuliaLang/julia/issues/25667
 [#25668]: https://github.com/JuliaLang/julia/issues/25668
+[#25697]: https://github.com/JuliaLang/julia/issues/25697
 [#25701]: https://github.com/JuliaLang/julia/issues/25701
 [#25725]: https://github.com/JuliaLang/julia/issues/25725
 [#25745]: https://github.com/JuliaLang/julia/issues/25745
@@ -1640,6 +1670,7 @@ Command-line option changes
 [#26154]: https://github.com/JuliaLang/julia/issues/26154
 [#26156]: https://github.com/JuliaLang/julia/issues/26156
 [#26161]: https://github.com/JuliaLang/julia/issues/26161
+[#26206]: https://github.com/JuliaLang/julia/issues/26206
 [#26212]: https://github.com/JuliaLang/julia/issues/26212
 [#26262]: https://github.com/JuliaLang/julia/issues/26262
 [#26283]: https://github.com/JuliaLang/julia/issues/26283
@@ -1679,6 +1710,7 @@ Command-line option changes
 [#27470]: https://github.com/JuliaLang/julia/issues/27470
 [#27473]: https://github.com/JuliaLang/julia/issues/27473
 [#27554]: https://github.com/JuliaLang/julia/issues/27554
+[#27560]: https://github.com/JuliaLang/julia/issues/27560
 [#27616]: https://github.com/JuliaLang/julia/issues/27616
 [#27635]: https://github.com/JuliaLang/julia/issues/27635
 [#27641]: https://github.com/JuliaLang/julia/issues/27641
@@ -1688,7 +1720,9 @@ Command-line option changes
 [#27856]: https://github.com/JuliaLang/julia/issues/27856
 [#27859]: https://github.com/JuliaLang/julia/issues/27859
 [#27908]: https://github.com/JuliaLang/julia/issues/27908
+[#27944]: https://github.com/JuliaLang/julia/issues/27944
 [#28045]: https://github.com/JuliaLang/julia/issues/28045
 [#28065]: https://github.com/JuliaLang/julia/issues/28065
+[#28155]: https://github.com/JuliaLang/julia/issues/28155
 [#28266]: https://github.com/JuliaLang/julia/issues/28266
 [#28302]: https://github.com/JuliaLang/julia/issues/28302

@@ -395,6 +395,8 @@ end
 @deprecate readstring(filename::AbstractString) read(filename, String)
 @deprecate readstring(cmd::AbstractCmd) read(cmd, String)
 
+@deprecate_binding UVError IOError false
+
 # issue #11310
 # remove "parametric method syntax" deprecation in julia-syntax.scm
 
@@ -1774,6 +1776,13 @@ end
 # PR #28302
 @deprecate realmin floatmin
 @deprecate realmax floatmax
+
+@deprecate sortrows(A::AbstractMatrix; kws...) sortslices(A, dims=1, kws...)
+@deprecate sortcols(A::AbstractMatrix; kws...) sortslices(A, dims=2, kws...)
+
+# PR #28304
+@deprecate nextpow2(x) nextpow(2, x)
+@deprecate prevpow2(x) prevpow(2, x)
 
 # END 0.7 deprecations
 

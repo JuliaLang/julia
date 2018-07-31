@@ -176,9 +176,9 @@ close(f)
 
 rm(c_tmpdir, recursive=true)
 @test !isdir(c_tmpdir)
-@test_throws Base.UVError rm(c_tmpdir)
+@test_throws Base.IOError rm(c_tmpdir)
 @test rm(c_tmpdir, force=true) === nothing
-@test_throws Base.UVError rm(c_tmpdir, recursive=true)
+@test_throws Base.IOError rm(c_tmpdir, recursive=true)
 @test rm(c_tmpdir, force=true, recursive=true) === nothing
 
 if !Sys.iswindows()
@@ -193,8 +193,8 @@ if !Sys.iswindows()
         @test stat(file).gid ==0
         @test stat(file).uid ==0
     else
-        @test_throws Base.UVError chown(file, -2, -1)  # Non-root user cannot change ownership to another user
-        @test_throws Base.UVError chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
+        @test_throws Base.IOError chown(file, -2, -1)  # Non-root user cannot change ownership to another user
+        @test_throws Base.IOError chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
     end
 else
     # test that chown doesn't cause any errors for Windows
@@ -608,10 +608,10 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         @test_throws ArgumentError Base.cptree(none_existing_src,dst; force=true, follow_symlinks=false)
         @test_throws ArgumentError Base.cptree(none_existing_src,dst; force=true, follow_symlinks=true)
         # cp
-        @test_throws Base.UVError cp(none_existing_src,dst; force=true, follow_symlinks=false)
-        @test_throws Base.UVError cp(none_existing_src,dst; force=true, follow_symlinks=true)
+        @test_throws Base.IOError cp(none_existing_src,dst; force=true, follow_symlinks=false)
+        @test_throws Base.IOError cp(none_existing_src,dst; force=true, follow_symlinks=true)
         # mv
-        @test_throws Base.UVError mv(none_existing_src,dst; force=true)
+        @test_throws Base.IOError mv(none_existing_src,dst; force=true)
     end
 end
 

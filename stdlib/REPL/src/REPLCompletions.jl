@@ -527,7 +527,7 @@ function dict_identifier_key(str,tag)
         # Avoid `isdefined(::Array, ::Symbol)`
         isa(obj, Array) && return (nothing, nothing, nothing)
     end
-    begin_of_key = first(findnext(r"\S", str, nextind(str, end_of_identifier) + 1)) # 1 for [
+    begin_of_key = first(something(findnext(r"\S", str, nextind(str, end_of_identifier) + 1), 1)) # 1 for [
     begin_of_key==0 && return (true, nothing, nothing)
     partial_key = str[begin_of_key:end]
     (isa(obj, AbstractDict) && length(obj) < 1e6) || return (true, nothing, nothing)

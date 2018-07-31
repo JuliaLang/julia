@@ -1909,20 +1909,21 @@ end
     @test rem(typemin(Int),-1) == 0
     @test mod(typemin(Int),-1) == 0
 end
-@testset "prevpow2/nextpow2" begin
-    @test nextpow2(0) == prevpow2(0) == 0
-    for i = -2:2
-        @test nextpow2(i) == prevpow2(i) == i
+@testset "prevpow(2, _)/nextpow(2, _)" begin
+    for i = 1:2
+        @test nextpow(2, i) == prevpow(2, i) == i
     end
-    @test nextpow2(56789) == -nextpow2(-56789) == 65536
-    @test prevpow2(56789) == -prevpow2(-56789) == 32768
-    for i = -100:100
-        @test nextpow2(i) == nextpow2(big(i))
-        @test prevpow2(i) == prevpow2(big(i))
+    @test nextpow(2, 56789) == 65536
+    @test_throws DomainError nextpow(2, -56789)
+    @test prevpow(2, 56789) == 32768
+    @test_throws DomainError prevpow(2, -56789)
+    for i = 1:100
+        @test nextpow(2, i) == nextpow(2, big(i))
+        @test prevpow(2, i) == prevpow(2, big(i))
     end
     for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64)
-        @test nextpow2(T(42)) === T(64)
-        @test prevpow2(T(42)) === T(32)
+        @test nextpow(2, T(42)) === T(64)
+        @test prevpow(2, T(42)) === T(32)
     end
 end
 @testset "ispow2" begin
