@@ -131,6 +131,8 @@ struct _jl_tls_states_t {
     int finalizers_inhibited;
     arraylist_t finalizers;
     jl_gc_mark_cache_t gc_cache;
+    arraylist_t sweep_objs;
+    void *last_gc_mark_sp;
 };
 
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`
