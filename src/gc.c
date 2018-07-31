@@ -21,6 +21,8 @@ static jl_gc_callback_list_t *gc_cblist_root_scanner;
 static jl_gc_callback_list_t *gc_cblist_task_scanner;
 static jl_gc_callback_list_t *gc_cblist_pre_gc;
 static jl_gc_callback_list_t *gc_cblist_post_gc;
+static jl_gc_callback_list_t *gc_cblist_notify_external_alloc;
+static jl_gc_callback_list_t *gc_cblist_notify_external_free;
 
 #define gc_invoke_callbacks(kind, args) \
     do { \
@@ -89,6 +91,22 @@ JL_DLLEXPORT void jl_gc_set_cb_post_gc(jl_gc_cb_post_gc_t cb, int enable)
         jl_gc_register_callback(&gc_cblist_post_gc, (jl_gc_cb_func_t)cb);
     else
         jl_gc_deregister_callback(&gc_cblist_post_gc, (jl_gc_cb_func_t)cb);
+}
+
+JL_DLLEXPORT void jl_gc_set_cb_notify_external_alloc(jl_gc_cb_notify_external_alloc_t cb, int enable)
+{
+    if (enable)
+        jl_gc_register_callback(&gc_cblist_notify_external_alloc, (jl_gc_cb_func_t)cb);
+    else
+        jl_gc_deregister_callback(&gc_cblist_notify_external_alloc, (jl_gc_cb_func_t)cb);
+}
+
+JL_DLLEXPORT void jl_gc_set_cb_notify_external_free(jl_gc_cb_notify_external_free_t cb, int enable)
+{
+    if (enable)
+        jl_gc_register_callback(&gc_cblist_notify_external_free, (jl_gc_cb_func_t)cb);
+    else
+        jl_gc_deregister_callback(&gc_cblist_notify_external_free, (jl_gc_cb_func_t)cb);
 }
 
 // Protect all access to `finalizer_list_marked` and `to_finalize`.
@@ -852,6 +870,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz)
     bigval_t *v = (bigval_t*)malloc_cache_align(allocsz);
     if (v == NULL)
         jl_throw(jl_memory_exception);
+    gc_invoke_callbacks(notify_external_alloc, (v, allocsz));
 #ifdef JULIA_ENABLE_THREADING
     jl_atomic_fetch_add(&gc_num.allocd, allocsz);
 #else
@@ -900,6 +919,7 @@ static bigval_t **sweep_big_list(int sweep_full, bigval_t **pv)
 #ifdef MEMDEBUG
             memset(v, 0xbb, v->sz&~3);
 #endif
+            gc_invoke_callbacks(notify_external_free, (v));
             jl_free_aligned(v);
         }
         gc_time_count_big(old_bits, bits);
@@ -1404,6 +1424,34 @@ static void gc_sweep_perm_alloc(void)
     gc_sweep_sysimg();
     gc_time_sysimg_end(t0);
 }
+
+// The following is to clean up pages in preparation for conservative
+// garbage collection. Conservative garbage collection requires that
+// unused memory is zeroed; on the transition from precise to conservative
+// garbage collection we therefore walk all the chunks of all pools and
+// zero them. This will happen only once, thereafter other pages will be
+// zeroed upon reuse.
+
+int jl_gc_cleanup_pages = 0;
+
+static void gc_do_cleanup_pages(void)
+{
+    for (int i = 0; i < jl_n_threads; i++) {
+        jl_gc_pool_t *pools = jl_all_tls_states[i]->heap.norm_pools;
+        for (int j = 0; j < JL_GC_N_POOLS; j++) {
+            // Pointer to the start of chunk of free objects
+            jl_taggedvalue_t *p = pools[j].newpages;
+            while (p) {
+                char *begin = gc_page_data(p);
+                char *end = begin + GC_PAGE_SZ;
+                memset((char *)p, 0, end - (char *)p);
+                p = p->next;
+            }
+        }
+    }
+    jl_gc_cleanup_pages = 0;
+}
+
 
 
 // mark phase
@@ -2769,6 +2817,8 @@ JL_DLLEXPORT void jl_gc_collect(int full)
     // TODO (concurrently queue objects)
     // no-op for non-threading
     jl_gc_wait_for_the_world();
+    if (jl_gc_cleanup_pages)
+        gc_do_cleanup_pages();
     gc_invoke_callbacks(pre_gc, (full));
 
     if (!jl_gc_disable_counter) {
@@ -3179,6 +3229,110 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     return jl_gc_alloc(ptls, sizeof(void*) * 3, NULL);
+}
+
+STATIC_INLINE int is_valid_tag(void *p)
+{
+    jl_gc_pagemeta_t *meta = page_metadata(p);
+    if (!meta || !meta->ages)
+       return 0;
+
+    char *page = gc_page_data(p);
+    size_t off = (char *)p - page;
+    off -= GC_PAGE_OFFSET;
+    return off % meta->osize == 0;
+}
+
+STATIC_INLINE int is_valid_pool_obj(jl_taggedvalue_t *val)
+{
+    jl_value_t *datatype_type = (jl_value_t *)jl_datatype_type;
+    if (val->next == NULL)
+        return 0; // end of free list
+    val = (jl_taggedvalue_t *) gc_ptr_clear_tag(val, 3);
+    if (jl_valueof(val->next) == datatype_type)
+        return 1; // a type
+    jl_value_t *next = (jl_value_t *) gc_ptr_clear_tag(val->next, 3);
+    val = jl_astaggedvalue(next);
+    if (!is_valid_tag(val))
+        return 0;
+
+    // We now follow the header link. This must be either part
+    // of the free list (including NULL) or a type reference.
+    if (val->next == NULL)
+        return 0;
+    next = (jl_value_t *) gc_ptr_clear_tag(val->next, 3);
+    if (next == datatype_type)
+        return 1;
+    return 0;
+}
+
+
+JL_DLLEXPORT int jl_gc_is_internal_obj_alloc(jl_value_t *p)
+{
+    jl_gc_pagemeta_t *meta = page_metadata(p);
+    if (meta && meta->ages) {
+        char* page = gc_page_data(p);
+        // offset within page.
+        size_t off = (char*)p - page;
+        if (off < GC_PAGE_OFFSET)
+            return 0;
+        // offset within object
+        size_t off2 = (off - GC_PAGE_OFFSET);
+        size_t osize = meta->osize;
+        // if (osize == 0) return NULL;
+        off2 %= osize;
+        if (off2 != sizeof(jl_taggedvalue_t))
+            return 0;
+        if (off - off2 + osize > GC_PAGE_SZ)
+            return 0;
+        return 1;
+    }
+    return 0;
+}
+
+JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
+{
+    p = (char *) p - 1;
+    jl_gc_pagemeta_t *meta = page_metadata(p);
+    if (meta && meta->ages) {
+        char *page = gc_page_data(p);
+        // offset within page.
+        size_t off = (char *)p - page;
+        if (off < GC_PAGE_OFFSET)
+            return NULL;
+        // offset within object
+        size_t off2 = (off - GC_PAGE_OFFSET);
+        size_t osize = meta->osize;
+        off2 %= osize;
+        if (off - off2 + osize > GC_PAGE_SZ)
+            return NULL;
+        jl_taggedvalue_t *val = (jl_taggedvalue_t *)((char *)p - off2);
+        if (!is_valid_pool_obj(val))
+            return NULL;
+        return jl_valueof(val);
+    }
+    return NULL;
+}
+
+JL_DLLEXPORT size_t jl_gc_max_internal_obj_size(void)
+{
+    return GC_MAX_SZCLASS;
+}
+
+JL_DLLEXPORT size_t jl_gc_external_obj_hdr_size(void)
+{
+    return sizeof(bigval_t);
+}
+
+
+JL_DLLEXPORT void * jl_gc_alloc_typed(jl_ptls_t ptls, size_t sz, void *ty)
+{
+    return jl_gc_alloc(ptls, sz, ty);
+}
+
+JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t *obj)
+{
+    arraylist_push(&ptls->sweep_objs, obj);
 }
 
 #ifdef __cplusplus
