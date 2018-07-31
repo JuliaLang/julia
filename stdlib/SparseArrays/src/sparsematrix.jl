@@ -867,8 +867,13 @@ function ftranspose(A::SparseMatrixCSC{Tv,Ti}, f::Function) where {Tv,Ti}
 end
 adjoint(A::SparseMatrixCSC) = Adjoint(A)
 transpose(A::SparseMatrixCSC) = Transpose(A)
-Base.copy(A::Adjoint{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, conj)
-Base.copy(A::Transpose{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, identity)
+Base.copy(A::Adjoint{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, x -> copy(adjoint(x)))
+Base.copy(A::Transpose{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, x -> copy(transpose(x)))
+function Base.permutedims(A::SparseMatrixCSC, (a,b))
+    (a, b) == (2, 1) && return ftranspose(A, identity)
+    (a, b) == (1, 2) && return copy(A)
+    throw(ArgumentError("no valid permutation of dimensions"))
+end
 
 """
     unchecked_noalias_permute!(X::SparseMatrixCSC{Tv,Ti},
