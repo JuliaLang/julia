@@ -249,6 +249,18 @@ function locate_package(pkg::PkgId)::Union{Nothing,String}
 end
 locate_package(::Nothing) = nothing
 
+"""
+    pathof(m::Module)
+
+Return the path of `m.jl` file that was used to `import` module `m`,
+or `nothing` if `m` was not imported from a package.
+"""
+function pathof(m::Module)
+    pkgid = get(Base.module_keys, m, nothing)
+    pkgid === nothing && return nothing
+    return Base.locate_package(pkgid)
+end
+
 ## generic project & manifest API ##
 
 const project_names = ("JuliaProject.toml", "Project.toml")

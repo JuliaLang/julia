@@ -739,6 +739,7 @@ export
     methods,
     nameof,
     parentmodule,
+    pathof,
     names,
     which,
     @isdefined,

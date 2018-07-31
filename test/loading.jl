@@ -218,6 +218,8 @@ Base.ACTIVE_PROJECT[] = nothing
     end
 end
 
+module NotPkgModule; end
+
 @testset "project & manifest import" begin
     @test !@isdefined Foo
     @test !@isdefined Bar
@@ -254,6 +256,12 @@ end
         end
     end
     @test Foo.which == "path"
+
+    @testset "pathof" begin
+        @test pathof(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1/src/Foo.jl"))
+        @test pathof(NotPkgModule) === nothing
+    end
+
 end
 
 ## systematic generation of test environments ##

@@ -432,13 +432,13 @@ function clone(url::String, name::String = "")
     develop(ctx, [Pkg.REPLMode.parse_package(url; add_or_develop=true)])
 end
 
-function dir(pkg::String, paths::String...)
-    @warn "Pkg.dir is only kept for legacy CI script reasons" maxlog=1
+function dir(pkg::String, paths::AbstractString...)
+    @warn "`Pkg.dir(pkgname, paths...)` is deprecated; instead, do `import $pkg; joinpath(dirname(pathof($pkg)), \"..\", paths...)`." maxlog=1
     pkgid = Base.identify_package(pkg)
-    pkgid == nothing && return nothing
+    pkgid === nothing && return nothing
     path = Base.locate_package(pkgid)
-    pkgid == nothing && return nothing
-    return joinpath(abspath(path, "..", "..", paths...))
+    path === nothing && return nothing
+    return abspath(path, "..", "..", paths...)
 end
 
 precompile() = precompile(Context())

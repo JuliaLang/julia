@@ -549,6 +549,8 @@ Library improvements
   * `Char` is now a subtype of `AbstractChar`, and most of the functions that
     take character arguments now accept any `AbstractChar` ([#26286]).
 
+  * `pathof(module)` returns the path a module was imported from ([#28310]).
+
   * `bytes2hex` now accepts an optional `io` argument to output to a hexadecimal stream
     without allocating a `String` first ([#27121]).
 
