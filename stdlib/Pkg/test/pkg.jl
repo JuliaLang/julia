@@ -436,5 +436,6 @@ temp_pkg_dir() do project_path
 end
 
 include("repl.jl")
+include("api.jl")
 
 end # module
