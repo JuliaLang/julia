@@ -16,7 +16,7 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     setindex!, show, similar, sin, sincos, sinh, size, size_to_strides, sqrt, StridedReinterpretArray,
     StridedReshapedArray, strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
 using Base: hvcat_fill, iszero, IndexLinear, _length, promote_op, promote_typeof,
-    @propagate_inbounds, @unsafe_pure, reduce, typed_vcat
+    @propagate_inbounds, @unsafe_pure, reduce, typed_vcat, has_offset_axes
 using Base.Broadcast: Broadcasted
 
 export
