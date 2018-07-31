@@ -17,6 +17,8 @@ typedef struct jl_gc_callback_list_t {
     jl_gc_cb_func_t func;
 } jl_gc_callback_list_t;
 
+static jl_gc_callback_list_t *gc_cblist_root_scanner;
+static jl_gc_callback_list_t *gc_cblist_task_scanner;
 static jl_gc_callback_list_t *gc_cblist_pre_gc;
 static jl_gc_callback_list_t *gc_cblist_post_gc;
 
@@ -55,6 +57,22 @@ static void jl_gc_deregister_callback(jl_gc_callback_list_t **list,
         }
         list = &((*list)->next);
     }
+}
+
+JL_DLLEXPORT void jl_gc_set_cb_root_scanner(jl_gc_cb_root_scanner_t cb, int enable)
+{
+    if (enable)
+        jl_gc_register_callback(&gc_cblist_root_scanner, (jl_gc_cb_func_t)cb);
+    else
+        jl_gc_deregister_callback(&gc_cblist_root_scanner, (jl_gc_cb_func_t)cb);
+}
+
+JL_DLLEXPORT void jl_gc_set_cb_task_scanner(jl_gc_cb_task_scanner_t cb, int enable)
+{
+    if (enable)
+        jl_gc_register_callback(&gc_cblist_task_scanner, (jl_gc_cb_func_t)cb);
+    else
+        jl_gc_deregister_callback(&gc_cblist_task_scanner, (jl_gc_cb_func_t)cb);
 }
 
 JL_DLLEXPORT void jl_gc_set_cb_pre_gc(jl_gc_cb_pre_gc_t cb, int enable)
@@ -2236,6 +2254,8 @@ mark: {
             void *stkbuf = ta->stkbuf;
             int16_t tid = ta->tid;
             jl_ptls_t ptls2 = jl_all_tls_states[tid];
+            ptls->last_gc_mark_sp = &sp;
+            gc_invoke_callbacks(task_scanner, (ta, ta == ptls2->root_task));
 #ifdef COPY_STACKS
             if (stkbuf && ta->copy_stack)
                 gc_setmark_buf_(ptls, stkbuf, bits, ta->bufsz);
@@ -2582,6 +2602,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
 
     // 3. walk roots
     mark_roots(gc_cache, &sp);
+    ptls->last_gc_mark_sp = &sp;
+    gc_invoke_callbacks(root_scanner, (full));
     gc_mark_loop(ptls, sp);
     gc_mark_sp_init(gc_cache, &sp);
     gc_num.since_sweep += gc_num.allocd + (int64_t)gc_num.interval;
