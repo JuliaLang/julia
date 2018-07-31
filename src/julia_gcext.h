@@ -7,9 +7,13 @@
 // a corresponding type with the same name, but in all lowercase,
 // and with a "_t" suffix.
 
+typedef void (*jl_gc_cb_root_scanner_t)(int full);
+typedef void (*jl_gc_cb_task_scanner_t)(jl_task_t *task, int full);
 typedef void (*jl_gc_cb_pre_gc_t)(int full);
 typedef void (*jl_gc_cb_post_gc_t)(int full);
 
+JL_DLLEXPORT void jl_gc_set_cb_root_scanner(jl_gc_cb_root_scanner_t cb, int enable);
+JL_DLLEXPORT void jl_gc_set_cb_task_scanner(jl_gc_cb_task_scanner_t cb, int enable);
 JL_DLLEXPORT void jl_gc_set_cb_pre_gc(jl_gc_cb_pre_gc_t cb, int enable);
 JL_DLLEXPORT void jl_gc_set_cb_post_gc(jl_gc_cb_post_gc_t cb, int enable);
 
