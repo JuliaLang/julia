@@ -150,7 +150,7 @@ end
     @test String(sym) == string(Char(0xdcdb))
     @test Meta.lower(Main, sym) === sym
     res = string(Meta.parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
-    @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\"\"))"""
+    @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\" near column 0\"))"""
 end
 
 @testset "Symbol and gensym" begin
