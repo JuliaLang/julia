@@ -94,12 +94,13 @@ particular interest for understanding how language constructs map to primitive o
 as assignments, branches, and calls:
 
 ```jldoctest
-julia> Meta.lower(@__MODULE__, :([1+2, sin(0.5)]) )
+julia> Meta.lower(@__MODULE__, :( [1+2, sin(0.5)] ))
 :($(Expr(:thunk, CodeInfo(
- 1 ─ %1 = 1 + 2
- │   %2 = sin(0.5)
- │   %3 = (Base.vect)(%1, %2)
- └──      return %3
+    @ none within `top-level scope'
+1 ─ %1 = 1 + 2
+│   %2 = sin(0.5)
+│   %3 = (Base.vect)(%1, %2)
+└──      return %3
 ))))
 ```
 
@@ -122,11 +123,11 @@ calls and expand argument types automatically:
 ```julia-repl
 julia> @code_llvm +(1,1)
 
-; Function Attrs: sspreq
-define i64 @"julia_+_130862"(i64, i64) #0 {
+;  @ int.jl:53 within `+'
+define i64 @"julia_+_130862"(i64, i64) {
 top:
-    %2 = add i64 %1, %0, !dbg !8
-    ret i64 %2, !dbg !8
+    %2 = add i64 %1, %0
+    ret i64 %2
 }
 ```
 

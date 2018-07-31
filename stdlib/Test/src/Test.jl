@@ -1280,10 +1280,14 @@ Int64
 
 julia> @code_warntype f(1, 2, 3)
 Body::UNION{FLOAT64, INT64}
-1 1 ─ %1 = (Base.slt_int)(1, b)::Bool
-  └──      goto #3 if not %1
-  2 ─      return 1
-  3 ─      return 1.0
+    @ none:1 within `f'
+   ┌ @ operators.jl:286 within `>'
+   │┌ @ int.jl:49 within `<'
+1 ─││ %1 = (Base.slt_int)(1, b)::Bool
+│  ┘┘
+└──      goto #3 if not %1
+2 ─      return 1
+3 ─      return 1.0
 
 julia> @inferred f(1, 2, 3)
 ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}
