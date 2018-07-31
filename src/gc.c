@@ -417,6 +417,32 @@ JL_DLLEXPORT void jl_finalize_th(jl_ptls_t ptls, jl_value_t *o)
     arraylist_free(&copied_list);
 }
 
+static void gc_sweep_foreign_objs_in_list(arraylist_t *objs)
+{
+    size_t p = 0;
+    for (size_t i = 0; i < objs->len; i++) {
+        jl_value_t *v = objs->items[i++];
+        jl_datatype_t *t = (jl_datatype_t *)(jl_typeof(v));
+        const jl_datatype_layout_t *layout = t->layout;
+        jl_fielddescdyn_t *desc = (jl_fielddescdyn_t*)jl_dt_layout_fields(layout);
+        if (!gc_ptr_tag(v, 1)) {
+            desc->sweepfunc(v);
+        }
+        else {
+          objs->items[p++] = v;
+        }
+    }
+    objs->len = p;
+}
+
+static void gc_sweep_foreign_objs(void)
+{
+    for (int i = 0;i < jl_n_threads;i++) {
+        jl_ptls_t ptls2 = jl_all_tls_states[i];
+        gc_sweep_foreign_objs_in_list(&ptls2->sweep_objs);
+    }
+}
+
 // GC knobs and self-measurement variables
 static int64_t last_gc_total_bytes = 0;
 
@@ -1555,6 +1581,22 @@ STATIC_INLINE int gc_mark_queue_obj(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *
     return (int)nptr;
 }
 
+JL_DLLEXPORT int jl_gc_mark_queue_obj(jl_ptls_t ptls, jl_value_t *obj)
+{
+    return gc_mark_queue_obj(&ptls->gc_cache, ptls->last_gc_mark_sp, obj);
+}
+
+JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
+                                            jl_value_t **objs, size_t nobjs)
+{
+    gc_mark_objarray_t data = { parent, objs, objs + nobjs,
+                                jl_astaggedvalue(parent)->bits.gc & 2 };
+    gc_mark_stack_push(&ptls->gc_cache, ptls->last_gc_mark_sp,
+                       gc_mark_label_addrs[GC_MARK_L_objarray],
+                       &data, sizeof(data), 1);
+}
+
+
 // Check if `nptr` is tagged for `old + refyoung`,
 // Push the object to the remset and update the `nptr` counter if necessary.
 STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj, uintptr_t nptr) JL_NOTSAFEPOINT
@@ -2288,7 +2330,7 @@ mark: {
                 obj16 = (gc_mark_obj16_t*)sp.data;
                 goto obj16_loaded;
             }
-            else {
+            else if (layout->fielddesc_type == 2) {
                 // This is very uncommon
                 // Do not do store to load forwarding to save some code size
                 assert(layout->fielddesc_type == 2);
@@ -2299,6 +2341,17 @@ mark: {
                                    &markdata, sizeof(markdata), 0);
                 sp.data = (jl_gc_mark_data_t *)(((char*)sp.data) + sizeof(markdata));
                 goto obj32;
+            }
+            else {
+                assert(layout->fielddesc_type == 3);
+                jl_fielddescdyn_t *desc = (jl_fielddescdyn_t*)jl_dt_layout_fields(layout);
+
+                int old = jl_astaggedvalue(new_obj)->bits.gc & 2;
+                ptls->last_gc_mark_sp = &sp;
+                uintptr_t young = desc->markfunc(ptls, new_obj);
+                if (old && young)
+                    gc_mark_push_remset(ptls, new_obj, young * 4 + 3);
+                goto pop;
             }
         }
     }
@@ -2624,6 +2677,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     // 5. start sweeping
     sweep_weak_refs();
     sweep_stack_pools();
+    gc_sweep_foreign_objs();
     gc_sweep_other(ptls, sweep_full);
     gc_scrub();
     gc_verify_tags();
@@ -2759,6 +2813,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     arraylist_new(heap->remset, 0);
     arraylist_new(heap->last_remset, 0);
     arraylist_new(&ptls->finalizers, 0);
+    arraylist_new(&ptls->sweep_objs, 0);
 
     jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
     gc_cache->perm_scanned_bytes = 0;
