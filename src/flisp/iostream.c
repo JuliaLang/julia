@@ -211,7 +211,7 @@ value_t fl_iolineno(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return size_wrap(fl_ctx, s->lineno);
 }
 
-value_t fl_iocolno(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_iocolno(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "input-port-column", nargs, 1);
     ios_t *s = toiostream(fl_ctx, args[0], "input-port-column");
