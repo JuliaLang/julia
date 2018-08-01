@@ -281,6 +281,7 @@ try
           """
           __precompile__(false)
           module Baz
+          baz() = 1
           end
           """)
 
@@ -291,6 +292,8 @@ try
         isa(exc, ErrorException) || rethrow(exc)
         occursin("__precompile__(false)", exc.msg) && rethrow(exc)
     end
+    @eval using Baz
+    @test Base.invokelatest(Baz.baz) == 1
 
     # Issue #12720
     FooBar1_file = joinpath(dir, "FooBar1.jl")
