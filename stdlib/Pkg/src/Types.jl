@@ -358,6 +358,14 @@ Base.@kwdef mutable struct Context
     old_pkg2_clone_name::String = ""
 end
 
+function Context!(kw_context::Vector{Pair{Symbol,Any}})::Context
+    ctx = Context()
+    for (k, v) in kw_context
+        setfield!(ctx, k, v)
+    end
+    return ctx
+end
+
 function Context!(ctx::Context; kwargs...)
     for (k, v) in kwargs
         setfield!(ctx, k, v)

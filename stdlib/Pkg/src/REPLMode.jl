@@ -19,7 +19,6 @@ end
 ###########
 # Options #
 ###########
-#TODO should this opt be removed: ("name", :cmd, :temp => false)
 struct OptionSpec
     name::String
     short_name::Union{Nothing,String}
@@ -101,7 +100,7 @@ struct ArgSpec
 end
 const CommandDeclaration = Tuple{CommandKind,
                                  Vector{String}, # names
-                                 Function, # handler
+                                 Union{Nothing,Function}, # handler
                                  Tuple{ArgClass, Vector{Int}}, # argument count
                                  Vector{OptionDeclaration}, # options
                                  Union{Nothing, Markdown.MD}, #help
@@ -109,7 +108,7 @@ const CommandDeclaration = Tuple{CommandKind,
 struct CommandSpec
     kind::CommandKind
     names::Vector{String}
-    handler::Function
+    handler::Union{Nothing,Function}
     argument_spec::ArgSpec # note: just use range operator for max/min
     option_specs::Dict{String, OptionSpec}
     help::Union{Nothing, Markdown.MD}
@@ -311,7 +310,6 @@ end
 ##############
 const Token = Union{String, VersionRange, Rev}
 const PkgArguments = Union{Vector{String}, Vector{PackageSpec}}
-#TODO embed spec in PkgCommand?
 struct PkgCommand
     meta_options::Vector{Option}
     spec::CommandSpec
@@ -321,14 +319,14 @@ struct PkgCommand
     PkgCommand(meta_opts, cmd_name, opts, args) = new(meta_opts, cmd_name, opts, args)
 end
 
-const APIOption = Pair{Symbol, Any}
-APIOptions(command::PkgCommand)::Vector{APIOption} =
+const APIOptions = Dict{Symbol, Any}
+APIOptions(command::PkgCommand)::Dict{Symbol, Any} =
     APIOptions(command.options, command.spec.option_specs)
 
 function APIOptions(options::Vector{Option},
                     specs::Dict{String, OptionSpec},
-                    )::Vector{APIOption}
-    return map(options) do opt
+                    )::Dict{Symbol, Any}
+    keyword_vec = map(options) do opt
         spec = specs[opt.val]
         # opt is switch
         spec.is_switch && return spec.api
@@ -337,17 +335,8 @@ function APIOptions(options::Vector{Option},
         # given opt wrapper
         return spec.api.first => spec.api.second(opt.argument)
     end
+    return Dict(keyword_vec)
 end
-
-function key_api(key::Symbol, api_opts::Vector{APIOption})
-    index = findfirst(x->x.first == key, api_opts)
-    if index !== nothing
-        return api_opts[index].second
-    end
-end
-
-set_default!(opt, api_opts::Vector{APIOption}) =
-    key_api(opt.first, api_opts) === nothing && push!(api_opts, opt)
 
 function enforce_argument_order(args::Vector{Token})
     prev_arg = nothing
@@ -496,6 +485,8 @@ function PkgCommand(statement::Statement)::PkgCommand
     return PkgCommand(meta_opts, statement.command, opts, args)
 end
 
+Context!(ctx::APIOptions)::Context = Types.Context!(collect(ctx))
+
 #############
 # Execution #
 #############
@@ -519,15 +510,14 @@ function do_cmd(repl::REPL.AbstractREPL, input::String; do_rethrow=false)
 end
 
 function do_cmd!(command::PkgCommand, repl)
-    meta_opts = APIOptions(command.meta_options, meta_option_specs)
-    ctx = Context(meta_opts...)
+    context = APIOptions(command.meta_options, meta_option_specs)
     spec = command.spec
 
     # REPL specific commands
     if spec.kind == CMD_HELP
-        return Base.invokelatest(do_help!, ctx, command, repl)
+        return Base.invokelatest(do_help!, command, repl)
     elseif spec.kind == CMD_PREVIEW
-        ctx.preview = true
+        context[:preview] = true
         cmd = command.arguments[1]
         cmd_spec = get(command_specs, cmd, nothing)
         cmd_spec === nothing &&
@@ -538,10 +528,15 @@ function do_cmd!(command::PkgCommand, repl)
 
     # API commands
     # TODO is invokelatest still needed?
-    Base.invokelatest(spec.handler, ctx, command.arguments, APIOptions(command))
+    api_opts = APIOptions(command)
+    if applicable(spec.handler, context, command.arguments, api_opts)
+        Base.invokelatest(spec.handler, context, command.arguments, api_opts)
+    else
+        Base.invokelatest(spec.handler, command.arguments, api_opts)
+    end
 end
 
-function do_help!(ctk::Context, command::PkgCommand, repl::REPL.AbstractREPL)
+function do_help!(command::PkgCommand, repl::REPL.AbstractREPL)
     disp = REPL.REPLDisplay(repl)
     if isempty(command.arguments)
         Base.display(disp, help)
@@ -562,21 +557,16 @@ function do_help!(ctk::Context, command::PkgCommand, repl::REPL.AbstractREPL)
 end
 
 # TODO set default Display.status keyword: mode = PKGMODE_COMBINED
-function do_status!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption})
-    set_default!(:mode => PKGMODE_COMBINED, api_opts)
-    Display.status(ctx, key_api(:mode, api_opts))
-end
-
-# TODO remove the need to specify a handler function (not needed for REPL commands)
-do_preview!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption}) = nothing
+do_status!(ctx::APIOptions, args::PkgArguments, api_opts::APIOptions) =
+    Display.status(Context!(ctx), get(api_opts, :mode, PKGMODE_COMBINED))
 
 # TODO , test recursive dependencies as on option.
-function do_test!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption})
+function do_test!(ctx::APIOptions, args::PkgArguments, api_opts::APIOptions)
     foreach(arg -> arg.mode = PKGMODE_MANIFEST, args)
-    API.test(ctx, args; api_opts...)
+    API.test(Context!(ctx), args; collect(api_opts)...)
 end
 
-function do_registry_add!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption})
+function do_registry_add!(ctx::APIOptions, args::PkgArguments, api_opts::APIOptions)
     println("This is a dummy function for now")
     println("My args are:")
     for arg in args
@@ -584,35 +574,34 @@ function do_registry_add!(ctx::Context, args::PkgArguments, api_opts::Vector{API
     end
 end
 
-do_precompile!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption}) =
-    API.precompile(ctx)
+do_precompile!(ctx::APIOptions, args::PkgArguments, api_opts::APIOptions) =
+    API.precompile(Context!(ctx))
 
-do_resolve!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption}) =
-    API.resolve(ctx)
+do_resolve!(ctx::APIOptions, args::PkgArguments, api_opts::APIOptions) =
+    API.resolve(Context!(ctx))
 
-do_gc!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption}) =
-    API.gc(ctx; api_opts...)
+do_gc!(ctx::APIOptions, args::PkgArguments, api_opts::APIOptions) =
+    API.gc(Context!(ctx); collect(api_opts)...)
 
-do_instantiate!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption}) =
-    API.instantiate(ctx; api_opts...)
+do_instantiate!(ctx::APIOptions, args::PkgArguments, api_opts::APIOptions) =
+    API.instantiate(Context!(ctx); collect(api_opts)...)
 
-do_generate!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption}) =
-    API.generate(ctx, args[1])
+do_generate!(ctx::APIOptions, args::PkgArguments, api_opts::APIOptions) =
+    API.generate(Context!(ctx), args[1])
 
-do_build!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption}) =
-    API.build(ctx, args; api_opts...)
+do_build!(ctx::APIOptions, args::PkgArguments, api_opts::APIOptions) =
+    API.build(Context!(ctx), args; collect(api_opts)...)
 
-do_rm!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption}) =
-    API.rm(ctx, args; api_opts...)
+do_rm!(ctx::APIOptions, args::PkgArguments, api_opts::APIOptions) =
+    API.rm(Context!(ctx), args; collect(api_opts)...)
 
-do_free!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption}) =
-    API.free(ctx, args; api_opts...)
+do_free!(ctx::APIOptions, args::PkgArguments, api_opts::APIOptions) =
+    API.free(Context!(ctx), args; collect(api_opts)...)
 
-do_up!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption}) =
-    API.up(ctx, args; api_opts...)
+do_up!(ctx::APIOptions, args::PkgArguments, api_opts::APIOptions) =
+    API.up(Context!(ctx), args; collect(api_opts)...)
 
-function do_activate!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption})
-    # TODO: Remove the ctx argument to this function.
+function do_activate!(args::PkgArguments, api_opts::APIOptions)
     if isempty(args)
         return API.activate(nothing)
     else
@@ -620,24 +609,24 @@ function do_activate!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOpti
     end
 end
 
-function do_pin!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption})
+function do_pin!(ctx::APIOptions, args::PkgArguments, api_opts::APIOptions)
     for arg in args
         # TODO not sure this is correct
         if arg.version.ranges[1].lower != arg.version.ranges[1].upper
             cmderror("pinning a package requires a single version, not a versionrange")
         end
     end
-    API.pin(ctx, args; api_opts...)
+    API.pin(Context!(ctx), args; collect(api_opts)...)
 end
 
-function do_add!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption})
-    push!(api_opts, :mode => :add)
-    API.add_or_develop(ctx, args; api_opts...)
+function do_add!(ctx::APIOptions, args::PkgArguments, api_opts::APIOptions)
+    api_opts[:mode] = :add
+    API.add_or_develop(Context!(ctx), args; collect(api_opts)...)
 end
 
-function do_develop!(ctx::Context, args::PkgArguments, api_opts::Vector{APIOption})
-    push!(api_opts, :mode => :develop)
-    API.add_or_develop(ctx, args; api_opts...)
+function do_develop!(ctx::APIOptions, args::PkgArguments, api_opts::APIOptions)
+    api_opts[:mode] = :develop
+    API.add_or_develop(Context!(ctx), args; collect(api_opts)...)
 end
 
 ######################
@@ -950,7 +939,7 @@ julia is started with `--startup-file=yes`.
     """,
 ),( CMD_HELP,
     ["help", "?"],
-    do_help!,
+    nothing,
     (ARG_RAW, []),
     [],
     md"""
@@ -1201,7 +1190,7 @@ Deletes packages that cannot be reached from any existing environment.
     """,
 ),( CMD_PREVIEW,
     ["preview"],
-    do_preview!,
+    nothing,
     (ARG_RAW, [1]),
     [],
     md"""
