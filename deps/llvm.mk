@@ -373,12 +373,14 @@ endif # LLVM_VER
 	touch -c $(LLVM_SRC_DIR)/CMakeLists.txt
 	echo 1 > $@
 
-# Apply version-specific LLVM patches
+# Apply version-specific LLVM patches sequentially
 LLVM_PATCH_PREV :=
 define LLVM_PATCH
 $$(LLVM_SRC_DIR)/$1.patch-applied: $$(LLVM_SRC_DIR)/source-extracted | $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
 	cd $$(LLVM_SRC_DIR) && patch -p1 < $$(SRCDIR)/patches/$1.patch
 	echo 1 > $$@
+# declare that applying any patch must re-run the compile step
+$$(LLVM_BUILDDIR_withtype)/build-compiled: $$(LLVM_SRC_DIR)/$1.patch-applied
 LLVM_PATCH_PREV := $$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
@@ -517,7 +519,8 @@ endif
 $(eval $(call LLVM_PATCH,llvm-symver-jlprefix)) # DO NOT REMOVE
 
 
-$(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_PATCH_PREV)
+# declare that all patches must be applied before running ./configure
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV)
 
 $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_SRC_DIR)/source-extracted | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
