@@ -249,34 +249,36 @@ end # cd
 end # temp_pkg_dir
 
 # activate
-cd(mktempdir()) do
-    path = pwd()
-    pkg"activate ."
-    mkdir("Foo")
-    cd(mkdir("modules")) do
-        pkg"generate Foo"
+temp_pkg_dir() do project_path
+    cd(mktempdir()) do
+        path = pwd()
+        pkg"activate ."
+        mkdir("Foo")
+        cd(mkdir("modules")) do
+            pkg"generate Foo"
+        end
+        pkg"develop modules/Foo"
+        pkg"activate Foo" # activate path Foo over deps Foo
+        @test Base.active_project() == joinpath(path, "Foo", "Project.toml")
+        pkg"activate ."
+        rm("Foo"; force=true, recursive=true)
+        pkg"activate Foo" # activate path from developed Foo
+        @test Base.active_project() == joinpath(path, "modules", "Foo", "Project.toml")
+        pkg"activate ."
+        pkg"activate ./Foo" # activate empty directory Foo (sidestep the developed Foo)
+        @test Base.active_project() == joinpath(path, "Foo", "Project.toml")
+        pkg"activate ."
+        pkg"activate Bar" # activate empty directory Bar
+        @test Base.active_project() == joinpath(path, "Bar", "Project.toml")
+        pkg"activate ."
+        pkg"add Example" # non-deved deps should not be activated
+        pkg"activate Example"
+        @test Base.active_project() == joinpath(path, "Example", "Project.toml")
+        pkg"activate ."
+        cd(mkdir("tests"))
+        pkg"activate Foo" # activate developed Foo from another directory
+        @test Base.active_project() == joinpath(path, "modules", "Foo", "Project.toml")
     end
-    pkg"develop modules/Foo"
-    pkg"activate Foo" # activate path Foo over deps Foo
-    @test Base.active_project() == joinpath(path, "Foo", "Project.toml")
-    pkg"activate ."
-    rm("Foo"; force=true, recursive=true)
-    pkg"activate Foo" # activate path from developed Foo
-    @test Base.active_project() == joinpath(path, "modules", "Foo", "Project.toml")
-    pkg"activate ."
-    pkg"activate ./Foo" # activate empty directory Foo (sidestep the developed Foo)
-    @test Base.active_project() == joinpath(path, "Foo", "Project.toml")
-    pkg"activate ."
-    pkg"activate Bar" # activate empty directory Bar
-    @test Base.active_project() == joinpath(path, "Bar", "Project.toml")
-    pkg"activate ."
-    pkg"add Example" # non-deved deps should not be activated
-    pkg"activate Example"
-    @test Base.active_project() == joinpath(path, "Example", "Project.toml")
-    pkg"activate ."
-    cd(mkdir("tests"))
-    pkg"activate Foo" # activate developed Foo from another directory
-    @test Base.active_project() == joinpath(path, "modules", "Foo", "Project.toml")
 end
 
 # test relative dev paths (#490)
