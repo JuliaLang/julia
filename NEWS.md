@@ -776,6 +776,9 @@ Compiler/Runtime improvements
   * Inference now propagates constants inter-procedurally, and can compute
     various constants expressions at compile-time ([#24362]).
 
+  * The LLVM SLP Vectorizer optimization pass is now enabled at the default
+    optimization level.
+
 Deprecated or removed
 ---------------------
 
