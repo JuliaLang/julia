@@ -919,16 +919,16 @@
                   ((memq t chain-ops)
                    (loop (list* 'call t ex
                                 (parse-chain s down t))
-                         #t))
+                         t))
                   (else
                    (loop (list 'call t ex (down s))
-                         got))))))))
+                         t))))))))
 
 (define (parse-expr s)     (parse-with-chains s parse-shift         is-prec-plus? '(+ ++)))
 
-(define (bitshift-warn s)
-  (parser-depwarn s (string "call to `*` inside call to bitshift operator")
-                  "parenthesized call to `*`"))
+(define (bitshift-warn s op)
+  (parser-depwarn s (string "call to `" op "` inside call to bitshift operator")
+                  (string "parenthesized call to `" op "`")))
 
 (define (parse-shift s)    #;(parse-LtoR        s parse-term          is-prec-bitshift?)
   (let loop ((ex (parse-term s))
@@ -937,11 +937,11 @@
     (let ((ex (car ex))
           (warn (cdr ex)))
       (if (is-prec-bitshift? t)
-          (begin (if warn (bitshift-warn s))
+          (begin (if warn (bitshift-warn s warn))
                  (take-token s)
                  (let ((nxt (parse-term s)))
                    (loop (cons (list 'call t ex (car nxt)) (cdr nxt)) (peek-token s) (cdr nxt))))
-          (begin (if warn1 (bitshift-warn s))
+          (begin (if warn1 (bitshift-warn s warn1))
                  ex)))))
 
 (define (parse-term s)     (parse-with-chains-warn s parse-rational      is-prec-times? '(*)))
