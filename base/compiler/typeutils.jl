@@ -102,7 +102,10 @@ function countunionsplit(atypes::Union{SimpleVector,Vector{Any}})
     nu = 1
     for ti in atypes
         if isa(ti, Union)
-            nu *= unionlen(ti::Union)
+            nu, ovf = Core.Intrinsics.checked_smul_int(nu, unionlen(ti::Union))
+            if ovf
+                return typemax(Int)
+            end
         end
     end
     return nu
