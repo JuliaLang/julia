@@ -122,6 +122,22 @@ Equivalent to the native `wchar_t` c-type ([`Int32`](@ref)).
 """
 Cwchar_t
 
+"""
+    Cwstring
+
+A C-style string composed of the native wide character type
+[`Cwchar_t`](@ref)s. `Cwstring`s are NUL-terminated.
+"""
+Cwstring
+
+"""
+    Cstring
+
+A C-style string composed of the native character type
+[`Cchar`](@ref)s. `Cstring`s are NUL-terminated.
+"""
+Cstring
+
 @static if ccall(:jl_get_UNAME, Any, ()) !== :NT
     const sizeof_mode_t = ccall(:jl_sizeof_mode_t, Cint, ())
     if sizeof_mode_t == 2
