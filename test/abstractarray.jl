@@ -145,6 +145,17 @@ end
         #   indices may be nontraditional
         @test_throws ArgumentError Base._sub2ind((1:3,), 2)
         @test_throws ArgumentError Base._ind2sub((1:3,), 2)
+
+        ci = CartesianIndices((2:4,))
+        @test first(ci) == ci[1] == CartesianIndex(2)
+        @test last(ci)  == ci[end] == ci[3] == CartesianIndex(4)
+        li = LinearIndices(ci)
+        @test collect(li) == [1,2,3]
+        @test first(li) == li[1] == 1
+        @test last(li)  == li[3] == 3
+        io = IOBuffer()
+        show(io, ci)
+        @test String(take!(io)) == "CartesianIndex{1}[CartesianIndex(2,), CartesianIndex(3,), CartesianIndex(4,)]"
     end
 
     @testset "2-dimensional" begin
