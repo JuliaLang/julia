@@ -374,7 +374,7 @@ static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
 // in many cases, we need to over-estimate this by returning `b`.
 static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b)
 {
-    if (a == (jl_value_t*)jl_any_type || b == jl_bottom_type)
+    if (a == (jl_value_t*)jl_any_type || b == jl_bottom_type || obviously_egal(a,b))
         return b;
     if (b == (jl_value_t*)jl_any_type || a == jl_bottom_type)
         return a;
@@ -438,6 +438,16 @@ static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, in
 // subtype for variable bounds consistency check. needs its own forall/exists environment.
 static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
+    if (x == y)
+        return 1;
+    if (x == jl_bottom_type && jl_is_type(y))
+        return 1;
+    if (y == (jl_value_t*)jl_any_type && jl_is_type(x))
+        return 1;
+    if (jl_is_uniontype(x) && jl_is_uniontype(y) && jl_egal(x,y))
+        return 1;
+    if (x == (jl_value_t*)jl_any_type && jl_is_datatype(y))
+        return 0;
     jl_unionstate_t oldLunions = e->Lunions;
     jl_unionstate_t oldRunions = e->Runions;
     int sub;
@@ -936,6 +946,17 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         return var_gt((jl_tvar_t*)y, x, e, param);
     if (y == (jl_value_t*)jl_any_type && !jl_has_free_typevars(x))
         return 1;
+    jl_value_t *ux = jl_unwrap_unionall(x);
+    jl_value_t *uy = jl_unwrap_unionall(y);
+    if ((x != ux || y != uy) && y != (jl_value_t*)jl_any_type && jl_is_datatype(ux) && jl_is_datatype(uy)) {
+        jl_datatype_t *xd = (jl_datatype_t*)ux, *yd = (jl_datatype_t*)uy;
+        while (xd != NULL && xd != jl_any_type && xd->name != yd->name) {
+            xd = xd->super;
+        }
+        if (xd == jl_any_type && !jl_is_type_type(ux)) {
+            return 0;
+        }
+    }
     // handle forall ("left") vars first
     if (jl_is_unionall(x)) {
         if (x == y && !(e->envidx < e->envsz))
@@ -1136,6 +1157,11 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
     jl_stenv_t e;
     if (envsz == 0 && (y == (jl_value_t*)jl_any_type || x == jl_bottom_type || x == y))
         return 1;
+    if (envsz == 0 && ((jl_is_unionall(x) && jl_is_unionall(y)) ||
+                       (jl_is_uniontype(x) && jl_is_uniontype(y))) &&
+        jl_egal(x, y)) {
+        return 1;
+    }
     init_stenv(&e, env, envsz);
     return forall_exists_subtype(x, y, &e, 0);
 }
@@ -2777,9 +2803,16 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
         if (!jl_is_type(b))
             return 0;
         if (invariant) {
-            if (eq_msp(((jl_tvar_t*)a)->ub, b, env))
-                return num_occurs((jl_tvar_t*)a, env) >= 2;
-            return 0;
+            if (((jl_tvar_t*)a)->ub == jl_bottom_type)
+                return 1;
+            if (jl_has_free_typevars(b)) {
+                if (type_morespecific_(((jl_tvar_t*)a)->ub, b, 0, env) ||
+                    eq_msp(((jl_tvar_t*)a)->ub, b, env))
+                    return num_occurs((jl_tvar_t*)a, env) >= 2;
+            }
+            else {
+                return 0;
+            }
         }
         return type_morespecific_((jl_value_t*)((jl_tvar_t*)a)->ub, b, 0, env);
     }
@@ -2787,8 +2820,16 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
         if (!jl_is_type(a))
             return 1;
         if (invariant) {
-            if (eq_msp(((jl_tvar_t*)b)->ub, a, env))
-                return num_occurs((jl_tvar_t*)b, env) < 2;
+            if (((jl_tvar_t*)b)->ub == jl_bottom_type)
+                return 0;
+            if (jl_has_free_typevars(a)) {
+                if (type_morespecific_(a, ((jl_tvar_t*)b)->ub, 0, env) ||
+                    eq_msp(a, ((jl_tvar_t*)b)->ub, env))
+                    return num_occurs((jl_tvar_t*)b, env) < 2;
+            }
+            else {
+                return 1;
+            }
         }
         return type_morespecific_(a, (jl_value_t*)((jl_tvar_t*)b)->ub, 0, env);
     }

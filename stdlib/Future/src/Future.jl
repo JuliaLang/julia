@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 "The `Future` module implements future behavior of already existing functions,
 which will replace the current version in a future release of Julia."
 module Future

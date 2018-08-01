@@ -15,7 +15,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-srand(1234321)
+Random.seed!(1234321)
 
 @testset "Matrix condition number" begin
     ainit = rand(n,n)

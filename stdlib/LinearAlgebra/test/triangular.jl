@@ -11,7 +11,7 @@ using LinearAlgebra: BlasFloat, errorbounds, full!, naivesub!, transpose!,
 debug && println("Triangular matrices")
 
 n = 9
-srand(123)
+Random.seed!(123)
 
 debug && println("Test basic type functionality")
 @test_throws DimensionMismatch LowerTriangular(randn(5, 4))
@@ -99,9 +99,17 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         if uplo1 == :L
             @test istril(A1)
             @test !istriu(A1)
+            @test istriu(A1')
+            @test istriu(transpose(A1))
+            @test !istril(A1')
+            @test !istril(transpose(A1))
         else
             @test istriu(A1)
             @test !istril(A1)
+            @test istril(A1')
+            @test istril(transpose(A1))
+            @test !istriu(A1')
+            @test !istriu(transpose(A1))
         end
 
         #tril/triu
@@ -519,8 +527,10 @@ end
 
 # dimensional correctness:
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
-using .Main.TestHelpers: Furlong
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
+LinearAlgebra.sylvester(a::Furlong,b::Furlong,c::Furlong) = -c / (a + b)
+
 let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
     @test sqrt(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
 end

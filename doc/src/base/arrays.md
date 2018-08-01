@@ -105,7 +105,7 @@ Base.parentindices
 Base.selectdim
 Base.reinterpret
 Base.reshape
-Base.squeeze
+Base.dropdims
 Base.vec
 ```
 

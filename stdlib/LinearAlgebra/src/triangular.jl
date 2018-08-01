@@ -236,6 +236,10 @@ istril(A::LowerTriangular) = true
 istril(A::UnitLowerTriangular) = true
 istriu(A::UpperTriangular) = true
 istriu(A::UnitUpperTriangular) = true
+istril(A::Adjoint) = istriu(A.parent)
+istril(A::Transpose) = istriu(A.parent)
+istriu(A::Adjoint) = istril(A.parent)
+istriu(A::Transpose) = istril(A.parent)
 
 function tril!(A::UpperTriangular, k::Integer=0)
     n = size(A,1)

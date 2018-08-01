@@ -300,51 +300,9 @@ first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8
 
 isvalid(s::String, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
 
-## optimized concatenation, reverse, repeat ##
-
-function string(a::String...)
-    if length(a) == 1
-        return a[1]::String
-    end
-    n = 0
-    for str in a
-        n += sizeof(str)
-    end
-    out = _string_n(n)
-    offs = 1
-    for str in a
-        unsafe_copyto!(pointer(out,offs), pointer(str), sizeof(str))
-        offs += sizeof(str)
-    end
-    return out
-end
-
 # UTF-8 encoding length of a character
 # TODO: delete or move to char.jl
 codelen(c::Char) = 4 - (trailing_zeros(0xff000000 | reinterpret(UInt32, c)) >> 3)
-
-function string(a::Union{String,AbstractChar}...)
-    io = IOBuffer()
-    for x in a
-        print(io, x)
-    end
-    return String(resize!(io.data, io.size))
-end
-
-function repeat(s::String, r::Integer)
-    r < 0 && throw(ArgumentError("can't repeat a string $r times"))
-    n = sizeof(s)
-    out = _string_n(n*r)
-    if n == 1 # common case: repeating a single-byte string
-        @inbounds b = codeunit(s, 1)
-        ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), out, b, r)
-    else
-        for i = 0:r-1
-            unsafe_copyto!(pointer(out, i*n+1), pointer(s), n)
-        end
-    end
-    return out
-end
 
 """
     repeat(c::AbstractChar, r::Integer) -> String

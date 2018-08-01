@@ -226,6 +226,32 @@ end
 # error throwing branch from #10560
 @test_throws ArgumentError Base.tryparse_internal(Bool, "foo", 1, 2, 10, true)
 
+# issue #16594
+@test Meta.parse("@x a + \nb") == Meta.parse("@x a +\nb")
+@test [1 +
+       1] == [2]
+@test [1 +1] == [1 1]
+
+# issue #16594, note for the macro tests, order is important
+# because the line number is included as part of the expression
+# (i.e. both macros must start on the same line)
+@test :(@test((1+1) == 2)) == :(@test 1 +
+                                      1 == 2)
+@test :(@x 1 +1 -1) == :(@x(1, +1, -1))
+@test :(@x 1 + 1 -1) == :(@x(1+1, -1))
+@test :(@x 1 + 1 - 1) == :(@x(1 + 1 - 1))
+@test :(@x(1 + 1 - 1)) == :(@x 1 +
+                               1 -
+                               1)
+@test :(@x(1 + 1 + 1)) == :(@x 1 +
+                               1 +
+                               1)
+@test :([x .+
+          y]) == :([x .+ y])
+
+# line break in : expression disallowed
+@test_throws Meta.ParseError Meta.parse("[1 :\n2] == [1:2]")
+
 @test tryparse(Float64, "1.23") === 1.23
 @test tryparse(Float32, "1.23") === 1.23f0
 @test tryparse(Float16, "1.23") === Float16(1.23)

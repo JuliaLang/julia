@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
 Simple unit testing functionality:
 
@@ -28,7 +26,8 @@ export TestSetException
 
 import Distributed: myid
 
-using Random: srand, AbstractRNG, GLOBAL_RNG
+using Random
+using Random: AbstractRNG, GLOBAL_RNG
 using InteractiveUtils: gen_call_with_extracted_types
 
 #-----------------------------------------------------------------------
@@ -1008,7 +1007,7 @@ method, which by default will return a list of the testset objects used in
 each iteration.
 
 Before the execution of the body of a `@testset`, there is an implicit
-call to `srand(seed)` where `seed` is the current seed of the global RNG.
+call to `Random.seed!(seed)` where `seed` is the current seed of the global RNG.
 Moreover, after the execution of the body, the state of the global RNG is
 restored to what it was before the `@testset`. This is meant to ease
 reproducibility in case of failure, and to allow seamless
@@ -1070,13 +1069,13 @@ function testset_beginend(args, tests, source)
         # which is needed for backtrace scrubbing to work correctly.
         while false; end
         push_testset(ts)
-        # we reproduce the logic of guardsrand, but this function
+        # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
         oldrng = copy(GLOBAL_RNG)
         try
             # GLOBAL_RNG is re-seeded with its own seed to ease reproduce a failed test
-            srand(GLOBAL_RNG.seed)
+            Random.seed!(GLOBAL_RNG.seed)
             $(esc(tests))
         catch err
             err isa InterruptException && rethrow(err)
@@ -1142,7 +1141,7 @@ function testset_forloop(args, testloop, source)
         if !first_iteration
             pop_testset()
             push!(arr, finish(ts))
-            # it's 1000 times faster to copy from tmprng rather than calling srand
+            # it's 1000 times faster to copy from tmprng rather than calling Random.seed!
             copy!(GLOBAL_RNG, tmprng)
 
         end
@@ -1163,7 +1162,7 @@ function testset_forloop(args, testloop, source)
         local first_iteration = true
         local ts
         local oldrng = copy(GLOBAL_RNG)
-        srand(GLOBAL_RNG.seed)
+        Random.seed!(GLOBAL_RNG.seed)
         local tmprng = copy(GLOBAL_RNG)
         try
             $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
@@ -1268,25 +1267,25 @@ Returns the result of `f(x)` if the types match,
 and an `Error` `Result` if it finds different types.
 
 ```jldoctest; setup = :(using InteractiveUtils), filter = r"begin\\n(.|\\n)*end"
-julia> f(a,b,c) = b > 1 ? 1 : 1.0
+julia> f(a, b, c) = b > 1 ? 1 : 1.0
 f (generic function with 1 method)
 
-julia> typeof(f(1,2,3))
+julia> typeof(f(1, 2, 3))
 Int64
 
-julia> @code_warntype f(1,2,3)
+julia> @code_warntype f(1, 2, 3)
 Body::UNION{FLOAT64, INT64}
-1 1 ─ %1 = Base.slt_int(1, %%b)::Bool
-  └──      goto 3 if not %1
+1 1 ─ %1 = (Base.slt_int)(1, b)::Bool
+  └──      goto #3 if not %1
   2 ─      return 1
   3 ─      return 1.0
 
-julia> @inferred f(1,2,3)
+julia> @inferred f(1, 2, 3)
 ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}
 Stacktrace:
 [...]
 
-julia> @inferred max(1,2)
+julia> @inferred max(1, 2)
 2
 ```
 """
@@ -1546,9 +1545,9 @@ Base.setindex!(a::GenericArray, x, i...) = a.a[i...] = x
 
 Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
 
-"`guardsrand(f)` runs the function `f()` and then restores the
+"`guardseed(f)` runs the function `f()` and then restores the
 state of the global RNG as it was before."
-function guardsrand(f::Function, r::AbstractRNG=GLOBAL_RNG)
+function guardseed(f::Function, r::AbstractRNG=GLOBAL_RNG)
     old = copy(r)
     try
         f()
@@ -1557,10 +1556,10 @@ function guardsrand(f::Function, r::AbstractRNG=GLOBAL_RNG)
     end
 end
 
-"`guardsrand(f, seed)` is equivalent to running `srand(seed); f()` and
+"`guardseed(f, seed)` is equivalent to running `Random.seed!(seed); f()` and
 then restoring the state of the global RNG as it was before."
-guardsrand(f::Function, seed::Union{Vector{UInt32},Integer}) = guardsrand() do
-    srand(seed)
+guardseed(f::Function, seed::Union{Vector{UInt32},Integer}) = guardseed() do
+    Random.seed!(seed)
     f()
 end
 

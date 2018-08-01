@@ -563,8 +563,8 @@ let
     @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
     @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
     B[1,2] = T12960()
-    @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [1, 2]  =  $(curmod_prefix)T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
-    @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [1, 2]  =  $(curmod_prefix)T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
+    @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [1, 2]  =  T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
+    @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [1, 2]  =  T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
 end
 
 # issue #13127
@@ -866,10 +866,17 @@ test_repr("(!).:~")
 test_repr("a.:(begin
         #= none:3 =#
     end)")
+test_repr("a.:(=)")
+test_repr("a.:(:)")
+test_repr("(:).a")
 @test repr(Expr(:., :a, :b, :c)) == ":(\$(Expr(:., :a, :b, :c)))"
 @test repr(Expr(:., :a, :b)) == ":(\$(Expr(:., :a, :b)))"
 @test repr(Expr(:., :a)) == ":(\$(Expr(:., :a)))"
 @test repr(Expr(:.)) == ":(\$(Expr(:.)))"
+@test repr(GlobalRef(Main, :a)) == ":(Main.a)"
+@test repr(GlobalRef(Main, :in)) == ":(Main.in)"
+@test repr(GlobalRef(Main, :+)) == ":(Main.:+)"
+@test repr(GlobalRef(Main, :(:))) == ":(Main.:(:))"
 
 # Test compact printing of homogeneous tuples
 @test repr(NTuple{7,Int64}) == "NTuple{7,Int64}"
@@ -983,6 +990,10 @@ end
     s = IOBuffer()
     show(IOContext(s, :compact => false), (1=>2) => Pair{Any,Any}(3,4))
     @test String(take!(s)) == "(1 => 2) => Pair{Any,Any}(3, 4)"
+
+    # issue #28327
+    d = Dict(Pair{Integer,Integer}(1,2)=>Pair{Integer,Integer}(1,2))
+    @test showstr(d) == "Dict((1=>2)=>(1=>2))" # correct parenthesis
 end
 
 @testset "alignment for pairs" begin  # (#22899)
@@ -1207,6 +1218,9 @@ end
 
     # issue #27979 (dislaying arrays of pairs containing arrays as first member)
     @test replstr([[1.0]=>1.0]) == "1-element Array{Pair{Array{Float64,1},Float64},1}:\n [1.0] => 1.0"
+
+    # issue #28159
+    @test replstr([(a=1, b=2), (a=3,c=4)]) == "2-element Array{NamedTuple{names,Tuple{$Int,$Int}} where names,1}:\n (a = 1, b = 2)\n (a = 3, c = 4)"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
@@ -1272,7 +1286,7 @@ function compute_annotations(f, types)
     ir = Core.Compiler.inflate_ir(src)
     la, lb, ll = Base.IRShow.compute_ir_line_annotations(ir)
     max_loc_method = maximum(length(s) for s in la)
-    join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')
+    return join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')
 end
 
 @noinline leaffunc() = print()
@@ -1292,12 +1306,79 @@ h_line() = f_line()
     ││╻  g_line
     ││╻  g_line""")
 
+# Tests for printing Core.Compiler internal objects
+@test repr(Core.Compiler.SSAValue(23)) == ":(%23)"
+@test repr(Core.Compiler.SSAValue(-2)) == ":(%-2)"
+@test repr(Core.Compiler.ReturnNode(23)) == ":(return 23)"
+@test repr(Core.Compiler.ReturnNode()) == ":(unreachable)"
+@test repr(Core.Compiler.GotoIfNot(true, 4)) == ":(goto %4 if not true)"
+@test repr(Core.Compiler.PhiNode(Any[2, 3], Any[1, Core.SlotNumber(3)])) == ":(φ (%2 => 1, %3 => _3))"
+@test repr(Core.Compiler.UpsilonNode(Core.SlotNumber(3))) == ":(ϒ (_3))"
+@test repr(Core.Compiler.PhiCNode(Any[1, Core.SlotNumber(3)])) == ":(φᶜ (1, _3))"
+@test sprint(Base.show_unquoted, Core.Compiler.Argument(23)) == "_23"
+@test sprint(Base.show_unquoted, Core.Compiler.Argument(-2)) == "_-2"
+
+
+eval(Meta.parse("""function my_fun28173(x)
+    y = if x == 1
+            "HI"
+        elseif x == 2
+            r = 1
+            s = try
+                r = 2
+                "BYE"
+            catch
+                r = 3
+                "CAUGHT!"
+            end
+            "\$r\$s"
+        else
+            "three"
+        end
+    return y
+end""")) # use parse to control the line numbers
+let src = code_typed(my_fun28173, (Int,))[1][1]
+    ir = Core.Compiler.inflate_ir(src)
+    source_slotnames = String["my_fun28173", "x"]
+    irshow = sprint(show, ir, context = :SOURCE_SLOTNAMES=>source_slotnames)
+    @test repr(src) == "CodeInfo(\n" * irshow * ")"
+    lines1 = split(repr(ir), '\n')
+    @test isempty(pop!(lines1))
+    Core.Compiler.insert_node!(ir, 1, Val{1}, QuoteNode(1), false)
+    Core.Compiler.insert_node!(ir, 1, Val{2}, QuoteNode(2), true)
+    Core.Compiler.insert_node!(ir, length(ir.stmts), Val{3}, QuoteNode(3), false)
+    Core.Compiler.insert_node!(ir, length(ir.stmts), Val{4}, QuoteNode(4), true)
+    lines2 = split(repr(ir), '\n')
+    @test isempty(pop!(lines2))
+    @test popfirst!(lines2) == "2  1 ──       $(QuoteNode(1))"
+    @test popfirst!(lines2) == "   │          $(QuoteNode(2))" # TODO: this should print after the next statement
+    let line1 = popfirst!(lines1)
+        line2 = popfirst!(lines2)
+        @test startswith(line1, "2  1 ── ")
+        @test startswith(line2, "   │    ")
+        @test line2[12:end] == line2[12:end]
+    end
+    let line1 = pop!(lines1)
+        line2 = pop!(lines2)
+        @test startswith(line1, "17 ")
+        @test startswith(line2, "   ")
+        @test line1[3:end] == line2[3:end]
+    end
+    @test pop!(lines2) == "   │          \$(QuoteNode(4))"
+    @test pop!(lines2) == "17 │          \$(QuoteNode(3))" # TODO: this should print after the next statement
+    @test lines1 == lines2
+end
+
 # issue #27352
-@test_deprecated print(nothing)
-@test_deprecated print(stdout, nothing)
-@test_deprecated string(nothing)
-@test_deprecated string(1, "", nothing)
-@test_deprecated let x = nothing; "x = $x" end
-@test let x = nothing; "x = $(repr(x))" end == "x = nothing"
-@test_deprecated `/bin/foo $nothing`
-@test_deprecated `$nothing`
+mktemp() do fname, io
+    redirect_stdout(io) do
+        @test_deprecated print(nothing)
+        @test_deprecated print(stdout, nothing)
+        @test_deprecated string(nothing)
+        @test_deprecated string(1, "", nothing)
+        @test_deprecated let x = nothing; "x = $x" end
+        @test let x = nothing; "x = $(repr(x))" end == "x = nothing"
+        @test_deprecated `/bin/foo $nothing`
+        @test_deprecated `$nothing`
+    end
+end

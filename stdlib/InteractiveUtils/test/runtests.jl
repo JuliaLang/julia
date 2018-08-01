@@ -200,7 +200,13 @@ const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
 
 @test_throws ErrorException("\"this_is_not_defined\" is not defined in module $curmod_str") @which this_is_not_defined
 # issue #13264
-@test isa((@which vcat(1...)), Method)
+@test (@which vcat(1...)).name == :vcat
+
+# PR #28122
+@test (@which [1][1]).name === :getindex
+@test (@which [1 2]).name == :hcat
+@test (@which [1; 2]).name == :vcat
+@test (@which [1]).name == :vect
 
 # issue #13464
 let t13464 = "hey there sailor"

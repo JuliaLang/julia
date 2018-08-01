@@ -8,7 +8,7 @@ using LinearAlgebra: BlasReal, BlasFloat
 include("testutils.jl") # test_approx_eq_modphase
 
 n = 10 #Size of test matrix
-srand(1)
+Random.seed!(1)
 
 @testset for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     if relty <: AbstractFloat

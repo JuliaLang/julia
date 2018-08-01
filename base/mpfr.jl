@@ -15,7 +15,7 @@ import
         log1p,
         eps, signbit, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh,
-        cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, rounding,
+        cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
         isone, big, _string_n
 
@@ -204,7 +204,7 @@ end
 
 Create a representation of the string `x` as a [`BigFloat`](@ref).
 """
-BigFloat(x::String) = parse(BigFloat, x)
+BigFloat(x::AbstractString) = parse(BigFloat, x)
 
 
 ## BigFloat -> Integer
@@ -881,8 +881,8 @@ end
 
 eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
 
-realmin(::Type{BigFloat}) = nextfloat(zero(BigFloat))
-realmax(::Type{BigFloat}) = prevfloat(BigFloat(Inf))
+floatmin(::Type{BigFloat}) = nextfloat(zero(BigFloat))
+floatmax(::Type{BigFloat}) = prevfloat(BigFloat(Inf))
 
 """
     setprecision(f::Function, [T=BigFloat,] precision::Integer)

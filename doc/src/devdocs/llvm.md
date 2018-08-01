@@ -211,6 +211,11 @@ three different address spaces (their numbers are defined in `src/codegen_shared
   future), but unlike the other pointers need not be rooted if passed to a
   call (they do still need to be rooted if they are live across another safepoint
   between the definition and the call).
+- Pointers loaded from tracked object (currently 13): This is used by arrays,
+  which themselves contain a pointer to the managed data. This data area is owned
+  by the array, but is not a GC-tracked object by itself. The compiler guarantees
+  that as long as this pointer is live, the object that this pointer was loaded
+  from will keep being live.
 
 ### Invariants
 

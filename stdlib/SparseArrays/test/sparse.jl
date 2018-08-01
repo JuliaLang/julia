@@ -7,7 +7,7 @@ using SparseArrays
 using LinearAlgebra
 using Base.Printf: @printf
 using Random
-using Test: guardsrand
+using Test: guardseed
 
 @testset "issparse" begin
     @test issparse(sparse(fill(1,5,5)))
@@ -167,14 +167,14 @@ let
     end
 end
 
-@testset "squeeze" begin
+@testset "dropdims" begin
     for i = 1:5
         am = sprand(20, 1, 0.2)
-        av = squeeze(am, dims=2)
+        av = dropdims(am, dims=2)
         @test ndims(av) == 1
         @test all(av.==am)
         am = sprand(1, 20, 0.2)
-        av = squeeze(am, dims=1)
+        av = dropdims(am, dims=1)
         @test ndims(av) == 1
         @test all(av' .== am)
     end
@@ -523,8 +523,9 @@ end
 
 @testset "reductions" begin
     pA = sparse(rand(3, 7))
+    p28227 = sparse(Real[0 0.5])
 
-    for arr in (se33, sA, pA)
+    for arr in (se33, sA, pA, p28227)
         for f in (sum, prod, minimum, maximum)
             farr = Array(arr)
             @test f(arr) ≈ f(farr)
@@ -1400,10 +1401,10 @@ end
     @test norm(Array(D) - Array(S)) == 0.0
 end
 
-@testset "error conditions for reshape, and squeeze" begin
+@testset "error conditions for reshape, and dropdims" begin
     local A = sprand(Bool, 5, 5, 0.2)
     @test_throws DimensionMismatch reshape(A,(20, 2))
-    @test_throws ArgumentError squeeze(A,dims=(1, 1))
+    @test_throws ArgumentError dropdims(A,dims=(1, 1))
 end
 
 @testset "float" begin
@@ -1441,7 +1442,7 @@ end
 end
 
 @testset "droptol" begin
-    local A = guardsrand(1234321) do
+    local A = guardseed(1234321) do
         triu(sprand(10, 10, 0.2))
     end
     @test SparseArrays.droptol!(A, 0.01).colptr == [1,1,1,2,2,3,4,6,6,7,9]
@@ -1741,13 +1742,13 @@ end
 end
 
 @testset "sparse matrix opnormestinv" begin
-    srand(1234)
+    Random.seed!(1234)
     Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
     Aci = ceil.(Int64, 100*sprand(20,20,.5)) + im*ceil.(Int64, sprand(20,20,.5))
     Ar = sprandn(20,20,.5)
     Ari = ceil.(Int64, 100*Ar)
     if Base.USE_GPL_LIBS
-        # NOTE: opnormestinv is probabilistic, so requires a fixed seed (set above in srand(1234))
+        # NOTE: opnormestinv is probabilistic, so requires a fixed seed (set above in Random.seed!(1234))
         @test SparseArrays.opnormestinv(Ac,3) ≈ opnorm(inv(Array(Ac)),1) atol=1e-4
         @test SparseArrays.opnormestinv(Aci,3) ≈ opnorm(inv(Array(Aci)),1) atol=1e-4
         @test SparseArrays.opnormestinv(Ar) ≈ opnorm(inv(Array(Ar)),1) atol=1e-4
@@ -1794,7 +1795,7 @@ end
 end
 
 @testset "factorization" begin
-    srand(123)
+    Random.seed!(123)
     local A
     A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2) + im*sprandn(5, 5, 0.2)
     A = A + copy(A')
@@ -2058,7 +2059,7 @@ end
 
 @testset "reverse search direction if step < 0 #21986" begin
     local A, B
-    A = guardsrand(1234) do
+    A = guardseed(1234) do
         sprand(5, 5, 1/5)
     end
     A = max.(A, copy(A'))

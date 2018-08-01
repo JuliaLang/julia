@@ -2,7 +2,8 @@
 
 # displaying type warnings
 
-function warntype_type_printer(io::IO, @nospecialize(ty))
+function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
+    used || return
     if ty isa Type && (!Base.isdispatchelem(ty) || ty == Core.Box)
         if ty isa Union && Base.is_expected_union(ty)
             Base.emphasize(io, "::$ty", Base.warn_color()) # more mild user notification
@@ -10,7 +11,7 @@ function warntype_type_printer(io::IO, @nospecialize(ty))
             Base.emphasize(io, "::$ty")
         end
     else
-        Base.printstyled(io, "::$ty", color=:cyan)
+        Base.printstyled(io, "::$ty", color=:cyan) # show the "good" type
     end
     nothing
 end
@@ -32,13 +33,15 @@ See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
 function code_warntype(io::IO, @nospecialize(f), @nospecialize(t); verbose_linetable=false)
     for (src, rettype) in code_typed(f, t)
+        lambda_io::IOContext = io
+        if src.slotnames !== nothing
+            lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(src))
+        end
         print(io, "Body")
-        warntype_type_printer(io, rettype)
+        warntype_type_printer(io, rettype, true)
         println(io)
         # TODO: static parameter values
-        ir = Core.Compiler.inflate_ir(src)
-        Base.IRShow.show_ir(io, ir, warntype_type_printer;
-                            argnames = Base.sourceinfo_slotnames(src),
+        Base.IRShow.show_ir(lambda_io, src, warntype_type_printer;
                             verbose_linetable = verbose_linetable)
     end
     nothing
@@ -102,12 +105,14 @@ end
 Prints the LLVM bitcodes generated for running the method matching the given generic
 function and type signature to `io`.
 
-All metadata and dbg.* calls are removed from the printed bitcode. Use `code_llvm_raw` for the full IR.
+If the `optimize` keyword is unset, the code will be shown before LLVM optimizations.
+All metadata and dbg.* calls are removed from the printed bitcode. Set the `raw` keyword for the full IR.
+To dump the entire module that encapsulates the function, with debug info and metadata, set the `dump_module` keyword.
 """
-code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Tuple), strip_ir_metadata=true, dump_module=false) =
-    print(io, _dump_function(f, types, false, false, strip_ir_metadata, dump_module))
-code_llvm(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(stdout, f, types)
-code_llvm_raw(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(stdout, f, types, false)
+code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Tuple), strip_ir_metadata=true, dump_module=false, optimize=true) =
+    print(io, _dump_function(f, types, false, false, strip_ir_metadata, dump_module, :att, optimize))
+code_llvm(@nospecialize(f), @nospecialize(types=Tuple); raw=false, dump_module=false, optimize=true) =
+    code_llvm(stdout, f, types, !raw, dump_module, optimize)
 
 """
     code_native([io=stdout,], f, types; syntax = :att)

@@ -421,9 +421,9 @@ let changes = []
     @test all(x -> (isa(x, Pair) && x[1] == F_PATH && (x[2].changed ⊻ x[2].renamed)), changes) || changes
 end
 
-@test_throws(Base.UVError("FileMonitor (start)", Base.UV_ENOENT),
+@test_throws(Base._UVError("FileMonitor (start)", Base.UV_ENOENT),
              watch_file("____nonexistent_file", 10))
-@test_throws(Base.UVError("FolderMonitor (start)", Base.UV_ENOENT),
+@test_throws(Base._UVError("FolderMonitor (start)", Base.UV_ENOENT),
              watch_folder("____nonexistent_file", 10))
 @test(@elapsed(
     @test(poll_file("____nonexistent_file", 1, 3.1) ===

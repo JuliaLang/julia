@@ -393,14 +393,6 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
     return Any
 end
 
-function tmerge_all(itr)
-    t = Bottom
-    for x in itr
-        t = tmerge(t, x)
-    end
-    return t
-end
-
 # the inverse of switchtupleunion, with limits on max element union size
 function tuplemerge(a::DataType, b::DataType)
     @assert a.name === b.name === Tuple.name "assertion failure"

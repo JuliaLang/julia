@@ -70,8 +70,8 @@ end
 
 if valgrind_off
     # If --trace-children=yes is passed to valgrind, valgrind will
-    # exit here with an error code, and no UVError will be raised.
-    @test_throws Base.UVError run(`foo_is_not_a_valid_command`)
+    # exit here with an error code, and no IOError will be raised.
+    @test_throws Base.IOError run(`foo_is_not_a_valid_command`)
 end
 
 if Sys.isunix()
@@ -451,31 +451,6 @@ end
 @test_throws ArgumentError reduce(&, Base.Cmd[])
 @test reduce(&, [`$echocmd abc`, `$echocmd def`, `$echocmd hij`]) == `$echocmd abc` & `$echocmd def` & `$echocmd hij`
 
-# test for proper handling of FD exhaustion
-if Sys.isunix()
-    let ps = Pipe[]
-        ulimit_n = tryparse(Int, readchomp(`sh -c 'ulimit -n'`))
-        try
-            for i = 1 : 100 * something(ulimit_n, 1000)
-                p = Pipe()
-                Base.link_pipe!(p)
-                push!(ps, p)
-            end
-            if ulimit_n === nothing
-                @warn "`ulimit -n` is set to unlimited, fd exhaustion cannot be tested"
-                @test_broken false
-            else
-                @test false
-            end
-        catch ex
-            isa(ex, Base.UVError) || rethrow(ex)
-            @test ex.code in (Base.UV_EMFILE, Base.UV_ENFILE)
-        finally
-            foreach(close, ps)
-        end
-    end
-end
-
 # readlines(::Cmd), accidentally broken in #20203
 @test sort(readlines(`$lscmd -A`)) == sort(readdir())
 
@@ -519,7 +494,7 @@ end
 # `kill` error conditions
 let p = run(`$sleepcmd 100`, wait=false)
     # Should throw on invalid signals
-    @test_throws Base.UVError kill(p, typemax(Cint))
+    @test_throws Base.IOError kill(p, typemax(Cint))
     kill(p)
     wait(p)
     # Should not throw if already dead

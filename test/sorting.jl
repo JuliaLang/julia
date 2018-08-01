@@ -227,7 +227,7 @@ function randn_with_nans(n,p)
 end
 
 @testset "advanced sorting" begin
-    srand(0xdeadbeef)
+    Random.seed!(0xdeadbeef)
     for n in [0:10; 100; 101; 1000; 1001]
         local r
         r = -5:5

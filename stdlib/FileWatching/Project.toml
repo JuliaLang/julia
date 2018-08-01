@@ -1,2 +1,8 @@
 name = "FileWatching"
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

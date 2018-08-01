@@ -842,13 +842,12 @@ read(s::IO, T::Type) = error("The IO stream does not support reading objects of 
 
 ## high-level iterator interfaces ##
 
-struct EachLine
-    stream::IO
+struct EachLine{IOT <: IO}
+    stream::IOT
     ondone::Function
     keep::Bool
-
     EachLine(stream::IO=stdin; ondone::Function=()->nothing, keep::Bool=false) =
-        new(stream, ondone, keep)
+        new{typeof(stream)}(stream, ondone, keep)
 end
 
 """
@@ -898,9 +897,9 @@ function iterate(itr::EachLine, state=nothing)
     (readline(itr.stream, keep=itr.keep), nothing)
 end
 
-eltype(::Type{EachLine}) = String
+eltype(::Type{<:EachLine}) = String
 
-IteratorSize(::Type{EachLine}) = SizeUnknown()
+IteratorSize(::Type{<:EachLine}) = SizeUnknown()
 
 # IOStream Marking
 # Note that these functions expect that io.mark exists for

@@ -129,8 +129,11 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
         a = maybe_widen_conditional(a)
         if isa(a, Const) && !isdefined(typeof(a.val), :instance) && !(isa(a.val, Type) && issingletontype(a.val))
             # have new information from argtypes that wasn't available from the signature
-            haveconst = true
-            break
+            if isa(a.val, Symbol) || isa(a.val, Type) || (!isa(a.val, String) && isimmutable(a.val))
+                # don't consider mutable values or Strings useful constants
+                haveconst = true
+                break
+            end
         end
     end
     haveconst || return Any
@@ -252,7 +255,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                         parent = parent::InferenceState
                         parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
                         parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
-                        if parent.cached && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
+                        if (parent.cached || parent.limited) && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
                             topmost = infstate
                             edgecycle = true
                         end

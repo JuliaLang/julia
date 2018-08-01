@@ -208,11 +208,11 @@ macro _sourceinfo()
     end)
 end
 
-macro logmsg(level, message, exs...) logmsg_code((@_sourceinfo)..., esc(level), message, exs...) end
-macro debug(message, exs...) logmsg_code((@_sourceinfo)..., :Debug, message, exs...) end
-macro  info(message, exs...) logmsg_code((@_sourceinfo)..., :Info,  message, exs...) end
-macro  warn(message, exs...) logmsg_code((@_sourceinfo)..., :Warn,  message, exs...) end
-macro error(message, exs...) logmsg_code((@_sourceinfo)..., :Error, message, exs...) end
+macro logmsg(level, exs...) logmsg_code((@_sourceinfo)..., esc(level), exs...) end
+macro debug(exs...) logmsg_code((@_sourceinfo)..., :Debug, exs...) end
+macro  info(exs...) logmsg_code((@_sourceinfo)..., :Info,  exs...) end
+macro  warn(exs...) logmsg_code((@_sourceinfo)..., :Warn,  exs...) end
+macro error(exs...) logmsg_code((@_sourceinfo)..., :Error, exs...) end
 
 # Logging macros share documentation
 @eval @doc $_logmsg_docs :(@logmsg)
@@ -288,9 +288,21 @@ function logmsg_code(_module, file, line, level, message, exs...)
             push!(kwargs, Expr(:kw, Symbol(ex), esc(ex)))
         end
     end
+
     # Note that it may be necessary to set `id` and `group` manually during bootstrap
     id = something(id, :(log_record_id(_module, level, $exs)))
-    group = something(group, :(Symbol(splitext(basename(something($file, "")))[1])))
+    if group == nothing
+        group = if isdefined(Base, :basename) && isa(file, String)
+            # precompute if we can
+            QuoteNode(splitext(basename(file))[1])
+        else
+            # memoized run-time execution
+            ref = Ref{Symbol}()
+            :(isassigned($ref) ? $ref[]
+                               : $ref[] = Symbol(splitext(basename(something($file, "")))[1]))
+        end
+    end
+
     quote
         level = $level
         std_level = convert(LogLevel, level)

@@ -1694,6 +1694,49 @@ struct Foo19668
 end
 @test Base.return_types(Foo19668, ()) == [Foo19668]
 
+# this `if` statement is necessary; make sure front-end var promotion isn't fooled
+# by simple control flow.
+if true
+    struct Bar19668
+        x
+        Bar19668(; x=true) = new(x)
+    end
+end
+@test Base.return_types(Bar19668, ()) == [Bar19668]
+
+if false
+    struct RD19668
+        x
+        RD19668() = new(0)
+    end
+else
+    struct RD19668
+        x
+        RD19668(; x = true) = new(x)
+    end
+end
+@test Base.return_types(RD19668, ()) == [RD19668]
+
+# issue #15276
+function f15276(x)
+    if x > 1
+    else
+        y = 2
+        z->y
+    end
+end
+@test Base.return_types(f15276(1), (Int,)) == [Int]
+
+function g15276()
+    spp = Int[0]
+    sol = [spp[i] for i=1:0]
+    if false
+        spp[1]
+    end
+    sol
+end
+@test g15276() isa Vector{Int}
+
 # issue #27316 - inference shouldn't hang on these
 f27316(::Vector) = nothing
 f27316(::Any) = f27316(Any[][1]), f27316(Any[][1])
@@ -1729,7 +1772,8 @@ Base.iterate(i::Iterator27434) = i.x, Val(1)
 Base.iterate(i::Iterator27434, ::Val{1}) = i.y, Val(2)
 Base.iterate(i::Iterator27434, ::Val{2}) = i.z, Val(3)
 Base.iterate(::Iterator27434, ::Any) = nothing
-@test @inferred splat27434(Iterator27434(1, 2, 3)) == (1, 2, 3)
+@test @inferred(splat27434(Iterator27434(1, 2, 3))) == (1, 2, 3)
+@test @inferred((1, 2, 3) == (1, 2, 3))
 @test Core.Compiler.return_type(splat27434, Tuple{typeof(Iterators.repeated(1))}) == Union{}
 
 # issue #27078
@@ -1749,3 +1793,62 @@ test28079(p, n, m) = h28079(Foo28079(), Base.pointerref, p, n, m)
 cinfo_unoptimized = code_typed(test28079, (Ptr{Float32}, Int, Int); optimize=false)[].first
 cinfo_optimized = code_typed(test28079, (Ptr{Float32}, Int, Int); optimize=true)[].first
 @test cinfo_unoptimized.ssavaluetypes[end-1] === cinfo_optimized.ssavaluetypes[end-1] === Float32
+
+# issue #27907
+ig27907(T::Type, N::Integer, offsets...) = ig27907(T, T, N, offsets...)
+
+function ig27907(::Type{T}, ::Type, N::Integer, offsets...) where {T}
+    if length(offsets) < N
+        return typeof(ig27907(T, N, offsets..., 0))
+    else
+        return 0
+    end
+end
+
+@test ig27907(Int, Int, 1, 0) == 0
+
+# issue #28279
+function f28279(b::Bool)
+    i = 1
+    while i > b
+        i -= 1
+    end
+    if b end
+    return i + 1
+end
+code28279 = code_lowered(f28279, (Bool,))[1].code
+oldcode28279 = deepcopy(code28279)
+ssachangemap = fill(0, length(code28279))
+labelchangemap = fill(0, length(code28279))
+worklist = Int[]
+let i
+    for i in 1:length(code28279)
+        stmt = code28279[i]
+        if Meta.isexpr(stmt, :gotoifnot)
+            push!(worklist, i)
+            ssachangemap[i] = 1
+            if i < length(code28279)
+                labelchangemap[i + 1] = 1
+            end
+        end
+    end
+end
+Core.Compiler.renumber_ir_elements!(code28279, ssachangemap, labelchangemap)
+@test length(code28279) === length(oldcode28279)
+offset = 1
+let i
+    for i in 1:length(code28279)
+        if i == length(code28279)
+            @test Meta.isexpr(code28279[i], :return)
+            @test Meta.isexpr(oldcode28279[i], :return)
+            @test code28279[i].args[1].id == (oldcode28279[i].args[1].id + offset - 1)
+        elseif Meta.isexpr(code28279[i], :gotoifnot)
+            @test Meta.isexpr(oldcode28279[i], :gotoifnot)
+            @test code28279[i].args[1] == oldcode28279[i].args[1]
+            @test code28279[i].args[2] == (oldcode28279[i].args[2] + offset)
+            global offset += 1
+        else
+            @test code28279[i] == oldcode28279[i]
+        end
+    end
+end

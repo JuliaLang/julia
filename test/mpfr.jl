@@ -12,7 +12,7 @@ import Base.MPFR
     @test x == BigFloat(x) == BigFloat(0xc) == BigFloat(12.) ==
           BigFloat(BigInt(12)) == BigFloat(BigFloat(12)) == parse(BigFloat,"12") ==
           parse(BigFloat,"12 ") == parse(BigFloat," 12") == parse(BigFloat," 12 ") ==
-          BigFloat(Float32(12.)) == BigFloat(12//1)
+          BigFloat(Float32(12.)) == BigFloat(12//1) == BigFloat(SubString("12"))
 
     @test typeof(BigFloat(typemax(Int8))) == BigFloat
     @test typeof(BigFloat(typemax(Int16))) == BigFloat
@@ -27,8 +27,8 @@ import Base.MPFR
     @test typeof(BigFloat(typemax(UInt64))) == BigFloat
     @test typeof(BigFloat(typemax(UInt128))) == BigFloat
 
-    @test typeof(BigFloat(realmax(Float32))) == BigFloat
-    @test typeof(BigFloat(realmax(Float64))) == BigFloat
+    @test typeof(BigFloat(floatmax(Float32))) == BigFloat
+    @test typeof(BigFloat(floatmax(Float64))) == BigFloat
 
     @test typeof(BigFloat(BigInt(1))) == BigFloat
     @test typeof(BigFloat(BigFloat(1))) == BigFloat
@@ -648,11 +648,11 @@ end
     @test BigFloat(1) + x == BigFloat(1) + prevfloat(x)
     @test eps(BigFloat) == eps(BigFloat(1))
 end
-@testset "realmin/realmax" begin
-    x = realmin(BigFloat)
+@testset "floatmin/floatmax" begin
+    x = floatmin(BigFloat)
     @test x > 0
     @test prevfloat(x) == 0
-    x = realmax(BigFloat)
+    x = floatmax(BigFloat)
     @test !isinf(x)
     @test isinf(nextfloat(x))
 end

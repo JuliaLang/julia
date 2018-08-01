@@ -59,12 +59,23 @@ end
 
 function with_temp_env(f, env_name::AbstractString="Dummy")
     env_path = joinpath(mktempdir(), env_name)
-    withenv("USER" => "Test User") do
-        Pkg.generate(env_path)
-    end
+    Pkg.generate(env_path)
     Pkg.activate(env_path)
     try
         applicable(f, env_path) ? f(env_path) : f()
+    finally
+        Pkg.activate()
+    end
+end
+
+function with_pkg_env(fn::Function, path::AbstractString="."; change_dir=false)
+    Pkg.activate(path)
+    try
+        if change_dir
+            cd(fn, path)
+        else
+            fn()
+        end
     finally
         Pkg.activate()
     end

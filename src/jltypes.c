@@ -1819,10 +1819,9 @@ void jl_init_types(void)
                                        jl_svec(2, jl_tvar_type, jl_any_type),
                                        0, 0, 2);
 
-    vararg_sym = jl_symbol("Vararg");
     jl_svec_t *tv;
     tv = jl_svec2(tvar("T"),tvar("N"));
-    jl_vararg_type = (jl_unionall_t*)jl_new_abstracttype((jl_value_t*)vararg_sym, core, jl_any_type, tv)->name->wrapper;
+    jl_vararg_type = (jl_unionall_t*)jl_new_abstracttype((jl_value_t*)jl_symbol("Vararg"), core, jl_any_type, tv)->name->wrapper;
     jl_vararg_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_vararg_type))->name;
 
     jl_anytuple_type = jl_new_datatype(jl_symbol("Tuple"), core, jl_any_type, jl_emptysvec,

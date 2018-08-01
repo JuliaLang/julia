@@ -330,7 +330,12 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
     if (head == toplevel_sym || head == thunk_sym) {
         return;
     }
-    else if (head == global_sym || head == const_sym || head == copyast_sym) {
+    else if (head == global_sym) {
+        // this could be considered has_defs, but loops that assign to globals
+        // might still need to be optimized.
+        return;
+    }
+    else if (head == const_sym || head == copyast_sym) {
         // Note: `copyast` is included here since it indicates the presence of
         // `quote` and probably `eval`.
         *has_defs = 1;
@@ -417,21 +422,25 @@ static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var)
 {
     static jl_value_t *require_func = NULL;
     static size_t require_world = 0;
+    int build_mode = jl_generating_output();
     jl_module_t *m = NULL;
     jl_ptls_t ptls = jl_get_ptls_states();
     if (require_func == NULL && jl_base_module != NULL) {
         require_func = jl_get_global(jl_base_module, jl_symbol("require"));
-        require_world = ptls->world_age;
+        if (build_mode)
+            require_world = ptls->world_age;
     }
     if (require_func != NULL) {
         size_t last_age = ptls->world_age;
-        ptls->world_age = require_world;
+        if (build_mode)
+            ptls->world_age = require_world;
         jl_value_t *reqargs[3];
         reqargs[0] = require_func;
         reqargs[1] = (jl_value_t*)mod;
         reqargs[2] = (jl_value_t*)var;
         m = (jl_module_t*)jl_apply(reqargs, 3);
-        ptls->world_age = last_age;
+        if (build_mode)
+            ptls->world_age = last_age;
     }
     if (m == NULL || !jl_is_module(m)) {
         jl_errorf("failed to load module %s", jl_symbol_name(var));
@@ -533,7 +542,7 @@ static void import_module(jl_module_t *m, jl_module_t *import)
     jl_binding_t *b;
     if (jl_binding_resolved_p(m, name)) {
         b = jl_get_binding(m, name);
-        if (b->owner != m || (b->value && b->value != (jl_value_t*)import)) {
+        if ((!b->constp && b->owner != m) || (b->value && b->value != (jl_value_t*)import)) {
             jl_errorf("importing %s into %s conflicts with an existing identifier",
                       jl_symbol_name(name), jl_symbol_name(m->name));
         }

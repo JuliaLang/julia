@@ -91,6 +91,8 @@ typedef struct {
 
 static jl_value_t *jl_idtable_type = NULL;
 static jl_typename_t *jl_idtable_typename = NULL;
+static jl_value_t *jl_bigint_type = NULL;
+static int gmp_limb_size = 0;
 static arraylist_t builtin_typenames;
 
 enum RefTags {
@@ -566,8 +568,7 @@ static void jl_write_values(jl_serializer_state *s)
             // make some header modifications in-place
             jl_array_t *newa = (jl_array_t*)&s->s->buf[reloc_offset];
             size_t alen = jl_array_len(ar);
-            size_t extra = (!ar->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(ar)))) ? alen : 0;
-            size_t tot = alen * ar->elsize + extra;
+            size_t tot = alen * ar->elsize;
             if (newa->flags.ndims == 1)
                 newa->maxsize = alen;
             newa->offset = 0;
@@ -586,9 +587,12 @@ static void jl_write_values(jl_serializer_state *s)
                 assert(data < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "offset to constant data too large");
                 arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_array_t, data))); // relocation location
                 arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + data)); // relocation target
-                if (ar->elsize == 1)
+                int isbitsunion = jl_array_isbitsunion(ar);
+                if (ar->elsize == 1 && !isbitsunion)
                     tot += 1;
                 ios_write(s->const_data, (char*)jl_array_data(ar), tot);
+                if (isbitsunion)
+                    ios_write(s->const_data, jl_array_typetagdata(ar), alen);
             }
             else {
                 newa->data = (void*)tsz; // relocation offset
@@ -626,6 +630,23 @@ static void jl_write_values(jl_serializer_state *s)
             assert(t->layout->npointers == 0);
             if (t->size > 0)
                 ios_write(s->s, (char*)v, t->size);
+        }
+        else if (jl_bigint_type && jl_typeis(v, jl_bigint_type)) {
+            jl_value_t *sizefield = jl_get_nth_field(v, 1);
+            int32_t sz = jl_unbox_int32(sizefield);
+            int32_t nw = (sz == 0 ? 1 : (sz < 0 ? -sz : sz));
+            size_t nb = nw * gmp_limb_size;
+            ios_write(s->s, (char*)&nw, sizeof(int32_t));
+            ios_write(s->s, (char*)&sz, sizeof(int32_t));
+            uintptr_t data = LLT_ALIGN(ios_pos(s->const_data), 8);
+            write_padding(s->const_data, data - ios_pos(s->const_data));
+            data /= sizeof(void*);
+            assert(data < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "offset to constant data too large");
+            arraylist_push(&s->relocs_list, (void*)(reloc_offset + 8)); // relocation location
+            arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + data)); // relocation target
+            void *pdata = jl_unbox_voidpointer(jl_get_nth_field(v, 2));
+            ios_write(s->const_data, (char*)pdata, nb);
+            write_pointer(s->s);
         }
         else {
             size_t i, nf = jl_datatype_nfields(t);
@@ -1241,6 +1262,11 @@ static void jl_save_system_image_to_stream(ios_t *f)
 
     jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("IdDict")) : NULL;
     jl_idtable_typename = jl_base_module ? ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_idtable_type))->name : NULL;
+    jl_bigint_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("BigInt")) : NULL;
+    if (jl_bigint_type) {
+        gmp_limb_size = jl_unbox_long(jl_get_global((jl_module_t*)jl_get_global(jl_base_module, jl_symbol("GMP")),
+                                                    jl_symbol("BITS_PER_LIMB"))) / 8;
+    }
 
     { // step 1: record values (recursively) that need to go in the image
         jl_serialize_value(&s, jl_core_module);
@@ -1413,6 +1439,11 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     s.ptls = jl_get_ptls_states();
     arraylist_new(&s.relocs_list, 0);
     arraylist_new(&s.gctags_list, 0);
+    jl_bigint_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("BigInt")) : NULL;
+    if (jl_bigint_type) {
+        gmp_limb_size = jl_unbox_long(jl_get_global((jl_module_t*)jl_get_global(jl_base_module, jl_symbol("GMP")),
+                                                    jl_symbol("BITS_PER_LIMB"))) / 8;
+    }
 
     // step 1: read section map and apply relocations
     assert(ios_pos(f) == 0 && f->bm == bm_mem);

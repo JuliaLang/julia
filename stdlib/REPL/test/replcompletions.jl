@@ -905,6 +905,9 @@ function test_dict_completion(dict_name)
     s = "$dict_name[:α"
     c, r = test_complete(s)
     @test c == Any[":α]"]
+    s = "$dict_name["
+    c, r = test_complete(s)
+    @test !isempty(c)
 end
 test_dict_completion("CompletionFoo.test_dict")
 test_dict_completion("CompletionFoo.test_customdict")

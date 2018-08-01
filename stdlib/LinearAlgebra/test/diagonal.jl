@@ -6,7 +6,7 @@ using Test, LinearAlgebra, SparseArrays, Random
 using LinearAlgebra: mul!, rmul!, lmul!, ldiv!, rdiv!, BlasFloat, BlasComplex, SingularException
 
 n=12 #Size of matrix problem to test
-srand(1)
+Random.seed!(1)
 
 @testset for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     dd=convert(Vector{elty}, randn(n))

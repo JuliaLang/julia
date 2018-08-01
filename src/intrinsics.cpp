@@ -932,7 +932,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 
     switch (f) {
     case arraylen:
-        return mark_julia_type(ctx, emit_arraylen(ctx, argv[0], args[1]), false, jl_long_type);
+        return mark_julia_type(ctx, emit_arraylen(ctx, argv[0]), false, jl_long_type);
     case pointerref:
         return emit_pointerref(ctx, argv);
     case pointerset:

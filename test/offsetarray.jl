@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using .Main.TestHelpers.OAs
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
 using DelimitedFiles
 using Random
 using LinearAlgebra
 using Statistics
 
-const OAs_name = join(fullname(OAs), ".")
+const OAs_name = join(fullname(OffsetArrays), ".")
 
 let
 # Basics
@@ -321,20 +321,20 @@ am = map(identity, a)
 @test isa(am, OffsetArray)
 @test am == a
 
-# squeeze
+# dropdims
 a0 = rand(1,1,8,8,1)
 a = OffsetArray(a0, (-1,2,3,4,5))
-@test @inferred(squeeze(a, dims=1)) == @inferred(squeeze(a, dims=(1,))) == OffsetArray(reshape(a, (1,8,8,1)), (2,3,4,5))
-@test @inferred(squeeze(a, dims=5)) == @inferred(squeeze(a, dims=(5,))) == OffsetArray(reshape(a, (1,1,8,8)), (-1,2,3,4))
-@test @inferred(squeeze(a, dims=(1,5))) == squeeze(a, dims=(5,1)) == OffsetArray(reshape(a, (1,8,8)), (2,3,4))
-@test @inferred(squeeze(a, dims=(1,2,5))) == squeeze(a, dims=(5,2,1)) == OffsetArray(reshape(a, (8,8)), (3,4))
-@test_throws ArgumentError squeeze(a, dims=0)
-@test_throws ArgumentError squeeze(a, dims=(1,1))
-@test_throws ArgumentError squeeze(a, dims=(1,2,1))
-@test_throws ArgumentError squeeze(a, dims=(1,1,2))
-@test_throws ArgumentError squeeze(a, dims=3)
-@test_throws ArgumentError squeeze(a, dims=4)
-@test_throws ArgumentError squeeze(a, dims=6)
+@test @inferred(dropdims(a, dims=1)) == @inferred(dropdims(a, dims=(1,))) == OffsetArray(reshape(a, (1,8,8,1)), (2,3,4,5))
+@test @inferred(dropdims(a, dims=5)) == @inferred(dropdims(a, dims=(5,))) == OffsetArray(reshape(a, (1,1,8,8)), (-1,2,3,4))
+@test @inferred(dropdims(a, dims=(1,5))) == dropdims(a, dims=(5,1)) == OffsetArray(reshape(a, (1,8,8)), (2,3,4))
+@test @inferred(dropdims(a, dims=(1,2,5))) == dropdims(a, dims=(5,2,1)) == OffsetArray(reshape(a, (8,8)), (3,4))
+@test_throws ArgumentError dropdims(a, dims=0)
+@test_throws ArgumentError dropdims(a, dims=(1,1))
+@test_throws ArgumentError dropdims(a, dims=(1,2,1))
+@test_throws ArgumentError dropdims(a, dims=(1,1,2))
+@test_throws ArgumentError dropdims(a, dims=3)
+@test_throws ArgumentError dropdims(a, dims=4)
+@test_throws ArgumentError dropdims(a, dims=6)
 
 # other functions
 v = OffsetArray(v0, (-3,))
@@ -434,8 +434,8 @@ amin, amax = extrema(parent(A))
 @test unique(A, dims=2) == OffsetArray(parent(A), first(axes(A, 1)) - 1, 0)
 v = OffsetArray(rand(8), (-2,))
 @test sort(v) == OffsetArray(sort(parent(v)), v.offsets)
-@test sortrows(A) == OffsetArray(sortrows(parent(A)), A.offsets)
-@test sortcols(A) == OffsetArray(sortcols(parent(A)), A.offsets)
+@test sortslices(A, dims=1) == OffsetArray(sortslices(parent(A), dims=1), A.offsets)
+@test sortslices(A, dims=2) == OffsetArray(sortslices(parent(A), dims=2), A.offsets)
 @test sort(A, dims=1) == OffsetArray(sort(parent(A), dims=1), A.offsets)
 @test sort(A, dims=2) == OffsetArray(sort(parent(A), dims=2), A.offsets)
 

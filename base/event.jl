@@ -295,7 +295,7 @@ mutable struct AsyncCondition
             #TODO: this codepath is currently not tested
             Libc.free(this.handle)
             this.handle = C_NULL
-            throw(UVError("uv_async_init", err))
+            throw(_UVError("uv_async_init", err))
         end
         return this
     end
@@ -353,7 +353,7 @@ mutable struct Timer
             #TODO: this codepath is currently not tested
             Libc.free(this.handle)
             this.handle = C_NULL
-            throw(UVError("uv_timer_init", err))
+            throw(_UVError("uv_timer_init", err))
         end
 
         associate_julia_struct(this.handle, this)

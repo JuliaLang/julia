@@ -56,9 +56,9 @@ end
         end
 
         for (a,b) in [(T(12.8),T(0.8)),
-                      (prevfloat(realmin(T)), prevfloat(one(T), 2)),
-                      (prevfloat(realmin(T)), prevfloat(one(T), 2)),
-                      (prevfloat(realmin(T)), nextfloat(one(T), -2)),
+                      (prevfloat(floatmin(T)), prevfloat(one(T), 2)),
+                      (prevfloat(floatmin(T)), prevfloat(one(T), 2)),
+                      (prevfloat(floatmin(T)), nextfloat(one(T), -2)),
                       (nextfloat(zero(T), 3), T(0.75)),
                       (prevfloat(zero(T), -3), T(0.75)),
                       (nextfloat(zero(T)), T(0.5))]
@@ -94,8 +94,8 @@ end
             @test ldexp(T(-0.854375), 5) === T(-27.34)
             @test ldexp(T(1.0), typemax(Int)) === T(Inf)
             @test ldexp(T(1.0), typemin(Int)) === T(0.0)
-            @test ldexp(prevfloat(realmin(T)), typemax(Int)) === T(Inf)
-            @test ldexp(prevfloat(realmin(T)), typemin(Int)) === T(0.0)
+            @test ldexp(prevfloat(floatmin(T)), typemax(Int)) === T(Inf)
+            @test ldexp(prevfloat(floatmin(T)), typemin(Int)) === T(0.0)
 
             @test ldexp(T(0.0), Int128(0)) === T(0.0)
             @test ldexp(T(-0.0), Int128(0)) === T(-0.0)
@@ -104,8 +104,8 @@ end
             @test ldexp(T(-0.854375), Int128(5)) === T(-27.34)
             @test ldexp(T(1.0), typemax(Int128)) === T(Inf)
             @test ldexp(T(1.0), typemin(Int128)) === T(0.0)
-            @test ldexp(prevfloat(realmin(T)), typemax(Int128)) === T(Inf)
-            @test ldexp(prevfloat(realmin(T)), typemin(Int128)) === T(0.0)
+            @test ldexp(prevfloat(floatmin(T)), typemax(Int128)) === T(Inf)
+            @test ldexp(prevfloat(floatmin(T)), typemin(Int128)) === T(0.0)
 
             @test ldexp(T(0.0), BigInt(0)) === T(0.0)
             @test ldexp(T(-0.0), BigInt(0)) === T(-0.0)
@@ -114,18 +114,18 @@ end
             @test ldexp(T(-0.854375), BigInt(5)) === T(-27.34)
             @test ldexp(T(1.0), BigInt(typemax(Int128))) === T(Inf)
             @test ldexp(T(1.0), BigInt(typemin(Int128))) === T(0.0)
-            @test ldexp(prevfloat(realmin(T)), BigInt(typemax(Int128))) === T(Inf)
-            @test ldexp(prevfloat(realmin(T)), BigInt(typemin(Int128))) === T(0.0)
+            @test ldexp(prevfloat(floatmin(T)), BigInt(typemax(Int128))) === T(Inf)
+            @test ldexp(prevfloat(floatmin(T)), BigInt(typemin(Int128))) === T(0.0)
 
             # Test also against BigFloat reference. Needs to be exactly rounded.
-            @test ldexp(realmin(T), -1) == T(ldexp(big(realmin(T)), -1))
-            @test ldexp(realmin(T), -2) == T(ldexp(big(realmin(T)), -2))
-            @test ldexp(realmin(T)/2, 0) == T(ldexp(big(realmin(T)/2), 0))
-            @test ldexp(realmin(T)/3, 0) == T(ldexp(big(realmin(T)/3), 0))
-            @test ldexp(realmin(T)/3, -1) == T(ldexp(big(realmin(T)/3), -1))
-            @test ldexp(realmin(T)/3, 11) == T(ldexp(big(realmin(T)/3), 11))
-            @test ldexp(realmin(T)/11, -10) == T(ldexp(big(realmin(T)/11), -10))
-            @test ldexp(-realmin(T)/11, -10) == T(ldexp(big(-realmin(T)/11), -10))
+            @test ldexp(floatmin(T), -1) == T(ldexp(big(floatmin(T)), -1))
+            @test ldexp(floatmin(T), -2) == T(ldexp(big(floatmin(T)), -2))
+            @test ldexp(floatmin(T)/2, 0) == T(ldexp(big(floatmin(T)/2), 0))
+            @test ldexp(floatmin(T)/3, 0) == T(ldexp(big(floatmin(T)/3), 0))
+            @test ldexp(floatmin(T)/3, -1) == T(ldexp(big(floatmin(T)/3), -1))
+            @test ldexp(floatmin(T)/3, 11) == T(ldexp(big(floatmin(T)/3), 11))
+            @test ldexp(floatmin(T)/11, -10) == T(ldexp(big(floatmin(T)/11), -10))
+            @test ldexp(-floatmin(T)/11, -10) == T(ldexp(big(-floatmin(T)/11), -10))
         end
     end
 end
@@ -956,8 +956,30 @@ float(x::FloatWrapper) = x
     @test isa(cos(z), Complex)
 end
 
-isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using .Main.TestHelpers: Furlong
+@testset "cbrt" begin
+    for T in (Float32, Float64)
+        @test cbrt(zero(T)) === zero(T)
+        @test cbrt(-zero(T)) === -zero(T)
+        @test cbrt(one(T)) === one(T)
+        @test cbrt(-one(T)) === -one(T)
+        @test cbrt(T(Inf)) === T(Inf)
+        @test cbrt(-T(Inf)) === -T(Inf)
+        @test isnan_type(T, cbrt(T(NaN)))
+        for x in (pcnfloat(nextfloat(nextfloat(zero(T))))...,
+                  pcnfloat(prevfloat(prevfloat(zero(T))))...,
+                  0.45, 0.6, 0.98,
+                  map(x->x^3, 1.0:1.0:1024.0)...,
+                  nextfloat(-T(Inf)), prevfloat(T(Inf)))
+            by = cbrt(big(T(x)))
+            @test cbrt(T(x)) ≈ by rtol=eps(T)
+            bym = cbrt(big(T(-x)))
+            @test cbrt(T(-x)) ≈ bym rtol=eps(T)
+        end
+    end
+end
+
+isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
+using .Main.Furlongs
 @test hypot(Furlong(0), Furlong(0)) == Furlong(0.0)
 @test hypot(Furlong(3), Furlong(4)) == Furlong(5.0)
 @test hypot(Furlong(NaN), Furlong(Inf)) == Furlong(Inf)

@@ -352,4 +352,27 @@ end # @testset
 
 end
 
+# The old iteration protocol shims deprecation test
+struct DelegateIterator{T}
+    x::T
+end
+Base.start(itr::DelegateIterator) = start(itr.x)
+Base.next(itr::DelegateIterator, state) = next(itr.x, state)
+Base.done(itr::DelegateIterator, state) = done(itr.x, state)
+
+@testset "Iteration protocol" begin
+    let A = [1], B = [], C = DelegateIterator([1]), D = DelegateIterator([]), E = Any[1,"abc"]
+        @test (@test_deprecated next(A, start(A))[1]) == 1
+        @test @test_deprecated done(A, next(A, start(A))[2])
+        @test @test_deprecated done(B, start(B))
+        @test (@test_deprecated next(C, start(C))[1]) == 1
+        @test @test_deprecated done(C, next(C, start(C))[2])
+        @test @test_deprecated done(D, start(D))
+        @test (@test_deprecated next(E, next(E, start(E))[2])[1]) == "abc"
+    end
+
+    # rest with state from old iteration protocol
+    @test (@test_deprecated collect(Iterators.rest(1:6, Base.start(1:6)))) == collect(1:6)
+end
+
 # END 0.7 deprecations

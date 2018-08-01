@@ -17,14 +17,24 @@ preview_info() = printstyled("───── Preview mode ─────\n"; c
 
 include("generate.jl")
 
-parse_package(pkg) = Pkg.REPLMode.parse_package(pkg; add_or_develop=true)
+function check_package_name(x::String)
+    if !(occursin(Pkg.REPLMode.name_re, x))
+         cmderror("$x is not a valid packagename")
+    end
+    return PackageSpec(x)
+end
 
 add_or_develop(pkg::Union{String, PackageSpec}; kwargs...) = add_or_develop([pkg]; kwargs...)
-add_or_develop(pkgs::Vector{String}; kwargs...)            = add_or_develop([parse_package(pkg) for pkg in pkgs]; kwargs...)
+add_or_develop(pkgs::Vector{String}; kwargs...)            = add_or_develop([check_package_name(pkg) for pkg in pkgs]; kwargs...)
 add_or_develop(pkgs::Vector{PackageSpec}; kwargs...)       = add_or_develop(Context(), pkgs; kwargs...)
 
-function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, kwargs...)
+function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, devdir::Union{String,Nothing}=nothing, kwargs...)
     Context!(ctx; kwargs...)
+
+    # All developed packages should go through handle_repos_develop so just give them an empty repo
+    for pkg in pkgs
+        mode == :develop && pkg.repo == nothing && (pkg.repo = Types.GitRepo())
+    end
 
     # if julia is passed as a package the solver gets tricked;
     # this catches the error early on
@@ -32,11 +42,8 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, k
         cmderror("Trying to $mode julia as a package")
 
     ctx.preview && preview_info()
-    if !UPDATED_REGISTRY_THIS_SESSION[]
-        update_registry(ctx)
-    end
     if mode == :develop
-        new_git = handle_repos_develop!(ctx, pkgs)
+        new_git = handle_repos_develop!(ctx, pkgs, something(devdir, Pkg.devdir()))
     else
         new_git = handle_repos_add!(ctx, pkgs; upgrade_or_add=true)
     end
@@ -55,12 +62,10 @@ end
 
 add(args...; kwargs...) = add_or_develop(args...; mode = :add, kwargs...)
 develop(args...; kwargs...) = add_or_develop(args...; mode = :develop, kwargs...)
-@deprecate checkout develop
 
-
-rm(pkg::Union{String, PackageSpec}; kwargs...)               = rm([pkg]; kwargs...)
-rm(pkgs::Vector{String}; kwargs...)      = rm([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
-rm(pkgs::Vector{PackageSpec}; kwargs...) = rm(Context(), pkgs; kwargs...)
+rm(pkg::Union{String, PackageSpec}; kwargs...) = rm([pkg]; kwargs...)
+rm(pkgs::Vector{String}; kwargs...)            = rm([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
+rm(pkgs::Vector{PackageSpec}; kwargs...)       = rm(Context(), pkgs; kwargs...)
 
 function rm(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     Context!(ctx; kwargs...)
@@ -96,7 +101,7 @@ function update_registry(ctx)
                     try
                         GitTools.fetch(repo; refspecs=["+refs/heads/$branch:refs/remotes/origin/$branch"])
                     catch e
-                        e isa LibGit2.GitError || rethrow(e)
+                        e isa CommandError || rethrow(e)
                         push!(errors, (reg, "failed to fetch from repo"))
                         return
                     end
@@ -280,22 +285,20 @@ function gc(ctx::Context=Context(); kwargs...)
     for (manifestfile, date) in manifest_date
         !isfile(manifestfile) && continue
         println("        `$manifestfile`")
-        infos = try
+        manifest = try
             read_manifest(manifestfile)
         catch e
             @warn "Reading manifest file at $manifestfile failed with error" exception = e
             nothing
         end
-        infos == nothing && continue
+        manifest == nothing && continue
         new_usage[manifestfile] = [Dict("time" => date)]
-        for entry in infos
-            entry isa Pair || continue
-            name, _stanzas = entry
-            @assert length(_stanzas) == 1
-            stanzas = _stanzas[1]
-            if stanzas isa Dict && haskey(stanzas, "uuid") && haskey(stanzas, "git-tree-sha1")
-                push!(paths_to_keep,
-                      Operations.find_installed(name, UUID(stanzas["uuid"]), SHA1(stanzas["git-tree-sha1"])))
+        for (name, infos) in manifest
+            for info in infos
+                if haskey(info, "uuid") && haskey(info, "git-tree-sha1")
+                    push!(paths_to_keep,
+                          Operations.find_installed(name, UUID(info["uuid"]), SHA1(info["git-tree-sha1"])))
+                end
             end
         end
     end
@@ -381,11 +384,11 @@ function _get_deps!(ctx::Context, pkgs::Vector{PackageSpec}, uuids::Vector{UUID}
     return
 end
 
+
 build(pkgs...) = build([PackageSpec(pkg) for pkg in pkgs])
 build(pkg::Array{Union{}, 1}) = build(PackageSpec[])
 build(pkg::PackageSpec) = build([pkg])
 build(pkgs::Vector{PackageSpec}) = build(Context(), pkgs)
-
 function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     Context!(ctx; kwargs...)
 
@@ -426,16 +429,16 @@ function clone(url::String, name::String = "")
     if !isempty(name)
         ctx.old_pkg2_clone_name = name
     end
-    develop(ctx, [parse_package(url)])
+    develop(ctx, [Pkg.REPLMode.parse_package(url; add_or_develop=true)])
 end
 
-function dir(pkg::String, paths::String...)
-    @warn "Pkg.dir is only kept for legacy CI script reasons" maxlog=1
+function dir(pkg::String, paths::AbstractString...)
+    @warn "`Pkg.dir(pkgname, paths...)` is deprecated; instead, do `import $pkg; joinpath(dirname(pathof($pkg)), \"..\", paths...)`." maxlog=1
     pkgid = Base.identify_package(pkg)
-    pkgid == nothing && return nothing
+    pkgid === nothing && return nothing
     path = Base.locate_package(pkgid)
-    pkgid == nothing && return nothing
-    return joinpath(abspath(path, "..", "..", paths...))
+    path === nothing && return nothing
+    return abspath(path, "..", "..", paths...)
 end
 
 precompile() = precompile(Context())
@@ -462,9 +465,9 @@ function precompile(ctx::Context)
             end
         end
         if !found_matching_precompile
-            # Only precompile packages that has contains `__precompile__` or `__precompile__(true)`
+            # Don't bother attempting to precompile packages that appear to contain `__precompile__(false)`
             source = read(sourcepath, String)
-            if occursin(r"__precompile__\(\)|__precompile__\(true\)", source)
+            if !occursin(r"__precompile__\(false\)", source)
                 push!(needs_to_be_precompiled, pkg.name)
             end
         end
@@ -541,6 +544,13 @@ function instantiate(ctx::Context; manifest::Union{Bool, Nothing}=nothing, kwarg
     new_git = handle_repos_add!(ctx, pkgs; upgrade_or_add=false)
     new_apply = Operations.apply_versions(ctx, pkgs, hashes, urls)
     Operations.build_versions(ctx, union(new_apply, new_git))
+end
+
+
+status(mode=PKGMODE_PROJECT) = status(Context(), mode)
+function status(ctx::Context, mode=PKGMODE_PROJECT)
+    Pkg.Display.status(ctx, mode)
+    return
 end
 
 function activate(path::Union{String,Nothing}=nothing)

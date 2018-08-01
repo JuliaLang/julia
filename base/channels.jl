@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-abstract type AbstractChannel end
+abstract type AbstractChannel{T} end
 
 """
     Channel{T}(sz::Int)
@@ -17,7 +17,7 @@ Other constructors:
 * `Channel(Inf)`: equivalent to `Channel{Any}(typemax(Int))`
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
 """
-mutable struct Channel{T} <: AbstractChannel
+mutable struct Channel{T} <: AbstractChannel{T}
     cond_take::Condition                 # waiting for data to become available
     cond_put::Condition                  # waiting for a writeable slot
     state::Symbol

@@ -367,7 +367,7 @@ function _jl_spawn(file, argv, cmd::Cmd, stdio)
         uv_jl_return_spawn::Ptr{Cvoid})
     if error != 0
         ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), proc)
-        throw(UVError("could not spawn " * string(cmd), error))
+        throw(_UVError("could not spawn " * string(cmd), error))
     end
     return proc
 end
@@ -687,7 +687,7 @@ function test_success(proc::Process)
     @assert process_exited(proc)
     if proc.exitcode < 0
         #TODO: this codepath is not currently tested
-        throw(UVError("could not start process $(string(proc.cmd))", proc.exitcode))
+        throw(_UVError("could not start process $(string(proc.cmd))", proc.exitcode))
     end
     proc.exitcode == 0 && (proc.termsignal == 0 || proc.termsignal == SIGPIPE)
 end
@@ -743,7 +743,7 @@ function kill(p::Process, signum::Integer)
         @assert p.handle != C_NULL
         err = ccall(:uv_process_kill, Int32, (Ptr{Cvoid}, Int32), p.handle, signum)
         if err != 0 && err != UV_ESRCH
-            throw(UVError("kill", err))
+            throw(_UVError("kill", err))
         end
     end
 end

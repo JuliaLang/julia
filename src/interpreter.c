@@ -511,8 +511,7 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == boundscheck_sym) {
         return jl_true;
     }
-    else if (head == boundscheck_sym || head == inbounds_sym || head == fastmath_sym ||
-             head == simdloop_sym || head == meta_sym) {
+    else if (head == meta_sym || head == inbounds_sym || head == simdloop_sym) {
         return jl_nothing;
     }
     else if (head == gc_preserve_begin_sym || head == gc_preserve_end_sym) {
@@ -670,6 +669,14 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                 }
                 else if (jl_is_toplevel_only_expr(stmt)) {
                     jl_toplevel_eval(s->module, stmt);
+                }
+                else if (head == meta_sym) {
+                    if (jl_expr_nargs(stmt) == 1 && jl_exprarg(stmt, 0) == (jl_value_t*)nospecialize_sym) {
+                        jl_set_module_nospecialize(s->module, 1);
+                    }
+                    if (jl_expr_nargs(stmt) == 1 && jl_exprarg(stmt, 0) == (jl_value_t*)specialize_sym) {
+                        jl_set_module_nospecialize(s->module, 0);
+                    }
                 }
                 else {
                     eval_stmt_value(stmt, s);

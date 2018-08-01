@@ -29,19 +29,17 @@ end
 end
 
 temp_pkg_dir() do project_path
-    cd(project_path) do
-        withenv("USER" => "Test User") do
-            pkg"generate HelloWorld"
-            LibGit2.close((LibGit2.init(".")))
-            cd("HelloWorld")
-            with_current_env() do
-                pkg"st"
-                @eval using HelloWorld
-                Base.invokelatest(HelloWorld.greet)
-                @test isfile("Project.toml")
-                Pkg.REPLMode.pkgstr("develop $(joinpath(@__DIR__, "test_packages", "PackageWithBuildSpecificTestDeps"))")
-                Pkg.test("PackageWithBuildSpecificTestDeps")
-            end
+    with_pkg_env(project_path; change_dir=true) do;
+        pkg"generate HelloWorld"
+        LibGit2.close((LibGit2.init(".")))
+        cd("HelloWorld")
+        with_current_env() do
+            pkg"st"
+            @eval using HelloWorld
+            Base.invokelatest(HelloWorld.greet)
+            @test isfile("Project.toml")
+            Pkg.REPLMode.pkgstr("develop $(joinpath(@__DIR__, "test_packages", "PackageWithBuildSpecificTestDeps"))")
+            Pkg.test("PackageWithBuildSpecificTestDeps")
         end
 
         pkg"dev Example"
@@ -55,9 +53,7 @@ temp_pkg_dir() do project_path
             @test LibGit2.branch(repo) == "DO_NOT_REMOVE"
         end
 
-        withenv("USER" => "Test User") do
-            pkg"generate Foo"
-        end
+        pkg"generate Foo"
         pkg"dev Foo"
         mv(joinpath("Foo", "src", "Foo.jl"), joinpath("Foo", "src", "Foo2.jl"))
         @test_throws CommandError pkg"dev Foo"
@@ -125,7 +121,10 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
     p2 = git_init_package(tmp_pkg_path, joinpath(@__DIR__, "test_packages/$pkg2"))
     Pkg.REPLMode.pkgstr("add $p2")
     Pkg.REPLMode.pkgstr("pin $pkg2")
-    @eval import $(Symbol(pkg2))
+    # FIXME: this confuses the precompile logic to know what is going on with the user
+    # FIXME: why isn't this testing the Pkg after importing, rather than after freeing it
+    #@eval import Example
+    #@eval import $(Symbol(pkg2))
     @test Pkg.installed()[pkg2] == v"0.1.0"
     Pkg.REPLMode.pkgstr("free $pkg2")
     @test_throws CommandError Pkg.REPLMode.pkgstr("free $pkg2")
@@ -219,34 +218,95 @@ temp_pkg_dir() do project_path; cd(project_path) do
     mktempdir() do other_dir
         mktempdir() do tmp;
             cd(tmp)
-            withenv("USER" => "Test User") do
-                pkg"generate HelloWorld"
-                cd("HelloWorld") do
-                    with_current_env() do
-                        pkg"generate SubModule1"
-                        pkg"generate SubModule2"
-                        pkg"develop SubModule1"
-                        mkdir("tests")
-                        cd("tests")
-                        pkg"develop ../SubModule2"
-                        @test Pkg.installed()["SubModule1"] == v"0.1.0"
-                        @test Pkg.installed()["SubModule2"] == v"0.1.0"
-                    end
-                end
-                cp("HelloWorld", joinpath(other_dir, "HelloWorld"))
-                cd(joinpath(other_dir, "HelloWorld"))
+            pkg"generate HelloWorld"
+            cd("HelloWorld") do
                 with_current_env() do
-                    # Check that these didn't generate absolute paths in the Manifest by copying
-                    # to another directory
-                    @test Base.find_package("SubModule1") == joinpath(pwd(), "SubModule1", "src", "SubModule1.jl")
-                    @test Base.find_package("SubModule2") == joinpath(pwd(), "SubModule2", "src", "SubModule2.jl")
+                    pkg"generate SubModule1"
+                    pkg"generate SubModule2"
+                    pkg"develop SubModule1"
+                    mkdir("tests")
+                    cd("tests")
+                    pkg"develop ../SubModule2"
+                    @test Pkg.installed()["SubModule1"] == v"0.1.0"
+                    @test Pkg.installed()["SubModule2"] == v"0.1.0"
+                    # make sure paths to SubModule1 and SubModule2 are relative
+                    manifest = Pkg.Types.Context().env.manifest
+                    @test manifest["SubModule1"][1]["path"] == "SubModule1"
+                    @test manifest["SubModule2"][1]["path"] == "SubModule2"
                 end
+            end
+            cp("HelloWorld", joinpath(other_dir, "HelloWorld"))
+            cd(joinpath(other_dir, "HelloWorld"))
+            with_current_env() do
+                # Check that these didn't generate absolute paths in the Manifest by copying
+                # to another directory
+                @test Base.find_package("SubModule1") == joinpath(pwd(), "SubModule1", "src", "SubModule1.jl")
+                @test Base.find_package("SubModule2") == joinpath(pwd(), "SubModule2", "src", "SubModule2.jl")
             end
         end
     end
 end # cd
 end # temp_pkg_dir
 
+# activate
+cd(mktempdir()) do
+    path = pwd()
+    pkg"activate ."
+    mkdir("Foo")
+    cd(mkdir("modules")) do
+        pkg"generate Foo"
+    end
+    pkg"develop modules/Foo"
+    pkg"activate Foo" # activate path Foo over deps Foo
+    @test Base.active_project() == joinpath(path, "Foo", "Project.toml")
+    pkg"activate ."
+    rm("Foo"; force=true, recursive=true)
+    pkg"activate Foo" # activate path from developed Foo
+    @test Base.active_project() == joinpath(path, "modules", "Foo", "Project.toml")
+    pkg"activate ."
+    pkg"activate ./Foo" # activate empty directory Foo (sidestep the developed Foo)
+    @test Base.active_project() == joinpath(path, "Foo", "Project.toml")
+    pkg"activate ."
+    pkg"activate Bar" # activate empty directory Bar
+    @test Base.active_project() == joinpath(path, "Bar", "Project.toml")
+    pkg"activate ."
+    pkg"add Example" # non-deved deps should not be activated
+    pkg"activate Example"
+    @test Base.active_project() == joinpath(path, "Example", "Project.toml")
+    pkg"activate ."
+    cd(mkdir("tests"))
+    pkg"activate Foo" # activate developed Foo from another directory
+    @test Base.active_project() == joinpath(path, "modules", "Foo", "Project.toml")
+end
+
+# test relative dev paths (#490)
+cd(mktempdir()) do
+    pkg"generate HelloWorld"
+    cd("HelloWorld")
+    pkg"generate SubModule"
+    cd(mkdir("tests"))
+    pkg"activate ."
+    pkg"develop .." # HelloWorld
+    pkg"develop ../SubModule"
+    @test Pkg.installed()["HelloWorld"] == v"0.1.0"
+    @test Pkg.installed()["SubModule"] == v"0.1.0"
+    manifest = Pkg.Types.Context().env.manifest
+    @test manifest["HelloWorld"][1]["path"] == ".."
+    @test manifest["SubModule"][1]["path"] == joinpath("..", "SubModule")
+end
+
+# develop with --shared and --local
+using Pkg.Types: manifest_info, EnvCache
+cd(mktempdir()) do
+    uuid = UUID("7876af07-990d-54b4-ab0e-23690620f79a") # Example
+    pkg"activate ."
+    pkg"develop Example" # test default
+    @test manifest_info(EnvCache(), uuid)["path"] == joinpath(Pkg.devdir(), "Example")
+    pkg"develop --shared Example"
+    @test manifest_info(EnvCache(), uuid)["path"] == joinpath(Pkg.devdir(), "Example")
+    pkg"develop --local Example"
+    @test manifest_info(EnvCache(), uuid)["path"] == joinpath("dev", "Example")
+end
 
 test_complete(s) = Pkg.REPLMode.completions(s,lastindex(s))
 apply_completion(str) = begin
@@ -310,6 +370,10 @@ temp_pkg_dir() do project_path; cd(project_path) do
     c, r = test_complete("help r")
     @test "remove" in c
     @test !("rm" in c)
+
+    c, r = test_complete("add REPL")
+    # Filtered by version
+    @test !("REPL" in c)
 end end
 
 temp_pkg_dir() do project_path; cd(project_path) do
@@ -358,9 +422,7 @@ temp_pkg_dir() do project_path
             setup_package(parent_dir, pkg_name) = begin
                 mkdir(parent_dir)
                 cd(parent_dir) do
-                    withenv("USER" => "Test User") do
-                        Pkg.generate(pkg_name)
-                    end
+                    Pkg.generate(pkg_name)
                     cd(pkg_name) do
                         LibGit2.with(LibGit2.init(joinpath(project_path, parent_dir, pkg_name))) do repo
                             LibGit2.add!(repo, "*")
@@ -487,6 +549,16 @@ end
             @test Pkg.REPLMode.promptf() == "($newname) pkg> "
         end
         @test Pkg.REPLMode.promptf() == "($newname) pkg> "
+    end
+end
+
+@testset "Argument order" begin
+    with_temp_env() do
+        @test_throws CommandError Pkg.REPLMode.pkgstr("add FooBar Example#foobar#foobar")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("up Example#foobar@0.0.0")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("pin Example@0.0.0@0.0.1")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("up #foobar")
+        @test_throws CommandError Pkg.REPLMode.pkgstr("add @0.0.1")
     end
 end
 

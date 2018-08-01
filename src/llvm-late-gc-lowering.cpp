@@ -461,6 +461,23 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
             fld_idx = IdxOp->getLimitedValue(INT_MAX);
             CurrentV = EEI->getVectorOperand();
         }
+        else if (auto LI = dyn_cast<LoadInst>(CurrentV)) {
+            if (auto PtrT = dyn_cast<PointerType>(LI->getType())) {
+                if (PtrT->getAddressSpace() == AddressSpace::Loaded) {
+                    CurrentV = LI->getPointerOperand();
+                    if (!isSpecialPtr(CurrentV->getType())) {
+                        // Special case to bypass the check below.
+                        // This could really be anything, but it's not loaded
+                        // from a tracked pointer, so it doesn't matter what
+                        // it is.
+                        return std::make_pair(CurrentV, fld_idx);
+                    }
+                    continue;
+                }
+            }
+            // In general a load terminates a walk
+            break;
+        }
         else {
             break;
         }
@@ -537,6 +554,10 @@ int LateLowerGCFrame::NumberBase(State &S, Value *V, Value *CurrentV)
                ((isa<AllocaInst>(CurrentV) || isa<AddrSpaceCastInst>(CurrentV)) &&
                 getValueAddrSpace(CurrentV) != AddressSpace::Tracked)) {
         // We know this is rooted in the parent
+        Number = -1;
+    } else if (!isSpecialPtr(CurrentV->getType()) && !isUnion) {
+        // Externally rooted somehow hopefully (otherwise there's a bug in the
+        // input IR)
         Number = -1;
     } else if (isa<SelectInst>(CurrentV) && !isUnion && getValueAddrSpace(CurrentV) != AddressSpace::Tracked) {
         int Number = LiftSelect(S, cast<SelectInst>(CurrentV));
@@ -1089,7 +1110,10 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     // we know that the object is a constant as well and doesn't need rooting.
                     RefinedPtr.push_back(-2);
                 }
-                MaybeNoteDef(S, BBS, LI, BBS.Safepoints, std::move(RefinedPtr));
+                if (!LI->getType()->isPointerTy() ||
+                    cast<PointerType>(LI->getType())->getAddressSpace() != AddressSpace::Loaded) {
+                    MaybeNoteDef(S, BBS, LI, BBS.Safepoints, std::move(RefinedPtr));
+                }
                 NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
             } else if (SelectInst *SI = dyn_cast<SelectInst>(&I)) {
                 // We need to insert an extra select for the GC root

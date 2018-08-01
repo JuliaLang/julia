@@ -4,7 +4,7 @@ module TestSymmetric
 
 using Test, LinearAlgebra, SparseArrays, Random
 
-srand(101)
+Random.seed!(101)
 
 @testset "Pauli σ-matrices: $σ" for σ in map(Hermitian,
         Any[ [1 0; 0 1], [0 1; 1 0], [0 -im; im 0], [1 0; 0 -1] ])

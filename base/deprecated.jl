@@ -395,6 +395,8 @@ end
 @deprecate readstring(filename::AbstractString) read(filename, String)
 @deprecate readstring(cmd::AbstractCmd) read(cmd, String)
 
+@deprecate_binding UVError IOError false
+
 # issue #11310
 # remove "parametric method syntax" deprecation in julia-syntax.scm
 
@@ -1386,7 +1388,8 @@ export readandwrite
 
 @deprecate flipdim(A, d) reverse(A, dims=d)
 
-@deprecate squeeze(A, dims) squeeze(A, dims=dims)
+@deprecate squeeze(args...; kwargs...) dropdims(args...; kwargs...)
+@deprecate dropdims(A, dims) dropdims(A, dims=dims)
 
 @deprecate diff(A::AbstractMatrix, dim::Integer) diff(A, dims=dim)
 @deprecate unique(A::AbstractArray, dim::Int)    unique(A, dims=dim)
@@ -1766,6 +1769,20 @@ end
 
 @deprecate indices1 axes1
 @deprecate _length length
+
+# PR #28223
+@deprecate code_llvm_raw(f, types=Tuple) code_llvm(f, types; raw=true)
+
+# PR #28302
+@deprecate realmin floatmin
+@deprecate realmax floatmax
+
+@deprecate sortrows(A::AbstractMatrix; kws...) sortslices(A, dims=1, kws...)
+@deprecate sortcols(A::AbstractMatrix; kws...) sortslices(A, dims=2, kws...)
+
+# PR #28304
+@deprecate nextpow2(x) nextpow(2, x)
+@deprecate prevpow2(x) prevpow(2, x)
 
 # END 0.7 deprecations
 

@@ -211,7 +211,8 @@ function summarize(io::IO, m::Module, binding)
     println(io, "No docstring found for module `", m, "`.\n")
 end
 
-function summarize(io::IO, ::T, binding) where T
+function summarize(io::IO, @nospecialize(T), binding)
+    T = typeof(T)
     println(io, "`", binding, "` is of type `", T, "`.\n")
     summarize(io, T, binding)
 end

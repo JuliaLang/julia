@@ -58,7 +58,7 @@ so all the performance issues discussed previously apply.
 A useful tool for measuring performance is the [`@time`](@ref) macro. We here repeat the example
 with the global variable above, but this time with the type annotation removed:
 
-```jldoctest; setup = :(using Random; srand(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
+```jldoctest; setup = :(using Random; Random.seed!(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
 julia> x = rand(1000);
 
 julia> function sum_global()
@@ -94,7 +94,7 @@ If we instead pass `x` as an argument to the function it no longer allocates mem
 (the allocation reported below is due to running the `@time` macro in global scope)
 and is significantly faster after the first call:
 
-```jldoctest sumarg; setup = :(using Random; srand(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
+```jldoctest sumarg; setup = :(using Random; Random.seed!(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
 julia> x = rand(1000);
 
 julia> function sum_arg(x)
@@ -583,7 +583,7 @@ to perform a core computation. Where possible, it is a good idea to put these co
 in separate functions. For example, the following contrived function returns an array of a randomly-chosen
 type:
 
-```jldoctest; setup = :(using Random; srand(1234))
+```jldoctest; setup = :(using Random; Random.seed!(1234))
 julia> function strange_twos(n)
            a = Vector{rand(Bool) ? Int64 : Float64}(undef, n)
            for i = 1:n
@@ -601,7 +601,7 @@ julia> strange_twos(3)
 
 This should be written as:
 
-```jldoctest; setup = :(using Random; srand(1234))
+```jldoctest; setup = :(using Random; Random.seed!(1234))
 julia> function fill_twos!(a)
            for i = eachindex(a)
                a[i] = 2

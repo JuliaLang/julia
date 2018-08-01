@@ -4,6 +4,8 @@
 # constants #
 #############
 
+@nospecialize
+
 const AbstractEvalConstant = Const
 
 const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
@@ -191,9 +193,7 @@ add_tfunc(checked_smul_int, 2, 2, chk_tfunc, 10)
 add_tfunc(checked_umul_int, 2, 2, chk_tfunc, 10)
     ## other, misc intrinsics ##
 add_tfunc(Core.Intrinsics.llvmcall, 3, INT_INF,
-          # TODO: Lower this inlining cost. We currently need to prevent inlining llvmcall
-          # to avoid issues with its IR.
-          (@nospecialize(fptr), @nospecialize(rt), @nospecialize(at), a...) -> instanceof_tfunc(rt)[1], 1000)
+          (@nospecialize(fptr), @nospecialize(rt), @nospecialize(at), a...) -> instanceof_tfunc(rt)[1], 10)
 cglobal_tfunc(@nospecialize(fptr)) = Ptr{Cvoid}
 cglobal_tfunc(@nospecialize(fptr), @nospecialize(t)) = (isType(t) ? Ptr{t.parameters[1]} : Ptr)
 cglobal_tfunc(@nospecialize(fptr), t::Const) = (isa(t.val, Type) ? Ptr{t.val} : Ptr)
@@ -345,9 +345,9 @@ add_tfunc(nfields, 1, 1,
         end
         return Int
     end, 0)
-add_tfunc(Core._expr, 1, INT_INF, (args...)->Expr, 100)
+add_tfunc(Core._expr, 1, INT_INF, (@nospecialize args...)->Expr, 100)
 add_tfunc(applicable, 1, INT_INF, (@nospecialize(f), args...)->Bool, 100)
-add_tfunc(Core.Intrinsics.arraylen, 1, 1, x->Int, 4)
+add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecialize(x)->Int, 4)
 add_tfunc(arraysize, 2, 2, (@nospecialize(a), @nospecialize(d))->Int, 4)
 add_tfunc(pointerref, 3, 3,
           function (@nospecialize(a), @nospecialize(i), @nospecialize(align))
@@ -466,7 +466,7 @@ add_tfunc(<:, 2, 2,
               return Bool
           end, 0)
 
-function const_datatype_getfield_tfunc(sv, fld)
+function const_datatype_getfield_tfunc(@nospecialize(sv), fld::Int)
     if (fld == DATATYPE_NAME_FIELDINDEX ||
             fld == DATATYPE_PARAMETERS_FIELDINDEX ||
             fld == DATATYPE_TYPES_FIELDINDEX ||
@@ -604,9 +604,14 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
                     return Const(sv.body)
                 end
             elseif isa(sv, DataType)
-                t = const_datatype_getfield_tfunc(sv, isa(nv, Symbol) ?
-                      fieldindex(DataType, nv, false) : nv)
-                t !== nothing && return t
+                idx = nv
+                if isa(idx, Symbol)
+                    idx = fieldindex(DataType, idx, false)
+                end
+                if isa(idx, Int)
+                    t = const_datatype_getfield_tfunc(sv, idx)
+                    t === nothing || return t
+                end
             elseif isa(sv, Core.TypeName)
                 fld = isa(nv, Symbol) ? fieldindex(Core.TypeName, nv, false) : nv
                 if (fld == TYPENAME_NAME_FIELDINDEX ||
@@ -657,7 +662,12 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
             return rewrap_unionall(unwrapva(s.types[1]), s00)
         end
         # union together types of all fields
-        return tmerge_all(map(@nospecialize(t) -> rewrap_unionall(unwrapva(t), s00), s.types))
+        t = Bottom
+        for _ft in s.types
+            t = tmerge(t, rewrap_unionall(unwrapva(_ft), s00))
+            t === Any && break
+        end
+        return t
     end
     fld = name.val
     if isa(fld,Symbol)
@@ -767,7 +777,12 @@ function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
         if !(Int <: name || Symbol <: name)
             return Bottom
         end
-        return tmerge_all(Any[ fieldtype_tfunc(s0, Const(i)) for i = 1:length(ftypes) ])
+        t = Bottom
+        for i in 1:length(ftypes)
+            t = tmerge(t, fieldtype_tfunc(s0, Const(i)))
+            t === Any && break
+        end
+        return t
     end
 
     fld = name.val
@@ -980,13 +995,29 @@ function tuple_tfunc(@nospecialize(argtype))
     return argtype
 end
 
-function array_builtin_common_nothrow(argtypes, first_idx_idx)
+function array_type_undefable(@nospecialize(a))
+    if isa(a, Union)
+        return array_type_undefable(a.a) || array_type_undefable(a.b)
+    elseif isa(a, UnionAll)
+        return true
+    else
+        etype = (a::DataType).parameters[1]
+        return !(isbitstype(etype) || isbitsunion(etype))
+    end
+end
+
+function array_builtin_common_nothrow(argtypes::Array{Any,1}, first_idx_idx::Int)
     length(argtypes) >= 4 || return false
-    (argtypes[1] ⊑ Bool && argtypes[2] ⊑ Array) || return false
+    atype = argtypes[2]
+    (argtypes[1] ⊑ Bool && atype ⊑ Array) || return false
     for i = first_idx_idx:length(argtypes)
         argtypes[i] ⊑ Int || return false
     end
-    # If we have @inbounds (first argument is false), we're allowed to assume we don't throw
+    # If we could potentially throw undef ref errors, bail out now.
+    atype = widenconst(atype)
+    array_type_undefable(atype) && return false
+    # If we have @inbounds (first argument is false), we're allowed to assume
+    # we don't throw bounds errors.
     (isa(argtypes[1], Const) && !argtypes[1].val) && return true
     # Else we can't really say anything here
     # TODO: In the future we may be able to track the shapes of arrays though
@@ -1037,7 +1068,7 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
     return false
 end
 
-function builtin_nothrow(@nospecialize(f), argtypes::Array{Any, 1}, rt)
+function builtin_nothrow(@nospecialize(f), argtypes::Array{Any, 1}, @nospecialize(rt))
     rt === Bottom && return false
     contains_is(_PURE_BUILTINS, f) && return true
     return _builtin_nothrow(f, argtypes, rt)
@@ -1052,7 +1083,7 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
                 return tuple_tfunc(argtypes_to_type(argtypes))
             end
         end
-        return Const(tuple(anymap(a->a.val, argtypes)...))
+        return Const(tuple(anymap(a::Const -> a.val, argtypes)...))
     elseif f === svec
         return SimpleVector
     elseif f === arrayset
@@ -1111,7 +1142,7 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
     end
     if isa(f, IntrinsicFunction)
         if is_pure_intrinsic_infer(f) && _all(@nospecialize(a) -> isa(a, Const), argtypes)
-            argvals = anymap(a -> a.val, argtypes)
+            argvals = anymap(a::Const -> a.val, argtypes)
             try
                 return Const(f(argvals...))
             catch
@@ -1193,3 +1224,5 @@ function typename_static(@nospecialize(t))
     t = unwrap_unionall(widenconst(t))
     return isType(t) ? _typename(t.parameters[1]) : Core.TypeName
 end
+
+@specialize
