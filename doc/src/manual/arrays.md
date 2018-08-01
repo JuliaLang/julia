@@ -835,7 +835,7 @@ provided, the memory layout must correspond in the same way to these strides. `D
 very specific example of a strided array where the elements are arranged contiguously, thus it
 provides its subtypes with the approporiate definition of `strides`. More concrete examples
 can be found within the [interface guide for strided arrays](@ref man-interface-strided-arrays).
-`StridedVector` and `StridedMatrix` are convenient aliases for many of the builtin array types that
+[`StridedVector`](@ref) and [`StridedMatrix`](@ref) are convenient aliases for many of the builtin array types that
 are considered strided arrays, allowing them to dispatch to select specialized implementations that
 call highly tuned and optimized BLAS and LAPACK functions using just the pointer and strides.
 

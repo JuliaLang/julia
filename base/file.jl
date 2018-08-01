@@ -383,6 +383,8 @@ Stacktrace:
 julia> mv("hello.txt", "goodbye.txt", force=true)
 "goodbye.txt"
 
+julia> rm("goodbye.txt");
+
 ```
 """
 function mv(src::AbstractString, dst::AbstractString; force::Bool=false,
