@@ -10457,6 +10457,38 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "base/arrays/#Base.StridedArray",
+    "page": "Arrays",
+    "title": "Base.StridedArray",
+    "category": "constant",
+    "text": "StridedArray{T, N}\n\nAn N dimensional strided array with elements of type T. These arrays follow the strided array interface. If A is a StridedArray, then its elements are stored in memory with offsets, which may vary between dimensions but are constant within a dimension. For example, A could have stride 2 in dimension 1, and stride 3 in dimension 2. Incrementing A along dimension d jumps in memory by [strides(A, d)] slots. Strided arrays are particularly important and useful because they can sometimes be passed directly as pointers to foreign language libraries like BLAS.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.StridedVector",
+    "page": "Arrays",
+    "title": "Base.StridedVector",
+    "category": "constant",
+    "text": "StridedVector{T}\n\nOne dimensional StridedArray with elements of type T.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.StridedMatrix",
+    "page": "Arrays",
+    "title": "Base.StridedMatrix",
+    "category": "constant",
+    "text": "StridedMatrix{T}\n\nTwo dimensional StridedArray with elements of type T.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.StridedVecOrMat",
+    "page": "Arrays",
+    "title": "Base.StridedVecOrMat",
+    "category": "constant",
+    "text": "StridedVecOrMat{T}\n\nUnion type of StridedVector and StridedMatrix with elements of type T.\n\n\n\n\n\n"
+},
+
+{
     "location": "base/arrays/#Base.getindex-Tuple{Type,Vararg{Any,N} where N}",
     "page": "Arrays",
     "title": "Base.getindex",
@@ -10549,7 +10581,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Constructors and Types",
     "category": "section",
-    "text": "Core.AbstractArray\nBase.AbstractVector\nBase.AbstractMatrix\nBase.AbstractVecOrMat\nCore.Array\nCore.Array(::UndefInitializer, ::Any)\nCore.Array(::Nothing, ::Any)\nCore.Array(::Missing, ::Any)\nCore.UndefInitializer\nCore.undef\nBase.Vector\nBase.Vector(::UndefInitializer, ::Any)\nBase.Vector(::Nothing, ::Any)\nBase.Vector(::Missing, ::Any)\nBase.Matrix\nBase.Matrix(::UndefInitializer, ::Any, ::Any)\nBase.Matrix(::Nothing, ::Any, ::Any)\nBase.Matrix(::Missing, ::Any, ::Any)\nBase.VecOrMat\nCore.DenseArray\nBase.DenseVector\nBase.DenseMatrix\nBase.DenseVecOrMat\nBase.getindex(::Type, ::Any...)\nBase.zeros\nBase.ones\nBase.BitArray\nBase.BitArray(::UndefInitializer, ::Integer...)\nBase.BitArray(::Any)\nBase.trues\nBase.falses\nBase.fill\nBase.fill!\nBase.similar"
+    "text": "Core.AbstractArray\nBase.AbstractVector\nBase.AbstractMatrix\nBase.AbstractVecOrMat\nCore.Array\nCore.Array(::UndefInitializer, ::Any)\nCore.Array(::Nothing, ::Any)\nCore.Array(::Missing, ::Any)\nCore.UndefInitializer\nCore.undef\nBase.Vector\nBase.Vector(::UndefInitializer, ::Any)\nBase.Vector(::Nothing, ::Any)\nBase.Vector(::Missing, ::Any)\nBase.Matrix\nBase.Matrix(::UndefInitializer, ::Any, ::Any)\nBase.Matrix(::Nothing, ::Any, ::Any)\nBase.Matrix(::Missing, ::Any, ::Any)\nBase.VecOrMat\nCore.DenseArray\nBase.DenseVector\nBase.DenseMatrix\nBase.DenseVecOrMat\nBase.StridedArray\nBase.StridedVector\nBase.StridedMatrix\nBase.StridedVecOrMat\nBase.getindex(::Type, ::Any...)\nBase.zeros\nBase.ones\nBase.BitArray\nBase.BitArray(::UndefInitializer, ::Integer...)\nBase.BitArray(::Any)\nBase.trues\nBase.falses\nBase.fill\nBase.fill!\nBase.similar"
 },
 
 {
@@ -12021,7 +12053,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.mv",
     "category": "function",
-    "text": "mv(src::AbstractString, dst::AbstractString; force::Bool=false)\n\nMove the file, link, or directory from src to dst. force=true will first remove an existing dst. Return dst.\n\nExamples\n\njulia> write(\"hello.txt\", \"world\");\n\njulia> mv(\"hello.txt\", \"goodbye.txt\")\n\"goodbye.txt\"\n\njulia> \"hello.txt\" in readdir()\nfalse\n\njulia> readline(\"goodbye.txt\")\n\"world\"\n\njulia> write(\"hello.txt\", \"world2\");\n\njulia> mv(\"hello.txt\", \"goodbye.txt\")\nERROR: ArgumentError: \'goodbye.txt\' exists. `force=true` is required to remove \'goodbye.txt\' before moving.\nStacktrace:\n [1] #checkfor_mv_cp_cptree#10(::Bool, ::Function, ::String, ::String, ::String) at ./file.jl:293\n[...]\n\njulia> mv(\"hello.txt\", \"goodbye.txt\", force=true)\n\"goodbye.txt\"\n\n\n\n\n\n\n"
+    "text": "mv(src::AbstractString, dst::AbstractString; force::Bool=false)\n\nMove the file, link, or directory from src to dst. force=true will first remove an existing dst. Return dst.\n\nExamples\n\njulia> write(\"hello.txt\", \"world\");\n\njulia> mv(\"hello.txt\", \"goodbye.txt\")\n\"goodbye.txt\"\n\njulia> \"hello.txt\" in readdir()\nfalse\n\njulia> readline(\"goodbye.txt\")\n\"world\"\n\njulia> write(\"hello.txt\", \"world2\");\n\njulia> mv(\"hello.txt\", \"goodbye.txt\")\nERROR: ArgumentError: \'goodbye.txt\' exists. `force=true` is required to remove \'goodbye.txt\' before moving.\nStacktrace:\n [1] #checkfor_mv_cp_cptree#10(::Bool, ::Function, ::String, ::String, ::String) at ./file.jl:293\n[...]\n\njulia> mv(\"hello.txt\", \"goodbye.txt\", force=true)\n\"goodbye.txt\"\n\njulia> rm(\"goodbye.txt\");\n\n\n\n\n\n\n"
 },
 
 {
@@ -15069,7 +15101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "function",
-    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\n"
+    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\n"
 },
 
 {
