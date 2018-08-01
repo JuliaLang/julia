@@ -867,7 +867,7 @@ function has_non_default_iterate(T)
     world = ccall(:jl_get_world_counter, UInt, ())
     mt = Base._methods(iterate, Tuple{T}, -1, world)
     # Check if this is the above method
-    if (mt[1][3].file == @__FILE_SYMBOL__) && (mt[1][3].line == old_iterate_line_prev + 1)
+    if (mt[1][3].file == @__FILE_SYMBOL__) && (mt[1][3].line == old_iterate_line_prev + 2)
         return false
     end
     return true
