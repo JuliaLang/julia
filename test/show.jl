@@ -563,8 +563,8 @@ let
     @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
     @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
     B[1,2] = T12960()
-    @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [1, 2]  =  $(curmod_prefix)T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
-    @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [1, 2]  =  $(curmod_prefix)T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
+    @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [1, 2]  =  T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
+    @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [1, 2]  =  T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
 end
 
 # issue #13127
@@ -990,6 +990,10 @@ end
     s = IOBuffer()
     show(IOContext(s, :compact => false), (1=>2) => Pair{Any,Any}(3,4))
     @test String(take!(s)) == "(1 => 2) => Pair{Any,Any}(3, 4)"
+
+    # issue #28327
+    d = Dict(Pair{Integer,Integer}(1,2)=>Pair{Integer,Integer}(1,2))
+    @test showstr(d) == "Dict((1=>2)=>(1=>2))" # correct parenthesis
 end
 
 @testset "alignment for pairs" begin  # (#22899)
@@ -1302,11 +1306,32 @@ h_line() = f_line()
     ││╻  g_line
     ││╻  g_line""")
 
+# Tests for printing Core.Compiler internal objects
+@test repr(Core.Compiler.SSAValue(23)) == ":(%23)"
+@test repr(Core.Compiler.SSAValue(-2)) == ":(%-2)"
+@test repr(Core.Compiler.ReturnNode(23)) == ":(return 23)"
+@test repr(Core.Compiler.ReturnNode()) == ":(unreachable)"
+@test repr(Core.Compiler.GotoIfNot(true, 4)) == ":(goto %4 if not true)"
+@test repr(Core.Compiler.PhiNode(Any[2, 3], Any[1, Core.SlotNumber(3)])) == ":(φ (%2 => 1, %3 => _3))"
+@test repr(Core.Compiler.UpsilonNode(Core.SlotNumber(3))) == ":(ϒ (_3))"
+@test repr(Core.Compiler.PhiCNode(Any[1, Core.SlotNumber(3)])) == ":(φᶜ (1, _3))"
+@test sprint(Base.show_unquoted, Core.Compiler.Argument(23)) == "_23"
+@test sprint(Base.show_unquoted, Core.Compiler.Argument(-2)) == "_-2"
+
+
 eval(Meta.parse("""function my_fun28173(x)
     y = if x == 1
             "HI"
         elseif x == 2
-            "BYE"
+            r = 1
+            s = try
+                r = 2
+                "BYE"
+            catch
+                r = 3
+                "CAUGHT!"
+            end
+            "\$r\$s"
         else
             "three"
         end
@@ -1314,7 +1339,9 @@ eval(Meta.parse("""function my_fun28173(x)
 end""")) # use parse to control the line numbers
 let src = code_typed(my_fun28173, (Int,))[1][1]
     ir = Core.Compiler.inflate_ir(src)
-    # @test repr(src) == "CodeInfo(\n" * irshow * ")"
+    source_slotnames = String["my_fun28173", "x"]
+    irshow = sprint(show, ir, context = :SOURCE_SLOTNAMES=>source_slotnames)
+    @test repr(src) == "CodeInfo(\n" * irshow * ")"
     lines1 = split(repr(ir), '\n')
     @test isempty(pop!(lines1))
     Core.Compiler.insert_node!(ir, 1, Val{1}, QuoteNode(1), false)
@@ -1323,22 +1350,22 @@ let src = code_typed(my_fun28173, (Int,))[1][1]
     Core.Compiler.insert_node!(ir, length(ir.stmts), Val{4}, QuoteNode(4), true)
     lines2 = split(repr(ir), '\n')
     @test isempty(pop!(lines2))
-    @test popfirst!(lines2) == "2 1 ─      :(\$(QuoteNode(1)))"
-    @test popfirst!(lines2) == "  │        :(\$(QuoteNode(2)))" # TODO: this should print after the next statement
+    @test popfirst!(lines2) == "2  1 ──       $(QuoteNode(1))"
+    @test popfirst!(lines2) == "   │          $(QuoteNode(2))" # TODO: this should print after the next statement
     let line1 = popfirst!(lines1)
         line2 = popfirst!(lines2)
-        @test startswith(line1, "2 1 ─ ")
-        @test startswith(line2, "  │   ")
-        @test line1[9:end] == line2[9:end]
+        @test startswith(line1, "2  1 ── ")
+        @test startswith(line2, "   │    ")
+        @test line2[12:end] == line2[12:end]
     end
     let line1 = pop!(lines1)
         line2 = pop!(lines2)
-        @test startswith(line1, "9 ")
-        @test startswith(line2, "  ")
-        @test line1[2:end] == line2[2:end]
+        @test startswith(line1, "17 ")
+        @test startswith(line2, "   ")
+        @test line1[3:end] == line2[3:end]
     end
-    @test pop!(lines2) == "  │        :(\$(QuoteNode(4)))"
-    @test pop!(lines2) == "9 │        :(\$(QuoteNode(3)))" # TODO: this should print after the next statement
+    @test pop!(lines2) == "   │          \$(QuoteNode(4))"
+    @test pop!(lines2) == "17 │          \$(QuoteNode(3))" # TODO: this should print after the next statement
     @test lines1 == lines2
 end
 

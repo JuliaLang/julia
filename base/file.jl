@@ -236,7 +236,7 @@ julia> rm("my", recursive=true)
 julia> rm("this_file_does_not_exist", force=true)
 
 julia> rm("this_file_does_not_exist")
-ERROR: unlink: no such file or directory (ENOENT)
+ERROR: IOError: unlink: no such file or directory (ENOENT)
 Stacktrace:
 [...]
 ```
@@ -252,7 +252,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
             end
             unlink(path)
         catch err
-            if force && isa(err, UVError) && err.code==Base.UV_ENOENT
+            if force && isa(err, IOError) && err.code==Base.UV_ENOENT
                 return
             end
             rethrow()
@@ -382,6 +382,8 @@ Stacktrace:
 
 julia> mv("hello.txt", "goodbye.txt", force=true)
 "goodbye.txt"
+
+julia> rm("goodbye.txt");
 
 ```
 """

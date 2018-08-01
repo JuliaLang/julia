@@ -1593,3 +1593,36 @@ function Base.getindex(S::GeneralizedSVD, i::Integer)
     i == 6 ? (return S.R0) :
         throw(BoundsError(S, i))
 end
+
+# deprecate two ordschur methods where the individual components are passed instead of
+# the factorization
+
+function ordschur!(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat}
+    depwarn(string("`ordschur!(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector})`",
+        "`where {Ty<:BlasFloat}` is deprecated, use `ordschur!(schur::Schur, select::Union{Vector{Bool},BitVector})`", "instead."), :ordschur!)
+    return LinearAlgebra.LAPACK.trsen!(convert(Vector{BlasInt}, select), T, Z)[1:3]
+end
+
+function ordschur(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat}
+    depwarn(string("`ordschur!(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector})`",
+        "`where {Ty<:BlasFloat}` is deprecated, use `ordschur(schur::Schur, select::Union{Vector{Bool},BitVector})`", "instead."), :ordschur)
+    return ordschur!(copy(T), copy(Z), select)
+end
+
+function ordschur!(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
+    Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat}
+    depwarn(string("`ordschur!(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},`",
+        "`Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat}`",
+        "is deprecated, use `ordschur!(gschur::GeneralizedSchur, select::Union{Vector{Bool},BitVector})`",
+        "instead."), :ordschur!)
+    return LinearAlgebra.LAPACK.tgsen!(convert(Vector{BlasInt}, select), S, T, Q, Z)
+end
+
+function ordschur(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
+    Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat}
+    depwarn(string("`ordschur(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},`",
+        "`Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat}`",
+        "is deprecated, use `ordschur(gschur::GeneralizedSchur, select::Union{Vector{Bool},BitVector})`",
+        "instead."), :ordschur)
+    return ordschur!(copy(S), copy(T), copy(Q), copy(Z), select)
+end

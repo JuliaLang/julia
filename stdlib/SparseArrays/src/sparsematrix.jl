@@ -867,8 +867,13 @@ function ftranspose(A::SparseMatrixCSC{Tv,Ti}, f::Function) where {Tv,Ti}
 end
 adjoint(A::SparseMatrixCSC) = Adjoint(A)
 transpose(A::SparseMatrixCSC) = Transpose(A)
-Base.copy(A::Adjoint{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, conj)
-Base.copy(A::Transpose{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, identity)
+Base.copy(A::Adjoint{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, x -> copy(adjoint(x)))
+Base.copy(A::Transpose{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, x -> copy(transpose(x)))
+function Base.permutedims(A::SparseMatrixCSC, (a,b))
+    (a, b) == (2, 1) && return ftranspose(A, identity)
+    (a, b) == (1, 2) && return copy(A)
+    throw(ArgumentError("no valid permutation of dimensions"))
+end
 
 """
     unchecked_noalias_permute!(X::SparseMatrixCSC{Tv,Ti},
@@ -1427,7 +1432,7 @@ distribution is used in case `rfn` is not specified. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
 
 # Examples
-```jldoctest; setup = :(using Random; srand(1234))
+```jldoctest; setup = :(using Random; Random.seed!(1234))
 julia> sprand(Bool, 2, 2, 0.5)
 2×2 SparseMatrixCSC{Bool,Int64} with 2 stored entries:
   [1, 1]  =  true
@@ -1476,7 +1481,7 @@ where nonzero values are sampled from the normal distribution. The optional `rng
 argument specifies a random number generator, see [Random Numbers](@ref).
 
 # Examples
-```jldoctest; setup = :(using Random; srand(0))
+```jldoctest; setup = :(using Random; Random.seed!(0))
 julia> sprandn(2, 2, 0.75)
 2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:
   [1, 1]  =  0.586617
@@ -1613,9 +1618,10 @@ end
 
 # In general, output of sparse matrix reductions will not be sparse,
 # and computing reductions along columns into SparseMatrixCSC is
-# non-trivial, so use Arrays for output
-Base.reducedim_initarray(A::SparseMatrixCSC, region, v0, ::Type{R}) where {R} =
-    fill(v0, Base.reduced_indices(A,region))
+# non-trivial, so use Arrays for output. Array element type is given by `R`.
+function Base.reducedim_initarray(A::SparseMatrixCSC, region, v0, ::Type{R}) where {R}
+    fill!(Array{R}(undef, Base.to_shape(Base.reduced_indices(A, region))), v0)
+end
 
 # General mapreduce
 function _mapreducezeros(f, op, ::Type{T}, nzeros::Int, v0) where T

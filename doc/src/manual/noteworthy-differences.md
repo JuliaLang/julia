@@ -69,7 +69,7 @@ may trip up Julia users accustomed to MATLAB:
   * In both Julia and MATLAB, the variable `ans` is set to the value of the last expression issued
     in an interactive session. In Julia, unlike MATLAB, `ans` is not set when Julia code is run in
     non-interactive mode.
-  * Julia's `type`s do not support dynamically adding fields at runtime, unlike MATLAB's `class`es.
+  * Julia's `struct`s do not support dynamically adding fields at runtime, unlike MATLAB's `class`es.
     Instead, use a [`Dict`](@ref).
   * In Julia each module has its own global scope/namespace, whereas in MATLAB there is just one global
     scope.

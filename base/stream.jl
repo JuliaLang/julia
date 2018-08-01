@@ -490,7 +490,7 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
                 # This is a fatal connection error. Shutdown requests as per the usual
                 # close function won't work and libuv will fail with an assertion failure
                 ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), stream)
-                notify_error(stream.readnotify, UVError("read", nread))
+                notify_error(stream.readnotify, _UVError("read", nread))
             end
         else
             notify_filled(stream.buffer, nread)
@@ -882,7 +882,7 @@ function uv_writecb_task(req::Ptr{Cvoid}, status::Cint)
         uv_req_set_data(req, C_NULL) # let the Task know we got the writecb
         t = unsafe_pointer_to_objref(d)::Task
         if status < 0
-            err = UVError("write", status)
+            err = _UVError("write", status)
             schedule(t, err, error=true)
         else
             schedule(t)

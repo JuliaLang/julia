@@ -37,3 +37,6 @@ end
 
 # PR #25668
 @deprecate RandomDevice(unlimited::Bool) RandomDevice(; unlimited=unlimited)
+
+# PR #28295
+@deprecate srand Random.seed!

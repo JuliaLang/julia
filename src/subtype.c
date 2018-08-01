@@ -374,7 +374,7 @@ static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
 // in many cases, we need to over-estimate this by returning `b`.
 static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b)
 {
-    if (a == (jl_value_t*)jl_any_type || b == jl_bottom_type)
+    if (a == (jl_value_t*)jl_any_type || b == jl_bottom_type || obviously_egal(a,b))
         return b;
     if (b == (jl_value_t*)jl_any_type || a == jl_bottom_type)
         return a;
@@ -2803,9 +2803,16 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
         if (!jl_is_type(b))
             return 0;
         if (invariant) {
-            if (eq_msp(((jl_tvar_t*)a)->ub, b, env))
-                return num_occurs((jl_tvar_t*)a, env) >= 2;
-            return 0;
+            if (((jl_tvar_t*)a)->ub == jl_bottom_type)
+                return 1;
+            if (jl_has_free_typevars(b)) {
+                if (type_morespecific_(((jl_tvar_t*)a)->ub, b, 0, env) ||
+                    eq_msp(((jl_tvar_t*)a)->ub, b, env))
+                    return num_occurs((jl_tvar_t*)a, env) >= 2;
+            }
+            else {
+                return 0;
+            }
         }
         return type_morespecific_((jl_value_t*)((jl_tvar_t*)a)->ub, b, 0, env);
     }
@@ -2813,8 +2820,16 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
         if (!jl_is_type(a))
             return 1;
         if (invariant) {
-            if (eq_msp(((jl_tvar_t*)b)->ub, a, env))
-                return num_occurs((jl_tvar_t*)b, env) < 2;
+            if (((jl_tvar_t*)b)->ub == jl_bottom_type)
+                return 0;
+            if (jl_has_free_typevars(a)) {
+                if (type_morespecific_(a, ((jl_tvar_t*)b)->ub, 0, env) ||
+                    eq_msp(a, ((jl_tvar_t*)b)->ub, env))
+                    return num_occurs((jl_tvar_t*)b, env) < 2;
+            }
+            else {
+                return 1;
+            }
         }
         return type_morespecific_(a, (jl_value_t*)((jl_tvar_t*)b)->ub, 0, env);
     }

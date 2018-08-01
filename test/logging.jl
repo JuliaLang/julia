@@ -7,6 +7,9 @@ import Base.CoreLogging: BelowMinLevel, Debug, Info, Warn, Error,
 import Test: collect_test_logs, TestLogger
 using Base.Printf: @sprintf
 
+isdefined(Main, :MacroCalls) || @eval Main include("testhelpers/MacroCalls.jl")
+using Main.MacroCalls
+
 #-------------------------------------------------------------------------------
 @testset "Logging" begin
 
@@ -120,6 +123,15 @@ end
     @test record._module == nothing
     @test record.file == nothing
     @test record.line == nothing
+end
+
+# PR #28209
+@testset "0-arg MethodErrors" begin
+    @test_throws MethodError @macrocall(@logmsg :Notice)
+    @test_throws MethodError @macrocall(@debug)
+    @test_throws MethodError @macrocall(@info)
+    @test_throws MethodError @macrocall(@warn)
+    @test_throws MethodError @macrocall(@error)
 end
 
 

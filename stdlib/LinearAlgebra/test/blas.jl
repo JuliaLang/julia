@@ -5,7 +5,7 @@ module TestBLAS
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasReal, BlasComplex
 
-srand(100)
+Random.seed!(100)
 ## BLAS tests - testing the interface code to BLAS routines
 @testset for elty in [Float32, Float64, ComplexF32, ComplexF64]
     @testset "syr2k!" begin

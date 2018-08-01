@@ -597,6 +597,9 @@
    (begin0 (ts:last-tok s)
            (ts:set-tok! s #f))))
 
+(define (space-before-next-token? s)
+  (or (skip-ws (ts:port s) #f) (eqv? #\newline (peek-char (ts:port s)))))
+
 ;; --- misc ---
 
 ; Log a syntax deprecation, attributing it to current-filename and the line
@@ -744,7 +747,7 @@
           (take-token s)
           (cond ((eq? t '~) ;; ~ is the only non-syntactic assignment-precedence operators
                  (if (and space-sensitive (ts:space? s)
-                          (not (eqv? (peek-char (ts:port s)) #\ )))
+                          (not (space-before-next-token? s)))
                      (begin (ts:put-back! s t (ts:space? s))
                             ex)
                      (list 'call t ex (parse-assignment s down))))
@@ -839,7 +842,7 @@
             ((and range-colon-enabled (eq? t ':))
              (take-token s)
              (if (and space-sensitive spc
-                      (or (peek-token s) #t) (not (ts:space? s)))
+                      (not (space-before-next-token? s)))
                  ;; "a :b" in space sensitive mode
                  (begin (ts:put-back! s ': spc)
                         ex)
@@ -873,7 +876,7 @@
           (let ((spc (ts:space? s)))
             (take-token s)
             (cond ((and space-sensitive spc (memq t unary-and-binary-ops)
-                        (not (eqv? (peek-char (ts:port s)) #\ )))
+                        (not (space-before-next-token? s)))
                    ;; here we have "x -y"
                    (ts:put-back! s t spc)
                    (reverse! chain))
@@ -890,7 +893,7 @@
           (let ((spc (ts:space? s)))
             (take-token s)
             (cond ((and space-sensitive spc (memq t unary-and-binary-ops)
-                        (not (eqv? (peek-char (ts:port s)) #\ )))
+                        (not (space-before-next-token? s)))
                    ;; here we have "x -y"
                    (ts:put-back! s t spc)
                    ex)
@@ -916,16 +919,16 @@
                   ((memq t chain-ops)
                    (loop (list* 'call t ex
                                 (parse-chain s down t))
-                         #t))
+                         t))
                   (else
                    (loop (list 'call t ex (down s))
-                         got))))))))
+                         t))))))))
 
 (define (parse-expr s)     (parse-with-chains s parse-shift         is-prec-plus? '(+ ++)))
 
-(define (bitshift-warn s)
-  (parser-depwarn s (string "call to `*` inside call to bitshift operator")
-                  "parenthesized call to `*`"))
+(define (bitshift-warn s op)
+  (parser-depwarn s (string "call to `" op "` inside call to bitshift operator")
+                  (string "parenthesized call to `" op "`")))
 
 (define (parse-shift s)    #;(parse-LtoR        s parse-term          is-prec-bitshift?)
   (let loop ((ex (parse-term s))
@@ -934,11 +937,11 @@
     (let ((ex (car ex))
           (warn (cdr ex)))
       (if (is-prec-bitshift? t)
-          (begin (if warn (bitshift-warn s))
+          (begin (if warn (bitshift-warn s warn))
                  (take-token s)
                  (let ((nxt (parse-term s)))
                    (loop (cons (list 'call t ex (car nxt)) (cdr nxt)) (peek-token s) (cdr nxt))))
-          (begin (if warn1 (bitshift-warn s))
+          (begin (if warn1 (bitshift-warn s warn1))
                  ex)))))
 
 (define (parse-term s)     (parse-with-chains-warn s parse-rational      is-prec-times? '(*)))
@@ -1837,7 +1840,8 @@
           `(generator ,first ,@iters)))))
 
 (define (parse-comprehension s first closer)
-  (with-whitespace-newline
+  (with-bindings ((whitespace-newline #t)
+                  (space-sensitive #f))
    (let ((gen (parse-generator s first)))
      (if (not (eqv? (require-token s) closer))
          (error (string "expected \"" closer "\""))

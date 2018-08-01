@@ -8,7 +8,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
-             bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0zpb,
+             bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
              hastypemax
 
@@ -634,10 +634,11 @@ function ndigits0zpb(x::BigInt, b::Integer)
     end
 end
 
+# Fast paths for nextpow(2, x::BigInt)
 # below, ONE is always left-shifted by at least one digit, so a new BigInt is
 # allocated, which can be safely mutated
-prevpow2(x::BigInt) = -2 <= x <= 2 ? x : flipsign!(ONE << (ndigits(x, base=2) - 1), x)
-nextpow2(x::BigInt) = count_ones_abs(x) <= 1 ? x : flipsign!(ONE << ndigits(x, base=2), x)
+_prevpow2(x::BigInt) = -2 <= x <= 2 ? x : flipsign!(ONE << (ndigits(x, base=2) - 1), x)
+_nextpow2(x::BigInt) = count_ones_abs(x) <= 1 ? x : flipsign!(ONE << ndigits(x, base=2), x)
 
 Base.checked_abs(x::BigInt) = abs(x)
 Base.checked_neg(x::BigInt) = -x

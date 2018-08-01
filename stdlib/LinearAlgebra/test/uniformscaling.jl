@@ -4,7 +4,7 @@ module TestUniformscaling
 
 using Test, LinearAlgebra, Random, SparseArrays
 
-srand(123)
+Random.seed!(123)
 
 @testset "basic functions" begin
     @test I[1,1] == 1 # getindex

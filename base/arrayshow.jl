@@ -312,7 +312,12 @@ print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
 # typeinfo aware
 # implements: show(io::IO, ::MIME"text/plain", X::AbstractArray)
 function show(io::IO, ::MIME"text/plain", X::AbstractArray)
-    # 0) compute new IOContext
+    # 0) show summary before setting :compact
+    summary(io, X)
+    isempty(X) && return
+    print(io, ":")
+
+    # 1) compute new IOContext
     if !haskey(io, :compact) && length(axes(X, 2)) > 1
         io = IOContext(io, :compact => true)
     end
@@ -321,10 +326,6 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
         io = IOContext(io, :limit => false)
     end
 
-    # 1) print summary info
-    summary(io, X)
-    isempty(X) && return
-    print(io, ":")
     if get(io, :limit, false) && displaysize(io)[1]-4 <= 0
         return print(io, " …")
     else

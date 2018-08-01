@@ -1861,6 +1861,11 @@
             (cons 'block
                   (map expand-forms (cdr e))))))
 
+   'body
+   (lambda (e)
+     (syntax-deprecation ":body expression head" ":block" #f)
+     (expand-forms (cons 'block (cdr e))))
+
    '|.|
    (lambda (e) ; e = (|.| f x)
      (expand-fuse-broadcast '() e))
@@ -2786,24 +2791,24 @@ f(x) = yt(x)
     `((thunk
       (lambda ()
         (() () 0 ())
-        (body (global ,name) (const ,name)
-              ,@(map (lambda (p n) `(= ,p (call (core TypeVar) ',n (core Any)))) P names)
-              (struct_type ,name (call (core svec) ,@P)
-                           (call (core svec) ,@(map quotify fields))
-                           ,super
-                           (call (core svec) ,@types) false ,(length fields))
-              (return (null))))))))
+        (block (global ,name) (const ,name)
+               ,@(map (lambda (p n) `(= ,p (call (core TypeVar) ',n (core Any)))) P names)
+               (struct_type ,name (call (core svec) ,@P)
+                            (call (core svec) ,@(map quotify fields))
+                            ,super
+                            (call (core svec) ,@types) false ,(length fields))
+               (return (null))))))))
 
 (define (type-for-closure name fields super)
   `((thunk (lambda ()
             (() () 0 ())
-            (body (global ,name) (const ,name)
-                  (struct_type ,name (call (core svec))
-                               (call (core svec) ,@(map quotify fields))
-                               ,super
-                               (call (core svec) ,@(map (lambda (v) '(core Box)) fields))
-                               false ,(length fields))
-                  (return (null)))))))
+            (block (global ,name) (const ,name)
+                   (struct_type ,name (call (core svec))
+                                (call (core svec) ,@(map quotify fields))
+                                ,super
+                                (call (core svec) ,@(map (lambda (v) '(core Box)) fields))
+                                false ,(length fields))
+                   (return (null)))))))
 
 
 ;; better versions of above, but they get handled wrong in many places
@@ -3063,7 +3068,7 @@ f(x) = yt(x)
              #t)
             ((eq? (car e) 'scope-block)
              (visit (cadr e)))
-            ((or (eq? (car e) 'block) (eq? (car e) 'body))
+            ((eq? (car e) 'block)
              (for-each visit (cdr e)))
             ((eq? (car e) 'break-block)
              (visit (caddr e)))
@@ -3112,7 +3117,7 @@ f(x) = yt(x)
         (and cv (vinfo:asgn cv) (vinfo:capt cv)))))
 
 (define (toplevel-preserving? e)
-  (and (pair? e) (memq (car e) '(if block body trycatch tryfinally))))
+  (and (pair? e) (memq (car e) '(if block trycatch tryfinally))))
 
 (define (map-cl-convert exprs fname lam namemap toplevel interp)
   (if toplevel
@@ -3692,7 +3697,7 @@ f(x) = yt(x)
                      (if tail (emit-return rr))
                      rr)
                    (emit-assignment lhs rhs))))
-            ((block body)
+            ((block)
              (let* ((last-fname filename)
                     (fnm        (first-non-meta e))
                     (fname      (if (and (length> e 1) (linenum? fnm)
@@ -4041,10 +4046,10 @@ f(x) = yt(x)
               (reverse! deprecated-global-const-locs))
     (let* ((stmts (reverse! code))
            (di    (definitely-initialized-vars stmts vi))
-           (body  (cons 'body (filter (lambda (e)
-                                        (not (and (pair? e) (eq? (car e) 'newvar)
-                                                  (has? di (cadr e)))))
-                                      stmts))))
+           (body  (cons 'block (filter (lambda (e)
+                                         (not (and (pair? e) (eq? (car e) 'newvar)
+                                                   (has? di (cadr e)))))
+                                       stmts))))
       (if arg-map
           (insert-after-meta
            body
@@ -4103,7 +4108,7 @@ f(x) = yt(x)
        ,@(cdddr lam))))
 
 (define (compact-ir body)
-  (let ((code         '(body))
+  (let ((code         '(block))
         (locs         '(list))
         (linetable    '(list))
         (labltable    (table))

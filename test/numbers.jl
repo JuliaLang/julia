@@ -1585,10 +1585,10 @@ end
 @test eps(-float(0)) == 5e-324
 @test eps(nextfloat(float(0))) == 5e-324
 @test eps(-nextfloat(float(0))) == 5e-324
-@test eps(realmin()) == 5e-324
-@test eps(-realmin()) == 5e-324
-@test eps(realmax()) ==  2.0^(1023-52)
-@test eps(-realmax()) ==  2.0^(1023-52)
+@test eps(floatmin()) == 5e-324
+@test eps(-floatmin()) == 5e-324
+@test eps(floatmax()) ==  2.0^(1023-52)
+@test eps(-floatmax()) ==  2.0^(1023-52)
 @test isnan(eps(NaN))
 @test isnan(eps(Inf))
 @test isnan(eps(-Inf))
@@ -1782,12 +1782,12 @@ end
     @test 0xf.fP1 === 31.875
     @test -0x1.0p2 === -4.0
 end
-@testset "eps / realmin / realmax" begin
+@testset "eps / floatmin / floatmax" begin
     @test 0x1p-52 == eps()
     @test 0x1p-52 + 1 != 1
     @test 0x1p-53 + 1 == 1
-    @test 0x1p-1022 == realmin()
-    @test 0x1.fffffffffffffp1023 == realmax()
+    @test 0x1p-1022 == floatmin()
+    @test 0x1.fffffffffffffp1023 == floatmax()
     @test isinf(nextfloat(0x1.fffffffffffffp1023))
 end
 @testset "issue #1308" begin
@@ -1909,20 +1909,21 @@ end
     @test rem(typemin(Int),-1) == 0
     @test mod(typemin(Int),-1) == 0
 end
-@testset "prevpow2/nextpow2" begin
-    @test nextpow2(0) == prevpow2(0) == 0
-    for i = -2:2
-        @test nextpow2(i) == prevpow2(i) == i
+@testset "prevpow(2, _)/nextpow(2, _)" begin
+    for i = 1:2
+        @test nextpow(2, i) == prevpow(2, i) == i
     end
-    @test nextpow2(56789) == -nextpow2(-56789) == 65536
-    @test prevpow2(56789) == -prevpow2(-56789) == 32768
-    for i = -100:100
-        @test nextpow2(i) == nextpow2(big(i))
-        @test prevpow2(i) == prevpow2(big(i))
+    @test nextpow(2, 56789) == 65536
+    @test_throws DomainError nextpow(2, -56789)
+    @test prevpow(2, 56789) == 32768
+    @test_throws DomainError prevpow(2, -56789)
+    for i = 1:100
+        @test nextpow(2, i) == nextpow(2, big(i))
+        @test prevpow(2, i) == prevpow(2, big(i))
     end
     for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64)
-        @test nextpow2(T(42)) === T(64)
-        @test prevpow2(T(42)) === T(32)
+        @test nextpow(2, T(42)) === T(64)
+        @test prevpow(2, T(42)) === T(32)
     end
 end
 @testset "ispow2" begin
@@ -1985,8 +1986,8 @@ for F in (Float16,Float32,Float64)
     @test reinterpret(Signed,one(F)) === signed(Base.exponent_one(F))
 end
 
-@test eps(realmax(Float64)) == 1.99584030953472e292
-@test eps(-realmax(Float64)) == 1.99584030953472e292
+@test eps(floatmax(Float64)) == 1.99584030953472e292
+@test eps(-floatmax(Float64)) == 1.99584030953472e292
 
 # modular multiplicative inverses of odd numbers via exponentiation
 

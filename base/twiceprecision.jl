@@ -622,7 +622,7 @@ function _linspace(start::T, stop::T, len::Integer) where {T<:IEEEFloat}
     end
     # 2x calculations to get high precision endpoint matching while also
     # preventing overflow in ref_hi+(i-offset)*step_hi
-    m, k = prevfloat(realmax(T)), max(imin-1, len-imin)
+    m, k = prevfloat(floatmax(T)), max(imin-1, len-imin)
     step_hi_pre = clamp(step, max(-(m+ref)/k, (-m+ref)/k), min((m-ref)/k, (m+ref)/k))
     nb = nbitslen(T, len, imin)
     step_hi = truncbits(step_hi_pre, nb)

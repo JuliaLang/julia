@@ -149,6 +149,8 @@ typedef struct {
 
 static jl_value_t *jl_idtable_type = NULL;
 static jl_typename_t *jl_idtable_typename = NULL;
+static jl_value_t *jl_bigint_type = NULL;
+static int gmp_limb_size = 0;
 static arraylist_t builtin_typenames;
 
 #define write_uint8(s, n) ios_putc((n), (s))
@@ -921,6 +923,17 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         for (i = 0; i < jl_datatype_nfields(jl_lineinfonode_type); i++)
             jl_serialize_value(s, jl_get_nth_field(v, i));
     }
+    else if (jl_bigint_type && jl_typeis(v, jl_bigint_type)) {
+        write_uint8(s->s, TAG_SHORT_GENERAL);
+        write_uint8(s->s, jl_datatype_size(jl_bigint_type));
+        jl_serialize_value(s, jl_bigint_type);
+        jl_value_t *sizefield = jl_get_nth_field(v, 1);
+        jl_serialize_value(s, sizefield);
+        void *data = jl_unbox_voidpointer(jl_get_nth_field(v, 2));
+        int32_t sz = jl_unbox_int32(sizefield);
+        size_t nb = (sz == 0 ? 1 : (sz < 0 ? -sz : sz)) * gmp_limb_size;
+        ios_write(s->s, (char*)data, nb);
+    }
     else {
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
         void *data = jl_data_ptr(v);
@@ -1012,7 +1025,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                         if (!jl_field_isptr(t, i)) {
                             uint8_t sel = 0;
                             if (jl_is_uniontype(jl_field_type(t, i))) {
-                                sel = ((uint8_t*)v)[offs + fsz - 1];
+                                sel = ((uint8_t*)v)[offs + fsz - 1] + 1;
                             }
                             write_int8(s->s, sel);
                         }
@@ -1818,9 +1831,14 @@ static jl_value_t *jl_deserialize_value_singleton(jl_serializer_state *s, jl_val
     if (s->mode == MODE_MODULE) {
         // TODO: optimize the case where the value can easily be obtained
         // from an external module (tag == 6) as dt->instance
-        assert(loc != NULL && loc != HT_NOTFOUND);
-        arraylist_push(&flagref_list, loc);
-        arraylist_push(&flagref_list, (void*)pos);
+        assert(loc != HT_NOTFOUND);
+        // if loc == NULL, then the caller can't provide the address where the instance will be
+        // stored. this happens if a field might store a 0-size value, but the field itself is
+        // not 0 size, e.g. `::Union{Int,Nothing}`
+        if (loc != NULL) {
+            arraylist_push(&flagref_list, loc);
+            arraylist_push(&flagref_list, (void*)pos);
+        }
     }
     jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)HT_NOTFOUND); // no loc, since if dt is replaced, then dt->instance would be also
     jl_set_typeof(v, dt);
@@ -1925,6 +1943,17 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
         int nby = jl_datatype_size(dt);
         ios_read(s->s, (char*)jl_data_ptr(v), nby);
     }
+    else if ((jl_value_t*)dt == jl_bigint_type) {
+        jl_value_t *sizefield = jl_deserialize_value(s, NULL);
+        int32_t sz = jl_unbox_int32(sizefield);
+        int32_t nw = (sz == 0 ? 1 : (sz < 0 ? -sz : sz));
+        size_t nb = nw * gmp_limb_size;
+        void *buf = jl_gc_counted_malloc(nb);
+        ios_read(s->s, (char*)buf, nb);
+        jl_set_nth_field(v, 0, jl_box_int32(nw));
+        jl_set_nth_field(v, 1, sizefield);
+        jl_set_nth_field(v, 2, jl_box_voidpointer(buf));
+    }
     else {
         jl_deserialize_struct(s, v, 0);
     }
@@ -1957,9 +1986,12 @@ static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc
         jl_value_t *bp = (jl_value_t*)backref_list.items[offs];
         assert(bp);
         if (isflagref && loc != HT_NOTFOUND) {
-            assert(loc != NULL);
-            arraylist_push(&flagref_list, loc);
-            arraylist_push(&flagref_list, (void*)(uintptr_t)-1);
+            if (loc != NULL) {
+                // as in jl_deserialize_value_singleton, the caller won't have a place to
+                // store this reference given a field type like Union{Int,Nothing}
+                arraylist_push(&flagref_list, loc);
+                arraylist_push(&flagref_list, (void*)(uintptr_t)-1);
+            }
         }
         return (jl_value_t*)bp;
     case TAG_METHODROOT:
@@ -2631,6 +2663,11 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     backref_table_numel = 1;
     jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("IdDict")) : NULL;
     jl_idtable_typename = jl_base_module ? ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_idtable_type))->name : NULL;
+    jl_bigint_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("BigInt")) : NULL;
+    if (jl_bigint_type) {
+        gmp_limb_size = jl_unbox_long(jl_get_global((jl_module_t*)jl_get_global(jl_base_module, jl_symbol("GMP")),
+                                                    jl_symbol("BITS_PER_LIMB"))) / 8;
+    }
 
     int en = jl_gc_enable(0); // edges map is not gc-safe
     jl_array_t *lambdas = jl_alloc_vec_any(0);
@@ -3006,6 +3043,12 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     { // skip past the dependency list
         size_t deplen = read_uint64(f);
         ios_skip(f, deplen);
+    }
+
+    jl_bigint_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("BigInt")) : NULL;
+    if (jl_bigint_type) {
+        gmp_limb_size = jl_unbox_long(jl_get_global((jl_module_t*)jl_get_global(jl_base_module, jl_symbol("GMP")),
+                                                    jl_symbol("BITS_PER_LIMB"))) / 8;
     }
 
     // list of world counters of incremental dependencies

@@ -226,7 +226,7 @@ function add_mt_backedge!(mt::Core.MethodTable, @nospecialize(typ), caller::Infe
     nothing
 end
 
-function is_specializable_vararg_slot(@nospecialize(arg), nargs, vargs)
+function is_specializable_vararg_slot(@nospecialize(arg), nargs::Int, vargs::Vector{Any})
     return (isa(arg, Slot) && slot_id(arg) == nargs && !isempty(vargs))
 end
 

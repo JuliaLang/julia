@@ -37,10 +37,7 @@ function project(pkg::String, dir::String; preview::Bool)
         end
     end
 
-    if name == nothing
-        cmderror("could not determine user, please set ", Sys.iswindows() ? "USERNAME" : "USER",
-                 " environment variable")
-    end
+    name == nothing && (name = "Unknown")
 
     if email == nothing
         for env in ["GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL", "EMAIL"];

@@ -8,9 +8,9 @@
 (load "julia-syntax.scm")
 
 
-;; exception handler for parser. turns known errors into special expressions,
-;; and prevents throwing an exception past a C caller.
-(define (parser-wrap thk)
+;; exception handler to turn known errors into special expressions,
+;; to prevent throwing an exception past a C caller.
+(define (error-wrap thk)
   (with-exception-catcher
    (lambda (e)
      (if (and (pair? e) (eq? (car e) 'error))
@@ -158,42 +158,42 @@
 (define (jl-parse-one-string s pos0 greedy)
   (let ((inp (open-input-string s)))
     (io.seek inp pos0)
-    (let ((expr (parser-wrap (lambda ()
-                               (if greedy
-                                   (julia-parse inp)
-                                   (julia-parse inp parse-atom))))))
+    (let ((expr (error-wrap (lambda ()
+                              (if greedy
+                                  (julia-parse inp)
+                                  (julia-parse inp parse-atom))))))
       (cons expr (io.pos inp)))))
 
 (define (jl-parse-string s filename)
   (with-bindings ((current-filename (symbol filename)))
-    (parser-wrap (lambda ()
-                 (let ((inp  (make-token-stream (open-input-string s))))
-                   ;; parse all exprs into a (toplevel ...) form
-                   (let loop ((exprs '()))
-                     ;; delay expansion so macros run in the Task executing
-                     ;; the input, not the task parsing it (issue #2378)
-                     ;; used to be (expand-toplevel-expr expr)
-                     (let ((expr (julia-parse inp)))
-                       (if (eof-object? expr)
-                           (cond ((null? exprs)     expr)
-                                 ((length= exprs 1) (car exprs))
-                                 (else (cons 'toplevel (reverse! exprs))))
-                           (if (and (pair? expr) (eq? (car expr) 'toplevel))
-                               (loop (nreconc (cdr expr) exprs))
-                               (loop (cons expr exprs)))))))))))
+    (error-wrap (lambda ()
+                  (let ((inp  (make-token-stream (open-input-string s))))
+                    ;; parse all exprs into a (toplevel ...) form
+                    (let loop ((exprs '()))
+                      ;; delay expansion so macros run in the Task executing
+                      ;; the input, not the task parsing it (issue #2378)
+                      ;; used to be (expand-toplevel-expr expr)
+                      (let ((expr (julia-parse inp)))
+                        (if (eof-object? expr)
+                            (cond ((null? exprs)     expr)
+                                  ((length= exprs 1) (car exprs))
+                                  (else (cons 'toplevel (reverse! exprs))))
+                            (if (and (pair? expr) (eq? (car expr) 'toplevel))
+                                (loop (nreconc (cdr expr) exprs))
+                                (loop (cons expr exprs)))))))))))
 
 (define (jl-parse-all io filename)
   (unwind-protect
    (with-bindings ((current-filename (symbol filename)))
     (let ((stream (make-token-stream io)))
       (let loop ((exprs '()))
-        (let ((lineno (parser-wrap
+        (let ((lineno (error-wrap
                        (lambda ()
                          (skip-ws-and-comments (ts:port stream))
                          (input-port-line (ts:port stream))))))
           (if (pair? lineno)
               (cons 'toplevel (reverse! (cons lineno exprs)))
-              (let ((expr (parser-wrap
+              (let ((expr (error-wrap
                            (lambda ()
                              (julia-parse stream)))))
                 (if (eof-object? expr)
@@ -221,13 +221,17 @@
 
 ; expand a piece of raw surface syntax to an executable thunk
 (define (jl-expand-to-thunk expr)
-  (parser-wrap (lambda ()
-                 (expand-toplevel-expr expr))))
+  (error-wrap (lambda ()
+                (expand-toplevel-expr expr))))
 
 (define (jl-expand-to-thunk-stmt expr)
   (jl-expand-to-thunk (if (toplevel-only-expr? expr)
                           expr
                           `(block ,expr (null)))))
+
+(define (jl-expand-macroscope expr)
+  (error-wrap (lambda ()
+                (julia-expand-macroscope expr))))
 
 ; run whole frontend on a string. useful for testing.
 (define (fe str)

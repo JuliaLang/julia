@@ -734,7 +734,7 @@ end
 ```
 
 The meaning of prefix `&` is not quite the same as in C. In particular, any changes to the referenced
-variables will not be visible in Julia unless the type is mutable (declared via `type`). However,
+variables will not be visible in Julia unless the type is mutable (declared via `mutable struct`). However,
 even for immutable structs it will not cause any harm for called functions to attempt such modifications
 (that is, writing through the passed pointers). Moreover, `&` may be used with any expression,
 such as `&0` or `&f(x)`.

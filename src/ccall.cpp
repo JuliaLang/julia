@@ -1638,9 +1638,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(!isVa && !llvmcall && nargt == 1);
         assert(!addressOf.at(0));
         const jl_cgval_t &ary = argv[0];
-        jl_value_t *aryex = ccallarg(0);
         JL_GC_POP();
-        return mark_or_box_ccall_result(ctx, ctx.builder.CreatePtrToInt(emit_arrayptr(ctx, ary, aryex), lrt),
+        return mark_or_box_ccall_result(ctx, ctx.builder.CreatePtrToInt(emit_unsafe_arrayptr(ctx, ary), lrt),
                                         retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_value_ptr)) {

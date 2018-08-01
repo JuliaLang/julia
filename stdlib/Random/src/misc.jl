@@ -52,7 +52,7 @@ number generator, see [Random Numbers](@ref).
 
 # Examples
 ```jldoctest
-julia> srand(0); randstring()
+julia> Random.seed!(0); randstring()
 "0IPrGg0J"
 
 julia> randstring(MersenneTwister(0), 'a':'z', 6)
@@ -145,7 +145,7 @@ randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
 ## rand Less Than Masked 52 bits (helper function)
 
 "Return a sampler generating a random `Int` (masked with `mask`) in ``[0, n)``, when `n <= 2^52`."
-ltm52(n::Int, mask::Int=nextpow2(n)-1) = LessThan(n-1, Masked(mask, UInt52Raw(Int)))
+ltm52(n::Int, mask::Int=nextpow(2, n)-1) = LessThan(n-1, Masked(mask, UInt52Raw(Int)))
 
 ## shuffle & shuffle!
 
@@ -183,7 +183,7 @@ function shuffle!(r::AbstractRNG, a::AbstractArray)
     @assert !has_offset_axes(a)
     n = length(a)
     @assert n <= Int64(2)^52
-    mask = nextpow2(n) - 1
+    mask = nextpow(2, n) - 1
     for i = n:-1:2
         (mask >> 1) == i && (mask >>= 1)
         j = 1 + rand(r, ltm52(i, mask))

@@ -16,7 +16,7 @@ function uv_getaddrinfocb(req::Ptr{Cvoid}, status::Cint, addrinfo::Ptr{Cvoid})
         t = unsafe_pointer_to_objref(data)::Task
         uv_req_set_data(req, C_NULL)
         if status != 0 || addrinfo == C_NULL
-            schedule(t, UVError("getaddrinfocb", status))
+            schedule(t, _UVError("getaddrinfocb", status))
         else
             freeaddrinfo = addrinfo
             addrs = IPAddr[]
@@ -88,7 +88,7 @@ function getalladdrinfo(host::String)
         end
         unpreserve_handle(ct)
     end
-    if isa(r, UVError)
+    if isa(r, IOError)
         code = r.code
         if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
                     UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
@@ -99,7 +99,7 @@ function getalladdrinfo(host::String)
         elseif code == UV_EAI_MEMORY
             throw(OutOfMemoryError())
         else
-            throw(UVError("getaddrinfo", code))
+            throw(_UVError("getaddrinfo", code))
         end
     end
     return r::Vector{IPAddr}
@@ -130,7 +130,7 @@ function uv_getnameinfocb(req::Ptr{Cvoid}, status::Cint, hostname::Cstring, serv
         t = unsafe_pointer_to_objref(data)::Task
         uv_req_set_data(req, C_NULL)
         if status != 0
-            schedule(t, UVError("getnameinfocb", status))
+            schedule(t, _UVError("getnameinfocb", status))
         else
             schedule(t, unsafe_string(hostname))
         end
@@ -194,7 +194,7 @@ function getnameinfo(address::Union{IPv4, IPv6})
         end
         unpreserve_handle(ct)
     end
-    if isa(r, UVError)
+    if isa(r, IOError)
         code = r.code
         if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
                     UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
@@ -205,7 +205,7 @@ function getnameinfo(address::Union{IPv4, IPv6})
         elseif code == UV_EAI_MEMORY
             throw(OutOfMemoryError())
         else
-            throw(UVError("getnameinfo", code))
+            throw(_UVError("getnameinfo", code))
         end
     end
     return r::String

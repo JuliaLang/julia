@@ -1,12 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Statistics, Test, Random, LinearAlgebra, SparseArrays
-using Test: guardsrand
+using Test: guardseed
 
 @testset "middle" begin
     @test middle(3) === 3.0
     @test middle(2, 3) === 2.5
-    let x = ((realmax(1.0)/4)*3)
+    let x = ((floatmax(1.0)/4)*3)
         @test middle(x, x) === x
     end
     @test middle(1:8) === 4.5
@@ -505,8 +505,8 @@ end
 
 # dimensional correctness
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
-using .Main.TestHelpers: Furlong
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
 
 Statistics.middle(x::Furlong{p}) where {p} = Furlong{p}(middle(x.val))
 Statistics.middle(x::Furlong{p}, y::Furlong{p}) where {p} = Furlong{p}(middle(x.val, y.val))
@@ -599,7 +599,7 @@ end
     n = 10
     p = 5
     np2 = div(n*p, 2)
-    nzvals, x_sparse = guardsrand(1) do
+    nzvals, x_sparse = guardseed(1) do
         if elty <: Real
             nzvals = randn(np2)
         else

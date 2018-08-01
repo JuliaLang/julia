@@ -5294,6 +5294,11 @@ static std::unique_ptr<Module> emit_function(
         if (lam->def.method->file != empty_sym)
             filename = jl_symbol_name(lam->def.method->file);
     }
+    else if (jl_array_len(src->linetable) > 0) {
+        jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, 0);
+        filename = jl_symbol_name((jl_sym_t*)jl_fieldref_noalloc(locinfo, 2));
+        toplineno = jl_unbox_long(jl_fieldref(locinfo, 3));
+    }
     ctx.file = filename;
     // jl_printf(JL_STDERR, "\n*** compiling %s at %s:%d\n\n",
     //           jl_symbol_name(ctx.name), filename.str().c_str(), toplineno);
@@ -6825,7 +6830,7 @@ static void init_julia_llvm_env(Module *m)
     jl_func_sig = FunctionType::get(T_prjlvalue, ftargs, false);
     assert(jl_func_sig != NULL);
 
-    Type *vaelts[] = {T_pint8
+    Type *vaelts[] = {PointerType::get(T_int8, AddressSpace::Loaded)
 #ifdef STORE_ARRAY_LEN
                       , T_size
 #endif
@@ -7471,14 +7476,9 @@ extern "C" void *jl_init_llvm(void)
 // Mark our address spaces as non-integral
 #if JL_LLVM_VERSION >= 40000
     jl_data_layout = jl_ExecutionEngine->getDataLayout();
-    std::string DL = jl_data_layout.getStringRepresentation() + "-ni:10:11:12";
+    std::string DL = jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13";
     jl_data_layout.reset(DL);
 #endif
-
-    // Now that the execution engine exists, initialize all modules
-    jl_setup_module(engine_module);
-    jl_setup_module(m);
-    return (void*)m;
 
 #ifdef JL_USE_INTEL_JITEVENTS
     if (jl_using_intel_jitevents)
@@ -7495,6 +7495,11 @@ extern "C" void *jl_init_llvm(void)
         jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createPerfJITEventListener());
     }
 #endif
+
+    // Now that the execution engine exists, initialize all modules
+    jl_setup_module(engine_module);
+    jl_setup_module(m);
+    return (void*)m;
 }
 
 extern "C" void jl_init_codegen(void)

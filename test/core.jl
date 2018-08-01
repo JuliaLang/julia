@@ -1410,7 +1410,7 @@ struct Foo2509; foo::Int; end
 # issue #2517
 struct Foo2517; end
 @test repr(Foo2517()) == "$(curmod_prefix)Foo2517()"
-@test repr(Vector{Foo2517}(undef, 1)) == "$(curmod_prefix)Foo2517[$(curmod_prefix)Foo2517()]"
+@test repr(Vector{Foo2517}(undef, 1)) == "$(curmod_prefix)Foo2517[Foo2517()]"
 @test Foo2517() === Foo2517()
 
 # issue #1474
@@ -2436,18 +2436,6 @@ let x = [1,2,3]
     @test (ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Tuple{Int16,Tuple{Cvoid},Int8,Tuple{},Int,Cvoid,Int}, x)::Tuple)[[2,4,5,6,7]] === ((nothing,),(),2,nothing,3)
 end
 
-# sig 2 is SIGINT per the POSIX.1-1990 standard
-if !Sys.iswindows()
-    ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 0)
-    @test_throws InterruptException begin
-        ccall(:kill, Cvoid, (Cint, Cint,), getpid(), 2)
-        for i in 1:10
-            Libc.systemsleep(0.1)
-            ccall(:jl_gc_safepoint, Cvoid, ()) # wait for SIGINT to arrive
-        end
-    end
-    ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
-end
 let
     # Exception frame automatically restores sigatomic counter.
     Base.sigatomic_begin()
@@ -3764,7 +3752,7 @@ let
 end
 
 # issue #14323
-@test eval(Expr(:body, :(1))) === 1
+@test eval(Expr(:block, :(1))) === 1
 
 # issue #14339
 f14339(x::T, y::T) where {T<:Union{}} = 0
@@ -6319,6 +6307,16 @@ let A=Vector{Union{UInt8, Missing}}(undef, 1048577)
     @test Base.arrayref(true, A, 5) === 0x05
 end
 
+# copyto!/vcat w/ internal padding
+let A=[0, missing], B=[missing, 0], C=Vector{Union{Int, Missing}}(undef, 6)
+    push!(A, missing)
+    push!(B, missing)
+    @test isequal(vcat(A, B), [0, missing, missing, missing, 0, missing])
+    copyto!(C, 1, A)
+    copyto!(C, 4, B)
+    @test isequal(C, [0, missing, missing, missing, 0, missing])
+end
+
 end # module UnionOptimizations
 
 # issue #6614, argument destructuring
@@ -6419,23 +6417,6 @@ end
 @test !Base.isvatuple(Tuple{Float64,Vararg{Int,1}})
 @test !Base.isvatuple(Tuple{T,Vararg{Int,2}} where T)
 @test !Base.isvatuple(Tuple{Int,Int,Vararg{Int,2}})
-
-# The old iteration protocol shims deprecation test
-struct DelegateIterator{T}
-    x::T
-end
-Base.start(itr::DelegateIterator) = start(itr.x)
-Base.next(itr::DelegateIterator, state) = next(itr.x, state)
-Base.done(itr::DelegateIterator, state) = done(itr.x, state)
-let A = [1], B = [], C = DelegateIterator([1]), D = DelegateIterator([]), E = Any[1,"abc"]
-    @test next(A, start(A))[1] == 1
-    @test done(A, next(A, start(A))[2])
-    @test done(B, start(B))
-    @test next(C, start(C))[1] == 1
-    @test done(C, next(C, start(C))[2])
-    @test done(D, start(D))
-    @test next(E, next(E, start(E))[2])[1] == "abc"
-end
 
 # Issue 27103
 function f27103()
@@ -6643,3 +6624,31 @@ function foo28224()
     return z
 end
 @test foo28224() == 5
+
+# Issue #28208
+@noinline function foo28208(a::Bool, b::Bool)
+    x = (1, 2)
+    if a
+        if b
+            y = nothing
+        else
+            y = missing
+        end
+        x = y
+    end
+    x
+end
+@test isa(foo28208(false, true), Tuple)
+@test foo28208(true, false) === missing
+@test foo28208(true, true) === nothing
+
+# Issue #28326
+function foo28326(a)
+    try
+        @inbounds a[1]
+        return false
+    catch
+        return true
+    end
+end
+@test foo28326(Vector(undef, 1))

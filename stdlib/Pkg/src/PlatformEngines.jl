@@ -124,7 +124,7 @@ If `verbose` is `true`, print out the various engines as they are searched.
 function probe_platform_engines!(;verbose::Bool = false)
     global already_probed
     global gen_download_cmd, gen_list_tarball_cmd, gen_package_cmd
-    global gen_unpack_cmd, parse_tarball_listing, gen_sh_cmd
+    global gen_unpack_cmd, parse_tarball_listing
     already_probed && return
     # download_engines is a list of (test_cmd, download_opts_functor)
     # The probulator will check each of them by attempting to run `$test_cmd`,
@@ -133,6 +133,7 @@ function probe_platform_engines!(;verbose::Bool = false)
         (`curl --help`, (url, path) -> `curl -C - -\# -f -o $path -L $url`),
         (`wget --help`, (url, path) -> `wget -c -O $path $url`),
         (`fetch --help`, (url, path) -> `fetch -f $path $url`),
+        (`busybox wget --help`, (url, path) -> `busybox wget -c -O $path $url`),
     ]
 
     # 7z is rather intensely verbose.  We also want to try running not only
@@ -156,20 +157,36 @@ function probe_platform_engines!(;verbose::Bool = false)
 
     # Tar is rather less verbose, and we don't need to search multiple places
     # for it, so just rely on PATH to have `tar` available for us:
-    unpack_tar = (tarball_path, out_path) ->
-        `tar xzf $(tarball_path) --directory=$(out_path)`
-    package_tar = (in_path, tarball_path) ->
-        `tar -czvf $tarball_path -C $(in_path) .`
-    list_tar = (in_path) -> `tar tzf $in_path`
 
     # compression_engines is a list of (test_cmd, unpack_opts_functor,
     # package_opts_functor, list_opts_functor, parse_functor).  The probulator
     # will check each of them by attempting to run `$test_cmd`, and if that
     # works, will set the global compression functions appropriately.
     gen_7z = (p) -> (unpack_7z(p), package_7z(p), list_7z(p), parse_7z_list)
-    compression_engines = Tuple[
-        (`tar --help`, unpack_tar, package_tar, list_tar, parse_tar_list),
-    ]
+    compression_engines = Tuple[]
+
+    for tar_cmd in [`tar`, `busybox tar`]
+        # Some tar's aren't smart enough to auto-guess decompression method. :(
+        unpack_tar = (tarball_path, out_path) -> begin
+            Jjz = "z"
+            if endswith(tarball_path, ".xz")
+                Jjz = "J"
+            elseif endswith(tarball_path, ".bz2")
+                Jjz = "j"
+            end
+            return `$tar_cmd -x$(Jjz)f $(tarball_path) --directory=$(out_path)`
+        end
+        package_tar = (in_path, tarball_path) ->
+            `$tar_cmd -czvf $tarball_path -C $(in_path) .`
+        list_tar = (in_path) -> `$tar_cmd -tzf $in_path`
+        push!(compression_engines, (
+            `$tar_cmd --help`,
+            unpack_tar,
+            package_tar,
+            list_tar,
+            parse_tar_list,
+        ))
+    end
 
     # For windows, we need to tweak a few things, as the tools available differ
     @static if Sys.iswindows()
@@ -182,6 +199,7 @@ function probe_platform_engines!(;verbose::Bool = false)
                 [System.Net.ServicePointManager]::SecurityProtocol =
                     [System.Net.SecurityProtocolType]::Tls12;
                 \$webclient = (New-Object System.Net.Webclient);
+                \$webclient.Headers.Add("user-agent", \"Pkg.jl (https://github.com/JuliaLang/Pkg.jl)\");
                 \$webclient.DownloadFile(\"$url\", \"$path\")
                 """
                 replace(webclient_code, "\n" => " ")
@@ -192,10 +210,10 @@ function probe_platform_engines!(;verbose::Bool = false)
         # We want to search both the `PATH`, and the direct path for powershell
         psh_path = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell"
         prepend!(download_engines, [
-            (`$psh_path -Help`, psh_download(psh_path))
+            (`$psh_path -Command ""`, psh_download(psh_path))
         ])
         prepend!(download_engines, [
-            (`powershell -Help`, psh_download(`powershell`))
+            (`powershell -Command ""`, psh_download(`powershell`))
         ])
 
         # We greatly prefer `7z` as a compression engine on Windows
@@ -209,13 +227,14 @@ function probe_platform_engines!(;verbose::Bool = false)
     # Allow environment override
     if haskey(ENV, "BINARYPROVIDER_DOWNLOAD_ENGINE")
         engine = ENV["BINARYPROVIDER_DOWNLOAD_ENGINE"]
-        dl_ngs = filter(e -> e[1].exec[1] == engine, download_engines)
+        es = split(engine)
+        dl_ngs = filter(e -> e[1].exec[1:length(es)] == es, download_engines)
         if isempty(dl_ngs)
             all_ngs = join([d[1].exec[1] for d in download_engines], ", ")
             warn_msg  = "Ignoring BINARYPROVIDER_DOWNLOAD_ENGINE as its value "
             warn_msg *= "of `$(engine)` doesn't match any known valid engines."
             warn_msg *= " Try one of `$(all_ngs)`."
-            warn(warn_msg)
+            @warn(warn_msg)
         else
             # If BINARYPROVIDER_DOWNLOAD_ENGINE matches one of our download engines,
             # then restrict ourselves to looking only at that engine
@@ -225,13 +244,14 @@ function probe_platform_engines!(;verbose::Bool = false)
 
     if haskey(ENV, "BINARYPROVIDER_COMPRESSION_ENGINE")
         engine = ENV["BINARYPROVIDER_COMPRESSION_ENGINE"]
-        comp_ngs = filter(e -> e[1].exec[1] == engine, compression_engines)
+        es = split(engine)
+        comp_ngs = filter(e -> e[1].exec[1:length(es)] == es, compression_engines)
         if isempty(comp_ngs)
             all_ngs = join([c[1].exec[1] for c in compression_engines], ", ")
             warn_msg  = "Ignoring BINARYPROVIDER_COMPRESSION_ENGINE as its "
             warn_msg *= "value of `$(engine)` doesn't match any known valid "
             warn_msg *= "engines. Try one of `$(all_ngs)`."
-            warn(warn_msg)
+            @warn(warn_msg)
         else
             # If BINARYPROVIDER_COMPRESSION_ENGINE matches one of our download
             # engines, then restrict ourselves to looking only at that engine
@@ -320,7 +340,7 @@ function parse_7z_list(output::AbstractString)
 
     # Find index of " Name". (can't use `findfirst(generator)` until this is
     # closed: https://github.com/JuliaLang/julia/issues/16884
-    header_row = find(occursin(" Name", l) && occursin(" Attr", l) for l in lines)[1]
+    header_row = findall(occursin(" Name", l) && occursin(" Attr", l) for l in lines)[1]
     name_idx = search(lines[header_row], "Name")[1]
     attr_idx = search(lines[header_row], "Attr")[1] - 1
 

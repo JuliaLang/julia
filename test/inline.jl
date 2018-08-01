@@ -21,7 +21,7 @@ Helper to test that every slot is in range after inlining.
 function test_inlined_symbols(func, argtypes)
     src, rettype = code_typed(func, argtypes)[1]
     nl = length(src.slotnames)
-    ast = Expr(:body)
+    ast = Expr(:block)
     ast.args = src.code
     walk(ast) do e
         if isa(e, Core.Slot)

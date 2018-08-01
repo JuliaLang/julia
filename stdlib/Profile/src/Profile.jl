@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
 Profiling support, main entry point is the [`@profile`](@ref) macro.
 """
@@ -256,6 +254,8 @@ function callers(funcname::String, bt::Vector, lidict::LineInfoFlatDict; filenam
     end
 end
 
+callers(funcname::String, bt::Vector, lidict::LineInfoDict; kwargs...) =
+    callers(funcname, flatten(bt, lidict)...; kwargs...)
 callers(funcname::String; kwargs...) = callers(funcname, retrieve()...; kwargs...)
 callers(func::Function, bt::Vector, lidict::LineInfoFlatDict; kwargs...) =
     callers(string(func), bt, lidict; kwargs...)

@@ -452,8 +452,8 @@ To recap, two essential properties define immutability in Julia:
 
 ## Declared Types
 
-The three kinds of types discussed in the previous three sections are actually all closely related.
-They share the same key properties:
+The three kinds of types (abstract, primitive, composite) discussed in the previous
+sections are actually all closely related. They share the same key properties:
 
   * They are explicitly declared.
   * They have names.

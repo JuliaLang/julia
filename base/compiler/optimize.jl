@@ -145,7 +145,7 @@ end
 # These affect control flow within the function (so may not be removed
 # if there is no usage within the function), but don't affect the purity
 # of the function as a whole.
-function stmt_affects_purity(stmt)
+function stmt_affects_purity(@nospecialize stmt)
     if isa(stmt, GotoIfNot) || isa(stmt, GotoNode) || isa(stmt, ReturnNode)
         return false
     end
@@ -270,7 +270,7 @@ end
 ## Computing the cost of a function body
 
 # saturating sum (inputs are nonnegative), prevents overflow with typemax(Int) below
-plus_saturate(x, y) = max(x, y, x+y)
+plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 
 # known return type
 isknowntype(@nospecialize T) = (T == Union{}) || isconcretetype(T)
@@ -393,32 +393,48 @@ function is_known_call(e::Expr, @nospecialize(func), src, spvals::SimpleVector, 
     return isa(f, Const) && f.val === func
 end
 
-function renumber_ir_elements!(body::Vector{Any}, changemap::Vector{Int}, preprocess::Bool = true)
-    if preprocess
-        for i = 2:length(changemap)
-            changemap[i] += changemap[i - 1]
+function renumber_ir_elements!(body::Vector{Any}, changemap::Vector{Int})
+    return renumber_ir_elements!(body, changemap, changemap)
+end
+
+function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, labelchangemap::Vector{Int})
+    for i = 2:length(labelchangemap)
+        labelchangemap[i] += labelchangemap[i - 1]
+    end
+    if ssachangemap !== labelchangemap
+        for i = 2:length(ssachangemap)
+            ssachangemap[i] += ssachangemap[i - 1]
         end
     end
-    changemap[end] != 0 || return
+    (labelchangemap[end] != 0 && ssachangemap[end] != 0) || return
     for i = 1:length(body)
         el = body[i]
         if isa(el, GotoNode)
-            body[i] = GotoNode(el.label + changemap[el.label])
+            body[i] = GotoNode(el.label + labelchangemap[el.label])
         elseif isa(el, SSAValue)
-            body[i] = SSAValue(el.id + changemap[el.id])
+            body[i] = SSAValue(el.id + ssachangemap[el.id])
         elseif isa(el, Expr)
             if el.head === :gotoifnot
                 cond = el.args[1]
                 if isa(cond, SSAValue)
-                    el.args[1] = SSAValue(cond.id + changemap[cond.id])
+                    el.args[1] = SSAValue(cond.id + ssachangemap[cond.id])
                 end
                 tgt = el.args[2]::Int
-                el.args[2] = tgt + changemap[tgt]
+                el.args[2] = tgt + labelchangemap[tgt]
             elseif el.head === :enter
                 tgt = el.args[1]::Int
-                el.args[1] = tgt + changemap[tgt]
+                el.args[1] = tgt + labelchangemap[tgt]
             elseif !is_meta_expr_head(el.head)
-                renumber_ir_elements!(el.args, changemap, false)
+                if el.head === :(=) && el.args[2] isa Expr && !is_meta_expr_head(el.args[2].head)
+                    el = el.args[2]::Expr
+                end
+                args = el.args
+                for i = 1:length(args)
+                    el = args[i]
+                    if isa(el, SSAValue)
+                        args[i] = SSAValue(el.id + ssachangemap[el.id])
+                    end
+                end
             end
         end
     end

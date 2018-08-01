@@ -11,7 +11,7 @@ using LinearAlgebra: BlasInt
 @test_throws ArgumentError LinearAlgebra.LAPACK.chktrans('Z')
 
 @testset "syevr" begin
-    srand(123)
+    Random.seed!(123)
     Ainit = randn(5,5)
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         if elty == ComplexF32 || elty == ComplexF64
@@ -208,7 +208,7 @@ end
 
 @testset "gels" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        srand(913)
+        Random.seed!(913)
         A = rand(elty,10,10)
         X = rand(elty,10)
         B,Y,z = LAPACK.gels!('N',copy(A),copy(X))
@@ -443,7 +443,7 @@ end
 
 @testset "sysv" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        srand(123)
+        Random.seed!(123)
         A = rand(elty,10,10)
         A = A + transpose(A) #symmetric!
         b = rand(elty,10)
@@ -456,7 +456,7 @@ end
 
 @testset "hesv" begin
     @testset for elty in (ComplexF32, ComplexF64)
-        srand(935)
+        Random.seed!(935)
         A = rand(elty,10,10)
         A = A + A' #hermitian!
         b = rand(elty,10)

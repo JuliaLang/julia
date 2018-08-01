@@ -65,7 +65,7 @@ These implementations assume that NaNs, infinities and zeros have already been f
     k = significand_bits(T) - (8*sizeof(T) - 32)
 
     u = highword(x) & 0x7fff_ffff
-    if u >= Base.Math.highword(realmin(T))
+    if u >= Base.Math.highword(floatmin(T))
         v = div(u, UInt32(3)) + floor(UInt32, adj * exp2(k))
     else
         # subnormal

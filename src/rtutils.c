@@ -805,8 +805,6 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         }
         else {
             char sep = ' ';
-            if (e->head == body_sym)
-                sep = '\n';
             n += jl_printf(out, "Expr(:%s", jl_symbol_name(e->head));
             size_t i, len = jl_array_len(e->args);
             for (i = 0; i < len; i++) {

@@ -131,10 +131,16 @@ end
 Same as [`ordschur`](@ref) but overwrites the factorization `F`.
 """
 function ordschur!(schur::Schur, select::Union{Vector{Bool},BitVector})
-    _, _, vals = ordschur!(schur.T, schur.Z, select)
+    _, _, vals = _ordschur!(schur.T, schur.Z, select)
     schur.values[:] = vals
     return schur
 end
+
+_ordschur(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
+    _ordschur!(copy(T), copy(Z), select)
+
+_ordschur!(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
+    LinearAlgebra.LAPACK.trsen!(convert(Vector{BlasInt}, select), T, Z)[1:3]
 
 """
     ordschur(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur
@@ -147,28 +153,7 @@ subspace. In the real case, a complex conjugate pair of eigenvalues must be eith
 included or both excluded via `select`.
 """
 ordschur(schur::Schur, select::Union{Vector{Bool},BitVector}) =
-    Schur(ordschur(schur.T, schur.Z, select)...)
-
-"""
-    ordschur!(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) -> T::StridedMatrix, Z::StridedMatrix, λ::Vector
-
-Same as [`ordschur`](@ref) but overwrites the input arguments.
-"""
-ordschur!(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
-    LinearAlgebra.LAPACK.trsen!(convert(Vector{BlasInt}, select), T, Z)[1:3]
-
-"""
-    ordschur(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) -> T::StridedMatrix, Z::StridedMatrix, λ::Vector
-
-Reorders the Schur factorization of a real matrix `A = Z*T*Z'` according to the logical
-array `select` returning the reordered matrices `T` and `Z` as well as the vector of
-eigenvalues `λ`. The selected eigenvalues appear in the leading diagonal of `T` and the
-corresponding leading columns of `Z` form an orthogonal/unitary basis of the corresponding
-right invariant subspace. In the real case, a complex conjugate pair of eigenvalues must be
-either both included or both excluded via `select`.
-"""
-ordschur(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
-    ordschur!(copy(T), copy(Z), select)
+    Schur(_ordschur(schur.T, schur.Z, select)...)
 
 struct GeneralizedSchur{Ty,M<:AbstractMatrix} <: Factorization{Ty}
     S::M
@@ -229,11 +214,19 @@ end
 Same as `ordschur` but overwrites the factorization `F`.
 """
 function ordschur!(gschur::GeneralizedSchur, select::Union{Vector{Bool},BitVector})
-    _, _, α, β, _, _ = ordschur!(gschur.S, gschur.T, gschur.Q, gschur.Z, select)
+    _, _, α, β, _, _ = _ordschur!(gschur.S, gschur.T, gschur.Q, gschur.Z, select)
     gschur.α[:] = α
     gschur.β[:] = β
     return gschur
 end
+
+_ordschur(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
+    Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
+        _ordschur!(copy(S), copy(T), copy(Q), copy(Z), select)
+
+_ordschur!(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
+    Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
+        LinearAlgebra.LAPACK.tgsen!(convert(Vector{BlasInt}, select), S, T, Q, Z)
 
 """
     ordschur(F::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) -> F::GeneralizedSchur
@@ -246,30 +239,7 @@ left and right orthogonal/unitary Schur vectors are also reordered such that
 and `B` can still be obtained with `F.α./F.β`.
 """
 ordschur(gschur::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) =
-    GeneralizedSchur(ordschur(gschur.S, gschur.T, gschur.Q, gschur.Z, select)...)
-
-"""
-    ordschur!(S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, select) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector
-
-Same as [`ordschur`](@ref) but overwrites the factorization the input arguments.
-"""
-ordschur!(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
-    Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
-        LinearAlgebra.LAPACK.tgsen!(convert(Vector{BlasInt}, select), S, T, Q, Z)
-
-"""
-    ordschur(S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, select) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector
-
-Reorders the Generalized Schur factorization of a matrix pair `(A, B) = (Q*S*Z', Q*T*Z')`
-according to the logical array `select` and returns the matrices `S`, `T`, `Q`, `Z` and
-vectors `α` and `β`.  The selected eigenvalues appear in the leading diagonal of both `S`
-and `T`, and the left and right unitary/orthogonal Schur vectors are also reordered such
-that `(A, B) = Q*(S, T)*Z'` still holds and the generalized eigenvalues of `A` and `B` can
-still be obtained with `α./β`.
-"""
-ordschur(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
-    Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
-        ordschur!(copy(S), copy(T), copy(Q), copy(Z), select)
+    GeneralizedSchur(_ordschur(gschur.S, gschur.T, gschur.Q, gschur.Z, select)...)
 
 function getproperty(F::GeneralizedSchur, d::Symbol)
     if d == :values

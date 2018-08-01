@@ -50,6 +50,8 @@ end
 # Base.compilecache only works from node 1, so precompile test is handled specially
 move_to_node1("precompile")
 move_to_node1("SharedArrays")
+# Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
+move_to_node1("stress")
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory

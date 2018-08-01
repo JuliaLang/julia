@@ -109,6 +109,8 @@ Base.trailing_zeros
 Base.trailing_ones
 Base.isodd
 Base.iseven
+Base.@int128_str
+Base.@uint128_str
 ```
 
 ## BigFloats
@@ -124,4 +126,5 @@ Base.MPFR.BigFloat(x, prec::Int)
 BigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)
 Base.MPFR.BigFloat(x, prec::Int, rounding::RoundingMode)
 Base.MPFR.BigFloat(x::String)
+Base.@big_str
 ```

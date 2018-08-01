@@ -741,7 +741,7 @@ _notspace(c) = c != _space
 
 beginofline(buf, pos=position(buf)) = something(findprev(isequal(_newline), buf.data, pos), 0)
 
-function lastindexline(buf, pos=position(buf))
+function endofline(buf, pos=position(buf))
     eol = findnext(isequal(_newline), buf.data[pos+1:buf.size], 1)
     eol === nothing ? buf.size : pos + eol - 1
 end
@@ -896,7 +896,7 @@ function edit_kill_line(s::MIState, backwards::Bool=false)
     else
         set_action!(s, :edit_kill_line_forwards)
         pos = position(buf)
-        endpos = lastindexline(buf)
+        endpos = endofline(buf)
         endpos == pos && buf.size > pos && (endpos += 1)
     end
     push_undo(s)
@@ -991,7 +991,7 @@ function edit_transpose_lines_up!(buf::IOBuffer, reg::Region)
     line1 = edit_splice!(buf, b1 => b2) # delete whole previous line
     line1 = '\n'*line1[1:end-1] # don't include the final '\n'
     pos = position(buf) # save pos in case it's at the end of line
-    b = lastindexline(buf, last(reg) - b2 + b1) # b2-b1 is the size of the removed line1
+    b = endofline(buf, last(reg) - b2 + b1) # b2-b1 is the size of the removed line1
     edit_splice!(buf, b => b, line1)
     seek(buf, pos)
     return true
@@ -999,9 +999,9 @@ end
 
 # swap all lines intersecting the region with line below
 function edit_transpose_lines_down!(buf::IOBuffer, reg::Region)
-    e1 = lastindexline(buf, last(reg))
+    e1 = endofline(buf, last(reg))
     e1 == buf.size && return false
-    e2 = lastindexline(buf, e1+1)
+    e2 = endofline(buf, e1+1)
     line2 = edit_splice!(buf, e1 => e2) # delete whole next line
     line2 = line2[2:end]*'\n' # don't include leading '\n'
     b = beginofline(buf, first(reg))
@@ -1111,7 +1111,7 @@ function get_lines_in_region(s)::Vector{Int}
     b, e = region(buf)
     bol = Int[beginofline(buf, b)] # begin of lines
     while true
-        b = lastindexline(buf, b)
+        b = endofline(buf, b)
         b >= e && break
         # b < e ==> b+1 <= e <= buf.size
         push!(bol, b += 1)
@@ -2258,14 +2258,7 @@ function run_interface(terminal::TextTerminal, m::ModalInterface, s::MIState=ini
             @static if Sys.isunix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
             buf, ok, suspend = prompt!(terminal, m, s)
         end
-        Core.eval(Main,
-            Expr(:body,
-                Expr(:return,
-                     Expr(:call,
-                          QuoteNode(mode(state(s)).on_done),
-                          QuoteNode(s),
-                          QuoteNode(buf),
-                          QuoteNode(ok)))))
+        Base.invokelatest(mode(state(s)).on_done, s, buf, ok)
     end
 end
 
