@@ -785,10 +785,10 @@ end
         Pkg.REPLMode.Option("rawnum", "5"),
     ], specs)
 
-    @test Pkg.REPLMode.key_api(:foo, api_opts) === nothing
-    @test Pkg.REPLMode.key_api(:mode, api_opts) == Pkg.Types.PKGMODE_MANIFEST
-    @test Pkg.REPLMode.key_api(:level, api_opts) == Pkg.Types.UPLEVEL_PATCH
-    @test Pkg.REPLMode.key_api(:num, api_opts) == "5"
+    @test get(api_opts,:foo,nothing) === nothing
+    @test get(api_opts,:mode,nothing) == Pkg.Types.PKGMODE_MANIFEST
+    @test get(api_opts,:level,nothing) == Pkg.Types.UPLEVEL_PATCH
+    @test get(api_opts,:num,nothing) == "5"
 
     api_opts = Pkg.REPLMode.APIOptions([
         Pkg.REPLMode.Option("project"),
@@ -796,15 +796,9 @@ end
         Pkg.REPLMode.Option("plus", "5"),
     ], specs)
 
-    @test Pkg.REPLMode.key_api(:mode, api_opts) == Pkg.Types.PKGMODE_PROJECT
-    @test Pkg.REPLMode.key_api(:level, api_opts) == Pkg.Types.UPLEVEL_PATCH
-    @test Pkg.REPLMode.key_api(:num, api_opts) == 6
-
-    @test Pkg.REPLMode.key_api(:foo, api_opts) === nothing
-    Pkg.REPLMode.set_default!(:foo => "bar", api_opts)
-    @test Pkg.REPLMode.key_api(:foo, api_opts) == "bar"
-    Pkg.REPLMode.set_default!(:level => "bar", api_opts)
-    @test Pkg.REPLMode.key_api(:level, api_opts) == Pkg.Types.UPLEVEL_PATCH
+    @test get(api_opts,:mode,nothing) == Pkg.Types.PKGMODE_PROJECT
+    @test get(api_opts,:level,nothing) == Pkg.Types.UPLEVEL_PATCH
+    @test get(api_opts,:num,nothing) == 6
 end
 
 @testset "meta option errors" begin
