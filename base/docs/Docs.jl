@@ -497,7 +497,7 @@ function docm(source::LineNumberNode, mod::Module, ex)
         return docm(source, mod, ex.args...)
     else
         # TODO: this is a shim to continue to allow `@doc` for looking up docstrings
-        REPL = Base.root_module(Base, :REPL)
+        REPL = Base.REPL_MODULE_REF[]
         return REPL.lookup_doc(ex)
     end
 end
