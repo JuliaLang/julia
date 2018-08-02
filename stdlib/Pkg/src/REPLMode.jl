@@ -603,7 +603,7 @@ do_up!(ctx::APIOptions, args::PkgArguments, api_opts::APIOptions) =
 
 function do_activate!(args::PkgArguments, api_opts::APIOptions)
     if isempty(args)
-        return API.activate(nothing)
+        return API.activate()
     else
         return API.activate(args[1])
     end
