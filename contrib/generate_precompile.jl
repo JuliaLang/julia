@@ -126,6 +126,8 @@ function generate_precompile_statements()
             m === nothing && continue
             statement = m.captures[1]
             occursin(r"Main.", statement) && continue
+            (count(isequal('{'), statement) != count(isequal('}'), statement)) && continue
+            (count(isequal('('), statement) != count(isequal(')'), statement)) && continue
             push!(statements, statement)
         end
 
@@ -137,7 +139,13 @@ function generate_precompile_statements()
             @assert length(statements) > 700
         end
 
-        Base.include_string(PrecompileStagingArea, statements_ordered)
+        for statement in statements
+            try
+                Base.include_string(PrecompileStagingArea, statement)
+            catch
+                @warn "Failed to run $statement"
+            end
+        end
         print(" $(length(statements)) generated in ")
         Base.time_print((time() - start_time) * 10^9)
         println()
