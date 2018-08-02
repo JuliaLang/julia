@@ -27,6 +27,9 @@ addprocs_with_testenv(4)
     Base.ACTIVE_PROJECT[] = joinpath(Sys.BINDIR, "..", "share", "julia", "test", "TestPkg")
 end
 
+# cause precompilation of TestPkg to avoid race condition
+Base.compilecache(Base.identify_package("TestPkg"))
+
 @everywhere using TestPkg
 @everywhere using TestPkg
 
