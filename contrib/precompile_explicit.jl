@@ -3,20 +3,11 @@
 # Steps to regenerate this file:
 # 1. Remove all `precompile` calls
 # 2. Rebuild system image
-# 3. Enable TRACE_COMPILE in options.h and rebuild
-# 4. Run `./julia 2> precompiles.txt` and do various things.
-# 5. Run `./julia contrib/fixup_precompile.jl precompiles.txt to overwrite `precompile.jl`
-#    or ./julia contrib/fixup_precompile.jl --merge precompiles.txt to merge into existing
-#    `precompile.jl`
+# 3. Start julia with `--trace-compile=yes and do some stuff
+# 5. Run `grep -v '#[0-9]' precompiles.txt >> contrib/precompile_explicit.jl`
+# (filters out closures, which might have different generated names in different environments)
+# This list is only used on Windows, otherwise precompile statements are generated dynamically.
 
-let
-PrecompileStagingArea = Module()
-for (_pkgid, _mod) in Base.loaded_modules
-    if !(_pkgid.name in ("Main", "Core", "Base"))
-        @eval PrecompileStagingArea $(Symbol(_mod)) = $_mod
-    end
-end
-@eval PrecompileStagingArea begin
 precompile(Tuple{Type{Array{Base.StackTraces.StackFrame, 1}}, UndefInitializer, Int64})
 precompile(Tuple{Type{Array{Union{Nothing, String}, 1}}, UndefInitializer, Int64})
 precompile(Tuple{Type{Base.CoreLogging.LogState}, Logging.ConsoleLogger})
@@ -742,5 +733,3 @@ precompile(Tuple{typeof(REPL.setup_interface), REPL.LineEditREPL})
 precompile(Tuple{typeof(REPL.start_repl_backend), Base.Channel{Any}, Base.Channel{Any}})
 precompile(Tuple{typeof(Random.__init__)})
 precompile(Tuple{typeof(eval), Module, Expr})
-end
-end

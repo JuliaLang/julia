@@ -183,7 +183,7 @@ struct REPLBackendRef
     response_channel::Channel
 end
 
-function run_repl(repl::AbstractREPL, consumer::Function = x->nothing)
+function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing))
     repl_channel = Channel(1)
     response_channel = Channel(1)
     backend = start_repl_backend(repl_channel, response_channel)
