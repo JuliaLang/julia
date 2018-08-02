@@ -469,12 +469,19 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     uint8_t j;
     uint8_t called = 0;
     int gen_only = 0;
-    for (j = 1; j < m->nargs && j <= 8; j++) {
+    for (j = 1; j < m->nargs && j <= sizeof(m->nospecialize) * 8; j++) {
         jl_value_t *ai = jl_array_ptr_ref(src->slotnames, j);
-        if (ai == (jl_value_t*)unused_sym)
+        if (ai == (jl_value_t*)unused_sym) {
+            // TODO: enable this. currently it triggers a bug on arguments like
+            // ::Type{>:Missing}
+            //int sn = j-1;
+            //m->nospecialize |= (1 << sn);
             continue;
-        if (jl_array_uint8_ref(src->slotflags, j) & 64)
-            called |= (1 << (j - 1));
+        }
+        if (j <= 8) {
+            if (jl_array_uint8_ref(src->slotflags, j) & 64)
+                called |= (1 << (j - 1));
+        }
     }
     m->called = called;
     m->pure = src->pure;
