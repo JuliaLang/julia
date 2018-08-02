@@ -28,10 +28,8 @@ add_or_develop(pkg::Union{String, PackageSpec}; kwargs...) = add_or_develop([pkg
 add_or_develop(pkgs::Vector{String}; kwargs...)            = add_or_develop([check_package_name(pkg) for pkg in pkgs]; kwargs...)
 add_or_develop(pkgs::Vector{PackageSpec}; kwargs...)       = add_or_develop(Context(), pkgs; kwargs...)
 
-function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, devdir::Bool=false, kwargs...)
+function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, shared::Bool=true, kwargs...)
     Context!(ctx; kwargs...)
-
-    devdir = devdir ? joinpath(dirname(ctx.env.project_file), "dev") : nothing
 
     # All developed packages should go through handle_repos_develop so just give them an empty repo
     for pkg in pkgs
@@ -45,7 +43,8 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, d
 
     ctx.preview && preview_info()
     if mode == :develop
-        new_git = handle_repos_develop!(ctx, pkgs, something(devdir, Pkg.devdir()))
+        devdir = shared ? Pkg.devdir() : joinpath(dirname(ctx.env.project_file), "dev")
+        new_git = handle_repos_develop!(ctx, pkgs, devdir)
     else
         new_git = handle_repos_add!(ctx, pkgs; upgrade_or_add=true)
     end
@@ -63,7 +62,7 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, d
 end
 
 add(args...; kwargs...) = add_or_develop(args...; mode = :add, kwargs...)
-develop(args...; kwargs...) = add_or_develop(args...; mode = :develop, kwargs...)
+develop(args...; shared=true, kwargs...) = add_or_develop(args...; mode = :develop, shared = shared, kwargs...)
 
 rm(pkg::Union{String, PackageSpec}; kwargs...) = rm([pkg]; kwargs...)
 rm(pkgs::Vector{String}; kwargs...)            = rm([PackageSpec(pkg) for pkg in pkgs]; kwargs...)

@@ -1037,8 +1037,8 @@ pkg> add Example=7876af07-990d-54b4-ab0e-23690620f79a
     do_develop!,
     (ARG_ALL, []),
     [
-        ("local", OPT_SWITCH, :devdir => true),
-        ("shared", OPT_SWITCH, :devdir => false),
+        ("local", OPT_SWITCH, :shared => false),
+        ("shared", OPT_SWITCH, :shared => true),
     ],
     md"""
     develop [--shared|--local] pkg[=uuid] [#rev] ...
