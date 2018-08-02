@@ -6652,3 +6652,7 @@ function foo28326(a)
     end
 end
 @test foo28326(Vector(undef, 1))
+
+# Issue #28392
+struct Foo28392; end
+@test_throws MethodError iterate(Foo28392())
