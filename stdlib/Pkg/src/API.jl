@@ -505,7 +505,7 @@ function instantiate(ctx::Context; manifest::Union{Bool, Nothing}=nothing, kwarg
         return
     end
     if !isfile(ctx.env.manifest_file) && manifest == true
-        cmderror("manifest at $(ctx.env.manifest) does not exist")
+        cmderror("manifest at $(ctx.env.manifest_file) does not exist")
     end
     update_registry(ctx)
     urls = Dict{}
