@@ -45,13 +45,13 @@ function trimWidth(str::String, term_width::Int, trim_right=true, pad::Int=2)
 end
 
 
-# Reads a single byte from STDIN
-readNextChar(stream::IO=STDIN) = Char(read(stream,1)[1])
+# Reads a single byte from stdin
+readNextChar(stream::IO=Base.stdin) = Char(read(stream,1)[1])
 
-# Read the next key from STDIN. It is also able to read several bytes for
+# Read the next key from stdin. It is also able to read several bytes for
 #   escaped keys such as the arrow keys, home/end keys, etc.
 # Escaped keys are returned using the `Key` enum.
-function readKey(stream::IO=STDIN) ::UInt32
+function readKey(stream::IO=Base.stdin) ::UInt32
     c = readNextChar(stream)
 
 	# Escape characters
