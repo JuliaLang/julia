@@ -200,7 +200,7 @@ function parse(cmd::String)::Vector{Statement}
     # tokenize accoring to whitespace / quotes
     qwords = parse_quotes(cmd)
     # tokenzie unquoted tokens according to pkg REPL syntax
-    words::Vector{String} = collect(Iterators.flatten(map(qword2word, qwords)))
+    words = lex(qwords)
     # break up words according to ";"(doing this early makes subsequent processing easier)
     word_groups = group_words(words)
     # create statements
@@ -210,7 +210,7 @@ end
 
 # vector of words -> structured statement
 # minimal checking is done in this phase
-function Statement(words)
+function Statement(words)::Statement
     is_option(word) = first(word) == '-'
     statement = Statement()
 
@@ -257,10 +257,16 @@ end
 
 const lex_re = r"^[\?\./\+\-](?!\-) | ((git|ssh|http(s)?)|(git@[\w\-\.]+))(:(//)?)([\w\.@\:/\-~]+)(\.git)(/)? | [^@\#\s;]+\s*=\s*[^@\#\s;]+ | \#\s*[^@\#\s;]* | @\s*[^@\#\s;]* | [^@\#\s;]+|;"x
 
-function qword2word(qword::QuotedWord)
-    return qword.isquoted ? [qword.word] : map(m->m.match, eachmatch(lex_re, " $(qword.word)"))
-    #                                                                         ^
-    # note: space before `$word` is necessary to keep using current `lex_re`
+function lex(qwords::Vector{QuotedWord})::Vector{String}
+    words = String[]
+    for qword in qwords
+        if qword.isquoted
+            push!(words, qword.word)
+        else
+            append!(words, map(m->m.match, eachmatch(lex_re, qword.word)))
+        end
+    end
+    return words
 end
 
 function parse_quotes(cmd::String)::Vector{QuotedWord}
@@ -279,18 +285,16 @@ function parse_quotes(cmd::String)::Vector{QuotedWord}
             if in_singlequote # raw char
                 push!(token_in_progress, c)
             else # delimiter
+                in_doublequote ? push_token!(true) : push_token!(false)
                 in_doublequote = !in_doublequote
-                push_token!(true)
             end
         elseif c == '\''
             if in_doublequote # raw char
                 push!(token_in_progress, c)
             else # delimiter
+                in_singlequote ? push_token!(true) : push_token!(false)
                 in_singlequote = !in_singlequote
-                push_token!(true)
             end
-        elseif c == ' ' && !(in_doublequote || in_singlequote)
-            push_token!(false)
         else
             push!(token_in_progress, c)
         end
