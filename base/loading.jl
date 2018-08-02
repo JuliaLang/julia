@@ -926,9 +926,10 @@ function _require(pkg::PkgId)
                  - Run `Pkg.instantiate()` to install all recorded dependencies.
                 """))
         end
+        needs_precompile = !occursin(r"__precompile__\(false\)", read(path, String))
 
         # attempt to load the module file via the precompile cache locations
-        if JLOptions().use_compiled_modules != 0
+        if JLOptions().use_compiled_modules != 0 && needs_precompile
             m = _require_search_from_serialized(pkg, path)
             if !isa(m, Bool)
                 return
@@ -948,7 +949,7 @@ function _require(pkg::PkgId)
             end
         end
 
-        if JLOptions().use_compiled_modules != 0
+        if JLOptions().use_compiled_modules != 0 && needs_precompile
             if (0 == ccall(:jl_generating_output, Cint, ())) || (JLOptions().incremental != 0)
                 # spawn off a new incremental pre-compile task for recursive `require` calls
                 # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
