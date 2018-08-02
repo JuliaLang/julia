@@ -55,15 +55,10 @@ hashall(x, h::UInt) = fieldcount(typeof(x)) == 0 ? hash(x, h) : hashfields(x, h)
 end
 hashall(x::Type, h::UInt) = hash(x, h)
 hashall(x::Module, h::UInt) = hash(x, h)
+hashall(S::String, h::UInt) = hash(S, h)
 function hashall(A::Array, h::UInt)
     for i in eachindex(A)
         h = hashall(isassigned(A, i) ? A[i] : 0x0a57083376608372, h)
-    end
-    return h
-end
-function hashall(S::String, h::UInt)
-    for c in S
-        h = hashall(c, h)
     end
     return h
 end
