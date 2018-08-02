@@ -122,6 +122,31 @@ Equivalent to the native `wchar_t` c-type ([`Int32`](@ref)).
 """
 Cwchar_t
 
+"""
+    Cwstring
+
+A C-style string composed of the native wide character type
+[`Cwchar_t`](@ref)s. `Cwstring`s are NUL-terminated. For
+C-style strings composed of the native character
+type, see [`Cstring`](@ref). For more information
+about string interopability with C, see the
+[manual](@ref man-bits-types).
+
+"""
+Cwstring
+
+"""
+    Cstring
+
+A C-style string composed of the native character type
+[`Cchar`](@ref)s. `Cstring`s are NUL-terminated. For
+C-style strings composed of the native wide character
+type, see [`Cwstring`](@ref). For more information
+about string interopability with C, see the
+[manual](@ref man-bits-types).
+"""
+Cstring
+
 @static if ccall(:jl_get_UNAME, Any, ()) !== :NT
     const sizeof_mode_t = ccall(:jl_sizeof_mode_t, Cint, ())
     if sizeof_mode_t == 2
@@ -214,7 +239,7 @@ unsafe_convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, 
 
 Converts a string `s` to a NUL-terminated `Vector{Cwchar_t}`, suitable for passing to C
 functions expecting a `Ptr{Cwchar_t}`. The main advantage of using this over the implicit
-conversion provided by `Cwstring` is if the function is called multiple times with the
+conversion provided by [`Cwstring`](@ref) is if the function is called multiple times with the
 same argument.
 
 This is only available on Windows.
@@ -236,7 +261,7 @@ Convert string data between Unicode encodings. `src` is either a
 `String` or a `Vector{UIntXX}` of UTF-XX code units, where
 `XX` is 8, 16, or 32. `T` indicates the encoding of the return value:
 `String` to return a (UTF-8 encoded) `String` or `UIntXX`
-to return a `Vector{UIntXX}` of UTF-`XX` data.   (The alias `Cwchar_t`
+to return a `Vector{UIntXX}` of UTF-`XX` data. (The alias [`Cwchar_t`](@ref)
 can also be used as the integer type, for converting `wchar_t*` strings
 used by external C libraries.)
 
@@ -428,7 +453,7 @@ end
     reenable_sigint(f::Function)
 
 Re-enable Ctrl-C handler during execution of a function.
-Temporarily reverses the effect of `disable_sigint`.
+Temporarily reverses the effect of [`disable_sigint`](@ref).
 """
 function reenable_sigint(f::Function)
     sigatomic_end()
