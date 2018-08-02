@@ -1221,6 +1221,10 @@ end
 
     # issue #28159
     @test replstr([(a=1, b=2), (a=3,c=4)]) == "2-element Array{NamedTuple{names,Tuple{$Int,$Int}} where names,1}:\n (a = 1, b = 2)\n (a = 3, c = 4)"
+
+    @test replstr(Vector[Any[1]]) == "1-element Array{Array{T,1} where T,1}:\n Any[1]"
+    @test replstr(AbstractDict{Integer,Integer}[Dict{Integer,Integer}(1=>2)]) ==
+        "1-element Array{AbstractDict{Integer,Integer},1}:\n Dict(1=>2)"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
@@ -1381,4 +1385,19 @@ mktemp() do fname, io
         @test_deprecated `/bin/foo $nothing`
         @test_deprecated `$nothing`
     end
+end
+
+struct X28004
+    value::Any
+end
+
+function Base.show(io::IO, x::X28004)
+    print(io, "X(")
+    show(io, x.value)
+    print(io, ")")
+end
+
+@testset """printing "Any" is not skipped with nested arrays""" begin
+    @test replstr(Union{X28004,Vector}[X28004(Any[X28004(1)])]) ==
+        "1-element Array{Union{X28004, Array{T,1} where T},1}:\n X(Any[X(1)])"
 end
