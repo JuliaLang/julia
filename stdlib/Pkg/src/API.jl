@@ -547,29 +547,27 @@ function status(ctx::Context, mode=PKGMODE_PROJECT)
     return
 end
 
-function activate(path::Union{String,Nothing}=nothing)
-    if path !== nothing
-        devpath = nothing
-        env = Base.active_project() === nothing ? nothing : EnvCache()
-        if env !== nothing && haskey(env.project["deps"], path)
-            uuid = UUID(env.project["deps"][path])
-            info = manifest_info(env, uuid)
-            devpath = haskey(info, "path") ? joinpath(dirname(env.project_file), info["path"]) : nothing
-        end
-        # `pkg> activate path`/`Pkg.activate(path)` does the following
-        # 1. if path exists, activate that
-        # 2. if path exists in deps, and the dep is deved, activate that path (`devpath` above)
-        # 3. activate the non-existing directory (e.g. as in `pkg> activate .` for initing a new env)
-        if Types.isdir_windows_workaround(path)
-            path = abspath(path)
-        elseif devpath !== nothing
-            path = abspath(devpath)
-        else
-            path = abspath(path)
-        end
+activate() = (Base.ACTIVE_PROJECT[] = Base.load_path_expand(nothing))
+function activate(path::String)
+    devpath = nothing
+    env = Base.active_project() === nothing ? nothing : EnvCache()
+    if env !== nothing && haskey(env.project["deps"], path)
+        uuid = UUID(env.project["deps"][path])
+        info = manifest_info(env, uuid)
+        devpath = haskey(info, "path") ? joinpath(dirname(env.project_file), info["path"]) : nothing
+    end
+    # `pkg> activate path`/`Pkg.activate(path)` does the following
+    # 1. if path exists, activate that
+    # 2. if path exists in deps, and the dep is deved, activate that path (`devpath` above)
+    # 3. activate the non-existing directory (e.g. as in `pkg> activate .` for initing a new env)
+    if Types.isdir_windows_workaround(path)
+        path = abspath(path)
+    elseif devpath !== nothing
+        path = abspath(devpath)
+    else
+        path = abspath(path)
     end
     Base.ACTIVE_PROJECT[] = Base.load_path_expand(path)
-    return
 end
 
 """
