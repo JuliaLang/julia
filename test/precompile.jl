@@ -24,6 +24,7 @@ try
 
     write(FooBase_file,
           """
+          false && __precompile__(false)
           module $FooBase_module
               import Base: hash, >
               struct fmpz end
@@ -235,7 +236,12 @@ try
                  :Future, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
                  :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
                  :Unicode, :REPL, :InteractiveUtils, :OldPkg, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
-                 :Statistics, ]))
+                 :Statistics, ]),
+                # Plus precompilation module generated at build time
+                let id = Base.PkgId("__PackagePrecompilationStatementModule")
+                    Dict(id => Base.module_build_id(Base.root_module(id)))
+                end
+           )
         @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -279,18 +285,15 @@ try
     Baz_file = joinpath(dir, "Baz.jl")
     write(Baz_file,
           """
-          __precompile__(false)
+          true && __precompile__(false)
           module Baz
+          baz() = 1
           end
           """)
 
-    @test_warn "ERROR: LoadError: Declaring __precompile__(false) is not allowed in files that are being precompiled.\nStacktrace:\n [1] __precompile__" try
-        Base.compilecache(Base.PkgId("Baz")) # from __precompile__(false)
-        error("__precompile__ disabled test failed")
-    catch exc
-        isa(exc, ErrorException) || rethrow(exc)
-        occursin("__precompile__(false)", exc.msg) && rethrow(exc)
-    end
+    @test Base.compilecache(Base.PkgId("Baz")) == Base.PrecompilableError() # due to __precompile__(false)
+    @eval using Baz
+    @test Base.invokelatest(Baz.baz) == 1
 
     # Issue #12720
     FooBar1_file = joinpath(dir, "FooBar1.jl")

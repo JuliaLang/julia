@@ -2253,4 +2253,23 @@ end
     @test SparseMatrixCSC(transpose(A)) isa SparseMatrixCSC
 end
 
+@testset "Issue #28369" begin
+    M = reshape([[1 2; 3 4], [9 10; 11 12], [5 6; 7 8], [13 14; 15 16]], (2,2))
+    MP = reshape([[1 2; 3 4], [5 6; 7 8], [9 10; 11 12], [13 14; 15 16]], (2,2))
+    S = sparse(M)
+    SP = sparse(MP)
+    @test isa(transpose(S), Transpose)
+    @test transpose(S) == copy(transpose(S))
+    @test Array(transpose(S)) == copy(transpose(M))
+    @test permutedims(S) == SP
+    @test permutedims(S, (2,1)) == SP
+    @test permutedims(S, (1,2)) == S
+    @test permutedims(S, (1,2)) !== S
+    MC = reshape([[(1+im) 2; 3 4], [9 10; 11 12], [(5 + 2im) 6; 7 8], [13 14; 15 16]], (2,2))
+    SC = sparse(MC)
+    @test isa(adjoint(SC), Adjoint)
+    @test adjoint(SC) == copy(adjoint(SC))
+    @test adjoint(MC) == copy(adjoint(SC))
+end
+
 end # module

@@ -18,6 +18,26 @@ include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 addprocs_with_testenv(4)
 @test nprocs() == 5
 
+# distributed loading of packages
+
+# setup
+@everywhere begin
+    old_act_proj = Base.ACTIVE_PROJECT[]
+    pushfirst!(Base.LOAD_PATH, "@")
+    Base.ACTIVE_PROJECT[] = joinpath(Sys.BINDIR, "..", "share", "julia", "test", "TestPkg")
+end
+
+# cause precompilation of TestPkg to avoid race condition
+Base.compilecache(Base.identify_package("TestPkg"))
+
+@everywhere using TestPkg
+@everywhere using TestPkg
+
+@everywhere begin
+    Base.ACTIVE_PROJECT[] = old_act_proj
+    popfirst!(Base.LOAD_PATH)
+end
+
 @everywhere using Test, Random, LinearAlgebra
 
 id_me = myid()

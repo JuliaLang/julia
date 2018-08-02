@@ -867,8 +867,13 @@ function ftranspose(A::SparseMatrixCSC{Tv,Ti}, f::Function) where {Tv,Ti}
 end
 adjoint(A::SparseMatrixCSC) = Adjoint(A)
 transpose(A::SparseMatrixCSC) = Transpose(A)
-Base.copy(A::Adjoint{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, conj)
-Base.copy(A::Transpose{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, identity)
+Base.copy(A::Adjoint{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, x -> copy(adjoint(x)))
+Base.copy(A::Transpose{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, x -> copy(transpose(x)))
+function Base.permutedims(A::SparseMatrixCSC, (a,b))
+    (a, b) == (2, 1) && return ftranspose(A, identity)
+    (a, b) == (1, 2) && return copy(A)
+    throw(ArgumentError("no valid permutation of dimensions"))
+end
 
 """
     unchecked_noalias_permute!(X::SparseMatrixCSC{Tv,Ti},
@@ -3470,51 +3475,6 @@ function rotl90(A::SparseMatrixCSC)
         J[i] = n - J[i] + 1
     end
     return sparse(J, I, V, n, m)
-end
-
-## hashing
-
-# End the run and return the current hash
-@inline function hashrun(val, runlength::Int, h::UInt)
-    if runlength == 0
-        return h
-    elseif runlength > 1
-        h += Base.hashrle_seed
-        h = hash(runlength, h)
-    end
-    hash(val, h)
-end
-
-function hash(A::SparseMatrixCSC{T}, h::UInt) where T
-    h += Base.hashaa_seed
-    sz = size(A)
-    h += hash(sz)
-
-    colptr = A.colptr
-    rowval = A.rowval
-    nzval = A.nzval
-    lastidx = 0
-    runlength = 0
-    lastnz = zero(T)
-    @inbounds for col = 1:size(A, 2)
-        for j = colptr[col]:colptr[col+1]-1
-            nz = nzval[j]
-            isequal(nz, zero(T)) && continue
-            idx = Base._sub2ind(sz, rowval[j], col)
-            if idx != lastidx+1 || !isequal(nz, lastnz)  # Run is over
-                h = hashrun(lastnz, runlength, h)        # Hash previous run
-                h = hashrun(0, idx-lastidx-1, h)         # Hash intervening zeros
-
-                runlength = 1
-                lastnz = nz
-            else
-                runlength += 1
-            end
-            lastidx = idx
-        end
-    end
-    h = hashrun(lastnz, runlength, h) # Hash previous run
-    hashrun(0, length(A)-lastidx, h)  # Hash zeros at end
 end
 
 ## Uniform matrix arithmetic

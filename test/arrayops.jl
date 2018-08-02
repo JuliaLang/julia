@@ -2442,7 +2442,34 @@ end
 end
 
 @testset "inference hash array 22740" begin
-    @inferred hash([1,2,3])
+    @test @inferred(hash([1,2,3])) == @inferred(hash(1:3))
+end
+
+@testset "hashing arrays of arrays" begin
+    # issues #27865 and #26011
+    @test hash([["asd"], ["asd"], ["asad"]]) == hash(Any[["asd"], ["asd"], ["asad"]])
+    @test hash([["asd"], ["asd"], ["asad"]]) != hash([["asd"], ["asd"], ["asadq"]])
+    @test hash([1,2,[3]]) == hash([1,2,Any[3]]) == hash([1,2,Int8[3]]) == hash([1,2,BigInt[3]]) == hash([1,2,[3.0]])
+    @test hash([1,2,[3]]) != hash([1,2,[3,4]])
+end
+
+# Ensure we can hash strange custom structs — and they hash the same in arrays
+struct totally_not_five26034 end
+Base.isequal(::totally_not_five26034, x)=isequal(5,x);
+Base.isequal(x, ::totally_not_five26034)=isequal(5,x);
+Base.isequal(::totally_not_five26034, ::totally_not_five26034)=true;
+Base.hash(::totally_not_five26034, h::UInt)=hash(5, h);
+import Base.==
+==(::totally_not_five26034, x)= (5==x);
+==(x,::totally_not_five26034)= (5==x);
+==(::totally_not_five26034,::totally_not_five26034)=true;
+@testset "issue #26034" begin
+    n5 = totally_not_five26034()
+    @test hash(n5) == hash(5)
+    @test isequal([4,n5,6], [4,5,6])
+    @test isequal(hash([4,n5,6]), hash([4,5,6]))
+    @test isequal(hash(Any[4,n5,6]), hash(Union{Int, totally_not_five26034}[4,5,6]))
+    @test isequal(hash([n5,4,n5,6]), hash([n5,4,5,6]))
 end
 
 function f27079()

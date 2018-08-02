@@ -1852,3 +1852,101 @@ let i
         end
     end
 end
+
+# issue #28356
+# unit test to make sure countunionsplit overflows gracefully
+# we don't care what number is returned as long as it's large
+@test Core.Compiler.countunionsplit(Any[Union{Int32,Int64} for i=1:80]) > 100000
+
+# make sure compiler doesn't hang in union splitting
+
+struct S28356{T<:Union{Float64,Float32}}
+x1::T
+x2::T
+x3::T
+x4::T
+x5::T
+x6::T
+x7::T
+x8::T
+x9::T
+x10::T
+x11::T
+x12::T
+x13::T
+x14::T
+x15::T
+x16::T
+x17::T
+x18::T
+x19::T
+x20::T
+x21::T
+x22::T
+x23::T
+x24::T
+x25::T
+x26::T
+x27::T
+x28::T
+x29::T
+x30::T
+x31::T
+x32::T
+x33::T
+x34::T
+x35::T
+x36::T
+x37::T
+x38::T
+x39::T
+x40::T
+x41::T
+x42::T
+x43::T
+x44::T
+x45::T
+x46::T
+x47::T
+x48::T
+x49::T
+x50::T
+x51::T
+x52::T
+x53::T
+x54::T
+x55::T
+x56::T
+x57::T
+x58::T
+x59::T
+x60::T
+x61::T
+x62::T
+x63::T
+x64::T
+x65::T
+x66::T
+x67::T
+x68::T
+x69::T
+x70::T
+x71::T
+x72::T
+x73::T
+x74::T
+x75::T
+x76::T
+x77::T
+x78::T
+x79::T
+x80::T
+end
+
+function f28356(::Type{T}) where {T<:Union{Float64,Float32}}
+    S28356(T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0),T(0))
+end
+
+h28356() = f28356(Any[Float64][1])
+
+@test h28356() isa S28356{Float64}

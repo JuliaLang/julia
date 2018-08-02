@@ -2071,124 +2071,68 @@ push!(A, a, b, c...) = push!(push!(A, a, b), c...)
 pushfirst!(A, a, b) = pushfirst!(pushfirst!(A, b), a)
 pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
 
-## hashing collections ##
+## hashing AbstractArray ##
 
-const hashaa_seed = UInt === UInt64 ? 0x7f53e68ceb575e76 : 0xeb575e76
-const hashrle_seed = UInt === UInt64 ? 0x2aab8909bfea414c : 0xbfea414c
-const hashr_seed   = UInt === UInt64 ? 0x80707b6821b70087 : 0x21b70087
+function hash(A::AbstractArray, h::UInt)
+    h = hash(AbstractArray, h)
+    # Axes are themselves AbstractArrays, so hashing them directly would stack overflow
+    # Instead hash the tuple of firsts and lasts along each dimension
+    h = hash(map(first, axes(A)), h)
+    h = hash(map(last, axes(A)), h)
+    isempty(A) && return h
 
-# Efficient O(1) method equivalent to the O(N) AbstractArray fallback,
-# which works only for ranges with regular step (RangeStepRegular)
-function hash_range(r::AbstractRange, h::UInt)
-    h += hashaa_seed
-    h += hash(size(r))
+    # Goal: Hash approximately log(N) entries with a higher density of hashed elements
+    # weighted towards the end and special consideration for repeated values. Colliding
+    # hashes will often subsequently be compared by equality -- and equality between arrays
+    # works elementwise forwards and is short-circuiting. This means that a collision
+    # between arrays that differ by elements at the beginning is cheaper than one where the
+    # difference is towards the end. Furthermore, blindly choosing log(N) entries from a
+    # sparse array will likely only choose the same element repeatedly (zero in this case).
 
-    length(r) == 0 && return h
-    h = hash(first(r), h)
-    length(r) == 1 && return h
-    length(r) == 2 && return hash(last(r), h)
+    # To achieve this, we work backwards, starting by hashing the last element of the
+    # array. After hashing each element, we skip `fibskip` elements, where `fibskip`
+    # is pulled from the Fibonacci sequence -- Fibonacci was chosen as a simple
+    # ~O(log(N)) algorithm that ensures we don't hit a common divisor of a dimension
+    # and only end up hashing one slice of the array (as might happen with powers of
+    # two). Finally, we find the next distinct value from the one we just hashed.
 
-    h += hashr_seed
-    h = hash(length(r), h)
-    h = hash(last(r), h)
-end
+    # This is a little tricky since skipping an integer number of values inherently works
+    # with linear indices, but `findprev` uses `keys`. Hoist out the conversion "maps":
+    ks = keys(A)
+    key_to_linear = LinearIndices(ks) # Index into this map to compute the linear index
+    linear_to_key = vec(ks)           # And vice-versa
 
-function hash(a::AbstractArray{T}, h::UInt) where T
-    # O(1) hashing for types with regular step
-    if isa(a, AbstractRange) && isa(RangeStepStyle(a), RangeStepRegular)
-        return hash_range(a, h)
-    end
-
-    h += hashaa_seed
-    h += hash(size(a))
-
-    y1 = iterate(a)
-    y1 === nothing && return h
-    y2 = iterate(a, y1[2])
-    y2 === nothing && return hash(y1[1], h)
-    y = iterate(a, y2[2])
-    y === nothing && return hash(y2[1], hash(y1[1], h))
-    x1, x2 = y1[1], y2[1]
-
-    # For the rest of the function, we keep three elements worth of state,
-    # x1, x2, y[1], with `y` potentially being `nothing` if there's only
-    # two elements remaining
-
-    # Check whether the array is equal to a range, and hash the elements
-    # at the beginning of the array as such as long as they match this assumption
-    # This needs to be done even for non-RangeStepRegular types since they may still be equal
-    # to RangeStepRegular values (e.g. 1.0:3.0 == 1:3)
-    if isa(a, AbstractVector) && applicable(-, x2, x1)
-        n = 1
-        local step, laststep, laststate
-
-        h = hash(x1, h)
-        h += hashr_seed
-
-        while true
-            # If overflow happens with entries of the same type, a cannot be equal
-            # to a range with more than two elements because more extreme values
-            # cannot be represented. We must still hash the two first values as a
-            # range since they can always be considered as such (in a wider type)
-            if isconcretetype(T)
-                try
-                    step = x2 - x1
-                catch err
-                    isa(err, OverflowError) || rethrow(err)
-                    break
-                end
-                # If true, wraparound overflow happened
-                sign(step) == cmp(x2, x1) || break
-            else
-                applicable(-, x2, x1) || break
-                # widen() is here to ensure no overflow can happen
-                step = widen(x2) - widen(x1)
-            end
-            n > 1 && !isequal(step, laststep) && break
-            n += 1
-            laststep = step
-            if y === nothing
-                # The array matches a range exactly
-                return hash(x2, hash(n, h))
-            end
-            x1, x2 = x2, y[1]
-            y = iterate(a, y[2])
-        end
-
-        # Always hash at least the two first elements as a range (even in case of overflow)
-        if n < 2
-            h = hash(2, h)
-            h = hash(y2[1], h)
-            @assert y !== nothing
-            x1, x2 = x2, y[1]
-            y = iterate(a, y[2])
-        else
-            h = hash(n, h)
-            h = hash(x1, h)
-        end
-    end
-
-    # Hash elements which do not correspond to a range
+    # Start at the last index
+    keyidx = last(ks)
+    linidx = key_to_linear[keyidx]
+    fibskip = prevfibskip = oneunit(linidx)
+    n = 0
     while true
-        if isequal(x2, x1)
-            # For repeated elements, use run length encoding
-            # This allows efficient hashing of sparse arrays
-            runlength = 2
-            while y !== nothing
-                # No need to update x1 (it's isequal x2)
-                x2 = y[1]
-                y = iterate(a, y[2])
-                isequal(x1, x2) || break
-                runlength += 1
-            end
-            h += hashrle_seed
-            h = hash(runlength, h)
+        n += 1
+        # Hash the current key-index and its element
+        elt = A[keyidx]
+        h = hash(keyidx=>elt, h)
+
+        # Skip backwards a Fibonacci number of indices -- this is a linear index operation
+        linidx = key_to_linear[keyidx]
+        linidx <= fibskip && break
+        linidx -= fibskip
+        keyidx = linear_to_key[linidx]
+
+        # Only increase the Fibonacci skip once every N iterations. This was chosen
+        # to be big enough that all elements of small arrays get hashed while
+        # obscenely large arrays are still tractable. With a choice of N=4096, an
+        # entirely-distinct 8000-element array will have ~75% of its elements hashed,
+        # with every other element hashed in the first half of the array. At the same
+        # time, hashing a `typemax(Int64)`-length Float64 range takes about a second.
+        if rem(n, 4096) == 0
+            fibskip, prevfibskip = fibskip + prevfibskip, fibskip
         end
-        h = hash(x1, h)
-        y === nothing && break
-        x1, x2 = x2, y[1]
-        y = iterate(a, y[2])
+
+        # Find a key index with a value distinct from `elt` -- might be `keyidx` itself
+        keyidx = findprev(!isequal(elt), A, keyidx)
+        keyidx === nothing && break
     end
-    !isequal(x2, x1) && (h = hash(x2, h))
+
     return h
 end

@@ -74,7 +74,7 @@ function _require_callback(mod::Base.PkgId)
         @sync for p in procs()
             p == 1 && continue
             @async remotecall_wait(p) do
-                Base._require(mod)
+                Base.require(mod)
                 nothing
             end
         end
