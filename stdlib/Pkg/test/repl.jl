@@ -72,6 +72,10 @@ temp_pkg_dir() do project_path
 end
 
 @testset "tokens" begin
+    statement = Pkg.REPLMode.parse("?dev")[1]
+    @test statement.command.kind == Pkg.REPLMode.CMD_HELP
+    @test length(statement.arguments) == 1
+    @test statement.arguments[1] == "dev"
     statement = Pkg.REPLMode.parse("add git@github.com:JuliaLang/Example.jl.git")[1]
     @test "add" in statement.command.names
     @test statement.arguments[1] == "git@github.com:JuliaLang/Example.jl.git"
@@ -844,11 +848,9 @@ end
     @test qwords[1].isquoted
     @test qwords[1].word == "Don't"
     @test !qwords[2].isquoted
-    @test qwords[2].word == "forget"
-    @test !qwords[3].isquoted
-    @test qwords[3].word == "to"
-    @test qwords[4].isquoted
-    @test qwords[4].word == "\"test\""
+    @test qwords[2].word == " forget to "
+    @test qwords[3].isquoted
+    @test qwords[3].word == "\"test\""
     @test_throws CommandError Pkg.REPLMode.parse_quotes("Don't")
     @test_throws CommandError Pkg.REPLMode.parse_quotes("Unterminated \"quot")
 end
