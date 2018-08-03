@@ -14,7 +14,7 @@ export UpgradeLevel, UPLEVEL_MAJOR, UPLEVEL_MAJOR, UPLEVEL_MINOR, UPLEVEL_PATCH
 depots() = Base.DEPOT_PATH
 function depots1()
     d = depots()
-    isempty(d) && cmderror("no depots found in DEPOT_PATH")
+    isempty(d) && pkgerror("no depots found in DEPOT_PATH")
     return d[1]
 end
 

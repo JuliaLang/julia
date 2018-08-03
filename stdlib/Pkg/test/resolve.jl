@@ -54,7 +54,7 @@ function load_package_data_raw(T::Type, input::String)
     for (v, d) in toml, (key, value) in d
         vr = VersionRange(v)
         dict = get!(data, vr, Dict{String,T}())
-        haskey(dict, key) && cmderror("$ver/$key is duplicated in $path")
+        haskey(dict, key) && pkgerror("$ver/$key is duplicated in $path")
         dict[key] = T(value)
     end
     return data

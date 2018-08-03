@@ -73,7 +73,7 @@ Base.show(io::IO, opt::Option) = print(io, "--$(opt.val)", opt.argument == nothi
 
 function parse_option(word::AbstractString)::Option
     m = match(r"^(?: -([a-z]) | --([a-z]{2,})(?:\s*=\s*(\S*))? )$"ix, word)
-    m == nothing && cmderror("malformed option: ", repr(word))
+    m == nothing && pkgerror("malformed option: ", repr(word))
     option_name = (m.captures[1] != nothing ? m.captures[1] : m.captures[2])
     option_arg = (m.captures[3] == nothing ? nothing : String(m.captures[3]))
     return Option(option_name, option_arg)
@@ -174,7 +174,7 @@ function parse_package(word::AbstractString; add_or_develop=false)::PackageSpec
         # Guess it is a url then
         return PackageSpec(Types.GitRepo(word))
     else
-        cmderror("`$word` cannot be parsed as a package")
+        pkgerror("`$word` cannot be parsed as a package")
     end
 end
 
@@ -218,7 +218,7 @@ function Statement(words)::Statement
     # meta options
     while is_option(word)
         push!(statement.meta_options, word)
-        isempty(words) && cmderror("no command specified")
+        isempty(words) && pkgerror("no command specified")
         word = popfirst!(words)
     end
     # command
@@ -229,7 +229,7 @@ function Statement(words)::Statement
         super = super_specs["package"]
     end
     command = get(super, word, nothing)
-    command !== nothing || cmderror("expected command. instead got [$word]")
+    command !== nothing || pkgerror("expected command. instead got [$word]")
     statement.command = command
     # command arguments
     for word in words
@@ -245,7 +245,7 @@ function group_words(words)::Vector{Vector{String}}
     x = String[]
     for word in words
         if word == ";"
-            isempty(x) ? cmderror("empty statement") : push!(statements, x)
+            isempty(x) ? pkgerror("empty statement") : push!(statements, x)
             x = String[]
         else
             push!(x, word)
@@ -300,7 +300,7 @@ function parse_quotes(cmd::String)::Vector{QuotedWord}
         end
     end
     if (in_doublequote || in_singlequote)
-        cmderror("unterminated quote")
+        pkgerror("unterminated quote")
     else
         push_token!(false)
     end
@@ -345,7 +345,7 @@ end
 function enforce_argument_order(args::Vector{Token})
     prev_arg = nothing
     function check_prev_arg(valid_type::DataType, error_message::AbstractString)
-        prev_arg isa valid_type || cmderror(error_message)
+        prev_arg isa valid_type || pkgerror(error_message)
     end
 
     for arg in args
@@ -379,11 +379,11 @@ function enforce_arg_spec(raw_args::Vector{String}, class::ArgClass)
     class == ARG_ALL && return args
 
     if class == ARG_PKG && has_types(args, [VersionRange, Rev])
-        cmderror("no versioned packages allowed")
+        pkgerror("no versioned packages allowed")
     elseif class == ARG_REV && has_types(args, [VersionRange])
-        cmderror("no versioned packages allowed")
+        pkgerror("no versioned packages allowed")
     elseif class == ARG_VERSION && has_types(args, [Rev])
-        cmderror("no reved packages allowed")
+        pkgerror("no reved packages allowed")
     end
     return args
 end
@@ -413,7 +413,7 @@ end
 function enforce_arg_count(count::Vector{Int}, args::PkgArguments)
     isempty(count) && return
     length(args) in count ||
-        cmderror("Wrong number of arguments")
+        pkgerror("Wrong number of arguments")
 end
 
 function enforce_args(raw_args::Vector{String}, spec::ArgSpec, cmd_spec::CommandSpec)::PkgArguments
@@ -433,13 +433,13 @@ function enforce_option(option::String, specs::Dict{String,OptionSpec})::Option
     opt = parse_option(option)
     spec = get(specs, opt.val, nothing)
     spec !== nothing ||
-        cmderror("option '$(opt.val)' is not a valid option")
+        pkgerror("option '$(opt.val)' is not a valid option")
     if spec.is_switch
         opt.argument === nothing ||
-            cmderror("option '$(opt.val)' does not take an argument, but '$(opt.argument)' given")
+            pkgerror("option '$(opt.val)' does not take an argument, but '$(opt.argument)' given")
     else # option takes an argument
         opt.argument !== nothing ||
-            cmderror("option '$(opt.val)' expects an argument, but no argument given")
+            pkgerror("option '$(opt.val)' expects an argument, but no argument given")
     end
     return opt
 end
@@ -449,7 +449,7 @@ function enforce_meta_options(options::Vector{String}, specs::Dict{String,Option
     return map(options) do opt
         tok = enforce_option(opt, specs)
         tok.val in meta_opt_names ||
-            cmderror("option '$opt' is not a valid meta option.")
+            pkgerror("option '$opt' is not a valid meta option.")
             #TODO hint that maybe they intended to use it as a command option
         return tok
     end
@@ -465,12 +465,12 @@ function enforce_opts(options::Vector{String}, specs::Dict{String,OptionSpec})::
     for opt in toks
         # valid option
         opt.val in keys(specs) ||
-            cmderror("option '$(opt.val)' is not supported")
+            pkgerror("option '$(opt.val)' is not supported")
         # conflicting options
         key = get_key(opt)
         if key in unique_keys
             conflicting = filter(opt->get_key(opt) == key, toks)
-            cmderror("Conflicting options: $conflicting")
+            pkgerror("Conflicting options: $conflicting")
         else
             push!(unique_keys, key)
         end
@@ -505,7 +505,7 @@ function do_cmd(repl::REPL.AbstractREPL, input::String; do_rethrow=false)
         if do_rethrow
             rethrow(err)
         end
-        if err isa CommandError || err isa ResolverError
+        if err isa PkgError || err isa ResolverError
             Base.display_error(repl.t.err_stream, ErrorException(sprint(showerror, err)), Ptr{Nothing}[])
         else
             Base.display_error(repl.t.err_stream, err, Base.catch_backtrace())
@@ -525,7 +525,7 @@ function do_cmd!(command::PkgCommand, repl)
         cmd = command.arguments[1]
         cmd_spec = get(command_specs, cmd, nothing)
         cmd_spec === nothing &&
-            cmderror("'$cmd' is not a valid command")
+            pkgerror("'$cmd' is not a valid command")
         spec = cmd_spec
         command = PkgCommand([], cmd, [], PackageSpec[])
     end
@@ -550,9 +550,9 @@ function do_help!(command::PkgCommand, repl::REPL.AbstractREPL)
     for arg in command.arguments
         spec = get(command_specs, arg, nothing)
         spec === nothing &&
-            cmderror("'$arg' does not name a command")
+            pkgerror("'$arg' does not name a command")
         spec.help === nothing &&
-            cmderror("Sorry, I don't have any help for the `$arg` command.")
+            pkgerror("Sorry, I don't have any help for the `$arg` command.")
         isempty(help_md.content) ||
             push!(help_md.content, md"---")
         push!(help_md.content, spec.help)
@@ -617,7 +617,7 @@ function do_pin!(ctx::APIOptions, args::PkgArguments, api_opts::APIOptions)
     for arg in args
         # TODO not sure this is correct
         if arg.version.ranges[1].lower != arg.version.ranges[1].upper
-            cmderror("pinning a package requires a single version, not a versionrange")
+            pkgerror("pinning a package requires a single version, not a versionrange")
         end
     end
     API.pin(Context!(ctx), args; collect(api_opts)...)

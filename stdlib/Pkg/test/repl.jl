@@ -3,7 +3,7 @@
 module REPLTests
 
 using Pkg
-import Pkg.Types.CommandError
+import Pkg.Types.PkgError
 using UUIDs
 using Test
 import LibGit2
@@ -25,7 +25,7 @@ function git_init_package(tmp, path)
 end
 
 @testset "generate args" begin
-    @test_throws CommandError pkg"generate"
+    @test_throws PkgError pkg"generate"
 end
 
 temp_pkg_dir() do project_path
@@ -56,18 +56,18 @@ temp_pkg_dir() do project_path
         pkg"generate Foo"
         pkg"dev Foo"
         mv(joinpath("Foo", "src", "Foo.jl"), joinpath("Foo", "src", "Foo2.jl"))
-        @test_throws CommandError pkg"dev Foo"
+        @test_throws PkgError pkg"dev Foo"
         mv(joinpath("Foo", "src", "Foo2.jl"), joinpath("Foo", "src", "Foo.jl"))
         write(joinpath("Foo", "Project.toml"), """
             name = "Foo"
         """
         )
-        @test_throws CommandError pkg"dev Foo"
+        @test_throws PkgError pkg"dev Foo"
         write(joinpath("Foo", "Project.toml"), """
             uuid = "b7b78b08-812d-11e8-33cd-11188e330cbe"
         """
         )
-        @test_throws CommandError pkg"dev Foo"
+        @test_throws PkgError pkg"dev Foo"
     end
 end
 
@@ -135,7 +135,7 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
     #@eval import $(Symbol(pkg2))
     @test Pkg.installed()[pkg2] == v"0.1.0"
     Pkg.REPLMode.pkgstr("free $pkg2")
-    @test_throws CommandError Pkg.REPLMode.pkgstr("free $pkg2")
+    @test_throws PkgError Pkg.REPLMode.pkgstr("free $pkg2")
     Pkg.test("UnregisteredWithProject")
 
     write(joinpath(p2, "Project.toml"), """
@@ -263,10 +263,10 @@ temp_pkg_dir() do project_path
         pkg"activate ."
         @test Base.active_project() == joinpath(path, "Project.toml")
         # tests illegal names for shared environments
-        @test_throws Pkg.Types.CommandError pkg"activate --shared ."
-        @test_throws Pkg.Types.CommandError pkg"activate --shared ./Foo"
-        @test_throws Pkg.Types.CommandError pkg"activate --shared Foo/Bar"
-        @test_throws Pkg.Types.CommandError pkg"activate --shared ../Bar"
+        @test_throws Pkg.Types.PkgError pkg"activate --shared ."
+        @test_throws Pkg.Types.PkgError pkg"activate --shared ./Foo"
+        @test_throws Pkg.Types.PkgError pkg"activate --shared Foo/Bar"
+        @test_throws Pkg.Types.PkgError pkg"activate --shared ../Bar"
         # check that those didn't change te enviroment
         @test Base.active_project() == joinpath(path, "Project.toml")
         mkdir("Foo")
@@ -420,11 +420,14 @@ temp_pkg_dir() do project_path; cd(project_path) do
             pkg"build"
             @eval using BigProject
             pkg"build BigProject"
-            @test_throws CommandError pkg"add BigProject"
-            pkg"test SubModule"
-            pkg"test SubModule2"
-            pkg"test BigProject"
-            pkg"test"
+            @test_throws PkgError pkg"add BigProject"
+            # the command below also tests multiline input
+            Pkg.REPLMode.pkgstr("""
+                test SubModule
+                test SubModule2
+                test BigProject
+                test
+                """)
             current_json = Pkg.API.installed()["JSON"]
             old_project = read("Project.toml", String)
             open("Project.toml"; append=true) do io
@@ -541,8 +544,8 @@ end
     pkg = Pkg.REPLMode.parse_package(path; add_or_develop=true)
     @test (pkg.repo.url == path)
     # errors
-    @test_throws CommandError Pkg.REPLMode.parse_package(url)
-    @test_throws CommandError Pkg.REPLMode.parse_package(path)
+    @test_throws PkgError Pkg.REPLMode.parse_package(url)
+    @test_throws PkgError Pkg.REPLMode.parse_package(path)
 end
 
 @testset "unit test for REPLMode.promptf" begin
@@ -583,18 +586,18 @@ end
 
 @testset "Argument order" begin
     with_temp_env() do
-        @test_throws CommandError Pkg.REPLMode.pkgstr("add FooBar Example#foobar#foobar")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("up Example#foobar@0.0.0")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("pin Example@0.0.0@0.0.1")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("up #foobar")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("add @0.0.1")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("add FooBar Example#foobar#foobar")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("up Example#foobar@0.0.0")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("pin Example@0.0.0@0.0.1")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("up #foobar")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("add @0.0.1")
     end
 end
 
 @testset "`do_generate!` error paths" begin
     with_temp_env() do
-        @test_throws CommandError Pkg.REPLMode.pkgstr("generate Example Example2")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("generate")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("generate Example Example2")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("generate")
     end
 end
 
@@ -670,9 +673,9 @@ end
 
 @testset "argument count errors" begin
     temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
-        @test_throws CommandError Pkg.REPLMode.pkgstr("activate one two")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("activate one two three")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("precompile Example")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("activate one two")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("activate one two three")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("precompile Example")
     end
     end
     end
@@ -680,8 +683,8 @@ end
 
 @testset "invalid options" begin
     temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
-        @test_throws CommandError Pkg.REPLMode.pkgstr("rm --minor Example")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("pin --project Example")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("rm --minor Example")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("pin --project Example")
     end
     end
     end
@@ -689,11 +692,11 @@ end
 
 @testset "Argument order" begin
     temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
-        @test_throws CommandError Pkg.REPLMode.pkgstr("add FooBar Example#foobar#foobar")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("up Example#foobar@0.0.0")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("pin Example@0.0.0@0.0.1")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("up #foobar")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("add @0.0.1")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("add FooBar Example#foobar#foobar")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("up Example#foobar@0.0.0")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("pin Example@0.0.0@0.0.1")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("up #foobar")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("add @0.0.1")
     end
     end
     end
@@ -701,8 +704,8 @@ end
 
 @testset "conflicting options" begin
     temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
-        @test_throws CommandError Pkg.REPLMode.pkgstr("up --major --minor")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("rm --project --manifest")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("up --major --minor")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("rm --project --manifest")
     end
     end
     end
@@ -710,9 +713,9 @@ end
 
 @testset "gc" begin
     temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
-        @test_throws CommandError Pkg.REPLMode.pkgstr("gc --project")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("gc --minor")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("gc Example")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("gc --project")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("gc --minor")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("gc Example")
         Pkg.REPLMode.pkgstr("gc")
     end
     end
@@ -721,8 +724,8 @@ end
 
 @testset "precompile" begin
     temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
-        @test_throws CommandError Pkg.REPLMode.pkgstr("precompile --project")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("precompile Example")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("precompile --project")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("precompile Example")
         Pkg.REPLMode.pkgstr("precompile")
     end
     end
@@ -731,9 +734,9 @@ end
 
 @testset "generate" begin
     temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
-        @test_throws CommandError Pkg.REPLMode.pkgstr("generate --major Example")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("generate --foobar Example")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("generate Example1 Example2")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("generate --major Example")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("generate --foobar Example")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("generate Example1 Example2")
         Pkg.REPLMode.pkgstr("generate Example")
     end
     end
@@ -743,7 +746,7 @@ end
 @testset "test" begin
     temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
         Pkg.add("Example")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("test --project Example")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("test --project Example")
         Pkg.REPLMode.pkgstr("test --coverage Example")
         Pkg.REPLMode.pkgstr("test Example")
     end
@@ -753,8 +756,8 @@ end
 
 @testset "build" begin
     temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
-        @test_throws CommandError Pkg.REPLMode.pkgstr("build --project")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("build --minor")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("build --project")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("build --minor")
     end
     end
     end
@@ -762,8 +765,8 @@ end
 
 @testset "free" begin
     temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
-        @test_throws CommandError Pkg.REPLMode.pkgstr("free --project")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("free --major")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("free --project")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("free --major")
     end
     end
     end
@@ -784,8 +787,8 @@ end
     groups = Pkg.REPLMode.group_words(["a", "b", "c", ";", "a", "b", ";"])
     @test length(groups) == 2
     # errors
-    @test_throws CommandError Pkg.REPLMode.group_words(["a", "b", ";", ";", "a", "b"])
-    @test_throws CommandError Pkg.REPLMode.group_words([";", "add", "Example"])
+    @test_throws PkgError Pkg.REPLMode.group_words(["a", "b", ";", ";", "a", "b"])
+    @test_throws PkgError Pkg.REPLMode.group_words([";", "add", "Example"])
 end
 
 @testset "tests for api opts" begin
@@ -825,11 +828,11 @@ end
 @testset "meta option errors" begin
     temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
         # unregistered meta options
-        @test_throws CommandError Pkg.REPLMode.pkgstr("--foo=foo add Example")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("--bar add Example")
-        @test_throws CommandError Pkg.REPLMode.pkgstr("-x add Example")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("--foo=foo add Example")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("--bar add Example")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("-x add Example")
         # malformed, but registered meta option
-        @test_throws CommandError Pkg.REPLMode.pkgstr("--env Example")
+        @test_throws PkgError Pkg.REPLMode.pkgstr("--env Example")
     end
     end
     end
@@ -868,15 +871,15 @@ end
     @test qwords[2].word == " forget to "
     @test qwords[3].isquoted
     @test qwords[3].word == "\"test\""
-    @test_throws CommandError Pkg.REPLMode.parse_quotes("Don't")
-    @test_throws CommandError Pkg.REPLMode.parse_quotes("Unterminated \"quot")
+    @test_throws PkgError Pkg.REPLMode.parse_quotes("Don't")
+    @test_throws PkgError Pkg.REPLMode.parse_quotes("Unterminated \"quot")
 end
 
 @testset "argument kinds" begin
     temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
-        @test_throws CommandError pkg"pin Example#foo"
-        @test_throws CommandError pkg"test Example#foo"
-        @test_throws CommandError pkg"test Example@v0.0.1"
+        @test_throws PkgError pkg"pin Example#foo"
+        @test_throws PkgError pkg"test Example#foo"
+        @test_throws PkgError pkg"test Example@v0.0.1"
     end
     end
     end

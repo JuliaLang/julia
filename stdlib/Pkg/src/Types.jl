@@ -19,7 +19,7 @@ using SHA
 export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     Requires, Fixed, merge_requires!, satisfies, ResolverError,
     PackageSpec, EnvCache, Context, Context!,
-    CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
+    PkgError, pkgerror, has_name, has_uuid, write_env, parse_toml, find_registered!,
     project_resolve!, project_deps_resolve!, manifest_resolve!, registry_resolve!, stdlib_resolve!, handle_repos_develop!, handle_repos_add!, ensure_resolved,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
     read_project, read_package, read_manifest, pathrepr, registries,
@@ -112,13 +112,13 @@ function Base.showerror(io::IO, pkgerr::ResolverError)
 end
 
 #################
-# Command Error #
+# Pkg Error #
 #################
-struct CommandError <: Exception
+struct PkgError <: Exception
     msg::String
 end
-cmderror(msg::String...) = throw(CommandError(join(msg)))
-Base.show(io::IO, err::CommandError) = print(io, err.msg)
+pkgerror(msg::String...) = throw(PkgError(join(msg)))
+Base.show(io::IO, err::PkgError) = print(io, err.msg)
 
 
 ###############
@@ -174,7 +174,7 @@ function PackageSpec(;name::AbstractString="", uuid::Union{String, UUID}=UUID(0)
                      url = nothing, rev = nothing, path=nothing, mode::PackageMode = PKGMODE_PROJECT)
     if url !== nothing || path !== nothing || rev !== nothing
         if path !== nothing || url !== nothing
-            path !== nothing && url !== nothing && cmderror("cannot specify both path and url")
+            path !== nothing && url !== nothing && pkgerror("cannot specify both path and url")
             url = url == nothing ? path : url
         end
         repo = GitRepo(url=url, rev=rev)
@@ -398,7 +398,7 @@ function get_deps(project::Dict, target::Union{Nothing,String}=nothing)
     for name in names
         haskey(deps, name) && continue
         haskey(extras, name) ||
-            cmderror("target `$target` has unlisted dependency `$name`")
+            pkgerror("target `$target` has unlisted dependency `$name`")
         deps[name] = extras[name]
     end
     return deps
@@ -441,7 +441,7 @@ function read_project(file::String)
     isfile(file) ? open(read_project, file) : read_project(devnull)
 end
 
-_throw_package_err(x, f) = cmderror("expected a `$x` entry in project file at $(abspath(f))")
+_throw_package_err(x, f) = pkgerror("expected a `$x` entry in project file at $(abspath(f))")
 function read_package(f::String)
     project = read_project(f)
     haskey(project, "name") || _throw_package_err("name", f)
@@ -449,7 +449,7 @@ function read_package(f::String)
     name = project["name"]
     entry = joinpath(dirname(f), "src", "$name.jl")
     if !isfile(entry)
-        cmderror("expected the file `src/$name.jl` to exist for package $name at $(dirname(f))")
+        pkgerror("expected the file `src/$name.jl` to exist for package $name at $(dirname(f))")
     end
     return project
 end
@@ -571,7 +571,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}, 
                 dev_pkg_path = joinpath(devdir, pkg.name)
                 if isdir(dev_pkg_path)
                     if !isfile(joinpath(dev_pkg_path, "src", pkg.name * ".jl"))
-                        cmderror("Path `$(dev_pkg_path)` exists but it does not contain `src/$(pkg.name).jl")
+                        pkgerror("Path `$(dev_pkg_path)` exists but it does not contain `src/$(pkg.name).jl")
                     else
                         @info "Path `$(dev_pkg_path)` exists and looks like the correct package, using existing path instead of cloning"
                     end
@@ -714,7 +714,7 @@ function parse_package!(ctx, pkg, project_path)
             else
                 m = match(reg_pkg, pkg.repo.url)
             end
-            m === nothing && cmderror("cannot determine package name from URL or path: $(pkg.repo.url)")
+            m === nothing && pkgerror("cannot determine package name from URL or path: $(pkg.repo.url)")
             pkg.name = m.captures[1]
         end
         reg_uuids = registered_uuids(env, pkg.name)
@@ -761,7 +761,7 @@ function get_object_branch(repo, rev)
             gitobject = LibGit2.GitObject(repo, rev)
         catch err
             err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-            cmderror("git object $(rev) could not be found")
+            pkgerror("git object $(rev) could not be found")
         end
     end
     return gitobject, isbranch
@@ -787,7 +787,7 @@ function project_deps_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     uuids = env.project["deps"]
     names = Dict(uuid => name for (uuid, name) in uuids)
     length(uuids) < length(names) && # TODO: handle this somehow?
-        cmderror("duplicate UUID found in project file's [deps] section")
+        pkgerror("duplicate UUID found in project file's [deps] section")
     for pkg in pkgs
         pkg.mode == PKGMODE_PROJECT || continue
         if has_name(pkg) && !has_uuid(pkg) && pkg.name in keys(uuids)
@@ -890,7 +890,7 @@ function ensure_resolved(env::EnvCache,
     end
         print(io, "Please specify by known `name=uuid`.")
     end
-    cmderror(msg)
+    pkgerror(msg)
 end
 
 const DEFAULT_REGISTRIES = Dict("General" => "https://github.com/JuliaRegistries/General.git")
@@ -1070,7 +1070,7 @@ function registered_name(env::EnvCache, uuid::UUID)::String
     name = nothing
     for value in values
         name  == nothing && (name = value[2])
-        name != value[2] && cmderror("package `$uuid` has multiple registered name values: $name, $(value[2])")
+        name != value[2] && pkgerror("package `$uuid` has multiple registered name values: $name, $(value[2])")
     end
     return name
 end
@@ -1078,7 +1078,7 @@ end
 # Return most current package info for a registered UUID
 function registered_info(env::EnvCache, uuid::UUID, key::String)
     paths = env.paths[uuid]
-    isempty(paths) && cmderror("`$uuid` is not registered")
+    isempty(paths) && pkgerror("`$uuid` is not registered")
     values = []
     for path in paths
         info = parse_toml(path, "Package.toml")

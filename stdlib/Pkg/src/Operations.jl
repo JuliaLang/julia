@@ -37,7 +37,7 @@ function load_package_data(f::Base.Callable, path::String, versions)
             vr = VersionRange(v)
             ver in vr || continue
             dict = get!(data, ver, Dict{String,Any}())
-            haskey(dict, key) && cmderror("$ver/$key is duplicated in $path")
+            haskey(dict, key) && pkgerror("$ver/$key is duplicated in $path")
             dict[key] = f(value)
         end
     end
@@ -53,7 +53,7 @@ function load_package_data_raw(T::Type, path::String)
     for (v, d) in toml, (key, value) in d
         vr = VersionRange(v)
         dict = get!(data, vr, Dict{String,T}())
-        haskey(dict, key) && cmderror("$vr/$key is duplicated in $path")
+        haskey(dict, key) && pkgerror("$vr/$key is duplicated in $path")
         dict[key] = T(value)
     end
     return data
@@ -106,7 +106,7 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
 
         path = project_rel_path(ctx, path)
         if !isdir(path)
-            cmderror("path $(path) for package $(pkg.name) no longer exists. Remove the package or `develop` it at a new path")
+            pkgerror("path $(path) for package $(pkg.name) no longer exists. Remove the package or `develop` it at a new path")
         end
 
         uuid_to_pkg[pkg.uuid] = pkg
@@ -328,7 +328,7 @@ function resolve_versions!(ctx::Context, pkgs::Vector{PackageSpec})::Dict{UUID,V
         proj_compat = Types.project_compatibility(ctx, name)
         v = intersect(pkg.version, proj_compat)
         if isempty(v)
-            cmderror(string("for package $(pkg.name) intersection between project compatibility $(proj_compat) ",
+            pkgerror(string("for package $(pkg.name) intersection between project compatibility $(proj_compat) ",
                             "and package version $(pkg.version) is empty"))
         end
         pkg.version = v
@@ -382,7 +382,7 @@ function version_data!(ctx::Context, pkgs::Vector{PackageSpec})
             info = parse_toml(path, "Package.toml")
             if haskey(names, uuid)
                 names[uuid] == info["name"] ||
-                    cmderror("$uuid: name mismatch between registries: ",
+                    pkgerror("$uuid: name mismatch between registries: ",
                              "$(names[uuid]) vs. $(info["name"])")
             else
                 names[uuid] = info["name"]
@@ -569,7 +569,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec}, hashes::Dict{UU
                 try
                     success = install_archive(urls[pkg.uuid], hashes[pkg.uuid], path)
                     if ctx.use_only_tarballs_for_downloads && !success
-                        cmderror("failed to get tarball from $(urls[pkg.uuid])")
+                        pkgerror("failed to get tarball from $(urls[pkg.uuid])")
                     end
                     put!(results, (pkg, success, path))
                 catch err
@@ -582,7 +582,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec}, hashes::Dict{UU
     missed_packages = Tuple{PackageSpec, String}[]
     for i in 1:length(pkgs_to_install)
         pkg, exc_or_success, bt_or_path = take!(results)
-        exc_or_success isa Exception && cmderror("Error when installing packages:\n", sprint(Base.showerror, exc_or_success, bt_or_path))
+        exc_or_success isa Exception && pkgerror("Error when installing packages:\n", sprint(Base.showerror, exc_or_success, bt_or_path))
         success, path = exc_or_success, bt_or_path
         if success
             vstr = pkg.version != nothing ? "v$(pkg.version)" : "[$h]"
@@ -1021,7 +1021,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
                 path = project_rel_path(ctx, info["path"])
                 hash_or_path = path
             else
-                cmderror("Could not find either `git-tree-sha1` or `path` for package $(pkg.name)")
+                pkgerror("Could not find either `git-tree-sha1` or `path` for package $(pkg.name)")
             end
             version = v"0.0"
         end
@@ -1260,7 +1260,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
             elseif pkg.uuid in keys(ctx.stdlibs)
                 version_path = Types.stdlib_path(pkg.name)
             else
-                cmderror("Could not find either `git-tree-sha1` or `path` for package $(pkg.name)")
+                pkgerror("Could not find either `git-tree-sha1` or `path` for package $(pkg.name)")
             end
         end
         testfile = joinpath(version_path, "test", "runtests.jl")
@@ -1271,7 +1271,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
         push!(testfiles, testfile)
     end
     if !isempty(missing_runtests)
-        cmderror(length(missing_runtests) == 1 ? "Package " : "Packages ",
+        pkgerror(length(missing_runtests) == 1 ? "Package " : "Packages ",
                 join(missing_runtests, ", "),
                 " did not provide a `test/runtests.jl` file")
     end
@@ -1316,7 +1316,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
     end
 
     if !isempty(pkgs_errored)
-        cmderror(length(pkgs_errored) == 1 ? "Package " : "Packages ",
+        pkgerror(length(pkgs_errored) == 1 ? "Package " : "Packages ",
                  join(pkgs_errored, ", "),
                  " errored during testing")
     end
