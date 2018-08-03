@@ -292,7 +292,7 @@ const activate = API.activate
 
 """
     PackageSpec(name::String, [uuid::UUID, version::VersionNumber])
-    PackageSpec(; name, url, rev, version, mode, level)
+    PackageSpec(; name, url, path, rev, version, mode, level)
 
 A `PackageSpec` is a representation of a package with various metadata.
 This includes:
@@ -301,8 +301,8 @@ This includes:
   * The package unique `uuid`.
   * A `version` (for example when adding a package. When upgrading, can also be an instance of
    the enum [`UpgradeLevel`](@ref)
-  * A `url` (which might also be a local path) and an optional git `rev`ision.
-   `rev` could be a branch name or a git commit SHA.
+  * A `url` and an optional git `rev`ision. `rev` could be a branch name or a git commit SHA.
+  * A local path `path`. This is equivalent to using the `url` argument but can be more descriptive.
   * A `mode`, which is an instance of the enum [`PackageMode`](@ref) which can be either `PKGMODE_PROJECT` or
    `PKGMODE_MANIFEST`, defaults to `PKGMODE_PROJECT`. Used in e.g. [`Pkg.rm`](@ref).
 
@@ -317,8 +317,8 @@ Below is a comparison between the REPL version and the `PackageSpec` version:
 | `Package@0.2`        | `PackageSpec(name="Package", version="0.2")`  |
 | `Package=a67d...`    | `PackageSpec(name="Package", uuid="a67d..."`  |
 | `Package#master`     | `PackageSpec(name="Package", rev="master")`   |
-| `local/path#feature` | `PackageSpec(url="local/path"; rev="feature)` |
-| `www.mypkg.com`      | `PackageSpec("url=www.mypkg.com")`              |
+| `local/path#feature` | `PackageSpec(path="local/path"; rev="feature)` |
+| `www.mypkg.com`      | `PackageSpec(url="www.mypkg.com")`              |
 | `--manifest Package` | `PackageSpec(name="Package", mode=PKGSPEC_MANIFEST)`|
 | `--major Package`    | `PackageSpec(name="Package", version=PKGLEVEL_MAJOR`)|
 """

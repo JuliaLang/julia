@@ -169,9 +169,14 @@ function PackageSpec(repo::GitRepo)
 end
 
 # kwarg constructor
-function PackageSpec(;name::AbstractString="", uuid::Union{String, UUID}=UUID(0), version::Union{VersionNumber, String} = "*",
-                     url = nothing, rev = nothing, mode::PackageMode = PKGMODE_PROJECT)
-    if url !== nothing || rev !== nothing
+function PackageSpec(;name::AbstractString="", uuid::Union{String, UUID}=UUID(0),
+                     version::Union{VersionNumber, String, VersionSpec} = VersionSpec(),
+                     url = nothing, rev = nothing, path=nothing, mode::PackageMode = PKGMODE_PROJECT)
+    if url !== nothing || path !== nothing || rev !== nothing
+        if path !== nothing || url !== nothing
+            path !== nothing && url !== nothing && cmderror("cannot specify both path and url")
+            url = url == nothing ? path : url
+        end
         repo = GitRepo(url=url, rev=rev)
     else
         repo = nothing
@@ -190,7 +195,7 @@ function Base.show(io::IO, pkg::PackageSpec)
     f = ["name" => pkg.name, "uuid" => has_uuid(pkg) ? pkg.uuid : "", "v" => (vstr == "VersionSpec(\"*\")" ? "" : vstr)]
     if pkg.repo !== nothing
         if !isempty(pkg.repo.url)
-            push!(f, "url/path" => pkg.repo.url)
+            push!(f, "url/path" => string("\"", pkg.repo.url, "\""))
         end
         if !isempty(pkg.repo.rev)
             push!(f, "rev" => pkg.repo.rev)
