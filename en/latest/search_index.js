@@ -7469,7 +7469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
@@ -8353,6 +8353,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "base/math/#Base.Rounding.RoundFromZero",
+    "page": "Mathematics",
+    "title": "Base.Rounding.RoundFromZero",
+    "category": "constant",
+    "text": "RoundFromZero\n\nRounds away from zero. This rounding mode may only be used with T == BigFloat inputs to round.\n\nExamples\n\njulia> BigFloat(\"1.0000000000000001\", 5, RoundFromZero)\n1.06\n\n\n\n\n\n"
+},
+
+{
     "location": "base/math/#Base.Rounding.RoundUp",
     "page": "Mathematics",
     "title": "Base.Rounding.RoundUp",
@@ -8797,7 +8805,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Mathematical Functions",
     "category": "section",
-    "text": "Base.isapprox\nBase.sin(::Number)\nBase.cos(::Number)\nBase.sincos(::Float64)\nBase.tan(::Number)\nBase.Math.sind\nBase.Math.cosd\nBase.Math.tand\nBase.Math.sinpi\nBase.Math.cospi\nBase.sinh(::Number)\nBase.cosh(::Number)\nBase.tanh(::Number)\nBase.asin(::Number)\nBase.acos(::Number)\nBase.atan(::Number)\nBase.Math.asind\nBase.Math.acosd\nBase.Math.atand\nBase.Math.sec(::Number)\nBase.Math.csc(::Number)\nBase.Math.cot(::Number)\nBase.Math.secd\nBase.Math.cscd\nBase.Math.cotd\nBase.Math.asec(::Number)\nBase.Math.acsc(::Number)\nBase.Math.acot(::Number)\nBase.Math.asecd\nBase.Math.acscd\nBase.Math.acotd\nBase.Math.sech(::Number)\nBase.Math.csch(::Number)\nBase.Math.coth(::Number)\nBase.asinh(::Number)\nBase.acosh(::Number)\nBase.atanh(::Number)\nBase.Math.asech(::Number)\nBase.Math.acsch(::Number)\nBase.Math.acoth(::Number)\nBase.Math.sinc\nBase.Math.cosc\nBase.Math.deg2rad\nBase.Math.rad2deg\nBase.Math.hypot\nBase.log(::Number)\nBase.log(::Number, ::Number)\nBase.log2\nBase.log10\nBase.log1p\nBase.Math.frexp\nBase.exp(::Float64)\nBase.exp2\nBase.exp10\nBase.Math.ldexp\nBase.Math.modf\nBase.expm1\nBase.round(::Type, ::Any)\nBase.Rounding.RoundingMode\nBase.Rounding.RoundNearest\nBase.Rounding.RoundNearestTiesAway\nBase.Rounding.RoundNearestTiesUp\nBase.Rounding.RoundToZero\nBase.Rounding.RoundUp\nBase.Rounding.RoundDown\nBase.round(::Complex{<: AbstractFloat}, ::RoundingMode, ::RoundingMode)\nBase.ceil\nBase.floor\nBase.trunc\nBase.unsafe_trunc\nBase.min\nBase.max\nBase.minmax\nBase.Math.clamp\nBase.Math.clamp!\nBase.abs\nBase.Checked.checked_abs\nBase.Checked.checked_neg\nBase.Checked.checked_add\nBase.Checked.checked_sub\nBase.Checked.checked_mul\nBase.Checked.checked_div\nBase.Checked.checked_rem\nBase.Checked.checked_fld\nBase.Checked.checked_mod\nBase.Checked.checked_cld\nBase.Checked.add_with_overflow\nBase.Checked.sub_with_overflow\nBase.Checked.mul_with_overflow\nBase.abs2\nBase.copysign\nBase.sign\nBase.signbit\nBase.flipsign\nBase.sqrt(::Real)\nBase.isqrt\nBase.Math.cbrt\nBase.real(::Complex)\nBase.imag\nBase.reim\nBase.conj\nBase.angle\nBase.cis\nBase.binomial\nBase.factorial\nBase.gcd\nBase.lcm\nBase.gcdx\nBase.ispow2\nBase.nextpow\nBase.prevpow\nBase.nextprod\nBase.invmod\nBase.powermod\nBase.ndigits\nBase.widemul\nBase.Math.@evalpoly\nBase.FastMath.@fastmath"
+    "text": "Base.isapprox\nBase.sin(::Number)\nBase.cos(::Number)\nBase.sincos(::Float64)\nBase.tan(::Number)\nBase.Math.sind\nBase.Math.cosd\nBase.Math.tand\nBase.Math.sinpi\nBase.Math.cospi\nBase.sinh(::Number)\nBase.cosh(::Number)\nBase.tanh(::Number)\nBase.asin(::Number)\nBase.acos(::Number)\nBase.atan(::Number)\nBase.Math.asind\nBase.Math.acosd\nBase.Math.atand\nBase.Math.sec(::Number)\nBase.Math.csc(::Number)\nBase.Math.cot(::Number)\nBase.Math.secd\nBase.Math.cscd\nBase.Math.cotd\nBase.Math.asec(::Number)\nBase.Math.acsc(::Number)\nBase.Math.acot(::Number)\nBase.Math.asecd\nBase.Math.acscd\nBase.Math.acotd\nBase.Math.sech(::Number)\nBase.Math.csch(::Number)\nBase.Math.coth(::Number)\nBase.asinh(::Number)\nBase.acosh(::Number)\nBase.atanh(::Number)\nBase.Math.asech(::Number)\nBase.Math.acsch(::Number)\nBase.Math.acoth(::Number)\nBase.Math.sinc\nBase.Math.cosc\nBase.Math.deg2rad\nBase.Math.rad2deg\nBase.Math.hypot\nBase.log(::Number)\nBase.log(::Number, ::Number)\nBase.log2\nBase.log10\nBase.log1p\nBase.Math.frexp\nBase.exp(::Float64)\nBase.exp2\nBase.exp10\nBase.Math.ldexp\nBase.Math.modf\nBase.expm1\nBase.round(::Type, ::Any)\nBase.Rounding.RoundingMode\nBase.Rounding.RoundNearest\nBase.Rounding.RoundNearestTiesAway\nBase.Rounding.RoundNearestTiesUp\nBase.Rounding.RoundToZero\nBase.Rounding.RoundFromZero\nBase.Rounding.RoundUp\nBase.Rounding.RoundDown\nBase.round(::Complex{<: AbstractFloat}, ::RoundingMode, ::RoundingMode)\nBase.ceil\nBase.floor\nBase.trunc\nBase.unsafe_trunc\nBase.min\nBase.max\nBase.minmax\nBase.Math.clamp\nBase.Math.clamp!\nBase.abs\nBase.Checked.checked_abs\nBase.Checked.checked_neg\nBase.Checked.checked_add\nBase.Checked.checked_sub\nBase.Checked.checked_mul\nBase.Checked.checked_div\nBase.Checked.checked_rem\nBase.Checked.checked_fld\nBase.Checked.checked_mod\nBase.Checked.checked_cld\nBase.Checked.add_with_overflow\nBase.Checked.sub_with_overflow\nBase.Checked.mul_with_overflow\nBase.abs2\nBase.copysign\nBase.sign\nBase.signbit\nBase.flipsign\nBase.sqrt(::Real)\nBase.isqrt\nBase.Math.cbrt\nBase.real(::Complex)\nBase.imag\nBase.reim\nBase.conj\nBase.angle\nBase.cis\nBase.binomial\nBase.factorial\nBase.gcd\nBase.lcm\nBase.gcdx\nBase.ispow2\nBase.nextpow\nBase.prevpow\nBase.nextprod\nBase.invmod\nBase.powermod\nBase.ndigits\nBase.widemul\nBase.Math.@evalpoly\nBase.FastMath.@fastmath"
 },
 
 {
@@ -9445,7 +9453,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Rounding.get_zero_subnormals",
     "category": "function",
-    "text": "get_zero_subnormals() -> Bool\n\nReturns false if operations on subnormal floating-point values (\"denormals\") obey rules for IEEE arithmetic, and true if they might be converted to zeros.\n\n\n\n\n\n"
+    "text": "get_zero_subnormals() -> Bool\n\nReturn false if operations on subnormal floating-point values (\"denormals\") obey rules for IEEE arithmetic, and true if they might be converted to zeros.\n\n\n\n\n\n"
 },
 
 {
@@ -9589,7 +9597,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.MPFR.BigFloat",
     "category": "method",
-    "text": "BigFloat(x, rounding::RoundingMode)\n\nCreate a representation of x as a BigFloat with the current global precision and rounding mode rounding.\n\n\n\n\n\n"
+    "text": "BigFloat(x, rounding::RoundingMode)\n\nCreate a representation of x as a BigFloat with the current global precision and Rounding Mode rounding.\n\n\n\n\n\n"
 },
 
 {
@@ -9597,7 +9605,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.MPFR.BigFloat",
     "category": "method",
-    "text": "BigFloat(x, prec::Int, rounding::RoundingMode)\n\nCreate a representation of x as a BigFloat with precision prec and rounding mode rounding.\n\n\n\n\n\n"
+    "text": "BigFloat(x, prec::Int, rounding::RoundingMode)\n\nCreate a representation of x as a BigFloat with precision prec and Rounding Mode rounding.\n\n\n\n\n\n"
 },
 
 {
@@ -15125,7 +15133,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "function",
-    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\n"
+    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\n"
 },
 
 {
