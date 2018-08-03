@@ -791,6 +791,19 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
     need_to_resolve = false
     is_project = Types.is_project(localctx.env, pkg)
 
+    # Only put `pkg` and its deps + target deps (recursively) in the temp project
+    collect_deps!(seen, pkg) = begin
+        pkg.uuid in seen && return
+        push!(seen, pkg.uuid)
+        info = manifest_info(localctx.env, pkg.uuid)
+        info === nothing && return
+        need_to_resolve |= haskey(info, "path")
+        localctx.env.project["deps"][pkg.name] = string(pkg.uuid)
+        for (dpkg, duuid) in get(info, "deps", [])
+            collect_deps!(seen, PackageSpec(dpkg, UUID(duuid)))
+        end
+    end
+
     if is_project # testing the project itself
         # the project might have changes made to it so need to resolve
         need_to_resolve = true
@@ -807,23 +820,11 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
         )]
     else
         # Only put `pkg` and its deps (recursively) in the temp project
-        collect_deps!(seen, pkg) = begin
-            pkg.uuid in seen && return
-            push!(seen, pkg.uuid)
-            info = manifest_info(localctx.env, pkg.uuid)
-            need_to_resolve |= haskey(info, "path")
-            localctx.env.project["deps"][pkg.name] = string(pkg.uuid)
-            for (dpkg, duuid) in get(info, "deps", [])
-                collect_deps!(seen, PackageSpec(dpkg, UUID(duuid)))
-            end
-        end
-        # Only put `pkg` and its deps (revursively) in the temp project
         empty!(localctx.env.project["deps"])
         localctx.env.project["deps"][pkg.name] = string(pkg.uuid)
-
         seen_uuids = Set{UUID}()
-        collect_deps!(seen_uuids, pkg)# Only put `pkg` and its deps (recursively) in the temp project
-
+        # Only put `pkg` and its deps (recursively) in the temp project
+        collect_deps!(seen_uuids, pkg)
     end
 
     pkgs = PackageSpec[]
@@ -833,6 +834,11 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
     end
     if !isempty(target)
         collect_target_deps!(localctx, pkgs, pkg, target)
+        seen_uuids = Set{UUID}()
+        for dpkg in pkgs
+            # Also put eventual deps of target deps in new manifest
+            collect_deps!(seen_uuids, dpkg)
+        end
     end
 
     mktempdir() do tmpdir
