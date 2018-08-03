@@ -55,11 +55,7 @@ jl_options_t jl_options = { 0,    // quiet
                             0,    // method overwrite warning
                             1,    // can_inline
                             JL_OPTIONS_POLLY_ON, // polly
-#ifdef TRACE_COMPILE
-                            1, // trace_compile
-#else
-                            0, // trace_compile
-#endif
+                            NULL, // trace_compile
                             JL_OPTIONS_FAST_MATH_DEFAULT,
                             0,    // worker
                             NULL, // cookie
@@ -575,13 +571,9 @@ restart_switch:
             }
             break;
          case opt_trace_compile:
-            if (!strcmp(optarg,"yes"))
-                jl_options.trace_compile = 1;
-            else if (!strcmp(optarg,"no"))
-                jl_options.trace_compile = 0;
-            else {
-                jl_errorf("julia: invalid argument to --trace-compile (%s)", optarg);
-            }
+            jl_options.trace_compile = strdup(optarg);
+            if (!jl_options.trace_compile)
+                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
             break;
         case opt_math_mode:
             if (!strcmp(optarg,"ieee"))
