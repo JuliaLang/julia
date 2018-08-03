@@ -945,6 +945,7 @@ function pkg2_test_target_compatibility!(ctx, path, pkgs)
         for r in Pkg2.Reqs.read(test_reqfile)
             r isa Pkg2.Reqs.Requirement || continue
             pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
+            pkg_name == "julia" && continue
             push!(pkgs, PackageSpec(pkg_name, vspec))
         end
         registry_resolve!(ctx.env, pkgs)
