@@ -700,8 +700,12 @@ function parse_package!(ctx, pkg, project_path)
             pkg.name = ctx.old_pkg2_clone_name
         else
             # This is an old style package, get the name from src/PackageName
-            m = match(reg_pkg, pkg.repo.url)
-            m === nothing && cmderror("cannot determine package name from URL: $(pkg.repo.url)")
+            if isdir_windows_workaround(pkg.repo.url)
+                m = match(reg_pkg, abspath(pkg.repo.url))
+            else
+                m = match(reg_pkg, pkg.repo.url)
+            end
+            m === nothing && cmderror("cannot determine package name from URL or path: $(pkg.repo.url)")
             pkg.name = m.captures[1]
         end
         reg_uuids = registered_uuids(env, pkg.name)
