@@ -181,7 +181,7 @@ end
     BigFloat(x, prec::Int, rounding::RoundingMode)
 
 Create a representation of `x` as a [`BigFloat`](@ref) with precision `prec` and
-rounding mode `rounding`.
+[`Rounding Mode`](@ref Base.Rounding.RoundingMode) `rounding`.
 """
 function BigFloat(x, prec::Int, rounding::RoundingMode)
     setrounding(BigFloat, rounding) do
@@ -193,7 +193,7 @@ end
     BigFloat(x, rounding::RoundingMode)
 
 Create a representation of `x` as a [`BigFloat`](@ref) with the current global precision
-and rounding mode `rounding`.
+and [`Rounding Mode`](@ref Base.Rounding.RoundingMode) `rounding`.
 """
 function BigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)
     BigFloat(x, precision(BigFloat), rounding)

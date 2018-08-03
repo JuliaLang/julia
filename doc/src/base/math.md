@@ -119,6 +119,7 @@ Base.Rounding.RoundNearest
 Base.Rounding.RoundNearestTiesAway
 Base.Rounding.RoundNearestTiesUp
 Base.Rounding.RoundToZero
+Base.Rounding.RoundFromZero
 Base.Rounding.RoundUp
 Base.Rounding.RoundDown
 Base.round(::Complex{<: AbstractFloat}, ::RoundingMode, ::RoundingMode)
