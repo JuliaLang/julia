@@ -666,22 +666,6 @@ long_commands = []
 all_options_sorted = []
 long_options = []
 
-all_commands_sorted = sort(collect(String,keys(command_specs)))
-long_commands = filter(c -> length(c) > 2, all_commands_sorted)
-function all_options()
-    all_opts = []
-    for command in values(command_specs)
-        for opt_spec in command.option_specs
-            push!(all_opts, opt_spec.name)
-            opt_spec.short_name !== nothing && push!(all_opts, opt_spec.short_name)
-        end
-    end
-    unique!(all_opts)
-    return all_opts
-end
-all_options_sorted = [length(opt) > 1 ? "--$opt" : "-$opt" for opt in sort!(all_options())]
-long_options = filter(c -> length(c) > 2, all_options_sorted)
-
 struct PkgCompletionProvider <: LineEdit.CompletionProvider end
 
 function LineEdit.complete_line(c::PkgCompletionProvider, s)
@@ -1220,7 +1204,7 @@ is modified.
 ], #package
 ] #command_declarations
 
-super_specs = SuperSpecs(command_declarations) # TODO should this go here ?
+super_specs = SuperSpecs(command_declarations)
 command_specs = super_specs["package"]
 all_commands_sorted = sort(collect(String,keys(command_specs)))
 long_commands = filter(c -> length(c) > 2, all_commands_sorted)
