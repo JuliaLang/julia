@@ -20,6 +20,7 @@ end
 
 logdir() = joinpath(depots1(), "logs")
 devdir() = get(ENV, "JULIA_PKG_DEVDIR", joinpath(depots1(), "dev"))
+envdir(depot = depots1()) = joinpath(depot, "environments")
 const UPDATED_REGISTRY_THIS_SESSION = Ref(false)
 
 # load snapshotted dependencies
@@ -261,17 +262,19 @@ const status = API.status
 
 
 """
-    Pkg.activate([s::String])
+    Pkg.activate([s::String]; shared::Bool=false)
 
 Activate the environment at `s`. The active environment is the environment
 that is modified by executing package commands.
 The logic for what path is activated is as follows:
 
-  * If `s` is a path that exist, that environment will be activcated.
-  * If `s` is a package name in the current projec activate that is tracking a path,
-activate the environment at that path.
+  * If `shared` is `true`, the first existing environment named `s` from the depots
+    in the depot stack will be activated. If no such environment exists yet,
+    activate it in the first depot.
+  * If `s` is a path that exist, that environment will be activated.
+  * If `s` is a package name in the current project activate that is tracking a path,
+    activate the environment at that path.
   * If `s` is a non-existing path, activate that path.
-
 
 If no argument is given to `activate`, activate the home project,
 which is the one specified by either `--project` command line when starting julia,

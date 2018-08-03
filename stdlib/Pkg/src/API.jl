@@ -546,27 +546,47 @@ function status(ctx::Context, mode=PKGMODE_PROJECT)
     return
 end
 
-activate() = (Base.ACTIVE_PROJECT[] = Base.load_path_expand(nothing))
-function activate(path::String)
-    devpath = nothing
-    env = Base.active_project() === nothing ? nothing : EnvCache()
-    if env !== nothing && haskey(env.project["deps"], path)
-        uuid = UUID(env.project["deps"][path])
-        info = manifest_info(env, uuid)
-        devpath = haskey(info, "path") ? joinpath(dirname(env.project_file), info["path"]) : nothing
-    end
-    # `pkg> activate path`/`Pkg.activate(path)` does the following
-    # 1. if path exists, activate that
-    # 2. if path exists in deps, and the dep is deved, activate that path (`devpath` above)
-    # 3. activate the non-existing directory (e.g. as in `pkg> activate .` for initing a new env)
-    if Types.isdir_windows_workaround(path)
-        path = abspath(path)
-    elseif devpath !== nothing
-        path = abspath(devpath)
+activate() = (Base.ACTIVE_PROJECT[] = nothing)
+function activate(path::String; shared::Bool=false)
+    if !shared
+        devpath = nothing
+        env = Base.active_project() === nothing ? nothing : EnvCache()
+        if env !== nothing && haskey(env.project["deps"], path)
+            uuid = UUID(env.project["deps"][path])
+            info = manifest_info(env, uuid)
+            devpath = haskey(info, "path") ? joinpath(dirname(env.project_file), info["path"]) : nothing
+        end
+        # `pkg> activate path`/`Pkg.activate(path)` does the following
+        # 1. if path exists, activate that
+        # 2. if path exists in deps, and the dep is deved, activate that path (`devpath` above)
+        # 3. activate the non-existing directory (e.g. as in `pkg> activate .` for initing a new env)
+        if Types.isdir_windows_workaround(path)
+            fullpath = abspath(path)
+        elseif devpath !== nothing
+            fullpath = abspath(devpath)
+        else
+            fullpath = abspath(path)
+            isdir(fullpath) || @info("new environment will be placed at $fullpath")
+        end
     else
-        path = abspath(path)
+        # initialize `fullpath` in case of empty `Pkg.depots()`
+        fullpath = ""
+        # loop over all depots to check if the shared environment already exists
+        for depot in Pkg.depots()
+            fullpath = joinpath(Pkg.envdir(depot), path)
+            isdir(fullpath) && break
+        end
+        # this disallows names such as "Foo/bar", ".", "..", etc
+        if basename(abspath(fullpath)) != path
+            cmderror("not a valid name for a shared environment: $(path)")
+        end
+        # unless the shared environment already exists, place it in the first depots
+        if !isdir(fullpath)
+            fullpath = joinpath(Pkg.envdir(Pkg.depots1()), path)
+            @info("new shared environment \"$path\" will be placed at $fullpath")
+        end
     end
-    Base.ACTIVE_PROJECT[] = Base.load_path_expand(path)
+    Base.ACTIVE_PROJECT[] = Base.load_path_expand(fullpath)
 end
 
 """
