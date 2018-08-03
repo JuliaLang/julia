@@ -26,7 +26,7 @@ struct JLOptions
     warn_overwrite::Int8
     can_inline::Int8
     polly::Int8
-    trace_compile::Int8
+    trace_compile::Ptr{UInt8}
     fast_math::Int8
     worker::Int8
     cookie::Ptr{UInt8}
