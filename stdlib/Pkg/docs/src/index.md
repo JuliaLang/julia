@@ -695,7 +695,7 @@ Testing...
 
 Sometimes one might want to use some packages only at testing time but not
 enforce a dependency on them when the package is used. This is possible by
-adding `[extra]` dependencies and adding a a "test target" to the Project file.
+adding dependencies to `[extras]` and a `test` target in `[targets]` to the Project file.
 Here we add the `Test` standard library as a test-only dependency by adding the
 following to the Project file:
 
