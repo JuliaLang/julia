@@ -34,7 +34,7 @@ end
 function ldflags()
     fl = "-L$(shell_escape(libDir()))"
     if Sys.iswindows()
-        fl = fl * " -Wl,--stack,8388608"
+        fl = fl * " -Wl,--export-all-symbols -Wl,--stack,8388608"
     elseif Sys.islinux()
         fl = fl * " -Wl,--export-dynamic"
     end
