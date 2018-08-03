@@ -700,4 +700,41 @@ let
     end
 end
 
+let
+    load_path = mktempdir()
+    load_cache_path = mktempdir()
+    try
+        write(joinpath(load_path, "Foo26028.jl"),
+            """
+            module Foo26028
+
+            module Bar26028
+                x = 0
+            end
+
+            function __init__()
+                include(joinpath(@__DIR__, "Baz26028.jl"))
+            end
+
+            end
+            """)
+        write(joinpath(load_path, "Baz26028.jl"),
+            """
+            module Baz26028
+            import Foo26028.Bar26028.x
+            end
+            """)
+
+        pushfirst!(LOAD_PATH, load_path)
+        pushfirst!(DEPOT_PATH, load_cache_path)
+
+        Base.compilecache(Base.PkgId("Foo26028"))
+        @test_nowarn @eval using Foo26028
+    finally
+        rm(load_path, recursive=true)
+        rm(load_cache_path, recursive=true)
+    end
+end
+
+
 end # !withenv
