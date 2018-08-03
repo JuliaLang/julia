@@ -398,11 +398,17 @@ let changes = []
     @test pop!(changes) == ("" => FileWatching.FileEvent())
     if F_GETPATH
         Sys.iswindows() && @test pop!(changes) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_CHANGE))
-        @test pop!(changes) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME))
+        p = pop!(changes)
+        if !Sys.isapple()
+            @test p == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME))
+        end
         while changes[end][1] == F_PATH
             @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
         end
-        @test pop!(changes) == (F_PATH * "~" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+        p = pop!(changes)
+        if !Sys.isapple()
+            @test p == (F_PATH * "~" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+        end
         while changes[end][1] == F_PATH * "~"
             @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
         end
@@ -414,7 +420,10 @@ let changes = []
                 while changes[end - 1][1] == "$F_PATH$i"
                     @test let x = pop!(changes)[2]; x.changed ⊻ x.renamed; end
                 end
-                @test pop!(changes) == ("$F_PATH$i" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+                p = pop!(changes)
+                if !Sys.isapple()
+                    @test p == ("$F_PATH$i" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+                end
             end
         end
     end
