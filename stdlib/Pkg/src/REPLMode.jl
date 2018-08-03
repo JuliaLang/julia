@@ -609,7 +609,7 @@ function do_activate!(args::PkgArguments, api_opts::APIOptions)
     if isempty(args)
         return API.activate()
     else
-        return API.activate(args[1])
+        return API.activate(args[1]; collect(api_opts)...)
     end
 end
 
@@ -1110,8 +1110,19 @@ packages have changed causing the current Manifest to_indices be out of sync.
     ["activate"],
     do_activate!,
     (ARG_RAW, [0,1]),
-    [],
-    nothing,
+    [
+        ("shared", OPT_SWITCH, :shared => true),
+    ],
+    md"""
+    activate
+    activate [--shared] path
+
+Activate the environment at the given `path`, or the home project environment if no `path` is specified.
+The active environment is the environment that is modified by executing package commands.
+When the option `--shared` is given, `path` will be assumed to be a directory name and searched for in the
+`environments` folders of the depots in the depot stack. In case no such environment exists in any of the depots,
+it will be placed in the first depot of the stack.
+    """ ,
 ),( CMD_UP,
     ["update", "up"],
     do_up!,
