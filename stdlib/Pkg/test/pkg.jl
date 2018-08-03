@@ -215,7 +215,7 @@ temp_pkg_dir() do project_path
     end
 
     @testset "invalid pkg name" begin
-        @test_throws CommandError Pkg.add(",sa..,--")
+        @test_throws PkgError Pkg.add(",sa..,--")
     end
 
     @testset "stdlibs as direct dependency" begin
@@ -241,7 +241,7 @@ temp_pkg_dir() do project_path
             withenv("JULIA_PKG_DEVDIR" => devdir) do
                 try
                     Pkg.setprotocol!("notarealprotocol")
-                    @test_throws CommandError Pkg.develop("Example")
+                    @test_throws PkgError Pkg.develop("Example")
                     Pkg.setprotocol!("https")
                     Pkg.develop("Example")
                     @test isinstalled(TEST_PKG)
@@ -259,8 +259,8 @@ temp_pkg_dir() do project_path
 
     @testset "adding nonexisting packages" begin
         nonexisting_pkg = randstring(14)
-        @test_throws CommandError Pkg.add(nonexisting_pkg)
-        @test_throws CommandError Pkg.update(nonexisting_pkg)
+        @test_throws PkgError Pkg.add(nonexisting_pkg)
+        @test_throws PkgError Pkg.update(nonexisting_pkg)
     end
 
     Pkg.rm(TEST_PKG.name)
@@ -281,7 +281,7 @@ temp_pkg_dir() do project_path
     end
 
     @testset "add julia" begin
-        @test_throws CommandError Pkg.add("julia")
+        @test_throws PkgError Pkg.add("julia")
     end
 end
 
@@ -390,9 +390,9 @@ end
 temp_pkg_dir() do project_path
     @testset "invalid repo url" begin
         cd(project_path) do
-            @test_throws CommandError Pkg.add("https://github.com")
+            @test_throws PkgError Pkg.add("https://github.com")
             Pkg.generate("FooBar")
-            @test_throws CommandError Pkg.add("./Foobar")
+            @test_throws PkgError Pkg.add("./Foobar")
         end
     end
 end
@@ -408,7 +408,7 @@ temp_pkg_dir() do project_path
                 Pkg.add(PackageSpec(path=package_path))
             end
             rm(joinpath(package_path, ".git"); force=true, recursive=true)
-            @test_throws CommandError Pkg.update()
+            @test_throws PkgError Pkg.update()
         end
     end
 end
