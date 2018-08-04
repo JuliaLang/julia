@@ -136,18 +136,18 @@ temp_pkg_dir() do project_path
     @testset "adding and upgrading different versions" begin
         # VersionNumber
         Pkg.add(PackageSpec(TEST_PKG.name, v"0.3"))
-        @test Pkg.installed()[TEST_PKG.name] == v"0.3"
+        @test Pkg.API.__installed()[TEST_PKG.name] == v"0.3"
         Pkg.add(PackageSpec(TEST_PKG.name, v"0.3.1"))
-        @test Pkg.installed()[TEST_PKG.name] == v"0.3.1"
+        @test Pkg.API.__installed()[TEST_PKG.name] == v"0.3.1"
         Pkg.rm(TEST_PKG.name)
 
         # VersionRange
         Pkg.add(PackageSpec(TEST_PKG.name, VersionSpec(VersionRange("0.3.0-0.3.2"))))
-        @test Pkg.installed()[TEST_PKG.name] == v"0.3.2"
+        @test Pkg.API.__installed()[TEST_PKG.name] == v"0.3.2"
         Pkg.update(; level = UPLEVEL_PATCH)
-        @test Pkg.installed()[TEST_PKG.name] == v"0.3.3"
+        @test Pkg.API.__installed()[TEST_PKG.name] == v"0.3.3"
         Pkg.update(; level = UPLEVEL_MINOR)
-        @test Pkg.installed()[TEST_PKG.name].minor != 3
+        @test Pkg.API.__installed()[TEST_PKG.name].minor != 3
         Pkg.rm(TEST_PKG.name)
     end
 
@@ -164,26 +164,26 @@ temp_pkg_dir() do project_path
 
     @testset "pinning / freeing" begin
         Pkg.add(TEST_PKG.name)
-        old_v = Pkg.installed()[TEST_PKG.name]
+        old_v = Pkg.API.__installed()[TEST_PKG.name]
         Pkg.pin(PackageSpec(TEST_PKG.name, v"0.2"))
-        @test Pkg.installed()[TEST_PKG.name].minor == 2
+        @test Pkg.API.__installed()[TEST_PKG.name].minor == 2
         Pkg.update(TEST_PKG.name)
-        @test Pkg.installed()[TEST_PKG.name].minor == 2
+        @test Pkg.API.__installed()[TEST_PKG.name].minor == 2
         Pkg.free(TEST_PKG.name)
         Pkg.update()
-        @test Pkg.installed()[TEST_PKG.name] == old_v
+        @test Pkg.API.__installed()[TEST_PKG.name] == old_v
         Pkg.rm(TEST_PKG.name)
     end
 
     @testset "develop / freeing" begin
         Pkg.add(TEST_PKG.name)
-        old_v = Pkg.installed()[TEST_PKG.name]
+        old_v = Pkg.API.__installed()[TEST_PKG.name]
         Pkg.rm(TEST_PKG.name)
         mktempdir() do devdir
             withenv("JULIA_PKG_DEVDIR" => devdir) do
                 Pkg.develop(TEST_PKG.name)
                 @test isinstalled(TEST_PKG)
-                @test Pkg.installed()[TEST_PKG.name] > old_v
+                @test Pkg.API.__installed()[TEST_PKG.name] > old_v
                 test_pkg_main_file = joinpath(devdir, TEST_PKG.name, "src", TEST_PKG.name * ".jl")
                 @test isfile(test_pkg_main_file)
                 # Pkg #152
@@ -209,7 +209,7 @@ temp_pkg_dir() do project_path
                 @test isfile(joinpath(devdir, TEST_PKG.name, "deps", "deps.jl"))
                 Pkg.test(TEST_PKG.name)
                 Pkg.free(TEST_PKG.name)
-                @test Pkg.installed()[TEST_PKG.name] == old_v
+                @test Pkg.API.__installed()[TEST_PKG.name] == old_v
             end
         end
     end
@@ -221,7 +221,7 @@ temp_pkg_dir() do project_path
     @testset "stdlibs as direct dependency" begin
         uuid_pkg = (name = "CRC32c", uuid = UUID("8bf52ea8-c179-5cab-976a-9e18b702a9bc"))
         Pkg.add("CRC32c")
-        @test haskey(Pkg.installed(), uuid_pkg.name)
+        @test haskey(Pkg.API.__installed(), uuid_pkg.name)
         Pkg.update()
         # Disable until fixed in Base
         # Pkg.test("CRC32c")
@@ -298,7 +298,7 @@ temp_pkg_dir() do project_path
             cd(joinpath(dir, "UnregisteredWithProject")) do
                 with_current_env() do
                     Pkg.update()
-                    @test haskey(Pkg.installed(), "Example")
+                    @test haskey(Pkg.API.__installed(), "Example")
                 end
             end
         end
@@ -308,12 +308,12 @@ end
 temp_pkg_dir() do project_path
     @testset "libgit2 downloads" begin
         Pkg.add(TEST_PKG.name; use_libgit2_for_all_downloads=true)
-        @test haskey(Pkg.installed(), TEST_PKG.name)
+        @test haskey(Pkg.API.__installed(), TEST_PKG.name)
         Pkg.rm(TEST_PKG.name)
     end
     @testset "tarball downloads" begin
         Pkg.add("JSON"; use_only_tarballs_for_downloads=true)
-        @test haskey(Pkg.installed(), "JSON")
+        @test haskey(Pkg.API.__installed(), "JSON")
         Pkg.rm("JSON")
     end
 end

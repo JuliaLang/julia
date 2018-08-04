@@ -1,8 +1,5 @@
 # Pkg
 
-!!! warning
-    This documentation is a work in progress and the information in it might be or become outdated.
-
 ## Introduction
 
 Pkg is the standard package manager for Julia 1.0 and newer. Unlike traditional

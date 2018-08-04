@@ -103,7 +103,7 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
     pkg"activate ."
     pkg"add Example"
     @test isinstalled(TEST_PKG)
-    v = Pkg.installed()[TEST_PKG.name]
+    v = Pkg.API.__installed()[TEST_PKG.name]
     pkg"rm Example"
     pkg"add Example#master"
 
@@ -117,12 +117,12 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
 
     pkg"test Example"
     @test isinstalled(TEST_PKG)
-    @test Pkg.installed()[TEST_PKG.name] > v
+    @test Pkg.API.__installed()[TEST_PKG.name] > v
     pkg = "UnregisteredWithoutProject"
     p = git_init_package(tmp_pkg_path, joinpath(@__DIR__, "test_packages/$pkg"))
     Pkg.REPLMode.pkgstr("add $p; precompile")
     @eval import $(Symbol(pkg))
-    @test Pkg.installed()[pkg] == v"0.0"
+    @test Pkg.API.__installed()[pkg] == v"0.0"
     Pkg.test("UnregisteredWithoutProject")
 
     pkg2 = "UnregisteredWithProject"
@@ -133,7 +133,7 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
     # FIXME: why isn't this testing the Pkg after importing, rather than after freeing it
     #@eval import Example
     #@eval import $(Symbol(pkg2))
-    @test Pkg.installed()[pkg2] == v"0.1.0"
+    @test Pkg.API.__installed()[pkg2] == v"0.1.0"
     Pkg.REPLMode.pkgstr("free $pkg2")
     @test_throws PkgError Pkg.REPLMode.pkgstr("free $pkg2")
     Pkg.test("UnregisteredWithProject")
@@ -148,7 +148,7 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
         LibGit2.add!(repo, "*")
         LibGit2.commit(repo, "bump version"; author = TEST_SIG, committer=TEST_SIG)
         pkg"update"
-        @test Pkg.installed()[pkg2] == v"0.2.0"
+        @test Pkg.API.__installed()[pkg2] == v"0.2.0"
         Pkg.REPLMode.pkgstr("rm $pkg2")
 
         c = LibGit2.commit(repo, "empty commit"; author = TEST_SIG, committer=TEST_SIG)
@@ -173,7 +173,7 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
                 mktempdir() do depot_dir
                     pushfirst!(DEPOT_PATH, depot_dir)
                     pkg"instantiate"
-                    @test Pkg.installed()[pkg2] == v"0.2.0"
+                    @test Pkg.API.__installed()[pkg2] == v"0.2.0"
                 end
             finally
                 empty!(DEPOT_PATH)
@@ -207,8 +207,8 @@ temp_pkg_dir() do project_path; cd(project_path) do
                     Pkg.REPLMode.pkgstr("build; precompile")
                     @test Base.find_package("UnregisteredWithProject") == joinpath(p1_new_path, "src", "UnregisteredWithProject.jl")
                     @test Base.find_package("UnregisteredWithoutProject") == joinpath(p2_new_path, "src", "UnregisteredWithoutProject.jl")
-                    @test Pkg.installed()["UnregisteredWithProject"] == v"0.1.0"
-                    @test Pkg.installed()["UnregisteredWithoutProject"] == v"0.0.0"
+                    @test Pkg.API.__installed()["UnregisteredWithProject"] == v"0.1.0"
+                    @test Pkg.API.__installed()["UnregisteredWithoutProject"] == v"0.0.0"
                     Pkg.test("UnregisteredWithoutProject")
                     Pkg.test("UnregisteredWithProject")
 
@@ -235,8 +235,8 @@ temp_pkg_dir() do project_path; cd(project_path) do
                     mkdir("tests")
                     cd("tests")
                     pkg"develop ../SubModule2"
-                    @test Pkg.installed()["SubModule1"] == v"0.1.0"
-                    @test Pkg.installed()["SubModule2"] == v"0.1.0"
+                    @test Pkg.API.__installed()["SubModule1"] == v"0.1.0"
+                    @test Pkg.API.__installed()["SubModule2"] == v"0.1.0"
                     # make sure paths to SubModule1 and SubModule2 are relative
                     manifest = Pkg.Types.Context().env.manifest
                     @test manifest["SubModule1"][1]["path"] == "SubModule1"
@@ -454,7 +454,9 @@ temp_pkg_dir() do project_path
             setup_package(parent_dir, pkg_name) = begin
                 mkdir(parent_dir)
                 cd(parent_dir) do
-                    Pkg.generate(pkg_name)
+                    withenv("USER" => "Test User") do
+                        Pkg.generate(pkg_name)
+                    end
                     cd(pkg_name) do
                         LibGit2.with(LibGit2.init(joinpath(project_path, parent_dir, pkg_name))) do repo
                             LibGit2.add!(repo, "*")
@@ -833,9 +835,7 @@ end
         @test_throws PkgError Pkg.REPLMode.pkgstr("-x add Example")
         # malformed, but registered meta option
         @test_throws PkgError Pkg.REPLMode.pkgstr("--env Example")
-    end
-    end
-    end
+    end end end
 end
 
 @testset "activate" begin
@@ -847,9 +847,7 @@ end
         @test Base.active_project() == joinpath(pwd(), "Foo", "Project.toml")
         pkg"activate"
         @test Base.active_project() == default
-    end
-    end
-    end
+    end end end
 end
 
 @testset "subcommands" begin
@@ -858,9 +856,7 @@ end
         @test isinstalled(TEST_PKG)
         Pkg.REPLMode.pkg"package rm Example"
         @test !isinstalled(TEST_PKG)
-    end
-    end
-    end
+    end end end
 end
 
 @testset "`parse_quotes` unit tests" begin
@@ -880,9 +876,7 @@ end
         @test_throws PkgError pkg"pin Example#foo"
         @test_throws PkgError pkg"test Example#foo"
         @test_throws PkgError pkg"test Example@v0.0.1"
-    end
-    end
-    end
+    end end end
 end
 
 end # module

@@ -253,7 +253,8 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...
 end
 
 
-function installed(mode::PackageMode=PKGMODE_MANIFEST)
+installed() = __installed(PKGMODE_PROJECT)
+function __installed(mode::PackageMode=PKGMODE_MANIFEST)
     diffs = Display.status(Context(), mode, #=use_as_api=# true)
     version_status = Dict{String, Union{VersionNumber,Nothing}}()
     diffs == nothing && return version_status

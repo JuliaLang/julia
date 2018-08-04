@@ -699,7 +699,7 @@ function complete_package(s, i1, i2, lastcommand, project_opt)
 end
 
 function complete_installed_package(s, i1, i2, project_opt)
-    pkgs = project_opt ? API.installed(PKGMODE_PROJECT) : API.installed()
+    pkgs = project_opt ? API.__installed(PKGMODE_PROJECT) : API.__installed()
     pkgs = sort!(collect(keys(filter((p) -> p[2] != nothing, pkgs))))
     cmp = filter(cmd -> startswith(cmd, s), pkgs)
     return cmp, i1:i2, !isempty(cmp)
