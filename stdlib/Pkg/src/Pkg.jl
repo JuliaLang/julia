@@ -14,7 +14,7 @@ export UpgradeLevel, UPLEVEL_MAJOR, UPLEVEL_MAJOR, UPLEVEL_MINOR, UPLEVEL_PATCH
 depots() = Base.DEPOT_PATH
 function depots1()
     d = depots()
-    isempty(d) && pkgerror("no depots found in DEPOT_PATH")
+    isempty(d) && Pkg.Types.pkgerror("no depots found in DEPOT_PATH")
     return d[1]
 end
 
@@ -41,6 +41,7 @@ import .API: clone, dir
 import .REPLMode: @pkg_str
 import .Types: UPLEVEL_MAJOR, UPLEVEL_MINOR, UPLEVEL_PATCH, UPLEVEL_FIXED
 import .Types: PKGMODE_MANIFEST, PKGMODE_PROJECT
+
 
 """
     PackageMode
@@ -347,6 +348,30 @@ function __init__()
     end
 end
 
+METADATA_compatible_uuid(pkg::String) = Types.uuid5(Types.uuid_package, pkg)
+
+##################
+# Precompilation #
+##################
+
+const CTRL_C = '\x03'
+const precompile_script = """
+    import Pkg
+    tmp = mktempdir()
+    cd(tmp)
+    empty!(DEPOT_PATH)
+    pushfirst!(DEPOT_PATH, tmp)
+    # Prevent cloning registry
+    mkdir("registries")
+    touch("registries/blocker") # prevents default registry from cloning
+    touch("Project.toml")
+    ] activate .
+    $CTRL_C
+    Pkg.add("Test") # adding an stdlib doesn't require internet access
+    ] st
+    $CTRL_C
+    rm(tmp; recursive=true)"""
+
 module PrecompileArea
     import ..Pkg
     using ..Types
@@ -356,7 +381,5 @@ module PrecompileArea
     import SHA
     include("precompile.jl")
 end
-
-METADATA_compatible_uuid(pkg::String) = Types.uuid5(Types.uuid_package, pkg)
 
 end # module
