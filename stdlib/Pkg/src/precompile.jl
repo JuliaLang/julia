@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 precompile(Tuple{Type{Base.Dict{K, V} where V where K}, Array{Base.Pair{A, B} where B where A, 1}})
 precompile(Tuple{Type{Base.Dict{Pkg.Types.VersionRange, Base.Dict{String, Base.UUID}}}})
 precompile(Tuple{Type{Base.Dict{Pkg.Types.VersionRange, Base.Dict{String, Pkg.Types.VersionSpec}}}})
