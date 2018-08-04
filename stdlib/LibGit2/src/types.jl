@@ -1303,6 +1303,9 @@ end
 
 function approve(cache::CachedCredentials, cred::AbstractCredential, url::AbstractString)
     cred_id = credential_identifier(url)
+    if haskey(cache.cred, cred_id) && cred !== cache.cred[cred_id]
+         Base.shred!(cache.cred[cred_id])
+    end
     cache.cred[cred_id] = cred
     nothing
 end
@@ -1310,6 +1313,7 @@ end
 function reject(cache::CachedCredentials, cred::AbstractCredential, url::AbstractString)
     cred_id = credential_identifier(url)
     if haskey(cache.cred, cred_id)
+        Base.shred!(cache.cred[cred_id])
         delete!(cache.cred, cred_id)
     end
     nothing
