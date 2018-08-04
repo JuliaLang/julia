@@ -33,7 +33,12 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, s
 
     # All developed packages should go through handle_repos_develop so just give them an empty repo
     for pkg in pkgs
-        mode == :develop && pkg.repo == nothing && (pkg.repo = Types.GitRepo())
+        if mode == :develop
+            pkg.repo == nothing && (pkg.repo = Types.GitRepo())
+            if !isempty(pkg.repo.rev)
+                pkgerror("git revision cannot be given to `develop`")
+            end
+        end
     end
 
     # if julia is passed as a package the solver gets tricked;

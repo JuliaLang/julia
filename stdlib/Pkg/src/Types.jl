@@ -545,13 +545,10 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}, 
                 project_path = mktempdir()
                 cp(repo_path, project_path; force=true)
                 LibGit2.with(LibGit2.GitRepo(project_path)) do repo
-                    rev = pkg.repo.rev
-                    if isempty(rev)
-                        if LibGit2.isattached(repo)
-                            rev = LibGit2.branch(repo)
-                        else
-                            rev = string(LibGit2.GitHash(LibGit2.head(repo)))
-                        end
+                    if LibGit2.isattached(repo)
+                        rev = LibGit2.branch(repo)
+                    else
+                        rev = string(LibGit2.GitHash(LibGit2.head(repo)))
                     end
                     gitobject, isbranch = get_object_branch(repo, rev)
                     try

@@ -397,6 +397,9 @@ function package_args(args::Vector{Token}, spec::CommandSpec)::Vector{PackageSpe
         elseif arg isa VersionRange
             pkgs[end].version = arg
         elseif arg isa Rev
+            if spec.kind == CMD_DEVELOP
+                pkgerror("a git revision cannot be given to `develop`")
+            end
             pkg = pkgs[end]
             if pkg.repo == nothing
                 pkg.repo = Types.GitRepo("", arg.rev)
@@ -1025,7 +1028,7 @@ pkg> add Example=7876af07-990d-54b4-ab0e-23690620f79a
         ("shared", OPT_SWITCH, :shared => true),
     ],
     md"""
-    develop [--shared|--local] pkg[=uuid] [#rev] ...
+    develop [--shared|--local] pkg[=uuid] ...
 
 Make a package available for development. If `pkg` is an existing local path that path will be recorded in
 the manifest and used. Otherwise, a full git clone of `pkg` at rev `rev` is made. The location of the clone is

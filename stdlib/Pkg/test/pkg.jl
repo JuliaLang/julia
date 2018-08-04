@@ -181,6 +181,7 @@ temp_pkg_dir() do project_path
         Pkg.rm(TEST_PKG.name)
         mktempdir() do devdir
             withenv("JULIA_PKG_DEVDIR" => devdir) do
+                @test_throws PkgError Pkg.develop(PackageSpec(url="bleh", rev="blurg"))
                 Pkg.develop(TEST_PKG.name)
                 @test isinstalled(TEST_PKG)
                 @test Pkg.API.__installed()[TEST_PKG.name] > old_v
