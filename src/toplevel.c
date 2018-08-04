@@ -590,6 +590,12 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
             jl_lineno = jl_linenode_line(e);
             return jl_nothing;
         }
+        if (jl_is_symbol(e)) {
+            char *n = jl_symbol_name((jl_sym_t*)e);
+            while (*n == '_') ++n;
+            if (*n == 0)
+                jl_error("all-underscore identifier used as rvalue");
+        }
         return jl_interpret_toplevel_expr_in(m, e, NULL, NULL);
     }
 

@@ -86,11 +86,7 @@ julia> cumsum(a, dims=2)
  4  9  15
 ```
 """
-function cumsum(A::AbstractArray{T}; dims::Union{Nothing,Integer}=nothing) where T
-    if dims === nothing
-        depwarn("`cumsum(A::AbstractArray)` is deprecated, use `cumsum(A, dims=1)` instead.", :cumsum)
-        dims = 1
-    end
+function cumsum(A::AbstractArray{T}; dims::Integer) where T
     out = similar(A, promote_op(add_sum, T, T))
     cumsum!(out, A, dims=dims)
 end
@@ -162,11 +158,7 @@ julia> cumprod(a, dims=2)
  4  20  120
 ```
 """
-function cumprod(A::AbstractArray; dims::Union{Nothing,Integer}=nothing)
-    if dims === nothing
-        depwarn("`cumprod(A::AbstractArray)` is deprecated, use `cumprod(A, dims=1)` instead.", :cumprod)
-        dims = 1
-    end
+function cumprod(A::AbstractArray; dims::Integer)
     return accumulate(mul_prod, A, dims=dims)
 end
 

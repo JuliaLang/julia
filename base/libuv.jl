@@ -120,9 +120,6 @@ function reinit_stdio()
     global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))
     global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))
     global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))
-    global STDIN = stdin
-    global STDOUT = stdout
-    global STDERR = stderr
 end
 
 """

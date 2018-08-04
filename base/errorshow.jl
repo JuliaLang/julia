@@ -187,7 +187,9 @@ function showerror(io::IO, ex::MethodError)
         else
             print(io, "Cannot `convert` an object of type ", arg_types_param[2], " to an object of type ", T)
         end
-    elseif isempty(methods(f)) && !isa(f, Function)
+    elseif isempty(methods(f)) && isa(f, DataType) && f.abstract
+        print(io, "no constructors have been defined for $f")
+    elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
         print(io, "objects of type $ft are not callable")
     else
         if ft <: Function && isempty(ft.parameters) &&
@@ -196,18 +198,6 @@ function showerror(io::IO, ex::MethodError)
             f_is_function = true
             print(io, "no method matching ", name)
         elseif isa(f, Type)
-            if isa(f, DataType) && f.abstract
-                # Print a more appropriate message if the only method
-                # on the type is the default one from sysimg.jl.
-                ms = methods(f)
-                if length(ms) == 1
-                    m = first(ms)
-                    if Base.is_default_method(m)
-                        print(io, "no constructors have been defined for $f")
-                        return
-                    end
-                end
-            end
             print(io, "no method matching ", f)
         else
             print(io, "no method matching (::", ft, ")")
@@ -328,9 +318,6 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
             iob = IOContext(buf, io)
             tv = Any[]
             sig0 = method.sig
-            if Base.is_default_method(method)
-                continue
-            end
             while isa(sig0, UnionAll)
                 push!(tv, sig0.var)
                 sig0 = sig0.body
@@ -619,14 +606,6 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
         push!(ret, (last_frame,n))
     end
     return ret
-end
-
-"""
-Determines whether a method is the default method which is provided to all types from sysimg.jl.
-Such a method is usually undesirable to be displayed to the user in the REPL.
-"""
-function is_default_method(m::Method)
-    return m.module == Base && m.sig == Tuple{Type{T},Any} where T
 end
 
 @noinline function throw_eachindex_mismatch(::IndexLinear, A...)

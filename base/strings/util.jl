@@ -302,27 +302,15 @@ julia> split(a,".")
 function split end
 
 function split(str::T, splitter;
-               limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
-    if keep !== nothing
-        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :split)
-        keepempty = keep
-    end
+               limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _split(str, splitter, limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
 function split(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
-               limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
-    if keep !== nothing
-        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :split)
-        keepempty = keep
-    end
+               limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _split(str, in(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
 function split(str::T, splitter::AbstractChar;
-               limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
-    if keep !== nothing
-        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :split)
-        keepempty = keep
-    end
+               limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _split(str, isequal(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
 
@@ -388,27 +376,15 @@ julia> rsplit(a,".";limit=2)
 function rsplit end
 
 function rsplit(str::T, splitter;
-                limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
-    if keep !== nothing
-        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :rsplit)
-        keepempty = keep
-    end
+                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _rsplit(str, splitter, limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
 function rsplit(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
-                limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
-    if keep !== nothing
-        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :rsplit)
-        keepempty = keep
-    end
+                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _rsplit(str, in(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
 function rsplit(str::T, splitter::AbstractChar;
-                limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
-    if keep !== nothing
-        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :rsplit)
-        keepempty = keep
-    end
+                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _rsplit(str, isequal(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
 

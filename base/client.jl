@@ -163,10 +163,6 @@ function parse_input_line(s::String; filename::String="none", depwarn=true)
                   s, sizeof(s), filename, sizeof(filename))
         end
     end
-    if ex isa Symbol && all(isequal('_'), string(ex))
-        # remove with 0.7 deprecation
-        Meta.lower(Main, ex)  # to get possible warning about using _ as an rvalue
-    end
     return ex
 end
 parse_input_line(s::AbstractString) = parse_input_line(String(s))

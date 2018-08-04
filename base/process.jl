@@ -551,11 +551,7 @@ spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::R
 _spawn(cmds::AbstractCmd, args...; chain::Union{ProcessChain, Nothing}=nothing) =
     _spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
 
-function eachline(cmd::AbstractCmd; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
-    end
+function eachline(cmd::AbstractCmd; keep::Bool=false)
     _stdout = Pipe()
     processes = _spawn(cmd, (devnull, _stdout, stderr))
     close(_stdout.in)

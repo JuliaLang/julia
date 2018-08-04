@@ -1606,14 +1606,8 @@ CartesianIndex(2, 1)
 function findnext(A, start)
     l = last(keys(A))
     i = start
-    warned = false
     while i <= l
-        a = A[i]
-        if !warned && !(a isa Bool)
-            depwarn("In the future `findnext` will only work on boolean collections. Use `findnext(x->x!=0, A, start)` instead.", :findnext)
-            warned = true
-        end
-        if a != 0
+        if A[i]
             return i
         end
         i = nextind(A, i)
@@ -1655,13 +1649,8 @@ CartesianIndex(2, 1)
 ```
 """
 function findfirst(A)
-    warned = false
     for (i, a) in pairs(A)
-        if !warned && !(a isa Bool)
-            depwarn("In the future `findfirst` will only work on boolean collections. Use `findfirst(x->x!=0, A)` instead.", :findfirst)
-            warned = true
-        end
-        if a != 0
+        if a
             return i
         end
     end
@@ -1695,9 +1684,7 @@ julia> findnext(isodd, A, CartesianIndex(1, 1))
 CartesianIndex(1, 1)
 ```
 """
-@inline findnext(testf::Function, A, start) = findnext_internal(testf, A, start)
-
-function findnext_internal(testf::Function, A, start)
+function findnext(testf::Function, A, start)
     l = last(keys(A))
     i = start
     while i <= l
@@ -1789,14 +1776,8 @@ CartesianIndex(2, 1)
 """
 function findprev(A, start)
     i = start
-    warned = false
     while i >= first(keys(A))
-        a = A[i]
-        if !warned && !(a isa Bool)
-            depwarn("In the future `findprev` will only work on boolean collections. Use `findprev(x->x!=0, A, start)` instead.", :findprev)
-            warned = true
-        end
-        a != 0 && return i
+        A[i] && return i
         i = prevind(A, i)
     end
     return nothing
@@ -1837,13 +1818,8 @@ CartesianIndex(2, 1)
 ```
 """
 function findlast(A)
-    warned = false
     for (i, a) in Iterators.reverse(pairs(A))
-        if !warned && !(a isa Bool)
-            depwarn("In the future `findlast` will only work on boolean collections. Use `findlast(x->x!=0, A)` instead.", :findlast)
-            warned = true
-        end
-        if a != 0
+        if a
             return i
         end
     end
@@ -1885,9 +1861,7 @@ julia> findprev(isodd, A, CartesianIndex(1, 2))
 CartesianIndex(2, 1)
 ```
 """
-@inline findprev(testf::Function, A, start) = findprev_internal(testf, A, start)
-
-function findprev_internal(testf::Function, A, start)
+function findprev(testf::Function, A, start)
     i = start
     while i >= first(keys(A))
         testf(A[i]) && return i
@@ -2031,10 +2005,7 @@ julia> findall(falses(3))
 ```
 """
 function findall(A)
-    if !(eltype(A) === Bool) && !all(x -> x isa Bool, A)
-        depwarn("In the future `findall(A)` will only work on boolean collections. Use `findall(x->x!=0, A)` instead.", :find)
-    end
-    collect(first(p) for p in pairs(A) if last(p) != 0)
+    collect(first(p) for p in pairs(A) if last(p))
 end
 # Allocating result upfront is faster (possible only when collection can be iterated twice)
 function findall(A::AbstractArray{Bool})

@@ -187,8 +187,6 @@ end
 
 # BEGIN 0.7 deprecations
 
-# TODO: remove warning for using `_` in parse_input_line in base/client.jl
-
 @deprecate issubtype (<:)
 
 @deprecate union() Set()
@@ -347,9 +345,6 @@ end
 
 @deprecate momenttype(::Type{T}) where {T} typeof((zero(T)*zero(T) + zero(T)*zero(T))/2) false
 
-# issue #6466
-# `write` on non-isbits arrays is deprecated in io.jl.
-
 # PR #23187
 @deprecate cpad(s, n::Integer, p=" ") rpad(lpad(s, div(n+textwidth(s), 2), p), n, p) false
 
@@ -404,22 +399,6 @@ end
 @deprecate (convert(::Type{Integer}, x::Enum{T}) where {T<:Integer})         Integer(x)
 @deprecate (convert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer})  T(x)
 
-function (::Type{T})(arg) where {T}
-    if applicable(convert, T, arg)
-        sig = which(convert, (Type{T}, typeof(arg))).sig
-        if sig == (Tuple{typeof(convert),Type{S},Number} where S<:Number) ||
-           sig == (Tuple{typeof(convert),Type{S},AbstractArray} where S<:AbstractArray)
-            # matches a catch-all converter; will stack overflow
-            throw(MethodError(T, (arg,)))
-        end
-        # if `convert` call would not work, just let the method error happen
-        depwarn("Constructors no longer fall back to `convert`. A constructor `$T(::$(typeof(arg)))` should be defined instead.", :Type)
-    end
-    convert(T, arg)::T
-end
-# related items to remove in: abstractarray.jl, dates/periods.jl, compiler.jl
-# also remove all uses of is_default_method
-
 @deprecate convert(::Type{UInt128},     u::UUID)     UInt128(u)
 @deprecate convert(::Type{UUID}, s::AbstractString)  UUID(s)
 
@@ -429,12 +408,6 @@ end
 @deprecate rol(B, i)            circshift(B, -i)
 @deprecate rol!(dest, src, i)   circshift!(dest, src, -i)
 @deprecate rol!(B, i)           circshift!(B, -i)
-
-# issue #5148, PR #23259
-# warning for `const` on locals should be changed to an error in julia-syntax.scm
-
-# issue #17886
-# deprecations for filter[!] with 2-arg functions are in abstractdict.jl
 
 # PR #23066
 @deprecate cfunction(f, r, a::Tuple) cfunction(f, r, Tuple{a...})
@@ -486,8 +459,6 @@ end
 @deprecate select! partialsort!
 @deprecate selectperm partialsortperm
 @deprecate selectperm! partialsortperm!
-
-# `initialized` keyword arg to `sort` is deprecated in sort.jl
 
 @deprecate promote_noncircular promote false
 
@@ -655,18 +626,6 @@ end
 @deprecate strwidth textwidth
 @deprecate charwidth textwidth
 
-@deprecate find(x::Number)            findall(!iszero, x)
-@deprecate findnext(A, v, i::Integer) something(findnext(isequal(v), A, i), 0)
-@deprecate findfirst(A, v)            something(findfirst(isequal(v), A), 0)
-@deprecate findprev(A, v, i::Integer) something(findprev(isequal(v), A, i), 0)
-@deprecate findlast(A, v)             something(findlast(isequal(v), A), 0)
-# to fix ambiguities introduced by deprecations
-# TODO: also remove find*_internal in array.jl
-findnext(pred::Function, A, i::Integer) = findnext_internal(pred, A, i)
-findprev(pred::Function, A, i::Integer) = findprev_internal(pred, A, i)
-# also remove deprecation warnings in find* functions in array.jl, sparse/sparsematrix.jl,
-# and sparse/sparsevector.jl.
-
 # issue #22849
 @deprecate reinterpret(::Type{T}, a::Array{S}, dims::NTuple{N,Int}) where {T, S, N} reshape(reinterpret(T, vec(a)), dims)
 @deprecate reinterpret(::Type{T}, a::ReinterpretArray{S}, dims::NTuple{N,Int}) where {T, S, N} reshape(reinterpret(T, vec(a)), dims)
@@ -712,9 +671,6 @@ findprev(pred::Function, A, i::Integer) = findprev_internal(pred, A, i)
 @deprecate parse(str::AbstractString; kwargs...) Meta.parse(str; kwargs...)
 @deprecate parse(str::AbstractString, pos::Int, ; kwargs...) Meta.parse(str, pos; kwargs...)
 @deprecate_binding ParseError Meta.ParseError
-
-# cumsum and cumprod have deprecations in multidimensional.jl
-# when the message is removed, the `dims` keyword argument should become required.
 
 # issue #16307
 @deprecate finalizer(o, f::Function) finalizer(f, o)
@@ -1209,16 +1165,6 @@ end
 
 @deprecate findin(a, b) findall(in(b), a)
 
-@deprecate find findall
-@deprecate find(A::AbstractVector) findall(A)
-@deprecate find(A::AbstractArray) LinearIndices(A)[findall(A)]
-@deprecate find(f::Function, A::AbstractVector) findall(f, A)
-@deprecate find(f::Function, A::AbstractArray) LinearIndices(A)[findall(f, A)]
-
-@deprecate findn(x::AbstractVector) (findall(!iszero, x),)
-@deprecate findn(x::AbstractMatrix) (I = findall(!iszero, x); (getindex.(I, 1), getindex.(I, 2)))
-@deprecate findn(x::AbstractArray{T, N}) where {T, N} (I = findall(!iszero, x); ntuple(i -> getindex.(I, i), N))
-
 @deprecate catch_stacktrace(c_funcs::Bool)  stacktrace(catch_backtrace(), c_funcs)
 @deprecate catch_stacktrace()               stacktrace(catch_backtrace())
 
@@ -1413,12 +1359,6 @@ end
 # PR #23332
 @deprecate ^(x, p::Integer) Base.power_by_squaring(x,p)
 
-# Issue #25979
-# The `remove_destination` keyword to `cp`, `mv`, and the unexported `cptree` has been
-# renamed to `force`. To remove this deprecation, remove the `remove_destination` keyword
-# argument from the function signatures as well as the internal logic that deals with the
-# renaming. These live in base/file.jl.
-
 # issue #25928
 @deprecate wait(t::Task) fetch(t)
 
@@ -1468,10 +1408,6 @@ end
 
 # Issue #25786
 @deprecate_binding DevNull devnull
-# TODO: When these are removed, also remove the uppercase variants in libuv.jl and stream.jl
-@deprecate_binding STDIN stdin true nothing false
-@deprecate_binding STDOUT stdout true nothing false
-@deprecate_binding STDERR stderr true nothing false
 
 # PR 25062
 @deprecate(link_pipe(pipe; julia_only_read = true, julia_only_write = true),
@@ -1506,9 +1442,6 @@ end
 # PR 26071
 @deprecate(matchall(r::Regex, s::AbstractString; overlap::Bool = false),
            collect(m.match for m in eachmatch(r, s, overlap = overlap)))
-
-# remove depwarn for `diff` in multidimensional.jl
-# @deprecate diff(A::AbstractMatrix) diff(A, dims=1)
 
 # PR 26194
 export assert
@@ -1602,14 +1535,6 @@ end
 @deprecate flipbits!(B::BitArray) B .= .!B
 
 @deprecate linearindices(x::AbstractArray) LinearIndices(x)
-
-# PR #26647
-# The `keep` argument in `split` and `rpslit` has been renamed to `keepempty`.
-# To remove this deprecation, remove the `keep` argument from the function signatures as well as
-# the internal logic that deals with the renaming. These live in base/strings/util.jl.
-
-# when this is removed, `isbitstype(typeof(x))` can be replaced with `isbits(x)`
-@deprecate isbits(@nospecialize(t::Type)) isbitstype(t)
 
 # Special string deprecation
 @deprecate start(s::AbstractString) firstindex(s)

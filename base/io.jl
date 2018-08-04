@@ -355,21 +355,13 @@ julia> readline("my_file.txt", keep=true)
 julia> rm("my_file.txt")
 ```
 """
-function readline(filename::AbstractString; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
-    end
+function readline(filename::AbstractString; keep::Bool=false)
     open(filename) do f
         readline(f, keep=keep)
     end
 end
 
-function readline(s::IO=stdin; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
-    end
+function readline(s::IO=stdin; keep::Bool=false)
     line = readuntil(s, 0x0a, keep=true)
     i = length(line)
     if keep || i == 0 || line[i] != 0x0a
@@ -521,7 +513,7 @@ write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
 function write(s::IO, A::AbstractArray)
     if !isbitstype(eltype(A))
-        depwarn("Calling `write` on non-isbits arrays is deprecated. Use a loop or `serialize` instead.", :write)
+        error("`write` is not supported on non-isbits arrays")
     end
     nb = 0
     for a in A
@@ -534,12 +526,7 @@ function write(s::IO, a::Array)
     if isbitstype(eltype(a))
         return GC.@preserve a unsafe_write(s, pointer(a), sizeof(a))
     else
-        depwarn("Calling `write` on non-isbits arrays is deprecated. Use a loop or `serialize` instead.", :write)
-        nb = 0
-        for b in a
-            nb += write(s, b)
-        end
-        return nb
+        error("`write` is not supported on non-isbits arrays")
     end
 end
 
@@ -875,19 +862,11 @@ JuliaLang is a GitHub organization. It has many members.
 julia> rm("my_file.txt");
 ```
 """
-function eachline(stream::IO=stdin; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
-    end
+function eachline(stream::IO=stdin; keep::Bool=false)
     EachLine(stream, keep=keep)::EachLine
 end
 
-function eachline(filename::AbstractString; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
-    end
+function eachline(filename::AbstractString; keep::Bool=false)
     s = open(filename)
     EachLine(s, ondone=()->close(s), keep=keep)::EachLine
 end

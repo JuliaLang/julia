@@ -341,7 +341,7 @@ end
         handle_message(logger, Error, msg, _module, :logevent_error, id, filepath, line; exception=(err,catch_backtrace()))
     catch err2
         try
-            # Give up and write to STDERR, in three independent calls to
+            # Give up and write to stderr, in three independent calls to
             # increase the odds of it getting through.
             print(stderr, "Exception handling log message: ")
             println(stderr, err)

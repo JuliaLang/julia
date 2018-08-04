@@ -48,11 +48,11 @@ end
 function valid_tparam(@nospecialize(x))
     if isa(x, Tuple)
         for t in x
-            isa(t, Symbol) || isbitstype(typeof(t)) || return false
+            isa(t, Symbol) || isbits(t) || return false
         end
         return true
     end
-    return isa(x, Symbol) || isbitstype(typeof(x))
+    return isa(x, Symbol) || isbits(x)
 end
 
 # return an upper-bound on type `a` with type `b` removed
