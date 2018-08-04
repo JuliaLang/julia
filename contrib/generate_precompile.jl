@@ -51,7 +51,6 @@ if have_pkg
 end
 
 function generate_precompile_statements()
-    start_time = time()
 
     # Precompile a package
     mktempdir() do prec_path
@@ -79,6 +78,7 @@ function generate_precompile_statements()
 
     # TODO: Implement REPL replayer for Windows
     @static if !Sys.iswindows()
+        start_time = time()
         print("Generating precompile statements...")
         sysimg = isempty(ARGS) ? joinpath(dirname(Sys.BINDIR), "lib", "julia", "sys.ji") : ARGS[1]
 
@@ -131,12 +131,15 @@ function generate_precompile_statements()
             # println(statements_ordered)
             if have_repl
                 # Seems like a reasonable number right now, adjust as needed
+                # Comment out if you are debugging the script and not building
                 @assert length(statements) > 700
             end
 
-            Base.include_string(PrecompileStagingArea, statements_ordered)
+            include_time = @elapsed Base.include_string(PrecompileStagingArea, statements_ordered)
             print(" $(length(statements)) generated in ")
-            Base.time_print((time() - start_time) * 10^9)
+            tot_time = time() - start_time
+            Base.time_print(tot_time * 10^9)
+            println(" (overhead ", string(tot_time / include_time * 100)[1:4], "%)")
             println()
         end
     end
