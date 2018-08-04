@@ -42,16 +42,7 @@ temp_pkg_dir() do project_path
             Pkg.test("PackageWithBuildSpecificTestDeps")
         end
 
-        pkg"dev Example"
-        devdir = joinpath(DEPOT_PATH[1], "dev", "Example")
-        @test isdir(devdir)
-        rm(devdir; recursive=true)
-        @test !isdir(devdir)
-        pkg"dev Example#DO_NOT_REMOVE"
-        @test isdir(devdir)
-        LibGit2.with(LibGit2.GitRepo(devdir)) do repo
-            @test LibGit2.branch(repo) == "DO_NOT_REMOVE"
-        end
+        @test_throws PkgError pkg"dev Example#blergh"
 
         pkg"generate Foo"
         pkg"dev Foo"
@@ -211,10 +202,6 @@ temp_pkg_dir() do project_path; cd(project_path) do
                     @test Pkg.API.__installed()["UnregisteredWithoutProject"] == v"0.0.0"
                     Pkg.test("UnregisteredWithoutProject")
                     Pkg.test("UnregisteredWithProject")
-
-                    pkg"develop Example#c37b675"
-                    @test Base.find_package("Example") ==  joinpath(tmp, "Example", "src", "Example.jl")
-                    Pkg.test("Example")
                 end
             finally
                 empty!(DEPOT_PATH)
