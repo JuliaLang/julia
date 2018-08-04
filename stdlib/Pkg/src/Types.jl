@@ -577,10 +577,12 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}, 
     end
 end
 
-function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgrade_or_add::Bool=true)
+function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec};
+                           upgrade_or_add::Bool=true, credentials=nothing)
     # Always update the registry when adding
     UPDATED_REGISTRY_THIS_SESSION[] || Pkg.API.update_registry(ctx)
-    Base.shred!(LibGit2.CachedCredentials()) do creds
+    creds = credentials !== nothing ? credentials : LibGit2.CachedCredentials()
+    try
         env = ctx.env
         new_uuids = UUID[]
         for pkg in pkgs
@@ -670,6 +672,8 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
             @assert pkg.version isa VersionNumber
         end
         return new_uuids
+    finally
+        creds !== credentials && Base.shred!(creds)
     end
 end
 
