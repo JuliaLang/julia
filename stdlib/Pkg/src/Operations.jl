@@ -1162,33 +1162,36 @@ end
 function up(ctx::Context, pkgs::Vector{PackageSpec})
     # resolve upgrade levels to version specs
     new_git = UUID[]
-    for pkg in pkgs
-        if pkg.uuid in keys(ctx.stdlibs)
-            pkg.version = VersionSpec()
-            continue
-        end
-        pkg.version isa UpgradeLevel || continue
-        level = pkg.version
-        info = manifest_info(ctx.env, pkg.uuid)
-        if info !== nothing && haskey(info, "repo-url")
-            pkg.repo = Types.GitRepo(info["repo-url"], info["repo-rev"])
-            new = handle_repos_add!(ctx, [pkg]; upgrade_or_add = (level == UPLEVEL_MAJOR))
-            append!(new_git, new)
-        else
-            if info !== nothing
-                pkg.uuid in keys(ctx.stdlibs) && continue
-                ver = VersionNumber(info["version"])
-                if level == UPLEVEL_FIXED
-                    pkg.version = VersionNumber(info["version"])
-                else
-                    r = level == UPLEVEL_PATCH ? VersionRange(ver.major, ver.minor) :
-                        level == UPLEVEL_MINOR ? VersionRange(ver.major) :
-                        level == UPLEVEL_MAJOR ? VersionRange() :
-                            error("unexpected upgrade level: $level")
-                    pkg.version = VersionSpec(r)
-                end
-            else
+    Base.shred!(LibGit2.CachedCredentials()) do creds
+        for pkg in pkgs
+            if pkg.uuid in keys(ctx.stdlibs)
                 pkg.version = VersionSpec()
+                continue
+            end
+            pkg.version isa UpgradeLevel || continue
+            level = pkg.version
+            info = manifest_info(ctx.env, pkg.uuid)
+            if info !== nothing && haskey(info, "repo-url")
+                pkg.repo = Types.GitRepo(info["repo-url"], info["repo-rev"])
+                new = handle_repos_add!(ctx, [pkg]; credentials=creds,
+                                        upgrade_or_add = (level == UPLEVEL_MAJOR))
+                append!(new_git, new)
+            else
+                if info !== nothing
+                    pkg.uuid in keys(ctx.stdlibs) && continue
+                    ver = VersionNumber(info["version"])
+                    if level == UPLEVEL_FIXED
+                        pkg.version = VersionNumber(info["version"])
+                    else
+                        r = level == UPLEVEL_PATCH ? VersionRange(ver.major, ver.minor) :
+                            level == UPLEVEL_MINOR ? VersionRange(ver.major) :
+                            level == UPLEVEL_MAJOR ? VersionRange() :
+                                error("unexpected upgrade level: $level")
+                        pkg.version = VersionSpec(r)
+                    end
+                else
+                    pkg.version = VersionSpec()
+                end
             end
         end
     end
