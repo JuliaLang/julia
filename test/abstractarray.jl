@@ -17,11 +17,11 @@ A = rand(5,4,3)
     @test checkbounds(Bool, A, 61) == false
     @test checkbounds(Bool, A, 2, 2, 2, 1) == true  # extra indices
     @test checkbounds(Bool, A, 2, 2, 2, 2) == false
-    # @test checkbounds(Bool, A, 1, 1)  == false       # TODO: partial linear indexing (PLI)
-    # @test checkbounds(Bool, A, 1, 12) == false
-    # @test checkbounds(Bool, A, 5, 12) == false
-    # @test checkbounds(Bool, A, 1, 13) == false
-    # @test checkbounds(Bool, A, 6, 12) == false
+    @test checkbounds(Bool, A, 1, 1)  == false
+    @test checkbounds(Bool, A, 1, 12) == false
+    @test checkbounds(Bool, A, 5, 12) == false
+    @test checkbounds(Bool, A, 1, 13) == false
+    @test checkbounds(Bool, A, 6, 12) == false
 end
 
 @testset "single CartesianIndex" begin
@@ -33,16 +33,16 @@ end
     @test checkbounds(Bool, A, CartesianIndex((6, 4, 3))) == false
     @test checkbounds(Bool, A, CartesianIndex((5, 5, 3))) == false
     @test checkbounds(Bool, A, CartesianIndex((5, 4, 4))) == false
-    # @test checkbounds(Bool, A, CartesianIndex((1,))) == false # TODO: PLI
-    # @test checkbounds(Bool, A, CartesianIndex((60,))) == false
-    # @test checkbounds(Bool, A, CartesianIndex((61,))) == false
+    @test checkbounds(Bool, A, CartesianIndex((1,))) == false
+    @test checkbounds(Bool, A, CartesianIndex((60,))) == false
+    @test checkbounds(Bool, A, CartesianIndex((61,))) == false
     @test checkbounds(Bool, A, CartesianIndex((2, 2, 2, 1,))) == true
     @test checkbounds(Bool, A, CartesianIndex((2, 2, 2, 2,))) == false
-    # @test checkbounds(Bool, A, CartesianIndex((1, 1,)))  == false # TODO: PLI
-    # @test checkbounds(Bool, A, CartesianIndex((1, 12,))) == false
-    # @test checkbounds(Bool, A, CartesianIndex((5, 12,))) == false
-    # @test checkbounds(Bool, A, CartesianIndex((1, 13,))) == false
-    # @test checkbounds(Bool, A, CartesianIndex((6, 12,))) == false
+    @test checkbounds(Bool, A, CartesianIndex((1, 1,)))  == false
+    @test checkbounds(Bool, A, CartesianIndex((1, 12,))) == false
+    @test checkbounds(Bool, A, CartesianIndex((5, 12,))) == false
+    @test checkbounds(Bool, A, CartesianIndex((1, 13,))) == false
+    @test checkbounds(Bool, A, CartesianIndex((6, 12,))) == false
 end
 
 @testset "mix of CartesianIndex and Int" begin
@@ -68,10 +68,10 @@ end
     @test checkbounds(Bool, A, 1:61) == false
     @test checkbounds(Bool, A, 2, 2, 2, 1:1) == true  # extra indices
     @test checkbounds(Bool, A, 2, 2, 2, 1:2) == false
-    # @test checkbounds(Bool, A, 1:5, 1:4) == false # TODO: PLI
-    # @test checkbounds(Bool, A, 1:5, 1:12) == false
-    # @test checkbounds(Bool, A, 1:5, 1:13) == false
-    # @test checkbounds(Bool, A, 1:6, 1:12) == false
+    @test checkbounds(Bool, A, 1:5, 1:4) == false
+    @test checkbounds(Bool, A, 1:5, 1:12) == false
+    @test checkbounds(Bool, A, 1:5, 1:13) == false
+    @test checkbounds(Bool, A, 1:6, 1:12) == false
 end
 
 @testset "logical" begin
@@ -83,9 +83,9 @@ end
     @test checkbounds(Bool, A, trues(61)) == false
     @test checkbounds(Bool, A, 2, 2, 2, trues(1)) == true  # extra indices
     @test checkbounds(Bool, A, 2, 2, 2, trues(2)) == false
-    # @test checkbounds(Bool, A, trues(5), trues(12)) == false # TODO: PLI
-    # @test checkbounds(Bool, A, trues(5), trues(13)) == false
-    # @test checkbounds(Bool, A, trues(6), trues(12)) == false
+    @test checkbounds(Bool, A, trues(5), trues(12)) == false
+    @test checkbounds(Bool, A, trues(5), trues(13)) == false
+    @test checkbounds(Bool, A, trues(6), trues(12)) == false
     @test checkbounds(Bool, A, trues(5, 4, 3)) == true
     @test checkbounds(Bool, A, trues(5, 4, 2)) == false
     @test checkbounds(Bool, A, trues(5, 12)) == false
@@ -417,11 +417,10 @@ function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
         @test A[] == B[] == 0
         @test A == B
     else
-        # TODO: Re-enable after PLI deprecation
-        # @test_throws BoundsError A[] = 0
-        # @test_throws BoundsError B[] = 0
-        # @test_throws BoundsError A[]
-        # @test_throws BoundsError B[]
+        @test_throws BoundsError A[] = 0
+        @test_throws BoundsError B[] = 0
+        @test_throws BoundsError A[]
+        @test_throws BoundsError B[]
     end
 end
 

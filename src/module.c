@@ -626,19 +626,6 @@ JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b)
     b->constp = 1;
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_current_module(void)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    return (jl_value_t*)ptls->current_module;
-}
-
-JL_DLLEXPORT void jl_set_current_module(jl_value_t *m)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    assert(jl_typeis(m, jl_module_type));
-    ptls->current_module = (jl_module_t*)m;
-}
-
 JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_any_type, 0);

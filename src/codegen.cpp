@@ -327,7 +327,6 @@ static Function *box_ssavalue_func;
 static Function *expect_func;
 static Function *jldlsym_func;
 static Function *jltypeassert_func;
-static Function *jldepwarnpi_func;
 //static Function *jlgetnthfield_func;
 static Function *jlgetnthfieldchecked_func;
 //static Function *jlsetnthfield_func;
@@ -7055,14 +7054,6 @@ static void init_julia_llvm_env(Module *m)
     jlgetfield_func = builtin_func_map[jl_f_getfield];
 
     jlapply2va_func = jlcall_func_to_llvm("jl_apply_2va", &jl_apply_2va, m);
-
-    std::vector<Type*> argsdepwarnpi(0);
-    argsdepwarnpi.push_back(T_size);
-    jldepwarnpi_func = Function::Create(FunctionType::get(T_void, argsdepwarnpi, false),
-                                        Function::ExternalLinkage,
-                                        "jl_depwarn_partial_indexing", m);
-    add_named_global(jldepwarnpi_func, &jl_depwarn_partial_indexing);
-
 
     std::vector<Type *> agargs(0);
     agargs.push_back(T_pprjlvalue);

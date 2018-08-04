@@ -37,9 +37,8 @@ function include(path::AbstractString)
     elseif INCLUDE_STATE === 2
         result = _include(Base, path)
     else
-        # to help users avoid error (accidentally evaluating into Base), this is deprecated
-        depwarn("Base.include(string) is deprecated, use `include(fname)` or `Base.include(@__MODULE__, fname)` instead.", :include)
-        result = include_relative(_current_module(), path)
+        # to help users avoid error (accidentally evaluating into Base), this is not allowed
+        error("Base.include(string) is discontinued, use `include(fname)` or `Base.include(@__MODULE__, fname)` instead.")
     end
     result
 end

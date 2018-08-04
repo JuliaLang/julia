@@ -559,15 +559,6 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     if (!jl_options.julia_bindir) {
         jl_options.julia_bindir = getenv("JULIA_BINDIR");
         if (!jl_options.julia_bindir) {
-            char *julia_bindir = getenv("JULIA_HOME");
-            if (julia_bindir) {
-                jl_depwarn(
-                    "`JULIA_HOME` environment variable is renamed to `JULIA_BINDIR`",
-                    (jl_value_t*)jl_symbol("JULIA_HOME"));
-                jl_options.julia_bindir = julia_bindir;
-            }
-        }
-        if (!jl_options.julia_bindir) {
             jl_options.julia_bindir = dirname(free_path);
         }
     }

@@ -217,10 +217,9 @@ timesofar("constructors")
             @check_bit_operation setindex!(b1, true)  T
             @check_bit_operation setindex!(b1, false) T
         else
-            # TODO: Re-enable after PLI deprecation is removed
-            # @test_throws getindex(b1)
-            # @test_throws setindex!(b1, true)
-            # @test_throws setindex!(b1, false)
+            @test_throws BoundsError getindex(b1)
+            @test_throws BoundsError setindex!(b1, true)
+            @test_throws BoundsError setindex!(b1, false)
         end
     end
 

@@ -557,16 +557,6 @@ static void import_module(jl_module_t *m, jl_module_t *import)
     }
 }
 
-// replace Base.X with top-level X
-static jl_module_t *deprecation_replacement_module(jl_module_t *parent, jl_sym_t *name)
-{
-    if (parent == jl_base_module) {
-        if (name == jl_symbol("Test") || name == jl_symbol("Mmap"))
-            return call_require(jl_base_module, name);
-    }
-    return NULL;
-}
-
 // in `import A.B: x, y, ...`, evaluate the `A.B` part if it exists
 static jl_module_t *eval_import_from(jl_module_t *m, jl_expr_t *ex, const char *keyword)
 {
@@ -638,30 +628,18 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
                 jl_module_t *u = import;
                 if (name != NULL)
                     u = (jl_module_t*)jl_eval_global_var(import, name);
-                if (jl_is_module(u)) {
-                    if (from) {
-                        jl_depwarn("`using A: B` will only be allowed for single bindings, not modules. Use "
-                                   "`using A.B` instead",
-                                   (jl_value_t*)jl_symbol("using"));
-                    }
+                if (from) {
+                    // `using A: B` syntax
+                    jl_module_use(m, import, name);
+                }
+                else {
+                    // `using A.B` syntax
                     jl_module_using(m, u);
                     if (m == jl_main_module && name == NULL) {
                         // TODO: for now, `using A` in Main also creates an explicit binding for `A`
                         // This will possibly be extended to all modules.
                         import_module(m, u);
                     }
-                }
-                else {
-                    if (!from) {
-                        jl_depwarn("`using A.B` will only be allowed for modules, not single bindings. Use "
-                                   "`using A: B` instead",
-                                   (jl_value_t*)jl_symbol("using"));
-                    }
-                    jl_module_t *replacement = deprecation_replacement_module(import, name);
-                    if (replacement)
-                        jl_module_using(m, replacement);
-                    else
-                        jl_module_use(m, import, name);
                 }
             }
         }
@@ -688,11 +666,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
                     import_module(m, import);
                 }
                 else {
-                    jl_module_t *replacement = deprecation_replacement_module(import, name);
-                    if (replacement)
-                        import_module(m, replacement);
-                    else
-                        jl_module_import(m, import, name);
+                    jl_module_import(m, import, name);
                 }
             }
         }

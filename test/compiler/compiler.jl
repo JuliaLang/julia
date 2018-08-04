@@ -815,7 +815,7 @@ err20033(x::Float64...) = prod(x)
 
 # nfields tfunc on `DataType`
 let f = ()->Val{nfields(DataType[Int][1])}
-    @test f() == Val{0}
+    @test f() == Val{length(DataType.types)}
 end
 
 # inference on invalid getfield call
