@@ -566,9 +566,6 @@ end
     @deprecate_binding(SparseVector, root_module(Base, :SparseArrays).SparseVector, true,
         ", run `using SparseArrays` to load sparse array functionality")
 
-    @deprecate_binding(SharedArray, root_module(Base, :SharedArrays).SharedArray, true,
-        ", run `using SharedArrays` to load shared array functionality")
-
     # PR #25571
     @deprecate_binding LinAlg root_module(Base, :LinearAlgebra) true ", run `using LinearAlgebra` instead"
     @deprecate_binding(I, root_module(Base, :LinearAlgebra).I, true,
