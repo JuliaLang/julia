@@ -1704,7 +1704,6 @@ function (\)(L::FactorComponent, B::SparseVecOrMat)
 end
 
 \(adjL::Adjoint{<:Any,<:FactorComponent}, B::Union{VecOrMat,SparseVecOrMat}) = (L = adjL.parent; adjoint(L)\B)
-\(adjL::Adjoint{<:Any,<:FactorComponent}, B::RowVector) = (L = adjL.parent; adjoint(L)\B) # ambiguity
 
 (\)(L::Factor{T}, B::Dense{T}) where {T<:VTypes} = solve(CHOLMOD_A, L, B)
 # Explicit typevars are necessary to avoid ambiguities with defs in linalg/factorizations.jl
