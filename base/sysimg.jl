@@ -634,11 +634,6 @@ end
     @deprecate_stdlib randjump Random true
     @deprecate_stdlib GLOBAL_RNG Random false
 
-    @deprecate_stdlib serialize Serialization true
-    @deprecate_stdlib deserialize Serialization true
-    @deprecate_stdlib AbstractSerializer Serialization true
-    @deprecate_stdlib SerializationState Serialization true
-
     # PR #25249: SparseArrays to stdlib
     ## the Base.SparseArrays module itself and exported types are deprecated in base/sysimg.jl
     ## functions that were re-exported from Base
