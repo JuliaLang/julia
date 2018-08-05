@@ -651,18 +651,17 @@ end
     @test_throws DimensionMismatch (1, 2) .+ (1, 2, 3)
 end
 
-# TODO: Enable after deprecations introduced in 0.7 are removed.
-# @testset "scalar .=" begin
-#     A = [[1,2,3],4:5,6]
-#     A[1] .= 0
-#     @test A[1] == [0,0,0]
-#     @test_throws ErrorException A[2] .= 0
-#     @test_throws MethodError A[3] .= 0
-#     A = [[1,2,3],4:5]
-#     A[1] .= 0
-#     @test A[1] == [0,0,0]
-#     @test_throws ErrorException A[2] .= 0
-# end
+@testset "scalar .=" begin
+    A = [[1,2,3],4:5,6]
+    A[1] .= 0
+    @test A[1] == [0,0,0]
+    @test_throws ErrorException A[2] .= 0
+    @test_throws MethodError A[3] .= 0
+    A = [[1,2,3],4:5]
+    A[1] .= 0
+    @test A[1] == [0,0,0]
+    @test_throws ErrorException A[2] .= 0
+end
 
 # Issue #22180
 @test convert.(Any, [1, 2]) == [1, 2]

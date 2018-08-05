@@ -575,14 +575,6 @@ function toc()
     return t
 end
 
-# A[I...] .= with scalar indices should modify the element at A[I...]
-function Broadcast.dotview(A::AbstractArray, args::Number...)
-    depwarn("the behavior of `A[I...] .= X` with scalar indices will change in the future. Use `A[I...] = X` instead.", :broadcast!)
-    view(A, args...)
-end
-Broadcast.dotview(A::AbstractArray{<:AbstractArray}, args::Integer...) = getindex(A, args...)
-# Upon removing deprecations, also enable the @testset "scalar .=" in test/broadcast.jl
-
 # indexing with A[true] will throw an argument error in the future
 function to_index(i::Bool)
     depwarn("indexing with Bool values is deprecated. Convert the index to an integer first with `Int(i)`.", (:getindex, :setindex!, :view))
