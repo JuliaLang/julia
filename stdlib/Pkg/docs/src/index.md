@@ -1,8 +1,5 @@
 # Pkg
 
-!!! warning
-    This documentation is a work in progress and the information in it might be or become outdated.
-
 ## Introduction
 
 Pkg is the standard package manager for Julia 1.0 and newer. Unlike traditional
@@ -350,13 +347,13 @@ If we try to `dev` a package at some branch that already exists at `~/.julia/dev
 For example:
 
 ```
-(v0.7) pkg> dev Example#master
+(v0.7) pkg> dev Example
   Updating git-repo `https://github.com/JuliaLang/Example.jl.git`
 [ Info: Path `/Users/kristoffer/.julia/dev/Example` exists and looks like the correct package, using existing path instead of cloning
 ```
 
-Note the info message saying that it is using the existing path. This means that you cannot use `dev` to e.g. change branches of
-an already developed package.
+Note the info message saying that it is using the existing path. As a general rule, the package manager will
+never touch files that are tracking a path.
 
 If `dev` is used on a local path, that path to that package is recorded and used when loading that package.
 The path will be recorded relative to the project file, unless it is given as an absolute path.

@@ -136,18 +136,18 @@ temp_pkg_dir() do project_path
     @testset "adding and upgrading different versions" begin
         # VersionNumber
         Pkg.add(PackageSpec(TEST_PKG.name, v"0.3"))
-        @test Pkg.installed()[TEST_PKG.name] == v"0.3"
+        @test Pkg.API.__installed()[TEST_PKG.name] == v"0.3"
         Pkg.add(PackageSpec(TEST_PKG.name, v"0.3.1"))
-        @test Pkg.installed()[TEST_PKG.name] == v"0.3.1"
+        @test Pkg.API.__installed()[TEST_PKG.name] == v"0.3.1"
         Pkg.rm(TEST_PKG.name)
 
         # VersionRange
         Pkg.add(PackageSpec(TEST_PKG.name, VersionSpec(VersionRange("0.3.0-0.3.2"))))
-        @test Pkg.installed()[TEST_PKG.name] == v"0.3.2"
+        @test Pkg.API.__installed()[TEST_PKG.name] == v"0.3.2"
         Pkg.update(; level = UPLEVEL_PATCH)
-        @test Pkg.installed()[TEST_PKG.name] == v"0.3.3"
+        @test Pkg.API.__installed()[TEST_PKG.name] == v"0.3.3"
         Pkg.update(; level = UPLEVEL_MINOR)
-        @test Pkg.installed()[TEST_PKG.name].minor != 3
+        @test Pkg.API.__installed()[TEST_PKG.name].minor != 3
         Pkg.rm(TEST_PKG.name)
     end
 
@@ -164,26 +164,27 @@ temp_pkg_dir() do project_path
 
     @testset "pinning / freeing" begin
         Pkg.add(TEST_PKG.name)
-        old_v = Pkg.installed()[TEST_PKG.name]
+        old_v = Pkg.API.__installed()[TEST_PKG.name]
         Pkg.pin(PackageSpec(TEST_PKG.name, v"0.2"))
-        @test Pkg.installed()[TEST_PKG.name].minor == 2
+        @test Pkg.API.__installed()[TEST_PKG.name].minor == 2
         Pkg.update(TEST_PKG.name)
-        @test Pkg.installed()[TEST_PKG.name].minor == 2
+        @test Pkg.API.__installed()[TEST_PKG.name].minor == 2
         Pkg.free(TEST_PKG.name)
         Pkg.update()
-        @test Pkg.installed()[TEST_PKG.name] == old_v
+        @test Pkg.API.__installed()[TEST_PKG.name] == old_v
         Pkg.rm(TEST_PKG.name)
     end
 
     @testset "develop / freeing" begin
         Pkg.add(TEST_PKG.name)
-        old_v = Pkg.installed()[TEST_PKG.name]
+        old_v = Pkg.API.__installed()[TEST_PKG.name]
         Pkg.rm(TEST_PKG.name)
         mktempdir() do devdir
             withenv("JULIA_PKG_DEVDIR" => devdir) do
+                @test_throws PkgError Pkg.develop(PackageSpec(url="bleh", rev="blurg"))
                 Pkg.develop(TEST_PKG.name)
                 @test isinstalled(TEST_PKG)
-                @test Pkg.installed()[TEST_PKG.name] > old_v
+                @test Pkg.API.__installed()[TEST_PKG.name] > old_v
                 test_pkg_main_file = joinpath(devdir, TEST_PKG.name, "src", TEST_PKG.name * ".jl")
                 @test isfile(test_pkg_main_file)
                 # Pkg #152
@@ -209,19 +210,19 @@ temp_pkg_dir() do project_path
                 @test isfile(joinpath(devdir, TEST_PKG.name, "deps", "deps.jl"))
                 Pkg.test(TEST_PKG.name)
                 Pkg.free(TEST_PKG.name)
-                @test Pkg.installed()[TEST_PKG.name] == old_v
+                @test Pkg.API.__installed()[TEST_PKG.name] == old_v
             end
         end
     end
 
     @testset "invalid pkg name" begin
-        @test_throws CommandError Pkg.add(",sa..,--")
+        @test_throws PkgError Pkg.add(",sa..,--")
     end
 
     @testset "stdlibs as direct dependency" begin
         uuid_pkg = (name = "CRC32c", uuid = UUID("8bf52ea8-c179-5cab-976a-9e18b702a9bc"))
         Pkg.add("CRC32c")
-        @test haskey(Pkg.installed(), uuid_pkg.name)
+        @test haskey(Pkg.API.__installed(), uuid_pkg.name)
         Pkg.update()
         # Disable until fixed in Base
         # Pkg.test("CRC32c")
@@ -241,7 +242,7 @@ temp_pkg_dir() do project_path
             withenv("JULIA_PKG_DEVDIR" => devdir) do
                 try
                     Pkg.setprotocol!("notarealprotocol")
-                    @test_throws CommandError Pkg.develop("Example")
+                    @test_throws PkgError Pkg.develop("Example")
                     Pkg.setprotocol!("https")
                     Pkg.develop("Example")
                     @test isinstalled(TEST_PKG)
@@ -259,8 +260,8 @@ temp_pkg_dir() do project_path
 
     @testset "adding nonexisting packages" begin
         nonexisting_pkg = randstring(14)
-        @test_throws CommandError Pkg.add(nonexisting_pkg)
-        @test_throws CommandError Pkg.update(nonexisting_pkg)
+        @test_throws PkgError Pkg.add(nonexisting_pkg)
+        @test_throws PkgError Pkg.update(nonexisting_pkg)
     end
 
     Pkg.rm(TEST_PKG.name)
@@ -281,7 +282,7 @@ temp_pkg_dir() do project_path
     end
 
     @testset "add julia" begin
-        @test_throws CommandError Pkg.add("julia")
+        @test_throws PkgError Pkg.add("julia")
     end
 end
 
@@ -298,7 +299,7 @@ temp_pkg_dir() do project_path
             cd(joinpath(dir, "UnregisteredWithProject")) do
                 with_current_env() do
                     Pkg.update()
-                    @test haskey(Pkg.installed(), "Example")
+                    @test haskey(Pkg.API.__installed(), "Example")
                 end
             end
         end
@@ -308,12 +309,12 @@ end
 temp_pkg_dir() do project_path
     @testset "libgit2 downloads" begin
         Pkg.add(TEST_PKG.name; use_libgit2_for_all_downloads=true)
-        @test haskey(Pkg.installed(), TEST_PKG.name)
+        @test haskey(Pkg.API.__installed(), TEST_PKG.name)
         Pkg.rm(TEST_PKG.name)
     end
     @testset "tarball downloads" begin
         Pkg.add("JSON"; use_only_tarballs_for_downloads=true)
-        @test haskey(Pkg.installed(), "JSON")
+        @test haskey(Pkg.API.__installed(), "JSON")
         Pkg.rm("JSON")
     end
 end
@@ -390,9 +391,9 @@ end
 temp_pkg_dir() do project_path
     @testset "invalid repo url" begin
         cd(project_path) do
-            @test_throws CommandError Pkg.add("https://github.com")
+            @test_throws PkgError Pkg.add("https://github.com")
             Pkg.generate("FooBar")
-            @test_throws CommandError Pkg.add("./Foobar")
+            @test_throws PkgError Pkg.add("./Foobar")
         end
     end
 end
@@ -405,10 +406,10 @@ temp_pkg_dir() do project_path
         @testset "inconsistent repo state" begin
             package_path = joinpath(project_path, "Example")
             LibGit2.with(LibGit2.clone("https://github.com/JuliaLang/Example.jl", package_path)) do repo
-                Pkg.add(PackageSpec(url=package_path))
+                Pkg.add(PackageSpec(path=package_path))
             end
             rm(joinpath(package_path, ".git"); force=true, recursive=true)
-            @test_throws CommandError Pkg.update()
+            @test_throws PkgError Pkg.update()
         end
     end
 end
@@ -435,6 +436,19 @@ temp_pkg_dir() do project_path
     end
 end
 
+@testset "dependency of test dependency (#567)" begin
+    mktempdir() do tmpdir
+        temp_pkg_dir() do project_path; cd(tmpdir) do; with_temp_env() do
+            for x in ["x1", "x2", "x3"]
+                cp(joinpath(@__DIR__, "test_packages/$x"), joinpath(tmpdir, "$x"))
+                Pkg.develop(Pkg.PackageSpec(url = joinpath(tmpdir, x)))
+            end
+            Pkg.test("x3")
+        end end end
+    end
+end
+
 include("repl.jl")
+include("api.jl")
 
 end # module

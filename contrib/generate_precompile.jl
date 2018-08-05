@@ -35,19 +35,12 @@ cd("complet_path\t\t$CTRL_C
 julia_cmd() = (julia = joinpath(Sys.BINDIR, Base.julia_exename()); `$julia`)
 have_repl =  haskey(Base.loaded_modules,
                     Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
-have_pkg =  haskey(Base.loaded_modules,
-                    Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
+Pkg = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"),
+          nothing)
 
-if have_pkg
-    precompile_script *= """
-    tmp = mktempdir()
-    cd(tmp)
-    touch("Project.toml")
-    ] activate .
-    st
-    $CTRL_C
-    rm(tmp; recursive=true)
-    """
+if Pkg !== nothing
+    precompile_script *= Pkg.precompile_script
 end
 
 function generate_precompile_statements()

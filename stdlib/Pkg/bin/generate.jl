@@ -11,7 +11,7 @@ write_toml(prefix, "Registry") do io
     println(io, "repo = ", repr(repo))
     println(io, "\ndescription = \"\"\"")
     print(io, """
-        Official uncurated Julia package registry where people can
+        Official general Julia package registry where people can
         register any package they want without too much debate about
         naming and without enforced standards on documentation or
         testing. We nevertheless encourage documentation, testing and
