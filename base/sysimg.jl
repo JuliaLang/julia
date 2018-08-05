@@ -554,7 +554,6 @@ end
     @deprecate_binding Distributed root_module(Base, :Distributed) true ", run `using Distributed` instead"
     @deprecate_binding Random root_module(Base, :Random) true ", run `using Random` instead"
     @deprecate_binding Serializer root_module(Base, :Serialization) true ", run `using Serialization` instead"
-    @deprecate_binding Markdown root_module(Base, :Markdown) true ", run `using Markdown` instead"
 
     # PR #25249
     @deprecate_binding SparseArrays root_module(Base, :SparseArrays) true ", run `using SparseArrays` instead"
@@ -585,8 +584,6 @@ end
 
     @deprecate_binding Pkg root_module(Base, :Pkg) true ", run `using Pkg` instead"
     @deprecate_binding LibGit2 root_module(Base, :LibGit2) true ", run `import LibGit2` instead"
-
-    @eval @deprecate_binding $(Symbol("@doc_str")) getfield(root_module(Base, :Markdown), Symbol("@doc_str")) true ", use `Markdown` instead"
 
     @eval @deprecate_stdlib $(Symbol("@profile")) Profile true
 
