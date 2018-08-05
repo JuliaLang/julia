@@ -803,26 +803,6 @@ end
     @deprecate_stdlib graphemes Unicode true
     @deprecate_stdlib is_assigned_char Unicode true
 
-    @eval @deprecate_stdlib $(Symbol("@ip_str")) Sockets true
-    @deprecate_stdlib IPAddr         Sockets true
-    @deprecate_stdlib IPv4           Sockets true
-    @deprecate_stdlib IPv6           Sockets true
-    @deprecate_stdlib accept         Sockets true
-    @deprecate_stdlib connect        Sockets true
-    @deprecate_stdlib getaddrinfo    Sockets true
-    @deprecate_stdlib getalladdrinfo Sockets true
-    @deprecate_stdlib getnameinfo    Sockets true
-    @deprecate_stdlib getipaddr      Sockets true
-    @deprecate_stdlib getpeername    Sockets true
-    @deprecate_stdlib getsockname    Sockets true
-    @deprecate_stdlib listen         Sockets true
-    @deprecate_stdlib listenany      Sockets true
-    @deprecate_stdlib recv           Sockets true
-    @deprecate_stdlib recvfrom       Sockets true
-    @deprecate_stdlib send           Sockets true
-    @deprecate_stdlib TCPSocket      Sockets true
-    @deprecate_stdlib UDPSocket      Sockets true
-
     @deprecate_stdlib cor       Statistics true
     @deprecate_stdlib cov       Statistics true
     @deprecate_stdlib std       Statistics true
