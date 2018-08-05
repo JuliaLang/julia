@@ -589,11 +589,6 @@ end
 
     @eval @deprecate_binding $(Symbol("@doc_str")) getfield(root_module(Base, :Markdown), Symbol("@doc_str")) true ", use `Markdown` instead"
 
-    @deprecate_stdlib readdlm  DelimitedFiles true
-    @deprecate_stdlib writedlm DelimitedFiles true
-    @deprecate_stdlib readcsv  DelimitedFiles true
-    @deprecate_stdlib writecsv DelimitedFiles true
-
     @eval @deprecate_stdlib $(Symbol("@profile")) Profile true
 
     @deprecate_stdlib poll_fd FileWatching true
