@@ -42,7 +42,6 @@ include("status.jl")
 include("tree.jl")
 include("gitcredential.jl")
 include("callbacks.jl")
-include("deprecated.jl")
 
 using .Error
 
@@ -268,8 +267,7 @@ Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
 function fetch(repo::GitRepo; remote::AbstractString="origin",
                remoteurl::AbstractString="",
                refspecs::Vector{<:AbstractString}=AbstractString[],
-               payload::Creds=nothing,
-               credentials::Creds=payload,
+               credentials::Creds=nothing,
                callbacks::Callbacks=Callbacks())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
@@ -277,7 +275,6 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
         GitRemoteAnon(repo, remoteurl)
     end
 
-    deprecate_payload_keyword(:fetch, "repo", payload)
     cred_payload = reset!(CredentialPayload(credentials), GitConfig(repo))
     if !haskey(callbacks, :credentials)
         callbacks[:credentials] = (credentials_cb(), cred_payload)
@@ -326,8 +323,7 @@ function push(repo::GitRepo; remote::AbstractString="origin",
               remoteurl::AbstractString="",
               refspecs::Vector{<:AbstractString}=AbstractString[],
               force::Bool=false,
-              payload::Creds=nothing,
-              credentials::Creds=payload,
+              credentials::Creds=nothing,
               callbacks::Callbacks=Callbacks())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
@@ -335,7 +331,6 @@ function push(repo::GitRepo; remote::AbstractString="origin",
         GitRemoteAnon(repo, remoteurl)
     end
 
-    deprecate_payload_keyword(:push, "repo", payload)
     cred_payload = reset!(CredentialPayload(credentials), GitConfig(repo))
     if !haskey(callbacks, :credentials)
         callbacks[:credentials] = (credentials_cb(), cred_payload)
@@ -559,10 +554,8 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
                isbare::Bool = false,
                remote_cb::Ptr{Cvoid} = C_NULL,
-               payload::Creds=nothing,
-               credentials::Creds=payload,
+               credentials::Creds=nothing,
                callbacks::Callbacks=Callbacks())
-    deprecate_payload_keyword(:clone, "repo_url, repo_path", payload)
     cred_payload = reset!(CredentialPayload(credentials))
     if !haskey(callbacks, :credentials)
         callbacks[:credentials] = (credentials_cb(), cred_payload)

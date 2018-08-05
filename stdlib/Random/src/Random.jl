@@ -273,7 +273,6 @@ include("RNGs.jl")
 include("generation.jl")
 include("normal.jl")
 include("misc.jl")
-include("deprecated.jl")
 
 ## rand & rand! & seed! docstrings
 

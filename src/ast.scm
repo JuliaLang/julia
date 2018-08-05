@@ -62,7 +62,7 @@
                         (deparse (cadr (cadr (caddr e)))))
                        (else
                         (string #\( (deparse (caddr e)) #\))))))
-        ((memq (car e) '(... |'| |.'|))
+        ((memq (car e) '(... |'|))
          (string (deparse (cadr e)) (car e)))
         ((or (syntactic-op? (car e)) (eq? (car e) '|<:|) (eq? (car e) '|>:|))
          (if (length= e 2)

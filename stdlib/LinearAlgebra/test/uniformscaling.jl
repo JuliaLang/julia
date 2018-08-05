@@ -256,4 +256,10 @@ end
     @test (I - LL')\[[0], [0], [1]] == (I - LL)'\[[0], [0], [1]] == fill([1], 3)
 end
 
+# Ensure broadcasting of I is an error (could be made to work in the future)
+@testset "broadcasting of I (#23197)" begin
+    @test_throws MethodError I .+ 1
+    @test_throws MethodError I .+ [1 1; 1 1]
+end
+
 end # module TestUniformscaling
