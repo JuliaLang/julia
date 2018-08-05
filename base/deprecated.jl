@@ -1349,28 +1349,6 @@ function slicedim(A::AbstractVector, d::Integer, i::Number)
     end
 end
 
-# PR #26347: Deprecate implicit scalar broadcasting in setindex!
-_axes(::Ref) = ()
-_axes(x) = axes(x)
-setindex_shape_check(X::Base.Iterators.Repeated, I...) = nothing
-function deprecate_scalar_setindex_broadcast_message(v, I...)
-    value = (_axes(Base.Broadcast.broadcastable(v)) == () ? "x" : "(x,)")
-    "using `A[I...] = x` to implicitly broadcast `x` across many locations is deprecated. Use `A[I...] .= $value` instead."
-end
-deprecate_scalar_setindex_broadcast_message(v, ::Colon, ::Vararg{Colon}) =
-    "using `A[:] = x` to implicitly broadcast `x` across many locations is deprecated. Use `fill!(A, x)` instead."
-
-function _iterable(v, I...)
-    depwarn(deprecate_scalar_setindex_broadcast_message(v, I...), :setindex!)
-    Iterators.repeated(v)
-end
-function setindex!(B::BitArray, x, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
-    depwarn(deprecate_scalar_setindex_broadcast_message(x, I0, I...), :setindex!)
-    B[I0, I...] .= (x,)
-    B
-end
-
-
 # PR #26283
 @deprecate contains(haystack, needle) occursin(needle, haystack)
 @deprecate contains(s::AbstractString, r::Regex, offset::Integer) occursin(r, s, offset=offset)

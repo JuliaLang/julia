@@ -632,11 +632,10 @@ function _setindex!(l::IndexStyle, A::AbstractArray, x, I::Union{Real, AbstractA
     A
 end
 
-_iterable(X::AbstractArray, I...) = X
 @generated function _unsafe_setindex!(::IndexStyle, A::AbstractArray, x, I::Union{Real,AbstractArray}...)
     N = length(I)
     quote
-        x′ = unalias(A, _iterable(x, I...))
+        x′ = unalias(A, x)
         @nexprs $N d->(I_d = unalias(A, I[d]))
         idxlens = @ncall $N index_lengths I
         @ncall $N setindex_shape_check x′ (d->idxlens[d])
