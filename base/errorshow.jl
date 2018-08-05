@@ -458,7 +458,18 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     end
 end
 
+# In case the line numbers in the source code have changed since the code was compiled,
+# allow packages to set a callback function that corrects them.
+# (Used by Revise and perhaps other packages.)
+#
+# Set this with
+#     Base.update_stackframes_callback[] = my_updater
+# where my_updater takes a single argument, a StackFrame, and returns a StackFrame
+# with the appropriate modifications.
+const update_stackframes_callback = Ref{Function}(identity)
+
 function show_trace_entry(io, frame, n; prefix = "")
+    frame = try update_stackframes_callback[](frame) catch _ frame end
     print(io, "\n", prefix)
     show(io, frame, full_path=true)
     n > 1 && print(io, " (repeats ", n, " times)")
@@ -469,17 +480,6 @@ end
 # the location of a stackframe/method in the editor.
 global LAST_SHOWN_LINE_INFOS = Tuple{String, Int}[]
 
-# In case the line numbers in the source code have changed since the code was compiled,
-# allow packages to set a callback function that corrects them.
-# (Used by Revise and perhaps other packages.)
-#
-# Set this with
-#     Base.update_stackframes_callback[] = my_updater!
-# where my_updater! takes a single argument and works in-place. The argument will be a
-# Vector{Any} storing tuples (sf::StackFrame, nrepetitions::Int), and the updater should
-# replace `sf` as needed.
-const update_stackframes_callback = Ref{Function}(identity)
-
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
 function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
@@ -488,7 +488,6 @@ function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
     such that hash(t[i-1]) == h, ie the list of positions in which the
     frame appears just before. =#
 
-    displayed_stackframes = []
     frame_counter = 1
     while frame_counter < length(t)
         (last_frame, n) = t[frame_counter]
@@ -507,7 +506,7 @@ function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
             while i < length(t) && t[i] == t[j]
                 i+=1 ; j+=1
             end
-            if j >= frame_counter
+            if j >= frame_counter-1
                 #= At least one cycle repeated =#
                 repetitions = div(i - frame_counter + 1, cycle_length)
                 print(io, "\n ... (the last ", cycle_length, " lines are repeated ",
@@ -518,18 +517,12 @@ function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
         end
 
         if repetitions==0
-            push!(displayed_stackframes, (last_frame, n))
-        end
-    end
-
-    try invokelatest(update_stackframes_callback[], displayed_stackframes) catch end
-
-    for (frame, n) in displayed_stackframes
-        if with_prefix
-            show_trace_entry(io, frame, n, prefix = string(" [", frame_counter-1, "] "))
-            push!(LAST_SHOWN_LINE_INFOS, (string(frame.file), frame.line))
-        else
-            show_trace_entry(io, frame, n)
+            if with_prefix
+                show_trace_entry(io, last_frame, n, prefix = string(" [", frame_counter-1, "] "))
+                push!(LAST_SHOWN_LINE_INFOS, (string(last_frame.file), last_frame.line))
+            else
+                show_trace_entry(io, last_frame, n)
+            end
         end
     end
 end
@@ -550,7 +543,6 @@ function show_backtrace(io::IO, t::Vector)
     print(io, "\nStacktrace:")
     if length(filtered) < BIG_STACKTRACE_SIZE
         # Fast track: no duplicate stack frame detection.
-        try invokelatest(update_stackframes_callback[], filtered) catch end
         frame_counter = 0
         for (last_frame, n) in filtered
             frame_counter += 1
@@ -565,7 +557,6 @@ end
 
 function show_backtrace(io::IO, t::Vector{Any})
     if length(t) < BIG_STACKTRACE_SIZE
-        try invokelatest(update_stackframes_callback[], t) catch end
         for entry in t
             show_trace_entry(io, entry...)
         end
