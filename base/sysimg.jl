@@ -828,29 +828,6 @@ end
     @deprecate_stdlib graphemes Unicode true
     @deprecate_stdlib is_assigned_char Unicode true
 
-    @deprecate_stdlib whos          InteractiveUtils true
-    @deprecate_stdlib subtypes      InteractiveUtils true
-    @deprecate_stdlib apropos       InteractiveUtils true
-    @deprecate_stdlib edit          InteractiveUtils true
-    @deprecate_stdlib less          InteractiveUtils true
-    @deprecate_stdlib code_llvm     InteractiveUtils true
-    @deprecate_stdlib code_native   InteractiveUtils true
-    @deprecate_stdlib code_warntype InteractiveUtils true
-    @deprecate_stdlib methodswith   InteractiveUtils true
-    @deprecate_stdlib varinfo       InteractiveUtils true
-    @deprecate_stdlib versioninfo   InteractiveUtils true
-    @deprecate_stdlib peakflops     InteractiveUtils true
-    @deprecate_stdlib clipboard     InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@which"))         InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@edit"))          InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@less"))          InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@functionloc"))   InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@code_typed"))    InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@code_warntype")) InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@code_lowered"))  InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@code_llvm"))     InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@code_native"))   InteractiveUtils true
-
     @eval @deprecate_stdlib $(Symbol("@ip_str")) Sockets true
     @deprecate_stdlib IPAddr         Sockets true
     @deprecate_stdlib IPv4           Sockets true

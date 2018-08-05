@@ -344,18 +344,4 @@ function peakflops(n::Integer=2000; parallel::Bool=false)
     end
 end
 
-@deprecate methodswith(typ, supertypes) methodswith(typ, supertypes = supertypes)
-@deprecate whos(io::IO, m::Module, pat::Regex) show(io, varinfo(m, pat))
-@deprecate whos(io::IO, m::Module)             show(io, varinfo(m))
-@deprecate whos(io::IO)                        show(io, varinfo())
-@deprecate whos(m::Module, pat::Regex)         varinfo(m, pat)
-@deprecate whos(m::Module)                     varinfo(m)
-@deprecate whos(pat::Regex)                    varinfo(pat)
-@deprecate whos()                              varinfo()
-@deprecate code_native(io, f, types, syntax) code_native(io, f, types, syntax = syntax)
-@deprecate code_native(f, types, syntax) code_native(f, types, syntax = syntax)
-# PR #21974
-@deprecate versioninfo(verbose::Bool) versioninfo(verbose=verbose)
-@deprecate versioninfo(io::IO, verbose::Bool) versioninfo(io, verbose=verbose)
-
 end
