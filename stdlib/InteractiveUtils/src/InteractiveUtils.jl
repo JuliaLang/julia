@@ -50,10 +50,7 @@ controlled with boolean keyword arguments:
 
 - `verbose`: print all additional information
 """
-function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Union{Bool, Nothing}=nothing)
-    if packages !== nothing
-        depwarn("the packages keyword argument has been removed")
-    end
+function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "Julia Version $VERSION")
     if !isempty(Base.GIT_VERSION_INFO.commit_short)
         println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")

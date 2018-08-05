@@ -559,7 +559,7 @@ end
 
 
 # issue #5575: inference with abstract types on a reasonably complex method tree
-zeros5575(::Type{T}, dims::Tuple{Vararg{Any,N}}) where {T,N} = Array{T,N}(dims)
+zeros5575(::Type{T}, dims::Tuple{Vararg{Any,N}}) where {T,N} = Array{T,N}(undef, dims)
 zeros5575(dims::Tuple) = zeros5575(Float64, dims)
 zeros5575(::Type{T}, dims...) where {T} = zeros5575(T, dims)
 zeros5575(a::AbstractArray) = zeros5575(a, Float64)
