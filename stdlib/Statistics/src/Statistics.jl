@@ -1000,24 +1000,4 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::SparseMatrixCSC{Tv,Ti}, mea
     return R
 end
 
-
-##### deprecations #####
-
-# PR #21709
-@deprecate cov(x::AbstractVector, corrected::Bool) cov(x, corrected=corrected)
-@deprecate cov(x::AbstractMatrix, vardim::Int, corrected::Bool) cov(x, dims=vardim, corrected=corrected)
-@deprecate cov(X::AbstractVector, Y::AbstractVector, corrected::Bool) cov(X, Y, corrected=corrected)
-@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat, vardim::Int, corrected::Bool) cov(X, Y, dims=vardim, corrected=corrected)
-
-# issue #25501
-@deprecate mean(A::AbstractArray, dims)                              mean(A, dims=dims)
-@deprecate varm(A::AbstractArray, m::AbstractArray, dims; kwargs...) varm(A, m; kwargs..., dims=dims)
-@deprecate var(A::AbstractArray, dims; kwargs...)                    var(A; kwargs..., dims=dims)
-@deprecate std(A::AbstractArray, dims; kwargs...)                    std(A; kwargs..., dims=dims)
-@deprecate cov(X::AbstractMatrix, dim::Int; kwargs...)               cov(X; kwargs..., dims=dim)
-@deprecate cov(x::AbstractVecOrMat, y::AbstractVecOrMat, dim::Int; kwargs...) cov(x, y; kwargs..., dims=dim)
-@deprecate cor(X::AbstractMatrix, dim::Int)                          cor(X, dims=dim)
-@deprecate cor(x::AbstractVecOrMat, y::AbstractVecOrMat, dim::Int)   cor(x, y, dims=dim)
-@deprecate median(A::AbstractArray, dims; kwargs...)                 median(A; kwargs..., dims=dims)
-
 end # module

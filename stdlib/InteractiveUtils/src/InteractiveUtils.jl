@@ -50,10 +50,7 @@ controlled with boolean keyword arguments:
 
 - `verbose`: print all additional information
 """
-function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Union{Bool, Nothing}=nothing)
-    if packages !== nothing
-        depwarn("the packages keyword argument has been removed")
-    end
+function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "Julia Version $VERSION")
     if !isempty(Base.GIT_VERSION_INFO.commit_short)
         println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
@@ -343,19 +340,5 @@ function peakflops(n::Integer=2000; parallel::Bool=false)
         2*Float64(n)^3 / t
     end
 end
-
-@deprecate methodswith(typ, supertypes) methodswith(typ, supertypes = supertypes)
-@deprecate whos(io::IO, m::Module, pat::Regex) show(io, varinfo(m, pat))
-@deprecate whos(io::IO, m::Module)             show(io, varinfo(m))
-@deprecate whos(io::IO)                        show(io, varinfo())
-@deprecate whos(m::Module, pat::Regex)         varinfo(m, pat)
-@deprecate whos(m::Module)                     varinfo(m)
-@deprecate whos(pat::Regex)                    varinfo(pat)
-@deprecate whos()                              varinfo()
-@deprecate code_native(io, f, types, syntax) code_native(io, f, types, syntax = syntax)
-@deprecate code_native(f, types, syntax) code_native(f, types, syntax = syntax)
-# PR #21974
-@deprecate versioninfo(verbose::Bool) versioninfo(verbose=verbose)
-@deprecate versioninfo(io::IO, verbose::Bool) versioninfo(io, verbose=verbose)
 
 end

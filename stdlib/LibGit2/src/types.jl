@@ -1202,16 +1202,6 @@ mutable struct UserPasswordCredential <: AbstractCredential
     function UserPasswordCredential(user::AbstractString="", pass::Union{AbstractString, Base.SecretBuffer}="")
         new(user, pass)
     end
-
-    # Deprecated constructors
-    function UserPasswordCredential(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool)
-        Base.depwarn(string(
-            "`UserPasswordCredential` no longer supports the `prompt_if_incorrect` parameter. ",
-            "Use the `allow_prompt` keyword in supported by `LibGit2.CredentialPayload` ",
-            "instead."), :UserPasswordCredential)
-        UserPasswordCredential(u, p)
-    end
-    UserPasswordCredential(prompt_if_incorrect::Bool) = UserPasswordCredential("","",prompt_if_incorrect)
 end
 
 function Base.setproperty!(cred::UserPasswordCredential, name::Symbol, value)
@@ -1247,17 +1237,6 @@ mutable struct SSHCredential <: AbstractCredential
                            prvkey="", pubkey="")
         new(user, pass, prvkey, pubkey)
     end
-
-    # Deprecated constructors
-    function SSHCredential(u::AbstractString,p::AbstractString,prvkey::AbstractString,pubkey::AbstractString,prompt_if_incorrect::Bool)
-        Base.depwarn(string(
-            "`SSHCredential` no longer supports the `prompt_if_incorrect` parameter. ",
-            "Use the `allow_prompt` keyword in supported by `LibGit2.CredentialPayload` ",
-            "instead."), :SSHCredential)
-        SSHCredential(u, p, prvkey, pubkey)
-    end
-    SSHCredential(u::AbstractString, p::AbstractString, prompt_if_incorrect::Bool) = SSHCredential(u,p,"","",prompt_if_incorrect)
-    SSHCredential(prompt_if_incorrect::Bool) = SSHCredential("","","","",prompt_if_incorrect)
 end
 
 function Base.setproperty!(cred::SSHCredential, name::Symbol, value)

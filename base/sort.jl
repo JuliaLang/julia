@@ -6,7 +6,7 @@ import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base.Order
 using .Base: copymutable, LinearIndices, length, (:),
-    eachindex, axes, first, last, similar, start, next, done, zip, OrdinalRange,
+    eachindex, axes, first, last, similar, zip, OrdinalRange,
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,

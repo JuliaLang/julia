@@ -92,9 +92,6 @@ function __init__()
     env_threads = nothing
     if haskey(ENV, "JULIA_CPU_THREADS")
         env_threads = ENV["JULIA_CPU_THREADS"]
-    elseif haskey(ENV, "JULIA_CPU_CORES") # TODO: delete in 1.0 (deprecation)
-        Core.print("JULIA_CPU_CORES is deprecated, use JULIA_CPU_THREADS instead.\n")
-        env_threads = ENV["JULIA_CPU_CORES"]
     end
     global CPU_THREADS = if env_threads !== nothing
         env_threads = tryparse(Int, env_threads)
@@ -106,7 +103,6 @@ function __init__()
     else
         Int(ccall(:jl_cpu_threads, Int32, ()))
     end
-    global CPU_CORES = CPU_THREADS # TODO: delete in 1.0 (deprecation)
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
