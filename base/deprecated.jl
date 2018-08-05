@@ -312,33 +312,6 @@ function zeros(a::AbstractArray)
     return fill!(similar(a), zero(eltype(a)))
 end
 
-# A[I...] .= with scalar indices should modify the element at A[I...]
-function Broadcast.dotview(A::AbstractArray, args::Number...)
-    depwarn("the behavior of `A[I...] .= X` with scalar indices will change in the future. Use `A[I...] = X` instead.", :broadcast!)
-    view(A, args...)
-end
-Broadcast.dotview(A::AbstractArray{<:AbstractArray}, args::Integer...) = getindex(A, args...)
-# Upon removing deprecations, also enable the @testset "scalar .=" in test/broadcast.jl
-
-# indexing with A[true] will throw an argument error in the future
-function to_index(i::Bool)
-    depwarn("indexing with Bool values is deprecated. Convert the index to an integer first with `Int(i)`.", (:getindex, :setindex!, :view))
-    convert(Int,i)::Int
-end
-# After deprecation is removed, enable the @testset "indexing by Bool values" in test/arrayops.jl
-# Also un-comment the new definition in base/indices.jl
-
-# Broadcast no longer defaults to treating its arguments as scalar (#)
-@noinline function Broadcast.broadcastable(x)
-    depwarn("""
-        broadcast will default to iterating over its arguments in the future. Wrap arguments of
-        type `x::$(typeof(x))` with `Ref(x)` to ensure they broadcast as "scalar" elements.
-        """, (:broadcast, :broadcast!))
-    return Ref{typeof(x)}(x)
-end
-@eval Base.Broadcast Base.@deprecate_binding Scalar DefaultArrayStyle{0} false
-# After deprecation is removed, enable the fallback broadcastable definitions in base/broadcast.jl
-
 # deprecate BitArray{...}(shape...) constructors to BitArray{...}(undef, shape...) equivalents
 @deprecate BitArray{N}(dims::Vararg{Int,N}) where {N}   BitArray{N}(undef, dims)
 @deprecate BitArray(dims::NTuple{N,Int}) where {N}      BitArray(undef, dims...)
@@ -652,28 +625,6 @@ end
 @deprecate (+)(index::CartesianIndex, i::Integer) (index + i*one(index))
 @deprecate (-)(i::Integer, index::CartesianIndex) (i*one(index) - index)
 @deprecate (-)(index::CartesianIndex, i::Integer) (index - i*one(index))
-
-# PR #26347: Deprecate implicit scalar broadcasting in setindex!
-_axes(::Ref) = ()
-_axes(x) = axes(x)
-setindex_shape_check(X::Base.Iterators.Repeated, I...) = nothing
-function deprecate_scalar_setindex_broadcast_message(v, I...)
-    value = (_axes(Base.Broadcast.broadcastable(v)) == () ? "x" : "(x,)")
-    "using `A[I...] = x` to implicitly broadcast `x` across many locations is deprecated. Use `A[I...] .= $value` instead."
-end
-deprecate_scalar_setindex_broadcast_message(v, ::Colon, ::Vararg{Colon}) =
-    "using `A[:] = x` to implicitly broadcast `x` across many locations is deprecated. Use `fill!(A, x)` instead."
-
-function _iterable(v, I...)
-    depwarn(deprecate_scalar_setindex_broadcast_message(v, I...), :setindex!)
-    Iterators.repeated(v)
-end
-function setindex!(B::BitArray, x, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
-    depwarn(deprecate_scalar_setindex_broadcast_message(x, I0, I...), :setindex!)
-    B[I0, I...] .= (x,)
-    B
-end
-
 
 # Remove ambiguous CartesianIndices and LinearIndices constructors that are ambiguous between an axis and an array (#26448)
 @eval IteratorsMD begin

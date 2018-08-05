@@ -2388,7 +2388,8 @@ end
     test_zeros(zeros(Int, (2, 3)), Matrix{Int}, (2,3))
 
     # #19265"
-    @test_throws Any zeros(Float64, [1.]) # TODO: Tighten back up to MethodError once 0.7 deprecations are removed
+    @test_throws MethodError zeros(Float64, [1.])
+    @test_throws MethodError ones(Float64, [0, 0])
 end
 
 # issue #11053
@@ -2431,11 +2432,10 @@ end
     @test_throws BoundsError checkbounds(zeros(2,3,0), 2, 3)
 end
 
-# TODO: Enable this testset after the deprecations introduced in 0.7 are removed
-# @testset "indexing by Bool values" begin
-#     @test_throws ArgumentError zeros(2)[false]
-#     @test_throws ArgumentError zeros(2)[true]
-# end
+@testset "indexing by Bool values" begin
+    @test_throws ArgumentError zeros(Float64, 2)[false]
+    @test_throws ArgumentError zeros(Float64, 2)[true]
+end
 
 @testset "issue 24707" begin
     @test eltype(Vector{Tuple{V}} where V<:Integer) >: Tuple{Integer}
