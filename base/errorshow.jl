@@ -468,17 +468,18 @@ end
 # with the appropriate modifications.
 const update_stackframes_callback = Ref{Function}(identity)
 
-function show_trace_entry(io, frame, n; prefix = "")
-    frame = try update_stackframes_callback[](frame) catch _ frame end
-    print(io, "\n", prefix)
-    show(io, frame, full_path=true)
-    n > 1 && print(io, " (repeats ", n, " times)")
-end
-
 # Contains file name and file number. Gets set when a backtrace
 # or methodlist is shown. Used by the REPL to make it possible to open
 # the location of a stackframe/method in the editor.
 global LAST_SHOWN_LINE_INFOS = Tuple{String, Int}[]
+
+function show_trace_entry(io, frame, n; prefix = "")
+    frame = try update_stackframes_callback[](frame) catch _ frame end
+    push!(LAST_SHOWN_LINE_INFOS, (string(frame.file), frame.line))
+    print(io, "\n", prefix)
+    show(io, frame, full_path=true)
+    n > 1 && print(io, " (repeats ", n, " times)")
+end
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
@@ -519,7 +520,6 @@ function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
         if repetitions==0
             if with_prefix
                 show_trace_entry(io, last_frame, n, prefix = string(" [", frame_counter-1, "] "))
-                push!(LAST_SHOWN_LINE_INFOS, (string(last_frame.file), last_frame.line))
             else
                 show_trace_entry(io, last_frame, n)
             end
@@ -547,7 +547,6 @@ function show_backtrace(io::IO, t::Vector)
         for (last_frame, n) in filtered
             frame_counter += 1
             show_trace_entry(IOContext(io, :backtrace => true), last_frame, n, prefix = string(" [", frame_counter, "] "))
-            push!(LAST_SHOWN_LINE_INFOS, (string(last_frame.file), last_frame.line))
         end
         return
     end
