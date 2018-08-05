@@ -621,9 +621,6 @@ end
     @deprecate_stdlib RemoteException Distributed true
     @deprecate_stdlib ProcessExitedException Distributed true
 
-    @eval @deprecate_stdlib $(Symbol("@printf")) Printf true
-    @eval @deprecate_stdlib $(Symbol("@sprintf")) Printf true
-
     # PR #24874
     @deprecate_stdlib rand! Random true
     @deprecate_stdlib srand Random true
