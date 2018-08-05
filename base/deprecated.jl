@@ -575,14 +575,6 @@ function toc()
     return t
 end
 
-# indexing with A[true] will throw an argument error in the future
-function to_index(i::Bool)
-    depwarn("indexing with Bool values is deprecated. Convert the index to an integer first with `Int(i)`.", (:getindex, :setindex!, :view))
-    convert(Int,i)::Int
-end
-# After deprecation is removed, enable the @testset "indexing by Bool values" in test/arrayops.jl
-# Also un-comment the new definition in base/indices.jl
-
 # Broadcast no longer defaults to treating its arguments as scalar (#)
 @noinline function Broadcast.broadcastable(x)
     depwarn("""

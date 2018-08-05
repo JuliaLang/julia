@@ -2431,11 +2431,10 @@ end
     @test_throws BoundsError checkbounds(zeros(2,3,0), 2, 3)
 end
 
-# TODO: Enable this testset after the deprecations introduced in 0.7 are removed
-# @testset "indexing by Bool values" begin
-#     @test_throws ArgumentError zeros(2)[false]
-#     @test_throws ArgumentError zeros(2)[true]
-# end
+@testset "indexing by Bool values" begin
+    @test_throws ArgumentError zeros(Float64, 2)[false]
+    @test_throws ArgumentError zeros(Float64, 2)[true]
+end
 
 @testset "issue 24707" begin
     @test eltype(Vector{Tuple{V}} where V<:Integer) >: Tuple{Integer}
