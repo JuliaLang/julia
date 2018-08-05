@@ -549,7 +549,6 @@ end
 
 @eval Base begin
     @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
-    @deprecate_binding Profile root_module(Base, :Profile) true ", run `using Profile` instead"
     @deprecate_binding Distributed root_module(Base, :Distributed) true ", run `using Distributed` instead"
     @deprecate_binding Random root_module(Base, :Random) true ", run `using Random` instead"
     @deprecate_binding Serializer root_module(Base, :Serialization) true ", run `using Serialization` instead"
@@ -583,8 +582,6 @@ end
 
     @deprecate_binding Pkg root_module(Base, :Pkg) true ", run `using Pkg` instead"
     @deprecate_binding LibGit2 root_module(Base, :LibGit2) true ", run `import LibGit2` instead"
-
-    @eval @deprecate_stdlib $(Symbol("@profile")) Profile true
 
     @eval @deprecate_stdlib $(Symbol("@spawn")) Distributed true
     @eval @deprecate_stdlib $(Symbol("@spawnat")) Distributed true
