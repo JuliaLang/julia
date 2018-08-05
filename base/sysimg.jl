@@ -574,12 +574,6 @@ end
     @deprecate_binding(I, root_module(Base, :LinearAlgebra).I, true,
         ", run `using LinearAlgebra` to load linear algebra functionality.")
 
-    # PR 25544
-    @deprecate_binding REPL            root_module(Base, :REPL)                 true ", run `using REPL` instead"
-    @deprecate_binding LineEdit        root_module(Base, :REPL).LineEdit        true ", use `REPL.LineEdit` instead"
-    @deprecate_binding REPLCompletions root_module(Base, :REPL).REPLCompletions true ", use `REPL.REPLCompletions` instead"
-    @deprecate_binding Terminals       root_module(Base, :REPL).Terminals       true ", use `REPL.Terminals` instead"
-
     @deprecate_binding Pkg root_module(Base, :Pkg) true ", run `using Pkg` instead"
     @deprecate_binding LibGit2 root_module(Base, :LibGit2) true ", run `import LibGit2` instead"
 
