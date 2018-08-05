@@ -575,17 +575,6 @@ function toc()
     return t
 end
 
-# Broadcast no longer defaults to treating its arguments as scalar (#)
-@noinline function Broadcast.broadcastable(x)
-    depwarn("""
-        broadcast will default to iterating over its arguments in the future. Wrap arguments of
-        type `x::$(typeof(x))` with `Ref(x)` to ensure they broadcast as "scalar" elements.
-        """, (:broadcast, :broadcast!))
-    return Ref{typeof(x)}(x)
-end
-@eval Base.Broadcast Base.@deprecate_binding Scalar DefaultArrayStyle{0} false
-# After deprecation is removed, enable the fallback broadcastable definitions in base/broadcast.jl
-
 # deprecate BitArray{...}(shape...) constructors to BitArray{...}(undef, shape...) equivalents
 @deprecate BitArray{N}(dims::Vararg{Int,N}) where {N}   BitArray{N}(undef, dims)
 @deprecate BitArray(dims::NTuple{N,Int}) where {N}      BitArray(undef, dims...)
