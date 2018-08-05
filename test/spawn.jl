@@ -225,7 +225,7 @@ if valgrind_off
 end
 
 # setup_stdio for AbstractPipe
-let out = Pipe(), proc = run(pipeline(`$exename --startup-file=no -e 'println(getpid())`, stdout=IOContext(out,stdout)), wait=false)
+let out = Pipe(), proc = run(pipeline(`$exename --startup-file=no -e "println(getpid())"`, stdout=IOContext(out,stdout)), wait=false)
     pid = getpid(proc)
     close(out.in)
     @test parse(Int32, read(out, String)) === pid
