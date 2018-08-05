@@ -486,7 +486,9 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
            isa<Argument>(CurrentV) || isa<SelectInst>(CurrentV) ||
            isa<PHINode>(CurrentV) || isa<AddrSpaceCastInst>(CurrentV) ||
            isa<Constant>(CurrentV) || isa<AllocaInst>(CurrentV) ||
-           isa<ExtractValueInst>(CurrentV));
+           isa<ExtractValueInst>(CurrentV) ||
+           isa<InsertElementInst>(CurrentV) ||
+           isa<ShuffleVectorInst>(CurrentV));
     return std::make_pair(CurrentV, fld_idx);
 }
 
@@ -602,22 +604,37 @@ std::vector<int> LateLowerGCFrame::NumberVectorBase(State &S, Value *CurrentV) {
         ((isa<Argument>(CurrentV) || isa<AllocaInst>(CurrentV) ||
          isa<AddrSpaceCastInst>(CurrentV)) &&
          getValueAddrSpace(CurrentV) != AddressSpace::Tracked)) {
+        Numbers.resize(cast<VectorType>(CurrentV->getType())->getNumElements(), -1);
     }
     /* We (the frontend) don't insert either of these, but it would be legal -
        though a bit strange, considering they're pointers - for the optimizer to
        do so. All that's needed here is to NumberVector the previous vector/value
        and lift the operation */
-    else if (isa<ShuffleVectorInst>(CurrentV)) {
-        assert(false && "TODO Shuffle");
-    } else if (isa<InsertElementInst>(CurrentV)) {
-        assert(false && "TODO Insert");
-    } else if (isa<LoadInst>(CurrentV)) {
+    else if (auto *SVI = dyn_cast<ShuffleVectorInst>(CurrentV)) {
+        std::vector<int> Numbers1 = NumberVectorBase(S, SVI->getOperand(0));
+        std::vector<int> Numbers2 = NumberVectorBase(S, SVI->getOperand(1));
+        auto Mask = SVI->getShuffleMask();
+        for (unsigned idx : Mask) {
+            if (idx < Numbers1.size()) {
+                Numbers.push_back(Numbers1[idx]);
+            } else {
+                Numbers.push_back(Numbers2[idx - Numbers1.size()]);
+            }
+        }
+    } else if (auto *IEI = dyn_cast<InsertElementInst>(CurrentV)) {
+        unsigned idx = cast<ConstantInt>(IEI->getOperand(2))->getZExtValue();
+        Numbers = NumberVectorBase(S, IEI->getOperand(0));
+        int ElNumber = Number(S, IEI->getOperand(1));
+        Numbers[idx] = ElNumber;
+    } else if (isa<LoadInst>(CurrentV) || isa<CallInst>(CurrentV) || isa<PHINode>(CurrentV)) {
         // This is simple, we can just number them sequentially
         for (unsigned i = 0; i < cast<VectorType>(CurrentV->getType())->getNumElements(); ++i) {
             int Num = ++S.MaxPtrNumber;
             Numbers.push_back(Num);
             S.ReversePtrNumbering[Num] = CurrentV;
         }
+    } else {
+        assert(false && "Unexpected vector generating operating");
     }
     S.AllVectorNumbering[CurrentV] = Numbers;
     return Numbers;
@@ -629,9 +646,17 @@ std::vector<int> LateLowerGCFrame::NumberVector(State &S, Value *V) {
         return it->second;
     auto CurrentV = FindBaseValue(S, V);
     assert(CurrentV.second == -1);
-    auto Numbers = NumberVectorBase(S, CurrentV.first);
-    S.AllVectorNumbering[V] = Numbers;
-    return Numbers;
+    // E.g. if this is a gep, it's possible for the base to be a single ptr
+    if (isSpecialPtrVec(CurrentV.first->getType())) {
+        auto Numbers = NumberVectorBase(S, CurrentV.first);
+        S.AllVectorNumbering[V] = Numbers;
+        return Numbers;
+    } else {
+        std::vector<int> Numbers{};
+        Numbers.resize(cast<VectorType>(V->getType())->getNumElements(),
+            NumberBase(S, V, CurrentV.first));
+        return Numbers;
+    }
 }
 
 static void MaybeResize(BBState &BBS, unsigned Idx) {
@@ -714,6 +739,8 @@ void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses
         std::vector<int> Nums = NumberVector(S, V);
         for (int Num : Nums) {
             MaybeResize(BBS, Num);
+            if (Num < 0)
+                continue;
             Uses[Num] = 1;
         }
     }
@@ -729,7 +756,7 @@ void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses
 void LateLowerGCFrame::NoteOperandUses(State &S, BBState &BBS, User &UI, BitVector &Uses) {
     for (Use &U : UI.operands()) {
         Value *V = U;
-        if (!isSpecialPtr(V->getType()))
+        if (!isSpecialPtr(V->getType()) && !isSpecialPtrVec(V->getType()))
             continue;
         NoteUse(S, BBS, V, Uses);
     }

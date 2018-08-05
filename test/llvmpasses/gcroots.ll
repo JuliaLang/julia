@@ -401,6 +401,19 @@ top:
    ret i8 %val
 }
 
+define %jl_value_t addrspace(10)* @vecstoreload(<2 x %jl_value_t addrspace(10)*> *%arg) {
+; CHECK-LABEL: @vecstoreload
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 4
+top:
+    %ptls = call %jl_value_t*** @julia.ptls_states()
+    %loaded = load <2 x %jl_value_t addrspace(10)*>, <2 x %jl_value_t addrspace(10)*> *%arg
+    call void @jl_safepoint()
+    %obj = call %jl_value_t addrspace(10) *@alloc()
+    %casted = bitcast %jl_value_t addrspace(10)* %obj to <2 x %jl_value_t addrspace(10)*> addrspace(10)*
+    store <2 x %jl_value_t addrspace(10)*> %loaded, <2 x %jl_value_t addrspace(10)*> addrspace(10)* %casted
+    ret %jl_value_t addrspace(10)* %obj
+}
+
 !0 = !{!"jtbaa"}
 !1 = !{!"jtbaa_const", !0, i64 0}
 !2 = !{!1, !1, i64 0, i64 1}
