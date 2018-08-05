@@ -596,12 +596,6 @@ end
 
     @eval @deprecate_stdlib $(Symbol("@profile")) Profile true
 
-    @deprecate_stdlib base64encode Base64 true
-    @deprecate_stdlib base64decode Base64 true
-    @deprecate_stdlib Base64EncodePipe Base64 true
-    @deprecate_stdlib Base64DecodePipe Base64 true
-    @deprecate_stdlib stringmime Base64 true
-
     @deprecate_stdlib poll_fd FileWatching true
     @deprecate_stdlib poll_file FileWatching true
     @deprecate_stdlib PollingFileWatcher FileWatching true
