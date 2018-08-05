@@ -554,7 +554,6 @@ end
     @deprecate_binding Distributed root_module(Base, :Distributed) true ", run `using Distributed` instead"
     @deprecate_binding Random root_module(Base, :Random) true ", run `using Random` instead"
     @deprecate_binding Serializer root_module(Base, :Serialization) true ", run `using Serialization` instead"
-    @deprecate_binding Libdl root_module(Base, :Libdl) true ", run `using Libdl` instead"
     @deprecate_binding Markdown root_module(Base, :Markdown) true ", run `using Markdown` instead"
 
     # PR #25249
