@@ -549,7 +549,6 @@ end
 
 @eval Base begin
     @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
-    @deprecate_binding Mmap root_module(Base, :Mmap) true ", run `using Mmap` instead"
     @deprecate_binding Profile root_module(Base, :Profile) true ", run `using Profile` instead"
     @deprecate_binding Distributed root_module(Base, :Distributed) true ", run `using Distributed` instead"
     @deprecate_binding Random root_module(Base, :Random) true ", run `using Random` instead"
