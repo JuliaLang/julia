@@ -462,9 +462,6 @@ function __init__()
             ENV["OPENBLAS_NUM_THREADS"] = "8"
         elseif haskey(ENV, "JULIA_CPU_THREADS") # or exactly as specified
             ENV["OPENBLAS_NUM_THREADS"] = cpu_threads
-        elseif haskey(ENV, "JULIA_CPU_CORES") # TODO: delete in 1.0 (deprecation)
-            Core.print("JULIA_CPU_CORES is deprecated, use JULIA_CPU_THREADS instead.\n")
-            ENV["OPENBLAS_NUM_THREADS"] = cpu_threads
         end # otherwise, trust that openblas will pick CPU_THREADS anyways, without any intervention
     end
     # for the few uses of Libc.rand in Base:
@@ -547,122 +544,6 @@ let
     print_time("Stdlibs total", Base.tot_time_stdlib[])
 end
 
-@eval Base begin
-    @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
-    @deprecate_binding Distributed root_module(Base, :Distributed) true ", run `using Distributed` instead"
-    @deprecate_binding Random root_module(Base, :Random) true ", run `using Random` instead"
-    @deprecate_binding Serializer root_module(Base, :Serialization) true ", run `using Serialization` instead"
-
-    # PR #25249
-    @deprecate_binding SparseArrays root_module(Base, :SparseArrays) true ", run `using SparseArrays` instead"
-    @deprecate_binding(AbstractSparseArray, root_module(Base, :SparseArrays).AbstractSparseArray, true,
-        ", run `using SparseArrays` to load sparse array functionality")
-    @deprecate_binding(AbstractSparseMatrix, root_module(Base, :SparseArrays).AbstractSparseMatrix, true,
-        ", run `using SparseArrays` to load sparse array functionality")
-    @deprecate_binding(AbstractSparseVector, root_module(Base, :SparseArrays).AbstractSparseVector, true,
-        ", run `using SparseArrays` to load sparse array functionality")
-    @deprecate_binding(SparseMatrixCSC, root_module(Base, :SparseArrays).SparseMatrixCSC, true,
-        ", run `using SparseArrays` to load sparse array functionality")
-    @deprecate_binding(SparseVector, root_module(Base, :SparseArrays).SparseVector, true,
-        ", run `using SparseArrays` to load sparse array functionality")
-
-    # PR #25571
-    @deprecate_binding LinAlg root_module(Base, :LinearAlgebra) true ", run `using LinearAlgebra` instead"
-    @deprecate_binding(I, root_module(Base, :LinearAlgebra).I, true,
-        ", run `using LinearAlgebra` to load linear algebra functionality.")
-
-    @deprecate_binding Pkg root_module(Base, :Pkg) true ", run `using Pkg` instead"
-    @deprecate_binding LibGit2 root_module(Base, :LibGit2) true ", run `import LibGit2` instead"
-
-    @eval @deprecate_stdlib $(Symbol("@spawn")) Distributed true
-    @eval @deprecate_stdlib $(Symbol("@spawnat")) Distributed true
-    @eval @deprecate_stdlib $(Symbol("@fetch")) Distributed true
-    @eval @deprecate_stdlib $(Symbol("@fetchfrom")) Distributed true
-    @eval @deprecate_stdlib $(Symbol("@everywhere")) Distributed true
-    @eval @deprecate_stdlib $(Symbol("@parallel")) Distributed true
-
-    @deprecate_stdlib addprocs Distributed true
-    @deprecate_stdlib CachingPool Distributed true
-    @deprecate_stdlib clear! Distributed true
-    @deprecate_stdlib ClusterManager Distributed true
-    @deprecate_stdlib default_worker_pool Distributed true
-    @deprecate_stdlib init_worker Distributed true
-    @deprecate_stdlib interrupt Distributed true
-    @deprecate_stdlib launch Distributed true
-    @deprecate_stdlib manage Distributed true
-    @deprecate_stdlib myid Distributed true
-    @deprecate_stdlib nprocs Distributed true
-    @deprecate_stdlib nworkers Distributed true
-    @deprecate_stdlib pmap Distributed true
-    @deprecate_stdlib procs Distributed true
-    @deprecate_stdlib remote Distributed true
-    @deprecate_stdlib remotecall Distributed true
-    @deprecate_stdlib remotecall_fetch Distributed true
-    @deprecate_stdlib remotecall_wait Distributed true
-    @deprecate_stdlib remote_do Distributed true
-    @deprecate_stdlib rmprocs Distributed true
-    @deprecate_stdlib workers Distributed true
-    @deprecate_stdlib WorkerPool Distributed true
-    @deprecate_stdlib RemoteChannel Distributed true
-    @deprecate_stdlib Future Distributed true
-    @deprecate_stdlib WorkerConfig Distributed true
-    @deprecate_stdlib RemoteException Distributed true
-    @deprecate_stdlib ProcessExitedException Distributed true
-
-    # PR #24874
-    @deprecate_stdlib rand! Random true
-    @deprecate_stdlib srand Random true
-    @deprecate_stdlib AbstractRNG Random true
-    @deprecate_stdlib randcycle  Random true
-    @deprecate_stdlib randcycle!  Random true
-    @deprecate_stdlib randperm  Random true
-    @deprecate_stdlib randperm! Random true
-    @deprecate_stdlib shuffle  Random true
-    @deprecate_stdlib shuffle! Random true
-    @deprecate_stdlib randsubseq Random true
-    @deprecate_stdlib randsubseq! Random true
-    @deprecate_stdlib randstring Random true
-    @deprecate_stdlib MersenneTwister  Random true
-    @deprecate_stdlib RandomDevice  Random true
-    @deprecate_stdlib randn! Random true
-    @deprecate_stdlib randexp Random true
-    @deprecate_stdlib randexp! Random true
-    @deprecate_stdlib bitrand Random true
-    @deprecate_stdlib randjump Random true
-    @deprecate_stdlib GLOBAL_RNG Random false
-
-    # PR #25249: SparseArrays to stdlib
-    ## the Base.SparseArrays module itself and exported types are deprecated in base/sysimg.jl
-    ## functions that were re-exported from Base
-    @deprecate_stdlib nonzeros   SparseArrays true
-    @deprecate_stdlib permute    SparseArrays true
-    @deprecate_stdlib blkdiag    SparseArrays true blockdiag
-    @deprecate_stdlib dropzeros  SparseArrays true
-    @deprecate_stdlib dropzeros! SparseArrays true
-    @deprecate_stdlib issparse   SparseArrays true
-    @deprecate_stdlib sparse     SparseArrays true
-    @deprecate_stdlib sparsevec  SparseArrays true
-    @deprecate_stdlib spdiagm    SparseArrays true
-    @deprecate_stdlib sprand     SparseArrays true
-    @deprecate_stdlib sprandn    SparseArrays true
-    @deprecate_stdlib spzeros    SparseArrays true
-    @deprecate_stdlib rowvals    SparseArrays true
-    @deprecate_stdlib nzrange    SparseArrays true
-    @deprecate_stdlib nnz        SparseArrays true
-    @deprecate_stdlib findnz     SparseArrays true
-    ## functions that were exported from Base.SparseArrays but not from Base
-    @deprecate_stdlib droptol!   SparseArrays false
-    ## deprecated functions that are moved to stdlib/SparseArrays/src/deprecated.jl
-    @deprecate_stdlib spones     SparseArrays true
-    @deprecate_stdlib speye      SparseArrays true
-
-    # PR #25571: LinearAlgebra to stdlib
-
-    # PR #25021
-    @deprecate_stdlib normalize_string Unicode true
-    @deprecate_stdlib graphemes Unicode true
-    @deprecate_stdlib is_assigned_char Unicode true
-end
 end
 
 # Clear global state
