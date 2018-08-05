@@ -637,8 +637,6 @@ end
     @deprecate_stdlib RemoteException Distributed true
     @deprecate_stdlib ProcessExitedException Distributed true
 
-    @deprecate_stdlib crc32c CRC32c true
-
     @eval @deprecate_stdlib $(Symbol("@printf")) Printf true
     @eval @deprecate_stdlib $(Symbol("@sprintf")) Printf true
 
