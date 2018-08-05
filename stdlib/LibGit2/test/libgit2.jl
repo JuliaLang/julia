@@ -1741,20 +1741,35 @@ mktempdir() do dir
 
         # Overwrite an already cached credential
         dup_cred = deepcopy(cred)
-        LibGit2.approve(cache, dup_cred, url)  # Shreds `cred`
+        LibGit2.approve(cache, dup_cred, url)  # Shreds overwritten `cred`
         @test haskey(cache, cred_id)
         @test cache[cred_id] === dup_cred
-        @test dup_cred.pass == password
+        @test cred.user != "julia"
         @test cred.pass != password
+        @test dup_cred.user == "julia"
+        @test dup_cred.pass == password
 
         cred = dup_cred
 
-        # Reject an approved should cause it to be removed and shredded
-        LibGit2.reject(cache, cred, url)
+        # Reject an approved credential
+        @test cache[cred_id] === cred
+        LibGit2.reject(cache, cred, url)  # Avoids shredding the credential passed in
+        @test !haskey(cache, cred_id)
+        @test cred.user == "julia"
+        @test cred.pass == password
+
+        # Reject and shred an approved credential
+        dup_cred = deepcopy(cred)
+        LibGit2.approve(cache, cred, url)
+
+        LibGit2.reject(cache, dup_cred, url)  # Shred `cred` but not passed in `dup_cred`
         @test !haskey(cache, cred_id)
         @test cred.user != "julia"
         @test cred.pass != password
+        @test dup_cred.user == "julia"
+        @test dup_cred.pass == password
 
+        Base.shred!(dup_cred)
         Base.shred!(cache)
         Base.shred!(password)
     end
