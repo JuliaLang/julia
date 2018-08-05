@@ -591,12 +591,6 @@ end
 
     @eval @deprecate_stdlib $(Symbol("@profile")) Profile true
 
-    @deprecate_stdlib poll_fd FileWatching true
-    @deprecate_stdlib poll_file FileWatching true
-    @deprecate_stdlib PollingFileWatcher FileWatching true
-    @deprecate_stdlib watch_file FileWatching true
-    @deprecate_stdlib FileMonitor FileWatching true
-
     @eval @deprecate_stdlib $(Symbol("@spawn")) Distributed true
     @eval @deprecate_stdlib $(Symbol("@spawnat")) Distributed true
     @eval @deprecate_stdlib $(Symbol("@fetch")) Distributed true
