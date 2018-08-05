@@ -902,12 +902,8 @@ function sort(A::AbstractArray;
               lt=isless,
               by=identity,
               rev::Union{Bool,Nothing}=nothing,
-              order::Ordering=Forward,
-              initialized::Union{Bool,Nothing}=nothing)
+              order::Ordering=Forward)
     dim = dims
-    if initialized !== nothing
-        Base.depwarn("`initialized` keyword argument is deprecated", :sort)
-    end
     order = ord(lt,by,rev,order)
     n = length(axes(A, dim))
     if dim != 1

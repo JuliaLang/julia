@@ -297,14 +297,7 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
 end
 
 function cptree(src::AbstractString, dst::AbstractString; force::Bool=false,
-                                                          follow_symlinks::Bool=false,
-                                                          remove_destination::Union{Bool,Nothing}=nothing)
-    # TODO: Remove after 0.7
-    if remove_destination !== nothing
-        Base.depwarn("The `remove_destination` keyword argument is deprecated; use " *
-                     "`force` instead", :cptree)
-        force = remove_destination
-    end
+                                                          follow_symlinks::Bool=false)
     isdir(src) || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
     checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
     mkdir(dst)
@@ -333,14 +326,7 @@ of the file or directory `src` refers to.
 Return `dst`.
 """
 function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
-                                                      follow_symlinks::Bool=false,
-                                                      remove_destination::Union{Bool,Nothing}=nothing)
-    # TODO: Remove after 0.7
-    if remove_destination !== nothing
-        Base.depwarn("The `remove_destination` keyword argument is deprecated; use " *
-                     "`force` instead", :cp)
-        force = remove_destination
-    end
+                                                      follow_symlinks::Bool=false)
     checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
     if !follow_symlinks && islink(src)
         symlink(readlink(src), dst)
@@ -387,14 +373,7 @@ julia> rm("goodbye.txt");
 
 ```
 """
-function mv(src::AbstractString, dst::AbstractString; force::Bool=false,
-                                                      remove_destination::Union{Bool,Nothing}=nothing)
-    # TODO: Remove after 0.7
-    if remove_destination !== nothing
-        Base.depwarn("The `remove_destination` keyword argument is deprecated; use " *
-                     "`force` instead", :mv)
-        force = remove_destination
-    end
+function mv(src::AbstractString, dst::AbstractString; force::Bool=false)
     checkfor_mv_cp_cptree(src, dst, "moving"; force=force)
     rename(src, dst)
     dst

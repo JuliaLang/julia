@@ -688,10 +688,7 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
 end
 
 function findall(x::SparseVector)
-    if !(eltype(x) <: Bool)
-        Base.depwarn("In the future `findall(A)` will only work on boolean collections. Use `findall(x->x!=0, A)` instead.", :findall)
-    end
-    return findall(x->x!=0, x)
+    return findall(identity, x)
 end
 
 function findall(p::Function, x::SparseVector{<:Any,Ti}) where Ti

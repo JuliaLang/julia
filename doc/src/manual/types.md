@@ -657,7 +657,7 @@ For the default constructor, exactly one argument must be supplied for each fiel
 
 ```jldoctest pointtype
 julia> Point{Float64}(1.0)
-ERROR: MethodError: Cannot `convert` an object of type Float64 to an object of type Point{Float64}
+ERROR: MethodError: no method matching Point{Float64}(::Float64)
 [...]
 
 julia> Point{Float64}(1.0,2.0,3.0)

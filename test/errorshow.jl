@@ -212,7 +212,7 @@ err_str = @except_str Float64[](1) MethodError
 @test !occursin("import Base.Array", err_str)
 
 Array() = 1
-err_str = @except_str Array(1) MethodError
+err_str = @except_str Array([1]) MethodError
 @test occursin("import Base.Array", err_str)
 
 end

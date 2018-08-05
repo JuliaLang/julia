@@ -601,10 +601,6 @@ JL_CALLABLE(jl_f__apply_latest)
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (m == NULL)
-        m = jl_main_module;
-    if (jl_is_symbol(ex))
-        return jl_eval_global_var(m, (jl_sym_t*)ex);
     if (ptls->in_pure_callback)
         jl_error("eval cannot be used in a generated function");
     jl_value_t *v = NULL;

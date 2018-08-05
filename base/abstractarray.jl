@@ -15,14 +15,6 @@ convert(::Type{T}, a::T) where {T<:AbstractArray} = a
 convert(::Type{AbstractArray{T}}, a::AbstractArray) where {T} = AbstractArray{T}(a)
 convert(::Type{AbstractArray{T,N}}, a::AbstractArray{<:Any,N}) where {T,N} = AbstractArray{T,N}(a)
 
-if nameof(@__MODULE__) === :Base  # avoid method overwrite
-# catch undefined constructors before the deprecation kicks in
-# TODO: remove when deprecation is removed
-function (::Type{T})(arg) where {T<:AbstractArray}
-    throw(MethodError(T, (arg,)))
-end
-end
-
 """
     size(A::AbstractArray, [dim])
 

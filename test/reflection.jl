@@ -266,7 +266,7 @@ import Base: datatype_alignment, return_types
 @test datatype_alignment(UInt16) == 2
 @test datatype_alignment(TLayout) == 4
 let rts = return_types(TLayout)
-    @test length(rts) >= 3 # general constructor, specific constructor, and call-to-convert adapter(s)
+    @test length(rts) == 2 # general constructor and specific constructor
     @test all(rts .== TLayout)
 end
 
