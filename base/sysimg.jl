@@ -551,7 +551,6 @@ end
     @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
     @deprecate_binding Mmap root_module(Base, :Mmap) true ", run `using Mmap` instead"
     @deprecate_binding Profile root_module(Base, :Profile) true ", run `using Profile` instead"
-    @deprecate_binding Dates root_module(Base, :Dates) true ", run `using Dates` instead"
     @deprecate_binding Distributed root_module(Base, :Distributed) true ", run `using Distributed` instead"
     @deprecate_binding Random root_module(Base, :Random) true ", run `using Random` instead"
     @deprecate_binding Serializer root_module(Base, :Serialization) true ", run `using Serialization` instead"
@@ -645,11 +644,6 @@ end
     @deprecate_stdlib ProcessExitedException Distributed true
 
     @deprecate_stdlib crc32c CRC32c true
-
-    @deprecate_stdlib DateTime Dates true
-    @deprecate_stdlib DateFormat Dates true
-    @eval @deprecate_stdlib $(Symbol("@dateformat_str")) Dates true
-    @deprecate_stdlib now Dates true
 
     @eval @deprecate_stdlib $(Symbol("@printf")) Printf true
     @eval @deprecate_stdlib $(Symbol("@sprintf")) Printf true
