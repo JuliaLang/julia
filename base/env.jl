@@ -136,19 +136,20 @@ end
 Execute `f` in an environment that is temporarily modified (not replaced as in `setenv`)
 by zero or more `"var"=>val` arguments `kv`. `withenv` is generally used via the
 `withenv(kv...) do ... end` syntax. A value of `nothing` can be used to temporarily unset an
-environment variable (if it is set). When `withenv` returns, the original environment has
-been restored.
+environment variable (if it is set). When `withenv` returns, the original environment is restored.
 """
 function withenv(f::Function, keyvals::Pair{T}...) where T<:AbstractString
-    old = Dict{T,Any}()
+    oldENV = copy(ENV)
     for (key,val) in keyvals
-        old[key] = get(ENV,key,nothing)
         val !== nothing ? (ENV[key]=val) : delete!(ENV, key)
     end
     try f()
     finally
-        for (key,val) in old
-            val !== nothing ? (ENV[key]=val) : delete!(ENV, key)
+        for (key, val) in keyvals
+            delete!(ENV, key)
+        end
+        for (key, val) in oldENV
+            ENV[key] = val
         end
     end
 end
