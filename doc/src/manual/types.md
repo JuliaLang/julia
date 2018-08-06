@@ -1,15 +1,39 @@
 # [Types](@id man-types)
 
-Type systems have traditionally fallen into two quite different camps: static type systems, where
-every program expression must have a type computable before the execution of the program, and
-dynamic type systems, where nothing is known about types until run time, when the actual values
-manipulated by the program are available. Object orientation allows some flexibility in statically
-typed languages by letting code be written without the precise types of values being known at
-compile time. The ability to write code that can operate on different types is called polymorphism.
-All code in classic dynamically typed languages is polymorphic: only by explicitly checking types,
-or when objects fail to support operations at run-time, are the types of any values ever restricted.
+In computer science the concept of *type* is complex, though in the context of executing
+programs it often reduces to a set of rules that provide the size, format, and manner of 
+representation for instances of memory. The manner of representation is an abstraction that
+converts the contents of an instance into a *value*.
 
-Julia's type system is dynamic, but gains some of the advantages of static type systems by making
+Computer language type systems have traditionally been said to be either *static*, or
+*dynamic*.  In static type systems the types for all future memory instances are
+determined, and checks for their consistent use are made, before the program executable is
+run. This determination is made by the compiler that produces the executable.  The
+compiler will issue errors and refuse to generate code if it can not make the required
+determinations.  In contrast, in dynamic type systems the types are computed at run time
+typically just before computing the value to be held in the instance. This computation is
+performed by an interpreter.  Should the interpreter fail to determine a type or discover
+that type usage is inconsistent there will be a run time error. Static type system based
+compilers usually produce executables that run faster than an interpreter can interpret
+the corresponding program.
+
+A constrained form of dynamic typing was introduced with object oriented techniques
+through the concepts of type classes, inheritance, and methods.  According to this
+approach a given program that calls an object method by name might actually be calling
+different functions depending on the types of the method's arguments.  In object oriented
+programming this is known as *polymorphism*.  The action of choosing which
+function to call based on the types of the arguments is known as *dispatch*.  Dispatch can
+also be static or dynamic.  For it to be static, the types for the arguments for the
+method call must be always be the same and must be known at compile time. For C++
+compilers this is done statically by *signature matching*, and dynamically by forcing
+method calls of polymorphic types through function pointer tables.  The function
+pointer approach works best when only one possible argument type is involved in the
+dispatch decision.  Typically at run time the static dispatch decisions will have been
+compiled away, but the overhead will remain for making dynamic dispatch decisions. Thus,
+in a conventional interpreted environment that supports polymorphism, dispatch will be
+present for every relevant call.
+
+Julia's type system is dynamic, but it gains some of the advantages of static type systems by making
 it possible to indicate that certain values are of specific types. This can be of great assistance
 in generating efficient code, but even more significantly, it allows method dispatch on the types
 of function arguments to be deeply integrated with the language. Method dispatch is explored in
@@ -34,13 +58,13 @@ able to inherit structure, and inheriting both causes significant difficulties i
 object-oriented languages. Other high-level aspects of Julia's type system that should be mentioned
 up front are:
 
-  * There is no division between object and non-object values: all values in Julia are true objects
+  * There is no division between object and non-object instances: all instances in Julia are true objects
     having a type that belongs to a single, fully connected type graph, all nodes of which are equally
     first-class as types.
-  * There is no meaningful concept of a "compile-time type": the only type a value has is its actual
-    type when the program is running. This is called a "run-time type" in object-oriented languages
-    where the combination of static compilation with polymorphism makes this distinction significant.
-  * Only values, not variables, have types -- variables are simply names bound to values.
+  * There is no meaningful concept of a "compile-time type": the only type an instance has is its actual
+    type when the program is running. This is called a "run-time type". In object-oriented languages
+    the combination of static compilation with polymorphism makes this distinction significant.
+  * Only instances, not variables, have types -- variables are simply names bound to instances.
   * Both abstract and concrete types can be parameterized by other types. They can also be parameterized
     by symbols, by values of any type for which [`isbits`](@ref) returns true (essentially, things
     like numbers and bools that are stored like C types or `struct`s with no pointers to other objects),
@@ -60,13 +84,14 @@ There are two primary reasons to do this:
 2. To provide extra type information to the compiler, which can then improve performance in some
    cases
 
-When appended to an expression computing a value, the `::` operator is read as "is an instance
-of". It can be used anywhere to assert that the value of the expression on the left is an instance
-of the type on the right. When the type on the right is concrete, the value on the left must have
-that type as its implementation -- recall that all concrete types are final, so no implementation
-is a subtype of any other. When the type is abstract, it suffices for the value to be implemented
-by a concrete type that is a subtype of the abstract type. If the type assertion is not true,
-an exception is thrown, otherwise, the left-hand value is returned:
+When appended to an expression computing a value, the `::` operator is read as "is an
+instance of" some type. It can be used anywhere to assert that the variable or expression
+on the left is bound to an instance of the type specified on the right. When the type on
+the right is concrete, the instance corresponding to the variable or expression on the
+left must have that type -- recall that all concrete types are final, so no implementation
+is a subtype of any other. When the type is abstract, it suffices for the instance to be
+implemented by a concrete type that is a subtype of the abstract type. If the type
+assertion is not true, an exception is thrown, otherwise, the left-hand value is returned:
 
 ```jldoctest
 julia> (1+2)::AbstractFloat
@@ -79,8 +104,8 @@ julia> (1+2)::Int
 This allows a type assertion to be attached to any expression in-place.
 
 When appended to a variable on the left-hand side of an assignment, or as part of a `local` declaration,
-the `::` operator means something a bit different: it declares the variable to always have the
-specified type, like a type declaration in a statically-typed language such as C. Every value
+the `::` operator means something a bit different: it declares the variable to always be bound to an 
+instance of the specified type, like a type declaration in a statically-typed language such as C. Every value
 assigned to the variable will be converted to the declared type using [`convert`](@ref):
 
 ```jldoctest
@@ -322,8 +347,7 @@ julia> struct Foo
 
 Fields with no type annotation default to `Any`, and can accordingly hold any type of value.
 
-New objects of type `Foo` are created by applying the `Foo` type object like a function
-to values for its fields:
+New instances of type `Foo` are created by applying the `Foo` type as though a function, with arguments passed in for initialzing the fields.
 
 ```jldoctest footype
 julia> foo = Foo("Hello, world.", 23, 1.5)
@@ -356,7 +380,7 @@ julia> fieldnames(Foo)
 (:bar, :baz, :qux)
 ```
 
-You can access the field values of a composite object using the traditional `foo.bar` notation:
+You can access the field values of a composite instance using the traditional `foo.bar` notation:
 
 ```jldoctest footype
 julia> foo.bar
@@ -369,22 +393,21 @@ julia> foo.qux
 1.5
 ```
 
-Composite objects declared with `struct` are *immutable*; they cannot be modified
+Instances of composite types declared with `struct` are *immutable*; they cannot be modified
 after construction. This may seem odd at first, but it has several advantages:
 
   * It can be more efficient. Some structs can be packed efficiently into arrays, and
-    in some cases the compiler is able to avoid allocating immutable objects entirely.
+    in some cases the compiler is able to avoid allocating immutable instances entirely.
   * It is not possible to violate the invariants provided by the type's constructors.
-  * Code using immutable objects can be easier to reason about.
+  * Code using immutable instances can be easier to reason about.
 
-An immutable object might contain mutable objects, such as arrays, as fields. Those contained
-objects will remain mutable; only the fields of the immutable object itself cannot be changed
-to point to different objects.
+An immutable instance might contain mutable containers, such as arrays, as fields, but those 
+fields can not be modified to point to another type of instance.
 
-Where required, mutable composite objects can be declared with the keyword [`mutable struct`](@ref), to be
+Mutable composite types can be declared with the keyword [`mutable struct`](@ref), to be
 discussed in the next section.
 
-Immutable composite types with no fields are singletons; there can be only one instance of such types:
+Immutable composite types with no fields imply the existence of a correponding singleton instance, as there can be only one instance of such types:
 
 ```jldoctest
 julia> struct NoFields
@@ -395,7 +418,7 @@ true
 ```
 
 The [`===`](@ref) function confirms that the "two" constructed instances of `NoFields` are actually one
-and the same. Singleton types are described in further detail [below](@ref man-singleton-types).
+and the same. Singleton instances are described in further detail [below](@ref man-singleton-types).
 
 There is much more to say about how instances of composite types are created, but that discussion
 depends on both [Parametric Types](@ref) and on [Methods](@ref), and is sufficiently important
@@ -423,7 +446,7 @@ julia> bar.baz = 1//2
 
 In order to support mutation, such objects are generally allocated on the heap, and have
 stable memory addresses.
-A mutable object is like a little container that might hold different values over time,
+A mutable instance is like a little container that might hold different values over time,
 and so can only be reliably identified with its address.
 In contrast, an instance of an immutable type is associated with specific field values ---
 the field values alone tell you everything about the object.
@@ -436,14 +459,14 @@ To recap, two essential properties define immutability in Julia:
   * It is not permitted to modify the value of an immutable type.
     * For bits types this means that the bit pattern of a value once set will never change
       and that value is the identity of a bits type.
-    * For composite  types, this means that the identity of the values of its fields will
+    * For instances of composite  types, this means that the identity of the values of its fields will
       never change. When the fields are bits types, that means their bits will never change,
       for fields whose values are mutable types like arrays, that means the fields will
       always refer to the same mutable value even though that mutable value's content may
       itself be modified.
-  * An object with an immutable type may be copied freely by the compiler since its
+  * An instance of an immutable type may be copied freely by the compiler since its
     immutability makes it impossible to programmatically distinguish between the original
-    object and a copy.
+    instances and a copy.
     * In particular, this means that small enough immutable values like integers and floats
       are typically passed to functions in registers (or stack allocated).
     * Mutable values, on the other hand are heap-allocated and passed to
@@ -479,8 +502,7 @@ Every concrete value in the system is an instance of some `DataType`.
 
 ## Type Unions
 
-A type union is a special abstract type which includes as objects all instances of any of its
-argument types, constructed using the special [`Union`](@ref) keyword:
+A type union is a special abstract type which binds an instance to all the types in the given argument list.  It is constructed using the special [`Union`](@ref) keyword:
 
 ```jldoctest
 julia> IntOrString = Union{Int,AbstractString}
@@ -502,7 +524,7 @@ presence of `Union` types with a small number of types [^1], by generating speci
 in separate branches for each possible type.
 
 A particularly useful case of a `Union` type is `Union{T, Nothing}`, where `T` can be any type and
-[`Nothing`](@ref) is the singleton type whose only instance is the object [`nothing`](@ref). This pattern
+[`Nothing`](@ref) is the singleton [`nothing`](@ref). This pattern
 is the Julia equivalent of [`Nullable`, `Option` or `Maybe`](https://en.wikipedia.org/wiki/Nullable_type)
 types in other languages. Declaring a function argument or a field as `Union{T, Nothing}` allows
 setting it either to a value of type `T`, or to `nothing` to indicate that there is no value.
@@ -557,9 +579,9 @@ Point{AbstractString}
 ```
 
 The type `Point{Float64}` is a point whose coordinates are 64-bit floating-point values, while
-the type `Point{AbstractString}` is a "point" whose "coordinates" are string objects (see [Strings](@ref)).
+the type `Point{AbstractString}` is a "point" whose "coordinates" are string instances (see [Strings](@ref)).
 
-`Point` itself is also a valid type object, containing all instances `Point{Float64}`, `Point{AbstractString}`,
+`Point` itself is also a valid type, containing all instances `Point{Float64}`, `Point{AbstractString}`,
 etc. as subtypes:
 
 ```jldoctest pointtype
@@ -601,16 +623,16 @@ have different representations in memory:
   * An instance of `Point{Float64}` can be represented compactly and efficiently as an immediate pair
     of 64-bit values;
   * An instance of `Point{Real}` must be able to hold any pair of instances of [`Real`](@ref).
-    Since objects that are instances of `Real` can be of arbitrary size and structure, in
+    Since `Real` instances can be of arbitrary size and structure, in
     practice an instance of `Point{Real}` must be represented as a pair of pointers to
-    individually allocated `Real` objects.
+    individually allocated `Real` instances.
 
-The efficiency gained by being able to store `Point{Float64}` objects with immediate values is
+The efficiency gained by being able to store `Point{Float64}` instances with immediate values is
 magnified enormously in the case of arrays: an `Array{Float64}` can be stored as a contiguous
 memory block of 64-bit floating-point values, whereas an `Array{Real}` must be an array of pointers
-to individually allocated [`Real`](@ref) objects -- which may well be
+to individually allocated [`Real`](@ref) instances -- which may well be
 [boxed](https://en.wikipedia.org/wiki/Object_type_%28object-oriented_programming%29#Boxing)
-64-bit floating-point values, but also might be arbitrarily large, complex objects, which are
+64-bit floating-point values, but also might be arbitrarily large, complex instances, which are
 declared to be implementations of the `Real` abstract type.
 
 Since `Point{Float64}` is not a subtype of `Point{Real}`, the following method can't be applied
@@ -636,11 +658,11 @@ end
 
 More examples will be discussed later in [Methods](@ref).
 
-How does one construct a `Point` object? It is possible to define custom constructors for composite
+How does one construct a `Point` instance? It is possible to define custom constructors for composite
 types, which will be discussed in detail in [Constructors](@ref man-constructors), but in the absence of any special
-constructor declarations, there are two default ways of creating new composite objects, one in
+constructor declarations, there are two default ways of creating new composite instances, one in
 which the type parameters are explicitly given and the other in which they are implied by the
-arguments to the object constructor.
+arguments to the instance constructor.
 
 Since the type `Point{Float64}` is a concrete type equivalent to `Point` declared with [`Float64`](@ref)
 in place of `T`, it can be applied as a constructor accordingly:
@@ -668,7 +690,7 @@ ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Fl
 Only one default constructor is generated for parametric types, since overriding it is not possible.
 This constructor accepts any arguments and converts them to the field types.
 
-In many cases, it is redundant to provide the type of `Point` object one wants to construct, since
+In many cases, it is redundant to provide the type of `Point` instance one wants to construct, since
 the types of arguments to the constructor call already implicitly provide type information. For
 that reason, you can also apply `Point` itself as a constructor, provided that the implied value
 of the parameter type `T` is unambiguous:
@@ -787,7 +809,7 @@ julia> struct DiagPoint{T} <: Pointy{T}
 
 Now both `Point{Float64}` and `DiagPoint{Float64}` are implementations of the `Pointy{Float64}`
 abstraction, and similarly for every other possible choice of type `T`. This allows programming
-to a common interface shared by all `Pointy` objects, implemented for both `Point` and `DiagPoint`.
+to a common interface shared by all `Pointy` instances, implemented for both `Point` and `DiagPoint`.
 This cannot be fully demonstrated, however, until we have introduced methods and dispatch in the
 next section, [Methods](@ref).
 
@@ -941,8 +963,8 @@ are used directly.
 #### [Singleton Types](@id man-singleton-types)
 
 There is a special kind of abstract parametric type that must be mentioned here: singleton types.
-For each type, `T`, the "singleton type" `Type{T}` is an abstract type whose only instance is
-the object `T`. Since the definition is a little difficult to parse, let's look at some examples:
+For each type, `T`, the "singleton type" `Type{T}` is an abstract type whose only instance is also `T`. 
+Since the definition is a little difficult to parse, let's look at some examples:
 
 ```jldoctest
 julia> isa(Float64, Type{Float64})
@@ -958,9 +980,9 @@ julia> isa(Float64, Type{Real})
 false
 ```
 
-In other words, [`isa(A,Type{B})`](@ref) is true if and only if `A` and `B` are the same object
-and that object is a type. Without the parameter, `Type` is simply an abstract type which has
-all type objects as its instances, including, of course, singleton types:
+In other words, [`isa(A,Type{B})`](@ref) is true if and only if `A` and `B` are the same instance
+and that instance is a type. Without the parameter, `Type` is simply an abstract type which has
+all type instances, including, of course, singleton types:
 
 ```jldoctest
 julia> isa(Type{Float64}, Type)
@@ -973,7 +995,7 @@ julia> isa(Real, Type)
 true
 ```
 
-Any object that is not a type is not an instance of `Type`:
+Any instance that is not a type is not an instance of `Type`:
 
 ```jldoctest
 julia> isa(1, Type)
@@ -991,7 +1013,7 @@ by the type of one of its arguments.
 
 A few popular languages have singleton types, including Haskell, Scala and Ruby. In general usage,
 the term "singleton type" refers to a type whose only instance is a single value. This meaning
-applies to Julia's singleton types, but with that caveat that only type objects have singleton
+applies to Julia's singleton types, but with that caveat that only type instances have singleton
 types.
 
 ### Parametric Primitive Types
@@ -1073,7 +1095,7 @@ Array{Array{T,1},1} where T
 ```
 
 Type `T1` defines a 1-dimensional array of 1-dimensional arrays; each
-of the inner arrays consists of objects of the same type, but this type may vary from one inner array to the next.
+of the inner arrays consists of instances of the same type, but this type may vary from one inner array to the next.
 On the other hand, type `T2` defines a 1-dimensional array of 1-dimensional arrays all of whose inner arrays must have the
 same type.  Note that `T2` is an abstract type, e.g., `Array{Array{Int,1},1} <: T2`, whereas `T1` is a concrete type. As a consequence, `T1` can be constructed with a zero-argument constructor `a=T1()` but `T2` cannot.
 
@@ -1086,7 +1108,7 @@ Vector{T} = Array{T,1}
 
 This is equivalent to `const Vector = Array{T,1} where T`.
 Writing `Vector{Float64}` is equivalent to writing `Array{Float64,1}`, and the umbrella type
-`Vector` has as instances all `Array` objects where the second parameter -- the number of array
+`Vector` has as instances all `Array` instances where the second parameter -- the number of array
 dimensions -- is 1, regardless of what the element type is. In languages where parametric types
 must always be specified in full, this is not especially helpful, but in Julia, this allows one
 to write just `Vector` for the abstract type including all one-dimensional dense arrays of any
@@ -1129,12 +1151,12 @@ native pointer on that machine.)
 
 ## Operations on Types
 
-Since types in Julia are themselves objects, ordinary functions can operate on them. Some functions
+Since types in Julia are instances, ordinary functions can operate on them. Some functions
 that are particularly useful for working with or exploring types have already been introduced,
 such as the `<:` operator, which indicates whether its left hand operand is a subtype of its right
 hand operand.
 
-The [`isa`](@ref) function tests if an object is of a given type and returns true or false:
+The [`isa`](@ref) function tests if an instance is of a given type and returns true or false:
 
 ```jldoctest
 julia> isa(1, Int)
@@ -1145,8 +1167,8 @@ false
 ```
 
 The [`typeof`](@ref) function, already used throughout the manual in examples, returns the type
-of its argument. Since, as noted above, types are objects, they also have types, and we can ask
-what their types are:
+of its argument. Since, as noted above, types are instances, and all instances have type, types 
+also have types, and we can ask what their types are:
 
 ```jldoctest
 julia> typeof(Rational{Int})
@@ -1189,7 +1211,7 @@ julia> supertype(Any)
 Any
 ```
 
-If you apply [`supertype`](@ref) to other type objects (or non-type objects), a [`MethodError`](@ref)
+If you apply [`supertype`](@ref) to other type instances (or non-type instances), a [`MethodError`](@ref)
 is raised:
 
 ```jldoctest; filter = r"Closest candidates.*"s
@@ -1225,19 +1247,19 @@ instances of this type display rather simply, with information about the type na
 the field values, as e.g. `Polar{Float64}(3.0,4.0)`.
 
 If we want it to display instead as `3.0 * exp(4.0im)`, we would define the following method to
-print the object to a given output object `io` (representing a file, terminal, buffer, etcetera;
+print the instance to a given output `io` (representing a file, terminal, buffer, etcetera;
 see [Networking and Streams](@ref)):
 
 ```jldoctest polartype
 julia> Base.show(io::IO, z::Polar) = print(io, z.r, " * exp(", z.Θ, "im)")
 ```
 
-More fine-grained control over display of `Polar` objects is possible. In particular, sometimes
-one wants both a verbose multi-line printing format, used for displaying a single object in the
+More fine-grained control over display of `Polar` instances is possible. In particular, sometimes
+one wants both a verbose multi-line printing format, used for displaying a single instance in the
 REPL and other interactive environments, and also a more compact single-line format used for
-[`print`](@ref) or for displaying the object as part of another object (e.g. in an array). Although
+[`print`](@ref) or for displaying the instance as part of another instance (e.g. in an array). Although
 by default the `show(io, z)` function is called in both cases, you can define a *different* multi-line
-format for displaying an object by overloading a three-argument form of `show` that takes the
+format for displaying an instance by overloading a three-argument form of `show` that takes the
 `text/plain` MIME type as its second argument (see [Multimedia I/O](@ref)), for example:
 
 ```jldoctest polartype
@@ -1264,8 +1286,8 @@ which in turn defaults to `show(stdout, z)`, but you should *not* define new [`d
 methods unless you are defining a new multimedia display handler (see [Multimedia I/O](@ref)).
 
 Moreover, you can also define `show` methods for other MIME types in order to enable richer display
-(HTML, images, etcetera) of objects in environments that support this (e.g. IJulia).   For example,
-we can define formatted HTML display of `Polar` objects, with superscripts and italics, via:
+(HTML, images, etcetera) of instances in environments that support this (e.g. IJulia).   For example,
+we can define formatted HTML display of `Polar` instances, with superscripts and italics, via:
 
 ```jldoctest polartype
 julia> Base.show(io::IO, ::MIME"text/html", z::Polar{T}) where {T} =
@@ -1273,7 +1295,7 @@ julia> Base.show(io::IO, ::MIME"text/html", z::Polar{T}) where {T} =
                    z.r, " <i>e</i><sup>", z.Θ, " <i>i</i></sup>")
 ```
 
-A `Polar` object will then display automatically using HTML in an environment that supports HTML
+A `Polar` instance will then display automatically using HTML in an environment that supports HTML
 display, but you can call `show` manually to get HTML output if you want:
 
 ```jldoctest polartype
@@ -1286,9 +1308,9 @@ julia> show(stdout, "text/html", Polar(3.0,4.0))
 ```
 
 As a rule of thumb, the single-line `show` method should print a valid Julia expression for creating
-the shown object.  When this `show` method contains infix operators, such as the multiplication
+the shown instance.  When this `show` method contains infix operators, such as the multiplication
 operator (`*`) in our single-line `show` method for `Polar` above, it may not parse correctly when
-printed as part of another object.  To see this, consider the expression object (see [Program
+printed as part of another instance.  To see this, consider the expression instance (see [Program
 representation](@ref)) which takes the square of a specific instance of our `Polar` type:
 
 ```jldoctest polartype
@@ -1303,7 +1325,7 @@ julia> print(:($a^2))
 Because the operator `^` has higher precedence than `*` (see [Operator Precedence and Associativity](@ref)), this
 output does not faithfully represent the expression `a ^ 2` which should be equal to `(3.0 *
 exp(4.0im)) ^ 2`.  To solve this issue, we must make a custom method for `Base.show_unquoted(io::IO,
-z::Polar, indent::Int, precedence::Int)`, which is called internally by the expression object when
+z::Polar, indent::Int, precedence::Int)`, which is called internally by the expression instance when
 printing:
 
 ```jldoctest polartype
@@ -1351,7 +1373,7 @@ julia> function Base.show(io::IO, z::Polar)
 ```
 
 This new compact representation will be used when the passed IO stream is an `IOContext`
-object with the `:compact` property set. In particular, this is the case when printing
+instance with the `:compact` property set. In particular, this is the case when printing
 arrays with multiple columns (where horizontal space is limited):
 ```jldoctest polartype
 julia> show(IOContext(stdout, :compact=>true), Polar(3, 4.0))
