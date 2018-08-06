@@ -569,7 +569,6 @@ end
     @deprecate_binding(I, root_module(Base, :LinearAlgebra).I, true,
         ", run `using LinearAlgebra` to load linear algebra functionality.")
 
-    @deprecate_binding Pkg root_module(Base, :Pkg) true ", run `using Pkg` instead"
     @deprecate_binding LibGit2 root_module(Base, :LibGit2) true ", run `import LibGit2` instead"
 
     @eval @deprecate_stdlib $(Symbol("@spawn")) Distributed true
