@@ -327,7 +327,7 @@ function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
         end
     end
 
-    for wt in wait_tasks; Base._wait(wt); end
+    for wt in wait_tasks; Base.wait(wt); end
 
     send_connection_hdr(controller, false)
     send_msg_now(controller, MsgHeader(RRID(0,0), header.notify_oid), JoinCompleteMsg(Sys.CPU_THREADS, getpid()))

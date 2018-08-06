@@ -419,7 +419,7 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
         end
     end
 
-    Base._wait(t_launch)      # catches any thrown errors from the launch task
+    Base.wait(t_launch)      # catches any thrown errors from the launch task
 
     # Since all worker-to-worker setups may not have completed by the time this
     # function returns to the caller, send the complete list to all workers.

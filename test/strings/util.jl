@@ -274,7 +274,7 @@ end
     # test replace with a count for String and GenericString
     # check that replace is a no-op if count==0
     for s in ["aaa", Test.GenericString("aaa")]
-        # @test replace("aaa", 'a' => 'z', count=0) == "aaa" # enable when undeprecated
+        @test replace("aaa", 'a' => 'z', count=0) == "aaa"
         @test replace(s, 'a' => 'z', count=1) == "zaa"
         @test replace(s, 'a' => 'z', count=2) == "zza"
         @test replace(s, 'a' => 'z', count=3) == "zzz"

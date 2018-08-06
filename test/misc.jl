@@ -102,7 +102,7 @@ let l = ReentrantLock()
             @test false
         end === false
     end
-    Base._wait(t)
+    Base.wait(t)
     unlock(l)
     @test_throws ErrorException unlock(l)
 end
@@ -112,9 +112,9 @@ end
 @noinline function f6597(c)
     t = @async nothing
     finalizer(t -> c[] += 1, t)
-    Base._wait(t)
+    Base.wait(t)
     @test c[] == 0
-    Base._wait(t)
+    Base.wait(t)
     nothing
 end
 let c = Ref(0),

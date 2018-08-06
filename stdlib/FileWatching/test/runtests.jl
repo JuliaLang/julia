@@ -110,7 +110,7 @@ for (i, intvl) in enumerate(intvls)
         end
         notify(ready_c, all=true)
         for idx in 1:n
-            Base._wait(t[idx])
+            Base.wait(t[idx])
         end
     end
 end

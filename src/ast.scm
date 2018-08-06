@@ -378,25 +378,20 @@
     (symbol (string.sub str 1 (length str)))))
 
 ; convert '.xx to 'xx, and (|.| _ '.xx) to (|.| _ 'xx), and otherwise return #f
-(define (maybe-undotop e)
+;; raise an error for using .op as a function name
+(define (check-dotop e)
   (if (symbol? e)
       (let ((str (string e)))
         (if (and (eqv? (string.char str 0) #\.)
                  (not (eq? e '|.|))
                  (not (eqv? (string.char str 1) #\.)))
-            (symbol (string.sub str 1 (length str)))
-            #f))
+            (error (string "invalid function name \"" e "\""))))
       (if (pair? e)
           (if (eq? (car e) '|.|)
-              (let ((op (maybe-undotop (caddr e))))
-                (if op
-                    (list '|.| (cadr e) op)
-                    #f))
+              (check-dotop (caddr e))
               (if (quoted? e)
-                  (let ((op (maybe-undotop (cadr e))))
-                    (if op (list (car e) op) #f))
-                  #f))
-          #f)))
+                  (check-dotop (cadr e))))))
+  e)
 
 (define (vararg? x) (and (pair? x) (eq? (car x) '...)))
 (define (varargexpr? x) (and

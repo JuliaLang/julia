@@ -1927,6 +1927,12 @@
         (else
          (list (=-to-kw e)))))
 
+(define invalid-identifier? (Set (list* '.... '? '|.'| syntactic-operators)))
+
+(define-macro (check-identifier ex)
+  `(if (invalid-identifier? ,ex)
+       (error (string "invalid identifier name \"" ,ex "\""))))
+
 (define (parse-paren s (checked #t)) (car (parse-paren- s checked)))
 
 ;; return (expr . arglist) where arglist is #t iff this isn't just a parenthesized expr
@@ -2219,12 +2225,6 @@
    (lambda ()
      ;; process escape sequences using lisp read
      (read (open-input-string (string #\" s #\"))))))
-
-(define invalid-identifier? (Set (list* '.... '? '|.'| syntactic-operators)))
-
-(define-macro (check-identifier ex)
-  `(if (invalid-identifier? ,ex)
-       (error (string "invalid identifier name \"" ,ex "\""))))
 
 ;; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s (checked #t))
