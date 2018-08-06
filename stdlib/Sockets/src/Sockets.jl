@@ -652,17 +652,4 @@ function __init__()
     global uv_jl_connectcb     = @cfunction(uv_connectcb, Cvoid, (Ptr{Cvoid}, Cint))
 end
 
-# deprecations
-
-@deprecate convert(dt::Type{<:Integer}, ip::IPAddr)  dt(ip)
-
-@noinline function getaddrinfo(callback::Function, host::AbstractString)
-    Base.depwarn("`getaddrinfo` with a callback function is deprecated, wrap code in `@async` instead for deferred execution.", :getaddrinfo)
-    @async begin
-        r = getaddrinfo(host)
-        callback(r)
-    end
-    nothing
-end
-
 end

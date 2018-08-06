@@ -12,10 +12,6 @@ import Base: tryparse_internal, show
 
 export readdlm, writedlm
 
-Base.@deprecate readcsv(io; opts...) readdlm(io, ','; opts...)
-Base.@deprecate readcsv(io, T::Type; opts...) readdlm(io, ',', T; opts...)
-Base.@deprecate writecsv(io, a; opts...) writedlm(io, a, ','; opts...)
-
 invalid_dlm(::Type{Char})   = reinterpret(Char, 0xfffffffe)
 invalid_dlm(::Type{UInt8})  = 0xfe
 invalid_dlm(::Type{UInt16}) = 0xfffe

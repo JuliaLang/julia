@@ -549,14 +549,9 @@ end
 
 @eval Base begin
     @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
-    @deprecate_binding Mmap root_module(Base, :Mmap) true ", run `using Mmap` instead"
-    @deprecate_binding Profile root_module(Base, :Profile) true ", run `using Profile` instead"
-    @deprecate_binding Dates root_module(Base, :Dates) true ", run `using Dates` instead"
     @deprecate_binding Distributed root_module(Base, :Distributed) true ", run `using Distributed` instead"
     @deprecate_binding Random root_module(Base, :Random) true ", run `using Random` instead"
     @deprecate_binding Serializer root_module(Base, :Serialization) true ", run `using Serialization` instead"
-    @deprecate_binding Libdl root_module(Base, :Libdl) true ", run `using Libdl` instead"
-    @deprecate_binding Markdown root_module(Base, :Markdown) true ", run `using Markdown` instead"
 
     # PR #25249
     @deprecate_binding SparseArrays root_module(Base, :SparseArrays) true ", run `using SparseArrays` instead"
@@ -571,43 +566,13 @@ end
     @deprecate_binding(SparseVector, root_module(Base, :SparseArrays).SparseVector, true,
         ", run `using SparseArrays` to load sparse array functionality")
 
-    @deprecate_binding(SharedArray, root_module(Base, :SharedArrays).SharedArray, true,
-        ", run `using SharedArrays` to load shared array functionality")
-
     # PR #25571
     @deprecate_binding LinAlg root_module(Base, :LinearAlgebra) true ", run `using LinearAlgebra` instead"
     @deprecate_binding(I, root_module(Base, :LinearAlgebra).I, true,
         ", run `using LinearAlgebra` to load linear algebra functionality.")
 
-    # PR 25544
-    @deprecate_binding REPL            root_module(Base, :REPL)                 true ", run `using REPL` instead"
-    @deprecate_binding LineEdit        root_module(Base, :REPL).LineEdit        true ", use `REPL.LineEdit` instead"
-    @deprecate_binding REPLCompletions root_module(Base, :REPL).REPLCompletions true ", use `REPL.REPLCompletions` instead"
-    @deprecate_binding Terminals       root_module(Base, :REPL).Terminals       true ", use `REPL.Terminals` instead"
-
     @deprecate_binding Pkg root_module(Base, :Pkg) true ", run `using Pkg` instead"
     @deprecate_binding LibGit2 root_module(Base, :LibGit2) true ", run `import LibGit2` instead"
-
-    @eval @deprecate_binding $(Symbol("@doc_str")) getfield(root_module(Base, :Markdown), Symbol("@doc_str")) true ", use `Markdown` instead"
-
-    @deprecate_stdlib readdlm  DelimitedFiles true
-    @deprecate_stdlib writedlm DelimitedFiles true
-    @deprecate_stdlib readcsv  DelimitedFiles true
-    @deprecate_stdlib writecsv DelimitedFiles true
-
-    @eval @deprecate_stdlib $(Symbol("@profile")) Profile true
-
-    @deprecate_stdlib base64encode Base64 true
-    @deprecate_stdlib base64decode Base64 true
-    @deprecate_stdlib Base64EncodePipe Base64 true
-    @deprecate_stdlib Base64DecodePipe Base64 true
-    @deprecate_stdlib stringmime Base64 true
-
-    @deprecate_stdlib poll_fd FileWatching true
-    @deprecate_stdlib poll_file FileWatching true
-    @deprecate_stdlib PollingFileWatcher FileWatching true
-    @deprecate_stdlib watch_file FileWatching true
-    @deprecate_stdlib FileMonitor FileWatching true
 
     @eval @deprecate_stdlib $(Symbol("@spawn")) Distributed true
     @eval @deprecate_stdlib $(Symbol("@spawnat")) Distributed true
@@ -644,16 +609,6 @@ end
     @deprecate_stdlib RemoteException Distributed true
     @deprecate_stdlib ProcessExitedException Distributed true
 
-    @deprecate_stdlib crc32c CRC32c true
-
-    @deprecate_stdlib DateTime Dates true
-    @deprecate_stdlib DateFormat Dates true
-    @eval @deprecate_stdlib $(Symbol("@dateformat_str")) Dates true
-    @deprecate_stdlib now Dates true
-
-    @eval @deprecate_stdlib $(Symbol("@printf")) Printf true
-    @eval @deprecate_stdlib $(Symbol("@sprintf")) Printf true
-
     # PR #24874
     @deprecate_stdlib rand! Random true
     @deprecate_stdlib srand Random true
@@ -675,11 +630,6 @@ end
     @deprecate_stdlib bitrand Random true
     @deprecate_stdlib randjump Random true
     @deprecate_stdlib GLOBAL_RNG Random false
-
-    @deprecate_stdlib serialize Serialization true
-    @deprecate_stdlib deserialize Serialization true
-    @deprecate_stdlib AbstractSerializer Serialization true
-    @deprecate_stdlib SerializationState Serialization true
 
     # PR #25249: SparseArrays to stdlib
     ## the Base.SparseArrays module itself and exported types are deprecated in base/sysimg.jl
@@ -852,63 +802,6 @@ end
     @deprecate_stdlib normalize_string Unicode true
     @deprecate_stdlib graphemes Unicode true
     @deprecate_stdlib is_assigned_char Unicode true
-
-    @deprecate_stdlib whos          InteractiveUtils true
-    @deprecate_stdlib subtypes      InteractiveUtils true
-    @deprecate_stdlib apropos       InteractiveUtils true
-    @deprecate_stdlib edit          InteractiveUtils true
-    @deprecate_stdlib less          InteractiveUtils true
-    @deprecate_stdlib code_llvm     InteractiveUtils true
-    @deprecate_stdlib code_native   InteractiveUtils true
-    @deprecate_stdlib code_warntype InteractiveUtils true
-    @deprecate_stdlib methodswith   InteractiveUtils true
-    @deprecate_stdlib varinfo       InteractiveUtils true
-    @deprecate_stdlib versioninfo   InteractiveUtils true
-    @deprecate_stdlib peakflops     InteractiveUtils true
-    @deprecate_stdlib clipboard     InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@which"))         InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@edit"))          InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@less"))          InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@functionloc"))   InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@code_typed"))    InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@code_warntype")) InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@code_lowered"))  InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@code_llvm"))     InteractiveUtils true
-    @eval @deprecate_stdlib $(Symbol("@code_native"))   InteractiveUtils true
-
-    @eval @deprecate_stdlib $(Symbol("@ip_str")) Sockets true
-    @deprecate_stdlib IPAddr         Sockets true
-    @deprecate_stdlib IPv4           Sockets true
-    @deprecate_stdlib IPv6           Sockets true
-    @deprecate_stdlib accept         Sockets true
-    @deprecate_stdlib connect        Sockets true
-    @deprecate_stdlib getaddrinfo    Sockets true
-    @deprecate_stdlib getalladdrinfo Sockets true
-    @deprecate_stdlib getnameinfo    Sockets true
-    @deprecate_stdlib getipaddr      Sockets true
-    @deprecate_stdlib getpeername    Sockets true
-    @deprecate_stdlib getsockname    Sockets true
-    @deprecate_stdlib listen         Sockets true
-    @deprecate_stdlib listenany      Sockets true
-    @deprecate_stdlib recv           Sockets true
-    @deprecate_stdlib recvfrom       Sockets true
-    @deprecate_stdlib send           Sockets true
-    @deprecate_stdlib TCPSocket      Sockets true
-    @deprecate_stdlib UDPSocket      Sockets true
-
-    @deprecate_stdlib cor       Statistics true
-    @deprecate_stdlib cov       Statistics true
-    @deprecate_stdlib std       Statistics true
-    @deprecate_stdlib stdm      Statistics true
-    @deprecate_stdlib var       Statistics true
-    @deprecate_stdlib varm      Statistics true
-    @deprecate_stdlib mean!     Statistics true
-    @deprecate_stdlib mean      Statistics true
-    @deprecate_stdlib median!   Statistics true
-    @deprecate_stdlib median    Statistics true
-    @deprecate_stdlib middle    Statistics true
-    @deprecate_stdlib quantile! Statistics true
-    @deprecate_stdlib quantile  Statistics true
 end
 end
 

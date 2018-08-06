@@ -27,8 +27,6 @@ end
 
 Serializer(io::IO) = Serializer{typeof(io)}(io)
 
-@deprecate SerializationState Serializer
-
 ## serializing values ##
 
 const n_int_literals = 33
