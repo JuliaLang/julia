@@ -472,10 +472,6 @@ rdiv!(A::SparseMatrixCSC{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
 
 function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     m,n = size(S)
-    if !(-m + 1 <= k <= n + 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-m + 1) and at most $(n + 1) in an $m-by-$n matrix")))
-    end
     colptr = Vector{Ti}(undef, n+1)
     nnz = 0
     for col = 1 : min(max(k+1,1), n+1)
@@ -504,10 +500,6 @@ end
 
 function tril(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     m,n = size(S)
-    if !(-m - 1 <= k <= n - 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-m - 1) and at most $(n - 1) in an $m-by-$n matrix")))
-    end
     colptr = Vector{Ti}(undef, n+1)
     nnz = 0
     colptr[1] = 1

@@ -171,17 +171,10 @@ julia> triu!(M, 1)
 function triu!(M::AbstractMatrix, k::Integer)
     @assert !has_offset_axes(M)
     m, n = size(M)
-    if !(-m + 1 <= k <= n + 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-m + 1) and at most $(n + 1) in an $m-by-$n matrix")))
-    end
-    idx = 1
-    for j = 0:n-1
-        ii = min(max(0, j+1-k), m)
-        for i = (idx+ii):(idx+m-1)
-            M[i] = zero(M[i])
+    for j in 1:min(n, n + k)
+        for i in max(1, j - k + 1):m
+            M[i,j] = zero(M[i,j])
         end
-        idx += m
     end
     M
 end
@@ -216,17 +209,10 @@ julia> tril!(M, 2)
 function tril!(M::AbstractMatrix, k::Integer)
     @assert !has_offset_axes(M)
     m, n = size(M)
-    if !(-m - 1 <= k <= n - 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-m - 1) and at most $(n - 1) in an $m-by-$n matrix")))
-    end
-    idx = 1
-    for j = 0:n-1
-        ii = min(max(0, j-k), m)
-        for i = idx:(idx+ii-1)
-            M[i] = zero(M[i])
+    for j in max(1, k + 1):n
+        @inbounds for i in 1:min(j - k - 1, m)
+            M[i,j] = zero(M[i,j])
         end
-        idx += m
     end
     M
 end
@@ -249,13 +235,8 @@ function fillband!(A::AbstractMatrix{T}, x, l, u) where T
     return A
 end
 
-function diagind(m::Integer, n::Integer, k::Integer=0)
-    if !(-m <= k <= n)
-        throw(ArgumentError(string("requested diagonal, $k, must be at least $(-m) and ",
-            "at most $n in an $m-by-$n matrix")))
-    end
+diagind(m::Integer, n::Integer, k::Integer=0) =
     k <= 0 ? range(1-k, step=m+1, length=min(m+k, n)) : range(k*m+1, step=m+1, length=min(m, n-k))
-end
 
 """
     diagind(M, k::Integer=0)
