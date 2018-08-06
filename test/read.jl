@@ -131,7 +131,7 @@ function cleanup()
     end
     empty!(open_streams)
     for tsk in tasks
-        Base._wait(tsk)
+        Base.wait(tsk)
     end
     empty!(tasks)
 end

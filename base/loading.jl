@@ -1070,7 +1070,6 @@ function evalfile(path::AbstractString, args::Vector{String}=String[])
         Expr(:toplevel,
              :(const ARGS = $args),
              :(eval(x) = $(Expr(:core, :eval))(__anon__, x)),
-             :(@deprecate eval(m, x) Core.eval(m, x)),
              :(include(x) = $(Expr(:top, :include))(__anon__, x)),
              :(include($path))))
 end

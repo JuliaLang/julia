@@ -119,16 +119,4 @@ global_logger(prev_logger)
     @test_broken length(Test.collect_test_logs(()->Meta.parse("for a=b f() end"))[1]) > 0
 end
 
-
-@testset "lowering syntax deprecations" begin
-    # #16295
-    @test_deprecated Meta.lower(@__MODULE__, :(A.(:+)(a,b) = 1))
-
-    # #17623
-    @test_deprecated r"Deprecated syntax `function .+(...)`" Meta.lower(@__MODULE__, :(function .+(a,b) ; end))
-
-    # #15032
-    @test_deprecated Meta.lower(@__MODULE__, :(a.(b) = 1))
-end
-
 # END 0.7 deprecations

@@ -2012,6 +2012,9 @@ julia> map(+, [1, 2, 3], [10, 20, 30])
 """
 map(f, A) = collect(Generator(f,A))
 
+map(f, ::AbstractDict) = error("map is not defined on dictionaries")
+map(f, ::AbstractSet) = error("map is not defined on sets")
+
 ## 2 argument
 function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F
     for (i, j, k) in zip(eachindex(dest), eachindex(A), eachindex(B))

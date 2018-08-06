@@ -240,24 +240,6 @@
            (pair? (caddr e)) (memq (car (caddr e)) '(quote inert))
            (symbol? (cadr (caddr e))))))
 
-;; e.g. Base.(:+) is deprecated in favor of Base.:+
-(define (deprecate-dotparen e)
-  (if (and (length= e 3) (eq? (car e) '|.|)
-           (or (atom? (cadr e)) (sym-ref? (cadr e)))
-           (length= (caddr e) 2) (eq? (caaddr e) 'tuple)
-           (pair? (cadr (caddr e))) (memq (caadr (caddr e)) '(quote inert)))
-      (let* ((s_ (cdadr (caddr e)))
-             (s (if (symbol? s_) s_
-                    (if (and (length= s_ 1) (symbol? (car s_))) (car s_) #f))))
-        (if s
-            (let ((newe (list (car e) (cadr e) (cadr (caddr e))))
-                  (S (deparse `(quote ,s)))) ; #16295
-              (syntax-deprecation (string (deparse (cadr e)) ".(" S ")")
-                                  (string (deparse (cadr e)) "." S) #f)
-              newe)
-            e))
-      e))
-
 ;; convert final (... x) to (curly Vararg x)
 (define (dots->vararg a)
   (if (null? a) a
@@ -1019,20 +1001,13 @@
           ((eq? (car name) 'call)
            (let* ((head    (cadr name))
                   (argl    (cddr name))
-                  (name    (deprecate-dotparen head))
-                  (op (let ((op_ (maybe-undotop name))) ; handle .op -> broadcast deprecation
-                        (if op_
-                            (syntax-deprecation (string "function " (deparse name) "(...)")
-                                                (string "function Base.broadcast(::typeof(" (deparse op_) "), ...)") #f))
-                        op_))
-                  (name (if op '(|.| Base (inert broadcast)) name))
+                  (name    (check-dotop head))
                   (annotations (map (lambda (a) `(meta ,(cadr a) ,(arg-name (caddr a))))
                                     (filter nospecialize-meta? argl)))
                   (body (insert-after-meta (caddr e) annotations))
                   (argl (map (lambda (a)
                                (if (nospecialize-meta? a) (caddr a) a))
                              argl))
-                  (argl (if op (cons `(|::| (call (core Typeof) ,op)) argl) argl))
                   (raw-typevars (or where '()))
                   (sparams (map analyze-typevar raw-typevars))
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
@@ -1893,15 +1868,11 @@
          ((|.|)
           ;; a.b =
           (let* ((a   (cadr lhs))
-                 (b_  (caddr lhs))
-                 (b   (if (and (length= b_ 2) (eq? (car b_) 'tuple))
-                          (begin
-                            (syntax-deprecation
-                             (string (deparse a) ".(" (deparse (cadr b_)) ") = ...")
-                             (string "setfield!(" (deparse a) ", " (deparse (cadr b_)) ", ...)") #f)
-                            (cadr b_))
-                          b_))
+                 (b  (caddr lhs))
                  (rhs (caddr e)))
+            (if (and (length= b 2) (eq? (car b) 'tuple))
+                (error (string "invalid syntax \""
+                               (string (deparse a) ".(" (deparse (cadr b)) ") = ...") "\"")))
             (let ((aa (if (symbol-like? a) a (make-ssavalue)))
                   (bb (if (or (atom? b) (symbol-like? b) (and (pair? b) (quoted? b)))
                           b (make-ssavalue)))

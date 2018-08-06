@@ -387,7 +387,6 @@ end
 baremodule MainInclude
 include(fname::AbstractString) = Main.Base.include(Main, fname)
 eval(x) = Core.eval(Main, x)
-Main.Base.@deprecate eval(m, x) Core.eval(m, x)
 end
 
 """

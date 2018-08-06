@@ -6,8 +6,6 @@
 
 const CoreNumType = Union{Int32, Int64, Float32, Float64}
 
-const DEPRECATED_SYM = Symbol("deprecated.jl")
-
 const _REF_NAME = Ref.body.name
 
 #########
@@ -199,10 +197,6 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
 end
 
 function abstract_call_method(method::Method, @nospecialize(sig), sparams::SimpleVector, sv::InferenceState)
-    # TODO: remove with 0.7 deprecations
-    if method.file === DEPRECATED_SYM && method.sig == (Tuple{Type{T},Any} where T)
-        return Any, false, nothing
-    end
     if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
         return Any, false, nothing
     end

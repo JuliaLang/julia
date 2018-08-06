@@ -3,11 +3,7 @@
 using TOML
 import TOML: linecol, whitespace, comment, newline, expect, lookup, Parser, parse
 
-if Base.isdeprecated(Base, :Test)
-    using Test
-else
-    using Base.Test
-end
+using Test
 
 macro testval(s, v)
     f = "foo = $s"
