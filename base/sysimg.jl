@@ -547,7 +547,6 @@ let
 end
 
 @eval Base begin
-    @deprecate_binding Distributed root_module(Base, :Distributed) true ", run `using Distributed` instead"
     @deprecate_binding Random root_module(Base, :Random) true ", run `using Random` instead"
 
     # PR #25249
@@ -569,41 +568,6 @@ end
         ", run `using LinearAlgebra` to load linear algebra functionality.")
 
     @deprecate_binding LibGit2 root_module(Base, :LibGit2) true ", run `import LibGit2` instead"
-
-    @eval @deprecate_stdlib $(Symbol("@spawn")) Distributed true
-    @eval @deprecate_stdlib $(Symbol("@spawnat")) Distributed true
-    @eval @deprecate_stdlib $(Symbol("@fetch")) Distributed true
-    @eval @deprecate_stdlib $(Symbol("@fetchfrom")) Distributed true
-    @eval @deprecate_stdlib $(Symbol("@everywhere")) Distributed true
-    @eval @deprecate_stdlib $(Symbol("@parallel")) Distributed true
-
-    @deprecate_stdlib addprocs Distributed true
-    @deprecate_stdlib CachingPool Distributed true
-    @deprecate_stdlib clear! Distributed true
-    @deprecate_stdlib ClusterManager Distributed true
-    @deprecate_stdlib default_worker_pool Distributed true
-    @deprecate_stdlib init_worker Distributed true
-    @deprecate_stdlib interrupt Distributed true
-    @deprecate_stdlib launch Distributed true
-    @deprecate_stdlib manage Distributed true
-    @deprecate_stdlib myid Distributed true
-    @deprecate_stdlib nprocs Distributed true
-    @deprecate_stdlib nworkers Distributed true
-    @deprecate_stdlib pmap Distributed true
-    @deprecate_stdlib procs Distributed true
-    @deprecate_stdlib remote Distributed true
-    @deprecate_stdlib remotecall Distributed true
-    @deprecate_stdlib remotecall_fetch Distributed true
-    @deprecate_stdlib remotecall_wait Distributed true
-    @deprecate_stdlib remote_do Distributed true
-    @deprecate_stdlib rmprocs Distributed true
-    @deprecate_stdlib workers Distributed true
-    @deprecate_stdlib WorkerPool Distributed true
-    @deprecate_stdlib RemoteChannel Distributed true
-    @deprecate_stdlib Future Distributed true
-    @deprecate_stdlib WorkerConfig Distributed true
-    @deprecate_stdlib RemoteException Distributed true
-    @deprecate_stdlib ProcessExitedException Distributed true
 
     # PR #24874
     @deprecate_stdlib rand! Random true
