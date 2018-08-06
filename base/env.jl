@@ -145,12 +145,12 @@ function withenv(f::Function, keyvals::Pair{T}...) where T<:AbstractString
     end
     try f()
     finally
-        for (key, val) in keyvals
+        for (key, val) in ENV
             delete!(ENV, key)
         end
-        for (key, val) in oldENV
-            ENV[key] = val
-        end
+        for key in keys(oldENV)
+            ENV[key] = oldENV[key]
+        end 
     end
 end
 withenv(f::Function) = f() # handle empty keyvals case; see #10853
