@@ -365,3 +365,13 @@ stages have different latency so they use a different number of parallel workers
 saturated throughput.
 
 We strongly encourage you to try all these examples to see how they work.
+
+## `CMD`-Objects
+Instead of with backticks, [`Cmd`](@ref)-objects can also be generated manually. This has the advantage, that arguments like the working directory and environment-variables can be customized.
+
+A simple example:
+```julia
+Cmd(`pwd`, dir="..")
+```
+
+Also see [`setenv`](@ref), [`withenv`](@ref) for further information.
