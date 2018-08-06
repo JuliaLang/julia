@@ -145,7 +145,7 @@ struct FileRedirect
     end
 end
 
-rawhandle(::DevNullStream) = C_NULL
+rawhandle(::DevNull) = C_NULL
 rawhandle(x::OS_HANDLE) = x
 if OS_HANDLE !== RawFD
     rawhandle(x::RawFD) = Libc._get_osfhandle(x)
