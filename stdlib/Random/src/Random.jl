@@ -245,6 +245,9 @@ rand(                dims::Integer...) = rand(Float64, Dims(dims))
 rand(r::AbstractRNG, X, dims::Dims)  = rand!(r, Array{gentype(X)}(undef, dims), X)
 rand(                X, dims::Dims)  = rand(GLOBAL_RNG, X, dims)
 
+# For disambiguation
+rand(r::AbstractRNG, dims::Dims) = rand(r, Float64, dims)
+
 rand(r::AbstractRNG, X, d::Integer, dims::Integer...) = rand(r, X, Dims((d, dims...)))
 rand(                X, d::Integer, dims::Integer...) = rand(X, Dims((d, dims...)))
 # note: the above methods would trigger an ambiguity warning if d was not separated out:
