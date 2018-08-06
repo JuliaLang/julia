@@ -621,10 +621,46 @@ index bfff7afb5b4..750c1fdfdfb 100644
      bool Proper = true;
      for (const SCEV *NAryOp : NAry->operands()) {
 diff --git a/lib/Analysis/ScalarEvolutionExpander.cpp b/lib/Analysis/ScalarEvolutionExpander.cpp
-index 53ce33bacbe..3179de31b92 100644
+index 01a8732b0b8..8160a1eaa0b 100644
 --- a/lib/Analysis/ScalarEvolutionExpander.cpp
 +++ b/lib/Analysis/ScalarEvolutionExpander.cpp
-@@ -1671,6 +1671,54 @@ Value *SCEVExpander::visitUMaxExpr(const SCEVUMaxExpr *S) {
+@@ -1634,14 +1634,15 @@ Value *SCEVExpander::visitSMaxExpr(const SCEVSMaxExpr *S) {
+   for (int i = S->getNumOperands()-2; i >= 0; --i) {
+     // In the case of mixed integer and pointer types, do the
+     // rest of the comparisons as integer.
+-    if (S->getOperand(i)->getType() != Ty) {
++    Type *OpTy = S->getOperand(i)->getType();
++    if (OpTy->isIntegerTy() != Ty->isIntegerTy()) {
+       Ty = SE.getEffectiveSCEVType(Ty);
+       LHS = InsertNoopCastOfTo(LHS, Ty);
+     }
+     Value *RHS = expandCodeFor(S->getOperand(i), Ty);
+     Value *ICmp = Builder.CreateICmpSGT(LHS, RHS);
+     rememberInstruction(ICmp);
+-    Value *Sel = Builder.CreateSelect(ICmp, LHS, RHS, "smax");
++    Value *Sel = Builder.CreateSelect(ICmp, LHS, RHS, "smin");
+     rememberInstruction(Sel);
+     LHS = Sel;
+   }
+@@ -1658,14 +1659,15 @@ Value *SCEVExpander::visitUMaxExpr(const SCEVUMaxExpr *S) {
+   for (int i = S->getNumOperands()-2; i >= 0; --i) {
+     // In the case of mixed integer and pointer types, do the
+     // rest of the comparisons as integer.
+-    if (S->getOperand(i)->getType() != Ty) {
++    Type *OpTy = S->getOperand(i)->getType();
++    if (OpTy->isIntegerTy() != Ty->isIntegerTy()) {
+       Ty = SE.getEffectiveSCEVType(Ty);
+       LHS = InsertNoopCastOfTo(LHS, Ty);
+     }
+     Value *RHS = expandCodeFor(S->getOperand(i), Ty);
+     Value *ICmp = Builder.CreateICmpUGT(LHS, RHS);
+     rememberInstruction(ICmp);
+-    Value *Sel = Builder.CreateSelect(ICmp, LHS, RHS, "umax");
++    Value *Sel = Builder.CreateSelect(ICmp, LHS, RHS, "umin");
+     rememberInstruction(Sel);
+     LHS = Sel;
+   }
+@@ -1671,6 +1671,56 @@ Value *SCEVExpander::visitUMaxExpr(const SCEVUMaxExpr *S) {
    return LHS;
  }
  
@@ -634,7 +670,8 @@ index 53ce33bacbe..3179de31b92 100644
 +  for (int i = S->getNumOperands()-2; i >= 0; --i) {
 +    // In the case of mixed integer and pointer types, do the
 +    // rest of the comparisons as integer.
-+    if (S->getOperand(i)->getType() != Ty) {
++    Type *OpTy = S->getOperand(i)->getType();
++    if (OpTy->isIntegerTy() != Ty->isIntegerTy()) {
 +      Ty = SE.getEffectiveSCEVType(Ty);
 +      LHS = InsertNoopCastOfTo(LHS, Ty);
 +    }
@@ -658,7 +695,8 @@ index 53ce33bacbe..3179de31b92 100644
 +  for (int i = S->getNumOperands()-2; i >= 0; --i) {
 +    // In the case of mixed integer and pointer types, do the
 +    // rest of the comparisons as integer.
-+    if (S->getOperand(i)->getType() != Ty) {
++    Type *OpTy = S->getOperand(i)->getType();
++    if (OpTy->isIntegerTy() != Ty->isIntegerTy()) {
 +      Ty = SE.getEffectiveSCEVType(Ty);
 +      LHS = InsertNoopCastOfTo(LHS, Ty);
 +    }
