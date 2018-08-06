@@ -1256,6 +1256,7 @@ function get_testset_depth()
 end
 
 _args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
+_materialize_broadcasted(f, args...) = Broadcast.materialize(Broadcast.Broadcasted(f, args))
 """
     @inferred f(x)
 
@@ -1294,7 +1295,12 @@ macro inferred(ex)
         ex = Expr(:call, :getindex, ex.args...)
     end
     Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
-
+    farg = ex.args[1]
+    if isa(farg, Symbol) && first(string(farg)) == '.'
+        farg = Symbol(string(farg)[2:end])
+        ex = Expr(:call, GlobalRef(Test, :_materialize_broadcasted),
+            farg, ex.args[2:end]...)
+    end
     Base.remove_linenums!(quote
         let
             $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)

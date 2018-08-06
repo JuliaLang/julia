@@ -1079,9 +1079,10 @@ function __dot__(x::Expr)
         Expr(x.head, x.args[1], dotargs[2])
     else
         if x.head == :&& || x.head == :||
-            Base.depwarn("""
-                using $(x.head) expressions in @. is deprecated; in the future it will
-                become elementwise. Break the expression into smaller parts instead.""", nothing)
+            error("""
+                Using `&&` and `||` is disallowed in `@.` expressions.
+                Use `&` or `|` for elementwise logical operations.
+                """)
         end
         head = string(x.head)
         if last(head) == '=' && first(head) != '.'
