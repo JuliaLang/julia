@@ -53,6 +53,8 @@ Base.axes(::AbstractArray, ::Any)
 Base.length(::AbstractArray)
 Base.eachindex
 Base.IndexStyle
+Base.IndexLinear
+Base.IndexCartesian
 Base.conj!
 Base.stride
 Base.strides
