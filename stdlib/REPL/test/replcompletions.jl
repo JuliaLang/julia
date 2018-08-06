@@ -67,7 +67,7 @@ let ex = quote
 
         test_y_array=[CompletionFoo.Test_y(rand()) for i in 1:10]
         test_dict = Dict("abc"=>1, "abcd"=>10, :bar=>2, :bar2=>9, Base=>3,
-                         contains=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
+                         occursin=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
                          "α"=>12, :α=>13)
         test_customdict = CustomDict(test_dict)
 
@@ -352,7 +352,7 @@ let s = "(1, CompletionFoo.test2(`')'`,"
     @test length(c) == 1
 end
 
-let s = "CompletionFoo.test3([1, 2] + CompletionFoo.varfloat,"
+let s = "CompletionFoo.test3([1, 2] .+ CompletionFoo.varfloat,"
     c, r, res = test_complete(s)
     @test !res
     @test c[1] == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
@@ -821,9 +821,9 @@ function test_dict_completion(dict_name)
     s = "$dict_name[Ba"
     c, r = test_complete(s)
     @test c == Any["Base]"]
-    s = "$dict_name[co"
+    s = "$dict_name[occ"
     c, r = test_complete(s)
-    @test c == Any["contains]"]
+    @test c == Any["occursin]"]
     s = "$dict_name[`l"
     c, r = test_complete(s)
     @test c == Any["`ls`]"]

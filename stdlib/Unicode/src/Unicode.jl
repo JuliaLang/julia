@@ -81,12 +81,4 @@ letter combined with an accent mark is a single grapheme.)
 """
 graphemes(s::AbstractString) = Base.Unicode.GraphemeIterator{typeof(s)}(s)
 
-# BEGIN 0.7 deprecations
-
-@deprecate is_assigned_char(c::Char) Unicode.isassigned(c)
-@deprecate normalize_string(s::AbstractString, nf::Symbol; kwargs...) Unicode.normalize(s, nf; kwargs...)
-@deprecate normalize_string(s::AbstractString; kwargs...) Unicode.normalize(s; kwargs...)
-
-# END 0.7 deprecations
-
 end

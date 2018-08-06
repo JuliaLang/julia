@@ -294,10 +294,10 @@ end
     @inferred parse(Int, "12")
     @inferred parse(Float64, "12")
     @inferred parse(Complex{Int}, "12")
-    @test eltype([parse(Int, s, 16) for s in String[]]) == Int
+    @test eltype([parse(Int, s, base=16) for s in String[]]) == Int
     @test eltype([parse(Float64, s) for s in String[]]) == Float64
     @test eltype([parse(Complex{Int}, s) for s in String[]]) == Complex{Int}
-    @test eltype([tryparse(Int, s, 16) for s in String[]]) == Union{Nothing, Int}
+    @test eltype([tryparse(Int, s, base=16) for s in String[]]) == Union{Nothing, Int}
     @test eltype([tryparse(Float64, s) for s in String[]]) == Union{Nothing, Float64}
     @test eltype([tryparse(Complex{Int}, s) for s in String[]]) == Union{Nothing, Complex{Int}}
 end

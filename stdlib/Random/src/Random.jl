@@ -251,6 +251,9 @@ rand(                X, d::Integer, dims::Integer...) = rand(X, Dims((d, dims...
 # rand(r, ()) would match both this method and rand(r, dims::Dims)
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
 
+# this is needed to disambiguate
+rand(r::AbstractRNG, dims::Dims) = error("rand(rng, dims) is discontinued; try rand(rng, Float64, dims)")
+
 rand(r::AbstractRNG, ::Type{X}, dims::Dims) where {X} = rand!(r, Array{X}(undef, dims), X)
 rand(                ::Type{X}, dims::Dims) where {X} = rand(GLOBAL_RNG, X, dims)
 
@@ -273,7 +276,6 @@ include("RNGs.jl")
 include("generation.jl")
 include("normal.jl")
 include("misc.jl")
-include("deprecated.jl")
 
 ## rand & rand! & seed! docstrings
 

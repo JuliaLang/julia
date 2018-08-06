@@ -244,7 +244,6 @@ Base.process_exited
 Base.kill(::Base.Process, ::Integer)
 Base.Sys.set_process_title
 Base.Sys.get_process_title
-Base.readandwrite
 Base.ignorestatus
 Base.detach
 Base.Cmd

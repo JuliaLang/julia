@@ -554,7 +554,7 @@ function IdDict(kv)
     try
         dict_with_eltype((K, V) -> IdDict{K, V}, kv, eltype(kv))
     catch e
-        if !applicable(start, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
+        if !applicable(iterate, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError(
                 "IdDict(kv): kv needs to be an iterator of tuples or pairs"))
         else
