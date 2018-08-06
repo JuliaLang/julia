@@ -450,15 +450,6 @@ function clone(url::String, name::String = "")
     develop(ctx, [Pkg.REPLMode.parse_package(url; add_or_develop=true)])
 end
 
-function dir(pkg::String, paths::AbstractString...)
-    @warn "`Pkg.dir(pkgname, paths...)` is deprecated; instead, do `import $pkg; joinpath(dirname(pathof($pkg)), \"..\", paths...)`." maxlog=1
-    pkgid = Base.identify_package(pkg)
-    pkgid === nothing && return nothing
-    path = Base.locate_package(pkgid)
-    path === nothing && return nothing
-    return abspath(path, "..", "..", paths...)
-end
-
 precompile() = precompile(Context())
 function precompile(ctx::Context)
     printpkgstyle(ctx, :Precompiling, "project...")
