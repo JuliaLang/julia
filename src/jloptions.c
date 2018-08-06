@@ -190,13 +190,10 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "print",           required_argument, 0, 'E' },
         { "load",            required_argument, 0, 'L' },
         { "sysimage",        required_argument, 0, 'J' },
-        { "precompiled",     required_argument, 0, opt_use_precompiled },   // deprecated
         { "sysimage-native-code", required_argument, 0, opt_sysimage_native_code },
-        { "compilecache",    required_argument, 0, opt_use_compilecache },  // deprecated
         { "compiled-modules",    required_argument, 0, opt_compiled_modules },
         { "cpu-target",      required_argument, 0, 'C' },
         { "procs",           required_argument, 0, 'p' },
-        { "machinefile",     required_argument, 0, opt_machinefile },   // deprecated
         { "machine-file",    required_argument, 0, opt_machine_file },
         { "project",         optional_argument, 0, opt_project },
         { "color",           required_argument, 0, opt_color },
@@ -358,9 +355,6 @@ restart_switch:
             else
                 jl_errorf("julia: invalid argument to --banner={yes|no|auto} (%s)", optarg);
             break;
-        case opt_use_precompiled:
-            jl_printf(JL_STDOUT, "WARNING: julia --precompiled option is deprecated, use --sysimage-native-code instead.\n");
-            // fall through
         case opt_sysimage_native_code:
             if (!strcmp(optarg,"yes"))
                 jl_options.use_sysimage_native_code = JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES;
@@ -369,9 +363,6 @@ restart_switch:
             else
                 jl_errorf("julia: invalid argument to --sysimage-native-code={yes|no} (%s)", optarg);
             break;
-        case opt_use_compilecache:
-            jl_printf(JL_STDOUT, "WARNING: julia --compilecache option is deprecated, use --compiled-modules instead.\n");
-            // fall through
         case opt_compiled_modules:
             if (!strcmp(optarg,"yes"))
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_YES;
@@ -397,9 +388,6 @@ restart_switch:
                 jl_options.nprocs = (int)nprocs;
             }
             break;
-        case opt_machinefile:
-            jl_printf(JL_STDOUT, "WARNING: julia --machinefile option is deprecated, use --machine-file instead.\n");
-            // fall through
         case opt_machine_file:
             jl_options.machine_file = strdup(optarg);
             if (!jl_options.machine_file)
