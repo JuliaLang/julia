@@ -547,7 +547,6 @@ let
 end
 
 @eval Base begin
-    @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
     @deprecate_binding Distributed root_module(Base, :Distributed) true ", run `using Distributed` instead"
     @deprecate_binding Random root_module(Base, :Random) true ", run `using Random` instead"
     @deprecate_binding Serializer root_module(Base, :Serialization) true ", run `using Serialization` instead"
