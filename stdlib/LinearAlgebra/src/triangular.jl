@@ -243,10 +243,7 @@ istriu(A::Transpose) = istril(A.parent)
 
 function tril!(A::UpperTriangular, k::Integer=0)
     n = size(A,1)
-    if !(-n - 1 <= k <= n - 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
-    elseif k < 0
+    if k < 0
         fill!(A.data,0)
         return A
     elseif k == 0
@@ -262,10 +259,7 @@ triu!(A::UpperTriangular, k::Integer=0) = UpperTriangular(triu!(A.data,k))
 
 function tril!(A::UnitUpperTriangular{T}, k::Integer=0) where T
     n = size(A,1)
-    if !(-n - 1 <= k <= n - 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
-    elseif k < 0
+    if k < 0
         fill!(A.data, zero(T))
         return UpperTriangular(A.data)
     elseif k == 0
@@ -291,10 +285,7 @@ end
 
 function triu!(A::LowerTriangular, k::Integer=0)
     n = size(A,1)
-    if !(-n + 1 <= k <= n + 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
-    elseif k > 0
+    if k > 0
         fill!(A.data,0)
         return A
     elseif k == 0
@@ -311,10 +302,7 @@ tril!(A::LowerTriangular, k::Integer=0) = LowerTriangular(tril!(A.data,k))
 
 function triu!(A::UnitLowerTriangular{T}, k::Integer=0) where T
     n = size(A,1)
-    if !(-n + 1 <= k <= n + 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
-    elseif k > 0
+    if k > 0
         fill!(A.data, zero(T))
         return LowerTriangular(A.data)
     elseif k == 0
