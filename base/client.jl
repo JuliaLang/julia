@@ -90,12 +90,6 @@ function ip_matches_func(ip, func::Symbol)
 end
 
 function display_error(io::IO, er, bt)
-    if !isempty(bt)
-        st = stacktrace(bt)
-        if !isempty(st)
-            io = redirect(io, log_error_to, st[1])
-        end
-    end
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     # remove REPL-related frames from interactive printing
     eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
