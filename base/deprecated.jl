@@ -575,33 +575,6 @@ function toc()
     return t
 end
 
-# A[I...] .= with scalar indices should modify the element at A[I...]
-function Broadcast.dotview(A::AbstractArray, args::Number...)
-    depwarn("the behavior of `A[I...] .= X` with scalar indices will change in the future. Use `A[I...] = X` instead.", :broadcast!)
-    view(A, args...)
-end
-Broadcast.dotview(A::AbstractArray{<:AbstractArray}, args::Integer...) = getindex(A, args...)
-# Upon removing deprecations, also enable the @testset "scalar .=" in test/broadcast.jl
-
-# indexing with A[true] will throw an argument error in the future
-function to_index(i::Bool)
-    depwarn("indexing with Bool values is deprecated. Convert the index to an integer first with `Int(i)`.", (:getindex, :setindex!, :view))
-    convert(Int,i)::Int
-end
-# After deprecation is removed, enable the @testset "indexing by Bool values" in test/arrayops.jl
-# Also un-comment the new definition in base/indices.jl
-
-# Broadcast no longer defaults to treating its arguments as scalar (#)
-@noinline function Broadcast.broadcastable(x)
-    depwarn("""
-        broadcast will default to iterating over its arguments in the future. Wrap arguments of
-        type `x::$(typeof(x))` with `Ref(x)` to ensure they broadcast as "scalar" elements.
-        """, (:broadcast, :broadcast!))
-    return Ref{typeof(x)}(x)
-end
-@eval Base.Broadcast Base.@deprecate_binding Scalar DefaultArrayStyle{0} false
-# After deprecation is removed, enable the fallback broadcastable definitions in base/broadcast.jl
-
 # deprecate BitArray{...}(shape...) constructors to BitArray{...}(undef, shape...) equivalents
 @deprecate BitArray{N}(dims::Vararg{Int,N}) where {N}   BitArray{N}(undef, dims)
 @deprecate BitArray(dims::NTuple{N,Int}) where {N}      BitArray(undef, dims...)
@@ -1376,28 +1349,6 @@ function slicedim(A::AbstractVector, d::Integer, i::Number)
     end
 end
 
-# PR #26347: Deprecate implicit scalar broadcasting in setindex!
-_axes(::Ref) = ()
-_axes(x) = axes(x)
-setindex_shape_check(X::Base.Iterators.Repeated, I...) = nothing
-function deprecate_scalar_setindex_broadcast_message(v, I...)
-    value = (_axes(Base.Broadcast.broadcastable(v)) == () ? "x" : "(x,)")
-    "using `A[I...] = x` to implicitly broadcast `x` across many locations is deprecated. Use `A[I...] .= $value` instead."
-end
-deprecate_scalar_setindex_broadcast_message(v, ::Colon, ::Vararg{Colon}) =
-    "using `A[:] = x` to implicitly broadcast `x` across many locations is deprecated. Use `fill!(A, x)` instead."
-
-function _iterable(v, I...)
-    depwarn(deprecate_scalar_setindex_broadcast_message(v, I...), :setindex!)
-    Iterators.repeated(v)
-end
-function setindex!(B::BitArray, x, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
-    depwarn(deprecate_scalar_setindex_broadcast_message(x, I0, I...), :setindex!)
-    B[I0, I...] .= (x,)
-    B
-end
-
-
 # PR #26283
 @deprecate contains(haystack, needle) occursin(needle, haystack)
 @deprecate contains(s::AbstractString, r::Regex, offset::Integer) occursin(r, s, offset=offset)
@@ -1493,15 +1444,6 @@ end
     depwarn("using similar(f, shape...) to call `f` with axes `shape` is deprecated; call `f` directly and/or add methods such that it supports axes", :similar)
     f(to_shape(dims))
 end
-# Deprecate non-integer/axis arguments to zeros/ones to match fill/trues/falses
-@deprecate zeros(::Type{T}, dims...) where {T}                  zeros(T, convert(Dims, dims)...)
-@deprecate zeros(dims...)                                       zeros(convert(Dims, dims)...)
-@deprecate zeros(::Type{T}, dims::NTuple{N, Any}) where {T, N}  zeros(T, convert(Dims, dims))
-@deprecate zeros(dims::Tuple)                                   zeros(convert(Dims, dims))
-@deprecate ones(::Type{T}, dims...) where {T}                   ones(T, convert(Dims, dims)...)
-@deprecate ones(dims...)                                        ones(convert(Dims, dims)...)
-@deprecate ones(::Type{T}, dims::NTuple{N, Any}) where {T, N}   ones(T, convert(Dims, dims))
-@deprecate ones(dims::Tuple)                                    ones(convert(Dims, dims))
 
 # Deprecate varargs size: PR #26862
 @deprecate size(x, d1::Integer, d2::Integer) (size(x, d1), size(x, d2))
