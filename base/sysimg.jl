@@ -552,19 +552,6 @@ end
     @deprecate_binding Random root_module(Base, :Random) true ", run `using Random` instead"
     @deprecate_binding Serializer root_module(Base, :Serialization) true ", run `using Serialization` instead"
 
-    # PR #25249
-    @deprecate_binding SparseArrays root_module(Base, :SparseArrays) true ", run `using SparseArrays` instead"
-    @deprecate_binding(AbstractSparseArray, root_module(Base, :SparseArrays).AbstractSparseArray, true,
-        ", run `using SparseArrays` to load sparse array functionality")
-    @deprecate_binding(AbstractSparseMatrix, root_module(Base, :SparseArrays).AbstractSparseMatrix, true,
-        ", run `using SparseArrays` to load sparse array functionality")
-    @deprecate_binding(AbstractSparseVector, root_module(Base, :SparseArrays).AbstractSparseVector, true,
-        ", run `using SparseArrays` to load sparse array functionality")
-    @deprecate_binding(SparseMatrixCSC, root_module(Base, :SparseArrays).SparseMatrixCSC, true,
-        ", run `using SparseArrays` to load sparse array functionality")
-    @deprecate_binding(SparseVector, root_module(Base, :SparseArrays).SparseVector, true,
-        ", run `using SparseArrays` to load sparse array functionality")
-
     # PR #25571
     @deprecate_binding LinAlg root_module(Base, :LinearAlgebra) true ", run `using LinearAlgebra` instead"
     @deprecate_binding(I, root_module(Base, :LinearAlgebra).I, true,
@@ -629,31 +616,6 @@ end
     @deprecate_stdlib bitrand Random true
     @deprecate_stdlib randjump Random true
     @deprecate_stdlib GLOBAL_RNG Random false
-
-    # PR #25249: SparseArrays to stdlib
-    ## the Base.SparseArrays module itself and exported types are deprecated in base/sysimg.jl
-    ## functions that were re-exported from Base
-    @deprecate_stdlib nonzeros   SparseArrays true
-    @deprecate_stdlib permute    SparseArrays true
-    @deprecate_stdlib blkdiag    SparseArrays true blockdiag
-    @deprecate_stdlib dropzeros  SparseArrays true
-    @deprecate_stdlib dropzeros! SparseArrays true
-    @deprecate_stdlib issparse   SparseArrays true
-    @deprecate_stdlib sparse     SparseArrays true
-    @deprecate_stdlib sparsevec  SparseArrays true
-    @deprecate_stdlib spdiagm    SparseArrays true
-    @deprecate_stdlib sprand     SparseArrays true
-    @deprecate_stdlib sprandn    SparseArrays true
-    @deprecate_stdlib spzeros    SparseArrays true
-    @deprecate_stdlib rowvals    SparseArrays true
-    @deprecate_stdlib nzrange    SparseArrays true
-    @deprecate_stdlib nnz        SparseArrays true
-    @deprecate_stdlib findnz     SparseArrays true
-    ## functions that were exported from Base.SparseArrays but not from Base
-    @deprecate_stdlib droptol!   SparseArrays false
-    ## deprecated functions that are moved to stdlib/SparseArrays/src/deprecated.jl
-    @deprecate_stdlib spones     SparseArrays true
-    @deprecate_stdlib speye      SparseArrays true
 
     # PR #25571: LinearAlgebra to stdlib
 
