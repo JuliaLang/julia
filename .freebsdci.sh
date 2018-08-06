@@ -45,7 +45,7 @@ runtests(){
 
     ./usr/bin/julia --check-bounds=yes test/runtests.jl all
     ./usr/bin/julia --check-bounds=yes test/runtests.jl \
-        LibGit2/online OldPkg/pkg Pkg/pkg download
+        LibGit2/online Pkg/pkg download
 }
 
 test-embedding(){

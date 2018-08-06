@@ -59,7 +59,7 @@ jobs:
           pushd /tmp/julia/share/julia/test &&
           if [ $(echo "$FILES_CHANGED" | grep -cv '^doc/') -gt 0 ]; then
             /tmp/julia/bin/julia --check-bounds=yes runtests.jl all --skip Sockets | bar -i 30 &&
-            /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online OldPkg/pkg Pkg/pkg download;
+            /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online Pkg/pkg download;
           fi &&
           popd &&
           mkdir /tmp/embedding-test &&

@@ -515,7 +515,6 @@ let
             :Random,
             :UUIDs,
             :Future,
-            :OldPkg,
             :LinearAlgebra,
             :SparseArrays,
             :SuiteSparse,

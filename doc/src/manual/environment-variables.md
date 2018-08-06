@@ -121,11 +121,6 @@ over `$EDITOR`. If none of these environment variables is set, then the editor
 is taken to be `open` on Windows and OS X, or `/etc/alternatives/editor` if it
 exists, or `emacs` otherwise.
 
-!!! note
-
-    `$JULIA_EDITOR` is *not* used in the determination of the editor for
-    `OldPkg.edit`: this function checks `$VISUAL` and `$EDITOR` alone.
-
 ## Parallelization
 
 ### `JULIA_CPU_THREADS`

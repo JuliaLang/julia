@@ -235,7 +235,7 @@ try
                 [:Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
                  :Future, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
                  :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
-                 :Unicode, :REPL, :InteractiveUtils, :OldPkg, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
+                 :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
                  :Statistics, ]),
                 # Plus precompilation module generated at build time
                 let id = Base.PkgId("__PackagePrecompilationStatementModule")
