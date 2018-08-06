@@ -795,11 +795,6 @@ end
     @deprecate_stdlib ConjVector LinearAlgebra true
     @deprecate_stdlib ConjMatrix LinearAlgebra true
     @deprecate_stdlib RowVector  LinearAlgebra true
-
-    # PR #25021
-    @deprecate_stdlib normalize_string Unicode true
-    @deprecate_stdlib graphemes Unicode true
-    @deprecate_stdlib is_assigned_char Unicode true
 end
 end
 
