@@ -549,7 +549,6 @@ end
 @eval Base begin
     @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
     @deprecate_binding Distributed root_module(Base, :Distributed) true ", run `using Distributed` instead"
-    @deprecate_binding Random root_module(Base, :Random) true ", run `using Random` instead"
     @deprecate_binding Serializer root_module(Base, :Serialization) true ", run `using Serialization` instead"
 
     # PR #25249
@@ -607,28 +606,6 @@ end
     @deprecate_stdlib WorkerConfig Distributed true
     @deprecate_stdlib RemoteException Distributed true
     @deprecate_stdlib ProcessExitedException Distributed true
-
-    # PR #24874
-    @deprecate_stdlib rand! Random true
-    @deprecate_stdlib srand Random true
-    @deprecate_stdlib AbstractRNG Random true
-    @deprecate_stdlib randcycle  Random true
-    @deprecate_stdlib randcycle!  Random true
-    @deprecate_stdlib randperm  Random true
-    @deprecate_stdlib randperm! Random true
-    @deprecate_stdlib shuffle  Random true
-    @deprecate_stdlib shuffle! Random true
-    @deprecate_stdlib randsubseq Random true
-    @deprecate_stdlib randsubseq! Random true
-    @deprecate_stdlib randstring Random true
-    @deprecate_stdlib MersenneTwister  Random true
-    @deprecate_stdlib RandomDevice  Random true
-    @deprecate_stdlib randn! Random true
-    @deprecate_stdlib randexp Random true
-    @deprecate_stdlib randexp! Random true
-    @deprecate_stdlib bitrand Random true
-    @deprecate_stdlib randjump Random true
-    @deprecate_stdlib GLOBAL_RNG Random false
 
     # PR #25249: SparseArrays to stdlib
     ## the Base.SparseArrays module itself and exported types are deprecated in base/sysimg.jl
