@@ -1950,3 +1950,16 @@ end
 h28356() = f28356(Any[Float64][1])
 
 @test h28356() isa S28356{Float64}
+
+# Issue #28444
+mutable struct foo28444
+    a::Int
+    b::Int
+end
+function bar28444()
+    a = foo28444(1, 2)
+    c, d = a.a, a.b
+    e = (c, d)
+    e[1]
+end
+@test bar28444() == 1
