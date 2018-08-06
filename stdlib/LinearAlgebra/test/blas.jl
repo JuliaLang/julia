@@ -344,9 +344,6 @@ Base.setindex!(A::WrappedArray, v, i::Int) = setindex!(A.A, v, i)
 Base.setindex!(A::WrappedArray{T, N}, v, I::Vararg{Int, N}) where {T, N} = setindex!(A.A, v, I...)
 Base.unsafe_convert(::Type{Ptr{T}}, A::WrappedArray{T}) where T = Base.unsafe_convert(Ptr{T}, A.A)
 
-@test_deprecated strides(WrappedArray(rand(5)))
-@test_deprecated stride(WrappedArray(rand(5)), 1)
-
 Base.stride(A::WrappedArray, i::Int) = stride(A.A, i)
 
 @testset "strided interface blas" begin

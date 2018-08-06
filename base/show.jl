@@ -1401,7 +1401,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         parens && print(io, ")")
 
     # transpose
-    elseif (head === Symbol('\'') || head === Symbol(".'")) && length(args) == 1
+    elseif head === Symbol('\'') && length(args) == 1
         if isa(args[1], Symbol)
             show_unquoted(io, args[1])
         else

@@ -834,9 +834,6 @@ end
     @test strides(A) == (1,10)
     @test strides(B) == (2,20)
 
-    @test_deprecated strides(1:5)
-    @test_deprecated stride(1:5,1)
-
     for M in (a, b, A, B)
         @inferred strides(M)
         strides_M = strides(M)

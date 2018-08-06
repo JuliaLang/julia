@@ -665,36 +665,6 @@ finalizer(f::Ptr{Cvoid}, o::Function) = invoke(finalizer, Tuple{Ptr{Cvoid}, Any}
     Base.@deprecate_binding broadcast_t broadcast false ", `broadcast_t(f, ::Type{ElType}, shape, iter, As...)` should become `broadcast(f, Broadcast.DefaultArrayStyle{N}(), ElType, shape, As...))` (see the manual chapter Interfaces)"
 end
 
-
-### deprecations for lazier, less jazzy linalg transition in the next several blocks ###
-# TODOs re. .' deprecation
-#   (1) remove .' deprecation from src/julia-syntax.scm around line 2346
-#   (2) remove .' documentation from base/docs/basedocs.jl around line 255
-#   (3) remove .'-involving code from base/show.jl around line 1277
-#   (4) remove .'-involving test from test/deprecation_exec.jl around line 178
-#   (5) remove .'-related code from src/ast.scm and src/julia-parser.scm
-
-# A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/operators.jl, to deprecate
-@deprecate Ac_ldiv_Bt(a,b)  (\)(adjoint(a), transpose(b))
-@deprecate At_ldiv_Bt(a,b)  (\)(transpose(a), transpose(b))
-@deprecate A_ldiv_Bt(a,b)   (\)(a, transpose(b))
-@deprecate At_ldiv_B(a,b)   (\)(transpose(a), b)
-@deprecate Ac_ldiv_Bc(a,b)  (\)(adjoint(a), adjoint(b))
-@deprecate A_ldiv_Bc(a,b)   (\)(a, adjoint(b))
-@deprecate Ac_ldiv_B(a,b)   (\)(adjoint(a), b)
-@deprecate At_rdiv_Bt(a,b)  (/)(transpose(a), transpose(b))
-@deprecate A_rdiv_Bt(a,b)   (/)(a, transpose(b))
-@deprecate At_rdiv_B(a,b)   (/)(transpose(a), b)
-@deprecate Ac_rdiv_Bc(a,b)  (/)(adjoint(a), adjoint(b))
-@deprecate A_rdiv_Bc(a,b)   (/)(a, adjoint(b))
-@deprecate Ac_rdiv_B(a,b)   (/)(adjoint(a), b)
-@deprecate At_mul_Bt(a,b)   (*)(transpose(a), transpose(b))
-@deprecate A_mul_Bt(a,b)    (*)(a, transpose(b))
-@deprecate At_mul_B(a,b)    (*)(transpose(a), b)
-@deprecate Ac_mul_Bc(a,b)   (*)(adjoint(a), adjoint(b))
-@deprecate A_mul_Bc(a,b)    (*)(a, adjoint(b))
-@deprecate Ac_mul_B(a,b)    (*)(adjoint(a), b)
-
 # issue #24822
 @deprecate_binding Display AbstractDisplay
 
