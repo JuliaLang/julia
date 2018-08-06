@@ -688,6 +688,9 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
         compact[idx] = val === nothing ? nothing : val.x
     end
 
+    # Copy the use count, `finish` may modify it and for our predicate
+    # below we need it consistent with the state of the IR here.
+    used_ssas = copy(compact.used_ssas)
     ir = finish(compact)
     # Now go through any mutable structs and see which ones we can eliminate
     for (idx, (intermediaries, defuse)) in defuses
@@ -699,9 +702,9 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
         nleaves = length(defuse.uses) + length(defuse.defs) + length(defuse.ccall_preserve_uses)
         nuses = 0
         for idx in intermediaries
-            nuses += compact.used_ssas[idx]
+            nuses += used_ssas[idx]
         end
-        nuses_total = compact.used_ssas[idx] + nuses - length(intermediaries)
+        nuses_total = used_ssas[idx] + nuses - length(intermediaries)
         nleaves == nuses_total || continue
         # Find the type for this allocation
         defexpr = ir[SSAValue(idx)]
@@ -717,7 +720,13 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
         fielddefuse = SSADefUse[SSADefUse() for _ = 1:fieldcount(typ)]
         ok = true
         for use in defuse.uses
-            field = try_compute_fieldidx_expr(typ, ir[SSAValue(use)])
+            stmt = ir[SSAValue(use)]
+            # We may have discovered above that this use is dead
+            # after the getfield elim of immutables. In that case,
+            # it would have been deleted. That's fine, just ignore
+            # the use in that case.
+            stmt === nothing && continue
+            field = try_compute_fieldidx_expr(typ, stmt)
             field === nothing && (ok = false; break)
             push!(fielddefuse[field].uses, use)
         end
