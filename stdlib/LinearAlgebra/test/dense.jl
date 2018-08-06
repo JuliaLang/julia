@@ -141,14 +141,14 @@ bimg  = randn(n,2)/2
     end
 end # for eltya
 
-@testset "test triu/tril bounds checking" begin
+@testset "test out of bounds triu/tril" begin
     local m, n = 5, 7
     ainit = rand(m, n)
     for a in (copy(ainit), view(ainit, 1:m, 1:n))
-        @test_throws ArgumentError triu(a, -m)
-        @test_throws ArgumentError triu(a, n + 2)
-        @test_throws ArgumentError tril(a, -m - 2)
-        @test_throws ArgumentError tril(a, n)
+        @test triu(a, -m) == a
+        @test triu(a, n + 2) == zero(a)
+        @test tril(a, -m - 2) == zero(a)
+        @test tril(a, n) == a
     end
 end
 
@@ -651,7 +651,7 @@ end
           2  6 10
           3  7 11
           4  8 12 ]
-    @test_throws ArgumentError diag(A, -5)
+    @test diag(A,-5) == []
     @test diag(A,-4) == []
     @test diag(A,-3) == [4]
     @test diag(A,-2) == [3,8]
@@ -660,21 +660,21 @@ end
     @test diag(A, 1) == [5,10]
     @test diag(A, 2) == [9]
     @test diag(A, 3) == []
-    @test_throws ArgumentError diag(A, 4)
+    @test diag(A, 4) == []
 
     @test diag(zeros(0,0)) == []
-    @test_throws ArgumentError diag(zeros(0,0),1)
-    @test_throws ArgumentError diag(zeros(0,0),-1)
+    @test diag(zeros(0,0),1) == []
+    @test diag(zeros(0,0),-1) == []
 
     @test diag(zeros(1,0)) == []
     @test diag(zeros(1,0),-1) == []
-    @test_throws ArgumentError diag(zeros(1,0),1)
-    @test_throws ArgumentError diag(zeros(1,0),-2)
+    @test diag(zeros(1,0),1) == []
+    @test diag(zeros(1,0),-2) == []
 
     @test diag(zeros(0,1)) == []
     @test diag(zeros(0,1),1) == []
-    @test_throws ArgumentError diag(zeros(0,1),-1)
-    @test_throws ArgumentError diag(zeros(0,1),2)
+    @test diag(zeros(0,1),-1) == []
+    @test diag(zeros(0,1),2) == []
 end
 
 @testset "Matrix to real power" for elty in (Float64, Complex{Float64})
