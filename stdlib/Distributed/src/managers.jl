@@ -135,7 +135,7 @@ function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy:
     end
 
     for t in launch_tasks
-        wait(t)
+        fetch(t)
     end
 
     notify(launch_ntfy)
