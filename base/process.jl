@@ -306,7 +306,6 @@ mutable struct Process <: AbstractPipe
     termsignal::Int32
     exitnotify::Condition
     closenotify::Condition
-    openstream::Symbol # for open(cmd) deprecation
     function Process(cmd::Cmd, handle::Ptr{Cvoid},
                      in::Union{Redirectable, Ptr{Cvoid}},
                      out::Union{Redirectable, Ptr{Cvoid}},
@@ -336,9 +335,7 @@ struct ProcessChain <: AbstractPipe
     in::Redirectable
     out::Redirectable
     err::Redirectable
-    openstream::Symbol # for open(cmd) deprecation
     ProcessChain(stdios::StdIOSet) = new(Process[], stdios[1], stdios[2], stdios[3])
-    ProcessChain(chain::ProcessChain, openstream::Symbol) = new(chain.processes, chain.in, chain.out, chain.err, openstream) # for open(cmd) deprecation
 end
 pipe_reader(p::ProcessChain) = p.out
 pipe_writer(p::ProcessChain) = p.in
@@ -596,21 +593,11 @@ function open(cmds::AbstractCmd, other::Redirectable=devnull; write::Bool = fals
         out = Pipe()
         processes = _spawn(cmds, (in,out,stderr))
         close(out.in)
-        if isa(processes, ProcessChain) # for open(cmd) deprecation
-            processes = ProcessChain(processes, :out)
-        else
-            processes.openstream = :out
-        end
     elseif write
         in = Pipe()
         out = other
         processes = _spawn(cmds, (in,out,stderr))
         close(in.out)
-        if isa(processes, ProcessChain) # for open(cmd) deprecation
-            processes = ProcessChain(processes, :in)
-        else
-            processes.openstream = :in
-        end
     else
         processes = _spawn(cmds)
     end
