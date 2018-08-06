@@ -2021,7 +2021,7 @@
      (if (has-parameters? (cddr e))
          (error (string "unexpected semicolon in \"" (deparse e) "\"")))
      (if (any assignment? (cddr e))
-         (syntax-deprecation "assignment inside T{ }" "" #f))
+         (error (string "misplaced assignment statement in \"" (deparse e) "\"" )))
      (let* ((p (extract-implicit-whereparams e))
             (curlyparams (car p))
             (whereparams (cdr p)))
@@ -2195,20 +2195,20 @@
      (if (has-parameters? (cdr e))
          (error "unexpected semicolon in array expression"))
      (if (any assignment? (cdr e))
-         (syntax-deprecation "assignment inside [ ]" "" #f))
+         (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
      (expand-forms `(call (top vect) ,@(cdr e))))
 
    'hcat
    (lambda (e)
      (if (any assignment? (cdr e))
-         (syntax-deprecation "assignment inside [ ]" "" #f))
+         (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
      (expand-forms `(call (top hcat) ,@(cdr e))))
 
    'vcat
    (lambda (e)
      (let ((a (cdr e)))
        (if (any assignment? a)
-           (syntax-deprecation "assignment inside [ ]" "" #f))
+           (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
        (if (has-parameters? a)
            (error "unexpected semicolon in array expression")
            (expand-forms
@@ -2229,7 +2229,7 @@
    'typed_hcat
    (lambda (e)
      (if (any assignment? (cddr e))
-         (syntax-deprecation "assignment inside T[ ]" "" #f))
+         (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
      (expand-forms `(call (top typed_hcat) ,@(cdr e))))
 
    'typed_vcat
@@ -2237,7 +2237,7 @@
      (let ((t (cadr e))
            (a (cddr e)))
        (if (any assignment? (cddr e))
-           (syntax-deprecation "assignment inside T[ ]" "" #f))
+           (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
        (expand-forms
         (if (any (lambda (x)
                    (and (pair? x) (eq? (car x) 'row)))
