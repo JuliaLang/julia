@@ -2957,7 +2957,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Environment Variables",
     "title": "JULIA_EDITOR",
     "category": "section",
-    "text": "The editor returned by InteractiveUtils.editor() and used in, e.g., InteractiveUtils.edit, referring to the command of the preferred editor, for instance vim.$JULIA_EDITOR takes precedence over $VISUAL, which in turn takes precedence over $EDITOR. If none of these environment variables is set, then the editor is taken to be open on Windows and OS X, or /etc/alternatives/editor if it exists, or emacs otherwise.note: Note\n$JULIA_EDITOR is not used in the determination of the editor for OldPkg.edit: this function checks $VISUAL and $EDITOR alone."
+    "text": "The editor returned by InteractiveUtils.editor() and used in, e.g., InteractiveUtils.edit, referring to the command of the preferred editor, for instance vim.$JULIA_EDITOR takes precedence over $VISUAL, which in turn takes precedence over $EDITOR. If none of these environment variables is set, then the editor is taken to be open on Windows and OS X, or /etc/alternatives/editor if it exists, or emacs otherwise."
 },
 
 {
@@ -7469,7 +7469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
