@@ -19,7 +19,7 @@ include("generate.jl")
 
 function check_package_name(x::String)
     if !(occursin(Pkg.REPLMode.name_re, x))
-         cmderror("$x is not a valid packagename")
+         pkgerror("$x is not a valid packagename")
     end
     return PackageSpec(x)
 end
@@ -28,22 +28,28 @@ add_or_develop(pkg::Union{String, PackageSpec}; kwargs...) = add_or_develop([pkg
 add_or_develop(pkgs::Vector{String}; kwargs...)            = add_or_develop([check_package_name(pkg) for pkg in pkgs]; kwargs...)
 add_or_develop(pkgs::Vector{PackageSpec}; kwargs...)       = add_or_develop(Context(), pkgs; kwargs...)
 
-function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, devdir::Union{String,Nothing}=nothing, kwargs...)
+function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, shared::Bool=true, kwargs...)
     Context!(ctx; kwargs...)
 
     # All developed packages should go through handle_repos_develop so just give them an empty repo
     for pkg in pkgs
-        mode == :develop && pkg.repo == nothing && (pkg.repo = Types.GitRepo())
+        if mode == :develop
+            pkg.repo == nothing && (pkg.repo = Types.GitRepo())
+            if !isempty(pkg.repo.rev)
+                pkgerror("git revision cannot be given to `develop`")
+            end
+        end
     end
 
     # if julia is passed as a package the solver gets tricked;
     # this catches the error early on
     any(pkg->(pkg.name == "julia"), pkgs) &&
-        cmderror("Trying to $mode julia as a package")
+        pkgerror("Trying to $mode julia as a package")
 
     ctx.preview && preview_info()
     if mode == :develop
-        new_git = handle_repos_develop!(ctx, pkgs, something(devdir, Pkg.devdir()))
+        devdir = shared ? Pkg.devdir() : joinpath(dirname(ctx.env.project_file), "dev")
+        new_git = handle_repos_develop!(ctx, pkgs, devdir)
     else
         new_git = handle_repos_add!(ctx, pkgs; upgrade_or_add=true)
     end
@@ -53,7 +59,7 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, d
     ensure_resolved(ctx.env, pkgs, registry=true)
 
     any(pkg -> Types.collides_with_project(ctx.env, pkg), pkgs) &&
-        cmderror("Cannot $mode package with the same name or uuid as the project")
+        pkgerror("Cannot $mode package with the same name or uuid as the project")
 
     Operations.add_or_develop(ctx, pkgs; new_git=new_git)
     ctx.preview && preview_info()
@@ -61,13 +67,18 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, d
 end
 
 add(args...; kwargs...) = add_or_develop(args...; mode = :add, kwargs...)
-develop(args...; kwargs...) = add_or_develop(args...; mode = :develop, kwargs...)
+develop(args...; shared=true, kwargs...) = add_or_develop(args...; mode = :develop, shared = shared, kwargs...)
 
 rm(pkg::Union{String, PackageSpec}; kwargs...) = rm([pkg]; kwargs...)
 rm(pkgs::Vector{String}; kwargs...)            = rm([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
 rm(pkgs::Vector{PackageSpec}; kwargs...)       = rm(Context(), pkgs; kwargs...)
 
-function rm(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
+function rm(ctx::Context, pkgs::Vector{PackageSpec}; mode=PKGMODE_PROJECT, kwargs...)
+    for pkg in pkgs
+        #TODO only overwrite pkg.mode is default value ?
+        pkg.mode = mode
+    end
+
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     project_deps_resolve!(ctx.env, pkgs)
@@ -101,7 +112,7 @@ function update_registry(ctx)
                     try
                         GitTools.fetch(repo; refspecs=["+refs/heads/$branch:refs/remotes/origin/$branch"])
                     catch e
-                        e isa CommandError || rethrow(e)
+                        e isa PkgError || rethrow(e)
                         push!(errors, (reg, "failed to fetch from repo"))
                         return
                     end
@@ -144,6 +155,12 @@ up(pkgs::Vector{PackageSpec}; kwargs...)       = up(Context(), pkgs; kwargs...)
 
 function up(ctx::Context, pkgs::Vector{PackageSpec};
             level::UpgradeLevel=UPLEVEL_MAJOR, mode::PackageMode=PKGMODE_PROJECT, do_update_registry=true, kwargs...)
+    for pkg in pkgs
+        # TODO only override if they are not already set
+        pkg.mode = mode
+        pkg.version = level
+    end
+
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     do_update_registry && update_registry(ctx)
@@ -207,7 +224,7 @@ function free(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     for pkg in pkgs
         info = manifest_info(ctx.env, pkg.uuid)
         if !get(info, "pinned", false) && !(pkg.uuid in uuids_in_registry)
-            cmderror("cannot free an unpinned package that does not exist in a registry")
+            pkgerror("cannot free an unpinned package that does not exist in a registry")
         end
     end
     Operations.free(ctx, pkgs)
@@ -226,7 +243,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...
     ctx.preview && preview_info()
     if isempty(pkgs)
         # TODO: Allow this?
-        ctx.env.pkg == nothing && cmderror("trying to test unnamed project")
+        ctx.env.pkg == nothing && pkgerror("trying to test unnamed project")
         push!(pkgs, ctx.env.pkg)
     end
     project_resolve!(ctx.env, pkgs)
@@ -241,7 +258,8 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...
 end
 
 
-function installed(mode::PackageMode=PKGMODE_MANIFEST)
+installed() = __installed(PKGMODE_PROJECT)
+function __installed(mode::PackageMode=PKGMODE_MANIFEST)
     diffs = Display.status(Context(), mode, #=use_as_api=# true)
     version_status = Dict{String, Union{VersionNumber,Nothing}}()
     diffs == nothing && return version_status
@@ -456,7 +474,7 @@ function precompile(ctx::Context)
         sourcepath = Base.locate_package(pkg)
         if sourcepath == nothing
             # XXX: this isn't supposed to be fatal
-            cmderror("couldn't find path to $(pkg.name) when trying to precompilie project")
+            pkgerror("couldn't find path to $(pkg.name) when trying to precompilie project")
         end
         stale = true
         for path_to_try in paths::Vector{String}
@@ -492,7 +510,7 @@ function instantiate(ctx::Context; manifest::Union{Bool, Nothing}=nothing, kwarg
         return
     end
     if !isfile(ctx.env.manifest_file) && manifest == true
-        cmderror("manifest at $(ctx.env.manifest) does not exist")
+        pkgerror("manifest at $(ctx.env.manifest_file) does not exist")
     end
     update_registry(ctx)
     urls = Dict{}
@@ -534,8 +552,47 @@ function status(ctx::Context, mode=PKGMODE_PROJECT)
     return
 end
 
-function activate(path::Union{String,Nothing}=nothing)
-    Base.ACTIVE_PROJECT[] = Base.load_path_expand(path)
+activate() = (Base.ACTIVE_PROJECT[] = nothing)
+function activate(path::String; shared::Bool=false)
+    if !shared
+        devpath = nothing
+        env = Base.active_project() === nothing ? nothing : EnvCache()
+        if env !== nothing && haskey(env.project["deps"], path)
+            uuid = UUID(env.project["deps"][path])
+            info = manifest_info(env, uuid)
+            devpath = haskey(info, "path") ? joinpath(dirname(env.project_file), info["path"]) : nothing
+        end
+        # `pkg> activate path`/`Pkg.activate(path)` does the following
+        # 1. if path exists, activate that
+        # 2. if path exists in deps, and the dep is deved, activate that path (`devpath` above)
+        # 3. activate the non-existing directory (e.g. as in `pkg> activate .` for initing a new env)
+        if Types.isdir_windows_workaround(path)
+            fullpath = abspath(path)
+        elseif devpath !== nothing
+            fullpath = abspath(devpath)
+        else
+            fullpath = abspath(path)
+            isdir(fullpath) || @info("new environment will be placed at $fullpath")
+        end
+    else
+        # initialize `fullpath` in case of empty `Pkg.depots()`
+        fullpath = ""
+        # loop over all depots to check if the shared environment already exists
+        for depot in Pkg.depots()
+            fullpath = joinpath(Pkg.envdir(depot), path)
+            isdir(fullpath) && break
+        end
+        # this disallows names such as "Foo/bar", ".", "..", etc
+        if basename(abspath(fullpath)) != path
+            pkgerror("not a valid name for a shared environment: $(path)")
+        end
+        # unless the shared environment already exists, place it in the first depots
+        if !isdir(fullpath)
+            fullpath = joinpath(Pkg.envdir(Pkg.depots1()), path)
+            @info("new shared environment \"$path\" will be placed at $fullpath")
+        end
+    end
+    Base.ACTIVE_PROJECT[] = Base.load_path_expand(fullpath)
 end
 
 """

@@ -611,7 +611,8 @@ end
 # or an Exception that describes why it couldn't be loaded
 # and it reconnects the Base.Docs.META
 function _include_from_serialized(path::String, depmods::Vector{Any})
-    restored = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
+    sv = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
+    restored = sv[1]
     if !isa(restored, Exception)
         for M in restored::Vector{Any}
             M = M::Module
@@ -623,6 +624,7 @@ function _include_from_serialized(path::String, depmods::Vector{Any})
             end
         end
     end
+    isassigned(sv, 2) && ccall(:jl_init_restored_modules, Cvoid, (Any,), sv[2])
     return restored
 end
 

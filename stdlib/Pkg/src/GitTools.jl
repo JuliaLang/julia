@@ -97,9 +97,9 @@ function clone(url, source_path; header=nothing, kwargs...)
         err isa LibGit2.GitError || rethrow(err)
         if (err.class == LibGit2.Error.Net && err.code == LibGit2.Error.EINVALIDSPEC) ||
            (err.class == LibGit2.Error.Repository && err.code == LibGit2.Error.ENOTFOUND)
-            Pkg.Types.cmderror("Git repository not found at '$(url)'")
+            Pkg.Types.pkgerror("Git repository not found at '$(url)'")
         else
-            Pkg.Types.cmderror("failed to clone from $(url), error: $err")
+            Pkg.Types.pkgerror("failed to clone from $(url), error: $err")
         end
     finally
         print(stdout, "\033[2K") # clear line
@@ -128,9 +128,9 @@ function fetch(repo::LibGit2.GitRepo, remoteurl=nothing; header=nothing, kwargs.
     catch err
         err isa LibGit2.GitError || rethrow(err)
         if (err.class == LibGit2.Error.Repository && err.code == LibGit2.Error.ERROR)
-            Pkg.Types.cmderror("Git repository not found at '$(remoteurl)'")
+            Pkg.Types.pkgerror("Git repository not found at '$(remoteurl)'")
         else
-            Pkg.Types.cmderror("failed to fetch from $(remoteurl), error: $err")
+            Pkg.Types.pkgerror("failed to fetch from $(remoteurl), error: $err")
         end
     finally
         print(stdout, "\033[2K") # clear line

@@ -2402,7 +2402,7 @@ static jl_array_t *jl_finalize_deserializer(jl_serializer_state *s, arraylist_t 
     return init_order;
 }
 
-static void jl_init_restored_modules(jl_array_t *init_order)
+JL_DLLEXPORT void jl_init_restored_modules(jl_array_t *init_order)
 {
     if (!init_order)
         return;
@@ -3118,10 +3118,10 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
         arraylist_free(tracee_list);
         free(tracee_list);
     }
-    jl_init_restored_modules(init_order);
+    jl_value_t *ret = (jl_value_t*)jl_svec(2, restored, init_order);
     JL_GC_POP();
 
-    return (jl_value_t*)restored;
+    return (jl_value_t*)ret;
 }
 
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz, jl_array_t *mod_array)

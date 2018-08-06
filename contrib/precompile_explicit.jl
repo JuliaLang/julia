@@ -3,7 +3,7 @@
 # Steps to regenerate this file:
 # 1. Remove all `precompile` calls
 # 2. Rebuild system image
-# 3. Start julia with `--trace-compile=yes and do some stuff
+# 3. Start julia with `--trace-compile=precompiles.txt and do some stuff
 # 5. Run `grep -v '#[0-9]' precompiles.txt >> contrib/precompile_explicit.jl`
 # (filters out closures, which might have different generated names in different environments)
 # This list is only used on Windows, otherwise precompile statements are generated dynamically.

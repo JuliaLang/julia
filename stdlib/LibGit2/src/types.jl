@@ -1303,6 +1303,10 @@ end
 
 function approve(cache::CachedCredentials, cred::AbstractCredential, url::AbstractString)
     cred_id = credential_identifier(url)
+    if haskey(cache.cred, cred_id)
+        # Shred the cached credential we'll be overwriting if it isn't identical
+        cred !== cache.cred[cred_id] && Base.shred!(cache.cred[cred_id])
+    end
     cache.cred[cred_id] = cred
     nothing
 end
@@ -1310,6 +1314,8 @@ end
 function reject(cache::CachedCredentials, cred::AbstractCredential, url::AbstractString)
     cred_id = credential_identifier(url)
     if haskey(cache.cred, cred_id)
+        # Shred the cached credential if it isn't the `cred` passed in
+        cred !== cache.cred[cred_id] && Base.shred!(cache.cred[cred_id])
         delete!(cache.cred, cred_id)
     end
     nothing
@@ -1409,6 +1415,8 @@ function approve(p::CredentialPayload; shred::Bool=true)
     cred = p.credential
     cred === nothing && return  # No credential was used
 
+    # Each `approve` call needs to avoid shredding the passed in credential as we need
+    # the credential information intact for subsequent approve calls.
     if p.cache !== nothing
         approve(p.cache, cred, p.url)
         shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
@@ -1437,6 +1445,8 @@ function reject(p::CredentialPayload; shred::Bool=true)
     cred = p.credential
     cred === nothing && return  # No credential was used
 
+    # Note: each `reject` call needs to avoid shredding the passed in credential as we need
+    # the credential information intact for subsequent reject calls.
     if p.cache !== nothing
         reject(p.cache, cred, p.url)
     end

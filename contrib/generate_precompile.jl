@@ -35,19 +35,12 @@ cd("complet_path\t\t$CTRL_C
 julia_cmd() = (julia = joinpath(Sys.BINDIR, Base.julia_exename()); `$julia`)
 have_repl =  haskey(Base.loaded_modules,
                     Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
-have_pkg =  haskey(Base.loaded_modules,
-                    Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
+Pkg = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"),
+          nothing)
 
-if have_pkg
-    precompile_script *= """
-    tmp = mktempdir()
-    cd(tmp)
-    touch("Project.toml")
-    ] activate .
-    st
-    $CTRL_C
-    rm(tmp; recursive=true)
-    """
+if Pkg !== nothing
+    precompile_script *= Pkg.precompile_script
 end
 
 function generate_precompile_statements()
@@ -82,65 +75,63 @@ function generate_precompile_statements()
         print("Generating precompile statements...")
         sysimg = isempty(ARGS) ? joinpath(dirname(Sys.BINDIR), "lib", "julia", "sys.ji") : ARGS[1]
 
-        # Run a repl process and replay our script
-        stdout_accumulator, stderr_accumulator = IOBuffer(), IOBuffer()
-        with_fake_pty() do slave, master
-            with_fake_pty() do slave_err, master_err
-                done = false
-                withenv("JULIA_HISTORY" => tempname(), "JULIA_PROJECT" => nothing,
-                        "TERM" => "") do
-                    p = run(`$(julia_cmd()) -O0 --trace-compile=yes --sysimage $sysimg
-                                           --startup-file=no --color=yes`,
-                            slave, slave, slave_err; wait=false)
-                    readuntil(master, "julia>", keep=true)
-                    for (tty, accumulator) in (master     => stdout_accumulator,
-                                               master_err => stderr_accumulator)
-                        @async begin
-                            while true
-                                done && break
-                                write(accumulator, readavailable(tty))
+        mktemp() do precompile_file, _
+            # Run a repl process and replay our script
+            stdout_accumulator, stderr_accumulator = IOBuffer(), IOBuffer()
+            with_fake_pty() do slave, master
+                with_fake_pty() do slave_err, master_err
+                    done = false
+                    withenv("JULIA_HISTORY" => tempname(), "JULIA_PROJECT" => nothing,
+                            "TERM" => "") do
+                        p = run(`$(julia_cmd()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
+                                               --startup-file=no --color=yes`,
+                                slave, slave, slave_err; wait=false)
+                        readuntil(master, "julia>", keep=true)
+                        for (tty, accumulator) in (master     => stdout_accumulator,
+                                                   master_err => stderr_accumulator)
+                            @async begin
+                                while true
+                                    done && break
+                                    write(accumulator, readavailable(tty))
+                                end
                             end
                         end
-                    end
-                    if have_repl
-                        for l in split(precompile_script, '\n'; keepempty=false)
-                            write(master, l, '\n')
+                        if have_repl
+                            for l in split(precompile_script, '\n'; keepempty=false)
+                                write(master, l, '\n')
+                            end
                         end
+                        write(master, "exit()\n")
+                        wait(p)
+                        done = true
                     end
-                    write(master, "exit()\n")
-                    wait(p)
-                    done = true
                 end
             end
+
+            # Check what the REPL displayed
+            # stdout_output = String(take!(stdout_accumulator))
+            # println(stdout_output)
+
+            # Extract the precompile statements from stderr
+            statements = Set{String}()
+            for statement in split(read(precompile_file, String), '\n')
+                occursin("Main.", statement) && continue
+                push!(statements, statement)
+            end
+
+            # Load the precompile statements
+            statements_ordered = join(sort(collect(statements)), '\n')
+            # println(statements_ordered)
+            if have_repl
+                # Seems like a reasonable number right now, adjust as needed
+                @assert length(statements) > 700
+            end
+
+            Base.include_string(PrecompileStagingArea, statements_ordered)
+            print(" $(length(statements)) generated in ")
+            Base.time_print((time() - start_time) * 10^9)
+            println()
         end
-
-        stderr_output = String(take!(stderr_accumulator))
-        # println(stderr_output)
-        # stdout_output = String(take!(stdout_accumulator))
-        # println(stdout_output)
-
-        # Extract the precompile statements from stderr
-        statements = Set{String}()
-        for statement in split(stderr_output, '\n')
-            m = match(r"(precompile\(Tuple{.*)", statement)
-            m === nothing && continue
-            statement = m.captures[1]
-            occursin(r"Main.", statement) && continue
-            push!(statements, statement)
-        end
-
-        # Load the precompile statements
-        statements_ordered = join(sort(collect(statements)), '\n')
-        # println(statements_ordered)
-        if have_repl
-            # Seems like a reasonable number right now, adjust as needed
-            @assert length(statements) > 700
-        end
-
-        Base.include_string(PrecompileStagingArea, statements_ordered)
-        print(" $(length(statements)) generated in ")
-        Base.time_print((time() - start_time) * 10^9)
-        println()
     end
 
     # Fall back to explicit list on Windows, might as well include them

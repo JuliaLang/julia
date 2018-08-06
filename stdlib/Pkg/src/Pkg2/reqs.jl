@@ -23,12 +23,12 @@ struct Requirement <: Line
         while !isempty(fields) && fields[1][1] == '@'
             push!(system, popfirst!(fields)[2:end])
         end
-        isempty(fields) && throw(PkgError("invalid requires entry: $content"))
+        isempty(fields) && error("invalid requires entry: $content")
         package = popfirst!(fields)
         all(field->occursin(Base.VERSION_REGEX, field), fields) ||
-            throw(PkgError("invalid requires entry for $package: $content"))
+            error("invalid requires entry for $package: $content")
         versions = VersionNumber.(fields)
-        issorted(versions) || throw(PkgError("invalid requires entry for $package: $content"))
+        issorted(versions) || error("invalid requires entry for $package: $content")
         new(content, package, VersionSet(versions), system)
     end
 end
