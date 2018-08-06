@@ -24,7 +24,7 @@ abstract type LibuvStream <: IO end
 # .  +- Process (not exported)
 # .  +- ProcessChain (not exported)
 # +- BufferStream
-# +- DevNullStream (not exported)
+# +- DevNull (not exported)
 # +- Filesystem.File
 # +- LibuvStream (not exported)
 # .  +- PipeEndpoint (not exported)
