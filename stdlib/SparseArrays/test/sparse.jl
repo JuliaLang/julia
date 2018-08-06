@@ -1553,14 +1553,10 @@ end
     @test Array(tril(A,1)) == tril(AF,1)
     @test Array(triu!(copy(A), 2)) == triu(AF,2)
     @test Array(tril!(copy(A), 2)) == tril(AF,2)
-    @test_throws ArgumentError tril(A, -n - 2)
-    @test_throws ArgumentError tril(A, n)
-    @test_throws ArgumentError triu(A, -n)
-    @test_throws ArgumentError triu(A, n + 2)
-    @test_throws ArgumentError tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -5)
-    @test_throws ArgumentError tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), 4)
-    @test_throws ArgumentError triu!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -3)
-    @test_throws ArgumentError triu!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), 6)
+    @test tril(A, -n - 2) == zero(A)
+    @test tril(A, n) == A
+    @test triu(A, -n) == A
+    @test triu(A, n + 2) == zero(A)
 
     # fkeep trim option
     @test isequal(length(tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -1).rowval), 0)
