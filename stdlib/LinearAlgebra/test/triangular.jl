@@ -117,24 +117,24 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test tril(A1,0)  == A1
             @test tril(A1,-1) == LowerTriangular(tril(Matrix(A1), -1))
             @test tril(A1,1)  == t1(tril(tril(Matrix(A1), 1)))
-            @test_throws ArgumentError tril!(A1, -n - 2)
-            @test_throws ArgumentError tril!(A1, n)
+            @test tril(A1, -n - 2) == zeros(size(A1))
+            @test tril(A1, n) == A1
             @test triu(A1,0)  == t1(diagm(0 => diag(A1)))
             @test triu(A1,-1) == t1(tril(triu(A1.data,-1)))
             @test triu(A1,1)  == zeros(size(A1)) # or just @test iszero(triu(A1,1))?
-            @test_throws ArgumentError triu!(A1, -n)
-            @test_throws ArgumentError triu!(A1, n + 2)
+            @test triu(A1, -n) == A1
+            @test triu(A1, n + 2) == zeros(size(A1))
         else
             @test triu(A1,0)  == A1
             @test triu(A1,1)  == UpperTriangular(triu(Matrix(A1), 1))
             @test triu(A1,-1) == t1(triu(triu(Matrix(A1), -1)))
-            @test_throws ArgumentError triu!(A1, -n)
-            @test_throws ArgumentError triu!(A1, n + 2)
+            @test triu(A1, -n) == A1
+            @test triu(A1, n + 2) == zeros(size(A1))
             @test tril(A1,0)  == t1(diagm(0 => diag(A1)))
             @test tril(A1,1)  == t1(triu(tril(A1.data,1)))
             @test tril(A1,-1) == zeros(size(A1)) # or just @test iszero(tril(A1,-1))?
-            @test_throws ArgumentError tril!(A1, -n - 2)
-            @test_throws ArgumentError tril!(A1, n)
+            @test tril(A1, -n - 2) == zeros(size(A1))
+            @test tril(A1, n) == A1
         end
 
         # factorize
