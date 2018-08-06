@@ -21,8 +21,7 @@ using Random
     tvals = Int[take!(c) for i in 1:10^6]
     @test pvals == tvals
 
-    # Uncomment line below once deprecation support has been removed.
-    # @test_throws MethodError Channel()
+    @test_throws MethodError Channel()
     @test_throws ArgumentError Channel(-1)
     @test_throws InexactError Channel(1.5)
 end
