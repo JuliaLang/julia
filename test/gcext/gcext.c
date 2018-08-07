@@ -326,9 +326,7 @@ static size_t gc_alloc_size(jl_value_t *val)
 
 JL_DLLEXPORT int internal_obj_scan(jl_value_t *val)
 {
-    if (jl_gc_is_internal_obj_alloc(val)) {
-        if (jl_gc_internal_obj_base_ptr(val) != val)
-            return 0;
+    if (jl_gc_internal_obj_base_ptr(val) == val) {
         size_t size = gc_alloc_size(val);
         char *addr = (char *)val;
         for (size_t i = 0; i <= size; i++) {
@@ -558,7 +556,6 @@ int main()
     jl_gc_set_cb_notify_external_alloc(alloc_bigval, 1);
     jl_gc_set_cb_notify_external_free(free_bigval, 1);
 
-    jl_gc_enable_conservative_gc_support();
     jl_init();
     ptls = jl_get_ptls_states();
     jl_gc_set_cb_root_scanner(root_scanner, 1);
