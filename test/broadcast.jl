@@ -599,8 +599,8 @@ end
 
     @test broadcast(identity, Iterators.filter(iseven, 1:10)) == 2:2:10
     d = Dict([1,2] => 1.1, [3,2] => 0.1)
-    @test length.(keys(d)) == [2,2]
-    @test Set(exp.(Set([1,2,3]))) == Set(exp.([1,2,3]))
+    @test_broken length.(keys(d)) == [2,2] # Issue #20678
+    @test_throws ArgumentError Set(exp.(Set([1,2,3]))) == Set(exp.([1,2,3]))
 end
 
 # Test that broadcasting identity where the input and output Array shapes do not match
