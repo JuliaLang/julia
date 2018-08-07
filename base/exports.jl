@@ -624,9 +624,6 @@ export
     set_zero_subnormals,
 
 # iteration
-    done,
-    next,
-    start,
     iterate,
 
     enumerate,  # re-exported from Iterators
