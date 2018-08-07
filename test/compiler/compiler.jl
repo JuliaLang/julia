@@ -10,14 +10,28 @@ using InteractiveUtils: code_llvm
 # demonstrate some of the type-size limits
 @test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 100, 0) == Ref
 @test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 100, 0) == Ref{Complex{T} where T}
+
 let comparison = Tuple{X, X} where X<:Tuple
     sig = Tuple{X, X} where X<:comparison
     ref = Tuple{X, X} where X
-    @test Core.Compiler.limit_type_size(sig, comparison, comparison, 100, 10) == comparison
-    @test Core.Compiler.limit_type_size(sig, ref, comparison, 100, 10) == ref
-    @test Core.Compiler.limit_type_size(Tuple{sig}, Tuple{ref}, comparison, 100, 10) == Tuple{ref}
-    @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison}, 100,  10) == sig
+    @test Core.Compiler.limit_type_size(sig, comparison, comparison, 100, 100) == Tuple{Tuple, Tuple}
+    @test Core.Compiler.limit_type_size(sig, ref, comparison, 100, 100) == Tuple{Any, Any}
+    @test Core.Compiler.limit_type_size(Tuple{sig}, Tuple{ref}, comparison, 100, 100) == Tuple{Tuple{Any, Any}}
+    @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison}, 100,  100) == Tuple{Tuple{X, X} where X<:Tuple, Tuple{X, X} where X<:Tuple}
+    @test Core.Compiler.limit_type_size(ref, sig, Union{}, 100, 100) == ref
 end
+
+let ref = Tuple{T, Val{T}} where T<:Val
+    sig = Tuple{T, Val{T}} where T<:(Val{T} where T<:Val)
+    @test Core.Compiler.limit_type_size(sig, ref, Union{}, 100, 100) == Tuple{Val, Val}
+    @test Core.Compiler.limit_type_size(ref, sig, Union{}, 100, 100) == ref
+end
+let ref = Tuple{T, Val{T}} where T<:(Val{T} where T<:(Val{T} where T<:(Val{T} where T<:Val)))
+    sig = Tuple{T, Val{T}} where T<:(Val{T} where T<:(Val{T} where T<:(Val{T} where T<:(Val{T} where T<:Val))))
+    @test Core.Compiler.limit_type_size(sig, ref, Union{}, 100, 100) == Tuple{Val, Val}
+    @test Core.Compiler.limit_type_size(ref, sig, Union{}, 100, 100) == ref
+end
+
 
 # PR 22120
 function tmerge_test(a, b, r, commutative=true)
