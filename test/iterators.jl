@@ -270,7 +270,8 @@ let iters = (1:2,
              rand(2, 2, 2),
              take(1:4, 2),
              product(1:2, 1:3),
-             product(rand(2, 2), rand(1, 1, 1))
+             product(rand(2, 2), rand(1, 1, 1)),
+             repeated([1, -1], 2)  # 28497
              )
     for method in [size, length, ndims, eltype]
         for i = 1:length(iters)
