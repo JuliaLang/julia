@@ -141,7 +141,11 @@ mutable struct Error <: Result
         else
             bt_str = ""
         end
-        new(test_type, orig_expr, repr(value), bt_str, source)
+        new(test_type,
+            orig_expr,
+            sprint(show, value, context = :limit => true),
+            bt_str,
+            source)
     end
 end
 function Base.show(io::IO, t::Error)
@@ -157,7 +161,7 @@ function Base.show(io::IO, t::Error)
         println(io, "  Expression: ", t.orig_expr)
         print(  io, "       Value: ", t.value)
     elseif t.test_type == :test_error
-        println(io, "  Test threw exception ", t.value)
+        println(io, "  Test threw exception")
         println(io, "  Expression: ", t.orig_expr)
         # Capture error message and indent to match
         print(io, join(map(line->string("  ",line),
@@ -169,7 +173,7 @@ function Base.show(io::IO, t::Error)
         println(io, " Got correct result, please change to @test if no longer broken.")
     elseif t.test_type == :nontest_error
         # we had an error outside of a @test
-        println(io, "  Got exception $(t.value) outside of a @test")
+        println(io, "  Got exception outside of a @test")
         # Capture error message and indent to match
         print(io, join(map(line->string("  ",line),
                            split(t.backtrace, "\n")), "\n"))

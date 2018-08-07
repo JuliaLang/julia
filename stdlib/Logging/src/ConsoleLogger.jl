@@ -111,10 +111,8 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
         valbuf = IOBuffer()
         rows_per_value = max(1, dsize[1]÷(length(kwargs)+1))
         valio = IOContext(IOContext(valbuf, logger.stream),
-                          :displaysize=>(rows_per_value,dsize[2]-5))
-        if logger.show_limited
-            valio = IOContext(valio, :limit=>true)
-        end
+                          :displaysize => (rows_per_value,dsize[2]-5),
+                          :limit => logger.show_limited)
         for (key,val) in pairs(kwargs)
             showvalue(valio, val)
             vallines = split(String(take!(valbuf)), '\n')
