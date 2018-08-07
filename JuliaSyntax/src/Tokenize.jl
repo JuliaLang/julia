@@ -1,5 +1,3 @@
-__precompile__()
-
 module Tokenize
 
 include("token.jl")
