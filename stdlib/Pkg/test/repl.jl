@@ -92,7 +92,7 @@ end
 
 temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
     pkg"activate ."
-    pkg"add Example"
+    pkg"add Example@0.5"
     @test isinstalled(TEST_PKG)
     v = Pkg.API.__installed()[TEST_PKG.name]
     pkg"rm Example"
