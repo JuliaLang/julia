@@ -1,11 +1,11 @@
 using TerminalMenus
-using Base.Test
+using Test
 
 TerminalMenus.config(supress_output=true)
 
 function simulateInput(expectedResult, menu::TerminalMenus.AbstractMenu, keys...)
     # If we cannot write to the buffer, skip the test
-    !(:buffer in fieldnames(STDIN)) && return true
+    !(:buffer in fieldnames(typeof(Base.stdin))) && return true
 
     keydict =  Dict(:up => "\e[A",
                     :down => "\e[B",
@@ -13,9 +13,9 @@ function simulateInput(expectedResult, menu::TerminalMenus.AbstractMenu, keys...
 
     for key in keys
         if isa(key, Symbol)
-            write(STDIN.buffer, keydict[key])
+            write(Base.stdin.buffer, keydict[key])
         else
-            write(STDIN.buffer, "$key")
+            write(Base.stdin.buffer, "$key")
         end
     end
 

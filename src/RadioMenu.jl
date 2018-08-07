@@ -75,7 +75,7 @@ function writeLine(buf::IOBuffer, menu::RadioMenu, idx::Int, cursor::Bool, term_
     cursor ? print(buf, CONFIG[:cursor]) : print(buf, repeat(" ", cursor_len))
     print(buf, " ") # Space between cursor and text
 
-    line = replace(menu.options[idx], "\n", "\\n")
+    line = replace(menu.options[idx], "\n" => "\\n")
     line = trimWidth(line, term_width, !cursor, cursor_len)
 
     print(buf, line)

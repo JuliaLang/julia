@@ -13,7 +13,7 @@
 # Enable raw mode. Allows us to process keyboard inputs directly.
 function enableRawMode(term)
     try
-        Base.Terminals.raw!(term, true)
+        REPL.Terminals.raw!(term, true)
         return true
     catch err
         warn("TerminalMenus: Unable to enter raw mode: $err")
@@ -24,7 +24,7 @@ end
 # Disable raw mode. Give control back to Julia REPL if interactive session.
 function disableRawMode(term)
     try
-        Base.Terminals.raw!(term, false)
+        REPL.Terminals.raw!(term, false)
         return true
     catch err
         warn("TerminalMenus: Unable to disable raw mode: $err")
