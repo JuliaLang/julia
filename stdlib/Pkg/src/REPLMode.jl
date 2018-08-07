@@ -97,13 +97,17 @@ meta_option_specs = OptionSpecs(meta_option_declarations)
                    )
 @enum(ArgClass, ARG_RAW, ARG_PKG, ARG_VERSION, ARG_REV, ARG_ALL)
 struct ArgSpec
-    class::ArgClass
-    count::Vector{Int}
+    count::Vector{Int} # note: just use range operator for max/min
+    parser::Function
+    parser_keys::Vector{Pair{Symbol, Any}}
 end
 const CommandDeclaration = Tuple{CommandKind,
                                  Vector{String}, # names
                                  Union{Nothing,Function}, # handler
-                                 Tuple{ArgClass, Vector{Int}}, # argument count
+                                 Tuple{Vector{Int}, # count
+                                       Function, # parser
+                                       Vector{Pair{Symbol, Any}}, # parser keys
+                                       }, # arguments
                                  Vector{OptionDeclaration}, # options
                                  Union{Nothing, Markdown.MD}, #help
                                  }
@@ -112,7 +116,7 @@ struct CommandSpec
     canonical_name::String
     short_name::Union{Nothing,String}
     handler::Union{Nothing,Function}
-    argument_spec::ArgSpec # note: just use range operator for max/min
+    argument_spec::ArgSpec
     option_specs::Dict{String, OptionSpec}
     help::Union{Nothing, Markdown.MD}
 end
@@ -393,6 +397,8 @@ end
 # PkgCommand #
 ##############
 const Token = Union{String, VersionRange, Rev}
+const ArgToken = Union{VersionRange, Rev}
+const PkgToken = Union{String, VersionRange, Rev}
 const PkgArguments = Union{Vector{String}, Vector{PackageSpec}}
 struct PkgCommand
     meta_options::Vector{Option}
@@ -422,6 +428,47 @@ function APIOptions(options::Vector{Option},
     return Dict(keyword_vec)
 end
 
+# TODO vector of what?
+function enforce_argument_count(count::Vector{Int}, args::PkgArguments)
+    isempty(count) && return
+    length(args) in count ||
+        pkgerror("Wrong number of arguments")
+end
+
+# Only for PkgSpec
+function package_args(args::Vector{Token}; add_or_dev=false)::Vector{PackageSpec}
+    pkgs = PackageSpec[]
+    for arg in args
+        if arg isa String
+            push!(pkgs, parse_package(arg; add_or_develop=add_or_dev))
+        elseif arg isa VersionRange
+            pkgs[end].version = VersionSpec(arg)
+        elseif arg isa Rev
+            pkg = pkgs[end]
+            if pkg.repo == nothing
+                pkg.repo = Types.GitRepo("", arg.rev)
+            else
+                pkgs[end].repo.rev = arg.rev
+            end
+        else
+            assert(false)
+        end
+    end
+    return pkgs
+end
+
+# Only for PkgSpec
+function word2token(word::AbstractString)::Token
+    if first(word) == '@'
+        return VersionRange(word[2:end])
+    elseif first(word) == '#'
+        return Rev(word[2:end])
+    else
+        return String(word)
+    end
+end
+
+# Only for PkgSpec
 function enforce_argument_order(args::Vector{Token})
     prev_arg = nothing
     function check_prev_arg(valid_type::DataType, error_message::AbstractString)
@@ -438,78 +485,22 @@ function enforce_argument_order(args::Vector{Token})
     end
 end
 
-function word2token(word::AbstractString)::Token
-    if first(word) == '@'
-        return VersionRange(word[2:end])
-    elseif first(word) == '#'
-        return Rev(word[2:end])
-    else
-        return String(word)
-    end
-end
-
-function enforce_arg_spec(raw_args::Vector{String}, class::ArgClass)
-    # TODO is there a more idiomatic way to do this?
-    function has_types(arguments::Vector{Token}, types::Vector{DataType})
-        return !isempty(filter(x->typeof(x) in types, arguments))
-    end
-
-    class == ARG_RAW && return raw_args
-    args::Vector{Token} = map(word2token, raw_args)
-    class == ARG_ALL && return args
-
-    if class == ARG_PKG && has_types(args, [VersionRange, Rev])
-        pkgerror("no versioned packages allowed")
-    elseif class == ARG_REV && has_types(args, [VersionRange])
-        pkgerror("no versioned packages allowed")
-    elseif class == ARG_VERSION && has_types(args, [Rev])
-        pkgerror("no reved packages allowed")
-    end
-    return args
-end
-
-function package_args(args::Vector{Token}, spec::CommandSpec)::Vector{PackageSpec}
-    pkgs = PackageSpec[]
-    for arg in args
-        if arg isa String
-            is_add_or_develop = spec.kind in (CMD_ADD, CMD_DEVELOP)
-            push!(pkgs, parse_package(arg; add_or_develop=is_add_or_develop))
-        elseif arg isa VersionRange
-            pkgs[end].version = VersionSpec(arg)
-        elseif arg isa Rev
-            if spec.kind == CMD_DEVELOP
-                pkgerror("a git revision cannot be given to `develop`")
-            end
-            pkg = pkgs[end]
-            if pkg.repo == nothing
-                pkg.repo = Types.GitRepo("", arg.rev)
-            else
-                pkgs[end].repo.rev = arg.rev
-            end
-        else
-            assert(false)
-        end
-    end
-    return pkgs
-end
-
-function enforce_arg_count(count::Vector{Int}, args::PkgArguments)
-    isempty(count) && return
-    length(args) in count ||
-        pkgerror("Wrong number of arguments")
-end
-
-function enforce_args(raw_args::Vector{String}, spec::ArgSpec, cmd_spec::CommandSpec)::PkgArguments
-    if spec.class == ARG_RAW
-        enforce_arg_count(spec.count, raw_args)
-        return raw_args
-    end
-
-    args = enforce_arg_spec(raw_args, spec.class)
+function parse_pkg(raw_args::Vector{String}; valid=[], add_or_dev=false)
+    args::Vector{PkgToken} = map(word2token, raw_args)
     enforce_argument_order(args)
-    pkgs = package_args(args, cmd_spec)
-    enforce_arg_count(spec.count, pkgs)
-    return pkgs
+    # enforce spec
+    push!(valid, String) # always want at least PkgSpec identifiers
+    if !all(x->typeof(x) in valid, args)
+        pkgerror("invalid token")
+    end
+    # convert to final arguments
+    return package_args(args; add_or_dev=add_or_dev)
+end
+
+function enforce_argument(raw_args::Vector{String}, spec::ArgSpec)::PkgArguments
+    args = spec.parser(raw_args; spec.parser_keys...)
+    enforce_argument_count(spec.count, args)
+    return args
 end
 
 function enforce_option(option::String, specs::Dict{String,OptionSpec})::Option
@@ -565,9 +556,8 @@ end
 function PkgCommand(statement::Statement)::PkgCommand
     meta_opts = enforce_meta_options(statement.meta_options,
                                      meta_option_specs)
-    args = enforce_args(statement.arguments,
-                        statement.command.argument_spec,
-                        statement.command)
+    args = enforce_argument(statement.arguments,
+                            statement.command.argument_spec)
     opts = enforce_opts(statement.options, statement.command.option_specs)
     return PkgCommand(meta_opts, statement.command, opts, args)
 end
@@ -982,7 +972,7 @@ command_declarations = [
     CMD_REGISTRY_ADD,
     ["add"],
     do_registry_add!,
-    (ARG_PKG, []),
+    ([], identity, []),
     [],
     nothing,
 ),
@@ -992,7 +982,7 @@ command_declarations = [
 (   CMD_TEST,
     ["test"],
     do_test!,
-    (ARG_PKG, []),
+    ([], parse_pkg, []),
     [
         ("coverage", OPT_SWITCH, :coverage => true),
     ],
@@ -1010,7 +1000,7 @@ julia is started with `--startup-file=yes`.
 ),( CMD_HELP,
     ["help", "?"],
     nothing,
-    (ARG_RAW, []),
+    ([], identity, []),
     [],
     md"""
 
@@ -1027,7 +1017,7 @@ Available commands: `help`, `status`, `add`, `rm`, `up`, `preview`, `gc`, `test`
 ),( CMD_INSTANTIATE,
     ["instantiate"],
     do_instantiate!,
-    (ARG_RAW, [0]),
+    ([0], identity, []),
     [
         (["project", "p"], OPT_SWITCH, :manifest => false),
         (["manifest", "m"], OPT_SWITCH, :manifest => true),
@@ -1043,7 +1033,7 @@ If no manifest exists or the `--project` option is given, resolve and download t
 ),( CMD_RM,
     ["remove", "rm"],
     do_rm!,
-    (ARG_PKG, []),
+    ([], parse_pkg, []),
     [
         (["project", "p"], OPT_SWITCH, :mode => PKGMODE_PROJECT),
         (["manifest", "m"], OPT_SWITCH, :mode => PKGMODE_MANIFEST),
@@ -1071,7 +1061,7 @@ as any no-longer-necessary manifest packages due to project package removals.
 ),( CMD_ADD,
     ["add"],
     do_add!,
-    (ARG_ALL, []),
+    ([], parse_pkg, [:add_or_dev => true, :valid => [VersionRange, Rev]]),
     [],
     md"""
 
@@ -1101,7 +1091,7 @@ pkg> add Example=7876af07-990d-54b4-ab0e-23690620f79a
 ),( CMD_DEVELOP,
     ["develop", "dev"],
     do_develop!,
-    (ARG_ALL, []),
+    ([], parse_pkg, [:add_or_dev => true, :valid => [VersionRange]]),
     [
         ("local", OPT_SWITCH, :shared => false),
         ("shared", OPT_SWITCH, :shared => true),
@@ -1126,7 +1116,7 @@ pkg> develop --local Example
 ),( CMD_FREE,
     ["free"],
     do_free!,
-    (ARG_PKG, []),
+    ([], parse_pkg, []),
     [],
     md"""
     free pkg[=uuid] ...
@@ -1137,7 +1127,7 @@ makes the package no longer being checked out.
 ),( CMD_PIN,
     ["pin"],
     do_pin!,
-    (ARG_VERSION, []),
+    ([], parse_pkg, [:valid => [VersionRange]]),
     [],
     md"""
 
@@ -1149,7 +1139,7 @@ A pinned package has the symbol `⚲` next to its version in the status list.
 ),( CMD_BUILD,
     ["build"],
     do_build!,
-    (ARG_PKG, []),
+    ([], parse_pkg, []),
     [],
     md"""
 
@@ -1162,7 +1152,7 @@ The `startup.jl` file is disabled during building unless julia is started with `
 ),( CMD_RESOLVE,
     ["resolve"],
     do_resolve!,
-    (ARG_RAW, [0]),
+    ([0], identity, []),
     [],
     md"""
     resolve
@@ -1173,7 +1163,7 @@ packages have changed causing the current Manifest to_indices be out of sync.
 ),( CMD_ACTIVATE,
     ["activate"],
     do_activate!,
-    (ARG_RAW, [0,1]),
+    ([0,1], identity, []),
     [
         ("shared", OPT_SWITCH, :shared => true),
     ],
@@ -1190,7 +1180,7 @@ it will be placed in the first depot of the stack.
 ),( CMD_UP,
     ["update", "up"],
     do_up!,
-    (ARG_VERSION, []),
+    ([], parse_pkg, [:valid => [VersionRange]]),
     [
         (["project", "p"], OPT_SWITCH, :mode => PKGMODE_PROJECT),
         (["manifest", "m"], OPT_SWITCH, :mode => PKGMODE_MANIFEST),
@@ -1218,7 +1208,7 @@ packages will not be upgraded at all.
 ),( CMD_GENERATE,
     ["generate"],
     do_generate!,
-    (ARG_RAW, [1]),
+    ([1], identity, []),
     [],
     md"""
 
@@ -1229,7 +1219,7 @@ Create a project called `pkgname` in the current folder.
 ),( CMD_PRECOMPILE,
     ["precompile"],
     do_precompile!,
-    (ARG_RAW, [0]),
+    ([0], identity, []),
     [],
     md"""
     precompile
@@ -1240,7 +1230,7 @@ The `startup.jl` file is disabled during precompilation unless julia is started 
 ),( CMD_STATUS,
     ["status", "st"],
     do_status!,
-    (ARG_RAW, [0]),
+    ([0], identity, []),
     [
         (["project", "p"], OPT_SWITCH, :mode => PKGMODE_PROJECT),
         (["manifest", "m"], OPT_SWITCH, :mode => PKGMODE_MANIFEST),
@@ -1261,7 +1251,7 @@ includes the dependencies of explicitly added packages.
 ),( CMD_GC,
     ["gc"],
     do_gc!,
-    (ARG_RAW, [0]),
+    ([0], identity, []),
     [],
     md"""
 
@@ -1272,7 +1262,7 @@ Deletes packages that cannot be reached from any existing environment.
     CMD_PREVIEW,
     ["preview"],
     nothing,
-    (ARG_RAW, [1]),
+    ([1], identity, []),
     [],
     md"""
 
