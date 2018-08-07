@@ -801,7 +801,7 @@ iterate(::ProductIterator{Tuple{}}, state) = nothing
 @inline isdone(P::ProductIterator) = any(isdone, P.iterators)
 @inline function _pisdone(iters, states)
     iter1 = first(iters)
-    done1 = isdone(iter1, first(states)) # check step
+    done1 = isdone(iter1, first(states)[2]) # check step
     done1 === true || return done1 # false or missing
     done1 = isdone(iter1) # check restart
     done1 === true || return done1 # false or missing
