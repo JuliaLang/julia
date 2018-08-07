@@ -911,17 +911,16 @@ for (x, writable, unix_fd, c_symbol) in
          (:stderr, true, 2, :jl_uv_stderr))
     f = Symbol("redirect_", lowercase(string(x)))
     _f = Symbol("_", f)
-    Ux = Symbol(uppercase(string(x)))
     @eval begin
         function ($_f)(stream)
-            global $x, $Ux
+            global $x
             posix_fd = _fd(stream)
             @static if Sys.iswindows()
                 ccall(:SetStdHandle, stdcall, Int32, (Int32, OS_HANDLE),
                     $(-10 - unix_fd), Libc._get_osfhandle(posix_fd))
             end
             dup(posix_fd, RawFD($unix_fd))
-            $Ux = $x = stream
+            $x = stream
             nothing
         end
         function ($f)(handle::Union{LibuvStream, IOStream})
