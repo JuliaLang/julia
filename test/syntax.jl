@@ -1300,13 +1300,12 @@ let ex = Meta.parse("@doc raw\"
     @test length(ex.args) == 3
 end
 
-# TODO: enable when 0.7 deprecations are removed
-#@test Meta.parse("\"x\"
-#                  # extra line, not a doc string
-#                  f(x) = x", 1)[1] === "x"
-#@test Meta.parse("\"x\"
-#
-#                  f(x) = x", 1)[1] === "x"
+@test Meta.parse("\"x\"
+                  # extra line, not a doc string
+                  f(x) = x", 1)[1] === "x"
+@test Meta.parse("\"x\"
+
+                  f(x) = x", 1)[1] === "x"
 
 # issue #26137
 # cases where parens enclose argument lists

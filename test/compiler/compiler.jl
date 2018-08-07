@@ -987,8 +987,8 @@ end
 @test isdefined_tfunc(Core.SimpleVector, Const(1)) === Const(false)
 @test Const(false) ⊑ isdefined_tfunc(Const(:x), Symbol)
 @test Const(false) ⊑ isdefined_tfunc(Const(:x), Const(:y))
-@test isdefined_tfunc(Vector{Int}, Const(1)) == Bool
-@test isdefined_tfunc(Vector{Any}, Const(1)) == Bool
+@test isdefined_tfunc(Vector{Int}, Const(1)) == Const(false)
+@test isdefined_tfunc(Vector{Any}, Const(1)) == Const(false)
 @test isdefined_tfunc(Module, Any, Any) === Union{}
 @test isdefined_tfunc(Module, Int) === Union{}
 @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(0)) === Const(false)
