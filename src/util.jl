@@ -60,11 +60,11 @@ function readKey(stream::IO=Base.stdin) ::UInt32
         esc_a = readNextChar(stream)
 
         if esc_a == 'v'  # M-v
-            return PAGE_UP
+            return UInt32(PAGE_UP)
         elseif esc_a == '<'  # M-<
-            return HOME_KEY
+            return UInt32(HOME_KEY)
         elseif esc_a == '>'  # M->
-            return END_KEY
+            return UInt32(END_KEY)
         end
 
         stream.buffer.size < 3 && return '\x1b'
@@ -77,57 +77,57 @@ function readKey(stream::IO=Base.stdin) ::UInt32
 
 				if esc_c == '~'
 					if esc_b == '1'
-                        return HOME_KEY
+                        return UInt32(HOME_KEY)
 					elseif esc_b == '4'
-                        return END_KEY
+                        return UInt32(END_KEY)
 					elseif esc_b == '3'
-                        return DEL_KEY
+                        return UInt32(DEL_KEY)
 					elseif esc_b == '5'
-                        return PAGE_UP
+                        return UInt32(PAGE_UP)
 					elseif esc_b == '6'
-                        return PAGE_DOWN
+                        return UInt32(PAGE_DOWN)
 					elseif esc_b == '7'
-                        return HOME_KEY
+                        return UInt32(HOME_KEY)
 					elseif esc_b == '8'
-                        return END_KEY
+                        return UInt32(END_KEY)
                     else
-                        return '\x1b'
+                        return UInt32('\x1b')
                     end
                 end
 
 			else
 				# Arrow keys
 				if esc_b == 'A'
-                    return ARROW_UP
+                    return UInt32(ARROW_UP)
 				elseif esc_b == 'B'
-                    return ARROW_DOWN
+                    return UInt32(ARROW_DOWN)
 				elseif esc_b == 'C'
-                    return ARROW_RIGHT
+                    return UInt32(ARROW_RIGHT)
 				elseif esc_b == 'D'
-                    return ARROW_LEFT
+                    return UInt32(ARROW_LEFT)
 				elseif esc_b == 'H'
-                    return HOME_KEY
+                    return UInt32(HOME_KEY)
 				elseif esc_b == 'F'
-                    return END_KEY
+                    return UInt32(END_KEY)
                 else
-                    return '\x1b'
+                    return UInt32('\x1b')
                 end
 			end
 		elseif esc_a == 'H'
-            return HOME_KEY
+            return UInt32(HOME_KEY)
         elseif esc_a == 'F'
-             return END_KEY
+            return UInt32(END_KEY)
 		end
 
-		return '\x1b'
+        return UInt32('\x1b')
 
     elseif c == '\x16'  # C-v
-        return PAGE_DOWN
+        return UInt32(PAGE_DOWN)
     elseif c == '\x10'  # C-p
-        return ARROW_UP
+        return UInt32(ARROW_UP)
     elseif c == '\x0e'  # C-n
-        return ARROW_DOWN
+        return UInt32(ARROW_DOWN)
     else
-		return c
+        return UInt32(c)
 	end
 end
