@@ -829,7 +829,7 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
             try
                 rbs = GitRebase(repo, head_ann, upst_ann, onto=onto_ann)
                 try
-                    while (rbs_op = next(rbs)) !== nothing
+                    for rbs_op in rbs
                         commit(rbs, sig)
                     end
                     finish(rbs, sig)
