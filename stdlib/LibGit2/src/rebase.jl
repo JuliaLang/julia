@@ -45,21 +45,21 @@ function Base.getindex(rb::GitRebase, i::Integer)
     return rb_op
 end
 
-function Base.next(rb::GitRebase)
+function Base.iterate(rb::GitRebase, state=nothing)
     ensure_initialized()
     rb_op_ptr_ptr = Ref{Ptr{RebaseOperation}}(C_NULL)
     GC.@preserve rb begin
-        try
-            @check ccall((:git_rebase_next, :libgit2), Cint,
-                          (Ptr{Ptr{RebaseOperation}}, Ptr{Cvoid}),
-                           rb_op_ptr_ptr, rb.ptr)
-        catch err
-            err.code == Error.ITEROVER && return nothing
-            rethrow(err)
+        err = ccall((:git_rebase_next, :libgit2), Cint,
+                    (Ptr{Ptr{RebaseOperation}}, Ptr{Cvoid}),
+                    rb_op_ptr_ptr, rb.ptr)
+        if err == Cint(Error.GIT_OK)
+            return unsafe_load(rb_op_ptr_ptr[]), nothing
+        elseif err == Cint(Error.ITEROVER)
+            return nothing
+        else
+            throw(GitError(err))
         end
-        rb_op_ptr = unsafe_load(rb_op_ptr_ptr[])
     end
-    return rb_op_ptr
 end
 
 function Base.show(io::IO, rb::GitRebase)

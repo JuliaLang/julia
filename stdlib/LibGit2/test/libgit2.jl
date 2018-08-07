@@ -1610,7 +1610,7 @@ mktempdir() do dir
             rb = LibGit2.GitRebase(repo, head_ann, upst_ann)
             @test_throws BoundsError rb[3]
             @test_throws BoundsError rb[0]
-            rbo = next(rb)
+            rbo, _ = iterate(rb)
             rbo_str = sprint(show, rbo)
             @test rbo_str == "RebaseOperation($(string(rbo.id)))\nOperation type: REBASE_OPERATION_PICK\n"
             rb_str = sprint(show, rb)
