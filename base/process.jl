@@ -102,13 +102,13 @@ function show(io::IO, cmd::Cmd)
     print_dir = !isempty(cmd.dir)
     (print_env || print_dir) && print(io, "setenv(")
     print(io, '`')
-    print(io, join(map(cmd.exec) do arg
-        replace(sprint() do io
+    join(io, map(cmd.exec) do arg
+        replace(sprint(context=io) do io
             with_output_color(:underline, io) do io
                 print_shell_word(io, arg, shell_special)
             end
         end, '`' => "\\`")
-    end, ' '))
+    end, ' ')
     print(io, '`')
     print_env && (print(io, ","); show(io, cmd.env))
     print_dir && (print(io, "; dir="); show(io, cmd.dir))

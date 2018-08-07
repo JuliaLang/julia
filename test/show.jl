@@ -1397,3 +1397,8 @@ end
     @test replstr(Union{X28004,Vector}[X28004(Any[X28004(1)])]) ==
         "1-element Array{Union{X28004, Array{T,1} where T},1}:\n X(Any[X(1)])"
 end
+
+# Issue 25589 - Underlines in cmd printing
+replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color => true),
+                                         MIME("text/plain"), x), x)
+@test occursin("\e[", replstrcolor(`curl abc`))
