@@ -1000,7 +1000,6 @@ end
 # Check for a number of functions known to be pure
 function ispuretopfunction(@nospecialize(f))
     return istopfunction(f, :typejoin) ||
-        istopfunction(f, :isbits) ||
         istopfunction(f, :isbitstype) ||
         istopfunction(f, :promote_type)
 end
@@ -1023,8 +1022,10 @@ function early_inline_special_case(ir::IRCode, @nospecialize(f), @nospecialize(f
             val = etype.val
             is_inlineable_constant(val) || return nothing
             if ispuretopfunction(f) ||
+                    (istopfunction(f, :isbits) && length(atypes)>1 &&
+                     typeintersect(widenconst(atypes[2]),Type) === Bottom) ||
                     (isa(f, IntrinsicFunction) ? is_pure_intrinsic_optim(f) :
-                    contains_is(_PURE_BUILTINS, f))
+                     contains_is(_PURE_BUILTINS, f))
                 return quoted(val)
             elseif contains_is(_PURE_OR_ERROR_BUILTINS, f)
                 if _builtin_nothrow(f, atypes[2:end], etype)
