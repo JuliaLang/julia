@@ -327,69 +327,79 @@ end
 test_complete(s) = Pkg.REPLMode.completions(s,lastindex(s))
 apply_completion(str) = begin
     c, r, s = test_complete(str)
-    @test s == true
     str[1:prevind(str, first(r))]*first(c)
 end
 
 # Autocompletions
 temp_pkg_dir() do project_path; cd(project_path) do
-    Pkg.Types.registries()
-    pkg"activate ."
-    c, r = test_complete("add Exam")
-    @test "Example" in c
-    c, r = test_complete("rm Exam")
-    @test isempty(c)
-    Pkg.REPLMode.pkgstr("develop $(joinpath(@__DIR__, "test_packages", "RequireDependency"))")
+    @testset "tab completion" begin
+        Pkg.Types.registries()
+        pkg"activate ."
+        c, r = test_complete("add Exam")
+        @test "Example" in c
+        c, r = test_complete("rm Exam")
+        @test isempty(c)
+        Pkg.REPLMode.pkgstr("develop $(joinpath(@__DIR__, "test_packages", "RequireDependency"))")
 
-    c, r = test_complete("rm RequireDep")
-    @test "RequireDependency" in c
-    c, r = test_complete("rm -p RequireDep")
-    @test "RequireDependency" in c
-    c, r = test_complete("rm --project RequireDep")
-    @test "RequireDependency" in c
-    c, r = test_complete("rm Exam")
-    @test isempty(c)
-    c, r = test_complete("rm -p Exam")
-    @test isempty(c)
-    c, r = test_complete("rm --project Exam")
-    @test isempty(c)
+        c, r = test_complete("rm RequireDep")
+        @test "RequireDependency" in c
+        c, r = test_complete("rm -p RequireDep")
+        @test "RequireDependency" in c
+        c, r = test_complete("rm --project RequireDep")
+        @test "RequireDependency" in c
+        c, r = test_complete("rm Exam")
+        @test isempty(c)
+        c, r = test_complete("rm -p Exam")
+        @test isempty(c)
+        c, r = test_complete("rm --project Exam")
+        @test isempty(c)
 
-    c, r = test_complete("rm -m RequireDep")
-    @test "RequireDependency" in c
-    c, r = test_complete("rm --manifest RequireDep")
-    @test "RequireDependency" in c
-    c, r = test_complete("rm -m Exam")
-    @test "Example" in c
-    c, r = test_complete("rm --manifest Exam")
-    @test "Example" in c
+        c, r = test_complete("rm -m RequireDep")
+        @test "RequireDependency" in c
+        c, r = test_complete("rm --manifest RequireDep")
+        @test "RequireDependency" in c
+        c, r = test_complete("rm -m Exam")
+        @test "Example" in c
+        c, r = test_complete("rm --manifest Exam")
+        @test "Example" in c
 
-    c, r = test_complete("rm RequireDep")
-    @test "RequireDependency" in c
-    c, r = test_complete("rm Exam")
-    @test isempty(c)
-    c, r = test_complete("rm -m Exam")
-    c, r = test_complete("rm -m Exam")
-    @test "Example" in c
+        c, r = test_complete("rm RequireDep")
+        @test "RequireDependency" in c
+        c, r = test_complete("rm Exam")
+        @test isempty(c)
+        c, r = test_complete("rm -m Exam")
+        c, r = test_complete("rm -m Exam")
+        @test "Example" in c
 
-    pkg"add Example"
-    c, r = test_complete("rm Exam")
-    @test "Example" in c
-    c, r = test_complete("add --man")
-    @test "--manifest" in c
-    c, r = test_complete("rem")
-    @test "remove" in c
-    @test apply_completion("rm E") == "rm Example"
-    @test apply_completion("add Exampl") == "add Example"
+        pkg"add Example"
+        c, r = test_complete("rm Exam")
+        @test "Example" in c
+        c, r = test_complete("add --man")
+        @test "--manifest" in c
+        c, r = test_complete("rem")
+        @test "remove" in c
+        @test apply_completion("rm E") == "rm Example"
+        @test apply_completion("add Exampl") == "add Example"
 
-    c, r = test_complete("preview r")
-    @test "remove" in c
-    c, r = test_complete("help r")
-    @test "remove" in c
-    @test !("rm" in c)
+        c, r = test_complete("preview r")
+        @test "remove" in c
+        c, r = test_complete("help r")
+        @test "remove" in c
+        @test !("rm" in c)
 
-    c, r = test_complete("add REPL")
-    # Filtered by version
-    @test !("REPL" in c)
+        c, r = test_complete("add REPL")
+        # Filtered by version
+        @test !("REPL" in c)
+
+        mkdir("testdir")
+        c, r = test_complete("add ")
+        @test Sys.iswindows() ? ("testdir\\\\" in c) : ("testdir/" in c)
+        @test "Example" in c
+        @test apply_completion("add tes") == (Sys.iswindows() ? "add testdir\\\\" : "add testdir/")
+        @test apply_completion("add ./tes") == (Sys.iswindows() ? "add ./testdir\\\\" : "add ./testdir/")
+        c, r = test_complete("dev ./")
+        @test (Sys.iswindows() ? ("testdir\\\\" in c) : ("testdir/" in c))
+    end
 end end
 
 temp_pkg_dir() do project_path; cd(project_path) do

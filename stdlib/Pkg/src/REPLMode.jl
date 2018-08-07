@@ -697,9 +697,20 @@ function complete_package(s, i1, i2, lastcommand, project_opt)
     if lastcommand in [CMD_STATUS, CMD_RM, CMD_UP, CMD_TEST, CMD_BUILD, CMD_FREE, CMD_PIN]
         return complete_installed_package(s, i1, i2, project_opt)
     elseif lastcommand in [CMD_ADD, CMD_DEVELOP]
-        return complete_remote_package(s, i1, i2)
+        if occursin(Base.Filesystem.path_separator_re, s)
+            return complete_local_path(s, i1, i2)
+        else
+            rps = complete_remote_package(s, i1, i2)
+            lps = complete_local_path(s, i1, i2)
+            return vcat(rps[1], lps[1]), isempty(rps[1]) ? lps[2] : i1:i2, length(rps[1]) + length(lps[1]) > 0
+        end
     end
     return String[], 0:-1, false
+end
+
+function complete_local_path(s, i1, i2)
+    cmp = REPL.REPLCompletions.complete_path(s, i2)
+    [REPL.REPLCompletions.completion_text(p) for p in cmp[1]], cmp[2], !isempty(cmp[1])
 end
 
 function complete_installed_package(s, i1, i2, project_opt)
