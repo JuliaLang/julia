@@ -322,7 +322,10 @@ solution and if the solution is not unique, the one with smallest norm is return
 
 Multiplication with respect to either full/square or non-full/square `Q` is allowed, i.e. both `F.Q*F.R`
 and `F.Q*A` are supported. A `Q` matrix can be converted into a regular matrix with
-[`Matrix`](@ref).
+[`Matrix`](@ref).  This operation returns the "thin" Q factor, i.e., if `A` is `m`×`n` with `m>=n`, then
+`Matrix(F.Q)` yields an `m`×`n` matrix with orthonormal columns.  To retrieve the "full" Q factor, an
+`m`×`m` orthogonal matrix, use `F.Q*Matrix(I,m,m)`.  If `m<=n`, then `Matrix(F.Q)` yields an `m`×`m`
+orthogonal matrix.
 
 # Examples
 ```jldoctest
