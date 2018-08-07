@@ -137,7 +137,9 @@ Execute `f` in an environment that is temporarily modified (not replaced as in `
 by zero or more `"var"=>val` arguments `kv`. `withenv` is generally used via the
 `withenv(kv...) do ... end` syntax. A value of `nothing` can be used to temporarily unset an
 environment variable (if it is set). When `withenv` returns, the changes made in `kv` are undone. 
-Note however, that changes done to `ENV` within the `do`-block will persist.
+Note however, that changes done to `ENV` within the `do`-block will persist. 
+
+See also: [`envsave`]@ref
 """
 function withenv(f::Function, keyvals::Pair{T}...) where T<:AbstractString
     old = Dict{T,Any}()
@@ -153,3 +155,22 @@ function withenv(f::Function, keyvals::Pair{T}...) where T<:AbstractString
     end
 end
 withenv(f::Function) = f() # handle empty keyvals case; see #10853
+
+"""
+    envsave(f::Function)
+
+Save the current environment and completely restore it after f() returns.
+If only certain values should be modified and restored, see ["withenv"]@ref.
+"""
+function envsave(f::Function)
+    oldENV = copy(ENV)
+    try f()
+    finally
+        for key in keys(ENV)
+            delete!(key, ENV)
+        end
+        for (key, val) in oldENV
+            ENV[key] = val
+        end
+    end
+end
