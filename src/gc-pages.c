@@ -21,19 +21,6 @@ extern "C" {
 
 static int block_pg_cnt = DEFAULT_BLOCK_PG_ALLOC;
 static size_t current_pg_count = 0;
-static int support_conservative_scans = 0;
-static jl_mutex_t conservative_scan_lock;
-
-JL_DLLEXPORT void jl_gc_enable_conservative_gc_support(void)
-{
-    JL_LOCK_NOGC(&conservative_scan_lock);
-    if (!support_conservative_scans) {
-        extern int jl_gc_cleanup_pages;
-        jl_gc_cleanup_pages = 1;
-    }
-    support_conservative_scans = 1;
-    JL_UNLOCK_NOGC(&conservative_scan_lock);
-}
 
 void jl_gc_init_page(void)
 {
@@ -259,8 +246,6 @@ have_free_page:
 #ifdef _OS_WINDOWS_
     VirtualAlloc(info.meta->data, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE);
 #endif
-    if (support_conservative_scans)
-        memset(info.meta->data, 0, GC_PAGE_SZ);
     current_pg_count++;
     gc_final_count_page(current_pg_count);
     JL_UNLOCK_NOGC(&gc_perm_lock);

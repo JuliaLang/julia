@@ -457,7 +457,7 @@ static void gc_sweep_foreign_objs_in_list(arraylist_t *objs)
 {
     size_t p = 0;
     for (size_t i = 0; i < objs->len; i++) {
-        jl_value_t *v = objs->items[i++];
+        jl_value_t *v = (jl_value_t *)(objs->items[i++]);
         jl_datatype_t *t = (jl_datatype_t *)(jl_typeof(v));
         const jl_datatype_layout_t *layout = t->layout;
         jl_fielddescdyn_t *desc = (jl_fielddescdyn_t*)jl_dt_layout_fields(layout);
@@ -465,7 +465,7 @@ static void gc_sweep_foreign_objs_in_list(arraylist_t *objs)
             desc->sweepfunc(v);
         }
         else {
-          objs->items[p++] = v;
+            objs->items[p++] = v;
         }
     }
     objs->len = p;
@@ -1041,7 +1041,18 @@ static inline jl_taggedvalue_t *reset_page(const jl_gc_pool_t *p, jl_gc_pagemeta
     memset(pg->ages, 0, GC_PAGE_SZ / 8 / p->osize + 1);
     jl_taggedvalue_t *beg = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
     jl_taggedvalue_t *next = (jl_taggedvalue_t*)pg->data;
-    next->next = fl;
+    if (fl == NULL) {
+        next->next = NULL;
+    }
+    else {
+        // insert free page after first page.
+        // this prevents unnecessary fragmentation from multiple pages
+        // being allocated from at the same time.
+        jl_taggedvalue_t *flpage = (jl_taggedvalue_t *)gc_page_data(fl);
+        next->next = flpage->next;
+        flpage->next = beg;
+        beg = fl;
+    }
     pg->has_young = 0;
     pg->has_marked = 0;
     pg->fl_begin_offset = -1;
@@ -1425,35 +1436,6 @@ static void gc_sweep_perm_alloc(void)
     gc_time_sysimg_end(t0);
 }
 
-// The following is to clean up pages in preparation for conservative
-// garbage collection. Conservative garbage collection requires that
-// unused memory is zeroed; on the transition from precise to conservative
-// garbage collection we therefore walk all the chunks of all pools and
-// zero them. This will happen only once, thereafter other pages will be
-// zeroed upon reuse.
-
-int jl_gc_cleanup_pages = 0;
-
-static void gc_do_cleanup_pages(void)
-{
-    for (int i = 0; i < jl_n_threads; i++) {
-        jl_gc_pool_t *pools = jl_all_tls_states[i]->heap.norm_pools;
-        for (int j = 0; j < JL_GC_N_POOLS; j++) {
-            // Pointer to the start of chunk of free objects
-            jl_taggedvalue_t *p = pools[j].newpages;
-            while (p) {
-                char *begin = gc_page_data(p);
-                char *end = begin + GC_PAGE_SZ;
-                memset((char *)p, 0, end - (char *)p);
-                p = p->next;
-            }
-        }
-    }
-    jl_gc_cleanup_pages = 0;
-}
-
-
-
 // mark phase
 
 JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *ptr)
@@ -1643,7 +1625,8 @@ STATIC_INLINE int gc_mark_queue_obj(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *
 
 JL_DLLEXPORT int jl_gc_mark_queue_obj(jl_ptls_t ptls, jl_value_t *obj)
 {
-    return gc_mark_queue_obj(&ptls->gc_cache, ptls->last_gc_mark_sp, obj);
+    return gc_mark_queue_obj(&ptls->gc_cache,
+            (gc_mark_sp_t *)(ptls->last_gc_mark_sp), obj);
 }
 
 JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
@@ -1651,7 +1634,7 @@ JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
 {
     gc_mark_objarray_t data = { parent, objs, objs + nobjs,
                                 jl_astaggedvalue(parent)->bits.gc & 2 };
-    gc_mark_stack_push(&ptls->gc_cache, ptls->last_gc_mark_sp,
+    gc_mark_stack_push(&ptls->gc_cache, (gc_mark_sp_t *)(ptls->last_gc_mark_sp),
                        gc_mark_label_addrs[GC_MARK_L_objarray],
                        &data, sizeof(data), 1);
 }
@@ -2817,8 +2800,6 @@ JL_DLLEXPORT void jl_gc_collect(int full)
     // TODO (concurrently queue objects)
     // no-op for non-threading
     jl_gc_wait_for_the_world();
-    if (jl_gc_cleanup_pages)
-        gc_do_cleanup_pages();
     gc_invoke_callbacks(pre_gc, (full));
 
     if (!jl_gc_disable_counter) {
@@ -3231,65 +3212,6 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
     return jl_gc_alloc(ptls, sizeof(void*) * 3, NULL);
 }
 
-STATIC_INLINE int is_valid_tag(void *p)
-{
-    jl_gc_pagemeta_t *meta = page_metadata(p);
-    if (!meta || !meta->ages)
-       return 0;
-
-    char *page = gc_page_data(p);
-    size_t off = (char *)p - page;
-    off -= GC_PAGE_OFFSET;
-    return off % meta->osize == 0;
-}
-
-STATIC_INLINE int is_valid_pool_obj(jl_taggedvalue_t *val)
-{
-    jl_value_t *datatype_type = (jl_value_t *)jl_datatype_type;
-    if (val->next == NULL)
-        return 0; // end of free list
-    val = (jl_taggedvalue_t *) gc_ptr_clear_tag(val, 3);
-    if (jl_valueof(val->next) == datatype_type)
-        return 1; // a type
-    jl_value_t *next = (jl_value_t *) gc_ptr_clear_tag(val->next, 3);
-    val = jl_astaggedvalue(next);
-    if (!is_valid_tag(val))
-        return 0;
-
-    // We now follow the header link. This must be either part
-    // of the free list (including NULL) or a type reference.
-    if (val->next == NULL)
-        return 0;
-    next = (jl_value_t *) gc_ptr_clear_tag(val->next, 3);
-    if (next == datatype_type)
-        return 1;
-    return 0;
-}
-
-
-JL_DLLEXPORT int jl_gc_is_internal_obj_alloc(jl_value_t *p)
-{
-    jl_gc_pagemeta_t *meta = page_metadata(p);
-    if (meta && meta->ages) {
-        char* page = gc_page_data(p);
-        // offset within page.
-        size_t off = (char*)p - page;
-        if (off < GC_PAGE_OFFSET)
-            return 0;
-        // offset within object
-        size_t off2 = (off - GC_PAGE_OFFSET);
-        size_t osize = meta->osize;
-        // if (osize == 0) return NULL;
-        off2 %= osize;
-        if (off2 != sizeof(jl_taggedvalue_t))
-            return 0;
-        if (off - off2 + osize > GC_PAGE_SZ)
-            return 0;
-        return 1;
-    }
-    return 0;
-}
-
 JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
 {
     p = (char *) p - 1;
@@ -3307,8 +3229,52 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
         if (off - off2 + osize > GC_PAGE_SZ)
             return NULL;
         jl_taggedvalue_t *val = (jl_taggedvalue_t *)((char *)p - off2);
-        if (!is_valid_pool_obj(val))
+        if (meta->fl_begin_offset == (uint16_t) -1) {
+            // either a full page or a page on the newpages list
+            if (meta->nfree == 0) {
+                // full page; `val` must be an object
+                return jl_valueof(val);
+            }
+            jl_gc_pool_t *pool =
+                jl_all_tls_states[meta->thread_n]->heap.norm_pools +
+                meta->pool_n;
+            jl_taggedvalue_t *newpages = pool->newpages;
+            // Check if the page is being allocated from via newpages
+            if (!newpages)
+                return NULL;
+            char *data = gc_page_data(newpages);
+            if (data != meta->data) {
+                // Pages on newpages form a linked list where only the
+                // first one is allocated from (see reset_page()).
+                // All other pages are empty.
+                return NULL;
+            }
+            // This is the first page on the newpages list, where objects
+            // are allocated from.
+            if ((char *)val >= (char *)newpages) // past allocation pointer
+                return NULL;
+        }
+        // `val` now points to either an allocated object or an entry
+        // on a free list.
+        //
+        // Fast path: marked or old objects cannot be on a free list.
+        if (val->bits.gc)
+            return jl_valueof(val);
+        jl_taggedvalue_t *hdr = val->next;
+        // Special cases: end of the free list is a null pointer.
+        // Objects with `jl_buff_tag` as their type must not be traced.
+        if (!hdr || (uintptr_t) hdr == jl_buff_tag)
             return NULL;
+        // Any freelist pointer must point to another pool page with the
+        // same osize and point to the header word (whereas type descriptors
+        // point to the address past the header word)
+        meta = page_metadata(hdr);
+        if (meta && meta->osize == osize) {
+            off = (char *) hdr - meta->data - GC_PAGE_OFFSET;
+            if (off % osize == 0)
+                return NULL;
+        }
+        // Not a freelist pointer, therefore a valid object.
         return jl_valueof(val);
     }
     return NULL;
