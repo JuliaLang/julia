@@ -186,8 +186,7 @@ end
 
 convert(::Type{IOContext}, io::IO) = IOContext(unwrapcontext(io)...)
 
-# rename to IOContext when deprecation of `IOContext(io::IO; kws...)` is removed
-_IOContext(io::IO) = convert(IOContext, io)
+IOContext(io::IO) = convert(IOContext, io)
 
 function IOContext(io::IO, KV::Pair)
     io0, d = unwrapcontext(io)
