@@ -458,16 +458,17 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     end
 end
 
-function show_trace_entry(io, frame, n; prefix = "")
-    print(io, "\n", prefix)
-    show(io, frame, full_path=true)
-    n > 1 && print(io, " (repeats ", n, " times)")
-end
-
 # Contains file name and file number. Gets set when a backtrace
 # or methodlist is shown. Used by the REPL to make it possible to open
 # the location of a stackframe/method in the editor.
 global LAST_SHOWN_LINE_INFOS = Tuple{String, Int}[]
+
+function show_trace_entry(io, frame, n; prefix = "")
+    push!(LAST_SHOWN_LINE_INFOS, (string(frame.file), frame.line))
+    print(io, "\n", prefix)
+    show(io, frame, full_path=true)
+    n > 1 && print(io, " (repeats ", n, " times)")
+end
 
 # In case the line numbers in the source code have changed since the code was compiled,
 # allow packages to set a callback function that corrects them.
@@ -489,6 +490,10 @@ function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
     frame appears just before. =#
 
     displayed_stackframes = []
+    repeated_cycle = Tuple{Int,Int,Int}[]
+    # First:  line to introuce the "cycle repetition" message
+    # Second: length of the cycle
+    # Third:  number of repetitions
     frame_counter = 1
     while frame_counter < length(t)
         (last_frame, n) = t[frame_counter]
@@ -507,11 +512,10 @@ function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
             while i < length(t) && t[i] == t[j]
                 i+=1 ; j+=1
             end
-            if j >= frame_counter
+            if j >= frame_counter-1
                 #= At least one cycle repeated =#
                 repetitions = div(i - frame_counter + 1, cycle_length)
-                print(io, "\n ... (the last ", cycle_length, " lines are repeated ",
-                      repetitions, " more time", repetitions>1 ? "s)" : ")")
+                push!(repeated_cycle, (length(displayed_stackframes), cycle_length, repetitions))
                 frame_counter += cycle_length * repetitions - 1
                 break
             end
@@ -524,13 +528,24 @@ function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
 
     try invokelatest(update_stackframes_callback[], displayed_stackframes) catch end
 
-    for (frame, n) in displayed_stackframes
+    push!(repeated_cycle, (0,0,0)) # repeated_cycle is never empty
+    frame_counter = 1
+    for i in 1:length(displayed_stackframes)
+        (frame, n) = displayed_stackframes[i]
         if with_prefix
-            show_trace_entry(io, frame, n, prefix = string(" [", frame_counter-1, "] "))
-            push!(LAST_SHOWN_LINE_INFOS, (string(frame.file), frame.line))
+            show_trace_entry(io, frame, n, prefix = string(" [", frame_counter, "] "))
         else
             show_trace_entry(io, frame, n)
         end
+        while repeated_cycle[1][1] == i # never empty because of the initial (0,0,0)
+            cycle_length = repeated_cycle[1][2]
+            repetitions = repeated_cycle[1][3]
+            popfirst!(repeated_cycle)
+            print(io, "\n ... (the last ", cycle_length, " lines are repeated ",
+                  repetitions, " more time", repetitions>1 ? "s)" : ")")
+            frame_counter += cycle_length * repetitions
+        end
+        frame_counter += 1
     end
 end
 
@@ -555,7 +570,6 @@ function show_backtrace(io::IO, t::Vector)
         for (last_frame, n) in filtered
             frame_counter += 1
             show_trace_entry(IOContext(io, :backtrace => true), last_frame, n, prefix = string(" [", frame_counter, "] "))
-            push!(LAST_SHOWN_LINE_INFOS, (string(last_frame.file), last_frame.line))
         end
         return
     end
