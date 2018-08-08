@@ -1714,7 +1714,8 @@ end
 (\)(L::Factor{T}, B::StridedMatrix) where {T<:VTypes} = Matrix(L\Dense{T}(B))
 (\)(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
 # When right hand side is sparse, we have to ensure that the rhs is not marked as symmetric.
-(\)(L::Factor, B::SparseVecOrMat) = sparse(spsolve(CHOLMOD_A, L, Sparse(B)))
+(\)(L::Factor, B::SparseMatrixCSC) = sparse(spsolve(CHOLMOD_A, L, Sparse(B, 0)))
+(\)(L::Factor, B::SparseVector) = sparse(spsolve(CHOLMOD_A, L, Sparse(B)))
 
 \(adjL::Adjoint{<:Any,<:Factor}, B::Dense) = (L = adjL.parent; solve(CHOLMOD_A, L, B))
 \(adjL::Adjoint{<:Any,<:Factor}, B::VecOrMat) = (L = adjL.parent; Matrix(solve(CHOLMOD_A, L, Dense(B))))
