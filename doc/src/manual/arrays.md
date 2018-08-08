@@ -214,6 +214,15 @@ the result in single precision by writing:
 Float32[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 ```
 
+More complex expressions have to be wrapped inside a `let` block:
+
+```julia
+[ let
+    x = 2
+    i + x
+  end for i=1:10 ]
+```
+
 ## Generator Expressions
 
 Comprehensions can also be written without the enclosing square brackets, producing an object
