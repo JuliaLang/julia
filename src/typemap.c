@@ -8,6 +8,7 @@
 #include <unistd.h>
 #endif
 #include "julia_assert.h"
+#include "locks.h"
 
 #define MAX_METHLIST_COUNT 12 // this can strongly affect the sysimg size and speed!
 #define INIT_CACHE_SIZE 8 // must be a power-of-two
@@ -1055,6 +1056,8 @@ static int has_unions(jl_value_t *type)
     return 0;
 }
 
+static jl_mutex_t typemap_lock;
+
 static void jl_typemap_list_insert_sorted(jl_typemap_entry_t **pml, jl_value_t *parent,
                                           jl_typemap_entry_t *newrec,
                                           const struct jl_typemap_info *tparams)
@@ -1080,7 +1083,7 @@ static void jl_typemap_list_insert_sorted(jl_typemap_entry_t **pml, jl_value_t *
         l = l->next;
     }
 
-    JL_SIGATOMIC_BEGIN();
+    JL_LOCK(&typemap_lock);
     newrec->next = l;
     jl_gc_wb(newrec, l);
     *pl = newrec;
@@ -1121,7 +1124,7 @@ static void jl_typemap_list_insert_sorted(jl_typemap_entry_t **pml, jl_value_t *
             item_parent = next_parent;
         }
     }
-    JL_SIGATOMIC_END();
+    JL_UNLOCK(&typemap_lock);
     return;
 }
 
