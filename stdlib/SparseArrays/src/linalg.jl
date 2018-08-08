@@ -464,13 +464,10 @@ function fwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat, unit::UnitDi
             i1 = ia[j]
             i2 = ia[j + 1] - 1
 
-            # loop through the structural zeros
-            ii = i1
+            # find diagonal element
+            ii = searchsortedfirst(ja, j, i1, i2, Base.Order.Forward)
+            ii > i2 && ( ii = i1)
             jai = ja[ii]
-            while ii <= i2 && jai < j
-                ii += 1
-                jai = ja[ii]
-            end
 
             bj = B[joff + j]
             # check for zero pivot and divide with pivot
@@ -507,13 +504,10 @@ function bwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat, unit::UnitDi
             i1 = ia[j]
             i2 = ia[j + 1] - 1
 
-            # loop through the structural zeros
-            ii = i2
+            # find diagonal element
+            ii = searchsortedlast(ja, j, i1, i2, Base.Order.Forward)
+            ii < i1 && ( ii = i2)
             jai = ja[ii]
-            while ii >= i1 && jai > j
-                ii -= 1
-                jai = ja[ii]
-            end
 
             bj = B[joff + j]
             # check for zero pivot and divide with pivot
