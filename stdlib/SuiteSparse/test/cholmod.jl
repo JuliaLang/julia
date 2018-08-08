@@ -713,6 +713,7 @@ end
     chI = cholesky(sparseI)
     @test chI \ sparseb ≈ sparseb
     @test chI \ sparseB ≈ sparseB
+    @test chI \ sparseI ≈ sparseI
 end
 
 @testset "Real factorization and complex rhs" begin
