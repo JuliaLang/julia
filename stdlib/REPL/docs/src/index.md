@@ -17,7 +17,7 @@ $ julia
  _/ |\__'_|_|_|\__'_|  |  Commit d038f2f* (0 days old master)
 |__/                   |  x86_64-linux-gnu
 
-julia> 
+julia>
 ```
 
 To exit the interactive session, type `^D` -- the control key together with the `d` key on a blank
