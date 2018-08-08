@@ -472,8 +472,7 @@ function _ldiv!(L::LowerTriangularPlain, B::StridedVecOrMat)
 
             # find diagonal element
             ii = searchsortedfirst(ja, j, i1, i2, Base.Order.Forward)
-            ii > i2 && ( ii = i1)
-            jai = ja[ii]
+            jai = ii > i2 ? zero(eltype(ja)) : ja[ii]
 
             bj = B[joff + j]
             # check for zero pivot and divide with pivot
@@ -515,8 +514,7 @@ function _ldiv!(U::UpperTriangularPlain, B::StridedVecOrMat)
 
             # find diagonal element
             ii = searchsortedlast(ja, j, i1, i2, Base.Order.Forward)
-            ii < i1 && ( ii = i2)
-            jai = ja[ii]
+            jai = ii < i1 ? zero(eltype(ja)) : ja[ii]
 
             bj = B[joff + j]
             # check for zero pivot and divide with pivot

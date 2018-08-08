@@ -2312,6 +2312,13 @@ end
             @test AW \ B ≈ MAW \ B
         end
     end
+
+    A = LowerTriangular(sparse([0 2.0;0 1]))
+    @test_throws SingularException(1) A \ ones(2)
+    A = UpperTriangular(sparse([1.0 0;0 0]))
+    @test_throws SingularException(2) A \ ones(2)
+
+
 end
 
 end # module
