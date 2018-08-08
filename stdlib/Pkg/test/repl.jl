@@ -820,7 +820,6 @@ end
         @test_throws PkgError Pkg.REPLMode.pkgstr("--foo=foo add Example")
         @test_throws PkgError Pkg.REPLMode.pkgstr("--bar add Example")
         @test_throws PkgError Pkg.REPLMode.pkgstr("-x add Example")
-        # malformed, but registered meta option
         @test_throws PkgError Pkg.REPLMode.pkgstr("--env Example")
     end end end
 end
