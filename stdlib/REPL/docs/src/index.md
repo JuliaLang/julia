@@ -11,13 +11,13 @@ $ julia
                _
    _       _ _(_)_     |  A fresh approach to technical computing
   (_)     | (_) (_)    |  Documentation: https://docs.julialang.org
-   _ _   _| |_  __ _   |  Type "?help" for help.
+   _ _   _| |_  __ _   |  Type "?" for help, "]?" for Pkg help.
   | | | | | | |/ _` |  |
-  | | |_| | | | (_| |  |  Version 0.6.0-dev.2493 (2017-01-31 18:53 UTC)
- _/ |\__'_|_|_|\__'_|  |  Commit c99e12c* (0 days old master)
+  | | |_| | | | (_| |  |  Version 1.0.0-rc1.5 (2018-08-07 20:49 UTC)
+ _/ |\__'_|_|_|\__'_|  |  Commit d038f2f* (0 days old master)
 |__/                   |  x86_64-linux-gnu
 
-julia>
+julia> 
 ```
 
 To exit the interactive session, type `^D` -- the control key together with the `d` key on a blank
