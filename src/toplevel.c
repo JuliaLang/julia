@@ -639,6 +639,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
                     jl_module_use(m, import, name);
                 }
                 else {
+                    if (!jl_is_module(u))
+                        jl_errorf("invalid using path: \"%s\" does not name a module", jl_symbol_name(name));
                     // `using A.B` syntax
                     jl_module_using(m, u);
                     if (m == jl_main_module && name == NULL) {
