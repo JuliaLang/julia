@@ -66,15 +66,15 @@ end
     @test length(statement.arguments) == 1
     @test statement.arguments[1] == "dev"
     statement = Pkg.REPLMode.parse("add git@github.com:JuliaLang/Example.jl.git")[1]
-    @test "add" in statement.command.names
+    @test "add" == statement.command.canonical_name
     @test statement.arguments[1] == "git@github.com:JuliaLang/Example.jl.git"
     statement = Pkg.REPLMode.parse("add git@github.com:JuliaLang/Example.jl.git#master")[1]
-    @test "add" in statement.command.names
+    @test "add" == statement.command.canonical_name
     @test length(statement.arguments) == 2
     @test statement.arguments[1] == "git@github.com:JuliaLang/Example.jl.git"
     @test statement.arguments[2] == "#master"
     statement = Pkg.REPLMode.parse("add git@github.com:JuliaLang/Example.jl.git#c37b675")[1]
-    @test "add" in statement.command.names
+    @test "add" == statement.command.canonical_name
     @test length(statement.arguments) == 2
     @test statement.arguments[1] == "git@github.com:JuliaLang/Example.jl.git"
     @test statement.arguments[2] == "#c37b675"
@@ -82,7 +82,7 @@ end
     @test statement.arguments[1] == "git@github.com:JuliaLang/Example.jl.git"
     @test statement.arguments[2] == "@v0.5.0"
     statement = Pkg.REPLMode.parse("add git@gitlab-fsl.jsc.näsan.guvv:drats/URGA2010.jl.git@0.5.0")[1]
-    @test "add" in statement.command.names
+    @test "add" == statement.command.canonical_name
     @test length(statement.arguments) == 2
     @test statement.arguments[1] == "git@gitlab-fsl.jsc.näsan.guvv:drats/URGA2010.jl.git"
     @test statement.arguments[2] == "@0.5.0"
@@ -353,6 +353,40 @@ cd(mktempdir()) do
     @test manifest_info(EnvCache(), uuid)["path"] == joinpath("dev", "Example")
 end
 
+@testset "parse completions" begin
+    # meta options
+    @test Pkg.REPLMode.parse("--pre"; for_completions=true) == (:meta, "--pre", nothing, true)
+    @test Pkg.REPLMode.parse("--meta --pre"; for_completions=true) == (:meta, "--pre", nothing, true)
+    @test Pkg.REPLMode.parse("--meta -"; for_completions=true) == (:meta, "-", nothing, true)
+    @test Pkg.REPLMode.parse("--meta --"; for_completions=true) == (:meta, "--", nothing, true)
+    # commands
+    @test Pkg.REPLMode.parse("--preview"; for_completions=true) == (:cmd, "", nothing, true)
+    @test Pkg.REPLMode.parse("--preview ad"; for_completions=true) == (:cmd, "ad", nothing, true)
+    @test Pkg.REPLMode.parse("--meta --preview r"; for_completions=true) == (:cmd, "r", nothing, true)
+    @test Pkg.REPLMode.parse("--preview reg"; for_completions=true) == (:cmd, "reg", nothing, true)
+    # sub commands
+    @test Pkg.REPLMode.parse("--preview registry"; for_completions=true) ==
+        (:sub, "", "registry", true)
+    @test Pkg.REPLMode.parse("--preview registry a"; for_completions=true) ==
+        (:sub, "a", "registry", true)
+    # options
+    @test Pkg.REPLMode.parse("add -"; for_completions=true) ==
+        (:opt, "-", Pkg.REPLMode.super_specs["package"]["add"], true)
+    @test Pkg.REPLMode.parse("up --m"; for_completions=true) ==
+        (:opt, "--m", Pkg.REPLMode.super_specs["package"]["up"], true)
+    @test Pkg.REPLMode.parse("up --major --pro"; for_completions=true) ==
+        (:opt, "--pro", Pkg.REPLMode.super_specs["package"]["up"], true)
+    @test Pkg.REPLMode.parse("foo --maj"; for_completions=true) ===
+        nothing
+    # arguments
+    @test Pkg.REPLMode.parse("up --major Ex"; for_completions=true) ==
+        (:arg, "Ex", Pkg.REPLMode.super_specs["package"]["up"], true)
+    @test Pkg.REPLMode.parse("--preview up --major foo Ex"; for_completions=true) ==
+        (:arg, "Ex", Pkg.REPLMode.super_specs["package"]["up"], true)
+    @test Pkg.REPLMode.parse("remove --manifest Ex"; for_completions=true) ==
+        (:arg, "Ex", Pkg.REPLMode.super_specs["package"]["remove"], false)
+end
+
 test_complete(s) = Pkg.REPLMode.completions(s,lastindex(s))
 apply_completion(str) = begin
     c, r, s = test_complete(str)
@@ -403,7 +437,7 @@ temp_pkg_dir() do project_path; cd(project_path) do
         pkg"add Example"
         c, r = test_complete("rm Exam")
         @test "Example" in c
-        c, r = test_complete("add --man")
+        c, r = test_complete("up --man")
         @test "--manifest" in c
         c, r = test_complete("rem")
         @test "remove" in c
@@ -428,7 +462,7 @@ temp_pkg_dir() do project_path; cd(project_path) do
         @test apply_completion("add ./tes") == (Sys.iswindows() ? "add ./testdir\\\\" : "add ./testdir/")
         c, r = test_complete("dev ./")
         @test (Sys.iswindows() ? ("testdir\\\\" in c) : ("testdir/" in c))
-    end
+    end # testset
 end end
 
 temp_pkg_dir() do project_path; cd(project_path) do
@@ -880,6 +914,27 @@ end
         Pkg.REPLMode.pkg"package add Example"
         @test isinstalled(TEST_PKG)
         Pkg.REPLMode.pkg"package rm Example"
+        @test !isinstalled(TEST_PKG)
+    end end end
+end
+
+@testset "preview" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        pkg"add Example"
+        pkg"preview rm Example"
+        @test isinstalled(TEST_PKG)
+        pkg"rm Example"
+        pkg"preview add Example"
+        @test !isinstalled(TEST_PKG)
+        # as a meta option
+        pkg"add Example"
+        pkg"--preview rm Example"
+        @test isinstalled(TEST_PKG)
+        pkg"rm Example"
+        pkg"--preview add Example"
+        @test !isinstalled(TEST_PKG)
+        # both
+        pkg"--preview preview add Example"
         @test !isinstalled(TEST_PKG)
     end end end
 end
