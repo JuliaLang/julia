@@ -1,0 +1,573 @@
+/*
+ * The default CSS style for Documenter.jl generated sites
+ *
+ * Heavily inspired by the Julia Sphinx theme
+ *     https://github.com/JuliaLang/JuliaDoc
+ * which extends the sphinx_rtd_theme
+ *     https://github.com/snide/sphinx_rtd_theme
+ *
+ * Part of Documenter.jl
+ *     https://github.com/JuliaDocs/Documenter.jl
+ *
+ * License: MIT
+ */
+
+/* fonts */
+body, input {
+  font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 16px;
+  color: #222;
+  text-rendering: optimizeLegibility;
+}
+
+pre, code, kbd {
+  font-family: 'Roboto Mono', Monaco, courier, monospace;
+  font-size: 0.90em;
+}
+
+pre code {
+  font-size: 1em;
+}
+
+a {
+    color: #2980b9;
+    text-decoration: none;
+}
+
+a:hover {
+    color: #3091d1;
+}
+
+a:visited {
+    color: #9b59b6;
+}
+
+body {
+    line-height: 1.5;
+}
+
+h1 {
+    font-size: 1.75em;
+}
+
+/* Unless the <h1> the is very first thing on the page (i.e. the second element
+ * in the <article>, * after the <header>, we add some additional styling to it
+ * to make it stand out a bit more. This way we get a reasonable fallback if CSS3
+ * selectors are not supported in the browser.
+ */
+article > h1:not(:nth-child(2)) {
+    margin: 2.5em 0 0;
+    padding-bottom: 0.30em;
+    border-bottom: 1px solid #e5e5e5;
+}
+h2 {
+    font-size: 1.50em;
+    margin: 2.3em 0 0;
+    padding-bottom: 0.25em;
+    border-bottom: 1px solid #e5e5e5;
+}
+h3 {
+    font-size: 1.25em;
+    margin: 2.0em 0 0;
+}
+h4 { font-size: 1.15em; }
+h5 { font-size: 1.10em; }
+h6 { font-size: 1em; }
+
+h4, h5, h6 {
+    margin-top: 1.5em;
+    margin-bottom: 1em;
+}
+
+img {
+    max-width: 100%;
+}
+
+table {
+    border-collapse: collapse;
+    margin: 1em 0;
+}
+
+th, td {
+    border: 1px solid #e1e4e5;
+    padding: 0.5em 1em;
+}
+
+th {
+    border-bottom-width: 2px;
+}
+
+tr:nth-child(even) {
+    background-color: #f3f6f6;
+}
+
+hr {
+    border: 0;
+    border-top: 1px solid #e5e5e5;
+}
+
+/* Inline code and code blocks */
+
+code {
+    padding: 0.1em;
+    background-color: rgba(0,0,0,.04);
+    border-radius: 3px;
+}
+
+pre {
+    background-color: #f5f5f5;
+    border: 1px solid #dddddd;
+    border-radius: 3px;
+    padding: 0.5em;
+    overflow: auto;
+}
+
+pre code {
+    padding: 0;
+    background-color: initial;
+}
+
+kbd {
+    font-size: 0.70em;
+    display: inline-block;
+    padding: 0.1em 0.5em 0.4em 0.5em;
+    line-height: 1.0em;
+    color: #444d56;
+    vertical-align: middle;
+    background-color: #fafbfc;
+    border: solid 1px #c6cbd1;
+    border-bottom-color: #959da5;
+    border-radius: 3px;
+    box-shadow: inset 0 -1px 0 #959da5;
+}
+
+/* Headers in admonitions and docstrings */
+.admonition h1,
+article section.docstring h1 {
+    font-size: 1.25em;
+}
+
+.admonition h2,
+article section.docstring h2 {
+    font-size: 1.10em;
+}
+
+.admonition h3,
+.admonition h4,
+.admonition h5,
+.admonition h6,
+article section.docstring h3,
+article section.docstring h4,
+article section.docstring h5,
+article section.docstring h6 {
+    font-size: 1em;
+}
+
+/* Navigation */
+nav.toc {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 20em;
+    overflow-y: auto;
+    padding: 1em 0;
+    background-color: #fcfcfc;
+    box-shadow: inset -14px 0px 5px -12px rgb(210,210,210);
+}
+
+nav.toc .logo {
+    margin: 0 auto;
+    display: block;
+    max-height: 6em;
+    max-width: 18em;
+}
+
+nav.toc h1 {
+    text-align: center;
+    margin-top: .57em;
+    margin-bottom: 0;
+}
+
+nav.toc select {
+    display: block;
+    height: 2em;
+    padding: 0 1.6em 0 1em;
+    min-width: 7em;
+    max-width: 90%;
+    max-width: calc(100% - 5em);
+    margin: 0 auto;
+    font-size: .83em;
+    border: 1px solid #c9c9c9;
+    border-radius: 1em;
+
+    /* TODO: doesn't seem to be centered on Safari */
+    text-align: center;
+    text-align-last: center;
+
+    appearance: none;
+    -moz-appearance: none;
+    -webkit-appearance: none;
+
+    background: white url("arrow.svg");
+    background-size: 1.155em;
+    background-repeat: no-repeat;
+    background-position: right;
+}
+
+nav.toc select:hover {
+    border: 1px solid #a0a0a0;
+}
+
+nav.toc select option {
+    text-align: center;
+}
+
+nav.toc input {
+    display: block;
+    height: 2em;
+    width: 90%;
+    width: calc(100% - 5em);
+    margin: 1.2em auto;
+    padding: 0 1em;
+    border: 1px solid #c9c9c9;
+    border-radius: 1em;
+    font-size: .83em;
+}
+
+nav.toc > ul * {
+    margin: 0;
+}
+
+nav.toc ul {
+    color: #404040;
+    padding: 0;
+    list-style: none;
+}
+
+nav.toc ul .toctext {
+    color: inherit;
+    display: block;
+}
+
+nav.toc ul a:hover {
+    color: #fcfcfc;
+    background-color: #4e4a4a;
+}
+
+nav.toc ul.internal a {
+    color: inherit;
+    display: block;
+}
+
+nav.toc ul.internal a:hover {
+    background-color: #d6d6d6;
+}
+
+nav.toc ul.internal {
+    background-color: #e3e3e3;
+    box-shadow: inset -14px 0px 5px -12px rgb(210,210,210);
+    list-style: none;
+}
+
+nav.toc ul.internal li.toplevel {
+    border-top: 1px solid #909090;
+    font-weight: bold;
+}
+
+nav.toc ul.internal li.toplevel:first-child {
+    border-top: none;
+}
+
+nav.toc .toctext {
+    padding-top: 0.3em;
+    padding-bottom: 0.3em;
+    padding-right: 1em;
+}
+
+nav.toc ul .toctext {
+    padding-left: 1em;
+}
+
+nav.toc ul ul .toctext {
+    padding-left: 2em;
+}
+
+nav.toc ul ul ul .toctext {
+    padding-left: 3em;
+}
+
+nav.toc li.current > .toctext {
+    border-top: 1px solid #c9c9c9;
+    border-bottom: 1px solid #c9c9c9;
+    color: #404040;
+    font-weight: bold;
+    background-color: white;
+}
+
+article {
+    margin-left: 20em;
+    min-width: 20em;
+    max-width: 48em;
+    padding: 2em;
+}
+
+article > header {}
+
+article > header div#topbar {
+    display: none;
+}
+
+article > header nav ul {
+    display: inline-block;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+article > header nav li {
+    display: inline-block;
+    padding-right: 0.2em;
+}
+
+article > header nav li:before {
+    content: "»";
+    padding-right: 0.2em;
+}
+
+article > header .edit-page {
+    float: right;
+}
+
+article > footer {}
+
+article > footer a.prev {
+    float: left;
+}
+article > footer a.next {
+    float: right;
+}
+
+article > footer a .direction:after {
+    content: ": ";
+}
+
+article hr {
+    margin: 1em 0;
+}
+
+article section.docstring {
+    border: 1px solid #ddd;
+    margin: 0.5em 0;
+    padding: 0.5em;
+    border-radius: 3px;
+}
+
+article section.docstring .docstring-header {
+    margin-bottom: 1em;
+}
+
+article section.docstring .docstring-binding {
+    color: #333;
+    font-weight: bold;
+}
+
+article section.docstring .docstring-category {
+    font-style: italic;
+}
+
+article section.docstring a.source-link {
+    display: block;
+    font-weight: bold;
+}
+
+.nav-anchor,
+.nav-anchor:hover,
+.nav-anchor:visited {
+    color: #333;
+}
+
+/*
+ * Admonitions
+ *
+ * Colors (title, body)
+ * warning: #f0b37e #ffedcc (orange)
+ * note:    #6ab0de #e7f2fa (blue)
+ * tip:     #1abc9c #dbfaf4 (green)
+*/
+.admonition {
+    border-radius: 3px;
+    background-color: #eeeeee;
+}
+
+.admonition-title {
+    border-radius: 3px 3px 0 0;
+    background-color: #9b9b9b;
+    padding: 0.15em 0.5em;
+}
+
+.admonition-text {
+    padding: 0.5em;
+}
+
+.admonition-text > :first-child {
+    margin-top: 0;
+}
+
+.admonition-text > :last-child {
+    margin-bottom: 0;
+}
+
+.admonition > .admonition-title:before {
+    font-family: "FontAwesome";
+    margin-right: 5px;
+    content: "\f06a";
+}
+
+.admonition.warning > .admonition-title {
+    background-color: #f0b37e;
+}
+
+.admonition.warning {
+    background-color: #ffedcc;
+}
+
+.admonition.note > .admonition-title {
+    background-color: #6ab0de;
+}
+
+.admonition.note {
+    background-color: #e7f2fa;
+}
+
+.admonition.tip > .admonition-title {
+    background-color: #1abc9c;
+}
+
+.admonition.tip {
+    background-color: #dbfaf4;
+}
+
+
+/* footnotes */
+.footnote {
+    padding-left: 0.8em;
+    border-left: 2px solid #ccc;
+}
+
+/* Search page */
+#search-results .category {
+    font-size: smaller;
+}
+
+/* Overriding the <code> block style of highligh.js.
+ * We have to override the padding and the background-color, since we style this
+ * part ourselves. Specifically, we style the <pre> surrounding the <code>, while
+ * highlight.js applies the .hljs style directly to the <code> tag.
+ */
+.hljs {
+    background-color: transparent;
+    padding: 0;
+}
+
+@media only screen and (max-width: 768px) {
+    nav.toc {
+        position: fixed;
+        overflow-y: scroll;
+        width: 16em;
+        left: -16em;
+        -webkit-overflow-scrolling: touch;
+        -webkit-transition-property: left; /* Safari */
+        -webkit-transition-duration: 0.3s; /* Safari */
+        transition-property: left;
+        transition-duration: 0.3s;
+        -webkit-transition-timing-function: ease-out; /* Safari */
+        transition-timing-function: ease-out;
+        z-index: 2;
+    }
+
+    nav.toc.show {
+        left: 0;
+    }
+
+    article {
+        margin-left: 0;
+        padding: 3em 0.9em 0 0.9em; /* top right bottom left */
+        overflow-wrap: break-word;
+    }
+
+    article > header {
+        position: fixed;
+        left: 0;
+        z-index: 1;
+    }
+
+    article > header nav, hr {
+        display: none;
+    }
+
+    article > header div#topbar {
+        display: block; /* is mobile */
+        position: fixed;
+        width: 100%;
+        height: 1.5em;
+        padding-top: 1em;
+        padding-bottom: 1em;
+        background-color: #fcfcfc;
+        box-shadow: 0 1px 3px rgba(0,0,0,.26);
+        top: 0;
+        -webkit-transition-property: top; /* Safari */
+        -webkit-transition-duration: 0.3s; /* Safari */
+        transition-property: top;
+        transition-duration: 0.3s;
+    }
+
+    article > header div#topbar.headroom--unpinned.headroom--not-top.headroom--not-bottom {
+        top: -4em;
+        -webkit-transition-property: top; /* Safari */
+        -webkit-transition-duration: 0.7s; /* Safari */
+        transition-property: top;
+        transition-duration: 0.7s;
+    }
+
+    article > header div#topbar span {
+        position: fixed;
+        width: 80%;
+        height: 1.5em;
+        margin-top: -0.1em;
+        margin-left: 0.9em;
+        font-size: 1.2em;
+        overflow: hidden;
+    }
+
+    article > header div#topbar a.fa-bars {
+        float: right;
+        padding: 0.6em;
+        margin-top: -0.6em;
+        margin-right: 0.3em;
+        font-size: 1.5em;
+    }
+
+    article > header div#topbar a.fa-bars:visited {
+        color: #3091d1;
+    }
+
+    article table {
+        overflow-x: auto;
+        display: block;
+    }
+
+    article div.MathJax_Display {
+        overflow: scroll;
+    }
+
+    article span.MathJax {
+        overflow: hidden;
+    }
+}
+
+@media only screen and (max-width: 320px) {
+    body {
+        font-size: 15px;
+    }
+}
