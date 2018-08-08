@@ -99,13 +99,19 @@ for op in (:+, :-)
         end
     end
 
-    for matrixtype1 in (:Diagonal, :Bidiagonal) # matrixtype1 is the sparser matrix type
-        for matrixtype2 in (:SymTridiagonal,)   # matrixtype2 is the denser matrix type
-            @eval begin
-                ($op)(A::($matrixtype1), B::($matrixtype2)) = ($op)(convert(($matrixtype2), A), B)
-                ($op)(A::($matrixtype2), B::($matrixtype1)) = ($op)(A, convert(($matrixtype2), B))
-            end
-        end
+    # todo check if these conversion methods are optimal
+    # we should be able to do these structured conversions really quickly
+
+    # Diagonal +/- SymTridiagonal (and reverse) will always be SymTridiagonal
+    @eval begin
+        ($op)(A::SymTridiagonal, B::Diagonal) = ($op)(A, convert(SymTridiagonal, B))
+        ($op)(A::Diagonal, B::SymTridiagonal) = ($op)(convert(SymTridiagonal, A), B)
+    end
+
+    # Bidiagonal +/- SymTridiagonal (and reverse) will always be Tridiagonal
+    @eval begin
+        ($op)(A::SymTridiagonal, B::Bidiagonal) = ($op)(convert(Tridiagonal, A), B)
+        ($op)(A::Bidiagonal, B::SymTridiagonal) = ($op)(A, convert(Tridiagonal, B))
     end
 
     for matrixtype1 in (:Diagonal,)
@@ -119,6 +125,7 @@ for op in (:+, :-)
             end
         end
     end
+
     for matrixtype in (:SymTridiagonal,:Tridiagonal,:Bidiagonal,:Matrix)
         @eval begin
             ($op)(A::AbstractTriangular, B::($matrixtype)) = ($op)(copyto!(similar(parent(A)), A), B)
