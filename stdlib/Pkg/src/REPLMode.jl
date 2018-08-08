@@ -81,9 +81,8 @@ function parse_option(word::AbstractString)::Option
     return Option(option_name, option_arg)
 end
 
-meta_option_declarations = OptionDeclaration[
-    ("env", OPT_ARG, :env => arg->EnvCache(Base.parse_env(arg)))
-]
+# declare meta options here
+meta_option_declarations = OptionDeclaration[]
 meta_option_specs = OptionSpecs(meta_option_declarations)
 
 ################
@@ -1235,18 +1234,9 @@ backspace when the input line is empty or press Ctrl+C.
 
 **Synopsis**
 
-    pkg> [--env=...] cmd [opts] [args]
+    pkg> cmd [opts] [args]
 
 Multiple commands can be given on the same line by interleaving a `;` between the commands.
-
-**Environment**
-
-The `--env` meta option determines which project environment to manipulate. By
-default, this looks for a git repo in the parents directories of the current
-working directory, and if it finds one, it uses that as an environment. Otherwise,
-it uses a named environment (typically found in `~/.julia/environments`) looking
-for environments named `v$(VERSION.major).$(VERSION.minor).$(VERSION.patch)`,
-`v$(VERSION.major).$(VERSION.minor)`,  `v$(VERSION.major)` or `default` in order.
 
 **Commands**
 
