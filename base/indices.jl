@@ -47,7 +47,7 @@ struct IndexCartesian <: IndexStyle end
 
 `IndexStyle` specifies the "native indexing style" for array `A`. When
 you define a new [`AbstractArray`](@ref) type, you can choose to implement
-either linear indexing (with [`IndexLinear`](@ref)) wor cartesian indexing.
+either linear indexing (with [`IndexLinear`](@ref)) or cartesian indexing.
 If you decide to implement linear indexing, then you must set this trait for your array
 type:
 
