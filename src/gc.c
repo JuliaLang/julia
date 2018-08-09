@@ -1045,9 +1045,10 @@ static inline jl_taggedvalue_t *reset_page(const jl_gc_pool_t *p, jl_gc_pagemeta
         next->next = NULL;
     }
     else {
-        // insert free page after first page.
-        // this prevents unnecessary fragmentation from multiple pages
-        // being allocated from at the same time.
+        // Insert free page after first page.
+        // This prevents unnecessary fragmentation from multiple pages
+        // being allocated from at the same time. Instead, objects will
+        // only ever be allocated from the first object in the list.
         jl_taggedvalue_t *flpage = (jl_taggedvalue_t *)gc_page_data(fl);
         next->next = flpage->next;
         flpage->next = beg;
@@ -3228,16 +3229,22 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
         off2 %= osize;
         if (off - off2 + osize > GC_PAGE_SZ)
             return NULL;
-        jl_taggedvalue_t *val = (jl_taggedvalue_t *)((char *)p - off2);
+        jl_taggedvalue_t *cell = (jl_taggedvalue_t *)((char *)p - off2);
+        // We have to distinguish between three cases:
+        // 1. We are on a page where every cell is allocated.
+        // 2. We are on a page where objects are currently bump-allocated
+        //    from the corresponding pool->newpages list.
+        // 3. We are on a page with a freelist that is used for object
+        //    allocation.
+        if (meta->nfree == 0) {
+            // case 1: full page; `cell` must be an object
+            goto valid_object;
+        }
+        jl_gc_pool_t *pool =
+            jl_all_tls_states[meta->thread_n]->heap.norm_pools +
+            meta->pool_n;
         if (meta->fl_begin_offset == (uint16_t) -1) {
-            // either a full page or a page on the newpages list
-            if (meta->nfree == 0) {
-                // full page; `val` must be an object
-                return jl_valueof(val);
-            }
-            jl_gc_pool_t *pool =
-                jl_all_tls_states[meta->thread_n]->heap.norm_pools +
-                meta->pool_n;
+            // case 2: this is a page on the newpages list
             jl_taggedvalue_t *newpages = pool->newpages;
             // Check if the page is being allocated from via newpages
             if (!newpages)
@@ -3251,31 +3258,48 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
             }
             // This is the first page on the newpages list, where objects
             // are allocated from.
-            if ((char *)val >= (char *)newpages) // past allocation pointer
+            if ((char *)cell >= (char *)newpages) // past allocation pointer
                 return NULL;
+            goto valid_object;
         }
-        // `val` now points to either an allocated object or an entry
-        // on a free list.
-        //
-        // Fast path: marked or old objects cannot be on a free list.
-        if (val->bits.gc)
-            return jl_valueof(val);
-        jl_taggedvalue_t *hdr = val->next;
-        // Special cases: end of the free list is a null pointer.
-        // Objects with `jl_buff_tag` as their type must not be traced.
-        if (!hdr || (uintptr_t) hdr == jl_buff_tag)
+        // case 3: this is a page with a freelist
+        // marked or old objects can't be on the freelist
+        if (cell->bits.gc)
+            goto valid_object;
+        // When allocating from a freelist, three subcases are possible:
+        // * The freelist of a page has been exhausted; this was handled
+        //   under case 1, as nfree == 0.
+        // * The freelist of the page has not been used, and the age bits
+        //   reflect whether a cell is on the freelist or an object.
+        // * The freelist is currently being allocated from. In this case,
+        //   pool->freelist will point to the current page; any cell with
+        //   a lower address will be an allocated object, and for cells
+        //   with the same or a higher address, the corresponding age
+        //   bit will reflect whether it's on the freelist.
+        // Age bits are set in sweep_page() and are 0 for freelist
+        // entries and 1 for live objects. The above subcases arise
+        // because allocating a cell will not update the age bit, so we
+        // need extra logic for pages that have been allocated from.
+        unsigned obj_id = (off - off2) / osize;
+        // We now distinguish between the second and third subcase.
+        // Freelist entries are consumed in ascending order. Anything
+        // before the freelist pointer was either live during the last
+        // sweep or has been allocated since.
+        if (gc_page_data(cell) == gc_page_data(pool->freelist)
+            && (char *)cell < (char *)pool->freelist)
+            goto valid_object;
+        // We know now that the age bit reflects liveness status during
+        // the last sweep and that the cell has not been reused since.
+        if (!(meta->ages[obj_id / 8] & (1 << (obj_id % 8)))) {
             return NULL;
-        // Any freelist pointer must point to another pool page with the
-        // same osize and point to the header word (whereas type descriptors
-        // point to the address past the header word)
-        meta = page_metadata(hdr);
-        if (meta && meta->osize == osize) {
-            off = (char *) hdr - meta->data - GC_PAGE_OFFSET;
-            if (off % osize == 0)
-                return NULL;
         }
-        // Not a freelist pointer, therefore a valid object.
-        return jl_valueof(val);
+        // Not a freelist entry, therefore a valid object.
+        valid_object:
+        // We have to treat objects with type `jl_buff_tag` differently,
+        // as they must not be passed to the usual marking functions.
+        if ((cell->header & ~(uintptr_t) 3) == jl_buff_tag)
+            return NULL;
+        return jl_valueof(cell);
     }
     return NULL;
 }
