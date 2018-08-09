@@ -89,7 +89,10 @@ function get_staged(li::MethodInstance)
     try
         # user code might throw errors – ignore them
         return ccall(:jl_code_for_staged, Any, (Any,), li)::CodeInfo
-    catch
+    catch ex
+        println(stderr, "WARNING: An error occurred during generated function execution.")
+        println(stderr, ex)
+        ccall(:jlbacktrace, Cvoid, ())
         return nothing
     end
 end
