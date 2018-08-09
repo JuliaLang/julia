@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Missing Values · The Julia Language</title><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-28835595-6', 'auto');
+ga('send', 'pageview');
+</script><link href="https://cdnjs.cloudflare.com/ajax/libs/normalize/4.2.0/normalize.min.css" rel="stylesheet" type="text/css"/><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.2.0/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link href="../assets/documenter.css" rel="stylesheet" type="text/css"/><link href="../assets/julia-manual.css" rel="stylesheet" type="text/css"/></head><body><nav class="toc"><a href="../index.html"><img class="logo" src="../assets/logo.png" alt="The Julia Language logo"/></a><h1>The Julia Language</h1><select id="version-selector" onChange="window.location.href=this.value" style="visibility: hidden"></select><form class="search" id="search-form" action="../search.html"><input id="search-query" name="q" type="text" placeholder="Search docs"/></form><ul><li><a class="toctext" href="../index.html">Home</a></li><li><span class="toctext">Manual</span><ul><li><a class="toctext" href="getting-started.html">Getting Started</a></li><li><a class="toctext" href="variables.html">Variables</a></li><li><a class="toctext" href="integers-and-floating-point-numbers.html">Integers and Floating-Point Numbers</a></li><li><a class="toctext" href="mathematical-operations.html">Mathematical Operations and Elementary Functions</a></li><li><a class="toctext" href="complex-and-rational-numbers.html">Complex and Rational Numbers</a></li><li><a class="toctext" href="strings.html">Strings</a></li><li><a class="toctext" href="functions.html">Functions</a></li><li><a class="toctext" href="control-flow.html">Control Flow</a></li><li><a class="toctext" href="variables-and-scoping.html">Scope of Variables</a></li><li><a class="toctext" href="types.html">Types</a></li><li><a class="toctext" href="methods.html">Methods</a></li><li><a class="toctext" href="constructors.html">Constructors</a></li><li><a class="toctext" href="conversion-and-promotion.html">Conversion and Promotion</a></li><li><a class="toctext" href="interfaces.html">Interfaces</a></li><li><a class="toctext" href="modules.html">Modules</a></li><li><a class="toctext" href="documentation.html">Documentation</a></li><li><a class="toctext" href="metaprogramming.html">Metaprogramming</a></li><li><a class="toctext" href="arrays.html">Multi-dimensional Arrays</a></li><li class="current"><a class="toctext" href="missing.html">Missing Values</a><ul class="internal"><li><a class="toctext" href="#Propagation-of-Missing-Values-1">Propagation of Missing Values</a></li><li><a class="toctext" href="#Equality-and-Comparison-Operators-1">Equality and Comparison Operators</a></li><li><a class="toctext" href="#Logical-operators-1">Logical operators</a></li><li><a class="toctext" href="#Control-Flow-and-Short-Circuiting-Operators-1">Control Flow and Short-Circuiting Operators</a></li><li><a class="toctext" href="#Arrays-With-Missing-Values-1">Arrays With Missing Values</a></li><li><a class="toctext" href="#Skipping-Missing-Values-1">Skipping Missing Values</a></li><li><a class="toctext" href="#Logical-Operations-on-Arrays-1">Logical Operations on Arrays</a></li></ul></li><li><a class="toctext" href="networking-and-streams.html">Networking and Streams</a></li><li><a class="toctext" href="parallel-computing.html">Parallel Computing</a></li><li><a class="toctext" href="running-external-programs.html">Running External Programs</a></li><li><a class="toctext" href="calling-c-and-fortran-code.html">Calling C and Fortran Code</a></li><li><a class="toctext" href="handling-operating-system-variation.html">Handling Operating System Variation</a></li><li><a class="toctext" href="environment-variables.html">Environment Variables</a></li><li><a class="toctext" href="embedding.html">Embedding Julia</a></li><li><a class="toctext" href="code-loading.html">Code Loading</a></li><li><a class="toctext" href="profile.html">Profiling</a></li><li><a class="toctext" href="stacktraces.html">Stack Traces</a></li><li><a class="toctext" href="performance-tips.html">Performance Tips</a></li><li><a class="toctext" href="workflow-tips.html">Workflow Tips</a></li><li><a class="toctext" href="style-guide.html">Style Guide</a></li><li><a class="toctext" href="faq.html">Frequently Asked Questions</a></li><li><a class="toctext" href="noteworthy-differences.html">Noteworthy Differences from other Languages</a></li><li><a class="toctext" href="unicode-input.html">Unicode Input</a></li></ul></li><li><span class="toctext">Base</span><ul><li><a class="toctext" href="../base/base.html">Essentials</a></li><li><a class="toctext" href="../base/collections.html">Collections and Data Structures</a></li><li><a class="toctext" href="../base/math.html">Mathematics</a></li><li><a class="toctext" href="../base/numbers.html">Numbers</a></li><li><a class="toctext" href="../base/strings.html">Strings</a></li><li><a class="toctext" href="../base/arrays.html">Arrays</a></li><li><a class="toctext" href="../base/parallel.html">Tasks</a></li><li><a class="toctext" href="../base/multi-threading.html">Multi-Threading</a></li><li><a class="toctext" href="../base/constants.html">Constants</a></li><li><a class="toctext" href="../base/file.html">Filesystem</a></li><li><a class="toctext" href="../base/io-network.html">I/O and Network</a></li><li><a class="toctext" href="../base/punctuation.html">Punctuation</a></li><li><a class="toctext" href="../base/sort.html">Sorting and Related Functions</a></li><li><a class="toctext" href="../base/iterators.html">Iteration utilities</a></li><li><a class="toctext" href="../base/c.html">C Interface</a></li><li><a class="toctext" href="../base/libc.html">C Standard Library</a></li><li><a class="toctext" href="../base/stacktraces.html">StackTraces</a></li><li><a class="toctext" href="../base/simd-types.html">SIMD Support</a></li></ul></li><li><span class="toctext">Standard Library</span><ul><li><a class="toctext" href="../stdlib/Base64.html">Base64</a></li><li><a class="toctext" href="../stdlib/CRC32c.html">CRC32c</a></li><li><a class="toctext" href="../stdlib/Dates.html">Dates</a></li><li><a class="toctext" href="../stdlib/DelimitedFiles.html">Delimited Files</a></li><li><a class="toctext" href="../stdlib/Distributed.html">Distributed Computing</a></li><li><a class="toctext" href="../stdlib/FileWatching.html">File Events</a></li><li><a class="toctext" href="../stdlib/InteractiveUtils.html">Interactive Utilities</a></li><li><a class="toctext" href="../stdlib/LibGit2.html">LibGit2</a></li><li><a class="toctext" href="../stdlib/Libdl.html">Dynamic Linker</a></li><li><a class="toctext" href="../stdlib/LinearAlgebra.html">Linear Algebra</a></li><li><a class="toctext" href="../stdlib/Logging.html">Logging</a></li><li><a class="toctext" href="../stdlib/Markdown.html">Markdown</a></li><li><a class="toctext" href="../stdlib/Mmap.html">Memory-mapped I/O</a></li><li><a class="toctext" href="../stdlib/Pkg.html">Pkg</a></li><li><a class="toctext" href="../stdlib/Printf.html">Printf</a></li><li><a class="toctext" href="../stdlib/Profile.html">Profiling</a></li><li><a class="toctext" href="../stdlib/REPL.html">The Julia REPL</a></li><li><a class="toctext" href="../stdlib/Random.html">Random Numbers</a></li><li><a class="toctext" href="../stdlib/SHA.html">SHA</a></li><li><a class="toctext" href="../stdlib/Serialization.html">Serialization</a></li><li><a class="toctext" href="../stdlib/SharedArrays.html">Shared Arrays</a></li><li><a class="toctext" href="../stdlib/Sockets.html">Sockets</a></li><li><a class="toctext" href="../stdlib/SparseArrays.html">Sparse Arrays</a></li><li><a class="toctext" href="../stdlib/Statistics.html">Statistics</a></li><li><a class="toctext" href="../stdlib/Test.html">Unit Testing</a></li><li><a class="toctext" href="../stdlib/UUIDs.html">UUIDs</a></li><li><a class="toctext" href="../stdlib/Unicode.html">Unicode</a></li></ul></li><li><span class="toctext">Developer Documentation</span><ul><li><a class="toctext" href="../devdocs/reflection.html">Reflection and introspection</a></li><li><span class="toctext">Documentation of Julia&#39;s Internals</span><ul><li><a class="toctext" href="../devdocs/init.html">Initialization of the Julia runtime</a></li><li><a class="toctext" href="../devdocs/ast.html">Julia ASTs</a></li><li><a class="toctext" href="../devdocs/types.html">More about types</a></li><li><a class="toctext" href="../devdocs/object.html">Memory layout of Julia Objects</a></li><li><a class="toctext" href="../devdocs/eval.html">Eval of Julia code</a></li><li><a class="toctext" href="../devdocs/callconv.html">Calling Conventions</a></li><li><a class="toctext" href="../devdocs/compiler.html">High-level Overview of the Native-Code Generation Process</a></li><li><a class="toctext" href="../devdocs/functions.html">Julia Functions</a></li><li><a class="toctext" href="../devdocs/cartesian.html">Base.Cartesian</a></li><li><a class="toctext" href="../devdocs/meta.html">Talking to the compiler (the <code>:meta</code> mechanism)</a></li><li><a class="toctext" href="../devdocs/subarrays.html">SubArrays</a></li><li><a class="toctext" href="../devdocs/isbitsunionarrays.html">isbits Union Optimizations</a></li><li><a class="toctext" href="../devdocs/sysimg.html">System Image Building</a></li><li><a class="toctext" href="../devdocs/llvm.html">Working with LLVM</a></li><li><a class="toctext" href="../devdocs/stdio.html">printf() and stdio in the Julia runtime</a></li><li><a class="toctext" href="../devdocs/boundscheck.html">Bounds checking</a></li><li><a class="toctext" href="../devdocs/locks.html">Proper maintenance and care of multi-threading locks</a></li><li><a class="toctext" href="../devdocs/offset-arrays.html">Arrays with custom indices</a></li><li><a class="toctext" href="../devdocs/require.html">Module loading</a></li><li><a class="toctext" href="../devdocs/inference.html">Inference</a></li></ul></li><li><span class="toctext">Developing/debugging Julia&#39;s C code</span><ul><li><a class="toctext" href="../devdocs/backtraces.html">Reporting and analyzing crashes (segfaults)</a></li><li><a class="toctext" href="../devdocs/debuggingtips.html">gdb debugging tips</a></li><li><a class="toctext" href="../devdocs/valgrind.html">Using Valgrind with Julia</a></li><li><a class="toctext" href="../devdocs/sanitizers.html">Sanitizer support</a></li></ul></li></ul></li></ul></nav><article id="docs"><header><nav><ul><li>Manual</li><li><a href="missing.html">Missing Values</a></li></ul><a class="edit-page" href="https://github.com/fredrikekre/julia/blob/master/doc/src/manual/missing.md"><span class="fa"></span> Edit on GitHub</a></nav><hr/><div id="topbar"><span>Missing Values</span><a class="fa fa-bars" href="#"></a></div></header><h1><a class="nav-anchor" id="missing-1" href="#missing-1">Missing Values</a></h1><p>Julia provides support for representing missing values in the statistical sense, that is for situations where no value is available for a variable in an observation, but a valid value theoretically exists. Missing values are represented via the <a href="../base/base.html#Base.missing"><code>missing</code></a> object, which is the singleton instance of the type <a href="../base/base.html#Base.Missing"><code>Missing</code></a>. <code>missing</code> is equivalent to <a href="https://en.wikipedia.org/wiki/NULL_(SQL)"><code>NULL</code> in SQL</a> and <a href="https://cran.r-project.org/doc/manuals/r-release/R-lang.html#NA-handling"><code>NA</code> in R</a>, and behaves like them in most situations.</p><h2><a class="nav-anchor" id="Propagation-of-Missing-Values-1" href="#Propagation-of-Missing-Values-1">Propagation of Missing Values</a></h2><p>The behavior of <code>missing</code> values follows one basic rule: <code>missing</code> values <em>propagate</em> automatically when passed to standard operators and functions, in particular mathematical functions. Uncertainty about the value of one of the operands induces uncertainty about the result. In practice, this means an operation involving a <code>missing</code> value generally returns <code>missing</code></p><pre><code class="language-julia-repl">julia&gt; missing + 1
+missing
+
+julia&gt; &quot;a&quot; * missing
+missing
+
+julia&gt; abs(missing)
+missing</code></pre><p>As <code>missing</code> is a normal Julia object, this propagation rule only works for functions which have opted in to implement this behavior. This can be achieved either via a specific method defined for arguments of type <code>Missing</code>, or simply by accepting arguments of this type, and passing them to functions which propagate them (like standard operators). Packages should consider whether it makes sense to propagate missing values when defining new functions, and define methods appropriately if that is the case. Passing a <code>missing</code> value to a function for which no method accepting arguments of type <code>Missing</code> is defined throws a <code>MethodError</code>, just like for any other type.</p><h2><a class="nav-anchor" id="Equality-and-Comparison-Operators-1" href="#Equality-and-Comparison-Operators-1">Equality and Comparison Operators</a></h2><p>Standard equality and comparison operators follow the propagation rule presented above: if any of the operands is <code>missing</code>, the result is <code>missing</code>. Here are a few examples</p><pre><code class="language-julia-repl">julia&gt; missing == 1
+missing
+
+julia&gt; missing == missing
+missing
+
+julia&gt; missing &lt; 1
+missing
+
+julia&gt; 2 &gt;= missing
+missing</code></pre><p>In particular, note that <code>missing == missing</code> returns <code>missing</code>, so <code>==</code> cannot be used to test whether a value is missing. To test whether <code>x</code> is <code>missing</code>, use <a href="../base/base.html#Base.ismissing"><code>ismissing(x)</code></a>.</p><p>Special comparison operators <a href="../base/base.html#Base.isequal"><code>isequal</code></a> and <a href="../base/base.html#Core.:==="><code>===</code></a> are exceptions to the propagation rule: they always return a <code>Bool</code> value, even in the presence of <code>missing</code> values, considering <code>missing</code> as equal to <code>missing</code> and as different from any other value. They can therefore be used to test whether a value is <code>missing</code></p><pre><code class="language-julia-repl">julia&gt; missing === 1
+false
+
+julia&gt; isequal(missing, 1)
+false
+
+julia&gt; missing === missing
+true
+
+julia&gt; isequal(missing, missing)
+true</code></pre><p>The <a href="../base/base.html#Base.isless"><code>isless</code></a> operator is another exception: <code>missing</code> is considered as greater than any other value. This operator is used by <a href="../base/sort.html#Base.sort"><code>sort</code></a>, which therefore places <code>missing</code> values after all other values.</p><pre><code class="language-julia-repl">julia&gt; isless(1, missing)
+true
+
+julia&gt; isless(missing, Inf)
+false
+
+julia&gt; isless(missing, missing)
+false</code></pre><h2><a class="nav-anchor" id="Logical-operators-1" href="#Logical-operators-1">Logical operators</a></h2><p>Logical (or boolean) operators <a href="../base/math.html#Base.:|"><code>|</code></a>, <a href="../base/math.html#Base.:&amp;"><code>&amp;</code></a> and <a href="../base/math.html#Base.xor"><code>xor</code></a> are another special case, as they only propagate <code>missing</code> values when it is logically required. For these operators, whether or not the result is uncertain depends on the particular operation, following the well-established rules of <a href="https://en.wikipedia.org/wiki/Three-valued_logic"><em>three-valued logic</em></a> which are also implemented by <code>NULL</code> in SQL and <code>NA</code> in R. This abstract definition actually corresponds to a relatively natural behavior which is best explained via concrete examples.</p><p>Let us illustrate this principle with the logical &quot;or&quot; operator <a href="../base/math.html#Base.:|"><code>|</code></a>. Following the rules of boolean logic, if one of the operands is <code>true</code>, the value of the other operand does not have an influence on the result, which will always be <code>true</code></p><pre><code class="language-julia-repl">julia&gt; true | true
+true
+
+julia&gt; true | false
+true
+
+julia&gt; false | true
+true</code></pre><p>Based on this observation, we can conclude that if one of the operands is <code>true</code> and the other <code>missing</code>, we know that the result is <code>true</code> in spite of the uncertainty about the actual value of one of the operands. If we had been able to observe the actual value of the second operand, it could only be <code>true</code> or <code>false</code>, and in both cases the result would be <code>true</code>. Therefore, in this particular case, missingness does <em>not</em> propagate</p><pre><code class="language-julia-repl">julia&gt; true | missing
+true
+
+julia&gt; missing | true
+true</code></pre><p>On the contrary, if one of the operands is <code>false</code>, the result could be either <code>true</code> or <code>false</code> depending on the value of the other operand. Therefore, if that operand is <code>missing</code>, the result has to be <code>missing</code> too</p><pre><code class="language-julia-repl">julia&gt; false | true
+true
+
+julia&gt; true | false
+true
+
+julia&gt; false | false
+false
+
+julia&gt; false | missing
+missing
+
+julia&gt; missing | false
+missing</code></pre><p>The behavior of the logical &quot;and&quot; operator <a href="../base/math.html#Base.:&amp;"><code>&amp;</code></a> is similar to that of the <code>|</code> operator, with the difference that missingness does not propagate when one of the operands is <code>false</code>. For example, when that is the case of the first operand</p><pre><code class="language-julia-repl">julia&gt; false &amp; false
+false
+
+julia&gt; false &amp; true
+false
+
+julia&gt; false &amp; missing
+false</code></pre><p>On the other hand, missingness propagates when one of the operands is <code>true</code>, for example the first one</p><pre><code class="language-julia-repl">julia&gt; true &amp; true
+true
+
+julia&gt; true &amp; false
+false
+
+julia&gt; true &amp; missing
+missing</code></pre><p>Finally, the &quot;exclusive or&quot; logical operator <a href="../base/math.html#Base.xor"><code>xor</code></a> always propagates <code>missing</code> values, since both operands always have an effect on the result. Also note that the negation operator <a href="../base/math.html#Base.:!"><code>!</code></a> returns <code>missing</code> when the operand is <code>missing</code> just like other unary operators.</p><h2><a class="nav-anchor" id="Control-Flow-and-Short-Circuiting-Operators-1" href="#Control-Flow-and-Short-Circuiting-Operators-1">Control Flow and Short-Circuiting Operators</a></h2><p>Control flow operators including <a href="../base/base.html#if"><code>if</code></a>, <a href="../base/base.html#while"><code>while</code></a> and the <a href="control-flow.html#man-conditional-evaluation-1">ternary operator</a> <code>x ? y : z</code> do not allow for missing values. This is because of the uncertainty about whether the actual value would be <code>true</code> or <code>false</code> if we could observe it, which implies that we do not know how the program should behave. A <code>TypeError</code> is thrown as soon as a <code>missing</code> value is encountered in this context</p><pre><code class="language-julia-repl">julia&gt; if missing
+           println(&quot;here&quot;)
+       end
+ERROR: TypeError: non-boolean (Missing) used in boolean context</code></pre><p>For the same reason, contrary to logical operators presented above, the short-circuiting boolean operators <a href="../base/math.html#&amp;&amp;"><code>&amp;&amp;</code></a> and <a href="../base/math.html#||"><code>||</code></a> do not allow for <code>missing</code> values in situations where the value of the operand determines whether the next operand is evaluated or not. For example</p><pre><code class="language-julia-repl">julia&gt; missing || false
+ERROR: TypeError: non-boolean (Missing) used in boolean context
+
+julia&gt; missing &amp;&amp; false
+ERROR: TypeError: non-boolean (Missing) used in boolean context
+
+julia&gt; true &amp;&amp; missing &amp;&amp; false
+ERROR: TypeError: non-boolean (Missing) used in boolean context</code></pre><p>On the other hand, no error is thrown when the result can be determined without the <code>missing</code> values. This is the case when the code short-circuits before evaluating the <code>missing</code> operand, and when the <code>missing</code> operand is the last one</p><pre><code class="language-julia-repl">julia&gt; true &amp;&amp; missing
+missing
+
+julia&gt; false &amp;&amp; missing
+false</code></pre><h2><a class="nav-anchor" id="Arrays-With-Missing-Values-1" href="#Arrays-With-Missing-Values-1">Arrays With Missing Values</a></h2><p>Arrays containing missing values can be created like other arrays</p><pre><code class="language-julia-repl">julia&gt; [1, missing]
+2-element Array{Union{Missing, Int64},1}:
+ 1
+  missing</code></pre><p>As this example shows, the element type of such arrays is <code>Union{Missing, T}</code>, with <code>T</code> the type of the non-missing values. This simply reflects the fact that array entries can be either of type <code>T</code> (here, <code>Int64</code>) or of type <code>Missing</code>. This kind of array uses an efficient memory storage equivalent to an <code>Array{T}</code> holding the actual values combined with an <code>Array{UInt8}</code> indicating the type of the entry (i.e. whether it is <code>Missing</code> or <code>T</code>).</p><p>Arrays allowing for missing values can be constructed with the standard syntax. Use <code>Array{Union{Missing, T}}(missing, dims)</code> to create arrays filled with missing values:</p><pre><code class="language-julia-repl">julia&gt; Array{Union{Missing, String}}(missing, 2, 3)
+2×3 Array{Union{Missing, String},2}:
+ missing  missing  missing
+ missing  missing  missing</code></pre><p>An array allowing for <code>missing</code> values but which does not contain any such value can be converted back to an array which does not allow for missing values using <a href="../base/base.html#Base.convert"><code>convert</code></a>. If the array contains <code>missing</code> values, a <code>MethodError</code> is thrown during conversion</p><pre><code class="language-julia-repl">julia&gt; x = Union{Missing, String}[&quot;a&quot;, &quot;b&quot;]
+2-element Array{Union{Missing, String},1}:
+ &quot;a&quot;
+ &quot;b&quot;
+
+julia&gt; convert(Array{String}, x)
+2-element Array{String,1}:
+ &quot;a&quot;
+ &quot;b&quot;
+
+julia&gt; y = Union{Missing, String}[missing, &quot;b&quot;]
+2-element Array{Union{Missing, String},1}:
+ missing
+ &quot;b&quot;
+
+julia&gt; convert(Array{String}, y)
+ERROR: MethodError: Cannot `convert` an object of type Missing to an object of type String</code></pre><h2><a class="nav-anchor" id="Skipping-Missing-Values-1" href="#Skipping-Missing-Values-1">Skipping Missing Values</a></h2><p>Since <code>missing</code> values propagate with standard mathematical operators, reduction functions return <code>missing</code> when called on arrays which contain missing values</p><pre><code class="language-julia-repl">julia&gt; sum([1, missing])
+missing</code></pre><p>In this situation, use the <a href="../base/base.html#Base.skipmissing"><code>skipmissing</code></a> function to skip missing values</p><pre><code class="language-julia-repl">julia&gt; sum(skipmissing([1, missing]))
+1</code></pre><p>This convenience function returns an iterator which filters out <code>missing</code> values efficiently. It can therefore be used with any function which supports iterators</p><pre><code class="language-julia-repl">julia&gt; maximum(skipmissing([3, missing, 2, 1]))
+3
+
+julia&gt; mean(skipmissing([3, missing, 2, 1]))
+2.0
+
+julia&gt; mapreduce(sqrt, +, skipmissing([3, missing, 2, 1]))
+4.146264369941973</code></pre><p>Use <a href="../base/collections.html#Base.collect-Tuple{Any}"><code>collect</code></a> to extract non-<code>missing</code> values and store them in an array</p><pre><code class="language-julia-repl">julia&gt; collect(skipmissing([3, missing, 2, 1]))
+3-element Array{Int64,1}:
+ 3
+ 2
+ 1</code></pre><h2><a class="nav-anchor" id="Logical-Operations-on-Arrays-1" href="#Logical-Operations-on-Arrays-1">Logical Operations on Arrays</a></h2><p>The three-valued logic described above for logical operators is also used by logical functions applied to arrays. Thus, array equality tests using the <a href="../base/math.html#Base.:=="><code>==</code></a> operator return <code>missing</code> whenever the result cannot be determined without knowing the actual value of the <code>missing</code> entry. In practice, this means that <code>missing</code> is returned if all non-missing values of the compared arrays are equal, but one or both arrays contain missing values (possibly at different positions)</p><pre><code class="language-julia-repl">julia&gt; [1, missing] == [2, missing]
+false
+
+julia&gt; [1, missing] == [1, missing]
+missing
+
+julia&gt; [1, 2, missing] == [1, missing, 2]
+missing</code></pre><p>As for single values, use <a href="../base/base.html#Base.isequal"><code>isequal</code></a> to treat <code>missing</code> values as equal to other <code>missing</code> values but different from non-missing values</p><pre><code class="language-julia-repl">julia&gt; isequal([1, missing], [1, missing])
+true
+
+julia&gt; isequal([1, 2, missing], [1, missing, 2])
+false</code></pre><p>Functions <a href="../base/collections.html#Base.any-Tuple{Any}"><code>any</code></a> and <a href="../base/collections.html#Base.all-Tuple{Any}"><code>all</code></a> also follow the rules of three-valued logic, returning <code>missing</code> when the result cannot be determined</p><pre><code class="language-julia-repl">julia&gt; all([true, missing])
+missing
+
+julia&gt; all([false, missing])
+false
+
+julia&gt; any([true, missing])
+true
+
+julia&gt; any([false, missing])
+missing</code></pre><footer><hr/><a class="previous" href="arrays.html"><span class="direction">Previous</span><span class="title">Multi-dimensional Arrays</span></a><a class="next" href="networking-and-streams.html"><span class="direction">Next</span><span class="title">Networking and Streams</span></a></footer></article></body></html>

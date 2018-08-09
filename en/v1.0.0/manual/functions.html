@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Functions · The Julia Language</title><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-28835595-6', 'auto');
+ga('send', 'pageview');
+</script><link href="https://cdnjs.cloudflare.com/ajax/libs/normalize/4.2.0/normalize.min.css" rel="stylesheet" type="text/css"/><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.2.0/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link href="../assets/documenter.css" rel="stylesheet" type="text/css"/><link href="../assets/julia-manual.css" rel="stylesheet" type="text/css"/></head><body><nav class="toc"><a href="../index.html"><img class="logo" src="../assets/logo.png" alt="The Julia Language logo"/></a><h1>The Julia Language</h1><select id="version-selector" onChange="window.location.href=this.value" style="visibility: hidden"></select><form class="search" id="search-form" action="../search.html"><input id="search-query" name="q" type="text" placeholder="Search docs"/></form><ul><li><a class="toctext" href="../index.html">Home</a></li><li><span class="toctext">Manual</span><ul><li><a class="toctext" href="getting-started.html">Getting Started</a></li><li><a class="toctext" href="variables.html">Variables</a></li><li><a class="toctext" href="integers-and-floating-point-numbers.html">Integers and Floating-Point Numbers</a></li><li><a class="toctext" href="mathematical-operations.html">Mathematical Operations and Elementary Functions</a></li><li><a class="toctext" href="complex-and-rational-numbers.html">Complex and Rational Numbers</a></li><li><a class="toctext" href="strings.html">Strings</a></li><li class="current"><a class="toctext" href="functions.html">Functions</a><ul class="internal"><li><a class="toctext" href="#Argument-Passing-Behavior-1">Argument Passing Behavior</a></li><li><a class="toctext" href="#The-return-Keyword-1">The <code>return</code> Keyword</a></li><li><a class="toctext" href="#Operators-Are-Functions-1">Operators Are Functions</a></li><li><a class="toctext" href="#Operators-With-Special-Names-1">Operators With Special Names</a></li><li><a class="toctext" href="#man-anonymous-functions-1">Anonymous Functions</a></li><li><a class="toctext" href="#Tuples-1">Tuples</a></li><li><a class="toctext" href="#Named-Tuples-1">Named Tuples</a></li><li><a class="toctext" href="#Multiple-Return-Values-1">Multiple Return Values</a></li><li><a class="toctext" href="#Argument-destructuring-1">Argument destructuring</a></li><li><a class="toctext" href="#Varargs-Functions-1">Varargs Functions</a></li><li><a class="toctext" href="#Optional-Arguments-1">Optional Arguments</a></li><li><a class="toctext" href="#Keyword-Arguments-1">Keyword Arguments</a></li><li><a class="toctext" href="#Evaluation-Scope-of-Default-Values-1">Evaluation Scope of Default Values</a></li><li><a class="toctext" href="#Do-Block-Syntax-for-Function-Arguments-1">Do-Block Syntax for Function Arguments</a></li><li><a class="toctext" href="#man-vectorized-1">Dot Syntax for Vectorizing Functions</a></li><li><a class="toctext" href="#Further-Reading-1">Further Reading</a></li></ul></li><li><a class="toctext" href="control-flow.html">Control Flow</a></li><li><a class="toctext" href="variables-and-scoping.html">Scope of Variables</a></li><li><a class="toctext" href="types.html">Types</a></li><li><a class="toctext" href="methods.html">Methods</a></li><li><a class="toctext" href="constructors.html">Constructors</a></li><li><a class="toctext" href="conversion-and-promotion.html">Conversion and Promotion</a></li><li><a class="toctext" href="interfaces.html">Interfaces</a></li><li><a class="toctext" href="modules.html">Modules</a></li><li><a class="toctext" href="documentation.html">Documentation</a></li><li><a class="toctext" href="metaprogramming.html">Metaprogramming</a></li><li><a class="toctext" href="arrays.html">Multi-dimensional Arrays</a></li><li><a class="toctext" href="missing.html">Missing Values</a></li><li><a class="toctext" href="networking-and-streams.html">Networking and Streams</a></li><li><a class="toctext" href="parallel-computing.html">Parallel Computing</a></li><li><a class="toctext" href="running-external-programs.html">Running External Programs</a></li><li><a class="toctext" href="calling-c-and-fortran-code.html">Calling C and Fortran Code</a></li><li><a class="toctext" href="handling-operating-system-variation.html">Handling Operating System Variation</a></li><li><a class="toctext" href="environment-variables.html">Environment Variables</a></li><li><a class="toctext" href="embedding.html">Embedding Julia</a></li><li><a class="toctext" href="code-loading.html">Code Loading</a></li><li><a class="toctext" href="profile.html">Profiling</a></li><li><a class="toctext" href="stacktraces.html">Stack Traces</a></li><li><a class="toctext" href="performance-tips.html">Performance Tips</a></li><li><a class="toctext" href="workflow-tips.html">Workflow Tips</a></li><li><a class="toctext" href="style-guide.html">Style Guide</a></li><li><a class="toctext" href="faq.html">Frequently Asked Questions</a></li><li><a class="toctext" href="noteworthy-differences.html">Noteworthy Differences from other Languages</a></li><li><a class="toctext" href="unicode-input.html">Unicode Input</a></li></ul></li><li><span class="toctext">Base</span><ul><li><a class="toctext" href="../base/base.html">Essentials</a></li><li><a class="toctext" href="../base/collections.html">Collections and Data Structures</a></li><li><a class="toctext" href="../base/math.html">Mathematics</a></li><li><a class="toctext" href="../base/numbers.html">Numbers</a></li><li><a class="toctext" href="../base/strings.html">Strings</a></li><li><a class="toctext" href="../base/arrays.html">Arrays</a></li><li><a class="toctext" href="../base/parallel.html">Tasks</a></li><li><a class="toctext" href="../base/multi-threading.html">Multi-Threading</a></li><li><a class="toctext" href="../base/constants.html">Constants</a></li><li><a class="toctext" href="../base/file.html">Filesystem</a></li><li><a class="toctext" href="../base/io-network.html">I/O and Network</a></li><li><a class="toctext" href="../base/punctuation.html">Punctuation</a></li><li><a class="toctext" href="../base/sort.html">Sorting and Related Functions</a></li><li><a class="toctext" href="../base/iterators.html">Iteration utilities</a></li><li><a class="toctext" href="../base/c.html">C Interface</a></li><li><a class="toctext" href="../base/libc.html">C Standard Library</a></li><li><a class="toctext" href="../base/stacktraces.html">StackTraces</a></li><li><a class="toctext" href="../base/simd-types.html">SIMD Support</a></li></ul></li><li><span class="toctext">Standard Library</span><ul><li><a class="toctext" href="../stdlib/Base64.html">Base64</a></li><li><a class="toctext" href="../stdlib/CRC32c.html">CRC32c</a></li><li><a class="toctext" href="../stdlib/Dates.html">Dates</a></li><li><a class="toctext" href="../stdlib/DelimitedFiles.html">Delimited Files</a></li><li><a class="toctext" href="../stdlib/Distributed.html">Distributed Computing</a></li><li><a class="toctext" href="../stdlib/FileWatching.html">File Events</a></li><li><a class="toctext" href="../stdlib/InteractiveUtils.html">Interactive Utilities</a></li><li><a class="toctext" href="../stdlib/LibGit2.html">LibGit2</a></li><li><a class="toctext" href="../stdlib/Libdl.html">Dynamic Linker</a></li><li><a class="toctext" href="../stdlib/LinearAlgebra.html">Linear Algebra</a></li><li><a class="toctext" href="../stdlib/Logging.html">Logging</a></li><li><a class="toctext" href="../stdlib/Markdown.html">Markdown</a></li><li><a class="toctext" href="../stdlib/Mmap.html">Memory-mapped I/O</a></li><li><a class="toctext" href="../stdlib/Pkg.html">Pkg</a></li><li><a class="toctext" href="../stdlib/Printf.html">Printf</a></li><li><a class="toctext" href="../stdlib/Profile.html">Profiling</a></li><li><a class="toctext" href="../stdlib/REPL.html">The Julia REPL</a></li><li><a class="toctext" href="../stdlib/Random.html">Random Numbers</a></li><li><a class="toctext" href="../stdlib/SHA.html">SHA</a></li><li><a class="toctext" href="../stdlib/Serialization.html">Serialization</a></li><li><a class="toctext" href="../stdlib/SharedArrays.html">Shared Arrays</a></li><li><a class="toctext" href="../stdlib/Sockets.html">Sockets</a></li><li><a class="toctext" href="../stdlib/SparseArrays.html">Sparse Arrays</a></li><li><a class="toctext" href="../stdlib/Statistics.html">Statistics</a></li><li><a class="toctext" href="../stdlib/Test.html">Unit Testing</a></li><li><a class="toctext" href="../stdlib/UUIDs.html">UUIDs</a></li><li><a class="toctext" href="../stdlib/Unicode.html">Unicode</a></li></ul></li><li><span class="toctext">Developer Documentation</span><ul><li><a class="toctext" href="../devdocs/reflection.html">Reflection and introspection</a></li><li><span class="toctext">Documentation of Julia&#39;s Internals</span><ul><li><a class="toctext" href="../devdocs/init.html">Initialization of the Julia runtime</a></li><li><a class="toctext" href="../devdocs/ast.html">Julia ASTs</a></li><li><a class="toctext" href="../devdocs/types.html">More about types</a></li><li><a class="toctext" href="../devdocs/object.html">Memory layout of Julia Objects</a></li><li><a class="toctext" href="../devdocs/eval.html">Eval of Julia code</a></li><li><a class="toctext" href="../devdocs/callconv.html">Calling Conventions</a></li><li><a class="toctext" href="../devdocs/compiler.html">High-level Overview of the Native-Code Generation Process</a></li><li><a class="toctext" href="../devdocs/functions.html">Julia Functions</a></li><li><a class="toctext" href="../devdocs/cartesian.html">Base.Cartesian</a></li><li><a class="toctext" href="../devdocs/meta.html">Talking to the compiler (the <code>:meta</code> mechanism)</a></li><li><a class="toctext" href="../devdocs/subarrays.html">SubArrays</a></li><li><a class="toctext" href="../devdocs/isbitsunionarrays.html">isbits Union Optimizations</a></li><li><a class="toctext" href="../devdocs/sysimg.html">System Image Building</a></li><li><a class="toctext" href="../devdocs/llvm.html">Working with LLVM</a></li><li><a class="toctext" href="../devdocs/stdio.html">printf() and stdio in the Julia runtime</a></li><li><a class="toctext" href="../devdocs/boundscheck.html">Bounds checking</a></li><li><a class="toctext" href="../devdocs/locks.html">Proper maintenance and care of multi-threading locks</a></li><li><a class="toctext" href="../devdocs/offset-arrays.html">Arrays with custom indices</a></li><li><a class="toctext" href="../devdocs/require.html">Module loading</a></li><li><a class="toctext" href="../devdocs/inference.html">Inference</a></li></ul></li><li><span class="toctext">Developing/debugging Julia&#39;s C code</span><ul><li><a class="toctext" href="../devdocs/backtraces.html">Reporting and analyzing crashes (segfaults)</a></li><li><a class="toctext" href="../devdocs/debuggingtips.html">gdb debugging tips</a></li><li><a class="toctext" href="../devdocs/valgrind.html">Using Valgrind with Julia</a></li><li><a class="toctext" href="../devdocs/sanitizers.html">Sanitizer support</a></li></ul></li></ul></li></ul></nav><article id="docs"><header><nav><ul><li>Manual</li><li><a href="functions.html">Functions</a></li></ul><a class="edit-page" href="https://github.com/fredrikekre/julia/blob/master/doc/src/manual/functions.md"><span class="fa"></span> Edit on GitHub</a></nav><hr/><div id="topbar"><span>Functions</span><a class="fa fa-bars" href="#"></a></div></header><h1><a class="nav-anchor" id="man-functions-1" href="#man-functions-1">Functions</a></h1><p>In Julia, a function is an object that maps a tuple of argument values to a return value. Julia functions are not pure mathematical functions, in the sense that functions can alter and be affected by the global state of the program. The basic syntax for defining functions in Julia is:</p><pre><code class="language-julia-repl">julia&gt; function f(x,y)
+           x + y
+       end
+f (generic function with 1 method)</code></pre><p>There is a second, more terse syntax for defining a function in Julia. The traditional function declaration syntax demonstrated above is equivalent to the following compact &quot;assignment form&quot;:</p><pre><code class="language-julia-repl">julia&gt; f(x,y) = x + y
+f (generic function with 1 method)</code></pre><p>In the assignment form, the body of the function must be a single expression, although it can be a compound expression (see <a href="control-flow.html#man-compound-expressions-1">Compound Expressions</a>). Short, simple function definitions are common in Julia. The short function syntax is accordingly quite idiomatic, considerably reducing both typing and visual noise.</p><p>A function is called using the traditional parenthesis syntax:</p><pre><code class="language-julia-repl">julia&gt; f(2,3)
+5</code></pre><p>Without parentheses, the expression <code>f</code> refers to the function object, and can be passed around like any value:</p><pre><code class="language-julia-repl">julia&gt; g = f;
+
+julia&gt; g(2,3)
+5</code></pre><p>As with variables, Unicode can also be used for function names:</p><pre><code class="language-julia-repl">julia&gt; ∑(x,y) = x + y
+∑ (generic function with 1 method)
+
+julia&gt; ∑(2, 3)
+5</code></pre><h2><a class="nav-anchor" id="Argument-Passing-Behavior-1" href="#Argument-Passing-Behavior-1">Argument Passing Behavior</a></h2><p>Julia function arguments follow a convention sometimes called &quot;pass-by-sharing&quot;, which means that values are not copied when they are passed to functions. Function arguments themselves act as new variable <em>bindings</em> (new locations that can refer to values), but the values they refer to are identical to the passed values. Modifications to mutable values (such as <code>Array</code>s) made within a function will be visible to the caller. This is the same behavior found in Scheme, most Lisps, Python, Ruby and Perl, among other dynamic languages.</p><h2><a class="nav-anchor" id="The-return-Keyword-1" href="#The-return-Keyword-1">The <code>return</code> Keyword</a></h2><p>The value returned by a function is the value of the last expression evaluated, which, by default, is the last expression in the body of the function definition. In the example function, <code>f</code>, from the previous section this is the value of the expression <code>x + y</code>. As in C and most other imperative or functional languages, the <code>return</code> keyword causes a function to return immediately, providing an expression whose value is returned:</p><pre><code class="language-julia">function g(x,y)
+    return x * y
+    x + y
+end</code></pre><p>Since function definitions can be entered into interactive sessions, it is easy to compare these definitions:</p><pre><code class="language-julia-repl">julia&gt; f(x,y) = x + y
+f (generic function with 1 method)
+
+julia&gt; function g(x,y)
+           return x * y
+           x + y
+       end
+g (generic function with 1 method)
+
+julia&gt; f(2,3)
+5
+
+julia&gt; g(2,3)
+6</code></pre><p>Of course, in a purely linear function body like <code>g</code>, the usage of <code>return</code> is pointless since the expression <code>x + y</code> is never evaluated and we could simply make <code>x * y</code> the last expression in the function and omit the <code>return</code>. In conjunction with other control flow, however, <code>return</code> is of real use. Here, for example, is a function that computes the hypotenuse length of a right triangle with sides of length <code>x</code> and <code>y</code>, avoiding overflow:</p><pre><code class="language-julia-repl">julia&gt; function hypot(x,y)
+           x = abs(x)
+           y = abs(y)
+           if x &gt; y
+               r = y/x
+               return x*sqrt(1+r*r)
+           end
+           if y == 0
+               return zero(x)
+           end
+           r = x/y
+           return y*sqrt(1+r*r)
+       end
+hypot (generic function with 1 method)
+
+julia&gt; hypot(3, 4)
+5.0</code></pre><p>There are three possible points of return from this function, returning the values of three different expressions, depending on the values of <code>x</code> and <code>y</code>. The <code>return</code> on the last line could be omitted since it is the last expression.</p><p>A return type can also be specified in the function declaration using the <code>::</code> operator. This converts the return value to the specified type.</p><pre><code class="language-julia-repl">julia&gt; function g(x, y)::Int8
+           return x * y
+       end;
+
+julia&gt; typeof(g(1, 2))
+Int8</code></pre><p>This function will always return an <code>Int8</code> regardless of the types of <code>x</code> and <code>y</code>. See <a href="types.html#Type-Declarations-1">Type Declarations</a> for more on return types.</p><h2><a class="nav-anchor" id="Operators-Are-Functions-1" href="#Operators-Are-Functions-1">Operators Are Functions</a></h2><p>In Julia, most operators are just functions with support for special syntax. (The exceptions are operators with special evaluation semantics like <code>&amp;&amp;</code> and <code>||</code>. These operators cannot be functions since <a href="control-flow.html#Short-Circuit-Evaluation-1">Short-Circuit Evaluation</a> requires that their operands are not evaluated before evaluation of the operator.) Accordingly, you can also apply them using parenthesized argument lists, just as you would any other function:</p><pre><code class="language-julia-repl">julia&gt; 1 + 2 + 3
+6
+
+julia&gt; +(1,2,3)
+6</code></pre><p>The infix form is exactly equivalent to the function application form – in fact the former is parsed to produce the function call internally. This also means that you can assign and pass around operators such as <a href="../base/math.html#Base.:+"><code>+</code></a> and <a href="../base/strings.html#Base.:*-Tuple{Union{AbstractChar, AbstractString},Vararg{Union{AbstractChar, AbstractString},N} where N}"><code>*</code></a> just like you would with other function values:</p><pre><code class="language-julia-repl">julia&gt; f = +;
+
+julia&gt; f(1,2,3)
+6</code></pre><p>Under the name <code>f</code>, the function does not support infix notation, however.</p><h2><a class="nav-anchor" id="Operators-With-Special-Names-1" href="#Operators-With-Special-Names-1">Operators With Special Names</a></h2><p>A few special expressions correspond to calls to functions with non-obvious names. These are:</p><table><tr><th>Expression</th><th>Calls</th></tr><tr><td><code>[A B C ...]</code></td><td><a href="../base/arrays.html#Base.hcat"><code>hcat</code></a></td></tr><tr><td><code>[A; B; C; ...]</code></td><td><a href="../base/arrays.html#Base.vcat"><code>vcat</code></a></td></tr><tr><td><code>[A B; C D; ...]</code></td><td><a href="../base/arrays.html#Base.hvcat"><code>hvcat</code></a></td></tr><tr><td><code>A&#39;</code></td><td><a href="../stdlib/LinearAlgebra.html#Base.adjoint"><code>adjoint</code></a></td></tr><tr><td><code>A[i]</code></td><td><a href="../base/collections.html#Base.getindex"><code>getindex</code></a></td></tr><tr><td><code>A[i] = x</code></td><td><a href="../base/collections.html#Base.setindex!"><code>setindex!</code></a></td></tr><tr><td><code>A.n</code></td><td><a href="../base/base.html#Base.getproperty"><code>getproperty</code></a></td></tr><tr><td><code>A.n = x</code></td><td><a href="../base/base.html#Base.setproperty!"><code>setproperty!</code></a></td></tr></table><h2><a class="nav-anchor" id="man-anonymous-functions-1" href="#man-anonymous-functions-1">Anonymous Functions</a></h2><p>Functions in Julia are <a href="https://en.wikipedia.org/wiki/First-class_citizen">first-class objects</a>: they can be assigned to variables, and called using the standard function call syntax from the variable they have been assigned to. They can be used as arguments, and they can be returned as values. They can also be created anonymously, without being given a name, using either of these syntaxes:</p><pre><code class="language-julia-repl">julia&gt; x -&gt; x^2 + 2x - 1
+#1 (generic function with 1 method)
+
+julia&gt; function (x)
+           x^2 + 2x - 1
+       end
+#3 (generic function with 1 method)</code></pre><p>This creates a function taking one argument <code>x</code> and returning the value of the polynomial <code>x^2 + 2x - 1</code> at that value. Notice that the result is a generic function, but with a compiler-generated name based on consecutive numbering.</p><p>The primary use for anonymous functions is passing them to functions which take other functions as arguments. A classic example is <a href="../base/collections.html#Base.map"><code>map</code></a>, which applies a function to each value of an array and returns a new array containing the resulting values:</p><pre><code class="language-julia-repl">julia&gt; map(round, [1.2,3.5,1.7])
+3-element Array{Float64,1}:
+ 1.0
+ 4.0
+ 2.0</code></pre><p>This is fine if a named function effecting the transform already exists to pass as the first argument to <a href="../base/collections.html#Base.map"><code>map</code></a>. Often, however, a ready-to-use, named function does not exist. In these situations, the anonymous function construct allows easy creation of a single-use function object without needing a name:</p><pre><code class="language-julia-repl">julia&gt; map(x -&gt; x^2 + 2x - 1, [1,3,-1])
+3-element Array{Int64,1}:
+  2
+ 14
+ -2</code></pre><p>An anonymous function accepting multiple arguments can be written using the syntax <code>(x,y,z)-&gt;2x+y-z</code>. A zero-argument anonymous function is written as <code>()-&gt;3</code>. The idea of a function with no arguments may seem strange, but is useful for &quot;delaying&quot; a computation. In this usage, a block of code is wrapped in a zero-argument function, which is later invoked by calling it as <code>f</code>.</p><h2><a class="nav-anchor" id="Tuples-1" href="#Tuples-1">Tuples</a></h2><p>Julia has a built-in data structure called a <em>tuple</em> that is closely related to function arguments and return values. A tuple is a fixed-length container that can hold any values, but cannot be modified (it is <em>immutable</em>). Tuples are constructed with commas and parentheses, and can be accessed via indexing:</p><pre><code class="language-julia-repl">julia&gt; (1, 1+1)
+(1, 2)
+
+julia&gt; (1,)
+(1,)
+
+julia&gt; x = (0.0, &quot;hello&quot;, 6*7)
+(0.0, &quot;hello&quot;, 42)
+
+julia&gt; x[2]
+&quot;hello&quot;</code></pre><p>Notice that a length-1 tuple must be written with a comma, <code>(1,)</code>, since <code>(1)</code> would just be a parenthesized value. <code>()</code> represents the empty (length-0) tuple.</p><h2><a class="nav-anchor" id="Named-Tuples-1" href="#Named-Tuples-1">Named Tuples</a></h2><p>The components of tuples can optionally be named, in which case a <em>named tuple</em> is constructed:</p><pre><code class="language-julia-repl">julia&gt; x = (a=1, b=1+1)
+(a = 1, b = 2)
+
+julia&gt; x.a
+1</code></pre><p>Named tuples are very similar to tuples, except that fields can additionally be accessed by name using dot syntax (<code>x.a</code>).</p><h2><a class="nav-anchor" id="Multiple-Return-Values-1" href="#Multiple-Return-Values-1">Multiple Return Values</a></h2><p>In Julia, one returns a tuple of values to simulate returning multiple values. However, tuples can be created and destructured without needing parentheses, thereby providing an illusion that multiple values are being returned, rather than a single tuple value. For example, the following function returns a pair of values:</p><pre><code class="language-julia-repl">julia&gt; function foo(a,b)
+           a+b, a*b
+       end
+foo (generic function with 1 method)</code></pre><p>If you call it in an interactive session without assigning the return value anywhere, you will see the tuple returned:</p><pre><code class="language-julia-repl">julia&gt; foo(2,3)
+(5, 6)</code></pre><p>A typical usage of such a pair of return values, however, extracts each value into a variable. Julia supports simple tuple &quot;destructuring&quot; that facilitates this:</p><pre><code class="language-julia-repl">julia&gt; x, y = foo(2,3)
+(5, 6)
+
+julia&gt; x
+5
+
+julia&gt; y
+6</code></pre><p>You can also return multiple values via an explicit usage of the <code>return</code> keyword:</p><pre><code class="language-julia">function foo(a,b)
+    return a+b, a*b
+end</code></pre><p>This has the exact same effect as the previous definition of <code>foo</code>.</p><h2><a class="nav-anchor" id="Argument-destructuring-1" href="#Argument-destructuring-1">Argument destructuring</a></h2><p>The destructuring feature can also be used within a function argument. If a function argument name is written as a tuple (e.g. <code>(x, y)</code>) instead of just a symbol, then an assignment <code>(x, y) = argument</code> will be inserted for you:</p><pre><code class="language-julia">julia&gt; minmax(x, y) = (y &lt; x) ? (y, x) : (x, y)
+
+julia&gt; range((min, max)) = max - min
+
+julia&gt; range(minmax(10, 2))
+8</code></pre><p>Notice the extra set of parentheses in the definition of <code>range</code>. Without those, <code>range</code> would be a two-argument function, and this example would not work.</p><h2><a class="nav-anchor" id="Varargs-Functions-1" href="#Varargs-Functions-1">Varargs Functions</a></h2><p>It is often convenient to be able to write functions taking an arbitrary number of arguments. Such functions are traditionally known as &quot;varargs&quot; functions, which is short for &quot;variable number of arguments&quot;. You can define a varargs function by following the last argument with an ellipsis:</p><pre><code class="language-julia-repl">julia&gt; bar(a,b,x...) = (a,b,x)
+bar (generic function with 1 method)</code></pre><p>The variables <code>a</code> and <code>b</code> are bound to the first two argument values as usual, and the variable <code>x</code> is bound to an iterable collection of the zero or more values passed to <code>bar</code> after its first two arguments:</p><pre><code class="language-julia-repl">julia&gt; bar(1,2)
+(1, 2, ())
+
+julia&gt; bar(1,2,3)
+(1, 2, (3,))
+
+julia&gt; bar(1, 2, 3, 4)
+(1, 2, (3, 4))
+
+julia&gt; bar(1,2,3,4,5,6)
+(1, 2, (3, 4, 5, 6))</code></pre><p>In all these cases, <code>x</code> is bound to a tuple of the trailing values passed to <code>bar</code>.</p><p>It is possible to constrain the number of values passed as a variable argument; this will be discussed later in <a href="methods.html#Parametrically-constrained-Varargs-methods-1">Parametrically-constrained Varargs methods</a>.</p><p>On the flip side, it is often handy to &quot;splat&quot; the values contained in an iterable collection into a function call as individual arguments. To do this, one also uses <code>...</code> but in the function call instead:</p><pre><code class="language-julia-repl">julia&gt; x = (3, 4)
+(3, 4)
+
+julia&gt; bar(1,2,x...)
+(1, 2, (3, 4))</code></pre><p>In this case a tuple of values is spliced into a varargs call precisely where the variable number of arguments go. This need not be the case, however:</p><pre><code class="language-julia-repl">julia&gt; x = (2, 3, 4)
+(2, 3, 4)
+
+julia&gt; bar(1,x...)
+(1, 2, (3, 4))
+
+julia&gt; x = (1, 2, 3, 4)
+(1, 2, 3, 4)
+
+julia&gt; bar(x...)
+(1, 2, (3, 4))</code></pre><p>Furthermore, the iterable object splatted into a function call need not be a tuple:</p><pre><code class="language-julia-repl">julia&gt; x = [3,4]
+2-element Array{Int64,1}:
+ 3
+ 4
+
+julia&gt; bar(1,2,x...)
+(1, 2, (3, 4))
+
+julia&gt; x = [1,2,3,4]
+4-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+
+julia&gt; bar(x...)
+(1, 2, (3, 4))</code></pre><p>Also, the function that arguments are splatted into need not be a varargs function (although it often is):</p><pre><code class="language-julia-repl">julia&gt; baz(a,b) = a + b;
+
+julia&gt; args = [1,2]
+2-element Array{Int64,1}:
+ 1
+ 2
+
+julia&gt; baz(args...)
+3
+
+julia&gt; args = [1,2,3]
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia&gt; baz(args...)
+ERROR: MethodError: no method matching baz(::Int64, ::Int64, ::Int64)
+Closest candidates are:
+  baz(::Any, ::Any) at none:1</code></pre><p>As you can see, if the wrong number of elements are in the splatted container, then the function call will fail, just as it would if too many arguments were given explicitly.</p><h2><a class="nav-anchor" id="Optional-Arguments-1" href="#Optional-Arguments-1">Optional Arguments</a></h2><p>In many cases, function arguments have sensible default values and therefore might not need to be passed explicitly in every call. For example, the function <a href="../stdlib/Dates.html#Dates.Date"><code>Date(y, [m, d])</code></a> from <code>Dates</code> module constructs a <code>Date</code> type for a given year <code>y</code>, month <code>m</code> and day <code>d</code>. However, <code>m</code> and <code>d</code> arguments are optional and their default value is <code>1</code>. This behavior can be expressed concisely as:</p><pre><code class="language-julia">function Date(y::Int64, m::Int64=1, d::Int64=1)
+    err = validargs(Date, y, m, d)
+    err === nothing || throw(err)
+    return Date(UTD(totaldays(y, m, d)))
+end</code></pre><p>Observe, that this definition calls another method of <code>Date</code> function that takes one argument of <code>UTInstant{Day}</code> type.</p><p>With this definition, the function can be called with either one, two or three arguments, and <code>1</code> is automatically passed when any of the arguments is not specified:</p><pre><code class="language-julia-repl">julia&gt; using Dates
+
+julia&gt; Date(2000, 12, 12)
+2000-12-12
+
+julia&gt; Date(2000, 12)
+2000-12-01
+
+julia&gt; Date(2000)
+2000-01-01</code></pre><p>Optional arguments are actually just a convenient syntax for writing multiple method definitions with different numbers of arguments (see <a href="methods.html#Note-on-Optional-and-keyword-Arguments-1">Note on Optional and keyword Arguments</a>). This can be checked for our <code>Date</code> function example by calling <code>methods</code> function.</p><h2><a class="nav-anchor" id="Keyword-Arguments-1" href="#Keyword-Arguments-1">Keyword Arguments</a></h2><p>Some functions need a large number of arguments, or have a large number of behaviors. Remembering how to call such functions can be difficult. Keyword arguments can make these complex interfaces easier to use and extend by allowing arguments to be identified by name instead of only by position.</p><p>For example, consider a function <code>plot</code> that plots a line. This function might have many options, for controlling line style, width, color, and so on. If it accepts keyword arguments, a possible call might look like <code>plot(x, y, width=2)</code>, where we have chosen to specify only line width. Notice that this serves two purposes. The call is easier to read, since we can label an argument with its meaning. It also becomes possible to pass any subset of a large number of arguments, in any order.</p><p>Functions with keyword arguments are defined using a semicolon in the signature:</p><pre><code class="language-julia">function plot(x, y; style=&quot;solid&quot;, width=1, color=&quot;black&quot;)
+    ###
+end</code></pre><p>When the function is called, the semicolon is optional: one can either call <code>plot(x, y, width=2)</code> or <code>plot(x, y; width=2)</code>, but the former style is more common. An explicit semicolon is required only for passing varargs or computed keywords as described below.</p><p>Keyword argument default values are evaluated only when necessary (when a corresponding keyword argument is not passed), and in left-to-right order. Therefore default expressions may refer to prior keyword arguments.</p><p>The types of keyword arguments can be made explicit as follows:</p><pre><code class="language-julia">function f(;x::Int=1)
+    ###
+end</code></pre><p>Extra keyword arguments can be collected using <code>...</code>, as in varargs functions:</p><pre><code class="language-julia">function f(x; y=0, kwargs...)
+    ###
+end</code></pre><p>If a keyword argument is not assigned a default value in the method definition, then it is <em>required</em>: an <a href="../base/base.html#Core.UndefKeywordError"><code>UndefKeywordError</code></a> exception will be thrown if the caller does not assign it a value:</p><pre><code class="language-julia">function f(x; y)
+    ###
+end
+f(3, y=5) # ok, y is assigned
+f(3)      # throws UndefKeywordError(:y)</code></pre><p>Inside <code>f</code>, <code>kwargs</code> will be a named tuple. Named tuples (as well as dictionaries) can be passed as keyword arguments using a semicolon in a call, e.g. <code>f(x, z=1; kwargs...)</code>.</p><p>One can also pass <code>key =&gt; value</code> expressions after a semicolon. For example, <code>plot(x, y; :width =&gt; 2)</code> is equivalent to <code>plot(x, y, width=2)</code>. This is useful in situations where the keyword name is computed at runtime.</p><p>The nature of keyword arguments makes it possible to specify the same argument more than once. For example, in the call <code>plot(x, y; options..., width=2)</code> it is possible that the <code>options</code> structure also contains a value for <code>width</code>. In such a case the rightmost occurrence takes precedence; in this example, <code>width</code> is certain to have the value <code>2</code>. However, explicitly specifying the same keyword argument multiple times, for example <code>plot(x, y, width=2, width=3)</code>, is not allowed and results in a syntax error.</p><h2><a class="nav-anchor" id="Evaluation-Scope-of-Default-Values-1" href="#Evaluation-Scope-of-Default-Values-1">Evaluation Scope of Default Values</a></h2><p>When optional and keyword argument default expressions are evaluated, only <em>previous</em> arguments are in scope. For example, given this definition:</p><pre><code class="language-julia">function f(x, a=b, b=1)
+    ###
+end</code></pre><p>the <code>b</code> in <code>a=b</code> refers to a <code>b</code> in an outer scope, not the subsequent argument <code>b</code>.</p><h2><a class="nav-anchor" id="Do-Block-Syntax-for-Function-Arguments-1" href="#Do-Block-Syntax-for-Function-Arguments-1">Do-Block Syntax for Function Arguments</a></h2><p>Passing functions as arguments to other functions is a powerful technique, but the syntax for it is not always convenient. Such calls are especially awkward to write when the function argument requires multiple lines. As an example, consider calling <a href="../base/collections.html#Base.map"><code>map</code></a> on a function with several cases:</p><pre><code class="language-julia">map(x-&gt;begin
+           if x &lt; 0 &amp;&amp; iseven(x)
+               return 0
+           elseif x == 0
+               return 1
+           else
+               return x
+           end
+       end,
+    [A, B, C])</code></pre><p>Julia provides a reserved word <code>do</code> for rewriting this code more clearly:</p><pre><code class="language-julia">map([A, B, C]) do x
+    if x &lt; 0 &amp;&amp; iseven(x)
+        return 0
+    elseif x == 0
+        return 1
+    else
+        return x
+    end
+end</code></pre><p>The <code>do x</code> syntax creates an anonymous function with argument <code>x</code> and passes it as the first argument to <a href="../base/collections.html#Base.map"><code>map</code></a>. Similarly, <code>do a,b</code> would create a two-argument anonymous function, and a plain <code>do</code> would declare that what follows is an anonymous function of the form <code>() -&gt; ...</code>.</p><p>How these arguments are initialized depends on the &quot;outer&quot; function; here, <a href="../base/collections.html#Base.map"><code>map</code></a> will sequentially set <code>x</code> to <code>A</code>, <code>B</code>, <code>C</code>, calling the anonymous function on each, just as would happen in the syntax <code>map(func, [A, B, C])</code>.</p><p>This syntax makes it easier to use functions to effectively extend the language, since calls look like normal code blocks. There are many possible uses quite different from <a href="../base/collections.html#Base.map"><code>map</code></a>, such as managing system state. For example, there is a version of <a href="../base/io-network.html#Base.open"><code>open</code></a> that runs code ensuring that the opened file is eventually closed:</p><pre><code class="language-julia">open(&quot;outfile&quot;, &quot;w&quot;) do io
+    write(io, data)
+end</code></pre><p>This is accomplished by the following definition:</p><pre><code class="language-julia">function open(f::Function, args...)
+    io = open(args...)
+    try
+        f(io)
+    finally
+        close(io)
+    end
+end</code></pre><p>Here, <a href="../base/io-network.html#Base.open"><code>open</code></a> first opens the file for writing and then passes the resulting output stream to the anonymous function you defined in the <code>do ... end</code> block. After your function exits, <a href="../base/io-network.html#Base.open"><code>open</code></a> will make sure that the stream is properly closed, regardless of whether your function exited normally or threw an exception. (The <code>try/finally</code> construct will be described in <a href="control-flow.html#Control-Flow-1">Control Flow</a>.)</p><p>With the <code>do</code> block syntax, it helps to check the documentation or implementation to know how the arguments of the user function are initialized.</p><p>A <code>do</code> block, like any other inner function, can &quot;capture&quot; variables from its enclosing scope. For example, the variable <code>data</code> in the above example of <code>open...do</code> is captured from the outer scope. Captured variables can create performance challenges as discussed in <a href="performance-tips.html#man-performance-tips-1">performance tips</a>.</p><h2><a class="nav-anchor" id="man-vectorized-1" href="#man-vectorized-1">Dot Syntax for Vectorizing Functions</a></h2><p>In technical-computing languages, it is common to have &quot;vectorized&quot; versions of functions, which simply apply a given function <code>f(x)</code> to each element of an array <code>A</code> to yield a new array via <code>f(A)</code>. This kind of syntax is convenient for data processing, but in other languages vectorization is also often required for performance: if loops are slow, the &quot;vectorized&quot; version of a function can call fast library code written in a low-level language. In Julia, vectorized functions are <em>not</em> required for performance, and indeed it is often beneficial to write your own loops (see <a href="performance-tips.html#man-performance-tips-1">Performance Tips</a>), but they can still be convenient. Therefore, <em>any</em> Julia function <code>f</code> can be applied elementwise to any array (or other collection) with the syntax <code>f.(A)</code>. For example <code>sin</code> can be applied to all elements in the vector <code>A</code>, like so:</p><pre><code class="language-julia-repl">julia&gt; A = [1.0, 2.0, 3.0]
+3-element Array{Float64,1}:
+ 1.0
+ 2.0
+ 3.0
+
+julia&gt; sin.(A)
+3-element Array{Float64,1}:
+ 0.8414709848078965
+ 0.9092974268256817
+ 0.1411200080598672</code></pre><p>Of course, you can omit the dot if you write a specialized &quot;vector&quot; method of <code>f</code>, e.g. via <code>f(A::AbstractArray) = map(f, A)</code>, and this is just as efficient as <code>f.(A)</code>. But that approach requires you to decide in advance which functions you want to vectorize.</p><p>More generally, <code>f.(args...)</code> is actually equivalent to <code>broadcast(f, args...)</code>, which allows you to operate on multiple arrays (even of different shapes), or a mix of arrays and scalars (see <a href="arrays.html#Broadcasting-1">Broadcasting</a>). For example, if you have <code>f(x,y) = 3x + 4y</code>, then <code>f.(pi,A)</code> will return a new array consisting of <code>f(pi,a)</code> for each <code>a</code> in <code>A</code>, and <code>f.(vector1,vector2)</code> will return a new vector consisting of <code>f(vector1[i],vector2[i])</code> for each index <code>i</code> (throwing an exception if the vectors have different length).</p><pre><code class="language-julia-repl">julia&gt; f(x,y) = 3x + 4y;
+
+julia&gt; A = [1.0, 2.0, 3.0];
+
+julia&gt; B = [4.0, 5.0, 6.0];
+
+julia&gt; f.(pi, A)
+3-element Array{Float64,1}:
+ 13.42477796076938
+ 17.42477796076938
+ 21.42477796076938
+
+julia&gt; f.(A, B)
+3-element Array{Float64,1}:
+ 19.0
+ 26.0
+ 33.0</code></pre><p>Moreover, <em>nested</em> <code>f.(args...)</code> calls are <em>fused</em> into a single <code>broadcast</code> loop. For example, <code>sin.(cos.(X))</code> is equivalent to <code>broadcast(x -&gt; sin(cos(x)), X)</code>, similar to <code>[sin(cos(x)) for x in X]</code>: there is only a single loop over <code>X</code>, and a single array is allocated for the result. [In contrast, <code>sin(cos(X))</code> in a typical &quot;vectorized&quot; language would first allocate one temporary array for <code>tmp=cos(X)</code>, and then compute <code>sin(tmp)</code> in a separate loop, allocating a second array.] This loop fusion is not a compiler optimization that may or may not occur, it is a <em>syntactic guarantee</em> whenever nested <code>f.(args...)</code> calls are encountered. Technically, the fusion stops as soon as a &quot;non-dot&quot; function call is encountered; for example, in <code>sin.(sort(cos.(X)))</code> the <code>sin</code> and <code>cos</code> loops cannot be merged because of the intervening <code>sort</code> function.</p><p>Finally, the maximum efficiency is typically achieved when the output array of a vectorized operation is <em>pre-allocated</em>, so that repeated calls do not allocate new arrays over and over again for the results (see <a href="performance-tips.html#Pre-allocating-outputs-1">Pre-allocating outputs</a>). A convenient syntax for this is <code>X .= ...</code>, which is equivalent to <code>broadcast!(identity, X, ...)</code> except that, as above, the <code>broadcast!</code> loop is fused with any nested &quot;dot&quot; calls. For example, <code>X .= sin.(Y)</code> is equivalent to <code>broadcast!(sin, X, Y)</code>, overwriting <code>X</code> with <code>sin.(Y)</code> in-place. If the left-hand side is an array-indexing expression, e.g. <code>X[2:end] .= sin.(Y)</code>, then it translates to <code>broadcast!</code> on a <code>view</code>, e.g. <code>broadcast!(sin, view(X, 2:lastindex(X)), Y)</code>, so that the left-hand side is updated in-place.</p><p>Since adding dots to many operations and function calls in an expression can be tedious and lead to code that is difficult to read, the macro <a href="../base/arrays.html#Base.Broadcast.@__dot__"><code>@.</code></a> is provided to convert <em>every</em> function call, operation, and assignment in an expression into the &quot;dotted&quot; version.</p><pre><code class="language-julia-repl">julia&gt; Y = [1.0, 2.0, 3.0, 4.0];
+
+julia&gt; X = similar(Y); # pre-allocate output array
+
+julia&gt; @. X = sin(cos(Y)) # equivalent to X .= sin.(cos.(Y))
+4-element Array{Float64,1}:
+  0.5143952585235492
+ -0.4042391538522658
+ -0.8360218615377305
+ -0.6080830096407656</code></pre><p>Binary (or unary) operators like <code>.+</code> are handled with the same mechanism: they are equivalent to <code>broadcast</code> calls and are fused with other nested &quot;dot&quot; calls.  <code>X .+= Y</code> etcetera is equivalent to <code>X .= X .+ Y</code> and results in a fused in-place assignment;  see also <a href="mathematical-operations.html#man-dot-operators-1">dot operators</a>.</p><p>You can also combine dot operations with function chaining using <a href="../base/base.html#Base.:|&gt;"><code>|&gt;</code></a>, as in this example:</p><pre><code class="language-julia-repl">julia&gt; [1:5;] .|&gt; [x-&gt;x^2, inv, x-&gt;2*x, -, isodd]
+5-element Array{Real,1}:
+    1
+    0.5
+    6
+   -4
+ true</code></pre><h2><a class="nav-anchor" id="Further-Reading-1" href="#Further-Reading-1">Further Reading</a></h2><p>We should mention here that this is far from a complete picture of defining functions. Julia has a sophisticated type system and allows multiple dispatch on argument types. None of the examples given here provide any type annotations on their arguments, meaning that they are applicable to all types of arguments. The type system is described in <a href="types.html#man-types-1">Types</a> and defining a function in terms of methods chosen by multiple dispatch on run-time argument types is described in <a href="methods.html#Methods-1">Methods</a>.</p><footer><hr/><a class="previous" href="strings.html"><span class="direction">Previous</span><span class="title">Strings</span></a><a class="next" href="control-flow.html"><span class="direction">Next</span><span class="title">Control Flow</span></a></footer></article></body></html>
