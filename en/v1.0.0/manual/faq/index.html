@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Frequently Asked Questions · The Julia Language</title><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-28835595-6', 'auto');
+ga('send', 'pageview');
+</script><link rel="canonical" href="https://docs.julialang.org/en/stable/manual/faq/index.html"/><link href="https://cdnjs.cloudflare.com/ajax/libs/normalize/4.2.0/normalize.min.css" rel="stylesheet" type="text/css"/><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.2.0/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link href="../../assets/documenter.css" rel="stylesheet" type="text/css"/><link href="../../assets/julia-manual.css" rel="stylesheet" type="text/css"/></head><body><nav class="toc"><a href="../../index.html"><img class="logo" src="../../assets/logo.png" alt="The Julia Language logo"/></a><h1>The Julia Language</h1><select id="version-selector" onChange="window.location.href=this.value" style="visibility: hidden"></select><form class="search" id="search-form" action="../../search/"><input id="search-query" name="q" type="text" placeholder="Search docs"/></form><ul><li><a class="toctext" href="../../">Home</a></li><li><span class="toctext">Manual</span><ul><li><a class="toctext" href="../getting-started/">Getting Started</a></li><li><a class="toctext" href="../variables/">Variables</a></li><li><a class="toctext" href="../integers-and-floating-point-numbers/">Integers and Floating-Point Numbers</a></li><li><a class="toctext" href="../mathematical-operations/">Mathematical Operations and Elementary Functions</a></li><li><a class="toctext" href="../complex-and-rational-numbers/">Complex and Rational Numbers</a></li><li><a class="toctext" href="../strings/">Strings</a></li><li><a class="toctext" href="../functions/">Functions</a></li><li><a class="toctext" href="../control-flow/">Control Flow</a></li><li><a class="toctext" href="../variables-and-scoping/">Scope of Variables</a></li><li><a class="toctext" href="../types/">Types</a></li><li><a class="toctext" href="../methods/">Methods</a></li><li><a class="toctext" href="../constructors/">Constructors</a></li><li><a class="toctext" href="../conversion-and-promotion/">Conversion and Promotion</a></li><li><a class="toctext" href="../interfaces/">Interfaces</a></li><li><a class="toctext" href="../modules/">Modules</a></li><li><a class="toctext" href="../documentation/">Documentation</a></li><li><a class="toctext" href="../metaprogramming/">Metaprogramming</a></li><li><a class="toctext" href="../arrays/">Multi-dimensional Arrays</a></li><li><a class="toctext" href="../missing/">Missing Values</a></li><li><a class="toctext" href="../networking-and-streams/">Networking and Streams</a></li><li><a class="toctext" href="../parallel-computing/">Parallel Computing</a></li><li><a class="toctext" href="../running-external-programs/">Running External Programs</a></li><li><a class="toctext" href="../calling-c-and-fortran-code/">Calling C and Fortran Code</a></li><li><a class="toctext" href="../handling-operating-system-variation/">Handling Operating System Variation</a></li><li><a class="toctext" href="../environment-variables/">Environment Variables</a></li><li><a class="toctext" href="../embedding/">Embedding Julia</a></li><li><a class="toctext" href="../code-loading/">Code Loading</a></li><li><a class="toctext" href="../profile/">Profiling</a></li><li><a class="toctext" href="../stacktraces/">Stack Traces</a></li><li><a class="toctext" href="../performance-tips/">Performance Tips</a></li><li><a class="toctext" href="../workflow-tips/">Workflow Tips</a></li><li><a class="toctext" href="../style-guide/">Style Guide</a></li><li class="current"><a class="toctext" href>Frequently Asked Questions</a><ul class="internal"><li><a class="toctext" href="#Sessions-and-the-REPL-1">Sessions and the REPL</a></li><li><a class="toctext" href="#Functions-1">Functions</a></li><li><a class="toctext" href="#Types,-type-declarations,-and-constructors-1">Types, type declarations, and constructors</a></li><li><a class="toctext" href="#Packages-and-Modules-1">Packages and Modules</a></li><li><a class="toctext" href="#Nothingness-and-missing-values-1">Nothingness and missing values</a></li><li><a class="toctext" href="#Memory-1">Memory</a></li><li><a class="toctext" href="#Asynchronous-IO-and-concurrent-synchronous-writes-1">Asynchronous IO and concurrent synchronous writes</a></li><li><a class="toctext" href="#Arrays-1">Arrays</a></li><li><a class="toctext" href="#Julia-Releases-1">Julia Releases</a></li></ul></li><li><a class="toctext" href="../noteworthy-differences/">Noteworthy Differences from other Languages</a></li><li><a class="toctext" href="../unicode-input/">Unicode Input</a></li></ul></li><li><span class="toctext">Base</span><ul><li><a class="toctext" href="../../base/base/">Essentials</a></li><li><a class="toctext" href="../../base/collections/">Collections and Data Structures</a></li><li><a class="toctext" href="../../base/math/">Mathematics</a></li><li><a class="toctext" href="../../base/numbers/">Numbers</a></li><li><a class="toctext" href="../../base/strings/">Strings</a></li><li><a class="toctext" href="../../base/arrays/">Arrays</a></li><li><a class="toctext" href="../../base/parallel/">Tasks</a></li><li><a class="toctext" href="../../base/multi-threading/">Multi-Threading</a></li><li><a class="toctext" href="../../base/constants/">Constants</a></li><li><a class="toctext" href="../../base/file/">Filesystem</a></li><li><a class="toctext" href="../../base/io-network/">I/O and Network</a></li><li><a class="toctext" href="../../base/punctuation/">Punctuation</a></li><li><a class="toctext" href="../../base/sort/">Sorting and Related Functions</a></li><li><a class="toctext" href="../../base/iterators/">Iteration utilities</a></li><li><a class="toctext" href="../../base/c/">C Interface</a></li><li><a class="toctext" href="../../base/libc/">C Standard Library</a></li><li><a class="toctext" href="../../base/stacktraces/">StackTraces</a></li><li><a class="toctext" href="../../base/simd-types/">SIMD Support</a></li></ul></li><li><span class="toctext">Standard Library</span><ul><li><a class="toctext" href="../../stdlib/Base64/">Base64</a></li><li><a class="toctext" href="../../stdlib/CRC32c/">CRC32c</a></li><li><a class="toctext" href="../../stdlib/Dates/">Dates</a></li><li><a class="toctext" href="../../stdlib/DelimitedFiles/">Delimited Files</a></li><li><a class="toctext" href="../../stdlib/Distributed/">Distributed Computing</a></li><li><a class="toctext" href="../../stdlib/FileWatching/">File Events</a></li><li><a class="toctext" href="../../stdlib/InteractiveUtils/">Interactive Utilities</a></li><li><a class="toctext" href="../../stdlib/LibGit2/">LibGit2</a></li><li><a class="toctext" href="../../stdlib/Libdl/">Dynamic Linker</a></li><li><a class="toctext" href="../../stdlib/LinearAlgebra/">Linear Algebra</a></li><li><a class="toctext" href="../../stdlib/Logging/">Logging</a></li><li><a class="toctext" href="../../stdlib/Markdown/">Markdown</a></li><li><a class="toctext" href="../../stdlib/Mmap/">Memory-mapped I/O</a></li><li><a class="toctext" href="../../stdlib/Pkg/">Pkg</a></li><li><a class="toctext" href="../../stdlib/Printf/">Printf</a></li><li><a class="toctext" href="../../stdlib/Profile/">Profiling</a></li><li><a class="toctext" href="../../stdlib/REPL/">The Julia REPL</a></li><li><a class="toctext" href="../../stdlib/Random/">Random Numbers</a></li><li><a class="toctext" href="../../stdlib/SHA/">SHA</a></li><li><a class="toctext" href="../../stdlib/Serialization/">Serialization</a></li><li><a class="toctext" href="../../stdlib/SharedArrays/">Shared Arrays</a></li><li><a class="toctext" href="../../stdlib/Sockets/">Sockets</a></li><li><a class="toctext" href="../../stdlib/SparseArrays/">Sparse Arrays</a></li><li><a class="toctext" href="../../stdlib/Statistics/">Statistics</a></li><li><a class="toctext" href="../../stdlib/Test/">Unit Testing</a></li><li><a class="toctext" href="../../stdlib/UUIDs/">UUIDs</a></li><li><a class="toctext" href="../../stdlib/Unicode/">Unicode</a></li></ul></li><li><span class="toctext">Developer Documentation</span><ul><li><a class="toctext" href="../../devdocs/reflection/">Reflection and introspection</a></li><li><span class="toctext">Documentation of Julia&#39;s Internals</span><ul><li><a class="toctext" href="../../devdocs/init/">Initialization of the Julia runtime</a></li><li><a class="toctext" href="../../devdocs/ast/">Julia ASTs</a></li><li><a class="toctext" href="../../devdocs/types/">More about types</a></li><li><a class="toctext" href="../../devdocs/object/">Memory layout of Julia Objects</a></li><li><a class="toctext" href="../../devdocs/eval/">Eval of Julia code</a></li><li><a class="toctext" href="../../devdocs/callconv/">Calling Conventions</a></li><li><a class="toctext" href="../../devdocs/compiler/">High-level Overview of the Native-Code Generation Process</a></li><li><a class="toctext" href="../../devdocs/functions/">Julia Functions</a></li><li><a class="toctext" href="../../devdocs/cartesian/">Base.Cartesian</a></li><li><a class="toctext" href="../../devdocs/meta/">Talking to the compiler (the <code>:meta</code> mechanism)</a></li><li><a class="toctext" href="../../devdocs/subarrays/">SubArrays</a></li><li><a class="toctext" href="../../devdocs/isbitsunionarrays/">isbits Union Optimizations</a></li><li><a class="toctext" href="../../devdocs/sysimg/">System Image Building</a></li><li><a class="toctext" href="../../devdocs/llvm/">Working with LLVM</a></li><li><a class="toctext" href="../../devdocs/stdio/">printf() and stdio in the Julia runtime</a></li><li><a class="toctext" href="../../devdocs/boundscheck/">Bounds checking</a></li><li><a class="toctext" href="../../devdocs/locks/">Proper maintenance and care of multi-threading locks</a></li><li><a class="toctext" href="../../devdocs/offset-arrays/">Arrays with custom indices</a></li><li><a class="toctext" href="../../devdocs/require/">Module loading</a></li><li><a class="toctext" href="../../devdocs/inference/">Inference</a></li></ul></li><li><span class="toctext">Developing/debugging Julia&#39;s C code</span><ul><li><a class="toctext" href="../../devdocs/backtraces/">Reporting and analyzing crashes (segfaults)</a></li><li><a class="toctext" href="../../devdocs/debuggingtips/">gdb debugging tips</a></li><li><a class="toctext" href="../../devdocs/valgrind/">Using Valgrind with Julia</a></li><li><a class="toctext" href="../../devdocs/sanitizers/">Sanitizer support</a></li></ul></li></ul></li></ul></nav><article id="docs"><header><nav><ul><li>Manual</li><li><a href>Frequently Asked Questions</a></li></ul><a class="edit-page" href="https://github.com/fredrikekre/julia/blob/master/doc/src/manual/faq.md"><span class="fa"></span> Edit on GitHub</a></nav><hr/><div id="topbar"><span>Frequently Asked Questions</span><a class="fa fa-bars" href="#"></a></div></header><h1><a class="nav-anchor" id="Frequently-Asked-Questions-1" href="#Frequently-Asked-Questions-1">Frequently Asked Questions</a></h1><h2><a class="nav-anchor" id="Sessions-and-the-REPL-1" href="#Sessions-and-the-REPL-1">Sessions and the REPL</a></h2><h3><a class="nav-anchor" id="How-do-I-delete-an-object-in-memory?-1" href="#How-do-I-delete-an-object-in-memory?-1">How do I delete an object in memory?</a></h3><p>Julia does not have an analog of MATLAB&#39;s <code>clear</code> function; once a name is defined in a Julia session (technically, in module <code>Main</code>), it is always present.</p><p>If memory usage is your concern, you can always replace objects with ones that consume less memory.  For example, if <code>A</code> is a gigabyte-sized array that you no longer need, you can free the memory with <code>A = nothing</code>.  The memory will be released the next time the garbage collector runs; you can force this to happen with <a href="../../base/base/#Base.GC.gc"><code>gc()</code></a>. Moreover, an attempt to use <code>A</code> will likely result in an error, because most methods are not defined on type <code>Nothing</code>.</p><h3><a class="nav-anchor" id="How-can-I-modify-the-declaration-of-a-type-in-my-session?-1" href="#How-can-I-modify-the-declaration-of-a-type-in-my-session?-1">How can I modify the declaration of a type in my session?</a></h3><p>Perhaps you&#39;ve defined a type and then realize you need to add a new field.  If you try this at the REPL, you get the error:</p><pre><code class="language-none">ERROR: invalid redefinition of constant MyType</code></pre><p>Types in module <code>Main</code> cannot be redefined.</p><p>While this can be inconvenient when you are developing new code, there&#39;s an excellent workaround.  Modules can be replaced by redefining them, and so if you wrap all your new code inside a module you can redefine types and constants.  You can&#39;t import the type names into <code>Main</code> and then expect to be able to redefine them there, but you can use the module name to resolve the scope.  In other words, while developing you might use a workflow something like this:</p><pre><code class="language-julia">include(&quot;mynewcode.jl&quot;)              # this defines a module MyModule
+obj1 = MyModule.ObjConstructor(a, b)
+obj2 = MyModule.somefunction(obj1)
+# Got an error. Change something in &quot;mynewcode.jl&quot;
+include(&quot;mynewcode.jl&quot;)              # reload the module
+obj1 = MyModule.ObjConstructor(a, b) # old objects are no longer valid, must reconstruct
+obj2 = MyModule.somefunction(obj1)   # this time it worked!
+obj3 = MyModule.someotherfunction(obj2, c)
+...</code></pre><h2><a class="nav-anchor" id="Functions-1" href="#Functions-1">Functions</a></h2><h3><a class="nav-anchor" id="I-passed-an-argument-x-to-a-function,-modified-it-inside-that-function,-but-on-the-outside,-the-variable-x-is-still-unchanged.-Why?-1" href="#I-passed-an-argument-x-to-a-function,-modified-it-inside-that-function,-but-on-the-outside,-the-variable-x-is-still-unchanged.-Why?-1">I passed an argument <code>x</code> to a function, modified it inside that function, but on the outside, the variable <code>x</code> is still unchanged. Why?</a></h3><p>Suppose you call a function like this:</p><pre><code class="language-julia-repl">julia&gt; x = 10
+10
+
+julia&gt; function change_value!(y)
+           y = 17
+       end
+change_value! (generic function with 1 method)
+
+julia&gt; change_value!(x)
+17
+
+julia&gt; x # x is unchanged!
+10</code></pre><p>In Julia, the binding of a variable <code>x</code> cannot be changed by passing <code>x</code> as an argument to a function. When calling <code>change_value!(x)</code> in the above example, <code>y</code> is a newly created variable, bound initially to the value of <code>x</code>, i.e. <code>10</code>; then <code>y</code> is rebound to the constant <code>17</code>, while the variable <code>x</code> of the outer scope is left untouched.</p><p>But here is a thing you should pay attention to: suppose <code>x</code> is bound to an object of type <code>Array</code> (or any other <em>mutable</em> type). From within the function, you cannot &quot;unbind&quot; <code>x</code> from this Array, but you can change its content. For example:</p><pre><code class="language-julia-repl">julia&gt; x = [1,2,3]
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia&gt; function change_array!(A)
+           A[1] = 5
+       end
+change_array! (generic function with 1 method)
+
+julia&gt; change_array!(x)
+5
+
+julia&gt; x
+3-element Array{Int64,1}:
+ 5
+ 2
+ 3</code></pre><p>Here we created a function <code>change_array!</code>, that assigns <code>5</code> to the first element of the passed array (bound to <code>x</code> at the call site, and bound to <code>A</code> within the function). Notice that, after the function call, <code>x</code> is still bound to the same array, but the content of that array changed: the variables <code>A</code> and <code>x</code> were distinct bindings referring to the same mutable <code>Array</code> object.</p><h3><a class="nav-anchor" id="Can-I-use-using-or-import-inside-a-function?-1" href="#Can-I-use-using-or-import-inside-a-function?-1">Can I use <code>using</code> or <code>import</code> inside a function?</a></h3><p>No, you are not allowed to have a <code>using</code> or <code>import</code> statement inside a function.  If you want to import a module but only use its symbols inside a specific function or set of functions, you have two options:</p><ol><li><p>Use <code>import</code>:</p><pre><code class="language-julia">import Foo
+function bar(...)
+    # ... refer to Foo symbols via Foo.baz ...
+end</code></pre><p>This loads the module <code>Foo</code> and defines a variable <code>Foo</code> that refers to the module, but does not import any of the other symbols from the module into the current namespace.  You refer to the <code>Foo</code> symbols by their qualified names <code>Foo.bar</code> etc.</p></li><li><p>Wrap your function in a module:</p><pre><code class="language-julia">module Bar
+export bar
+using Foo
+function bar(...)
+    # ... refer to Foo.baz as simply baz ....
+end
+end
+using Bar</code></pre><p>This imports all the symbols from <code>Foo</code>, but only inside the module <code>Bar</code>.</p></li></ol><h3><a class="nav-anchor" id="What-does-the-...-operator-do?-1" href="#What-does-the-...-operator-do?-1">What does the <code>...</code> operator do?</a></h3><h3><a class="nav-anchor" id="The-two-uses-of-the-...-operator:-slurping-and-splatting-1" href="#The-two-uses-of-the-...-operator:-slurping-and-splatting-1">The two uses of the <code>...</code> operator: slurping and splatting</a></h3><p>Many newcomers to Julia find the use of <code>...</code> operator confusing. Part of what makes the <code>...</code> operator confusing is that it means two different things depending on context.</p><h3><a class="nav-anchor" id="...-combines-many-arguments-into-one-argument-in-function-definitions-1" href="#...-combines-many-arguments-into-one-argument-in-function-definitions-1"><code>...</code> combines many arguments into one argument in function definitions</a></h3><p>In the context of function definitions, the <code>...</code> operator is used to combine many different arguments into a single argument. This use of <code>...</code> for combining many different arguments into a single argument is called slurping:</p><pre><code class="language-julia-repl">julia&gt; function printargs(args...)
+           println(typeof(args))
+           for (i, arg) in enumerate(args)
+               println(&quot;Arg #$i = $arg&quot;)
+           end
+       end
+printargs (generic function with 1 method)
+
+julia&gt; printargs(1, 2, 3)
+Tuple{Int64,Int64,Int64}
+Arg #1 = 1
+Arg #2 = 2
+Arg #3 = 3</code></pre><p>If Julia were a language that made more liberal use of ASCII characters, the slurping operator might have been written as <code>&lt;-...</code> instead of <code>...</code>.</p><h3><a class="nav-anchor" id="...-splits-one-argument-into-many-different-arguments-in-function-calls-1" href="#...-splits-one-argument-into-many-different-arguments-in-function-calls-1"><code>...</code> splits one argument into many different arguments in function calls</a></h3><p>In contrast to the use of the <code>...</code> operator to denote slurping many different arguments into one argument when defining a function, the <code>...</code> operator is also used to cause a single function argument to be split apart into many different arguments when used in the context of a function call. This use of <code>...</code> is called splatting:</p><pre><code class="language-julia-repl">julia&gt; function threeargs(a, b, c)
+           println(&quot;a = $a::$(typeof(a))&quot;)
+           println(&quot;b = $b::$(typeof(b))&quot;)
+           println(&quot;c = $c::$(typeof(c))&quot;)
+       end
+threeargs (generic function with 1 method)
+
+julia&gt; x = [1, 2, 3]
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia&gt; threeargs(x...)
+a = 1::Int64
+b = 2::Int64
+c = 3::Int64</code></pre><p>If Julia were a language that made more liberal use of ASCII characters, the splatting operator might have been written as <code>...-&gt;</code> instead of <code>...</code>.</p><h3><a class="nav-anchor" id="What-is-the-return-value-of-an-assignment?-1" href="#What-is-the-return-value-of-an-assignment?-1">What is the return value of an assignment?</a></h3><p>The operator <code>=</code> always returns the right-hand side, therefore:</p><pre><code class="language-julia-repl">julia&gt; function threeint()
+           x::Int = 3.0
+           x # returns variable x
+       end
+threeint (generic function with 1 method)
+
+julia&gt; function threefloat()
+           x::Int = 3.0 # returns 3.0
+       end
+threefloat (generic function with 1 method)
+
+julia&gt; threeint()
+3
+
+julia&gt; threefloat()
+3.0</code></pre><p>and similarly:</p><pre><code class="language-julia-repl">julia&gt; function threetup()
+           x, y = [3, 3]
+           x, y # returns a tuple
+       end
+threetup (generic function with 1 method)
+
+julia&gt; function threearr()
+           x, y = [3, 3] # returns an array
+       end
+threearr (generic function with 1 method)
+
+julia&gt; threetup()
+(3, 3)
+
+julia&gt; threearr()
+2-element Array{Int64,1}:
+ 3
+ 3</code></pre><h2><a class="nav-anchor" id="Types,-type-declarations,-and-constructors-1" href="#Types,-type-declarations,-and-constructors-1">Types, type declarations, and constructors</a></h2><h3><a class="nav-anchor" id="man-type-stability-1" href="#man-type-stability-1">What does &quot;type-stable&quot; mean?</a></h3><p>It means that the type of the output is predictable from the types of the inputs.  In particular, it means that the type of the output cannot vary depending on the <em>values</em> of the inputs. The following code is <em>not</em> type-stable:</p><pre><code class="language-julia-repl">julia&gt; function unstable(flag::Bool)
+           if flag
+               return 1
+           else
+               return 1.0
+           end
+       end
+unstable (generic function with 1 method)</code></pre><p>It returns either an <code>Int</code> or a <a href="../../base/numbers/#Core.Float64"><code>Float64</code></a> depending on the value of its argument. Since Julia can&#39;t predict the return type of this function at compile-time, any computation that uses it will have to guard against both types possibly occurring, making generation of fast machine code difficult.</p><h3><a class="nav-anchor" id="faq-domain-errors-1" href="#faq-domain-errors-1">Why does Julia give a <code>DomainError</code> for certain seemingly-sensible operations?</a></h3><p>Certain operations make mathematical sense but result in errors:</p><pre><code class="language-julia-repl">julia&gt; sqrt(-2.0)
+ERROR: DomainError with -2.0:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+Stacktrace:
+[...]</code></pre><p>This behavior is an inconvenient consequence of the requirement for type-stability.  In the case of <a href="../../base/math/#Base.sqrt-Tuple{Real}"><code>sqrt</code></a>, most users want <code>sqrt(2.0)</code> to give a real number, and would be unhappy if it produced the complex number <code>1.4142135623730951 + 0.0im</code>.  One could write the <a href="../../base/math/#Base.sqrt-Tuple{Real}"><code>sqrt</code></a> function to switch to a complex-valued output only when passed a negative number (which is what <a href="../../base/math/#Base.sqrt-Tuple{Real}"><code>sqrt</code></a> does in some other languages), but then the result would not be <a href="#man-type-stability-1">type-stable</a> and the <a href="../../base/math/#Base.sqrt-Tuple{Real}"><code>sqrt</code></a> function would have poor performance.</p><p>In these and other cases, you can get the result you want by choosing an <em>input type</em> that conveys your willingness to accept an <em>output type</em> in which the result can be represented:</p><pre><code class="language-julia-repl">julia&gt; sqrt(-2.0+0im)
+0.0 + 1.4142135623730951im</code></pre><h3><a class="nav-anchor" id="Why-does-Julia-use-native-machine-integer-arithmetic?-1" href="#Why-does-Julia-use-native-machine-integer-arithmetic?-1">Why does Julia use native machine integer arithmetic?</a></h3><p>Julia uses machine arithmetic for integer computations. This means that the range of <code>Int</code> values is bounded and wraps around at either end so that adding, subtracting and multiplying integers can overflow or underflow, leading to some results that can be unsettling at first:</p><pre><code class="language-julia-repl">julia&gt; typemax(Int)
+9223372036854775807
+
+julia&gt; ans+1
+-9223372036854775808
+
+julia&gt; -ans
+-9223372036854775808
+
+julia&gt; 2*ans
+0</code></pre><p>Clearly, this is far from the way mathematical integers behave, and you might think it less than ideal for a high-level programming language to expose this to the user. For numerical work where efficiency and transparency are at a premium, however, the alternatives are worse.</p><p>One alternative to consider would be to check each integer operation for overflow and promote results to bigger integer types such as <a href="../../base/numbers/#Core.Int128"><code>Int128</code></a> or <a href="../../base/numbers/#Base.GMP.BigInt"><code>BigInt</code></a> in the case of overflow. Unfortunately, this introduces major overhead on every integer operation (think incrementing a loop counter) – it requires emitting code to perform run-time overflow checks after arithmetic instructions and branches to handle potential overflows. Worse still, this would cause every computation involving integers to be type-unstable. As we mentioned above, <a href="#man-type-stability-1">type-stability is crucial</a> for effective generation of efficient code. If you can&#39;t count on the results of integer operations being integers, it&#39;s impossible to generate fast, simple code the way C and Fortran compilers do.</p><p>A variation on this approach, which avoids the appearance of type instability is to merge the <code>Int</code> and <a href="../../base/numbers/#Base.GMP.BigInt"><code>BigInt</code></a> types into a single hybrid integer type, that internally changes representation when a result no longer fits into the size of a machine integer. While this superficially avoids type-instability at the level of Julia code, it just sweeps the problem under the rug by foisting all of the same difficulties onto the C code implementing this hybrid integer type. This approach <em>can</em> be made to work and can even be made quite fast in many cases, but has several drawbacks. One problem is that the in-memory representation of integers and arrays of integers no longer match the natural representation used by C, Fortran and other languages with native machine integers. Thus, to interoperate with those languages, we would ultimately need to introduce native integer types anyway. Any unbounded representation of integers cannot have a fixed number of bits, and thus cannot be stored inline in an array with fixed-size slots – large integer values will always require separate heap-allocated storage. And of course, no matter how clever a hybrid integer implementation one uses, there are always performance traps – situations where performance degrades unexpectedly. Complex representation, lack of interoperability with C and Fortran, the inability to represent integer arrays without additional heap storage, and unpredictable performance characteristics make even the cleverest hybrid integer implementations a poor choice for high-performance numerical work.</p><p>An alternative to using hybrid integers or promoting to BigInts is to use saturating integer arithmetic, where adding to the largest integer value leaves it unchanged and likewise for subtracting from the smallest integer value. This is precisely what Matlab™ does:</p><pre><code class="language-none">&gt;&gt; int64(9223372036854775807)
+
+ans =
+
+  9223372036854775807
+
+&gt;&gt; int64(9223372036854775807) + 1
+
+ans =
+
+  9223372036854775807
+
+&gt;&gt; int64(-9223372036854775808)
+
+ans =
+
+ -9223372036854775808
+
+&gt;&gt; int64(-9223372036854775808) - 1
+
+ans =
+
+ -9223372036854775808</code></pre><p>At first blush, this seems reasonable enough since 9223372036854775807 is much closer to 9223372036854775808 than -9223372036854775808 is and integers are still represented with a fixed size in a natural way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic. The first and most obvious issue is that this is not the way machine integer arithmetic works, so implementing saturated operations requires emitting instructions after each machine integer operation to check for underflow or overflow and replace the result with <a href="../../base/base/#Base.typemin"><code>typemin(Int)</code></a> or <a href="../../base/base/#Base.typemax"><code>typemax(Int)</code></a> as appropriate. This alone expands each integer operation from a single, fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets worse – saturating integer arithmetic isn&#39;t associative. Consider this Matlab computation:</p><pre><code class="language-none">&gt;&gt; n = int64(2)^62
+4611686018427387904
+
+&gt;&gt; n + (n - 1)
+9223372036854775807
+
+&gt;&gt; (n + n) - 1
+9223372036854775806</code></pre><p>This makes it hard to write many basic integer algorithms since a lot of common techniques depend on the fact that machine addition with overflow <em>is</em> associative. Consider finding the midpoint between integer values <code>lo</code> and <code>hi</code> in Julia using the expression <code>(lo + hi) &gt;&gt;&gt; 1</code>:</p><pre><code class="language-julia-repl">julia&gt; n = 2^62
+4611686018427387904
+
+julia&gt; (n + 2n) &gt;&gt;&gt; 1
+6917529027641081856</code></pre><p>See? No problem. That&#39;s the correct midpoint between 2^62 and 2^63, despite the fact that <code>n + 2n</code> is -4611686018427387904. Now try it in Matlab:</p><pre><code class="language-none">&gt;&gt; (n + 2*n)/2
+
+ans =
+
+  4611686018427387904</code></pre><p>Oops. Adding a <code>&gt;&gt;&gt;</code> operator to Matlab wouldn&#39;t help, because saturation that occurs when adding <code>n</code> and <code>2n</code> has already destroyed the information necessary to compute the correct midpoint.</p><p>Not only is lack of associativity unfortunate for programmers who cannot rely it for techniques like this, but it also defeats almost anything compilers might want to do to optimize integer arithmetic. For example, since Julia integers use normal machine integer arithmetic, LLVM is free to aggressively optimize simple little functions like <code>f(k) = 5k-1</code>. The machine code for this function is just this:</p><pre><code class="language-julia-repl">julia&gt; code_native(f, Tuple{Int})
+  .text
+Filename: none
+  pushq %rbp
+  movq  %rsp, %rbp
+Source line: 1
+  leaq  -1(%rdi,%rdi,4), %rax
+  popq  %rbp
+  retq
+  nopl  (%rax,%rax)</code></pre><p>The actual body of the function is a single <code>leaq</code> instruction, which computes the integer multiply and add at once. This is even more beneficial when <code>f</code> gets inlined into another function:</p><pre><code class="language-julia-repl">julia&gt; function g(k, n)
+           for i = 1:n
+               k = f(k)
+           end
+           return k
+       end
+g (generic function with 1 methods)
+
+julia&gt; code_native(g, Tuple{Int,Int})
+  .text
+Filename: none
+  pushq %rbp
+  movq  %rsp, %rbp
+Source line: 2
+  testq %rsi, %rsi
+  jle L26
+  nopl  (%rax)
+Source line: 3
+L16:
+  leaq  -1(%rdi,%rdi,4), %rdi
+Source line: 2
+  decq  %rsi
+  jne L16
+Source line: 5
+L26:
+  movq  %rdi, %rax
+  popq  %rbp
+  retq
+  nop</code></pre><p>Since the call to <code>f</code> gets inlined, the loop body ends up being just a single <code>leaq</code> instruction. Next, consider what happens if we make the number of loop iterations fixed:</p><pre><code class="language-julia-repl">julia&gt; function g(k)
+           for i = 1:10
+               k = f(k)
+           end
+           return k
+       end
+g (generic function with 2 methods)
+
+julia&gt; code_native(g,(Int,))
+  .text
+Filename: none
+  pushq %rbp
+  movq  %rsp, %rbp
+Source line: 3
+  imulq $9765625, %rdi, %rax    # imm = 0x9502F9
+  addq  $-2441406, %rax         # imm = 0xFFDABF42
+Source line: 5
+  popq  %rbp
+  retq
+  nopw  %cs:(%rax,%rax)</code></pre><p>Because the compiler knows that integer addition and multiplication are associative and that multiplication distributes over addition – neither of which is true of saturating arithmetic – it can optimize the entire loop down to just a multiply and an add. Saturated arithmetic completely defeats this kind of optimization since associativity and distributivity can fail at each loop iteration, causing different outcomes depending on which iteration the failure occurs in. The compiler can unroll the loop, but it cannot algebraically reduce multiple operations into fewer equivalent operations.</p><p>The most reasonable alternative to having integer arithmetic silently overflow is to do checked arithmetic everywhere, raising errors when adds, subtracts, and multiplies overflow, producing values that are not value-correct. In this <a href="http://danluu.com/integer-overflow/">blog post</a>, Dan Luu analyzes this and finds that rather than the trivial cost that this approach should in theory have, it ends up having a substantial cost due to compilers (LLVM and GCC) not gracefully optimizing around the added overflow checks. If this improves in the future, we could consider defaulting to checked integer arithmetic in Julia, but for now, we have to live with the possibility of overflow.</p><h3><a class="nav-anchor" id="What-are-the-possible-causes-of-an-UndefVarError-during-remote-execution?-1" href="#What-are-the-possible-causes-of-an-UndefVarError-during-remote-execution?-1">What are the possible causes of an <code>UndefVarError</code> during remote execution?</a></h3><p>As the error states, an immediate cause of an <code>UndefVarError</code> on a remote node is that a binding by that name does not exist. Let us explore some of the possible causes.</p><pre><code class="language-julia-repl">julia&gt; module Foo
+           foo() = remotecall_fetch(x-&gt;x, 2, &quot;Hello&quot;)
+       end
+
+julia&gt; Foo.foo()
+ERROR: On worker 2:
+UndefVarError: Foo not defined
+Stacktrace:
+[...]</code></pre><p>The closure <code>x-&gt;x</code> carries a reference to <code>Foo</code>, and since <code>Foo</code> is unavailable on node 2, an <code>UndefVarError</code> is thrown.</p><p>Globals under modules other than <code>Main</code> are not serialized by value to the remote node. Only a reference is sent. Functions which create global bindings (except under <code>Main</code>) may cause an <code>UndefVarError</code> to be thrown later.</p><pre><code class="language-julia-repl">julia&gt; @everywhere module Foo
+           function foo()
+               global gvar = &quot;Hello&quot;
+               remotecall_fetch(()-&gt;gvar, 2)
+           end
+       end
+
+julia&gt; Foo.foo()
+ERROR: On worker 2:
+UndefVarError: gvar not defined
+Stacktrace:
+[...]</code></pre><p>In the above example, <code>@everywhere module Foo</code> defined <code>Foo</code> on all nodes. However the call to <code>Foo.foo()</code> created a new global binding <code>gvar</code> on the local node, but this was not found on node 2 resulting in an <code>UndefVarError</code> error.</p><p>Note that this does not apply to globals created under module <code>Main</code>. Globals under module <code>Main</code> are serialized and new bindings created under <code>Main</code> on the remote node.</p><pre><code class="language-julia-repl">julia&gt; gvar_self = &quot;Node1&quot;
+&quot;Node1&quot;
+
+julia&gt; remotecall_fetch(()-&gt;gvar_self, 2)
+&quot;Node1&quot;
+
+julia&gt; remotecall_fetch(varinfo, 2)
+name          size summary
+––––––––– –––––––– –––––––
+Base               Module
+Core               Module
+Main               Module
+gvar_self 13 bytes String</code></pre><p>This does not apply to <code>function</code> or <code>struct</code> declarations. However, anonymous functions bound to global variables are serialized as can be seen below.</p><pre><code class="language-julia-repl">julia&gt; bar() = 1
+bar (generic function with 1 method)
+
+julia&gt; remotecall_fetch(bar, 2)
+ERROR: On worker 2:
+UndefVarError: #bar not defined
+[...]
+
+julia&gt; anon_bar  = ()-&gt;1
+(::#21) (generic function with 1 method)
+
+julia&gt; remotecall_fetch(anon_bar, 2)
+1</code></pre><h2><a class="nav-anchor" id="Packages-and-Modules-1" href="#Packages-and-Modules-1">Packages and Modules</a></h2><h3><a class="nav-anchor" id="What-is-the-difference-between-&quot;using&quot;-and-&quot;import&quot;?-1" href="#What-is-the-difference-between-&quot;using&quot;-and-&quot;import&quot;?-1">What is the difference between &quot;using&quot; and &quot;import&quot;?</a></h3><p>There is only one difference, and on the surface (syntax-wise) it may seem very minor. The difference between <code>using</code> and <code>import</code> is that with <code>using</code> you need to say <code>function Foo.bar(..</code> to extend module Foo&#39;s function bar with a new method, but with <code>import Foo.bar</code>, you only need to say <code>function bar(...</code> and it automatically extends module Foo&#39;s function bar.</p><p>The reason this is important enough to have been given separate syntax is that you don&#39;t want to accidentally extend a function that you didn&#39;t know existed, because that could easily cause a bug. This is most likely to happen with a method that takes a common type like a string or integer, because both you and the other module could define a method to handle such a common type. If you use <code>import</code>, then you&#39;ll replace the other module&#39;s implementation of <code>bar(s::AbstractString)</code> with your new implementation, which could easily do something completely different (and break all/many future usages of the other functions in module Foo that depend on calling bar).</p><h2><a class="nav-anchor" id="Nothingness-and-missing-values-1" href="#Nothingness-and-missing-values-1">Nothingness and missing values</a></h2><h3><a class="nav-anchor" id="faq-nothing-1" href="#faq-nothing-1">How does &quot;null&quot;, &quot;nothingness&quot; or &quot;missingness&quot; work in Julia?</a></h3><p>Unlike many languages (for example, C and Java), Julia objects cannot be &quot;null&quot; by default. When a reference (variable, object field, or array element) is uninitialized, accessing it will immediately throw an error. This situation can be detected using the <a href="../../base/base/#Core.isdefined"><code>isdefined</code></a> or <a href="../../base/arrays/#Base.isassigned"><code>isassigned</code></a> functions.</p><p>Some functions are used only for their side effects, and do not need to return a value. In these cases, the convention is to return the value <code>nothing</code>, which is just a singleton object of type <code>Nothing</code>. This is an ordinary type with no fields; there is nothing special about it except for this convention, and that the REPL does not print anything for it. Some language constructs that would not otherwise have a value also yield <code>nothing</code>, for example <code>if false; end</code>.</p><p>For situations where a value <code>x</code> of type <code>T</code> exists only sometimes, the <code>Union{T, Nothing}</code> type can be used for function arguments, object fields and array element types as the equivalent of <a href="https://en.wikipedia.org/wiki/Nullable_type"><code>Nullable</code>, <code>Option</code> or <code>Maybe</code></a> in other languages. If the value itself can be <code>nothing</code> (notably, when <code>T</code> is <code>Any</code>), the <code>Union{Some{T}, Nothing}</code> type is more appropriate since <code>x == nothing</code> then indicates the absence of a value, and <code>x == Some(nothing)</code> indicates the presence of a value equal to <code>nothing</code>. The <a href="../../base/base/#Base.something"><code>something</code></a> function allows unwrapping <code>Some</code> objects and using a default value instead of <code>nothing</code> arguments. Note that the compiler is able to generate efficient code when working with <code>Union{T, Nothing}</code> arguments or fields.</p><p>To represent missing data in the statistical sense (<code>NA</code> in R or <code>NULL</code> in SQL), use the <a href="../../base/base/#Base.missing"><code>missing</code></a> object. See the <a href="../missing/#missing-1"><code>Missing Values</code></a> section for more details.</p><p>The empty tuple (<code>()</code>) is another form of nothingness. But, it should not really be thought of as nothing but rather a tuple of zero values.</p><p>The empty (or &quot;bottom&quot;) type, written as <code>Union{}</code> (an empty union type), is a type with no values and no subtypes (except itself). You will generally not need to use this type.</p><h3><a class="nav-anchor" id="How-do-I-check-if-the-current-file-is-being-run-as-the-main-script?-1" href="#How-do-I-check-if-the-current-file-is-being-run-as-the-main-script?-1">How do I check if the current file is being run as the main script?</a></h3><p>When a file is run as the main script using <code>julia file.jl</code> one might want to activate extra functionality like command line argument handling. A way to determine that a file is run in this fashion is to check if <code>abspath(PROGRAM_FILE) == @__FILE__</code> is <code>true</code>.</p><h2><a class="nav-anchor" id="Memory-1" href="#Memory-1">Memory</a></h2><h3><a class="nav-anchor" id="Why-does-x-y-allocate-memory-when-x-and-y-are-arrays?-1" href="#Why-does-x-y-allocate-memory-when-x-and-y-are-arrays?-1">Why does <code>x += y</code> allocate memory when <code>x</code> and <code>y</code> are arrays?</a></h3><p>In Julia, <code>x += y</code> gets replaced during parsing by <code>x = x + y</code>. For arrays, this has the consequence that, rather than storing the result in the same location in memory as <code>x</code>, it allocates a new array to store the result.</p><p>While this behavior might surprise some, the choice is deliberate. The main reason is the presence of immutable objects within Julia, which cannot change their value once created.  Indeed, a number is an immutable object; the statements <code>x = 5; x += 1</code> do not modify the meaning of <code>5</code>, they modify the value bound to <code>x</code>. For an immutable, the only way to change the value is to reassign it.</p><p>To amplify a bit further, consider the following function:</p><pre><code class="language-julia">function power_by_squaring(x, n::Int)
+    ispow2(n) || error(&quot;This implementation only works for powers of 2&quot;)
+    while n &gt;= 2
+        x *= x
+        n &gt;&gt;= 1
+    end
+    x
+end</code></pre><p>After a call like <code>x = 5; y = power_by_squaring(x, 4)</code>, you would get the expected result: <code>x == 5 &amp;&amp; y == 625</code>.  However, now suppose that <code>*=</code>, when used with matrices, instead mutated the left hand side.  There would be two problems:</p><ul><li>For general square matrices, <code>A = A*B</code> cannot be implemented without temporary storage: <code>A[1,1]</code> gets computed and stored on the left hand side before you&#39;re done using it on the right hand side.</li><li>Suppose you were willing to allocate a temporary for the computation (which would eliminate most of the point of making <code>*=</code> work in-place); if you took advantage of the mutability of <code>x</code>, then this function would behave differently for mutable vs. immutable inputs. In particular, for immutable <code>x</code>, after the call you&#39;d have (in general) <code>y != x</code>, but for mutable <code>x</code> you&#39;d have <code>y == x</code>.</li></ul><p>Because supporting generic programming is deemed more important than potential performance optimizations that can be achieved by other means (e.g., using explicit loops), operators like <code>+=</code> and <code>*=</code> work by rebinding new values.</p><h2><a class="nav-anchor" id="Asynchronous-IO-and-concurrent-synchronous-writes-1" href="#Asynchronous-IO-and-concurrent-synchronous-writes-1">Asynchronous IO and concurrent synchronous writes</a></h2><h3><a class="nav-anchor" id="Why-do-concurrent-writes-to-the-same-stream-result-in-inter-mixed-output?-1" href="#Why-do-concurrent-writes-to-the-same-stream-result-in-inter-mixed-output?-1">Why do concurrent writes to the same stream result in inter-mixed output?</a></h3><p>While the streaming I/O API is synchronous, the underlying implementation is fully asynchronous.</p><p>Consider the printed output from the following:</p><pre><code class="language-julia-repl">julia&gt; @sync for i in 1:3
+           @async write(stdout, string(i), &quot; Foo &quot;, &quot; Bar &quot;)
+       end
+123 Foo  Foo  Foo  Bar  Bar  Bar</code></pre><p>This is happening because, while the <code>write</code> call is synchronous, the writing of each argument yields to other tasks while waiting for that part of the I/O to complete.</p><p><code>print</code> and <code>println</code> &quot;lock&quot; the stream during a call. Consequently changing <code>write</code> to <code>println</code> in the above example results in:</p><pre><code class="language-julia-repl">julia&gt; @sync for i in 1:3
+           @async println(stdout, string(i), &quot; Foo &quot;, &quot; Bar &quot;)
+       end
+1 Foo  Bar
+2 Foo  Bar
+3 Foo  Bar</code></pre><p>You can lock your writes with a <code>ReentrantLock</code> like this:</p><pre><code class="language-julia-repl">julia&gt; l = ReentrantLock()
+ReentrantLock(nothing, Condition(Any[]), 0)
+
+julia&gt; @sync for i in 1:3
+           @async begin
+               lock(l)
+               try
+                   write(stdout, string(i), &quot; Foo &quot;, &quot; Bar &quot;)
+               finally
+                   unlock(l)
+               end
+           end
+       end
+1 Foo  Bar 2 Foo  Bar 3 Foo  Bar</code></pre><h2><a class="nav-anchor" id="Arrays-1" href="#Arrays-1">Arrays</a></h2><h3><a class="nav-anchor" id="What-are-the-differences-between-zero-dimensional-arrays-and-scalars?-1" href="#What-are-the-differences-between-zero-dimensional-arrays-and-scalars?-1">What are the differences between zero-dimensional arrays and scalars?</a></h3><p>Zero-dimensional arrays are arrays of the form <code>Array{T,0}</code>. They behave similar to scalars, but there are important differences. They deserve a special mention because they are a special case which makes logical sense given the generic definition of arrays, but might be a bit unintuitive at first. The following line defines a zero-dimensional array:</p><pre><code class="language-none">julia&gt; A = zeros()
+0-dimensional Array{Float64,0}:
+0.0</code></pre><p>In this example, <code>A</code> is a mutable container that contains one element, which can be set by <code>A[] = 1.0</code> and retrieved with <code>A[]</code>. All zero-dimensional arrays have the same size (<code>size(A) == ()</code>), and length (<code>length(A) == 1</code>). In particular, zero-dimensional arrays are not empty. If you find this unintuitive, here are some ideas that might help to understand Julia&#39;s definition.</p><ul><li>Zero-dimensional arrays are the &quot;point&quot; to vector&#39;s &quot;line&quot; and matrix&#39;s &quot;plane&quot;. Just as a line has no area (but still represents a set of things), a point has no length or any dimensions at all (but still represents a thing).</li><li>We define <code>prod(())</code> to be 1, and the total number of elements in an array is the product of the size. The size of a zero-dimensional array is <code>()</code>, and therefore its length is <code>1</code>.</li><li>Zero-dimensional arrays don&#39;t natively have any dimensions into which you index – they’re just <code>A[]</code>. We can apply the same &quot;trailing one&quot; rule for them as for all other array dimensionalities, so you can indeed index them as <code>A[1]</code>, <code>A[1,1]</code>, etc.</li></ul><p>It is also important to understand the differences to ordinary scalars. Scalars are not mutable containers (even though they are iterable and define things like <code>length</code>, <code>getindex</code>, <em>e.g.</em> <code>1[] == 1</code>). In particular, if <code>x = 0.0</code> is defined as a scalar, it is an error to attempt to change its value via <code>x[] = 1.0</code>. A scalar <code>x</code> can be converted into a zero-dimensional array containing it via <code>fill(x)</code>, and conversely, a zero-dimensional array <code>a</code> can be converted to the contained scalar via <code>a[]</code>. Another difference is that a scalar can participate in linear algebra operations such as <code>2 * rand(2,2)</code>, but the analogous operation with a zero-dimensional array <code>fill(2) * rand(2,2)</code> is an error.</p><h2><a class="nav-anchor" id="Julia-Releases-1" href="#Julia-Releases-1">Julia Releases</a></h2><h3><a class="nav-anchor" id="Do-I-want-to-use-a-release,-beta,-or-nightly-version-of-Julia?-1" href="#Do-I-want-to-use-a-release,-beta,-or-nightly-version-of-Julia?-1">Do I want to use a release, beta, or nightly version of Julia?</a></h3><p>You may prefer the release version of Julia if you are looking for a stable code base. Releases generally occur every 6 months, giving you a stable platform for writing code.</p><p>You may prefer the beta version of Julia if you don&#39;t mind being slightly behind the latest bugfixes and changes, but find the slightly faster rate of changes more appealing. Additionally, these binaries are tested before they are published to ensure they are fully functional.</p><p>You may prefer the nightly version of Julia if you want to take advantage of the latest updates to the language, and don&#39;t mind if the version available today occasionally doesn&#39;t actually work.</p><p>Finally, you may also consider building Julia from source for yourself. This option is mainly for those individuals who are comfortable at the command line, or interested in learning. If this describes you, you may also be interested in reading our <a href="https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md">guidelines for contributing</a>.</p><p>Links to each of these download types can be found on the download page at <a href="https://julialang.org/downloads/">https://julialang.org/downloads/</a>. Note that not all versions of Julia are available for all platforms.</p><h3><a class="nav-anchor" id="When-are-deprecated-functions-removed?-1" href="#When-are-deprecated-functions-removed?-1">When are deprecated functions removed?</a></h3><p>Deprecated functions are removed after the subsequent release. For example, functions marked as deprecated in the 0.1 release will not be available starting with the 0.2 release.</p><footer><hr/><a class="previous" href="../style-guide/"><span class="direction">Previous</span><span class="title">Style Guide</span></a><a class="next" href="../noteworthy-differences/"><span class="direction">Next</span><span class="title">Noteworthy Differences from other Languages</span></a></footer></article></body></html>

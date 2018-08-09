@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Metaprogramming · The Julia Language</title><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-28835595-6', 'auto');
+ga('send', 'pageview');
+</script><link rel="canonical" href="https://docs.julialang.org/en/stable/manual/metaprogramming/index.html"/><link href="https://cdnjs.cloudflare.com/ajax/libs/normalize/4.2.0/normalize.min.css" rel="stylesheet" type="text/css"/><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.2.0/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link href="../../assets/documenter.css" rel="stylesheet" type="text/css"/><link href="../../assets/julia-manual.css" rel="stylesheet" type="text/css"/></head><body><nav class="toc"><a href="../../index.html"><img class="logo" src="../../assets/logo.png" alt="The Julia Language logo"/></a><h1>The Julia Language</h1><select id="version-selector" onChange="window.location.href=this.value" style="visibility: hidden"></select><form class="search" id="search-form" action="../../search/"><input id="search-query" name="q" type="text" placeholder="Search docs"/></form><ul><li><a class="toctext" href="../../">Home</a></li><li><span class="toctext">Manual</span><ul><li><a class="toctext" href="../getting-started/">Getting Started</a></li><li><a class="toctext" href="../variables/">Variables</a></li><li><a class="toctext" href="../integers-and-floating-point-numbers/">Integers and Floating-Point Numbers</a></li><li><a class="toctext" href="../mathematical-operations/">Mathematical Operations and Elementary Functions</a></li><li><a class="toctext" href="../complex-and-rational-numbers/">Complex and Rational Numbers</a></li><li><a class="toctext" href="../strings/">Strings</a></li><li><a class="toctext" href="../functions/">Functions</a></li><li><a class="toctext" href="../control-flow/">Control Flow</a></li><li><a class="toctext" href="../variables-and-scoping/">Scope of Variables</a></li><li><a class="toctext" href="../types/">Types</a></li><li><a class="toctext" href="../methods/">Methods</a></li><li><a class="toctext" href="../constructors/">Constructors</a></li><li><a class="toctext" href="../conversion-and-promotion/">Conversion and Promotion</a></li><li><a class="toctext" href="../interfaces/">Interfaces</a></li><li><a class="toctext" href="../modules/">Modules</a></li><li><a class="toctext" href="../documentation/">Documentation</a></li><li class="current"><a class="toctext" href>Metaprogramming</a><ul class="internal"><li><a class="toctext" href="#Program-representation-1">Program representation</a></li><li><a class="toctext" href="#Expressions-and-evaluation-1">Expressions and evaluation</a></li><li><a class="toctext" href="#man-macros-1">Macros</a></li><li><a class="toctext" href="#Code-Generation-1">Code Generation</a></li><li><a class="toctext" href="#Non-Standard-String-Literals-1">Non-Standard String Literals</a></li><li><a class="toctext" href="#Generated-functions-1">Generated functions</a></li></ul></li><li><a class="toctext" href="../arrays/">Multi-dimensional Arrays</a></li><li><a class="toctext" href="../missing/">Missing Values</a></li><li><a class="toctext" href="../networking-and-streams/">Networking and Streams</a></li><li><a class="toctext" href="../parallel-computing/">Parallel Computing</a></li><li><a class="toctext" href="../running-external-programs/">Running External Programs</a></li><li><a class="toctext" href="../calling-c-and-fortran-code/">Calling C and Fortran Code</a></li><li><a class="toctext" href="../handling-operating-system-variation/">Handling Operating System Variation</a></li><li><a class="toctext" href="../environment-variables/">Environment Variables</a></li><li><a class="toctext" href="../embedding/">Embedding Julia</a></li><li><a class="toctext" href="../code-loading/">Code Loading</a></li><li><a class="toctext" href="../profile/">Profiling</a></li><li><a class="toctext" href="../stacktraces/">Stack Traces</a></li><li><a class="toctext" href="../performance-tips/">Performance Tips</a></li><li><a class="toctext" href="../workflow-tips/">Workflow Tips</a></li><li><a class="toctext" href="../style-guide/">Style Guide</a></li><li><a class="toctext" href="../faq/">Frequently Asked Questions</a></li><li><a class="toctext" href="../noteworthy-differences/">Noteworthy Differences from other Languages</a></li><li><a class="toctext" href="../unicode-input/">Unicode Input</a></li></ul></li><li><span class="toctext">Base</span><ul><li><a class="toctext" href="../../base/base/">Essentials</a></li><li><a class="toctext" href="../../base/collections/">Collections and Data Structures</a></li><li><a class="toctext" href="../../base/math/">Mathematics</a></li><li><a class="toctext" href="../../base/numbers/">Numbers</a></li><li><a class="toctext" href="../../base/strings/">Strings</a></li><li><a class="toctext" href="../../base/arrays/">Arrays</a></li><li><a class="toctext" href="../../base/parallel/">Tasks</a></li><li><a class="toctext" href="../../base/multi-threading/">Multi-Threading</a></li><li><a class="toctext" href="../../base/constants/">Constants</a></li><li><a class="toctext" href="../../base/file/">Filesystem</a></li><li><a class="toctext" href="../../base/io-network/">I/O and Network</a></li><li><a class="toctext" href="../../base/punctuation/">Punctuation</a></li><li><a class="toctext" href="../../base/sort/">Sorting and Related Functions</a></li><li><a class="toctext" href="../../base/iterators/">Iteration utilities</a></li><li><a class="toctext" href="../../base/c/">C Interface</a></li><li><a class="toctext" href="../../base/libc/">C Standard Library</a></li><li><a class="toctext" href="../../base/stacktraces/">StackTraces</a></li><li><a class="toctext" href="../../base/simd-types/">SIMD Support</a></li></ul></li><li><span class="toctext">Standard Library</span><ul><li><a class="toctext" href="../../stdlib/Base64/">Base64</a></li><li><a class="toctext" href="../../stdlib/CRC32c/">CRC32c</a></li><li><a class="toctext" href="../../stdlib/Dates/">Dates</a></li><li><a class="toctext" href="../../stdlib/DelimitedFiles/">Delimited Files</a></li><li><a class="toctext" href="../../stdlib/Distributed/">Distributed Computing</a></li><li><a class="toctext" href="../../stdlib/FileWatching/">File Events</a></li><li><a class="toctext" href="../../stdlib/InteractiveUtils/">Interactive Utilities</a></li><li><a class="toctext" href="../../stdlib/LibGit2/">LibGit2</a></li><li><a class="toctext" href="../../stdlib/Libdl/">Dynamic Linker</a></li><li><a class="toctext" href="../../stdlib/LinearAlgebra/">Linear Algebra</a></li><li><a class="toctext" href="../../stdlib/Logging/">Logging</a></li><li><a class="toctext" href="../../stdlib/Markdown/">Markdown</a></li><li><a class="toctext" href="../../stdlib/Mmap/">Memory-mapped I/O</a></li><li><a class="toctext" href="../../stdlib/Pkg/">Pkg</a></li><li><a class="toctext" href="../../stdlib/Printf/">Printf</a></li><li><a class="toctext" href="../../stdlib/Profile/">Profiling</a></li><li><a class="toctext" href="../../stdlib/REPL/">The Julia REPL</a></li><li><a class="toctext" href="../../stdlib/Random/">Random Numbers</a></li><li><a class="toctext" href="../../stdlib/SHA/">SHA</a></li><li><a class="toctext" href="../../stdlib/Serialization/">Serialization</a></li><li><a class="toctext" href="../../stdlib/SharedArrays/">Shared Arrays</a></li><li><a class="toctext" href="../../stdlib/Sockets/">Sockets</a></li><li><a class="toctext" href="../../stdlib/SparseArrays/">Sparse Arrays</a></li><li><a class="toctext" href="../../stdlib/Statistics/">Statistics</a></li><li><a class="toctext" href="../../stdlib/Test/">Unit Testing</a></li><li><a class="toctext" href="../../stdlib/UUIDs/">UUIDs</a></li><li><a class="toctext" href="../../stdlib/Unicode/">Unicode</a></li></ul></li><li><span class="toctext">Developer Documentation</span><ul><li><a class="toctext" href="../../devdocs/reflection/">Reflection and introspection</a></li><li><span class="toctext">Documentation of Julia&#39;s Internals</span><ul><li><a class="toctext" href="../../devdocs/init/">Initialization of the Julia runtime</a></li><li><a class="toctext" href="../../devdocs/ast/">Julia ASTs</a></li><li><a class="toctext" href="../../devdocs/types/">More about types</a></li><li><a class="toctext" href="../../devdocs/object/">Memory layout of Julia Objects</a></li><li><a class="toctext" href="../../devdocs/eval/">Eval of Julia code</a></li><li><a class="toctext" href="../../devdocs/callconv/">Calling Conventions</a></li><li><a class="toctext" href="../../devdocs/compiler/">High-level Overview of the Native-Code Generation Process</a></li><li><a class="toctext" href="../../devdocs/functions/">Julia Functions</a></li><li><a class="toctext" href="../../devdocs/cartesian/">Base.Cartesian</a></li><li><a class="toctext" href="../../devdocs/meta/">Talking to the compiler (the <code>:meta</code> mechanism)</a></li><li><a class="toctext" href="../../devdocs/subarrays/">SubArrays</a></li><li><a class="toctext" href="../../devdocs/isbitsunionarrays/">isbits Union Optimizations</a></li><li><a class="toctext" href="../../devdocs/sysimg/">System Image Building</a></li><li><a class="toctext" href="../../devdocs/llvm/">Working with LLVM</a></li><li><a class="toctext" href="../../devdocs/stdio/">printf() and stdio in the Julia runtime</a></li><li><a class="toctext" href="../../devdocs/boundscheck/">Bounds checking</a></li><li><a class="toctext" href="../../devdocs/locks/">Proper maintenance and care of multi-threading locks</a></li><li><a class="toctext" href="../../devdocs/offset-arrays/">Arrays with custom indices</a></li><li><a class="toctext" href="../../devdocs/require/">Module loading</a></li><li><a class="toctext" href="../../devdocs/inference/">Inference</a></li></ul></li><li><span class="toctext">Developing/debugging Julia&#39;s C code</span><ul><li><a class="toctext" href="../../devdocs/backtraces/">Reporting and analyzing crashes (segfaults)</a></li><li><a class="toctext" href="../../devdocs/debuggingtips/">gdb debugging tips</a></li><li><a class="toctext" href="../../devdocs/valgrind/">Using Valgrind with Julia</a></li><li><a class="toctext" href="../../devdocs/sanitizers/">Sanitizer support</a></li></ul></li></ul></li></ul></nav><article id="docs"><header><nav><ul><li>Manual</li><li><a href>Metaprogramming</a></li></ul><a class="edit-page" href="https://github.com/fredrikekre/julia/blob/master/doc/src/manual/metaprogramming.md"><span class="fa"></span> Edit on GitHub</a></nav><hr/><div id="topbar"><span>Metaprogramming</span><a class="fa fa-bars" href="#"></a></div></header><h1><a class="nav-anchor" id="Metaprogramming-1" href="#Metaprogramming-1">Metaprogramming</a></h1><p>The strongest legacy of Lisp in the Julia language is its metaprogramming support. Like Lisp, Julia represents its own code as a data structure of the language itself. Since code is represented by objects that can be created and manipulated from within the language, it is possible for a program to transform and generate its own code. This allows sophisticated code generation without extra build steps, and also allows true Lisp-style macros operating at the level of <a href="https://en.wikipedia.org/wiki/Abstract_syntax_tree">abstract syntax trees</a>. In contrast, preprocessor &quot;macro&quot; systems, like that of C and C++, perform textual manipulation and substitution before any actual parsing or interpretation occurs. Because all data types and code in Julia are represented by Julia data structures, powerful <a href="https://en.wikipedia.org/wiki/Reflection_%28computer_programming%29">reflection</a> capabilities are available to explore the internals of a program and its types just like any other data.</p><h2><a class="nav-anchor" id="Program-representation-1" href="#Program-representation-1">Program representation</a></h2><p>Every Julia program starts life as a string:</p><pre><code class="language-julia-repl">julia&gt; prog = &quot;1 + 1&quot;
+&quot;1 + 1&quot;</code></pre><p><strong>What happens next?</strong></p><p>The next step is to <a href="https://en.wikipedia.org/wiki/Parsing#Computer_languages">parse</a> each string into an object called an expression, represented by the Julia type <code>Expr</code>:</p><pre><code class="language-julia-repl">julia&gt; ex1 = Meta.parse(prog)
+:(1 + 1)
+
+julia&gt; typeof(ex1)
+Expr</code></pre><p><code>Expr</code> objects contain two parts:</p><ul><li>a <code>Symbol</code> identifying the kind of expression. A symbol is an <a href="https://en.wikipedia.org/wiki/String_interning">interned string</a> identifier (more discussion below).</li></ul><pre><code class="language-julia-repl">julia&gt; ex1.head
+:call</code></pre><ul><li>the expression arguments, which may be symbols, other expressions, or literal values:</li></ul><pre><code class="language-julia-repl">julia&gt; ex1.args
+3-element Array{Any,1}:
+  :+
+ 1
+ 1</code></pre><p>Expressions may also be constructed directly in <a href="https://en.wikipedia.org/wiki/Polish_notation">prefix notation</a>:</p><pre><code class="language-julia-repl">julia&gt; ex2 = Expr(:call, :+, 1, 1)
+:(1 + 1)</code></pre><p>The two expressions constructed above – by parsing and by direct construction – are equivalent:</p><pre><code class="language-julia-repl">julia&gt; ex1 == ex2
+true</code></pre><p><strong>The key point here is that Julia code is internally represented as a data structure that is accessible from the language itself.</strong></p><p>The <a href="../../base/io-network/#Base.dump"><code>dump</code></a> function provides indented and annotated display of <code>Expr</code> objects:</p><pre><code class="language-julia-repl">julia&gt; dump(ex2)
+Expr
+  head: Symbol call
+  args: Array{Any}((3,))
+    1: Symbol +
+    2: Int64 1
+    3: Int64 1</code></pre><p><code>Expr</code> objects may also be nested:</p><pre><code class="language-julia-repl">julia&gt; ex3 = Meta.parse(&quot;(4 + 4) / 2&quot;)
+:((4 + 4) / 2)</code></pre><p>Another way to view expressions is with Meta.show_sexpr, which displays the <a href="https://en.wikipedia.org/wiki/S-expression">S-expression</a> form of a given <code>Expr</code>, which may look very familiar to users of Lisp. Here&#39;s an example illustrating the display on a nested <code>Expr</code>:</p><pre><code class="language-julia-repl">julia&gt; Meta.show_sexpr(ex3)
+(:call, :/, (:call, :+, 4, 4), 2)</code></pre><h3><a class="nav-anchor" id="Symbols-1" href="#Symbols-1">Symbols</a></h3><p>The <code>:</code> character has two syntactic purposes in Julia. The first form creates a <a href="../../base/strings/#Core.Symbol"><code>Symbol</code></a>, an <a href="https://en.wikipedia.org/wiki/String_interning">interned string</a> used as one building-block of expressions:</p><pre><code class="language-julia-repl">julia&gt; :foo
+:foo
+
+julia&gt; typeof(ans)
+Symbol</code></pre><p>The <a href="../../base/strings/#Core.Symbol"><code>Symbol</code></a> constructor takes any number of arguments and creates a new symbol by concatenating their string representations together:</p><pre><code class="language-julia-repl">julia&gt; :foo == Symbol(&quot;foo&quot;)
+true
+
+julia&gt; Symbol(&quot;func&quot;,10)
+:func10
+
+julia&gt; Symbol(:var,&#39;_&#39;,&quot;sym&quot;)
+:var_sym</code></pre><p>In the context of an expression, symbols are used to indicate access to variables; when an expression is evaluated, a symbol is replaced with the value bound to that symbol in the appropriate <a href="../variables-and-scoping/#scope-of-variables-1">scope</a>.</p><p>Sometimes extra parentheses around the argument to <code>:</code> are needed to avoid ambiguity in parsing.:</p><pre><code class="language-julia-repl">julia&gt; :(:)
+:(:)
+
+julia&gt; :(::)
+:(::)</code></pre><h2><a class="nav-anchor" id="Expressions-and-evaluation-1" href="#Expressions-and-evaluation-1">Expressions and evaluation</a></h2><h3><a class="nav-anchor" id="Quoting-1" href="#Quoting-1">Quoting</a></h3><p>The second syntactic purpose of the <code>:</code> character is to create expression objects without using the explicit <code>Expr</code> constructor. This is referred to as <em>quoting</em>. The <code>:</code> character, followed by paired parentheses around a single statement of Julia code, produces an <code>Expr</code> object based on the enclosed code. Here is example of the short form used to quote an arithmetic expression:</p><pre><code class="language-julia-repl">julia&gt; ex = :(a+b*c+1)
+:(a + b * c + 1)
+
+julia&gt; typeof(ex)
+Expr</code></pre><p>(to view the structure of this expression, try <code>ex.head</code> and <code>ex.args</code>, or use <a href="../../base/io-network/#Base.dump"><code>dump</code></a> as above or <a href="../../base/io-network/#Base.Meta.@dump"><code>Meta.@dump</code></a>)</p><p>Note that equivalent expressions may be constructed using <a href="../../base/base/#Base.Meta.parse-Tuple{AbstractString,Int64}"><code>Meta.parse</code></a> or the direct <code>Expr</code> form:</p><pre><code class="language-julia-repl">julia&gt;      :(a + b*c + 1)       ==
+       Meta.parse(&quot;a + b*c + 1&quot;) ==
+       Expr(:call, :+, :a, Expr(:call, :*, :b, :c), 1)
+true</code></pre><p>Expressions provided by the parser generally only have symbols, other expressions, and literal values as their args, whereas expressions constructed by Julia code can have arbitrary run-time values without literal forms as args. In this specific example, <code>+</code> and <code>a</code> are symbols, <code>*(b,c)</code> is a subexpression, and <code>1</code> is a literal 64-bit signed integer.</p><p>There is a second syntactic form of quoting for multiple expressions: blocks of code enclosed in <code>quote ... end</code>.</p><pre><code class="language-julia-repl">julia&gt; ex = quote
+           x = 1
+           y = 2
+           x + y
+       end
+quote
+    #= none:2 =#
+    x = 1
+    #= none:3 =#
+    y = 2
+    #= none:4 =#
+    x + y
+end
+
+julia&gt; typeof(ex)
+Expr</code></pre><h3><a class="nav-anchor" id="Interpolation-1" href="#Interpolation-1">Interpolation</a></h3><p>Direct construction of <code>Expr</code> objects with value arguments is powerful, but <code>Expr</code> constructors can be tedious compared to &quot;normal&quot; Julia syntax. As an alternative, Julia allows <em>interpolation</em> of literals or expressions into quoted expressions. Interpolation is indicated by a prefix <code>$</code>.</p><p>In this example, the value of variable <code>a</code> is interpolated:</p><pre><code class="language-julia-repl">julia&gt; a = 1;
+
+julia&gt; ex = :($a + b)
+:(1 + b)</code></pre><p>Interpolating into an unquoted expression is not supported and will cause a compile-time error:</p><pre><code class="language-julia-repl">julia&gt; $a + b
+ERROR: syntax: &quot;$&quot; expression outside quote</code></pre><p>In this example, the tuple <code>(1,2,3)</code> is interpolated as an expression into a conditional test:</p><pre><code class="language-julia-repl">julia&gt; ex = :(a in $:((1,2,3)) )
+:(a in (1, 2, 3))</code></pre><p>The use of <code>$</code> for expression interpolation is intentionally reminiscent of <a href="../strings/#string-interpolation-1">string interpolation</a> and <a href="../running-external-programs/#command-interpolation-1">command interpolation</a>. Expression interpolation allows convenient, readable programmatic construction of complex Julia expressions.</p><h3><a class="nav-anchor" id="Splatting-interpolation-1" href="#Splatting-interpolation-1">Splatting interpolation</a></h3><p>Notice that the <code>$</code> interpolation syntax allows inserting only a single expression into an enclosing expression. Occasionally, you have an array of expressions and need them all to become arguments of the surrounding expression. This can be done with the syntax <code>$(xs...)</code>. For example, the following code generates a function call where the number of arguments is determined programmatically:</p><pre><code class="language-julia-repl">julia&gt; args = [:x, :y, :z];
+
+julia&gt; :(f(1, $(args...)))
+:(f(1, x, y, z))</code></pre><h3><a class="nav-anchor" id="Nested-quote-1" href="#Nested-quote-1">Nested quote</a></h3><p>Naturally, it is possible for quote expressions to contain other quote expressions. Understanding how interpolation works in these cases can be a bit tricky. Consider this example:</p><pre><code class="language-julia-repl">julia&gt; x = :(1 + 2);
+
+julia&gt; e = quote quote $x end end
+quote
+    #= none:1 =#
+    $(Expr(:quote, quote
+    #= none:1 =#
+    $(Expr(:$, :x))
+end))
+end</code></pre><p>Notice that the result contains <code>Expr(:$, :x)</code>, which means that <code>x</code> has not been evaluated yet. In other words, the <code>$</code> expression &quot;belongs to&quot; the inner quote expression, and so its argument is only evaluated when the inner quote expression is:</p><pre><code class="language-julia-repl">julia&gt; eval(e)
+quote
+    #= none:1 =#
+    1 + 2
+end</code></pre><p>However, the outer <code>quote</code> expression is able to interpolate values inside the <code>$</code> in the inner quote. This is done with multiple <code>$</code>s:</p><pre><code class="language-julia-repl">julia&gt; e = quote quote $$x end end
+quote
+    #= none:1 =#
+    $(Expr(:quote, quote
+    #= none:1 =#
+    $(Expr(:$, :(1 + 2)))
+end))
+end</code></pre><p>Notice that <code>:(1 + 2)</code> now appears in the result instead of the symbol <code>:x</code>. Evaluating this expression yields an interpolated <code>3</code>:</p><pre><code class="language-julia-repl">julia&gt; eval(e)
+quote
+    #= none:1 =#
+    3
+end</code></pre><p>The intuition behind this behavior is that <code>x</code> is evaluated once for each <code>$</code>: one <code>$</code> works similarly to <code>eval(:x)</code>, giving <code>x</code>&#39;s value, while two <code>$</code>s do the equivalent of <code>eval(eval(:x))</code>.</p><h3><a class="nav-anchor" id="QuoteNode-1" href="#QuoteNode-1">QuoteNode</a></h3><p>The usual representation of a <code>quote</code> form in an AST is an <code>Expr</code> with head <code>:quote</code>:</p><pre><code class="language-julia-repl">julia&gt; dump(Meta.parse(&quot;:(1+2)&quot;))
+Expr
+  head: Symbol quote
+  args: Array{Any}((1,))
+    1: Expr
+      head: Symbol call
+      args: Array{Any}((3,))
+        1: Symbol +
+        2: Int64 1
+        3: Int64 2</code></pre><p>As we have seen, such expressions support interpolation with <code>$</code>. However, in some situations it is necessary to quote code <em>without</em> performing interpolation. This kind of quoting does not yet have syntax, but is represented internally as an object of type <code>QuoteNode</code>. The parser yields <code>QuoteNode</code>s for simple quoted items like symbols:</p><pre><code class="language-julia-repl">julia&gt; dump(Meta.parse(&quot;:x&quot;))
+QuoteNode
+  value: Symbol x</code></pre><p><code>QuoteNode</code> can also be used for certain advanced metaprogramming tasks.</p><h3><a class="nav-anchor" id="[eval](@ref)-and-effects-1" href="#[eval](@ref)-and-effects-1"><a href="../../base/base/#Base.MainInclude.eval"><code>eval</code></a> and effects</a></h3><p>Given an expression object, one can cause Julia to evaluate (execute) it at global scope using <a href="../../base/base/#Base.MainInclude.eval"><code>eval</code></a>:</p><pre><code class="language-julia-repl">julia&gt; :(1 + 2)
+:(1 + 2)
+
+julia&gt; eval(ans)
+3
+
+julia&gt; ex = :(a + b)
+:(a + b)
+
+julia&gt; eval(ex)
+ERROR: UndefVarError: b not defined
+[...]
+
+julia&gt; a = 1; b = 2;
+
+julia&gt; eval(ex)
+3</code></pre><p>Every <a href="../modules/#modules-1">module</a> has its own <a href="../../base/base/#Base.MainInclude.eval"><code>eval</code></a> function that evaluates expressions in its global scope. Expressions passed to <a href="../../base/base/#Base.MainInclude.eval"><code>eval</code></a> are not limited to returning values – they can also have side-effects that alter the state of the enclosing module&#39;s environment:</p><pre><code class="language-julia-repl">julia&gt; ex = :(x = 1)
+:(x = 1)
+
+julia&gt; x
+ERROR: UndefVarError: x not defined
+
+julia&gt; eval(ex)
+1
+
+julia&gt; x
+1</code></pre><p>Here, the evaluation of an expression object causes a value to be assigned to the global variable <code>x</code>.</p><p>Since expressions are just <code>Expr</code> objects which can be constructed programmatically and then evaluated, it is possible to dynamically generate arbitrary code which can then be run using <a href="../../base/base/#Base.MainInclude.eval"><code>eval</code></a>. Here is a simple example:</p><pre><code class="language-julia-repl">julia&gt; a = 1;
+
+julia&gt; ex = Expr(:call, :+, a, :b)
+:(1 + b)
+
+julia&gt; a = 0; b = 2;
+
+julia&gt; eval(ex)
+3</code></pre><p>The value of <code>a</code> is used to construct the expression <code>ex</code> which applies the <code>+</code> function to the value 1 and the variable <code>b</code>. Note the important distinction between the way <code>a</code> and <code>b</code> are used:</p><ul><li>The value of the <em>variable</em> <code>a</code> at expression construction time is used as an immediate value in the expression. Thus, the value of <code>a</code> when the expression is evaluated no longer matters: the value in the expression is already <code>1</code>, independent of whatever the value of <code>a</code> might be.</li><li>On the other hand, the <em>symbol</em> <code>:b</code> is used in the expression construction, so the value of the variable <code>b</code> at that time is irrelevant – <code>:b</code> is just a symbol and the variable <code>b</code> need not even be defined. At expression evaluation time, however, the value of the symbol <code>:b</code> is resolved by looking up the value of the variable <code>b</code>.</li></ul><h3><a class="nav-anchor" id="Functions-on-Expressions-1" href="#Functions-on-Expressions-1">Functions on <code>Expr</code>essions</a></h3><p>As hinted above, one extremely useful feature of Julia is the capability to generate and manipulate Julia code within Julia itself. We have already seen one example of a function returning <code>Expr</code> objects: the <a href="../../base/numbers/#Base.parse"><code>parse</code></a> function, which takes a string of Julia code and returns the corresponding <code>Expr</code>. A function can also take one or more <code>Expr</code> objects as arguments, and return another <code>Expr</code>. Here is a simple, motivating example:</p><pre><code class="language-julia-repl">julia&gt; function math_expr(op, op1, op2)
+           expr = Expr(:call, op, op1, op2)
+           return expr
+       end
+math_expr (generic function with 1 method)
+
+julia&gt;  ex = math_expr(:+, 1, Expr(:call, :*, 4, 5))
+:(1 + 4 * 5)
+
+julia&gt; eval(ex)
+21</code></pre><p>As another example, here is a function that doubles any numeric argument, but leaves expressions alone:</p><pre><code class="language-julia-repl">julia&gt; function make_expr2(op, opr1, opr2)
+           opr1f, opr2f = map(x -&gt; isa(x, Number) ? 2*x : x, (opr1, opr2))
+           retexpr = Expr(:call, op, opr1f, opr2f)
+           return retexpr
+       end
+make_expr2 (generic function with 1 method)
+
+julia&gt; make_expr2(:+, 1, 2)
+:(2 + 4)
+
+julia&gt; ex = make_expr2(:+, 1, Expr(:call, :*, 5, 8))
+:(2 + 5 * 8)
+
+julia&gt; eval(ex)
+42</code></pre><h2><a class="nav-anchor" id="man-macros-1" href="#man-macros-1">Macros</a></h2><p>Macros provide a method to include generated code in the final body of a program. A macro maps a tuple of arguments to a returned <em>expression</em>, and the resulting expression is compiled directly rather than requiring a runtime <a href="../../base/base/#Base.MainInclude.eval"><code>eval</code></a> call. Macro arguments may include expressions, literal values, and symbols.</p><h3><a class="nav-anchor" id="Basics-1" href="#Basics-1">Basics</a></h3><p>Here is an extraordinarily simple macro:</p><pre><code class="language-julia-repl">julia&gt; macro sayhello()
+           return :( println(&quot;Hello, world!&quot;) )
+       end
+@sayhello (macro with 1 method)</code></pre><p>Macros have a dedicated character in Julia&#39;s syntax: the <code>@</code> (at-sign), followed by the unique name declared in a <code>macro NAME ... end</code> block. In this example, the compiler will replace all instances of <code>@sayhello</code> with:</p><pre><code class="language-julia">:( println(&quot;Hello, world!&quot;) )</code></pre><p>When <code>@sayhello</code> is entered in the REPL, the expression executes immediately, thus we only see the evaluation result:</p><pre><code class="language-julia-repl">julia&gt; @sayhello()
+Hello, world!</code></pre><p>Now, consider a slightly more complex macro:</p><pre><code class="language-julia-repl">julia&gt; macro sayhello(name)
+           return :( println(&quot;Hello, &quot;, $name) )
+       end
+@sayhello (macro with 1 method)</code></pre><p>This macro takes one argument: <code>name</code>. When <code>@sayhello</code> is encountered, the quoted expression is <em>expanded</em> to interpolate the value of the argument into the final expression:</p><pre><code class="language-julia-repl">julia&gt; @sayhello(&quot;human&quot;)
+Hello, human</code></pre><p>We can view the quoted return expression using the function <a href="../../base/base/#Base.macroexpand"><code>macroexpand</code></a> (<strong>important note:</strong> this is an extremely useful tool for debugging macros):</p><pre><code class="language-julia-repl">julia&gt; ex = macroexpand(Main, :(@sayhello(&quot;human&quot;)) )
+:((Main.println)(&quot;Hello, &quot;, &quot;human&quot;))
+
+julia&gt; typeof(ex)
+Expr</code></pre><p>We can see that the <code>&quot;human&quot;</code> literal has been interpolated into the expression.</p><p>There also exists a macro <a href="../../base/base/#Base.@macroexpand"><code>@macroexpand</code></a> that is perhaps a bit more convenient than the <code>macroexpand</code> function:</p><pre><code class="language-julia-repl">julia&gt; @macroexpand @sayhello &quot;human&quot;
+:((println)(&quot;Hello, &quot;, &quot;human&quot;))</code></pre><h3><a class="nav-anchor" id="Hold-up:-why-macros?-1" href="#Hold-up:-why-macros?-1">Hold up: why macros?</a></h3><p>We have already seen a function <code>f(::Expr...) -&gt; Expr</code> in a previous section. In fact, <a href="../../base/base/#Base.macroexpand"><code>macroexpand</code></a> is also such a function. So, why do macros exist?</p><p>Macros are necessary because they execute when code is parsed, therefore, macros allow the programmer to generate and include fragments of customized code <em>before</em> the full program is run. To illustrate the difference, consider the following example:</p><pre><code class="language-julia-repl">julia&gt; macro twostep(arg)
+           println(&quot;I execute at parse time. The argument is: &quot;, arg)
+           return :(println(&quot;I execute at runtime. The argument is: &quot;, $arg))
+       end
+@twostep (macro with 1 method)
+
+julia&gt; ex = macroexpand(Main, :(@twostep :(1, 2, 3)) );
+I execute at parse time. The argument is: $(Expr(:quote, :((1, 2, 3))))</code></pre><p>The first call to <a href="../../base/io-network/#Base.println"><code>println</code></a> is executed when <a href="../../base/base/#Base.macroexpand"><code>macroexpand</code></a> is called. The resulting expression contains <em>only</em> the second <code>println</code>:</p><pre><code class="language-julia-repl">julia&gt; typeof(ex)
+Expr
+
+julia&gt; ex
+:((println)(&quot;I execute at runtime. The argument is: &quot;, $(Expr(:copyast, :($(QuoteNode(:((1, 2, 3)))))))))
+
+julia&gt; eval(ex)
+I execute at runtime. The argument is: (1, 2, 3)</code></pre><h3><a class="nav-anchor" id="Macro-invocation-1" href="#Macro-invocation-1">Macro invocation</a></h3><p>Macros are invoked with the following general syntax:</p><pre><code class="language-julia">@name expr1 expr2 ...
+@name(expr1, expr2, ...)</code></pre><p>Note the distinguishing <code>@</code> before the macro name and the lack of commas between the argument expressions in the first form, and the lack of whitespace after <code>@name</code> in the second form. The two styles should not be mixed. For example, the following syntax is different from the examples above; it passes the tuple <code>(expr1, expr2, ...)</code> as one argument to the macro:</p><pre><code class="language-julia">@name (expr1, expr2, ...)</code></pre><p>An alternative way to invoke a macro over an array literal (or comprehension) is to juxtapose both without using parentheses. In this case, the array will be the only expression fed to the macro. The following syntax is equivalent (and different from <code>@name [a b] * v</code>):</p><pre><code class="language-julia">@name[a b] * v
+@name([a b]) * v</code></pre><p>It is important to emphasize that macros receive their arguments as expressions, literals, or symbols. One way to explore macro arguments is to call the <a href="../../base/io-network/#Base.show-Tuple{Any}"><code>show</code></a> function within the macro body:</p><pre><code class="language-julia-repl">julia&gt; macro showarg(x)
+           show(x)
+           # ... remainder of macro, returning an expression
+       end
+@showarg (macro with 1 method)
+
+julia&gt; @showarg(a)
+:a
+
+julia&gt; @showarg(1+1)
+:(1 + 1)
+
+julia&gt; @showarg(println(&quot;Yo!&quot;))
+:(println(&quot;Yo!&quot;))</code></pre><p>In addition to the given argument list, every macro is passed extra arguments named <code>__source__</code> and <code>__module__</code>.</p><p>The argument <code>__source__</code> provides information (in the form of a <code>LineNumberNode</code> object) about the parser location of the <code>@</code> sign from the macro invocation. This allows macros to include better error diagnostic information, and is commonly used by logging, string-parser macros, and docs, for example, as well as to implement the <code>@__LINE__</code>, <code>@__FILE__</code>, and <code>@__DIR__</code> macros.</p><p>The location information can be accessed by referencing <code>__source__.line</code> and <code>__source__.file</code>:</p><pre><code class="language-julia-repl">julia&gt; macro __LOCATION__(); return QuoteNode(__source__); end
+@__LOCATION__ (macro with 1 method)
+
+julia&gt; dump(
+            @__LOCATION__(
+       ))
+LineNumberNode
+  line: Int64 2
+  file: Symbol none</code></pre><p>The argument <code>__module__</code> provides information (in the form of a <code>Module</code> object) about the expansion context of the macro invocation. This allows macros to look up contextual information, such as existing bindings, or to insert the value as an extra argument to a runtime function call doing self-reflection in the current module.</p><h3><a class="nav-anchor" id="Building-an-advanced-macro-1" href="#Building-an-advanced-macro-1">Building an advanced macro</a></h3><p>Here is a simplified definition of Julia&#39;s <code>@assert</code> macro:</p><pre><code class="language-julia-repl">julia&gt; macro assert(ex)
+           return :( $ex ? nothing : throw(AssertionError($(string(ex)))) )
+       end
+@assert (macro with 1 method)</code></pre><p>This macro can be used like this:</p><pre><code class="language-julia-repl">julia&gt; @assert 1 == 1.0
+
+julia&gt; @assert 1 == 0
+ERROR: AssertionError: 1 == 0</code></pre><p>In place of the written syntax, the macro call is expanded at parse time to its returned result. This is equivalent to writing:</p><pre><code class="language-julia">1 == 1.0 ? nothing : throw(AssertionError(&quot;1 == 1.0&quot;))
+1 == 0 ? nothing : throw(AssertionError(&quot;1 == 0&quot;))</code></pre><p>That is, in the first call, the expression <code>:(1 == 1.0)</code> is spliced into the test condition slot, while the value of <code>string(:(1 == 1.0))</code> is spliced into the assertion message slot. The entire expression, thus constructed, is placed into the syntax tree where the <code>@assert</code> macro call occurs. Then at execution time, if the test expression evaluates to true, then <code>nothing</code> is returned, whereas if the test is false, an error is raised indicating the asserted expression that was false. Notice that it would not be possible to write this as a function, since only the <em>value</em> of the condition is available and it would be impossible to display the expression that computed it in the error message.</p><p>The actual definition of <code>@assert</code> in Julia Base is more complicated. It allows the user to optionally specify their own error message, instead of just printing the failed expression. Just like in functions with a variable number of arguments, this is specified with an ellipses following the last argument:</p><pre><code class="language-julia-repl">julia&gt; macro assert(ex, msgs...)
+           msg_body = isempty(msgs) ? ex : msgs[1]
+           msg = string(msg_body)
+           return :($ex ? nothing : throw(AssertionError($msg)))
+       end
+@assert (macro with 1 method)</code></pre><p>Now <code>@assert</code> has two modes of operation, depending upon the number of arguments it receives! If there&#39;s only one argument, the tuple of expressions captured by <code>msgs</code> will be empty and it will behave the same as the simpler definition above. But now if the user specifies a second argument, it is printed in the message body instead of the failing expression. You can inspect the result of a macro expansion with the aptly named <a href="../../base/base/#Base.@macroexpand"><code>@macroexpand</code></a> macro:</p><pre><code class="language-julia-repl">julia&gt; @macroexpand @assert a == b
+:(if Main.a == Main.b
+        Main.nothing
+    else
+        (Main.throw)((Main.AssertionError)(&quot;a == b&quot;))
+    end)
+
+julia&gt; @macroexpand @assert a==b &quot;a should equal b!&quot;
+:(if Main.a == Main.b
+        Main.nothing
+    else
+        (Main.throw)((Main.AssertionError)(&quot;a should equal b!&quot;))
+    end)</code></pre><p>There is yet another case that the actual <code>@assert</code> macro handles: what if, in addition to printing &quot;a should equal b,&quot; we wanted to print their values? One might naively try to use string interpolation in the custom message, e.g., <code>@assert a==b &quot;a ($a) should equal b ($b)!&quot;</code>, but this won&#39;t work as expected with the above macro. Can you see why? Recall from <a href="../strings/#string-interpolation-1">string interpolation</a> that an interpolated string is rewritten to a call to <a href="../../base/strings/#Base.string"><code>string</code></a>. Compare:</p><pre><code class="language-julia-repl">julia&gt; typeof(:(&quot;a should equal b&quot;))
+String
+
+julia&gt; typeof(:(&quot;a ($a) should equal b ($b)!&quot;))
+Expr
+
+julia&gt; dump(:(&quot;a ($a) should equal b ($b)!&quot;))
+Expr
+  head: Symbol string
+  args: Array{Any}((5,))
+    1: String &quot;a (&quot;
+    2: Symbol a
+    3: String &quot;) should equal b (&quot;
+    4: Symbol b
+    5: String &quot;)!&quot;</code></pre><p>So now instead of getting a plain string in <code>msg_body</code>, the macro is receiving a full expression that will need to be evaluated in order to display as expected. This can be spliced directly into the returned expression as an argument to the <a href="../../base/strings/#Base.string"><code>string</code></a> call; see <a href="https://github.com/JuliaLang/julia/blob/master/base/error.jl"><code>error.jl</code></a> for the complete implementation.</p><p>The <code>@assert</code> macro makes great use of splicing into quoted expressions to simplify the manipulation of expressions inside the macro body.</p><h3><a class="nav-anchor" id="Hygiene-1" href="#Hygiene-1">Hygiene</a></h3><p>An issue that arises in more complex macros is that of <a href="https://en.wikipedia.org/wiki/Hygienic_macro">hygiene</a>. In short, macros must ensure that the variables they introduce in their returned expressions do not accidentally clash with existing variables in the surrounding code they expand into. Conversely, the expressions that are passed into a macro as arguments are often <em>expected</em> to evaluate in the context of the surrounding code, interacting with and modifying the existing variables. Another concern arises from the fact that a macro may be called in a different module from where it was defined. In this case we need to ensure that all global variables are resolved to the correct module. Julia already has a major advantage over languages with textual macro expansion (like C) in that it only needs to consider the returned expression. All the other variables (such as <code>msg</code> in <code>@assert</code> above) follow the <a href="../variables-and-scoping/#scope-of-variables-1">normal scoping block behavior</a>.</p><p>To demonstrate these issues, let us consider writing a <code>@time</code> macro that takes an expression as its argument, records the time, evaluates the expression, records the time again, prints the difference between the before and after times, and then has the value of the expression as its final value. The macro might look like this:</p><pre><code class="language-julia">macro time(ex)
+    return quote
+        local t0 = time()
+        local val = $ex
+        local t1 = time()
+        println(&quot;elapsed time: &quot;, t1-t0, &quot; seconds&quot;)
+        val
+    end
+end</code></pre><p>Here, we want <code>t0</code>, <code>t1</code>, and <code>val</code> to be private temporary variables, and we want <code>time</code> to refer to the <a href="../../base/base/#Base.Libc.time-Tuple{}"><code>time</code></a> function in Julia Base, not to any <code>time</code> variable the user might have (the same applies to <code>println</code>). Imagine the problems that could occur if the user expression <code>ex</code> also contained assignments to a variable called <code>t0</code>, or defined its own <code>time</code> variable. We might get errors, or mysteriously incorrect behavior.</p><p>Julia&#39;s macro expander solves these problems in the following way. First, variables within a macro result are classified as either local or global. A variable is considered local if it is assigned to (and not declared global), declared local, or used as a function argument name. Otherwise, it is considered global. Local variables are then renamed to be unique (using the <a href="../../base/base/#Base.gensym"><code>gensym</code></a> function, which generates new symbols), and global variables are resolved within the macro definition environment. Therefore both of the above concerns are handled; the macro&#39;s locals will not conflict with any user variables, and <code>time</code> and <code>println</code> will refer to the Julia Base definitions.</p><p>One problem remains however. Consider the following use of this macro:</p><pre><code class="language-julia">module MyModule
+import Base.@time
+
+time() = ... # compute something
+
+@time time()
+end</code></pre><p>Here the user expression <code>ex</code> is a call to <code>time</code>, but not the same <code>time</code> function that the macro uses. It clearly refers to <code>MyModule.time</code>. Therefore we must arrange for the code in <code>ex</code> to be resolved in the macro call environment. This is done by &quot;escaping&quot; the expression with <a href="../../base/base/#Base.esc"><code>esc</code></a>:</p><pre><code class="language-julia">macro time(ex)
+    ...
+    local val = $(esc(ex))
+    ...
+end</code></pre><p>An expression wrapped in this manner is left alone by the macro expander and simply pasted into the output verbatim. Therefore it will be resolved in the macro call environment.</p><p>This escaping mechanism can be used to &quot;violate&quot; hygiene when necessary, in order to introduce or manipulate user variables. For example, the following macro sets <code>x</code> to zero in the call environment:</p><pre><code class="language-julia-repl">julia&gt; macro zerox()
+           return esc(:(x = 0))
+       end
+@zerox (macro with 1 method)
+
+julia&gt; function foo()
+           x = 1
+           @zerox
+           return x # is zero
+       end
+foo (generic function with 1 method)
+
+julia&gt; foo()
+0</code></pre><p>This kind of manipulation of variables should be used judiciously, but is occasionally quite handy.</p><p>Getting the hygiene rules correct can be a formidable challenge. Before using a macro, you might want to consider whether a function closure would be sufficient. Another useful strategy is to defer as much work as possible to runtime. For example, many macros simply wrap their arguments in a QuoteNode or other similar Expr. Some examples of this include <code>@task body</code> which simply returns <code>schedule(Task(() -&gt; $body))</code>, and <code>@eval expr</code>, which simply returns <code>eval(QuoteNode(expr))</code>.</p><p>To demonstrate, we might rewrite the <code>@time</code> example above as:</p><pre><code class="language-julia">macro time(expr)
+    return :(timeit(() -&gt; $(esc(expr))))
+end
+function timeit(f)
+    t0 = time()
+    val = f()
+    t1 = time()
+    println(&quot;elapsed time: &quot;, t1-t0, &quot; seconds&quot;)
+    return val
+end</code></pre><p>However, we don&#39;t do this for a good reason: wrapping the <code>expr</code> in a new scope block (the anonymous function) also slightly changes the meaning of the expression (the scope of any variables in it), while we want <code>@time</code> to be usable with minimum impact on the wrapped code.</p><h3><a class="nav-anchor" id="Macros-and-dispatch-1" href="#Macros-and-dispatch-1">Macros and dispatch</a></h3><p>Macros, just like Julia functions, are generic. This means they can also have multiple method definitions, thanks to multiple dispatch:</p><pre><code class="language-julia-repl">julia&gt; macro m end
+@m (macro with 0 methods)
+
+julia&gt; macro m(args...)
+           println(&quot;$(length(args)) arguments&quot;)
+       end
+@m (macro with 1 method)
+
+julia&gt; macro m(x,y)
+           println(&quot;Two arguments&quot;)
+       end
+@m (macro with 2 methods)
+
+julia&gt; @m &quot;asd&quot;
+1 arguments
+
+julia&gt; @m 1 2
+Two arguments</code></pre><p>However one should keep in mind, that macro dispatch is based on the types of AST that are handed to the macro, not the types that the AST evaluates to at runtime:</p><pre><code class="language-julia-repl">julia&gt; macro m(::Int)
+           println(&quot;An Integer&quot;)
+       end
+@m (macro with 3 methods)
+
+julia&gt; @m 2
+An Integer
+
+julia&gt; x = 2
+2
+
+julia&gt; @m x
+1 arguments</code></pre><h2><a class="nav-anchor" id="Code-Generation-1" href="#Code-Generation-1">Code Generation</a></h2><p>When a significant amount of repetitive boilerplate code is required, it is common to generate it programmatically to avoid redundancy. In most languages, this requires an extra build step, and a separate program to generate the repetitive code. In Julia, expression interpolation and <a href="../../base/base/#Base.MainInclude.eval"><code>eval</code></a> allow such code generation to take place in the normal course of program execution. For example, consider the following custom type</p><pre><code class="language-julia">struct MyNumber
+    x::Float64
+end
+# output
+</code></pre><p>for which we want to add a number of methods to. We can do this programmatically in the following loop:</p><pre><code class="language-julia">for op = (:sin, :cos, :tan, :log, :exp)
+    eval(quote
+        Base.$op(a::MyNumber) = MyNumber($op(a.x))
+    end)
+end
+# output
+</code></pre><p>and we can now use those functions with our custom type:</p><pre><code class="language-julia-repl">julia&gt; x = MyNumber(π)
+MyNumber(3.141592653589793)
+
+julia&gt; sin(x)
+MyNumber(1.2246467991473532e-16)
+
+julia&gt; cos(x)
+MyNumber(-1.0)</code></pre><p>In this manner, Julia acts as its own <a href="https://en.wikipedia.org/wiki/Preprocessor">preprocessor</a>, and allows code generation from inside the language. The above code could be written slightly more tersely using the <code>:</code> prefix quoting form:</p><pre><code class="language-julia">for op = (:sin, :cos, :tan, :log, :exp)
+    eval(:(Base.$op(a::MyNumber) = MyNumber($op(a.x))))
+end</code></pre><p>This sort of in-language code generation, however, using the <code>eval(quote(...))</code> pattern, is common enough that Julia comes with a macro to abbreviate this pattern:</p><pre><code class="language-julia">for op = (:sin, :cos, :tan, :log, :exp)
+    @eval Base.$op(a::MyNumber) = MyNumber($op(a.x))
+end</code></pre><p>The <a href="../../base/base/#Base.@eval"><code>@eval</code></a> macro rewrites this call to be precisely equivalent to the above longer versions. For longer blocks of generated code, the expression argument given to <a href="../../base/base/#Base.@eval"><code>@eval</code></a> can be a block:</p><pre><code class="language-julia">@eval begin
+    # multiple lines
+end</code></pre><h2><a class="nav-anchor" id="Non-Standard-String-Literals-1" href="#Non-Standard-String-Literals-1">Non-Standard String Literals</a></h2><p>Recall from <a href="../strings/#non-standard-string-literals-1">Strings</a> that string literals prefixed by an identifier are called non-standard string literals, and can have different semantics than un-prefixed string literals. For example:</p><ul><li><code>r&quot;^\s*(?:#|$)&quot;</code> produces a regular expression object rather than a string</li><li><code>b&quot;DATA\xff\u2200&quot;</code> is a byte array literal for <code>[68,65,84,65,255,226,136,128]</code>.</li></ul><p>Perhaps surprisingly, these behaviors are not hard-coded into the Julia parser or compiler. Instead, they are custom behaviors provided by a general mechanism that anyone can use: prefixed string literals are parsed as calls to specially-named macros. For example, the regular expression macro is just the following:</p><pre><code class="language-julia">macro r_str(p)
+    Regex(p)
+end</code></pre><p>That&#39;s all. This macro says that the literal contents of the string literal <code>r&quot;^\s*(?:#|$)&quot;</code> should be passed to the <code>@r_str</code> macro and the result of that expansion should be placed in the syntax tree where the string literal occurs. In other words, the expression <code>r&quot;^\s*(?:#|$)&quot;</code> is equivalent to placing the following object directly into the syntax tree:</p><pre><code class="language-julia">Regex(&quot;^\\s*(?:#|\$)&quot;)</code></pre><p>Not only is the string literal form shorter and far more convenient, but it is also more efficient: since the regular expression is compiled and the <code>Regex</code> object is actually created <em>when the code is compiled</em>, the compilation occurs only once, rather than every time the code is executed. Consider if the regular expression occurs in a loop:</p><pre><code class="language-julia">for line = lines
+    m = match(r&quot;^\s*(?:#|$)&quot;, line)
+    if m === nothing
+        # non-comment
+    else
+        # comment
+    end
+end</code></pre><p>Since the regular expression <code>r&quot;^\s*(?:#|$)&quot;</code> is compiled and inserted into the syntax tree when this code is parsed, the expression is only compiled once instead of each time the loop is executed. In order to accomplish this without macros, one would have to write this loop like this:</p><pre><code class="language-julia">re = Regex(&quot;^\\s*(?:#|\$)&quot;)
+for line = lines
+    m = match(re, line)
+    if m === nothing
+        # non-comment
+    else
+        # comment
+    end
+end</code></pre><p>Moreover, if the compiler could not determine that the regex object was constant over all loops, certain optimizations might not be possible, making this version still less efficient than the more convenient literal form above. Of course, there are still situations where the non-literal form is more convenient: if one needs to interpolate a variable into the regular expression, one must take this more verbose approach; in cases where the regular expression pattern itself is dynamic, potentially changing upon each loop iteration, a new regular expression object must be constructed on each iteration. In the vast majority of use cases, however, regular expressions are not constructed based on run-time data. In this majority of cases, the ability to write regular expressions as compile-time values is invaluable.</p><p>Like non-standard string literals, non-standard command literals exist using a prefixed variant of the command literal syntax. The command literal <code>custom`literal`</code> is parsed as <code>@custom_cmd &quot;literal&quot;</code>. Julia itself does not contain any non-standard command literals, but packages can make use of this syntax. Aside from the different syntax and the <code>_cmd</code> suffix instead of the <code>_str</code> suffix, non-standard command literals behave exactly like non-standard string literals.</p><p>In the event that two modules provide non-standard string or command literals with the same name, it is possible to qualify the string or command literal with a module name. For instance, if both <code>Foo</code> and <code>Bar</code> provide non-standard string literal <code>@x_str</code>, then one can write <code>Foo.x&quot;literal&quot;</code> or <code>Bar.x&quot;literal&quot;</code> to disambiguate between the two.</p><p>The mechanism for user-defined string literals is deeply, profoundly powerful. Not only are Julia&#39;s non-standard literals implemented using it, but also the command literal syntax (<code>`echo &quot;Hello, $person&quot;`</code>) is implemented with the following innocuous-looking macro:</p><pre><code class="language-julia">macro cmd(str)
+    :(cmd_gen($(shell_parse(str)[1])))
+end</code></pre><p>Of course, a large amount of complexity is hidden in the functions used in this macro definition, but they are just functions, written entirely in Julia. You can read their source and see precisely what they do – and all they do is construct expression objects to be inserted into your program&#39;s syntax tree.</p><h2><a class="nav-anchor" id="Generated-functions-1" href="#Generated-functions-1">Generated functions</a></h2><p>A very special macro is <code>@generated</code>, which allows you to define so-called <em>generated functions</em>. These have the capability to generate specialized code depending on the types of their arguments with more flexibility and/or less code than what can be achieved with multiple dispatch. While macros work with expressions at parse time and cannot access the types of their inputs, a generated function gets expanded at a time when the types of the arguments are known, but the function is not yet compiled.</p><p>Instead of performing some calculation or action, a generated function declaration returns a quoted expression which then forms the body for the method corresponding to the types of the arguments. When a generated function is called, the expression it returns is compiled and then run. To make this efficient, the result is usually cached. And to make this inferable, only a limited subset of the language is usable. Thus, generated functions provide a flexible way to move work from run time to compile time, at the expense of greater restrictions on allowed constructs.</p><p>When defining generated functions, there are four main differences to ordinary functions:</p><ol><li>You annotate the function declaration with the <code>@generated</code> macro. This adds some information to the AST that lets the compiler know that this is a generated function.</li><li>In the body of the generated function you only have access to the <em>types</em> of the arguments – not their values – and any function that was defined <em>before</em> the definition of the generated function.</li><li>Instead of calculating something or performing some action, you return a <em>quoted expression</em> which, when evaluated, does what you want.</li><li>Generated functions must not <em>mutate</em> or <em>observe</em> any non-constant global state (including, for example, IO, locks, non-local dictionaries, or using <code>hasmethod</code>). This means they can only read global constants, and cannot have any side effects. In other words, they must be completely pure. Due to an implementation limitation, this also means that they currently cannot define a closure or generator.</li></ol><p>It&#39;s easiest to illustrate this with an example. We can declare a generated function <code>foo</code> as</p><pre><code class="language-julia-repl">julia&gt; @generated function foo(x)
+           Core.println(x)
+           return :(x * x)
+       end
+foo (generic function with 1 method)</code></pre><p>Note that the body returns a quoted expression, namely <code>:(x * x)</code>, rather than just the value of <code>x * x</code>.</p><p>From the caller&#39;s perspective, this is identical to a regular function; in fact, you don&#39;t have to know whether you&#39;re calling a regular or generated function. Let&#39;s see how <code>foo</code> behaves:</p><pre><code class="language-julia-repl">julia&gt; x = foo(2); # note: output is from println() statement in the body
+Int64
+
+julia&gt; x           # now we print x
+4
+
+julia&gt; y = foo(&quot;bar&quot;);
+String
+
+julia&gt; y
+&quot;barbar&quot;</code></pre><p>So, we see that in the body of the generated function, <code>x</code> is the <em>type</em> of the passed argument, and the value returned by the generated function, is the result of evaluating the quoted expression we returned from the definition, now with the <em>value</em> of <code>x</code>.</p><p>What happens if we evaluate <code>foo</code> again with a type that we have already used?</p><pre><code class="language-julia-repl">julia&gt; foo(4)
+16</code></pre><p>Note that there is no printout of <a href="../../base/numbers/#Core.Int64"><code>Int64</code></a>. We can see that the body of the generated function was only executed once here, for the specific set of argument types, and the result was cached. After that, for this example, the expression returned from the generated function on the first invocation was re-used as the method body. However, the actual caching behavior is an implementation-defined performance optimization, so it is invalid to depend too closely on this behavior.</p><p>The number of times a generated function is generated <em>might</em> be only once, but it <em>might</em> also be more often, or appear to not happen at all. As a consequence, you should <em>never</em> write a generated function with side effects - when, and how often, the side effects occur is undefined. (This is true for macros too - and just like for macros, the use of <a href="../../base/base/#Base.MainInclude.eval"><code>eval</code></a> in a generated function is a sign that you&#39;re doing something the wrong way.) However, unlike macros, the runtime system cannot correctly handle a call to <a href="../../base/base/#Base.MainInclude.eval"><code>eval</code></a>, so it is disallowed.</p><p>It is also important to see how <code>@generated</code> functions interact with method redefinition. Following the principle that a correct <code>@generated</code> function must not observe any mutable state or cause any mutation of global state, we see the following behavior. Observe that the generated function <em>cannot</em> call any method that was not defined prior to the <em>definition</em> of the generated function itself.</p><p>Initially <code>f(x)</code> has one definition</p><pre><code class="language-julia-repl">julia&gt; f(x) = &quot;original definition&quot;;</code></pre><p>Define other operations that use <code>f(x)</code>:</p><pre><code class="language-julia-repl">julia&gt; g(x) = f(x);
+
+julia&gt; @generated gen1(x) = f(x);
+
+julia&gt; @generated gen2(x) = :(f(x));</code></pre><p>We now add some new definitions for <code>f(x)</code>:</p><pre><code class="language-julia-repl">julia&gt; f(x::Int) = &quot;definition for Int&quot;;
+
+julia&gt; f(x::Type{Int}) = &quot;definition for Type{Int}&quot;;</code></pre><p>and compare how these results differ:</p><pre><code class="language-julia-repl">julia&gt; f(1)
+&quot;definition for Int&quot;
+
+julia&gt; g(1)
+&quot;definition for Int&quot;
+
+julia&gt; gen1(1)
+&quot;original definition&quot;
+
+julia&gt; gen2(1)
+&quot;definition for Int&quot;</code></pre><p>Each method of a generated function has its own view of defined functions:</p><pre><code class="language-julia-repl">julia&gt; @generated gen1(x::Real) = f(x);
+
+julia&gt; gen1(1)
+&quot;definition for Type{Int}&quot;</code></pre><p>The example generated function <code>foo</code> above did not do anything a normal function <code>foo(x) = x * x</code> could not do (except printing the type on the first invocation, and incurring higher overhead). However, the power of a generated function lies in its ability to compute different quoted expressions depending on the types passed to it:</p><pre><code class="language-julia-repl">julia&gt; @generated function bar(x)
+           if x &lt;: Integer
+               return :(x ^ 2)
+           else
+               return :(x)
+           end
+       end
+bar (generic function with 1 method)
+
+julia&gt; bar(4)
+16
+
+julia&gt; bar(&quot;baz&quot;)
+&quot;baz&quot;</code></pre><p>(although of course this contrived example would be more easily implemented using multiple dispatch...)</p><p>Abusing this will corrupt the runtime system and cause undefined behavior:</p><pre><code class="language-julia-repl">julia&gt; @generated function baz(x)
+           if rand() &lt; .9
+               return :(x^2)
+           else
+               return :(&quot;boo!&quot;)
+           end
+       end
+baz (generic function with 1 method)</code></pre><p>Since the body of the generated function is non-deterministic, its behavior, <em>and the behavior of all subsequent code</em> is undefined.</p><p><em>Don&#39;t copy these examples!</em></p><p>These examples are hopefully helpful to illustrate how generated functions work, both in the definition end and at the call site; however, <em>don&#39;t copy them</em>, for the following reasons:</p><ul><li>the <code>foo</code> function has side-effects (the call to <code>Core.println</code>), and it is undefined exactly when, how often or how many times these side-effects will occur</li><li>the <code>bar</code> function solves a problem that is better solved with multiple dispatch - defining <code>bar(x) = x</code> and <code>bar(x::Integer) = x ^ 2</code> will do the same thing, but it is both simpler and faster.</li><li>the <code>baz</code> function is pathological</li></ul><p>Note that the set of operations that should not be attempted in a generated function is unbounded, and the runtime system can currently only detect a subset of the invalid operations. There are many other operations that will simply corrupt the runtime system without notification, usually in subtle ways not obviously connected to the bad definition. Because the function generator is run during inference, it must respect all of the limitations of that code.</p><p>Some operations that should not be attempted include:</p><ol><li><p>Caching of native pointers.</p></li><li><p>Interacting with the contents or methods of Core.Compiler in any way.</p></li><li><p>Observing any mutable state.</p><ul><li>Inference on the generated function may be run at <em>any</em> time, including while your code is attempting to observe or mutate this state.</li></ul></li><li><p>Taking any locks: C code you call out to may use locks internally, (for example, it is not problematic to call <code>malloc</code>, even though most implementations require locks internally) but don&#39;t attempt to hold or acquire any while executing Julia code.</p></li><li><p>Calling any function that is defined after the body of the generated function. This condition is relaxed for incrementally-loaded precompiled modules to allow calling any function in the module.</p></li></ol><p>Alright, now that we have a better understanding of how generated functions work, let&#39;s use them to build some more advanced (and valid) functionality...</p><h3><a class="nav-anchor" id="An-advanced-example-1" href="#An-advanced-example-1">An advanced example</a></h3><p>Julia&#39;s base library has a an internal <code>sub2ind</code> function to calculate a linear index into an n-dimensional array, based on a set of n multilinear indices - in other words, to calculate the index <code>i</code> that can be used to index into an array <code>A</code> using <code>A[i]</code>, instead of <code>A[x,y,z,...]</code>. One possible implementation is the following:</p><pre><code class="language-julia-repl">julia&gt; function sub2ind_loop(dims::NTuple{N}, I::Integer...) where N
+           ind = I[N] - 1
+           for i = N-1:-1:1
+               ind = I[i]-1 + dims[i]*ind
+           end
+           return ind + 1
+       end
+sub2ind_loop (generic function with 1 method)
+
+julia&gt; sub2ind_loop((3, 5), 1, 2)
+4</code></pre><p>The same thing can be done using recursion:</p><pre><code class="language-julia-repl">julia&gt; sub2ind_rec(dims::Tuple{}) = 1;
+
+julia&gt; sub2ind_rec(dims::Tuple{}, i1::Integer, I::Integer...) =
+           i1 == 1 ? sub2ind_rec(dims, I...) : throw(BoundsError());
+
+julia&gt; sub2ind_rec(dims::Tuple{Integer, Vararg{Integer}}, i1::Integer) = i1;
+
+julia&gt; sub2ind_rec(dims::Tuple{Integer, Vararg{Integer}}, i1::Integer, I::Integer...) =
+           i1 + dims[1] * (sub2ind_rec(Base.tail(dims), I...) - 1);
+
+julia&gt; sub2ind_rec((3, 5), 1, 2)
+4</code></pre><p>Both these implementations, although different, do essentially the same thing: a runtime loop over the dimensions of the array, collecting the offset in each dimension into the final index.</p><p>However, all the information we need for the loop is embedded in the type information of the arguments. Thus, we can utilize generated functions to move the iteration to compile-time; in compiler parlance, we use generated functions to manually unroll the loop. The body becomes almost identical, but instead of calculating the linear index, we build up an <em>expression</em> that calculates the index:</p><pre><code class="language-julia-repl">julia&gt; @generated function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
+           ex = :(I[$N] - 1)
+           for i = (N - 1):-1:1
+               ex = :(I[$i] - 1 + dims[$i] * $ex)
+           end
+           return :($ex + 1)
+       end
+sub2ind_gen (generic function with 1 method)
+
+julia&gt; sub2ind_gen((3, 5), 1, 2)
+4</code></pre><p><strong>What code will this generate?</strong></p><p>An easy way to find out is to extract the body into another (regular) function:</p><pre><code class="language-julia-repl">julia&gt; @generated function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
+           return sub2ind_gen_impl(dims, I...)
+       end
+sub2ind_gen (generic function with 1 method)
+
+julia&gt; function sub2ind_gen_impl(dims::Type{T}, I...) where T &lt;: NTuple{N,Any} where N
+           length(I) == N || return :(error(&quot;partial indexing is unsupported&quot;))
+           ex = :(I[$N] - 1)
+           for i = (N - 1):-1:1
+               ex = :(I[$i] - 1 + dims[$i] * $ex)
+           end
+           return :($ex + 1)
+       end
+sub2ind_gen_impl (generic function with 1 method)</code></pre><p>We can now execute <code>sub2ind_gen_impl</code> and examine the expression it returns:</p><pre><code class="language-julia-repl">julia&gt; sub2ind_gen_impl(Tuple{Int,Int}, Int, Int)
+:(((I[1] - 1) + dims[1] * (I[2] - 1)) + 1)</code></pre><p>So, the method body that will be used here doesn&#39;t include a loop at all - just indexing into the two tuples, multiplication and addition/subtraction. All the looping is performed compile-time, and we avoid looping during execution entirely. Thus, we only loop <em>once per type</em>, in this case once per <code>N</code> (except in edge cases where the function is generated more than once - see disclaimer above).</p><h3><a class="nav-anchor" id="Optionally-generated-functions-1" href="#Optionally-generated-functions-1">Optionally-generated functions</a></h3><p>Generated functions can achieve high efficiency at run time, but come with a compile time cost: a new function body must be generated for every combination of concrete argument types. Typically, Julia is able to compile &quot;generic&quot; versions of functions that will work for any arguments, but with generated functions this is impossible. This means that programs making heavy use of generated functions might be impossible to statically compile.</p><p>To solve this problem, the language provides syntax for writing normal, non-generated alternative implementations of generated functions. Applied to the <code>sub2ind</code> example above, it would look like this:</p><pre><code class="language-julia">function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
+    if N != length(I)
+        throw(ArgumentError(&quot;Number of dimensions must match number of indices.&quot;))
+    end
+    if @generated
+        ex = :(I[$N] - 1)
+        for i = (N - 1):-1:1
+            ex = :(I[$i] - 1 + dims[$i] * $ex)
+        end
+        return :($ex + 1)
+    else
+        ind = I[N] - 1
+        for i = (N - 1):-1:1
+            ind = I[i] - 1 + dims[i]*ind
+        end
+        return ind + 1
+    end
+end</code></pre><p>Internally, this code creates two implementations of the function: a generated one where the first block in <code>if @generated</code> is used, and a normal one where the <code>else</code> block is used. Inside the <code>then</code> part of the <code>if @generated</code> block, code has the same semantics as other generated functions: argument names refer to types, and the code should return an expression. Multiple <code>if @generated</code> blocks may occur, in which case the generated implementation uses all of the <code>then</code> blocks and the alternate implementation uses all of the <code>else</code> blocks.</p><p>Notice that we added an error check to the top of the function. This code will be common to both versions, and is run-time code in both versions (it will be quoted and returned as an expression from the generated version). That means that the values and types of local variables are not available at code generation time –- the code-generation code can only see the types of arguments.</p><p>In this style of definition, the code generation feature is essentially an optional optimization. The compiler will use it if convenient, but otherwise may choose to use the normal implementation instead. This style is preferred, since it allows the compiler to make more decisions and compile programs in more ways, and since normal code is more readable than code-generating code. However, which implementation is used depends on compiler implementation details, so it is essential for the two implementations to behave identically.</p><footer><hr/><a class="previous" href="../documentation/"><span class="direction">Previous</span><span class="title">Documentation</span></a><a class="next" href="../arrays/"><span class="direction">Next</span><span class="title">Multi-dimensional Arrays</span></a></footer></article></body></html>
