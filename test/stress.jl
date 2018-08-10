@@ -98,7 +98,7 @@ if !Sys.iswindows()
     @test_throws InterruptException begin
         ccall(:kill, Cvoid, (Cint, Cint,), getpid(), 2)
         for i in 1:10
-            Libc.systemsleep(0.1)
+            Libc.systemsleep(0.5)
             ccall(:jl_gc_safepoint, Cvoid, ()) # wait for SIGINT to arrive
         end
     end
