@@ -816,7 +816,7 @@ function require(into::Module, mod::Symbol)
         if where.uuid === nothing
             throw(ArgumentError("""
                 Package $mod not found in current path:
-                - Run `Pkg.add($(repr(String(mod))))` to install the $mod package.
+                - Run `import Pkg; Pkg.add($(repr(String(mod))))` to install the $mod package.
                 """))
         else
             s = """
