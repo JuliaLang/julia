@@ -141,7 +141,10 @@ end
 
 widenconst(c::Conditional) = Bool
 function widenconst(c::Const)
-    if isa(c.val, Type)
+    if isa(c.val, Tuple)
+        params = Any[widenconst(Const(x, false)) for x in c.val]
+        return Tuple{params...}
+    elseif isa(c.val, Type)
         if isvarargtype(c.val)
             return Type
         end
