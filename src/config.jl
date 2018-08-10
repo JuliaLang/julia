@@ -26,8 +26,8 @@ function config(;charset::Symbol = :na,
                 down_arrow::Char = '\0',
                 checked::String = "",
                 unchecked::String = "",
-                supress_output::Union{Void, Bool}=nothing,
-                ctrl_c_interrupt::Union{Void, Bool}=nothing)
+                supress_output::Union{Nothing, Bool}=nothing,
+                ctrl_c_interrupt::Union{Nothing, Bool}=nothing)
 
     if !(charset in [:na, :ascii, :unicode])
         error("charset should be :ascii or :unicode, recieved $charset")

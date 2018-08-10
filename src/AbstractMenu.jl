@@ -100,7 +100,7 @@ varies based on menu type.
 """
 request(m::AbstractMenu) = request(terminal, m)
 
-function request(term::Base.Terminals.TTYTerminal, m::AbstractMenu)
+function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu)
 
     function advance_cursor()
         if cursor < length(options(m))
@@ -217,7 +217,7 @@ Shorthand for `println(msg); request(m)`.
 request(msg::AbstractString, m::AbstractMenu) =
     request(terminal, msg, m)
 
-function request(term::Base.Terminals.TTYTerminal,
+function request(term::REPL.Terminals.TTYTerminal,
                  msg::AbstractString, m::AbstractMenu)
     println(term.out_stream, msg)
     request(term, m)
@@ -257,7 +257,7 @@ function printMenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
             print(buf, " ")
         end
 
-        term_width = Base.Terminals.width(TerminalMenus.terminal)
+        term_width = REPL.Terminals.width(TerminalMenus.terminal)
 
         writeLine(buf, m, i, i == cursor, term_width)
 

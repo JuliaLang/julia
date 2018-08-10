@@ -97,7 +97,7 @@ function writeLine(buf::IOBuffer, menu::MultiSelectMenu, idx::Int, cursor::Bool,
     print(buf, CONFIG[status], " ")
     padding = length(CONFIG[status]) + 1
 
-    line = replace(menu.options[idx], "\n", "\\n")
+    line = replace(menu.options[idx], "\n" => "\\n")
     line = trimWidth(line, term_width, !cursor, cursor_len + padding)
 
     print(buf, line)
