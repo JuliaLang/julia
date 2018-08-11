@@ -217,10 +217,9 @@ timesofar("constructors")
             @check_bit_operation setindex!(b1, true)  T
             @check_bit_operation setindex!(b1, false) T
         else
-            # TODO: Re-enable after PLI deprecation is removed
-            # @test_throws getindex(b1)
-            # @test_throws setindex!(b1, true)
-            # @test_throws setindex!(b1, false)
+            @test_throws BoundsError getindex(b1)
+            @test_throws BoundsError setindex!(b1, true)
+            @test_throws BoundsError setindex!(b1, false)
         end
     end
 
@@ -1574,4 +1573,14 @@ end
             end
         end
     end
+end
+
+@testset "SIMD violations (issue #27482)" begin
+    @test all(any!(falses(10), trues(10, 10)))
+    @check_bit_operation any!(falses(10), trues(10, 10))
+    @check_bit_operation any!(falses(100), trues(100, 100))
+    @check_bit_operation any!(falses(1000), trues(1000, 100))
+    @check_bit_operation all!(falses(10), trues(10, 10))
+    @check_bit_operation all!(falses(100), trues(100, 100))
+    @check_bit_operation all!(falses(1000), trues(1000, 100))
 end

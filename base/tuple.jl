@@ -16,14 +16,16 @@ NTuple
 
 ## indexing ##
 
-length(t::Tuple) = nfields(t)
-firstindex(t::Tuple) = 1
-lastindex(t::Tuple) = length(t)
-size(t::Tuple, d) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
+length(@nospecialize t::Tuple) = nfields(t)
+firstindex(@nospecialize t::Tuple) = 1
+lastindex(@nospecialize t::Tuple) = length(t)
+size(@nospecialize(t::Tuple), d) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
+axes(@nospecialize t::Tuple) = OneTo(length(t))
 @eval getindex(t::Tuple, i::Int) = getfield(t, i, $(Expr(:boundscheck)))
 @eval getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...,)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
+getindex(t::Tuple, c::Colon) = t
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
 setindex(x::Tuple, v, i::Integer) = (@_inline_meta; _setindex(v, i, x...))
@@ -38,10 +40,10 @@ _setindex(v, i::Integer) = ()
 
 iterate(t::Tuple, i::Int=1) = length(t) < i ? nothing : (t[i], i+1)
 
-keys(t::Tuple) = OneTo(length(t))
+keys(@nospecialize t::Tuple) = OneTo(length(t))
 
-prevind(t::Tuple, i::Integer) = Int(i)-1
-nextind(t::Tuple, i::Integer) = Int(i)+1
+prevind(@nospecialize(t::Tuple), i::Integer) = Int(i)-1
+nextind(@nospecialize(t::Tuple), i::Integer) = Int(i)+1
 
 function keys(t::Tuple, t2::Tuple...)
     @_inline_meta
@@ -275,17 +277,29 @@ function _isequal(t1::Any16, t2::Any16)
     return true
 end
 
-==(t1::Tuple, t2::Tuple) = (length(t1) == length(t2)) && _eq(t1, t2, false)
-_eq(t1::Tuple{}, t2::Tuple{}, anymissing) = anymissing ? missing : true
-function _eq(t1::Tuple, t2::Tuple, anymissing)
+==(t1::Tuple, t2::Tuple) = (length(t1) == length(t2)) && _eq(t1, t2)
+_eq(t1::Tuple{}, t2::Tuple{}) = true
+_eq_missing(t1::Tuple{}, t2::Tuple{}) = missing
+function _eq(t1::Tuple, t2::Tuple)
+    eq = t1[1] == t2[1]
+    if eq === false
+        return false
+    elseif ismissing(eq)
+        return _eq_missing(tail(t1), tail(t2))
+    else
+        return _eq(tail(t1), tail(t2))
+    end
+end
+function _eq_missing(t1::Tuple, t2::Tuple)
     eq = t1[1] == t2[1]
     if eq === false
         return false
     else
-        return _eq(tail(t1), tail(t2), anymissing | ismissing(eq))
+        return _eq_missing(tail(t1), tail(t2))
     end
 end
-function _eq(t1::Any16, t2::Any16, anymissing)
+function _eq(t1::Any16, t2::Any16)
+    anymissing = false
     for i = 1:length(t1)
         eq = (t1[i] == t2[i])
         if ismissing(eq)
@@ -362,7 +376,7 @@ end
 ## functions ##
 
 isempty(x::Tuple{}) = true
-isempty(x::Tuple) = false
+isempty(@nospecialize x::Tuple) = false
 
 revargs() = ()
 revargs(x, r...) = (revargs(r...)..., x)
@@ -394,9 +408,17 @@ any(x::Tuple{Bool}) = x[1]
 any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 
+# equivalent to any(f, t), to be used only in bootstrap
+_tuple_any(f::Function, t::Tuple) = _tuple_any(f, false, t...)
+function _tuple_any(f::Function, tf::Bool, a, b...)
+    @_inline_meta
+    _tuple_any(f, tf | f(a), b...)
+end
+_tuple_any(f::Function, tf::Bool) = tf
+
 """
     empty(x::Tuple)
 
 Returns an empty tuple, `()`.
 """
-empty(x::Tuple) = ()
+empty(@nospecialize x::Tuple) = ()

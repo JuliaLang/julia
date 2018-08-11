@@ -5,7 +5,7 @@ module TestHessenberg
 using Test, LinearAlgebra, Random
 
 let n = 10
-    srand(1234321)
+    Random.seed!(1234321)
 
     Areal  = randn(n,n)/2
     Aimg   = randn(n,n)/2

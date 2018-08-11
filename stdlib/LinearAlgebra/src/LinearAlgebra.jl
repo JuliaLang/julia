@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
 Linear algebra module. Provides array arithmetic,
 matrix factorizations and other linear algebra related
@@ -17,12 +15,9 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
     setindex!, show, similar, sin, sincos, sinh, size, size_to_strides, sqrt, StridedReinterpretArray,
     StridedReshapedArray, strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
-using Base: hvcat_fill, iszero, IndexLinear, _length, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat
+using Base: hvcat_fill, iszero, IndexLinear, promote_op, promote_typeof,
+    @propagate_inbounds, @pure, reduce, typed_vcat, has_offset_axes
 using Base.Broadcast: Broadcasted
-
-# We use `_length` because of non-1 indices; releases after julia 0.5
-# can go back to `length`. `_length(A)` is equivalent to `length(LinearIndices(A))`.
 
 export
 # Modules
@@ -126,6 +121,7 @@ export
     qr!,
     lq,
     lq!,
+    opnorm,
     rank,
     rdiv!,
     schur,
@@ -143,8 +139,6 @@ export
     triu,
     tril!,
     triu!,
-    vecdot,
-    vecnorm,
 
 # Operators
     \,
@@ -336,8 +330,6 @@ copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractAr
 
 include("adjtrans.jl")
 include("transpose.jl")
-include("conjarray.jl")
-include("rowvector.jl")
 
 include("exceptions.jl")
 include("generic.jl")

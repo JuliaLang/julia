@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 module Logging
 
 # For now, simply import most names from Base - we don't want to fully
@@ -54,12 +52,6 @@ include("ConsoleLogger.jl")
 
 function __init__()
     global_logger(ConsoleLogger(stderr))
-    atexit() do
-        logger = global_logger()
-        if isa(logger, ConsoleLogger)
-            global_logger(ConsoleLogger(Core.stderr, min_enabled_level(logger)))
-        end
-    end
 end
 
 end

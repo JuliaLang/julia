@@ -11,9 +11,9 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        rad2deg, deg2rad,
        log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
        cbrt, sqrt, significand,
-       lgamma, hypot, gamma, lfact, max, min, minmax, ldexp, frexp,
+       hypot, max, min, minmax, ldexp, frexp,
        clamp, clamp!, modf, ^, mod2pi, rem2pi,
-       beta, lbeta, @evalpoly
+       @evalpoly
 
 import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
@@ -89,7 +89,10 @@ function clamp!(x::AbstractArray, lo, hi)
     x
 end
 
-# evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
+"""
+    @horner(x, p...)
+    Evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
+"""
 macro horner(x, p...)
     ex = esc(p[end])
     for i = length(p)-1:-1:1
@@ -277,33 +280,13 @@ asinh(x::Number)
 Accurately compute ``e^x-1``.
 """
 expm1(x)
-for f in (:cbrt, :exp2, :expm1)
+for f in (:exp2, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(float(x))
     end
 end
-# fallback definitions to prevent infinite loop from $f(x::Real) def above
-
-"""
-    cbrt(x::Real)
-
-Return the cube root of `x`, i.e. ``x^{1/3}``. Negative values are accepted
-(returning the negative real root when ``x < 0``).
-
-The prefix operator `∛` is equivalent to `cbrt`.
-
-# Examples
-```jldoctest
-julia> cbrt(big(27))
-3.0
-
-julia> cbrt(big(-27))
--3.0
-```
-"""
-cbrt(x::AbstractFloat) = x < 0 ? -(-x)^(1//3) : x^(1//3)
 
 """
     exp2(x)
@@ -342,11 +325,11 @@ end
     elseif x <= -1023
         # if -1073 < x <= -1023 then Result will be a subnormal number
         # Hex literal with padding must be used to work on 32bit machine
-        reinterpret(Float64, 0x0000_0000_0000_0001 << ((x + 1074)) % UInt)
+        reinterpret(Float64, 0x0000_0000_0000_0001 << ((x + 1074) % UInt))
     else
         # We will cast everything to Int64 to avoid errors in case of Int128
         # If x is a Int128, and is outside the range of Int64, then it is not -1023<x<=1023
-        reinterpret(Float64, (exponent_bias(Float64) + (x % Int64)) << (significand_bits(Float64)) % UInt)
+        reinterpret(Float64, (exponent_bias(Float64) + (x % Int64)) << (significand_bits(Float64) % UInt))
     end
 end
 
@@ -484,7 +467,7 @@ Stacktrace:
 ```
 """
 log1p(x)
-for f in (:log2, :log10, :lgamma)
+for f in (:log2, :log10)
     @eval begin
         @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
         @inline ($f)(x::Float32) = nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)
@@ -547,8 +530,8 @@ function hypot(x::T, y::T) where T<:Number
     if ax < ay
         ax, ay = ay, ax
     end
-    if ax == 0
-        r = ay / one(ax)
+    if iszero(ax)
+        r = ay / oneunit(ax)
     else
         r = ay / ax
     end
@@ -622,7 +605,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
     end
     n = e % Int
     k += n
-    # overflow, if k is larger than maximum posible exponent
+    # overflow, if k is larger than maximum possible exponent
     if k >= exponent_raw_max(T)
         return flipsign(T(Inf), x)
     end
@@ -1032,12 +1015,36 @@ end
 cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 sincos(a::Float16) = Float16.(sincos(Float32(a)))
 
+# helper functions for Libm functionality
+
+"""
+    highword(x)
+
+Return the high word of `x` as a `UInt32`.
+"""
+@inline highword(x::Float64) = highword(reinterpret(UInt64, x))
+@inline highword(x::UInt64)  = (x >>> 32) % UInt32
+@inline highword(x::Float32) = reinterpret(UInt32, x)
+
+@inline fromhighword(::Type{Float64}, u::UInt32) = reinterpret(Float64, UInt64(u) << 32)
+@inline fromhighword(::Type{Float32}, u::UInt32) = reinterpret(Float32, u)
+
+
+"""
+    poshighword(x)
+
+Return positive part of the high word of `x` as a `UInt32`.
+"""
+@inline poshighword(x::Float64) = poshighword(reinterpret(UInt64, x))
+@inline poshighword(x::UInt64)  = highword(x) & 0x7fffffff
+@inline poshighword(x::Float32) = highword(x) & 0x7fffffff
+
 # More special functions
+include("special/cbrt.jl")
 include("special/exp.jl")
 include("special/exp10.jl")
 include("special/hyperbolic.jl")
 include("special/trig.jl")
-include("special/gamma.jl")
 include("special/rem_pio2.jl")
 include("special/log.jl")
 
@@ -1045,7 +1052,7 @@ include("special/log.jl")
 for f in (:(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
           :(sin), :(sinh), :(cos), :(cosh), :(tan), :(tanh),
           :(exp), :(exp2), :(expm1), :(log), :(log10), :(log1p),
-          :(log2), :(exponent), :(sqrt), :(gamma), :(lgamma))
+          :(log2), :(exponent), :(sqrt))
     @eval $(f)(::Missing) = missing
 end
 

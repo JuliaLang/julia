@@ -35,6 +35,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
         m->build_id++; // build id 0 is invalid
     m->primary_world = 0;
     m->counter = 0;
+    m->nospecialize = 0;
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
     if (jl_core_module) {
@@ -61,6 +62,11 @@ JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports)
     if (std_imports) jl_add_standard_imports(m);
     JL_GC_POP();
     return (jl_value_t*)m;
+}
+
+JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on)
+{
+    self->nospecialize = (on ? -1 : 0);
 }
 
 JL_DLLEXPORT void jl_set_istopmod(jl_module_t *self, uint8_t isprimary)
@@ -385,18 +391,6 @@ JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
     module_import_(to, from, s, 0);
 }
 
-JL_DLLEXPORT void jl_module_importall(jl_module_t *to, jl_module_t *from)
-{
-    void **table = from->bindings.table;
-    for(size_t i=1; i < from->bindings.size; i+=2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->exportp && (b->owner==from || b->imported))
-                jl_module_import(to, from, b->name);
-        }
-    }
-}
-
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
 {
     if (to == from)
@@ -630,19 +624,6 @@ JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b)
                   jl_symbol_name(b->name));
     }
     b->constp = 1;
-}
-
-JL_DLLEXPORT jl_value_t *jl_get_current_module(void)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    return (jl_value_t*)ptls->current_module;
-}
-
-JL_DLLEXPORT void jl_set_current_module(jl_value_t *m)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    assert(jl_typeis(m, jl_module_type));
-    ptls->current_module = (jl_module_t*)m;
 }
 
 JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)

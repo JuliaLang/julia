@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
 Tools for distributed parallel processing.
 """
@@ -76,7 +74,7 @@ function _require_callback(mod::Base.PkgId)
         @sync for p in procs()
             p == 1 && continue
             @async remotecall_wait(p) do
-                Base._require(mod)
+                Base.require(mod)
                 nothing
             end
         end
@@ -94,16 +92,7 @@ include("pmap.jl")
 include("managers.jl")    # LocalManager and SSHManager
 include("precompile.jl")
 
-# Deprecations
-
-@eval @deprecate $(Symbol("@parallel")) $(Symbol("@distributed"))
-
-# PR 26783
-@deprecate pmap(p::AbstractWorkerPool, f, c; kwargs...) pmap(f, p, c; kwargs...)
-@deprecate pmap(p::AbstractWorkerPool, f, c1, c...; kwargs...) pmap(f, p, c1, c...; kwargs...)
-
 function __init__()
-    push!(Base.package_callbacks, _require_callback)
     init_parallel()
 end
 

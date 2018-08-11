@@ -22,8 +22,6 @@ Base.exit
 Base.atexit
 Base.isinteractive
 Base.summarysize
-Base.clipboard(::Any)
-Base.clipboard()
 Base.require
 Base.compilecache
 Base.__precompile__
@@ -164,8 +162,8 @@ Base.datatype_pointerfree
 ```@docs
 Base.typemin
 Base.typemax
-Base.realmin
-Base.realmax
+Base.floatmin
+Base.floatmax
 Base.maxintfloat
 Base.eps(::Type{<:AbstractFloat})
 Base.eps(::AbstractFloat)
@@ -215,11 +213,15 @@ Base.@boundscheck
 Base.@inline
 Base.@noinline
 Base.@nospecialize
+Base.@specialize
 Base.gensym
 Base.@gensym
 Base.@goto
 Base.@label
+Base.@simd
 Base.@polly
+Base.@generated
+Base.@pure
 ```
 
 ## Missing Values
@@ -242,7 +244,6 @@ Base.process_exited
 Base.kill(::Base.Process, ::Integer)
 Base.Sys.set_process_title
 Base.Sys.get_process_title
-Base.readandwrite
 Base.ignorestatus
 Base.detach
 Base.Cmd
@@ -289,6 +290,7 @@ Base.@assert
 Base.ArgumentError
 Base.AssertionError
 Core.BoundsError
+Base.CompositeException
 Base.DimensionMismatch
 Core.DivideError
 Core.DomainError
@@ -329,6 +331,7 @@ Base.AsyncCondition(::Function)
 ```@docs
 Base.nameof(::Module)
 Base.parentmodule
+Base.pathof(::Module)
 Base.moduleroot
 Base.@__MODULE__
 Base.fullname

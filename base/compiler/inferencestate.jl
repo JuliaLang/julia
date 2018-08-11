@@ -7,6 +7,7 @@ mutable struct InferenceState
     result::InferenceResult # remember where to put the result
     linfo::MethodInstance # used here for the tuple (specTypes, env, Method) and world-age validity
     sp::SimpleVector     # static parameters
+    slottypes::Vector{Any}
     mod::Module
     currpc::LineNum
 
@@ -29,17 +30,12 @@ mutable struct InferenceState
     n_handlers::Int
     # ssavalue sparsity and restart info
     ssavalue_uses::Vector{BitSet}
-    ssavalue_defs::Vector{LineNum}
 
-    backedges::Vector{Tuple{InferenceState, LineNum}} # call-graph backedges connecting from callee to caller
+    cycle_backedges::Vector{Tuple{InferenceState, LineNum}} # call-graph backedges connecting from callee to caller
     callers_in_cycle::Vector{InferenceState}
     parent::Union{Nothing, InferenceState}
 
-    const_api::Bool
-    const_ret::Bool
-
     # TODO: move these to InferenceResult / Params?
-    optimize::Bool
     cached::Bool
     limited::Bool
     inferred::Bool
@@ -47,49 +43,12 @@ mutable struct InferenceState
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(result::InferenceResult, src::CodeInfo,
-                            optimize::Bool, cached::Bool, params::Params)
+                            cached::Bool, params::Params)
         linfo = result.linfo
         code = src.code::Array{Any,1}
         toplevel = !isa(linfo.def, Method)
 
-        if !toplevel && isempty(linfo.sparam_vals) && !isempty(linfo.def.sparam_syms)
-            # linfo is unspecialized
-            sp = Any[]
-            sig = linfo.def.sig
-            while isa(sig, UnionAll)
-                push!(sp, sig.var)
-                sig = sig.body
-            end
-            sp = svec(sp...)
-        else
-            sp = linfo.sparam_vals
-            if _any(t->isa(t,TypeVar), sp)
-                sp = collect(Any, sp)
-            end
-        end
-        if !isa(sp, SimpleVector)
-            for i = 1:length(sp)
-                v = sp[i]
-                if v isa TypeVar
-                    ub = v.ub
-                    while ub isa TypeVar
-                        ub = ub.ub
-                    end
-                    if has_free_typevars(ub)
-                        ub = Any
-                    end
-                    lb = v.lb
-                    while lb isa TypeVar
-                        lb = lb.lb
-                    end
-                    if has_free_typevars(lb)
-                        lb = Bottom
-                    end
-                    sp[i] = TypeVar(v.name, lb, ub)
-                end
-            end
-            sp = svec(sp...)
-        end
+        sp = spvals_from_meth_instance(linfo::MethodInstance)
 
         nssavalues = src.ssavaluetypes::Int
         src.ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
@@ -103,16 +62,15 @@ mutable struct InferenceState
         argtypes = get_argtypes(result)
         nargs = length(argtypes)
         s_argtypes = VarTable(undef, nslots)
-        src.slottypes = Vector{Any}(undef, nslots)
+        slottypes = Vector{Any}(undef, nslots)
         for i in 1:nslots
             at = (i > nargs) ? Bottom : argtypes[i]
             s_argtypes[i] = VarState(at, i > nargs)
-            src.slottypes[i] = at
+            slottypes[i] = at
         end
         s_types[1] = s_argtypes
 
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
-        ssavalue_defs = find_ssavalue_defs(code, nssavalues)
 
         # exception handlers
         cur_hand = ()
@@ -138,32 +96,71 @@ mutable struct InferenceState
         end
         frame = new(
             params, result, linfo,
-            sp, inmodule, 0,
+            sp, slottypes, inmodule, 0,
             src, min_valid, max_valid,
             nargs, s_types, s_edges,
             Union{}, W, 1, n,
             cur_hand, handler_at, n_handlers,
-            ssavalue_uses, ssavalue_defs,
-            Vector{Tuple{InferenceState,LineNum}}(), # backedges
+            ssavalue_uses,
+            Vector{Tuple{InferenceState,LineNum}}(), # cycle_backedges
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
-            false, false, optimize, cached, false, false, false)
+            cached, false, false, false)
         result.result = frame
         cached && push!(params.cache, result)
         return frame
     end
 end
 
-function InferenceState(linfo::MethodInstance, optimize::Bool, cached::Bool, params::Params)
-    return InferenceState(InferenceResult(linfo), optimize, cached, params)
-end
-
-function InferenceState(result::InferenceResult, optimize::Bool, cached::Bool, params::Params)
+function InferenceState(result::InferenceResult, cached::Bool, params::Params)
     # prepare an InferenceState object for inferring lambda
     src = retrieve_code_info(result.linfo)
     src === nothing && return nothing
     validate_code_in_debug_mode(result.linfo, src, "lowered")
-    return InferenceState(result, src, optimize, cached, params)
+    return InferenceState(result, src, cached, params)
+end
+
+function spvals_from_meth_instance(linfo::MethodInstance)
+    toplevel = !isa(linfo.def, Method)
+    if !toplevel && isempty(linfo.sparam_vals) && !isempty(linfo.def.sparam_syms)
+        # linfo is unspecialized
+        sp = Any[]
+        sig = linfo.def.sig
+        while isa(sig, UnionAll)
+            push!(sp, sig.var)
+            sig = sig.body
+        end
+        sp = svec(sp...)
+    else
+        sp = linfo.sparam_vals
+        if _any(t->isa(t,TypeVar), sp)
+            sp = collect(Any, sp)
+        end
+    end
+    if !isa(sp, SimpleVector)
+        for i = 1:length(sp)
+            v = sp[i]
+            if v isa TypeVar
+                ub = v.ub
+                while ub isa TypeVar
+                    ub = ub.ub
+                end
+                if has_free_typevars(ub)
+                    ub = Any
+                end
+                lb = v.lb
+                while lb isa TypeVar
+                    lb = lb.lb
+                end
+                if has_free_typevars(lb)
+                    lb = Bottom
+                end
+                sp[i] = TypeVar(v.name, lb, ub)
+            end
+        end
+        sp = svec(sp...)
+    end
+    return sp
 end
 
 _topmod(sv::InferenceState) = _topmod(sv.mod)
@@ -200,10 +197,10 @@ function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceStat
     nothing
 end
 
-function add_backedge!(frame::InferenceState, caller::InferenceState, currpc::Int)
+function add_cycle_backedge!(frame::InferenceState, caller::InferenceState, currpc::Int)
     update_valid_age!(frame, caller)
     backedge = (caller, currpc)
-    contains_is(frame.backedges, backedge) || push!(frame.backedges, backedge)
+    contains_is(frame.cycle_backedges, backedge) || push!(frame.cycle_backedges, backedge)
     return frame
 end
 
@@ -229,7 +226,7 @@ function add_mt_backedge!(mt::Core.MethodTable, @nospecialize(typ), caller::Infe
     nothing
 end
 
-function is_specializable_vararg_slot(@nospecialize(arg), nargs, vargs)
+function is_specializable_vararg_slot(@nospecialize(arg), nargs::Int, vargs::Vector{Any})
     return (isa(arg, Slot) && slot_id(arg) == nargs && !isempty(vargs))
 end
 

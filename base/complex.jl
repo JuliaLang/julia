@@ -364,8 +364,8 @@ function /(z::ComplexF64, w::ComplexF64)
     two = 2.0
     ab = max(abs(a), abs(b))
     cd = max(abs(c), abs(d))
-    ov = realmax(a)
-    un = realmin(a)
+    ov = floatmax(a)
+    un = floatmin(a)
     ϵ = eps(Float64)
     bs = two/(ϵ*ϵ)
     s = 1.0
@@ -397,8 +397,8 @@ function inv(w::ComplexF64)
     half = 0.5
     two = 2.0
     cd = max(abs(c), abs(d))
-    ov = realmax(c)
-    un = realmin(c)
+    ov = floatmax(c)
+    un = floatmin(c)
     ϵ = eps(Float64)
     bs = two/(ϵ*ϵ)
     s = 1.0

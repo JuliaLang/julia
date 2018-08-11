@@ -10,6 +10,7 @@ export
     Threads,
     Iterators,
     Broadcast,
+    MathConstants,
 
 # Types
     AbstractChannel,
@@ -84,6 +85,7 @@ export
     StridedVector,
     SubArray,
     SubString,
+    SubstitutionString,
     Timer,
     UnitRange,
     Val,
@@ -122,7 +124,6 @@ export
     InvalidStateException,
     KeyError,
     MissingException,
-    ParseError,
     SystemError,
     StringIndexError,
 
@@ -260,7 +261,6 @@ export
     floor,
     fma,
     frexp,
-    gamma,
     gcd,
     gcdx,
     hypot,
@@ -284,8 +284,6 @@ export
     ldexp,
     leading_ones,
     leading_zeros,
-    lfact,
-    lgamma,
     log,
     log10,
     log1p,
@@ -298,7 +296,6 @@ export
     muladd,
     nextfloat,
     nextpow,
-    nextpow2,
     nextprod,
     numerator,
     one,
@@ -306,12 +303,11 @@ export
     powermod,
     prevfloat,
     prevpow,
-    prevpow2,
     rad2deg,
     rationalize,
     real,
-    realmax,
-    realmin,
+    floatmax,
+    floatmin,
     reim,
     reinterpret,
     rem,
@@ -347,10 +343,6 @@ export
     ∛,
     ≈,
     ≉,
-
-# specfun
-    beta,
-    lbeta,
 
 # arrays
     axes,
@@ -418,17 +410,14 @@ export
     rot180,
     rotl90,
     rotr90,
-    shuffle,
-    shuffle!,
     size,
     selectdim,
     sort!,
     sort,
-    sortcols,
     sortperm,
     sortperm!,
-    sortrows,
-    squeeze,
+    sortslices,
+    dropdims,
     step,
     stride,
     strides,
@@ -615,9 +604,6 @@ export
     summary,
 
 # logging
-    info,
-    logging,
-    warn,
     @debug,
     @info,
     @warn,
@@ -631,19 +617,7 @@ export
     get_zero_subnormals,
     set_zero_subnormals,
 
-# statistics
-    mean!,
-    mean,
-    median!,
-    median,
-    middle,
-    quantile!,
-    quantile,
-
 # iteration
-    done,
-    next,
-    start,
     iterate,
 
     enumerate,  # re-exported from Iterators
@@ -756,6 +730,7 @@ export
     methods,
     nameof,
     parentmodule,
+    pathof,
     names,
     which,
     @isdefined,
@@ -775,7 +750,6 @@ export
 # misc
     atexit,
     atreplinit,
-    clipboard,
     exit,
     ntuple,
 
@@ -985,6 +959,7 @@ export
     @inline,
     @noinline,
     @nospecialize,
+    @specialize,
     @polly,
 
     @assert,

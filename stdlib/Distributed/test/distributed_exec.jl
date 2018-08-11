@@ -18,6 +18,26 @@ include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 addprocs_with_testenv(4)
 @test nprocs() == 5
 
+# distributed loading of packages
+
+# setup
+@everywhere begin
+    old_act_proj = Base.ACTIVE_PROJECT[]
+    pushfirst!(Base.LOAD_PATH, "@")
+    Base.ACTIVE_PROJECT[] = joinpath(Sys.BINDIR, "..", "share", "julia", "test", "TestPkg")
+end
+
+# cause precompilation of TestPkg to avoid race condition
+Base.compilecache(Base.identify_package("TestPkg"))
+
+@everywhere using TestPkg
+@everywhere using TestPkg
+
+@everywhere begin
+    Base.ACTIVE_PROJECT[] = old_act_proj
+    popfirst!(Base.LOAD_PATH)
+end
+
 @everywhere using Test, Random, LinearAlgebra
 
 id_me = myid()
@@ -675,7 +695,7 @@ if Sys.isunix() # aka have ssh
 
     print("\nMixed ssh addprocs with :auto\n")
     new_pids = addprocs_with_testenv(["localhost", ("127.0.0.1", :auto), "localhost"]; sshflags=sshflags)
-    @test length(new_pids) == (2 + Sys.CPU_CORES)
+    @test length(new_pids) == (2 + Sys.CPU_THREADS)
     test_n_remove_pids(new_pids)
 
     print("\nMixed ssh addprocs with numeric counts\n")
@@ -716,7 +736,7 @@ end # full-test
 
 let t = @task 42
     schedule(t, ErrorException(""), error=true)
-    @test_throws ErrorException Base._wait(t)
+    @test_throws ErrorException Base.wait(t)
 end
 
 # issue #8207
@@ -954,6 +974,7 @@ const get_num_threads = function() # anonymous so it will be serialized when cal
         if Sys.isapple()
             return tryparse(Cint, get(ENV, "VECLIB_MAXIMUM_THREADS", "1"))
         end
+    catch
     end
 
     return nothing
@@ -1028,7 +1049,7 @@ for i in 1:5
     p = addprocs_with_testenv(1)[1]
     np = nprocs()
     @spawnat p sleep(5)
-    Base._wait(rmprocs(p; waitfor=0))
+    Base.wait(rmprocs(p; waitfor=0))
     for pid in procs()
         @test pid == remotecall_fetch(myid, pid)
     end
@@ -1410,7 +1431,7 @@ let
         #rm(tmp_dir, force=true)
     end
 end
-# cookie and comand line option `--worker` tests. remove workers, set cookie and test
+# cookie and command line option `--worker` tests. remove workers, set cookie and test
 struct WorkerArgTester <: ClusterManager
     worker_opt
     write_cookie
@@ -1499,6 +1520,10 @@ if ccall(:jl_has_so_reuseport, Int32, ()) == 1
 else
     @info "SO_REUSEPORT is unsupported, skipping reuseport tests"
 end
+
+# issue #27933
+a27933 = :_not_defined_27933
+@test remotecall_fetch(()->a27933, first(workers())) === a27933
 
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.

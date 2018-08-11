@@ -30,14 +30,20 @@ end
     @nospecialize
 
 Applied to a function argument name, hints to the compiler that the method
-should not be specialized for different types of that argument.
+should not be specialized for different types of that argument,
+but instead to use precisely the declared type for each argument.
 This is only a hint for avoiding excess code generation.
-Can be applied to an argument within a formal argument list, or in the
-function body.
-When applied to an argument, the macro must wrap the entire argument
-expression.
+Can be applied to an argument within a formal argument list,
+or in the function body.
+When applied to an argument, the macro must wrap the entire argument expression.
 When used in a function body, the macro must occur in statement position and
 before any code.
+
+When used without arguments, it applies to all arguments of the parent scope.
+In local scope, this means all arguments of the containing function.
+In global (top-level) scope, this means all methods subsequently defined in the current module.
+
+Specialization can reset back to the default by using [`@specialize`](@ref).
 
 ```julia
 function example_function(@nospecialize x)
@@ -52,21 +58,46 @@ function example_function(x, y, z)
     @nospecialize x y
     ...
 end
+
+@nospecialize
+f(y) = [x for x in y]
+@specialize
 ```
 """
-macro nospecialize(var, vars...)
-    if isa(var, Expr) && var.head === :(=)
-        var.head = :kw
+macro nospecialize(vars...)
+    if nfields(vars) === 1
+        # in argument position, need to fix `@nospecialize x=v` to `@nospecialize (kw x v)`
+        var = getfield(vars, 1)
+        if isa(var, Expr) && var.head === :(=)
+            var.head = :kw
+        end
     end
-    Expr(:meta, :nospecialize, var, vars...)
+    return Expr(:meta, :nospecialize, vars...)
+end
+
+"""
+    @specialize
+
+Reset the specialization hint for an argument back to the default.
+For details, see [`@specialize`](@ref).
+"""
+macro specialize(vars...)
+    if nfields(vars) === 1
+        # in argument position, need to fix `@specialize x=v` to `@specialize (kw x v)`
+        var = getfield(vars, 1)
+        if isa(var, Expr) && var.head === :(=)
+            var.head = :kw
+        end
+    end
+    return Expr(:meta, :specialize, vars...)
 end
 
 macro _pure_meta()
-    Expr(:meta, :pure)
+    return Expr(:meta, :pure)
 end
 # another version of inlining that propagates an inbounds context
 macro _propagate_inbounds_meta()
-    Expr(:meta, :inline, :propagate_inbounds)
+    return Expr(:meta, :inline, :propagate_inbounds)
 end
 
 """
@@ -141,31 +172,21 @@ end
 argtail(x, rest...) = rest
 tail(x::Tuple) = argtail(x...)
 
-# TODO: a better / more infer-able definition would pehaps be
-#   tuple_type_head(T::Type) = fieldtype(T::Type{<:Tuple}, 1)
-tuple_type_head(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_head(T.body)))
-function tuple_type_head(T::Union)
-    @_pure_meta
-    return Union{tuple_type_head(T.a), tuple_type_head(T.b)}
-end
-function tuple_type_head(T::DataType)
-    @_pure_meta
-    T.name === Tuple.name || throw(MethodError(tuple_type_head, (T,)))
-    return unwrapva(T.parameters[1])
-end
+tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T::Type{<:Tuple}, 1))
 
-tuple_type_tail(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_tail(T.body)))
-function tuple_type_tail(T::Union)
+function tuple_type_tail(T::Type)
     @_pure_meta
-    return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
-end
-function tuple_type_tail(T::DataType)
-    @_pure_meta
-    T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
-    if isvatuple(T) && length(T.parameters) == 1
-        return T
+    if isa(T, UnionAll)
+        return UnionAll(T.var, tuple_type_tail(T.body))
+    elseif isa(T, Union)
+        return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
+    else
+        T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
+        if isvatuple(T) && length(T.parameters) == 1
+            return T
+        end
+        return Tuple{argtail(T.parameters...)...}
     end
-    return Tuple{argtail(T.parameters...)...}
 end
 
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
@@ -304,11 +325,6 @@ oftype(x, y) = convert(typeof(x), y)
 unsigned(x::Int) = reinterpret(UInt, x)
 signed(x::UInt) = reinterpret(Int, x)
 
-# conversions used by ccall
-ptr_arg_cconvert(::Type{Ptr{T}}, x) where {T} = cconvert(T, x)
-ptr_arg_unsafe_convert(::Type{Ptr{T}}, x) where {T} = unsafe_convert(T, x)
-ptr_arg_unsafe_convert(::Type{Ptr{Cvoid}}, x) = x
-
 """
     cconvert(T,x)
 
@@ -401,7 +417,7 @@ function append_any(xs...)
                 _growend!(out, 16)
                 l += 16
             end
-            Core.arrayset(true, out, y, i)
+            arrayset(true, out, y, i)
             i += 1
         end
     end
@@ -410,7 +426,7 @@ function append_any(xs...)
 end
 
 # simple Array{Any} operations needed for bootstrap
-@eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = Core.arrayset($(Expr(:boundscheck)), A, x, i)
+@eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)
 
 """
     precompile(f, args::Tuple{Vararg{Any}})
@@ -674,43 +690,6 @@ function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
     Core._apply_latest(inner)
 end
 
-# iteration protocol
-
-"""
-    next(iter, state) -> item, state
-
-For a given iterable object and iteration state, return the current item and the next iteration state.
-
-# Examples
-```jldoctest
-julia> next(1:5, 3)
-(3, 4)
-
-julia> next(1:5, 5)
-(5, 6)
-```
-"""
-function next end
-
-"""
-    start(iter) -> state
-
-Get initial iteration state for an iterable object.
-
-# Examples
-```jldoctest
-julia> start(1:5)
-1
-
-julia> start([1;2;3])
-1
-
-julia> start([4;2;3])
-1
-```
-"""
-function start end
-
 """
     isempty(collection) -> Bool
 
@@ -784,8 +763,8 @@ function peek end
 """
     @__LINE__ -> Int
 
-`@__LINE__` expands to the line number of the location of the macrocall.
-Returns `0` if the line number could not be determined.
+Expand to the line number of the location of the macrocall.
+Return `0` if the line number could not be determined.
 """
 macro __LINE__()
     return __source__.line
@@ -804,7 +783,7 @@ This function provides a fast-path hint for iterator completion.
 This is useful for mutable iterators that want to avoid having elements
 consumed, if they are not going to be exposed to the user (e.g. to check
 for done-ness in `isempty` or `zip`). Mutable iterators that want to
-opt into this feature shoud define an isdone method that returns
+opt into this feature should define an isdone method that returns
 true/false depending on whether the iterator is done or not. Stateless
 iterators need not implement this function. If the result is `missing`,
 callers may go ahead and compute `iterate(x, state...) === nothing` to
@@ -821,67 +800,6 @@ next element and the new iteration state should be returned.
 """
 function iterate end
 
-# Compatibility with old iteration protocol
-function iterate(x, state)
-    @_inline_meta
-    done(x, state) && return nothing
-    return next(x, state)
-end
-const old_iterate_line_prev = (@__LINE__)
-iterate(x) = (@_inline_meta; iterate(x, start(x)))
-
-struct LegacyIterationCompat{I,T,S}
-    done::Bool
-    nextval::T
-    state::S
-    LegacyIterationCompat{I,T,S}() where {I,T,S} = new{I,T,S}(true)
-    LegacyIterationCompat{I,T,S}(nextval::T, state::S) where {I,T,S} = new{I,T,S}(false, nextval, state)
-end
-
-function has_non_default_iterate(T)
-    world = ccall(:jl_get_world_counter, UInt, ())
-    mt = Base._methods(iterate, Tuple{T}, -1, world)
-    # Check if this is the above method
-    if (mt[1][3].file == @__FILE_SYMBOL__) && (mt[1][3].line == old_iterate_line_prev + 1)
-        return false
-    end
-    return true
-end
-
-const compat_start_line_prev = (@__LINE__)
-function start(itr::T) where {T}
-    has_non_default_iterate(T) || throw(MethodError(iterate, (itr,)))
-    y = iterate(itr)
-    y === nothing && return LegacyIterationCompat{T, Union{}, Union{}}()
-    val, state = y
-    LegacyIterationCompat{T, typeof(val), typeof(state)}(val, state)
-end
-
-function next(itr::I, state::LegacyIterationCompat{I,T,S}) where {I,T,S}
-    val, state = state.nextval, state.state
-    y = iterate(itr, state)
-    if y === nothing
-        return (val, LegacyIterationCompat{I,T,S}())
-    end
-    nextval, state = y
-    val, LegacyIterationCompat{I, typeof(nextval), typeof(state)}(nextval, state)
-end
-
-done(itr::I, state::LegacyIterationCompat{I,T,S}) where {I,T,S} = (@_inline_meta; state.done)
-# This is necessary to support the above compatibility layer,
-# eventually, this should just check for applicability of `iterate`
 function isiterable(T)::Bool
-    if !has_non_default_iterate(T)
-        world = ccall(:jl_get_world_counter, UInt, ())
-        mt = Base._methods(start, Tuple{T}, -1, world)
-        # Check if this is the fallback start method
-        if (mt[1][3].file == @__FILE_SYMBOL__) && (mt[1][3].line == compat_start_line_prev + 2)
-            return false
-        end
-    end
-    return true
+    return hasmethod(iterate, Tuple{T})
 end
-
-# This is required to avoid massive performance problems
-# due to the start(s::AbstractString) deprecation.
-iterate(s::AbstractString) = iterate(s, firstindex(s))

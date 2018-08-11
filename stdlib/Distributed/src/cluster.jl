@@ -188,6 +188,8 @@ It does not return.
 """
 start_worker(cookie::AbstractString=readline(stdin)) = start_worker(stdout, cookie)
 function start_worker(out::IO, cookie::AbstractString=readline(stdin))
+    init_multi()
+
     close(stdin) # workers will not use it
     redirect_stderr(stdout)
 
@@ -358,6 +360,8 @@ master can be specified via variable `JULIA_WORKER_TIMEOUT` in the worker proces
 environment. Relevant only when using TCP/IP as transport.
 """
 function addprocs(manager::ClusterManager; kwargs...)
+    init_multi()
+
     cluster_mgmt_from_master_check()
 
     lock(worker_lock)
@@ -415,7 +419,7 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
         end
     end
 
-    Base._wait(t_launch)      # catches any thrown errors from the launch task
+    Base.wait(t_launch)      # catches any thrown errors from the launch task
 
     # Since all worker-to-worker setups may not have completed by the time this
     # function returns to the caller, send the complete list to all workers.
@@ -452,7 +456,7 @@ function setup_launched_worker(manager, wconfig, launched_q)
     # same type. This is done by setting an appropriate value to `WorkerConfig.cnt`.
     cnt = something(wconfig.count, 1)
     if cnt === :auto
-        cnt = wconfig.environ[:cpu_cores]
+        cnt = wconfig.environ[:cpu_threads]
     end
     cnt = cnt - 1   # Removing self from the requested number
 
@@ -680,10 +684,6 @@ end
 const PGRP = ProcessGroup([])
 
 function topology(t)
-    if t == :master_slave
-        Base.depwarn("The topology :master_slave is deprecated, use :master_worker instead.", :topology)
-        t = :master_worker
-    end
     @assert t in [:all_to_all, :master_worker, :custom]
     if (PGRP.topology==t) || ((myid()==1) && (nprocs()==1)) || (myid() > 1)
         PGRP.topology = t
@@ -1111,17 +1111,27 @@ end
 
 using Random: randstring
 
+let inited = false
+    # do initialization that's only needed when there is more than 1 processor
+    global function init_multi()
+        if !inited
+            inited = true
+            push!(Base.package_callbacks, _require_callback)
+            atexit(terminate_all_workers)
+            init_bind_addr()
+            cluster_cookie(randstring(HDR_COOKIE_LEN))
+        end
+        return nothing
+    end
+end
+
 function init_parallel()
     start_gc_msgs_task()
-    atexit(terminate_all_workers)
-
-    init_bind_addr()
 
     # start in "head node" mode, if worker, will override later.
     global PGRP
     global LPROC
     LPROC.id = 1
-    cluster_cookie(randstring(HDR_COOKIE_LEN))
     @assert isempty(PGRP.workers)
     register_worker(LPROC)
 end

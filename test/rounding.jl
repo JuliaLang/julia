@@ -211,6 +211,7 @@ end
 # custom rounding and significant-digit ops
 @testset "rounding to digits relative to the decimal point" begin
     @test round(pi) ≈ 3.
+    @test round(pi, base=10) ≈ 3.
     @test round(pi, digits=0) ≈ 3.
     @test round(pi, digits=1) ≈ 3.1
     @test round(pi, digits=3, base=2) ≈ 3.125

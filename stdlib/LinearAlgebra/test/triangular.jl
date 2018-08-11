@@ -11,7 +11,7 @@ using LinearAlgebra: BlasFloat, errorbounds, full!, naivesub!, transpose!,
 debug && println("Triangular matrices")
 
 n = 9
-srand(123)
+Random.seed!(123)
 
 debug && println("Test basic type functionality")
 @test_throws DimensionMismatch LowerTriangular(randn(5, 4))
@@ -99,9 +99,17 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         if uplo1 == :L
             @test istril(A1)
             @test !istriu(A1)
+            @test istriu(A1')
+            @test istriu(transpose(A1))
+            @test !istril(A1')
+            @test !istril(transpose(A1))
         else
             @test istriu(A1)
             @test !istril(A1)
+            @test istril(A1')
+            @test istril(transpose(A1))
+            @test !istriu(A1')
+            @test !istriu(transpose(A1))
         end
 
         #tril/triu
@@ -109,24 +117,24 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test tril(A1,0)  == A1
             @test tril(A1,-1) == LowerTriangular(tril(Matrix(A1), -1))
             @test tril(A1,1)  == t1(tril(tril(Matrix(A1), 1)))
-            @test_throws ArgumentError tril!(A1, -n - 2)
-            @test_throws ArgumentError tril!(A1, n)
+            @test tril(A1, -n - 2) == zeros(size(A1))
+            @test tril(A1, n) == A1
             @test triu(A1,0)  == t1(diagm(0 => diag(A1)))
             @test triu(A1,-1) == t1(tril(triu(A1.data,-1)))
             @test triu(A1,1)  == zeros(size(A1)) # or just @test iszero(triu(A1,1))?
-            @test_throws ArgumentError triu!(A1, -n)
-            @test_throws ArgumentError triu!(A1, n + 2)
+            @test triu(A1, -n) == A1
+            @test triu(A1, n + 2) == zeros(size(A1))
         else
             @test triu(A1,0)  == A1
             @test triu(A1,1)  == UpperTriangular(triu(Matrix(A1), 1))
             @test triu(A1,-1) == t1(triu(triu(Matrix(A1), -1)))
-            @test_throws ArgumentError triu!(A1, -n)
-            @test_throws ArgumentError triu!(A1, n + 2)
+            @test triu(A1, -n) == A1
+            @test triu(A1, n + 2) == zeros(size(A1))
             @test tril(A1,0)  == t1(diagm(0 => diag(A1)))
             @test tril(A1,1)  == t1(triu(tril(A1.data,1)))
             @test tril(A1,-1) == zeros(size(A1)) # or just @test iszero(tril(A1,-1))?
-            @test_throws ArgumentError tril!(A1, -n - 2)
-            @test_throws ArgumentError tril!(A1, n)
+            @test tril(A1, -n - 2) == zeros(size(A1))
+            @test tril(A1, n) == A1
         end
 
         # factorize
@@ -251,7 +259,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         if !(elty1 in (BigFloat, Complex{BigFloat})) # Not handled yet
             vals, vecs = eigen(A1)
             if (t1 == UpperTriangular || t1 == LowerTriangular) && elty1 != Int # Cannot really handle degenerate eigen space and Int matrices will probably have repeated eigenvalues.
-                @test vecs*diagm(0 => vals)/vecs ≈ A1 atol=sqrt(eps(float(real(one(vals[1])))))*(norm(A1,Inf)*n)^2
+                @test vecs*diagm(0 => vals)/vecs ≈ A1 atol=sqrt(eps(float(real(one(vals[1])))))*(opnorm(A1,Inf)*n)^2
             end
         end
 
@@ -519,8 +527,10 @@ end
 
 # dimensional correctness:
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
-using .Main.TestHelpers: Furlong
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
+LinearAlgebra.sylvester(a::Furlong,b::Furlong,c::Furlong) = -c / (a + b)
+
 let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
     @test sqrt(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
 end

@@ -358,24 +358,19 @@ SECT_INTERP static int jl_source_nssavalues(jl_code_info_t *src)
     return jl_is_long(src->ssavaluetypes) ? jl_unbox_long(src->ssavaluetypes) : jl_array_len(src->ssavaluetypes);
 }
 
-SECT_INTERP static int jl_is_newstyle_ir(jl_code_info_t *src) {
-    return src->codelocs != jl_nothing;
-}
-
 SECT_INTERP static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s)
 {
     jl_value_t *res = eval_value(stmt, s);
-    if (jl_is_newstyle_ir(s->src))
-        s->locals[jl_source_nslots(s->src) + s->ip] = res;
+    s->locals[jl_source_nslots(s->src) + s->ip] = res;
+    if (!jl_is_phinode(stmt))
+        s->last_branch = s->ip;
 }
 
 SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 {
     jl_code_info_t *src = s->src;
     if (jl_is_ssavalue(e)) {
-        ssize_t id = ((jl_ssavalue_t*)e)->id;
-        if (jl_is_newstyle_ir(src))
-            id -= 1;
+        ssize_t id = ((jl_ssavalue_t*)e)->id - 1;
         if (src == NULL || id >= jl_source_nssavalues(src) || id < 0 || s->locals == NULL)
             jl_error("access to invalid SSAValue");
         else
@@ -405,6 +400,23 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         jl_typeassert(val, jl_fieldref_noalloc(e, 1));
 #endif
         return val;
+    }
+    if (jl_is_phinode(e)) {
+        jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(e, 0);
+        ssize_t edge = -1;
+        for (int i = 0; i < jl_array_len(edges); ++i) {
+            size_t from = jl_unbox_long(jl_arrayref(edges, i));
+            if (from == s->last_branch + 1) {
+                edge = i;
+                break;
+            }
+        }
+        if (edge == -1) {
+            // edges list doesn't contain last branch. this value should be unused.
+            return NULL;
+        }
+        jl_value_t *val = jl_arrayref((jl_array_t*)jl_fieldref_noalloc(e, 1), edge);
+        return eval_value(val, s);
     }
     if (!jl_is_expr(e))
         return e;
@@ -454,7 +466,11 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         jl_value_t *cond = eval_value(args[1], s);
         assert(jl_is_bool(cond));
         if (cond == jl_false) {
-            jl_undefined_var_error((jl_sym_t*)args[0]);
+            jl_sym_t *var = (jl_sym_t*)args[0];
+            if (var == getfield_undefref_sym)
+                jl_throw(jl_undefref_exception);
+            else
+                jl_undefined_var_error(var);
         }
         return jl_nothing;
     }
@@ -495,13 +511,12 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == boundscheck_sym) {
         return jl_true;
     }
-    else if (head == boundscheck_sym || head == inbounds_sym || head == fastmath_sym ||
-             head == simdloop_sym || head == meta_sym) {
+    else if (head == meta_sym || head == inbounds_sym || head == simdloop_sym) {
         return jl_nothing;
     }
     else if (head == gc_preserve_begin_sym || head == gc_preserve_end_sym) {
         // The interpreter generally keeps values that were assigned in this scope
-        // rooted. If the interpreter learns to be more agressive here, we may
+        // rooted. If the interpreter learns to be more aggressive here, we may
         // want to explicitly root these values.
         return jl_nothing;
     }
@@ -538,48 +553,27 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                 return eval_value(jl_exprarg(stmt, 0), s);
             }
             else if (head == assign_sym) {
-                jl_value_t *sym = jl_exprarg(stmt, 0);
-                jl_value_t *rhs = NULL;
-                if (jl_is_phinode(jl_exprarg(stmt, 1))) {
-                    jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(jl_exprarg(stmt, 1), 0);
-                    ssize_t edge = -1;
-                    for (int i = 0; i < jl_array_len(edges); ++i) {
-                        size_t from = jl_unbox_long(jl_arrayref(edges, i));
-                        if (from == s->last_branch) {
-                            edge = i;
-                            break;
-                        }
-                    }
-                    if (edge == -1) {
-                        jl_error("PhiNode edges do not contain last branch");
-                    }
-                    jl_value_t *val = jl_arrayref((jl_array_t*)jl_fieldref_noalloc(jl_exprarg(stmt, 1), 1), edge);
-                    rhs = eval_value(val, s);
-                } else {
-                    rhs = eval_value(jl_exprarg(stmt, 1), s);
-                }
-                if (jl_is_ssavalue(sym)) {
-                    ssize_t id = ((jl_ssavalue_t*)sym)->id;
-                    if (jl_is_newstyle_ir(s->src))
-                        id -= 1;
-                    if (id >= jl_source_nssavalues(s->src) || id < 0)
-                        jl_error("assignment to invalid SSAValue location");
-                    s->locals[jl_source_nslots(s->src) + id] = rhs;
-                }
-                else if (jl_is_slot(sym)) {
-                    ssize_t n = jl_slot_number(sym);
+                jl_value_t *lhs = jl_exprarg(stmt, 0);
+                jl_value_t *rhs = eval_value(jl_exprarg(stmt, 1), s);
+                if (jl_is_slot(lhs)) {
+                    ssize_t n = jl_slot_number(lhs);
                     assert(n <= jl_source_nslots(s->src) && n > 0);
                     s->locals[n-1] = rhs;
                 }
                 else {
-                    jl_module_t *modu = s->module;
-                    if (jl_is_globalref(sym)) {
-                        modu = jl_globalref_mod(sym);
-                        sym = (jl_value_t*)jl_globalref_name(sym);
+                    jl_module_t *modu;
+                    jl_sym_t *sym;
+                    if (jl_is_globalref(lhs)) {
+                        modu = jl_globalref_mod(lhs);
+                        sym = jl_globalref_name(lhs);
                     }
-                    assert(jl_is_symbol(sym));
+                    else {
+                        assert(jl_is_symbol(lhs));
+                        modu = s->module;
+                        sym = (jl_sym_t*)lhs;
+                    }
                     JL_GC_PUSH1(&rhs);
-                    jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)sym, 1);
+                    jl_binding_t *b = jl_get_binding_wr(modu, sym, 1);
                     jl_checked_assignment(b, rhs);
                     JL_GC_POP();
                 }
@@ -611,7 +605,6 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                     jl_value_t *phicnode = jl_array_ptr_ref(stmts, catch_ip);
                     if (!jl_is_phicnode(phicnode))
                         break;
-                    assert(jl_is_newstyle_ir(s->src));
                     jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(phicnode, 0);
                     for (size_t i = 0; i < jl_array_len(values); ++i) {
                         jl_value_t *val = jl_array_ptr_ref(values, i);
@@ -662,7 +655,7 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                 jl_declare_constant(b);
             }
             else if (toplevel) {
-                if (head == method_sym) {
+                if (head == method_sym && jl_expr_nargs(stmt) > 1) {
                     eval_methoddef((jl_expr_t*)stmt, s);
                 }
                 else if (head == abstracttype_sym) {
@@ -676,6 +669,14 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                 }
                 else if (jl_is_toplevel_only_expr(stmt)) {
                     jl_toplevel_eval(s->module, stmt);
+                }
+                else if (head == meta_sym) {
+                    if (jl_expr_nargs(stmt) == 1 && jl_exprarg(stmt, 0) == (jl_value_t*)nospecialize_sym) {
+                        jl_set_module_nospecialize(s->module, 1);
+                    }
+                    if (jl_expr_nargs(stmt) == 1 && jl_exprarg(stmt, 0) == (jl_value_t*)specialize_sym) {
+                        jl_set_module_nospecialize(s->module, 0);
+                    }
                 }
                 else {
                     eval_stmt_value(stmt, s);

@@ -4,8 +4,8 @@
 
 include("pcre.jl")
 
-const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.ALT_BSUX | PCRE.UCP
-const DEFAULT_MATCH_OPTS = zero(UInt32)
+const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.NO_UTF_CHECK | PCRE.ALT_BSUX | PCRE.UCP
+const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 
 mutable struct Regex
     pattern::String
@@ -230,6 +230,25 @@ findnext(r::Regex, s::AbstractString, idx::Integer) = throw(ArgumentError(
 ))
 findfirst(r::Regex, s::AbstractString) = findnext(r,s,firstindex(s))
 
+"""
+    SubstitutionString(substr)
+
+Stores the given string `substr` as a `SubstitutionString`, for use in regular expression
+substitutions. Most commonly constructed using the [`@s_str`](@ref) macro.
+
+```jldoctest
+julia> SubstitutionString("Hello \\\\g<name>, it's \\\\1")
+s"Hello \\\\g<name>, it's \\\\1"
+
+julia> subst = s"Hello \\g<name>, it's \\1"
+s"Hello \\\\g<name>, it's \\\\1"
+
+julia> typeof(subst)
+SubstitutionString{String}
+
+```
+
+"""
 struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T
 end
@@ -245,6 +264,20 @@ function show(io::IO, s::SubstitutionString)
     show(io, s.string)
 end
 
+"""
+    @s_str -> SubstitutionString
+
+Construct a substitution string, used for regular expression substitutions.  Within the
+string, sequences of the form `\\N` refer to the Nth capture group in the regex, and
+`\\g<groupname>` refers to a named capture group with name `groupname`.
+
+```jldoctest
+julia> msg = "#Hello# from Julia";
+
+julia> replace(msg, r"#(.+)# from (?<from>\\w+)" => s"FROM: \\g<from>; MESSAGE: \\1")
+"FROM: Julia; MESSAGE: Hello"
+```
+"""
 macro s_str(string) SubstitutionString(string) end
 
 replace_err(repl) = error("Bad replacement string: $repl")

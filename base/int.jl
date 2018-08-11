@@ -471,7 +471,7 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
 end
 
 # @doc isn't available when running in Core at this point.
-# Tuple syntax for documention two function signatures at the same time
+# Tuple syntax for documentation two function signatures at the same time
 # doesn't work either at this point.
 if nameof(@__MODULE__) === :Base
     for fname in (:mod, :rem)
@@ -553,14 +553,36 @@ floor(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
 
 ## integer construction ##
 
+"""
+    @int128_str str
+    @int128_str(str)
+
+`@int128_str` parses a string into a Int128
+Throws an `ArgumentError` if the string is not a valid integer
+"""
 macro int128_str(s)
     return parse(Int128, s)
 end
 
+"""
+    @uint128_str str
+    @uint128_str(str)
+
+`@uint128_str` parses a string into a UInt128
+Throws an `ArgumentError` if the string is not a valid integer
+"""
 macro uint128_str(s)
     return parse(UInt128, s)
 end
 
+"""
+    @big_str str
+    @big_str(str)
+
+`@big_str` parses a string into a BigInt
+Throws an `ArgumentError` if the string is not a valid integer
+Removes all underscores `_` from the string
+"""
 macro big_str(s)
     if '_' in s
         # remove _ in s[2:end-1]
@@ -659,10 +681,13 @@ typemax(::Type{UInt64}) = 0xffffffffffffffff
 @eval typemin(::Type{Int128} ) = $(convert(Int128, 1) << 127)
 @eval typemax(::Type{Int128} ) = $(bitcast(Int128, typemax(UInt128) >> 1))
 
-widen(::Type{<:Union{Int8, Int16}}) = Int
+
+widen(::Type{Int8}) = Int16
+widen(::Type{Int16}) = Int32
 widen(::Type{Int32}) = Int64
 widen(::Type{Int64}) = Int128
-widen(::Type{<:Union{UInt8, UInt16}}) = UInt
+widen(::Type{UInt8}) = UInt16
+widen(::Type{UInt16}) = UInt32
 widen(::Type{UInt32}) = UInt64
 widen(::Type{UInt64}) = UInt128
 

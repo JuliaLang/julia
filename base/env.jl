@@ -115,7 +115,7 @@ else # !windows
     end
 end # os-test
 
-#TODO: Make these more efficent
+#TODO: Make these more efficient
 function length(::EnvDict)
     i = 0
     for (k,v) in ENV

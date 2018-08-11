@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Test, Random
+
 module TestBroadcastInternals
 
 using Base.Broadcast: check_broadcast_axes, check_broadcast_shape, newindex, _bcs
@@ -589,6 +591,18 @@ end
     @test broadcast(==, 1, AbstractArray) == false
 end
 
+@testset "broadcasting falls back to iteration (issues #26421, #19577, #23746)" begin
+    @test_throws ArgumentError broadcast(identity, Dict(1=>2))
+    @test_throws ArgumentError broadcast(identity, (a=1, b=2))
+    @test_throws ArgumentError length.(Dict(1 => BitSet(1:2), 2 => BitSet(1:3)))
+    @test_throws MethodError broadcast(identity, Base)
+
+    @test broadcast(identity, Iterators.filter(iseven, 1:10)) == 2:2:10
+    d = Dict([1,2] => 1.1, [3,2] => 0.1)
+    @test length.(keys(d)) == [2,2]
+    @test Set(exp.(Set([1,2,3]))) == Set(exp.([1,2,3]))
+end
+
 # Test that broadcasting identity where the input and output Array shapes do not match
 # yields the correct result, not merely a partial copy. See pull request #19895 for discussion.
 let N = 5
@@ -649,18 +663,17 @@ end
     @test_throws DimensionMismatch (1, 2) .+ (1, 2, 3)
 end
 
-# TODO: Enable after deprecations introduced in 0.7 are removed.
-# @testset "scalar .=" begin
-#     A = [[1,2,3],4:5,6]
-#     A[1] .= 0
-#     @test A[1] == [0,0,0]
-#     @test_throws ErrorException A[2] .= 0
-#     @test_throws MethodError A[3] .= 0
-#     A = [[1,2,3],4:5]
-#     A[1] .= 0
-#     @test A[1] == [0,0,0]
-#     @test_throws ErrorException A[2] .= 0
-# end
+@testset "scalar .=" begin
+    A = [[1,2,3],4:5,6]
+    A[1] .= 0
+    @test A[1] == [0,0,0]
+    @test_throws ErrorException A[2] .= 0
+    @test_throws MethodError A[3] .= 0
+    A = [[1,2,3],4:5]
+    A[1] .= 0
+    @test A[1] == [0,0,0]
+    @test_throws ErrorException A[2] .= 0
+end
 
 # Issue #22180
 @test convert.(Any, [1, 2]) == [1, 2]
@@ -720,11 +733,56 @@ let X = zeros(2, 3)
     @test X == [1 1 1; 2 2 2]
 end
 
+# issue #27988: inference of Broadcast.flatten
+using .Broadcast: Broadcasted
+let
+    bc = Broadcasted(+, (Broadcasted(*, (1, 2)), Broadcasted(*, (Broadcasted(*, (3, 4)), 5))))
+    @test @inferred(Broadcast.cat_nested(bc)) == (1,2,3,4,5)
+    @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 62
+    bc = Broadcasted(+, (Broadcasted(*, (1, Broadcasted(/, (2.0, 2.5)))), Broadcasted(*, (Broadcasted(*, (3, 4)), 5))))
+    @test @inferred(Broadcast.cat_nested(bc)) == (1,2.0,2.5,3,4,5)
+    @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 60.8
+end
+
 # Issue #26127: multiple splats in a fused dot-expression
 let f(args...) = *(args...)
     x, y, z = (1,2), 3, (4, 5)
     @test f.(x..., y, z...) == broadcast(f, x..., y, z...) == 120
     @test f.(x..., f.(x..., y, z...), y, z...) == broadcast(f, x..., broadcast(f, x..., y, z...), y, z...) == 120*120
+end
+
+@testset "Issue #27911: Broadcasting over collections with big indices" begin
+    @test iszero.(Int128(0):Int128(2)) == [true, false, false]
+    @test iszero.((Int128(0):Int128(2)) .- 1) == [false, true, false]
+    @test iszero.(big(0):big(2)) == [true, false, false]
+    @test iszero.((big(0):big(2)) .- 1) == [false, true, false]
+end
+
+@testset "Issue #27775: Broadcast!ing over nested scalar operations" begin
+    a = zeros(2)
+    a .= 1 ./ (1 + 2)
+    @test a == [1/3, 1/3]
+    a .= 1 ./ (1 .+ 3)
+    @test a == [1/4, 1/4]
+    a .= sqrt.(1 ./ 2)
+    @test a == [sqrt(1/2), sqrt(1/2)]
+    rng = MersenneTwister(1234)
+    a .= rand.((rng,))
+    rng = MersenneTwister(1234)
+    @test a == [rand(rng), rand(rng)]
+    @test a[1] != a[2]
+    rng = MersenneTwister(1234)
+    broadcast!(rand, a, (rng,))
+    rng = MersenneTwister(1234)
+    @test a == [rand(rng), rand(rng)]
+    @test a[1] != a[2]
+end
+
+# Issue #27446: Broadcasting pair operator
+let
+    c = ["foo", "bar"]
+    d = [1,2]
+    @test Dict(c .=> d) == Dict("foo" => 1, "bar" => 2)
 end
 
 # Broadcasted iterable/indexable APIs

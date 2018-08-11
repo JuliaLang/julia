@@ -79,7 +79,7 @@ lcm(a::Integer, b::Integer) = lcm(promote(a,b)...)
 gcd(a::Integer, b::Integer...) = gcd(a, gcd(b...))
 lcm(a::Integer, b::Integer...) = lcm(a, lcm(b...))
 
-lcm(abc::AbstractArray{<:Integer}) = reduce(lcm,one(eltype(abc)),abc)
+lcm(abc::AbstractArray{<:Integer}) = reduce(lcm, abc; init=one(eltype(abc)))
 
 function gcd(abc::AbstractArray{<:Integer})
     a = zero(eltype(abc))
@@ -292,7 +292,7 @@ function powermod(x::Integer, p::Integer, m::T) where T<:Integer
     (m == 1 || m == -1) && return zero(m)
     b = oftype(m,mod(x,m))  # this also checks for divide by zero
 
-    t = prevpow2(p)
+    t = prevpow(2, p)
     r::T = 1
     while true
         if p >= t
@@ -309,43 +309,10 @@ end
 # optimization: promote the modulus m to BigInt only once (cf. widemul in generic powermod above)
 powermod(x::Integer, p::Integer, m::Union{Int128,UInt128}) = oftype(m, powermod(x, p, big(m)))
 
-# smallest power of 2 >= x
-
-"""
-    nextpow2(n::Integer)
-
-The smallest power of two not less than `n`. Returns 0 for `n==0`, and returns
-`-nextpow2(-n)` for negative arguments.
-
-# Examples
-```jldoctest
-julia> nextpow2(16)
-16
-
-julia> nextpow2(17)
-32
-```
-"""
-nextpow2(x::Unsigned) = oneunit(x)<<((sizeof(x)<<3)-leading_zeros(x-oneunit(x)))
-nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
-
-"""
-    prevpow2(n::Integer)
-
-The largest power of two not greater than `n`. Returns 0 for `n==0`, and returns
-`-prevpow2(-n)` for negative arguments.
-
-# Examples
-```jldoctest
-julia> prevpow2(5)
-4
-
-julia> prevpow2(0)
-0
-```
-"""
-prevpow2(x::Unsigned) = one(x) << unsigned((sizeof(x)<<3)-leading_zeros(x)-1)
-prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -prevpow2(unsigned(-x)) : prevpow2(unsigned(x)))
+_nextpow2(x::Unsigned) = oneunit(x)<<((sizeof(x)<<3)-leading_zeros(x-oneunit(x)))
+_nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -_nextpow2(unsigned(-x)) : _nextpow2(unsigned(x)))
+_prevpow2(x::Unsigned) = one(x) << unsigned((sizeof(x)<<3)-leading_zeros(x)-1)
+_prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -_prevpow2(unsigned(-x)) : _prevpow2(unsigned(x)))
 
 """
     ispow2(n::Integer) -> Bool
@@ -387,8 +354,12 @@ julia> nextpow(4, 16)
 See also [`prevpow`](@ref).
 """
 function nextpow(a::Real, x::Real)
-    a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
     x <= 0 && throw(DomainError(x, "`x` must be positive."))
+    # Special case fast path for x::Integer, a == 2.
+    # This is a very common case. Constant prop will make sure that a call site
+    # specified as `nextpow(2, x)` will get this special case inlined.
+    a == 2 && isa(x, Integer) && return _nextpow2(x)
+    a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
     x <= 1 && return one(a)
     n = ceil(Integer,log(a, x))
     p = a^(n-1)
@@ -419,8 +390,10 @@ julia> prevpow(4, 16)
 See also [`nextpow`](@ref).
 """
 function prevpow(a::Real, x::Real)
-    a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
     x < 1 && throw(DomainError(x, "`x` must be ≥ 1."))
+    # See comment in nextpos() for a == special case.
+    a == 2 && isa(x, Integer) && return _prevpow2(x)
+    a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
     n = floor(Integer,log(a, x))
     p = a^(n+1)
     p <= x ? p : a^n
@@ -453,10 +426,6 @@ end
 ndigits0z(x::BitSigned) = ndigits0z(unsigned(abs(x)))
 
 ndigits0z(x::Integer) = ndigits0zpb(x, 10)
-
-# TODO (when keywords args are fast): rename to ndigits and make pad a keyword
-ndigits10(x::Integer, pad::Int=1) = max(pad, ndigits0z(x))
-ndigits(x::Integer) = iszero(x) ? 1 : ndigits0z(x)
 
 ## ndigits with specified base ##
 
@@ -510,7 +479,7 @@ ndigits0zpb(x::Bool, b::Integer) = x % Int
     ndigits0z(n::Integer, b::Integer=10)
 
 Return 0 if `n == 0`, otherwise compute the number of digits in
-integer `n` written in base `b` (i.e. equal to `ndigits(n, b)`
+integer `n` written in base `b` (i.e. equal to `ndigits(n, base=b)`
 in this case).
 The base `b` must not be in `[-1, 0, 1]`.
 
@@ -519,7 +488,7 @@ The base `b` must not be in `[-1, 0, 1]`.
 julia> Base.ndigits0z(0, 16)
 0
 
-julia> Base.ndigits(0, 16)
+julia> Base.ndigits(0, base=16)
 1
 
 julia> Base.ndigits0z(0)
@@ -540,29 +509,33 @@ function ndigits0z(x::Integer, b::Integer)
     elseif b > 1
         ndigits0zpb(x, b)
     else
-        throw(DomainError(b, "The base `b` must not be in `[-1, 0, 1]`."))
+        throw(DomainError(b, "The base must not be in `[-1, 0, 1]`."))
     end
 end
 
 """
-    ndigits(n::Integer, b::Integer=10)
+    ndigits(n::Integer; base::Integer=10, pad::Integer=1)
 
-Compute the number of digits in integer `n` written in base `b`.
-The base `b` must not be in `[-1, 0, 1]`.
+Compute the number of digits in integer `n` written in base `base`
+(`base` must not be in `[-1, 0, 1]`), optionally padded with zeros
+to a specified size (the result will never be less than `pad`).
 
 # Examples
 ```jldoctest
 julia> ndigits(12345)
 5
 
-julia> ndigits(1022, 16)
+julia> ndigits(1022, base=16)
 3
 
-julia> string(1022, base = 16)
+julia> string(1022, base=16)
 "3fe"
+
+julia> ndigits(123, pad=5)
+5
 ```
 """
-ndigits(x::Integer, b::Integer, pad::Int=1) = max(pad, ndigits0z(x, b))
+ndigits(x::Integer; base::Integer=10, pad::Int=1) = max(pad, ndigits0z(x, base))
 
 ## integer to string functions ##
 
@@ -591,7 +564,7 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
-    i = neg + ndigits10(x, pad)
+    i = neg + ndigits(x, base=10, pad=pad)
     a = StringVector(i)
     while i > neg
         a[i] = '0'+rem(x,10)
@@ -622,7 +595,7 @@ function _base(b::Int, x::Integer, pad::Int, neg::Bool)
     (x >= 0) | (b < 0) || throw(DomainError(x, "For negative `x`, `b` must be negative."))
     2 <= abs(b) <= 62 || throw(ArgumentError("base must satisfy 2 ≤ abs(base) ≤ 62, got $b"))
     digits = abs(b) <= 36 ? base36digits : base62digits
-    i = neg + ndigits(x, b, pad)
+    i = neg + ndigits(x, base=b, pad=pad)
     a = StringVector(i)
     @inbounds while i > neg
         if b > 0
@@ -732,7 +705,7 @@ digits(n::Integer; base::Integer = 10, pad::Integer = 1) =
     digits(typeof(base), n, base = base, pad = pad)
 
 function digits(T::Type{<:Integer}, n::Integer; base::Integer = 10, pad::Integer = 1)
-    digits!(zeros(T, ndigits(n, base, pad)), n, base = base)
+    digits!(zeros(T, ndigits(n, base=base, pad=pad)), n, base=base)
 end
 
 """
@@ -807,6 +780,33 @@ function isqrt(x::Union{Int64,UInt64,Int128,UInt128})
     s*s > x ? s-1 : s
 end
 
+"""
+    factorial(n::Integer)
+
+Factorial of `n`. If `n` is an [`Integer`](@ref), the factorial is computed as an
+integer (promoted to at least 64 bits). Note that this may overflow if `n` is not small,
+but you can use `factorial(big(n))` to compute the result exactly in arbitrary precision.
+
+# Examples
+```jldoctest
+julia> factorial(6)
+720
+
+julia> factorial(21)
+ERROR: OverflowError: 21 is too large to look up in the table
+Stacktrace:
+[...]
+
+julia> factorial(big(21))
+51090942171709440000
+```
+
+# See also
+* [`binomial`](@ref)
+
+# External links
+* [Factorial](https://en.wikipedia.org/wiki/Factorial) on Wikipedia.
+"""
 function factorial(n::Integer)
     n < 0 && throw(DomainError(n, "`n` must be nonnegative."))
     f::typeof(n*n) = 1
@@ -817,9 +817,21 @@ function factorial(n::Integer)
 end
 
 """
-    binomial(n, k)
+    binomial(n::Integer, k::Integer)
 
-Number of ways to choose `k` out of `n` items.
+The _binomial coefficient_ ``\binom{n}{k}``, being the coefficient of the ``k``th term in
+the polynomial expansion of ``(1+x)^n``.
+
+If ``n`` is non-negative, then it is the number of ways to choose `k` out of `n` items:
+```math
+\binom{n}{k} = \frac{n!}{k! (n-k)!}
+```
+where ``n!`` is the [`factorial`](@ref) function.
+
+If ``n`` is negative, then it is defined in terms of the identity
+```math
+\binom{n}{k} = (-1)^k \binom{k-n-1}{k}
+```
 
 # Examples
 ```jldoctest
@@ -828,7 +840,16 @@ julia> binomial(5, 3)
 
 julia> factorial(5) ÷ (factorial(5-3) * factorial(3))
 10
+
+julia> binomial(-5, 3)
+-35
 ```
+
+# See also
+* [`factorial`](@ref)
+
+# External links
+* [Binomial coeffient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.
 """
 function binomial(n::T, k::T) where T<:Integer
     n0, k0 = n, k

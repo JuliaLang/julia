@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
 Profiling support, main entry point is the [`@profile`](@ref) macro.
 """
@@ -217,8 +215,7 @@ function flatten(data::Vector, lidict::LineInfoDict)
         end
     end
     newdata = UInt64[]
-    for ip in data
-        local ip::UInt64
+    for ip::UInt64 in data
         if haskey(newmap, ip)
             append!(newdata, newmap[ip])
         else
@@ -256,6 +253,8 @@ function callers(funcname::String, bt::Vector, lidict::LineInfoFlatDict; filenam
     end
 end
 
+callers(funcname::String, bt::Vector, lidict::LineInfoDict; kwargs...) =
+    callers(funcname, flatten(bt, lidict)...; kwargs...)
 callers(funcname::String; kwargs...) = callers(funcname, retrieve()...; kwargs...)
 callers(func::Function, bt::Vector, lidict::LineInfoFlatDict; kwargs...) =
     callers(string(func), bt, lidict; kwargs...)
@@ -547,6 +546,13 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
             insert!(builder_value, fastkey, this)
         end
     end
+    function cleanup!(node::StackFrameTree)
+        empty!(node.builder_key)
+        empty!(node.builder_value)
+        foreach(cleanup!, values(node.down))
+        nothing
+    end
+    cleanup!(root)
     return root
 end
 

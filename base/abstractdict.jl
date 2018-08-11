@@ -47,7 +47,7 @@ end
 summary(iter::T) where {T<:Union{KeySet,ValueIterator}} =
     string(T.name, " for a ", summary(iter.dict))
 
-show(io::IO, iter::Union{KeySet,ValueIterator}) = show(io, collect(iter))
+show(io::IO, iter::Union{KeySet,ValueIterator}) = show_vector(io, iter)
 
 length(v::Union{KeySet,ValueIterator}) = length(v.dict)
 isempty(v::Union{KeySet,ValueIterator}) = isempty(v.dict)
@@ -349,14 +349,10 @@ Dict{Int64,String} with 2 entries:
 """
 function filter!(f, d::AbstractDict)
     badkeys = Vector{keytype(d)}()
-    try
-        for pair in d
-            # don't delete!(d, k) here, since dictionary types
-            # may not support mutation during iteration
-            f(pair) || push!(badkeys, pair.first)
-        end
-    catch e
-        return filter!_dict_deprecation(e, f, d)
+    for pair in d
+        # don't delete!(d, k) here, since dictionary types
+        # may not support mutation during iteration
+        f(pair) || push!(badkeys, pair.first)
     end
     for k in badkeys
         delete!(d, k)
@@ -365,32 +361,10 @@ function filter!(f, d::AbstractDict)
 end
 
 function filter_in_one_pass!(f, d::AbstractDict)
-    try
-        for pair in d
-            if !f(pair)
-                delete!(d, pair.first)
-            end
+    for pair in d
+        if !f(pair)
+            delete!(d, pair.first)
         end
-    catch e
-        return filter!_dict_deprecation(e, f, d)
-    end
-    return d
-end
-
-function filter!_dict_deprecation(e, f, d::AbstractDict)
-    if isa(e, MethodError) && e.f === f
-        depwarn("In `filter!(f, dict)`, `f` is now passed a single pair instead of two arguments.", :filter!)
-        badkeys = Vector{keytype(d)}()
-        for (k,v) in d
-            # don't delete!(d, k) here, since dictionary types
-            # may not support mutation during iteration
-            f(k, v) || push!(badkeys, k)
-        end
-        for k in badkeys
-            delete!(d, k)
-        end
-    else
-        rethrow(e)
     end
     return d
 end
@@ -580,7 +554,7 @@ function IdDict(kv)
     try
         dict_with_eltype((K, V) -> IdDict{K, V}, kv, eltype(kv))
     catch e
-        if !applicable(start, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
+        if !applicable(iterate, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError(
                 "IdDict(kv): kv needs to be an iterator of tuples or pairs"))
         else

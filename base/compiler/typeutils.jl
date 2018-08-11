@@ -10,8 +10,7 @@ function rewrap(@nospecialize(t), @nospecialize(u))
     return rewrap_unionall(t, u)
 end
 
-const _TYPE_NAME = Type.body.name
-isType(@nospecialize t) = isa(t, DataType) && (t::DataType).name === _TYPE_NAME
+isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
 
 # true if Type{T} is inlineable as constant T
 # requires that T is a singleton, s.t. T == S implies T === S
@@ -27,20 +26,16 @@ function issingletontype(@nospecialize t)
     iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
     isconcretetype(t) && return true # these are also interned and pointer comparable
     if isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
-        return all(p -> issingletontype(p), t.parameters)
+        return _all(issingletontype, t.parameters)
     end
     return false
 end
 
-iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
-isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
-
-# equivalent to isdispatchtuple(Tuple{v}) || v == Union{}
-# and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
-function isdispatchelem(@nospecialize v)
-    return (v === Bottom) || (v === typeof(Bottom)) ||
-        isconcretedispatch(v) || (isType(v) && !has_free_typevars(v))
-end
+# Subtyping currently intentionally answers certain queries incorrectly for kind types. For
+# some of these queries, this check can be used to somewhat protect against making incorrect
+# decisions based on incorrect subtyping. Note that this check, itself, is broken for
+# certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
+isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || issingletontype(a.parameters[1]))
 
 argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(widenconst, argtypes)...}
 
@@ -53,19 +48,17 @@ end
 function valid_tparam(@nospecialize(x))
     if isa(x, Tuple)
         for t in x
-            isa(t, Symbol) || isbitstype(typeof(t)) || return false
+            isa(t, Symbol) || isbits(t) || return false
         end
         return true
     end
-    return isa(x, Symbol) || isbitstype(typeof(x))
+    return isa(x, Symbol) || isbits(x)
 end
-
-has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0
 
 # return an upper-bound on type `a` with type `b` removed
 # such that `return <: a` && `Union{return, b} == Union{a, b}`
 function typesubtract(@nospecialize(a), @nospecialize(b))
-    if a <: b
+    if a <: b && isnotbrokensubtype(a, b)
         return Bottom
     end
     if isa(a, Union)
@@ -95,8 +88,27 @@ end
 _typename(union::UnionAll) = _typename(union.body)
 _typename(a::DataType) = Const(a.name)
 
-function tuple_tail_elem(@nospecialize(init), ct)
-    return Vararg{widenconst(foldl((a, b) -> tmerge(a, tvar_extent(unwrapva(b))), init, ct))}
+function tuple_tail_elem(@nospecialize(init), ct::Vector{Any})
+    # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
+    tmerge_maybe_vararg(@nospecialize(a), @nospecialize(b)) = tmerge(a, tvar_extent(unwrapva(b)))
+    t = init
+    for x in ct
+        t = tmerge_maybe_vararg(t, x)
+    end
+    return Vararg{widenconst(t)}
+end
+
+function countunionsplit(atypes::Union{SimpleVector,Vector{Any}})
+    nu = 1
+    for ti in atypes
+        if isa(ti, Union)
+            nu, ovf = Core.Intrinsics.checked_smul_int(nu, unionlen(ti::Union))
+            if ovf
+                return typemax(Int)
+            end
+        end
+    end
+    return nu
 end
 
 # take a Tuple where one or more parameters are Unions
@@ -125,3 +137,20 @@ function _switchtupleunion(t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospeci
     end
     return tunion
 end
+
+# unioncomplexity estimates the number of calls to `tmerge` to obtain the given type by
+# counting the Union instances, taking also into account those hidden in a Tuple or UnionAll
+unioncomplexity(u::Union) = 1 + unioncomplexity(u.a) + unioncomplexity(u.b)
+function unioncomplexity(t::DataType)
+    t.name === Tuple.name || return 0
+    c = 0
+    for ti in t.parameters
+        ci = unioncomplexity(ti)
+        if ci > c
+            c = ci
+        end
+    end
+    return c
+end
+unioncomplexity(u::UnionAll) = max(unioncomplexity(u.body), unioncomplexity(u.var.ub))
+unioncomplexity(@nospecialize(x)) = 0

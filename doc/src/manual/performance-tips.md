@@ -58,7 +58,7 @@ so all the performance issues discussed previously apply.
 A useful tool for measuring performance is the [`@time`](@ref) macro. We here repeat the example
 with the global variable above, but this time with the type annotation removed:
 
-```jldoctest; setup = :(using Random; srand(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
+```jldoctest; setup = :(using Random; Random.seed!(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
 julia> x = rand(1000);
 
 julia> function sum_global()
@@ -94,7 +94,7 @@ If we instead pass `x` as an argument to the function it no longer allocates mem
 (the allocation reported below is due to running the `@time` macro in global scope)
 and is significantly faster after the first call:
 
-```jldoctest sumarg; setup = :(using Random; srand(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
+```jldoctest sumarg; setup = :(using Random; Random.seed!(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
 julia> x = rand(1000);
 
 julia> function sum_arg(x)
@@ -583,7 +583,7 @@ to perform a core computation. Where possible, it is a good idea to put these co
 in separate functions. For example, the following contrived function returns an array of a randomly-chosen
 type:
 
-```jldoctest; setup = :(using Random; srand(1234))
+```jldoctest; setup = :(using Random; Random.seed!(1234))
 julia> function strange_twos(n)
            a = Vector{rand(Bool) ? Int64 : Float64}(undef, n)
            for i = 1:n
@@ -601,7 +601,7 @@ julia> strange_twos(3)
 
 This should be written as:
 
-```jldoctest; setup = :(using Random; srand(1234))
+```jldoctest; setup = :(using Random; Random.seed!(1234))
 julia> function fill_twos!(a)
            for i = eachindex(a)
                a[i] = 2
@@ -1133,12 +1133,18 @@ These are some minor points that might help in tight inner loops.
 
 Sometimes you can enable better optimization by promising certain program properties.
 
-  * Use `@inbounds` to eliminate array bounds checking within expressions. Be certain before doing
+  * Use [`@inbounds`](@ref) to eliminate array bounds checking within expressions. Be certain before doing
     this. If the subscripts are ever out of bounds, you may suffer crashes or silent corruption.
-  * Use `@fastmath` to allow floating point optimizations that are correct for real numbers, but lead
+  * Use [`@fastmath`](@ref) to allow floating point optimizations that are correct for real numbers, but lead
     to differences for IEEE numbers. Be careful when doing this, as this may change numerical results.
     This corresponds to the `-ffast-math` option of clang.
-  * Write `@simd` in front of `for` loops that are amenable to vectorization. **This feature is experimental**
+  * Write [`@simd`](@ref) in front of `for` loops to promise that the iterations are independent and may be
+    reordered.  Note that in many cases, Julia can automatically vectorize code without the `@simd` macro;
+    it is only beneficial in cases where such a transformation would otherwise be illegal, including cases
+    like allowing floating-point re-associativity and ignoring dependent memory accesses (`@simd ivdep`).
+    Again, be very careful when asserting `@simd` as erroneously annotating a loop with dependent iterations
+    may result in unexpected results. In particular, note that `setindex!` on some `AbstractArray` subtypes is
+    inherently dependent upon iteration order. **This feature is experimental**
     and could change or disappear in future versions of Julia.
 
 The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,
@@ -1146,9 +1152,9 @@ and may cause a segmentation fault if bounds checking is turned off. Use `Linear
 instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays)).
 
 !!!note
-    While `@simd` needs to be placed directly in front of a loop, both `@inbounds` and `@fastmath`
-    can be applied to several statements at once, e.g. using `begin` ... `end`, or even to a whole
-    function.
+    While `@simd` needs to be placed directly in front of an innermost `for` loop, both `@inbounds` and `@fastmath`
+    can be applied to either single expressions or all the expressions that appear within nested blocks of code, e.g.,
+    using `@inbounds begin` or `@inbounds for ...`.
 
 Here is an example with both `@inbounds` and `@simd` markup (we here use `@noinline` to prevent
 the optimizer from trying to be too clever and defeat our benchmark):
@@ -1194,33 +1200,7 @@ GFlop/sec        = 1.9467069505224963
 GFlop/sec (SIMD) = 17.578554163920018
 ```
 
-(`GFlop/sec` measures the performance, and larger numbers are better.) The range for a `@simd for`
-loop should be a one-dimensional range. A variable used for accumulating, such as `s` in the example,
-is called a *reduction variable*. By using `@simd`, you are asserting several properties of the
-loop:
-
-  * It is safe to execute iterations in arbitrary or overlapping order, with special consideration
-    for reduction variables.
-  * Floating-point operations on reduction variables can be reordered, possibly causing different
-    results than without `@simd`.
-  * No iteration ever waits on another iteration to make forward progress.
-
-A loop containing `break`, `continue`, or `@goto` will cause a compile-time error.
-
-Using `@simd` merely gives the compiler license to vectorize. Whether it actually does so depends
-on the compiler. To actually benefit from the current implementation, your loop should have the
-following additional properties:
-
-  * The loop must be an innermost loop.
-  * The loop body must be straight-line code. This is why `@inbounds` is currently needed for all
-    array accesses. The compiler can sometimes turn short `&&`, `||`, and `?:` expressions into straight-line
-    code, if it is safe to evaluate all operands unconditionally. Consider using the [`ifelse`](@ref)
-    function instead of `?:` in the loop if it is safe to do so.
-  * Accesses must have a stride pattern and cannot be "gathers" (random-index reads) or "scatters"
-    (random-index writes).
-  * The stride should be unit stride.
-  * In some simple cases, for example with 2-3 arrays accessed in a loop, the LLVM auto-vectorization
-    may kick in automatically, leading to no further speedup with `@simd`.
+(`GFlop/sec` measures the performance, and larger numbers are better.)
 
 Here is an example with all three kinds of markup. This program first calculates the finite difference
 of a one-dimensional array, and then evaluates the L2-norm of the result:
@@ -1479,3 +1459,85 @@ The following examples may help you interpret expressions marked as containing n
         field `data::Array{T}`. But `Array` needs the dimension `N`, too, to be a concrete type.
       * Suggestion: use concrete types like `Array{T,3}` or `Array{T,N}`, where `N` is now a parameter
         of `ArrayContainer`
+
+## [Performance of captured variable](@id man-performance-captured)
+
+Consider the following example that defines an inner function:
+```julia
+function abmult(r::Int)
+    if r < 0
+        r = -r
+    end
+    f = x -> x * r
+    return f
+end
+```
+
+Function `abmult` returns a function `f` that multiplies its argument by
+the absolute value of `r`. The inner function assigned to `f` is called a
+"closure". Inner functions are also used by the
+language for `do`-blocks and for generator expressions.
+
+This style of code presents performance challenges for the language.
+The parser, when translating it into lower-level instructions,
+substantially reorganizes the above code by extracting the
+inner function to a separate code block.  "Captured" variables such as `r`
+that are shared by inner functions and their enclosing scope are
+also extracted into a heap-allocated "box" accessible to both inner and
+outer functions because the language specifies that `r` in the
+inner scope must be identical to `r` in the outer scope even after the
+outer scope (or another inner function) modifies `r`.
+
+The discussion in the preceding paragraph referred to the "parser", that is, the phase
+of compilation that takes place when the module containing `abmult` is first loaded,
+as opposed to the later phase when it is first invoked. The parser does not "know" that
+`Int` is a fixed type, or that the statement `r = -r` transforms an `Int` to another `Int`.
+The magic of type inference takes place in the later phase of compilation.
+
+Thus, the parser does not know that `r` has a fixed type (`Int`).
+nor that `r` does not change value once the inner function is created (so that
+the box is unneeded).  Therefore, the parser emits code for
+box that holds an object with an abstract type such as `Any`, which
+requires run-time type dispatch for each occurrence of `r`.  This can be
+verified by applying `@code_warntype` to the above function.  Both the boxing
+and the run-time type dispatch can cause loss of performance.
+
+If captured variables are used in a performance-critical section of the code,
+then the following tips help ensure that their use is performant. First, if
+it is known that a captured variable does not change its type, then this can
+be declared explicitly with a type annotation (on the variable, not the
+right-hand side):
+```julia
+function abmult2(r0::Int)
+    r::Int = r0
+    if r < 0
+        r = -r
+    end
+    f = x -> x * r
+    return f
+end
+```
+The type annotation partially recovers lost performance due to capturing because
+the parser can associate a concrete type to the object in the box.
+Going further, if the captured variable does not need to be boxed at all (because it
+will not be reassigned after the closure is created), this can be indicated
+with `let` blocks as follows.
+```julia
+function abmult3(r::Int)
+    if r < 0
+        r = -r
+    end
+    f = let r = r
+            x -> x * r
+    end
+    return f
+end
+```
+The `let` block creates a new variable `r` whose scope is only the
+inner function. The second technique recovers full language performance
+in the presence of captured variables. Note that this is a rapidly
+evolving aspect of the compiler, and it is likely that future releases
+will not require this degree of programmer annotation to attain performance.
+In the mean time, some user-contributed packages like
+[FastClosures](https://github.com/c42f/FastClosures.jl) automate the
+insertion of `let` statements as in `abmult3`.

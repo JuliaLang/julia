@@ -14,7 +14,7 @@ export
     atomic_max!, atomic_min!,
     atomic_fence
 
-# Disable 128-bit types on 32-bit Intel sytems due to LLVM problems;
+# Disable 128-bit types on 32-bit Intel systems due to LLVM problems;
 # see <https://github.com/JuliaLang/julia/issues/14818> (fixed on LLVM 3.9)
 # 128-bit atomics do not exist on AArch32.
 if (Base.libllvm_version < v"3.9-" && ARCH === :i686) ||
@@ -337,7 +337,7 @@ inttype(::Type{Float32}) = Int32
 inttype(::Type{Float64}) = Int64
 
 
-alignment(::Type{T}) where {T} = ccall(:jl_alignment, Cint, (Csize_t,), sizeof(T))
+gc_alignment(::Type{T}) where {T} = ccall(:jl_alignment, Cint, (Csize_t,), sizeof(T))
 
 # All atomic operations have acquire and/or release semantics, depending on
 # whether the load or store values. Most of the time, this is what one wants
@@ -350,13 +350,13 @@ for typ in atomictypes
     @eval getindex(x::Atomic{$typ}) =
         llvmcall($"""
                  %ptr = inttoptr i$WORD_SIZE %0 to $lt*
-                 %rv = load atomic $rt %ptr acquire, align $(alignment(typ))
+                 %rv = load atomic $rt %ptr acquire, align $(gc_alignment(typ))
                  ret $lt %rv
                  """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
     @eval setindex!(x::Atomic{$typ}, v::$typ) =
         llvmcall($"""
                  %ptr = inttoptr i$WORD_SIZE %0 to $lt*
-                 store atomic $lt %1, $lt* %ptr release, align $(alignment(typ))
+                 store atomic $lt %1, $lt* %ptr release, align $(gc_alignment(typ))
                  ret void
                  """, Cvoid, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
 

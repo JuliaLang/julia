@@ -35,7 +35,6 @@ end
 function copy(e::Expr)
     n = Expr(e.head)
     n.args = copy_exprargs(e.args)
-    n.typ = e.typ
     return n
 end
 
@@ -200,6 +199,20 @@ macro noinline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)
 end
 
+"""
+    @pure ex
+    @pure(ex)
+
+`@pure` gives the compiler a hint for the definition of a pure function,
+helping for type inference.
+
+A pure function can only depend on immutable information.
+This also means a `@pure` function cannot use any global mutable state, including
+generic functions. Calls to generic functions depend on method tables which are
+mutable global state.
+Use with caution, incorrect `@pure` annotation of a function may introduce
+hard to identify bugs. Double check for calls to generic functions.
+"""
 macro pure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
 end
@@ -330,7 +343,7 @@ end
 
 remove_linenums!(ex) = ex
 function remove_linenums!(ex::Expr)
-    if ex.head === :body || ex.head === :block || ex.head === :quote
+    if ex.head === :block || ex.head === :quote
         # remove line number expressions from metadata (not argument literal or inert) position
         filter!(ex.args) do x
             isa(x, Expr) && x.head === :line && return false
@@ -348,6 +361,35 @@ macro generated()
     return Expr(:generated)
 end
 
+"""
+    @generated f
+    @generated(f)
+`@generated` is used to annotate a function which will be generated.
+In the body of the generated function, only types of arguments can be read
+(not the values). The function returns a quoted expression evaluated when the
+function is called. The `@generated` macro should not be used on functions mutating
+the global scope or depending on mutable elements.
+
+See [Metaprogramming](@ref) for further details.
+
+## Example:
+```julia
+julia> @generated function bar(x)
+           if x <: Integer
+               return :(x ^ 2)
+           else
+               return :(x)
+           end
+       end
+bar (generic function with 1 method)
+
+julia> bar(4)
+16
+
+julia> bar("baz")
+"baz"
+```
+"""
 macro generated(f)
     if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
         body = f.args[2]

@@ -3,11 +3,7 @@
 using TOML
 import TOML: linecol, whitespace, comment, newline, expect, lookup, Parser, parse
 
-if Base.isdeprecated(Base, :Test)
-    using Test
-else
-    using Base.Test
-end
+using Test
 
 macro testval(s, v)
     f = "foo = $s"
@@ -34,7 +30,7 @@ macro fail(s...)
     pvar = :pv
     ppvar = :ppv
 
-    # debuging report
+    # debugging report
     dbgexp = if debug
         quote
             println("\nTEST FAIL: ", escape_string($teststr))
@@ -83,7 +79,7 @@ macro success(s...)
     pvar = :pv
     ppvar = :ppv
 
-    # debuging report
+    # debugging report
     dbgexp = if debug
         quote
             println("\nTEST SUCCESS: ", escape_string($teststr))

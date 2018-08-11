@@ -102,7 +102,7 @@ the disk activity of the `julia` process:
     $ dtruss -f julia
     ```
 
-Create a [gist](https://gist.github.com) with the `strace`/ `dtruss` ouput, the [version info](@ref dev-version-info),
+Create a [gist](https://gist.github.com) with the `strace`/ `dtruss` output, the [version info](@ref dev-version-info),
 and any other pertinent information and open a new [issue](https://github.com/JuliaLang/julia/issues?q=is%3Aopen)
 on Github with a link to the gist.
 

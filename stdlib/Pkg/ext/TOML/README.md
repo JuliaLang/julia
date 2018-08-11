@@ -25,7 +25,7 @@ julia> TOML.parsefile("etc/example.toml")
 
 ## Documentation
 ```julia
-TOML.print(io::IO, a::Associative)
+TOML.print(io::IO, a::AbstractDict)
 ```
 Writes a TOML representation to the supplied `IO`.
 

@@ -223,28 +223,31 @@ end
     @test_throws DimensionMismatch dot(x, 1:2, y, 1:3)
     @test_throws BoundsError dot(x, 1:4, y, 1:4)
     @test_throws BoundsError dot(x, 1:3, y, 2:4)
-    @test dot(x, 1:2,y, 1:2) == convert(elty, 12.5)
+    @test dot(x, 1:2, y, 1:2) == convert(elty, 12.5)
     @test transpose(x)*y == convert(elty, 29.0)
-    @test_throws MethodError dot(rand(elty, 2, 2), randn(elty, 2, 2))
-    X = convert(Vector{Matrix{elty}},[reshape(1:4, 2, 2), fill(1, 2, 2)])
-    res = convert(Matrix{elty}, [7.0 13.0; 13.0 27.0])
-    @test dot(X, X) == res
+    X = convert(Matrix{elty},[1.0 2.0; 3.0 4.0])
+    Y = convert(Matrix{elty},[1.5 2.5; 3.5 4.5])
+    @test dot(X, Y) == convert(elty, 35.0)
+    Z = convert(Vector{Matrix{elty}},[reshape(1:4, 2, 2), fill(1, 2, 2)])
+    @test dot(Z, Z) == convert(elty, 34.0)
 end
 
-vecdot_(x,y) = invoke(vecdot, Tuple{Any,Any}, x,y)
-@testset "generic vecdot" begin
+dot1(x,y) = invoke(dot, Tuple{Any,Any}, x,y)
+dot2(x,y) = invoke(dot, Tuple{AbstractArray,AbstractArray}, x,y)
+@testset "generic dot" begin
     AA = [1+2im 3+4im; 5+6im 7+8im]
     BB = [2+7im 4+1im; 3+8im 6+5im]
     for A in (copy(AA), view(AA, 1:2, 1:2)), B in (copy(BB), view(BB, 1:2, 1:2))
-        @test vecdot(A,B) == dot(vec(A),vec(B)) == vecdot_(A,B) == vecdot(float.(A),float.(B))
-        @test vecdot(Int[], Int[]) == 0 == vecdot_(Int[], Int[])
-        @test_throws MethodError vecdot(Any[], Any[])
-        @test_throws MethodError vecdot_(Any[], Any[])
-        for n1 = 0:2, n2 = 0:2, d in (vecdot, vecdot_)
+        @test dot(A,B) == dot(vec(A),vec(B)) == dot1(A,B) == dot2(A,B) == dot(float.(A),float.(B))
+        @test dot(Int[], Int[]) == 0 == dot1(Int[], Int[]) == dot2(Int[], Int[])
+        @test_throws MethodError dot(Any[], Any[])
+        @test_throws MethodError dot1(Any[], Any[])
+        @test_throws MethodError dot2(Any[], Any[])
+        for n1 = 0:2, n2 = 0:2, d in (dot, dot1, dot2)
             if n1 != n2
                 @test_throws DimensionMismatch d(1:n1, 1:n2)
             else
-                @test d(1:n1, 1:n2) ≈ vecnorm(1:n1)^2
+                @test d(1:n1, 1:n2) ≈ norm(1:n1)^2
             end
         end
     end
@@ -424,7 +427,7 @@ end
     @test  transpose(Xv2)*Xv2     ≈ XtX
     @test (transpose(Xv3)*Xv3)[1] ≈ XtX
     @test  Xv1'*Xv1     ≈ XcX
-    @test  Xv2'*Xv2     ≈ XcX
+    @test Xv2'*Xv2 ≈ norm(Xv2)^2
     @test (Xv3'*Xv3)[1] ≈ XcX
     @test (Xv1*transpose(Xv1))[1] ≈ XXt
     @test  Xv2*transpose(Xv2)     ≈ XXt

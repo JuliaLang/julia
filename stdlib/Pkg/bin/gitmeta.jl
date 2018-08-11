@@ -4,7 +4,7 @@
 import Pkg.TOML
 import LibGit2
 
-const STDLIBS = [
+const STDLIBS = sort!(by = lowercase, [
     "Base64"
     "CRC32c"
     "Dates"
@@ -25,6 +25,7 @@ const STDLIBS = [
     "Profile"
     "REPL"
     "Random"
+    "Sockets"
     "Serialization"
     "SHA"
     "SharedArrays"
@@ -33,7 +34,7 @@ const STDLIBS = [
     "Test"
     "UUIDs"
     "Unicode"
-]
+])
 
 function uses(repo::String, tree::String, lib::String)
     pattern = string(raw"\b(import|using)\s+((\w|\.)+\s*,\s*)*", lib, raw"\b")

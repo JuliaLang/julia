@@ -87,4 +87,10 @@ end
     @test F.Q*F.R == A[F.prow,F.pcol]
 end
 
+@testset "propertynames of QRSparse" begin
+    A = sparse([0.0 1 0 0; 0 0 0 0])
+    F = qr(A)
+    @test propertynames(F) == (:R, :Q, :prow, :pcol)
+    @test propertynames(F, true) == (:R, :Q, :prow, :pcol, :factors, :τ, :cpiv, :rpivinv)
+end
 end

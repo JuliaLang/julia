@@ -103,7 +103,7 @@ end
 """
     cd(f::Function, dir::AbstractString=homedir())
 
-Temporarily change the current working directory, apply function `f` and
+Temporarily change the current working directory to `dir`, apply function `f` and
 finally return to the original directory.
 
 # Examples
@@ -236,7 +236,7 @@ julia> rm("my", recursive=true)
 julia> rm("this_file_does_not_exist", force=true)
 
 julia> rm("this_file_does_not_exist")
-ERROR: unlink: no such file or directory (ENOENT)
+ERROR: IOError: unlink: no such file or directory (ENOENT)
 Stacktrace:
 [...]
 ```
@@ -252,7 +252,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
             end
             unlink(path)
         catch err
-            if force && isa(err, UVError) && err.code==Base.UV_ENOENT
+            if force && isa(err, IOError) && err.code==Base.UV_ENOENT
                 return
             end
             rethrow()
@@ -273,7 +273,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
 end
 
 
-# The following use Unix command line facilites
+# The following use Unix command line facilities
 function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::AbstractString;
                                                           force::Bool=false)
     if ispath(dst)
@@ -297,14 +297,7 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
 end
 
 function cptree(src::AbstractString, dst::AbstractString; force::Bool=false,
-                                                          follow_symlinks::Bool=false,
-                                                          remove_destination::Union{Bool,Nothing}=nothing)
-    # TODO: Remove after 0.7
-    if remove_destination !== nothing
-        Base.depwarn("The `remove_destination` keyword argument is deprecated; use " *
-                     "`force` instead", :cptree)
-        force = remove_destination
-    end
+                                                          follow_symlinks::Bool=false)
     isdir(src) || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
     checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
     mkdir(dst)
@@ -333,14 +326,7 @@ of the file or directory `src` refers to.
 Return `dst`.
 """
 function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
-                                                      follow_symlinks::Bool=false,
-                                                      remove_destination::Union{Bool,Nothing}=nothing)
-    # TODO: Remove after 0.7
-    if remove_destination !== nothing
-        Base.depwarn("The `remove_destination` keyword argument is deprecated; use " *
-                     "`force` instead", :cp)
-        force = remove_destination
-    end
+                                                      follow_symlinks::Bool=false)
     checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
     if !follow_symlinks && islink(src)
         symlink(readlink(src), dst)
@@ -358,15 +344,36 @@ end
 Move the file, link, or directory from `src` to `dst`.
 `force=true` will first remove an existing `dst`.
 Return `dst`.
+
+# Examples
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+julia> write("hello.txt", "world");
+
+julia> mv("hello.txt", "goodbye.txt")
+"goodbye.txt"
+
+julia> "hello.txt" in readdir()
+false
+
+julia> readline("goodbye.txt")
+"world"
+
+julia> write("hello.txt", "world2");
+
+julia> mv("hello.txt", "goodbye.txt")
+ERROR: ArgumentError: 'goodbye.txt' exists. `force=true` is required to remove 'goodbye.txt' before moving.
+Stacktrace:
+ [1] #checkfor_mv_cp_cptree#10(::Bool, ::Function, ::String, ::String, ::String) at ./file.jl:293
+[...]
+
+julia> mv("hello.txt", "goodbye.txt", force=true)
+"goodbye.txt"
+
+julia> rm("goodbye.txt");
+
+```
 """
-function mv(src::AbstractString, dst::AbstractString; force::Bool=false,
-                                                      remove_destination::Union{Bool,Nothing}=nothing)
-    # TODO: Remove after 0.7
-    if remove_destination !== nothing
-        Base.depwarn("The `remove_destination` keyword argument is deprecated; use " *
-                     "`force` instead", :mv)
-        force = remove_destination
-    end
+function mv(src::AbstractString, dst::AbstractString; force::Bool=false)
     checkfor_mv_cp_cptree(src, dst, "moving"; force=force)
     rename(src, dst)
     dst
@@ -547,8 +554,13 @@ function mktemp(fn::Function, parent=tempdir())
     try
         fn(tmp_path, tmp_io)
     finally
-        close(tmp_io)
-        rm(tmp_path)
+        # TODO: should we call GC.gc() first on error, to make it much more likely that `rm` succeeds?
+        try
+            close(tmp_io)
+            rm(tmp_path)
+        catch ex
+            @error "mktemp cleanup" _group=:file exception=(ex, catch_backtrace())
+        end
     end
 end
 
@@ -563,7 +575,12 @@ function mktempdir(fn::Function, parent=tempdir())
     try
         fn(tmpdir)
     finally
-        rm(tmpdir, recursive=true)
+        # TODO: should we call GC.gc() first on error, to make it much more likely that `rm` succeeds?
+        try
+            rm(tmpdir, recursive=true)
+        catch ex
+            @error "mktempdir cleanup" _group=:file exception=(ex, catch_backtrace())
+        end
     end
 end
 

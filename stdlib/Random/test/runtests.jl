@@ -1,18 +1,21 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, SparseArrays
+using Test: guardseed
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
-using .Main.TestHelpers.OAs
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
 
 using Random
 using Random.DSFMT
 
 using Random: Sampler, SamplerRangeFast, SamplerRangeInt, MT_CACHE_F, MT_CACHE_I
 
+import Future # randjump
+
 @testset "Issue #6573" begin
-    srand(0)
+    Random.seed!(0)
     rand()
     x = rand(384)
     @test findall(x .== rand()) == []
@@ -127,10 +130,10 @@ for T in [UInt32, UInt64, UInt128, Int128]
     r = rand(s, 1, 2)
     @test size(r) == (1, 2)
     @test typeof(r) == Matrix{BigInt}
-    guardsrand() do
-        srand(0)
+    guardseed() do
+        Random.seed!(0)
         r = rand(s)
-        srand(0)
+        Random.seed!(0)
         @test rand(s) == r
     end
 end
@@ -220,15 +223,15 @@ randmtzig_fill_ziggurat_tables()
 @test all(fe == Random.fe)
 
 #same random numbers on for small ranges on all systems
-guardsrand() do
+guardseed() do
     seed = rand(UInt)
-    srand(seed)
+    Random.seed!(seed)
     r = map(Int64, rand(map(Int32, 97:122)))
-    srand(seed)
+    Random.seed!(seed)
     @test r == rand(map(Int64, 97:122))
-    srand(seed)
+    Random.seed!(seed)
     r = map(UInt64, rand(map(UInt32, 97:122)))
-    srand(seed)
+    Random.seed!(seed)
     @test r == rand(map(UInt64, 97:122))
 end
 
@@ -263,7 +266,7 @@ let mt = MersenneTwister(0)
                                    0x4b54632b4619f4eca22675166784d229][i]
     end
 
-    srand(mt, 0)
+    Random.seed!(mt, 0)
     for (i,T) in enumerate([Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, Float16, Float32])
         A = Vector{T}(undef, 16)
         B = Vector{T}(undef, 31)
@@ -275,7 +278,7 @@ let mt = MersenneTwister(0)
                             61881313582466480231846019869039259750, Float16(0.38672), 0.20027375f0][i]
     end
 
-    srand(mt, 0)
+    Random.seed!(mt, 0)
     AF64 = Vector{Float64}(undef, Random.dsfmt_get_min_array_size()-1)
     @test rand!(mt, AF64)[end] == 0.957735065345398
     @test rand!(mt, AF64)[end] == 0.6492481059865669
@@ -301,7 +304,7 @@ let mt = MersenneTwister(0)
 
     for A in (a, b, c)
         local A
-        srand(mt, 0)
+        Random.seed!(mt, 0)
         rand(mt) # this is to fill mt.vals, cf. #9040
         rand!(mt, A) # must not segfault even if Int(pointer(A)) % 16 != 0
         @test A[end-4:end] == [0.3371041633752143, 0.41147647589610803, 0.6063082992397912, 0.9103565379264364, 0.16456579813368521]
@@ -498,8 +501,8 @@ let mta = MersenneTwister(42), mtb = MersenneTwister(42)
     @test sprand(mta,10,10,0.3) == sprand(mtb,10,10,0.3)
 end
 
-# test MersenneTwister polynomial generation and jump
-let seed = rand(UInt)
+@testset "MersenneTwister polynomial generation and jump" begin
+    seed = rand(UInt)
     mta = MersenneTwister(seed)
     mtb = MersenneTwister(seed)
     step = 25000*2
@@ -514,18 +517,29 @@ let seed = rand(UInt)
 
     # test PRNG jump
 
-    mts = randjump(mta, 25000, size)
+    function randjumpvec(m, steps, len) # old version of randjump
+        mts = accumulate(Future.randjump, fill(steps, len-1); init=m)
+        pushfirst!(mts, m)
+        mts
+    end
+
+    mts = randjumpvec(mta, 25000, size)
     @test length(mts) == 4
 
     for x in (rand(mts[k], Float64) for j=1:step, k=1:size)
         @test rand(mtb, Float64) == x
     end
+
+    @testset "generated RNGs are in a deterministic state (relatively to ==)" begin
+        m = MersenneTwister()
+        @test Future.randjump(m, 25000) == Future.randjump(m, 25000)
+    end
 end
 
 # test that the following is not an error (#16925)
-guardsrand() do
-    srand(typemax(UInt))
-    srand(typemax(UInt128))
+guardseed() do
+    Random.seed!(typemax(UInt))
+    Random.seed!(typemax(UInt128))
 end
 
 # copy, == and hash
@@ -568,26 +582,26 @@ let seed = rand(UInt32, 10)
     r = MersenneTwister(seed)
     @test r.seed == seed && r.seed !== seed
     # RNGs do not share their seed in randjump
-    let rs = randjump(r, big(10)^20, 2)
-        @test  rs[1].seed !== rs[2].seed
-        srand(rs[2])
-        @test seed == rs[1].seed != rs[2].seed
+    let r2 = Future.randjump(r, big(10)^20)
+        @test  r.seed !== r2.seed
+        Random.seed!(r2)
+        @test seed == r.seed != r2.seed
     end
     resize!(seed, 4)
     @test r.seed != seed
 end
 
-# srand(rng, ...) returns rng (#21248)
-guardsrand() do
+# Random.seed!(rng, ...) returns rng (#21248)
+guardseed() do
     g = Random.GLOBAL_RNG
     m = MersenneTwister(0)
-    @test srand() === g
-    @test srand(rand(UInt)) === g
-    @test srand(rand(UInt32, rand(1:10))) === g
-    @test srand(m) === m
-    @test srand(m, rand(UInt)) === m
-    @test srand(m, rand(UInt32, rand(1:10))) === m
-    @test srand(m, rand(1:10)) === m
+    @test Random.seed!() === g
+    @test Random.seed!(rand(UInt)) === g
+    @test Random.seed!(rand(UInt32, rand(1:10))) === g
+    @test Random.seed!(m) === m
+    @test Random.seed!(m, rand(UInt)) === m
+    @test Random.seed!(m, rand(UInt32, rand(1:10))) === m
+    @test Random.seed!(m, rand(1:10)) === m
 end
 
 # Issue 20062 - ensure internal functions reserve_1, reserve are type-stable
@@ -619,7 +633,7 @@ end
 # this shouldn't crash (#22403)
 @test_throws ArgumentError rand!(Union{UInt,Int}[1, 2, 3])
 
-@testset "$RNG() & srand(rng::$RNG) initializes randomly" for RNG in (MersenneTwister, RandomDevice)
+@testset "$RNG() & Random.seed!(rng::$RNG) initializes randomly" for RNG in (MersenneTwister, RandomDevice)
     m = RNG()
     a = rand(m, Int)
     m = RNG()
@@ -628,22 +642,22 @@ end
     m = RNG(nothing)
     b = rand(m, Int)
     @test b != a
-    srand(m)
+    Random.seed!(m)
     c = rand(m, Int)
     @test c ∉ (a, b)
-    srand(m)
+    Random.seed!(m)
     @test rand(m, Int) ∉ (a, b, c)
-    srand(m, nothing)
+    Random.seed!(m, nothing)
     d = rand(m, Int)
     @test d ∉ (a, b, c)
-    srand(m, nothing)
+    Random.seed!(m, nothing)
     @test rand(m, Int) ∉ (a, b, c, d)
 end
 
-@testset "MersenneTwister($seed) & srand(m::MersenneTwister, $seed) produce the same stream" for seed in [0:5; 10000:10005]
+@testset "MersenneTwister($seed) & Random.seed!(m::MersenneTwister, $seed) produce the same stream" for seed in [0:5; 10000:10005]
     m = MersenneTwister(seed)
     a = [rand(m) for _=1:100]
-    srand(m, seed)
+    Random.seed!(m, seed)
     @test a == [rand(m) for _=1:100]
 end
 
@@ -653,9 +667,9 @@ struct RandomStruct23964 end
     @test_throws ArgumentError rand(RandomStruct23964())
 end
 
-@testset "rand(::$RNG, ::UnitRange{$T}" for RNG ∈ (MersenneTwister(), RandomDevice()),
+@testset "rand(::$(typeof(RNG)), ::UnitRange{$T}" for RNG ∈ (MersenneTwister(), RandomDevice()),
                                                  T ∈ (Int32, UInt32, Int64, Int128, UInt128)
-    RNG isa MersenneTwister && srand(RNG, rand(UInt128)) # for reproducibility
+    RNG isa MersenneTwister && Random.seed!(RNG, rand(UInt128)) # for reproducibility
     r = T(1):T(108)
     @test rand(RNG, SamplerRangeFast(r)) ∈ r
 end
@@ -667,8 +681,8 @@ end
     end
 end
 
-@testset "eltype for UniformBits" begin
-    @test eltype(Random.UInt52()) == UInt64
-    @test eltype(Random.UInt52(UInt128)) == UInt128
-    @test eltype(Random.UInt104()) == UInt128
+@testset "gentype for UniformBits" begin
+    @test Random.gentype(Random.UInt52()) == UInt64
+    @test Random.gentype(Random.UInt52(UInt128)) == UInt128
+    @test Random.gentype(Random.UInt104()) == UInt128
 end

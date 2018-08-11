@@ -1,8 +1,9 @@
 # Install dependencies needed to build the documentation.
-using Pkg
+empty!(LOAD_PATH)
+push!(LOAD_PATH, @__DIR__, "@stdlib")
 empty!(DEPOT_PATH)
 pushfirst!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
-pushfirst!(LOAD_PATH, @__DIR__)
+using Pkg
 Pkg.instantiate()
 
 using Documenter
@@ -122,6 +123,7 @@ const PAGES = [
             "devdocs/cartesian.md",
             "devdocs/meta.md",
             "devdocs/subarrays.md",
+            "devdocs/isbitsunionarrays.md",
             "devdocs/sysimg.md",
             "devdocs/llvm.md",
             "devdocs/stdio.md",
@@ -144,8 +146,9 @@ for stdlib in STDLIB_DOCS
     @eval using $(stdlib.stdlib)
 end
 
+const render_pdf = "pdf" in ARGS
 makedocs(
-    build     = joinpath(@__DIR__, "_build/html/en"),
+    build     = joinpath(@__DIR__, "_build", (render_pdf ? "pdf" : "html"), "en"),
     modules   = [Base, Core, BuildSysImg, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
     clean     = true,
     doctest   = ("doctest=fix" in ARGS) ? (:fix) : ("doctest=true" in ARGS) ? true : false,
@@ -153,7 +156,7 @@ makedocs(
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
     strict    = true,
     checkdocs = :none,
-    format    = "pdf" in ARGS ? :latex : :html,
+    format    = render_pdf ? :latex : :html,
     sitename  = "The Julia Language",
     authors   = "The Julia Project",
     analytics = "UA-28835595-6",

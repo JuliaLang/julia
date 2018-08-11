@@ -211,7 +211,8 @@ function summarize(io::IO, m::Module, binding)
     println(io, "No docstring found for module `", m, "`.\n")
 end
 
-function summarize(io::IO, ::T, binding) where T
+function summarize(io::IO, @nospecialize(T), binding)
+    T = typeof(T)
     println(io, "`", binding, "` is of type `", T, "`.\n")
     summarize(io, T, binding)
 end
@@ -378,7 +379,7 @@ function fuzzyscore(needle, haystack)
     score += (acro ? 2 : 1)*length(is) # Matched characters
     score -= 2(length(needle)-length(is)) # Missing characters
     !acro && (score -= avgdistance(is)/10) # Contiguous
-    !isempty(is) && (score -= mean(is)/100) # Closer to beginning
+    !isempty(is) && (score -= sum(is)/length(is)/100) # Closer to beginning
     return score
 end
 

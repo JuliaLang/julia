@@ -52,11 +52,11 @@ number generator, see [Random Numbers](@ref).
 
 # Examples
 ```jldoctest
-julia> srand(0); randstring()
-"Qgt7sUOP"
+julia> Random.seed!(0); randstring()
+"0IPrGg0J"
 
 julia> randstring(MersenneTwister(0), 'a':'z', 6)
-"oevnou"
+"aszvqk"
 
 julia> randstring("ACGT")
 "TATCGGTC"
@@ -85,6 +85,7 @@ end
 # (Note that this is different from the problem of finding a random
 #  size-m subset of A where m is fixed!)
 function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real)
+    @assert !has_offset_axes(S, A)
     0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
     n = length(A)
     p == 1 && return copyto!(resize!(S, n), A)
@@ -144,7 +145,7 @@ randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
 ## rand Less Than Masked 52 bits (helper function)
 
 "Return a sampler generating a random `Int` (masked with `mask`) in ``[0, n)``, when `n <= 2^52`."
-ltm52(n::Int, mask::Int=nextpow2(n)-1) = LessThan(n-1, Masked(mask, UInt52Raw(Int)))
+ltm52(n::Int, mask::Int=nextpow(2, n)-1) = LessThan(n-1, Masked(mask, UInt52Raw(Int)))
 
 ## shuffle & shuffle!
 
@@ -179,9 +180,10 @@ julia> shuffle!(rng, Vector(1:16))
 ```
 """
 function shuffle!(r::AbstractRNG, a::AbstractArray)
+    @assert !has_offset_axes(a)
     n = length(a)
     @assert n <= Int64(2)^52
-    mask = nextpow2(n) - 1
+    mask = nextpow(2, n) - 1
     for i = n:-1:2
         (mask >> 1) == i && (mask >>= 1)
         j = 1 + rand(r, ltm52(i, mask))

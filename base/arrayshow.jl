@@ -78,7 +78,7 @@ function alignment(io::IO, X::AbstractVecOrMat,
             break
         end
     end
-    if 1 < length(a) < _length(axes(X,2))
+    if 1 < length(a) < length(axes(X,2))
         while sum(map(sum,a)) + sep*length(a) >= cols_otherwise
             pop!(a)
         end
@@ -167,8 +167,8 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     postsp = ""
     @assert textwidth(hdots) == textwidth(ddots)
     sepsize = length(sep)
-    rowsA, colsA = axes(X,1), axes(X,2)
-    m, n = _length(rowsA), _length(colsA)
+    rowsA, colsA = UnitRange(axes(X,1)), UnitRange(axes(X,2))
+    m, n = length(rowsA), length(colsA)
     # To figure out alignments, only need to look at as many rows as could
     # fit down screen. If screen has at least as many rows as A, look at A.
     # If not, then we only need to look at the first and last chunks of A,
@@ -266,10 +266,10 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
             for i = 1:nd
                 ii = idxs[i]
                 ind = tailinds[i]
-                if _length(ind) > 10
+                if length(ind) > 10
                     if ii == ind[firstindex(ind)+3] && all(d->idxs[d]==first(tailinds[d]),1:i-1)
                         for j=i+1:nd
-                            szj = _length(axes(a, j+2))
+                            szj = length(axes(a, j+2))
                             indj = tailinds[j]
                             if szj>10 && first(indj)+2 < idxs[j] <= last(indj)-3
                                 @goto skip
@@ -312,8 +312,13 @@ print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
 # typeinfo aware
 # implements: show(io::IO, ::MIME"text/plain", X::AbstractArray)
 function show(io::IO, ::MIME"text/plain", X::AbstractArray)
-    # 0) compute new IOContext
-    if !haskey(io, :compact) && _length(axes(X, 2)) > 1
+    # 0) show summary before setting :compact
+    summary(io, X)
+    isempty(X) && return
+    print(io, ":")
+
+    # 1) compute new IOContext
+    if !haskey(io, :compact) && length(axes(X, 2)) > 1
         io = IOContext(io, :compact => true)
     end
     if get(io, :limit, false) && eltype(X) === Method
@@ -321,10 +326,6 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
         io = IOContext(io, :limit => false)
     end
 
-    # 1) print summary info
-    summary(io, X)
-    isempty(X) && return
-    print(io, ":")
     if get(io, :limit, false) && displaysize(io)[1]-4 <= 0
         return print(io, " …")
     else
@@ -359,7 +360,7 @@ function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
     @assert !isempty(X)
     limit = get(io, :limit, false)::Bool
     indr, indc = axes(X,1), axes(X,2)
-    nr, nc = _length(indr), _length(indc)
+    nr, nc = length(indr), length(indc)
     rdots, cdots = false, false
     rr1, rr2 = UnitRange{Int}(indr), 1:0
     cr1, cr2 = UnitRange{Int}(indc), 1:0
@@ -416,7 +417,7 @@ _show_empty(io, X) = nothing # by default, we don't know this constructor
 function show(io::IO, X::AbstractArray)
     ndims(X) == 1 && return show_vector(io, X)
     prefix = typeinfo_prefix(io, X)
-    io = IOContext(io, :typeinfo => eltype(X), :compact => true)
+    io = IOContext(io, :typeinfo => eltype(X), :compact => get(io, :compact, true))
     isempty(X) ?
         _show_empty(io, X) :
         _show_nonempty(io, X, prefix)
@@ -430,10 +431,10 @@ end
 function show_vector(io::IO, v, opn='[', cls=']')
     print(io, typeinfo_prefix(io, v))
     # directly or indirectly, the context now knows about eltype(v)
-    io = IOContext(io, :typeinfo => eltype(v), :compact => true)
+    io = IOContext(io, :typeinfo => eltype(v), :compact => get(io, :compact, true))
     limited = get(io, :limit, false)
-    if limited && _length(v) > 20
-        inds = indices1(v)
+    if limited && length(v) > 20
+        inds = axes1(v)
         show_delim_array(io, v, opn, ",", "", false, inds[1], inds[1]+9)
         print(io, "  …  ")
         show_delim_array(io, v, "", ",", cls, false, inds[end-9], inds[end])
@@ -447,45 +448,40 @@ end
 
 # given type `typeinfo` extracted from context, assuming a collection
 # is being displayed, deduce the elements type; in spirit this is
-# similar to `eltype`, but in some cases this would lead to incomplete
-# information: assume we are at the top level, and no typeinfo is set,
-# and that it is deduced to be typeinfo=Any by default, and consider
-# printing X = Any[1]; to know if the eltype of X is already displayed,
-# we would compare eltype(X) to eltype(typeinfo) == Any, and deduce
-# that we don't need to print X's eltype because it's already known by
-# the context, which is wrong; even if default value of typeinfo is
-# not set to Any, then the problem would be similar one layer below
-# when printing an array like Any[Any[1]]; hence we must treat Any
-# specially
-function typeinfo_eltype(typeinfo::Type)::Union{Type,Nothing}
-    if typeinfo == Any
-        # the current context knows nothing about what is being displayed, not even
-        # whether it's a collection or scalar
-        nothing
-    else
-        # we assume typeinfo refers to a collection-like type, whose
-        # eltype meaningfully represents what the context knows about
-        # the eltype of the object currently being displayed
-        eltype(typeinfo)
-    end
-end
+# similar to `eltype` (except that we don't want a default fall-back
+# returning Any, as this would cause incorrect printing in e.g. `Vector[Any[1]]`,
+# because eltype(Vector) == Any so `Any` wouldn't be printed in `Any[1]`)
+typeinfo_eltype(typeinfo) = nothing # element type not precisely known
+typeinfo_eltype(typeinfo::Type{<:AbstractArray{T}}) where {T} = eltype(typeinfo)
+typeinfo_eltype(typeinfo::Type{<:AbstractDict{K,V}}) where {K,V} = eltype(typeinfo)
+typeinfo_eltype(typeinfo::Type{<:AbstractSet{T}}) where {T} = eltype(typeinfo)
+
 
 # X not constrained, can be any iterable (cf. show_vector)
 function typeinfo_prefix(io::IO, X)
     typeinfo = get(io, :typeinfo, Any)::Type
     if !(X isa typeinfo)
-        @assert typeinfo.name.module ∉ (Base, Core) "$(typeof(X)) is not a subtype of $typeinfo"
-        typeinfo = Any # no error for user-defined types
+        typeinfo = Any
     end
+
     # what the context already knows about the eltype of X:
     eltype_ctx = typeinfo_eltype(typeinfo)
     eltype_X = eltype(X)
-    # Types hard-coded here are those which are created by default for a given syntax
-    if eltype_X == eltype_ctx || !isempty(X) && eltype_X in (Float64, Int, Char, String)
-        ""
-    elseif print_without_params(eltype_X)
-        string(unwrap_unionall(eltype_X).name) # Print "Array" rather than "Array{T,N}"
+
+    if X isa AbstractDict
+        if eltype_X == eltype_ctx || !isempty(X) && isconcretetype(keytype(X)) && isconcretetype(valtype(X))
+            string(typeof(X).name)
+        else
+            string(typeof(X))
+        end
     else
-        string(eltype_X)
+        # Types hard-coded here are those which are created by default for a given syntax
+        if eltype_X == eltype_ctx || !isempty(X) && eltype_X in (Float64, Int, Char, String)
+            ""
+        elseif print_without_params(eltype_X)
+            string(unwrap_unionall(eltype_X).name) # Print "Array" rather than "Array{T,N}"
+        else
+            string(eltype_X)
+        end
     end
 end

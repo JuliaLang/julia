@@ -52,7 +52,7 @@ function bind(server::PipeServer, name::AbstractString)
     if err != 0
         if err != UV_EADDRINUSE && err != UV_EACCES
             #TODO: this codepath is currently not tested
-            throw(UVError("bind",err))
+            throw(_UVError("bind",err))
         else
             return false
         end

@@ -56,6 +56,15 @@ float(::Type{<:AbstractIrrational}) = Float64
 ==(::Irrational{s}, ::Irrational{s}) where {s} = true
 ==(::AbstractIrrational, ::AbstractIrrational) = false
 
+<(::Irrational{s}, ::Irrational{s}) where {s} = false
+function <(x::AbstractIrrational, y::AbstractIrrational)
+    Float64(x) != Float64(y) || throw(MethodError(<, (x, y)))
+    return Float64(x) < Float64(y)
+end
+
+<=(::Irrational{s}, ::Irrational{s}) where {s} = true
+<=(x::AbstractIrrational, y::AbstractIrrational) = x==y || x<y
+
 # Irrationals, by definition, can't have a finite representation equal them exactly
 ==(x::AbstractIrrational, y::Real) = false
 ==(x::Real, y::AbstractIrrational) = false
@@ -127,6 +136,13 @@ end
 
 round(x::Irrational, r::RoundingMode) = round(float(x), r)
 
+"""
+	@irrational sym val def
+	@irrational(sym, val, def)
+
+Define a new `Irrational` value, `sym`, with pre-computed `Float64` value `val`,
+and arbitrary-precision definition in terms of `BigFloat`s given be the expression `def`.
+"""
 macro irrational(sym, val, def)
     esym = esc(sym)
     qsym = esc(Expr(:quote, sym))

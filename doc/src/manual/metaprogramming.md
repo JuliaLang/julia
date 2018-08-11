@@ -80,7 +80,6 @@ Expr
     1: Symbol +
     2: Int64 1
     3: Int64 1
-  typ: Any
 ```
 
 `Expr` objects may also be nested:
@@ -324,8 +323,6 @@ Expr
         1: Symbol +
         2: Int64 1
         3: Int64 2
-      typ: Any
-  typ: Any
 ```
 
 As we have seen, such expressions support interpolation with `$`.
@@ -734,7 +731,6 @@ Expr
     3: String ") should equal b ("
     4: Symbol b
     5: String ")!"
-  typ: Any
 ```
 
 So now instead of getting a plain string in `msg_body`, the macro is receiving a full expression
@@ -911,15 +907,40 @@ When a significant amount of repetitive boilerplate code is required, it is comm
 it programmatically to avoid redundancy. In most languages, this requires an extra build step,
 and a separate program to generate the repetitive code. In Julia, expression interpolation and
 [`eval`](@ref) allow such code generation to take place in the normal course of program execution.
-For example, the following code defines a series of operators on three arguments in terms of their
-2-argument forms:
+For example, consider the following custom type
 
-```julia
-for op = (:+, :*, :&, :|, :$)
+```jldoctest mynumber-codegen
+struct MyNumber
+    x::Float64
+end
+# output
+
+```
+
+for which we want to add a number of methods to. We can do this programmatically in the
+following loop:
+
+```jldoctest mynumber-codegen
+for op = (:sin, :cos, :tan, :log, :exp)
     eval(quote
-        ($op)(a,b,c) = ($op)(($op)(a,b),c)
+        Base.$op(a::MyNumber) = MyNumber($op(a.x))
     end)
 end
+# output
+
+```
+
+and we can now use those functions with our custom type:
+
+```jldoctest mynumber-codegen
+julia> x = MyNumber(π)
+MyNumber(3.141592653589793)
+
+julia> sin(x)
+MyNumber(1.2246467991473532e-16)
+
+julia> cos(x)
+MyNumber(-1.0)
 ```
 
 In this manner, Julia acts as its own [preprocessor](https://en.wikipedia.org/wiki/Preprocessor),
@@ -927,8 +948,8 @@ and allows code generation from inside the language. The above code could be wri
 more tersely using the `:` prefix quoting form:
 
 ```julia
-for op = (:+, :*, :&, :|, :$)
-    eval(:(($op)(a,b,c) = ($op)(($op)(a,b),c)))
+for op = (:sin, :cos, :tan, :log, :exp)
+    eval(:(Base.$op(a::MyNumber) = MyNumber($op(a.x))))
 end
 ```
 
@@ -936,8 +957,8 @@ This sort of in-language code generation, however, using the `eval(quote(...))` 
 enough that Julia comes with a macro to abbreviate this pattern:
 
 ```julia
-for op = (:+, :*, :&, :|, :$)
-    @eval ($op)(a,b,c) = ($op)(($op)(a,b),c)
+for op = (:sin, :cos, :tan, :log, :exp)
+    @eval Base.$op(a::MyNumber) = MyNumber($op(a.x))
 end
 ```
 

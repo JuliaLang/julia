@@ -257,14 +257,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createLoopIdiomPass());
     PM->add(createLoopDeletionPass());          // Delete dead loops
     PM->add(createJumpThreadingPass());         // Thread jumps
-
-    if (opt_level >= 3) {
-        PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
-    }
-
+    PM->add(createSLPVectorizerPass());         // Vectorize straight-line code
     PM->add(createAggressiveDCEPass());         // Delete dead instructions
-    if (opt_level >= 3)
-        PM->add(createInstructionCombiningPass());   // Clean up after SLP loop vectorizer
+    PM->add(createInstructionCombiningPass());  // Clean up after SLP loop vectorizer
     PM->add(createLoopVectorizePass());         // Vectorize loops
     PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
     // LowerPTLS removes an indirect call. As a result, it is likely to trigger
@@ -410,6 +405,7 @@ void JuliaOJIT::DebugObjectRegistrar::registerObject(RTDyldObjHandleT H, const O
         NotifyGDB(SavedObject);
     }
 
+    JIT.NotifyFinalizer(*Object, *LO);
     SavedObjects.push_back(std::move(SavedObject));
 
     ORCNotifyObjectEmitted(JuliaListener.get(), *Object,
@@ -630,9 +626,9 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
 void JuliaOJIT::removeModule(ModuleHandleT H)
 {
 #if JL_LLVM_VERSION >= 50000
-    CompileLayer.removeModule(H);
+    (void)CompileLayer.removeModule(H);
 #else
-    CompileLayer.removeModuleSet(H);
+    (void)CompileLayer.removeModuleSet(H);
 #endif
 }
 
@@ -681,7 +677,16 @@ Function *JuliaOJIT::FindFunctionNamed(const std::string &Name)
 
 void JuliaOJIT::RegisterJITEventListener(JITEventListener *L)
 {
-    // TODO
+    if (!L)
+        return;
+    EventListeners.push_back(L);
+}
+
+void JuliaOJIT::NotifyFinalizer(const object::ObjectFile &Obj,
+                                const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo)
+{
+    for (auto &Listener : EventListeners)
+        Listener->NotifyObjectEmitted(Obj, LoadedObjectInfo);
 }
 
 const DataLayout& JuliaOJIT::getDataLayout() const
@@ -1150,7 +1155,7 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
     shadow_output->setTargetTriple(TM->getTargetTriple().str());
 #if JL_LLVM_VERSION >= 40000
     DataLayout DL = TM->createDataLayout();
-    DL.reset(DL.getStringRepresentation() + "-ni:10:11:12");
+    DL.reset(DL.getStringRepresentation() + "-ni:10:11:12:13");
     shadow_output->setDataLayout(DL);
 #else
     shadow_output->setDataLayout(TM->createDataLayout());
@@ -1184,6 +1189,11 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
     };
 
     add_output(*shadow_output, "unopt.bc", "text.bc", "text.o");
+    // save some memory, by deleting all of the function bodies
+    for (auto &F : shadow_output->functions()) {
+        if (!F.isDeclaration())
+            F.deleteBody();
+    }
 
     LLVMContext &Context = shadow_output->getContext();
     std::unique_ptr<Module> sysimage(new Module("sysimage", Context));

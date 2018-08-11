@@ -254,7 +254,7 @@ end
 
 Open a file in a mode specified by five boolean keyword arguments:
 
-| Keyword    | Desciption             | Default                                 |
+| Keyword    | Description             | Default                                 |
 |:-----------|:-----------------------|:----------------------------------------|
 | `read`     | open for reading       | `!write`                                |
 | `write`    | open for writing       | `truncate \\| append`                   |
@@ -425,11 +425,7 @@ function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
     ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, !keep)
 end
 
-function readline(s::IOStream; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
-    end
+function readline(s::IOStream; keep::Bool=false)
     ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
 end
 
@@ -485,6 +481,7 @@ function read(s::IOStream)
         if pos > 0
             sz -= pos
         end
+    catch
     end
     b = StringVector(sz<=0 ? 1024 : sz)
     nr = readbytes_all!(s, b, typemax(Int))
@@ -507,15 +504,7 @@ function read(s::IOStream, nb::Integer; all::Bool=true)
     resize!(b, nr)
 end
 
-## Character streams ##
-
-function peekchar(s::IOStream)
-    chref = Ref{UInt32}()
-    if ccall(:ios_peekutf8, Cint, (Ptr{Cvoid}, Ptr{UInt32}), s, chref) < 0
-        return typemax(Char)
-    end
-    return Char(chref[])
-end
+## peek ##
 
 function peek(s::IOStream)
     ccall(:ios_peekc, Cint, (Ptr{Cvoid},), s)

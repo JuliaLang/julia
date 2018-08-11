@@ -5,12 +5,12 @@ module Sort
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base.Order
-using .Base: copymutable, LinearIndices, IndexStyle, viewindexing, IndexLinear, _length, (:),
-    eachindex, axes, first, last, similar, start, next, done, zip, @views, OrdinalRange,
+using .Base: copymutable, LinearIndices, length, (:),
+    eachindex, axes, first, last, similar, zip, OrdinalRange,
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
-    length, resize!, fill
+    length, resize!, fill, Missing, has_offset_axes
 
 using .Base: >>>, !==
 
@@ -37,8 +37,6 @@ export # also exported by Base
     partialsort!,
     partialsortperm,
     partialsortperm!,
-    sortrows,
-    sortcols,
     # algorithms:
     InsertionSort,
     QuickSort,
@@ -225,6 +223,7 @@ function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
 end
 
 function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -234,6 +233,7 @@ function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
 end
 
 function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if step(a) == 0
         lt(o, first(a), x) ? length(a) + 1 : 1
     else
@@ -243,6 +243,7 @@ function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -251,6 +252,7 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if step(a) == 0
         lt(o, first(a), x) ? length(a)+1 : 1
     else
@@ -259,6 +261,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if lt(o, first(a), x)
         if step(a) == 0
             length(a) + 1
@@ -271,6 +274,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOr
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if lt(o, x, first(a))
         0
     elseif step(a) == 0
@@ -568,7 +572,7 @@ end
 ## generic sorting methods ##
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
-defalg(v::AbstractArray{<:Number}) = DEFAULT_UNSTABLE
+defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
 
 function sort!(v::AbstractVector, alg::Algorithm, order::Ordering)
     inds = axes(v,1)
@@ -622,7 +626,7 @@ function sort!(v::AbstractVector;
                order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
-        n = _length(v)
+        n = length(v)
         if n > 1
             min, max = extrema(v)
             (diff, o1) = sub_with_overflow(max, min)
@@ -780,7 +784,7 @@ function sortperm(v::AbstractVector;
                   order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
-        n = _length(v)
+        n = length(v)
         if n > 1
             min, max = extrema(v)
             (diff, o1) = sub_with_overflow(max, min)
@@ -898,14 +902,10 @@ function sort(A::AbstractArray;
               lt=isless,
               by=identity,
               rev::Union{Bool,Nothing}=nothing,
-              order::Ordering=Forward,
-              initialized::Union{Bool,Nothing}=nothing)
+              order::Ordering=Forward)
     dim = dims
-    if initialized !== nothing
-        Base.depwarn("`initialized` keyword argument is deprecated", :sort)
-    end
     order = ord(lt,by,rev,order)
-    n = _length(axes(A, dim))
+    n = length(axes(A, dim))
     if dim != 1
         pdims = (dim, setdiff(1:ndims(A), dim)...)  # put the selected dimension first
         Ap = permutedims(A, pdims)
@@ -925,75 +925,6 @@ end
         sort!(Av, s, s+n-1, alg, order)
     end
     Av
-end
-
-
-"""
-    sortrows(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
-
-Sort the rows of matrix `A` lexicographically.
-See [`sort!`](@ref) for a description of possible
-keyword arguments.
-
-# Examples
-```jldoctest
-julia> sortrows([7 3 5; -1 6 4; 9 -2 8])
-3×3 Array{Int64,2}:
- -1   6  4
-  7   3  5
-  9  -2  8
-
-julia> sortrows([7 3 5; -1 6 4; 9 -2 8], lt=(x,y)->isless(x[2],y[2]))
-3×3 Array{Int64,2}:
-  9  -2  8
-  7   3  5
- -1   6  4
-
-julia> sortrows([7 3 5; -1 6 4; 9 -2 8], rev=true)
-3×3 Array{Int64,2}:
-  9  -2  8
-  7   3  5
- -1   6  4
-```
-"""
-function sortrows(A::AbstractMatrix; kws...)
-    rows = [view(A, i, :) for i in axes(A,1)]
-    p = sortperm(rows; kws...)
-    A[p,:]
-end
-
-"""
-    sortcols(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
-
-Sort the columns of matrix `A` lexicographically.
-See [`sort!`](@ref) for a description of possible
-keyword arguments.
-
-# Examples
-```jldoctest
-julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8])
-3×3 Array{Int64,2}:
-  3   5  7
- -1  -4  6
- -2   8  9
-
-julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8], alg=InsertionSort, lt=(x,y)->isless(x[2],y[2]))
-3×3 Array{Int64,2}:
-  5   3  7
- -4  -1  6
-  8  -2  9
-
-julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8], rev=true)
-3×3 Array{Int64,2}:
- 7   5   3
- 6  -4  -1
- 9   8  -2
-```
-"""
-function sortcols(A::AbstractMatrix; kws...)
-    cols = [view(A, :, i) for i in axes(A,2)]
-    p = sortperm(cols; kws...)
-    A[:,p]
 end
 
 ## fast clever sorting for floats ##

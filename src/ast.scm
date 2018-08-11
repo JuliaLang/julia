@@ -62,7 +62,7 @@
                         (deparse (cadr (cadr (caddr e)))))
                        (else
                         (string #\( (deparse (caddr e)) #\))))))
-        ((memq (car e) '(... |'| |.'|))
+        ((memq (car e) '(... |'|))
          (string (deparse (cadr e)) (car e)))
         ((or (syntactic-op? (car e)) (eq? (car e) '|<:|) (eq? (car e) '|>:|))
          (if (length= e 2)
@@ -81,7 +81,7 @@
                    (string #\( (deparse (caddr e)) " " (cadr e) " " (deparse (cadddr e)) #\) ))
                   (else
                    (deparse-prefix-call (cadr e) (cddr e) #\( #\)))))
-           (($ &)          (if (pair? (cadr e))
+           (($ &)          (if (and (pair? (cadr e)) (not (eq? (caadr e) 'outerref)))
                                (string (car e) "(" (deparse (cadr e)) ")")
                                (string (car e) (deparse (cadr e)))))
            ((|::|)         (if (length= e 2)
@@ -200,7 +200,7 @@
                     (string.join (map deparse (cdr (cadddr e))) "\n") "\n"
                     "end"))
            ;; misc syntax forms
-           ((import importall using)
+           ((import using)
             (define (deparse-path e)
               (cond ((and (pair? e) (eq? (car e) '|.|))
                      (let loop ((lst   (cdr e))
@@ -378,25 +378,20 @@
     (symbol (string.sub str 1 (length str)))))
 
 ; convert '.xx to 'xx, and (|.| _ '.xx) to (|.| _ 'xx), and otherwise return #f
-(define (maybe-undotop e)
+;; raise an error for using .op as a function name
+(define (check-dotop e)
   (if (symbol? e)
       (let ((str (string e)))
         (if (and (eqv? (string.char str 0) #\.)
                  (not (eq? e '|.|))
                  (not (eqv? (string.char str 1) #\.)))
-            (symbol (string.sub str 1 (length str)))
-            #f))
+            (error (string "invalid function name \"" e "\""))))
       (if (pair? e)
           (if (eq? (car e) '|.|)
-              (let ((op (maybe-undotop (caddr e))))
-                (if op
-                    (list '|.| (cadr e) op)
-                    #f))
+              (check-dotop (caddr e))
               (if (quoted? e)
-                  (let ((op (maybe-undotop (cadr e))))
-                    (if op (list (car e) op) #f))
-                  #f))
-          #f)))
+                  (check-dotop (cadr e))))))
+  e)
 
 (define (vararg? x) (and (pair? x) (eq? (car x) '...)))
 (define (varargexpr? x) (and
@@ -408,8 +403,6 @@
                            (pair? (caddr x))
                            (length> (caddr x) 1)
                            (eq? (cadr (caddr x)) 'Vararg)))))
-(define (trans?  x) (and (pair? x) (eq? (car x) '|.'|)))
-(define (ctrans? x) (and (pair? x) (eq? (car x) '|'|)))
 (define (linenum? x) (and (pair? x) (eq? (car x) 'line)))
 
 (define (make-assignment l r) `(= ,l ,r))
@@ -457,9 +450,6 @@
 
 (define var-info-for assq)
 
-(define (assignment? e)
-  (and (pair? e) (eq? (car e) '=)))
-
 (define (assignment-like? e)
   (and (pair? e) (is-prec-assignment? (car e))))
 
@@ -468,7 +458,7 @@
 
 (define (nospecialize-meta? e (one #f))
   (and (if one (length= e 3) (length> e 2))
-       (eq? (car e) 'meta) (eq? (cadr e) 'nospecialize)))
+       (eq? (car e) 'meta) (memq (cadr e) '(nospecialize specialize))))
 
 (define (if-generated? e)
   (and (length= e 4) (eq? (car e) 'if) (equal? (cadr e) '(generated))))

@@ -337,7 +337,7 @@ Core.eval(Main, main_ex)
 create_serialization_stream() do s # user-defined type array
     f = () -> begin task_local_storage(:v, 2); return 1+1 end
     t = Task(f)
-    Base._wait(schedule(t))
+    Base.wait(schedule(t))
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
@@ -349,7 +349,7 @@ end
 struct MyErrorTypeTest <: Exception end
 create_serialization_stream() do s # user-defined type array
     t = Task(()->throw(MyErrorTypeTest()))
-    @test_throws MyErrorTypeTest Base._wait(schedule(t))
+    @test_throws MyErrorTypeTest Base.wait(schedule(t))
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)

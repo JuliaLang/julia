@@ -80,6 +80,7 @@ pointer(s::String) = unsafe_convert(Ptr{UInt8}, s)
 pointer(s::String, i::Integer) = pointer(s)+(i-1)
 
 ncodeunits(s::String) = Core.sizeof(s)
+sizeof(s::String) = Core.sizeof(s)
 codeunit(s::String) = UInt8
 
 @inline function codeunit(s::String, i::Integer)
@@ -262,12 +263,12 @@ function length(s::String, i::Int, j::Int)
     j < i && return 0
     @inbounds i, k = thisind(s, i), i
     c = j - i + (i == k)
-    _length(s, i, j, c)
+    length(s, i, j, c)
 end
 
-length(s::String) = _length(s, 1, ncodeunits(s), ncodeunits(s))
+length(s::String) = length(s, 1, ncodeunits(s), ncodeunits(s))
 
-@inline function _length(s::String, i::Int, n::Int, c::Int)
+@inline function length(s::String, i::Int, n::Int, c::Int)
     i < n || return c
     @inbounds b = codeunit(s, i)
     @inbounds while true
@@ -299,51 +300,9 @@ first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8
 
 isvalid(s::String, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
 
-## optimized concatenation, reverse, repeat ##
-
-function string(a::String...)
-    if length(a) == 1
-        return a[1]::String
-    end
-    n = 0
-    for str in a
-        n += sizeof(str)
-    end
-    out = _string_n(n)
-    offs = 1
-    for str in a
-        unsafe_copyto!(pointer(out,offs), pointer(str), sizeof(str))
-        offs += sizeof(str)
-    end
-    return out
-end
-
 # UTF-8 encoding length of a character
 # TODO: delete or move to char.jl
 codelen(c::Char) = 4 - (trailing_zeros(0xff000000 | reinterpret(UInt32, c)) >> 3)
-
-function string(a::Union{String,AbstractChar}...)
-    sprint() do io
-        for x in a
-            print(io, x)
-        end
-    end
-end
-
-function repeat(s::String, r::Integer)
-    r < 0 && throw(ArgumentError("can't repeat a string $r times"))
-    n = sizeof(s)
-    out = _string_n(n*r)
-    if n == 1 # common case: repeating a single-byte string
-        @inbounds b = codeunit(s, 1)
-        ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), out, b, r)
-    else
-        for i = 0:r-1
-            unsafe_copyto!(pointer(out, i*n+1), pointer(s), n)
-        end
-    end
-    return out
-end
 
 """
     repeat(c::AbstractChar, r::Integer) -> String

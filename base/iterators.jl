@@ -224,6 +224,7 @@ pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
 pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 pairs(tuple::Tuple) = Pairs(tuple, keys(tuple))
 pairs(nt::NamedTuple) = Pairs(nt, keys(nt))
+pairs(v::Core.SimpleVector) = Pairs(v, LinearIndices(v))
 # pairs(v::Pairs) = v # listed for reference, but already defined from being an AbstractDict
 
 length(v::Pairs) = length(v.itr)
@@ -249,7 +250,7 @@ values(v::Pairs) = v.data
 getindex(v::Pairs, key) = v.data[key]
 setindex!(v::Pairs, value, key) = (v.data[key] = value; v)
 get(v::Pairs, key, default) = get(v.data, key, default)
-get(f::Base.Callable, collection::Pairs, key) = get(f, v.data, key)
+get(f::Base.Callable, v::Pairs, key) = get(f, v.data, key)
 
 # zip
 
@@ -495,8 +496,6 @@ end
 
 @propagate_inbounds iterate(i::Rest, st=i.st) = iterate(i.itr, st)
 isdone(i::Rest, st...) = isdone(i.itr, st...)
-@propagate_inbounds iterate(i::Rest{I,S}, st::S=i.st) where {I,S<:Base.LegacyIterationCompat{I}} =
-    done(i.itr, st) ? nothing : next(i.itr, st)
 
 eltype(::Type{<:Rest{I}}) where {I} = eltype(I)
 IteratorEltype(::Type{<:Rest{I}}) where {I} = IteratorEltype(I)
@@ -774,15 +773,14 @@ _prod_size1(a, A) =
 
 axes(P::ProductIterator) = _prod_indices(P.iterators)
 _prod_indices(::Tuple{}) = ()
-_prod_indices(t::Tuple) = (_prod_indices1(t[1], IteratorSize(t[1]))..., _prod_indices(tail(t))...)
-_prod_indices1(a, ::HasShape)  = axes(a)
-_prod_indices1(a, ::HasLength) = (OneTo(length(a)),)
-_prod_indices1(a, A) =
+_prod_indices(t::Tuple) = (_prod_axes1(t[1], IteratorSize(t[1]))..., _prod_indices(tail(t))...)
+_prod_axes1(a, ::HasShape)  = axes(a)
+_prod_axes1(a, ::HasLength) = (OneTo(length(a)),)
+_prod_axes1(a, A) =
     throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
 
 ndims(p::ProductIterator) = length(axes(p))
 length(P::ProductIterator) = prod(size(P))
-_length(p::ProductIterator) = prod(map(unsafe_length, axes(p)))
 
 IteratorEltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
 IteratorEltype(::Type{ProductIterator{Tuple{I}}}) where {I} = IteratorEltype(I)
@@ -803,7 +801,7 @@ iterate(::ProductIterator{Tuple{}}, state) = nothing
 @inline isdone(P::ProductIterator) = any(isdone, P.iterators)
 @inline function _pisdone(iters, states)
     iter1 = first(iters)
-    done1 = isdone(iter1, first(states)) # check step
+    done1 = isdone(iter1, first(states)[2]) # check step
     done1 === true || return done1 # false or missing
     done1 = isdone(iter1) # check restart
     done1 === true || return done1 # false or missing
@@ -946,10 +944,9 @@ function length(itr::PartitionIterator)
 end
 
 function iterate(itr::PartitionIterator{<:Vector}, state=1)
-    iterate(itr.c, state) === nothing && return nothing
-    l = state
-    r = min(state + itr.n-1, length(itr.c))
-    return view(itr.c, l:r), r + 1
+    state > length(itr.c) && return nothing
+    r = min(state + itr.n - 1, length(itr.c))
+    return view(itr.c, state:r), r + 1
 end
 
 struct IterationCutShort; end
@@ -1031,15 +1028,18 @@ mutable struct Stateful{T, VS}
     # A bit awkward right now, but adapted to the new iteration protocol
     nextvalstate::Union{VS, Nothing}
     taken::Int
+    @inline function Stateful{<:Any, Any}(itr::T) where {T}
+        new{T, Any}(itr, iterate(itr), 0)
+    end
     @inline function Stateful(itr::T) where {T}
         VS = approx_iter_type(T)
-        new{T, VS}(itr, iterate(itr)::VS, 0)
+        return new{T, VS}(itr, iterate(itr)::VS, 0)
     end
 end
 
 function reset!(s::Stateful{T,VS}, itr::T) where {T,VS}
     s.itr = itr
-    s.nextvalstate = iterate(itr)
+    setfield!(s, :nextvalstate, iterate(itr))
     s.taken = 0
     s
 end
@@ -1055,7 +1055,8 @@ else
     # having to typesubtract
     function doiterate(itr, valstate::Union{Nothing, Tuple{Any, Any}})
         valstate === nothing && return nothing
-        iterate(itr, tail(valstate))
+        val, st = valstate
+        return iterate(itr, st)
     end
     function _approx_iter_type(itrT::Type, vstate::Type)
         vstate <: Union{Nothing, Tuple{Any, Any}} || return Any
@@ -1075,7 +1076,7 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
         throw(EOFError())
     else
         val, state = vs
-        s.nextvalstate = iterate(s.itr, state)
+        Core.setfield!(s, :nextvalstate, iterate(s.itr, state))
         s.taken += 1
         return val
     end

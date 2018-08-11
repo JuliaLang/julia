@@ -20,10 +20,9 @@ Helper to test that every slot is in range after inlining.
 """
 function test_inlined_symbols(func, argtypes)
     src, rettype = code_typed(func, argtypes)[1]
-    nl = length(src.slottypes)
-    ast = Expr(:body)
+    nl = length(src.slotnames)
+    ast = Expr(:block)
     ast.args = src.code
-    ast.typ = rettype
     walk(ast) do e
         if isa(e, Core.Slot)
             @test 1 <= e.id <= nl
@@ -122,4 +121,19 @@ end
     @noinline g19122()::Bool = true
     @test f19122()
     @test g19122()
+end
+
+@testset "issue #27403: getindex is inlined with Union{Int,Missing}" begin
+    function sum27403(X::AbstractArray)
+        s = zero(eltype(X)) + zero(eltype(X))
+        for x in X
+            if !ismissing(x)
+                s += x
+            end
+        end
+        s
+    end
+
+    (src, _) = code_typed(sum27403, Tuple{Vector{Int}})[1]
+    @test !any(x -> x isa Expr && x.head === :invoke, src.code)
 end

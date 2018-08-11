@@ -40,7 +40,7 @@ function generate_nasty(n::Int,             # size of planted solutions
     @assert m ≥ n
     d ≤ m-1 || @warn "d=$d, should be ≤ m-1=$(m-1)"
 
-    srand(seed)
+    Random.seed!(seed)
 
     allvers = [sort(unique(randvers(k) for j = 1:q)) for i = 1:m]
 

@@ -5,17 +5,10 @@ include("testenv.jl")
 
 using Test, Serialization
 
-@test_throws MethodError convert(Enum, 1.0)
+isdefined(Main, :MacroCalls) || @eval Main include("testhelpers/MacroCalls.jl")
+using Main.MacroCalls
 
-macro macrocall(ex)
-    @assert Meta.isexpr(ex, :macrocall)
-    ex.head = :call
-    for i in 2:length(ex.args)
-        ex.args[i] = QuoteNode(ex.args[i])
-    end
-    insert!(ex.args, 3, __module__)
-    return esc(ex)
-end
+@test_throws MethodError convert(Enum, 1.0)
 
 @test_throws ArgumentError("no arguments given for Enum Foo") @macrocall(@enum Foo)
 @test_throws ArgumentError("invalid base type for Enum Foo2, Foo2::Float64=::Float64; base type must be an integer primitive type") @macrocall(@enum Foo2::Float64 apple=1.)
@@ -135,11 +128,11 @@ end
 # test for unique Enum values
 @test_throws ArgumentError("values for Enum Test14 are not unique") @macrocall(@enum(Test14, _zero_Test14, _one_Test14, _two_Test14=0))
 
-@test repr(apple) == "apple::$(string(Fruit)) = 0"
+@test repr(apple) == "apple::Fruit = 0"
 @test string(apple) == "apple"
 
 @test repr("text/plain", Fruit) == "Enum $(string(Fruit)):\napple = 0\norange = 1\nkiwi = 2"
-@test repr("text/plain", orange) == "orange::$(curmod_prefix)Fruit = 1"
+@test repr("text/plain", orange) == "orange::Fruit = 1"
 let io = IOBuffer()
     ioc = IOContext(io, :compact=>false)
     show(io, Fruit)

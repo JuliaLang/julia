@@ -115,6 +115,19 @@ function resolve(g::GlobalRef; force::Bool=false)
     return g
 end
 
+const NamedTuple_typename = NamedTuple.body.body.name
+
+function _fieldnames(@nospecialize t)
+    if t.name === NamedTuple_typename
+        if t.parameters[1] isa Tuple
+            return t.parameters[1]
+        else
+            throw(ArgumentError("type does not have definite field names"))
+        end
+    end
+    isdefined(t, :names) ? t.names : t.name.names
+end
+
 """
     fieldname(x::DataType, i::Integer)
 
@@ -130,7 +143,10 @@ julia> fieldname(Rational, 2)
 ```
 """
 function fieldname(t::DataType, i::Integer)
-    names = isdefined(t, :names) ? t.names : t.name.names
+    if t.abstract
+        throw(ArgumentError("type does not have definite field names"))
+    end
+    names = _fieldnames(t)
     n_fields = length(names)
     field_label = n_fields == 1 ? "field" : "fields"
     i > n_fields && throw(ArgumentError("Cannot access field $i since type $t only has $n_fields $field_label."))
@@ -153,8 +169,11 @@ julia> fieldnames(Rational)
 (:num, :den)
 ```
 """
-fieldnames(t::DataType) = ntuple(i -> fieldname(t, i), fieldcount(t))
+fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
+                           (_fieldnames(t)...,))
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
+fieldnames(::Core.TypeofBottom) =
+    throw(ArgumentError("The empty type does not have field names since it does not have instances."))
 fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 
 """
@@ -390,6 +409,18 @@ and has no subtypes (or supertypes) which could appear in a call.
 """
 isdispatchtuple(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isdispatchtuple)
 
+iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
+isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
+has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0
+
+# equivalent to isa(v, Type) && isdispatchtuple(Tuple{v}) || v === Union{}
+# and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
+const _TYPE_NAME = Type.body.name
+function isdispatchelem(@nospecialize v)
+    return (v === Bottom) || (v === typeof(Bottom)) || isconcretedispatch(v) ||
+        (isa(v, DataType) && v.name === _TYPE_NAME && !has_free_typevars(v)) # isType(v)
+end
+
 """
     isconcretetype(T)
 
@@ -565,16 +596,16 @@ function fieldcount(@nospecialize t)
     if t isa UnionAll || t isa Union
         t = argument_datatype(t)
         if t === nothing
-            error("type does not have a definite number of fields")
+            throw(ArgumentError("type does not have a definite number of fields"))
         end
         t = t::DataType
     elseif t == Union{}
-        return 0
+        throw(ArgumentError("The empty type does not have a well-defined number of fields since it does not have instances."))
     end
     if !(t isa DataType)
         throw(TypeError(:fieldcount, "", Type, t))
     end
-    if t.name === NamedTuple.body.body.name
+    if t.name === NamedTuple_typename
         names, types = t.parameters
         if names isa Tuple
             return length(names)
@@ -587,7 +618,7 @@ function fieldcount(@nospecialize t)
         abstr = t.abstract || (t.name === Tuple.name && isvatuple(t))
     end
     if abstr
-        error("type does not have a definite number of fields")
+        throw(ArgumentError("type does not have a definite number of fields"))
     end
     return length(t.types)
 end
@@ -616,8 +647,10 @@ function to_tuple_type(@nospecialize(t))
         t = Tuple{t...}
     end
     if isa(t,Type) && t<:Tuple
-        if !all(p->(isa(p,Type)||isa(p,TypeVar)), t.parameters)
-            error("argument tuple type must contain only types")
+        for p in t.parameters
+            if !(isa(p,Type) || isa(p,TypeVar))
+                error("argument tuple type must contain only types")
+            end
         end
     else
         error("expected tuple type")
@@ -804,15 +837,19 @@ struct CodegenParams
     module_setup::Any
     module_activation::Any
     raise_exception::Any
+    emit_function::Any
+    emitted_function::Any
 
     CodegenParams(;cached::Bool=true,
                    track_allocations::Bool=true, code_coverage::Bool=true,
                    static_alloc::Bool=true, prefer_specsig::Bool=false,
-                   module_setup=nothing, module_activation=nothing, raise_exception=nothing) =
+                   module_setup=nothing, module_activation=nothing, raise_exception=nothing,
+                   emit_function=nothing, emitted_function=nothing) =
         new(Cint(cached),
             Cint(track_allocations), Cint(code_coverage),
             Cint(static_alloc), Cint(prefer_specsig),
-            module_setup, module_activation, raise_exception)
+            module_setup, module_activation, raise_exception,
+            emit_function, emitted_function)
 end
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
@@ -842,9 +879,9 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple); optimize=true)
     params = Core.Compiler.Params(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
-        (_, code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, optimize, params)
+        (code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, params)
         code === nothing && error("inference not successful") # inference disabled?
-        push!(asts, uncompressed_ast(meth, code) => ty)
+        push!(asts, code => ty)
     end
     return asts
 end
@@ -860,7 +897,7 @@ function return_types(@nospecialize(f), @nospecialize(types=Tuple))
     params = Core.Compiler.Params(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
-        ty = Core.Compiler.typeinf_type(meth, x[1], x[2], true, params)
+        ty = Core.Compiler.typeinf_type(meth, x[1], x[2], params)
         ty === nothing && error("inference not successful") # inference disabled?
         push!(rt, ty)
     end
