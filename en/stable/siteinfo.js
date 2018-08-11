@@ -1,1 +1,1 @@
-var DOCUMENTER_CURRENT_VERSION = "latest";
+var DOCUMENTER_CURRENT_VERSION = "stable";
