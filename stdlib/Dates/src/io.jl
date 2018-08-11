@@ -306,7 +306,7 @@ string:
 | `H`        | 00        | Matches hours                                                |
 | `M`        | 00        | Matches minutes                                              |
 | `S`        | 00        | Matches seconds                                              |
-| `s`        | .500      | Matches milliseconds                                         |
+| `s`        | 500       | Matches milliseconds                                         |
 | `e`        | Mon, Tues | Matches abbreviated days of the week                         |
 | `E`        | Monday    | Matches full name days of the week                           |
 | `yyyymmdd` | 19960101  | Matches fixed-width year, month, and day                     |
