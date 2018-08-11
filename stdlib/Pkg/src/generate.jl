@@ -10,6 +10,7 @@ function generate(ctx::Context, path::String; kwargs...)
     print(" project $pkg:\n")
     project(pkg, dir; preview=ctx.preview)
     entrypoint(pkg, dir; preview=ctx.preview)
+    gitignore(pkg, dir; preview=ctx.preview)
     ctx.preview && preview_info()
     return
 end
@@ -62,7 +63,7 @@ function project(pkg::String, dir::String; preview::Bool)
     end
 end
 
-function entrypoint(pkg::String, dir; preview::Bool)
+function entrypoint(pkg::String, dir::String; preview::Bool)
     genfile(pkg, dir, "src/$pkg.jl"; preview=preview) do io
         print(io,
            """
@@ -73,5 +74,30 @@ function entrypoint(pkg::String, dir; preview::Bool)
             end # module
             """
         )
+    end
+end
+
+function gitignore(pkg::String, dir::String; preview::Bool)
+    genfile(pkg, dir, ".gitignore", preview) do io
+        print(io, """
+        *.jl.cov
+        *.jl.*.cov
+        *.jl.mem
+        """)
+    end
+end
+
+function tests(pkg::String, dir::Stirng; preview::Bool)
+    genfile(pkg, dir, "test/runtests.jl", preview) do io
+        print(io, """
+        using $pkg
+        @static if VERSION < v"0.7.0-DEV.2005"
+            using Base.Test
+        else
+            using Test
+        end
+        # write your own tests here
+        @test 1 == 2
+        """)
     end
 end
