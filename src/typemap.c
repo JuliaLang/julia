@@ -8,6 +8,7 @@
 #include <unistd.h>
 #endif
 #include "julia_assert.h"
+#include "atomics.h"
 
 #define MAX_METHLIST_COUNT 12 // this can strongly affect the sysimg size and speed!
 #define INIT_CACHE_SIZE 8 // must be a power-of-two
@@ -823,22 +824,22 @@ jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_v
         jl_value_t *a1 = args[offs];
         jl_value_t *ty = (jl_value_t*)jl_typeof(a1);
         assert(jl_is_datatype(ty));
-        if (ty == (jl_value_t*)jl_datatype_type && cache->targ.values != (void*)jl_nothing) {
+        if (ty == (jl_value_t*)jl_datatype_type && jl_atomic_load(&cache->targ.values) != (void*)jl_nothing) {
             union jl_typemap_t ml_or_cache = mtcache_hash_lookup(&cache->targ, a1, 1, offs);
             jl_typemap_entry_t *ml = jl_typemap_assoc_exact(ml_or_cache, args, n, offs+1, world);
             if (ml) return ml;
         }
-        if (cache->arg1.values != (void*)jl_nothing) {
+        if (jl_atomic_load(&cache->arg1.values) != (void*)jl_nothing) {
             union jl_typemap_t ml_or_cache = mtcache_hash_lookup(&cache->arg1, ty, 0, offs);
             jl_typemap_entry_t *ml = jl_typemap_assoc_exact(ml_or_cache, args, n, offs+1, world);
             if (ml) return ml;
         }
     }
-    if (cache->linear != (jl_typemap_entry_t*)jl_nothing) {
+    if (jl_atomic_load(&cache->linear) != (jl_typemap_entry_t*)jl_nothing) {
         jl_typemap_entry_t *ml = jl_typemap_entry_assoc_exact(cache->linear, args, n, world);
         if (ml) return ml;
     }
-    if (cache->any.unknown != jl_nothing)
+    if (jl_atomic_load(&cache->any.unknown) != jl_nothing)
         return jl_typemap_assoc_exact(cache->any, args, n, offs+1, world);
     return NULL;
 }
