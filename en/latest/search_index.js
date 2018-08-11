@@ -9,11 +9,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "#Julia-0.7-Documentation-1",
+    "location": "#Julia-1.0-Documentation-1",
     "page": "Home",
-    "title": "Julia 0.7 Documentation",
+    "title": "Julia 1.0 Documentation",
     "category": "section",
-    "text": "Welcome to the documentation for Julia 0.7.Please read the release notes to see what has changed since the last release."
+    "text": "Welcome to the documentation for Julia 1.0.Please read the release blog post for a general overview of the language and many of the changes since Julia v0.6. Note that version 0.7 was released alongside 1.0 to provide an upgrade path for packages and code that predates the 1.0 release. The only difference between 0.7 and 1.0 is the removal of deprecation warnings. For a complete list of all the changes since 0.6, see the release notes for version 0.7"
 },
 
 {
@@ -22,78 +22,6 @@ var documenterSearchIndex = {"docs": [
     "title": "Introduction",
     "category": "section",
     "text": "Scientific computing has traditionally required the highest performance, yet domain experts have largely moved to slower dynamic languages for daily work. We believe there are many good reasons to prefer dynamic languages for these applications, and we do not expect their use to diminish. Fortunately, modern language design and compiler techniques make it possible to mostly eliminate the performance trade-off and provide a single environment productive enough for prototyping and efficient enough for deploying performance-intensive applications. The Julia programming language fills this role: it is a flexible dynamic language, appropriate for scientific and numerical computing, with performance comparable to traditional statically-typed languages.Because Julia\'s compiler is different from the interpreters used for languages like Python or R, you may find that Julia\'s performance is unintuitive at first. If you find that something is slow, we highly recommend reading through the Performance Tips section before trying anything else. Once you understand how Julia works, it\'s easy to write code that\'s nearly as fast as C.Julia features optional typing, multiple dispatch, and good performance, achieved using type inference and just-in-time (JIT) compilation, implemented using LLVM. It is multi-paradigm, combining features of imperative, functional, and object-oriented programming. Julia provides ease and expressiveness for high-level numerical computing, in the same way as languages such as R, MATLAB, and Python, but also supports general programming. To achieve this, Julia builds upon the lineage of mathematical programming languages, but also borrows much from popular dynamic languages, including Lisp, Perl, Python, Lua, and Ruby.The most significant departures of Julia from typical dynamic languages are:The core language imposes very little; Julia Base and the standard library is written in Julia itself, including primitive operations like integer arithmetic\nA rich language of types for constructing and describing objects, that can also optionally be used to make type declarations\nThe ability to define function behavior across many combinations of argument types via multiple dispatch\nAutomatic generation of efficient, specialized code for different argument types\nGood performance, approaching that of statically-compiled languages like CAlthough one sometimes speaks of dynamic languages as being \"typeless\", they are definitely not: every object, whether primitive or user-defined, has a type. The lack of type declarations in most dynamic languages, however, means that one cannot instruct the compiler about the types of values, and often cannot explicitly talk about types at all. In static languages, on the other hand, while one can – and usually must – annotate types for the compiler, types exist only at compile time and cannot be manipulated or expressed at run time. In Julia, types are themselves run-time objects, and can also be used to convey information to the compiler.While the casual programmer need not explicitly use types or multiple dispatch, they are the core unifying features of Julia: functions are defined on different combinations of argument types, and applied by dispatching to the most specific matching definition. This model is a good fit for mathematical programming, where it is unnatural for the first argument to \"own\" an operation as in traditional object-oriented dispatch. Operators are just functions with special notation – to extend addition to new user-defined data types, you define new methods for the + function. Existing code then seamlessly applies to the new data types.Partly because of run-time type inference (augmented by optional type annotations), and partly because of a strong focus on performance from the inception of the project, Julia\'s computational efficiency exceeds that of other dynamic languages, and even rivals that of statically-compiled languages. For large scale numerical problems, speed always has been, continues to be, and probably always will be crucial: the amount of data being processed has easily kept pace with Moore\'s Law over the past decades.Julia aims to create an unprecedented combination of ease-of-use, power, and efficiency in a single language. In addition to the above, some advantages of Julia over comparable systems include:Free and open source (MIT licensed)\nUser-defined types are as fast and compact as built-ins\nNo need to vectorize code for performance; devectorized code is fast\nDesigned for parallelism and distributed computation\nLightweight \"green\" threading (coroutines)\nUnobtrusive yet powerful type system\nElegant and extensible conversions and promotions for numeric and other types\nEfficient support for Unicode, including but not limited to UTF-8\nCall C functions directly (no wrappers or special APIs needed)\nPowerful shell-like capabilities for managing other processes\nLisp-like macros and other metaprogramming facilities"
-},
-
-{
-    "location": "NEWS/#",
-    "page": "Julia v1.0.0 Release Notes",
-    "title": "Julia v1.0.0 Release Notes",
-    "category": "page",
-    "text": ""
-},
-
-{
-    "location": "NEWS/#Julia-v1.0.0-Release-Notes-1",
-    "page": "Julia v1.0.0 Release Notes",
-    "title": "Julia v1.0.0 Release Notes",
-    "category": "section",
-    "text": ""
-},
-
-{
-    "location": "NEWS/#New-language-features-1",
-    "page": "Julia v1.0.0 Release Notes",
-    "title": "New language features",
-    "category": "section",
-    "text": ""
-},
-
-{
-    "location": "NEWS/#Language-changes-1",
-    "page": "Julia v1.0.0 Release Notes",
-    "title": "Language changes",
-    "category": "section",
-    "text": ""
-},
-
-{
-    "location": "NEWS/#Breaking-changes-1",
-    "page": "Julia v1.0.0 Release Notes",
-    "title": "Breaking changes",
-    "category": "section",
-    "text": ""
-},
-
-{
-    "location": "NEWS/#Library-improvements-1",
-    "page": "Julia v1.0.0 Release Notes",
-    "title": "Library improvements",
-    "category": "section",
-    "text": ""
-},
-
-{
-    "location": "NEWS/#Compiler/Runtime-improvements-1",
-    "page": "Julia v1.0.0 Release Notes",
-    "title": "Compiler/Runtime improvements",
-    "category": "section",
-    "text": ""
-},
-
-{
-    "location": "NEWS/#Deprecated-or-removed-1",
-    "page": "Julia v1.0.0 Release Notes",
-    "title": "Deprecated or removed",
-    "category": "section",
-    "text": "The old package manager (now called OldPkg) has been moved to a separate repository at https://github.com/JuliaArchive/OldPkg.jl (#27930)"
-},
-
-{
-    "location": "NEWS/#Command-line-option-changes-1",
-    "page": "Julia v1.0.0 Release Notes",
-    "title": "Command-line option changes",
-    "category": "section",
-    "text": ""
 },
 
 {
@@ -15125,7 +15053,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "function",
-    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\n"
+    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\n"
 },
 
 {
@@ -20557,7 +20485,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sockets",
     "title": "Base.bind",
     "category": "function",
-    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
+    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
 },
 
 {
