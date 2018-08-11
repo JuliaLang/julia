@@ -44,6 +44,7 @@ function get_argtypes(linfo::MethodInstance)
             vararg_type = Tuple
         else
             laty = length(atypes)
+            # println(atypes)
             if nargs > laty
                 va = atypes[laty]
                 if isvarargtype(va)

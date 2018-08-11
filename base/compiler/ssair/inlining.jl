@@ -560,6 +560,8 @@ end
 function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, atypes::Vector{Any}, sv::OptimizationState)
     new_argexprs = Any[argexprs[2]]
     new_atypes = Any[atypes[2]]
+    println("------------------------------------")
+    println("old atypes:", atypes)
     # loop over original arguments and flatten any known iterators
     for i in 3:length(argexprs)
         def = argexprs[i]
@@ -593,6 +595,7 @@ function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, at
             push!(new_atypes, def_atype)
         end
     end
+    println("new atypes:", new_atypes)
     return new_argexprs, new_atypes
 end
 
