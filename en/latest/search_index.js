@@ -3305,6 +3305,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "manual/profile/#External-Profiling-1",
+    "page": "Profiling",
+    "title": "External Profiling",
+    "category": "section",
+    "text": "Currently Julia supports Intel VTune, OProfile and perf as external profiling tools.Depending on the tool you choose, compile with USE_INTEL_JITEVENTS, USE_OPROFILE_JITEVENTS and USE_PERF_JITEVENTS set to 1 in Make.user. Multiple flags are supported.Before running Julia set the environment variable ENABLE_JITPROFILING to 1.Now you have a multitude of ways to employ those tools! For example with OProfile you can try a simple recording :>ENABLE_JITPROFILING=1 sudo operf -Vdebug ./julia test/fastmath.jl\n>opreport -l `which ./julia`Or similary with with perf :$ ENABLE_JITPROFILING=1 perf record -o /tmp/perf.data --call-graph dwarf ./julia /test/fastmath.jl\n$ perf report --call-graph -GThere are many more interesting things that you can measure about your program, to get a comprehensive list please read the Linux perf examples page.Remember that perf saves for each execution a perf.data file that, even for small programs, can get quite large. Also the perf LLVM module saves temporarly debug objects in ~/.debug/jit, remember to clean that folder frequently."
+},
+
+{
     "location": "manual/stacktraces/#",
     "page": "Stack Traces",
     "title": "Stack Traces",
@@ -7389,7 +7397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
 },
 
 {
@@ -19821,7 +19829,7 @@ var documenterSearchIndex = {"docs": [
     "page": "The Julia REPL",
     "title": "The Julia REPL",
     "category": "section",
-    "text": "Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into the julia executable. In addition to allowing quick and easy evaluation of Julia statements, it has a searchable history, tab-completion, many helpful keybindings, and dedicated help and shell modes. The REPL can be started by simply calling julia with no arguments or double-clicking on the executable:$ julia\n               _\n   _       _ _(_)_     |  A fresh approach to technical computing\n  (_)     | (_) (_)    |  Documentation: https://docs.julialang.org\n   _ _   _| |_  __ _   |  Type \"?help\" for help.\n  | | | | | | |/ _` |  |\n  | | |_| | | | (_| |  |  Version 0.6.0-dev.2493 (2017-01-31 18:53 UTC)\n _/ |\\__\'_|_|_|\\__\'_|  |  Commit c99e12c* (0 days old master)\n|__/                   |  x86_64-linux-gnu\n\njulia>To exit the interactive session, type ^D – the control key together with the d key on a blank line – or type quit() followed by the return or enter key. The REPL greets you with a banner and a julia> prompt."
+    "text": "Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into the julia executable. In addition to allowing quick and easy evaluation of Julia statements, it has a searchable history, tab-completion, many helpful keybindings, and dedicated help and shell modes. The REPL can be started by simply calling julia with no arguments or double-clicking on the executable:io = IOBuffer()\nBase.banner(io)\nbanner = String(take!(io))\nimport Markdown\nMarkdown.parse(\"```\\n\\$ julia\\n\\n$(banner)\\njulia>\\n```\")To exit the interactive session, type ^D – the control key together with the d key on a blank line – or type quit() followed by the return or enter key. The REPL greets you with a banner and a julia> prompt."
 },
 
 {
