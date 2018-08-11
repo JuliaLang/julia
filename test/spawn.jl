@@ -59,13 +59,14 @@ Sys.isunix() && run(pipeline(yescmd, `head`, devnull))
 
 let a, p
     a = Base.Condition()
-    @async begin
+    t = @async begin
         p = run(pipeline(yescmd,devnull), wait=false)
         Base.notify(a,p)
         @test !success(p)
     end
     p = wait(a)
     kill(p)
+    wait(t)
 end
 
 if valgrind_off
@@ -144,11 +145,15 @@ let str = "", proc, str2, file
     end
 
     # Here we test that if we close a stream with pending writes, we don't lose the writes.
-    proc = open(`$catcmd -`, "r+")
-    write(proc, str)
-    close(proc.in)
-    str2 = read(proc, String)
-    @test str2 == str
+    @sync begin
+        proc = open(`$catcmd -`, "r+")
+        @async begin
+            write(proc, str) # TODO: use Base.uv_write_async to restore the intended functionality of this test
+            close(proc.in)
+        end
+        str2 = read(proc, String)
+        @test str2 == str
+    end
 
     # This test hangs if the end-of-run-walk-across-uv-streams calls shutdown on a stream that is shutting down.
     file = tempname()
@@ -415,11 +420,15 @@ end
 @test Base.shell_split("\"\\\\\"") == ["\\"]
 
 # issue #13616
-@test_throws ErrorException collect(eachline(pipeline(`$catcmd _doesnt_exist__111_`, stderr=devnull)))
+pcatcmd = `$catcmd _doesnt_exist__111_`
+let p = eachline(pipeline(`$catcmd _doesnt_exist__111_`, stderr=devnull))
+    @test_throws(ErrorException("failed process: Process($pcatcmd, ProcessExited(1)) [1]"),
+                 collect(p))
+end
 
 # make sure windows_verbatim strips quotes
 if Sys.iswindows()
-    read(`cmd.exe /c dir /b spawn.jl`, String) == read(Cmd(`cmd.exe /c dir /b "\"spawn.jl\""`, windows_verbatim=true), String)
+    @test read(`cmd.exe /c dir /b spawn.jl`, String) == read(Cmd(`cmd.exe /c dir /b "\"spawn.jl\""`, windows_verbatim=true), String)
 end
 
 # make sure Cmd is nestable
@@ -480,7 +489,7 @@ let out = Pipe(), inpt = Pipe()
     Base.link_pipe!(out, reader_supports_async=true)
     Base.link_pipe!(inpt, writer_supports_async=true)
     p = run(pipeline(catcmd, stdin=inpt, stdout=out, stderr=devnull), wait=false)
-    @async begin # feed cat with 2 MB of data (zeros)
+    t = @async begin # feed cat with 2 MB of data (zeros)
         write(inpt, zeros(UInt8, 1048576 * 2))
         close(inpt)
     end
@@ -489,6 +498,7 @@ let out = Pipe(), inpt = Pipe()
     close(out.in) # make sure we can still close the write end
     @test sizeof(read(out)) == 1048576 * 2 # make sure we get all the data
     @test success(p)
+    wait(t)
 end
 
 # `kill` error conditions
@@ -593,4 +603,14 @@ mktempdir() do dir
             @test Sys.which(joinpath("bin1", "bar")) == realpath(bar_path)
         end
     end
+end
+
+# Issue #27550: make sure `peek` works when slurping a Char from an AbstractPipe
+open(`$catcmd`, "r+") do f
+    t = @async begin
+        write(f, "δ")
+        close(f.in)
+    end
+    @test read(f, Char) == 'δ'
+    wait(t)
 end

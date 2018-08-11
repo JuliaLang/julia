@@ -300,7 +300,7 @@ sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cma
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
-- **[LLVM]** (3.9 + patches) — compiler infrastructure (see [note below](#llvm)).
+- **[LLVM]** (6.0 + [patches](https://github.com/JuliaLang/julia/tree/master/deps/patches)) — compiler infrastructure (see [note below](#llvm)).
 - **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
 - **[libuv]**  (custom fork) — portable, high-performance event-based I/O library.
 - **[OpenLibm]**             — portable libm library containing elementary math functions.
@@ -364,9 +364,11 @@ Please be aware that this procedure is not officially supported, as it introduce
 
 ### LLVM
 
-The most complicated dependency is LLVM, for which we require version 3.9 with some additional patches from upstream (LLVM is not backward compatible). For packaging Julia, we recommend either:
+The most complicated dependency is LLVM, for which we require additional patches from upstream (LLVM is not backward compatible).
+
+For packaging Julia with LLVM, we recommend either:
  - bundling a Julia-only LLVM library inside the Julia package, or
- - adding the patches to the LLVM 3.9 package of the distribution.
+ - adding the patches to the LLVM package of the distribution.
    * A complete list of patches is available in `deps/llvm.mk`, and the patches themselves are in `deps/patches/`.
    * The only Julia-specific patch is the lib renaming (`llvm-symver-jlprefix.patch`), which should _not_ be applied to a system LLVM.
    * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
