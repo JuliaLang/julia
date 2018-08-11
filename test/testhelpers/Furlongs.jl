@@ -19,7 +19,7 @@ Furlong{p}(v::Number) where {p} = Furlong{p,typeof(v)}(v)
 Furlong{p,T}(x::Furlong{p,S}) where {T,p,S} = Furlong{p,T}(T(x.val))
 
 Base.promote_type(::Type{Furlong{p,T}}, ::Type{Furlong{p,S}}) where {p,T,S} =
-    (Base.@_pure_meta; Furlong{p,promote_type(T,S)})
+    (Base.@_unsafe_pure_meta; Furlong{p,promote_type(T,S)})
 
 Base.one(x::Furlong{p,T}) where {p,T} = one(T)
 Base.one(::Type{Furlong{p,T}}) where {p,T} = one(T)

@@ -32,7 +32,7 @@ julia> .![true false true]
 """
 function !(x::Bool)
     ## We need a better heuristic to detect this automatically
-    @_pure_meta
+    @_unsafe_pure_meta
     return not_int(x)
 end
 

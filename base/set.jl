@@ -440,7 +440,7 @@ promote_valuetype(x::Pair{K, V}, y::Pair...) where {K, V} =
     promote_type(V, promote_valuetype(y...))
 
 # Subtract singleton types which are going to be replaced
-@pure issingletontype(T::DataType) = isdefined(T, :instance)
+@unsafe_pure issingletontype(T::DataType) = isdefined(T, :instance)
 issingletontype(::Type) = false
 function subtract_singletontype(::Type{T}, x::Pair{K}) where {T, K}
     if issingletontype(K)

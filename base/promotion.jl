@@ -9,11 +9,11 @@
 Return the closest common ancestor of `T` and `S`, i.e. the narrowest type from which
 they both inherit.
 """
-typejoin() = (@_pure_meta; Bottom)
-typejoin(@nospecialize(t)) = (@_pure_meta; t)
-typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
+typejoin() = (@_unsafe_pure_meta; Bottom)
+typejoin(@nospecialize(t)) = (@_unsafe_pure_meta; t)
+typejoin(@nospecialize(t), ts...) = (@_unsafe_pure_meta; typejoin(t, typejoin(ts...)))
 function typejoin(@nospecialize(a), @nospecialize(b))
-    @_pure_meta
+    @_unsafe_pure_meta
     if a <: b
         return b
     elseif b <: a

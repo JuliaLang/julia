@@ -167,7 +167,7 @@ function optimize(opt::OptimizationState, @nospecialize(result))
         proven_pure = false
         # must be proven pure to use const_api; otherwise we might skip throwing errors
         # (issue #20704)
-        # TODO: Improve this analysis; if a function is marked @pure we should really
+        # TODO: Improve this analysis; if a function is marked @unsafe_pure we should really
         # only care about certain errors (e.g. method errors and type errors).
         if length(ir.stmts) < 10
             proven_pure = true

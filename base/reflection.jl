@@ -275,7 +275,7 @@ Memory allocation minimum alignment for instances of this type.
 Can be called on any `isconcretetype`.
 """
 function datatype_alignment(dt::DataType)
-    @_pure_meta
+    @_unsafe_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
     alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
     return Int(alignment & 0x1FF)
@@ -289,7 +289,7 @@ with no intervening padding bytes.
 Can be called on any `isconcretetype`.
 """
 function datatype_haspadding(dt::DataType)
-    @_pure_meta
+    @_unsafe_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
     alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
     return (alignment >> 9) & 1 == 1
@@ -302,7 +302,7 @@ Return whether instances of this type can contain references to gc-managed memor
 Can be called on any `isconcretetype`.
 """
 function datatype_pointerfree(dt::DataType)
-    @_pure_meta
+    @_unsafe_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
     alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
     return (alignment >> 10) & 0xFFFFF == 0
@@ -318,7 +318,7 @@ Can be called on any `isconcretetype`.
 See also [`Base.fieldoffset`](@ref).
 """
 function datatype_fielddesc_type(dt::DataType)
-    @_pure_meta
+    @_unsafe_pure_meta
     dt.layout == C_NULL && throw(UndefRefError())
     alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
     return (alignment >> 30) & 3
@@ -340,7 +340,7 @@ julia> isimmutable([1,2])
 false
 ```
 """
-isimmutable(@nospecialize(x)) = (@_pure_meta; !typeof(x).mutable)
+isimmutable(@nospecialize(x)) = (@_unsafe_pure_meta; !typeof(x).mutable)
 
 """
     Base.isstructtype(T) -> Bool
@@ -349,7 +349,7 @@ Determine whether type `T` was declared as a struct type
 (i.e. using the `struct` or `mutable struct` keyword).
 """
 function isstructtype(@nospecialize(t::Type))
-    @_pure_meta
+    @_unsafe_pure_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
@@ -363,7 +363,7 @@ Determine whether type `T` was declared as a primitive type
 (i.e. using the `primitive` keyword).
 """
 function isprimitivetype(@nospecialize(t::Type))
-    @_pure_meta
+    @_unsafe_pure_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
@@ -391,14 +391,14 @@ julia> isbitstype(Complex)
 false
 ```
 """
-isbitstype(@nospecialize(t::Type)) = (@_pure_meta; isa(t, DataType) && t.isbitstype)
+isbitstype(@nospecialize(t::Type)) = (@_unsafe_pure_meta; isa(t, DataType) && t.isbitstype)
 
 """
     isbits(x)
 
 Return `true` if `x` is an instance of an `isbitstype` type.
 """
-isbits(@nospecialize x) = (@_pure_meta; typeof(x).isbitstype)
+isbits(@nospecialize x) = (@_unsafe_pure_meta; typeof(x).isbitstype)
 
 """
     isdispatchtuple(T)
@@ -407,7 +407,7 @@ Determine whether type `T` is a tuple "leaf type",
 meaning it could appear as a type signature in dispatch
 and has no subtypes (or supertypes) which could appear in a call.
 """
-isdispatchtuple(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isdispatchtuple)
+isdispatchtuple(@nospecialize(t)) = (@_unsafe_pure_meta; isa(t, DataType) && t.isdispatchtuple)
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
 isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
@@ -448,7 +448,7 @@ julia> isconcretetype(Union{Int,String})
 false
 ```
 """
-isconcretetype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isconcretetype)
+isconcretetype(@nospecialize(t)) = (@_unsafe_pure_meta; isa(t, DataType) && t.isconcretetype)
 
 """
     Base.isabstracttype(T)
@@ -466,7 +466,7 @@ false
 ```
 """
 function isabstracttype(@nospecialize(t))
-    @_pure_meta
+    @_unsafe_pure_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     return isa(t, DataType) && t.abstract
@@ -493,7 +493,7 @@ Any
 ```
 """
 function parameter_upper_bound(t::UnionAll, idx)
-    @_pure_meta
+    @_unsafe_pure_meta
     return rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
 end
 
@@ -503,7 +503,7 @@ end
 Compute a type that contains the intersection of `T` and `S`. Usually this will be the
 smallest such type or one close to it.
 """
-typeintersect(@nospecialize(a),@nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
+typeintersect(@nospecialize(a),@nospecialize(b)) = (@_unsafe_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
 
 """
     fieldoffset(type, i)
@@ -530,7 +530,7 @@ julia> structinfo(Base.Filesystem.StatStruct)
  (0x0000000000000058, :ctime, Float64)
 ```
 """
-fieldoffset(x::DataType, idx::Integer) = (@_pure_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
+fieldoffset(x::DataType, idx::Integer) = (@_unsafe_pure_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
 
 """
     fieldtype(T, name::Symbol | index::Int)
@@ -642,7 +642,7 @@ julia> instances(Color)
 function instances end
 
 function to_tuple_type(@nospecialize(t))
-    @_pure_meta
+    @_unsafe_pure_meta
     if isa(t,Tuple) || isa(t,AbstractArray) || isa(t,SimpleVector)
         t = Tuple{t...}
     end

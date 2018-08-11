@@ -88,7 +88,7 @@ function eltype(t::Type{<:Tuple{Vararg{E}}}) where {E}
 end
 eltype(t::Type{<:Tuple}) = _compute_eltype(t)
 function _compute_eltype(t::Type{<:Tuple})
-    @_pure_meta
+    @_unsafe_pure_meta
     t isa Union && return promote_typejoin(eltype(t.a), eltype(t.b))
     t´ = unwrap_unionall(t)
     r = Union{}
