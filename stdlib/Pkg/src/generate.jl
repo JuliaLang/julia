@@ -10,6 +10,7 @@ function generate(ctx::Context, path::String; kwargs...)
     print(" project $pkg:\n")
     project(pkg, dir; preview=ctx.preview)
     entrypoint(pkg, dir; preview=ctx.preview)
+    gitignore(pkg, dir; preview=ctx.preview)
     ctx.preview && preview_info()
     return
 end
@@ -73,5 +74,15 @@ function entrypoint(pkg::String, dir; preview::Bool)
             end # module
             """
         )
+    end
+end
+
+function gitignore(pkg::String, dir::String; preview::Bool)
+    genfile(pkg, dir,".gitignore",force) do io
+        print(io, """
+        *.jl.cov
+        *.jl.*.cov
+        *.jl.mem
+        """)
     end
 end
