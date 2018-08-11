@@ -94,7 +94,11 @@ search: Int32 UInt32
   32-bit signed integer type.
 ```
 
-Help mode can be exited by pressing backspace at the beginning of the line.
+### Pkg mode
+
+When the cursor is the beginning of the line, typing `]` will enter pkg mode. This mode allows
+simpler syntax than the standard Pkg API and is fully documented [here](@ref pkg_getting_started).
+To return to the julia> prompt, either press backspace when the input line is empty or press Ctrl+C. 
 
 ### [Shell mode](@id man-shell-mode)
 

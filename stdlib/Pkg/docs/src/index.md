@@ -176,7 +176,7 @@ global configuration data is saved. Later entries in the depot path are treated
 as read-only and are appropriate for registries, packages, etc. installed and
 managed by system administrators.
 
-## Getting Started
+## Getting Started(@id pkg_getting_started)
 
 The Pkg REPL-mode is entered from the Julia REPL using the key `]`.
 
