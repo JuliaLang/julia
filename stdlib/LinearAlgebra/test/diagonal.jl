@@ -6,7 +6,7 @@ using Test, LinearAlgebra, SparseArrays, Random
 using LinearAlgebra: mul!, rmul!, lmul!, ldiv!, rdiv!, BlasFloat, BlasComplex, SingularException
 
 n=12 #Size of matrix problem to test
-srand(1)
+Random.seed!(1)
 
 @testset for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     dd=convert(Vector{elty}, randn(n))
@@ -27,6 +27,11 @@ srand(1)
             @test Diagonal{elty}(x)::Diagonal{elty,typeof(x)} == DM
             @test Diagonal{elty}(x).diag === x
         end
+        @test eltype(Diagonal{elty}([1,2,3,4])) == elty
+        @test isa(Diagonal{elty,Vector{elty}}(GenericArray([1,2,3,4])), Diagonal{elty,Vector{elty}})
+        DI = Diagonal([1,2,3,4])
+        @test Diagonal(DI) === DI
+        @test isa(Diagonal{elty}(DI), Diagonal{elty})
         # issue #26178
         @test_throws MethodError convert(Diagonal, [1, 2, 3, 4])
     end
@@ -187,6 +192,11 @@ srand(1)
         DD = copy(D)
         r  = VV * Array(D)'
         @test Array(rmul!(VV, adjoint(DD))) ≈ r
+
+        # kron
+        D3 = Diagonal(convert(Vector{elty}, rand(n÷2)))
+        DM3= Matrix(D3)
+        Matrix(kron(D, D3)) ≈ kron(DM, DM3)
     end
     @testset "triu/tril" begin
         @test istriu(D)
@@ -207,7 +217,7 @@ srand(1)
     @test factorize(D) == D
 
     @testset "Eigensystem" begin
-        eigD = eigfact(D)
+        eigD = eigen(D)
         @test Diagonal(eigD.values) ≈ D
         @test eigD.vectors == Matrix(I, size(D))
     end
@@ -265,14 +275,24 @@ srand(1)
         U, s, V = svd(D)
         @test (U*Diagonal(s))*V' ≈ D
         @test svdvals(D) == s
-        @test svdfact(D).V == V
+        @test svd(D).V == V
     end
+
 end
 
 @testset "svdvals and eigvals (#11120/#11247)" begin
     D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
     @test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
     @test [eigvals(D)...;] ≈ eigvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
+
+end
+
+@testset "eigmin (#27847)" begin
+    for _ in 1:100
+        d = randn(rand(1:10))
+        D = Diagonal(d)
+        @test eigmin(D) == minimum(d)
+    end
 end
 
 @testset "isposdef" begin
@@ -360,9 +380,9 @@ end
 
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
     D = Diagonal(randn(5))
-    Q = qrfact(randn(5, 5)).Q
+    Q = qr(randn(5, 5)).Q
     @test D * Q' == Array(D) * Q'
-    Q = qrfact(randn(5, 5), Val(true)).Q
+    Q = qr(randn(5, 5), Val(true)).Q
     @test_throws ArgumentError lmul!(Q, D)
 end
 
@@ -438,6 +458,19 @@ end
     D = Diagonal(rand(5))
     @test x'*D*x == (x'*D)*x == (x'*Array(D))*x
     @test Transpose(x)*D*x == (Transpose(x)*D)*x == (Transpose(x)*Array(D))*x
+end
+
+@testset "Triangular division by Diagonal #27989" begin
+    K = 5
+    for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        U = UpperTriangular(randn(elty, K, K))
+        L = LowerTriangular(randn(elty, K, K))
+        D = Diagonal(randn(elty, K))
+        @test (U / D)::UpperTriangular{elty} == UpperTriangular(Matrix(U) / Matrix(D))
+        @test (L / D)::LowerTriangular{elty} == LowerTriangular(Matrix(L) / Matrix(D))
+        @test (D \ U)::UpperTriangular{elty} == UpperTriangular(Matrix(D) \ Matrix(U))
+        @test (D \ L)::LowerTriangular{elty} == LowerTriangular(Matrix(D) \ Matrix(L))
+    end
 end
 
 end # module TestDiagonal

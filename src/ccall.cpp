@@ -577,7 +577,7 @@ static Value *julia_to_address(
                 }
                 ai->setAlignment(16);
                 // minimum gc-alignment in julia is pointer size
-                emit_memcpy(ctx, ai, jvinfo, nbytes, sizeof(void*));
+                emit_memcpy(ctx, ai, jvinfo.tbaa, jvinfo, nbytes, sizeof(void*));
                 return ctx.builder.CreatePtrToInt(ai, to);
             }
         }
@@ -596,7 +596,7 @@ static Value *julia_to_address(
         Value *nbytes = emit_datatype_size(ctx, jvt);
         AllocaInst *ai = ctx.builder.CreateAlloca(T_int8, nbytes);
         ai->setAlignment(16);
-        emit_memcpy(ctx, ai, jvinfo, nbytes, sizeof(void*)); // minimum gc-alignment in julia is pointer size
+        emit_memcpy(ctx, ai, jvinfo.tbaa, jvinfo, nbytes, sizeof(void*)); // minimum gc-alignment in julia is pointer size
         Value *p2 = ctx.builder.CreatePtrToInt(ai, to);
         ctx.builder.CreateBr(afterBB);
         ctx.builder.SetInsertPoint(afterBB);
@@ -611,10 +611,10 @@ static Value *julia_to_address(
     // since those are immutable.
     Value *slot = emit_static_alloca(ctx, slottype);
     if (!jvinfo.ispointer()) {
-        ctx.builder.CreateStore(emit_unbox(ctx, slottype, jvinfo, ety), slot);
+        tbaa_decorate(jvinfo.tbaa, ctx.builder.CreateStore(emit_unbox(ctx, slottype, jvinfo, ety), slot));
     }
     else {
-        emit_memcpy(ctx, slot, jvinfo, jl_datatype_size(ety), jl_datatype_align(ety));
+        emit_memcpy(ctx, slot, jvinfo.tbaa, jvinfo, jl_datatype_size(ety), jl_datatype_align(ety));
     }
     return ctx.builder.CreatePtrToInt(slot, to);
 }
@@ -646,10 +646,10 @@ static Value *julia_to_native(
     // since those are immutable.
     Value *slot = emit_static_alloca(ctx, to);
     if (!jvinfo.ispointer()) {
-        ctx.builder.CreateStore(emit_unbox(ctx, to, jvinfo, jlto), slot);
+        tbaa_decorate(jvinfo.tbaa, ctx.builder.CreateStore(emit_unbox(ctx, to, jvinfo, jlto), slot));
     }
     else {
-        emit_memcpy(ctx, slot, jvinfo, jl_datatype_size(jlto), jl_datatype_align(jlto));
+        emit_memcpy(ctx, slot, jvinfo.tbaa, jvinfo, jl_datatype_size(jlto), jl_datatype_align(jlto));
     }
     return slot;
 }
@@ -960,10 +960,25 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
 {
     JL_NARGSV(llvmcall, 3);
     jl_value_t *rt = NULL, *at = NULL, *ir = NULL, *decl = NULL;
+    jl_value_t *ir_arg = args[1];
     JL_GC_PUSH4(&ir, &rt, &at, &decl);
-    at = try_eval(ctx, args[3], "error statically evaluating llvmcall argument tuple");
-    rt = try_eval(ctx, args[2], "error statically evaluating llvmcall return type");
-    ir = try_eval(ctx, args[1], "error statically evaluating llvm IR argument");
+    if (jl_is_ssavalue(ir_arg))
+        ir_arg = jl_arrayref((jl_array_t*)ctx.source->code, ((jl_ssavalue_t*)ir_arg)->id - 1);
+    ir = try_eval(ctx, ir_arg, "error statically evaluating llvm IR argument");
+    if (jl_is_ssavalue(args[2])) {
+        jl_value_t *rtt = jl_arrayref((jl_array_t*)ctx.source->ssavaluetypes, ((jl_ssavalue_t*)args[2])->id - 1);
+        if (jl_is_type_type(rtt))
+            rt = jl_tparam0(rtt);
+    }
+    if (rt == NULL)
+        rt = try_eval(ctx, args[2], "error statically evaluating llvmcall return type");
+    if (jl_is_ssavalue(args[3])) {
+        jl_value_t *att = jl_arrayref((jl_array_t*)ctx.source->ssavaluetypes, ((jl_ssavalue_t*)args[3])->id - 1);
+        if (jl_is_type_type(att))
+            at = jl_tparam0(att);
+    }
+    if (at == NULL)
+        at = try_eval(ctx, args[3], "error statically evaluating llvmcall argument tuple");
     int i = 1;
     if (jl_is_tuple(ir)) {
         // if the IR is a tuple, we expect (declarations, ir)
@@ -1256,7 +1271,7 @@ std::string generate_func_sig(const char *fname)
 #else
             paramattrs.push_back(AttributeSet::get(jl_LLVMContext, 1, retattrs));
 #endif
-            fargt_sig.push_back(PointerType::get(lrt, AddressSpace::Derived));
+            fargt_sig.push_back(PointerType::get(lrt, 0));
             sret = 1;
             prt = lrt;
         }
@@ -1545,14 +1560,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         // Julia (expression) value of current parameter
         jl_value_t *argi = ccallarg(i);
 
-        // pass the address of the argument rather than the argument itself
-        if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
-            addressOf.push_back(true);
-            argi = jl_exprarg(argi, 0);
-        }
-        else {
-            addressOf.push_back(false);
-        }
+        addressOf.push_back(false);
 
         argv[i] = emit_expr(ctx, argi);
     }
@@ -1623,9 +1631,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(!isVa && !llvmcall && nargt == 1);
         assert(!addressOf.at(0));
         const jl_cgval_t &ary = argv[0];
-        jl_value_t *aryex = ccallarg(0);
         JL_GC_POP();
-        return mark_or_box_ccall_result(ctx, ctx.builder.CreatePtrToInt(emit_arrayptr(ctx, ary, aryex), lrt),
+        return mark_or_box_ccall_result(ctx, ctx.builder.CreatePtrToInt(emit_unsafe_arrayptr(ctx, ary), lrt),
                                         retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_value_ptr)) {
@@ -1930,6 +1937,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         assert(!retboxed && jl_is_datatype(rt) && "sret return type invalid");
         if (jl_justbits(rt)) {
             result = emit_static_alloca(ctx, lrt);
+            argvals[0] = ctx.builder.CreateBitCast(result, fargt_sig.at(0));
         }
         else {
             // XXX: result needs to be zero'd and given a GC root here
@@ -1937,8 +1945,9 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             result = emit_allocobj(ctx, jl_datatype_size(rt),
                                    literal_pointer_val(ctx, (jl_value_t*)rt));
             sretboxed = true;
+            gc_uses.push_back(result);
+            argvals[0] = ctx.builder.CreateIntToPtr(emit_pointer_from_objref(ctx, result), fargt_sig.at(0));
         }
-        argvals[0] = emit_bitcast(ctx, decay_derived(result), fargt_sig.at(0));
     }
 
     Instruction *stacksave = NULL;
@@ -2094,7 +2103,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     auto slot = emit_static_alloca(ctx, resultTy);
                     slot->setAlignment(boxalign);
                     ctx.builder.CreateAlignedStore(result, slot, boxalign);
-                    emit_memcpy(ctx, strct, slot, rtsz, boxalign, tbaa);
+                    emit_memcpy(ctx, strct, tbaa, slot, tbaa, rtsz, boxalign, tbaa);
                 }
                 else {
                     init_bits_value(ctx, strct, result, tbaa, boxalign);

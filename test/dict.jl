@@ -783,12 +783,6 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     A = [1]
     B = [2]
     C = [3]
-    local x = 0
-    local y = 0
-    local z = 0
-    finalizer(a->(x+=1), A)
-    finalizer(b->(y+=1), B)
-    finalizer(c->(z+=1), C)
 
     # construction
     wkd = WeakKeyDict()
@@ -829,6 +823,28 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test isa(wkd, WeakKeyDict)
 
     @test_throws ArgumentError WeakKeyDict([1, 2, 3])
+
+    wkd = WeakKeyDict(A=>1)
+    @test delete!(wkd, A) == empty(wkd)
+
+    # issue #26939
+    d26939 = WeakKeyDict()
+    d26939[big"1.0" + 1.1] = 1
+    GC.gc() # make sure this doesn't segfault
+
+    # WeakKeyDict does not convert keys on setting
+    @test_throws ArgumentError WeakKeyDict{Vector{Int},Any}([5.0]=>1)
+    wkd = WeakKeyDict(A=>2)
+    @test_throws ArgumentError get!(wkd, [2.0], 2)
+    @test_throws ArgumentError get!(wkd, [1.0], 2) # get! fails even if the key is only
+                                                   # used for getting and not setting
+
+    # WeakKeyDict does convert on getting
+    wkd = WeakKeyDict(A=>2)
+    @test keytype(wkd)==Vector{Int}
+    @test wkd[[1.0]] == 2
+    @test haskey(wkd, [1.0])
+    @test pop!(wkd, [1.0]) == 2
 end
 
 @testset "issue #19995, hash of dicts" begin

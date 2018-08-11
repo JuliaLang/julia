@@ -1,25 +1,32 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-struct LDLt{T,S<:AbstractMatrix} <: Factorization{T}
+struct LDLt{T,S<:AbstractMatrix{T}} <: Factorization{T}
     data::S
+
+    function LDLt{T,S}(data) where {T,S<:AbstractMatrix{T}}
+        @assert !has_offset_axes(data)
+        new{T,S}(data)
+    end
 end
+LDLt(data::AbstractMatrix{T}) where {T} = LDLt{T,typeof(data)}(data)
+LDLt{T}(data::AbstractMatrix) where {T} = LDLt(convert(AbstractMatrix{T}, data)::AbstractMatrix{T})
 
 size(S::LDLt) = size(S.data)
 size(S::LDLt, i::Integer) = size(S.data, i)
 
-LDLt{T,S}(F::LDLt) where {T,S<:AbstractMatrix} = LDLt{T,S}(convert(S, F.data))
-# NOTE: the annotaion <:AbstractMatrix shouldn't be necessary, it is introduced
-#       to avoid an ambiguity warning (see issue #6383)
-LDLt{T}(F::LDLt{S,U}) where {T,S,U<:AbstractMatrix} = LDLt{T,U}(F)
+LDLt{T,S}(F::LDLt{T,S}) where {T,S<:AbstractMatrix{T}} = F
+LDLt{T,S}(F::LDLt) where {T,S<:AbstractMatrix{T}} = LDLt{T,S}(convert(S, F.data)::S)
+LDLt{T}(F::LDLt{T}) where {T} = F
+LDLt{T}(F::LDLt) where {T} = LDLt(convert(AbstractMatrix{T}, F.data)::AbstractMatrix{T})
 
 Factorization{T}(F::LDLt{T}) where {T} = F
-Factorization{T}(F::LDLt{S,U}) where {T,S,U} = LDLt{T,U}(F)
+Factorization{T}(F::LDLt) where {T} = LDLt{T}(F)
 
 # SymTridiagonal
 """
-    ldltfact!(S::SymTridiagonal) -> LDLt
+    ldlt!(S::SymTridiagonal) -> LDLt
 
-Same as [`ldltfact`](@ref), but saves space by overwriting the input `S`, instead of creating a copy.
+Same as [`ldlt`](@ref), but saves space by overwriting the input `S`, instead of creating a copy.
 
 # Examples
 ```jldoctest
@@ -29,7 +36,7 @@ julia> S = SymTridiagonal([3., 4., 5.], [1., 2.])
  1.0  4.0  2.0
   ⋅   2.0  5.0
 
-julia> ldltS = ldltfact!(S);
+julia> ldltS = ldlt!(S);
 
 julia> ldltS === S
 false
@@ -41,7 +48,7 @@ julia> S
   ⋅        0.545455  3.90909
 ```
 """
-function ldltfact!(S::SymTridiagonal{T,V}) where {T<:Real,V}
+function ldlt!(S::SymTridiagonal{T,V}) where {T<:Real,V}
     n = size(S,1)
     d = S.dv
     e = S.ev
@@ -53,11 +60,11 @@ function ldltfact!(S::SymTridiagonal{T,V}) where {T<:Real,V}
 end
 
 """
-    ldltfact(S::SymTridiagonal) -> LDLt
+    ldlt(S::SymTridiagonal) -> LDLt
 
 Compute an `LDLt` factorization of the real symmetric tridiagonal matrix `S` such that `S = L*Diagonal(d)*L'`
 where `L` is a unit lower triangular matrix and `d` is a vector. The main use of an `LDLt`
-factorization `F = ldltfact(S)` is to solve the linear system of equations `Sx = b` with `F\\b`.
+factorization `F = ldlt(S)` is to solve the linear system of equations `Sx = b` with `F\\b`.
 
 # Examples
 ```jldoctest
@@ -67,7 +74,7 @@ julia> S = SymTridiagonal([3., 4., 5.], [1., 2.])
  1.0  4.0  2.0
   ⋅   2.0  5.0
 
-julia> ldltS = ldltfact(S);
+julia> ldltS = ldlt(S);
 
 julia> b = [6., 7., 8.];
 
@@ -84,14 +91,15 @@ julia> S \\ b
  1.3488372093023255
 ```
 """
-function ldltfact(M::SymTridiagonal{T}) where T
+function ldlt(M::SymTridiagonal{T}) where T
     S = typeof(zero(T)/one(T))
-    return S == T ? ldltfact!(copy(M)) : ldltfact!(SymTridiagonal{S}(M))
+    return S == T ? ldlt!(copy(M)) : ldlt!(SymTridiagonal{S}(M))
 end
 
-factorize(S::SymTridiagonal) = ldltfact(S)
+factorize(S::SymTridiagonal) = ldlt(S)
 
 function ldiv!(S::LDLt{T,M}, B::AbstractVecOrMat{T}) where {T,M<:SymTridiagonal{T}}
+    @assert !has_offset_axes(B)
     n, nrhs = size(B, 1), size(B, 2)
     if size(S,1) != n
         throw(DimensionMismatch("Matrix has dimensions $(size(S)) but right hand side has first dimension $n"))

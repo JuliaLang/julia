@@ -52,7 +52,7 @@
 #ifdef GC_DEBUG_ENV
 #define GC_VERIFY
 #else
-// It is recommanded to use the WITH_GC_VERIFY make option to turn on this
+// It is recommended to use the WITH_GC_VERIFY make option to turn on this
 // option. Keep the document here before a better build system is ready.
 // #define GC_VERIFY
 #endif
@@ -89,7 +89,6 @@
 
 // print all signatures type inference is invoked on
 //#define TRACE_INFERENCE
-//#define TRACE_COMPILE
 
 // print all generic method dispatches (excludes inlined and specialized call
 // sites). this generally prints too much output to be useful.

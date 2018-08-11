@@ -4,6 +4,7 @@
 ccall
 Core.Intrinsics.cglobal
 Base.@cfunction
+Base.CFunction
 Base.unsafe_convert
 Base.cconvert
 Base.unsafe_load
@@ -23,6 +24,7 @@ Core.Ref
 Base.Cchar
 Base.Cuchar
 Base.Cshort
+Base.Cstring
 Base.Cushort
 Base.Cint
 Base.Cuint
@@ -36,6 +38,7 @@ Base.Csize_t
 Base.Cssize_t
 Base.Cptrdiff_t
 Base.Cwchar_t
+Base.Cwstring
 Base.Cfloat
 Base.Cdouble
 ```

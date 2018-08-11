@@ -29,7 +29,7 @@ There are a few noteworthy high-level features about Julia's strings:
     a string argument, you should declare the type as `AbstractString` in order to accept any string
     type.
   * Like C and Java, but unlike most dynamic languages, Julia has a first-class type for representing
-    a single character, called `AbstractChar`. The built-in `Char` subtype of `AbstractChar`
+    a single character, called [`AbstractChar`](@ref). The built-in [`Char`](@ref) subtype of `AbstractChar`
     is a 32-bit primitive type that can represent any Unicode character (and which is based
     on the UTF-8 encoding).
   * As in Java, strings are immutable: the value of an `AbstractString` object cannot be changed.
@@ -42,7 +42,7 @@ There are a few noteworthy high-level features about Julia's strings:
 
 ## [Characters](@id man-characters)
 
-An `Char` value represents a single character: it is just a 32-bit primitive type with a special literal
+A `Char` value represents a single character: it is just a 32-bit primitive type with a special literal
 representation and appropriate arithmetic behaviors, and which can be converted
 to a numeric value representing a
 [Unicode code point](https://en.wikipedia.org/wiki/Code_point).  (Julia packages may define
@@ -58,7 +58,7 @@ julia> typeof(ans)
 Char
 ```
 
-You can convert a `Char` to its integer value, i.e. code point, easily:
+You can easily convert a `Char` to its integer value, i.e. code point:
 
 ```jldoctest
 julia> Int('x')
@@ -187,7 +187,7 @@ Most indexing in Julia is 1-based: the first element of many integer-indexed obj
 index 1. (As we will see below, this does not necessarily mean that the last element is found
 at index `n`, where `n` is the length of the string.)
 
-You can perform arithmetic and other operations with `end`, just like
+You can perform arithmetic and other operations with [`end`](@ref), just like
 a normal value:
 
 ```jldoctest helloworldstring
@@ -348,6 +348,54 @@ x
 y
 ```
 
+Strings in Julia can contain invalid UTF-8 code unit sequences. This convention allows to
+treat any byte sequence as a `String`. In such situations a rule is that when parsing
+a sequence of code units from left to right characters are formed by the longest sequence of
+8-bit code units that matches the start of one of the following bit patterns
+(each `x` can be `0` or `1`):
+
+* `0xxxxxxx`;
+* `110xxxxx` `10xxxxxx`;
+* `1110xxxx` `10xxxxxx` `10xxxxxx`;
+* `11110xxx` `10xxxxxx` `10xxxxxx` `10xxxxxx`;
+* `10xxxxxx`;
+* `11111xxx`.
+
+In particular this implies that overlong and too high code unit sequences are accepted.
+This rule is best explained by an example:
+
+```julia-repl
+julia> s = "\xc0\xa0\xe2\x88\xe2|"
+"\xc0\xa0\xe2\x88\xe2|"
+
+julia> foreach(display, s)
+'\xc0\xa0': [overlong] ASCII/Unicode U+0020 (category Zs: Separator, space)
+'\xe2\x88': Malformed UTF-8 (category Ma: Malformed, bad data)
+'\xe2': Malformed UTF-8 (category Ma: Malformed, bad data)
+'|': ASCII/Unicode U+007c (category Sm: Symbol, math)
+
+julia> isvalid.(collect(s))
+4-element BitArray{1}:
+ false
+ false
+ false
+  true
+
+julia> s2 = "\xf7\xbf\xbf\xbf"
+"\U1fffff"
+
+julia> foreach(display, s2)
+'\U1fffff': Unicode U+1fffff (category In: Invalid, too high)
+```
+
+We can see that the first two code units in the string `s` form an overlong encoding of
+space character. It is invalid, but is accepted in a string as a single character.
+The next two code units form a valid start of a three-byte UTF-8 sequence. However, the fifth
+code unit `\xe2` is not its valid continuation. Therefore code units 3 and 4 are also
+interpreted as malformed characters in this string. Similarly code unit 5 forms a malformed
+character because `|` is not a valid continuation to it. Finally the string `s2` contains
+one too high code point.
+
 Julia uses the UTF-8 encoding by default, and support for new encodings can be added by packages.
 For example, the [LegacyStrings.jl](https://github.com/JuliaArchive/LegacyStrings.jl) package
 implements `UTF16String` and `UTF32String` types. Additional discussion of other encodings and
@@ -371,7 +419,35 @@ julia> string(greet, ", ", whom, ".\n")
 "Hello, world.\n"
 ```
 
-Julia also provides `*` for string concatenation:
+It's important to be aware of potentially dangerous situations such as concatenation of invalid UTF-8 strings.
+The resulting string may contain different characters than the input strings,
+and its number of characters may be lower than sum of numbers of characters
+of the concatenated strings, e.g.:
+
+```julia-repl
+julia> a, b = "\xe2\x88", "\x80"
+("\xe2\x88", "\x80")
+
+julia> c = a*b
+"∀"
+
+julia> collect.([a, b, c])
+3-element Array{Array{Char,1},1}:
+ ['\xe2\x88']
+ ['\x80']
+ ['∀']
+
+julia> length.([a, b, c])
+3-element Array{Int64,1}:
+ 1
+ 1
+ 1
+```
+
+This situation can happen only for invalid UTF-8 strings. For valid UTF-8 strings
+concatenation preserves all characters in strings and additivity of string lengths.
+
+Julia also provides [`*`](@ref) for string concatenation:
 
 ```jldoctest stringconcat
 julia> greet * ", " * whom * ".\n"
@@ -505,7 +581,7 @@ hello"""
 
 will contain a literal newline at the beginning.
 
-Stripping of the newline is performed after the dedentation for example:
+Stripping of the newline is performed after the dedentation. For example:
 
 ```jldoctest
 julia> """
@@ -656,7 +732,7 @@ julia> match(r"^\s*(?:#|$)", "# a comment")
 RegexMatch("#")
 ```
 
-If the regular expression does not match the given string, [`match`](@ref) returns `nothing`
+If the regular expression does not match the given string, [`match`](@ref) returns [`nothing`](@ref)
 -- a special value that does not print anything at the interactive prompt. Other than not printing,
 it is a completely normal value and you can test for it programmatically:
 
@@ -832,6 +908,27 @@ julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
 RegexMatch("angry,\nBad world")
 ```
 
+The `r"..."` literal is constructed without interpolation and unescaping (except for
+quotation mark `"` which still has to be escaped). Here is an example
+showing the difference from standard string literals:
+
+```julia-repl
+julia> x = 10
+10
+
+julia> r"$x"
+r"$x"
+
+julia> "$x"
+"10"
+
+julia> r"\x"
+r"\x"
+
+julia> "\x"
+ERROR: syntax: invalid escape sequence
+```
+
 Triple-quoted regex strings, of the form `r"""..."""`, are also supported (and may be convenient
 for regular expressions containing quotation marks or newlines).
 
@@ -940,7 +1037,7 @@ is equivalent to `v"0.2.0"` (with empty pre-release/build annotations), `v"2"` i
 `v"2.0.0"`, and so on.
 
 `VersionNumber` objects are mostly useful to easily and correctly compare two (or more) versions.
-For example, the constant `VERSION` holds Julia version number as a `VersionNumber` object, and
+For example, the constant [`VERSION`](@ref) holds Julia version number as a `VersionNumber` object, and
 therefore one can define some version-specific behavior using simple statements as:
 
 ```julia

@@ -10,11 +10,11 @@ Execution starts at [`main()` in `ui/repl.c`](https://github.com/JuliaLang/julia
 to set the C library locale and to initialize the "ios" library (see [`ios_init_stdstreams()`](https://github.com/JuliaLang/julia/blob/master/src/support/ios.c)
 and [Legacy `ios.c` library](@ref)).
 
-Next [`parse_opts()`](https://github.com/JuliaLang/julia/blob/master/ui/repl.c) is called to process
-command line options. Note that `parse_opts()` only deals with options that affect code generation
+Next [`jl_parse_opts()`](https://github.com/JuliaLang/julia/blob/master/src/jloptions.c) is called to process
+command line options. Note that `jl_parse_opts()` only deals with options that affect code generation
 or early initialization. Other options are handled later by [`process_options()` in `base/client.jl`](https://github.com/JuliaLang/julia/blob/master/base/client.jl).
 
-`parse_opts()` stores command line options in the [global `jl_options` struct](https://github.com/JuliaLang/julia/blob/master/src/julia.h).
+`jl_parse_opts()` stores command line options in the [global `jl_options` struct](https://github.com/JuliaLang/julia/blob/master/src/julia.h).
 
 ## julia_init()
 

@@ -4,8 +4,8 @@
 
 include("pcre.jl")
 
-const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.ALT_BSUX
-const DEFAULT_MATCH_OPTS = zero(UInt32)
+const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.NO_UTF_CHECK | PCRE.ALT_BSUX | PCRE.UCP
+const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 
 mutable struct Regex
     pattern::String
@@ -40,11 +40,15 @@ end
 function Regex(pattern::AbstractString, flags::AbstractString)
     options = DEFAULT_COMPILER_OPTS
     for f in flags
-        options |= f=='i' ? PCRE.CASELESS  :
-                   f=='m' ? PCRE.MULTILINE :
-                   f=='s' ? PCRE.DOTALL    :
-                   f=='x' ? PCRE.EXTENDED  :
-                   throw(ArgumentError("unknown regex flag: $f"))
+        if f == 'a'
+            options &= ~PCRE.UCP
+        else
+            options |= f=='i' ? PCRE.CASELESS  :
+                       f=='m' ? PCRE.MULTILINE :
+                       f=='s' ? PCRE.DOTALL    :
+                       f=='x' ? PCRE.EXTENDED  :
+                       throw(ArgumentError("unknown regex flag: $f"))
+        end
     end
     Regex(pattern, options, DEFAULT_MATCH_OPTS)
 end
@@ -63,8 +67,9 @@ end
 """
     @r_str -> Regex
 
-Construct a regex, such as `r"^[a-z]*\$"`. The regex also accepts one or more flags, listed
-after the ending quote, to change its behaviour:
+Construct a regex, such as `r"^[a-z]*\$"`, without interpolation and unescaping (except for
+quotation mark `"` which still has to be escaped). The regex also accepts one or more flags,
+listed after the ending quote, to change its behaviour:
 
 - `i` enables case-insensitive matching
 - `m` treats the `^` and `\$` tokens as matching the start and end of individual lines, as
@@ -72,26 +77,30 @@ after the ending quote, to change its behaviour:
 - `s` allows the `.` modifier to match newlines.
 - `x` enables "comment mode": whitespace is enabled except when escaped with `\\`, and `#`
   is treated as starting a comment.
+- `a` disables `UCP` mode (enables ASCII mode). By default `\\B`, `\\b`, `\\D`, `\\d`, `\\S`,
+  `\\s`, `\\W`, `\\w`, etc. match based on Unicode character properties. With this option,
+  these sequences only match ASCII characters.
 
-For example, this regex has all three flags enabled:
-
+# Examples
 ```jldoctest
 julia> match(r"a+.*b+.*?d\$"ism, "Goodbye,\\nOh, angry,\\nBad world\\n")
 RegexMatch("angry,\\nBad world")
 ```
+This regex has the first three flags enabled.
 """
 macro r_str(pattern, flags...) Regex(pattern, flags...) end
 
 function show(io::IO, re::Regex)
-    imsx = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED
+    imsxa = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED|PCRE.UCP
     opts = re.compile_options
-    if (opts & ~imsx) == DEFAULT_COMPILER_OPTS
+    if (opts & ~imsxa) == (DEFAULT_COMPILER_OPTS & ~imsxa)
         print(io, 'r')
         print_quoted_literal(io, re.pattern)
         if (opts & PCRE.CASELESS ) != 0; print(io, 'i'); end
         if (opts & PCRE.MULTILINE) != 0; print(io, 'm'); end
         if (opts & PCRE.DOTALL   ) != 0; print(io, 's'); end
         if (opts & PCRE.EXTENDED ) != 0; print(io, 'x'); end
+        if (opts & PCRE.UCP      ) == 0; print(io, 'a'); end
     else
         print(io, "Regex(")
         show(io, re.pattern)
@@ -221,6 +230,25 @@ findnext(r::Regex, s::AbstractString, idx::Integer) = throw(ArgumentError(
 ))
 findfirst(r::Regex, s::AbstractString) = findnext(r,s,firstindex(s))
 
+"""
+    SubstitutionString(substr)
+
+Stores the given string `substr` as a `SubstitutionString`, for use in regular expression
+substitutions. Most commonly constructed using the [`@s_str`](@ref) macro.
+
+```jldoctest
+julia> SubstitutionString("Hello \\\\g<name>, it's \\\\1")
+s"Hello \\\\g<name>, it's \\\\1"
+
+julia> subst = s"Hello \\g<name>, it's \\1"
+s"Hello \\\\g<name>, it's \\\\1"
+
+julia> typeof(subst)
+SubstitutionString{String}
+
+```
+
+"""
 struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T
 end
@@ -236,6 +264,20 @@ function show(io::IO, s::SubstitutionString)
     show(io, s.string)
 end
 
+"""
+    @s_str -> SubstitutionString
+
+Construct a substitution string, used for regular expression substitutions.  Within the
+string, sequences of the form `\\N` refer to the Nth capture group in the regex, and
+`\\g<groupname>` refers to a named capture group with name `groupname`.
+
+```jldoctest
+julia> msg = "#Hello# from Julia";
+
+julia> replace(msg, r"#(.+)# from (?<from>\\w+)" => s"FROM: \\g<from>; MESSAGE: \\1")
+"FROM: Julia; MESSAGE: Hello"
+```
+"""
 macro s_str(string) SubstitutionString(string) end
 
 replace_err(repl) = error("Bad replacement string: $repl")

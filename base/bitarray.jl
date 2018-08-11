@@ -339,8 +339,6 @@ similar(B::BitArray, T::Type{Bool}, dims::Dims) = BitArray(undef, dims)
 # (this triggers conversions like float(bitvector) etc.)
 similar(B::BitArray, T::Type, dims::Dims) = Array{T}(undef, dims)
 
-similar(::Type{T}, shape::Tuple) where {T<:BitArray} = T(undef, to_shape(shape))
-
 function fill!(B::BitArray, x)
     y = convert(Bool, x)
     isempty(B) && return B
@@ -1718,11 +1716,11 @@ function vcat(A::BitMatrix...)
 end
 
 # general case, specialized for BitArrays and Integers
-function cat(dims::Integer, X::Union{BitArray, Bool}...)
+function _cat(dims::Integer, X::Union{BitArray, Bool}...)
     catdims = dims2cat(dims)
     shape = cat_shape(catdims, (), map(cat_size, X)...)
     A = falses(shape)
-    return _cat(A, shape, catdims, X...)
+    return __cat(A, shape, catdims, X...)
 end
 
 # hvcat -> use fallbacks in abstractarray.jl

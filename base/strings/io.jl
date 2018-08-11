@@ -11,6 +11,8 @@ of values `xs` if there is one, otherwise call [`show`](@ref).
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 
+Printing `nothing` is deprecated and will throw an error in the future.
+
 # Examples
 ```jldoctest
 julia> print("Hello World!")
@@ -233,25 +235,30 @@ julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
 via `print(io::IOBuffer, x)`. `strings` will be printed to `io`.
 """
 function join(io::IO, strings, delim, last)
-    a = Iterators.Stateful(strings)
-    isempty(a) && return
-    print(io, popfirst!(a))
-    for str in a
-        print(io, isempty(a) ? last : delim)
+    first = true
+    local prev
+    for str in strings
+        if @isdefined prev
+            first ? (first = false) : print(io, delim)
+            print(io, prev)
+        end
+        prev = str
+    end
+    if @isdefined prev
+        first || print(io, last)
+        print(io, prev)
+    end
+    nothing
+end
+function join(io::IO, strings, delim="")
+    # Specialization of the above code when delim==last,
+    # which lets us emit (compile) less code
+    first = true
+    for str in strings
+        first ? (first = false) : print(io, delim)
         print(io, str)
     end
 end
-function join(io::IO, strings, delim)
-    a = Iterators.Stateful(strings)
-    for str in a
-        print(io, str)
-        !isempty(a) && print(io, delim)
-    end
-end
-join(io::IO, strings) = join(io, strings, "")
-# Hack around https://github.com/JuliaLang/julia/issues/26871
-join(io::IO, strings::Tuple{}, delim) = nothing
-join(io::IO, strings::Tuple{}, delim, last) = nothing
 
 join(strings) = sprint(join, strings)
 join(strings, delim) = sprint(join, strings, delim)
@@ -264,21 +271,38 @@ escape_nul(c::Union{Nothing, AbstractChar}) =
     (c !== nothing && '0' <= c <= '7') ? "\\x00" : "\\0"
 
 """
-    escape_string(str::AbstractString[, esc::AbstractString]) -> AbstractString
+    escape_string(str::AbstractString[, esc])::AbstractString
+    escape_string(io, str::AbstractString[, esc::])::Nothing
 
-General escaping of traditional C and Unicode escape sequences.
-Any characters in `esc` are also escaped (with a backslash).
-The reverse is [`unescape_string`](@ref).
-"""
-escape_string(s::AbstractString, esc::AbstractString) = sprint(escape_string, s, esc, sizehint=lastindex(s))
-escape_string(s::AbstractString) = sprint(escape_string, s, "\"", sizehint=lastindex(s))
+General escaping of traditional C and Unicode escape sequences. The first form returns the
+escaped string, the second prints the result to `io`.
 
-"""
-    escape_string(io, str::AbstractString[, esc::AbstractString]) -> Nothing
+Backslashes (`\\`) are escaped with a double-backslash (`"\\\\"`). Non-printable
+characters are escaped either with their standard C escape codes, `"\\0"` for NUL (if
+unambiguous), unicode code point (`"\\u"` prefix) or hex (`"\\x"` prefix).
 
-Escape sequences in `str` and print result to `io`. See also [`unescape_string`](@ref).
+The optional `esc` argument specifies any additional characters that should also be
+escaped by a prepending backslash (`\"` is also escaped by default in the first form).
+
+# Examples
+```jldoctest
+julia> escape_string("aaa\\nbbb")
+"aaa\\\\nbbb"
+
+julia> escape_string("\\xfe\\xff") # invalid utf-8
+"\\\\xfe\\\\xff"
+
+julia> escape_string(string('\\u2135','\\0')) # unambiguous
+"ℵ\\\\0"
+
+julia> escape_string(string('\\u2135','\\0','0')) # \\0 would be ambiguous
+"ℵ\\\\x000"
+```
+
+## See also
+[`unescape_string`](@ref) for the reverse operation.
 """
-function escape_string(io, s::AbstractString, esc::AbstractString="")
+function escape_string(io::IO, s::AbstractString, esc="")
     a = Iterators.Stateful(s)
     for c in a
         if c in esc
@@ -287,7 +311,6 @@ function escape_string(io, s::AbstractString, esc::AbstractString="")
             c == '\0'          ? print(io, escape_nul(peek(a))) :
             c == '\e'          ? print(io, "\\e") :
             c == '\\'          ? print(io, "\\\\") :
-            c in esc           ? print(io, '\\', c) :
             '\a' <= c <= '\r'  ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
             isprint(c)         ? print(io, c) :
                                  print(io, "\\x", string(UInt32(c), base = 16, pad = 2))
@@ -306,28 +329,46 @@ function escape_string(io, s::AbstractString, esc::AbstractString="")
     end
 end
 
+escape_string(s::AbstractString, esc=('\"',)) = sprint(escape_string, s, esc, sizehint=lastindex(s))
+
 function print_quoted(io, s::AbstractString)
     print(io, '"')
-    escape_string(io, s, "\"\$") #"# work around syntax highlighting problem
+    escape_string(io, s, ('\"','$')) #"# work around syntax highlighting problem
     print(io, '"')
 end
 
 # general unescaping of traditional C and Unicode escape sequences
 
 # TODO: handle unescaping invalid UTF-8 sequences
-
 """
-    unescape_string(str::AbstractString) -> AbstractString
+    unescape_string(str::AbstractString)::AbstractString
+    unescape_string(io, str::AbstractString)::Nothing
 
-General unescaping of traditional C and Unicode escape sequences. Reverse of
+General unescaping of traditional C and Unicode escape sequences. The first form returns
+the escaped string, the second prints the result to `io`.
+
+The following escape sequences are recognised:
+ - Escaped backslash (`\\\\`)
+ - Escaped double-quote (`\\\"`)
+ - Standard C escape sequences (`\\a`, `\\b`, `\\t`, `\\n`, `\\v`, `\\f`, `\\r`, `\\e`)
+ - Unicode code points (`\\u` or `\\U` prefixes with 1-4 trailing hex digits)
+ - Hex bytes (`\\x` with 1-2 trailing hex digits)
+ - Octal bytes (`\\` with 1-3 trailing octal digits)
+
+# Examples
+```jldoctest
+julia> unescape_string("aaa\\\\nbbb") # C escape sequence
+"aaa\\nbbb"
+
+julia> unescape_string("\\\\u03c0") # unicode
+"π"
+
+julia> unescape_string("\\\\101") # octal
+"A"
+```
+
+## See also
 [`escape_string`](@ref).
-"""
-unescape_string(s::AbstractString) = sprint(unescape_string, s, sizehint=lastindex(s))
-
-"""
-    unescape_string(io, str::AbstractString) -> Nothing
-
-Unescapes sequences and prints result to `io`. See also [`escape_string`](@ref).
 """
 function unescape_string(io, s::AbstractString)
     a = Iterators.Stateful(s)
@@ -375,13 +416,17 @@ function unescape_string(io, s::AbstractString)
                           c == 'v' ? '\v' :
                           c == 'f' ? '\f' :
                           c == 'r' ? '\r' :
-                          c == 'e' ? '\e' : c)
+                          c == 'e' ? '\e' :
+                          (c == '\\' || c == '"') ? c :
+                          throw(ArgumentError("invalid escape sequence \\$c")))
             end
         else
             print(io, c)
         end
     end
 end
+unescape_string(s::AbstractString) = sprint(unescape_string, s, sizehint=lastindex(s))
+
 
 macro b_str(s)
     v = codeunits(unescape_string(s))
@@ -418,13 +463,22 @@ macro raw_str(s); s; end
 ## multiline strings ##
 
 """
-    indentation(str::AbstractString; tabwidth=8)
+    indentation(str::AbstractString; tabwidth=8) -> (Int, Bool)
 
-Calculate the width of leading blank space, and also return if string is blank
+Calculate the width of leading white space. Return the width and a flag to indicate
+if the string is empty.
 
-Returns:
+# Examples
+```jldoctest
+julia> Base.indentation("")
+(0, true)
 
-* width of leading whitespace, flag if string is totally blank
+julia> Base.indentation("  a")
+(2, false)
+
+julia> Base.indentation("\\ta"; tabwidth=3)
+(3, false)
+```
 """
 function indentation(str::AbstractString; tabwidth=8)
     count = 0
@@ -443,11 +497,16 @@ end
 """
     unindent(str::AbstractString, indent::Int; tabwidth=8)
 
-Remove leading indentation from string
+Remove leading indentation from string.
 
-Returns:
+# Examples
+```jldoctest
+julia> Base.unindent("   a\\n   b", 2)
+" a\\n b"
 
-* `String` of multiline string, with leading indentation of `indent` removed
+julia> Base.unindent("\\ta\\n\\tb", 2, tabwidth=8)
+"      a\\n      b"
+```
 """
 function unindent(str::AbstractString, indent::Int; tabwidth=8)
     indent == 0 && return str

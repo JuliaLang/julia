@@ -36,6 +36,7 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL, // cpu_target ("native", "core2", etc...)
                             0,    // nprocs
                             NULL, // machine_file
+                            NULL, // project
                             0,    // isinteractive
                             0,    // color
                             JL_OPTIONS_HISTORYFILE_ON, // history file
@@ -54,6 +55,7 @@ jl_options_t jl_options = { 0,    // quiet
                             0,    // method overwrite warning
                             1,    // can_inline
                             JL_OPTIONS_POLLY_ON, // polly
+                            NULL, // trace_compile
                             JL_OPTIONS_FAST_MATH_DEFAULT,
                             0,    // worker
                             NULL, // cookie
@@ -92,7 +94,7 @@ static const char opts[]  =
 
     // parallel options
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
-    "                           \"auto\" launches as many workers as the number of local cores\n"
+    "                           \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
     " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
 
     // interactive options
@@ -158,6 +160,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_warn_overwrite,
            opt_inline,
            opt_polly,
+           opt_trace_compile,
            opt_math_mode,
            opt_worker,
            opt_bind_to,
@@ -171,6 +174,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_sysimage_native_code,
            opt_compiled_modules,
            opt_machine_file,
+           opt_project,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:ip:O:g:";
     static const struct option longopts[] = {
@@ -186,14 +190,12 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "print",           required_argument, 0, 'E' },
         { "load",            required_argument, 0, 'L' },
         { "sysimage",        required_argument, 0, 'J' },
-        { "precompiled",     required_argument, 0, opt_use_precompiled },   // deprecated
         { "sysimage-native-code", required_argument, 0, opt_sysimage_native_code },
-        { "compilecache",    required_argument, 0, opt_use_compilecache },  // deprecated
         { "compiled-modules",    required_argument, 0, opt_compiled_modules },
         { "cpu-target",      required_argument, 0, 'C' },
         { "procs",           required_argument, 0, 'p' },
-        { "machinefile",     required_argument, 0, opt_machinefile },   // deprecated
         { "machine-file",    required_argument, 0, opt_machine_file },
+        { "project",         optional_argument, 0, opt_project },
         { "color",           required_argument, 0, opt_color },
         { "history-file",    required_argument, 0, opt_history_file },
         { "startup-file",    required_argument, 0, opt_startup_file },
@@ -212,6 +214,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "warn-overwrite",  required_argument, 0, opt_warn_overwrite },
         { "inline",          required_argument, 0, opt_inline },
         { "polly",           required_argument, 0, opt_polly },
+        { "trace-compile",   required_argument, 0, opt_trace_compile },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
@@ -352,9 +355,6 @@ restart_switch:
             else
                 jl_errorf("julia: invalid argument to --banner={yes|no|auto} (%s)", optarg);
             break;
-        case opt_use_precompiled:
-            jl_printf(JL_STDOUT, "WARNING: julia --precompiled option is deprecated, use --sysimage-native-code instead.\n");
-            // fall through
         case opt_sysimage_native_code:
             if (!strcmp(optarg,"yes"))
                 jl_options.use_sysimage_native_code = JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES;
@@ -363,9 +363,6 @@ restart_switch:
             else
                 jl_errorf("julia: invalid argument to --sysimage-native-code={yes|no} (%s)", optarg);
             break;
-        case opt_use_compilecache:
-            jl_printf(JL_STDOUT, "WARNING: julia --compilecache option is deprecated, use --compiled-modules instead.\n");
-            // fall through
         case opt_compiled_modules:
             if (!strcmp(optarg,"yes"))
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_YES;
@@ -382,7 +379,7 @@ restart_switch:
         case 'p': // procs
             errno = 0;
             if (!strcmp(optarg,"auto")) {
-                jl_options.nprocs = jl_cpu_cores();
+                jl_options.nprocs = jl_cpu_threads();
             }
             else {
                 long nprocs = strtol(optarg, &endptr, 10);
@@ -391,13 +388,13 @@ restart_switch:
                 jl_options.nprocs = (int)nprocs;
             }
             break;
-        case opt_machinefile:
-            jl_printf(JL_STDOUT, "WARNING: julia --machinefile option is deprecated, use --machine-file instead.\n");
-            // fall through
         case opt_machine_file:
             jl_options.machine_file = strdup(optarg);
             if (!jl_options.machine_file)
                 jl_error("julia: failed to allocate memory");
+            break;
+        case opt_project:
+            jl_options.project = optarg ? strdup(optarg) : "@.";
             break;
         case opt_color:
             if (!strcmp(optarg, "yes"))
@@ -560,6 +557,11 @@ restart_switch:
             else {
                 jl_errorf("julia: invalid argument to --polly (%s)", optarg);
             }
+            break;
+         case opt_trace_compile:
+            jl_options.trace_compile = strdup(optarg);
+            if (!jl_options.trace_compile)
+                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
             break;
         case opt_math_mode:
             if (!strcmp(optarg,"ieee"))

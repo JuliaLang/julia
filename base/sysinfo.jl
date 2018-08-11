@@ -6,7 +6,8 @@ Provide methods for retrieving information about hardware and the operating syst
 """ Sys
 
 export BINDIR,
-       CPU_CORES,
+       STDLIB,
+       CPU_THREADS,
        CPU_NAME,
        WORD_SIZE,
        ARCH,
@@ -23,7 +24,9 @@ export BINDIR,
        isbsd,
        islinux,
        isunix,
-       iswindows
+       iswindows,
+       isexecutable,
+       which
 
 import ..Base: show
 
@@ -35,17 +38,26 @@ A string containing the full path to the directory containing the `julia` execut
 """
 :BINDIR
 
+"""
+    Sys.STDLIB
+
+A string containing the full path to the directory containing the `stdlib` packages.
+"""
+STDLIB = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
+
 # helper to avoid triggering precompile warnings
 
-global CPU_CORES
 """
-    Sys.CPU_CORES
+    Sys.CPU_THREADS
 
-The number of logical CPU cores available in the system.
+The number of logical CPU cores available in the system, i.e. the number of threads
+that the CPU can run concurrently. Note that this is not necessarily the number of
+CPU cores, for example, in the presence of
+[hyper-threading](https://en.wikipedia.org/wiki/Hyper-threading).
 
-See the Hwloc.jl package for extended information, including number of physical cores.
+See Hwloc.jl or CpuId.jl for extended information, including number of physical cores.
 """
-:CPU_CORES
+CPU_THREADS = 1 # for bootstrap, changed on startup
 
 """
     Sys.ARCH
@@ -77,21 +89,26 @@ Standard word size on the current machine, in bits.
 const WORD_SIZE = Core.sizeof(Int) * 8
 
 function __init__()
-    env_cores = get(ENV, "JULIA_CPU_CORES", "")
-    global CPU_CORES = if !isempty(env_cores)
-        env_cores = tryparse(Int, env_cores)
-        if !(env_cores isa Int && env_cores > 0)
-            Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_CORES` environment variable. Defaulting Sys.CPU_CORES to 1.\n")
-            env_cores = 1
+    env_threads = nothing
+    if haskey(ENV, "JULIA_CPU_THREADS")
+        env_threads = ENV["JULIA_CPU_THREADS"]
+    end
+    global CPU_THREADS = if env_threads !== nothing
+        env_threads = tryparse(Int, env_threads)
+        if !(env_threads isa Int && env_threads > 0)
+            env_threads = Int(ccall(:jl_cpu_threads, Int32, ()))
+            Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $env_threads.\n")
         end
-        env_cores
+        env_threads
     else
-        Int(ccall(:jl_cpu_cores, Int32, ()))
+        Int(ccall(:jl_cpu_threads, Int32, ()))
     end
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
+    vers = "v$(VERSION.major).$(VERSION.minor)"
+    global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
     nothing
 end
 
@@ -312,14 +329,96 @@ if iswindows()
 else
     windows_version() = v"0.0"
 end
+
 """
     Sys.windows_version()
 
-Returns the version number for the Windows NT Kernel as a `VersionNumber`,
+Return the version number for the Windows NT Kernel as a `VersionNumber`,
 i.e. `v"major.minor.build"`, or `v"0.0.0"` if this is not running on Windows.
 """
 windows_version
 
 const WINDOWS_VISTA_VER = v"6.0"
+
+"""
+    Sys.isexecutable(path::String)
+
+Return `true` if the given `path` has executable permissions.
+"""
+function isexecutable(path::String)
+    if iswindows()
+        return isfile(path)
+    else
+        # We use `access()` and `X_OK` to determine if a given path is
+        # executable by the current user.  `X_OK` comes from `unistd.h`.
+        X_OK = 0x01
+        ccall(:access, Cint, (Ptr{UInt8}, Cint), path, X_OK) == 0
+    end
+end
+isexecutable(path::AbstractString) = isexecutable(String(path))
+
+"""
+    Sys.which(program_name::String)
+
+Given a program name, search the current `PATH` to find the first binary with
+the proper executable permissions that can be run and return an absolute path
+to it, or return `nothing` if no such program is available. If a path with
+a directory in it is passed in for `program_name`, tests that exact path
+for executable permissions only (with `.exe` and `.com` extensions added on
+Windows platforms); no searching of `PATH` is performed.
+"""
+function which(program_name::String)
+    # Build a list of program names that we're going to try
+    program_names = String[]
+    base_pname = basename(program_name)
+    if iswindows()
+        # If the file already has an extension, try that name first
+        if !isempty(splitext(base_pname)[2])
+            push!(program_names, base_pname)
+        end
+
+        # But also try appending .exe and .com`
+        for pe in (".exe", ".com")
+            push!(program_names, string(base_pname, pe))
+        end
+    else
+        # On non-windows, we just always search for what we've been given
+        push!(program_names, base_pname)
+    end
+
+    path_dirs = String[]
+    program_dirname = dirname(program_name)
+    # If we've been given a path that has a directory name in it, then we
+    # check to see if that path exists.  Otherwise, we search the PATH.
+    if isempty(program_dirname)
+        # If we have been given just a program name (not a relative or absolute
+        # path) then we should search `PATH` for it here:
+        pathsep = iswindows() ? ';' : ':'
+        path_dirs = abspath.(split(get(ENV, "PATH", ""), pathsep))
+
+        # On windows we always check the current directory as well
+        if iswindows()
+            pushfirst!(path_dirs, pwd())
+        end
+    else
+        push!(path_dirs, abspath(program_dirname))
+    end
+
+    # Here we combine our directories with our program names, searching for the
+    # first match among all combinations.
+    for path_dir in path_dirs
+        for pname in program_names
+            program_path = joinpath(path_dir, pname)
+            # If we find something that matches our name and we can execute
+            if isexecutable(program_path)
+                return realpath(program_path)
+            end
+        end
+    end
+
+    # If we couldn't find anything, don't return anything
+    nothing
+end
+which(program_name::AbstractString) = which(String(program_name))
 
 end # module Sys

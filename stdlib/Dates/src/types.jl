@@ -189,7 +189,8 @@ function validargs(::Type{DateTime}, y::Int64, m::Int64, d::Int64,
                    h::Int64, mi::Int64, s::Int64, ms::Int64)
     0 < m < 13 || return argerror("Month: $m out of range (1:12)")
     0 < d < daysinmonth(y, m) + 1 || return argerror("Day: $d out of range (1:$(daysinmonth(y, m)))")
-    -1 < h < 24 || return argerror("Hour: $h out of range (0:23)")
+    -1 < h < 24 || (h == 24 && mi==s==ms==0) ||
+        return argerror("Hour: $h out of range (0:23)")
     -1 < mi < 60 || return argerror("Minute: $mi out of range (0:59)")
     -1 < s < 60 || return argerror("Second: $s out of range (0:59)")
     -1 < ms < 1000 || return argerror("Millisecond: $ms out of range (0:999)")

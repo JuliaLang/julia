@@ -320,6 +320,7 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
 #define jl_datatype_layout_n_nonptr(layout) ((uint32_t*)(layout))[-1]
 
 jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz);
+JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz);
 
 jl_code_info_t *jl_type_infer(jl_method_instance_t **pli JL_ROOTS_TEMPORARILY, size_t world, int force);
 jl_callptr_t jl_generate_fptr(jl_method_instance_t **pli, jl_llvm_functions_t decls, size_t world);
@@ -446,6 +447,7 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_svec_t *sparam_vals);
 int jl_is_toplevel_only_expr(jl_value_t *e);
 jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module_t *inmodule);
+void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_module_t *mod, jl_sym_t *name);
 
 jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt JL_PROPAGATES_ROOT,
     jl_value_t **args, size_t nargs, int cache, size_t world);
@@ -471,6 +473,9 @@ extern char jl_using_intel_jitevents;
 #endif
 #ifdef JL_USE_OPROFILE_JITEVENTS
 extern char jl_using_oprofile_jitevents;
+#endif
+#ifdef JL_USE_PERF_JITEVENTS
+extern char jl_using_perf_jitevents;
 #endif
 extern size_t jl_arr_xtralloc_limit;
 
@@ -569,7 +574,7 @@ int32_t jl_assign_functionID(const char *fname);
 JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz);
 
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module);
-jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world);
+jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world, int mt_cache);
 JL_DLLEXPORT int jl_has_call_ambiguities(jl_value_t *types, jl_method_t *m);
 jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_svec_t *sp);
 int jl_is_rettype_inferred(jl_method_instance_t *li);
@@ -918,7 +923,6 @@ STATIC_INLINE void *jl_get_frame_addr(void)
 }
 
 JL_DLLEXPORT jl_array_t *jl_array_cconvert_cstring(jl_array_t *a);
-JL_DLLEXPORT void jl_depwarn_partial_indexing(size_t n);
 void jl_depwarn(const char *msg, jl_value_t *sym);
 
 // Log `msg` to the current logger by calling CoreLogging.logmsg_shim() on the
@@ -932,46 +936,38 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
 int isabspath(const char *in);
 
 extern jl_sym_t *call_sym;    extern jl_sym_t *invoke_sym;
-extern jl_sym_t *empty_sym;   extern jl_sym_t *body_sym;
-extern jl_sym_t *dots_sym;    extern jl_sym_t *vararg_sym;
-extern jl_sym_t *quote_sym;   extern jl_sym_t *newvar_sym;
-extern jl_sym_t *top_sym;     extern jl_sym_t *dot_sym;
-extern jl_sym_t *line_sym;    extern jl_sym_t *toplevel_sym;
-extern jl_sym_t *core_sym;    extern jl_sym_t *globalref_sym;
-extern jl_sym_t *error_sym;   extern jl_sym_t *amp_sym;
-extern jl_sym_t *module_sym;  extern jl_sym_t *colons_sym;
+extern jl_sym_t *empty_sym;   extern jl_sym_t *top_sym;
+extern jl_sym_t *module_sym;  extern jl_sym_t *slot_sym;
 extern jl_sym_t *export_sym;  extern jl_sym_t *import_sym;
-extern jl_sym_t *importall_sym; extern jl_sym_t *using_sym;
+extern jl_sym_t *toplevel_sym; extern jl_sym_t *quote_sym;
+extern jl_sym_t *line_sym;    extern jl_sym_t *jl_incomplete_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
-extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
-extern jl_sym_t *unreachable_sym; extern jl_sym_t *tuple_sym;
+extern jl_sym_t *return_sym;  extern jl_sym_t *unreachable_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
-extern jl_sym_t *method_sym;  extern jl_sym_t *slot_sym;
+extern jl_sym_t *globalref_sym; extern jl_sym_t *do_sym;
+extern jl_sym_t *method_sym;  extern jl_sym_t *core_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
-extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
-extern jl_sym_t *compiler_temp_sym;
-extern jl_sym_t *foreigncall_sym;
-extern jl_sym_t *cfunction_sym;
+extern jl_sym_t *exc_sym;     extern jl_sym_t *error_sym;
+extern jl_sym_t *new_sym;     extern jl_sym_t *using_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
-extern jl_sym_t *underscore_sym; extern jl_sym_t *colon_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *primtype_sym;
-extern jl_sym_t *structtype_sym;
-extern jl_sym_t *global_sym; extern jl_sym_t *unused_sym;
+extern jl_sym_t *structtype_sym;   extern jl_sym_t *foreigncall_sym;
+extern jl_sym_t *global_sym; extern jl_sym_t *list_sym;
+extern jl_sym_t *dot_sym;    extern jl_sym_t *newvar_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *inbounds_sym;
-extern jl_sym_t *copyast_sym; extern jl_sym_t *fastmath_sym;
+extern jl_sym_t *copyast_sym; extern jl_sym_t *cfunction_sym;
 extern jl_sym_t *pure_sym; extern jl_sym_t *simdloop_sym;
-extern jl_sym_t *meta_sym; extern jl_sym_t *list_sym;
-extern jl_sym_t *inert_sym; extern jl_sym_t *static_parameter_sym;
-extern jl_sym_t *inline_sym;  extern jl_sym_t *noinline_sym;
-extern jl_sym_t *polly_sym;
-extern jl_sym_t *propagate_inbounds_sym;
-extern jl_sym_t *isdefined_sym;
-extern jl_sym_t *nospecialize_sym;
-extern jl_sym_t *boundscheck_sym;
+extern jl_sym_t *meta_sym; extern jl_sym_t *compiler_temp_sym;
+extern jl_sym_t *inert_sym;  extern jl_sym_t *polly_sym;
+extern jl_sym_t *unused_sym; extern jl_sym_t *static_parameter_sym;
+extern jl_sym_t *inline_sym; extern jl_sym_t *noinline_sym;
+extern jl_sym_t *generated_sym; extern jl_sym_t *generated_only_sym;
+extern jl_sym_t *isdefined_sym; extern jl_sym_t *propagate_inbounds_sym;
+extern jl_sym_t *specialize_sym; extern jl_sym_t *nospecialize_sym;
+extern jl_sym_t *macrocall_sym;  extern jl_sym_t *colon_sym;
+extern jl_sym_t *hygienicscope_sym; extern jl_sym_t *escape_sym;
 extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
-extern jl_sym_t *generated_sym;
-extern jl_sym_t *generated_only_sym;
-extern jl_sym_t *throw_undef_if_not_sym;
+extern jl_sym_t *throw_undef_if_not_sym; extern jl_sym_t *getfield_undefref_sym;
 
 struct _jl_sysimg_fptrs_t;
 

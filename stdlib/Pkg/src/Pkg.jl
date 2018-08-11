@@ -1,320 +1,385 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
-"""
-    Pkg
-
-The `Pkg` module provides package management for Julia.
-Use
-`Pkg.status()` for a list of installed packages,
-`Pkg.add("<pkg name>")` to add a package,
-`Pkg.update()` to update the installed packages.
-
-Please see the manual section on packages for more information.
-"""
 module Pkg
 
-export Dir, Types, Reqs, Cache, Read, Query, Resolve, Write, Entry
-export dir, init, add, available, installed, status, clone, checkout,
-       update, resolve, test, build, free, pin, PkgError, setprotocol!
+import Random
+import REPL
 
-const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
-const META_BRANCH = "metadata-v2"
+# legacy CI script support
+export @pkg_str
+export PackageSpec
+export PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT
+export UpgradeLevel, UPLEVEL_MAJOR, UPLEVEL_MAJOR, UPLEVEL_MINOR, UPLEVEL_PATCH
 
-struct PkgError <: Exception
-    msg::AbstractString
-    ex::Union{Exception, Nothing}
+depots() = Base.DEPOT_PATH
+function depots1()
+    d = depots()
+    isempty(d) && Pkg.Types.pkgerror("no depots found in DEPOT_PATH")
+    return d[1]
 end
-PkgError(msg::AbstractString) = PkgError(msg, nothing)
-function Base.showerror(io::IO, pkgerr::PkgError)
-    print(io, pkgerr.msg)
-    if pkgerr.ex !== nothing
-        pkgex = pkgerr.ex
-        if isa(pkgex, CompositeException)
-            for cex in pkgex
-                print(io, "\n=> ")
-                showerror(io, cex)
+
+logdir() = joinpath(depots1(), "logs")
+devdir() = get(ENV, "JULIA_PKG_DEVDIR", joinpath(depots1(), "dev"))
+envdir(depot = depots1()) = joinpath(depot, "environments")
+const UPDATED_REGISTRY_THIS_SESSION = Ref(false)
+
+# load snapshotted dependencies
+include("../ext/TOML/src/TOML.jl")
+
+include("GitTools.jl")
+include("PlatformEngines.jl")
+include("Types.jl")
+include("Display.jl")
+include("Pkg2/Pkg2.jl")
+include("GraphType.jl")
+include("Resolve.jl")
+include("Operations.jl")
+include("API.jl")
+include("REPLMode.jl")
+
+import .API: clone, dir
+import .REPLMode: @pkg_str
+import .Types: UPLEVEL_MAJOR, UPLEVEL_MINOR, UPLEVEL_PATCH, UPLEVEL_FIXED
+import .Types: PKGMODE_MANIFEST, PKGMODE_PROJECT
+
+
+"""
+    PackageMode
+
+An enum with the instances
+
+  * `PKGMODE_MANIFEST`
+  * `PKGMODE_PROJECT`
+
+Determines if operations should be made on a project or manifest level.
+Used as an argument to  [`PackageSpec`](@ref) or as an argument to [`Pkg.rm`](@ref).
+"""
+const PackageMode = Types.PackageMode
+
+
+"""
+    UpgradeLevel
+
+An enum with the instances
+
+  * `UPLEVEL_FIXED`
+  * `UPLEVEL_PATCH`
+  * `UPLEVEL_MINOR`
+  * `UPLEVEL_MAJOR`
+
+Determines how much a package is allowed to be updated.
+Used as an argument to  [`PackageSpec`](@ref) or as an argument to [`Pkg.update`](@ref).
+"""
+const UpgradeLevel = Types.UpgradeLevel
+
+# Define new variables so tab comleting Pkg. works.
+"""
+    Pkg.add(pkg::Union{String, Vector{String})
+    Pkg.add(pkg::Union{PackageSpec, Vector{PackageSpec}})
+
+Add a package to the current project. This package will be available using the
+`import` and `using` keywords in the Julia REPL and if the current project is
+a package, also inside that package.
+
+# Examples
+```julia
+Pkg.add("Example") # Add a package from registry
+Pkg.add(PackageSpec(name="Example", version="0.3")) # Specify version
+Pkg.add(PackageSpec(url="https://github.com/JuliaLang/Example.jl", rev="master")) # From url
+Pkg.add(PackageSpec(url="/remote/mycompany/juliapackages/OurPackage"))` # From path (has to be a gitrepo)
+```
+
+See also [`PackageSpec`](@ref).
+"""
+const add = API.add
+
+"""
+    Pkg.rm(pkg::Union{String, Vector{String})
+    Pkg.rm(pkg::Union{PackageSpec, Vector{PackageSpec}})
+
+Remove a package from the current project. If the `mode` of `pkg` is
+`PKGMODE_MANIFEST` also remove it from the manifest including all
+recursive dependencies of `pkg`.
+
+See also [`PackageSpec`](@ref), [`PackageMode`](@ref).
+"""
+const rm = API.rm
+
+"""
+    Pkg.update(; level::UpgradeLevel=UPLEVEL_MAJOR, mode::PackageMode = PKGMODE_PROJECT)
+    Pkg.update(pkg::Union{String, Vector{String})
+    Pkg.update(pkg::Union{PackageSpec, Vector{PackageSpec}})
+
+Update a package `pkg`. If no posistional argument is given, update all packages in the manifest if `mode` is `PKGMODE_MANIFEST` and packages in both manifest and project if `mode` is `PKGMODE_PROJECT`.
+If no positional argument is given `level` can be used to control what how much packages are allowed to be upgraded (major, minor, patch, fixed).
+
+See also [`PackageSpec`](@ref), [`PackageMode`](@ref), [`UpgradeLevel`](@ref).
+"""
+const update = API.up
+
+
+"""
+    Pkg.test(; coverage::Bool=true)
+    Pkg.test(pkg::Union{String, Vector{String}; coverage::Bool=true)
+    Pkg.test(pkgs::Union{PackageSpec, Vector{PackageSpec}}; coverage::Bool=true)
+
+Run the tests for package `pkg` or if no positional argument is given to `test`,
+the current project is tested (which thus needs to be a package).
+A package is tested by running its `test/runtests.jl` file.
+
+The tests are run by generating a temporary environment with only `pkg` and its (recursive) dependencies
+(recursively) in it. If a manifest exist, the versions in that manifest is used, otherwise
+a feasible set of package are resolved and installed.
+
+During the test, test-specific dependencies are active, which are
+given in the project file as e.g.
+
+```
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = [Test]
+```
+
+Coverage statistics for the packages may be generated by
+passing `coverage=true`. The default behavior is not to run coverage.
+
+The tests are executed in a new process with `check-bounds=yes` and by default `startup-file=no`.
+If using the startup file (`~/.julia/config/startup.jl`) is desired, start julia with `--startup-file=yes`.
+"""
+const test = API.test
+
+"""
+    Pkg.gc()
+
+Garbage collect packages that are no longer reachable from any project.
+Only packages that are tracked by version are deleted, so no packages
+that might contain local changes are touched.
+"""
+const gc = API.gc
+
+
+"""
+    Pkg.build()
+    Pkg.build(pkg::Union{String, Vector{String})
+    Pkg.build(pkgs::Union{PackageSpec, Vector{PackageSpec}})
+
+Run the build script in `deps/build.jl` for `pkg` and all of the dependencies in
+depth-first recursive order.
+If no argument is given to `build`, the current project is built, which thus needs
+to be a package.
+This function is called automatically one any package that gets installed
+for the first time.
+"""
+const build = API.build
+
+# TODO: decide what to do with this
+const installed = API.installed
+
+"""
+    Pkg.pin(pkg::Union{String, Vector{String})
+    Pkg.pin(pkgs::Union{Packagespec, Vector{Packagespec}})
+
+Pin a package to the current version (or the one given in the `packagespec` or a certain
+git revision. A pinned package is never updated.
+"""
+const pin = API.pin
+
+"""
+    Pkg.free(pkg::Union{String, Vector{String})
+    Pkg.free(pkgs::Union{Packagespec, Vector{Packagespec}})
+
+Free a package which removes a `pin` if it exists, or if the package is tracking a path,
+e.g. after [`Pkg.develop`](@ref), go back to tracking registered versions.
+
+# Examples
+```julia
+Pkg.free("Package")
+Pkg.free(PackageSpec("Package"))
+```
+"""
+const free = API.free
+
+
+"""
+    Pkg.develop(pkg::Union{String, Vector{String})
+    Pkg.develop(pkgs::Union{Packagespec, Vector{Packagespec}})
+
+Make a package available for development by tracking it by path.
+If `pkg` is given with only a name or by a URL the packages will be downloaded
+to the location by the environment variable `JULIA_PKG_DEVDIR` with
+`.julia/dev` as the default.
+
+If `pkg` is given as a local path, the package at that path will be tracked.
+
+# Examples
+```julia
+# By name
+Pkg.develop("Example")
+
+# By url
+Pkg.develop(PackageSpec(url="https://github.com/JuliaLang/Compat.jl", rev="master"))
+
+# By path (also uses url keyword to PackageSpec)
+Pkg.develop(PackageSpec(url="MyJuliaPackages/Package.jl")
+```
+
+See also [`PackageSpec`](@ref)
+
+"""
+const develop = API.develop
+
+#TODO: Will probably be deprecated for something in PkgDev
+const generate = API.generate
+
+"""
+    Pkg.instantiate()
+
+If a `Manifest.toml` file exist in the current project, download all
+the packages declared in that manifest.
+Else, resolve a set of feasible packages from the `Project.toml` files
+and install them.
+"""
+const instantiate = API.instantiate
+
+"""
+    Pkg.resolve()
+
+Update the current manifest with eventual changes to the dependency graph
+from packages that are tracking a path.
+"""
+const resolve = API.resolve
+
+"""
+    Pkg.status(mode::PackageMode=PKGMODE_PROJECT)
+
+Print out the status of the project/manifest.
+If `mode` is `PKGMODE_PROJECT` prints out status about only those packages
+that are in the project (explicitly added). If `mode` is `PKGMODE_MANIFEST`
+also print for those in the manifest (recursive dependencies).
+"""
+const status = API.status
+
+
+"""
+    Pkg.activate([s::String]; shared::Bool=false)
+
+Activate the environment at `s`. The active environment is the environment
+that is modified by executing package commands.
+The logic for what path is activated is as follows:
+
+  * If `shared` is `true`, the first existing environment named `s` from the depots
+    in the depot stack will be activated. If no such environment exists yet,
+    activate it in the first depot.
+  * If `s` is a path that exist, that environment will be activated.
+  * If `s` is a package name in the current project activate that is tracking a path,
+    activate the environment at that path.
+  * If `s` is a non-existing path, activate that path.
+
+If no argument is given to `activate`, activate the home project,
+which is the one specified by either `--project` command line when starting julia,
+or `JULIA_PROJECT` environment variable.
+
+# Examples
+```
+Pkg.activate()
+Pkg.activate("local/path")
+Pkg.activate("MyDependency")
+```
+"""
+const activate = API.activate
+
+
+"""
+    PackageSpec(name::String, [uuid::UUID, version::VersionNumber])
+    PackageSpec(; name, url, path, rev, version, mode, level)
+
+A `PackageSpec` is a representation of a package with various metadata.
+This includes:
+
+  * The `name` of the package.
+  * The package unique `uuid`.
+  * A `version` (for example when adding a package. When upgrading, can also be an instance of
+   the enum [`UpgradeLevel`](@ref)
+  * A `url` and an optional git `rev`ision. `rev` could be a branch name or a git commit SHA.
+  * A local path `path`. This is equivalent to using the `url` argument but can be more descriptive.
+  * A `mode`, which is an instance of the enum [`PackageMode`](@ref) which can be either `PKGMODE_PROJECT` or
+   `PKGMODE_MANIFEST`, defaults to `PKGMODE_PROJECT`. Used in e.g. [`Pkg.rm`](@ref).
+
+Most functions in Pkg take a `Vector` of `PackageSpec` and do the operation on all the packages
+in the vector.
+
+Below is a comparison between the REPL version and the `PackageSpec` version:
+
+| `REPL`               | `API`                                         |
+|:---------------------|:----------------------------------------------|
+| `Package`            | `PackageSpec("Package")`                      |
+| `Package@0.2`        | `PackageSpec(name="Package", version="0.2")`  |
+| `Package=a67d...`    | `PackageSpec(name="Package", uuid="a67d..."`  |
+| `Package#master`     | `PackageSpec(name="Package", rev="master")`   |
+| `local/path#feature` | `PackageSpec(path="local/path"; rev="feature)` |
+| `www.mypkg.com`      | `PackageSpec(url="www.mypkg.com")`              |
+| `--manifest Package` | `PackageSpec(name="Package", mode=PKGSPEC_MANIFEST)`|
+| `--major Package`    | `PackageSpec(name="Package", version=PKGLEVEL_MAJOR`)|
+"""
+const PackageSpec = Types.PackageSpec
+
+"""
+    Pkg.setprotocol!(proto::Union{Nothing, AbstractString}=nothing)
+
+Set the protocol used to access GitHub-hosted packages when `add`ing a url or `develop`ing a package.
+Defaults to 'https', with `proto == nothing` delegating the choice to the package developer.
+"""
+const setprotocol! = API.setprotocol!
+
+
+
+function __init__()
+    if isdefined(Base, :active_repl)
+        REPLMode.repl_init(Base.active_repl)
+    else
+        atreplinit() do repl
+            if isinteractive() && repl isa REPL.LineEditREPL
+                isdefined(repl, :interface) || (repl.interface = REPL.setup_interface(repl))
+                REPLMode.repl_init(repl)
             end
-        else
-            print(io, "\n")
-            showerror(io, pkgex)
         end
     end
 end
 
-for file in split("dir types reqs cache read query resolve write entry")
-    include("$file.jl")
+METADATA_compatible_uuid(pkg::String) = Types.uuid5(Types.uuid_package, pkg)
+
+##################
+# Precompilation #
+##################
+
+const CTRL_C = '\x03'
+const precompile_script = """
+    import Pkg
+    tmp = mktempdir()
+    cd(tmp)
+    empty!(DEPOT_PATH)
+    pushfirst!(DEPOT_PATH, tmp)
+    # Prevent cloning registry
+    mkdir("registries")
+    touch("registries/blocker") # prevents default registry from cloning
+    touch("Project.toml")
+    ] activate .
+    $CTRL_C
+    Pkg.add("Test") # adding an stdlib doesn't require internet access
+    ] st
+    $CTRL_C
+    rm(tmp; recursive=true)"""
+
+module PrecompileArea
+    import ..Pkg
+    using ..Types
+    using UUIDs
+    import LibGit2
+    import REPL
+    import SHA
+    include("precompile.jl")
 end
-const cd = Dir.cd
-
-dir(path...) = Dir.path(path...)
-
-# remove extension .jl
-const PKGEXT = ".jl"
-splitjl(pkg::AbstractString) = endswith(pkg, PKGEXT) ? pkg[1:(end-length(PKGEXT))] : pkg
-
-"""
-    dir() -> AbstractString
-
-Returns the absolute path of the package directory. This defaults to
-`joinpath(homedir(),".julia","v\$(VERSION.major).\$(VERSION.minor)")` on all platforms (i.e.
-`~/.julia/v$(VERSION.major).$(VERSION.minor)` in UNIX shell syntax). If the `JULIA_PKGDIR`
-environment variable is set, then that path is used in the returned value as
-`joinpath(ENV["JULIA_PKGDIR"],"v\$(VERSION.major).\$(VERSION.minor)")`. If `JULIA_PKGDIR` is
-a relative path, it is interpreted relative to whatever the current working directory is.
-"""
-dir()
-
-"""
-    dir(names...) -> AbstractString
-
-Equivalent to `normpath(Pkg.dir(),names...)` – i.e. it appends path components to the
-package directory and normalizes the resulting path. In particular, `Pkg.dir(pkg)` returns
-the path to the package `pkg`.
-"""
-dir(names...)
-
-"""
-    init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH)
-
-Initialize `Pkg.dir()` as a package directory. This will be done automatically when the
-`JULIA_PKGDIR` is not set and `Pkg.dir()` uses its default value. As part of this process,
-clones a local METADATA git repository from the site and branch specified by its arguments,
-which are typically not provided. Explicit (non-default) arguments can be used to support a
-custom METADATA setup.
-"""
-init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH) = Dir.init(meta,branch)
-
-function __init__()
-    if !Base.creating_sysimg
-        vers = "v$(VERSION.major).$(VERSION.minor)"
-        push!(Base.LOAD_PATH, dir)
-    end
-end
-
-"""
-    edit()
-
-Opens `Pkg.dir("REQUIRE")` in the editor specified by the `VISUAL` or `EDITOR` environment
-variables; when the editor command returns, it runs `Pkg.resolve()` to determine and install
-a new optimal set of installed package versions.
-"""
-edit() = cd(Entry.edit)
-
-"""
-    rm(pkg)
-
-Remove all requirement entries for `pkg` from `Pkg.dir("REQUIRE")` and call `Pkg.resolve()`.
-"""
-rm(pkg::AbstractString) = cd(Entry.rm,splitjl(pkg))
-
-"""
-    add(pkg, vers...)
-
-Add a requirement entry for `pkg` to `Pkg.dir("REQUIRE")` and call `Pkg.resolve()`. If
-`vers` are given, they must be `VersionNumber` objects and they specify acceptable version
-intervals for `pkg`.
-"""
-add(pkg::AbstractString, vers::VersionNumber...) = cd(Entry.add,splitjl(pkg),vers...)
-
-"""
-    available() -> Vector{String}
-
-Returns the names of available packages.
-"""
-available() = cd(Entry.available)
-
-"""
-    available(pkg) -> Vector{VersionNumber}
-
-Returns the version numbers available for package `pkg`.
-"""
-available(pkg::AbstractString) = cd(Entry.available,splitjl(pkg))
-
-"""
-    installed() -> Dict{String,VersionNumber}
-
-Returns a dictionary mapping installed package names to the installed version number of each
-package.
-"""
-installed() = cd(Entry.installed)
-
-"""
-    installed(pkg) -> Nothing | VersionNumber
-
-If `pkg` is installed, return the installed version number. If `pkg` is registered,
-but not installed, return `nothing`.
-"""
-installed(pkg::AbstractString) = cd(Entry.installed,splitjl(pkg))
-
-"""
-    status()
-
-Prints out a summary of what packages are installed and what version and state they're in.
-"""
-status(io::IO=stdout) = cd(Entry.status,io)
-
-"""
-    status(pkg)
-
-Prints out a summary of what version and state `pkg`, specifically, is in.
-"""
-status(pkg::AbstractString, io::IO=stdout) = cd(Entry.status,io,splitjl(pkg))
-
-"""
-    clone(pkg)
-
-If `pkg` has a URL registered in `Pkg.dir("METADATA")`, clone it from that URL on the
-default branch. The package does not need to have any registered versions.
-"""
-clone(url_or_pkg::AbstractString) = cd(Entry.clone,url_or_pkg)
-
-"""
-    clone(url, [pkg])
-
-Clone a package directly from the git URL `url`. The package does not need to be registered
-in `Pkg.dir("METADATA")`. The package repo is cloned by the name `pkg` if provided; if not
-provided, `pkg` is determined automatically from `url`.
-"""
-clone(url::AbstractString, pkg::AbstractString) = cd(Entry.clone,url,splitjl(pkg))
-
-"""
-    checkout(pkg, [branch="master"]; merge=true, pull=true)
-
-Checkout the `Pkg.dir(pkg)` repo to the branch `branch`. Defaults to checking out the
-"master" branch. To go back to using the newest compatible released version, use
-`Pkg.free(pkg)`. Changes are merged (fast-forward only) if the keyword argument `merge ==
-true`, and the latest version is pulled from the upstream repo if `pull == true`.
-"""
-checkout(pkg::AbstractString, branch::AbstractString="master"; merge::Bool=true, pull::Bool=true) =
-    cd(Entry.checkout,splitjl(pkg),branch,merge,pull)
-
-"""
-    free(pkg)
-
-Free the package `pkg` to be managed by the package manager again. It calls `Pkg.resolve()`
-to determine optimal package versions after. This is an inverse for both `Pkg.checkout` and
-`Pkg.pin`.
-
-You can also supply an iterable collection of package names, e.g., `Pkg.free(("Pkg1",
-"Pkg2"))` to free multiple packages at once.
-"""
-free(pkg) = cd(Entry.free,splitjl.(pkg))
-
-"""
-    pin(pkg)
-
-Pin `pkg` at the current version. To go back to using the newest compatible released
-version, use `Pkg.free(pkg)`
-"""
-pin(pkg::AbstractString) = cd(Entry.pin,splitjl(pkg))
-
-"""
-    pin(pkg, version)
-
-Pin `pkg` at registered version `version`.
-"""
-pin(pkg::AbstractString, ver::VersionNumber) = cd(Entry.pin,splitjl(pkg),ver)
-
-"""
-    update(pkgs...)
-
-Update the metadata repo – kept in `Pkg.dir("METADATA")` – then update any fixed packages
-that can safely be pulled from their origin; then call `Pkg.resolve()` to determine a new
-optimal set of packages versions.
-
-Without arguments, updates all installed packages. When one or more package names are provided as
-arguments, only those packages and their dependencies are updated.
-"""
-update(upkgs::AbstractString...) = cd(Entry.update,Dir.getmetabranch(),Set{String}(splitjl.([upkgs...])))
-
-"""
-    resolve()
-
-Determines an optimal, consistent set of package versions to install or upgrade to. The
-optimal set of package versions is based on the contents of `Pkg.dir("REQUIRE")` and the
-state of installed packages in `Pkg.dir()`, Packages that are no longer required are moved
-into `Pkg.dir(".trash")`.
-"""
-resolve() = cd(Entry.resolve)
-
-"""
-    build()
-
-Run the build scripts for all installed packages in depth-first recursive order.
-"""
-build() = cd(Entry.build)
-
-"""
-    build(pkgs...)
-
-Run the build script in `deps/build.jl` for each package in `pkgs` and all of their
-dependencies in depth-first recursive order. This is called automatically by `Pkg.resolve()`
-on all installed or updated packages.
-"""
-build(pkgs::AbstractString...) = cd(Entry.build,[splitjl.(pkgs)...])
-
-"""
-    test(; coverage=false)
-
-Run the tests for all installed packages ensuring that each package's test dependencies are
-installed for the duration of the test. A package is tested by running its
-`test/runtests.jl` file and test dependencies are specified in `test/REQUIRE`.
-Coverage statistics for the packages may be generated by passing `coverage=true`.
-The default behavior is not to run coverage.
-"""
-test(;coverage::Bool=false) = cd(Entry.test; coverage=coverage)
-
-"""
-    test(pkgs...; coverage=false)
-
-Run the tests for each package in `pkgs` ensuring that each package's test dependencies are
-installed for the duration of the test. A package is tested by running its
-`test/runtests.jl` file and test dependencies are specified in `test/REQUIRE`.
-Coverage statistics for the packages may be generated by passing `coverage=true`.
-The default behavior is not to run coverage.
-"""
-test(pkgs::AbstractString...; coverage::Bool=false) = cd(Entry.test,AbstractString[splitjl.(pkgs)...]; coverage=coverage)
-
-"""
-    dependents(pkg)
-
-List the packages that have `pkg` as a dependency.
-"""
-dependents(pkg::AbstractString) = Reqs.dependents(splitjl(pkg))
-
-"""
-    setprotocol!(proto)
-
-Set the protocol used to access GitHub-hosted packages. Defaults to 'https', with a blank
-`proto` delegating the choice to the package developer.
-"""
-setprotocol!(proto::AbstractString) = Cache.setprotocol!(proto)
-
-# point users to PkgDev
-register(args...) =
-    error("Pkg.register(pkg,[url]) has been moved to the package PkgDev.jl.\n",
-          "Run Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-")
-
-tag(pkg, ver=nothing, commit=nothing) =
-    error("Pkg.tag(pkg, [ver, [commit]]) has been moved to the package PkgDev.jl.\n",
-          "Run Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-")
-
-publish() =
-    error("Pkg.publish() has been moved to the package PkgDev.jl.\n",
-          "Run Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-")
-
-generate(pkg, license) =
-    error("Pkg.generate(pkg, license) has been moved to the package PkgDev.jl.\n",
-          "Run Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-")
-
-license(lic=nothing) =
-    error("Pkg.license([lic]) has been moved to the package PkgDev.jl.\n",
-          "Run Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-")
-
-submit(pkg, commit=nothing) =
-    error("Pkg.submit(pkg[, commit]) has been moved to the package PkgDev.jl.\n",
-          "Run Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-")
 
 end # module

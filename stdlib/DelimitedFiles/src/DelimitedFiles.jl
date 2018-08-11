@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
 Utilities for reading and writing delimited files, for example ".csv".
 See [`readdlm`](@ref) and [`writedlm`](@ref).
@@ -10,13 +8,9 @@ module DelimitedFiles
 
 using Mmap
 
-import Base: _default_delims, tryparse_internal, show
+import Base: tryparse_internal, show
 
 export readdlm, writedlm
-
-Base.@deprecate readcsv(io; opts...) readdlm(io, ','; opts...)
-Base.@deprecate readcsv(io, T::Type; opts...) readdlm(io, ',', T; opts...)
-Base.@deprecate writecsv(io, a; opts...) writedlm(io, a, ','; opts...)
 
 invalid_dlm(::Type{Char})   = reinterpret(Char, 0xfffffffe)
 invalid_dlm(::Type{UInt8})  = 0xfe
@@ -590,7 +584,7 @@ function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
             val,idx = iterate(dbuff, idx)
             if (is_eol = (Char(val) == Char(eol)))
                 is_dlm = is_comment = is_cr = is_quote = false
-            elseif (is_dlm = (is_default_dlm ? in(Char(val), _default_delims) : (Char(val) == Char(dlm))))
+            elseif (is_dlm = (is_default_dlm ? isspace(Char(val)) : (Char(val) == Char(dlm))))
                 is_comment = is_cr = is_quote = false
             elseif (is_quote = (Char(val) == Char(qchar)))
                 is_comment = is_cr = false

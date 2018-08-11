@@ -27,47 +27,38 @@ extern "C" {
 
 // head symbols for each expression type
 jl_sym_t *call_sym;    jl_sym_t *invoke_sym;
-jl_sym_t *dots_sym;    jl_sym_t *empty_sym;
+jl_sym_t *empty_sym;   jl_sym_t *top_sym;
 jl_sym_t *module_sym;  jl_sym_t *slot_sym;
 jl_sym_t *export_sym;  jl_sym_t *import_sym;
-jl_sym_t *importall_sym; jl_sym_t *toplevel_sym;
-jl_sym_t *quote_sym;   jl_sym_t *amp_sym;
-jl_sym_t *top_sym;     jl_sym_t *colons_sym;
+jl_sym_t *toplevel_sym; jl_sym_t *quote_sym;
 jl_sym_t *line_sym;    jl_sym_t *jl_incomplete_sym;
 jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
-jl_sym_t *label_sym;   jl_sym_t *return_sym;
-jl_sym_t *unreachable_sym; jl_sym_t *tuple_sym;
+jl_sym_t *return_sym;  jl_sym_t *unreachable_sym;
 jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
-jl_sym_t *body_sym;    jl_sym_t *globalref_sym;
+jl_sym_t *globalref_sym; jl_sym_t *do_sym;
 jl_sym_t *method_sym;  jl_sym_t *core_sym;
 jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
-jl_sym_t *underscore_sym;
-jl_sym_t *abstracttype_sym;
-jl_sym_t *primtype_sym;
-jl_sym_t *structtype_sym;
-jl_sym_t *foreigncall_sym;
-jl_sym_t *cfunction_sym;
+jl_sym_t *abstracttype_sym; jl_sym_t *primtype_sym;
+jl_sym_t *structtype_sym;   jl_sym_t *foreigncall_sym;
 jl_sym_t *global_sym; jl_sym_t *list_sym;
 jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *inbounds_sym;
-jl_sym_t *copyast_sym; jl_sym_t *fastmath_sym;
+jl_sym_t *copyast_sym; jl_sym_t *cfunction_sym;
 jl_sym_t *pure_sym; jl_sym_t *simdloop_sym;
 jl_sym_t *meta_sym; jl_sym_t *compiler_temp_sym;
-jl_sym_t *inert_sym; jl_sym_t *vararg_sym;
+jl_sym_t *inert_sym;  jl_sym_t *polly_sym;
 jl_sym_t *unused_sym; jl_sym_t *static_parameter_sym;
 jl_sym_t *inline_sym; jl_sym_t *noinline_sym;
-jl_sym_t *polly_sym;
-jl_sym_t *propagate_inbounds_sym; jl_sym_t *generated_sym;
-jl_sym_t *generated_only_sym;
-jl_sym_t *isdefined_sym; jl_sym_t *nospecialize_sym;
-jl_sym_t *macrocall_sym; jl_sym_t *colon_sym;
-jl_sym_t *hygienicscope_sym;
-jl_sym_t *escape_sym;
+jl_sym_t *generated_sym; jl_sym_t *generated_only_sym;
+jl_sym_t *isdefined_sym; jl_sym_t *propagate_inbounds_sym;
+jl_sym_t *specialize_sym; jl_sym_t *nospecialize_sym;
+jl_sym_t *macrocall_sym;  jl_sym_t *colon_sym;
+jl_sym_t *hygienicscope_sym; jl_sym_t *escape_sym;
 jl_sym_t *gc_preserve_begin_sym; jl_sym_t *gc_preserve_end_sym;
-jl_sym_t *throw_undef_if_not_sym;
+jl_sym_t *throw_undef_if_not_sym; jl_sym_t *getfield_undefref_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -335,19 +326,14 @@ void jl_init_frontend(void)
     error_sym = jl_symbol("error");
     goto_sym = jl_symbol("goto");
     goto_ifnot_sym = jl_symbol("gotoifnot");
-    label_sym = jl_symbol("label");
     return_sym = jl_symbol("return");
     unreachable_sym = jl_symbol("unreachable");
-    tuple_sym = jl_symbol("tuple");
     lambda_sym = jl_symbol("lambda");
     module_sym = jl_symbol("module");
     export_sym = jl_symbol("export");
     import_sym = jl_symbol("import");
     using_sym = jl_symbol("using");
-    importall_sym = jl_symbol("importall");
     assign_sym = jl_symbol("=");
-    body_sym = jl_symbol("body");
-    colons_sym = jl_symbol("::");
     method_sym = jl_symbol("method");
     exc_sym = jl_symbol("the_exception");
     enter_sym = jl_symbol("enter");
@@ -356,8 +342,6 @@ void jl_init_frontend(void)
     const_sym = jl_symbol("const");
     global_sym = jl_symbol("global");
     thunk_sym = jl_symbol("thunk");
-    underscore_sym = jl_symbol("_");
-    amp_sym = jl_symbol("&");
     abstracttype_sym = jl_symbol("abstract_type");
     primtype_sym = jl_symbol("primitive_type");
     structtype_sym = jl_symbol("struct_type");
@@ -366,13 +350,11 @@ void jl_init_frontend(void)
     colon_sym = jl_symbol(":");
     boundscheck_sym = jl_symbol("boundscheck");
     inbounds_sym = jl_symbol("inbounds");
-    fastmath_sym = jl_symbol("fastmath");
     newvar_sym = jl_symbol("newvar");
     copyast_sym = jl_symbol("copyast");
     simdloop_sym = jl_symbol("simdloop");
     pure_sym = jl_symbol("pure");
     meta_sym = jl_symbol("meta");
-    dots_sym = jl_symbol("...");
     list_sym = jl_symbol("list");
     unused_sym = jl_symbol("#unused#");
     slot_sym = jl_symbol("slot");
@@ -384,6 +366,7 @@ void jl_init_frontend(void)
     propagate_inbounds_sym = jl_symbol("propagate_inbounds");
     isdefined_sym = jl_symbol("isdefined");
     nospecialize_sym = jl_symbol("nospecialize");
+    specialize_sym = jl_symbol("specialize");
     macrocall_sym = jl_symbol("macrocall");
     escape_sym = jl_symbol("escape");
     hygienicscope_sym = jl_symbol("hygienic-scope");
@@ -392,6 +375,8 @@ void jl_init_frontend(void)
     generated_sym = jl_symbol("generated");
     generated_only_sym = jl_symbol("generated_only");
     throw_undef_if_not_sym = jl_symbol("throw_undef_if_not");
+    getfield_undefref_sym = jl_symbol("##getfield##");
+    do_sym = jl_symbol("do");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -549,11 +534,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             return temp;
         }
         JL_GC_PUSH1(&ex);
-        if (sym == label_sym) {
-            ex = scm_to_julia_(fl_ctx, car_(e), mod);
-            temp = jl_new_struct(jl_labelnode_type, ex);
-        }
-        else if (sym == goto_sym) {
+        if (sym == goto_sym) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
             temp = jl_new_struct(jl_gotonode_type, ex);
         }
@@ -582,6 +563,13 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
         else if (sym == inert_sym || (sym == quote_sym && (!iscons(car_(e))))) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
             temp = jl_new_struct(jl_quotenode_type, ex);
+        }
+        else if (sym == thunk_sym) {
+            ex = scm_to_julia_(fl_ctx, car_(e), mod);
+            assert(jl_is_code_info(ex));
+            jl_linenumber_to_lineinfo((jl_code_info_t*)ex, mod, jl_symbol("top-level scope"));
+            temp = (jl_value_t*)jl_exprn(sym, 1);
+            jl_exprargset(temp, 0, ex);
         }
         if (temp) {
             JL_GC_POP();
@@ -687,11 +675,9 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
         fl_free_gc_handles(fl_ctx, 1);
         return scmv;
     }
-    // GC Note: jl_fieldref(v, 0) allocate for LabelNode, GotoNode
+    // GC Note: jl_fieldref(v, 0) allocates for GotoNode
     //          but we don't need a GC root here because julia_to_list2
     //          shouldn't allocate in this case.
-    if (jl_typeis(v, jl_labelnode_type))
-        return julia_to_list2(fl_ctx, (jl_value_t*)label_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_linenumbernode_type)) {
         jl_value_t *file = jl_fieldref_noalloc(v,1); // non-allocating
         jl_value_t *line = jl_fieldref(v,0); // allocating
@@ -1079,6 +1065,23 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
         JL_GC_POP();
         return result;
     }
+    if (e->head == do_sym && jl_expr_nargs(e) == 2 && jl_is_expr(jl_exprarg(e, 0)) &&
+        ((jl_expr_t*)jl_exprarg(e, 0))->head == macrocall_sym) {
+        jl_expr_t *mc = (jl_expr_t*)jl_exprarg(e, 0);
+        size_t nm = jl_expr_nargs(mc);
+        jl_expr_t *mc2 = jl_exprn(macrocall_sym, nm+1);
+        JL_GC_PUSH1(&mc2);
+        jl_exprargset(mc2, 0, jl_exprarg(mc, 0));  // macro name
+        jl_exprargset(mc2, 1, jl_exprarg(mc, 1));  // location
+        jl_exprargset(mc2, 2, jl_exprarg(e, 1));   // function argument
+        size_t j;
+        for (j = 2; j < nm; j++) {
+            jl_exprargset(mc2, j+1, jl_exprarg(mc, j));
+        }
+        jl_value_t *ret = jl_expand_macros((jl_value_t*)mc2, inmodule, macroctx, onelevel);
+        JL_GC_POP();
+        return ret;
+    }
     if (e->head == escape_sym && macroctx) {
         macroctx = macroctx->parent;
     }
@@ -1099,7 +1102,7 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule)
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
     expr = jl_expand_macros(expr, inmodule, NULL, 0);
-    expr = jl_call_scm_on_ast("julia-expand-macroscope", expr, inmodule);
+    expr = jl_call_scm_on_ast("jl-expand-macroscope", expr, inmodule);
     JL_GC_POP();
     return expr;
 }
@@ -1110,7 +1113,7 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
     expr = jl_expand_macros(expr, inmodule, NULL, 1);
-    expr = jl_call_scm_on_ast("julia-expand-macroscope", expr, inmodule);
+    expr = jl_call_scm_on_ast("jl-expand-macroscope", expr, inmodule);
     JL_GC_POP();
     return expr;
 }

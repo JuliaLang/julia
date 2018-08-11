@@ -3,7 +3,7 @@
 using Random, Sockets
 
 const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "stdlib", "v$(VERSION.major).$(VERSION.minor)")
-const STDLIBS = readdir(STDLIB_DIR)
+const STDLIBS = filter!(x -> isdir(joinpath(STDLIB_DIR, x)), readdir(STDLIB_DIR))
 
 """
 
@@ -41,7 +41,7 @@ function choosetests(choices = [])
         "intfuncs", "simdloop", "vecelement", "rational",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
         "operators", "path", "ccall", "parse", "loading", "bigint",
-        "bigfloat", "sorting", "statistics", "spawn", "backtrace",
+        "bigfloat", "sorting", "spawn", "backtrace",
         "file", "read", "version", "namedtuple",
         "mpfr", "broadcast", "complex",
         "floatapprox", "stdlib", "reflection", "regex", "float16",
@@ -49,11 +49,11 @@ function choosetests(choices = [])
         "euler", "show",
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
         "some", "meta", "stacktraces", "docs",
-        "misc", "threads",
+        "misc", "threads", "stress",
         "enums", "cmdlineargs", "int",
         "checked", "bitset", "floatfuncs", "precompile", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
-        "channels", "iostream", "specificity", "codegen",
+        "channels", "iostream", "secretbuffer", "specificity", "codegen",
         "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
     ]
 
@@ -157,13 +157,9 @@ function choosetests(choices = [])
         filter!(x -> x != "rounding", tests)
     end
 
-    # The shift and invert solvers need SuiteSparse for sparse input
-    Base.USE_GPL_LIBS || filter!(x->x != "IterativeEigensolvers", STDLIBS)
-
     filter!(!in(skip_tests), tests)
 
-    explicit_pkg     =  "Pkg/pkg"        in tests
-    explicit_pkg3    =  "Pkg3/pkg"       in tests
+    explicit_pkg3    =  "Pkg/pkg"       in tests
     explicit_libgit2 =  "LibGit2/online" in tests
     new_tests = String[]
     for test in tests
@@ -180,8 +176,7 @@ function choosetests(choices = [])
     end
     filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
     append!(tests, new_tests)
-    explicit_pkg     || filter!(x -> x != "Pkg/pkg",        tests)
-    explicit_pkg3    || filter!(x -> x != "Pkg3/pkg",       tests)
+    explicit_pkg3    || filter!(x -> x != "Pkg/pkg",       tests)
     explicit_libgit2 || filter!(x -> x != "LibGit2/online", tests)
 
     # Filter out tests from the test groups in the stdlibs

@@ -148,9 +148,9 @@ end
                 this = Base.explicit_project_deps_get(project_file, "This")
                 that = Base.explicit_project_deps_get(project_file, "That")
                 # test that the correct answers are given
-                @test root == (coalesce(n, N+1) ≥ coalesce(d, N+1) ? false :
-                               coalesce(u, N+1) < coalesce(d, N+1) ? root_uuid : proj_uuid)
-                @test this == (coalesce(d, N+1) < coalesce(t, N+1) ≤ N ? this_uuid : false)
+                @test root == (something(n, N+1) ≥ something(d, N+1) ? false :
+                               something(u, N+1) < something(d, N+1) ? root_uuid : proj_uuid)
+                @test this == (something(d, N+1) < something(t, N+1) ≤ N ? this_uuid : false)
                 @test that == false
             end
         end
@@ -161,19 +161,24 @@ end
 
 saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
+saved_home_project = Base.HOME_PROJECT[]
+saved_active_project = Base.ACTIVE_PROJECT[]
+
 push!(empty!(LOAD_PATH), "project")
 push!(empty!(DEPOT_PATH), "depot")
+Base.HOME_PROJECT[] = nothing
+Base.ACTIVE_PROJECT[] = nothing
 
 @test load_path() == [abspath("project","Project.toml")]
 
 @testset "project & manifest identify_package & locate_package" begin
     local path
     for (names, uuid, path) in [
-        ("Foo",     "767738be-2f1f-45a9-b806-0234f3164144", "project/deps/Foo1/src/Foo.jl"      ),
-        ("Bar.Foo", "6f418443-bd2e-4783-b551-cdbac608adf2", "project/deps/Foo2.jl/src/Foo.jl"   ),
-        ("Bar",     "2a550a13-6bab-4a91-a4ee-dff34d6b99d0", "project/deps/Bar/src/Bar.jl"       ),
-        ("Foo.Baz", "6801f525-dc68-44e8-a4e8-cabd286279e7", "depot/packages/Baz/81oL/src/Baz.jl"),
-        ("Foo.Qux", "b5ec9b9c-e354-47fd-b367-a348bdc8f909", "project/deps/Qux.jl"               ),
+        ("Foo",     "767738be-2f1f-45a9-b806-0234f3164144", "project/deps/Foo1/src/Foo.jl"       ),
+        ("Bar.Foo", "6f418443-bd2e-4783-b551-cdbac608adf2", "project/deps/Foo2.jl/src/Foo.jl"    ),
+        ("Bar",     "2a550a13-6bab-4a91-a4ee-dff34d6b99d0", "project/deps/Bar/src/Bar.jl"        ),
+        ("Foo.Baz", "6801f525-dc68-44e8-a4e8-cabd286279e7", "depot/packages/Baz/81oLe/src/Baz.jl"),
+        ("Foo.Qux", "b5ec9b9c-e354-47fd-b367-a348bdc8f909", "project/deps/Qux.jl"                ),
     ]
         n = map(String, split(names, '.'))
         pkg = identify_package(n...)
@@ -213,6 +218,8 @@ push!(empty!(DEPOT_PATH), "depot")
     end
 end
 
+module NotPkgModule; end
+
 @testset "project & manifest import" begin
     @test !@isdefined Foo
     @test !@isdefined Bar
@@ -249,6 +256,12 @@ end
         end
     end
     @test Foo.which == "path"
+
+    @testset "pathof" begin
+        @test pathof(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1/src/Foo.jl"))
+        @test pathof(NotPkgModule) === nothing
+    end
+
 end
 
 ## systematic generation of test environments ##
@@ -524,6 +537,16 @@ end
 # normalization of paths by include (#26424)
 @test_throws ErrorException("could not open file $(joinpath(@__DIR__, "notarealfile.jl"))") include("./notarealfile.jl")
 
+old_act_proj = Base.ACTIVE_PROJECT[]
+pushfirst!(LOAD_PATH, "@")
+try
+    Base.ACTIVE_PROJECT[] = joinpath(@__DIR__, "TestPkg")
+    @eval using TestPkg
+finally
+    Base.ACTIVE_PROJECT[] = old_act_proj
+    popfirst!(LOAD_PATH)
+end
+
 ## cleanup after tests ##
 
 for env in keys(envs)
@@ -533,5 +556,12 @@ for depot in depots
     rm(depot, force=true, recursive=true)
 end
 
-append!(empty!(DEPOT_PATH), saved_depot_path)
 append!(empty!(LOAD_PATH), saved_load_path)
+append!(empty!(DEPOT_PATH), saved_depot_path)
+Base.HOME_PROJECT[] = saved_home_project
+Base.ACTIVE_PROJECT[] = saved_active_project
+
+# issue #28190
+module Foo; import Libdl; end
+import .Foo.Libdl; import Libdl
+@test Foo.Libdl === Libdl

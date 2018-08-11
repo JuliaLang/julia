@@ -12,7 +12,7 @@ struct Pair{A, B}
         return new(a, b)
     end
 end
-Pair(a::A, b::B) where {A, B} = Pair{A, B}(a, b)
+Pair(a, b) = Pair{typeof(a), typeof(b)}(a, b)
 const => = Pair
 
 """

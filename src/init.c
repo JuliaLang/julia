@@ -460,6 +460,10 @@ char jl_using_intel_jitevents; // Non-zero if running under Intel VTune Amplifie
 char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 #endif
 
+#ifdef JL_USE_PERF_JITEVENTS
+char jl_using_perf_jitevents = 0;
+#endif
+
 int isabspath(const char *in)
 {
 #ifdef _OS_WINDOWS_
@@ -554,15 +558,6 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     ((char*)jl_options.julia_bin)[path_size] = '\0';
     if (!jl_options.julia_bindir) {
         jl_options.julia_bindir = getenv("JULIA_BINDIR");
-        if (!jl_options.julia_bindir) {
-            char *julia_bindir = getenv("JULIA_HOME");
-            if (julia_bindir) {
-                jl_depwarn(
-                    "`JULIA_HOME` environment variable is renamed to `JULIA_BINDIR`",
-                    (jl_value_t*)jl_symbol("JULIA_HOME"));
-                jl_options.julia_bindir = julia_bindir;
-            }
-        }
         if (!jl_options.julia_bindir) {
             jl_options.julia_bindir = dirname(free_path);
         }
@@ -687,9 +682,15 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
 #endif
 
+#if defined(JL_USE_PERF_JITEVENTS)
+    const char *jit_profiling = getenv("ENABLE_JITPROFILING");
+    if (jit_profiling && atoi(jit_profiling)) {
+        jl_using_perf_jitevents= 1;
+    }
+#endif
 
 #if defined(__linux__)
-    int ncores = jl_cpu_cores();
+    int ncores = jl_cpu_threads();
     if (ncores > 1) {
         cpu_set_t cpumask;
         CPU_ZERO(&cpumask);
@@ -837,8 +838,6 @@ void jl_get_builtin_hooks(void)
     jl_int8_type    = (jl_datatype_t*)core("Int8");
     jl_int16_type   = (jl_datatype_t*)core("Int16");
     jl_uint16_type  = (jl_datatype_t*)core("UInt16");
-    jl_uint32_type  = (jl_datatype_t*)core("UInt32");
-    jl_uint64_type  = (jl_datatype_t*)core("UInt64");
 
     jl_float16_type = (jl_datatype_t*)core("Float16");
     jl_float32_type = (jl_datatype_t*)core("Float32");
@@ -852,6 +851,8 @@ void jl_get_builtin_hooks(void)
     jl_uint8_type->super = jl_unsigned_type;
     jl_int32_type->super = jl_signed_type;
     jl_int64_type->super = jl_signed_type;
+    jl_uint32_type->super = jl_unsigned_type;
+    jl_uint64_type->super = jl_unsigned_type;
 
     jl_errorexception_type = (jl_datatype_t*)core("ErrorException");
     jl_stackovf_exception  = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
@@ -875,7 +876,6 @@ void jl_get_builtin_hooks(void)
     jl_methoderror_type = (jl_datatype_t*)core("MethodError");
     jl_loaderror_type = (jl_datatype_t*)core("LoadError");
     jl_initerror_type = (jl_datatype_t*)core("InitError");
-    jl_lineinfonode_type = (jl_datatype_t*)core("LineInfoNode");
 }
 
 void jl_get_builtins(void)

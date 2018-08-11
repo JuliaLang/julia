@@ -11,7 +11,7 @@ mutable struct GitCredential
     host::Union{String, Nothing}
     path::Union{String, Nothing}
     username::Union{String, Nothing}
-    password::Union{String, Nothing}
+    password::Union{Base.SecretBuffer, Nothing}
     use_http_path::Bool
 
     function GitCredential(
@@ -20,9 +20,7 @@ mutable struct GitCredential
             path::Union{AbstractString, Nothing}=nothing,
             username::Union{AbstractString, Nothing}=nothing,
             password::Union{AbstractString, Nothing}=nothing)
-        c = new(protocol, host, path, username, password, true)
-        finalizer(securezero!, c)
-        return c
+        new(protocol, host, path, username, password, true)
     end
 end
 
@@ -30,30 +28,22 @@ function GitCredential(cfg::GitConfig, url::AbstractString)
     fill!(cfg, parse(GitCredential, url))
 end
 
-function GitCredential(cred::UserPasswordCredential, url::AbstractString)
-    git_cred = parse(GitCredential, url)
-    git_cred.username = deepcopy(cred.user)
-    git_cred.password = deepcopy(cred.pass)
-    return git_cred
-end
+GitCredential(cred::UserPasswordCredential, url::AbstractString) = parse(GitCredential, url)
 
-function securezero!(cred::GitCredential)
-    cred.protocol !== nothing && securezero!(cred.protocol)
-    cred.host !== nothing && securezero!(cred.host)
-    cred.path !== nothing && securezero!(cred.path)
-    cred.username !== nothing && securezero!(cred.username)
-    cred.password !== nothing && securezero!(cred.password)
+Base.:(==)(c1::GitCredential, c2::GitCredential) = (c1.protocol, c1.host, c1.path, c1.username, c1.password, c1.use_http_path) ==
+                                                   (c2.protocol, c2.host, c2.path, c2.username, c2.password, c2.use_http_path)
+Base.hash(cred::GitCredential, h::UInt) = hash(GitCredential, hash((cred.protocol, cred.host, cred.path, cred.username, cred.password, cred.use_http_path), h))
+
+function Base.shred!(cred::GitCredential)
+    cred.protocol = nothing
+    cred.host = nothing
+    cred.path = nothing
+    cred.username = nothing
+    cred.password !== nothing && Base.shred!(cred.password)
+    cred.password = nothing
     return cred
 end
 
-function Base.:(==)(a::GitCredential, b::GitCredential)
-    isequal(a.protocol, b.protocol) &&
-    isequal(a.host, b.host) &&
-    isequal(a.path, b.path) &&
-    isequal(a.username, b.username) &&
-    isequal(a.password, b.password) &&
-    a.use_http_path == b.use_http_path
-end
 
 """
     ismatch(url, git_cred) -> Bool
@@ -90,35 +80,47 @@ function Base.parse(::Type{GitCredential}, url::AbstractString)
 end
 
 function Base.copy!(a::GitCredential, b::GitCredential)
-    # Note: deepcopy calls avoid issues with securezero!
-    a.protocol = deepcopy(b.protocol)
-    a.host = deepcopy(b.host)
-    a.path = deepcopy(b.path)
-    a.username = deepcopy(b.username)
-    a.password = deepcopy(b.password)
+    Base.shred!(a)
+    a.protocol = b.protocol
+    a.host = b.host
+    a.path = b.path
+    a.username = b.username
+    a.password = b.password == nothing ? nothing : copy(b.password)
     return a
 end
 
 function Base.write(io::IO, cred::GitCredential)
-    cred.protocol !== nothing && println(io, "protocol=", cred.protocol)
-    cred.host !== nothing && println(io, "host=", cred.host)
-    cred.path !== nothing && cred.use_http_path && println(io, "path=", cred.path)
-    cred.username !== nothing && println(io, "username=", cred.username)
-    cred.password !== nothing && println(io, "password=", cred.password)
+    cred.protocol !== nothing && write(io, "protocol=", cred.protocol, '\n')
+    cred.host !== nothing && write(io, "host=", cred.host, '\n')
+    cred.path !== nothing && cred.use_http_path && write(io, "path=", cred.path, '\n')
+    cred.username !== nothing && write(io, "username=", cred.username, '\n')
+    cred.password !== nothing && write(io, "password=", cred.password, '\n')
     nothing
 end
 
 function Base.read!(io::IO, cred::GitCredential)
     # https://git-scm.com/docs/git-credential#IOFMT
     while !eof(io)
-        key, value = split(readline(io), '=')
-
+        key = readuntil(io, '=')
+        if key == "password"
+            value = Base.SecretBuffer()
+            while !eof(io) && (c = read(io, UInt8)) != UInt8('\n')
+                write(value, c)
+            end
+            seekstart(value)
+        else
+            value = readuntil(io, '\n')
+        end
         if key == "url"
             # Any components which are missing from the URL will be set to empty
             # https://git-scm.com/docs/git-credential#git-credential-codeurlcode
-            copy!(cred, parse(GitCredential, value))
+            Base.shred!(parse(GitCredential, value)) do urlcred
+                copy!(cred, urlcred)
+            end
         else
-            Base.setproperty!(cred, Symbol(key), String(value))
+            field = getproperty(cred, Symbol(key))
+            field !== nothing && Symbol(key) == :password && Base.shred!(field)
+            setproperty!(cred, Symbol(key), value)
         end
     end
 
@@ -208,7 +210,7 @@ function credential_helpers(cfg::GitConfig, cred::GitCredential)
 
     # https://git-scm.com/docs/gitcredentials#gitcredentials-helper
     for entry in GitConfigIter(cfg, r"credential.*\.helper")
-        section, url, name, value = split(entry)
+        section, url, name, value = split_cfg_entry(entry)
         @assert name == "helper"
 
         # Only use configuration settings where the URL applies to the git credential
@@ -244,7 +246,7 @@ specified `git_cred`.
 function default_username(cfg::GitConfig, cred::GitCredential)
     # https://git-scm.com/docs/gitcredentials#gitcredentials-username
     for entry in GitConfigIter(cfg, r"credential.*\.username")
-        section, url, name, value = split(entry)
+        section, url, name, value = split_cfg_entry(entry)
         @assert name == "username"
 
         # Only use configuration settings where the URL applies to the git credential
@@ -263,7 +265,7 @@ function use_http_path(cfg::GitConfig, cred::GitCredential)
     # Note: Ideally the regular expression should use "useHttpPath"
     # https://github.com/libgit2/libgit2/issues/4390
     for entry in GitConfigIter(cfg, r"credential.*\.usehttppath")
-        section, url, name, value = split(entry)
+        section, url, name, value = split_cfg_entry(entry)
 
         ismatch(url, cred) || continue
         use_path = value == "true"
@@ -283,7 +285,7 @@ function approve(cfg::GitConfig, cred::UserPasswordCredential, url::AbstractStri
         approve(helper, git_cred)
     end
 
-    securezero!(git_cred)
+    Base.shred!(git_cred)
     nothing
 end
 
@@ -295,6 +297,6 @@ function reject(cfg::GitConfig, cred::UserPasswordCredential, url::AbstractStrin
         reject(helper, git_cred)
     end
 
-    securezero!(git_cred)
+    Base.shred!(git_cred)
     nothing
 end

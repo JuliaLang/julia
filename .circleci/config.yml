@@ -12,14 +12,14 @@ jobs:
       - image: circleci/python:2.7
         environment:
           ARCH: i686
-          JULIA_CPU_CORES: 4
+          JULIA_CPU_THREADS: 4
           JULIA_TEST_MAXRSS_MB: 800
     steps: &steps
       - run: | # install build dependencies
-          sudo apt-get install -y g++-4.8-multilib gfortran-4.8-multilib \
+          sudo apt-get install -y g++-6-multilib gfortran-6-multilib \
             time ccache bar &&
           for prog in gcc g++ gfortran; do
-            sudo ln -s /usr/bin/$prog-4.8 /usr/local/bin/$prog;
+            sudo ln -s /usr/bin/$prog-6 /usr/local/bin/$prog;
           done
       - checkout # circle ci code checkout step
 # (FIXME: need to unset url."ssh://git@github.com".insteadOf or libgit2 tests fail)
@@ -43,19 +43,24 @@ jobs:
           contrib/download_cmake.sh &&
           make -j3 -C deps || make
       - run: | # build julia, output ccache stats when done
-          make -j3 all &&
+          make -j3 release &&
           make prefix=/tmp/julia install &&
           ccache -s &&
           make build-stats
       - run: | # move source tree out of the way, run tests from install tree
+          COMMIT_RANGE=$(echo "${CIRCLE_COMPARE_URL}" | cut -d/ -f7) &&
+          [[ "$COMMIT_RANGE" != *"..."* ]] && COMMIT_RANGE="${COMMIT_RANGE}...${COMMIT_RANGE}";
+          FILES_CHANGED=$(git diff --name-only $COMMIT_RANGE -- || git ls-files) &&
           cd .. &&
           mv project julia-src &&
-          /tmp/julia/bin/julia -e 'versioninfo()' &&
+          /tmp/julia/bin/julia -e 'Base.require(Main, :InteractiveUtils).versioninfo()' &&
           /tmp/julia/bin/julia --sysimage-native-code=no -e 'true' &&
-          /tmp/julia/bin/julia-debug --sysimage-native-code=no -e 'true' &&
+          #/tmp/julia/bin/julia-debug --sysimage-native-code=no -e 'true' &&
           pushd /tmp/julia/share/julia/test &&
-          /tmp/julia/bin/julia --check-bounds=yes runtests.jl all --skip Sockets | bar -i 30 &&
-          /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online Pkg/pkg Pkg3/pkg download &&
+          if [ $(echo "$FILES_CHANGED" | grep -cv '^doc/') -gt 0 ]; then
+            /tmp/julia/bin/julia --check-bounds=yes runtests.jl all --skip Sockets | bar -i 30 &&
+            /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online Pkg/pkg download;
+          fi &&
           popd &&
           mkdir /tmp/embedding-test &&
           make check -C /tmp/julia/share/julia/test/embedding \
@@ -76,6 +81,6 @@ jobs:
       - image: circleci/python:2.7
         environment:
           ARCH: x86_64
-          JULIA_CPU_CORES: 4
+          JULIA_CPU_THREADS: 4
           JULIA_TEST_MAXRSS_MB: 800
     steps: *steps

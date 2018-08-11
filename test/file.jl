@@ -79,10 +79,28 @@ if Sys.iswindows()
     @test filemode(file) & 0o777 == permissions
     chmod(dir, 0o666, recursive=true)  # Reset permissions in case someone wants to use these later
 else
+    function get_umask()
+        umask = ccall(:umask, UInt32, (UInt32,), 0)
+        ccall(:umask, UInt32, (UInt32,), umask)
+        return umask
+    end
+
     mktempdir() do tmpdir
+        umask = get_umask()
         tmpfile=joinpath(tmpdir, "tempfile.txt")
+        tmpfile2=joinpath(tmpdir, "tempfile2.txt")
         touch(tmpfile)
+        cp(tmpfile, tmpfile2)
+        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        rm(tmpfile2)
+        chmod(tmpfile, 0o777)
+        cp(tmpfile, tmpfile2)
+        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        rm(tmpfile2)
         chmod(tmpfile, 0o707)
+        cp(tmpfile, tmpfile2)
+        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        rm(tmpfile2)
         linkfile=joinpath(dir, "tempfile.txt")
         symlink(tmpfile, linkfile)
         permissions=0o776
@@ -158,9 +176,9 @@ close(f)
 
 rm(c_tmpdir, recursive=true)
 @test !isdir(c_tmpdir)
-@test_throws Base.UVError rm(c_tmpdir)
+@test_throws Base.IOError rm(c_tmpdir)
 @test rm(c_tmpdir, force=true) === nothing
-@test_throws Base.UVError rm(c_tmpdir, recursive=true)
+@test_throws Base.IOError rm(c_tmpdir, recursive=true)
 @test rm(c_tmpdir, force=true, recursive=true) === nothing
 
 if !Sys.iswindows()
@@ -175,8 +193,8 @@ if !Sys.iswindows()
         @test stat(file).gid ==0
         @test stat(file).uid ==0
     else
-        @test_throws Base.UVError chown(file, -2, -1)  # Non-root user cannot change ownership to another user
-        @test_throws Base.UVError chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
+        @test_throws Base.IOError chown(file, -2, -1)  # Non-root user cannot change ownership to another user
+        @test_throws Base.IOError chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
     end
 else
     # test that chown doesn't cause any errors for Windows
@@ -590,10 +608,10 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         @test_throws ArgumentError Base.cptree(none_existing_src,dst; force=true, follow_symlinks=false)
         @test_throws ArgumentError Base.cptree(none_existing_src,dst; force=true, follow_symlinks=true)
         # cp
-        @test_throws Base.UVError cp(none_existing_src,dst; force=true, follow_symlinks=false)
-        @test_throws Base.UVError cp(none_existing_src,dst; force=true, follow_symlinks=true)
+        @test_throws Base.IOError cp(none_existing_src,dst; force=true, follow_symlinks=false)
+        @test_throws Base.IOError cp(none_existing_src,dst; force=true, follow_symlinks=true)
         # mv
-        @test_throws Base.UVError mv(none_existing_src,dst; force=true)
+        @test_throws Base.IOError mv(none_existing_src,dst; force=true)
     end
 end
 
@@ -1011,71 +1029,4 @@ let n = tempname()
     rm(n)
 end
 
-# issue 13559
-if !Sys.iswindows()
-function test_13559()
-    fn = tempname()
-    run(`mkfifo $fn`)
-    # use subprocess to write 127 bytes to FIFO
-    writer_cmds = """
-        using Test
-        x = open($(repr(fn)), "w")
-        for i in 1:120
-            write(x, 0xaa)
-        end
-        flush(x)
-        Test.@test read(stdin, Int8) == 31
-        for i in 1:7
-            write(x, 0xaa)
-        end
-        close(x)
-    """
-    p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $writer_cmds`, stderr=stderr), "w")
-    # quickly read FIFO, draining it and blocking but not failing with EOFError yet
-    r = open(fn, "r")
-    # 15 proper reads
-    for i in 1:15
-        @test read(r, UInt64) === 0xaaaaaaaaaaaaaaaa
-    end
-    write(p, 0x1f)
-    # last read should throw EOFError when FIFO closes, since there are only 7 bytes (or less) available.
-    @test_throws EOFError read(r, UInt64)
-    close(r)
-    @test success(p)
-    rm(fn)
-end
-test_13559()
-end
 @test_throws ArgumentError mkpath("fakepath", mode = -1)
-
-# issue #22566
-# issue #24037 (disabling on FreeBSD)
-if !Sys.iswindows() && !(Sys.isbsd() && !Sys.isapple())
-    function test_22566()
-        fn = tempname()
-        run(`mkfifo $fn`)
-
-        script = """
-            using Test
-            x = open($(repr(fn)), "w")
-            write(x, 0x42)
-            flush(x)
-            Test.@test read(stdin, Int8) == 21
-            close(x)
-        """
-        cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
-        p = open(pipeline(cmd, stderr=stderr), "w")
-
-        r = open(fn, "r")
-        @test read(r, Int8) == 66
-        write(p, 0x15)
-        close(r)
-        @test success(p)
-        rm(fn)
-    end
-
-    # repeat opening/closing fifo file, ensure no EINTR popped out
-    for i ∈ 1:50
-        test_22566()
-    end
-end  # !Sys.iswindows

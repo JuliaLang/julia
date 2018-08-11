@@ -385,6 +385,35 @@ top:
   ret %jl_value_t addrspace(10)* %rval
 }
 
+define i8 @simple_arrayptr() {
+; CHECK-LABEL: @simple_arrayptr
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 4
+top:
+   %ptls = call %jl_value_t*** @julia.ptls_states()
+   %obj1 = call %jl_value_t addrspace(10) *@alloc()
+   %obj2 = call %jl_value_t addrspace(10) *@alloc()
+   %decayed = addrspacecast %jl_value_t addrspace(10) *%obj1 to %jl_value_t addrspace(11) *
+   %arrayptrptr = bitcast %jl_value_t addrspace(11) *%decayed to i8 addrspace(13)* addrspace(11)*
+   %arrayptr = load i8 addrspace(13)*, i8 addrspace(13)* addrspace(11)* %arrayptrptr
+   call void @jl_safepoint()
+   call void @one_arg_boxed(%jl_value_t addrspace(10) *%obj2)
+   %val = load i8, i8 addrspace(13)* %arrayptr
+   ret i8 %val
+}
+
+define %jl_value_t addrspace(10)* @vecstoreload(<2 x %jl_value_t addrspace(10)*> *%arg) {
+; CHECK-LABEL: @vecstoreload
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 4
+top:
+    %ptls = call %jl_value_t*** @julia.ptls_states()
+    %loaded = load <2 x %jl_value_t addrspace(10)*>, <2 x %jl_value_t addrspace(10)*> *%arg
+    call void @jl_safepoint()
+    %obj = call %jl_value_t addrspace(10) *@alloc()
+    %casted = bitcast %jl_value_t addrspace(10)* %obj to <2 x %jl_value_t addrspace(10)*> addrspace(10)*
+    store <2 x %jl_value_t addrspace(10)*> %loaded, <2 x %jl_value_t addrspace(10)*> addrspace(10)* %casted
+    ret %jl_value_t addrspace(10)* %obj
+}
+
 !0 = !{!"jtbaa"}
 !1 = !{!"jtbaa_const", !0, i64 0}
 !2 = !{!1, !1, i64 0, i64 1}

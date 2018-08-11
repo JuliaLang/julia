@@ -13,9 +13,16 @@ branches:
     - master
     - /^release-.*/
 
+# Note: use `[ci skip]` or `[skip ci]` anywhere in the commit message and AppVeyor won't be
+# built for that commit. You can use `[skip appveyor]` to explicitly skip AppVeyor and
+# allow other CI to still run.
 skip_commits:
 # Add [av skip] to commit messages for docfixes, etc to reduce load on queue
   message: /\[av skip\]/
+# Skip running CI for changes only to the documentation
+# https://github.com/JuliaLang/julia/pull/27356#discussion_r192536676
+# files:
+#   - doc/
 
 notifications:
   - provider: Email
@@ -35,6 +42,7 @@ cache:
   - llvm-3.9.1-i686-w64-mingw32-juliadeps-r07.7z
   - llvm-3.9.1-x86_64-w64-mingw32-juliadeps-r07.7z
   - usr/bin/busybox.exe
+  - C:\ccache
 
 build_script:
 # If there's a newer build queued for the same PR, cancel this one
@@ -52,9 +60,9 @@ build_script:
   - C:\cygwin-%ARCH%\bin\sh.exe --login /cygdrive/c/projects/julia/contrib/windows/appveyor_build.sh
 
 test_script:
-  - usr\bin\julia -e "versioninfo()"
+  - usr\bin\julia -e "Base.require(Main, :InteractiveUtils).versioninfo()"
   - usr\bin\julia --sysimage-native-code=no -e "true"
   - cd julia-* && .\bin\julia.exe --check-bounds=yes share\julia\test\runtests.jl all &&
-      .\bin\julia.exe --check-bounds=yes share\julia\test\runtests.jl LibGit2/online Pkg/pkg Pkg3/pkg download
+      .\bin\julia.exe --check-bounds=yes share\julia\test\runtests.jl LibGit2/online Pkg/pkg download
   - cd ..
   - usr\bin\julia usr\share\julia\test\embedding\embedding-test.jl test\embedding\embedding.exe

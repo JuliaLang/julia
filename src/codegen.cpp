@@ -235,14 +235,17 @@ static MDNode *tbaa_mutab;              // mutable type
 static MDNode *tbaa_immut;              // immutable type
 static MDNode *tbaa_ptrarraybuf;    // Data in an array of boxed values
 static MDNode *tbaa_arraybuf;       // Data in an array of POD
+static MDNode *tbaa_unionselbyte;   // a selector byte in isbits Union struct fields
 static MDNode *tbaa_array;      // jl_array_t
 static MDNode *tbaa_arrayptr;       // The pointer inside a jl_array_t
 static MDNode *tbaa_arraysize;      // A size in a jl_array_t
 static MDNode *tbaa_arraylen;       // The len in a jl_array_t
 static MDNode *tbaa_arrayflags;     // The flags in a jl_array_t
-static MDNode *tbaa_const;      // Memory that is immutable by the time LLVM can see it
+static MDNode *tbaa_arrayoffset;     // The offset in a jl_array_t
 static MDNode *tbaa_arrayselbyte;   // a selector byte in a isbits Union jl_array_t
-static MDNode *tbaa_unionselbyte;   // a selector byte in isbits Union struct fields
+static MDNode *tbaa_const;      // Memory that is immutable by the time LLVM can see it
+
+static Attribute Thunk;
 
 // Basic DITypes
 static DICompositeType *jl_value_dillvmt;
@@ -302,6 +305,7 @@ static Function *jl_alloc_obj_func;
 static Function *jl_newbits_func;
 static Function *jl_typeof_func;
 static Function *jl_simdloop_marker_func;
+static Function *jl_simdivdep_marker_func;
 static Function *jl_write_barrier_func;
 static Function *jlisa_func;
 static Function *jlsubtype_func;
@@ -320,14 +324,9 @@ static Function *box_uint64_func;
 static Function *box_float32_func;
 static Function *box_float64_func;
 static Function *box_ssavalue_func;
-static Function *box8_func;
-static Function *box16_func;
-static Function *box32_func;
-static Function *box64_func;
 static Function *expect_func;
 static Function *jldlsym_func;
 static Function *jltypeassert_func;
-static Function *jldepwarnpi_func;
 //static Function *jlgetnthfield_func;
 static Function *jlgetnthfieldchecked_func;
 //static Function *jlsetnthfield_func;
@@ -402,7 +401,6 @@ struct jl_cgval_t {
     jl_value_t *typ; // the original type of V, never NULL
     bool isboxed; // whether this value is a jl_value_t* allocated on the heap with the right type tag
     bool isghost; // whether this value is "ghost"
-    bool isimmutable; // V points to something that is definitely immutable (e.g. single-assignment, but including memory)
     MDNode *tbaa; // The related tbaa node. Non-NULL iff this holds an address.
     bool ispointer() const
     {
@@ -417,7 +415,6 @@ struct jl_cgval_t {
         typ(typ),
         isboxed(isboxed),
         isghost(false),
-        isimmutable(isboxed && jl_is_immutable_datatype(typ)),
         tbaa(isboxed ? best_tbaa(typ) : nullptr)
     {
         assert(gcroot == nullptr);
@@ -433,7 +430,6 @@ struct jl_cgval_t {
         typ(typ),
         isboxed(false),
         isghost(true),
-        isimmutable(true),
         tbaa(nullptr)
     {
         assert(jl_is_datatype(typ));
@@ -447,7 +443,6 @@ struct jl_cgval_t {
         typ(typ),
         isboxed(v.isboxed),
         isghost(v.isghost),
-        isimmutable(v.isimmutable),
         tbaa(v.tbaa)
     {
         // this constructor expects we had a badly or equivalently typed version
@@ -467,7 +462,6 @@ struct jl_cgval_t {
         typ(jl_bottom_type),
         isboxed(false),
         isghost(true),
-        isimmutable(true),
         tbaa(nullptr)
     {
     }
@@ -482,7 +476,7 @@ struct jl_varinfo_t {
     // if the variable might be used undefined and is not boxed
     // this i1 flag is true when it is defined
     Value *defFlag;
-    bool isSA;
+    bool isSA; // whether all stores dominate all uses
     bool isVolatile;
     bool isArgument;
     bool usedUndef;
@@ -501,14 +495,6 @@ struct jl_varinfo_t {
     {
     }
 };
-
-// aggregate of array metadata
-typedef struct {
-    Value *dataptr;
-    Value *len;
-    std::vector<Value*> sizes;
-    jl_value_t *ty;
-} jl_arrayvar_t;
 
 struct jl_returninfo_t {
     Function *decl;
@@ -538,7 +524,6 @@ public:
     std::vector<jl_cgval_t> SAvalues;
     std::vector<std::tuple<jl_cgval_t, BasicBlock *, AllocaInst *, PHINode *, jl_value_t *>> PhiNodes;
     std::vector<bool> ssavalue_assigned;
-    std::map<int, jl_arrayvar_t> *arrayvars = NULL;
     jl_module_t *module = NULL;
     jl_method_instance_t *linfo = NULL;
     jl_code_info_t *source = NULL;
@@ -563,7 +548,6 @@ public:
     Value *world_age_field = NULL;
 
     bool debug_enabled = false;
-    bool new_style_ir = false;
     const jl_cgparams_t *params = NULL;
 
     jl_codectx_t(LLVMContext &llvmctx)
@@ -574,7 +558,7 @@ public:
     }
 };
 
-static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr);
+static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval = -1);
 static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign);
 static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, bool isvol, MDNode *tbaa);
@@ -658,7 +642,6 @@ static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, Value *tinde
     assert(tbaa);
     jl_cgval_t tagval(v, NULL, false, typ, tindex);
     tagval.tbaa = tbaa;
-    tagval.isimmutable = true;
     return tagval;
 }
 
@@ -953,17 +936,14 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
                 Value *isboxv = ctx.builder.CreateIsNotNull(boxv);
                 Value *slotv;
                 MDNode *tbaa;
-                bool isimmutable;
                 if (v.ispointer()) {
                     slotv = v.V;
                     tbaa = v.tbaa;
-                    isimmutable = v.isimmutable;
                 }
                 else {
                     slotv = emit_static_alloca(ctx, v.V->getType());
                     ctx.builder.CreateStore(v.V, slotv);
                     tbaa = tbaa_stack;
-                    isimmutable = true;
                 }
                 slotv = ctx.builder.CreateSelect(isboxv,
                             decay_derived(boxv),
@@ -971,7 +951,6 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
                 jl_cgval_t newv = jl_cgval_t(slotv, NULL, false, typ, new_tindex);
                 newv.Vboxed = boxv;
                 newv.tbaa = tbaa;
-                newv.isimmutable = isimmutable;
                 return newv;
             }
         }
@@ -1031,7 +1010,6 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
                     ctx.builder.CreateStore(v.V, slotv);
                     jl_cgval_t newv = jl_cgval_t(slotv, NULL, false, typ, new_tindex);
                     newv.tbaa = tbaa_stack;
-                    newv.isimmutable = true;
                     return newv;
                 }
             }
@@ -1615,13 +1593,13 @@ void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapp
         if (!strcmp(decls.functionObject, "jl_fptr_args")) {
             auto f = Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage, decls.specFunctionObject);
             add_return_attr(f, Attribute::NonNull);
-            f->addFnAttr("thunk");
+            f->addFnAttr(Thunk);
             return f;
         }
         else if (!strcmp(decls.functionObject, "jl_fptr_sparam")) {
             auto f = Function::Create(jl_func_sig_sparams, GlobalVariable::ExternalLinkage, decls.specFunctionObject);
             add_return_attr(f, Attribute::NonNull);
-            f->addFnAttr("thunk");
+            f->addFnAttr(Thunk);
             return f;
         }
         else {
@@ -1631,7 +1609,7 @@ void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapp
     }
     auto f = Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage, decls.functionObject);
     add_return_attr(f, Attribute::NonNull);
-    f->addFnAttr("thunk");
+    f->addFnAttr(Thunk);
     return f;
 }
 
@@ -1839,9 +1817,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex, int sparams=tr
     if (jl_is_slot(ex))
         return NULL;
     if (jl_is_ssavalue(ex)) {
-        ssize_t idx = ((jl_ssavalue_t*)ex)->id;
-        if (ctx.new_style_ir)
-            idx -= 1;
+        ssize_t idx = ((jl_ssavalue_t*)ex)->id - 1;
         assert(idx >= 0);
         if (ctx.ssavalue_assigned.at(idx)) {
             return ctx.SAvalues.at(idx).constant;
@@ -1955,11 +1931,10 @@ static bool local_var_occurs(jl_value_t *e, int sl)
     return false;
 }
 
-static std::set<int> assigned_in_try(jl_array_t *stmts, int s, long l, int *pend)
+static std::set<int> assigned_in_try(jl_array_t *stmts, int s, long l)
 {
     std::set<int> av;
-    size_t slength = jl_array_dim0(stmts);
-    for(int i=s; i < (int)slength; i++) {
+    for(int i=s; i <= l; i++) {
         jl_value_t *st = jl_array_ptr_ref(stmts,i);
         if (jl_is_expr(st)) {
             if (((jl_expr_t*)st)->head == assign_sym) {
@@ -1967,12 +1942,6 @@ static std::set<int> assigned_in_try(jl_array_t *stmts, int s, long l, int *pend
                 if (jl_is_slot(ar)) {
                     av.insert(jl_slot_number(ar)-1);
                 }
-            }
-        }
-        if (jl_is_labelnode(st)) {
-            if (jl_labelnode_label(st) == l) {
-                *pend = i;
-                break;
             }
         }
     }
@@ -1986,10 +1955,8 @@ static void mark_volatile_vars(jl_array_t *stmts, std::vector<jl_varinfo_t> &slo
         jl_value_t *st = jl_array_ptr_ref(stmts, i);
         if (jl_is_expr(st)) {
             if (((jl_expr_t*)st)->head == enter_sym) {
-                int last = (int)slength - 1;
-                std::set<int> as =
-                    assigned_in_try(stmts, i + 1,
-                                    jl_unbox_long(jl_exprarg(st, 0)), &last);
+                int last = jl_unbox_long(jl_exprarg(st, 0));
+                std::set<int> as = assigned_in_try(stmts, i + 1, last);
                 for (int j = 0; j < (int)slength; j++) {
                     if (j < i || j > last) {
                         std::set<int>::iterator it = as.begin();
@@ -2206,19 +2173,26 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
         assert(arg1.ispointer() && arg2.ispointer());
         jl_datatype_t *sty = (jl_datatype_t*)arg1.typ;
         size_t sz = jl_datatype_size(sty);
+        Value *varg1 = maybe_decay_tracked(data_pointer(ctx, arg1));
+        Value *varg2 = maybe_decay_tracked(data_pointer(ctx, arg2));
         if (sz > 512 && !sty->layout->haspadding) {
-            Value *answer = ctx.builder.CreateCall(prepare_call(memcmp_derived_func),
-                            {
-                            maybe_bitcast(ctx, decay_derived(data_pointer(ctx, arg1)), T_pint8),
-                            maybe_bitcast(ctx, decay_derived(data_pointer(ctx, arg2)), T_pint8),
-                            ConstantInt::get(T_size, sz)
-                            });
+            varg1 = decay_derived(varg1);
+            varg2 = decay_derived(varg2);
+            Value *answer = ctx.builder.CreateCall(prepare_call(memcmp_derived_func), {
+                        maybe_bitcast(ctx, varg1, T_pint8),
+                        maybe_bitcast(ctx, varg2, T_pint8),
+                        ConstantInt::get(T_size, sz)
+                    });
             return ctx.builder.CreateICmpEQ(answer, ConstantInt::get(T_int32, 0));
         }
         else {
             Type *atp = at->getPointerTo();
-            Value *varg1 = maybe_bitcast(ctx, decay_derived(data_pointer(ctx, arg1)), atp);
-            Value *varg2 = maybe_bitcast(ctx, decay_derived(data_pointer(ctx, arg2)), atp);
+            if (cast<PointerType>(varg1->getType())->getAddressSpace() != cast<PointerType>(varg2->getType())->getAddressSpace()) {
+                varg1 = decay_derived(varg1);
+                varg2 = decay_derived(varg2);
+            }
+            varg1 = maybe_bitcast(ctx, varg1, atp);
+            varg2 = maybe_bitcast(ctx, varg2, atp);
             jl_svec_t *types = sty->types;
             Value *answer = ConstantInt::get(T_int1, 1);
             for (size_t i = 0, l = jl_svec_len(types); i < l; i++) {
@@ -2339,8 +2313,12 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
         Value *varg2 = arg2.constant ? literal_pointer_val(ctx, arg2.constant) : arg2.V;
         assert(varg1 && varg2 && (arg1.isboxed || arg1.TIndex) && (arg2.isboxed || arg2.TIndex) &&
                 "Only boxed types are valid for pointer comparison.");
-        varg1 = decay_derived(varg1);
-        varg2 = decay_derived(varg2);
+        varg1 = maybe_decay_tracked(varg1);
+        varg2 = maybe_decay_tracked(varg2);
+        if (cast<PointerType>(varg1->getType())->getAddressSpace() != cast<PointerType>(varg2->getType())->getAddressSpace()) {
+            varg1 = decay_derived(varg1);
+            varg2 = decay_derived(varg2);
+        }
         return ctx.builder.CreateICmpEQ(emit_bitcast(ctx, varg1, T_pint8),
                                         emit_bitcast(ctx, varg2, T_pint8));
     }
@@ -2428,7 +2406,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 #ifdef _P64
                 nva = ctx.builder.CreateTrunc(nva, T_int32);
 #endif
-                Value *theArgs = ctx.builder.CreateGEP(ctx.argArray, ConstantInt::get(T_size, ctx.nReqArgs));
+                Value *theArgs = ctx.builder.CreateInBoundsGEP(ctx.argArray, ConstantInt::get(T_size, ctx.nReqArgs));
                 Value *r = ctx.builder.CreateCall(prepare_call(jlapply2va_func), { theF, theArgs, nva });
                 *ret = mark_julia_type(ctx, r, true, jl_any_type);
                 return true;
@@ -2519,7 +2497,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             if (!jl_has_free_typevars(ety) && (jl_is_long(ndp) || nargs == 3)) {
                 jl_value_t *ary_ex = jl_exprarg(ex, 2);
                 size_t elsz = 0, al = 0;
-                bool isboxed = !jl_islayout_inline(ety, &elsz, &al);
+                int union_max = jl_islayout_inline(ety, &elsz, &al);
+                bool isboxed = (union_max == 0);
                 if (isboxed)
                     ety = (jl_value_t*)jl_any_type;
                 ssize_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : -1;
@@ -2530,21 +2509,28 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     *ret = ghostValue(ety);
                 }
                 else if (!isboxed && jl_is_uniontype(ety)) {
-                    Value *nbytes = ConstantInt::get(T_size, elsz);
-                    Value *data = emit_bitcast(ctx, emit_arrayptr(ctx, ary, ary_ex), T_pint8);
-                    // isbits union selector bytes are stored directly after the last array element
-                    Value *selidx = ctx.builder.CreateMul(emit_arraylen_prim(ctx, ary), nbytes);
-                    selidx = ctx.builder.CreateAdd(selidx, idx);
-                    Value *ptindex = ctx.builder.CreateGEP(T_int8, data, selidx);
-                    Value *tindex = ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1),
-                            tbaa_decorate(tbaa_arrayselbyte, ctx.builder.CreateLoad(T_int8, ptindex)));
                     Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * al), (elsz + al - 1) / al);
+                    Value *data = emit_bitcast(ctx, emit_arrayptr(ctx, ary, ary_ex), AT->getPointerTo());
+                    // isbits union selector bytes are stored after a->maxsize
+                    Value *ndims = (nd == -1 ? emit_arrayndims(ctx, ary) : ConstantInt::get(T_int16, nd));
+                    Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(T_int16, 1));
+                    Value *offset = emit_arrayoffset(ctx, ary, nd);
+                    Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, T_size));
+                    Value *selidx_m = emit_arraylen(ctx, ary);
+                    Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
+                    Value *ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
+                    ptindex = emit_bitcast(ctx, ptindex, T_pint8);
+                    ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, offset);
+                    ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, idx);
+                    Instruction *tindex = tbaa_decorate(tbaa_arrayselbyte, ctx.builder.CreateLoad(T_int8, ptindex));
+                    tindex->setMetadata(LLVMContext::MD_range, MDNode::get(jl_LLVMContext, {
+                        ConstantAsMetadata::get(ConstantInt::get(T_int8, 0)),
+                        ConstantAsMetadata::get(ConstantInt::get(T_int8, union_max)) }));
                     AllocaInst *lv = emit_static_alloca(ctx, AT);
                     if (al > 1)
                         lv->setAlignment(al);
-                    Value *elidx = ctx.builder.CreateMul(idx, nbytes);
-                    emit_memcpy(ctx, lv, ctx.builder.CreateGEP(T_int8, data, elidx), elsz, al);
-                    *ret = mark_julia_slot(lv, ety, tindex, tbaa_stack);
+                    emit_memcpy(ctx, lv, tbaa_arraybuf, ctx.builder.CreateInBoundsGEP(AT, data, idx), tbaa_arraybuf, elsz, al, false);
+                    *ret = mark_julia_slot(lv, ety, ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1), tindex), tbaa_arraybuf);
                 }
                 else {
                     *ret = typed_load(ctx,
@@ -2574,7 +2560,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             if (!jl_has_free_typevars(ety) && (jl_is_long(ndp) || nargs == 4)) {
                 if (jl_subtype(val.typ, ety)) { // TODO: probably should just convert this to a type-assert
                     size_t elsz = 0, al = 0;
-                    bool isboxed = !jl_islayout_inline(ety, &elsz, &al);
+                    int union_max = jl_islayout_inline(ety, &elsz, &al);
+                    bool isboxed = (union_max == 0);
                     if (isboxed)
                         ety = (jl_value_t*)jl_any_type;
                     jl_value_t *ary_ex = jl_exprarg(ex, 2);
@@ -2601,14 +2588,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                             // load owner pointer
                             Instruction *own_ptr;
                             if (jl_is_long(ndp)) {
-                                own_ptr = tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(
-                                    emit_bitcast(ctx,
-                                        ctx.builder.CreateConstGEP1_32(
-                                            emit_bitcast(ctx, decay_derived(aryv), T_pint8),
-                                            jl_array_data_owner_offset(nd)),
-                                        T_pprjlvalue)));
-                                maybe_mark_load_dereferenceable(own_ptr, false,
-                                                                sizeof(jl_array_t));
+                                own_ptr = ctx.builder.CreateLoad(T_prjlvalue,
+                                        ctx.builder.CreateConstGEP1_32(T_prjlvalue,
+                                            emit_bitcast(ctx, decay_derived(aryv), T_pprjlvalue),
+                                            jl_array_data_owner_offset(nd) / sizeof(jl_value_t*)));
+                                tbaa_decorate(tbaa_const, maybe_mark_load_dereferenceable(own_ptr, false, (jl_value_t*)jl_array_any_type));
                             }
                             else {
                                 own_ptr = ctx.builder.CreateCall(
@@ -2622,26 +2606,30 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                             data_owner->addIncoming(own_ptr, ownedBB);
                         }
                         if (jl_is_uniontype(ety)) {
-                            Value *nbytes = ConstantInt::get(T_size, elsz);
-                            Value *data = emit_bitcast(ctx, emit_arrayptr(ctx, ary, ary_ex), T_pint8);
-                            if (!(val.typ == jl_bottom_type)) {
-                                // compute tindex from val
-                                jl_cgval_t rhs_union = convert_julia_type(ctx, val, ety);
-                                Value *tindex = compute_tindex_unboxed(ctx, rhs_union, ety);
-                                tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
-                                Value *selidx = ctx.builder.CreateMul(emit_arraylen_prim(ctx, ary), nbytes);
-                                selidx = ctx.builder.CreateAdd(selidx, idx);
-                                Value *ptindex = ctx.builder.CreateGEP(T_int8, data, selidx);
-                                ctx.builder.CreateStore(tindex, ptindex);
-                                if (jl_is_datatype(val.typ) && jl_datatype_size(val.typ) == 0) {
-                                    // no-op
-                                }
-                                else {
-                                    // copy data
-                                    Value *elidx = ctx.builder.CreateMul(idx, nbytes);
-                                    Value *addr = ctx.builder.CreateGEP(T_int8, data, elidx);
-                                    emit_unionmove(ctx, addr, val, NULL, false, NULL);
-                                }
+                            Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * al), (elsz + al - 1) / al);
+                            Value *data = emit_bitcast(ctx, emit_arrayptr(ctx, ary, ary_ex), AT->getPointerTo());
+                            // compute tindex from val
+                            jl_cgval_t rhs_union = convert_julia_type(ctx, val, ety);
+                            Value *tindex = compute_tindex_unboxed(ctx, rhs_union, ety);
+                            tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
+                            Value *ndims = (nd == -1 ? emit_arrayndims(ctx, ary) : ConstantInt::get(T_int16, nd));
+                            Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(T_int16, 1));
+                            Value *offset = emit_arrayoffset(ctx, ary, nd);
+                            Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, T_size));
+                            Value *selidx_m = emit_arraylen(ctx, ary);
+                            Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
+                            Value *ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
+                            ptindex = emit_bitcast(ctx, ptindex, T_pint8);
+                            ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, offset);
+                            ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, idx);
+                            tbaa_decorate(tbaa_arrayselbyte, ctx.builder.CreateStore(tindex, ptindex));
+                            if (jl_is_datatype(val.typ) && jl_datatype_size(val.typ) == 0) {
+                                // no-op
+                            }
+                            else {
+                                // copy data
+                                Value *addr = ctx.builder.CreateInBoundsGEP(AT, data, idx);
+                                emit_unionmove(ctx, addr, tbaa_arraybuf, val, nullptr);
                             }
                         }
                         else {
@@ -2674,15 +2662,16 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot && ctx.argArray) {
                         Value *valen = emit_n_varargs(ctx);
                         jl_cgval_t va_ary( // fake instantiation of a cgval, in order to call emit_bounds_check
-                                ctx.builder.CreateGEP(ctx.argArray, ConstantInt::get(T_size, ctx.nReqArgs)),
+                                ctx.builder.CreateInBoundsGEP(ctx.argArray, ConstantInt::get(T_size, ctx.nReqArgs)),
                                 NULL, false, NULL, NULL);
                         Value *idx = emit_unbox(ctx, T_size, fld, (jl_value_t*)jl_long_type);
                         jl_value_t *boundscheck = (nargs == 3 ? argv[3].constant : jl_true);
                         idx = emit_bounds_check(ctx, va_ary, NULL, idx, valen, boundscheck);
                         idx = ctx.builder.CreateAdd(idx, ConstantInt::get(T_size, ctx.nReqArgs));
-                        Instruction *v = tbaa_decorate(tbaa_value, ctx.builder.CreateLoad(ctx.builder.CreateGEP(ctx.argArray, idx)));
-                        maybe_mark_load_dereferenceable(v, false);
-                        *ret = mark_julia_type(ctx, v, /*boxed*/ true, jl_any_type);
+                        Instruction *v = ctx.builder.CreateLoad(ctx.builder.CreateInBoundsGEP(ctx.argArray, idx));
+                        // if we know the result type of this load, we will mark that information here too
+                        tbaa_decorate(tbaa_value, maybe_mark_load_dereferenceable(v, false, rt));
+                        *ret = mark_julia_type(ctx, v, /*boxed*/ true, rt);
                         return true;
                     }
                 }
@@ -2730,7 +2719,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                 emit_datatype_nfields(ctx, emit_typeof_boxed(ctx, obj)),
                                 jl_true);
                         }
-                        Value *ptr = decay_derived(data_pointer(ctx, obj));
+                        Value *ptr = maybe_decay_tracked(data_pointer(ctx, obj));
                         *ret = typed_load(ctx, ptr, vidx, jt, obj.tbaa, false);
                         return true;
                     }
@@ -2818,7 +2807,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 Value *idx = emit_unbox(ctx, T_size, fld, (jl_value_t*)jl_long_type);
                 jl_value_t *boundscheck = (nargs == 3 ? argv[3].constant : jl_true);
                 emit_bounds_check(ctx, typ, (jl_value_t*)jl_datatype_type, idx, types_len, boundscheck);
-                Value *fieldtyp_p = ctx.builder.CreateGEP(decay_derived(emit_bitcast(ctx, types_svec, T_pprjlvalue)), idx);
+                Value *fieldtyp_p = ctx.builder.CreateInBoundsGEP(decay_derived(emit_bitcast(ctx, types_svec, T_pprjlvalue)), idx);
                 Value *fieldtyp = tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(fieldtyp_p));
                 *ret = mark_julia_type(ctx, fieldtyp, true, (jl_value_t*)jl_type_type);
                 return true;
@@ -2842,12 +2831,12 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             return true;
         }
         else if (jl_is_datatype(sty) && sty->name == jl_array_typename) {
-            jl_value_t *ary_ex = jl_exprarg(ex, 1);
-            auto len = emit_arraylen(ctx, obj, ary_ex);
+            auto len = emit_arraylen(ctx, obj);
             jl_value_t *ety = jl_tparam0(sty);
             Value *elsize;
             size_t elsz = 0, al = 0;
-            bool isboxed = !jl_islayout_inline(ety, &elsz, &al);
+            int union_max = jl_islayout_inline(ety, &elsz, &al);
+            bool isboxed = (union_max == 0);
             if (!jl_has_free_typevars(ety)) {
                 if (isboxed) {
                     elsize = ConstantInt::get(T_size, sizeof(void*));
@@ -2929,12 +2918,12 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         else {
             size_t offs = jl_field_offset(stt, fieldidx);
-            Value *ptr = emit_bitcast(ctx, decay_derived(data_pointer(ctx, obj)), T_pprjlvalue);
+            Value *ptr = emit_bitcast(ctx, maybe_decay_tracked(data_pointer(ctx, obj)), T_pprjlvalue);
             Value *llvm_idx = ConstantInt::get(T_size, offs / sizeof(void*));
-            Value *addr = ctx.builder.CreateGEP(ptr, llvm_idx);
+            Value *addr = ctx.builder.CreateInBoundsGEP(ptr, llvm_idx);
             // emit this using the same type as emit_getfield_knownidx
             // so that LLVM may be able to load-load forward them and fold the result
-            Value *fldv = tbaa_decorate(obj.tbaa, ctx.builder.CreateLoad(T_prjlvalue,  addr));
+            Value *fldv = tbaa_decorate(obj.tbaa, ctx.builder.CreateLoad(T_prjlvalue, addr));
             Value *isdef = ctx.builder.CreateIsNotNull(fldv);
             *ret = mark_julia_type(ctx, isdef, false, jl_bool_type);
         }
@@ -2990,7 +2979,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
         break;
     case jl_returninfo_t::SRet:
         result = emit_static_alloca(ctx, cft->getParamType(0)->getContainedType(0));
-        argvals[idx] = decay_derived(result);
+        argvals[idx] = result;
         idx++;
         break;
     case jl_returninfo_t::Union:
@@ -3076,24 +3065,25 @@ static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_method_instance_
     auto theFptr = jl_Module->getOrInsertFunction(specFunctionObject, jl_func_sig);
     if (auto F = dyn_cast<Function>(theFptr->stripPointerCasts())) {
         add_return_attr(F, Attribute::NonNull);
-        F->addFnAttr("thunk");
+        F->addFnAttr(Thunk);
     }
     Value *ret = emit_jlcall(ctx, theFptr, boxed(ctx, argv[0]), &argv[1], nargs - 1);
     return mark_julia_type(ctx, ret, true, inferred_retty);
 }
 
-static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex)
+static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
 {
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t arglen = jl_array_dim0(ex->args);
     size_t nargs = arglen - 1;
-    jl_value_t *rt = ex->etype;
     assert(arglen >= 2);
 
     jl_cgval_t lival = emit_expr(ctx, args[0]);
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);
     for (size_t i = 0; i < nargs; ++i) {
         argv[i] = emit_expr(ctx, args[i + 1]);
+        if (argv[i].typ == jl_bottom_type)
+            return jl_cgval_t();
     }
 
     bool handled = false;
@@ -3132,12 +3122,11 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex)
     return result;
 }
 
-static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex)
+static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
 {
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t nargs = jl_array_dim0(ex->args);
     assert(nargs >= 1);
-    jl_value_t *rt = ex->etype;
     jl_cgval_t f = emit_expr(ctx, args[0]);
 
     if (f.constant && jl_typeis(f.constant, jl_intrinsic_type)) {
@@ -3379,24 +3368,37 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
     jl_cgval_t v;
     Value *isnull = NULL;
     if (vi.boxroot == NULL || vi.pTIndex != NULL) {
-        if (!vi.isVolatile || vi.value.constant || !vi.value.V) {
+        if ((!vi.isVolatile && vi.isSA) || vi.isArgument || vi.value.constant || !vi.value.V) {
             v = vi.value;
             if (vi.pTIndex)
-                v.TIndex = ctx.builder.CreateLoad(vi.pTIndex);
+                v.TIndex = ctx.builder.CreateLoad(T_int8, vi.pTIndex);
         }
         else {
-            // copy value to a non-volatile location
-            AllocaInst *volatile_slot = cast<AllocaInst>(vi.value.V);
-            Type *T = volatile_slot->getAllocatedType();
-            assert(!volatile_slot->isArrayAllocation() && "variables not expected to be VLA");
-            AllocaInst *slot = emit_static_alloca(ctx, T);
-            // TODO: emit memcpy instead
-            Value *unbox = ctx.builder.CreateLoad(vi.value.V, /*volatile*/true);
-            ctx.builder.CreateStore(unbox, slot);
+            // copy value to a non-mutable (non-volatile SSA) location
+            AllocaInst *varslot = cast<AllocaInst>(vi.value.V);
+            Type *T = varslot->getAllocatedType();
+            assert(!varslot->isArrayAllocation() && "variables not expected to be VLA");
+            AllocaInst *ssaslot = emit_static_alloca(ctx, T);
+            unsigned al = varslot->getAlignment();
+            if (al)
+                ssaslot->setAlignment(al);
+            if (vi.isVolatile) {
+                Value *unbox = ctx.builder.CreateLoad(vi.value.V, true);
+                ctx.builder.CreateStore(unbox, ssaslot);
+            }
+            else {
+#if JL_LLVM_VERSION >= 40000
+                const DataLayout &DL = jl_data_layout;
+#else
+                const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
+#endif
+                uint64_t sz = DL.getTypeStoreSize(T);
+                emit_memcpy(ctx, ssaslot, tbaa_stack, vi.value, sz, al);
+            }
             Value *tindex = NULL;
             if (vi.pTIndex)
-                tindex = ctx.builder.CreateLoad(vi.pTIndex, /*volatile*/true);
-            v = mark_julia_slot(slot, vi.value.typ, tindex, tbaa_stack);
+                tindex = ctx.builder.CreateLoad(vi.pTIndex, vi.isVolatile);
+            v = mark_julia_slot(ssaslot, vi.value.typ, tindex, tbaa_stack);
         }
         if (vi.boxroot == NULL)
             v = update_julia_type(ctx, v, typ);
@@ -3489,27 +3491,20 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
             }
         }
         else {
-            MDNode *tbaa = rval_info.tbaa;
-            // the memcpy intrinsic does not allow to specify different alias tags
-            // for the load part (x.tbaa) and the store part (tbaa_stack).
-            // since the tbaa lattice has to be a tree we have unfortunately
-            // x.tbaa ∪ tbaa_stack = tbaa_root if x.tbaa != tbaa_stack
-            if (tbaa != tbaa_stack)
-                tbaa = NULL;
             if (vi.pTIndex == NULL) {
                 assert(jl_is_concrete_type(vi.value.typ));
                 // Sometimes we can get into situations where the LHS and RHS
                 // are the same slot. We're not allowed to memcpy in that case
-                // under penalty of undefined behavior. This check should catch
-                // the relevant situations.
+                // due to LLVM bugs.
+                // This check should probably mostly catch the relevant situations.
                 if (vi.value.V != rval_info.V) {
                     Value *copy_bytes = ConstantInt::get(T_int32, jl_datatype_size(vi.value.typ));
-                    emit_memcpy(ctx, vi.value.V, rval_info, copy_bytes,
-                                jl_datatype_align(rval_info.typ), vi.isVolatile, tbaa);
+                    emit_memcpy(ctx, vi.value.V, tbaa_stack, rval_info, copy_bytes,
+                                jl_datatype_align(rval_info.typ), vi.isVolatile);
                 }
             }
             else {
-                emit_unionmove(ctx, vi.value.V, rval_info, isboxed, vi.isVolatile, tbaa);
+                emit_unionmove(ctx, vi.value.V, tbaa_stack, rval_info, isboxed, vi.isVolatile);
             }
         }
     }
@@ -3617,7 +3612,7 @@ static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
         jl_varinfo_t &vi = ctx.phic_slots[idx];
         slot = emit_varinfo(ctx, vi, jl_symbol("phic"));
     } else {
-        slot = emit_expr(ctx, r); // slot could be a jl_value_t (unboxed) or jl_value_t* (ispointer)
+        slot = emit_expr(ctx, r, idx); // slot could be a jl_value_t (unboxed) or jl_value_t* (ispointer)
     }
     if (slot.isboxed || slot.TIndex) {
         // see if inference suggested a different type for the ssavalue than the expression
@@ -3628,48 +3623,6 @@ static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             if (declType != slot.typ) {
                 slot = update_julia_type(ctx, slot, declType);
             }
-        }
-    }
-    if (!slot.isboxed && !slot.isimmutable) {
-        // emit a copy of values stored in mutable slots
-        Value *dest;
-        jl_value_t *jt = slot.typ;
-        if (jl_is_uniontype(jt)) {
-            assert(slot.TIndex && "Unboxed union must have a type-index.");
-            bool allunbox;
-            size_t min_align, nbytes;
-            dest = try_emit_union_alloca(ctx, ((jl_uniontype_t*)jt), allunbox, min_align, nbytes);
-            Value *isboxed = NULL;
-            if (slot.isboxed || slot.Vboxed != nullptr) {
-                isboxed = ctx.builder.CreateICmpNE(
-                        ctx.builder.CreateAnd(slot.TIndex, ConstantInt::get(T_int8, 0x80)),
-                        ConstantInt::get(T_int8, 0));
-            }
-            if (dest)
-                emit_unionmove(ctx, dest, slot, isboxed, false, NULL);
-            if (isboxed) {
-                Value *box = slot.Vboxed ? slot.Vboxed : V_null;
-                if (dest) // might be all ghost values
-                    dest = ctx.builder.CreateSelect(isboxed,
-                        decay_derived(box),
-                        emit_bitcast(ctx, decay_derived(dest), box->getType()));
-                else
-                    dest = box;
-            }
-            else {
-                assert(allunbox && "Failed to allocate correct union-type storage.");
-            }
-            Value *box = slot.Vboxed;
-            slot = mark_julia_slot(dest, slot.typ, slot.TIndex, tbaa_stack);
-            slot.Vboxed = box;
-        }
-        else {
-            bool isboxed;
-            Type *vtype = julia_type_to_llvm(slot.typ, &isboxed);
-            assert(!isboxed);
-            dest = emit_static_alloca(ctx, vtype);
-            emit_unbox(ctx, vtype, slot, slot.typ, dest);
-            slot = mark_julia_slot(dest, slot.typ, NULL, tbaa_stack);
         }
     }
     ctx.SAvalues.at(idx) = slot; // now SAvalues[idx] contains the SAvalue
@@ -3685,15 +3638,6 @@ static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_cgval_t 
     rval_info = convert_julia_type(ctx, rval_info, slot_type);
     if (rval_info.typ == jl_bottom_type)
         return;
-
-    // add info to arrayvar list
-    if (l && rval_info.isboxed) {
-        // check isboxed in case rval isn't the right type (for example, on a dead branch),
-        // so we don't try to assign it to the arrayvar info
-        jl_arrayvar_t *av = arrayvar_for(ctx, l);
-        if (av != NULL)
-            assign_arrayvar(ctx, *av, rval_info);
-    }
 
     // compute / store tindex info
     if (vi.pTIndex) {
@@ -3739,16 +3683,9 @@ static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_cgval_t 
     }
 }
 
-static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
+static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssize_t ssaval)
 {
-    if (jl_is_ssavalue(l)) {
-        ssize_t idx = ((jl_ssavalue_t*)l)->id;
-        if (ctx.new_style_ir)
-            idx -= 1;
-        assert(idx >= 0);
-        emit_ssaval_assign(ctx, idx, r);
-        return;
-    }
+    assert(!jl_is_ssavalue(l));
 
     jl_sym_t *s = NULL;
     jl_binding_t *bnd = NULL;
@@ -3763,7 +3700,7 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
         bp = global_binding_pointer(ctx, ctx.module, s, &bnd, true);
     if (bp != NULL) { // it's a global
         assert(bnd);
-        Value *rval = mark_callee_rooted(boxed(ctx, emit_expr(ctx, r)));
+        Value *rval = mark_callee_rooted(boxed(ctx, emit_expr(ctx, r, ssaval)));
         ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
                            { literal_pointer_val(ctx, bnd),
                              rval });
@@ -3775,7 +3712,7 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
     int sl = jl_slot_number(l) - 1;
     // it's a local variable
     jl_varinfo_t &vi = ctx.slots[sl];
-    jl_cgval_t rval_info = emit_expr(ctx, r);
+    jl_cgval_t rval_info = emit_expr(ctx, r, ssaval);
     emit_varinfo_assign(ctx, vi, rval_info, l);
 }
 
@@ -3813,11 +3750,9 @@ static Value *emit_condition(jl_codectx_t &ctx, jl_value_t *cond, const std::str
 
 static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
 {
-    if (jl_is_ssavalue(expr))
+    if (jl_is_ssavalue(expr) && ssaval_result == -1)
         return; // value not used, no point in attempting codegen for it
-    if (jl_is_linenode(expr))
-        return;
-    if (jl_is_slot(expr)) {
+    if (jl_is_slot(expr) && ssaval_result == -1) {
         size_t sl = jl_slot_number(expr) - 1;
         jl_varinfo_t &vi = ctx.slots[sl];
         if (vi.usedUndef)
@@ -3839,10 +3774,8 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
         return;
     }
     if (!jl_is_expr(expr)) {
-        if (ssaval_result != -1)
-            emit_ssaval_assign(ctx, ssaval_result, expr);
-        else
-            emit_expr(ctx, expr);
+        assert(ssaval_result != -1);
+        emit_ssaval_assign(ctx, ssaval_result, expr);
         return;
     }
     jl_expr_t *ex = (jl_expr_t*)expr;
@@ -3864,14 +3797,12 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
             Value *world = ctx.builder.CreateLoad(prepare_global(jlgetworld_global));
             ctx.builder.CreateStore(world, ctx.world_age_field);
         }
-        if (ssaval_result != -1)
-            emit_ssaval_assign(ctx, ssaval_result, expr);
-        else
-            emit_expr(ctx, expr);
+        assert(ssaval_result != -1);
+        emit_ssaval_assign(ctx, ssaval_result, expr);
     }
 }
 
-static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
+static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
 {
     if (jl_is_symbol(expr)) {
         jl_sym_t *sym = (jl_sym_t*)expr;
@@ -3881,9 +3812,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
         return emit_local(ctx, expr);
     }
     if (jl_is_ssavalue(expr)) {
-        ssize_t idx = ((jl_ssavalue_t*)expr)->id;
-        if (ctx.new_style_ir)
-            idx -= 1;
+        ssize_t idx = ((jl_ssavalue_t*)expr)->id - 1;
         assert(idx >= 0);
         if (!ctx.ssavalue_assigned.at(idx)) {
             ctx.ssavalue_assigned.at(idx) = true; // (assignment, not comparison test)
@@ -3895,9 +3824,6 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
     }
     if (jl_is_globalref(expr)) {
         return emit_globalref(ctx, jl_globalref_mod(expr), jl_globalref_name(expr));
-    }
-    if (jl_is_labelnode(expr)) {
-        jl_error("LabelNode in value position");
     }
     if (jl_is_linenode(expr)) {
         jl_error("LineNumberNode in value position");
@@ -3930,6 +3856,10 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
                 expr = jl_box_int64(val);
             }
         }
+        else if (jl_is_uint8(expr)) {
+            expr = jl_box_uint8(jl_unbox_uint8(expr));
+            needroot = false;
+        }
         if (needroot && jl_is_method(ctx.linfo->def.method)) { // toplevel exprs and some integers are already rooted
             jl_add_method_root(ctx, expr);
         }
@@ -3946,18 +3876,32 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
         return emit_isdefined(ctx, args[0]);
     }
     else if (head == throw_undef_if_not_sym) {
-        Value *cond = emit_unbox(ctx, T_int8, emit_expr(ctx, args[1]), (jl_value_t*)jl_bool_type);
-        undef_var_error_ifnot(ctx, ctx.builder.CreateTrunc(cond, T_int1), (jl_sym_t*)args[0]);
+        jl_sym_t *var = (jl_sym_t*)args[0];
+        Value *cond = ctx.builder.CreateTrunc(emit_unbox(ctx, T_int8, emit_expr(ctx, args[1]), (jl_value_t*)jl_bool_type), T_int1);
+        if (var == getfield_undefref_sym) {
+            raise_exception_unless(ctx, cond,
+                literal_pointer_val(ctx, jl_undefref_exception));
+        } else {
+            undef_var_error_ifnot(ctx, cond, var);
+        }
         return ghostValue(jl_void_type);
     }
     else if (head == invoke_sym) {
-        return emit_invoke(ctx, ex);
+        assert(ssaval >= 0);
+        jl_value_t *expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type :
+            jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaval);
+        return emit_invoke(ctx, ex, expr_t);
     }
     else if (head == call_sym) {
-        jl_cgval_t res = emit_call(ctx, ex);
+        jl_value_t *expr_t;
+        if (ssaval < 0)
+            // TODO: this case is needed for the call to emit_expr in emit_llvmcall
+            expr_t = (jl_value_t*)jl_any_type;
+        else
+            expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type : jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaval);
+        jl_cgval_t res = emit_call(ctx, ex, expr_t);
         // some intrinsics (e.g. typeassert) can return a wider type
         // than what's actually possible
-        jl_value_t *expr_t = ex->etype;
         res = update_julia_type(ctx, res, expr_t);
         if (res.typ == jl_bottom_type || expr_t == jl_bottom_type) {
             CreateTrap(ctx.builder);
@@ -3972,7 +3916,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
         return emit_cfunction(ctx, args[0], fexpr_rt, args[2], (jl_svec_t*)args[3]);
     }
     else if (head == assign_sym) {
-        emit_assignment(ctx, args[0], args[1]);
+        emit_assignment(ctx, args[0], args[1], ssaval);
         return ghostValue(jl_void_type);
     }
     else if (head == static_parameter_sym) {
@@ -4085,7 +4029,13 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
                     maybe_decay_untracked(boxed(ctx, ast))), true, jl_expr_type);
     }
     else if (head == simdloop_sym) {
-        ctx.builder.CreateCall(prepare_call(jl_simdloop_marker_func));
+        jl_value_t *ivdep = args[0];
+        assert(jl_expr_nargs(ex) == 1 && jl_is_bool(ivdep));
+        if (ivdep == jl_false) {
+            ctx.builder.CreateCall(prepare_call(jl_simdloop_marker_func));
+        } else {
+            ctx.builder.CreateCall(prepare_call(jl_simdivdep_marker_func));
+        }
         return jl_cgval_t();
     }
     else if (head == goto_ifnot_sym) {
@@ -4124,7 +4074,6 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
         Value *token = ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func),
             ArrayRef<Value*>(vals, nargsboxed));
         jl_cgval_t tok(token, NULL, false, (jl_value_t*)jl_void_type, NULL);
-        tok.isimmutable = true;
         return tok;
     }
     else if (head == gc_preserve_end_sym) {
@@ -4174,12 +4123,12 @@ static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0)
     ctx.ptlsStates = ctx.builder.CreateCall(prepare_call(jltls_states_func));
     int nthfield = offsetof(jl_tls_states_t, safepoint) / sizeof(void*);
     ctx.signalPage = emit_nthptr_recast(ctx, ctx.ptlsStates, nthfield, tbaa_const,
-                                        PointerType::get(T_psize, 0), false);
+                                        PointerType::get(T_psize, 0));
 }
 
 static void emit_last_age_field(jl_codectx_t &ctx)
 {
-    ctx.world_age_field = ctx.builder.CreateGEP(
+    ctx.world_age_field = ctx.builder.CreateInBoundsGEP(
             ctx.builder.CreateBitCast(ctx.ptlsStates, T_psize),
             ConstantInt::get(T_size, offsetof(jl_tls_states_t, world_age) / sizeof(size_t)));
 }
@@ -4248,13 +4197,12 @@ static void emit_cfunc_invalidate(
         }
         else {
             gf_ret = emit_bitcast(ctx, gf_ret, gfrt->getPointerTo());
-            ctx.builder.CreateRet(ctx.builder.CreateAlignedLoad(gf_ret, julia_alignment(astrt, 0)));
+            ctx.builder.CreateRet(ctx.builder.CreateAlignedLoad(gf_ret, julia_alignment(astrt)));
         }
         break;
     }
     case jl_returninfo_t::SRet: {
-        unsigned sret_nbytes = jl_datatype_size(astrt);
-        emit_memcpy(ctx, &*gf_thunk->arg_begin(), gf_ret, sret_nbytes, jl_alignment(sret_nbytes));
+        emit_memcpy(ctx, &*gf_thunk->arg_begin(), nullptr, gf_ret, nullptr, jl_datatype_size(astrt), julia_alignment(astrt));
         ctx.builder.CreateRetVoid();
         break;
     }
@@ -4288,7 +4236,7 @@ static Function* gen_cfun_wrapper(
     size_t world = jl_world_counter;
     bool nest = (!ff || unionall_env);
     // try to look up this function for direct invoking
-    jl_method_instance_t *lam = sigt ? jl_get_specialization1((jl_tupletype_t*)sigt, world) : NULL;
+    jl_method_instance_t *lam = sigt ? jl_get_specialization1((jl_tupletype_t*)sigt, world, 1) : NULL;
     jl_value_t *astrt = (jl_value_t*)jl_any_type;
     // infer it first, if necessary
     if (lam) {
@@ -4390,9 +4338,10 @@ static Function* gen_cfun_wrapper(
     Value *age_ok = NULL;
     if (lam) {
         Value *lam_max = ctx.builder.CreateLoad(
+                T_size,
                 ctx.builder.CreateConstInBoundsGEP1_32(
                     T_size,
-                    emit_bitcast(ctx, decay_derived(literal_pointer_val(ctx, (jl_value_t*)lam)), T_psize),
+                    emit_bitcast(ctx, literal_pointer_val(ctx, (jl_value_t*)lam), T_psize),
                     offsetof(jl_method_instance_t, max_world) / sizeof(size_t)));
         // XXX: age is always OK if we don't have a TLS. This is a hack required due to `@threadcall` abuse.
         // and adds quite a bit of complexity here, even though it's still wrong
@@ -4581,7 +4530,7 @@ static Function* gen_cfun_wrapper(
                     assert(theFptr->getFunctionType() == jl_func_sig);
                 }
                 add_return_attr(theFptr, Attribute::NonNull);
-                theFptr->addFnAttr("thunk");
+                theFptr->addFnAttr(Thunk);
             }
         }
         BasicBlock *b_generic, *b_jlcall, *b_after;
@@ -4625,7 +4574,7 @@ static Function* gen_cfun_wrapper(
             if (sig.sret && jlfunc_sret)
                 result = emit_bitcast(ctx, sretPtr, cft->getParamType(0));
             else
-                result = decay_derived(emit_static_alloca(ctx, cft->getParamType(0)->getContainedType(0)));
+                result = emit_static_alloca(ctx, cft->getParamType(0)->getContainedType(0));
             args.push_back(result);
         }
         for (size_t i = 0; i < nargs + 1; i++) {
@@ -5043,7 +4992,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, const jl_returnin
 {
     Function *w = Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage, funcName, M);
     add_return_attr(w, Attribute::NonNull);
-    w->addFnAttr("thunk");
+    w->addFnAttr(Thunk);
     jl_init_function(w);
 #ifdef JL_DISABLE_FPO
     w->addFnAttr("no-frame-pointer-elim", "true");
@@ -5078,7 +5027,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, const jl_returnin
         break;
     case jl_returninfo_t::SRet:
         result = ctx.builder.CreateAlloca(ftype->getParamType(0)->getContainedType(0));
-        args[idx] = decay_derived(result);
+        args[idx] = result;
         idx++;
         break;
     case jl_returninfo_t::Union:
@@ -5095,12 +5044,12 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, const jl_returnin
         Type *lty = julia_type_to_llvm(ty, &isboxed);
         if (lty != NULL && type_is_ghost(lty))
             continue;
-        Value *argPtr = ctx.builder.CreateGEP(argArray, ConstantInt::get(T_size, i));
+        Value *argPtr = ctx.builder.CreateInBoundsGEP(argArray, ConstantInt::get(T_size, i));
         Value *theArg = maybe_mark_load_dereferenceable(ctx.builder.CreateLoad(argPtr), false, ty);
         if (lty != NULL && !isboxed) {
             theArg = decay_derived(emit_bitcast(ctx, theArg, PointerType::get(lty, 0)));
             if (!lty->isAggregateType()) // keep "aggregate" type values in place as pointers
-                theArg = ctx.builder.CreateAlignedLoad(theArg, julia_alignment(ty, 0));
+                theArg = ctx.builder.CreateAlignedLoad(theArg, julia_alignment(ty));
         }
         assert(dyn_cast<UndefValue>(theArg) == NULL);
         args[idx] = theArg;
@@ -5209,7 +5158,7 @@ static jl_returninfo_t get_specsig_function(Module *M, const std::string &name, 
         if (!retboxed) {
             if (rt != T_void && deserves_sret(jlrettype, rt)) {
                 props.cc = jl_returninfo_t::SRet;
-                fsig.push_back(rt->getPointerTo(AddressSpace::Derived));
+                fsig.push_back(rt->getPointerTo());
                 rt = T_void;
             }
             else {
@@ -5239,9 +5188,10 @@ static jl_returninfo_t get_specsig_function(Module *M, const std::string &name, 
         Type *ty = julia_type_to_llvm(jt, &isboxed);
         if (type_is_ghost(ty))
             continue;
+        unsigned argno = fsig.size();
         if (ty->isAggregateType()) { // aggregate types are passed by pointer
-            attributes = attributes.addAttribute(jl_LLVMContext, fsig.size() + 1, Attribute::NoCapture);
-            attributes = attributes.addAttribute(jl_LLVMContext, fsig.size() + 1, Attribute::ReadOnly);
+            attributes = attributes.addParamAttribute(jl_LLVMContext, argno, Attribute::NoCapture);
+            attributes = attributes.addParamAttribute(jl_LLVMContext, argno, Attribute::ReadOnly);
             ty = PointerType::get(ty, AddressSpace::Derived);
         }
         if (isboxed)
@@ -5313,9 +5263,7 @@ static std::unique_ptr<Module> emit_function(
 
     //jl_static_show(JL_STDOUT, (jl_value_t*)ast);
     //jl_printf(JL_STDOUT, "\n");
-    std::map<int, jl_arrayvar_t> arrayvars;
     std::map<int, BasicBlock*> labels;
-    ctx.arrayvars = &arrayvars;
     ctx.module = jl_is_method(lam->def.method) ? lam->def.method->module : lam->def.module;
     ctx.linfo = lam;
     ctx.source = src;
@@ -5329,7 +5277,10 @@ static std::unique_ptr<Module> emit_function(
     jl_array_t *stmts = ctx.code;
     size_t stmtslen = jl_array_dim0(stmts);
 
-    ctx.new_style_ir = src->codelocs != jl_nothing;
+    if (JL_HOOK_TEST(ctx.params, emit_function)) {
+        JL_HOOK_CALL(ctx.params, emit_function, 3, (jl_value_t*)ctx.linfo,
+                     (jl_value_t*)ctx.source, jl_box_ulong(world));
+    }
 
     // step 1b. unpack debug information
     int coverage_mode = jl_options.code_coverage;
@@ -5342,11 +5293,10 @@ static std::unique_ptr<Module> emit_function(
         if (lam->def.method->file != empty_sym)
             filename = jl_symbol_name(lam->def.method->file);
     }
-    else if (stmtslen > 0 && jl_is_linenode(jl_array_ptr_ref(stmts, 0))) {
-        jl_value_t *lno = jl_array_ptr_ref(stmts, 0);
-        toplineno = jl_linenode_line(lno);
-        if (jl_is_symbol(jl_linenode_file(lno)))
-            filename = jl_symbol_name((jl_sym_t*)jl_linenode_file(lno));
+    else if (jl_array_len(src->linetable) > 0) {
+        jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, 0);
+        filename = jl_symbol_name((jl_sym_t*)jl_fieldref_noalloc(locinfo, 2));
+        toplineno = jl_unbox_long(jl_fieldref(locinfo, 3));
     }
     ctx.file = filename;
     // jl_printf(JL_STDERR, "\n*** compiling %s at %s:%d\n\n",
@@ -5401,11 +5351,11 @@ static std::unique_ptr<Module> emit_function(
     // step 3. some variable analysis
     size_t i;
     for (i = 0; i < nreq; i++) {
+        jl_varinfo_t &varinfo = ctx.slots[i];
+        varinfo.isArgument = true;
         jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(src->slotnames, i);
         if (argname == unused_sym)
             continue;
-        jl_varinfo_t &varinfo = ctx.slots[i];
-        varinfo.isArgument = true;
         jl_value_t *ty = jl_nth_slot_type(lam->specTypes, i);
         varinfo.value = mark_julia_type(ctx, (Value*)NULL, false, ty);
     }
@@ -5419,13 +5369,10 @@ static std::unique_ptr<Module> emit_function(
     for (i = 0; i < vinfoslen; i++) {
         jl_varinfo_t &varinfo = ctx.slots[i];
         uint8_t flags = jl_array_uint8_ref(src->slotflags, i);
-        varinfo.isSA = (jl_vinfo_sa(flags) != 0);
+        varinfo.isSA = (jl_vinfo_sa(flags) != 0) || varinfo.isArgument;
         varinfo.usedUndef = (jl_vinfo_usedundef(flags) != 0) || (!varinfo.isArgument && !src->inferred);
         if (!varinfo.isArgument) {
-            jl_value_t *typ = jl_is_array(src->slottypes) ? jl_array_ptr_ref(src->slottypes, i) : (jl_value_t*)jl_any_type;
-            if (!jl_is_type(typ))
-                typ = (jl_value_t*)jl_any_type;
-            varinfo.value = mark_julia_type(ctx, (Value*)NULL, false, typ);
+            varinfo.value = mark_julia_type(ctx, (Value*)NULL, false, (jl_value_t*)jl_any_type);
         }
     }
 
@@ -5476,7 +5423,10 @@ static std::unique_ptr<Module> emit_function(
                              GlobalVariable::ExternalLinkage,
                              funcName.str(), M);
         add_return_attr(f, Attribute::NonNull);
-        f->addFnAttr("thunk");
+        f->addFnAttr(Thunk);
+        // TODO: (if needsparams) add attributes: dereferenceable<sizeof(void*) * length(sp)>, readonly, nocapture
+        // TODO: add attributes: dereferenceable<sizeof(ft)>, readonly, nocapture - e.g. maybe_mark_argument_dereferenceable(Arg, argType);
+        // TODO: add attributes: dereferenceable<sizeof(void*) * nreq>, readonly, nocapture
         returninfo.decl = f;
         jl_init_function(f);
         declarations->functionObject = needsparams ? "jl_fptr_sparam" : "jl_fptr_args";
@@ -5515,6 +5465,11 @@ static std::unique_ptr<Module> emit_function(
 
     if (jl_has_meta(stmts, noinline_sym)) {
         f->addFnAttr(Attribute::NoInline);
+    }
+
+    if (returninfo.cc == jl_returninfo_t::Union) {
+        f->addAttribute(1, Attribute::getWithDereferenceableBytes(jl_LLVMContext, returninfo.union_bytes));
+        f->addAttribute(1, Attribute::getWithAlignment(jl_LLVMContext, returninfo.union_align));
     }
 
 #ifdef JL_DEBUG_BUILD
@@ -5676,8 +5631,6 @@ static std::unique_ptr<Module> emit_function(
                 lv->setName(jl_symbol_name(s));
                 varinfo.value = mark_julia_slot(lv, jt, NULL, tbaa_stack);
                 varinfo.pTIndex = emit_static_alloca(ctx, T_int8);
-                // the slot is not immutable if there are multiple assignments
-                varinfo.value.isimmutable &= varinfo.isSA;
             }
             else if (allunbox) {
                 // all ghost values just need a selector allocated
@@ -5686,7 +5639,6 @@ static std::unique_ptr<Module> emit_function(
                 varinfo.pTIndex = lv;
                 varinfo.value.tbaa = NULL;
                 varinfo.value.isboxed = false;
-                varinfo.value.isimmutable = true;
             }
             if (lv || allunbox)
                 alloc_def_flag(ctx, varinfo);
@@ -5701,8 +5653,6 @@ static std::unique_ptr<Module> emit_function(
             // CreateAlloca is OK during prologue setup
             Value *lv = ctx.builder.CreateAlloca(vtype, NULL, jl_symbol_name(s));
             varinfo.value = mark_julia_slot(lv, jt, NULL, tbaa_stack);
-            // slot is not immutable if there are multiple assignments
-            varinfo.value.isimmutable &= varinfo.isSA;
             alloc_def_flag(ctx, varinfo);
             if (ctx.debug_enabled && varinfo.dinfo) {
                 assert((Metadata*)varinfo.dinfo->getType() != jl_pvalue_dillvmt);
@@ -5755,14 +5705,13 @@ static std::unique_ptr<Module> emit_function(
             continue;
         }
         allocate_local(varinfo, s);
-        maybe_alloc_arrayvar(ctx, i);
     }
 
     std::map<int, int> upsilon_to_phic;
 
     // Scan for PhiC nodes, emit their slots and record which upsilon nodes
     // yield to them.
-    if (ctx.new_style_ir) {
+    {
         for (size_t i = 0; i < jl_array_len(stmts); ++i) {
             jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
             if (jl_is_phicnode(stmt)) {
@@ -5792,14 +5741,13 @@ static std::unique_ptr<Module> emit_function(
             theArg = ghostValue(argType);
         }
         else if (llvmArgType->isAggregateType()) {
-            Argument *Arg = &*AI++;
+            Argument *Arg = &*AI; ++AI;
             maybe_mark_argument_dereferenceable(Arg, argType);
             theArg = mark_julia_slot(Arg, argType, NULL, tbaa_const); // this argument is by-pointer
-            theArg.isimmutable = true;
         }
         else {
-            Argument *Arg = &*AI++;
-            if (isboxed)
+            Argument *Arg = &*AI; ++AI;
+            if (isboxed) // e.g. is-pointer
                 maybe_mark_argument_dereferenceable(Arg, argType);
             theArg = mark_julia_type(ctx, Arg, isboxed, argType);
         }
@@ -5835,7 +5783,7 @@ static std::unique_ptr<Module> emit_function(
                     theArg = mark_julia_type(ctx, fArg, true, vi.value.typ);
                 }
                 else {
-                    Value *argPtr = ctx.builder.CreateGEP(argArray, ConstantInt::get(T_size, i-1));
+                    Value *argPtr = ctx.builder.CreateInBoundsGEP(argArray, ConstantInt::get(T_size, i-1));
                     auto load = maybe_mark_load_dereferenceable(ctx.builder.CreateLoad(argPtr),
                                                                 false, vi.value.typ);
                     theArg = mark_julia_type(ctx, load, true, vi.value.typ);
@@ -5879,11 +5827,6 @@ static std::unique_ptr<Module> emit_function(
                 Value *argp = boxed(ctx, theArg);
                 ctx.builder.CreateStore(argp, vi.boxroot);
             }
-            // get arrayvar data if applicable
-            if (arrayvars.find(i) != arrayvars.end()) {
-                jl_arrayvar_t av = arrayvars[i];
-                assign_arrayvar(ctx, av, theArg);
-            }
         }
     }
 
@@ -5918,7 +5861,7 @@ static std::unique_ptr<Module> emit_function(
             restTuple =
                 ctx.builder.CreateCall(prepare_call(jltuple_func),
                         { maybe_decay_untracked(V_null),
-                          ctx.builder.CreateGEP(argArray,
+                          ctx.builder.CreateInBoundsGEP(argArray,
                                   ConstantInt::get(T_size, nreq - 1)),
                           ctx.builder.CreateSub(argCount,
                                   ConstantInt::get(T_int32, nreq - 1)) });
@@ -5934,6 +5877,7 @@ static std::unique_ptr<Module> emit_function(
         return (!jl_is_submodule(mod, jl_base_module) &&
                 !jl_is_submodule(mod, jl_core_module));
     };
+    bool mod_is_user_mod = in_user_mod(ctx.module);
     struct StmtProp {
         DebugLoc loc;
         StringRef file;
@@ -5943,7 +5887,7 @@ static std::unique_ptr<Module> emit_function(
         bool in_user_code;
     };
     std::vector<StmtProp> stmtprops(stmtslen);
-    if (ctx.new_style_ir) {
+    { // if new style IR
         std::vector<DebugLoc> linetable;
         size_t nlocs = jl_array_len(src->linetable);
         if (ctx.debug_enabled) {
@@ -5953,17 +5897,24 @@ static std::unique_ptr<Module> emit_function(
             for (size_t i = 0; i < nlocs; i++) {
                 // LineInfoNode(mod::Module, method::Symbol, file::Symbol, line::Int, inlined_at::Int)
                 jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, i);
-                jl_sym_t *method = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 1);
-                jl_sym_t *file = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 2);
-                int line = jl_unbox_long(jl_fieldref(locinfo, 3));
-                int inlined_at = jl_unbox_long(jl_fieldref(locinfo, 4));
-                assert((size_t)inlined_at <= i);
-                StringRef filename = jl_symbol_name(file);
-                if (filename.empty())
-                    filename = "<missing>";
-                StringRef fname = jl_symbol_name(method);
-                if (fname.empty())
-                    fname = "macro expansion";
+                int inlined_at, line;
+                jl_sym_t *file;
+                StringRef filename = ctx.file;
+                StringRef fname;
+                assert(jl_typeis(locinfo, jl_lineinfonode_type));
+                {
+                    jl_sym_t *method = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 1);
+                    file = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 2);
+                    line = jl_unbox_long(jl_fieldref(locinfo, 3));
+                    inlined_at = jl_unbox_long(jl_fieldref(locinfo, 4));
+                    assert((size_t)inlined_at <= i);
+                    filename = jl_symbol_name(file);
+                    if (filename.empty())
+                        filename = "<missing>";
+                    fname = jl_symbol_name(method);
+                    if (fname.empty())
+                        fname = "macro expansion";
+                }
                 if (inlined_at == 0 && filename == ctx.file) { // if everything matches, emit a toplevel line number
                     linetable[i + 1] = DebugLoc::get(line, 0, SP, NULL);
                 }
@@ -5983,20 +5934,26 @@ static std::unique_ptr<Module> emit_function(
         }
         size_t prev_loc = 0;
         for (i = 0; i < stmtslen; i++) {
-            size_t loc = ((size_t*)jl_array_data(src->codelocs))[i];
+            size_t loc = ((int32_t*)jl_array_data(src->codelocs))[i];
             StmtProp &cur_prop = stmtprops[i];
             cur_prop.is_poploc = false;
             if (loc > 0) {
                 jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, loc - 1);
-                jl_module_t *module = (jl_module_t*)jl_fieldref_noalloc(locinfo, 0);
                 if (ctx.debug_enabled)
                     cur_prop.loc = linetable.at(loc);
                 else
                     cur_prop.loc = noDbg;
-                cur_prop.file = jl_symbol_name((jl_sym_t*)jl_fieldref_noalloc(locinfo, 2));
-                cur_prop.line = jl_unbox_long(jl_fieldref(locinfo, 3));
+                assert(jl_typeis(locinfo, jl_lineinfonode_type));
+                {
+                    jl_module_t *module = (jl_module_t*)jl_fieldref_noalloc(locinfo, 0);
+                    cur_prop.file = jl_symbol_name((jl_sym_t*)jl_fieldref_noalloc(locinfo, 2));
+                    cur_prop.line = jl_unbox_long(jl_fieldref(locinfo, 3));
+                    if (module == ctx.module)
+                        cur_prop.in_user_code = mod_is_user_mod;
+                    else
+                        cur_prop.in_user_code = in_user_mod(module);
+                }
                 cur_prop.loc_changed = (loc != prev_loc); // for code-coverage
-                cur_prop.in_user_code = in_user_mod(module);
                 prev_loc = loc;
             }
             else {
@@ -6008,197 +5965,49 @@ static std::unique_ptr<Module> emit_function(
             }
         }
     }
-    else {
-        struct DbgState {
-            DebugLoc loc;
-            DISubprogram *sp;
-            StringRef file;
-            ssize_t line;
-            bool in_user_code;
-        };
-        std::vector<DbgState> legacy_DI_stack;
-        StmtProp cur_prop{topdebugloc, filename, toplineno,
-                true, false, false};
-        ctx.line = &cur_prop.line;
-        if (coverage_mode != JL_LOG_NONE || malloc_log_mode)
-            cur_prop.in_user_code = in_user_mod(ctx.module);
-        for (i = 0; i < stmtslen; i++) {
-            cur_prop.loc_changed = false;
-            cur_prop.is_poploc = false;
-            jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
-            jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
-#ifndef JL_NDEBUG
-            if (jl_is_labelnode(stmt)) {
-                size_t lname = jl_labelnode_label(stmt);
-                if (lname != i + 1) {
-                    jl_safe_printf("Label number mismatch.\n");
-                    jl_(stmts);
-                    abort();
-                }
-            }
-#endif
-            if (jl_is_linenode(stmt)) {
-                ssize_t lno = -1;
-                lno = jl_linenode_line(stmt);
-                MDNode *inlinedAt = NULL;
-                if (legacy_DI_stack.size() > 0) {
-                    inlinedAt = legacy_DI_stack.back().loc;
-                }
-                if (ctx.debug_enabled)
-                    cur_prop.loc = DebugLoc::get(lno, 0, SP, inlinedAt);
-                cur_prop.line = lno;
-                cur_prop.loc_changed = true;
-            }
-            else if (expr && expr->head == meta_sym &&
-                     jl_array_len(expr->args) >= 1) {
-                jl_value_t *meta_arg = jl_exprarg(expr, 0);
-                if (meta_arg == (jl_value_t*)jl_symbol("push_loc")) {
-                    const char *new_filename = "<missing>";
-                    assert(jl_array_len(expr->args) > 1);
-                    jl_sym_t *filesym = (jl_sym_t*)jl_exprarg(expr, 1);
-                    if (filesym != empty_sym)
-                        new_filename = jl_symbol_name(filesym);
-                    DIFile *new_file = nullptr;
-                    if (ctx.debug_enabled)
-                        new_file = dbuilder.createFile(new_filename, ".");
-                    legacy_DI_stack.push_back(DbgState{cur_prop.loc, SP,
-                                cur_prop.file, cur_prop.line,
-                                cur_prop.in_user_code});
-                    const char *inl_name = "";
-                    int inlined_func_lineno = 0;
-                    if (jl_array_len(expr->args) > 2) {
-                        for (size_t ii = 2; ii < jl_array_len(expr->args); ii++) {
-                            jl_value_t *arg = jl_exprarg(expr, ii);
-                            if (jl_is_symbol(arg))
-                                inl_name = jl_symbol_name((jl_sym_t*)arg);
-                            else if (jl_is_int32(arg))
-                                inlined_func_lineno = jl_unbox_int32(arg);
-                            else if (jl_is_int64(arg))
-                                inlined_func_lineno = jl_unbox_int64(arg);
-                            else if (jl_is_module(arg)) {
-                                jl_module_t *mod = (jl_module_t*)arg;
-                                cur_prop.in_user_code = in_user_mod(mod);
-                            }
-                        }
-                    }
-                    else {
-                        inl_name = "macro expansion";
-                    }
-                    if (ctx.debug_enabled) {
-                        SP = dbuilder.createFunction(new_file,
-                                                     std::string(inl_name) + ";",
-                                                     inl_name,
-                                                     new_file,
-                                                     inlined_func_lineno,
-                                                     jl_di_func_null_sig,
-                                                     false,
-                                                     true,
-                                                     inlined_func_lineno,
-                                                     DIFlagZero,
-                                                     true,
-                                                     nullptr);
-                        MDNode *inlinedAt = NULL;
-                        inlinedAt = cur_prop.loc;
-                        cur_prop.loc = DebugLoc::get(inlined_func_lineno,
-                                                     0, SP, inlinedAt);
-                    }
-                    cur_prop.file = new_filename;
-                    cur_prop.line = inlined_func_lineno;
-                    cur_prop.loc_changed = true;
-                }
-                else if (meta_arg == (jl_value_t*)jl_symbol("pop_loc")) {
-                    unsigned npops = 1;
-                    if (jl_expr_nargs(expr) > 1)
-                        npops = jl_unbox_long(jl_exprarg(expr, 1));
-                    for (unsigned i = 1; i < npops; i++)
-                        legacy_DI_stack.pop_back();
-                    cur_prop.is_poploc = true;
-                    auto &DI = legacy_DI_stack.back();
-                    SP = DI.sp;
-                    cur_prop.loc = DI.loc;
-                    cur_prop.file = DI.file;
-                    cur_prop.line = DI.line;
-                    cur_prop.in_user_code = DI.in_user_code;
-                    cur_prop.loc_changed = true;
-                    legacy_DI_stack.pop_back();
-                }
-            }
-            stmtprops[i] = cur_prop;
-        }
-        legacy_DI_stack.clear();
-    }
     Instruction &prologue_end = ctx.builder.GetInsertBlock()->back();
 
 
     // step 12. Do codegen in control flow order
-    std::vector<std::pair<int,BasicBlock*>> workstack;
+    std::vector<int> workstack;
+    std::map<int, BasicBlock*> BB;
+    std::map<size_t, BasicBlock*> come_from_bb;
     int cursor = 0;
     // Whether we are doing codegen in statement order.
     // We need to update debug location if this is false even if
     // `loc_changed` is false.
     auto find_next_stmt = [&] (int seq_next) {
-        // new style ir is always in dominance order
-        if (ctx.new_style_ir) {
-            if (cursor + 1 == (int)stmtslen)
-                cursor = -1;
-            else
-                cursor = cursor + 1;
-            return;
-        }
+        // new style ir is always in dominance order, but frontend IR might not be
         // `seq_next` is the next statement we want to emit
         // i.e. if it exists, it's the next one following control flow and
         // should be emitted into the current insert point.
         if (seq_next >= 0 && (unsigned)seq_next < stmtslen) {
-            cursor = seq_next;
-            return;
+            workstack.push_back(seq_next);
         }
-        if (!ctx.builder.GetInsertBlock()->getTerminator())
+        else if (!ctx.builder.GetInsertBlock()->getTerminator()) {
             ctx.builder.CreateUnreachable();
-        if (workstack.empty()) {
-            cursor = -1;
-            return;
         }
-        auto &item = workstack.back();
-        ctx.builder.SetInsertPoint(item.second);
-        cursor = item.first;
-        workstack.pop_back();
-    };
-    auto add_to_list = [&] (unsigned pos, BasicBlock *bb) {
-        if (pos >= stmtslen)
-            return;
-        workstack.push_back({pos, bb});
-    };
-    // returns the corresponding basic block.
-    // if `unconditional` a unconditional branch is created to the target
-    // label and the cursor is set to the next statement to process
-    auto handle_label = [&] (int lname, bool unconditional) {
-        auto &bb = labels[lname];
-        BasicBlock *cur_bb = ctx.builder.GetInsertBlock();
-        // Check if we've already visited this label
-        if (bb) {
-            // Already in the work list
-            // branch to it and pop one from the work list
-            if (unconditional) {
-                if (!cur_bb->getTerminator())
-                    ctx.builder.CreateBr(bb);
-                find_next_stmt(-1);
+        while (!workstack.empty()) {
+            int item = workstack.back();
+            workstack.pop_back();
+            auto nextbb = BB.find(item + 1);
+            if (nextbb == BB.end()) {
+                cursor = item;
+                return;
             }
-            return bb;
+            if (seq_next != -1 && !ctx.builder.GetInsertBlock()->getTerminator()) {
+                come_from_bb[cursor + 1] = ctx.builder.GetInsertBlock();
+                ctx.builder.CreateBr(nextbb->second);
+            }
+            seq_next = -1;
+            // if this BB is non-empty, we've visited it before so skip it
+            if (!nextbb->second->getTerminator()) {
+                ctx.builder.SetInsertPoint(nextbb->second);
+                cursor = item;
+                return;
+            }
         }
-        // use the label name as the BB name.
-        bb = BasicBlock::Create(jl_LLVMContext,
-                                "L" + std::to_string(lname), f);
-        if (unconditional) {
-           if (!cur_bb->getTerminator())
-               ctx.builder.CreateBr(bb);
-           ctx.builder.SetInsertPoint(bb);
-        }
-        else {
-           add_to_list(lname, bb);
-        }
-        if (unconditional)
-            find_next_stmt(lname);
-        return bb;
+        cursor = -1;
     };
 
     auto do_coverage = [&] (bool in_user_code) {
@@ -6212,13 +6021,12 @@ static std::unique_ptr<Module> emit_function(
                 (malloc_log_mode == JL_LOG_USER && in_user_code));
     };
 
-    std::map<size_t, BasicBlock*> come_from_bb;
     come_from_bb[0] = ctx.builder.GetInsertBlock();
 
     // First go through and collect all branch targets, so we know where to
     // split basic blocks.
     std::set<int> branch_targets;
-    if (ctx.new_style_ir) {
+    {
         for (size_t i = 0; i < stmtslen; ++i) {
             jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
             if (jl_is_expr(stmt)) {
@@ -6253,40 +6061,21 @@ static std::unique_ptr<Module> emit_function(
         }
     }
 
-    std::map<int, BasicBlock*> BB;
-    if (ctx.new_style_ir) {
-        for (int label : branch_targets) {
-            BasicBlock *bb = BasicBlock::Create(jl_LLVMContext,
-                "L" + std::to_string(label), f);
-            BB[label] = bb;
-        }
+    for (int label : branch_targets) {
+        BasicBlock *bb = BasicBlock::Create(jl_LLVMContext,
+            "L" + std::to_string(label), f);
+        BB[label] = bb;
     }
 
     if (coverage_mode != JL_LOG_NONE && do_coverage(in_user_mod(ctx.module)))
         coverageVisitLine(ctx, filename, toplineno);
+    find_next_stmt(0);
     while (cursor != -1) {
         auto &props = stmtprops[cursor];
         if (ctx.debug_enabled)
             ctx.builder.SetCurrentDebugLocation(props.loc);
         jl_value_t *stmt = jl_array_ptr_ref(stmts, cursor);
         jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
-        if (ctx.new_style_ir) {
-            if (branch_targets.count(cursor + 1)) {
-                come_from_bb[cursor] = ctx.builder.GetInsertBlock();
-                BasicBlock *NewBB = BB[cursor + 1];
-                if (!ctx.builder.GetInsertBlock()->getTerminator())
-                    ctx.builder.CreateBr(NewBB);
-                ctx.builder.SetInsertPoint(NewBB);
-            }
-        }
-        else {
-            if (jl_is_labelnode(stmt)) {
-                // Label node
-                int lname = jl_labelnode_label(stmt);
-                handle_label(lname, true);
-                continue;
-            }
-        }
         // Legacy IR: disables coverage for pop_loc since it doesn't start a new expression
         if (props.loc_changed && do_coverage(props.in_user_code) && !props.is_poploc) {
             coverageVisitLine(ctx, props.file, props.line);
@@ -6366,11 +6155,11 @@ static std::unique_ptr<Module> emit_function(
                 if (retvalinfo.ispointer()) {
                     if (returninfo.cc == jl_returninfo_t::SRet) {
                         assert(jl_is_concrete_type(jlrettype));
-                        emit_memcpy(ctx, sret, retvalinfo, jl_datatype_size(jlrettype),
-                                    julia_alignment(jlrettype, 0));
+                        emit_memcpy(ctx, sret, nullptr, retvalinfo, jl_datatype_size(jlrettype),
+                                    julia_alignment(jlrettype));
                     }
                     else { // must be jl_returninfo_t::Union
-                        emit_unionmove(ctx, sret, retvalinfo, isboxed_union, false, NULL);
+                        emit_unionmove(ctx, sret, nullptr, retvalinfo, /*skip*/isboxed_union);
                     }
                 }
                 else {
@@ -6395,12 +6184,8 @@ static std::unique_ptr<Module> emit_function(
         if (jl_is_gotonode(stmt)) {
             int lname = jl_gotonode_label(stmt);
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
-            if (ctx.new_style_ir) {
-                ctx.builder.CreateBr(BB[lname]);
-                find_next_stmt(-1);
-            } else {
-                handle_label(lname, true);
-            }
+            ctx.builder.CreateBr(BB[lname]);
+            find_next_stmt(lname - 1);
             continue;
         }
         if (jl_is_upsilonnode(stmt)) {
@@ -6413,7 +6198,7 @@ static std::unique_ptr<Module> emit_function(
                 jl_varinfo_t &vi = ctx.phic_slots[upsilon_to_phic[cursor+1]];
                 emit_varinfo_assign(ctx, vi, rval_info);
             }
-            find_next_stmt(-1);
+            find_next_stmt(cursor + 1);
             continue;
         }
         if (expr && expr->head == goto_ifnot_sym) {
@@ -6424,22 +6209,14 @@ static std::unique_ptr<Module> emit_function(
             if (do_malloc_log(props.in_user_code) && props.line != -1)
                 mallocVisitLine(ctx, props.file, props.line);
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
-            if (ctx.new_style_ir) {
-                BasicBlock *ifnot = BB[lname];
-                BasicBlock *ifso = BB[cursor+2];
+            workstack.push_back(lname - 1);
+            BasicBlock *ifnot = BB[lname];
+            BasicBlock *ifso = BB[cursor+2];
+            if (ifnot == ifso)
+                ctx.builder.CreateBr(ifnot);
+            else
                 ctx.builder.CreateCondBr(isfalse, ifnot, ifso);
-                find_next_stmt(-1);
-            } else {
-                bool next_is_label = jl_is_labelnode(jl_array_ptr_ref(stmts, cursor+1));
-                BasicBlock *ifnot = handle_label(lname, false);
-                BasicBlock *ifso = (next_is_label ? handle_label(cursor + 2, false) : BasicBlock::Create(jl_LLVMContext, "if", f));
-                // Any branches treated as constant in type inference should be
-                // eliminated before running
-                ctx.builder.CreateCondBr(isfalse, ifnot, ifso);
-                if (!next_is_label && !ctx.new_style_ir)
-                    ctx.builder.SetInsertPoint(ifso);
-                find_next_stmt(next_is_label ? -1 : cursor+1);
-            }
+            find_next_stmt(cursor + 1);
             continue;
         }
         else if (expr && expr->head == enter_sym) {
@@ -6453,10 +6230,9 @@ static std::unique_ptr<Module> emit_function(
             Value *isz = ctx.builder.CreateICmpEQ(sj, ConstantInt::get(T_int32, 0));
             BasicBlock *tryblk = BasicBlock::Create(jl_LLVMContext, "try", f);
             BasicBlock *handlr = NULL;
-            if (ctx.new_style_ir)
-                handlr = BB[lname];
-            else
-                handlr = handle_label(lname, false);
+            handlr = BB[lname];
+            workstack.push_back(lname - 1);
+            come_from_bb[cursor + 1] = ctx.builder.GetInsertBlock();
 #ifdef _OS_WINDOWS_
             BasicBlock *cond_resetstkoflw_blk = BasicBlock::Create(jl_LLVMContext, "cond_resetstkoflw", f);
             BasicBlock *resetstkoflw_blk = BasicBlock::Create(jl_LLVMContext, "resetstkoflw", f);
@@ -6475,26 +6251,22 @@ static std::unique_ptr<Module> emit_function(
             ctx.builder.SetInsertPoint(tryblk);
         }
         else {
-            emit_stmtpos(ctx, stmt, ctx.new_style_ir ? cursor : -1);
+            emit_stmtpos(ctx, stmt, cursor);
             if (do_malloc_log(props.in_user_code) && props.line != -1) {
                 mallocVisitLine(ctx, props.file, props.line);
             }
         }
-        if (!ctx.new_style_ir) {
-            if ((size_t)cursor + 1 < jl_array_len(stmts) && jl_is_labelnode(jl_array_ptr_ref(stmts, cursor+1)))
-                come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
-        }
         find_next_stmt(cursor + 1);
     }
+
+    // Delete any unreachable blocks
+    for (auto &item : BB) {
+        if (!item.second->getTerminator())
+            item.second->eraseFromParent();
+    }
+
     ctx.builder.SetCurrentDebugLocation(noDbg);
     ctx.builder.ClearInsertionPoint();
-
-    // We don't visit empty labels, but they can still be implicit terminators,
-    // just add them to the list
-    if (!ctx.new_style_ir) {
-        for (auto &pair : labels)
-            come_from_bb[pair.first] = pair.second;
-    }
 
     auto undef_value_for_type = [&](jl_value_t *phiType, Type *UndefType) {
         Value *VNUndef;
@@ -6530,14 +6302,32 @@ static std::unique_ptr<Module> emit_function(
             if (BB_rewrite_map.count(LookupKey)) {
                 FromBB = BB_rewrite_map[LookupKey];
             }
-#ifndef JL_NDEBUG
-            bool found_pred = false;
-            for (BasicBlock *pred : predecessors(PhiBB)) {
-                found_pred = pred == FromBB;
-                if (found_pred)
-                    break;
+            // This edge was statically unreachable. Don't codegen it.
+            if (!FromBB)
+                continue;
+            // We folded this branch to an unconditional branch, only codegen it once
+            if (cast<BranchInst>(FromBB->getTerminator())->isUnconditional()) {
+                bool found = false;
+                for (size_t j = 0; j < i; ++j) {
+                    size_t j_edge = jl_unbox_long(jl_array_ptr_ref(edges, j));
+                    if (j_edge == edge) {
+                        found = true;
+                        assert(jl_egal(value, jl_array_ptr_ref(values, j)));
+                    }
+                }
+                if (found)
+                    continue;
             }
-            assert(found_pred);
+#ifndef JL_NDEBUG
+            if (FromBB) {
+                bool found_pred = false;
+                for (BasicBlock *pred : predecessors(PhiBB)) {
+                    found_pred = pred == FromBB;
+                    if (found_pred)
+                        break;
+                }
+                assert(found_pred);
+            }
 #endif
             ctx.builder.SetInsertPoint(FromBB->getTerminator());
             if (dest)
@@ -6545,8 +6335,7 @@ static std::unique_ptr<Module> emit_function(
             jl_cgval_t val;
             if (!value || jl_is_ssavalue(value)) {
                 ssize_t idx = value ? ((jl_ssavalue_t*)value)->id : 0;
-                if (ctx.new_style_ir)
-                    idx -= 1;
+                idx -= 1;
                 if (!value || !ctx.ssavalue_assigned.at(idx)) {
                     Value *RTindex = TindexN ? UndefValue::get(T_int8) : NULL;
                     if (VN) { // otherwise, it's all-unboxed
@@ -6610,6 +6399,9 @@ static std::unique_ptr<Module> emit_function(
             }
             if (!jl_is_uniontype(phiType) || !TindexN) {
                 if (VN) {
+                    // XXX: this code assumes that `val` is of type `phiType` statically,
+                    // that must be true dynamically, but we have not propagated that information here,
+                    // and thus this might generate invalid code
                     if (val.typ == (jl_value_t*)jl_bottom_type) {
                         V = undef_value_for_type(phiType, VN->getType());
                     }
@@ -6623,8 +6415,8 @@ static std::unique_ptr<Module> emit_function(
                     VN->addIncoming(V, ctx.builder.GetInsertBlock());
                     assert(!TindexN);
                 } else if (dest && val.typ != (jl_value_t*)jl_bottom_type) {
-                    ctx.builder.CreateMemCpy(decay_derived(dest),
-                        decay_derived(data_pointer(ctx, val)),
+                    ctx.builder.CreateMemCpy(maybe_decay_tracked(dest),
+                        maybe_decay_tracked(data_pointer(ctx, val)),
                         jl_datatype_size(phiType),
                         jl_datatype_align(phiType),
                         false);
@@ -6670,7 +6462,7 @@ static std::unique_ptr<Module> emit_function(
                             skip = ctx.builder.CreateICmpNE( // if 0x80 is set, we won't select this slot anyways
                                     ctx.builder.CreateAnd(RTindex, ConstantInt::get(T_int8, 0x80)),
                                     ConstantInt::get(T_int8, 0));
-                        emit_unionmove(ctx, dest, new_union, skip, false, NULL);
+                        emit_unionmove(ctx, dest, tbaa_arraybuf, new_union, skip);
                     }
                 }
                 if (VN)
@@ -6820,6 +6612,11 @@ static std::unique_ptr<Module> emit_function(
         JL_UNLOCK(&m->writelock);
     }
 
+    if (JL_HOOK_TEST(ctx.params, emitted_function)) {
+        JL_HOOK_CALL(ctx.params, emitted_function, 3, (jl_value_t*)ctx.linfo,
+                     (jl_value_t*)ctx.source, jl_box_ulong(world));
+    }
+
     JL_GC_POP();
     return std::unique_ptr<Module>(M);
 }
@@ -6880,10 +6677,16 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_method_instance_t *lam, int specs
         Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage, funcName.str());
         add_named_global(f, fptr);
         const char **fdecl;
-        if (specsig)
+        if (specsig) {
             fdecl = &lam->functionObjectsDecls.specFunctionObject;
-        else
+            if (lam->invoke == jl_fptr_args)
+                lam->functionObjectsDecls.functionObject = "jl_fptr_args";
+            else if (lam->invoke == jl_fptr_sparam)
+                lam->functionObjectsDecls.functionObject = "jl_fptr_sparam";
+        }
+        else {
             fdecl = &lam->functionObjectsDecls.functionObject;
+        }
         assert(!*fdecl);
         *fdecl = strdup(f->getName().str().c_str());
         delete f;
@@ -6910,16 +6713,19 @@ static void init_julia_llvm_meta(void)
     tbaa_arraysize = tbaa_make_child("jtbaa_arraysize", tbaa_array_scalar).first;
     tbaa_arraylen = tbaa_make_child("jtbaa_arraylen", tbaa_array_scalar).first;
     tbaa_arrayflags = tbaa_make_child("jtbaa_arrayflags", tbaa_array_scalar).first;
+    tbaa_arrayoffset = tbaa_make_child("jtbaa_arrayoffset", tbaa_array_scalar).first;
     tbaa_const = tbaa_make_child("jtbaa_const", nullptr, true).first;
     tbaa_arrayselbyte = tbaa_make_child("jtbaa_arrayselbyte", tbaa_array_scalar).first;
     tbaa_unionselbyte = tbaa_make_child("jtbaa_unionselbyte", tbaa_data_scalar).first;
+
+    Thunk = Attribute::get(jl_LLVMContext, "thunk");
 }
 
 static Function *jlcall_func_to_llvm(const std::string &cname, jl_fptr_args_t addr, Module *m)
 {
     Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage, cname, m);
     add_return_attr(f, Attribute::NonNull);
-    f->addFnAttr("thunk");
+    f->addFnAttr(Thunk);
     add_named_global(f, addr);
     return f;
 }
@@ -7023,19 +6829,18 @@ static void init_julia_llvm_env(Module *m)
     jl_func_sig = FunctionType::get(T_prjlvalue, ftargs, false);
     assert(jl_func_sig != NULL);
 
-    Type *vaelts[] = {T_pint8
+    Type *vaelts[] = {PointerType::get(T_int8, AddressSpace::Loaded)
 #ifdef STORE_ARRAY_LEN
                       , T_size
 #endif
                       , T_int16
                       , T_int16
+                      , T_int32
     };
     static_assert(sizeof(jl_array_flags_t) == sizeof(int16_t),
                   "Size of jl_array_flags_t is not the same as int16_t");
     jl_array_llvmt =
-        StructType::create(jl_LLVMContext,
-                           ArrayRef<Type*>(vaelts,sizeof(vaelts)/sizeof(vaelts[0])),
-                           "jl_array_t");
+        StructType::create(jl_LLVMContext, makeArrayRef(vaelts), "jl_array_t");
     jl_parray_llvmt = PointerType::get(jl_array_llvmt, 0);
 
     global_to_llvm("__stack_chk_guard", (void*)&__stack_chk_guard, m);
@@ -7149,7 +6954,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(jl_func_sig, Function::ExternalLinkage,
                          "jl_new_structv", m);
     add_return_attr(jlnew_func, Attribute::NonNull);
-    jlnew_func->addFnAttr("thunk");
+    jlnew_func->addFnAttr(Thunk);
     add_named_global(jlnew_func, &jl_new_structv);
 
     std::vector<Type*> args2(0);
@@ -7250,14 +7055,6 @@ static void init_julia_llvm_env(Module *m)
 
     jlapply2va_func = jlcall_func_to_llvm("jl_apply_2va", &jl_apply_2va, m);
 
-    std::vector<Type*> argsdepwarnpi(0);
-    argsdepwarnpi.push_back(T_size);
-    jldepwarnpi_func = Function::Create(FunctionType::get(T_void, argsdepwarnpi, false),
-                                        Function::ExternalLinkage,
-                                        "jl_depwarn_partial_indexing", m);
-    add_named_global(jldepwarnpi_func, &jl_depwarn_partial_indexing);
-
-
     std::vector<Type *> agargs(0);
     agargs.push_back(T_pprjlvalue);
     agargs.push_back(T_uint32);
@@ -7265,7 +7062,7 @@ static void init_julia_llvm_env(Module *m)
                                            Function::ExternalLinkage,
                                            "jl_apply_generic", m);
     add_return_attr(jlapplygeneric_func, Attribute::NonNull);
-    jlapplygeneric_func->addFnAttr("thunk");
+    jlapplygeneric_func->addFnAttr(Thunk);
     add_named_global(jlapplygeneric_func, &jl_apply_generic);
 
     std::vector<Type *> invokeargs(0);
@@ -7431,6 +7228,7 @@ static void init_julia_llvm_env(Module *m)
                                          "julia.gc_alloc_obj");
     add_return_attr(jl_alloc_obj_func, Attribute::NoAlias);
     add_return_attr(jl_alloc_obj_func, Attribute::NonNull);
+    jl_alloc_obj_func->addFnAttr(Attribute::getWithAllocSizeArgs(jl_LLVMContext, 1, None)); // returns %1 bytes
     add_named_global(jl_alloc_obj_func, (void*)NULL, /*dllimport*/false);
 
     std::vector<Type*> newbits_args(0);
@@ -7449,6 +7247,13 @@ static void init_julia_llvm_env(Module *m)
     jl_simdloop_marker_func->addFnAttr(Attribute::NoUnwind);
     jl_simdloop_marker_func->addFnAttr(Attribute::NoRecurse);
     jl_simdloop_marker_func->addFnAttr(Attribute::InaccessibleMemOnly);
+
+    jl_simdivdep_marker_func = Function::Create(FunctionType::get(T_void, {}, false),
+                                               Function::ExternalLinkage,
+                                               "julia.simdivdep_marker");
+    jl_simdivdep_marker_func->addFnAttr(Attribute::NoUnwind);
+    jl_simdivdep_marker_func->addFnAttr(Attribute::NoRecurse);
+    jl_simdivdep_marker_func->addFnAttr(Attribute::InaccessibleMemOnly);
 
     jl_typeof_func = Function::Create(FunctionType::get(T_prjlvalue, {T_prjlvalue}, false),
                                       Function::ExternalLinkage,
@@ -7662,8 +7467,24 @@ extern "C" void *jl_init_llvm(void)
 // Mark our address spaces as non-integral
 #if JL_LLVM_VERSION >= 40000
     jl_data_layout = jl_ExecutionEngine->getDataLayout();
-    std::string DL = jl_data_layout.getStringRepresentation() + "-ni:10:11:12";
+    std::string DL = jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13";
     jl_data_layout.reset(DL);
+#endif
+
+#ifdef JL_USE_INTEL_JITEVENTS
+    if (jl_using_intel_jitevents)
+        jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createIntelJITEventListener());
+#endif
+
+#ifdef JL_USE_OPROFILE_JITEVENTS
+    if (jl_using_oprofile_jitevents)
+        jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createOProfileJITEventListener());
+#endif
+
+#ifdef JL_USE_PERF_JITEVENTS
+    if (jl_using_perf_jitevents) {
+        jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createPerfJITEventListener());
+    }
 #endif
 
     // Now that the execution engine exists, initialize all modules
@@ -7677,22 +7498,14 @@ extern "C" void jl_init_codegen(void)
     Module *m = (Module *)jl_init_llvm();
     init_julia_llvm_env(m);
 
-    BOX_F(int8,int8);  UBOX_F(uint8,uint8);
-    BOX_F(int16,int16); UBOX_F(uint16,uint16);
-    BOX_F(int32,int32); UBOX_F(uint32,uint32);
-    BOX_F(int64,int64); UBOX_F(uint64,uint64);
-    BOX_F(float32,float32); BOX_F(float64,float64);
-    BOX_F(char,char);
+    SBOX_F_PERM(int8,int8); UBOX_F_PERM(uint8,uint8);
+    SBOX_F(int16,int16); UBOX_F(uint16,uint16);
+    SBOX_F(int32,int32); UBOX_F(uint32,uint32);
+    SBOX_F(int64,int64); UBOX_F(uint64,uint64);
+    BOX_F(float32,float32,T_prjlvalue); BOX_F(float64,float64,T_prjlvalue);
+    UBOX_F(char,char);
     UBOX_F(ssavalue,size);
 
-    box8_func  = boxfunc_llvm(ft2arg(T_pjlvalue, T_pjlvalue, T_int8),
-                              "jl_box8", &jl_box8, m);
-    box16_func = boxfunc_llvm(ft2arg(T_pjlvalue, T_pjlvalue, T_int16),
-                              "jl_box16", &jl_box16, m);
-    box32_func = boxfunc_llvm(ft2arg(T_pjlvalue, T_pjlvalue, T_int32),
-                              "jl_box32", &jl_box32, m);
-    box64_func = boxfunc_llvm(ft2arg(T_pjlvalue, T_pjlvalue, T_int64),
-                              "jl_box64", &jl_box64, m);
     jl_init_intrinsic_functions_codegen(m);
 }
 

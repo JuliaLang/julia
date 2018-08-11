@@ -9,7 +9,7 @@ function rstrip_shell(s::AbstractString)
     c_old = nothing
     for (i, c) in Iterators.reverse(pairs(s))
         ((c == '\\') && c_old == ' ') && return SubString(s, 1, i+1)
-        c in _default_delims || return SubString(s, 1, i)
+        isspace(c) || return SubString(s, 1, i)
         c_old = c
     end
     SubString(s, 1, 0)
@@ -46,7 +46,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     end
     function consume_upto(j)
         update_arg(s[i:prevind(s, j)])
-        i = coalesce(peek(st), (lastindex(s)+1,'\0'))[1]
+        i = something(peek(st), (lastindex(s)+1,'\0'))[1]
     end
     function append_arg()
         if isempty(arg); arg = Any["",]; end
@@ -60,7 +60,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             append_arg()
             while !isempty(st)
                 # We've made sure above that we don't end in whitespace,
-                # so updateing `i` here is ok
+                # so updating `i` here is ok
                 (i, c) = peek(st)
                 isspace(c) || break
                 popfirst!(st)

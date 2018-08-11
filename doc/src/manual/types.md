@@ -43,7 +43,7 @@ up front are:
   * Only values, not variables, have types -- variables are simply names bound to values.
   * Both abstract and concrete types can be parameterized by other types. They can also be parameterized
     by symbols, by values of any type for which [`isbits`](@ref) returns true (essentially, things
-    like numbers and bools that are stored like C types or structs with no pointers to other objects),
+    like numbers and bools that are stored like C types or `struct`s with no pointers to other objects),
     and also by tuples thereof. Type parameters may be omitted when they do not need to be referenced
     or restricted.
 
@@ -148,7 +148,7 @@ numbers. Abstract types allow the construction of a hierarchy of types, providin
 into which concrete types can fit. This allows you, for example, to easily program to any type
 that is an integer, without restricting an algorithm to a specific type of integer.
 
-Abstract types are declared using the `abstract type` keyword. The general syntaxes for declaring an
+Abstract types are declared using the [`abstract type`](@ref) keyword. The general syntaxes for declaring an
 abstract type are:
 
 ```
@@ -157,7 +157,7 @@ abstract type «name» <: «supertype» end
 ```
 
 The `abstract type` keyword introduces a new abstract type, whose name is given by `«name»`. This
-name can be optionally followed by `<:` and an already-existing type, indicating that the newly
+name can be optionally followed by [`<:`](@ref) and an already-existing type, indicating that the newly
 declared abstract type is a subtype of this "parent" type.
 
 When no supertype is given, the default supertype is `Any` -- a predefined abstract type that
@@ -309,7 +309,7 @@ for more information on methods and dispatch). Thus, it would be inappropriate f
 named bags of methods "inside" each object ends up being a highly beneficial aspect of the language
 design.
 
-Composite types are introduced with the `struct` keyword followed by a block of field names, optionally
+Composite types are introduced with the [`struct`](@ref) keyword followed by a block of field names, optionally
 annotated with types using the `::` operator:
 
 ```jldoctest footype
@@ -349,7 +349,7 @@ Stacktrace:
 [...]
 ```
 
-You may find a list of field names using the `fieldnames` function.
+You may find a list of field names using the [`fieldnames`](@ref) function.
 
 ```jldoctest footype
 julia> fieldnames(Foo)
@@ -381,7 +381,7 @@ An immutable object might contain mutable objects, such as arrays, as fields. Th
 objects will remain mutable; only the fields of the immutable object itself cannot be changed
 to point to different objects.
 
-Where required, mutable composite objects can be declared with the keyword `mutable struct`, to be
+Where required, mutable composite objects can be declared with the keyword [`mutable struct`](@ref), to be
 discussed in the next section.
 
 Immutable composite types with no fields are singletons; there can be only one instance of such types:
@@ -394,7 +394,7 @@ julia> NoFields() === NoFields()
 true
 ```
 
-The `===` function confirms that the "two" constructed instances of `NoFields` are actually one
+The [`===`](@ref) function confirms that the "two" constructed instances of `NoFields` are actually one
 and the same. Singleton types are described in further detail [below](@ref man-singleton-types).
 
 There is much more to say about how instances of composite types are created, but that discussion
@@ -442,7 +442,7 @@ To recap, two essential properties define immutability in Julia:
       always refer to the same mutable value even though that mutable value's content may
       itself be modified.
   * An object with an immutable type may be copied freely by the compiler since its
-    immutabity makes it impossible to programmatically distinguish between the original
+    immutability makes it impossible to programmatically distinguish between the original
     object and a copy.
     * In particular, this means that small enough immutable values like integers and floats
       are typically passed to functions in registers (or stack allocated).
@@ -452,8 +452,8 @@ To recap, two essential properties define immutability in Julia:
 
 ## Declared Types
 
-The three kinds of types discussed in the previous three sections are actually all closely related.
-They share the same key properties:
+The three kinds of types (abstract, primitive, composite) discussed in the previous
+sections are actually all closely related. They share the same key properties:
 
   * They are explicitly declared.
   * They have names.
@@ -480,7 +480,7 @@ Every concrete value in the system is an instance of some `DataType`.
 ## Type Unions
 
 A type union is a special abstract type which includes as objects all instances of any of its
-argument types, constructed using the special `Union` function:
+argument types, constructed using the special [`Union`](@ref) keyword:
 
 ```jldoctest
 julia> IntOrString = Union{Int,AbstractString}
@@ -497,7 +497,16 @@ ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got Floa
 ```
 
 The compilers for many languages have an internal union construct for reasoning about types; Julia
-simply exposes it to the programmer.
+simply exposes it to the programmer. The Julia compiler is able to generate efficient code in the
+presence of `Union` types with a small number of types [^1], by generating specialized code
+in separate branches for each possible type.
+
+A particularly useful case of a `Union` type is `Union{T, Nothing}`, where `T` can be any type and
+[`Nothing`](@ref) is the singleton type whose only instance is the object [`nothing`](@ref). This pattern
+is the Julia equivalent of [`Nullable`, `Option` or `Maybe`](https://en.wikipedia.org/wiki/Nullable_type)
+types in other languages. Declaring a function argument or a field as `Union{T, Nothing}` allows
+setting it either to a value of type `T`, or to `nothing` to indicate that there is no value.
+See [this FAQ entry](@ref faq-nothing) for more information.
 
 ## Parametric Types
 
@@ -648,7 +657,7 @@ For the default constructor, exactly one argument must be supplied for each fiel
 
 ```jldoctest pointtype
 julia> Point{Float64}(1.0)
-ERROR: MethodError: Cannot `convert` an object of type Float64 to an object of type Point{Float64}
+ERROR: MethodError: no method matching Point{Float64}(::Float64)
 [...]
 
 julia> Point{Float64}(1.0,2.0,3.0)
@@ -878,7 +887,7 @@ signature (when the signature matches).
 
 ### Vararg Tuple Types
 
-The last parameter of a tuple type can be the special type `Vararg`, which denotes any number
+The last parameter of a tuple type can be the special type [`Vararg`](@ref), which denotes any number
 of trailing elements:
 
 ```jldoctest
@@ -1003,7 +1012,7 @@ is that the type parameter `T` is not used in the definition of the type itself 
 an abstract tag, essentially defining an entire family of types with identical structure, differentiated
 only by their type parameter. Thus, `Ptr{Float64}` and `Ptr{Int64}` are distinct types, even though
 they have identical representations. And of course, all specific pointer types are subtypes of
-the umbrella `Ptr` type:
+the umbrella [`Ptr`](@ref) type:
 
 ```jldoctest
 julia> Ptr{Float64} <: Ptr
@@ -1019,7 +1028,7 @@ We have said that a parametric type like `Ptr` acts as a supertype of all its in
 (`Ptr{Int64}` etc.). How does this work? `Ptr` itself cannot be a normal data type, since without
 knowing the type of the referenced data the type clearly cannot be used for memory operations.
 The answer is that `Ptr` (or other parametric types like `Array`) is a different kind of type called a
-`UnionAll` type. Such a type expresses the *iterated union* of types for all values of some parameter.
+[`UnionAll`](@ref) type. Such a type expresses the *iterated union* of types for all values of some parameter.
 
 `UnionAll` types are usually written using the keyword `where`. For example `Ptr` could be more
 accurately written as `Ptr{T} where T`, meaning all values whose type is `Ptr{T}` for some value
@@ -1183,7 +1192,7 @@ Any
 If you apply [`supertype`](@ref) to other type objects (or non-type objects), a [`MethodError`](@ref)
 is raised:
 
-```jldoctest
+```jldoctest; filter = r"Closest candidates.*"s
 julia> supertype(Union{Float64,Int64})
 ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
 Closest candidates are:
@@ -1368,13 +1377,13 @@ of custom types. By way of illustration of this idea, let's introduce a parametr
 and a constructor `Val(x) = Val{x}()`, which serves as a customary way to exploit this technique
 for cases where you don't need a more elaborate hierarchy.
 
-`Val` is defined as:
+[`Val`](@ref) is defined as:
 
 ```jldoctest valtype
 julia> struct Val{x}
        end
 
-julia> Base.@pure Val(x) = Val{x}()
+julia> Val(x) = Val{x}()
 Val
 ```
 
@@ -1403,3 +1412,5 @@ It's worth noting that it's extremely easy to mis-use parametric "value" types, 
 in unfavorable cases, you can easily end up making the performance of your code much *worse*.
  In particular, you would never want to write actual code as illustrated above.  For more information
 about the proper (and improper) uses of `Val`, please read the more extensive discussion in [the performance tips](@ref man-performance-tips).
+
+[^1]: "Small" is defined by the `MAX_UNION_SPLITTING` constant, which is currently set to 4.

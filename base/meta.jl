@@ -14,11 +14,9 @@ export quot,
 
 quot(ex) = Expr(:quote, ex)
 
-isexpr(ex::Expr, head)          = ex.head === head
-isexpr(ex::Expr, heads::Union{Set,Vector,Tuple}) = in(ex.head, heads)
-isexpr(ex,       head)          = false
-
-isexpr(ex,       head, n::Int)  = isexpr(ex, head) && length(ex.args) == n
+isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
+isexpr(@nospecialize(ex), heads::Union{Set,Vector,Tuple}) = isa(ex, Expr) && in(ex.head, heads)
+isexpr(@nospecialize(ex), heads, n::Int) = isexpr(ex, heads) && length(ex.args) == n
 
 
 # ---- show_sexpr: print an AST as an S-expression ----
@@ -43,8 +41,10 @@ function show_sexpr(io::IO, ex::Expr, indent::Int)
         print(io, ex.head === :block ? ",\n"*" "^inner : ", ")
         show_sexpr(io, arg, inner)
     end
-    if isempty(ex.args); print(io, ",)")
-    else print(io, (ex.head === :block ? "\n"*" "^indent : ""), ')')
+    if isempty(ex.args)
+        print(io, ",)")
+    else
+        print(io, (ex.head === :block ? "\n"*" "^indent : ""), ')')
     end
 end
 
@@ -55,7 +55,7 @@ Show every part of the representation of the given expression. Equivalent to
 [`dump(:(expr))`](@ref dump).
 """
 macro dump(expr)
-    dump(expr)
+    return :(dump($(QuoteNode(expr))))
 end
 
 """
@@ -114,7 +114,7 @@ julia> Meta.parse("x = 3, y = 5", 5)
 (:((3, y) = 5), 13)
 ```
 """
-function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=true,
+function parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool=true,
                depwarn::Bool=true)
     # pos is one based byte offset.
     # returns (expr, end_pos). expr is () in case of parse error.
@@ -171,5 +171,132 @@ function parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
     end
     return ex
 end
+
+"""
+    partially_inline!(code::Vector{Any}, slot_replacements::Vector{Any},
+                      type_signature::Type{<:Tuple}, static_param_values::Vector{Any},
+                      slot_offset::Int, statement_offset::Int,
+                      boundscheck::Symbol)
+
+Return `code` after performing an in-place partial inlining pass on the Julia IR stored
+within it.
+
+The kind of inlining transformations performed by this function are those that are generally
+possible given only a runtime type signature for a method invocation and the corresponding
+method's lowered IR. Thus, this function is mainly useful when preparing Julia IR to be
+emitted from a `@generated` function.
+
+The performed transformations are:
+
+- replace slot numbers in the range `1:length(slot_replacements)` with the corresponding items in `slot_replacements`
+- increment other slot numbers by `slot_offset`
+- substitute static parameter placeholders (e.g. `Expr(:static_parameter, 1)`) with the corresponding
+values in `static_param_values`
+- increment any statement indices present in the IR (`GotoNode`s, `SSAValue`s, etc.) by `statement_offset`
+(useful when the caller plans to prepend new statements to the IR)
+- turn off boundschecking (if `boundscheck === :off`) or propagate boundschecking (if `boundscheck === :propagate`)
+
+This function is similar to `Core.Compiler.ssa_substitute!`, but works on pre-type-inference
+IR instead of the optimizer's IR.
+"""
+function partially_inline!(code::Vector{Any}, slot_replacements::Vector{Any},
+                           @nospecialize(type_signature)#=::Type{<:Tuple}=#,
+                           static_param_values::Vector{Any},
+                           slot_offset::Int, statement_offset::Int,
+                           boundscheck::Symbol)
+    for i = 1:length(code)
+        isassigned(code, i) || continue
+        code[i] = _partially_inline!(code[i], slot_replacements, type_signature,
+                                     static_param_values, slot_offset,
+                                     statement_offset, boundscheck)
+    end
+    return code
+end
+
+function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
+                            @nospecialize(type_signature), static_param_values::Vector{Any},
+                            slot_offset::Int, statement_offset::Int,
+                            boundscheck::Symbol)
+    if isa(x, Core.SSAValue)
+        return Core.SSAValue(x.id + statement_offset)
+    end
+    if isa(x, Core.GotoNode)
+        return Core.GotoNode(x.label + statement_offset)
+    end
+    if isa(x, Core.SlotNumber)
+        id = x.id
+        if 1 <= id <= length(slot_replacements)
+            return slot_replacements[id]
+        end
+        return Core.SlotNumber(id + slot_offset)
+    end
+    if isa(x, Core.NewvarNode)
+        return Core.NewvarNode(_partially_inline!(x.slot, slot_replacements, type_signature,
+                                                  static_param_values, slot_offset,
+                                                  statement_offset, boundscheck))
+    end
+    if isa(x, Core.PhiNode)
+        partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
+                          slot_offset, statement_offset, boundscheck)
+        x.edges .+= slot_offset
+        return x
+    end
+    if isa(x, Expr)
+        head = x.head
+        if head === :static_parameter
+            return QuoteNode(static_param_values[x.args[1]])
+        elseif head === :cfunction
+            @assert !isa(type_signature, UnionAll) || !isempty(spvals)
+            if !isa(x.args[2], QuoteNode) # very common no-op
+                x.args[2] = _partially_inline!(x.args[2], slot_replacements, type_signature,
+                                               static_param_values, slot_offset,
+                                               statement_offset, boundscheck)
+            end
+            x.args[3] = _instantiate_type_in_env(x.args[3], type_signature, static_param_values)
+            x.args[4] = Core.svec(Any[_instantiate_type_in_env(argt, type_signature, static_param_values) for argt in x.args[4]]...)
+        elseif head === :foreigncall
+            @assert !isa(type_signature, UnionAll) || !isempty(static_param_values)
+            for i = 1:length(x.args)
+                if i == 2
+                    x.args[2] = _instantiate_type_in_env(x.args[2], type_signature, static_param_values)
+                elseif i == 3
+                    x.args[3] = Core.svec(Any[_instantiate_type_in_env(argt, type_signature, static_param_values) for argt in x.args[3]]...)
+                elseif i == 4
+                    @assert isa((x.args[4]::QuoteNode).value, Symbol)
+                elseif i == 5
+                    @assert isa(x.args[5], Int)
+                else
+                    x.args[i] = _partially_inline!(x.args[i], slot_replacements,
+                                                   type_signature, static_param_values,
+                                                   slot_offset, statement_offset,
+                                                   boundscheck)
+                end
+            end
+        elseif head === :boundscheck
+            if boundscheck === :propagate
+                return x
+            elseif boundscheck === :off
+                return false
+            else
+                return true
+            end
+        elseif head === :gotoifnot
+            x.args[1] = _partially_inline!(x.args[1], slot_replacements, type_signature,
+                                           static_param_values, slot_offset,
+                                           statement_offset, boundscheck)
+            x.args[2] += statement_offset
+        elseif head === :enter
+            x.args[1] += statement_offset
+        elseif !is_meta_expr_head(head)
+            partially_inline!(x.args, slot_replacements, type_signature, static_param_values,
+                              slot_offset, statement_offset, boundscheck)
+        end
+    end
+    return x
+end
+
+_instantiate_type_in_env(x, spsig, spvals) = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), x, spsig, spvals)
+
+is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :simdloop)
 
 end # module

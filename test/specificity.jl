@@ -16,8 +16,8 @@ let
     @test !args_morespecific(b2, a)
     a  = Tuple{Type{T1}, Ptr{T1}} where T1<:Integer
     b2 = Tuple{Type{T2}, Ptr{Integer}} where T2<:Integer
-    @test args_morespecific(a, b2)
-    @test !args_morespecific(b2, a)
+    @test !args_morespecific(a, b2)
+    @test  args_morespecific(b2, a)
 end
 
 # issue #11534
@@ -108,7 +108,7 @@ f17016(f, t::T_17016) = 0
 f17016(f, t1::Tuple) = 1
 @test f17016(0, (1,2,3)) == 0
 
-@test !args_morespecific(Tuple{Type{Any}, Any}, Tuple{Type{T}, Any} where T<:VecElement)
+@test  args_morespecific(Tuple{Type{Any}, Any}, Tuple{Type{T}, Any} where T<:VecElement)
 @test !args_morespecific((Tuple{Type{T}, Any} where T<:VecElement), Tuple{Type{Any}, Any})
 
 @test !args_morespecific(Tuple{Type{T}, Tuple{Any, Vararg{Any, N} where N}} where T<:Tuple{Any, Vararg{Any, N} where N},
@@ -202,3 +202,15 @@ let A = Tuple{Vector, AbstractVector},
     @test args_morespecific(B, C)
     @test args_morespecific(A, C)
 end
+
+# issue #27361
+f27361(::M) where M <: Tuple{2} = nothing
+f27361(::M) where M <: Tuple{3} = nothing
+@test length(methods(f27361)) == 2
+
+# specificity of TypeofBottom
+@test args_morespecific(Tuple{Core.TypeofBottom}, Tuple{DataType})
+@test args_morespecific(Tuple{Core.TypeofBottom}, Tuple{Type{<:Tuple}})
+
+@test  args_morespecific(Tuple{Type{Any}, Type}, Tuple{Type{T}, Type{T}} where T)
+@test !args_morespecific(Tuple{Type{Any}, Type}, Tuple{Type{T}, Type{T}} where T<:Union{})

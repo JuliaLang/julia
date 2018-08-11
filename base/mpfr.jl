@@ -12,18 +12,16 @@ import
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
         sum, sqrt, string, print, trunc, precision, exp10, expm1,
-        gamma, lgamma, log1p,
+        log1p,
         eps, signbit, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
-        cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
-        cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, rounding,
+        cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh,
+        cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
-        isone, big, beta, RefValue
+        isone, big, _string_n
 
 import .Base.Rounding: rounding_raw, setrounding_raw
 
 import .Base.GMP: ClongMax, CulongMax, CdoubleMax, Limb
-
-import .Base.Math.lgamma_r
 
 import .Base.FastMath.sincos_fast
 
@@ -38,10 +36,11 @@ function __init__()
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module MPFR")
     end
+    nothing
 end
 
-const ROUNDING_MODE = RefValue{Cint}(0)
-const DEFAULT_PRECISION = RefValue(256)
+const ROUNDING_MODE = Ref{Cint}(0) # actually an Enum, defined by `to_mpfr`
+const DEFAULT_PRECISION = Ref{Int}(256)
 
 # Basic type and initialization definitions
 
@@ -55,20 +54,43 @@ mutable struct BigFloat <: AbstractFloat
     sign::Cint
     exp::Clong
     d::Ptr{Limb}
-
-    function BigFloat()
-        prec = precision(BigFloat)
-        z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
-        ccall((:mpfr_init2,:libmpfr), Cvoid, (Ref{BigFloat}, Clong), z, prec)
-        finalizer(cglobal((:mpfr_clear, :libmpfr)), z)
-        return z
-    end
+    # _d::Buffer{Limb} # Julia gc handle for memory @ d
+    _d::String # Julia gc handle for memory @ d (optimized)
 
     # Not recommended for general use:
-    function BigFloat(prec::Clong, sign::Cint, exp::Clong, d::Ptr{Cvoid})
-        new(prec, sign, exp, d)
+    # used internally by, e.g. deepcopy
+    global function _BigFloat(prec::Clong, sign::Cint, exp::Clong, d::String)
+        # ccall-based version, inlined below
+        #z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL, d)
+        #ccall((:mpfr_custom_init,:libmpfr), Cvoid, (Ptr{Limb}, Clong), d, prec) # currently seems to be a no-op in mpfr
+        #NAN_KIND = Cint(0)
+        #ccall((:mpfr_custom_init_set,:libmpfr), Cvoid, (Ref{BigFloat}, Cint, Clong, Ptr{Limb}), z, NAN_KIND, prec, d)
+        #return z
+        return new(prec, sign, exp, pointer(d), d)
+    end
+
+    function BigFloat()
+        prec::Clong = precision(BigFloat)
+        nb = ccall((:mpfr_custom_get_size,:libmpfr), Csize_t, (Clong,), prec)
+        nb = (nb + Core.sizeof(Limb) - 1) ÷ Core.sizeof(Limb) # align to number of Limb allocations required for this
+        #d = Vector{Limb}(undef, nb)
+        d = _string_n(nb * Core.sizeof(Limb))
+        EXP_NAN = Clong(1) - Clong(typemax(Culong) >> 1)
+        return _BigFloat(prec, one(Cint), EXP_NAN, d) # +NAN
     end
 end
+
+# overload the definition of unsafe_convert to ensure that `x.d` is assigned
+# it may have been dropped in the event that the BigFloat was serialized
+Base.unsafe_convert(::Type{Ref{BigFloat}}, x::Ptr{BigFloat}) = x
+@inline function Base.unsafe_convert(::Type{Ref{BigFloat}}, x::Ref{BigFloat})
+    x = x[]
+    if x.d == C_NULL
+        x.d = pointer(x._d)
+    end
+    return convert(Ptr{BigFloat}, Base.pointer_from_objref(x))
+end
+
 
 """
     BigFloat(x)
@@ -159,7 +181,7 @@ end
     BigFloat(x, prec::Int, rounding::RoundingMode)
 
 Create a representation of `x` as a [`BigFloat`](@ref) with precision `prec` and
-rounding mode `rounding`.
+[`Rounding Mode`](@ref Base.Rounding.RoundingMode) `rounding`.
 """
 function BigFloat(x, prec::Int, rounding::RoundingMode)
     setrounding(BigFloat, rounding) do
@@ -171,7 +193,7 @@ end
     BigFloat(x, rounding::RoundingMode)
 
 Create a representation of `x` as a [`BigFloat`](@ref) with the current global precision
-and rounding mode `rounding`.
+and [`Rounding Mode`](@ref Base.Rounding.RoundingMode) `rounding`.
 """
 function BigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)
     BigFloat(x, precision(BigFloat), rounding)
@@ -182,7 +204,7 @@ end
 
 Create a representation of the string `x` as a [`BigFloat`](@ref).
 """
-BigFloat(x::String) = parse(BigFloat, x)
+BigFloat(x::AbstractString) = parse(BigFloat, x)
 
 
 ## BigFloat -> Integer
@@ -655,7 +677,7 @@ function sum(arr::AbstractArray{BigFloat})
 end
 
 # Functions for which NaN results are converted to DomainError, following Base
-for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :atanh, :gamma)
+for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :atanh)
     @eval begin
         function ($f)(x::BigFloat)
             isnan(x) && return x
@@ -667,27 +689,10 @@ for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :at
     end
 end
 
-# log of absolute value of gamma function
-const lgamma_signp = Ref{Cint}()
-function lgamma(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_lgamma,:libmpfr), Cint, (Ref{BigFloat}, Ref{Cint}, Ref{BigFloat}, Int32), z, lgamma_signp, x, ROUNDING_MODE[])
-    return z
-end
-
-lgamma_r(x::BigFloat) = (lgamma(x), lgamma_signp[])
-
-function atan2(y::BigFloat, x::BigFloat)
+function atan(y::BigFloat, x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_atan2, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, Int32), z, y, x, ROUNDING_MODE[])
     return z
-end
-if version() >= v"4.0.0"
-    function beta(y::BigFloat, x::BigFloat)
-        z = BigFloat()
-        ccall((:mpfr_beta, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, Int32), z, y, x, ROUNDING_MODE[])
-        return z
-    end
 end
 
 # Utility functions
@@ -757,6 +762,7 @@ function setprecision(::Type{BigFloat}, precision::Int)
         throw(DomainError(precision, "`precision` cannot be less than 2."))
     end
     DEFAULT_PRECISION[] = precision
+    return precision
 end
 
 setprecision(precision::Int) = setprecision(BigFloat, precision)
@@ -875,8 +881,8 @@ end
 
 eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
 
-realmin(::Type{BigFloat}) = nextfloat(zero(BigFloat))
-realmax(::Type{BigFloat}) = prevfloat(BigFloat(Inf))
+floatmin(::Type{BigFloat}) = nextfloat(zero(BigFloat))
+floatmax(::Type{BigFloat}) = prevfloat(BigFloat(Inf))
 
 """
     setprecision(f::Function, [T=BigFloat,] precision::Integer)
@@ -975,11 +981,11 @@ set_emin!(x) = ccall((:mpfr_set_emin, :libmpfr), Cvoid, (Clong,), x)
 
 function Base.deepcopy_internal(x::BigFloat, stackdict::IdDict)
     haskey(stackdict, x) && return stackdict[x]
-    prec = precision(x)
-    y = BigFloat(zero(Clong), zero(Cint), zero(Clong), C_NULL)
-    ccall((:mpfr_init2,:libmpfr), Cvoid, (Ref{BigFloat}, Clong), y, prec)
-    finalizer(cglobal((:mpfr_clear, :libmpfr)), y)
-    ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Int32), y, x, ROUNDING_MODE[])
+    # d = copy(x._d)
+    d = x._d
+    d′ = GC.@preserve d unsafe_string(pointer(d), sizeof(d)) # creates a definitely-new String
+    y = _BigFloat(x.prec, x.sign, x.exp, d′)
+    #ccall((:mpfr_custom_move,:libmpfr), Cvoid, (Ref{BigFloat}, Ptr{Limb}), y, d) # unnecessary
     stackdict[x] = y
     return y
 end

@@ -47,11 +47,11 @@ length(s::Set)  = length(s.dict)
 in(x, s::Set) = haskey(s.dict, x)
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 pop!(s::Set, x) = (pop!(s.dict, x); x)
-pop!(s::Set, x, deflt) = x in s ? pop!(s, x) : deflt
+pop!(s::Set, x, default) = (x in s ? pop!(s, x) : default)
 
 function pop!(s::Set)
     isempty(s) && throw(ArgumentError("set must be non-empty"))
-    pop!(s.dict)[1]
+    return pop!(s.dict)[1]
 end
 
 delete!(s::Set, x) = (delete!(s.dict, x); s)
@@ -283,6 +283,7 @@ end
 allunique(::Set) = true
 
 allunique(r::AbstractRange{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
+allunique(r::StepRange{T,S}) where {T,S} = (step(r) != zero(S)) || (length(r) <= 1)
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 
@@ -360,27 +361,6 @@ function replace_pairs!(res, A, count::Int, old_new::Tuple{Vararg{Pair}})
     end
     _replace!(new, res, A, count)
 end
-
-"""
-    replace!(pred::Function, A, new; [count::Integer])
-
-Replace all occurrences `x` in collection `A` for which `pred(x)` is true
-by `new`.
-
-# Examples
-```jldoctest
-julia> A = [1, 2, 3, 1];
-
-julia> replace!(isodd, A, 0, count=2)
-4-element Array{Int64,1}:
- 0
- 2
- 0
- 1
-```
-"""
-replace!(pred::Callable, A, new; count::Integer=typemax(Int)) =
-    replace!(x -> ifelse(pred(x), new, x), A, count=check_count(count))
 
 """
     replace!(new::Function, A; [count::Integer])
@@ -471,28 +451,6 @@ function subtract_singletontype(::Type{T}, x::Pair{K}) where {T, K}
 end
 subtract_singletontype(::Type{T}, x::Pair{K}, y::Pair...) where {T, K} =
     subtract_singletontype(subtract_singletontype(T, y...), x)
-
-"""
-    replace(pred::Function, A, new; [count::Integer])
-
-Return a copy of collection `A` where all occurrences `x` for which
-`pred(x)` is true are replaced by `new`.
-If `count` is specified, then replace at most `count` occurrences in total.
-
-# Examples
-```jldoctest
-julia> replace(isodd, [1, 2, 3, 1], 0, count=2)
-4-element Array{Int64,1}:
- 0
- 2
- 0
- 1
-```
-"""
-function replace(pred::Callable, A, new; count::Integer=typemax(Int))
-    T = promote_type(eltype(A), typeof(new))
-    _replace!(x -> ifelse(pred(x), new, x), _similar_or_copy(A, T), A, check_count(count))
-end
 
 """
     replace(new::Function, A; [count::Integer])

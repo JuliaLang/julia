@@ -54,13 +54,13 @@ that only support specific dimensionalities:
     struct SparseMatrixStyle <: Broadcast.AbstractArrayStyle{2} end
     Base.BroadcastStyle(::Type{<:SparseMatrixCSC}) = SparseMatrixStyle()
 
-For AbstractArray types that support arbitrary dimensionality, `N` can be set to `Any`:
+For `AbstractArray` types that support arbitrary dimensionality, `N` can be set to `Any`:
 
     struct MyArrayStyle <: Broadcast.AbstractArrayStyle{Any} end
     Base.BroadcastStyle(::Type{<:MyArray}) = MyArrayStyle()
 
 In cases where you want to be able to mix multiple `AbstractArrayStyle`s and keep track
-of dimensionality, your style needs to support a `Val` constructor:
+of dimensionality, your style needs to support a [`Val`](@ref) constructor:
 
     struct MyArrayStyleDim{N} <: Broadcast.AbstractArrayStyle{N} end
     (::Type{<:MyArrayStyleDim})(::Val{N}) where N = MyArrayStyleDim{N}()
@@ -87,7 +87,7 @@ ArrayStyle{A}(::Val) where A = ArrayStyle{A}()
 `Broadcast.DefaultArrayStyle{N}()` is a [`BroadcastStyle`](@ref) indicating that an object
 behaves as an `N`-dimensional array for broadcasting. Specifically, `DefaultArrayStyle` is
 used for any
-AbstractArray type that hasn't defined a specialized style, and in the absence of
+`AbstractArray` type that hasn't defined a specialized style, and in the absence of
 overrides from other `broadcast` arguments the resulting output type is `Array`.
 When there are multiple inputs to `broadcast`, `DefaultArrayStyle` "loses" to any other [`Broadcast.ArrayStyle`](@ref).
 """
@@ -97,7 +97,6 @@ DefaultArrayStyle{M}(::Val{N}) where {N,M} = DefaultArrayStyle{N}()
 const DefaultVectorStyle = DefaultArrayStyle{1}
 const DefaultMatrixStyle = DefaultArrayStyle{2}
 BroadcastStyle(::Type{<:AbstractArray{T,N}}) where {T,N} = DefaultArrayStyle{N}()
-BroadcastStyle(::Type{<:Ref}) = DefaultArrayStyle{0}()
 BroadcastStyle(::Type{T}) where {T} = DefaultArrayStyle{ndims(T)}()
 
 # `ArrayConflict` is an internal type signaling that two or more different `AbstractArrayStyle`
@@ -114,7 +113,7 @@ ArrayConflict(::Val) = ArrayConflict()
 
 Indicate how to resolve different `BroadcastStyle`s. For example,
 
-    Broadcast.rule(::Primary, ::Secondary) = Primary()
+    BroadcastStyle(::Primary, ::Secondary) = Primary()
 
 would indicate that style `Primary` has precedence over `Secondary`.
 You do not have to (and generally should not) define both argument orders.
@@ -204,14 +203,13 @@ Base.similar(bc::Broadcasted{ArrayConflict}, ::Type{Bool}) =
 ## Computing the result's axes. Most types probably won't need to specialize this.
 broadcast_axes() = ()
 broadcast_axes(A::Tuple) = (OneTo(length(A)),)
-broadcast_axes(A::Ref) = ()
 @inline broadcast_axes(A) = axes(A)
 """
     Base.broadcast_axes(A)
 
 Compute the axes for `A`.
 
-This should only be specialized for objects that do not define axes but want to participate in broadcasting.
+This should only be specialized for objects that do not define [`axes`](@ref) but want to participate in broadcasting.
 """
 broadcast_axes
 
@@ -228,12 +226,6 @@ BroadcastStyle(::Type{<:Broadcasted{S}}) where {S<:Union{Nothing,Unknown}} =
 argtype(::Type{Broadcasted{Style,Axes,F,Args}}) where {Style,Axes,F,Args} = Args
 argtype(bc::Broadcasted) = argtype(typeof(bc))
 
-const NestedTuple = Tuple{<:Broadcasted,Vararg{Any}}
-not_nested(bc::Broadcasted) = _not_nested(bc.args)
-_not_nested(t::Tuple)       = _not_nested(tail(t))
-_not_nested(::NestedTuple)  = false
-_not_nested(::Tuple{})      = true
-
 @inline Base.eachindex(bc::Broadcasted) = _eachindex(axes(bc))
 _eachindex(t::Tuple{Any}) = t[1]
 _eachindex(t::Tuple) = CartesianIndices(t)
@@ -242,8 +234,6 @@ Base.ndims(::Broadcasted{<:Any,<:NTuple{N,Any}}) where {N} = N
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
 
 Base.length(bc::Broadcasted) = prod(map(length, axes(bc)))
-Base.size(bc::Broadcasted) = _size(axes(bc))
-_size(::Tuple{Vararg{Base.OneTo}}) = map(length, axes(bc))
 
 function Base.iterate(bc::Broadcasted)
     iter = eachindex(bc)
@@ -267,9 +257,9 @@ instantiate(x) = x
 
 Construct and check the axes for the lazy Broadcasted object `bc`.
 
-Custom `BroadcastStyle`s may override this default in cases where it is fast and easy
+Custom [`BroadcastStyle`](@ref)s may override this default in cases where it is fast and easy
 to compute and verify the resulting `axes` on-demand, leaving the `axis` field
-of the `Broadcasted` object empty (populated with `nothing`).
+of the `Broadcasted` object empty (populated with [`nothing`](@ref)).
 """
 @inline function instantiate(bc::Broadcasted{Style}) where {Style}
     if bc.axes isa Nothing # Not done via dispatch to make it easier to extend instantiate(::Broadcasted{Style})
@@ -303,9 +293,9 @@ This is an optional operation that may make custom implementation of broadcastin
 some cases.
 """
 function flatten(bc::Broadcasted{Style}) where {Style}
-    isflat(bc.args) && return bc
+    isflat(bc) && return bc
     # concatenate the nested arguments into {a, b, c, d}
-    args = cat_nested(x->x.args, bc)
+    args = cat_nested(bc)
     # build a function `makeargs` that takes a "flat" argument list and
     # and creates the appropriate input arguments for `f`, e.g.,
     #          makeargs = (w, x, y, z) -> (w, g(x, y), z)
@@ -322,18 +312,15 @@ function flatten(bc::Broadcasted{Style}) where {Style}
     end
 end
 
-isflat(args::NestedTuple) = false
-isflat(args::Tuple) = isflat(tail(args))
-isflat(args::Tuple{}) = true
+const NestedTuple = Tuple{<:Broadcasted,Vararg{Any}}
+isflat(bc::Broadcasted) = _isflat(bc.args)
+_isflat(args::NestedTuple) = false
+_isflat(args::Tuple) = _isflat(tail(args))
+_isflat(args::Tuple{}) = true
 
-cat_nested(fieldextractor, bc::Broadcasted) = cat_nested(fieldextractor, fieldextractor(bc), ())
-
-cat_nested(fieldextractor, t::Tuple, rest) =
-    (t[1], cat_nested(fieldextractor, tail(t), rest)...)
-cat_nested(fieldextractor, t::Tuple{<:Broadcasted,Vararg{Any}}, rest) =
-    cat_nested(fieldextractor, cat_nested(fieldextractor, fieldextractor(t[1]), tail(t)), rest)
-cat_nested(fieldextractor, t::Tuple{}, tail) = cat_nested(fieldextractor, tail, ())
-cat_nested(fieldextractor, t::Tuple{}, tail::Tuple{}) = ()
+cat_nested(t::Broadcasted, rest...) = (cat_nested(t.args...)..., cat_nested(rest...)...)
+cat_nested(t::Any, rest...) = (t, cat_nested(rest...)...)
+cat_nested() = ()
 
 make_makeargs(bc::Broadcasted) = make_makeargs(()->(), bc.args)
 @inline function make_makeargs(makeargs, t::Tuple)
@@ -479,7 +466,7 @@ end
 
 Recompute index `I` such that it appropriately constrains broadcasted dimensions to the source.
 
-Two methods are supported, both allowing for `I` to be specified as either a `CartesianIndex` or
+Two methods are supported, both allowing for `I` to be specified as either a [`CartesianIndex`](@ref) or
 an `Int`.
 
 * `newindex(argument, I)` dynamically constrains `I` based upon the axes of `argument`.
@@ -490,7 +477,7 @@ an `Int`.
     tuples may be created by `newindexer(argument)`.
 """
 Base.@propagate_inbounds newindex(arg, I::CartesianIndex) = CartesianIndex(_newindex(broadcast_axes(arg), I.I))
-Base.@propagate_inbounds newindex(arg, I::Int) = CartesianIndex(_newindex(broadcast_axes(arg), (I,)))
+Base.@propagate_inbounds newindex(arg, I::Integer) = CartesianIndex(_newindex(broadcast_axes(arg), (I,)))
 Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple) = (ifelse(Base.unsafe_length(ax[1])==1, ax[1][1], I[1]), _newindex(tail(ax), tail(I))...)
 Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple) = ()
 Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple{}) = (ax[1][1], _newindex(tail(ax), ())...)
@@ -498,8 +485,8 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 
 # If dot-broadcasting were already defined, this would be `ifelse.(keep, I, Idefault)`.
 @inline newindex(I::CartesianIndex, keep, Idefault) = CartesianIndex(_newindex(I.I, keep, Idefault))
-@inline newindex(i::Int, keep::Tuple{Bool}, idefault) = ifelse(keep[1], i, idefault[1])
-@inline newindex(i::Int, keep::Tuple{}, idefault) = CartesianIndex(())
+@inline newindex(i::Integer, keep::Tuple{Bool}, idefault) = ifelse(keep[1], i, idefault[1])
+@inline newindex(i::Integer, keep::Tuple{}, idefault) = CartesianIndex(())
 @inline _newindex(I, keep, Idefault) =
     (ifelse(keep[1], I[1], Idefault[1]), _newindex(tail(I), tail(keep), tail(Idefault))...)
 @inline _newindex(I, keep::Tuple{}, Idefault) = ()  # truncate if keep is shorter than I
@@ -512,24 +499,24 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 @inline function _newindexer(indsA::Tuple)
     ind1 = indsA[1]
     keep, Idefault = _newindexer(tail(indsA))
-    (length(ind1)!=1, keep...), (first(ind1), Idefault...)
+    (Base.length(ind1)!=1, keep...), (first(ind1), Idefault...)
 end
 
-@inline function Base.getindex(bc::Broadcasted, I::Union{Int,CartesianIndex})
+@inline function Base.getindex(bc::Broadcasted, I::Union{Integer,CartesianIndex})
     @boundscheck checkbounds(bc, I)
     @inbounds _broadcast_getindex(bc, I)
 end
-Base.@propagate_inbounds Base.getindex(bc::Broadcasted, i1::Int, i2::Int, I::Int...) = bc[CartesianIndex((i1, i2, I...))]
+Base.@propagate_inbounds Base.getindex(bc::Broadcasted, i1::Integer, i2::Integer, I::Integer...) = bc[CartesianIndex((i1, i2, I...))]
 Base.@propagate_inbounds Base.getindex(bc::Broadcasted) = bc[CartesianIndex(())]
 
-@inline Base.checkbounds(bc::Broadcasted, I::Union{Int,CartesianIndex}) =
+@inline Base.checkbounds(bc::Broadcasted, I::Union{Integer,CartesianIndex}) =
     Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, (I,))
 
 
 """
     _broadcast_getindex(A, I)
 
-Index into `A` with `I`, collapsing broadcasted indices to their singleton indices as appropriate
+Index into `A` with `I`, collapsing broadcasted indices to their singleton indices as appropriate.
 """
 Base.@propagate_inbounds _broadcast_getindex(A::Union{Ref,AbstractArray{<:Any,0},Number}, I) = A[] # Scalar-likes can just ignore all indices
 Base.@propagate_inbounds _broadcast_getindex(::Ref{Type{T}}, I) where {T} = T
@@ -589,7 +576,7 @@ Base.@propagate_inbounds _getindex(args::Tuple{}, I) = ()
 """
     Broadcast.broadcastable(x)
 
-Return either `x` or an object like `x` such that it supports `axes`, indexing, and its type supports `ndims`.
+Return either `x` or an object like `x` such that it supports [`axes`](@ref), indexing, and its type supports [`ndims`](@ref).
 
 If `x` supports iteration, the returned value should have the same `axes` and indexing
 behaviors as [`collect(x)`](@ref).
@@ -615,12 +602,12 @@ Base.RefValue{String}("hello")
 ```
 """
 broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val}) = Ref(x)
-broadcastable(x::Ptr) = Ref{Ptr}(x) # Cannot use Ref(::Ptr) until ambiguous deprecation goes through
+broadcastable(x::Ptr) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,Ref,Tuple,Broadcasted}) = x
-# In the future, default to collecting arguments. TODO: uncomment once deprecations are removed
-# broadcastable(x) = collect(x)
-# broadcastable(::Union{AbstractDict, NamedTuple}) = error("intentionally unimplemented to allow development in 1.x")
+# Default to collecting iterables — which will error for non-iterables
+broadcastable(x) = collect(x)
+broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
 
 ## Computation of inferred result type, for empty and concretely inferred cases only
 _broadcast_getindex_eltype(bc::Broadcasted) = Base._return_type(bc.f, eltypes(bc.args))
@@ -639,13 +626,13 @@ combine_eltypes(f, args::Tuple) = Base._return_type(f, eltypes(args))
 """
     broadcast(f, As...)
 
-Broadcast the function `f` over the arrays, tuples, collections, `Ref`s and/or scalars `As`.
+Broadcast the function `f` over the arrays, tuples, collections, [`Ref`](@ref)s and/or scalars `As`.
 
 Broadcasting applies the function `f` over the elements of the container arguments and the
 scalars themselves in `As`. Singleton and missing dimensions are expanded to match the
 extents of the other arguments by virtually repeating the value. By default, only a limited
 number of types are considered scalars, including `Number`s, `String`s, `Symbol`s, `Type`s,
-`Function`s and some common singletons like `missing` and `nothing`. All other arguments are
+`Function`s and some common singletons like [`missing`](@ref) and [`nothing`](@ref). All other arguments are
 iterated over or indexed into elementwise.
 
 The resulting container type is established by the following rules:
@@ -780,22 +767,17 @@ end
 # This permits specialization on typeof(dest) without introducing ambiguities
 @inline copyto!(dest::AbstractArray, bc::Broadcasted) = copyto!(dest, convert(Broadcasted{Nothing}, bc))
 
-# Performance optimization for the Scalar case
+# Performance optimization for the common identity scalar case: dest .= val
 @inline function copyto!(dest::AbstractArray, bc::Broadcasted{<:AbstractArrayStyle{0}})
-    if not_nested(bc)
-        if bc.f === identity && bc.args isa Tuple{Any} # only a single input argument to broadcast!
-            # broadcast!(identity, dest, val) is equivalent to fill!(dest, val)
-            return fill!(dest, bc.args[1][])
-        else
-            args = bc.args
-            @inbounds for I in eachindex(dest)
-                dest[I] = bc.f(map(getindex, args)...)
-            end
-            return dest
-        end
+    # Typically, we must independently execute bc for every storage location in `dest`, but:
+    # IF we're in the common no-op identity case with no nested args (like `dest .= val`),
+    if bc.f === identity && bc.args isa Tuple{Any} && isflat(bc)
+        # THEN we can just extract the argument and `fill!` the destination with it
+        return fill!(dest, bc.args[1][])
+    else
+        # Otherwise, fall back to the default implementation like above
+        return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     end
-    # Fall back to the default implementation
-    return copyto!(dest, instantiate(bc))
 end
 
 # For broadcasted assignments like `broadcast!(f, A, ..., A, ...)`, where `A`
@@ -868,7 +850,7 @@ end
 # We could eventually allow for all broadcasting and other array types, but that
 # requires very careful consideration of all the edge effects.
 const ChunkableOp = Union{typeof(&), typeof(|), typeof(xor), typeof(~), typeof(identity),
-    typeof(!), typeof(*), typeof(==)} # these are convertable to chunkable ops by liftfuncs
+    typeof(!), typeof(*), typeof(==)} # these are convertible to chunkable ops by liftfuncs
 const BroadcastedChunkableOp{Style<:Union{Nothing,BroadcastStyle}, Axes, F<:ChunkableOp, Args<:Tuple} = Broadcasted{Style,Axes,F,Args}
 ischunkedbroadcast(R, bc::BroadcastedChunkableOp) = ischunkedbroadcast(R, bc.args)
 ischunkedbroadcast(R, args) = false
@@ -960,6 +942,10 @@ _longest_tuple(A::NTuple{N,Any}, B::NTuple{N,Any}) where N = A
 
 ## scalar-range broadcast operations ##
 # DefaultArrayStyle and \ are not available at the time of range.jl
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::OrdinalRange) = r
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::StepRangeLen) = r
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::LinRange) = r
+
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::OrdinalRange) = range(-first(r), step=-step(r), length=length(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::StepRangeLen) = StepRangeLen(-r.ref, -r.step, length(r), r.offset)
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::LinRange) = LinRange(-r.start, -r.stop, length(r))
@@ -1093,9 +1079,10 @@ function __dot__(x::Expr)
         Expr(x.head, x.args[1], dotargs[2])
     else
         if x.head == :&& || x.head == :||
-            Base.depwarn("""
-                using $(x.head) expressions in @. is deprecated; in the future it will
-                become elementwise. Break the expression into smaller parts instead.""", nothing)
+            error("""
+                Using `&&` and `||` is disallowed in `@.` expressions.
+                Use `&` or `|` for elementwise logical operations.
+                """)
         end
         head = string(x.head)
         if last(head) == '=' && first(head) != '.'

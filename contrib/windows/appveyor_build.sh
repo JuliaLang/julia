@@ -204,7 +204,10 @@ if [ -n "$USEMSVC" ]; then
 else
   # Use BinaryBuilder
   echo 'USE_BINARYBUILDER_LLVM = 1' >> Make.user
+  echo 'BINARYBUILDER_LLVM_ASSERTS = 1' >> Make.user
   echo 'override DEP_LIBS += llvm openlibm' >> Make.user
+  export CCACHE_DIR=/cygdrive/c/ccache
+  echo 'USECCACHE=1' >> Make.user
   make check-whitespace
   make VERBOSE=1 -C base version_git.jl.phony
   echo 'NO_GIT = 1' >> Make.user
@@ -212,8 +215,9 @@ fi
 echo 'FORCE_ASSERTIONS = 1' >> Make.user
 
 cat Make.user
-make -j3 VERBOSE=1 all
+make -j3 VERBOSE=1 release
 make -j3 VERBOSE=1 install
 make VERBOSE=1 JULIA=../../usr/bin/julia.exe BIN=. "$(make print-CC)" -C test/embedding release
 cp usr/bin/busybox.exe julia-*/bin
 make build-stats
+ccache -s

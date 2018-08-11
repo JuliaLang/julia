@@ -9,7 +9,8 @@
 references to objects, and thus may be garbage collected even when
 referenced in a hash table.
 
-See [`Dict`](@ref) for further help.
+See [`Dict`](@ref) for further help.  Note, unlike [`Dict`](@ref),
+`WeakKeyDict` does not convert keys on insertion.
 """
 mutable struct WeakKeyDict{K,V} <: AbstractDict{K,V}
     ht::Dict{WeakRef,V}
@@ -75,10 +76,10 @@ lock(f, wkh::WeakKeyDict) = lock(f, wkh.lock)
 trylock(f, wkh::WeakKeyDict) = trylock(f, wkh.lock)
 
 function setindex!(wkh::WeakKeyDict{K}, v, key) where K
-    k = convert(K, key)
-    finalizer(wkh.finalizer, k)
+    !isa(key, K) && throw(ArgumentError("$key is not a valid key for type $K"))
+    finalizer(wkh.finalizer, key)
     lock(wkh) do
-        wkh.ht[WeakRef(k)] = v
+        wkh.ht[WeakRef(key)] = v
     end
     return wkh
 end
@@ -93,8 +94,14 @@ end
 
 get(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get(wkh.ht, key, default), wkh)
 get(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get(default, wkh.ht, key), wkh)
-get!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get!(wkh.ht, key, default), wkh)
-get!(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get!(default, wkh.ht, key), wkh)
+function get!(wkh::WeakKeyDict{K}, key, default) where {K}
+    !isa(key, K) && throw(ArgumentError("$key is not a valid key for type $K"))
+    lock(() -> get!(wkh.ht, WeakRef(key), default), wkh)
+end
+function get!(default::Callable, wkh::WeakKeyDict{K}, key) where {K}
+    !isa(key, K) && throw(ArgumentError("$key is not a valid key for type $K"))
+    lock(() -> get!(default, wkh.ht, WeakRef(key)), wkh)
+end
 pop!(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> pop!(wkh.ht, key), wkh)
 pop!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> pop!(wkh.ht, key, default), wkh)
 delete!(wkh::WeakKeyDict, key) = lock(() -> delete!(wkh.ht, key), wkh)

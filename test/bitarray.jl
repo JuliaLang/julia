@@ -217,10 +217,9 @@ timesofar("constructors")
             @check_bit_operation setindex!(b1, true)  T
             @check_bit_operation setindex!(b1, false) T
         else
-            # TODO: Re-enable after PLI deprecation is removed
-            # @test_throws getindex(b1)
-            # @test_throws setindex!(b1, true)
-            # @test_throws setindex!(b1, false)
+            @test_throws BoundsError getindex(b1)
+            @test_throws BoundsError setindex!(b1, true)
+            @test_throws BoundsError setindex!(b1, false)
         end
     end
 
@@ -1405,14 +1404,14 @@ timesofar("permutedims")
     b1 = bitrand(s1, s2, s3, s4)
     b2 = bitrand(s1, s3, s3, s4)
     b3 = bitrand(s1, s2, s3, s1)
-    @check_bit_operation cat(2, b1, b2) BitArray{4}
-    @check_bit_operation cat(4, b1, b3) BitArray{4}
-    @check_bit_operation cat(6, b1, b1) BitArray{6}
+    @check_bit_operation cat(b1, b2, dims=2) BitArray{4}
+    @check_bit_operation cat(b1, b3, dims=4) BitArray{4}
+    @check_bit_operation cat(b1, b1, dims=6) BitArray{6}
 
     b1 = bitrand(1, v1, 1)
-    @check_bit_operation cat(2, 0, b1, 1, 1, b1) Array{Int,3}
-    @check_bit_operation cat(2, 3, b1, 4, 5, b1) Array{Int,3}
-    @check_bit_operation cat(2, false, b1, true, true, b1) BitArray{3}
+    @check_bit_operation cat(0, b1, 1, 1, b1, dims=2) Array{Int,3}
+    @check_bit_operation cat(3, b1, 4, 5, b1, dims=2) Array{Int,3}
+    @check_bit_operation cat(false, b1, true, true, b1, dims=2) BitArray{3}
 
     b1 = bitrand(n1, n2)
     for m1 = 1:(n1-1), m2 = 1:(n2-1)
@@ -1467,8 +1466,10 @@ timesofar("cat")
     @check_bit_operation diff(b1, dims=2) Matrix{Int}
 
     b1 = bitrand(n1, n1)
-    @check_bit_operation svd(b1)
-    @check_bit_operation qr(b1)
+    @test ((svdb1, svdb1A) = (svd(b1), svd(Array(b1)));
+            svdb1.U == svdb1A.U && svdb1.S == svdb1A.S && svdb1.V == svdb1A.V)
+    @test ((qrb1, qrb1A) = (qr(b1), qr(Array(b1)));
+            qrb1.Q == qrb1A.Q && qrb1.R == qrb1A.R)
 
     b1 = bitrand(v1)
     @check_bit_operation diagm(0 => b1) BitMatrix
@@ -1572,4 +1573,14 @@ end
             end
         end
     end
+end
+
+@testset "SIMD violations (issue #27482)" begin
+    @test all(any!(falses(10), trues(10, 10)))
+    @check_bit_operation any!(falses(10), trues(10, 10))
+    @check_bit_operation any!(falses(100), trues(100, 100))
+    @check_bit_operation any!(falses(1000), trues(1000, 100))
+    @check_bit_operation all!(falses(10), trues(10, 10))
+    @check_bit_operation all!(falses(100), trues(100, 100))
+    @check_bit_operation all!(falses(1000), trues(1000, 100))
 end

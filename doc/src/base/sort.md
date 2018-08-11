@@ -111,8 +111,7 @@ Base.sort!
 Base.sort
 Base.sortperm
 Base.Sort.sortperm!
-Base.Sort.sortrows
-Base.Sort.sortcols
+Base.Sort.sortslices
 ```
 
 ## Order-Related Functions

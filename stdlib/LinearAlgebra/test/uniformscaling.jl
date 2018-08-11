@@ -4,7 +4,7 @@ module TestUniformscaling
 
 using Test, LinearAlgebra, Random, SparseArrays
 
-srand(123)
+Random.seed!(123)
 
 @testset "basic functions" begin
     @test I[1,1] == 1 # getindex
@@ -20,7 +20,7 @@ srand(123)
     @test -one(UniformScaling(2)) == UniformScaling(-1)
     @test sparse(3I,4,5) == sparse(1:4, 1:4, 3, 4, 5)
     @test sparse(3I,5,4) == sparse(1:4, 1:4, 3, 5, 4)
-    @test norm(UniformScaling(1+im)) ≈ sqrt(2)
+    @test opnorm(UniformScaling(1+im)) ≈ sqrt(2)
 end
 
 @testset "conjugation of UniformScaling" begin
@@ -192,14 +192,6 @@ end
     end
 end
 
-@testset "chol" begin
-    for T in (Float64, ComplexF32, BigFloat, Int)
-        λ = T(4)
-        @test chol(λ*I) ≈ √λ*I
-        @test_throws LinearAlgebra.PosDefException chol(-λ*I)
-    end
-end
-
 @testset "Matrix/Array construction from UniformScaling" begin
     I2_33 = [2 0 0; 0 2 0; 0 0 2]
     I2_34 = [2 0 0 0; 0 2 0 0; 0 0 2 0]
@@ -257,6 +249,17 @@ end
     @test eltype(fill(Float16(1), 2, 2)I) == Float16
     @test eltype(fill(Int8(1), 2, 2) + I) == Int8
     @test eltype(fill(Float16(1), 2, 2) + I) == Float16
+end
+
+@testset "test that UniformScaling is applied correctly for matrices of matrices" begin
+    LL = Bidiagonal(fill(0*I, 3), fill(1*I, 2), :L)
+    @test (I - LL')\[[0], [0], [1]] == (I - LL)'\[[0], [0], [1]] == fill([1], 3)
+end
+
+# Ensure broadcasting of I is an error (could be made to work in the future)
+@testset "broadcasting of I (#23197)" begin
+    @test_throws MethodError I .+ 1
+    @test_throws MethodError I .+ [1 1; 1 1]
 end
 
 end # module TestUniformscaling

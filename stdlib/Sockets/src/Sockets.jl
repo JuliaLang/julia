@@ -27,7 +27,7 @@ export
 import Base: isless, show, print, parse, bind, convert, isreadable, iswritable, alloc_buf_hook, _uv_hook_close
 
 using Base: LibuvStream, LibuvServer, PipeEndpoint, @handle_as, uv_error, associate_julia_struct, uvfinalize,
-    notify_error, stream_wait, uv_req_data, uv_req_set_data, preserve_handle, unpreserve_handle, UVError,
+    notify_error, stream_wait, uv_req_data, uv_req_set_data, preserve_handle, unpreserve_handle, _UVError, IOError,
     eventloop, StatusUninit, StatusInit, StatusConnecting, StatusOpen, StatusClosing, StatusClosed, StatusActive,
     uv_status_string, check_open, wait_connected,
     UV_EINVAL, UV_ENOMEM, UV_ENOBUFS, UV_EAGAIN, UV_ECONNABORTED, UV_EADDRINUSE, UV_EACCES, UV_EADDRNOTAVAIL,
@@ -229,7 +229,7 @@ function bind(sock::Union{TCPServer, UDPSocket}, host::IPAddr, port::Integer; ip
     if err < 0
         if err != UV_EADDRINUSE && err != UV_EACCES && err != UV_EADDRNOTAVAIL
             #TODO: this codepath is not currently tested
-            throw(UVError("bind", err))
+            throw(_UVError("bind", err))
         else
             return false
         end
@@ -306,7 +306,7 @@ function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::P
     sock = @handle_as handle UDPSocket
     if nread < 0
         Libc.free(buf_addr)
-        notify_error(sock.recvnotify, UVError("recv", nread))
+        notify_error(sock.recvnotify, _UVError("recv", nread))
     elseif flags & UV_UDP_PARTIAL > 0
         Libc.free(buf_addr)
         notify_error(sock.recvnotify, "Partial message received")
@@ -359,7 +359,7 @@ end
 function uv_sendcb(handle::Ptr{Cvoid}, status::Cint)
     sock = @handle_as handle UDPSocket
     if status < 0
-        notify_error(sock.sendnotify, UVError("UDP send failed", status))
+        notify_error(sock.sendnotify, _UVError("UDP send failed", status))
     end
     notify(sock.sendnotify)
     Libc.free(handle)
@@ -378,7 +378,7 @@ function uv_connectcb(conn::Ptr{Cvoid}, status::Cint)
         notify(sock.connectnotify)
     else
         ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), hand)
-        err = UVError("connect", status)
+        err = _UVError("connect", status)
         notify_error(sock.connectnotify, err)
     end
     Libc.free(conn)
@@ -497,8 +497,7 @@ function uv_connectioncb(stream::Ptr{Cvoid}, status::Cint)
     if status >= 0
         notify(sock.connectnotify)
     else
-        err = UVError("connection", status)
-        notify_error(sock.connectnotify, err)
+        notify_error(sock.connectnotify, _UVError("connection", status))
     end
     nothing
 end
@@ -651,19 +650,6 @@ function __init__()
     global uv_jl_sendcb        = @cfunction(uv_sendcb, Cvoid, (Ptr{Cvoid}, Cint))
     global uv_jl_connectioncb  = @cfunction(uv_connectioncb, Cvoid, (Ptr{Cvoid}, Cint))
     global uv_jl_connectcb     = @cfunction(uv_connectcb, Cvoid, (Ptr{Cvoid}, Cint))
-end
-
-# deprecations
-
-@deprecate convert(dt::Type{<:Integer}, ip::IPAddr)  dt(ip)
-
-@noinline function getaddrinfo(callback::Function, host::AbstractString)
-    Base.depwarn("`getaddrinfo` with a callback function is deprecated, wrap code in `@async` instead for deferred execution.", :getaddrinfo)
-    @async begin
-        r = getaddrinfo(host)
-        callback(r)
-    end
-    nothing
 end
 
 end

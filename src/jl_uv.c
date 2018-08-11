@@ -136,7 +136,7 @@ static void uv_flush_callback(uv_write_t *req, int status)
     free(req);
 }
 
-// Turn a normal write into a blocking write (primarly for use from C and gdb).
+// Turn a normal write into a blocking write (primarily for use from C and gdb).
 // Warning: This calls uv_run, so it can have unbounded side-effects.
 // Be care where you call it from! - the libuv loop is also not reentrant.
 void jl_uv_flush(uv_stream_t *stream)

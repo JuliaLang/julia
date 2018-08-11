@@ -37,7 +37,7 @@ check_parent_index_match(parent::AbstractArray{T,N}, ::NTuple{N, Bool}) where {T
 check_parent_index_match(parent, ::NTuple{N, Bool}) where {N} =
     throw(ArgumentError("number of indices ($N) must match the parent dimensionality ($(ndims(parent)))"))
 
-# This computes the linear indexing compatability for a given tuple of indices
+# This computes the linear indexing compatibility for a given tuple of indices
 viewindexing() = IndexLinear()
 # Leading scalar indices simply increase the stride
 viewindexing(I::Tuple{ScalarIndex, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
@@ -68,7 +68,7 @@ parentindices(V::SubArray) = V.indices
 
 From an array view `A`, returns the corresponding indices in the parent.
 """
-parentindices(a::AbstractArray) = ntuple(i->OneTo(size(a,i)), ndims(a))
+parentindices(a::AbstractArray) = map(OneTo, size(a))
 
 ## Aliasing detection
 dataids(A::SubArray) = (dataids(A.parent)..., _splatmap(dataids, A.indices)...)
@@ -105,6 +105,7 @@ given indices instead of making a copy.  Calling [`getindex`](@ref) or
 [`setindex!`](@ref) on the returned `SubArray` computes the
 indices to the parent array on the fly without checking bounds.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -285,7 +286,7 @@ end
 # The running sum is `f`; the cumulative stride product is `s`.
 # If the parent is a vector, then we offset the parent's own indices with parameters of I
 compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{AbstractRange}) =
-    (@_inline_meta; first(I[1]) - first(indices1(I[1]))*stride1)
+    (@_inline_meta; first(I[1]) - first(axes1(I[1]))*stride1)
 # If the result is one-dimensional and it's a Colon, then linear
 # indexing uses the indices along the given dimension. Otherwise
 # linear indexing always starts with 1.
@@ -349,7 +350,7 @@ function _indices_sub(S::SubArray, i1::AbstractArray, I...)
     (unsafe_indices(i1)..., _indices_sub(S, I...)...)
 end
 
-## Compatability
+## Compatibility
 # deprecate?
 function parentdims(s::SubArray)
     nd = ndims(s)

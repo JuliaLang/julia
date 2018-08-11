@@ -1,14 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using SuiteSparse: increment!
+using LinearAlgebra: Adjoint, Transpose, SingularException
+
 @testset "UMFPACK wrappers" begin
     se33 = sparse(1.0I, 3, 3)
     do33 = fill(1., 3)
     @test isequal(se33 \ do33, do33)
 
     # based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
-
-    using SuiteSparse: increment!
-    using LinearAlgebra: Adjoint, Transpose
 
     A0 = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
                 increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
@@ -18,7 +18,7 @@
         # We might be able to support two index sizes one day
         for Ti in Base.uniontypes(SuiteSparse.UMFPACK.UMFITypes)
             A = convert(SparseMatrixCSC{Tv,Ti}, A0)
-            lua = lufact(A)
+            lua = lu(A)
             @test nnz(lua) == 18
             @test_throws ErrorException lua.Z
             L,U,p,q,Rs = lua.:(:)
@@ -77,7 +77,7 @@
         for Ti in Base.uniontypes(SuiteSparse.UMFPACK.UMFITypes)
             Ac = convert(SparseMatrixCSC{ComplexF64,Ti}, Ac0)
             x  = fill(1.0 + im, size(Ac,1))
-            lua = lufact(Ac)
+            lua = lu(Ac)
             L,U,p,q,Rs = lua.:(:)
             @test (Diagonal(Rs) * Ac)[p,q] ≈ L * U
             b  = Ac*x
@@ -89,24 +89,26 @@
         end
     end
 
-    @testset "Rectangular cases" for elty in (Float64, ComplexF64)
-        for (m, n) in ((10,5), (5, 10))
-            A = sparse([1:min(m,n); rand(1:m, 10)], [1:min(m,n); rand(1:n, 10)], elty == Float64 ? randn(min(m, n) + 10) : complex.(randn(min(m, n) + 10), randn(min(m, n) + 10)))
-            F = lufact(A)
-            L, U, p, q, Rs = F.:(:)
-            @test (Diagonal(Rs) * A)[p,q] ≈ L * U
-        end
+    @testset "Rectangular cases. elty=$elty, m=$m, n=$n" for
+        elty in (Float64, ComplexF64),
+            (m, n) in ((10,5), (5, 10))
+
+        Random.seed!(30072018)
+        A = sparse([1:min(m,n); rand(1:m, 10)], [1:min(m,n); rand(1:n, 10)], elty == Float64 ? randn(min(m, n) + 10) : complex.(randn(min(m, n) + 10), randn(min(m, n) + 10)))
+        F = lu(A)
+        L, U, p, q, Rs = F.:(:)
+        @test (Diagonal(Rs) * A)[p,q] ≈ L * U
     end
 
     @testset "Issue #4523 - complex sparse \\" begin
         A, b = sparse((1.0 + im)I, 2, 2), fill(1., 2)
-        @test A * (lufact(A)\b) ≈ b
+        @test A * (lu(A)\b) ≈ b
 
         @test det(sparse([1,3,3,1], [1,1,3,3], [1,1,1,1])) == 0
     end
 
     @testset "UMFPACK_ERROR_n_nonpositive" begin
-        @test_throws ArgumentError lufact(sparse(Int[], Int[], Float64[], 5, 0))
+        @test_throws ArgumentError lu(sparse(Int[], Int[], Float64[], 5, 0))
     end
 
     @testset "Issue #15099" for (Tin, Tout) in (
@@ -119,7 +121,7 @@
             (Int, Float64),
         )
 
-        F = lufact(sparse(fill(Tin(1), 1, 1)))
+        F = lu(sparse(fill(Tin(1), 1, 1)))
         L = sparse(fill(Tout(1), 1, 1))
         @test F.p == F.q == [1]
         @test F.Rs == [1.0]
@@ -128,12 +130,12 @@
     end
 
     @testset "BigFloat not supported" for T in (BigFloat, Complex{BigFloat})
-        @test_throws ArgumentError lufact(sparse(fill(T(1), 1, 1)))
+        @test_throws ArgumentError lu(sparse(fill(T(1), 1, 1)))
     end
 
     @testset "size(::UmfpackLU)" begin
         m = n = 1
-        F = lufact(sparse(fill(1., m, n)))
+        F = lu(sparse(fill(1., m, n)))
         @test size(F) == (m, n)
         @test size(F, 1) == m
         @test size(F, 2) == n
@@ -143,15 +145,15 @@
 
     @testset "Test aliasing" begin
         a = rand(5)
-        @test_throws ArgumentError SuiteSparse.UMFPACK.solve!(a, lufact(sparse(1.0I, 5, 5)), a, SuiteSparse.UMFPACK.UMFPACK_A)
+        @test_throws ArgumentError SuiteSparse.UMFPACK.solve!(a, lu(sparse(1.0I, 5, 5)), a, SuiteSparse.UMFPACK.UMFPACK_A)
         aa = complex(a)
-        @test_throws ArgumentError SuiteSparse.UMFPACK.solve!(aa, lufact(sparse((1.0im)I, 5, 5)), aa, SuiteSparse.UMFPACK.UMFPACK_A)
+        @test_throws ArgumentError SuiteSparse.UMFPACK.solve!(aa, lu(sparse((1.0im)I, 5, 5)), aa, SuiteSparse.UMFPACK.UMFPACK_A)
     end
 
-    @testset "Issues #18246,18244 - lufact sparse pivot" begin
+    @testset "Issues #18246,18244 - lu sparse pivot" begin
         A = sparse(1.0I, 4, 4)
         A[1:2,1:2] = [-.01 -200; 200 .001]
-        F = lufact(A)
+        F = lu(A)
         @test F.p == [3 ; 4 ; 2 ; 1]
     end
 
@@ -161,10 +163,17 @@
         A = N*I + sprand(N, N, p)
         X = zeros(Complex{Float64}, N, N)
         B = complex.(rand(N, N), rand(N, N))
-        luA, lufA = lufact(A), lufact(Array(A))
+        luA, lufA = lu(A), lu(Array(A))
         @test LinearAlgebra.ldiv!(copy(X), luA, B) ≈ LinearAlgebra.ldiv!(copy(X), lufA, B)
         @test LinearAlgebra.ldiv!(copy(X), adjoint(luA), B) ≈ LinearAlgebra.ldiv!(copy(X), adjoint(lufA), B)
         @test LinearAlgebra.ldiv!(copy(X), transpose(luA), B) ≈ LinearAlgebra.ldiv!(copy(X), transpose(lufA), B)
+    end
+
+    @testset "singular matrix" begin
+        for A in sparse.((Float64[1 2; 0 0], ComplexF64[1 2; 0 0]))
+            @test_throws SingularException lu(A)
+            @test !issuccess(lu(A; check = false))
+        end
     end
 
 end

@@ -205,7 +205,7 @@ end
             @test eof(io)
             close(io)
         end
-   finally
+    finally
         rm(file, force=true)
     end
 end

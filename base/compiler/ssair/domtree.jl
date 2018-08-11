@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 struct DomTreeNode
     level::Int
     children::Vector{Int}
@@ -79,9 +81,13 @@ function construct_domtree(cfg::CFG)
         doms = collect(dominators[i])
         for dom in doms
             i == dom && continue
-            let i = i, dom = dom
-                any(p -> (p !== i && p !== dom && dom in dominators[p]), doms) && continue
+            hasany = false
+            for p in doms
+                if p !== i && p !== dom && dom in dominators[p]
+                    hasany = true; break
+                end
             end
+            hasany && continue
             idoms[i] = dom
         end
     end

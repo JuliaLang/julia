@@ -234,9 +234,8 @@ typedef struct _jl_llvm_functions_t {
 // This type describes a single function body
 typedef struct _jl_code_info_t {
     jl_array_t *code;  // Any array of statements
-    jl_value_t *codelocs; // Int array of indicies into the line table
+    jl_value_t *codelocs; // Int32 array of indicies into the line table
     jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
-    jl_value_t *slottypes; // types of variable slots (or `nothing`)
     jl_value_t *ssavaluetypes;  // types of ssa values (or count of them)
     jl_value_t *linetable; // Table of locations
     jl_array_t *ssaflags; // flags associated with each statement:
@@ -451,6 +450,7 @@ typedef struct _jl_module_t {
     jl_uuid_t uuid;
     size_t primary_world;
     uint32_t counter;
+    int32_t nospecialize;  // global bit flags: initialization for new methods
     uint8_t istopmod;
 } jl_module_t;
 
@@ -506,7 +506,6 @@ typedef struct {
     JL_DATA_TYPE
     jl_sym_t *head;
     jl_array_t *args;
-    jl_value_t *etype;
 } jl_expr_t;
 
 // constants and type objects -------------------------------------------------
@@ -521,7 +520,6 @@ extern JL_DLLEXPORT jl_datatype_t *jl_tvar_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_any_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_type_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_typetype_type JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_value_t    *jl_ANY_flag JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_typename_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_typename_t *jl_type_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_sym_type JL_GLOBALLY_ROOTED;
@@ -599,10 +597,10 @@ extern JL_DLLEXPORT jl_unionall_t *jl_namedtuple_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_value_t *jl_array_uint8_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_value_t *jl_array_any_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_value_t *jl_array_symbol_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_value_t *jl_array_int32_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_expr_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_globalref_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_linenumbernode_type JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_datatype_t *jl_labelnode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_gotonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_phinode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_pinode_type JL_GLOBALLY_ROOTED;
@@ -779,6 +777,8 @@ JL_DLLEXPORT size_t jl_array_len_(jl_array_t *a);
 #define jl_array_data_owner_offset(ndims) (offsetof(jl_array_t,ncols) + sizeof(size_t)*(1+jl_array_ndimwords(ndims))) // in bytes
 #define jl_array_data_owner(a) (*((jl_value_t**)((char*)a + jl_array_data_owner_offset(jl_array_ndims(a)))))
 
+JL_DLLEXPORT char *jl_array_typetagdata(jl_array_t *a);
+
 STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a, size_t i) JL_NOTSAFEPOINT
 {
     assert(i < jl_array_len(a));
@@ -823,7 +823,6 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPO
 // Not using jl_fieldref to avoid allocations
 #define jl_linenode_line(x) (((intptr_t*)(x))[0])
 #define jl_linenode_file(x) (((jl_value_t**)(x))[1])
-#define jl_labelnode_label(x) (((intptr_t*)(x))[0])
 #define jl_slot_number(x) (((intptr_t*)(x))[0])
 #define jl_typedslot_get_type(x) (((jl_value_t**)(x))[1])
 #define jl_gotonode_label(x) (((intptr_t*)(x))[0])
@@ -948,7 +947,6 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_slot(v)        (jl_typeis(v,jl_slotnumber_type) || jl_typeis(v,jl_typedslot_type))
 #define jl_is_expr(v)        jl_typeis(v,jl_expr_type)
 #define jl_is_globalref(v)   jl_typeis(v,jl_globalref_type)
-#define jl_is_labelnode(v)   jl_typeis(v,jl_labelnode_type)
 #define jl_is_gotonode(v)    jl_typeis(v,jl_gotonode_type)
 #define jl_is_pinode(v)      jl_typeis(v,jl_pinode_type)
 #define jl_is_phinode(v)     jl_typeis(v,jl_phinode_type)
@@ -967,6 +965,7 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_intrinsic(v)   jl_typeis(v,jl_intrinsic_type)
+#define jl_array_isbitsunion(a) (!(((jl_array_t*)(a))->flags.ptrarray) && jl_is_uniontype(jl_tparam0(jl_typeof(a))))
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b);
 
@@ -1071,6 +1070,7 @@ JL_DLLEXPORT int jl_subtype_env_size(jl_value_t *t);
 JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz);
 JL_DLLEXPORT int jl_isa(jl_value_t *a, jl_value_t *t);
 JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_is_not_broken_subtype(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n);
 JL_DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT int jl_has_empty_intersection(jl_value_t *x, jl_value_t *y);
@@ -1159,10 +1159,6 @@ JL_DLLEXPORT jl_value_t *jl_box_float64(double x);
 JL_DLLEXPORT jl_value_t *jl_box_voidpointer(void *x);
 JL_DLLEXPORT jl_value_t *jl_box_ssavalue(size_t x);
 JL_DLLEXPORT jl_value_t *jl_box_slotnumber(size_t x);
-JL_DLLEXPORT jl_value_t *jl_box8 (jl_datatype_t *t, int8_t  x);
-JL_DLLEXPORT jl_value_t *jl_box16(jl_datatype_t *t, int16_t x);
-JL_DLLEXPORT jl_value_t *jl_box32(jl_datatype_t *t, int32_t x);
-JL_DLLEXPORT jl_value_t *jl_box64(jl_datatype_t *t, int64_t x);
 JL_DLLEXPORT int8_t jl_unbox_bool(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int8_t jl_unbox_int8(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_unbox_uint8(jl_value_t *v) JL_NOTSAFEPOINT;
@@ -1319,6 +1315,7 @@ extern JL_DLLEXPORT jl_module_t *jl_core_module JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_base_module JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_top_module JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name);
+JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on);
 // get binding for reading
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var);
@@ -1344,7 +1341,6 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from);
 JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 JL_DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from,
                                    jl_sym_t *s);
-JL_DLLEXPORT void jl_module_importall(jl_module_t *to, jl_module_t *from);
 JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
@@ -1365,7 +1361,7 @@ JL_DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, void *key,
 JL_DLLEXPORT int jl_errno(void);
 JL_DLLEXPORT void jl_set_errno(int e);
 JL_DLLEXPORT int32_t jl_stat(const char *path, char *statbuf);
-JL_DLLEXPORT int jl_cpu_cores(void);
+JL_DLLEXPORT int jl_cpu_threads(void);
 JL_DLLEXPORT long jl_getpagesize(void);
 JL_DLLEXPORT long jl_getallocationgranularity(void);
 JL_DLLEXPORT int jl_is_debugbuild(void);
@@ -1786,6 +1782,7 @@ typedef struct {
     const char *cpu_target;
     int32_t nprocs;
     const char *machine_file;
+    const char *project;
     int8_t isinteractive;
     int8_t color;
     int8_t historyfile;
@@ -1800,6 +1797,7 @@ typedef struct {
     int8_t warn_overwrite;
     int8_t can_inline;
     int8_t polly;
+    const char *trace_compile;
     int8_t fast_math;
     int8_t worker;
     const char *cookie;
@@ -1940,6 +1938,16 @@ typedef struct {
     // parameters: LLVMBasicBlockRef as Ptr{Cvoid}, LLVMValueRef as Ptr{Cvoid}
     // return value: none
     jl_value_t *raise_exception;
+
+    // emit function: start emission of a new function
+    // parameters: MethodInstance, CodeInfo, world age as UInt
+    // return value: none
+    jl_value_t *emit_function;
+
+    // emitted function: end emission of a new function
+    // parameters: MethodInstance, CodeInfo, world age as UInt
+    // return value: none
+    jl_value_t *emitted_function;
 } jl_cgparams_t;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
 

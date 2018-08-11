@@ -1495,7 +1495,7 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
     std::vector<uintptr_t> start_ips(nentries);
     size_t cur_entry = 0;
     // Cache the previously parsed CIE entry so that we can support multiple
-    // CIE's (may not happen) without parsing it everytime.
+    // CIE's (may not happen) without parsing it every time.
     const uint8_t *cur_cie = nullptr;
     DW_EH_PE encoding = DW_EH_PE_omit;
     processFDEs((char*)Addr, Size, [&](const char *Entry) {

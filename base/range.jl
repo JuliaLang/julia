@@ -6,10 +6,9 @@
 
 (:)(start::T, stop::T) where {T} = (:)(start, oftype(stop-start, 1), stop)
 
-# first promote start and stop, leaving step alone
+# promote start and stop, leaving step alone
 (:)(start::A, step, stop::C) where {A<:Real,C<:Real} =
     (:)(convert(promote_type(A,C),start), step, convert(promote_type(A,C),stop))
-(:)(start::T, step::Real, stop::T) where {T<:Real} = (:)(promote(start, step, stop)...)
 
 # AbstractFloat specializations
 (:)(a::T, b::T) where {T<:AbstractFloat} = (:)(a, T(1), b)
@@ -32,8 +31,8 @@ _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
 """
     (:)(start, [step], stop)
 
-Range operator. `a:b` constructs a range from `a` to `b` with a step size of 1, and `a:s:b`
-is similar but uses a step size of `s`.
+Range operator. `a:b` constructs a range from `a` to `b` with a step size of 1 (a [`UnitRange`](@ref))
+, and `a:s:b` is similar but uses a step size of `s` (a [`StepRange`](@ref)).
 
 `:` is also used in indexing to select whole dimensions.
 """
@@ -50,11 +49,14 @@ end
     range(start; length, stop, step=1)
 
 Given a starting value, construct a range either by length or from `start` to `stop`,
-optionally with a given step (defaults to 1). One of `length` or `step` is required.
-If `length`, `stop`, and `step` are all specified, they must agree.
+optionally with a given step (defaults to 1, a [`UnitRange`](@ref)).
+One of `length` or `stop` is required.  If `length`, `stop`, and `step` are all specified, they must agree.
 
 If `length` and `stop` are provided and `step` is not, the step size will be computed
-automatically such that there are `length` linearly spaced elements in the range.
+automatically such that there are `length` linearly spaced elements in the range (a [`LinRange`](@ref)).
+
+If `step` and `stop` are provided and `length` is not, the overall range length will be computed
+automatically such that the elements are `step` spaced (a [`StepRange`](@ref)).
 
 # Examples
 ```jldoctest
@@ -107,6 +109,12 @@ _range(::Nothing, ::Nothing, ::Nothing, ::Integer) = # range(nothing, length=l)
 
 ## 1-dimensional ranges ##
 
+"""
+    AbstractRange{T}
+
+Supertype for ranges with elements of type `T`.
+[`UnitRange`](@ref) and other types are subtypes of this.
+"""
 abstract type AbstractRange{T} <: AbstractArray{T,1} end
 
 RangeStepStyle(::Type{<:AbstractRange}) = RangeStepIrregular()
@@ -116,9 +124,53 @@ convert(::Type{T}, r::AbstractRange) where {T<:AbstractRange} = r isa T ? r : T(
 
 ## ordinal ranges
 
-abstract type OrdinalRange{T,S} <: AbstractRange{T} end
-abstract type AbstractUnitRange{T} <: OrdinalRange{T,Int} end
+"""
+    OrdinalRange{T, S} <: AbstractRange{T}
 
+Supertype for ordinal ranges with elements of type `T` with
+spacing(s) of type `S`. The steps should be always-exact
+multiples of [`oneunit`](@ref), and `T` should be a "discrete"
+type, which cannot have values smaller than `oneunit`. For example,
+`Integer` or `Date` types would qualify, whereas `Float64` would not (since this
+type can represent values smaller than `oneunit(Float64)`.
+[`UnitRange`](@ref), [`StepRange`](@ref), and other types are subtypes of this.
+"""
+abstract type OrdinalRange{T,S} <: AbstractRange{T} end
+
+"""
+    AbstractUnitRange{T} <: OrdinalRange{T, T}
+
+Supertype for ranges with a step size of [`oneunit(T)`](@ref) with elements of type `T`.
+[`UnitRange`](@ref) and other types are subtypes of this.
+"""
+abstract type AbstractUnitRange{T} <: OrdinalRange{T,T} end
+
+"""
+    StepRange{T, S} <: OrdinalRange{T, S}
+
+Ranges with elements of type `T` with spacing of type `S`. The step
+between each element is constant, and the range is defined in terms
+of a `start` and `stop` of type `T` and a `step` of type `S`. Neither
+`T` nor `S` should be floating point types. The syntax `a:b:c` with `b > 1`
+and `a`, `b`, and `c` all integers creates a `StepRange`.
+
+# Examples
+```jldoctest
+julia> collect(StepRange(1, Int8(2), 10))
+5-element Array{Int64,1}:
+ 1
+ 3
+ 5
+ 7
+ 9
+
+julia> typeof(StepRange(1, Int8(2), 10))
+StepRange{Int64,Int8}
+
+julia> typeof(1:3:6)
+StepRange{Int64,Int64}
+```
+"""
 struct StepRange{T,S} <: OrdinalRange{T,S}
     start::T
     step::S
@@ -143,18 +195,19 @@ function steprange_last(start::T, step, stop) where T
         if (step > z) != (stop > start)
             last = steprange_last_empty(start, step, stop)
         else
-            diff = stop - start
-            if T<:Signed && (diff > zero(diff)) != (stop > start)
-                # handle overflowed subtraction with unsigned rem
-                if diff > zero(diff)
-                    remain = -convert(T, unsigned(-diff) % step)
-                else
-                    remain = convert(T, unsigned(diff) % step)
-                end
+            # Compute absolute value of difference between `start` and `stop`
+            # (to simplify handling both signed and unsigned T and checking for signed overflow):
+            absdiff, absstep = stop > start ? (stop - start, step) : (start - stop, -step)
+
+            # Compute remainder as a nonnegative number:
+            if T <: Signed && absdiff < zero(absdiff)
+                # handle signed overflow with unsigned rem
+                remain = convert(T, unsigned(absdiff) % absstep)
             else
-                remain = steprem(start,stop,step)
+                remain = absdiff % absstep
             end
-            last = stop - remain
+            # Move `stop` closer to `start` if there is a remainder:
+            last = stop > start ? stop - remain : stop + remain
         end
     end
     last
@@ -175,10 +228,27 @@ end
 # For types where x+oneunit(x) may not be well-defined
 steprange_last_empty(start, step, stop) = start - step
 
-steprem(start,stop,step) = (stop-start) % step
-
 StepRange(start::T, step::S, stop::T) where {T,S} = StepRange{T,S}(start, step, stop)
 
+"""
+    UnitRange{T<:Real}
+
+A range parameterized by a `start` and `stop` of type `T`, filled
+with elements spaced by `1` from `start` until `stop` is exceeded.
+The syntax `a:b` with `a` and `b` both `Integer`s creates a `UnitRange`.
+
+# Examples
+```jldoctest
+julia> collect(UnitRange(2.3, 5.2))
+3-element Array{Float64,1}:
+ 2.3
+ 3.3
+ 4.3
+
+julia> typeof(1:10)
+UnitRange{Int64}
+```
+"""
 struct UnitRange{T<:Real} <: AbstractUnitRange{T}
     start::T
     stop::T
@@ -194,8 +264,17 @@ unitrange_last(start::T, stop::T) where {T} =
                           convert(T,start-oneunit(stop-start)))
 
 if isdefined(Main, :Base)
-    getindex(t::Tuple, r::AbstractUnitRange{<:Real}) =
-        (o = first(r) - 1; ntuple(n -> t[o + n], length(r)))
+    function getindex(t::Tuple, r::AbstractUnitRange{<:Real})
+        n = length(r)
+        n == 0 && return ()
+        a = Vector{eltype(t)}(undef, n)
+        o = first(r) - 1
+        for i = 1:n
+            el = t[o + i]
+            @inbounds a[i] = el
+        end
+        (a...,)
+    end
 end
 
 """
@@ -208,8 +287,16 @@ be 1.
 struct OneTo{T<:Integer} <: AbstractUnitRange{T}
     stop::T
     OneTo{T}(stop) where {T<:Integer} = new(max(zero(T), stop))
+    function OneTo{T}(r::AbstractRange) where {T<:Integer}
+        throwstart(r) = (@_noinline_meta; throw(ArgumentError("first element must be 1, got $(first(r))")))
+        throwstep(r)  = (@_noinline_meta; throw(ArgumentError("step must be 1, got $(step(r))")))
+        first(r) == 1 || throwstart(r)
+        step(r)  == 1 || throwstep(r)
+        return new(max(zero(T), last(r)))
+    end
 end
 OneTo(stop::T) where {T<:Integer} = OneTo{T}(stop)
+OneTo(r::AbstractRange{T}) where {T<:Integer} = OneTo{T}(r)
 
 ## Step ranges parameterized by length
 
@@ -245,6 +332,20 @@ StepRangeLen{T}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S
 
 ## range with computed step
 
+"""
+    LinRange{T}
+
+A range with `len` linearly spaced elements between its `start` and `stop`.
+The size of the spacing is controlled by `len`, which must
+be an `Int`.
+
+# Examples
+```jldoctest
+julia> LinRange(1.5, 5.5, 9)
+9-element LinRange{Float64}:
+ 1.5,2.0,2.5,3.0,3.5,4.0,4.5,5.0,5.5
+```
+"""
 struct LinRange{T} <: AbstractRange{T}
     start::T
     stop::T
@@ -358,7 +459,9 @@ isempty(r::LinRange) = length(r) == 0
 """
     step(r)
 
-Get the step size of an `AbstractRange` object.
+Get the step size of an [`AbstractRange`](@ref) object.
+
+# Examples
 ```jldoctest
 julia> step(1:10)
 1
@@ -374,7 +477,7 @@ julia> step(range(2.5, stop=10.9, length=85))
 ```
 """
 step(r::StepRange) = r.step
-step(r::AbstractUnitRange) = 1
+step(r::AbstractUnitRange{T}) where{T} = oneunit(T) - zero(T)
 step(r::StepRangeLen{T}) where {T} = T(r.step)
 step(r::LinRange) = (last(r)-first(r))/r.lendiv
 
@@ -388,12 +491,17 @@ function unsafe_length(r::StepRange)
     isempty(r) ? zero(n) : n
 end
 length(r::StepRange) = unsafe_length(r)
-unsafe_length(r::AbstractUnitRange) = Integer(last(r) - first(r) + 1)
-unsafe_length(r::OneTo) = r.stop
+unsafe_length(r::AbstractUnitRange) = Integer(last(r) - first(r) + step(r))
+unsafe_length(r::OneTo) = Integer(r.stop - zero(r.stop))
 length(r::AbstractUnitRange) = unsafe_length(r)
 length(r::OneTo) = unsafe_length(r)
 length(r::StepRangeLen) = r.len
 length(r::LinRange) = r.len
+
+# Needed to fold the `firstindex` call in SimdLoop.simd_index
+firstindex(::UnitRange) = 1
+firstindex(::StepRange) = 1
+firstindex(::LinRange) = 1
 
 function length(r::StepRange{T}) where T<:Union{Int,UInt,Int64,UInt64}
     isempty(r) && return zero(T)
@@ -401,8 +509,10 @@ function length(r::StepRange{T}) where T<:Union{Int,UInt,Int64,UInt64}
         return checked_add(convert(T, div(unsigned(r.stop - r.start), r.step)), one(T))
     elseif r.step < -1
         return checked_add(convert(T, div(unsigned(r.start - r.stop), -r.step)), one(T))
+    elseif r.step > 0
+        return checked_add(div(checked_sub(r.stop, r.start), r.step), one(T))
     else
-        checked_add(div(checked_sub(r.stop, r.start), r.step), one(T))
+        return checked_add(div(checked_sub(r.start, r.stop), -r.step), one(T))
     end
 end
 
@@ -444,55 +554,48 @@ maximum(r::AbstractUnitRange) = isempty(r) ? throw(ArgumentError("range must be 
 minimum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : min(first(r), last(r))
 maximum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : max(first(r), last(r))
 
+extrema(r::AbstractRange) = (minimum(r), maximum(r))
+
 # Ranges are immutable
 copy(r::AbstractRange) = r
 
 
 ## iteration
 
-function iterate(r::LinRange, i::Int=1)
+function iterate(r::Union{LinRange,StepRangeLen}, i::Int=1)
     @_inline_meta
     length(r) < i && return nothing
-    unsafe_getindex(r, i), i+1
+    unsafe_getindex(r, i), i + 1
 end
 
-function iterate(r::StepRange{T}, i=oftype(r.start + r.step, r.start)) where {T}
-    if i isa Integer
-        (isempty(r) | (i == oftype(i, r.stop) + r.step)) && return nothing
-    else
-        (isempty(r) | (i < min(r.start, r.stop)) | (i > max(r.start, r.stop))) && return nothing
-    end
-    (convert(T,i), i+r.step)
-end
+iterate(r::OrdinalRange) = isempty(r) ? nothing : (first(r), first(r))
 
-iterate(r::StepRangeLen{T}, i=1) where {T} = i > length(r) ? nothing : (unsafe_getindex(r, i), i+1)
-
-iterate(r::AbstractUnitRange) = isless(last(r), first(r)) ? nothing : (first(r), first(r))
-
-function iterate(r::AbstractUnitRange{T}, i) where {T}
+function iterate(r::OrdinalRange{T}, i) where {T}
+    @_inline_meta
     i == last(r) && return nothing
-    next = convert(T, i + oneunit(T))
+    next = convert(T, i + step(r))
     (next, next)
-end
-
-# some special cases to favor default Int type to avoid overflow
-let smallint = (Int === Int64 ?
-                Union{Int8,UInt8,Int16,UInt16,Int32,UInt32} :
-                Union{Int8,UInt8,Int16,UInt16})
-    global iterate
-    function iterate(r::StepRange{T}, i=convert(Int, r.start)) where {T<:smallint}
-        (isempty(r) | (i == oftype(i, r.stop) + r.step)) && return nothing
-        (i % T, i + r.step)
-    end
 end
 
 ## indexing
 
+_in_unit_range(v::UnitRange, val, i::Integer) = i > 0 && val <= v.stop && val >= v.start
+
 function getindex(v::UnitRange{T}, i::Integer) where T
     @_inline_meta
-    ret = convert(T, first(v) + i - 1)
-    @boundscheck ((i > 0) & (ret <= v.stop) & (ret >= v.start)) || throw_boundserror(v, i)
-    ret
+    val = convert(T, v.start + i - 1)
+    @boundscheck _in_unit_range(v, val, i) || throw_boundserror(v, i)
+    val
+end
+
+const OverflowSafe = Union{Bool,Int8,Int16,Int32,Int64,Int128,
+                           UInt8,UInt16,UInt32,UInt64,UInt128}
+
+function getindex(v::UnitRange{T}, i::Integer) where {T<:OverflowSafe}
+    @_inline_meta
+    val = v.start + i - 1
+    @boundscheck _in_unit_range(v, val, i) || throw_boundserror(v, i)
+    val % T
 end
 
 function getindex(v::OneTo{T}, i::Integer) where T
@@ -844,13 +947,6 @@ function sum(r::AbstractRange{<:Real})
     return l * first(r) + (iseven(l) ? (step(r) * (l-1)) * (l>>1)
                                      : (step(r) * l) * ((l-1)>>1))
 end
-
-function mean(r::AbstractRange{<:Real})
-    isempty(r) && throw(ArgumentError("mean of an empty range is undefined"))
-    (first(r) + last(r)) / 2
-end
-
-median(r::AbstractRange{<:Real}) = mean(r)
 
 function _in_range(x, r::AbstractRange)
     if step(r) == 0

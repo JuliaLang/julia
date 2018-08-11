@@ -24,8 +24,7 @@ try
 
     write(FooBase_file,
           """
-          __precompile__(true)
-
+          false && __precompile__(false)
           module $FooBase_module
               import Base: hash, >
               struct fmpz end
@@ -39,8 +38,6 @@ try
           """)
     write(Foo2_file,
           """
-          __precompile__(true)
-
           module $Foo2_module
               export override
               override(x::Integer) = 2
@@ -49,8 +46,6 @@ try
           """)
     write(Foo_file,
           """
-          __precompile__(true)
-
           module $Foo_module
               import $FooBase_module, $FooBase_module.typeA
               import $Foo2_module: $Foo2_module, override
@@ -133,6 +128,14 @@ try
               Base.convert(::Type{Ref}, ::Value18343{T}) where {T} = 3
 
 
+              # issue #28297
+              mutable struct Result
+                  result::Union{Int,Missing}
+              end
+
+              const x28297 = Result(missing)
+
+
               let some_method = which(Base.include, (String,))
                     # global const some_method // FIXME: support for serializing a direct reference to an external Method not implemented
                   global const some_linfo =
@@ -142,12 +145,17 @@ try
 
               g() = override(1.0)
               Test.@test g() === 2.0 # compile this
+
+              const abigfloat_f() = big"12.34"
+              const abigfloat_x = big"43.21"
+              const abigint_f() = big"123"
+              const abigint_x = big"124"
           end
           """)
     @test_throws ErrorException Core.kwfunc(Base.nothing) # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
 
     # Issue #12623
-    @test __precompile__(true) === nothing
+    @test __precompile__(false) === nothing
 
     # Issue #21307
     Foo2 = Base.require(Main, Foo2_module)
@@ -164,6 +172,14 @@ try
         @test Foo.override(1.0e0) == Float64('a')
         @test Foo.override(1.0f0) == 'b'
         @test Foo.override(UInt(1)) == 2
+
+        # Issue #15722
+        @test Foo.abigfloat_f()::BigFloat == big"12.34"
+        @test (Foo.abigfloat_x::BigFloat + 21) == big"64.21"
+        @test Foo.abigint_f()::BigInt == big"123"
+        @test Foo.abigint_x::BigInt + 1 == big"125"
+
+        @test Foo.x28297.result === missing
     end
 
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
@@ -217,9 +233,15 @@ try
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in
                 [:Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
-                 :Future, :IterativeEigensolvers, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
+                 :Future, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
                  :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
-                 :Unicode, :REPL, :InteractiveUtils, :Pkg, :Pkg3, :LibGit2, :SHA, :UUIDs, :Sockets]))
+                 :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
+                 :Statistics, ]),
+                # Plus precompilation module generated at build time
+                let id = Base.PkgId("__PackagePrecompilationStatementModule")
+                    Dict(id => Base.module_build_id(Base.root_module(id)))
+                end
+           )
         @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -263,24 +285,20 @@ try
     Baz_file = joinpath(dir, "Baz.jl")
     write(Baz_file,
           """
-          __precompile__(false)
+          true && __precompile__(false)
           module Baz
+          baz() = 1
           end
           """)
 
-    @test_warn "ERROR: LoadError: Declaring __precompile__(false) is not allowed in files that are being precompiled.\nStacktrace:\n [1] __precompile__" try
-        Base.compilecache(Base.PkgId("Baz")) # from __precompile__(false)
-        error("__precompile__ disabled test failed")
-    catch exc
-        isa(exc, ErrorException) || rethrow(exc)
-        occursin("__precompile__(false)", exc.msg) && rethrow(exc)
-    end
+    @test Base.compilecache(Base.PkgId("Baz")) == Base.PrecompilableError() # due to __precompile__(false)
+    @eval using Baz
+    @test Base.invokelatest(Baz.baz) == 1
 
     # Issue #12720
     FooBar1_file = joinpath(dir, "FooBar1.jl")
     write(FooBar1_file,
           """
-          __precompile__(true)
           module FooBar1
               using FooBar
           end
@@ -289,7 +307,6 @@ try
     FooBar_file = joinpath(dir, "FooBar.jl")
     write(FooBar_file,
           """
-          __precompile__(true)
           module FooBar
           end
           """)
@@ -330,7 +347,6 @@ try
     FooBar2_file = joinpath(dir, "FooBar2.jl")
     write(FooBar2_file,
           """
-          __precompile__(true)
           module FooBar2
           error("break me")
           end
@@ -347,14 +363,12 @@ try
     FooBarT_file = joinpath(dir, "FooBarT.jl")
     write(FooBarT_file,
           """
-          __precompile__(true)
           module FooBarT
           end
           """)
     FooBarT1_file = joinpath(dir, "FooBarT1.jl")
     write(FooBarT1_file,
           """
-          __precompile__(true)
           module FooBarT1
               using FooBarT
           end
@@ -362,7 +376,6 @@ try
     FooBarT2_file = joinpath(dir, "FooBarT2.jl")
     write(FooBarT2_file,
           """
-          __precompile__(true)
           module FooBarT2
               using FooBarT1
           end
@@ -370,7 +383,6 @@ try
     Base.compilecache(Base.PkgId("FooBarT2"))
     write(FooBarT1_file,
           """
-          __precompile__(true)
           module FooBarT1
           end
           """)
@@ -393,7 +405,6 @@ let dir = mktempdir(),
         write(joinpath(dir, "$Time_module.jl"),
               """
               module $Time_module
-                  __precompile__(true)
                   time = Base.time()
               end
               """)
@@ -436,15 +447,13 @@ let dir = mktempdir()
         write(joinpath(dir, "Iterators.jl"),
               """
               module Iterators
-                   __precompile__(true)
               end
               """)
 
         write(joinpath(dir, "$Test_module.jl"),
               """
               module $Test_module
-                   __precompile__(true)
-                   using Iterators
+                   import Iterators # FIXME: use `using`
               end
               """)
 
@@ -452,25 +461,16 @@ let dir = mktempdir()
             insert!(LOAD_PATH, 1, $(repr(dir)))
             insert!(DEPOT_PATH, 1, $(repr(dir)))
             using $Test_module
+            println(stderr, $Test_module.Iterators)
         """
 
         exename = `$(Base.julia_cmd()) --startup-file=no`
         let fname = tempname()
             try
-                @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
-                @test occursin(Regex("Replacing module `$Test_module`"), read(fname, String))
-            finally
-                rm(fname, force=true)
-            end
-        end
-        # Loading $Test_module from the cache should not bring `Base.Iterators`
-        # into `Main`, since that would lead to a namespace conflict with
-        # the module `Iterators` defined above.
-        let fname = tempname()
-            try
-                @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
-                # e.g `@test_nowarn`
-                @test Test.contains_warn(read(fname, String), r"^(?!.)"s)
+                for i = 1:2
+                    @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
+                    @test read(fname, String) == "Iterators\n"
+                end
             finally
                 rm(fname, force=true)
             end
@@ -496,7 +496,6 @@ let dir = mktempdir()
         write(joinpath(dir, "$(Test1_module).jl"),
               """
               module $(Test1_module)
-                  __precompile__(true)
               end
               """)
 
@@ -504,7 +503,6 @@ let dir = mktempdir()
         write(joinpath(dir, "$(Test2_module).jl"),
               """
               module $(Test2_module)
-                  __precompile__(true)
                   using $(Test1_module)
               end
               """)
@@ -545,7 +543,6 @@ end
 
         write(joinpath(load_path, "$ModuleA.jl"),
             """
-            __precompile__(true)
             module $ModuleA
                 import Distributed: myid
                 export f
@@ -555,7 +552,6 @@ end
 
         write(joinpath(load_path, "$ModuleB.jl"),
             """
-            __precompile__(true)
             module $ModuleB
                 using $ModuleA
                 export g
@@ -605,8 +601,6 @@ try
 
     write(A_file,
           """
-          __precompile__()
-
           module $A_module
 
           export apc, anopc
@@ -621,8 +615,6 @@ try
           """)
     write(B_file,
           """
-          __precompile__()
-
           module $B_module
 
           using $A_module
@@ -657,7 +649,6 @@ let
 
         write(joinpath(load_path, "$ModuleA.jl"),
             """
-            __precompile__(true)
             module $ModuleA
                 __init__() = push!(Base.package_callbacks, sym->nothing)
             end
@@ -681,7 +672,6 @@ let
     try
         write(joinpath(load_path, "A25604.jl"),
             """
-            __precompile__(true)
             module A25604
             using B25604
             using C25604
@@ -689,13 +679,11 @@ let
             """)
         write(joinpath(load_path, "B25604.jl"),
             """
-            __precompile__()
             module B25604
             end
             """)
         write(joinpath(load_path, "C25604.jl"),
             """
-            __precompile__()
             module C25604
             using B25604
             end
@@ -711,5 +699,42 @@ let
         rm(load_cache_path, recursive=true)
     end
 end
+
+let
+    load_path = mktempdir()
+    load_cache_path = mktempdir()
+    try
+        write(joinpath(load_path, "Foo26028.jl"),
+            """
+            module Foo26028
+
+            module Bar26028
+                x = 0
+            end
+
+            function __init__()
+                include(joinpath(@__DIR__, "Baz26028.jl"))
+            end
+
+            end
+            """)
+        write(joinpath(load_path, "Baz26028.jl"),
+            """
+            module Baz26028
+            import Foo26028.Bar26028.x
+            end
+            """)
+
+        pushfirst!(LOAD_PATH, load_path)
+        pushfirst!(DEPOT_PATH, load_cache_path)
+
+        Base.compilecache(Base.PkgId("Foo26028"))
+        @test_nowarn @eval using Foo26028
+    finally
+        rm(load_path, recursive=true)
+        rm(load_cache_path, recursive=true)
+    end
+end
+
 
 end # !withenv

@@ -4,14 +4,14 @@
 # Cholesky Factorization #
 ##########################
 
-# The dispatch structure in the chol!, chol, cholfact, and cholfact! methods is a bit
+# The dispatch structure in the cholesky, and cholesky! methods is a bit
 # complicated and some explanation is therefore provided in the following
 #
 # In the methods below, LAPACK is called when possible, i.e. StridedMatrices with Float32,
 # Float64, Complex{Float32}, and Complex{Float64} element types. For other element or
-# matrix types, the unblocked Julia implementation in _chol! is used. For cholfact
-# and cholfact! pivoting is supported through a Val(Bool) argument. A type argument is
-# necessary for type stability since the output of cholfact and cholfact! is either
+# matrix types, the unblocked Julia implementation in _chol! is used. For cholesky
+# and cholesky! pivoting is supported through a Val(Bool) argument. A type argument is
+# necessary for type stability since the output of cholesky and cholesky! is either
 # Cholesky or PivotedCholesky. The latter is only
 # supported for the four LAPACK element types. For other types, e.g. BigFloats Val(true) will
 # give an error. It is required that the input is Hermitian (including real symmetric) either
@@ -20,8 +20,7 @@
 
 # The internal structure is as follows
 # - _chol! returns the factor and info without checking positive definiteness
-# - chol/chol! returns the factor and checks for positive definiteness
-# - cholfact/cholfact! returns Cholesky without checking positive definiteness
+# - cholesky/cholesky! returns Cholesky without checking positive definiteness
 
 # FixMe? The dispatch below seems overly complicated. One simplification could be to
 # merge the two Cholesky types into one. It would remove the need for Val completely but
@@ -33,6 +32,11 @@ struct Cholesky{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     uplo::Char
     info::BlasInt
+
+    function Cholesky{T,S}(factors, uplo, info) where {T,S<:AbstractMatrix}
+        @assert !has_offset_axes(factors)
+        new(factors, uplo, info)
+    end
 end
 Cholesky(A::AbstractMatrix{T}, uplo::Symbol, info::BlasInt) where {T} =
     Cholesky{T,typeof(A)}(A, char_uplo(uplo), info)
@@ -46,6 +50,11 @@ struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
     rank::BlasInt
     tol::Real
     info::BlasInt
+
+    function CholeskyPivoted{T,S}(factors, uplo, piv, rank, tol, info) where {T,S<:AbstractMatrix}
+        @assert !has_offset_axes(factors)
+        new(factors, uplo, piv, rank, tol, info)
+    end
 end
 function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{BlasInt},
                             rank::BlasInt, tol::Real, info::BlasInt) where T
@@ -53,7 +62,7 @@ function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{B
 end
 
 # make a copy that allow inplace Cholesky factorization
-@inline choltype(A) = promote_type(typeof(chol(one(eltype(A)))), Float32)
+@inline choltype(A) = promote_type(typeof(sqrt(oneunit(eltype(A)))), Float32)
 @inline cholcopy(A) = copy_oftype(A, choltype(A))
 
 # _chol!. Internal methods for calling unpivoted Cholesky
@@ -76,6 +85,7 @@ end
 
 ## Non BLAS/LAPACK element types (generic)
 function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
+    @assert !has_offset_axes(A)
     n = checksquare(A)
     @inbounds begin
         for k = 1:n
@@ -99,6 +109,7 @@ function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
     return UpperTriangular(A), convert(BlasInt, 0)
 end
 function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
+    @assert !has_offset_axes(A)
     n = checksquare(A)
     @inbounds begin
         for k = 1:n
@@ -132,93 +143,22 @@ function _chol!(x::Number, uplo)
     rx == abs(x) ? (rval, convert(BlasInt, 0)) : (rval, convert(BlasInt, 1))
 end
 
-# chol!. Destructive methods for computing Cholesky factor of real symmetric or Hermitian
-# matrix
-function chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix})
-    C, info = _chol!(A.uplo == 'U' ? A.data : LinearAlgebra.copytri!(A.data, 'L', true), UpperTriangular)
-    @assertposdef C info
-end
-function chol!(A::StridedMatrix)
-    checksquare(A)
-    C, info = _chol!(A)
-    @assertposdef C info
-end
-
-
-
-# chol. Non-destructive methods for computing Cholesky factor of a real symmetric or
-# Hermitian matrix. Promotes elements to a type that is stable under square roots.
-function chol(A::RealHermSymComplexHerm)
-    AA = similar(A, choltype(A), size(A))
-    if A.uplo == 'U'
-        copyto!(AA, A.data)
-    else
-        adjoint!(AA, A.data)
-    end
-    chol!(Hermitian(AA, :U))
-end
-
 ## for StridedMatrices, check that matrix is symmetric/Hermitian
-"""
-    chol(A) -> U
 
-Compute the Cholesky factorization of a positive definite matrix `A`
-and return the [`UpperTriangular`](@ref) matrix `U` such that `A = U'U`.
-
-# Examples
-```jldoctest
-julia> A = [1. 2.; 2. 50.]
-2×2 Array{Float64,2}:
- 1.0   2.0
- 2.0  50.0
-
-julia> U = chol(A)
-2×2 UpperTriangular{Float64,Array{Float64,2}}:
- 1.0  2.0
-  ⋅   6.78233
-
-julia> U'U
-2×2 Array{Float64,2}:
- 1.0   2.0
- 2.0  50.0
-```
-"""
-chol(A::AbstractMatrix) = chol!(cholcopy(A))
-
-## Numbers
-"""
-    chol(x::Number) -> y
-
-Compute the square root of a non-negative number `x`.
-
-# Examples
-```jldoctest
-julia> chol(16)
-4.0
-```
-"""
-chol(x::Number, args...) = ((C, info) = _chol!(x, nothing); @assertposdef C info)
-
-
-
-# cholfact!. Destructive methods for computing Cholesky factorization of real symmetric
+# cholesky!. Destructive methods for computing Cholesky factorization of real symmetric
 # or Hermitian matrix
 ## No pivoting (default)
-function cholfact!(A::RealHermSymComplexHerm, ::Val{false}=Val(false))
-    if A.uplo == 'U'
-        CU, info = _chol!(A.data, UpperTriangular)
-        Cholesky(CU.data, 'U', info)
-    else
-        CL, info = _chol!(A.data, LowerTriangular)
-        Cholesky(CL.data, 'L', info)
-    end
+function cholesky!(A::RealHermSymComplexHerm, ::Val{false}=Val(false); check::Bool = true)
+    C, info = _chol!(A.data, A.uplo == 'U' ? UpperTriangular : LowerTriangular)
+    check && checkpositivedefinite(info)
+    return Cholesky(C.data, A.uplo, info)
 end
 
 ### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholfact!(A, Val(false)) -> Cholesky
+    cholesky!(A, Val(false); check = true) -> Cholesky
 
-The same as [`cholfact`](@ref), but saves space by overwriting the input `A`,
+The same as [`cholesky`](@ref), but saves space by overwriting the input `A`,
 instead of creating a copy. An [`InexactError`](@ref) exception is thrown if
 the factorization produces a number not representable by the element type of
 `A`, e.g. for integer types.
@@ -230,59 +170,63 @@ julia> A = [1 2; 2 50]
  1   2
  2  50
 
-julia> cholfact!(A)
+julia> cholesky!(A)
 ERROR: InexactError: Int64(Int64, 6.782329983125268)
 Stacktrace:
 [...]
 ```
 """
-function cholfact!(A::StridedMatrix, ::Val{false}=Val(false))
+function cholesky!(A::StridedMatrix, ::Val{false}=Val(false); check::Bool = true)
     checksquare(A)
     if !ishermitian(A) # return with info = -1 if not Hermitian
+        check && checkpositivedefinite(-1)
         return Cholesky(A, 'U', convert(BlasInt, -1))
     else
-        return cholfact!(Hermitian(A), Val(false))
+        return cholesky!(Hermitian(A), Val(false); check = check)
     end
 end
 
-
 ## With pivoting
 ### BLAS/LAPACK element types
-function cholfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix},
-                   ::Val{true}; tol = 0.0)
+function cholesky!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix},
+                   ::Val{true}; tol = 0.0, check::Bool = true)
     AA, piv, rank, info = LAPACK.pstrf!(A.uplo, A.data, tol)
-    return CholeskyPivoted{eltype(AA),typeof(AA)}(AA, A.uplo, piv, rank, tol, info)
+    C = CholeskyPivoted{eltype(AA),typeof(AA)}(AA, A.uplo, piv, rank, tol, info)
+    check && chkfullrank(C)
+    return C
 end
 
 ### Non BLAS/LAPACK element types (generic). Since generic fallback for pivoted Cholesky
 ### is not implemented yet we throw an error
-cholfact!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; tol = 0.0) =
+cholesky!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; tol = 0.0, check::Bool = true) =
     throw(ArgumentError("generic pivoted Cholesky factorization is not implemented yet"))
 
 ### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholfact!(A, Val(true); tol = 0.0) -> CholeskyPivoted
+    cholesky!(A, Val(true); tol = 0.0, check = true) -> CholeskyPivoted
 
-The same as [`cholfact`](@ref), but saves space by overwriting the input `A`,
+The same as [`cholesky`](@ref), but saves space by overwriting the input `A`,
 instead of creating a copy. An [`InexactError`](@ref) exception is thrown if the
 factorization produces a number not representable by the element type of `A`,
 e.g. for integer types.
 """
-function cholfact!(A::StridedMatrix, ::Val{true}; tol = 0.0)
+function cholesky!(A::StridedMatrix, ::Val{true}; tol = 0.0, check::Bool = true)
     checksquare(A)
-    if !ishermitian(A) # return with info = -1 if not Hermitian
-        return CholeskyPivoted(A, 'U', Vector{BlasInt}(),convert(BlasInt, 1),
-                               tol, convert(BlasInt, -1))
+    if !ishermitian(A)
+        C = CholeskyPivoted(A, 'U', Vector{BlasInt}(),convert(BlasInt, 1),
+                            tol, convert(BlasInt, -1))
+        check && chkfullrank(C)
+        return C
     else
-        return cholfact!(Hermitian(A), Val(true); tol = tol)
+        return cholesky!(Hermitian(A), Val(true); tol = tol, check = check)
     end
 end
 
-# cholfact. Non-destructive methods for computing Cholesky factorization of real symmetric
+# cholesky. Non-destructive methods for computing Cholesky factorization of real symmetric
 # or Hermitian matrix
 ## No pivoting (default)
 """
-    cholfact(A, Val(false)) -> Cholesky
+    cholesky(A, Val(false); check = true) -> Cholesky
 
 Compute the Cholesky factorization of a dense symmetric positive definite matrix `A`
 and return a `Cholesky` factorization. The matrix `A` can either be a [`Symmetric`](@ref) or [`Hermitian`](@ref)
@@ -290,6 +234,10 @@ and return a `Cholesky` factorization. The matrix `A` can either be a [`Symmetri
 The triangular Cholesky factor can be obtained from the factorization `F` with: `F.L` and `F.U`.
 The following functions are available for `Cholesky` objects: [`size`](@ref), [`\\`](@ref),
 [`inv`](@ref), [`det`](@ref), [`logdet`](@ref) and [`isposdef`](@ref).
+
+When `check = true`, an error is thrown if the decomposition fails.
+When `check = false`, responsibility for checking the decomposition's
+validity (via [`issuccess`](@ref)) lies with the user.
 
 # Examples
 ```jldoctest
@@ -299,7 +247,7 @@ julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
   12.0   37.0  -43.0
  -16.0  -43.0   98.0
 
-julia> C = cholfact(A)
+julia> C = cholesky(A)
 Cholesky{Float64,Array{Float64,2}}
 U factor:
 3×3 UpperTriangular{Float64,Array{Float64,2}}:
@@ -323,13 +271,13 @@ julia> C.L * C.U == A
 true
 ```
 """
-cholfact(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
-    ::Val{false}=Val(false)) = cholfact!(cholcopy(A))
+cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
+    ::Val{false}=Val(false); check::Bool = true) = cholesky!(cholcopy(A); check = check)
 
 
 ## With pivoting
 """
-    cholfact(A, Val(true); tol = 0.0) -> CholeskyPivoted
+    cholesky(A, Val(true); tol = 0.0, check = true) -> CholeskyPivoted
 
 Compute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix `A`
 and return a `CholeskyPivoted` factorization. The matrix `A` can either be a [`Symmetric`](@ref)
@@ -339,12 +287,17 @@ The following functions are available for `PivotedCholesky` objects:
 [`size`](@ref), [`\\`](@ref), [`inv`](@ref), [`det`](@ref), and [`rank`](@ref).
 The argument `tol` determines the tolerance for determining the rank.
 For negative values, the tolerance is the machine precision.
+
+When `check = true`, an error is thrown if the decomposition fails.
+When `check = false`, responsibility for checking the decomposition's
+validity (via [`issuccess`](@ref)) lies with the user.
 """
-cholfact(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
-    ::Val{true}; tol = 0.0) = cholfact!(cholcopy(A), Val(true); tol = tol)
+cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
+    ::Val{true}; tol = 0.0, check::Bool = true) =
+    cholesky!(cholcopy(A), Val(true); tol = tol, check = check)
 
 ## Number
-function cholfact(x::Number, uplo::Symbol=:U)
+function cholesky(x::Number, uplo::Symbol=:U)
     C, info = _chol!(x, uplo)
     xf = fill(C, 1, 1)
     Cholesky(xf, uplo, info)
@@ -385,12 +338,13 @@ size(C::Union{Cholesky, CholeskyPivoted}, d::Integer) = size(C.factors, d)
 function getproperty(C::Cholesky, d::Symbol)
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
+    info     = getfield(C, :info)
     if d == :U
         return UpperTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors'))
     elseif d == :L
         return LowerTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors'))
     elseif d == :UL
-        return Symbol(Cuplo) == :U ? UpperTriangular(Cfactors) : LowerTriangular(Cfactors)
+        return (Symbol(Cuplo) == :U ? UpperTriangular(Cfactors) : LowerTriangular(Cfactors))
     else
         return getfield(C, d)
     end
@@ -442,7 +396,7 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, C::CholeskyPivoted{<:Any
 end
 
 ldiv!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
-    @assertposdef LAPACK.potrs!(C.uplo, C.factors, B) C.info
+    LAPACK.potrs!(C.uplo, C.factors, B)
 
 function ldiv!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat)
     if C.uplo == 'L'
@@ -453,11 +407,9 @@ function ldiv!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat)
 end
 
 function ldiv!(C::CholeskyPivoted{T}, B::StridedVector{T}) where T<:BlasFloat
-    chkfullrank(C)
     invpermute!(LAPACK.potrs!(C.uplo, C.factors, permute!(B, C.piv)), C.piv)
 end
 function ldiv!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloat
-    chkfullrank(C)
     n = size(C, 1)
     for i=1:size(B, 2)
         permute!(view(B, 1:n, i), C.piv)
@@ -492,7 +444,6 @@ end
 isposdef(C::Union{Cholesky,CholeskyPivoted}) = C.info == 0
 
 function det(C::Cholesky)
-    isposdef(C) || throw(PosDefException(C.info))
     dd = one(real(eltype(C)))
     @inbounds for i in 1:size(C.factors,1)
         dd *= real(C.factors[i,i])^2
@@ -501,8 +452,6 @@ function det(C::Cholesky)
 end
 
 function logdet(C::Cholesky)
-    # need to check first, or log will throw DomainError
-    isposdef(C) || throw(PosDefException(C.info))
     dd = zero(real(eltype(C)))
     @inbounds for i in 1:size(C.factors,1)
         dd += log(real(C.factors[i,i]))
@@ -535,12 +484,11 @@ function logdet(C::CholeskyPivoted)
 end
 
 inv!(C::Cholesky{<:BlasFloat,<:StridedMatrix}) =
-    @assertposdef copytri!(LAPACK.potri!(C.uplo, C.factors), C.uplo, true) C.info
+    copytri!(LAPACK.potri!(C.uplo, C.factors), C.uplo, true)
 
 inv(C::Cholesky{<:BlasFloat,<:StridedMatrix}) = inv!(copy(C))
 
 function inv(C::CholeskyPivoted)
-    chkfullrank(C)
     ipiv = invperm(C.piv)
     copytri!(LAPACK.potri!(C.uplo, copy(C.factors)), C.uplo, true)[ipiv, ipiv]
 end
@@ -557,7 +505,7 @@ rank(C::CholeskyPivoted) = C.rank
     lowrankupdate!(C::Cholesky, v::StridedVector) -> CC::Cholesky
 
 Update a Cholesky factorization `C` with the vector `v`. If `A = C.U'C.U` then
-`CC = cholfact(C.U'C.U + v*v')` but the computation of `CC` only uses `O(n^2)`
+`CC = cholesky(C.U'C.U + v*v')` but the computation of `CC` only uses `O(n^2)`
 operations. The input factorization `C` is updated in place such that on exit `C == CC`.
 The vector `v` is destroyed during the computation.
 """
@@ -603,7 +551,7 @@ end
     lowrankdowndate!(C::Cholesky, v::StridedVector) -> CC::Cholesky
 
 Downdate a Cholesky factorization `C` with the vector `v`. If `A = C.U'C.U` then
-`CC = cholfact(C.U'C.U - v*v')` but the computation of `CC` only uses `O(n^2)`
+`CC = cholesky(C.U'C.U - v*v')` but the computation of `CC` only uses `O(n^2)`
 operations. The input factorization `C` is updated in place such that on exit `C == CC`.
 The vector `v` is destroyed during the computation.
 """
@@ -656,7 +604,7 @@ end
     lowrankupdate(C::Cholesky, v::StridedVector) -> CC::Cholesky
 
 Update a Cholesky factorization `C` with the vector `v`. If `A = C.U'C.U`
-then `CC = cholfact(C.U'C.U + v*v')` but the computation of `CC` only uses
+then `CC = cholesky(C.U'C.U + v*v')` but the computation of `CC` only uses
 `O(n^2)` operations.
 """
 lowrankupdate(C::Cholesky, v::StridedVector) = lowrankupdate!(copy(C), copy(v))
@@ -665,7 +613,7 @@ lowrankupdate(C::Cholesky, v::StridedVector) = lowrankupdate!(copy(C), copy(v))
     lowrankdowndate(C::Cholesky, v::StridedVector) -> CC::Cholesky
 
 Downdate a Cholesky factorization `C` with the vector `v`. If `A = C.U'C.U`
-then `CC = cholfact(C.U'C.U - v*v')` but the computation of `CC` only uses
+then `CC = cholesky(C.U'C.U - v*v')` but the computation of `CC` only uses
 `O(n^2)` operations.
 """
 lowrankdowndate(C::Cholesky, v::StridedVector) = lowrankdowndate!(copy(C), copy(v))

@@ -63,6 +63,7 @@ inv(x::Integer) = float(one(x)) / float(x)
 
 Return `true` if `x` is odd (that is, not divisible by 2), and `false` otherwise.
 
+# Examples
 ```jldoctest
 julia> isodd(9)
 true
@@ -78,6 +79,7 @@ isodd(n::Integer) = rem(n, 2) != 0
 
 Return `true` is `x` is even (that is, divisible by 2), and `false` otherwise.
 
+# Examples
 ```jldoctest
 julia> iseven(9)
 false
@@ -116,6 +118,7 @@ when `abs` is applied to the minimum representable value of a signed
 integer. That is, when `x == typemin(typeof(x))`, `abs(x) == x < 0`,
 not `-x` as might be expected.
 
+# Examples
 ```jldoctest
 julia> abs(-3)
 3
@@ -346,6 +349,7 @@ bswap(x::Union{Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}) =
 
 Number of ones in the binary representation of `x`.
 
+# Examples
 ```jldoctest
 julia> count_ones(7)
 3
@@ -358,6 +362,7 @@ count_ones(x::BitInteger) = Int(ctpop_int(x))
 
 Number of zeros leading the binary representation of `x`.
 
+# Examples
 ```jldoctest
 julia> leading_zeros(Int32(1))
 31
@@ -370,6 +375,7 @@ leading_zeros(x::BitInteger) = Int(ctlz_int(x))
 
 Number of zeros trailing the binary representation of `x`.
 
+# Examples
 ```jldoctest
 julia> trailing_zeros(2)
 1
@@ -382,6 +388,7 @@ trailing_zeros(x::BitInteger) = Int(cttz_int(x))
 
 Number of zeros in the binary representation of `x`.
 
+# Examples
 ```jldoctest
 julia> count_zeros(Int32(2 ^ 16 - 1))
 16
@@ -394,6 +401,7 @@ count_zeros(x::Integer) = count_ones(~x)
 
 Number of ones leading the binary representation of `x`.
 
+# Examples
 ```jldoctest
 julia> leading_ones(UInt32(2 ^ 32 - 2))
 31
@@ -406,6 +414,7 @@ leading_ones(x::Integer) = leading_zeros(~x)
 
 Number of ones trailing the binary representation of `x`.
 
+# Examples
 ```jldoctest
 julia> trailing_ones(3)
 2
@@ -462,7 +471,7 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
 end
 
 # @doc isn't available when running in Core at this point.
-# Tuple syntax for documention two function signatures at the same time
+# Tuple syntax for documentation two function signatures at the same time
 # doesn't work either at this point.
 if nameof(@__MODULE__) === :Base
     for fname in (:mod, :rem)
@@ -476,6 +485,7 @@ if nameof(@__MODULE__) === :Base
         If `T` can represent any integer (e.g. `T == BigInt`), then this operation corresponds to
         a conversion to `T`.
 
+        # Examples
         ```jldoctest
         julia> 129 % Int8
         -127
@@ -543,14 +553,36 @@ floor(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
 
 ## integer construction ##
 
+"""
+    @int128_str str
+    @int128_str(str)
+
+`@int128_str` parses a string into a Int128
+Throws an `ArgumentError` if the string is not a valid integer
+"""
 macro int128_str(s)
     return parse(Int128, s)
 end
 
+"""
+    @uint128_str str
+    @uint128_str(str)
+
+`@uint128_str` parses a string into a UInt128
+Throws an `ArgumentError` if the string is not a valid integer
+"""
 macro uint128_str(s)
     return parse(UInt128, s)
 end
 
+"""
+    @big_str str
+    @big_str(str)
+
+`@big_str` parses a string into a BigInt
+Throws an `ArgumentError` if the string is not a valid integer
+Removes all underscores `_` from the string
+"""
 macro big_str(s)
     if '_' in s
         # remove _ in s[2:end-1]
@@ -616,6 +648,15 @@ function typemin end
     typemax(T)
 
 The highest value representable by the given (real) numeric `DataType`.
+
+# Examples
+```jldoctest
+julia> typemax(Int8)
+127
+
+julia> typemax(UInt32)
+0xffffffff
+```
 """
 function typemax end
 
@@ -640,10 +681,13 @@ typemax(::Type{UInt64}) = 0xffffffffffffffff
 @eval typemin(::Type{Int128} ) = $(convert(Int128, 1) << 127)
 @eval typemax(::Type{Int128} ) = $(bitcast(Int128, typemax(UInt128) >> 1))
 
-widen(::Type{<:Union{Int8, Int16}}) = Int
+
+widen(::Type{Int8}) = Int16
+widen(::Type{Int16}) = Int32
 widen(::Type{Int32}) = Int64
 widen(::Type{Int64}) = Int128
-widen(::Type{<:Union{UInt8, UInt16}}) = UInt
+widen(::Type{UInt8}) = UInt16
+widen(::Type{UInt16}) = UInt32
 widen(::Type{UInt32}) = UInt64
 widen(::Type{UInt64}) = UInt128
 

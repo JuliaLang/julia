@@ -31,7 +31,7 @@ Base.isfinite(q::Quaternion) = isfinite(q.s) & isfinite(q.v1) & isfinite(q.v2) &
 (/)(q::Quaternion, w::Quaternion) = q * conj(w) * (1.0 / abs2(w))
 (\)(q::Quaternion, w::Quaternion) = conj(q) * w * (1.0 / abs2(q))
 
-srand(123)
+Random.seed!(123)
 
 n = 5 # should be odd
 
@@ -87,53 +87,6 @@ n = 5 # should be odd
             @test logabsdet(A)[2] ≈ sign(det(A))
         end
     end
-end
-
-@testset "linrange" begin
-    # make sure unequal input arrays throw an error
-    x = [2; 5; 6]
-    y = [3; 7; 10; 10]
-    @test_throws DimensionMismatch linreg(x, y)
-    x = [2 5 6]
-    y = [3; 7; 10]
-    @test_throws MethodError linreg(x, y)
-
-    # check (UnitRange, Array)
-    x = 1:12
-    y = [5.5; 6.3; 7.6; 8.8; 10.9; 11.79; 13.48; 15.02; 17.77; 20.81; 22.0; 22.99]
-    @test [linreg(x,y)...] ≈ [2.5559090909090867, 1.6960139860139862]
-    @test [linreg(view(x,1:6),view(y,1:6))...] ≈ [3.8366666666666642,1.3271428571428574]
-
-    # check (LinRange, UnitRange)
-    x = range(1.0, stop=12.0, length=100)
-    y = -100:-1
-    @test [linreg(x, y)...] ≈ [-109.0, 9.0]
-
-    # check (UnitRange, UnitRange)
-    x = 1:12
-    y = 12:-1:1
-    @test [linreg(x, y)...] ≈ [13.0, -1.0]
-
-    # check (LinRange, LinRange)
-    x = range(-5, stop=10, length=100)
-    y = range(50, stop=200, length=100)
-    @test [linreg(x, y)...] ≈ [100.0, 10.0]
-
-    # check (Array, Array)
-    # Anscombe's quartet (https://en.wikipedia.org/wiki/Anscombe%27s_quartet)
-    x123 = [10.0; 8.0; 13.0; 9.0; 11.0; 14.0; 6.0; 4.0; 12.0; 7.0; 5.0]
-    y1 = [8.04; 6.95; 7.58; 8.81; 8.33; 9.96; 7.24; 4.26; 10.84; 4.82; 5.68]
-    @test [linreg(x123,y1)...] ≈ [3.0,0.5] atol=15e-5
-
-    y2 = [9.14; 8.14; 8.74; 8.77; 9.26; 8.10; 6.12; 3.10; 9.13; 7.26; 4.74]
-    @test [linreg(x123,y2)...] ≈ [3.0,0.5] atol=10e-3
-
-    y3 = [7.46; 6.77; 12.74; 7.11; 7.81; 8.84; 6.08; 5.39; 8.15; 6.42; 5.73]
-    @test [linreg(x123,y3)...] ≈ [3.0,0.5] atol=10e-3
-
-    x4 = [8.0; 8.0; 8.0; 8.0; 8.0; 8.0; 8.0; 19.0; 8.0; 8.0; 8.0]
-    y4 = [6.58; 5.76; 7.71; 8.84; 8.47; 7.04; 5.25; 12.50; 5.56; 7.91; 6.89]
-    @test [linreg(x4,y4)...] ≈ [3.0,0.5] atol=10e-3
 end
 
 @testset "diag" begin
@@ -240,18 +193,18 @@ end
 
 @test rank(fill(0, 0, 0)) == 0
 @test rank([1.0 0.0; 0.0 0.9],0.95) == 1
-@test qr(big.([0 1; 0 0]))[2] == [0 1; 0 0]
+@test qr(big.([0 1; 0 0])).R == [0 1; 0 0]
 
 @test norm([2.4e-322, 4.4e-323]) ≈ 2.47e-322
 @test norm([2.4e-322, 4.4e-323], 3) ≈ 2.4e-322
-@test_throws ArgumentError norm(Matrix{Float64}(undef,5,5),5)
+@test_throws ArgumentError opnorm(Matrix{Float64}(undef,5,5),5)
 
-@testset "generic vecnorm for arrays of arrays" begin
+@testset "generic norm for arrays of arrays" begin
     x = Vector{Int}[[1,2], [3,4]]
     @test @inferred(norm(x)) ≈ sqrt(30)
     @test norm(x, 0) == length(x)
-    @test norm(x, 1) ≈ sqrt(5) + 5
-    @test norm(x, 3) ≈ cbrt(sqrt(125)+125)
+    @test norm(x, 1) ≈ 5+sqrt(5)
+    @test norm(x, 3) ≈ cbrt(5^3  +sqrt(5)^3)
 end
 
 @testset "LinearAlgebra.axp(b)y! for element type without commutative multiplication" begin
@@ -348,13 +301,13 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
     A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]
     b = [ModInt{2}(1), ModInt{2}(0)]
 
-    @test A*(lufact(A, Val(false))\b) == b
+    @test A*(lu(A, Val(false))\b) == b
 
     # Needed for pivoting:
     Base.abs(a::ModInt{n}) where {n} = a
     Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
 
-    @test A*(lufact(A, Val(true))\b) == b
+    @test A*(lu(A, Val(true))\b) == b
 end
 
 @testset "fallback throws properly for AbstractArrays with dimension > 2" begin
@@ -414,6 +367,10 @@ end
         @test !isdiag(lbidiag)
         @test isdiag(adiag)
     end
+end
+
+@testset "missing values" begin
+    @test ismissing(norm(missing))
 end
 
 end # module TestGeneric

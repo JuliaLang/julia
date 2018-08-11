@@ -17,12 +17,12 @@ function runtests(name, path, isolate=true; seed=nothing)
         @eval(m, using Test, Random)
         ex = quote
             @timed @testset $"$name" begin
-                # srand(nothing) will fail
-                $seed != nothing && srand($seed)
+                # Random.seed!(nothing) will fail
+                $seed != nothing && Random.seed!($seed)
                 include($"$path.jl")
             end
         end
-        res_and_time_data = eval(m, ex)
+        res_and_time_data = Core.eval(m, ex)
         rss = Sys.maxrss()
         #res_and_time_data[1] is the testset
         passes,fails,error,broken,c_passes,c_fails,c_errors,c_broken = Test.get_test_counts(res_and_time_data[1])

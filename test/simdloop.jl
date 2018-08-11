@@ -12,6 +12,13 @@ function simd_loop_example_from_manual(x, y, z)
     s
 end
 
+function simd_loop_axpy!(a, X, Y)
+    @simd ivdep for i in eachindex(X)
+        @inbounds Y[i] += a*X[i]
+    end
+    return Y
+end
+
 function simd_loop_with_multiple_reductions(x, y, z)
     # Use non-zero initial value to make sure reduction values include it.
     (s,t) = (one(eltype(x)),one(eltype(y)))
@@ -42,6 +49,11 @@ for T in [Int32,Int64,Float32,Float64]
         (s,t) = simd_loop_with_multiple_reductions(a,b,c)
         @test s==sum(a)+sum(c)+1
         @test t==2*sum(b)+1
+
+        X = ones(T, n)
+        Y = zeros(T, n)
+        simd_loop_axpy!(T(2), X, Y)
+        @test all(y->y==T(2), Y)
     end
 end
 
@@ -115,19 +127,19 @@ function simd_cartesian_range!(indices, crng)
     indices
 end
 
-crng = CartesianIndices((2:4, 0:1, 1:1, 3:5))
+crng = CartesianIndices(map(Base.Slice, (2:4, 0:1, 1:1, 3:5)))
 indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
 @test indices == vec(collect(crng))
 
-crng = CartesianIndices((-1:1, 1:3))
+crng = CartesianIndices(map(Base.Slice, (-1:1, 1:3)))
 indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
 @test indices == vec(collect(crng))
 
-crng = CartesianIndices((-1:-1, 1:3))
+crng = CartesianIndices(map(Base.Slice, (-1:-1, 1:3)))
 indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
 @test indices == vec(collect(crng))
 
-crng = CartesianIndices((2:4,))
+crng = CartesianIndices(map(Base.Slice, (2:4,)))
 indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
 @test indices == collect(crng)
 

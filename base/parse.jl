@@ -14,6 +14,7 @@ of the form `"R±Iim"` as a `Complex(R,I)` of the requested type; `"i"` or `"j"`
 used instead of `"im"`, and `"R"` or `"Iim"` are also permitted.
 If the string does not contain a valid number, an error is raised.
 
+# Examples
 ```jldoctest
 julia> parse(Int, "1234")
 1234
@@ -372,16 +373,16 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     end
 
     # find index of ± separating real/imaginary parts (if any)
-    i₊ = coalesce(findnext(in(('+','-')), s, i), 0)
+    i₊ = something(findnext(in(('+','-')), s, i), 0)
     if i₊ == i # leading ± sign
-        i₊ = coalesce(findnext(in(('+','-')), s, i₊+1), 0)
+        i₊ = something(findnext(in(('+','-')), s, i₊+1), 0)
     end
     if i₊ != 0 && s[i₊-1] in ('e','E') # exponent sign
-        i₊ = coalesce(findnext(in(('+','-')), s, i₊+1), 0)
+        i₊ = something(findnext(in(('+','-')), s, i₊+1), 0)
     end
 
     # find trailing im/i/j
-    iᵢ = coalesce(findprev(in(('m','i','j')), s, e), 0)
+    iᵢ = something(findprev(in(('m','i','j')), s, e), 0)
     if iᵢ > 0 && s[iᵢ] == 'm' # im
         iᵢ -= 1
         if s[iᵢ] != 'i'
@@ -428,14 +429,26 @@ tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int) wher
 function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Real
     result = tryparse_internal(T, s, startpos, endpos)
     if raise && result === nothing
-        throw(ArgumentError("cannot parse $(repr(s[startpos:endpos])) as $T"))
+        _parse_failure(T, s, startpos, endpos)
     end
     return result
 end
+function tryparse_internal(::Type{T}, s::AbstractString, raise::Bool) where T<:Real
+    result = tryparse(T, s)
+    if raise && result === nothing
+        _parse_failure(T, s)
+    end
+    return result
+end
+@noinline _parse_failure(T, s::AbstractString, startpos = firstindex(s), endpos = lastindex(s)) =
+    throw(ArgumentError("cannot parse $(repr(s[startpos:endpos])) as $T"))
+
 tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Integer =
     tryparse_internal(T, s, startpos, endpos, 10, raise)
 
-parse(::Type{T}, s::AbstractString) where T<:Union{Real,Complex} =
+parse(::Type{T}, s::AbstractString) where T<:Real =
+    convert(T, tryparse_internal(T, s, true))
+parse(::Type{T}, s::AbstractString) where T<:Complex =
     convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s), true))
 
 tryparse(T::Type{Complex{S}}, s::AbstractString) where S<:Real =

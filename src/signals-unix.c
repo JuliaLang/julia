@@ -89,6 +89,14 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     // checks that the syscall is made in the signal handler and that
     // the ucontext address is valid. Hopefully the value of the ucontext
     // will not be part of the validation...
+    if (!ptls->signal_stack) {
+        sigset_t sset;
+        sigemptyset(&sset);
+        sigaddset(&sset, sig);
+        sigprocmask(SIG_UNBLOCK, &sset, NULL);
+        fptr();
+        return;
+    }
     uintptr_t rsp = (uintptr_t)ptls->signal_stack + sig_stack_size;
     assert(rsp % 16 == 0);
 #if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
@@ -143,7 +151,7 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     // Only used for SIGFPE.
     // This doesn't seems to be reliable when the SIGFPE is generated
     // from a divide-by-zero exception, which is now handled by
-    // `catch_exception_raise`. It works fine when a signal is recieved
+    // `catch_exception_raise`. It works fine when a signal is received
     // due to `kill`/`raise` though.
     ucontext64_t *ctx = (ucontext64_t*)_ctx;
     rsp -= sizeof(void*);
@@ -358,6 +366,7 @@ static void jl_exit_thread0(int state)
 void usr2_handler(int sig, siginfo_t *info, void *ctx)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
+    int errno_save = errno;
     sig_atomic_t request = jl_atomic_exchange(&ptls->signal_request, 0);
 #if !defined(JL_DISABLE_LIBUNWIND)
     if (request == 1) {
@@ -388,6 +397,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
     else if (request == 3) {
         jl_call_in_ctx(ptls, jl_exit_thread0_cb, sig, ctx);
     }
+    errno = errno_save;
 }
 
 #if defined(HAVE_TIMER)
@@ -665,9 +675,22 @@ static void *signal_listener(void *arg)
             // do backtrace for profiler
             if (profile && running) {
                 if (bt_size_cur < bt_size_max - 1) {
-                    // Get backtrace data
-                    bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
-                            bt_size_max - bt_size_cur - 1, signal_context);
+                    // unwinding can fail, so keep track of the current state
+                    // and restore from the SEGV handler if anything happens.
+                    jl_ptls_t ptls = jl_get_ptls_states();
+                    jl_jmp_buf *old_buf = ptls->safe_restore;
+                    jl_jmp_buf buf;
+
+                    ptls->safe_restore = &buf;
+                    if (jl_setjmp(buf, 0)) {
+                        jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
+                    } else {
+                        // Get backtrace data
+                        bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
+                                bt_size_max - bt_size_cur - 1, signal_context);
+                    }
+                    ptls->safe_restore = old_buf;
+
                     // Mark the end of this block with 0
                     bt_data_prof[bt_size_cur++] = 0;
                 }

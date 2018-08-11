@@ -8,7 +8,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
-             bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0zpb,
+             bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
              hastypemax
 
@@ -70,6 +70,7 @@ results are promoted to a [`BigInt`](@ref).
 Instances can be constructed from strings via [`parse`](@ref), or using the `big`
 string literal.
 
+# Examples
 ```jldoctest
 julia> parse(BigInt, "42")
 42
@@ -552,7 +553,7 @@ function gcdx(a::BigInt, b::BigInt)
     g, s, t
 end
 
-sum(arr::AbstractArray{BigInt}) = foldl(MPZ.add!, BigInt(0), arr)
+sum(arr::AbstractArray{BigInt}) = foldl(MPZ.add!, arr; init=BigInt(0))
 # note: a similar implementation for `prod` won't be efficient:
 # 1) the time complexity of the allocations is negligible compared to the multiplications
 # 2) assuming arr contains similarly sized BigInts, the multiplications are much more
@@ -599,7 +600,7 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
     base < 0 && return Base._base(Int(base), n, pad, (base>0) & (n.size<0))
     2 <= base <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $base"))
     iszero(n) && pad < 1 && return ""
-    nd1 = ndigits(n, base)
+    nd1 = ndigits(n, base=base)
     nd  = max(nd1, pad)
     sv  = Base.StringVector(nd + isneg(n))
     GC.@preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, base, n)
@@ -617,7 +618,7 @@ function ndigits0zpb(x::BigInt, b::Integer)
         MPZ.sizeinbase(x, b)
     else
         # non-base 2 mpz_sizeinbase might return an answer 1 too big
-        # use property that log(b, x) < ndigits(x, b) <= log(b, x) + 1
+        # use property that log(b, x) < ndigits(x, base=b) <= log(b, x) + 1
         n = MPZ.sizeinbase(x, 2)
         lb = log2(b) # assumed accurate to <1ulp (true for openlibm)
         q,r = divrem(n,lb)
@@ -633,10 +634,11 @@ function ndigits0zpb(x::BigInt, b::Integer)
     end
 end
 
+# Fast paths for nextpow(2, x::BigInt)
 # below, ONE is always left-shifted by at least one digit, so a new BigInt is
 # allocated, which can be safely mutated
-prevpow2(x::BigInt) = -2 <= x <= 2 ? x : flipsign!(ONE << (ndigits(x, 2) - 1), x)
-nextpow2(x::BigInt) = count_ones_abs(x) <= 1 ? x : flipsign!(ONE << ndigits(x, 2), x)
+_prevpow2(x::BigInt) = -2 <= x <= 2 ? x : flipsign!(ONE << (ndigits(x, base=2) - 1), x)
+_nextpow2(x::BigInt) = count_ones_abs(x) <= 1 ? x : flipsign!(ONE << ndigits(x, base=2), x)
 
 Base.checked_abs(x::BigInt) = abs(x)
 Base.checked_neg(x::BigInt) = -x

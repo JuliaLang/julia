@@ -6,7 +6,8 @@
 struct SymTridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     dv::V                        # diagonal
     ev::V                        # subdiagonal
-    function SymTridiagonal{T}(dv::V, ev::V) where {T,V<:AbstractVector{T}}
+    function SymTridiagonal{T,V}(dv, ev) where {T,V<:AbstractVector{T}}
+        @assert !has_offset_axes(dv, ev)
         if !(length(dv) - 1 <= length(ev) <= length(dv))
             throw(DimensionMismatch("subdiagonal has wrong length. Has length $(length(ev)), but should be either $(length(dv) - 1) or $(length(dv))."))
         end
@@ -46,6 +47,11 @@ julia> SymTridiagonal(dv, ev)
 ```
 """
 SymTridiagonal(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T}(dv, ev)
+SymTridiagonal{T}(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T,V}(dv, ev)
+function SymTridiagonal{T}(dv::AbstractVector, ev::AbstractVector) where {T}
+    SymTridiagonal(convert(AbstractVector{T}, dv)::AbstractVector{T},
+                   convert(AbstractVector{T}, ev)::AbstractVector{T})
+end
 
 """
     SymTridiagonal(A::AbstractMatrix)
@@ -76,10 +82,18 @@ function SymTridiagonal(A::AbstractMatrix)
     end
 end
 
+SymTridiagonal{T,V}(S::SymTridiagonal{T,V}) where {T,V<:AbstractVector{T}} = S
+SymTridiagonal{T,V}(S::SymTridiagonal) where {T,V<:AbstractVector{T}} =
+    SymTridiagonal(convert(V, S.dv)::V, convert(V, S.ev)::V)
+SymTridiagonal{T}(S::SymTridiagonal{T}) where {T} = S
 SymTridiagonal{T}(S::SymTridiagonal) where {T} =
-    SymTridiagonal(convert(AbstractVector{T}, S.dv), convert(AbstractVector{T}, S.ev))
+    SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
+                   convert(AbstractVector{T}, S.ev)::AbstractVector{T})
+SymTridiagonal(S::SymTridiagonal) = S
+
 AbstractMatrix{T}(S::SymTridiagonal) where {T} =
-    SymTridiagonal(convert(AbstractVector{T}, S.dv), convert(AbstractVector{T}, S.ev))
+    SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
+                   convert(AbstractVector{T}, S.ev)::AbstractVector{T})
 function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
     Mf = zeros(T, n, n)
@@ -181,20 +195,20 @@ function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
     return C
 end
 
-(\)(T::SymTridiagonal, B::StridedVecOrMat) = ldltfact(T)\B
+(\)(T::SymTridiagonal, B::StridedVecOrMat) = ldlt(T)\B
 
-eigfact!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
-eigfact(A::SymTridiagonal{T}) where T = eigfact!(copy_oftype(A, eigtype(T)))
+eigen!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
+eigen(A::SymTridiagonal{T}) where T = eigen!(copy_oftype(A, eigtype(T)))
 
-eigfact!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
+eigen!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
     Eigen(LAPACK.stegr!('V', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)...)
-eigfact(A::SymTridiagonal{T}, irange::UnitRange) where T =
-    eigfact!(copy_oftype(A, eigtype(T)), irange)
+eigen(A::SymTridiagonal{T}, irange::UnitRange) where T =
+    eigen!(copy_oftype(A, eigtype(T)), irange)
 
-eigfact!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
+eigen!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
     Eigen(LAPACK.stegr!('V', 'V', A.dv, A.ev, vl, vu, 0, 0)...)
-eigfact(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
-    eigfact!(copy_oftype(A, eigtype(T)), vl, vu)
+eigen(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
+    eigen!(copy_oftype(A, eigtype(T)), vl, vu)
 
 eigvals!(A::SymTridiagonal{<:BlasReal}) = LAPACK.stev!('N', A.dv, A.ev)[1]
 eigvals(A::SymTridiagonal{T}) where T = eigvals!(copy_oftype(A, eigtype(T)))
@@ -214,7 +228,7 @@ eigmax(A::SymTridiagonal) = eigvals(A, size(A, 1):size(A, 1))[1]
 eigmin(A::SymTridiagonal) = eigvals(A, 1:1)[1]
 
 #Compute selected eigenvectors only corresponding to particular eigenvalues
-eigvecs(A::SymTridiagonal) = eigfact(A).vectors
+eigvecs(A::SymTridiagonal) = eigen(A).vectors
 
 """
     eigvecs(A::SymTridiagonal[, eigvals]) -> Matrix
@@ -314,6 +328,7 @@ end
 #    Linear Algebra and its Applications 212-213 (1994), pp.413-414
 #    doi:10.1016/0024-3795(94)90414-6
 function inv_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
+    @assert !has_offset_axes(a, b, c)
     n = length(b)
     θ = zeros(T, n+1) #principal minors of A
     θ[1] = 1
@@ -344,6 +359,7 @@ end
 #Implements the determinant using principal minors
 #Inputs and reference are as above for inv_usmani()
 function det_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
+    @assert !has_offset_axes(a, b, c)
     n = length(b)
     θa = one(T)
     if n == 0
@@ -390,7 +406,8 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     d::V     # diagonal
     du::V    # sup-diagonal
     du2::V   # supsup-diagonal for pivoting in LU
-    function Tridiagonal{T}(dl::V, d::V, du::V) where {T,V<:AbstractVector{T}}
+    function Tridiagonal{T,V}(dl, d, du) where {T,V<:AbstractVector{T}}
+        @assert !has_offset_axes(dl, d, du)
         n = length(d)
         if (length(dl) != n-1 || length(du) != n-1)
             throw(ArgumentError(string("cannot construct Tridiagonal from incompatible ",
@@ -399,8 +416,10 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         end
         new{T,V}(dl, d, du)
     end
-    # constructor used in lufact!
-    function Tridiagonal{T,V}(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}}
+    # constructor used in lu!
+    function Tridiagonal{T,V}(dl, d, du, du2) where {T,V<:AbstractVector{T}}
+        @assert !has_offset_axes(dl, d, du, du2)
+        # length checks?
         new{T,V}(dl, d, du, du2)
     end
 end
@@ -430,7 +449,11 @@ julia> Tridiagonal(dl, d, du)
  ⋅  ⋅  3  0
 ```
 """
-Tridiagonal(dl::V, d::V, du::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T}(dl, d, du)
+Tridiagonal(dl::V, d::V, du::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T,V}(dl, d, du)
+Tridiagonal(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T,V}(dl, d, du, du2)
+function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector) where {T}
+    Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du))...)
+end
 
 """
     Tridiagonal(A)
@@ -456,6 +479,18 @@ julia> Tridiagonal(A)
 ```
 """
 Tridiagonal(A::AbstractMatrix) = Tridiagonal(diag(A,-1), diag(A,0), diag(A,1))
+
+Tridiagonal(A::Tridiagonal) = A
+Tridiagonal{T}(A::Tridiagonal{T}) where {T} = A
+function Tridiagonal{T}(A::Tridiagonal) where {T}
+    dl, d, du = map(x->convert(AbstractVector{T}, x)::AbstractVector{T},
+                    (A.dl, A.d, A.du))
+    if isdefined(A, :du2)
+        Tridiagonal(dl, d, du, convert(AbstractVector{T}, A.du2)::AbstractVector{T})
+    else
+        Tridiagonal(dl, d, du)
+    end
+end
 
 size(M::Tridiagonal) = (length(M.d), length(M.d))
 function size(M::Tridiagonal, d::Integer)
@@ -619,8 +654,6 @@ end
 inv(A::Tridiagonal) = inv_usmani(A.dl, A.d, A.du)
 det(A::Tridiagonal) = det_usmani(A.dl, A.d, A.du)
 
-Tridiagonal{T}(M::Tridiagonal) where {T} =
-    Tridiagonal(convert(AbstractVector{T}, M.dl), convert(AbstractVector{T}, M.d), convert(AbstractVector{T}, M.du))
 AbstractMatrix{T}(M::Tridiagonal) where {T} = Tridiagonal{T}(M)
 Tridiagonal{T}(M::SymTridiagonal{T}) where {T} = Tridiagonal(M)
 function SymTridiagonal{T}(M::Tridiagonal) where T

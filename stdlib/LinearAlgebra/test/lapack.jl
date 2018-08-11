@@ -11,7 +11,7 @@ using LinearAlgebra: BlasInt
 @test_throws ArgumentError LinearAlgebra.LAPACK.chktrans('Z')
 
 @testset "syevr" begin
-    srand(123)
+    Random.seed!(123)
     Ainit = randn(5,5)
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         if elty == ComplexF32 || elty == ComplexF64
@@ -208,7 +208,7 @@ end
 
 @testset "gels" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        srand(913)
+        Random.seed!(913)
         A = rand(elty,10,10)
         X = rand(elty,10)
         B,Y,z = LAPACK.gels!('N',copy(A),copy(X))
@@ -231,7 +231,7 @@ end
     @testset for elty in (ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         Aw, Avl, Avr = LAPACK.geev!('N','V',copy(A))
-        fA = eigfact(A)
+        fA = eigen(A)
         @test fA.values  ≈ Aw
         @test fA.vectors ≈ Avr
     end
@@ -266,7 +266,7 @@ end
         @test_throws DimensionMismatch LAPACK.gttrs!('N', x11, d, du, x9, y10, b)
         @test_throws DimensionMismatch LAPACK.gttrs!('N', dl, d, x11, x9, y10, b)
         @test_throws DimensionMismatch LAPACK.gttrs!('N', dl, d, du, x9, y10, x11)
-        A = lufact(Tridiagonal(dl,d,du))
+        A = lu(Tridiagonal(dl,d,du))
         b  = rand(elty,10,5)
         c = copy(b)
         dl,d,du,du2,ipiv = LAPACK.gttrf!(dl,d,du)
@@ -443,7 +443,7 @@ end
 
 @testset "sysv" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        srand(123)
+        Random.seed!(123)
         A = rand(elty,10,10)
         A = A + transpose(A) #symmetric!
         b = rand(elty,10)
@@ -456,7 +456,7 @@ end
 
 @testset "hesv" begin
     @testset for elty in (ComplexF32, ComplexF64)
-        srand(935)
+        Random.seed!(935)
         A = rand(elty,10,10)
         A = A + A' #hermitian!
         b = rand(elty,10)
@@ -660,7 +660,7 @@ end
 
 # Issue 14065 (and 14220)
 let A = [NaN NaN; NaN NaN]
-    @test_throws ArgumentError eigfact(A)
+    @test_throws ArgumentError eigen(A)
 end
 
 end # module TestLAPACK

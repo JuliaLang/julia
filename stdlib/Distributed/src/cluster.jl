@@ -115,10 +115,10 @@ function check_worker_state(w::Worker)
         else
             w.ct_time = time()
             if myid() > w.id
-                @schedule exec_conn_func(w)
+                @async exec_conn_func(w)
             else
                 # route request via node 1
-                @schedule remotecall_fetch((p,to_id) -> remotecall_fetch(exec_conn_func, p, to_id), 1, w.id, myid())
+                @async remotecall_fetch((p,to_id) -> remotecall_fetch(exec_conn_func, p, to_id), 1, w.id, myid())
             end
             wait_for_conn(w)
         end
@@ -144,7 +144,7 @@ function wait_for_conn(w)
         timeout =  worker_timeout() - (time() - w.ct_time)
         timeout <= 0 && error("peer $(w.id) has not connected to $(myid())")
 
-        @schedule (sleep(timeout); notify(w.c_state; all=true))
+        @async (sleep(timeout); notify(w.c_state; all=true))
         wait(w.c_state)
         w.state == W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
     end
@@ -188,6 +188,8 @@ It does not return.
 """
 start_worker(cookie::AbstractString=readline(stdin)) = start_worker(stdout, cookie)
 function start_worker(out::IO, cookie::AbstractString=readline(stdin))
+    init_multi()
+
     close(stdin) # workers will not use it
     redirect_stderr(stdout)
 
@@ -200,7 +202,7 @@ function start_worker(out::IO, cookie::AbstractString=readline(stdin))
     else
         sock = listen(interface, LPROC.bind_port)
     end
-    @schedule while isopen(sock)
+    @async while isopen(sock)
         client = accept(sock)
         process_messages(client, client, true)
     end
@@ -231,7 +233,7 @@ end
 
 
 function redirect_worker_output(ident, stream)
-    @schedule while !eof(stream)
+    @async while !eof(stream)
         line = readline(stream)
         if startswith(line, "      From worker ")
             # stdout's of "additional" workers started from an initial worker on a host are not available
@@ -265,7 +267,7 @@ function read_worker_host_port(io::IO)
     leader = String[]
     try
         while ntries > 0
-            readtask = @schedule readline(io)
+            readtask = @async readline(io)
             yield()
             while !istaskdone(readtask) && ((time() - t0) < timeout)
                 sleep(0.05)
@@ -358,6 +360,8 @@ master can be specified via variable `JULIA_WORKER_TIMEOUT` in the worker proces
 environment. Relevant only when using TCP/IP as transport.
 """
 function addprocs(manager::ClusterManager; kwargs...)
+    init_multi()
+
     cluster_mgmt_from_master_check()
 
     lock(worker_lock)
@@ -396,13 +400,13 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
     # call manager's `launch` is a separate task. This allows the master
     # process initiate the connection setup process as and when workers come
     # online
-    t_launch = @schedule launch(manager, params, launched, launch_ntfy)
+    t_launch = @async launch(manager, params, launched, launch_ntfy)
 
     @sync begin
         while true
             if isempty(launched)
                 istaskdone(t_launch) && break
-                @schedule (sleep(1); notify(launch_ntfy))
+                @async (sleep(1); notify(launch_ntfy))
                 wait(launch_ntfy)
             end
 
@@ -415,7 +419,7 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
         end
     end
 
-    Base._wait(t_launch)      # catches any thrown errors from the launch task
+    Base.wait(t_launch)      # catches any thrown errors from the launch task
 
     # Since all worker-to-worker setups may not have completed by the time this
     # function returns to the caller, send the complete list to all workers.
@@ -450,9 +454,9 @@ function setup_launched_worker(manager, wconfig, launched_q)
     # When starting workers on remote multi-core hosts, `launch` can (optionally) start only one
     # process on the remote machine, with a request to start additional workers of the
     # same type. This is done by setting an appropriate value to `WorkerConfig.cnt`.
-    cnt = coalesce(wconfig.count, 1)
+    cnt = something(wconfig.count, 1)
     if cnt === :auto
-        cnt = wconfig.environ[:cpu_cores]
+        cnt = wconfig.environ[:cpu_threads]
     end
     cnt = cnt - 1   # Removing self from the requested number
 
@@ -465,7 +469,7 @@ end
 function launch_n_additional_processes(manager, frompid, fromconfig, cnt, launched_q)
     @sync begin
         exename = notnothing(fromconfig.exename)
-        exeflags = coalesce(fromconfig.exeflags, ``)
+        exeflags = something(fromconfig.exeflags, ``)
         cmd = `$exename $exeflags`
 
         new_addresses = remotecall_fetch(launch_additional, frompid, cnt, cmd)
@@ -550,7 +554,7 @@ function create_worker(manager, wconfig)
     elseif PGRP.topology == :custom
         # wait for requested workers to be up before connecting to them.
         filterfunc(x) = (x.id != 1) && isdefined(x, :config) &&
-            (notnothing(x.config.ident) in coalesce(wconfig.connect_idents, []))
+            (notnothing(x.config.ident) in something(wconfig.connect_idents, []))
 
         wlist = filter(filterfunc, PGRP.workers)
         while wconfig.connect_idents !== nothing &&
@@ -566,15 +570,15 @@ function create_worker(manager, wconfig)
     end
 
     all_locs = map(x -> isa(x, Worker) ?
-                   (coalesce(x.config.connect_at, ()), x.id) :
+                   (something(x.config.connect_at, ()), x.id) :
                    ((), x.id, true),
                    join_list)
     send_connection_hdr(w, true)
-    enable_threaded_blas = coalesce(wconfig.enable_threaded_blas, false)
+    enable_threaded_blas = something(wconfig.enable_threaded_blas, false)
     join_message = JoinPGRPMsg(w.id, all_locs, PGRP.topology, enable_threaded_blas, isclusterlazy())
     send_msg_now(w, MsgHeader(RRID(0,0), ntfy_oid), join_message)
 
-    @schedule manage(w.manager, w.id, w.config, :register)
+    @async manage(w.manager, w.id, w.config, :register)
     wait(rr_ntfy_join)
     lock(client_refs) do
         delete!(PGRP.refs, ntfy_oid)
@@ -621,7 +625,7 @@ function check_master_connect()
     if ccall(:jl_running_on_valgrind,Cint,()) != 0
         return
     end
-    @schedule begin
+    @async begin
         start = time()
         while !haskey(map_pid_wrkr, 1) && (time() - start) < timeout
             sleep(1.0)
@@ -680,10 +684,6 @@ end
 const PGRP = ProcessGroup([])
 
 function topology(t)
-    if t == :master_slave
-        Base.depwarn("The topology :master_slave is deprecated, use :master_worker instead.", :topology)
-        t = :master_worker
-    end
     @assert t in [:all_to_all, :master_worker, :custom]
     if (PGRP.topology==t) || ((myid()==1) && (nprocs()==1)) || (myid() > 1)
         PGRP.topology = t
@@ -693,7 +693,7 @@ function topology(t)
     t
 end
 
-isclusterlazy() = coalesce(PGRP.lazy, false)
+isclusterlazy() = something(PGRP.lazy, false)
 
 get_bind_addr(pid::Integer) = get_bind_addr(worker_from_id(pid))
 get_bind_addr(w::LocalProcess) = LPROC.bind_addr
@@ -844,13 +844,13 @@ function rmprocs(pids...; waitfor=typemax(Int))
 
     pids = vcat(pids...)
     if waitfor == 0
-        t = @schedule _rmprocs(pids, typemax(Int))
+        t = @async _rmprocs(pids, typemax(Int))
         yield()
         return t
     else
         _rmprocs(pids, waitfor)
         # return a dummy task object that user code can wait on.
-        return @schedule nothing
+        return @async nothing
     end
 end
 
@@ -1111,17 +1111,27 @@ end
 
 using Random: randstring
 
+let inited = false
+    # do initialization that's only needed when there is more than 1 processor
+    global function init_multi()
+        if !inited
+            inited = true
+            push!(Base.package_callbacks, _require_callback)
+            atexit(terminate_all_workers)
+            init_bind_addr()
+            cluster_cookie(randstring(HDR_COOKIE_LEN))
+        end
+        return nothing
+    end
+end
+
 function init_parallel()
     start_gc_msgs_task()
-    atexit(terminate_all_workers)
-
-    init_bind_addr()
 
     # start in "head node" mode, if worker, will override later.
     global PGRP
     global LPROC
     LPROC.id = 1
-    cluster_cookie(randstring(HDR_COOKIE_LEN))
     @assert isempty(PGRP.workers)
     register_worker(LPROC)
 end

@@ -4,7 +4,15 @@
 
 struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     diag::V
+
+    function Diagonal{T,V}(diag) where {T,V<:AbstractVector{T}}
+        @assert !has_offset_axes(diag)
+        new{T,V}(diag)
+    end
 end
+Diagonal(v::AbstractVector{T}) where {T} = Diagonal{T,typeof(v)}(v)
+Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v)::AbstractVector{T})
+
 """
     Diagonal(A::AbstractMatrix)
 
@@ -45,12 +53,12 @@ julia> Diagonal(V)
  ⋅  2
 ```
 """
-Diagonal(V::AbstractVector{T}) where {T} = Diagonal{T,typeof(V)}(V)
-Diagonal{T}(V::AbstractVector{T}) where {T} = Diagonal{T,typeof(V)}(V)
-Diagonal{T}(V::AbstractVector) where {T} = Diagonal{T}(convert(AbstractVector{T}, V))
+Diagonal(V::AbstractVector)
 
+Diagonal(D::Diagonal) = D
 Diagonal{T}(D::Diagonal{T}) where {T} = D
-Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(convert(AbstractVector{T}, D.diag))
+Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(D.diag)
+
 AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
 Matrix(D::Diagonal) = diagm(0 => D.diag)
 Array(D::Diagonal) = Matrix(D)
@@ -159,11 +167,13 @@ end
     lmul!(D, copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A))
 
 function rmul!(A::AbstractMatrix, D::Diagonal)
+    @assert !has_offset_axes(A)
     A .= A .* transpose(D.diag)
     return A
 end
 
 function lmul!(D::Diagonal, B::AbstractMatrix)
+    @assert !has_offset_axes(B)
     B .= D.diag .* B
     return B
 end
@@ -303,6 +313,7 @@ function ldiv!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
     v
 end
 function ldiv!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
+    @assert !has_offset_axes(V)
     if size(V,1) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
     end
@@ -324,7 +335,13 @@ ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
 ldiv!(transD::Transpose{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
     (D = transD.parent; ldiv!(D, B))
 
+function ldiv!(D::Diagonal, A::Union{LowerTriangular,UpperTriangular})
+    broadcast!(\, parent(A), D.diag, parent(A))
+    A
+end
+
 function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
+    @assert !has_offset_axes(A)
     dd = D.diag
     m, n = size(A)
     if (k = length(dd)) ≠ n
@@ -342,16 +359,35 @@ function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
     A
 end
 
+function rdiv!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal)
+    broadcast!(/, parent(A), parent(A), permutedims(D.diag))
+    A
+end
 
 rdiv!(A::AbstractMatrix{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
     (D = adjD.parent; rdiv!(A, conj(D)))
 rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     (D = transD.parent; rdiv!(A, D))
 
+(/)(A::Union{StridedMatrix, AbstractTriangular}, D::Diagonal) =
+    rdiv!((typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A), D)
+
 (\)(F::Factorization, D::Diagonal) =
     ldiv!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
 \(adjF::Adjoint{<:Any,<:Factorization}, D::Diagonal) =
     (F = adjF.parent; ldiv!(adjoint(F), Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D)))
+(\)(A::Union{QR,QRCompactWY,QRPivoted}, B::Diagonal) =
+    invoke(\, Tuple{Union{QR,QRCompactWY,QRPivoted}, AbstractVecOrMat}, A, B)
+
+function kron(A::Diagonal{T1}, B::Diagonal{T2}) where {T1<:Number, T2<:Number}
+    valA = A.diag; nA = length(valA)
+    valB = B.diag; nB = length(valB)
+    valC = Vector{typeof(zero(T1)*zero(T2))}(undef,nA*nB)
+    @inbounds for i = 1:nA, j = 1:nB
+        valC[(i-1)*nB+j] = valA[i] * valB[j]
+    end
+    return Diagonal(valC)
+end
 
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal{<:Number}) = D
@@ -406,7 +442,9 @@ function ldiv!(D::Diagonal, B::StridedVecOrMat)
     end
     return B
 end
-(\)(D::Diagonal, A::AbstractMatrix) = D.diag .\ A
+(\)(D::Diagonal, A::AbstractMatrix) =
+    ldiv!(D, (typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A))
+
 (\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
 (\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
 
@@ -442,10 +480,11 @@ function pinv(D::Diagonal{T}, tol::Real) where T
 end
 
 #Eigensystem
-eigvals(D::Diagonal{<:Number}) = D.diag
-eigvals(D::Diagonal) = [eigvals(x) for x in D.diag] #For block matrices, etc.
+eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = D.diag
+eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true) =
+    [eigvals(x) for x in D.diag] #For block matrices, etc.
 eigvecs(D::Diagonal) = Matrix{eltype(D)}(I, size(D))
-function eigfact(D::Diagonal; permute::Bool=true, scale::Bool=true)
+function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true)
     if any(!isfinite, D.diag)
         throw(ArgumentError("matrix contains Infs or NaNs"))
     end
@@ -462,14 +501,10 @@ function svd(D::Diagonal{<:Number})
     Up  = hcat([U[:,i] for i = 1:length(D.diag)][piv]...)
     V   = Diagonal(fill!(similar(D.diag), one(eltype(D.diag))))
     Vp  = hcat([V[:,i] for i = 1:length(D.diag)][piv]...)
-    return (Up, S[piv], Vp)
-end
-function svdfact(D::Diagonal)
-    U, s, V = svd(D)
-    SVD(U, s, copy(V'))
+    return SVD(Up, S[piv], copy(Vp'))
 end
 
-# dismabiguation methods: * of Diagonal and Adj/Trans AbsVec
+# disambiguation methods: * of Diagonal and Adj/Trans AbsVec
 *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal) = Adjoint(map((t,s) -> t'*s, D.diag, parent(x)))
 *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
     mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
@@ -477,3 +512,23 @@ end
 *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
     mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
 # TODO: these methods will yield row matrices, rather than adjoint/transpose vectors
+
+function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
+    info = 0
+    diagonal = A.diag
+    for i in axes(diagonal, 1)
+        d = diagonal[i]
+        if !(d == 0 || (isreal(d) && d < 0))
+            diagonal[i] = √d
+        elseif check
+            throw(PosDefException(i))
+        else
+            info = i
+            break
+        end
+    end
+    Cholesky(A, 'U', convert(BlasInt, info))
+end
+
+cholesky(A::Diagonal, ::Val{false} = Val(false); check::Bool = true) =
+    cholesky!(cholcopy(A), Val(false); check = check)

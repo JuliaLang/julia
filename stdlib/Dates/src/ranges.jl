@@ -21,9 +21,30 @@ Base.length(r::StepRange{<:TimeType}) = isempty(r) ? Int64(0) : len(r.start, r.s
 # Period ranges hook into Int64 overflow detection
 Base.length(r::StepRange{<:Period}) = length(StepRange(value(r.start), value(r.step), value(r.stop)))
 
-# Used to calculate the last valid date in the range given the start, stop, and step
-# last = stop - steprem(start, stop, step)
-Base.steprem(a::T, b::T, c) where {T<:TimeType} = b - (a + c * len(a, b, c))
+# Overload Base.steprange_last because `rem` is not overloaded for `TimeType`s
+function Base.steprange_last(start::T, step, stop) where T<:TimeType
+    if isa(step,AbstractFloat)
+        throw(ArgumentError("StepRange should not be used with floating point"))
+    end
+    z = zero(step)
+    step == z && throw(ArgumentError("step cannot be zero"))
+
+    if stop == start
+        last = stop
+    else
+        if (step > z) != (stop > start)
+            last = Base.steprange_last_empty(start, step, stop)
+        else
+            diff = stop - start
+            if (diff > zero(diff)) != (stop > start)
+                throw(OverflowError())
+            end
+            remain = stop - (start + step * len(start, stop, step))
+            last = stop - remain
+        end
+    end
+    last
+end
 
 import Base.in
 function in(x::T, r::StepRange{T}) where T<:TimeType

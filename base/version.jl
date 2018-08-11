@@ -278,7 +278,8 @@ function banner(io::IO = stdout)
             commit_string = "$(branch)/$(commit) (fork: $(distance) commits, $(days) $(unit))"
         end
     end
-    commit_date = !isempty(GIT_VERSION_INFO.date_string) ? " ($(GIT_VERSION_INFO.date_string))" : ""
+
+    commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
 
     if get(io, :color, false)
         c = text_colors
@@ -290,25 +291,25 @@ function banner(io::IO = stdout)
         d4 = c[:bold] * c[:magenta] # fourth dot
 
         print(io,"""               $(d3)_$(tx)
-           $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
-          $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: https://docs.julialang.org
-           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?help\" for help.
+           $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
+          $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
+           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
           $(jl)| | | | | | |/ _` |$(tx)  |
           $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
          $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
-        $(jl)|__/$(tx)                   |  $(Sys.MACHINE)
+        $(jl)|__/$(tx)                   |
 
         """)
     else
         print(io,"""
                        _
-           _       _ _(_)_     |  A fresh approach to technical computing
-          (_)     | (_) (_)    |  Documentation: https://docs.julialang.org
-           _ _   _| |_  __ _   |  Type \"?help\" for help.
+           _       _ _(_)_     |  Documentation: https://docs.julialang.org
+          (_)     | (_) (_)    |
+           _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
           | | | | | | |/ _` |  |
           | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
          _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
-        |__/                   |  $(Sys.MACHINE)
+        |__/                   |
 
         """)
     end

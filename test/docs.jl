@@ -669,7 +669,6 @@ end
 @test (@repl :@r_str) !== nothing
 
 # Simple tests for apropos:
-@test occursin("cor", sprint(apropos, "pearson"))
 @test occursin("eachindex", sprint(apropos, r"ind(exes|ices)"))
 using Profile
 @test occursin("Profile.print", sprint(apropos, "print"))
@@ -1121,3 +1120,21 @@ struct A_20087 end
 (a::A_20087)() = a
 
 @test docstrings_equal(@doc(A_20087()), doc"a")
+
+# issue #27832
+
+_last_atdoc = Core.atdoc
+Core.atdoc!(Core.Compiler.CoreDocs.docm)  # test bootstrap doc system
+
+"""
+"""
+module M27832
+macro foo(x)
+    repr(x)
+end
+for fn in (:isdone,)
+    global xs = @foo $fn
+end
+end
+@test M27832.xs == ":(\$(Expr(:\$, :fn)))"
+Core.atdoc!(_last_atdoc)

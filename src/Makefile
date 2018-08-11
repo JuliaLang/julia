@@ -21,6 +21,9 @@ FLAGS := \
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common \
 		 -Wpointer-arith -Wundef
+ifeq ($(USEGCC),1) # GCC bug #25509 (void)__attribute__((warn_unused_result))
+FLAGS += -Wno-unused-result
+endif
 override CFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 endif
 

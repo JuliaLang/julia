@@ -21,8 +21,7 @@ using Random
     tvals = Int[take!(c) for i in 1:10^6]
     @test pvals == tvals
 
-    # Uncomment line below once deprecation support has been removed.
-    # @test_throws MethodError Channel()
+    @test_throws MethodError Channel()
     @test_throws ArgumentError Channel(-1)
     @test_throws InexactError Channel(1.5)
 end
@@ -69,13 +68,13 @@ using Distributed
 @testset "channels bound to tasks" for N in [0, 10]
     # Normal exit of task
     c=Channel(N)
-    bind(c, @schedule (yield();nothing))
+    bind(c, @async (yield();nothing))
     @test_throws InvalidStateException take!(c)
     @test !isopen(c)
 
     # Error exception in task
     c=Channel(N)
-    bind(c, @schedule (yield();error("foo")))
+    bind(c, @async (yield();error("foo")))
     @test_throws ErrorException take!(c)
     @test !isopen(c)
 
@@ -230,7 +229,7 @@ end
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    Base._wait(t)
+    Base.wait(t)
     @test run[] == 3
     @test fetch(errstream) == """
         error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
@@ -238,7 +237,7 @@ end
         error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
         """
     # test for invalid state in Workqueue during yield
-    t = @schedule nothing
+    t = @async nothing
     t.state = :invalid
     try
         newstderr = redirect_stderr()
@@ -252,7 +251,7 @@ end
 end
 
 @testset "schedule_and_wait" begin
-    t = @schedule(nothing)
+    t = @async(nothing)
     ct = current_task()
     testobject = "testobject"
     # note: there is a low probability this test could fail, due to receiving network traffic simultaneously
@@ -268,7 +267,7 @@ end
     testerr = ErrorException("expected")
     @async Base.throwto(t, testerr)
     @test try
-        Base._wait(t)
+        Base.wait(t)
         false
     catch ex
         ex

@@ -99,7 +99,7 @@ function maybe_extract_const_bool(c::Conditional)
     (c.elsetype === Bottom && !(c.vtype === Bottom)) && return true
     nothing
 end
-maybe_extract_const_bool(c) = nothing
+maybe_extract_const_bool(@nospecialize c) = nothing
 
 function ⊑(@nospecialize(a), @nospecialize(b))
     if isa(a, MaybeUndef) && !isa(b, MaybeUndef)
@@ -127,6 +127,9 @@ function ⊑(@nospecialize(a), @nospecialize(b))
         end
         return isa(a.val, widenconst(b))
     elseif isa(b, Const)
+        if isa(a, DataType) && isdefined(a, :instance)
+            return a.instance === b.val
+        end
         return a === Bottom
     elseif !(isa(a, Type) || isa(a, TypeVar)) ||
            !(isa(b, Type) || isa(b, TypeVar))

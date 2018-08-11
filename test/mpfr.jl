@@ -12,7 +12,7 @@ import Base.MPFR
     @test x == BigFloat(x) == BigFloat(0xc) == BigFloat(12.) ==
           BigFloat(BigInt(12)) == BigFloat(BigFloat(12)) == parse(BigFloat,"12") ==
           parse(BigFloat,"12 ") == parse(BigFloat," 12") == parse(BigFloat," 12 ") ==
-          BigFloat(Float32(12.)) == BigFloat(12//1)
+          BigFloat(Float32(12.)) == BigFloat(12//1) == BigFloat(SubString("12"))
 
     @test typeof(BigFloat(typemax(Int8))) == BigFloat
     @test typeof(BigFloat(typemax(Int16))) == BigFloat
@@ -27,8 +27,8 @@ import Base.MPFR
     @test typeof(BigFloat(typemax(UInt64))) == BigFloat
     @test typeof(BigFloat(typemax(UInt128))) == BigFloat
 
-    @test typeof(BigFloat(realmax(Float32))) == BigFloat
-    @test typeof(BigFloat(realmax(Float64))) == BigFloat
+    @test typeof(BigFloat(floatmax(Float32))) == BigFloat
+    @test typeof(BigFloat(floatmax(Float64))) == BigFloat
 
     @test typeof(BigFloat(BigInt(1))) == BigFloat
     @test typeof(BigFloat(BigFloat(1))) == BigFloat
@@ -648,11 +648,11 @@ end
     @test BigFloat(1) + x == BigFloat(1) + prevfloat(x)
     @test eps(BigFloat) == eps(BigFloat(1))
 end
-@testset "realmin/realmax" begin
-    x = realmin(BigFloat)
+@testset "floatmin/floatmax" begin
+    x = floatmin(BigFloat)
     @test x > 0
     @test prevfloat(x) == 0
-    x = realmax(BigFloat)
+    x = floatmax(BigFloat)
     @test !isinf(x)
     @test isinf(nextfloat(x))
 end
@@ -696,9 +696,9 @@ end
     # hypot
     @test hypot(BigFloat(3), BigFloat(4)) == 5
 
-    # atan2
+    # atan
     setprecision(53) do
-        @test atan2(12,2) == atan2(BigFloat(12), BigFloat(2))
+        @test atan(12,2) == atan(BigFloat(12), BigFloat(2))
     end
 end
 @testset "ldexp" begin
@@ -853,11 +853,17 @@ end
 @test_throws ArgumentError parse(BigFloat, "1\0")
 
 @testset "serialization (issue #12386)" begin
-    b = IOBuffer()
-    x = 2.1 * big(pi)
-    serialize(b, x)
-    seekstart(b)
-    @test deserialize(b) == x
+    b = PipeBuffer()
+    let x = setprecision(53) do
+            return 2.1 * big(pi)
+        end
+        serialize(b, x)
+        @test deserialize(b) == x
+    end
+    let x = BigFloat(Inf, 46)
+        serialize(b, x)
+        @test deserialize(b) == x == BigFloat(Inf, 2)
+    end
 end
 @test isnan(sqrt(BigFloat(NaN)))
 
@@ -923,5 +929,3 @@ end
         @test to_string(big"-1.0") == "-1.0"
     end
 end
-
-@test beta(big(1.0),big(1.2)) ≈ beta(1.0,1.2) rtol=4*eps()

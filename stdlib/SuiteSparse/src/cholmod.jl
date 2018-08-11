@@ -3,12 +3,13 @@
 module CHOLMOD
 
 import Base: (*), convert, copy, eltype, getindex, getproperty, show, size,
-             IndexStyle, IndexLinear, IndexCartesian, adjoint
+             IndexStyle, IndexLinear, IndexCartesian, adjoint, axes
+using Base: has_offset_axes
 
 using LinearAlgebra
 import LinearAlgebra: (\),
-                 cholfact, cholfact!, det, diag, ishermitian, isposdef,
-                 issuccess, issymmetric, ldltfact, ldltfact!, logdet
+                 cholesky, cholesky!, det, diag, ishermitian, isposdef,
+                 issuccess, issymmetric, ldlt, ldlt!, logdet
 
 using SparseArrays
 import Libdl
@@ -271,7 +272,7 @@ if build_version >= v"2.1.0" # CHOLMOD version 2.1.0 or later
         minor::Csize_t
         Perm::Ptr{SuiteSparse_long}
         ColCount::Ptr{SuiteSparse_long}
-        IPerm::Ptr{SuiteSparse_long}        # this pointer was added in verison 2.1.0
+        IPerm::Ptr{SuiteSparse_long}        # this pointer was added in version 2.1.0
         nzmax::Csize_t
         p::Ptr{SuiteSparse_long}
         i::Ptr{SuiteSparse_long}
@@ -352,7 +353,7 @@ Base.transpose(F::Factor) = Transpose(F)
 
 # All pointer loads should be checked to make sure that SuiteSparse is not called with
 # a C_NULL pointer which could cause a segfault. Pointers are set to null
-# when serialized so this can happen when mutiple processes are in use.
+# when serialized so this can happen when multiple processes are in use.
 function Base.unsafe_convert(::Type{Ptr{T}}, x::Union{Dense,Sparse,Factor}) where T<:SuiteSparseStruct
     xp = getfield(x, :ptr)
     if xp == C_NULL
@@ -774,7 +775,7 @@ function solve(sys::Integer, F::Factor{Tv}, B::Dense{Tv}) where Tv<:VTypes
         if s.is_ll == 1
             throw(LinearAlgebra.PosDefException(s.minor))
         else
-            throw(ArgumentError("factorized matrix has one or more zero pivots. Try using lufact instead."))
+            throw(ArgumentError("factorized matrix has one or more zero pivots. Try using `lu` instead."))
         end
     end
     Dense(ccall((@cholmod_name("solve", SuiteSparse_long),:libcholmod), Ptr{C_Dense{Tv}},
@@ -823,7 +824,7 @@ get_perm(FC::FactorComponent) = get_perm(Factor(FC))
 # High level interfaces #
 #########################
 
-# Convertion/construction
+# Conversion/construction
 function Dense{T}(A::StridedVecOrMat) where T<:VTypes
     d = allocate_dense(size(A, 1), size(A, 2), stride(A, 2), T)
     s = unsafe_load(pointer(d))
@@ -1026,7 +1027,7 @@ function Sparse(filename::String)
     end
 end
 
-## convertion back to base Julia types
+## conversion back to base Julia types
 function Matrix{T}(D::Dense{T}) where T
     s = unsafe_load(pointer(D))
     a = Matrix{T}(undef, s.nrow, s.ncol)
@@ -1040,6 +1041,7 @@ Base.copyto!(dest::AbstractArray{T,2}, D::Dense{T}) where {T<:VTypes} = _copy!(d
 Base.copyto!(dest::AbstractArray, D::Dense) = _copy!(dest, D)
 
 function _copy!(dest::AbstractArray, D::Dense)
+    @assert !has_offset_axes(dest)
     s = unsafe_load(pointer(D))
     n = s.nrow*s.ncol
     n <= length(dest) || throw(BoundsError(dest, n))
@@ -1237,6 +1239,7 @@ function size(F::Factor, i::Integer)
     return 1
 end
 size(F::Factor) = (size(F, 1), size(F, 2))
+axes(A::Union{Dense,Sparse,Factor}) = map(Base.OneTo, size(A))
 
 IndexStyle(::Dense) = IndexLinear()
 
@@ -1314,7 +1317,7 @@ function *(A::Sparse{Tv}, adjB::Adjoint{Tv,Sparse{Tv}}) where Tv<:VRealTypes
     end
 
     ## The A*A' case is handled by cholmod_aat. This routine requires
-    ## A->stype == 0 (storage of upper and lower parts). If neccesary
+    ## A->stype == 0 (storage of upper and lower parts). If necessary
     ## the matrix A is first converted to stype == 0
     s = unsafe_load(pointer(A))
     if s.stype != 0
@@ -1367,25 +1370,27 @@ function fact_(A::Sparse{<:VTypes}, cm::Array{UInt8};
     return F
 end
 
-function cholfact!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
+function cholesky!(F::Factor{Tv}, A::Sparse{Tv};
+                   shift::Real=0.0, check::Bool = true) where Tv
     # Makes it an LLt
     unsafe_store!(common_final_ll[], 1)
 
     # Compute the numerical factorization
     factorize_p!(A, shift, F, common_struct)
 
+    check && (issuccess(F) || throw(LinearAlgebra.PosDefException(1)))
     return F
 end
 
 """
-    cholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
+    cholesky!(F::Factor, A; shift = 0.0, check = true) -> CHOLMOD.Factor
 
 Compute the Cholesky (``LL'``) factorization of `A`, reusing the symbolic
 factorization `F`. `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/
 [`Hermitian`](@ref) view of a `SparseMatrixCSC`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 
-See also [`cholfact`](@ref).
+See also [`cholesky`](@ref).
 
 !!! note
     This method uses the CHOLMOD library from SuiteSparse, which only supports
@@ -1393,15 +1398,15 @@ See also [`cholfact`](@ref).
     be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}`
     as appropriate.
 """
-cholfact!(F::Factor, A::Union{SparseMatrixCSC{T},
-        SparseMatrixCSC{Complex{T}},
-        Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
-        Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
-        Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
-    shift = 0.0) where {T<:Real} =
-    cholfact!(F, Sparse(A); shift = shift)
+cholesky!(F::Factor, A::Union{SparseMatrixCSC{T},
+          SparseMatrixCSC{Complex{T}},
+          Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
+          Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
+          Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
+          shift = 0.0, check::Bool = true) where {T<:Real} =
+    cholesky!(F, Sparse(A); shift = shift, check = check)
 
-function cholfact(A::Sparse; shift::Real=0.0,
+function cholesky(A::Sparse; shift::Real=0.0, check::Bool = true,
     perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[])
 
     cm = defaults(common_struct)
@@ -1411,20 +1416,20 @@ function cholfact(A::Sparse; shift::Real=0.0,
     F = fact_(A, cm; perm = perm)
 
     # Compute the numerical factorization
-    cholfact!(F, A; shift = shift)
+    cholesky!(F, A; shift = shift, check = check)
 
     return F
 end
 
 """
-    cholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor
+    cholesky(A; shift = 0.0, check = true, perm = Int[]) -> CHOLMOD.Factor
 
 Compute the Cholesky factorization of a sparse positive definite matrix `A`.
 `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
 view of a `SparseMatrixCSC`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 A fill-reducing permutation is used.
-`F = cholfact(A)` is most frequently used to solve systems of equations with `F\\b`,
+`F = cholesky(A)` is most frequently used to solve systems of equations with `F\\b`,
 but also the methods [`diag`](@ref), [`det`](@ref), and
 [`logdet`](@ref) are defined for `F`.
 You can also extract individual factors from `F`, using `F.L`.
@@ -1434,6 +1439,10 @@ using just `L` without accounting for `P` will give incorrect answers.
 To include the effects of permutation,
 it's typically preferable to extract "combined" factors like `PtL = F.PtL`
 (the equivalent of `P'*L`) and `LtP = F.UP` (the equivalent of `L'*P`).
+
+When `check = true`, an error is thrown if the decomposition fails.
+When `check = false`, responsibility for checking the decomposition's
+validity (via [`issuccess`](@ref)) lies with the user.
 
 Setting the optional `shift` keyword argument computes the factorization of
 `A+shift*I` instead of `A`. If the `perm` argument is nonempty,
@@ -1449,14 +1458,15 @@ it should be a permutation of `1:size(A,1)` giving the ordering to use
     Many other functions from CHOLMOD are wrapped but not exported from the
     `Base.SparseArrays.CHOLMOD` module.
 """
-cholfact(A::Union{SparseMatrixCSC{T}, SparseMatrixCSC{Complex{T}},
+cholesky(A::Union{SparseMatrixCSC{T}, SparseMatrixCSC{Complex{T}},
     Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
     Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
     Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
-    kws...) where {T<:Real} = cholfact(Sparse(A); kws...)
+    kws...) where {T<:Real} = cholesky(Sparse(A); kws...)
 
 
-function ldltfact!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
+function ldlt!(F::Factor{Tv}, A::Sparse{Tv};
+               shift::Real=0.0, check::Bool = true) where Tv
     cm = defaults(common_struct)
     set_print_level(cm, 0)
 
@@ -1466,18 +1476,19 @@ function ldltfact!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
     # Compute the numerical factorization
     factorize_p!(A, shift, F, cm)
 
+    check && (issuccess(F) || throw(LinearAlgebra.PosDefException(1)))
     return F
 end
 
 """
-    ldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
+    ldlt!(F::Factor, A; shift = 0.0, check = true) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of `A`, reusing the symbolic factorization `F`.
 `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
 view of a `SparseMatrixCSC`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 
-See also [`ldltfact`](@ref).
+See also [`ldlt`](@ref).
 
 !!! note
     This method uses the CHOLMOD library from SuiteSparse, which only supports
@@ -1485,15 +1496,15 @@ See also [`ldltfact`](@ref).
     be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}`
     as appropriate.
 """
-ldltfact!(F::Factor, A::Union{SparseMatrixCSC{T},
+ldlt!(F::Factor, A::Union{SparseMatrixCSC{T},
     SparseMatrixCSC{Complex{T}},
     Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
     Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
     Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
-    shift = 0.0) where {T<:Real} =
-    ldltfact!(F, Sparse(A), shift = shift)
+    shift = 0.0, check::Bool = true) where {T<:Real} =
+    ldlt!(F, Sparse(A), shift = shift, check = check)
 
-function ldltfact(A::Sparse; shift::Real=0.0,
+function ldlt(A::Sparse; shift::Real=0.0, check::Bool = true,
     perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[])
 
     cm = defaults(common_struct)
@@ -1508,19 +1519,19 @@ function ldltfact(A::Sparse; shift::Real=0.0,
     F = fact_(A, cm; perm = perm)
 
     # Compute the numerical factorization
-    ldltfact!(F, A; shift = shift)
+    ldlt!(F, A; shift = shift, check = check)
 
     return F
 end
 
 """
-    ldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
+    ldlt(A; shift = 0.0, check = true, perm=Int[]) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of a sparse matrix `A`.
 `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
 view of a `SparseMatrixCSC`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
-A fill-reducing permutation is used. `F = ldltfact(A)` is most frequently
+A fill-reducing permutation is used. `F = ldlt(A)` is most frequently
 used to solve systems of equations `A*x = b` with `F\\b`. The returned
 factorization object `F` also supports the methods [`diag`](@ref),
 [`det`](@ref), [`logdet`](@ref), and [`inv`](@ref).
@@ -1532,6 +1543,10 @@ To include the effects of permutation, it is typically preferable to extract
 "combined" factors like `PtL = F.PtL` (the equivalent of
 `P'*L`) and `LtP = F.UP` (the equivalent of `L'*P`).
 The complete list of supported factors is `:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP`.
+
+When `check = true`, an error is thrown if the decomposition fails.
+When `check = false`, responsibility for checking the decomposition's
+validity (via [`issuccess`](@ref)) lies with the user.
 
 Setting the optional `shift` keyword argument computes the factorization of
 `A+shift*I` instead of `A`. If the `perm` argument is nonempty,
@@ -1547,11 +1562,11 @@ it should be a permutation of `1:size(A,1)` giving the ordering to use
     Many other functions from CHOLMOD are wrapped but not exported from the
     `Base.SparseArrays.CHOLMOD` module.
 """
-ldltfact(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}},
+ldlt(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}},
     Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
     Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
     Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
-    kws...) where {T<:Real} = ldltfact(Sparse(A); kws...)
+    kws...) where {T<:Real} = ldlt(Sparse(A); kws...)
 
 ## Rank updates
 
@@ -1689,7 +1704,6 @@ function (\)(L::FactorComponent, B::SparseVecOrMat)
 end
 
 \(adjL::Adjoint{<:Any,<:FactorComponent}, B::Union{VecOrMat,SparseVecOrMat}) = (L = adjL.parent; adjoint(L)\B)
-\(adjL::Adjoint{<:Any,<:FactorComponent}, B::RowVector) = (L = adjL.parent; adjoint(L)\B) # ambiguity
 
 (\)(L::Factor{T}, B::Dense{T}) where {T<:VTypes} = solve(CHOLMOD_A, L, B)
 # Explicit typevars are necessary to avoid ambiguities with defs in linalg/factorizations.jl
@@ -1712,29 +1726,29 @@ const RealHermSymComplexHermF64SSL = Union{
     Hermitian{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
     Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}
 function \(A::RealHermSymComplexHermF64SSL, B::StridedVecOrMat)
-    F = cholfact(A)
+    F = cholesky(A; check = false)
     if issuccess(F)
         return \(F, B)
     else
-        ldltfact!(F, A)
+        ldlt!(F, A; check = false)
         if issuccess(F)
             return \(F, B)
         else
-            return \(lufact(SparseMatrixCSC{eltype(A), SuiteSparse_long}(A)), B)
+            return \(lu(SparseMatrixCSC{eltype(A), SuiteSparse_long}(A)), B)
         end
     end
 end
 function \(adjA::Adjoint{<:Any,<:RealHermSymComplexHermF64SSL}, B::StridedVecOrMat)
     A = adjA.parent
-    F = cholfact(A)
+    F = cholesky(A; check = false)
     if issuccess(F)
         return \(adjoint(F), B)
     else
-        ldltfact!(F, A)
+        ldlt!(F, A; check = false)
         if issuccess(F)
             return \(adjoint(F), B)
         else
-            return \(adjoint(lufact(SparseMatrixCSC{eltype(A), SuiteSparse_long}(A))), B)
+            return \(adjoint(lu(SparseMatrixCSC{eltype(A), SuiteSparse_long}(A))), B)
         end
     end
 end

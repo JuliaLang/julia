@@ -19,6 +19,15 @@ include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "errno_h.jl"))  # inc
 ## RawFD ##
 
 # Wrapper for an OS file descriptor (on both Unix and Windows)
+"""
+    RawFD
+
+Primitive type which wraps the native OS file descriptor.
+`RawFD`s can be passed to methods like [`stat`](@ref) to
+discover information about the underlying file, and can
+also be used to open streams, with the `RawFD` describing
+the OS file backing the stream.
+"""
 primitive type RawFD 32 end
 RawFD(fd::Integer) = bitcast(RawFD, Cint(fd))
 RawFD(fd::RawFD) = fd
@@ -170,12 +179,13 @@ library.
 """
 strftime(t) = strftime("%c", t)
 strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
+# Use wcsftime instead of strftime to support different locales
 function strftime(fmt::AbstractString, tm::TmStruct)
-    timestr = Base.StringVector(128)
-    n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Cstring, Ref{TmStruct}),
-              timestr, length(timestr), fmt, tm)
+    wctimestr = Vector{Cwchar_t}(undef, 128)
+    n = ccall(:wcsftime, Csize_t, (Ptr{Cwchar_t}, Csize_t, Cwstring, Ref{TmStruct}),
+              wctimestr, length(wctimestr), fmt, tm)
     n == 0 && return ""
-    return String(resize!(timestr,n))
+    return transcode(String, resize!(wctimestr, n))
 end
 
 """

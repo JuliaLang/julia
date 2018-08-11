@@ -5,12 +5,12 @@ module Sort
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base.Order
-using .Base: copymutable, LinearIndices, IndexStyle, viewindexing, IndexLinear, _length, (:),
-    eachindex, axes, first, last, similar, start, next, done, zip, @views, OrdinalRange,
+using .Base: copymutable, LinearIndices, length, (:),
+    eachindex, axes, first, last, similar, zip, OrdinalRange,
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
-    length, resize!, fill
+    length, resize!, fill, Missing, has_offset_axes
 
 using .Base: >>>, !==
 
@@ -37,8 +37,6 @@ export # also exported by Base
     partialsort!,
     partialsortperm,
     partialsortperm!,
-    sortrows,
-    sortcols,
     # algorithms:
     InsertionSort,
     QuickSort,
@@ -225,6 +223,7 @@ function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
 end
 
 function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -234,6 +233,7 @@ function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
 end
 
 function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if step(a) == 0
         lt(o, first(a), x) ? length(a) + 1 : 1
     else
@@ -243,6 +243,7 @@ function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -251,6 +252,7 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if step(a) == 0
         lt(o, first(a), x) ? length(a)+1 : 1
     else
@@ -259,6 +261,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if lt(o, first(a), x)
         if step(a) == 0
             length(a) + 1
@@ -271,6 +274,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOr
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if lt(o, x, first(a))
         0
     elseif step(a) == 0
@@ -568,7 +572,7 @@ end
 ## generic sorting methods ##
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
-defalg(v::AbstractArray{<:Number}) = DEFAULT_UNSTABLE
+defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
 
 function sort!(v::AbstractVector, alg::Algorithm, order::Ordering)
     inds = axes(v,1)
@@ -622,7 +626,7 @@ function sort!(v::AbstractVector;
                order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
-        n = _length(v)
+        n = length(v)
         if n > 1
             min, max = extrema(v)
             (diff, o1) = sub_with_overflow(max, min)
@@ -685,22 +689,41 @@ sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
 """
-    partialsortperm(v, k; alg=<algorithm>, by=<transform>, lt=<comparison>, rev=false)
+    partialsortperm(v, k; by=<transform>, lt=<comparison>, rev=false)
 
-Return a partial permutation of the vector `v`, according to the order specified by
-`by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values
-if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index,
-the index in `v` of the value which would be sorted at position `k` is returned;
-if `k` is a range, an array with the indices in `v` of the values which would be sorted in
-these positions is returned.
+Return a partial permutation `I` of the vector `v`, so that `v[I]` returns values of a fully
+sorted version of `v` at index `k`. If `k` is a range, a vector of indices is returned; if
+`k` is an integer, a single index is returned. The order is specified using the same
+keywords as `sort!`. The permutation is stable, meaning that indices of equal elements
+appear in ascending order.
 
-Note that this is equivalent to, but more efficient than, calling `sortperm(...)[k]`.
+Note that this function is equivalent to, but more efficient than, calling `sortperm(...)[k]`.
+
+# Examples
+```jldoctest
+julia> v = [3, 1, 2, 1];
+
+julia> v[partialsortperm(v, 1)]
+1
+
+julia> p = partialsortperm(v, 1:3)
+3-element view(::Array{Int64,1}, 1:3) with eltype Int64:
+ 2
+ 4
+ 3
+
+julia> v[p]
+3-element Array{Int64,1}:
+ 1
+ 1
+ 2
+```
 """
 partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     partialsortperm!(similar(Vector{eltype(k)}, axes(v,1)), v, k; kwargs..., initialized=false)
 
 """
-    partialsortperm!(ix, v, k; alg=<algorithm>, by=<transform>, lt=<comparison>, rev=false, initialized=false)
+    partialsortperm!(ix, v, k; by=<transform>, lt=<comparison>, rev=false, initialized=false)
 
 Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix`. If `initialized` is `false`
 (the default), `ix` is initialized to contain the values `1:length(ix)`.
@@ -729,13 +752,10 @@ end
 """
     sortperm(v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Return a permutation vector of indices of `v` that puts it in sorted order. Specify `alg` to
-choose a particular sorting algorithm (see Sorting Algorithms). `MergeSort` is used by
-default, and since it is stable, the resulting permutation will be the lexicographically
-first one that puts the input array into sorted order – i.e. indices of equal elements
-appear in ascending order. If you choose a non-stable sorting algorithm such as `QuickSort`,
-a different permutation that puts the array into order may be returned. The order is
-specified using the same keywords as `sort!`.
+Return a permutation vector `I` that puts `v[I]` in sorted order. The order is specified
+using the same keywords as `sort!`. The permutation is guaranteed to be stable even if the
+sorting algorithm is unstable, meaning that indices of equal elements appear in ascending
+order.
 
 See also [`sortperm!`](@ref).
 
@@ -764,7 +784,7 @@ function sortperm(v::AbstractVector;
                   order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
-        n = _length(v)
+        n = length(v)
         if n > 1
             min, max = extrema(v)
             (diff, o1) = sub_with_overflow(max, min)
@@ -882,12 +902,8 @@ function sort(A::AbstractArray;
               lt=isless,
               by=identity,
               rev::Union{Bool,Nothing}=nothing,
-              order::Ordering=Forward,
-              initialized::Union{Bool,Nothing}=nothing)
+              order::Ordering=Forward)
     dim = dims
-    if initialized !== nothing
-        Base.depwarn("`initialized` keyword argument is deprecated", :sort)
-    end
     order = ord(lt,by,rev,order)
     n = length(axes(A, dim))
     if dim != 1
@@ -910,93 +926,6 @@ end
     end
     Av
 end
-
-
-"""
-    sortrows(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
-
-Sort the rows of matrix `A` lexicographically.
-See [`sort!`](@ref) for a description of possible
-keyword arguments.
-
-# Examples
-```jldoctest
-julia> sortrows([7 3 5; -1 6 4; 9 -2 8])
-3×3 Array{Int64,2}:
- -1   6  4
-  7   3  5
-  9  -2  8
-
-julia> sortrows([7 3 5; -1 6 4; 9 -2 8], lt=(x,y)->isless(x[2],y[2]))
-3×3 Array{Int64,2}:
-  9  -2  8
-  7   3  5
- -1   6  4
-
-julia> sortrows([7 3 5; -1 6 4; 9 -2 8], rev=true)
-3×3 Array{Int64,2}:
-  9  -2  8
-  7   3  5
- -1   6  4
-```
-"""
-function sortrows(A::AbstractMatrix; kws...)
-    inds = axes(A,1)
-    T = slicetypeof(A, inds, :)
-    rows = similar(A, T, axes(A, 1))
-    for i in inds
-        rows[i] = view(A, i, :)
-    end
-    p = sortperm(rows; kws...)
-    A[p,:]
-end
-
-"""
-    sortcols(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
-
-Sort the columns of matrix `A` lexicographically.
-See [`sort!`](@ref) for a description of possible
-keyword arguments.
-
-# Examples
-```jldoctest
-julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8])
-3×3 Array{Int64,2}:
-  3   5  7
- -1  -4  6
- -2   8  9
-
-julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8], alg=InsertionSort, lt=(x,y)->isless(x[2],y[2]))
-3×3 Array{Int64,2}:
-  5   3  7
- -4  -1  6
-  8  -2  9
-
-julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8], rev=true)
-3×3 Array{Int64,2}:
- 7   5   3
- 6  -4  -1
- 9   8  -2
-```
-"""
-function sortcols(A::AbstractMatrix; kws...)
-    inds = axes(A,2)
-    T = slicetypeof(A, :, inds)
-    cols = similar(A, T, axes(A, 2))
-    for i in inds
-        cols[i] = view(A, :, i)
-    end
-    p = sortperm(cols; kws...)
-    A[:,p]
-end
-
-function slicetypeof(A::AbstractArray{T}, i1, i2) where T
-    I = map(slice_dummy, to_indices(A, (i1, i2)))
-    fast = isa(IndexStyle(viewindexing(I), IndexStyle(A)), IndexLinear)
-    SubArray{T,1,typeof(A),typeof(I),fast}
-end
-slice_dummy(S::Slice) = S
-slice_dummy(::AbstractUnitRange{T}) where {T} = oneunit(T)
 
 ## fast clever sorting for floats ##
 

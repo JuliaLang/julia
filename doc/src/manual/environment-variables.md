@@ -76,36 +76,6 @@ the absolute path
 e.g., version 0.7 of Julia on a Linux system with a Julia executable at
 `/bin/julia` will have a default `LOAD_PATH` of `/share/julia/stdlib/v0.7`.
 
-### `JULIA_PKGDIR`
-
-The path of the parent directory `Pkg.Dir._pkgroot()` for the version-specific
-Julia package repositories. If the path is relative, then it is taken with
-respect to the working directory. If `$JULIA_PKGDIR` is not set, then
-`Pkg.Dir._pkgroot()` defaults to
-
-```
-$HOME/.julia
-```
-
-Then the repository location `Pkg.dir` for a given Julia version is
-
-```
-$JULIA_PKGDIR/v$(VERSION.major).$(VERSION.minor)
-```
-
-For example, for a Linux user whose home directory is `/home/alice`, the directory
-containing the package repositories would by default be
-
-```
-/home/alice/.julia
-```
-
-and the package repository for version 0.6 of Julia would be
-
-```
-/home/alice/.julia/v0.6
-```
-
 ### `JULIA_HISTORY`
 
 The absolute path `REPL.find_hist_file()` of the REPL's history file. If
@@ -118,7 +88,7 @@ $HOME/.julia/logs/repl_history.jl
 ### `JULIA_PKGRESOLVE_ACCURACY`
 
 A positive `Int` that determines how much time the max-sum subroutine
-`MaxSum.maxsum()` of the package dependency resolver `Pkg.resolve`
+`MaxSum.maxsum()` of the package dependency resolver
 will devote to attempting satisfying constraints before giving up: this value is
 by default `1`, and larger values correspond to larger amounts of time.
 
@@ -151,16 +121,11 @@ over `$EDITOR`. If none of these environment variables is set, then the editor
 is taken to be `open` on Windows and OS X, or `/etc/alternatives/editor` if it
 exists, or `emacs` otherwise.
 
-!!! note
-
-    `$JULIA_EDITOR` is *not* used in the determination of the editor for
-    `Pkg.edit`: this function checks `$VISUAL` and `$EDITOR` alone.
-
 ## Parallelization
 
-### `JULIA_CPU_CORES`
+### `JULIA_CPU_THREADS`
 
-Overrides the global variable [`Base.Sys.CPU_CORES`](@ref), the number of
+Overrides the global variable [`Base.Sys.CPU_THREADS`](@ref), the number of
 logical CPU cores available.
 
 ### `JULIA_WORKER_TIMEOUT`

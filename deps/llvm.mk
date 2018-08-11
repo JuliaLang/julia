@@ -98,6 +98,10 @@ ifeq ($(USE_OPROFILE_JITEVENTS), 1)
 LLVM_CMAKE += -DLLVM_USE_OPROFILE:BOOL=ON
 endif # USE_OPROFILE_JITEVENTS
 
+ifeq ($(USE_PERF_JITEVENTS), 1)
+	LLVM_CMAKE += -DLLVM_USE_PERF:BOOL=ON
+endif # USE_PERF_JITEVENTS
+
 ifeq ($(BUILD_LLDB),1)
 ifeq ($(USECLANG),0)
 LLVM_CXXFLAGS += -std=c++0x
@@ -369,12 +373,14 @@ endif # LLVM_VER
 	touch -c $(LLVM_SRC_DIR)/CMakeLists.txt
 	echo 1 > $@
 
-# Apply version-specific LLVM patches
+# Apply version-specific LLVM patches sequentially
 LLVM_PATCH_PREV :=
 define LLVM_PATCH
 $$(LLVM_SRC_DIR)/$1.patch-applied: $$(LLVM_SRC_DIR)/source-extracted | $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
 	cd $$(LLVM_SRC_DIR) && patch -p1 < $$(SRCDIR)/patches/$1.patch
 	echo 1 > $$@
+# declare that applying any patch must re-run the compile step
+$$(LLVM_BUILDDIR_withtype)/build-compiled: $$(LLVM_SRC_DIR)/$1.patch-applied
 LLVM_PATCH_PREV := $$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
@@ -488,6 +494,19 @@ $(eval $(call LLVM_PATCH,llvm-D45008)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-D45070)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-6.0.0-ifconv-D45819)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-D46460))
+$(eval $(call LLVM_PATCH,llvm-rL332680)) # remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-rL332682)) # remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-rL332302)) # remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-rL332694)) # remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-rL327898)) # remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
+$(eval $(call LLVM_PATCH,llvm-OProfile-line-num))
+$(eval $(call LLVM_PATCH,llvm-D44892-Perf-integration))
+$(eval $(call LLVM_PATCH,llvm-D49832-SCEVPred)) # Remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-rL323946-LSRTy)) # Remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-D50010-VNCoercion-ni))
+$(eval $(call LLVM_PATCH,llvm-D50167-scev-umin))
+$(eval $(call LLVM_PATCH,llvm-windows-race))
 endif # LLVM_VER
 
 # Remove hardcoded OS X requirements in compilter-rt cmake build
@@ -502,7 +521,8 @@ endif
 $(eval $(call LLVM_PATCH,llvm-symver-jlprefix)) # DO NOT REMOVE
 
 
-$(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_PATCH_PREV)
+# declare that all patches must be applied before running ./configure
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV)
 
 $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_SRC_DIR)/source-extracted | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
@@ -574,7 +594,14 @@ endif
 endif
 else # USE_BINARYBUILDER_LLVM
 LLVM_BB_URL_BASE := https://github.com/staticfloat/LLVMBuilder/releases/download
-LLVM_BB_URL := $(LLVM_BB_URL_BASE)/v$(LLVM_VER)-$(LLVM_BB_REL)/LLVM.$(BINARYBUILDER_TRIPLET).tar.gz
+ifneq ($(BINARYBUILDER_LLVM_ASSERTS), 1)
+LLVM_BB_NAME := LLVM
+else
+LLVM_BB_NAME := LLVM.asserts
+endif
+LLVM_BB_NAME := $(LLVM_BB_NAME).v$(LLVM_VER)
+LLVM_BB_URL := $(LLVM_BB_URL_BASE)/v$(LLVM_VER)-$(LLVM_BB_REL)/$(LLVM_BB_NAME).$(BINARYBUILDER_TRIPLET).tar.gz
+
 
 $(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL):
 	mkdir -p $@
