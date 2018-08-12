@@ -505,7 +505,7 @@ function find(t::ShortTuple, n::Integer)
     end
 end
 
-flatten(x::Integer) = x[1]..., flatten(tail(x))...
+flatten(x::ShortTuple) = x[1]..., flatten(tail(x))...
 flatten(::Tuple{}) = ()
 
 product(x::ShortTuple, y::ShortTuple) = flatten(map(
