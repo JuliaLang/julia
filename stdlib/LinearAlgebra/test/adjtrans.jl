@@ -271,8 +271,10 @@ end
 
 @testset "Adjoint and Transpose vector vec methods" begin
     intvec = [1, 2]
-    @test vec(Adjoint(intvec)) === intvec
+    @test vec(Adjoint(intvec)) == intvec
     @test vec(Transpose(intvec)) === intvec
+    cvec = [1 + 1im]
+    @test vec(cvec')[1] == cvec[1]'
 end
 
 @testset "horizontal concatenation of Adjoint/Transpose-wrapped vectors and Numbers" begin
