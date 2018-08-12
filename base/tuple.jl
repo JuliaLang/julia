@@ -508,7 +508,7 @@ end
 flatten(x::Integer) = x[1]..., flatten(tail(x))...
 flatten(::Tuple{}) = ()
 
-product(x::ShortTuple, y::::ShortTuple) = flatten(map(
+product(x::ShortTuple, y::ShortTuple) = flatten(map(
     let x = x
         y1 ->
             map(
