@@ -103,7 +103,6 @@ using RTDyldObjHandleT = orc::ObjectLinkingLayerBase::ObjSetHandleT;
 
 class JuliaOJIT {
     // Custom object emission notification handler for the JuliaOJIT
-    // TODO: hook up RegisterJITEventListener, instead of hard-coding the GDB and JuliaListener targets
     class DebugObjectRegistrar {
     public:
         DebugObjectRegistrar(JuliaOJIT &JIT);
@@ -112,7 +111,6 @@ class JuliaOJIT {
     private:
         template <typename ObjT, typename LoadResult>
         void registerObject(RTDyldObjHandleT H, const ObjT &Object, const LoadResult &LO);
-        void NotifyGDB(object::OwningBinary<object::ObjectFile> &DebugObj);
         std::vector<object::OwningBinary<object::ObjectFile>> SavedObjects;
         std::unique_ptr<JITEventListener> JuliaListener;
         JuliaOJIT &JIT;
