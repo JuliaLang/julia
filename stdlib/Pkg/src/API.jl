@@ -576,7 +576,7 @@ function activate(path::String; shared::Bool=false)
             fullpath = abspath(devpath)
         else
             fullpath = abspath(path)
-            isdir(fullpath) || @info("new environment will be placed at $fullpath")
+            isdir(fullpath) || @info("activating new environment at $(Base.contractuser(fullpath)).")
         end
     else
         # initialize `fullpath` in case of empty `Pkg.depots()`
@@ -593,7 +593,7 @@ function activate(path::String; shared::Bool=false)
         # unless the shared environment already exists, place it in the first depots
         if !isdir(fullpath)
             fullpath = joinpath(Pkg.envdir(Pkg.depots1()), path)
-            @info("new shared environment \"$path\" will be placed at $fullpath")
+            @info("activating new environment at $(Base.contractuser(fullpath)).")
         end
     end
     Base.ACTIVE_PROJECT[] = Base.load_path_expand(fullpath)

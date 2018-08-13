@@ -264,21 +264,21 @@ temp_pkg_dir() do project_path
         pkg"activate Foo" # activate path Foo over deps Foo
         @test Base.active_project() == joinpath(path, "Foo", "Project.toml")
         pkg"activate ."
-        @test_logs (:info, r"new shared environment") pkg"activate --shared Foo" # activate shared Foo
+        @test_logs (:info, r"activating new environment at ") pkg"activate --shared Foo" # activate shared Foo
         @test Base.active_project() == joinpath(Pkg.envdir(), "Foo", "Project.toml")
         pkg"activate ."
         rm("Foo"; force=true, recursive=true)
         pkg"activate Foo" # activate path from developed Foo
         @test Base.active_project() == joinpath(path, "modules", "Foo", "Project.toml")
         pkg"activate ."
-        @test_logs (:info, r"new environment") pkg"activate ./Foo" # activate empty directory Foo (sidestep the developed Foo)
+        @test_logs (:info, r"activating new environment at ") pkg"activate ./Foo" # activate empty directory Foo (sidestep the developed Foo)
         @test Base.active_project() == joinpath(path, "Foo", "Project.toml")
         pkg"activate ."
-        @test_logs (:info, r"new environment") pkg"activate Bar" # activate empty directory Bar
+        @test_logs (:info, r"activating new environment at ") pkg"activate Bar" # activate empty directory Bar
         @test Base.active_project() == joinpath(path, "Bar", "Project.toml")
         pkg"activate ."
         pkg"add Example" # non-deved deps should not be activated
-        @test_logs (:info, r"new environment") pkg"activate Example"
+        @test_logs (:info, r"activating new environment at ") pkg"activate Example"
         @test Base.active_project() == joinpath(path, "Example", "Project.toml")
         pkg"activate ."
         cd(mkdir("tests"))
