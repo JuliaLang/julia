@@ -219,10 +219,10 @@ If `pkg` is given as a local path, the package at that path will be tracked.
 Pkg.develop("Example")
 
 # By url
-Pkg.develop(PackageSpec(url="https://github.com/JuliaLang/Compat.jl", rev="master"))
+Pkg.develop(PackageSpec(url="https://github.com/JuliaLang/Compat.jl"))
 
-# By path (also uses url keyword to PackageSpec)
-Pkg.develop(PackageSpec(url="MyJuliaPackages/Package.jl")
+# By path
+Pkg.develop(PackageSpec(path="MyJuliaPackages/Package.jl")
 ```
 
 See also [`PackageSpec`](@ref)
