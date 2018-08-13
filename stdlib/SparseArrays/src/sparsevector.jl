@@ -3,7 +3,7 @@
 ### Common definitions
 
 import Base: sort, findall
-import LinearAlgebra: promote_to_array_type, promote_to_arrays_
+import LinearAlgebra: promote_to_array_type, promote_to_arrays_, wrapperop
 
 ### The SparseVector
 
@@ -510,22 +510,43 @@ sprandn(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, randn)
 ## Indexing into Matrices can return SparseVectors
 
 # Column slices
-function getindex(x::SparseMatrixCSC, ::Colon, j::Integer)
+
+## Helper function
+_colptr_range(x, j::Integer) = (convert(Int, x.colptr[j]), convert(Int, x.colptr[j+1]) - 1)
+
+# Barrier function for calling f on a range of nzval.
+# This can be done as well with view and map, etc.
+# But, in that case, this code is not optimized unless it is inlined by hand.
+function _get_new_nzval(x, irange, f)
+    nzval = x.nzval
+    len = last(irange) - first(irange) + 1
+    newnzval = similar(nzval, len)
+    offset = first(irange) - 1
+    @inbounds for ind in 1:len
+        newnzval[ind] = f(nzval[ind + offset])
+    end
+    return newnzval
+end
+_get_new_nzval(x, irange::AbstractUnitRange, ::typeof(identity)) = x.nzval[irange]
+
+getindex(x::SparseMatrixCSC, ::Colon, j::Integer) = _getindex(x, :, j, identity)
+function _getindex(x::SparseMatrixCSC, ::Colon, j::Integer, f)
     checkbounds(x, :, j)
-    r1 = convert(Int, x.colptr[j])
-    r2 = convert(Int, x.colptr[j+1]) - 1
-    SparseVector(x.m, x.rowval[r1:r2], x.nzval[r1:r2])
+    r1, r2 = _colptr_range(x, j)
+    newnzval = _get_new_nzval(x, r1:r2, f)
+    return SparseVector(x.m, x.rowval[r1:r2], newnzval)
 end
 
-function getindex(x::SparseMatrixCSC, I::AbstractUnitRange, j::Integer)
+getindex(x::SparseMatrixCSC, I::AbstractUnitRange, j::Integer) = _getindex(x, I, j, identity)
+function _getindex(x::SparseMatrixCSC, I::AbstractUnitRange, j::Integer, f)
     checkbounds(x, I, j)
     # Get the selected column
-    c1 = convert(Int, x.colptr[j])
-    c2 = convert(Int, x.colptr[j+1]) - 1
+    c1, c2 = _colptr_range(x, j)
     # Restrict to the selected rows
     r1 = searchsortedfirst(x.rowval, first(I), c1, c2, Forward)
     r2 = searchsortedlast(x.rowval, last(I), c1, c2, Forward)
-    SparseVector(length(I), [x.rowval[i] - first(I) + 1 for i = r1:r2], x.nzval[r1:r2])
+    newnzval = _get_new_nzval(x, r1:r2, f)
+    return SparseVector(length(I), [x.rowval[i] - first(I) + 1 for i = r1:r2], newnzval)
 end
 
 # In the general case, we piggy back upon SparseMatrixCSC's optimized solution
@@ -534,9 +555,19 @@ end
     SparseVector(M.m, M.rowval, M.nzval)
 end
 
+@inline function _getindex(A::SparseMatrixCSC, I::AbstractVector, J::Integer, f)
+    M = A[I, [J]]
+    newnzval = similar(M.nzval)
+    @inbounds for ind in 1:lastindex(newnzval)
+        newnzval[ind] = f(M.nzval[ind])
+    end
+    SparseVector(M.m, M.rowval, newnzval)
+end
+
 # Row slices
 getindex(A::SparseMatrixCSC, i::Integer, ::Colon) = A[i, 1:end]
-function Base.getindex(A::SparseMatrixCSC{Tv,Ti}, i::Integer, J::AbstractVector) where {Tv,Ti}
+getindex(A::SparseMatrixCSC, i::Integer, J::AbstractVector) = _getindex(A, i, J)
+function _getindex(A::SparseMatrixCSC{Tv,Ti}, i::Integer, J::AbstractVector; f=identity) where {Tv,Ti}
     @assert !has_offset_axes(A, J)
     checkbounds(A, i, J)
     nJ = length(J)
@@ -557,7 +588,7 @@ function Base.getindex(A::SparseMatrixCSC{Tv,Ti}, i::Integer, J::AbstractVector)
                 ptrA = searchsortedfirst(rowvalA, rowI, ptrA, stopA, Base.Order.Forward)
                 if ptrA <= stopA && rowvalA[ptrA] == rowI
                     push!(nzinds, j)
-                    push!(nzvals, nzvalA[ptrA])
+                    push!(nzvals, f(nzvalA[ptrA]))
                 end
             end
             ptrI += 1
@@ -566,6 +597,13 @@ function Base.getindex(A::SparseMatrixCSC{Tv,Ti}, i::Integer, J::AbstractVector)
     return SparseVector(nJ, nzinds, nzvals)
 end
 
+## Column slices with Adjoint or Transpose wrappers
+const AdjOrTransSparseMatrixCSC = Union{Transpose{<:Any,<:SparseMatrixCSC}, Adjoint{<:Any,<:SparseMatrixCSC}}
+getindex(A::AdjOrTransSparseMatrixCSC, ::Colon, j::Integer) = A[1:end, j]
+getindex(A::AdjOrTransSparseMatrixCSC, I::AbstractVector, j::Integer) = _getindex(A.parent, j, I; f=wrapperop(A))
+## Row slices with Adjoint or Transpose wrappers
+getindex(A::AdjOrTransSparseMatrixCSC, i::Integer, ::Colon) = _getindex(A.parent, :, i, wrapperop(A))
+getindex(A::AdjOrTransSparseMatrixCSC, i::Integer, J::AbstractVector) = _getindex(A.parent, J, i, wrapperop(A))
 
 # Logical and linear indexing into SparseMatrices
 getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}) = _logical_index(A, I) # Ambiguities
