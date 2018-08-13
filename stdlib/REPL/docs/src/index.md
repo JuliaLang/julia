@@ -6,18 +6,12 @@ it has a searchable history, tab-completion, many helpful keybindings, and dedic
 shell modes. The REPL can be started by simply calling `julia` with no arguments or double-clicking
 on the executable:
 
-```
-$ julia
-               _
-   _       _ _(_)_     |  A fresh approach to technical computing
-  (_)     | (_) (_)    |  Documentation: https://docs.julialang.org
-   _ _   _| |_  __ _   |  Type "?help" for help.
-  | | | | | | |/ _` |  |
-  | | |_| | | | (_| |  |  Version 0.6.0-dev.2493 (2017-01-31 18:53 UTC)
- _/ |\__'_|_|_|\__'_|  |  Commit c99e12c* (0 days old master)
-|__/                   |  x86_64-linux-gnu
-
-julia>
+```@eval
+io = IOBuffer()
+Base.banner(io)
+banner = String(take!(io))
+import Markdown
+Markdown.parse("```\n\$ julia\n\n$(banner)\njulia>\n```")
 ```
 
 To exit the interactive session, type `^D` -- the control key together with the `d` key on a blank

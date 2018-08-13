@@ -80,6 +80,8 @@ n = 5 # should be odd
         @test logdet(A) ≈ log(det(A))
         @test logabsdet(A)[1] ≈ log(abs(det(A)))
         @test logabsdet(Matrix{elty}(-I, n, n))[2] == -1
+        infinity = convert(float(elty), Inf)
+        @test logabsdet(zeros(elty, n, n)) == (-infinity, zero(elty))
         if elty <: Real
             @test logabsdet(A)[2] == sign(det(A))
             @test_throws DomainError logdet(Matrix{elty}(-I, n, n))
