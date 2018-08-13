@@ -98,7 +98,6 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
             path = pkg.path
         elseif info !== nothing && haskey(info, "repo-url")
             path = find_installed(pkg.name, pkg.uuid, SHA1(info["git-tree-sha1"]))
-            pkg.version = VersionNumber(info["version"])
             pkg.repo = Types.GitRepo(info["repo-url"], info["repo-rev"], SHA1(info["git-tree-sha1"]))
         else
             continue
@@ -326,23 +325,33 @@ function resolve_versions!(ctx::Context, pkgs::Vector{PackageSpec})::Dict{UUID,V
             pkg = PackageSpec(name, uuid, ver)
             push!(pkgs, pkg)
         end
-        proj_compat = Types.project_compatibility(ctx, name)
-        v = intersect(pkg.version, proj_compat)
-        if isempty(v)
-            pkgerror(string("for package $(pkg.name) intersection between project compatibility $(proj_compat) ",
-                            "and package version $(pkg.version) is empty"))
-        end
-        pkg.version = v
-    end
-    proj_compat = Types.project_compatibility(ctx, "julia")
-    v = intersect(VERSION, proj_compat)
-    if isempty(v)
-        @warn("julia version requirement for project not satisfied")
     end
 
     # construct data structures for resolver and call it
-    reqs = Requires(pkg.uuid => VersionSpec(pkg.version) for pkg in pkgs if pkg.uuid ≠ uuid_julia)
+    # this also sets pkg.version for fixed packages
     fixed = collect_fixed!(ctx, pkgs, uuid_to_name)
+
+    # compatibility
+    proj_compat = Types.project_compatibility(ctx, "julia")
+    v = intersect(VERSION, proj_compat)
+    if isempty(v)
+        @warn "julia version requirement for project not satisfied" _module=nothing _file=nothing
+    end
+
+    for pkg in pkgs
+        proj_compat = Types.project_compatibility(ctx, pkg.name)
+        v = intersect(pkg.version, proj_compat)
+        if isempty(v)
+            pkgerror(string("empty intersection between $(pkg.name)@$(pkg.version) and project ",
+                            "compatibility $(proj_compat)"))
+        end
+        # Work around not clobbering 0.x.y+ for checked out old type of packages
+        if !(pkg.version isa VersionNumber)
+            pkg.version = v
+        end
+    end
+
+    reqs = Requires(pkg.uuid => VersionSpec(pkg.version) for pkg in pkgs if pkg.uuid ≠ uuid_julia)
     fixed[uuid_julia] = Fixed(VERSION)
     graph = deps_graph(ctx, uuid_to_name, reqs, fixed)
 

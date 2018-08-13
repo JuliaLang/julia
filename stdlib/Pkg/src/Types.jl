@@ -582,6 +582,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}, 
                 pkg.path = Pkg.Operations.relative_project_path_if_in_project(ctx, dev_pkg_path)
             end
             @assert pkg.path != nothing
+            @assert has_uuid(pkg)
         end
         return new_uuids
     end
@@ -679,7 +680,7 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec};
                 mv(project_path, version_path; force=true)
                 push!(new_uuids, pkg.uuid)
             end
-            @assert pkg.version isa VersionNumber
+            @assert has_uuid(pkg)
         end
         return new_uuids
     finally
@@ -694,14 +695,7 @@ function parse_package!(ctx, pkg, project_path)
         project_data = read_package(project_file)
         pkg.uuid = UUID(project_data["uuid"])
         pkg.name = project_data["name"]
-        if haskey(project_data, "version")
-            pkg.version = VersionNumber(project_data["version"])
-        else
-            @warn "project file for $(pkg.name) at $(project_path) is missing a `version` entry"
-            Pkg.Operations.set_maximum_version_registry!(env, pkg)
-        end
     else
-        # @warn "package $(pkg.name) at $(project_path) will need to have a [Julia]Project.toml file in the future"
         if !isempty(ctx.old_pkg2_clone_name) # remove when legacy CI script support is removed
             pkg.name = ctx.old_pkg2_clone_name
         else
@@ -723,14 +717,9 @@ function parse_package!(ctx, pkg, project_path)
                 pkg.uuid = uuid5(uuid_unreg_pkg, pkg.name)
                 @info "Assigning UUID $(pkg.uuid) to $(pkg.name)"
             end
-            pkg.version = v"0.0"
         else
-            # TODO: Fix
             @assert length(reg_uuids) == 1
             pkg.uuid = reg_uuids[1]
-            # Old style registered package
-            # What version does this package have? We have no idea... let's give it the latest one with a `+`...
-            Pkg.Operations.set_maximum_version_registry!(env, pkg)
         end
     end
 end
