@@ -56,7 +56,7 @@ function repl_cmd(cmd, out)
                     # If it's intended to simulate `cd`, it should instead be doing
                     # more nearly `cd $dir && printf %s \$PWD` (with appropriate quoting),
                     # since shell `cd` does more than just `echo` the result.
-                    dir = read(`$shell -c "printf %s $(shell_escape_posixly(dir))"`, String)
+                    dir = read(`$shell -c "printf '%s' $(shell_escape_posixly(dir))"`, String)
                 end
                 cd(dir)
             end
