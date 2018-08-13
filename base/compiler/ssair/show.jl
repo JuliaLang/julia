@@ -327,7 +327,7 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
     bb_idx = 1
     new_nodes = code.new_nodes
     if any(i -> !isassigned(code.new_nodes, i), 1:length(code.new_nodes))
-        printstyled(io, :red, "ERROR: New node array has unset entry\n")
+        printstyled(io, "ERROR: New node array has unset entry\n", color=:red)
         new_nodes = new_nodes[filter(i -> isassigned(code.new_nodes, i), 1:length(code.new_nodes))]
     end
     for nn in new_nodes
@@ -354,7 +354,7 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
         if !isassigned(stmts, idx)
             # This is invalid, but do something useful rather
             # than erroring, to make debugging easier
-            printstyled(io, :red, "#UNDEF\n")
+            printstyled(io, "#UNDEF\n", color=:red)
             continue
         end
         stmt = stmts[idx]
@@ -495,7 +495,7 @@ function show_ir(io::IO, code::CodeInfo, expr_type_printer=default_expr_type_pri
         if !isassigned(stmts, idx)
             # This is invalid, but do something useful rather
             # than erroring, to make debugging easier
-            printstyled(io, :red, "#UNDEF\n")
+            printstyled(io, "#UNDEF\n", color=:red)
             continue
         end
         stmt = stmts[idx]
