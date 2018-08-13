@@ -70,7 +70,7 @@ end
 # this will inherit an existing JULIA_LOAD_PATH value or if there is none, leave
 # a trailing empty entry in JULIA_LOAD_PATH which will be replaced with defaults.
 
-const DEFAULT_LOAD_PATH = ["@", "@v#.#", "@stdlib"]
+const DEFAULT_LOAD_PATH = ["@", "@v#", "@stdlib"]
 
 """
     LOAD_PATH
