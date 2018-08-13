@@ -270,16 +270,6 @@ function __installed(mode::PackageMode=PKGMODE_MANIFEST)
 end
 
 function gc(ctx::Context=Context(); kwargs...)
-    function recursive_dir_size(path)
-        size = 0
-        for (root, dirs, files) in walkdir(path)
-            for file in files
-                size += stat(joinpath(root, file)).size
-            end
-        end
-        return size
-    end
-
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     env = ctx.env
@@ -327,10 +317,12 @@ function gc(ctx::Context=Context(); kwargs...)
         packagedir = abspath(depot, "packages")
         if isdir(packagedir)
             for name in readdir(packagedir)
-                for slug in readdir(joinpath(packagedir, name))
-                    versiondir = joinpath(packagedir, name, slug)
-                    if !(versiondir in paths_to_keep)
-                        push!(paths_to_delete, versiondir)
+                if isdir(joinpath(packagedir, name))
+                    for slug in readdir(joinpath(packagedir, name))
+                        versiondir = joinpath(packagedir, name, slug)
+                        if !(versiondir in paths_to_keep)
+                            push!(paths_to_delete, versiondir)
+                        end
                     end
                 end
             end
@@ -343,6 +335,16 @@ function gc(ctx::Context=Context(); kwargs...)
     end
 
     # Delete paths for noreachable package versions and compute size saved
+    function recursive_dir_size(path)
+        size = 0
+        for (root, dirs, files) in walkdir(path)
+            for file in files
+                size += stat(joinpath(root, file)).size
+            end
+        end
+        return size
+    end
+
     sz = 0
     for path in paths_to_delete
         sz_pkg = recursive_dir_size(path)
@@ -363,8 +365,10 @@ function gc(ctx::Context=Context(); kwargs...)
         if isdir(packagedir)
             for name in readdir(packagedir)
                 name_path = joinpath(packagedir, name)
-                if isempty(readdir(name_path))
-                    !ctx.preview && Base.rm(name_path)
+                if isdir(name_path)
+                    if isempty(readdir(name_path))
+                        !ctx.preview && Base.rm(name_path)
+                    end
                 end
             end
         end

@@ -127,6 +127,12 @@ temp_pkg_dir() do project_path
         @test isinstalled(TEST_PKG)
         Pkg.rm(TEST_PKG.name)
         @test !isinstalled(TEST_PKG)
+        # https://github.com/JuliaLang/Pkg.jl/issues/601
+        pkgdir = joinpath(Pkg.depots1(), "packages")
+        touch(joinpath(pkgdir, ".DS_Store"))
+        Pkg.gc()
+        rm(joinpath(pkgdir, ".DS_Store"))
+        @test isempty(readdir(pkgdir))
     end
 
     @testset "package with wrong UUID" begin
