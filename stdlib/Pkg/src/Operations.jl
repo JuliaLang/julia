@@ -310,16 +310,17 @@ function resolve_versions!(ctx::Context, pkgs::Vector{PackageSpec})::Dict{UUID,V
         uuid_to_name[uuid] = name
 
         uuid_idx = findfirst(isequal(uuid), uuids)
-        ver = VersionSpec()
+        info = manifest_info(ctx.env, uuid)
+        if info !== nothing && haskey(info, "version") # stdlibs might not have a version
+            ver = VersionSpec(VersionNumber(info["version"]))
+        else
+            ver = VersionSpec()
+        end
         if uuid_idx != nothing
             pkg = pkgs[uuid_idx]
-            info = manifest_info(ctx.env, uuid)
-            if info !== nothing && haskey(info, "version") # stdlibs might not have a version
-                ver = VersionNumber(info["version"])
-                    if pkg.special_action != PKGSPEC_FREED && get(info, "pinned", false)
-                        # This is a pinned package, fix its version
-                        pkg.version = ver
-                end
+            if info !== nothing && pkg.special_action != PKGSPEC_FREED && get(info, "pinned", false)
+                # This is a pinned package, fix its version
+                pkg.version = ver
             end
         else
             pkg = PackageSpec(name, uuid, ver)

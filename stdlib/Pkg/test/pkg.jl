@@ -144,6 +144,9 @@ temp_pkg_dir() do project_path
         # VersionRange
         Pkg.add(PackageSpec(TEST_PKG.name, VersionSpec(VersionRange("0.3.0-0.3.2"))))
         @test Pkg.API.__installed()[TEST_PKG.name] == v"0.3.2"
+        # Check that adding another packages doesn't upgrade other packages
+        Pkg.add("Test")
+        @test Pkg.API.__installed()[TEST_PKG.name] == v"0.3.2"
         Pkg.update(; level = UPLEVEL_PATCH)
         @test Pkg.API.__installed()[TEST_PKG.name] == v"0.3.3"
         Pkg.update(; level = UPLEVEL_MINOR)
