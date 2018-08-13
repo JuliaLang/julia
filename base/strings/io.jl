@@ -11,7 +11,7 @@ of values `xs` if there is one, otherwise call [`show`](@ref).
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 
-Printing `nothing` is deprecated and will throw an error in the future.
+Printing `nothing` is not allowed and throws an error.
 
 # Examples
 ```jldoctest
@@ -132,7 +132,7 @@ string_with_env(env, xs...) = print_to_string(xs...; env=env)
 """
     string(xs...)
 
-Create a string from any values using the [`print`](@ref) function.
+Create a string from any values, except `nothing`, using the [`print`](@ref) function.
 
 # Examples
 ```jldoctest
