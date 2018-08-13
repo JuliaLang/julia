@@ -1122,6 +1122,7 @@ This operation is undone by `free`.
 ```jl
 pkg> develop Example
 pkg> develop https://github.com/JuliaLang/Example.jl
+pkg> develop ~/mypackages/Example
 pkg> develop --local Example
 ```
     """,
