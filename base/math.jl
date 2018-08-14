@@ -27,7 +27,7 @@ using Core.Intrinsics: sqrt_llvm
 
 using .Base: IEEEFloat
 
-@noinline function throw_complex_domainerror(f, x)
+@noinline function throw_complex_domainerror(f::Symbol, x)
     throw(DomainError(x, string("$f will only return a complex result if called with a ",
                                 "complex argument. Try $f(Complex(x)).")))
 end
