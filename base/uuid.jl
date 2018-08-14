@@ -3,7 +3,7 @@
 """
     Represents a Universally Unique Identifier (UUID).
     Can be built from a UInt128 (all byte values), from two UInt64 or four UInt32.
-    Conversion from a string is will check the UUID validity.
+    Conversion from a string will check the UUID validity.
 """
 struct UUID
     value::UInt128
