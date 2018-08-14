@@ -9629,7 +9629,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.string",
     "category": "function",
-    "text": "string(n::Integer; base::Integer = 10, pad::Integer = 1)\n\nConvert an integer n to a string in the given base, optionally specifying a number of digits to pad to.\n\njulia> string(5, base = 13, pad = 4)\n\"0005\"\n\njulia> string(13, base = 5, pad = 4)\n\"0023\"\n\n\n\n\n\nstring(xs...)\n\nCreate a string from any values using the print function.\n\nExamples\n\njulia> string(\"a\", 1, true)\n\"a1true\"\n\n\n\n\n\n"
+    "text": "string(n::Integer; base::Integer = 10, pad::Integer = 1)\n\nConvert an integer n to a string in the given base, optionally specifying a number of digits to pad to.\n\njulia> string(5, base = 13, pad = 4)\n\"0005\"\n\njulia> string(13, base = 5, pad = 4)\n\"0023\"\n\n\n\n\n\nstring(xs...)\n\nCreate a string from any values, except nothing, using the print function.\n\nExamples\n\njulia> string(\"a\", 1, true)\n\"a1true\"\n\n\n\n\n\n"
 },
 
 {
@@ -12733,7 +12733,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.print",
     "category": "function",
-    "text": "print([io::IO], xs...)\n\nWrite to io (or to the default output stream stdout if io is not given) a canonical (un-decorated) text representation of values xs if there is one, otherwise call show. The representation used by print includes minimal formatting and tries to avoid Julia-specific details.\n\nPrinting nothing is deprecated and will throw an error in the future.\n\nExamples\n\njulia> print(\"Hello World!\")\nHello World!\njulia> io = IOBuffer();\n\njulia> print(io, \"Hello\", \' \', :World!)\n\njulia> String(take!(io))\n\"Hello World!\"\n\n\n\n\n\n"
+    "text": "print([io::IO], xs...)\n\nWrite to io (or to the default output stream stdout if io is not given) a canonical (un-decorated) text representation of values xs if there is one, otherwise call show. The representation used by print includes minimal formatting and tries to avoid Julia-specific details.\n\nPrinting nothing is not allowed and throws an error.\n\nExamples\n\njulia> print(\"Hello World!\")\nHello World!\njulia> io = IOBuffer();\n\njulia> print(io, \"Hello\", \' \', :World!)\n\njulia> String(take!(io))\n\"Hello World!\"\n\n\n\n\n\n"
 },
 
 {
