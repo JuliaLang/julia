@@ -156,7 +156,6 @@ temp_pkg_dir() do project_path
 
     @testset "testing" begin
         # TODO: Check that preview = true doesn't actually execute the test
-        # TODO: Test-only dependencies
         Pkg.add(TEST_PKG.name)
         Pkg.test(TEST_PKG.name; coverage=true)
         pkgdir = Base.locate_package(Base.PkgId(TEST_PKG.uuid, TEST_PKG.name))
@@ -416,6 +415,51 @@ temp_pkg_dir() do project_path
         end
     end
 end
+
+temp_pkg_dir() do project_path; cd(project_path) do
+    @testset "instantiating updated repo" begin
+        tmp = mktempdir()
+        cd(tmp)
+        depo1 = mktempdir()
+        depo2 = mktempdir()
+
+        empty!(DEPOT_PATH)
+        pushfirst!(DEPOT_PATH, depo1)
+        LibGit2.close(LibGit2.clone("https://github.com/JuliaLang/Example.jl", "Example.jl"))
+        mkdir("machine1")
+        cd("machine1")
+        Pkg.activate(".")
+        Pkg.add(PackageSpec(path="../Example.jl"))
+        cd("..")
+        cp("machine1", "machine2")
+        empty!(DEPOT_PATH)
+        pushfirst!(DEPOT_PATH, depo2)
+        cd("machine2")
+        Pkg.activate(".")
+        Pkg.instantiate()
+        cd("..")
+        cd("Example.jl")
+        open("README.md", "a") do io
+            print(io, "Hello")
+        end
+        LibGit2.with(LibGit2.GitRepo(".")) do repo
+            LibGit2.add!(repo, "*")
+            LibGit2.commit(repo, "changes"; author=TEST_SIG, committer=TEST_SIG)
+        end
+        cd("../machine1")
+        empty!(DEPOT_PATH)
+        pushfirst!(DEPOT_PATH, depo1)
+        Pkg.activate(".")
+        Pkg.update()
+        cd("..")
+        cp("machine1/Manifest.toml", "machine2/Manifest.toml"; force=true)
+        cd("machine2")
+        empty!(DEPOT_PATH)
+        pushfirst!(DEPOT_PATH, depo2)
+        Pkg.activate(".")
+        Pkg.instantiate()
+    end
+end end
 
 temp_pkg_dir() do project_path
     cd(project_path) do
