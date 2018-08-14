@@ -231,7 +231,7 @@ end
 
 
 # Statically split range [1,N] into equal sized chunks for np processors
-function splitrange(N::Integer, np::Integer)
+function splitrange(N::Int, np::Int)
     each = div(N,np)
     extras = rem(N,np)
     nchunks = each > 0 ? np : extras
@@ -251,7 +251,7 @@ end
 
 function preduce(reducer, f, R)
     N = length(R)
-    chunks = splitrange(N, nworkers())
+    chunks = splitrange(Int(N), nworkers())
     all_w = workers()[1:length(chunks)]
 
     w_exec = Task[]
