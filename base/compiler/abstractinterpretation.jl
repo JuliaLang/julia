@@ -1168,6 +1168,8 @@ function typeinf_local(frame::InferenceState)
     nothing
 end
 
+const zygote = true
+
 function rettype(ci::CodeInfo)
   rets = map(x -> x.args[1], filter(x -> isexpr(x, :return), ci.code))
   return Union{map(r -> r isa SSAValue ? ci.ssavaluetypes[r.id] : typeof(r), rets)...}
