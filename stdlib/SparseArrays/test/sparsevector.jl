@@ -1260,4 +1260,22 @@ end
     end
 end
 
+@testset "slice transpose and adjoint" begin
+    matdim = 1000
+    S = sprand(Complex{Float64}, matdim, matdim, 0.1)
+    St = transpose(S)
+    Sa = adjoint(S)
+    r1 = div(matdim, 4)
+    r2 = div(matdim, 2) + r1
+    irange = r1:r2
+    cirange = collect(irange)
+    for inds1 in ((1, :), (irange, 1), (cirange, 1))
+        for inds in (inds1, reverse(inds1))
+            rinds = reverse(inds)
+            @test S[inds...] == St[rinds...]
+            @test S[inds...] == conj.(Sa[rinds...])
+        end
+    end
+end
+
 end # module
