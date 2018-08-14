@@ -368,18 +368,9 @@ const precompile_script = """
     ] activate .
     $CTRL_C
     Pkg.add("Test") # adding an stdlib doesn't require internet access
+    ] add Te\t\t$CTRL_C
     ] st
     $CTRL_C
     rm(tmp; recursive=true)"""
-
-module PrecompileArea
-    import ..Pkg
-    using ..Types
-    using UUIDs
-    import LibGit2
-    import REPL
-    import SHA
-    include("precompile.jl")
-end
 
 end # module
