@@ -231,7 +231,7 @@ end
 
 
 # Statically split range [1,N] into equal sized chunks for np processors
-function splitrange(N::Int, np::Int)
+function splitrange(N::Integer, np::Integer)
     each = div(N,np)
     extras = rem(N,np)
     nchunks = each > 0 ? np : extras
