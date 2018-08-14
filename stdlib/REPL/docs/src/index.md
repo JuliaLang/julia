@@ -15,7 +15,7 @@ Markdown.parse("```\n\$ julia\n\n$(banner)\njulia>\n```")
 ```
 
 To exit the interactive session, type `^D` -- the control key together with the `d` key on a blank
-line -- or type `quit()` followed by the return or enter key. The REPL greets you with a banner
+line -- or type `exit()` followed by the return or enter key. The REPL greets you with a banner
 and a `julia>` prompt.
 
 ## The different prompt modes
