@@ -550,7 +550,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}, 
                     else
                         rev = string(LibGit2.GitHash(LibGit2.head(repo)))
                     end
-                    gitobject, isbranch = get_object_branch(repo, rev)
+                    gitobject, isbranch = get_object_branch(repo, rev, creds)
                     try
                         LibGit2.transact(repo) do r
                             if isbranch
@@ -608,35 +608,32 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec};
             project_path = nothing
             folder_already_downloaded = false
             try
-                repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
-                    r = GitTools.clone(pkg.repo.url, repo_path, isbare=true, credentials=creds)
-                    GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
-                    r, true
+                repo = if ispath(repo_path)
+                    LibGit2.GitRepo(repo_path)
+                else
+                    GitTools.clone(pkg.repo.url, repo_path, isbare=true, credentials=creds)
                 end
                 info = manifest_info(env, pkg.uuid)
                 pinned = (info != nothing && get(info, "pinned", false))
-                if upgrade_or_add && !pinned && !just_cloned
-                    rev = pkg.repo.rev
-                    GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
-                end
                 upgrading = upgrade_or_add && !pinned
                 if upgrading
+                    GitTools.fetch(repo; refspecs=refspecs, credentials=creds)
                     rev = pkg.repo.rev
+                    # see if we can get rev as a branch
+                    if isempty(rev)
+                        if LibGit2.isattached(repo)
+                            rev = LibGit2.branch(repo)
+                        else
+                            rev = string(LibGit2.GitHash(LibGit2.head(repo)))
+                        end
+                    end
                 else
                     # Not upgrading so the rev should be the current git-tree-sha
                     rev = info["git-tree-sha1"]
                     pkg.version = VersionNumber(info["version"])
                 end
 
-                # see if we can get rev as a branch
-                if isempty(rev)
-                    if LibGit2.isattached(repo)
-                        rev = LibGit2.branch(repo)
-                    else
-                        rev = string(LibGit2.GitHash(LibGit2.head(repo)))
-                    end
-                end
-                gitobject, isbranch = get_object_branch(repo, rev)
+                gitobject, isbranch = get_object_branch(repo, rev, creds)
                 # If the user gave a shortened commit SHA, might as well update it to the full one
                 try
                     if upgrading
@@ -653,7 +650,6 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec};
                             info = manifest_info(env, pkg.uuid)
                             if info != nothing && get(info, "git-tree-sha1", "") == string(pkg.repo.git_tree_sha1) && folder_already_downloaded
                                 # Same tree sha and this version already downloaded, nothing left to do
-                                pkg.version = VersionNumber(info["version"])
                                 do_nothing_more = true
                             end
                         end
@@ -733,7 +729,7 @@ function set_repo_for_pkg!(env, pkg)
     _, pkg.repo.url = Types.registered_info(env, pkg.uuid, "repo")[1]
 end
 
-function get_object_branch(repo, rev)
+function get_object_branch(repo, rev, creds)
     gitobject = nothing
     isbranch = false
     try
@@ -747,7 +743,13 @@ function get_object_branch(repo, rev)
             gitobject = LibGit2.GitObject(repo, rev)
         catch err
             err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-            pkgerror("git object $(rev) could not be found")
+            GitTools.fetch(repo; refspecs=refspecs, credentials=creds)
+            try
+                gitobject = LibGit2.GitObject(repo, rev)
+            catch err
+                err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+                pkgerror("git object $(rev) could not be found")
+            end
         end
     end
     return gitobject, isbranch
