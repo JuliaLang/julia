@@ -1,0 +1,29 @@
+# Configuration file for VSTS pipelines
+
+queue: 'Hosted Preview Linux'
+steps:
+# First set BUILDOPTS as a environment wide variable
+- bash: "echo \"##vso[task.setvariable variable=BUILDOPTS]-j5 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 USECCACHE=1\""
+- bash: make check-whitespace
+- bash: |
+    contrib/travis_fastfail.sh || exit 1;
+    sudo apt-get update
+    sudo apt-get install -y ccache gfortran
+    contrib/download_cmake.sh
+  displayName: setup
+- bash: |
+    make $BUILDOPTS -C base version_git.jl.phony
+    make $BUILDOPTS NO_GIT=1 -C deps
+  displayName: dependencies
+  env:
+    BUILDOPTS: $(BUILDOPTS)
+- bash: |
+    make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia release
+  displayName: release
+  env:
+    BUILDOPTS: $(BUILDOPTS)
+- bash: |
+    make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia debug
+  displayName: debug
+  env:
+    BUILDOPTS: $(BUILDOPTS)
