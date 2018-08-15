@@ -6697,3 +6697,8 @@ function repackage28445()
     true
 end
 @test repackage28445()
+
+# issue #28597
+@test_throws ErrorException Array{Int, 2}(undef, 0, -10)
+@test_throws ErrorException Array{Int, 2}(undef, -10, 0)
+@test_throws ErrorException Array{Int, 2}(undef, -1, -1)
