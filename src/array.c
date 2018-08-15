@@ -61,8 +61,9 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
     jl_array_t *a;
 
     for(i=0; i < ndims; i++) {
-        wideint_t prod = (wideint_t)nel * (wideint_t)dims[i];
-        if (prod > (wideint_t) MAXINTVAL)
+        size_t di = dims[i];
+        wideint_t prod = (wideint_t)nel * (wideint_t)di;
+        if (prod > (wideint_t) MAXINTVAL || di > MAXINTVAL)
             jl_error("invalid Array dimensions");
         nel = prod;
     }
