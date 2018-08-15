@@ -2,8 +2,8 @@
 
 function dot(x::BitVector, y::BitVector)
     # simplest way to mimic Array dot behavior
-    if size(x) != size(y)
-        throw(DimensionMismatch("The first array has size $(size(x)) which does not match the size of the second, $(size(y)). You might want to use `dot(vec(x), vec(y))` if `length(x) == length(y)`."))
+    if axes(x) != axes(y)
+        throw(DimensionMismatch("The first array has axes $(axes(x)) that do not match the axes of the second, $(axes(y)). You might want to use `dot(vec(x), vec(y))` if `length(x) == length(y)`."))
     end
     s = 0
     xc = x.chunks
