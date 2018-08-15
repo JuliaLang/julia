@@ -1,21 +1,15 @@
 Julia v1.0.0 Release Notes
 ==========================
 
-New language features
----------------------
+Julia v1.0 is identical to the v0.7 release, with the exception that
+it removes all deprecations and deprecation related warnings. When
+upgrading a codebase from v0.6, the process is to first get the code
+to work on v0.7, and fix all the deprecation warnings. Once the code
+runs on v0.7 without warnings, it should be good to run on v1.0.
 
-Language changes
-----------------
-
-Breaking changes
-----------------
-If you encounter errors in your code that were not there in Julia version 0.6, it is recommended to run the code on version 0.7 where deprecation warnings for things removed in 1.0 are shown.
-
-Library improvements
---------------------
-
-Compiler/Runtime improvements
------------------------------
+Refer to the [Release Notes for
+v0.7](https://github.com/JuliaLang/julia/blob/master/HISTORY.md) for a
+detailed list of changes from Julia v0.6.
 
 Deprecated or removed
 ---------------------
