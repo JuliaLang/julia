@@ -7397,7 +7397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
@@ -8149,7 +8149,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.log",
     "category": "method",
-    "text": "log(b,x)\n\nCompute the base b logarithm of x. Throws DomainError for negative Real arguments.\n\nExamples\n\njulia> log(4,8)\n1.5\n\njulia> log(4,2)\n0.5\n\njulia> log(-2, 3)\nERROR: DomainError with log:\n-2.0 will only return a complex result if called with a complex argument. Try -2.0(Complex(x)).\nStacktrace:\n [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31\n[...]\n\njulia> log(2, -3)\nERROR: DomainError with log:\n-3.0 will only return a complex result if called with a complex argument. Try -3.0(Complex(x)).\nStacktrace:\n [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31\n[...]\n\nnote: Note\nIf b is a power of 2 or 10, log2 or log10 should be used, as these will typically be faster and more accurate. For example,julia> log(100,1000000)\n2.9999999999999996\n\njulia> log10(1000000)/2\n3.0\n\n\n\n\n\n"
+    "text": "log(b,x)\n\nCompute the base b logarithm of x. Throws DomainError for negative Real arguments.\n\nExamples\n\njulia> log(4,8)\n1.5\n\njulia> log(4,2)\n0.5\n\njulia> log(-2, 3)\nERROR: DomainError with -2.0:\nlog will only return a complex result if called with a complex argument. Try log(Complex(x)).\nStacktrace:\n [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31\n[...]\n\njulia> log(2, -3)\nERROR: DomainError with -3.0:\nlog will only return a complex result if called with a complex argument. Try log(Complex(x)).\nStacktrace:\n [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31\n[...]\n\nnote: Note\nIf b is a power of 2 or 10, log2 or log10 should be used, as these will typically be faster and more accurate. For example,julia> log(100,1000000)\n2.9999999999999996\n\njulia> log10(1000000)/2\n3.0\n\n\n\n\n\n"
 },
 
 {
@@ -8173,7 +8173,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.log1p",
     "category": "function",
-    "text": "log1p(x)\n\nAccurate natural logarithm of 1+x. Throws DomainError for Real arguments less than -1.\n\nExamples\n\njulia> log1p(-0.5)\n-0.6931471805599453\n\njulia> log1p(0)\n0.0\n\njulia> log1p(-2)\nERROR: DomainError with log1p:\n-2.0 will only return a complex result if called with a complex argument. Try -2.0(Complex(x)).\nStacktrace:\n [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31\n[...]\n\n\n\n\n\n"
+    "text": "log1p(x)\n\nAccurate natural logarithm of 1+x. Throws DomainError for Real arguments less than -1.\n\nExamples\n\njulia> log1p(-0.5)\n-0.6931471805599453\n\njulia> log1p(0)\n0.0\n\njulia> log1p(-2)\nERROR: DomainError with -2.0:\nlog1p will only return a complex result if called with a complex argument. Try log1p(Complex(x)).\nStacktrace:\n [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31\n[...]\n\n\n\n\n\n"
 },
 
 {
