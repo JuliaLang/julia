@@ -19845,7 +19845,7 @@ var documenterSearchIndex = {"docs": [
     "page": "The Julia REPL",
     "title": "The Julia REPL",
     "category": "section",
-    "text": "Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into the julia executable. In addition to allowing quick and easy evaluation of Julia statements, it has a searchable history, tab-completion, many helpful keybindings, and dedicated help and shell modes. The REPL can be started by simply calling julia with no arguments or double-clicking on the executable:io = IOBuffer()\nBase.banner(io)\nbanner = String(take!(io))\nimport Markdown\nMarkdown.parse(\"```\\n\\$ julia\\n\\n$(banner)\\njulia>\\n```\")To exit the interactive session, type ^D – the control key together with the d key on a blank line – or type quit() followed by the return or enter key. The REPL greets you with a banner and a julia> prompt."
+    "text": "Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into the julia executable. In addition to allowing quick and easy evaluation of Julia statements, it has a searchable history, tab-completion, many helpful keybindings, and dedicated help and shell modes. The REPL can be started by simply calling julia with no arguments or double-clicking on the executable:io = IOBuffer()\nBase.banner(io)\nbanner = String(take!(io))\nimport Markdown\nMarkdown.parse(\"```\\n\\$ julia\\n\\n$(banner)\\njulia>\\n```\")To exit the interactive session, type ^D – the control key together with the d key on a blank line – or type exit() followed by the return or enter key. The REPL greets you with a banner and a julia> prompt."
 },
 
 {
