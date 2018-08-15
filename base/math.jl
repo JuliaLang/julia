@@ -27,7 +27,7 @@ using Core.Intrinsics: sqrt_llvm
 
 using .Base: IEEEFloat
 
-@noinline function throw_complex_domainerror(f, x)
+@noinline function throw_complex_domainerror(f::Symbol, x)
     throw(DomainError(x, string("$f will only return a complex result if called with a ",
                                 "complex argument. Try $f(Complex(x)).")))
 end
@@ -198,17 +198,17 @@ julia> log(4,2)
 0.5
 
 julia> log(-2, 3)
-ERROR: DomainError with log:
--2.0 will only return a complex result if called with a complex argument. Try -2.0(Complex(x)).
+ERROR: DomainError with -2.0:
+log will only return a complex result if called with a complex argument. Try log(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31
+ [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
 
 julia> log(2, -3)
-ERROR: DomainError with log:
--3.0 will only return a complex result if called with a complex argument. Try -3.0(Complex(x)).
+ERROR: DomainError with -3.0:
+log will only return a complex result if called with a complex argument. Try log(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31
+ [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
 ```
 
@@ -459,10 +459,10 @@ julia> log1p(0)
 0.0
 
 julia> log1p(-2)
-ERROR: DomainError with log1p:
--2.0 will only return a complex result if called with a complex argument. Try -2.0(Complex(x)).
+ERROR: DomainError with -2.0:
+log1p will only return a complex result if called with a complex argument. Try log1p(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31
+ [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
 ```
 """
