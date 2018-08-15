@@ -543,11 +543,11 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
     a = StringVector(i)
     while i > neg
-        a[i] = 48+(x&0x1)
+        @inbounds a[i] = 48+(x&0x1)
         x >>= 1
         i -= 1
     end
-    if neg; a[1]='-'; end
+    if neg; @inbounds a[1]=0x2d; end
     String(a)
 end
 
@@ -559,7 +559,7 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
         x >>= 3
         i -= 1
     end
-    if neg; @inbounds a[1]='-'; end
+    if neg; @inbounds a[1]=0x2d; end
     String(a)
 end
 
@@ -571,7 +571,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
         x = oftype(x,div(x,10))
         i -= 1
     end
-    if neg; @inbounds a[1]='-'; end
+    if neg; @inbounds a[1]=0x2d; end
     String(a)
 end
 
@@ -584,7 +584,7 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
         x >>= 4
         i -= 1
     end
-    if neg; @inbounds a[1]='-'; end
+    if neg; @inbounds a[1]=0x2d; end
     String(a)
 end
 
