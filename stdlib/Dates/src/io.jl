@@ -243,6 +243,17 @@ function Base.show(io::IO, d::Delim)
     print(io, ")")
 end
 
+### Optional parts
+
+struct OptionalStart{depth} <: AbstractDateToken end
+struct OptionalEnd{depth} <: AbstractDateToken end
+
+_show_content(io::IO, d::OptionalStart) = print(io, '[')
+_show_content(io::IO, d::OptionalEnd) = print(io, ']')
+
+function format(io, d::OptionalStart, dt) end
+function format(io, d::OptionalEnd, dt) end
+
 ### DateFormat construction
 
 abstract type DayOfWeekToken end # special addition to Period types
@@ -292,8 +303,8 @@ const CONVERSION_TRANSLATIONS = IdDict{Type, Any}(
     DateFormat(format::AbstractString, locale="english") -> DateFormat
 
 Construct a date formatting object that can be used for parsing date strings or
-formatting a date object as a string. The following character codes can be used to construct the `format`
-string:
+formatting a date object as a string. The following character codes can be used to construct
+the `format` string:
 
 | Code       | Matches   | Comment                                                      |
 |:-----------|:----------|:-------------------------------------------------------------|
@@ -309,6 +320,7 @@ string:
 | `s`        | 500       | Matches milliseconds                                         |
 | `e`        | Mon, Tues | Matches abbreviated days of the week                         |
 | `E`        | Monday    | Matches full name days of the week                           |
+| `[...]`    |           | Marks the content between brackets to be optional            |
 | `yyyymmdd` | 19960101  | Matches fixed-width year, month, and day                     |
 
 Characters not listed above are normally treated as delimiters between date and time slots.
@@ -320,51 +332,66 @@ Creating a DateFormat object is expensive. Whenever possible, create it once and
 or try the `dateformat""` string macro. Using this macro creates the DateFormat object once at
 macro expansion time and reuses it later. see [`@dateformat_str`](@ref).
 
-See [`DateTime`](@ref) and [`format`](@ref) for how to use a DateFormat object to parse and write Date strings
-respectively.
+See [`DateTime`](@ref) and [`format`](@ref) for how to use a DateFormat object to parse and write
+Date strings respectively.
 """
 function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
     tokens = AbstractDateToken[]
     prev = ()
     prev_offset = 1
+    opt_depth = 0
 
     letters = String(collect(keys(CONVERSION_SPECIFIERS)))
-    for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
+    for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters[]\\E])\\1*"), f)
         tran = replace(f[prev_offset:prevind(f, m.offset)], r"\\(.)" => s"\1")
 
         if !isempty(prev)
-            letter, width = prev
-            typ = CONVERSION_SPECIFIERS[letter]
-
-            push!(tokens, DatePart{letter}(width, isempty(tran)))
+            opt_depth = _push_token!(tokens, prev, isempty(tran), opt_depth)
+            opt_depth < 0 && throw(ArgumentError("Unmatched closing optional ']' in $f"))
         end
 
         if !isempty(tran)
             push!(tokens, Delim(length(tran) == 1 ? first(tran) : tran))
         end
 
-        letter = f[m.offset]
         width = length(m.match)
-
-        prev = (letter, width)
+        prev = (f[m.offset], width)
         prev_offset = m.offset + width
     end
 
     tran = replace(f[prev_offset:lastindex(f)], r"\\(.)" => s"\1")
 
     if !isempty(prev)
-        letter, width = prev
-        typ = CONVERSION_SPECIFIERS[letter]
-
-        push!(tokens, DatePart{letter}(width, false))
+        opt_depth = _push_token!(tokens, prev, false, opt_depth)
+        opt_depth < 0 && throw(ArgumentError("Unmatched closing optional ']' in $f"))
     end
 
     if !isempty(tran)
         push!(tokens, Delim(length(tran) == 1 ? first(tran) : tran))
     end
 
+    opt_depth > 0 && throw(ArgumentError("Unmatched opening optional '[' in $f"))
+
     tokens_tuple = (tokens...,)
     return DateFormat{Symbol(f),typeof(tokens_tuple)}(tokens_tuple, locale)
+end
+
+function _push_token!(tokens::Vector{AbstractDateToken}, prev::Tuple{Char, Int}, fixed::Bool, depth::Int)
+    letter, width = prev
+    if letter == '['
+        for i in 1:width
+            push!(tokens, OptionalStart{depth+i}())
+        end
+        depth+width
+    elseif letter == ']'
+        for i in 0:width-1
+            push!(tokens, OptionalEnd{depth-i}())
+        end
+        depth-width
+    else
+        push!(tokens, DatePart{letter}(width, fixed))
+        depth
+    end
 end
 
 function DateFormat(f::AbstractString, locale::AbstractString)
@@ -489,7 +516,6 @@ function format(dt::TimeType, fmt::DateFormat, bufsize=12)
     String(io.data[1:io.ptr - 1])
 end
 
-
 """
     format(dt::TimeType, format::AbstractString; locale="english") -> AbstractString
 
@@ -510,6 +536,7 @@ following character codes can be used to construct the `format` string:
 | `s`        | 000, 500  | Millisecond with a minimum width of 3                        |
 | `e`        | Mon, Tue  | Abbreviated days of the week                                 |
 | `E`        | Monday    | Full day of week name                                        |
+| `[...]`    |           | Optionality is ignored during formatting                     |
 
 The number of sequential code characters indicate the width of the code. A format of
 `yyyy-mm` specifies that the code `y` should have a width of four while `m` a width of two.
