@@ -9,7 +9,7 @@ Language changes
 
 Breaking changes
 ----------------
-It's likely if you encounter errors that where not there in Julia version 0.6 that you need to run your code in version 0.7 to get it fixed for version 1.0.
+If you encounter errors in your code that were not there in Julia version 0.6, it is recommended to run the code on version 0.7 where deprecation warnings for things removed in 1.0 are shown.
 
 Library improvements
 --------------------
