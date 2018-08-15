@@ -235,7 +235,7 @@ mtime with sub-second accuracy). It also takes into account whether the path to 
 by the search logic in `require` matches the path that had created the precompile file. It also takes 
 into account the set of dependencies already loaded into the current process and won't recompile those 
 modules, even if their files change or disappear, in order to avoid creating incompatibilities between 
-the running system and the precompile cache. 
+the running system and the precompile cache.
 
 If you know that a module is *not* safe to precompile your module
 (for example, for one of the reasons described below), you should
