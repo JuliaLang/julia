@@ -81,7 +81,7 @@ of the buffer (in bytes).
 
 The optional keyword argument `context` can be set to `:key=>value` pair
 or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
-stream passed to `f`.  The optional `sizehint` is a suggersted (in bytes)
+stream passed to `f`.  The optional `sizehint` is a suggested size (in bytes)
 to allocate for the buffer used to write the string.
 
 # Examples
