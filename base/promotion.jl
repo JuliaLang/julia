@@ -14,7 +14,11 @@ typejoin(@nospecialize(t)) = (@_pure_meta; t)
 typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
 function typejoin(@nospecialize(a), @nospecialize(b))
     @_pure_meta
-    if a <: b
+    if isa(a, TypeVar)
+        return typejoin(a.ub, b)
+    elseif isa(b, TypeVar)
+        return typejoin(a, b.ub)
+    elseif a <: b
         return b
     elseif b <: a
         return a
@@ -22,10 +26,6 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         return UnionAll(a.var, typejoin(a.body, b))
     elseif isa(b, UnionAll)
         return UnionAll(b.var, typejoin(a, b.body))
-    elseif isa(a, TypeVar)
-        return typejoin(a.ub, b)
-    elseif isa(b, TypeVar)
-        return typejoin(a, b.ub)
     elseif isa(a, Union)
         return typejoin(typejoin(a.a, a.b), b)
     elseif isa(b, Union)
