@@ -908,10 +908,10 @@ dot(x::Number, y::Number) = conj(x) * y
     dot(x, y)
     x ⋅ y
 
-Compute the dot product between two arrays of the same size as if they were
-vectors. For complex arrays, the elements of the first array are conjugated.
+Compute the dot product between two arrays with the same [`axes`](@ref) as if they
+were vectors. For complex arrays, the elements of the first array are conjugated.
 This is the classical dot product for vectors and the Hilbert-Schmidt dot
-product `tr(x' * y)` for matrices. When the arrays have equal sizes, calling
+product `tr(x' * y)` for matrices. When the arrays have equal axes, calling
 `dot` is semantically equivalent to `sum(dot(vx,vy) for (vx,vy) in zip(x, y))`.
 
 # Examples
