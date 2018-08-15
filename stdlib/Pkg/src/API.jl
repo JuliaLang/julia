@@ -48,8 +48,7 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, s
 
     ctx.preview && preview_info()
     if mode == :develop
-        devdir = shared ? Pkg.devdir() : joinpath(dirname(ctx.env.project_file), "dev")
-        new_git = handle_repos_develop!(ctx, pkgs, devdir)
+        new_git = handle_repos_develop!(ctx, pkgs, shared = shared)
     else
         new_git = handle_repos_add!(ctx, pkgs; upgrade_or_add=true)
     end

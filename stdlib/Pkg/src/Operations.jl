@@ -657,17 +657,8 @@ function find_stdlib_deps(ctx::Context, path::String)
     return stdlib_deps
 end
 
-function relative_project_path_if_in_project(ctx::Context, path::String)
-    # Check if path is in project => relative
-    project_path = dirname(ctx.env.project_file)
-    if startswith(normpath(path), project_path)
-        return relpath(path, project_path)
-    else
-        return abspath(path)
-    end
-end
-
-project_rel_path(ctx::Context, path::String) = joinpath(dirname(ctx.env.project_file), path)
+project_rel_path(ctx::Context, path::String) =
+    normpath(joinpath(dirname(ctx.env.project_file), path))
 
 function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothing})
     env = ctx.env

@@ -492,9 +492,22 @@ function isdir_windows_workaround(path::String)
     end
 end
 
+# try to call realpath on as much as possible
+function safe_realpath(path)
+    ispath(path) && return realpath(path)
+    a, b = splitdir(path)
+    return joinpath(safe_realpath(a), b)
+end
+function relative_project_path(ctx::Context, path::String)
+    # compute path relative the project
+    # realpath needed to expand symlinks before taking the relative path
+    return relpath(safe_realpath(abspath(path)),
+                   safe_realpath(dirname(ctx.env.project_file)))
+end
+
 casesensitive_isdir(dir::String) = isdir_windows_workaround(dir) && dir in readdir(joinpath(dir, ".."))
 
-function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}, devdir::String)
+function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}; shared::Bool)
     Base.shred!(LibGit2.CachedCredentials()) do creds
         env = ctx.env
         new_uuids = UUID[]
@@ -512,8 +525,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}, 
                 else
                     # Relative paths are given relative pwd() so we
                     # translate that to be relative the project instead.
-                    # `realpath` is needed to expand symlinks before taking the relative path.
-                    pkg.path = relpath(realpath(abspath(pkg.repo.url)), realpath(dirname(ctx.env.project_file)))
+                    pkg.path = relative_project_path(ctx, pkg.repo.url)
                 end
                 folder_already_downloaded = true
                 project_path = pkg.repo.url
@@ -565,6 +577,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}, 
                 end
 
                 parse_package!(ctx, pkg, project_path)
+                devdir = shared ? Pkg.devdir() : joinpath(dirname(ctx.env.project_file), "dev")
                 dev_pkg_path = joinpath(devdir, pkg.name)
                 if isdir(dev_pkg_path)
                     if !isfile(joinpath(dev_pkg_path, "src", pkg.name * ".jl"))
@@ -577,9 +590,9 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}, 
                     mv(project_path, dev_pkg_path; force=true)
                     push!(new_uuids, pkg.uuid)
                 end
-                # Save the path as relative if the location is inside the project
-                # (e.g. from `dev --local`), otherwise put in the absolute path.
-                pkg.path = Pkg.Operations.relative_project_path_if_in_project(ctx, dev_pkg_path)
+                # Save the path as relative if it is a --local dev,
+                # otherwise put in the absolute path.
+                pkg.path = shared ? dev_pkg_path : relative_project_path(ctx, dev_pkg_path)
             end
             @assert pkg.path != nothing
             @assert has_uuid(pkg)
