@@ -3,6 +3,8 @@
 using Test, Distributed, Random, Serialization, Sockets
 import Distributed: launch, manage
 
+@test cluster_cookie() isa String
+
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 
 @test Distributed.extract_imports(:(begin; import Foo, Bar; let; using Baz; end; end)) ==
