@@ -60,6 +60,10 @@ Random.seed!(100)
                 x2 = convert(Vector{elty}, randn(n))
                 @test BLAS.dot(x1,x2) ≈ sum(x1.*x2)
                 @test_throws DimensionMismatch BLAS.dot(x1,rand(elty, n + 1))
+                y1 = convert(Matrix{elty}, randn(4,4))
+                y2 = convert(Matrix{elty}, randn(2,8))
+                @test_throws DimensionMismatch BLAS.dot(y1, y2)
+                @test sum(y1[i] * y2[i] for i in 1:16) ≈ BLAS.dot(vec(y1), vec(y2))
             else
                 z1 = convert(Vector{elty}, complex.(randn(n),randn(n)))
                 z2 = convert(Vector{elty}, complex.(randn(n),randn(n)))
@@ -67,6 +71,12 @@ Random.seed!(100)
                 @test BLAS.dotu(z1,z2) ≈ sum(z1.*z2)
                 @test_throws DimensionMismatch BLAS.dotc(z1,rand(elty, n + 1))
                 @test_throws DimensionMismatch BLAS.dotu(z1,rand(elty, n + 1))
+                y1 = convert(Matrix{elty}, complex.(randn(4,4),randn(4,4)))
+                y2 = convert(Matrix{elty}, complex.(randn(2,8),randn(2,8)))
+                @test_throws DimensionMismatch BLAS.dotc(y1, y2)
+                @test_throws DimensionMismatch BLAS.dotu(y1, y2)
+                @test sum(conj(y1[i]) * y2[i] for i in 1:16) ≈ BLAS.dotc(vec(y1), vec(y2))
+                @test sum(y1[i] * y2[i] for i in 1:16) ≈ BLAS.dotu(vec(y1), vec(y2))
             end
         end
         @testset "iamax" begin

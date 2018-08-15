@@ -904,12 +904,30 @@ end
 
 dot(x::Number, y::Number) = conj(x) * y
 
+"""
+    dot(x, y)
+    x ⋅ y
+
+Compute the dot product between two arrays of the same size as if they were
+vectors. For complex arrays, the elements of the first array are conjugated.
+This is the classical dot product for vectors and the Hilbert-Schmidt dot
+product `tr(x' * y)` for matrices. When the arrays have equal sizes, calling
+`dot` is semantically equivalent to `sum(dot(vx,vy) for (vx,vy) in zip(x, y))`.
+
+# Examples
+```jldoctest
+julia> dot([1; 1], [2; 3])
+5
+
+julia> dot([im; im], [1; 1])
+0 - 2im
+```
+"""
 function dot(x::AbstractArray, y::AbstractArray)
-    lx = length(x)
-    if lx != length(y)
-        throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(length(y))."))
+    if size(x) != size(y)
+        throw(DimensionMismatch("The first array has size $(size(x)) which does not match the size of the second, $(size(y)). You might want to use `dot(vec(x), vec(y))` if `length(x) == length(y)`."))
     end
-    if lx == 0
+    if length(x) == 0
         return dot(zero(eltype(x)), zero(eltype(y)))
     end
     s = zero(dot(first(x), first(y)))
