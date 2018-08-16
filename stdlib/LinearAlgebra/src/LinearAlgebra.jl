@@ -60,7 +60,6 @@ export
     axpby!,
     bunchkaufman,
     bunchkaufman!,
-    chol,
     cholesky,
     cholesky!,
     cond,
