@@ -678,3 +678,11 @@ end
     # Just checking that this doesn't stack overflow on construction
     @test Test27970Empty() == Test27970Empty()
 end
+
+@testset "exports of modules" begin
+    for (_, mod) in Base.loaded_modules
+       for v in names(mod)
+           @test isdefined(mod, v)
+       end
+   end
+end
