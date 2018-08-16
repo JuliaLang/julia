@@ -363,6 +363,17 @@ julia> kron(A, B)
  0+3im  3+0im  0+4im  4+0im
  3+0im  0-3im  4+0im  0-4im
 ```
+Note that, due to column-major ordering, using `kron()` together with 
+`reshape()` can produce counter-intuitive results. In particular, when 
+the result of `kron(A,B)` is reshaped to obtain separate indices for 
+the factors `A` and `B`, the index ordering is the opposite of the 
+argument ordering in `kron()`:
+```jldoctest
+julia> A = rand(2,2); B = rand(2,2);
+julia> AB = reshape(kron(A, B), (2,2,2,2));
+julia> all(AB[b1,a1,b2,a2] == A[a1,a2] * B[b1,b2] for a1=1:2, a2=1:2, b1=1:2, b2=1:2)
+true
+```
 """
 function kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
     @assert !has_offset_axes(a, b)
