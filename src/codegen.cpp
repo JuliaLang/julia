@@ -7471,6 +7471,11 @@ extern "C" void *jl_init_llvm(void)
     jl_data_layout.reset(DL);
 #endif
 
+// Register GDB event listener
+#ifdef JL_DEBUG_BUILD
+    jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createGDBRegistrationListener());
+#endif
+
 #ifdef JL_USE_INTEL_JITEVENTS
     if (jl_using_intel_jitevents)
         jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createIntelJITEventListener());
