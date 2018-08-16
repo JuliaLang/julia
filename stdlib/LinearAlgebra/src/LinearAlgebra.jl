@@ -134,7 +134,6 @@ export
     tr,
     transpose,
     transpose!,
-    transpose_type,
     tril,
     triu,
     tril!,
