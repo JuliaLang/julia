@@ -200,9 +200,17 @@
   (let ((bounds (map analyze-typevar params)))
     (values (map car bounds) bounds)))
 
+(define (unmangled-name v)
+  (if (eq? v '||)
+      v
+      (let ((s (string v)))
+        (if (eqv? (string.char s 0) #\#)
+            (symbol (last (string-split s "#")))
+            v))))
+
 ;; construct expression to allocate a TypeVar
-(define (bounds-to-TypeVar v)
-  (let ((v  (car v))
+(define (bounds-to-TypeVar v (unmangle #f))
+  (let ((v  ((if unmangle unmangled-name identity) (car v)))
         (lb (cadr v))
         (ub (caddr v)))
     `(call (core TypeVar) ',v
@@ -836,7 +844,7 @@
         (block
          (global ,name) (const ,name)
          ,@(map (lambda (v) `(local ,v)) params)
-         ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v))) params bounds)
+         ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
          (struct_type ,name (call (core svec) ,@params)
                       (call (core svec) ,@(map quotify field-names))
                       ,super (call (core svec) ,@field-types) ,mut ,min-initialized)))
@@ -877,7 +885,7 @@
      (scope-block
       (block
        ,@(map (lambda (v) `(local ,v)) params)
-       ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v))) params bounds)
+       ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
        (abstract_type ,name (call (core svec) ,@params) ,super))))))
 
 (define (primitive-type-def-expr n name params super)
@@ -888,7 +896,7 @@
      (scope-block
       (block
        ,@(map (lambda (v) `(local ,v)) params)
-       ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v))) params bounds)
+       ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
        (primitive_type ,name (call (core svec) ,@params) ,n ,super))))))
 
 ;; take apart a type signature, e.g. T{X} <: S{Y}
