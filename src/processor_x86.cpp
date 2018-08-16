@@ -820,17 +820,6 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
     features.push_back("+sse2");
     features.push_back("+mmx");
     features.push_back("+fxsr");
-#if JL_LLVM_VERSION < 50000
-#  ifdef _CPU_X86_
-    // LLVM has bug on < 5.0 when using avx in 32bit mode.
-    features.push_back("-avx");
-#  endif
-    // Scatter-gatter can't handle address space on < 5.0
-    // This is a base requirement for AVX512 so we have to turn all AVX512 features off
-    // Gatter is available in AVX2 too but fortunately LLVM doesn't use them.
-    features.push_back("-avx512f");
-    features.push_back("-avx512dq");
-#endif
     return std::make_pair(std::move(name), std::move(features));
 }
 
