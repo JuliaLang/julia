@@ -363,10 +363,10 @@ julia> kron(A, B)
  0+3im  3+0im  0+4im  4+0im
  3+0im  0-3im  4+0im  0-4im
 ```
-Note that, due to column-major ordering, using `kron()` together with 
-`reshape()` can produce counter-intuitive results. In particular, when 
-the result of `kron(A,B)` is reshaped to obtain separate indices for 
-the factors `A` and `B`, the index ordering is the opposite of the 
+Note that, due to column-major ordering, using `kron()` together with
+`reshape()` can produce counter-intuitive results. In particular, when
+the result of `kron(A,B)` is reshaped to obtain separate indices for
+the factors `A` and `B`, the index ordering is the opposite of the
 argument ordering in `kron()`:
 ```jldoctest
 julia> A = rand(2,2); B = rand(2,2);
