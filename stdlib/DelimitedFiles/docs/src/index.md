@@ -1,4 +1,4 @@
-# Delimited Files
+# DelimitedFiles
 
 ```@meta
 DocTestSetup = :(using DelimitedFiles)

@@ -1,4 +1,4 @@
-# Sparse Arrays
+# SparseArrays
 
 ```@meta
 DocTestSetup = :(using SparseArrays, LinearAlgebra)

@@ -1,4 +1,4 @@
-# [File Events](@id lib-filewatching)
+# [FileWatching](@id lib-filewatching)
 
 ```@docs
 FileWatching.poll_fd

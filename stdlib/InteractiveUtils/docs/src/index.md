@@ -1,4 +1,4 @@
-# Interactive Utilities
+# InteractiveUtils
 
 ```@meta
 DocTestSetup = :(using InteractiveUtils)

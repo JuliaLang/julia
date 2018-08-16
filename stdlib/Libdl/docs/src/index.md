@@ -1,4 +1,4 @@
-# Dynamic Linker
+# Libdl
 
 ```@docs
 Libdl.dlopen

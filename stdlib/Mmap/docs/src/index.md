@@ -1,4 +1,4 @@
-# Memory-mapped I/O
+# Mmap
 
 ```@meta
 DocTestSetup = :(using Mmap)

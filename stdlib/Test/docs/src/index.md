@@ -1,4 +1,4 @@
-# Unit Testing
+# Test
 
 ```@meta
 DocTestSetup = :(using Test)

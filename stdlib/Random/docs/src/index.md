@@ -1,4 +1,4 @@
-# Random Numbers
+# Random
 
 ```@meta
 DocTestSetup = :(using Random)

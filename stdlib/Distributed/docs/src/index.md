@@ -1,4 +1,4 @@
-# Distributed Computing
+# Distributed
 
 ```@meta
 DocTestSetup = :(using Distributed)

@@ -1,4 +1,4 @@
-# [Profiling](@id lib-profiling)
+# [Profile](@id lib-profiling)
 
 ```@docs
 Profile.@profile

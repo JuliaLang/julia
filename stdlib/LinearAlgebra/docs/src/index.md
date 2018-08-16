@@ -1,4 +1,4 @@
-# Linear Algebra
+# LinearAlgebra
 
 ```@meta
 DocTestSetup = :(using LinearAlgebra)

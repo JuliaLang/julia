@@ -1,4 +1,4 @@
-# Shared Arrays
+# SharedArrays
 
 ```@docs
 SharedArrays.SharedArray
