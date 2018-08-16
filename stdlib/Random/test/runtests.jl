@@ -686,3 +686,9 @@ end
     @test Random.gentype(Random.UInt52(UInt128)) == UInt128
     @test Random.gentype(Random.UInt104()) == UInt128
 end
+
+@testset "rand(::Pair)" begin
+    @test rand(1=>3) ∈ (1, 3)
+    @test rand(1=>2, 3) isa Vector{Int}
+    @test rand(1=>'2', 3) isa Vector{Union{Char, Int}}
+end

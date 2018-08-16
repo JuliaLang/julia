@@ -430,3 +430,12 @@ function rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractString,<:Sampler})::
         isvalid_unsafe(str, pos) && return str[pos]
     end
 end
+
+
+## random elements from pairs
+
+Sampler(RNG::Type{<:AbstractRNG}, t::Pair, n::Repetition) =
+    SamplerSimple(t, Sampler(RNG, Bool, n))
+
+rand(rng::AbstractRNG, sp::SamplerSimple{<:Pair}) =
+    @inbounds return sp[][1 + rand(rng, sp.data)]
