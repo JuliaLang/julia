@@ -1188,6 +1188,13 @@ JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
 {
     if (obviously_egal(a, b))    return 1;
     if (obviously_unequal(a, b)) return 0;
+    if (jl_is_datatype(a) && !jl_is_concrete_type(b)) {
+        // if one type looks more likely to be abstract, check it on the left
+        // first in order to reject more quickly.
+        jl_value_t *temp = a;
+        a = b;
+        b = temp;
+    }
     return jl_subtype(a, b) && jl_subtype(b, a);
 }
 
