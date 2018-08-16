@@ -1544,8 +1544,8 @@ insertion of `let` statements as in `abmult3`.
 
 # Checking for equality with a singleton
 
-When checking if a value is equal to some singleton it can be be
+When checking if a value is equal to some singleton it can be
 better for performance to check for identicality (`===`) instead of
 equality (`==`). The same advice applies to using `!==` over `!=`.
-These type of checks frequently occurs e.g. when implementing the iteration
+These type of checks frequently occur e.g. when implementing the iteration
 protocol and checking if `nothing` is returned from [`iterate`](@ref).
