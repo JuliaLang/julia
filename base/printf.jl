@@ -863,7 +863,7 @@ function decode_oct(d::Integer)
     @handle_zero x digits
     pt = i = div((sizeof(x)<<3)-leading_zeros(x)+2,3)
     while i > 0
-        digits[i] = '0'+(x&0x7)
+        digits[i] = 48+(x&0x7)
         x >>= 3
         i -= 1
     end
@@ -876,7 +876,7 @@ function decode_0ct(d::Integer)
     pt = i = div((sizeof(x)<<3)-leading_zeros(x)+5,3)
     digits = DIGITSs[Threads.threadid()]
     while i > 0
-        digits[i] = '0'+(x&0x7)
+        digits[i] = 48+(x&0x7)
         x >>= 3
         i -= 1
     end
@@ -889,7 +889,7 @@ function decode_dec(d::Integer)
     @handle_zero x digits
     pt = i = Base.ndigits0z(x)
     while i > 0
-        digits[i] = '0'+rem(x,10)
+        digits[i] = 48+rem(x,10)
         x = div(x,10)
         i -= 1
     end
