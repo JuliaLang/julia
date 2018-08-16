@@ -1541,3 +1541,11 @@ will not require this degree of programmer annotation to attain performance.
 In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
+
+# Checking for equality with a singleton
+
+When checking if a value is equal to some singleton it can be be
+better for performance to check for identicality (`===`) instead of
+equality (`==`). The same advice applies to using `!==` over `!=`.
+These type of checks frequently occurs e.g. when implementing the iteration
+protocol and checking if `nothing` is returned from [`iterate`](@ref).
