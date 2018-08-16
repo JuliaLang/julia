@@ -1820,6 +1820,20 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, strp, retboxed, rt, unionall, static_rt);
     }
+    else if (is_libjulia_func(memcpy)) {
+        const jl_cgval_t &dst = argv[0];
+        const jl_cgval_t &src = argv[1];
+        const jl_cgval_t &n = argv[2];
+        ctx.builder.CreateMemCpy(
+                ctx.builder.CreateIntToPtr(
+                    emit_unbox(ctx, T_size, dst, (jl_value_t*)jl_voidpointer_type), T_pint8),
+                ctx.builder.CreateIntToPtr(
+                    emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type), T_pint8),
+                emit_unbox(ctx, T_size, n, (jl_value_t*)jl_ulong_type), 1,
+                false);
+        JL_GC_POP();
+        return ghostValue(jl_void_type);
+    }
 
     jl_cgval_t retval = sig.emit_a_ccall(
             ctx,
