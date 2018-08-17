@@ -25,16 +25,16 @@ if Sys.iswindows()
     end
 else
     function download(url::AbstractString, filename::AbstractString)
-        if Sys.which("wget") != nothing
+        if Sys.which("wget") !== nothing
             try
                 run(`wget -O $filename $url`)
             catch
                 rm(filename)  # wget always creates a file
                 rethrow()
             end
-        elseif Sys.which("curl") != nothing
+        elseif Sys.which("curl") !== nothing
             run(`curl -g -L -f -o $filename $url`)
-        elseif Sys.which("fetch") != nothing
+        elseif Sys.which("fetch") !== nothing
             run(`fetch -f $filename $url`)
         else
             error("no download agent available; install curl, wget, or fetch")
