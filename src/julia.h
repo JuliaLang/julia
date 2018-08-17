@@ -1268,7 +1268,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);
 JL_DLLEXPORT jl_value_t *jl_get_nth_field_noalloc(jl_value_t *v JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i);
 JL_DLLEXPORT void        jl_set_nth_field(jl_value_t *v, size_t i,
-                                          jl_value_t *rhs);
+                                          jl_value_t *rhs) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int         jl_field_isdefined(jl_value_t *v, size_t i);
 JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld);
 JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a);
