@@ -13033,6 +13033,38 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "base/sort/#Base.Sort.InsertionSort",
+    "page": "Sorting and Related Functions",
+    "title": "Base.Sort.InsertionSort",
+    "category": "constant",
+    "text": "InsertionSort\n\nIndicate that a sorting function should use the insertion sort algorithm. Insertion sort traverses the collection one element at a time, inserting each element into its correct, sorted position in the output list.\n\nCharacteristics:\n\nstable: preserves the ordering of elements which compare equal (e.g. \"a\" and \"A\" in a sort of letters which ignores case).\nin-place in memory.\nquadratic performance in the number of elements to be sorted: it is well-suited to small collections but should not be used for large ones.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/sort/#Base.Sort.MergeSort",
+    "page": "Sorting and Related Functions",
+    "title": "Base.Sort.MergeSort",
+    "category": "constant",
+    "text": "MergeSort\n\nIndicate that a sorting function should use the merge sort algorithm. Merge sort divides the collection into subcollections and repeatedly merges them, sorting each subcollection at each step, until the entire collection has been recombined in sorted form.\n\nCharacteristics:\n\nstable: preserves the ordering of elements which compare equal (e.g. \"a\" and \"A\" in a sort of letters which ignores case).\nnot in-place in memory.\ndivide-and-conquer sort strategy.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/sort/#Base.Sort.QuickSort",
+    "page": "Sorting and Related Functions",
+    "title": "Base.Sort.QuickSort",
+    "category": "constant",
+    "text": "QuickSort\n\nIndicate that a sorting function should use the quick sort algorithm, which is not stable.\n\nCharacteristics:\n\nnot stable: does not preserve the ordering of elements which compare equal (e.g. \"a\" and \"A\" in a sort of letters which ignores case).\nin-place in memory.\ndivide-and-conquer: sort strategy similar to MergeSort.\ngood performance for large collections.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/sort/#Base.Sort.PartialQuickSort",
+    "page": "Sorting and Related Functions",
+    "title": "Base.Sort.PartialQuickSort",
+    "category": "type",
+    "text": "PartialQuickSort{T <: Union{Int,OrdinalRange}}\n\nIndicate that a sorting function should use the partial quick sort algorithm. Partial quick sort returns the smallest k elements sorted from smallest to largest, finding them and sorting them using QuickSort.\n\nCharacteristics:\n\nnot stable: does not preserve the ordering of elements which compare equal (e.g. \"a\" and \"A\" in a sort of letters which ignores case).\nin-place in memory.\ndivide-and-conquer: sort strategy similar to MergeSort.\n\n\n\n\n\n"
+},
+
+{
     "location": "base/sort/#Base.Sort.sortperm!",
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.sortperm!",
@@ -13053,7 +13085,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Sorting Functions",
     "category": "section",
-    "text": "Base.sort!\nBase.sort\nBase.sortperm\nBase.Sort.sortperm!\nBase.Sort.sortslices"
+    "text": "Base.sort!\nBase.sort\nBase.sortperm\nBase.InsertionSort\nBase.MergeSort\nBase.QuickSort\nBase.PartialQuickSort\nBase.Sort.sortperm!\nBase.Sort.sortslices"
 },
 
 {
@@ -20509,7 +20541,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sockets",
     "title": "Base.bind",
     "category": "function",
-    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
+    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
 },
 
 {
