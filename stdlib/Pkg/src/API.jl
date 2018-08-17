@@ -96,7 +96,7 @@ function update_registry(ctx)
     else
         for reg in registries()
             if isdir(joinpath(reg, ".git"))
-                regpath = pathrepr(ctx, reg)
+                regpath = pathrepr(reg)
                 printpkgstyle(ctx, :Updating, "registry at " * regpath)
                 LibGit2.with(LibGit2.GitRepo, reg) do repo
                     if LibGit2.isdirty(repo)
