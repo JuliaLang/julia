@@ -495,7 +495,7 @@ are constant by default.
 
 Note that `const` only affects the variable binding; the variable may be bound to a mutable
 object (such as an array), and that object may still be modified. Additionally when one tries
-to assign a value a variable that is declared constant the following scenarios are possible:
+to assign a value to a variable that is declared constant the following scenarios are possible:
 
 * if a new value has a different type than the type of the constant then an error is thrown:
 ```jldoctest
@@ -522,7 +522,7 @@ julia> const z = 100
 julia> z = 100
 100
 ```
-The last rule applies for immutable objects even if the vairable binding would change, e.g.:
+The last rule applies for immutable objects even if the variable binding would change, e.g.:
 ```julia-repl
 julia> const s1 = "1"
 "1"
