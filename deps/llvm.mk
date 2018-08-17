@@ -417,6 +417,7 @@ $(eval $(call LLVM_PATCH,llvm-D49832-SCEVPred)) # Remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-rL323946-LSRTy)) # Remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-D50010-VNCoercion-ni))
 $(eval $(call LLVM_PATCH,llvm-D50167-scev-umin))
+$(eval $(call LLVM_PATCH,llvm-rL326967-aligned-load)) # remove for 7.0
 ifeq ($(LLVM_VER_PATCH), 0)
 $(eval $(call LLVM_PATCH,llvm-windows-race))
 endif
