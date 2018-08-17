@@ -70,7 +70,7 @@ typedef struct _jl_ast_context_list_t {
 } jl_ast_context_list_t;
 
 STATIC_INLINE void jl_ast_context_list_insert(jl_ast_context_list_t **head,
-                                              jl_ast_context_list_t *node)
+                                              jl_ast_context_list_t *node) JL_NOTSAFEPOINT
 {
     jl_ast_context_list_t *next = *head;
     if (next)
@@ -80,7 +80,7 @@ STATIC_INLINE void jl_ast_context_list_insert(jl_ast_context_list_t **head,
     *head = node;
 }
 
-STATIC_INLINE void jl_ast_context_list_delete(jl_ast_context_list_t *node)
+STATIC_INLINE void jl_ast_context_list_delete(jl_ast_context_list_t *node) JL_NOTSAFEPOINT
 {
     if (node->next)
         node->next->prev = node->prev;
@@ -105,7 +105,11 @@ typedef struct _jl_ast_context_t {
 
 static jl_ast_context_t jl_ast_main_ctx;
 
+#ifdef __clang_analyzer__
+jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED;
+#else
 #define jl_ast_ctx(fl_ctx) container_of(fl_ctx, jl_ast_context_t, fl)
+#endif
 #define jl_ast_context_list_item(node)          \
     container_of(node, jl_ast_context_t, list)
 
@@ -247,7 +251,7 @@ static jl_mutex_t flisp_lock;
 static jl_ast_context_list_t *jl_ast_ctx_using = NULL;
 static jl_ast_context_list_t *jl_ast_ctx_freed = NULL;
 
-static jl_ast_context_t *jl_ast_ctx_enter(void)
+static jl_ast_context_t *jl_ast_ctx_enter(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_SIGATOMIC_BEGIN();
@@ -285,7 +289,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void)
     return ctx;
 }
 
-static void jl_ast_ctx_leave(jl_ast_context_t *ctx)
+static void jl_ast_ctx_leave(jl_ast_context_t *ctx) JL_NOTSAFEPOINT
 {
     JL_SIGATOMIC_END();
     if (--ctx->ref)
@@ -646,18 +650,65 @@ static value_t julia_to_list2(fl_context_t *fl_ctx, jl_value_t *a, jl_value_t *b
     return l;
 }
 
-static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
+static int julia_to_scm_noalloc1(fl_context_t *fl_ctx, jl_value_t *v, value_t *retval) JL_NOTSAFEPOINT
 {
     if (v == NULL)
         lerror(fl_ctx, symbol(fl_ctx, "error"), "undefined reference in AST");
-    if (jl_is_symbol(v))
-        return symbol(fl_ctx, jl_symbol_name((jl_sym_t*)v));
-    if (v == jl_true)
-        return jl_ast_ctx(fl_ctx)->true_sym;
-    if (v == jl_false)
-        return jl_ast_ctx(fl_ctx)->false_sym;
-    if (v == jl_nothing)
-        return fl_cons(fl_ctx, jl_ast_ctx(fl_ctx)->null_sym, fl_ctx->NIL);
+    else if (jl_is_symbol(v))
+        *retval = symbol(fl_ctx, jl_symbol_name((jl_sym_t*)v));
+    else if (v == jl_true)
+        *retval = jl_ast_ctx(fl_ctx)->true_sym;
+    else if (v == jl_false)
+        *retval = jl_ast_ctx(fl_ctx)->false_sym;
+    else if (v == jl_nothing)
+        *retval = fl_cons(fl_ctx, jl_ast_ctx(fl_ctx)->null_sym, fl_ctx->NIL);
+    else
+        return 0;
+    return 1;
+}
+
+static value_t julia_to_scm_noalloc2(fl_context_t *fl_ctx, jl_value_t *v) JL_NOTSAFEPOINT
+{
+    if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v)))
+        return fixnum(jl_unbox_long(v));
+    if (jl_is_ssavalue(v))
+        lerror(fl_ctx, symbol(fl_ctx, "error"), "SSAValue objects should not occur in an AST");
+    if (jl_is_slot(v))
+        lerror(fl_ctx, symbol(fl_ctx, "error"), "Slot objects should not occur in an AST");
+    value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvtype, sizeof(void*));
+    *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = v;
+    return opaque;
+}
+
+static value_t julia_to_scm_noalloc(fl_context_t *fl_ctx, jl_value_t *v) JL_NOTSAFEPOINT
+{
+    value_t retval;
+    if (julia_to_scm_noalloc1(fl_ctx, v, &retval))
+        return retval;
+    assert(!jl_is_expr(v) &&
+           !jl_typeis(v, jl_linenumbernode_type) &&
+           !jl_typeis(v, jl_gotonode_type) &&
+           !jl_typeis(v, jl_quotenode_type) &&
+           !jl_typeis(v, jl_newvarnode_type) &&
+           !jl_typeis(v, jl_globalref_type));
+    return julia_to_scm_noalloc2(fl_ctx, v);
+}
+
+static value_t julia_to_list2_noalloc(fl_context_t *fl_ctx, jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
+{
+    value_t sa = julia_to_scm_noalloc(fl_ctx, a);
+    fl_gc_handle(fl_ctx, &sa);
+    value_t sb = julia_to_scm_noalloc(fl_ctx, b);
+    value_t l = fl_list2(fl_ctx, sa, sb);
+    fl_free_gc_handles(fl_ctx, 1);
+    return l;
+}
+
+static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
+{
+    value_t retval;
+    if (julia_to_scm_noalloc1(fl_ctx, v, &retval))
+        return retval;
     if (jl_is_expr(v)) {
         jl_expr_t *ex = (jl_expr_t*)v;
         value_t args = fl_ctx->NIL;
@@ -676,12 +727,12 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
         return scmv;
     }
     // GC Note: jl_fieldref(v, 0) allocates for GotoNode
-    //          but we don't need a GC root here because julia_to_list2
+    //          but we don't need a GC root here because julia_to_list2_noalloc
     //          shouldn't allocate in this case.
     if (jl_typeis(v, jl_linenumbernode_type)) {
-        jl_value_t *file = jl_fieldref_noalloc(v,1); // non-allocating
-        jl_value_t *line = jl_fieldref(v,0); // allocating
-        value_t args = julia_to_list2(fl_ctx, line, file);
+        jl_value_t *file = jl_fieldref_noalloc(v,1);
+        jl_value_t *line = jl_fieldref(v,0);
+        value_t args = julia_to_list2_noalloc(fl_ctx, line, file);
         fl_gc_handle(fl_ctx, &args);
         value_t hd = julia_to_scm_(fl_ctx, (jl_value_t*)line_sym);
         value_t scmv = fl_cons(fl_ctx, hd, args);
@@ -689,11 +740,11 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
         return scmv;
     }
     if (jl_typeis(v, jl_gotonode_type))
-        return julia_to_list2(fl_ctx, (jl_value_t*)goto_sym, jl_fieldref(v,0));
+        return julia_to_list2_noalloc(fl_ctx, (jl_value_t*)goto_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_quotenode_type))
-        return julia_to_list2(fl_ctx, (jl_value_t*)inert_sym, jl_fieldref(v,0));
+        return julia_to_list2(fl_ctx, (jl_value_t*)inert_sym, jl_fieldref_noalloc(v,0));
     if (jl_typeis(v, jl_newvarnode_type))
-        return julia_to_list2(fl_ctx, (jl_value_t*)newvar_sym, jl_fieldref(v,0));
+        return julia_to_list2_noalloc(fl_ctx, (jl_value_t*)newvar_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_globalref_type)) {
         jl_module_t *m = jl_globalref_mod(v);
         jl_sym_t *sym = jl_globalref_name(v);
@@ -707,15 +758,7 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
         fl_free_gc_handles(fl_ctx, 1);
         return scmv;
     }
-    if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v)))
-        return fixnum(jl_unbox_long(v));
-    if (jl_is_ssavalue(v))
-        lerror(fl_ctx, symbol(fl_ctx, "error"), "SSAValue objects should not occur in an AST");
-    if (jl_is_slot(v))
-        lerror(fl_ctx, symbol(fl_ctx, "error"), "Slot objects should not occur in an AST");
-    value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvtype, sizeof(void*));
-    *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = v;
-    return opaque;
+    return julia_to_scm_noalloc2(fl_ctx, v);
 }
 
 // this is used to parse a line of repl input
