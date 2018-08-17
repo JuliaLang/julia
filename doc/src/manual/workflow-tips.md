@@ -8,7 +8,7 @@ As already elaborated in [The Julia REPL](@ref), Julia's REPL provides rich func
 that facilitates an efficient interactive workflow. Here are some tips that might further enhance
 your experience at the command line.
 
-## Commandline-based basic editor/REPL workflow
+## Command-line-based basic editor/REPL workflow
 
 The most basic Julia workflows involve using a text editor in conjunction with the `julia` command
 line. A common pattern includes the following elements:
