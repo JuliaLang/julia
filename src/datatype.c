@@ -18,7 +18,7 @@ extern "C" {
 
 // allocating TypeNames -----------------------------------------------------------
 
-jl_sym_t *jl_demangle_typename(jl_sym_t *s)
+jl_sym_t *jl_demangle_typename(jl_sym_t *s) JL_NOTSAFEPOINT
 {
     char *n = jl_symbol_name(s);
     if (n[0] != '#')
@@ -90,7 +90,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
 static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
                                            uint32_t alignment,
                                            int haspadding,
-                                           jl_fielddesc32_t desc[])
+                                           jl_fielddesc32_t desc[]) JL_NOTSAFEPOINT
 {
     // compute the smallest fielddesc type that can hold the layout description
     int fielddesc_type = 0;
@@ -262,7 +262,7 @@ JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al)
     return (countbits > 0 && countbits < 127) ? countbits : 0;
 }
 
-static int references_name(jl_value_t *p, jl_typename_t *name)
+static int references_name(jl_value_t *p, jl_typename_t *name) JL_NOTSAFEPOINT
 {
     if (jl_is_uniontype(p))
         return references_name(((jl_uniontype_t*)p)->a, name) ||
@@ -362,10 +362,11 @@ void jl_compute_field_offsets(jl_datatype_t *st)
 
     size_t descsz = nfields * sizeof(jl_fielddesc32_t);
     jl_fielddesc32_t *desc;
-    if (descsz < jl_page_size)
-        desc = (jl_fielddesc32_t*)alloca(descsz);
-    else
+    int should_malloc = descsz >= jl_page_size;
+    if (should_malloc)
         desc = (jl_fielddesc32_t*)malloc(descsz);
+    else
+        desc = (jl_fielddesc32_t*)alloca(descsz);
     int haspadding = 0;
     assert(st->name == jl_tuple_typename ||
            st == jl_sym_type ||
@@ -374,7 +375,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
 
     for (size_t i = 0; i < nfields; i++) {
         jl_value_t *ty = jl_field_type(st, i);
-        size_t fsz = 0, al = 0;
+        size_t fsz = 0, al = 1;
         if (jl_islayout_inline(ty, &fsz, &al)) {
             if (__unlikely(fsz > max_size))
                 // Should never happen
@@ -427,11 +428,11 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     if (st->size > sz)
         haspadding = 1;
     st->layout = jl_get_layout(nfields, alignm, haspadding, desc);
-    if (descsz >= jl_page_size) free(desc);
+    if (should_malloc) free(desc);
     jl_allocate_singleton_instance(st);
     return;
  throw_ovf:
-    if (descsz >= jl_page_size) free(desc);
+    if (should_malloc) free(desc);
     jl_errorf("type %s has field offset %d that exceeds the page size", jl_symbol_name(st->name->name), descsz);
 }
 
@@ -873,7 +874,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
     return jl_new_bits(ty, (char*)v + offs);
 }
 
-JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
+JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs) JL_NOTSAFEPOINT
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     size_t offs = jl_field_offset(st, i);
