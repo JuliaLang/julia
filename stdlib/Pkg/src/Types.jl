@@ -333,7 +333,7 @@ is_project_uuid(env::EnvCache, uuid::UUID) =
 ###########
 # Context #
 ###########
-stdlib_dir() = joinpath(Sys.BINDIR, "..", "share", "julia", "stdlib", "v$(VERSION.major).$(VERSION.minor)")
+stdlib_dir() = normpath(joinpath(Sys.BINDIR, "..", "share", "julia", "stdlib", "v$(VERSION.major).$(VERSION.minor)"))
 stdlib_path(stdlib::String) = joinpath(stdlib_dir(), stdlib)
 function gather_stdlib_uuids()
     stdlibs = Dict{UUID,String}()
@@ -1114,6 +1114,10 @@ end
 
 
 function pathrepr(path::String)
+    # print stdlib paths as @stdlib/Name
+    if startswith(path, stdlib_dir())
+        path = "@stdlib/" * basename(path)
+    end
     return "`" * Base.contractuser(path) * "`"
 end
 

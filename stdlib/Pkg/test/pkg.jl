@@ -495,6 +495,11 @@ end
     end
 end
 
+@testset "printing of stdlib paths, issue #605" begin
+    path = Pkg.Types.stdlib_path("Test")
+    @test Pkg.Types.pathrepr(path) == "`@stdlib/Test`"
+end
+
 include("repl.jl")
 include("api.jl")
 
