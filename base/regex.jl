@@ -13,7 +13,7 @@ const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 A type representing a regular expression. `Regex`-objects can be used to match strings
 with [`match`](@ref) or [`matchall`](@ref).
 
-`Regex` objects can be created using the [`r""`](@ref) string-macro. The
+`Regex` objects can be created using the [`@r_str`](@ref) string-macro. The
 `Regex(pattern[, flags])` constructor is usually used if the `pattern` string needs
 to be interpolated. See the documentation of the string-macro for details on flags.
 """
@@ -91,7 +91,7 @@ listed after the ending quote, to change its behaviour:
   `\\s`, `\\W`, `\\w`, etc. match based on Unicode character properties. With this option,
   these sequences only match ASCII characters.
 
-See [`Regex`](@ref) if interpolation is needed.
+See `Regex` if interpolation is needed.
 
 # Examples
 ```jldoctest
