@@ -9,7 +9,7 @@
 #define JL_ROOTING_ARGUMENT __attribute__((annotate("julia_rooting_argument")))
 #define JL_ROOTED_ARGUMENT __attribute__((annotate("julia_rooted_argument")))
 #define JL_GC_DISABLED __attribute__((annotate("julia_gc_disabled")))
-#define JL_ALWAYS_LEAFTYPE __attribute__((annotate("julia_always_leaftype")))
+#define JL_ALWAYS_LEAFTYPE JL_GLOBALLY_ROOTED
 #define JL_ROOTS_TEMPORARILY __attribute__((annotate("julia_temporarily_roots")))
 #define JL_REQUIRE_ROOTED_SLOT __attribute__((annotate("julia_require_rooted_slot")))
 #ifdef __cplusplus
