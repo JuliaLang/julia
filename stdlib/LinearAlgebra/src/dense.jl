@@ -367,11 +367,11 @@ Note that, due to column-major ordering, using `kron()` together with
 `reshape()` can produce counter-intuitive results. In particular, when
 the result of `kron(A,B)` is reshaped to obtain separate indices for
 the factors `A` and `B`, the index ordering is the opposite of the
-argument ordering in `kron()`:
+argument ordering in `kron()`. For two vectors, this means:
 ```jldoctest
-julia> A = rand(2,2); B = rand(2,2);
-julia> AB = reshape(kron(A, B), (2,2,2,2));
-julia> all(AB[b1,a1,b2,a2] == A[a1,a2] * B[b1,b2] for a1=1:2, a2=1:2, b1=1:2, b2=1:2)
+julia> A = rand(3); B = rand(3); AB = reshape(kron(A,B), (3,3));
+
+julia> all(AB[b,a] == A[a] * B[b] for a=1:3, b=1:3)
 true
 ```
 """
