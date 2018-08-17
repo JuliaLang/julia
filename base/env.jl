@@ -136,8 +136,8 @@ end
 Execute `f` in an environment that is temporarily modified (not replaced as in `setenv`)
 by zero or more `"var"=>val` arguments `kv`. `withenv` is generally used via the
 `withenv(kv...) do ... end` syntax. A value of `nothing` can be used to temporarily unset an
-environment variable (if it is set). When `withenv` returns, the changes made in `kv` are undone. 
-Note however, that changes done to `ENV` within the `do`-block will persist. 
+environment variable (if it is set). When `withenv` returns, the changes made in `kv` are undone.
+Note however, that changes done to `ENV` within the `do`-block will persist.
 
 See also: [`envsave`]@ref
 """
