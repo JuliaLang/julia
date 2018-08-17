@@ -2,13 +2,13 @@
 
 Here are some tips for working with Julia efficiently.
 
-## REPL based workflow
+## REPL-based workflow
 
 As already elaborated in [The Julia REPL](@ref), Julia's REPL provides rich functionality
 that facilitates an efficient interactive workflow. Here are some tips that might further enhance
 your experience at the command line.
 
-## Command line based basic editor/REPL workflow
+## Commandline-based basic editor/REPL workflow
 
 The most basic Julia workflows involve using a text editor in conjunction with the `julia` command
 line. A common pattern includes the following elements:
@@ -78,7 +78,7 @@ isfile("_init.jl") && include(joinpath(pwd(), "_init.jl"))
 then calling `julia` from that directory will run the initialization code without the additional
 command line argument.
 
-## Browser based workflow
+## Browser-based workflow
 
 It is also possible to interact with a Julia REPL in the browser via [IJulia](https://github.com/JuliaLang/IJulia.jl).
 See the package home for details.
