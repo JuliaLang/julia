@@ -786,7 +786,7 @@ STATIC_INLINE jl_value_t *jl_array_ptr_set(
     void *a JL_ROOTING_ARGUMENT, size_t i,
     void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT;
 #else
-STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
 {
     assert(i < jl_array_len(a));
     return ((jl_value_t**)(jl_array_data(a)))[i];
@@ -1358,7 +1358,7 @@ STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 {
     return (jl_function_t*)jl_get_global(m, jl_symbol(name));
 }
-int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
+int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT;
 
 // eq hash tables
 JL_DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val, int *inserted);

@@ -671,7 +671,7 @@ JL_DLLEXPORT jl_uuid_t jl_module_uuid(jl_module_t* m) { return m->uuid; }
 // TODO: make this part of the module constructor and read-only?
 JL_DLLEXPORT void jl_set_module_uuid(jl_module_t *m, jl_uuid_t uuid) { m->uuid = uuid; }
 
-int jl_is_submodule(jl_module_t *child, jl_module_t *parent)
+int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT
 {
     while (1) {
         if (parent == child)
