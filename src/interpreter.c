@@ -134,7 +134,7 @@ static void eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
     jl_datatype_t *dt = NULL;
     jl_value_t *w = NULL;
     jl_module_t *modu = s->module;
-    JL_GC_PUSH4(&para, &super, &temp, &w);
+    JL_GC_PUSH5(&para, &super, &temp, &w, &dt);
     assert(jl_is_svec(para));
     if (jl_is_globalref(name)) {
         modu = jl_globalref_mod(name);
