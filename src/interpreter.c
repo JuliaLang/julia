@@ -397,7 +397,9 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     if (jl_is_pinode(e)) {
         jl_value_t *val = eval_value(jl_fieldref_noalloc(e, 0), s);
 #ifndef JL_NDEBUG
+        JL_GC_PUSH1(&val);
         jl_typeassert(val, jl_fieldref_noalloc(e, 1));
+        JL_GC_POP();
 #endif
         return val;
     }
