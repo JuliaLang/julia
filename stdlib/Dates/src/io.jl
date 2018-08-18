@@ -342,12 +342,11 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
     opt_depth = 0
 
     letters = String(collect(keys(CONVERSION_SPECIFIERS)))
-    for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters[]\\E])\\1*"), f)
+    for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters[]\\E])\\1*!?"), f)
         tran = replace(f[prev_offset:prevind(f, m.offset)], r"\\(.)" => s"\1")
 
         if !isempty(prev)
-            opt_depth = _push_token!(tokens, prev, isempty(tran), opt_depth)
-            opt_depth < 0 && throw(ArgumentError("Unmatched closing optional ']' in $f"))
+            opt_depth = _push_token!(tokens, f, prev, opt_depth)
         end
 
         if !isempty(tran)
@@ -355,15 +354,14 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
         end
 
         width = length(m.match)
-        prev = (f[m.offset], width)
+        prev = (f[m.offset], width, endswith(m.match, '!'))
         prev_offset = m.offset + width
     end
 
     tran = replace(f[prev_offset:lastindex(f)], r"\\(.)" => s"\1")
 
     if !isempty(prev)
-        opt_depth = _push_token!(tokens, prev, false, opt_depth)
-        opt_depth < 0 && throw(ArgumentError("Unmatched closing optional ']' in $f"))
+        opt_depth = _push_token!(tokens, f, prev, opt_depth)
     end
 
     if !isempty(tran)
@@ -376,14 +374,18 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
     return DateFormat{Symbol(f),typeof(tokens_tuple)}(tokens_tuple, locale)
 end
 
-function _push_token!(tokens::Vector{AbstractDateToken}, prev::Tuple{Char, Int}, fixed::Bool, depth::Int)
-    letter, width = prev
+function _push_token!(tokens::Vector{AbstractDateToken},  f::AbstractString,
+                        (letter, width, fixed)::Tuple{Char, Int, Bool}, depth::Int)
+    if fixed
+        width -= 1
+    end
     if letter == '['
         for i in 1:width
             push!(tokens, OptionalStart{depth+i}())
         end
         depth+width
     elseif letter == ']'
+        width > depth && throw(ArgumentError("Unmatched closing optional ']' in $f"))
         for i in 0:width-1
             push!(tokens, OptionalEnd{depth-i}())
         end
