@@ -465,6 +465,7 @@ void jl_compute_field_offsets(jl_datatype_t *st);
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
                                              int isunboxed, int elsz);
 void jl_module_run_initializer(jl_module_t *m);
+jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT;
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern jl_array_t *jl_cfunction_list JL_GLOBALLY_ROOTED;
 
@@ -699,8 +700,8 @@ extern JL_DLLEXPORT jl_value_t *jl_segv_exception;
 #endif
 
 // -- Runtime intrinsics -- //
-JL_DLLEXPORT const char *jl_intrinsic_name(int f);
-unsigned jl_intrinsic_nargs(int f);
+JL_DLLEXPORT const char *jl_intrinsic_name(int f) JL_NOTSAFEPOINT;
+unsigned jl_intrinsic_nargs(int f) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align);
