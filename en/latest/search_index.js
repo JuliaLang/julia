@@ -7397,7 +7397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
@@ -9337,22 +9337,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers/#Base.GMP.BigInt-Tuple{Any}",
-    "page": "Numbers",
-    "title": "Base.GMP.BigInt",
-    "category": "method",
-    "text": "BigInt(x)\n\nCreate an arbitrary precision integer. x may be an Int (or anything that can be converted to an Int). The usual mathematical operators are defined for this type, and results are promoted to a BigInt.\n\nInstances can be constructed from strings via parse, or using the big string literal.\n\nExamples\n\njulia> parse(BigInt, \"42\")\n42\n\njulia> big\"313\"\n313\n\n\n\n\n\n"
-},
-
-{
-    "location": "base/numbers/#Base.MPFR.BigFloat-Tuple{Any}",
-    "page": "Numbers",
-    "title": "Base.MPFR.BigFloat",
-    "category": "method",
-    "text": "BigFloat(x)\n\nCreate an arbitrary precision floating point number. x may be an Integer, a Float64 or a BigInt. The usual mathematical operators are defined for this type, and results are promoted to a BigFloat.\n\nNote that because decimal literals are converted to floating point numbers when parsed, BigFloat(2.1) may not yield what you expect. You may instead prefer to initialize constants from strings via parse, or using the big string literal.\n\njulia> BigFloat(2.1)\n2.100000000000000088817841970012523233890533447265625\n\njulia> big\"2.1\"\n2.099999999999999999999999999999999999999999999999999999999999999999999999999986\n\n\n\n\n\n"
-},
-
-{
     "location": "base/numbers/#Base.Rounding.rounding",
     "page": "Numbers",
     "title": "Base.Rounding.rounding",
@@ -9397,7 +9381,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "General Number Functions and Constants",
     "category": "section",
-    "text": "Base.one\nBase.oneunit\nBase.zero\nBase.im\nBase.MathConstants.pi\nBase.MathConstants.ℯ\nBase.MathConstants.catalan\nBase.MathConstants.eulergamma\nBase.MathConstants.golden\nBase.Inf\nBase.Inf32\nBase.Inf16\nBase.NaN\nBase.NaN32\nBase.NaN16\nBase.issubnormal\nBase.isfinite\nBase.isinf\nBase.isnan\nBase.iszero\nBase.isone\nBase.nextfloat\nBase.prevfloat\nBase.isinteger\nBase.isreal\nCore.Float32(::Any)\nCore.Float64(::Any)\nBase.GMP.BigInt(::Any)\nBase.MPFR.BigFloat(::Any)\nBase.Rounding.rounding\nBase.Rounding.setrounding(::Type, ::Any)\nBase.Rounding.setrounding(::Function, ::Type, ::RoundingMode)\nBase.Rounding.get_zero_subnormals\nBase.Rounding.set_zero_subnormals"
+    "text": "Base.one\nBase.oneunit\nBase.zero\nBase.im\nBase.MathConstants.pi\nBase.MathConstants.ℯ\nBase.MathConstants.catalan\nBase.MathConstants.eulergamma\nBase.MathConstants.golden\nBase.Inf\nBase.Inf32\nBase.Inf16\nBase.NaN\nBase.NaN32\nBase.NaN16\nBase.issubnormal\nBase.isfinite\nBase.isinf\nBase.isnan\nBase.iszero\nBase.isone\nBase.nextfloat\nBase.prevfloat\nBase.isinteger\nBase.isreal\nCore.Float32(::Any)\nCore.Float64(::Any)\nBase.Rounding.rounding\nBase.Rounding.setrounding(::Type, ::Any)\nBase.Rounding.setrounding(::Function, ::Type, ::RoundingMode)\nBase.Rounding.get_zero_subnormals\nBase.Rounding.set_zero_subnormals"
 },
 
 {
@@ -9489,6 +9473,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "base/numbers/#Base.MPFR.BigFloat-Tuple{Any}",
+    "page": "Numbers",
+    "title": "Base.MPFR.BigFloat",
+    "category": "method",
+    "text": "BigFloat(x)\n\nCreate an arbitrary precision floating point number. x may be an Integer, a Float64 or a BigInt. The usual mathematical operators are defined for this type, and results are promoted to a BigFloat.\n\nNote that because decimal literals are converted to floating point numbers when parsed, BigFloat(2.1) may not yield what you expect. You may instead prefer to initialize constants from strings via parse, or using the big string literal.\n\njulia> BigFloat(2.1)\n2.100000000000000088817841970012523233890533447265625\n\njulia> big\"2.1\"\n2.099999999999999999999999999999999999999999999999999999999999999999999999999986\n\n\n\n\n\n"
+},
+
+{
     "location": "base/numbers/#Base.precision",
     "page": "Numbers",
     "title": "Base.precision",
@@ -9537,11 +9529,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers/#Base.MPFR.BigFloat-Tuple{String}",
+    "location": "base/numbers/#Base.GMP.BigInt-Tuple{Any}",
     "page": "Numbers",
-    "title": "Base.MPFR.BigFloat",
+    "title": "Base.GMP.BigInt",
     "category": "method",
-    "text": "BigFloat(x)\n\nCreate an arbitrary precision floating point number. x may be an Integer, a Float64 or a BigInt. The usual mathematical operators are defined for this type, and results are promoted to a BigFloat.\n\nNote that because decimal literals are converted to floating point numbers when parsed, BigFloat(2.1) may not yield what you expect. You may instead prefer to initialize constants from strings via parse, or using the big string literal.\n\njulia> BigFloat(2.1)\n2.100000000000000088817841970012523233890533447265625\n\njulia> big\"2.1\"\n2.099999999999999999999999999999999999999999999999999999999999999999999999999986\n\n\n\n\n\nBigFloat(x::String)\n\nCreate a representation of the string x as a BigFloat.\n\n\n\n\n\n"
+    "text": "BigInt(x)\n\nCreate an arbitrary precision integer. x may be an Int (or anything that can be converted to an Int). The usual mathematical operators are defined for this type, and results are promoted to a BigInt.\n\nInstances can be constructed from strings via parse, or using the big string literal.\n\nExamples\n\njulia> parse(BigInt, \"42\")\n42\n\njulia> big\"313\"\n313\n\n\n\n\n\n"
 },
 
 {
@@ -9549,15 +9541,15 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.@big_str",
     "category": "macro",
-    "text": "@big_str str\n@big_str(str)\n\n@big_str parses a string into a BigInt Throws an ArgumentError if the string is not a valid integer Removes all underscores _ from the string\n\n\n\n\n\n"
+    "text": "@big_str str\n@big_str(str)\n\nParse a string into a BigInt or BigFloat, and throw an ArgumentError if the string is not a valid number. For integers _ is allowed in the string as a separator.\n\nExamples\n\njulia> big\"123_456\"\n123456\n\njulia> big\"7891.5\"\n7.8915e+03\n\n\n\n\n\n"
 },
 
 {
-    "location": "base/numbers/#BigFloats-1",
+    "location": "base/numbers/#BigFloats-and-BigInts-1",
     "page": "Numbers",
-    "title": "BigFloats",
+    "title": "BigFloats and BigInts",
     "category": "section",
-    "text": "The BigFloat type implements arbitrary-precision floating-point arithmetic using the GNU MPFR library.Base.precision\nBase.MPFR.precision(::Type{BigFloat})\nBase.MPFR.setprecision\nBase.MPFR.BigFloat(x, prec::Int)\nBigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)\nBase.MPFR.BigFloat(x, prec::Int, rounding::RoundingMode)\nBase.MPFR.BigFloat(x::String)\nBase.@big_str"
+    "text": "The BigFloat and BigInt types implements arbitrary-precision floating point and integer arithmetic, respectively. For BigFloat the GNU MPFR library is used, and for BigInt the GNU Multiple Precision Arithmetic Library (GMP) is used.Base.MPFR.BigFloat(::Any)\nBase.precision\nBase.MPFR.precision(::Type{BigFloat})\nBase.MPFR.setprecision\nBase.MPFR.BigFloat(x, prec::Int)\nBase.MPFR.BigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)\nBase.MPFR.BigFloat(x, prec::Int, rounding::RoundingMode)\nBase.GMP.BigInt(::Any)\nBase.@big_str"
 },
 
 {
@@ -15109,7 +15101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "function",
-    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\n"
+    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\n"
 },
 
 {
@@ -20541,7 +20533,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sockets",
     "title": "Base.bind",
     "category": "function",
-    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
+    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
 },
 
 {
