@@ -11,7 +11,7 @@ const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
     Regex(pattern[, flags])
 
 A type representing a regular expression. `Regex` objects can be used to match strings
-with [`match`](@ref) or [`matchall`](@ref).
+with [`match`](@ref).
 
 `Regex` objects can be created using the [`@r_str`](@ref) string macro. The
 `Regex(pattern[, flags])` constructor is usually used if the `pattern` string needs
