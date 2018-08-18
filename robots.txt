@@ -1,0 +1,9 @@
+# Make sure that the search engines do not index old documentation which did not
+# have canonical URLs pointing to the latest.
+User-agent: *
+Disallow: /en/v0.3.12/
+Disallow: /en/v0.4.7/
+Disallow: /en/v0.5.2/
+Disallow: /en/v0.6.0/
+Disallow: /en/v0.6.1/
+Disallow: /en/v0.6.2/
