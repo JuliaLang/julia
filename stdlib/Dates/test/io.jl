@@ -492,6 +492,25 @@ end
         @test_throws ArgumentError Dates.Time("10:33:51", DateFormat("YYYY-MM-DD HH:MM:SS"))  # Time can't hold year/month/day
     end
 end
+@testset "fixed width / optional" begin
+    f = DateFormat("yyyy!")
+    @test Dates.year(Dates.Date("2000", f)) == 2000
+    @test_throws ArgumentError Dates.Date("1", f)
+    @test_throws ArgumentError Dates.Date("10000", f)
+    @test Dates.year(Dates.Date("2000", DateFormat("[y]"))) == 2000
+    @test_throws ArgumentError Dates.Date("", DateFormat("y"))
+    @test_throws ArgumentError DateFormat("[y")
+    @test_throws ArgumentError DateFormat("y]")
+    @test Dates.month(Dates.Date("2000-2", "y-[m-]d")) == 1
+    # "-2" matches both the optional part and the part after it
+    @test_throws ArgumentError Dates.Date("2000-2", "y[-m]-d")
+    f = DateFormat("yyyy![[-]mm!]")
+    d = Dates.Date(2000, 2, 1)
+    @test Dates.Date("2000-02", f) == d
+    @test Dates.Date("200002", f) == d
+    @test Dates.Date("2000", f) + Dates.Month(1) == d
+    @test_throws ArgumentError Dates.Date("2000-", f)
+end
 
 @testset "midnight" begin
     # issue #28203: 24:00 is a valid ISO 8601 time
