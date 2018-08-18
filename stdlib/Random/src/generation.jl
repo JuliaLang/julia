@@ -161,6 +161,18 @@ function rand(r::AbstractRNG, ::SamplerType{T}) where {T<:AbstractChar}
     (c < 0xd800) ? T(c) : T(c+0x800)
 end
 
+### random pairs
+
+function Sampler(RNG::Type{<:AbstractRNG}, ::Type{Pair{A,B}}, n::Repetition) where {A,B}
+    sp1 = Sampler(RNG, A, n)
+    sp2 = A === B ? sp1 : Sampler(RNG, B, n)
+    SamplerTag{Tuple{Pair{A,B}}}(sp1 => sp2) # Tuple so that the gentype is Pair{A,B}
+                                             # in SamplerTag's constructor
+end
+
+rand(rng::AbstractRNG, sp::SamplerTag{<:Tuple{<:Pair}}) =
+    rand(rng, sp.data.first) => rand(rng, sp.data.second)
+
 
 ## Generate random integer within a range
 

@@ -288,7 +288,7 @@ Pick a random element or array of random elements from the set of values specifi
 * a string (considered as a collection of characters), or
 * a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
   integers (this is not applicable to [`BigInt`](@ref)), and to ``[0, 1)`` for floating
-  point numbers;
+  point numbers; `S` can also be a `Pair` type, in which case random pairs are produced;
 
 `S` defaults to [`Float64`](@ref)
 (except when `dims` is a tuple of integers, in which case `S` must be specified).
