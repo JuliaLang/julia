@@ -479,7 +479,7 @@ extern char jl_using_perf_jitevents;
 #endif
 extern size_t jl_arr_xtralloc_limit;
 
-void jl_init_types(void);
+void jl_init_types(void) JL_GC_DISABLED;
 void jl_init_box_caches(void);
 void jl_init_frontend(void);
 void jl_init_primitives(void) JL_GC_DISABLED;
