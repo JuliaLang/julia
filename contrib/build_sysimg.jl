@@ -33,7 +33,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
     sysimg = Libdl.dlopen_e("sys")
     if sysimg != C_NULL
         if !force && Base.samefile(Libdl.dlpath(sysimg), "$(sysimg_path).$(Libdl.dlext)")
-            info("System image already loaded at $(Libdl.dlpath(sysimg)), set force=true to override.")
+            @info "System image already loaded at $(Libdl.dlpath(sysimg)), set force=true to override."
             return nothing
         end
     end
@@ -55,29 +55,29 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
         catch
             err_msg =  "Unable to modify $sysimg_path.ji, ensure parent directory exists "
             err_msg *= "and is writable; absolute paths work best.)"
-            error(err_msg)
+            @error err_msg
         end
 
         # Copy in userimg.jl if it exists
         if userimg_path !== nothing
             if !isfile(userimg_path)
-                error("$userimg_path is not found, ensure it is an absolute path.")
+                @error "$userimg_path is not found, ensure it is an absolute path."
             end
             if isfile("userimg.jl")
-                error("$(joinpath(base_dir, "userimg.jl")) already exists, delete manually to continue.")
+                @error "$(joinpath(base_dir, "userimg.jl")) already exists, delete manually to continue."
             end
             cp(userimg_path, "userimg.jl")
         end
         try
             # Start by building basecompiler.{ji,o}
             basecompiler_path = joinpath(dirname(sysimg_path), "basecompiler")
-            info("Building basecompiler.o")
-            info("$julia -C $cpu_target --output-ji $basecompiler_path.ji --output-o $basecompiler_path.o compiler/compiler.jl")
+            @info "Building basecompiler.o"
+            @info "$julia -C $cpu_target --output-ji $basecompiler_path.ji --output-o $basecompiler_path.o compiler/compiler.jl"
             run(`$julia -C $cpu_target --output-ji $basecompiler_path.ji --output-o $basecompiler_path.o compiler/compiler.jl`)
 
             # Bootstrap off of that to create sys.{ji,o}
-            info("Building sys.o")
-            info("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $basecompiler_path.ji --startup-file=no sysimg.jl")
+            @info "Building sys.o"
+            @info "$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $basecompiler_path.ji --startup-file=no sysimg.jl"
             run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $basecompiler_path.ji --startup-file=no sysimg.jl`)
 
             if cc !== nothing
@@ -85,17 +85,17 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
                 !isempty(warn_msg) && foreach(warn, warn_msg)
             else
                 !isempty(warn_msg) && foreach(warn, warn_msg)
-                info("System image successfully built at $sysimg_path.ji.")
+                @info "System image successfully built at $sysimg_path.ji."
             end
 
             if !Base.samefile("$(default_sysimg_path(debug)).ji", "$sysimg_path.ji")
                 if isfile("$sysimg_path.$(Libdl.dlext)")
-                    info("To run Julia with this image loaded, run: `julia -J $sysimg_path.$(Libdl.dlext)`.")
+                    @info "To run Julia with this image loaded, run: `julia -J $sysimg_path.$(Libdl.dlext)`."
                 else
-                    info("To run Julia with this image loaded, run: `julia -J $sysimg_path.ji`.")
+                    @info "To run Julia with this image loaded, run: `julia -J $sysimg_path.ji`."
                 end
             else
-                info("Julia will automatically load this system image at next startup.")
+                @info "Julia will automatically load this system image at next startup."
             end
         finally
             # Cleanup userimg.jl
@@ -165,8 +165,8 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
     end
 
     sysimg_file = "$sysimg_path.$(Libdl.dlext)"
-    info("Linking sys.$(Libdl.dlext)")
-    info("$cc $(join(FLAGS, ' ')) -o $sysimg_file $sysimg_path.o")
+    @info "Linking sys.$(Libdl.dlext)"
+    @info "$cc $(join(FLAGS, ' ')) -o $sysimg_file $sysimg_path.o"
     # Windows has difficulties overwriting a file in use so we first link to a temp file
     if Sys.iswindows() && isfile(sysimg_file)
         if success(pipeline(`$cc $FLAGS -o $sysimg_path.tmp $sysimg_path.o`; stdout=stdout, stderr=stderr))
@@ -176,7 +176,7 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
     else
         run(`$cc $FLAGS -o $sysimg_file $sysimg_path.o`)
     end
-    info("System image successfully built at $sysimg_path.$(Libdl.dlext)")
+    @info "System image successfully built at $sysimg_path.$(Libdl.dlext)"
     return
 end
 
