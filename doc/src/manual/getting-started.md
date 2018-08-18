@@ -40,7 +40,7 @@ also set when a Julia expression is given using the `-e` option on the command l
 arguments given to a script, you could do this:
 
 ```
-$ julia -e 'println(PROGRAM_FILE); for x in ARGS; println(x); end' foo bar
+$ julia -e "println(PROGRAM_FILE); for x in ARGS; println(x); end" foo bar
 
 foo
 bar
