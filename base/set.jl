@@ -173,7 +173,6 @@ julia> print(v)
 ```
 """
 function unique!(f::Callable, C)
-    out = Vector{eltype(C)}()
     seen = Set()
     i = 1
     while i <= length(C)
