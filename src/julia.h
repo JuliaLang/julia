@@ -1086,7 +1086,7 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body);
 JL_DLLEXPORT const char *jl_typename_str(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT const char *jl_typeof_str(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b);
-jl_value_t *jl_unwrap_unionall(jl_value_t *v) JL_NOTSAFEPOINT;
+jl_value_t *jl_unwrap_unionall(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u);
 
 STATIC_INLINE int jl_is_dispatch_tupletype(jl_value_t *v) JL_NOTSAFEPOINT
@@ -1833,7 +1833,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp);
 // argc/argv
 JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv);
 
-JL_DLLEXPORT int jl_generating_output(void);
+JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 
 // Settings for code_coverage and malloc_log
 // NOTE: if these numbers change, test/cmdlineargs.jl will have to be updated
