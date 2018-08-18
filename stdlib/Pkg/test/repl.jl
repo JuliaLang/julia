@@ -365,10 +365,10 @@ end
     @test Pkg.REPLMode.parse("--meta --preview r"; for_completions=true) == (:cmd, "r", nothing, true)
     @test Pkg.REPLMode.parse("--preview reg"; for_completions=true) == (:cmd, "reg", nothing, true)
     # sub commands
-    @test Pkg.REPLMode.parse("--preview registry"; for_completions=true) ==
-        (:sub, "", "registry", true)
-    @test Pkg.REPLMode.parse("--preview registry a"; for_completions=true) ==
-        (:sub, "a", "registry", true)
+    @test Pkg.REPLMode.parse("--preview package"; for_completions=true) ==
+        (:sub, "", "package", true)
+    @test Pkg.REPLMode.parse("--preview package a"; for_completions=true) ==
+        (:sub, "a", "package", true)
     # options
     @test Pkg.REPLMode.parse("add -"; for_completions=true) ==
         (:opt, "-", Pkg.REPLMode.super_specs["package"]["add"], true)
