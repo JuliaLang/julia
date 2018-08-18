@@ -422,9 +422,9 @@ macro dateformat_str(str)
 end
 
 # Standard formats
-const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.s")
-const ISODateFormat = DateFormat("yyyy-mm-dd")
-const ISOTimeFormat = DateFormat("HH:MM:SS.s")
+const ISODateTimeFormat = DateFormat("yyyy-[mm[-[dd[\\T[HH[:[MM[:[SS[.[s]]]]]]]]]]]")
+const ISODateFormat = DateFormat("[yyyy[-[mm[-[dd]]]]]")
+const ISOTimeFormat = DateFormat("[HH[:[MM[:[SS[.[s]]]]]]]")
 const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 
 default_format(::Type{DateTime}) = ISODateTimeFormat
