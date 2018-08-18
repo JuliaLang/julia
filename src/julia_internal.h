@@ -137,7 +137,7 @@ STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
 #define GC_OLD_MARKED (GC_OLD | GC_MARKED) // reachable and old
 
 // useful constants
-extern jl_methtable_t *jl_type_type_mt;
+extern jl_methtable_t *jl_type_type_mt JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT extern size_t jl_world_counter;
 
 typedef void (*tracer_cb)(jl_value_t *tracee);
