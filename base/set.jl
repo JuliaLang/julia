@@ -173,17 +173,9 @@ julia> print(v)
 ```
 """
 function unique!(f::Callable, C)
-    seen = Set()
-    i = 1
-    while i <= length(C)
-        y = f(C[i])
-	if !in(y, seen)
-	    push!(seen, y)
-	    i += 1
-	else
-	    splice!(C, i)
-        end
-    end
+    x = unique(f, C)
+    resize!(C, 1)
+    splice!(C, 1, x)
 end
 
 # If A is not grouped, then we will need to keep track of all of the elements that we have
