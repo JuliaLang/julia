@@ -158,6 +158,35 @@ function unique(f::Callable, C)
     out
 end
 
+"""
+    unique!(f, itr)
+
+In-place replace an array containing one value from `itr` for each unique value produced by `f`
+applied to elements of `itr`.
+
+# Examples
+```jldoctest
+julia> v = Vector([1, -1, 3, -3, 4, -4, 5, -5, 6, -6])
+julia> unique!(x -> x^2, v)
+julia> print(v)
+[1, 3, 4, 5, 6]
+```
+"""
+function unique!(f::Callable, C)
+    out = Vector{eltype(C)}()
+    seen = Set()
+    i = 1
+    while i <= length(C)
+        y = f(C[i])
+	if !in(y, seen)
+	    push!(seen, y)
+	    i += 1
+	else
+	    splice!(C, i)
+        end
+    end
+end
+
 # If A is not grouped, then we will need to keep track of all of the elements that we have
 # seen so far.
 function _unique!(A::AbstractVector)

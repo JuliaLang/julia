@@ -350,6 +350,9 @@ end
     u = [1,1,3,2,1]
     unique!(u)
     @test u == [1,3,2]
+    u = [5, 1, 8, 9, 3, 4, 10, 7, 2, 6]
+    unique!(n -> n % 3, u)
+    @test u == [5, 1, 9]
     @test unique!([]) == []
     @test unique!(Float64[]) == Float64[]
     u = [1,2,2,3,5,5]
