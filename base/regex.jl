@@ -15,7 +15,7 @@ with [`match`](@ref) or [`matchall`](@ref).
 
 `Regex` objects can be created using the [`@r_str`](@ref) string macro. The
 `Regex(pattern[, flags])` constructor is usually used if the `pattern` string needs
-to be interpolated. See the documentation of the string-macro for details on flags.
+to be interpolated. See the documentation of the string macro for details on flags.
 """
 mutable struct Regex
     pattern::String
