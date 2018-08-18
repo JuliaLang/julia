@@ -781,11 +781,13 @@ JL_DLLEXPORT size_t jl_array_len_(jl_array_t *a);
 JL_DLLEXPORT char *jl_array_typetagdata(jl_array_t *a);
 
 #ifdef __clang_analyzer__
+jl_value_t **jl_array_ptr_data(jl_array_t *a JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 STATIC_INLINE jl_value_t *jl_array_ptr_set(
     void *a JL_ROOTING_ARGUMENT, size_t i,
     void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT;
 #else
+#define jl_array_ptr_data(a)  ((jl_value_t**)((jl_array_t*)(a))->data)
 STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
 {
     assert(i < jl_array_len(a));
@@ -846,7 +848,6 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPO
 // get a pointer to the data in a datatype
 #define jl_data_ptr(v)  ((jl_value_t**)v)
 
-#define jl_array_ptr_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
 #define jl_string_data(s) ((char*)s + sizeof(void*))
 #define jl_string_len(s)  (*(size_t*)s)
 
