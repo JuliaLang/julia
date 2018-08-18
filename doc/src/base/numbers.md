@@ -89,8 +89,6 @@ Base.isinteger
 Base.isreal
 Core.Float32(::Any)
 Core.Float64(::Any)
-Base.GMP.BigInt(::Any)
-Base.MPFR.BigFloat(::Any)
 Base.Rounding.rounding
 Base.Rounding.setrounding(::Type, ::Any)
 Base.Rounding.setrounding(::Function, ::Type, ::RoundingMode)
@@ -113,18 +111,22 @@ Base.@int128_str
 Base.@uint128_str
 ```
 
-## BigFloats
+## BigFloats and BigInts
 
-The [`BigFloat`](@ref) type implements arbitrary-precision floating-point arithmetic using
-the [GNU MPFR library](http://www.mpfr.org/).
+The [`BigFloat`](@ref) and [`BigInt`](@ref) types implements
+arbitrary-precision floating point and integer arithmetic, respectively. For
+[`BigFloat`](@ref) the [GNU MPFR library](http://www.mpfr.org/) is used,
+and for [`BigInt`](@ref) the [GNU Multiple Precision Arithmetic Library (GMP)]
+(https://gmplib.org) is used.
 
 ```@docs
+Base.MPFR.BigFloat(::Any)
 Base.precision
 Base.MPFR.precision(::Type{BigFloat})
 Base.MPFR.setprecision
 Base.MPFR.BigFloat(x, prec::Int)
-BigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)
+Base.MPFR.BigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)
 Base.MPFR.BigFloat(x, prec::Int, rounding::RoundingMode)
-Base.MPFR.BigFloat(x::String)
+Base.GMP.BigInt(::Any)
 Base.@big_str
 ```
