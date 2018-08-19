@@ -182,6 +182,7 @@ julia> shuffle!(rng, Vector(1:16))
 function shuffle!(r::AbstractRNG, a::AbstractArray)
     @assert !has_offset_axes(a)
     n = length(a)
+    n <= 1 && return a # nextpow below won't work with n == 0
     @assert n <= Int64(2)^52
     mask = nextpow(2, n) - 1
     for i = n:-1:2
