@@ -166,9 +166,7 @@ applied to elements of `itr`.
 
 # Examples
 ```jldoctest
-julia> v = [1, -1, 3, -3, 4, -4, 5, -5, 6, -6]
-julia> unique!(x -> x^2, v)
-julia> print(v)
+julia> v = [1, -1, 3, -3, 4, -4, 5, -5, 6, -6]; unique!(x -> x^2, v); print(v)
 [1, 3, 4, 5, 6]
 ```
 """
