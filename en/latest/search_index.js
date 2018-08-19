@@ -2841,6 +2841,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "manual/environment-variables/#JULIA_PROJECT-1",
+    "page": "Environment Variables",
+    "title": "JULIA_PROJECT",
+    "category": "section",
+    "text": "A directory path that points to the current Julia project. Setting this environment variable has the same effect as specifying the --project start-up option, but --project has higher precedence.  If the variable is set to @., Julia tries to find a project directory that contains Project.toml or JuliaProject.toml file from the current directory and its parents.  See also the chapter on Code Loading."
+},
+
+{
     "location": "manual/environment-variables/#JULIA_LOAD_PATH-1",
     "page": "Environment Variables",
     "title": "JULIA_LOAD_PATH",
@@ -3713,17 +3721,17 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide/#Use-naming-conventions-consistent-with-Julia\'s-base/-1",
+    "location": "manual/style-guide/#Use-naming-conventions-consistent-with-Julia-base/-1",
     "page": "Style Guide",
-    "title": "Use naming conventions consistent with Julia\'s base/",
+    "title": "Use naming conventions consistent with Julia base/",
     "category": "section",
     "text": "modules and type names use capitalization and camel case: module SparseArrays, struct UnitRange.\nfunctions are lowercase (maximum, convert) and, when readable, with multiple words squashed together (isequal, haskey). When necessary, use underscores as word separators. Underscores are also used to indicate a combination of concepts (remotecall_fetch as a more efficient implementation of fetch(remotecall(...))) or as modifiers.\nconciseness is valued, but avoid abbreviation (indexin rather than indxin) as it becomes difficult to remember whether and how particular words are abbreviated.If a function name requires multiple words, consider whether it might represent more than one concept and might be better split into pieces."
 },
 
 {
-    "location": "manual/style-guide/#Write-functions-with-argument-ordering-similar-to-Julia\'s-Base-1",
+    "location": "manual/style-guide/#Write-functions-with-argument-ordering-similar-to-Julia-Base-1",
     "page": "Style Guide",
-    "title": "Write functions with argument ordering similar to Julia\'s Base",
+    "title": "Write functions with argument ordering similar to Julia Base",
     "category": "section",
     "text": "As a general rule, the Base library uses the following order of arguments to functions, as applicable:Function argument. Putting a function argument first permits the use of do blocks for passing multiline anonymous functions.\nI/O stream. Specifying the IO object first permits passing the function to functions such as sprint, e.g. sprint(show, x).\nInput being mutated. For example, in fill!(x, v), x is the object being mutated and it appears before the value to be inserted into x.\nType. Passing a type typically means that the output will have the given type. In parse(Int, \"1\"), the type comes before the string to parse. There are many such examples where the type appears first, but it\'s useful to note that in read(io, String), the IO argument appears before the type, which is in keeping with the order outlined here.\nInput not being mutated. In fill!(x, v), v is not being mutated and it comes after x.\nKey. For associative collections, this is the key of the key-value pair(s). For other indexed collections, this is the index.\nValue. For associative collections, this is the value of the key-value pair(s). In cases like fill!(x, v), this is v.\nEverything else. Any other arguments.\nVarargs. This refers to arguments that can be listed indefinitely at the end of a function call. For example, in Matrix{T}(undef, dims), the dimensions can be given as a Tuple, e.g. Matrix{T}(undef, (1,2)), or as Varargs, e.g. Matrix{T}(undef, 1, 2).\nKeyword arguments. In Julia keyword arguments have to come last anyway in function definitions; they\'re listed here for the sake of completeness.The vast majority of functions will not take every kind of argument listed above; the numbers merely denote the precedence that should be used for any applicable arguments to a function.There are of course a few exceptions. For example, in convert, the type should always come first. In setindex!, the value comes before the indices so that the indices can be provided as varargs.When designing APIs, adhering to this general order as much as possible is likely to give users of your functions a more consistent experience."
 },
@@ -15101,7 +15109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "function",
-    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\n"
+    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\n"
 },
 
 {
