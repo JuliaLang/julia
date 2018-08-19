@@ -80,7 +80,7 @@ JL_DLLEXPORT int64_t ios_seek(ios_t *s, int64_t pos);   // absolute seek
 JL_DLLEXPORT int64_t ios_seek_end(ios_t *s);
 JL_DLLEXPORT int64_t ios_skip(ios_t *s, int64_t offs);  // relative seek
 JL_DLLEXPORT int64_t ios_pos(ios_t *s);  // get current position
-JL_DLLEXPORT int ios_trunc(ios_t *s, size_t size);
+JL_DLLEXPORT int ios_trunc(ios_t *s, size_t size) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int ios_eof(ios_t *s);
 JL_DLLEXPORT int ios_eof_blocking(ios_t *s);
 JL_DLLEXPORT int ios_flush(ios_t *s);
@@ -88,14 +88,14 @@ JL_DLLEXPORT void ios_close(ios_t *s);
 JL_DLLEXPORT int ios_isopen(ios_t *s);
 JL_DLLEXPORT char *ios_take_buffer(ios_t *s, size_t *psize);  // release buffer to caller
 // set buffer space to use
-JL_DLLEXPORT int ios_setbuf(ios_t *s, char *buf, size_t size, int own);
+JL_DLLEXPORT int ios_setbuf(ios_t *s, char *buf, size_t size, int own) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int ios_bufmode(ios_t *s, bufmode_t mode);
 JL_DLLEXPORT int ios_get_readable(ios_t *s);
 JL_DLLEXPORT int ios_get_writable(ios_t *s);
 JL_DLLEXPORT void ios_set_readonly(ios_t *s);
 JL_DLLEXPORT size_t ios_copy(ios_t *to, ios_t *from, size_t nbytes);
 JL_DLLEXPORT size_t ios_copyall(ios_t *to, ios_t *from);
-JL_DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim);
+JL_DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t ios_nchomp(ios_t *from, size_t ntowrite);
 // ensure at least n bytes are buffered if possible. returns # available.
 JL_DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);
@@ -104,7 +104,7 @@ JL_DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);
 JL_DLLEXPORT
 ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int trunc);
 JL_DLLEXPORT ios_t *ios_mkstemp(ios_t *f, char *fname);
-JL_DLLEXPORT ios_t *ios_mem(ios_t *s, size_t initsize);
+JL_DLLEXPORT ios_t *ios_mem(ios_t *s, size_t initsize) JL_NOTSAFEPOINT;
 ios_t *ios_str(ios_t *s, char *str);
 ios_t *ios_static_buffer(ios_t *s, char *buf, size_t sz);
 JL_DLLEXPORT ios_t *ios_fd(ios_t *s, long fd, int isfile, int own);
