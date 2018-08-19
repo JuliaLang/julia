@@ -73,7 +73,7 @@ JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
     return old_main;
 }
 
-static jl_function_t *jl_module_get_initializer(jl_module_t *m)
+static jl_function_t *jl_module_get_initializer(jl_module_t *m JL_PROPAGATES_ROOT)
 {
     return (jl_function_t*)jl_get_global(m, jl_symbol("__init__"));
 }
@@ -273,7 +273,9 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
         JL_TRY {
             size_t i, l = module_stack.len;
             for (i = stackidx; i < l; i++) {
-                jl_module_load_time_initialize((jl_module_t*)module_stack.items[i]);
+                jl_module_t *m = (jl_module_t*)module_stack.items[i];
+                JL_GC_PROMISE_ROOTED(m);
+                jl_module_load_time_initialize(m);
             }
             assert(module_stack.len == l);
             module_stack.len = stackidx;
@@ -418,7 +420,7 @@ static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs
     }
 }
 
-static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var)
+static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_ROOTED
 {
     static jl_value_t *require_func = NULL;
     static size_t require_world = 0;
@@ -451,7 +453,7 @@ static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var)
 // either:
 //   - sets *name and returns the module to import *name from
 //   - sets *name to NULL and returns a module to import
-static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from, jl_array_t *args, jl_sym_t **name, const char *keyword)
+static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from JL_PROPAGATES_ROOT, jl_array_t *args, jl_sym_t **name, const char *keyword) JL_GLOBALLY_ROOTED
 {
     jl_sym_t *var = (jl_sym_t*)jl_array_ptr_ref(args, 0);
     size_t i = 1;
@@ -488,6 +490,7 @@ static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from, jl_a
             if (var != dot_sym)
                 break;
             i++;
+            assert(m);
             m = m->parent;
         }
     }
@@ -501,6 +504,7 @@ static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from, jl_a
         if (i == jl_array_len(args)-1)
             break;
         m = (jl_module_t*)jl_eval_global_var(m, var);
+        JL_GC_PROMISE_ROOTED(m);
         if (!jl_is_module(m))
             jl_errorf("invalid %s path: \"%s\" does not name a module", keyword, jl_symbol_name(var));
         i++;
@@ -535,8 +539,9 @@ static jl_method_instance_t *method_instance_for_thunk(jl_code_info_t *src, jl_m
     return li;
 }
 
-static void import_module(jl_module_t *m, jl_module_t *import)
+static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import)
 {
+    assert(m);
     jl_sym_t *name = import->name;
     jl_binding_t *b;
     if (jl_binding_resolved_p(m, name)) {
@@ -558,7 +563,7 @@ static void import_module(jl_module_t *m, jl_module_t *import)
 }
 
 // in `import A.B: x, y, ...`, evaluate the `A.B` part if it exists
-static jl_module_t *eval_import_from(jl_module_t *m, jl_expr_t *ex, const char *keyword)
+static jl_module_t *eval_import_from(jl_module_t *m JL_PROPAGATES_ROOT, jl_expr_t *ex, const char *keyword)
 {
     if (jl_expr_nargs(ex) == 1 && jl_is_expr(jl_exprarg(ex, 0))) {
         jl_expr_t *fr = (jl_expr_t*)jl_exprarg(ex, 0);
@@ -582,7 +587,7 @@ static jl_module_t *eval_import_from(jl_module_t *m, jl_expr_t *ex, const char *
     return NULL;
 }
 
-jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded)
+jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int fast, int expanded)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (!jl_is_expr(e)) {

@@ -1,5 +1,13 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#ifndef __has_feature
+#define __has_feature(x) 0
+#endif
+#if !(defined(__clang__) && __has_feature(nullability))
+#define _Nonnull
+#endif
+#define JL_NONNULL _Nonnull
+
 #ifdef __clang_analyzer__
 
 #define JL_PROPAGATES_ROOT __attribute__((annotate("julia_propagates_root")))
