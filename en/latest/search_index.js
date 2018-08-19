@@ -7405,7 +7405,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
@@ -10637,7 +10637,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.Broadcast.broadcast!",
     "category": "function",
-    "text": "broadcast!(f, dest, As...)\n\nLike broadcast, but store the result of broadcast(f, As...) in the dest array. Note that dest is only used to store the result, and does not supply arguments to f unless it is also listed in the As, as in broadcast!(f, A, A, B) to perform A[:] = broadcast(f, A, B).\n\n\n\n\n\n"
+    "text": "broadcast!(f, dest, As...)\n\nLike broadcast, but store the result of broadcast(f, As...) in the dest array. Note that dest is only used to store the result, and does not supply arguments to f unless it is also listed in the As, as in broadcast!(f, A, A, B) to perform A[:] = broadcast(f, A, B).\n\nExamples\n\njulia> A = [1.0; 0.0]; B = [0.0; 0.0];\n\njulia> broadcast!(+, B, A, (0, -2.0));\n\njulia> B\n2-element Array{Float64,1}:\n  1.0\n -2.0\n\njulia> A\n2-element Array{Float64,1}:\n 1.0\n 0.0\n\njulia> broadcast!(+, A, A, (0, -2.0));\n\njulia> A\n2-element Array{Float64,1}:\n  1.0\n -2.0\n\n\n\n\n\n"
 },
 
 {
@@ -10845,7 +10845,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.parentindices",
     "category": "function",
-    "text": "parentindices(A)\n\nFrom an array view A, returns the corresponding indices in the parent.\n\n\n\n\n\n"
+    "text": "parentindices(A)\n\nReturn the indices in the parent which correspond to the array view A.\n\nExamples\n\njulia> A = [1 2; 3 4];\n\njulia> V = view(A, 1, :)\n2-element view(::Array{Int64,2}, 1, :) with eltype Int64:\n 1\n 2\n\njulia> parentindices(V)\n(1, Base.Slice(Base.OneTo(2)))\n\n\n\n\n\n"
 },
 
 {
@@ -15109,7 +15109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "function",
-    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\n"
+    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\n"
 },
 
 {
