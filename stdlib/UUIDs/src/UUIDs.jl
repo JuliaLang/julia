@@ -4,7 +4,9 @@ module UUIDs
 
 using Random
 
-export UUID, uuid1, uuid4, uuid_version
+import SHA
+
+export UUID, uuid1, uuid4, uuid5, uuid_version
 
 import Base: UUID
 
@@ -79,6 +81,34 @@ function uuid4(rng::AbstractRNG=Random.GLOBAL_RNG)
     u &= 0xffffffffffff0fff3fffffffffffffff
     u |= 0x00000000000040008000000000000000
     UUID(u)
+end
+
+"""
+    uuid5(ns::UUID, name::String) -> UUID
+
+Generates a version 5 (namespace and domain-based) universally unique identifier (UUID),
+as specified by RFC 4122.
+
+# Examples
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> u4 = uuid4(rng)
+UUID("196f2941-2d58-45ba-9f13-43a2532b2fa8")
+
+julia> u5 = uuid5(u4, "julia")
+```
+"""
+function uuid5(ns::UUID, name::String)
+    #trucate SHA1 result to 16 bytes
+    hash_result = SHA.sha1(string(ns,name))[1:16]
+    # set version number to 5
+    hash_result[6] = (hash_result[6] & 0xf) | (0x2)
+    v = zero(UInt128)
+    for idx in 1:16
+        v = (v << 0x08) | hash_result[idx]
+    end
+    return UUID(v)
 end
 
 end
