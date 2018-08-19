@@ -397,10 +397,10 @@ jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b);
 extern uv_loop_t *jl_io_loop;
 void jl_uv_flush(uv_stream_t *stream);
 
-typedef struct _typeenv {
+typedef struct jl_typeenv_t {
     jl_tvar_t *var;
     jl_value_t *val;
-    struct _typeenv *prev;
+    struct jl_typeenv_t *prev;
 } jl_typeenv_t;
 
 int jl_tuple_isa(jl_value_t **child, size_t cl, jl_datatype_t *pdt);
