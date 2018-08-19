@@ -158,7 +158,7 @@ julia> data = [i for i in c]
 
 Consider a simple example using channels for inter-task communication. We start 4 tasks to process
 data from a single `jobs` channel. Jobs, identified by an id (`job_id`), are written to the channel.
-Each task in this simulation reads a `job_id`, waits for a random amout of time and writes back
+Each task in this simulation reads a `job_id`, waits for a random amount of time and writes back
 a tuple of `job_id` and the simulated time to the results channel. Finally all the `results` are
 printed out.
 
@@ -1792,10 +1792,10 @@ mpirun -np 4 ./julia example.jl
 ```
 
 [^1]:
-    in this context, mpi refers to the mpi-1 standard. beginning with mpi-2, the mpi standards committee
-    introduced a new set of communication mechanisms, collectively referred to as remote memory access
-    (rma). the motivation for adding rma to the mpi standard was to facilitate one-sided communication
-    patterns. for additional information on the latest mpi standard, see [http://mpi-forum.org/docs](http://mpi-forum.org/docs/).
+    In this context, MPI refers to the MPI-1 standard. Beginning with MPI-2, the MPI standards committee
+    introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access
+    (RMA). The motivation for adding rma to the MPI standard was to facilitate one-sided communication
+    patterns. For additional information on the latest MPI standard, see [http://mpi-forum.org/docs](http://mpi-forum.org/docs/).
 
 [^2]:
     [Julia GPU man pages](http://juliagpu.github.io/CUDAnative.jl/stable/man/usage.html#Julia-support-1)
