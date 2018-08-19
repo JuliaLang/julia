@@ -598,8 +598,9 @@ static jl_value_t *fix_inferred_var_bound(jl_tvar_t *var, jl_value_t *ty)
 {
     if (!jl_is_typevar(ty) && jl_has_free_typevars(ty)) {
         jl_value_t *ans = ty;
-        jl_array_t *vs = jl_find_free_typevars(ty);
+        jl_array_t *vs = NULL;
         JL_GC_PUSH2(&ans, &vs);
+        vs = jl_find_free_typevars(ty);
         int i;
         for (i = 0; i < jl_array_len(vs); i++) {
             ans = jl_type_unionall((jl_tvar_t*)jl_array_ptr_ref(vs, i), ans);
@@ -630,7 +631,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         btemp = btemp->prev;
     }
     jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, NULL, 0, 0, 0, 0, e->invdepth, 0, NULL, e->vars };
-    JL_GC_PUSH3(&u, &vb.lb, &vb.ub);
+    JL_GC_PUSH4(&u, &vb.lb, &vb.ub, &vb.innervars);
     e->vars = &vb;
     int ans;
     if (R) {
@@ -1724,7 +1725,9 @@ static int intersect_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e, int8
     // only do the check if N is free in the tuple type's last parameter
     if (jl_is_typevar(N) && N != (jl_value_t*)va_p1 && N != (jl_value_t*)va_p2) {
         jl_value_t *len = jl_box_long(n);
+        JL_GC_PUSH1(&len);
         jl_value_t *il = R ? intersect(len, N, e, 2) : intersect(N, len, e, 2);
+        JL_GC_POP();
         if (il == jl_bottom_type)
             return 0;
     }
