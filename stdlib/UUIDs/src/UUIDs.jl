@@ -97,15 +97,17 @@ julia> u4 = uuid4(rng)
 UUID("196f2941-2d58-45ba-9f13-43a2532b2fa8")
 
 julia> u5 = uuid5(u4, "julia")
+UUID("6f461186-52d8-5fc1-993a-77a729165b65")
 ```
 """
 function uuid5(ns::UUID, name::String)
-    #trucate SHA1 result to 16 bytes
-    hash_result = SHA.sha1(string(ns,name))[1:16]
+    hash_result = SHA.sha1(string(ns,name))
     # set version number to 5
-    hash_result[6] = (hash_result[6] & 0xf) | (0x2)
+    hash_result[7] = (hash_result[7] & 0x0F) | (0x50)
+    hash_result[9] = (hash_result[9] & 0x3F) | (0x80)
     v = zero(UInt128)
-    for idx in 1:16
+    #use only the first 16 bytes of the SHA1 hash
+    for idx in Base.OneTo(16)
         v = (v << 0x08) | hash_result[idx]
     end
     return UUID(v)
