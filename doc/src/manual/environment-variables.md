@@ -65,6 +65,15 @@ and a global configuration search path of
 /etc/julia/startup.jl
 ```
 
+### `JULIA_PROJECT`
+
+A directory path that points to the current Julia project. Setting this
+environment variable has the same effect as specifying the `--project` start-up
+option, but `--project` has higher precedence.  If the variable is set to `@.`,
+Julia tries to find a project directory that contains `Project.toml` or
+`JuliaProject.toml` file from the current directory and its parents.  See also
+the chapter on [Code Loading](@ref).
+
 ### `JULIA_LOAD_PATH`
 
 A separated list of absolute paths that are to be appended to the variable
