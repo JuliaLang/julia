@@ -626,9 +626,9 @@ function open(f::Function, cmds::AbstractCmd, args...)
 end
 
 """
-    read(command)
+    read(command::Cmd)
 
-Run a command asynchronously and return an array of bytes from the resulting stream.
+Run `command` and return the resulting output as an array of bytes.
 """
 function read(cmd::AbstractCmd)
     procs = open(cmd, "r", devnull)
@@ -638,9 +638,9 @@ function read(cmd::AbstractCmd)
 end
 
 """
-    read(command, String)
+    read(command::Cmd, String)
 
-Run a command asynchronously and convert the resulting stream to a string.
+Run `command` and return the resulting output as a `String`.
 """
 read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))
 
