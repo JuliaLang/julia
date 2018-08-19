@@ -169,12 +169,18 @@ JL_DLLEXPORT void (jl_cpu_wake)(void);
         jl_signal_fence();                              \
         (void)safepoint_load;                           \
     } while (0)
+#ifdef __clang_analyzer__
+// This is a sigint safepoint, not a GC safepoint (which
+// JL_NOTSAFEPOINT refers to)
+void jl_sigint_safepoint(jl_ptls_t tls) JL_NOTSAFEPOINT;
+#else
 #define jl_sigint_safepoint(ptls) do {                  \
         jl_signal_fence();                              \
         size_t safepoint_load = ptls->safepoint[-1];    \
         jl_signal_fence();                              \
         (void)safepoint_load;                           \
     } while (0)
+#endif
 #ifndef JULIA_ENABLE_THREADING
 #define jl_gc_state(ptls) ((int8_t)0)
 STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,

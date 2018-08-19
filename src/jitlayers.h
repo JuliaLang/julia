@@ -10,11 +10,7 @@
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
 #include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
 #include "llvm/ExecutionEngine/Orc/LazyEmittingLayer.h"
-#if JL_LLVM_VERSION >= 50000
-#  include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
-#else
-#  include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
-#endif
+#include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
 #include "llvm/ExecutionEngine/ObjectMemoryBuffer.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
 
@@ -85,21 +81,12 @@ static inline void add_named_global(GlobalObject *gv, T *addr, bool dllimport = 
 }
 
 void jl_init_jit(Type *T_pjlvalue_);
-#if JL_LLVM_VERSION >= 40000
 typedef JITSymbol JL_JITSymbol;
 // The type that is similar to SymbolInfo on LLVM 4.0 is actually
 // `JITEvaluatedSymbol`. However, we only use this type when a JITSymbol
 // is expected.
 typedef JITSymbol JL_SymbolInfo;
-#else
-typedef orc::JITSymbol JL_JITSymbol;
-typedef RuntimeDyld::SymbolInfo JL_SymbolInfo;
-#endif
-#if JL_LLVM_VERSION >= 50000
 using RTDyldObjHandleT = orc::RTDyldObjectLinkingLayerBase::ObjHandleT;
-#else
-using RTDyldObjHandleT = orc::ObjectLinkingLayerBase::ObjSetHandleT;
-#endif
 
 class JuliaOJIT {
     // Custom object emission notification handler for the JuliaOJIT
@@ -126,15 +113,9 @@ class JuliaOJIT {
     };
 
 public:
-#if JL_LLVM_VERSION >= 50000
     typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
     typedef orc::IRCompileLayer<ObjLayerT,CompilerT> CompileLayerT;
     typedef CompileLayerT::ModuleHandleT ModuleHandleT;
-#else
-    typedef orc::ObjectLinkingLayer<std::reference_wrapper<DebugObjectRegistrar>> ObjLayerT;
-    typedef orc::IRCompileLayer<ObjLayerT> CompileLayerT;
-    typedef CompileLayerT::ModuleSetHandleT ModuleHandleT;
-#endif
     typedef StringMap<void*> SymbolTableT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 
