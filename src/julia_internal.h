@@ -488,7 +488,7 @@ void *jl_init_llvm(void);
 void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_intrinsic_properties(void);
-void jl_init_tasks(void);
+void jl_init_tasks(void) JL_GC_DISABLED;
 void jl_init_stack_limits(int ismaster);
 void jl_init_root_task(void *stack, size_t ssize);
 void jl_init_serializer(void);
@@ -635,8 +635,8 @@ typedef unw_cursor_t bt_cursor_t;
 typedef int bt_context_t;
 typedef int bt_cursor_t;
 #endif
-size_t rec_backtrace(uintptr_t *data, size_t maxsize);
-size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
+size_t rec_backtrace(uintptr_t *data, size_t maxsize) JL_NOTSAFEPOINT;
+size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx) JL_NOTSAFEPOINT;
 #ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 #endif
