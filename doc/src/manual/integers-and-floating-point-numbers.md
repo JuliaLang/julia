@@ -215,7 +215,7 @@ UInt128: [0,340282366920938463463374607431768211455]
 ```
 
 The values returned by [`typemin`](@ref) and [`typemax`](@ref) are always of the given argument
-type. (The above expression uses several features that yet have to be introduced, including [for loops](@ref man-loops),
+type. (The above expression uses several features that have yet to be introduced, including [for loops](@ref man-loops),
 [Strings](@ref man-strings), and [Interpolation](@ref), but should be easy enough to understand for users
 with some existing programming experience.)
 
