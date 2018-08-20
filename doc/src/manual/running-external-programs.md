@@ -366,8 +366,8 @@ saturated throughput.
 
 We strongly encourage you to try all these examples to see how they work.
 
-## `CMD`-Objects
-Instead of with backticks, [`Cmd`](@ref)-objects can also be generated manually. This has the advantage,
+## `Cmd` Objects
+Instead of with backticks, [`Cmd`](@ref) objects can also be generated manually. This has the advantage,
 that arguments like the working directory and environment-variables can be customized.
 
 A simple example:
