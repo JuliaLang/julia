@@ -625,6 +625,11 @@ function open(f::Function, cmds::AbstractCmd, args...)
     return ret
 end
 
+"""
+    read(command::Cmd)
+
+Run `command` and return the resulting output as an array of bytes.
+"""
 function read(cmd::AbstractCmd)
     procs = open(cmd, "r", devnull)
     bytes = read(procs.out)
@@ -632,6 +637,11 @@ function read(cmd::AbstractCmd)
     return bytes
 end
 
+"""
+    read(command::Cmd, String)
+
+Run `command` and return the resulting output as a `String`.
+"""
 read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))
 
 """
