@@ -747,6 +747,12 @@ JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
 #define jl_svec_set_len_unsafe(t,n) (((jl_svec_t*)(t))->length=(n))
 #define jl_svec_data(t) ((jl_value_t**)((char*)(t) + sizeof(jl_svec_t)))
 
+#ifdef __clang_analyzer__
+STATIC_INLINE jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+STATIC_INLINE jl_value_t *jl_svecset(
+    void *t JL_ROOTING_ARGUMENT JL_PROPAGATES_ROOT,
+    size_t i, void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT;
+#else
 STATIC_INLINE jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
 {
     assert(jl_typeis(t,jl_simplevector_type));
@@ -763,6 +769,7 @@ STATIC_INLINE jl_value_t *jl_svecset(
     if (x) jl_gc_wb(t, x);
     return (jl_value_t*)x;
 }
+#endif
 
 #ifdef STORE_ARRAY_LEN
 #define jl_array_len(a)   (((jl_array_t*)(a))->length)
@@ -1245,7 +1252,7 @@ STATIC_INLINE jl_vararg_kind_t jl_vararg_kind(jl_value_t *v) JL_NOTSAFEPOINT
     return JL_VARARG_UNBOUND;
 }
 
-STATIC_INLINE int jl_is_va_tuple(jl_datatype_t *t)
+STATIC_INLINE int jl_is_va_tuple(jl_datatype_t *t) JL_NOTSAFEPOINT
 {
     assert(jl_is_tuple_type(t));
     size_t l = jl_svec_len(t->parameters);
