@@ -344,6 +344,12 @@ end
 
 Kronecker tensor product of two vectors or two matrices.
 
+For vectors v and w, the Kronecker product is related to the outer product by
+`kron(v,w) == vec(w*transpose(v))` or
+`w*transpose(v) == reshape(kron(v,w), (length(w), length(v)))`.
+Note how the ordering of `v` and `w` differs on the left and right
+of these expressions (due to column-major storage).
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -362,17 +368,20 @@ julia> kron(A, B)
  1+0im  0-1im  2+0im  0-2im
  0+3im  3+0im  0+4im  4+0im
  3+0im  0-3im  4+0im  0-4im
-```
-Note that, due to column-major ordering, using `kron()` together with
-`reshape()` can produce counter-intuitive results. In particular, when
-the result of `kron(A,B)` is reshaped to obtain separate indices for
-the factors `A` and `B`, the index ordering is the opposite of the
-argument ordering in `kron()`. For two vectors, this means:
-```jldoctest
-julia> A = rand(3); B = rand(3); AB = reshape(kron(A,B), (3,3));
 
-julia> all(AB[b,a] == A[a] * B[b] for a=1:3, b=1:3)
-true
+julia> v = [1, 2]; w = [3, 4, 5];
+
+julia> w*transpose(v)
+3×2 Array{Int64,2}:
+ 3   6
+ 4   8
+ 5  10
+
+julia> reshape(kron(v,w), (length(w), length(v)))
+3×2 Array{Int64,2}:
+ 3   6
+ 4   8
+ 5  10
 ```
 """
 function kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
