@@ -18,3 +18,26 @@ u5 = uuid5(u1, "julia")
 @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-446655440000")
 @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-44665544000098")
 @test_throws ArgumentError UUID("z50e8400-e29b-41d4-a716-446655440000")
+
+# results similar to Python builtin uuid
+# To reproduce the sequence
+#=
+import uuid
+uuids = [uuid.UUID("22b4a8a1-e548-4eeb-9270-60426d66a48e")]
+for _ in range(5):
+    uuids.append(uuid.uuid5(uuids[-1], "julia"))
+=#
+
+const following_uuids = [
+    UUID("22b4a8a1-e548-4eeb-9270-60426d66a48e"),
+    UUID("30ea6cfd-c270-569f-b4cb-795dead63686"),
+    UUID("31099374-e3a0-5fde-9482-791c639bf29b"),
+    UUID("6b34b357-a348-53aa-8c71-fb9b06c3a51e"),
+    UUID("fdbd7d4d-c462-59cc-ae6a-0c3b010240e2"),
+    UUID("d8cc6298-75d5-57e0-996c-279259ab365c"),
+]
+
+for (idx, init_uuid) in enumerate(following_uuids[1:end-1])
+    next_id = uuid5(init_uuid, "julia")
+    @test next_id == following_uuids[idx+1]
+end
