@@ -87,7 +87,7 @@ MinGW-w64 compilers available through Cygwin's package manager.
 
     Advanced: you may skip steps 2-4 by running:
 
-        setup-x86_64.exe -s <url> -q -P cmake,gcc-g++,git,make,patch,curl,m4,python,p7zip,mingw64-i686-gcc-g++,mingw64-i686-gcc-fortran,mingw64-x86_64-gcc-g++,mingw64-x86_64-gcc-fortran
+        setup-x86_64.exe -s <url> -q -P cmake,gcc-g++,git,make,patch,curl,m4,flex,python,p7zip,mingw64-i686-gcc-g++,mingw64-i686-gcc-fortran,mingw64-x86_64-gcc-g++,mingw64-x86_64-gcc-fortran
         :: replace <url> with a site from https://cygwin.com/mirrors.html
         :: or run setup manually first and select a mirror
 
@@ -95,7 +95,7 @@ MinGW-w64 compilers available through Cygwin's package manager.
 
  3. At the '*Select Packages'* step, select the following:
 
-    1.  From the *Devel* category: `cmake`, `gcc-g++`, `git`, `make`, `patch`
+    1.  From the *Devel* category: `cmake`, `gcc-g++`, `git`, `make`, `patch`, `flex`
     2.  From the *Net* category: `curl`
     3.  From *Interpreters* (or *Python*) category: `m4`, `python`
     4.  From the *Archive* category: `p7zip`
