@@ -215,7 +215,7 @@ UInt128: [0,340282366920938463463374607431768211455]
 ```
 
 The values returned by [`typemin`](@ref) and [`typemax`](@ref) are always of the given argument
-type. (The above expression uses several features we have yet to introduce, including [for loops](@ref man-loops),
+type. (The above expression uses several features that have yet to be introduced, including [for loops](@ref man-loops),
 [Strings](@ref man-strings), and [Interpolation](@ref), but should be easy enough to understand for users
 with some existing programming experience.)
 
@@ -678,7 +678,7 @@ where syntactic conflicts arise:
   * The 32-bit floating-point literal expression `1.5f22` could be interpreted as the numeric literal
     `1.5` multiplied by the variable `f22`.
 
-In all cases, we resolve the ambiguity in favor of interpretation as numeric literals:
+In all cases the ambiguity is resolved in favor of interpretation as numeric literals:
 
   * Expressions starting with `0x` are always hexadecimal literals.
   * Expressions starting with a numeric literal followed by `e` or `E` are always floating-point literals.
