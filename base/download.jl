@@ -29,7 +29,7 @@ else
             try
                 run(`wget -O $filename $url`)
             catch
-                rm(filename)  # wget always creates a file
+                isfile(filename) && rm(filename)  # wget always creates a file
                 rethrow()
             end
         elseif Sys.which("curl") !== nothing
