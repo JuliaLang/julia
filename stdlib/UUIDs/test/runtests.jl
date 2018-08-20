@@ -41,3 +41,16 @@ for (idx, init_uuid) in enumerate(following_uuids[1:end-1])
     next_id = uuid5(init_uuid, "julia")
     @test next_id == following_uuids[idx+1]
 end
+
+# Python-generated UUID following each of the standard namespaces
+const standard_namespace_uuids = [
+    (UUIDs.namespace_dns,  UUID("00ca23ad-40ef-500c-a910-157de3950d07")),
+    (UUIDs.namespace_oid,  UUID("b7bf72b0-fb4e-538b-952a-3be296f07f6d")),
+    (UUIDs.namespace_url,  UUID("997cd5be-4705-5439-9fe6-d77b18d612e5")),
+    (UUIDs.namespace_x500, UUID("993c6684-82e7-5cdb-bd46-9bff0362e6a9")),
+]
+
+for (init_uuid, next_uuid) in standard_namespace_uuids
+    result = uuid5(init_uuid, "julia")
+    @test next_uuid == result
+end
