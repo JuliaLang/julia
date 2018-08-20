@@ -542,8 +542,8 @@ end
 ```
 
 Inside `f`, `kwargs` will be a key-value iterator over a named tuple. Named
-tuples (as well as dictionaries) can be passed as keyword arguments using a
-semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
+tuples (as well as dictionaries with keys of `Symbol`) can be passed as keyword
+arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
 
 If a keyword argument is not assigned a default value in the method definition,
 then it is *required*: an [`UndefKeywordError`](@ref) exception will be thrown
