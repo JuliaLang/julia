@@ -1413,7 +1413,7 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
         jl_array_t *backedges = def.replaced->backedges;
         if (backedges) {
             size_t i, l = jl_array_len(backedges);
-            jl_method_instance_t **replaced = (jl_method_instance_t**)jl_array_data(backedges);
+            jl_method_instance_t **replaced = (jl_method_instance_t**)jl_array_ptr_data(backedges);
             for (i = 0; i < l; i++) {
                 invalidate_method_instance(replaced[i], closure->max_world, 0);
             }
@@ -1921,6 +1921,7 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
 {
     size_t world = jl_world_counter;
     jl_method_instance_t *li = jl_get_specialization1(types, world, 1);
+    JL_GC_PROMISE_ROOTED(li); // Rooted via types since mt_cache==1
     if (li == NULL)
         return 0;
     if (jl_generating_output()) {

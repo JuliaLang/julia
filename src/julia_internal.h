@@ -332,7 +332,7 @@ jl_llvm_functions_t jl_compile_linfo(
 jl_callptr_t jl_compile_method_internal(jl_method_instance_t **pmeth, size_t world);
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam);
-int jl_code_requires_compiler(jl_code_info_t *src);
+int jl_code_requires_compiler(jl_code_info_t *src) JL_NOTSAFEPOINT;
 jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast);
 JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void);
 
