@@ -104,7 +104,7 @@ julia> u4 = uuid4(rng)
 UUID("196f2941-2d58-45ba-9f13-43a2532b2fa8")
 
 julia> u5 = uuid5(u4, "julia")
-UUID("6f461186-52d8-5fc1-993a-77a729165b65")
+UUID("b37756f8-b0c0-54cd-a466-19b3d25683bc")
 ```
 """
 function uuid5(ns::UUID, name::String)
