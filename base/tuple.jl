@@ -35,6 +35,42 @@ function _setindex(v, i::Integer, first, tail...)
 end
 _setindex(v, i::Integer) = ()
 
+getindex(into::Tuple{}, index::Tuple{}) = ()
+getindex(into::Tuple, index::Tuple{}) = ()
+getindex(into::Tuple{}, index::Tuple) = ()
+getindex(into::Tuple, index::Tuple) = begin
+    next = getindex(tail(into), tail(index))
+    ifelse(first(index), (first(into), next...), next)
+end
+
+setindex(old::Tuple{}, new, switch::Tuple{}) = ()
+setindex(old::Tuple{}, new, switch::Tuple) = ()
+setindex(old::Tuple, new, switch::Tuple{}) = old
+setindex(old::Tuple, new, switch::Tuple) =  begin
+    first_switch = first(switch)
+    ifelse(first_switch, new, first(old)),
+    setindex(
+        tail(old),
+        new,
+        tail(switch))...
+end
+
+setindex(old::Tuple{}, new::Tuple{}, switch::Tuple{}) = ()
+setindex(old::Tuple{}, new::Tuple{}, switch::Tuple) = ()
+setindex(old::Tuple{}, new::Tuple, switch::Tuple{}) = ()
+setindex(old::Tuple{}, new::Tuple, switch::Tuple) = ()
+setindex(old::Tuple, new::Tuple{}, switch::Tuple{}) = old
+setindex(old::Tuple, new::Tuple{}, switch::Tuple) = old
+setindex(old::Tuple, new::Tuple, switch::Tuple{}) = old
+setindex(old::Tuple, new::Tuple, switch::Tuple) = begin
+    first_switch = first(switch)
+    ifelse(first_switch, first(new), first(old)),
+    setindex(
+        tail(old),
+        ifelse(first_switch, tail(new), new),
+        tail(switch))...
+end
+
 
 ## iterating ##
 
