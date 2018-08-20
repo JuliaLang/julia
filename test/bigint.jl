@@ -401,3 +401,16 @@ end
 
 # Issue #24298
 @test mod(BigInt(6), UInt(5)) == mod(6, 5)
+
+@testset "cmp has values in [-1, 0, 1], issue #28780" begin
+    bigrand() = rand(-big(2)^rand(1:rand(1:1000)):big(2)^rand(1:rand(1:1000)))
+    for T in (Base.BitInteger_types..., BigInt, Float64, Float32, Float16, BigFloat)
+        @test cmp(big(2)^130, one(T)) == 1
+        @test cmp(-big(2)^130, one(T)) == -1
+        T === BigInt && continue
+        @test cmp(big(2)^130, rand(T)) == 1
+        @test cmp(-big(2)^130, rand(T)) == -1
+        @test cmp(bigrand(), rand(T)) ∈ (-1, 0, 1)
+    end
+    @test cmp(bigrand(), bigrand()) ∈ (-1, 0, 1)
+end
