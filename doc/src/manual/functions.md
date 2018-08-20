@@ -541,6 +541,10 @@ function f(x; y=0, kwargs...)
 end
 ```
 
+Inside `f`, `kwargs` will be a key-value iterator over a named tuple. Named
+tuples (as well as dictionaries with keys of `Symbol`) can be passed as keyword
+arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
+
 If a keyword argument is not assigned a default value in the method definition,
 then it is *required*: an [`UndefKeywordError`](@ref) exception will be thrown
 if the caller does not assign it a value:
@@ -551,9 +555,6 @@ end
 f(3, y=5) # ok, y is assigned
 f(3)      # throws UndefKeywordError(:y)
 ```
-
-Inside `f`, `kwargs` will be a named tuple. Named tuples (as well as dictionaries) can be passed as
-keyword arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
 
 One can also pass `key => value` expressions after a semicolon. For example, `plot(x, y; :width => 2)`
 is equivalent to `plot(x, y, width=2)`. This is useful in situations where the keyword name is computed
