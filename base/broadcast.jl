@@ -304,9 +304,9 @@ function flatten(bc::Broadcasted{Style}) where {Style}
     #     makeargs(w, x, y, z) = (w, makeargs1(x, y, z)...)
     #                          = (w, g(x, y), makeargs2(z)...)
     #                          = (w, g(x, y), z)
-    let makeargs = make_makeargs(bc)
+    let makeargs = make_makeargs(bc), f = bc.f
         newf = @inline function(args::Vararg{Any,N}) where N
-            bc.f(makeargs(args...)...)
+            f(makeargs(args...)...)
         end
         return Broadcasted{Style}(newf, args, bc.axes)
     end
@@ -332,13 +332,13 @@ make_makeargs(bc::Broadcasted) = make_makeargs(()->(), bc.args)
 end
 @inline function make_makeargs(makeargs, t::Tuple{<:Broadcasted,Vararg{Any}})
     bc = t[1]
-    let makeargs = make_makeargs(makeargs, tail(t))
+    let makeargs = make_makeargs(makeargs, tail(t)), f = bc.f
         let makeargs = make_makeargs(makeargs, bc.args)
             headargs, tailargs = make_headargs(bc.args), make_tailargs(bc.args)
             return @inline function(args::Vararg{Any,N}) where N
                 args1 = makeargs(args...)
                 a, b = headargs(args1...), tailargs(args1...)
-                (bc.f(a...), b...)
+                (f(a...), b...)
             end
         end
     end
