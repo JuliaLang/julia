@@ -72,12 +72,12 @@ julia> instances(Fruit)
 `Base.Enums.basetype` function returns `BaseType`.
 
 ```julia
-julia> @enum Vegetable::UInt8 pea carotte broccoli
+julia> @enum Vegetable::UInt8 pea carrot broccoli
 
 julia> Vegetable
 Enum Vegetable:
 pea = 0x00
-carotte = 0x01
+carrot = 0x01
 broccoli = 0x02
 
 julia> Base.Enums.basetype(Vegetable)
