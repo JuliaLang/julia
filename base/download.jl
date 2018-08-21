@@ -2,9 +2,7 @@
 
 # file downloading
 
-downloadcmd = nothing
 if Sys.iswindows()
-    downloadcmd = "powershell"
     function download(url::AbstractString, filename::AbstractString)
         ps = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
         tls12 = "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12"
@@ -31,7 +29,7 @@ else
             try
                 run(`wget -O $filename $url`)
             catch
-                isfile(filename) && rm(filename)  # wget always creates a file
+                rm(filename, force=true)  # wget always creates a file
                 rethrow()
             end
         elseif Sys.which("fetch") !== nothing
