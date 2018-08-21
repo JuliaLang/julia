@@ -28,29 +28,6 @@ static inline int lt_ptr(void *a, void *b)
     return (uintptr_t)a < (uintptr_t)b;
 }
 
-#if 0
-static inline int gt_ptr(void * a, void * b)
-{
-    return (uintptr_t)a > (uintptr_t)b;
-}
-
-static inline void *max_ptr(void *a, void *b)
-{
-    if ((uintptr_t) a > (uintptr_t) b)
-        return a;
-    else
-        return b;
-}
-
-static inline void *min_ptr(void *a, void *b)
-{
-    if ((uintptr_t) a < (uintptr_t) b)
-        return a;
-    else
-        return b;
-}
-#endif
-
 /* align pointer to full word if mis-aligned */
 static inline void *align_ptr(void *p)
 {
@@ -263,23 +240,23 @@ void free_bigval(void *p)
 
 #define NAUXROOTS 1024
 static jl_value_t *aux_roots[NAUXROOTS];
-JL_DLLEXPORT size_t gc_counter_full, gc_counter_inc;
+size_t gc_counter_full, gc_counter_inc;
 
-JL_DLLEXPORT jl_value_t *get_aux_root(size_t n)
+jl_value_t *get_aux_root(size_t n)
 {
     if (n >= NAUXROOTS)
         jl_error("get_aux_root: index out of range");
     return aux_roots[n];
 }
 
-JL_DLLEXPORT void set_aux_root(size_t n, jl_value_t *val)
+void set_aux_root(size_t n, jl_value_t *val)
 {
     if (n >= NAUXROOTS)
         jl_error("set_aux_root: index out of range");
     aux_roots[n] = val;
 }
 
-JL_DLLEXPORT size_t get_gc_counter(int full)
+size_t get_gc_counter(int full)
 {
     if (full)
         return gc_counter_full;
@@ -289,7 +266,7 @@ JL_DLLEXPORT size_t get_gc_counter(int full)
 
 static size_t obj_sweeps = 0;
 
-JL_DLLEXPORT size_t get_obj_sweeps()
+size_t get_obj_sweeps()
 {
     return obj_sweeps;
 }
@@ -324,7 +301,7 @@ static size_t gc_alloc_size(jl_value_t *val)
     return size;
 }
 
-JL_DLLEXPORT int internal_obj_scan(jl_value_t *val)
+int internal_obj_scan(jl_value_t *val)
 {
     if (jl_gc_internal_obj_base_ptr(val) == val) {
         size_t size = gc_alloc_size(val);
@@ -386,9 +363,16 @@ void check_stack_notempty(const char *name, jl_value_t *p)
 // denotes the actual number of objects. GC scanning should ignore
 // any storage past those.
 
+// Return the type of stacks
+
+jl_value_t *stk_type()
+{
+    return (jl_value_t *)datatype_stack;
+}
+
 // Create a new stack object
 
-JL_DLLEXPORT jl_value_t *stk_make()
+jl_value_t *stk_make()
 {
     jl_value_t *hdr =
             jl_gc_alloc_typed(ptls, sizeof(jl_value_t *), datatype_stack);
@@ -403,14 +387,14 @@ JL_DLLEXPORT jl_value_t *stk_make()
 
 // Return a pointer to the inner `dynstack_t` struct.
 
-JL_DLLEXPORT jl_value_t *stk_blob(jl_value_t *s)
+jl_value_t *stk_blob(jl_value_t *s)
 {
     return (jl_value_t *)(*(dynstack_t **)s);
 }
 
 // Push `v` on `s`.
 
-JL_DLLEXPORT void stk_push(jl_value_t *s, jl_value_t *v)
+void stk_push(jl_value_t *s, jl_value_t *v)
 {
     check_stack("push", s);
     dynstack_t *stk = *(dynstack_t **)s;
@@ -432,7 +416,7 @@ JL_DLLEXPORT void stk_push(jl_value_t *s, jl_value_t *v)
 
 // Return top value from `s`. Raise error if not empty.
 
-JL_DLLEXPORT jl_value_t *stk_top(jl_value_t *s)
+jl_value_t *stk_top(jl_value_t *s)
 {
     check_stack_notempty("top", s);
     dynstack_t *stk = *(dynstack_t **)s;
@@ -441,7 +425,7 @@ JL_DLLEXPORT jl_value_t *stk_top(jl_value_t *s)
 
 // Pop a value from `s` and return it. Raise error if not empty.
 
-JL_DLLEXPORT jl_value_t *stk_pop(jl_value_t *s)
+jl_value_t *stk_pop(jl_value_t *s)
 {
     check_stack_notempty("pop", s);
     dynstack_t *stk = *(dynstack_t **)s;
@@ -451,7 +435,7 @@ JL_DLLEXPORT jl_value_t *stk_pop(jl_value_t *s)
 
 // Number of objects on the stack.
 
-JL_DLLEXPORT size_t stk_size(jl_value_t *s)
+size_t stk_size(jl_value_t *s)
 {
     check_stack("empty", s);
     dynstack_t *stk = *(dynstack_t **)s;
@@ -557,6 +541,8 @@ int main()
     jl_gc_set_cb_notify_external_free(free_bigval, 1);
 
     jl_init();
+    if (jl_gc_enable_conservative_gc_support() < 0)
+        abort();
     ptls = jl_get_ptls_states();
     jl_gc_set_cb_root_scanner(root_scanner, 1);
     jl_gc_set_cb_pre_gc(pre_gc_func, 1);
@@ -609,5 +595,8 @@ int main()
             "    push!(empty!(LOAD_PATH), dir, stdlib)\n"
             "end");
 
-    checked_eval_string("import LocalTest");
+    checked_eval_string(
+            "module LocalTest\n"
+            "  include(\"LocalTest.jl\")\n"
+            "end");
 }
