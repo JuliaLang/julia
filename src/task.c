@@ -548,9 +548,9 @@ void JL_NORETURN throw_internal(jl_value_t *e)
     ptls->io_wait = 0;
     if (ptls->safe_restore)
         jl_longjmp(*ptls->safe_restore, 1);
-    jl_gc_unsafe_enter(ptls);
     assert(e != NULL);
     ptls->exception_in_transit = e;
+    jl_gc_unsafe_enter(ptls);
     jl_handler_t *eh = ptls->current_task->eh;
     if (eh != NULL) {
 #ifdef ENABLE_TIMINGS

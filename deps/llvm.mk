@@ -385,7 +385,11 @@ LLVM_PATCH_PREV := $$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
 ifeq ($(LLVM_VER_SHORT),6.0)
+ifeq ($(LLVM_VER_PATCH), 0)
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_4.0))
+else
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
+endif
 $(eval $(call LLVM_PATCH,llvm-D34078-vectorize-fdiv))
 $(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX
 $(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1)) # remove for 7.0

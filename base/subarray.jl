@@ -66,7 +66,20 @@ parentindices(V::SubArray) = V.indices
 """
     parentindices(A)
 
-From an array view `A`, returns the corresponding indices in the parent.
+Return the indices in the [`parent`](@ref) which correspond to the array view `A`.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4];
+
+julia> V = view(A, 1, :)
+2-element view(::Array{Int64,2}, 1, :) with eltype Int64:
+ 1
+ 2
+
+julia> parentindices(V)
+(1, Base.Slice(Base.OneTo(2)))
+```
 """
 parentindices(a::AbstractArray) = map(OneTo, size(a))
 
