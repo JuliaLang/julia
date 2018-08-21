@@ -4861,15 +4861,14 @@ static Function *jl_cfunction_object(jl_value_t *ff, jl_value_t *declrt, jl_tupl
     // first split on `ft` using a simple eqtable
     // then use the typemap to split on argt
     // and finally, pick declrt from the pair-list
-    union jl_typemap_t cache_l2 = { NULL };
-    // cache_l2.unknown = NULL;
+    jl_typemap_t *cache_l2 = NULL;
     jl_typemap_entry_t *cache_l3 = NULL;
     if (!jl_cfunction_list) {
         jl_cfunction_list = jl_alloc_vec_any(16);
     }
     else {
-        cache_l2.unknown = jl_eqtable_get(jl_cfunction_list, ft, NULL);
-        if (cache_l2.unknown) {
+        cache_l2 = jl_eqtable_get(jl_cfunction_list, ft, NULL);
+        if (cache_l2) {
             cache_l3 = jl_typemap_assoc_by_type(cache_l2, (jl_value_t*)argt, NULL,
                 /*subtype*/0, /*offs*/0, /*world*/1, /*max_world_mask*/0);
             if (cache_l3) {
@@ -4886,13 +4885,13 @@ static Function *jl_cfunction_object(jl_value_t *ff, jl_value_t *declrt, jl_tupl
     }
 
     if (cache_l3 == NULL) {
-        union jl_typemap_t insert = cache_l2;
-        if (!insert.unknown)
-            insert.unknown = jl_nothing;
-        cache_l3 = jl_typemap_insert(&insert, (jl_value_t*)insert.unknown, (jl_tupletype_t*)argt,
+        jl_typemap_t *insert = cache_l2;
+        if (!insert)
+            insert = jl_nothing;
+        cache_l3 = jl_typemap_insert(&insert, (jl_value_t*)insert, (jl_tupletype_t*)argt,
             NULL, jl_emptysvec, (jl_value_t*)jl_emptysvec, /*offs*/0, &cfunction_cache, 1, ~(size_t)0, NULL);
-        if (insert.unknown != cache_l2.unknown)
-            jl_cfunction_list = jl_eqtable_put(jl_cfunction_list, ft, insert.unknown, NULL);
+        if (insert != cache_l2)
+            jl_cfunction_list = jl_eqtable_put(jl_cfunction_list, ft, insert, NULL);
     }
 
     // compute / validate return type
