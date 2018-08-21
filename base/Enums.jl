@@ -36,7 +36,6 @@ Int64
 julia> typeof(Integer(broccoli))
 UInt8
 ```
-
 """
 function basetype end
 
@@ -103,7 +102,6 @@ To list all the instances of an enum use `instances`, e.g.
 julia> instances(Fruit)
 (apple::Fruit = 1, orange::Fruit = 2, kiwi::Fruit = 3)
 ```
-
 """
 macro enum(T, syms...)
     if isempty(syms)
