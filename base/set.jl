@@ -170,10 +170,32 @@ julia> v = [1, -1, 3, -3, 4, -4, 5, -5, 6, -6]; unique!(x -> x^2, v); print(v)
 [1, 3, 4, 5, 6]
 ```
 """
-function unique!(f::Callable, C)
-    x = unique(f, C)
-    resize!(C, 1)
-    splice!(C, 1, x)
+function unique!(f::Callable, A)
+    seen = Set{eltype(A)}()
+    l = length(A)
+    cur = 1
+    index = 1
+    done = false
+    tmp = Nothing
+    while !done
+        y = f(A[cur])
+        if y ∉ seen
+	    push!(seen, y)
+            if cur != index
+                tmp = A[index]
+                A[index] = A[cur]
+                A[cur] = tmp
+            end
+            index += 1
+        end
+        cur += 1
+
+        if cur > l
+            done = true
+        end
+    end
+    if cur != index  splice!(A, index:cur-1); end
+    A
 end
 
 # If A is not grouped, then we will need to keep track of all of the elements that we have
