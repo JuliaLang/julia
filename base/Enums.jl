@@ -5,6 +5,39 @@ module Enums
 import Core.Intrinsics.bitcast
 export Enum, @enum
 
+"""
+    Base.Enums.basetype(enum)
+
+```julia
+julia> @enum Vegetable::UInt8 pea carrot broccoli
+
+julia> Vegetable
+Enum Vegetable:
+pea = 0x00
+carrot = 0x01
+broccoli = 0x02
+
+julia> Base.Enums.basetype(Vegetable)
+UInt8
+```
+
+Be aware of the difference between `Int` and `Integer` functions
+
+```julia
+julia> Int(broccoli)
+2
+
+julia> Integer(broccoli)
+0x02
+
+julia> typeof(Int(broccoli))
+Int64
+
+julia> typeof(Integer(broccoli))
+UInt8
+```
+
+"""
 function basetype end
 
 abstract type Enum{T<:Integer} end
@@ -62,42 +95,13 @@ end
 Member values can be converted between the enum type and `BaseType`. `read` and `write`
 perform these conversions automatically.
 
+`Base.Enums.basetype` function returns `BaseType`.
+
 To list all the instances of an enum use `instances`, e.g.
 
 ```jldoctest fruitenum
 julia> instances(Fruit)
 (apple::Fruit = 1, orange::Fruit = 2, kiwi::Fruit = 3)
-```
-
-`Base.Enums.basetype` function returns `BaseType`.
-
-```julia
-julia> @enum Vegetable::UInt8 pea carrot broccoli
-
-julia> Vegetable
-Enum Vegetable:
-pea = 0x00
-carrot = 0x01
-broccoli = 0x02
-
-julia> Base.Enums.basetype(Vegetable)
-UInt8
-```
-
-Be aware of the difference between `Int` and `Integer` functions
-
-```julia
-julia> Int(broccoli)
-2
-
-julia> Integer(broccoli)
-0x02
-
-julia> typeof(Int(broccoli))
-Int64
-
-julia> typeof(Integer(broccoli))
-UInt8
 ```
 
 """
