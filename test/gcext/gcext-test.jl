@@ -11,10 +11,10 @@ end
 function checknum(s, rx, cond)
     m = match(rx, s)
     if m === nothing
-	return false
+        return false
     else
         num = m[1]
-	return cond(parse(UInt, num))
+        return cond(parse(UInt, num))
     end
 end
 
