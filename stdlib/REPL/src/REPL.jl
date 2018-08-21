@@ -542,7 +542,7 @@ function hist_from_file(hp, file, path)
         while !isempty(line)
             push!(lines, chomp(line[2:end]))
             eof(file) && break
-            ch = Char(Base.peek(file))
+            ch = Char(peek(file))
             ch == ' '  && error(munged_history_message(path), countlines)
             ch != '\t' && break
             line = hist_getline(file)

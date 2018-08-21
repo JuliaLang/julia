@@ -785,6 +785,25 @@ ismissing(::Any) = false
 ismissing(::Missing) = true
 
 function popfirst! end
+
+"""
+    peek(stream)
+
+Read and return the next value from a stream without advancing the current position
+in the stream.
+
+# Examples
+
+```jldoctest
+julia> b = IOBuffer("julia");
+
+julia> peek(b)
+0x6a
+
+julia> position(b)
+0
+```
+"""
 function peek end
 
 """

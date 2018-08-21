@@ -795,6 +795,7 @@ export
     bytesavailable,
     ntoh,
     open,
+    peek,
     pipeline,
     Pipe,
     PipeBuffer,

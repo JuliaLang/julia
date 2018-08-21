@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base: peek
-
 macro dotimes(n, body)
     quote
         for i = 1:$(esc(n))
