@@ -3,7 +3,7 @@
 #include "llvm-version.h"
 #include "platform.h"
 #include "options.h"
-#if defined(_OS_WINDOWS_) && JL_LLVM_VERSION < 70000
+#if defined(_OS_WINDOWS_) && JL_LLVM_VERSION < 80000
 // trick llvm into skipping the generation of _chkstk calls
 //   since it has some codegen issues associated with them:
 //   (a) assumed to be within 32-bit offset
