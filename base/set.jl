@@ -176,15 +176,12 @@ function unique!(f::Callable, A)
     cur = 1
     index = 1
     done = false
-    tmp = Nothing
     while !done
         y = f(A[cur])
         if y ∉ seen
 	    push!(seen, y)
             if cur != index
-                tmp = A[index]
-                A[index] = A[cur]
-                A[cur] = tmp
+                A[cur], A[index] =  A[index], A[cur]
             end
             index += 1
         end
