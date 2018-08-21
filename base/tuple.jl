@@ -422,3 +422,104 @@ _tuple_any(f::Function, tf::Bool) = tf
 Returns an empty tuple, `()`.
 """
 empty(@nospecialize x::Tuple) = ()
+
+# optimizations for short tuples
+
+const ShortTuple = Union{
+    Tuple{},
+    Tuple{A} where {A},
+    Tuple{A, B} where {A, B},
+    Tuple{A, B, C} where {A, B, C},
+    Tuple{A, B, C, D} where {A, B, C, D},
+    Tuple{A, B, C, D, E} where {A, B, C, D, E},
+    Tuple{A, B, C, D, E, F} where {A, B, C, D, E, F},
+    Tuple{A, B, C, D, E, F, G} where {A, B, C, D, E, F, G},
+    Tuple{A, B, C, D, E, F, G, H} where {A, B, C, D, E, F, G, H},
+    Tuple{A, B, C, D, E, F, G, H, I} where {A, B, C, D, E, F, G, H, I},
+    Tuple{A, B, C, D, E, F, G, H, I, J} where {A, B, C, D, E, F, G, H, I, J},
+    Tuple{A, B, C, D, E, F, G, H, I, J, K} where {A, B, C, D, E, F, G, H, I, J, K},
+    Tuple{A, B, C, D, E, F, G, H, I, J, K, L} where {A, B, C, D, E, F, G, H, I, J, K, L},
+    Tuple{A, B, C, D, E, F, G, H, I, J, K, L, M} where {A, B, C, D, E, F, G, H, I, J, K, L, M},
+    Tuple{A, B, C, D, E, F, G, H, I, J, K, L, M, N} where {A, B, C, D, E, F, G, H, I, J, K, L, M, N},
+    Tuple{A, B, C, D, E, F, G, H, I, J, K, L, M, N, O} where {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O},
+    Tuple{A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P} where {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P}
+}
+
+fill(t::Tuple, value::ShortTuple) = ntuple(
+    let value = value
+        x -> value
+    end,
+    length(t)
+)
+
+reduce(reducer, ::Tuple{}) = Base._empty_reduce_error()
+reduce(reducer, args::ShortTuple) = reduce(
+    reducer,
+    args[1],
+    tail(args)
+)
+reduce(reducer, default, args::Tuple{}) = default
+
+reduce(reducer, default, args::ShortTuple) =
+    reducer(default, reduce(reducer, args[1], tail(args)))
+
+getindex(into::Tuple{}, switch::Tuple{}) = ()
+getindex(into::Tuple{}, switch::ShortTuple) = ()
+getindex(into::ShortTuple, switch::Tuple{}) = ()
+
+function getindex(into::ShortTuple, switch::ShortTuple)
+    next = getindex(tail(into), tail(switch))
+    if Bool(switch[1])
+        (into[1], next...)
+    else
+        next
+    end
+end
+
+setindex(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
+setindex(::Tuple{}, ::Tuple{}, switch::ShortTuple) = ()
+setindex(::Tuple{}, new::ShortTuple, ::Tuple{}) = ()
+setindex(::Tuple{}, new::ShortTuple, switch::ShortTuple) = ()
+setindex(old::ShortTuple, ::Tuple{}, ::Tuple{}) = old
+setindex(old::ShortTuple, ::Tuple{}, switch::ShortTuple) = old
+setindex(old::ShortTuple, new::ShortTuple, ::Tuple{}) = ()
+function setindex(old::ShortTuple, new::ShortTuple, switch::ShortTuple)
+    first_tuple, tail_tuple =
+        if Bool(switch[1])
+            (new[1], tail(new))
+        else
+            (old[1], new)
+        end
+    first_tuple, setindex(tail(old), tail_tuple, tail(switch))...
+end
+
+find(t::ShortTuple) = find(t, 1)
+find(t::Tuple{}, n::Integer) = ()
+
+function find(t::ShortTuple, n::Integer)
+    next = find(tail(t), n + 1)
+    if Bool(t[1])
+        (n, next...)
+    else
+        next
+    end
+end
+
+flatten(x::ShortTuple) = x[1]..., flatten(tail(x))...
+flatten(::Tuple{}) = ()
+
+product(x::ShortTuple, y::ShortTuple) = flatten(map(
+    let x = x
+        y1 ->
+            map(
+                let y1 = y1
+                    x1 -> (x1, y1)
+                end,
+                x
+            )
+    end,
+    y
+))
+
+filter(f, x::ShortTuple) = getindex(x, map(f, x))
+
