@@ -860,7 +860,7 @@ struct jl_typemap_info {
     jl_datatype_t **jl_contains; // the type that is being put in this
 };
 
-jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache,
+jl_typemap_entry_t *jl_typemap_insert(jl_typemap_t **cache,
                                       jl_value_t *parent JL_PROPAGATES_ROOT,
                                       jl_tupletype_t *type,
                                       jl_tupletype_t *simpletype, jl_svec_t *guardsigs,
@@ -870,27 +870,29 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache,
                                       jl_value_t **overwritten);
 
 jl_typemap_entry_t *jl_typemap_assoc_by_type(
-        union jl_typemap_t ml_or_cache JL_PROPAGATES_ROOT,
+        jl_typemap_t *ml_or_cache JL_PROPAGATES_ROOT,
         jl_value_t *types, jl_svec_t **penv,
         int8_t subtype, int8_t offs, size_t world, size_t max_world_mask);
 jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_value_t **args, size_t n, int8_t offs, size_t world);
 jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *mn, jl_value_t **args, size_t n, size_t world);
 STATIC_INLINE jl_typemap_entry_t *jl_typemap_assoc_exact(
-    union jl_typemap_t ml_or_cache JL_PROPAGATES_ROOT,
+    jl_typemap_t *ml_or_cache JL_PROPAGATES_ROOT,
     jl_value_t **args, size_t n, int8_t offs, size_t world)
 {
     // NOTE: This function is a huge performance hot spot!!
-    if (jl_typeof(ml_or_cache.unknown) == (jl_value_t*)jl_typemap_entry_type) {
-        return jl_typemap_entry_assoc_exact(ml_or_cache.leaf, args, n, world);
+    if (jl_typeof(ml_or_cache) == (jl_value_t *)jl_typemap_entry_type) {
+        return jl_typemap_entry_assoc_exact(
+            (jl_typemap_entry_t *)ml_or_cache, args, n, world);
     }
-    else if (jl_typeof(ml_or_cache.unknown) == (jl_value_t*)jl_typemap_level_type) {
-        return jl_typemap_level_assoc_exact(ml_or_cache.node, args, n, offs, world);
+    else if (jl_typeof(ml_or_cache) == (jl_value_t*)jl_typemap_level_type) {
+        return jl_typemap_level_assoc_exact(
+            (jl_typemap_level_t *)ml_or_cache, args, n, offs, world);
     }
     return NULL;
 }
 
 typedef int (*jl_typemap_visitor_fptr)(jl_typemap_entry_t *l, void *closure);
-int jl_typemap_visitor(union jl_typemap_t a, jl_typemap_visitor_fptr fptr, void *closure);
+int jl_typemap_visitor(jl_typemap_t *a, jl_typemap_visitor_fptr fptr, void *closure);
 
 struct typemap_intersection_env;
 typedef int (*jl_typemap_intersection_visitor_fptr)(jl_typemap_entry_t *l, struct typemap_intersection_env *closure);
@@ -904,7 +906,7 @@ struct typemap_intersection_env {
     jl_svec_t *env; // intersection env (initialize to null to perform intersection without an environment)
     int issubty;    // if `a <: b` is true in `intersect(a,b)`
 };
-int jl_typemap_intersection_visitor(union jl_typemap_t a, int offs, struct typemap_intersection_env *closure);
+int jl_typemap_intersection_visitor(jl_typemap_t *a, int offs, struct typemap_intersection_env *closure);
 
 unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *field_type);
 

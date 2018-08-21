@@ -580,7 +580,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             arraylist_push(&reinit_list, (void*)pos);
             arraylist_push(&reinit_list, (void*)3);
         }
-        if (jl_is_method(v) && jl_typeof(((jl_method_t*)v)->specializations.unknown) == (jl_value_t*)jl_typemap_level_type) {
+        if (jl_is_method(v) && jl_typeof(((jl_method_t*)v)->specializations) == (jl_value_t*)jl_typemap_level_type) {
             arraylist_push(&reinit_list, (void*)pos);
             arraylist_push(&reinit_list, (void*)4);
         }
@@ -781,8 +781,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_datatype_t *gf = jl_first_argument_datatype((jl_value_t*)m->sig);
         assert(jl_is_datatype(gf) && gf->name->mt);
         external_mt = !module_in_worklist(gf->name->mt->module);
-        union jl_typemap_t *tf = &m->specializations;
-        jl_serialize_value(s, tf->unknown);
+        jl_serialize_value(s, m->specializations);
         jl_serialize_value(s, (jl_value_t*)m->name);
         jl_serialize_value(s, (jl_value_t*)m->file);
         write_int32(s->s, m->line);
@@ -801,7 +800,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_serialize_value(s, (jl_value_t*)m->source);
         jl_serialize_value(s, (jl_value_t*)m->unspecialized);
         jl_serialize_value(s, (jl_value_t*)m->generator);
-        jl_serialize_value(s, (jl_value_t*)m->invokes.unknown);
+        jl_serialize_value(s, (jl_value_t*)m->invokes);
     }
     else if (jl_is_method_instance(v)) {
         write_uint8(s->s, TAG_METHOD_INSTANCE);
@@ -999,7 +998,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 jl_serialize_value(s, jl_nothing);
                 jl_serialize_value(s, node->targ.values);
                 jl_serialize_value(s, node->linear);
-                jl_serialize_value(s, node->any.unknown);
+                jl_serialize_value(s, node->any);
                 jl_serialize_value(s, node->key);
                 return;
             }
@@ -1638,8 +1637,8 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
         arraylist_push(&flagref_list, (void*)pos);
         return (jl_value_t*)m;
     }
-    m->specializations.unknown = jl_deserialize_value(s, (jl_value_t**)&m->specializations);
-    jl_gc_wb(m, m->specializations.unknown);
+    m->specializations = jl_deserialize_value(s, (jl_value_t**)&m->specializations);
+    jl_gc_wb(m, m->specializations);
     m->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
     jl_gc_wb(m, m->name);
     m->file = (jl_sym_t*)jl_deserialize_value(s, NULL);
@@ -1668,8 +1667,8 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->generator = jl_deserialize_value(s, (jl_value_t**)&m->generator);
     if (m->generator)
         jl_gc_wb(m, m->generator);
-    m->invokes.unknown = jl_deserialize_value(s, (jl_value_t**)&m->invokes);
-    jl_gc_wb(m, m->invokes.unknown);
+    m->invokes = jl_deserialize_value(s, (jl_value_t**)&m->invokes);
+    jl_gc_wb(m, m->invokes);
     m->traced = 0;
     JL_MUTEX_INIT(&m->writelock);
     return (jl_value_t*)m;
@@ -2330,7 +2329,7 @@ static void jl_finalize_serializer(jl_serializer_state *s)
     write_int32(s->s, -1);
 }
 
-void jl_typemap_rehash(union jl_typemap_t ml, int8_t offs);
+void jl_typemap_rehash(jl_typemap_t *ml, int8_t offs);
 static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
