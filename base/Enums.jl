@@ -68,6 +68,38 @@ To list all the instances of an enum use `instances`, e.g.
 julia> instances(Fruit)
 (apple::Fruit = 1, orange::Fruit = 2, kiwi::Fruit = 3)
 ```
+
+`Base.Enums.basetype` function returns `BaseType`.
+
+```julia
+julia> @enum Vegetable::UInt8 pea carotte broccoli
+
+julia> Vegetable
+Enum Vegetable:
+pea = 0x00
+carotte = 0x01
+broccoli = 0x02
+
+julia> Base.Enums.basetype(Vegetable)
+UInt8
+```
+
+Be aware of the difference between `Int` and `Integer` functions
+
+```julia
+julia> Int(broccoli)
+2
+
+julia> Integer(broccoli)
+0x02
+
+julia> typeof(Int(broccoli))
+Int64
+
+julia> typeof(Integer(broccoli))
+UInt8
+```
+
 """
 macro enum(T, syms...)
     if isempty(syms)
