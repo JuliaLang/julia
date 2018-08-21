@@ -24,13 +24,13 @@ static jl_gc_callback_list_t *gc_cblist_post_gc;
 static jl_gc_callback_list_t *gc_cblist_notify_external_alloc;
 static jl_gc_callback_list_t *gc_cblist_notify_external_free;
 
-#define gc_invoke_callbacks(kind, args) \
+#define gc_invoke_callbacks(ty, list, args) \
     do { \
-        for (jl_gc_callback_list_t *cb = gc_cblist_##kind; \
+        for (jl_gc_callback_list_t *cb = list; \
                 cb != NULL; \
                 cb = cb->next) \
         { \
-            ((jl_gc_cb_##kind##_t)(cb->func)) args; \
+            ((ty)(cb->func)) args; \
         } \
     } while (0)
 
@@ -115,6 +115,10 @@ JL_DLLEXPORT void jl_gc_set_cb_notify_external_free(jl_gc_cb_notify_external_fre
 // list of another thread
 static jl_mutex_t finalizers_lock;
 static jl_mutex_t gc_cache_lock;
+
+// Flag that tells us whether we need to support conservative marking
+// of objects.
+static int support_conservative_marking = 0;
 
 /**
  * Note about GC synchronization:
@@ -457,7 +461,7 @@ static void gc_sweep_foreign_objs_in_list(arraylist_t *objs)
 {
     size_t p = 0;
     for (size_t i = 0; i < objs->len; i++) {
-        jl_value_t *v = (jl_value_t *)(objs->items[i++]);
+        jl_value_t *v = (jl_value_t *)(objs->items[i]);
         jl_datatype_t *t = (jl_datatype_t *)(jl_typeof(v));
         const jl_datatype_layout_t *layout = t->layout;
         jl_fielddescdyn_t *desc = (jl_fielddescdyn_t*)jl_dt_layout_fields(layout);
@@ -473,7 +477,7 @@ static void gc_sweep_foreign_objs_in_list(arraylist_t *objs)
 
 static void gc_sweep_foreign_objs(void)
 {
-    for (int i = 0;i < jl_n_threads;i++) {
+    for (int i = 0;i < jl_n_threads; i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
         gc_sweep_foreign_objs_in_list(&ptls2->sweep_objs);
     }
@@ -870,7 +874,8 @@ JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz)
     bigval_t *v = (bigval_t*)malloc_cache_align(allocsz);
     if (v == NULL)
         jl_throw(jl_memory_exception);
-    gc_invoke_callbacks(notify_external_alloc, (v, allocsz));
+    gc_invoke_callbacks(jl_gc_cb_notify_external_alloc_t,
+        gc_cblist_notify_external_alloc, (v, allocsz));
 #ifdef JULIA_ENABLE_THREADING
     jl_atomic_fetch_add(&gc_num.allocd, allocsz);
 #else
@@ -919,7 +924,8 @@ static bigval_t **sweep_big_list(int sweep_full, bigval_t **pv)
 #ifdef MEMDEBUG
             memset(v, 0xbb, v->sz&~3);
 #endif
-            gc_invoke_callbacks(notify_external_free, (v));
+            gc_invoke_callbacks(jl_gc_cb_notify_external_free_t,
+                gc_cblist_notify_external_free, (v));
             jl_free_aligned(v);
         }
         gc_time_count_big(old_bits, bits);
@@ -1049,6 +1055,9 @@ static inline jl_taggedvalue_t *reset_page(const jl_gc_pool_t *p, jl_gc_pagemeta
         // This prevents unnecessary fragmentation from multiple pages
         // being allocated from at the same time. Instead, objects will
         // only ever be allocated from the first object in the list.
+        // This is specifically being relied on by the implementation
+        // of jl_gc_internal_obj_base_ptr() so that the function does
+        // not have to traverse the entire list.
         jl_taggedvalue_t *flpage = (jl_taggedvalue_t *)gc_page_data(fl);
         next->next = flpage->next;
         flpage->next = beg;
@@ -2281,7 +2290,8 @@ mark: {
             int16_t tid = ta->tid;
             jl_ptls_t ptls2 = jl_all_tls_states[tid];
             ptls->last_gc_mark_sp = &sp;
-            gc_invoke_callbacks(task_scanner, (ta, ta == ptls2->root_task));
+            gc_invoke_callbacks(jl_gc_cb_task_scanner_t,
+                gc_cblist_task_scanner, (ta, ta == ptls2->root_task));
             if (stkbuf) {
 #ifdef COPY_STACKS
                 gc_setmark_buf_(ptls, ta->stkbuf, bits, ta->bufsz);
@@ -2383,7 +2393,6 @@ mark: {
             else if (layout->fielddesc_type == 2) {
                 // This is very uncommon
                 // Do not do store to load forwarding to save some code size
-                assert(layout->fielddesc_type == 2);
                 jl_fielddesc32_t *desc = (jl_fielddesc32_t*)jl_dt_layout_fields(layout);
                 assert(first < nfields);
                 gc_mark_obj32_t markdata = {new_obj, desc + first, desc + nfields, nptr};
@@ -2637,7 +2646,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     // 3. walk roots
     mark_roots(gc_cache, &sp);
     ptls->last_gc_mark_sp = &sp;
-    gc_invoke_callbacks(root_scanner, (full));
+    gc_invoke_callbacks(jl_gc_cb_root_scanner_t,
+        gc_cblist_root_scanner, (full));
     gc_mark_loop(ptls, sp);
     gc_mark_sp_init(gc_cache, &sp);
     gc_num.since_sweep += gc_num.allocd + (int64_t)gc_num.interval;
@@ -2668,7 +2678,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     // so that the objects are not incorrectly reset.
     gc_mark_loop(ptls, sp);
     gc_mark_sp_init(gc_cache, &sp);
-    mark_reset_age = 1;
+    // Conservative marking relies on age to tell allocated objects
+    // and freelist entries apart.
+    mark_reset_age = !support_conservative_marking;
     // Reset the age and old bit for any unmarked objects referenced by the
     // `to_finalize` list. These objects are only reachable from this list
     // and should not be referenced by any old objects so this won't break
@@ -2801,7 +2813,8 @@ JL_DLLEXPORT void jl_gc_collect(int full)
     // TODO (concurrently queue objects)
     // no-op for non-threading
     jl_gc_wait_for_the_world();
-    gc_invoke_callbacks(pre_gc, (full));
+    gc_invoke_callbacks(jl_gc_cb_pre_gc_t,
+        gc_cblist_pre_gc, (full));
 
     if (!jl_gc_disable_counter) {
         JL_LOCK_NOGC(&finalizers_lock);
@@ -2826,7 +2839,8 @@ JL_DLLEXPORT void jl_gc_collect(int full)
         run_finalizers(ptls);
         ptls->in_finalizer = was_in_finalizer;
     }
-    gc_invoke_callbacks(post_gc, (full));
+    gc_invoke_callbacks(jl_gc_cb_post_gc_t,
+        gc_cblist_post_gc, (full));
 }
 
 void gc_mark_queue_all_roots(jl_ptls_t ptls, gc_mark_sp_t *sp)
@@ -3213,6 +3227,36 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
     return jl_gc_alloc(ptls, sizeof(void*) * 3, NULL);
 }
 
+JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void)
+{
+    static jl_mutex_t conservative_gc_lock;
+    static_assert(jl_buff_tag % GC_PAGE_SZ == 0,
+        "jl_buff_tag must be a multiple of GC_PAGE_SZ");
+    if (jl_is_initialized()) {
+        JL_LOCK_NOGC(&conservative_gc_lock);
+        int result = support_conservative_marking;
+        support_conservative_marking = 1;
+        JL_UNLOCK_NOGC(&conservative_gc_lock);
+        if (!result) {
+            // Do a full collection to ensure that age bits are updated
+            // properly. We don't have to worry about race conditions
+            // for this part, as allocation itself is unproblematic and
+            // a collection will wait for safepoints.
+            jl_gc_collect(1);
+        }
+        return result;
+    } else {
+        int result = support_conservative_marking;
+        support_conservative_marking = 1;
+        return result;
+    }
+}
+
+JL_DLLEXPORT int jl_gc_conservative_gc_support_enabled(void)
+{
+    return support_conservative_marking;
+}
+
 JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
 {
     p = (char *) p - 1;
@@ -3294,9 +3338,11 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
             return NULL;
         }
         // Not a freelist entry, therefore a valid object.
-        valid_object:
+    valid_object:
         // We have to treat objects with type `jl_buff_tag` differently,
         // as they must not be passed to the usual marking functions.
+        // Note that jl_buff_tag is a multiple of GC_PAGE_SZ, thus it
+        // cannot be a type reference.
         if ((cell->header & ~(uintptr_t) 3) == jl_buff_tag)
             return NULL;
         return jl_valueof(cell);
