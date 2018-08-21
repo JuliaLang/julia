@@ -181,6 +181,18 @@ Random.seed!(1)
         @test (r = Matrix(D)' * UU  ; mul!(UUU, adjoint(D), UU) ≈ r ≈ UUU)
         @test (r = transpose(Matrix(D)) * UU ; mul!(UUU, transpose(D), UU) ≈ r ≈ UUU)
 
+        # Performance specialisations / ambiguity checks for A_mul_B*!
+        @test (r = Matrix(D) * UU' ; mul!(UUU, D, adjoint(UU)) ≈ r ≈ UUU)
+        @test (r = Matrix(D) * transpose(UU) ; mul!(UUU, D, transpose(UU)) ≈ r ≈ UUU)
+
+        # Performance specialisations / ambiguity checks for A*_mul_B*!
+        # Using non-lazy adjoint/transpose (so it's actually A_mul_B*!):
+        @test (r = Matrix(D') * UU' ; mul!(UUU, adjoint(D), adjoint(UU)) ≈ r ≈ UUU)
+        @test (r = Matrix(transpose(D)) * transpose(UU) ; mul!(UUU, transpose(D), transpose(UU)) ≈ r ≈ UUU)
+        # Using lazy Adjoint/Transpose:
+        @test (r = Matrix(D') * UU' ; mul!(UUU, Adjoint(D), adjoint(UU)) ≈ r ≈ UUU)
+        @test (r = Matrix(transpose(D)) * Transpose(UU) ; mul!(UUU, transpose(D), transpose(UU)) ≈ r ≈ UUU)
+
         # make sure that mul!(A, {Adj|Trans}(B)) works with B as a Diagonal
         VV = Array(D)
         DD = copy(D)
