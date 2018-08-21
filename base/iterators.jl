@@ -1016,10 +1016,7 @@ julia> a = Iterators.Stateful([1,1,1,2,3,4]);
 
 julia> for x in a; x == 1 || break; end
 
-julia> Base.peek(a)
-3
-
-julia> sum(a) # Sum the remaining elements
+julia> sum(a) # Sum the remaining elements (i.e., 3 and 4)
 7
 ```
 """
