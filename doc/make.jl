@@ -162,7 +162,7 @@ makedocs(
     analytics = "UA-28835595-6",
     pages     = PAGES,
     html_prettyurls = ("deploy" in ARGS),
-    html_canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/stable/" : nothing,
+    html_canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/v1/" : nothing,
     assets = ["assets/julia-manual.css", ]
 )
 
