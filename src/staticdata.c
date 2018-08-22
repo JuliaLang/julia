@@ -1094,7 +1094,7 @@ static void jl_finalize_serializer(jl_serializer_state *s)
 }
 
 
-void jl_typemap_rehash(union jl_typemap_t ml, int8_t offs);
+void jl_typemap_rehash(jl_typemap_t *ml, int8_t offs);
 static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
 {
     jl_ptls_t ptls = jl_get_ptls_states();

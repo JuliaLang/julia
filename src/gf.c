@@ -333,7 +333,7 @@ static void update_world_bound(jl_method_instance_t *replaced, jl_typemap_visito
     // update the world-valid in the specializations caches
     jl_typemap_visitor(m->specializations, fptr, (void*)&update);
     // update the world-valid in the invoke cache
-    if (m->invokes.unknown != NULL)
+    if (m->invokes != NULL)
         jl_typemap_visitor(m->invokes, fptr, (void*)&update);
     // update the world-valid in the gf cache
     jl_datatype_t *gf = jl_first_argument_datatype((jl_value_t*)m->sig);
@@ -510,8 +510,8 @@ void jl_foreach_reachable_mtable(void (*visit)(jl_methtable_t *mt, void *env), v
 static void reset_mt_caches(jl_methtable_t *mt, void *env)
 {
     // removes all method caches
-    if (mt->defs.unknown != jl_nothing) // make sure not to reset builtin functions
-        mt->cache.unknown = jl_nothing;
+    if (mt->defs != jl_nothing) // make sure not to reset builtin functions
+        mt->cache = jl_nothing;
     jl_typemap_visitor(mt->defs, get_method_unspec_list, env);
 }
 
@@ -576,7 +576,7 @@ jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i)
 //    return 1;
 //}
 
-static jl_value_t *ml_matches(union jl_typemap_t ml, int offs,
+static jl_value_t *ml_matches(jl_typemap_t *ml, int offs,
                               jl_tupletype_t *type, int lim, int include_ambiguous,
                               size_t world, size_t *min_valid, size_t *max_valid);
 
@@ -921,7 +921,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
 }
 
 static jl_method_instance_t *cache_method(
-        jl_methtable_t *mt, union jl_typemap_t *cache, jl_value_t *parent JL_PROPAGATES_ROOT,
+        jl_methtable_t *mt, jl_typemap_t **cache, jl_value_t *parent JL_PROPAGATES_ROOT,
         jl_tupletype_t *tt, // the original tupletype of the signature
         jl_method_t *definition,
         size_t world,
@@ -1152,7 +1152,7 @@ void print_func_loc(JL_STREAM *s, jl_method_t *m)
 */
 struct ambiguous_matches_env {
     struct typemap_intersection_env match;
-    union jl_typemap_t defs;
+    jl_typemap_t *defs;
     jl_typemap_entry_t *newentry;
     jl_value_t *shadowed;
     int after;
@@ -1167,7 +1167,7 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
     }
     if (oldentry->max_world < ~(size_t)0)
         return 1;
-    union jl_typemap_t map = closure->defs;
+    jl_typemap_t *map = closure->defs;
     jl_tupletype_t *type = (jl_tupletype_t*)closure->match.type;
     jl_method_t *m = closure->newentry->func.method;
     jl_tupletype_t *sig = oldentry->sig;
@@ -1248,7 +1248,7 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
     return 1;
 }
 
-static jl_value_t *check_ambiguous_matches(union jl_typemap_t defs, jl_typemap_entry_t *newentry, jl_typemap_intersection_visitor_fptr fptr)
+static jl_value_t *check_ambiguous_matches(jl_typemap_t *defs, jl_typemap_entry_t *newentry, jl_typemap_intersection_visitor_fptr fptr)
 {
     jl_tupletype_t *type = newentry->sig;
     jl_tupletype_t *ttypes = (jl_tupletype_t*)jl_unwrap_unionall((jl_value_t*)type);
@@ -1401,7 +1401,7 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
         jl_method_t *m = def.replaced->def.method;
 
         // truncate the max-valid in the invoke cache
-        if (m->invokes.unknown != NULL)
+        if (m->invokes != NULL)
             jl_typemap_visitor(m->invokes, set_max_world2, (void*)&def);
         // invalidate mt cache entries
         jl_datatype_t *gf = jl_first_argument_datatype((jl_value_t*)m->sig);
@@ -2231,7 +2231,7 @@ jl_value_t *jl_gf_invoke(jl_value_t *types0, jl_value_t **args, size_t nargs)
     jl_method_t *method = entry->func.method;
     jl_method_instance_t *mfunc = NULL;
     jl_typemap_entry_t *tm = NULL;
-    if (method->invokes.unknown != NULL)
+    if (method->invokes != NULL)
         tm = jl_typemap_assoc_exact(method->invokes, args, nargs, jl_cachearg_offset(mt), world);
     if (tm) {
         mfunc = tm->func.linfo;
@@ -2244,8 +2244,8 @@ jl_value_t *jl_gf_invoke(jl_value_t *types0, jl_value_t **args, size_t nargs)
             assert(sub); (void)sub;
         }
 
-        if (method->invokes.unknown == NULL)
-            method->invokes.unknown = jl_nothing;
+        if (method->invokes == NULL)
+            method->invokes = jl_nothing;
 
         mfunc = cache_method(mt, &method->invokes, entry->func.value, tt, method, world, tpenv, 1);
         JL_UNLOCK(&method->writelock);
@@ -2265,7 +2265,7 @@ JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_methtable_t *mt,
 
     jl_method_t *method = entry->func.method;
     jl_typemap_entry_t *tm = NULL;
-    if (method->invokes.unknown != NULL) {
+    if (method->invokes != NULL) {
         tm = jl_typemap_assoc_by_type(method->invokes, tt, NULL, /*subtype*/1,
                                       jl_cachearg_offset(mt), world, /*max_world_mask*/0);
         if (tm) {
@@ -2274,7 +2274,7 @@ JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_methtable_t *mt,
     }
 
     JL_LOCK(&method->writelock);
-    if (method->invokes.unknown != NULL) {
+    if (method->invokes != NULL) {
         tm = jl_typemap_assoc_by_type(method->invokes, tt, NULL, /*subtype*/1,
                                       jl_cachearg_offset(mt), world, /*max_world_mask*/0);
         if (tm) {
@@ -2292,8 +2292,8 @@ JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_methtable_t *mt,
         (void)ti;
     }
 
-    if (method->invokes.unknown == NULL)
-        method->invokes.unknown = jl_nothing;
+    if (method->invokes == NULL)
+        method->invokes = jl_nothing;
 
     jl_method_instance_t *mfunc = cache_method(mt, &method->invokes, entry->func.value,
                                                (jl_tupletype_t*)tt, method, world, tpenv, 1);
@@ -2488,7 +2488,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
 //
 // Returns a match as an array of svec(argtypes, static_params, Method).
 // See below for the meaning of lim.
-static jl_value_t *ml_matches(union jl_typemap_t defs, int offs,
+static jl_value_t *ml_matches(jl_typemap_t *defs, int offs,
                               jl_tupletype_t *type, int lim, int include_ambiguous,
                               size_t world, size_t *min_valid, size_t *max_valid)
 {

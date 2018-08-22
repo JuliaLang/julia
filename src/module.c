@@ -588,7 +588,7 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
                 }
                 else {
                     jl_methtable_t *mt = jl_gf_mtable(v);
-                    if (mt != NULL && (mt->defs.unknown != jl_nothing ||
+                    if (mt != NULL && (mt->defs != jl_nothing ||
                                        jl_isa(v, (jl_value_t*)jl_builtin_type))) {
                         jl_printf(JL_STDERR, ", use ");
                         if (mt->module != jl_core_module) {

@@ -40,8 +40,8 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
                                      jl_methtable_type);
     mt->name = jl_demangle_typename(name);
     mt->module = module;
-    mt->defs.unknown = jl_nothing;
-    mt->cache.unknown = jl_nothing;
+    mt->defs = jl_nothing;
+    mt->cache = jl_nothing;
     mt->max_args = 0;
     mt->kwsorter = NULL;
     mt->backedges = NULL;

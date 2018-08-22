@@ -195,11 +195,7 @@ struct _jl_method_instance_t;
 // when key is a leaftype, (but only when the tree has enough entries for this to be
 // more efficient than storing them sorted linearly)
 // otherwise the leaf entries are stored sorted, linearly
-union jl_typemap_t {
-    struct _jl_typemap_level_t *node;
-    struct _jl_typemap_entry_t *leaf;
-    struct _jl_value_t *unknown; // nothing
-};
+typedef jl_value_t jl_typemap_t;
 
 typedef jl_value_t *(jl_call_t)(struct _jl_method_instance_t*, jl_value_t**, uint32_t);
 typedef jl_call_t *jl_callptr_t;
@@ -269,7 +265,7 @@ typedef struct _jl_method_t {
     jl_value_t *ambig;
 
     // table of all argument types for which we've inferred or compiled this code
-    union jl_typemap_t specializations;
+    jl_typemap_t *specializations;
 
     jl_svec_t *sparam_syms;  // symbols giving static parameter names
     jl_value_t *source;  // original code template (jl_code_info_t, but may be compressed), null for builtins
@@ -280,7 +276,7 @@ typedef struct _jl_method_t {
     // cache of specializations of this method for invoke(), i.e.
     // cases where this method was called even though it was not necessarily
     // the most specific for the argument types.
-    union jl_typemap_t invokes;
+    jl_typemap_t *invokes;
 
     int32_t nargs;
     int32_t called;        // bit flags: whether each of the first 8 arguments is called
@@ -478,14 +474,14 @@ typedef struct _jl_typemap_entry_t {
 // indexed by key if it is a sublevel in an array
 struct jl_ordereddict_t {
     jl_array_t *indices; // Array{Int{8,16,32}}
-    jl_array_t *values; // Array{union jl_typemap_t}
+    jl_array_t *values; // Array{jl_typemap_t*}
 };
 typedef struct _jl_typemap_level_t {
     JL_DATA_TYPE
     struct jl_ordereddict_t arg1;
     struct jl_ordereddict_t targ;
-    jl_typemap_entry_t *linear; // union jl_typemap_t (but no more levels)
-    union jl_typemap_t any; // type at offs is Any
+    jl_typemap_entry_t *linear; // jl_typemap_t * (but no more levels)
+    jl_typemap_t *any; // type at offs is Any
     jl_value_t *key; // [nullable]
 } jl_typemap_level_t;
 
@@ -493,8 +489,8 @@ typedef struct _jl_typemap_level_t {
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
     jl_sym_t *name;
-    union jl_typemap_t defs;
-    union jl_typemap_t cache;
+    jl_typemap_t *defs;
+    jl_typemap_t *cache;
     intptr_t max_args;  // max # of non-vararg arguments in a signature
     jl_value_t *kwsorter;  // keyword argument sorter function
     jl_module_t *module; // used for incremental serialization to locate original binding
@@ -1105,6 +1101,12 @@ STATIC_INLINE int jl_is_dispatch_tupletype(jl_value_t *v) JL_NOTSAFEPOINT
 STATIC_INLINE int jl_is_concrete_type(jl_value_t *v) JL_NOTSAFEPOINT
 {
     return jl_is_datatype(v) && ((jl_datatype_t*)v)->isconcretetype;
+}
+
+STATIC_INLINE jl_value_t *jl_typemap_entry_sig(jl_typemap_t *tmap) JL_NOTSAFEPOINT
+{
+    assert(jl_typeof(tmap) == (jl_value_t*)jl_typemap_entry_type);
+    return (jl_value_t*)((jl_typemap_entry_t*)tmap)->sig;
 }
 
 // type constructors
