@@ -192,8 +192,8 @@ julia> for i in 1:4 # start 4 tasks to process requests in parallel
 
 julia> @elapsed while n > 0 # print out results
            job_id, exec_time = take!(results)
-           println("$job_id finished in $(round(exec_time,2)) seconds")
-           n = n - 1
+           println("$job_id finished in $(round(exec_time; digits=2)) seconds")
+           global n = n - 1
        end
 4 finished in 0.22 seconds
 3 finished in 0.45 seconds
