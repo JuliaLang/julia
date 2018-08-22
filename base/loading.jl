@@ -612,8 +612,8 @@ end
 # and it reconnects the Base.Docs.META
 function _include_from_serialized(path::String, depmods::Vector{Any})
     sv = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
-    restored = sv[1]
-    if !isa(restored, Exception)
+    if !isa(sv, Exception)
+        restored = sv[1]
         for M in restored::Vector{Any}
             M = M::Module
             if isdefined(M, Base.Docs.META)
@@ -623,8 +623,10 @@ function _include_from_serialized(path::String, depmods::Vector{Any})
                 register_root_module(M)
             end
         end
+        isassigned(sv, 2) && ccall(:jl_init_restored_modules, Cvoid, (Any,), sv[2])
+    else
+        restored = sv
     end
-    isassigned(sv, 2) && ccall(:jl_init_restored_modules, Cvoid, (Any,), sv[2])
     return restored
 end
 
