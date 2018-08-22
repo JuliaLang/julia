@@ -323,7 +323,7 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
+static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs) JL_NOTSAFEPOINT
 {
     if (!jl_is_expr(v))
         return;
@@ -362,7 +362,7 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
             jl_module_t *mod = jl_globalref_mod(f);
             jl_sym_t *name = jl_globalref_name(f);
             if (jl_binding_resolved_p(mod, name)) {
-                jl_binding_t *b = jl_get_binding(mod, name);
+                jl_binding_t *b = jl_get_module_binding(mod, name);
                 if (b && b->value && b->constp)
                     called = b->value;
             }
@@ -513,7 +513,7 @@ static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from JL_PR
     return m;
 }
 
-int jl_is_toplevel_only_expr(jl_value_t *e)
+int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT
 {
     return jl_is_expr(e) &&
         (((jl_expr_t*)e)->head == module_sym ||

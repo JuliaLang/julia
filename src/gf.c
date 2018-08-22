@@ -146,7 +146,7 @@ static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 /// ----- Insertion logic for special entries ----- ///
 
 // get or create the MethodInstance for a specialization
-JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m, jl_value_t *type, jl_svec_t *sparams, size_t world)
+JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m JL_PROPAGATES_ROOT, jl_value_t *type, jl_svec_t *sparams, size_t world)
 {
     assert(world >= m->min_world && "typemap lookup is corrupted");
     JL_LOCK(&m->writelock);
@@ -240,7 +240,7 @@ void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr
 // returns the inferred source, and may cache the result in li
 // if successful, also updates the li argument to describe the validity of this src
 // if inference doesn't occur (or can't finish), returns NULL instead
-jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int force)
+jl_code_info_t *jl_type_infer(jl_method_instance_t **pli JL_ROOTS_TEMPORARILY, size_t world, int force)
 {
     JL_TIMING(INFERENCE);
     if (jl_typeinf_func == NULL)
@@ -1395,22 +1395,25 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
 {
     struct invalidate_conflicting_env *closure = container_of(closure0, struct invalidate_conflicting_env, match);
     if (oldentry->max_world > closure->max_world) {
-        struct set_world def;
-        def.replaced = oldentry->func.linfo;
-        def.world = closure->max_world;
-        jl_method_t *m = def.replaced->def.method;
+        jl_method_instance_t *replaced_linfo = oldentry->func.linfo;
+        {
+            struct set_world def;
+            def.replaced = oldentry->func.linfo;
+            def.world = closure->max_world;
+            jl_method_t *m = def.replaced->def.method;
 
-        // truncate the max-valid in the invoke cache
-        if (m->invokes != NULL)
-            jl_typemap_visitor(m->invokes, set_max_world2, (void*)&def);
-        // invalidate mt cache entries
-        jl_datatype_t *gf = jl_first_argument_datatype((jl_value_t*)m->sig);
-        assert(jl_is_datatype(gf) && gf->name->mt && "method signature invalid?");
-        jl_typemap_visitor(gf->name->mt->cache, set_max_world2, (void*)&def);
+            // truncate the max-valid in the invoke cache
+            if (m->invokes != NULL)
+                jl_typemap_visitor(m->invokes, set_max_world2, (void*)&def);
+            // invalidate mt cache entries
+            jl_datatype_t *gf = jl_first_argument_datatype((jl_value_t*)m->sig);
+            assert(jl_is_datatype(gf) && gf->name->mt && "method signature invalid?");
+            jl_typemap_visitor(gf->name->mt->cache, set_max_world2, (void*)&def);
+        }
 
         // invalidate backedges
-        JL_LOCK_NOGC(&def.replaced->def.method->writelock);
-        jl_array_t *backedges = def.replaced->backedges;
+        JL_LOCK_NOGC(&replaced_linfo->def.method->writelock);
+        jl_array_t *backedges = replaced_linfo->backedges;
         if (backedges) {
             size_t i, l = jl_array_len(backedges);
             jl_method_instance_t **replaced = (jl_method_instance_t**)jl_array_ptr_data(backedges);
@@ -1419,8 +1422,8 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
             }
         }
         closure->invalidated = 1;
-        def.replaced->backedges = NULL;
-        JL_UNLOCK_NOGC(&def.replaced->def.method->writelock);
+        replaced_linfo->backedges = NULL;
+        JL_UNLOCK_NOGC(&replaced_linfo->def.method->writelock);
     }
     return 1;
 }
@@ -1494,11 +1497,20 @@ static int typemap_search(jl_typemap_entry_t *entry, void *closure)
     return 1;
 }
 
+static jl_typemap_entry_t *do_typemap_search(jl_methtable_t *mt JL_PROPAGATES_ROOT, jl_method_t *method) JL_NOTSAFEPOINT;
+
+#ifndef __clang_analyzer__
+static jl_typemap_entry_t *do_typemap_search(jl_methtable_t *mt JL_PROPAGATES_ROOT, jl_method_t *method) JL_NOTSAFEPOINT {
+    jl_value_t *closure = (jl_value_t*)(method);
+    if (jl_typemap_visitor(mt->defs, typemap_search, &closure))
+        jl_error("method not in method table");
+    return (jl_typemap_entry_t *)closure;
+}
+#endif
+
 JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *method)
 {
-    jl_typemap_entry_t *methodentry = (jl_typemap_entry_t*)(method);
-    if (jl_typemap_visitor(mt->defs, typemap_search, &methodentry))
-        jl_error("method not in method table");
+    jl_typemap_entry_t *methodentry = do_typemap_search(mt, method);
     JL_LOCK(&mt->writelock);
     // Narrow the world age on the method to make it uncallable
     methodentry->max_world = jl_world_counter++;
@@ -1539,7 +1551,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     else {
         oldvalue = check_ambiguous_matches(mt->defs, newentry, check_ambiguous_visitor);
         if (mt->backedges) {
-            jl_value_t **backedges = (jl_value_t**)jl_array_data(mt->backedges);
+            jl_value_t **backedges = jl_array_ptr_data(mt->backedges);
             size_t i, na = jl_array_len(mt->backedges);
             size_t ins = 0;
             for (i = 1; i < na; i += 2) {
@@ -1862,7 +1874,7 @@ JL_DLLEXPORT int32_t jl_invoke_api(jl_method_instance_t *mi)
 }
 
 // compile-time method lookup
-jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world, int mt_cache)
+jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world, int mt_cache)
 {
     JL_TIMING(METHOD_LOOKUP_COMPILE);
     if (jl_has_free_typevars((jl_value_t*)types))
@@ -1921,7 +1933,6 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
 {
     size_t world = jl_world_counter;
     jl_method_instance_t *li = jl_get_specialization1(types, world, 1);
-    JL_GC_PROMISE_ROOTED(li); // Rooted via types since mt_cache==1
     if (li == NULL)
         return 0;
     if (jl_generating_output()) {
@@ -1949,6 +1960,7 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
         // additional useful methods that should be compiled
         //ALT: if (jl_is_datatype(types) && ((jl_datatype_t*)types)->isdispatchtuple && !jl_egal(li->specTypes, types))
         //ALT: if (jl_subtype(types, li->specTypes))
+        JL_GC_PROMISE_ROOTED(li);
         if (!jl_subtype(li->specTypes, (jl_value_t*)types)) {
             jl_svec_t *tpenv2 = jl_emptysvec;
             jl_value_t *types2 = NULL;
@@ -2039,7 +2051,7 @@ static void show_call(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 }
 #endif
 
-static jl_value_t *verify_type(jl_value_t *v)
+static jl_value_t *verify_type(jl_value_t *v) JL_NOTSAFEPOINT
 {
     assert(jl_typeof(jl_typeof(v)));
     return v;
@@ -2180,6 +2192,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
     jl_method_instance_t *mfunc = jl_lookup_generic_(args, nargs,
                                                      jl_int32hash_fast(jl_return_address()),
                                                      jl_get_ptls_states()->world_age);
+    JL_GC_PROMISE_ROOTED(mfunc);
     jl_value_t *res = mfunc->invoke(mfunc, args, nargs);
     return verify_type(res);
 }
@@ -2251,6 +2264,7 @@ jl_value_t *jl_gf_invoke(jl_value_t *types0, jl_value_t **args, size_t nargs)
         JL_UNLOCK(&method->writelock);
     }
     JL_GC_POP();
+    JL_GC_PROMISE_ROOTED(mfunc);
     return mfunc->invoke(mfunc, args, nargs);
 }
 
