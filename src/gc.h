@@ -348,6 +348,9 @@ typedef struct {
     int ub;
 } pagetable_t;
 
+#ifdef __clang_analyzer__
+unsigned ffs_u32(uint32_t bitvec) JL_NOTSAFEPOINT;
+#else
 STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
 {
 #if defined(_COMPILER_MINGW_)
@@ -360,6 +363,7 @@ STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
     return ffs(bitvec) - 1;
 #endif
 }
+#endif
 
 extern jl_gc_num_t gc_num;
 extern pagetable_t memory_map;
@@ -368,7 +372,7 @@ extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 extern int64_t lazy_freed_pages;
 
-STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o)
+STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o) JL_NOTSAFEPOINT
 {
     return container_of(o, bigval_t, header);
 }
@@ -389,34 +393,34 @@ STATIC_INLINE jl_taggedvalue_t *page_pfl_end(jl_gc_pagemeta_t *p)
     return (jl_taggedvalue_t*)(p->data + p->fl_end_offset);
 }
 
-STATIC_INLINE int gc_marked(uintptr_t bits)
+STATIC_INLINE int gc_marked(uintptr_t bits) JL_NOTSAFEPOINT
 {
     return (bits & GC_MARKED) != 0;
 }
 
-STATIC_INLINE int gc_old(uintptr_t bits)
+STATIC_INLINE int gc_old(uintptr_t bits) JL_NOTSAFEPOINT
 {
     return (bits & GC_OLD) != 0;
 }
 
-STATIC_INLINE uintptr_t gc_set_bits(uintptr_t tag, int bits)
+STATIC_INLINE uintptr_t gc_set_bits(uintptr_t tag, int bits) JL_NOTSAFEPOINT
 {
     return (tag & ~(uintptr_t)3) | bits;
 }
 
-STATIC_INLINE uintptr_t gc_ptr_tag(void *v, uintptr_t mask)
+STATIC_INLINE uintptr_t gc_ptr_tag(void *v, uintptr_t mask) JL_NOTSAFEPOINT
 {
     return ((uintptr_t)v) & mask;
 }
 
-STATIC_INLINE void *gc_ptr_clear_tag(void *v, uintptr_t mask)
+STATIC_INLINE void *gc_ptr_clear_tag(void *v, uintptr_t mask) JL_NOTSAFEPOINT
 {
     return (void*)(((uintptr_t)v) & ~mask);
 }
 
 NOINLINE uintptr_t gc_get_stack_ptr(void);
 
-STATIC_INLINE jl_gc_pagemeta_t *page_metadata(void *_data)
+STATIC_INLINE jl_gc_pagemeta_t *page_metadata(void *_data) JL_NOTSAFEPOINT
 {
     uintptr_t data = ((uintptr_t)_data);
     unsigned i;
@@ -441,7 +445,7 @@ struct jl_gc_metadata_ext {
     unsigned pagetable0_i32, pagetable0_i;
 };
 
-STATIC_INLINE struct jl_gc_metadata_ext page_metadata_ext(void *_data)
+STATIC_INLINE struct jl_gc_metadata_ext page_metadata_ext(void *_data) JL_NOTSAFEPOINT
 {
     uintptr_t data = (uintptr_t)_data;
     struct jl_gc_metadata_ext info;
@@ -462,7 +466,7 @@ STATIC_INLINE struct jl_gc_metadata_ext page_metadata_ext(void *_data)
     return info;
 }
 
-STATIC_INLINE void gc_big_object_unlink(const bigval_t *hdr)
+STATIC_INLINE void gc_big_object_unlink(const bigval_t *hdr) JL_NOTSAFEPOINT
 {
     *hdr->prev = hdr->next;
     if (hdr->next) {
@@ -470,7 +474,7 @@ STATIC_INLINE void gc_big_object_unlink(const bigval_t *hdr)
     }
 }
 
-STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list)
+STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list) JL_NOTSAFEPOINT
 {
     hdr->next = *list;
     hdr->prev = list;
@@ -623,7 +627,7 @@ JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;
 int gc_debug_check_other(void);
 int gc_debug_check_pool(void);
 void gc_debug_print(void);
-void gc_scrub_record_task(jl_task_t *ta);
+void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT;
 void gc_scrub(void);
 #else
 #define gc_sweep_always_full 0
@@ -638,7 +642,7 @@ static inline int gc_debug_check_pool(void)
 static inline void gc_debug_print(void)
 {
 }
-static inline void gc_scrub_record_task(jl_task_t *ta)
+static inline void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT
 {
     (void)ta;
 }
@@ -648,11 +652,11 @@ static inline void gc_scrub(void)
 #endif
 
 #ifdef OBJPROFILE
-void objprofile_count(void *ty, int old, int sz);
+void objprofile_count(void *ty, int old, int sz) JL_NOTSAFEPOINT;
 void objprofile_printall(void);
 void objprofile_reset(void);
 #else
-static inline void objprofile_count(void *ty, int old, int sz)
+static inline void objprofile_count(void *ty, int old, int sz) JL_NOTSAFEPOINT
 {
 }
 

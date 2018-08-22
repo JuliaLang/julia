@@ -204,7 +204,7 @@ JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_value_t *typ
 
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t*);
 
-void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr)
+void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr) JL_GC_DISABLED
 {
     jl_sym_t *sname = jl_symbol(name);
     if (dt == NULL) {
@@ -289,7 +289,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int forc
     return src;
 }
 
-int jl_is_rettype_inferred(jl_method_instance_t *li)
+int jl_is_rettype_inferred(jl_method_instance_t *li) JL_NOTSAFEPOINT
 {
     if (!li->inferred)
         return 0;
@@ -587,7 +587,7 @@ static void jl_compilation_sig(
     jl_method_t *definition,
     intptr_t nspec,
     // output:
-    jl_svec_t **const newparams)
+    jl_svec_t **const newparams JL_REQUIRE_ROOTED_SLOT)
 {
     if (definition->generator) {
         // staged functions aren't optimized
@@ -921,7 +921,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
 }
 
 static jl_method_instance_t *cache_method(
-        jl_methtable_t *mt, union jl_typemap_t *cache, jl_value_t *parent,
+        jl_methtable_t *mt, union jl_typemap_t *cache, jl_value_t *parent JL_PROPAGATES_ROOT,
         jl_tupletype_t *tt, // the original tupletype of the signature
         jl_method_t *definition,
         size_t world,
@@ -1413,7 +1413,7 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
         jl_array_t *backedges = def.replaced->backedges;
         if (backedges) {
             size_t i, l = jl_array_len(backedges);
-            jl_method_instance_t **replaced = (jl_method_instance_t**)jl_array_data(backedges);
+            jl_method_instance_t **replaced = (jl_method_instance_t**)jl_array_ptr_data(backedges);
             for (i = 0; i < l; i++) {
                 invalidate_method_instance(replaced[i], closure->max_world, 0);
             }
@@ -1921,6 +1921,7 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
 {
     size_t world = jl_world_counter;
     jl_method_instance_t *li = jl_get_specialization1(types, world, 1);
+    JL_GC_PROMISE_ROOTED(li); // Rooted via types since mt_cache==1
     if (li == NULL)
         return 0;
     if (jl_generating_output()) {
@@ -2061,7 +2062,7 @@ STATIC_INLINE int sig_match_fast(jl_value_t **args, jl_value_t **sig, size_t i, 
     return 1;
 }
 
-jl_typemap_entry_t *call_cache[N_CALL_CACHE];
+jl_typemap_entry_t *call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 static uint8_t pick_which[N_CALL_CACHE];
 #ifdef JL_GF_PROFILE
 size_t ncalls;
@@ -2183,7 +2184,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
     return verify_type(res);
 }
 
-JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_value_t *types, size_t world)
+JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, size_t world)
 {
     jl_methtable_t *mt = jl_first_argument_datatype(types)->name->mt;
     jl_svec_t *env = jl_emptysvec;

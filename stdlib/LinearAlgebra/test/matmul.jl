@@ -445,4 +445,8 @@ end
     @test Xv1'*Xv3' ≈ XcXc
 end
 
+@testset "method ambiguity" begin
+    @test detect_ambiguities(LinearAlgebra, Base; imported=true, recursive=true) == []
+end
+
 end # module TestMatmul

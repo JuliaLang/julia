@@ -80,11 +80,13 @@ void jl_write_compiler_output(void)
             }
         }
 
-        if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc)
+        if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc) {
+            assert(s);
             jl_dump_native(jl_options.outputbc,
                            jl_options.outputunoptbc,
                            jl_options.outputo,
                            (const char*)s->buf, (size_t)s->size);
+        }
     }
     JL_GC_POP();
 }
@@ -127,6 +129,7 @@ static void _compile_all_tvar_union(jl_value_t *methsig)
         if (!jl_has_concrete_subtype(sig))
             goto getnext; // signature wouldn't be callable / is invalid -- skip it
         if (jl_is_concrete_type(sig)) {
+            JL_GC_PROMISE_ROOTED(sig); // `sig` is rooted because it's a leaftype (JL_ALWAYS_LEAFTYPE)
             if (jl_compile_hint((jl_tupletype_t*)sig))
                 goto getnext; // success
         }
@@ -197,6 +200,7 @@ static void _compile_all_union(jl_value_t *sig)
         for (i = 0, idx_ctr = 0, incr = 1; i < l; i++) {
             jl_value_t *ty = jl_svecref(sigbody->parameters, i);
             if (jl_is_uniontype(ty)) {
+                assert(idx_ctr < count_unions);
                 size_t l = jl_count_union_components(ty);
                 size_t j = idx[idx_ctr];
                 jl_svecset(p, i, jl_nth_union_component(ty, j));

@@ -5,6 +5,8 @@
 
 #define HT_N_INLINE 32
 
+#include "analyzer_annotations.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -25,13 +27,13 @@ void htable_free(htable_t *h);
 // clear and (possibly) change size
 void htable_reset(htable_t *h, size_t sz);
 
-#define HTPROT(HTNAME)                                          \
-void *HTNAME##_get(htable_t *h, void *key);                     \
-void HTNAME##_put(htable_t *h, void *key, void *val);           \
-void HTNAME##_adjoin(htable_t *h, void *key, void *val);        \
-int HTNAME##_has(htable_t *h, void *key);                       \
-int HTNAME##_remove(htable_t *h, void *key);                    \
-void **HTNAME##_bp(htable_t *h, void *key);
+#define HTPROT(HTNAME)                                                  \
+void *HTNAME##_get(htable_t *h, void *key) JL_NOTSAFEPOINT;             \
+void HTNAME##_put(htable_t *h, void *key, void *val) JL_NOTSAFEPOINT;   \
+void HTNAME##_adjoin(htable_t *h, void *key, void *val) JL_NOTSAFEPOINT;\
+int HTNAME##_has(htable_t *h, void *key) JL_NOTSAFEPOINT;               \
+int HTNAME##_remove(htable_t *h, void *key) JL_NOTSAFEPOINT;            \
+void **HTNAME##_bp(htable_t *h, void *key) JL_NOTSAFEPOINT;
 
 #define HTPROT_R(HTNAME)                                                \
 void *HTNAME##_get_r(htable_t *h, void *key, void *ctx);                \

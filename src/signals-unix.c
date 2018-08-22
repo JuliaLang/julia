@@ -577,7 +577,6 @@ static void *signal_listener(void *arg)
     }
 #endif
     while (1) {
-        profile = 0;
         sig = 0;
         errno = 0;
 #ifdef HAVE_KEVENT

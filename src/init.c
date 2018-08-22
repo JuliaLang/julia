@@ -278,6 +278,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
             }
             JL_CATCH {
                 //error handling -- continue cleanup, as much as possible
+                assert(item);
                 uv_unref(item->h);
                 jl_printf(JL_STDERR, "error during exit cleanup: close: ");
                 jl_static_show(JL_STDERR, ptls->exception_in_transit);
