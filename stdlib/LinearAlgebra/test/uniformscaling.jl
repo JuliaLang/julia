@@ -85,6 +85,13 @@ let
         @test cond(I) == 1
         @test cond(J) == (λ ≠ zero(λ) ? one(real(λ)) : oftype(real(λ), Inf))
     end
+    
+    @testset "copyto!" begin
+        A = Matrix{Int}(undef, (3,3))
+        @test copyto!(A, I) == one(A)
+        B = Matrix{ComplexF64}(undef, (1,2))
+        @test copyto!(B, J) == [λ zero(λ)]
+    end
 
     @testset "binary ops with matrices" begin
         B = bitrand(2, 2)
