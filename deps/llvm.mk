@@ -432,8 +432,8 @@ $(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX
 $(eval $(call LLVM_PATCH,llvm-6.0-D44650)) # mingw32 build fix
 $(eval $(call LLVM_PATCH,llvm-D46460))
 $(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
-$(eval $(call LLVM_PATCH,llvm-D50010-VNCoercion-ni))
-$(eval $(call LLVM_PATCH,llvm-D50167-scev-umin))
+$(eval $(call LLVM_PATCH,llvm-7.0-D50010-VNCoercion-ni))
+$(eval $(call LLVM_PATCH,llvm-7.0-D50167-scev-umin))
 endif # LLVM_VER
 
 # Independent to the llvm version add a JL prefix to the version map
