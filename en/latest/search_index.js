@@ -5,7 +5,15 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Home",
     "category": "page",
-    "text": "io = IOBuffer()\nrelease = isempty(VERSION.prerelease)\nv = \"$(VERSION.major).$(VERSION.minor)\"\n!release && (v = v*\"-$(first(VERSION.prerelease))\")\nprint(io, \"\"\"\n    # Julia $(v) Documentation\n\n    Welcome to the documentation for Julia $(v).\n\n    \"\"\")\nif !release\n    print(io,\"\"\"\n        !!! warning \"Work in progress!\"\n            This documentation is for an unreleased, in-development, version of Julia.\n        \"\"\")\nend\nimport Markdown\nMarkdown.parse(String(take!(io)))Please read the release blog post for a general overview of the language and many of the changes since Julia v0.6. Note that version 0.7 was released alongside 1.0 to provide an upgrade path for packages and code that predates the 1.0 release. The only difference between 0.7 and 1.0 is the removal of deprecation warnings. For a complete list of all the changes since 0.6, see the release notes for version 0.7"
+    "text": ""
+},
+
+{
+    "location": "#Julia-1.0-Documentation-1",
+    "page": "Home",
+    "title": "Julia 1.0 Documentation",
+    "category": "section",
+    "text": "Welcome to the documentation for Julia 1.0.Please read the release blog post for a general overview of the language and many of the changes since Julia v0.6. Note that version 0.7 was released alongside 1.0 to provide an upgrade path for packages and code that predates the 1.0 release. The only difference between 0.7 and 1.0 is the removal of deprecation warnings. For a complete list of all the changes since 0.6, see the release notes for version 0.7"
 },
 
 {
@@ -20533,7 +20541,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sockets",
     "title": "Base.bind",
     "category": "function",
-    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
+    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
 },
 
 {
