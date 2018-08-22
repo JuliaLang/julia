@@ -143,6 +143,8 @@ function generate_precompile_statements()
         # Execute the collected precompile statements
         include_time = @elapsed for statement in sort(collect(statements))
             # println(statement)
+            # Work around #28808
+            occursin("\"YYYY-mm-dd\\THH:MM:SS\"", statement) && continue
             try
                 Base.include_string(PrecompileStagingArea, statement)
             catch ex
