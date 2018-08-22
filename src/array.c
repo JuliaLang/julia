@@ -547,13 +547,15 @@ JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
     return 1;
 }
 
-JL_DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
+JL_DLLEXPORT void jl_arrayset(jl_array_t *a JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i)
 {
     assert(i < jl_array_len(a));
     jl_value_t *eltype = jl_tparam0(jl_typeof(a));
     if (eltype != (jl_value_t*)jl_any_type) {
+        JL_GC_PUSH1(&rhs);
         if (!jl_isa(rhs, eltype))
             jl_type_error("arrayset", eltype, rhs);
+        JL_GC_POP();
     }
     if (!a->flags.ptrarray) {
         if (jl_is_uniontype(eltype)) {

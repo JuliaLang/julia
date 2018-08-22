@@ -3116,8 +3116,10 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     jl_gc_enable_finalizers(ptls, 1); // make sure we don't run any Julia code concurrently before this point
     if (tracee_list) {
         jl_methtable_t *mt;
-        while ((mt = (jl_methtable_t*)arraylist_pop(tracee_list)) != NULL)
+        while ((mt = (jl_methtable_t*)arraylist_pop(tracee_list)) != NULL) {
+            JL_GC_PROMISE_ROOTED(mt);
             jl_typemap_visitor(mt->defs, trace_method, NULL);
+        }
         arraylist_free(tracee_list);
         free(tracee_list);
     }

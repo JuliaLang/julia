@@ -76,10 +76,10 @@ extern void (*ios_set_io_wait_func)(int);
 JL_DLLEXPORT size_t ios_read(ios_t *s, char *dest, size_t n);
 JL_DLLEXPORT size_t ios_readall(ios_t *s, char *dest, size_t n);
 JL_DLLEXPORT size_t ios_write(ios_t *s, const char *data, size_t n) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int64_t ios_seek(ios_t *s, int64_t pos);   // absolute seek
+JL_DLLEXPORT int64_t ios_seek(ios_t *s, int64_t pos) JL_NOTSAFEPOINT; // absolute seek
 JL_DLLEXPORT int64_t ios_seek_end(ios_t *s);
 JL_DLLEXPORT int64_t ios_skip(ios_t *s, int64_t offs);  // relative seek
-JL_DLLEXPORT int64_t ios_pos(ios_t *s);  // get current position
+JL_DLLEXPORT int64_t ios_pos(ios_t *s) JL_NOTSAFEPOINT;  // get current position
 JL_DLLEXPORT int ios_trunc(ios_t *s, size_t size) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int ios_eof(ios_t *s);
 JL_DLLEXPORT int ios_eof_blocking(ios_t *s);
@@ -102,7 +102,7 @@ JL_DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);
 
 /* stream creation */
 JL_DLLEXPORT
-ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int trunc);
+ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int trunc) JL_NOTSAFEPOINT;
 JL_DLLEXPORT ios_t *ios_mkstemp(ios_t *f, char *fname);
 JL_DLLEXPORT ios_t *ios_mem(ios_t *s, size_t initsize) JL_NOTSAFEPOINT;
 ios_t *ios_str(ios_t *s, char *str);

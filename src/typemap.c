@@ -242,7 +242,7 @@ static jl_array_t *jl_alloc_int_1d(size_t np, size_t len)
 }
 
 static inline
-jl_typemap_t *mtcache_hash_lookup(const struct jl_ordereddict_t *a JL_PROPAGATES_ROOT, jl_value_t *ty, int8_t tparam, int8_t offs)
+jl_typemap_t *mtcache_hash_lookup(const struct jl_ordereddict_t *a JL_PROPAGATES_ROOT, jl_value_t *ty, int8_t tparam, int8_t offs) JL_NOTSAFEPOINT
 {
     uintptr_t uid = ((jl_datatype_t*)ty)->uid;
     jl_typemap_t *ml = jl_nothing;
@@ -349,7 +349,7 @@ static jl_typemap_t **mtcache_hash_bp(struct jl_ordereddict_t *pa JL_PROPAGATES_
                 if (idx > jl_max_int(pa->indices))
                     mtcache_rehash(pa, jl_array_len(pa->indices), parent, tparam, offs);
                 jl_intset(pa->indices, slot, idx);
-                return &((jl_typemap_t **)jl_array_data(pa->values))[idx - 1];
+                return &((jl_typemap_t **)jl_array_ptr_data(pa->values))[idx - 1];
             }
             jl_typemap_t **pml = &((jl_typemap_t **)jl_array_ptr_data(pa->values))[idx - 1];
             if (*pml == jl_nothing)
