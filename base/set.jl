@@ -191,8 +191,7 @@ function unique!(f::Callable, A)
             done = true
         end
     end
-    if cur != index  splice!(A, index:cur-1); end
-    A
+    ifelse(cur != index,  resize!(A, index-1), A)
 end
 
 # If A is not grouped, then we will need to keep track of all of the elements that we have
