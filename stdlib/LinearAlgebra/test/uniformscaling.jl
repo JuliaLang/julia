@@ -85,7 +85,7 @@ let
         @test cond(I) == 1
         @test cond(J) == (λ ≠ zero(λ) ? one(real(λ)) : oftype(real(λ), Inf))
     end
-    
+
     @testset "copyto!" begin
         A = Matrix{Int}(undef, (3,3))
         @test copyto!(A, I) == one(A)
