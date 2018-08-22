@@ -74,7 +74,7 @@ rm(pkgs::Vector{PackageSpec}; kwargs...)       = rm(Context(), pkgs; kwargs...)
 
 function rm(ctx::Context, pkgs::Vector{PackageSpec}; mode=PKGMODE_PROJECT, kwargs...)
     for pkg in pkgs
-        #TODO only overwrite pkg.mode is default value ?
+        # TODO only overwrite pkg.mode if default value ?
         pkg.mode = mode
     end
 
@@ -98,14 +98,23 @@ function update_registry(ctx)
             if isdir(joinpath(reg, ".git"))
                 regpath = pathrepr(reg)
                 printpkgstyle(ctx, :Updating, "registry at " * regpath)
-                LibGit2.with(LibGit2.GitRepo, reg) do repo
+                # Using LibGit2.with here crashes julia when running the
+                # tests for PkgDev wiht "Unreachable reached".
+                # This seems to work around it.
+                local repo
+                try
+                    repo = LibGit2.GitRepo(reg)
                     if LibGit2.isdirty(repo)
                         push!(errors, (regpath, "registry dirty"))
-                        return
+                        @goto done
                     end
                     if !LibGit2.isattached(repo)
                         push!(errors, (regpath, "registry detached"))
-                        return
+                        @goto done
+                    end
+                    if !("origin" in LibGit2.remotes(repo))
+                        push!(errors, (regpath, "origin not in the list of remotes"))
+                        @goto done
                     end
                     branch = LibGit2.headname(repo)
                     try
@@ -113,14 +122,14 @@ function update_registry(ctx)
                     catch e
                         e isa PkgError || rethrow(e)
                         push!(errors, (reg, "failed to fetch from repo"))
-                        return
+                        @goto done
                     end
                     ff_succeeded = try
                         LibGit2.merge!(repo; branch="refs/remotes/origin/$branch", fastforward=true)
                     catch e
                         e isa LibGit2.GitError && e.code == LibGit2.Error.ENOTFOUND || rethrow(e)
                         push!(errors, (reg, "branch origin/$branch not found"))
-                        return
+                        @goto done
                     end
 
                     if !ff_succeeded
@@ -128,9 +137,12 @@ function update_registry(ctx)
                         catch e
                             e isa LibGit2.GitError || rethrow(e)
                             push!(errors, (reg, "registry failed to rebase on origin/$branch"))
-                            return
+                            @goto done
                         end
                     end
+                    @label done
+                finally
+                    close(repo)
                 end
             end
         end
