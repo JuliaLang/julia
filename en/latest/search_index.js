@@ -5,15 +5,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Home",
     "category": "page",
-    "text": ""
-},
-
-{
-    "location": "#Julia-1.0-Documentation-1",
-    "page": "Home",
-    "title": "Julia 1.0 Documentation",
-    "category": "section",
-    "text": "Welcome to the documentation for Julia 1.0.Please read the release blog post for a general overview of the language and many of the changes since Julia v0.6. Note that version 0.7 was released alongside 1.0 to provide an upgrade path for packages and code that predates the 1.0 release. The only difference between 0.7 and 1.0 is the removal of deprecation warnings. For a complete list of all the changes since 0.6, see the release notes for version 0.7"
+    "text": "io = IOBuffer()\nrelease = isempty(VERSION.prerelease)\nv = \"$(VERSION.major).$(VERSION.minor)\"\n!release && (v = v*\"-$(first(VERSION.prerelease))\")\nprint(io, \"\"\"\n    # Julia $(v) Documentation\n\n    Welcome to the documentation for Julia $(v).\n\n    \"\"\")\nif !release\n    print(io,\"\"\"\n        !!! warning \"Work in progress!\"\n            This documentation is for an unreleased, in-development, version of Julia.\n        \"\"\")\nend\nimport Markdown\nMarkdown.parse(String(take!(io)))Please read the release blog post for a general overview of the language and many of the changes since Julia v0.6. Note that version 0.7 was released alongside 1.0 to provide an upgrade path for packages and code that predates the 1.0 release. The only difference between 0.7 and 1.0 is the removal of deprecation warnings. For a complete list of all the changes since 0.6, see the release notes for version 0.7"
 },
 
 {
