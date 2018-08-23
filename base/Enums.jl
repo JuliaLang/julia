@@ -94,7 +94,7 @@ end
 Member values can be converted between the enum type and `BaseType`. `read` and `write`
 perform these conversions automatically.
 
-`Base.Enums.basetype` function returns `BaseType`.
+[Base.Enums.basetype](@ref) function returns `BaseType`.
 
 To list all the instances of an enum use `instances`, e.g.
 
