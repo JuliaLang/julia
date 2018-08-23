@@ -185,6 +185,7 @@ Core.Nothing
 Base.Some
 Base.something
 Base.Enums.@enum
+Base.Enums.basetype
 ```
 
 ## Generic Functions
