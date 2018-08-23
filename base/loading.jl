@@ -255,7 +255,7 @@ locate_package(::Nothing) = nothing
 Return the path of `m.jl` file that was used to `import` module `m`,
 or `nothing` if `m` was not imported from a package.
 
-Use [`dirname`](@ref) to get the directory part and [`basename`](@ref) 
+Use [`dirname`](@ref) to get the directory part and [`basename`](@ref)
 to get the file name part of the path.
 """
 function pathof(m::Module)
