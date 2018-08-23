@@ -1153,7 +1153,7 @@ julia> typeof(Rational{Int})
 DataType
 
 julia> typeof(Union{Real,Float64,Rational})
-DataType
+Union
 
 julia> typeof(Union{Real,String})
 Union
