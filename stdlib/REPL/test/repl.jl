@@ -117,7 +117,6 @@ fake_repl() do stdin_write, stdout_read, repl
         @test pwd() == realpath(tmpdir)
 
         # Test using `cd` to move to the home directory
-        write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "cd\n")
         readuntil(stdout_read, realpath(homedir()))
@@ -126,7 +125,6 @@ fake_repl() do stdin_write, stdout_read, repl
         @test pwd() == realpath(homedir())
 
         # Test using `-` to jump backward to tmpdir
-        write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "cd -\n")
         readuntil(stdout_read, tmpdir)
@@ -136,7 +134,6 @@ fake_repl() do stdin_write, stdout_read, repl
 
         # Test using `~` in `cd` commands
         if !Sys.iswindows()
-            write(stdin_write, ";")
             readuntil(stdout_read, "shell> ")
             write(stdin_write, "cd ~\n")
             readuntil(stdout_read, realpath(homedir()))
@@ -161,7 +158,6 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # issue #20771
     let s
-        write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "'\n") # invalid input
         s = readuntil(stdout_read, "\n")
@@ -175,7 +171,6 @@ fake_repl() do stdin_write, stdout_read, repl
     # issue #27293
     if Sys.isunix()
         let s, old_stdout = stdout
-            write(stdin_write, ";")
             readuntil(stdout_read, "shell> ")
             write(stdin_write, "echo ~")
             s = readuntil(stdout_read, "~")
@@ -217,7 +212,6 @@ fake_repl() do stdin_write, stdout_read, repl
     # issue #10120
     # ensure that command quoting works correctly
     let s, old_stdout = stdout
-        write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
         write(stdin_write, """ -e "println(\\"HI\\")\"""")
