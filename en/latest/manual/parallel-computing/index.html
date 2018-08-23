@@ -22,7 +22,7 @@ end
 
 # we can schedule `n` instances of `foo` to be active concurrently.
 for _ in 1:n
-    @async foo()
+    @schedule foo()
 end</code></pre></li><li><p>Channels are created via the <code>Channel{T}(sz)</code> constructor. The channel will only hold objects</p></li></ul><p>of type <code>T</code>. If the type is not specified, the channel can hold objects of any type. <code>sz</code> refers   to the maximum number of elements that can be held in the channel at any time. For example, <code>Channel(32)</code>   creates a channel that can hold a maximum of 32 objects of any type. A <code>Channel{MyType}(64)</code> can   hold up to 64 objects of <code>MyType</code> at any time.</p><ul><li>If a <a href="../../base/parallel/#Base.Channel"><code>Channel</code></a> is empty, readers (on a <a href="../../base/parallel/#Base.take!-Tuple{Channel}"><code>take!</code></a> call) will block until data is available.</li><li>If a <a href="../../base/parallel/#Base.Channel"><code>Channel</code></a> is full, writers (on a <a href="../../base/parallel/#Base.put!-Tuple{Channel,Any}"><code>put!</code></a> call) will block until space becomes available.</li><li><a href="../../base/parallel/#Base.isready-Tuple{Channel}"><code>isready</code></a> tests for the presence of any object in the channel, while <a href="../../stdlib/Distributed/#Base.wait"><code>wait</code></a> waits for an object to become available.</li><li>A <a href="../../base/parallel/#Base.Channel"><code>Channel</code></a> is in an open state initially. This means that it can be read from and written to freely via <a href="../../base/parallel/#Base.take!-Tuple{Channel}"><code>take!</code></a> and <a href="../../base/parallel/#Base.put!-Tuple{Channel,Any}"><code>put!</code></a> calls. <a href="../../base/io-network/#Base.close"><code>close</code></a> closes a <a href="../../base/parallel/#Base.Channel"><code>Channel</code></a>. On a closed <a href="../../base/parallel/#Base.Channel"><code>Channel</code></a>, <a href="../../base/parallel/#Base.put!-Tuple{Channel,Any}"><code>put!</code></a> will fail. For example:</li></ul><pre><code class="language-julia-repl">julia&gt; c = Channel(2);
 
 julia&gt; put!(c, 1) # `put!` on an open channel succeeds
@@ -80,16 +80,16 @@ julia&gt; function make_jobs(n)
 
 julia&gt; n = 12;
 
-julia&gt; @async make_jobs(n); # feed the jobs channel with &quot;n&quot; jobs
+julia&gt; @schedule make_jobs(n); # feed the jobs channel with &quot;n&quot; jobs
 
 julia&gt; for i in 1:4 # start 4 tasks to process requests in parallel
-           @async do_work()
+           @schedule do_work()
        end
 
 julia&gt; @elapsed while n &gt; 0 # print out results
            job_id, exec_time = take!(results)
-           println(&quot;$job_id finished in $(round(exec_time; digits=2)) seconds&quot;)
-           global n = n - 1
+           println(&quot;$job_id finished in $(round(exec_time,2)) seconds&quot;)
+           n = n - 1
        end
 4 finished in 0.22 seconds
 3 finished in 0.45 seconds
