@@ -1646,3 +1646,30 @@ end
 # issue #28576
 @test Meta.isexpr(Meta.parse("1 == 2 ?"), :incomplete)
 @test Meta.isexpr(Meta.parse("1 == 2 ? 3 :"), :incomplete)
+
+# issue #28593
+macro a28593()
+    quote
+        abstract type A28593{S<:Real, V<:AbstractVector{S}} end
+    end
+end
+
+macro b28593()
+    quote
+        struct B28593{S<:Real, V<:AbstractVector{S}} end
+    end
+end
+
+macro c28593()
+    quote
+        primitive type C28593{S<:Real, V<:AbstractVector{S}} 32 end
+    end
+end
+
+@a28593
+@b28593
+@c28593
+
+@test A28593.var.name === :S
+@test B28593.var.name === :S
+@test C28593.var.name === :S
