@@ -401,3 +401,27 @@ end
 
 # Issue #24298
 @test mod(BigInt(6), UInt(5)) == mod(6, 5)
+
+@testset "cmp has values in [-1, 0, 1], issue #28780" begin
+    # _rand produces values whose log2 is better distributed than rand
+    _rand(::Type{BigInt}, n=1000) = let x = big(2)^rand(1:rand(1:n))
+        rand(-x:x)
+    end
+    _rand(F::Type{<:AbstractFloat}) = F(_rand(BigInt, round(Int, log2(floatmax(F))))) + rand(F)
+    _rand(T) = rand(T)
+    for T in (Base.BitInteger_types..., BigInt, Float64, Float32, Float16)
+        @test cmp(big(2)^130, one(T)) === 1
+        @test cmp(-big(2)^130, one(T)) === -1
+        c = cmp(_rand(BigInt), _rand(T))
+        @test c ∈ (-1, 0, 1)
+        @test c isa Int
+        (T <: Integer && T !== BigInt) || continue
+        x = rand(T)
+        @test cmp(big(2)^130, x) === cmp(x, -big(2)^130) === 1
+        @test cmp(-big(2)^130, x) === cmp(x, big(2)^130) === -1
+        @test cmp(big(x), x) === cmp(x, big(x)) === 0
+    end
+    c = cmp(_rand(BigInt), _rand(BigInt))
+    @test c ∈ (-1, 0, 1)
+    @test c isa Int
+end

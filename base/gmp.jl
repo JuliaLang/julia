@@ -487,13 +487,13 @@ count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
 divrem(x::BigInt, y::BigInt) = MPZ.tdiv_qr(x, y)
 
-cmp(x::BigInt, y::BigInt) = MPZ.cmp(x, y)
-cmp(x::BigInt, y::ClongMax) = MPZ.cmp_si(x, y)
-cmp(x::BigInt, y::CulongMax) = MPZ.cmp_ui(x, y)
+cmp(x::BigInt, y::BigInt) = sign(MPZ.cmp(x, y))
+cmp(x::BigInt, y::ClongMax) = sign(MPZ.cmp_si(x, y))
+cmp(x::BigInt, y::CulongMax) = sign(MPZ.cmp_ui(x, y))
 cmp(x::BigInt, y::Integer) = cmp(x, big(y))
 cmp(x::Integer, y::BigInt) = -cmp(y, x)
 
-cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? -1 : MPZ.cmp_d(x, y)
+cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? -1 : sign(MPZ.cmp_d(x, y))
 cmp(x::CdoubleMax, y::BigInt) = -cmp(y, x)
 
 isqrt(x::BigInt) = MPZ.sqrt(x)
