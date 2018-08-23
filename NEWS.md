@@ -22,5 +22,4 @@ separate repository at https://github.com/JuliaArchive/OldPkg.jl ([#27930])
 
 Standard Library Changes
 ---------------------
-
 * The shell REPL mode activated with `;` is now sticky and will not be exited upon pressing enter. It can be exited by pressing `backspace`. 
