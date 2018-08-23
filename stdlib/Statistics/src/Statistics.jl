@@ -248,7 +248,7 @@ end
 Compute the sample variance of a collection `v` with known mean(s) `m`,
 optionally over the given dimensions. `m` may contain means for each dimension of
 `v`. If `corrected` is `true`, then the sum is scaled with `n-1`,
-whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x)`.
+whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(v)`.
 
 !!! note
     If array contains `NaN` or [`missing`](@ref) values, the result is also
@@ -278,7 +278,7 @@ The algorithm will return an estimator of the generative distribution's variance
 under the assumption that each entry of `v` is an IID drawn from that generative
 distribution. This computation is equivalent to calculating `sum(abs2, v - mean(v)) /
 (length(v) - 1)`. If `corrected` is `true`, then the sum is scaled with `n-1`,
-whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x)`.
+whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(v)`.
 The mean `mean` over the region may be provided.
 
 !!! note
@@ -345,7 +345,7 @@ deviation under the assumption that each entry of `v` is an IID drawn from that 
 distribution. This computation is equivalent to calculating `sqrt(sum((v - mean(v)).^2) /
 (length(v) - 1))`. A pre-computed `mean` may be provided. If `corrected` is `true`,
 then the sum is scaled with `n-1`, whereas the sum is scaled with `n` if `corrected` is
-`false` where `n = length(x)`.
+`false` where `n = length(v)`.
 
 !!! note
     If array contains `NaN` or [`missing`](@ref) values, the result is also
@@ -376,7 +376,7 @@ std(iterable; corrected::Bool=true, mean=nothing) =
 Compute the sample standard deviation of a vector `v`
 with known mean `m`. If `corrected` is `true`,
 then the sum is scaled with `n-1`, whereas the sum is
-scaled with `n` if `corrected` is `false` where `n = length(x)`.
+scaled with `n` if `corrected` is `false` where `n = length(v)`.
 
 !!! note
     If array contains `NaN` or [`missing`](@ref) values, the result is also
@@ -882,7 +882,7 @@ probabilities `p` on the interval [0,1]. The keyword argument `sorted` indicates
 `itr` can be assumed to be sorted.
 
 Quantiles are computed via linear interpolation between the points `((k-1)/(n-1), v[k])`,
-for `k = 1:n` where `n = length(v)`. This corresponds to Definition 7 of Hyndman and Fan
+for `k = 1:n` where `n = length(itr)`. This corresponds to Definition 7 of Hyndman and Fan
 (1996), and is the same as the R default.
 
 !!! note
