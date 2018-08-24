@@ -58,6 +58,7 @@ end
     @test α.\UniformScaling(α) == UniformScaling(1.0)
     @test α * UniformScaling(1.0) == UniformScaling(1.0) * α
     @test UniformScaling(α)/α == UniformScaling(1.0)
+    @test (2I)^α == (2I).^α == (2^α)I
 end
 
 @testset "det and logdet" begin
