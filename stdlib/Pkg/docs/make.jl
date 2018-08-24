@@ -1,4 +1,8 @@
-using Documenter, Pkg
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
+Base.ACTIVE_PROJECT[] = joinpath(@__DIR__, "..")
+using Documenter
+using Pkg
 
 makedocs(
     modules = [Pkg],

@@ -38,7 +38,6 @@ USE_SYSTEM_BLAS:=0
 USE_SYSTEM_LAPACK:=0
 USE_SYSTEM_GMP:=0
 USE_SYSTEM_MPFR:=0
-USE_SYSTEM_ARPACK:=0
 USE_SYSTEM_SUITESPARSE:=0
 USE_SYSTEM_LIBUV:=0
 USE_SYSTEM_UTF8PROC:=0
@@ -72,6 +71,9 @@ endif
 
 # Set to 1 to enable profiling with OProfile
 USE_OPROFILE_JITEVENTS ?= 0
+
+# Set to 1 to enable profiling with perf
+USE_PERF_JITEVENTS ?= 0
 
 # libc++ is standard on OS X 10.9, but not for earlier releases
 USE_LIBCPP := 0
@@ -168,6 +170,11 @@ else
 JULIA_COMMIT := $(JULIA_VERSION)
 endif
 
+# Override `JULIA_COMMIT` to `JULIA_VERSION` if we're on a tagged commit
+ifeq ($(shell git describe --tags --exact-match > /dev/null 2>&1 && echo true),true)
+JULIA_COMMIT := $(JULIA_VERSION)
+endif
+
 # Whether to use GPL libraries or not.
 USE_GPL_LIBS ?= 1
 
@@ -223,6 +230,8 @@ INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
 # BinaryBuilder options
 # TODO: Autodiscover triplet
 USE_BINARYBUILDER_LLVM := 0
+# Use the Assertions build
+BINARYBUILDER_LLVM_ASSERTS := 0
 BINARYBUILDER_TRIPLET :=
 
 # LLVM Options
@@ -248,7 +257,11 @@ USE_POLLY_ACC := 0     # Enable GPU code-generation
 CMAKE ?= cmake
 CMAKE_GENERATOR ?= make
 
-# Point pkg-config to only look at our libraries
+# Point pkg-config to only look at our libraries, overriding whatever
+# the user may have unwittingly set.  To pass PKG_CONFIG_* variables
+# through to the buildsystem, these must be set either on the command
+# line, or through `override` directives within Make.user
+export PKG_CONFIG_PATH = $(JULIAHOME)/usr/lib/pkgconfig
 export PKG_CONFIG_LIBDIR = $(JULIAHOME)/usr/lib/pkgconfig
 
 # Figure out OS and architecture
@@ -444,19 +457,22 @@ SHIPFLAGS := -O3 -g -falign-functions
 endif
 
 ifeq ($(USECCACHE), 1)
-# expand CC and CXX at declaration time because we will redefine them
-# Expand CC and CXX here already because we want the original definition and not the ccache version.
+# Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
 CC_ARG   := $(CC)
 CXX_ARG  := $(CXX)
-# Expand CC and CXX here already to avoid recursive referencing.
+FC_ARG   := $(FC)
+# Expand CC, CXX and FC here already to avoid recursive referencing.
 CC_FULL  := ccache $(CC)
 CXX_FULL := ccache $(CXX)
-# Add an extra indirection to make CC/CXX non-simple vars
+FC_FULL  := ccache $(FC)
+# Add an extra indirection to make CC/CXX/FC non-simple vars
 # (because of how -m$(BINARY) is added later on).
 CC       := $(CC_FULL)
 CXX      := $(CXX_FULL)
+FC       := $(FC_FULL)
 CC_BASE  := ccache
 CXX_BASE := ccache
+FC_BASE  := ccache
 ifeq ($(USECLANG),1)
 # ccache and Clang don't do well together
 # http://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
@@ -470,6 +486,8 @@ CC_BASE := $(shell echo $(CC) | cut -d' ' -f1)
 CC_ARG := $(shell echo $(CC) | cut -s -d' ' -f2-)
 CXX_BASE := $(shell echo $(CXX) | cut -d' ' -f1)
 CXX_ARG := $(shell echo $(CXX) | cut -s -d' ' -f2-)
+FC_BASE := $(shell echo $(FC) | cut -d' ' -f1)
+FC_ARG := $(shell echo $(FC) | cut -s -d' ' -f2-)
 endif
 
 JFFLAGS := -O2 $(fPIC)
@@ -539,10 +557,10 @@ endif
 # Allow the user to specify this in Make.user
 GCCPATH ?= $(LOCALBASE)/lib/gcc$(_GCCVER)
 
-LDFLAGS += -L$(build_libdir) -L$(GCCPATH) -Wl,-rpath,$(build_libdir) -Wl,-rpath,$(GCCPATH)
-
-# This ensures we get the right RPATH even if we're missing FFLAGS somewhere
-FC += -Wl,-rpath=$(GCCPATH)
+# We're going to copy over the libraries we need from GCCPATH into build_libdir, then
+# tell everyone to look for them there. At install time, the build_libdir added into
+# the RPATH here is removed by patchelf.
+LDFLAGS += -L$(build_libdir) -Wl,-rpath,$(build_libdir)
 
 endif # gfortran
 endif # FreeBSD
@@ -773,6 +791,7 @@ CXX += -m$(BINARY)
 FC += -m$(BINARY)
 CC_ARG += -m$(BINARY)
 CXX_ARG += -m$(BINARY)
+FC_ARG += -m$(BINARY)
 endif
 endif
 
@@ -949,6 +968,9 @@ else ifeq ($(OS), Darwin)
   RPATH_LIB := -Wl,-rpath,'@loader_path/julia/' -Wl,-rpath,'@loader_path/'
 else
   RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin
+ifeq ($(OS), FreeBSD)
+  RPATH += -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)'
+endif
   RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
   RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin
   RPATH_LIB := -Wl,-rpath,'$$ORIGIN/julia' -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
@@ -1048,6 +1070,12 @@ ifeq ($(DISABLE_LIBUNWIND), 1)
 JCPPFLAGS += -DJL_DISABLE_LIBUNWIND
 endif
 
+# perf
+ifeq ($(USE_PERF_JITEVENTS), 1)
+JCPPFLAGS += -DJL_USE_PERF_JITEVENTS
+endif
+
+
 # Intel libraries
 
 ifeq ($(USE_INTEL_LIBM), 1)
@@ -1065,16 +1093,9 @@ MKLLIB := $(MKLROOT)/lib/ia32
 endif
 USE_SYSTEM_BLAS:=1
 USE_SYSTEM_LAPACK:=1
-ifeq ($(OS), WINNT)
-LIBBLASNAME := mkl_rt
-LIBLAPACKNAME := mkl_rt
-# work around libtool issue with arpack
-MKL_LDFLAGS := -L$(MKLLIB) -Wl,-lmkl_rt
-else
 LIBBLASNAME := libmkl_rt
 LIBLAPACKNAME := libmkl_rt
 MKL_LDFLAGS := -L$(MKLLIB) -lmkl_rt
-endif
 ifneq ($(strip $(MKLLIB)),)
   ifeq ($(OS), Linux)
     RPATH_MKL := -Wl,-rpath,$(MKLLIB)

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 """
     replace_ref_end!(ex)
 
@@ -75,6 +77,7 @@ reference expression (e.g. `@view A[1,2:end]`), and should *not* be used as the 
 an assignment (e.g. `@view(A[1,2:end]) = ...`).  See also [`@views`](@ref)
 to switch an entire block of code to use views for slicing.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:

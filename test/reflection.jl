@@ -27,8 +27,8 @@ function test_code_reflection(freflect, f, types, tester)
 end
 
 function test_code_reflections(tester, freflect)
-    test_code_reflection(freflect, contains,
-                         Tuple{AbstractString, Regex}, tester) # abstract type
+    test_code_reflection(freflect, occursin,
+                         Tuple{Regex, AbstractString}, tester) # abstract type
     test_code_reflection(freflect, +, Tuple{Int, Int}, tester) # leaftype signature
     test_code_reflection(freflect, +,
                          Tuple{Array{Float32}, Array{Float32}}, tester) # incomplete types
@@ -209,8 +209,6 @@ end
 # PR 13825
 let ex = :(a + b)
     @test string(ex) == "a + b"
-    ex.typ = Integer
-    @test string(ex) == "(a + b)::Integer"
 end
 foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} = nothing
 @test startswith(string(first(methods(foo13825))),
@@ -225,6 +223,7 @@ tlayout = TLayout(5,7,11)
 @test fieldnames(TLayout) == (:x, :y, :z) == Base.propertynames(tlayout)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
     [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
+@test fieldnames(Complex) === (:re, :im)
 @test_throws BoundsError fieldtype(TLayout, 0)
 @test_throws ArgumentError fieldname(TLayout, 0)
 @test_throws BoundsError fieldoffset(TLayout, 0)
@@ -237,14 +236,37 @@ tlayout = TLayout(5,7,11)
 @test_throws BoundsError fieldtype(Tuple{Vararg{Int8}}, 0)
 
 @test fieldnames(NTuple{3, Int}) == ntuple(i -> fieldname(NTuple{3, Int}, i), 3) == (1, 2, 3)
+@test_throws ArgumentError fieldnames(Union{})
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 4)
+
+@test fieldnames(NamedTuple{(:z,:a)}) === (:z,:a)
+@test fieldname(NamedTuple{(:z,:a)}, 1) === :z
+@test fieldname(NamedTuple{(:z,:a)}, 2) === :a
+@test_throws ArgumentError fieldname(NamedTuple{(:z,:a)}, 3)
+@test_throws ArgumentError fieldnames(NamedTuple)
+@test_throws ArgumentError fieldnames(NamedTuple{T,Tuple{Int,Int}} where T)
+@test_throws ArgumentError fieldnames(Real)
+@test_throws ArgumentError fieldnames(AbstractArray)
+
+@test fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 1) === Int
+@test fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 2) === String
+@test_throws BoundsError fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 3)
+
+@test fieldtype(NamedTuple, 42) === Any
+@test_throws BoundsError fieldtype(NamedTuple, 0)
+@test_throws BoundsError fieldtype(NamedTuple, -1)
+
+@test fieldtype(NamedTuple{(:a,:b)}, 1) === Any
+@test fieldtype(NamedTuple{(:a,:b)}, 2) === Any
+@test fieldtype((NamedTuple{(:a,:b),T} where T<:Tuple{Vararg{Integer}}), 2) === Integer
+@test_throws BoundsError fieldtype(NamedTuple{(:a,:b)}, 3)
 
 import Base: datatype_alignment, return_types
 @test datatype_alignment(UInt16) == 2
 @test datatype_alignment(TLayout) == 4
 let rts = return_types(TLayout)
-    @test length(rts) >= 3 # general constructor, specific constructor, and call-to-convert adapter(s)
+    @test length(rts) == 2 # general constructor and specific constructor
     @test all(rts .== TLayout)
 end
 
@@ -495,7 +517,7 @@ else
     @test h16850 === nothing
 end
 
-# PR #18888: code_typed shouldn't cache if not optimizing
+# PR #18888: code_typed shouldn't cache, return_types should
 let
     world = typemax(UInt)
     f18888() = return nothing
@@ -509,6 +531,10 @@ let
     @test !isdefined(code, :inferred)
 
     code_typed(f18888, Tuple{}; optimize=true)
+    code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
+    @test !isdefined(code, :inferred)
+
+    Base.return_types(f18888, Tuple{})
     code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
     @test isdefined(code, :inferred)
 end
@@ -582,21 +608,22 @@ end
 @test_throws ErrorException sizeof(Vector{Int})
 @test_throws ErrorException sizeof(Symbol)
 @test_throws ErrorException sizeof(Core.SimpleVector)
+@test_throws ErrorException sizeof(Union{})
 
 @test nfields((1,2)) == 2
 @test nfields(()) == 0
 @test nfields(nothing) == fieldcount(Nothing) == 0
 @test nfields(1) == 0
-@test fieldcount(Union{}) == 0
+@test_throws ArgumentError fieldcount(Union{})
 @test fieldcount(Tuple{Any,Any,T} where T) == 3
 @test fieldcount(Complex) == fieldcount(ComplexF32) == 2
 @test fieldcount(Union{ComplexF32,ComplexF64}) == 2
 @test fieldcount(Int) == 0
-@test_throws(ErrorException("type does not have a definite number of fields"),
+@test_throws(ArgumentError("type does not have a definite number of fields"),
              fieldcount(Union{Complex,Pair}))
-@test_throws ErrorException fieldcount(Real)
-@test_throws ErrorException fieldcount(AbstractArray)
-@test_throws ErrorException fieldcount(Tuple{Any,Vararg{Any}})
+@test_throws ArgumentError fieldcount(Real)
+@test_throws ArgumentError fieldcount(AbstractArray)
+@test_throws ArgumentError fieldcount(Tuple{Any,Vararg{Any}})
 
 # PR #22979
 

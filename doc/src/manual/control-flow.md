@@ -563,7 +563,7 @@ below all interrupt the normal flow of control.
 |:----------------------------- |
 | [`ArgumentError`](@ref)       |
 | [`BoundsError`](@ref)         |
-| `CompositeException`          |
+| [`CompositeException`](@ref)  |
 | [`DivideError`](@ref)         |
 | [`DomainError`](@ref)         |
 | [`EOFError`](@ref)            |
@@ -788,12 +788,6 @@ try bad()
 catch
     x
 end
-```
-
-The `catch` clause is not strictly necessary; when omitted, the default return value is `nothing`.
-
-```jldoctest
-julia> try error() end # Returns nothing
 ```
 
 The power of the `try/catch` construct lies in the ability to unwind a deeply nested computation

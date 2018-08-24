@@ -25,7 +25,8 @@ using LinearAlgebra: rmul!, lmul!
                 @test lmul!(G,Matrix{elty}(I, 10, 10)) == [G[i,j] for i=1:10,j=1:10]
 
                 @testset "transposes" begin
-                    @test copy(G')*G*Matrix(elty(1)I, 10, 10) ≈ Matrix(I, 10, 10)
+                    @test G'*G*Matrix(elty(1)I, 10, 10)   ≈ Matrix(I, 10, 10)
+                    @test (G*Matrix(elty(1)I, 10, 10))*G' ≈ Matrix(I, 10, 10)
                     @test copy(R')*(R*Matrix(elty(1)I, 10, 10)) ≈ Matrix(I, 10, 10)
                     @test_throws ErrorException transpose(G)
                     @test_throws ErrorException transpose(R)
@@ -38,7 +39,7 @@ using LinearAlgebra: rmul!, lmul!
         @test_throws DimensionMismatch lmul!(G, A)
         @test_throws DimensionMismatch rmul!(A, adjoint(G))
         @test abs.(A) ≈ abs.(hessenberg(Ac).H)
-        @test norm(R*Matrix{elty}(I, 10, 10)) ≈ one(elty)
+        @test opnorm(R*Matrix{elty}(I, 10, 10)) ≈ one(elty)
 
         I10 = Matrix{elty}(I, 10, 10)
         G, _ = givens(one(elty),zero(elty),9,10)

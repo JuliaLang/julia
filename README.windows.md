@@ -23,7 +23,7 @@ Instructions for adding fonts to the terminal are available at
 
 Additionally, rather than sticking with the default command prompt, you may want
 to use a different terminal emulator program, such as
-[Conemu](https://code.google.com/p/conemu-maximus5/) or [Mintty](
+[Conemu](https://conemu.github.io/) or [Mintty](
 https://github.com/mintty/mintty) (note that running Julia on Mintty needs a
 copy of `stty.exe` in your `%PATH%` to work properly).  Alternatively, you may
 prefer the features of a more full-function IDE, such as [Juno](http://junolab.org),
@@ -131,7 +131,7 @@ MinGW-w64 compilers available through Cygwin's package manager.
 
     3. Start the build
        ```sh
-       make -j 4   # Adjust the number of cores (4) to match your build environment.
+       make -j 4   # Adjust the number of threads (4) to match your build environment.
        ```
 
 

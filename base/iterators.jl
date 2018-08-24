@@ -181,9 +181,9 @@ Also similar to `enumerate(A)`, except `i` will be a valid index
 for `A`, while `enumerate` always counts from 1 regardless of the indices
 of `A`.
 
-Specifying `IndexLinear()` ensures that `i` will be an integer;
-specifying `IndexCartesian()` ensures that `i` will be a
-`CartesianIndex`; specifying `IndexStyle(A)` chooses whichever has
+Specifying [`IndexLinear()`](@ref) ensures that `i` will be an integer;
+specifying [`IndexCartesian()`](@ref) ensures that `i` will be a
+[`CartesianIndex`](@ref); specifying `IndexStyle(A)` chooses whichever has
 been defined as the native indexing style for array `A`.
 
 Mutation of the bounds of the underlying array will invalidate this iterator.
@@ -224,6 +224,7 @@ pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
 pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 pairs(tuple::Tuple) = Pairs(tuple, keys(tuple))
 pairs(nt::NamedTuple) = Pairs(nt, keys(nt))
+pairs(v::Core.SimpleVector) = Pairs(v, LinearIndices(v))
 # pairs(v::Pairs) = v # listed for reference, but already defined from being an AbstractDict
 
 length(v::Pairs) = length(v.itr)
@@ -249,7 +250,7 @@ values(v::Pairs) = v.data
 getindex(v::Pairs, key) = v.data[key]
 setindex!(v::Pairs, value, key) = (v.data[key] = value; v)
 get(v::Pairs, key, default) = get(v.data, key, default)
-get(f::Base.Callable, collection::Pairs, key) = get(f, v.data, key)
+get(f::Base.Callable, v::Pairs, key) = get(f, v.data, key)
 
 # zip
 
@@ -473,7 +474,7 @@ rest(itr) = itr
 
 Returns the first element and an iterator over the remaining elements.
 
-# Example
+# Examples
 ```jldoctest
 julia> (a, rest) = Iterators.peel("abc");
 
@@ -495,8 +496,6 @@ end
 
 @propagate_inbounds iterate(i::Rest, st=i.st) = iterate(i.itr, st)
 isdone(i::Rest, st...) = isdone(i.itr, st...)
-@propagate_inbounds iterate(i::Rest{I,S}, st::S=i.st) where {I,S<:Base.LegacyIterationCompat{I}} =
-    done(i.itr, st) ? nothing : next(i.itr, st)
 
 eltype(::Type{<:Rest{I}}) where {I} = eltype(I)
 IteratorEltype(::Type{<:Rest{I}}) where {I} = IteratorEltype(I)
@@ -663,7 +662,7 @@ end
     cycle(iter)
 
 An iterator that cycles through `iter` forever.
-N.B. if `iter` is empty, so is `cycle(iter)`.
+If `iter` is empty, so is `cycle(iter)`.
 
 # Examples
 ```jldoctest
@@ -774,15 +773,14 @@ _prod_size1(a, A) =
 
 axes(P::ProductIterator) = _prod_indices(P.iterators)
 _prod_indices(::Tuple{}) = ()
-_prod_indices(t::Tuple) = (_prod_indices1(t[1], IteratorSize(t[1]))..., _prod_indices(tail(t))...)
-_prod_indices1(a, ::HasShape)  = axes(a)
-_prod_indices1(a, ::HasLength) = (OneTo(length(a)),)
-_prod_indices1(a, A) =
+_prod_indices(t::Tuple) = (_prod_axes1(t[1], IteratorSize(t[1]))..., _prod_indices(tail(t))...)
+_prod_axes1(a, ::HasShape)  = axes(a)
+_prod_axes1(a, ::HasLength) = (OneTo(length(a)),)
+_prod_axes1(a, A) =
     throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
 
 ndims(p::ProductIterator) = length(axes(p))
 length(P::ProductIterator) = prod(size(P))
-_length(p::ProductIterator) = prod(map(unsafe_length, axes(p)))
 
 IteratorEltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
 IteratorEltype(::Type{ProductIterator{Tuple{I}}}) where {I} = IteratorEltype(I)
@@ -803,7 +801,7 @@ iterate(::ProductIterator{Tuple{}}, state) = nothing
 @inline isdone(P::ProductIterator) = any(isdone, P.iterators)
 @inline function _pisdone(iters, states)
     iter1 = first(iters)
-    done1 = isdone(iter1, first(states)) # check step
+    done1 = isdone(iter1, first(states)[2]) # check step
     done1 === true || return done1 # false or missing
     done1 = isdone(iter1) # check restart
     done1 === true || return done1 # false or missing
@@ -946,10 +944,9 @@ function length(itr::PartitionIterator)
 end
 
 function iterate(itr::PartitionIterator{<:Vector}, state=1)
-    iterate(itr.c, state) === nothing && return nothing
-    l = state
-    r = min(state + itr.n-1, length(itr.c))
-    return view(itr.c, l:r), r + 1
+    state > length(itr.c) && return nothing
+    r = min(state + itr.n - 1, length(itr.c))
+    return view(itr.c, state:r), r + 1
 end
 
 struct IterationCutShort; end
@@ -978,20 +975,21 @@ end
     Stateful(itr)
 
 There are several different ways to think about this iterator wrapper:
-    1. It provides a mutable wrapper around an iterator and
-       its iteration state.
-    2. It turns an iterator-like abstraction into a Channel-like
-       abstraction.
-    3. It's an iterator that mutates to become its own rest iterator
-       whenever an item is produced.
+
+1. It provides a mutable wrapper around an iterator and
+   its iteration state.
+2. It turns an iterator-like abstraction into a `Channel`-like
+   abstraction.
+3. It's an iterator that mutates to become its own rest iterator
+   whenever an item is produced.
 
 `Stateful` provides the regular iterator interface. Like other mutable iterators
-(e.g. `Channel`), if iteration is stopped early (e.g. by a `break` in a `for` loop),
+(e.g. [`Channel`](@ref)), if iteration is stopped early (e.g. by a `break` in a `for` loop),
 iteration can be resumed from the same spot by continuing to iterate over the
 same iterator object (in contrast, an immutable iterator would restart from the
 beginning).
 
-# Example:
+# Examples
 ```jldoctest
 julia> a = Iterators.Stateful("abcdef");
 
@@ -1021,8 +1019,7 @@ julia> for x in a; x == 1 || break; end
 julia> Base.peek(a)
 3
 
-# Sum the remaining elements
-julia> sum(a)
+julia> sum(a) # Sum the remaining elements
 7
 ```
 """
@@ -1031,15 +1028,18 @@ mutable struct Stateful{T, VS}
     # A bit awkward right now, but adapted to the new iteration protocol
     nextvalstate::Union{VS, Nothing}
     taken::Int
+    @inline function Stateful{<:Any, Any}(itr::T) where {T}
+        new{T, Any}(itr, iterate(itr), 0)
+    end
     @inline function Stateful(itr::T) where {T}
         VS = approx_iter_type(T)
-        new{T, VS}(itr, iterate(itr)::VS, 0)
+        return new{T, VS}(itr, iterate(itr)::VS, 0)
     end
 end
 
 function reset!(s::Stateful{T,VS}, itr::T) where {T,VS}
     s.itr = itr
-    s.nextvalstate = iterate(itr)
+    setfield!(s, :nextvalstate, iterate(itr))
     s.taken = 0
     s
 end
@@ -1055,7 +1055,8 @@ else
     # having to typesubtract
     function doiterate(itr, valstate::Union{Nothing, Tuple{Any, Any}})
         valstate === nothing && return nothing
-        iterate(itr, tail(valstate))
+        val, st = valstate
+        return iterate(itr, st)
     end
     function _approx_iter_type(itrT::Type, vstate::Type)
         vstate <: Union{Nothing, Tuple{Any, Any}} || return Any
@@ -1075,7 +1076,7 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
         throw(EOFError())
     else
         val, state = vs
-        s.nextvalstate = iterate(s.itr, state)
+        Core.setfield!(s, :nextvalstate, iterate(s.itr, state))
         s.taken += 1
         return val
     end
@@ -1085,7 +1086,7 @@ end
 @inline iterate(s::Stateful, state=nothing) = s.nextvalstate === nothing ? nothing : (popfirst!(s), nothing)
 IteratorSize(::Type{Stateful{VS,T}} where VS) where {T} =
     isa(IteratorSize(T), SizeUnknown) ? SizeUnknown() : HasLength()
-eltype(::Type{Stateful{VS, T}} where VS) where {T} = eltype(T)
+eltype(::Type{Stateful{T, VS}} where VS) where {T} = eltype(T)
 IteratorEltype(::Type{Stateful{VS,T}} where VS) where {T} = IteratorEltype(T)
 length(s::Stateful) = length(s.itr) - s.taken
 

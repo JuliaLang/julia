@@ -1,14 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using SuiteSparse: increment!
+using LinearAlgebra: Adjoint, Transpose, SingularException
+
 @testset "UMFPACK wrappers" begin
     se33 = sparse(1.0I, 3, 3)
     do33 = fill(1., 3)
     @test isequal(se33 \ do33, do33)
 
     # based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
-
-    using SuiteSparse: increment!
-    using LinearAlgebra: Adjoint, Transpose
 
     A0 = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
                 increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
@@ -89,13 +89,15 @@
         end
     end
 
-    @testset "Rectangular cases" for elty in (Float64, ComplexF64)
-        for (m, n) in ((10,5), (5, 10))
-            A = sparse([1:min(m,n); rand(1:m, 10)], [1:min(m,n); rand(1:n, 10)], elty == Float64 ? randn(min(m, n) + 10) : complex.(randn(min(m, n) + 10), randn(min(m, n) + 10)))
-            F = lu(A)
-            L, U, p, q, Rs = F.:(:)
-            @test (Diagonal(Rs) * A)[p,q] ≈ L * U
-        end
+    @testset "Rectangular cases. elty=$elty, m=$m, n=$n" for
+        elty in (Float64, ComplexF64),
+            (m, n) in ((10,5), (5, 10))
+
+        Random.seed!(30072018)
+        A = sparse([1:min(m,n); rand(1:m, 10)], [1:min(m,n); rand(1:n, 10)], elty == Float64 ? randn(min(m, n) + 10) : complex.(randn(min(m, n) + 10), randn(min(m, n) + 10)))
+        F = lu(A)
+        L, U, p, q, Rs = F.:(:)
+        @test (Diagonal(Rs) * A)[p,q] ≈ L * U
     end
 
     @testset "Issue #4523 - complex sparse \\" begin
@@ -165,6 +167,13 @@
         @test LinearAlgebra.ldiv!(copy(X), luA, B) ≈ LinearAlgebra.ldiv!(copy(X), lufA, B)
         @test LinearAlgebra.ldiv!(copy(X), adjoint(luA), B) ≈ LinearAlgebra.ldiv!(copy(X), adjoint(lufA), B)
         @test LinearAlgebra.ldiv!(copy(X), transpose(luA), B) ≈ LinearAlgebra.ldiv!(copy(X), transpose(lufA), B)
+    end
+
+    @testset "singular matrix" begin
+        for A in sparse.((Float64[1 2; 0 0], ComplexF64[1 2; 0 0]))
+            @test_throws SingularException lu(A)
+            @test !issuccess(lu(A; check = false))
+        end
     end
 
 end

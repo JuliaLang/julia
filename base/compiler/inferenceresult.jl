@@ -9,7 +9,7 @@ mutable struct InferenceResult
                        # on the InferenceResult, so that the optimizer can use this info
                        # later during inlining.
     result # ::Type, or InferenceState if WIP
-    src::Union{CodeInfo, Nothing} # if inferred copy is available
+    src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
     function InferenceResult(linfo::MethodInstance)
         if isdefined(linfo, :inferred_const)
             result = Const(linfo.inferred_const)
@@ -22,11 +22,20 @@ end
 
 function get_argtypes(result::InferenceResult)
     result.args === EMPTY_VECTOR || return result.args # already cached
-    linfo = result.linfo
+    argtypes, vargs = get_argtypes(result.linfo)
+    result.args = argtypes
+    if vargs !== nothing
+        result.vargs = vargs
+    end
+    return argtypes
+end
+
+function get_argtypes(linfo::MethodInstance)
     toplevel = !isa(linfo.def, Method)
     atypes::SimpleVector = unwrap_unionall(linfo.specTypes).parameters
     nargs::Int = toplevel ? 0 : linfo.def.nargs
     args = Vector{Any}(undef, nargs)
+    vargs = nothing
     if !toplevel && linfo.def.isva
         if linfo.specTypes == Tuple
             if nargs > 1
@@ -62,7 +71,7 @@ function get_argtypes(result::InferenceResult)
                     end
                 end
             end
-            result.vargs = vararg_type_vec
+            vargs = vararg_type_vec
         end
         args[nargs] = vararg_type
         nargs -= 1
@@ -100,8 +109,7 @@ function get_argtypes(result::InferenceResult)
     else
         @assert nargs == 0 "invalid specialization of method" # wrong number of arguments
     end
-    result.args = args
-    return args
+    return args, vargs
 end
 
 function cache_lookup(code::MethodInstance, argtypes::Vector{Any}, cache::Vector{InferenceResult})
@@ -115,7 +123,7 @@ function cache_lookup(code::MethodInstance, argtypes::Vector{Any}, cache::Vector
         if cache_code.linfo === code && length(argtypes) === (length(cache_vargs) + nargs)
             cache_match = true
             for i in 1:length(argtypes)
-                a = argtypes[i]
+                a = maybe_widen_conditional(argtypes[i])
                 ca = i <= nargs ? cache_args[i] : cache_vargs[i - nargs]
                 # verify that all Const argument types match between the call and cache
                 if (isa(a, Const) || isa(ca, Const)) && !(a === ca)

@@ -54,8 +54,8 @@ function run_test_server(srv, text)
             try
                 write(sock, text)
             catch e
-                if !(isa(e, Base.UVError) && e.code == Base.UV_EPIPE)
-                    if !(isa(e, Base.UVError) && e.code == Base.UV_ECONNRESET)
+                if !(isa(e, Base.IOError) && e.code == Base.UV_EPIPE)
+                    if !(isa(e, Base.IOError) && e.code == Base.UV_ECONNRESET)
                         rethrow(e)
                     end
                 end
@@ -127,11 +127,11 @@ end
 open_streams = []
 function cleanup()
     for s_ in open_streams
-        try close(s_) end
+        try close(s_); catch; end
     end
     empty!(open_streams)
     for tsk in tasks
-        Base._wait(tsk)
+        Base.wait(tsk)
     end
     empty!(tasks)
 end
@@ -463,7 +463,7 @@ if !Sys.iswindows() && get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") !=
     # msvcrt _wchmod documentation states that all files are readable,
     # so we don't test that it correctly set the umask on windows
     @test_throws SystemError open(f)
-    @test_throws Base.UVError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
+    @test_throws Base.IOError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
 else
     Sys.iswindows() || @warn "File permissions tests skipped due to running tests as root (not recommended)"
     close(open(f))
@@ -504,14 +504,14 @@ end
 @test eof(f1)
 @test eof(f2)
 @test_throws ArgumentError write(f1, '*')
-@test_throws Base.UVError write(f2, '*')
+@test_throws Base.IOError write(f2, '*')
 close(f1)
 close(f2)
 @test eof(f1)
-@test_throws Base.UVError eof(f2)
+@test_throws Base.IOError eof(f2)
 if get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
     @test_throws SystemError open(f, "r+")
-    @test_throws Base.UVError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
+    @test_throws Base.IOError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
 else
     @warn "File permissions tests skipped due to running tests as root (not recommended)"
 end
@@ -568,3 +568,6 @@ let p = Pipe()
     @test length(s) == 660_000 + typemax(UInt16)
     @test s[(end - typemax(UInt16)):end] == UInt16.(0:typemax(UInt16))
 end
+
+# issue #26419
+@test Base.return_types(read, (String, Type{String})) == Any[String]

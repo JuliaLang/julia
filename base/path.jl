@@ -5,6 +5,7 @@ export
     basename,
     dirname,
     expanduser,
+    contractuser,
     homedir,
     isabspath,
     isdirpath,
@@ -86,7 +87,7 @@ end
 """
     isabspath(path::AbstractString) -> Bool
 
-Determines whether a path is absolute (begins at the root directory).
+Determine whether a path is absolute (begins at the root directory).
 
 # Examples
 ```jldoctest
@@ -102,7 +103,7 @@ isabspath(path::AbstractString)
 """
     isdirpath(path::AbstractString) -> Bool
 
-Determines whether a path refers to a directory (for example, ends with a path separator).
+Determine whether a path refers to a directory (for example, ends with a path separator).
 
 # Examples
 ```jldoctest
@@ -155,7 +156,7 @@ See also: [`basename`](@ref)
 Get the file name part of a path.
 
 # Examples
- ```jldoctest
+```jldoctest
 julia> basename("/home/myuser/example.jl")
 "example.jl"
 ```
@@ -335,17 +336,29 @@ realpath(path::AbstractString)
 
 
 if Sys.iswindows()
-expanduser(path::AbstractString) = path # on windows, ~ means "temporary file"
+# on windows, ~ means "temporary file"
+expanduser(path::AbstractString) = path
+contractuser(path::AbstractString) = path
 else
 function expanduser(path::AbstractString)
     y = iterate(path)
     y === nothing && return path
     c, i = y
-    if c != '~' return path end
+    c != '~' && return path
     y = iterate(path, i)
-    if y == nothing return homedir() end
-    if y[1] == '/' return homedir()*path[i:end] end
+    y === nothing && return homedir()
+    y[1] == '/' && return homedir() * path[i:end]
     throw(ArgumentError("~user tilde expansion not yet implemented"))
+end
+function contractuser(path::AbstractString)
+    home = homedir()
+    if path == home
+        return "~"
+    elseif startswith(path, home)
+        return joinpath("~", relpath(path, home))
+    else
+        return path
+    end
 end
 end
 
@@ -356,6 +369,13 @@ end
 On Unix systems, replace a tilde character at the start of a path with the current user's home directory.
 """
 expanduser(path::AbstractString)
+
+"""
+    contractuser(path::AbstractString) -> AbstractString
+
+On Unix systems, if the path starts with `homedir()`, replace it with a tilde character.
+"""
+contractuser(path::AbstractString)
 
 
 """
@@ -381,8 +401,8 @@ function relpath(path::String, startpath::String = ".")
             break
         end
     end
-    pathpart = join(path_arr[i+1:coalesce(findlast(x -> !isempty(x), path_arr), 0)], path_separator)
-    prefix_num = coalesce(findlast(x -> !isempty(x), start_arr), 0) - i - 1
+    pathpart = join(path_arr[i+1:something(findlast(x -> !isempty(x), path_arr), 0)], path_separator)
+    prefix_num = something(findlast(x -> !isempty(x), start_arr), 0) - i - 1
     if prefix_num >= 0
         prefix = pardir * path_separator
         relpath_ = isempty(pathpart)     ?

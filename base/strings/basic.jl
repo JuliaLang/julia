@@ -128,7 +128,7 @@ Return a tuple of the character in `s` at index `i` with the index of the start
 of the following character in `s`. This is the key method that allows strings to
 be iterated, yielding a sequences of characters. If `i` is out of bounds in `s`
 then a bounds error is raised. The `iterate` function, as part of the iteration
-protocoal may assume that `i` is the start of a character in `s`.
+protocol may assume that `i` is the start of a character in `s`.
 
 See also: [`getindex`](@ref), [`checkbounds`](@ref)
 """
@@ -365,25 +365,32 @@ end
 If `i` is in bounds in `s` return the index of the start of the character whose
 encoding code unit `i` is part of. In other words, if `i` is the start of a
 character, return `i`; if `i` is not the start of a character, rewind until the
-start of a character and return that index. If `i` is out of bounds in `s`
-return `i`.
+start of a character and return that index. If `i` is equal to 0 or `ncodeunits(s)+1`
+return `i`. In all other cases throw `BoundsError`.
 
 # Examples
 ```jldoctest
-julia> thisind("αβγdef", 1)
+julia> thisind("α", 0)
+0
+
+julia> thisind("α", 1)
 1
 
-julia> thisind("αβγdef", 3)
+julia> thisind("α", 2)
+1
+
+julia> thisind("α", 3)
 3
 
-julia> thisind("αβγdef", 4)
-3
+julia> thisind("α", 4)
+ERROR: BoundsError: attempt to access "α"
+  at index [4]
+[...]
 
-julia> thisind("αβγdef", 9)
-9
-
-julia> thisind("αβγdef", 10)
-10
+julia> thisind("α", -1)
+ERROR: BoundsError: attempt to access "α"
+  at index [-1]
+[...]
 ```
 """
 thisind(s::AbstractString, i::Integer) = thisind(s, Int(i))
@@ -401,28 +408,46 @@ end
 """
     prevind(str::AbstractString, i::Integer, n::Integer=1) -> Int
 
-If `i` is in bounds in `s` return the index of the start of the character whose
-encoding starts before index `i`. In other words, if `i` is the start of a
-character, return the start of the previous character; if `i` is not the start
-of a character, rewind until the start of a character and return that index.
-If `i` is out of bounds in `s` return `i - 1`. If `n == 0` return `i`.
+* Case `n == 1`
+
+  If `i` is in bounds in `s` return the index of the start of the character whose
+  encoding starts before index `i`. In other words, if `i` is the start of a
+  character, return the start of the previous character; if `i` is not the start
+  of a character, rewind until the start of a character and return that index.
+  If `i` is equal to `1` return `0`.
+  If `i` is equal to `ncodeunits(str)+1` return `lastindex(str)`.
+  Otherwise throw `BoundsError`.
+
+* Case `n > 1`
+
+  Behaves like applying `n` times `prevind` for `n==1`. The only difference
+  is that if `n` is so large that applying `prevind` would reach `0` then each remaining
+  iteration decreases the returned value by `1`.
+  This means that in this case `prevind` can return a negative value.
+
+* Case `n == 0`
+
+  Return `i` only if `i` is a valid index in `str` or is equal to `ncodeunits(str)+1`.
+  Otherwise `StringIndexError` or `BoundsError` is thrown.
 
 # Examples
 ```jldoctest
-julia> prevind("αβγdef", 3)
+julia> prevind("α", 3)
 1
 
-julia> prevind("αβγdef", 1)
+julia> prevind("α", 1)
 0
 
-julia> prevind("αβγdef", 0)
-ERROR: BoundsError: attempt to access "αβγdef"
+julia> prevind("α", 0)
+ERROR: BoundsError: attempt to access "α"
   at index [0]
-Stacktrace:
 [...]
 
-julia> prevind("αβγdef", 3, 2)
+julia> prevind("α", 2, 2)
 0
+
+julia> prevind("α", 2, 3)
+-1
 ```
 """
 prevind(s::AbstractString, i::Integer, n::Integer) = prevind(s, Int(i), Int(n))
@@ -443,25 +468,46 @@ end
 """
     nextind(str::AbstractString, i::Integer, n::Integer=1) -> Int
 
-If `i` is in bounds in `s` return the index of the start of the character whose
-encoding starts after index `i`. If `i` is out of bounds in `s` return `i + 1`.
-If `n == 0` return `i`.
+* Case `n == 1`
+
+  If `i` is in bounds in `s` return the index of the start of the character whose
+  encoding starts after index `i`. In other words, if `i` is the start of a
+  character, return the start of the next character; if `i` is not the start
+  of a character, move forward until the start of a character and return that index.
+  If `i` is equal to `0` return `1`.
+  If `i` is in bounds but greater or equal to `lastindex(str)` return `ncodeunits(str)+1`.
+  Otherwise throw `BoundsError`.
+
+* Case `n > 1`
+
+  Behaves like applying `n` times `nextind` for `n==1`. The only difference
+  is that if `n` is so large that applying `nextind` would reach `ncodeunits(str)+1` then
+  each remaining iteration increases the returned value by `1`. This means that in this
+  case `nextind` can return a value greater than `ncodeunits(str)+1`.
+
+* Case `n == 0`
+
+  Return `i` only if `i` is a valid index in `s` or is equal to `0`.
+  Otherwise `StringIndexError` or `BoundsError` is thrown.
 
 # Examples
 ```jldoctest
-julia> str = "αβγdef";
+julia> nextind("α", 0)
+1
 
-julia> nextind(str, 1)
+julia> nextind("α", 1)
 3
 
-julia> nextind(str, 1, 2)
-5
+julia> nextind("α", 3)
+ERROR: BoundsError: attempt to access "α"
+  at index [3]
+[...]
 
-julia> lastindex(str)
-9
+julia> nextind("α", 0, 2)
+3
 
-julia> nextind(str, 9)
-10
+julia> nextind("α", 1, 2)
+4
 ```
 """
 nextind(s::AbstractString, i::Integer, n::Integer) = nextind(s, Int(i), Int(n))

@@ -1,4 +1,5 @@
 #!/usr/bin/env julia
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base: thispatch, thisminor, nextpatch, nextminor
 import LinearAlgebra: checksquare
@@ -151,7 +152,12 @@ for pkg in [
     "S3Dicts"
     "BigArrays"
     "ChainMap"
+    "NanoTimes"
+    "OnlineMoments"
+    "ProjectiveDictionaryPairLearning"
+    "React"
     "PackageGenerator"
+    "Sparrow"
 ]
     delete!(pkgs, pkg)
 end

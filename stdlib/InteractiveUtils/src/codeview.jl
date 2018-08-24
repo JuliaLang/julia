@@ -2,58 +2,18 @@
 
 # displaying type warnings
 
-function code_warntype_legacy_ir(io::IO, ci::Core.CodeInfo, rettype)
-    function slots_used(ci, slotnames)
-        used = falses(length(slotnames))
-        scan_exprs!(used, ci.code)
-        return used
-    end
-
-    function scan_exprs!(used, exprs)
-        for ex in exprs
-            if isa(ex, Core.Slot)
-                used[ex.id] = true
-            elseif isa(ex, Expr)
-                scan_exprs!(used, ex.args)
-            end
-        end
-    end
-
-    emph_io = IOContext(io, :TYPEEMPHASIZE => true)
-    println(emph_io, "Variables:")
-    slotnames = Base.sourceinfo_slotnames(src)
-    used_slotids = slots_used(src, slotnames)
-    for i = 1:length(slotnames)
-        if used_slotids[i]
-            print(emph_io, "  ", slotnames[i])
-            if isa(src.slottypes, Array)
-                show_expr_type(emph_io, src.slottypes[i], true)
-            end
-            print(emph_io, '\n')
-        elseif !('#' in slotnames[i] || '@' in slotnames[i])
-            print(emph_io, "  ", slotnames[i], "<optimized out>\n")
-        end
-    end
-    print(emph_io, "\nBody:\n  ")
-    body = Expr(:body)
-    body.args = src.code
-    body.typ = rettype
-    # Fix slot names and types in function body
-    show_unquoted(IOContext(emph_io, :SOURCEINFO => src, :SOURCE_SLOTNAMES => slotnames),
-                    body, 2)
-    print(emph_io, '\n')
-end
-
-function warntype_type_printer(io, ty)
-    if ty !== Union{} && (!isdispatchtuple(Tuple{ty}) || ty == Core.Box)
+function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
+    used || return
+    if ty isa Type && (!Base.isdispatchelem(ty) || ty == Core.Box)
         if ty isa Union && Base.is_expected_union(ty)
             Base.emphasize(io, "::$ty", Base.warn_color()) # more mild user notification
         else
             Base.emphasize(io, "::$ty")
         end
     else
-        Base.printstyled(io, "::$ty", color=:cyan)
+        Base.printstyled(io, "::$ty", color=:cyan) # show the "good" type
     end
+    nothing
 end
 
 """
@@ -71,20 +31,23 @@ in verbose mode, showing all available information (rather than applying
 the usual heuristics).
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
-function code_warntype(io::IO, f, @nospecialize(t); verbose_linetable=false)
+function code_warntype(io::IO, @nospecialize(f), @nospecialize(t); verbose_linetable=false)
     for (src, rettype) in code_typed(f, t)
-        if src.codelocs === nothing
-            code_warntype_legacy_ir(io, src, rettype)
-        else
-            print(io, "Body"); warntype_type_printer(io, rettype); println(io);
-            ir = Core.Compiler.inflate_ir(src)
-            Base.IRShow.show_ir(io, ir, warntype_type_printer;
-                                argnames=Base.sourceinfo_slotnames(src), verbose_linetable=verbose_linetable)
+        lambda_io::IOContext = io
+        if src.slotnames !== nothing
+            lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(src))
         end
+        print(io, "Body")
+        warntype_type_printer(io, rettype, true)
+        println(io)
+        # TODO: static parameter values
+        Base.IRShow.show_ir(lambda_io, src, warntype_type_printer;
+                            verbose_linetable = verbose_linetable)
     end
     nothing
 end
-code_warntype(f, @nospecialize(t); kwargs...) = code_warntype(stdout, f, t; kwargs...)
+code_warntype(@nospecialize(f), @nospecialize(t); kwargs...) =
+    code_warntype(stdout, f, t; kwargs...)
 
 import Base.CodegenParams
 
@@ -142,12 +105,14 @@ end
 Prints the LLVM bitcodes generated for running the method matching the given generic
 function and type signature to `io`.
 
-All metadata and dbg.* calls are removed from the printed bitcode. Use `code_llvm_raw` for the full IR.
+If the `optimize` keyword is unset, the code will be shown before LLVM optimizations.
+All metadata and dbg.* calls are removed from the printed bitcode. Set the `raw` keyword for the full IR.
+To dump the entire module that encapsulates the function, with debug info and metadata, set the `dump_module` keyword.
 """
-code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Tuple), strip_ir_metadata=true, dump_module=false) =
-    print(io, _dump_function(f, types, false, false, strip_ir_metadata, dump_module))
-code_llvm(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(stdout, f, types)
-code_llvm_raw(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(stdout, f, types, false)
+code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Tuple), strip_ir_metadata=true, dump_module=false, optimize=true) =
+    print(io, _dump_function(f, types, false, false, strip_ir_metadata, dump_module, :att, optimize))
+code_llvm(@nospecialize(f), @nospecialize(types=Tuple); raw=false, dump_module=false, optimize=true) =
+    code_llvm(stdout, f, types, !raw, dump_module, optimize)
 
 """
     code_native([io=stdout,], f, types; syntax = :att)

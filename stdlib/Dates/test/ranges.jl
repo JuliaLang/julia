@@ -578,4 +578,8 @@ a = Dates.Time(23, 1, 1)
 @test !(π in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
 @test !("a" in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
 
+@test hash(Any[Date("2018-1-03"), Date("2018-1-04"), Date("2018-1-05")]) ==
+      hash([Date("2018-1-03"), Date("2018-1-04"), Date("2018-1-05")]) ==
+      hash(Date("2018-1-03"):Day(1):Date("2018-1-05"))
+
 end

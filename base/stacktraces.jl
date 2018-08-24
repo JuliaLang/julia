@@ -8,7 +8,7 @@ module StackTraces
 
 import Base: hash, ==, show
 using Base.Printf: @printf
-using Base: coalesce
+using Base: something
 
 export StackTrace, StackFrame, stacktrace
 
@@ -123,8 +123,6 @@ const top_level_scope_sym = Symbol("top-level scope")
 using Base.Meta
 is_loc_meta(expr, kind) = isexpr(expr, :meta) && length(expr.args) >= 1 && expr.args[1] === kind
 function lookup(ip::Base.InterpreterIP)
-    i = ip.stmt
-    foundline = false
     if ip.code isa Core.MethodInstance
         codeinfo = ip.code.inferred
         func = ip.code.def.name
@@ -140,41 +138,20 @@ function lookup(ip::Base.InterpreterIP)
         file = empty_sym
         line = 0
     end
-    while i >= 1
-        expr = codeinfo.code[i]
-        if isa(expr, LineNumberNode)
-            if line == 0
-                line = expr.line
-            end
-            if expr.file !== nothing
-                file = expr.file
-            end
-            foundline = true
-        elseif foundline && is_loc_meta(expr, :push_loc)
-            file = expr.args[2]
-            if length(expr.args) >= 3
-                func = expr.args[3]
-            else
-                # Note: This is not quite correct. See issue #23971
-                func = Symbol("macro expansion")
-            end
-            scopes = lookup(Base.InterpreterIP(ip.code, i-1))
-            pushfirst!(scopes, StackFrame(
-                func, file, line, nothing, false, true, 0
-            ))
-            return scopes
-        elseif is_loc_meta(expr, :pop_loc)
-            npops = 1
-            while npops >= 1
-                i -= 1
-                expr = codeinfo.code[i]
-                is_loc_meta(expr, :pop_loc) && (npops += 1)
-                is_loc_meta(expr, :push_loc) && (npops -= 1)
-            end
-        end
-        i -= 1
+    i = max(ip.stmt+1, 1)  # ip.stmt is 0-indexed
+    if i > length(codeinfo.codelocs) || codeinfo.codelocs[i] == 0
+        return [StackFrame(func, file, line, ip.code, false, false, 0)]
     end
-    return [StackFrame(func, file, line, ip.code, false, false, 0)]
+    lineinfo = codeinfo.linetable[codeinfo.codelocs[i]]
+    scopes = StackFrame[]
+    while true
+        push!(scopes, StackFrame(lineinfo.method, lineinfo.file, lineinfo.line, ip.code, false, false, 0))
+        if lineinfo.inlined_at == 0
+            break
+        end
+        lineinfo = codeinfo.linetable[lineinfo.inlined_at]
+    end
+    return scopes
 end
 
 # allow lookup on already-looked-up data for easier handling of pre-processed frames
@@ -247,12 +224,12 @@ all frames above the specified function). Primarily used to remove `StackTraces`
 from the `StackTrace` prior to returning it.
 """
 function remove_frames!(stack::StackTrace, name::Symbol)
-    splice!(stack, 1:coalesce(findlast(frame -> frame.func == name, stack), 0))
+    splice!(stack, 1:something(findlast(frame -> frame.func == name, stack), 0))
     return stack
 end
 
 function remove_frames!(stack::StackTrace, names::Vector{Symbol})
-    splice!(stack, 1:coalesce(findlast(frame -> frame.func in names, stack), 0))
+    splice!(stack, 1:something(findlast(frame -> frame.func in names, stack), 0))
     return stack
 end
 

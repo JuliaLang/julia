@@ -3,7 +3,8 @@
 module TestCholesky
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
+using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted,
+    PosDefException, RankDeficientException, chkfullrank
 
 function unary_ops_tests(a, ca, tol; n=size(a, 1))
     @test inv(ca)*a ≈ Matrix(I, n, n)
@@ -20,7 +21,7 @@ end
 function factor_recreation_tests(a_U, a_L)
     c_U = cholesky(a_U)
     c_L = cholesky(a_L)
-    cl  = chol(a_L)
+    cl  = c_L.U
     ls = c_L.L
     @test Array(c_U) ≈ Array(c_L) ≈ a_U
     @test ls*ls' ≈ a_U
@@ -38,7 +39,7 @@ end
     n1 = div(n, 2)
     n2 = 2*n1
 
-    srand(1234321)
+    Random.seed!(1234321)
 
     areal = randn(n,n)/2
     aimg  = randn(n,n)/2
@@ -56,7 +57,6 @@ end
         # Test of symmetric pos. def. strided matrix
         apd  = a'*a
         @inferred cholesky(apd)
-        @inferred chol(apd)
         capd  = factorize(apd)
         r     = capd.U
         κ     = cond(apd, 1) #condition number
@@ -65,8 +65,6 @@ end
 
         @testset "throw for non-square input" begin
             A = rand(eltya, 2, 3)
-            @test_throws DimensionMismatch chol(A)
-            @test_throws DimensionMismatch LinearAlgebra.chol!(A)
             @test_throws DimensionMismatch cholesky(A)
             @test_throws DimensionMismatch cholesky!(A)
         end
@@ -75,7 +73,7 @@ end
 
         #these tests were failing on 64-bit linux when inside the inner loop
         #for eltya = ComplexF32 and eltyb = Int. The E[i,j] had NaN32 elements
-        #but only with srand(1234321) set before the loops.
+        #but only with Random.seed!(1234321) set before the loops.
         E = abs.(apd - r'*r)
         for i=1:n, j=1:n
             @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
@@ -87,9 +85,8 @@ end
         @test LinearAlgebra.issuccess(capd)
         @inferred(logdet(capd))
 
-        apos = apd[1,1]            # test chol(x::Number), needs x>0
+        apos = apd[1,1]
         @test all(x -> x ≈ √apos, cholesky(apos).factors)
-        @test_throws PosDefException chol(-one(eltya))
 
         # Test cholesky with Symmetric/Hermitian upper/lower
         apds  = Symmetric(apd)
@@ -116,9 +113,9 @@ end
             @test sprint((t, s) -> show(t, "text/plain", s), capdh) == "$(typeof(capdh))\nU factor:\n$ulstring"
         end
 
-        # test chol of 2x2 Strang matrix
+        # test cholesky of 2x2 Strang matrix
         S = Matrix{eltya}(SymTridiagonal([2, 2], [-1]))
-        @test Matrix(chol(S)) ≈ [2 -1; 0 sqrt(eltya(3))] / sqrt(eltya(2))
+        @test Matrix(cholesky(S).U) ≈ [2 -1; 0 sqrt(eltya(3))] / sqrt(eltya(2))
 
         # test extraction of factor and re-creating original matrix
         if eltya <: Real
@@ -129,8 +126,6 @@ end
 
         #pivoted upper Cholesky
         if eltya != BigFloat
-            cz = cholesky(Hermitian(zeros(eltya,n,n)), Val(true))
-            @test_throws LinearAlgebra.RankDeficientException LinearAlgebra.chkfullrank(cz)
             cpapd = cholesky(apdh, Val(true))
             unary_ops_tests(apdh, cpapd, ε*κ*n)
             @test rank(cpapd) == n
@@ -174,19 +169,6 @@ end
             end
         end
         if eltya <: BlasFloat
-            @testset "throw for non positive definite matrix" begin
-                A = eltya[1 2; 2 1]; B = eltya[1, 1]
-                C = cholesky(A)
-                @test !isposdef(C)
-                @test !LinearAlgebra.issuccess(C)
-                Cstr = sprint((t, s) -> show(t, "text/plain", s), C)
-                @test Cstr == "Failed factorization of type $(typeof(C))"
-                @test_throws PosDefException C\B
-                @test_throws PosDefException det(C)
-                @test_throws PosDefException logdet(C)
-            end
-
-            # Test generic cholesky!
             @testset "generic cholesky!" begin
                 if eltya <: Complex
                     A = complex.(randn(5,5), randn(5,5))
@@ -199,6 +181,32 @@ end
             end
         end
     end
+end
+
+@testset "behavior for non-positive definite matrices" for T in (Float64, ComplexF64)
+    A = T[1 2; 2 1]
+    B = T[1 2; 0 1]
+    # check = (true|false)
+    for M in (A, Hermitian(A), B)
+        @test_throws PosDefException cholesky(M)
+        @test_throws PosDefException cholesky!(copy(M))
+        @test_throws PosDefException cholesky(M; check = true)
+        @test_throws PosDefException cholesky!(copy(M); check = true)
+        @test !LinearAlgebra.issuccess(cholesky(M; check = false))
+        @test !LinearAlgebra.issuccess(cholesky!(copy(M); check = false))
+    end
+    for M in (A, Hermitian(A), B)
+        @test_throws RankDeficientException cholesky(M, Val(true))
+        @test_throws RankDeficientException cholesky!(copy(M), Val(true))
+        @test_throws RankDeficientException cholesky(M, Val(true); check = true)
+        @test_throws RankDeficientException cholesky!(copy(M), Val(true); check = true)
+        C = cholesky(M, Val(true); check = false)
+        @test_throws RankDeficientException chkfullrank(C)
+        C = cholesky!(copy(M), Val(true); check = false)
+        @test_throws RankDeficientException chkfullrank(C)
+    end
+    @test !isposdef(A)
+    str = sprint((io, x) -> show(io, "text/plain", x), cholesky(A; check = false))
 end
 
 @testset "Cholesky factor of Matrix with non-commutative elements, here 2x2-matrices" begin
@@ -259,19 +267,43 @@ end
     end
 end
 
-@testset "handling of non-Hermitian" begin
-    R = randn(5, 5)
-    C = complex.(R, R)
-    for A in (R, C)
-        @test !LinearAlgebra.issuccess(cholesky(A))
-        @test !LinearAlgebra.issuccess(cholesky!(copy(A)))
-        @test_throws PosDefException chol(A)
-        @test_throws PosDefException LinearAlgebra.chol!(copy(A))
-    end
-end
-
 @testset "fail for non-BLAS element types" begin
     @test_throws ArgumentError cholesky!(Hermitian(rand(Float16, 5,5)), Val(true))
+end
+
+@testset "cholesky Diagonal" begin
+    # real
+    d = abs.(randn(3)) .+ 0.1
+    D = Diagonal(d)
+    CD = cholesky(D)
+    @test CD isa Cholesky{Float64}
+    @test CD.U isa UpperTriangular{Float64}
+    @test CD.U == Diagonal(.√d)
+    @test CD.info == 0
+
+    # real, failing
+    @test_throws PosDefException cholesky(Diagonal([1.0, -2.0]))
+    Dnpd = cholesky(Diagonal([1.0, -2.0]); check = false)
+    @test Dnpd.info == 2
+
+    # complex
+    d = cis.(rand(3) .* 2*π)
+    d .*= abs.(randn(3) .+ 0.1)
+    D = Diagonal(d)
+    CD = cholesky(D)
+    @test CD isa Cholesky{Complex{Float64}}
+    @test CD.U isa UpperTriangular{Complex{Float64}}
+    @test CD.U == Diagonal(.√d)
+    @test CD.info == 0
+
+    # complex, failing
+    D[2, 2] = 0.0 + 0im
+    @test_throws PosDefException cholesky(D)
+    Dnpd = cholesky(D; check = false)
+    @test Dnpd.info == 2
+
+    # InexactError for Int
+    @test_throws InexactError cholesky!(Diagonal([2, 1]))
 end
 
 end # module TestCholesky

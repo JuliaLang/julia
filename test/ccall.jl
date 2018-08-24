@@ -713,7 +713,7 @@ function verify_huge(init, a, b)
     for i = 1:nfields(a)
         @test getfield(init, i) === getfield(a, i)
     end
-    # make sure b was modifed as expected
+    # make sure b was modified as expected
     a1, b1 = getfield(a, 1), getfield(b, 1)
     while isa(a1, Tuple)
         @test a1[2:end] === b1[2:end]
@@ -1364,8 +1364,8 @@ end
 @test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,),)))
 @test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C), )))
 @test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), )))
-@test Expr(:error, "only the trailing ccall argument type should have '...'") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), x)))
-@test Expr(:error, "only the trailing ccall argument type should have '...'") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), x, y, z)))
+@test Expr(:error, "only the trailing ccall argument type should have \"...\"") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), x)))
+@test Expr(:error, "only the trailing ccall argument type should have \"...\"") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B..., C...), x, y, z)))
 @test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C...), )))
 
 # cfunction on non-function singleton
@@ -1443,3 +1443,31 @@ callback27178(cb::CTF) where CTF<:CallThisFunc27178 = nothing
 @inline make_cfunc27178(cbi::CI) where CI = @cfunction(callback27178, Cvoid, (Ref{CI},))
 get_c_func(fcn::FCN_TYPE) where {FCN_TYPE<:Function} = return make_cfunc27178(CallThisFunc27178(fcn))
 @test isa(get_c_func(sin), Ptr)
+
+# issue #27215
+function once_removed()
+    function mycompare(a, b)::Cint
+        return (a < b) ? -1 : ((a > b) ? +1 : 0)
+    end
+    mycompare_c = @cfunction($mycompare, Cint, (Ref{Cdouble}, Ref{Cdouble}))
+end
+@test isa(once_removed(), Base.CFunction)
+
+# issue #27478
+function ccall27478()
+    module_lib = Libdl.dlopen("libjulia")
+    ccall(Libdl.dlsym(module_lib, "getpid"), Cint, ())
+end
+@test code_typed(ccall27478, ()) isa Array
+
+# issue #27477
+@eval module Pkg27477
+const libccalltest = $libccalltest
+end
+
+module Test27477
+using ..Pkg27477
+test27477() = ccall((:ctest, Pkg27477.libccalltest), Complex{Int}, (Complex{Int},), 1 + 2im)
+end
+
+@test Test27477.test27477() == 2 + 0im

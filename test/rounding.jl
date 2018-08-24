@@ -19,36 +19,6 @@ using Test
         @test a - b === -c
         @test b - a === c
     end
-    @testset "RoundToZero" begin
-        setrounding(Float64,RoundToZero) do
-            @test a + b === d
-            @test - a - b === -d
-            @test a - b === -c
-            @test b - a === c
-        end
-        # Sanity check to see if we have returned to RoundNearest
-        @test a + b === 1.
-        @test - a - b === -1.
-        @test a - b == -c
-        @test b - a == c
-    end
-
-    @testset "RoundUp" begin
-        setrounding(Float64,RoundUp) do
-            @test a + b === 1.
-            @test - a - b === -d
-            @test a - b === -c
-            @test b - a === c
-        end
-    end
-    @testset "RoundDown" begin
-        setrounding(Float64,RoundDown) do
-            @test a + b === d
-            @test - a - b === -1.
-            @test a - b === -c
-            @test b - a === c
-        end
-    end
 end
 
 @testset "Float32 checks" begin
@@ -63,49 +33,24 @@ end
         @test a32 - b32 === -c32
         @test b32 - a32 === c32
     end
-    @testset "RoundToZero" begin
-        setrounding(Float32,RoundToZero) do
-            @test a32 + b32 === d32
-            @test - a32 - b32 === -d32
-            @test a32 - b32 === -c32
-            @test b32 - a32 === c32
-        end
-
-        # Sanity check to see if we have returned to RoundNearest
-        @test a32 + b32 === 1.0f0
-        @test - a32 - b32 === -1.0f0
-        @test a32 - b32 == -c32
-        @test b32 - a32 == c32
-    end
-    @testset "RoundUp" begin
-        setrounding(Float32,RoundUp) do
-            @test a32 + b32 === 1.0f0
-            @test - a32 - b32 === -d32
-            @test a32 - b32 === -c32
-            @test b32 - a32 === c32
-        end
-    end
-    @testset "RoundDown" begin
-        setrounding(Float32,RoundDown) do
-            @test a32 + b32 === d32
-            @test - a32 - b32 === -1.0f0
-            @test a32 - b32 === -c32
-            @test b32 - a32 === c32
-        end
-    end
 end
 
 @testset "convert with rounding" begin
     for v = [sqrt(2),-1/3,nextfloat(1.0),prevfloat(1.0),nextfloat(-1.0),
              prevfloat(-1.0),nextfloat(0.0),prevfloat(0.0)]
+
         pn = Float32(v,RoundNearest)
         @test pn == convert(Float32,v)
+
         pz = Float32(v,RoundToZero)
-        @test pz == setrounding(()->convert(Float32,v), Float64, RoundToZero)
+        @test abs(pz) <= abs(v) < nextfloat(abs(pz))
+        @test signbit(pz) == signbit(v)
+
         pd = Float32(v,RoundDown)
-        @test pd == setrounding(()->convert(Float32,v), Float64, RoundDown)
+        @test pd <= v < nextfloat(pd)
+
         pu = Float32(v,RoundUp)
-        @test pu == setrounding(()->convert(Float32,v), Float64, RoundUp)
+        @test prevfloat(pu) < v <= pu
 
         @test pn == pd || pn == pu
         @test v > 0 ? pz == pd : pz == pu
@@ -266,6 +211,7 @@ end
 # custom rounding and significant-digit ops
 @testset "rounding to digits relative to the decimal point" begin
     @test round(pi) ≈ 3.
+    @test round(pi, base=10) ≈ 3.
     @test round(pi, digits=0) ≈ 3.
     @test round(pi, digits=1) ≈ 3.1
     @test round(pi, digits=3, base=2) ≈ 3.125

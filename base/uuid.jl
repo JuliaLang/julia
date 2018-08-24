@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Represents a Universally Unique Identifier (UUID).
+    Can be built from one `UInt128` (all byte values), two `UInt64`, or four `UInt32`.
+    Conversion from a string will check the UUID validity.
+"""
 struct UUID
     value::UInt128
 end
@@ -8,18 +13,18 @@ UUID(u::NTuple{4, UInt32}) = UUID((UInt128(u[1]) << 96) | (UInt128(u[2]) << 64) 
                                   (UInt128(u[3]) << 32) | UInt128(u[4]))
 
 function convert(::Type{NTuple{2, UInt64}}, uuid::UUID)
-    uuid = uuid.value
-    hi = UInt64((uuid >> 64) & 0xffffffffffffffff)
-    lo = UInt64(uuid & 0xffffffffffffffff)
+    bytes = uuid.value
+    hi = UInt64((bytes >> 64) & 0xffffffffffffffff)
+    lo = UInt64(bytes & 0xffffffffffffffff)
     return (hi, lo)
 end
 
 function convert(::Type{NTuple{4, UInt32}}, uuid::UUID)
-    uuid = uuid.value
-    hh = UInt32((uuid >> 96) & 0xffffffff)
-    hl = UInt32((uuid >> 64) & 0xffffffff)
-    lh = UInt32((uuid >> 32) & 0xffffffff)
-    ll = UInt32(uuid & 0xffffffff)
+    bytes = uuid.value
+    hh = UInt32((bytes >> 96) & 0xffffffff)
+    hl = UInt32((bytes >> 64) & 0xffffffff)
+    lh = UInt32((bytes >> 32) & 0xffffffff)
+    ll = UInt32(bytes & 0xffffffff)
     return (hh, hl, lh, ll)
 end
 

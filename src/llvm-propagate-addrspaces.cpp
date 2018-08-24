@@ -32,7 +32,7 @@ using namespace llvm;
         in an untracked address space
       - Commuting GEPs and addrspace casts
 
-    This is most useful for removing superflous casts that can inhibit LLVM
+    This is most useful for removing superfluous casts that can inhibit LLVM
     optimizations.
 */
 
@@ -222,7 +222,7 @@ Value *PropagateJuliaAddrspaces::LiftPointer(Value *V, Type *LocTy, Instruction 
         }
     }
 
-    return CollapseCastsAndLift(V, cast<Instruction>(V));
+    return CollapseCastsAndLift(V, InsertPt);
 }
 
 void PropagateJuliaAddrspaces::visitLoadInst(LoadInst &LI) {

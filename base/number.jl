@@ -11,6 +11,7 @@ convert(::Type{T}, x::Number) where {T<:Number} = T(x)
 
 Test whether `x` is numerically equal to some integer.
 
+# Examples
 ```jldoctest
 julia> isinteger(4.0)
 true
@@ -24,8 +25,15 @@ isinteger(x::Integer) = true
 Return `true` if `x == zero(x)`; if `x` is an array, this checks whether
 all of the elements of `x` are zero.
 
+# Examples
 ```jldoctest
 julia> iszero(0.0)
+true
+
+julia> iszero([1, 9, 0])
+false
+
+julia> iszero([false, 0, 0])
 true
 ```
 """
@@ -37,8 +45,15 @@ iszero(x) = x == zero(x) # fallback method
 Return `true` if `x == one(x)`; if `x` is an array, this checks whether
 `x` is an identity matrix.
 
+# Examples
 ```jldoctest
 julia> isone(1.0)
+true
+
+julia> isone([1 0; 0 2])
+false
+
+julia> isone([1 0; 0 true])
 true
 ```
 """
@@ -78,6 +93,7 @@ copy(x::Number) = x # some code treats numbers as collection-like
 The quotient and remainder from Euclidean division. Equivalent to `(div(x,y), rem(x,y))` or
 `(x÷y, x%y)`.
 
+# Examples
 ```jldoctest
 julia> divrem(3,7)
 (0, 3)
@@ -132,6 +148,7 @@ abs(x::Real) = ifelse(signbit(x), -x, x)
 
 Squared absolute value of `x`.
 
+# Examples
 ```jldoctest
 julia> abs2(-3)
 9
@@ -144,6 +161,7 @@ abs2(x::Real) = x*x
 
 Return `x` with its sign flipped if `y` is negative. For example `abs(x) = flipsign(x,x)`.
 
+# Examples
 ```jldoctest
 julia> flipsign(5, 3)
 5
@@ -173,7 +191,7 @@ copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, +x)
 conj(x::Real) = x
 transpose(x::Number) = x
 adjoint(x::Number) = conj(x)
-angle(z::Real) = atan2(zero(z), z)
+angle(z::Real) = atan(zero(z), z)
 
 """
     inv(x)
@@ -207,6 +225,7 @@ inv(x::Number) = one(x)/x
 
 Multiply `x` and `y`, giving the result as a larger type.
 
+# Examples
 ```jldoctest
 julia> widemul(Float32(3.), 4.)
 1.2e+01
@@ -214,7 +233,8 @@ julia> widemul(Float32(3.), 4.)
 """
 widemul(x::Number, y::Number) = widen(x)*widen(y)
 
-iterate(x::Number, done = false) = done ? nothing : (x, true)
+iterate(x::Number) = (x, nothing)
+iterate(x::Number, ::Any) = nothing
 isempty(x::Number) = false
 in(x::Number, y::Number) = x == y
 
@@ -225,6 +245,7 @@ map(f, x::Number, ys::Number...) = f(x, ys...)
 
 Get the additive identity element for the type of `x` (`x` can also specify the type itself).
 
+# Examples
 ```jldoctest
 julia> zero(1)
 0
@@ -260,6 +281,8 @@ should return an identity value of the same precision
 
 If you want a quantity that is of the same type as `x`, or of type `T`,
 even if `x` is dimensionful, use [`oneunit`](@ref) instead.
+
+# Examples
 ```jldoctest
 julia> one(3.7)
 1.0
@@ -285,6 +308,7 @@ Returns `T(one(x))`, where `T` is either the type of the argument or
 dimensionful quantities: `one` is dimensionless (a multiplicative identity)
 while `oneunit` is dimensionful (of the same type as `x`, or of type `T`).
 
+# Examples
 ```jldoctest
 julia> oneunit(3.7)
 1.0
@@ -299,37 +323,12 @@ oneunit(::Type{T}) where {T} = T(one(T))
 _default_type(::Type{Number}) = Int
 
 """
-    factorial(n)
-
-Factorial of `n`. If `n` is an [`Integer`](@ref), the factorial is computed as an
-integer (promoted to at least 64 bits). Note that this may overflow if `n` is not small,
-but you can use `factorial(big(n))` to compute the result exactly in arbitrary precision.
-If `n` is not an `Integer`, `factorial(n)` is equivalent to [`gamma(n+1)`](@ref).
-
-```jldoctest
-julia> factorial(6)
-720
-
-julia> factorial(21)
-ERROR: OverflowError: 21 is too large to look up in the table
-Stacktrace:
-[...]
-
-julia> factorial(21.0)
-5.109094217170944e19
-
-julia> factorial(big(21))
-51090942171709440000
-```
-"""
-factorial(x::Number) = gamma(x + 1) # fallback for x not Integer
-
-"""
     big(T::Type)
 
 Compute the type that represents the numeric type `T` with arbitrary precision.
 Equivalent to `typeof(big(zero(T)))`.
 
+# Examples
 ```jldoctest
 julia> big(Rational)
 Rational{BigInt}

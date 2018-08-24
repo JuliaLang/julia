@@ -16,7 +16,7 @@ function uv_getaddrinfocb(req::Ptr{Cvoid}, status::Cint, addrinfo::Ptr{Cvoid})
         t = unsafe_pointer_to_objref(data)::Task
         uv_req_set_data(req, C_NULL)
         if status != 0 || addrinfo == C_NULL
-            schedule(t, UVError("getaddrinfocb", status))
+            schedule(t, _UVError("getaddrinfocb", status))
         else
             freeaddrinfo = addrinfo
             addrs = IPAddr[]
@@ -46,7 +46,15 @@ end
     getalladdrinfo(host::AbstractString) -> Vector{IPAddr}
 
 Gets all of the IP addresses of the `host`.
-Uses the operating system's underlying getaddrinfo implementation, which may do a DNS lookup.
+Uses the operating system's underlying `getaddrinfo` implementation, which may do a DNS lookup.
+
+# Example
+```julia-repl
+julia> getalladdrinfo("google.com")
+2-element Array{IPAddr,1}:
+ ip"172.217.6.174"
+ ip"2607:f8b0:4000:804::200e"
+```
 """
 function getalladdrinfo(host::String)
     isascii(host) || error("non-ASCII hostname: $host")
@@ -80,7 +88,7 @@ function getalladdrinfo(host::String)
         end
         unpreserve_handle(ct)
     end
-    if isa(r, UVError)
+    if isa(r, IOError)
         code = r.code
         if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
                     UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
@@ -91,7 +99,7 @@ function getalladdrinfo(host::String)
         elseif code == UV_EAI_MEMORY
             throw(OutOfMemoryError())
         else
-            throw(UVError("getaddrinfo", code))
+            throw(_UVError("getaddrinfo", code))
         end
     end
     return r::Vector{IPAddr}
@@ -122,7 +130,7 @@ function uv_getnameinfocb(req::Ptr{Cvoid}, status::Cint, hostname::Cstring, serv
         t = unsafe_pointer_to_objref(data)::Task
         uv_req_set_data(req, C_NULL)
         if status != 0
-            schedule(t, UVError("getnameinfocb", status))
+            schedule(t, _UVError("getnameinfocb", status))
         else
             schedule(t, unsafe_string(hostname))
         end
@@ -137,7 +145,13 @@ end
     getnameinfo(host::IPAddr) -> String
 
 Performs a reverse-lookup for IP address to return a hostname and service
-using the operating system's underlying getnameinfo implementation.
+using the operating system's underlying `getnameinfo` implementation.
+
+# Examples
+```julia-repl
+julia> getnameinfo(Sockets.IPv4("8.8.8.8"))
+"google-public-dns-a.google.com"
+```
 """
 function getnameinfo(address::Union{IPv4, IPv6})
     req = Libc.malloc(Base._sizeof_uv_getnameinfo)
@@ -180,7 +194,7 @@ function getnameinfo(address::Union{IPv4, IPv6})
         end
         unpreserve_handle(ct)
     end
-    if isa(r, UVError)
+    if isa(r, IOError)
         code = r.code
         if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
                     UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
@@ -191,7 +205,7 @@ function getnameinfo(address::Union{IPv4, IPv6})
         elseif code == UV_EAI_MEMORY
             throw(OutOfMemoryError())
         else
-            throw(UVError("getnameinfo", code))
+            throw(_UVError("getnameinfo", code))
         end
     end
     return r::String
@@ -203,6 +217,12 @@ const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32
     getipaddr() -> IPAddr
 
 Get the IP address of the local machine.
+
+# Examples
+```julia-repl
+julia> getipaddr()
+ip"192.168.1.28"
+```
 """
 function getipaddr()
     addr_ref = Ref{Ptr{UInt8}}(C_NULL)

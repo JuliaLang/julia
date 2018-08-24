@@ -23,7 +23,7 @@ $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled: $(BUILDDIR)/pcre2-$(PCRE_VER)/buil
 	$(MAKE) -C $(dir $<) $(LIBTOOL_CCLD)
 	echo 1 > $@
 
-$(BUILDDIR)/pcre2-$(PCRE_VER)/checked: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled
+$(BUILDDIR)/pcre2-$(PCRE_VER)/build-checked: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
 ifneq ($(OS),WINNT)
 	$(MAKE) -C $(dir $@) check -j1

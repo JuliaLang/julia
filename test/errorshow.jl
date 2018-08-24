@@ -212,7 +212,7 @@ err_str = @except_str Float64[](1) MethodError
 @test !occursin("import Base.Array", err_str)
 
 Array() = 1
-err_str = @except_str Array(1) MethodError
+err_str = @except_str Array([1]) MethodError
 @test occursin("import Base.Array", err_str)
 
 end
@@ -521,3 +521,18 @@ end
     end
 end
 
+# issue #28442
+@testset "Long stacktrace printing" begin
+    f28442(c) = g28442(c + 1)
+    g28442(c) = c > 10000 ? (return backtrace()) : f28442(c+1)
+    bt = f28442(1)
+    io = IOBuffer()
+    Base.show_backtrace(io, bt)
+    output = split(String(take!(io)), '\n')
+    @test output[3][1:4] == " [1]"
+    @test occursin("g28442", output[3])
+    @test output[4][1:4] == " [2]"
+    @test occursin("f28442", output[4])
+    @test occursin("the last 2 lines are repeated 5000 more times", output[5])
+    @test output[6][1:8] == " [10003]"
+end

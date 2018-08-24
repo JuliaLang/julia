@@ -303,3 +303,8 @@ end
 let S = SharedArray([1,2,3])
     @test sprint(show, S) == "[1, 2, 3]"
 end
+
+let S = SharedArray(Int64[]) # Issue #26582
+    @test sprint(show, S) == "Int64[]"
+    @test sprint(show, "text/plain", S) == "0-element SharedArray{Int64,1}:\n"
+end

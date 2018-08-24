@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module GitTools
 
 using ..Pkg
@@ -5,15 +7,17 @@ import LibGit2
 using Printf
 
 Base.@kwdef mutable struct MiniProgressBar
-    max::Float64 = 1
+    max::Float64 = 1.0
     header::String = ""
     color::Symbol = :white
     width::Int = 40
     current::Float64 = 0.0
     prev::Float64 = 0.0
     has_shown::Bool = false
+    time_shown::Float64 = 0.0
 end
 
+const NONINTERACTIVE_TIME_GRANULARITY = Ref(2.0)
 const PROGRESS_BAR_PERCENTAGE_GRANULARITY = Ref(0.1)
 
 function showprogress(io::IO, p::MiniProgressBar)
@@ -23,6 +27,13 @@ function showprogress(io::IO, p::MiniProgressBar)
     # Saves printing to the terminal
     if p.has_shown && !((perc - prev_perc) > PROGRESS_BAR_PERCENTAGE_GRANULARITY[])
         return
+    end
+    if !isinteractive()
+        t = time()
+        if p.has_shown && (t - p.time_shown) < NONINTERACTIVE_TIME_GRANULARITY[]
+            return
+        end
+        p.time_shown = t
     end
     p.prev = p.current
     p.has_shown = true
@@ -54,6 +65,20 @@ function transfer_progress(progress::Ptr{LibGit2.TransferProgress}, p::Any)
     return Cint(0)
 end
 
+
+const GITHUB_REGEX =
+    r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
+const GIT_PROTOCOL = Ref{Union{String, Nothing}}(nothing)
+
+setprotocol!(proto::Union{Nothing, AbstractString}=nothing) = GIT_PROTOCOL[] = proto
+
+# TODO: extend this to more urls
+function normalize_url(url::AbstractString)
+    m = match(GITHUB_REGEX, url)
+    (m === nothing || GIT_PROTOCOL[] === nothing) ?
+        url : "$(GIT_PROTOCOL[])://github.com/$(m.captures[1]).git"
+end
+
 function clone(url, source_path; header=nothing, kwargs...)
     Pkg.Types.printpkgstyle(stdout, :Cloning, header == nothing ? "git-repo `$url`" : header)
     transfer_payload = MiniProgressBar(header = "Fetching:", color = Base.info_color())
@@ -63,12 +88,19 @@ function clone(url, source_path; header=nothing, kwargs...)
             transfer_payload,
         )
     )
+    url = normalize_url(url)
     print(stdout, "\e[?25l") # disable cursor
     try
         return LibGit2.clone(url, source_path; callbacks=callbacks, kwargs...)
-    catch e
+    catch err
         rm(source_path; force=true, recursive=true)
-        rethrow(e)
+        err isa LibGit2.GitError || rethrow(err)
+        if (err.class == LibGit2.Error.Net && err.code == LibGit2.Error.EINVALIDSPEC) ||
+           (err.class == LibGit2.Error.Repository && err.code == LibGit2.Error.ENOTFOUND)
+            Pkg.Types.pkgerror("Git repository not found at '$(url)'")
+        else
+            Pkg.Types.pkgerror("failed to clone from $(url), error: $err")
+        end
     finally
         print(stdout, "\033[2K") # clear line
         print(stdout, "\e[?25h") # put back cursor
@@ -81,6 +113,7 @@ function fetch(repo::LibGit2.GitRepo, remoteurl=nothing; header=nothing, kwargs.
             LibGit2.url(remote)
         end
     end
+    remoteurl = normalize_url(remoteurl)
     Pkg.Types.printpkgstyle(stdout, :Updating, header == nothing ? "git-repo `$remoteurl`" : header)
     transfer_payload = MiniProgressBar(header = "Fetching:", color = Base.info_color())
     callbacks = LibGit2.Callbacks(
@@ -92,6 +125,13 @@ function fetch(repo::LibGit2.GitRepo, remoteurl=nothing; header=nothing, kwargs.
     print(stdout, "\e[?25l") # disable cursor
     try
         return LibGit2.fetch(repo; remoteurl=remoteurl, callbacks=callbacks, kwargs...)
+    catch err
+        err isa LibGit2.GitError || rethrow(err)
+        if (err.class == LibGit2.Error.Repository && err.code == LibGit2.Error.ERROR)
+            Pkg.Types.pkgerror("Git repository not found at '$(remoteurl)'")
+        else
+            Pkg.Types.pkgerror("failed to fetch from $(remoteurl), error: $err")
+        end
     finally
         print(stdout, "\033[2K") # clear line
         print(stdout, "\e[?25h") # put back cursor

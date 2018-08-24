@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 "TOML Table"
 struct Table
     values::Dict{String,Any}

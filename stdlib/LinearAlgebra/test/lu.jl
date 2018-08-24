@@ -11,7 +11,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-srand(1234321)
+Random.seed!(1234321)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -55,11 +55,6 @@ dimg  = randn(n)/2
             F = eigen(A)
             # @test norm(F.vectors*Diagonal(F.values)/F.vectors - A) > 0.01
         end
-    end
-    @testset "Singular LU" begin
-        lua = lu(zeros(eltya, 3, 3))
-        @test !LinearAlgebra.issuccess(lua)
-        @test sprint((t, s) -> show(t, "text/plain", s), lua) == "Failed factorization of type $(typeof(lua))"
     end
     κ  = cond(a,1)
     @testset "(Automatic) Square LU decomposition" begin
@@ -172,7 +167,7 @@ dimg  = randn(n)/2
                 du[1] = zero(eltya)
                 dl[1] = zero(eltya)
                 zT = Tridiagonal(dl,dd,du)
-                @test !LinearAlgebra.issuccess(lu(zT))
+                @test !LinearAlgebra.issuccess(lu(zT; check = false))
             end
         end
         @testset "Thin LU" begin
@@ -193,8 +188,27 @@ dimg  = randn(n)/2
     end
 end
 
+@testset "Singular matrices" for T in (Float64, ComplexF64)
+    A = T[1 2; 0 0]
+    @test_throws SingularException lu(A)
+    @test_throws SingularException lu!(copy(A))
+    @test_throws SingularException lu(A; check = true)
+    @test_throws SingularException lu!(copy(A); check = true)
+    @test !issuccess(lu(A; check = false))
+    @test !issuccess(lu!(copy(A); check = false))
+    @test_throws SingularException lu(A, Val(false))
+    @test_throws SingularException lu!(copy(A), Val(false))
+    @test_throws SingularException lu(A, Val(false); check = true)
+    @test_throws SingularException lu!(copy(A), Val(false); check = true)
+    @test !issuccess(lu(A, Val(false); check = false))
+    @test !issuccess(lu!(copy(A), Val(false); check = false))
+    F = lu(A; check = false)
+    @test sprint((io, x) -> show(io, "text/plain", x), F) ==
+        "Failed factorization of type $(typeof(F))"
+end
+
 @testset "conversion" begin
-    srand(3)
+    Random.seed!(3)
     a = Tridiagonal(rand(9),rand(10),rand(9))
     fa = Array(a)
     falu = lu(fa)
@@ -269,6 +283,17 @@ end
     @test names == ["L", "P", "U", "p"]
     allnames = sort!(collect(string.(Base.propertynames(lu(rand(3,3)), true))))
     @test allnames == ["L", "P", "U", "factors", "info", "ipiv", "p"]
+end
+
+include("trickyarithmetic.jl")
+
+@testset "lu with type whose sum is another type" begin
+    A = TrickyArithmetic.A[1 2; 3 4]
+    ElT = TrickyArithmetic.D{TrickyArithmetic.C,TrickyArithmetic.C}
+    B = lu(A)
+    @test B isa LinearAlgebra.LU{ElT,Matrix{ElT}}
+    C = lu(A, Val(false))
+    @test C isa LinearAlgebra.LU{ElT,Matrix{ElT}}
 end
 
 end # module TestLU

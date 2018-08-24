@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## Broadcast styles
 import Base.Broadcast
 using Base.Broadcast: DefaultArrayStyle, Broadcasted, tail

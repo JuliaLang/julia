@@ -851,10 +851,13 @@ julia> function (p::Polynomial)(x)
            end
            return v
        end
+
+julia> (p::Polynomial)() = p(5)
 ```
 
-Notice that the function is specified by type instead of by name. In the function body, `p` will
-refer to the object that was called. A `Polynomial` can be used as follows:
+Notice that the function is specified by type instead of by name. As with normal functions
+there is a terse syntax form. In the function body, `p` will refer to the object that was
+called. A `Polynomial` can be used as follows:
 
 ```jldoctest polynomial
 julia> p = Polynomial([1,10,100])
@@ -862,6 +865,9 @@ Polynomial{Int64}([1, 10, 100])
 
 julia> p(3)
 931
+
+julia> p()
+2551
 ```
 
 This mechanism is also the key to how type constructors and closures (inner functions that refer

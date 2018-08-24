@@ -5,8 +5,8 @@ using LinearAlgebra, SparseArrays
 # For curmod_*
 include("testenv.jl")
 
-replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), MIME("text/plain"), x), x)
-showstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), x), x)
+replstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80), kv...), MIME("text/plain"), x), x)
+showstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80), kv...), x), x)
 
 @testset "IOContext" begin
     io = IOBuffer()
@@ -563,8 +563,8 @@ let
     @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
     @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
     B[1,2] = T12960()
-    @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [1, 2]  =  $(curmod_prefix)T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
-    @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [1, 2]  =  $(curmod_prefix)T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
+    @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [1, 2]  =  T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
+    @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [1, 2]  =  T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
 end
 
 # issue #13127
@@ -730,8 +730,8 @@ let x = [], y = [], z = Base.ImmutableDict(x => y)
     push!(x, y)
     push!(y, x)
     push!(y, z)
-    @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict(Any[Any[#= circular reference @-3 =#]]=>Any[#= circular reference @-2 =#])]"
-    @test repr(z) == "Base.ImmutableDict(Any[Any[Any[#= circular reference @-2 =#], Base.ImmutableDict(#= circular reference @-3 =#)]]=>Any[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict(#= circular reference @-2 =#)])"
+    @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict([Any[#= circular reference @-3 =#]]=>[#= circular reference @-2 =#])]"
+    @test repr(z) == "Base.ImmutableDict([Any[Any[#= circular reference @-2 =#], Base.ImmutableDict(#= circular reference @-3 =#)]]=>[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict(#= circular reference @-2 =#)])"
     @test sprint(dump, x) == """
         Array{Any}((1,))
           1: Array{Any}((2,))
@@ -779,7 +779,7 @@ end
 end
 
 let repr = sprint(dump, :(x = 1))
-    @test repr == "Expr\n  head: Symbol =\n  args: Array{Any}((2,))\n    1: Symbol x\n    2: $Int 1\n  typ: Any\n"
+    @test repr == "Expr\n  head: Symbol =\n  args: Array{Any}((2,))\n    1: Symbol x\n    2: $Int 1\n"
 end
 let repr = sprint(dump, Pair{String,Int64})
     @test repr == "Pair{String,Int64} <: Any\n  first::String\n  second::Int64\n"
@@ -819,6 +819,9 @@ let repr = sprint(dump, sin)
 end
 let repr = sprint(dump, Test)
     @test repr == "Module Test\n"
+end
+let repr = sprint(dump, nothing)
+    @test repr == "Nothing nothing\n"
 end
 let a = Vector{Any}(undef, 10000)
     a[2] = "elemA"
@@ -863,10 +866,17 @@ test_repr("(!).:~")
 test_repr("a.:(begin
         #= none:3 =#
     end)")
+test_repr("a.:(=)")
+test_repr("a.:(:)")
+test_repr("(:).a")
 @test repr(Expr(:., :a, :b, :c)) == ":(\$(Expr(:., :a, :b, :c)))"
 @test repr(Expr(:., :a, :b)) == ":(\$(Expr(:., :a, :b)))"
 @test repr(Expr(:., :a)) == ":(\$(Expr(:., :a)))"
 @test repr(Expr(:.)) == ":(\$(Expr(:.)))"
+@test repr(GlobalRef(Main, :a)) == ":(Main.a)"
+@test repr(GlobalRef(Main, :in)) == ":(Main.in)"
+@test repr(GlobalRef(Main, :+)) == ":(Main.:+)"
+@test repr(GlobalRef(Main, :(:))) == ":(Main.:(:))"
 
 # Test compact printing of homogeneous tuples
 @test repr(NTuple{7,Int64}) == "NTuple{7,Int64}"
@@ -980,6 +990,10 @@ end
     s = IOBuffer()
     show(IOContext(s, :compact => false), (1=>2) => Pair{Any,Any}(3,4))
     @test String(take!(s)) == "(1 => 2) => Pair{Any,Any}(3, 4)"
+
+    # issue #28327
+    d = Dict(Pair{Integer,Integer}(1,2)=>Pair{Integer,Integer}(1,2))
+    @test showstr(d) == "Dict((1=>2)=>(1=>2))" # correct parenthesis
 end
 
 @testset "alignment for pairs" begin  # (#22899)
@@ -990,8 +1004,8 @@ end
     @test replstr(Any[Dict(1=>2)=> (3=>4), 1=>2]) ==
         "2-element Array{Any,1}:\n Dict(1=>2) => (3=>4)\n          1 => 2     "
     # left-alignment when not using the "=>" symbol
-    @test replstr(Pair{Integer,Int64}[1=>2, 33=>4]) ==
-        "2-element Array{Pair{Integer,Int64},1}:\n Pair{Integer,Int64}(1, 2) \n Pair{Integer,Int64}(33, 4)"
+    @test replstr(Any[Pair{Integer,Int64}(1, 2), Pair{Integer,Int64}(33, 4)]) ==
+        "2-element Array{Any,1}:\n Pair{Integer,Int64}(1, 2) \n Pair{Integer,Int64}(33, 4)"
 end
 
 @testset "display arrays non-compactly when size(⋅, 2) == 1" begin
@@ -1016,6 +1030,25 @@ end
         "1×1×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0 + 0im"
     @test replstr(zeros(Complex{Int}, 1, 2, 1)) ==
         "1×2×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0+0im  0+0im"
+end
+
+@testset "arrays printing follows the :compact property when specified" begin
+    x = 3.141592653589793
+    @test showstr(x) == "3.141592653589793"
+    @test showstr([x, x]) == showstr([x, x], :compact => true) == "[3.14159, 3.14159]"
+    @test showstr([x, x], :compact => false) == "[3.141592653589793, 3.141592653589793]"
+    @test showstr([x x; x x]) == showstr([x x; x x], :compact => true) ==
+        "[3.14159 3.14159; 3.14159 3.14159]"
+    @test showstr([x x; x x], :compact => false) ==
+        "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
+    @test replstr([x, x]) == replstr([x, x], :compact => false) ==
+        "2-element Array{Float64,1}:\n 3.141592653589793\n 3.141592653589793"
+    @test replstr([x, x], :compact => true) ==
+        "2-element Array{Float64,1}:\n 3.14159\n 3.14159"
+    @test replstr([x x; x x]) == replstr([x x; x x], :compact => true) ==
+        "2×2 Array{Float64,2}:\n 3.14159  3.14159\n 3.14159  3.14159"
+    @test showstr([x x; x x], :compact => false) ==
+        "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
 end
 
 @testset "Array printing with limited rows" begin
@@ -1156,8 +1189,42 @@ end
     A = [0.0, 1.0]
     @test replstr(view(A, [1], :)) == "1×1 view(::Array{Float64,2}, [1], :) with eltype Float64:\n 0.0"
 
+    # issue #27680
+    @test replstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
+              "Set(Tuple{Float64,Float64}[(3.0, 3.0), (2.0, 2.0), (1.0, 1.0)])" :
+              "Set(Tuple{Float64,Float64}[(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
+
+    # issue #27747
+    let t = (x = Integer[1, 2],)
+        v = [t, t]
+        @test showstr(v) == "NamedTuple{(:x,),Tuple{Array{Integer,1}}}[(x = [1, 2],), (x = [1, 2],)]"
+        @test replstr(v) == "2-element Array{NamedTuple{(:x,),Tuple{Array{Integer,1}}},1}:\n (x = [1, 2],)\n (x = [1, 2],)"
+    end
+
     # issue #25857
     @test repr([(1,),(1,2),(1,2,3)]) == "Tuple{$Int,Vararg{$Int,N} where N}[(1,), (1, 2), (1, 2, 3)]"
+
+    # issues #25466 & #26256
+    @test replstr([:A => [1]]) == "1-element Array{Pair{Symbol,Array{$Int,1}},1}:\n :A => [1]"
+
+    # issue #26881
+    @test showstr([keys(Dict('a' => 'b'))]) == "Base.KeySet{Char,Dict{Char,Char}}[['a']]"
+    @test showstr([values(Dict('a' => 'b'))]) == "Base.ValueIterator{Dict{Char,Char}}[['b']]"
+    @test replstr([keys(Dict('a' => 'b'))]) == "1-element Array{Base.KeySet{Char,Dict{Char,Char}},1}:\n ['a']"
+
+    @test showstr(Pair{Integer,Integer}(1, 2), :typeinfo => Pair{Integer,Integer}) == "1 => 2"
+    @test showstr([Pair{Integer,Integer}(1, 2)]) == "Pair{Integer,Integer}[1=>2]"
+    @test showstr(Dict{Integer,Integer}(1 => 2)) == "Dict{Integer,Integer}(1=>2)"
+
+    # issue #27979 (dislaying arrays of pairs containing arrays as first member)
+    @test replstr([[1.0]=>1.0]) == "1-element Array{Pair{Array{Float64,1},Float64},1}:\n [1.0] => 1.0"
+
+    # issue #28159
+    @test replstr([(a=1, b=2), (a=3,c=4)]) == "2-element Array{NamedTuple{names,Tuple{$Int,$Int}} where names,1}:\n (a = 1, b = 2)\n (a = 3, c = 4)"
+
+    @test replstr(Vector[Any[1]]) == "1-element Array{Array{T,1} where T,1}:\n Any[1]"
+    @test replstr(AbstractDict{Integer,Integer}[Dict{Integer,Integer}(1=>2)]) ==
+        "1-element Array{AbstractDict{Integer,Integer},1}:\n Dict(1=>2)"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
@@ -1223,21 +1290,115 @@ function compute_annotations(f, types)
     ir = Core.Compiler.inflate_ir(src)
     la, lb, ll = Base.IRShow.compute_ir_line_annotations(ir)
     max_loc_method = maximum(length(s) for s in la)
-    join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')
+    return join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')
 end
 
-g_line() = leaf() # Deliberately not implemented to end up as a leaf after inlining
+@noinline leaffunc() = print()
+
+@inline g_line() = leaffunc()
 
 # Test that separate instances of the same function do not get merged
-function f_line()
+@inline function f_line()
    g_line()
    g_line()
    g_line()
    nothing
 end
 h_line() = f_line()
-@test compute_annotations(h_line, Tuple{}) == """
+@test startswith(compute_annotations(h_line, Tuple{}), """
     │╻╷ f_line
     ││╻  g_line
-    ││╻  g_line
-    │"""
+    ││╻  g_line""")
+
+# Tests for printing Core.Compiler internal objects
+@test repr(Core.Compiler.SSAValue(23)) == ":(%23)"
+@test repr(Core.Compiler.SSAValue(-2)) == ":(%-2)"
+@test repr(Core.Compiler.ReturnNode(23)) == ":(return 23)"
+@test repr(Core.Compiler.ReturnNode()) == ":(unreachable)"
+@test repr(Core.Compiler.GotoIfNot(true, 4)) == ":(goto %4 if not true)"
+@test repr(Core.Compiler.PhiNode(Any[2, 3], Any[1, Core.SlotNumber(3)])) == ":(φ (%2 => 1, %3 => _3))"
+@test repr(Core.Compiler.UpsilonNode(Core.SlotNumber(3))) == ":(ϒ (_3))"
+@test repr(Core.Compiler.PhiCNode(Any[1, Core.SlotNumber(3)])) == ":(φᶜ (1, _3))"
+@test sprint(Base.show_unquoted, Core.Compiler.Argument(23)) == "_23"
+@test sprint(Base.show_unquoted, Core.Compiler.Argument(-2)) == "_-2"
+
+
+eval(Meta.parse("""function my_fun28173(x)
+    y = if x == 1
+            "HI"
+        elseif x == 2
+            r = 1
+            s = try
+                r = 2
+                "BYE"
+            catch
+                r = 3
+                "CAUGHT!"
+            end
+            "\$r\$s"
+        else
+            "three"
+        end
+    return y
+end""")) # use parse to control the line numbers
+let src = code_typed(my_fun28173, (Int,))[1][1]
+    ir = Core.Compiler.inflate_ir(src)
+    source_slotnames = String["my_fun28173", "x"]
+    irshow = sprint(show, ir, context = :SOURCE_SLOTNAMES=>source_slotnames)
+    @test repr(src) == "CodeInfo(\n" * irshow * ")"
+    lines1 = split(repr(ir), '\n')
+    @test isempty(pop!(lines1))
+    Core.Compiler.insert_node!(ir, 1, Val{1}, QuoteNode(1), false)
+    Core.Compiler.insert_node!(ir, 1, Val{2}, QuoteNode(2), true)
+    Core.Compiler.insert_node!(ir, length(ir.stmts), Val{3}, QuoteNode(3), false)
+    Core.Compiler.insert_node!(ir, length(ir.stmts), Val{4}, QuoteNode(4), true)
+    lines2 = split(repr(ir), '\n')
+    @test isempty(pop!(lines2))
+    @test popfirst!(lines2) == "2  1 ──       $(QuoteNode(1))"
+    @test popfirst!(lines2) == "   │          $(QuoteNode(2))" # TODO: this should print after the next statement
+    let line1 = popfirst!(lines1)
+        line2 = popfirst!(lines2)
+        @test startswith(line1, "2  1 ── ")
+        @test startswith(line2, "   │    ")
+        @test line2[12:end] == line2[12:end]
+    end
+    let line1 = pop!(lines1)
+        line2 = pop!(lines2)
+        @test startswith(line1, "17 ")
+        @test startswith(line2, "   ")
+        @test line1[3:end] == line2[3:end]
+    end
+    @test pop!(lines2) == "   │          \$(QuoteNode(4))"
+    @test pop!(lines2) == "17 │          \$(QuoteNode(3))" # TODO: this should print after the next statement
+    @test lines1 == lines2
+end
+
+# issue #27352
+@test_throws ArgumentError print(nothing)
+@test_throws ArgumentError print(stdout, nothing)
+@test_throws ArgumentError string(nothing)
+@test_throws ArgumentError string(1, "", nothing)
+@test_throws ArgumentError let x = nothing; "x = $x" end
+@test let x = nothing; "x = $(repr(x))" end == "x = nothing"
+@test_throws ArgumentError `/bin/foo $nothing`
+@test_throws ArgumentError `$nothing`
+
+struct X28004
+    value::Any
+end
+
+function Base.show(io::IO, x::X28004)
+    print(io, "X(")
+    show(io, x.value)
+    print(io, ")")
+end
+
+@testset """printing "Any" is not skipped with nested arrays""" begin
+    @test replstr(Union{X28004,Vector}[X28004(Any[X28004(1)])]) ==
+        "1-element Array{Union{X28004, Array{T,1} where T},1}:\n X(Any[X(1)])"
+end
+
+# Issue 25589 - Underlines in cmd printing
+replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color => true),
+                                         MIME("text/plain"), x), x)
+@test occursin("\e[", replstrcolor(`curl abc`))

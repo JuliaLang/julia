@@ -97,6 +97,7 @@ Return the type that represents the real part of a value of type `T`.
 e.g: for `T == Complex{R}`, returns `R`.
 Equivalent to `typeof(real(zero(T)))`.
 
+# Examples
 ```jldoctest
 julia> real(Complex{Int})
 Int64
@@ -363,8 +364,8 @@ function /(z::ComplexF64, w::ComplexF64)
     two = 2.0
     ab = max(abs(a), abs(b))
     cd = max(abs(c), abs(d))
-    ov = realmax(a)
-    un = realmin(a)
+    ov = floatmax(a)
+    un = floatmin(a)
     ϵ = eps(Float64)
     bs = two/(ϵ*ϵ)
     s = 1.0
@@ -396,8 +397,8 @@ function inv(w::ComplexF64)
     half = 0.5
     two = 2.0
     cd = max(abs(c), abs(d))
-    ov = realmax(c)
-    un = realmin(c)
+    ov = floatmax(c)
+    un = floatmin(c)
     ϵ = eps(Float64)
     bs = two/(ϵ*ϵ)
     s = 1.0
@@ -512,7 +513,7 @@ julia> rad2deg(angle(-1 - im))
 -135.0
 ```
 """
-angle(z::Complex) = atan2(imag(z), real(z))
+angle(z::Complex) = atan(imag(z), real(z))
 
 function log(z::Complex{T}) where T<:AbstractFloat
     T1::T  = 1.25
@@ -808,7 +809,7 @@ function asin(z::Complex)
     end
     ξ = zr == 0       ? zr :
         !isfinite(zr) ? oftype(zr,pi)/2 * sign(zr) :
-        atan2(zr, real(sqrt(1-z)*sqrt(1+z)))
+        atan(zr, real(sqrt(1-z)*sqrt(1+z)))
     η = asinh(copysign(imag(sqrt(conj(1-z))*sqrt(1+z)), imag(z)))
     Complex(ξ,η)
 end
@@ -829,7 +830,7 @@ function acos(z::Complex{<:AbstractFloat})
     elseif zr==-Inf && zi===-0.0
         return Complex(oftype(zi,pi), -zr)
     end
-    ξ = 2*atan2(real(sqrt(1-z)), real(sqrt(1+z)))
+    ξ = 2*atan(real(sqrt(1-z)), real(sqrt(1+z)))
     η = asinh(imag(sqrt(conj(1+z))*sqrt(1-z)))
     if isinf(zr) && isinf(zi) ξ -= oftype(η,pi)/4 * sign(zr) end
     Complex(ξ,η)
@@ -890,7 +891,7 @@ function acosh(z::Complex)
         return Complex(oftype(zr,Inf), oftype(zi, -pi))
     end
     ξ = asinh(real(sqrt(conj(z-1))*sqrt(z+1)))
-    η = 2atan2(imag(sqrt(z-1)),real(sqrt(z+1)))
+    η = 2*atan(imag(sqrt(z-1)),real(sqrt(z+1)))
     if isinf(zr) && isinf(zi)
         η -= oftype(η,pi)/4 * sign(zi) * sign(zr)
     end

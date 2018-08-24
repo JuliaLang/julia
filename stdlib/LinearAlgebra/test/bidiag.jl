@@ -8,7 +8,7 @@ using LinearAlgebra: BlasReal, BlasFloat
 include("testutils.jl") # test_approx_eq_modphase
 
 n = 10 #Size of test matrix
-srand(1)
+Random.seed!(1)
 
 @testset for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     if relty <: AbstractFloat
@@ -42,9 +42,13 @@ srand(1)
             @test Bidiagonal(ubd, :U) == Bidiagonal(Matrix(ubd), :U) == ubd
             @test Bidiagonal(lbd, :L) == Bidiagonal(Matrix(lbd), :L) == lbd
         end
-        # enable when deprecations for 0.7 are dropped
-        # @test_throws MethodError Bidiagonal(dv, GenericArray(ev), :U)
-        # @test_throws MethodError Bidiagonal(GenericArray(dv), ev, :U)
+        @test eltype(Bidiagonal{elty}([1,2,3,4], [1.0f0,2.0f0,3.0f0], :U)) == elty
+        @test isa(Bidiagonal{elty,Vector{elty}}(GenericArray(dv), ev, :U), Bidiagonal{elty,Vector{elty}})
+        @test_throws MethodError Bidiagonal(dv, GenericArray(ev), :U)
+        @test_throws MethodError Bidiagonal(GenericArray(dv), ev, :U)
+        BI = Bidiagonal([1,2,3,4], [1,2,3], :U)
+        @test Bidiagonal(BI) === BI
+        @test isa(Bidiagonal{elty}(BI), Bidiagonal{elty})
     end
 
     @testset "getindex, setindex!, size, and similar" begin
@@ -251,7 +255,7 @@ srand(1)
                     test_approx_eq_modphase(u1, u2)
                     test_approx_eq_modphase(copy(v1), copy(v2))
                 end
-                @test 0 ≈ vecnorm(u2*Diagonal(d2)*v2'-Tfull) atol=n*max(n^2*eps(relty),vecnorm(u1*Diagonal(d1)*v1'-Tfull))
+                @test 0 ≈ norm(u2*Diagonal(d2)*v2'-Tfull) atol=n*max(n^2*eps(relty),norm(u1*Diagonal(d1)*v1'-Tfull))
                 @inferred svdvals(T)
                 @inferred svd(T)
             end
@@ -334,7 +338,7 @@ using LinearAlgebra: fillstored!, UnitLowerTriangular
         # not matching the general behavior of fill!, and so have been deprecated.
         # In a future dev cycle, these fill! methods should probably be reintroduced
         # with behavior matching that of fill! for other structured matrix types.
-        # In the interm, equivalently test fillstored! below
+        # In the interim, equivalently test fillstored! below
         @test iszero(fillstored!(Diagonal(fill(1, 3)), 0))
         @test iszero(fillstored!(LowerTriangular(fill(1, 3, 3)), 0))
         @test iszero(fillstored!(UpperTriangular(fill(1, 3, 3)), 0))

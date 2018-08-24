@@ -119,8 +119,8 @@ function UInt32(c::Char)
         invalid_char(c)::Union{}
     u &= 0xffffffff >> l1
     u >>= t0
-    (u & 0x0000007f >> 0) | (u & 0x00007f00 >> 2) |
-    (u & 0x007f0000 >> 4) | (u & 0x7f000000 >> 6)
+    ((u & 0x0000007f) >> 0) | ((u & 0x00007f00) >> 2) |
+    ((u & 0x007f0000) >> 4) | ((u & 0x7f000000) >> 6)
 end
 
 function decode_overlong(c::Char)
@@ -129,8 +129,8 @@ function decode_overlong(c::Char)
     t0 = trailing_zeros(u) & 56
     u &= 0xffffffff >> l1
     u >>= t0
-    (u & 0x0000007f >> 0) | (u & 0x00007f00 >> 2) |
-    (u & 0x007f0000 >> 4) | (u & 0x7f000000 >> 6)
+    ((u & 0x0000007f) >> 0) | ((u & 0x00007f00) >> 2) |
+    ((u & 0x007f0000) >> 4) | ((u & 0x7f000000) >> 6)
 end
 
 """

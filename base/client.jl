@@ -15,7 +15,7 @@ color_normal = text_colors[:normal]
 function repl_color(key, default)
     env_str = get(ENV, key, "")
     c = tryparse(Int, env_str)
-    c_conv = coalesce(c, Symbol(env_str))
+    c_conv = something(c, Symbol(env_str))
     haskey(text_colors, c_conv) ? c_conv : default
 end
 
@@ -33,6 +33,9 @@ stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bol
 function repl_cmd(cmd, out)
     shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
     shell_name = Base.basename(shell[1])
+
+    # Immediately expand all arguments, so that typing e.g. ~/bin/foo works.
+    cmd.exec .= expanduser.(cmd.exec)
 
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
@@ -53,7 +56,7 @@ function repl_cmd(cmd, out)
                     # If it's intended to simulate `cd`, it should instead be doing
                     # more nearly `cd $dir && printf %s \$PWD` (with appropriate quoting),
                     # since shell `cd` does more than just `echo` the result.
-                    dir = read(`$shell -c "printf %s $(shell_escape_posixly(dir))"`, String)
+                    dir = read(`$shell -c "printf '%s' $(shell_escape_posixly(dir))"`, String)
                 end
                 cd(dir)
             end
@@ -87,12 +90,6 @@ function ip_matches_func(ip, func::Symbol)
 end
 
 function display_error(io::IO, er, bt)
-    if !isempty(bt)
-        st = stacktrace(bt)
-        if !isempty(st)
-            io = redirect(io, log_error_to, st[1])
-        end
-    end
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     # remove REPL-related frames from interactive printing
     eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
@@ -118,7 +115,7 @@ function eval_user_input(@nospecialize(ast), show_value::Bool)
             else
                 ast = Meta.lower(Main, ast)
                 value = Core.eval(Main, ast)
-                Core.eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
+                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :ans, value)
                 if !(value === nothing) && show_value
                     if have_color
                         print(answer_color())
@@ -151,13 +148,14 @@ end
 
 function parse_input_line(s::String; filename::String="none", depwarn=true)
     # For now, assume all parser warnings are depwarns
-    ex = with_logger(depwarn ? current_logger() : NullLogger()) do
+    ex = if depwarn
         ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
               s, sizeof(s), filename, sizeof(filename))
-    end
-    if ex isa Symbol && all(isequal('_'), string(ex))
-        # remove with 0.7 deprecation
-        Meta.lower(Main, ex)  # to get possible warning about using _ as an rvalue
+    else
+        with_logger(NullLogger()) do
+            ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+                  s, sizeof(s), filename, sizeof(filename))
+        end
     end
     return ex
 end
@@ -329,7 +327,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
                 Core.eval(Main, :(using .InteractiveUtils))
             end
         catch ex
-            @warn "Failed to insert InteractiveUtils into module Main" exception=(ex, catch_backtrace())
+            @warn "Failed to import InteractiveUtils into module Main" exception=(ex, catch_backtrace())
         end
     end
 
@@ -338,7 +336,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
             color_set || (global have_color = REPL.Terminals.hascolor(term))
-            banner && REPL.banner(term, term)
+            banner && Base.banner(term)
             if term.term_type == "dumb"
                 active_repl = REPL.BasicREPL(term)
                 quiet || @warn "Terminal not fully functional"
@@ -389,7 +387,6 @@ end
 baremodule MainInclude
 include(fname::AbstractString) = Main.Base.include(Main, fname)
 eval(x) = Core.eval(Main, x)
-Main.Base.@deprecate eval(m, x) Core.eval(m, x)
 end
 
 """

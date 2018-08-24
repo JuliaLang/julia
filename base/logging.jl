@@ -103,8 +103,8 @@ end
 LogLevel(level::LogLevel) = level
 
 isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
-+(level::LogLevel, inc) = LogLevel(level.level+inc)
--(level::LogLevel, inc) = LogLevel(level.level-inc)
++(level::LogLevel, inc::Integer) = LogLevel(level.level+inc)
+-(level::LogLevel, inc::Integer) = LogLevel(level.level-inc)
 convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
 
 const BelowMinLevel = LogLevel(-1000001)
@@ -208,11 +208,11 @@ macro _sourceinfo()
     end)
 end
 
-macro logmsg(level, message, exs...) logmsg_code((@_sourceinfo)..., esc(level), message, exs...) end
-macro debug(message, exs...) logmsg_code((@_sourceinfo)..., :Debug, message, exs...) end
-macro  info(message, exs...) logmsg_code((@_sourceinfo)..., :Info,  message, exs...) end
-macro  warn(message, exs...) logmsg_code((@_sourceinfo)..., :Warn,  message, exs...) end
-macro error(message, exs...) logmsg_code((@_sourceinfo)..., :Error, message, exs...) end
+macro logmsg(level, exs...) logmsg_code((@_sourceinfo)..., esc(level), exs...) end
+macro debug(exs...) logmsg_code((@_sourceinfo)..., :Debug, exs...) end
+macro  info(exs...) logmsg_code((@_sourceinfo)..., :Info,  exs...) end
+macro  warn(exs...) logmsg_code((@_sourceinfo)..., :Warn,  exs...) end
+macro error(exs...) logmsg_code((@_sourceinfo)..., :Error, exs...) end
 
 # Logging macros share documentation
 @eval @doc $_logmsg_docs :(@logmsg)
@@ -229,7 +229,7 @@ _log_record_ids = Set{Symbol}()
 # versions of the originating module, provided the log generating statement
 # itself doesn't change.
 function log_record_id(_module, level, message_ex)
-    modname = join(fullname(_module), "_")
+    modname = _module === nothing ?  "" : join(fullname(_module), "_")
     # Use (1<<31) to fit well within an (arbitriraly chosen) eight hex digits,
     # as we increment h to resolve any collisions.
     h = hash(string(modname, level, message_ex)) % (1<<31)
@@ -288,9 +288,21 @@ function logmsg_code(_module, file, line, level, message, exs...)
             push!(kwargs, Expr(:kw, Symbol(ex), esc(ex)))
         end
     end
+
     # Note that it may be necessary to set `id` and `group` manually during bootstrap
-    id !== nothing || (id = Expr(:quote, log_record_id(_module, level, exs)))
-    group !== nothing || (group = Expr(:quote, Symbol(splitext(basename(file))[1])))
+    id = something(id, :(log_record_id(_module, level, $exs)))
+    if group == nothing
+        group = if isdefined(Base, :basename) && isa(file, String)
+            # precompute if we can
+            QuoteNode(splitext(basename(file))[1])
+        else
+            # memoized run-time execution
+            ref = Ref{Symbol}()
+            :(isassigned($ref) ? $ref[]
+                               : $ref[] = Symbol(splitext(basename(something($file, "")))[1]))
+        end
+    end
+
     quote
         level = $level
         std_level = convert(LogLevel, level)
@@ -329,7 +341,7 @@ end
         handle_message(logger, Error, msg, _module, :logevent_error, id, filepath, line; exception=(err,catch_backtrace()))
     catch err2
         try
-            # Give up and write to STDERR, in three independent calls to
+            # Give up and write to stderr, in three independent calls to
             # increase the odds of it getting through.
             print(stderr, "Exception handling log message: ")
             println(stderr, err)
@@ -529,7 +541,8 @@ function handle_message(logger::SimpleLogger, level, message, _module, group, id
     for (key, val) in kwargs
         println(iob, "│   ", key, " = ", val)
     end
-    println(iob, "└ @ ", _module, " ", filepath, ":", line)
+    println(iob, "└ @ ", something(_module, "nothing"), " ",
+            something(filepath, "nothing"), ":", something(line, "nothing"))
     write(logger.stream, take!(buf))
     nothing
 end

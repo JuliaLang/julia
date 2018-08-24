@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
 Utilities for monitoring files and file descriptors for events.
 """
@@ -20,8 +18,8 @@ export
     PollingFileWatcher,
     FDWatcher
 
-import Base: @handle_as, wait, close, eventloop, notify_error, stream_wait,
-    _sizeof_uv_poll, _sizeof_uv_fs_poll, _sizeof_uv_fs_event, _uv_hook_close, uv_error, UVError,
+import Base: @handle_as, wait, close, eventloop, notify_error, stream_wait, IOError,
+    _sizeof_uv_poll, _sizeof_uv_fs_poll, _sizeof_uv_fs_event, _uv_hook_close, uv_error, _UVError,
     associate_julia_struct, disassociate_julia_struct, isreadable, iswritable, |
 import Base.Filesystem.StatStruct
 if Sys.iswindows()
@@ -85,7 +83,7 @@ mutable struct FileMonitor
         err = ccall(:uv_fs_event_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), eventloop(), handle)
         if err != 0
             Libc.free(handle)
-            throw(UVError("FileMonitor", err))
+            throw(_UVError("FileMonitor", err))
         end
         finalizer(uvfinalize, this)
         return this
@@ -95,7 +93,7 @@ end
 
 mutable struct FolderMonitor
     handle::Ptr{Cvoid}
-    notify::Channel{Any} # eltype = Union{Pair{String, FileEvent}, UVError}
+    notify::Channel{Any} # eltype = Union{Pair{String, FileEvent}, IOError}
     open::Bool
     FolderMonitor(folder::AbstractString) = FolderMonitor(String(folder))
     function FolderMonitor(folder::String)
@@ -105,7 +103,7 @@ mutable struct FolderMonitor
         err = ccall(:uv_fs_event_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), eventloop(), handle)
         if err != 0
             Libc.free(handle)
-            throw(UVError("FolderMonitor", err))
+            throw(_UVError("FolderMonitor", err))
         end
         this.open = true
         finalizer(uvfinalize, this)
@@ -132,7 +130,7 @@ mutable struct PollingFileWatcher
         err = ccall(:uv_fs_poll_init, Int32, (Ptr{Cvoid}, Ptr{Cvoid}), eventloop(), handle)
         if err != 0
             Libc.free(handle)
-            throw(UVError("PollingFileWatcher", err))
+            throw(_UVError("PollingFileWatcher", err))
         end
         finalizer(uvfinalize, this)
         return this
@@ -180,7 +178,7 @@ mutable struct _FDWatcher
                 err = ccall(:uv_poll_init, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, RawFD), eventloop(), handle, fd)
                 if err != 0
                     Libc.free(handle)
-                    throw(UVError("FDWatcher", err))
+                    throw(_UVError("FDWatcher", err))
                 end
                 finalizer(uvfinalize, this)
                 FDWatchers[fdnum] = this
@@ -229,7 +227,7 @@ mutable struct _FDWatcher
                                                eventloop(), handle,    fd)
             if err != 0
                 Libc.free(handle)
-                throw(UVError("FDWatcher", err))
+                throw(_UVError("FDWatcher", err))
             end
             finalizer(uvfinalize, this)
             return this
@@ -314,7 +312,7 @@ end
 function uv_fseventscb_file(handle::Ptr{Cvoid}, filename::Ptr, events::Int32, status::Int32)
     t = @handle_as handle FileMonitor
     if status != 0
-        notify_error(t.notify, UVError("FileMonitor", status))
+        notify_error(t.notify, _UVError("FileMonitor", status))
     else
         t.events |= events
         notify(t.notify, FileEvent(events))
@@ -325,7 +323,7 @@ end
 function uv_fseventscb_folder(handle::Ptr{Cvoid}, filename::Ptr, events::Int32, status::Int32)
     t = @handle_as handle FolderMonitor
     if status != 0
-        put!(t.notify, UVError("FolderMonitor", status))
+        put!(t.notify, _UVError("FolderMonitor", status))
     else
         fname = (filename == C_NULL) ? "" : unsafe_string(convert(Cstring, filename))
         put!(t.notify, fname => FileEvent(events))
@@ -336,7 +334,7 @@ end
 function uv_pollcb(handle::Ptr{Cvoid}, status::Int32, events::Int32)
     t = @handle_as handle _FDWatcher
     if status != 0
-        notify_error(t.notify, UVError("FDWatcher", status))
+        notify_error(t.notify, _UVError("FDWatcher", status))
     else
         t.events |= events
         if t.active[1] || t.active[2]
@@ -491,7 +489,7 @@ function wait(pfw::PollingFileWatcher)
     if pfw.handle == C_NULL
         return prevstat, EOFError()
     elseif pfw.curr_error != 0
-        return prevstat, UVError("PollingFileWatcher", pfw.curr_error)
+        return prevstat, _UVError("PollingFileWatcher", pfw.curr_error)
     else
         return prevstat, pfw.curr_stat
     end
@@ -685,7 +683,7 @@ function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::R
             @async (sleep(timeout_s); close(pfw))
         end
         statdiff = wait(pfw)
-        if isa(statdiff[2], UVError)
+        if isa(statdiff[2], IOError)
             # file didn't initially exist, continue watching for it to be created (or the error to change)
             statdiff = wait(pfw)
         end

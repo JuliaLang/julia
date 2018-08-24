@@ -17,11 +17,11 @@ A = rand(5,4,3)
     @test checkbounds(Bool, A, 61) == false
     @test checkbounds(Bool, A, 2, 2, 2, 1) == true  # extra indices
     @test checkbounds(Bool, A, 2, 2, 2, 2) == false
-    # @test checkbounds(Bool, A, 1, 1)  == false       # TODO: partial linear indexing (PLI)
-    # @test checkbounds(Bool, A, 1, 12) == false
-    # @test checkbounds(Bool, A, 5, 12) == false
-    # @test checkbounds(Bool, A, 1, 13) == false
-    # @test checkbounds(Bool, A, 6, 12) == false
+    @test checkbounds(Bool, A, 1, 1)  == false
+    @test checkbounds(Bool, A, 1, 12) == false
+    @test checkbounds(Bool, A, 5, 12) == false
+    @test checkbounds(Bool, A, 1, 13) == false
+    @test checkbounds(Bool, A, 6, 12) == false
 end
 
 @testset "single CartesianIndex" begin
@@ -33,16 +33,16 @@ end
     @test checkbounds(Bool, A, CartesianIndex((6, 4, 3))) == false
     @test checkbounds(Bool, A, CartesianIndex((5, 5, 3))) == false
     @test checkbounds(Bool, A, CartesianIndex((5, 4, 4))) == false
-    # @test checkbounds(Bool, A, CartesianIndex((1,))) == false # TODO: PLI
-    # @test checkbounds(Bool, A, CartesianIndex((60,))) == false
-    # @test checkbounds(Bool, A, CartesianIndex((61,))) == false
+    @test checkbounds(Bool, A, CartesianIndex((1,))) == false
+    @test checkbounds(Bool, A, CartesianIndex((60,))) == false
+    @test checkbounds(Bool, A, CartesianIndex((61,))) == false
     @test checkbounds(Bool, A, CartesianIndex((2, 2, 2, 1,))) == true
     @test checkbounds(Bool, A, CartesianIndex((2, 2, 2, 2,))) == false
-    # @test checkbounds(Bool, A, CartesianIndex((1, 1,)))  == false # TODO: PLI
-    # @test checkbounds(Bool, A, CartesianIndex((1, 12,))) == false
-    # @test checkbounds(Bool, A, CartesianIndex((5, 12,))) == false
-    # @test checkbounds(Bool, A, CartesianIndex((1, 13,))) == false
-    # @test checkbounds(Bool, A, CartesianIndex((6, 12,))) == false
+    @test checkbounds(Bool, A, CartesianIndex((1, 1,)))  == false
+    @test checkbounds(Bool, A, CartesianIndex((1, 12,))) == false
+    @test checkbounds(Bool, A, CartesianIndex((5, 12,))) == false
+    @test checkbounds(Bool, A, CartesianIndex((1, 13,))) == false
+    @test checkbounds(Bool, A, CartesianIndex((6, 12,))) == false
 end
 
 @testset "mix of CartesianIndex and Int" begin
@@ -68,10 +68,10 @@ end
     @test checkbounds(Bool, A, 1:61) == false
     @test checkbounds(Bool, A, 2, 2, 2, 1:1) == true  # extra indices
     @test checkbounds(Bool, A, 2, 2, 2, 1:2) == false
-    # @test checkbounds(Bool, A, 1:5, 1:4) == false # TODO: PLI
-    # @test checkbounds(Bool, A, 1:5, 1:12) == false
-    # @test checkbounds(Bool, A, 1:5, 1:13) == false
-    # @test checkbounds(Bool, A, 1:6, 1:12) == false
+    @test checkbounds(Bool, A, 1:5, 1:4) == false
+    @test checkbounds(Bool, A, 1:5, 1:12) == false
+    @test checkbounds(Bool, A, 1:5, 1:13) == false
+    @test checkbounds(Bool, A, 1:6, 1:12) == false
 end
 
 @testset "logical" begin
@@ -83,9 +83,9 @@ end
     @test checkbounds(Bool, A, trues(61)) == false
     @test checkbounds(Bool, A, 2, 2, 2, trues(1)) == true  # extra indices
     @test checkbounds(Bool, A, 2, 2, 2, trues(2)) == false
-    # @test checkbounds(Bool, A, trues(5), trues(12)) == false # TODO: PLI
-    # @test checkbounds(Bool, A, trues(5), trues(13)) == false
-    # @test checkbounds(Bool, A, trues(6), trues(12)) == false
+    @test checkbounds(Bool, A, trues(5), trues(12)) == false
+    @test checkbounds(Bool, A, trues(5), trues(13)) == false
+    @test checkbounds(Bool, A, trues(6), trues(12)) == false
     @test checkbounds(Bool, A, trues(5, 4, 3)) == true
     @test checkbounds(Bool, A, trues(5, 4, 2)) == false
     @test checkbounds(Bool, A, trues(5, 12)) == false
@@ -145,6 +145,17 @@ end
         #   indices may be nontraditional
         @test_throws ArgumentError Base._sub2ind((1:3,), 2)
         @test_throws ArgumentError Base._ind2sub((1:3,), 2)
+
+        ci = CartesianIndices((2:4,))
+        @test first(ci) == ci[1] == CartesianIndex(2)
+        @test last(ci)  == ci[end] == ci[3] == CartesianIndex(4)
+        li = LinearIndices(ci)
+        @test collect(li) == [1,2,3]
+        @test first(li) == li[1] == 1
+        @test last(li)  == li[3] == 3
+        io = IOBuffer()
+        show(io, ci)
+        @test String(take!(io)) == "CartesianIndex{1}[CartesianIndex(2,), CartesianIndex(3,), CartesianIndex(4,)]"
     end
 
     @testset "2-dimensional" begin
@@ -156,8 +167,8 @@ end
             k += 1
             @test linear[i,j] == linear[k] == k
             @test cartesian[k] == CartesianIndex(i,j)
-            @test LinearIndices((0:3,3:5))[i-1,j+2] == k
-            @test CartesianIndices((0:3,3:5))[k] == CartesianIndex(i-1,j+2)
+            @test LinearIndices(map(Base.Slice, (0:3,3:5)))[i-1,j+2] == k
+            @test CartesianIndices(map(Base.Slice, (0:3,3:5)))[k] == CartesianIndex(i-1,j+2)
         end
         @test linear[linear] == linear
         @test linear[vec(linear)] == vec(linear)
@@ -189,10 +200,10 @@ end
         l = 0
         for k = -101:-100, j = 3:5, i = 0:3
             l += 1
-            @test LinearIndices((0:3,3:5,-101:-100))[i,j,k] == l
-            @test LinearIndices((0:3,3:5,-101:-100))[l] == l
-            @test CartesianIndices((0:3,3:5,-101:-100))[i,j,k] == CartesianIndex(i,j,k)
-            @test CartesianIndices((0:3,3:5,-101:-100))[l] == CartesianIndex(i,j,k)
+            @test LinearIndices(map(Base.Slice, (0:3,3:5,-101:-100)))[i,j,k] == l
+            @test LinearIndices(map(Base.Slice, (0:3,3:5,-101:-100)))[l] == l
+            @test CartesianIndices(map(Base.Slice, (0:3,3:5,-101:-100)))[i,j,k] == CartesianIndex(i,j,k)
+            @test CartesianIndices(map(Base.Slice, (0:3,3:5,-101:-100)))[l] == CartesianIndex(i,j,k)
         end
 
         local A = reshape(Vector(1:9), (3,3))
@@ -406,11 +417,10 @@ function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
         @test A[] == B[] == 0
         @test A == B
     else
-        # TODO: Re-enable after PLI deprecation
-        # @test_throws BoundsError A[] = 0
-        # @test_throws BoundsError B[] = 0
-        # @test_throws BoundsError A[]
-        # @test_throws BoundsError B[]
+        @test_throws BoundsError A[] = 0
+        @test_throws BoundsError B[] = 0
+        @test_throws BoundsError A[]
+        @test_throws BoundsError B[]
     end
 end
 
@@ -873,7 +883,7 @@ end
 @testset "CartesianIndices" begin
     xrng = 2:4
     yrng = 1:5
-    CR = CartesianIndices((xrng,yrng))
+    CR = CartesianIndices(map(Base.Slice, (xrng,yrng)))
 
     for i in xrng, j in yrng
         @test CR[i,j] == CartesianIndex(i,j)
@@ -887,6 +897,14 @@ end
 
     @test CartesianIndices(fill(1., 2, 3)) == CartesianIndices((2,3))
     @test LinearIndices((2,3)) == [1 3 5; 2 4 6]
+
+    for IType in (CartesianIndices, LinearIndices)
+        I1 = IType((Base.OneTo(3),))
+        I2 = IType((1:3,))
+        @test !(I1 === I2)
+        J1, J2 = @inferred(promote(I1, I2))
+        @test J1 === J2
+    end
 end
 
 @testset "issue #25770" begin

@@ -6,7 +6,8 @@ Provide methods for retrieving information about hardware and the operating syst
 """ Sys
 
 export BINDIR,
-       CPU_CORES,
+       STDLIB,
+       CPU_THREADS,
        CPU_NAME,
        WORD_SIZE,
        ARCH,
@@ -37,17 +38,26 @@ A string containing the full path to the directory containing the `julia` execut
 """
 :BINDIR
 
+"""
+    Sys.STDLIB
+
+A string containing the full path to the directory containing the `stdlib` packages.
+"""
+STDLIB = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
+
 # helper to avoid triggering precompile warnings
 
-global CPU_CORES
 """
-    Sys.CPU_CORES
+    Sys.CPU_THREADS
 
-The number of logical CPU cores available in the system.
+The number of logical CPU cores available in the system, i.e. the number of threads
+that the CPU can run concurrently. Note that this is not necessarily the number of
+CPU cores, for example, in the presence of
+[hyper-threading](https://en.wikipedia.org/wiki/Hyper-threading).
 
-See the Hwloc.jl package for extended information, including number of physical cores.
+See Hwloc.jl or CpuId.jl for extended information, including number of physical cores.
 """
-:CPU_CORES
+CPU_THREADS = 1 # for bootstrap, changed on startup
 
 """
     Sys.ARCH
@@ -79,21 +89,26 @@ Standard word size on the current machine, in bits.
 const WORD_SIZE = Core.sizeof(Int) * 8
 
 function __init__()
-    env_cores = get(ENV, "JULIA_CPU_CORES", "")
-    global CPU_CORES = if !isempty(env_cores)
-        env_cores = tryparse(Int, env_cores)
-        if !(env_cores isa Int && env_cores > 0)
-            Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_CORES` environment variable. Defaulting Sys.CPU_CORES to 1.\n")
-            env_cores = 1
+    env_threads = nothing
+    if haskey(ENV, "JULIA_CPU_THREADS")
+        env_threads = ENV["JULIA_CPU_THREADS"]
+    end
+    global CPU_THREADS = if env_threads !== nothing
+        env_threads = tryparse(Int, env_threads)
+        if !(env_threads isa Int && env_threads > 0)
+            env_threads = Int(ccall(:jl_cpu_threads, Int32, ()))
+            Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $env_threads.\n")
         end
-        env_cores
+        env_threads
     else
-        Int(ccall(:jl_cpu_cores, Int32, ()))
+        Int(ccall(:jl_cpu_threads, Int32, ()))
     end
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
+    vers = "v$(VERSION.major).$(VERSION.minor)"
+    global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
     nothing
 end
 
@@ -346,8 +361,8 @@ isexecutable(path::AbstractString) = isexecutable(String(path))
     Sys.which(program_name::String)
 
 Given a program name, search the current `PATH` to find the first binary with
-the proper executable permissions that can be run, and return an absolute
-path. Raise `ErrorException` if no such program is available.  If a path with
+the proper executable permissions that can be run and return an absolute path
+to it, or return `nothing` if no such program is available. If a path with
 a directory in it is passed in for `program_name`, tests that exact path
 for executable permissions only (with `.exe` and `.com` extensions added on
 Windows platforms); no searching of `PATH` is performed.
@@ -401,8 +416,8 @@ function which(program_name::String)
         end
     end
 
-    # If we couldn't find anything, complain
-    error("$program_name not found")
+    # If we couldn't find anything, don't return anything
+    nothing
 end
 which(program_name::AbstractString) = which(String(program_name))
 

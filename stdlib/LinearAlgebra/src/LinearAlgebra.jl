@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
 Linear algebra module. Provides array arithmetic,
 matrix factorizations and other linear algebra related
@@ -17,12 +15,9 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
     setindex!, show, similar, sin, sincos, sinh, size, size_to_strides, sqrt, StridedReinterpretArray,
     StridedReshapedArray, strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
-using Base: hvcat_fill, iszero, IndexLinear, _length, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat
+using Base: hvcat_fill, iszero, IndexLinear, promote_op, promote_typeof,
+    @propagate_inbounds, @pure, reduce, typed_vcat, has_offset_axes
 using Base.Broadcast: Broadcasted
-
-# We use `_length` because of non-1 indices; releases after julia 0.5
-# can go back to `length`. `_length(A)` is equivalent to `length(LinearIndices(A))`.
 
 export
 # Modules
@@ -65,7 +60,6 @@ export
     axpby!,
     bunchkaufman,
     bunchkaufman!,
-    chol,
     cholesky,
     cholesky!,
     cond,
@@ -103,7 +97,6 @@ export
     ldiv!,
     ldlt!,
     ldlt,
-    linreg,
     logabsdet,
     logdet,
     lowrankdowndate,
@@ -127,6 +120,7 @@ export
     qr!,
     lq,
     lq!,
+    opnorm,
     rank,
     rdiv!,
     schur,
@@ -139,13 +133,10 @@ export
     tr,
     transpose,
     transpose!,
-    transpose_type,
     tril,
     triu,
     tril!,
     triu!,
-    vecdot,
-    vecnorm,
 
 # Operators
     \,
@@ -254,6 +245,29 @@ The reason for this is that factorization itself is both expensive and typically
 (although it can also be done in-place via, e.g., [`lu!`](@ref)),
 and performance-critical situations requiring `ldiv!` usually also require fine-grained
 control over the factorization of `A`.
+
+# Examples
+```jldoctest
+julia> A = [1 2.2 4; 3.1 0.2 3; 4 1 2];
+
+julia> X = [1; 2.5; 3];
+
+julia> Y = zero(X);
+
+julia> ldiv!(Y, qr(A), X);
+
+julia> Y
+3-element Array{Float64,1}:
+  0.7128099173553719
+ -0.051652892561983674
+  0.10020661157024757
+
+julia> A\\X
+3-element Array{Float64,1}:
+  0.7128099173553719
+ -0.05165289256198333
+  0.10020661157024785
+```
 """
 ldiv!(Y, A, B)
 
@@ -268,6 +282,29 @@ The reason for this is that factorization itself is both expensive and typically
 (although it can also be done in-place via, e.g., [`lu!`](@ref)),
 and performance-critical situations requiring `ldiv!` usually also require fine-grained
 control over the factorization of `A`.
+
+# Examples
+```jldoctest
+julia> A = [1 2.2 4; 3.1 0.2 3; 4 1 2];
+
+julia> X = [1; 2.5; 3];
+
+julia> Y = copy(X);
+
+julia> ldiv!(qr(A), X);
+
+julia> X
+3-element Array{Float64,1}:
+  0.7128099173553719
+ -0.051652892561983674
+  0.10020661157024757
+
+julia> A\\Y
+3-element Array{Float64,1}:
+  0.7128099173553719
+ -0.05165289256198333
+  0.10020661157024785
+```
 """
 ldiv!(A, B)
 
@@ -291,8 +328,6 @@ copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractAr
 
 include("adjtrans.jl")
 include("transpose.jl")
-include("conjarray.jl")
-include("rowvector.jl")
 
 include("exceptions.jl")
 include("generic.jl")

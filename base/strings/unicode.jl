@@ -234,7 +234,7 @@ julia> textwidth("March")
 5
 ```
 """
-textwidth(s::AbstractString) = mapreduce(textwidth, +, 0, s)
+textwidth(s::AbstractString) = mapreduce(textwidth, +, s; init=0)
 
 lowercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) :
     T(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))

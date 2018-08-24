@@ -18,6 +18,7 @@
         0x0000001c      '\x1c'      "\\x1c"
         0x0000001f      '\x1f'      "\\x1f"
         0x00000020      ' '         " "
+        0x00000022      '"'         "\\\""
         0x0000002f      '/'         "/"
         0x00000030      '0'         "0"
         0x00000039      '9'         "9"
@@ -26,6 +27,7 @@
         0x00000041      'A'         "A"
         0x0000005a      'Z'         "Z"
         0x0000005b      '['         "["
+        0x0000005c      '\\'         "\\\\"
         0x00000060      '`'         "`"
         0x00000061      'a'         "a"
         0x0000007a      'z'         "z"
@@ -73,7 +75,7 @@
             local str = string(ch, cx[j,2])
             @test str == unescape_string(escape_string(str))
         end
-        @test repr(ch) == "'$(isprint(ch) ? ch : st)'"
+        @test repr(ch) == "'$(isprint(ch) && ch != '\\' ? ch : st)'"
     end
 
     for i = 0:0x7f, p = ["","\0","x","xxx","\x7f","\uFF","\uFFF",
@@ -169,6 +171,9 @@ join(myio, "", "", 1)
 @testset "unescape_string ArgumentErrors" begin
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"xZ"))
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"777"))
+    @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"U110000"))
+    @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"N"))
+    @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"m"))
 end
 @testset "#11659" begin
     # The indentation code was not correctly counting tab stops

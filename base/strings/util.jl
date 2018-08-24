@@ -7,8 +7,8 @@ const Chars = Union{AbstractChar,Tuple{Vararg{<:AbstractChar}},AbstractVector{<:
 """
     startswith(s::AbstractString, prefix::AbstractString)
 
-Returns `true` if `s` starts with `prefix`. If `prefix` is a vector or set
-of characters, tests whether the first character of `s` belongs to that set.
+Return `true` if `s` starts with `prefix`. If `prefix` is a vector or set
+of characters, test whether the first character of `s` belongs to that set.
 
 See also [`endswith`](@ref).
 
@@ -27,8 +27,8 @@ startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str) in c
 """
     endswith(s::AbstractString, suffix::AbstractString)
 
-Returns `true` if `s` ends with `suffix`. If `suffix` is a vector or set of
-characters, tests whether the last character of `s` belongs to that set.
+Return `true` if `s` ends with `suffix`. If `suffix` is a vector or set of
+characters, test whether the last character of `s` belongs to that set.
 
 See also [`startswith`](@ref).
 
@@ -45,14 +45,32 @@ function endswith(a::AbstractString, b::AbstractString)
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
-# FIXME: check that end of `b` doesn't match a partial character in `a`
-startswith(a::String, b::String) = sizeof(a) ≥ sizeof(b) &&
-    ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, sizeof(b)) == 0
+function startswith(a::Union{String, SubString{String}},
+                    b::Union{String, SubString{String}})
+    cub = ncodeunits(b)
+    if ncodeunits(a) < cub
+        false
+    elseif ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
+                 pointer(a), pointer(b), sizeof(b)) == 0
+        nextind(a, cub) == cub + 1
+    else
+        false
+    end
+end
 
-startswith(a::Vector{UInt8}, b::Vector{UInt8}) = length(a) ≥ length(b) &&
-    ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0
-
-# TODO: fast endswith
+function endswith(a::Union{String, SubString{String}},
+                  b::Union{String, SubString{String}})
+    cub = ncodeunits(b)
+    astart = ncodeunits(a) - ncodeunits(b) + 1
+    if astart < 1
+        false
+    elseif ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
+                 pointer(a, astart), pointer(b), sizeof(b)) == 0
+        thisind(a, astart) == astart
+    else
+        false
+    end
+end
 
 """
     chop(s::AbstractString; head::Integer = 0, tail::Integer = 1)
@@ -113,16 +131,18 @@ function chomp(s::String)
     end
 end
 
-const _default_delims = [' ','\t','\n','\v','\f','\r']
-
 """
-    lstrip(s::AbstractString[, chars::Chars])
+    lstrip([pred=isspace,] str::AbstractString)
+    lstrip(str::AbstractString, chars)
 
-Return `s` with any leading whitespace and delimiters removed.
-The default delimiters to remove are `' '`, `\\t`, `\\n`, `\\v`,
-`\\f`, and `\\r`.
-If `chars` (a character, or vector or set of characters) is provided,
-instead remove characters contained in it.
+Remove leading characters from `str`, either those specified by `chars` or those for
+which the function `pred` returns `true`.
+
+The default behaviour is to remove leading whitespace and delimiters: see
+[`isspace`](@ref) for precise details.
+
+The optional `chars` argument specifies which characters to remove: it can be a single
+character, or a vector or set of characters.
 
 # Examples
 ```jldoctest
@@ -133,22 +153,28 @@ julia> lstrip(a)
 "March"
 ```
 """
-function lstrip(s::AbstractString, chars::Chars=_default_delims)
+function lstrip(f, s::AbstractString)
     e = lastindex(s)
     for (i, c) in pairs(s)
-        !(c in chars) && return SubString(s, i, e)
+        !f(c) && return SubString(s, i, e)
     end
     SubString(s, e+1, e)
 end
+lstrip(s::AbstractString) = lstrip(isspace, s)
+lstrip(s::AbstractString, chars::Chars) = lstrip(in(chars), s)
 
 """
-    rstrip(s::AbstractString[, chars::Chars])
+    rstrip([pred=isspace,] str::AbstractString)
+    rstrip(str::AbstractString, chars)
 
-Return `s` with any trailing whitespace and delimiters removed.
-The default delimiters to remove are `' '`, `\\t`, `\\n`, `\\v`,
-`\\f`, and `\\r`.
-If `chars` (a character, or vector or set of characters) is provided,
-instead remove characters contained in it.
+Remove trailing characters from `str`, either those specified by `chars` or those for
+which the function `pred` returns `true`.
+
+The default behaviour is to remove leading whitespace and delimiters: see
+[`isspace`](@ref) for precise details.
+
+The optional `chars` argument specifies which characters to remove: it can be a single
+character, or a vector or set of characters.
 
 # Examples
 ```jldoctest
@@ -159,19 +185,25 @@ julia> rstrip(a)
 "March"
 ```
 """
-function rstrip(s::AbstractString, chars::Chars=_default_delims)
+function rstrip(f, s::AbstractString)
     for (i, c) in Iterators.reverse(pairs(s))
-        c in chars || return SubString(s, 1, i)
+        f(c) || return SubString(s, 1, i)
     end
     SubString(s, 1, 0)
 end
+rstrip(s::AbstractString) = rstrip(isspace, s)
+rstrip(s::AbstractString, chars::Chars) = rstrip(in(chars), s)
 
 """
-    strip(s::AbstractString, [chars::Chars])
+    strip(str::AbstractString, [chars])
 
-Return `s` with any leading and trailing whitespace removed.
-If `chars` (a character, or vector or set of characters) is provided,
-instead remove characters contained in it.
+Remove leading and trailing characters from `str`.
+
+The default behaviour is to remove leading whitespace and delimiters: see
+[`isspace`](@ref) for precise details.
+
+The optional `chars` argument specifies which characters to remove: it can be a single character,
+vector or set of characters, or a predicate function.
 
 # Examples
 ```jldoctest
@@ -180,7 +212,7 @@ julia> strip("{3, 5}\\n", ['{', '}', '\\n'])
 ```
 """
 strip(s::AbstractString) = lstrip(rstrip(s))
-strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
+strip(s::AbstractString, chars) = lstrip(rstrip(s, chars), chars)
 
 ## string padding functions ##
 
@@ -239,20 +271,20 @@ function rpad(
 end
 
 """
-    split(s::AbstractString; limit::Integer=0, keepempty::Bool=false)
-    split(s::AbstractString, chars; limit::Integer=0, keepempty::Bool=true)
+    split(str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true)
+    split(str::AbstractString; limit::Integer=0, keepempty::Bool=false)
 
-Return an array of substrings by splitting the given string on occurrences of the given
-character delimiters, which may be specified in any of the formats allowed by
-[`findnext`](@ref)'s first argument (i.e. as a string, regular expression or a function),
-or as a single character or collection of characters.
+Split `str` into an array of substrings on occurrences of the delimiter(s) `dlm`.  `dlm`
+can be any of the formats allowed by [`findnext`](@ref)'s first argument (i.e. as a
+string, regular expression or a function), or as a single character or collection of
+characters.
 
-If `chars` is omitted, it defaults to the set of all space characters.
+If `dlm` is omitted, it defaults to [`isspace`](@ref).
 
 The optional keyword arguments are:
  - `limit`: the maximum size of the result. `limit=0` implies no maximum (default)
  - `keepempty`: whether empty fields should be kept in the result. Default is `false` without
-   a `chars` argument, `true` with a `chars` argument.
+   a `dlm` argument, `true` with a `dlm` argument.
 
 See also [`rsplit`](@ref).
 
@@ -270,34 +302,22 @@ julia> split(a,".")
 function split end
 
 function split(str::T, splitter;
-               limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
-    if keep !== nothing
-        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :split)
-        keepempty = keep
-    end
+               limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _split(str, splitter, limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
 function split(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
-               limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
-    if keep !== nothing
-        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :split)
-        keepempty = keep
-    end
+               limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _split(str, in(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
 function split(str::T, splitter::AbstractChar;
-               limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
-    if keep !== nothing
-        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :split)
-        keepempty = keep
-    end
+               limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _split(str, isequal(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
 
 function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
     i = 1 # firstindex(str)
     n = lastindex(str)
-    r = coalesce(findfirst(splitter,str), 0)
+    r = something(findfirst(splitter,str), 0)
     if r != 0:-1
         j, k = first(r), nextind(str,last(r))
         while 0 < j <= n && length(strs) != limit-1
@@ -308,7 +328,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, 
                 i = k
             end
             (k <= j) && (k = nextind(str,j))
-            r = coalesce(findnext(splitter,str,k), 0)
+            r = something(findnext(splitter,str,k), 0)
             r == 0:-1 && break
             j, k = first(r), nextind(str,last(r))
         end
@@ -322,7 +342,7 @@ end
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 split(str::AbstractString;
       limit::Integer=0, keepempty::Bool=false) =
-    split(str, _default_delims; limit=limit, keepempty=keepempty)
+    split(str, isspace; limit=limit, keepempty=keepempty)
 
 """
     rsplit(s::AbstractString; limit::Integer=0, keepempty::Bool=false)
@@ -356,38 +376,26 @@ julia> rsplit(a,".";limit=2)
 function rsplit end
 
 function rsplit(str::T, splitter;
-                limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
-    if keep !== nothing
-        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :rsplit)
-        keepempty = keep
-    end
+                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _rsplit(str, splitter, limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
 function rsplit(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
-                limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
-    if keep !== nothing
-        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :rsplit)
-        keepempty = keep
-    end
+                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _rsplit(str, in(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
 function rsplit(str::T, splitter::AbstractChar;
-                limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
-    if keep !== nothing
-        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :rsplit)
-        keepempty = keep
-    end
+                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _rsplit(str, isequal(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
 
 function _rsplit(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
     n = lastindex(str)
-    r = coalesce(findlast(splitter, str), 0)
+    r = something(findlast(splitter, str), 0)
     j, k = first(r), last(r)
     while j > 0 && k > 0 && length(strs) != limit-1
         (keepempty || k < n) && pushfirst!(strs, SubString(str,nextind(str,k),n))
         n = prevind(str, j)
-        r = coalesce(findprev(splitter,str,n), 0)
+        r = something(findprev(splitter,str,n), 0)
         j, k = first(r), last(r)
     end
     (keepempty || n > 0) && pushfirst!(strs, SubString(str,1,n))
@@ -395,7 +403,7 @@ function _rsplit(str::AbstractString, splitter, limit::Integer, keepempty::Bool,
 end
 rsplit(str::AbstractString;
       limit::Integer=0, keepempty::Bool=false) =
-    rsplit(str, _default_delims; limit=limit, keepempty=keepempty)
+    rsplit(str, isspace; limit=limit, keepempty=keepempty)
 
 _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
@@ -418,7 +426,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     n = 1
     e = lastindex(str)
     i = a = firstindex(str)
-    r = coalesce(findnext(pattern,str,i), 0)
+    r = something(findnext(pattern,str,i), 0)
     j, k = first(r), last(r)
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
     while j != 0
@@ -433,7 +441,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
         else
             i = k = nextind(str, k)
         end
-        r = coalesce(findnext(pattern,str,k), 0)
+        r = something(findnext(pattern,str,k), 0)
         r == 0:-1 || n == count && break
         j, k = first(r), last(r)
         n += 1
@@ -452,7 +460,7 @@ or a regular expression.
 If `r` is a function, each occurrence is replaced with `r(s)`
 where `s` is the matched substring (when `pat`is a `Regex` or `AbstractString`) or
 character (when `pat` is an `AbstractChar` or a collection of `AbstractChar`).
-If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
+If `pat` is a regular expression and `r` is a [`SubstitutionString`](@ref), then capture group
 references in `r` are replaced with the corresponding matched text.
 To remove instances of `pat` from `string`, set `r` to the empty `String` (`""`).
 
@@ -466,6 +474,9 @@ julia> replace("The quick foxes run quickly.", "quick" => "slow", count=1)
 
 julia> replace("The quick foxes run quickly.", "quick" => "", count=1)
 "The  foxes run quickly."
+
+julia> replace("The quick foxes run quickly.", r"fox(es)?" => s"bus\\1")
+"The quick buses run quickly."
 ```
 """
 replace(s::AbstractString, pat_f::Pair; count=typemax(Int)) =

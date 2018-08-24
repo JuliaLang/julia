@@ -297,7 +297,7 @@ function deserialize(s::ClusterSerializer, t::Type{<:Future})
 
     # 1) send_add_client() is not executed when the ref is being serialized
     #    to where it exists, hence do it here.
-    # 2) If we have recieved a 'fetch'ed Future or if the Future ctor found an
+    # 2) If we have received a 'fetch'ed Future or if the Future ctor found an
     #    already 'fetch'ed instance in client_refs (Issue #25847), we should not
     #    track it in the backing RemoteValue store.
     if f2.where == myid() && f2.v === nothing
@@ -493,7 +493,7 @@ Wait for a value to become available on the specified remote channel.
 wait(r::RemoteChannel, args...) = (call_on_owner(wait_ref, r, myid(), args...); r)
 
 function fetch(r::Future)
-    r.v !== nothing && return coalesce(r.v)
+    r.v !== nothing && return something(r.v)
     v = call_on_owner(fetch_ref, r)
     r.v = Some(v)
     send_del_client(r)

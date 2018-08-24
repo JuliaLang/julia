@@ -12,10 +12,7 @@ struct CapturedException <: Exception
         # Typically the result of a catch_backtrace()
 
         # Process bt_raw so that it can be safely serialized
-        bt_lines = Any[]
-        process_func(args...) = push!(bt_lines, args)
-        process_backtrace(process_func, bt_raw, 100) # Limiting this to 100 lines.
-
+        bt_lines = process_backtrace(bt_raw, 100) # Limiting this to 100 lines.
         CapturedException(ex, bt_lines)
     end
 
@@ -26,6 +23,14 @@ function showerror(io::IO, ce::CapturedException)
     showerror(io, ce.ex, ce.processed_bt, backtrace=true)
 end
 
+"""
+    CompositeException
+
+Wrap a `Vector` of exceptions thrown by a [`Task`](@ref) (e.g. generated from a remote worker over a channel
+or an asynchronously executing local I/O write or a remote worker under `pmap`) with information about the series of exceptions.
+For example, if a group of workers are executing several tasks, and multiple workers fail, the resulting `CompositeException` will
+contain a "bundle" of information from each worker indicating where and why the exception(s) occurred.
+"""
 struct CompositeException <: Exception
     exceptions::Vector{Any}
     CompositeException() = new(Any[])
@@ -59,6 +64,7 @@ end
 Wrap an expression in a [`Task`](@ref) without executing it, and return the [`Task`](@ref). This only
 creates a task, and does not run it.
 
+# Examples
 ```jldoctest
 julia> a1() = sum(i for i in 1:1000);
 
@@ -91,6 +97,7 @@ current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
 
 Determine whether a task has exited.
 
+# Examples
 ```jldoctest
 julia> a2() = sum(i for i in 1:1000);
 
@@ -114,6 +121,7 @@ istaskdone(t::Task) = ((t.state == :done) | istaskfailed(t))
 
 Determine whether a task has started executing.
 
+# Examples
 ```jldoctest
 julia> a3() = sum(i for i in 1:1000);
 
@@ -170,8 +178,7 @@ function task_local_storage(body::Function, key, val)
 end
 
 # NOTE: you can only wait for scheduled tasks
-# TODO: rename to wait for 1.0
-function _wait(t::Task)
+function wait(t::Task)
     if !istaskdone(t)
         if t.donenotify === nothing
             t.donenotify = Condition()
@@ -185,8 +192,6 @@ function _wait(t::Task)
     end
 end
 
-_wait(not_a_task) = wait(not_a_task)
-
 """
     fetch(t::Task)
 
@@ -194,7 +199,7 @@ Wait for a Task to finish, then return its result value. If the task fails with 
 exception, the exception is propagated (re-thrown in the task that called fetch).
 """
 function fetch(t::Task)
-    _wait(t)
+    wait(t)
     task_result(t)
 end
 
@@ -205,7 +210,7 @@ function sync_end(refs)
     c_ex = CompositeException()
     for r in refs
         try
-            _wait(r)
+            wait(r)
         catch ex
             if !isa(r, Task) || (isa(r, Task) && !istaskfailed(r))
                 rethrow(ex)
@@ -257,14 +262,11 @@ macro async(expr)
         local task = Task($thunk)
         if $(Expr(:isdefined, var))
             push!($var, task)
-            get_task_tls(task)[:SUPPRESS_EXCEPTION_PRINTING] = true
         end
         schedule(task)
     end
 end
 
-
-suppress_excp_printing(t::Task) = isa(t.storage, IdDict) ? get(get_task_tls(t), :SUPPRESS_EXCEPTION_PRINTING, false) : false
 
 function register_taskdone_hook(t::Task, hook)
     tls = get_task_tls(t)
@@ -299,16 +301,6 @@ function task_done_hook(t::Task)
             active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
             active_repl_backend.in_eval
             throwto(active_repl_backend.backend_task, result) # this terminates the task
-        end
-        if !suppress_excp_printing(t)
-            let bt = t.backtrace
-                # run a new task to print the error for us
-                @async with_output_color(Base.error_color(), stderr) do io
-                    print(io, "ERROR (unhandled task failure): ")
-                    showerror(io, result, bt)
-                    println(io)
-                end
-            end
         end
     end
     # Clear sigatomic before waiting

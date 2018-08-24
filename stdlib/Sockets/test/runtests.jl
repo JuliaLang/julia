@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Sockets, Random
+using Sockets, Random, Test
 
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
@@ -118,7 +118,7 @@ defaultport = rand(2000:4000)
         let p = fetch(port)
             otherip = getipaddr()
             if otherip != Sockets.localhost
-                @test_throws Base.UVError("connect", Base.UV_ECONNREFUSED) connect(otherip, p)
+                @test_throws Base._UVError("connect", Base.UV_ECONNREFUSED) connect(otherip, p)
             end
             for i in 1:3
                 client = connect(p)
@@ -130,7 +130,7 @@ defaultport = rand(2000:4000)
                 @test read(client, String) == "Hello World\n" * ("a1\n"^100)
             end
         end
-        Base._wait(tsk)
+        Base.wait(tsk)
     end
 
     mktempdir() do tmpdir
@@ -146,7 +146,7 @@ defaultport = rand(2000:4000)
         end
         wait(c)
         @test read(connect(socketname), String) == "Hello World\n"
-        Base._wait(tsk)
+        Base.wait(tsk)
     end
 end
 
@@ -185,7 +185,7 @@ end
     end
     @test_throws Sockets.DNSError getaddrinfo(".invalid")
     @test_throws ArgumentError getaddrinfo("localhost\0") # issue #10994
-    @test_throws Base.UVError("connect", Base.UV_ECONNREFUSED) connect(ip"127.0.0.1", 21452)
+    @test_throws Base._UVError("connect", Base.UV_ECONNREFUSED) connect(ip"127.0.0.1", 21452)
     e = (try; getaddrinfo(".invalid"); catch ex; ex; end)
     @test startswith(sprint(show, e), "DNSError:")
 end
@@ -202,11 +202,11 @@ end
     r = Channel(1)
     tsk = @async begin
         put!(r, :start)
-        @test_throws Base.UVError("accept", Base.UV_ECONNABORTED) accept(server)
+        @test_throws Base._UVError("accept", Base.UV_ECONNABORTED) accept(server)
     end
     @test fetch(r) === :start
     close(server)
-    Base._wait(tsk)
+    Base.wait(tsk)
 end
 
 # test connecting to a named port
@@ -216,7 +216,7 @@ let localhost = getaddrinfo("localhost")
     @async connect("localhost", randport)
     s1 = accept(server)
     @test_throws ErrorException("client TCPSocket is not in initialization state") accept(server, s1)
-    @test_throws Base.UVError("listen", Base.UV_EADDRINUSE) listen(randport)
+    @test_throws Base._UVError("listen", Base.UV_EADDRINUSE) listen(randport)
     port2, server2 = listenany(localhost, randport)
     @test randport != port2
     close(server)
@@ -242,11 +242,11 @@ end
             notify(c)
         end
         send(b, ip"127.0.0.1", randport, "Hello World")
-        Base._wait(tsk2)
+        Base.wait(tsk2)
     end
     send(b, ip"127.0.0.1", randport, "Hello World")
     wait(c)
-    Base._wait(tsk)
+    Base.wait(tsk)
 
     tsk = @async begin
         @test begin
@@ -255,7 +255,7 @@ end
         end
     end
     send(b, ip"127.0.0.1", randport, "Hello World")
-    Base._wait(tsk)
+    Base.wait(tsk)
 
     @test_throws MethodError bind(UDPSocket(), randport)
 
@@ -275,9 +275,9 @@ end
             end
         end
         send(b, ip"::1", randport, "Hello World")
-        Base._wait(tsk)
+        Base.wait(tsk)
         send(b, ip"::1", randport, "Hello World")
-        Base._wait(tsk)
+        Base.wait(tsk)
     end
 end
 
@@ -335,7 +335,7 @@ end
                 sleep(0.05)
             end
             length(recvs_check) > 0 && error("timeout")
-            map(Base._wait, recvs)
+            map(Base.wait, recvs)
         end
 
         a, b, c = [create_socket() for i = 1:3]
@@ -348,7 +348,7 @@ end
                 wait_with_timeout(recvs)
             end
         catch e
-            if isa(e, Base.UVError) && Base.uverrorname(e) == "EPERM"
+            if isa(e, Base.IOError) && Base.uverrorname(e.code) == "EPERM"
                 @warn "UDP broadcast test skipped (permission denied upon send, restrictive firewall?)"
             else
                 rethrow()
@@ -381,12 +381,12 @@ end
     # on windows, the kernel fails to do even that
     # causing the `write` call to freeze
     # so we end up forced to do a slightly weaker test here
-    Sys.iswindows() || Base._wait(t)
+    Sys.iswindows() || Base.wait(t)
     @test isopen(P) # without an active uv_reader, P shouldn't be closed yet
     @test !eof(P) # should already know this,
     @test isopen(P) #  so it still shouldn't have an active uv_reader
     @test readuntil(P, 'w') == "llo"
-    Sys.iswindows() && Base._wait(t)
+    Sys.iswindows() && Base.wait(t)
     @test eof(P)
     @test !isopen(P) # eof test should have closed this by now
     close(P) # should be a no-op, just make sure
@@ -412,7 +412,7 @@ end
     let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
         srv = listen(addr)
         r = @async close(srv)
-        @test_throws Base.UVError("accept", Base.UV_ECONNABORTED) accept(srv)
+        @test_throws Base._UVError("accept", Base.UV_ECONNABORTED) accept(srv)
         fetch(r)
     end
 
@@ -421,7 +421,7 @@ end
         s = Sockets.TCPSocket()
         Sockets.connect!(s, addr)
         r = @async close(s)
-        @test_throws Base.UVError("connect", Base.UV_ECANCELED) Sockets.wait_connected(s)
+        @test_throws Base._UVError("connect", Base.UV_ECANCELED) Sockets.wait_connected(s)
         fetch(r)
     end
 end

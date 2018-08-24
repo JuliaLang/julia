@@ -8,8 +8,6 @@ struct SummarySize
     chargeall::Any
 end
 
-_nfields(@nospecialize x) = length(typeof(x).types)
-
 """
     Base.summarysize(obj; exclude=Union{...}, chargeall=Union{...}) -> Int
 
@@ -43,7 +41,7 @@ function summarysize(obj;
                 val = x[i]
             end
         else
-            nf = _nfields(x)
+            nf = nfields(x)
             ft = typeof(x).types
             if !isbitstype(ft[i]) && isdefined(x, i)
                 val = getfield(x, i)
@@ -65,11 +63,12 @@ end
 (ss::SummarySize)(@nospecialize obj) = _summarysize(ss, obj)
 # define the general case separately to make sure it is not specialized for every type
 @noinline function _summarysize(ss::SummarySize, @nospecialize obj)
+    isdefined(typeof(obj), :instance) && return 0
     # NOTE: this attempts to discover multiple copies of the same immutable value,
     # and so is somewhat approximate.
     key = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
-    if _nfields(obj) > 0
+    if nfields(obj) > 0
         push!(ss.frontier_x, obj)
         push!(ss.frontier_i, 1)
     end
@@ -88,7 +87,7 @@ function (ss::SummarySize)(obj::DataType)
     key = pointer_from_objref(obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
     size::Int = 7 * Core.sizeof(Int) + 6 * Core.sizeof(Int32)
-    size += 4 * _nfields(obj) + ifelse(Sys.WORD_SIZE == 64, 4, 0)
+    size += 4 * nfields(obj) + ifelse(Sys.WORD_SIZE == 64, 4, 0)
     size += ss(obj.parameters)::Int
     size += ss(obj.types)::Int
     return size

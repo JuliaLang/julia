@@ -708,16 +708,16 @@ end
 
 ### Reduction
 
-@testset "sum, vecnorm" begin
+@testset "sum, norm" begin
     x = spv_x1
     @test sum(x) == 4.0
     @test sum(abs, x) == 5.5
     @test sum(abs2, x) == 14.375
 
-    @test vecnorm(x) == sqrt(14.375)
-    @test vecnorm(x, 1) == 5.5
-    @test vecnorm(x, 2) == sqrt(14.375)
-    @test vecnorm(x, Inf) == 3.5
+    @test norm(x) == sqrt(14.375)
+    @test norm(x, 1) == 5.5
+    @test norm(x, 2) == sqrt(14.375)
+    @test norm(x, Inf) == 3.5
 end
 
 @testset "maximum, minimum" begin
@@ -1008,19 +1008,6 @@ end
         end
     end
 end
-@testset "kron" begin
-    testdims = ((5,10), (20,12), (25,30))
-    for (m,n) in testdims
-        x = sprand(m, 0.4)
-        y = sprand(n, 0.3)
-        @test Vector(kron(x,y)) == kron(Vector(x), Vector(y))
-        @test Vector(kron(Vector(x),y)) == kron(Vector(x), Vector(y))
-        @test Vector(kron(x,Vector(y))) == kron(Vector(x), Vector(y))
-        # test different types
-        z = convert(SparseVector{Float16, Int8}, y)
-        @test Vector(kron(x, z)) == kron(Vector(x), Vector(z))
-    end
-end
 
 @testset "fkeep!" begin
     x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
@@ -1040,7 +1027,7 @@ end
 end
 
 @testset "dropzeros[!] with length=$m" for m in (10, 20, 30)
-    srand(123)
+    Random.seed!(123)
     nzprob, targetnumposzeros, targetnumnegzeros = 0.4, 5, 5
     v = sprand(m, nzprob)
     struczerosv = findall(x -> x == 0, v)
@@ -1130,7 +1117,7 @@ end
     # test vector with sparsity approx 1/2
     let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
         @test Vector(sort(x)) == sort(Vector(x))
-        # apply three distinct tranformations where zeros sort into start/middle/end
+        # apply three distinct transformations where zeros sort into start/middle/end
         @test Vector(sort(x, by=abs)) == sort(Vector(x), by=abs)
         @test Vector(sort(x, by=sign)) == sort(Vector(x), by=sign)
         @test Vector(sort(x, by=inv)) == sort(Vector(x), by=inv)

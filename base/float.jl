@@ -274,6 +274,7 @@ float(x) = AbstractFloat(x)
 Return an appropriate type to represent a value of type `T` as a floating point value.
 Equivalent to `typeof(float(zero(T)))`.
 
+# Examples
 ```jldoctest
 julia> float(Complex{Int})
 Complex{Float64}
@@ -531,6 +532,7 @@ isnan(x::Real) = false
 
 Test whether a number is finite.
 
+# Examples
 ```jldoctest
 julia> isfinite(5)
 true
@@ -589,7 +591,7 @@ uabs(x::BitSigned) = unsigned(abs(x))
 
 
 """
-    nextfloat(x::AbstractFloat, n::Integer)
+    nextfloat(x::IEEEFloat, n::Integer)
 
 The result of `n` iterative applications of `nextfloat` to `x` if `n >= 0`, or `-n`
 applications of `prevfloat` if `n < 0`.
@@ -639,6 +641,14 @@ Return the smallest floating point number `y` of the same type as `x` such `x < 
 such `y` exists (e.g. if `x` is `Inf` or `NaN`), then return `x`.
 """
 nextfloat(x::AbstractFloat) = nextfloat(x,1)
+
+"""
+    prevfloat(x::AbstractFloat, n::Integer)
+
+The result of `n` iterative applications of `prevfloat` to `x` if `n >= 0`, or `-n`
+applications of `nextfloat` if `n < 0`.
+"""
+prevfloat(x::AbstractFloat, d::Integer) = nextfloat(x, -d)
 
 """
     prevfloat(x::AbstractFloat)
@@ -715,14 +725,14 @@ end
     typemin(x::T) where {T<:Real} = typemin(T)
     typemax(x::T) where {T<:Real} = typemax(T)
 
-    realmin(::Type{Float16}) = $(bitcast(Float16, 0x0400))
-    realmin(::Type{Float32}) = $(bitcast(Float32, 0x00800000))
-    realmin(::Type{Float64}) = $(bitcast(Float64, 0x0010000000000000))
-    realmax(::Type{Float16}) = $(bitcast(Float16, 0x7bff))
-    realmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
-    realmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
+    floatmin(::Type{Float16}) = $(bitcast(Float16, 0x0400))
+    floatmin(::Type{Float32}) = $(bitcast(Float32, 0x00800000))
+    floatmin(::Type{Float64}) = $(bitcast(Float64, 0x0010000000000000))
+    floatmax(::Type{Float16}) = $(bitcast(Float16, 0x7bff))
+    floatmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
+    floatmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
 
-    eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
+    eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= floatmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
     eps(::Type{Float16}) = $(bitcast(Float16, 0x1400))
     eps(::Type{Float32}) = $(bitcast(Float32, 0x34000000))
     eps(::Type{Float64}) = $(bitcast(Float64, 0x3cb0000000000000))
@@ -730,31 +740,31 @@ end
 end
 
 """
-    realmin(T)
+    floatmin(T)
 
 The smallest in absolute value non-subnormal value representable by the given
 floating-point DataType `T`.
 """
-realmin(x::T) where {T<:AbstractFloat} = realmin(T)
+floatmin(x::T) where {T<:AbstractFloat} = floatmin(T)
 
 """
-    realmax(T)
+    floatmax(T)
 
 The highest finite value representable by the given floating-point DataType `T`.
 
 # Examples
 ```jldoctest
-julia> realmax(Float16)
+julia> floatmax(Float16)
 Float16(6.55e4)
 
-julia> realmax(Float32)
+julia> floatmax(Float32)
 3.4028235f38
 ```
 """
-realmax(x::T) where {T<:AbstractFloat} = realmax(T)
+floatmax(x::T) where {T<:AbstractFloat} = floatmax(T)
 
-realmin() = realmin(Float64)
-realmax() = realmax(Float64)
+floatmin() = floatmin(Float64)
+floatmax() = floatmax(Float64)
 
 """
     eps(::Type{T}) where T<:AbstractFloat
@@ -765,6 +775,7 @@ default). This is defined as the gap between 1 and the next largest value repres
 `typeof(one(T))`, and is equivalent to `eps(one(T))`.  (Since `eps(T)` is a
 bound on the *relative error* of `T`, it is a "dimensionless" quantity like [`one`](@ref).)
 
+# Examples
 ```jldoctest
 julia> eps()
 2.220446049250313e-16
@@ -802,6 +813,7 @@ is the nearest floating point number to ``y``, then
 |y-x| \\leq \\operatorname{eps}(x)/2.
 ```
 
+# Examples
 ```jldoctest
 julia> eps(1.0)
 2.220446049250313e-16

@@ -89,14 +89,13 @@ end
     @test powermod(2, -2, -5) == -1
 end
 @testset "nextpow/prevpow" begin
-    @test nextpow2(3) == 4
     @test nextpow(2, 3) == 4
     @test nextpow(2, 4) == 4
     @test nextpow(2, 7) == 8
     @test_throws DomainError nextpow(0, 3)
     @test_throws DomainError nextpow(3, 0)
 
-    @test prevpow2(3) == 2
+    @test prevpow(2, 3) == 2
     @test prevpow(2, 4) == 4
     @test prevpow(2, 5) == 4
     @test_throws DomainError prevpow(0, 3)
@@ -104,42 +103,42 @@ end
 end
 @testset "ndigits/ndigits0z" begin
     @testset "issue #8266" begin
-        @test ndigits(-15, 10) == 2
-        @test ndigits(-15, -10) == 2
-        @test ndigits(-1, 10) == 1
-        @test ndigits(-1, -10) == 2
-        @test ndigits(2, 10) == 1
-        @test ndigits(2, -10) == 1
-        @test ndigits(10, 10) == 2
-        @test ndigits(10, -10) == 3
-        @test ndigits(17, 10) == 2
-        @test ndigits(17, -10) == 3
-        @test ndigits(unsigned(17), -10) == 3
+        @test ndigits(-15, base=10) == 2
+        @test ndigits(-15, base=-10) == 2
+        @test ndigits(-1, base=10) == 1
+        @test ndigits(-1, base=-10) == 2
+        @test ndigits(2, base=10) == 1
+        @test ndigits(2, base=-10) == 1
+        @test ndigits(10, base=10) == 2
+        @test ndigits(10, base=-10) == 3
+        @test ndigits(17, base=10) == 2
+        @test ndigits(17, base=-10) == 3
+        @test ndigits(unsigned(17), base=-10) == 3
 
-        @test ndigits(146, -3) == 5
+        @test ndigits(146, base=-3) == 5
     end
     let (n, b) = rand(Int, 2)
         -1 <= b <= 1 && (b = 2) # invalid bases
-        @test ndigits(n) == ndigits(big(n)) == ndigits(n, 10)
-        @test ndigits(n, b) == ndigits(big(n), b)
+        @test ndigits(n) == ndigits(big(n)) == ndigits(n, base=10)
+        @test ndigits(n, base=b) == ndigits(big(n), base=b)
     end
 
     for b in -1:1
-        @test_throws DomainError ndigits(rand(Int), b)
+        @test_throws DomainError ndigits(rand(Int), base=b)
     end
     @test ndigits(Int8(5)) == ndigits(5)
 
     # issue #19367
-    @test ndigits(Int128(2)^64, 256) == 9
+    @test ndigits(Int128(2)^64, base=256) == 9
 
     # test unsigned bases
-    @test ndigits(9, 0x2) == 4
-    @test ndigits(0x9, 0x2) == 4
+    @test ndigits(9, base=0x2) == 4
+    @test ndigits(0x9, base=0x2) == 4
 
     # ndigits is defined for Bool
     @test iszero([Base.ndigits0z(false, b) for b in [-20:-2;2:20]])
     @test all(n -> n == 1, Base.ndigits0z(true, b) for b in [-20:-2;2:20])
-    @test all(n -> n == 1, ndigits(x, b) for b in [-20:-2;2:20] for x in [true, false])
+    @test all(n -> n == 1, ndigits(x, base=b) for b in [-20:-2;2:20] for x in [true, false])
 end
 @testset "bin/oct/dec/hex/bits" begin
     @test string(UInt32('3'), base = 2) == "110011"

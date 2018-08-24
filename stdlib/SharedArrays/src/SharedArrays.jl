@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
 Provide the [`SharedArray`](@ref) type. It represents an array, which is shared across multiple processes, on a single machine.
 """
@@ -15,7 +13,7 @@ import Random
 using Serialization
 using Serialization: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG, serialize, deserialize
 import Serialization: serialize, deserialize
-import Distributed: RRID, procs
+import Distributed: RRID, procs, remotecall_fetch
 import Base.Filesystem: JL_O_CREAT, JL_O_RDWR, S_IRUSR, S_IWUSR
 
 export SharedArray, SharedVector, SharedMatrix, sdata, indexpids, localindices
@@ -490,7 +488,7 @@ function show(io::IO, mime::MIME"text/plain", S::SharedArray)
     else
         # retrieve from the first worker mapping the array.
         println(io, summary(S), ":")
-        showarray(io, remotecall_fetch(sharr->sharr.s, S.pids[1], S), false; header=false)
+        Base.print_array(io, remotecall_fetch(sharr->sharr.s, S.pids[1], S))
     end
 end
 
@@ -559,6 +557,8 @@ similar(S::SharedArray) = similar(S.s, eltype(S), size(S))
 reduce(f, S::SharedArray) =
     mapreduce(fetch, f, Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
 
+reduce(::typeof(vcat), S::SharedVector) = invoke(reduce, Tuple{Any,SharedArray}, vcat, S)
+reduce(::typeof(hcat), S::SharedVector) = invoke(reduce, Tuple{Any,SharedArray}, hcat, S)
 
 function map!(f, S::SharedArray, Q::SharedArray)
     if (S !== Q) && (procs(S) != procs(Q) || localindices(S) != localindices(Q))
@@ -685,15 +685,5 @@ shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Cint,
     (Cstring, Cint, Base.Cmode_t), shm_seg_name, oflags, permissions)
 
 end # os-test
-
-# 0.7 deprecations
-
-@deprecate SharedArray(::Type{T}, dims::Dims{N}; kwargs...) where {T,N} SharedArray{T}(dims; kwargs...)
-@deprecate SharedArray(::Type{T}, dims::Int...; kwargs...) where {T}    SharedArray{T}(dims...; kwargs...)
-@deprecate(SharedArray(filename::AbstractString, ::Type{T}, dims::NTuple{N,Int}, offset; kwargs...) where {T,N},
-           SharedArray{T}(filename, dims, offset; kwargs...))
-@deprecate(SharedArray(filename::AbstractString, ::Type{T}, dims::NTuple, offset; kwargs...) where {T},
-           SharedArray{T}(filename, dims, offset; kwargs...))
-@deprecate localindexes localindices
 
 end # module

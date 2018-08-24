@@ -72,7 +72,6 @@ Base.tanh(::Number)
 Base.asin(::Number)
 Base.acos(::Number)
 Base.atan(::Number)
-Base.Math.atan2
 Base.Math.asind
 Base.Math.acosd
 Base.Math.atand
@@ -120,6 +119,7 @@ Base.Rounding.RoundNearest
 Base.Rounding.RoundNearestTiesAway
 Base.Rounding.RoundNearestTiesUp
 Base.Rounding.RoundToZero
+Base.Rounding.RoundFromZero
 Base.Rounding.RoundUp
 Base.Rounding.RoundDown
 Base.round(::Complex{<: AbstractFloat}, ::RoundingMode, ::RoundingMode)
@@ -166,38 +166,13 @@ Base.gcd
 Base.lcm
 Base.gcdx
 Base.ispow2
-Base.nextpow2
-Base.prevpow2
 Base.nextpow
 Base.prevpow
 Base.nextprod
 Base.invmod
 Base.powermod
-Base.Math.gamma
-Base.Math.lgamma
-Base.Math.lfact
-Base.Math.beta
-Base.Math.lbeta
 Base.ndigits
 Base.widemul
 Base.Math.@evalpoly
 Base.FastMath.@fastmath
-```
-
-## Statistics
-
-```@docs
-Base.mean
-Base.mean!
-Base.std
-Base.stdm
-Base.var
-Base.varm
-Base.middle
-Base.median
-Base.median!
-Base.quantile
-Base.quantile!
-Base.cov
-Base.cor
 ```

@@ -48,25 +48,19 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         # make sure this is a non-fatal error and the REPL still loads
         @test v[1]
         @test isempty(v[2])
-        @test startswith(v[3], """
-                         ┌ Warning: Failed to insert InteractiveUtils into module Main
-                         │   exception =
-                         │    ArgumentError: Module InteractiveUtils not found in current path.
-                         │    Run `Pkg.add("InteractiveUtils")` to install the InteractiveUtils package.
-                         │    Stacktrace:
-                         """)
+        @test startswith(v[3], "┌ Warning: Failed to import InteractiveUtils into module Main\n")
     end
-    for nc in ("0", "-2", "x", "2x", " ")
-        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_CORES'`, "JULIA_CPU_CORES" => nc))
+    real_threads = string(ccall(:jl_cpu_threads, Int32, ()))
+    for nc in ("0", "-2", "x", "2x", " ", "")
+        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc))
+        @test v[1]
+        @test v[2] == real_threads
+        @test v[3] == "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $real_threads."
+    end
+    for nc in ("1", " 1 ", " +1 ", " 0x1 ")
+        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc))
         @test v[1]
         @test v[2] == "1"
-        @test v[3] == "WARNING: couldn't parse `JULIA_CPU_CORES` environment variable. Defaulting Sys.CPU_CORES to 1."
-    end
-    real_cores = string(ccall(:jl_cpu_cores, Int32, ()))
-    for nc in ("1", " 1 ", " +1 ", " 0x1 ", "")
-        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_CORES'`, "JULIA_CPU_CORES" => nc))
-        @test v[1]
-        @test v[2] == (isempty(nc) ? real_cores : "1")
         @test isempty(v[3])
     end
 end
@@ -424,7 +418,13 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         testdir = mktempdir()
         cd(testdir) do
             rm(testdir)
+            @test Base.current_project() === nothing
             @test success(`$exename -e "exit(0)"`)
+            for load_path in ["", "@", "@."]
+                withenv("JULIA_LOAD_PATH" => load_path) do
+                    @test success(`$exename -e "exit(!(Base.load_path() == []))"`)
+                end
+            end
         end
     end
 end
@@ -499,9 +499,8 @@ end
 
 # backtrace contains type and line number info (esp. on windows #17179)
 for precomp in ("yes", "no")
-    success, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp
-        -E 'include("____nonexistent_file")'`)
-    @test !success
+    succ, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp -E 'include("____nonexistent_file")'`)
+    @test !succ
     @test out == ""
     @test occursin("include_relative(::Module, ::String) at $(joinpath(".", "loading.jl"))", bt)
     lno = match(r"at \.[\/\\]loading\.jl:(\d+)", bt)

@@ -29,7 +29,7 @@ Block the current task until some event occurs, depending on the type of the arg
   can be used to determine success or failure.
 * [`Task`](@ref): Wait for a `Task` to finish. If the task fails with an exception, the
   exception is propagated (re-thrown in the task that called `wait`).
-* `RawFD`: Wait for changes on a file descriptor (see the `FileWatching` package).
+* [`RawFD`](@ref): Wait for changes on a file descriptor (see the `FileWatching` package).
 
 If no argument is passed, the task blocks for an undefined period. A task can only be
 restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).
@@ -104,6 +104,7 @@ If a second argument `val` is provided, it will be passed to the task (via the r
 [`yieldto`](@ref)) when it runs again. If `error` is `true`, the value is raised as an exception in
 the woken task.
 
+# Examples
 ```jldoctest
 julia> a5() = sum(i for i in 1:1000);
 
@@ -294,7 +295,7 @@ mutable struct AsyncCondition
             #TODO: this codepath is currently not tested
             Libc.free(this.handle)
             this.handle = C_NULL
-            throw(UVError("uv_async_init", err))
+            throw(_UVError("uv_async_init", err))
         end
         return this
     end
@@ -332,7 +333,7 @@ end
 
 Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object).
 
-Waiting tasks are woken after an intial delay of `delay` seconds, and then repeating with the given
+Waiting tasks are woken after an initial delay of `delay` seconds, and then repeating with the given
 `interval` in seconds. If `interval` is equal to `0`, the timer is only triggered once. When
 the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)
 to check whether a timer is still active.
@@ -352,7 +353,7 @@ mutable struct Timer
             #TODO: this codepath is currently not tested
             Libc.free(this.handle)
             this.handle = C_NULL
-            throw(UVError("uv_timer_init", err))
+            throw(_UVError("uv_timer_init", err))
         end
 
         associate_julia_struct(this.handle, this)
@@ -436,7 +437,7 @@ end
 Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object) and
 calls the function `callback`.
 
-Waiting tasks are woken and the function `callback` is called after an intial delay of `delay` seconds,
+Waiting tasks are woken and the function `callback` is called after an initial delay of `delay` seconds,
 and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the timer
 is only triggered once. The function `callback` is called with a single argument, the timer itself.
 When the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)

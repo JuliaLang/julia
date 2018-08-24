@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Test, Random
+
 module TestBroadcastInternals
 
 using Base.Broadcast: check_broadcast_axes, check_broadcast_shape, newindex, _bcs
@@ -174,10 +176,10 @@ let x = [1, 3.2, 4.7],
     @test sin.(α) == broadcast(sin, α)
     @test sin.(3.2) == broadcast(sin, 3.2) == sin(3.2)
     @test factorial.(3) == broadcast(factorial, 3)
-    @test atan2.(x, y) == broadcast(atan2, x, y)
-    @test atan2.(x, y') == broadcast(atan2, x, y')
-    @test atan2.(x, α) == broadcast(atan2, x, α)
-    @test atan2.(α, y') == broadcast(atan2, α, y')
+    @test atan.(x, y) == broadcast(atan, x, y)
+    @test atan.(x, y') == broadcast(atan, x, y')
+    @test atan.(x, α) == broadcast(atan, x, α)
+    @test atan.(α, y') == broadcast(atan, α, y')
 end
 
 # issue 14725
@@ -215,13 +217,13 @@ end
 # PR #17300: loop fusion
 @test (x->x+1).((x->x+2).((x->x+3).(1:10))) == 7:16
 let A = [sqrt(i)+j for i = 1:3, j=1:4]
-    @test atan2.(log.(A), sum(A, dims=1)) == broadcast(atan2, broadcast(log, A), sum(A, dims=1))
+    @test atan.(log.(A), sum(A, dims=1)) == broadcast(atan, broadcast(log, A), sum(A, dims=1))
 end
 let x = sin.(1:10)
-    @test atan2.((x->x+1).(x), (x->x+2).(x)) == broadcast(atan2, x.+1, x.+2)
-    @test sin.(atan2.([x.+1,x.+2]...)) == sin.(atan2.(x.+1 ,x.+2)) == @. sin(atan2(x+1,x+2))
-    @test sin.(atan2.(x, 3.7)) == broadcast(x -> sin(atan2(x,3.7)), x)
-    @test atan2.(x, 3.7) == broadcast(x -> atan2(x,3.7), x) == broadcast(atan2, x, 3.7)
+    @test atan.((x->x+1).(x), (x->x+2).(x)) == broadcast(atan, x.+1, x.+2)
+    @test sin.(atan.([x.+1,x.+2]...)) == sin.(atan.(x.+1 ,x.+2)) == @. sin(atan(x+1,x+2))
+    @test sin.(atan.(x, 3.7)) == broadcast(x -> sin(atan(x,3.7)), x)
+    @test atan.(x, 3.7) == broadcast(x -> atan(x,3.7), x) == broadcast(atan, x, 3.7)
 end
 # Use side effects to check for loop fusion.
 let g = Int[]
@@ -235,11 +237,11 @@ end
 # fusion with splatted args:
 let x = sin.(1:10), a = [x]
     @test cos.(x) == cos.(a...)
-    @test atan2.(x,x) == atan2.(a..., a...) == atan2.([x, x]...)
-    @test atan2.(x, cos.(x)) == atan2.(a..., cos.(x)) == broadcast(atan2, x, cos.(a...)) == broadcast(atan2, a..., cos.(a...))
+    @test atan.(x,x) == atan.(a..., a...) == atan.([x, x]...)
+    @test atan.(x, cos.(x)) == atan.(a..., cos.(x)) == broadcast(atan, x, cos.(a...)) == broadcast(atan, a..., cos.(a...))
     @test ((args...)->cos(args[1])).(x) == cos.(x) == ((y,args...)->cos(y)).(x)
 end
-@test atan2.(3, 4) == atan2(3, 4) == (() -> atan2(3, 4)).()
+@test atan.(3, 4) == atan(3, 4) == (() -> atan(3, 4)).()
 # fusion with keyword args:
 let x = [1:4;]
     f17300kw(x; y=0) = x + y
@@ -589,6 +591,18 @@ end
     @test broadcast(==, 1, AbstractArray) == false
 end
 
+@testset "broadcasting falls back to iteration (issues #26421, #19577, #23746)" begin
+    @test_throws ArgumentError broadcast(identity, Dict(1=>2))
+    @test_throws ArgumentError broadcast(identity, (a=1, b=2))
+    @test_throws ArgumentError length.(Dict(1 => BitSet(1:2), 2 => BitSet(1:3)))
+    @test_throws MethodError broadcast(identity, Base)
+
+    @test broadcast(identity, Iterators.filter(iseven, 1:10)) == 2:2:10
+    d = Dict([1,2] => 1.1, [3,2] => 0.1)
+    @test length.(keys(d)) == [2,2]
+    @test Set(exp.(Set([1,2,3]))) == Set(exp.([1,2,3]))
+end
+
 # Test that broadcasting identity where the input and output Array shapes do not match
 # yields the correct result, not merely a partial copy. See pull request #19895 for discussion.
 let N = 5
@@ -649,18 +663,17 @@ end
     @test_throws DimensionMismatch (1, 2) .+ (1, 2, 3)
 end
 
-# TODO: Enable after deprecations introduced in 0.7 are removed.
-# @testset "scalar .=" begin
-#     A = [[1,2,3],4:5,6]
-#     A[1] .= 0
-#     @test A[1] == [0,0,0]
-#     @test_throws ErrorException A[2] .= 0
-#     @test_throws MethodError A[3] .= 0
-#     A = [[1,2,3],4:5]
-#     A[1] .= 0
-#     @test A[1] == [0,0,0]
-#     @test_throws ErrorException A[2] .= 0
-# end
+@testset "scalar .=" begin
+    A = [[1,2,3],4:5,6]
+    A[1] .= 0
+    @test A[1] == [0,0,0]
+    @test_throws ErrorException A[2] .= 0
+    @test_throws MethodError A[3] .= 0
+    A = [[1,2,3],4:5]
+    A[1] .= 0
+    @test A[1] == [0,0,0]
+    @test_throws ErrorException A[2] .= 0
+end
 
 # Issue #22180
 @test convert.(Any, [1, 2]) == [1, 2]
@@ -720,11 +733,56 @@ let X = zeros(2, 3)
     @test X == [1 1 1; 2 2 2]
 end
 
+# issue #27988: inference of Broadcast.flatten
+using .Broadcast: Broadcasted
+let
+    bc = Broadcasted(+, (Broadcasted(*, (1, 2)), Broadcasted(*, (Broadcasted(*, (3, 4)), 5))))
+    @test @inferred(Broadcast.cat_nested(bc)) == (1,2,3,4,5)
+    @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 62
+    bc = Broadcasted(+, (Broadcasted(*, (1, Broadcasted(/, (2.0, 2.5)))), Broadcasted(*, (Broadcasted(*, (3, 4)), 5))))
+    @test @inferred(Broadcast.cat_nested(bc)) == (1,2.0,2.5,3,4,5)
+    @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 60.8
+end
+
 # Issue #26127: multiple splats in a fused dot-expression
 let f(args...) = *(args...)
     x, y, z = (1,2), 3, (4, 5)
     @test f.(x..., y, z...) == broadcast(f, x..., y, z...) == 120
     @test f.(x..., f.(x..., y, z...), y, z...) == broadcast(f, x..., broadcast(f, x..., y, z...), y, z...) == 120*120
+end
+
+@testset "Issue #27911: Broadcasting over collections with big indices" begin
+    @test iszero.(Int128(0):Int128(2)) == [true, false, false]
+    @test iszero.((Int128(0):Int128(2)) .- 1) == [false, true, false]
+    @test iszero.(big(0):big(2)) == [true, false, false]
+    @test iszero.((big(0):big(2)) .- 1) == [false, true, false]
+end
+
+@testset "Issue #27775: Broadcast!ing over nested scalar operations" begin
+    a = zeros(2)
+    a .= 1 ./ (1 + 2)
+    @test a == [1/3, 1/3]
+    a .= 1 ./ (1 .+ 3)
+    @test a == [1/4, 1/4]
+    a .= sqrt.(1 ./ 2)
+    @test a == [sqrt(1/2), sqrt(1/2)]
+    rng = MersenneTwister(1234)
+    a .= rand.((rng,))
+    rng = MersenneTwister(1234)
+    @test a == [rand(rng), rand(rng)]
+    @test a[1] != a[2]
+    rng = MersenneTwister(1234)
+    broadcast!(rand, a, (rng,))
+    rng = MersenneTwister(1234)
+    @test a == [rand(rng), rand(rng)]
+    @test a[1] != a[2]
+end
+
+# Issue #27446: Broadcasting pair operator
+let
+    c = ["foo", "bar"]
+    d = [1,2]
+    @test Dict(c .=> d) == Dict("foo" => 1, "bar" => 2)
 end
 
 # Broadcasted iterable/indexable APIs

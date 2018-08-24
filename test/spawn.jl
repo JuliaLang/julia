@@ -59,19 +59,20 @@ Sys.isunix() && run(pipeline(yescmd, `head`, devnull))
 
 let a, p
     a = Base.Condition()
-    @async begin
+    t = @async begin
         p = run(pipeline(yescmd,devnull), wait=false)
         Base.notify(a,p)
         @test !success(p)
     end
     p = wait(a)
     kill(p)
+    wait(t)
 end
 
 if valgrind_off
     # If --trace-children=yes is passed to valgrind, valgrind will
-    # exit here with an error code, and no UVError will be raised.
-    @test_throws Base.UVError run(`foo_is_not_a_valid_command`)
+    # exit here with an error code, and no IOError will be raised.
+    @test_throws Base.IOError run(`foo_is_not_a_valid_command`)
 end
 
 if Sys.isunix()
@@ -144,11 +145,15 @@ let str = "", proc, str2, file
     end
 
     # Here we test that if we close a stream with pending writes, we don't lose the writes.
-    proc = open(`$catcmd -`, "r+")
-    write(proc, str)
-    close(proc.in)
-    str2 = read(proc, String)
-    @test str2 == str
+    @sync begin
+        proc = open(`$catcmd -`, "r+")
+        @async begin
+            write(proc, str) # TODO: use Base.uv_write_async to restore the intended functionality of this test
+            close(proc.in)
+        end
+        str2 = read(proc, String)
+        @test str2 == str
+    end
 
     # This test hangs if the end-of-run-walk-across-uv-streams calls shutdown on a stream that is shutting down.
     file = tempname()
@@ -165,6 +170,7 @@ let r, t
     t = @async begin
         try
             wait(r)
+        catch
         end
         p = run(`$sleepcmd 1`, wait=false); wait(p)
         @test p.exitcode == 0
@@ -357,7 +363,7 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(stdout, " 1\t", r
     @test isempty(read(out))
     @test eof(out)
     @test desc == "Pipe($infd open => $outfd active, 0 bytes waiting)"
-    Base._wait(t)
+    Base.wait(t)
 end
 
 # issue #8529
@@ -414,11 +420,15 @@ end
 @test Base.shell_split("\"\\\\\"") == ["\\"]
 
 # issue #13616
-@test_throws ErrorException collect(eachline(pipeline(`$catcmd _doesnt_exist__111_`, stderr=devnull)))
+pcatcmd = `$catcmd _doesnt_exist__111_`
+let p = eachline(pipeline(`$catcmd _doesnt_exist__111_`, stderr=devnull))
+    @test_throws(ErrorException("failed process: Process($pcatcmd, ProcessExited(1)) [1]"),
+                 collect(p))
+end
 
 # make sure windows_verbatim strips quotes
 if Sys.iswindows()
-    read(`cmd.exe /c dir /b spawn.jl`, String) == read(Cmd(`cmd.exe /c dir /b "\"spawn.jl\""`, windows_verbatim=true), String)
+    @test read(`cmd.exe /c dir /b spawn.jl`, String) == read(Cmd(`cmd.exe /c dir /b "\"spawn.jl\""`, windows_verbatim=true), String)
 end
 
 # make sure Cmd is nestable
@@ -450,31 +460,6 @@ end
 @test_throws ArgumentError reduce(&, Base.Cmd[])
 @test reduce(&, [`$echocmd abc`, `$echocmd def`, `$echocmd hij`]) == `$echocmd abc` & `$echocmd def` & `$echocmd hij`
 
-# test for proper handling of FD exhaustion
-if Sys.isunix()
-    let ps = Pipe[]
-        ulimit_n = tryparse(Int, readchomp(`sh -c 'ulimit -n'`))
-        try
-            for i = 1 : 100 * coalesce(ulimit_n, 1000)
-                p = Pipe()
-                Base.link_pipe!(p)
-                push!(ps, p)
-            end
-            if ulimit_n === nothing
-                @warn "`ulimit -n` is set to unlimited, fd exhaustion cannot be tested"
-                @test_broken false
-            else
-                @test false
-            end
-        catch ex
-            isa(ex, Base.UVError) || rethrow(ex)
-            @test ex.code in (Base.UV_EMFILE, Base.UV_ENFILE)
-        finally
-            foreach(close, ps)
-        end
-    end
-end
-
 # readlines(::Cmd), accidentally broken in #20203
 @test sort(readlines(`$lscmd -A`)) == sort(readdir())
 
@@ -500,25 +485,26 @@ let c = `ls -l "foo bar"`
 end
 
 ## Deadlock in spawning a cmd (#22832)
-# FIXME?
-#let out = Pipe(), inpt = Pipe()
-#    Base.link_pipe!(out, reader_supports_async=true)
-#    Base.link_pipe!(inpt, writer_supports_async=true)
-#    p = run(pipeline(catcmd, stdin=inpt, stdout=out, stderr=devnull), wait=false)
-#    @async begin # feed cat with 2 MB of data (zeros)
-#        write(inpt, zeros(UInt8, 1048576 * 2))
-#        close(inpt)
-#    end
-#    sleep(0.5) # give cat a chance to fill the write buffer for stdout
-#    close(out.in) # make sure we can still close the write end
-#    @test sizeof(readstring(out)) == 1048576 * 2 # make sure we get all the data
-#    @test success(p)
-#end
+let out = Pipe(), inpt = Pipe()
+    Base.link_pipe!(out, reader_supports_async=true)
+    Base.link_pipe!(inpt, writer_supports_async=true)
+    p = run(pipeline(catcmd, stdin=inpt, stdout=out, stderr=devnull), wait=false)
+    t = @async begin # feed cat with 2 MB of data (zeros)
+        write(inpt, zeros(UInt8, 1048576 * 2))
+        close(inpt)
+    end
+    sleep(1) # give cat a chance to fill the write buffer for stdout
+    close(inpt.out)
+    close(out.in) # make sure we can still close the write end
+    @test sizeof(read(out)) == 1048576 * 2 # make sure we get all the data
+    @test success(p)
+    wait(t)
+end
 
 # `kill` error conditions
 let p = run(`$sleepcmd 100`, wait=false)
     # Should throw on invalid signals
-    @test_throws Base.UVError kill(p, typemax(Cint))
+    @test_throws Base.IOError kill(p, typemax(Cint))
     kill(p)
     wait(p)
     # Should not throw if already dead
@@ -561,12 +547,12 @@ mktempdir() do dir
             @test Sys.which(foo_path) == realpath(foo_path)
 
             chmod(foo_path, 0o666)
-            @test_throws ErrorException Sys.which("foo")
-            @test_throws ErrorException Sys.which(foo_path)
+            @test Sys.which("foo") === nothing
+            @test Sys.which(foo_path) === nothing
         end
 
-        # Test that completely missing files also fail
-        @test_throws ErrorException Sys.which("this_is_not_a_command")
+        # Test that completely missing files also return nothing
+        @test Sys.which("this_is_not_a_command") === nothing
     end
 end
 
@@ -617,4 +603,14 @@ mktempdir() do dir
             @test Sys.which(joinpath("bin1", "bar")) == realpath(bar_path)
         end
     end
+end
+
+# Issue #27550: make sure `peek` works when slurping a Char from an AbstractPipe
+open(`$catcmd`, "r+") do f
+    t = @async begin
+        write(f, "δ")
+        close(f.in)
+    end
+    @test read(f, Char) == 'δ'
+    wait(t)
 end

@@ -7,6 +7,7 @@ using SparseArrays
 using LinearAlgebra
 using Base.Printf: @printf
 using Random
+using Test: guardseed
 
 @testset "issparse" begin
     @test issparse(sparse(fill(1,5,5)))
@@ -117,6 +118,8 @@ end
 
     @testset "blockdiag concatenation" begin
         @test blockdiag(se33, se33) == sparse(1:6,1:6,fill(1.,6))
+        @test blockdiag() == spzeros(0, 0)
+        @test nnz(blockdiag()) == 0
     end
 
     @testset "concatenation promotion" begin
@@ -164,14 +167,14 @@ let
     end
 end
 
-@testset "squeeze" begin
+@testset "dropdims" begin
     for i = 1:5
         am = sprand(20, 1, 0.2)
-        av = squeeze(am, dims=2)
+        av = dropdims(am, dims=2)
         @test ndims(av) == 1
         @test all(av.==am)
         am = sprand(1, 20, 0.2)
-        av = squeeze(am, dims=1)
+        av = dropdims(am, dims=1)
         @test ndims(av) == 1
         @test all(av' .== am)
     end
@@ -308,23 +311,56 @@ end
     end
 end
 
-@testset "matrix multiplication and kron" begin
+@testset "matrix multiplication" begin
     for i = 1:5
         a = sprand(10, 5, 0.7)
         b = sprand(5, 15, 0.3)
         @test maximum(abs.(a*b - Array(a)*Array(b))) < 100*eps()
         @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:sortcols) - Array(a)*Array(b))) < 100*eps()
         @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:doubletranspose) - Array(a)*Array(b))) < 100*eps()
-        @test Array(kron(a,b)) == kron(Array(a), Array(b))
-        @test Array(kron(Array(a),b)) == kron(Array(a), Array(b))
-        @test Array(kron(a,Array(b))) == kron(Array(a), Array(b))
-        c = sparse(rand(Float32,5,5))
-        d = sparse(rand(Float64,5,5))
-        @test Array(kron(c,d)) == kron(Array(c),Array(d))
         f = Diagonal(rand(5))
         @test Array(a*f) == Array(a)*f
         @test Array(f*b) == f*Array(b)
     end
+end
+
+@testset "kronecker product" begin
+    for (m,n) in ((5,10), (13,8), (14,10))
+        a = sprand(m, 5, 0.4); a_d = Matrix(a)
+        b = sprand(n, 6, 0.3); b_d = Matrix(b)
+        x = sprand(m, 0.4); x_d = Vector(x)
+        y = sprand(n, 0.3); y_d = Vector(y)
+        # mat ⊗ mat
+        @test Array(kron(a, b)) == kron(a_d, b_d)
+        @test Array(kron(a_d, b)) == kron(a_d, b_d)
+        @test Array(kron(a, b_d)) == kron(a_d, b_d)
+        # vec ⊗ vec
+        @test Vector(kron(x, y)) == kron(x_d, y_d)
+        @test Vector(kron(x_d, y)) == kron(x_d, y_d)
+        @test Vector(kron(x, y_d)) == kron(x_d, y_d)
+        # mat ⊗ vec
+        @test Array(kron(a, y)) == kron(a_d, y_d)
+        @test Array(kron(a_d, y)) == kron(a_d, y_d)
+        @test Array(kron(a, y_d)) == kron(a_d, y_d)
+        # vec ⊗ mat
+        @test Array(kron(x, b)) == kron(x_d, b_d)
+        @test Array(kron(x_d, b)) == kron(x_d, b_d)
+        @test Array(kron(x, b_d)) == kron(x_d, b_d)
+        # test different types
+        z = convert(SparseVector{Float16, Int8}, y); z_d = Vector(z)
+        @test Vector(kron(x, z)) == kron(x_d, z_d)
+        @test Array(kron(a, z)) == kron(a_d, z_d)
+        @test Array(kron(z, b)) == kron(z_d, b_d)
+    end
+end
+
+@testset "sparse Frobenius dot/inner product" begin
+    for i = 1:5
+        A = sprand(ComplexF64,10,15,0.4)
+        B = sprand(ComplexF64,10,15,0.5)
+        @test dot(A,B) ≈ dot(Matrix(A),Matrix(B))
+    end
+    @test_throws DimensionMismatch dot(sprand(5,5,0.2),sprand(5,6,0.2))
 end
 
 sA = sprandn(3, 7, 0.5)
@@ -487,9 +523,10 @@ end
 
 @testset "reductions" begin
     pA = sparse(rand(3, 7))
+    p28227 = sparse(Real[0 0.5])
 
-    for arr in (se33, sA, pA)
-        for f in (sum, prod, minimum, maximum, var)
+    for arr in (se33, sA, pA, p28227)
+        for f in (sum, prod, minimum, maximum)
             farr = Array(arr)
             @test f(arr) ≈ f(farr)
             @test f(arr, dims=1) ≈ f(farr, dims=1)
@@ -518,9 +555,8 @@ end
         @test prod(sparse(Int[])) === 1
         @test_throws ArgumentError minimum(sparse(Int[]))
         @test_throws ArgumentError maximum(sparse(Int[]))
-        @test var(sparse(Int[])) === NaN
 
-        for f in (sum, prod, var)
+        for f in (sum, prod)
             @test isequal(f(spzeros(0, 1), dims=1), f(Matrix{Int}(I, 0, 1), dims=1))
             @test isequal(f(spzeros(0, 1), dims=2), f(Matrix{Int}(I, 0, 1), dims=2))
             @test isequal(f(spzeros(0, 1), dims=(1, 2)), f(Matrix{Int}(I, 0, 1), dims=(1, 2)))
@@ -569,7 +605,7 @@ end
         @test length(sprb45) == 20
         sprb45nnzs[i] = sum(sprb45)[1]
     end
-    @test 4 <= mean(sprb45nnzs) <= 16
+    @test 4 <= sum(sprb45nnzs)/length(sprb45nnzs) <= 16
 end
 
 @testset "issue #5853, sparse diff" begin
@@ -1057,15 +1093,15 @@ end
 
     A = Matrix{Int}(I, 0, 0)
     S = sparse(A)
-    iA = try argmax(A) end
-    iS = try argmax(S) end
+    iA = try argmax(A); catch; end
+    iS = try argmax(S); catch; end
     @test iA === iS === nothing
-    iA = try argmin(A) end
-    iS = try argmin(S) end
+    iA = try argmin(A); catch; end
+    iS = try argmin(S); catch; end
     @test iA === iS === nothing
 end
 
-@testset "findmin/findmax/minumum/maximum" begin
+@testset "findmin/findmax/minimum/maximum" begin
     A = sparse([1.0 5.0 6.0;
                 5.0 2.0 4.0])
     for (tup, rval, rind) in [((1,), [1.0 2.0 4.0], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(2,3)]),
@@ -1365,10 +1401,10 @@ end
     @test norm(Array(D) - Array(S)) == 0.0
 end
 
-@testset "error conditions for reshape, and squeeze" begin
+@testset "error conditions for reshape, and dropdims" begin
     local A = sprand(Bool, 5, 5, 0.2)
     @test_throws DimensionMismatch reshape(A,(20, 2))
-    @test_throws ArgumentError squeeze(A,dims=(1, 1))
+    @test_throws ArgumentError dropdims(A,dims=(1, 1))
 end
 
 @testset "float" begin
@@ -1406,7 +1442,7 @@ end
 end
 
 @testset "droptol" begin
-    local A = guardsrand(1234321) do
+    local A = guardseed(1234321) do
         triu(sprand(10, 10, 0.2))
     end
     @test SparseArrays.droptol!(A, 0.01).colptr == [1,1,1,2,2,3,4,6,6,7,9]
@@ -1517,14 +1553,10 @@ end
     @test Array(tril(A,1)) == tril(AF,1)
     @test Array(triu!(copy(A), 2)) == triu(AF,2)
     @test Array(tril!(copy(A), 2)) == tril(AF,2)
-    @test_throws ArgumentError tril(A, -n - 2)
-    @test_throws ArgumentError tril(A, n)
-    @test_throws ArgumentError triu(A, -n)
-    @test_throws ArgumentError triu(A, n + 2)
-    @test_throws ArgumentError tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -5)
-    @test_throws ArgumentError tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), 4)
-    @test_throws ArgumentError triu!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -3)
-    @test_throws ArgumentError triu!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), 6)
+    @test tril(A, -n - 2) == zero(A)
+    @test tril(A, n) == A
+    @test triu(A, -n) == A
+    @test triu(A, n + 2) == zero(A)
 
     # fkeep trim option
     @test isequal(length(tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -1).rowval), 0)
@@ -1536,8 +1568,8 @@ end
     @test norm(A) == zero(eltype(A))
     A = sparse([1.0])
     @test norm(A) == 1.0
-    @test_throws ArgumentError norm(sprand(5,5,0.2),3)
-    @test_throws ArgumentError norm(sprand(5,5,0.2),2)
+    @test_throws ArgumentError opnorm(sprand(5,5,0.2),3)
+    @test_throws ArgumentError opnorm(sprand(5,5,0.2),2)
 end
 
 @testset "ishermitian/issymmetric" begin
@@ -1659,30 +1691,30 @@ end
     Ac = sprandn(10,10,.1) + im* sprandn(10,10,.1)
     Ar = sprandn(10,10,.1)
     Ai = ceil.(Int,Ar*100)
-    @test norm(Ac,1) ≈ norm(Array(Ac),1)
-    @test norm(Ac,Inf) ≈ norm(Array(Ac),Inf)
-    @test vecnorm(Ac) ≈ vecnorm(Array(Ac))
-    @test norm(Ar,1) ≈ norm(Array(Ar),1)
-    @test norm(Ar,Inf) ≈ norm(Array(Ar),Inf)
-    @test vecnorm(Ar) ≈ vecnorm(Array(Ar))
-    @test norm(Ai,1) ≈ norm(Array(Ai),1)
-    @test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
-    @test vecnorm(Ai) ≈ vecnorm(Array(Ai))
+    @test opnorm(Ac,1) ≈ opnorm(Array(Ac),1)
+    @test opnorm(Ac,Inf) ≈ opnorm(Array(Ac),Inf)
+    @test norm(Ac) ≈ norm(Array(Ac))
+    @test opnorm(Ar,1) ≈ opnorm(Array(Ar),1)
+    @test opnorm(Ar,Inf) ≈ opnorm(Array(Ar),Inf)
+    @test norm(Ar) ≈ norm(Array(Ar))
+    @test opnorm(Ai,1) ≈ opnorm(Array(Ai),1)
+    @test opnorm(Ai,Inf) ≈ opnorm(Array(Ai),Inf)
+    @test norm(Ai) ≈ norm(Array(Ai))
     Ai = trunc.(Int, Ar*100)
-    @test norm(Ai,1) ≈ norm(Array(Ai),1)
-    @test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
-    @test vecnorm(Ai) ≈ vecnorm(Array(Ai))
+    @test opnorm(Ai,1) ≈ opnorm(Array(Ai),1)
+    @test opnorm(Ai,Inf) ≈ opnorm(Array(Ai),Inf)
+    @test norm(Ai) ≈ norm(Array(Ai))
     Ai = round.(Int, Ar*100)
-    @test norm(Ai,1) ≈ norm(Array(Ai),1)
-    @test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
-    @test vecnorm(Ai) ≈ vecnorm(Array(Ai))
+    @test opnorm(Ai,1) ≈ opnorm(Array(Ai),1)
+    @test opnorm(Ai,Inf) ≈ opnorm(Array(Ai),Inf)
+    @test norm(Ai) ≈ norm(Array(Ai))
     # make certain entries in nzval beyond
     # the range specified in colptr do not
-    # impact vecnorm of a sparse matrix
+    # impact norm of a sparse matrix
     foo = sparse(1.0I, 4, 4)
     resize!(foo.nzval, 5)
     setindex!(foo.nzval, NaN, 5)
-    @test vecnorm(foo) == 2.0
+    @test norm(foo) == 2.0
 end
 
 @testset "sparse matrix cond" begin
@@ -1692,10 +1724,10 @@ end
     @test cond(A, 1) == 1.0
     # For a discussion of the tolerance, see #14778
     if Base.USE_GPL_LIBS
-        @test 0.99 <= cond(Ar, 1) \ norm(Ar, 1) * norm(inv(Array(Ar)), 1) < 3
-        @test 0.99 <= cond(Ac, 1) \ norm(Ac, 1) * norm(inv(Array(Ac)), 1) < 3
-        @test 0.99 <= cond(Ar, Inf) \ norm(Ar, Inf) * norm(inv(Array(Ar)), Inf) < 3
-        @test 0.99 <= cond(Ac, Inf) \ norm(Ac, Inf) * norm(inv(Array(Ac)), Inf) < 3
+        @test 0.99 <= cond(Ar, 1) \ opnorm(Ar, 1) * opnorm(inv(Array(Ar)), 1) < 3
+        @test 0.99 <= cond(Ac, 1) \ opnorm(Ac, 1) * opnorm(inv(Array(Ac)), 1) < 3
+        @test 0.99 <= cond(Ar, Inf) \ opnorm(Ar, Inf) * opnorm(inv(Array(Ar)), Inf) < 3
+        @test 0.99 <= cond(Ac, Inf) \ opnorm(Ac, Inf) * opnorm(inv(Array(Ac)), Inf) < 3
     end
     @test_throws ArgumentError cond(A,2)
     @test_throws ArgumentError cond(A,3)
@@ -1705,21 +1737,21 @@ end
     @test_throws DimensionMismatch cond(Arect, Inf)
 end
 
-@testset "sparse matrix normestinv" begin
-    srand(1234)
+@testset "sparse matrix opnormestinv" begin
+    Random.seed!(1234)
     Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
     Aci = ceil.(Int64, 100*sprand(20,20,.5)) + im*ceil.(Int64, sprand(20,20,.5))
     Ar = sprandn(20,20,.5)
     Ari = ceil.(Int64, 100*Ar)
     if Base.USE_GPL_LIBS
-        # NOTE: normestinv is probabilistic, so requires a fixed seed (set above in srand(1234))
-        @test SparseArrays.normestinv(Ac,3) ≈ norm(inv(Array(Ac)),1) atol=1e-4
-        @test SparseArrays.normestinv(Aci,3) ≈ norm(inv(Array(Aci)),1) atol=1e-4
-        @test SparseArrays.normestinv(Ar) ≈ norm(inv(Array(Ar)),1) atol=1e-4
-        @test_throws ArgumentError SparseArrays.normestinv(Ac,0)
-        @test_throws ArgumentError SparseArrays.normestinv(Ac,21)
+        # NOTE: opnormestinv is probabilistic, so requires a fixed seed (set above in Random.seed!(1234))
+        @test SparseArrays.opnormestinv(Ac,3) ≈ opnorm(inv(Array(Ac)),1) atol=1e-4
+        @test SparseArrays.opnormestinv(Aci,3) ≈ opnorm(inv(Array(Aci)),1) atol=1e-4
+        @test SparseArrays.opnormestinv(Ar) ≈ opnorm(inv(Array(Ar)),1) atol=1e-4
+        @test_throws ArgumentError SparseArrays.opnormestinv(Ac,0)
+        @test_throws ArgumentError SparseArrays.opnormestinv(Ac,21)
     end
-    @test_throws DimensionMismatch SparseArrays.normestinv(sprand(3,5,.9))
+    @test_throws DimensionMismatch SparseArrays.opnormestinv(sprand(3,5,.9))
 end
 
 @testset "issue #13008" begin
@@ -1759,7 +1791,7 @@ end
 end
 
 @testset "factorization" begin
-    srand(123)
+    Random.seed!(123)
     local A
     A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2) + im*sprandn(5, 5, 0.2)
     A = A + copy(A')
@@ -1779,7 +1811,6 @@ end
     @test isa(factorize(tril(A)), LowerTriangular{Float64, SparseMatrixCSC{Float64, Int}})
     C, b = A[:, 1:4], fill(1., size(A, 1))
     @test !Base.USE_GPL_LIBS || factorize(C)\b ≈ Array(C)\b
-    @test_throws ErrorException chol(A)
     @test_throws ErrorException eigen(A)
     @test_throws ErrorException inv(A)
 end
@@ -2024,70 +2055,13 @@ end
 
 @testset "reverse search direction if step < 0 #21986" begin
     local A, B
-    A = guardsrand(1234) do
+    A = guardseed(1234) do
         sprand(5, 5, 1/5)
     end
     A = max.(A, copy(A'))
     LinearAlgebra.fillstored!(A, 1)
     B = A[5:-1:1, 5:-1:1]
     @test issymmetric(B)
-end
-
-# Faster covariance function for sparse matrices
-# Prevents densifying the input matrix when subtracting the mean
-# Test against dense implementation
-# PR https://github.com/JuliaLang/julia/pull/22735
-# Part of this test needed to be hacked due to the treatment
-# of Inf in sparse matrix algebra
-# https://github.com/JuliaLang/julia/issues/22921
-# The issue will be resolved in
-# https://github.com/JuliaLang/julia/issues/22733
-@testset "optimizing sparse $elty covariance" for elty in (Float64, Complex{Float64})
-    n = 10
-    p = 5
-    np2 = div(n*p, 2)
-    nzvals, x_sparse = guardsrand(1) do
-        if elty <: Real
-            nzvals = randn(np2)
-        else
-            nzvals = complex.(randn(np2), randn(np2))
-        end
-        nzvals, sparse(rand(1:n, np2), rand(1:p, np2), nzvals, n, p)
-    end
-    x_dense  = convert(Matrix{elty}, x_sparse)
-    @testset "Test with no Infs and NaNs, vardim=$vardim, corrected=$corrected" for vardim in (1, 2),
-                                                                                 corrected in (true, false)
-        @test cov(x_sparse, dims=vardim, corrected=corrected) ≈
-              cov(x_dense , dims=vardim, corrected=corrected)
-    end
-
-    @testset "Test with $x11, vardim=$vardim, corrected=$corrected" for x11 in (NaN, Inf),
-                                                                     vardim in (1, 2),
-                                                                  corrected in (true, false)
-        x_sparse[1,1] = x11
-        x_dense[1 ,1] = x11
-
-        cov_sparse = cov(x_sparse, dims=vardim, corrected=corrected)
-        cov_dense  = cov(x_dense , dims=vardim, corrected=corrected)
-        @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
-        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
-        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
-    end
-
-    @testset "Test with NaN and Inf, vardim=$vardim, corrected=$corrected" for vardim in (1, 2),
-                                                                            corrected in (true, false)
-        x_sparse[1,1] = Inf
-        x_dense[1 ,1] = Inf
-        x_sparse[2,1] = NaN
-        x_dense[2 ,1] = NaN
-
-        cov_sparse = cov(x_sparse, dims=vardim, corrected=corrected)
-        cov_dense  = cov(x_dense , dims=vardim, corrected=corrected)
-        @test cov_sparse[(1 + vardim):end, (1 + vardim):end] ≈
-              cov_dense[ (1 + vardim):end, (1 + vardim):end]
-        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
-        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
-    end
 end
 
 @testset "similar should not alias the input sparse array" begin
@@ -2223,11 +2197,6 @@ end
     @test A[1,1] == 2
 end
 
-@testset "findnz on non-sparse arrays" begin
-    @test findnz([0 1; 0 2]) == ([1, 2], [2, 2], [1, 2])
-    @test findnz(BitArray([false true; false true])) == ([1, 2], [2, 2], trues(2))
-end
-
 # #25943
 @testset "operations on Integer subtypes" begin
     s = sparse(UInt8[1, 2, 3], UInt8[1, 2, 3], UInt8[1, 2, 3])
@@ -2270,6 +2239,60 @@ _length_or_count_or_five(x) = length(x)
         b[[6, 8, 13, 15, 23]] .= false
         @test setindex!(spzeros(5, 5), X, b) == setindex!(zeros(5, 5), X, b)
     end
+end
+
+@testset "sparse transpose adjoint" begin
+    A = sprand(10, 10, 0.75)
+    @test A' == SparseMatrixCSC(A')
+    @test SparseMatrixCSC(A') isa SparseMatrixCSC
+    @test transpose(A) == SparseMatrixCSC(transpose(A))
+    @test SparseMatrixCSC(transpose(A)) isa SparseMatrixCSC
+end
+
+# PR 28242
+@testset "forward and backward solving of transpose/adjoint triangular matrices" begin
+    rng = MersenneTwister(20180730)
+    n = 10
+    A = sprandn(rng, n, n, 0.8); A += Diagonal((1:n) - diag(A))
+    B = ones(n, 2)
+    for (Ttri, triul ) in ((UpperTriangular, triu), (LowerTriangular, tril))
+        for trop in (adjoint, transpose)
+            AT = Ttri(A)           # ...Triangular wrapped
+            AC = triul(A)          # copied part of A
+            ATa = trop(AT)         # wrapped Adjoint
+            ACa = sparse(trop(AC)) # copied and adjoint
+            @test AT \ B ≈ AC \ B
+            @test ATa \ B ≈ ACa \ B
+            @test ATa \ sparse(B) == ATa \ B
+            @test Matrix(ATa) \ B ≈ ATa \ B
+            @test ATa * ( ATa \ B ) ≈ B
+        end
+    end
+end
+
+@testset "Issue #28369" begin
+    M = reshape([[1 2; 3 4], [9 10; 11 12], [5 6; 7 8], [13 14; 15 16]], (2,2))
+    MP = reshape([[1 2; 3 4], [5 6; 7 8], [9 10; 11 12], [13 14; 15 16]], (2,2))
+    S = sparse(M)
+    SP = sparse(MP)
+    @test isa(transpose(S), Transpose)
+    @test transpose(S) == copy(transpose(S))
+    @test Array(transpose(S)) == copy(transpose(M))
+    @test permutedims(S) == SP
+    @test permutedims(S, (2,1)) == SP
+    @test permutedims(S, (1,2)) == S
+    @test permutedims(S, (1,2)) !== S
+    MC = reshape([[(1+im) 2; 3 4], [9 10; 11 12], [(5 + 2im) 6; 7 8], [13 14; 15 16]], (2,2))
+    SC = sparse(MC)
+    @test isa(adjoint(SC), Adjoint)
+    @test adjoint(SC) == copy(adjoint(SC))
+    @test adjoint(MC) == copy(adjoint(SC))
+end
+
+@testset "Issue #28634" begin
+    a = SparseMatrixCSC{Int8, Int16}([1 2; 3 4])
+    na = SparseMatrixCSC(a)
+    @test typeof(a) === typeof(na)
 end
 
 end # module

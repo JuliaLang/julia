@@ -138,7 +138,7 @@ function _searchindex(s::Union{AbstractString,ByteArray},
     end
 end
 
-_searchindex(s::AbstractString, t::AbstractChar, i::Integer) = coalesce(findnext(isequal(t), s, i), 0)
+_searchindex(s::AbstractString, t::AbstractChar, i::Integer) = something(findnext(isequal(t), s, i), 0)
 
 function _search_bloom_mask(c)
     UInt64(1) << (c & 63)
@@ -149,7 +149,7 @@ _nthbyte(a::Union{AbstractVector{UInt8},AbstractVector{Int8}}, i) = a[i]
 
 function _searchindex(s::String, t::String, i::Integer)
     # Check for fast case of a single byte
-    lastindex(t) == 1 && return coalesce(findnext(isequal(t[1]), s, i), 0)
+    lastindex(t) == 1 && return something(findnext(isequal(t[1]), s, i), 0)
     _searchindex(unsafe_wrap(Vector{UInt8},s), unsafe_wrap(Vector{UInt8},t), i)
 end
 
@@ -162,7 +162,7 @@ function _searchindex(s::ByteArray, t::ByteArray, i::Integer)
     elseif m == 0
         return 0
     elseif n == 1
-        return coalesce(findnext(isequal(_nthbyte(t,1)), s, i), 0)
+        return something(findnext(isequal(_nthbyte(t,1)), s, i), 0)
     end
 
     w = m - n
@@ -317,7 +317,7 @@ end
 function _rsearchindex(s::String, t::String, i::Integer)
     # Check for fast case of a single byte
     if lastindex(t) == 1
-        return coalesce(findprev(isequal(t[1]), s, i), 0)
+        return something(findprev(isequal(t[1]), s, i), 0)
     elseif lastindex(t) != 0
         j = i ≤ ncodeunits(s) ? nextind(s, i)-1 : i
         return _rsearchindex(unsafe_wrap(Vector{UInt8}, s), unsafe_wrap(Vector{UInt8}, t), j)
@@ -339,7 +339,7 @@ function _rsearchindex(s::ByteArray, t::ByteArray, k::Integer)
     elseif m == 0
         return 0
     elseif n == 1
-        return coalesce(findprev(isequal(_nthbyte(t,1)), s, k), 0)
+        return something(findprev(isequal(_nthbyte(t,1)), s, k), 0)
     end
 
     w = m - n
@@ -435,7 +435,7 @@ findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, i)
 """
     occursin(needle::Union{AbstractString,Regex,AbstractChar}, haystack::AbstractString)
 
-Determine whether the second argument is a substring of the first. If `needle`
+Determine whether the first argument is a substring of the second. If `needle`
 is a regular expression, checks whether `haystack` contains a match.
 
 # Examples

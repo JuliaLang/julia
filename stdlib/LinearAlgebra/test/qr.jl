@@ -11,7 +11,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-srand(1234321)
+Random.seed!(1234321)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -174,7 +174,7 @@ end
 @testset "Issue 7304" begin
     A = [-√.5 -√.5; -√.5 √.5]
     Q = rectangularQ(qr(A).Q)
-    @test vecnorm(A-Q) < eps()
+    @test norm(A-Q) < eps()
 end
 
 @testset "qr on AbstractVector" begin

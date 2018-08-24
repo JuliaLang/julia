@@ -95,7 +95,7 @@ size_t rec_backtrace(uintptr_t *data, size_t maxsize)
     return rec_backtrace_ctx(data, maxsize, &context);
 }
 
-static jl_value_t *array_ptr_void_type = NULL;
+static jl_value_t *array_ptr_void_type JL_ALWAYS_LEAFTYPE = NULL;
 JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp)
 {
     jl_array_t *ip = NULL;
@@ -151,7 +151,7 @@ JL_DLLEXPORT void jl_get_backtrace(jl_array_t **btout, jl_array_t **bt2out)
     bt = jl_alloc_array_1d(array_ptr_void_type, ptls->bt_size);
     memcpy(bt->data, ptls->bt_data, ptls->bt_size * sizeof(void*));
     bt2 = jl_alloc_array_1d(jl_array_any_type, 0);
-    // Scan the stack for any interpeter frames
+    // Scan the stack for any interpreter frames
     size_t n = 0;
     while (n < ptls->bt_size) {
         if (ptls->bt_data[n] == (uintptr_t)-1) {

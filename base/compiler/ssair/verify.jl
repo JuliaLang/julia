@@ -1,7 +1,10 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 if !isdefined(@__MODULE__, Symbol("@verify_error"))
     macro verify_error(arg)
-        arg isa String && return esc(:(println($arg)))
-        arg isa Expr && arg.head === :string || error()
+        arg isa String && return esc(:(println(stderr, $arg)))
+        (arg isa Expr && arg.head === :string) || error("verify_error macro expected a string expression")
+        pushfirst!(arg.args, GlobalRef(Core, :stderr))
         pushfirst!(arg.args, :println)
         arg.head = :call
         return esc(arg)
@@ -38,6 +41,16 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
     end
 end
 
+function count_int(val::Int, arr::Vector{Int})
+    n = 0
+    for x in arr
+        if x === val
+            n += 1
+        end
+    end
+    n
+end
+
 function verify_ir(ir::IRCode)
     # For now require compact IR
     # @assert isempty(ir.new_nodes)
@@ -50,9 +63,56 @@ function verify_ir(ir::IRCode)
             error()
         end
         last_end = last(block.stmts)
+        terminator = ir.stmts[last_end]
+
         for p in block.preds
-            if !(idx in ir.cfg.blocks[p].succs)
-                @verify_error "Predeccsor $p of block $idx not in successor list"
+            p == 0 && continue
+            c = count_int(idx, ir.cfg.blocks[p].succs)
+            if c == 0
+                @verify_error "Predecessor $p of block $idx not in successor list"
+                error()
+            elseif c > 1
+                @verify_error "Predecessor $p of block $idx occurs too often in successor list"
+                error()
+            end
+        end
+        if isa(terminator, ReturnNode)
+            if !isempty(block.succs)
+                @verify_error "Block $idx ends in return or unreachable, but has successors"
+                error()
+            end
+        elseif isa(terminator, GotoNode)
+            if length(block.succs) != 1 || block.succs[1] != terminator.label
+                @verify_error "Block $idx successors ($(block.succs)), does not match GotoNode terminator"
+                error()
+            end
+        elseif isa(terminator, GotoIfNot)
+            if terminator.dest == idx + 1
+                @verify_error "Block $idx terminator forms a double edge to block $(idx+1)"
+                error()
+            end
+            if length(block.succs) != 2 || (block.succs != [terminator.dest, idx+1] && block.succs != [idx+1, terminator.dest])
+                @verify_error "Block $idx successors ($(block.succs)), does not match GotoIfNot terminator"
+                error()
+            end
+        elseif isexpr(terminator, :enter)
+            @label enter_check
+            if length(block.succs) != 2 || (block.succs != [terminator.args[1], idx+1] && block.succs != [idx+1, terminator.args[1]])
+                @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
+                error()
+            end
+        else
+            if length(block.succs) != 1 || block.succs[1] != idx + 1
+                # As a special case, we allow extra statements in the BB of an :enter
+                # statement, until we can do proper CFG manipulations during compaction.
+                for stmt in ir.stmts[first(block.stmts):last(block.stmts)]
+                    if isexpr(stmt, :enter)
+                        terminator = stmt
+                        @goto enter_check
+                    end
+                    isa(stmt, PhiNode) || break
+                end
+                @verify_error "Block $idx successors ($(block.succs)), does not match fall-through terminator"
                 error()
             end
         end
@@ -94,6 +154,9 @@ function verify_ir(ir::IRCode)
                         #"""
                         #error()
                     end
+                elseif isa(val, GlobalRef) || isa(val, Expr)
+                    @verify_error "GlobalRefs and Exprs are not allowed as PhiNode values"
+                    error()
                 end
                 check_op(ir, domtree, val, edge, last(ir.cfg.blocks[stmt.edges[i]].stmts)+1)
             end
@@ -115,6 +178,12 @@ function verify_ir(ir::IRCode)
                     if ir.lines[idx] <= 0
                         #@verify_error "Missing line number information for statement $idx of $ir"
                     end
+                end
+            end
+            if isa(stmt, Expr) && stmt.head === :(=)
+                if stmt.args[1] isa SSAValue
+                    @verify_error "SSAValue as assignment LHS"
+                    error()
                 end
             end
             for op in userefs(stmt)

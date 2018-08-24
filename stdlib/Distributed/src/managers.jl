@@ -64,7 +64,7 @@ specified, other workers will connect to this worker at the specified `bind_addr
 `port`.
 
 `count` is the number of workers to be launched on the specified host. If specified as
-`:auto` it will launch as many workers as the number of cores on the specific host.
+`:auto` it will launch as many workers as the number of CPU threads on the specific host.
 
 Keyword arguments:
 
@@ -294,13 +294,13 @@ end
 """
     addprocs(; kwargs...) -> List of process identifiers
 
-Equivalent to `addprocs(Sys.CPU_CORES; kwargs...)`
+Equivalent to `addprocs(Sys.CPU_THREADS; kwargs...)`
 
 Note that workers do not run a `.julia/config/startup.jl` startup script, nor do they synchronize
 their global state (such as global variables, new method definitions, and loaded modules) with any
 of the other running processes.
 """
-addprocs(; kwargs...) = addprocs(Sys.CPU_CORES; kwargs...)
+addprocs(; kwargs...) = addprocs(Sys.CPU_THREADS; kwargs...)
 
 """
     addprocs(np::Integer; restrict=true, kwargs...) -> List of process identifiers
@@ -395,16 +395,16 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
     # master connecting to workers
     if config.io !== nothing
         (bind_addr, port) = read_worker_host_port(config.io)
-        pubhost = coalesce(config.host, bind_addr)
+        pubhost = something(config.host, bind_addr)
         config.host = pubhost
         config.port = port
     else
         pubhost = notnothing(config.host)
         port = notnothing(config.port)
-        bind_addr = coalesce(config.bind_addr, pubhost)
+        bind_addr = something(config.bind_addr, pubhost)
     end
 
-    tunnel = coalesce(config.tunnel, false)
+    tunnel = something(config.tunnel, false)
 
     s = split(pubhost,'@')
     user = ""
@@ -422,7 +422,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 
     if tunnel
         if !haskey(tunnel_hosts_map, pubhost)
-            tunnel_hosts_map[pubhost] = Semaphore(coalesce(config.max_parallel, typemax(Int)))
+            tunnel_hosts_map[pubhost] = Semaphore(something(config.max_parallel, typemax(Int)))
         end
         sem = tunnel_hosts_map[pubhost]
 

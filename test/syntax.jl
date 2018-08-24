@@ -521,7 +521,7 @@ end
               global x = 2
               local x = 1
               end")) == Expr(:error, "variable \"x\" declared both local and global")
-
+#=
 @test Meta.lower(Main, Meta.parse("let
               local x = 2
               local x = 1
@@ -534,7 +534,7 @@ end
 @test Meta.lower(Main, Meta.parse("let x = 2
                   local x = 1
               end")) == Expr(:error, "local \"x\" declared twice")
-
+=#
 # issue #23673
 @test :(let $([:(x=1),:(y=2)]...); x+y end) == :(let x = 1, y = 2; x+y end)
 
@@ -702,46 +702,27 @@ macro m1()
         sin(1)
     end
 end
-macro m2()
-    quote
-        1
-    end
-end
 include_string(@__MODULE__, """
 macro m3()
     quote
         @m1
     end
 end
-macro m4()
-    quote
-        @m2
-    end
-end
 """, "another_file.jl")
 m1_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m1 end))
-m2_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m2 end))
-m3_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m3 end))
-m4_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m4 end))
 
-# Check the expanded expresion has expected number of matching push/pop
+# Check the expanded expression has expected number of matching push/pop
 # and the return is handled correctly
 # NOTE: we currently only emit push/pop locations for macros from other files
 @test_broken count_meta_loc(m1_exprs) == 1
 @test is_return_ssavalue(m1_exprs[end])
-@test_broken is_pop_loc(m1_exprs[end - 1])
 
-@test_broken count_meta_loc(m2_exprs) == 1
-@test m2_exprs[end] == :(return 1)
-@test_broken is_pop_loc(m2_exprs[end - 1])
-
-@test count_meta_loc(m3_exprs) == 2
-@test is_return_ssavalue(m3_exprs[end])
-@test is_pop_loc(m3_exprs[end - 1])
-
-@test count_meta_loc(m4_exprs) == 2
-@test m4_exprs[end] == :(return 1)
-@test is_pop_loc(m4_exprs[end - 1])
+let low3 = Meta.lower(@__MODULE__, quote @m3 end)
+    m3_exprs = get_expr_list(low3)
+    ci = low3.args[1]::Core.CodeInfo
+    @test ci.codelocs == [3, 1]
+    @test is_return_ssavalue(m3_exprs[end])
+end
 
 function f1(a)
     b = a + 100
@@ -761,25 +742,12 @@ f2_ci = code_typed(f2, (Int,))[1][1]
 f1_exprs = get_expr_list(f1_ci)
 f2_exprs = get_expr_list(f2_ci)
 
-if f1_ci.codelocs !== nothing # New style IR
-    if Base.JLOptions().can_inline != 0
-        @test length(f1_ci.linetable) == 3
-        @test length(f2_ci.linetable) >= 4
-    else
-        @test length(f1_ci.linetable) == 2
-        @test length(f2_ci.linetable) >= 3
-    end
+if Base.JLOptions().can_inline != 0
+    @test length(f1_ci.linetable) == 3
+    @test length(f2_ci.linetable) >= 3
 else
-    @test Meta.isexpr(f1_exprs[end], :return)
-    @test Meta.isexpr(f2_exprs[end-1], :return)
-
-    if Base.JLOptions().can_inline != 0
-        @test count_meta_loc(f1_exprs) == 1
-        @test count_meta_loc(f2_exprs) == 2
-    else
-        @test count_meta_loc(f1_exprs) == 0
-        @test count_meta_loc(f2_exprs) == 1
-    end
+    @test length(f1_ci.linetable) == 2
+    @test length(f2_ci.linetable) >= 3
 end
 
 # Check that string and command literals are parsed to the appropriate macros
@@ -1116,7 +1084,7 @@ end
 @test_throws ParseError Meta.parse("@ time")
 
 # issue #7479
-@test Meta.lower(Main, Meta.parse("(true &&& false)")) == Expr(:error, "misplaced \"&\" expression")
+@test Meta.lower(Main, Meta.parse("(true &&& false)")) == Expr(:error, "invalid syntax &false")
 
 # if an indexing expression becomes a cat expression, `end` is not special
 @test_throws ParseError Meta.parse("a[end end]")
@@ -1332,13 +1300,12 @@ let ex = Meta.parse("@doc raw\"
     @test length(ex.args) == 3
 end
 
-# TODO: enable when 0.7 deprecations are removed
-#@test Meta.parse("\"x\"
-#                  # extra line, not a doc string
-#                  f(x) = x", 1)[1] === "x"
-#@test Meta.parse("\"x\"
-#
-#                  f(x) = x", 1)[1] === "x"
+@test Meta.parse("\"x\"
+                  # extra line, not a doc string
+                  f(x) = x", 1)[1] === "x"
+@test Meta.parse("\"x\"
+
+                  f(x) = x", 1)[1] === "x"
 
 # issue #26137
 # cases where parens enclose argument lists
@@ -1365,15 +1332,33 @@ end
 @test Meta.parse("1 -+(a=1, b=2)") == Expr(:call, :-, 1,
                                            Expr(:call, :+, Expr(:kw, :a, 1), Expr(:kw, :b, 2)))
 
-@test Meta.parse("-(2)(x)") == Expr(:call, :-, Expr(:call, :*, 2, :x))
-@test Meta.parse("-(x)y")   == Expr(:call, :-, Expr(:call, :*, :x, :y))
+@test Meta.parse("-(2)(x)") == Expr(:call, :*, Expr(:call, :-,  2), :x)
+@test Meta.parse("-(x)y")   == Expr(:call, :*, Expr(:call, :-, :x), :y)
 @test Meta.parse("-(x,)y")  == Expr(:call, :*, Expr(:call, :-, :x), :y)
 @test Meta.parse("-(f)(x)") == Expr(:call, :-, Expr(:call, :f, :x))
-@test Meta.parse("-(2)(x)^2") == Expr(:call, :-, Expr(:call, :*, 2, Expr(:call, :^, :x, 2)))
+@test Meta.parse("-(2)(x)^2") == Expr(:call, :*, Expr(:call, :-, 2), Expr(:call, :^, :x, 2))
 @test Meta.parse("Y <- (x->true)(X)") ==
     Expr(:call, :<, :Y,
          Expr(:call, :-, Expr(:call, Expr(:->, :x, Expr(:block, LineNumberNode(1,:none), true)),
                               :X)))
+
+# issue #27641
+@test Meta.parse("√3x")   == Expr(:call, :*, Expr(:call, :√, 3), :x)
+@test Meta.parse("2^√3x") == Expr(:call, :^, 2, Expr(:call, :*, Expr(:call, :√, 3), :x))
+@test Meta.parse("√2^3")  == Expr(:call, :√, Expr(:call, :^, 2, 3))
+@test Meta.parse("-√2")   == Expr(:call, :-, Expr(:call, :√, 2))
+@test Meta.parse("√3x^2") == Expr(:call, :*, Expr(:call, :√, 3), Expr(:call, :^, :x, 2))
+@test Meta.parse("-3x^2") == Expr(:call, :*, -3, Expr(:call, :^, :x, 2))
+@test_throws ParseError Meta.parse("2!3")
+@test_throws ParseError Meta.parse("2√3")
+
+# issue #27914
+@test Meta.parse("2f(x)")        == Expr(:call, :*, 2, Expr(:call, :f, :x))
+@test Meta.parse("f(x)g(x)")     == Expr(:call, :*, Expr(:call, :f, :x), Expr(:call, :g, :x))
+@test Meta.parse("2f(x)g(x)")    == Expr(:call, :*, 2, Expr(:call, :f, :x), Expr(:call, :g, :x))
+@test Meta.parse("f(x)g(x)h(x)") == Expr(:call, :*, Expr(:call, :f, :x), Expr(:call, :g, :x), Expr(:call, :h, :x))
+@test Meta.parse("2(x)")         == Expr(:call, :*, 2, :x)
+@test Meta.parse("2(x)y")        == Expr(:call, :*, 2, :x, :y)
 
 @test_throws ParseError Meta.parse("a.: b")
 @test Meta.parse("a.:end") == Expr(:., :a, QuoteNode(:end))
@@ -1384,6 +1369,11 @@ end
 
 # issue #25994
 @test Meta.parse("[a\nfor a in b]") == Expr(:comprehension, Expr(:generator, :a, Expr(:(=), :a, :b)))
+
+# issue #27529
+let len = 10
+    @test [ i for i in 0:len -1 ] == [0:9;]
+end
 
 # Module name cannot be a reserved word.
 @test_throws ParseError Meta.parse("module module end")
@@ -1399,6 +1389,11 @@ end
 
 # issue #26717
 @test Meta.lower(@__MODULE__, :( :(:) = 2 )) == Expr(:error, "invalid assignment location \":(:)\"")
+
+# issue #27690
+# previously, this was allowed since it thought `end` was being used for indexing.
+# however the quote should disable that context.
+@test_throws ParseError Meta.parse("Any[:(end)]")
 
 # issue #17781
 let ex = Meta.lower(@__MODULE__, Meta.parse("
@@ -1423,6 +1418,30 @@ end
 # issue #15229
 @test Meta.lower(@__MODULE__, :(function f(x); local x; 0; end)) ==
     Expr(:error, "local variable name \"x\" conflicts with an argument")
+@test Meta.lower(@__MODULE__, :(function f(x); begin; local x; 0; end; end)) ==
+    Expr(:error, "local variable name \"x\" conflicts with an argument")
+
+# issue #27964
+a27964(x) = Any[x for x in []]
+@test a27964(0) == Any[]
+function b27964(x)
+    local y
+    let
+        local x
+        x = 2
+        y = x
+    end
+    return (x, y)
+end
+@test b27964(8) == (8, 2)
+function c27964(x)
+    local y
+    let x = 2
+        y = x
+    end
+    return (x, y)
+end
+@test c27964(8) == (8, 2)
 
 # issue #26739
 @test_throws ErrorException("syntax: invalid syntax \"sin.[1]\"") Core.eval(@__MODULE__, :(sin.[1]))
@@ -1457,3 +1476,200 @@ macro test27155()
     end
 end
 @test @test27155() == (Tuple{T} where T)
+
+# issue #27521
+macro test27521(f, x)
+    :(($(esc(f)), $x))
+end
+let ex = Meta.parse("@test27521(2) do y; y; end")
+    fex = Expr(:(->), Expr(:tuple, :y), Expr(:block, LineNumberNode(1,:none), :y))
+    @test ex == Expr(:do, Expr(:macrocall, Symbol("@test27521"), LineNumberNode(1,:none), 2),
+                     fex)
+    @test macroexpand(@__MODULE__, ex) == Expr(:tuple, fex, 2)
+end
+
+# issue #27129
+f27129(x = 1) = (@Base._inline_meta; x)
+for meth in methods(f27129)
+    @test ccall(:jl_uncompress_ast, Any, (Any, Any), meth, meth.source).inlineable
+end
+
+# issue #27710
+struct Foo27710{T} end
+function test27710()
+    types(::Foo27710{T}) where T = T
+    T = types(Foo27710{Int64}())
+end
+@test test27710() === Int64
+
+# issue #27268
+function f27268()
+    g(col::AbstractArray{<:Real}) = col
+end
+function f27268_2()
+    g(col::AbstractArray{T} where T<:Real) = col
+end
+@test f27268()([1]) == [1]
+@test f27268_2()([1]) == [1]
+@test_throws MethodError f27268()([""])
+@test_throws MethodError f27268_2()([""])
+
+@test_throws ErrorException("syntax: local variable x cannot be used in closure declaration") @eval begin
+    function g27268()
+        x = 1
+        h(::Val{x}) = 1
+    end
+end
+
+types27268 = (Int64,Int8)
+function h27268()
+    function g(::Union{map(t->Array{t,N},types27268)...} where N)
+    end
+end
+@test first(methods(h27268())).sig == Tuple{typeof(h27268()), Union{Array{Int64,N}, Array{Int8,N}} where N}
+
+let val(::Type{Val{X}}) where {X} = X, f
+    function f()
+        function g(::Val{x->2x})
+        end
+    end
+    @test val(first(methods(f())).sig.parameters[2])(21) == 42
+end
+
+# issue #27807
+module A27807
+macro m()
+    quote
+        function foo(x::T, y::S) where T<:Number where S<:Number
+            return one(T), zero(S)
+        end
+    end
+end
+end
+@test A27807.@m()(1,1.0) === (1, 0.0)
+
+# issue #27896
+let oldstderr = stderr, newstderr, errtxt
+    try
+        newstderr = redirect_stderr()
+        @eval function foo(a::A, b::B) where {A,B}
+            B = eltype(A)
+            return convert(B, b)
+        end
+        errtxt = @async read(newstderr[1], String)
+    finally
+        redirect_stderr(oldstderr)
+        close(newstderr[2])
+    end
+    @test occursin("WARNING: local variable B conflicts with a static parameter", fetch(errtxt))
+end
+
+# issue #28044
+code28044(x) = 10x
+begin
+    function f28044(::Val{code28044}) where code28044
+        code28044(2)
+    end
+    # make sure this assignment to `code28044` doesn't add an implicit-global
+    Val{code28044} where code28044
+end
+@test f28044(Val(identity)) == 2
+
+# issue #28244
+macro foo28244(sym)
+    x = :(bar())
+    push!(x.args, Expr(sym))
+    x
+end
+@test (@macroexpand @foo28244(kw)) == Expr(:call, GlobalRef(@__MODULE__,:bar), Expr(:kw))
+@test eval(:(@macroexpand @foo28244($(Symbol("let"))))) == Expr(:error, "malformed expression")
+
+# #16356
+@test_throws ParseError Meta.parse("0xapi")
+
+# #22523 #22712
+@test_throws ParseError Meta.parse("a?b:c")
+@test_throws ParseError Meta.parse("a ?b:c")
+@test_throws ParseError Meta.parse("a ? b:c")
+@test_throws ParseError Meta.parse("a ? b :c")
+@test_throws ParseError Meta.parse("?")
+
+# #13079
+@test Meta.parse("1<<2*3") == :((1<<2)*3)
+
+# #19987
+@test_throws ParseError Meta.parse("try ; catch f() ; end")
+
+# #23076
+@test :([1,2;]) == Expr(:vect, Expr(:parameters), 1, 2)
+
+# #24452
+@test Meta.parse("(a...)") == Expr(Symbol("..."), :a)
+
+# #19324
+@test_throws UndefVarError(:x) eval(:(module M19324
+                 x=1
+                 for i=1:10
+                     x += i
+                 end
+             end))
+
+# #22314
+function f22314()
+    i = 0
+    for i = 1:10
+    end
+    i
+end
+@test f22314() == 0
+
+module M22314
+i = 0
+for i = 1:10
+end
+end
+@test M22314.i == 0
+
+# #6080
+@test Meta.lower(@__MODULE__, :(ccall(:a, Cvoid, (Cint,), &x))) == Expr(:error, "invalid syntax &x")
+
+@test_throws ParseError Meta.parse("x.'")
+@test_throws ParseError Meta.parse("0.+1")
+
+# #24221
+@test Meta.isexpr(Meta.lower(@__MODULE__, :(a=_)), :error)
+
+for ex in [:([x=1]), :(T{x=1})]
+    @test Meta.lower(@__MODULE__, ex) == Expr(:error, string("misplaced assignment statement in \"", ex, "\""))
+end
+
+# issue #28576
+@test Meta.isexpr(Meta.parse("1 == 2 ?"), :incomplete)
+@test Meta.isexpr(Meta.parse("1 == 2 ? 3 :"), :incomplete)
+
+# issue #28593
+macro a28593()
+    quote
+        abstract type A28593{S<:Real, V<:AbstractVector{S}} end
+    end
+end
+
+macro b28593()
+    quote
+        struct B28593{S<:Real, V<:AbstractVector{S}} end
+    end
+end
+
+macro c28593()
+    quote
+        primitive type C28593{S<:Real, V<:AbstractVector{S}} 32 end
+    end
+end
+
+@a28593
+@b28593
+@c28593
+
+@test A28593.var.name === :S
+@test B28593.var.name === :S
+@test C28593.var.name === :S

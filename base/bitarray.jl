@@ -339,8 +339,6 @@ similar(B::BitArray, T::Type{Bool}, dims::Dims) = BitArray(undef, dims)
 # (this triggers conversions like float(bitvector) etc.)
 similar(B::BitArray, T::Type, dims::Dims) = Array{T}(undef, dims)
 
-similar(::Type{T}, shape::Tuple) where {T<:BitArray} = T(undef, to_shape(shape))
-
 function fill!(B::BitArray, x)
     y = convert(Bool, x)
     isempty(B) && return B
