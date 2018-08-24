@@ -55,6 +55,7 @@ end
     @test I - α == 1 - α
     @test α .* UniformScaling(1.0) == UniformScaling(1.0) .* α
     @test UniformScaling(α)./α == UniformScaling(1.0)
+    @test α.\UniformScaling(α) == UniformScaling(1.0)
     @test α * UniformScaling(1.0) == UniformScaling(1.0) * α
     @test UniformScaling(α)/α == UniformScaling(1.0)
 end

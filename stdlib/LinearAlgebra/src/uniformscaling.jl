@@ -168,6 +168,8 @@ Broadcast.broadcasted(::typeof(*), J::UniformScaling,x::Number) = UniformScaling
 
 Broadcast.broadcasted(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
 
+Broadcast.broadcasted(::typeof(\), x::Number,J::UniformScaling) = UniformScaling(x\J.λ)
+
 ==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
 
 ## equality comparison with UniformScaling
