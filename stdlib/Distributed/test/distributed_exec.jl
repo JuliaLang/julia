@@ -1527,6 +1527,14 @@ end
 a27933 = :_not_defined_27933
 @test remotecall_fetch(()->a27933, first(workers())) === a27933
 
+# PR #28651
+for T in (UInt8, Int8, UInt16, Int16, UInt32, Int32, UInt64)
+    n = @distributed (+) for i in Base.OneTo(T(10))
+        i
+    end
+    @test n == 55
+end
+
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.
 rmprocs(workers())
