@@ -643,7 +643,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
     jl_arr_xtralloc_limit = total_mem / 100;  // Extra allocation limited to 1% of total RAM
     jl_find_stack_bottom();
-    jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
+    jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 1);
 #ifdef _OS_WINDOWS_
     jl_ntdll_handle = jl_dlopen("ntdll.dll", 0); // bypass julia's pathchecking for system dlls
     jl_kernel32_handle = jl_dlopen("kernel32.dll", 0);

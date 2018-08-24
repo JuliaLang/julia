@@ -1498,8 +1498,7 @@ enum JL_RTLD_CONSTANT {
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
 
 typedef void *jl_uv_libhandle; // compatible with dlopen (void*) / LoadLibrary (HMODULE)
-JL_DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(const char *fname, unsigned flags);
-JL_DLLEXPORT jl_uv_libhandle jl_load_dynamic_library_e(const char *fname, unsigned flags);
+JL_DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(const char *fname, unsigned flags, int throw_err);
 JL_DLLEXPORT jl_uv_libhandle jl_dlopen(const char *filename, unsigned flags);
 JL_DLLEXPORT int jl_dlclose(jl_uv_libhandle handle);
 JL_DLLEXPORT int jl_dlsym(jl_uv_libhandle handle, const char *symbol, void ** value, int throw_err);

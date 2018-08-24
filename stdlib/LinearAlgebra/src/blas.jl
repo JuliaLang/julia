@@ -72,7 +72,9 @@ import Libdl
 # utility routines
 let lib = C_NULL
 global function determine_vendor()
-    lib == C_NULL && (lib = Libdl.dlopen_e(Base.libblas_name))
+    if lib == C_NULL
+        lib = Libdl.dlopen(Base.libblas_name; throw_error=false)
+    end
     vend = :unknown
     if lib != C_NULL
         if Libdl.dlsym(lib, :openblas_set_num_threads; throw_error=false) !== nothing

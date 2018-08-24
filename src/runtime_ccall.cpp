@@ -45,7 +45,7 @@ void *jl_get_library(const char *f_lib)
     if (hnd != NULL)
         return hnd;
     // We might run this concurrently on two threads but it doesn't matter.
-    hnd = jl_load_dynamic_library(f_lib, JL_RTLD_DEFAULT);
+    hnd = jl_load_dynamic_library(f_lib, JL_RTLD_DEFAULT, 1);
     if (hnd != NULL)
         jl_atomic_store_release(map_slot, hnd);
     return hnd;
