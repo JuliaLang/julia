@@ -1408,7 +1408,7 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 
     // Get handle to sys.so
     if (!is_ji) // .ji extension => load .ji file only
-        jl_set_sysimg_so(jl_load_dynamic_library(fname, JL_RTLD_LOCAL | JL_RTLD_NOW));
+        jl_set_sysimg_so(jl_load_dynamic_library(fname, JL_RTLD_LOCAL | JL_RTLD_NOW, 1));
 }
 
 // Allow passing in a module handle directly, rather than a path

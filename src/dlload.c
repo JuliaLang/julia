@@ -117,7 +117,7 @@ JL_DLLEXPORT int jl_dlclose(void *handle)
 #endif
 }
 
-static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int throw_err)
+JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err)
 {
     char path[PATHBUF];
     int i;
@@ -200,16 +200,6 @@ notfound:
 
 done:
     return handle;
-}
-
-JL_DLLEXPORT void *jl_load_dynamic_library_e(const char *modname, unsigned flags)
-{
-    return jl_load_dynamic_library_(modname, flags, 0);
-}
-
-JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags)
-{
-    return jl_load_dynamic_library_(modname, flags, 1);
 }
 
 JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int throw_err)

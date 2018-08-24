@@ -95,27 +95,28 @@ exported symbols and if the bound references are put into process local or globa
 instance `RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL` allows the library's symbols to be available
 for usage in other shared libraries, addressing situations where there are dependencies
 between shared libraries.
+
+If the library cannot be found, this method returns `nothing`.
 """
 function dlopen end
 
-dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    dlopen(string(s), flags)
+dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; kwargs...) =
+    dlopen(string(s), flags; kwargs...)
 
-dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Cstring,UInt32), s, flags)
+function dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; throw_error::Bool = true)
+    ret = ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Cstring,UInt32,Cint), s, flags, Cint(throw_error))
+    if ret == C_NULL
+        return nothing
+    end
+    return ret
+end
 
 """
     dlopen_e(libfile::AbstractString [, flags::Integer])
 
-Similar to [`dlopen`](@ref), except returns a `NULL` pointer instead of raising errors.
+Similar to [`dlopen`](@ref), except returns a `NULL` pointer instead of raising errors.  It is preferred to directly call dlopen(libfile, flags; throw_error=false)`
 """
-function dlopen_e end
-
-dlopen_e(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    dlopen_e(string(s), flags)
-
-dlopen_e(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    ccall(:jl_load_dynamic_library_e, Ptr{Cvoid}, (Cstring,UInt32), s, flags)
+dlopen_e(args...) = dlopen(args...; throw_error=false)
 
 """
     dlclose(handle)
@@ -139,14 +140,14 @@ function find_library(libnames, extrapaths=String[])
     for lib in libnames
         for path in extrapaths
             l = joinpath(path, lib)
-            p = dlopen_e(l, RTLD_LAZY)
-            if p != C_NULL
+            p = dlopen(l, RTLD_LAZY; throw_error=false)
+            if p !== nothing
                 dlclose(p)
                 return l
             end
         end
-        p = dlopen_e(lib, RTLD_LAZY)
-        if p != C_NULL
+        p = dlopen(lib, RTLD_LAZY; throw_error=false)
+        if p !== nothing
             dlclose(p)
             return lib
         end

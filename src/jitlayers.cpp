@@ -247,8 +247,8 @@ static uint64_t resolve_atomic(const char *name)
 #elif defined(_OS_WINDOWS_)
     static const char *const libatomic = "libatomic-1.dll";
 #endif
-    static void *atomic_hdl = jl_load_dynamic_library_e(libatomic,
-                                                        JL_RTLD_LOCAL);
+    static void *atomic_hdl = jl_load_dynamic_library(libatomic,
+                                                      JL_RTLD_LOCAL, 0);
     static const char *const atomic_prefix = "__atomic_";
     if (!atomic_hdl)
         return 0;
