@@ -382,12 +382,8 @@ JL_DLLEXPORT int jl_cpu_threads(void)
     return count;
 #elif defined(_OS_WINDOWS_)
     //Try to get WIN7 API method
-    GAPC gapc = (GAPC) jl_dlsym_e(
-        jl_kernel32_handle,
-        "GetActiveProcessorCount"
-    );
-
-    if (gapc) {
+    GAPC gapc;
+    if (jl_dlsym(jl_kernel32_handle, "GetActiveProcessorCount", (void **)&gapc, 0)) {
         return gapc(ALL_PROCESSOR_GROUPS);
     }
     else { //fall back on GetSystemInfo

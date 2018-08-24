@@ -174,13 +174,13 @@ let dl = C_NULL
     try
         dl = Libdl.dlopen(abspath(joinpath(private_libdir, "libccalltest")))
         fptr = Libdl.dlsym(dl, :set_verbose)
-        @test fptr != C_NULL
+        @test fptr !== nothing
         @test_throws ErrorException Libdl.dlsym(dl, :foo)
 
         fptr = Libdl.dlsym_e(dl, :set_verbose)
-        @test fptr != C_NULL
+        @test fptr !== nothing
         fptr = Libdl.dlsym_e(dl, :foo)
-        @test fptr == C_NULL
+        @test fptr === nothing
     finally
         Libdl.dlclose(dl)
     end
