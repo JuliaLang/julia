@@ -68,15 +68,15 @@ julia> typeof(1)
 Int64
 ```
 
-The Julia internal variable [`Sys.WORD_SIZE`](@ref) indicates whether the target system is 32-bit
+The Julia internal variable [`Sys.WORD_SIZE`](@ref) indicates whether julia is 32-bit
 or 64-bit:
 
 ```julia-repl
-# 32-bit system:
+# 32-bit julia:
 julia> Sys.WORD_SIZE
 32
 
-# 64-bit system:
+# 64-bit julia:
 julia> Sys.WORD_SIZE
 64
 ```
