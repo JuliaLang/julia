@@ -226,14 +226,15 @@ end
 <=(l::AbstractSet, r::AbstractSet) = l ⊆ r
 
 function issubset(l, r)
+    if haslength(r)
+        rlen = length(r)
+        #This threshold was empirically determined by repeatedly
+        #sampling using these two methods (see #26198)
+        lenthresh = 70
 
-    rlen = length(r)
-    #This threshold was empirically determined by repeatedly
-    #sampling using these two methods.
-    lenthresh = 70
-
-    if rlen > lenthresh && !isa(r, AbstractSet)
-       return issubset(l, Set(r))
+        if rlen > lenthresh && !isa(r, AbstractSet)
+            return issubset(l, Set(r))
+        end
     end
 
     for elt in l
