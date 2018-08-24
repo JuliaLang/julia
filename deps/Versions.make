@@ -9,8 +9,8 @@ OSXUNWIND_VER = 0.0.3
 GMP_VER = 6.1.2
 MPFR_VER = 4.0.1
 PATCHELF_VER = 0.9
-MBEDTLS_VER = 2.12.0
-CURL_VER = 7.61.0
+MBEDTLS_VER = 2.7.5
+CURL_VER = 7.56.0
 
 # Specify the version of the Mozilla CA Certificate Store to obtain.
 # The versions of cacert.pem are identified by the date (YYYY-MM-DD) of their changes.
