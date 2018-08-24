@@ -661,7 +661,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     needsSymRefreshModuleList = 0;
     HMODULE jl_dbghelp = (HMODULE) jl_dlopen("dbghelp.dll", 0);
     if (jl_dbghelp)
-        hSymRefreshModuleList = (BOOL (WINAPI*)(HANDLE)) jl_dlsym(jl_dbghelp, "SymRefreshModuleList");
+        jl_dlsym(jl_dbghelp, "SymRefreshModuleList", (void **)&hSymRefreshModuleList, 1);
 #else
     jl_exe_handle = jl_dlopen(NULL, JL_RTLD_NOW);
 #ifdef RTLD_DEFAULT

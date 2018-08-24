@@ -1502,8 +1502,7 @@ JL_DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(const char *fname, unsigned
 JL_DLLEXPORT jl_uv_libhandle jl_load_dynamic_library_e(const char *fname, unsigned flags);
 JL_DLLEXPORT jl_uv_libhandle jl_dlopen(const char *filename, unsigned flags);
 JL_DLLEXPORT int jl_dlclose(jl_uv_libhandle handle);
-JL_DLLEXPORT void *jl_dlsym_e(jl_uv_libhandle handle, const char *symbol);
-JL_DLLEXPORT void *jl_dlsym(jl_uv_libhandle handle, const char *symbol);
+JL_DLLEXPORT int jl_dlsym(jl_uv_libhandle handle, const char *symbol, void ** value, int throw_err);
 
 // compiler
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v);

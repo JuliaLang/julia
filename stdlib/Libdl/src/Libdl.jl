@@ -50,19 +50,26 @@ applicable.
 
 Look up a symbol from a shared library handle, return callable function pointer on success.
 """
-function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString})
+function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString}; throw_error::Bool = true)
     hnd == C_NULL && throw(ArgumentError("NULL library handle"))
-    ccall(:jl_dlsym, Ptr{Cvoid}, (Ptr{Cvoid}, Cstring), hnd, s)
+    val = Ref(Ptr{Cvoid}(0))
+    symbol_found = ccall(:jl_dlsym, Cint,
+        (Ptr{Cvoid}, Cstring, Ref{Ptr{Cvoid}}, Cint),
+        hnd, s, val, Int64(throw_error)
+    )
+    if symbol_found == 0
+        return nothing
+    end
+    return val[]
 end
 
 """
     dlsym_e(handle, sym)
 
-Look up a symbol from a shared library handle, silently return `NULL` pointer on lookup failure.
+Look up a symbol from a shared library handle, silently return `NULL` pointer on lookup failure.  It is preferred to use dlsym(handle, sym; throw_error=false).
 """
 function dlsym_e(hnd::Ptr, s::Union{Symbol,AbstractString})
-    hnd == C_NULL && throw(ArgumentError("NULL library handle"))
-    ccall(:jl_dlsym_e, Ptr{Cvoid}, (Ptr{Cvoid}, Cstring), hnd, s)
+    return dlsym(hnd, s; throw_error=false)
 end
 
 """
