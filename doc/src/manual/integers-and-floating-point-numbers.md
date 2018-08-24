@@ -56,15 +56,14 @@ julia> 1234
 1234
 ```
 
-The default type for an integer literal depends on whether the target system has a 32-bit architecture
-or a 64-bit architecture:
+The default type for an integer literal depends on version of julia, 32bit or 64bit:
 
 ```julia-repl
-# 32-bit system:
+# 32-bit julia:
 julia> typeof(1)
 Int32
 
-# 64-bit system:
+# 64-bit julia:
 julia> typeof(1)
 Int64
 ```
