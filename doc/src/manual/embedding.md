@@ -459,3 +459,175 @@ jl_errorf("argument x = %d is too large", x);
 ```
 
 where in this example `x` is assumed to be an integer.
+
+## Dynamic Loading of `libjulia`
+
+The method of embedding shown so far requires that the embedding
+program is linked with `libjulia`. As a consequence `libjulia` and the
+rest of the Julia runtime must be shipped with the embedding program,
+alternatively the user of the program is required to have a matching
+Julia installed, in order to use the program at all.
+
+In some situations, e.g. if you have a large application where Julia
+is only an optional backend or plugin, this can be
+problematic. Requiring users that don't need the Julia functionality
+to have Julia (of the right version) installed is rather user
+unfriendly, and the Julia runtime is large enough that bundling it
+will likely have noticeable effects on the application size.
+
+If this is the case, an alternative strategy is to dynamically load
+`libjulia` with `dlopen` (`LoadLibrary` in Windows). This means that
+`libjulia` is loaded at runtime when it is needed, and those who do
+not need Julia functionality also do not need to have Julia installed,
+or bundled.
+
+This approach does not come for free, however. It needs a certain
+amount of overhead related to the loading, and only a subset of the
+functions in `julia.h` can be used. Specifically anything involving C
+macros is unavailable, which severely limits the possibilities to
+manage memory and the use of everything that depends on correct memory
+management. This is not quite as crippling as it may sound, however,
+as will be shown in the following sections. The key is to perform all
+communication with the Julia code through `cfunction`s and pass data
+using only types from C.
+
+### Overview
+
+To use a dynamically loaded `libjulia` involves a number of setup
+steps.
+
+* Open `libjulia` with `dlopen`/`LoadLibrary`.
+* Obtain function pointers to the functions needed from `libjulia`.
+* Initialize Julia.
+* Load the Julia code that is going to be used and create `cfunction`
+  pointers to the functions the embedding code will interact with.
+* Retrieve the `cfunction` pointers from the embedding code.
+
+Each of these steps will be discussed in more detail but to see the
+full picture, look at the `embeddingdl.c` program in the Julia source
+tree in the `test/embedding/` folder. That code also includes error
+handling, which is omitted from this presentation for brevity.
+
+### Load `libjulia`
+
+#### Linux
+
+Dynamic loading of `libjulia` is done with `dlopen`.
+```
+#include <dlfcn.h>
+void *libjulia = dlopen("libjulia.so");
+```
+In order for the application to be able to find `libjulia.so`, it
+needs to be in a directory listed in `LD_LIBRARY_PATH`. Alternatively
+it can be in the `rpath` built into the executable or `dlopen` is
+given an absolute path. In the latter case the embedding program can
+determine the path from additional information, e.g. querying the
+Julia binary (assuming it is in `PATH`) or relying on some environment
+variable to point to the location of `libjulia`.
+
+#### Windows
+
+Dynamic loading of `libjulia` is done with `LoadLibrary`.
+```
+#include <windows.h>
+HMODULE libjulia = LoadLibrary("libjulia.dll");
+```
+In order for the application to be able to find `libjulia.dll`, it
+must either be in the same directory as the executable, or in `Path`.
+
+### Retrieve Function Pointers from `libjulia`
+
+#### Linux
+
+Function pointers are retrieved from `libjulia` using `dlsym`.
+```
+void (*p_jl_init)(void) = dlsym(libjulia, "jl_init");
+```
+The `jl_init` function can now be called by dereferencing the function
+pointer,
+```
+(*p_jl_init)();
+```
+Optionally the function pointer can be masqueraded to allow the same
+syntax as the ordinary function call `jl_init()`.
+```
+#define jl_init (*p_jl_init)
+```
+This has to be done for each and every function from `libjulia` that
+is needed, so it is advantageous to keep the list as short as possible.
+
+Some functions have arguments or return value of a Julia type,
+e.g. `jl_value_t`. These types can be obtained by `#include "julia.h"`
+but that would interfere with the masquerading trick and is not really
+necessary. It is sufficient to declare them locally without the
+definition of what is inside the `struct`s.
+```
+typedef struct _jl_value_t jl_value_t;
+```
+Not only functions can be found in `libjulia`, but also global
+variables, e.g. the useful `jl_main_module`. These can also be
+retrieved by `dlsym`.
+```
+jl_module_t **p_jl_main_module = dlsym(libjulia, "jl_main_module");
+#define jl_main_module (*p_jl_main_module)
+```
+
+#### Windows
+
+The only difference from Linux is that `dlsym` is replaced by
+`GetProcAddress`.
+
+#### Renaming of `jl_init`
+
+If Julia has been compiled with threading enabled, `jl_init` goes
+under the name of `jl_init__threading`. The easiest way to find out is
+to ask `dlsym` to resolve the symbols.
+```
+void (*p_jl_init)(void) = dlsym(libjulia, "jl_init");
+if (!p_jl_init)
+    (*p_jl_init)(void) = dlsym(libjulia, "jl_init__threading");
+#define jl_init (*p_jl_init)
+```
+This is also the case for `jl_init_with_image`.
+
+### Initialize Julia
+
+Note: In this and following sections it is assumed that function
+pointers have been masqueraded as normal function calls.
+
+Initialization of Julia is the same as without dynamic loading of
+`libjulia`. Normally it is sufficient to just do
+```
+jl_init();
+```
+With dynamic loading it may be convenient to set up the Julia code
+with the Julia function `include`. It is worth noting that this is not
+configured like in the REPL (for embedding in general, not only with
+dynamic loading) and if you want to use it the same way as in the REPL
+to include code in the `Main` module, you need to define a method
+yourself.
+```
+jl_eval_string("include(x) = Base.include(Main, x)");
+```
+
+### Creating and Retrieving `cfunction` Pointers
+
+The interaction between the embedding code and the Julia code is most
+easily done by calling specific methods of Julia functions as
+`cfunction`s and using C types for the data passed back and forth.
+```
+jl_eval_string("const julia_sqrt = @cfunction(sqrt, Cdouble, (Cdouble,))");
+double (*p_julia_sqrt)(double) = jl_unbox_voidpointer(
+    jl_get_global(jl_main_module, jl_symbol("julia_sqrt")));
+printf("%e\n", (*p_julia_sqrt)(2.0));
+```
+The creation of the needed `cfunction` pointers, as well as loading of
+the Julia code, is most convenient to do all at once in a Julia file
+and including it in `Main`.
+```
+jl_eval_string("include(\"setup.jl\")");
+```
+Retrieval of the `cfunction` pointers must be done one by one but the
+lengthy invocation can of course be packaged into a helper
+function. Optionally these function pointers can also be masqueraded
+as regular functions.

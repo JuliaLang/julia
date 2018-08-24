@@ -24,19 +24,26 @@ JULIA_CONFIG := $(JULIA) -e 'include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "jul
 CPPFLAGS_ADD :=
 CFLAGS_ADD = $(shell $(JULIA_CONFIG) --cflags)
 LDFLAGS_ADD = -lm $(shell $(JULIA_CONFIG) --ldflags --ldlibs)
+LDFLAGS_DL = -ldl
 
 DEBUGFLAGS += -g
 
 #=============================================================================
 
-release: $(BIN)/embedding$(EXE)
-debug:   $(BIN)/embedding-debug$(EXE)
+release: $(BIN)/embedding$(EXE) $(BIN)/embeddingdl$(EXE)
+debug:   $(BIN)/embedding-debug$(EXE) $(BIN)/embeddingdl-debug$(EXE)
 
 $(BIN)/embedding$(EXE): $(SRCDIR)/embedding.c
 	$(CC) $^ -o $@ $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
 
 $(BIN)/embedding-debug$(EXE): $(SRCDIR)/embedding.c
 	$(CC) $^ -o $@ $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS) $(DEBUGFLAGS)
+
+$(BIN)/embeddingdl$(EXE): $(SRCDIR)/embeddingdl.c
+	$(CC) $^ -o $@ $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(LDFLAGS_DL)
+
+$(BIN)/embeddingdl-debug$(EXE): $(SRCDIR)/embeddingdl.c
+	$(CC) $^ -o $@ $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(LDFLAGS_DL) $(DEBUGFLAGS)
 
 ifneq ($(abspath $(BIN)),$(abspath $(SRCDIR)))
 # for demonstration purposes, our demo code is also installed
@@ -45,12 +52,13 @@ $(BIN)/LocalModule.jl: $(SRCDIR)/LocalModule.jl
 	cp $< $@
 endif
 
-check: $(BIN)/embedding$(EXE) $(BIN)/LocalModule.jl
-	$(JULIA) --depwarn=error $(SRCDIR)/embedding-test.jl $<
+check: $(BIN)/embedding$(EXE) $(BIN)/embeddingdl$(EXE) $(BIN)/LocalModule.jl
+	$(JULIA) --depwarn=error $(SRCDIR)/embedding-test.jl $^
 	@echo SUCCESS
 
 clean:
 	-rm -f $(BIN)/embedding-debug$(EXE) $(BIN)/embedding$(EXE)
+	-rm -f $(BIN)/embeddingdl-debug$(EXE) $(BIN)/embeddingdl$(EXE)
 
 .PHONY: release debug clean check
 
