@@ -99,7 +99,7 @@ ishermitian(J::UniformScaling) = isreal(J.λ)
 
 # matrix functions
 for f in ( :exp,   :log,
-           :sqrt,  :cbrt,
+           :sqrt,
            :sin,   :cos,   :tan,
            :asin,  :acos,  :atan,
            :csc,   :sec,   :cot,
