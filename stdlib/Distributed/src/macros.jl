@@ -231,20 +231,21 @@ end
 
 
 # Statically split range [1,N] into equal sized chunks for np processors
-function splitrange(N::Int, np::Int)
+function splitrange(N::T1, np::T2) where {T1<:Integer,T2<:Integer}
+    IType = promote_type(T1,T2)
     each = div(N,np)
     extras = rem(N,np)
     nchunks = each > 0 ? np : extras
-    chunks = Vector{UnitRange{Int}}(undef, nchunks)
-    lo = 1
+    chunks = Vector{UnitRange{IType}}(undef, nchunks)
+    lo = one(IType)
     for i in 1:nchunks
-        hi = lo + each - 1
+        hi = lo + each - one(IType)
         if extras > 0
-            hi += 1
-            extras -= 1
+            hi += one(IType)
+            extras -= one(IType)
         end
         chunks[i] = lo:hi
-        lo = hi+1
+        lo = hi+one(IType)
     end
     return chunks
 end
