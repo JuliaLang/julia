@@ -78,6 +78,8 @@ Standard library changes
   * `current_project()` now searches the parent directories of a Git repository for a `Project.toml` file.
     This also affects the behavior of the `--project` command line option when using the default
     `--project=@.` ([#29108]).
+  * The `spawn` API is now more flexible and supports taking IOBuffer directly as a I/O stream,
+    converting to a system pipe as needed ([#30278]).
 
 #### Dates
   * New `DateTime(::Date, ::Time)` constructor ([#29754]).
