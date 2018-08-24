@@ -274,9 +274,6 @@ julia&gt; isa(1, AbstractFloat)
 false</code></pre><p>The <a href="../../base/base/#Core.typeof"><code>typeof</code></a> function, already used throughout the manual in examples, returns the type of its argument. Since, as noted above, types are objects, they also have types, and we can ask what their types are:</p><pre><code class="language-julia-repl">julia&gt; typeof(Rational{Int})
 DataType
 
-julia&gt; typeof(Union{Real,Float64,Rational})
-DataType
-
 julia&gt; typeof(Union{Real,String})
 Union</code></pre><p>What if we repeat the process? What is the type of a type of a type? As it happens, types are all composite values and thus all have a type of <code>DataType</code>:</p><pre><code class="language-julia-repl">julia&gt; typeof(DataType)
 DataType
