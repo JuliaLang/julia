@@ -850,10 +850,10 @@ end
 function require(uuidkey::PkgId)
     if !root_module_exists(uuidkey)
         _require(uuidkey)
-        # After successfully loading, notify downstream consumers
-        for callback in package_callbacks
-            invokelatest(callback, uuidkey)
-        end
+    end
+    # After loading, notify downstream consumers
+    for callback in package_callbacks
+        invokelatest(callback, uuidkey)
     end
     return root_module(uuidkey)
 end

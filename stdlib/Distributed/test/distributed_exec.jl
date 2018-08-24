@@ -26,12 +26,13 @@ addprocs_with_testenv(4)
 @everywhere begin
     old_act_proj = Base.ACTIVE_PROJECT[]
     pushfirst!(Base.LOAD_PATH, "@")
-    Base.ACTIVE_PROJECT[] = joinpath(Sys.BINDIR, "..", "share", "julia", "test", "TestPkg")
+    Base.ACTIVE_PROJECT[] = joinpath(@__DIR__, "TestPkg")
 end
 
 # cause precompilation of TestPkg to avoid race condition
 Base.compilecache(Base.identify_package("TestPkg"))
 
+# Check that double `@everywhere using` works without a prior `using`
 @everywhere using TestPkg
 @everywhere using TestPkg
 
@@ -40,7 +41,43 @@ Base.compilecache(Base.identify_package("TestPkg"))
     popfirst!(Base.LOAD_PATH)
 end
 
+rmprocs(workers())
+@test nprocs() == 1
+
+# Test that modules are loaded on workers despite a using; addprocs; using chain
+# see https://github.com/JuliaLang/julia/issues/28859
+@test !("TestPkg2" in map(string, values(Base.loaded_modules)))
+
+old_act_proj = Base.ACTIVE_PROJECT[]
+pushfirst!(Base.LOAD_PATH, "@")
+Base.ACTIVE_PROJECT[] = joinpath(@__DIR__, "TestPkg2")
+
+using TestPkg2
+addprocs_with_testenv(4)
 @everywhere using Test, Random, LinearAlgebra
+
+@everywhere begin
+    myid() == 1 && return
+    old_act_proj = Base.ACTIVE_PROJECT[]
+    pushfirst!(Base.LOAD_PATH, "@")
+    Base.ACTIVE_PROJECT[] = joinpath(@__DIR__, "TestPkg2")
+end
+
+using TestPkg2
+
+for p in procs()
+    mods = remotecall_fetch(()->map(string, values(Base.loaded_modules)), p)
+    @test "TestPkg2" in mods
+
+    # Make sure that call of imported binding (on master)
+    # works everywhere.
+    remotecall_wait(TestPkg2.f, p, 1)
+end
+
+@everywhere begin
+    Base.ACTIVE_PROJECT[] = old_act_proj
+    popfirst!(Base.LOAD_PATH)
+end
 
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
@@ -843,14 +880,14 @@ remotecall_fetch(()->eval(:(f16091a() = 2)), wid)
 # these will only heisen-fail, since it depends on the gensym counter collisions:
 f16091b = () -> 1
 remotecall_fetch(()->eval(:(f16091b = () -> 2)), wid)
-@test remotecall_fetch(f16091b, 2) === 1
+@test remotecall_fetch(f16091b, wid) === 1
 # Global anonymous functions are over-written...
 @test remotecall_fetch((myid)->remotecall_fetch(f16091b, myid), wid, myid()) === 1
 
 # ...while local anonymous functions are by definition, local.
 let
     f16091c = () -> 1
-    @test remotecall_fetch(f16091c, 2) === 1
+    @test remotecall_fetch(f16091c, wid) === 1
     @test remotecall_fetch(
         myid -> begin
             let
@@ -892,14 +929,14 @@ module LocalFoo
 end
 
 let
-    @test_throws RemoteException remotecall_fetch(()->LocalFoo.foo, 2)
+    @test_throws RemoteException remotecall_fetch(()->LocalFoo.foo, wid)
 
     bad_thunk = ()->NonexistantModule.f()
-    @test_throws RemoteException remotecall_fetch(bad_thunk, 2)
+    @test_throws RemoteException remotecall_fetch(bad_thunk, wid)
 
     # Test that the stream is still usable
-    @test remotecall_fetch(()->:test,2) == :test
-    ref = remotecall(bad_thunk, 2)
+    @test remotecall_fetch(()->:test, wid) == :test
+    ref = remotecall(bad_thunk, wid)
     @test_throws RemoteException fetch(ref)
 end
 
@@ -1323,7 +1360,7 @@ end
 
 let thrown = false
     try
-        remotecall_fetch(sqrt, 2, -1)
+        remotecall_fetch(sqrt, wid, -1)
     catch e
         thrown = true
         local b = IOBuffer()
