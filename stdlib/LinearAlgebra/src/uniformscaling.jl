@@ -97,6 +97,20 @@ ishermitian(J::UniformScaling) = isreal(J.λ)
 (-)(J::UniformScaling, B::BitArray{2})      = J - Array(B)
 (-)(A::AbstractMatrix, J::UniformScaling)   = A + (-J)
 
+# matrix functions
+for f in ( :exp,   :log,
+           :sqrt,  :cbrt,
+           :sin,   :cos,   :tan,
+           :asin,  :acos,  :atan,
+           :csc,   :sec,   :cot,
+           :acsc,  :asec,  :acot,
+           :sinh,  :cosh,  :tanh,
+           :asinh, :acosh, :atanh,
+           :csch,  :sech,  :coth,
+           :acsch, :asech, :acoth )
+    @eval $f(J::UniformScaling) = UniformScaling($f(J.λ))
+end
+
 # Unit{Lower/Upper}Triangular matrices become {Lower/Upper}Triangular under
 # addition with a UniformScaling
 for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
