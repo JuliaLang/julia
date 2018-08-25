@@ -1121,6 +1121,13 @@ struct A_20087 end
 
 @test docstrings_equal(@doc(A_20087()), doc"a")
 
+struct B_20087 end
+
+"""b"""
+(::B_20087)() = a
+
+@test docstrings_equal(@doc(B_20087()), doc"b")
+
 # issue #27832
 
 _last_atdoc = Core.atdoc
