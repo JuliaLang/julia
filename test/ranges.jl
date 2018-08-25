@@ -256,6 +256,8 @@ end
         @test length(1:0) == 0
         @test length(0.0:-0.5) == 0
         @test length(1:2:0) == 0
+        @test length(Char(0):Char(0x001fffff)) == 2097152
+        @test length(typemax(UInt64)//one(UInt64):1:typemax(UInt64)//one(UInt64)) == 1
     end
     @testset "findall(::Base.Fix2{typeof(in)}, ::Array)" begin
         @test findall(in(3:20), [5.2, 3.3]) == findall(in(Vector(3:20)), [5.2, 3.3])
@@ -1370,4 +1372,8 @@ end # module NonStandardIntegerRangeTest
             end
         end
     end
+end
+
+@testset "getindex" begin
+    @test getindex((typemax(UInt64)//one(UInt64):typemax(UInt64)//one(UInt64)), 1) == typemax(UInt64)//one(UInt64)
 end
