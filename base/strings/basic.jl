@@ -326,7 +326,7 @@ isless(a::Symbol, b::Symbol) = cmp(a, b) < 0
 
 The number of characters in string `s` from indices `i` through `j`. This is
 computed as the number of code unit indices from `i` to `j` which are valid
-character indices. Without only a single string argument, this computes the
+character indices. With only a single string argument, this computes the
 number of characters in the entire string. With `i` and `j` arguments it
 computes the number of indices between `i` and `j` inclusive that are valid
 indices in the string `s`. In addition to in-bounds values, `i` may take the
