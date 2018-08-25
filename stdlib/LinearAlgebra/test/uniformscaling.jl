@@ -40,6 +40,44 @@ end
                acsch, asech, acoth )
         @test f(J) ≈ f(M(J))
     end
+
+    # on real axis
+    # functions defined for x ∈ ℝ
+    J = UniformScaling(randn(Float64))
+    for f in ( exp,
+               sin,   cos,   tan,
+               csc,   sec,   cot,
+               atan,  acot,
+               sinh,  cosh,  tanh,
+               csch,  sech,  coth,
+               asinh, acsch )
+        @test f(J) ≈ f(M(J))
+    end
+    # functions defined for x ≥ 0
+    J = UniformScaling(abs(randn(Float64)))
+    for f in ( log, )
+        @test f(J) ≈ f(M(J))
+    end
+    # functions defined for -1 ≤ x ≤ 1
+    J = UniformScaling(2 * rand(Float64) - 1)
+    for f in ( asin,  acos,  atanh )
+        @test f(J) ≈ f(M(J))
+    end
+    # functions defined for x ≤ -1 or x ≥ 1
+    J = UniformScaling(1 ./ (2 * rand(Float64) - 1))
+    for f in ( acsc,  asec,  acoth )
+        @test f(J) ≈ f(M(J))
+    end
+    # functions defined for 0 ≤ x ≤ 1
+    J = UniformScaling(rand(Float64))
+    for f in ( asech, )
+        @test f(J) ≈ f(M(J))
+    end
+    # functions defined for x ≥ 1
+    J = UniformScaling(1 ./ rand(Float64))
+    for f in ( acosh, )
+        @test f(J) ≈ f(M(J))
+    end
 end
 
 @testset "conjugation of UniformScaling" begin
