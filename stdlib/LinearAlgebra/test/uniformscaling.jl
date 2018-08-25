@@ -23,13 +23,14 @@ Random.seed!(123)
     @test opnorm(UniformScaling(1+im)) ≈ sqrt(2)
 end
 
-@testset "exp, log, and trigonometric functions" begin
+@testset "sqrt, exp, log, and trigonometric functions" begin
     # convert to a dense matrix with random size
     M(J) = (N = rand(1:0x678); Matrix(J, N, N))
 
     # on complex plane
     J = UniformScaling(randn(ComplexF64))
     for f in ( exp,   log,
+               sqrt,
                sin,   cos,   tan,
                asin,  acos,  atan,
                csc,   sec,   cot,
@@ -55,7 +56,7 @@ end
     end
     # functions defined for x ≥ 0
     J = UniformScaling(abs(randn(Float64)))
-    for f in ( log, )
+    for f in ( log,   sqrt )
         @test f(J) ≈ f(M(J))
     end
     # functions defined for -1 ≤ x ≤ 1
