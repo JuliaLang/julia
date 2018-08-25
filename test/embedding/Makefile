@@ -24,7 +24,14 @@ JULIA_CONFIG := $(JULIA) -e 'include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "jul
 CPPFLAGS_ADD :=
 CFLAGS_ADD = $(shell $(JULIA_CONFIG) --cflags)
 LDFLAGS_ADD = -lm $(shell $(JULIA_CONFIG) --ldflags --ldlibs)
-LDFLAGS_DL = -ldl
+
+BUILD_OS := $(shell uname)
+ifeq ($(BUILD_OS), Linux)
+LDFLAGS_DL := -ldl
+endif
+ifeq ($(BUILD_OS), Darwin)
+LDFLAGS_DL := -ldl
+endif
 
 DEBUGFLAGS += -g
 

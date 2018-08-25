@@ -34,13 +34,13 @@ static jl_value_t *(*p_jl_exception_occurred)(void);
 
 // Helper function to extract function pointers from the dynamically
 // loaded libjulia.
-#if _OS_WINDOWS_
+#ifdef _OS_WINDOWS_
 static void *load_function(HMODULE libjulia, const char *name, int *success)
 #else
 static void *load_function(void *libjulia, const char *name, int *success)
 #endif
 {
-#if _OS_WINDOWS_
+#ifdef _OS_WINDOWS_
     void *p = GetProcAddress(libjulia, name);
 #else
     void *p = dlsym(libjulia, name);
@@ -51,7 +51,7 @@ static void *load_function(void *libjulia, const char *name, int *success)
     // which of these is available, or otherwise query Julia in some
     // other way (issue #28824).
     if (!p && strcmp(name, "jl_init") == 0) {
-#if _OS_WINDOWS_
+#ifdef _OS_WINDOWS_
         p = GetProcAddress(libjulia, "jl_init__threading");
 #else
         p = dlsym(libjulia, "jl_init__threading");
@@ -69,7 +69,7 @@ static void *load_function(void *libjulia, const char *name, int *success)
 // Open libjulia and extract pointers to the needed functions.
 static int load_julia_functions()
 {
-#if _OS_WINDOWS_
+#ifdef _OS_WINDOWS_
     // libjulia.dll needs to be in the same directory as the
     // executable or in PATH.
     const char *library_name = "libjulia.dll";
@@ -79,7 +79,11 @@ static int load_julia_functions()
     // rpath (but that kind of defeats the purpose of dynamically
     // loading libjulia) or an absolute path could be given, computed
     // from other information.
+#ifdef __APPLE__
+    const char *library_name = "libjulia.dylib";
+#else
     const char *library_name = "libjulia.so";
+#endif
     void *libjulia = dlopen(library_name, RTLD_LAZY | RTLD_GLOBAL);
 #endif
 
