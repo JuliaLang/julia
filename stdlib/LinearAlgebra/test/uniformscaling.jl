@@ -23,6 +23,24 @@ Random.seed!(123)
     @test opnorm(UniformScaling(1+im)) ≈ sqrt(2)
 end
 
+@testset "exp, log, and trigonometric functions" begin
+    # on complex plane
+    J = UniformScaling(randn(ComplexF64))
+    # convert to a dense matrix with random size
+    M = (N = rand(1:0x678); Matrix(J, N, N))
+    for f in ( exp,   log,
+               sin,   cos,   tan,
+               asin,  acos,  atan,
+               csc,   sec,   cot,
+               acsc,  asec,  acot,
+               sinh,  cosh,  tanh,
+               asinh, acosh, atanh,
+               csch,  sech,  coth,
+               acsch, asech, acoth )
+        @test f(J) ≈ f(M)
+    end
+end
+
 @testset "conjugation of UniformScaling" begin
     @test conj(UniformScaling(1))::UniformScaling{Int} == UniformScaling(1)
     @test conj(UniformScaling(1.0))::UniformScaling{Float64} == UniformScaling(1.0)
