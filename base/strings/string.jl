@@ -293,16 +293,9 @@ length(s::String) = length(s, 1, ncodeunits(s), ncodeunits(s))
     end
 end
 
-# TODO: delete or move to char.jl
-first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8
-
 ## overload methods for efficiency ##
 
 isvalid(s::String, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
-
-# UTF-8 encoding length of a character
-# TODO: delete or move to char.jl
-codelen(c::Char) = 4 - (trailing_zeros(0xff000000 | reinterpret(UInt32, c)) >> 3)
 
 """
     repeat(c::AbstractChar, r::Integer) -> String
