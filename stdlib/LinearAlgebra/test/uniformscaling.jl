@@ -24,10 +24,11 @@ Random.seed!(123)
 end
 
 @testset "exp, log, and trigonometric functions" begin
+    # convert to a dense matrix with random size
+    M(J) = (N = rand(1:0x678); Matrix(J, N, N))
+
     # on complex plane
     J = UniformScaling(randn(ComplexF64))
-    # convert to a dense matrix with random size
-    M = (N = rand(1:0x678); Matrix(J, N, N))
     for f in ( exp,   log,
                sin,   cos,   tan,
                asin,  acos,  atan,
@@ -37,7 +38,7 @@ end
                asinh, acosh, atanh,
                csch,  sech,  coth,
                acsch, asech, acoth )
-        @test f(J) ≈ f(M)
+        @test f(J) ≈ f(M(J))
     end
 end
 
