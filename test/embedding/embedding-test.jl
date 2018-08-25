@@ -33,7 +33,11 @@ if !Sys.iswindows()
     # On Windows it needs to be in the same directory as the embedding
     # executable or in PATH, but that was arranged earlier.
     libdir = dirname(abspath(Libdl.dlpath("libjulia")))
-    ENV["LD_LIBRARY_PATH"] = string(libdir, ":", ENV["LD_LIBRARY_PATH"])
+    if haskey(ENV, "LD_LIBRARY_PATH")
+        ENV["LD_LIBRARY_PATH"] = string(libdir, ":", ENV["LD_LIBRARY_PATH"])
+    else
+        ENV["LD_LIBRARY_PATH"] = libdir
+    end
 end
 
 @testset "embedding dl" begin
