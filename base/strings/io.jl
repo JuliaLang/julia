@@ -103,31 +103,43 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     String(resize!(s.data, s.size))
 end
 
-tostr_sizehint(x) = 0
+tostr_sizehint(x) = 8
 tostr_sizehint(x::AbstractString) = lastindex(x)
 tostr_sizehint(x::Float64) = 20
 tostr_sizehint(x::Float32) = 12
 
-function print_to_string(xs...; env=nothing)
+function print_to_string(xs...)
     if isempty(xs)
         return ""
     end
+    siz = 0
+    for x in xs
+        siz += tostr_sizehint(x)
+    end
     # specialized for performance reasons
-    s = IOBuffer(sizehint=tostr_sizehint(xs[1]))
-    if env !== nothing
-        env_io = IOContext(s, env)
-        for x in xs
-            print(env_io, x)
-        end
-    else
-        for x in xs
-            print(s, x)
-        end
+    s = IOBuffer(sizehint=siz)
+    for x in xs
+        print(s, x)
     end
     String(resize!(s.data, s.size))
 end
 
-string_with_env(env, xs...) = print_to_string(xs...; env=env)
+function string_with_env(env, xs...)
+    if isempty(xs)
+        return ""
+    end
+    siz = 0
+    for x in xs
+        siz += tostr_sizehint(x)
+    end
+    # specialized for performance reasons
+    s = IOBuffer(sizehint=siz)
+    env_io = IOContext(s, env)
+    for x in xs
+        print(env_io, x)
+    end
+    String(resize!(s.data, s.size))
+end
 
 """
     string(xs...)
