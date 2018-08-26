@@ -170,7 +170,8 @@ int main()
     checked_eval_string("include(x) = Base.include(Main, x)",
                         "Failed to define include: ");
 
-    if (!checked_eval_string("include(\"embeddingdl-cfunctions.jl\")",
+    // Find the included file relative to the `embeddingdl` executable.
+    if (!checked_eval_string("include(joinpath(dirname(unsafe_string(Base.JLOptions().julia_bin)), \"embeddingdl-cfunctions.jl\"))",
                              "Failed to load cfunctions: ")) {
         jl_atexit_hook(EXIT_FAILURE);
         return EXIT_FAILURE;
