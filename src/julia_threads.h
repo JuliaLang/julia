@@ -145,11 +145,9 @@ struct _jl_tls_states_t {
     struct _jl_module_t *current_module;
     struct _jl_task_t *volatile current_task;
     struct _jl_task_t *root_task;
-//#ifdef COPY_STACKS
     void *stackbase;
     size_t stacksize;
     jl_ucontext_t base_ctx; // base context of stack
-//#endif
     jl_jmp_buf *safe_restore;
     int16_t tid;
     size_t bt_size;

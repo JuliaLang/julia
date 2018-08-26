@@ -171,7 +171,7 @@ int main(int argc, char *argv[])
 
 static void lock_low32() {
 #if defined(_P64) && defined(JL_DEBUG_BUILD)
-    // Wine currently has a that causes it to answer VirtualQuery incorrectly.
+    // Wine currently has a bug that causes it to answer VirtualQuery incorrectly.
     // See https://www.winehq.org/pipermail/wine-devel/2016-March/112188.html for details
     // Now Windows 10 does too
     // block usage of the 32-bit address space on win64, to catch pointer cast errors
