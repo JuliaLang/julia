@@ -1712,6 +1712,29 @@ should be available in the `.error` field.
 LoadError
 
 """
+    __init__()
+
+Defining a `__init__()` fuction in your module for initialization that must occur at runtime. This
+function will not be claled during compilation, and you can assume the code will be run exactly
+once in its lifetime. 
+
+# Examples
+```julia
+const foo_data_ptr = Ref{Ptr{Cvoid}}(0)
+function __init__()
+    ccall((:foo_init, :libfoo), Cvoid, ())
+    foo_data_ptr[] = ccall((:foo_data, :libfoo), Ptr{Cvoid}, ())
+    nothing
+end
+```
+
+`__init__()` can be useful, for example, when we need to initialize a global
+constants that involves pointers returned by external libraries.
+
+"""
+kw"init", kw"__init__"
+
+"""
     InitError(mod::Symbol, error)
 
 An error occurred when running a module's `__init__` function. The actual error thrown is
