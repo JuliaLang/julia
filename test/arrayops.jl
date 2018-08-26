@@ -1199,11 +1199,13 @@ end
     @test issorted(as[:,1])
     @test issorted(as[:,2])
     @test issorted(as[:,3])
+    @test sort!(copy(a), dims=1) == as
 
     as = sort(a, dims=2)
     @test issorted(as[1,:])
     @test issorted(as[2,:])
     @test issorted(as[3,:])
+    @test sort!(copy(a), dims=2) == as
 
     local b = rand(21,21,2)
 
@@ -1212,15 +1214,18 @@ end
         @test issorted(bs[:,i,1])
         @test issorted(bs[:,i,2])
     end
+    @test sort!(copy(b), dims=1) == bs
 
     bs = sort(b, dims=2)
     for i in 1:21
         @test issorted(bs[i,:,1])
         @test issorted(bs[i,:,2])
     end
+    @test sort!(copy(b), dims=2) == bs
 
     bs = sort(b, dims=3)
     @test all(bs[:,:,1] .<= bs[:,:,2])
+    @test sort!(copy(b), dims=3) == bs
 end
 
 @testset "higher dimensional sortslices" begin
