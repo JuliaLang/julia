@@ -57,7 +57,7 @@ ifneq ($(abspath $(BIN)),$(abspath $(SRCDIR)))
 # in $BIN, although this would likely not be typical
 $(BIN)/LocalModule.jl: $(SRCDIR)/LocalModule.jl
 	cp $< $@
-$(BIN)/embedding-cfunctions.jl: $(SRCDIR)/embedding-cfunctions.jl
+$(BIN)/embeddingdl-cfunctions.jl: $(SRCDIR)/embeddingdl-cfunctions.jl
 	cp $< $@
 endif
 
