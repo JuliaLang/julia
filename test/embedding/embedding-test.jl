@@ -9,7 +9,7 @@ if Sys.iswindows()
     ENV["PATH"] = string(Sys.BINDIR, ";", ENV["PATH"])
 end
 
-@test length(ARGS) == 3
+@test length(ARGS) == 2
 @testset "embedding example" begin
     out = Pipe()
     err = Pipe()

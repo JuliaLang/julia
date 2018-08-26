@@ -525,6 +525,11 @@ determine the path from additional information, e.g. querying the
 Julia binary (assuming it is in `PATH`) or relying on some environment
 variable to point to the location of `libjulia`.
 
+#### Mac
+
+Same as Linux with the exception that the library is called
+`libjulia.dylib` instead of `libjulia.so`.
+
 #### Windows
 
 Dynamic loading of `libjulia` is done with `LoadLibrary`.
@@ -537,7 +542,7 @@ must either be in the same directory as the executable, or in `Path`.
 
 ### Retrieve Function Pointers from `libjulia`
 
-#### Linux
+#### Linux and Mac
 
 Function pointers are retrieved from `libjulia` using `dlsym`.
 ```

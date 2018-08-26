@@ -57,10 +57,12 @@ ifneq ($(abspath $(BIN)),$(abspath $(SRCDIR)))
 # in $BIN, although this would likely not be typical
 $(BIN)/LocalModule.jl: $(SRCDIR)/LocalModule.jl
 	cp $< $@
+$(BIN)/embedding-cfunctions.jl: $(SRCDIR)/embedding-cfunctions.jl
+	cp $< $@
 endif
 
-check: $(BIN)/embedding$(EXE) $(BIN)/embeddingdl$(EXE) $(BIN)/LocalModule.jl
-	$(JULIA) --depwarn=error $(SRCDIR)/embedding-test.jl $^
+check: $(BIN)/embedding$(EXE) $(BIN)/embeddingdl$(EXE) $(BIN)/LocalModule.jl $(BIN)/embeddingdl-cfunctions.jl
+	$(JULIA) --depwarn=error $(SRCDIR)/embedding-test.jl $(BIN)/embedding$(EXE) $(BIN)/embeddingdl$(EXE)
 	@echo SUCCESS
 
 clean:
