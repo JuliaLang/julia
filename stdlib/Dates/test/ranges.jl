@@ -55,7 +55,7 @@ let
                     @test maximum(dr) == last(dr)
                     @test dr[1] == f
                     @test dr[end] <= l
-                    @test next(dr, start(dr)) == (first(dr), 1)
+                    @test iterate(dr) == (first(dr), 1)
 
                     if len < 10000
                         dr1 = [i for i in dr]
@@ -113,7 +113,7 @@ let
                     @test maximum(dr) == first(dr)
                     @test dr[1] == l
                     @test dr[end] >= f
-                    @test next(dr, start(dr)) == (first(dr), 1)
+                    @test iterate(dr) == (first(dr), 1)
 
                     if len < 10000
                         dr1 = [i for i in dr]
@@ -173,7 +173,7 @@ let
                         @test maximum(dr) == last(dr)
                         @test dr[1] == f
                         @test dr[end] <= l
-                        @test next(dr, start(dr)) == (first(dr), 1)
+                        @test iterate(dr) == (first(dr), 1)
 
                         if len < 10000
                             dr1 = [i for i in dr]
@@ -231,7 +231,7 @@ let
                         @test maximum(dr) == first(dr)
                         @test dr[1] == l
                         @test dr[end] >= f
-                        @test next(dr, start(dr)) == (first(dr), 1)
+                        @test iterate(dr) == (first(dr), 1)
 
                         if len < 10000
                             dr1 = [i for i in dr]
@@ -577,5 +577,9 @@ a = Dates.Time(23, 1, 1)
 @test !(Complex(1, 0) in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
 @test !(π in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
 @test !("a" in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
+
+@test hash(Any[Date("2018-1-03"), Date("2018-1-04"), Date("2018-1-05")]) ==
+      hash([Date("2018-1-03"), Date("2018-1-04"), Date("2018-1-05")]) ==
+      hash(Date("2018-1-03"):Day(1):Date("2018-1-05"))
 
 end

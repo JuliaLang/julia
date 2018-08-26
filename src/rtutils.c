@@ -462,20 +462,20 @@ JL_DLLEXPORT int jl_substrtof(char *str, int offset, size_t len, float *out)
 
 // showing --------------------------------------------------------------------
 
-JL_DLLEXPORT void jl_flush_cstdio(void)
+JL_DLLEXPORT void jl_flush_cstdio(void) JL_NOTSAFEPOINT
 {
     fflush(stdout);
     fflush(stderr);
 }
 
-JL_DLLEXPORT jl_value_t *jl_stdout_obj(void)
+JL_DLLEXPORT jl_value_t *jl_stdout_obj(void) JL_NOTSAFEPOINT
 {
     if (jl_base_module == NULL) return NULL;
     jl_value_t *stdout_obj = jl_get_global(jl_base_module, jl_symbol("stdout"));
     return stdout_obj;
 }
 
-JL_DLLEXPORT jl_value_t *jl_stderr_obj(void)
+JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
 {
     if (jl_base_module == NULL) return NULL;
     jl_value_t *stderr_obj = jl_get_global(jl_base_module, jl_symbol("stderr"));
@@ -484,7 +484,7 @@ JL_DLLEXPORT jl_value_t *jl_stderr_obj(void)
 
 // toys for debugging ---------------------------------------------------------
 
-static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, const char *head, const char *opn, const char *cls)
+static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, const char *head, const char *opn, const char *cls) JL_NOTSAFEPOINT
 {
     size_t i, n=0, len = jl_svec_len(t);
     n += jl_printf(out, "%s", head);
@@ -504,12 +504,12 @@ struct recur_list {
     jl_value_t *v;
 };
 
-static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth);
+static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT int jl_id_start_char(uint32_t wc);
-JL_DLLEXPORT int jl_id_char(uint32_t wc);
+JL_DLLEXPORT int jl_id_start_char(uint32_t wc) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_id_char(uint32_t wc) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT int jl_is_identifier(char *str)
+JL_DLLEXPORT int jl_is_identifier(char *str) JL_NOTSAFEPOINT
 {
     size_t i = 0;
     uint32_t wc = u8_nextchar(str, &i);
@@ -528,7 +528,7 @@ JL_DLLEXPORT int jl_is_identifier(char *str)
 // This is necessary to make sure that this function doesn't allocate any
 // memory through the Julia GC
 static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt,
-                                struct recur_list *depth)
+                                struct recur_list *depth) JL_NOTSAFEPOINT
 {
     size_t n = 0;
     if ((uintptr_t)vt < 4096U) {
@@ -576,7 +576,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         if (globname && !strchr(jl_symbol_name(globname), '#') &&
             !strchr(jl_symbol_name(globname), '@') && dv->name->module &&
             jl_binding_resolved_p(dv->name->module, globname)) {
-            jl_binding_t *b = jl_get_binding(dv->name->module, globname);
+            jl_binding_t *b = jl_get_module_binding(dv->name->module, globname);
             if (b && jl_typeof(b->value) == v)
                 globfunc = 1;
         }
@@ -767,9 +767,6 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         char *name = jl_symbol_name(jl_globalref_name(v));
         n += jl_printf(out, jl_is_identifier(name) ? ".%s" : ".:(%s)", name);
     }
-    else if (vt == jl_labelnode_type) {
-        n += jl_printf(out, "%" PRIuPTR ":", jl_labelnode_label(v));
-    }
     else if (vt == jl_gotonode_type) {
         n += jl_printf(out, "goto %" PRIuPTR, jl_gotonode_label(v));
     }
@@ -808,16 +805,13 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         }
         else {
             char sep = ' ';
-            if (e->head == body_sym)
-                sep = '\n';
             n += jl_printf(out, "Expr(:%s", jl_symbol_name(e->head));
             size_t i, len = jl_array_len(e->args);
             for (i = 0; i < len; i++) {
                 n += jl_printf(out, ",%c", sep);
                 n += jl_static_show_x(out, jl_exprarg(e,i), depth);
             }
-            n += jl_printf(out, ")::");
-            n += jl_static_show_x(out, e->etype, depth);
+            n += jl_printf(out, ")");
         }
     }
     else if (jl_is_array_type(vt)) {
@@ -939,7 +933,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     return n;
 }
 
-static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth)
+static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth) JL_NOTSAFEPOINT
 {
     // show values without calling a julia method or allocating through the GC
     if (v == NULL) {
@@ -959,12 +953,12 @@ static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list 
     return jl_static_show_x_(out, v, (jl_datatype_t*)jl_typeof(v), &this_item);
 }
 
-JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
+JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) JL_NOTSAFEPOINT
 {
     return jl_static_show_x(out, v, 0);
 }
 
-JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
+JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_NOTSAFEPOINT
 {
     jl_value_t *ftype = (jl_value_t*)jl_first_argument_datatype(type);
     if (ftype == NULL)
@@ -1115,26 +1109,6 @@ void jl_depwarn(const char *msg, jl_value_t *sym)
     depwarn_args[1] = jl_cstr_to_string(msg);
     depwarn_args[2] = sym;
     jl_apply(depwarn_args, 3);
-    JL_GC_POP();
-}
-
-JL_DLLEXPORT void jl_depwarn_partial_indexing(size_t n)
-{
-    static jl_value_t *depwarn_func = NULL;
-    if (!depwarn_func && jl_base_module) {
-        depwarn_func = jl_get_global(jl_base_module, jl_symbol("_depwarn_for_trailing_indices"));
-    }
-    if (!depwarn_func) {
-        jl_safe_printf("WARNING: omitting indices for non-singleton trailing dimensions is deprecated. Use "
-            "`reshape(A, Val(%zd))` or add trailing `1` indices to make the dimensionality of the array match "
-            "the number of indices\n", n);
-        return;
-    }
-    jl_value_t **depwarn_args;
-    JL_GC_PUSHARGS(depwarn_args, 2);
-    depwarn_args[0] = depwarn_func;
-    depwarn_args[1] = jl_box_long(n);
-    jl_apply(depwarn_args, 2);
     JL_GC_POP();
 }
 

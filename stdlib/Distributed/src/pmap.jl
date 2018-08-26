@@ -187,7 +187,7 @@ function wrap_batch(f, p, handle_errors)
             remotecall_fetch(f, p, batch)
         catch e
             if handle_errors
-                return Any[BatchProcessingError(batch[i], e) for i in 1:length(batch)]
+                return Any[BatchProcessingError(b, e) for b in batch]
             else
                 rethrow(e)
             end
@@ -211,7 +211,8 @@ function process_batch_errors!(p, f, results, on_error, retry_delays, retry_chec
     if length(reprocess) > 0
         errors = [x[2] for x in reprocess]
         exceptions = [x.ex for x in errors]
-        state = start(retry_delays)
+        state = iterate(retry_delays)
+        state != nothing && (state = state[2])
         if (length(retry_delays) > 0) &&
                 (retry_check==nothing || all([retry_check(state,ex)[2] for ex in exceptions]))
             # BatchProcessingError.data is a tuple of original args
@@ -256,13 +257,18 @@ julia> collect(c)
 """
 function head_and_tail(c, n)
     head = Vector{eltype(c)}(undef, n)
-    s = start(c)
-    i = 0
-    while i < n && !done(c, s)
+    n == 0 && return (head, c)
+    i = 1
+    y = iterate(c)
+    y == nothing && return (resize!(head, 0), ())
+    head[i] = y[1]
+    while i < n
+        y = iterate(c, y[2])
+        y == nothing && return (resize!(head, i), ())
         i += 1
-        head[i], s = next(c, s)
+        head[i] = y[1]
     end
-    return resize!(head, i), Iterators.rest(c, s)
+    return head, Iterators.rest(c, s)
 end
 
 """

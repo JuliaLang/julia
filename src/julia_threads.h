@@ -169,12 +169,18 @@ JL_DLLEXPORT void (jl_cpu_wake)(void);
         jl_signal_fence();                              \
         (void)safepoint_load;                           \
     } while (0)
+#ifdef __clang_analyzer__
+// This is a sigint safepoint, not a GC safepoint (which
+// JL_NOTSAFEPOINT refers to)
+void jl_sigint_safepoint(jl_ptls_t tls) JL_NOTSAFEPOINT;
+#else
 #define jl_sigint_safepoint(ptls) do {                  \
         jl_signal_fence();                              \
         size_t safepoint_load = ptls->safepoint[-1];    \
         jl_signal_fence();                              \
         (void)safepoint_load;                           \
     } while (0)
+#endif
 #ifndef JULIA_ENABLE_THREADING
 #define jl_gc_state(ptls) ((int8_t)0)
 STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
@@ -203,10 +209,17 @@ STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_ptls_t ptls,
 {
     return jl_gc_state_set(ptls, state, jl_gc_state(ptls));
 }
+#ifdef __clang_analyzer__
+int8_t jl_gc_unsafe_enter(jl_ptls_t ptls); // Can be a safepoint
+int8_t jl_gc_unsafe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT;
+int8_t jl_gc_safe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+int8_t jl_gc_safe_leave(jl_ptls_t ptls, int8_t state); // Can be a safepoint
+#else
 #define jl_gc_unsafe_enter(ptls) jl_gc_state_save_and_set(ptls, 0)
 #define jl_gc_unsafe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), 0))
 #define jl_gc_safe_enter(ptls) jl_gc_state_save_and_set(ptls, JL_GC_STATE_SAFE)
 #define jl_gc_safe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_SAFE))
+#endif
 JL_DLLEXPORT void (jl_gc_safepoint)(void);
 
 JL_DLLEXPORT void jl_gc_enable_finalizers(jl_ptls_t ptls, int on);

@@ -312,3 +312,34 @@ memory allocation). The recommended procedure is to force compilation by executi
 you want to analyze, then call [`Profile.clear_malloc_data()`](@ref) to reset all allocation counters.
  Finally, execute the desired commands and quit Julia to trigger the generation of the `.mem`
 files.
+
+# External Profiling
+
+Currently Julia supports `Intel VTune`, `OProfile` and `perf` as external profiling tools.
+
+Depending on the tool you choose, compile with `USE_INTEL_JITEVENTS`, `USE_OPROFILE_JITEVENTS` and
+`USE_PERF_JITEVENTS` set to 1 in `Make.user`. Multiple flags are supported.
+
+Before running Julia set the environment variable `ENABLE_JITPROFILING` to 1.
+
+Now you have a multitude of ways to employ those tools!
+For example with `OProfile` you can try a simple recording :
+
+```
+>ENABLE_JITPROFILING=1 sudo operf -Vdebug ./julia test/fastmath.jl
+>opreport -l `which ./julia`
+```
+
+Or similary with with `perf` :
+
+```
+$ ENABLE_JITPROFILING=1 perf record -o /tmp/perf.data --call-graph dwarf ./julia /test/fastmath.jl
+$ perf report --call-graph -G
+```
+
+There are many more interesting things that you can measure about your program, to get a comprehensive list
+please read the [Linux perf examples page](http://www.brendangregg.com/perf.html).
+
+Remember that perf saves for each execution a `perf.data` file that, even for small programs, can get
+quite large. Also the perf LLVM module saves temporarly debug objects in `~/.debug/jit`, remember
+to clean that folder frequently.

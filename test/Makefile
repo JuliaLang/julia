@@ -8,7 +8,7 @@ include $(JULIAHOME)/Make.inc
 TESTGROUPS = unicode strings compiler
 TESTS = all stdlib $(TESTGROUPS) \
         $(patsubst $(STDLIBDIR)/%/,%,$(dir $(wildcard $(STDLIBDIR)/*/.))) \
-		$(filter-out TestHelpers runtests testdefs, \
+		$(filter-out runtests testdefs, \
 			$(patsubst $(SRCDIR)/%.jl,%,$(wildcard $(SRCDIR)/*.jl))) \
 		$(foreach group,$(TESTGROUPS), \
 			$(patsubst $(SRCDIR)/%.jl,%,$(wildcard $(SRCDIR)/$(group)/*.jl)))

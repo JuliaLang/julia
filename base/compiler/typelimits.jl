@@ -4,27 +4,12 @@
 # limitation parameters #
 #########################
 
-const MAX_TYPEUNION_LEN = 4
+const MAX_TYPEUNION_COMPLEXITY = 3
 const MAX_INLINE_CONST_SIZE = 256
 
 #########################
 # limitation heuristics #
 #########################
-
-limit_tuple_type(@nospecialize(t), params::Params) = limit_tuple_type_n(t, params.MAX_TUPLETYPE_LEN)
-
-function limit_tuple_type_n(@nospecialize(t), lim::Int)
-    if isa(t, UnionAll)
-        return UnionAll(t.var, limit_tuple_type_n(t.body, lim))
-    end
-    p = t.parameters
-    n = length(p)
-    if n > lim
-        tail = reduce(typejoin, Bottom, Any[p[lim:(n-1)]..., unwrapva(p[n])])
-        return Tuple{p[1:(lim-1)]..., Vararg{tail}}
-    end
-    return t
-end
 
 # limit the complexity of type `t` to be simpler than the comparison type `compare`
 # no new values may be introduced, so the parameter `source` encodes the set of all values already present
@@ -44,22 +29,20 @@ end
 # try to find `type` somewhere in `comparison` type
 # at a minimum nesting depth of `mindepth`
 function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
-    if mindepth > 0
-        mindepth -= 1
-    end
     if t === c
-        return mindepth == 0
+        return mindepth <= 1
     end
-    if isa(c, TypeVar)
-        # see if it is replacing a TypeVar upper bound with something simpler
-        return is_derived_type(t, c.ub, mindepth)
-    elseif isa(c, Union)
+    if isa(c, Union)
         # see if it is one of the elements of the union
-        return is_derived_type(t, c.a, mindepth + 1) || is_derived_type(t, c.b, mindepth + 1)
+        return is_derived_type(t, c.a, mindepth) || is_derived_type(t, c.b, mindepth)
     elseif isa(c, UnionAll)
         # see if it is derived from the body
-        return is_derived_type(t, c.body, mindepth)
+        # also handle the var here, since this construct bounds the mindepth to the smallest possible value
+        return is_derived_type(t, c.var.ub, mindepth) || is_derived_type(t, c.body, mindepth)
     elseif isa(c, DataType)
+        if mindepth > 0
+            mindepth -= 1
+        end
         if isa(t, DataType)
             # see if it is one of the supertypes of a parameter
             super = supertype(c)
@@ -96,7 +79,8 @@ function is_derived_type_from_any(@nospecialize(t), sources::SimpleVector, minde
     return false
 end
 
-# type vs. comparison or which was derived from source
+# The goal of this function is to return a type of greater "size" and less "complexity" than
+# both `t` or `c` over the lattice defined by `sources`, `depth`, and `allowed_tuplelen`.
 function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVector, depth::Int, allowed_tuplelen::Int)
     if t === c
         return t # quick egal test
@@ -109,45 +93,32 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
     elseif is_derived_type_from_any(unwrap_unionall(t), sources, depth)
         return t # t isn't something new
     end
-    if isa(t, TypeVar)
-        if isa(c, TypeVar)
-            if t.ub === c.ub && t.lb === c.lb
-                return t
-            end
+    # peel off (and ignore) wrappers - they contribute no useful information, so we don't need to consider their size
+    # first attempt to turn `c` into a type that contributes meaningful information
+    # by peeling off meaningless non-matching wrappers of comparison one at a time
+    # then unwrap `t`
+    if isa(c, TypeVar)
+        if isa(t, TypeVar) && t.ub === c.ub && (t.lb === Union{} || t.lb === c.lb)
+            return t # it's ok to change the name, or widen `lb` to Union{}, so we can handle this immediately here
         end
+        return _limit_type_size(t, c.ub, sources, depth, allowed_tuplelen)
+    end
+    if isa(c, UnionAll)
+        return _limit_type_size(t, c.body, sources, depth, allowed_tuplelen)
+    end
+    if isa(t, UnionAll)
+        tbody = _limit_type_size(t.body, c, sources, depth, allowed_tuplelen)
+        tbody === t.body && return t
+        return UnionAll(t.var, tbody)
+    elseif isa(t, TypeVar)
+        # don't have a matching TypeVar in comparison, so we keep just the upper bound
+        return _limit_type_size(t.ub, c, sources, depth, allowed_tuplelen)
     elseif isa(t, Union)
         if isa(c, Union)
             a = _limit_type_size(t.a, c.a, sources, depth, allowed_tuplelen)
             b = _limit_type_size(t.b, c.b, sources, depth, allowed_tuplelen)
             return Union{a, b}
         end
-    elseif isa(t, UnionAll)
-        if isa(c, UnionAll)
-            tv = t.var
-            cv = c.var
-            if tv.ub === cv.ub
-                if tv.lb === cv.lb
-                    return UnionAll(tv, _limit_type_size(t.body, c.body, sources, depth + 1, allowed_tuplelen))
-                end
-                ub = tv.ub
-            else
-                ub = _limit_type_size(tv.ub, cv.ub, sources, depth + 1, 0)
-            end
-            if tv.lb === cv.lb
-                lb = tv.lb
-            else
-                # note: lower bounds need to be widened by making them lower
-                lb = Bottom
-            end
-            v2 = TypeVar(tv.name, lb, ub)
-            return UnionAll(v2, _limit_type_size(t{v2}, c{v2}, sources, depth + 1, allowed_tuplelen))
-        end
-        tbody = _limit_type_size(t.body, c, sources, depth + 1, allowed_tuplelen)
-        tbody === t.body && return t
-        return UnionAll(t.var, tbody)
-    elseif isa(c, UnionAll)
-        # peel off non-matching wrapper of comparison
-        return _limit_type_size(t, c.body, sources, depth, allowed_tuplelen)
     elseif isa(t, DataType)
         if isa(c, DataType)
             tP = t.parameters
@@ -305,7 +276,7 @@ end
 # pick a wider type that contains both typea and typeb,
 # with some limits on how "large" it can get,
 # but without losing too much precision in common cases
-# and also trying to be associative and commutative
+# and also trying to be mostly associative and commutative
 function tmerge(@nospecialize(typea), @nospecialize(typeb))
     typea ⊑ typeb && return typeb
     typeb ⊑ typea && return typea
@@ -338,6 +309,10 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
                 return Conditional(typea.var, vtype, elsetype)
             end
         end
+        val = maybe_extract_const_bool(typea)
+        if val isa Bool && val === maybe_extract_const_bool(typeb)
+            return Const(val)
+        end
         return Bool
     end
     # no special type-inference lattice, join the types
@@ -348,12 +323,9 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         # XXX: this should never happen
         return Any
     end
-    # if we didn't start with any unions, then always OK to form one now
-    if !(typea isa Union || typeb isa Union)
-        # except if we might have switched Union and Tuple below, or would do so
-        if (isconcretetype(typea) && isconcretetype(typeb)) || !(typea <: Tuple && typeb <: Tuple)
-            return Union{typea, typeb}
-        end
+    # it's always ok to form a Union of two concrete types
+    if (isconcretetype(typea) || isType(typea)) && (isconcretetype(typeb) || isType(typeb))
+        return Union{typea, typeb}
     end
     # collect the list of types from past tmerge calls returning Union
     # and then reduce over that list
@@ -384,15 +356,14 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
                     types[j] = Union{}
                     typenames[j] = Any.name
                 else
-                    widen = typenames[i].wrapper
                     if typenames[i] === Tuple.name
                         # try to widen Tuple slower: make a single non-concrete Tuple containing both
                         # converge the Tuple element-wise if they are the same length
                         # see 4ee2b41552a6bc95465c12ca66146d69b354317b, be59686f7613a2ccfd63491c7b354d0b16a95c05,
-                        if nothing !== tuplelen(ti) === tuplelen(tj)
-                            widen = tuplemerge(ti, tj)
-                        end
-                        # TODO: else, try to merge them into a single Tuple{Vararg{T}} instead (#22120)?
+                        widen = tuplemerge(unwrap_unionall(ti)::DataType, unwrap_unionall(tj)::DataType)
+                        widen = rewrap_unionall(rewrap_unionall(widen, ti), tj)
+                    else
+                        widen = typenames[i].wrapper
                     end
                     types[i] = Union{}
                     types[j] = widen
@@ -402,7 +373,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         end
     end
     u = Union{types...}
-    if unionlen(u) <= MAX_TYPEUNION_LEN
+    if unioncomplexity(u) <= MAX_TYPEUNION_COMPLEXITY
         # don't let type unions get too big, if the above didn't reduce it enough
         return u
     end
@@ -411,30 +382,80 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
 end
 
 # the inverse of switchtupleunion, with limits on max element union size
-function tuplemerge(@nospecialize(a), @nospecialize(b))
-    if isa(a, UnionAll)
-        return UnionAll(a.var, tuplemerge(a.body, b))
-    elseif isa(b, UnionAll)
-        return UnionAll(b.var, tuplemerge(a, b.body))
-    elseif isa(a, Union)
-        return tuplemerge(tuplemerge(a.a, a.b), b)
-    elseif isa(b, Union)
-        return tuplemerge(a, tuplemerge(b.a, b.b))
-    end
-    a = a::DataType
-    b = b::DataType
+function tuplemerge(a::DataType, b::DataType)
+    @assert a.name === b.name === Tuple.name "assertion failure"
     ap, bp = a.parameters, b.parameters
     lar = length(ap)::Int
     lbr = length(bp)::Int
-    @assert lar === lbr && a.name === b.name === Tuple.name "assertion failure"
-    p = Vector{Any}(undef, lar)
-    for i = 1:lar
+    va = lar > 0 && isvarargtype(ap[lar])
+    vb = lbr > 0 && isvarargtype(bp[lbr])
+    if lar == lbr && !va && !vb
+        lt = lar
+        vt = false
+    else
+        lt = 0 # or min(lar - va, lbr - vb)
+        vt = true
+    end
+    # combine the common elements
+    p = Vector{Any}(undef, lt + vt)
+    for i = 1:lt
         ui = Union{ap[i], bp[i]}
-        if unionlen(ui) < MAX_TYPEUNION_LEN
+        if unioncomplexity(ui) < MAX_TYPEUNION_COMPLEXITY
             p[i] = ui
         else
             p[i] = Any
         end
+    end
+    # merge the remaining tail into a single, simple Tuple{Vararg{T}} (#22120)
+    if vt
+        tail = Union{}
+        for loop_b = (false, true)
+            for i = (lt + 1):(loop_b ? lbr : lar)
+                ti = unwrapva(loop_b ? bp[i] : ap[i])
+                while ti isa TypeVar
+                    ti = ti.ub
+                end
+                # compare (ti <-> tail), (wrapper ti <-> tail), (ti <-> wrapper tail), then (wrapper ti <-> wrapper tail)
+                # until we find the first element that contains the other in the pair
+                # TODO: this result would be more stable (and more associative and more commutative)
+                #   if we either joined all of the element wrappers first into a wide-tail, then picked between that or an exact tail,
+                #   or (equivalently?) iteratively took super-types until reaching a common wrapper
+                #   e.g. consider the results of `tuplemerge(Tuple{Complex}, Tuple{Number, Int})` and of
+                #   `tuplemerge(Tuple{Int}, Tuple{String}, Tuple{Int, String})`
+                if !(ti <: tail)
+                    if tail <: ti
+                        tail = ti # widen to ti
+                    else
+                        uw = unwrap_unionall(tail)
+                        if uw isa DataType && tail <: uw.name.wrapper
+                            # widen tail to wrapper(tail)
+                            tail = uw.name.wrapper
+                            if !(ti <: tail)
+                                #assert !(tail <: ti)
+                                uw = unwrap_unionall(ti)
+                                if uw isa DataType && ti <: uw.name.wrapper
+                                    # widen ti to wrapper(ti)
+                                    ti = uw.name.wrapper
+                                    #assert !(ti <: tail)
+                                    if tail <: ti
+                                        tail = ti
+                                    else
+                                        tail = Any # couldn't find common super-type
+                                    end
+                                else
+                                    tail = Any # couldn't analyze type
+                                end
+                            end
+                        else
+                            tail = Any # couldn't analyze type
+                        end
+                    end
+                end
+                tail === Any && return Tuple # short-circuit loop
+            end
+        end
+        @assert !(tail === Union{})
+        p[lt + 1] = Vararg{tail}
     end
     return Tuple{p...}
 end

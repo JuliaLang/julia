@@ -12,6 +12,7 @@ Base.Filesystem.symlink
 Base.Filesystem.readlink
 Base.Filesystem.chmod
 Base.Filesystem.chown
+Base.RawFD
 Base.stat
 Base.Filesystem.lstat
 Base.Filesystem.ctime

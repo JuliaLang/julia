@@ -12,7 +12,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-srand(1234321)
+Random.seed!(1234321)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -38,7 +38,7 @@ bimg  = randn(n,2)/2
         @test isa(factorize(asym), LinearAlgebra.BunchKaufman)
         @test isa(factorize(aher), LinearAlgebra.BunchKaufman)
         @testset "$uplo Bunch-Kaufman factor of indefinite matrix" for uplo in (:L, :U)
-            bc1 = bkfact(Hermitian(aher, uplo))
+            bc1 = bunchkaufman(Hermitian(aher, uplo))
             @test LinearAlgebra.issuccess(bc1)
             @test logabsdet(bc1)[1] ≈ log(abs(det(bc1)))
             if eltya <: Real
@@ -48,17 +48,17 @@ bimg  = randn(n,2)/2
             end
             @test inv(bc1)*aher ≈ Matrix(I, n, n)
             @testset for rook in (false, true)
-                @test inv(bkfact(Symmetric(transpose(a) + a, uplo), rook))*(transpose(a) + a) ≈ Matrix(I, n, n)
+                @test inv(bunchkaufman(Symmetric(transpose(a) + a, uplo), rook))*(transpose(a) + a) ≈ Matrix(I, n, n)
                 if eltya <: BlasFloat
-                    # test also bkfact! without explicit type tag
-                    # no bkfact! method for Int ... yet
-                    @test inv(bkfact!(transpose(a) + a, rook))*(transpose(a) + a) ≈ Matrix(I, n, n)
+                    # test also bunchkaufman! without explicit type tag
+                    # no bunchkaufman! method for Int ... yet
+                    @test inv(bunchkaufman!(transpose(a) + a, rook))*(transpose(a) + a) ≈ Matrix(I, n, n)
                 end
                 @test size(bc1) == size(bc1.LD)
                 @test size(bc1, 1) == size(bc1.LD, 1)
                 @test size(bc1, 2) == size(bc1.LD, 2)
                 if eltya <: BlasReal
-                    @test_throws ArgumentError bkfact(a)
+                    @test_throws ArgumentError bunchkaufman(a)
                 end
                 # Test extraction of factors
                 if eltya <: Real
@@ -66,7 +66,7 @@ bimg  = randn(n,2)/2
                     @test getproperty(bc1, uplo)*bc1.D*getproperty(bc1, uplo)' ≈ bc1.P*aher*bc1.P'
                 end
 
-                bc1 = bkfact(Symmetric(asym, uplo))
+                bc1 = bunchkaufman(Symmetric(asym, uplo))
                 @test getproperty(bc1, uplo)*bc1.D*transpose(getproperty(bc1, uplo)) ≈ asym[bc1.p, bc1.p]
                 @test getproperty(bc1, uplo)*bc1.D*transpose(getproperty(bc1, uplo)) ≈ bc1.P*asym*transpose(bc1.P)
                 @test_throws ErrorException bc1.Z
@@ -81,13 +81,13 @@ bimg  = randn(n,2)/2
                 ε = max(εa,εb)
 
                 @testset "$uplo Bunch-Kaufman factor of indefinite matrix" for uplo in (:L, :U)
-                    bc1 = bkfact(Hermitian(aher, uplo))
+                    bc1 = bunchkaufman(Hermitian(aher, uplo))
                     @test aher*(bc1\b) ≈ b atol=1000ε
                 end
 
                 @testset "$uplo Bunch-Kaufman factors of a pos-def matrix" for uplo in (:U, :L)
                     @testset "rook pivoting: $rook" for rook in (false, true)
-                        bc2 = bkfact(Hermitian(apd, uplo), rook)
+                        bc2 = bunchkaufman(Hermitian(apd, uplo), rook)
                         @test LinearAlgebra.issuccess(bc2)
                         bks = split(sprint(show, "text/plain", bc2), "\n")
                         @test bks[1] == summary(bc2)
@@ -104,42 +104,34 @@ bimg  = randn(n,2)/2
                 end
             end
         end
-        if eltya <: BlasReal
-            As1 = fill(eltya(1), n, n)
-            As2 = fill(complex(eltya(1)), n, n)
-            As3 = fill(complex(eltya(1)), n, n)
-            As3[end, 1] += im/2
-            As3[1, end] -= im/2
-            for As = (As1, As2, As3)
-                for As in (As, view(As, 1:n, 1:n))
-                    @testset "$uplo Bunch-Kaufman factors of a singular matrix" for uplo in (:L, :U)
-                        @testset for rook in (false, true)
-                            F = bkfact(issymmetric(As) ? Symmetric(As, uplo) : Hermitian(As, uplo), rook)
-                            @test !LinearAlgebra.issuccess(F)
-                            # test printing of this as well!
-                            bks = sprint(show, "text/plain", F)
-                            @test bks == "Failed factorization of type $(typeof(F))"
-                            @test det(F) == 0
-                            @test_throws LinearAlgebra.SingularException inv(F)
-                            @test_throws LinearAlgebra.SingularException F \ fill(1., size(As,1))
-                        end
-                    end
-                end
-            end
-        end
     end
+end
+
+@testset "Singular matrices" begin
+    R = Float64[1 0; 0 0]
+    C = ComplexF64[1 0; 0 0]
+    for A in (R, Symmetric(R), C, Hermitian(C))
+        @test_throws SingularException bunchkaufman(A)
+        @test_throws SingularException bunchkaufman!(copy(A))
+        @test_throws SingularException bunchkaufman(A; check = true)
+        @test_throws SingularException bunchkaufman!(copy(A); check = true)
+        @test !issuccess(bunchkaufman(A; check = false))
+        @test !issuccess(bunchkaufman!(copy(A); check = false))
+    end
+    F = bunchkaufman(R; check = false)
+    @test sprint(show, "text/plain", F) == "Failed factorization of type $(typeof(F))"
 end
 
 @testset "test example due to @timholy in PR 15354" begin
     A = rand(6,5); A = complex(A'*A) # to avoid calling the real-lhs-complex-rhs method
-    F = cholfact(A);
+    F = cholesky(A);
     v6 = rand(ComplexF64, 6)
     v5 = view(v6, 1:5)
     @test F\v5 == F\v6[1:5]
 end
 
-@test_throws DomainError logdet(bkfact([-1 -1; -1 1]))
-@test logabsdet(bkfact([8 4; 4 2]))[1] == -Inf
-@test isa(bkfact(Symmetric(ones(0,0))), BunchKaufman) # 0x0 matrix
+@test_throws DomainError logdet(bunchkaufman([-1 -1; -1 1]))
+@test logabsdet(bunchkaufman([8 4; 4 2]; check = false))[1] == -Inf
+@test isa(bunchkaufman(Symmetric(ones(0,0))), BunchKaufman) # 0x0 matrix
 
 end # module TestBunchKaufman

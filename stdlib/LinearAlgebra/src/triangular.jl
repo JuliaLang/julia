@@ -9,14 +9,22 @@ abstract type AbstractTriangular{T,S<:AbstractMatrix} <: AbstractMatrix{T} end
 for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
           :UnitUpperTriangular)
     @eval begin
-        struct $t{T,S<:AbstractMatrix} <: AbstractTriangular{T,S}
+        struct $t{T,S<:AbstractMatrix{T}} <: AbstractTriangular{T,S}
             data::S
+
+            function $t{T,S}(data) where {T,S<:AbstractMatrix{T}}
+                @assert !has_offset_axes(data)
+                checksquare(data)
+                new{T,S}(data)
+            end
         end
         $t(A::$t) = A
         $t{T}(A::$t{T}) where {T} = A
         function $t(A::AbstractMatrix)
-            checksquare(A)
             return $t{eltype(A), typeof(A)}(A)
+        end
+        function $t{T}(A::AbstractMatrix) where T
+            $t(convert(AbstractMatrix{T}, A))
         end
 
         function $t{T}(A::$t) where T
@@ -228,13 +236,14 @@ istril(A::LowerTriangular) = true
 istril(A::UnitLowerTriangular) = true
 istriu(A::UpperTriangular) = true
 istriu(A::UnitUpperTriangular) = true
+istril(A::Adjoint) = istriu(A.parent)
+istril(A::Transpose) = istriu(A.parent)
+istriu(A::Adjoint) = istril(A.parent)
+istriu(A::Transpose) = istril(A.parent)
 
 function tril!(A::UpperTriangular, k::Integer=0)
     n = size(A,1)
-    if !(-n - 1 <= k <= n - 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
-    elseif k < 0
+    if k < 0
         fill!(A.data,0)
         return A
     elseif k == 0
@@ -250,10 +259,7 @@ triu!(A::UpperTriangular, k::Integer=0) = UpperTriangular(triu!(A.data,k))
 
 function tril!(A::UnitUpperTriangular{T}, k::Integer=0) where T
     n = size(A,1)
-    if !(-n - 1 <= k <= n - 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
-    elseif k < 0
+    if k < 0
         fill!(A.data, zero(T))
         return UpperTriangular(A.data)
     elseif k == 0
@@ -279,10 +285,7 @@ end
 
 function triu!(A::LowerTriangular, k::Integer=0)
     n = size(A,1)
-    if !(-n + 1 <= k <= n + 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
-    elseif k > 0
+    if k > 0
         fill!(A.data,0)
         return A
     elseif k == 0
@@ -299,10 +302,7 @@ tril!(A::LowerTriangular, k::Integer=0) = LowerTriangular(tril!(A.data,k))
 
 function triu!(A::UnitLowerTriangular{T}, k::Integer=0) where T
     n = size(A,1)
-    if !(-n + 1 <= k <= n + 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
-    elseif k > 0
+    if k > 0
         fill!(A.data, zero(T))
         return LowerTriangular(A.data)
     elseif k == 0
@@ -1138,6 +1138,7 @@ end
 # replacing repeated references to A.data[j,j] with [Ajj = A.data[j,j] and references to Ajj]
 # does not significantly impact performance as of Dec 2015
 function naivesub!(A::UpperTriangular, b::AbstractVector, x::AbstractVector = b)
+    @assert !has_offset_axes(A, b, x)
     n = size(A, 2)
     if !(n == length(b) == length(x))
         throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
@@ -1152,6 +1153,7 @@ function naivesub!(A::UpperTriangular, b::AbstractVector, x::AbstractVector = b)
     x
 end
 function naivesub!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector = b)
+    @assert !has_offset_axes(A, b, x)
     n = size(A, 2)
     if !(n == length(b) == length(x))
         throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
@@ -1165,6 +1167,7 @@ function naivesub!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector 
     x
 end
 function naivesub!(A::LowerTriangular, b::AbstractVector, x::AbstractVector = b)
+    @assert !has_offset_axes(A, b, x)
     n = size(A, 2)
     if !(n == length(b) == length(x))
         throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
@@ -1179,6 +1182,7 @@ function naivesub!(A::LowerTriangular, b::AbstractVector, x::AbstractVector = b)
     x
 end
 function naivesub!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector = b)
+    @assert !has_offset_axes(A, b, x)
     n = size(A, 2)
     if !(n == length(b) == length(x))
         throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
@@ -1194,6 +1198,7 @@ end
 # in the following transpose and conjugate transpose naive substitution variants,
 # accumulating in z rather than b[j] significantly improves performance as of Dec 2015
 function ldiv!(transA::Transpose{<:Any,<:LowerTriangular}, b::AbstractVector, x::AbstractVector)
+    @assert !has_offset_axes(transA, b, x)
     A = transA.parent
     n = size(A, 1)
     if !(n == length(b) == length(x))
@@ -1212,6 +1217,7 @@ end
 ldiv!(transA::Transpose{<:Any,<:LowerTriangular}, b::AbstractVector) = ldiv!(transA, b, b)
 
 function ldiv!(transA::Transpose{<:Any,<:UnitLowerTriangular}, b::AbstractVector, x::AbstractVector)
+    @assert !has_offset_axes(transA, b, x)
     A = transA.parent
     n = size(A, 1)
     if !(n == length(b) == length(x))
@@ -1229,6 +1235,7 @@ end
 ldiv!(transA::Transpose{<:Any,<:UnitLowerTriangular}, b::AbstractVector) = ldiv!(transA, b, b)
 
 function ldiv!(transA::Transpose{<:Any,<:UpperTriangular}, b::AbstractVector, x::AbstractVector)
+    @assert !has_offset_axes(transA, b, x)
     A = transA.parent
     n = size(A, 1)
     if !(n == length(b) == length(x))
@@ -1247,6 +1254,7 @@ end
 ldiv!(transA::Transpose{<:Any,<:UpperTriangular}, b::AbstractVector) = ldiv!(transA, b, b)
 
 function ldiv!(transA::Transpose{<:Any,<:UnitUpperTriangular}, b::AbstractVector, x::AbstractVector)
+    @assert !has_offset_axes(transA, b, x)
     A = transA.parent
     n = size(A, 1)
     if !(n == length(b) == length(x))
@@ -1264,6 +1272,7 @@ end
 ldiv!(transA::Transpose{<:Any,<:UnitUpperTriangular}, b::AbstractVector) = ldiv!(transA, b, b)
 
 function ldiv!(adjA::Adjoint{<:Any,<:LowerTriangular}, b::AbstractVector, x::AbstractVector)
+    @assert !has_offset_axes(adjA, b, x)
     A = adjA.parent
     n = size(A, 1)
     if !(n == length(b) == length(x))
@@ -1282,6 +1291,7 @@ end
 ldiv!(adjA::Adjoint{<:Any,<:LowerTriangular}, b::AbstractVector) = ldiv!(adjA, b, b)
 
 function ldiv!(adjA::Adjoint{<:Any,<:UnitLowerTriangular}, b::AbstractVector, x::AbstractVector)
+    @assert !has_offset_axes(adjA, b, x)
     A = adjA.parent
     n = size(A, 1)
     if !(n == length(b) == length(x))
@@ -1299,6 +1309,7 @@ end
 ldiv!(adjA::Adjoint{<:Any,<:UnitLowerTriangular}, b::AbstractVector) = ldiv!(adjA, b, b)
 
 function ldiv!(adjA::Adjoint{<:Any,<:UpperTriangular}, b::AbstractVector, x::AbstractVector)
+    @assert !has_offset_axes(adjA, b, x)
     A = adjA.parent
     n = size(A, 1)
     if !(n == length(b) == length(x))
@@ -1317,6 +1328,7 @@ end
 ldiv!(adjA::Adjoint{<:Any,<:UpperTriangular}, b::AbstractVector) = ldiv!(adjA, b, b)
 
 function ldiv!(adjA::Adjoint{<:Any,<:UnitUpperTriangular}, b::AbstractVector, x::AbstractVector)
+    @assert !has_offset_axes(adjA, b, x)
     A = adjA.parent
     n = size(A, 1)
     if !(n == length(b) == length(x))
@@ -1585,7 +1597,7 @@ rdiv!(A::LowerTriangular, transB::Transpose{<:Any,<:Union{UpperTriangular,UnitUp
 ## the element type doesn't have to be stable under division whereas that is
 ## necessary in the general triangular solve problem.
 
-## Some Triangular-Triangular cases. We might want to write taylored methods
+## Some Triangular-Triangular cases. We might want to write tailored methods
 ## for these cases, but I'm not sure it is worth it.
 (*)(A::Union{Tridiagonal,SymTridiagonal}, B::AbstractTriangular) = rmul!(Matrix(A), B)
 
@@ -1783,12 +1795,14 @@ for mat in (:AbstractVector, :AbstractMatrix)
     ### Multiplication with triangle to the left and hence rhs cannot be transposed.
     @eval begin
         function *(A::AbstractTriangular, B::$mat)
+            @assert !has_offset_axes(B)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
             lmul!(convert(AbstractArray{TAB}, A), BB)
         end
         function *(adjA::Adjoint{<:Any,<:AbstractTriangular}, B::$mat)
+            @assert !has_offset_axes(B)
             A = adjA.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
@@ -1796,6 +1810,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
             lmul!(adjoint(convert(AbstractArray{TAB}, A)), BB)
         end
         function *(transA::Transpose{<:Any,<:AbstractTriangular}, B::$mat)
+            @assert !has_offset_axes(B)
             A = transA.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
@@ -1806,12 +1821,14 @@ for mat in (:AbstractVector, :AbstractMatrix)
     ### Left division with triangle to the left hence rhs cannot be transposed. No quotients.
     @eval begin
         function \(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::$mat)
+            @assert !has_offset_axes(B)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
             ldiv!(convert(AbstractArray{TAB}, A), BB)
         end
         function \(adjA::Adjoint{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}, B::$mat)
+            @assert !has_offset_axes(B)
             A = adjA.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
@@ -1819,6 +1836,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
             ldiv!(adjoint(convert(AbstractArray{TAB}, A)), BB)
         end
         function \(transA::Transpose{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}, B::$mat)
+            @assert !has_offset_axes(B)
             A = transA.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
@@ -1829,12 +1847,14 @@ for mat in (:AbstractVector, :AbstractMatrix)
     ### Left division with triangle to the left hence rhs cannot be transposed. Quotients.
     @eval begin
         function \(A::Union{UpperTriangular,LowerTriangular}, B::$mat)
+            @assert !has_offset_axes(B)
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
             ldiv!(convert(AbstractArray{TAB}, A), BB)
         end
         function \(adjA::Adjoint{<:Any,<:Union{UpperTriangular,LowerTriangular}}, B::$mat)
+            @assert !has_offset_axes(B)
             A = adjA.parent
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
             BB = similar(B, TAB, size(B))
@@ -1842,6 +1862,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
             ldiv!(adjoint(convert(AbstractArray{TAB}, A)), BB)
         end
         function \(transA::Transpose{<:Any,<:Union{UpperTriangular,LowerTriangular}}, B::$mat)
+            @assert !has_offset_axes(B)
             A = transA.parent
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
             BB = similar(B, TAB, size(B))
@@ -1852,12 +1873,14 @@ for mat in (:AbstractVector, :AbstractMatrix)
     ### Right division with triangle to the right hence lhs cannot be transposed. No quotients.
     @eval begin
         function /(A::$mat, B::Union{UnitUpperTriangular, UnitLowerTriangular})
+            @assert !has_offset_axes(A)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             AA = similar(A, TAB, size(A))
             copyto!(AA, A)
             rdiv!(AA, convert(AbstractArray{TAB}, B))
         end
         function /(A::$mat, adjB::Adjoint{<:Any,<:Union{UnitUpperTriangular, UnitLowerTriangular}})
+            @assert !has_offset_axes(A)
             B = adjB.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             AA = similar(A, TAB, size(A))
@@ -1865,6 +1888,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
             rdiv!(AA, adjoint(convert(AbstractArray{TAB}, B)))
         end
         function /(A::$mat, transB::Transpose{<:Any,<:Union{UnitUpperTriangular, UnitLowerTriangular}})
+            @assert !has_offset_axes(A)
             B = transB.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             AA = similar(A, TAB, size(A))
@@ -1875,12 +1899,14 @@ for mat in (:AbstractVector, :AbstractMatrix)
     ### Right division with triangle to the right hence lhs cannot be transposed. Quotients.
     @eval begin
         function /(A::$mat, B::Union{UpperTriangular,LowerTriangular})
+            @assert !has_offset_axes(A)
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
             AA = similar(A, TAB, size(A))
             copyto!(AA, A)
             rdiv!(AA, convert(AbstractArray{TAB}, B))
         end
         function /(A::$mat, adjB::Adjoint{<:Any,<:Union{UpperTriangular,LowerTriangular}})
+            @assert !has_offset_axes(A)
             B = adjB.parent
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
             AA = similar(A, TAB, size(A))
@@ -1888,6 +1914,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
             rdiv!(AA, adjoint(convert(AbstractArray{TAB}, B)))
         end
         function /(A::$mat, transB::Transpose{<:Any,<:Union{UpperTriangular,LowerTriangular}})
+            @assert !has_offset_axes(A)
             B = transB.parent
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
             AA = similar(A, TAB, size(A))
@@ -1899,12 +1926,14 @@ end
 ### Multiplication with triangle to the right and hence lhs cannot be transposed.
 # Only for AbstractMatrix, hence outside the above loop.
 function *(A::AbstractMatrix, B::AbstractTriangular)
+    @assert !has_offset_axes(A)
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
     rmul!(AA, convert(AbstractArray{TAB}, B))
 end
 function *(A::AbstractMatrix, adjB::Adjoint{<:Any,<:AbstractTriangular})
+    @assert !has_offset_axes(A)
     B = adjB.parent
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
     AA = similar(A, TAB, size(A))
@@ -1912,6 +1941,7 @@ function *(A::AbstractMatrix, adjB::Adjoint{<:Any,<:AbstractTriangular})
     rmul!(AA, adjoint(convert(AbstractArray{TAB}, B)))
 end
 function *(A::AbstractMatrix, transB::Transpose{<:Any,<:AbstractTriangular})
+    @assert !has_offset_axes(A)
     B = transB.parent
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
     AA = similar(A, TAB, size(A))
@@ -1952,7 +1982,7 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
         ArgumentError("p must be a real number in (-1,1), got $p")
     end
 
-    normA0 = norm(A0, 1)
+    normA0 = opnorm(A0, 1)
     rmul!(A0, 1/normA0)
 
     theta = [1.53e-5, 2.25e-3, 1.92e-2, 6.08e-2, 1.25e-1, 2.03e-1, 2.84e-1]
@@ -2050,8 +2080,8 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
     end
 
     AmI = A - I
-    d2 = sqrt(norm(AmI^2, 1))
-    d3 = cbrt(norm(AmI^3, 1))
+    d2 = sqrt(opnorm(AmI^2, 1))
+    d3 = cbrt(opnorm(AmI^3, 1))
     alpha2 = max(d2, d3)
     foundm = false
     if alpha2 <= theta[2]
@@ -2062,9 +2092,9 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
     while !foundm
         more = false
         if s > s0
-            d3 = cbrt(norm(AmI^3, 1))
+            d3 = cbrt(opnorm(AmI^3, 1))
         end
-        d4 = norm(AmI^4, 1)^(1/4)
+        d4 = opnorm(AmI^4, 1)^(1/4)
         alpha3 = max(d3, d4)
         if alpha3 <= theta[tmax]
             local j
@@ -2083,7 +2113,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
         end
 
         if !more
-            d5 = norm(AmI^5, 1)^(1/5)
+            d5 = opnorm(AmI^5, 1)^(1/5)
             alpha4 = max(d4, d5)
             eta = min(alpha3, alpha4)
             if eta <= theta[tmax]
@@ -2156,7 +2186,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
         R[i,i+1] = i / sqrt((2 * i)^2 - 1)
         R[i+1,i] = R[i,i+1]
     end
-    x,V = eig(R)
+    x,V = eigen(R)
     w = Vector{Float64}(undef, m)
     for i = 1:m
         x[i] = (x[i] + 1) / 2
@@ -2227,6 +2257,7 @@ end
 # Repeatedly compute the square roots of A so that in the end its
 # eigenvalues are close enough to the positive real line
 function invsquaring(A0::UpperTriangular, theta)
+    @assert !has_offset_axes(theta)
     # assumes theta is in ascending order
     maxsqrt = 100
     tmax = size(theta, 1)
@@ -2250,8 +2281,8 @@ function invsquaring(A0::UpperTriangular, theta)
     end
 
     AmI = A - I
-    d2 = sqrt(norm(AmI^2, 1))
-    d3 = cbrt(norm(AmI^3, 1))
+    d2 = sqrt(opnorm(AmI^2, 1))
+    d3 = cbrt(opnorm(AmI^3, 1))
     alpha2 = max(d2, d3)
     foundm = false
     if alpha2 <= theta[2]
@@ -2262,9 +2293,9 @@ function invsquaring(A0::UpperTriangular, theta)
     while !foundm
         more = false
         if s > s0
-            d3 = cbrt(norm(AmI^3, 1))
+            d3 = cbrt(opnorm(AmI^3, 1))
         end
-        d4 = norm(AmI^4, 1)^(1/4)
+        d4 = opnorm(AmI^4, 1)^(1/4)
         alpha3 = max(d3, d4)
         if alpha3 <= theta[tmax]
             local j
@@ -2287,7 +2318,7 @@ function invsquaring(A0::UpperTriangular, theta)
         end
 
         if !more
-            d5 = norm(AmI^5, 1)^(1/5)
+            d5 = opnorm(AmI^5, 1)^(1/5)
             alpha4 = max(d4, d5)
             eta = min(alpha3, alpha4)
             if eta <= theta[tmax]
@@ -2432,10 +2463,10 @@ function logabsdet(A::Union{UpperTriangular{T},LowerTriangular{T}}) where T
     return abs_det, sgn
 end
 
-eigfact(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
+eigen(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
 
 # Generic singular systems
-for func in (:svd, :svdfact, :svdfact!, :svdvals)
+for func in (:svd, :svd!, :svdvals)
     @eval begin
         ($func)(A::AbstractTriangular) = ($func)(copyto!(similar(parent(A)), A))
     end
@@ -2443,20 +2474,20 @@ end
 
 factorize(A::AbstractTriangular) = A
 
-# dismabiguation methods: *(AbstractTriangular, Adj/Trans of AbstractVector)
+# disambiguation methods: *(AbstractTriangular, Adj/Trans of AbstractVector)
 *(A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractVector}) = adjoint(adjoint(B) * adjoint(A))
 *(A::AbstractTriangular, B::Transpose{<:Any,<:AbstractVector}) = transpose(transpose(B) * transpose(A))
-# dismabiguation methods: *(Adj/Trans of AbstractTriangular, Trans/Ajd of AbstractTriangular)
+# disambiguation methods: *(Adj/Trans of AbstractTriangular, Trans/Ajd of AbstractTriangular)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractTriangular}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractTriangular}) = copy(A) * B
-# dismabiguation methods: *(Adj/Trans of AbstractTriangular, Adj/Trans of AbsVec or AbsMat)
+# disambiguation methods: *(Adj/Trans of AbstractTriangular, Adj/Trans of AbsVec or AbsMat)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVector}) = adjoint(adjoint(B) * adjoint(A))
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractMatrix}) = A * copy(B)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVector}) = transpose(transpose(B) * transpose(A))
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVector}) = transpose(transpose(B) * transpose(A))
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVector}) = adjoint(adjoint(B) * adjoint(A))
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractMatrix}) = A * copy(B)
-# dismabiguation methods: *(Adj/Trans of AbsVec or AbsMat, Adj/Trans of AbstractTriangular)
+# disambiguation methods: *(Adj/Trans of AbsVec or AbsMat, Adj/Trans of AbstractTriangular)
 *(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:AbstractTriangular}) = adjoint(adjoint(B) * adjoint(A))
 *(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractTriangular}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractTriangular}) = transpose(transpose(B) * transpose(A))

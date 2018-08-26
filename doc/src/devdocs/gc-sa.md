@@ -251,10 +251,12 @@ jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED;
 
 This annotations is essentially equivalent to JL_GLOBALLY_ROOTED, except that
 is should only be used if those values are globally rooted by virtue of being
-a leaftype. The rooting of leaftypes is a bit complicated, and we can generally
-assume that leaftypes are rooted where they are used, but we may refine this
-property in the future, so the separate annotation helps split out the reason
-for being globally rooted.
+a leaftype. The rooting of leaftypes is a bit complicated. They are generally
+rooted through `cache` field of the corresponding `TypeName`, which itself is
+rooted by the containing module (so they're rooted as long as the containing
+module is ok) and we can generally assume that leaftypes are rooted where they
+are used, but we may refine this property in the future, so the separate
+annotation helps split out the reason for being globally rooted.
 
 The analyzer also automatically detects checks for leaftype-ness and will not
 complain about missing GC roots on these paths.

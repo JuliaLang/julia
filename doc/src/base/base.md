@@ -22,12 +22,11 @@ Base.exit
 Base.atexit
 Base.isinteractive
 Base.summarysize
-Base.clipboard(::Any)
-Base.clipboard()
 Base.require
 Base.compilecache
 Base.__precompile__
 Base.include
+Base.MainInclude.include
 Base.include_string
 Base.include_dependency
 Base.which(::Any, ::Any)
@@ -72,6 +71,8 @@ primitive type
 
 ## Base Modules
 ```@docs
+Base.Base
+Base.Broadcast
 Base.Docs
 Base.Iterators
 Base.Libc
@@ -79,6 +80,7 @@ Base.Meta
 Base.StackTraces
 Base.Sys
 Base.Threads
+Base.GC
 ```
 
 ## All Objects
@@ -160,8 +162,8 @@ Base.datatype_pointerfree
 ```@docs
 Base.typemin
 Base.typemax
-Base.realmin
-Base.realmax
+Base.floatmin
+Base.floatmax
 Base.maxintfloat
 Base.eps(::Type{<:AbstractFloat})
 Base.eps(::AbstractFloat)
@@ -181,6 +183,7 @@ Base.Val
 Core.Vararg
 Core.Nothing
 Base.Some
+Base.something
 Base.Enums.@enum
 ```
 
@@ -201,6 +204,7 @@ Base.:(∘)
 
 ```@docs
 Core.eval
+Base.MainInclude.eval
 Base.@eval
 Base.evalfile
 Base.esc
@@ -209,11 +213,15 @@ Base.@boundscheck
 Base.@inline
 Base.@noinline
 Base.@nospecialize
+Base.@specialize
 Base.gensym
 Base.@gensym
 Base.@goto
 Base.@label
+Base.@simd
 Base.@polly
+Base.@generated
+Base.@pure
 ```
 
 ## Missing Values
@@ -236,7 +244,6 @@ Base.process_exited
 Base.kill(::Base.Process, ::Integer)
 Base.Sys.set_process_title
 Base.Sys.get_process_title
-Base.readandwrite
 Base.ignorestatus
 Base.detach
 Base.Cmd
@@ -264,6 +271,13 @@ Base.Sys.windows_version
 Base.@static
 ```
 
+## Versioning
+
+```@docs
+Base.VersionNumber
+Base.@v_str
+```
+
 ## Errors
 
 ```@docs
@@ -276,6 +290,7 @@ Base.@assert
 Base.ArgumentError
 Base.AssertionError
 Core.BoundsError
+Base.CompositeException
 Base.DimensionMismatch
 Core.DivideError
 Core.DomainError
@@ -316,6 +331,8 @@ Base.AsyncCondition(::Function)
 ```@docs
 Base.nameof(::Module)
 Base.parentmodule
+Base.pathof(::Module)
+Base.moduleroot
 Base.@__MODULE__
 Base.fullname
 Base.names
@@ -331,6 +348,7 @@ Base.functionloc(::Method)
 ```@docs
 Base.GC.gc
 Base.GC.enable
+Base.GC.@preserve
 Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)

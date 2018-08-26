@@ -5,15 +5,21 @@ struct Bidiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     dv::V      # diagonal
     ev::V      # sub/super diagonal
     uplo::Char # upper bidiagonal ('U') or lower ('L')
-    function Bidiagonal{T}(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
+    function Bidiagonal{T,V}(dv, ev, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
+        @assert !has_offset_axes(dv, ev)
         if length(ev) != length(dv)-1
             throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
         new{T,V}(dv, ev, uplo)
     end
-    function Bidiagonal(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
-        Bidiagonal{T}(dv, ev, uplo)
-    end
+end
+function Bidiagonal{T,V}(dv, ev, uplo::Symbol) where {T,V<:AbstractVector{T}}
+    Bidiagonal{T,V}(dv, ev, char_uplo(uplo))
+end
+function Bidiagonal{T}(dv::AbstractVector, ev::AbstractVector, uplo::Union{Symbol,AbstractChar}) where {T}
+    Bidiagonal(convert(AbstractVector{T}, dv)::AbstractVector{T},
+               convert(AbstractVector{T}, ev)::AbstractVector{T},
+               uplo)
 end
 
 """
@@ -56,7 +62,10 @@ julia> Bl = Bidiagonal(dv, ev, :L) # ev is on the first subdiagonal
 ```
 """
 function Bidiagonal(dv::V, ev::V, uplo::Symbol) where {T,V<:AbstractVector{T}}
-    Bidiagonal{T}(dv, ev, char_uplo(uplo))
+    Bidiagonal{T,V}(dv, ev, char_uplo(uplo))
+end
+function Bidiagonal(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
+    Bidiagonal{T,V}(dv, ev, uplo)
 end
 
 """
@@ -94,6 +103,8 @@ function Bidiagonal(A::AbstractMatrix, uplo::Symbol)
 end
 
 Bidiagonal(A::Bidiagonal) = A
+Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
+Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A.dv, A.ev, A.uplo)
 
 function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
     if !((1 <= i <= size(A,2)) && (1 <= j <= size(A,2)))
@@ -164,11 +175,6 @@ promote_rule(::Type{<:Tridiagonal{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
     @isdefined(T) && @isdefined(S) ? Tridiagonal{promote_type(T,S)} : Tridiagonal
 promote_rule(::Type{<:Tridiagonal}, ::Type{<:Bidiagonal}) = Tridiagonal
 
-# No-op for trivial conversion Bidiagonal{T} -> Bidiagonal{T}
-Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
-# Convert Bidiagonal to Bidiagonal{T} by constructing a new instance with converted elements
-Bidiagonal{T}(A::Bidiagonal) where {T} =
-    Bidiagonal(convert(AbstractVector{T}, A.dv), convert(AbstractVector{T}, A.ev), A.uplo)
 # When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
 AbstractMatrix{T}(A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
 
@@ -188,26 +194,12 @@ similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal(similar(B.dv, T), simil
 
 #Singular values
 svdvals!(M::Bidiagonal{<:BlasReal}) = LAPACK.bdsdc!(M.uplo, 'N', M.dv, M.ev)[1]
-function svdfact!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
-    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
-    if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `svdfact!(A; thin = $(thin))` has ",
-            "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `svdfact!(A; full = $(!thin))`."), :svdfact!)
-        full::Bool = !thin
-    end
+function svd!(M::Bidiagonal{<:BlasReal}; full::Bool = false)
     d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.uplo, 'I', M.dv, M.ev)
     SVD(U, d, Vt)
 end
-function svdfact(M::Bidiagonal; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
-    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
-    if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `svdfact(A; thin = $(thin))` has ",
-            "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `svdfact(A; full = $(!thin))`."), :svdfact)
-        full::Bool = !thin
-    end
-    return svdfact!(copy(M), full = full)
+function svd(M::Bidiagonal; full::Bool = false)
+    svd!(copy(M), full = full)
 end
 
 ####################
@@ -243,10 +235,14 @@ adjoint(B::Bidiagonal) = Adjoint(B)
 transpose(B::Bidiagonal) = Transpose(B)
 adjoint(B::Bidiagonal{<:Real}) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? :L : :U)
 transpose(B::Bidiagonal{<:Number}) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? :L : :U)
-Base.copy(aB::Adjoint{<:Any,<:Bidiagonal}) =
-    (B = aB.parent; Bidiagonal(map(x -> copy.(adjoint.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U))
-Base.copy(tB::Transpose{<:Any,<:Bidiagonal}) =
-    (B = tB.parent; Bidiagonal(map(x -> copy.(transpose.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U))
+function Base.copy(aB::Adjoint{<:Any,<:Bidiagonal})
+    B = aB.parent
+    return Bidiagonal(map(x -> copy.(adjoint.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U)
+end
+function Base.copy(tB::Transpose{<:Any,<:Bidiagonal})
+    B = tB.parent
+    return Bidiagonal(map(x -> copy.(transpose.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U)
+end
 
 istriu(M::Bidiagonal) = M.uplo == 'U' || iszero(M.ev)
 istril(M::Bidiagonal) = M.uplo == 'L' || iszero(M.ev)
@@ -348,6 +344,9 @@ mul!(C::AbstractMatrix, A::BiTri, B::Adjoint{<:Any,<:AbstractVecOrMat}) = A_mul_
 mul!(C::AbstractVector, A::BiTri, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 
 function check_A_mul_B!_sizes(C, A, B)
+    @assert !has_offset_axes(C)
+    @assert !has_offset_axes(A)
+    @assert !has_offset_axes(B)
     nA, mA = size(A)
     nB, mB = size(B)
     nC, mC = size(C)
@@ -428,6 +427,8 @@ function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym)
 end
 
 function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat)
+    @assert !has_offset_axes(C)
+    @assert !has_offset_axes(B)
     nA = size(A,1)
     nB = size(B,2)
     if !(size(C,1) == size(B,1) == nA)
@@ -502,6 +503,7 @@ ldiv!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A
 ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
 ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
 function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
+    @assert !has_offset_axes(A, B)
     nA,mA = size(A)
     tmp = similar(B,size(B,1))
     n = size(B, 1)
@@ -516,6 +518,7 @@ function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
     B
 end
 function ldiv!(adjA::Adjoint{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::AbstractMatrix)
+    @assert !has_offset_axes(adjA, B)
     A = adjA.parent
     nA,mA = size(A)
     tmp = similar(B,size(B,1))
@@ -531,6 +534,7 @@ function ldiv!(adjA::Adjoint{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::A
     B
 end
 function ldiv!(transA::Transpose{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::AbstractMatrix)
+    @assert !has_offset_axes(transA, B)
     A = transA.parent
     nA,mA = size(A)
     tmp = similar(B,size(B,1))
@@ -547,24 +551,44 @@ function ldiv!(transA::Transpose{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, 
 end
 #Generic solver using naive substitution
 function naivesub!(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b) where T
+    @assert !has_offset_axes(A, b, x)
     N = size(A, 2)
     if N != length(b) || N != length(x)
         throw(DimensionMismatch("second dimension of A, $N, does not match one of the lengths of x, $(length(x)), or b, $(length(b))"))
     end
-    if A.uplo == 'L' #do forward substitution
-        for j = 1:N
-            x[j] = b[j]
-            j > 1 && (x[j] -= A.ev[j-1] * x[j-1])
-            x[j] /= A.dv[j] == zero(T) ? throw(SingularException(j)) : A.dv[j]
-        end
-    else #do backward substitution
-        for j = N:-1:1
-            x[j] = b[j]
-            j < N && (x[j] -= A.ev[j] * x[j+1])
-            x[j] /= A.dv[j] == zero(T) ? throw(SingularException(j)) : A.dv[j]
+
+    if N == 0
+        return x
+    end
+
+    @inbounds begin
+        if A.uplo == 'L' #do forward substitution
+            x[1] = xj1 = A.dv[1]\b[1]
+            for j = 2:N
+                xj  = b[j]
+                xj -= A.ev[j - 1] * xj1
+                dvj = A.dv[j]
+                if iszero(dvj)
+                    throw(SingularException(j))
+                end
+                xj   = dvj\xj
+                x[j] = xj1 = xj
+            end
+        else #do backward substitution
+            x[N] = xj1 = A.dv[N]\b[N]
+            for j = (N - 1):-1:1
+                xj  = b[j]
+                xj -= A.ev[j] * xj1
+                dvj = A.dv[j]
+                if iszero(dvj)
+                    throw(SingularException(j))
+                end
+                xj   = dvj\xj
+                x[j] = xj1 = xj
+            end
         end
     end
-    x
+    return x
 end
 
 ### Generic promotion methods and fallbacks
@@ -625,4 +649,4 @@ function eigvecs(M::Bidiagonal{T}) where T
     end
     Q #Actually Triangular
 end
-eigfact(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
+eigen(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))

@@ -17,6 +17,7 @@ are supported on all primitive numeric types:
 | `x - y`    | binary minus   | performs subtraction                   |
 | `x * y`    | times          | performs multiplication                |
 | `x / y`    | divide         | performs division                      |
+| `x ÷ y`    | integer divide | x / y, truncated to an integer         |
 | `x \ y`    | inverse divide | equivalent to `y / x`                  |
 | `x ^ y`    | power          | raises `x` to the `y`th power          |
 | `x % y`    | remainder      | equivalent to `rem(x,y)`               |
@@ -249,7 +250,7 @@ julia> NaN > NaN
 false
 ```
 
-and can cause especial headaches with [Arrays](@ref):
+and can cause especial headaches with [arrays](@ref man-multi-dim-arrays):
 
 ```jldoctest
 julia> [1 NaN] == [1 NaN]
@@ -355,16 +356,17 @@ Julia applies the following order and associativity of operations, from highest 
 |:-------------- |:------------------------------------------------------------------------------------------------- |:-------------------------- |
 | Syntax         | `.` followed by `::`                                                                              | Left                       |
 | Exponentiation | `^`                                                                                               | Right                      |
-| Unary          | `+ - √`                                                                                           | Right[^1]                   |
-| Fractions      | `//`                                                                                              | Left                       |
-| Multiplication | `* / % & \`                                                                                       | Left[^2]                    |
+| Unary          | `+ - √`                                                                                           | Right[^1]                  |
 | Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
-| Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                    |
+| Fractions      | `//`                                                                                              | Left                       |
+| Multiplication | `* / % & \ ÷`                                                                                     | Left[^2]                   |
+| Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                   |
 | Syntax         | `: ..`                                                                                            | Left                       |
 | Syntax         | `\|>`                                                                                             | Left                       |
 | Syntax         | `<\|`                                                                                             | Right                      |
 | Comparisons    | `> < >= <= == === != !== <:`                                                                      | Non-associative            |
 | Control flow   | `&&` followed by `\|\|` followed by `?`                                                           | Right                      |
+| Pair           | `=>`                                                                                              | Right                      |
 | Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            | Right                      |
 
 [^1]:
@@ -471,19 +473,19 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 
 ### Division functions
 
-| Function              | Description                                                                                               |
-|:--------------------- |:--------------------------------------------------------------------------------------------------------- |
-| [`div(x,y)`](@ref)    | truncated division; quotient rounded towards zero                                                         |
-| [`fld(x,y)`](@ref)    | floored division; quotient rounded towards `-Inf`                                                         |
-| [`cld(x,y)`](@ref)    | ceiling division; quotient rounded towards `+Inf`                                                         |
-| [`rem(x,y)`](@ref)    | remainder; satisfies `x == div(x,y)*y + rem(x,y)`; sign matches `x`                                       |
-| [`mod(x,y)`](@ref)    | modulus; satisfies `x == fld(x,y)*y + mod(x,y)`; sign matches `y`                                         |
-| [`mod1(x,y)`](@ref)   | `mod` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)` |
-| [`mod2pi(x)`](@ref)   | modulus with respect to 2pi;  `0 <= mod2pi(x)    < 2pi`                                                   |
-| [`divrem(x,y)`](@ref) | returns `(div(x,y),rem(x,y))`                                                                             |
-| [`fldmod(x,y)`](@ref) | returns `(fld(x,y),mod(x,y))`                                                                             |
-| [`gcd(x,y...)`](@ref) | greatest positive common divisor of `x`, `y`,...                                                          |
-| [`lcm(x,y...)`](@ref) | least positive common multiple of `x`, `y`,...                                                            |
+| Function                  | Description                                                                                               |
+|:------------------------- |:--------------------------------------------------------------------------------------------------------- |
+| [`div(x,y)`](@ref), `x÷y` | truncated division; quotient rounded towards zero                                                         |
+| [`fld(x,y)`](@ref)        | floored division; quotient rounded towards `-Inf`                                                         |
+| [`cld(x,y)`](@ref)        | ceiling division; quotient rounded towards `+Inf`                                                         |
+| [`rem(x,y)`](@ref)        | remainder; satisfies `x == div(x,y)*y + rem(x,y)`; sign matches `x`                                       |
+| [`mod(x,y)`](@ref)        | modulus; satisfies `x == fld(x,y)*y + mod(x,y)`; sign matches `y`                                         |
+| [`mod1(x,y)`](@ref)       | `mod` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)`   |
+| [`mod2pi(x)`](@ref)       | modulus with respect to 2pi;  `0 <= mod2pi(x)    < 2pi`                                                   |
+| [`divrem(x,y)`](@ref)     | returns `(div(x,y),rem(x,y))`                                                                             |
+| [`fldmod(x,y)`](@ref)     | returns `(fld(x,y),mod(x,y))`                                                                             |
+| [`gcd(x,y...)`](@ref)     | greatest positive common divisor of `x`, `y`,...                                                          |
+| [`lcm(x,y...)`](@ref)     | least positive common multiple of `x`, `y`,...                                                            |
 
 ### Sign and absolute value functions
 
@@ -527,12 +529,11 @@ sin    cos    tan    cot    sec    csc
 sinh   cosh   tanh   coth   sech   csch
 asin   acos   atan   acot   asec   acsc
 asinh  acosh  atanh  acoth  asech  acsch
-sinc   cosc   atan2
+sinc   cosc
 ```
 
-These are all single-argument functions, with the exception of [atan2](https://en.wikipedia.org/wiki/Atan2),
-which gives the angle in [radians](https://en.wikipedia.org/wiki/Radian) between the *x*-axis
-and the point specified by its arguments, interpreted as *x* and *y* coordinates.
+These are all single-argument functions, with [`atan`](@ref) also accepting two arguments
+corresponding to a traditional [`atan2`](https://en.wikipedia.org/wiki/Atan2) function.
 
 Additionally, [`sinpi(x)`](@ref) and [`cospi(x)`](@ref) are provided for more accurate computations
 of [`sin(pi*x)`](@ref) and [`cos(pi*x)`](@ref) respectively.
@@ -548,10 +549,5 @@ asind  acosd  atand  acotd  asecd  acscd
 
 ### Special functions
 
-| Function                                                      | Description                                                                                                                                                     |
-|:------------------------------------------------------------- |:--------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`gamma(x)`](@ref)                                            | [gamma function](https://en.wikipedia.org/wiki/Gamma_function) at `x`                                                                                           |
-| [`lgamma(x)`](@ref)                                           | accurate `log(gamma(x))` for large `x`                                                                                                                          |
-| [`lfact(x)`](@ref)                                            | accurate `log(factorial(x))` for large `x`; same as `lgamma(x+1)` for `x > 1`, zero otherwise                                                                   |
-| [`beta(x,y)`](@ref)                                           | [beta function](https://en.wikipedia.org/wiki/Beta_function) at `x,y`                                                                                           |
-| [`lbeta(x,y)`](@ref)                                          | accurate `log(beta(x,y))` for large `x` or `y`                                                                                                                  |
+Many other special mathematical functions are provided by the package
+[SpecialFunctions.jl](https://github.com/JuliaMath/SpecialFunctions.jl).

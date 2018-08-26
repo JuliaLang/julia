@@ -6,7 +6,7 @@ using Random
 
 function safe_mapslices(op, A, region)
     newregion = intersect(region, 1:ndims(A))
-    return isempty(newregion) ? A : mapslices(op, A, newregion)
+    return isempty(newregion) ? A : mapslices(op, A, dims = newregion)
 end
 safe_sum(A::Array{T}, region) where {T} = safe_mapslices(sum, A, region)
 safe_prod(A::Array{T}, region) where {T} = safe_mapslices(prod, A, region)
@@ -17,11 +17,10 @@ safe_sumabs2(A::Array{T}, region) where {T} = safe_mapslices(sum, abs2.(A), regi
 safe_maxabs(A::Array{T}, region) where {T} = safe_mapslices(maximum, abs.(A), region)
 safe_minabs(A::Array{T}, region) where {T} = safe_mapslices(minimum, abs.(A), region)
 
-Areduc = rand(3, 4, 5, 6)
-for region in Any[
+@testset "test reductions over region: $region" for region in Any[
     1, 2, 3, 4, 5, (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4),
     (1, 2, 3), (1, 3, 4), (2, 3, 4), (1, 2, 3, 4)]
-    # println("region = $region")
+    Areduc = rand(3, 4, 5, 6)
     r = fill(NaN, map(length, Base.reduced_indices(axes(Areduc), region)))
     @test sum!(r, Areduc) ≈ safe_sum(Areduc, region)
     @test prod!(r, Areduc) ≈ safe_prod(Areduc, region)
@@ -51,14 +50,14 @@ for region in Any[
     fill!(r, -1.5)
     @test minimum!(abs, r, Areduc, init=false) ≈ fill!(r2, -1.5)
 
-    @test sum(Areduc, dims=region) ≈ safe_sum(Areduc, region)
-    @test prod(Areduc, dims=region) ≈ safe_prod(Areduc, region)
-    @test maximum(Areduc, dims=region) ≈ safe_maximum(Areduc, region)
-    @test minimum(Areduc, dims=region) ≈ safe_minimum(Areduc, region)
-    @test sum(abs, Areduc, dims=region) ≈ safe_sumabs(Areduc, region)
-    @test sum(abs2, Areduc, dims=region) ≈ safe_sumabs2(Areduc, region)
-    @test maximum(abs, Areduc, dims=region) ≈ safe_maxabs(Areduc, region)
-    @test minimum(abs, Areduc, dims=region) ≈ safe_minabs(Areduc, region)
+    @test @inferred(sum(Areduc, dims=region)) ≈ safe_sum(Areduc, region)
+    @test @inferred(prod(Areduc, dims=region)) ≈ safe_prod(Areduc, region)
+    @test @inferred(maximum(Areduc, dims=region)) ≈ safe_maximum(Areduc, region)
+    @test @inferred(minimum(Areduc, dims=region)) ≈ safe_minimum(Areduc, region)
+    @test @inferred(sum(abs, Areduc, dims=region)) ≈ safe_sumabs(Areduc, region)
+    @test @inferred(sum(abs2, Areduc, dims=region)) ≈ safe_sumabs2(Areduc, region)
+    @test @inferred(maximum(abs, Areduc, dims=region)) ≈ safe_maxabs(Areduc, region)
+    @test @inferred(minimum(abs, Areduc, dims=region)) ≈ safe_minabs(Areduc, region)
 end
 
 # Test reduction along first dimension; this is special-cased for
@@ -107,19 +106,31 @@ end
 @test typeof(@inferred(Base.prod(abs, [1.0+1.0im], dims=1))) == Vector{Float64}
 @test typeof(@inferred(Base.prod(abs2, [1.0+1.0im], dims=1))) == Vector{Float64}
 
-# Heterogeneously typed arrays
-@test sum(Union{Float32, Float64}[1.0], dims=1) == [1.0]
-@test prod(Union{Float32, Float64}[1.0], dims=1) == [1.0]
+@testset "heterogeneously typed arrays" begin
+    for x in (sum(Union{Float32, Float64}[1.0], dims=1),
+              prod(Union{Float32, Float64}[1.0], dims=1))
+        @test x == [1.0]
+        @test x isa Vector{Float64}
+    end
 
-@test reduce((a,b) -> a|b, false, [true false; false false], dims=1) == [true false]
-let R = reduce((a,b) -> a+b, 0.0, [1 2; 3 4], dims=2)
+    x = sum(Real[1.0], dims=1)
+    @test x == [1.0]
+    @test x isa Vector{Real}
+
+    x = mapreduce(cos, +, Union{Int,Missing}[1, 2], dims=1)
+    @test x == mapreduce(cos, +, [1, 2], dims=1)
+    @test x isa Vector{Float64}
+end
+
+@test reduce((a,b) -> a|b, [true false; false false], dims=1, init=false) == [true false]
+let R = reduce((a,b) -> a+b, [1 2; 3 4], dims=2, init=0.0)
     @test eltype(R) == Float64
     @test R ≈ [3,7]
 end
-@test reduce((a,b) -> a+b, 0, [1 2; 3 4], dims=1) == [4 6]
+@test reduce((a,b) -> a+b, [1 2; 3 4], dims=1, init=0) == [4 6]
 
 # inferred return types
-@test typeof(@inferred(reduce(+, 0.0, ones(3,3,3), dims=1))) == Array{Float64, 3}
+@test typeof(@inferred(reduce(+, ones(3,3,3), dims=1, init=0.0))) == Array{Float64, 3}
 
 @testset "empty cases" begin
     A = Matrix{Int}(undef, 0,1)
@@ -127,7 +138,6 @@ end
     @test prod(A) === 1
     @test_throws ArgumentError minimum(A)
     @test_throws ArgumentError maximum(A)
-    @test var(A) === NaN
 
     @test isequal(sum(A, dims=1), zeros(Int, 1, 1))
     @test isequal(sum(A, dims=2), zeros(Int, 0, 1))
@@ -137,10 +147,6 @@ end
     @test isequal(prod(A, dims=2), fill(1, 0, 1))
     @test isequal(prod(A, dims=(1, 2)), fill(1, 1, 1))
     @test isequal(prod(A, dims=3), fill(1, 0, 1))
-    @test isequal(var(A, dims=1), fill(NaN, 1, 1))
-    @test isequal(var(A, dims=2), fill(NaN, 0, 1))
-    @test isequal(var(A, dims=(1, 2)), fill(NaN, 1, 1))
-    @test isequal(var(A, dims=3), fill(NaN, 0, 1))
 
     for f in (minimum, maximum)
         @test_throws ArgumentError f(A, dims=1)
@@ -156,7 +162,7 @@ end
     end
 
 end
-## findmin/findmax/minumum/maximum
+## findmin/findmax/minimum/maximum
 
 A = [1.0 5.0 6.0;
      5.0 2.0 4.0]
@@ -204,6 +210,17 @@ for (tup, rval, rind) in [((1,), [NaN 3.0 6.0], [CartesianIndex(2,1) CartesianIn
     @test isequal(maximum!(similar(rval), A), rval)
     @test isequal(maximum!(copy(rval), A, init=false), rval)
     @test isequal(Base.reducedim!(max, copy(rval), A), rval)
+end
+
+# issue #28320
+@testset "reducedim issue with abstract complex arrays" begin
+let A = Complex[1.5 0.5]
+    @test mapreduce(abs2, +, A, dims=2) == reshape([2.5], 1, 1)
+    @test sum(abs2, A, dims=2) == reshape([2.5], 1, 1)
+    @test prod(abs2, A, dims=2) == reshape([0.5625], 1, 1)
+    @test maximum(abs2, A, dims=2) == reshape([2.25], 1, 1)
+    @test minimum(abs2, A, dims=2) == reshape([0.25], 1, 1)
+end
 end
 
 A = [1.0 NaN 6.0;
@@ -320,14 +337,13 @@ end
 
 # issue #6672
 @test sum(Real[1 2 3; 4 5.3 7.1], dims=2) == reshape([6, 16.4], 2, 1)
-@test std(AbstractFloat[1,2,3], dims=1) == [1.0]
 @test sum(Any[1 2;3 4], dims=1) == [4 6]
 @test sum(Vector{Int}[[1,2],[4,3]], dims=1)[1] == [5,5]
 
-# issue #10461
-Areduc = rand(3, 4, 5, 6)
-for region in Any[-1, 0, (-1, 2), [0, 1], (1,-2,3), [0 1;
+@testset "Issue #10461. region=$region" for region in Any[-1, 0, (-1, 2), [0, 1], (1,-2,3), [0 1;
                                                      2 3], "hello"]
+    Areduc = rand(3, 4, 5, 6)
+
     @test_throws ArgumentError sum(Areduc, dims=region)
     @test_throws ArgumentError prod(Areduc, dims=region)
     @test_throws ArgumentError maximum(Areduc, dims=region)
@@ -357,4 +373,10 @@ end
     @test eltype(result) === (T <: Base.SmallSigned ? Int :
                               T <: Base.SmallUnsigned ? UInt :
                               T)
+end
+
+@testset "argmin/argmax" begin
+    B = reshape(3^3:-1:1, (3, 3, 3))
+    @test B[argmax(B, dims=[2, 3])] == maximum(B, dims=[2, 3])
+    @test B[argmin(B, dims=[2, 3])] == minimum(B, dims=[2, 3])
 end

@@ -442,9 +442,9 @@ end
 Base.convert(::Type{Year}, x::Month) = Year(divexact(value(x), 12))
 Base.promote_rule(::Type{Year}, ::Type{Month}) = Month
 
-# disallow comparing fixed to other periods
-(==)(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(==, (x, y)))
-(==)(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(==, (x, y)))
+# fixed is not comparable to other periods, as per discussion in issue #21378
+(==)(x::FixedPeriod, y::OtherPeriod) = false
+(==)(x::OtherPeriod, y::FixedPeriod) = false
 
 const fixedperiod_seed = UInt === UInt64 ? 0x5b7fc751bba97516 : 0xeae0fdcb
 const otherperiod_seed = UInt === UInt64 ? 0xe1837356ff2d2ac9 : 0x170d1b00

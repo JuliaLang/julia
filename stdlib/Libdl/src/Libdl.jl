@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 module Libdl
 @doc """
 Interface to libdl. Provides dynamic linking support.

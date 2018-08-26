@@ -30,7 +30,8 @@ catch err
     @test length(lkup) == 2
     @test endswith(string(lkup[2].file), "backtrace.jl")
     @test lkup[2].line == 42
-    @test lkup[1].func == :inlfunc
+    # TODO: we don't support surface AST locations with inlined function names
+    @test_broken lkup[1].func == :inlfunc
     @test endswith(string(lkup[1].file), "backtrace.jl")
     @test lkup[1].line == 37
 end
@@ -162,4 +163,17 @@ let st = stacktrace(bt23971)
     @test StackTraces.is_top_level_frame(st[1])
     @test string(st[1].file) == @__FILE__
     @test !occursin("missing", string(st[2].file))
+end
+
+# issue #27959
+let bt, found = false
+    @testset begin
+        bt = backtrace()
+    end
+    for frame in map(StackTraces.lookup, bt)
+        if frame[1].line == @__LINE__() - 3 && frame[1].file == Symbol(@__FILE__)
+            found = true; break
+        end
+    end
+    @test found
 end

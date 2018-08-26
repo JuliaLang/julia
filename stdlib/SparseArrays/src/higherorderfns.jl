@@ -70,6 +70,7 @@ Broadcast.BroadcastStyle(::Type{<:Adjoint{T,<:Union{SparseVector,SparseMatrixCSC
 Broadcast.BroadcastStyle(::Type{<:Transpose{T,<:Union{SparseVector,SparseMatrixCSC}} where T}) = PromoteToSparse()
 
 Broadcast.BroadcastStyle(s::SPVM, ::Broadcast.AbstractArrayStyle{0}) = s
+Broadcast.BroadcastStyle(s::SPVM, ::Broadcast.DefaultArrayStyle{0}) = s
 Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{1}) = PromoteToSparse()
 Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{2}) = PromoteToSparse()
 
@@ -522,11 +523,16 @@ function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseV
         end
     # Cases with vertical expansion
     else # numrows(A) != numrows(C) (=> numrows(A) == 1)
+        svA, svC = storedvals(A), storedvals(C)
         @inbounds for (j, jo) in zip(columns(C), _densecoloffsets(C))
             Ak, stopAk = numcols(A) == 1 ? (colstartind(A, 1), colboundind(A, 1)) : (colstartind(A, j), colboundind(A, j))
-            Ax = Ak < stopAk ? storedvals(A)[Ak] : zero(eltype(A))
+            Ax = Ak < stopAk ? svA[Ak] : zero(eltype(A))
             fofAx = f(Ax)
-            fofAx != fillvalue && (storedvals(C)[(jo + 1):(jo + numrows(C))] = fofAx)
+            if fofAx != fillvalue
+                for i in (jo + 1):(jo + numrows(C))
+                    svC[i] = fofAx
+                end
+            end
         end
     end
     return C
@@ -1007,7 +1013,7 @@ end
 # capturescalars takes a function (f) and a tuple of mixed sparse vectors/matrices and
 # broadcast scalar arguments (mixedargs), and returns a function (parevalf, i.e. partially
 # evaluated f) and a reduced argument tuple (passedargstup) containing only the sparse
-# vectors/matrices in mixedargs in their orginal order, and such that the result of
+# vectors/matrices in mixedargs in their original order, and such that the result of
 # broadcast(parevalf, passedargstup...) is broadcast(f, mixedargs...)
 @inline function capturescalars(f, mixedargs)
     let (passedsrcargstup, makeargs) = _capturescalars(mixedargs...)
@@ -1075,7 +1081,7 @@ function copy(bc::Broadcasted{PromoteToSparse})
     if is_supported_sparse_broadcast(bcf.args...)
         broadcast(bcf.f, map(_sparsifystructured, bcf.args)...)
     else
-        return copy(convert(Broadcasted{Broadcast.DefaultArrayStyle{2}}, bc))
+        return copy(convert(Broadcasted{Broadcast.DefaultArrayStyle{length(axes(bc))}}, bc))
     end
 end
 
@@ -1086,7 +1092,6 @@ end
 
 _sparsifystructured(M::AbstractMatrix) = SparseMatrixCSC(M)
 _sparsifystructured(V::AbstractVector) = SparseVector(V)
-_sparsifystructured(P::AbstractArray{<:Any,0}) = SparseVector(reshape(P, 1))
 _sparsifystructured(M::AbstractSparseMatrix) = SparseMatrixCSC(M)
 _sparsifystructured(V::AbstractSparseVector) = SparseVector(V)
 _sparsifystructured(S::SparseVecOrMat) = S

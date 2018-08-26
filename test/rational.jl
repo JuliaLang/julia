@@ -30,6 +30,8 @@ using Test
     @test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
     @test @inferred(rationalize(Int, 3.0, 0)) === 3//1
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
+    # issue 26823
+    @test_throws InexactError rationalize(Int, NaN)
 
     for a = -5:5, b = -5:5
         if a == b == 0; continue; end
@@ -68,12 +70,12 @@ using Test
     @test 0.1 == 3602879701896397//36028797018963968
     @test Inf == 1//0 == 2//0 == typemax(Int)//0
     @test -Inf == -1//0 == -2//0 == -typemax(Int)//0
-    @test realmin() != 1//(BigInt(2)^1022+1)
-    @test realmin() == 1//(BigInt(2)^1022)
-    @test realmin() != 1//(BigInt(2)^1022-1)
-    @test realmin()/2 != 1//(BigInt(2)^1023+1)
-    @test realmin()/2 == 1//(BigInt(2)^1023)
-    @test realmin()/2 != 1//(BigInt(2)^1023-1)
+    @test floatmin() != 1//(BigInt(2)^1022+1)
+    @test floatmin() == 1//(BigInt(2)^1022)
+    @test floatmin() != 1//(BigInt(2)^1022-1)
+    @test floatmin()/2 != 1//(BigInt(2)^1023+1)
+    @test floatmin()/2 == 1//(BigInt(2)^1023)
+    @test floatmin()/2 != 1//(BigInt(2)^1023-1)
     @test nextfloat(0.0) != 1//(BigInt(2)^1074+1)
     @test nextfloat(0.0) == 1//(BigInt(2)^1074)
     @test nextfloat(0.0) != 1//(BigInt(2)^1074-1)
@@ -281,8 +283,8 @@ end
     @test convert(Rational{BigInt},zero(BigFloat)) == 0
     @test convert(Rational{BigInt},-zero(BigFloat)) == 0
     @test convert(Rational{BigInt},5e-324) == 5e-324
-    @test convert(Rational{BigInt},realmin(Float64)) == realmin(Float64)
-    @test convert(Rational{BigInt},realmax(Float64)) == realmax(Float64)
+    @test convert(Rational{BigInt},floatmin(Float64)) == floatmin(Float64)
+    @test convert(Rational{BigInt},floatmax(Float64)) == floatmax(Float64)
 
     @test isa(convert(Float64, big(1)//2), Float64)
 end

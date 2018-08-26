@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 module Base64
+
+using Base: has_offset_axes
 
 export
     Base64EncodePipe,
@@ -38,7 +38,7 @@ stream passed to `show`.
 stringmime(m::MIME, x; context=nothing) = istextmime(m) ? Base.Multimedia._textrepr(m, x, context) : _binstringmime(m, x, context)
 stringmime(m::AbstractString, x; context=nothing) = stringmime(MIME(m), x; context=context)
 
-_binstringmime(m::MIME, x, context) = Base64.base64encode(show, m, x; context=IOContext)
+_binstringmime(m::MIME, x, context) = Base64.base64encode(show, m, x; context=context)
 _binstringmime(m::MIME, x::Vector{UInt8}, context) = Base64.base64encode(write, x; context=context)
 
 end

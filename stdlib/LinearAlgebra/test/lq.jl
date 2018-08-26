@@ -11,7 +11,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-srand(1234321)
+Random.seed!(1234321)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -38,16 +38,15 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
 
         α = rand(eltya)
         aα = fill(α,1,1)
-        @test lqfact(α).L*lqfact(α).Q ≈ lqfact(aα).L*lqfact(aα).Q
-        @test lq(α)[1]*lq(α)[2] ≈ lqfact(aα).L*lqfact(aα).Q
-        @test abs(lqfact(α).Q[1,1]) ≈ one(eltya)
+        @test lq(α).L*lq(α).Q ≈ lq(aα).L*lq(aα).Q
+        @test abs(lq(α).Q[1,1]) ≈ one(eltya)
         tab = promote_type(eltya,eltyb)
 
         for i = 1:2
             let a = i == 1 ? a : view(a, 1:n - 1, 1:n - 1), b = i == 1 ? b : view(b, 1:n - 1), n = i == 1 ? n : n - 1
-                lqa   = lqfact(a)
+                lqa   = lq(a)
                 l,q   = lqa.L, lqa.Q
-                qra   = qrfact(a)
+                qra   = qr(a)
                 @testset "Basic ops" begin
                     @test size(lqa,1) == size(a,1)
                     @test size(lqa,3) == 1
@@ -93,7 +92,7 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
         end
 
         @testset "Matmul with LQ factorizations" begin
-            lqa = lqfact(a[:,1:n1])
+            lqa = lq(a[:,1:n1])
             l,q = lqa.L, lqa.Q
             @test rectangularQ(q)*rectangularQ(q)' ≈ Matrix(I, n1, n1)
             @test squareQ(q)'*squareQ(q) ≈ Matrix(I, n1, n1)
@@ -103,43 +102,6 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
             @test_throws BoundsError size(q,-1)
         end
     end
-end
-
-@testset "correct form of Q from lq(...) (#23729)" begin
-    # where the original matrix (say A) is square or has more rows than columns,
-    # then A's factorization's triangular factor (say L) should have the same shape
-    # as A independent of factorization form ("full", "reduced"/"thin"), and A's factorization's
-    # orthogonal factor (say Q) should be a square matrix of order of A's number of
-    # columns independent of factorization form ("full", "reduced"/"thin"), and L and Q
-    # should have multiplication-compatible shapes.
-    local m, n = 4, 2
-    A = randn(m, n)
-    for full in (false, true)
-        L, Q = lq(A, full = full)
-        @test size(L) == (m, n)
-        @test size(Q) == (n, n)
-        @test isapprox(A, L*Q)
-    end
-    # where the original matrix has strictly fewer rows than columns ...
-    m, n = 2, 4
-    A = randn(m, n)
-    # ... then, for a rectangular/"thin" factorization of A, L should be a square matrix
-    # of order of A's number of rows, Q should have the same shape as A,
-    # and L and Q should have multiplication-compatible shapes
-    Lrect, Qrect = lq(A, full = false)
-    @test size(Lrect) == (m, m)
-    @test size(Qrect) == (m, n)
-    @test isapprox(A, Lrect * Qrect)
-    # ... and, for a full factorization of A, L should have the
-    # same shape as A, Q should be a square matrix of order of A's number of columns,
-    # and L and Q should have multiplication-compatible shape. but instead the L returned
-    # has no zero-padding on the right / is L for the rectangular/"thin" factorization,
-    # so for L and Q to have multiplication-compatible shapes, L must be zero-padded
-    # to have the shape of A.
-    Lfull, Qfull = lq(A, full = true)
-    @test size(Lfull) == (m, m)
-    @test size(Qfull) == (n, n)
-    @test isapprox(A, [Lfull zeros(m, n - m)] * Qfull)
 end
 
 @testset "getindex on LQPackedQ (#23733)" begin
@@ -152,14 +114,14 @@ end
     end
 
     m, n = 3, 3 # reduced Q 3-by-3, full Q 3-by-3
-    implicitQ, explicitQ = getqs(lqfact(randn(m, n)))
+    implicitQ, explicitQ = getqs(lq(randn(m, n)))
     @test implicitQ[1, 1] == explicitQ[1, 1]
     @test implicitQ[m, 1] == explicitQ[m, 1]
     @test implicitQ[1, n] == explicitQ[1, n]
     @test implicitQ[m, n] == explicitQ[m, n]
 
     m, n = 3, 4 # reduced Q 3-by-4, full Q 4-by-4
-    implicitQ, explicitQ = getqs(lqfact(randn(m, n)))
+    implicitQ, explicitQ = getqs(lq(randn(m, n)))
     @test implicitQ[1, 1] == explicitQ[1, 1]
     @test implicitQ[m, 1] == explicitQ[m, 1]
     @test implicitQ[1, n] == explicitQ[1, n]
@@ -168,7 +130,7 @@ end
     @test implicitQ[m+1, n] == explicitQ[m+1, n]
 
     m, n = 4, 3 # reduced Q 3-by-3, full Q 3-by-3
-    implicitQ, explicitQ = getqs(lqfact(randn(m, n)))
+    implicitQ, explicitQ = getqs(lq(randn(m, n)))
     @test implicitQ[1, 1] == explicitQ[1, 1]
     @test implicitQ[n, 1] == explicitQ[n, 1]
     @test implicitQ[1, n] == explicitQ[1, n]
@@ -181,7 +143,7 @@ end
         ((3, 3), 3), # A 3-by-3 => full/square Q 3-by-3
         ((3, 4), 4), # A 3-by-4 => full/square Q 4-by-4
         ((4, 3), 3) )# A 4-by-3 => full/square Q 3-by-3
-        @test size(lqfact(randn(mA, nA)).Q) == (nQ, nQ)
+        @test size(lq(randn(mA, nA)).Q) == (nQ, nQ)
     end
 end
 
@@ -195,7 +157,7 @@ end
     # A_mul_B*(C, Q) (Ac_mul_B*(C, Q)) operations should work for
     # *-by-n (n-by-*) C, which we test below via n-by-n C
     for (mA, nA) in ((3, 3), (3, 4), (4, 3))
-        implicitQ, explicitQ = getqs(lqfact(randn(mA, nA)))
+        implicitQ, explicitQ = getqs(lq(randn(mA, nA)))
         C = randn(nA, nA)
         @test *(C, implicitQ) ≈ *(C, explicitQ)
         @test *(C, adjoint(implicitQ)) ≈ *(C, adjoint(explicitQ))
@@ -212,7 +174,7 @@ end
     # hence we need also test *-by-m C with
     # A*_mul_B(C, Q) ops, as below via m-by-m C.
     mA, nA = 3, 4
-    implicitQ, explicitQ = getqs(lqfact(randn(mA, nA)))
+    implicitQ, explicitQ = getqs(lq(randn(mA, nA)))
     C = randn(mA, mA)
     zeroextCright = hcat(C, zeros(eltype(C), mA))
     zeroextCdown = vcat(C, zeros(eltype(C), (1, mA)))

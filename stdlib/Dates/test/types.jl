@@ -154,7 +154,7 @@ end
     @test_throws ArgumentError Dates.DateTime(2013, 13, 1)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 0)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 32)
-    @test_throws ArgumentError Dates.DateTime(2013, 1, 1, 24)
+    @test_throws ArgumentError Dates.DateTime(2013, 1, 1, 25)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 1, -1)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 1, 0, -1)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 1, 0, 60)

@@ -271,8 +271,10 @@ end
 
 @testset "Adjoint and Transpose vector vec methods" begin
     intvec = [1, 2]
-    @test vec(Adjoint(intvec)) === intvec
+    @test vec(Adjoint(intvec)) == intvec
     @test vec(Transpose(intvec)) === intvec
+    cvec = [1 + 1im]
+    @test vec(cvec')[1] == cvec[1]'
 end
 
 @testset "horizontal concatenation of Adjoint/Transpose-wrapped vectors and Numbers" begin
@@ -413,19 +415,30 @@ end
     @test (Transpose(complexvec) / Transpose(complexmat))::Transpose ≈ rowcomplexvec / copy(Transpose(complexmat))
 end
 
-@testset "norm of Adjoint/Transpose-wrapped vectors" begin
+@testset "norm and opnorm of Adjoint/Transpose-wrapped vectors" begin
     # definitions are in base/linalg/generic.jl
     realvec, complexvec = [3, -4], [3im, -4im]
-    # one norm result should be maximum(abs.(realvec)) == 4
+    # one norm result should be sum(abs.(realvec)) == 7
     # two norm result should be sqrt(sum(abs.(realvec))) == 5
-    # inf norm result should be sum(abs.(realvec)) == 7
+    # inf norm result should be maximum(abs.(realvec)) == 4
     for v in (realvec, complexvec)
         @test norm(Adjoint(v)) ≈ 5
-        @test norm(Adjoint(v), 1) ≈ 4
-        @test norm(Adjoint(v), Inf) ≈ 7
+        @test norm(Adjoint(v), 1) ≈ 7
+        @test norm(Adjoint(v), Inf) ≈ 4
         @test norm(Transpose(v)) ≈ 5
-        @test norm(Transpose(v), 1) ≈ 4
-        @test norm(Transpose(v), Inf) ≈ 7
+        @test norm(Transpose(v), 1) ≈ 7
+        @test norm(Transpose(v), Inf) ≈ 4
+    end
+    # one opnorm result should be maximum(abs.(realvec)) == 4
+    # two opnorm result should be sqrt(sum(abs.(realvec))) == 5
+    # inf opnorm result should be sum(abs.(realvec)) == 7
+    for v in (realvec, complexvec)
+        @test opnorm(Adjoint(v)) ≈ 5
+        @test opnorm(Adjoint(v), 1) ≈ 4
+        @test opnorm(Adjoint(v), Inf) ≈ 7
+        @test opnorm(Transpose(v)) ≈ 5
+        @test opnorm(Transpose(v), 1) ≈ 4
+        @test opnorm(Transpose(v), Inf) ≈ 7
     end
 end
 
@@ -458,6 +471,37 @@ end
     B = copy(A)
     B .= B .* B'
     @test B == A .* A'
+end
+
+@testset "test show methods for $t of Factorizations" for t in (Adjoint, Transpose)
+    A = randn(4, 4)
+    F = lu(A)
+    Fop = t(F)
+    @test "LinearAlgebra."*sprint(show, Fop) ==
+                  "$t of "*sprint(show, parent(Fop))
+    @test "LinearAlgebra."*sprint((io, t) -> show(io, MIME"text/plain"(), t), Fop) ==
+                  "$t of "*sprint((io, t) -> show(io, MIME"text/plain"(), t), parent(Fop))
+end
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
+@testset "offset axes" begin
+    s = Base.Slice(-3:3)'
+    @test axes(s) === (Base.OneTo(1), Base.Slice(-3:3))
+    @test collect(LinearIndices(s)) == reshape(1:7, 1, 7)
+    @test collect(CartesianIndices(s)) == reshape([CartesianIndex(1,i) for i = -3:3], 1, 7)
+    @test s[1] == -3
+    @test s[7] ==  3
+    @test s[4] ==  0
+    @test_throws BoundsError s[0]
+    @test_throws BoundsError s[8]
+    @test s[1,-3] == -3
+    @test s[1, 3] ==  3
+    @test s[1, 0] ==  0
+    @test_throws BoundsError s[1,-4]
+    @test_throws BoundsError s[1, 4]
 end
 
 end # module TestAdjointTranspose

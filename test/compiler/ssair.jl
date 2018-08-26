@@ -1,14 +1,14 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Core.IR
 const Compiler = Core.Compiler
 
 let code = Any[
     Expr(:gotoifnot, SlotNumber(2), 4),
-    LabelNode(2),
     Expr(:(=), SlotNumber(3), 2),
-    LabelNode(4),
     # Test a SlotNumber as a value of a PhiNode
-    Expr(:(=), SSAValue(0), PhiNode(Any[2,3], Any[1, SlotNumber(3)])),
-    Expr(:return, SSAValue(0))
+    PhiNode(Any[2,3], Any[1, SlotNumber(3)]),
+    Expr(:return, SSAValue(3))
 ]
 
     ci = eval(Expr(:new, CodeInfo,
@@ -22,4 +22,12 @@ let code = Any[
     ))
 
     Compiler.run_passes(ci, 1, Compiler.LineInfoNode[Compiler.NullLineInfo])
+end
+
+# test >:
+let
+
+f(a,b) = a >: b
+code_typed(f, Tuple{Any, Any})
+
 end

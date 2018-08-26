@@ -266,16 +266,7 @@ end
             # --> test broadcast! entry point / not zero-preserving op
             fQ = broadcast(f, fX, fY, fZ); Q = sparse(fQ)
             broadcast!(f, Q, X, Y, Z); Q = sparse(fQ) # warmup for @allocated
-            @test_broken (@allocated broadcast!(f, Q, X, Y, Z)) == 0
-            broadcast!(f, Q, X, Y, Z); Q = sparse(fQ) # warmup for @allocated
-            @test (@allocated broadcast!(f, Q, X, Y, Z)) <= 16
-            # the preceding test allocates 16 bytes in the entry point for broadcast!, but
-            # none of the earlier tests of the same code path allocate. no allocation shows
-            # up with --track-allocation=user. allocation shows up on the first line of the
-            # entry point for broadcast! with --track-allocation=all, but that first line
-            # almost certainly should not allocate. so not certain what's going on.
-            # additional info: occurs for broadcast!(f, Z, X) for Z and X of different
-            # shape, but not for Z and X of the same shape.
+            @test (@allocated broadcast!(f, Q, X, Y, Z)) == 0
             @test broadcast!(f, Q, X, Y, Z) == sparse(broadcast!(f, fQ, fX, fY, fZ))
             # --> test shape checks for both broadcast and broadcast! entry points
             # TODO strengthen this test, avoiding dependence on checking whether
@@ -356,7 +347,7 @@ end
             @test_broken (@allocated broadcast!(*, X, sparseargs...)) == 0
             X = sparse(fX) # reset / warmup for @allocated test
             # And broadcasting over Transposes currently requires making a CSC copy, so we must account for that in the bounds
-            @test (@allocated broadcast!(*, X, sparseargs...)) <= (sum(x->isa(x, Transpose) ? Base.summarysize(x)*2+128 : 0, sparseargs) + 128)
+            @test (@allocated broadcast!(*, X, sparseargs...)) <= (sum(x->isa(x, Transpose) ? @allocated(SparseMatrixCSC(x))+128 : 0, sparseargs) + 128)
         end
     end
     # test combinations at the limit of inference (eight arguments net)
@@ -619,6 +610,26 @@ end
     R = reshape(A, 2, 2)
     A[R] .= reshape((1:4) .+ 2^30, 2, 2)
     @test A == [2,1,4,3] .+ 2^30
+end
+
+@testset "1-dimensional 'opt-out' (non) sparse broadcasting" begin
+    # SparseArrays intentionally only promotes to sparse for limited array types
+    # More support may be added in the future, but for now let's make sure that
+    # broadcast still performs as expected (issue #26977)
+    A = spzeros(5)
+    @test A .+ (1:5) == 1:5
+    @test A .* 2 .+ view(collect(1:10), 1:5) == 1:5
+    @test 2 .* A .+ view(1:10, 1:5) == 1:5
+    @test (A .+ (1:5)) .* 2 == 2:2:10
+    @test ((1:5) .+ A) .* 2 == 2:2:10
+    @test 2 .* ((1:5) .+ A) == 2:2:10
+    @test 2 .* (A .+ (1:5)) == 2:2:10
+
+    @test Diagonal(spzeros(5)) \ view(rand(10), 1:5) == [Inf,Inf,Inf,Inf,Inf]
+end
+
+@testset "Issue #27836" begin
+    @test minimum(sparse([1, 2], [1, 2], ones(Int32, 2)), dims = 1) isa Matrix
 end
 
 end # module

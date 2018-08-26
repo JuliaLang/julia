@@ -16,6 +16,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
 
     function GenericIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
                                 maxsize::Integer) where T<:AbstractVector{UInt8}
+        @assert !has_offset_axes(data)
         new(data,readable,writable,seekable,append,length(data),maxsize,1,-1)
     end
 end
@@ -117,7 +118,7 @@ function IOBuffer(;
         append=flags.append,
         truncate=flags.truncate,
         maxsize=maxsize)
-    buf.data[:] = 0
+    fill!(buf.data, 0)
     return buf
 end
 
@@ -167,6 +168,7 @@ function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
 end
 
 function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
+    @assert !has_offset_axes(a)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
@@ -246,7 +248,7 @@ function truncate(io::GenericIOBuffer, n::Integer)
     if n > length(io.data)
         resize!(io.data, n)
     end
-    io.data[io.size+1:n] = 0
+    io.data[io.size+1:n] .= 0
     io.size = n
     io.ptr = min(io.ptr, n+1)
     ismarked(io) && io.mark > n && unmark(io)
@@ -401,6 +403,7 @@ function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
 end
 
 function write_sub(to::GenericIOBuffer, a::AbstractArray{UInt8}, offs, nel)
+    @assert !has_offset_axes(a)
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end

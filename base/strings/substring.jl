@@ -62,9 +62,12 @@ function codeunit(s::SubString, i::Integer)
     @inbounds return codeunit(s.string, s.offset + i)
 end
 
-function next(s::SubString, i::Integer)
+function iterate(s::SubString, i::Integer=firstindex(s))
+    i == ncodeunits(s)+1 && return nothing
     @boundscheck checkbounds(s, i)
-    @inbounds c, i = next(s.string, s.offset + i)
+    y = iterate(s.string, s.offset + i)
+    y === nothing && return nothing
+    c, i = y
     return c, i - s.offset
 end
 
@@ -137,6 +140,39 @@ function reverse(s::Union{String,SubString{String}})::String
             write(io, c)
         end
     end
+end
+
+function string(a::Union{String, SubString{String}}...)
+    if length(a) == 1
+        return String(a[1])
+    end
+    n = 0
+    for str in a
+        n += sizeof(str)
+    end
+    out = _string_n(n)
+    offs = 1
+    for str in a
+        unsafe_copyto!(pointer(out,offs), pointer(str), sizeof(str))
+        offs += sizeof(str)
+    end
+    return out
+end
+
+function repeat(s::Union{String, SubString{String}}, r::Integer)
+    r < 0 && throw(ArgumentError("can't repeat a string $r times"))
+    r == 1 && return String(s)
+    n = sizeof(s)
+    out = _string_n(n*r)
+    if n == 1 # common case: repeating a single-byte string
+        @inbounds b = codeunit(s, 1)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), out, b, r)
+    else
+        for i = 0:r-1
+            unsafe_copyto!(pointer(out, i*n+1), pointer(s), n)
+        end
+    end
+    return out
 end
 
 getindex(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, r)

@@ -37,7 +37,7 @@ cartesian, rather than linear, indexing.
 Consider making 2d slices of a 3d array:
 
 ```@meta
-DocTestSetup = :(import Random; Random.srand(1234))
+DocTestSetup = :(import Random; Random.seed!(1234))
 ```
 ```jldoctest subarray
 julia> A = rand(2,3,4);

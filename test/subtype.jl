@@ -1238,6 +1238,9 @@ struct A23764_2{T, N, S} <: AbstractArray{Union{Ref{T}, S}, N}; end
 @test Tuple{A23764_2{T, 1, Nothing} where T} <: Tuple{AbstractArray{T,N}} where {T,N}
 @test Tuple{A23764_2{T, 1, Nothing} where T} <: Tuple{AbstractArray{T,N} where {T,N}}
 
+# issue #26131
+@test !(Vector{Vector{Number}} <: Vector{Union{Vector{Number}, Vector{S}}} where S<:Integer)
+
 # issue #24305
 f24305(x) = [g24305(x) g24305(x) g24305(x) g24305(x); g24305(x) g24305(x) 0 0];
 @test_throws UndefVarError f24305(1)
@@ -1304,3 +1307,29 @@ f26453(x::T,y::T) where {S,T>:S} = 0
 g26453(x::T,y::T) where {S,T>:S} = T
 @test_throws UndefVarError(:T) g26453(1,1)
 @test issub_strict((Tuple{T,T} where T), (Tuple{T,T} where {S,T>:S}))
+
+# issue #27632
+@test !(Tuple{Array{Int,0}, Int, Vararg{Int}} <: Tuple{AbstractArray{T,N}, Vararg{Int,N}} where {T, N})
+@test !(Tuple{Array{Int,0}, Int, Vararg{Int}} <: Tuple{AbstractArray{T,N}, Vararg{Any,N}} where {T, N})
+@test !(Tuple{Array{Int,0}, Vararg{Any}} <: Tuple{AbstractArray{T,N}, Vararg{Any,N}} where {T, N})
+@test Tuple{Array{Int,0},} <: Tuple{AbstractArray{T,N}, Vararg{Any,N}} where {T, N}
+@test !(Tuple{Array{Int,0}, Any} <: Tuple{AbstractArray{T,N}, Vararg{Any,N}} where {T, N})
+
+# issue #26827
+@test typeintersect(Union{Int8,Int16,Int32}, Union{Int8,Int16,Int64}) == Union{Int8, Int16}
+@test typeintersect(Union{Int8,Int16,Float64}, Integer) == Union{Int8, Int16}
+@test typeintersect(Integer, Union{Int8,Int16,Float64}) == Union{Int8, Int16}
+@test typeintersect(Tuple{Ref{Int},Any},
+                    Tuple{Ref{T},Union{Val{N}, Array{Float32,N}}} where {T,N}) ==
+                    Tuple{Ref{Int},Union{Val{N}, Array{Float32,N}}} where N
+@test typeintersect(Tuple{Ref{T},Union{Val{N}, Array{Float32,N}}} where {T,N},
+                    Tuple{Ref{Int},Any}) ==
+                    Tuple{Ref{Int},Union{Val{N}, Array{Float32,N}}} where N
+
+# issue #28256
+@test Pair{(:a,), Pair{(:a,),Tuple{Int}}} isa Type{Pair{names,T}} where {names, T<:Pair{names,<:Tuple}}
+@test Type{Pair{(:a,), Pair{(:a,),Tuple{Int}}}} <: Type{Pair{names,T}} where {names, T<:Pair{names,<:Tuple}}
+struct A28256{names, T<:NamedTuple{names, <:Tuple}}
+    x::T
+end
+@test A28256{(:a,), NamedTuple{(:a,),Tuple{Int}}}((a=1,)) isa A28256

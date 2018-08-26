@@ -102,13 +102,13 @@ function show(io::IO, cmd::Cmd)
     print_dir = !isempty(cmd.dir)
     (print_env || print_dir) && print(io, "setenv(")
     print(io, '`')
-    print(io, join(map(cmd.exec) do arg
-        replace(sprint() do io
+    join(io, map(cmd.exec) do arg
+        replace(sprint(context=io) do io
             with_output_color(:underline, io) do io
                 print_shell_word(io, arg, shell_special)
             end
         end, '`' => "\\`")
-    end, ' '))
+    end, ' ')
     print(io, '`')
     print_env && (print(io, ","); show(io, cmd.env))
     print_dir && (print(io, "; dir="); show(io, cmd.dir))
@@ -145,7 +145,7 @@ struct FileRedirect
     end
 end
 
-rawhandle(::DevNullStream) = C_NULL
+rawhandle(::DevNull) = C_NULL
 rawhandle(x::OS_HANDLE) = x
 if OS_HANDLE !== RawFD
     rawhandle(x::RawFD) = Libc._get_osfhandle(x)
@@ -306,7 +306,6 @@ mutable struct Process <: AbstractPipe
     termsignal::Int32
     exitnotify::Condition
     closenotify::Condition
-    openstream::Symbol # for open(cmd) deprecation
     function Process(cmd::Cmd, handle::Ptr{Cvoid},
                      in::Union{Redirectable, Ptr{Cvoid}},
                      out::Union{Redirectable, Ptr{Cvoid}},
@@ -336,9 +335,7 @@ struct ProcessChain <: AbstractPipe
     in::Redirectable
     out::Redirectable
     err::Redirectable
-    openstream::Symbol # for open(cmd) deprecation
     ProcessChain(stdios::StdIOSet) = new(Process[], stdios[1], stdios[2], stdios[3])
-    ProcessChain(chain::ProcessChain, openstream::Symbol) = new(chain.processes, chain.in, chain.out, chain.err, openstream) # for open(cmd) deprecation
 end
 pipe_reader(p::ProcessChain) = p.out
 pipe_writer(p::ProcessChain) = p.in
@@ -347,9 +344,9 @@ function _jl_spawn(file, argv, cmd::Cmd, stdio)
     loop = eventloop()
     handles = Tuple{Cint, UInt}[ # assuming little-endian layout
         let h = rawhandle(io)
-            h === C_NULL    && return (0x00, UInt(0))
-            h isa OS_HANDLE && return (0x02, UInt(cconvert(@static(Sys.iswindows() ? Ptr{Cvoid} : Cint), h)))
-            h isa Ptr{Cvoid} && return (0x04, UInt(h))
+            h === C_NULL     ? (0x00, UInt(0)) :
+            h isa OS_HANDLE  ? (0x02, UInt(cconvert(@static(Sys.iswindows() ? Ptr{Cvoid} : Cint), h))) :
+            h isa Ptr{Cvoid} ? (0x04, UInt(h)) :
             error("invalid spawn handle $h from $io")
         end
         for io in stdio]
@@ -367,7 +364,7 @@ function _jl_spawn(file, argv, cmd::Cmd, stdio)
         uv_jl_return_spawn::Ptr{Cvoid})
     if error != 0
         ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), proc)
-        throw(UVError("could not spawn " * string(cmd), error))
+        throw(_UVError("could not spawn " * string(cmd), error))
     end
     return proc
 end
@@ -551,11 +548,7 @@ spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::R
 _spawn(cmds::AbstractCmd, args...; chain::Union{ProcessChain, Nothing}=nothing) =
     _spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
 
-function eachline(cmd::AbstractCmd; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
-    end
+function eachline(cmd::AbstractCmd; keep::Bool=false)
     _stdout = Pipe()
     processes = _spawn(cmd, (devnull, _stdout, stderr))
     close(_stdout.in)
@@ -600,21 +593,11 @@ function open(cmds::AbstractCmd, other::Redirectable=devnull; write::Bool = fals
         out = Pipe()
         processes = _spawn(cmds, (in,out,stderr))
         close(out.in)
-        if isa(processes, ProcessChain) # for open(cmd) deprecation
-            processes = ProcessChain(processes, :out)
-        else
-            processes.openstream = :out
-        end
     elseif write
         in = Pipe()
         out = other
         processes = _spawn(cmds, (in,out,stderr))
         close(in.out)
-        if isa(processes, ProcessChain) # for open(cmd) deprecation
-            processes = ProcessChain(processes, :in)
-        else
-            processes.openstream = :in
-        end
     else
         processes = _spawn(cmds)
     end
@@ -642,6 +625,11 @@ function open(f::Function, cmds::AbstractCmd, args...)
     return ret
 end
 
+"""
+    read(command::Cmd)
+
+Run `command` and return the resulting output as an array of bytes.
+"""
 function read(cmd::AbstractCmd)
     procs = open(cmd, "r", devnull)
     bytes = read(procs.out)
@@ -649,6 +637,11 @@ function read(cmd::AbstractCmd)
     return bytes
 end
 
+"""
+    read(command::Cmd, String)
+
+Run `command` and return the resulting output as a `String`.
+"""
 read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))
 
 """
@@ -687,7 +680,7 @@ function test_success(proc::Process)
     @assert process_exited(proc)
     if proc.exitcode < 0
         #TODO: this codepath is not currently tested
-        throw(UVError("could not start process $(string(proc.cmd))", proc.exitcode))
+        throw(_UVError("could not start process $(string(proc.cmd))", proc.exitcode))
     end
     proc.exitcode == 0 && (proc.termsignal == 0 || proc.termsignal == SIGPIPE)
 end
@@ -743,7 +736,7 @@ function kill(p::Process, signum::Integer)
         @assert p.handle != C_NULL
         err = ccall(:uv_process_kill, Int32, (Ptr{Cvoid}, Int32), p.handle, signum)
         if err != 0 && err != UV_ESRCH
-            throw(UVError("kill", err))
+            throw(_UVError("kill", err))
         end
     end
 end
@@ -795,7 +788,7 @@ arg_gen(x::AbstractString) = String[cstr(x)]
 arg_gen(cmd::Cmd)  = cmd.exec
 
 function arg_gen(head)
-    if applicable(start, head)
+    if isiterable(typeof(head))
         vals = String[]
         for x in head
             push!(vals, cstr(string(x)))
@@ -824,6 +817,22 @@ function cmd_gen(parsed)
     return Cmd(args)
 end
 
+"""
+    @cmd str
+
+Similar to `cmd`, generate a `Cmd` from the `str` string which represents the shell command(s) to be executed.
+The [`Cmd`](@ref) object can be run as a process and can outlive the spawning julia process (see `Cmd` for more).
+
+# Examples
+```jldoctest
+julia> cm = @cmd " echo 1 "
+`echo 1`
+
+julia> run(cm)
+1
+Process(`echo 1`, ProcessExited(0))
+```
+"""
 macro cmd(str)
     return :(cmd_gen($(esc(shell_parse(str, special=shell_special)[1]))))
 end
@@ -834,10 +843,10 @@ wait(x::ProcessChain) = for p in x.processes; wait(p); end
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
 
 # allow the elements of the Cmd to be accessed as an array or iterator
-for f in (:length, :firstindex, :lastindex, :start, :keys, :first, :last)
+for f in (:length, :firstindex, :lastindex, :keys, :first, :last, :iterate)
     @eval $f(cmd::Cmd) = $f(cmd.exec)
 end
 eltype(::Type{Cmd}) = eltype(fieldtype(Cmd, :exec))
-for f in (:next, :done, :getindex)
+for f in (:iterate, :getindex)
     @eval $f(cmd::Cmd, i) = $f(cmd.exec, i)
 end

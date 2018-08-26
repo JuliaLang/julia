@@ -5,7 +5,7 @@ module TestHessenberg
 using Test, LinearAlgebra, Random
 
 let n = 10
-    srand(1234321)
+    Random.seed!(1234321)
 
     Areal  = randn(n,n)/2
     Aimg   = randn(n,n)/2
@@ -18,7 +18,7 @@ let n = 10
                     Areal)
 
         if eltya != BigFloat
-            H = hessfact(A)
+            H = hessenberg(A)
             @test size(H.Q, 1) == size(A, 1)
             @test size(H.Q, 2) == size(A, 2)
             @test size(H.Q) == size(A)

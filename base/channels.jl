@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-abstract type AbstractChannel end
+abstract type AbstractChannel{T} end
 
 """
     Channel{T}(sz::Int)
@@ -17,7 +17,7 @@ Other constructors:
 * `Channel(Inf)`: equivalent to `Channel{Any}(typemax(Int))`
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
 """
-mutable struct Channel{T} <: AbstractChannel
+mutable struct Channel{T} <: AbstractChannel{T}
     cond_take::Condition                 # waiting for data to become available
     cond_put::Condition                  # waiting for a writeable slot
     state::Symbol
@@ -155,7 +155,7 @@ termination of the task will close all of the bound channels.
 ```jldoctest
 julia> c = Channel(0);
 
-julia> task = @schedule foreach(i->put!(c, i), 1:4);
+julia> task = @async foreach(i->put!(c, i), 1:4);
 
 julia> bind(c,task);
 
@@ -174,7 +174,7 @@ false
 ```jldoctest
 julia> c = Channel(0);
 
-julia> task = @schedule (put!(c,1);error("foo"));
+julia> task = @async (put!(c,1);error("foo"));
 
 julia> bind(c,task);
 
@@ -381,28 +381,16 @@ eltype(::Type{Channel{T}}) where {T} = T
 
 show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
 
-mutable struct ChannelIterState{T}
-    hasval::Bool
-    val::T
-    ChannelIterState{T}(has::Bool) where {T} = new(has)
-end
-
-start(c::Channel{T}) where {T} = ChannelIterState{T}(false)
-function done(c::Channel, state::ChannelIterState)
+function iterate(c::Channel, state=nothing)
     try
-        # we are waiting either for more data or channel to be closed
-        state.hasval && return false
-        state.val = take!(c)
-        state.hasval = true
-        return false
+        return (take!(c), nothing)
     catch e
         if isa(e, InvalidStateException) && e.state==:closed
-            return true
+            return nothing
         else
             rethrow(e)
         end
     end
 end
-next(c::Channel, state) = (v=state.val; state.hasval=false; (v, state))
 
 IteratorSize(::Type{<:Channel}) = SizeUnknown()

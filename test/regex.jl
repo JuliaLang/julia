@@ -57,3 +57,7 @@ end
 
 # Proper unicode handling
 @test  match(r"∀∀", "∀x∀∀∀").match == "∀∀"
+
+# 'a' flag to disable UCP
+@test match(r"\w+", "Düsseldorf").match == "Düsseldorf"
+@test match(r"\w+"a, "Düsseldorf").match == "D"

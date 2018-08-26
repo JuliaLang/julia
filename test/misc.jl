@@ -102,7 +102,7 @@ let l = ReentrantLock()
             @test false
         end === false
     end
-    Base._wait(t)
+    Base.wait(t)
     unlock(l)
     @test_throws ErrorException unlock(l)
 end
@@ -110,15 +110,15 @@ end
 # task switching
 
 @noinline function f6597(c)
-    t = @schedule nothing
+    t = @async nothing
     finalizer(t -> c[] += 1, t)
-    Base._wait(t)
+    Base.wait(t)
     @test c[] == 0
-    Base._wait(t)
+    Base.wait(t)
     nothing
 end
 let c = Ref(0),
-    t2 = @schedule (wait(); c[] += 99)
+    t2 = @async (wait(); c[] += 99)
     @test c[] == 0
     f6597(c)
     GC.gc() # this should run the finalizer for t
@@ -129,6 +129,20 @@ let c = Ref(0),
     @test c[] == 100
 end
 
+# test that @sync is lexical (PR #27164)
+
+const x27164 = Ref(0)
+do_something_async_27164() = @async(begin sleep(1); x27164[] = 2; end)
+
+let t = nothing
+    @sync begin
+        t = do_something_async_27164()
+        @async (sleep(0.05); x27164[] = 1)
+    end
+    @test x27164[] == 1
+    fetch(t)
+    @test x27164[] == 2
+end
 
 # timing macros
 
@@ -361,11 +375,10 @@ let s = "abcα🐨\0x\0"
     end
 end
 
-# clipboard functionality
-if Sys.iswindows()
-    for str in ("Hello, world.", "∀ x ∃ y", "")
-        clipboard(str)
-        @test clipboard() == str
+let X = UInt8[0x30,0x31,0x32]
+    for T in (UInt8, UInt16, UInt32, Int32)
+        @test transcode(UInt8,transcode(T, X)) == X
+        @test transcode(UInt8,transcode(T, 0x30:0x32)) == X
     end
 end
 
@@ -393,6 +406,16 @@ let a = [1,2,3]
     a[:] = 1:3
     @test unsafe_securezero!(Ptr{Cvoid}(pointer(a)), sizeof(a)) == Ptr{Cvoid}(pointer(a))
     @test a == [0,0,0]
+end
+
+# PR #28038 (prompt/getpass stream args)
+@test_throws MethodError Base.getpass(IOBuffer(), stdout, "pass")
+let buf = IOBuffer()
+    @test Base.prompt(IOBuffer("foo\nbar\n"), buf, "baz") == "foo"
+    @test String(take!(buf)) == "baz: "
+    @test Base.prompt(IOBuffer("\n"), buf, "baz", default="foobar") == "foobar"
+    @test String(take!(buf)) == "baz [foobar]: "
+    @test Base.prompt(IOBuffer("blah\n"), buf, "baz", default="foobar") == "blah"
 end
 
 # Test that we can VirtualProtect jitted code to writable
@@ -498,8 +521,8 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
         Demo_20254(string.(arr))
     end
 
-    _get(x::NTuple{1}) = (get(x[1]),)
-    _get_19433(xs::Vararg) = (get(xs[1]), _get_19433(xs[2:end])...)
+    _get_19433(x::NTuple{1}) = (something(x[1]),)
+    _get_19433(xs::Vararg) = (something(xs[1]), _get_19433(xs[2:end])...)
 
     f_19433(f_19433, xs...) = f_19433(_get_19433(xs)...)
 
@@ -550,7 +573,7 @@ end
 # Endian tests
 # For now, we only support little endian.
 # Add an `Sys.ARCH` test for big endian when/if we add support for that.
-# Do **NOT** use `ENDIAN_BOM` to figure out the endianess
+# Do **NOT** use `ENDIAN_BOM` to figure out the endianness
 # since that's exactly what we want to test.
 @test ENDIAN_BOM == 0x04030201
 @test ntoh(0x1) == 0x1
@@ -590,7 +613,76 @@ end
 @test readlines(`$(Base.julia_cmd()) --startup-file=no -e 'foreach(println, names(Main))'`) == ["Base","Core","Main"]
 
 # issue #26310
-@test_warn "could not import" eval(@__MODULE__, :(import .notdefined_26310__))
-@test_warn "could not import" eval(Main,        :(import ........notdefined_26310__))
-@test_nowarn eval(Main, :(import .Main))
-@test_nowarn eval(Main, :(import ....Main))
+@test_warn "could not import" Core.eval(@__MODULE__, :(import .notdefined_26310__))
+@test_warn "could not import" Core.eval(Main,        :(import ........notdefined_26310__))
+@test_nowarn Core.eval(Main, :(import .Main))
+@test_nowarn Core.eval(Main, :(import ....Main))
+
+# issue #27239
+@testset "strftime tests issue #27239" begin
+
+    # save current locales
+    locales = Dict()
+    for cat in 0:9999
+        cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, C_NULL)
+        if cstr != C_NULL
+            locales[cat] = unsafe_string(cstr)
+        end
+    end
+
+    # change to non-Unicode Korean
+    for (cat, _) in locales
+        korloc = ["ko_KR.EUC-KR", "ko_KR.CP949", "ko_KR.949", "Korean_Korea.949"]
+        for lc in korloc
+            cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, lc)
+        end
+    end
+
+    # system dependent formats
+    timestr_c = Libc.strftime(0.0)
+    timestr_aAbBpZ = Libc.strftime("%a %A %b %B %p %Z", 0)
+
+    # recover locales
+    for (cat, lc) in locales
+        cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, lc)
+    end
+
+    # tests
+    @test isvalid(timestr_c)
+    @test isvalid(timestr_aAbBpZ)
+end
+
+
+using Base: @kwdef
+
+@kwdef struct Test27970Typed
+    a::Int
+    b::String = "hi"
+end
+
+@kwdef struct Test27970Untyped
+    a
+end
+
+@kwdef struct Test27970Empty end
+
+@testset "No default values in @kwdef" begin
+    @test Test27970Typed(a=1) == Test27970Typed(1, "hi")
+    # Implicit type conversion (no assertion on kwarg)
+    @test Test27970Typed(a=0x03) == Test27970Typed(3, "hi")
+    @test_throws UndefKeywordError Test27970Typed()
+
+    @test Test27970Untyped(a=1) == Test27970Untyped(1)
+    @test_throws UndefKeywordError Test27970Untyped()
+
+    # Just checking that this doesn't stack overflow on construction
+    @test Test27970Empty() == Test27970Empty()
+end
+
+@testset "exports of modules" begin
+    for (_, mod) in Base.loaded_modules
+       for v in names(mod)
+           @test isdefined(mod, v)
+       end
+   end
+end

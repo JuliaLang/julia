@@ -62,8 +62,18 @@ OPENBLAS_FFLAGS += -mincoming-stack-boundary=2
 endif
 endif
 
+# Work around invalid register errors on 64-bit Windows
+# See discussion in https://github.com/xianyi/OpenBLAS/issues/1708
+# TODO: Remove this once we use a version of OpenBLAS where this is set automatically
+ifeq ($(OS),WINNT)
+ifeq ($(ARCH),x86_64)
+OPENBLAS_CFLAGS += -fno-asynchronous-unwind-tables
+endif
+endif
+
 OPENBLAS_BUILD_OPTS += CFLAGS="$(CFLAGS) $(OPENBLAS_CFLAGS)"
 OPENBLAS_BUILD_OPTS += FFLAGS="$(FFLAGS) $(OPENBLAS_FFLAGS)"
+OPENBLAS_BUILD_OPTS += LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN)"
 
 # Debug OpenBLAS
 ifeq ($(OPENBLAS_DEBUG), 1)
@@ -72,21 +82,17 @@ endif
 
 # Allow disabling AVX for older binutils
 ifeq ($(OPENBLAS_NO_AVX), 1)
-OPENBLAS_BUILD_OPTS += NO_AVX=1 NO_AVX2=1
+OPENBLAS_BUILD_OPTS += NO_AVX=1 NO_AVX2=1 NO_AVX512=1
 else ifeq ($(OPENBLAS_NO_AVX2), 1)
-OPENBLAS_BUILD_OPTS += NO_AVX2=1
+OPENBLAS_BUILD_OPTS += NO_AVX2=1 NO_AVX512=1
+else ifeq ($(OPENBLAS_NO_AVX512), 1)
+OPENBLAS_BUILD_OPTS += NO_AVX512=1
 endif
 
 # Do not overwrite the "-j" flag
 OPENBLAS_BUILD_OPTS += MAKE_NB_JOBS=0
 
-# Fix build on musl libc, from https://github.com/xianyi/OpenBLAS/pull/1257
-# remove when upgrading past openblas v0.2.20
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-musl-PR1257.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
-	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/openblas-musl-PR1257.patch
-	echo 1 > $@
-
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-musl-PR1257.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $(dir $<)/Makefile.system
 	echo 1 > $@
 

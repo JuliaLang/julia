@@ -33,14 +33,6 @@ else
     factorial(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32}) = factorial(Int64(n))
 end
 
-function gamma(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64})
-    n < 0 && throw(DomainError(n, "`n` must not be negative."))
-    n == 0 && return Inf
-    n <= 2 && return 1.0
-    n > 20 && return gamma(Float64(n))
-    @inbounds return Float64(_fact_table64[n-1])
-end
-
 
 # Basic functions for working with permutations
 
@@ -72,6 +64,7 @@ isperm(p::Tuple{Int}) = p[1] == 1
 isperm(p::Tuple{Int,Int}) = ((p[1] == 1) & (p[2] == 2)) | ((p[1] == 2) & (p[2] == 1))
 
 function permute!!(a, p::AbstractVector{<:Integer})
+    @assert !has_offset_axes(a, p)
     count = 0
     start = 0
     while count < length(a)
@@ -122,6 +115,7 @@ julia> A
 permute!(a, p::AbstractVector) = permute!!(a, copymutable(p))
 
 function invpermute!!(a, p::AbstractVector{<:Integer})
+    @assert !has_offset_axes(a, p)
     count = 0
     start = 0
     while count < length(a)
@@ -202,6 +196,7 @@ julia> B[invperm(v)]
 ```
 """
 function invperm(a::AbstractVector)
+    @assert !has_offset_axes(a)
     b = zero(a) # similar vector of zeros
     n = length(a)
     @inbounds for (i, j) in enumerate(a)

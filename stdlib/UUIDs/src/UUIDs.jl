@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 module UUIDs
 
 using Random
@@ -36,7 +34,7 @@ according to section 4.5 of the RFC.
 julia> rng = MersenneTwister(1234);
 
 julia> uuid1(rng)
-fcbd9b64-1bc2-11e8-1f13-43a2532b2fa8
+UUID("cfc395e8-590f-11e8-1f13-43a2532b2fa8")
 ```
 """
 function uuid1(rng::AbstractRNG=Random.GLOBAL_RNG)
@@ -73,7 +71,7 @@ as specified by RFC 4122.
 julia> rng = MersenneTwister(1234);
 
 julia> uuid4(rng)
-196f2941-2d58-45ba-9f13-43a2532b2fa8
+UUID("196f2941-2d58-45ba-9f13-43a2532b2fa8")
 ```
 """
 function uuid4(rng::AbstractRNG=Random.GLOBAL_RNG)

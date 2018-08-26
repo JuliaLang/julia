@@ -541,6 +541,10 @@ function f(x; y=0, kwargs...)
 end
 ```
 
+Inside `f`, `kwargs` will be a key-value iterator over a named tuple. Named
+tuples (as well as dictionaries with keys of `Symbol`) can be passed as keyword
+arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
+
 If a keyword argument is not assigned a default value in the method definition,
 then it is *required*: an [`UndefKeywordError`](@ref) exception will be thrown
 if the caller does not assign it a value:
@@ -551,9 +555,6 @@ end
 f(3, y=5) # ok, y is assigned
 f(3)      # throws UndefKeywordError(:y)
 ```
-
-Inside `f`, `kwargs` will be a named tuple. Named tuples (as well as dictionaries) can be passed as
-keyword arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
 
 One can also pass `key => value` expressions after a semicolon. For example, `plot(x, y; :width => 2)`
 is equivalent to `plot(x, y, width=2)`. This is useful in situations where the keyword name is computed
@@ -654,6 +655,12 @@ normally or threw an exception. (The `try/finally` construct will be described i
 With the `do` block syntax, it helps to check the documentation or implementation to know how
 the arguments of the user function are initialized.
 
+A `do` block, like any other inner function, can "capture" variables from its
+enclosing scope. For example, the variable `data` in the above example of
+`open...do` is captured from the outer scope. Captured variables
+can create performance challenges as discussed in [performance tips](@ref man-performance-tips).
+
+
 ## [Dot Syntax for Vectorizing Functions](@id man-vectorized)
 
 In technical-computing languages, it is common to have "vectorized" versions of functions, which
@@ -753,6 +760,17 @@ Binary (or unary) operators like `.+` are handled with the same mechanism:
 they are equivalent to `broadcast` calls and are fused with other nested "dot" calls.
  `X .+= Y` etcetera is equivalent to `X .= X .+ Y` and results in a fused in-place assignment;
  see also [dot operators](@ref man-dot-operators).
+
+You can also combine dot operations with function chaining using [`|>`](@ref), as in this example:
+```jldoctest
+julia> [1:5;] .|> [x->x^2, inv, x->2*x, -, isodd]
+5-element Array{Real,1}:
+    1
+    0.5
+    6
+   -4
+ true
+```
 
 ## Further Reading
 

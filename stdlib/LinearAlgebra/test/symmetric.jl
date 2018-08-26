@@ -4,7 +4,7 @@ module TestSymmetric
 
 using Test, LinearAlgebra, SparseArrays, Random
 
-srand(101)
+Random.seed!(101)
 
 @testset "Pauli σ-matrices: $σ" for σ in map(Hermitian,
         Any[ [1 0; 0 1], [0 1; 1 0], [0 -im; im 0], [1 0; 0 -1] ])
@@ -196,7 +196,7 @@ end
                 end
                 if eltya <: LinearAlgebra.BlasComplex
                     @testset "inverse edge case with complex Hermitian" begin
-                        # Hermitian matrix, where inv(lufact(A)) generates non-real diagonal elements
+                        # Hermitian matrix, where inv(lu(A)) generates non-real diagonal elements
                         for T in (ComplexF32, ComplexF64)
                             A = T[0.650488+0.0im 0.826686+0.667447im; 0.826686-0.667447im 1.81707+0.0im]
                             H = Hermitian(A)
@@ -218,32 +218,28 @@ end
 
                 @testset "symmetric eigendecomposition" begin
                     if eltya <: Real # the eigenvalues are only real and ordered for Hermitian matrices
-                        d, v = eig(asym)
+                        d, v = eigen(asym)
                         @test asym*v[:,1] ≈ d[1]*v[:,1]
                         @test v*Diagonal(d)*transpose(v) ≈ asym
-                        @test isequal(eigvals(asym[1]), eigvals(asym[1:1,1:1]))
-                        @test abs.(eigfact(Symmetric(asym), 1:2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
-                        eig(Symmetric(asym), 1:2) # same result, but checks that method works
-                        @test abs.(eigfact(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
-                        eig(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2) # same result, but checks that method works
+                        @test isequal(eigvals(asym[1]), eigvals(asym[1:1,1:1])[1])
+                        @test abs.(eigen(Symmetric(asym), 1:2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
+                        @test abs.(eigen(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
                         @test eigvals(Symmetric(asym), 1:2) ≈ d[1:2]
                         @test eigvals(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
-                        # eigfact doesn't support Symmetric{Complex}
-                        @test Matrix(eigfact(asym)) ≈ asym
+                        # eigen doesn't support Symmetric{Complex}
+                        @test Matrix(eigen(asym)) ≈ asym
                         @test eigvecs(Symmetric(asym)) ≈ eigvecs(asym)
                     end
 
-                    d, v = eig(aherm)
+                    d, v = eigen(aherm)
                     @test aherm*v[:,1] ≈ d[1]*v[:,1]
                     @test v*Diagonal(d)*v' ≈ aherm
-                    @test isequal(eigvals(aherm[1]), eigvals(aherm[1:1,1:1]))
-                    @test abs.(eigfact(Hermitian(aherm), 1:2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
-                    eig(Hermitian(aherm), 1:2) # same result, but checks that method works
-                    @test abs.(eigfact(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
-                    eig(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2) # same result, but checks that method works
+                    @test isequal(eigvals(aherm[1]), eigvals(aherm[1:1,1:1])[1])
+                    @test abs.(eigen(Hermitian(aherm), 1:2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
+                    @test abs.(eigen(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
                     @test eigvals(Hermitian(aherm), 1:2) ≈ d[1:2]
                     @test eigvals(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
-                    @test Matrix(eigfact(aherm)) ≈ aherm
+                    @test Matrix(eigen(aherm)) ≈ aherm
                     @test eigvecs(Hermitian(aherm)) ≈ eigvecs(aherm)
 
                     # relation to svdvals
@@ -365,7 +361,7 @@ end
 end
 
 @testset "Issues #8057 and #8058. f=$f, A=$A" for f in
-        (eigfact, eigvals, eig),
+        (eigen, eigvals),
             A in (Symmetric([0 1; 1 0]), Hermitian([0 im; -im 0]))
     @test_throws ArgumentError f(A, 3, 2)
     @test_throws ArgumentError f(A, 1:4)

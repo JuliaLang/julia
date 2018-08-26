@@ -331,13 +331,13 @@ main_ex = quote
     end
 end
 # This needs to be run on `Main` since the serializer treats it differently.
-eval(Main, main_ex)
+Core.eval(Main, main_ex)
 
 # Task
 create_serialization_stream() do s # user-defined type array
     f = () -> begin task_local_storage(:v, 2); return 1+1 end
     t = Task(f)
-    Base._wait(schedule(t))
+    Base.wait(schedule(t))
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
@@ -349,7 +349,7 @@ end
 struct MyErrorTypeTest <: Exception end
 create_serialization_stream() do s # user-defined type array
     t = Task(()->throw(MyErrorTypeTest()))
-    @test_throws MyErrorTypeTest Base._wait(schedule(t))
+    @test_throws MyErrorTypeTest Base.wait(schedule(t))
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
@@ -518,4 +518,17 @@ let io = IOBuffer()
     @test ((b[5] & 0xc)>>2) == (sizeof(Int) == 8)
     @test (b[5] & 0xf0) == 0
     @test all(b[6:8] .== 0)
+end
+
+# issue #26979
+let io = IOBuffer()
+    function gen_f(a::T) where T
+        f = x -> T(x)
+        return f
+    end
+    f = gen_f(1f0)
+    serialize(io, f)
+    seekstart(io)
+    f2 = deserialize(io)
+    @test f2(1) === 1f0
 end

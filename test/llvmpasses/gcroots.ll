@@ -314,6 +314,106 @@ define %jl_value_t addrspace(10)* @vec_loadobj() {
   ret %jl_value_t addrspace(10)* %v7
 }
 
+declare i1 @check_property(%jl_value_t addrspace(10)* %val)
+define void @loopyness(i1 %cond1, %jl_value_t addrspace(10) *%arg) {
+; CHECK-LABEL: @loopyness
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 4
+top:
+    %ptls = call %jl_value_t*** @julia.ptls_states()
+    br label %header
+
+header:
+    %phi = phi %jl_value_t addrspace(10)* [null, %top], [%obj, %latch]
+    br i1 %cond1, label %a, label %latch
+
+a:
+; This needs a store
+; CHECK-LABEL: a:
+; CHECK:  [[GEP1:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 [[GEPSLOT0:[0-9]+]]
+; CHECK:  store %jl_value_t addrspace(10)* %phi, %jl_value_t addrspace(10)** [[GEP1]]
+    call void @one_arg_boxed(%jl_value_t addrspace(10)* %phi)
+    br label %latch
+
+latch:
+; This as well in case we went the other path
+; CHECK:  [[GEP2:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 [[GEPSLOT0]]
+; CHECK:  store %jl_value_t addrspace(10)* %phi, %jl_value_t addrspace(10)** [[GEP2]]
+    %obj = call %jl_value_t addrspace(10)* @alloc()
+    %cond = call i1 @check_property(%jl_value_t addrspace(10)* %phi)
+    br i1 %cond, label %exit, label %header
+
+exit:
+    ret void
+}
+
+define %jl_value_t addrspace(10)* @phi_union(i1 %cond) {
+; CHECK-LABEL: @phi_union
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+top:
+  %ptls = call %jl_value_t*** @julia.ptls_states()
+  br i1 %cond, label %a, label %b
+
+a:
+  %obj = call %jl_value_t addrspace(10) *@alloc()
+  %aobj = insertvalue {%jl_value_t addrspace(10)*, i8} undef, %jl_value_t addrspace(10)* %obj, 0
+  %aunion = insertvalue {%jl_value_t addrspace(10)*, i8} undef, i8 -126, 1
+  br label %join
+
+b:
+  %bunion = call {%jl_value_t addrspace(10)*, i8} @union_ret()
+  br label %join
+
+join:
+  %phi = phi {%jl_value_t addrspace(10)*, i8} [%aunion, %a], [%bunion, %b]
+  call void @jl_safepoint()
+  %rval = extractvalue { %jl_value_t addrspace(10)*, i8 } %phi, 0
+  ret %jl_value_t addrspace(10)* %rval
+}
+
+define %jl_value_t addrspace(10)* @select_union(i1 %cond) {
+; CHECK-LABEL: @select_union
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+top:
+  %ptls = call %jl_value_t*** @julia.ptls_states()
+  %obj = call %jl_value_t addrspace(10) *@alloc()
+  %aobj = insertvalue {%jl_value_t addrspace(10)*, i8} undef, %jl_value_t addrspace(10)* %obj, 0
+  %aunion = insertvalue {%jl_value_t addrspace(10)*, i8} undef, i8 -126, 1
+  %bunion = call {%jl_value_t addrspace(10)*, i8} @union_ret()
+  %select = select i1 %cond, {%jl_value_t addrspace(10)*, i8} %aunion, {%jl_value_t addrspace(10)*, i8} %bunion
+  call void @jl_safepoint()
+  %rval = extractvalue { %jl_value_t addrspace(10)*, i8 } %select, 0
+  ret %jl_value_t addrspace(10)* %rval
+}
+
+define i8 @simple_arrayptr() {
+; CHECK-LABEL: @simple_arrayptr
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 4
+top:
+   %ptls = call %jl_value_t*** @julia.ptls_states()
+   %obj1 = call %jl_value_t addrspace(10) *@alloc()
+   %obj2 = call %jl_value_t addrspace(10) *@alloc()
+   %decayed = addrspacecast %jl_value_t addrspace(10) *%obj1 to %jl_value_t addrspace(11) *
+   %arrayptrptr = bitcast %jl_value_t addrspace(11) *%decayed to i8 addrspace(13)* addrspace(11)*
+   %arrayptr = load i8 addrspace(13)*, i8 addrspace(13)* addrspace(11)* %arrayptrptr
+   call void @jl_safepoint()
+   call void @one_arg_boxed(%jl_value_t addrspace(10) *%obj2)
+   %val = load i8, i8 addrspace(13)* %arrayptr
+   ret i8 %val
+}
+
+define %jl_value_t addrspace(10)* @vecstoreload(<2 x %jl_value_t addrspace(10)*> *%arg) {
+; CHECK-LABEL: @vecstoreload
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 4
+top:
+    %ptls = call %jl_value_t*** @julia.ptls_states()
+    %loaded = load <2 x %jl_value_t addrspace(10)*>, <2 x %jl_value_t addrspace(10)*> *%arg
+    call void @jl_safepoint()
+    %obj = call %jl_value_t addrspace(10) *@alloc()
+    %casted = bitcast %jl_value_t addrspace(10)* %obj to <2 x %jl_value_t addrspace(10)*> addrspace(10)*
+    store <2 x %jl_value_t addrspace(10)*> %loaded, <2 x %jl_value_t addrspace(10)*> addrspace(10)* %casted
+    ret %jl_value_t addrspace(10)* %obj
+}
+
 !0 = !{!"jtbaa"}
 !1 = !{!"jtbaa_const", !0, i64 0}
 !2 = !{!1, !1, i64 0, i64 1}

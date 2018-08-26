@@ -1,20 +1,24 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Set tests
-isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using .Main.TestHelpers.OAs
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
+using Dates
 
 @testset "Construction, collect" begin
-    @test ===(typeof(Set([1,2,3])), Set{Int})
-    @test ===(typeof(Set{Int}([3])), Set{Int})
+    @test Set([1,2,3]) isa Set{Int}
+    @test Set{Int}([3]) isa Set{Int}
     data_in = (1,"banana", ())
     s = Set(data_in)
     data_out = collect(s)
-    @test ===(typeof(data_out), Array{Any,1})
+    @test s isa Set{Any}
+    @test data_out isa Array{Any,1}
     @test all(map(in(data_out), data_in))
     @test length(data_out) == length(data_in)
     let f17741 = x -> x < 0 ? false : 1
         @test isa(Set(x for x = 1:3), Set{Int})
+        @test isa(Set(x for x = 1:3 for j = 1:1), Set{Int})
         @test isa(Set(sin(x) for x = 1:3), Set{Float64})
         @test isa(Set(f17741(x) for x = 1:3), Set{Int})
         @test isa(Set(f17741(x) for x = -1:1), Set{Integer})
@@ -390,6 +394,8 @@ end
     @test allunique(4.0:0.3:7.0)
     @test allunique(4:-1:5)       # empty range
     @test allunique(7:-1:1)       # negative step
+    @test allunique(Date(2018, 8, 7):Day(1):Date(2018, 8, 11))  # JuliaCon 2018
+    @test allunique(DateTime(2018, 8, 7):Hour(1):DateTime(2018, 8, 11))
 end
 @testset "filter(f, ::$S)" for S = (Set, BitSet)
     s = S([1,2,3,4])
@@ -512,16 +518,12 @@ end
     @test replace!(x->2x, a, count=0x2) == [4, 8, 3, 2]
 
     d = Dict(1=>2, 3=>4)
-    @test replace(x->x.first > 2, d, 0=>0) == Dict(1=>2, 0=>0)
     @test replace!(x -> x.first > 2 ? x.first=>2*x.second : x, d) === d
     @test d == Dict(1=>2, 3=>8)
     @test replace(d, (3=>8)=>(0=>0)) == Dict(1=>2, 0=>0)
     @test replace!(d, (3=>8)=>(2=>2)) === d
     @test d == Dict(1=>2, 2=>2)
-    for count = (1, 0x1, big(1))
-        @test replace(x->x.second == 2, d, 0=>0, count=count) in [Dict(1=>2, 0=>0),
-                                                                  Dict(2=>2, 0=>0)]
-    end
+
     s = Set([1, 2, 3])
     @test replace(x -> x > 1 ? 2x : x, s) == Set([1, 4, 6])
     for count = (1, 0x1, big(1))
@@ -547,15 +549,12 @@ end
     # test eltype promotion
     x = @inferred replace([1, 2], 2=>2.5)
     @test x == [1, 2.5] && x isa Vector{Float64}
-    x = @inferred replace(x -> x > 1, [1, 2], 2.5)
-    @test x == [1, 2.5] && x isa Vector{Float64}
 
     x = @inferred replace([1, 2], 2=>missing)
     @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
-    x = @inferred replace(x -> x > 1, [1, 2], missing)
-    @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
 
-    x = @inferred replace([1, missing], missing=>2)
+    @test_broken @inferred replace([1, missing], missing=>2)
+    x = replace([1, missing], missing=>2)
     @test x == [1, 2] && x isa Vector{Int}
     x = @inferred replace([1, missing], missing=>2, count=1)
     @test x == [1, 2] && x isa Vector{Union{Int, Missing}}

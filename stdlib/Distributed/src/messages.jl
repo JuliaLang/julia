@@ -71,7 +71,7 @@ struct JoinPGRPMsg <: AbstractMsg
     lazy::Bool
 end
 struct JoinCompleteMsg <: AbstractMsg
-    cpu_cores::Int
+    cpu_threads::Int
     ospid::Int
 end
 
@@ -201,7 +201,7 @@ function flush_gc_msgs()
         end
     catch e
         bt = catch_backtrace()
-        @schedule showerror(stderr, e, bt)
+        @async showerror(stderr, e, bt)
     end
 end
 

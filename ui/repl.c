@@ -50,9 +50,12 @@ static int exec_program(char *program)
             if (errs) {
                 bt_data = (uintptr_t*)malloc(bt_size * sizeof(void*));
                 memcpy(bt_data, ptls->bt_data, bt_size * sizeof(void*));
-                jl_call2(jl_get_function(jl_base_module, "show"), errs, e);
-                jl_printf(JL_STDERR, "\n");
-                shown_err = 1;
+                jl_value_t *showf = jl_get_function(jl_base_module, "show");
+                if (showf != NULL) {
+                    jl_call2(showf, errs, e);
+                    jl_printf(JL_STDERR, "\n");
+                    shown_err = 1;
+                }
             }
         }
         JL_CATCH {
@@ -166,22 +169,9 @@ int main(int argc, char *argv[])
     uv_setup_args(argc, argv); // no-op on Windows
 #else
 
-#if defined(_P64) && defined(JL_DEBUG_BUILD)
-static int is_running_under_wine()
-{
-    static const char * (CDECL *pwine_get_version)(void);
-    HMODULE hntdll = GetModuleHandle("ntdll.dll");
-    assert(hntdll);
-    pwine_get_version = (void *)GetProcAddress(hntdll, "wine_get_version");
-    return pwine_get_version != 0;
-}
-#endif
-
 static void lock_low32() {
 #if defined(_P64) && defined(JL_DEBUG_BUILD)
     // Wine currently has a that causes it to answer VirtualQuery incorrectly.
-    // See https://www.winehq.org/pipermail/wine-devel/2016-March/112188.html for details
-    int under_wine = is_running_under_wine();
     // block usage of the 32-bit address space on win64, to catch pointer cast errors
     char *const max32addr = (char*)0xffffffffL;
     SYSTEM_INFO info;
@@ -195,7 +185,6 @@ static void lock_low32() {
         if (meminfo.State == MEM_FREE) { // reserve all free pages in the first 4GB of memory
             char *first = (char*)meminfo.BaseAddress;
             char *last = first + meminfo.RegionSize;
-            char *p;
             if (last > max32addr)
                 last = max32addr;
             // adjust first up to the first allocation granularity boundary
@@ -203,8 +192,12 @@ static void lock_low32() {
             first = (char*)(((long long)first + info.dwAllocationGranularity - 1) & ~(info.dwAllocationGranularity - 1));
             last = (char*)((long long)last & ~(info.dwAllocationGranularity - 1));
             if (last != first) {
-                p = VirtualAlloc(first, last - first, MEM_RESERVE, PAGE_NOACCESS); // reserve all memory in between
-                assert(under_wine || p == first);
+                void *p = VirtualAlloc(first, last - first, MEM_RESERVE, PAGE_NOACCESS); // reserve all memory in between
+                if ((char*)p != first)
+                    // Wine and Windows10 seem to have issues with reporting memory access information correctly
+                    // so we sometimes end up with unexpected results - this is just ignore those and continue
+                    // this is just a debugging aid to help find accidental pointer truncation anyways, so it's not critical
+                    VirtualFree(p, 0, MEM_RELEASE);
             }
         }
         meminfo.BaseAddress += meminfo.RegionSize;

@@ -119,8 +119,8 @@ function UInt32(c::Char)
         invalid_char(c)::Union{}
     u &= 0xffffffff >> l1
     u >>= t0
-    (u & 0x0000007f >> 0) | (u & 0x00007f00 >> 2) |
-    (u & 0x007f0000 >> 4) | (u & 0x7f000000 >> 6)
+    ((u & 0x0000007f) >> 0) | ((u & 0x00007f00) >> 2) |
+    ((u & 0x007f0000) >> 4) | ((u & 0x7f000000) >> 6)
 end
 
 function decode_overlong(c::Char)
@@ -129,8 +129,8 @@ function decode_overlong(c::Char)
     t0 = trailing_zeros(u) & 56
     u &= 0xffffffff >> l1
     u >>= t0
-    (u & 0x0000007f >> 0) | (u & 0x00007f00 >> 2) |
-    (u & 0x007f0000 >> 4) | (u & 0x7f000000 >> 6)
+    ((u & 0x0000007f) >> 0) | ((u & 0x00007f00) >> 2) |
+    ((u & 0x007f0000) >> 4) | ((u & 0x7f000000) >> 6)
 end
 
 """
@@ -187,9 +187,7 @@ first(c::AbstractChar) = c
 last(c::AbstractChar) = c
 eltype(::Type{T}) where {T<:AbstractChar} = T
 
-start(c::AbstractChar) = false
-next(c::AbstractChar, state) = (c, true)
-done(c::AbstractChar, state) = state
+iterate(c::AbstractChar, done=false) = done ? nothing : (c, true)
 isempty(c::AbstractChar) = false
 in(x::AbstractChar, y::AbstractChar) = x == y
 
@@ -215,7 +213,10 @@ widen(::Type{T}) where {T<:AbstractChar} = T
 print(io::IO, c::Char) = (write(io, c); nothing)
 print(io::IO, c::AbstractChar) = print(io, Char(c)) # fallback: convert to output UTF-8
 
-const hex_chars = UInt8['0':'9';'a':'z']
+const hex_chars = UInt8['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+                        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
+                        'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
+                        's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
 
 function show_invalid(io::IO, c::Char)
     write(io, 0x27)

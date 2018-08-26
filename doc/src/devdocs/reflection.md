@@ -90,23 +90,17 @@ The functions `Base.Meta.show_sexpr` and [`dump`](@ref) are used to display S-ex
 and depth-nested detail views for any expression.
 
 Finally, the [`Meta.lower`](@ref) function gives the `lowered` form of any expression and is of
-particular interest for understanding both macros and top-level statements such as function declarations
-and variable assignments:
+particular interest for understanding how language constructs map to primitive operations such
+as assignments, branches, and calls:
 
 ```jldoctest
-julia> Meta.lower(@__MODULE__, :(f() = 1) )
-:($(Expr(:thunk, CodeInfo(:(begin
-      $(Expr(:method, :f))
-      Core.SSAValue(0) = (Core.Typeof)(f)
-      Core.SSAValue(1) = (Core.svec)(Core.SSAValue(0))
-      Core.SSAValue(2) = (Core.svec)()
-      Core.SSAValue(3) = (Core.svec)(Core.SSAValue(1), Core.SSAValue(2))
-      $(Expr(:method, :f, Core.SSAValue(3), CodeInfo(:(begin
-      #= none:1 =#
-      return 1
-  end))))
-      return f
-  end)))))
+julia> Meta.lower(@__MODULE__, :([1+2, sin(0.5)]) )
+:($(Expr(:thunk, CodeInfo(
+ 1 ─ %1 = 1 + 2
+ │   %2 = sin(0.5)
+ │   %3 = (Base.vect)(%1, %2)
+ └──      return %3
+))))
 ```
 
 ## Intermediate and compiled representations

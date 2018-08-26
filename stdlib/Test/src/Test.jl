@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
 Simple unit testing functionality:
 
@@ -24,11 +22,12 @@ export @testset
 export @inferred
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray
-export guardsrand, TestSetException
+export TestSetException
 
 import Distributed: myid
 
-using Random: srand, AbstractRNG, GLOBAL_RNG
+using Random
+using Random: AbstractRNG, GLOBAL_RNG
 using InteractiveUtils: gen_call_with_extracted_types
 
 #-----------------------------------------------------------------------
@@ -101,7 +100,7 @@ end
 function Base.show(io::IO, t::Fail)
     printstyled(io, "Test Failed"; bold=true, color=Base.error_color())
     print(io, " at ")
-    printstyled(io, t.source.file, ":", t.source.line, "\n"; bold=true, color=:default)
+    printstyled(io, something(t.source.file, :none), ":", t.source.line, "\n"; bold=true, color=:default)
     print(io, "  Expression: ", t.orig_expr)
     if t.test_type == :test_throws_wrong
         # An exception was thrown, but it was of the wrong type
@@ -142,7 +141,11 @@ mutable struct Error <: Result
         else
             bt_str = ""
         end
-        new(test_type, orig_expr, repr(value), bt_str, source)
+        new(test_type,
+            orig_expr,
+            sprint(show, value, context = :limit => true),
+            bt_str,
+            source)
     end
 end
 function Base.show(io::IO, t::Error)
@@ -152,13 +155,13 @@ function Base.show(io::IO, t::Error)
     end
     printstyled(io, "Error During Test"; bold=true, color=Base.error_color())
     print(io, " at ")
-    printstyled(io, t.source.file, ":", t.source.line, "\n"; bold=true, color=:default)
+    printstyled(io, something(t.source.file, :none), ":", t.source.line, "\n"; bold=true, color=:default)
     if t.test_type == :test_nonbool
         println(io, "  Expression evaluated to non-Boolean")
         println(io, "  Expression: ", t.orig_expr)
         print(  io, "       Value: ", t.value)
     elseif t.test_type == :test_error
-        println(io, "  Test threw exception ", t.value)
+        println(io, "  Test threw exception")
         println(io, "  Expression: ", t.orig_expr)
         # Capture error message and indent to match
         print(io, join(map(line->string("  ",line),
@@ -170,7 +173,7 @@ function Base.show(io::IO, t::Error)
         println(io, " Got correct result, please change to @test if no longer broken.")
     elseif t.test_type == :nontest_error
         # we had an error outside of a @test
-        println(io, "  Got exception $(t.value) outside of a @test")
+        println(io, "  Got exception outside of a @test")
         # Capture error message and indent to match
         print(io, join(map(line->string("  ",line),
                            split(t.backtrace, "\n")), "\n"))
@@ -190,9 +193,9 @@ end
 function Base.show(io::IO, t::Broken)
     printstyled(io, "Test Broken\n"; bold=true, color=Base.warn_color())
     if t.test_type == :skipped && !(t.orig_expr === nothing)
-        println(io, "  Skipped: ", t.orig_expr)
+        print(io, "  Skipped: ", t.orig_expr)
     elseif !(t.orig_expr === nothing)
-        println(io, "Expression: ", t.orig_expr)
+        print(io, "  Expression: ", t.orig_expr)
     end
 end
 
@@ -297,13 +300,25 @@ Tests that the expression `ex` evaluates to `true`.
 Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
 `false`, and an `Error` `Result` if it could not be evaluated.
 
+# Examples
+```jldoctest
+julia> @test true
+Test Passed
+
+julia> @test [1, 2] + [2, 1] == [3, 3]
+Test Passed
+```
+
 The `@test f(args...) key=val...` form is equivalent to writing
 `@test f(args..., key=val...)` which can be useful when the expression
 is a call using infix syntax such as approximate comparisons:
 
-    @test a ≈ b atol=ε
+```jldoctest
+julia> @test π ≈ 3.14 atol=0.01
+Test Passed
+```
 
-This is equivalent to the uglier test `@test ≈(a, b, atol=ε)`.
+This is equivalent to the uglier test `@test ≈(π, 3.14, atol=0.01)`.
 It is an error to supply more than one expression unless the first
 is a call expression and the rest are assignments (`k=v`).
 """
@@ -324,6 +339,17 @@ exception. Returns a `Broken` `Result` if it does, or an `Error` `Result`
 if the expression evaluates to `true`.
 
 The `@test_broken f(args...) key=val...` form works as for the `@test` macro.
+
+# Examples
+```jldoctest
+julia> @test_broken 1 == 2
+Test Broken
+  Expression: 1 == 2
+
+julia> @test_broken 1 == 2 atol=0.1
+Test Broken
+  Expression: ==(1, 2, atol=0.1)
+```
 """
 macro test_broken(ex, kws...)
     test_expr!("@test_broken", ex, kws...)
@@ -342,6 +368,17 @@ summary reporting as `Broken`. This can be useful for tests that intermittently
 fail, or tests of not-yet-implemented functionality.
 
 The `@test_skip f(args...) key=val...` form works as for the `@test` macro.
+
+# Examples
+```jldoctest
+julia> @test_skip 1 == 2
+Test Broken
+  Skipped: 1 == 2
+
+julia> @test_skip 1 == 2 atol=0.1
+Test Broken
+  Skipped: ==(1, 2, atol=0.1)
+```
 """
 macro test_skip(ex, kws...)
     test_expr!("@test_skip", ex, kws...)
@@ -480,6 +517,17 @@ Tests that the expression `expr` throws `exception`.
 The exception may specify either a type,
 or a value (which will be tested for equality by comparing fields).
 Note that `@test_throws` does not support a trailing keyword form.
+
+# Examples
+```jldoctest
+julia> @test_throws BoundsError [1, 2, 3][4]
+Test Passed
+      Thrown: BoundsError
+
+julia> @test_throws DimensionMismatch [1, 2, 3] + [1, 2]
+Test Passed
+      Thrown: DimensionMismatch
+```
 """
 macro test_throws(extype, ex)
     orig_ex = Expr(:inert, ex)
@@ -963,12 +1011,25 @@ method, which by default will return a list of the testset objects used in
 each iteration.
 
 Before the execution of the body of a `@testset`, there is an implicit
-call to `srand(seed)` where `seed` is the current seed of the global RNG.
+call to `Random.seed!(seed)` where `seed` is the current seed of the global RNG.
 Moreover, after the execution of the body, the state of the global RNG is
 restored to what it was before the `@testset`. This is meant to ease
 reproducibility in case of failure, and to allow seamless
 re-arrangements of `@testset`s regardless of their side-effect on the
 global RNG state.
+
+# Examples
+```jldoctest
+julia> @testset "trigonometric identities" begin
+           θ = 2/3*π
+           @test sin(-θ) ≈ -sin(θ)
+           @test cos(-θ) ≈ cos(θ)
+           @test sin(2θ) ≈ 2*sin(θ)*cos(θ)
+           @test cos(2θ) ≈ cos(θ)^2 - sin(θ)^2
+       end;
+Test Summary:            | Pass  Total
+trigonometric identities |    4      4
+```
 """
 macro testset(args...)
     isempty(args) && error("No arguments to @testset")
@@ -1012,13 +1073,13 @@ function testset_beginend(args, tests, source)
         # which is needed for backtrace scrubbing to work correctly.
         while false; end
         push_testset(ts)
-        # we reproduce the logic of guardsrand, but this function
+        # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
         oldrng = copy(GLOBAL_RNG)
         try
             # GLOBAL_RNG is re-seeded with its own seed to ease reproduce a failed test
-            srand(GLOBAL_RNG.seed)
+            Random.seed!(GLOBAL_RNG.seed)
             $(esc(tests))
         catch err
             err isa InterruptException && rethrow(err)
@@ -1084,7 +1145,7 @@ function testset_forloop(args, testloop, source)
         if !first_iteration
             pop_testset()
             push!(arr, finish(ts))
-            # it's 1000 times faster to copy from tmprng rather than calling srand
+            # it's 1000 times faster to copy from tmprng rather than calling Random.seed!
             copy!(GLOBAL_RNG, tmprng)
 
         end
@@ -1105,7 +1166,7 @@ function testset_forloop(args, testloop, source)
         local first_iteration = true
         local ts
         local oldrng = copy(GLOBAL_RNG)
-        srand(GLOBAL_RNG.seed)
+        Random.seed!(GLOBAL_RNG.seed)
         local tmprng = copy(GLOBAL_RNG)
         try
             $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
@@ -1191,7 +1252,7 @@ end
 """
     get_testset_depth()
 
-Returns the number of active test sets, not including the defaut test set
+Returns the number of active test sets, not including the default test set
 """
 function get_testset_depth()
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
@@ -1199,6 +1260,7 @@ function get_testset_depth()
 end
 
 _args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
+_materialize_broadcasted(f, args...) = Broadcast.materialize(Broadcast.broadcasted(f, args...))
 """
     @inferred f(x)
 
@@ -1210,36 +1272,25 @@ Returns the result of `f(x)` if the types match,
 and an `Error` `Result` if it finds different types.
 
 ```jldoctest; setup = :(using InteractiveUtils), filter = r"begin\\n(.|\\n)*end"
-julia> f(a,b,c) = b > 1 ? 1 : 1.0
+julia> f(a, b, c) = b > 1 ? 1 : 1.0
 f (generic function with 1 method)
 
-julia> typeof(f(1,2,3))
+julia> typeof(f(1, 2, 3))
 Int64
 
-julia> @code_warntype f(1,2,3)
-Variables:
-  a<optimized out>
-  b::Int64
-  c<optimized out>
+julia> @code_warntype f(1, 2, 3)
+Body::UNION{FLOAT64, INT64}
+1 1 ─ %1 = (Base.slt_int)(1, b)::Bool
+  └──      goto #3 if not %1
+  2 ─      return 1
+  3 ─      return 1.0
 
-Body:
-  begin
-      # meta: location operators.jl > 279
-      # meta: location int.jl < 49
-      Core.SSAValue(2) = (Base.slt_int)(1, b::Int64)::Bool
-      # meta: pop locations (2)
-      unless Core.SSAValue(2) goto 7
-      return 1
-      7:
-      return 1.0
-  end::UNION{FLOAT64, INT64}
-
-julia> @inferred f(1,2,3)
+julia> @inferred f(1, 2, 3)
 ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}
 Stacktrace:
 [...]
 
-julia> @inferred max(1,2)
+julia> @inferred max(1, 2)
 2
 ```
 """
@@ -1248,7 +1299,12 @@ macro inferred(ex)
         ex = Expr(:call, :getindex, ex.args...)
     end
     Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
-
+    farg = ex.args[1]
+    if isa(farg, Symbol) && first(string(farg)) == '.'
+        farg = Symbol(string(farg)[2:end])
+        ex = Expr(:call, GlobalRef(Test, :_materialize_broadcasted),
+            farg, ex.args[2:end]...)
+    end
     Base.remove_linenums!(quote
         let
             $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
@@ -1361,7 +1417,7 @@ function detect_unbound_args(mods...;
                             params = tuple_sig.parameters[1:(end - 1)]
                             tuple_sig = Base.rewrap_unionall(Tuple{params...}, m.sig)
                             mf = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tuple_sig, typemax(UInt))
-                            if mf != nothing && mf.func !== m && mf.func.sig <: tuple_sig
+                            if mf !== nothing && mf.func !== m && mf.func.sig <: tuple_sig
                                 continue
                             end
                         end
@@ -1442,7 +1498,7 @@ Base.ncodeunits(s::GenericString) = ncodeunits(s.string)
 Base.codeunit(s::GenericString) = codeunit(s.string)
 Base.codeunit(s::GenericString, i::Integer) = codeunit(s.string, i)
 Base.isvalid(s::GenericString, i::Integer) = isvalid(s.string, i)
-Base.next(s::GenericString, i::Integer) = next(s.string, i)
+Base.iterate(s::GenericString, i::Integer=1) = iterate(s.string, i)
 Base.reverse(s::GenericString) = GenericString(reverse(s.string))
 Base.reverse(s::SubString{GenericString}) =
     GenericString(typeof(s.string)(reverse(String(s))))
@@ -1465,13 +1521,11 @@ struct GenericDict{K,V} <: AbstractDict{K,V}
     s::AbstractDict{K,V}
 end
 
-for (G, A) in ((GenericSet, AbstractSet),
-               (GenericDict, AbstractDict))
+for G in (GenericSet, GenericDict)
     @eval begin
-        Base.done(s::$G, state) = done(s.s, state)
-        Base.next(s::$G, state) = next(s.s, state)
+        Base.iterate(s::$G, state...) = iterate(s.s, state...)
     end
-    for f in (:isempty, :length, :start)
+    for f in (:isempty, :length)
         @eval begin
             Base.$f(s::$G) = $f(s.s)
         end
@@ -1501,9 +1555,9 @@ Base.setindex!(a::GenericArray, x, i...) = a.a[i...] = x
 
 Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
 
-"`guardsrand(f)` runs the function `f()` and then restores the
+"`guardseed(f)` runs the function `f()` and then restores the
 state of the global RNG as it was before."
-function guardsrand(f::Function, r::AbstractRNG=GLOBAL_RNG)
+function guardseed(f::Function, r::AbstractRNG=GLOBAL_RNG)
     old = copy(r)
     try
         f()
@@ -1512,10 +1566,10 @@ function guardsrand(f::Function, r::AbstractRNG=GLOBAL_RNG)
     end
 end
 
-"`guardsrand(f, seed)` is equivalent to running `srand(seed); f()` and
+"`guardseed(f, seed)` is equivalent to running `Random.seed!(seed); f()` and
 then restoring the state of the global RNG as it was before."
-guardsrand(f::Function, seed::Union{Vector{UInt32},Integer}) = guardsrand() do
-    srand(seed)
+guardseed(f::Function, seed::Union{Vector{UInt32},Integer}) = guardseed() do
+    Random.seed!(seed)
     f()
 end
 
@@ -1543,7 +1597,7 @@ begin
     function test_approx_eq(va, vb, Eps, astr, bstr)
         va = approx_full(va)
         vb = approx_full(vb)
-        la, lb = length(linearindices(va)), length(linearindices(vb))
+        la, lb = length(LinearIndices(va)), length(LinearIndices(vb))
         if la != lb
             error("lengths of ", astr, " and ", bstr, " do not match: ",
                 "\n  ", astr, " (length $la) = ", va,
@@ -1573,33 +1627,7 @@ begin
     array_eps(a) = eps(float(maximum(x->(isfinite(x) ? abs(x) : oftype(x,NaN)), a)))
 
     test_approx_eq(va, vb, astr, bstr) =
-        test_approx_eq(va, vb, 1E4*length(linearindices(va))*max(array_eps(va), array_eps(vb)), astr, bstr)
-
-    """
-        @test_approx_eq_eps(a, b, tol)
-
-    Test two floating point numbers `a` and `b` for equality taking into account
-    a margin of tolerance given by `tol`.
-    """
-    macro test_approx_eq_eps(a, b, c)
-        Base.depwarn(string("@test_approx_eq_eps is deprecated, use `@test ", a, " ≈ ", b, " atol=", c, "` instead"),
-                    Symbol("@test_approx_eq_eps"))
-        :(test_approx_eq($(esc(a)), $(esc(b)), $(esc(c)), $(string(a)), $(string(b))))
-    end
-    export @test_approx_eq_eps
-
-    """
-        @test_approx_eq(a, b)
-
-    Deprecated. Test two floating point numbers `a` and `b` for equality taking into
-    account small numerical errors.
-    """
-    macro test_approx_eq(a, b)
-        Base.depwarn(string("@test_approx_eq is deprecated, use `@test ", a, " ≈ ", b, "` instead"),
-                    Symbol("@test_approx_eq"))
-        :(test_approx_eq($(esc(a)), $(esc(b)), $(string(a)), $(string(b))))
-    end
-    export @test_approx_eq
+        test_approx_eq(va, vb, 1E4*length(LinearIndices(va))*max(array_eps(va), array_eps(vb)), astr, bstr)
 end
 
 include("logging.jl")
