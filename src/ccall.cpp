@@ -1491,11 +1491,13 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     };
 #define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), #name)
 
-    static auto ptls_getter = &jl_get_ptls_states;
+    static jl_ptls_t (*ptls_getter)(void);
 #ifdef _OS_LINUX_
     // directly accessing the address of an ifunc can cause linker issue on
     // some configurations (e.g. AArch64 + -Bsymbolic-functions).
     jl_dlsym(jl_dlopen(nullptr, 0), "jl_get_ptls_states", (void **)&ptls_getter, 0);
+#else
+    ptls_getter = &jl_get_ptls_states;
 #endif
 
     // emit arguments
