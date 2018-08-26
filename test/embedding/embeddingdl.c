@@ -2,6 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Extracted from src/support/platform.h
+#if defined(_WIN32) || defined(_WIN64)
+#define _OS_WINDOWS_
+#endif
+
 #ifdef _OS_WINDOWS_
 #include <windows.h>
 #else

@@ -6,6 +6,11 @@
 
 JULIA_DEFINE_FAST_TLS() // only define this once, in an executable
 
+// Extracted from src/support/platform.h
+#if defined(_WIN32) || defined(_WIN64)
+#define _OS_WINDOWS_
+#endif
+
 #ifdef _OS_WINDOWS_
 __declspec(dllexport) __cdecl
 #endif
