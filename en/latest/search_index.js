@@ -6173,7 +6173,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.pathof",
     "category": "method",
-    "text": "pathof(m::Module)\n\nReturn the path of m.jl file that was used to import module m, or nothing if m was not imported from a package.\n\n\n\n\n\n"
+    "text": "pathof(m::Module)\n\nReturn the path of m.jl file that was used to import module m, or nothing if m was not imported from a package.\n\nUse dirname to get the directory part and basename to get the file name part of the path.\n\n\n\n\n\n"
 },
 
 {
@@ -7077,7 +7077,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\n"
 },
 
 {
@@ -9589,7 +9589,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.length",
     "category": "method",
-    "text": "length(s::AbstractString) -> Int\nlength(s::AbstractString, i::Integer, j::Integer) -> Int\n\nThe number of characters in string s from indices i through j. This is computed as the number of code unit indices from i to j which are valid character indices. Without only a single string argument, this computes the number of characters in the entire string. With i and j arguments it computes the number of indices between i and j inclusive that are valid indices in the string s. In addition to in-bounds values, i may take the out-of-bounds value ncodeunits(s) + 1 and j may take the out-of-bounds value 0.\n\nSee also: isvalid, ncodeunits, lastindex, thisind, nextind, prevind\n\nExamples\n\njulia> length(\"jμΛIα\")\n5\n\n\n\n\n\n"
+    "text": "length(s::AbstractString) -> Int\nlength(s::AbstractString, i::Integer, j::Integer) -> Int\n\nThe number of characters in string s from indices i through j. This is computed as the number of code unit indices from i to j which are valid character indices. With only a single string argument, this computes the number of characters in the entire string. With i and j arguments it computes the number of indices between i and j inclusive that are valid indices in the string s. In addition to in-bounds values, i may take the out-of-bounds value ncodeunits(s) + 1 and j may take the out-of-bounds value 0.\n\nSee also: isvalid, ncodeunits, lastindex, thisind, nextind, prevind\n\nExamples\n\njulia> length(\"jμΛIα\")\n5\n\n\n\n\n\n"
 },
 
 {
