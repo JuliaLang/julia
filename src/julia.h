@@ -45,6 +45,7 @@
 #  define JL_CONST_FUNC __attribute__((const))
 #  define JL_USED_FUNC __attribute__((used))
 #  define JL_SECTION(name) __attribute__((section(name)))
+#  define JL_THREAD_LOCAL __thread
 #elif defined(_COMPILER_MICROSOFT_)
 #  define JL_NORETURN __declspec(noreturn)
 // This is the closest I can find for __attribute__((const))
@@ -53,10 +54,12 @@
 #  define JL_USED_FUNC
 // TODO: Figure out what to do on MSVC
 #  define JL_SECTION(x)
+#  define JL_THREAD_LOCAL __declspec(threaD)
 #else
 #  define JL_NORETURN
 #  define JL_CONST_FUNC
 #  define JL_USED_FUNC
+#  define JL_THREAD_LOCAL
 #endif
 
 #define container_of(ptr, type, member) \
