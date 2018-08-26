@@ -1715,7 +1715,7 @@ LoadError
     __init__()
 
 Defining a `__init__()` fuction in your module for initialization that must occur at runtime. This
-function will not be claled during compilation, and you can assume the code will be run exactly
+function will not be called during compilation, and you can assume the code will be run exactly
 once in its lifetime. 
 
 # Examples
