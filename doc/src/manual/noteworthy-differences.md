@@ -253,7 +253,7 @@ For users coming to Julia from R, these are some noteworthy differences:
      Floating point literals are closer in behavior to C/C++. Octal (prefixed with `0o`) and binary
     (prefixed with `0b`) literals are also treated as unsigned.
   * String literals can be delimited with either `"`  or `"""`, `"""` delimited literals can contain
-    `"` characters without quoting it like `"\""` String literals can have values of other variables
+    `"` characters without quoting it like `"\""`. String literals can have values of other variables
     or expressions interpolated into them, indicated by `$variablename` or `$(expression)`, which
     evaluates the variable name or the expression in the context of the function.
   * `//` indicates a [`Rational`](@ref) number, and not a single-line comment (which is `#` in Julia)

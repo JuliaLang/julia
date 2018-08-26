@@ -222,7 +222,7 @@ end
     I = ind2sub_rs(axes(A.parent), A.mi, i)
     _unsafe_getindex_rs(parent(A), I)
 end
-_unsafe_getindex_rs(A, i::Integer) = (@inbounds ret = A[i]; ret)
+@inline _unsafe_getindex_rs(A, i::Integer) = (@inbounds ret = A[i]; ret)
 @inline _unsafe_getindex_rs(A, I) = (@inbounds ret = A[I...]; ret)
 
 @inline function setindex!(A::ReshapedArrayLF, val, index::Int)

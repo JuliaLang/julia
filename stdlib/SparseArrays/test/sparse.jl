@@ -2317,8 +2317,12 @@ end
     @test_throws SingularException(1) A \ ones(2)
     A = UpperTriangular(sparse([1.0 0;0 0]))
     @test_throws SingularException(2) A \ ones(2)
+end
 
-
+@testset "Issue #28634" begin
+    a = SparseMatrixCSC{Int8, Int16}([1 2; 3 4])
+    na = SparseMatrixCSC(a)
+    @test typeof(a) === typeof(na)
 end
 
 end # module

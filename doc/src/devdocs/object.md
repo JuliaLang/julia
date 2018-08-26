@@ -1,6 +1,6 @@
 # Memory layout of Julia Objects
 
-## Object layout (jl_value_t)
+## Object layout (`jl_value_t`)
 
 The `jl_value_t` struct is the name for a block of memory owned by the Julia Garbage Collector,
 representing the data associated with a Julia object in memory. Absent any type information, it

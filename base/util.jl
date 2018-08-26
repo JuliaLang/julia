@@ -476,7 +476,7 @@ function getpass(input::TTY, output::IO, prompt::AbstractString)
             write(s, c)
         end
     end
-    return s
+    return seekstart(s)
 end
 else
 function getpass(input::TTY, output::IO, prompt::AbstractString)

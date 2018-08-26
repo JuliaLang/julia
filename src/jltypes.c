@@ -314,7 +314,7 @@ int jl_count_union_components(jl_value_t *v)
 // Return the `*pi`th element of a nested type union, according to a
 // standard traversal order. Anything that is not itself a `Union` is
 // considered an "element". `*pi` is destroyed in the process.
-static jl_value_t *nth_union_component(jl_value_t *v, int *pi)
+static jl_value_t *nth_union_component(jl_value_t *v, int *pi) JL_NOTSAFEPOINT
 {
     if (!jl_is_uniontype(v)) {
         if (*pi == 0)
@@ -328,13 +328,13 @@ static jl_value_t *nth_union_component(jl_value_t *v, int *pi)
     return nth_union_component(u->b, pi);
 }
 
-jl_value_t *jl_nth_union_component(jl_value_t *v, int i)
+jl_value_t *jl_nth_union_component(jl_value_t *v, int i) JL_NOTSAFEPOINT
 {
     return nth_union_component(v, &i);
 }
 
 // inverse of jl_nth_union_component
-int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *nth)
+int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *nth) JL_NOTSAFEPOINT
 {
     if (jl_is_uniontype(haystack)) {
         if (jl_find_union_component(((jl_uniontype_t*)haystack)->a, needle, nth))
@@ -349,7 +349,7 @@ int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *
     return 0;
 }
 
-static void flatten_type_union(jl_value_t **types, size_t n, jl_value_t **out, size_t *idx)
+static void flatten_type_union(jl_value_t **types, size_t n, jl_value_t **out, size_t *idx) JL_NOTSAFEPOINT
 {
     size_t i;
     for(i=0; i < n; i++) {
@@ -366,25 +366,25 @@ static void flatten_type_union(jl_value_t **types, size_t n, jl_value_t **out, s
     }
 }
 
-STATIC_INLINE const char *datatype_module_name(jl_value_t *t)
+STATIC_INLINE const char *datatype_module_name(jl_value_t *t) JL_NOTSAFEPOINT
 {
     if (((jl_datatype_t*)t)->name->module == NULL)
         return NULL;
     return jl_symbol_name(((jl_datatype_t*)t)->name->module->name);
 }
 
-STATIC_INLINE const char *str_(const char *s)
+STATIC_INLINE const char *str_(const char *s) JL_NOTSAFEPOINT
 {
     return s == NULL ? "" : s;
 }
 
-STATIC_INLINE int cmp_(int a, int b)
+STATIC_INLINE int cmp_(int a, int b) JL_NOTSAFEPOINT
 {
     return a < b ? -1 : a > b;
 }
 
 // a/b are jl_datatype_t* & not NULL
-int datatype_name_cmp(jl_value_t *a, jl_value_t *b)
+int datatype_name_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
 {
     if (!jl_is_datatype(a))
         return jl_is_datatype(b) ? 1 : 0;
@@ -426,7 +426,7 @@ int datatype_name_cmp(jl_value_t *a, jl_value_t *b)
 
 // sort singletons first, then DataTypes, then UnionAlls,
 // ties broken alphabetically including module name & type parameters
-int union_sort_cmp(const void *ap, const void *bp)
+int union_sort_cmp(const void *ap, const void *bp) JL_NOTSAFEPOINT
 {
     jl_value_t *a = *(jl_value_t**)ap;
     jl_value_t *b = *(jl_value_t**)bp;
@@ -558,7 +558,7 @@ static int contains_unions(jl_value_t *type)
     return 0;
 }
 
-static intptr_t wrapper_id(jl_value_t *t)
+static intptr_t wrapper_id(jl_value_t *t) JL_NOTSAFEPOINT
 {
     // DataType wrappers occur often, e.g. when called as constructors.
     // make sure any type equal to a wrapper gets a consistent, ordered ID.
@@ -587,7 +587,7 @@ static int is_typekey_ordered(jl_value_t **key, size_t n)
 }
 
 // ordered comparison of types
-static int typekey_compare(jl_datatype_t *tt, jl_value_t **key, size_t n)
+static int typekey_compare(jl_datatype_t *tt, jl_value_t **key, size_t n) JL_NOTSAFEPOINT
 {
     size_t j;
     if (tt == NULL) return -1;  // place NULLs at end to allow padding for fast growing
@@ -634,7 +634,7 @@ static int typekey_compare(jl_datatype_t *tt, jl_value_t **key, size_t n)
     return 0;
 }
 
-static int dt_compare(const void *ap, const void *bp)
+static int dt_compare(const void *ap, const void *bp) JL_NOTSAFEPOINT
 {
     jl_datatype_t *a = *(jl_datatype_t**)ap;
     jl_datatype_t *b = *(jl_datatype_t**)bp;
@@ -971,6 +971,7 @@ static jl_value_t *lookup_type_stack(jl_typestack_t *stack, jl_datatype_t *tt, s
     // stack, return it. this computes a fixed point for recursive types.
     jl_typename_t *tn = tt->name;
     while (stack != NULL) {
+        JL_GC_PROMISE_ROOTED(stack->tt);
         if (stack->tt->name == tn &&
             ntp == jl_svec_len(stack->tt->parameters) &&
             typekey_eq(stack->tt, iparams, ntp)) {
@@ -1130,9 +1131,9 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     }
 
     jl_datatype_t *ndt = NULL;
-    JL_GC_PUSH2(&p, &ndt);
-
     jl_value_t *last = iparams[ntp - 1];
+    JL_GC_PUSH3(&p, &ndt, &last);
+
     int isvatuple = 0;
     if (istuple && ntp > 0 && jl_is_vararg_type(last)) {
         isvatuple = 1;
@@ -1148,17 +1149,13 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             JL_GC_POP();
             return (jl_value_t*)jl_anytuple_type;
         }
-        {
-            JL_GC_PUSH1(&last);
-            jl_value_t *last2 = normalize_vararg(last);
-            if (last2 != last) {
-                last = last2;
-                p = jl_alloc_svec(ntp);
-                for (size_t i = 0; i < ntp-1; i++)
-                    jl_svecset(p, i, iparams[i]);
-                jl_svecset(p, ntp-1, last);
-            }
-            JL_GC_POP();
+        int did_normalize = 0;
+        jl_value_t *last2 = normalize_vararg(last);
+        if (last2 != last) {
+            last = last2;
+            did_normalize = 1;
+            va = jl_unwrap_unionall(last);
+            va0 = jl_tparam0(va); va1 = jl_tparam1(va);
         }
         if (jl_is_long(va1)) {
             ssize_t nt = jl_unbox_long(va1);
@@ -1181,6 +1178,12 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                 JL_GC_POP();
                 return ndt;
             }
+        }
+        if (did_normalize) {
+            p = jl_alloc_svec(ntp);
+            for (size_t i = 0; i < ntp-1; i++)
+                jl_svecset(p, i, iparams[i]);
+            jl_svecset(p, ntp-1, last);
         }
     }
 
@@ -1322,6 +1325,7 @@ static jl_tupletype_t *jl_apply_tuple_type_v_(jl_value_t **p, size_t np, jl_svec
 {
     int cacheable = 1;
     for (size_t i = 0; i < np; i++) {
+        assert(p[i]);
         if (!jl_is_concrete_type(p[i]))
             cacheable = 0;
     }
@@ -1638,7 +1642,7 @@ static jl_tvar_t *tvar(const char *name)
 
 extern void jl_init_int32_int64_cache(void);
 
-void jl_init_types(void)
+void jl_init_types(void) JL_GC_DISABLED
 {
     jl_module_t *core = NULL; // will need to be assigned later
 

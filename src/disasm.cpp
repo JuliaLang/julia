@@ -28,13 +28,8 @@
 
 #include "llvm-version.h"
 #include <llvm/Object/ObjectFile.h>
-#if JL_LLVM_VERSION >= 50000
 #include <llvm/BinaryFormat/MachO.h>
 #include <llvm/BinaryFormat/COFF.h>
-#else
-#include <llvm/Support/MachO.h>
-#include <llvm/Support/COFF.h>
-#endif
 #include <llvm/MC/MCInst.h>
 #include <llvm/MC/MCStreamer.h>
 #include <llvm/MC/MCSubtargetInfo.h>
@@ -650,12 +645,7 @@ static void jl_dump_asm_internal(
 
     std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
     MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr);
-#if JL_LLVM_VERSION >= 60000
     MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false, Ctx);
-#else
-    MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false,
-                               CodeModel::Default, Ctx);
-#endif
 
     // Set up Subtarget and Disassembler
     std::unique_ptr<MCSubtargetInfo>
@@ -683,15 +673,8 @@ static void jl_dump_asm_internal(
     MCAsmBackend *MAB = 0;
     if (ShowEncoding) {
         CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx);
-#if JL_LLVM_VERSION >= 60000
         MCTargetOptions Options;
         MAB = TheTarget->createMCAsmBackend(*STI, *MRI, Options);
-#elif JL_LLVM_VERSION >= 40000
-        MCTargetOptions Options;
-        MAB = TheTarget->createMCAsmBackend(*MRI, TripleName, cpu, Options);
-#else
-        MAB = TheTarget->createMCAsmBackend(*MRI, TripleName, cpu);
-#endif
     }
 
     // createAsmStreamer expects a unique_ptr to a formatted stream, which means

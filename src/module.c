@@ -125,6 +125,23 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var, int 
     return *bp;
 }
 
+// Hash tables don't generically root their contents, but they do for bindings.
+// Express this to the analyzer.
+#ifdef __clang_analyzer__
+jl_binding_t *_jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT;
+jl_binding_t **_jl_get_module_binding_bp(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT;
+#else
+static inline jl_binding_t *_jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT
+{
+    return (jl_binding_t*)ptrhash_get(&m->bindings, var);
+}
+static inline jl_binding_t **_jl_get_module_binding_bp(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT
+{
+    return (jl_binding_t**)ptrhash_bp(&m->bindings, var);
+}
+#endif
+
+
 // return module of binding
 JL_DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var)
 {
@@ -138,7 +155,7 @@ JL_DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var
 // like jl_get_binding_wr, but has different error paths
 JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
+    jl_binding_t **bp = _jl_get_module_binding_bp(m, var);
     jl_binding_t *b = *bp;
 
     if (b != HT_NOTFOUND) {
@@ -177,16 +194,16 @@ typedef struct _modstack_t {
     struct _modstack_t *prev;
 } modstack_t;
 
-static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *st);
+static jl_binding_t *jl_get_binding_(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, modstack_t *st);
 
 // find a binding from a module's `usings` list
-static jl_binding_t *using_resolve_binding(jl_module_t *m, jl_sym_t *var, modstack_t *st, int warn)
+static jl_binding_t *using_resolve_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, modstack_t *st, int warn)
 {
     jl_binding_t *b = NULL;
     jl_module_t *owner = NULL;
     for(int i=(int)m->usings.len-1; i >= 0; --i) {
         jl_module_t *imp = (jl_module_t*)m->usings.items[i];
-        jl_binding_t *tempb = (jl_binding_t*)ptrhash_get(&imp->bindings, var);
+        jl_binding_t *tempb = _jl_get_module_binding(imp, var);
         if (tempb != HT_NOTFOUND && tempb->exportp) {
             tempb = jl_get_binding_(imp, var, st);
             if (tempb == NULL || tempb->owner == NULL)
@@ -227,7 +244,7 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
         }
         tmp = tmp->prev;
     }
-    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    jl_binding_t *b = _jl_get_module_binding(m, var);
     if (b == HT_NOTFOUND || b->owner == NULL) {
         b = using_resolve_binding(m, var, &top, 1);
         if (b != NULL) {
@@ -453,16 +470,22 @@ JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
     return b != HT_NOTFOUND && (b->exportp || b->owner==m);
 }
 
-JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var)
+JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var) JL_NOTSAFEPOINT
 {
-    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    jl_binding_t *b = _jl_get_module_binding(m, var);
     return b != HT_NOTFOUND && b->exportp;
 }
 
-JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
+JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var) JL_NOTSAFEPOINT
 {
-    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    jl_binding_t *b = _jl_get_module_binding(m, var);
     return b != HT_NOTFOUND && b->owner != NULL;
+}
+
+JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT
+{
+    jl_binding_t *b = _jl_get_module_binding(m, var);
+    return b == HT_NOTFOUND ? NULL : b;
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
@@ -473,7 +496,7 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
     return b->value;
 }
 
-JL_DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
+JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
     if (!bp->constp) {
@@ -482,7 +505,7 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
     }
 }
 
-JL_DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
+JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
     if (!bp->constp) {
@@ -565,7 +588,7 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
                 }
                 else {
                     jl_methtable_t *mt = jl_gf_mtable(v);
-                    if (mt != NULL && (mt->defs.unknown != jl_nothing ||
+                    if (mt != NULL && (mt->defs != jl_nothing ||
                                        jl_isa(v, (jl_value_t*)jl_builtin_type))) {
                         jl_printf(JL_STDERR, ", use ");
                         if (mt->module != jl_core_module) {
@@ -671,7 +694,7 @@ JL_DLLEXPORT jl_uuid_t jl_module_uuid(jl_module_t* m) { return m->uuid; }
 // TODO: make this part of the module constructor and read-only?
 JL_DLLEXPORT void jl_set_module_uuid(jl_module_t *m, jl_uuid_t uuid) { m->uuid = uuid; }
 
-int jl_is_submodule(jl_module_t *child, jl_module_t *parent)
+int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT
 {
     while (1) {
         if (parent == child)

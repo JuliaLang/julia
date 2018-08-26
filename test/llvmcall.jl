@@ -179,20 +179,16 @@ module ObjLoadTest
 end
 
 # Test for proper parenting
-if Base.libllvm_version >= v"3.6" # llvm 3.6 changed the syntax for a gep, so just ignore this test on older versions
-    local foo
-    function foo()
-        # this IR snippet triggers an optimization relying
-        # on the llvmcall function having a parent module
-        Base.llvmcall(
-         """%1 = getelementptr i64, i64* null, i64 1
-            ret void""",
-        Cvoid, Tuple{})
-    end
-    code_llvm(devnull, foo, ())
-else
-    @info "Skipping gep parentage test on llvm < 3.6"
+local foo
+function foo()
+    # this IR snippet triggers an optimization relying
+    # on the llvmcall function having a parent module
+    Base.llvmcall(
+     """%1 = getelementptr i64, i64* null, i64 1
+        ret void""",
+    Cvoid, Tuple{})
 end
+code_llvm(devnull, foo, ())
 
 module CcallableRetTypeTest
     using Base: llvmcall, @ccallable

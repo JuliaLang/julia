@@ -346,7 +346,7 @@ function complete_line(c::REPLCompletionProvider, s)
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
     ret, range, should_complete = completions(full, lastindex(partial))
-    return map(completion_text, ret), partial[range], should_complete
+    return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
 function complete_line(c::ShellCompletionProvider, s)
@@ -354,14 +354,14 @@ function complete_line(c::ShellCompletionProvider, s)
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
     ret, range, should_complete = shell_completions(full, lastindex(partial))
-    return map(completion_text, ret), partial[range], should_complete
+    return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
 function complete_line(c::LatexCompletions, s)
     partial = beforecursor(LineEdit.buffer(s))
     full = LineEdit.input_string(s)
     ret, range, should_complete = bslash_completions(full, lastindex(partial))[2]
-    return map(completion_text, ret), partial[range], should_complete
+    return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
 mutable struct REPLHistoryProvider <: HistoryProvider

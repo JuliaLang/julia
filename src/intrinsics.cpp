@@ -281,11 +281,7 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
     Type *ty = unboxed->getType();
     bool frompointer = ty->isPointerTy();
     bool topointer = to->isPointerTy();
-#if JL_LLVM_VERSION >= 40000
     const DataLayout &DL = jl_data_layout;
-#else
-    const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
-#endif
     if (ty == T_int1 && to == T_int8) {
         // bools may be stored internally as int8
         unboxed = ctx.builder.CreateZExt(unboxed, T_int8);
@@ -381,11 +377,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
             // appropriate coercion manually.
             AllocaInst *AI = cast<AllocaInst>(p);
             Type *AllocType = AI->getAllocatedType();
-#if JL_LLVM_VERSION >= 40000
             const DataLayout &DL = jl_data_layout;
-#else
-            const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
-#endif
             if (!AI->isArrayAllocation() &&
                     (AllocType->isFloatingPointTy() || AllocType->isIntegerTy() || AllocType->isPointerTy()) &&
                     (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
@@ -755,18 +747,10 @@ struct math_builder {
         if (jl_options.fast_math != JL_OPTIONS_FAST_MATH_OFF &&
             (always_fast ||
              jl_options.fast_math == JL_OPTIONS_FAST_MATH_ON)) {
-#if JL_LLVM_VERSION >= 60000
             fmf.setFast();
-#else
-            fmf.setUnsafeAlgebra();
-#endif
         }
-#if JL_LLVM_VERSION >= 50000
         if (contract)
             fmf.setAllowContract(true);
-#else
-        assert(!contract);
-#endif
         ctxbuilder.setFastMathFlags(fmf);
     }
     IRBuilder<>& operator()() const { return ctxbuilder; }
@@ -1079,18 +1063,11 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         return ctx.builder.CreateCall(fmaintr, {x, y, z});
     }
     case muladd_float: {
-#if JL_LLVM_VERSION >= 50000
         // LLVM 5.0 can create FMA in the backend for contractable fmul and fadd
         // Emitting fmul and fadd here since they are easier for other LLVM passes to
         // optimize.
         auto mathb = math_builder(ctx, false, true);
         return mathb().CreateFAdd(mathb().CreateFMul(x, y), z);
-#else
-        assert(y->getType() == x->getType());
-        assert(z->getType() == y->getType());
-        Value *muladdintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fmuladd, makeArrayRef(t));
-        return ctx.builder.CreateCall(muladdintr, {x, y, z});
-#endif
     }
 
     case checked_sadd_int:

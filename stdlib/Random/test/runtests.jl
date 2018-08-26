@@ -686,3 +686,11 @@ end
     @test Random.gentype(Random.UInt52(UInt128)) == UInt128
     @test Random.gentype(Random.UInt104()) == UInt128
 end
+
+@testset "shuffle[!]" begin
+    a = []
+    @test shuffle(a) == a # issue #28727
+    @test shuffle!(a) === a
+    a = rand(Int, 1)
+    @test shuffle(a) == a
+end
