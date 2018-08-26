@@ -63,7 +63,7 @@ extern char *julia_bindir;
 static const char * jl_dlerror(void)
 {
 #ifdef _OS_WINDOWS_
-    static CHAR reason[256];
+    __thread static CHAR reason[256];
     FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
             NULL, GetLastError(),
             MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
