@@ -652,14 +652,14 @@ end
     end
 end
 
-function diff(a::AbstractVector)
+function diff(a::AbstractArray)
     @assert !has_offset_axes(a)
     [ a[i+1] - a[i] for i=1:length(a)-1 ]
 end
 
 """
-    diff(A::AbstractVector)
-    diff(A::AbstractMatrix; dims::Integer)
+    diff(A::AbstractArray)
+    diff(A::AbstractArray; dims::Integer)
 
 Finite difference operator of matrix or vector `A`. If `A` is a matrix,
 specify the dimension over which to operate with the `dims` keyword argument.
@@ -683,7 +683,7 @@ julia> diff(vec(a))
  12
 ```
 """
-function diff(A::AbstractMatrix; dims::Integer)
+function diff(A::AbstractArray; dims::Integer)
     if dims == 1
         [A[i+1,j] - A[i,j] for i=1:size(A,1)-1, j=1:size(A,2)]
     elseif dims == 2
