@@ -154,7 +154,7 @@ let
     end
 
     @testset "binary ops with vectors" begin
-        v = complex(randn(), randn())
+        v = complex.(randn(3), randn(3))
         @test v  * J == v  * λ
         @test v' * J == v' * λ
         @test J * v  == λ * v
