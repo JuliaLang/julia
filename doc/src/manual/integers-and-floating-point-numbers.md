@@ -220,17 +220,20 @@ with some existing programming experience.)
 
 ### Overflow behavior
 
-In Julia, exceeding the maximum representable value of a given type results in a wraparound behavior:
+In Julia, exceeding boundaries, the minimum or the maximum representable value of a given type results in a wraparound behavior:
 
 ```jldoctest
-julia> x = typemax(Int64)
-9223372036854775807
-
-julia> x + 1
+julia> left = typemin(Int)
 -9223372036854775808
 
-julia> x + 1 == typemin(Int64)
-true
+julia> right = typemax(Int)
+9223372036854775807
+
+julia> left - 1
+9223372036854775807
+
+julia> right + 1
+-9223372036854775808
 ```
 
 Thus, arithmetic with Julia integers is actually a form of [modular arithmetic](https://en.wikipedia.org/wiki/Modular_arithmetic).
