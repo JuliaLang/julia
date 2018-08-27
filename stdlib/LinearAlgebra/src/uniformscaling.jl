@@ -207,10 +207,9 @@ isapprox(A::AbstractMatrix, J::UniformScaling; kwargs...) = isapprox(J, A; kwarg
 
 function copyto!(A::AbstractMatrix, J::UniformScaling)
     @assert !has_offset_axes(A)
-    size(A,1)==size(A,2) || throw(DimensionMismatch("a UniformScaling can only be copied to a square matrix"))
     fill!(A, 0)
     λ = J.λ
-    for i = 1:size(A,1)
+    for i = 1:min(size(A,1),size(A,2))
         @inbounds A[i,i] = λ
     end
     return A

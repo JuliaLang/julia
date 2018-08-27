@@ -1367,7 +1367,7 @@ const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
     // RAS is not currently detectable AFAICT
     auto max_feature = get_max_feature();
     static const auto res = get_llvm_target_str(TargetData<feature_sz>{host_cpu_name(),
-                JL_LLVM_VERSION >= 60000 ? "+dotprod,+ras" : "+ras",
+                "+dotprod,+ras",
                 {max_feature, 0}, {feature_masks & ~max_feature, 0}, 0});
     return res;
 }

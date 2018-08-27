@@ -95,7 +95,7 @@ size_t rec_backtrace(uintptr_t *data, size_t maxsize)
     return rec_backtrace_ctx(data, maxsize, &context);
 }
 
-static jl_value_t *array_ptr_void_type = NULL;
+static jl_value_t *array_ptr_void_type JL_ALWAYS_LEAFTYPE = NULL;
 JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp)
 {
     jl_array_t *ip = NULL;

@@ -56,9 +56,15 @@ SymTridiagonal(A::AbstractTriangular) = SymTridiagonal(Tridiagonal(A))
 Tridiagonal(A::AbstractTriangular) =
     isbanded(A, -1, 1) ? Tridiagonal(diag(A, -1), diag(A, 0), diag(A, 1)) : # is tridiagonal
         throw(ArgumentError("matrix cannot be represented as Tridiagonal"))
-
+UpperTriangular(A::Bidiagonal) =
+    A.uplo == 'U' ? UpperTriangular{eltype(A), typeof(A)}(A) :
+        throw(ArgumentError("matrix cannot be represented as UpperTriangular"))
+LowerTriangular(A::Bidiagonal) =
+    A.uplo == 'L' ? LowerTriangular{eltype(A), typeof(A)}(A) :
+        throw(ArgumentError("matrix cannot be represented as LowerTriangular"))
 
 const ConvertibleSpecialMatrix = Union{Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,AbstractTriangular}
+const PossibleTriangularMatrix = Union{Diagonal, Bidiagonal, AbstractTriangular}
 
 convert(T::Type{<:Diagonal},       m::ConvertibleSpecialMatrix) = m isa T ? m : T(m)
 convert(T::Type{<:SymTridiagonal}, m::ConvertibleSpecialMatrix) = m isa T ? m : T(m)
@@ -66,6 +72,9 @@ convert(T::Type{<:Tridiagonal},    m::ConvertibleSpecialMatrix) = m isa T ? m : 
 
 convert(T::Type{<:LowerTriangular}, m::Union{LowerTriangular,UnitLowerTriangular}) = m isa T ? m : T(m)
 convert(T::Type{<:UpperTriangular}, m::Union{UpperTriangular,UnitUpperTriangular}) = m isa T ? m : T(m)
+
+convert(T::Type{<:LowerTriangular}, m::PossibleTriangularMatrix) = m isa T ? m : T(m)
+convert(T::Type{<:UpperTriangular}, m::PossibleTriangularMatrix) = m isa T ? m : T(m)   
 
 # Constructs two method definitions taking into account (assumed) commutativity
 # e.g. @commutative f(x::S, y::T) where {S,T} = x+y is the same is defining
@@ -80,56 +89,26 @@ macro commutative(myexpr)
 end
 
 for op in (:+, :-)
-    SpecialMatrices = [:Diagonal, :Bidiagonal, :Tridiagonal, :Matrix]
-    for (idx, matrixtype1) in enumerate(SpecialMatrices) # matrixtype1 is the sparser matrix type
-        for matrixtype2 in SpecialMatrices[idx+1:end] # matrixtype2 is the denser matrix type
-            @eval begin # TODO quite a few of these conversions are NOT defined
-                ($op)(A::($matrixtype1), B::($matrixtype2)) = ($op)(convert(($matrixtype2), A), B)
-                ($op)(A::($matrixtype2), B::($matrixtype1)) = ($op)(A, convert(($matrixtype2), B))
-            end
-        end
-    end
-
-    for  matrixtype1 in (:SymTridiagonal,)                      # matrixtype1 is the sparser matrix type
-        for matrixtype2 in (:Tridiagonal, :Matrix) # matrixtype2 is the denser matrix type
-            @eval begin
-                ($op)(A::($matrixtype1), B::($matrixtype2)) = ($op)(convert(($matrixtype2), A), B)
-                ($op)(A::($matrixtype2), B::($matrixtype1)) = ($op)(A, convert(($matrixtype2), B))
-            end
-        end
-    end
-
-    # todo check if these conversion methods are optimal
-    # we should be able to do these structured conversions really quickly
-
-    # Diagonal +/- SymTridiagonal (and reverse) will always be SymTridiagonal
-    @eval begin
-        ($op)(A::SymTridiagonal, B::Diagonal) = ($op)(A, convert(SymTridiagonal, B))
-        ($op)(A::Diagonal, B::SymTridiagonal) = ($op)(convert(SymTridiagonal, A), B)
-    end
-
-    # Bidiagonal +/- SymTridiagonal (and reverse) will always be Tridiagonal
-    @eval begin
-        ($op)(A::SymTridiagonal, B::Bidiagonal) = ($op)(convert(Tridiagonal, A), B)
-        ($op)(A::Bidiagonal, B::SymTridiagonal) = ($op)(A, convert(Tridiagonal, B))
-    end
-
-    for matrixtype1 in (:Diagonal,)
-        for (matrixtype2,matrixtype3) in ((:UpperTriangular,:UpperTriangular),
-                                          (:UnitUpperTriangular,:UpperTriangular),
-                                          (:LowerTriangular,:LowerTriangular),
-                                          (:UnitLowerTriangular,:LowerTriangular))
-            @eval begin
-                ($op)(A::($matrixtype1), B::($matrixtype2)) = ($op)(($matrixtype3)(A), B)
-                ($op)(A::($matrixtype2), B::($matrixtype1)) = ($op)(A, ($matrixtype3)(B))
-            end
-        end
-    end
-
-    for matrixtype in (:SymTridiagonal,:Tridiagonal,:Bidiagonal,:Matrix)
+    for (matrixtype, uplo, converttype) in ((:UpperTriangular, 'U', :UpperTriangular), 
+                                            (:UnitUpperTriangular, 'U', :UpperTriangular),
+                                            (:LowerTriangular, 'L', :LowerTriangular),
+                                            (:UnitLowerTriangular, 'L', :LowerTriangular))
         @eval begin
-            ($op)(A::AbstractTriangular, B::($matrixtype)) = ($op)(copyto!(similar(parent(A)), A), B)
-            ($op)(A::($matrixtype), B::AbstractTriangular) = ($op)(A, copyto!(similar(parent(B)), B))
+            function ($op)(A::$matrixtype, B::Bidiagonal)
+                if B.uplo == $uplo
+                    ($op)(A, convert($converttype, B))
+                else
+                    ($op).(A, B)
+                end
+            end
+
+            function ($op)(A::Bidiagonal, B::$matrixtype)
+                if A.uplo == $uplo
+                    ($op)(convert($converttype, A), B)
+                else
+                    ($op).(A, B)
+                end
+            end
         end
     end
 end

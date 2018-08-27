@@ -1152,9 +1152,6 @@ what their types are:
 julia> typeof(Rational{Int})
 DataType
 
-julia> typeof(Union{Real,Float64,Rational})
-DataType
-
 julia> typeof(Union{Real,String})
 Union
 ```

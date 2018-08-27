@@ -384,120 +384,35 @@ $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(LLVM_SRC_DIR)/$1.patch-applied
 LLVM_PATCH_PREV := $$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
-ifeq ($(LLVM_VER_SHORT),3.9)
-$(eval $(call LLVM_PATCH,llvm-PR22923)) # Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-arm-fix-prel31)) # Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D25865-cmakeshlib)) # Remove for 4.0
-# Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
-$(eval $(call LLVM_PATCH,llvm-3.9.0_threads))
-$(eval $(call LLVM_PATCH,llvm-3.9.0_win64-reloc-dwarf)) # modified version applied as R290809, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
-$(eval $(call LLVM_PATCH,llvm-D27609-AArch64-UABS_G3)) # Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model))
-$(eval $(call LLVM_PATCH,llvm-NVPTX-addrspaces)) # NVPTX
-$(eval $(call LLVM_PATCH,llvm-D9168_argument_alignment)) # NVPTX, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D23597_sdag_names))     # NVPTX, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D24300_ptx_intrinsics)) # NVPTX, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D27389)) # Julia issue #19792, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D27397)) # Julia issue #19792, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D28009)) # Julia issue #19792, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D28215_FreeBSD_shlib))
-$(eval $(call LLVM_PATCH,llvm-D28221-avx512)) # mentioned in issue #19797
-$(eval $(call LLVM_PATCH,llvm-PR276266)) # Issue #19976, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-PR278088)) # Issue #19976, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-PR277939)) # Issue #19976, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-PR278321)) # Issue #19976, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-PR278923)) # Issue #19976, Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D28759-loopclearance))
-$(eval $(call LLVM_PATCH,llvm-D28786-callclearance))
-$(eval $(call LLVM_PATCH,llvm-rL293230-icc17-cmake)) # Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-D32593))
-$(eval $(call LLVM_PATCH,llvm-D33179))
-$(eval $(call LLVM_PATCH,llvm-PR29010-i386-xmm)) # Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-3.9.0-D37576-NVPTX-sm_70)) # NVPTX, Remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D37939-Mem2Reg-Also-handle-memcpy))
-$(eval $(call LLVM_PATCH,llvm-D31524-sovers_4.0)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1))
-$(eval $(call LLVM_PATCH,llvm-3.9-c_api_nullptr))
-$(eval $(call LLVM_PATCH,llvm-PPC-addrspaces)) # PPC
-$(eval $(call LLVM_PATCH,llvm-D30114)) # PPC remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-PR36292)) # PPC fixes #26249, remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D39297-musl-dynamiclibrary-pre5)) # Remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D28476-musl-targetlibraryinfo_3.9)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D46460))
-ifeq ($(BUILD_LLVM_CLANG),1)
-$(eval $(call LLVM_PATCH,compiler_rt-3.9-glibc_2.25.90)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,clang-D28477)) # Remove for 5.0
+ifeq ($(LLVM_VER_SHORT),6.0)
+ifeq ($(LLVM_VER_PATCH), 0)
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_4.0))
+else
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
 endif
-else ifeq ($(LLVM_VER_SHORT),4.0)
-# Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
-$(eval $(call LLVM_PATCH,llvm-4.0.0_threads))
-$(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
-$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_4.0))
-$(eval $(call LLVM_PATCH,llvm-D28215_FreeBSD_shlib)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D28759-loopclearance)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D28786-callclearance_4.0)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D32593)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D33179)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D32203-SORA-non-integral)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D33110-codegen-prepare-inttoptr))
-$(eval $(call LLVM_PATCH,llvm-D30478-VNCoercion)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-VNCoercion-signatures)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-VNCoercion-template)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D32196-LIR-non-integral)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D32208-coerce-non-integral)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D32623-GVN-non-integral)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D33129-scevexpander-non-integral)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-Yet-another-fix))
-$(eval $(call LLVM_PATCH,llvm-NVPTX-addrspaces)) # NVPTX
-$(eval $(call LLVM_PATCH,llvm-4.0.0-D37576-NVPTX-sm_70)) # NVPTX, Remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-loadcse-addrspace_4.0))
-$(eval $(call LLVM_PATCH,llvm-D31524-sovers_4.0)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1))
-$(eval $(call LLVM_PATCH,llvm-PPC-addrspaces)) # PPC
-$(eval $(call LLVM_PATCH,llvm-D30114)) # PPC remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-PR36292)) # PPC fixes #26249, remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D39297-musl-dynamiclibrary-pre5)) # Remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D28476-musl-targetlibraryinfo_4.0)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,llvm-D46460))
-ifeq ($(BUILD_LLVM_CLANG),1)
-$(eval $(call LLVM_PATCH,compiler_rt-3.9-glibc_2.25.90)) # Remove for 5.0
-$(eval $(call LLVM_PATCH,clang-D28477)) # Remove for 5.0
-endif
-else ifeq ($(LLVM_VER_SHORT),5.0)
-# Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
-$(eval $(call LLVM_PATCH,llvm-5.0.0_threads))
-$(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
-$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_4.0))
-$(eval $(call LLVM_PATCH,llvm-loadcse-addrspace_5.0))
-$(eval $(call LLVM_PATCH,llvm-D34078-vectorize-fdiv))
-$(eval $(call LLVM_PATCH,llvm-5.0-NVPTX-addrspaces)) # NVPTX
-$(eval $(call LLVM_PATCH,llvm-4.0.0-D37576-NVPTX-sm_70)) # NVPTX, Remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D38765-gvn_5.0)) # Remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1)) # remove for 7.0
-$(eval $(call LLVM_PATCH,llvm-PPC-addrspaces)) # PPC
-$(eval $(call LLVM_PATCH,llvm-PR36292-5.0)) # PPC fixes #26249, remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D39297-musl-dynamiclibrary)) # Remove for 6.0
-$(eval $(call LLVM_PATCH,llvm-D46460))
-else ifeq ($(LLVM_VER_SHORT),6.0)
-$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_4.0))
 $(eval $(call LLVM_PATCH,llvm-D34078-vectorize-fdiv))
 $(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX
 $(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-PPC-addrspaces)) # remove for 7.0
+ifeq ($(LLVM_VER_PATCH), 0)
 $(eval $(call LLVM_PATCH,llvm-D42260)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-rL326843-missing-header)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-6.0-r327540)) # remove for 7.0
+endif
 $(eval $(call LLVM_PATCH,llvm-6.0.0_D27296-libssp)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-6.0-D44650)) # mingw32 build fix
+ifeq ($(LLVM_VER_PATCH), 0)
 $(eval $(call LLVM_PATCH,llvm-D45008)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-D45070)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-6.0.0-ifconv-D45819)) # remove for 7.0
+endif
 $(eval $(call LLVM_PATCH,llvm-D46460))
+ifeq ($(LLVM_VER_PATCH), 0)
 $(eval $(call LLVM_PATCH,llvm-rL332680)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-rL332682)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-rL332302)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-rL332694)) # remove for 7.0
+endif
 $(eval $(call LLVM_PATCH,llvm-rL327898)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
 $(eval $(call LLVM_PATCH,llvm-OProfile-line-num))
@@ -506,18 +421,13 @@ $(eval $(call LLVM_PATCH,llvm-D49832-SCEVPred)) # Remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-rL323946-LSRTy)) # Remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-D50010-VNCoercion-ni))
 $(eval $(call LLVM_PATCH,llvm-D50167-scev-umin))
+$(eval $(call LLVM_PATCH,llvm-rL326967-aligned-load)) # remove for 7.0
+ifeq ($(LLVM_VER_PATCH), 0)
 $(eval $(call LLVM_PATCH,llvm-windows-race))
+endif
 endif # LLVM_VER
 
-# Remove hardcoded OS X requirements in compilter-rt cmake build
-ifeq ($(LLVM_VER_SHORT),3.9)
-ifeq ($(BUILD_LLVM_CLANG),1)
-$(eval $(call LLVM_PATCH,llvm-3.9-osx-10.12))
-endif
-endif
-
 # Independent to the llvm version add a JL prefix to the version map
-# Depends on `llvm-D31524-sovers_4.0` for LLVM_VER==3.9
 $(eval $(call LLVM_PATCH,llvm-symver-jlprefix)) # DO NOT REMOVE
 
 

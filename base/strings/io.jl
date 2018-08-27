@@ -81,7 +81,7 @@ of the buffer (in bytes).
 
 The optional keyword argument `context` can be set to `:key=>value` pair
 or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
-stream passed to `f`.  The optional `sizehint` is a suggersted (in bytes)
+stream passed to `f`.  The optional `sizehint` is a suggested size (in bytes)
 to allocate for the buffer used to write the string.
 
 # Examples
@@ -223,7 +223,7 @@ IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.stri
 Join an array of `strings` into a single string, inserting the given delimiter between
 adjacent strings. If `last` is given, it will be used instead of `delim` between the last
 two strings. If `io` is given, the result is written to `io` rather than returned as
-as a `String`.  For example,
+as a `String`.
 
 # Examples
 ```jldoctest

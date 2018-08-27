@@ -109,27 +109,23 @@ end
             @test Matrix(convert(Spectype,A) - D) ≈ Matrix(A - D)
         end
     end
+    
+    UpTri = UpperTriangular(rand(20,20))
+    LoTri = LowerTriangular(rand(20,20))
+    Diag = Diagonal(rand(20,20))
+    Tridiag = Tridiagonal(rand(20, 20))
+    UpBi = Bidiagonal(rand(20,20), :U)
+    LoBi = Bidiagonal(rand(20,20), :L)
+    Sym = SymTridiagonal(rand(20), rand(19))
+    Dense = rand(20, 20)
+    mats = [UpTri, LoTri, Diag, Tridiag, UpBi, LoBi, Sym, Dense]
 
-    for uplo in ('U', 'L')
-        E = Bidiagonal(a, fill(1., n-1), uplo)
-        @test E + B ≈ Matrix(E) + Matrix(B)
-        @test B + E ≈ Matrix(B) + Matrix(E)
-        @test E - B ≈ Matrix(E) - Matrix(B)
-        @test B - E ≈ Matrix(B) - Matrix(E)
-    end
-end
-
-# more need to be added here but for now only a few operation/type combinations output the optimal type
-@testset "output type of binary ops on triangular/diagonal matrices" begin
-    a=[1.0:n;]
-    sym = SymTridiagonal(a, fill(1., n-1))
-
-    for uplo in ('U', 'L')
-        bi = Bidiagonal(a, fill(1., n-1), uplo)
-        @test typeof(sym+bi) == LinearAlgebra.Tridiagonal{Float64,Array{Float64,1}}
-        @test typeof(bi+sym) == LinearAlgebra.Tridiagonal{Float64,Array{Float64,1}}
-        @test typeof(sym-bi) == LinearAlgebra.Tridiagonal{Float64,Array{Float64,1}}
-        @test typeof(bi-sym) == LinearAlgebra.Tridiagonal{Float64,Array{Float64,1}}
+    for op in (+, -)
+        for A in mats
+            for B in mats
+                @test (op)(A, B) ≈ (op)(Matrix(A), Matrix(B)) ≈ Matrix((op)(A, B))
+            end
+        end
     end
 end
 

@@ -162,9 +162,39 @@ makedocs(
     analytics = "UA-28835595-6",
     pages     = PAGES,
     html_prettyurls = ("deploy" in ARGS),
-    html_canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/stable/" : nothing,
+    html_canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/v1/" : nothing,
     assets = ["assets/julia-manual.css", ]
 )
+
+# This overloads the function in Documenter that generates versions.js, to include
+# v1/ in the version selector, instead of stable/.
+#
+# The function is identical to the version found in Documenter v0.19.6, except that
+# it includes "v1" instead of "stable".
+#
+# Original:
+# https://github.com/JuliaDocs/Documenter.jl/blob/v0.19.6/src/Writers/HTMLWriter.jl#L481-L506
+#
+import Documenter.Writers.HTMLWriter: generate_version_file
+function generate_version_file(dir::AbstractString)
+    named_folders = ["v1", "latest"]
+    tag_folders = []
+    for each in readdir(dir)
+        each == "v1" && continue # skip the v1 symlink
+        occursin(Base.VERSION_REGEX, each) && push!(tag_folders, each)
+    end
+    # sort tags by version number
+    sort!(tag_folders, lt = (x, y) -> VersionNumber(x) < VersionNumber(y), rev = true)
+    open(joinpath(dir, "versions.js"), "w") do buf
+        println(buf, "var DOC_VERSIONS = [")
+        for group in (named_folders, tag_folders)
+            for folder in group
+                println(buf, "  \"", folder, "\",")
+            end
+        end
+        println(buf, "];")
+    end
+end
 
 # Only deploy docs from 64bit Linux to avoid committing multiple versions of the same
 # docs from different workers.

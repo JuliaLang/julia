@@ -32,7 +32,7 @@ extern "C" {
 
 // egal and object_id ---------------------------------------------------------
 
-static int bits_equal(void *a, void *b, int sz)
+static int bits_equal(void *a, void *b, int sz) JL_NOTSAFEPOINT
 {
     switch (sz) {
     case 1:  return *(int8_t*)a == *(int8_t*)b;
@@ -63,7 +63,7 @@ static int bits_equal(void *a, void *b, int sz)
 // The solution is to keep the code in jl_egal simple and split out the
 // (more) complex cases into their own functions which are marked with
 // NOINLINE.
-static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b)
+static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b) JL_NOTSAFEPOINT
 {
     size_t l = jl_svec_len(a);
     if (l != jl_svec_len(b))
@@ -76,7 +76,7 @@ static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b)
 }
 
 // See comment above for an explanation of NOINLINE.
-static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *dt)
+static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     size_t f, nf = jl_datatype_nfields(dt);
     for (f = 0; f < nf; f++) {
@@ -116,7 +116,7 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
     return 1;
 }
 
-static int egal_types(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env)
+static int egal_types(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env) JL_NOTSAFEPOINT
 {
     if (a == b)
         return 1;
@@ -163,7 +163,7 @@ static int egal_types(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env)
     return jl_egal(a, b);
 }
 
-JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
+JL_DLLEXPORT int jl_egal(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
     // warning: a,b may NOT have been gc-rooted by the caller
     if (a == b)
@@ -199,7 +199,7 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
 
 // object_id ------------------------------------------------------------------
 
-static uintptr_t bits_hash(const void *b, size_t sz)
+static uintptr_t bits_hash(const void *b, size_t sz) JL_NOTSAFEPOINT
 {
     switch (sz) {
     case 1:  return int32hash(*(const int8_t*)b);
@@ -219,7 +219,7 @@ static uintptr_t bits_hash(const void *b, size_t sz)
     }
 }
 
-static uintptr_t NOINLINE hash_svec(jl_svec_t *v)
+static uintptr_t NOINLINE hash_svec(jl_svec_t *v) JL_NOTSAFEPOINT
 {
     uintptr_t h = 0;
     size_t i, l = jl_svec_len(v);
@@ -236,9 +236,9 @@ typedef struct _varidx {
     struct _varidx *prev;
 } jl_varidx_t;
 
-static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v);
+static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT;
 
-static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env)
+static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOINT
 {
     if (v == NULL) return 0;
     jl_datatype_t *tv = (jl_datatype_t*)jl_typeof(v);
@@ -277,7 +277,7 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env)
     return jl_object_id_((jl_value_t*)tv, v);
 }
 
-static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
+static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT
 {
     if (tv == (jl_value_t*)jl_sym_type)
         return ((jl_sym_t*)v)->hash;
@@ -337,7 +337,7 @@ static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
     return h;
 }
 
-JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v)
+JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT
 {
     return jl_object_id_(jl_typeof(v), v);
 }
@@ -1132,7 +1132,7 @@ static void add_intrinsic_properties(enum intrinsic f, unsigned nargs, void (*pf
     runtime_fp[f] = pfunc;
 }
 
-static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f)
+static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f) JL_GC_DISABLED
 {
     jl_value_t *i = jl_permbox32(jl_intrinsic_type, (int32_t)f);
     jl_sym_t *sym = jl_symbol(name);
@@ -1140,7 +1140,7 @@ static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f)
     jl_module_export(inm, sym);
 }
 
-void jl_init_intrinsic_properties(void)
+void jl_init_intrinsic_properties(void) JL_GC_DISABLED
 {
 #define ADD_I(name, nargs) add_intrinsic_properties(name, nargs, (void(*)(void))&jl_##name);
 #define ADD_HIDDEN ADD_I
@@ -1151,7 +1151,7 @@ void jl_init_intrinsic_properties(void)
 #undef ALIAS
 }
 
-void jl_init_intrinsic_functions(void)
+void jl_init_intrinsic_functions(void) JL_GC_DISABLED
 {
     jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"));
     inm->parent = jl_core_module;
@@ -1175,7 +1175,7 @@ static void add_builtin(const char *name, jl_value_t *v)
 jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_isa(b, (jl_value_t*)jl_builtin_type));
-    return jl_gf_mtable(b)->cache.leaf->func.linfo->specptr.fptr1;
+    return ((jl_typemap_entry_t*)jl_gf_mtable(b)->cache)->func.linfo->specptr.fptr1;
 }
 
 static void add_builtin_func(const char *name, jl_fptr_args_t fptr)
@@ -1183,7 +1183,7 @@ static void add_builtin_func(const char *name, jl_fptr_args_t fptr)
     jl_mk_builtin_func(NULL, name, fptr);
 }
 
-void jl_init_primitives(void)
+void jl_init_primitives(void) JL_GC_DISABLED
 {
     add_builtin_func("===", jl_f_is);
     add_builtin_func("typeof", jl_f_typeof);

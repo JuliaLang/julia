@@ -135,16 +135,21 @@
                    (if var (list 'varlist var) '()))
 
    ;; type definition
-   (pattern-lambda (struct mut (<: (curly tn . tvars) super) body)
-                   (list* 'varlist (cons (unescape tn) (unescape tn)) '(new . new)
-                          (typevar-names tvars)))
-   (pattern-lambda (struct mut (curly tn . tvars) body)
-                   (list* 'varlist (cons (unescape tn) (unescape tn)) '(new . new)
-                          (typevar-names tvars)))
-   (pattern-lambda (struct mut (<: tn super) body)
-                   (list 'varlist (cons (unescape tn) (unescape tn)) '(new . new)))
-   (pattern-lambda (struct mut tn body)
-                   (list 'varlist (cons (unescape tn) (unescape tn)) '(new . new)))
+   (pattern-lambda (struct mut spec body)
+                   (let ((tn (typedef-expr-name spec))
+                         (tv (typedef-expr-tvars spec)))
+                     (list* 'varlist (cons (unescape tn) (unescape tn)) '(new . new)
+                            (typevar-names tv))))
+   (pattern-lambda (abstract spec)
+                   (let ((tn (typedef-expr-name spec))
+                         (tv (typedef-expr-tvars spec)))
+                     (list* 'varlist (cons (unescape tn) (unescape tn))
+                            (typevar-names tv))))
+   (pattern-lambda (primitive spec nb)
+                   (let ((tn (typedef-expr-name spec))
+                         (tv (typedef-expr-tvars spec)))
+                     (list* 'varlist (cons (unescape tn) (unescape tn))
+                            (typevar-names tv))))
 
    )) ; vars-introduced-by-patterns
 
@@ -177,6 +182,17 @@
   (if (and (pair? e) (eq? (car e) 'escape))
       (cadr e)
       e))
+
+(define (typedef-expr-name e)
+  (cond ((atom? e) e)
+        ((or (eq? (car e) 'curly) (eq? (car e) '<:)) (typedef-expr-name (cadr e)))
+        (else e)))
+
+(define (typedef-expr-tvars e)
+  (cond ((atom? e) '())
+        ((eq? (car e) '<:) (typedef-expr-tvars (cadr e)))
+        ((eq? (car e) 'curly) (cddr e))
+        (else '())))
 
 (define (typevar-expr-name e) (car (analyze-typevar e)))
 

@@ -1,0 +1,53 @@
+From f76abe65e6d07fea5e838c4f8c9a9421c16debb0 Mon Sep 17 00:00:00 2001
+From: Valentin Churavy <v.churavy@gmail.com>
+Date: Thu, 5 Jul 2018 12:37:50 -0400
+Subject: [PATCH] Fix unwind info relocation with large code model on AArch64
+
+---
+ lib/MC/MCObjectFileInfo.cpp                   |  2 ++
+ .../AArch64/ELF_ARM64_large-relocations.s     | 20 +++++++++++++++++++
+ 2 files changed, 22 insertions(+)
+ create mode 100644 test/ExecutionEngine/RuntimeDyld/AArch64/ELF_ARM64_large-relocations.s
+
+diff --git a/lib/MC/MCObjectFileInfo.cpp b/lib/MC/MCObjectFileInfo.cpp
+index 328f000f37c..938b35f20d1 100644
+--- a/lib/MC/MCObjectFileInfo.cpp
++++ b/lib/MC/MCObjectFileInfo.cpp
+@@ -291,6 +291,8 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
+     break;
+   case Triple::ppc64:
+   case Triple::ppc64le:
++  case Triple::aarch64:
++  case Triple::aarch64_be:
+   case Triple::x86_64:
+     FDECFIEncoding = dwarf::DW_EH_PE_pcrel |
+                      (Large ? dwarf::DW_EH_PE_sdata8 : dwarf::DW_EH_PE_sdata4);
+diff --git a/test/ExecutionEngine/RuntimeDyld/AArch64/ELF_ARM64_large-relocations.s b/test/ExecutionEngine/RuntimeDyld/AArch64/ELF_ARM64_large-relocations.s
+new file mode 100644
+index 00000000000..66f28dabd79
+--- /dev/null
++++ b/test/ExecutionEngine/RuntimeDyld/AArch64/ELF_ARM64_large-relocations.s
+@@ -0,0 +1,20 @@
++# RUN: llvm-mc -triple=arm64-none-linux-gnu -large-code-model -filetype=obj -o %T/large-reloc.o %s
++# RUN: llvm-rtdyld -triple=arm64-none-linux-gnu -verify -map-section large-reloc.o,.eh_frame=0x10000 -map-section large-reloc.o,.text=0xffff000000000000 -check=%s %T/large-reloc.o
++# RUN-BE: llvm-mc -triple=aarch64_be-none-linux-gnu -large-code-model -filetype=obj -o %T/be-large-reloc.o %s
++# RUN-BE: llvm-rtdyld -triple=aarch64_be-none-linux-gnu -verify -map-section be-large-reloc.o,.eh_frame=0x10000 -map-section be-large-reloc.o,.text=0xffff000000000000 -check=%s %T/be-large-reloc.o
++
++        .text
++        .globl  g
++        .p2align        2
++        .type   g,@function
++g:
++        .cfi_startproc
++        mov      x0, xzr
++        ret
++        .Lfunc_end0:
++        .size   g, .Lfunc_end0-g
++        .cfi_endproc
++
++# Skip the CIE and load the 8 bytes PC begin pointer.
++# Assuming the CIE and the FDE length are both 4 bytes.
++# rtdyld-check: *{8}(section_addr(large-reloc.o, .eh_frame) + (*{4}(section_addr(large-reloc.o, .eh_frame))) + 0xc) = g - (section_addr(large-reloc.o, .eh_frame) + (*{4}(section_addr(large-reloc.o, .eh_frame))) + 0xc)
+-- 
+2.18.0
+
