@@ -628,10 +628,10 @@ or [`nothing`](@ref) if the string does not contain a valid number.
 """
 ```
 
-This will create a link in the generated docs to the `parse` documentation
-(which has more information about what this function actually does). It's good to include
-cross references to mutating/non-mutating versions of a function, or to highlight a difference
-between two similar-seeming functions.
+This will create a link in the generated docs to the [`parse`](@ref) documentation
+(which has more information about what this function actually does), and to the
+[`nothing`](@ref) documentation. It's good to include cross references to mutating/non-mutating
+versions of a function, or to highlight a difference between two similar-seeming functions.
 
 !!! note
     The above cross referencing is *not* a Markdown feature, and relies on
