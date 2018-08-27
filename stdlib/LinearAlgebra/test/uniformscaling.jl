@@ -159,6 +159,10 @@ let
         @test v' * J == v' * λ
         @test J * v  == λ * v
         @test J * v' == λ * v'
+        @test v  / J == v  / λ
+        @test v' / J == v' / λ
+        @test J \ v  == λ \ v
+        @test J \ v' == λ \ v'
     end
 
     @testset "binary ops with matrices" begin

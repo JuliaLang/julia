@@ -167,7 +167,7 @@ end
 
 /(J1::UniformScaling, J2::UniformScaling) = J2.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ/J2.λ)
 /(J::UniformScaling, A::AbstractMatrix) = lmul!(J.λ, inv(A))
-/(A::AbstractMatrix, J::UniformScaling) = J.λ == 0 ? throw(SingularException(1)) : A/J.λ
+/(A::AbstractVecOrMat, J::UniformScaling) = J.λ == 0 ? throw(SingularException(1)) : A/J.λ
 
 /(J::UniformScaling, x::Number) = UniformScaling(J.λ/x)
 
