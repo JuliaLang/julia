@@ -34,6 +34,7 @@ using Random
     @test string("∀∃", "1∀∃") === "∀∃1∀∃"
     @test string(SubString("∀∃"), SubString("1∀∃", 2)) === "∀∃∀∃"
     @test string(s"123") === s"123"
+    @test string("123", 'α', SubString("1∀∃", 2), 'a', "foo") === "123α∀∃afoo"
     codegen_egal_of_strings(x, y) = (x===y, x!==y)
     @test codegen_egal_of_strings(string("ab", 'c'), "abc") === (true, false)
     let strs = ["", "a", "a b c", "до свидания"]

@@ -1131,9 +1131,9 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     }
 
     jl_datatype_t *ndt = NULL;
-    JL_GC_PUSH2(&p, &ndt);
-
     jl_value_t *last = iparams[ntp - 1];
+    JL_GC_PUSH3(&p, &ndt, &last);
+
     int isvatuple = 0;
     if (istuple && ntp > 0 && jl_is_vararg_type(last)) {
         isvatuple = 1;
@@ -1149,17 +1149,13 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             JL_GC_POP();
             return (jl_value_t*)jl_anytuple_type;
         }
-        {
-            JL_GC_PUSH1(&last);
-            jl_value_t *last2 = normalize_vararg(last);
-            if (last2 != last) {
-                last = last2;
-                p = jl_alloc_svec(ntp);
-                for (size_t i = 0; i < ntp-1; i++)
-                    jl_svecset(p, i, iparams[i]);
-                jl_svecset(p, ntp-1, last);
-            }
-            JL_GC_POP();
+        int did_normalize = 0;
+        jl_value_t *last2 = normalize_vararg(last);
+        if (last2 != last) {
+            last = last2;
+            did_normalize = 1;
+            va = jl_unwrap_unionall(last);
+            va0 = jl_tparam0(va); va1 = jl_tparam1(va);
         }
         if (jl_is_long(va1)) {
             ssize_t nt = jl_unbox_long(va1);
@@ -1182,6 +1178,12 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                 JL_GC_POP();
                 return ndt;
             }
+        }
+        if (did_normalize) {
+            p = jl_alloc_svec(ntp);
+            for (size_t i = 0; i < ntp-1; i++)
+                jl_svecset(p, i, iparams[i]);
+            jl_svecset(p, ntp-1, last);
         }
     }
 
