@@ -465,7 +465,7 @@ julia> function g_fix(r)
 g_fix (generic function with 1 method)
 
 julia>  r = let m = MersenneTwister(1)
-                [m; accumulate(Future.randjump, m, fill(big(10)^20, nthreads()-1))]
+                [m; accumulate(Future.randjump, fill(big(10)^20, nthreads()-1), init=m)]
             end;
 
 julia> g_fix(r)
