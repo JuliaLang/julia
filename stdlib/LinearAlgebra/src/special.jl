@@ -56,11 +56,11 @@ SymTridiagonal(A::AbstractTriangular) = SymTridiagonal(Tridiagonal(A))
 Tridiagonal(A::AbstractTriangular) =
     isbanded(A, -1, 1) ? Tridiagonal(diag(A, -1), diag(A, 0), diag(A, 1)) : # is tridiagonal
         throw(ArgumentError("matrix cannot be represented as Tridiagonal"))
-UpperTriangular(A::Bidiagonal) = 
-    A.uplo == 'U' ? UpperTriangular{eltype(A), typeof(A)}(A) : 
+UpperTriangular(A::Bidiagonal) =
+    A.uplo == 'U' ? UpperTriangular{eltype(A), typeof(A)}(A) :
         throw(ArgumentError("matrix cannot be represented as UpperTriangular"))
-LowerTriangular(A::Bidiagonal) = 
-    A.uplo == 'L' ? LowerTriangular{eltype(A), typeof(A)}(A) : 
+LowerTriangular(A::Bidiagonal) =
+    A.uplo == 'L' ? LowerTriangular{eltype(A), typeof(A)}(A) :
         throw(ArgumentError("matrix cannot be represented as LowerTriangular"))
 
 const ConvertibleSpecialMatrix = Union{Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,AbstractTriangular}
