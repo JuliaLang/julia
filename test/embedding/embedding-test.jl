@@ -52,5 +52,5 @@ end
     @test success(p)
     lines = fetch(out_task)
     @test length(lines) == 1
-    @test lines[1] == "1.414214e+00"
+    @test parse(Float64, lines[1]) == 1.414214
 end
