@@ -153,6 +153,17 @@ let
         @test copyto!(B, J) == [λ zero(λ)]
     end
 
+    @testset "binary ops with vectors" begin
+        for T in (Float64, ComplexF64)
+            v = randn(T, 3)
+            J = UniformScaling(randn(T))
+            @test v  * J == v  * J.λ
+            @test v' * J == v' * J.λ
+            @test J * v  == J.λ * v
+            @test J * v' == J.λ * v'
+        end
+    end
+
     @testset "binary ops with matrices" begin
         B = bitrand(2, 2)
         @test B + I == B + Matrix(I, size(B))

@@ -160,7 +160,7 @@ end
 *(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ*J2.λ)
 *(B::BitArray{2}, J::UniformScaling) = *(Array(B), J::UniformScaling)
 *(J::UniformScaling, B::BitArray{2}) = *(J::UniformScaling, Array(B))
-*(A::AbstractMatrix, J::UniformScaling) = A*J.λ
+*(A::AbstractVecOrMat, J::UniformScaling) = A*J.λ
 *(J::UniformScaling, A::AbstractVecOrMat) = J.λ*A
 *(x::Number, J::UniformScaling) = UniformScaling(x*J.λ)
 *(J::UniformScaling, x::Number) = UniformScaling(J.λ*x)
