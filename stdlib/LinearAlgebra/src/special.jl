@@ -74,7 +74,7 @@ convert(T::Type{<:LowerTriangular}, m::Union{LowerTriangular,UnitLowerTriangular
 convert(T::Type{<:UpperTriangular}, m::Union{UpperTriangular,UnitUpperTriangular}) = m isa T ? m : T(m)
 
 convert(T::Type{<:LowerTriangular}, m::PossibleTriangularMatrix) = m isa T ? m : T(m)
-convert(T::Type{<:UpperTriangular}, m::PossibleTriangularMatrix) = m isa T ? m : T(m)   
+convert(T::Type{<:UpperTriangular}, m::PossibleTriangularMatrix) = m isa T ? m : T(m)
 
 # Constructs two method definitions taking into account (assumed) commutativity
 # e.g. @commutative f(x::S, y::T) where {S,T} = x+y is the same is defining
@@ -89,7 +89,7 @@ macro commutative(myexpr)
 end
 
 for op in (:+, :-)
-    for (matrixtype, uplo, converttype) in ((:UpperTriangular, 'U', :UpperTriangular), 
+    for (matrixtype, uplo, converttype) in ((:UpperTriangular, 'U', :UpperTriangular),
                                             (:UnitUpperTriangular, 'U', :UpperTriangular),
                                             (:LowerTriangular, 'L', :LowerTriangular),
                                             (:UnitLowerTriangular, 'L', :LowerTriangular))

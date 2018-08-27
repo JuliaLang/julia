@@ -109,7 +109,7 @@ end
             @test Matrix(convert(Spectype,A) - D) ≈ Matrix(A - D)
         end
     end
-    
+
     UpTri = UpperTriangular(rand(20,20))
     LoTri = LowerTriangular(rand(20,20))
     Diag = Diagonal(rand(20,20))
