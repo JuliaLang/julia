@@ -154,14 +154,11 @@ let
     end
 
     @testset "binary ops with vectors" begin
-        for T in (Float64, ComplexF64)
-            v = randn(T, 3)
-            J = UniformScaling(randn(T))
-            @test v  * J == v  * J.λ
-            @test v' * J == v' * J.λ
-            @test J * v  == J.λ * v
-            @test J * v' == J.λ * v'
-        end
+        v = complex(randn(), randn())
+        @test v  * J == v  * λ
+        @test v' * J == v' * λ
+        @test J * v  == λ * v
+        @test J * v' == λ * v'
     end
 
     @testset "binary ops with matrices" begin
