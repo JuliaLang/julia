@@ -199,7 +199,7 @@ Sometimes it can be useful to write log events to a file. Here is an example
 of how to use a task-local and global logger to write information to a text
 file:
 
-```julia
+```julia-repl
 # Load the logging module
 julia> using Logging
 
@@ -213,7 +213,7 @@ SimpleLogger(IOStream(<file log.txt>), Info, Dict{Any,Int64}())
 
 # Log a task-specific message
 julia> with_logger(logger) do
-         @info("a context specific log message")
+           @info("a context specific log message")
        end
 
 # Write all buffered messages to the file
