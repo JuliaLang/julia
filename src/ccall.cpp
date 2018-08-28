@@ -1491,16 +1491,19 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     };
 #define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), #name)
 
-    static jl_ptls_t (*ptls_getter)(void);
+    static jl_ptls_t (*ptls_getter)(void) = [] {
     // directly accessing the address of an ifunc can cause compile-time linker issues
     // on some configurations (e.g. AArch64 + -Bsymbolic-functions), so we guard the
     // `&jl_get_ptls_states` within this `#ifdef` guard, and use a more roundabout
     // method involving `jl_dlsym()` on Linux platforms instead.
 #ifdef _OS_LINUX_
-    jl_dlsym(jl_dlopen(nullptr, 0), "jl_get_ptls_states", (void **)&ptls_getter, 0);
+        jl_ptls_t (*p)(void);
+        jl_dlsym(jl_dlopen(nullptr, 0), "jl_get_ptls_states", (void **)&p, 0);
+        return p;
 #else
-    ptls_getter = &jl_get_ptls_states;
+        return &jl_get_ptls_states;
 #endif
+    }();
 
     // emit arguments
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nccallargs);
