@@ -262,6 +262,23 @@ temp_pkg_dir() do project_path
                 end
             end
         end
+        mktempdir() do devdir
+            withenv("JULIA_PKG_DEVDIR" => devdir) do
+                try
+                    https_url = "https://github.com/JuliaLang/Example.jl.git"
+                    ssh_url = "ssh://git@github.com/JuliaLang/Example.jl.git"
+                    @test Pkg.GitTools.normalize_url(https_url) == https_url
+                    Pkg.setprotocol!("ssh")
+                    @test Pkg.GitTools.normalize_url(https_url) == ssh_url
+                    # TODO: figure out how to test this without
+                    #       having to deploy a ssh key on github
+                    #Pkg.develop("Example")
+                    #@test isinstalled(TEST_PKG)
+                finally
+                    Pkg.setprotocol!()
+                end
+            end
+        end
     end
 
     @testset "check logging" begin
