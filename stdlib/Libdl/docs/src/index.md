@@ -8,6 +8,7 @@ Libdl.dlsym
 Libdl.dlsym_e
 Libdl.dlclose
 Libdl.dlext
+Libdl.dllist
 Libdl.find_library
 Libdl.DL_LOAD_PATH
 ```

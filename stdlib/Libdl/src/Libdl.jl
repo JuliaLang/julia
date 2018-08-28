@@ -230,6 +230,11 @@ if Sys.isbsd() && !Sys.isapple()
     end
 end # bsd family
 
+"""
+    dllist()::Vector{AbstractString}
+
+List the paths of the dynamic libraries that are currently loaded.
+"""
 function dllist()
     dynamic_libraries = Vector{AbstractString}()
 
