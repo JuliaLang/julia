@@ -66,7 +66,7 @@ Julia is built and tested regularly on the following platforms:
 | FreeBSD 11.0+    | x86-64 (64-bit)  | ✓  |          | Community     |
 
 All systems marked with ✓ for CI are tested using continuous integration for every commit.
-Systems with ✓ for binaries have official binaries available on the [downloads](https://julialang.org/downloads) page and are tested regularly. The PTX backend needs a source build and the [CUDAnative.jl](https://github.com/JuliaGPU/CUDAnative.jl) package.
+Systems with ✓ for binaries have official binaries available on the [downloads](https://julialang.org/downloads) page and are tested regularly. The PTX backend needs the [CUDAnative.jl](https://github.com/JuliaGPU/CUDAnative.jl) package.
 The systems listed here with neither CI nor official binaries are known to build and work, but ongoing support for those platforms is dependent on community efforts.
 It is possible that Julia will build and work on other platforms too, and we're always looking to better our platform coverage.
 If you're using Julia on a platform not listed here, let us know!
