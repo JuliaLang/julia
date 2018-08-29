@@ -42,10 +42,10 @@ viewindexing() = IndexLinear()
 # Leading scalar indices simply increase the stride
 viewindexing(I::Tuple{ScalarIndex, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
 # Slices may begin a section which may be followed by any number of Slices
-viewindexing(I::Tuple{Slice, Slice, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
-# A UnitRange can follow Slices, but only if all other indices are scalar
-viewindexing(I::Tuple{Slice, AbstractUnitRange, Vararg{ScalarIndex}}) = IndexLinear()
-viewindexing(I::Tuple{Slice, Slice, Vararg{ScalarIndex}}) = IndexLinear() # disambiguate
+viewindexing(I::Tuple{WholeSlice, WholeSlice, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
+# A UnitRange can follow WholeSlices, but only if all other indices are scalar
+viewindexing(I::Tuple{WholeSlice, AbstractUnitRange, Vararg{ScalarIndex}}) = IndexLinear()
+viewindexing(I::Tuple{WholeSlice, WholeSlice, Vararg{ScalarIndex}}) = IndexLinear() # disambiguate
 # In general, ranges are only fast if all other indices are scalar
 viewindexing(I::Tuple{AbstractRange, Vararg{ScalarIndex}}) = IndexLinear()
 # All other index combinations are slow
@@ -190,7 +190,7 @@ reindex(V, idxs::Tuple{ScalarIndex, Vararg{Any}}, subidxs::Tuple{Vararg{Any}}) =
     (@_propagate_inbounds_meta; (idxs[1], reindex(V, tail(idxs), subidxs)...))
 
 # Slices simply pass their subindices straight through
-reindex(V, idxs::Tuple{Slice, Vararg{Any}}, subidxs::Tuple{Any, Vararg{Any}}) =
+reindex(V, idxs::Tuple{WholeSlice, Vararg{Any}}, subidxs::Tuple{Any, Vararg{Any}}) =
     (@_propagate_inbounds_meta; (subidxs[1], reindex(V, tail(idxs), tail(subidxs))...))
 
 # Re-index into parent vectors with one subindex
@@ -229,7 +229,7 @@ function getindex(V::FastSubArray, i::Int)
     r
 end
 # We can avoid a multiplication if the first parent index is a Colon or AbstractUnitRange
-FastContiguousSubArray{T,N,P,I<:Tuple{Union{Slice, AbstractUnitRange}, Vararg{Any}}} = SubArray{T,N,P,I,true}
+FastContiguousSubArray{T,N,P,I<:Tuple{Union{WholeSlice, AbstractUnitRange}, Vararg{Any}}} = SubArray{T,N,P,I,true}
 function getindex(V::FastContiguousSubArray, i::Int)
     @_inline_meta
     @boundscheck checkbounds(V, i)
@@ -266,7 +266,7 @@ strides(V::SubArray) = substrides(V.parent, V.indices)
 substrides(parent, I::Tuple) = substrides(parent, strides(parent), I)
 substrides(parent, strds::Tuple{}, ::Tuple{}) = ()
 substrides(parent, strds::NTuple{N,Int}, I::Tuple{ScalarIndex, Vararg{Any}}) where N = (substrides(parent, tail(strds), tail(I))...,)
-substrides(parent, strds::NTuple{N,Int}, I::Tuple{Slice, Vararg{Any}}) where N = (first(strds), substrides(parent, tail(strds), tail(I))...)
+substrides(parent, strds::NTuple{N,Int}, I::Tuple{WholeSlice, Vararg{Any}}) where N = (first(strds), substrides(parent, tail(strds), tail(I))...)
 substrides(parent, strds::NTuple{N,Int}, I::Tuple{AbstractRange, Vararg{Any}}) where N = (first(strds)*step(I[1]), substrides(parent, tail(strds), tail(I))...)
 substrides(parent, strds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("strides is invalid for SubArrays with indices of type $(typeof(I[1]))"))
 
@@ -278,7 +278,7 @@ compute_stride1(s, inds, I::Tuple{}) = s
 compute_stride1(s, inds, I::Tuple{ScalarIndex, Vararg{Any}}) =
     (@_inline_meta; compute_stride1(s*unsafe_length(inds[1]), tail(inds), tail(I)))
 compute_stride1(s, inds, I::Tuple{AbstractRange, Vararg{Any}}) = s*step(I[1])
-compute_stride1(s, inds, I::Tuple{Slice, Vararg{Any}}) = s
+compute_stride1(s, inds, I::Tuple{WholeSlice, Vararg{Any}}) = s
 compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("invalid strided index type $(typeof(I[1]))"))
 
 elsize(::Type{<:SubArray{<:Any,<:Any,P}}) where {P} = elsize(P)
@@ -373,7 +373,7 @@ function parentdims(s::SubArray)
     j = 1
     for i = 1:ndims(s.parent)
         r = s.indices[i]
-        if j <= nd && (isa(r,Union{Slice,AbstractRange}) ? sp[i]*step(r) : sp[i]) == sv[j]
+        if j <= nd && (isa(r,AbstractRange) ? sp[i]*step(r) : sp[i]) == sv[j]
             dimindex[j] = i
             j += 1
         end

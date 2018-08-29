@@ -306,13 +306,21 @@ ranges with the same indices as those they wrap. This means that indexing into
 Slice objects with an integer always returns that exact integer, and they
 iterate over all the wrapped indices, even supporting offset indices.
 """
-struct Slice{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
+struct Slice{T<:AbstractUnitRange, wholedim} <: AbstractUnitRange{Int}
     indices::T
 end
-Slice(S::Slice) = S
-axes(S::Slice) = (S,)
-unsafe_indices(S::Slice) = (S,)
-axes1(S::Slice) = S
+Slice(r::AbstractUnitRange) = Slice{typeof(r), false}(r)
+Slice(S::Slice) = Slice{typeof(S.indices), false}(S.indices)
+Slice(S::Slice{<:Any, false}) = S
+const WholeSlice{T} = Slice{T, true}
+WholeSlice(r::AbstractUnitRange) = Slice{typeof(r), true}(r)
+WholeSlice(S::Slice) = Slice{typeof(S.indices), true}(S.indices)
+WholeSlice(S::WholeSlice) = S
+# Slices are offset and thus have offset axes, so they are their own axes... but
+# we need to strip the wholedim marker because we don't know how they'll be used
+axes(S::Slice) = (Slice(S),)
+unsafe_indices(S::Slice) = (Slice(S),)
+axes1(S::Slice) = Slice(S)
 axes(S::Slice{<:OneTo}) = (S.indices,)
 unsafe_indices(S::Slice{<:OneTo}) = (S.indices,)
 axes1(S::Slice{<:OneTo}) = S.indices

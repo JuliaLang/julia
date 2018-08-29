@@ -469,7 +469,6 @@ index_dimsum() = ()
 index_lengths() = ()
 @inline index_lengths(::Real, rest...) = (1, index_lengths(rest...)...)
 @inline index_lengths(A::AbstractArray, rest...) = (length(A), index_lengths(rest...)...)
-@inline index_lengths(A::Slice, rest...) = (length(axes1(A)), index_lengths(rest...)...)
 
 # shape of array to create for getindex() with indices I, dropping scalars
 # returns a Tuple{Vararg{AbstractUnitRange}} of indices
@@ -574,8 +573,8 @@ _maybe_linear_logical_index(::IndexLinear, A, i) = LogicalIndex{Int}(i)
     (uncolon(inds, I), to_indices(A, _maybetail(inds), tail(I))...)
 
 const CI0 = Union{CartesianIndex{0}, AbstractArray{CartesianIndex{0}}}
-uncolon(inds::Tuple{},    I::Tuple{Colon, Vararg{Any}}) = Slice(OneTo(1))
-uncolon(inds::Tuple,      I::Tuple{Colon, Vararg{Any}}) = Slice(inds[1])
+uncolon(inds::Tuple{},    I::Tuple{Colon, Vararg{Any}}) = WholeSlice(OneTo(1))
+uncolon(inds::Tuple,      I::Tuple{Colon, Vararg{Any}}) = WholeSlice(inds[1])
 
 ### From abstractarray.jl: Internal multidimensional indexing definitions ###
 getindex(x::Number, i::CartesianIndex{0}) = x
