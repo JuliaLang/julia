@@ -146,6 +146,12 @@ let
         @test cond(J) == (λ ≠ zero(λ) ? one(real(λ)) : oftype(real(λ), Inf))
     end
 
+    @testset "real, imag, reim" begin
+        @test real(J) == UniformScaling(real(λ))
+        @test imag(J) == UniformScaling(imag(λ))
+        @test reim(J) == (UniformScaling(real(λ)), UniformScaling(imag(λ)))
+    end
+
     @testset "copyto!" begin
         A = Matrix{Int}(undef, (3,3))
         @test copyto!(A, I) == one(A)

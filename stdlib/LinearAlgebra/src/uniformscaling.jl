@@ -63,6 +63,8 @@ end
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
 conj(J::UniformScaling) = UniformScaling(conj(J.λ))
+real(J::UniformScaling) = UniformScaling(real(J.λ))
+imag(J::UniformScaling) = UniformScaling(imag(J.λ))
 
 transpose(J::UniformScaling) = J
 adjoint(J::UniformScaling) = UniformScaling(conj(J.λ))
