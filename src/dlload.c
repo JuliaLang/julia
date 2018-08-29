@@ -60,18 +60,18 @@ extern char *julia_bindir;
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 
-static void JL_NORETURN jl_dlerror(const char *fmt, const char *sym)
+static const char * jl_dlerror(void)
 {
 #ifdef _OS_WINDOWS_
-    CHAR reason[256];
+    static JL_THREAD_LOCAL CHAR reason[256];
     FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
             NULL, GetLastError(),
             MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
             reason, sizeof(reason) / sizeof(reason[0]), NULL);
+    return (const char *)&reason[0];
 #else
-    const char *reason = dlerror();
+    return dlerror();
 #endif
-    jl_errorf(fmt, sym, reason);
 }
 
 JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags)
@@ -117,7 +117,7 @@ JL_DLLEXPORT int jl_dlclose(void *handle)
 #endif
 }
 
-static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int throw_err)
+JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err)
 {
     char path[PATHBUF];
     int i;
@@ -192,56 +192,64 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
     }
 
 notfound:
-    if (throw_err)
-        jl_dlerror("could not load library \"%s\"\n%s", modname);
+    if (throw_err) {
+        const char * reason = jl_dlerror();
+        jl_errorf("could not load library \"%s\"\n%s", modname, reason);
+    }
     return NULL;
 
 done:
     return handle;
 }
 
-JL_DLLEXPORT void *jl_load_dynamic_library_e(const char *modname, unsigned flags)
+JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int throw_err)
 {
-    return jl_load_dynamic_library_(modname, flags, 0);
-}
+    int symbol_found = 0;
 
-JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags)
-{
-    return jl_load_dynamic_library_(modname, flags, 1);
-}
-
-JL_DLLEXPORT void *jl_dlsym_e(void *handle, const char *symbol)
-{
+    /* First, get the symbol value */
 #ifdef _OS_WINDOWS_
-    void *ptr = GetProcAddress((HMODULE) handle, symbol);
+    *value = GetProcAddress((HMODULE) handle, symbol);
 #else
     dlerror(); /* Reset error status. */
-    void *ptr = dlsym(handle, symbol);
+    *value = dlsym(handle, symbol);
 #endif
-    return ptr;
-}
 
-JL_DLLEXPORT void *jl_dlsym(void *handle, const char *symbol)
-{
-    void *ptr = jl_dlsym_e(handle, symbol);
-    if (!ptr)
-        jl_dlerror("could not load symbol \"%s\":\n%s", symbol);
-    return ptr;
+    /* Next, check for errors.  On Windows, a NULL pointer means the symbol
+     * was not found.  On everything else, we can have NULL symbols, so we check
+     * for non-NULL returns from dlerror().  Note that we unconditionally call
+     * jl_dlerror() on POSIX systems, but on Windows systems we only call it
+     * when we have been returned a NULL symbol.*/
+    const char * err = NULL;
+#ifdef _OS_WINDOWS_
+    symbol_found = *value != NULL;
+#else
+    err = jl_dlerror();
+    symbol_found = err == NULL;
+#endif
+
+    if (!symbol_found && throw_err) {
+#ifdef _OS_WINDOWS_
+        err = jl_dlerror();
+#endif
+        jl_errorf("could not load symbol \"%s\":\n%s", symbol, err);
+    }
+    return symbol_found;
 }
 
 #ifdef _OS_WINDOWS_
 //Look for symbols in win32 libraries
 const char *jl_dlfind_win32(const char *f_name)
 {
-    if (jl_dlsym_e(jl_exe_handle, f_name))
+    void * dummy;
+    if (jl_dlsym(jl_exe_handle, f_name, &dummy, 0))
         return JL_EXE_LIBNAME;
-    if (jl_dlsym_e(jl_dl_handle, f_name))
+    if (jl_dlsym(jl_dl_handle, f_name, &dummy, 0))
         return JL_DL_LIBNAME;
-    if (jl_dlsym_e(jl_kernel32_handle, f_name))
+    if (jl_dlsym(jl_kernel32_handle, f_name, &dummy, 0))
         return "kernel32";
-    if (jl_dlsym_e(jl_ntdll_handle, f_name))
+    if (jl_dlsym(jl_ntdll_handle, f_name, &dummy, 0))
         return "ntdll";
-    if (jl_dlsym_e(jl_crtdll_handle, f_name))
+    if (jl_dlsym(jl_crtdll_handle, f_name, &dummy, 0))
 #if defined(_MSC_VER)
 #if _MSC_VER == 1800
         return "msvcr120";
@@ -251,7 +259,7 @@ const char *jl_dlfind_win32(const char *f_name)
 #else
         return "msvcrt";
 #endif
-    if (jl_dlsym_e(jl_winsock_handle, f_name))
+    if (jl_dlsym(jl_winsock_handle, f_name, &dummy, 0))
         return "ws2_32";
     // additional common libraries (libc?) could be added here, but in general,
     // it is better to specify the library explicitly in the code. This exists

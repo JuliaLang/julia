@@ -58,7 +58,7 @@ JL_DLLEXPORT void jl_init(void)
 {
     char *libbindir = NULL;
 #ifdef _OS_WINDOWS_
-    void *hdl = (void*)jl_load_dynamic_library_e(NULL, JL_RTLD_DEFAULT);
+    void *hdl = (void*)jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 0);
     if (hdl) {
         char *to_free = (char*)jl_pathname_for_handle(hdl);
         if (to_free) {

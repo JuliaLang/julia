@@ -45,7 +45,7 @@ void *jl_get_library(const char *f_lib)
     if (hnd != NULL)
         return hnd;
     // We might run this concurrently on two threads but it doesn't matter.
-    hnd = jl_load_dynamic_library(f_lib, JL_RTLD_DEFAULT);
+    hnd = jl_load_dynamic_library(f_lib, JL_RTLD_DEFAULT, 1);
     if (hnd != NULL)
         jl_atomic_store_release(map_slot, hnd);
     return hnd;
@@ -57,7 +57,9 @@ void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd)
     void *handle = jl_atomic_load_acquire(hnd);
     if (!handle)
         jl_atomic_store_release(hnd, (handle = jl_get_library(f_lib)));
-    return jl_dlsym(handle, f_name);
+    void * ptr;
+    jl_dlsym(handle, f_name, &ptr, 1);
+    return ptr;
 }
 
 // miscellany
