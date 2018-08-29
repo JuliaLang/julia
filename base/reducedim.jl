@@ -218,17 +218,20 @@ Extract first entry of slices of array A into existing array R.
 """
 copyfirst!(R::AbstractArray, A::AbstractArray) = mapfirst!(identity, R, A)
 
-function mapfirst!(f, R::AbstractArray, A::AbstractArray)
+function mapfirst!(f, R::AbstractArray, A::AbstractArray{<:Any,N}) where {N}
     lsiz = check_reducedims(R, A)
-    iA = axes(A)
-    iR = axes(R)
-    t = []
-    for i in 1:length(iR)
-        iAi = iA[i]
-        push!(t, iAi == iR[i] ? iAi : first(iAi))
-    end
+    t = _firstreducedslice(axes(R), axes(A))
     map!(f, R, view(A, t...))
 end
+# We know that the axes of R and A are compatible, but R might have a different number of
+# dimensions than A, which is trickier than it seems due to offset arrays and type stability
+_firstreducedslice(::Tuple{}, a::Tuple{}) = ()
+_firstreducedslice(::Tuple, ::Tuple{}) = ()
+@inline _firstreducedslice(::Tuple{}, a::Tuple) = (_firstslice(a[1]), _firstreducedslice((), tail(a))...)
+@inline _firstreducedslice(r::Tuple, a::Tuple) = (length(r[1])==1 ? _firstslice(a[1]) : r[1], _firstreducedslice(tail(r), tail(a))...)
+_firstslice(i::OneTo) = OneTo(1)
+_firstslice(i::Slice) = Slice(_firstslice(i.indices))
+_firstslice(i) = i[firstindex(i):firstindex(i)]
 
 function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
     lsiz = check_reducedims(R,A)

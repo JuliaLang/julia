@@ -380,3 +380,21 @@ end
     @test B[argmax(B, dims=[2, 3])] == maximum(B, dims=[2, 3])
     @test B[argmin(B, dims=[2, 3])] == minimum(B, dims=[2, 3])
 end
+
+@testset "in-place reductions with mismatched dimensionalities" begin
+    B = reshape(1:24, 4, 3, 2)
+    for R in (fill(0, 4), fill(0, 4, 1), fill(0, 4, 1, 1))
+        @test @inferred(maximum!(R, B)) == reshape(21:24, size(R))
+        @test @inferred(minimum!(R, B)) == reshape(1:4, size(R))
+    end
+    for R in (fill(0, 1, 3), fill(0, 1, 3, 1))
+        @test @inferred(maximum!(R, B)) == reshape(16:4:24, size(R))
+        @test @inferred(minimum!(R, B)) == reshape(1:4:9, size(R))
+    end
+    @test_throws DimensionMismatch maximum!(fill(0, 4, 1, 1, 1), B)
+    @test_throws DimensionMismatch minimum!(fill(0, 4, 1, 1, 1), B)
+    @test_throws DimensionMismatch maximum!(fill(0, 1, 3, 1, 1), B)
+    @test_throws DimensionMismatch minimum!(fill(0, 1, 3, 1, 1), B)
+    @test_throws DimensionMismatch maximum!(fill(0, 1, 1, 2, 1), B)
+    @test_throws DimensionMismatch minimum!(fill(0, 1, 1, 2, 1), B)
+end

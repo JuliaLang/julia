@@ -489,3 +489,21 @@ end
     A = OffsetArray(reshape(16:-1:1, (4, 4)), (-3,5))
     @test maximum(A, dims=1) == OffsetArray(maximum(parent(A), dims=1), A.offsets)
 end
+
+@testset "in-place reductions with mismatched dimensionalities" begin
+    B = OffsetArray(reshape(1:24, 4, 3, 2), -5, 6, -7)
+    for R in (fill(0, -4:-1), fill(0, -4:-1, 7:7), fill(0, -4:-1, 7:7, -6:-6))
+        @test @inferred(maximum!(R, B)) == reshape(maximum(B, dims=(2,3)), axes(R)) == reshape(21:24, axes(R))
+        @test @inferred(minimum!(R, B)) == reshape(minimum(B, dims=(2,3)), axes(R)) == reshape(1:4, axes(R))
+    end
+    for R in (fill(0, -4:-4, 7:9), fill(0, -4:-4, 7:9, -6:-6))
+        @test @inferred(maximum!(R, B)) == reshape(maximum(B, dims=(1,3)), axes(R)) == reshape(16:4:24, axes(R))
+        @test @inferred(minimum!(R, B)) == reshape(minimum(B, dims=(1,3)), axes(R)) == reshape(1:4:9, axes(R))
+    end
+    @test_throws DimensionMismatch maximum!(fill(0, -4:-1, 7:7, -6:-6, 1:1), B)
+    @test_throws DimensionMismatch minimum!(fill(0, -4:-1, 7:7, -6:-6, 1:1), B)
+    @test_throws DimensionMismatch maximum!(fill(0, -4:-4, 7:9, -6:-6, 1:1), B)
+    @test_throws DimensionMismatch minimum!(fill(0, -4:-4, 7:9, -6:-6, 1:1), B)
+    @test_throws DimensionMismatch maximum!(fill(0, -4:-4, 7:7, -6:-5, 1:1), B)
+    @test_throws DimensionMismatch minimum!(fill(0, -4:-4, 7:7, -6:-5, 1:1), B)
+end
