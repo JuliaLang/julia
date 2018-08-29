@@ -43,41 +43,30 @@ end
     end
 
     # on real axis
-    # functions defined for x ∈ ℝ
-    J = UniformScaling(randn(Float64))
-    for f in ( exp,
-               sin,   cos,   tan,
-               csc,   sec,   cot,
-               atan,  acot,
-               sinh,  cosh,  tanh,
-               csch,  sech,  coth,
-               asinh, acsch )
-        @test f(J) ≈ f(M(J))
-    end
-    # functions defined for x ≥ 0
-    J = UniformScaling(abs(randn(Float64)))
-    for f in ( log,   sqrt )
-        @test f(J) ≈ f(M(J))
-    end
-    # functions defined for -1 ≤ x ≤ 1
-    J = UniformScaling(2 * rand(Float64) - 1)
-    for f in ( asin,  acos,  atanh )
-        @test f(J) ≈ f(M(J))
-    end
-    # functions defined for x ≤ -1 or x ≥ 1
-    J = UniformScaling(1 ./ (2 * rand(Float64) - 1))
-    for f in ( acsc,  asec,  acoth )
-        @test f(J) ≈ f(M(J))
-    end
-    # functions defined for 0 ≤ x ≤ 1
-    J = UniformScaling(rand(Float64))
-    for f in ( asech, )
-        @test f(J) ≈ f(M(J))
-    end
-    # functions defined for x ≥ 1
-    J = UniformScaling(1 ./ rand(Float64))
-    for f in ( acosh, )
-        @test f(J) ≈ f(M(J))
+    for (λ, fs) in (
+        # functions defined for x ∈ ℝ
+        (()->randn(),           (exp,
+                                 sin,   cos,   tan,
+                                 csc,   sec,   cot,
+                                 atan,  acot,
+                                 sinh,  cosh,  tanh,
+                                 csch,  sech,  coth,
+                                 asinh, acsch)),
+        # functions defined for x ≥ 0
+        (()->abs(randn()),      (log,   sqrt)),
+        # functions defined for -1 ≤ x ≤ 1
+        (()->2rand()-1,         (asin,  acos,  atanh)),
+        # functions defined for x ≤ -1 or x ≥ 1
+        (()->1/(2rand()-1),     (acsc,  asec,  acoth)),
+        # functions defined for 0 ≤ x ≤ 1
+        (()->rand(),            (asech,)),
+        # functions defined for x ≥ 1
+        (()->1/rand(),          (acosh,))
+    )
+        for f in fs
+            J = UniformScaling(λ())
+            @test f(J) ≈ f(M(J))
+        end
     end
 end
 
