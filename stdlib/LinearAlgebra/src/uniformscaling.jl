@@ -161,6 +161,14 @@ function det(J::UniformScaling{T}) where T
     end
 end
 
+function tr(J::UniformScaling{T}) where T
+    if iszero(J.λ)
+        zero(T)
+    else
+        throw(ArgumentError("Trace of UniformScaling is only well-defined when λ = 0"))
+    end
+end
+
 *(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ*J2.λ)
 *(B::BitArray{2}, J::UniformScaling) = *(Array(B), J::UniformScaling)
 *(J::UniformScaling, B::BitArray{2}) = *(J::UniformScaling, Array(B))
