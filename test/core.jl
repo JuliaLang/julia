@@ -6702,3 +6702,7 @@ end
 @test_throws ErrorException Array{Int, 2}(undef, 0, -10)
 @test_throws ErrorException Array{Int, 2}(undef, -10, 0)
 @test_throws ErrorException Array{Int, 2}(undef, -1, -1)
+
+# issue #28812
+@test Tuple{Vararg{Array{T},3} where T} === Tuple{Array,Array,Array}
+@test Tuple{Vararg{Array{T} where T,3}} === Tuple{Array,Array,Array}

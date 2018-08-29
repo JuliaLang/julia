@@ -38,7 +38,7 @@ _setindex(v, i::Integer) = ()
 
 ## iterating ##
 
-iterate(t::Tuple, i::Int=1) = length(t) < i ? nothing : (t[i], i+1)
+iterate(@nospecialize(t::Tuple), i::Int=1) = 1 <= i <= length(t) ? (@inbounds t[i], i+1) : nothing
 
 keys(@nospecialize t::Tuple) = OneTo(length(t))
 
