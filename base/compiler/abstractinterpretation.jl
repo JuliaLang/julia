@@ -368,6 +368,10 @@ end
 # Union of Tuples of the same length is converted to Tuple of Unions.
 # returns an array of types
 function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::VarTable, sv::InferenceState)
+    if isa(typ, PartialTuple)
+        return typ.fields
+    end
+
     if isa(typ, Const)
         val = typ.val
         if isa(val, SimpleVector) || isa(val, Tuple)
@@ -376,14 +380,9 @@ function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::
     end
 
     arg = ssa_def_expr(arg, sv)
-    if is_specializable_vararg_slot(arg, sv.nargs, sv.result.vargs)
-        return sv.result.vargs
-    end
-
     tti0 = widenconst(typ)
     tti = unwrap_unionall(tti0)
-    if isa(arg, Expr) && arg.head === :call && (abstract_evals_to_constant(arg.args[1], svec, vtypes, sv) ||
-                                                abstract_evals_to_constant(arg.args[1], tuple, vtypes, sv))
+    if isa(arg, Expr) && arg.head === :call && abstract_evals_to_constant(arg.args[1], svec, vtypes, sv)
         aa = arg.args
         result = Any[ abstract_eval(aa[j],vtypes,sv) for j=2:length(aa) ]
         if _any(isvarargtype, result)

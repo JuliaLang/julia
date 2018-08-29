@@ -968,27 +968,43 @@ end
 
 # convert the dispatch tuple type argtype to the real (concrete) type of
 # the tuple of those values
-function tuple_tfunc(@nospecialize(argtype))
-    if isa(argtype, DataType) && argtype.name === Tuple.name
-        p = Vector{Any}()
-        for x in argtype.parameters
+function tuple_tfunc(atypes::Vector{Any})
+    all_are_const = true
+    for i in 1:length(atypes)
+        if !isa(atypes[i], Const)
+            all_are_const = false
+            break
+        end
+    end
+    if all_are_const
+        return Const(tuple(Any[atypes[i].val for i in 1:length(atypes)]...))
+    end
+    p = Vector{Any}(undef, length(atypes))
+    anyinfo = false
+    for i in 1:length(atypes)
+        x = atypes[i]
+        # TODO ignore singleton Const (don't forget to update cache logic if you implement this)
+        anyinfo || (anyinfo = !isa(x, Type) || isType(x))
+        if isa(x, Const)
+            p[i] = typeof(x.val)
+        else
+            x = widenconst(x)
             if isType(x)
                 xparam = x.parameters[1]
                 if issingletontype(xparam) || xparam === Bottom
-                    push!(p, typeof(xparam))
+                    p[i] = typeof(xparam)
                 else
-                    push!(p, Type)
+                    p[i] = Type
                 end
             else
-                push!(p, x)
+                p[i] = x
             end
         end
-        t = Tuple{p...}
-        # replace a singleton type with its equivalent Const object
-        isdefined(t, :instance) && return Const(t.instance)
-        return t
     end
-    return argtype
+    t = Tuple{p...}
+    # replace a singleton type with its equivalent Const object
+    isdefined(t, :instance) && return Const(t.instance)
+    return anyinfo ? PartialTuple(t, atypes) : t
 end
 
 function array_type_undefable(@nospecialize(a))
