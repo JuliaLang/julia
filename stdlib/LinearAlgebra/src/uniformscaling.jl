@@ -81,6 +81,8 @@ istril(::UniformScaling) = true
 issymmetric(::UniformScaling) = true
 ishermitian(J::UniformScaling) = isreal(J.λ)
 
+isposdef(J::UniformScaling) = isreal(J.λ) && J.λ > 0
+
 (+)(J::UniformScaling, x::Number) = J.λ + x
 (+)(x::Number, J::UniformScaling) = x + J.λ
 (-)(J::UniformScaling, x::Number) = J.λ - x
