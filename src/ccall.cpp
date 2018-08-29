@@ -111,7 +111,8 @@ static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
         llvmgv = new GlobalVariable(*M, T_pvoidfunc, false,
                                     GlobalVariable::ExternalLinkage, NULL, name);
         llvmgv = global_proto(llvmgv);
-        void *addr = jl_dlsym_e(libsym, f_name);
+        void *addr;
+        jl_dlsym(libsym, f_name, &addr, 0);
         (*symMap)[f_name] = std::make_pair(llvmgv, addr);
         if (symaddr)
             *symaddr = addr;
@@ -776,8 +777,8 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
             res = ctx.builder.CreatePtrToInt(res, lrt);
         }
         else {
-            void *symaddr = jl_dlsym_e(jl_get_library(sym.f_lib), sym.f_name);
-            if (symaddr == NULL) {
+            void *symaddr;
+            if (!jl_dlsym(jl_get_library(sym.f_lib), sym.f_name, &symaddr, 0)) {
                 std::stringstream msg;
                 msg << "cglobal: could not find symbol ";
                 msg << sym.f_name;
@@ -1490,14 +1491,19 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     };
 #define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), #name)
 
+    static jl_ptls_t (*ptls_getter)(void) = [] {
+    // directly accessing the address of an ifunc can cause compile-time linker issues
+    // on some configurations (e.g. AArch64 + -Bsymbolic-functions), so we guard the
+    // `&jl_get_ptls_states` within this `#ifdef` guard, and use a more roundabout
+    // method involving `jl_dlsym()` on Linux platforms instead.
 #ifdef _OS_LINUX_
-    // directly accessing the address of an ifunc can cause linker issue on
-    // some configurations (e.g. AArch64 + -Bsymbolic-functions).
-    static const auto ptls_getter = jl_dlsym_e(jl_dlopen(nullptr, 0),
-                                               "jl_get_ptls_states");
+        jl_ptls_t (*p)(void);
+        jl_dlsym(jl_dlopen(nullptr, 0), "jl_get_ptls_states", (void **)&p, 0);
+        return p;
 #else
-    static const auto ptls_getter = &jl_get_ptls_states;
+        return &jl_get_ptls_states;
 #endif
+    }();
 
     // emit arguments
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nccallargs);
@@ -1967,8 +1973,8 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 llvmf = emit_plt(ctx, functype, attributes, cc, symarg.f_lib, symarg.f_name);
         }
         else {
-            void *symaddr = jl_dlsym_e(jl_get_library(symarg.f_lib), symarg.f_name);
-            if (symaddr == NULL) {
+            void *symaddr;
+            if (!jl_dlsym(jl_get_library(symarg.f_lib), symarg.f_name, &symaddr, 0)) {
                 std::stringstream msg;
                 msg << "ccall: could not find function ";
                 msg << symarg.f_name;

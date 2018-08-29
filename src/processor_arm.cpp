@@ -499,17 +499,6 @@ static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 #endif
 
 #if defined(DYN_GETAUXVAL)
-static bool getauxval_dlsym(unsigned long type, unsigned long *val)
-{
-    static auto getauxval_p = (unsigned long (*)(unsigned long))
-        jl_dlsym_e(jl_dlopen(nullptr, JL_RTLD_LOCAL), "getauxval");
-    if (getauxval_p) {
-        *val = getauxval_p(type);
-        return true;
-    }
-    return false;
-}
-
 static unsigned long getauxval_procfs(unsigned long type)
 {
     int fd = open("/proc/self/auxv", O_RDONLY);
@@ -531,9 +520,14 @@ static unsigned long getauxval_procfs(unsigned long type)
 
 static inline unsigned long jl_getauxval(unsigned long type)
 {
-    unsigned long val;
-    if (getauxval_dlsym(type, &val))
-        return val;
+    // First, try resolving getauxval in libc
+    auto libc = jl_dlopen(nullptr, JL_RTLD_LOCAL);
+    static (unsigned long (*)(unsigned long) getauxval_p;
+    if (jl_dlsym(libc, "getauxval", &getauxval_p, 0) {
+        return getauxval_p(type);
+    }
+
+    // If we couldn't resolve it, use procfs.
     return getauxval_procfs(type);
 }
 #else
