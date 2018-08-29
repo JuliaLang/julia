@@ -135,13 +135,18 @@ end
 let
     λ = complex(randn(),randn())
     J = UniformScaling(λ)
-    @testset "transpose, conj, inv" begin
+    @testset "transpose, conj, inv, pinv, cond" begin
         @test ndims(J) == 2
         @test transpose(J) == J
         @test J * [1 0; 0 1] == conj(*(adjoint(J), [1 0; 0 1])) # ctranpose (and A(c)_mul_B)
         @test I + I === UniformScaling(2) # +
         @test inv(I) == I
         @test inv(J) == UniformScaling(inv(λ))
+        @test pinv(J) == UniformScaling(inv(λ))
+        @test @inferred(pinv(0.0I)) == 0.0I
+        @test @inferred(pinv(0I)) == 0.0I
+        @test @inferred(pinv(false*I)) == 0.0I
+        @test @inferred(pinv(0im*I)) == 0im*I
         @test cond(I) == 1
         @test cond(J) == (λ ≠ zero(λ) ? one(real(λ)) : oftype(real(λ), Inf))
     end

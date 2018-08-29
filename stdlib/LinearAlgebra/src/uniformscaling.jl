@@ -151,6 +151,10 @@ end
 inv(J::UniformScaling) = UniformScaling(inv(J.λ))
 opnorm(J::UniformScaling, p::Real=2) = opnorm(J.λ, p)
 
+pinv(J::UniformScaling) = ifelse(iszero(J.λ),
+                          UniformScaling(zero(inv(J.λ))),  # type stability
+                          UniformScaling(inv(J.λ)))
+
 function det(J::UniformScaling{T}) where T
     if isone(J.λ)
         one(T)
