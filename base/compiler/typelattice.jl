@@ -4,7 +4,6 @@
 # structs/constants #
 #####################
 
-
 # The type of a value might be constant
 struct Const
     val
@@ -71,6 +70,11 @@ struct StateUpdate
     state::VarTable
 end
 
+struct PartialTuple
+    typ
+    fields::Vector{Any} # elements are other type lattice members
+end
+
 struct NotFound end
 
 const NOT_FOUND = NotFound()
@@ -119,18 +123,44 @@ function ⊑(@nospecialize(a), @nospecialize(b))
         end
         a = Bool
     elseif isa(b, Conditional)
-        return a === Bottom
+        return false
+    end
+    if isa(a, PartialTuple)
+        if isa(b, PartialTuple)
+            if !(length(a.fields) == length(b.fields) && a.typ <: b.typ)
+                return false
+            end
+            for i in 1:length(b.fields)
+                # XXX: let's handle varargs later
+                ⊑(a.fields[i], b.fields[i]) || return false
+            end
+            return true
+        end
+        return isa(b, Type) && a.typ <: b
+    elseif isa(b, PartialTuple)
+        if isa(a, Const)
+            nfields(a.val) == length(b.fields) || return false
+            for i in 1:nfields(a.val)
+                # XXX: let's handle varargs later
+                ⊑(Const(getfield(a.val, i)), b.fields[i]) || return false
+            end
+            return true
+        end
+        return false
     end
     if isa(a, Const)
         if isa(b, Const)
             return a.val === b.val
         end
-        return isa(a.val, widenconst(b))
+        # TODO: `b` could potentially be a `PartialTypeVar` here, in which case we might be
+        # able to return `true` in more cases; in the meantime, just returning this is the
+        # most conservative option.
+        return isa(b, Type) && isa(a.val, b)
     elseif isa(b, Const)
         if isa(a, DataType) && isdefined(a, :instance)
             return a.instance === b.val
         end
-        return a === Bottom
+        return false
     elseif !(isa(a, Type) || isa(a, TypeVar)) ||
            !(isa(b, Type) || isa(b, TypeVar))
         return a === b
@@ -152,6 +182,7 @@ function widenconst(c::Const)
 end
 widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(c::PartialTypeVar) = TypeVar
+widenconst(t::PartialTuple) = t.typ
 widenconst(@nospecialize(t)) = t
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)

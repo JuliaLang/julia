@@ -6,7 +6,6 @@
 
 mutable struct OptimizationState
     linfo::MethodInstance
-    result_vargs::Vector{Any}
     calledges::Vector{Any}
     src::CodeInfo
     mod::Module
@@ -24,7 +23,7 @@ mutable struct OptimizationState
             frame.stmt_edges[1] = s_edges
         end
         src = frame.src
-        return new(frame.linfo, frame.result.vargs,
+        return new(frame.linfo,
                    s_edges::Vector{Any},
                    src, frame.mod, frame.nargs,
                    frame.min_valid, frame.max_valid,
@@ -51,8 +50,7 @@ mutable struct OptimizationState
             inmodule = linfo.def::Module
             nargs = 0
         end
-        result_vargs = Any[] # if you want something more accurate, set it yourself :P
-        return new(linfo, result_vargs,
+        return new(linfo,
                    s_edges::Vector{Any},
                    src, inmodule, nargs,
                    min_world(linfo), max_world(linfo),
