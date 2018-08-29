@@ -1094,6 +1094,7 @@ isempty(a::AbstractArray) = (length(a) == 0)
 
 
 ## range conversions ##
+AbstractVector{T}(r::AbstractRange) where {T} = map(x->T(x),r)
 
 map(::Type{T}, r::StepRange) where {T<:Real} = T(r.start):T(r.step):T(last(r))
 map(::Type{T}, r::UnitRange) where {T<:Real} = T(r.start):T(last(r))
