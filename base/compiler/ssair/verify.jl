@@ -82,10 +82,10 @@ function verify_ir(ir::IRCode)
                 error()
             end
         elseif isa(terminator, GotoNode)
-            if length(block.succs) != 1 || block.succs[1] != terminator.label
-                @verify_error "Block $idx successors ($(block.succs)), does not match GotoNode terminator"
-                error()
-            end
+            # if length(block.succs) != 1 || block.succs[1] != terminator.label
+            #     @verify_error "Block $idx successors ($(block.succs)), does not match GotoNode terminator"
+            #     error()
+            # end
         elseif isa(terminator, GotoIfNot)
             if terminator.dest == idx + 1
                 @verify_error "Block $idx terminator forms a double edge to block $(idx+1)"
