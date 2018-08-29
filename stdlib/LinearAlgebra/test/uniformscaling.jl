@@ -25,7 +25,7 @@ end
 
 @testset "sqrt, exp, log, and trigonometric functions" begin
     # convert to a dense matrix with random size
-    M(J) = (N = rand(1:0x678); Matrix(J, N, N))
+    M(J) = (N = rand(1:10); Matrix(J, N, N))
 
     # on complex plane
     J = UniformScaling(randn(ComplexF64))
