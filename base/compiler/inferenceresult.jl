@@ -4,7 +4,7 @@ const EMPTY_VECTOR = Vector{Any}()
 
 mutable struct InferenceResult
     linfo::MethodInstance
-    args::Vector{Any}
+    argtypes::Vector{Any}
     result # ::Type, or InferenceState if WIP
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
     function InferenceResult(linfo::MethodInstance)
@@ -13,32 +13,27 @@ mutable struct InferenceResult
         else
             result = linfo.rettype
         end
-        return new(linfo, EMPTY_VECTOR, result, nothing)
+        return new(linfo, compute_inf_result_argtypes(linfo), result, nothing)
     end
 end
 
-function get_argtypes(result::InferenceResult)
-    result.args === EMPTY_VECTOR || return result.args # already cached
-    argtypes = get_argtypes(result.linfo)
-    result.args = argtypes
-    return argtypes
-end
-
-function get_argtypes(linfo::MethodInstance)
+function compute_inf_result_argtypes(linfo::MethodInstance)
     toplevel = !isa(linfo.def, Method)
-    atypes::SimpleVector = unwrap_unionall(linfo.specTypes).parameters
+    linfo_argtypes::SimpleVector = unwrap_unionall(linfo.specTypes).parameters
     nargs::Int = toplevel ? 0 : linfo.def.nargs
-    args = Vector{Any}(undef, nargs)
+    result_argtypes = Vector{Any}(undef, nargs)
+    # First, if we're dealing with a varargs method, then we set the last element of `args`
+    # to the appropriate `Tuple` type or `PartialTuple` instance.
     if !toplevel && linfo.def.isva
         if linfo.specTypes == Tuple
             if nargs > 1
-                atypes = svec(Any[ Any for i = 1:(nargs - 1) ]..., Tuple.parameters[1])
+                linfo_argtypes = svec(Any[ Any for i = 1:(nargs - 1) ]..., Tuple.parameters[1])
             end
             vararg_type = Tuple
         else
-            laty = length(atypes)
-            if nargs > laty
-                va = atypes[laty]
+            linfo_argtypes_length = length(linfo_argtypes)
+            if nargs > linfo_argtypes_length
+                va = linfo_argtypes[linfo_argtypes_length]
                 if isvarargtype(va)
                     new_va = rewrap_unionall(unconstrain_vararg_length(va), linfo.specTypes)
                     vararg_type_vec = Any[new_va]
@@ -49,7 +44,7 @@ function get_argtypes(linfo::MethodInstance)
                 end
             else
                 vararg_type_vec = Any[]
-                for p in atypes[nargs:laty]
+                for p in linfo_argtypes[nargs:linfo_argtypes_length]
                     p = isvarargtype(p) ? unconstrain_vararg_length(p) : p
                     push!(vararg_type_vec, rewrap_unionall(p, linfo.specTypes))
                 end
@@ -65,21 +60,25 @@ function get_argtypes(linfo::MethodInstance)
                 vararg_type = tuple_tfunc(vararg_type_vec)
             end
         end
-        args[nargs] = vararg_type
+        result_argtypes[nargs] = vararg_type
         nargs -= 1
     end
-    laty = length(atypes)
-    if laty > 0
-        if laty > nargs
-            laty = nargs
+    # Now, we propagate type info from `linfo_argtypes` into `result_argtypes`, improving some
+    # type info as we go (where possible). Note that if we're dealing with a varargs method,
+    # we already handled the last element of `result_argtypes` (and decremented `nargs` so that
+    # we don't overwrite the result of that work here).
+    linfo_argtypes_length = length(linfo_argtypes)
+    if linfo_argtypes_length > 0
+        if linfo_argtypes_length > nargs
+            linfo_argtypes_length = nargs
         end
         local lastatype
-        atail = laty
-        for i = 1:laty
-            atyp = atypes[i]
-            if i == laty && isvarargtype(atyp)
+        tail_index = linfo_argtypes_length
+        for i = 1:linfo_argtypes_length
+            atyp = linfo_argtypes[i]
+            if i == linfo_argtypes_length && isvarargtype(atyp)
                 atyp = unwrapva(atyp)
-                atail -= 1
+                tail_index -= 1
             end
             while isa(atyp, TypeVar)
                 atyp = atyp.ub
@@ -92,16 +91,16 @@ function get_argtypes(linfo::MethodInstance)
             else
                 atyp = rewrap_unionall(atyp, linfo.specTypes)
             end
-            i == laty && (lastatype = atyp)
-            args[i] = atyp
+            i == linfo_argtypes_length && (lastatype = atyp)
+            result_argtypes[i] = atyp
         end
-        for i = (atail + 1):nargs
-            args[i] = lastatype
+        for i = (tail_index + 1):nargs
+            result_argtypes[i] = lastatype
         end
     else
         @assert nargs == 0 "invalid specialization of method" # wrong number of arguments
     end
-    return args
+    return result_argtypes
 end
 
 function cache_lookup(code::MethodInstance, argtypes::Vector{Any}, cache::Vector{InferenceResult})
@@ -110,12 +109,12 @@ function cache_lookup(code::MethodInstance, argtypes::Vector{Any}, cache::Vector
     method.isva && (nargs -= 1)
     for cache_code in cache
         # try to search cache first
-        cache_args = cache_code.args
+        cache_argtypes = cache_code.argtypes
         if cache_code.linfo === code && length(argtypes) >= nargs
             cache_match = true
             for i in 1:nargs
                 a = maybe_widen_conditional(argtypes[i])
-                ca = cache_args[i]
+                ca = cache_argtypes[i]
                 # verify that all Const argument types match between the call and cache
                 if (isa(a, Const) || isa(ca, Const)) && !(a === ca)
                     cache_match = false
@@ -123,13 +122,13 @@ function cache_lookup(code::MethodInstance, argtypes::Vector{Any}, cache::Vector
                 end
             end
             if method.isva
-                last_arg = cache_args[end]
+                last_argtype = cache_argtypes[end]
                 for i in (nargs + 1):length(argtypes)
                     a = maybe_widen_conditional(argtypes[i])
-                    if isa(last_arg, PartialTuple)
-                        ca = last_arg.fields[i - nargs]
-                    elseif isa(last_arg, Const) && isa(last_arg.val, Tuple)
-                        ca = Const(last_arg.val[i - nargs])
+                    if isa(last_argtype, PartialTuple)
+                        ca = last_argtype.fields[i - nargs]
+                    elseif isa(last_argtype, Const) && isa(last_argtype.val, Tuple)
+                        ca = Const(last_argtype.val[i - nargs])
                     else
                         ca = nothing # not Const
                     end
