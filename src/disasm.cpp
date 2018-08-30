@@ -74,9 +74,13 @@ using namespace llvm;
 
 // helper class for tracking inlining context while printing debug info
 class DILineInfoPrinter {
+    // internal state:
     std::vector<DILineInfo> context;
-    const char* LineStart;
-    bool bracket_outer;
+    uint32_t inline_depth = 0;
+    // configuration options:
+    const char* LineStart = "; ";
+    bool bracket_outer = false;
+    bool collapse_recursive = true;
 public:
     DILineInfoPrinter(const char *LineStart, bool bracket_outer)
         : LineStart(LineStart),
@@ -91,7 +95,7 @@ public:
     struct repeat inlining_indent(const char *c)
     {
         return repeat{
-            std::max(context.size() + bracket_outer, (size_t)1) - 1,
+            std::max(inline_depth + bracket_outer, (uint32_t)1) - 1,
             c };
     }
 
@@ -146,54 +150,128 @@ void DILineInfoPrinter::emit_finish(raw_ostream &Out)
 void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> &DI)
 {
     bool update_line_only = false;
-    uint32_t nctx = context.size();
     uint32_t nframes = DI.size();
     if (nframes == 0)
         return; // just skip over lines with no debug info at all
-    // look for a matching prefix in the inlining information stack
-    if (nctx > nframes)
-        context.resize(nframes);
-    for (uint32_t i = 0; i < nctx && i < nframes; i++) {
-        const DILineInfo &CtxLine = context.at(i);
-        const DILineInfo &FrameLine = DI.at(nframes - 1 - i);
+    // compute the size of the matching prefix in the inlining information stack
+    uint32_t nctx;
+    for (nctx = 0; nctx < context.size() && nctx < nframes; nctx++) {
+        const DILineInfo &CtxLine = context.at(nctx);
+        const DILineInfo &FrameLine = DI.at(nframes - 1 - nctx);
         if (CtxLine != FrameLine) {
-            if (CtxLine.FileName == FrameLine.FileName &&
-                    CtxLine.FunctionName == FrameLine.FunctionName) {
-                update_line_only = true;
-            }
-            context.resize(i);
             break;
         }
     }
-    uint32_t npops = nctx - context.size() - update_line_only;
-    if (npops) {
-        Out << LineStart << inlining_indent("│");
-        if (update_line_only)
-            Out << "│";
-        Out << repeat{npops, "┘"} << '\n';
+    if (collapse_recursive && 0 < nctx) {
+        // check if we're adding more frames with the same method name,
+        // if so, drop all existing calls to it from the top of the context
+        // AND check if instead the context was previously printed that way
+        // but now has removed the recursive frames
+        StringRef method = StringRef(context.at(nctx - 1).FunctionName).rtrim(';');
+        if ((nctx < nframes && StringRef(DI.at(nframes - nctx - 1).FunctionName).rtrim(';') == method) ||
+            (nctx < context.size() && StringRef(context.at(nctx).FunctionName).rtrim(';') == method)) {
+            update_line_only = true;
+            while (nctx > 0 && StringRef(context.at(nctx - 1).FunctionName).rtrim(';') == method) {
+                nctx -= 1;
+            }
+        }
     }
+    // examine what frames we're returning from
+    if (nctx < context.size()) {
+        // compute the new inlining depth
+        uint32_t npops;
+        if (collapse_recursive) {
+            npops = 1;
+            StringRef Prev = StringRef(context.at(nctx).FunctionName).rtrim(';');
+            for (uint32_t i = nctx + 1; i < context.size(); i++) {
+                StringRef Next = StringRef(context.at(i).FunctionName).rtrim(';');
+                if (Prev != Next)
+                    npops += 1;
+                Prev = Next;
+            }
+        }
+        else {
+            npops = context.size() - nctx;
+        }
+        // look at the first non-matching element to see if we are only changing the line number
+        if (!update_line_only && nctx < nframes) {
+            const DILineInfo &CtxLine = context.at(nctx);
+            const DILineInfo &FrameLine = DI.at(nframes - 1 - nctx);
+            if (CtxLine.FileName == FrameLine.FileName &&
+                    StringRef(CtxLine.FunctionName).rtrim(';') == StringRef(FrameLine.FunctionName).rtrim(';')) {
+                update_line_only = true;
+            }
+        }
+        context.resize(nctx);
+        update_line_only && (npops -= 1);
+        if (npops > 0) {
+            this->inline_depth -= npops;
+            Out << LineStart << inlining_indent("│") << repeat{npops, "┘"} << '\n';
+        }
+    }
+    // see what change we made to the outermost line number
     if (update_line_only) {
-        DILineInfo frame = DI.at(nframes - 1 - context.size());
+        const DILineInfo &frame = DI.at(nframes - 1 - nctx);
+        nctx += 1;
         context.push_back(frame);
-        if (frame.Line != UINT_MAX && frame.Line != 0)
+        if (frame.Line != UINT_MAX && frame.Line != 0) {
+            StringRef method = StringRef(frame.FunctionName).rtrim(';');
             Out << LineStart << inlining_indent("│")
                 << " @ " << frame.FileName
                 << ":" << frame.Line
-                << " within `" << StringRef(frame.FunctionName).rtrim(';')
-                << "'\n";
+                << " within `" << method << "'";
+            if (collapse_recursive) {
+                while (nctx < nframes) {
+                    const DILineInfo &frame = DI.at(nframes - 1 - nctx);
+                    if (StringRef(frame.FunctionName).rtrim(';') != method)
+                        break;
+                    nctx += 1;
+                    context.push_back(frame);
+                    Out << " @ " << frame.FileName
+                        << ":" << frame.Line;
+                }
+            }
+            Out << "\n";
+        }
     }
-    for (uint32_t i = context.size(); i < nframes; i++) {
-        DILineInfo frame = DI.at(nframes - 1 - i);
+    // now print the rest of the new frames
+    while (nctx < nframes) {
+        const DILineInfo &frame = DI.at(nframes - 1 - nctx);
         Out << LineStart << inlining_indent("│");
+        nctx += 1;
         context.push_back(frame);
-        if (bracket_outer || i != 0)
+        this->inline_depth += 1;
+        if (bracket_outer || nctx != 1)
             Out << "┌";
         Out << " @ " << frame.FileName;
         if (frame.Line != UINT_MAX && frame.Line != 0)
             Out << ":" << frame.Line;
-        Out << " within `" << StringRef(frame.FunctionName).rtrim(';');
-        Out << "'\n";
+        Out << " within `" << StringRef(frame.FunctionName).rtrim(';') << "'";
+        if (collapse_recursive) {
+            StringRef method = StringRef(frame.FunctionName).rtrim(';');
+            while (nctx < nframes) {
+                const DILineInfo &frame = DI.at(nframes - 1 - nctx);
+                if (StringRef(frame.FunctionName).rtrim(';') != method)
+                    break;
+                nctx += 1;
+                context.push_back(frame);
+                Out << " @ " << frame.FileName
+                    << ":" << frame.Line;
+            }
+        }
+        Out << "\n";
     }
+#ifndef JL_NDEBUG
+    StringRef Prev = StringRef(context.at(0).FunctionName).rtrim(';');
+    uint32_t depth2 = 1;
+    for (uint32_t i = 1; i < nctx; i++) {
+        StringRef Next = StringRef(context.at(i).FunctionName).rtrim(';');
+        if (!collapse_recursive || Prev != Next)
+            depth2 += 1;
+        Prev = Next;
+    }
+    assert(this->inline_depth == depth2);
+#endif
 }
 
 
