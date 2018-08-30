@@ -79,7 +79,7 @@ end
     @specialize
 
 Reset the specialization hint for an argument back to the default.
-For details, see [`@specialize`](@ref).
+For details, see [`@nospecialize`](@ref).
 """
 macro specialize(vars...)
     if nfields(vars) === 1
