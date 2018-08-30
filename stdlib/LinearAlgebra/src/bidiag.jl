@@ -524,7 +524,7 @@ end
 function *(A::UpperTriangular, B::Bidiagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     if B.uplo == 'U'
-        A_mul_B_td!(similar(A, TS), A, B)
+        A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
     else
         A_mul_B_td!(zeros(TS, size(A)...), A, B)
     end
@@ -533,7 +533,7 @@ end
 function *(A::LowerTriangular, B::Bidiagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     if B.uplo == 'L'
-        A_mul_B_td!(similar(A, TS), A, B)
+        A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
     else
         A_mul_B_td!(zeros(TS, size(A)...), A, B)
     end
@@ -541,13 +541,13 @@ end
 
 function *(A::Union{SymTridiagonal, Tridiagonal}, B::AbstractTriangular)
     TS = promote_op(matprod, eltype(A), eltype(B))
-    A_mul_B_td!(zeros(eltype(A), size(A)...), A, B)
+    A_mul_B_td!(zeros(TS, size(A)...), A, B)
 end
 
 function *(A::Bidiagonal, B::UpperTriangular)
     TS = promote_op(matprod, eltype(A), eltype(B))
     if A.uplo == 'U'
-        A_mul_B_td!(similar(B, TS), A, B)
+        A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
     else
         A_mul_B_td!(zeros(TS, size(A)...), A, B)
     end
@@ -556,7 +556,7 @@ end
 function *(A::Bidiagonal, B::LowerTriangular)
     TS = promote_op(matprod, eltype(A), eltype(B))
     if A.uplo == 'L'
-        A_mul_B_td!(similar(B, TS), A, B)
+        A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
     else
         A_mul_B_td!(zeros(TS, size(A)...), A, B)
     end
@@ -564,7 +564,7 @@ end
 
 function *(A::Diagonal, B::BiTri)
     TS = promote_op(matprod, eltype(A), eltype(B))
-    A_mul_B_td!(imilar(B, TS), A, B)
+    A_mul_B_td!(similar(B, TS), A, B)
 end
 
 function *(A::Diagonal, B::SymTridiagonal)
@@ -577,10 +577,27 @@ function *(A::SymTridiagonal, B::Diagonal)
     A_mul_B_td!(Tridiagonal(zeros(TS, size(A)...)), A, B)
 end
 
-*(A::Adjoint{<:Any,<:Diagonal}, B::BiTriSym) = A_mul_B_td!(zeros(eltype(A), size(A)...), A, B)
-*(A::Transpose{<:Any,<:Diagonal}, B::BiTriSym) = A_mul_B_td!(zeros(eltype(A), size(A)...), A, B)
-*(A::Adjoint{<:Any,<:AbstractTriangular}, B::BiTriSym) = A_mul_B_td!(zeros(eltype(A), size(A)...), A, B)
-*(A::Transpose{<:Any,<:AbstractTriangular}, B::BiTriSym) = A_mul_B_td!(zeros(eltype(A), size(A)...), A, B)
+# todo update the specialized output types here.
+# right now I am just fixing it so the eltype is correct
+function *(A::Adjoint{<:Any,<:Diagonal}, B::BiTriSym)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(zeros(TS, size(A)...), A, B)
+end
+
+function *(A::Transpose{<:Any,<:Diagonal}, B::BiTriSym)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(zeros(TS, size(A)...), A, B)
+end
+
+function *(A::Adjoint{<:Any,<:AbstractTriangular}, B::BiTriSym)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(zeros(TS, size(A)...), A, B)
+end
+
+function *(A::Transpose{<:Any,<:AbstractTriangular}, B::BiTriSym)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(zeros(TS, size(A)...), A, B)
+end
 
 #Generic multiplication
 *(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = *(Array(A), B)
