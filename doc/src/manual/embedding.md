@@ -9,7 +9,7 @@ further language bridges (e.g. calling Julia from Python or C#).
 
 ## High-Level Embedding
 
-__Note__: This section covers embedding Julia code in C on Unix-like operating systems. For doing 
+__Note__: This section covers embedding Julia code in C on Unix-like operating systems. For doing
 this on Windows, please see the section following this.
 
 We start with a simple C program that initializes Julia and calls some Julia code:
@@ -177,7 +177,7 @@ The next step is to set up the project to find the Julia include files and the l
 know whether the Julia installation is 32- or 64-bits. Remove any platform configuration that doesn't correspond
 to the Julia installation before proceeding.
 
-Using the project Properties dialog, go to `C/C++` | `General` and add `$(JULIA_DIR)\include\julia\` to the 
+Using the project Properties dialog, go to `C/C++` | `General` and add `$(JULIA_DIR)\include\julia\` to the
 Additional Include Directories property. Then, go to the `Linker` | `General` section and add `$(JULIA_DIR)\lib`
 to the Additional Library Directories property. Finally, under `Linker` | `Input`, add `libjulia.dll.a;libopenlibm.dll.a;`
 to the list of libraries.
