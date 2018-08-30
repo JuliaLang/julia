@@ -109,6 +109,24 @@ end
             @test Matrix(convert(Spectype,A) - D) ≈ Matrix(A - D)
         end
     end
+    
+    UpTri = UpperTriangular(rand(20,20))
+    LoTri = LowerTriangular(rand(20,20))
+    Diag = Diagonal(rand(20,20))
+    Tridiag = Tridiagonal(rand(20, 20))
+    UpBi = Bidiagonal(rand(20,20), :U)
+    LoBi = Bidiagonal(rand(20,20), :L)
+    Sym = SymTridiagonal(rand(20), rand(19))
+    Dense = rand(20, 20)
+    mats = [UpTri, LoTri, Diag, Tridiag, UpBi, LoBi, Sym, Dense]
+
+    for op in (+, -)
+        for A in mats
+            for B in mats
+                @test (op)(A, B) ≈ (op)(Matrix(A), Matrix(B)) ≈ Matrix((op)(A, B))
+            end
+        end
+    end
 end
 
 @testset "Triangular Types and QR" begin
