@@ -5,7 +5,7 @@ inflate_ir(ci::CodeInfo) = inflate_ir(ci, Core.svec(), Any[ Any for i = 1:length
 function inflate_ir(ci::CodeInfo, linfo::MethodInstance)
     spvals = spvals_from_meth_instance(linfo)
     if ci.inferred
-        argtypes, _ = get_argtypes(linfo)
+        argtypes = compute_inf_result_argtypes(linfo)
     else
         argtypes = Any[ Any for i = 1:length(ci.slotnames) ]
     end
