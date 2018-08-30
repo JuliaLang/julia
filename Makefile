@@ -59,7 +59,7 @@ endif
 julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_defaultpkgdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/deps
 
-julia-base: julia-deps $(build_sysconfdir)/julia/startup.jl $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl
+julia-base: julia-deps $(build_sysconfdir)/julia/startup.jl $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl $(build_datarootdir)/julia/build_sysimg.jl
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/base
 
 julia-libccalltest: julia-deps
@@ -136,6 +136,9 @@ $(build_man1dir)/julia.1: $(JULIAHOME)/doc/man/julia.1 | $(build_man1dir)
 $(build_sysconfdir)/julia/startup.jl: $(JULIAHOME)/etc/startup.jl | $(build_sysconfdir)/julia
 	@echo Creating usr/etc/julia/startup.jl
 	@cp $< $@
+
+$(build_datarootdir)/julia/build_sysimg.jl: $(JULIAHOME)/contrib/build_sysimg.jl | $(build_datarootdir)/julia
+	$(INSTALL_M) $< $(dir $@)
 
 $(build_datarootdir)/julia/julia-config.jl : $(JULIAHOME)/contrib/julia-config.jl | $(build_datarootdir)/julia
 	$(INSTALL_M) $< $(dir $@)
