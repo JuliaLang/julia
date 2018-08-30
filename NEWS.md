@@ -14,11 +14,11 @@ detailed list of changes from Julia v0.6.
 Standard Library Changes
 ------------------------
 
-* The `Libdl` module's methods `dlopen_e()` and `dlsym_e()` have been
-  updated to return `nothing` as the indicator of a nonexistent symbol
-  or library.  Additionally, the `dlopen()` and `dlsym()` methods have
-  gained a `throw_error` keyword argument, to replace usages such as
-  `dlsym_e(args...)` with `dlsym(args...; throw_error=false)`. ([#28888])
+* The `Libdl` module's methods `dlopen()` and `dlsym()` have gained a
+  `throw_error` keyword argument, replacing the now-deprecated `dlopen_e()`
+  and `dlsym_e()` methods.  When `throw_error` is `false`, failure to locate
+  a shared library or symbol will return `nothing` rather than `C_NULL`.
+  ([#28888])
 
 Deprecated or removed
 ---------------------
