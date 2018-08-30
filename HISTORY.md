@@ -625,7 +625,7 @@ Library improvements
   * The `crc32c` function for CRC-32c checksums is now exported ([#22274]).
 
   * `eye(::Type{Diagonal{T}}, m::Integer)` has been deprecated in favor of
-    `Diagonal{T}(I, m)` ([#24413]).
+    `Diagonal{T}(I, m)` ([#24415]).
 
   * The output of `versioninfo` is now controlled with keyword arguments ([#21974]).
 
@@ -1575,6 +1575,7 @@ Command-line option changes
 [#24404]: https://github.com/JuliaLang/julia/issues/24404
 [#24413]: https://github.com/JuliaLang/julia/issues/24413
 [#24414]: https://github.com/JuliaLang/julia/issues/24414
+[#24415]: https://github.com/JuliaLang/julia/issues/24415
 [#24438]: https://github.com/JuliaLang/julia/issues/24438
 [#24445]: https://github.com/JuliaLang/julia/issues/24445
 [#24452]: https://github.com/JuliaLang/julia/issues/24452
