@@ -704,7 +704,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
             return ret
         end
         return Any
-    elseif f === return_type
+    elseif is_return_type(f)
         rt_rt = return_type_tfunc(argtypes, vtypes, sv)
         if rt_rt !== NOT_FOUND
             return rt_rt
@@ -755,7 +755,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
     t = pure_eval_call(f, argtypes, atype, sv)
     t !== false && return t
 
-    if istopfunction(f, :typejoin) || f === return_type
+    if istopfunction(f, :typejoin) || is_return_type(f)
         return Type # don't try to infer these function edges directly -- it won't actually come up with anything useful
     end
 
