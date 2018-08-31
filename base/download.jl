@@ -62,10 +62,13 @@ end
 """
     download(url::AbstractString, [localfile::AbstractString])
 
-Download a file from the given url, optionally renaming it to the given local file name.
+Download a file from the given url, optionally renaming it to the given local file name. If
+no filename is given this will download into a randomly-named file in your temp directory.
 Note that this function relies on the availability of external tools such as `curl`, `wget`
 or `fetch` to download the file and is provided for convenience. For production use or
 situations in which more options are needed, please use a package that provides the desired
 functionality instead.
+
+Returns the filename of the downloaded file.
 """
 download(url, filename)
