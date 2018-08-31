@@ -41,6 +41,17 @@ the above test program `test.c` with `gcc` using:
 gcc -o test -fPIC -I$JULIA_DIR/include/julia -L$JULIA_DIR/lib test.c -ljulia $JULIA_DIR/lib/julia/libstdc++.so.6
 ```
 
+But in the real world, here e.g. a manjaro Linux distro, the following lines make more sense:
+
+/usr/bin/env julia  /usr/share/julia/julia-config.jl   --allflags
+export JULIA_BINDIR="/usr/bin"
+gcc -o test  -fPIC   -std=gnu99 -I'/usr/include/julia' -DJULIA_ENABLE_THREADING=1 -fPIC -L'/usr/lib' -Wl,--export-dynamic -Wl,-rpath,'/usr/lib' -Wl,-rpath,'/usr/lib/julia' -ljulia        test.c
+./test   
+---
+
+
+
+
 Then if the environment variable `JULIA_BINDIR` is set to `$JULIA_DIR/bin`, the output `test` program
 can be executed.
 
