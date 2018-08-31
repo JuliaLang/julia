@@ -694,3 +694,10 @@ end
     a = rand(Int, 1)
     @test shuffle(a) == a
 end
+
+@testset "fast(a:b)" begin
+    for bounds = (rand(Int, 2), rand(-1000:1000, 2))
+        a, b = minmax(bounds...)
+        @test rand(fast(a:b)) ∈ a:b
+    end
+end

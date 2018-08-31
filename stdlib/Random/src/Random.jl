@@ -303,6 +303,11 @@ julia> rand(Int, 2)
 julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
 1=>2
 ```
+As an experimental feature, it's possible to obtain faster sampling from an array
+(in particular ranges) at the cost of getting a possibly biased distribution,
+by wrapping the array in a call to the `Random.fast` function,
+e.g. `rand(Random.fast(1:10))`. It is not recommended to use this method
+for arrays of big length (in particular of the order of 2^52 or greater).
 
 !!! note
     The complexity of `rand(rng, s::Union{AbstractDict,AbstractSet})`

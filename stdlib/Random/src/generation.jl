@@ -296,6 +296,27 @@ function rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt128}) where T<:BitInte
 end
 
 
+#### fast & Biased
+
+struct SamplerRangeBiased{T<:Integer} <: Sampler{T}
+    m::Float64 # multiplier
+    a::T       # first element
+end
+
+SamplerRangeBiased(r::AbstractUnitRange{T}) where {T<:Integer} = SamplerRangeBiased{T}(Float64(length(r)), first(r))
+
+"""
+    Random.fast(a::AbstractArray) -> Random.Sampler
+
+Create a `Sampler` object used to sample uniformly from `a`, in a typically faster way than
+the default (which is used in `rand(a)`), but with a possible bias, in particular for
+arrays with a big length.
+"""
+fast(r::AbstractUnitRange{T}) where {T<:Integer} = SamplerRangeBiased(r)
+
+rand(rng::AbstractRNG, sp::SamplerRangeBiased{T}) where {T} = sp.a + floor(T, sp.m * rand(rng, Float64))
+
+
 ### BigInt
 
 struct SamplerBigInt <: Sampler{BigInt}
@@ -341,6 +362,8 @@ end
 
 Sampler(::Type{RNG}, r::AbstractArray, n::Repetition) where {RNG<:AbstractRNG} =
     SamplerSimple(r, Sampler(RNG, firstindex(r):lastindex(r), n))
+
+fast(r::AbstractArray) = SamplerSimple(r, fast(firstindex(r):lastindex(r)))
 
 rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractArray,<:Sampler}) =
     @inbounds return sp[][rand(rng, sp.data)]
