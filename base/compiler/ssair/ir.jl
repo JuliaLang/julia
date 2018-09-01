@@ -897,7 +897,19 @@ function process_node!(compact::IncrementalCompact, result::Vector{Any},
         end
         result[result_idx] = stmt
         result_idx += 1
-    elseif isa(stmt, PiNode) || isa(stmt, ReturnNode) || isa(stmt, UpsilonNode) || isa(stmt, GotoIfNot)
+    elseif isa(stmt, PiNode)
+        # As an optimization, we eliminate any trivial pinodes. For performance, we use ===
+        # type equality. We may want to consider using == in either a separate pass or if
+        # performance turns out ok
+        stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)::PiNode
+        if ((!isa(stmt.val, AnySSAValue) && !isa(stmt.val, GlobalRef)) ||
+            (isa(stmt.val, SSAValue) && (stmt.typ === compact.result_types[stmt.val.id])))
+            ssa_rename[idx] = stmt.val
+        else
+            result[result_idx] = stmt
+            result_idx += 1
+        end
+    elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode) || isa(stmt, GotoIfNot)
         result[result_idx] = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)
         result_idx += 1
     elseif isa(stmt, PhiNode)
