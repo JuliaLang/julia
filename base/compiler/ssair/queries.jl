@@ -19,7 +19,8 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src, spvals::S
         ea = e.args
         if head === :call
             f = argextype(ea[1], src, spvals)
-            f = isa(f, Const) ? f.val : isType(f) ? f.parameters[1] : return false
+            f = singleton_type(f)
+            f === nothing && return false
             is_return_type(f) && return true
             contains_is(_PURE_BUILTINS, f) && return true
             contains_is(_PURE_OR_ERROR_BUILTINS, f) || return false
