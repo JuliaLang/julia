@@ -74,5 +74,5 @@ function is_known_call(e::Expr, @nospecialize(func), src::IncrementalCompact)
         return false
     end
     f = compact_exprtype(src, e.args[1])
-    return isa(f, Const) && f.val === func
+    return singleton_type(f) === func
 end
