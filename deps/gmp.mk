@@ -18,7 +18,8 @@ $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted: $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2
 	echo 1 > $@
 
 $(SRCCACHE)/gmp-$(GMP_VER)/build-patched: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted
-	cd $(dir $@) && patch < $(SRCDIR)/patches/gmp-exception.patch
+	cd $(dir $@) && patch < $(SRCDIR)/patches/gmp-exception.patch \
+		         && patch -p1 < $(SRCDIR)/patches/gmp_alloc_overflow_func.patch
 	echo 1 > $@
 
 $(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted $(SRCCACHE)/gmp-$(GMP_VER)/build-patched
