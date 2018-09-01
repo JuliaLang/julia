@@ -176,30 +176,7 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
     end
     inf_result = cache_lookup(code, argtypes, sv.params.cache)
     if inf_result === nothing
-        inf_result = InferenceResult(code)
-        inf_result_argtypes = inf_result.argtypes
-        if method.isva
-            # `argtypes` might contain better vararg type info than `inf_result_argtypes`, so
-            # here we propagate that better type info into the `inf_result_argtypes` where
-            # appropriate.
-            trailing_vargtypes = argtypes[(nargs + 1):end]
-            last_inf_result_argtype = inf_result_argtypes[end]
-            # XXX replace this loop
-            # for i in 1:length(vargs)
-            #     # a = maybe_widen_conditional(vargs[i])
-            #     # if i > length(inf_result.argtypes)
-            #     #     push!(inf_result.vargs, a)
-            #     # elseif a isa Const
-            #     #     inf_result.vargs[i] = a
-            #     # end
-            # end
-        end
-        for i in 1:nargs
-            a = maybe_widen_conditional(argtypes[i])
-            if a isa Const
-                inf_result_argtypes[i] = a # inject Const argtypes into inference
-            end
-        end
+        inf_result = InferenceResult(code, argtypes)
         frame = InferenceState(inf_result, #=cache=#false, sv.params)
         frame.limited = true
         frame.parent = sv

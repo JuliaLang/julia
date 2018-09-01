@@ -7,76 +7,84 @@ mutable struct InferenceResult
     argtypes::Vector{Any}
     result # ::Type, or InferenceState if WIP
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
-    function InferenceResult(linfo::MethodInstance)
+    function InferenceResult(linfo::MethodInstance, caller_argtypes = nothing)
         if isdefined(linfo, :inferred_const)
             result = Const(linfo.inferred_const)
         else
             result = linfo.rettype
         end
-        return new(linfo, compute_inf_result_argtypes(linfo), result, nothing)
+        return new(linfo, compute_inf_result_argtypes(linfo, caller_argtypes), result, nothing)
     end
 end
 
-function compute_inf_result_argtypes(linfo::MethodInstance)
+function compute_inf_result_argtypes(linfo::MethodInstance, caller_argtypes = nothing)
     toplevel = !isa(linfo.def, Method)
-    linfo_argtypes::SimpleVector = unwrap_unionall(linfo.specTypes).parameters
+    given_argtypes = Any[unwrap_unionall(linfo.specTypes).parameters...]
     nargs::Int = toplevel ? 0 : linfo.def.nargs
+    if !toplevel && caller_argtypes !== nothing
+        for i in 1:length(caller_argtypes)
+            a = maybe_widen_conditional(given_argtypes[i])
+            if i > length(given_argtypes)
+                push!(given_argtypes, a)
+            elseif a isa Const
+                given_argtypes[i] = a
+            end
+        end
+    end
     result_argtypes = Vector{Any}(undef, nargs)
     # First, if we're dealing with a varargs method, then we set the last element of `args`
     # to the appropriate `Tuple` type or `PartialTuple` instance.
     if !toplevel && linfo.def.isva
         if linfo.specTypes == Tuple
             if nargs > 1
-                linfo_argtypes = svec(Any[ Any for i = 1:(nargs - 1) ]..., Tuple.parameters[1])
+                given_argtypes = svec(Any[ Any for i = 1:(nargs - 1) ]..., Tuple.parameters[1])
             end
-            vararg_type = Tuple
+            vargtype = Tuple
         else
-            linfo_argtypes_length = length(linfo_argtypes)
-            if nargs > linfo_argtypes_length
-                va = linfo_argtypes[linfo_argtypes_length]
+            given_argtypes_length = length(given_argtypes)
+            if nargs > given_argtypes_length
+                va = given_argtypes[given_argtypes_length]
                 if isvarargtype(va)
                     new_va = rewrap_unionall(unconstrain_vararg_length(va), linfo.specTypes)
-                    vararg_type_vec = Any[new_va]
-                    vararg_type = Tuple{new_va}
+                    vargtype_elements = Any[new_va]
+                    vargtype = Tuple{new_va}
                 else
-                    vararg_type_vec = Any[]
-                    vararg_type = Tuple{}
+                    vargtype_elements = Any[]
+                    vargtype = Tuple{}
                 end
             else
-                vararg_type_vec = Any[]
-                for p in linfo_argtypes[nargs:linfo_argtypes_length]
+                vargtype_elements = Any[]
+                for p in given_argtypes[nargs:given_argtypes_length]
                     p = isvarargtype(p) ? unconstrain_vararg_length(p) : p
-                    push!(vararg_type_vec, rewrap_unionall(p, linfo.specTypes))
+                    push!(vargtype_elements, rewrap_unionall(p, linfo.specTypes))
                 end
-                for i in 1:length(vararg_type_vec)
-                    atyp = vararg_type_vec[i]
+                for i in 1:length(vargtype_elements)
+                    atyp = vargtype_elements[i]
                     if isa(atyp, DataType) && isdefined(atyp, :instance)
                         # replace singleton types with their equivalent Const object
-                        vararg_type_vec[i] = Const(atyp.instance)
+                        vargtype_elements[i] = Const(atyp.instance)
                     elseif isconstType(atyp)
-                        vararg_type_vec[i] = Const(atyp.parameters[1])
+                        vargtype_elements[i] = Const(atyp.parameters[1])
                     end
                 end
-                vararg_type = tuple_tfunc(vararg_type_vec)
+                vargtype = tuple_tfunc(vargtype_elements)
             end
         end
-        result_argtypes[nargs] = vararg_type
+        result_argtypes[nargs] = vargtype
         nargs -= 1
     end
-    # Now, we propagate type info from `linfo_argtypes` into `result_argtypes`, improving some
+    # Now, we propagate type info from `given_argtypes` into `result_argtypes`, improving some
     # type info as we go (where possible). Note that if we're dealing with a varargs method,
     # we already handled the last element of `result_argtypes` (and decremented `nargs` so that
     # we don't overwrite the result of that work here).
-    linfo_argtypes_length = length(linfo_argtypes)
-    if linfo_argtypes_length > 0
-        if linfo_argtypes_length > nargs
-            linfo_argtypes_length = nargs
-        end
+    given_argtypes_length = length(given_argtypes)
+    if given_argtypes_length > 0
+        n = given_argtypes_length > nargs ? nargs : given_argtypes_length
+        tail_index = n
         local lastatype
-        tail_index = linfo_argtypes_length
-        for i = 1:linfo_argtypes_length
-            atyp = linfo_argtypes[i]
-            if i == linfo_argtypes_length && isvarargtype(atyp)
+        for i = 1:n
+            atyp = given_argtypes[i]
+            if i == n && isvarargtype(atyp)
                 atyp = unwrapva(atyp)
                 tail_index -= 1
             end
@@ -91,7 +99,7 @@ function compute_inf_result_argtypes(linfo::MethodInstance)
             else
                 atyp = rewrap_unionall(atyp, linfo.specTypes)
             end
-            i == linfo_argtypes_length && (lastatype = atyp)
+            i == n && (lastatype = atyp)
             result_argtypes[i] = atyp
         end
         for i = (tail_index + 1):nargs
