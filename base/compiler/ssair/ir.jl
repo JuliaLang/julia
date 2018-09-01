@@ -913,9 +913,18 @@ function process_node!(compact::IncrementalCompact, result::Vector{Any},
         result[result_idx] = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)
         result_idx += 1
     elseif isa(stmt, PhiNode)
-        edges = compact.allow_cfg_transforms ? map!(i->compact.bb_rename[i], stmt.edges, stmt.edges) : stmt.edges
-        result[result_idx] = PhiNode(edges, process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, do_rename_ssa))
-        result_idx += 1
+        values = process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, do_rename_ssa)
+        if length(stmt.edges) == 1 && isassigned(values, 1) &&
+                length(compact.allow_cfg_transforms ?
+                    compact.result_bbs[compact.bb_rename[active_bb]].preds :
+                    compact.ir.cfg.blocks[active_bb].preds) == 1
+            # There's only one predecessor left - just replace it
+            ssa_rename[idx] = values[1]
+        else
+            edges = compact.allow_cfg_transforms ? map!(i->compact.bb_rename[i], stmt.edges, stmt.edges) : stmt.edges
+            result[result_idx] = PhiNode(edges, values)
+            result_idx += 1
+        end
     elseif isa(stmt, PhiCNode)
         result[result_idx] = PhiCNode(process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, do_rename_ssa))
         result_idx += 1
