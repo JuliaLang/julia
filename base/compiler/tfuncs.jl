@@ -1093,12 +1093,7 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
                            sv::Union{InferenceState,Nothing}, params::Params = sv.params)
     isva = !isempty(argtypes) && isvarargtype(argtypes[end])
     if f === tuple
-        for a in argtypes # TODO: permit Conditional here too
-            if !isa(a, Const)
-                return tuple_tfunc(argtypes_to_type(argtypes))
-            end
-        end
-        return Const(tuple(anymap(a::Const -> a.val, argtypes)...))
+        return tuple_tfunc(argtypes)
     elseif f === svec
         return SimpleVector
     elseif f === arrayset
