@@ -81,6 +81,14 @@ julia> big"313"
 """
 BigInt(x)
 
+"""
+HAS_ALLOC_OVERFLOW_FUNCTION
+
+If true, julia is linked with a patched GMP that does not abort on huge allocation
+and throws OutOfMemoryError instead.
+"""
+global HAS_ALLOC_OVERFLOW_FUNCTION = false
+
 function __init__()
     try
         if version().major != VERSION.major || bits_per_limb() != BITS_PER_LIMB
@@ -95,11 +103,22 @@ function __init__()
               cglobal(:jl_gc_counted_malloc),
               cglobal(:jl_gc_counted_realloc_with_old_size),
               cglobal(:jl_gc_counted_free_with_size))
-
         ZERO.alloc, ZERO.size, ZERO.d = 0, 0, C_NULL
         ONE.alloc, ONE.size, ONE.d = 1, 1, pointer(_ONE)
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module GMP")
+    end
+    # This only works with a patched version of GMP, ignore otherwise
+    try
+        ccall((:__gmp_set_alloc_overflow_function, :libgmp), Cvoid,
+              (Ptr{Cvoid},),
+              cglobal(:jl_throw_out_of_memory_error))
+        global HAS_ALLOC_OVERFLOW_FUNCTION = true
+    catch ex
+        # ErrorException("ccall: could not find function...")
+        if typeof(ex) != ErrorException
+            rethrow()
+        end
     end
 end
 

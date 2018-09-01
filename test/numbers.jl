@@ -208,6 +208,11 @@ end
 
 @test isa(0170141183460469231731687303715884105728,BigInt)
 
+# GMP allocation overflow should not cause crash
+if sizeof(Int)>4 && Base.GMP.HAS_ALLOC_OVERFLOW_FUNCTION
+  @test_throws OutOfMemoryError BigInt(3)^(3^3^3)
+end
+
 # exponentiating with a negative base
 @test -3^2 == -9
 @test -9223372036854775808^2 == -(9223372036854775808^2)
