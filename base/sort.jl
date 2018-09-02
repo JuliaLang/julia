@@ -938,6 +938,8 @@ Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
 keyword arguments.
 
+To sort slices of an array, refer to [`sortslices`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [4 3; 1 2]
@@ -992,6 +994,8 @@ end
 
 Sort the multidimensional array `A` along dimension `dims`.
 See [`sort!`](@ref) for a description of possible keyword arguments.
+
+To sort slices of an array, refer to [`sortslices`](@ref).
 
 # Examples
 ```jldoctest
