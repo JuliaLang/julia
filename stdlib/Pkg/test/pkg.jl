@@ -354,7 +354,6 @@ temp_pkg_dir() do project_path
     end
 end
 
-#=
 temp_pkg_dir() do project_path
     @testset "valid project file names" begin
         extract_uuid(toml_path) = begin
@@ -370,6 +369,8 @@ temp_pkg_dir() do project_path
         end
 
         cd(project_path) do
+            target_dir = mktempdir()
+            uuid = nothing
             mktempdir() do tmp; cd(tmp) do
                 pkg_name = "FooBar"
                 # create a project and grab its uuid
@@ -381,20 +382,21 @@ temp_pkg_dir() do project_path
                 Pkg.activate(abspath(pkg_name))
                 # add an example project to populate manifest file
                 Pkg.add("Example")
-                Pkg.activate()
                 # change away from default names
-                mv(joinpath(pkg_name, "Project.toml"), joinpath(pkg_name, "JuliaProject.toml"))
-                mv(joinpath(pkg_name, "Manifest.toml"), joinpath(pkg_name, "JuliaManifest.toml"))
-                # make sure things still work
-                Pkg.develop(PackageSpec(url = abspath(pkg_name)))
-                @test isinstalled((name=pkg_name, uuid=UUID(uuid)))
-                Pkg.rm(pkg_name)
-                @test !isinstalled((name=pkg_name, uuid=UUID(uuid)))
+                ## note: this is written awkwardly because a `mv` here causes failures on AppVeyor
+                cp(joinpath(pkg_name, "src"), joinpath(target_dir, "src"))
+                cp(joinpath(pkg_name, "Project.toml"), joinpath(target_dir, "JuliaProject.toml"))
+                cp(joinpath(pkg_name, "Manifest.toml"), joinpath(target_dir, "JuliaManifest.toml"))
             end end
+            Pkg.activate()
+            # make sure things still work
+            Pkg.REPLMode.pkgstr("dev $target_dir")
+            @test isinstalled((name="FooBar", uuid=UUID(uuid)))
+            Pkg.rm("FooBar")
+            @test !isinstalled((name="FooBar", uuid=UUID(uuid)))
         end # cd project_path
     end # @testset
 end
-=#
 
 temp_pkg_dir() do project_path
     @testset "invalid repo url" begin
