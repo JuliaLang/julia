@@ -409,12 +409,8 @@ SparseMatrixCSC{Tv,Ti}(M::Transpose{Tv,SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = 
 # converting from adjoint or transpose sparse matrices to sparse matrices with different eltype
 SparseMatrixCSC{Tv}(M::Adjoint{<:Any,SparseMatrixCSC}) where {Tv} = SparseMatrixCSC{Tv}(copy(M))
 SparseMatrixCSC{Tv}(M::Transpose{<:Any,SparseMatrixCSC}) where {Tv} = SparseMatrixCSC{Tv}(copy(M))
-function SparseMatrixCSC{Tv,Ti}(M::Adjoint{<:Any,SparseMatrixCSC}) where {Tv,Ti}
-    SparseMatrixCSC{Tv,Ti}(copy(M))
-end
-function SparseMatrixCSC{Tv,Ti}(M::Transpose{<:Any,SparseMatrixCSC}) where {Tv,Ti}
-    SparseMatrixCSC{Tv,Ti}(copy(M))
-end
+SparseMatrixCSC{Tv,Ti}(M::Adjoint{<:Any,SparseMatrixCSC}) where {Tv,Ti} = SparseMatrixCSC{Tv,Ti}(copy(M))
+SparseMatrixCSC{Tv,Ti}(M::Transpose{<:Any,SparseMatrixCSC}) where {Tv,Ti} = SparseMatrixCSC{Tv,Ti}(copy(M))
 
 # converting from SparseMatrixCSC to other matrix types
 function Matrix(S::SparseMatrixCSC{Tv}) where Tv
