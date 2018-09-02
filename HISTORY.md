@@ -1247,7 +1247,7 @@ Deprecated or removed
   * `search(buf::IOBuffer, delim::UInt8)` has been deprecated in favor of either `occursin(delim, buf)`
     (to test containment) or `readuntil(buf, delim)` (to read data up to `delim`) ([#26600]).
 
-  * `ismatch(regex, str)` has been deprecated in favor of `contains(str, regex)` ([#24673]).
+  * `ismatch(regex, str)` has been deprecated in favor of `occursin(regex, str)` ([#26283]).
 
   * `matchall` has been deprecated in favor of `collect(m.match for m in eachmatch(r, s))` ([#26071]).
 
