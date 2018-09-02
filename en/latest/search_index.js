@@ -3473,7 +3473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips/#kernal-functions-1",
+    "location": "manual/performance-tips/#kernel-functions-1",
     "page": "Performance Tips",
     "title": "Separate kernel functions (aka, function barriers)",
     "category": "section",
@@ -3865,6 +3865,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "manual/faq/#How-do-I-check-if-the-current-file-is-being-run-as-the-main-script?-1",
+    "page": "Frequently Asked Questions",
+    "title": "How do I check if the current file is being run as the main script?",
+    "category": "section",
+    "text": "When a file is run as the main script using julia file.jl one might want to activate extra functionality like command line argument handling. A way to determine that a file is run in this fashion is to check if abspath(PROGRAM_FILE) == @__FILE__ is true."
+},
+
+{
     "location": "manual/faq/#Functions-1",
     "page": "Frequently Asked Questions",
     "title": "Functions",
@@ -3998,14 +4006,6 @@ var documenterSearchIndex = {"docs": [
     "title": "How does \"null\", \"nothingness\" or \"missingness\" work in Julia?",
     "category": "section",
     "text": "Unlike many languages (for example, C and Java), Julia objects cannot be \"null\" by default. When a reference (variable, object field, or array element) is uninitialized, accessing it will immediately throw an error. This situation can be detected using the isdefined or isassigned functions.Some functions are used only for their side effects, and do not need to return a value. In these cases, the convention is to return the value nothing, which is just a singleton object of type Nothing. This is an ordinary type with no fields; there is nothing special about it except for this convention, and that the REPL does not print anything for it. Some language constructs that would not otherwise have a value also yield nothing, for example if false; end.For situations where a value x of type T exists only sometimes, the Union{T, Nothing} type can be used for function arguments, object fields and array element types as the equivalent of Nullable, Option or Maybe in other languages. If the value itself can be nothing (notably, when T is Any), the Union{Some{T}, Nothing} type is more appropriate since x == nothing then indicates the absence of a value, and x == Some(nothing) indicates the presence of a value equal to nothing. The something function allows unwrapping Some objects and using a default value instead of nothing arguments. Note that the compiler is able to generate efficient code when working with Union{T, Nothing} arguments or fields.To represent missing data in the statistical sense (NA in R or NULL in SQL), use the missing object. See the Missing Values section for more details.The empty tuple (()) is another form of nothingness. But, it should not really be thought of as nothing but rather a tuple of zero values.The empty (or \"bottom\") type, written as Union{} (an empty union type), is a type with no values and no subtypes (except itself). You will generally not need to use this type."
-},
-
-{
-    "location": "manual/faq/#How-do-I-check-if-the-current-file-is-being-run-as-the-main-script?-1",
-    "page": "Frequently Asked Questions",
-    "title": "How do I check if the current file is being run as the main script?",
-    "category": "section",
-    "text": "When a file is run as the main script using julia file.jl one might want to activate extra functionality like command line argument handling. A way to determine that a file is run in this fashion is to check if abspath(PROGRAM_FILE) == @__FILE__ is true."
 },
 
 {
@@ -7077,7 +7077,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\n"
 },
 
 {
@@ -20533,7 +20533,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sockets",
     "title": "Base.bind",
     "category": "function",
-    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
+    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
 },
 
 {
