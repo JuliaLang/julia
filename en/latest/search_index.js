@@ -19169,6 +19169,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/Logging/#Writing-log-events-to-a-file-1",
+    "page": "Logging",
+    "title": "Writing log events to a file",
+    "category": "section",
+    "text": "Sometimes it can be useful to write log events to a file. Here is an example of how to use a task-local and global logger to write information to a text file:# Load the logging module\njulia> using Logging\n\n# Open a textfile for writing\njulia> io = open(\"log.txt\", \"w+\")\nIOStream(<file log.txt>)\n\n# Create a simple logger\njulia> logger = SimpleLogger(io)\nSimpleLogger(IOStream(<file log.txt>), Info, Dict{Any,Int64}())\n\n# Log a task-specific message\njulia> with_logger(logger) do\n           @info(\"a context specific log message\")\n       end\n\n# Write all buffered messages to the file\njulia> flush(io)\n\n# Set the global logger to logger\njulia> global_logger(logger)\nSimpleLogger(IOStream(<file log.txt>), Info, Dict{Any,Int64}())\n\n# This message will now also be written to the file\njulia> @info(\"a global log message\")\n\n# Close the file\njulia> close(io)"
+},
+
+{
     "location": "stdlib/Logging/#Reference-1",
     "page": "Logging",
     "title": "Reference",
