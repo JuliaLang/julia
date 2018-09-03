@@ -276,9 +276,13 @@ end
 
 #### seed!()
 
-function seed!(r::MersenneTwister, seed::Vector{UInt32})
+function seed!(r::MersenneTwister, seed::Union{UInt32, Vector{UInt32}})
     copyto!(resize!(r.seed, length(seed)), seed)
-    dsfmt_init_by_array(r.state, r.seed)
+    if seed isa UInt32
+        dsfmt_init_gen_rand(r.state, seed)
+    else
+        dsfmt_init_by_array(r.state, r.seed)
+    end
     mt_setempty!(r)
     mt_setempty!(r, UInt128)
     fillcache_zeros!(r)
@@ -286,7 +290,13 @@ function seed!(r::MersenneTwister, seed::Vector{UInt32})
 end
 
 seed!(r::MersenneTwister=GLOBAL_RNG) = seed!(r, make_seed())
-seed!(r::MersenneTwister, n::Integer) = seed!(r, make_seed(n))
+function seed!(r::MersenneTwister, n::Integer)
+    if n <= typemax(UInt32)
+        seed!(r, UInt32(n))
+    else
+        seed!(r, make_seed(n))
+    end
+end
 seed!(seed::Union{Integer,Vector{UInt32}}) = seed!(GLOBAL_RNG, seed)
 
 
