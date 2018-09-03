@@ -17,11 +17,10 @@ abstract type AbstractDateToken end
 `locale`. If a `tryparsenext` method does not need a locale, it can leave
 the argument out in the method definition.
 
-Return a tuple of 2 elements `(res, idx)`, where:
+If parsing succeeds, returns a tuple of 2 elements `(res, idx)`, where:
 
-* `res` is a `Nullable{T}` - the result of the parsing, null if parsing failed.
-* `idx` is an `Int` - if parsing failed, the index at which it failed; if
-   parsing succeeded, `idx` is the index _after_ the index at which parsing ended.
+* `res` is the result of the parsing.
+* `idx::Int`, is the index _after_ the index at which parsing ended.
 """
 function tryparsenext end
 
@@ -39,7 +38,7 @@ function format end
 
 # fallback to tryparsenext/format methods that don't care about locale
 @inline function tryparsenext(d::AbstractDateToken, str, i, len, locale)
-    tryparsenext(d, str, i, len)
+    return tryparsenext(d, str, i, len)
 end
 
 function Base.string(t::Time)
@@ -76,14 +75,14 @@ end
 
 function _show_content(io::IO, d::DatePart{c}) where c
     for i = 1:d.width
-        write(io, c)
+        print(io, c)
     end
 end
 
 function Base.show(io::IO, d::DatePart{c}) where c
-    write(io, "DatePart(")
+    print(io, "DatePart(")
     _show_content(io, d)
-    write(io, ")")
+    print(io, ")")
 end
 
 ### Parse tokens
@@ -91,20 +90,19 @@ end
 for c in "yYmdHMS"
     @eval begin
         @inline function tryparsenext(d::DatePart{$c}, str, i, len)
-            tryparsenext_base10(str, i, len, min_width(d), max_width(d))
+            return tryparsenext_base10(str, i, len, min_width(d), max_width(d))
         end
     end
 end
 
 for (tok, fn) in zip("uUeE", [monthabbr_to_value, monthname_to_value, dayabbr_to_value, dayname_to_value])
     @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
-        word, i = tryparsenext_word(str, i, len, locale, max_width(d))
-        val = isnull(word) ? 0 : $fn(get(word), locale)
-        if val == 0
-            return Nullable{Int64}(), i
-        else
-            return Nullable{Int64}(val), i
-        end
+        next = tryparsenext_word(str, i, len, locale, max_width(d))
+        next === nothing && return nothing
+        word, i = next
+        val = $fn(word, locale)
+        val == 0 && return nothing
+        return val, i
     end
 end
 
@@ -112,17 +110,15 @@ end
 struct Decimal3 end
 
 @inline function tryparsenext(d::DatePart{'s'}, str, i, len)
-    ms, ii = tryparsenext_base10(str, i, len, min_width(d), max_width(d))
-    if !isnull(ms)
-        val0 = val = get(ms)
-        len = ii - i
-        if len > 3
-            val, r = divrem(val, Int64(10) ^ (len - 3))
-            r == 0 || throw(InexactError(:convert, Decimal3, val0))
-        else
-            val *= Int64(10) ^ (3 - len)
-        end
-        ms = Nullable{Int64}(val)
+    val = tryparsenext_base10(str, i, len, min_width(d), max_width(d))
+    val === nothing && return nothing
+    ms0, ii = val
+    len = ii - i
+    if len > 3
+        ms, r = divrem(ms0, Int64(10) ^ (len - 3))
+        r == 0 || throw(InexactError(:convert, Decimal3, ms0))
+    else
+        ms = ms0 * Int64(10) ^ (3 - len)
     end
     return ms, ii
 end
@@ -131,19 +127,19 @@ end
 
 for (c, fn) in zip("YmdHMS", [year, month, day, hour, minute, second])
     @eval function format(io, d::DatePart{$c}, dt)
-        write(io, dec($fn(dt), d.width))
+        print(io, string($fn(dt), base = 10, pad = d.width))
     end
 end
 
 for (tok, fn) in zip("uU", [monthabbr, monthname])
     @eval function format(io, d::DatePart{$tok}, dt, locale)
-        write(io, $fn(month(dt), locale))
+        print(io, $fn(month(dt), locale))
     end
 end
 
 for (tok, fn) in zip("eE", [dayabbr, dayname])
     @eval function format(io, ::DatePart{$tok}, dt, locale)
-        write(io, $fn(dayofweek(dt), locale))
+        print(io, $fn(dayofweek(dt), locale))
     end
 end
 
@@ -153,27 +149,27 @@ end
 
     # the last n digits of y
     # will be 0 padded if y has less than n digits
-    str = dec(y, n)
-    l = endof(str)
+    str = string(y, base = 10, pad = n)
+    l = lastindex(str)
     if l == n
         # fast path
-        write(io, str)
+        print(io, str)
     else
-        write(io, SubString(str, l - (n - 1), l))
+        print(io, SubString(str, l - (n - 1), l))
     end
 end
 
 function format(io, d::DatePart{'s'}, dt)
     ms = millisecond(dt)
     if ms % 100 == 0
-        str = dec(div(ms, 100), 1)
+        str = string(div(ms, 100))
     elseif ms % 10 == 0
-        str = dec(div(ms, 10), 2)
+        str = string(div(ms, 10), pad = 2)
     else
-        str = dec(ms, 3)
+        str = string(ms, pad = 3)
     end
 
-    write(io, rpad(str, d.width, '0'))
+    print(io, rpad(str, d.width, '0'))
 end
 
 ### Delimiters
@@ -182,48 +178,52 @@ struct Delim{T, length} <: AbstractDateToken
     d::T
 end
 
-Delim(d::Char) = Delim{Char, 1}(d)
+Delim(d::T) where {T<:AbstractChar} = Delim{T, 1}(d)
 Delim(d::String) = Delim{String, length(d)}(d)
 
-@inline function tryparsenext(d::Delim{Char, N}, str, i::Int, len) where N
-    R = Nullable{Bool}
-    for j=1:N
-        i > len && return (R(), i)
-        c, i = next(str, i)
-        c != d.d && return (R(), i)
+@inline function tryparsenext(d::Delim{<:AbstractChar, N}, str, i::Int, len) where N
+    for j = 1:N
+        i > len && return nothing
+        next = iterate(str, i)
+        @assert next !== nothing
+        c, i = next
+        c != d.d && return nothing
     end
-    return R(true), i
+    return true, i
 end
 
 @inline function tryparsenext(d::Delim{String, N}, str, i::Int, len) where N
-    R = Nullable{Bool}
     i1 = i
-    i2 = start(d.d)
+    i2 = firstindex(d.d)
     for j = 1:N
         if i1 > len
-            return R(), i1
+            return nothing
         end
-        c1, i1 = next(str, i1)
-        c2, i2 = next(d.d, i2)
+        next1 = iterate(str, i1)
+        @assert next1 !== nothing
+        c1, i1 = next1
+        next2 = iterate(d.d, i2)
+        @assert next2 !== nothing
+        c2, i2 = next2
         if c1 != c2
-            return R(), i1
+            return nothing
         end
     end
-    return R(true), i1
+    return true, i1
 end
 
 @inline function format(io, d::Delim, dt, locale)
-    write(io, d.d)
+    print(io, d.d)
 end
 
-function _show_content(io::IO, d::Delim{Char, N}) where N
+function _show_content(io::IO, d::Delim{<:AbstractChar, N}) where N
     if d.d in keys(CONVERSION_SPECIFIERS)
         for i = 1:N
-            write(io, '\\', d.d)
+            print(io, '\\', d.d)
         end
     else
         for i = 1:N
-            write(io, d.d)
+            print(io, d.d)
         end
     end
 end
@@ -231,16 +231,16 @@ end
 function _show_content(io::IO, d::Delim)
     for c in d.d
         if c in keys(CONVERSION_SPECIFIERS)
-            write(io, '\\')
+            print(io, '\\')
         end
-        write(io, c)
+        print(io, c)
     end
 end
 
 function Base.show(io::IO, d::Delim)
-    write(io, "Delim(")
+    print(io, "Delim(")
     _show_content(io, d)
-    write(io, ")")
+    print(io, ")")
 end
 
 ### DateFormat construction
@@ -267,7 +267,7 @@ const CONVERSION_SPECIFIERS = Dict{Char, Type}(
 # Default values are needed when a conversion specifier is used in a DateFormat for parsing
 # and we have reached the end of the input string.
 # Note: Allow `Any` value as a default to support extensibility
-const CONVERSION_DEFAULTS = Dict{Type, Any}(
+const CONVERSION_DEFAULTS = IdDict{Type, Any}(
     Year => Int64(1),
     Month => Int64(1),
     DayOfWeekToken => Int64(0),
@@ -282,7 +282,7 @@ const CONVERSION_DEFAULTS = Dict{Type, Any}(
 
 # Specifies the required fields in order to parse a TimeType
 # Note: Allows for addition of new TimeTypes
-const CONVERSION_TRANSLATIONS = Dict{Type{<:TimeType}, Tuple}(
+const CONVERSION_TRANSLATIONS = IdDict{Type, Any}(
     Date => (Year, Month, Day),
     DateTime => (Year, Month, Day, Hour, Minute, Second, Millisecond),
     Time => (Hour, Minute, Second, Millisecond, Microsecond, Nanosecond),
@@ -330,7 +330,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
 
     letters = String(collect(keys(CONVERSION_SPECIFIERS)))
     for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
-        tran = replace(f[prev_offset:prevind(f, m.offset)], r"\\(.)", s"\1")
+        tran = replace(f[prev_offset:prevind(f, m.offset)], r"\\(.)" => s"\1")
 
         if !isempty(prev)
             letter, width = prev
@@ -350,7 +350,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
         prev_offset = m.offset + width
     end
 
-    tran = replace(f[prev_offset:endof(f)], r"\\(.)", s"\1")
+    tran = replace(f[prev_offset:lastindex(f)], r"\\(.)" => s"\1")
 
     if !isempty(prev)
         letter, width = prev
@@ -372,12 +372,13 @@ function DateFormat(f::AbstractString, locale::AbstractString)
 end
 
 function Base.show(io::IO, df::DateFormat)
-    write(io, "dateformat\"")
+    print(io, "dateformat\"")
     for t in df.tokens
         _show_content(io, t)
     end
-    write(io, '"')
+    print(io, '"')
 end
+Base.Broadcast.broadcastable(x::DateFormat) = Ref(x)
 
 """
     dateformat"Y-m-d H:M:S"
@@ -416,7 +417,7 @@ parsing many date time strings of the same format, consider creating a
 [`DateFormat`](@ref) object once and using that as the second argument instead.
 """
 function DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
-    parse(DateTime, dt, DateFormat(format, locale))
+    return parse(DateTime, dt, DateFormat(format, locale))
 end
 
 """
@@ -483,7 +484,7 @@ end
 
 function format(dt::TimeType, fmt::DateFormat, bufsize=12)
     # preallocate to reduce resizing
-    io = IOBuffer(Vector{UInt8}(uninitialized, bufsize), true, true)
+    io = IOBuffer(Vector{UInt8}(undef, bufsize), read=true, write=true)
     format(io, dt, fmt)
     String(io.data[1:io.ptr - 1])
 end

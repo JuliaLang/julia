@@ -72,7 +72,7 @@ function _threadsfor(iter,lbody)
         else
             in_threaded_loop[] = true
             # the ccall is not expected to throw
-            ccall(:jl_threading_run, Ref{Void}, (Any,), threadsfor_fun)
+            ccall(:jl_threading_run, Ref{Cvoid}, (Any,), threadsfor_fun)
             in_threaded_loop[] = false
         end
         nothing

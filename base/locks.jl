@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base: _uv_hook_close, unsafe_convert,
+import .Base: _uv_hook_close, unsafe_convert,
     lock, trylock, unlock, islocked
 
 export SpinLock, RecursiveSpinLock, Mutex
@@ -15,7 +15,7 @@ export SpinLock, RecursiveSpinLock, Mutex
 
 Abstract supertype describing types that
 implement the thread-safe synchronization primitives:
-`lock`, `trylock`, `unlock`, and `islocked`
+[`lock`](@ref), [`trylock`](@ref), [`unlock`](@ref), and [`islocked`](@ref).
 """
 abstract type AbstractLock end
 
@@ -25,7 +25,7 @@ abstract type AbstractLock end
 """
     TatasLock()
 
-See SpinLock.
+See [`SpinLock`](@ref).
 """
 struct TatasLock <: AbstractLock
     handle::Atomic{Int}
@@ -35,17 +35,18 @@ end
 """
     SpinLock()
 
-Creates a non-reentrant lock.
+Create a non-reentrant lock.
 Recursive use will result in a deadlock.
-Each `lock` must be matched with an `unlock`.
+Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
 
 Test-and-test-and-set spin locks are quickest up to about 30ish
 contending threads. If you have more contention than that, perhaps
 a lock is the wrong way to synchronize.
 
-See also RecursiveSpinLock for a version that permits recursion.
+See also [`RecursiveSpinLock`](@ref) for a version that permits recursion.
 
-See also Mutex for a more efficient version on one core or if the lock may be held for a considerable length of time.
+See also [`Mutex`](@ref) for a more efficient version on one core or if the
+lock may be held for a considerable length of time.
 """
 const SpinLock = TatasLock
 
@@ -57,9 +58,9 @@ function lock(l::TatasLock)
                 return
             end
         end
-        ccall(:jl_cpu_pause, Void, ())
+        ccall(:jl_cpu_pause, Cvoid, ())
         # Temporary solution before we have gc transition support in codegen.
-        ccall(:jl_gc_safepoint, Void, ())
+        ccall(:jl_gc_safepoint, Cvoid, ())
     end
 end
 
@@ -72,7 +73,7 @@ end
 
 function unlock(l::TatasLock)
     l.handle[] = 0
-    ccall(:jl_cpu_wake, Void, ())
+    ccall(:jl_cpu_wake, Cvoid, ())
     return
 end
 
@@ -84,7 +85,7 @@ end
 """
     RecursiveTatasLock()
 
-See RecursiveSpinLock.
+See [`RecursiveSpinLock`](@ref).
 """
 struct RecursiveTatasLock <: AbstractLock
     ownertid::Atomic{Int16}
@@ -97,11 +98,12 @@ end
 
 Creates a reentrant lock.
 The same thread can acquire the lock as many times as required.
-Each `lock` must be matched with an `unlock`.
+Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
 
-See also SpinLock for a slightly faster version.
+See also [`SpinLock`](@ref) for a slightly faster version.
 
-See also Mutex for a more efficient version on one core or if the lock may be held for a considerable length of time.
+See also [`Mutex`](@ref) for a more efficient version on one core or if the lock
+may be held for a considerable length of time.
 """
 const RecursiveSpinLock = RecursiveTatasLock
 
@@ -117,9 +119,9 @@ function lock(l::RecursiveTatasLock)
                 return
             end
         end
-        ccall(:jl_cpu_pause, Void, ())
+        ccall(:jl_cpu_pause, Cvoid, ())
         # Temporary solution before we have gc transition support in codegen.
-        ccall(:jl_gc_safepoint, Void, ())
+        ccall(:jl_gc_safepoint, Cvoid, ())
     end
 end
 
@@ -144,7 +146,7 @@ function unlock(l::RecursiveTatasLock)
     if l.handle[] == 1
         l.ownertid[] = 0
         l.handle[] = 0
-        ccall(:jl_cpu_wake, Void, ())
+        ccall(:jl_cpu_wake, Cvoid, ())
     else
         l.handle[] -= 1
     end
@@ -177,26 +179,26 @@ These are standard system mutexes for locking critical sections of logic.
 On Windows, this is a critical section object,
 on pthreads, this is a `pthread_mutex_t`.
 
-See also SpinLock for a lighter-weight lock.
+See also [`SpinLock`](@ref) for a lighter-weight lock.
 """
 mutable struct Mutex <: AbstractLock
     ownertid::Int16
-    handle::Ptr{Void}
+    handle::Ptr{Cvoid}
     function Mutex()
         m = new(zero(Int16), Libc.malloc(UV_MUTEX_SIZE))
-        ccall(:uv_mutex_init, Void, (Ptr{Void},), m.handle)
+        ccall(:uv_mutex_init, Cvoid, (Ptr{Cvoid},), m.handle)
         finalizer(_uv_hook_close, m)
         return m
     end
 end
 
-unsafe_convert(::Type{Ptr{Void}}, m::Mutex) = m.handle
+unsafe_convert(::Type{Ptr{Cvoid}}, m::Mutex) = m.handle
 
 function _uv_hook_close(x::Mutex)
     h = x.handle
     if h != C_NULL
         x.handle = C_NULL
-        ccall(:uv_mutex_destroy, Void, (Ptr{Void},), h)
+        ccall(:uv_mutex_destroy, Cvoid, (Ptr{Cvoid},), h)
         Libc.free(h)
         nothing
     end
@@ -209,8 +211,8 @@ function lock(m::Mutex)
     # Temporary solution before we have gc transition support in codegen.
     # This could mess up gc state when we add codegen support.
     gc_state = ccall(:jl_gc_safe_enter, Int8, ())
-    ccall(:uv_mutex_lock, Void, (Ptr{Void},), m)
-    ccall(:jl_gc_safe_leave, Void, (Int8,), gc_state)
+    ccall(:uv_mutex_lock, Cvoid, (Ptr{Cvoid},), m)
+    ccall(:jl_gc_safe_leave, Cvoid, (Int8,), gc_state)
     m.ownertid = threadid()
     return
 end
@@ -219,7 +221,7 @@ function trylock(m::Mutex)
     if m.ownertid == threadid()
         return true
     end
-    r = ccall(:uv_mutex_trylock, Cint, (Ptr{Void},), m)
+    r = ccall(:uv_mutex_trylock, Cint, (Ptr{Cvoid},), m)
     if r == 0
         m.ownertid = threadid()
     end
@@ -229,7 +231,7 @@ end
 function unlock(m::Mutex)
     @assert(m.ownertid == threadid(), "unlock from wrong thread")
     m.ownertid = 0
-    ccall(:uv_mutex_unlock, Void, (Ptr{Void},), m)
+    ccall(:uv_mutex_unlock, Cvoid, (Ptr{Cvoid},), m)
     return
 end
 

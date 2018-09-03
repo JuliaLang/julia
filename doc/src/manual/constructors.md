@@ -97,14 +97,16 @@ julia> struct OrderedPair
 
 Now `OrderedPair` objects can only be constructed such that `x <= y`:
 
-```jldoctest pairtype
+```jldoctest pairtype; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
 julia> OrderedPair(1, 2)
 OrderedPair(1, 2)
 
 julia> OrderedPair(2,1)
 ERROR: out of order
 Stacktrace:
- [1] OrderedPair(::Int64, ::Int64) at ./none:4
+ [1] error at ./error.jl:33 [inlined]
+ [2] OrderedPair(::Int64, ::Int64) at ./none:4
+ [3] top-level scope
 ```
 
 If the type were declared `mutable`, you could reach in and directly change the field values to
@@ -277,7 +279,7 @@ that, by default, instances of parametric composite types can be constructed eit
 given type parameters or with type parameters implied by the types of the arguments given to the
 constructor. Here are some examples:
 
-```jldoctest parametric
+```jldoctest parametric; filter = r"Closest candidates.*\n  .*"
 julia> struct Point{T<:Real}
            x::T
            y::T
@@ -292,16 +294,15 @@ Point{Float64}(1.0, 2.5)
 julia> Point(1,2.5) ## implicit T ##
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
 Closest candidates are:
-  Point(::T<:Real, !Matched::T<:Real) where T<:Real at none:2
+  Point(::T<:Real, ::T<:Real) where T<:Real at none:2
 
 julia> Point{Int64}(1, 2) ## explicit T ##
 Point{Int64}(1, 2)
 
 julia> Point{Int64}(1.0,2.5) ## explicit T ##
-ERROR: InexactError: convert(Int64, 2.5)
+ERROR: InexactError: Int64(Int64, 2.5)
 Stacktrace:
- [1] convert at ./float.jl:703 [inlined]
- [2] Point{Int64}(::Float64, ::Float64) at ./none:2
+[...]
 
 julia> Point{Float64}(1.0, 2.5) ## explicit T ##
 Point{Float64}(1.0, 2.5)
@@ -337,7 +338,7 @@ julia> Point(x::T, y::T) where {T<:Real} = Point{T}(x,y);
 
 Notice that each definition looks like the form of constructor call that it handles.
 The call `Point{Int64}(1,2)` will invoke the definition `Point{T}(x,y)` inside the
-`type` block.
+`struct` block.
 The outer constructor declaration, on the other hand, defines a
 method for the general `Point` constructor which only applies to pairs of values of the same real
 type. This declaration makes constructor calls without explicit type parameters, like `Point(1,2)`
@@ -406,8 +407,10 @@ defining sophisticated behavior is typically quite simple.
 ## Case Study: Rational
 
 Perhaps the best way to tie all these pieces together is to present a real world example of a
-parametric composite type and its constructor methods. To that end, here is the (slightly modified) beginning of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
-which implements Julia's [Rational Numbers](@ref):
+parametric composite type and its constructor methods. To that end, we implement our own rational number type
+`OurRational`, similar to Julia's built-in [`Rational`](@ref) type, defined in
+[`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
+
 
 ```jldoctest rational
 julia> struct OurRational{T<:Integer} <: Real
@@ -433,27 +436,27 @@ OurRational
 julia> OurRational(n::Integer) = OurRational(n,one(n))
 OurRational
 
-julia> //(n::Integer, d::Integer) = OurRational(n,d)
-// (generic function with 1 method)
+julia> ⊘(n::Integer, d::Integer) = OurRational(n,d)
+⊘ (generic function with 1 method)
 
-julia> //(x::OurRational, y::Integer) = x.num // (x.den*y)
-// (generic function with 2 methods)
+julia> ⊘(x::OurRational, y::Integer) = x.num ⊘ (x.den*y)
+⊘ (generic function with 2 methods)
 
-julia> //(x::Integer, y::OurRational) = (x*y.den) // y.num
-// (generic function with 3 methods)
+julia> ⊘(x::Integer, y::OurRational) = (x*y.den) ⊘ y.num
+⊘ (generic function with 3 methods)
 
-julia> //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
-// (generic function with 4 methods)
+julia> ⊘(x::Complex, y::Real) = complex(real(x) ⊘ y, imag(x) ⊘ y)
+⊘ (generic function with 4 methods)
 
-julia> //(x::Real, y::Complex) = x*y'//real(y*y')
-// (generic function with 5 methods)
+julia> ⊘(x::Real, y::Complex) = (x*y') ⊘ real(y*y')
+⊘ (generic function with 5 methods)
 
-julia> function //(x::Complex, y::Complex)
+julia> function ⊘(x::Complex, y::Complex)
            xy = x*y'
            yy = real(y*y')
-           complex(real(xy)//yy, imag(xy)//yy)
+           complex(real(xy) ⊘ yy, imag(xy) ⊘ yy)
        end
-// (generic function with 6 methods)
+⊘ (generic function with 6 methods)
 ```
 
 The first line -- `struct OurRational{T<:Integer} <: Real` -- declares that `OurRational` takes one
@@ -477,55 +480,33 @@ have different types: it promotes them to a common type and then delegates const
 outer constructor for arguments of matching type. The third outer constructor turns integer values
 into rationals by supplying a value of `1` as the denominator.
 
-Following the outer constructor definitions, we have a number of methods for the [`//`](@ref)
-operator, which provides a syntax for writing rationals. Before these definitions, [`//`](@ref)
+Following the outer constructor definitions, we defined a number of methods for the `⊘`
+operator, which provides a syntax for writing rationals (e.g. `1 ⊘ 2`). Julia's `Rational`
+type uses the [`//`](@ref) operator for this purpose. Before these definitions, `⊘`
 is a completely undefined operator with only syntax and no meaning. Afterwards, it behaves just
 as described in [Rational Numbers](@ref) -- its entire behavior is defined in these few lines.
-The first and most basic definition just makes `a//b` construct a `OurRational` by applying the
-`OurRational` constructor to `a` and `b` when they are integers. When one of the operands of [`//`](@ref)
+The first and most basic definition just makes `a ⊘ b` construct a `OurRational` by applying the
+`OurRational` constructor to `a` and `b` when they are integers. When one of the operands of `⊘`
 is already a rational number, we construct a new rational for the resulting ratio slightly differently;
 this behavior is actually identical to division of a rational with an integer.
 Finally, applying
-[`//`](@ref) to complex integral values creates an instance of `Complex{OurRational}` -- a complex
+`⊘` to complex integral values creates an instance of `Complex{OurRational}` -- a complex
 number whose real and imaginary parts are rationals:
 
 ```jldoctest rational
-julia> ans = (1 + 2im)//(1 - 2im);
+julia> z = (1 + 2im) ⊘ (1 - 2im);
 
-julia> typeof(ans)
+julia> typeof(z)
 Complex{OurRational{Int64}}
 
-julia> ans <: Complex{OurRational}
+julia> typeof(z) <: Complex{OurRational}
 false
 ```
 
-Thus, although the [`//`](@ref) operator usually returns an instance of `OurRational`, if either
+Thus, although the `⊘` operator usually returns an instance of `OurRational`, if either
 of its arguments are complex integers, it will return an instance of `Complex{OurRational}` instead.
 The interested reader should consider perusing the rest of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
 it is short, self-contained, and implements an entire basic Julia type.
-
-## [Constructors and Conversion](@id constructors-and-conversion)
-
-Constructors `T(args...)` in Julia are implemented like other callable objects: methods are added
-to their types. The type of a type is `Type`, so all constructor methods are stored in the method
-table for the `Type` type. This means that you can declare more flexible constructors, e.g. constructors
-for abstract types, by explicitly defining methods for the appropriate types.
-
-However, in some cases you could consider adding methods to `Base.convert` *instead* of defining
-a constructor, because Julia falls back to calling [`convert`](@ref) if no matching constructor
-is found. For example, if no constructor `T(args...) = ...` exists `Base.convert(::Type{T}, args...) = ...`
-is called.
-
-`convert` is used extensively throughout Julia whenever one type needs to be converted to another
-(e.g. in assignment, [`ccall`](@ref), etcetera), and should generally only be defined (or successful)
-if the conversion is lossless.  For example, `convert(Int, 3.0)` produces `3`, but `convert(Int, 3.2)`
-throws an `InexactError`.  If you want to define a constructor for a lossless conversion from
-one type to another, you should probably define a `convert` method instead.
-
-On the other hand, if your constructor does not represent a lossless conversion, or doesn't represent
-"conversion" at all, it is better to leave it as a constructor rather than a `convert` method.
-For example, the `Array{Int,0}(uninitialized)` constructor creates a zero-dimensional `Array` of the type `Int`,
-but is not really a "conversion" from `Int` to an `Array`.
 
 ## Outer-only constructors
 
@@ -553,7 +534,7 @@ The problem is that we want `S` to be a larger type than `T`, so that we can sum
 with less information loss. For example, when `T` is [`Int32`](@ref), we would like `S` to
 be [`Int64`](@ref). Therefore we want to avoid an interface that allows the user to construct
 instances of the type `SummedArray{Int32,Int32}`. One way to do this is to provide a
-constructor only for `SummedArray`, but inside the `type` definition block to suppress
+constructor only for `SummedArray`, but inside the `struct` definition block to suppress
 generation of default constructors:
 
 ```jldoctest

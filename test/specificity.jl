@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function args_morespecific(a, b)
     sp = (ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) != 0)
     if sp  # make sure morespecific(a,b) implies !morespecific(b,a)
@@ -14,14 +16,14 @@ let
     @test !args_morespecific(b2, a)
     a  = Tuple{Type{T1}, Ptr{T1}} where T1<:Integer
     b2 = Tuple{Type{T2}, Ptr{Integer}} where T2<:Integer
-    @test args_morespecific(a, b2)
-    @test !args_morespecific(b2, a)
+    @test !args_morespecific(a, b2)
+    @test  args_morespecific(b2, a)
 end
 
 # issue #11534
 let
-    t1 = Tuple{AbstractArray, Tuple{Vararg{RangeIndex}}}
-    t2 = Tuple{Array, T} where T<:Tuple{Vararg{RangeIndex}}
+    t1 = Tuple{AbstractArray, Tuple{Vararg{Base.RangeIndex}}}
+    t2 = Tuple{Array, T} where T<:Tuple{Vararg{Base.RangeIndex}}
     @test !args_morespecific(t1, t2)
     @test  args_morespecific(t2, t1)
 end
@@ -45,7 +47,7 @@ _z_z_z_(::Int, c...) = 3
 @test  args_morespecific(Tuple{T,Vararg{T}} where T<:Number,  Tuple{Number,Number,Vararg{Number}})
 @test !args_morespecific(Tuple{Number,Number,Vararg{Number}}, Tuple{T,Vararg{T}} where T<:Number)
 
-@test args_morespecific(Tuple{Array{T} where T<:Union{Float32,Float64,Complex64,Complex128}, Any},
+@test args_morespecific(Tuple{Array{T} where T<:Union{Float32,Float64,ComplexF32,ComplexF64}, Any},
                         Tuple{Array{T} where T<:Real, Any})
 
 @test  args_morespecific(Tuple{1,T} where T, Tuple{Any})
@@ -106,7 +108,7 @@ f17016(f, t::T_17016) = 0
 f17016(f, t1::Tuple) = 1
 @test f17016(0, (1,2,3)) == 0
 
-@test !args_morespecific(Tuple{Type{Any}, Any}, Tuple{Type{T}, Any} where T<:VecElement)
+@test  args_morespecific(Tuple{Type{Any}, Any}, Tuple{Type{T}, Any} where T<:VecElement)
 @test !args_morespecific((Tuple{Type{T}, Any} where T<:VecElement), Tuple{Type{Any}, Any})
 
 @test !args_morespecific(Tuple{Type{T}, Tuple{Any, Vararg{Any, N} where N}} where T<:Tuple{Any, Vararg{Any, N} where N},
@@ -127,12 +129,12 @@ f17016(f, t1::Tuple) = 1
 @test !args_morespecific(Tuple{Real, Real, Vararg{Real}}, Tuple{T, T, T} where T <: Real)
 @test  args_morespecific(Tuple{Real, Real, Vararg{Int}}, Tuple{T, T, T} where T <: Real)
 
-@test  args_morespecific(Tuple{Type{Base.Nullable{T}}} where T, Tuple{Type{T}, Any} where T)
-@test !args_morespecific(Tuple{Type{Base.Nullable{T}}, T} where T, Tuple{Type{Base.Nullable{T}}} where T)
+@test  args_morespecific(Tuple{Type{Base.Some{T}}} where T, Tuple{Type{T}, Any} where T)
+@test !args_morespecific(Tuple{Type{Base.Some{T}}, T} where T, Tuple{Type{Base.Some{T}}} where T)
 
 @test  args_morespecific(Tuple{Union{Base.StepRange{T, S} where S, Base.StepRangeLen{T, T, S} where S},
                                Union{Base.StepRange{T, S} where S, Base.StepRangeLen{T, T, S} where S}} where T,
-                         Tuple{T, T} where T<:Union{Base.StepRangeLen, Base.LinSpace})
+                         Tuple{T, T} where T<:Union{Base.StepRangeLen, Base.LinRange})
 
 @test args_morespecific(Tuple{Type{Tuple}, Any, Any},
                         Tuple{Type{Tuple{Vararg{E, N} where N}}, Any, Any} where E)
@@ -183,3 +185,32 @@ let x = Type{Union{Tuple{T}, Tuple{Ptr{T}, Ptr{T}, Any}} where T},
     @test !args_morespecific(x.parameters[1], y.parameters[1])
     @test !args_morespecific(y.parameters[1], x.parameters[1])
 end
+
+let A = Tuple{Array{T,N}, Vararg{Int,N}} where {T,N},
+    B = Tuple{Array, Int},
+    C = Tuple{AbstractArray, Int, Array}
+    @test args_morespecific(A, B)
+    @test args_morespecific(B, C)
+    @test args_morespecific(A, C)
+end
+
+# transitivity issue found in #26915
+let A = Tuple{Vector, AbstractVector},
+    B = Tuple{AbstractVecOrMat{T}, AbstractVector{T}} where T,
+    C = Tuple{AbstractVecOrMat{T}, AbstractVecOrMat{T}} where T
+    @test args_morespecific(A, B)
+    @test args_morespecific(B, C)
+    @test args_morespecific(A, C)
+end
+
+# issue #27361
+f27361(::M) where M <: Tuple{2} = nothing
+f27361(::M) where M <: Tuple{3} = nothing
+@test length(methods(f27361)) == 2
+
+# specificity of TypeofBottom
+@test args_morespecific(Tuple{Core.TypeofBottom}, Tuple{DataType})
+@test args_morespecific(Tuple{Core.TypeofBottom}, Tuple{Type{<:Tuple}})
+
+@test  args_morespecific(Tuple{Type{Any}, Type}, Tuple{Type{T}, Type{T}} where T)
+@test !args_morespecific(Tuple{Type{Any}, Type}, Tuple{Type{T}, Type{T}} where T<:Union{})

@@ -64,11 +64,13 @@ MIN_EXP(::Type{Float32}) = -103.97207708f0            # log 2^-150
 
 Compute the natural base exponential of `x`, in other words ``e^x``.
 
+# Examples
 ```jldoctest
 julia> exp(1.0)
 2.718281828459045
 ```
 """
+exp(x::Real) = exp(float(x))
 function exp(x::T) where T<:Union{Float32,Float64}
     xa = reinterpret(Unsigned, x) & ~sign_mask(T)
     xsb = signbit(x)

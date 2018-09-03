@@ -1,65 +1,67 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 mainres = ([4, 5, 3],
            [1, 5, 3])
 bitres = ([true, true, false],
           [false, true, false])
 
 chnlprod(x) = Channel(c->for i in x; put!(c,i); end)
-@testset "copy!" begin
+@testset "copyto!" begin
     for (dest, src, bigsrc, emptysrc, res) in [
         ([1, 2, 3], () -> [4, 5], () -> [1, 2, 3, 4, 5], () -> Int[], mainres),
         ([1, 2, 3], () -> 4:5, () -> 1:5, () -> 1:0, mainres),
         ([1, 2, 3], () -> chnlprod(4:5), () -> chnlprod(1:5), () -> chnlprod(1:0), mainres),
         (falses(3), () -> trues(2), () -> trues(5), () -> trues(0), bitres)]
 
-        @test copy!(copy(dest), src()) == res[1]
-        @test copy!(copy(dest), 1, src()) == res[1]
-        @test copy!(copy(dest), 2, src(), 2) == res[2]
-        @test copy!(copy(dest), 2, src(), 2, 1) == res[2]
+        @test copyto!(copy(dest), src()) == res[1]
+        @test copyto!(copy(dest), 1, src()) == res[1]
+        @test copyto!(copy(dest), 2, src(), 2) == res[2]
+        @test copyto!(copy(dest), 2, src(), 2, 1) == res[2]
 
-        @test copy!(copy(dest), 99, src(), 99, 0) == dest
+        @test copyto!(copy(dest), 99, src(), 99, 0) == dest
 
-        @test copy!(copy(dest), 1, emptysrc()) == dest
+        @test copyto!(copy(dest), 1, emptysrc()) == dest
         x = emptysrc()
         exc = isa(x, AbstractArray) ? BoundsError : ArgumentError
-        @test_throws exc copy!(dest, 1, emptysrc(), 1)
+        @test_throws exc copyto!(dest, 1, emptysrc(), 1)
 
         for idx in (0, 4)
-            @test_throws BoundsError copy!(dest, idx, src())
-            @test_throws BoundsError copy!(dest, idx, src(), 1)
-            @test_throws BoundsError copy!(dest, idx, src(), 1, 1)
+            @test_throws BoundsError copyto!(dest, idx, src())
+            @test_throws BoundsError copyto!(dest, idx, src(), 1)
+            @test_throws BoundsError copyto!(dest, idx, src(), 1, 1)
             x = src()
             exc = isa(x, AbstractArray) ? BoundsError : ArgumentError
-            @test_throws exc copy!(dest, 1, x, idx)
+            @test_throws exc copyto!(dest, 1, x, idx)
             x = src()
             exc = isa(x, AbstractArray) ? BoundsError : ArgumentError
-            @test_throws exc copy!(dest, 1, x, idx, 1)
+            @test_throws exc copyto!(dest, 1, x, idx, 1)
         end
 
-        @test_throws ArgumentError copy!(dest, 1, src(), 1, -1)
+        @test_throws ArgumentError copyto!(dest, 1, src(), 1, -1)
 
-        @test_throws BoundsError copy!(dest, bigsrc())
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, bigsrc())
 
-        @test_throws BoundsError copy!(dest, 3, src())
-        @test_throws BoundsError copy!(dest, 3, src(), 1)
-        @test_throws BoundsError copy!(dest, 3, src(), 1, 2)
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 3, src())
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 3, src(), 1)
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 3, src(), 1, 2)
 
-        @test_throws BoundsError copy!(dest, 1, src(), 2, 2)
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 1, src(), 2, 2)
     end
 end
 
-@testset "with CartesianRange" begin
+@testset "with CartesianIndices" begin
     let A = reshape(1:6, 3, 2), B = similar(A)
-        RA = CartesianRange(indices(A))
-        copy!(B, RA, A, RA)
+        RA = CartesianIndices(axes(A))
+        copyto!(B, RA, A, RA)
         @test B == A
     end
     let A = reshape(1:6, 3, 2), B = zeros(8,8)
-        RA = CartesianRange(indices(A))
-        copy!(B, CartesianRange((5:7,2:3)), A, RA)
+        RA = CartesianIndices(axes(A))
+        copyto!(B, CartesianIndices((5:7,2:3)), A, RA)
         @test B[5:7,2:3] == A
-        B[5:7,2:3] = 0
+        B[5:7,2:3] .= 0
         @test all(x->x==0, B)
     end
 end
@@ -83,7 +85,13 @@ end
 end
 
 # issue #14027
-@test isnull(deepcopy(Nullable{Array}()))
+struct Nullable14027{T}
+    hasvalue::Bool
+    value::T
+
+    Nullable14027{T}() where {T} = new(false)
+end
+@test !deepcopy(Nullable14027{Array}()).hasvalue
 
 @testset "issue #15250" begin
     a1 = Core.svec(1, 2, 3, [])
@@ -144,5 +152,15 @@ end
         bar2 = deepcopy(bar)
         @test bar2.foo ∈ keys(bar2.fooDict)
         @test bar2.fooDict[bar2.foo] != nothing
+    end
+
+    let d = IdDict(rand(2) => rand(2) for i = 1:100)
+        d2 = deepcopy(d)
+        for k in keys(d2)
+            @test haskey(d2, k)
+        end
+        for k in keys(d)
+            @test haskey(d, k)
+        end
     end
 end

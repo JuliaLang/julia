@@ -1,16 +1,67 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-catcmd = `cat`
-if Sys.iswindows()
-    busybox = joinpath(JULIA_HOME, "busybox.exe")
-    havebb = try # use busybox-w32 on windows
-        success(`$busybox`)
-        true
-    catch
-        false
+import Libdl
+
+# helper function for passing input to stdin
+# and returning the stdout result
+function writereadpipeline(input, exename)
+    p = open(exename, "w+")
+    @async begin
+        write(p.in, input)
+        close(p.in)
     end
-    if havebb
-        catcmd = `$busybox cat`
+    return (read(p.out, String), success(p))
+end
+
+# helper function for returning stderr and stdout
+# from running a command (ignoring failure status)
+function readchomperrors(exename::Cmd)
+    out = Base.PipeEndpoint()
+    err = Base.PipeEndpoint()
+    p = run(exename, devnull, out, err, wait=false)
+    o = @async(readchomp(out))
+    e = @async(readchomp(err))
+    return (success(p), fetch(o), fetch(e))
+end
+
+
+let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
+    # tests for handling of ENV errors
+    let v = writereadpipeline("println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
+                setenv(`$exename -i -E 'empty!(LOAD_PATH); @isdefined InteractiveUtils'`,
+                    "JULIA_LOAD_PATH"=>"", "JULIA_DEPOT_PATH"=>""))
+        @test v[1] == "false\nREPL: InteractiveUtilstrue\n"
+        @test v[2]
+    end
+    let v = writereadpipeline("println(\"REPL: \", InteractiveUtils)",
+                setenv(`$exename -i -e 'const InteractiveUtils = 3'`,
+                    "JULIA_LOAD_PATH"=>";;;:::", "JULIA_DEPOT_PATH"=>";;;:::"))
+        # TODO: ideally, `@which`, etc. would still work, but Julia can't handle `using $InterativeUtils`
+        @test v[1] == "REPL: 3\n"
+        @test v[2]
+    end
+    let v = readchomperrors(`$exename -i -e '
+            empty!(LOAD_PATH)
+            Base.unreference_module(Base.PkgId(Base.UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
+            '`)
+        # simulate not having a working version of InteractiveUtils,
+        # make sure this is a non-fatal error and the REPL still loads
+        @test v[1]
+        @test isempty(v[2])
+        @test startswith(v[3], "┌ Warning: Failed to import InteractiveUtils into module Main\n")
+    end
+    real_threads = string(ccall(:jl_cpu_threads, Int32, ()))
+    for nc in ("0", "-2", "x", "2x", " ", "")
+        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc))
+        @test v[1]
+        @test v[2] == real_threads
+        @test v[3] == "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $real_threads."
+    end
+    for nc in ("1", " 1 ", " +1 ", " 0x1 ")
+        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc))
+        @test v[1]
+        @test v[2] == "1"
+        @test isempty(v[3])
     end
 end
 
@@ -41,8 +92,8 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     end
 
     # --home
-    @test success(`$exename -H $JULIA_HOME`)
-    @test success(`$exename --home=$JULIA_HOME`)
+    @test success(`$exename -H $(Sys.BINDIR)`)
+    @test success(`$exename --home=$(Sys.BINDIR)`)
 
     # --eval
     @test  success(`$exename -e "exit(0)"`)
@@ -104,15 +155,15 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     @test !success(`$exename -p 0`)
     @test !success(`$exename --procs=1.0`)
 
-    # --machinefile
-    # this does not check that machinefile works,
+    # --machine-file
+    # this does not check that machine file works,
     # only that the filename gets correctly passed to the option struct
     let fname = tempname()
         touch(fname)
         fname = realpath(fname)
         try
-            @test readchomp(`$exename --machinefile $fname -e
-                "println(unsafe_string(Base.JLOptions().machinefile))"`) == fname
+            @test readchomp(`$exename --machine-file $fname -e
+                "println(unsafe_string(Base.JLOptions().machine_file))"`) == fname
         finally
             rm(fname)
         end
@@ -162,23 +213,29 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
 
     # -g
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
-    let code = read(`$exename -g0 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`, String)
-        @test contains(code, "llvm.module.flags")
-        @test !contains(code, "llvm.dbg.cu")
-        @test !contains(code, "int.jl")
-        @test !contains(code, "Int64")
+    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g0`)
+        @test code[2]
+        code = code[1]
+        @test occursin("llvm.module.flags", code)
+        @test !occursin("llvm.dbg.cu", code)
+        @test !occursin("int.jl", code)
+        @test !occursin("Int64", code)
     end
-    let code = read(`$exename -g1 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`, String)
-        @test contains(code, "llvm.module.flags")
-        @test contains(code, "llvm.dbg.cu")
-        @test contains(code, "int.jl")
-        @test !contains(code, "Int64")
+    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g1`)
+        @test code[2]
+        code = code[1]
+        @test occursin("llvm.module.flags", code)
+        @test occursin("llvm.dbg.cu", code)
+        @test occursin("int.jl", code)
+        @test !occursin("Int64", code)
     end
-    let code = read(`$exename -g2 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`, String)
-        @test contains(code, "llvm.module.flags")
-        @test contains(code, "llvm.dbg.cu")
-        @test contains(code, "int.jl")
-        @test contains(code, "\"Int64\"")
+    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g2`)
+        @test code[2]
+        code = code[1]
+        @test occursin("llvm.module.flags", code)
+        @test occursin("llvm.dbg.cu", code)
+        @test occursin("int.jl", code)
+        @test occursin("\"Int64\"", code)
     end
 
     # --check-bounds
@@ -196,10 +253,8 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     @test !success(`$exename -E "exit(0)" --check-bounds=false`)
 
     # --depwarn
-    @test readchomp(`$exename --depwarn=no -E
-        "Base.syntax_deprecation_warnings(true)"`) == "false"
-    @test readchomp(`$exename --depwarn=yes -E
-        "Base.syntax_deprecation_warnings(false)"`) == "true"
+    @test readchomp(`$exename --depwarn=no  -E "Base.JLOptions().depwarn"`) == "0"
+    @test readchomp(`$exename --depwarn=yes -E "Base.JLOptions().depwarn"`) == "1"
     @test !success(`$exename --depwarn=false`)
     # test deprecated syntax
     @test !success(`$exename -e "foo (x::Int) = x * x" --depwarn=error`)
@@ -224,25 +279,11 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
 
         @test !success(`$exename -E "$code" --depwarn=error`)
 
-        let out  = Pipe(),
-            proc = spawn(pipeline(`$exename -E "$code" --depwarn=yes`, stderr=out)),
-            output = @async readchomp(out)
+        @test readchomperrors(`$exename -E "$code" --depwarn=yes`) ==
+            (true, "true", "WARNING: Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near no file:5")
 
-            close(out.in)
-            wait(proc)
-            @test success(proc)
-            @test wait(output) == "WARNING: Foo.Deprecated is deprecated.\n  likely near no file:5"
-        end
-
-        let out  = Pipe(),
-            proc = spawn(pipeline(`$exename -E "$code" --depwarn=no`, stderr=out))
-            output = @async read(out, String)
-
-            wait(proc)
-            close(out.in)
-            @test success(proc)
-            @test wait(output) == ""
-        end
+        @test readchomperrors(`$exename -E "$code" --depwarn=no`) ==
+            (true, "true", "")
     end
 
     # --inline
@@ -274,17 +315,18 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     end
 
     # --worker takes default / custom as argument (default/custom arguments
-    # tested in test/parallel.jl, test/examples.jl)
+    # tested in test/parallel.jl)
     @test !success(`$exename --worker=true`)
 
     # test passing arguments
     mktempdir() do dir
         testfile = joinpath(dir, tempname())
-        # write a julia source file that just prints ARGS to STDOUT
+        # write a julia source file that just prints ARGS to stdout
         write(testfile, """
             println(ARGS)
             """)
-        cp(testfile, joinpath(dir, ".juliarc.jl"))
+        mkpath(joinpath(dir, ".julia", "config"))
+        cp(testfile, joinpath(dir, ".julia", "config", "startup.jl"))
 
         withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => dir) do
             output = "[\"foo\", \"-bar\", \"--baz\"]"
@@ -309,7 +351,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     mktempdir() do dir
         a = joinpath(dir, "a.jl")
         b = joinpath(dir, "b.jl")
-        c = joinpath(dir, ".juliarc.jl")
+        c = joinpath(dir, ".julia", "config", "startup.jl")
 
         write(a, """
             println(@__FILE__)
@@ -320,6 +362,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
             println(@__FILE__)
             println(PROGRAM_FILE)
             """)
+        mkpath(dirname(c))
         cp(b, c)
 
         readsplit(cmd) = split(readchomp(cmd), '\n')
@@ -351,14 +394,14 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     @test readchomp(`$exename -e 'println(ARGS);' ''`) == "[\"\"]"
 
     # issue #12679
-    @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no --compile=yes -ioo`),
-        stderr=catcmd)) == "ERROR: unknown option `-o`"
-    @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no -p`),
-        stderr=catcmd)) == "ERROR: option `-p/--procs` is missing an argument"
-    @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no --inline`),
-        stderr=catcmd)) == "ERROR: option `--inline` is missing an argument"
-    @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no -e "@show ARGS" -now -- julia RUN.jl`),
-        stderr=catcmd)) == "ERROR: unknown option `-n`"
+    @test readchomperrors(`$exename --startup-file=no --compile=yes -ioo`) ==
+        (false, "", "ERROR: unknown option `-o`")
+    @test readchomperrors(`$exename --startup-file=no -p`) ==
+        (false, "", "ERROR: option `-p/--procs` is missing an argument")
+    @test readchomperrors(`$exename --startup-file=no --inline`) ==
+        (false, "", "ERROR: option `--inline` is missing an argument")
+    @test readchomperrors(`$exename --startup-file=no -e "@show ARGS" -now -- julia RUN.jl`) ==
+        (false, "", "ERROR: unknown option `-n`")
 
     # --compiled-modules={yes|no}
     @test readchomp(`$exename -E "Bool(Base.JLOptions().use_compiled_modules)"`) == "true"
@@ -375,7 +418,13 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         testdir = mktempdir()
         cd(testdir) do
             rm(testdir)
+            @test Base.current_project() === nothing
             @test success(`$exename -e "exit(0)"`)
+            for load_path in ["", "@", "@."]
+                withenv("JULIA_LOAD_PATH" => load_path) do
+                    @test success(`$exename -e "exit(!(Base.load_path() == []))"`)
+                end
+            end
         end
     end
 end
@@ -386,29 +435,29 @@ end
 libjulia = abspath(Libdl.dlpath((ccall(:jl_is_debugbuild, Cint, ()) != 0) ? "libjulia-debug" : "libjulia"))
 
 # test error handling code paths of running --sysimage
-let exename = joinpath(JULIA_HOME, Base.julia_exename()),
+let exename = joinpath(Sys.BINDIR, Base.julia_exename()),
     sysname = unsafe_string(Base.JLOptions().image_file)
     for nonexist_image in (
             joinpath(@__DIR__, "nonexistent"),
             "$sysname.nonexistent",
             )
-        let stderr = Pipe(),
-            p = spawn(pipeline(`$exename --sysimage=$nonexist_image`, stderr=stderr))
-            close(stderr.in)
-            let s = read(stderr, String)
-                @test contains(s, "ERROR: could not load library \"$nonexist_image\"\n")
-                @test !contains(s, "Segmentation fault")
-                @test !contains(s, "EXCEPTION_ACCESS_VIOLATION")
+        let err = Pipe(),
+            p = run(pipeline(`$exename --sysimage=$nonexist_image`, stderr=err), wait=false)
+            close(err.in)
+            let s = read(err, String)
+                @test occursin("ERROR: could not load library \"$nonexist_image\"\n", s)
+                @test !occursin("Segmentation fault", s)
+                @test !occursin("EXCEPTION_ACCESS_VIOLATION", s)
             end
             @test !success(p)
             @test !Base.process_signaled(p)
             @test p.exitcode == 1
         end
     end
-    let stderr = Pipe(),
-        p = spawn(pipeline(`$exename --sysimage=$libjulia`, stderr=stderr))
-        close(stderr.in)
-        let s = read(stderr, String)
+    let err = Pipe(),
+        p = run(pipeline(`$exename --sysimage=$libjulia`, stderr=err), wait=false)
+        close(err.in)
+        let s = read(err, String)
             @test s == "ERROR: System image file failed consistency check: maybe opened the wrong version?\n"
         end
         @test !success(p)
@@ -421,7 +470,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes`
     # --startup-file
     let JL_OPTIONS_STARTUPFILE_ON = 1,
         JL_OPTIONS_STARTUPFILE_OFF = 2
-        # `HOME=$tmpdir` to avoid errors in the user .juliarc.jl, which hangs the tests.  Issue #17642
+        # `HOME=$tmpdir` to avoid errors in the user startup.jl, which hangs the tests. Issue #17642
         mktempdir() do tmpdir
             withenv("HOME"=>tmpdir) do
                 @test parse(Int,readchomp(`$exename -E "Base.JLOptions().startupfile" --startup-file=yes`)) == JL_OPTIONS_STARTUPFILE_ON
@@ -434,11 +483,11 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes`
 end
 
 # Make sure `julia --lisp` doesn't break
-run(pipeline(DevNull, `$(joinpath(JULIA_HOME, Base.julia_exename())) --lisp`, DevNull))
+run(pipeline(devnull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, devnull))
 
 # Test that `julia [some other option] --lisp` is disallowed
-@test_throws ErrorException run(pipeline(DevNull, pipeline(`$(joinpath(JULIA_HOME,
-    Base.julia_exename())) -Cnative --lisp`, stderr=DevNull), DevNull))
+@test readchomperrors(`$(joinpath(Sys.BINDIR, Base.julia_exename())) -Cnative --lisp`) ==
+    (false, "", "ERROR: --lisp must be specified as the first argument")
 
 # --sysimage-native-code={yes|no}
 let exename = `$(Base.julia_cmd()) --startup-file=no`
@@ -450,9 +499,10 @@ end
 
 # backtrace contains type and line number info (esp. on windows #17179)
 for precomp in ("yes", "no")
-    bt = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp
-        -E 'include("____nonexistent_file")'`), stderr=catcmd), String)
-    @test contains(bt, "include_relative(::Module, ::String) at $(joinpath(".", "loading.jl"))")
+    succ, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp -E 'include("____nonexistent_file")'`)
+    @test !succ
+    @test out == ""
+    @test occursin("include_relative(::Module, ::String) at $(joinpath(".", "loading.jl"))", bt)
     lno = match(r"at \.[\/\\]loading\.jl:(\d+)", bt)
     @test length(lno.captures) == 1
     @test parse(Int, lno.captures[1]) > 0
@@ -482,5 +532,30 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         exit(0)
         """
         run(`$exename $flag -e $str`)
+    end
+end
+
+# issue #6310
+let exename = `$(Base.julia_cmd()) --startup-file=no`
+    @test writereadpipeline("2+2", exename) == ("4\n", true)
+    @test writereadpipeline("2+2\n3+3\n4+4", exename) == ("4\n6\n8\n", true)
+    @test writereadpipeline("", exename) == ("", true)
+    @test writereadpipeline("print(2)", exename) == ("2", true)
+    @test writereadpipeline("print(2)\nprint(3)", exename) == ("23", true)
+    let infile = tempname()
+        touch(infile)
+        try
+            @test read(pipeline(exename, stdin=infile), String) == ""
+            write(infile, "(1, 2+3)")
+            @test read(pipeline(exename, stdin=infile), String) == "(1, 5)\n"
+            write(infile, "1+2\n2+2\n1-2\n")
+            @test read(pipeline(exename, stdin=infile), String) == "3\n4\n-1\n"
+            write(infile, "print(2)")
+            @test read(pipeline(exename, stdin=infile), String) == "2"
+            write(infile, "print(2)\nprint(3)")
+            @test read(pipeline(exename, stdin=infile), String) == "23"
+        finally
+            rm(infile)
+        end
     end
 end

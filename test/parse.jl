@@ -1,17 +1,17 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # integer parsing
-@test parse(Int32,"0",36) === Int32(0)
-@test parse(Int32,"1",36) === Int32(1)
-@test parse(Int32,"9",36) === Int32(9)
-@test parse(Int32,"A",36) === Int32(10)
-@test parse(Int32,"a",36) === Int32(10)
-@test parse(Int32,"B",36) === Int32(11)
-@test parse(Int32,"b",36) === Int32(11)
-@test parse(Int32,"F",36) === Int32(15)
-@test parse(Int32,"f",36) === Int32(15)
-@test parse(Int32,"Z",36) === Int32(35)
-@test parse(Int32,"z",36) === Int32(35)
+@test parse(Int32,"0", base = 36) === Int32(0)
+@test parse(Int32,"1", base = 36) === Int32(1)
+@test parse(Int32,"9", base = 36) === Int32(9)
+@test parse(Int32,"A", base = 36) === Int32(10)
+@test parse(Int32,"a", base = 36) === Int32(10)
+@test parse(Int32,"B", base = 36) === Int32(11)
+@test parse(Int32,"b", base = 36) === Int32(11)
+@test parse(Int32,"F", base = 36) === Int32(15)
+@test parse(Int32,"f", base = 36) === Int32(15)
+@test parse(Int32,"Z", base = 36) === Int32(35)
+@test parse(Int32,"z", base = 36) === Int32(35)
 
 @test parse(Int,"0") == 0
 @test parse(Int,"-0") == 0
@@ -23,11 +23,15 @@
 @test parse(Int,"-10") == -10
 @test parse(Int64,"3830974272") == 3830974272
 @test parse(Int64,"-3830974272") == -3830974272
+
 @test parse(Int,'3') == 3
-@test parse(Int,'3', 8) == 3
+@test parse(Int,'3', base = 8) == 3
+@test parse(Int, 'a', base=16) == 10
+@test_throws ArgumentError parse(Int, 'a')
+@test_throws ArgumentError parse(Int,typemax(Char))
 
 # Issue 20587
-for T in vcat(subtypes(Signed), subtypes(Unsigned))
+for T in Any[BigInt, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8]
     T === BigInt && continue # TODO: make BigInt pass this test
     for s in ["", " ", "  "]
         # Without a base (handles things like "0x00001111", etc)
@@ -44,7 +48,7 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
         end
 
         # With a base
-        result = @test_throws ArgumentError parse(T, s, 16)
+        result = @test_throws ArgumentError parse(T, s, base = 16)
         exception_with_base = result.value
         if T == Bool
             if s == ""
@@ -59,15 +63,15 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
 
     # Test `tryparse_internal` with part of a string
     let b = "                   "
-        result = @test_throws ArgumentError get(Base.tryparse_internal(Bool, b, 7, 11, 0, true))
+        result = @test_throws ArgumentError Base.tryparse_internal(Bool, b, 7, 11, 0, true)
         exception_bool = result.value
         @test exception_bool.msg == "input string only contains whitespace"
 
-        result = @test_throws ArgumentError get(Base.tryparse_internal(Int, b, 7, 11, 0, true))
+        result = @test_throws ArgumentError Base.tryparse_internal(Int, b, 7, 11, 0, true)
         exception_int = result.value
         @test exception_int.msg == "input string is empty or only contains whitespace"
 
-        result = @test_throws ArgumentError get(Base.tryparse_internal(UInt128, b, 7, 11, 0, true))
+        result = @test_throws ArgumentError Base.tryparse_internal(UInt128, b, 7, 11, 0, true)
         exception_uint = result.value
         @test exception_uint.msg == "input string is empty or only contains whitespace"
     end
@@ -75,7 +79,7 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
     # Test that the entire input string appears in error messages
     let s = "     false    true     "
         result = @test_throws(ArgumentError,
-            get(Base.tryparse_internal(Bool, s, start(s), endof(s), 0, true)))
+            Base.tryparse_internal(Bool, s, firstindex(s), lastindex(s), 0, true))
         @test result.value.msg == "invalid Bool representation: $(repr(s))"
     end
 
@@ -107,9 +111,9 @@ end
 @test parse(Bool, "\u202f true") === true
 @test parse(Bool, "\u202f false") === false
 
-parsebin(s) = parse(Int,s,2)
-parseoct(s) = parse(Int,s,8)
-parsehex(s) = parse(Int,s,16)
+parsebin(s) = parse(Int,s, base = 2)
+parseoct(s) = parse(Int,s, base = 8)
+parsehex(s) = parse(Int,s, base = 16)
 
 @test parsebin("0") == 0
 @test parsebin("-0") == 0
@@ -151,12 +155,12 @@ parsehex(s) = parse(Int,s,16)
 @test parsehex("-10") == -16
 @test parsehex("0BADF00D") == 195948557
 @test parsehex("-0BADF00D") == -195948557
-@test parse(Int64,"BADCAB1E",16) == 3135023902
-@test parse(Int64,"-BADCAB1E",16) == -3135023902
-@test parse(Int64,"CafeBabe",16) == 3405691582
-@test parse(Int64,"-CafeBabe",16) == -3405691582
-@test parse(Int64,"DeadBeef",16) == 3735928559
-@test parse(Int64,"-DeadBeef",16) == -3735928559
+@test parse(Int64,"BADCAB1E", base = 16) == 3135023902
+@test parse(Int64,"-BADCAB1E", base = 16) == -3135023902
+@test parse(Int64,"CafeBabe", base = 16) == 3405691582
+@test parse(Int64,"-CafeBabe", base = 16) == -3405691582
+@test parse(Int64,"DeadBeef", base = 16) == 3735928559
+@test parse(Int64,"-DeadBeef", base = 16) == -3735928559
 
 @test parse(Int,"2\n") == 2
 @test parse(Int,"   2 \n ") == 2
@@ -172,9 +176,6 @@ parsehex(s) = parse(Int,s,16)
 # multibyte spaces
 @test parse(Int, "3\u2003\u202F") == 3
 @test_throws ArgumentError parse(Int, "3\u2003\u202F,")
-
-@test parse(Int,'a') == 10
-@test_throws ArgumentError parse(Int,typemax(Char))
 
 @test parse(Int,"1234") == 1234
 @test parse(Int,"0x1234") == 0x1234
@@ -202,7 +203,7 @@ end
 # issue #15597
 # make sure base can be any Integer
 for T in (Int, BigInt)
-    let n = parse(T, "123", Int8(10))
+    let n = parse(T, "123", base = Int8(10))
         @test n == 123
         @test isa(n, T)
     end
@@ -212,20 +213,91 @@ end
 @test parse(Int, "2") === 2
 @test parse(Bool, "true") === true
 @test parse(Bool, "false") === false
-@test get(tryparse(Bool, "true")) === get(Nullable{Bool}(true))
-@test get(tryparse(Bool, "false")) === get(Nullable{Bool}(false))
-@test_throws ArgumentError parse(Int, "2", 1)
-@test_throws ArgumentError parse(Int, "2", 63)
+@test tryparse(Bool, "true") === true
+@test tryparse(Bool, "false") === false
+@test_throws ArgumentError parse(Int, "2", base = 1)
+@test_throws ArgumentError parse(Int, "2", base = 63)
 
 # issue #17333: tryparse should still throw on invalid base
 for T in (Int32, BigInt), base in (0,1,100)
-    @test_throws ArgumentError tryparse(T, "0", base)
+    @test_throws ArgumentError tryparse(T, "0", base = base)
 end
 
 # error throwing branch from #10560
 @test_throws ArgumentError Base.tryparse_internal(Bool, "foo", 1, 2, 10, true)
 
-@test tryparse(Float64, "1.23") === Nullable(1.23)
-@test tryparse(Float32, "1.23") === Nullable(1.23f0)
-@test tryparse(Float16, "1.23") === Nullable(Float16(1.23))
+# issue #16594
+@test Meta.parse("@x a + \nb") == Meta.parse("@x a +\nb")
+@test [1 +
+       1] == [2]
+@test [1 +1] == [1 1]
 
+# issue #16594, note for the macro tests, order is important
+# because the line number is included as part of the expression
+# (i.e. both macros must start on the same line)
+@test :(@test((1+1) == 2)) == :(@test 1 +
+                                      1 == 2)
+@test :(@x 1 +1 -1) == :(@x(1, +1, -1))
+@test :(@x 1 + 1 -1) == :(@x(1+1, -1))
+@test :(@x 1 + 1 - 1) == :(@x(1 + 1 - 1))
+@test :(@x(1 + 1 - 1)) == :(@x 1 +
+                               1 -
+                               1)
+@test :(@x(1 + 1 + 1)) == :(@x 1 +
+                               1 +
+                               1)
+@test :([x .+
+          y]) == :([x .+ y])
+
+# line break in : expression disallowed
+@test_throws Meta.ParseError Meta.parse("[1 :\n2] == [1:2]")
+
+@test tryparse(Float64, "1.23") === 1.23
+@test tryparse(Float32, "1.23") === 1.23f0
+@test tryparse(Float16, "1.23") === Float16(1.23)
+
+# parsing complex numbers (#22250)
+@testset "complex parsing" begin
+    for r in (1,0,-1), i in (1,0,-1), sign in ('-','+'), Im in ("i","j","im")
+        for s1 in (""," "), s2 in (""," "), s3 in (""," "), s4 in (""," ")
+            n = Complex(r, sign == '+' ? i : -i)
+            s = string(s1, r, s2, sign, s3, i, Im, s4)
+            @test n === parse(Complex{Int}, s)
+            @test Complex(r) === parse(Complex{Int}, string(s1, r, s2))
+            @test Complex(0,i) === parse(Complex{Int}, string(s3, i, Im, s4))
+            for T in (Float64, BigFloat)
+                nT = parse(Complex{T}, s)
+                @test nT isa Complex{T}
+                @test nT == n
+                @test n == parse(Complex{T}, string(s1, r, ".0", s2, sign, s3, i, ".0", Im, s4))
+                @test n*parse(T,"1e-3") == parse(Complex{T}, string(s1, r, "e-3", s2, sign, s3, i, "e-3", Im, s4))
+            end
+        end
+    end
+    @test parse(Complex{Float16}, "3.3+4i") === Complex{Float16}(3.3+4im)
+    @test parse(Complex{Int}, SubString("xxxxxx1+2imxxxx", 7, 10)) === 1+2im
+    for T in (Int, Float64), bad in ("3 + 4*im", "3 + 4", "1+2ij", "1im-3im", "++4im")
+        @test_throws ArgumentError parse(Complex{T}, bad)
+    end
+    @test_throws ArgumentError parse(Complex{Int}, "3 + 4.2im")
+end
+
+# added ⟂ to operator precedence (#24404)
+@test Meta.parse("a ⟂ b ⟂ c") == Expr(:comparison, :a, :⟂, :b, :⟂, :c)
+@test Meta.parse("a ⟂ b ∥ c") == Expr(:comparison, :a, :⟂, :b, :∥, :c)
+
+# only allow certain characters after interpolated vars (#25231)
+@test Meta.parse("\"\$x෴  \"",raise=false) == Expr(:error, "interpolated variable \$x ends with invalid character \"෴\"; use \"\$(x)\" instead.")
+@test Base.incomplete_tag(Meta.parse("\"\$foo", raise=false)) == :string
+
+@testset "parse and tryparse type inference" begin
+    @inferred parse(Int, "12")
+    @inferred parse(Float64, "12")
+    @inferred parse(Complex{Int}, "12")
+    @test eltype([parse(Int, s, base=16) for s in String[]]) == Int
+    @test eltype([parse(Float64, s) for s in String[]]) == Float64
+    @test eltype([parse(Complex{Int}, s) for s in String[]]) == Complex{Int}
+    @test eltype([tryparse(Int, s, base=16) for s in String[]]) == Union{Nothing, Int}
+    @test eltype([tryparse(Float64, s) for s in String[]]) == Union{Nothing, Float64}
+    @test eltype([tryparse(Complex{Int}, s) for s in String[]]) == Union{Nothing, Complex{Int}}
+end

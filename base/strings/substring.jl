@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    SubString(s::AbstractString, i::Integer, j::Integer=endof(s))
+    SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s))
     SubString(s::AbstractString, r::UnitRange{<:Integer})
 
 Like [`getindex`](@ref), but returns a view into the parent string `s`
@@ -22,105 +22,87 @@ julia> SubString("abc", 2)
 struct SubString{T<:AbstractString} <: AbstractString
     string::T
     offset::Int
-    endof::Int
+    ncodeunits::Int
 
     function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
-        i > j && return new(s, i - 1, 0) # always allow i > j as it is consistent with getindex
-        isvalid(s, i) || throw(BoundsError(s, i))
-        isvalid(s, j) || throw(BoundsError(s, j))
-        new(s, i-1, j-i+1)
+        i ≤ j || return new(s, 0, 0)
+        @boundscheck begin
+            checkbounds(s, i:j)
+            @inbounds isvalid(s, i) || string_index_err(s, i)
+            @inbounds isvalid(s, j) || string_index_err(s, j)
+        end
+        return new(s, i-1, nextind(s,j)-i)
     end
 end
 
 SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
-SubString(s::AbstractString, i::Integer, j::Integer=endof(s)) = SubString(s, Int(i), Int(j))
+SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i), Int(j))
 SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, first(r), last(r))
 
 function SubString(s::SubString, i::Int, j::Int)
-    # always allow i > j as it is consistent with getindex
-    i > j && return SubString(s.string, s.offset + i, s.offset + j)
-    i >= 1 || throw(BoundsError(s, i))
-    j <= endof(s) || throw(BoundsError(s, j))
-    SubString(s.string, s.offset + i, s.offset + j)
+    @boundscheck i ≤ j && checkbounds(s, i:j)
+    SubString(s.string, s.offset+i, s.offset+j)
 end
 
-SubString(s::AbstractString) = SubString(s, 1, endof(s))
-SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, endof(s))
+SubString(s::AbstractString) = SubString(s, 1, lastindex(s))
+SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s))
 
 convert(::Type{SubString{S}}, s::AbstractString) where {S<:AbstractString} =
     SubString(convert(S, s))
+convert(::Type{T}, s::T) where {T<:SubString} = s
 
-String(p::SubString{String}) =
-    unsafe_string(pointer(p.string, p.offset+1), nextind(p, p.endof)-1)
+String(s::SubString{String}) = unsafe_string(pointer(s.string, s.offset+1), s.ncodeunits)
 
-sizeof(s::SubString{String}) = s.endof == 0 ? 0 : nextind(s, s.endof) - 1
+ncodeunits(s::SubString) = s.ncodeunits
+codeunit(s::SubString) = codeunit(s.string)
+length(s::SubString) = length(s.string, s.offset+1, s.offset+s.ncodeunits)
 
-# TODO: length(s::SubString) = ??
-# default implementation will work but it's slow
-# can this be delegated efficiently somehow?
-# that may require additional string interfaces
-function length(s::SubString{String})
-    return s.endof==0 ? 0 : Int(ccall(:u8_charnum, Csize_t, (Ptr{UInt8}, Csize_t),
-                                      pointer(s), nextind(s, s.endof) - 1))
+function codeunit(s::SubString, i::Integer)
+    @boundscheck checkbounds(s, i)
+    @inbounds return codeunit(s.string, s.offset + i)
 end
 
-function next(s::SubString, i::Int)
-    if i < 1 || i > s.endof
-        throw(BoundsError(s, i))
-    end
-    c, i = next(s.string, i+s.offset)
-    c, i-s.offset
+function iterate(s::SubString, i::Integer=firstindex(s))
+    i == ncodeunits(s)+1 && return nothing
+    @boundscheck checkbounds(s, i)
+    y = iterate(s.string, s.offset + i)
+    y === nothing && return nothing
+    c, i = y
+    return c, i - s.offset
 end
 
-function getindex(s::SubString, i::Int)
-    if i < 1 || i > s.endof
-        throw(BoundsError(s, i))
-    end
-    getindex(s.string, i+s.offset)
+function getindex(s::SubString, i::Integer)
+    @boundscheck checkbounds(s, i)
+    @inbounds return getindex(s.string, s.offset + i)
 end
-
-endof(s::SubString) = s.endof
 
 function isvalid(s::SubString, i::Integer)
-    return (start(s) <= i <= endof(s)) && isvalid(s.string, s.offset+i)
+    ib = true
+    @boundscheck ib = checkbounds(Bool, s, i)
+    @inbounds return ib && isvalid(s.string, s.offset + i)
 end
 
-function thisind(s::SubString{String}, i::Integer)
-    j = Int(i)
-    j < start(s) && return 0
-    n = ncodeunits(s)
-    j > n && return n + 1
-    offset = s.offset
-    str = s.string
-    j += offset
-    @inbounds while j > offset && is_valid_continuation(codeunit(str, j))
-        j -= 1
-    end
-    j - offset
-end
-
-nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
-prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
-
-function getindex(s::AbstractString, r::UnitRange{Int})
-    checkbounds(s, r) || throw(BoundsError(s, r))
-    SubString(s, first(r), last(r))
-end
+thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
+nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
 
 function cmp(a::SubString{String}, b::SubString{String})
     na = sizeof(a)
     nb = sizeof(b)
     c = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-              pointer(a), pointer(b), min(na,nb))
-    c < 0 ? -1 : c > 0 ? +1 : cmp(na,nb)
+              pointer(a), pointer(b), min(na, nb))
+    return c < 0 ? -1 : c > 0 ? +1 : cmp(na, nb)
 end
 
 # don't make unnecessary copies when passing substrings to C functions
 cconvert(::Type{Ptr{UInt8}}, s::SubString{String}) = s
 cconvert(::Type{Ptr{Int8}}, s::SubString{String}) = s
+
 function unsafe_convert(::Type{Ptr{R}}, s::SubString{String}) where R<:Union{Int8, UInt8}
     convert(Ptr{R}, pointer(s.string)) + s.offset
 end
+
+pointer(x::SubString{String}) = pointer(x.string) + x.offset
+pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)
 
 """
     reverse(s::AbstractString) -> AbstractString
@@ -128,8 +110,9 @@ end
 Reverses a string. Technically, this function reverses the codepoints in a string and its
 main utility is for reversed-order string processing, especially for reversed
 regular-expression searches. See also [`reverseind`](@ref) to convert indices in `s` to
-indices in `reverse(s)` and vice-versa, and [`graphemes`](@ref) to operate on user-visible
-"characters" (graphemes) rather than codepoints. See also [`Iterators.reverse`](@ref) for
+indices in `reverse(s)` and vice-versa, and `graphemes` from module `Unicode` to
+operate on user-visible "characters" (graphemes) rather than codepoints.
+See also [`Iterators.reverse`](@ref) for
 reverse-order iteration without making a copy. Custom string types must implement the
 `reverse` function themselves and should typically return a string with the same type
 and encoding. If they return a string with a different encoding, they must also override
@@ -143,13 +126,15 @@ julia> reverse("JuliaLang")
 julia> reverse("ax̂e") # combining characters can lead to surprising results
 "êxa"
 
+julia> using Unicode
+
 julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
 "ex̂a"
 ```
 """
 function reverse(s::Union{String,SubString{String}})::String
-    sprint() do io
-        i, j = start(s), endof(s)
+    sprint(sizehint=sizeof(s)) do io
+        i, j = firstindex(s), lastindex(s)
         while i ≤ j
             c, j = s[j], prevind(s, j)
             write(io, c)
@@ -157,52 +142,50 @@ function reverse(s::Union{String,SubString{String}})::String
     end
 end
 
-"""
-    reverseind(v, i)
+string(a::String)            = String(a)
+string(a::SubString{String}) = String(a)
 
-Given an index `i` in [`reverse(v)`](@ref), return the corresponding index in `v` so that
-`v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in cases where `v` contains
-non-ASCII characters.)
+function string(a::Union{Char, String, SubString{String}}...)
+    n = 0
+    for v in a
+        if v isa Char
+            n += codelen(v)
+        else
+            n += sizeof(v)
+        end
+    end
+    out = _string_n(n)
+    offs = 1
+    for v in a
+        if v isa Char
+           x = bswap(reinterpret(UInt32, v))
+           for j in 1:codelen(v)
+               unsafe_store!(pointer(out, offs), x % UInt8)
+               offs += 1
+               x >>= 8
+           end
+        else
+            unsafe_copyto!(pointer(out,offs), pointer(v), sizeof(v))
+            offs += sizeof(v)
+        end
+    end
+    return out
+end
 
-# Examples
-```jldoctest
-julia> r = reverse("Julia")
-"ailuJ"
+function repeat(s::Union{String, SubString{String}}, r::Integer)
+    r < 0 && throw(ArgumentError("can't repeat a string $r times"))
+    r == 1 && return String(s)
+    n = sizeof(s)
+    out = _string_n(n*r)
+    if n == 1 # common case: repeating a single-byte string
+        @inbounds b = codeunit(s, 1)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), out, b, r)
+    else
+        for i = 0:r-1
+            unsafe_copyto!(pointer(out, i*n+1), pointer(s), n)
+        end
+    end
+    return out
+end
 
-julia> for i in 1:length(r)
-           print(r[reverseind("Julia", i)])
-       end
-Julia
-```
-"""
-reverseind(s::AbstractString, i::Integer) = thisind(s, ncodeunits(s)-i+1)
-
-"""
-    repeat(s::AbstractString, r::Integer)
-
-Repeat a string `r` times. This can equivalently be accomplished by calling [`s^r`](@ref ^).
-
-# Examples
-```jldoctest
-julia> repeat("ha", 3)
-"hahaha"
-```
-"""
-repeat(s::AbstractString, r::Integer) = repeat(convert(String, s), r)
-
-"""
-    ^(s::Union{AbstractString,Char}, n::Integer)
-
-Repeat a string or character `n` times.
-The [`repeat`](@ref) function is an alias to this operator.
-
-# Examples
-```jldoctest
-julia> "Test "^3
-"Test Test Test "
-```
-"""
-(^)(s::Union{AbstractString,Char}, r::Integer) = repeat(s,r)
-
-pointer(x::SubString{String}) = pointer(x.string) + x.offset
-pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)
+getindex(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, r)

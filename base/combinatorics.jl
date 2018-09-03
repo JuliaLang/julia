@@ -2,13 +2,13 @@
 
 # Factorials
 
-const _fact_table64 = Vector{Int64}(uninitialized, 20)
+const _fact_table64 = Vector{Int64}(undef, 20)
 _fact_table64[1] = 1
 for n in 2:20
     _fact_table64[n] = _fact_table64[n-1] * n
 end
 
-const _fact_table128 = Vector{UInt128}(uninitialized, 34)
+const _fact_table128 = Vector{UInt128}(undef, 34)
 _fact_table128[1] = 1
 for n in 2:34
     _fact_table128[n] = _fact_table128[n-1] * n
@@ -31,14 +31,6 @@ if Int === Int32
     factorial(n::Union{Int32,UInt32}) = factorial_lookup(n, _fact_table64, 12)
 else
     factorial(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32}) = factorial(Int64(n))
-end
-
-function gamma(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64})
-    n < 0 && throw(DomainError(n, "`n` must not be negative."))
-    n == 0 && return Inf
-    n <= 2 && return 1.0
-    n > 20 && return gamma(Float64(n))
-    @inbounds return Float64(_fact_table64[n-1])
 end
 
 
@@ -72,10 +64,11 @@ isperm(p::Tuple{Int}) = p[1] == 1
 isperm(p::Tuple{Int,Int}) = ((p[1] == 1) & (p[2] == 2)) | ((p[1] == 2) & (p[2] == 1))
 
 function permute!!(a, p::AbstractVector{<:Integer})
+    @assert !has_offset_axes(a, p)
     count = 0
     start = 0
     while count < length(a)
-        ptr = start = findnext(!iszero, p, start+1)
+        ptr = start = findnext(!iszero, p, start+1)::Int
         temp = a[start]
         next = p[start]
         count += 1
@@ -101,7 +94,7 @@ to verify that `p` is a permutation.
 To return a new permutation, use `v[p]`. Note that this is generally faster than
 `permute!(v,p)` for large vectors.
 
-See also [`ipermute!`](@ref).
+See also [`invpermute!`](@ref).
 
 # Examples
 ```jldoctest
@@ -121,11 +114,12 @@ julia> A
 """
 permute!(a, p::AbstractVector) = permute!!(a, copymutable(p))
 
-function ipermute!!(a, p::AbstractVector{<:Integer})
+function invpermute!!(a, p::AbstractVector{<:Integer})
+    @assert !has_offset_axes(a, p)
     count = 0
     start = 0
     while count < length(a)
-        start = findnext(!iszero, p, start+1)
+        start = findnext(!iszero, p, start+1)::Int
         temp = a[start]
         next = p[start]
         count += 1
@@ -145,7 +139,7 @@ function ipermute!!(a, p::AbstractVector{<:Integer})
 end
 
 """
-    ipermute!(v, p)
+    invpermute!(v, p)
 
 Like [`permute!`](@ref), but the inverse of the given permutation is applied.
 
@@ -155,7 +149,7 @@ julia> A = [1, 1, 3, 4];
 
 julia> perm = [2, 4, 3, 1];
 
-julia> ipermute!(A, perm);
+julia> invpermute!(A, perm);
 
 julia> A
 4-element Array{Int64,1}:
@@ -165,7 +159,7 @@ julia> A
  1
 ```
 """
-ipermute!(a, p::AbstractVector) = ipermute!!(a, copymutable(p))
+invpermute!(a, p::AbstractVector) = invpermute!!(a, copymutable(p))
 
 """
     invperm(v)
@@ -202,6 +196,7 @@ julia> B[invperm(v)]
 ```
 """
 function invperm(a::AbstractVector)
+    @assert !has_offset_axes(a)
     b = zero(a) # similar vector of zeros
     n = length(a)
     @inbounds for (i, j) in enumerate(a)
@@ -239,7 +234,7 @@ function nextprod(a::Vector{Int}, x)
         throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end
     k = length(a)
-    v = ones(Int, k)                  # current value of each counter
+    v = fill(1, k)                    # current value of each counter
     mx = [nextpow(ai,x) for ai in a]  # maximum value of each counter
     v[1] = mx[1]                      # start at first case that is >= x
     p::widen(Int) = mx[1]             # initial value of product in this case

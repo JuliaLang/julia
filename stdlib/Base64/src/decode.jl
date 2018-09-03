@@ -56,7 +56,7 @@ function read_until_end(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
     p = ptr
     p_end = ptr + n
     while !isempty(pipe.rest) && p < p_end
-        unsafe_store!(p, shift!(pipe.rest))
+        unsafe_store!(p, popfirst!(pipe.rest))
         p += 1
     end
 
@@ -77,7 +77,7 @@ function read_until_end(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
             end
         end
         if p < p_end
-            if i + 4 ≤ endof(buffer)
+            if i + 4 ≤ lastindex(buffer)
                 b1 = decode(buffer[i+1])
                 b2 = decode(buffer[i+2])
                 b3 = decode(buffer[i+3])
@@ -105,10 +105,11 @@ function Base.read(pipe::Base64DecodePipe, ::Type{UInt8})
             throw(EOFError())
         end
     end
-    return shift!(pipe.rest)
+    return popfirst!(pipe.rest)
 end
 
 function Base.readbytes!(pipe::Base64DecodePipe, data::AbstractVector{UInt8}, nb::Integer=length(data))
+    @assert !has_offset_axes(data)
     filled::Int = 0
     while filled < nb && !eof(pipe)
         if length(data) == filled
@@ -140,7 +141,7 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
         else
             break
         end
-        if i + 1 ≤ endof(buffer)
+        if i + 1 ≤ lastindex(buffer)
             b4 = decode(buffer[i+=1])
         elseif !eof(input)
             b4 = decode(read(input, UInt8))

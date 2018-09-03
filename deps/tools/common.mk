@@ -13,7 +13,7 @@ ifneq ($(USEMSVC), 1)
 CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) -Wl,--stack,8388608"
 endif
 else
-CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS)"
+CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN)"
 endif
 CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)" LD="$(LD)"
 
@@ -71,6 +71,15 @@ ifeq ($(USEIFC),1)
 USE_BLAS_FFLAGS += -i8
 else
 USE_BLAS_FFLAGS += -fdefault-integer-8
+endif
+endif
+
+ifeq ($(USE_INTEL_MKL),1)
+# We want to test if gfortran is used but currently only gfortran and ifort are supported
+# so not ifort is the same as gfortran. If support for new Fortran compilers is added
+# then this should be adjusted
+ifneq ($(USEIFC),1)
+USE_BLAS_FFLAGS += -ff2c
 endif
 endif
 

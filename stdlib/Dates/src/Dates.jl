@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
     Dates
 
@@ -34,8 +32,8 @@ for more information.
 """
 module Dates
 
-import ..Base: ==, div, fld, mod, rem, gcd, lcm, +, -, *, /, %
-import ..Base.broadcast
+import Base: ==, div, fld, mod, rem, gcd, lcm, +, -, *, /, %, broadcast
+using Printf: @sprintf
 
 using Base.Iterators
 

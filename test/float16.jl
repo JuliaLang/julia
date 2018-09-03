@@ -108,7 +108,7 @@ end
     @test NaN16 != NaN16
     @test isequal(NaN16, NaN16)
     @test repr(NaN16) == "NaN16"
-    @test sprint(showcompact, NaN16) == "NaN"
+    @test sprint(show, NaN16, context=:compact => true) == "NaN"
 
     @test isinf(Inf16)
     @test isinf(-Inf16)
@@ -120,7 +120,7 @@ end
     @test -Inf16 < Inf16
     @test isequal(Inf16, Inf16)
     @test repr(Inf16) == "Inf16"
-    @test sprint(showcompact, Inf16) == "Inf"
+    @test sprint(show, Inf16, context=:compact => true) == "Inf"
 
     @test isnan(reinterpret(Float16,0x7c01))
     @test !isinf(reinterpret(Float16,0x7c01))

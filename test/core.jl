@@ -1,7 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # test core language features
+
+using Random, SparseArrays, InteractiveUtils
+
 const Bottom = Union{}
+
 
 # For curmod_*
 include("testenv.jl")
@@ -19,6 +23,9 @@ f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws TypeError (Array{T} where T>:Vararg)
 @test_throws TypeError (Array{T} where T<:Vararg{Int})
 @test_throws TypeError (Array{T} where T<:Vararg{Int,2})
+
+@test_throws TypeError TypeVar(:T) <: Any
+@test_throws TypeError TypeVar(:T) >: Any
 
 # issue #12939
 module Issue12939
@@ -60,9 +67,6 @@ g11840(sig::Type{T}) where {T<:Tuple} = 3
 
 g11840b(::DataType) = 1
 g11840b(::Type) = 2
-# FIXME (needs a test): how to compute that the guard entry is still required,
-# even though Type{Vector} ∩ DataType = Bottom and this method would set
-# cache_with_orig = true
 g11840b(sig::Type{T}) where {T<:Tuple} = 3
 @test g11840b(Vector) == 2
 @test g11840b(Vector.body) == 1
@@ -83,6 +87,20 @@ h11840(::Type{T}) where {T<:Tuple} = '4'
 @test h11840(Tuple) == '4'
 @test h11840(TT11840) == '4'
 
+# show that we don't make the cache confused by using alternative representations
+# when specificity is reversed
+j11840(::DataType) = '1'
+j11840(::Union{Type{T}, T}) where {T} = '2' # force cache to contain leaftypes
+@test j11840(Union{Tuple{Int32}, Tuple{Int64}}) == '2'
+@test j11840(Tuple{Union{Int32, Int64}}) == '1' # DataType more specific than Type
+
+# but show we can correctly match types with alternate equivalent representations
+k11840(::Type{Union{Tuple{Int32}, Tuple{Int64}}}) = '2'
+@test k11840(Tuple{Union{Int32, Int64}}) == '2'
+@test k11840(Tuple{Union{Int32, Int64}}) == '2'
+@test k11840(Union{Tuple{Int32}, Tuple{Int64}}) == '2'
+
+
 # issue #20511
 f20511(x::DataType) = 0
 f20511(x) = 1
@@ -95,17 +113,17 @@ Type{Integer}  # cache this
 @test typejoin(Array{Float64},BitArray) <: AbstractArray
 @test typejoin(Array{Bool},BitArray) <: AbstractArray{Bool}
 @test typejoin(Tuple{Int,Int8},Tuple{Int8,Float64}) === Tuple{Signed,Real}
-@test Base.typeseq(typejoin(Tuple{String,String},Tuple{GenericString,String},
-                            Tuple{String,GenericString},Tuple{Int,String,Int}),
-                   Tuple{Any,AbstractString,Vararg{Int}})
-@test Base.typeseq(typejoin(Tuple{Int8,Vararg{Int}},Tuple{Int8,Int8}),
-                   Tuple{Int8,Vararg{Signed}})
-@test Base.typeseq(typejoin(Tuple{Int8,Vararg{Int}},Tuple{Int8,Vararg{Int8}}),
-                   Tuple{Int8,Vararg{Signed}})
-@test Base.typeseq(typejoin(Tuple{Int8,UInt8,Vararg{Int}},Tuple{Int8,Vararg{Int8}}),
-                   Tuple{Int8,Vararg{Integer}})
-@test Base.typeseq(typejoin(Union{Int,AbstractString},Int), Union{Int,AbstractString})
-@test Base.typeseq(typejoin(Union{Int,AbstractString},Int8), Any)
+@test typejoin(Tuple{String,String}, Tuple{GenericString,String},
+               Tuple{String,GenericString}, Tuple{Int,String,Int}) ==
+    Tuple{Any,AbstractString,Vararg{Int}}
+@test typejoin(Tuple{Int8,Vararg{Int}}, Tuple{Int8,Int8}) ==
+    Tuple{Int8,Vararg{Signed}}
+@test typejoin(Tuple{Int8,Vararg{Int}}, Tuple{Int8,Vararg{Int8}}) ==
+    Tuple{Int8,Vararg{Signed}}
+@test typejoin(Tuple{Int8,UInt8,Vararg{Int}}, Tuple{Int8,Vararg{Int8}}) ==
+    Tuple{Int8,Vararg{Integer}}
+@test typejoin(Union{Int,AbstractString}, Int) == Union{Int,AbstractString}
+@test typejoin(Union{Int,AbstractString}, Int8) == Any
 @test typejoin(Tuple{}, Tuple{Int}) == Tuple{Vararg{Int}}
 
 # typejoin associativity
@@ -122,6 +140,37 @@ end
 # typejoin with Vararg{T,N}
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Int,Int,Int}) === Tuple{Int,Int,Vararg{Int}}
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}) === Tuple{Vararg{Int}}
+
+@test typejoin(NTuple{3,Tuple}, NTuple{2,T} where T) == Tuple{Any,Any,Vararg{Tuple}}
+
+# issue #26321
+struct T26321{N,S<:NTuple{N}}
+    t::S
+end
+let mi = T26321{3,NTuple{3,Int}}((1,2,3)), mf = T26321{3,NTuple{3,Float64}}((1.0,2.0,3.0))
+    J = T26321{3,S} where S<:(Tuple{T,T,T} where T)
+    @test typejoin(typeof(mi),typeof(mf)) == J
+    a = [mi, mf]
+    @test a[1] === mi
+    @test a[2] === mf
+    @test eltype(a) == J
+    @test a isa Vector{<:T26321{3}}
+end
+
+# promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
+for T in (Nothing, Missing)
+    @test Base.promote_typejoin(Int, Float64) === Real
+    @test Base.promote_typejoin(Int, T) === Union{Int, T}
+    @test Base.promote_typejoin(T, String) === Union{T, String}
+    @test Base.promote_typejoin(Vector{Int}, T) === Union{Vector{Int}, T}
+    @test Base.promote_typejoin(Vector, T) === Any
+    @test Base.promote_typejoin(Real, T) === Any
+    @test Base.promote_typejoin(Int, String) === Any
+    @test Base.promote_typejoin(Int, Union{Float64, T}) === Any
+    @test Base.promote_typejoin(Int, Union{String, T}) === Any
+    @test Base.promote_typejoin(T, Union{}) === T
+    @test Base.promote_typejoin(Union{}, T) === T
+end
 
 @test promote_type(Bool,Bottom) === Bool
 
@@ -170,7 +219,7 @@ let elT = T22624.body.body.body.types[1].parameters[1]
     elT2 = elT.body.types[1].parameters[1]
     @test elT2 == T22624{Int64, Int64, C} where C
     @test elT2.body.types[1].parameters[1] === elT2
-    @test Base._isleaftype(elT2.body.types[1])
+    @test Base.isconcretetype(elT2.body.types[1])
 end
 
 # issue #3890
@@ -469,7 +518,7 @@ function const_implies_local()
 end
 @test const_implies_local() === (1, 0)
 
-a_global_closure_vector = Vector{Any}(uninitialized, 3)
+a_global_closure_vector = Vector{Any}(undef, 3)
 for i = 1:3
     let ii = i
         a_global_closure_vector[i] = x -> x + ii
@@ -507,11 +556,11 @@ function f21900()
         x = 0
     end
     global f21900_cnt += 1
-    x
+    x # should be global
     global f21900_cnt += -1000
     nothing
 end
-@test_throws UndefVarError f21900()
+@test_throws UndefVarError(:x) f21900()
 @test f21900_cnt == 1
 
 # use @eval so this runs as a toplevel scope block
@@ -582,16 +631,17 @@ let
     @test !isdefined(a, :foo)
     @test !isdefined(2, :a)
 
-    @test_throws TypeError isdefined(2)
+    @test_throws TypeError isdefined(Base, 2)
+    @test_throws ArgumentError isdefined(2)
 end
 
 let
     local a
-    a = Vector{Any}(uninitialized, 2)
+    a = Vector{Any}(undef, 2)
     @test !isassigned(a,1) && !isassigned(a,2)
     a[1] = 1
     @test isassigned(a,1) && !isassigned(a,2)
-    a = Vector{Float64}(uninitialized,1)
+    a = Vector{Float64}(undef,1)
     @test isassigned(a,1)
     @test isassigned(a)
     @test !isassigned(a,2)
@@ -723,6 +773,7 @@ begin
             global try_finally_glo_after = 1
         end
         global gothere = 1
+    catch
     end
     @test try_finally_loc_after == 0
     @test try_finally_glo_after == 1
@@ -752,7 +803,7 @@ begin
     @test retfinally() == 5
     @test glo == 18
 
-    @test try error() end === nothing
+    @test try error(); catch; end === nothing
 end
 
 # issue #12806
@@ -893,6 +944,15 @@ function f24331()
 end
 @test f24331() == [2]
 
+# issue #26743
+function f26743()
+    try
+        return 5
+    finally
+    end
+end
+@test @inferred(f26743()) == 5
+
 # finalizers
 let A = [1]
     local x = 0
@@ -900,13 +960,13 @@ let A = [1]
     finalize(A)
     @test x == 1
     A = 0
-    gc(); gc()
+    GC.gc(); GC.gc()
     @test x == 1
 end
 
 # Module() constructor
-@test names(Module(:anonymous), true, true) == [:anonymous]
-@test names(Module(:anonymous, false), true, true) == [:anonymous]
+@test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
+@test names(Module(:anonymous, false), all = true, imported = true) == [:anonymous]
 
 # exception from __init__()
 let didthrow =
@@ -997,36 +1057,64 @@ end
 
 let
     local z = complex(3, 4)
-    v = Int[0,0]
-    for i=1:2
+    v = Int[0, 0]
+    for i = 1:2
         v[i] = getfield(z, i)
     end
-    @test v == [3,4]
-    @test_throws BoundsError getfield(z, -1)
-    @test_throws BoundsError getfield(z, 0)
-    @test_throws BoundsError getfield(z, 3)
+    @test v == [3, 4]
+    @test_throws BoundsError(z, -1) getfield(z, -1)
+    @test_throws BoundsError(z, 0) getfield(z, 0)
+    @test_throws BoundsError(z, 3) getfield(z, 3)
 
     strct = LoadError("yofile", 0, "bad")
-    @test_throws BoundsError getfield(strct, 10)
-    @test_throws ErrorException setfield!(strct, 0, "")
-    @test_throws ErrorException setfield!(strct, 4, "")
+    @test nfields(strct) == 3 # sanity test
+    @test_throws BoundsError(strct, 10) getfield(strct, 10)
+    @test_throws ErrorException("type LoadError is immutable") setfield!(strct, 0, "")
+    @test_throws ErrorException("type LoadError is immutable") setfield!(strct, 4, "")
+    @test_throws ErrorException("type is immutable") setfield!(strct, :line, 0)
     @test strct.file == "yofile"
-    @test strct.line == 0
+    @test strct.line === 0
     @test strct.error == "bad"
     @test getfield(strct, 1) == "yofile"
-    @test getfield(strct, 2) == 0
+    @test getfield(strct, 2) === 0
     @test getfield(strct, 3) == "bad"
 
     mstrct = TestMutable("melm", 1, nothing)
-    setfield!(mstrct, 2, 8)
-    @test mstrct.line == 8
+    Base.setproperty!(mstrct, :line, 8.0)
+    @test mstrct.line === 8
+    @test_throws TypeError(:setfield!, "", Int, 8.0) setfield!(mstrct, :line, 8.0)
+    @test_throws TypeError(:setfield!, "", Int, 8.0) setfield!(mstrct, 2, 8.0)
     setfield!(mstrct, 3, "hi")
     @test mstrct.error == "hi"
     setfield!(mstrct, 1, "yo")
     @test mstrct.file == "yo"
-    @test_throws BoundsError getfield(mstrct, 10)
-    @test_throws BoundsError setfield!(mstrct, 0, "")
-    @test_throws BoundsError setfield!(mstrct, 4, "")
+    @test_throws BoundsError(mstrct, 10) getfield(mstrct, 10)
+    @test_throws BoundsError(mstrct, 0) setfield!(mstrct, 0, "")
+    @test_throws BoundsError(mstrct, 4) setfield!(mstrct, 4, "")
+end
+
+# test getfield-overloading
+function Base.getproperty(mstrct::TestMutable, p::Symbol)
+    return (p, getfield(mstrct, :error))
+end
+function Base.setproperty!(mstrct::TestMutable, p::Symbol, v)
+    setfield!(mstrct, :error, (p, v))
+end
+
+let
+    mstrct = TestMutable("melm", 1, nothing)
+    @test mstrct.line === (:line, nothing)
+    @test mstrct.bar === (:bar, nothing)
+    @test getfield(mstrct, 1) == "melm"
+    @test getfield(mstrct, :file) == "melm"
+    @test_throws MethodError Base.getproperty(mstrct, 1)
+    mstrct.error = 8.0
+    @test mstrct.bar === (:bar, (:error, 8.0))
+    mstrct.line = 8.0
+    @test getfield(mstrct, :line) === 1
+    @test getfield(mstrct, :error) === (:line, 8.0)
+    @test mstrct.bar === (:bar, (:line, 8.0))
+    @test mstrct.error === (:error, (:line, 8.0))
 end
 
 # allow typevar in Union to match as long as the arguments contain
@@ -1105,7 +1193,7 @@ let
    b = C_NULL + 1
    c = C_NULL - 1
    d = 1 + C_NULL
-   @test eltype(a) == Void
+   @test eltype(a) == Nothing
 
    @test a != b != c
    @test b == d
@@ -1134,9 +1222,12 @@ let
     @test a2 == [101,102,909]
 end
 
-@test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Void}, (Any,Any),
+@test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Cvoid}, (Any,Any),
                                      x -> x+1, 314158)) == 314159
-@test unsafe_pointer_to_objref(pointer_from_objref(ℯ+pi)) == ℯ+pi
+let x = [1,2,3]
+    @test unsafe_pointer_to_objref(pointer_from_objref(x)) == x
+    @test unsafe_pointer_to_objref(pointer_from_objref(x)) === x
+end
 
 let
     local a, aa
@@ -1155,9 +1246,9 @@ let
     @test_throws InexactError unsafe_wrap(Array, pointer(a), -3)
     # Misaligned pointer
     res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, length(a))
-    @test contains(res.value.msg, "is not properly aligned to $(sizeof(Int)) bytes")
+    @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
     res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, (1, 1))
-    @test contains(res.value.msg, "is not properly aligned to $(sizeof(Int)) bytes")
+    @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
 end
 
 struct FooBar2515
@@ -1183,6 +1274,7 @@ let
     function f()
         try
             return 1
+        catch
         end
     end
     @test f() == 1
@@ -1256,7 +1348,7 @@ let
 
     # issue #1886
     X = [1:4;]
-    r = Vector{UnitRange{Int}}(uninitialized, 1)
+    r = Vector{UnitRange{Int}}(undef, 1)
     r[1] = 2:3
     X[r...] *= 2
     @test X == [1,4,6,4]
@@ -1299,7 +1391,7 @@ end
 
 # issue #2365
 mutable struct B2365{T}
-     v::Union{T, Void}
+     v::Union{T, Nothing}
 end
 @test B2365{Int}(nothing).v === nothing
 @test B2365{Int}(0).v === 0
@@ -1321,7 +1413,7 @@ struct Foo2509; foo::Int; end
 # issue #2517
 struct Foo2517; end
 @test repr(Foo2517()) == "$(curmod_prefix)Foo2517()"
-@test repr(Vector{Foo2517}(uninitialized, 1)) == "$(curmod_prefix)Foo2517[$(curmod_prefix)Foo2517()]"
+@test repr(Vector{Foo2517}(undef, 1)) == "$(curmod_prefix)Foo2517[Foo2517()]"
 @test Foo2517() === Foo2517()
 
 # issue #1474
@@ -1439,7 +1531,7 @@ end
 
 function foo4075(f::Foo4075, s::Symbol)
     x = getfield(f,s)
-    gc()
+    GC.gc()
     x
 end
 
@@ -1450,13 +1542,13 @@ end
 # issue #3167
 let
     function foo(x)
-        ret=Vector{typeof(x[1])}(uninitialized, length(x))
+        ret=Vector{typeof(x[1])}(undef, length(x))
         for j = 1:length(x)
             ret[j] = x[j]
         end
         return ret
     end
-    x = Vector{Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void}}(uninitialized, 3)
+    x = Vector{Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Nothing}}(undef, 3)
     x[1] = 1.0
     x[2] = 2.0
     x[3] = 3.0
@@ -1571,10 +1663,11 @@ try
     (function() end)(1)
     # should throw an argument count error
     @test false
+catch
 end
 
 # issue #4526
-f4526(x) = isa(x.a, Void)
+f4526(x) = isa(x.a, Nothing)
 @test_throws ErrorException f4526(1)
 @test_throws ErrorException f4526(im)
 @test_throws ErrorException f4526(1+2im)
@@ -1615,7 +1708,7 @@ end
 # issue #4681
 # ccall should error if convert() returns something of the wrong type
 mutable struct Z4681
-    x::Ptr{Void}
+    x::Ptr{Cvoid}
     Z4681() = new(C_NULL)
 end
 Base.unsafe_convert(::Type{Ptr{Z4681}},b::Z4681) = b.x
@@ -1644,7 +1737,7 @@ mutable struct SIQ{A,B} <: Number
 end
 import Base: promote_rule
 promote_rule(A::Type{SIQ{T,T2}},B::Type{SIQ{S,S2}}) where {T,T2,S,S2} = SIQ{promote_type(T,S)}
-@test_throws ErrorException promote_type(SIQ{Int},SIQ{Float64})
+@test promote_type(SIQ{Int},SIQ{Float64}) == SIQ
 f4731(x::T...) where {T} = ""
 f4731(x...) = 0
 g4731() = f4731()
@@ -1704,13 +1797,13 @@ end
 @test invalid_tupleref()==true
 
 # issue #5150
-f5150(T) = Vector{Rational{T}}(uninitialized, 1)
+f5150(T) = Vector{Rational{T}}(undef, 1)
 @test typeof(f5150(Int)) === Vector{Rational{Int}}
 
 
 # issue #5165
 primitive type T5165{S} 64 end
-make_t(x::Int64) = Core.Intrinsics.bitcast(T5165{Void}, x)
+make_t(x::Int64) = Core.Intrinsics.bitcast(T5165{Nothing}, x)
 xs5165 = T5165[make_t(Int64(1))]
 b5165 = IOBuffer()
 for x in xs5165
@@ -1794,6 +1887,7 @@ try
     # try running this code in a different context that triggers the codegen
     # assertion `assert(isboxed || v.typ == typ)`.
     f5142()
+catch
 end
 
 primitive type Int5142b 8 end
@@ -1854,7 +1948,7 @@ mutable struct Polygon5884{T<:Real}
 end
 
 function test5884()
-    star = Vector{Polygon5884}(uninitialized, (3,))
+    star = Vector{Polygon5884}(undef, (3,))
     star[1] = Polygon5884([Complex(1.0,1.0)])
     p1 = star[1].points[1]
     @test p1 == Complex(1.0,1.0)
@@ -1865,11 +1959,11 @@ test5884()
 
 # issue #5924
 let
-    function Test()
+    function test5924()
         func = function () end
         func
     end
-    @test Test()() === nothing
+    @test test5924()() === nothing
 end
 
 # issue #6031
@@ -1919,6 +2013,7 @@ test5536(a::Union{Real, AbstractArray}) = "Non-splatting"
 
 # issue #6142
 import Base: +
+import LinearAlgebra: UniformScaling, I
 mutable struct A6142 <: AbstractMatrix{Float64}; end
 +(x::A6142, y::UniformScaling) = "UniformScaling method called"
 +(x::A6142, y::AbstractArray) = "AbstractArray method called"
@@ -2046,7 +2141,7 @@ end
 obj6387 = ObjMember(DateRange6387{Int64}())
 
 function v6387(r::AbstractRange{T}) where T
-    a = Vector{T}(uninitialized, 1)
+    a = Vector{T}(undef, 1)
     a[1] = Core.Intrinsics.bitcast(Date6387{Int64}, Int64(1))
     return a
 end
@@ -2059,8 +2154,8 @@ end
 day_in(obj6387)
 
 # issue #6784
-@test ndims(Array{Array{Float64}}(uninitialized, 3,5)) == 2
-@test ndims(Array{Array}(uninitialized, 3,5)) == 2
+@test ndims(Array{Array{Float64}}(undef, 3,5)) == 2
+@test ndims(Array{Array}(undef, 3,5)) == 2
 
 # issue #6793
 function segfault6793(;gamma=1)
@@ -2111,7 +2206,7 @@ f6980(::Union{Int, Float64}, ::B6980) = true
 @test f6980(1, B6980())
 
 # issue #7049
-Maybe7049{T} = Union{T,Void}
+Maybe7049{T} = Union{T,Nothing}
 function ttt7049(;init::Maybe7049{Union{AbstractString,Tuple{Int,Char}}} = nothing)
     string("init=", init)
 end
@@ -2170,15 +2265,14 @@ t_a7652 = A7652
 f7652() = fieldtype(t_a7652, :a) <: Int
 @test f7652() == (fieldtype(A7652, :a) <: Int) == true
 g7652() = fieldtype(DataType, :types)
-@test g7652() == fieldtype(DataType, :types) == SimpleVector
+@test g7652() == fieldtype(DataType, :types) == Core.SimpleVector
 @test fieldtype(t_a7652, 1) == Int
 h7652() = setfield!(a7652, 1, 2)
 h7652()
 @test a7652.a == 2
-# commented out due to issue #16195: setfield! does not perform conversions
-#   i7652() = setfield!(a7652, 1, 3.0)
-#   i7652()
-#   @test a7652.a == 3
+i7652() = Base.setproperty!(a7652, :a, 3.0)
+i7652()
+@test a7652.a == 3
 
 # issue #7679
 @test map(f->f(), Any[ ()->i for i=1:3 ]) == Any[1,2,3]
@@ -2190,11 +2284,12 @@ function issue7897!(data, arr)
 end
 
 let
-    a = ones(UInt8, 10)
+    a = fill(0x01, 10)
     sa = view(a, 4:6)
     # This can throw an error, but shouldn't segfault
     try
         issue7897!(sa, zeros(10))
+    catch
     end
 end
 
@@ -2213,8 +2308,8 @@ end
 
 # issue #8184
 struct Foo8184
-    x::Void
-    y::Void
+    x::Nothing
+    y::Nothing
     z::Float64
 end
 let f = Foo8184(nothing,nothing,1.0)
@@ -2295,7 +2390,7 @@ end
 
 # issue #9475
 module I9475
-    arr = Vector{Any}(uninitialized, 1)
+    arr = Vector{Any}(undef, 1)
     @eval @eval $arr[1] = 1
 end
 
@@ -2309,6 +2404,16 @@ f9520c(::Any, ::Any, ::Any, ::Any, ::Any, ::Any, args...) = 46
 @test invoke(f9520b, Tuple{Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6) == 23
 @test invoke(f9520c, Tuple{Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6) == 46
 @test invoke(f9520c, Tuple{Any, Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6, 7) == 46
+
+# issue #24460
+f24460(x, y) = 1
+f24460(x::T, y::T) where {T} = 2.0
+f24460(x::Int, y::Int) = "3"
+@test f24460(1, 2) === "3"
+@test invoke(f24460, Tuple{T,T} where T, 1, 2) === 2.0
+const T24460 = Tuple{T,T} where T
+g24460() = invoke(f24460, T24460, 1, 2)
+@test @inferred(g24460()) === 2.0
 
 call_lambda1() = (()->x)(1)
 call_lambda2() = ((x)->x)()
@@ -2327,25 +2432,13 @@ call_lambda7() = ((x...)->x)(1,2)
 
 # jl_new_bits testing
 let x = [1,2,3]
-    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Int, x) === 1
-    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Complex{Int}, x) === 1+2im
-    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), NTuple{3,Int}, x) === (1,2,3)
-    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Tuple{Int,Int,Int}, x) === (1,2,3)
-    @test (ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Tuple{Int16,Tuple{Void},Int8,Tuple{},Int,Void,Int}, x)::Tuple)[[2,4,5,6,7]] === ((nothing,),(),2,nothing,3)
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Int, x) === 1
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Complex{Int}, x) === 1+2im
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), NTuple{3,Int}, x) === (1,2,3)
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Tuple{Int,Int,Int}, x) === (1,2,3)
+    @test (ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Tuple{Int16,Tuple{Cvoid},Int8,Tuple{},Int,Cvoid,Int}, x)::Tuple)[[2,4,5,6,7]] === ((nothing,),(),2,nothing,3)
 end
 
-# sig 2 is SIGINT per the POSIX.1-1990 standard
-if !Sys.iswindows()
-    ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
-    @test_throws InterruptException begin
-        ccall(:kill, Void, (Cint, Cint,), getpid(), 2)
-        for i in 1:10
-            Libc.systemsleep(0.1)
-            ccall(:jl_gc_safepoint, Void, ()) # wait for SIGINT to arrive
-        end
-    end
-    ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
-end
 let
     # Exception frame automatically restores sigatomic counter.
     Base.sigatomic_begin()
@@ -2358,49 +2451,53 @@ let
 end
 
 # pull request #9534
-@test try; a,b,c = 1,2; catch ex; (ex::BoundsError).a === (1,2) && ex.i == 3; end
-# @test try; [][]; catch ex; isempty((ex::BoundsError).a::Array{Any,1}) && ex.i == (1,); end # TODO: Re-enable after PLI
-@test try; [][1,2]; catch ex; isempty((ex::BoundsError).a::Array{Any,1}) && ex.i == (1,2); end
-@test try; [][10]; catch ex; isempty((ex::BoundsError).a::Array{Any,1}) && ex.i == (10,); end
-f9534a() = (a=1+2im; getfield(a, -100))
-f9534a(x) = (a=1+2im; getfield(a, x))
-@test try; f9534a() catch ex; (ex::BoundsError).a === 1+2im && ex.i == -100; end
-@test try; f9534a(3) catch ex; (ex::BoundsError).a === 1+2im && ex.i == 3; end
-f9534b() = (a=(1,2.,""); a[5])
-f9534b(x) = (a=(1,2.,""); a[x])
-@test try; f9534b() catch ex; (ex::BoundsError).a == (1,2.,"") && ex.i == 5; end
-@test try; f9534b(4) catch ex; (ex::BoundsError).a == (1,2.,"") && ex.i == 4; end
-f9534c() = (a=(1,2.); a[3])
-f9534c(x) = (a=(1,2.); a[x])
-@test try; f9534c() catch ex; (ex::BoundsError).a === (1,2.) && ex.i == 3; end
-@test try; f9534c(0) catch ex; (ex::BoundsError).a === (1,2.) && ex.i == 0; end
-f9534d() = (a=(1,2,4,6,7); a[7])
-f9534d(x) = (a=(1,2,4,6,7); a[x])
-@test try; f9534d() catch ex; (ex::BoundsError).a === (1,2,4,6,7) && ex.i == 7; end
-@test try; f9534d(-1) catch ex; (ex::BoundsError).a === (1,2,4,6,7) && ex.i == -1; end
-f9534e(x) = (a=IOBuffer(); setfield!(a, x, 3))
-@test try; f9534e(-2) catch ex; isa((ex::BoundsError).a,Base.IOBuffer) && ex.i == -2; end
-f9534f() = (a=IOBuffer(); getfield(a, -2))
-f9534f(x) = (a=IOBuffer(); getfield(a, x))
-@test try; f9534f() catch ex; isa((ex::BoundsError).a,Base.IOBuffer) && ex.i == -2; end
-@test try; f9534f(typemin(Int)+2) catch ex; isa((ex::BoundsError).a,Base.IOBuffer) && ex.i == typemin(Int)+2; end
+@test_throws BoundsError((1, 2), 3) begin; a, b, c = 1, 2; end
+let a = []
+    @test try; a[]; catch ex; (ex::BoundsError).a === a && ex.i == (); end
+    @test_throws BoundsError(a, (1, 2)) a[1, 2]
+    @test_throws BoundsError(a, (10,)) a[10]
+end
+f9534a() = (a = 1 + 2im; getfield(a, -100))
+f9534a(x) = (a = 1 + 2im; getfield(a, x))
+@test_throws BoundsError(1 + 2im, -100) f9534a()
+@test_throws BoundsError(1 + 2im, 3) f9534a(3)
+f9534b() = (a = (1, 2., ""); a[5])
+f9534b(x) = (a = (1, 2., ""); a[x])
+@test_throws BoundsError((1, 2., ""), 5) f9534b()
+@test_throws BoundsError((1, 2., ""), 4) f9534b(4)
+f9534c() = (a = (1, 2.); a[3])
+f9534c(x) = (a = (1, 2.); a[x])
+@test_throws BoundsError((1, 2.), 3) f9534c()
+@test_throws BoundsError((1, 2.), 0) f9534c(0)
+f9534d() = (a = (1, 2, 4, 6, 7); a[7])
+f9534d(x) = (a = (1, 2, 4, 6, 7); a[x])
+@test_throws BoundsError((1, 2, 4, 6, 7), 7) f9534d()
+@test_throws BoundsError((1, 2, 4, 6, 7), -1) f9534d(-1)
+let a = IOBuffer()
+    f9534e(x) = setfield!(a, x, 3)
+    @test_throws BoundsError(a, -2) f9534e(-2)
+    f9534f() = getfield(a, -2)
+    f9534f(x) = getfield(a, x)
+    @test_throws BoundsError(a, -2) f9534f()
+    @test_throws BoundsError(a, typemin(Int) + 2) f9534f(typemin(Int) + 2)
+end
 x9634 = 3
-@test try; getfield(1+2im, x9634); catch ex; (ex::BoundsError).a === 1+2im && ex.i == 3; end
-@test try; throw(BoundsError()) catch ex; !isdefined((ex::BoundsError), :a) && !isdefined((ex::BoundsError), :i); end
-@test try; throw(BoundsError(Int)) catch ex; (ex::BoundsError).a == Int && !isdefined((ex::BoundsError), :i); end
-@test try; throw(BoundsError(Int, typemin(Int))) catch ex; (ex::BoundsError).a == Int && (ex::BoundsError).i == typemin(Int); end
-@test try; throw(BoundsError(Int, (:a,))) catch ex; (ex::BoundsError).a == Int && (ex::BoundsError).i == (:a,); end
-f9534g(a,b,c...) = c[0]
-@test try; f9534g(1,2,3,4,5,6) catch ex; (ex::BoundsError).a === (3,4,5,6) && ex.i == 0; end
-f9534h(a,b,c...) = c[a]
-@test f9534h(4,2,3,4,5,6) == 6
-@test try; f9534h(5,2,3,4,5,6) catch ex; (ex::BoundsError).a === (3,4,5,6) && ex.i == 5; end
+@test_throws BoundsError(1 + 2im, 3) getfield(1 + 2im, x9634)
+@test try; throw(BoundsError()); catch ex; !isdefined((ex::BoundsError), :a) && !isdefined((ex::BoundsError), :i); end
+@test try; throw(BoundsError(Int)); catch ex; (ex::BoundsError).a == Int && !isdefined((ex::BoundsError), :i); end
+@test_throws BoundsError(Int, typemin(Int)) throw(BoundsError(Int, typemin(Int)))
+@test_throws BoundsError(Int, (:a,)) throw(BoundsError(Int, (:a,)))
+f9534g(a, b, c...) = c[0]
+@test_throws BoundsError((3, 4, 5, 6), 0) f9534g(1, 2, 3, 4, 5, 6)
+f9534h(a, b, c...) = c[a]
+@test f9534h(4, 2, 3, 4, 5, 6) == 6
+@test_throws BoundsError((3, 4, 5, 6), 5) f9534h(5, 2, 3, 4, 5, 6)
 
 # issue #7978, comment 332352438
 f7978a() = 1
-@test try; a, b = f7978a() catch ex; (ex::BoundsError).a == 1 && ex.i == 2; end
+@test_throws BoundsError(1, 2) begin; a, b = f7978a(); end
 f7978b() = 1, 2
-@test try; a, b, c = f7978b() catch ex; (ex::BoundsError).a == (1, 2) && ex.i == 3; end
+@test_throws BoundsError((1, 2), 3) begin; a, b, c = f7978b(); end
 
 # issue #9535
 counter9535 = 0
@@ -2423,10 +2520,10 @@ mutable struct Obj; x; end
         wref = []
         mk_wr(ref, wref)
         test_wr(ref, wref)
-        gc()
+        GC.gc()
         test_wr(ref, wref)
         pop!(ref)
-        gc()
+        GC.gc()
         @test wref[1].value === nothing
     end
     test_wr()
@@ -2491,9 +2588,11 @@ const N10281 = 1000
     end
 end === nothing
 
+
 # issue #10221
 module GCbrokentype
-OLD_STDOUT = STDOUT
+using InteractiveUtils
+OLD_STDOUT = stdout
 fname = tempname()
 file = open(fname, "w")
 redirect_stdout(file)
@@ -2502,8 +2601,9 @@ try
     mutable struct Foo{T}
         val::Bar{T}
     end
+catch
 end
-gc()
+GC.gc()
 redirect_stdout(OLD_STDOUT)
 close(file)
 rm(fname)
@@ -3047,7 +3147,7 @@ struct Array_512_Uint8
     d511::UInt8
     d512::UInt8
 end
-gc()
+GC.gc()
 
 # issue #10867
 @test collect(enumerate((Tuple,Int))) == [(1,Tuple), (2,Int)]
@@ -3121,6 +3221,23 @@ function f11065()
 end
 @test_throws UndefVarError f11065()
 
+# issue #25724
+a25724 = Any[]
+for i = 1:3
+    needX = false
+    try
+        X = X
+        X[1] = X[1] + 1
+    catch err
+        needX = true
+    end
+    if needX
+        X = [0]
+    end
+    push!(a25724, copy(X))
+end
+@test a25724 == [[0], [0], [0]]
+
 # for loop iterator expression should be evaluated in outer scope
 let
     for i in (local a = 1:2)
@@ -3178,13 +3295,13 @@ f11715(x) = (x === Tuple{Any})
 
 # part of #11597
 # make sure invalid, partly-constructed types don't end up in the cache
-abstract type C11597{T<:Union{Void, Int}} end
+abstract type C11597{T<:Union{Nothing, Int}} end
 mutable struct D11597{T} <: C11597{T} d::T end
 @test_throws TypeError D11597(1.0)
 @test_throws TypeError repr(D11597(1.0))
 
 # issue #11772
-@test_throws UndefRefError (Vector{Any}(uninitialized, 5)...,)
+@test_throws UndefRefError (Vector{Any}(undef, 5)...,)
 
 # issue #11813
 let a = UInt8[1, 107, 66, 88, 2, 99, 254, 13, 0, 0, 0, 0]
@@ -3234,17 +3351,21 @@ f11858(Any[Type{Foo11858}, Type{Bar11858}, typeof(g11858)])
 @test Bar11858(1).x == 1.0
 
 # issue 11904
+struct Nullable11904{T}
+    value::T
+    hasvalue::Bool
+end
 @noinline throw_error() = error()
 foo11904(x::Int) = x
-@inline function foo11904(x::Nullable{S}) where S
-    if isbits(S)
-        Nullable(foo11904(x.value), x.hasvalue)
+@inline function foo11904(x::Nullable11904{S}) where S
+    if isbitstype(S)
+        Nullable11904(foo11904(x.value), x.hasvalue)
     else
         throw_error()
     end
 end
 
-@test !isnull(foo11904(Nullable(1)))
+@test foo11904(Nullable11904(1, true)).hasvalue
 
 # issue 11874
 struct Foo11874
@@ -3354,12 +3475,12 @@ struct Vec8010{T}
 end
 Vec8010(a::AbstractVector) = Vec8010(ntuple(x->a[x],2)...)
 Base.convert(::Type{Vec8010{T}},x::AbstractVector) where {T} = Vec8010(x)
-Base.convert(::Type{Void},x::AbstractVector) = Vec8010(x)
+Base.convert(::Type{Nothing},x::AbstractVector) = Vec8010(x)
 struct MyType8010
      m::Vec8010{Float32}
 end
 struct MyType8010_ghost
-     m::Void
+     m::Nothing
 end
 @test_throws TypeError MyType8010([3.0;4.0])
 @test_throws TypeError MyType8010_ghost([3.0;4.0])
@@ -3407,7 +3528,7 @@ end
 
 # issue #12394
 mutable struct Empty12394 end
-let x = Vector{Empty12394}(uninitialized, 1), y = [Empty12394()]
+let x = Vector{Empty12394}(undef, 1), y = [Empty12394()]
     @test_throws UndefRefError x==y
     @test_throws UndefRefError y==x
 end
@@ -3424,7 +3545,7 @@ const const_array_int2 = Array{Int}
 test_eq_array_int() = ===(const_array_int1, const_array_int2)
 @test test_eq_array_int()
 
-# object_id of haspadding field
+# objectid of haspadding field
 struct HasPadding
     x::Bool
     y::Int
@@ -3432,11 +3553,12 @@ end
 struct HasHasPadding
     x::HasPadding
 end
-hashaspadding = HasHasPadding(HasPadding(true,1))
-hashaspadding2 = HasHasPadding(HasPadding(true,1))
-unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding)), 0x12, 2)
-unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding2)), 0x21, 2)
-@test object_id(hashaspadding) == object_id(hashaspadding2)
+let hashaspadding = Ref(HasHasPadding(HasPadding(true,1))),
+    hashaspadding2 = Ref(HasHasPadding(HasPadding(true,1)))
+    unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding)), 0x12, 2)
+    unsafe_store!(convert(Ptr{UInt8},pointer_from_objref(hashaspadding2)), 0x21, 2)
+    @test objectid(hashaspadding[]) == objectid(hashaspadding2[])
+end
 
 # issue #12517
 let x = (1,2)
@@ -3469,7 +3591,7 @@ call13007(::Type{Array}) = 1
 @test length(Base._methods(call13007, Tuple{Type{x} where x<:Array}, 4, typemax(UInt))) == 2
 
 # detecting cycles during type intersection, e.g. #1631
-cycle_in_solve_tvar_constraints(::Type{Nullable{S}}, x::S) where {S} = 0
+cycle_in_solve_tvar_constraints(::Type{Some{S}}, x::S) where {S} = 0
 cycle_in_solve_tvar_constraints(::Type{T}, x::Val{T}) where {T} = 1
 @test length(methods(cycle_in_solve_tvar_constraints)) == 2
 
@@ -3481,7 +3603,7 @@ foo12967(x, ::TupleType12967) = 2
 @test foo12967(1, Tuple{}) == 2
 
 # issue #13083
-@test Void() === nothing
+@test Nothing() === nothing
 
 # issue discovered in #11973
 for j = 1:1
@@ -3545,7 +3667,7 @@ end
 #13433, read!(::IO, a::Vector{UInt8}) should return a
 mutable struct IO13433 <: IO end
 Base.read(::IO13433, ::Type{UInt8}) = 0x01
-@test read!(IO13433(), Array{UInt8}(uninitialized, 4)) == [0x01, 0x01, 0x01, 0x01]
+@test read!(IO13433(), Array{UInt8}(undef, 4)) == [0x01, 0x01, 0x01, 0x01]
 
 # issue #13647, comparing boxed isbits immutables
 struct X13647
@@ -3582,7 +3704,7 @@ f11327(::Type{T},x::T) where {T} = x
 
 # issue #8487
 @test [x for x in 1:3] == [x for x ∈ 1:3] == [x for x = 1:3]
-let A = Matrix{Int}(uninitialized, 4,3)
+let A = Matrix{Int}(undef, 4,3)
     for i ∈ 1:size(A,1), j ∈ 1:size(A,2)
         A[i,j] = 17*i + 51*j
     end
@@ -3598,11 +3720,11 @@ let
     # obj should be marked for promotion after the second gc and be promoted
     # after the third GC
     # GC_CLEAN; age = 0
-    gc(false)
+    GC.gc(false)
     # GC_CLEAN; age = 1
-    gc(false)
+    GC.gc(false)
     # GC_QUEUED; age = 1
-    gc(false)
+    GC.gc(false)
     # GC_MARKED; age = 1
     finalize(obj)
     @test finalized == 1
@@ -3611,14 +3733,14 @@ end
 # check if finalizers for the old gen can be triggered manually
 # PR #14181
 let
-    # The following three `gc(false)` clears the `finalizer_list`. It is
+    # The following three `GC.gc(false)` clears the `finalizer_list`. It is
     # not strictly necessary to make the test pass but should make the failure
     # more repeatable if something breaks.
-    gc(false)
+    GC.gc(false)
     # At least: GC_CLEAN; age = 1
-    gc(false)
+    GC.gc(false)
     # At least: GC_QUEUED; age = 1
-    gc(false)
+    GC.gc(false)
     # all objects in `finalizer_list` are now moved to `finalizer_list_marked`
 
     obj1 = Ref(1)
@@ -3633,7 +3755,7 @@ let
 end
 
 # issue #14323
-@test_throws ErrorException eval(Expr(:body, :(1)))
+@test eval(Expr(:block, :(1))) === 1
 
 # issue #14339
 f14339(x::T, y::T) where {T<:Union{}} = 0
@@ -3664,9 +3786,9 @@ let i = 9.0
 end
 
 # Make sure the old f() method is GC'd if it was not rooted properly
-gc()
-gc()
-gc()
+GC.gc()
+GC.gc()
+GC.gc()
 
 # Run again.
 g()
@@ -3709,11 +3831,11 @@ let nometh = try; @eval @m8846(a, b, c); false; catch ex; ex; end
  end
 
 # a simple case of parametric dispatch with unions
-let foo(x::Union{T, Void}, y::Union{T, Void}) where {T} = 1
+let foo(x::Union{T, Nothing}, y::Union{T, Nothing}) where {T} = 1
     @test foo(1, nothing) === 1
     @test foo(nothing, nothing) === 1
 end
-let foo(x::Union{T, Void}, y::Union{T, Void}) where {T} = T
+let foo(x::Union{T, Nothing}, y::Union{T, Nothing}) where {T} = T
     @test foo(1, nothing) === Int
     @test_throws UndefVarError(:T) foo(nothing, nothing)
 end
@@ -3746,7 +3868,7 @@ let
 end
 
 # issue #14564
-@test isa(object_id(Tuple.name.cache), Integer)
+@test isa(objectid(Tuple.name.cache), Integer)
 
 # issue #14691
 mutable struct T14691; a::UInt; end
@@ -3769,14 +3891,14 @@ foo9677(x::Array) = invoke(foo9677, Tuple{AbstractArray}, x)
 
 # issue #6846
 f6846() = (please6846; 2)
-@test_throws UndefVarError f6846()
+@test_throws UndefVarError(:please6846) f6846()
 
 module M6846
     macro f()
-        return :(please6846; 2)
+        return esc(:(please6846; 2))
     end
 end
-@test_throws UndefVarError @M6846.f()
+@test_throws UndefVarError(:please6846) @M6846.f()
 
 # issue #14758
 @test isa(@eval(f14758(; $([]...)) = ()), Function)
@@ -3805,7 +3927,7 @@ end
 # issue #14610
 let sometypes = (Int,Int8)
     f(::Union{ntuple(i->Type{sometypes[i]}, length(sometypes))...}) = 1
-    @test method_exists(f, (Union{Type{Int},Type{Int8}},))
+    @test hasmethod(f, (Union{Type{Int},Type{Int8}},))
 end
 
 let
@@ -3870,9 +3992,18 @@ let ex = quote
     @test ex.args[2] == :test
 end
 
+# issue #25652
+x25652 = 1
+x25652_2 = let (x25652, _) = (x25652, nothing)
+    x25652 = x25652 + 1
+    x25652
+end
+@test x25652_2 == 2
+@test x25652 == 1
+
 # issue #15180
 function f15180(x::T) where T
-    X = Vector{T}(uninitialized, 1)
+    X = Vector{T}(undef, 1)
     X[1] = x
     @noinline ef(::J) where {J} = (J,X[1]) # Use T
     ef(::J, ::Int) where {J} = (T,J)
@@ -3880,7 +4011,7 @@ function f15180(x::T) where T
 end
 @test map(f15180(1), [1,2]) == [(Int,1),(Int,1)]
 
-let ary = Vector{Any}(uninitialized, 10)
+let ary = Vector{Any}(undef, 10)
     check_undef_and_fill(ary, rng) = for i in rng
         @test !isassigned(ary, i)
         ary[i] = (Float64(i), i) # some non-cached content
@@ -3890,33 +4021,33 @@ let ary = Vector{Any}(uninitialized, 10)
     # to check if these values are not reused later.
     check_undef_and_fill(ary, 1:10)
     # Check if the memory grown at the end are zerod
-    ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
     check_undef_and_fill(ary, 11:20)
     # Make sure the content of the memory deleted at the end are not reused
-    ccall(:jl_array_del_end, Void, (Any, Csize_t), ary, 5)
-    ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 5)
+    ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), ary, 5)
+    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 5)
     check_undef_and_fill(ary, 16:20)
 
     # Now check grow/del_end
-    ary = Vector{Any}(uninitialized, 1010)
+    ary = Vector{Any}(undef, 1010)
     check_undef_and_fill(ary, 1:1010)
     # This del_beg should move the buffer
-    ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 1000)
-    ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 1000)
+    ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 1000)
+    ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 1000)
     check_undef_and_fill(ary, 1:1000)
-    ary = Vector{Any}(uninitialized, 1010)
+    ary = Vector{Any}(undef, 1010)
     check_undef_and_fill(ary, 1:1010)
     # This del_beg should not move the buffer
-    ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 10)
-    ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 10)
     check_undef_and_fill(ary, 1:10)
 
-    ary = Vector{Any}(uninitialized, 1010)
+    ary = Vector{Any}(undef, 1010)
     check_undef_and_fill(ary, 1:1010)
-    ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
     check_undef_and_fill(ary, 1011:1020)
-    ccall(:jl_array_del_end, Void, (Any, Csize_t), ary, 10)
-    ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 10)
     check_undef_and_fill(ary, 1:10)
 
     # Make sure newly malloc'd buffers are filled with 0
@@ -3924,36 +4055,36 @@ let ary = Vector{Any}(uninitialized, 10)
     # we are malloc'ing the buffer after the grow_end and malloc is not using
     # mmap directly (which may return a zero'd new page).
     for n in [50, 51, 100, 101, 200, 201, 300, 301]
-        ary = Vector{Any}(uninitialized, n)
+        ary = Vector{Any}(undef, n)
         # Try to free the previous buffer that was filled with random content
         # and to increase the chance of getting a non-zero'd buffer next time
-        gc()
-        gc()
-        gc()
-        ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 4)
-        ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 4)
-        ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, n)
-        ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 4)
+        GC.gc()
+        GC.gc()
+        GC.gc()
+        ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 4)
+        ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 4)
+        ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, n)
+        ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 4)
         check_undef_and_fill(ary, 1:(2n + 4))
     end
 
-    ary = Vector{Any}(uninitialized, 100)
-    ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10000)
+    ary = Vector{Any}(undef, 100)
+    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10000)
     ary[:] = 1:length(ary)
-    ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 10000)
+    ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 10000)
     # grow on the back until a buffer reallocation happens
     cur_ptr = pointer(ary)
     while cur_ptr == pointer(ary)
         len = length(ary)
-        ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10)
+        ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
         for i in (len + 1):(len + 10)
             @test !isassigned(ary, i)
         end
     end
 
-    ary = Vector{Any}(uninitialized, 100)
+    ary = Vector{Any}(undef, 100)
     ary[:] = 1:length(ary)
-    ccall(:jl_array_grow_at, Void, (Any, Csize_t, Csize_t), ary, 50, 10)
+    ccall(:jl_array_grow_at, Cvoid, (Any, Csize_t, Csize_t), ary, 50, 10)
     for i in 51:60
         @test !isassigned(ary, i)
     end
@@ -3972,16 +4103,16 @@ end
 end
 # disable GC to make sure no collection/promotion happens
 # when we are constructing the objects
-let gc_enabled13995 = gc_enable(false)
+let gc_enabled13995 = GC.enable(false)
     finalized13995 = [false, false, false, false]
     create_dead_object13995(finalized13995)
-    gc_enable(true)
+    GC.enable(true)
     # obj is unreachable and young, a single young gc should collect it
     # and trigger all the finalizers.
-    gc(false)
-    gc_enable(false)
+    GC.gc(false)
+    GC.enable(false)
     @test finalized13995 == [true, true, true, true]
-    gc_enable(gc_enabled13995)
+    GC.enable(gc_enabled13995)
 end
 
 # issue #15283
@@ -4008,14 +4139,14 @@ end
 @test M15455.partialsort(1,2)==0
 
 # check that medium-sized array is 64-byte aligned (#15139)
-@test Int(pointer(Vector{Float64}(uninitialized, 1024))) % 64 == 0
+@test Int(pointer(Vector{Float64}(undef, 1024))) % 64 == 0
 
 # PR #15413
 # Make sure arrayset can handle `Array{T}` (where `T` is a type and not a
 # `TypeVar`) without crashing
 let
     function arrayset_unknown_dim(::Type{T}, n) where T
-        Base.arrayset(true, reshape(Vector{T}(uninitialized, 1), ones(Int, n)...), 2, 1)
+        Base.arrayset(true, reshape(Vector{T}(undef, 1), fill(1, n)...), 2, 1)
     end
     arrayset_unknown_dim(Any, 1)
     arrayset_unknown_dim(Any, 2)
@@ -4031,7 +4162,7 @@ using Test
 # not modify the original data
 function test_shared_array_resize(::Type{T}) where T
     len = 100
-    a = Vector{T}(uninitialized, len)
+    a = Vector{T}(undef, len)
     function test_unshare(f)
         a′ = reshape(reshape(a, (len ÷ 2, 2)), len)
         a[:] = 1:length(a)
@@ -4048,16 +4179,16 @@ function test_shared_array_resize(::Type{T}) where T
         @test pointer(a) != pointer(a′)
     end
 
-    test_unshare(a->ccall(:jl_array_del_end, Void, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_del_end, Void, (Any, Csize_t), a, 1))
-    test_unshare(a->ccall(:jl_array_del_beg, Void, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_del_beg, Void, (Any, Csize_t), a, 1))
+    test_unshare(a->ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), a, 1))
+    test_unshare(a->ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), a, 1))
     test_unshare(a->deleteat!(a, 10))
     test_unshare(a->deleteat!(a, 90))
-    test_unshare(a->ccall(:jl_array_grow_end, Void, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_grow_end, Void, (Any, Csize_t), a, 1))
-    test_unshare(a->ccall(:jl_array_grow_beg, Void, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_grow_beg, Void, (Any, Csize_t), a, 1))
+    test_unshare(a->ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), a, 1))
+    test_unshare(a->ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), a, 1))
     test_unshare(a->insert!(a, 10, 10))
     test_unshare(a->insert!(a, 90, 90))
 end
@@ -4079,7 +4210,7 @@ b = "aaa"
 c = [0x2, 0x1, 0x3]
 
 @test check_nul(a)
-@test check_nul(Vector{UInt8}(b))
+@test check_nul(unsafe_wrap(Vector{UInt8},b))
 @test check_nul(c)
 d = [0x2, 0x1, 0x3]
 @test check_nul(d)
@@ -4087,34 +4218,34 @@ push!(d, 0x3)
 @test check_nul(d)
 push!(d, 0x3)
 @test check_nul(d)
-ccall(:jl_array_del_end, Void, (Any, UInt), d, 2)
+ccall(:jl_array_del_end, Cvoid, (Any, UInt), d, 2)
 @test check_nul(d)
-ccall(:jl_array_grow_end, Void, (Any, UInt), d, 1)
+ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 1)
 @test check_nul(d)
-ccall(:jl_array_grow_end, Void, (Any, UInt), d, 1)
+ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 1)
 @test check_nul(d)
-ccall(:jl_array_grow_end, Void, (Any, UInt), d, 10)
+ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 10)
 @test check_nul(d)
-ccall(:jl_array_del_beg, Void, (Any, UInt), d, 8)
+ccall(:jl_array_del_beg, Cvoid, (Any, UInt), d, 8)
 @test check_nul(d)
-ccall(:jl_array_grow_beg, Void, (Any, UInt), d, 8)
+ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), d, 8)
 @test check_nul(d)
-ccall(:jl_array_grow_beg, Void, (Any, UInt), d, 8)
+ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), d, 8)
 @test check_nul(d)
 f = unsafe_wrap(Array, pointer(d), length(d))
 @test !check_nul(f)
-f = unsafe_wrap(Array, ccall(:malloc, Ptr{UInt8}, (Csize_t,), 10), 10, true)
+f = unsafe_wrap(Array, ccall(:malloc, Ptr{UInt8}, (Csize_t,), 10), 10, own = true)
 @test !check_nul(f)
 end
 
 # Copy of `#undef`
-copy!(Vector{Any}(uninitialized, 10), Vector{Any}(uninitialized, 10))
+copyto!(Vector{Any}(undef, 10), Vector{Any}(undef, 10))
 function test_copy_alias(::Type{T}) where T
     ary = T[1:100;]
-    unsafe_copy!(ary, 1, ary, 11, 90)
+    unsafe_copyto!(ary, 1, ary, 11, 90)
     @test ary == [11:100; 91:100]
     ary = T[1:100;]
-    unsafe_copy!(ary, 11, ary, 1, 90)
+    unsafe_copyto!(ary, 11, ary, 1, 90)
     @test ary == [1:10; 1:90]
 end
 test_copy_alias(Int)
@@ -4141,7 +4272,7 @@ end
 
 # issue #14113
 module A14113
-    using Test
+    using Test, Random
     # show that making several thousand methods (and lots of AST constants)
     # doesn't cause any serious issues (for example, for the serializer)
     # although to keep runtime on the order of several seconds for this test,
@@ -4202,7 +4333,7 @@ function count_expr_push(ex::Expr, head::Symbol, counter)
     return false
 end
 
-function metadata_matches(ast::CodeInfo)
+function metadata_matches(ast::Core.CodeInfo)
     inbounds_cnt = Ref(0)
     for ex in ast.code::Array{Any,1}
         if isa(ex, Expr)
@@ -4277,11 +4408,11 @@ end
 @test f16158("abc") == "abcaba"
 
 # LLVM verifier error for noreturn function
-# the `code_llvm(DevNull, ...)` tests are only meaningful on debug build
+# the `code_llvm(devnull, ...)` tests are only meaningful on debug build
 # with verifier on (but should still pass on release build).
 module TestSSA16244
 
-using Test
+using Test, InteractiveUtils
 @noinline k(a) = a
 
 # unreachable branch due to `ccall(:jl_throw)`
@@ -4293,7 +4424,7 @@ function f1(a)
     end
     b[1]
 end
-code_llvm(DevNull, f1, Tuple{Bool})
+code_llvm(devnull, f1, Tuple{Bool})
 @test f1(true) == 2
 @test_throws DivideError f1(false)
 
@@ -4308,7 +4439,7 @@ function f2(a)
     end
     b[1]
 end
-code_llvm(DevNull, f2, Tuple{Bool})
+code_llvm(devnull, f2, Tuple{Bool})
 @test f2(true) == 2
 @test_throws ErrorException f2(false)
 
@@ -4319,7 +4450,7 @@ function f3(a)
     end
     b[1]
 end
-code_llvm(DevNull, f3, Tuple{Bool})
+code_llvm(devnull, f3, Tuple{Bool})
 @test f3(true) == 2
 ex = try
     f3(false)
@@ -4338,7 +4469,7 @@ function f4(a, p)
     end
     b[1]
 end
-code_llvm(DevNull, f4, Tuple{Bool,Ptr{Void}})
+code_llvm(devnull, f4, Tuple{Bool,Ptr{Cvoid}})
 @test f4(true, C_NULL) == 2
 @test_throws UndefRefError f4(false, C_NULL)
 
@@ -4350,7 +4481,7 @@ function f5(a)
     end
     b[1]
 end
-code_llvm(DevNull, f5, Tuple{Bool})
+code_llvm(devnull, f5, Tuple{Bool})
 @test f5(true) == 2
 @test f5(false) == 1
 
@@ -4361,7 +4492,7 @@ function f6(a)
     end
     b[1]
 end
-code_llvm(DevNull, f6, Tuple{Bool})
+code_llvm(devnull, f6, Tuple{Bool})
 @test f6(true) == 2
 @test f6(false) == 1
 
@@ -4374,7 +4505,7 @@ function f7(a)
     end
     b[1]
 end
-code_llvm(DevNull, f7, Tuple{Bool})
+code_llvm(devnull, f7, Tuple{Bool})
 @test f7(true) == 2
 @test_throws TypeError f7(false)
 
@@ -4387,7 +4518,7 @@ function f8(a, c)
     end
     b[1]
 end
-code_llvm(DevNull, f8, Tuple{Bool,Int})
+code_llvm(devnull, f8, Tuple{Bool,Int})
 @test f8(true, 1) == 2
 @test_throws TypeError f8(false, 1)
 
@@ -4401,7 +4532,7 @@ function f9(a)
     end
     b[1]
 end
-code_llvm(DevNull, f9, Tuple{Bool})
+code_llvm(devnull, f9, Tuple{Bool})
 @test f9(true) == 2
 ex = try
     f9(false)
@@ -4435,7 +4566,7 @@ undefined_x16090 = (Int,)
 @test_throws TypeError f16090()
 
 # issue #12238
-mutable struct A12238{T} end
+struct A12238{T} end
 mutable struct B12238{T,S}
     a::A12238{B12238{Int,S}}
 end
@@ -4456,14 +4587,14 @@ let a = Val{Val{TypeVar(:_, Int)}},
 
     @test !isdefined(a, :instance)
     @test  isdefined(b, :instance)
-    @test Base._isleaftype(b)
+    @test Base.isconcretetype(b)
 end
 
-# A return type widened to Type{Union{T,Void}} should not confuse
+# A return type widened to Type{Union{T,Nothing}} should not confuse
 # codegen
-@noinline MaybeFunc(T) = Union{T, Void}
+@noinline MaybeFunc(T) = Union{T, Nothing}
 fMaybeFunc() = MaybeFunc(Int64)
-@test fMaybeFunc() == Union{Int64, Void}
+@test fMaybeFunc() == Union{Int64, Nothing}
 
 # issue #16431
 function f16431(x)
@@ -4483,10 +4614,10 @@ end
 B14878(ng) = B14878()
 function trigger14878()
     w = A14878()
-    w.ext[:14878] = B14878(junk)  # junk not defined!
+    w.ext[:14878] = B14878(junk)  # global junk not defined!
     return w
 end
-@test_throws UndefVarError trigger14878()
+@test_throws UndefVarError(:junk) trigger14878()
 
 # issue #1090
 function f1090(x)::Int
@@ -4533,7 +4664,7 @@ f1090()::Int = A1090()
 @test_throws TypeError f1090()
 
 # issue #19106
-function f19106()::Void end
+function f19106()::Nothing end
 @test f19106() === nothing
 
 # issue #16783
@@ -4574,7 +4705,7 @@ try
 catch
 end
 @test isa(T16793, Type)
-@test isa(abstract type T16793_2 end, Void)
+@test isa(abstract type T16793_2 end, Nothing)
 
 # issue #17147
 f17147(::Tuple) = 1
@@ -4633,21 +4764,6 @@ let
     @test k(1) == 1
 end
 
-# PR #18054: compilation of cfunction leaves IRBuilder in bad state,
-#            causing heap-use-after-free when compiling f18054
-function f18054()
-    return Cint(0)
-end
-cfunction(f18054, Cint, Tuple{})
-
-# issue #18986: the ccall optimization of cfunction leaves JL_TRY stack in bad state
-dummy18996() = return nothing
-function main18986()
-    cfunction(dummy18986, Void, ())
-    ccall((:dummy2, "this_is_a_nonexisting_library"), Void, ())
-end
-@test_throws ErrorException main18986()
-
 # issue #18085
 f18085(a, x...) = (0, )
 for (f, g) in ((:asin, :sin), (:acos, :cos))
@@ -4659,11 +4775,11 @@ end
 # issue #18236 constant VecElement in ast triggers codegen assertion/undef
 # VecElement of scalar
 v18236 = VecElement(1.0)
-ptr18236 = cfunction(identity, VecElement{Float64}, Tuple{VecElement{Float64}})
+ptr18236 = @cfunction(identity, VecElement{Float64}, (VecElement{Float64},))
 @eval @noinline f18236(ptr) = ccall(ptr, VecElement{Float64},
                                     (VecElement{Float64},), $v18236)
 @test f18236(ptr18236) === v18236
-@test !contains(sprint(code_llvm, f18236, Tuple{Ptr{Void}}), "double undef")
+@test !occursin("double undef", sprint(code_llvm, f18236, Tuple{Ptr{Cvoid}}))
 # VecElement of struct, not necessarily useful but does have special
 # ABI so should be handled correctly
 # This struct should be small enough to be passed by value in C ABI
@@ -4671,8 +4787,8 @@ ptr18236 = cfunction(identity, VecElement{Float64}, Tuple{VecElement{Float64}})
 # We should be at least testing this on some platforms.
 # Not sure if there's a better way to trigger unboxing in codegen.
 v18236_2 = VecElement((Int8(1), Int8(2)))
-ptr18236_2 = cfunction(identity, VecElement{NTuple{2,Int8}},
-                       Tuple{VecElement{NTuple{2,Int8}}})
+ptr18236_2 = @cfunction(identity, VecElement{NTuple{2,Int8}},
+                        (VecElement{NTuple{2,Int8}},))
 @eval @noinline f18236_2(ptr) = ccall(ptr, VecElement{NTuple{2,Int8}},
                                       (VecElement{NTuple{2,Int8}},),
                                       $v18236_2)
@@ -4720,14 +4836,6 @@ function f18173()
 end
 @test f18173() == false
 
-let _true = Ref(true), f, g, h
-    @noinline f() = ccall((:time, "error_library_doesnt_exist\0"), Void, ()) # some expression that throws an error in codegen
-    @noinline g() = _true[] ? 0 : h()
-    @noinline h() = (g(); f())
-    @test_throws ErrorException @code_native h() # due to a failure to compile f()
-    @test g() == 0
-end
-
 fVararg(x) = Vararg{x}
 gVararg(a::fVararg(Int)) = length(a)
 @test gVararg(1,2,3,4,5) == 5
@@ -4763,6 +4871,23 @@ f18095(::Number, ::Int) = 0x12
 @test_throws MethodError invoke(f18095, Tuple{Int, Any}, 1, 2)
 @test invoke(f18095, Tuple{Int, Real}, 1, 2) === 0x21
 
+# `invoke` with non-constant function
+struct CassetteLikeWrapper{F}
+    x
+    f::F
+end
+(foo::CassetteLikeWrapper)(args...) = foo.f(args...)
+(foo::CassetteLikeWrapper)(x) = invoke(foo, Tuple{Vararg{Any}}, x)
+@test CassetteLikeWrapper(1,-)(2) == -2
+
+f26301(x) = 1
+f26301(x::Int) = 2
+function g26301()
+    f = Any[f26301][1]
+    invoke(f, Tuple{Any}, 0)
+end
+@test g26301() == 1
+
 # issue #10981, long argument lists
 let a = fill(["sdf"], 2*10^6), temp_vcat(x...) = vcat(x...)
     # we introduce a new function `temp_vcat` to make sure there is no existing
@@ -4776,7 +4901,7 @@ end
 # issue #17255, take `deferred_alloc` into account
 # when calculating total allocation size.
 @noinline function f17255(n)
-    gc_enable(false)
+    GC.enable(false)
     b0 = Base.gc_bytes()
     local a
     for i in 1:n
@@ -4790,11 +4915,11 @@ end
     return true, a
 end
 @test f17255(10000)[1]
-gc_enable(true)
+GC.enable(true)
 
 # issue #18710
 bad_tvars() where {T} = 1
-@test isa(@which(bad_tvars()), Method)
+@test isa(which(bad_tvars, ()), Method)
 @test bad_tvars() === 1
 bad_tvars2() where {T} = T
 @test_throws UndefVarError(:T) bad_tvars2()
@@ -4889,12 +5014,12 @@ function let_Box5()
         return g
     end
 end
-@test any(contains_Box, (@code_lowered let_Box1()).code)
-@test any(contains_Box, (@code_lowered let_Box2()).code)
-@test any(contains_Box, (@code_lowered let_Box3()).code)
-@test any(contains_Box, (@code_lowered let_Box4()).code)
-@test any(contains_Box, (@code_lowered let_Box5()).code)
-@test !any(contains_Box, (@code_lowered let_noBox()).code)
+@test any(contains_Box, code_lowered(let_Box1,())[1].code)
+@test any(contains_Box, code_lowered(let_Box2,())[1].code)
+@test any(contains_Box, code_lowered(let_Box3,())[1].code)
+@test any(contains_Box, code_lowered(let_Box4,())[1].code)
+@test any(contains_Box, code_lowered(let_Box5,())[1].code)
+@test !any(contains_Box, code_lowered(let_noBox,())[1].code)
 @test let_Box1()() == 22
 @test let_Box2()() == 23
 @test let_Box3()() == 24
@@ -4955,12 +5080,12 @@ end # module SOE
 # issue #15240
 @test_nowarn begin
     local p15240
-    p15240 = ccall(:jl_realloc, Ptr{Void}, (Ptr{Void}, Csize_t), C_NULL, 10)
-    ccall(:jl_free, Void, (Ptr{Void},), p15240)
+    p15240 = ccall(:jl_realloc, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), C_NULL, 10)
+    ccall(:jl_free, Cvoid, (Ptr{Cvoid},), p15240)
 end
 
 # issue #19963
-@test_nowarn ccall(:jl_free, Void, (Ptr{Void},), C_NULL)
+@test_nowarn ccall(:jl_free, Cvoid, (Ptr{Cvoid},), C_NULL)
 
 # Wrong string size on 64bits for large string.
 if Sys.WORD_SIZE == 64
@@ -4968,7 +5093,7 @@ if Sys.WORD_SIZE == 64
         try
             # Do no touch the string to avoid triggering OOM
             slot[] = Base._string_n(2^32)
-            gc(false)
+            GC.gc(false)
         catch ex
             # This can happen if there's a virtual address size limit
             @test isa(ex, OutOfMemoryError)
@@ -4977,13 +5102,13 @@ if Sys.WORD_SIZE == 64
         return
     end
     @noinline function tester20360()
-        gc()
-        # Makes sure the string is rooted during the `gc(false)`
+        GC.gc()
+        # Makes sure the string is rooted during the `GC.gc(false)`
         # but is not before the last gc in this function.
         slot = Ref{Any}()
         test_large_string20360(slot)
         slot[] = nothing
-        gc()
+        GC.gc()
         return
     end
     @test_nowarn tester20360()
@@ -5067,7 +5192,7 @@ end
     x::Array{T} where T<:Integer
 end
 
-let a = Vector{Core.TypeofBottom}(uninitialized, 2)
+let a = Vector{Core.TypeofBottom}(undef, 2)
     @test a[1] == Union{}
     @test a == [Union{}, Union{}]
 end
@@ -5108,7 +5233,7 @@ end
 let ni128 = sizeof(FP128test) ÷ sizeof(Int),
     ns128 = sizeof(FP128align) ÷ sizeof(Int),
     nbit = sizeof(Int) * 8,
-    arr = Vector{FP128align}(uninitialized, 2),
+    arr = Vector{FP128align}(undef, 2),
     offset = Base.datatype_alignment(FP128test) ÷ sizeof(Int),
     little,
     expected,
@@ -5402,10 +5527,10 @@ m22929_2.x = m22929_1
 
 # Union type sorting
 for T in (
-        (Void, Int8),
-        (Void, Int64),
-        (Void, Tuple{Int64, String}),
-        (Void, Array),
+        (Nothing, Int8),
+        (Nothing, Int64),
+        (Nothing, Tuple{Int64, String}),
+        (Nothing, Array),
         (Float64, Int64),
         (Float64, String),
         (Float64, Array),
@@ -5416,7 +5541,7 @@ for T in (
     @test Base.uniontypes(Union{T...}) == collect(T)
     @test Base.uniontypes(Union{reverse(T)...}) == collect(T)
 end
-@test Base.uniontypes(Union{Void, Union{Int64, Float64}}) == Any[Void, Float64, Int64]
+@test Base.uniontypes(Union{Nothing, Union{Int64, Float64}}) == Any[Nothing, Float64, Int64]
 module AlternativeIntModule
     struct Int64
         val::UInt64
@@ -5470,7 +5595,7 @@ module GlobalDef18933
         global sincos
         nothing
     end
-    @test @which(sincos) === Base.Math
+    @test which(Main, :sincos) === Base.Math
     @test @isdefined sincos
     @test sincos === Base.sincos
 end
@@ -5485,10 +5610,11 @@ module UnionOptimizations
 
 using Test
 using Dates
+using Random
 
-const boxedunions = [Union{}, Union{String, Void}]
-const unboxedunions = [Union{Int8, Void},
-                       Union{Int8, Float16, Void},
+const boxedunions = [Union{}, Union{String, Nothing}]
+const unboxedunions = [Union{Int8, Nothing},
+                       Union{Int8, Float16, Nothing},
                        Union{Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128},
                        Union{Char, Date, Int}]
 
@@ -5508,44 +5634,48 @@ const unboxedunions = [Union{Int8, Void},
 @test sizeof(unboxedunions[3]) == 16
 @test sizeof(unboxedunions[4]) == 8
 
-initvalue(::Type{Void}) = nothing
+initvalue(::Type{Nothing}) = nothing
 initvalue(::Type{Char}) = '\0'
 initvalue(::Type{Date}) = Date(0, 12, 31)
 initvalue(::Type{T}) where {T <: Number} = T(0)
 
-initvalue2(::Type{Void}) = nothing
+initvalue2(::Type{Nothing}) = nothing
 initvalue2(::Type{Char}) = Char(0x01)
 initvalue2(::Type{Date}) = Date(1)
 initvalue2(::Type{T}) where {T <: Number} = T(1)
 
 U = unboxedunions[1]
 
+@noinline compare(a, b) = (a === b) # make sure we are testing code-generation of `is`
+egal(x, y) = (ccall(:jl_egal, Cint, (Any, Any), x, y) != 0) # make sure we are NOT testing code-generate of `is`
+
 mutable struct UnionField
     u::U
 end
 
-x = UnionField(initvalue(Base.uniontypes(U)[1]))
-@test x.u === initvalue(Base.uniontypes(U)[1])
-x.u = initvalue2(Base.uniontypes(U)[1])
-@test x.u === initvalue2(Base.uniontypes(U)[1])
-x.u = initvalue(Base.uniontypes(U)[2])
-@test x.u === initvalue(Base.uniontypes(U)[2])
+let x = UnionField(initvalue(Base.uniontypes(U)[1]))
+    @test x.u === initvalue(Base.uniontypes(U)[1])
+    x.u = initvalue2(Base.uniontypes(U)[1])
+    @test x.u === initvalue2(Base.uniontypes(U)[1])
+    x.u = initvalue(Base.uniontypes(U)[2])
+    @test x.u === initvalue(Base.uniontypes(U)[2])
+end
 
 mutable struct UnionField2
-    x::Union{Void, Int}
+    x::Union{Nothing, Int}
     @noinline UnionField2() = new()
 end
 @test UnionField2().x === nothing
 
 struct UnionField3
-    x::Union{Void, Int}
+    x::Union{Nothing, Int}
     @noinline UnionField3() = new()
 end
 @test UnionField3().x === nothing
 
 mutable struct UnionField4
-    x::Union{Void, Float64}
-    y::Union{Void, Int8}
+    x::Union{Nothing, Float64}
+    y::Union{Nothing, Int8}
     z::NTuple{8, UInt8}
     @noinline UnionField4() = new()
     @noinline UnionField4(x, y) = new(x, y, (0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88))
@@ -5557,15 +5687,17 @@ let x4 = UnionField4(nothing, Int8(3))
     @test x4.x === nothing
     @test x4.y === Int8(3)
     @test x4.z[1] === 0x11
-    @test x4 === x4
+    @test compare(x4, x4)
     @test x4 == x4
+    @test egal(x4, x4)
     @test !(x4 === x4copy)
     @test !(x4 == x4copy)
+    @test !egal(x4, x4copy)
 end
 
 struct UnionField5
-    x::Union{Void, Float64}
-    y::Union{Void, Int8}
+    x::Union{Nothing, Float64}
+    y::Union{Nothing, Int8}
     z::NTuple{8, UInt8}
     @noinline UnionField5() = new()
     @noinline UnionField5(x, y) = new(x, y, (0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88))
@@ -5577,25 +5709,25 @@ let x5 = UnionField5(nothing, Int8(3))
     @test x5.x === nothing
     @test x5.y === Int8(3)
     @test x5.z[1] === 0x11
-    @test x5 === x5
+    @test compare(x5, x5)
     @test x5 == x5
-    @test x5 === x5copy
+    @test compare(x5, x5copy)
     @test x5 == x5copy
-    @test object_id(x5) === object_id(x5copy)
+    @test egal(x5, x5copy)
+    @test objectid(x5) === objectid(x5copy)
     @test hash(x5) === hash(x5copy)
 end
 
 
 # PR #23367
 struct A23367
-    x::Union{Int8, Int16, NTuple{7, Int8}, Void}
+    x::Union{Int8, Int16, NTuple{7, Int8}, Nothing}
 end
 struct B23367
     x::Int8
     y::A23367
     z::Int8
 end
-@noinline compare(a, b) = (a === b) # test code-generation of `is`
 @noinline get_x(a::A23367) = a.x
 function constant23367 end
 let
@@ -5603,19 +5735,20 @@ let
     @eval @noinline constant23367(a, b) = (a ? b : $b)
     b2 = Ref(b)[] # copy b via field assignment
     b3 = B23367[b][1] # copy b via array assignment
-    @test pointer_from_objref(b) == pointer_from_objref(b)
-    @test pointer_from_objref(b) != pointer_from_objref(b2)
-    @test pointer_from_objref(b) != pointer_from_objref(b3)
-    @test pointer_from_objref(b2) != pointer_from_objref(b3)
+    addr(@nospecialize x) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
+    @test addr(b)  == addr(b)
+    @test addr(b)  == addr(b2)
+    @test addr(b)  == addr(b3)
+    @test addr(b2) == addr(b3)
 
-    @test b === b2 === b3
-    @test compare(b, b2)
-    @test compare(b, b3)
-    @test object_id(b) === object_id(b2) == object_id(b3)
+    @test b === b2 === b3 === b
+    @test egal(b, b2) && egal(b2, b3) && egal(b3, b)
+    @test compare(b, b2) && compare(b, b3) && compare(b2, b3)
+    @test objectid(b) === objectid(b2) == objectid(b3)
     @test b.x === Int8(91)
     @test b.z === Int8(23)
     @test b.y === A23367((Int8(1), Int8(2), Int8(3), Int8(4), Int8(5), Int8(6), Int8(7)))
-    @test sizeof(b) == 12
+    @test sizeof(b) == sizeof(Int) * 3
     @test A23367(Int8(1)).x === Int8(1)
     @test A23367(Int8(0)).x === Int8(0)
     @test A23367(Int16(1)).x === Int16(1)
@@ -5632,11 +5765,11 @@ end
 for U in boxedunions
     local U
     for N in (1, 2, 3, 4)
-        A = Array{U}(uninitialized, ntuple(x->0, N)...)
+        A = Array{U}(undef, ntuple(x->0, N)...)
         @test isempty(A)
         @test sizeof(A) == 0
 
-        A = Array{U}(uninitialized, ntuple(x->10, N)...)
+        A = Array{U}(undef, ntuple(x->10, N)...)
         @test length(A) == 10^N
         @test sizeof(A) == sizeof(Int) * (10^N)
         @test !isassigned(A, 1)
@@ -5646,15 +5779,15 @@ end
 # unsafe_wrap
 let
     A4 = [1, 2, 3]
-    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A4)), 3)
+    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Nothing}}, pointer(A4)), 3)
     A5 = [1 2 3; 4 5 6]
-    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A5)), 6)
+    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Nothing}}, pointer(A5)), 6)
 end
 
-# copy!
-A23567 = Vector{Union{Float64, Void}}(uninitialized, 5)
-B23567 = collect(Union{Float64, Void}, 1.0:3.0)
-copy!(A23567, 2, B23567)
+# copyto!
+A23567 = Vector{Union{Float64, Nothing}}(undef, 5)
+B23567 = collect(Union{Float64, Nothing}, 1.0:3.0)
+copyto!(A23567, 2, B23567)
 @test A23567[1] === nothing
 @test A23567[2] === 1.0
 @test A23567[3] === 2.0
@@ -5668,16 +5801,18 @@ t4 = vcat(A23567, t2, t3)
 @test t4[6:10] == A23567
 @test t4[11:15] == A23567
 
+using Serialization
+
 for U in unboxedunions
     local U
     for N in (1, 2, 3, 4)
-        A = Array{U}(uninitialized, ntuple(x->0, N)...)
+        A = Array{U}(undef, ntuple(x->0, N)...)
         @test isempty(A)
         @test sizeof(A) == 0
 
         len = ntuple(x->10, N)
         mxsz = maximum(sizeof, Base.uniontypes(U))
-        A = Array{U}(uninitialized, len)
+        A = Array{U}(undef, len)
         @test length(A) == prod(len)
         @test sizeof(A) == prod(len) * mxsz
         @test isassigned(A, 1)
@@ -5728,11 +5863,11 @@ for U in unboxedunions
             end
             @test isempty(A)
 
-            # shift!
+            # popfirst!
             A = U[initvalue2(F2) for i = 1:len]
             for i = 1:len
                 @test A[1] === initvalue2(F2)
-                shift!(A)
+                popfirst!(A)
             end
             @test isempty(A)
 
@@ -5779,11 +5914,11 @@ for U in unboxedunions
             @test length(A) == len - 2
             @test all(A .== initvalue2(F2))
 
-            # unshift!
+            # pushfirst!
             A = U[initvalue2(F2) for i = 1:len]
             for i = 1:5
-                unshift!(A, initvalue2(F))
-                unshift!(A, initvalue(F2))
+                pushfirst!(A, initvalue2(F))
+                pushfirst!(A, initvalue(F2))
                 @test A[1] === initvalue(F2)
                 @test A[2] === initvalue2(F)
             end
@@ -5837,6 +5972,354 @@ for U in unboxedunions
     end
 end
 
+@testset "jl_array_grow_at_end" begin
+
+# start w/ array, set & check elements, grow it, check that elements stayed correct, set & check elements
+A = Vector{Union{Missing, UInt8}}(undef, 2)
+Base.arrayset(true, A, 0x01, 1)
+Base.arrayset(true, A, missing, 2)
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+
+# grow_at_end 2
+resize!(A, 5)
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === missing
+Base.arrayset(true, A, 0x03, 3)
+Base.arrayset(true, A, missing, 4)
+Base.arrayset(true, A, 0x05, 5)
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === 0x03
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === 0x05
+
+# grow_at_end 1
+Base._growat!(A, 4, 1)
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === 0x03
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === missing
+@test Base.arrayref(true, A, 6) === 0x05
+
+Base.arrayset(true, A, missing, 1)
+Base.arrayset(true, A, 0x02, 2)
+Base.arrayset(true, A, missing, 3)
+Base.arrayset(true, A, 0x04, 4)
+Base.arrayset(true, A, missing, 5)
+Base.arrayset(true, A, 0x06, 6)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === 0x02
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === 0x04
+@test Base.arrayref(true, A, 5) === missing
+@test Base.arrayref(true, A, 6) === 0x06
+
+# grow_at_end 5
+Base._growat!(A, 4, 1)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === 0x02
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === 0x04
+@test Base.arrayref(true, A, 6) === missing
+@test Base.arrayref(true, A, 7) === 0x06
+
+# grow_at_end 6
+resize!(A, 8)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === 0x02
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === 0x04
+@test Base.arrayref(true, A, 6) === missing
+@test Base.arrayref(true, A, 7) === 0x06
+@test Base.arrayref(true, A, 8) === missing
+
+# grow_at_end 4
+resize!(A, 1048576)
+resize!(A, 1048577)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === 0x02
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === 0x04
+@test Base.arrayref(true, A, 6) === missing
+@test Base.arrayref(true, A, 7) === 0x06
+@test Base.arrayref(true, A, 8) === missing
+foreach(9:1048577) do i
+    @test Base.arrayref(true, A, i) === missing
+end
+foreach(9:1048577) do i
+    Base.arrayset(true, A, i % UInt8, i)
+    @test Base.arrayref(true, A, i) === i % UInt8
+end
+
+# grow_at_end 3
+A = Vector{Union{Missing, UInt8}}(undef, 1048577)
+foreach(1:1048577) do i
+    @test Base.arrayref(true, A, i) === missing
+    Base.arrayset(true, A, i % UInt8, i)
+    @test Base.arrayref(true, A, i) === i % UInt8
+end
+Base._growat!(A, 1048576, 1)
+@test length(A) == 1048578
+foreach(1:1048575) do i
+    @test Base.arrayref(true, A, i) === i % UInt8
+    @test A[i] === i % UInt8
+end
+@test Base.arrayref(true, A, 1048576) === missing
+@test Base.arrayref(true, A, 1048577) === 1048576 % UInt8
+@test Base.arrayref(true, A, 1048578) === 1048577 % UInt8
+
+end # @testset
+
+@testset "jl_array_grow_at_beg" begin
+
+# grow_at_beg 4
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+Base.arrayset(true, A, 0x01, 1)
+Base.arrayset(true, A, missing, 2)
+Base.arrayset(true, A, 0x03, 3)
+Base.arrayset(true, A, missing, 4)
+Base.arrayset(true, A, 0x05, 5)
+Base._growat!(A, 1, 1)
+
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === 0x01
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === 0x03
+@test Base.arrayref(true, A, 5) === missing
+@test Base.arrayref(true, A, 6) === 0x05
+
+# grow_at_beg 2
+Base._growat!(A, 1, 1)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === 0x01
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === 0x03
+@test Base.arrayref(true, A, 6) === missing
+@test Base.arrayref(true, A, 7) === 0x05
+
+# grow_at_beg 1
+Base._growat!(A, 2, 1)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === 0x01
+@test Base.arrayref(true, A, 5) === missing
+@test Base.arrayref(true, A, 6) === 0x03
+@test Base.arrayref(true, A, 7) === missing
+@test Base.arrayref(true, A, 8) === 0x05
+
+# grow_at_beg 9
+Base._growat!(A, 1, 1)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === 0x01
+@test Base.arrayref(true, A, 6) === missing
+@test Base.arrayref(true, A, 7) === 0x03
+@test Base.arrayref(true, A, 8) === missing
+@test Base.arrayref(true, A, 9) === 0x05
+
+# grow_at_beg 8
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+Base.arrayset(true, A, 0x01, 1)
+Base.arrayset(true, A, missing, 2)
+Base.arrayset(true, A, 0x03, 3)
+Base.arrayset(true, A, missing, 4)
+Base.arrayset(true, A, 0x05, 5)
+Base._growat!(A, 2, 1)
+Base._growat!(A, 2, 1)
+
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === 0x03
+@test Base.arrayref(true, A, 6) === missing
+@test Base.arrayref(true, A, 7) === 0x05
+
+# grow_at_beg 5
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+Base.arrayset(true, A, 0x01, 1)
+Base.arrayset(true, A, missing, 2)
+Base.arrayset(true, A, 0x03, 3)
+Base.arrayset(true, A, missing, 4)
+Base.arrayset(true, A, 0x05, 5)
+Base._growat!(A, 4, 1)
+Base._growat!(A, 4, 1)
+
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === 0x03
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === missing
+@test Base.arrayref(true, A, 6) === missing
+@test Base.arrayref(true, A, 7) === 0x05
+
+# grow_at_beg 6
+Base._growat!(A, 2, 3)
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === missing
+@test Base.arrayref(true, A, 6) === 0x03
+@test Base.arrayref(true, A, 7) === missing
+@test Base.arrayref(true, A, 8) === missing
+@test Base.arrayref(true, A, 9) === missing
+@test Base.arrayref(true, A, 10) === 0x05
+
+# grow_at_beg 3
+A = Vector{Union{Missing, UInt8}}(undef, 1048577)
+Base.arrayset(true, A, 0x01, 1)
+Base.arrayset(true, A, missing, 2)
+Base.arrayset(true, A, 0x03, 3)
+Base.arrayset(true, A, missing, 4)
+Base.arrayset(true, A, 0x05, 5)
+Base._growat!(A, 2, 1)
+
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === 0x03
+@test Base.arrayref(true, A, 5) === missing
+@test Base.arrayref(true, A, 6) === 0x05
+
+foreach(7:length(A)) do i
+    @test Base.arrayref(true, A, i) === missing
+    Base.arrayset(true, A, i % UInt8, i)
+    @test Base.arrayref(true, A, i) === i % UInt8
+end
+
+end # @testset
+
+@testset "jl_array_del_at_beg" begin
+
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+Base.arrayset(true, A, 0x01, 1)
+Base.arrayset(true, A, missing, 2)
+Base.arrayset(true, A, 0x03, 3)
+Base.arrayset(true, A, missing, 4)
+Base.arrayset(true, A, 0x05, 5)
+Base._deleteat!(A, 2, 1)
+
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === 0x03
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === 0x05
+
+Base._deleteat!(A, 1, 1)
+@test Base.arrayref(true, A, 1) === 0x03
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === 0x05
+
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+Base.arrayset(true, A, 0x01, 1)
+Base.arrayset(true, A, missing, 2)
+Base.arrayset(true, A, 0x03, 3)
+Base.arrayset(true, A, missing, 4)
+Base.arrayset(true, A, 0x05, 5)
+Base._growat!(A, 1, 1)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === 0x01
+@test Base.arrayref(true, A, 3) === missing
+@test Base.arrayref(true, A, 4) === 0x03
+@test Base.arrayref(true, A, 5) === missing
+@test Base.arrayref(true, A, 6) === 0x05
+Base._deleteat!(A, 2, 1)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === 0x03
+@test Base.arrayref(true, A, 4) === missing
+@test Base.arrayref(true, A, 5) === 0x05
+Base._deleteat!(A, 1, 2)
+@test Base.arrayref(true, A, 1) === 0x03
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === 0x05
+Base._deleteat!(A, 1, 1)
+@test Base.arrayref(true, A, 1) === missing
+@test Base.arrayref(true, A, 2) === 0x05
+
+end # @testset
+
+@testset "jl_array_del_at_end" begin
+
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+Base.arrayset(true, A, 0x01, 1)
+Base.arrayset(true, A, missing, 2)
+Base.arrayset(true, A, 0x03, 3)
+Base.arrayset(true, A, missing, 4)
+Base.arrayset(true, A, 0x05, 5)
+Base._deleteat!(A, 5, 1)
+
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === 0x03
+@test Base.arrayref(true, A, 4) === missing
+
+Base._deleteat!(A, 3, 1)
+@test Base.arrayref(true, A, 1) === 0x01
+@test Base.arrayref(true, A, 2) === missing
+@test Base.arrayref(true, A, 3) === missing
+
+end # @testset
+
+# issue #27767
+let A=Vector{Union{Int, Missing}}(undef, 1)
+    resize!(A, 2)
+    @test length(A) == 2
+    @test A[2] === missing
+end
+
+# issue #27809
+let A=Vector{Union{Int, Missing}}(undef, 0)
+    while length(A) < 2^17
+        push!(A, 0.0)
+    end
+    push!(A, 0.0)
+    @test !any(ismissing, A)
+end
+
+# jl_array_shrink
+let A=Vector{Union{UInt8, Missing}}(undef, 1048577)
+    Base.arrayset(true, A, 0x01, 1)
+    Base.arrayset(true, A, missing, 2)
+    Base.arrayset(true, A, 0x03, 3)
+    Base.arrayset(true, A, missing, 4)
+    Base.arrayset(true, A, 0x05, 5)
+    deleteat!(A, 6:1048577)
+    @test Base.arrayref(true, A, 1) === 0x01
+    @test Base.arrayref(true, A, 2) === missing
+    @test Base.arrayref(true, A, 3) === 0x03
+    @test Base.arrayref(true, A, 4) === missing
+    @test Base.arrayref(true, A, 5) === 0x05
+    sizehint!(A, 5)
+    @test Base.arrayref(true, A, 1) === 0x01
+    @test Base.arrayref(true, A, 2) === missing
+    @test Base.arrayref(true, A, 3) === 0x03
+    @test Base.arrayref(true, A, 4) === missing
+    @test Base.arrayref(true, A, 5) === 0x05
+end
+
+# copyto!/vcat w/ internal padding
+let A=[0, missing], B=[missing, 0], C=Vector{Union{Int, Missing}}(undef, 6)
+    push!(A, missing)
+    push!(B, missing)
+    @test isequal(vcat(A, B), [0, missing, missing, missing, 0, missing])
+    copyto!(C, 1, A)
+    copyto!(C, 4, B)
+    @test isequal(C, [0, missing, missing, missing, 0, missing])
+end
+
 end # module UnionOptimizations
 
 # issue #6614, argument destructuring
@@ -5864,6 +6347,9 @@ function hh6614()
     x, y
 end
 @test hh6614() == (1, 2)
+# issue #26518
+function f26518((a,b)) end
+@test f26518((1,2)) === nothing
 
 # issue 22098
 macro m22098 end
@@ -5872,7 +6358,7 @@ handle_on_m22098 = getfield(@__MODULE__, Symbol("@m22098"))
 
 # issue 24363
 mutable struct A24363
-    x::Union{Int,Void}
+    x::Union{Int,Nothing}
 end
 
 int24363 = A24363(65535)
@@ -5880,3 +6366,343 @@ void24363 = A24363(nothing)
 f24363(a) = a.x
 @test f24363(int24363) === 65535
 @test f24363(void24363) === nothing
+
+# issue 17149
+mutable struct Foo17149
+end
+@test Foo17149() !== Foo17149()
+let a = Foo17149()
+    @test a === a
+end
+
+# issue #21004
+const PTuple_21004{N,T} = NTuple{N,VecElement{T}}
+@test_throws ArgumentError PTuple_21004(1)
+@test_throws UndefVarError PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
+
+#issue #22792
+foo_22792(::Type{<:Union{Int8,Int,UInt}}) = 1;
+@test foo_22792(Union{Int,UInt}) == 1
+foo_22792(::Union) = 2;
+@test foo_22792(Union{Int,UInt}) == 1
+@test foo_22792(Union{Int8,UInt}) == 1
+@test foo_22792(Union{Int,UInt}) == 1
+
+# issue #25907
+g25907a(x) = x[1]::Integer
+@test g25907a(Union{Int, UInt, Nothing}[1]) === 1
+g25907b(x) = x[1]::Complex
+@test g25907b(Union{Complex{Int}, Complex{UInt}, Nothing}[1im]) === 1im
+
+#issue #26363
+@test eltype(Ref(Float64(1))) === Float64
+@test ndims(Ref(1)) === 0
+@test collect(Ref(1)) == [v for v in Ref(1)] == fill(1)
+@test axes(Ref(1)) === size(Ref(1)) === ()
+
+# issue #23206
+g1_23206(::Tuple{Type{Int}, T}) where T = 0
+g2_23206(::Tuple{Type{Int}}) = 1
+@test_throws MethodError g1_23206(tuple(Int, 2))
+@test_throws MethodError g2_23206(tuple(Int, 2))
+
+# issue #26739
+let x26739 = Int[1]
+    @test eval(:(identity.($x26739))) == x26739
+end
+
+# issue #27018
+@test Base.isvatuple(Tuple{Float64,Vararg{Int}})
+@test Base.isvatuple(Tuple{T,Vararg{Int}} where T)
+@test Base.isvatuple(Tuple{Int,Int,Vararg{Int,N}} where N)
+@test Base.isvatuple(Tuple{T,S,Vararg{T}} where T<:S where S)
+@test Base.isvatuple(Tuple{T,S,Vararg{T,3}} where T<:S where S)
+@test !Base.isvatuple(Tuple{Float64,Vararg{Int,1}})
+@test !Base.isvatuple(Tuple{T,Vararg{Int,2}} where T)
+@test !Base.isvatuple(Tuple{Int,Int,Vararg{Int,2}})
+
+# Issue 27103
+function f27103()
+    a = @isdefined x
+    x = 3
+    b = @isdefined x
+    (a, b)
+end
+@test f27103() == (false, true)
+
+g27103() = @isdefined z27103
+@test g27103() == false
+z27103 = 1
+@test g27103() == true
+
+# Issue 27181
+struct A27181
+    typ::Type
+end
+
+struct C27181
+    val
+end
+
+function f27181()
+    invoke(A27181(C27181).typ, Tuple{Any}, nothing)
+end
+@test f27181() == C27181(nothing)
+
+# Issue #27204
+struct Foo27204{T}
+end
+(::Foo27204{Int})() = 1
+(::Foo27204{Float64})() = 2
+@noinline f27204(x) = x ? Foo27204{Int}() : Foo27204{Float64}()
+foo27204(x) = f27204(x)()
+@test foo27204(true) == 1
+@test foo27204(false) == 2
+
+# Issue 27209
+@noinline function f27209(x::Union{Float64, Nothing})
+    if x === nothing
+        y = x; return @isdefined(y)
+    else
+        return @isdefined(y)
+    end
+end
+g27209(x) = f27209(x ? nothing : 1.0)
+@test g27209(true) == true
+
+# Issue 27240
+@inline function foo27240()
+    if rand(Bool)
+        return foo_nonexistant_27240
+    else
+        return bar_nonexistant_27240
+    end
+end
+bar27240() = foo27240()
+@test_throws UndefVarError bar27240()
+
+# issue #27269
+struct T27269{X, Y <: Vector{X}}
+    v::Vector{Y}
+end
+@test T27269([[1]]) isa T27269{Int, Vector{Int}}
+
+# issue #27368
+struct Combinator27368
+    op
+    args::Vector{Any}
+    Combinator27368(op, args...) =
+        new(op, collect(Any, args))
+end
+field27368(name) =
+    Combinator27368(field27368, name)
+translate27368(name::Symbol) =
+    translate27368(Val{name})
+translate27368(::Type{Val{name}}) where {name} =
+    field27368(name)
+@test isa(translate27368(:name), Combinator27368)
+
+# issue #27456
+@inline foo27456() = try baz_nonexistent27456(); catch; nothing; end
+bar27456() = foo27456()
+@test bar27456() == nothing
+
+# issue #27365
+mutable struct foo27365
+    x::Float64
+    foo27365() = new()
+end
+
+function baz27365()
+    data = foo27365()
+    return data.x
+end
+
+@test isa(baz27365(), Float64)
+
+# Issue #27566
+function test27566(a,b)
+    c = (b,(0,1)...)
+    test27566(a, c...)
+end
+test27566(a, b, c, d) = a.*(b, c, d)
+@test test27566(1,1) == (1,0,1)
+
+# Issue #27594
+struct Iter27594 end
+Base.iterate(::Iter27594) = (1, nothing)
+Base.iterate(::Iter27594, ::Any) = nothing
+
+function foo27594()
+    ind = 0
+    for x in (1,)
+        for y in Iter27594()
+            ind += 1
+        end
+    end
+    ind
+end
+
+@test foo27594() == 1
+
+# Issue 27597
+function f27597(y)
+    x = Int[]
+
+    if isempty(y)
+        y = 1:length(x)
+    elseif false
+        ;
+    end
+
+    length(y)
+    return y
+end
+@test f27597([1]) == [1]
+@test f27597([]) == 1:0
+
+# issue #22291
+wrap22291(ind) = (ind...,)
+@test @inferred(wrap22291(1)) == (1,)
+@test @inferred(wrap22291((1, 2))) == (1, 2)
+
+# Issue 27770
+mutable struct Handle27770
+    ptr::Ptr{Cvoid}
+end
+Handle27770() = Handle27770(Ptr{Cvoid}(UInt(0xfeedface)))
+
+struct Nullable27770
+    hasvalue::Bool
+    value::Handle27770
+    Nullable27770() = new(false)
+    Nullable27770(v::Handle27770) = new(true, Handle27770)
+end
+get27770(n::Nullable27770, v::Handle27770) = n.hasvalue ? n.value : v
+
+foo27770() = get27770(Nullable27770(), Handle27770())
+@test foo27770().ptr == Ptr{Cvoid}(UInt(0xfeedface))
+
+bar27770() = Nullable27770().value
+@test_throws UndefRefError bar27770()
+
+# Issue 27910
+f27910() = ((),)[2]
+@test_throws BoundsError f27910()
+
+# Issue 9765
+f9765(::Bool) = 1
+g9765() = f9765(isa(1, 1))
+@test_throws TypeError g9765()
+
+# Issue 28102
+struct HasPlain28102
+    plain::Int
+    HasPlain28102() = new()
+end
+@noinline function bam28102()
+    x = HasPlain28102()
+    if isdefined(x,:plain)
+        x.plain
+    end
+end
+@test isa(bam28102(), Int)
+
+# Check that the tfunc for fieldtype is correct
+struct FooFieldType; x::Int; end
+f_fieldtype(b) = fieldtype(b ? Int : FooFieldType, 1)
+
+@test @inferred(f_fieldtype(false)) == Int
+@test_throws BoundsError f_fieldtype(true)
+
+# Issue #28224
+@noinline make_error28224(n) = n == 5 ? error() : true
+function foo28224()
+    z = 0
+    try
+        while make_error28224(z)
+            z+=1
+        end
+    catch end
+    return z
+end
+@test foo28224() == 5
+
+# Issue #28208
+@noinline function foo28208(a::Bool, b::Bool)
+    x = (1, 2)
+    if a
+        if b
+            y = nothing
+        else
+            y = missing
+        end
+        x = y
+    end
+    x
+end
+@test isa(foo28208(false, true), Tuple)
+@test foo28208(true, false) === missing
+@test foo28208(true, true) === nothing
+
+# Issue #28326
+function foo28326(a)
+    try
+        @inbounds a[1]
+        return false
+    catch
+        return true
+    end
+end
+@test foo28326(Vector(undef, 1))
+
+# Issue #28392
+struct Foo28392; end
+@test_throws MethodError iterate(Foo28392())
+
+# issue #28399
+function g28399(n)
+    for a = 1:n
+        c28399 = 1
+    end
+    ()->c28399
+end
+function f28399()
+    for a = __undef_28399__
+        c28399 = 1
+    end
+    ()->c28399
+end
+c28399 = 42
+@test g28399(0)() == 42
+@test g28399(1)() == 42
+@test_throws UndefVarError(:__undef_28399__) f28399()
+
+# issue #28445
+mutable struct foo28445
+    x::Int
+end
+
+@noinline make_foo28445() = (foo28445(1), foo28445(rand(1:10)), foo28445(rand(1:10)))
+@noinline function use_tuple28445(c)
+    @test isa(c[2], foo28445)
+    @test isa(c[3], foo28445)
+end
+
+function repackage28445()
+    (_, a, b) = make_foo28445()
+    GC.gc()
+    c = (foo28445(1), foo28445(2), a, b)
+    use_tuple28445(c)
+    true
+end
+@test repackage28445()
+
+# issue #28597
+@test_throws ErrorException Array{Int, 2}(undef, 0, -10)
+@test_throws ErrorException Array{Int, 2}(undef, -10, 0)
+@test_throws ErrorException Array{Int, 2}(undef, -1, -1)
+
+# issue #28812
+@test Tuple{Vararg{Array{T},3} where T} === Tuple{Array,Array,Array}
+@test Tuple{Vararg{Array{T} where T,3}} === Tuple{Array,Array,Array}

@@ -168,7 +168,7 @@ static jl_ptls_t jl_get_ptls_states_init(void)
     // This 2-step initialization is used to detect calling
     // `jl_set_ptls_states_getter` after the address of the TLS variables
     // are used. Since the address of TLS variables should be constant,
-    // changing the getter address can result in wierd crashes.
+    // changing the getter address can result in weird crashes.
 
     // This is clearly not thread safe but should be fine since we
     // make sure the tls states callback is finalized before adding
@@ -303,13 +303,12 @@ static void ti_init_master_thread(void)
 }
 
 // all threads call this function to run user code
-static jl_value_t *ti_run_fun(const jl_generic_fptr_t *fptr, jl_method_instance_t *mfunc,
+static jl_value_t *ti_run_fun(jl_callptr_t fptr, jl_method_instance_t *mfunc,
                               jl_value_t **args, uint32_t nargs)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
-        (void)jl_assume(fptr->jlcall_api != JL_API_CONST);
-        jl_call_fptr_internal(fptr, mfunc, args, nargs);
+        fptr(mfunc, args, nargs);
     }
     JL_CATCH {
         // Lock this output since we know it'll likely happen on multiple threads
@@ -397,6 +396,7 @@ void ti_threadfun(void *arg)
 
         ti_threadgroup_fork(tg, ptls->tid, (void **)&work, init);
         init = 0;
+        JL_GC_PROMISE_ROOTED(work);
 
 #if PROFILE_JL_THREADING
         uint64_t tfork = uv_hrtime();
@@ -420,7 +420,7 @@ void ti_threadfun(void *arg)
                 JL_GC_PUSH1(&last_m);
                 ptls->current_module = work->current_module;
                 ptls->world_age = work->world_age;
-                ti_run_fun(&work->fptr, work->mfunc, work->args, work->nargs);
+                ti_run_fun(work->fptr, work->mfunc, work->args, work->nargs);
                 ptls->current_module = last_m;
                 ptls->world_age = last_age;
                 JL_GC_POP();
@@ -556,7 +556,7 @@ void jl_init_threading(void)
 #endif
 
     // how many threads available, usable
-    int max_threads = jl_cpu_cores();
+    int max_threads = jl_cpu_threads();
     jl_n_threads = JULIA_NUM_THREADS;
     cp = getenv(NUM_THREADS_NAME);
     if (cp) {
@@ -584,10 +584,14 @@ void jl_init_threading(void)
 void jl_start_threads(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    char *cp, mask[UV_CPU_SETSIZE];
+    int cpumasksize = uv_cpumask_size();
+    char *cp;
     int i, exclusive;
     uv_thread_t uvtid;
     ti_threadarg_t **targs;
+    if (cpumasksize < jl_n_threads) // also handles error case
+        cpumasksize = jl_n_threads;
+    char *mask = (char*)alloca(cpumasksize);
 
     // do we have exclusive use of the machine? default is no
     exclusive = DEFAULT_MACHINE_EXCLUSIVE;
@@ -599,38 +603,42 @@ void jl_start_threads(void)
     // according to a 'compact' policy
     // non-exclusive: no affinity settings; let the kernel move threads about
     if (exclusive) {
-        memset(mask, 0, UV_CPU_SETSIZE);
+        memset(mask, 0, cpumasksize);
         mask[0] = 1;
         uvtid = (uv_thread_t)uv_thread_self();
-        uv_thread_setaffinity(&uvtid, mask, NULL, UV_CPU_SETSIZE);
+        uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
+        mask[0] = 0;
     }
 
+    // The analyzer doesn't know jl_n_threads doesn't change, help it
+    size_t nthreads = jl_n_threads;
+
     // create threads
-    targs = (ti_threadarg_t **)malloc((jl_n_threads - 1) * sizeof (ti_threadarg_t *));
+    targs = (ti_threadarg_t **)malloc((nthreads - 1) * sizeof (ti_threadarg_t *));
 
-    uv_barrier_init(&thread_init_done, jl_n_threads);
+    uv_barrier_init(&thread_init_done, nthreads);
 
-    for (i = 0;  i < jl_n_threads - 1;  ++i) {
+    for (i = 0;  i < nthreads - 1;  ++i) {
         targs[i] = (ti_threadarg_t *)malloc(sizeof (ti_threadarg_t));
         targs[i]->state = TI_THREAD_INIT;
         targs[i]->tid = i + 1;
         uv_thread_create(&uvtid, ti_threadfun, targs[i]);
         if (exclusive) {
-            memset(mask, 0, UV_CPU_SETSIZE);
-            mask[i+1] = 1;
-            uv_thread_setaffinity(&uvtid, mask, NULL, UV_CPU_SETSIZE);
+            mask[i + 1] = 1;
+            uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
+            mask[i + 1] = 0;
         }
         uv_thread_detach(&uvtid);
     }
 
     // set up the world thread group
-    ti_threadgroup_create(1, jl_n_threads, 1, &tgworld);
-    for (i = 0;  i < jl_n_threads;  ++i)
+    ti_threadgroup_create(1, nthreads, 1, &tgworld);
+    for (i = 0;  i < nthreads;  ++i)
         ti_threadgroup_addthread(tgworld, i, NULL);
     ti_threadgroup_initthread(tgworld, ptls->tid);
 
     // give the threads the world thread group; they will block waiting for fork
-    for (i = 0;  i < jl_n_threads - 1;  ++i) {
+    for (i = 0;  i < nthreads - 1;  ++i) {
         targs[i]->tg = tgworld;
         jl_atomic_store_release(&targs[i]->state, TI_THREAD_WORK);
     }
@@ -686,17 +694,19 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_value_t *_args)
 
     int8_t gc_state = jl_gc_unsafe_enter(ptls);
 
+    size_t world = jl_get_ptls_states()->world_age;
     threadwork.command = TI_THREADWORK_RUN;
     threadwork.mfunc = jl_lookup_generic(args, nargs,
-                                         jl_int32hash_fast(jl_return_address()), ptls->world_age);
+                                         jl_int32hash_fast(jl_return_address()), world);
     // Ignore constant return value for now.
-    if (jl_compile_method_internal(&threadwork.fptr, threadwork.mfunc))
+    threadwork.fptr = jl_compile_method_internal(&threadwork.mfunc, world);
+    if (threadwork.fptr == jl_fptr_const_return)
         return jl_nothing;
     threadwork.args = args;
     threadwork.nargs = nargs;
     threadwork.ret = jl_nothing;
     threadwork.current_module = ptls->current_module;
-    threadwork.world_age = ptls->world_age;
+    threadwork.world_age = world;
 
 #if PROFILE_JL_THREADING
     uint64_t tcompile = uv_hrtime();
@@ -713,7 +723,8 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_value_t *_args)
 #endif
 
     // this thread must do work too (TODO: reduction?)
-    tw->ret = ti_run_fun(&threadwork.fptr, threadwork.mfunc, args, nargs);
+    JL_GC_PROMISE_ROOTED(threadwork.mfunc);
+    tw->ret = ti_run_fun(threadwork.fptr, threadwork.mfunc, args, nargs);
 
 #if PROFILE_JL_THREADING
     uint64_t trun = uv_hrtime();
@@ -804,10 +815,11 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_value_t *_args)
     jl_method_instance_t *mfunc = jl_lookup_generic(args, nargs,
                                                     jl_int32hash_fast(jl_return_address()),
                                                     jl_get_ptls_states()->world_age);
-    jl_generic_fptr_t fptr;
-    if (jl_compile_method_internal(&fptr, mfunc))
+    size_t world = jl_get_ptls_states()->world_age;
+    jl_callptr_t fptr = jl_compile_method_internal(&mfunc, world);
+    if (fptr == jl_fptr_const_return)
         return jl_nothing;
-    return ti_run_fun(&fptr, mfunc, args, nargs);
+    return ti_run_fun(fptr, mfunc, args, nargs);
 }
 
 void jl_init_threading(void)

@@ -65,7 +65,7 @@ struct Gr{N, T}
     w::T
 end
 
-let a = Vector{Gr{2,Float64}}(uninitialized, 2)
+let a = Vector{Gr{2,Float64}}(undef, 2)
     a[2] = Gr(1.0, Bunch((VecElement(2.0), VecElement(3.0))), 4.0)
     a[1] = Gr(5.0, Bunch((VecElement(6.0), VecElement(7.0))), 8.0)
     @test a[2] == Gr(1.0, Bunch((VecElement(2.0), VecElement(3.0))), 4.0)
@@ -90,7 +90,7 @@ const _llvmtypes = Dict{DataType, String}(
     """
     return quote
         Base.@_inline_meta
-        Base.llvmcall($exp, Vec{$N, $T}, Tuple{Vec{$N, $T}, Vec{$N, $T}}, x, y)
+        Core.getfield(Base, :llvmcall)($exp, Vec{$N, $T}, Tuple{Vec{$N, $T}, Vec{$N, $T}}, x, y)
     end
 end
 

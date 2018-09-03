@@ -23,16 +23,13 @@ end
 
 Block the current task until some event occurs, depending on the type of the argument:
 
-* [`RemoteChannel`](@ref) : Wait for a value to become available on the specified remote
-  channel.
-* [`Future`](@ref) : Wait for a value to become available for the specified future.
 * [`Channel`](@ref): Wait for a value to be appended to the channel.
 * [`Condition`](@ref): Wait for [`notify`](@ref) on a condition.
 * `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process
   can be used to determine success or failure.
-* [`Task`](@ref): Wait for a `Task` to finish, returning its result value. If the task fails
-  with an exception, the exception is propagated (re-thrown in the task that called `wait`).
-* `RawFD`: Wait for changes on a file descriptor (see the `FileWatching` package).
+* [`Task`](@ref): Wait for a `Task` to finish. If the task fails with an exception, the
+  exception is propagated (re-thrown in the task that called `wait`).
+* [`RawFD`](@ref): Wait for changes on a file descriptor (see the `FileWatching` package).
 
 If no argument is passed, the task blocks for an undefined period. A task can only be
 restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).
@@ -73,7 +70,7 @@ function notify(c::Condition, arg, all, error)
         empty!(c.waitq)
     elseif !isempty(c.waitq)
         cnt = 1
-        t = shift!(c.waitq)
+        t = popfirst!(c.waitq)
         error ? schedule(t, arg, error=error) : schedule(t, arg)
     end
     cnt
@@ -83,26 +80,13 @@ notify_error(c::Condition, err) = notify(c, err, true, true)
 
 n_waiters(c::Condition) = length(c.waitq)
 
-# schedule an expression to run asynchronously, with minimal ceremony
-"""
-    @schedule
-
-Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
-Similar to [`@async`](@ref) except that an enclosing `@sync` does NOT wait for tasks
-started with an `@schedule`.
-"""
-macro schedule(expr)
-    thunk = esc(:(()->($expr)))
-    :(enq_work(Task($thunk)))
-end
-
 ## scheduler and work queue
 
 global const Workqueue = Task[]
 
 function enq_work(t::Task)
     t.state == :runnable || error("schedule: Task not runnable")
-    ccall(:uv_stop, Void, (Ptr{Void},), eventloop())
+    ccall(:uv_stop, Cvoid, (Ptr{Cvoid},), eventloop())
     push!(Workqueue, t)
     t.state = :queued
     return t
@@ -120,8 +104,9 @@ If a second argument `val` is provided, it will be passed to the task (via the r
 [`yieldto`](@ref)) when it runs again. If `error` is `true`, the value is raised as an exception in
 the woken task.
 
+# Examples
 ```jldoctest
-julia> a5() = det(rand(1000, 1000));
+julia> a5() = sum(i for i in 1:1000);
 
 julia> b = Task(a5);
 
@@ -199,7 +184,7 @@ end
 
 function try_yieldto(undo, reftask::Ref{Task})
     try
-        ccall(:jl_switchto, Void, (Any,), reftask)
+        ccall(:jl_switchto, Cvoid, (Any,), reftask)
     catch e
         undo(reftask[])
         rethrow(e)
@@ -226,7 +211,7 @@ function ensure_rescheduled(othertask::Task)
     if ct !== othertask && othertask.state == :runnable
         # we failed to yield to othertask
         # return it to the head of the queue to be scheduled later
-        unshift!(Workqueue, othertask)
+        pushfirst!(Workqueue, othertask)
         othertask.state = :queued
     end
     if ct.state == :queued
@@ -234,21 +219,21 @@ function ensure_rescheduled(othertask::Task)
         # also need to return it to the runnable state
         # before throwing an error
         i = findfirst(t->t===ct, Workqueue)
-        i == 0 || deleteat!(Workqueue, i)
+        i === nothing || deleteat!(Workqueue, i)
         ct.state = :runnable
     end
     nothing
 end
 
 @noinline function poptask()
-    t = shift!(Workqueue)
+    t = popfirst!(Workqueue)
     if t.state != :queued
         # assume this somehow got queued twice,
         # probably broken now, but try discarding this switch and keep going
         # can't throw here, because it's probably not the fault of the caller to wait
         # and don't want to use print() here, because that may try to incur a task switch
-        ccall(:jl_safe_printf, Void, (Ptr{UInt8}, Int32...),
-            "\nWARNING: Workqueue inconsistency detected: shift!(Workqueue).state != :queued\n")
+        ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
+            "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :queued\n")
         return
     end
     t.state = :runnable
@@ -278,9 +263,9 @@ function wait()
 end
 
 if Sys.iswindows()
-    pause() = ccall(:Sleep, stdcall, Void, (UInt32,), 0xffffffff)
+    pause() = ccall(:Sleep, stdcall, Cvoid, (UInt32,), 0xffffffff)
 else
-    pause() = ccall(:pause, Void, ())
+    pause() = ccall(:pause, Cvoid, ())
 end
 
 
@@ -296,7 +281,7 @@ Waiting tasks are woken with an error when the object is closed (by [`close`](@r
 Use [`isopen`](@ref) to check whether it is still active.
 """
 mutable struct AsyncCondition
-    handle::Ptr{Void}
+    handle::Ptr{Cvoid}
     cond::Condition
     isopen::Bool
 
@@ -304,13 +289,13 @@ mutable struct AsyncCondition
         this = new(Libc.malloc(_sizeof_uv_async), Condition(), true)
         associate_julia_struct(this.handle, this)
         finalizer(uvfinalize, this)
-        err = ccall(:uv_async_init, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Void}),
-            eventloop(), this, uv_jl_asynccb::Ptr{Void})
+        err = ccall(:uv_async_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+            eventloop(), this, uv_jl_asynccb::Ptr{Cvoid})
         if err != 0
             #TODO: this codepath is currently not tested
             Libc.free(this.handle)
             this.handle = C_NULL
-            throw(UVError("uv_async_init", err))
+            throw(_UVError("uv_async_init", err))
         end
         return this
     end
@@ -344,46 +329,46 @@ end
 ## timer-based notifications
 
 """
-    Timer(delay, repeat=0)
+    Timer(delay; interval = 0)
 
 Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object).
 
-Waiting tasks are woken after an intial delay of `delay` seconds, and then repeating with the given
-`repeat` interval in seconds. If `repeat` is equal to `0`, the timer is only triggered once. When
+Waiting tasks are woken after an initial delay of `delay` seconds, and then repeating with the given
+`interval` in seconds. If `interval` is equal to `0`, the timer is only triggered once. When
 the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)
 to check whether a timer is still active.
 """
 mutable struct Timer
-    handle::Ptr{Void}
+    handle::Ptr{Cvoid}
     cond::Condition
     isopen::Bool
 
-    function Timer(timeout::Real, repeat::Real=0.0)
+    function Timer(timeout::Real; interval::Real = 0.0)
         timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
-        repeat ≥ 0 || throw(ArgumentError("timer cannot have negative repeat interval of $repeat seconds"))
+        interval ≥ 0 || throw(ArgumentError("timer cannot have negative repeat interval of $interval seconds"))
 
         this = new(Libc.malloc(_sizeof_uv_timer), Condition(), true)
-        err = ccall(:uv_timer_init, Cint, (Ptr{Void}, Ptr{Void}), eventloop(), this)
+        err = ccall(:uv_timer_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), eventloop(), this)
         if err != 0
             #TODO: this codepath is currently not tested
             Libc.free(this.handle)
             this.handle = C_NULL
-            throw(UVError("uv_timer_init", err))
+            throw(_UVError("uv_timer_init", err))
         end
 
         associate_julia_struct(this.handle, this)
         finalizer(uvfinalize, this)
 
-        ccall(:uv_update_time, Void, (Ptr{Void},), eventloop())
-        ccall(:uv_timer_start,  Cint,  (Ptr{Void}, Ptr{Void}, UInt64, UInt64),
-              this, uv_jl_timercb::Ptr{Void},
-              UInt64(round(timeout * 1000)) + 1, UInt64(round(repeat * 1000)))
+        ccall(:uv_update_time, Cvoid, (Ptr{Cvoid},), eventloop())
+        ccall(:uv_timer_start,  Cint,  (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
+              this, uv_jl_timercb::Ptr{Cvoid},
+              UInt64(round(timeout * 1000)) + 1, UInt64(round(interval * 1000)))
         return this
     end
 end
 
-unsafe_convert(::Type{Ptr{Void}}, t::Timer) = t.handle
-unsafe_convert(::Type{Ptr{Void}}, async::AsyncCondition) = async.handle
+unsafe_convert(::Type{Ptr{Cvoid}}, t::Timer) = t.handle
+unsafe_convert(::Type{Ptr{Cvoid}}, async::AsyncCondition) = async.handle
 
 function wait(t::Union{Timer, AsyncCondition})
     isopen(t) || throw(EOFError())
@@ -395,8 +380,8 @@ isopen(t::Union{Timer, AsyncCondition}) = t.isopen
 function close(t::Union{Timer, AsyncCondition})
     if t.handle != C_NULL && isopen(t)
         t.isopen = false
-        isa(t, Timer) && ccall(:uv_timer_stop, Cint, (Ptr{Void},), t)
-        ccall(:jl_close_uv, Void, (Ptr{Void},), t)
+        isa(t, Timer) && ccall(:uv_timer_stop, Cint, (Ptr{Cvoid},), t)
+        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
     end
     nothing
 end
@@ -417,15 +402,15 @@ function _uv_hook_close(t::Union{Timer, AsyncCondition})
     nothing
 end
 
-function uv_asynccb(handle::Ptr{Void})
+function uv_asynccb(handle::Ptr{Cvoid})
     async = @handle_as handle AsyncCondition
     notify(async.cond)
     nothing
 end
 
-function uv_timercb(handle::Ptr{Void})
+function uv_timercb(handle::Ptr{Cvoid})
     t = @handle_as handle Timer
-    if ccall(:uv_timer_get_repeat, UInt64, (Ptr{Void},), t) == 0
+    if ccall(:uv_timer_get_repeat, UInt64, (Ptr{Cvoid},), t) == 0
         # timer is stopped now
         close(t)
     end
@@ -447,13 +432,13 @@ end
 
 # timer with repeated callback
 """
-    Timer(callback::Function, delay, repeat=0)
+    Timer(callback::Function, delay; interval = 0)
 
 Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object) and
 calls the function `callback`.
 
-Waiting tasks are woken and the function `callback` is called after an intial delay of `delay` seconds,
-and then repeating with the given `repeat` interval in seconds. If `repeat` is equal to `0`, the timer
+Waiting tasks are woken and the function `callback` is called after an initial delay of `delay` seconds,
+and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the timer
 is only triggered once. The function `callback` is called with a single argument, the timer itself.
 When the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)
 to check whether a timer is still active.
@@ -466,7 +451,7 @@ Here the first number is printed after a delay of two seconds, then the followin
 julia> begin
            i = 0
            cb(timer) = (global i += 1; println(i))
-           t = Timer(cb, 2, 0.2)
+           t = Timer(cb, 2, interval = 0.2)
            wait(t)
            sleep(0.5)
            close(t)
@@ -476,8 +461,8 @@ julia> begin
 3
 ```
 """
-function Timer(cb::Function, timeout::Real, repeat::Real=0.0)
-    t = Timer(timeout, repeat)
+function Timer(cb::Function, timeout::Real; interval::Real = 0.0)
+    t = Timer(timeout, interval = interval)
     waiter = Task(function()
         while isopen(t)
             success = try

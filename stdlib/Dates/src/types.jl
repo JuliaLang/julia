@@ -94,13 +94,15 @@ machine instant. `Time`, `DateTime` and `Date` are subtypes of `TimeType`.
 """
 abstract type TimeType <: AbstractTime end
 
+abstract type AbstractDateTime <: TimeType end
+
 """
     DateTime
 
 `DateTime` wraps a `UTInstant{Millisecond}` and interprets it according to the proleptic
 Gregorian calendar.
 """
-struct DateTime <: TimeType
+struct DateTime <: AbstractDateTime
     instant::UTInstant{Millisecond}
     DateTime(instant::UTInstant{Millisecond}) = new(instant)
 end
@@ -152,21 +154,21 @@ daysinmonth(y,m) = DAYSINMONTH[m] + (m == 2 && isleapyear(y))
 # we can validate arguments in tryparse.
 
 """
-    validargs(::Type{<:TimeType}, args...) -> Nullable{ArgumentError}
+    validargs(::Type{<:TimeType}, args...) -> Union{ArgumentError, Nothing}
 
 Determine whether the given arguments consitute valid inputs for the given type.
-Returns a `Nullable{ArgumentError}` where null signifies success.
+Returns either an `ArgumentError`, or [`nothing`](@ref) in case of success.
 """
 function validargs end
 
 """
-    argerror([msg]) -> Nullable{ArgumentError}
+    argerror([msg]) -> Union{ArgumentError, Nothing}
 
-Construct a `Nullable{ArgumentError}` with the given message, or null if no message
-is provided. For use by `validargs`.
+Return an `ArgumentError` object with the given message,
+or [`nothing`](@ref) if no message is provided. For use by `validargs`.
 """
-argerror(msg::String) = Nullable(ArgumentError(msg))
-argerror() = Nullable{ArgumentError}()
+argerror(msg::String) = ArgumentError(msg)
+argerror() = nothing
 
 ### CONSTRUCTORS ###
 # Core constructors
@@ -178,7 +180,7 @@ Construct a `DateTime` type by parts. Arguments must be convertible to [`Int64`]
 function DateTime(y::Int64, m::Int64=1, d::Int64=1,
                   h::Int64=0, mi::Int64=0, s::Int64=0, ms::Int64=0)
     err = validargs(DateTime, y, m, d, h, mi, s, ms)
-    isnull(err) || throw(unsafe_get(err))
+    err === nothing || throw(err)
     rata = ms + 1000 * (s + 60mi + 3600h + 86400 * totaldays(y, m, d))
     return DateTime(UTM(rata))
 end
@@ -187,7 +189,8 @@ function validargs(::Type{DateTime}, y::Int64, m::Int64, d::Int64,
                    h::Int64, mi::Int64, s::Int64, ms::Int64)
     0 < m < 13 || return argerror("Month: $m out of range (1:12)")
     0 < d < daysinmonth(y, m) + 1 || return argerror("Day: $d out of range (1:$(daysinmonth(y, m)))")
-    -1 < h < 24 || return argerror("Hour: $h out of range (0:23)")
+    -1 < h < 24 || (h == 24 && mi==s==ms==0) ||
+        return argerror("Hour: $h out of range (0:23)")
     -1 < mi < 60 || return argerror("Minute: $mi out of range (0:59)")
     -1 < s < 60 || return argerror("Second: $s out of range (0:59)")
     -1 < ms < 1000 || return argerror("Millisecond: $ms out of range (0:999)")
@@ -201,7 +204,7 @@ Construct a `Date` type by parts. Arguments must be convertible to [`Int64`](@re
 """
 function Date(y::Int64, m::Int64=1, d::Int64=1)
     err = validargs(Date, y, m, d)
-    isnull(err) || throw(unsafe_get(err))
+    err === nothing || throw(err)
     return Date(UTD(totaldays(y, m, d)))
 end
 
@@ -218,7 +221,7 @@ Construct a `Time` type by parts. Arguments must be convertible to [`Int64`](@re
 """
 function Time(h::Int64, mi::Int64=0, s::Int64=0, ms::Int64=0, us::Int64=0, ns::Int64=0)
     err = validargs(Time, h, mi, s, ms, us, ns)
-    isnull(err) || throw(unsafe_get(err))
+    err === nothing || throw(err)
     return Time(Nanosecond(ns + 1000us + 1000000ms + 1000000000s + 60000000000mi + 3600000000000h))
 end
 
@@ -256,10 +259,10 @@ end
 Construct a `DateTime` type by `Period` type parts. Arguments may be in any order. DateTime
 parts not provided will default to the value of `Dates.default(period)`.
 """
-function DateTime(periods::Period...)
+function DateTime(period::Period, periods::Period...)
     y = Year(1); m = Month(1); d = Day(1)
     h = Hour(0); mi = Minute(0); s = Second(0); ms = Millisecond(0)
-    for p in periods
+    for p in (period, periods...)
         isa(p, Year) && (y = p::Year)
         isa(p, Month) && (m = p::Month)
         isa(p, Day) && (d = p::Day)
@@ -277,9 +280,9 @@ end
 Construct a `Date` type by `Period` type parts. Arguments may be in any order. `Date` parts
 not provided will default to the value of `Dates.default(period)`.
 """
-function Date(periods::Period...)
+function Date(period::Period, periods::Period...)
     y = Year(1); m = Month(1); d = Day(1)
-    for p in periods
+    for p in (period, periods...)
         isa(p, Year) && (y = p::Year)
         isa(p, Month) && (m = p::Month)
         isa(p, Day) && (d = p::Day)
@@ -293,10 +296,10 @@ end
 Construct a `Time` type by `Period` type parts. Arguments may be in any order. `Time` parts
 not provided will default to the value of `Dates.default(period)`.
 """
-function Time(periods::TimePeriod...)
+function Time(period::TimePeriod, periods::TimePeriod...)
     h = Hour(0); mi = Minute(0); s = Second(0)
     ms = Millisecond(0); us = Microsecond(0); ns = Nanosecond(0)
-    for p in periods
+    for p in (period, periods...)
         isa(p, Hour) && (h = p::Hour)
         isa(p, Minute) && (mi = p::Minute)
         isa(p, Second) && (s = p::Second)
@@ -337,7 +340,6 @@ Base.typemin(::Union{Date, Type{Date}}) = Date(-252522163911150, 1, 1)
 Base.typemax(::Union{Time, Type{Time}}) = Time(23, 59, 59, 999, 999, 999)
 Base.typemin(::Union{Time, Type{Time}}) = Time(0)
 # Date-DateTime promotion, isless, ==
-Base.eltype(::Type{T}) where {T<:Period} = T
 Base.promote_rule(::Type{Date}, x::Type{DateTime}) = DateTime
 Base.isless(x::T, y::T) where {T<:TimeType} = isless(value(x), value(y))
 Base.isless(x::TimeType, y::TimeType) = isless(promote(x, y)...)
@@ -351,8 +353,9 @@ end
 
 import Base: sleep, Timer, timedwait
 sleep(time::Period) = sleep(toms(time) / 1000)
-Timer(time::Period, repeat::Period=Second(0)) = Timer(toms(time) / 1000, toms(repeat) / 1000)
+Timer(time::Period; interval::Period = Second(0)) =
+    Timer(toms(time) / 1000, interval = toms(interval) / 1000)
 timedwait(testcb::Function, time::Period) = timedwait(testcb, toms(time) / 1000)
 
-Base.TypeOrder(::Type{<:AbstractTime}) = Base.HasOrder()
-Base.TypeArithmetic(::Type{<:AbstractTime}) = Base.ArithmeticOverflows()
+Base.OrderStyle(::Type{<:AbstractTime}) = Base.Ordered()
+Base.ArithmeticStyle(::Type{<:AbstractTime}) = Base.ArithmeticWraps()

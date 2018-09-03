@@ -110,6 +110,7 @@ end
     @test Dates.Time(Dates.Hour(4), Dates.Second(10), Dates.Millisecond(15),
                      Dates.Microsecond(20), Dates.Nanosecond(25)) == Dates.Time(4, 0, 10, 15, 20, 25)
 end
+
 @testset "various input types for Date/DateTime" begin
     test = Dates.Date(1, 1, 1)
     @test Dates.Date(Int8(1), Int8(1), Int8(1)) == test
@@ -153,7 +154,7 @@ end
     @test_throws ArgumentError Dates.DateTime(2013, 13, 1)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 0)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 32)
-    @test_throws ArgumentError Dates.DateTime(2013, 1, 1, 24)
+    @test_throws ArgumentError Dates.DateTime(2013, 1, 1, 25)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 1, -1)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 1, 0, -1)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 1, 0, 60)

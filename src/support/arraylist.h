@@ -9,6 +9,8 @@
 extern "C" {
 #endif
 
+#include "analyzer_annotations.h"
+
 typedef struct {
     size_t len;
     size_t max;
@@ -19,7 +21,7 @@ typedef struct {
 arraylist_t *arraylist_new(arraylist_t *a, size_t size);
 void arraylist_free(arraylist_t *a);
 
-void arraylist_push(arraylist_t *a, void *elt);
+void arraylist_push(arraylist_t *a, void *elt) JL_NOTSAFEPOINT;
 void *arraylist_pop(arraylist_t *a);
 void arraylist_grow(arraylist_t *a, size_t n);
 

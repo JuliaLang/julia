@@ -4,10 +4,20 @@
     @test sprint(showerror, MissingException("test")) == "MissingException: test"
 end
 
+@testset "nonmissingtype" begin
+    @test Base.nonmissingtype(Union{Int, Missing}) == Int
+    @test Base.nonmissingtype(Any) == Any
+    @test Base.nonmissingtype(Missing) == Union{}
+end
+
 @testset "convert" begin
     @test convert(Union{Int, Missing}, 1) === 1
     @test convert(Union{Int, Missing}, 1.0) === 1
+    @test convert(Union{Nothing, Missing}, missing) === missing
+    @test convert(Union{Nothing, Missing}, nothing) === nothing
+
     @test_throws MethodError convert(Missing, 1)
+    @test_throws MethodError convert(Union{Nothing, Missing}, 1)
     @test_throws MethodError convert(Union{Int, Missing}, "a")
 end
 
@@ -27,7 +37,17 @@ end
     @test promote_type(Union{Int, Missing}, Union{Int, Missing}) == Union{Int, Missing}
     @test promote_type(Union{Float64, Missing}, Union{String, Missing}) == Any
     @test promote_type(Union{Float64, Missing}, Union{Int, Missing}) == Union{Float64, Missing}
-    @test_broken promote_type(Union{Void, Missing, Int}, Float64) == Any
+    @test_broken promote_type(Union{Nothing, Missing, Int}, Float64) == Any
+end
+
+@testset "promotion in various contexts" for T in (Nothing, Missing)
+    @test collect(v for v in (1, T())) isa Vector{Union{Int,T}}
+    @test map(identity, Any[1, T()]) isa Vector{Union{Int,T}}
+    @test broadcast(identity, Any[1, T()]) isa Vector{Union{Int,T}}
+    @test unique((1, T())) isa Vector{Union{Int,T}}
+
+    @test map(ismissing, Any[1, missing]) isa Vector{Bool}
+    @test broadcast(ismissing, Any[1, missing]) isa BitVector
 end
 
 @testset "comparison operators" begin
@@ -49,13 +69,18 @@ end
     @test !isless(missing, missing)
     @test !isless(missing, 1)
     @test isless(1, missing)
+    @test (missing ≈ missing) === missing
+    @test isapprox(missing, 1.0, atol=1e-6) === missing
+    @test isapprox(1.0, missing, rtol=1e-6) === missing
+
+    @test !any(T -> T === Union{Missing,Bool}, Base.return_types(isequal, Tuple{Any,Any}))
 end
 
 @testset "arithmetic operators" begin
     arithmetic_operators = [+, -, *, /, ^, Base.div, Base.mod, Base.fld, Base.rem]
 
     # All unary operators return missing when evaluating missing
-    for f in [!, +, -]
+    for f in [!, ~, +, -]
         @test ismissing(f(missing))
     end
 
@@ -66,6 +91,15 @@ end
         @test ismissing(f(missing, missing))
         @test ismissing(f(1, missing))
         @test ismissing(f(missing, 1))
+    end
+
+    @test ismissing(min(missing, missing))
+    @test ismissing(max(missing, missing))
+    for f in [min, max]
+        for arg in ["", "a", 1, -1.0, [2]]
+            @test ismissing(f(missing, arg))
+            @test ismissing(f(arg, missing))
+        end
     end
 end
 
@@ -113,15 +147,15 @@ Base.zero(::Type{Unit}) = Unit(0)
 Base.one(::Type{Unit}) = 1
 
 @testset "elementary functions" begin
-    elementary_functions = [abs, abs2, sign,
+    elementary_functions = [abs, abs2, sign, real, imag,
                             acos, acosh, asin, asinh, atan, atanh, sin, sinh,
                             conj, cos, cosh, tan, tanh,
                             exp, exp2, expm1, log, log10, log1p, log2,
-                            exponent, sqrt, gamma, lgamma,
+                            exponent, sqrt,
                             identity, zero, one, oneunit,
                             iseven, isodd, ispow2,
                             isfinite, isinf, isnan, iszero,
-                            isinteger, isreal, isempty, transpose, float]
+                            isinteger, isreal, transpose, adjoint, float]
 
     # All elementary functions return missing when evaluating missing
     for f in elementary_functions
@@ -161,13 +195,14 @@ end
         @test ismissing(f(missing, 1))
         @test ismissing(f(missing, 1, 1))
         @test ismissing(f(Union{Int, Missing}, missing))
+        @test f(Union{Int, Missing}, 1.0) === 1
         @test_throws MissingException f(Int, missing)
     end
 end
 
 @testset "printing" begin
     @test sprint(show, missing) == "missing"
-    @test sprint(showcompact, missing) == "missing"
+    @test sprint(show, missing, context=:compact => true) == "missing"
     @test sprint(show, [missing]) == "$Missing[missing]"
     @test sprint(show, [1 missing]) == "$(Union{Int, Missing})[1 missing]"
     b = IOBuffer()
@@ -188,6 +223,7 @@ end
     x = convert(Vector{Union{Int, Missing}}, [missing])
     @test isa(x, Vector{Union{Int, Missing}})
     @test isequal(x, [missing])
+    @test eltype(adjoint([1, missing])) == Union{Int, Missing}
 end
 
 @testset "== and != on arrays" begin
@@ -202,6 +238,7 @@ end
     @test Union{Int, Missing}[1] == Union{Float64, Missing}[1.0]
     @test Union{Int, Missing}[1] == [1.0]
     @test Union{Bool, Missing}[true] == BitArray([true])
+    @test !([missing, 1] == [missing, 2])
     @test !(Union{Int, Missing}[1] == [2])
     @test !([1] == Union{Int, Missing}[2])
     @test !(Union{Int, Missing}[1] == Union{Int, Missing}[2])
@@ -217,9 +254,59 @@ end
     @test !(Union{Int, Missing}[1] != Union{Float64, Missing}[1.0])
     @test !(Union{Int, Missing}[1] != [1.0])
     @test !(Union{Bool, Missing}[true] != BitArray([true]))
+    @test [missing, 1] != [missing, 2]
     @test Union{Int, Missing}[1] != [2]
     @test [1] != Union{Int, Missing}[2]
     @test Union{Int, Missing}[1] != Union{Int, Missing}[2]
+end
+
+@testset "== and != on tuples" begin
+    @test ismissing((1, missing) == (1, missing))
+    @test ismissing(("a", missing) == ("a", missing))
+    @test ismissing((missing,) == (missing,))
+    @test ismissing((missing, 2) == (1, missing))
+    @test !((missing, 1) == (missing, 2))
+
+    longtuple = (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16)
+    @test ismissing((longtuple...,17,missing) == (longtuple...,17,18))
+    @test ismissing((longtuple...,missing,18) == (longtuple...,17,18))
+    @test !((longtuple...,17,missing) == (longtuple...,-17,18))
+    @test !((longtuple...,missing,18) == (longtuple...,17,-18))
+
+    @test ismissing((1, missing) != (1, missing))
+    @test ismissing(("a", missing) != ("a", missing))
+    @test ismissing((missing,) != (missing,))
+    @test ismissing((missing, 2) != (1, missing))
+    @test (missing, 1) != (missing, 2)
+
+    @test ismissing((longtuple...,17,missing) != (longtuple...,17,18))
+    @test ismissing((longtuple...,missing,18) != (longtuple...,17,18))
+    @test (longtuple...,17,missing) != (longtuple...,-17,18)
+    @test (longtuple...,missing,18) != (longtuple...,17,-18)
+end
+
+@testset "< and isless on tuples" begin
+    @test ismissing((1, missing) < (1, 3))
+    @test ismissing((1, missing) < (1, missing))
+    @test ismissing((missing, 1) < (missing, 2))
+    @test ismissing((1, 2) < (1, missing))
+    @test ismissing((1, missing) < (1, 2))
+    @test ismissing((missing,) < (missing,))
+    @test ismissing((1,) < (missing,))
+    @test () < (missing,)
+    @test (1,) < (2, missing)
+    @test (1, missing,) < (2, missing)
+
+    @test !isless((1, missing), (1, 3))
+    @test !isless((1, missing), (1, missing))
+    @test isless((missing, 1), (missing, 2))
+    @test isless((1, 2), (1, missing))
+    @test !isless((1, missing), (1, 2))
+    @test !isless((missing,), (missing,))
+    @test isless((1,), (missing,))
+    @test isless((), (missing,))
+    @test isless((1,), (2, missing))
+    @test isless((1, missing,), (2, missing))
 end
 
 @testset "any & all" begin
@@ -245,4 +332,104 @@ end
     @test float(Union{Int, Missing}[1]) isa Vector{Union{Float64, Missing}}
     @test isequal(float([missing]), [missing])
     @test float([missing]) isa Vector{Missing}
+end
+
+@testset "skipmissing" begin
+    x = skipmissing([1, 2, missing, 4])
+    @test eltype(x) === Int
+    @test collect(x) == [1, 2, 4]
+    @test collect(x) isa Vector{Int}
+
+    x = skipmissing([1  2; missing 4])
+    @test eltype(x) === Int
+    @test collect(x) == [1, 2, 4]
+    @test collect(x) isa Vector{Int}
+
+    x = collect(skipmissing([missing]))
+    @test eltype(x) === Union{}
+    @test isempty(collect(x))
+    @test collect(x) isa Vector{Union{}}
+
+    x = collect(skipmissing(Union{Int, Missing}[]))
+    @test eltype(x) === Int
+    @test isempty(collect(x))
+    @test collect(x) isa Vector{Int}
+
+    x = skipmissing([missing, missing, 1, 2, missing, 4, missing, missing])
+    @test eltype(x) === Int
+    @test collect(x) == [1, 2, 4]
+    @test collect(x) isa Vector{Int}
+
+    x = skipmissing(v for v in [missing, 1, missing, 2, 4])
+    @test eltype(x) === Any
+    @test collect(x) == [1, 2, 4]
+    @test collect(x) isa Vector{Int}
+
+    @testset "mapreduce" begin
+        # Vary size to test splitting blocks with several configurations of missing values
+        for T in (Int, Float64),
+            A in (rand(T, 10), rand(T, 1000), rand(T, 10000))
+            if T === Int
+                @test sum(A) === sum(skipmissing(A)) ===
+                    reduce(+, skipmissing(A)) === mapreduce(identity, +, skipmissing(A))
+            else
+                @test sum(A) ≈ sum(skipmissing(A)) ===
+                    reduce(+, skipmissing(A)) === mapreduce(identity, +, skipmissing(A))
+            end
+            @test mapreduce(cos, *, A) ≈ mapreduce(cos, *, skipmissing(A))
+
+            B = Vector{Union{T,Missing}}(A)
+            replace!(x -> rand(Bool) ? x : missing, B)
+            if T === Int
+                @test sum(collect(skipmissing(B))) === sum(skipmissing(B)) ===
+                    reduce(+, skipmissing(B)) === mapreduce(identity, +, skipmissing(B))
+            else
+                @test sum(collect(skipmissing(B))) ≈ sum(skipmissing(B)) ===
+                    reduce(+, skipmissing(B)) === mapreduce(identity, +, skipmissing(B))
+            end
+            @test mapreduce(cos, *, collect(skipmissing(A))) ≈ mapreduce(cos, *, skipmissing(A))
+
+            # Test block full of missing values
+            B[1:length(B)÷2] .= missing
+            if T === Int
+                @test sum(collect(skipmissing(B))) == sum(skipmissing(B)) ==
+                    reduce(+, skipmissing(B)) == mapreduce(identity, +, skipmissing(B))
+            else
+                @test sum(collect(skipmissing(B))) ≈ sum(skipmissing(B)) ==
+                    reduce(+, skipmissing(B)) == mapreduce(identity, +, skipmissing(B))
+            end
+
+            @test mapreduce(cos, *, collect(skipmissing(A))) ≈ mapreduce(cos, *, skipmissing(A))
+        end
+
+        # Patterns that exercize code paths for inputs with 1 or 2 non-missing values
+        @test sum(skipmissing([1, missing, missing, missing])) === 1
+        @test sum(skipmissing([missing, missing, missing, 1])) === 1
+        @test sum(skipmissing([1, missing, missing, missing, 2])) === 3
+        @test sum(skipmissing([missing, missing, missing, 1, 2])) === 3
+
+        for n in 0:3
+            itr = skipmissing(Vector{Union{Int,Missing}}(fill(missing, n)))
+            @test sum(itr) == reduce(+, itr) == mapreduce(identity, +, itr) === 0
+            @test_throws ArgumentError reduce(x -> x/2, itr)
+            @test_throws ArgumentError mapreduce(x -> x/2, +, itr)
+        end
+    end
+end
+
+@testset "coalesce" begin
+    @test coalesce() === missing
+    @test coalesce(1) === 1
+    @test coalesce(nothing) === nothing
+    @test coalesce(missing) === missing
+    @test coalesce(missing, 1) === 1
+    @test coalesce(1, missing) === 1
+    @test coalesce(missing, missing) === missing
+    @test coalesce(missing, 1, 2) === 1
+    @test coalesce(1, missing, 2) === 1
+    @test coalesce(missing, missing, 2) === 2
+    @test coalesce(missing, missing, missing) === missing
+
+    @test coalesce(nothing, missing) === nothing
+    @test coalesce(missing, nothing) === nothing
 end

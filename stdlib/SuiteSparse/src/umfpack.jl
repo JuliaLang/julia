@@ -4,11 +4,12 @@ module UMFPACK
 
 export UmfpackLU
 
-import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, show, size
-import Base.LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact
+import Base: (\), getproperty, show, size
+using LinearAlgebra
+import LinearAlgebra: Factorization, det, lu, ldiv!
 
-using ..SparseArrays
-import ..SparseArrays: nnz
+using SparseArrays
+import SparseArrays: nnz
 
 import ..increment, ..increment!, ..decrement, ..decrement!
 
@@ -21,7 +22,7 @@ function umferror(status::Integer)
     if status==UMFPACK_OK
         return
     elseif status==UMFPACK_WARNING_singular_matrix
-        throw(LinAlg.SingularException(0))
+        throw(LinearAlgebra.SingularException(0))
     elseif status==UMFPACK_WARNING_determinant_underflow
         throw(MatrixIllConditionedException("the determinant is nonzero but underflowed"))
     elseif status==UMFPACK_WARNING_determinant_overflow
@@ -68,64 +69,72 @@ else
     const UMFITypes = Union{Int32, Int64}
 end
 
-const UMFVTypes = Union{Float64,Complex128}
+const UMFVTypes = Union{Float64,ComplexF64}
 
 ## UMFPACK
 
 # the control and info arrays
-const umf_ctrl = Vector{Float64}(uninitialized, UMFPACK_CONTROL)
-ccall((:umfpack_dl_defaults,:libumfpack), Void, (Ptr{Float64},), umf_ctrl)
-const umf_info = Vector{Float64}(uninitialized, UMFPACK_INFO)
+const umf_ctrl = Vector{Float64}(undef, UMFPACK_CONTROL)
+ccall((:umfpack_dl_defaults,:libumfpack), Cvoid, (Ptr{Float64},), umf_ctrl)
+const umf_info = Vector{Float64}(undef, UMFPACK_INFO)
 
 function show_umf_ctrl(level::Real = 2.0)
     old_prt::Float64 = umf_ctrl[1]
     umf_ctrl[1] = Float64(level)
-    ccall((:umfpack_dl_report_control, :libumfpack), Void, (Ptr{Float64},), umf_ctrl)
+    ccall((:umfpack_dl_report_control, :libumfpack), Cvoid, (Ptr{Float64},), umf_ctrl)
     umf_ctrl[1] = old_prt
 end
 
 function show_umf_info(level::Real = 2.0)
     old_prt::Float64 = umf_ctrl[1]
     umf_ctrl[1] = Float64(level)
-    ccall((:umfpack_dl_report_info, :libumfpack), Void,
+    ccall((:umfpack_dl_report_info, :libumfpack), Cvoid,
           (Ptr{Float64}, Ptr{Float64}), umf_ctrl, umf_info)
     umf_ctrl[1] = old_prt
 end
 
 ## Should this type be immutable?
 mutable struct UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
-    symbolic::Ptr{Void}
-    numeric::Ptr{Void}
+    symbolic::Ptr{Cvoid}
+    numeric::Ptr{Cvoid}
     m::Int
     n::Int
     colptr::Vector{Ti}                  # 0-based column pointers
     rowval::Vector{Ti}                  # 0-based row indices
     nzval::Vector{Tv}
+    status::Int
 end
 
+Base.adjoint(F::UmfpackLU) = Adjoint(F)
+Base.transpose(F::UmfpackLU) = Transpose(F)
+
 """
-    lufact(A::SparseMatrixCSC) -> F::UmfpackLU
+    lu(A::SparseMatrixCSC; check = true) -> F::UmfpackLU
 
 Compute the LU factorization of a sparse matrix `A`.
 
 For sparse `A` with real or complex element type, the return type of `F` is
-`UmfpackLU{Tv, Ti}`, with `Tv` = [`Float64`](@ref) or `Complex128` respectively and
+`UmfpackLU{Tv, Ti}`, with `Tv` = [`Float64`](@ref) or `ComplexF64` respectively and
 `Ti` is an integer type ([`Int32`](@ref) or [`Int64`](@ref)).
+
+When `check = true`, an error is thrown if the decomposition fails.
+When `check = false`, responsibility for checking the decomposition's
+validity (via [`issuccess`](@ref)) lies with the user.
 
 The individual components of the factorization `F` can be accessed by indexing:
 
 | Component | Description                         |
 |:----------|:------------------------------------|
-| `F[:L]`   | `L` (lower triangular) part of `LU` |
-| `F[:U]`   | `U` (upper triangular) part of `LU` |
-| `F[:p]`   | right permutation `Vector`          |
-| `F[:q]`   | left permutation `Vector`           |
-| `F[:Rs]`  | `Vector` of scaling factors         |
-| `F[:(:)]` | `(L,U,p,q,Rs)` components           |
+| `L`       | `L` (lower triangular) part of `LU` |
+| `U`       | `U` (upper triangular) part of `LU` |
+| `p`       | right permutation `Vector`          |
+| `q`       | left permutation `Vector`           |
+| `Rs`      | `Vector` of scaling factors         |
+| `:`       | `(L,U,p,q,Rs)` components           |
 
 The relation between `F` and `A` is
 
-`F[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]`
+`F.L*F.U == (F.Rs .* A)[F.p, F.q]`
 
 `F` further supports the following functions:
 
@@ -134,30 +143,35 @@ The relation between `F` and `A` is
 - [`det`](@ref)
 
 !!! note
-    `lufact(A::SparseMatrixCSC)` uses the UMFPACK library that is part of
+    `lu(A::SparseMatrixCSC)` uses the UMFPACK library that is part of
     SuiteSparse. As this library only supports sparse matrices with [`Float64`](@ref) or
-    `Complex128` elements, `lufact` converts `A` into a copy that is of type
-    `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as appropriate.
+    `ComplexF64` elements, `lu` converts `A` into a copy that is of type
+    `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}` as appropriate.
 """
-function lufact(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes})
+function lu(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes}; check::Bool = true)
     zerobased = S.colptr[1] == 0
     res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
                     zerobased ? copy(S.colptr) : decrement(S.colptr),
                     zerobased ? copy(S.rowval) : decrement(S.rowval),
-                    copy(S.nzval))
+                    copy(S.nzval), 0)
     finalizer(umfpack_free_symbolic, res)
     umfpack_numeric!(res)
+    check && (issuccess(res) || throw(LinearAlgebra.SingularException(0)))
+    return res
 end
-lufact(A::SparseMatrixCSC{<:Union{Float16,Float32},Ti}) where {Ti<:UMFITypes} =
-    lufact(convert(SparseMatrixCSC{Float64,Ti}, A))
-lufact(A::SparseMatrixCSC{<:Union{Complex32,Complex64},Ti}) where {Ti<:UMFITypes} =
-    lufact(convert(SparseMatrixCSC{Complex128,Ti}, A))
-lufact(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) where {T<:AbstractFloat} =
+lu(A::SparseMatrixCSC{<:Union{Float16,Float32},Ti};
+   check::Bool = true) where {Ti<:UMFITypes} =
+    lu(convert(SparseMatrixCSC{Float64,Ti}, A); check = check)
+lu(A::SparseMatrixCSC{<:Union{ComplexF16,ComplexF32},Ti};
+   check::Bool = true) where {Ti<:UMFITypes} =
+    lu(convert(SparseMatrixCSC{ComplexF64,Ti}, A); check = check)
+lu(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}};
+   check::Bool = true) where {T<:AbstractFloat} =
     throw(ArgumentError(string("matrix type ", typeof(A), "not supported. ",
-    "Try lufact(convert(SparseMatrixCSC{Float64/Complex128,Int}, A)) for ",
-    "sparse floating point LU using UMFPACK or lufact(Array(A)) for generic ",
+    "Try lu(convert(SparseMatrixCSC{Float64/ComplexF64,Int}, A)) for ",
+    "sparse floating point LU using UMFPACK or lu(Array(A)) for generic ",
     "dense LU.")))
-lufact(A::SparseMatrixCSC) = lufact(float(A))
+lu(A::SparseMatrixCSC; check::Bool = true) = lu(float(A); check = check)
 
 
 size(F::UmfpackLU) = (F.m, F.n)
@@ -174,8 +188,8 @@ function size(F::UmfpackLU, dim::Integer)
 end
 
 function show(io::IO, F::UmfpackLU)
-    println(io, "UMFPACK LU Factorization of a $(size(F)) sparse matrix")
-    F.numeric != C_NULL && println(io, F.numeric)
+    print(io, "UMFPACK LU Factorization of a $(size(F)) sparse matrix")
+    F.numeric != C_NULL && print(io, '\n', F.numeric)
 end
 
 ## Wrappers for UMFPACK functions
@@ -185,34 +199,34 @@ umf_nm(nm,Tv,Ti) = "umfpack_" * (Tv == :Float64 ? "d" : "z") * (Ti == :Int64 ? "
 
 for itype in UmfpackIndexTypes
     sym_r = umf_nm("symbolic", :Float64, itype)
-    sym_c = umf_nm("symbolic", :Complex128, itype)
+    sym_c = umf_nm("symbolic", :ComplexF64, itype)
     num_r = umf_nm("numeric", :Float64, itype)
-    num_c = umf_nm("numeric", :Complex128, itype)
+    num_c = umf_nm("numeric", :ComplexF64, itype)
     sol_r = umf_nm("solve", :Float64, itype)
-    sol_c = umf_nm("solve", :Complex128, itype)
+    sol_c = umf_nm("solve", :ComplexF64, itype)
     det_r = umf_nm("get_determinant", :Float64, itype)
-    det_z = umf_nm("get_determinant", :Complex128, itype)
+    det_z = umf_nm("get_determinant", :ComplexF64, itype)
     lunz_r = umf_nm("get_lunz", :Float64, itype)
-    lunz_z = umf_nm("get_lunz", :Complex128, itype)
+    lunz_z = umf_nm("get_lunz", :ComplexF64, itype)
     get_num_r = umf_nm("get_numeric", :Float64, itype)
-    get_num_z = umf_nm("get_numeric", :Complex128, itype)
+    get_num_z = umf_nm("get_numeric", :ComplexF64, itype)
     @eval begin
         function umfpack_symbolic!(U::UmfpackLU{Float64,$itype})
             if U.symbolic != C_NULL return U end
-            tmp = Vector{Ptr{Void}}(uninitialized, 1)
+            tmp = Vector{Ptr{Cvoid}}(undef, 1)
             @isok ccall(($sym_r, :libumfpack), $itype,
-                        ($itype, $itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Void},
+                        ($itype, $itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Cvoid},
                          Ptr{Float64}, Ptr{Float64}),
                         U.m, U.n, U.colptr, U.rowval, U.nzval, tmp,
                         umf_ctrl, umf_info)
             U.symbolic = tmp[1]
             return U
         end
-        function umfpack_symbolic!(U::UmfpackLU{Complex128,$itype})
+        function umfpack_symbolic!(U::UmfpackLU{ComplexF64,$itype})
             if U.symbolic != C_NULL return U end
-            tmp = Vector{Ptr{Void}}(uninitialized, 1)
+            tmp = Vector{Ptr{Cvoid}}(undef, 1)
             @isok ccall(($sym_c, :libumfpack), $itype,
-                        ($itype, $itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64}, Ptr{Void},
+                        ($itype, $itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64}, Ptr{Cvoid},
                          Ptr{Float64}, Ptr{Float64}),
                         U.m, U.n, U.colptr, U.rowval, real(U.nzval), imag(U.nzval), tmp,
                         umf_ctrl, umf_info)
@@ -222,9 +236,9 @@ for itype in UmfpackIndexTypes
         function umfpack_numeric!(U::UmfpackLU{Float64,$itype})
             if U.numeric != C_NULL return U end
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
-            tmp = Vector{Ptr{Void}}(uninitialized, 1)
+            tmp = Vector{Ptr{Cvoid}}(undef, 1)
             status = ccall(($num_r, :libumfpack), $itype,
-                           (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Void}, Ptr{Void},
+                           (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Cvoid}, Ptr{Cvoid},
                             Ptr{Float64}, Ptr{Float64}),
                            U.colptr, U.rowval, U.nzval, U.symbolic, tmp,
                            umf_ctrl, umf_info)
@@ -232,14 +246,15 @@ for itype in UmfpackIndexTypes
                 umferror(status)
             end
             U.numeric = tmp[1]
+            U.status = status
             return U
         end
-        function umfpack_numeric!(U::UmfpackLU{Complex128,$itype})
+        function umfpack_numeric!(U::UmfpackLU{ComplexF64,$itype})
             if U.numeric != C_NULL return U end
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
-            tmp = Vector{Ptr{Void}}(uninitialized, 1)
+            tmp = Vector{Ptr{Cvoid}}(undef, 1)
             status = ccall(($num_c, :libumfpack), $itype,
-                           (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Void},
+                           (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64}, Ptr{Cvoid}, Ptr{Cvoid},
                             Ptr{Float64}, Ptr{Float64}),
                            U.colptr, U.rowval, real(U.nzval), imag(U.nzval), U.symbolic, tmp,
                            umf_ctrl, umf_info)
@@ -247,6 +262,7 @@ for itype in UmfpackIndexTypes
                 umferror(status)
             end
             U.numeric = tmp[1]
+            U.status = status
             return U
         end
         function solve!(x::StridedVector{Float64}, lu::UmfpackLU{Float64,$itype}, b::StridedVector{Float64}, typ::Integer)
@@ -260,14 +276,14 @@ for itype in UmfpackIndexTypes
             (size(b,1) == lu.m) && (size(b) == size(x)) || throw(DimensionMismatch())
             @isok ccall(($sol_r, :libumfpack), $itype,
                 ($itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64},
-                 Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Float64},
+                 Ptr{Float64}, Ptr{Float64}, Ptr{Cvoid}, Ptr{Float64},
                  Ptr{Float64}),
                 typ, lu.colptr, lu.rowval, lu.nzval,
                 x, b, lu.numeric, umf_ctrl,
                 umf_info)
             return x
         end
-        function solve!(x::StridedVector{Complex128}, lu::UmfpackLU{Complex128,$itype}, b::StridedVector{Complex128}, typ::Integer)
+        function solve!(x::StridedVector{ComplexF64}, lu::UmfpackLU{ComplexF64,$itype}, b::StridedVector{ComplexF64}, typ::Integer)
             if x === b
                 throw(ArgumentError("output array must not be aliased with input array"))
             end
@@ -280,7 +296,7 @@ for itype in UmfpackIndexTypes
             @isok ccall(($sol_c, :libumfpack), $itype,
                         ($itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64},
                          Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64},
-                         Ptr{Float64}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
+                         Ptr{Float64}, Ptr{Cvoid}, Ptr{Float64}, Ptr{Float64}),
                         typ, lu.colptr, lu.rowval, lu.nzval,
                         C_NULL, x, C_NULL, b,
                         C_NULL, lu.numeric, umf_ctrl, umf_info)
@@ -289,15 +305,15 @@ for itype in UmfpackIndexTypes
         function det(lu::UmfpackLU{Float64,$itype})
             mx = Ref{Float64}()
             @isok ccall(($det_r,:libumfpack), $itype,
-                           (Ptr{Float64},Ptr{Float64},Ptr{Void},Ptr{Float64}),
+                           (Ptr{Float64},Ptr{Float64},Ptr{Cvoid},Ptr{Float64}),
                            mx, C_NULL, lu.numeric, umf_info)
             mx[]
         end
-        function det(lu::UmfpackLU{Complex128,$itype})
+        function det(lu::UmfpackLU{ComplexF64,$itype})
             mx = Ref{Float64}()
             mz = Ref{Float64}()
             @isok ccall(($det_z,:libumfpack), $itype,
-                        (Ptr{Float64},Ptr{Float64},Ptr{Float64},Ptr{Void},Ptr{Float64}),
+                        (Ptr{Float64},Ptr{Float64},Ptr{Float64},Ptr{Cvoid},Ptr{Float64}),
                         mx, mz, C_NULL, lu.numeric, umf_info)
             complex(mx[], mz[])
         end
@@ -308,70 +324,70 @@ for itype in UmfpackIndexTypes
             n_col = Ref{$itype}()
             nz_diag = Ref{$itype}()
             @isok ccall(($lunz_r,:libumfpack), $itype,
-                           (Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{Void}),
+                           (Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{Cvoid}),
                            lnz, unz, n_row, n_col, nz_diag, lu.numeric)
             (lnz[], unz[], n_row[], n_col[], nz_diag[])
         end
-        function umf_lunz(lu::UmfpackLU{Complex128,$itype})
+        function umf_lunz(lu::UmfpackLU{ComplexF64,$itype})
             lnz = Ref{$itype}()
             unz = Ref{$itype}()
             n_row = Ref{$itype}()
             n_col = Ref{$itype}()
             nz_diag = Ref{$itype}()
             @isok ccall(($lunz_z,:libumfpack), $itype,
-                           (Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{Void}),
+                           (Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{Cvoid}),
                            lnz, unz, n_row, n_col, nz_diag, lu.numeric)
             (lnz[], unz[], n_row[], n_col[], nz_diag[])
         end
         function umf_extract(lu::UmfpackLU{Float64,$itype})
             umfpack_numeric!(lu)        # ensure the numeric decomposition exists
             (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
-            Lp = Vector{$itype}(uninitialized, n_row + 1)
-            Lj = Vector{$itype}(uninitialized, lnz) # L is returned in CSR (compressed sparse row) format
-            Lx = Vector{Float64}(uninitialized, lnz)
-            Up = Vector{$itype}(uninitialized, n_col + 1)
-            Ui = Vector{$itype}(uninitialized, unz)
-            Ux = Vector{Float64}(uninitialized, unz)
-            P  = Vector{$itype}(uninitialized, n_row)
-            Q  = Vector{$itype}(uninitialized, n_col)
-            Rs = Vector{Float64}(uninitialized, n_row)
+            Lp = Vector{$itype}(undef, n_row + 1)
+            Lj = Vector{$itype}(undef, lnz) # L is returned in CSR (compressed sparse row) format
+            Lx = Vector{Float64}(undef, lnz)
+            Up = Vector{$itype}(undef, n_col + 1)
+            Ui = Vector{$itype}(undef, unz)
+            Ux = Vector{Float64}(undef, unz)
+            P  = Vector{$itype}(undef, n_row)
+            Q  = Vector{$itype}(undef, n_col)
+            Rs = Vector{Float64}(undef, n_row)
             @isok ccall(($get_num_r,:libumfpack), $itype,
                         (Ptr{$itype},Ptr{$itype},Ptr{Float64},
                          Ptr{$itype},Ptr{$itype},Ptr{Float64},
-                         Ptr{$itype},Ptr{$itype},Ptr{Void},
-                         Ref{$itype},Ptr{Float64},Ptr{Void}),
+                         Ptr{$itype},Ptr{$itype},Ptr{Cvoid},
+                         Ref{$itype},Ptr{Float64},Ptr{Cvoid}),
                         Lp,Lj,Lx,
                         Up,Ui,Ux,
                         P, Q, C_NULL,
                         0, Rs, lu.numeric)
-            (transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), Lx)),
+            (copy(transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), Lx))),
              SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), Ux),
              increment!(P), increment!(Q), Rs)
         end
-        function umf_extract(lu::UmfpackLU{Complex128,$itype})
+        function umf_extract(lu::UmfpackLU{ComplexF64,$itype})
             umfpack_numeric!(lu)        # ensure the numeric decomposition exists
             (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
-            Lp = Vector{$itype}(uninitialized, n_row + 1)
-            Lj = Vector{$itype}(uninitialized, lnz) # L is returned in CSR (compressed sparse row) format
-            Lx = Vector{Float64}(uninitialized, lnz)
-            Lz = Vector{Float64}(uninitialized, lnz)
-            Up = Vector{$itype}(uninitialized, n_col + 1)
-            Ui = Vector{$itype}(uninitialized, unz)
-            Ux = Vector{Float64}(uninitialized, unz)
-            Uz = Vector{Float64}(uninitialized, unz)
-            P  = Vector{$itype}(uninitialized, n_row)
-            Q  = Vector{$itype}(uninitialized, n_col)
-            Rs = Vector{Float64}(uninitialized, n_row)
+            Lp = Vector{$itype}(undef, n_row + 1)
+            Lj = Vector{$itype}(undef, lnz) # L is returned in CSR (compressed sparse row) format
+            Lx = Vector{Float64}(undef, lnz)
+            Lz = Vector{Float64}(undef, lnz)
+            Up = Vector{$itype}(undef, n_col + 1)
+            Ui = Vector{$itype}(undef, unz)
+            Ux = Vector{Float64}(undef, unz)
+            Uz = Vector{Float64}(undef, unz)
+            P  = Vector{$itype}(undef, n_row)
+            Q  = Vector{$itype}(undef, n_col)
+            Rs = Vector{Float64}(undef, n_row)
             @isok ccall(($get_num_z,:libumfpack), $itype,
                         (Ptr{$itype},Ptr{$itype},Ptr{Float64},Ptr{Float64},
                          Ptr{$itype},Ptr{$itype},Ptr{Float64},Ptr{Float64},
-                         Ptr{$itype},Ptr{$itype},Ptr{Void}, Ptr{Void},
-                         Ref{$itype},Ptr{Float64},Ptr{Void}),
+                         Ptr{$itype},Ptr{$itype},Ptr{Cvoid}, Ptr{Cvoid},
+                         Ref{$itype},Ptr{Float64},Ptr{Cvoid}),
                         Lp,Lj,Lx,Lz,
                         Up,Ui,Ux,Uz,
                         P, Q, C_NULL, C_NULL,
                         0, Rs, lu.numeric)
-            (transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), complex.(Lx, Lz))),
+            (copy(transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), complex.(Lx, Lz)))),
              SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), complex.(Ux, Uz)),
              increment!(P), increment!(Q), Rs)
         end
@@ -383,26 +399,37 @@ function nnz(lu::UmfpackLU)
     return Int(lnz + unz)
 end
 
-### Solve with Factorization
-A_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = A_ldiv_B!(B, lu, copy(B))
-At_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = At_ldiv_B!(B, lu, copy(B))
-Ac_ldiv_B!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} = Ac_ldiv_B!(B, lu, copy(B))
-A_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = A_ldiv_B!(B, lu, copy(B))
-At_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = At_ldiv_B!(B, lu, copy(B))
-Ac_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = Ac_ldiv_B!(B, lu, copy(B))
+LinearAlgebra.issuccess(lu::UmfpackLU) = lu.status == UMFPACK_OK
 
-A_ldiv_B!(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
+### Solve with Factorization
+
+import LinearAlgebra.ldiv!
+
+ldiv!(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
+    ldiv!(B, lu, copy(B))
+ldiv!(translu::Transpose{T,<:UmfpackLU{T}}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
+    (lu = translu.parent; ldiv!(B, transpose(lu), copy(B)))
+ldiv!(adjlu::Adjoint{T,<:UmfpackLU{T}}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
+    (lu = adjlu.parent; ldiv!(B, adjoint(lu), copy(B)))
+ldiv!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) =
+    ldiv!(B, lu, copy(B))
+ldiv!(translu::Transpose{Float64,<:UmfpackLU{Float64}}, B::StridedVecOrMat{<:Complex}) =
+    (lu = translu.parent; ldiv!(B, transpose(lu), copy(B)))
+ldiv!(adjlu::Adjoint{Float64,<:UmfpackLU{Float64}}, B::StridedVecOrMat{<:Complex}) =
+    (lu = adjlu.parent; ldiv!(B, adjoint(lu), copy(B)))
+
+ldiv!(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
     _Aq_ldiv_B!(X, lu, B, UMFPACK_A)
-At_ldiv_B!(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
-    _Aq_ldiv_B!(X, lu, B, UMFPACK_Aat)
-Ac_ldiv_B!(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
-    _Aq_ldiv_B!(X, lu, B, UMFPACK_At)
-A_ldiv_B!(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
+ldiv!(X::StridedVecOrMat{T}, translu::Transpose{T,<:UmfpackLU{T}}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
+    (lu = translu.parent; _Aq_ldiv_B!(X, lu, B, UMFPACK_Aat))
+ldiv!(X::StridedVecOrMat{T}, adjlu::Adjoint{T,<:UmfpackLU{T}}, B::StridedVecOrMat{T}) where {T<:UMFVTypes} =
+    (lu = adjlu.parent; _Aq_ldiv_B!(X, lu, B, UMFPACK_At))
+ldiv!(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
     _Aq_ldiv_B!(X, lu, B, UMFPACK_A)
-At_ldiv_B!(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
-    _Aq_ldiv_B!(X, lu, B, UMFPACK_Aat)
-Ac_ldiv_B!(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
-    _Aq_ldiv_B!(X, lu, B, UMFPACK_At)
+ldiv!(X::StridedVecOrMat{Tb}, translu::Transpose{Float64,<:UmfpackLU{Float64}}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
+    (lu = translu.parent; _Aq_ldiv_B!(X, lu, B, UMFPACK_Aat))
+ldiv!(X::StridedVecOrMat{Tb}, adjlu::Adjoint{Float64,<:UmfpackLU{Float64}}, B::StridedVecOrMat{Tb}) where {Tb<:Complex} =
+    (lu = adjlu.parent; _Aq_ldiv_B!(X, lu, B, UMFPACK_At))
 
 function _Aq_ldiv_B!(X::StridedVecOrMat, lu::UmfpackLU, B::StridedVecOrMat, transposeoptype)
     if size(X, 2) != size(B, 2)
@@ -440,31 +467,34 @@ function _AqldivB_kernel!(X::StridedMatrix{Tb}, lu::UmfpackLU{Float64},
 end
 
 
-function getindex(lu::UmfpackLU, d::Symbol)
-    L,U,p,q,Rs = umf_extract(lu)
-    if d == :L
-        return L
-    elseif d == :U
-        return U
-    elseif d == :p
-        return p
-    elseif d == :q
-        return q
-    elseif d == :Rs
-        return Rs
-    elseif d == :(:)
-        return (L,U,p,q,Rs)
+@inline function getproperty(lu::UmfpackLU, d::Symbol)
+    if d == :L || d == :U || d == :p || d == :q || d == :Rs || d == :(:)
+        # Guard the call to umf_extract behaind a branch to avoid infinite recursion
+        L, U, p, q, Rs = umf_extract(lu)
+        if d == :L
+            return L
+        elseif d == :U
+            return U
+        elseif d == :p
+            return p
+        elseif d == :q
+            return q
+        elseif d == :Rs
+            return Rs
+        elseif d == :(:)
+            return (L, U, p, q, Rs)
+        end
     else
-        throw(KeyError(d))
+        getfield(lu, d)
     end
 end
 
-for Tv in (:Float64, :Complex128), Ti in UmfpackIndexTypes
+for Tv in (:Float64, :ComplexF64), Ti in UmfpackIndexTypes
     f = Symbol(umf_nm("free_symbolic", Tv, Ti))
     @eval begin
-        function ($f)(symb::Ptr{Void})
+        function ($f)(symb::Ptr{Cvoid})
             tmp = [symb]
-            ccall(($(string(f)), :libumfpack), Void, (Ptr{Void},), tmp)
+            ccall(($(string(f)), :libumfpack), Cvoid, (Ptr{Cvoid},), tmp)
         end
 
         function umfpack_free_symbolic(lu::UmfpackLU{$Tv,$Ti})
@@ -478,9 +508,9 @@ for Tv in (:Float64, :Complex128), Ti in UmfpackIndexTypes
 
     f = Symbol(umf_nm("free_numeric", Tv, Ti))
     @eval begin
-        function ($f)(num::Ptr{Void})
+        function ($f)(num::Ptr{Cvoid})
             tmp = [num]
-            ccall(($(string(f)), :libumfpack), Void, (Ptr{Void},), tmp)
+            ccall(($(string(f)), :libumfpack), Cvoid, (Ptr{Cvoid},), tmp)
         end
         function umfpack_free_numeric(lu::UmfpackLU{$Tv,$Ti})
             if lu.numeric == C_NULL return lu end
@@ -491,30 +521,30 @@ for Tv in (:Float64, :Complex128), Ti in UmfpackIndexTypes
     end
 end
 
-function umfpack_report_symbolic(symb::Ptr{Void}, level::Real)
+function umfpack_report_symbolic(symb::Ptr{Cvoid}, level::Real)
     old_prl::Float64 = umf_ctrl[UMFPACK_PRL]
     umf_ctrl[UMFPACK_PRL] = Float64(level)
     @isok ccall((:umfpack_dl_report_symbolic, :libumfpack), Int,
-                (Ptr{Void}, Ptr{Float64}), symb, umf_ctrl)
+                (Ptr{Cvoid}, Ptr{Float64}), symb, umf_ctrl)
     umf_ctrl[UMFPACK_PRL] = old_prl
 end
 
-umfpack_report_symbolic(symb::Ptr{Void}) = umfpack_report_symbolic(symb, 4.)
+umfpack_report_symbolic(symb::Ptr{Cvoid}) = umfpack_report_symbolic(symb, 4.)
 
 function umfpack_report_symbolic(lu::UmfpackLU, level::Real)
     umfpack_report_symbolic(umfpack_symbolic!(lu).symbolic, level)
 end
 
 umfpack_report_symbolic(lu::UmfpackLU) = umfpack_report_symbolic(lu.symbolic,4.)
-function umfpack_report_numeric(num::Ptr{Void}, level::Real)
+function umfpack_report_numeric(num::Ptr{Cvoid}, level::Real)
     old_prl::Float64 = umf_ctrl[UMFPACK_PRL]
     umf_ctrl[UMFPACK_PRL] = Float64(level)
     @isok ccall((:umfpack_dl_report_numeric, :libumfpack), Int,
-                (Ptr{Void}, Ptr{Float64}), num, umf_ctrl)
+                (Ptr{Cvoid}, Ptr{Float64}), num, umf_ctrl)
     umf_ctrl[UMFPACK_PRL] = old_prl
 end
 
-umfpack_report_numeric(num::Ptr{Void}) = umfpack_report_numeric(num, 4.)
+umfpack_report_numeric(num::Ptr{Cvoid}) = umfpack_report_numeric(num, 4.)
 function umfpack_report_numeric(lu::UmfpackLU, level::Real)
     umfpack_report_numeric(umfpack_numeric!(lu).numeric, level)
 end

@@ -19,6 +19,13 @@ mktempdir() do temp_dir
     @test_throws ErrorException download("http://httpbin.org/status/404", missing_file)
     @test !isfile(missing_file)
 
+    # Make sure we properly handle metachar '
+    metachar_file = joinpath(temp_dir, "metachar")
+    download("https://httpbin.org/get?test='^'", metachar_file)
+    metachar_string = read(metachar_file, String)
+    m = match(r"\"url\"\s*:\s*\"(.*)\"", metachar_string)
+    @test m.captures[1] == "https://httpbin.org/get?test='^'"
+
     # Use a TEST-NET (192.0.2.0/24) address which shouldn't be bound
     invalid_host_file = joinpath(temp_dir, "invalid_host")
     @test_throws ErrorException download("http://192.0.2.1", invalid_host_file)

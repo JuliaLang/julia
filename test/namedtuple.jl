@@ -12,8 +12,8 @@
 
 @test fieldcount(NamedTuple{(:a,:b,:c)}) == 3
 @test fieldcount(NamedTuple{<:Any,Tuple{Int,Int}}) == 2
-@test_throws ErrorException fieldcount(NamedTuple)
-@test_throws ErrorException fieldcount(NamedTuple{<:Any,<:Tuple{Int,Vararg{Int}}})
+@test_throws ArgumentError fieldcount(NamedTuple)
+@test_throws ArgumentError fieldcount(NamedTuple{<:Any,<:Tuple{Int,Vararg{Int}}})
 
 @test (a=1,).a == 1
 @test (a=2,)[1] == 2
@@ -51,8 +51,8 @@ let NT = NamedTuple{(:a,:b),Tuple{Int8,Int16}}, nt = (x=3,y=4)
 end
 
 @test NamedTuple{(:a,:c)}((b=1,z=2,c=3,aa=4,a=5)) === (a=5, c=3)
-@test NamedTuple{(:a,)}(NamedTuple{(:b, :a), Tuple{Int, Union{Int,Void}}}((1, 2))) ===
-    NamedTuple{(:a,), Tuple{Union{Int,Void}}}((2,))
+@test NamedTuple{(:a,)}(NamedTuple{(:b, :a), Tuple{Int, Union{Int,Nothing}}}((1, 2))) ===
+    NamedTuple{(:a,), Tuple{Union{Int,Nothing}}}((2,))
 
 @test eltype((a=[1,2], b=[3,4])) === Vector{Int}
 
@@ -72,7 +72,7 @@ end
 @test map(+, (x=1, y=2), (x=10, y=20)) == (x=11, y=22)
 @test_throws ArgumentError map(+, (x=1, y=2), (y=10, x=20))
 @test map(string, (x=1, y=2)) == (x="1", y="2")
-@test map(round, (x=1//3, y=Int), (x=3, y=2//3)) == (x=0.333, y=1)
+@test map(round, (x=UInt, y=Int), (x=3.1, y=2//3)) == (x=UInt(3), y=1)
 
 @test merge((a=1, b=2), (a=10,)) == (a=10, b=2)
 @test merge((a=1, b=2), (a=10, z=20)) == (a=10, b=2, z=20)
@@ -81,10 +81,10 @@ end
 @test merge((a=2, b=1), NamedTuple()) == (a=2, b=1)
 @test merge(NamedTuple(), NamedTuple()) == NamedTuple()
 # `merge` should preserve element types
-let nt = merge(NamedTuple{(:a,:b),Tuple{Int32,Union{Int32,Void}}}((1,Int32(2))),
-               NamedTuple{(:a,:c),Tuple{Union{Int8,Void},Float64}}((nothing,1.0)))
-    @test typeof(nt) == NamedTuple{(:a,:b,:c),Tuple{Union{Int8,Void},Union{Int32,Void},Float64}}
-    @test repr(nt) == "NamedTuple{(:a, :b, :c),Tuple{Union{Void, Int8},Union{Void, Int32},Float64}}((nothing, 2, 1.0))"
+let nt = merge(NamedTuple{(:a,:b),Tuple{Int32,Union{Int32,Nothing}}}((1,Int32(2))),
+               NamedTuple{(:a,:c),Tuple{Union{Int8,Nothing},Float64}}((nothing,1.0)))
+    @test typeof(nt) == NamedTuple{(:a,:b,:c),Tuple{Union{Int8,Nothing},Union{Int32,Nothing},Float64}}
+    @test repr(nt) == "NamedTuple{(:a, :b, :c),Tuple{Union{Nothing, Int8},Union{Nothing, Int32},Float64}}((nothing, 2, 1.0))"
 end
 
 @test merge(NamedTuple(), [:a=>1, :b=>2, :c=>3, :a=>4, :c=>5]) == (a=4, b=2, c=5)
@@ -157,7 +157,7 @@ function nt_from_abstractly_typed_array()
 end
 @test nt_from_abstractly_typed_array() === (3,5)
 
-let T = NamedTuple{(:a, :b), Tuple{Int64, Union{Float64, Void}}}, nt = T((1, nothing))
+let T = NamedTuple{(:a, :b), Tuple{Int64, Union{Float64, Nothing}}}, nt = T((1, nothing))
     @test nt == (a=1, b=nothing)
     @test typeof(nt) == T
     @test convert(T, (a=1, b=nothing)) == nt
@@ -206,5 +206,37 @@ abstr_nt_22194_3()
 @test Base.structdiff((a=1, b=2, z=20), (b=3, q=20, z=1)) == (a=1,)
 @test Base.structdiff((a=1, b=2, z=20), (b=3, q=20, z=1, a=0)) == NamedTuple()
 @test Base.structdiff((a=1, b=2, z=20), NamedTuple{(:b,)}) == (a=1, z=20)
-@test typeof(Base.structdiff(NamedTuple{(:a, :b), Tuple{Int32, Union{Int32, Void}}}((1, Int32(2))),
-                             (a=0,))) === NamedTuple{(:b,), Tuple{Union{Int32, Void}}}
+@test typeof(Base.structdiff(NamedTuple{(:a, :b), Tuple{Int32, Union{Int32, Nothing}}}((1, Int32(2))),
+                             (a=0,))) === NamedTuple{(:b,), Tuple{Union{Int32, Nothing}}}
+
+@test findall(isequal(1), (a=1, b=2)) == [:a]
+@test findall(isequal(1), (a=1, b=1)) == [:a, :b]
+@test isempty(findall(isequal(1), NamedTuple()))
+@test isempty(findall(isequal(1), (a=2, b=3)))
+@test findfirst(isequal(1), (a=1, b=2)) == :a
+@test findlast(isequal(1), (a=1, b=2)) == :a
+@test findfirst(isequal(1), (a=1, b=1)) == :a
+@test findlast(isequal(1), (a=1, b=1)) == :b
+@test findfirst(isequal(1), ()) === nothing
+@test findlast(isequal(1), ()) === nothing
+@test findfirst(isequal(1), (a=2, b=3)) === nothing
+@test findlast(isequal(1), (a=2, b=3)) === nothing
+
+# Test map with Nothing and Missing
+for T in (Nothing, Missing)
+    x = [(a=1, b=T()), (a=1, b=2)]
+    y = map(v -> (a=v.a, b=v.b), [(a=1, b=T()), (a=1, b=2)])
+    @test y isa Vector{NamedTuple{(:a,:b), T} where T<:Tuple}
+    @test isequal(x, y)
+end
+y = map(v -> (a=v.a, b=v.a + v.b), [(a=1, b=missing), (a=1, b=2)])
+@test y isa Vector{NamedTuple{(:a,:b), T} where T<:Tuple}
+@test isequal(y, [(a=1, b=missing), (a=1, b=3)])
+
+# issue #27187
+@test reduce(merge,[(a = 1, b = 2), (c = 3, d = 4)]) == (a = 1, b = 2, c = 3, d = 4)
+@test typeintersect(NamedTuple{()}, NamedTuple{names, Tuple{Int,Int}} where names) == Union{}
+
+# Iterator constructor
+@test NamedTuple{(:a, :b), Tuple{Int, Float64}}(Any[1.0, 2]) === (a=1, b=2.0)
+@test NamedTuple{(:a, :b)}(Any[1.0, 2]) === (a=1.0, b=2)

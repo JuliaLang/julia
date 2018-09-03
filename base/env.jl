@@ -63,7 +63,7 @@ end # os test
 
 A singleton of this type provides a hash table interface to environment variables.
 """
-struct EnvDict <: Associative{String,String}; end
+struct EnvDict <: AbstractDict{String,String}; end
 
 """
     ENV
@@ -81,23 +81,20 @@ pop!(::EnvDict, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
 pop!(::EnvDict, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
 delete!(::EnvDict, k::AbstractString) = (_unsetenv(k); ENV)
 setindex!(::EnvDict, v, k::AbstractString) = _setenv(k,string(v))
-push!(::EnvDict, k::AbstractString, v) = setindex!(ENV, v, k)
+push!(::EnvDict, kv::Pair{<:AbstractString}) = setindex!(ENV, kv.second, kv.first)
 
 if Sys.iswindows()
-    start(hash::EnvDict) = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
-    function done(hash::EnvDict, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
+    GESW() = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
+    function iterate(hash::EnvDict, block::Tuple{Ptr{UInt16},Ptr{UInt16}} = GESW())
         if unsafe_load(block[1]) == 0
             ccall(:FreeEnvironmentStringsW, stdcall, Int32, (Ptr{UInt16},), block[2])
-            return true
+            return nothing
         end
-        return false
-    end
-    function next(hash::EnvDict, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
         pos = block[1]
         blk = block[2]
         len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
-        buf = Vector{UInt16}(uninitialized, len)
-        @gc_preserve buf unsafe_copy!(pointer(buf), pos, len)
+        buf = Vector{UInt16}(undef, len)
+        GC.@preserve buf unsafe_copyto!(pointer(buf), pos, len)
         env = transcode(String, buf)
         m = match(r"^(=?[^=]+)=(.*)$"s, env)
         if m === nothing
@@ -106,14 +103,9 @@ if Sys.iswindows()
         return (Pair{String,String}(m.captures[1], m.captures[2]), (pos+(len+1)*2, blk))
     end
 else # !windows
-    start(::EnvDict) = 0
-    done(::EnvDict, i) = (ccall(:jl_environ, Any, (Int32,), i) === nothing)
-
-    function next(::EnvDict, i)
+    function iterate(::EnvDict, i=0)
         env = ccall(:jl_environ, Any, (Int32,), i)
-        if env === nothing
-            throw(BoundsError())
-        end
+        env === nothing && return nothing
         env = env::String
         m = match(r"^(.*?)=(.*)$"s, env)
         if m === nothing
@@ -123,7 +115,7 @@ else # !windows
     end
 end # os-test
 
-#TODO: Make these more efficent
+#TODO: Make these more efficient
 function length(::EnvDict)
     i = 0
     for (k,v) in ENV

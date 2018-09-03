@@ -32,15 +32,32 @@ end
 
 ## expressions ##
 
-copy(e::Expr) = (n = Expr(e.head);
-                 n.args = copy_exprargs(e.args);
-                 n.typ = e.typ;
-                 n)
+function copy(e::Expr)
+    n = Expr(e.head)
+    n.args = copy_exprargs(e.args)
+    return n
+end
 
 # copy parts of an AST that the compiler mutates
-copy_exprs(x::Expr) = copy(x)
 copy_exprs(@nospecialize(x)) = x
-copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(a) for a in x]
+copy_exprs(x::Expr) = copy(x)
+function copy_exprs(x::PhiNode)
+    new_values = Vector{Any}(undef, length(x.values))
+    for i = 1:length(x.values)
+        isassigned(x.values, i) || continue
+        new_values[i] = copy_exprs(x.values[i])
+    end
+    return PhiNode(copy(x.edges), new_values)
+end
+function copy_exprs(x::PhiCNode)
+    new_values = Vector{Any}(undef, length(x.values))
+    for i = 1:length(x.values)
+        isassigned(x.values, i) || continue
+        new_values[i] = copy_exprs(x.values[i])
+    end
+    return PhiCNode(new_values)
+end
+copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(x[i]) for i in 1:length(x)]
 
 ==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
 ==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
@@ -133,11 +150,9 @@ end
 ## misc syntax ##
 
 """
-    eval([m::Module], expr::Expr)
+    Core.eval(m::Module, expr)
 
-Evaluate an expression in the given module and return the result. Every `Module` (except
-those defined with `baremodule`) has its own 1-argument definition of `eval`, which
-evaluates expressions in that module.
+Evaluate an expression in the given module and return the result.
 """
 Core.eval
 
@@ -184,6 +199,20 @@ macro noinline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)
 end
 
+"""
+    @pure ex
+    @pure(ex)
+
+`@pure` gives the compiler a hint for the definition of a pure function,
+helping for type inference.
+
+A pure function can only depend on immutable information.
+This also means a `@pure` function cannot use any global mutable state, including
+generic functions. Calls to generic functions depend on method tables which are
+mutable global state.
+Use with caution, incorrect `@pure` annotation of a function may introduce
+hard to identify bugs. Double check for calls to generic functions.
+"""
 macro pure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
 end
@@ -231,17 +260,20 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
         push!(exargs[idx].args, tag)
     else
         body::Expr = inner.args[2]
-        unshift!(body.args, Expr(:meta, tag))
+        pushfirst!(body.args, Expr(:meta, tag))
     end
     ex
 end
 
-function popmeta!(body::Expr, sym::Symbol)
+popmeta!(body, sym) = _getmeta(body, sym, true)
+peekmeta(body, sym) = _getmeta(body, sym, false)
+
+function _getmeta(body::Expr, sym::Symbol, delete::Bool)
     body.head == :block || return false, []
-    popmeta!(body.args, sym)
+    _getmeta(body.args, sym, delete)
 end
-popmeta!(arg, sym) = (false, [])
-function popmeta!(body::Array{Any,1}, sym::Symbol)
+_getmeta(arg, sym, delete::Bool) = (false, [])
+function _getmeta(body::Array{Any,1}, sym::Symbol, delete::Bool)
     idx, blockargs = findmeta_block(body, args -> findmetaarg(args,sym)!=0)
     if idx == 0
         return false, []
@@ -252,8 +284,10 @@ function popmeta!(body::Array{Any,1}, sym::Symbol)
         return false, []
     end
     ret = isa(metaargs[i], Expr) ? (metaargs[i]::Expr).args : []
-    deleteat!(metaargs, i)
-    isempty(metaargs) && deleteat!(blockargs, idx)
+    if delete
+        deleteat!(metaargs, i)
+        isempty(metaargs) && deleteat!(blockargs, idx)
+    end
     true, ret
 end
 
@@ -309,7 +343,7 @@ end
 
 remove_linenums!(ex) = ex
 function remove_linenums!(ex::Expr)
-    if ex.head === :body || ex.head === :block || ex.head === :quote
+    if ex.head === :block || ex.head === :quote
         # remove line number expressions from metadata (not argument literal or inert) position
         filter!(ex.args) do x
             isa(x, Expr) && x.head === :line && return false
@@ -327,6 +361,35 @@ macro generated()
     return Expr(:generated)
 end
 
+"""
+    @generated f
+    @generated(f)
+`@generated` is used to annotate a function which will be generated.
+In the body of the generated function, only types of arguments can be read
+(not the values). The function returns a quoted expression evaluated when the
+function is called. The `@generated` macro should not be used on functions mutating
+the global scope or depending on mutable elements.
+
+See [Metaprogramming](@ref) for further details.
+
+## Example:
+```julia
+julia> @generated function bar(x)
+           if x <: Integer
+               return :(x ^ 2)
+           else
+               return :(x)
+           end
+       end
+bar (generic function with 1 method)
+
+julia> bar(4)
+16
+
+julia> bar("baz")
+"baz"
+```
+"""
 macro generated(f)
     if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
         body = f.args[2]

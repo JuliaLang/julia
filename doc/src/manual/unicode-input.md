@@ -19,7 +19,7 @@ the symbol).
 #
 # Generate a table containing all LaTeX and Emoji tab completions available in the REPL.
 #
-
+import REPL, Markdown
 const NBSP = '\u00A0'
 
 function tab_completions(symbols...)
@@ -31,13 +31,14 @@ function tab_completions(symbols...)
 end
 
 function unicode_data()
-    file = normpath(JULIA_HOME, "..", "..", "doc", "UnicodeData.txt")
+    file = normpath(Sys.BINDIR, "..", "..", "doc", "UnicodeData.txt")
     names = Dict{UInt32, String}()
     open(file) do unidata
         for line in readlines(unidata)
             id, name, desc = split(line, ";")[[1, 2, 11]]
             codepoint = parse(UInt32, "0x$id")
-            names[codepoint] = titlecase(lowercase(name == "" ? desc : desc == "" ? name : "$name / $desc"))
+            names[codepoint] = titlecase(lowercase(
+                name == "" ? desc : desc == "" ? name : "$name / $desc"))
         end
     end
     return names
@@ -47,7 +48,7 @@ end
 # for how unicode is displayed on the unicode.org website:
 # http://unicode.org/cldr/utility/character.jsp?a=0300
 function fix_combining_chars(char)
-    cat = Base.UTF8proc.category_code(char)
+    cat = Base.Unicode.category_code(char)
     return cat == 6 || cat == 8 ? "$NBSP$char$NBSP" : "$char"
 end
 
@@ -60,7 +61,7 @@ function table_entries(completions, unicode_dict)
     for (chars, inputs) in sort!(collect(completions), by = first)
         code_points, unicode_names, characters = String[], String[], String[]
         for char in chars
-            push!(code_points, "U+$(uppercase(hex(char, 5)))")
+            push!(code_points, "U+$(uppercase(string(UInt32(char), base = 16, pad = 5)))")
             push!(unicode_names, get(unicode_dict, UInt32(char), "(No Unicode name)"))
             push!(characters, isempty(characters) ? fix_combining_chars(char) : "$char")
         end
@@ -74,8 +75,8 @@ end
 
 table_entries(
     tab_completions(
-        Base.REPLCompletions.latex_symbols,
-        Base.REPLCompletions.emoji_symbols
+        REPL.REPLCompletions.latex_symbols,
+        REPL.REPLCompletions.emoji_symbols
     ),
     unicode_data()
 )

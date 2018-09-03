@@ -29,6 +29,7 @@ end
 
 Divide two integers or rational numbers, giving a [`Rational`](@ref) result.
 
+# Examples
 ```jldoctest
 julia> 3 // 5
 3//5
@@ -54,7 +55,7 @@ function //(x::Rational, y::Rational)
 end
 
 //(x::Complex,  y::Real) = complex(real(x)//y,imag(x)//y)
-//(x::Number, y::Complex) = x*y'//abs2(y)
+//(x::Number, y::Complex) = x*conj(y)//abs2(y)
 
 
 //(X::AbstractArray, y::Number) = X .// y
@@ -74,32 +75,29 @@ function write(s::IO, z::Rational)
     write(s,numerator(z),denominator(z))
 end
 
-convert(::Type{Rational{T}}, x::Rational) where {T<:Integer} = Rational{T}(convert(T,x.num),convert(T,x.den))
-convert(::Type{Rational{T}}, x::Integer) where {T<:Integer} = Rational{T}(convert(T,x), convert(T,1))
+Rational{T}(x::Rational) where {T<:Integer} = Rational{T}(convert(T,x.num), convert(T,x.den))
+Rational{T}(x::Integer) where {T<:Integer} = Rational{T}(convert(T,x), convert(T,1))
 
-convert(::Type{Rational}, x::Rational) = x
-convert(::Type{Rational}, x::Integer) = convert(Rational{typeof(x)},x)
+Rational(x::Rational) = x
 
-convert(::Type{Bool}, x::Rational) = x==0 ? false : x==1 ? true :
-    throw(InexactError(:convert, Bool, x)) # to resolve ambiguity
-convert(::Type{Integer}, x::Rational) = (isinteger(x) ? convert(Integer, x.num) :
-    throw(InexactError(:convert, Integer, x)))
-convert(::Type{T}, x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num) :
-    throw(InexactError(:convert, T, x)))
+Bool(x::Rational) = x==0 ? false : x==1 ? true :
+    throw(InexactError(:Bool, Bool, x)) # to resolve ambiguity
+(::Type{T})(x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num) :
+    throw(InexactError(Symbol(string(T)), T, x)))
 
-convert(::Type{AbstractFloat}, x::Rational) = float(x.num)/float(x.den)
-function convert(::Type{T}, x::Rational{S}) where T<:AbstractFloat where S
+AbstractFloat(x::Rational) = float(x.num)/float(x.den)
+function (::Type{T})(x::Rational{S}) where T<:AbstractFloat where S
     P = promote_type(T,S)
     convert(T, convert(P,x.num)/convert(P,x.den))
 end
 
-function convert(::Type{Rational{T}}, x::AbstractFloat) where T<:Integer
+function Rational{T}(x::AbstractFloat) where T<:Integer
     r = rationalize(T, x, tol=0)
-    x == convert(typeof(x), r) || throw(InexactError(:convert, Rational{T}, x))
+    x == convert(typeof(x), r) || throw(InexactError(:Rational, Rational{T}, x))
     r
 end
-convert(::Type{Rational}, x::Float64) = convert(Rational{Int64}, x)
-convert(::Type{Rational}, x::Float32) = convert(Rational{Int}, x)
+Rational(x::Float64) = Rational{Int64}(x)
+Rational(x::Float32) = Rational{Int}(x)
 
 big(z::Complex{<:Rational{<:Integer}}) = Complex{Rational{BigInt}}(z)
 
@@ -115,6 +113,7 @@ widen(::Type{Rational{T}}) where {T} = Rational{widen(T)}
 Approximate floating point number `x` as a [`Rational`](@ref) number with components
 of the given integer type. The result will differ from `x` by no more than `tol`.
 
+# Examples
 ```jldoctest
 julia> rationalize(5.6)
 28//5
@@ -130,7 +129,7 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     if tol < 0
         throw(ArgumentError("negative tolerance $tol"))
     end
-    isnan(x) && return zero(T)//zero(T)
+    isnan(x) && return T(x)//one(T)
     isinf(x) && return (x < 0 ? -one(T) : one(T))//zero(T)
 
     p,  q  = (x < 0 ? -one(T) : one(T)), zero(T)
@@ -193,6 +192,7 @@ rationalize(x::AbstractFloat; kvs...) = rationalize(Int, x; kvs...)
 
 Numerator of the rational representation of `x`.
 
+# Examples
 ```jldoctest
 julia> numerator(2//3)
 2
@@ -209,6 +209,7 @@ numerator(x::Rational) = x.num
 
 Denominator of the rational representation of `x`.
 
+# Examples
 ```jldoctest
 julia> denominator(2//3)
 3
@@ -288,8 +289,12 @@ end
 for rel in (:<,:<=,:cmp)
     for (Tx,Ty) in ((Rational,AbstractFloat), (AbstractFloat,Rational))
         @eval function ($rel)(x::$Tx, y::$Ty)
-            if isnan(x) || isnan(y)
-                $(rel == :cmp ? :(throw(DomainError((x,y), "Inputs cannot be NaN."))) :
+            if isnan(x)
+                $(rel == :cmp ? :(return isnan(y) ? 0 : 1) :
+                                :(return false))
+            end
+            if isnan(y)
+                $(rel == :cmp ? :(return -1) :
                                 :(return false))
             end
 

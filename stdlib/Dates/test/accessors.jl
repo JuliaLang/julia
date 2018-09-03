@@ -195,28 +195,28 @@ end
 @testset "Vectorized accessors" begin
     a = Dates.Date(2014, 1, 1)
     dr = [a, a, a, a, a, a, a, a, a, a]
-    @test Dates.year.(dr) == repmat([2014], 10)
-    @test Dates.month.(dr) == repmat([1], 10)
-    @test Dates.day.(dr) == repmat([1], 10)
+    @test Dates.year.(dr) == repeat([2014], 10)
+    @test Dates.month.(dr) == repeat([1], 10)
+    @test Dates.day.(dr) == repeat([1], 10)
 
     a = Dates.DateTime(2014, 1, 1)
     dr = [a, a, a, a, a, a, a, a, a, a]
-    @test Dates.year.(dr) == repmat([2014], 10)
-    @test Dates.month.(dr) == repmat([1], 10)
-    @test Dates.day.(dr) == repmat([1], 10)
-    @test Dates.hour.(dr) == repmat([0], 10)
-    @test Dates.minute.(dr) == repmat([0], 10)
-    @test Dates.second.(dr) == repmat([0], 10)
-    @test Dates.millisecond.(dr) == repmat([0], 10)
+    @test Dates.year.(dr) == repeat([2014], 10)
+    @test Dates.month.(dr) == repeat([1], 10)
+    @test Dates.day.(dr) == repeat([1], 10)
+    @test Dates.hour.(dr) == repeat([0], 10)
+    @test Dates.minute.(dr) == repeat([0], 10)
+    @test Dates.second.(dr) == repeat([0], 10)
+    @test Dates.millisecond.(dr) == repeat([0], 10)
 
     b = Dates.Time(1, 2, 3, 4, 5, 6)
     tr = [b, b, b, b, b, b, b, b, b, b]
-    @test Dates.hour.(tr) == repmat([1], 10)
-    @test Dates.minute.(tr) == repmat([2], 10)
-    @test Dates.second.(tr) == repmat([3], 10)
-    @test Dates.millisecond.(tr) == repmat([4], 10)
-    @test Dates.microsecond.(tr) == repmat([5], 10)
-    @test Dates.nanosecond.(tr) == repmat([6], 10)
+    @test Dates.hour.(tr) == repeat([1], 10)
+    @test Dates.minute.(tr) == repeat([2], 10)
+    @test Dates.second.(tr) == repeat([3], 10)
+    @test Dates.millisecond.(tr) == repeat([4], 10)
+    @test Dates.microsecond.(tr) == repeat([5], 10)
+    @test Dates.nanosecond.(tr) == repeat([6], 10)
 end
 
 end

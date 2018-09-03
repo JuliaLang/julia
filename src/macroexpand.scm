@@ -30,7 +30,9 @@
              ;; expression in the next stage.
              (cons splat-token (cdr x))))
         ((not (contains (lambda (e) (and (pair? e) (eq? (car e) '$))) x))
-         `(copyast (inert ,x)))
+         (if (eq? (car x) 'line)
+             `(inert ,x)
+             `(copyast (inert ,x))))
         (else
          (case (car x)
            ((inert) `(call (core QuoteNode)      ,@(bq-expand-arglist (cdr x) d)))
@@ -59,9 +61,12 @@
    ;; function definition
    (pattern-lambda (function (-$ (call name . argl) (|::| (call name . argl) _t)) body)
                    (cons 'varlist (safe-llist-positional-args (fix-arglist argl))))
-   (pattern-lambda (function (where (-$ (call name . argl) (|::| (call name . argl) _t)) . wheres) body)
-                   (cons 'varlist (append (safe-llist-positional-args (fix-arglist argl))
-                                          (typevar-names wheres))))
+   (pattern-lambda (function (where callspec . wheres) body)
+                   (let ((others (pattern-expand1 vars-introduced-by-patterns `(function ,callspec ,body))))
+                     (cons 'varlist (append (if (and (pair? others) (eq? (car others) 'varlist))
+                                                (cdr others)
+                                                '())
+                                            (typevar-names wheres)))))
 
    (pattern-lambda (function (tuple . args) body)
                    `(-> (tuple ,@args) ,body))
@@ -71,7 +76,7 @@
                    `(function (call (curly ,name . ,sparams) . ,argl) ,body))
    (pattern-lambda (= (-$ (call name . argl) (|::| (call name . argl) _t)) body)
                    `(function (call ,name ,@argl) ,body))
-   (pattern-lambda (= (where (-$ (call name . argl) (|::| (call name . argl) _t)) . wheres) body)
+   (pattern-lambda (= (where callspec . wheres) body)
                    (cons 'function (cdr __)))
 
    ;; anonymous function
@@ -84,6 +89,8 @@
 
    ;; where
    (pattern-lambda (where ex . vars)
+                   (cons 'varlist (typevar-names vars)))
+   (pattern-lambda (= (curly ex . vars) rhs)
                    (cons 'varlist (typevar-names vars)))
 
    ;; let
@@ -128,16 +135,21 @@
                    (if var (list 'varlist var) '()))
 
    ;; type definition
-   (pattern-lambda (struct mut (<: (curly tn . tvars) super) body)
-                   (list* 'varlist (cons (unescape tn) (unescape tn)) '(new . new)
-                          (typevar-names tvars)))
-   (pattern-lambda (struct mut (curly tn . tvars) body)
-                   (list* 'varlist (cons (unescape tn) (unescape tn)) '(new . new)
-                          (typevar-names tvars)))
-   (pattern-lambda (struct mut (<: tn super) body)
-                   (list 'varlist (cons (unescape tn) (unescape tn)) '(new . new)))
-   (pattern-lambda (struct mut tn body)
-                   (list 'varlist (cons (unescape tn) (unescape tn)) '(new . new)))
+   (pattern-lambda (struct mut spec body)
+                   (let ((tn (typedef-expr-name spec))
+                         (tv (typedef-expr-tvars spec)))
+                     (list* 'varlist (cons (unescape tn) (unescape tn)) '(new . new)
+                            (typevar-names tv))))
+   (pattern-lambda (abstract spec)
+                   (let ((tn (typedef-expr-name spec))
+                         (tv (typedef-expr-tvars spec)))
+                     (list* 'varlist (cons (unescape tn) (unescape tn))
+                            (typevar-names tv))))
+   (pattern-lambda (primitive spec nb)
+                   (let ((tn (typedef-expr-name spec))
+                         (tv (typedef-expr-tvars spec)))
+                     (list* 'varlist (cons (unescape tn) (unescape tn))
+                            (typevar-names tv))))
 
    )) ; vars-introduced-by-patterns
 
@@ -148,14 +160,14 @@
 
    (pattern-lambda (function (-$ (call name . argl) (|::| (call name . argl) _t)) body)
                    (cons 'varlist (safe-llist-keyword-args (fix-arglist argl))))
-   (pattern-lambda (function (where (-$ (call name . argl) (|::| (call name . argl) _t)) . wheres) body)
-                   (cons 'varlist (safe-llist-keyword-args (fix-arglist argl))))
+   (pattern-lambda (function (where callspec . wheres) body)
+                   `(function ,callspec ,body))
 
    (pattern-lambda (= (call (curly name . sparams) . argl) body)
                    `(function (call (curly ,name . ,sparams) . ,argl) ,body))
    (pattern-lambda (= (-$ (call name . argl) (|::| (call name . argl) _t)) body)
                    `(function (call ,name ,@argl) ,body))
-   (pattern-lambda (= (where (-$ (call name . argl) (|::| (call name . argl) _t)) . wheres) body)
+   (pattern-lambda (= (where callspec . wheres) body)
                    (cons 'function (cdr __)))
    ))
 
@@ -170,6 +182,17 @@
   (if (and (pair? e) (eq? (car e) 'escape))
       (cadr e)
       e))
+
+(define (typedef-expr-name e)
+  (cond ((atom? e) e)
+        ((or (eq? (car e) 'curly) (eq? (car e) '<:)) (typedef-expr-name (cadr e)))
+        (else e)))
+
+(define (typedef-expr-tvars e)
+  (cond ((atom? e) '())
+        ((eq? (car e) '<:) (typedef-expr-tvars (cadr e)))
+        ((eq? (car e) 'curly) (cddr e))
+        (else '())))
 
 (define (typevar-expr-name e) (car (analyze-typevar e)))
 
@@ -209,18 +232,25 @@
 
 ;; arg names, looking only at positional args
 (define (safe-llist-positional-args lst (escaped #f))
-  (safe-arg-names
-   (filter (lambda (a) (not (and (pair? a)
-                                 (eq? (car a) 'parameters))))
-           lst)
-   escaped))
+  (receive
+   (params normal) (separate (lambda (a) (and (pair? a)
+                                              (eq? (car a) 'parameters)))
+                             lst)
+   (safe-arg-names
+    (append normal
+            ;; rest keywords name is not a keyword
+            (apply append (map (lambda (a) (filter vararg? a))
+                               params)))
+    escaped)))
 
 ;; arg names from keyword arguments, and positional arguments with escaped names
 (define (safe-llist-keyword-args lst)
-  (let ((kwargs (apply nconc
-                       (map cdr
-                            (filter (lambda (a) (and (pair? a) (eq? (car a) 'parameters)))
-                                    lst)))))
+  (let* ((kwargs (apply nconc
+                        (map cdr
+                             (filter (lambda (a) (and (pair? a) (eq? (car a) 'parameters)))
+                                     lst))))
+         ;; rest keywords name is not a keyword
+         (kwargs (filter (lambda (x) (not (vararg? x))) kwargs)))
     (append
      (safe-arg-names kwargs #f)
      (safe-arg-names kwargs #t)
@@ -279,7 +309,7 @@
    m parent-scope inarg))
 
 (define (resolve-expansion-vars- e env m parent-scope inarg)
-  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end) (eq? e 'ccall))
+  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal))
          e)
         ((symbol? e)
          (let ((a (assq e env)))
@@ -306,7 +336,7 @@
                                    ,(resolve-expansion-vars-with-new-env (caddr arg) env m parent-scope inarg))))
                              (else
                               `(global ,(resolve-expansion-vars-with-new-env arg env m parent-scope inarg))))))
-           ((using import importall export meta line inbounds boundscheck simdloop gc_preserve gc_preserve_end) (map unescape e))
+           ((using import export meta line inbounds boundscheck simdloop gc_preserve gc_preserve_end) (map unescape e))
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
            ((symbolicgoto) e)
@@ -339,19 +369,22 @@
                                   (cdr e)))))
 
            ((kw)
-            (if (and (pair? (cadr e))
-                     (eq? (caadr e) '|::|))
-                `(kw (|::|
-                      ,(if inarg
-                           (resolve-expansion-vars- (cadr (cadr e)) env m parent-scope inarg)
-                           ;; in keyword arg A=B, don't transform "A"
-                           (unescape (cadr (cadr e))))
-                      ,(resolve-expansion-vars- (caddr (cadr e)) env m parent-scope inarg))
-                     ,(resolve-expansion-vars- (caddr e) env m parent-scope inarg))
-                `(kw ,(if inarg
-                          (resolve-expansion-vars- (cadr e) env m parent-scope inarg)
-                          (unescape (cadr e)))
-                     ,(resolve-expansion-vars- (caddr e) env m parent-scope inarg))))
+            (cond
+             ((not (length> e 2)) e)
+             ((and (pair? (cadr e))
+                   (eq? (caadr e) '|::|))
+              `(kw (|::|
+                    ,(if inarg
+                         (resolve-expansion-vars- (cadr (cadr e)) env m parent-scope inarg)
+                         ;; in keyword arg A=B, don't transform "A"
+                         (unescape (cadr (cadr e))))
+                    ,(resolve-expansion-vars- (caddr (cadr e)) env m parent-scope inarg))
+                   ,(resolve-expansion-vars- (caddr e) env m parent-scope inarg)))
+             (else
+              `(kw ,(if inarg
+                        (resolve-expansion-vars- (cadr e) env m parent-scope inarg)
+                        (unescape (cadr e)))
+                   ,(resolve-expansion-vars- (caddr e) env m parent-scope inarg)))))
 
            ((let)
             (let* ((newenv (new-expansion-env-for e env))
@@ -491,12 +524,12 @@
   (cond
    ((or (not (pair? e)) (quoted? e)) e)
    ((eq? (car e) 'hygienic-scope)
-     (let ((parent-scope (list relabels parent-scope))
-           (body (cadr e))
-           (m (caddr e)))
-     `(hygienic-scope ,(rename-symbolic-labels- (cadr e) (table) parent-scope) ,m)))
+    (let ((parent-scope (list relabels parent-scope))
+          (body (cadr e))
+          (m (caddr e)))
+      `(hygienic-scope ,(rename-symbolic-labels- (cadr e) (table) parent-scope) ,m)))
    ((and (eq? (car e) 'escape) (not (null? parent-scope)))
-     `(escape ,(apply rename-symbolic-labels- (cadr e) parent-scope)))
+    `(escape ,(apply rename-symbolic-labels- (cadr e) parent-scope)))
    ((or (eq? (car e) 'symbolicgoto) (eq? (car e) 'symboliclabel))
     (let* ((s (cadr e))
            (havelabel (if (or (null? parent-scope) (not (symbol? s))) s (get relabels s #f)))
@@ -504,9 +537,9 @@
       (if (not havelabel) (put! relabels s newlabel))
       `(,(car e) ,newlabel)))
    (else
-     (cons (car e)
-           (map (lambda (x) (rename-symbolic-labels- x relabels parent-scope))
-                (cdr e))))))
+    (cons (car e)
+          (map (lambda (x) (rename-symbolic-labels- x relabels parent-scope))
+               (cdr e))))))
 
 (define (rename-symbolic-labels e)
   (rename-symbolic-labels- e (table) '()))
@@ -516,12 +549,12 @@
 ;; TODO: delete this file and fold this operation into resolve-scopes
 (define (julia-expand-macroscope e)
   (julia-expand-macroscopes-
-    (rename-symbolic-labels
-      (julia-expand-quotes e))))
+   (rename-symbolic-labels
+    (julia-expand-quotes e))))
 
 (define (contains-macrocall e)
   (and (pair? e)
-    (contains (lambda (e) (and (pair? e) (eq? (car e) 'macrocall))) e)))
+       (contains (lambda (e) (and (pair? e) (eq? (car e) 'macrocall))) e)))
 
 (define (julia-bq-macro x)
   (julia-bq-expand x 0))

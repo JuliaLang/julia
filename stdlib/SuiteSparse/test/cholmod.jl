@@ -3,13 +3,16 @@
 using SuiteSparse.CHOLMOD
 using DelimitedFiles
 using Test
+using Random
+using Serialization
+using LinearAlgebra: issuccess, PosDefException
 
 # CHOLMOD tests
-srand(123)
+Random.seed!(123)
 
 @testset "based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/" begin
 
-# chm_rdsp(joinpath(JULIA_HOME, "../../deps/SuiteSparse-4.0.2/CHOLMOD/Demo/Matrix/bcsstk01.tri"))
+# chm_rdsp(joinpath(Sys.BINDIR, "../../deps/SuiteSparse-4.0.2/CHOLMOD/Demo/Matrix/bcsstk01.tri"))
 # because the file may not exist in binary distributions and when a system suitesparse library
 # is used
 
@@ -38,7 +41,8 @@ srand(123)
 ## residual  1.3e-19 (|Ax-b|/(|A||x|+|b|)) after iterative refinement
 ## rcond     9.5e-06
 
-    A = CHOLMOD.Sparse(48, 48,
+    n = 48
+    A = CHOLMOD.Sparse(n, n,
         CHOLMOD.SuiteSparse_long[0,1,2,3,6,9,12,15,18,20,25,30,34,36,39,43,47,52,58,
         62,67,71,77,84,90,93,95,98,103,106,110,115,119,123,130,136,142,146,150,155,
         161,167,174,182,189,197,207,215,224], # zero-based column pointers
@@ -102,32 +106,32 @@ srand(123)
     @test_throws ArgumentError CHOLMOD.norm_sparse(A, 2)
     @test CHOLMOD.isvalid(A)
 
-    B = A * ones(size(A,2))
-    chma = ldltfact(A)                      # LDL' form
+    x = fill(1., n)
+    b = A*x
+
+    chma = ldlt(A)                      # LDL' form
     @test CHOLMOD.isvalid(chma)
     @test unsafe_load(pointer(chma)).is_ll == 0    # check that it is in fact an LDLt
-    x = chma\B
-    @test x ≈ ones(size(x))
-    @test nnz(ldltfact(A, perm=1:size(A,1))) > nnz(chma)
+    @test chma\b ≈ x
+    @test nnz(ldlt(A, perm=1:size(A,1))) > nnz(chma)
     @test size(chma) == size(A)
     chmal = CHOLMOD.FactorComponent(chma, :L)
     @test size(chmal) == size(A)
     @test size(chmal, 1) == size(A, 1)
 
-    chma = cholfact(A)                      # LL' form
+    chma = cholesky(A)                      # LL' form
     @test CHOLMOD.isvalid(chma)
     @test unsafe_load(pointer(chma)).is_ll == 1    # check that it is in fact an LLt
-    x = chma\B
-    @test x ≈ ones(size(x))
+    @test chma\b ≈ x
     @test nnz(chma) == 489
-    @test nnz(cholfact(A, perm=1:size(A,1))) > nnz(chma)
+    @test nnz(cholesky(A, perm=1:size(A,1))) > nnz(chma)
     @test size(chma) == size(A)
     chmal = CHOLMOD.FactorComponent(chma, :L)
     @test size(chmal) == size(A)
     @test size(chmal, 1) == size(A, 1)
 
     @testset "eltype" begin
-        @test eltype(Dense(ones(3))) == Float64
+        @test eltype(Dense(fill(1., 3))) == Float64
         @test eltype(A) == Float64
         @test eltype(chma) == Float64
     end
@@ -151,8 +155,8 @@ end
         2.249,-1.0,2.279,1.4,-1.0,1.0,-1.0,1.0,1.0,1.0], 0)
     afiro2 = CHOLMOD.aat(afiro, CHOLMOD.SuiteSparse_long[0:50;], CHOLMOD.SuiteSparse_long(1))
     CHOLMOD.change_stype!(afiro2, -1)
-    chmaf = cholfact(afiro2)
-    y = afiro'*ones(size(afiro,1))
+    chmaf = cholesky(afiro2)
+    y = afiro'*fill(1., size(afiro,1))
     sol = chmaf\(afiro*y) # least squares solution
     @test CHOLMOD.isvalid(sol)
     pred = afiro'*sol
@@ -182,7 +186,7 @@ end
     @test sparse(cmA'*cmA) ≈ A'*A
 
     # A_mul_Ac for symmetric A
-    A = 0.5*(A + A')
+    A = 0.5*(A + copy(A'))
     cmA = CHOLMOD.Sparse(A)
     @test sparse(cmA*cmA') ≈ A*A'
 end
@@ -227,46 +231,46 @@ end
 ## The struct pointer must be constructed by the library constructor and then modified afterwards to checks that the method throws
 @testset "illegal dtype (for now but should be supported at some point)" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
         1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
     puint = convert(Ptr{UInt32}, p)
-    unsafe_store!(puint, CHOLMOD.SINGLE, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 4)
+    unsafe_store!(puint, CHOLMOD.SINGLE, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 4)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 end
 
 @testset "illegal dtype" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
         1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
     puint = convert(Ptr{UInt32}, p)
-    unsafe_store!(puint, 5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 4)
+    unsafe_store!(puint, 5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 4)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 end
 
 @testset "illegal xtype" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
         1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
     puint = convert(Ptr{UInt32}, p)
-    unsafe_store!(puint, 3, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 3)
+    unsafe_store!(puint, 3, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 3)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 end
 
 @testset "illegal itype I" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
         1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
     puint = convert(Ptr{UInt32}, p)
-    unsafe_store!(puint, CHOLMOD.INTLONG, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 2)
+    unsafe_store!(puint, CHOLMOD.INTLONG, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 2)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 end
 
 @testset "illegal itype II" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
         1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
     puint = convert(Ptr{UInt32}, p)
-    unsafe_store!(puint,  5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 2)
+    unsafe_store!(puint,  5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 2)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 end
 
@@ -287,8 +291,8 @@ end
     @test_throws BoundsError ADense[6, 1]
     @test_throws BoundsError ADense[1, 6]
     @test copy(ADense) == ADense
-    @test CHOLMOD.norm_dense(ADense, 1) ≈ norm(A, 1)
-    @test CHOLMOD.norm_dense(ADense, 0) ≈ norm(A, Inf)
+    @test CHOLMOD.norm_dense(ADense, 1) ≈ opnorm(A, 1)
+    @test CHOLMOD.norm_dense(ADense, 0) ≈ opnorm(A, Inf)
     @test_throws ArgumentError CHOLMOD.norm_dense(ADense, 2)
     @test_throws ArgumentError CHOLMOD.norm_dense(ADense, 3)
 
@@ -314,7 +318,7 @@ end
 # Test Sparse and Factor
 @testset "test free_sparse!" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Float64}},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
         1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
     @test CHOLMOD.free_sparse!(p)
 end
@@ -333,7 +337,7 @@ end
         A1pd.nzval)
 
     ## High level interface
-    @test isa(CHOLMOD.Sparse(3, 3, [0,1,3,4], [0,2,1,2], ones(4)), CHOLMOD.Sparse) # Sparse doesn't require columns to be sorted
+    @test isa(CHOLMOD.Sparse(3, 3, [0,1,3,4], [0,2,1,2], fill(1., 4)), CHOLMOD.Sparse) # Sparse doesn't require columns to be sorted
     @test_throws BoundsError A1Sparse[6, 1]
     @test_throws BoundsError A1Sparse[1, 6]
     @test sparse(A1Sparse) == A1
@@ -368,86 +372,91 @@ end
     end
 
     # Factor
-    @test_throws ArgumentError cholfact(A1)
-    @test_throws ArgumentError cholfact(A1)
-    @test_throws ArgumentError cholfact(A1, shift=1.0)
-    @test_throws ArgumentError ldltfact(A1)
-    @test_throws ArgumentError ldltfact(A1, shift=1.0)
-    @test_throws LinAlg.PosDefException cholfact(A1 + A1' - 2eigmax(Array(A1 + A1'))*I)\ones(size(A1, 1))
-    @test_throws LinAlg.PosDefException cholfact(A1 + A1', shift=-2eigmax(Array(A1 + A1')))\ones(size(A1, 1))
-    @test_throws ArgumentError ldltfact(A1 + A1' - 2real(A1[1,1])*I)\ones(size(A1, 1))
-    @test_throws ArgumentError ldltfact(A1 + A1', shift=-2real(A1[1,1]))\ones(size(A1, 1))
-    @test !isposdef(cholfact(A1 + A1' - 2eigmax(Array(A1 + A1'))*I))
-    @test !isposdef(cholfact(A1 + A1', shift=-2eigmax(Array(A1 + A1'))))
-    @test !LinAlg.issuccess(ldltfact(A1 + A1' - 2real(A1[1,1])*I))
-    @test !LinAlg.issuccess(ldltfact(A1 + A1', shift=-2real(A1[1,1])))
-    F = cholfact(A1pd)
+    @test_throws ArgumentError cholesky(A1)
+    @test_throws ArgumentError cholesky(A1)
+    @test_throws ArgumentError cholesky(A1, shift=1.0)
+    @test_throws ArgumentError ldlt(A1)
+    @test_throws ArgumentError ldlt(A1, shift=1.0)
+    C = A1 + copy(adjoint(A1))
+    λmaxC = eigmax(Array(C))
+    b = fill(1., size(A1, 1))
+    @test_throws PosDefException cholesky(C - 2λmaxC*I)
+    @test_throws PosDefException cholesky(C, shift=-2λmaxC)
+    @test_throws PosDefException ldlt(C - C[1,1]*I)
+    @test_throws PosDefException ldlt(C, shift=-real(C[1,1]))
+    @test !isposdef(cholesky(C - 2λmaxC*I; check = false))
+    @test !isposdef(cholesky(C, shift=-2λmaxC; check = false))
+    @test !issuccess(ldlt(C - C[1,1]*I; check = false))
+    @test !issuccess(ldlt(C, shift=-real(C[1,1]); check = false))
+    F = cholesky(A1pd)
     tmp = IOBuffer()
     show(tmp, F)
     @test tmp.size > 0
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
-    @test F\CHOLMOD.Sparse(sparse(ones(elty, 5))) ≈ A1pd\ones(5)
-    @test_throws DimensionMismatch F\CHOLMOD.Dense(ones(elty, 4))
-    @test_throws DimensionMismatch F\CHOLMOD.Sparse(sparse(ones(elty, 4)))
-    @test F'\ones(elty, 5) ≈ Array(A1pd)'\ones(5)
-    @test F'\sparse(ones(elty, 5)) ≈ Array(A1pd)'\ones(5)
-    @test F.'\ones(elty, 5) ≈ conj(A1pd)'\ones(elty, 5)
+    @test_throws DimensionMismatch F\CHOLMOD.Dense(fill(elty(1), 4))
+    @test_throws DimensionMismatch F\CHOLMOD.Sparse(sparse(fill(elty(1), 4)))
+    b = fill(1., 5)
+    bT = fill(elty(1), 5)
+    @test F'\bT ≈ Array(A1pd)'\b
+    @test F'\sparse(bT) ≈ Array(A1pd)'\b
+    @test transpose(F)\bT ≈ conj(A1pd)'\bT
+    @test F\CHOLMOD.Sparse(sparse(bT)) ≈ A1pd\b
     @test logdet(F) ≈ logdet(Array(A1pd))
     @test det(F) == exp(logdet(F))
     let # to test supernodal, we must use a larger matrix
         Ftmp = sprandn(100, 100, 0.1)
         Ftmp = Ftmp'Ftmp + I
-        @test logdet(cholfact(Ftmp)) ≈ logdet(Array(Ftmp))
+        @test logdet(cholesky(Ftmp)) ≈ logdet(Array(Ftmp))
     end
-    @test logdet(ldltfact(A1pd)) ≈ logdet(Array(A1pd))
+    @test logdet(ldlt(A1pd)) ≈ logdet(Array(A1pd))
     @test isposdef(A1pd)
     @test !isposdef(A1)
-    @test !isposdef(A1 + A1' |> t -> t - 2eigmax(Array(t))*I)
+    @test !isposdef(A1 + copy(A1') |> t -> t - 2eigmax(Array(t))*I)
 
     if elty <: Real
         @test CHOLMOD.issymmetric(Sparse(A1pd, 0))
-        @test CHOLMOD.Sparse(cholfact(Symmetric(A1pd, :L))) == CHOLMOD.Sparse(cholfact(A1pd))
-        F1 = CHOLMOD.Sparse(cholfact(Symmetric(A1pd, :L), shift=2))
-        F2 = CHOLMOD.Sparse(cholfact(A1pd, shift=2))
+        @test CHOLMOD.Sparse(cholesky(Symmetric(A1pd, :L))) == CHOLMOD.Sparse(cholesky(A1pd))
+        F1 = CHOLMOD.Sparse(cholesky(Symmetric(A1pd, :L), shift=2))
+        F2 = CHOLMOD.Sparse(cholesky(A1pd, shift=2))
         @test F1 == F2
-        @test CHOLMOD.Sparse(ldltfact(Symmetric(A1pd, :L))) == CHOLMOD.Sparse(ldltfact(A1pd))
-        F1 = CHOLMOD.Sparse(ldltfact(Symmetric(A1pd, :L), shift=2))
-        F2 = CHOLMOD.Sparse(ldltfact(A1pd, shift=2))
+        @test CHOLMOD.Sparse(ldlt(Symmetric(A1pd, :L))) == CHOLMOD.Sparse(ldlt(A1pd))
+        F1 = CHOLMOD.Sparse(ldlt(Symmetric(A1pd, :L), shift=2))
+        F2 = CHOLMOD.Sparse(ldlt(A1pd, shift=2))
         @test F1 == F2
     else
         @test !CHOLMOD.issymmetric(Sparse(A1pd, 0))
         @test CHOLMOD.ishermitian(Sparse(A1pd, 0))
-        @test CHOLMOD.Sparse(cholfact(Hermitian(A1pd, :L))) == CHOLMOD.Sparse(cholfact(A1pd))
-        F1 = CHOLMOD.Sparse(cholfact(Hermitian(A1pd, :L), shift=2))
-        F2 = CHOLMOD.Sparse(cholfact(A1pd, shift=2))
+        @test CHOLMOD.Sparse(cholesky(Hermitian(A1pd, :L))) == CHOLMOD.Sparse(cholesky(A1pd))
+        F1 = CHOLMOD.Sparse(cholesky(Hermitian(A1pd, :L), shift=2))
+        F2 = CHOLMOD.Sparse(cholesky(A1pd, shift=2))
         @test F1 == F2
-        @test CHOLMOD.Sparse(ldltfact(Hermitian(A1pd, :L))) == CHOLMOD.Sparse(ldltfact(A1pd))
-        F1 = CHOLMOD.Sparse(ldltfact(Hermitian(A1pd, :L), shift=2))
-        F2 = CHOLMOD.Sparse(ldltfact(A1pd, shift=2))
+        @test CHOLMOD.Sparse(ldlt(Hermitian(A1pd, :L))) == CHOLMOD.Sparse(ldlt(A1pd))
+        F1 = CHOLMOD.Sparse(ldlt(Hermitian(A1pd, :L), shift=2))
+        F2 = CHOLMOD.Sparse(ldlt(A1pd, shift=2))
         @test F1 == F2
     end
 
-    ### cholfact!/ldltfact!
-    F = cholfact(A1pd)
+    ### cholesky!/ldlt!
+    F = cholesky(A1pd)
     CHOLMOD.change_factor!(elty, false, false, true, true, F)
     @test unsafe_load(pointer(F)).is_ll == 0
     CHOLMOD.change_factor!(elty, true, false, true, true, F)
-    @test CHOLMOD.Sparse(cholfact!(copy(F), A1pd)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test CHOLMOD.Sparse(cholesky!(copy(F), A1pd)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
     @test size(F, 2) == 5
     @test size(F, 3) == 1
     @test_throws ArgumentError size(F, 0)
 
-    F = cholfact(A1pdSparse, shift=2)
+    F = cholesky(A1pdSparse, shift=2)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
-    @test CHOLMOD.Sparse(cholfact!(copy(F), A1pd, shift=2.0)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test CHOLMOD.Sparse(cholesky!(copy(F), A1pd, shift=2.0)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
-    F = ldltfact(A1pd)
+    F = ldlt(A1pd)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
-    @test CHOLMOD.Sparse(ldltfact!(copy(F), A1pd)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test CHOLMOD.Sparse(ldlt!(copy(F), A1pd)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
-    F = ldltfact(A1pdSparse, shift=2)
+    F = ldlt(A1pdSparse, shift=2)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
-    @test CHOLMOD.Sparse(ldltfact!(copy(F), A1pd, shift=2.0)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test CHOLMOD.Sparse(ldlt!(copy(F), A1pd, shift=2.0)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     @test isa(CHOLMOD.factor_to_sparse!(F), CHOLMOD.Sparse)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.factor_to_sparse!(F)
@@ -460,9 +469,9 @@ end
         @test CHOLMOD.copy(A1Sparse, 0, 1) == A1Sparse
         @test CHOLMOD.horzcat(A1Sparse, A2Sparse, true) == [A1 A2]
         @test CHOLMOD.vertcat(A1Sparse, A2Sparse, true) == [A1; A2]
-        svec = ones(elty, 1)
+        svec = fill(elty(1), 1)
         @test CHOLMOD.scale!(CHOLMOD.Dense(svec), CHOLMOD.SCALAR, A1Sparse) == A1Sparse
-        svec = ones(elty, 5)
+        svec = fill(elty(1), 5)
         @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense(svec), CHOLMOD.SCALAR, A1Sparse)
         @test CHOLMOD.scale!(CHOLMOD.Dense(svec), CHOLMOD.ROW, A1Sparse) == A1Sparse
         @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense([svec; 1]), CHOLMOD.ROW, A1Sparse)
@@ -497,140 +506,140 @@ end
     p = [2,3,1]
     p_inv = [3,1,2]
 
-    @testset "cholfact, no permutation" begin
-        Fs = cholfact(As, perm=[1:3;])
-        @test Fs[:p] == [1:3;]
-        @test sparse(Fs[:L]) ≈ Lf
+    @testset "cholesky, no permutation" begin
+        Fs = cholesky(As, perm=[1:3;])
+        @test Fs.p == [1:3;]
+        @test sparse(Fs.L) ≈ Lf
         @test sparse(Fs) ≈ As
         b = rand(3)
         @test Fs\b ≈ Af\b
-        @test Fs[:UP]\(Fs[:PtL]\b) ≈ Af\b
-        @test Fs[:L]\b ≈ Lf\b
-        @test Fs[:U]\b ≈ Lf'\b
-        @test Fs[:L]'\b ≈ Lf'\b
-        @test Fs[:U]'\b ≈ Lf\b
-        @test Fs[:PtL]\b ≈ Lf\b
-        @test Fs[:UP]\b ≈ Lf'\b
-        @test Fs[:PtL]'\b ≈ Lf'\b
-        @test Fs[:UP]'\b ≈ Lf\b
-        @test_throws CHOLMOD.CHOLMODException Fs[:D]
-        @test_throws CHOLMOD.CHOLMODException Fs[:LD]
-        @test_throws CHOLMOD.CHOLMODException Fs[:DU]
-        @test_throws CHOLMOD.CHOLMODException Fs[:PLD]
-        @test_throws CHOLMOD.CHOLMODException Fs[:DUPt]
+        @test Fs.UP\(Fs.PtL\b) ≈ Af\b
+        @test Fs.L\b ≈ Lf\b
+        @test Fs.U\b ≈ Lf'\b
+        @test Fs.L'\b ≈ Lf'\b
+        @test Fs.U'\b ≈ Lf\b
+        @test Fs.PtL\b ≈ Lf\b
+        @test Fs.UP\b ≈ Lf'\b
+        @test Fs.PtL'\b ≈ Lf'\b
+        @test Fs.UP'\b ≈ Lf\b
+        @test_throws CHOLMOD.CHOLMODException Fs.D
+        @test_throws CHOLMOD.CHOLMODException Fs.LD
+        @test_throws CHOLMOD.CHOLMODException Fs.DU
+        @test_throws CHOLMOD.CHOLMODException Fs.PLD
+        @test_throws CHOLMOD.CHOLMODException Fs.DUPt
     end
 
-    @testset "cholfact, with permutation" begin
-        Fs = cholfact(As, perm=p)
-        @test Fs[:p] == p
+    @testset "cholesky, with permutation" begin
+        Fs = cholesky(As, perm=p)
+        @test Fs.p == p
         Afp = Af[p,p]
-        Lfp = cholfact(Afp)[:L]
-        @test sparse(Fs[:L]) ≈ Lfp
+        Lfp = cholesky(Afp).L
+        @test sparse(Fs.L) ≈ Lfp
         @test sparse(Fs) ≈ As
         b = rand(3)
         @test Fs\b ≈ Af\b
-        @test Fs[:UP]\(Fs[:PtL]\b) ≈ Af\b
-        @test Fs[:L]\b ≈ Lfp\b
-        @test Fs[:U]'\b ≈ Lfp\b
-        @test Fs[:U]\b ≈ Lfp'\b
-        @test Fs[:L]'\b ≈ Lfp'\b
-        @test Fs[:PtL]\b ≈ Lfp\b[p]
-        @test Fs[:UP]\b ≈ (Lfp'\b)[p_inv]
-        @test Fs[:PtL]'\b ≈ (Lfp'\b)[p_inv]
-        @test Fs[:UP]'\b ≈ Lfp\b[p]
-        @test_throws CHOLMOD.CHOLMODException Fs[:PL]
-        @test_throws CHOLMOD.CHOLMODException Fs[:UPt]
-        @test_throws CHOLMOD.CHOLMODException Fs[:D]
-        @test_throws CHOLMOD.CHOLMODException Fs[:LD]
-        @test_throws CHOLMOD.CHOLMODException Fs[:DU]
-        @test_throws CHOLMOD.CHOLMODException Fs[:PLD]
-        @test_throws CHOLMOD.CHOLMODException Fs[:DUPt]
+        @test Fs.UP\(Fs.PtL\b) ≈ Af\b
+        @test Fs.L\b ≈ Lfp\b
+        @test Fs.U'\b ≈ Lfp\b
+        @test Fs.U\b ≈ Lfp'\b
+        @test Fs.L'\b ≈ Lfp'\b
+        @test Fs.PtL\b ≈ Lfp\b[p]
+        @test Fs.UP\b ≈ (Lfp'\b)[p_inv]
+        @test Fs.PtL'\b ≈ (Lfp'\b)[p_inv]
+        @test Fs.UP'\b ≈ Lfp\b[p]
+        @test_throws CHOLMOD.CHOLMODException Fs.PL
+        @test_throws CHOLMOD.CHOLMODException Fs.UPt
+        @test_throws CHOLMOD.CHOLMODException Fs.D
+        @test_throws CHOLMOD.CHOLMODException Fs.LD
+        @test_throws CHOLMOD.CHOLMODException Fs.DU
+        @test_throws CHOLMOD.CHOLMODException Fs.PLD
+        @test_throws CHOLMOD.CHOLMODException Fs.DUPt
     end
 
-    @testset "ldltfact, no permutation" begin
-        Fs = ldltfact(As, perm=[1:3;])
-        @test Fs[:p] == [1:3;]
-        @test sparse(Fs[:LD]) ≈ LDf
+    @testset "ldlt, no permutation" begin
+        Fs = ldlt(As, perm=[1:3;])
+        @test Fs.p == [1:3;]
+        @test sparse(Fs.LD) ≈ LDf
         @test sparse(Fs) ≈ As
         b = rand(3)
         @test Fs\b ≈ Af\b
-        @test Fs[:UP]\(Fs[:PtLD]\b) ≈ Af\b
-        @test Fs[:DUP]\(Fs[:PtL]\b) ≈ Af\b
-        @test Fs[:L]\b ≈ L_f\b
-        @test Fs[:U]\b ≈ L_f'\b
-        @test Fs[:L]'\b ≈ L_f'\b
-        @test Fs[:U]'\b ≈ L_f\b
-        @test Fs[:PtL]\b ≈ L_f\b
-        @test Fs[:UP]\b ≈ L_f'\b
-        @test Fs[:PtL]'\b ≈ L_f'\b
-        @test Fs[:UP]'\b ≈ L_f\b
-        @test Fs[:D]\b ≈ D_f\b
-        @test Fs[:D]'\b ≈ D_f\b
-        @test Fs[:LD]\b ≈ D_f\(L_f\b)
-        @test Fs[:DU]'\b ≈ D_f\(L_f\b)
-        @test Fs[:LD]'\b ≈ L_f'\(D_f\b)
-        @test Fs[:DU]\b ≈ L_f'\(D_f\b)
-        @test Fs[:PtLD]\b ≈ D_f\(L_f\b)
-        @test Fs[:DUP]'\b ≈ D_f\(L_f\b)
-        @test Fs[:PtLD]'\b ≈ L_f'\(D_f\b)
-        @test Fs[:DUP]\b ≈ L_f'\(D_f\b)
+        @test Fs.UP\(Fs.PtLD\b) ≈ Af\b
+        @test Fs.DUP\(Fs.PtL\b) ≈ Af\b
+        @test Fs.L\b ≈ L_f\b
+        @test Fs.U\b ≈ L_f'\b
+        @test Fs.L'\b ≈ L_f'\b
+        @test Fs.U'\b ≈ L_f\b
+        @test Fs.PtL\b ≈ L_f\b
+        @test Fs.UP\b ≈ L_f'\b
+        @test Fs.PtL'\b ≈ L_f'\b
+        @test Fs.UP'\b ≈ L_f\b
+        @test Fs.D\b ≈ D_f\b
+        @test Fs.D'\b ≈ D_f\b
+        @test Fs.LD\b ≈ D_f\(L_f\b)
+        @test Fs.DU'\b ≈ D_f\(L_f\b)
+        @test Fs.LD'\b ≈ L_f'\(D_f\b)
+        @test Fs.DU\b ≈ L_f'\(D_f\b)
+        @test Fs.PtLD\b ≈ D_f\(L_f\b)
+        @test Fs.DUP'\b ≈ D_f\(L_f\b)
+        @test Fs.PtLD'\b ≈ L_f'\(D_f\b)
+        @test Fs.DUP\b ≈ L_f'\(D_f\b)
     end
 
-    @testset "ldltfact, with permutation" begin
-        Fs = ldltfact(As, perm=p)
-        @test Fs[:p] == p
+    @testset "ldlt, with permutation" begin
+        Fs = ldlt(As, perm=p)
+        @test Fs.p == p
         @test sparse(Fs) ≈ As
         b = rand(3)
         Asp = As[p,p]
-        LDp = sparse(ldltfact(Asp, perm=[1,2,3])[:LD])
-        # LDp = sparse(Fs[:LD])
+        LDp = sparse(ldlt(Asp, perm=[1,2,3]).LD)
+        # LDp = sparse(Fs.LD)
         Lp, dp = SuiteSparse.CHOLMOD.getLd!(copy(LDp))
         Dp = sparse(Diagonal(dp))
         @test Fs\b ≈ Af\b
-        @test Fs[:UP]\(Fs[:PtLD]\b) ≈ Af\b
-        @test Fs[:DUP]\(Fs[:PtL]\b) ≈ Af\b
-        @test Fs[:L]\b ≈ Lp\b
-        @test Fs[:U]\b ≈ Lp'\b
-        @test Fs[:L]'\b ≈ Lp'\b
-        @test Fs[:U]'\b ≈ Lp\b
-        @test Fs[:PtL]\b ≈ Lp\b[p]
-        @test Fs[:UP]\b ≈ (Lp'\b)[p_inv]
-        @test Fs[:PtL]'\b ≈ (Lp'\b)[p_inv]
-        @test Fs[:UP]'\b ≈ Lp\b[p]
-        @test Fs[:LD]\b ≈ Dp\(Lp\b)
-        @test Fs[:DU]'\b ≈ Dp\(Lp\b)
-        @test Fs[:LD]'\b ≈ Lp'\(Dp\b)
-        @test Fs[:DU]\b ≈ Lp'\(Dp\b)
-        @test Fs[:PtLD]\b ≈ Dp\(Lp\b[p])
-        @test Fs[:DUP]'\b ≈ Dp\(Lp\b[p])
-        @test Fs[:PtLD]'\b ≈ (Lp'\(Dp\b))[p_inv]
-        @test Fs[:DUP]\b ≈ (Lp'\(Dp\b))[p_inv]
-        @test_throws CHOLMOD.CHOLMODException Fs[:DUPt]
-        @test_throws CHOLMOD.CHOLMODException Fs[:PLD]
+        @test Fs.UP\(Fs.PtLD\b) ≈ Af\b
+        @test Fs.DUP\(Fs.PtL\b) ≈ Af\b
+        @test Fs.L\b ≈ Lp\b
+        @test Fs.U\b ≈ Lp'\b
+        @test Fs.L'\b ≈ Lp'\b
+        @test Fs.U'\b ≈ Lp\b
+        @test Fs.PtL\b ≈ Lp\b[p]
+        @test Fs.UP\b ≈ (Lp'\b)[p_inv]
+        @test Fs.PtL'\b ≈ (Lp'\b)[p_inv]
+        @test Fs.UP'\b ≈ Lp\b[p]
+        @test Fs.LD\b ≈ Dp\(Lp\b)
+        @test Fs.DU'\b ≈ Dp\(Lp\b)
+        @test Fs.LD'\b ≈ Lp'\(Dp\b)
+        @test Fs.DU\b ≈ Lp'\(Dp\b)
+        @test Fs.PtLD\b ≈ Dp\(Lp\b[p])
+        @test Fs.DUP'\b ≈ Dp\(Lp\b[p])
+        @test Fs.PtLD'\b ≈ (Lp'\(Dp\b))[p_inv]
+        @test Fs.DUP\b ≈ (Lp'\(Dp\b))[p_inv]
+        @test_throws CHOLMOD.CHOLMODException Fs.DUPt
+        @test_throws CHOLMOD.CHOLMODException Fs.PLD
     end
 
     @testset "Element promotion and type inference" begin
-        @inferred cholfact(As)\ones(Int, size(As, 1))
-        @inferred ldltfact(As)\ones(Int, size(As, 1))
+        @inferred cholesky(As)\fill(1, size(As, 1))
+        @inferred ldlt(As)\fill(1, size(As, 1))
     end
 end
 
 @testset "Issue 11745 - row and column pointers were not sorted in sparse(Factor)" begin
     A = Float64[10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]
-    @test sparse(cholfact(sparse(A))) ≈ A
+    @test sparse(cholesky(sparse(A))) ≈ A
 end
-gc()
+GC.gc()
 
 @testset "Issue 11747 - Wrong show method defined for FactorComponent" begin
-    v = cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]))[:L]
+    v = cholesky(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10])).L
     for s in (sprint(show, MIME("text/plain"), v), sprint(show, v))
-        @test contains(s, "method: simplicial")
-        @test !contains(s, "#undef")
+        @test occursin("method:  simplicial", s)
+        @test !occursin("#undef", s)
     end
 end
 
 @testset "Issue 14076" begin
-    @test cholfact(sparse([1,2,3,4], [1,2,3,4], Float32[1,4,16,64]))\[1,4,16,64] == ones(4)
+    @test cholesky(sparse([1,2,3,4], [1,2,3,4], Float32[1,4,16,64]))\[1,4,16,64] == fill(1, 4)
 end
 
 @testset "Issue 14134" begin
@@ -643,11 +652,11 @@ end
     @test_throws ArgumentError size(Anew)
     @test_throws ArgumentError Anew[1]
     @test_throws ArgumentError Anew[2,1]
-    F = cholfact(A)
+    F = cholesky(A)
     serialize(b, F)
     seekstart(b)
     Fnew = deserialize(b)
-    @test_throws ArgumentError Fnew\ones(5)
+    @test_throws ArgumentError Fnew\fill(1., 5)
     @test_throws ArgumentError show(Fnew)
     @test_throws ArgumentError size(Fnew)
     @test_throws ArgumentError diag(Fnew)
@@ -655,59 +664,60 @@ end
 end
 
 @testset "Issue with promotion during conversion to CHOLMOD.Dense" begin
-    @test CHOLMOD.Dense(ones(Float32, 5)) == ones(5, 1)
-    @test CHOLMOD.Dense(ones(Int, 5)) == ones(5, 1)
-    @test CHOLMOD.Dense(ones(Complex{Float32}, 5, 2)) == ones(5, 2)
+    @test CHOLMOD.Dense(fill(1, 5)) == fill(1, 5, 1)
+    @test CHOLMOD.Dense(fill(1f0, 5)) == fill(1, 5, 1)
+    @test CHOLMOD.Dense(fill(1f0 + 0im, 5, 2)) == fill(1, 5, 2)
 end
 
 @testset "Further issue with promotion #14894" begin
-    @test cholfact(sparse(Float16(1)I, 5, 5))\ones(5) == ones(5)
-    @test cholfact(Symmetric(sparse(Float16(1)I, 5, 5)))\ones(5) == ones(5)
-    @test cholfact(Hermitian(sparse(Complex{Float16}(1)I, 5, 5)))\ones(5) == ones(Complex{Float64}, 5)
-    @test_throws MethodError cholfact(sparse(BigFloat(1)I, 5, 5))
-    @test_throws MethodError cholfact(Symmetric(sparse(BigFloat(1)I, 5, 5)))
-    @test_throws MethodError cholfact(Hermitian(sparse(Complex{BigFloat}(1)I, 5, 5)))
+    x = fill(1., 5)
+    @test cholesky(sparse(Float16(1)I, 5, 5))\x == x
+    @test cholesky(Symmetric(sparse(Float16(1)I, 5, 5)))\x == x
+    @test cholesky(Hermitian(sparse(Complex{Float16}(1)I, 5, 5)))\x == x
+    @test_throws MethodError cholesky(sparse(BigFloat(1)I, 5, 5))
+    @test_throws MethodError cholesky(Symmetric(sparse(BigFloat(1)I, 5, 5)))
+    @test_throws MethodError cholesky(Hermitian(sparse(Complex{BigFloat}(1)I, 5, 5)))
 end
 
 @testset "test \\ for Factor and StridedVecOrMat" begin
     x = rand(5)
-    A = cholfact(sparse(Diagonal(x.\1)))
-    @test A\view(ones(10),1:2:10) ≈ x
+    A = cholesky(sparse(Diagonal(x.\1)))
+    @test A\view(fill(1.,10),1:2:10) ≈ x
     @test A\view(Matrix(1.0I, 5, 5), :, :) ≈ Matrix(Diagonal(x))
 end
 
 @testset "Real factorization and complex rhs" begin
     A = sprandn(5, 5, 0.4) |> t -> t't + I
     B = complex.(randn(5, 2), randn(5, 2))
-    @test cholfact(A)\B ≈ A\B
+    @test cholesky(A)\B ≈ A\B
 end
 
-@testset "Make sure that ldltfact performs an LDLt (Issue #19032)" begin
+@testset "Make sure that ldlt performs an LDLt (Issue #19032)" begin
     m, n = 400, 500
     A = sprandn(m, n, .2)
-    M = [I A'; A -I]
-    b = M * ones(m + n)
-    F = ldltfact(M)
+    M = [I copy(A'); A -I]
+    b = M * fill(1., m+n)
+    F = ldlt(M)
     s = unsafe_load(pointer(F))
     @test s.is_super == 0
-    @test F\b ≈ ones(m + n)
-    F2 = cholfact(M)
-    @test !LinAlg.issuccess(F2)
-    ldltfact!(F2, M)
-    @test LinAlg.issuccess(F2)
-    @test F2\b ≈ ones(m + n)
+    @test F\b ≈ fill(1., m+n)
+    F2 = cholesky(M; check = false)
+    @test !issuccess(F2)
+    ldlt!(F2, M)
+    @test issuccess(F2)
+    @test F2\b ≈ fill(1., m+n)
 end
 
 @testset "Test that imaginary parts in Hermitian{T,SparseMatrixCSC{T}} are ignored" begin
     A = sparse([1,2,3,4,1], [1,2,3,4,2], [complex(2.0,1),2,2,2,1])
-    Fs = cholfact(Hermitian(A))
-    Fd = cholfact(Hermitian(Array(A)))
+    Fs = cholesky(Hermitian(A))
+    Fd = cholesky(Hermitian(Array(A)))
     @test sparse(Fs) ≈ Hermitian(A)
-    @test Fs\ones(4) ≈ Fd\ones(4)
+    @test Fs\fill(1., 4) ≈ Fd\fill(1., 4)
 end
 
-@testset "\\ '\\ and .'\\" begin
-    # Test that \ and '\ and .'\ work for Symmetric and Hermitian. This is just
+@testset "\\ '\\ and transpose(...)\\" begin
+    # Test that \ and '\ and transpose(...)\ work for Symmetric and Hermitian. This is just
     # a dispatch exercise so it doesn't matter that the complex matrix has
     # zero imaginary parts
     Apre = sprandn(10, 10, 0.2) - I
@@ -715,22 +725,23 @@ end
               Symmetric(Apre + 10I), Hermitian(Apre + 10I),
               Hermitian(complex(Apre)), Hermitian(complex(Apre) + 10I))
         local A, x, b
-        x = ones(10)
+        x = fill(1., 10)
         b = A*x
         @test x ≈ A\b
-        @test A.'\b ≈ A'\b
+        @test transpose(A)\b ≈ A'\b
     end
 end
 
 @testset "Check that Symmetric{SparseMatrixCSC} can be constructed from CHOLMOD.Sparse" begin
+    Int === Int32 && Random.seed!(124)
     A = sprandn(10, 10, 0.1)
     B = CHOLMOD.Sparse(A)
     C = B'B
     # Change internal representation to symmetric (upper/lower)
-    o = fieldoffset(CHOLMOD.C_Sparse{eltype(C)}, find(fieldnames(CHOLMOD.C_Sparse{eltype(C)}) .== :stype)[1])
+    o = fieldoffset(CHOLMOD.C_Sparse{eltype(C)}, findall(fieldnames(CHOLMOD.C_Sparse{eltype(C)}) .== :stype)[1])
     for uplo in (1, -1)
         unsafe_store!(Ptr{Int8}(pointer(C)), uplo, Int(o) + 1)
-        @test convert(Symmetric{Float64,SparseMatrixCSC{Float64,Int}}, C) == Symmetric(A'A)
+        @test convert(Symmetric{Float64,SparseMatrixCSC{Float64,Int}}, C) ≈ Symmetric(A'A)
     end
 end
 
@@ -759,34 +770,34 @@ end
         1.02371, -0.502384, 1.10686, 0.262229, -1.6935, 0.525239])
     AtA = A'*A
     C0 = [1., 2., 0, 0, 0]
-    # Test both cholfact and LDLt with and without automatic permutations
-    for F in (cholfact(AtA), cholfact(AtA, perm=1:5), ldltfact(AtA), ldltfact(AtA, perm=1:5))
+    # Test both cholesky and LDLt with and without automatic permutations
+    for F in (cholesky(AtA), cholesky(AtA, perm=1:5), ldlt(AtA), ldlt(AtA, perm=1:5))
         local F
-        B0 = F\ones(5)
+        x0 = F\(b = fill(1., 5))
         #Test both sparse/dense and vectors/matrices
         for Ctest in (C0, sparse(C0), [C0 2*C0], sparse([C0 2*C0]))
-            local B, C, F1
+            local x, C, F1
             C = copy(Ctest)
             F1 = copy(F)
-            B = (AtA+C*C')\ones(5)
+            x = (AtA+C*C')\b
 
             #Test update
             F11 = CHOLMOD.lowrankupdate(F1, C)
             @test Array(sparse(F11)) ≈ AtA+C*C'
-            @test F11\ones(5) ≈ B
+            @test F11\b ≈ x
             #Make sure we get back the same factor again
             F10 = CHOLMOD.lowrankdowndate(F11, C)
             @test Array(sparse(F10)) ≈ AtA
-            @test F10\ones(5) ≈ B0
+            @test F10\b ≈ x0
 
             #Test in-place update
             CHOLMOD.lowrankupdate!(F1, C)
             @test Array(sparse(F1)) ≈ AtA+C*C'
-            @test F1\ones(5) ≈ B
+            @test F1\b ≈ x
             #Test in-place downdate
             CHOLMOD.lowrankdowndate!(F1, C)
             @test Array(sparse(F1)) ≈ AtA
-            @test F1\ones(5) ≈ B0
+            @test F1\b ≈ x0
 
             @test C == Ctest    #Make sure C didn't change
         end
@@ -796,11 +807,32 @@ end
 @testset "Issue #22335" begin
     local A, F
     A = sparse(1.0I, 3, 3)
-    @test LinAlg.issuccess(cholfact(A))
+    @test issuccess(cholesky(A))
     A[3, 3] = -1
-    F = cholfact(A)
-    @test !LinAlg.issuccess(F)
-    @test LinAlg.issuccess(ldltfact!(F, A))
+    F = cholesky(A; check = false)
+    @test !issuccess(F)
+    @test issuccess(ldlt!(F, A))
     A[3, 3] = 1
-    @test A[:, 3:-1:1]\ones(3) == [1, 1, 1]
+    @test A[:, 3:-1:1]\fill(1., 3) == [1, 1, 1]
+end
+
+@testset "Non-positive definite matrices" begin
+    A = sparse(Float64[1 2; 2 1])
+    B = sparse(ComplexF64[1 2; 2 1])
+    for M in (A, B, Symmetric(A), Hermitian(B))
+        F = cholesky(M; check = false)
+        @test_throws PosDefException cholesky(M)
+        @test_throws PosDefException cholesky!(F, M)
+        @test !issuccess(cholesky(M; check = false))
+        @test !issuccess(cholesky!(F, M; check = false))
+    end
+    A = sparse(Float64[0 0; 0 0])
+    B = sparse(ComplexF64[0 0; 0 0])
+    for M in (A, B, Symmetric(A), Hermitian(B))
+        F = ldlt(M; check = false)
+        @test_throws PosDefException ldlt(M)
+        @test_throws PosDefException ldlt!(F, M)
+        @test !issuccess(ldlt(M; check = false))
+        @test !issuccess(ldlt!(F, M; check = false))
+    end
 end

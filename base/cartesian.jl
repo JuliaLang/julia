@@ -13,7 +13,7 @@ export @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @nany, @ntuple, @nif
 
 Generate `N` nested loops, using `itersym` as the prefix for the iteration variables.
 `rangeexpr` may be an anonymous-function expression, or a simple symbol `var` in which case
-the range is `indices(var, d)` for dimension `d`.
+the range is `axes(var, d)` for dimension `d`.
 
 Optionally, you can provide "pre" and "post" expressions. These get executed first and last,
 respectively, in the body of each loop. For example:
@@ -24,15 +24,15 @@ respectively, in the body of each loop. For example:
 
 would generate:
 
-    for i_2 = indices(A, 2)
+    for i_2 = axes(A, 2)
         j_2 = min(i_2, 5)
-        for i_1 = indices(A, 1)
+        for i_1 = axes(A, 1)
             j_1 = min(i_1, 5)
             s += A[j_1, j_2]
         end
     end
 
-If you want just a post-expression, supply `nothing` for the pre-expression. Using
+If you want just a post-expression, supply [`nothing`](@ref) for the pre-expression. Using
 parentheses and semicolons, you can supply multi-statement expressions.
 """
 macro nloops(N, itersym, rangeexpr, args...)
@@ -41,7 +41,7 @@ end
 
 function _nloops(N::Int, itersym::Symbol, arraysym::Symbol, args::Expr...)
     @gensym d
-    _nloops(N, itersym, :($d->Base.indices($arraysym, $d)), args...)
+    _nloops(N, itersym, :($d->Base.axes($arraysym, $d)), args...)
 end
 
 function _nloops(N::Int, itersym::Symbol, rangeexpr::Expr, args::Expr...)
@@ -92,7 +92,7 @@ end
 Generate a function call expression. `sym` represents any number of function arguments, the
 last of which may be an anonymous-function expression and is expanded into `N` arguments.
 
-For example `@ncall 3 func a` generates
+For example, `@ncall 3 func a` generates
 
     func(a_1, a_2, a_3)
 
@@ -270,38 +270,41 @@ function lreplace!(sym::Symbol, r::LReplace)
 end
 
 function lreplace!(str::AbstractString, r::LReplace)
-    i = start(str)
+    i = firstindex(str)
     pat = r.pat_str
-    j = start(pat)
+    j = firstindex(pat)
     matching = false
     local istart::Int
-    while !done(str, i)
-        cstr, i = next(str, i)
+    while i <= ncodeunits(str)
+        cstr = str[i]
+        i = nextind(str, i)
         if !matching
-            if cstr != '_' || done(str, i)
+            if cstr != '_' || i > ncodeunits(str)
                 continue
             end
             istart = i
-            cstr, i = next(str, i)
+            cstr = str[i]
+            i = nextind(str, i)
         end
-        if !done(pat, j)
-            cr, j = next(pat, j)
+        if j <= lastindex(pat)
+            cr = pat[j]
+            j = nextind(pat, j)
             if cstr == cr
                 matching = true
             else
                 matching = false
-                j = start(pat)
+                j = firstindex(pat)
                 i = istart
                 continue
             end
         end
-        if matching && done(pat, j)
-            if done(str, i) || next(str, i)[1] == '_'
+        if matching && j > lastindex(pat)
+            if i > lastindex(str) || str[i] == '_'
                 # We have a match
                 return string(str[1:prevind(str, istart)], r.val, lreplace!(str[i:end], r))
             end
             matching = false
-            j = start(pat)
+            j = firstindex(pat)
             i = istart
         end
     end

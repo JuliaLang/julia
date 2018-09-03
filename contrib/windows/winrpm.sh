@@ -3,25 +3,24 @@
 
 # build-time mini version of WinRPM, usage:
 # ./winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.2/ mingw64-zlib1
-# depends on curl, xmllint, gunzip, sort -V, sha256sum, and p7zip
+# depends on wget/curl, xmllint, gunzip, sort -V, sha256sum, and p7zip
 
 set -e
 url=$1
 toinstall=$2
 
-for i in curl xmllint gunzip sort sha256sum 7z; do
+for i in xmllint gunzip sort sha256sum 7z; do
   if [ -z "$(which $i 2>/dev/null)" ]; then
     echo "error: this script requires having $i installed" >&2
     exit 1
   fi
 done
 
-# there is a curl --retry flag but it wasn't working here for some reason
+jldownload=$(dirname "$0")/../../deps/tools/jldownload
+
 retry_curl() {
-  for i in $(seq 10); do
-    curl -fLsS $1 && return
-    #sleep 2
-  done
+  echo "fetching \"$1\"" >&2
+  "$jldownload" - "$1" && return
   echo "error: failed to download $1" >&2
   exit 1
 }
@@ -141,7 +140,7 @@ for i in $toinstall; do
   checksum=$(echo $pkgi | $xp "/package/checksum/text()" -)
   eval $(echo $pkgi | $xp "/package/location/@href" -)
   echo "downloading $href"
-  $(dirname "$0")/../../deps/tools/jldownload $href $url/$href
+  $jldownload $href $url/$href
   echo "$checksum *$href" | sha256sum -c
   7z x -y $href
   cpiofile=$(basename $href | sed 's/.rpm$/.cpio/')

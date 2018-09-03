@@ -2,18 +2,20 @@
 
 # Test functionality of BitSet
 
+using Random
+
 @testset "Construction, collect" begin
     data_in = (1,5,100)
     s = BitSet(data_in)
     data_out = collect(s)
-    @test all(map(d->in(d,data_out), data_in))
+    @test all(map(in(data_out), data_in))
     @test length(data_out) === length(data_in)
 end
 
-@testset "eltype, similar" begin
+@testset "eltype, empty" begin
     @test eltype(BitSet()) === Int
     @test eltype(BitSet) === Int
-    @test isequal(similar(BitSet([1,2,3])), BitSet())
+    @test isequal(empty(BitSet([1,2,3])), BitSet())
 end
 
 @testset "show" begin
@@ -30,7 +32,7 @@ end
     @test pop!(s) === 10002
     @test_throws KeyError pop!(s, -1)
     @test length(s) === 8
-    @test shift!(s) === 1
+    @test popfirst!(s) === 1
     @test length(s) === 7
     @test !in(0,s)
     @test !in(1,s)
@@ -55,9 +57,11 @@ end
     @test hash(BitSet([1])) != hash(BitSet([33]))
     @test hash(BitSet([1])) != hash(BitSet([65]))
     @test hash(BitSet([1])) != hash(BitSet([129]))
+    # test with a different internal structure
+    s = BitSet([129])
+    pop!(push!(s, 65), 65)
+    @test hash(BitSet([1])) != hash(s)
 
-    # issue #7851
-    @test_throws ArgumentError BitSet(-1)
     @test !(-1 in BitSet(1:10))
 end
 
@@ -79,7 +83,9 @@ end
     empty!(i)
     @test length(i) === 0
 
-    @test_throws ArgumentError symdiff!(i, -3)
+    @test symdiff!(i, -3) == BitSet([-3])
+    @test symdiff!(i, -3) == BitSet([])
+
     @test symdiff!(i, 3) == BitSet([3])
     @test symdiff!(i, 257) == BitSet([3, 257])
     @test symdiff!(i, [3, 6]) == BitSet([6, 257])
@@ -87,18 +93,17 @@ end
     i = BitSet(1:6)
     @test symdiff!(i, BitSet([6, 513])) == BitSet([1:5; 513])
 
-    # issue #23099 : these tests should not segfault
-    @test_throws ArgumentError symdiff!(BitSet(rand(1:100, 30)), 0)
-    @test_throws ArgumentError symdiff!(BitSet(rand(1:100, 30)), [0, 2, 4])
+    @test 0 ∈ symdiff!(BitSet(rand(1:100, 30)), 0)
+    @test BitSet(0:2:4) ⊆ symdiff!(BitSet(rand(5:100, 30)), [0, 2, 4])
 
     # issue #23557 :
     @test_throws MethodError symdiff!(BitSet([1]), ['a']) # should no stack-overflow
     @test_throws MethodError symdiff!(BitSet([1, 2]),  [[1]]) # should not return BitSet([2])
 end
 
-@testset "copy, copy!, similar" begin
+@testset "copy, copy!, empty" begin
     s1 = BitSet([1,2,3])
-    s2 = similar(s1)
+    s2 = empty(s1)
     copy!(s2, s1)
     s3 = copy(s2)
     @test s3 == s2 == s1
@@ -128,16 +133,17 @@ end
     @test union(i, j, k) == BitSet(1:9)
 
     s1 = BitSet()
-    @test_throws ArgumentError push!(s1, -1)
-    push!(s1, 1, 10, 100, 1000)
-    @test collect(s1) == [1, 10, 100, 1000]
+    @test push!(s1, -1) == BitSet([-1])
+    push!(s1, -10, 1, 10, 100, 1000)
+    @test collect(s1) == [-10, -1, 1, 10, 100, 1000]
     push!(s1, 606)
-    @test collect(s1) == [1, 10, 100, 606, 1000]
+    @test collect(s1) == [-10, -1, 1, 10, 100, 606, 1000]
+
     s2 = BitSet()
     @test s2 === union!(s2, s1)
-    s3 = BitSet([1, 10, 100])
-    union!(s3, [1, 606, 1000])
-    s4 = union(BitSet([1, 100, 1000]), BitSet([10, 100, 606]))
+    s3 = BitSet([-1, 1, 10, 100])
+    union!(s3, [-10, 1, 606, 1000])
+    s4 = union(BitSet([-1, 1, 100, 1000]), BitSet([-10, 10, 100, 606]))
     @test s1 == s2 == s3 == s4
 end
 
@@ -163,8 +169,8 @@ end
     push!(s, 1:2:10...)
     @test pop!(s) === 9
     @test pop!(s) === 7
-    @test shift!(s) === 1
-    @test shift!(s) === 3
+    @test popfirst!(s) === 1
+    @test popfirst!(s) === 3
     @test collect(s) == [5]
     empty!(s)
     @test isempty(s)
@@ -191,7 +197,7 @@ end
     @test intersect(BitSet([1,2,3])) == BitSet([1,2,3])
     @test intersect(BitSet(1:7), BitSet(3:10)) ==
     	  intersect(BitSet(3:10), BitSet(1:7)) == BitSet(3:7)
-    @test intersect(BitSet(1:10), BitSet(1:4), 1:5, [2,3,10]) == [2,3]
+    @test intersect(BitSet(1:10), BitSet(1:4), 1:5, [2,3,10]) == BitSet([2,3])
 end
 
 @testset "setdiff, symdiff" begin
@@ -312,4 +318,17 @@ end
     @test m == first(s) == minimum(s) == minimum(a)
     @test M == last(s)  == maximum(s) == maximum(a)
     @test issorted(s)
+end
+
+@testset "extreme values" begin
+    @test pop!(BitSet(typemin(Int))) == typemin(Int)
+    @test pop!(BitSet(typemax(Int))) == typemax(Int)
+end
+
+@testset "sizehint! returns a BitSet" begin
+    # see #25029
+    @test sizehint!(BitSet(), 100) isa BitSet
+    # TODO: test that we don't delegate sizehint! to the underlying bits
+    # field without dividing by 64 (i.e. the 100 above should allocate
+    # only 2 UInt64 words
 end

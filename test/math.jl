@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+using LinearAlgebra
+
 function isnan_type(::Type{T}, x) where T
     isa(x, T) && isnan(x)
 end
@@ -40,7 +43,8 @@ end
 
     @test Float16(3.0) < pi
     @test pi < Float16(4.0)
-    @test contains(sprint(show,π),"3.14159")
+    @test occursin("3.14159", sprint(show, π))
+    @test widen(pi) === pi
 end
 
 @testset "frexp,ldexp,significand,exponent" begin
@@ -52,8 +56,11 @@ end
         end
 
         for (a,b) in [(T(12.8),T(0.8)),
-                      (prevfloat(realmin(T)), nextfloat(one(T),-2)),
-                      (nextfloat(zero(T),3), T(0.75)),
+                      (prevfloat(floatmin(T)), prevfloat(one(T), 2)),
+                      (prevfloat(floatmin(T)), prevfloat(one(T), 2)),
+                      (prevfloat(floatmin(T)), nextfloat(one(T), -2)),
+                      (nextfloat(zero(T), 3), T(0.75)),
+                      (prevfloat(zero(T), -3), T(0.75)),
                       (nextfloat(zero(T)), T(0.5))]
 
             n = Int(log2(a/b))
@@ -87,8 +94,8 @@ end
             @test ldexp(T(-0.854375), 5) === T(-27.34)
             @test ldexp(T(1.0), typemax(Int)) === T(Inf)
             @test ldexp(T(1.0), typemin(Int)) === T(0.0)
-            @test ldexp(prevfloat(realmin(T)), typemax(Int)) === T(Inf)
-            @test ldexp(prevfloat(realmin(T)), typemin(Int)) === T(0.0)
+            @test ldexp(prevfloat(floatmin(T)), typemax(Int)) === T(Inf)
+            @test ldexp(prevfloat(floatmin(T)), typemin(Int)) === T(0.0)
 
             @test ldexp(T(0.0), Int128(0)) === T(0.0)
             @test ldexp(T(-0.0), Int128(0)) === T(-0.0)
@@ -97,8 +104,8 @@ end
             @test ldexp(T(-0.854375), Int128(5)) === T(-27.34)
             @test ldexp(T(1.0), typemax(Int128)) === T(Inf)
             @test ldexp(T(1.0), typemin(Int128)) === T(0.0)
-            @test ldexp(prevfloat(realmin(T)), typemax(Int128)) === T(Inf)
-            @test ldexp(prevfloat(realmin(T)), typemin(Int128)) === T(0.0)
+            @test ldexp(prevfloat(floatmin(T)), typemax(Int128)) === T(Inf)
+            @test ldexp(prevfloat(floatmin(T)), typemin(Int128)) === T(0.0)
 
             @test ldexp(T(0.0), BigInt(0)) === T(0.0)
             @test ldexp(T(-0.0), BigInt(0)) === T(-0.0)
@@ -107,18 +114,18 @@ end
             @test ldexp(T(-0.854375), BigInt(5)) === T(-27.34)
             @test ldexp(T(1.0), BigInt(typemax(Int128))) === T(Inf)
             @test ldexp(T(1.0), BigInt(typemin(Int128))) === T(0.0)
-            @test ldexp(prevfloat(realmin(T)), BigInt(typemax(Int128))) === T(Inf)
-            @test ldexp(prevfloat(realmin(T)), BigInt(typemin(Int128))) === T(0.0)
+            @test ldexp(prevfloat(floatmin(T)), BigInt(typemax(Int128))) === T(Inf)
+            @test ldexp(prevfloat(floatmin(T)), BigInt(typemin(Int128))) === T(0.0)
 
             # Test also against BigFloat reference. Needs to be exactly rounded.
-            @test ldexp(realmin(T), -1) == T(ldexp(big(realmin(T)), -1))
-            @test ldexp(realmin(T), -2) == T(ldexp(big(realmin(T)), -2))
-            @test ldexp(realmin(T)/2, 0) == T(ldexp(big(realmin(T)/2), 0))
-            @test ldexp(realmin(T)/3, 0) == T(ldexp(big(realmin(T)/3), 0))
-            @test ldexp(realmin(T)/3, -1) == T(ldexp(big(realmin(T)/3), -1))
-            @test ldexp(realmin(T)/3, 11) == T(ldexp(big(realmin(T)/3), 11))
-            @test ldexp(realmin(T)/11, -10) == T(ldexp(big(realmin(T)/11), -10))
-            @test ldexp(-realmin(T)/11, -10) == T(ldexp(big(-realmin(T)/11), -10))
+            @test ldexp(floatmin(T), -1) == T(ldexp(big(floatmin(T)), -1))
+            @test ldexp(floatmin(T), -2) == T(ldexp(big(floatmin(T)), -2))
+            @test ldexp(floatmin(T)/2, 0) == T(ldexp(big(floatmin(T)/2), 0))
+            @test ldexp(floatmin(T)/3, 0) == T(ldexp(big(floatmin(T)/3), 0))
+            @test ldexp(floatmin(T)/3, -1) == T(ldexp(big(floatmin(T)/3), -1))
+            @test ldexp(floatmin(T)/3, 11) == T(ldexp(big(floatmin(T)/3), 11))
+            @test ldexp(floatmin(T)/11, -10) == T(ldexp(big(floatmin(T)/11), -10))
+            @test ldexp(-floatmin(T)/11, -10) == T(ldexp(big(-floatmin(T)/11), -10))
         end
     end
 end
@@ -139,7 +146,7 @@ end
             @test asin(x) ≈ asin(big(x))
             @test asinh(x) ≈ asinh(big(x))
             @test atan(x) ≈ atan(big(x))
-            @test atan2(x,y) ≈ atan2(big(x),big(y))
+            @test atan(x,y) ≈ atan(big(x),big(y))
             @test atanh(x) ≈ atanh(big(x))
             @test cbrt(x) ≈ cbrt(big(x))
             @test cos(x) ≈ cos(big(x))
@@ -168,7 +175,7 @@ end
             @test isequal(acosh(T(1)), T(0))
             @test asin(T(1)) ≈ T(pi)/2 atol=eps(T)
             @test atan(T(1)) ≈ T(pi)/4 atol=eps(T)
-            @test atan2(T(1),T(1)) ≈ T(pi)/4 atol=eps(T)
+            @test atan(T(1),T(1)) ≈ T(pi)/4 atol=eps(T)
             @test isequal(cbrt(T(0)), T(0))
             @test isequal(cbrt(T(1)), T(1))
             @test isequal(cbrt(T(1000000000)), T(1000))
@@ -207,7 +214,7 @@ end
             @test cbrt(x^3) ≈ x
             @test asinh(sinh(x)) ≈ x
             @test atan(tan(x)) ≈ x
-            @test atan2(x,y) ≈ atan(x/y)
+            @test atan(x,y) ≈ atan(x/y)
             @test atanh(tanh(x)) ≈ x
             @test cos(acos(x)) ≈ x
             @test cosh(acosh(1+x)) ≈ 1+x
@@ -296,13 +303,14 @@ end
 
 @testset "test abstractarray trig functions" begin
     TAA = rand(2,2)
-    TAA = (TAA + TAA.')/2.
+    TAA = (TAA + TAA')/2.
     STAA = Symmetric(TAA)
     @test Array(atanh.(STAA)) == atanh.(TAA)
     @test Array(asinh.(STAA)) == asinh.(TAA)
-    @test Array(acosh.(STAA+Symmetric(ones(2,2)))) == acosh.(TAA+ones(2,2))
-    @test Array(acsch.(STAA+Symmetric(ones(2,2)))) == acsch.(TAA+ones(2,2))
-    @test Array(acoth.(STAA+Symmetric(ones(2,2)))) == acoth.(TAA+ones(2,2))
+    TAA .+= 1
+    @test Array(acosh.(STAA)) == acosh.(TAA)
+    @test Array(acsch.(STAA)) == acsch.(TAA)
+    @test Array(acoth.(STAA)) == acoth.(TAA)
 end
 
 @testset "check exp2(::Integer) matches exp2(::Float)" begin
@@ -424,90 +432,11 @@ end
     end
 end
 
-@testset "beta, lbeta" begin
-    @test beta(3/2,7/2) ≈ 5π/128
-    @test beta(3,5) ≈ 1/105
-    @test lbeta(5,4) ≈ log(beta(5,4))
-    @test beta(5,4) ≈ beta(4,5)
-    @test beta(-1/2, 3) ≈ beta(-1/2 + 0im, 3 + 0im) ≈ -16/3
-    @test lbeta(-1/2, 3) ≈ log(16/3)
-    @test beta(Float32(5),Float32(4)) == beta(Float32(4),Float32(5))
-    @test beta(3,5) ≈ beta(3+0im,5+0im)
-    @test(beta(3.2+0.1im,5.3+0.3im) ≈ exp(lbeta(3.2+0.1im,5.3+0.3im)) ≈
-          0.00634645247782269506319336871208405439180447035257028310080 -
-          0.00169495384841964531409376316336552555952269360134349446910im)
-end
-
 # useful test functions for relative error, which differ from isapprox (≈)
 # in that relerrc separately looks at the real and imaginary parts
 relerr(z, x) = z == x ? 0.0 : abs(z - x) / abs(x)
 relerrc(z, x) = max(relerr(real(z),real(x)), relerr(imag(z),imag(x)))
 ≅(a,b) = relerrc(a,b) ≤ 1e-13
-
-@testset "gamma and friends" begin
-    @testset "gamma, lgamma (complex argument)" begin
-        if Base.Math.libm == "libopenlibm"
-            @test gamma.(Float64[1:25;]) == gamma.(1:25)
-        else
-            @test gamma.(Float64[1:25;]) ≈ gamma.(1:25)
-        end
-        for elty in (Float32, Float64)
-            @test gamma(convert(elty,1/2)) ≈ convert(elty,sqrt(π))
-            @test gamma(convert(elty,-1/2)) ≈ convert(elty,-2sqrt(π))
-            @test lgamma(convert(elty,-1/2)) ≈ convert(elty,log(abs(gamma(-1/2))))
-        end
-        @test lgamma(1.4+3.7im) ≈ -3.7094025330996841898 + 2.4568090502768651184im
-        @test lgamma(1.4+3.7im) ≈ log(gamma(1.4+3.7im))
-        @test lgamma(-4.2+0im) ≈ lgamma(-4.2)-5pi*im
-        @test factorial(3.0) == gamma(4.0) == factorial(3)
-        for x in (3.2, 2+1im, 3//2, 3.2+0.1im)
-            @test factorial(x) == gamma(1+x)
-        end
-        @test lfact(0) == lfact(1) == 0
-        @test lfact(2) == lgamma(3)
-        # Ensure that the domain of lfact matches that of factorial (issue #21318)
-        @test_throws DomainError lfact(-3)
-        @test_throws MethodError lfact(1.0)
-    end
-
-    # lgamma test cases (from Wolfram Alpha)
-    @test lgamma(-300im) ≅ -473.17185074259241355733179182866544204963885920016823743 - 1410.3490664555822107569308046418321236643870840962522425im
-    @test lgamma(3.099) ≅ lgamma(3.099+0im) ≅ 0.786413746900558058720665860178923603134125854451168869796
-    @test lgamma(1.15) ≅ lgamma(1.15+0im) ≅ -0.06930620867104688224241731415650307100375642207340564554
-    @test lgamma(0.89) ≅ lgamma(0.89+0im) ≅ 0.074022173958081423702265889979810658434235008344573396963
-    @test lgamma(0.91) ≅ lgamma(0.91+0im) ≅ 0.058922567623832379298241751183907077883592982094770449167
-    @test lgamma(0.01) ≅ lgamma(0.01+0im) ≅ 4.599479878042021722513945411008748087261001413385289652419
-    @test lgamma(-3.4-0.1im) ≅ -1.1733353322064779481049088558918957440847715003659143454 + 12.331465501247826842875586104415980094316268974671819281im
-    @test lgamma(-13.4-0.1im) ≅ -22.457344044212827625152500315875095825738672314550695161 + 43.620560075982291551250251193743725687019009911713182478im
-    @test lgamma(-13.4+0.0im) ≅ conj(lgamma(-13.4-0.0im)) ≅ -22.404285036964892794140985332811433245813398559439824988 - 43.982297150257105338477007365913040378760371591251481493im
-    @test lgamma(-13.4+8im) ≅ -44.705388949497032519400131077242200763386790107166126534 - 22.208139404160647265446701539526205774669649081807864194im
-    @test lgamma(1+exp2(-20)) ≅ lgamma(1+exp2(-20)+0im) ≅ -5.504750066148866790922434423491111098144565651836914e-7
-    @test lgamma(1+exp2(-20)+exp2(-19)*im) ≅ -5.5047799872835333673947171235997541985495018556426e-7 - 1.1009485171695646421931605642091915847546979851020e-6im
-    @test lgamma(-300+2im) ≅ -1419.3444991797240659656205813341478289311980525970715668 - 932.63768120761873747896802932133229201676713644684614785im
-    @test lgamma(300+2im) ≅ 1409.19538972991765122115558155209493891138852121159064304 + 11.4042446282102624499071633666567192538600478241492492652im
-    @test lgamma(1-6im) ≅ -7.6099596929506794519956058191621517065972094186427056304 - 5.5220531255147242228831899544009162055434670861483084103im
-    @test lgamma(1-8im) ≅ -10.607711310314582247944321662794330955531402815576140186 - 9.4105083803116077524365029286332222345505790217656796587im
-    @test lgamma(1+6.5im) ≅ conj(lgamma(1-6.5im)) ≅ -8.3553365025113595689887497963634069303427790125048113307 + 6.4392816159759833948112929018407660263228036491479825744im
-    @test lgamma(1+1im) ≅ conj(lgamma(1-1im)) ≅ -0.6509231993018563388852168315039476650655087571397225919 - 0.3016403204675331978875316577968965406598997739437652369im
-    @test lgamma(-pi*1e7 + 6im) ≅ -5.10911758892505772903279926621085326635236850347591e8 - 9.86959420047365966439199219724905597399295814979993e7im
-    @test lgamma(-pi*1e7 + 8im) ≅ -5.10911765175690634449032797392631749405282045412624e8 - 9.86959074790854911974415722927761900209557190058925e7im
-    @test lgamma(-pi*1e14 + 6im) ≅ -1.0172766411995621854526383224252727000270225301426e16 - 9.8696044010873714715264929863618267642124589569347e14im
-    @test lgamma(-pi*1e14 + 8im) ≅ -1.0172766411995628137711690403794640541491261237341e16 - 9.8696044010867038531027376655349878694397362250037e14im
-    @test lgamma(2.05 + 0.03im) ≅ conj(lgamma(2.05 - 0.03im)) ≅ 0.02165570938532611215664861849215838847758074239924127515 + 0.01363779084533034509857648574107935425251657080676603919im
-    @test lgamma(2+exp2(-20)+exp2(-19)*im) ≅ 4.03197681916768997727833554471414212058404726357753e-7 + 8.06398296652953575754782349984315518297283664869951e-7im
-
-    @testset "lgamma for non-finite arguments" begin
-        @test lgamma(Inf + 0im) === Inf + 0im
-        @test lgamma(Inf - 0.0im) === Inf - 0.0im
-        @test lgamma(Inf + 1im) === Inf + Inf*im
-        @test lgamma(Inf - 1im) === Inf - Inf*im
-        @test lgamma(-Inf + 0.0im) === -Inf - Inf*im
-        @test lgamma(-Inf - 0.0im) === -Inf + Inf*im
-        @test lgamma(Inf*im) === -Inf + Inf*im
-        @test lgamma(-Inf*im) === -Inf - Inf*im
-        @test lgamma(Inf + Inf*im) === lgamma(NaN + 0im) === lgamma(NaN*im) === NaN + NaN*im
-    end
-end
 
 @testset "subnormal flags" begin
     # Ensure subnormal flags functions don't segfault
@@ -559,7 +488,7 @@ end
 end
 
 @testset "log/log1p" begin
-    # if using Tang's algorithm, should be accurate to within 0.56 ulps
+    # using Tang's algorithm, should be accurate to within 0.56 ulps
     X = rand(100)
     for x in X
         for n = -5:5
@@ -568,16 +497,16 @@ end
             for T in (Float32,Float64)
                 xt = T(x)
 
-                y = Base.Math.JuliaLibm.log(xt)
+                y = log(xt)
                 yb = log(big(xt))
                 @test abs(y-yb) <= 0.56*eps(T(yb))
 
-                y = Base.Math.JuliaLibm.log1p(xt)
+                y = log1p(xt)
                 yb = log1p(big(xt))
                 @test abs(y-yb) <= 0.56*eps(T(yb))
 
                 if n <= 0
-                    y = Base.Math.JuliaLibm.log1p(-xt)
+                    y = log1p(-xt)
                     yb = log1p(big(-xt))
                     @test abs(y-yb) <= 0.56*eps(T(yb))
                 end
@@ -607,8 +536,7 @@ end
 
 @testset "vectorization of 2-arg functions" begin
     binary_math_functions = [
-        copysign, flipsign, log, atan2, hypot, max, min,
-        beta, lbeta,
+        copysign, flipsign, log, atan, hypot, max, min,
     ]
     @testset "$f" for f in binary_math_functions
         x = y = 2
@@ -783,58 +711,96 @@ end
         @test atan(1.7581305072934137) ≈ 1.053644580517088
     end
 end
-@testset "atan2" begin
+@testset "atan" begin
     for T in (Float32, Float64)
-        @test isnan_type(T, atan2(T(NaN), T(NaN)))
-        @test isnan_type(T, atan2(T(NaN), T(0.1)))
-        @test isnan_type(T, atan2(T(0.1), T(NaN)))
+        @test isnan_type(T, atan(T(NaN), T(NaN)))
+        @test isnan_type(T, atan(T(NaN), T(0.1)))
+        @test isnan_type(T, atan(T(0.1), T(NaN)))
         r = T(randn())
         absr = abs(r)
         # y zero
-        @test atan2(T(r), one(T)) === atan(T(r))
-        @test atan2(zero(T), absr) === zero(T)
-        @test atan2(-zero(T), absr) === -zero(T)
-        @test atan2(zero(T), -absr) === T(pi)
-        @test atan2(-zero(T), -absr) === -T(pi)
+        @test atan(T(r), one(T)) === atan(T(r))
+        @test atan(zero(T), absr) === zero(T)
+        @test atan(-zero(T), absr) === -zero(T)
+        @test atan(zero(T), -absr) === T(pi)
+        @test atan(-zero(T), -absr) === -T(pi)
         # x zero and y not zero
-        @test atan2(one(T), zero(T)) === T(pi)/2
-        @test atan2(-one(T), zero(T)) === -T(pi)/2
+        @test atan(one(T), zero(T)) === T(pi)/2
+        @test atan(-one(T), zero(T)) === -T(pi)/2
         # isinf(x) == true && isinf(y) == true
-        @test atan2(T(Inf), T(Inf)) === T(pi)/4 # m == 0 (see atan2 code)
-        @test atan2(-T(Inf), T(Inf)) === -T(pi)/4 # m == 1
-        @test atan2(T(Inf), -T(Inf)) === 3*T(pi)/4 # m == 2
-        @test atan2(-T(Inf), -T(Inf)) === -3*T(pi)/4 # m == 3
+        @test atan(T(Inf), T(Inf)) === T(pi)/4 # m == 0 (see atan code)
+        @test atan(-T(Inf), T(Inf)) === -T(pi)/4 # m == 1
+        @test atan(T(Inf), -T(Inf)) === 3*T(pi)/4 # m == 2
+        @test atan(-T(Inf), -T(Inf)) === -3*T(pi)/4 # m == 3
         # isinf(x) == true && isinf(y) == false
-        @test atan2(absr, T(Inf)) === zero(T) # m == 0
-        @test atan2(-absr, T(Inf)) === -zero(T) # m == 1
-        @test atan2(absr, -T(Inf)) === T(pi) # m == 2
-        @test atan2(-absr, -T(Inf)) === -T(pi) # m == 3
+        @test atan(absr, T(Inf)) === zero(T) # m == 0
+        @test atan(-absr, T(Inf)) === -zero(T) # m == 1
+        @test atan(absr, -T(Inf)) === T(pi) # m == 2
+        @test atan(-absr, -T(Inf)) === -T(pi) # m == 3
         # isinf(y) == true && isinf(x) == false
-        @test atan2(T(Inf), absr) === T(pi)/2
-        @test atan2(-T(Inf), absr) === -T(pi)/2
-        @test atan2(T(Inf), -absr) === T(pi)/2
-        @test atan2(-T(Inf), -absr) === -T(pi)/2
+        @test atan(T(Inf), absr) === T(pi)/2
+        @test atan(-T(Inf), absr) === -T(pi)/2
+        @test atan(T(Inf), -absr) === T(pi)/2
+        @test atan(-T(Inf), -absr) === -T(pi)/2
         # |y/x| above high threshold
         atanpi = T(1.5707963267948966)
-        @test atan2(T(2.0^61), T(1.0)) === atanpi # m==0
-        @test atan2(-T(2.0^61), T(1.0)) === -atanpi # m==1
-        @test atan2(T(2.0^61), -T(1.0)) === atanpi # m==2
-        @test atan2(-T(2.0^61), -T(1.0)) === -atanpi # m==3
-        @test atan2(-T(Inf), -absr) === -T(pi)/2
+        @test atan(T(2.0^61), T(1.0)) === atanpi # m==0
+        @test atan(-T(2.0^61), T(1.0)) === -atanpi # m==1
+        @test atan(T(2.0^61), -T(1.0)) === atanpi # m==2
+        @test atan(-T(2.0^61), -T(1.0)) === -atanpi # m==3
+        @test atan(-T(Inf), -absr) === -T(pi)/2
         # |y|/x between 0 and low threshold
-        @test atan2(T(2.0^-61), -T(1.0)) === T(pi) # m==2
-        @test atan2(-T(2.0^-61), -T(1.0)) === -T(pi) # m==3
+        @test atan(T(2.0^-61), -T(1.0)) === T(pi) # m==2
+        @test atan(-T(2.0^-61), -T(1.0)) === -T(pi) # m==3
         # y/x is "safe" ("arbitrary values", just need to hit the branch)
-        _ATAN2_PI_LO(::Type{Float32}) = -8.7422776573f-08
-        _ATAN2_PI_LO(::Type{Float64}) = 1.2246467991473531772E-16
-        @test atan2(T(5.0), T(2.5)) === atan(abs(T(5.0)/T(2.5)))
-        @test atan2(-T(5.0), T(2.5)) === -atan(abs(-T(5.0)/T(2.5)))
-        @test atan2(T(5.0), -T(2.5)) === T(pi)-(atan(abs(T(5.0)/-T(2.5)))-_ATAN2_PI_LO(T))
-        @test atan2(-T(5.0), -T(2.5)) === -(T(pi)-atan(abs(-T(5.0)/-T(2.5)))-_ATAN2_PI_LO(T))
-        @test atan2(T(1235.2341234), T(2.5)) === atan(abs(T(1235.2341234)/T(2.5)))
-        @test atan2(-T(1235.2341234), T(2.5)) === -atan(abs(-T(1235.2341234)/T(2.5)))
-        @test atan2(T(1235.2341234), -T(2.5)) === T(pi)-(atan(abs(T(1235.2341234)/-T(2.5)))-_ATAN2_PI_LO(T))
-        @test atan2(-T(1235.2341234), -T(2.5)) === -(T(pi)-(atan(abs(-T(1235.2341234)/T(2.5)))-_ATAN2_PI_LO(T)))
+        _ATAN_PI_LO(::Type{Float32}) = -8.7422776573f-08
+        _ATAN_PI_LO(::Type{Float64}) = 1.2246467991473531772E-16
+        @test atan(T(5.0), T(2.5)) === atan(abs(T(5.0)/T(2.5)))
+        @test atan(-T(5.0), T(2.5)) === -atan(abs(-T(5.0)/T(2.5)))
+        @test atan(T(5.0), -T(2.5)) === T(pi)-(atan(abs(T(5.0)/-T(2.5)))-_ATAN_PI_LO(T))
+        @test atan(-T(5.0), -T(2.5)) === -(T(pi)-atan(abs(-T(5.0)/-T(2.5)))-_ATAN_PI_LO(T))
+        @test atan(T(1235.2341234), T(2.5)) === atan(abs(T(1235.2341234)/T(2.5)))
+        @test atan(-T(1235.2341234), T(2.5)) === -atan(abs(-T(1235.2341234)/T(2.5)))
+        @test atan(T(1235.2341234), -T(2.5)) === T(pi)-(atan(abs(T(1235.2341234)/-T(2.5)))-_ATAN_PI_LO(T))
+        @test atan(-T(1235.2341234), -T(2.5)) === -(T(pi)-(atan(abs(-T(1235.2341234)/T(2.5)))-_ATAN_PI_LO(T)))
+    end
+end
+
+@testset "atand" begin
+    for T in (Float32, Float64)
+        r = T(randn())
+        absr = abs(r)
+
+        # Tests related to the 1-argument version of `atan`.
+        # ==================================================
+
+        @test atand(T(Inf))  === T(90.0)
+        @test atand(-T(Inf)) === -T(90.0)
+        @test atand(zero(T)) === T(0.0)
+        @test atand(one(T))  === T(45.0)
+        @test atand(-one(T)) === -T(45.0)
+
+        # Tests related to the 2-argument version of `atan`.
+        # ==================================================
+
+        # If `x` is one, then `atand(y,x)` must be equal to `atand(y)`.
+        @test atand(T(r), one(T))    === atand(T(r))
+
+        # `y` zero.
+        @test atand(zero(T), absr)   === zero(T)
+        @test atand(-zero(T), absr)  === -zero(T)
+        @test atand(zero(T), -absr)  === T(180.0)
+        @test atand(-zero(T), -absr) === -T(180.0)
+
+        # `x` zero and `y` not zero.
+        @test atand(one(T), zero(T))  === T(90.0)
+        @test atand(-one(T), zero(T)) === -T(90.0)
+
+        # `x` and `y` equal for each quadrant.
+        @test atand(+absr, +absr) === T(45.0)
+        @test atand(-absr, +absr) === -T(45.0)
+        @test atand(+absr, -absr) === T(135.0)
+        @test atand(-absr, -absr) === -T(135.0)
     end
 end
 
@@ -857,3 +823,165 @@ end
         @test isnan_type(T, acos(T(NaN)))
     end
 end
+
+#prev, current, next float
+pcnfloat(x) = prevfloat(x), x, nextfloat(x)
+import Base.Math: COSH_SMALL_X, H_SMALL_X, H_MEDIUM_X, H_LARGE_X
+
+@testset "sinh" begin
+    for T in (Float32, Float64)
+        @test sinh(zero(T)) === zero(T)
+        @test sinh(-zero(T)) === -zero(T)
+        @test sinh(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test sinh(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test sinh(T(1000)) === T(Inf)
+        @test sinh(-T(1000)) === -T(Inf)
+        @test isnan_type(T, sinh(T(NaN)))
+        for x in Iterators.flatten(pcnfloat.([H_SMALL_X(T), H_MEDIUM_X(T), H_LARGE_X(T)]))
+            @test sinh(x) ≈ sinh(big(x)) rtol=eps(T)
+            @test sinh(-x) ≈ sinh(big(-x)) rtol=eps(T)
+        end
+    end
+end
+
+@testset "cosh" begin
+    for T in (Float32, Float64)
+        @test cosh(zero(T)) === one(T)
+        @test cosh(-zero(T)) === one(T)
+        @test cosh(nextfloat(zero(T))) === one(T)
+        @test cosh(prevfloat(zero(T))) === one(T)
+        @test cosh(T(1000)) === T(Inf)
+        @test cosh(-T(1000)) === T(Inf)
+        @test isnan_type(T, cosh(T(NaN)))
+        for x in Iterators.flatten(pcnfloat.([COSH_SMALL_X(T), H_MEDIUM_X(T), H_LARGE_X(T)]))
+            @test cosh(x) ≈ cosh(big(x)) rtol=eps(T)
+            @test cosh(-x) ≈ cosh(big(-x)) rtol=eps(T)
+        end
+    end
+end
+
+@testset "tanh" begin
+    for T in (Float32, Float64)
+        @test tanh(zero(T)) === zero(T)
+        @test tanh(-zero(T)) === -zero(T)
+        @test tanh(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test tanh(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test tanh(T(1000)) === one(T)
+        @test tanh(-T(1000)) === -one(T)
+        @test isnan_type(T, tanh(T(NaN)))
+        for x in Iterators.flatten(pcnfloat.([H_SMALL_X(T), T(1.0), H_MEDIUM_X(T)]))
+            @test tanh(x) ≈ tanh(big(x)) rtol=eps(T)
+            @test tanh(-x) ≈ tanh(big(-x)) rtol=eps(T)
+        end
+    end
+end
+
+@testset "asinh" begin
+    for T in (Float32, Float64)
+        @test asinh(zero(T)) === zero(T)
+        @test asinh(-zero(T)) === -zero(T)
+        @test asinh(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test asinh(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test isnan_type(T, asinh(T(NaN)))
+        for x in Iterators.flatten(pcnfloat.([T(2)^-28,T(2),T(2)^28]))
+            @test asinh(x) ≈ asinh(big(x)) rtol=eps(T)
+            @test asinh(-x) ≈ asinh(big(-x)) rtol=eps(T)
+        end
+    end
+end
+
+@testset "acosh" begin
+    for T in (Float32, Float64)
+        @test_throws DomainError acosh(T(0.1))
+        @test acosh(one(T)) === zero(T)
+        @test isnan_type(T, acosh(T(NaN)))
+        for x in Iterators.flatten(pcnfloat.([nextfloat(T(1.0)), T(2), T(2)^28]))
+            @test acosh(x) ≈ acosh(big(x)) rtol=eps(T)
+        end
+    end
+end
+
+@testset "atanh" begin
+    for T in (Float32, Float64)
+        @test_throws DomainError atanh(T(1.1))
+        @test atanh(zero(T)) === zero(T)
+        @test atanh(-zero(T)) === -zero(T)
+        @test atanh(one(T)) === T(Inf)
+        @test atanh(-one(T)) === -T(Inf)
+        @test atanh(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test atanh(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test isnan_type(T, atanh(T(NaN)))
+        for x in Iterators.flatten(pcnfloat.([T(2.0)^-28, T(0.5)]))
+            @test atanh(x) ≈ atanh(big(x)) rtol=eps(T)
+            @test atanh(-x) ≈ atanh(big(-x)) rtol=eps(T)
+        end
+    end
+end
+
+# Define simple wrapper of a Float type:
+struct FloatWrapper <: Real
+    x::Float64
+end
+
+import Base: +, -, *, /, ^, sin, cos, exp, sinh, cosh, convert, isfinite, float, promote_rule
+
+for op in (:+, :-, :*, :/, :^)
+    @eval $op(x::FloatWrapper, y::FloatWrapper) = FloatWrapper($op(x.x, y.x))
+end
+
+for op in (:sin, :cos, :exp, :sinh, :cosh, :-)
+    @eval $op(x::FloatWrapper) = FloatWrapper($op(x.x))
+end
+
+for op in (:isfinite,)
+    @eval $op(x::FloatWrapper) = $op(x.x)
+end
+
+convert(::Type{FloatWrapper}, x::Int) = FloatWrapper(float(x))
+promote_rule(::Type{FloatWrapper}, ::Type{Int}) = FloatWrapper
+
+float(x::FloatWrapper) = x
+
+@testset "exp(Complex(a, b)) for a and b of non-standard real type #25292" begin
+
+    x = FloatWrapper(3.1)
+    y = FloatWrapper(4.1)
+
+    @test sincos(x) == (sin(x), cos(x))
+
+    z = Complex(x, y)
+
+    @test isa(exp(z), Complex)
+    @test isa(sin(z), Complex)
+    @test isa(cos(z), Complex)
+end
+
+@testset "cbrt" begin
+    for T in (Float32, Float64)
+        @test cbrt(zero(T)) === zero(T)
+        @test cbrt(-zero(T)) === -zero(T)
+        @test cbrt(one(T)) === one(T)
+        @test cbrt(-one(T)) === -one(T)
+        @test cbrt(T(Inf)) === T(Inf)
+        @test cbrt(-T(Inf)) === -T(Inf)
+        @test isnan_type(T, cbrt(T(NaN)))
+        for x in (pcnfloat(nextfloat(nextfloat(zero(T))))...,
+                  pcnfloat(prevfloat(prevfloat(zero(T))))...,
+                  0.45, 0.6, 0.98,
+                  map(x->x^3, 1.0:1.0:1024.0)...,
+                  nextfloat(-T(Inf)), prevfloat(T(Inf)))
+            by = cbrt(big(T(x)))
+            @test cbrt(T(x)) ≈ by rtol=eps(T)
+            bym = cbrt(big(T(-x)))
+            @test cbrt(T(-x)) ≈ bym rtol=eps(T)
+        end
+    end
+end
+
+isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
+using .Main.Furlongs
+@test hypot(Furlong(0), Furlong(0)) == Furlong(0.0)
+@test hypot(Furlong(3), Furlong(4)) == Furlong(5.0)
+@test hypot(Furlong(NaN), Furlong(Inf)) == Furlong(Inf)
+@test hypot(Furlong(Inf), Furlong(NaN)) == Furlong(Inf)
+@test hypot(Furlong(Inf), Furlong(Inf)) == Furlong(Inf)

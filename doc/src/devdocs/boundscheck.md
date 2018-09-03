@@ -54,16 +54,16 @@ The overall hierarchy is:
 
       * `checkbounds(Bool, A, I...)` which calls
 
-          * `checkbounds_indices(Bool, indices(A), I)` which recursively calls
+          * `checkbounds_indices(Bool, axes(A), I)` which recursively calls
 
               * `checkindex` for each dimension
 
-Here `A` is the array, and `I` contains the "requested" indices. `indices(A)` returns a tuple
+Here `A` is the array, and `I` contains the "requested" indices. `axes(A)` returns a tuple
 of "permitted" indices of `A`.
 
 `checkbounds(A, I...)` throws an error if the indices are invalid, whereas `checkbounds(Bool, A, I...)`
 returns `false` in that circumstance.  `checkbounds_indices` discards any information about the
-array other than its `indices` tuple, and performs a pure indices-vs-indices comparison: this
+array other than its `axes` tuple, and performs a pure indices-vs-indices comparison: this
 allows relatively few compiled methods to serve a huge variety of array types. Indices are specified
 as tuples, and are usually compared in a 1-1 fashion with individual dimensions handled by calling
 another important function, `checkindex`: typically,
@@ -78,7 +78,7 @@ so `checkindex` checks a single dimension.  All of these functions, including th
 
 If you have to customize bounds checking for a specific array type, you should specialize `checkbounds(Bool, A, I...)`.
 However, in most cases you should be able to rely on `checkbounds_indices` as long as you supply
-useful `indices` for your array type.
+useful `axes` for your array type.
 
 If you have novel index types, first consider specializing `checkindex`, which handles a single
 index for a particular dimension of an array.  If you have a custom multidimensional index type

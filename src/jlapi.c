@@ -39,13 +39,13 @@ JL_DLLEXPORT int jl_is_initialized(void)
 // Second argument is the path of a system image file (*.ji) relative to the
 // first argument path, or relative to the default julia home dir.
 // The default is something like ../lib/julia/sys.ji
-JL_DLLEXPORT void jl_init_with_image(const char *julia_home_dir,
+JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
                                      const char *image_relative_path)
 {
     if (jl_is_initialized())
         return;
     libsupport_init();
-    jl_options.julia_home = julia_home_dir;
+    jl_options.julia_bindir = julia_bindir;
     if (image_relative_path != NULL)
         jl_options.image_file = image_relative_path;
     else
@@ -58,7 +58,7 @@ JL_DLLEXPORT void jl_init(void)
 {
     char *libbindir = NULL;
 #ifdef _OS_WINDOWS_
-    void *hdl = (void*)jl_load_dynamic_library_e(NULL, JL_RTLD_DEFAULT);
+    void *hdl = (void*)jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 0);
     if (hdl) {
         char *to_free = (char*)jl_pathname_for_handle(hdl);
         if (to_free) {
@@ -305,9 +305,9 @@ JL_DLLEXPORT int8_t jl_is_memdebug(void) {
 #endif
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_julia_home(void)
+JL_DLLEXPORT jl_value_t *jl_get_julia_bindir(void)
 {
-    return jl_cstr_to_string(jl_options.julia_home);
+    return jl_cstr_to_string(jl_options.julia_bindir);
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_julia_bin(void)
@@ -386,6 +386,7 @@ JL_DLLEXPORT jl_value_t *(jl_typeof)(jl_value_t *v)
     return jl_typeof(v);
 }
 
+#ifndef __clang_analyzer__
 JL_DLLEXPORT int8_t (jl_gc_unsafe_enter)(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -409,6 +410,7 @@ JL_DLLEXPORT void (jl_gc_safe_leave)(int8_t state)
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_gc_safe_leave(ptls, state);
 }
+#endif
 
 JL_DLLEXPORT void (jl_gc_safepoint)(void)
 {

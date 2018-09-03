@@ -28,13 +28,8 @@
 
 #include "llvm-version.h"
 #include <llvm/Object/ObjectFile.h>
-#if JL_LLVM_VERSION >= 50000
 #include <llvm/BinaryFormat/MachO.h>
 #include <llvm/BinaryFormat/COFF.h>
-#else
-#include <llvm/Support/MachO.h>
-#include <llvm/Support/COFF.h>
-#endif
 #include <llvm/MC/MCInst.h>
 #include <llvm/MC/MCStreamer.h>
 #include <llvm/MC/MCSubtargetInfo.h>
@@ -436,9 +431,8 @@ namespace {
 // sequentially or encoding the line number, but that doesn't seem
 // necessary.
 class SymbolTable {
-    typedef std::map<uint64_t, MCSymbol*> TableType;
+    typedef std::map<uint64_t, std::string> TableType;
     TableType Table;
-    std::string TempName;
     MCContext& Ctx;
     const FuncMCView &MemObj;
     int Pass;
@@ -454,7 +448,7 @@ public:
     void insertAddress(uint64_t addr);
     // void createSymbol(const char *name, uint64_t addr);
     void createSymbols();
-    const char *lookupSymbolName(uint64_t addr, bool LocalOnly);
+    const char *lookupSymbolName(uint64_t addr);
     MCSymbol *lookupSymbol(uint64_t addr);
     StringRef getSymbolNameAt(uint64_t offset) const;
     const char *lookupLocalPC(size_t addr);
@@ -511,14 +505,8 @@ StringRef SymbolTable::getSymbolNameAt(uint64_t offset) const
 // Insert an address
 void SymbolTable::insertAddress(uint64_t addr)
 {
-    Table[addr] = NULL;
+    Table[addr] = "";
 }
-// Create a symbol
-// void SymbolTable::createSymbol(const char *name, uint64_t addr)
-// {
-//     MCSymbol *symb = Ctx.GetOrCreateSymbol(StringRef(name));
-//     symb->setVariableValue(MCConstantExpr::Create(addr, Ctx));
-// }
 // Create symbols for all addresses
 void SymbolTable::createSymbols()
 {
@@ -526,68 +514,84 @@ void SymbolTable::createSymbols()
     uintptr_t Fsize = MemObj.size();
     for (TableType::iterator isymb = Table.begin(), esymb = Table.end();
          isymb != esymb; ++isymb) {
-        std::ostringstream name;
         uintptr_t rel = isymb->first - ip;
         uintptr_t addr = isymb->first;
         if (Fptr <= addr && addr < Fptr + Fsize) {
+            std::ostringstream name;
             name << "L" << rel;
+            isymb->second = name.str();
         }
         else {
             const char *global = lookupLocalPC(addr);
-            if (!global)
-                continue;
-            name << global;
+            if (global)
+                isymb->second = global;
         }
-
-        MCSymbol *symb = Ctx.getOrCreateSymbol(StringRef(name.str()));
-        assert(symb->isUndefined());
-        isymb->second = symb;
     }
 }
 
-const char *SymbolTable::lookupSymbolName(uint64_t addr, bool LocalOnly)
+const char *SymbolTable::lookupSymbolName(uint64_t addr)
 {
-    TempName = std::string();
-    TableType::iterator Sym = Table.find(addr);
-    if (Sym != Table.end() && Sym->second) {
-        TempName = Sym->second->getName().str();
+    TableType::iterator Sym;
+    bool insertion;
+    std::tie(Sym, insertion) = Table.insert(std::make_pair(addr, std::string()));
+    if (insertion) {
+        // First time we've seen addr: try to look it up
+        StringRef local_name = getSymbolNameAt(addr + slide);
+        if (local_name.empty()) {
+            const char *global = lookupLocalPC(addr);
+            if (global) {
+                //std::ostringstream name;
+                //name << global << "@0x" << std::hex
+                //     << std::setfill('0') << std::setw(2 * sizeof(void*))
+                //     << addr;
+                //Sym->second = name.str();
+                Sym->second = global;
+            }
+        }
+        else {
+            Sym->second = local_name;
+        }
     }
-    else if (!LocalOnly) {
-        TempName = getSymbolNameAt(addr + slide).str();
-    }
-    return TempName.empty() ? NULL : TempName.c_str();
+    return Sym->second.empty() ? NULL : Sym->second.c_str();
 }
 
 MCSymbol *SymbolTable::lookupSymbol(uint64_t addr)
 {
-    if (!Table.count(addr)) return NULL;
-    return Table[addr];
+    TableType::iterator Sym = Table.find(addr);
+    if (Sym == Table.end() || Sym->second.empty())
+        return NULL;
+    MCSymbol *symb = Ctx.getOrCreateSymbol(Sym->second);
+    assert(symb->isUndefined());
+    return symb;
 }
 
 static const char *SymbolLookup(void *DisInfo, uint64_t ReferenceValue, uint64_t *ReferenceType,
                                 uint64_t ReferencePC, const char **ReferenceName)
 {
+    uint64_t RTypeIn = *ReferenceType;
     SymbolTable *SymTab = (SymbolTable*)DisInfo;
+    *ReferenceType = LLVMDisassembler_ReferenceType_InOut_None;
+    *ReferenceName = NULL;
     if (SymTab->getPass() != 0) {
-        uint64_t addr = ReferenceValue + SymTab->getIP();
-        if (*ReferenceType == LLVMDisassembler_ReferenceType_In_Branch) {
-            const char *symbolName = SymTab->lookupSymbolName(addr, false);
-            //*ReferenceType = LLVMDisassembler_ReferenceType_Out_SymbolStub;
-            *ReferenceType = LLVMDisassembler_ReferenceType_InOut_None;
-            *ReferenceName = NULL;
+        if (RTypeIn == LLVMDisassembler_ReferenceType_In_Branch) {
+            uint64_t addr = ReferenceValue + SymTab->getIP(); // probably pc-rel
+            const char *symbolName = SymTab->lookupSymbolName(addr);
             return symbolName;
         }
-        else if (*ReferenceType == LLVMDisassembler_ReferenceType_In_PCrel_Load) {
-            const char *symbolName = SymTab->lookupSymbolName(addr, false);
+        else if (RTypeIn == LLVMDisassembler_ReferenceType_In_PCrel_Load) {
+            uint64_t addr = ReferenceValue + SymTab->getIP();
+            const char *symbolName = SymTab->lookupSymbolName(addr);
             if (symbolName) {
                 *ReferenceType = LLVMDisassembler_ReferenceType_Out_LitPool_SymAddr;
                 *ReferenceName = symbolName;
-                return NULL;
             }
         }
+        else if (RTypeIn == LLVMDisassembler_ReferenceType_InOut_None) {
+            uint64_t addr = ReferenceValue; // probably not pc-rel
+            const char *symbolName = SymTab->lookupSymbolName(addr);
+            return symbolName;
+        }
     }
-    *ReferenceType = LLVMDisassembler_ReferenceType_InOut_None;
-    *ReferenceName = NULL;
     return NULL;
 }
 
@@ -595,32 +599,18 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Si
                         int TagType, void *TagBuf)
 {
     SymbolTable *SymTab = (SymbolTable*)DisInfo;
-    PC += SymTab->getIP() - (uint64_t)(uintptr_t)SymTab->getMemoryObject().data(); // add offset from MemoryObject base
+    LLVMOpInfo1 *info = (LLVMOpInfo1*)TagBuf;
+    memset(info, 0, sizeof(*info));
     if (TagType != 1)
         return 0;               // Unknown data format
-    LLVMOpInfo1 *info = (LLVMOpInfo1*)TagBuf;
-    uint8_t *bytes = (uint8_t*) alloca(Size*sizeof(uint8_t));
-    if (PC+Offset+Size > SymTab->getMemoryObject().size())
-        return 0;              // Invalid memory location
-    for (uint64_t i=0; i<Size; ++i)
-        bytes[i] = SymTab->getMemoryObject()[PC+Offset+i];
-    size_t pointer;
-    switch (Size) {
-    case 1: { uint8_t  val; std::memcpy(&val, bytes, 1); pointer = val; break; }
-    case 2: { uint16_t val; std::memcpy(&val, bytes, 2); pointer = val; break; }
-    case 4: { uint32_t val; std::memcpy(&val, bytes, 4); pointer = val; break; }
-    case 8: { uint64_t val; std::memcpy(&val, bytes, 8); pointer = val; break; }
-    default: return 0;          // Cannot handle input address size
-    }
-    const char *name = SymTab->lookupLocalPC(pointer);
-    if (!name)
-        return 0;               // Did not find symbolic information
-    // Describe the symbol
-    info->AddSymbol.Present = 1;
-    info->AddSymbol.Name = name;
-    info->AddSymbol.Value = pointer; // unused by LLVM
-    info->Value = 0;                 // offset
-    return 1;                        // Success
+    PC += SymTab->getIP() - (uint64_t)(uintptr_t)SymTab->getMemoryObject().data(); // add offset from MemoryObject base
+    // TODO: see if we knew of a relocation applied at PC
+    // info->AddSymbol.Present = 1;
+    // info->AddSymbol.Name = name;
+    // info->AddSymbol.Value = pointer; // unused by LLVM
+    // info->Value = 0;                 // offset
+    // return 1;                        // Success
+    return 0;
 }
 } // namespace
 
@@ -655,12 +645,7 @@ static void jl_dump_asm_internal(
 
     std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
     MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr);
-#if JL_LLVM_VERSION >= 60000
     MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false, Ctx);
-#else
-    MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false,
-                               CodeModel::Default, Ctx);
-#endif
 
     // Set up Subtarget and Disassembler
     std::unique_ptr<MCSubtargetInfo>
@@ -688,12 +673,8 @@ static void jl_dump_asm_internal(
     MCAsmBackend *MAB = 0;
     if (ShowEncoding) {
         CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx);
-#if JL_LLVM_VERSION >= 40000
         MCTargetOptions Options;
-        MAB = TheTarget->createMCAsmBackend(*MRI, TripleName, cpu, Options);
-#else
-        MAB = TheTarget->createMCAsmBackend(*MRI, TripleName, cpu);
-#endif
+        MAB = TheTarget->createMCAsmBackend(*STI, *MRI, Options);
     }
 
     // createAsmStreamer expects a unique_ptr to a formatted stream, which means
@@ -760,7 +741,7 @@ static void jl_dump_asm_internal(
             if (di_ctx && di_lineIter != di_lineEnd) {
                 // Set up the line info
                 nextLineAddr = di_lineIter->first;
-                if (nextLineAddr != Fptr + slide) {
+                if (nextLineAddr != (uint64_t)(Fptr + slide)) {
                     std::string buf;
                     dbgctx.emit_lineinfo(buf, di_lineIter->second);
                     if (!buf.empty()) {
@@ -841,15 +822,33 @@ static void jl_dump_asm_internal(
 
             case MCDisassembler::Success:
                 if (pass == 0) {
-                    // Pass 0: Record all branch targets
-                    if (MCIA && (MCIA->isBranch(Inst) || MCIA->isCall(Inst))) {
-                        uint64_t addr;
-                        if (MCIA->evaluateBranch(Inst, Fptr+Index, insSize, addr))
-                            DisInfo.insertAddress(addr);
+                    // Pass 0: Record all branch target references
+                    if (MCIA) {
+                        const MCInstrDesc &opcode = MCII->get(Inst.getOpcode());
+                        if (opcode.isBranch() || opcode.isCall()) {
+                            uint64_t addr;
+                            if (MCIA->evaluateBranch(Inst, Fptr + Index, insSize, addr))
+                                DisInfo.insertAddress(addr);
+                        }
                     }
                 }
                 else {
                     // Pass 1: Output instruction
+                    if (pass != 0) {
+                        // attempt to symbolicate any immediate operands
+                        const MCInstrDesc &opinfo = MCII->get(Inst.getOpcode());
+                        for (unsigned Op = 0; Op < opinfo.NumOperands; Op++) {
+                            const MCOperand &OpI = Inst.getOperand(Op);
+                            if (OpI.isImm()) {
+                                int64_t imm = OpI.getImm();
+                                if (opinfo.OpInfo[Op].OperandType == MCOI::OPERAND_PCREL)
+                                    imm += Fptr + Index;
+                                const char *name = DisInfo.lookupSymbolName(imm);
+                                if (name)
+                                    Streamer->AddComment(name);
+                            }
+                        }
+                    }
                     Streamer->EmitInstruction(Inst, *STI);
                 }
                 break;

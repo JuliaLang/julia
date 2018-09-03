@@ -97,9 +97,13 @@ JL_DLLEXPORT void *jl_mmap(void *addr, size_t length, int prot, int flags,
     return mmap(addr, length, prot, flags, fd, (off_t)offset);
 }
 #else
-JL_DLLEXPORT int64_t jl_lseek(int fd, int64_t offset, int whence)
+JL_DLLEXPORT int64_t jl_lseek(HANDLE fd, int64_t offset, int whence)
 {
-    return _lseeki64(fd, offset, whence);
+    LARGE_INTEGER tell;
+    tell.QuadPart = offset;
+    if (SetFilePointerEx(fd, tell, &tell, whence) == 0)
+        return -1;
+    return tell.QuadPart;
 }
 #endif
 JL_DLLEXPORT int jl_sizeof_ios_t(void) { return sizeof(ios_t); }
@@ -116,7 +120,7 @@ JL_DLLEXPORT int32_t jl_nb_available(ios_t *s)
 JL_DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
 JL_DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t *req) { uv_fs_req_cleanup(req); }
 JL_DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req) { return (char*)req->ptr; }
-JL_DLLEXPORT int jl_uv_fs_result(uv_fs_t *f) { return f->result; }
+JL_DLLEXPORT ssize_t jl_uv_fs_result(uv_fs_t *f) { return f->result; }
 
 // --- stat ---
 JL_DLLEXPORT int jl_sizeof_stat(void) { return sizeof(uv_stat_t); }
@@ -147,7 +151,7 @@ JL_DLLEXPORT int32_t jl_lstat(const char *path, char *statbuf)
     return ret;
 }
 
-JL_DLLEXPORT int32_t jl_fstat(int fd, char *statbuf)
+JL_DLLEXPORT int32_t jl_fstat(uv_os_fd_t fd, char *statbuf)
 {
     uv_fs_t req;
     int ret;
@@ -252,6 +256,11 @@ JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s)
     return a;
 }
 
+// str: if 1 return a string, otherwise return a Vector{UInt8}
+// chomp:
+//   0 - keep delimiter
+//   1 - remove 1 byte delimiter
+//   2 - remove 2 bytes \r\n if present
 JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint8_t chomp)
 {
     jl_array_t *a;
@@ -259,17 +268,17 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
     char *pd = (char*)memchr(s->buf + s->bpos, delim, (size_t)(s->size - s->bpos));
     if (pd) {
         size_t n = pd - (s->buf + s->bpos) + 1;
+        size_t nchomp = 0;
+        if (chomp) {
+            nchomp = chomp == 2 ? ios_nchomp(s, n) : 1;
+        }
         if (str) {
-            size_t nchomp = 0;
-            if (chomp) {
-                nchomp = ios_nchomp(s, n);
-            }
             jl_value_t *str = jl_pchar_to_string(s->buf + s->bpos, n - nchomp);
             s->bpos += n;
             return str;
         }
-        a = jl_alloc_array_1d(jl_array_uint8_type, n);
-        memcpy(jl_array_data(a), s->buf + s->bpos, n);
+        a = jl_alloc_array_1d(jl_array_uint8_type, n - nchomp);
+        memcpy(jl_array_data(a), s->buf + s->bpos, n - nchomp);
         s->bpos += n;
     }
     else {
@@ -278,9 +287,9 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
         ios_mem(&dest, 0);
         ios_setbuf(&dest, (char*)a->data, 80, 0);
         size_t n = ios_copyuntil(&dest, s, delim);
-        if (chomp && n > 0 && dest.buf[n - 1] == '\n') {
+        if (chomp && n > 0 && dest.buf[n - 1] == delim) {
             n--;
-            if (n > 0 && dest.buf[n - 1] == '\r') {
+            if (chomp == 2 && n > 0 && dest.buf[n - 1] == '\r') {
                 n--;
             }
             int truncret = ios_trunc(&dest, n); // it should always be possible to truncate dest
@@ -344,7 +353,7 @@ JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
 JL_DLLEXPORT int jl_errno(void) { return errno; }
 JL_DLLEXPORT void jl_set_errno(int e) { errno = e; }
 
-// -- get the number of CPU cores --
+// -- get the number of CPU threads (logical cores) --
 
 #ifdef _OS_WINDOWS_
 typedef DWORD (WINAPI *GAPC)(WORD);
@@ -353,7 +362,7 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 #endif
 #endif
 
-JL_DLLEXPORT int jl_cpu_cores(void)
+JL_DLLEXPORT int jl_cpu_threads(void)
 {
 #if defined(HW_AVAILCPU) && defined(HW_NCPU)
     size_t len = 4;
@@ -373,12 +382,8 @@ JL_DLLEXPORT int jl_cpu_cores(void)
     return count;
 #elif defined(_OS_WINDOWS_)
     //Try to get WIN7 API method
-    GAPC gapc = (GAPC) jl_dlsym_e(
-        jl_kernel32_handle,
-        "GetActiveProcessorCount"
-    );
-
-    if (gapc) {
+    GAPC gapc;
+    if (jl_dlsym(jl_kernel32_handle, "GetActiveProcessorCount", (void **)&gapc, 0)) {
         return gapc(ALL_PROCESSOR_GROUPS);
     }
     else { //fall back on GetSystemInfo
@@ -529,7 +534,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
     for (int32_t i = _dyld_image_count() - 1; i >= 0 ; i--) {
         // dlopen() each image, check handle
         const char *image_name = _dyld_get_image_name(i);
-        void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT);
+        void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT, 0);
         jl_dlclose(probe_lib);
 
         // If the handle is the same as what was passed in (modulo mode bits), return this image name

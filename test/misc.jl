@@ -2,154 +2,6 @@
 
 # Tests that do not really go anywhere else
 
-# Test info
-@test contains(sprint(info, "test"), "INFO:")
-@test contains(sprint(info, "test"), "INFO: test")
-@test contains(sprint(info, "test ", 1, 2, 3), "INFO: test 123")
-@test contains(sprint(io->info(io,"test", prefix="MYINFO: ")), "MYINFO: test")
-
-# Test warn
-@test contains(sprint(Base.warn_once, "test"), "WARNING: test")
-@test isempty(sprint(Base.warn_once, "test"))
-
-@test contains(sprint(warn), "WARNING:")
-@test contains(sprint(warn, "test"), "WARNING: test")
-@test contains(sprint(warn, "test ", 1, 2, 3), "WARNING: test 123")
-@test contains(sprint(io->warn(io, "test", prefix="MYWARNING: ")), "MYWARNING: test")
-@test contains(sprint(io->warn(io, "testonce", once=true)), "WARNING: testonce")
-@test isempty(sprint(io->warn(io, "testonce", once=true)))
-@test !isempty(sprint(io->warn(io, "testonce", once=true, key=hash("testonce",hash("testanother")))))
-let bt = backtrace()
-    ws = split(chomp(sprint(io->warn(io, "test", bt = bt))), '\n')
-    bs = split(chomp(sprint(Base.show_backtrace, bt)), '\n')
-    @test contains(ws[1],"WARNING: test")
-    for (l,b) in zip(ws[2:end],bs[2:end])
-        @test contains(l, b)
-    end
-end
-
-# PR #16213
-module Logging
-    function bar(io)
-        info(io,"barinfo")
-        warn(io,"barwarn")
-        Base.display_error(io,"barerror",backtrace())
-    end
-    function pooh(io)
-        info(io,"poohinfo")
-        warn(io,"poohwarn")
-        Base.display_error(io,"pooherror",backtrace())
-    end
-end
-function foo(io)
-    info(io,"fooinfo")
-    warn(io,"foowarn")
-    Base.display_error(io,"fooerror",backtrace())
-end
-
-@test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "WARNING: barwarn", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
-
-
-logging(DevNull, Logging, :bar;  kind=:info)
-@test all(contains.(sprint(Logging.bar), ["WARNING: barwarn", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
-
-logging(DevNull, Logging;  kind=:info)
-@test all(contains.(sprint(Logging.bar), ["WARNING: barwarn", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(Logging.pooh), ["WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
-
-logging(DevNull;  kind=:info)
-@test all(contains.(sprint(Logging.bar), ["WARNING: barwarn", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(Logging.pooh), ["WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["WARNING: foowarn", "ERROR: \"fooerror\""]))
-
-logging(kind=:info)
-@test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "WARNING: barwarn", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
-
-
-logging(DevNull, Logging, :bar;  kind=:warn)
-@test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
-
-logging(DevNull, Logging;  kind=:warn)
-@test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
-
-logging(DevNull;  kind=:warn)
-@test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "ERROR: \"fooerror\""]))
-
-logging(kind=:warn)
-@test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "WARNING: barwarn", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
-
-
-logging(DevNull, Logging, :bar;  kind=:error)
-@test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "WARNING: barwarn"]))
-@test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
-
-logging(DevNull, Logging;  kind=:error)
-@test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "WARNING: barwarn"]))
-@test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn"]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
-
-logging(DevNull;  kind=:error)
-@test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "WARNING: barwarn"]))
-@test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn"]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn"]))
-
-logging(kind=:error)
-@test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "WARNING: barwarn", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
-
-
-logging(DevNull, Logging, :bar)
-@test sprint(Logging.bar) == ""
-@test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
-
-logging(DevNull, Logging)
-@test sprint(Logging.bar) == ""
-@test sprint(Logging.pooh) == ""
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
-
-logging(DevNull)
-@test sprint(Logging.bar) == ""
-@test sprint(Logging.pooh) == ""
-@test sprint(foo) == ""
-
-logging()
-@test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "WARNING: barwarn", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
-
-# test assert() method
-@test_throws AssertionError assert(false)
-let res = assert(true)
-    @test res === nothing
-end
-let
-    try
-        assert(false)
-        error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test isempty(ex.msg)
-    end
-end
-
 # test @assert macro
 @test_throws AssertionError (@assert 1 == 2)
 @test_throws AssertionError (@assert false)
@@ -162,7 +14,7 @@ let
         error("unexpected")
     catch ex
         @test isa(ex, AssertionError)
-        @test contains(ex.msg, "1 == 2")
+        @test occursin("1 == 2", ex.msg)
     end
 end
 # test @assert message
@@ -192,8 +44,8 @@ let
         error("unexpected")
     catch ex
         @test isa(ex, AssertionError)
-        @test !contains(ex.msg,  "1 == 2")
-        @test contains(ex.msg, "random_object")
+        @test !occursin("1 == 2", ex.msg)
+        @test occursin("random_object", ex.msg)
     end
 end
 # if the second argument is an expression, c
@@ -216,31 +68,21 @@ let # test the process title functions, issue #9957
     @test Sys.get_process_title() == oldtitle
 end
 
-# test gc_enable/disable
-@test gc_enable(true)
-@test gc_enable(false)
-@test gc_enable(false) == false
-@test gc_enable(true) == false
-@test gc_enable(true)
-
-# test methodswith
-# `methodswith` relies on exported symbols
-export func4union, Base
-struct NoMethodHasThisType end
-@test isempty(methodswith(NoMethodHasThisType))
-@test !isempty(methodswith(Int))
-struct Type4Union end
-func4union(::Union{Type4Union,Int}) = ()
-@test !isempty(methodswith(Type4Union, @__MODULE__))
+# test GC.enable/disable
+@test GC.enable(true)
+@test GC.enable(false)
+@test GC.enable(false) == false
+@test GC.enable(true) == false
+@test GC.enable(true)
 
 # PR #10984
-# Disable on windows because of issue (missing flush) when redirecting STDERR.
+# Disable on windows because of issue (missing flush) when redirecting stderr.
 let
-    redir_err = "redirect_stderr(STDOUT)"
+    redir_err = "redirect_stderr(stdout)"
     exename = Base.julia_cmd()
     script = "$redir_err; module A; f() = 1; end; A.f() = 1"
     warning_str = read(`$exename --warn-overwrite=yes --startup-file=no -e $script`, String)
-    @test contains(warning_str, "f()")
+    @test occursin("f()", warning_str)
 end
 
 # lock / unlock
@@ -260,7 +102,7 @@ let l = ReentrantLock()
             @test false
         end === false
     end
-    wait(t)
+    Base.wait(t)
     unlock(l)
     @test_throws ErrorException unlock(l)
 end
@@ -268,18 +110,18 @@ end
 # task switching
 
 @noinline function f6597(c)
-    t = @schedule nothing
+    t = @async nothing
     finalizer(t -> c[] += 1, t)
-    wait(t)
+    Base.wait(t)
     @test c[] == 0
-    wait(t)
+    Base.wait(t)
     nothing
 end
 let c = Ref(0),
-    t2 = @schedule (wait(); c[] += 99)
+    t2 = @async (wait(); c[] += 99)
     @test c[] == 0
     f6597(c)
-    gc() # this should run the finalizer for t
+    GC.gc() # this should run the finalizer for t
     @test c[] == 1
     yield()
     @test c[] == 1
@@ -287,12 +129,26 @@ let c = Ref(0),
     @test c[] == 100
 end
 
+# test that @sync is lexical (PR #27164)
+
+const x27164 = Ref(0)
+do_something_async_27164() = @async(begin sleep(1); x27164[] = 2; end)
+
+let t = nothing
+    @sync begin
+        t = do_something_async_27164()
+        @async (sleep(0.05); x27164[] = 1)
+    end
+    @test x27164[] == 1
+    fetch(t)
+    @test x27164[] == 2
+end
 
 # timing macros
 
 # test that they don't introduce global vars
 global v11801, t11801, names_before_timing
-names_before_timing = names(@__MODULE__, true)
+names_before_timing = names(@__MODULE__, all = true)
 
 let t = @elapsed 1+1
     @test isa(t, Real) && t >= 0
@@ -311,12 +167,12 @@ v11801, t11801 = @timed sin(1)
 @test v11801 == sin(1)
 @test isa(t11801,Real) && t11801 >= 0
 
-@test names(@__MODULE__, true) == names_before_timing
+@test names(@__MODULE__, all = true) == names_before_timing
 
 # interactive utilities
 
 import Base.summarysize
-@test summarysize(Core) > (summarysize(Core.Inference) + Base.summarysize(Core.Intrinsics)) > Core.sizeof(Core)
+@test summarysize(Core) > (summarysize(Core.Compiler) + Base.summarysize(Core.Intrinsics)) > Core.sizeof(Core)
 @test summarysize(Base) > 100_000 * sizeof(Ptr)
 
 let R = Ref{Any}(nothing), depth = 10^6
@@ -327,16 +183,12 @@ let R = Ref{Any}(nothing), depth = 10^6
     @test summarysize(R) == (depth + 4) * sizeof(Ptr)
 end
 
-module _test_varinfo_
-export x
-x = 1.0
-end
-@test repr(varinfo(Main, r"^$")) == """
-| name | size | summary |
-|:---- | ----:|:------- |
-"""
-let v = repr(varinfo(_test_varinfo_))
-    @test contains(v, "| x              |   8 bytes | Float64 |")
+# issue #25367 - summarysize with reshaped arrays
+let A = zeros(1000), B = reshape(A, (1,1000))
+    @test summarysize((A,B)) < 2 * sizeof(A)
+
+    # check that object header is accounted for
+    @test summarysize(A) > sizeof(A)
 end
 
 # issue #13021
@@ -348,15 +200,6 @@ catch ex
 end
     @test isa(ex, ErrorException) && ex.msg == "cannot assign variables in other modules"
 end
-
-# Issue 14173
-module Tmp14173
-    export A
-    A = randn(2000, 2000)
-end
-varinfo(Tmp14173) # warm up
-const MEMDEBUG = ccall(:jl_is_memdebug, Bool, ())
-@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 60000 : 20000)
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
@@ -446,7 +289,7 @@ for s in [map(first,V8); X8],
     ss = s[i:j]
     ss in X8 || push!(X8, ss)
 end
-sort!(X8, lt=lexless)
+sort!(X8, lt=isless)
 sort!(X8, by=length)
 
 I8 = [(s,map(UInt16,s)) for s in X8]
@@ -527,31 +370,30 @@ end
 
 let s = "abcα🐨\0x\0"
     for T in (UInt8, UInt16, UInt32, Int32)
-        @test transcode(T, s) == transcode(T, Vector{UInt8}(s))
+        @test transcode(T, s) == transcode(T, codeunits(s))
         @test transcode(String, transcode(T, s)) == s
     end
 end
 
-# clipboard functionality
-if Sys.iswindows()
-    for str in ("Hello, world.", "∀ x ∃ y", "")
-        clipboard(str)
-        @test clipboard() == str
+let X = UInt8[0x30,0x31,0x32]
+    for T in (UInt8, UInt16, UInt32, Int32)
+        @test transcode(UInt8,transcode(T, X)) == X
+        @test transcode(UInt8,transcode(T, 0x30:0x32)) == X
     end
 end
 
-let optstring = stringmime(MIME("text/plain"), Base.JLOptions())
+let optstring = repr("text/plain", Base.JLOptions())
     @test startswith(optstring, "JLOptions(\n")
-    @test !contains(optstring, "Ptr")
+    @test !occursin("Ptr", optstring)
     @test endswith(optstring, "\n)")
-    @test contains(optstring, " = \"")
+    @test occursin(" = \"", optstring)
 end
 let optstring = repr(Base.JLOptions())
     @test startswith(optstring, "JLOptions(")
     @test endswith(optstring, ")")
-    @test !contains(optstring, "\n")
-    @test !contains(optstring, "Ptr")
-    @test contains(optstring, " = \"")
+    @test !occursin("\n", optstring)
+    @test !occursin("Ptr", optstring)
+    @test occursin(" = \"", optstring)
 end
 
 # Base.securezero! functions (#17579)
@@ -562,61 +404,69 @@ let a = [1,2,3]
     @test unsafe_securezero!(pointer(a), length(a)) == pointer(a)
     @test a == [0,0,0]
     a[:] = 1:3
-    @test unsafe_securezero!(Ptr{Void}(pointer(a)), sizeof(a)) == Ptr{Void}(pointer(a))
+    @test unsafe_securezero!(Ptr{Cvoid}(pointer(a)), sizeof(a)) == Ptr{Cvoid}(pointer(a))
     @test a == [0,0,0]
 end
-let cache = Base.LibGit2.CachedCredentials()
-    get!(cache, "foo", LibGit2.SSHCredentials("", "bar"))
-    securezero!(cache)
-    @test cache["foo"].pass == "\0\0\0"
+
+# PR #28038 (prompt/getpass stream args)
+@test_throws MethodError Base.getpass(IOBuffer(), stdout, "pass")
+let buf = IOBuffer()
+    @test Base.prompt(IOBuffer("foo\nbar\n"), buf, "baz") == "foo"
+    @test String(take!(buf)) == "baz: "
+    @test Base.prompt(IOBuffer("\n"), buf, "baz", default="foobar") == "foobar"
+    @test String(take!(buf)) == "baz [foobar]: "
+    @test Base.prompt(IOBuffer("blah\n"), buf, "baz", default="foobar") == "blah"
 end
 
 # Test that we can VirtualProtect jitted code to writable
-if Sys.iswindows()
-    @noinline function WeVirtualProtectThisToRWX(x, y)
-        x+y
-    end
-
-    let addr = cfunction(WeVirtualProtectThisToRWX, UInt64, Tuple{UInt64, UInt64})
-        addr = addr-(UInt64(addr)%4096)
+@noinline function WeVirtualProtectThisToRWX(x, y)
+    return x + y
+end
+@static if Sys.iswindows()
+    let addr = @cfunction(WeVirtualProtectThisToRWX, UInt64, (UInt64, UInt64))
+        addr = addr - (UInt64(addr) % 4096)
         PAGE_EXECUTE_READWRITE = 0x40
         oldPerm = Ref{UInt32}()
-        err18083 = ccall(:VirtualProtect,stdcall,Cint,
-            (Ptr{Void}, Csize_t, UInt32, Ptr{UInt32}),
+        err18083 = ccall(:VirtualProtect, stdcall, Cint,
+            (Ptr{Cvoid}, Csize_t, UInt32, Ptr{UInt32}),
             addr, 4096, PAGE_EXECUTE_READWRITE, oldPerm)
         err18083 == 0 && error(Libc.GetLastError())
     end
 end
 
-let
-    old_have_color = Base.have_color
-    try
-        @eval Base have_color = true
-        buf = IOBuffer()
-        print_with_color(:red, buf, "foo")
-        @test startswith(String(take!(buf)), Base.text_colors[:red])
-    finally
-        @eval Base have_color = $(old_have_color)
-    end
+let buf = IOBuffer()
+    printstyled(IOContext(buf, :color=>true), "foo", color=:red)
+    @test startswith(String(take!(buf)), Base.text_colors[:red])
 end
 
-# Test that `print_with_color` accepts non-string values, just as `print` does
-let
-    old_have_color = Base.have_color
-    try
-        @eval Base have_color = true
-        buf_color = IOBuffer()
-        args = (3.2, "foo", :testsym)
-        print_with_color(:red, buf_color, args...)
-        buf_plain = IOBuffer()
-        print(buf_plain, args...)
-        expected_str = string(Base.text_colors[:red],
-                              String(take!(buf_plain)),
-                              Base.text_colors[:default])
-        @test expected_str == String(take!(buf_color))
-    finally
-        @eval Base have_color = $(old_have_color)
-    end
+# Test that `printstyled` accepts non-string values, just as `print` does
+let buf_color = IOBuffer()
+    args = (3.2, "foo", :testsym)
+    printstyled(IOContext(buf_color, :color=>true), args..., color=:red)
+    buf_plain = IOBuffer()
+    print(buf_plain, args...)
+    expected_str = string(Base.text_colors[:red],
+                          String(take!(buf_plain)),
+                          Base.text_colors[:default])
+    @test expected_str == String(take!(buf_color))
+end
+
+# Test that `printstyled` on multiline input prints the ANSI codes
+# on each line
+let buf_color = IOBuffer()
+    str = "Two\nlines"
+    printstyled(IOContext(buf_color, :color=>true), str; bold=true, color=:red)
+    @test String(take!(buf_color)) == "\e[31m\e[1mTwo\e[22m\e[39m\n\e[31m\e[1mlines\e[22m\e[39m"
+end
+
+if stdout isa Base.TTY
+    @test haskey(stdout, :color) == true
+    @test haskey(stdout, :bar) == false
+    @test (:color=>Base.have_color) in stdout
+    @test (:color=>!Base.have_color) ∉ stdout
+    @test stdout[:color] == get(stdout, :color, nothing) == Base.have_color
+    @test get(stdout, :bar, nothing) === nothing
+    @test_throws KeyError stdout[:bar]
 end
 
 let
@@ -629,21 +479,15 @@ let
     @test c_18711 == 1
 end
 
-let
-    old_have_color = Base.have_color
-    try
-        @eval Base have_color = true
-        buf = IOBuffer()
-        print_with_color(:red, buf, "foo")
-        # Check that we get back to normal text color in the end
-        @test String(take!(buf)) == "\e[31mfoo\e[39m"
+let buf = IOBuffer()
+    buf_color = IOContext(buf, :color => true)
+    printstyled(buf_color, "foo", color=:red)
+    # Check that we get back to normal text color in the end
+    @test String(take!(buf)) == "\e[31mfoo\e[39m"
 
-        # Check that boldness is turned off
-        print_with_color(:red, buf, "foo"; bold = true)
-        @test String(take!(buf)) == "\e[1m\e[31mfoo\e[39m\e[22m"
-    finally
-        @eval Base have_color = $(old_have_color)
-    end
+    # Check that boldness is turned off
+    printstyled(buf_color, "foo"; bold=true, color=:red)
+    @test String(take!(buf)) == "\e[31m\e[1mfoo\e[22m\e[39m"
 end
 
 abstract type DA_19281{T, N} <: AbstractArray{T, N} end
@@ -677,10 +521,10 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
         Demo_20254(string.(arr))
     end
 
-    _unsafe_get_19433(x::NTuple{1}) = (unsafe_get(x[1]),)
-    _unsafe_get_19433(xs::Vararg) = (unsafe_get(xs[1]), _unsafe_get_19433(xs[2:end])...)
+    _get_19433(x::NTuple{1}) = (something(x[1]),)
+    _get_19433(xs::Vararg) = (something(xs[1]), _get_19433(xs[2:end])...)
 
-    f_19433(f_19433, xs...) = f_19433(_unsafe_get_19433(xs)...)
+    f_19433(f_19433, xs...) = f_19433(_get_19433(xs)...)
 
     @testset "test this does not crash, issue #19433 and #20254" begin
         @test_throws StackOverflowError Demo_20254()
@@ -729,7 +573,7 @@ end
 # Endian tests
 # For now, we only support little endian.
 # Add an `Sys.ARCH` test for big endian when/if we add support for that.
-# Do **NOT** use `ENDIAN_BOM` to figure out the endianess
+# Do **NOT** use `ENDIAN_BOM` to figure out the endianness
 # since that's exactly what we want to test.
 @test ENDIAN_BOM == 0x04030201
 @test ntoh(0x1) == 0x1
@@ -757,13 +601,88 @@ end
 
 include("testenv.jl")
 
-let flags = Cmd(filter(a->!contains(a, "depwarn"), collect(test_exeflags)))
+let flags = Cmd(filter(a->!occursin("depwarn", a), collect(test_exeflags)))
     local cmd = `$test_exename $flags deprecation_exec.jl`
 
-    if !success(pipeline(cmd; stdout=STDOUT, stderr=STDERR))
+    if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
         error("Deprecation test failed, cmd : $cmd")
     end
 end
 
 # PR #23664, make sure names don't get added to the default `Main` workspace
 @test readlines(`$(Base.julia_cmd()) --startup-file=no -e 'foreach(println, names(Main))'`) == ["Base","Core","Main"]
+
+# issue #26310
+@test_warn "could not import" Core.eval(@__MODULE__, :(import .notdefined_26310__))
+@test_warn "could not import" Core.eval(Main,        :(import ........notdefined_26310__))
+@test_nowarn Core.eval(Main, :(import .Main))
+@test_nowarn Core.eval(Main, :(import ....Main))
+
+# issue #27239
+@testset "strftime tests issue #27239" begin
+
+    # save current locales
+    locales = Dict()
+    for cat in 0:9999
+        cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, C_NULL)
+        if cstr != C_NULL
+            locales[cat] = unsafe_string(cstr)
+        end
+    end
+
+    # change to non-Unicode Korean
+    for (cat, _) in locales
+        korloc = ["ko_KR.EUC-KR", "ko_KR.CP949", "ko_KR.949", "Korean_Korea.949"]
+        for lc in korloc
+            cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, lc)
+        end
+    end
+
+    # system dependent formats
+    timestr_c = Libc.strftime(0.0)
+    timestr_aAbBpZ = Libc.strftime("%a %A %b %B %p %Z", 0)
+
+    # recover locales
+    for (cat, lc) in locales
+        cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, lc)
+    end
+
+    # tests
+    @test isvalid(timestr_c)
+    @test isvalid(timestr_aAbBpZ)
+end
+
+
+using Base: @kwdef
+
+@kwdef struct Test27970Typed
+    a::Int
+    b::String = "hi"
+end
+
+@kwdef struct Test27970Untyped
+    a
+end
+
+@kwdef struct Test27970Empty end
+
+@testset "No default values in @kwdef" begin
+    @test Test27970Typed(a=1) == Test27970Typed(1, "hi")
+    # Implicit type conversion (no assertion on kwarg)
+    @test Test27970Typed(a=0x03) == Test27970Typed(3, "hi")
+    @test_throws UndefKeywordError Test27970Typed()
+
+    @test Test27970Untyped(a=1) == Test27970Untyped(1)
+    @test_throws UndefKeywordError Test27970Untyped()
+
+    # Just checking that this doesn't stack overflow on construction
+    @test Test27970Empty() == Test27970Empty()
+end
+
+@testset "exports of modules" begin
+    for (_, mod) in Base.loaded_modules
+       for v in names(mod)
+           @test isdefined(mod, v)
+       end
+   end
+end

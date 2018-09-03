@@ -148,7 +148,7 @@ static Value *uint_cnvt(jl_codectx_t &ctx, Type *to, Value *x)
 
 static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
 {
-    // assumes `jl_isbits(bt)`.
+    // assumes `jl_justbits(bt)`.
     // `ptr` can point to a inline field, do not read the tag from it.
     // make sure to return exactly the type specified by
     // julia_type_to_llvm as this will be assumed by the callee.
@@ -269,7 +269,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
     if (e == jl_false)
         return ConstantInt::get(T_int8, 0);
     jl_value_t *bt = jl_typeof(e);
-    if (!jl_isbits(bt))
+    if (!jl_justbits(bt))
         return NULL;
     return julia_const_to_llvm(e, (jl_datatype_t*)bt);
 }
@@ -279,9 +279,18 @@ static jl_cgval_t ghostValue(jl_value_t *ty);
 static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
 {
     Type *ty = unboxed->getType();
-    assert(ty != T_void);
     bool frompointer = ty->isPointerTy();
     bool topointer = to->isPointerTy();
+    const DataLayout &DL = jl_data_layout;
+    if (ty == T_int1 && to == T_int8) {
+        // bools may be stored internally as int8
+        unboxed = ctx.builder.CreateZExt(unboxed, T_int8);
+    }
+    else if (ty == T_void || DL.getTypeSizeInBits(ty) != DL.getTypeSizeInBits(to)) {
+        // this can happen in dead code
+        //emit_unreachable(ctx);
+        return UndefValue::get(to);
+    }
     if (frompointer && topointer) {
         unboxed = emit_bitcast(ctx, unboxed, to);
     }
@@ -297,10 +306,6 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
             unboxed = ctx.builder.CreateBitCast(unboxed, INTT_to);
         unboxed = ctx.builder.CreateIntToPtr(unboxed, to);
     }
-    else if (ty == T_int1 && to == T_int8) {
-        // bools may be stored internally as int8
-        unboxed = ctx.builder.CreateZExt(unboxed, T_int8);
-    }
     else if (ty != to) {
         unboxed = ctx.builder.CreateBitCast(unboxed, to);
     }
@@ -308,7 +313,7 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
 }
 
 // emit code to unpack a raw value from a box into registers or a stack slot
-static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *dest, bool volatile_store)
+static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *dest, MDNode *tbaa_dest, bool isVolatile)
 {
     assert(to != T_void);
     // TODO: fully validate that x.typ == jt?
@@ -319,7 +324,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         if (type_is_ghost(to)) {
             return NULL;
         }
-        //emit_error(ctx, "emit_unbox: a type mismatch error in occurred during codegen");
+        //emit_unreachable(ctx);
         return UndefValue::get(to); // type mismatch error
     }
 
@@ -331,36 +336,37 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         Type *dest_ty = unboxed->getType()->getPointerTo();
         if (dest->getType() != dest_ty)
             dest = emit_bitcast(ctx, dest, dest_ty);
-        ctx.builder.CreateStore(unboxed, dest, volatile_store);
+        tbaa_decorate(tbaa_dest, ctx.builder.CreateStore(unboxed, dest));
         return NULL;
     }
 
     // bools stored as int8, so an extra Trunc is needed to get an int1
     Value *p = x.constant ? literal_pointer_val(ctx, x.constant) : x.V;
-    Type *ptype = (to == T_int1 ? T_pint8 : to->getPointerTo());
 
-    Value *unboxed = NULL;
-    if (to == T_int1)
-        unboxed = ctx.builder.CreateTrunc(tbaa_decorate(x.tbaa, ctx.builder.CreateLoad(maybe_bitcast(ctx, p, ptype))), T_int1);
-    else if (jt == (jl_value_t*)jl_bool_type)
-        unboxed = ctx.builder.CreateZExt(ctx.builder.CreateTrunc(tbaa_decorate(x.tbaa, ctx.builder.CreateLoad(maybe_bitcast(ctx, p, ptype))), T_int1), to);
-    if (unboxed) {
+    if (jt == (jl_value_t*)jl_bool_type || to == T_int1) {
+        Instruction *unbox_load = tbaa_decorate(x.tbaa, ctx.builder.CreateLoad(T_int8, maybe_bitcast(ctx, p, T_pint8)));
+        if (jt == (jl_value_t*)jl_bool_type)
+            unbox_load->setMetadata(LLVMContext::MD_range, MDNode::get(jl_LLVMContext, {
+                ConstantAsMetadata::get(ConstantInt::get(T_int8, 0)),
+                ConstantAsMetadata::get(ConstantInt::get(T_int8, 2)) }));
+        Value *unboxed;
+        if (to == T_int1)
+            unboxed = ctx.builder.CreateTrunc(unbox_load, T_int1);
+        else
+            unboxed = unbox_load; // `to` must be T_int8
         if (!dest)
             return unboxed;
-        ctx.builder.CreateStore(unboxed, dest);
+        Type *dest_ty = unboxed->getType()->getPointerTo();
+        if (dest->getType() != dest_ty)
+            dest = emit_bitcast(ctx, dest, dest_ty);
+        tbaa_decorate(tbaa_dest, ctx.builder.CreateStore(unboxed, dest));
         return NULL;
     }
 
-    unsigned alignment = julia_alignment(jt, 0);
+    unsigned alignment = julia_alignment(jt);
+    Type *ptype = to->getPointerTo();
     if (dest) {
-        MDNode *tbaa = x.tbaa;
-        // the memcpy intrinsic does not allow to specify different alias tags
-        // for the load part (x.tbaa) and the store part (tbaa_stack).
-        // since the tbaa lattice has to be a tree we have unfortunately
-        // x.tbaa ∪ tbaa_stack = tbaa_root if x.tbaa != tbaa_stack
-        if (tbaa != tbaa_stack)
-            tbaa = NULL;
-        emit_memcpy(ctx, dest, p, jl_datatype_size(jt), alignment, volatile_store, tbaa);
+        emit_memcpy(ctx, dest, tbaa_dest, p, x.tbaa, jl_datatype_size(jt), alignment, false);
         return NULL;
     }
     else {
@@ -371,11 +377,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
             // appropriate coercion manually.
             AllocaInst *AI = cast<AllocaInst>(p);
             Type *AllocType = AI->getAllocatedType();
-#if JL_LLVM_VERSION >= 40000
             const DataLayout &DL = jl_data_layout;
-#else
-            const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
-#endif
             if (!AI->isArrayAllocation() &&
                     (AllocType->isFloatingPointTy() || AllocType->isIntegerTy() || AllocType->isPointerTy()) &&
                     (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
@@ -435,15 +437,15 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
         Value *typ = emit_typeof_boxed(ctx, v);
         if (!jl_is_primitivetype(v.typ)) {
             if (isboxed) {
-                Value *isbits = emit_datatype_isbitstype(ctx, typ);
-                error_unless(ctx, isbits, "bitcast: expected primitive type value for second argument");
+                Value *isprimitive = emit_datatype_isprimitivetype(ctx, typ);
+                error_unless(ctx, isprimitive, "bitcast: expected primitive type value for second argument");
             }
             else {
                 emit_error(ctx, "bitcast: expected primitive type value for second argument");
                 return jl_cgval_t();
             }
         }
-        if (jl_datatype_size(v.typ) != nb) {
+        if (!jl_is_datatype(v.typ) || jl_datatype_size(v.typ) != nb) {
             if (isboxed) {
                 Value *size = emit_datatype_size(ctx, typ);
                 error_unless(ctx,
@@ -488,7 +490,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
             vx = emit_bitcast(ctx, vx, llvmt);
     }
 
-    if (jl_is_leaf_type(bt)) {
+    if (jl_is_concrete_type(bt)) {
         return mark_julia_type(ctx, vx, false, bt);
     }
     else {
@@ -619,19 +621,20 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
                 ety);
     }
     else if (!jl_isbits(ety)) {
-        if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety)) {
+        if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_concrete_type(ety)) {
             emit_error(ctx, "pointerref: invalid pointer type");
             return jl_cgval_t();
         }
         assert(jl_is_datatype(ety));
         uint64_t size = jl_datatype_size(ety);
         Value *strct = emit_allocobj(ctx, size,
-                                     literal_pointer_val(ctx, (jl_value_t*)ety));
+                                     literal_pointer_val(ctx, ety));
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         Value *thePtr = emit_unbox(ctx, T_pint8, e, e.typ);
         thePtr = ctx.builder.CreateGEP(T_int8, emit_bitcast(ctx, thePtr, T_pint8), im1);
-        emit_memcpy(ctx, strct, thePtr, size, 1);
+        MDNode *tbaa = best_tbaa(ety);
+        emit_memcpy(ctx, strct, tbaa, thePtr, nullptr, size, 1);
         return mark_julia_type(ctx, strct, true, ety);
     }
     else {
@@ -687,7 +690,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         tbaa_decorate(tbaa_data, store);
     }
     else if (!jl_isbits(ety)) {
-        if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety)) {
+        if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_concrete_type(ety)) {
             emit_error(ctx, "pointerset: invalid pointer type");
             return jl_cgval_t();
         }
@@ -695,7 +698,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         uint64_t size = jl_datatype_size(ety);
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
-        emit_memcpy(ctx, ctx.builder.CreateGEP(T_int8, thePtr, im1), x, size, align_nb);
+        emit_memcpy(ctx, ctx.builder.CreateGEP(T_int8, thePtr, im1), nullptr, x, size, align_nb);
     }
     else {
         bool isboxed;
@@ -744,14 +747,10 @@ struct math_builder {
         if (jl_options.fast_math != JL_OPTIONS_FAST_MATH_OFF &&
             (always_fast ||
              jl_options.fast_math == JL_OPTIONS_FAST_MATH_ON)) {
-            fmf.setUnsafeAlgebra();
+            fmf.setFast();
         }
-#if JL_LLVM_VERSION >= 50000
         if (contract)
             fmf.setAllowContract(true);
-#else
-        assert(!contract);
-#endif
         ctxbuilder.setFastMathFlags(fmf);
     }
     IRBuilder<>& operator()() const { return ctxbuilder; }
@@ -762,6 +761,135 @@ struct math_builder {
 
 static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **argvalues, size_t nargs,
                                      jl_datatype_t **newtyp, jl_value_t *xtyp);
+
+
+static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_cgval_t y, jl_value_t *rt_hint)
+{
+    Value *isfalse = emit_condition(ctx, c, "ifelse");
+    jl_value_t *t1 = x.typ;
+    jl_value_t *t2 = y.typ;
+    // handle cases where the condition is irrelevant based on type info
+    if (t1 == jl_bottom_type && t2 == jl_bottom_type)
+        return jl_cgval_t(); // undefined
+    if (t1 == jl_bottom_type)
+        return y;
+    if (t2 == jl_bottom_type)
+        return x;
+
+    if (t1 != t2) {
+        // type inference may know something we don't, in which case it may
+        // be illegal for us to convert to rt_hint. Check first if either
+        // of the types have empty intersection with the result type,
+        // in which case, we may use the other one.
+        if (jl_type_intersection(t1, rt_hint) == jl_bottom_type)
+            return y;
+        else if (jl_type_intersection(t2, rt_hint) == jl_bottom_type)
+            return x;
+        // if they aren't the same type, consider using the expr type
+        // to instantiate a union-split optimization
+        x = convert_julia_type(ctx, x, rt_hint);
+        y = convert_julia_type(ctx, y, rt_hint);
+        t1 = x.typ;
+        t2 = y.typ;
+    }
+
+    Value *ifelse_result;
+    bool isboxed;
+    Type *llt1 = julia_type_to_llvm(t1, &isboxed);
+    if (t1 != t2)
+        isboxed = true;
+    if (!isboxed) {
+        if (type_is_ghost(llt1))
+            return x;
+        ifelse_result = ctx.builder.CreateSelect(isfalse,
+                emit_unbox(ctx, llt1, y, t1),
+                emit_unbox(ctx, llt1, x, t1));
+    }
+    else {
+        Value *x_tindex = x.TIndex;
+        Value *y_tindex = y.TIndex;
+        if (x_tindex || y_tindex) {
+            if (!x.isghost)
+                x = value_to_pointer(ctx, x);
+            if (!y.isghost)
+                y = value_to_pointer(ctx, y);
+            Value *x_vboxed = x.Vboxed;
+            Value *y_vboxed = y.Vboxed;
+            Value *x_ptr = (x.isghost ? NULL : data_pointer(ctx, x));
+            Value *y_ptr = (y.isghost ? NULL : data_pointer(ctx, y));
+            if (!x.isghost && x.constant)
+                x_vboxed = boxed(ctx, x);
+            if (!y.isghost && y.constant)
+                y_vboxed = boxed(ctx, y);
+            if (!x_ptr && !y_ptr) {
+                ifelse_result = NULL;
+            }
+            else if (!x_ptr) {
+                ifelse_result = y_ptr;
+            }
+            else if (!y_ptr) {
+                ifelse_result = x_ptr;
+            }
+            else {
+                x_ptr = decay_derived(x_ptr);
+                y_ptr = decay_derived(y_ptr);
+                if (x_ptr->getType() != y_ptr->getType())
+                    y_ptr = ctx.builder.CreateBitCast(y_ptr, x_ptr->getType());
+                ifelse_result = ctx.builder.CreateSelect(isfalse, y_ptr, x_ptr);
+            }
+            Value *tindex;
+            if (!x_tindex && x.constant) {
+                x_tindex = ConstantInt::get(T_int8, 0x80 | get_box_tindex((jl_datatype_t*)jl_typeof(x.constant), rt_hint));
+            }
+            if (!y_tindex && y.constant) {
+                y_tindex = ConstantInt::get(T_int8, 0x80 | get_box_tindex((jl_datatype_t*)jl_typeof(y.constant), rt_hint));
+            }
+            if (x_tindex && y_tindex) {
+                tindex = ctx.builder.CreateSelect(isfalse, y_tindex, x_tindex);
+            }
+            else {
+                PHINode *ret = PHINode::Create(T_int8, 2);
+                BasicBlock *post = BasicBlock::Create(jl_LLVMContext, "post", ctx.f);
+                BasicBlock *compute = BasicBlock::Create(jl_LLVMContext, "compute_tindex", ctx.f);
+                // compute tindex if we select the previously-boxed value
+                if (x_tindex) {
+                    assert(y.isboxed && y.V);
+                    ctx.builder.CreateCondBr(isfalse, compute, post);
+                    ret->addIncoming(x_tindex, ctx.builder.GetInsertBlock());
+                    ctx.builder.SetInsertPoint(compute);
+                    tindex = compute_tindex_unboxed(ctx, y, rt_hint);
+                }
+                else {
+                    assert(x.isboxed);
+                    ctx.builder.CreateCondBr(isfalse, post, compute);
+                    ret->addIncoming(y_tindex, ctx.builder.GetInsertBlock());
+                    ctx.builder.SetInsertPoint(compute);
+                    tindex = compute_tindex_unboxed(ctx, x, rt_hint);
+                }
+                tindex = ctx.builder.CreateOr(tindex, ConstantInt::get(T_int8, 0x80));
+                ret->addIncoming(tindex, compute);
+                ctx.builder.CreateBr(post);
+                ctx.builder.SetInsertPoint(post);
+                ctx.builder.Insert(ret);
+                tindex = ret;
+            }
+            jl_cgval_t ret = mark_julia_slot(ifelse_result, rt_hint, tindex, tbaa_data);
+            if (x_vboxed || y_vboxed) {
+                if (!x_vboxed)
+                    x_vboxed = ConstantPointerNull::get(cast<PointerType>(y_vboxed->getType()));
+                if (!y_vboxed)
+                    y_vboxed = ConstantPointerNull::get(cast<PointerType>(x_vboxed->getType()));
+                ret.Vboxed = ctx.builder.CreateSelect(isfalse, y_vboxed, x_vboxed);
+            }
+            return ret;
+        }
+        ifelse_result = ctx.builder.CreateSelect(isfalse,
+                boxed(ctx, y),
+                boxed(ctx, x));
+    }
+    jl_value_t *jt = (t1 == t2 ? t1 : rt_hint);
+    return mark_julia_type(ctx, ifelse_result, isboxed, jt);
+}
 
 static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **args, size_t nargs)
 {
@@ -788,7 +916,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 
     switch (f) {
     case arraylen:
-        return mark_julia_type(ctx, emit_arraylen(ctx, argv[0], args[1]), false, jl_long_type);
+        return mark_julia_type(ctx, emit_arraylen(ctx, argv[0]), false, jl_long_type);
     case pointerref:
         return emit_pointerref(ctx, argv);
     case pointerset:
@@ -813,42 +941,6 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         return generic_cast(ctx, f, generic_fptrunc, argv, false, false);
     case fpext:
         return generic_cast(ctx, f, generic_fpext, argv, false, false);
-
-    case select_value: {
-        Value *isfalse = emit_condition(ctx, argv[0], "select_value"); // emit the first argument
-        // emit X and Y arguments
-        const jl_cgval_t &x = argv[1];
-        const jl_cgval_t &y = argv[2];
-        jl_value_t *t1 = x.typ;
-        jl_value_t *t2 = y.typ;
-        // check the return value was valid
-        if (t1 == jl_bottom_type && t2 == jl_bottom_type)
-            return jl_cgval_t(); // undefined
-        if (t1 == jl_bottom_type)
-            return y;
-        if (t2 == jl_bottom_type)
-            return x;
-
-        Value *ifelse_result;
-        bool isboxed;
-        Type *llt1 = julia_type_to_llvm(t1, &isboxed);
-        if (t1 != t2)
-            isboxed = true;
-        if (!isboxed) {
-            if (type_is_ghost(llt1))
-                return x;
-            ifelse_result = ctx.builder.CreateSelect(isfalse,
-                    emit_unbox(ctx, llt1, y, t1),
-                    emit_unbox(ctx, llt1, x, t1));
-        }
-        else {
-            ifelse_result = ctx.builder.CreateSelect(isfalse,
-                    boxed(ctx, y),
-                    boxed(ctx, x));
-        }
-        jl_value_t *jt = (t1 == t2 ? t1 : (jl_value_t*)jl_any_type);
-        return mark_julia_type(ctx, ifelse_result, isboxed, jt);
-    }
 
     case not_int: {
         const jl_cgval_t &x = argv[0];
@@ -971,18 +1063,11 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         return ctx.builder.CreateCall(fmaintr, {x, y, z});
     }
     case muladd_float: {
-#if JL_LLVM_VERSION >= 50000
         // LLVM 5.0 can create FMA in the backend for contractable fmul and fadd
         // Emitting fmul and fadd here since they are easier for other LLVM passes to
         // optimize.
         auto mathb = math_builder(ctx, false, true);
         return mathb().CreateFAdd(mathb().CreateFMul(x, y), z);
-#else
-        assert(y->getType() == x->getType());
-        assert(z->getType() == y->getType());
-        Value *muladdintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fmuladd, makeArrayRef(t));
-        return ctx.builder.CreateCall(muladdintr, {x, y, z});
-#endif
     }
 
     case checked_sadd_int:
@@ -1196,12 +1281,14 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     assert(0 && "unreachable");
 }
 
-#define BOX_F(ct,jl_ct)                                                  \
-    box_##ct##_func = boxfunc_llvm(ft1arg(T_prjlvalue, T_##jl_ct),       \
+#define BOX_F(ct,jl_ct,rt)                                      \
+    box_##ct##_func = boxfunc_llvm(ft1arg(rt, T_##jl_ct),       \
                                    "jl_box_"#ct, &jl_box_##ct, m);
 
-#define SBOX_F(ct,jl_ct) BOX_F(ct,jl_ct); box_##ct##_func->addAttribute(1, Attribute::SExt);
-#define UBOX_F(ct,jl_ct) BOX_F(ct,jl_ct); box_##ct##_func->addAttribute(1, Attribute::ZExt);
+#define SBOX_F(ct,jl_ct) BOX_F(ct,jl_ct,T_prjlvalue); box_##ct##_func->addAttribute(1, Attribute::SExt);
+#define UBOX_F(ct,jl_ct) BOX_F(ct,jl_ct,T_prjlvalue); box_##ct##_func->addAttribute(1, Attribute::ZExt);
+#define SBOX_F_PERM(ct,jl_ct) BOX_F(ct,jl_ct,T_pjlvalue); box_##ct##_func->addAttribute(1, Attribute::SExt);
+#define UBOX_F_PERM(ct,jl_ct) BOX_F(ct,jl_ct,T_pjlvalue); box_##ct##_func->addAttribute(1, Attribute::ZExt);
 
 template<typename T>
 static Function *boxfunc_llvm(FunctionType *ft, const std::string &cname,
@@ -1215,15 +1302,5 @@ static Function *boxfunc_llvm(FunctionType *ft, const std::string &cname,
 
 static FunctionType *ft1arg(Type *ret, Type *arg)
 {
-    std::vector<Type*> args1(0);
-    args1.push_back(arg);
-    return FunctionType::get(ret, args1, false);
-}
-
-static FunctionType *ft2arg(Type *ret, Type *arg1, Type *arg2)
-{
-    std::vector<Type*> args2(0);
-    args2.push_back(arg1);
-    args2.push_back(arg2);
-    return FunctionType::get(ret, args2, false);
+    return FunctionType::get(ret, { arg }, false);
 }

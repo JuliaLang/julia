@@ -26,6 +26,9 @@ using Test
     @test mod.([t, t, t, t, t], Dates.Year(2)) == ([t, t, t, t, t])
     @test [t, t, t] / t2 == [0.5, 0.5, 0.5]
     @test abs(-t) == t
+    @test sign(t) == sign(t2) == 1
+    @test sign(-t) == sign(-t2) == -1
+    @test sign(Dates.Year(0)) == 0
 end
 @testset "div/mod/gcd/lcm/rem" begin
     @test Dates.Year(10) % Dates.Year(4) == Dates.Year(2)
@@ -244,13 +247,17 @@ end
     @test Dates.Millisecond(1) == Dates.Millisecond(1)
     @test_throws MethodError Dates.Year(1) < Dates.Millisecond(1)
     @test_throws MethodError Dates.Millisecond(1) < Dates.Year(1)
-    @test_throws MethodError Dates.Year(1) == Dates.Millisecond(1)
-    @test_throws MethodError Dates.Millisecond(1) == Dates.Year(1)
+
+    # issue #27076
+    @test Dates.Year(1) != Dates.Millisecond(1)
+    @test Dates.Millisecond(1) != Dates.Year(1)
 end
 
 struct Beat <: Dates.Period
     value::Int64
 end
+
+Beat(p::Period) = Beat(Dates.toms(p) ÷ 86400)
 
 @testset "comparisons with new subtypes of Period" begin
     # https://en.wikipedia.org/wiki/Swatch_Internet_Time

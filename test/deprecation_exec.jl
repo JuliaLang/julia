@@ -1,4 +1,14 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
+# Tests for deprecated functionality.
+#
+# These can't be run with --depwarn=error, so currently require special
+# treatment when run inside the test system.
+
 using Test
+using Logging
+
+using Base: remove_linenums!
 
 module DeprecationTests # to test @deprecate
     f() = true
@@ -70,8 +80,7 @@ end
     @noinline function f21972()
         T21972()
     end
-    @test_warn "deprecated" f21972()
-    @test_nowarn f21972()
+    @test_deprecated "something" f21972()
 end
 
 f24658() = depwarn24658()
@@ -80,5 +89,34 @@ depwarn24658() = Base.firstcaller(backtrace(), :_func_not_found_)
 
 @testset "firstcaller" begin
     # issue #24658
-    @test eval(:(if true; f24658(); end)) == StackTraces.UNKNOWN
+    @test eval(:(if true; f24658(); end)) == (Ptr{Cvoid}(0),StackTraces.UNKNOWN)
 end
+
+# issue #25130
+f25130() = Base.depwarn("f25130 message", :f25130)
+# The following test is for the depwarn behavior of expressions evaluated at
+# top-level, so we can't use the usual `collect_test_logs()` / `with_logger()`
+testlogger = Test.TestLogger()
+prev_logger = global_logger(testlogger)
+# Each call at top level should be distinct. This won't be true if they're
+# attributed to internal C frames (including generic dispatch machinery)
+f25130()
+f25130()
+testlogs = testlogger.logs
+@test length(testlogs) == 2
+@test testlogs[1].id != testlogs[2].id
+@test testlogs[1].kwargs[:caller].func == Symbol("top-level scope")
+@test all(l.message == "f25130 message" for l in testlogs)
+global_logger(prev_logger)
+
+
+#-------------------------------------------------------------------------------
+# BEGIN 0.7 deprecations
+
+@testset "parser syntax deprecations" begin
+    # #15524
+    # @test (@test_deprecated Meta.parse("for a=b f() end")) == :(for a=b; f() end)
+    @test_broken length(Test.collect_test_logs(()->Meta.parse("for a=b f() end"))[1]) > 0
+end
+
+# END 0.7 deprecations

@@ -23,7 +23,7 @@ if !@isdefined(testenv_defined)
     if haskey(ENV, "JULIA_TEST_EXENAME")
         const test_exename = `$(Base.shell_split(ENV["JULIA_TEST_EXENAME"]))`
     else
-        const test_exename = `$(joinpath(JULIA_HOME, Base.julia_exename()))`
+        const test_exename = `$(joinpath(Sys.BINDIR, Base.julia_exename()))`
     end
 
     addprocs_with_testenv(X; kwargs...) = addprocs(X; exename=test_exename, exeflags=test_exeflags, kwargs...)

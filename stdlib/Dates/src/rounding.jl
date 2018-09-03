@@ -170,7 +170,7 @@ julia> ceil(Dates.Minute(44), Dates.Minute(15))
 45 minutes
 
 julia> ceil(Dates.Hour(36), Dates.Day)
-3 days
+2 days
 ```
 
 Rounding to a `precision` of `Month`s or `Year`s is not supported, as these `Period`s are of
@@ -250,7 +250,7 @@ julia> round(Dates.Minute(44), Dates.Minute(15))
 45 minutes
 
 julia> round(Dates.Hour(36), Dates.Day)
-3 days
+2 days
 ```
 
 Valid rounding modes for `round(::Period, ::T, ::RoundingMode)` are `RoundNearestTiesUp`

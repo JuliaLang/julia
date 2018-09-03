@@ -1,6 +1,8 @@
 #!/usr/bin/env julia
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Libdl
+
 const options = [
     "--cflags",
     "--ldflags",
@@ -11,7 +13,7 @@ const options = [
 threadingOn() = ccall(:jl_threading_enabled, Cint, ()) != 0
 
 function shell_escape(str)
-    str = replace(str, "'", "'\''")
+    str = replace(str, "'" => "'\''")
     return "'$str'"
 end
 
@@ -23,10 +25,10 @@ function libDir()
     end
 end
 
-private_libDir() = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
+private_libDir() = abspath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
 
 function includeDir()
-    return abspath(JULIA_HOME, Base.INCLUDEDIR, "julia")
+    return abspath(Sys.BINDIR, Base.INCLUDEDIR, "julia")
 end
 
 function ldflags()
@@ -73,7 +75,7 @@ end
 function check_args(args)
     checked = intersect(args, options)
     if length(checked) == 0 || length(checked) != length(args)
-        println(STDERR, "Usage: julia-config [", join(options, " | "), "]")
+        println(stderr, "Usage: julia-config [", join(options, " | "), "]")
         exit(1)
     end
 end

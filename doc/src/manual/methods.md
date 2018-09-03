@@ -509,12 +509,12 @@ julia> f(1)
 julia> g(1)
 "definition for Int"
 
-julia> wait(schedule(t, 1))
+julia> fetch(schedule(t, 1))
 "original definition"
 
 julia> t = @async f(wait()); yield();
 
-julia> wait(schedule(t, 1))
+julia> fetch(schedule(t, 1))
 "definition for Int"
 ```
 
@@ -593,7 +593,7 @@ The subtypes of `AbstractArray` typically implement two methods to
 achieve this:
 A method to convert the input array to a subtype of a specific `AbstractArray{T, N}` abstract type;
 and a method to make a new uninitialized array with a specific element type.
-Sample implementations of these can be found in the standard library.
+Sample implementations of these can be found in Julia Base.
 Here is a basic example usage of them, guaranteeing that `input` and
 `output` are of the same type:
 
@@ -605,11 +605,11 @@ output = similar(input, Eltype)
 As an extension of this, in cases where the algorithm needs a copy of
 the input array,
 [`convert`](@ref) is insufficient as the return value may alias the original input.
-Combining [`similar`](@ref) (to make the output array) and [`copy!`](@ref) (to fill it with the input data)
+Combining [`similar`](@ref) (to make the output array) and [`copyto!`](@ref) (to fill it with the input data)
 is a generic way to express the requirement for a mutable copy of the input argument:
 
 ```julia
-copy_with_eltype(input, Eltype) = copy!(similar(input, Eltype), input)
+copy_with_eltype(input, Eltype) = copyto!(similar(input, Eltype), input)
 ```
 
 ### Iterated dispatch
@@ -789,10 +789,10 @@ Closest candidates are:
 More usefully, it is possible to constrain varargs methods by a parameter. For example:
 
 ```julia
-function getindex(A::AbstractArray{T,N}, indexes::Vararg{Number,N}) where {T,N}
+function getindex(A::AbstractArray{T,N}, indices::Vararg{Number,N}) where {T,N}
 ```
 
-would be called only when the number of `indexes` matches the dimensionality of the array.
+would be called only when the number of `indices` matches the dimensionality of the array.
 
 When only the type of supplied arguments needs to be constrained `Vararg{T}` can be equivalently
 written as `T...`. For instance `f(x::Int...) = x` is a shorthand for `f(x::Vararg{Int}) = x`.
@@ -851,10 +851,13 @@ julia> function (p::Polynomial)(x)
            end
            return v
        end
+
+julia> (p::Polynomial)() = p(5)
 ```
 
-Notice that the function is specified by type instead of by name. In the function body, `p` will
-refer to the object that was called. A `Polynomial` can be used as follows:
+Notice that the function is specified by type instead of by name. As with normal functions
+there is a terse syntax form. In the function body, `p` will refer to the object that was
+called. A `Polynomial` can be used as follows:
 
 ```jldoctest polynomial
 julia> p = Polynomial([1,10,100])
@@ -862,10 +865,13 @@ Polynomial{Int64}([1, 10, 100])
 
 julia> p(3)
 931
+
+julia> p()
+2551
 ```
 
 This mechanism is also the key to how type constructors and closures (inner functions that refer
-to their surrounding environment) work in Julia, discussed [later in the manual](@ref constructors-and-conversion).
+to their surrounding environment) work in Julia.
 
 ## Empty generic functions
 

@@ -3,8 +3,8 @@
 module Multimedia
 
 export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay,
-    MIME, @MIME_str, reprmime, stringmime, istextmime,
-    mimewritable, TextDisplay
+    MIME, @MIME_str, istextmime,
+    showable, TextDisplay
 
 ###########################################################################
 # We define a singleton type MIME{mime symbol} for each MIME type, so
@@ -14,9 +14,8 @@ export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay
 # defined in sysimg.jl for bootstrapping:
 # struct MIME{mime} end
 # macro MIME_str(s)
-import Base: MIME, @MIME_str
-
-import Base: show, print, string, convert
+import .Base: MIME, @MIME_str
+import .Base: show, print, string, convert, repr
 MIME(s) = MIME{Symbol(s)}()
 show(io::IO, ::MIME{mime}) where {mime} = print(io, "MIME type ", string(mime))
 print(io::IO, ::MIME{mime}) where {mime} = print(io, mime)
@@ -26,45 +25,48 @@ print(io::IO, ::MIME{mime}) where {mime} = print(io, mime)
 # in order to provide a way to export T as a given mime type.
 
 """
-    mimewritable(mime, x)
+    showable(mime, x)
 
-Returns a boolean value indicating whether or not the object `x` can be written as the given
-`mime` type. (By default, this is determined automatically by the existence of the
-corresponding [`show`](@ref) method for `typeof(x)`.)
+Returns a boolean value indicating whether or not the object `x` can be written
+as the given `mime` type.
+
+(By default, this is determined automatically by the existence of the
+corresponding [`show`](@ref) method for `typeof(x)`.  Some types provide custom `showable`
+methods; for example, if the available MIME formats depend on the *value* of `x`.)
 
 # Examples
 ```jldoctest
-julia> mimewritable(MIME("text/plain"), rand(5))
+julia> showable(MIME("text/plain"), rand(5))
 true
 
-julia> mimewritable(MIME("img/png"), rand(5))
+julia> showable("img/png", rand(5))
 false
 ```
 """
-mimewritable(::MIME{mime}, x) where {mime} =
-    method_exists(show, Tuple{IO, MIME{mime}, typeof(x)})
+showable(::MIME{mime}, @nospecialize x) where {mime} = hasmethod(show, Tuple{IO, MIME{mime}, typeof(x)})
+showable(m::AbstractString, @nospecialize x) = showable(MIME(m), x)
 
 """
-    show(stream, mime, x)
+    show(io, mime, x)
 
 The [`display`](@ref) functions ultimately call `show` in order to write an object `x` as a
-given `mime` type to a given I/O `stream` (usually a memory buffer), if possible. In order
+given `mime` type to a given I/O stream `io` (usually a memory buffer), if possible. In order
 to provide a rich multimedia representation of a user-defined type `T`, it is only necessary
-to define a new `show` method for `T`, via: `show(stream, ::MIME"mime", x::T) = ...`,
-where `mime` is a MIME-type string and the function body calls `write` (or similar) to write
-that representation of `x` to `stream`. (Note that the `MIME""` notation only supports
+to define a new `show` method for `T`, via: `show(io, ::MIME"mime", x::T) = ...`,
+where `mime` is a MIME-type string and the function body calls [`write`](@ref) (or similar) to write
+that representation of `x` to `io`. (Note that the `MIME""` notation only supports
 literal strings; to construct `MIME` types in a more flexible manner use
 `MIME{Symbol("")}`.)
 
 For example, if you define a `MyImage` type and know how to write it to a PNG file, you
-could define a function `show(stream, ::MIME"image/png", x::MyImage) = ...` to allow
+could define a function `show(io, ::MIME"image/png", x::MyImage) = ...` to allow
 your images to be displayed on any PNG-capable `AbstractDisplay` (such as IJulia). As usual, be sure
 to `import Base.show` in order to add new methods to the built-in Julia function
 `show`.
 
 The default MIME type is `MIME"text/plain"`. There is a fallback definition for `text/plain`
 output that calls `show` with 2 arguments. Therefore, this case should be handled by
-defining a 2-argument `show(stream::IO, x::MyType)` method.
+defining a 2-argument `show(io::IO, x::MyType)` method.
 
 Technically, the `MIME"mime"` macro defines a singleton type for the given `mime` string,
 which allows us to exploit Julia's dispatch mechanisms in determining how to display objects
@@ -74,56 +76,62 @@ The first argument to `show` can be an [`IOContext`](@ref) specifying output for
 See [`IOContext`](@ref) for details.
 """
 show(stream, mime, x)
-
-# it is convenient to accept strings instead of ::MIME
 show(io::IO, m::AbstractString, x) = show(io, MIME(m), x)
-mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
-
-verbose_show(io, m, x) = show(IOContext(io, :limit => false), m, x)
 
 """
-    reprmime(mime, x)
+    repr(mime, x; context=nothing)
 
 Returns an `AbstractString` or `Vector{UInt8}` containing the representation of
-`x` in the requested `mime` type, as written by `show` (throwing a
-`MethodError` if no appropriate `show` is available). An `AbstractString` is
+`x` in the requested `mime` type, as written by [`show(io, mime, x)`](@ref) (throwing a
+[`MethodError`](@ref) if no appropriate `show` is available). An `AbstractString` is
 returned for MIME types with textual representations (such as `"text/html"` or
 `"application/postscript"`), whereas binary data is returned as
 `Vector{UInt8}`. (The function `istextmime(mime)` returns whether or not Julia
 treats a given `mime` type as text.)
 
+The optional keyword argument `context` can be set to `:key=>value` pair
+or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
+stream passed to `show`.
+
 As a special case, if `x` is an `AbstractString` (for textual MIME types) or a
-`Vector{UInt8}` (for binary MIME types), the `reprmime` function assumes that
+`Vector{UInt8}` (for binary MIME types), the `repr` function assumes that
 `x` is already in the requested `mime` format and simply returns `x`. This
 special case does not apply to the `"text/plain"` MIME type. This is useful so
 that raw data can be passed to `display(m::MIME, x)`.
+
+In particular, `repr("text/plain", x)` is typically a "pretty-printed" version
+of `x` designed for human consumption.  See also [`repr(x)`](@ref) to instead
+return a string corresponding to [`show(x)`](@ref) that may be closer to how
+the value of `x` would be entered in Julia.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4];
+
+julia> repr("text/plain", A)
+"2×2 Array{Int64,2}:\\n 1  2\\n 3  4"
+```
 """
-reprmime(m::MIME, x) = istextmime(m) ? _textreprmime(m, x) : _binreprmime(m, x)
+repr(m::MIME, x; context=nothing) = istextmime(m) ? _textrepr(m, x, context) : _binrepr(m, x, context)
+repr(m::AbstractString, x; context=nothing) = repr(MIME(m), x; context=context)
 
 # strings are shown escaped for text/plain
-_textreprmime(m::MIME, x) = sprint(verbose_show, m, x)
-_textreprmime(::MIME, x::AbstractString) = x
-_textreprmime(m::MIME"text/plain", x::AbstractString) =
-    sprint(verbose_show, m, x)
+_textrepr(m::MIME, x, context) = String(__binrepr(m, x, context))
+_textrepr(::MIME, x::AbstractString, context) = x
+_textrepr(m::MIME"text/plain", x::AbstractString, context) = String(__binrepr(m, x, context))
 
-function _binreprmime(m::MIME, x)
+
+function __binrepr(m::MIME, x, context)
     s = IOBuffer()
-    verbose_show(s, m, x)
+    if context === nothing
+        show(s, m, x)
+    else
+        show(IOContext(s, context), m, x)
+    end
     take!(s)
 end
-_binreprmime(m::MIME, x::Vector{UInt8}) = x
-
-"""
-    stringmime(mime, x)
-
-Returns an `AbstractString` containing the representation of `x` in the
-requested `mime` type. This is similar to [`reprmime`](@ref) except
-that binary data is base64-encoded as an ASCII string.
-"""
-stringmime(m::MIME, x) = istextmime(m) ? reprmime(m, x) : _binstringmime(m, x)
-
-_binstringmime(m::MIME, x) = Base64.base64encode(verbose_show, m, x)
-_binstringmime(m::MIME, x::Vector{UInt8}) = Base64.base64encode(write, x)
+_binrepr(m::MIME, x, context) = __binrepr(m, x, context)
+_binrepr(m::MIME, x::Vector{UInt8}, context) = x
 
 """
     istextmime(m::MIME)
@@ -141,11 +149,7 @@ false
 ```
 """
 istextmime(m::MIME) = startswith(string(m), "text/")
-
-# it is convenient to accept strings instead of ::MIME
 istextmime(m::AbstractString) = istextmime(MIME(m))
-reprmime(m::AbstractString, x) = reprmime(MIME(m), x)
-stringmime(m::AbstractString, x) = stringmime(MIME(m), x)
 
 for mime in ["application/atom+xml", "application/ecmascript",
              "application/javascript", "application/julia",
@@ -161,7 +165,7 @@ end
 # We have an abstract AbstractDisplay class that can be subclassed in order to
 # define new rich-display output devices.  A typical subclass should
 # overload display(d::AbstractDisplay, m::MIME, x) for supported MIME types m,
-# (typically using reprmime or stringmime to get the MIME
+# (typically using show, repr, ..., to get the MIME
 # representation of x) and should also overload display(d::AbstractDisplay, x)
 # to display x in whatever MIME type is preferred by the AbstractDisplay and
 # is writable by x.  display(..., x) should throw a MethodError if x
@@ -171,8 +175,8 @@ end
 abstract type AbstractDisplay end
 
 # it is convenient to accept strings instead of ::MIME
-display(d::AbstractDisplay, mime::AbstractString, x) = display(d, MIME(mime), x)
-display(mime::AbstractString, x) = display(MIME(mime), x)
+display(d::AbstractDisplay, mime::AbstractString, @nospecialize x) = display(d, MIME(mime), x)
+display(mime::AbstractString, @nospecialize x) = display(MIME(mime), x)
 
 """
     displayable(mime) -> Bool
@@ -197,12 +201,12 @@ objects are printed in the Julia REPL.)
 struct TextDisplay <: AbstractDisplay
     io::IO
 end
-display(d::TextDisplay, M::MIME"text/plain", x) = show(d.io, M, x)
-display(d::TextDisplay, x) = display(d, MIME"text/plain"(), x)
+display(d::TextDisplay, M::MIME"text/plain", @nospecialize x) = show(d.io, M, x)
+display(d::TextDisplay, @nospecialize x) = display(d, MIME"text/plain"(), x)
 
 # if you explicitly call display("text/foo", x), it should work on a TextDisplay:
 displayable(d::TextDisplay, M::MIME) = istextmime(M)
-function display(d::TextDisplay, M::MIME, x)
+function display(d::TextDisplay, M::MIME, @nospecialize x)
     displayable(d, M) || throw(MethodError(display, (d, M, x)))
     show(d.io, M, x)
 end
@@ -247,10 +251,10 @@ function popdisplay(d::AbstractDisplay)
 end
 function reinit_displays()
     empty!(displays)
-    pushdisplay(TextDisplay(STDOUT))
+    pushdisplay(TextDisplay(stdout))
 end
 
-xdisplayable(D::AbstractDisplay, args...) = applicable(display, D, args...)
+xdisplayable(D::AbstractDisplay, @nospecialize args...) = applicable(display, D, args...)
 
 """
     display(x)
@@ -259,15 +263,15 @@ xdisplayable(D::AbstractDisplay, args...) = applicable(display, D, args...)
     display(d::AbstractDisplay, mime, x)
 
 AbstractDisplay `x` using the topmost applicable display in the display stack, typically using the
-richest supported multimedia output for `x`, with plain-text [`STDOUT`](@ref) output as a fallback.
+richest supported multimedia output for `x`, with plain-text [`stdout`](@ref) output as a fallback.
 The `display(d, x)` variant attempts to display `x` on the given display `d` only, throwing
 a [`MethodError`](@ref) if `d` cannot display objects of this type.
 
-In general, you cannot assume that `display` output goes to `STDOUT` (unlike [`print(x)`](@ref) or
+In general, you cannot assume that `display` output goes to `stdout` (unlike [`print(x)`](@ref) or
 [`show(x)`](@ref)).  For example, `display(x)` may open up a separate window with an image.
 `display(x)` means "show `x` in the best way you can for the current output device(s)."
-If you want REPL-like text output that is guaranteed to go to `STDOUT`, use
-[`show(STDOUT, "text/plain", x)`](@ref) instead.
+If you want REPL-like text output that is guaranteed to go to `stdout`, use
+[`show(stdout, "text/plain", x)`](@ref) instead.
 
 There are also two variants with a `mime` argument (a MIME type string, such as
 `"image/png"`), which attempt to display `x` using the requested MIME type *only*, throwing
@@ -276,7 +280,7 @@ variants, one can also supply the "raw" data in the requested MIME type by passi
 `x::AbstractString` (for MIME types with text-based storage, such as text/html or
 application/postscript) or `x::Vector{UInt8}` (for binary MIME types).
 """
-function display(x)
+function display(@nospecialize x)
     for i = length(displays):-1:1
         if xdisplayable(displays[i], x)
             try
@@ -290,7 +294,7 @@ function display(x)
     throw(MethodError(display, (x,)))
 end
 
-function display(m::MIME, x)
+function display(m::MIME, @nospecialize x)
     for i = length(displays):-1:1
         if xdisplayable(displays[i], m, x)
             try
@@ -305,7 +309,7 @@ function display(m::MIME, x)
 end
 
 displayable(d::D, ::MIME{mime}) where {D<:AbstractDisplay,mime} =
-    method_exists(display, Tuple{D,MIME{mime},Any})
+    hasmethod(display, Tuple{D,MIME{mime},Any})
 
 function displayable(m::MIME)
     for d in displays
@@ -335,7 +339,7 @@ Using `redisplay` is also a hint to the backend that `x` may be redisplayed
 several times, and the backend may choose to defer the display until
 (for example) the next interactive prompt.
 """
-function redisplay(x)
+function redisplay(@nospecialize x)
     for i = length(displays):-1:1
         if xdisplayable(displays[i], x)
             try
@@ -349,7 +353,7 @@ function redisplay(x)
     throw(MethodError(redisplay, (x,)))
 end
 
-function redisplay(m::Union{MIME,AbstractString}, x)
+function redisplay(m::Union{MIME,AbstractString}, @nospecialize x)
     for i = length(displays):-1:1
         if xdisplayable(displays[i], m, x)
             try
@@ -364,8 +368,8 @@ function redisplay(m::Union{MIME,AbstractString}, x)
 end
 
 # default redisplay is simply to call display
-redisplay(d::AbstractDisplay, x) = display(d, x)
-redisplay(d::AbstractDisplay, m::Union{MIME,AbstractString}, x) = display(d, m, x)
+redisplay(d::AbstractDisplay, @nospecialize x) = display(d, x)
+redisplay(d::AbstractDisplay, m::Union{MIME,AbstractString}, @nospecialize x) = display(d, m, x)
 
 ###########################################################################
 

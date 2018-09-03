@@ -1,5 +1,4 @@
-
-__precompile__(true)
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
 Standard library module for computing the CRC-32c checksum.

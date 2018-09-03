@@ -10,7 +10,7 @@ session (technically, in module `Main`), it is always present.
 If memory usage is your concern, you can always replace objects with ones that consume less memory.
  For example, if `A` is a gigabyte-sized array that you no longer need, you can free the memory
 with `A = nothing`.  The memory will be released the next time the garbage collector runs; you can force
-this to happen with [`gc()`](@ref). Moreover, an attempt to use `A` will likely result in an error, because most methods are not defined on type `Void`.
+this to happen with [`gc()`](@ref Base.GC.gc). Moreover, an attempt to use `A` will likely result in an error, because most methods are not defined on type `Nothing`.
 
 ### How can I modify the declaration of a type in my session?
 
@@ -40,6 +40,12 @@ obj2 = MyModule.somefunction(obj1)   # this time it worked!
 obj3 = MyModule.someotherfunction(obj2, c)
 ...
 ```
+
+### How do I check if the current file is being run as the main script?
+
+When a file is run as the main script using `julia file.jl` one might want to activate extra
+functionality like command line argument handling. A way to determine that a file is run in
+this fashion is to check if `abspath(PROGRAM_FILE) == @__FILE__` is `true`.
 
 ## Functions
 
@@ -97,7 +103,7 @@ julia> x
 Here we created a function `change_array!`, that assigns `5` to the first element of the passed
 array (bound to `x` at the call site, and bound to `A` within the function). Notice that, after
 the function call, `x` is still bound to the same array, but the content of that array changed:
-the variables `A` and `x` were distinct bindings refering to the same mutable `Array` object.
+the variables `A` and `x` were distinct bindings referring to the same mutable `Array` object.
 
 ### Can I use `using` or `import` inside a function?
 
@@ -147,18 +153,18 @@ argument is called slurping:
 
 ```jldoctest
 julia> function printargs(args...)
-           @printf("%s\n", typeof(args))
+           println(typeof(args))
            for (i, arg) in enumerate(args)
-               @printf("Arg %d = %s\n", i, arg)
+               println("Arg #$i = $arg")
            end
        end
 printargs (generic function with 1 method)
 
 julia> printargs(1, 2, 3)
 Tuple{Int64,Int64,Int64}
-Arg 1 = 1
-Arg 2 = 2
-Arg 3 = 3
+Arg #1 = 1
+Arg #2 = 2
+Arg #3 = 3
 ```
 
 If Julia were a language that made more liberal use of ASCII characters, the slurping operator
@@ -173,19 +179,19 @@ call. This use of `...` is called splatting:
 
 ```jldoctest
 julia> function threeargs(a, b, c)
-           @printf("a = %s::%s\n", a, typeof(a))
-           @printf("b = %s::%s\n", b, typeof(b))
-           @printf("c = %s::%s\n", c, typeof(c))
+           println("a = $a::$(typeof(a))")
+           println("b = $b::$(typeof(b))")
+           println("c = $c::$(typeof(c))")
        end
 threeargs (generic function with 1 method)
 
-julia> vec = [1, 2, 3]
+julia> x = [1, 2, 3]
 3-element Array{Int64,1}:
  1
  2
  3
 
-julia> threeargs(vec...)
+julia> threeargs(x...)
 a = 1::Int64
 b = 2::Int64
 c = 3::Int64
@@ -575,7 +581,7 @@ Main               Module
 gvar_self 13 bytes String
 ```
 
-This does not apply to `function` or `type` declarations. However, anonymous functions bound to global
+This does not apply to `function` or `struct` declarations. However, anonymous functions bound to global
 variables are serialized as can be seen below.
 
 ```julia-repl
@@ -613,29 +619,37 @@ all/many future usages of the other functions in module Foo that depend on calli
 
 ## Nothingness and missing values
 
-### How does "null" or "nothingness" work in Julia?
+### [How does "null", "nothingness" or "missingness" work in Julia?](@id faq-nothing)
 
-Unlike many languages (for example, C and Java), Julia does not have a "null" value. When a reference
-(variable, object field, or array element) is uninitialized, accessing it will immediately throw
-an error. This situation can be detected using the [`isdefined`](@ref) or [`isassigned`](@ref)
-functions.
+Unlike many languages (for example, C and Java), Julia objects cannot be "null" by default.
+When a reference (variable, object field, or array element) is uninitialized, accessing it
+will immediately throw an error. This situation can be detected using the
+[`isdefined`](@ref) or [`isassigned`](@ref Base.isassigned) functions.
 
 Some functions are used only for their side effects, and do not need to return a value. In these
 cases, the convention is to return the value `nothing`, which is just a singleton object of type
-`Void`. This is an ordinary type with no fields; there is nothing special about it except for
+`Nothing`. This is an ordinary type with no fields; there is nothing special about it except for
 this convention, and that the REPL does not print anything for it. Some language constructs that
 would not otherwise have a value also yield `nothing`, for example `if false; end`.
 
+For situations where a value `x` of type `T` exists only sometimes, the `Union{T, Nothing}`
+type can be used for function arguments, object fields and array element types
+as the equivalent of [`Nullable`, `Option` or `Maybe`](https://en.wikipedia.org/wiki/Nullable_type)
+in other languages. If the value itself can be `nothing` (notably, when `T` is `Any`),
+the `Union{Some{T}, Nothing}` type is more appropriate since `x == nothing` then indicates
+the absence of a value, and `x == Some(nothing)` indicates the presence of a value equal
+to `nothing`. The [`something`](@ref) function allows unwrapping `Some` objects and
+using a default value instead of `nothing` arguments. Note that the compiler is able to
+generate efficient code when working with `Union{T, Nothing}` arguments or fields.
+
 To represent missing data in the statistical sense (`NA` in R or `NULL` in SQL), use the
-[`missing`](@ref) object. See the [`Missing Values|](@ref missing) section for more details.
+[`missing`](@ref) object. See the [`Missing Values`](@ref missing) section for more details.
 
 The empty tuple (`()`) is another form of nothingness. But, it should not really be thought of
 as nothing but rather a tuple of zero values.
 
-In code written for Julia prior to version 0.4 you may occasionally see `None`, which is quite
-different. It is the empty (or "bottom") type, a type with no values and no subtypes (except itself).
-This is now written as `Union{}` (an empty union type). You will generally not need to use this
-type.
+The empty (or "bottom") type, written as `Union{}` (an empty union type), is a type with
+no values and no subtypes (except itself). You will generally not need to use this type.
 
 ## Memory
 
@@ -689,7 +703,7 @@ Consider the printed output from the following:
 
 ```jldoctest
 julia> @sync for i in 1:3
-           @async write(STDOUT, string(i), " Foo ", " Bar ")
+           @async write(stdout, string(i), " Foo ", " Bar ")
        end
 123 Foo  Foo  Foo  Bar  Bar  Bar
 ```
@@ -702,7 +716,7 @@ in the above example results in:
 
 ```jldoctest
 julia> @sync for i in 1:3
-           @async println(STDOUT, string(i), " Foo ", " Bar ")
+           @async println(stdout, string(i), " Foo ", " Bar ")
        end
 1 Foo  Bar
 2 Foo  Bar
@@ -713,13 +727,13 @@ You can lock your writes with a `ReentrantLock` like this:
 
 ```jldoctest
 julia> l = ReentrantLock()
-ReentrantLock(Nullable{Task}(), Condition(Any[]), 0)
+ReentrantLock(nothing, Condition(Any[]), 0)
 
 julia> @sync for i in 1:3
            @async begin
                lock(l)
                try
-                   write(STDOUT, string(i), " Foo ", " Bar ")
+                   write(stdout, string(i), " Foo ", " Bar ")
                finally
                    unlock(l)
                end
@@ -727,6 +741,50 @@ julia> @sync for i in 1:3
        end
 1 Foo  Bar 2 Foo  Bar 3 Foo  Bar
 ```
+
+## Arrays
+
+### What are the differences between zero-dimensional arrays and scalars?
+
+Zero-dimensional arrays are arrays of the form `Array{T,0}`. They behave similar
+to scalars, but there are important differences. They deserve a special mention
+because they are a special case which makes logical sense given the generic
+definition of arrays, but might be a bit unintuitive at first. The following
+line defines a zero-dimensional array:
+
+```
+julia> A = zeros()
+0-dimensional Array{Float64,0}:
+0.0
+```
+
+In this example, `A` is a mutable container that contains one element, which can
+be set by `A[] = 1.0` and retrieved with `A[]`. All zero-dimensional arrays have
+the same size (`size(A) == ()`), and length (`length(A) == 1`). In particular,
+zero-dimensional arrays are not empty. If you find this unintuitive, here are
+some ideas that might help to understand Julia's definition.
+
+* Zero-dimensional arrays are the "point" to vector's "line" and matrix's
+  "plane". Just as a line has no area (but still represents a set of things), a
+  point has no length or any dimensions at all (but still represents a thing).
+* We define `prod(())` to be 1, and the total number of elements in an array is
+  the product of the size. The size of a zero-dimensional array is `()`, and
+  therefore its length is `1`.
+* Zero-dimensional arrays don't natively have any dimensions into which you
+  index -- they’re just `A[]`. We can apply the same "trailing one" rule for them
+  as for all other array dimensionalities, so you can indeed index them as
+  `A[1]`, `A[1,1]`, etc.
+
+It is also important to understand the differences to ordinary scalars. Scalars
+are not mutable containers (even though they are iterable and define things
+like `length`, `getindex`, *e.g.* `1[] == 1`). In particular, if `x = 0.0` is
+defined as a scalar, it is an error to attempt to change its value via
+`x[] = 1.0`. A scalar `x` can be converted into a zero-dimensional array
+containing it via `fill(x)`, and conversely, a zero-dimensional array `a` can
+be converted to the contained scalar via `a[]`. Another difference is that
+a scalar can participate in linear algebra operations such as `2 * rand(2,2)`,
+but the analogous operation with a zero-dimensional array
+`fill(2) * rand(2,2)` is an error.
 
 ## Julia Releases
 

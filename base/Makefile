@@ -30,7 +30,7 @@ $(BUILDDIR)/errno_h.jl:
 $(BUILDDIR)/file_constants.jl: $(SRCDIR)/../src/file_constants.h
 	@$(call PRINT_PERL, $(CPP_STDOUT) -DJULIA $< | perl -nle 'print "$$1 0o$$2" if /^(\s*const\s+[A-z_]+\s+=)\s+(0[0-9]*)\s*$$/; print "$$1" if /^\s*(const\s+[A-z_]+\s+=\s+([1-9]|0x)[0-9A-z]*)\s*$$/' > $@)
 
-$(BUILDDIR)/uv_constants.jl: $(SRCDIR)/../src/uv_constants.h $(build_includedir)/uv-errno.h
+$(BUILDDIR)/uv_constants.jl: $(SRCDIR)/../src/uv_constants.h $(build_includedir)/uv/errno.h
 	@$(call PRINT_PERL, $(CPP_STDOUT) "-I$(LIBUV_INC)" -DJULIA $< | tail -n 16 > $@)
 
 $(BUILDDIR)/build_h.jl.phony:
@@ -130,6 +130,14 @@ resolve_path += && \
 	$1_wd=`dirname "$${$1}"`; $1=$${$1_}; \
 	if [ -z "`echo $${$1} | grep '^/'`" ]; then $1=$${$1_wd}/$${$1}; fi; \
 	fi
+else
+# try to use the SO_NAME (if the named file exists)
+resolve_path += && \
+	$1_=`objdump -p "$${$1}" | awk '/SONAME/ {print $$2}'` && \
+	if [ -n "$${$1_}" ]; then \
+	$1_=$$(dirname "$${$1}")/$${$1_}; \
+	if [ -e "$${$1_}" ]; then $1=$${$1_}; fi; \
+	fi
 endif
 
 ## debug code: `make resolve-path P=<path to test>`
@@ -155,7 +163,7 @@ endif
 endif
 endef
 
-# the following excludes: libuv.a, libutf8proc.a, suitesparse*
+# the following excludes: libuv.a, libutf8proc.a
 
 $(eval $(call symlink_system_library,$(LIBMNAME)))
 ifneq ($(USE_SYSTEM_LIBM),0)
@@ -172,11 +180,18 @@ $(eval $(call symlink_system_library,$(LIBLAPACKNAME),LAPACK))
 endif
 $(eval $(call symlink_system_library,libgmp,GMP))
 $(eval $(call symlink_system_library,libmpfr,MPFR))
-$(eval $(call symlink_system_library,libarpack,ARPACK))
 $(eval $(call symlink_system_library,libmbedtls,MBEDTLS))
 $(eval $(call symlink_system_library,libssh2,LIBSSH2))
 $(eval $(call symlink_system_library,libcurl,CURL))
 $(eval $(call symlink_system_library,libgit2,LIBGIT2))
+$(eval $(call symlink_system_library,libamd,SUITESPARSE))
+$(eval $(call symlink_system_library,libcamd,SUITESPARSE))
+$(eval $(call symlink_system_library,libccolamd,SUITESPARSE))
+$(eval $(call symlink_system_library,libcholmod,SUITESPARSE))
+$(eval $(call symlink_system_library,libcolamd,SUITESPARSE))
+$(eval $(call symlink_system_library,libumfpack,SUITESPARSE))
+$(eval $(call symlink_system_library,libspqr,SUITESPARSE))
+$(eval $(call symlink_system_library,libsuitesparseconfig,SUITESPARSE))
 ifneq ($(DISABLE_LIBUNWIND),0)
 $(eval $(call symlink_system_library,libunwind,LIBUNWIND))
 endif
@@ -201,12 +216,12 @@ symlink_system_libraries: $(SYMLINK_SYSTEM_LIBRARIES)
 .PHONY: $(BUILDDIR)/build_h.jl.phony $(BUILDDIR)/version_git.jl.phony clean all symlink_*
 
 clean:
-	rm -f $(BUILDDIR)/pcre_h.jl
-	rm -f $(BUILDDIR)/errno_h.jl
-	rm -f $(BUILDDIR)/build_h.jl
-	rm -f $(BUILDDIR)/build_h.jl.phony
-	rm -f $(BUILDDIR)/fenv_constants.jl # To be removed
-	rm -f $(BUILDDIR)/uv_constants.jl
-	rm -f $(BUILDDIR)/file_constants.jl
-	rm -f $(BUILDDIR)/version_git.jl
-	rm -f $(BUILDDIR)/version_git.jl.phony
+	-rm -f $(BUILDDIR)/pcre_h.jl
+	-rm -f $(BUILDDIR)/errno_h.jl
+	-rm -f $(BUILDDIR)/build_h.jl
+	-rm -f $(BUILDDIR)/build_h.jl.phony
+	-rm -f $(BUILDDIR)/uv_constants.jl
+	-rm -f $(BUILDDIR)/file_constants.jl
+	-rm -f $(BUILDDIR)/version_git.jl
+	-rm -f $(BUILDDIR)/version_git.jl.phony
+	-rm -f $(build_private_libdir)/lib*.$(SHLIB_EXT)*

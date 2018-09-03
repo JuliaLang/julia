@@ -5,7 +5,7 @@ technical computing languages pay a lot of attention to their array implementati
 of other containers. Julia does not treat arrays in any special way. The array library is implemented
 almost completely in Julia itself, and derives its performance from the compiler, just like any
 other code written in Julia. As such, it's also possible to define custom array types by inheriting
-from `AbstractArray.` See the [manual section on the AbstractArray interface](@ref man-interface-array) for more details
+from [`AbstractArray`](@ref). See the [manual section on the AbstractArray interface](@ref man-interface-array) for more details
 on implementing a custom array type.
 
 An array is a collection of objects stored in a multi-dimensional grid. In the most general case,
@@ -17,15 +17,19 @@ be written in a vectorized style for performance. Julia's compiler uses type inf
 optimized code for scalar array indexing, allowing programs to be written in a style that is convenient
 and readable, without sacrificing performance, and using less memory at times.
 
-In Julia, all arguments to functions are passed by reference. Some technical computing languages
-pass arrays by value, and this is convenient in many cases. In Julia, modifications made to input
-arrays within a function will be visible in the parent function. The entire Julia array library
-ensures that inputs are not modified by library functions. User code, if it needs to exhibit similar
-behavior, should take care to create a copy of inputs that it may modify.
+In Julia, all arguments to functions are [passed by
+sharing](https://en.wikipedia.org/wiki/Evaluation_strategy#Call_by_sharing)
+(i.e. by pointers). Some technical computing languages pass arrays by value, and
+while this prevents accidental modification by callees of a value in the caller,
+it makes avoiding unwanted copying of arrays difficult. By convention, a
+function name ending with a `!` indicates that it will mutate or destroy the
+value of one or more of its arguments (see, for example, [`sort`](@ref) and [`sort!`](@ref).
+Callees must make explicit copies to ensure that they don't modify inputs that
+they don't intend to change. Many non- mutating functions are implemented by
+calling a function of the same name with an added `!` at the end on an explicit
+copy of the input, and returning that copy.
 
-## Arrays
-
-### Basic Functions
+## Basic Functions
 
 | Function               | Description                                                                      |
 |:---------------------- |:-------------------------------------------------------------------------------- |
@@ -34,13 +38,13 @@ behavior, should take care to create a copy of inputs that it may modify.
 | [`ndims(A)`](@ref)     | the number of dimensions of `A`                                                  |
 | [`size(A)`](@ref)      | a tuple containing the dimensions of `A`                                         |
 | [`size(A,n)`](@ref)    | the size of `A` along dimension `n`                                              |
-| [`indices(A)`](@ref)   | a tuple containing the valid indices of `A`                                      |
-| [`indices(A,n)`](@ref) | a range expressing the valid indices along dimension `n`                         |
+| [`axes(A)`](@ref)   | a tuple containing the valid indices of `A`                                      |
+| [`axes(A,n)`](@ref) | a range expressing the valid indices along dimension `n`                         |
 | [`eachindex(A)`](@ref) | an efficient iterator for visiting each position in `A`                          |
 | [`stride(A,k)`](@ref)  | the stride (linear index distance between adjacent elements) along dimension `k` |
 | [`strides(A)`](@ref)   | a tuple of the strides in each dimension                                         |
 
-### Construction and Initialization
+## Construction and Initialization
 
 Many functions for constructing and initializing arrays are provided. In the following list of
 such functions, calls with a `dims...` argument can either take a single tuple of dimension sizes
@@ -50,7 +54,7 @@ omitted it will default to [`Float64`](@ref).
 
 | Function                           | Description                                                                                                                                                                                                                                  |
 |:---------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`Array{T}(uninitialized, dims...)`](@ref)     | an uninitialized dense [`Array`](@ref)                                                                                                                                                                                                       |
+| [`Array{T}(undef, dims...)`](@ref)             | an uninitialized dense [`Array`](@ref)                                                                                                                                                                                                              |
 | [`zeros(T, dims...)`](@ref)                    | an `Array` of all zeros                                                                                                                                                                                                                      |
 | [`ones(T, dims...)`](@ref)                     | an `Array` of all ones                                                                                                                                                                                                                       |
 | [`trues(dims...)`](@ref)                       | a [`BitArray`](@ref) with all values `true`                                                                                                                                                                                                  |
@@ -63,7 +67,7 @@ omitted it will default to [`Float64`](@ref).
 | [`rand(T, dims...)`](@ref)                     | an `Array` with random, iid [^1] and uniformly distributed values in the half-open interval ``[0, 1)``                                                                                                                                       |
 | [`randn(T, dims...)`](@ref)                    | an `Array` with random, iid and standard normally distributed values                                                                                                                                                                         |
 | [`Matrix{T}(I, m, n)`](@ref)                   | `m`-by-`n` identity matrix                                                                                                                                                                                                                   |
-| [`linspace(start, stop, n)`](@ref)             | range of `n` linearly spaced elements from `start` to `stop`                                                                                                                                                                                 |
+| [`range(start, stop=stop, length=n)`](@ref)    | range of `n` linearly spaced elements from `start` to `stop`                                                                                                                                                                                 |
 | [`fill!(A, x)`](@ref)                          | fill the array `A` with the value `x`                                                                                                                                                                                                        |
 | [`fill(x, dims...)`](@ref)                     | an `Array` filled with the value `x`                                                                                                                                                                                                         |
 
@@ -71,19 +75,49 @@ omitted it will default to [`Float64`](@ref).
 
 The syntax `[A, B, C, ...]` constructs a 1-d array (vector) of its arguments. If all
 arguments have a common [promotion type](@ref conversion-and-promotion) then they get
-converted to that type using `convert`.
+converted to that type using [`convert`](@ref).
 
-### Concatenation
+To see the various ways we can pass dimensions to these constructors, consider the following examples:
+```jldoctest
+julia> zeros(Int8, 2, 2)
+2×2 Array{Int8,2}:
+ 0  0
+ 0  0
+
+julia> zeros(Int8, (2, 2))
+2×2 Array{Int8,2}:
+ 0  0
+ 0  0
+
+julia> zeros((2, 2))
+2×2 Array{Float64,2}:
+ 0.0  0.0
+ 0.0  0.0
+```
+Here, `(2, 2)` is a [`Tuple`](@ref).
+
+## Concatenation
 
 Arrays can be constructed and also concatenated using the following functions:
 
-| Function               | Description                                          |
-|:---------------------- |:---------------------------------------------------- |
-| [`cat(k, A...)`](@ref) | concatenate input n-d arrays along the dimension `k` |
-| [`vcat(A...)`](@ref)   | shorthand for `cat(1, A...)`                         |
-| [`hcat(A...)`](@ref)   | shorthand for `cat(2, A...)`                         |
+| Function                    | Description                                     |
+|:--------------------------- |:----------------------------------------------- |
+| [`cat(A...; dims=k)`](@ref) | concatenate input arrays along dimension(s) `k` |
+| [`vcat(A...)`](@ref)        | shorthand for `cat(A...; dims=1)`               |
+| [`hcat(A...)`](@ref)        | shorthand for `cat(A...; dims=2)`               |
 
-Scalar values passed to these functions are treated as 1-element arrays.
+Scalar values passed to these functions are treated as 1-element arrays. For example,
+```jldoctest
+julia> vcat([1, 2], 3)
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> hcat([1 2], 3)
+1×3 Array{Int64,2}:
+ 1  2  3
+```
 
 The concatenation functions are used so often that they have special syntax:
 
@@ -94,12 +128,30 @@ The concatenation functions are used so often that they have special syntax:
 | `[A B; C D; ...]` | [`hvcat`](@ref) |
 
 [`hvcat`](@ref) concatenates in both dimension 1 (with semicolons) and dimension 2 (with spaces).
+Consider these examples of this syntax:
+```jldoctest
+julia> [[1; 2]; [3, 4]]
+4-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
 
-### Typed array initializers
+julia> [[1 2] [3 4]]
+1×4 Array{Int64,2}:
+ 1  2  3  4
+
+julia> [[1 2]; [3 4]]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+```
+
+## Typed array initializers
 
 An array with a specific element type can be constructed using the syntax `T[A, B, C, ...]`. This
 will construct a 1-d array with element type `T`, initialized to contain elements `A`, `B`, `C`,
-etc. For example `Any[x, y, z]` constructs a heterogeneous array that can contain any values.
+etc. For example, `Any[x, y, z]` constructs a heterogeneous array that can contain any values.
 
 Concatenation syntax can similarly be prefixed with a type to specify the element type of the
 result.
@@ -114,7 +166,7 @@ julia> Int8[[1 2] [3 4]]
  1  2  3  4
 ```
 
-### Comprehensions
+## Comprehensions
 
 Comprehensions provide a general and powerful way to construct arrays. Comprehension syntax is
 similar to set construction notation in mathematics:
@@ -162,7 +214,7 @@ the result in single precision by writing:
 Float32[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 ```
 
-### Generator Expressions
+## Generator Expressions
 
 Comprehensions can also be written without the enclosing square brackets, producing an object
 known as a generator. This object can be iterated to produce values on demand, instead of allocating
@@ -183,7 +235,7 @@ ERROR: syntax: invalid iteration specification
 ```
 
 All comma-separated expressions after `for` are interpreted as ranges. Adding parentheses lets
-us add a third argument to `map`:
+us add a third argument to [`map`](@ref):
 
 ```jldoctest
 julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
@@ -191,6 +243,14 @@ julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
  (0.5, 1)       (0.333333, 3)
  (0.333333, 2)  (0.25, 4)
 ```
+
+Generators are implemented via inner functions. As in other cases of
+inner functions in the language, variables from the enclosing scope can be
+"captured" in the inner function.  For example, `sum(p[i] - q[i] for i=1:n)`
+captures the three variables `p`, `q` and `n` from the enclosing scope.
+Captured variables can present performance challenges described in
+[performance tips](@ref man-performance-tips).
+
 
 Ranges in generators and comprehensions can depend on previous ranges by writing multiple `for`
 keywords:
@@ -217,7 +277,7 @@ julia> [(i,j) for i=1:3 for j=1:i if i+j == 4]
  (3, 1)
 ```
 
-### [Indexing](@id man-array-indexing)
+## [Indexing](@id man-array-indexing)
 
 The general syntax for indexing into an n-dimensional array A is:
 
@@ -237,15 +297,80 @@ indices.
 
 If all indices are vectors, for example, then the shape of `X` would be `(length(I_1), length(I_2), ..., length(I_n))`,
 with location `(i_1, i_2, ..., i_n)` of `X` containing the value `A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]`.
+
+Example:
+
+```jldoctest
+julia> A = reshape(collect(1:16), (2, 2, 2, 2))
+2×2×2×2 Array{Int64,4}:
+[:, :, 1, 1] =
+ 1  3
+ 2  4
+
+[:, :, 2, 1] =
+ 5  7
+ 6  8
+
+[:, :, 1, 2] =
+  9  11
+ 10  12
+
+[:, :, 2, 2] =
+ 13  15
+ 14  16
+
+julia> A[1, 2, 1, 1] # all scalar indices
+3
+
+julia> A[[1, 2], [1], [1, 2], [1]] # all vector indices
+2×1×2×1 Array{Int64,4}:
+[:, :, 1, 1] =
+ 1
+ 2
+
+[:, :, 2, 1] =
+ 5
+ 6
+
+julia> A[[1, 2], [1], [1, 2], 1] # a mix of index types
+2×1×2 Array{Int64,3}:
+[:, :, 1] =
+ 1
+ 2
+
+[:, :, 2] =
+ 5
+ 6
+```
+
+Note how the size of the resulting array is different in the last two cases.
+
 If `I_1` is changed to a two-dimensional matrix, then `X` becomes an `n+1`-dimensional array of
 shape `(size(I_1, 1), size(I_1, 2), length(I_2), ..., length(I_n))`. The matrix adds a dimension.
+
+Example:
+
+```jldoctest
+julia> A = reshape(collect(1:16), (2, 2, 2, 2));
+
+julia> A[[1 2; 1 2]]
+2×2 Array{Int64,2}:
+ 1  2
+ 1  2
+
+julia> A[[1 2; 1 2], 1, 2, 1]
+2×2 Array{Int64,2}:
+ 5  6
+ 5  6
+```
+
 The location `(i_1, i_2, i_3, ..., i_{n+1})` contains the value at `A[I_1[i_1, i_2], I_2[i_3], ..., I_n[i_{n+1}]]`.
 All dimensions indexed with scalars are dropped. For example, the result of `A[2, I, 3]` is an
 array with size `size(I)`. Its `i`th element is populated by `A[2, I[i], 3]`.
 
 As a special part of this syntax, the `end` keyword may be used to represent the last index of
 each dimension within the indexing brackets, as determined by the size of the innermost array
-being indexed. Indexing syntax without the `end` keyword is equivalent to a call to `getindex`:
+being indexed. Indexing syntax without the `end` keyword is equivalent to a call to [`getindex`](@ref):
 
 ```
 X = getindex(A, I_1, I_2, ..., I_n)
@@ -283,7 +408,7 @@ julia> searchsorted(a, 3)
 3:2
 ```
 
-### Assignment
+## Assignment
 
 The general syntax for assigning values in an n-dimensional array A is:
 
@@ -321,17 +446,18 @@ julia> x = collect(reshape(1:9, 3, 3))
  2  5  8
  3  6  9
 
-julia> x[1:2, 2:3] = -1
--1
+julia> x[3, 3] = -9;
+
+julia> x[1:2, 1:2] = [-1 -4; -2 -5];
 
 julia> x
 3×3 Array{Int64,2}:
- 1  -1  -1
- 2  -1  -1
- 3   6   9
+ -1  -4   7
+ -2  -5   8
+  3   6  -9
 ```
 
-### [Supported index types](@id man-supported-index-types)
+## [Supported index types](@id man-supported-index-types)
 
 In the expression `A[I_1, I_2, ..., I_n]`, each `I_k` may be a scalar index, an
 array of scalar indices, or an object that represents an array of scalar
@@ -339,7 +465,7 @@ indices and can be converted to such by [`to_indices`](@ref):
 
 1. A scalar index. By default this includes:
     * Non-boolean integers
-    * `CartesianIndex{N}`s, which behave like an `N`-tuple of integers spanning multiple dimensions (see below for more details)
+    * [`CartesianIndex{N}`](@ref)s, which behave like an `N`-tuple of integers spanning multiple dimensions (see below for more details)
 2. An array of scalar indices. This includes:
     * Vectors and multidimensional arrays of integers
     * Empty arrays like `[]`, which select no elements
@@ -350,7 +476,51 @@ indices and can be converted to such by [`to_indices`](@ref):
     * [`Colon()`](@ref) (`:`), which represents all indices within an entire dimension or across the entire array
     * Arrays of booleans, which select elements at their `true` indices (see below for more details)
 
-#### Cartesian indices
+Some examples:
+```jldoctest
+julia> A = reshape(collect(1:2:18), (3, 3))
+3×3 Array{Int64,2}:
+ 1   7  13
+ 3   9  15
+ 5  11  17
+
+julia> A[4]
+7
+
+julia> A[[2, 5, 8]]
+3-element Array{Int64,1}:
+  3
+  9
+ 15
+
+julia> A[[1 4; 3 8]]
+2×2 Array{Int64,2}:
+ 1   7
+ 5  15
+
+julia> A[[]]
+0-element Array{Int64,1}
+
+julia> A[1:2:5]
+3-element Array{Int64,1}:
+ 1
+ 5
+ 9
+
+julia> A[2, :]
+3-element Array{Int64,1}:
+  3
+  9
+ 15
+
+julia> A[:, 3]
+3-element Array{Int64,1}:
+ 13
+ 15
+ 17
+```
+
+### Cartesian indices
 
 The special `CartesianIndex{N}` object represents a scalar index that behaves
 like an `N`-tuple of integers spanning multiple dimensions.  For example:
@@ -403,14 +573,14 @@ first `page` from `A` as a separate step). It can even be combined with a `:`
 to extract both diagonals from the two pages at the same time:
 
 ```jldoctest cartesianindex
-julia> A[CartesianIndex.(indices(A, 1), indices(A, 2)), 1]
+julia> A[CartesianIndex.(axes(A, 1), axes(A, 2)), 1]
 4-element Array{Int64,1}:
   1
   6
  11
  16
 
-julia> A[CartesianIndex.(indices(A, 1), indices(A, 2)), :]
+julia> A[CartesianIndex.(axes(A, 1), axes(A, 2)), :]
 4×2 Array{Int64,2}:
   1  17
   6  22
@@ -424,18 +594,18 @@ julia> A[CartesianIndex.(indices(A, 1), indices(A, 2)), :]
     `end` keyword to represent the last index of a dimension. Do not use `end`
     in indexing expressions that may contain either `CartesianIndex` or arrays thereof.
 
-#### Logical indexing
+### Logical indexing
 
 Often referred to as logical indexing or indexing with a logical mask, indexing
 by a boolean array selects elements at the indices where its values are `true`.
 Indexing by a boolean vector `B` is effectively the same as indexing by the
-vector of integers that is returned by [`find(B)`](@ref). Similarly, indexing
+vector of integers that is returned by [`findall(B)`](@ref). Similarly, indexing
 by a `N`-dimensional boolean array is effectively the same as indexing by the
 vector of `CartesianIndex{N}`s where its values are `true`. A logical index
 must be a vector of the same length as the dimension it indexes into, or it
 must be the only index provided and match the size and dimensionality of the
 array it indexes into. It is generally more efficient to use boolean arrays as
-indices directly instead of first calling [`find`](@ref).
+indices directly instead of first calling [`findall`](@ref).
 
 ```jldoctest
 julia> x = reshape(1:16, 4, 4)
@@ -466,7 +636,7 @@ julia> x[mask]
  16
 ```
 
-### Iteration
+## Iteration
 
 The recommended ways to iterate over a whole array are
 
@@ -500,10 +670,10 @@ i = CartesianIndex(2, 2)
 i = CartesianIndex(3, 2)
 ```
 
-In contrast with `for i = 1:length(A)`, iterating with `eachindex` provides an efficient way to
+In contrast with `for i = 1:length(A)`, iterating with [`eachindex`](@ref) provides an efficient way to
 iterate over any array type.
 
-### Array traits
+## Array traits
 
 If you write a custom [`AbstractArray`](@ref) type, you can specify that it has fast linear indexing using
 
@@ -514,7 +684,7 @@ Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
 This setting will cause `eachindex` iteration over a `MyArray` to use integers. If you don't
 specify this trait, the default value `IndexCartesian()` is used.
 
-### Array and Vectorized Operators and Functions
+## Array and Vectorized Operators and Functions
 
 The following operators are supported for arrays:
 
@@ -522,12 +692,7 @@ The following operators are supported for arrays:
 2. Binary arithmetic -- `-`, `+`, `*`, `/`, `\`, `^`
 3. Comparison -- `==`, `!=`, `≈` ([`isapprox`](@ref)), `≉`
 
-Most of the binary arithmetic operators listed above also operate elementwise
-when one argument is scalar: `-`, `+`, and `*` when either argument is scalar,
-and `/` and `\` when the denominator is scalar. For example, `[1, 2] + 3 == [4, 5]`
-and `[6, 4] / 2 == [3, 2]`.
-
-Additionally, to enable convenient vectorization of mathematical and other operations,
+To enable convenient vectorization of mathematical and other operations,
 Julia [provides the dot syntax](@ref man-vectorized) `f.(args...)`, e.g. `sin.(x)`
 or `min.(x,y)`, for elementwise operations over arrays or mixtures of arrays and
 scalars (a [Broadcasting](@ref) operation); these have the additional advantage of
@@ -541,11 +706,11 @@ Note that comparisons such as `==` operate on whole arrays, giving a single bool
 answer. Use dot operators like `.==` for elementwise comparisons. (For comparison
 operations like `<`, *only* the elementwise `.<` version is applicable to arrays.)
 
-Also notice the difference between `max.(a,b)`, which `broadcast`s [`max`](@ref)
-elementwise over `a` and `b`, and `maximum(a)`, which finds the largest value within
+Also notice the difference between `max.(a,b)`, which [`broadcast`](@ref)s [`max`](@ref)
+elementwise over `a` and `b`, and [`maximum(a)`](@ref), which finds the largest value within
 `a`. The same relationship holds for `min.(a,b)` and `minimum(a)`.
 
-### Broadcasting
+## Broadcasting
 
 It is sometimes useful to perform element-by-element binary operations on arrays of different
 sizes, such as adding a vector to each column of a matrix. An inefficient way to do this would
@@ -554,7 +719,7 @@ be to replicate the vector to the size of the matrix:
 ```julia-repl
 julia> a = rand(2,1); A = rand(2,3);
 
-julia> repmat(a,1,3)+A
+julia> repeat(a,1,3)+A
 2×3 Array{Float64,2}:
  1.20813  1.82068  1.25387
  1.56851  1.86401  1.67846
@@ -583,20 +748,20 @@ julia> broadcast(+, a, b)
 [Dotted operators](@ref man-dot-operators) such as `.+` and `.*` are equivalent
 to `broadcast` calls (except that they fuse, as described below). There is also a
 [`broadcast!`](@ref) function to specify an explicit destination (which can also
-be accessed in a fusing fashion by `.=` assignment), and functions [`broadcast_getindex`](@ref)
-and [`broadcast_setindex!`](@ref) that broadcast the indices before indexing. Moreover, `f.(args...)`
+be accessed in a fusing fashion by `.=` assignment). Moreover, `f.(args...)`
 is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broadcast any function
 ([dot syntax](@ref man-vectorized)). Nested "dot calls" `f.(...)` (including calls to `.+` etcetera)
 [automatically fuse](@ref man-dot-operators) into a single `broadcast` call.
 
 Additionally, [`broadcast`](@ref) is not limited to arrays (see the function documentation),
-it also handles tuples and treats any argument that is not an array, tuple or `Ref` (except for `Ptr`) as a "scalar".
+it also handles tuples and treats any argument that is not an array, tuple or [`Ref`](@ref)
+(except for [`Ptr`](@ref)) as a "scalar".
 
 ```jldoctest
 julia> convert.(Float32, [1, 2])
 2-element Array{Float32,1}:
- 1.0f0
- 2.0f0
+ 1.0
+ 2.0
 
 julia> ceil.((UInt8,), [1.2 3.4; 5.6 6.7])
 2×2 Array{UInt8,2}:
@@ -610,7 +775,7 @@ julia> string.(1:3, ". ", ["First", "Second", "Third"])
  "3. Third"
 ```
 
-### Implementation
+## Implementation
 
 The base array type in Julia is the abstract type [`AbstractArray{T,N}`](@ref). It is parametrized by
 the number of dimensions `N` and the element type `T`. [`AbstractVector`](@ref) and [`AbstractMatrix`](@ref) are
@@ -628,264 +793,83 @@ functions may be unexpectedly slow. Concrete types should also typically provide
 method, which is used to allocate a similar array for [`copy`](@ref) and other out-of-place
 operations. No matter how an `AbstractArray{T,N}` is represented internally, `T` is the type of
 object returned by *integer* indexing (`A[1, ..., 1]`, when `A` is not empty) and `N` should be
-the length of the tuple returned by [`size`](@ref).
+the length of the tuple returned by [`size`](@ref). For more details on defining custom
+`AbstractArray` implementations, see the [array interface guide in the interfaces chapter](@ref man-interface-array).
 
-`DenseArray` is an abstract subtype of `AbstractArray` intended to include all arrays that are
-laid out at regular offsets in memory, and which can therefore be passed to external C and Fortran
-functions expecting this memory layout. Subtypes should provide a method [`stride(A,k)`](@ref)
-that returns the "stride" of dimension `k`: increasing the index of dimension `k` by `1` should
-increase the index `i` of [`getindex(A,i)`](@ref) by [`stride(A,k)`](@ref). If a pointer conversion
-method [`Base.unsafe_convert(Ptr{T}, A)`](@ref) is provided, the memory layout should correspond
-in the same way to these strides.
+`DenseArray` is an abstract subtype of `AbstractArray` intended to include all arrays where
+elements are stored contiguously in column-major order (see additional notes in
+[Performance Tips](@ref man-performance-tips)). The [`Array`](@ref) type is a specific instance
+of `DenseArray`  [`Vector`](@ref) and [`Matrix`](@ref) are aliases for the 1-d and 2-d cases.
+Very few operations are implemented specifically for `Array` beyond those that are required
+for all `AbstractArrays`s; much of the array library is implemented in a generic
+manner that allows all custom arrays to behave similarly.
 
-The [`Array`](@ref) type is a specific instance of `DenseArray` where elements are stored in column-major
-order (see additional notes in [Performance Tips](@ref man-performance-tips)). [`Vector`](@ref) and [`Matrix`](@ref) are aliases for
-the 1-d and 2-d cases. Specific operations such as scalar indexing, assignment, and a few other
-basic storage-specific operations are all that have to be implemented for [`Array`](@ref), so
-that the rest of the array library can be implemented in a generic manner.
-
-`SubArray` is a specialization of `AbstractArray` that performs indexing by reference rather than
-by copying. A `SubArray` is created with the [`view`](@ref) function, which is called the same
-way as [`getindex`](@ref) (with an array and a series of index arguments). The result of [`view`](@ref)
-looks the same as the result of [`getindex`](@ref), except the data is left in place. [`view`](@ref)
-stores the input index vectors in a `SubArray` object, which can later be used to index the original
-array indirectly.  By putting the [`@views`](@ref) macro in front of an expression or
+`SubArray` is a specialization of `AbstractArray` that performs indexing by
+sharing memory with the original array rather than by copying it. A `SubArray`
+is created with the [`view`](@ref) function, which is called the same way as
+[`getindex`](@ref) (with an array and a series of index arguments). The result
+of [`view`](@ref) looks the same as the result of [`getindex`](@ref), except the
+data is left in place. [`view`](@ref) stores the input index vectors in a
+`SubArray` object, which can later be used to index the original array
+indirectly.  By putting the [`@views`](@ref) macro in front of an expression or
 block of code, any `array[...]` slice in that expression will be converted to
 create a `SubArray` view instead.
 
-`StridedVector` and `StridedMatrix` are convenient aliases defined to make it possible for Julia
-to call a wider range of BLAS and LAPACK functions by passing them either [`Array`](@ref) or
-`SubArray` objects, and thus saving inefficiencies from memory allocation and copying.
+[`BitArray`](@ref)s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
+They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
+and can be converted to/from the latter via `Array(bitarray)` and `BitArray(array)`, respectively.
+
+A "strided" array is stored in memory with elements laid out in regular offsets such that
+an instance with a supported `isbits` element type can be passed to
+external C and Fortran functions that expect this memory layout. Strided arrays
+must define a [`strides(A)`](@ref) method that returns a tuple of "strides" for each dimension; a
+provided [`stride(A,k)`](@ref) method accesses the `k`th element within this tuple. Increasing the
+index of dimension `k` by `1` should increase the index `i` of [`getindex(A,i)`](@ref) by
+[`stride(A,k)`](@ref). If a pointer conversion method [`Base.unsafe_convert(Ptr{T}, A)`](@ref) is
+provided, the memory layout must correspond in the same way to these strides. `DenseArray` is a
+very specific example of a strided array where the elements are arranged contiguously, thus it
+provides its subtypes with the approporiate definition of `strides`. More concrete examples
+can be found within the [interface guide for strided arrays](@ref man-interface-strided-arrays).
+[`StridedVector`](@ref) and [`StridedMatrix`](@ref) are convenient aliases for many of the builtin array types that
+are considered strided arrays, allowing them to dispatch to select specialized implementations that
+call highly tuned and optimized BLAS and LAPACK functions using just the pointer and strides.
 
 The following example computes the QR decomposition of a small section of a larger array, without
 creating any temporaries, and by calling the appropriate LAPACK function with the right leading
 dimension size and stride parameters.
 
 ```julia-repl
-julia> a = rand(10,10)
+julia> a = rand(10, 10)
 10×10 Array{Float64,2}:
- 0.561255   0.226678   0.203391  0.308912   …  0.750307  0.235023   0.217964
- 0.718915   0.537192   0.556946  0.996234      0.666232  0.509423   0.660788
- 0.493501   0.0565622  0.118392  0.493498      0.262048  0.940693   0.252965
- 0.0470779  0.736979   0.264822  0.228787      0.161441  0.897023   0.567641
- 0.343935   0.32327    0.795673  0.452242      0.468819  0.628507   0.511528
- 0.935597   0.991511   0.571297  0.74485    …  0.84589   0.178834   0.284413
- 0.160706   0.672252   0.133158  0.65554       0.371826  0.770628   0.0531208
- 0.306617   0.836126   0.301198  0.0224702     0.39344   0.0370205  0.536062
- 0.890947   0.168877   0.32002   0.486136      0.096078  0.172048   0.77672
- 0.507762   0.573567   0.220124  0.165816      0.211049  0.433277   0.539476
+ 0.517515  0.0348206  0.749042   0.0979679  …  0.75984     0.950481   0.579513
+ 0.901092  0.873479   0.134533   0.0697848     0.0586695   0.193254   0.726898
+ 0.976808  0.0901881  0.208332   0.920358      0.288535    0.705941   0.337137
+ 0.657127  0.0317896  0.772837   0.534457      0.0966037   0.700694   0.675999
+ 0.471777  0.144969   0.0718405  0.0827916     0.527233    0.173132   0.694304
+ 0.160872  0.455168   0.489254   0.827851   …  0.62226     0.0995456  0.946522
+ 0.291857  0.769492   0.68043    0.629461      0.727558    0.910796   0.834837
+ 0.775774  0.700731   0.700177   0.0126213     0.00822304  0.327502   0.955181
+ 0.9715    0.64354    0.848441   0.241474      0.591611    0.792573   0.194357
+ 0.646596  0.575456   0.0995212  0.038517      0.709233    0.477657   0.0507231
 
 julia> b = view(a, 2:2:8,2:2:4)
-4×2 SubArray{Float64,2,Array{Float64,2},Tuple{StepRange{Int64,Int64},StepRange{Int64,Int64}},false}:
- 0.537192  0.996234
- 0.736979  0.228787
- 0.991511  0.74485
- 0.836126  0.0224702
+4×2 view(::Array{Float64,2}, 2:2:8, 2:2:4) with eltype Float64:
+ 0.873479   0.0697848
+ 0.0317896  0.534457
+ 0.455168   0.827851
+ 0.700731   0.0126213
 
-julia> (q,r) = qr(b);
+julia> (q, r) = qr(b);
 
 julia> q
-4×2 Array{Float64,2}:
- -0.338809   0.78934
- -0.464815  -0.230274
- -0.625349   0.194538
- -0.527347  -0.534856
+4×4 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
+ -0.722358    0.227524  -0.247784    -0.604181
+ -0.0262896  -0.575919  -0.804227     0.144377
+ -0.376419   -0.75072    0.540177    -0.0541979
+ -0.579497    0.230151  -0.00552346   0.781782
 
 julia> r
 2×2 Array{Float64,2}:
- -1.58553  -0.921517
-  0.0       0.866567
+ -1.20921  -0.383393
+  0.0      -0.910506
 ```
-
-## Sparse Vectors and Matrices
-
-Julia has built-in support for sparse vectors and
-[sparse matrices](https://en.wikipedia.org/wiki/Sparse_matrix). Sparse arrays are arrays
-that contain enough zeros that storing them in a special data structure leads to savings
-in space and execution time, compared to dense arrays.
-
-### [Compressed Sparse Column (CSC) Sparse Matrix Storage](@id man-csc)
-
-In Julia, sparse matrices are stored in the [Compressed Sparse Column (CSC) format](https://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_column_.28CSC_or_CCS.29).
-Julia sparse matrices have the type [`SparseMatrixCSC{Tv,Ti}`](@ref), where `Tv` is the
-type of the stored values, and `Ti` is the integer type for storing column pointers and
-row indices. The internal representation of `SparseMatrixCSC` is as follows:
-
-```julia
-struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
-    m::Int                  # Number of rows
-    n::Int                  # Number of columns
-    colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
-    rowval::Vector{Ti}      # Row indices of stored values
-    nzval::Vector{Tv}       # Stored values, typically nonzeros
-end
-```
-
-The compressed sparse column storage makes it easy and quick to access the elements in the column
-of a sparse matrix, whereas accessing the sparse matrix by rows is considerably slower. Operations
-such as insertion of previously unstored entries one at a time in the CSC structure tend to be slow. This is
-because all elements of the sparse matrix that are beyond the point of insertion have to be moved
-one place over.
-
-All operations on sparse matrices are carefully implemented to exploit the CSC data structure
-for performance, and to avoid expensive operations.
-
-If you have data in CSC format from a different application or library, and wish to import it
-in Julia, make sure that you use 1-based indexing. The row indices in every column need to be
-sorted. If your `SparseMatrixCSC` object contains unsorted row indices, one quick way to sort
-them is by doing a double transpose.
-
-In some applications, it is convenient to store explicit zero values in a `SparseMatrixCSC`. These
-*are* accepted by functions in `Base` (but there is no guarantee that they will be preserved in
-mutating operations). Such explicitly stored zeros are treated as structural nonzeros by many
-routines. The [`nnz`](@ref) function returns the number of elements explicitly stored in the
-sparse data structure, including structural nonzeros. In order to count the exact number of
-numerical nonzeros, use [`count(!iszero, x)`](@ref), which inspects every stored element of a sparse
-matrix. [`dropzeros`](@ref), and the in-place [`dropzeros!`](@ref), can be used to
-remove stored zeros from the sparse matrix.
-
-```jldoctest
-julia> A = sparse([1, 2, 3], [1, 2, 3], [0, 2, 0])
-3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
-  [1, 1]  =  0
-  [2, 2]  =  2
-  [3, 3]  =  0
-
-julia> dropzeros(A)
-3×3 SparseMatrixCSC{Int64,Int64} with 1 stored entry:
-  [2, 2]  =  2
-```
-
-### Sparse Vector Storage
-
-Sparse vectors are stored in a close analog to compressed sparse column format for sparse
-matrices. In Julia, sparse vectors have the type [`SparseVector{Tv,Ti}`](@ref) where `Tv`
-is the type of the stored values and `Ti` the integer type for the indices. The internal
-representation is as follows:
-
-```julia
-struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
-    n::Int              # Length of the sparse vector
-    nzind::Vector{Ti}   # Indices of stored values
-    nzval::Vector{Tv}   # Stored values, typically nonzeros
-end
-```
-
-As for [`SparseMatrixCSC`](@ref), the `SparseVector` type can also contain explicitly
-stored zeros. (See [Sparse Matrix Storage](@ref man-csc).).
-
-### Sparse Vector and Matrix Constructors
-
-The simplest way to create a sparse array is to use a function equivalent to the [`zeros`](@ref)
-function that Julia provides for working with dense arrays. To produce a
-sparse array instead, you can use the same name with an `sp` prefix:
-
-```jldoctest
-julia> spzeros(3)
-3-element SparseVector{Float64,Int64} with 0 stored entries
-```
-
-The [`sparse`](@ref) function is often a handy way to construct sparse arrays. For
-example, to construct a sparse matrix we can input a vector `I` of row indices, a vector
-`J` of column indices, and a vector `V` of stored values (this is also known as the
-[COO (coordinate) format](https://en.wikipedia.org/wiki/Sparse_matrix#Coordinate_list_.28COO.29)).
-`sparse(I,J,V)` then constructs a sparse matrix such that `S[I[k], J[k]] = V[k]`. The
-equivalent sparse vector constructor is [`sparsevec`](@ref), which takes the (row) index
-vector `I` and the vector `V` with the stored values and constructs a sparse vector `R`
-such that `R[I[k]] = V[k]`.
-
-```jldoctest sparse_function
-julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
-
-julia> S = sparse(I,J,V)
-5×18 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
-  [1 ,  4]  =  1
-  [4 ,  7]  =  2
-  [5 ,  9]  =  3
-  [3 , 18]  =  -5
-
-julia> R = sparsevec(I,V)
-5-element SparseVector{Int64,Int64} with 4 stored entries:
-  [1]  =  1
-  [3]  =  -5
-  [4]  =  2
-  [5]  =  3
-```
-
-The inverse of the [`sparse`](@ref) and [`sparsevec`](@ref) functions is
-[`findnz`](@ref), which retrieves the inputs used to create the sparse array.
-There is also a [`findn`](@ref) function which only returns the index vectors.
-
-```jldoctest sparse_function
-julia> findnz(S)
-([1, 4, 5, 3], [4, 7, 9, 18], [1, 2, 3, -5])
-
-julia> findn(S)
-([1, 4, 5, 3], [4, 7, 9, 18])
-
-julia> findnz(R)
-([1, 3, 4, 5], [1, -5, 2, 3])
-
-julia> find(!iszero, R)
-4-element Array{Int64,1}:
- 1
- 3
- 4
- 5
-```
-
-Another way to create a sparse array is to convert a dense array into a sparse array using
-the [`sparse`](@ref) function:
-
-```jldoctest
-julia> sparse(Matrix(1.0I, 5, 5))
-5×5 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  1.0
-  [3, 3]  =  1.0
-  [4, 4]  =  1.0
-  [5, 5]  =  1.0
-
-julia> sparse([1.0, 0.0, 1.0])
-3-element SparseVector{Float64,Int64} with 2 stored entries:
-  [1]  =  1.0
-  [3]  =  1.0
-```
-
-You can go in the other direction using the [`Array`](@ref) constructor. The [`issparse`](@ref)
-function can be used to query if a matrix is sparse.
-
-```jldoctest
-julia> issparse(spzeros(5))
-true
-```
-
-### Sparse matrix operations
-
-Arithmetic operations on sparse matrices also work as they do on dense matrices. Indexing of,
-assignment into, and concatenation of sparse matrices work in the same way as dense matrices.
-Indexing operations, especially assignment, are expensive, when carried out one element at a time.
-In many cases it may be better to convert the sparse matrix into `(I,J,V)` format using [`findnz`](@ref),
-manipulate the values or the structure in the dense vectors `(I,J,V)`, and then reconstruct
-the sparse matrix.
-
-### Correspondence of dense and sparse methods
-
-The following table gives a correspondence between built-in methods on sparse matrices and their
-corresponding methods on dense matrix types. In general, methods that generate sparse matrices
-differ from their dense counterparts in that the resulting matrix follows the same sparsity pattern
-as a given sparse matrix `S`, or that the resulting sparse matrix has density `d`, i.e. each matrix
-element has a probability `d` of being non-zero.
-
-Details can be found in the [Sparse Vectors and Matrices](@ref stdlib-sparse-arrays)
-section of the standard library reference.
-
-| Sparse                     | Dense                  | Description                                                                                                                                                           |
-|:-------------------------- |:---------------------- |:--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`spzeros(m,n)`](@ref)     | [`zeros(m,n)`](@ref)   | Creates a *m*-by-*n* matrix of zeros. ([`spzeros(m,n)`](@ref) is empty.)                                                                                              |
-| [`spones(S)`](@ref)        | [`ones(m,n)`](@ref)    | Creates a matrix filled with ones. Unlike the dense version, [`spones`](@ref) has the same sparsity pattern as *S*.                                                 |
-| [`sparse(I, n, n)`](@ref)  | [`Matrix(I,n,n)`](@ref)| Creates a *n*-by-*n* identity matrix.                                                                                                                                 |
-| [`Array(S)`](@ref)         | [`sparse(A)`](@ref)    | Interconverts between dense and sparse formats.                                                                                                                       |
-| [`sprand(m,n,d)`](@ref)    | [`rand(m,n)`](@ref)    | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed uniformly on the half-open interval ``[0, 1)``.                            |
-| [`sprandn(m,n,d)`](@ref)   | [`randn(m,n)`](@ref)   | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed according to the standard normal (Gaussian) distribution.                  |
-| [`sprandn(m,n,d,X)`](@ref) | [`randn(m,n,X)`](@ref) | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed according to the *X* distribution. (Requires the `Distributions` package.) |
