@@ -26,15 +26,12 @@ if Sys.iswindows()
 else
     function download(url::AbstractString, filename::AbstractString)
         global downloadcmd
+        download_agents = ("curl", "wget", "fetch")
         if downloadcmd === nothing
-            for checkcmd in ("curl", "wget", "fetch")
-                try
-                    # Sys.which() will throw() if it can't find `checkcmd`
-                    Sys.which(checkcmd)
-                    downloadcmd = checkcmd
-                    break
-                catch
-                end
+            try
+                downloadcmd = basename(something(Sys.which.(download_agents)...))
+            catch
+                error("no download agent available; install curl, wget, or fetch")
             end
         end
         if downloadcmd == "wget"
@@ -48,8 +45,6 @@ else
             run(`curl -g -L -f -o $filename $url`)
         elseif downloadcmd == "fetch"
             run(`fetch -f $filename $url`)
-        else
-            error("no download agent available; install curl, wget, or fetch")
         end
         filename
     end
