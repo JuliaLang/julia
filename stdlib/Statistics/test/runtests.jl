@@ -86,6 +86,10 @@ end
     @test ismissing(mean([missing, NaN]))
     @test isequal(mean([missing 1.0; 2.0 3.0], dims=1), [missing 2.0])
     @test mean(skipmissing([1, missing, 2])) === 1.5
+    @test isequal(mean(Complex{Float64}[]), NaN+NaN*im)
+    @test isequal(mean(skipmissing(Complex{Float64}[])), NaN+NaN*im)
+    @test isequal(mean(abs, Complex{Float64}[]), NaN)
+    @test isequal(mean(abs, skipmissing(Complex{Float64}[])), NaN)
 
     # Check that small types are accumulated using wider type
     for T in (Int8, UInt8)
@@ -245,6 +249,9 @@ end
         @test ismissing(f([missing, NaN], missing))
         @test f(skipmissing([1, missing, 2]), 0) === f([1, 2], 0)
     end
+
+    @test isequal(mean(Complex{Float64}[]), NaN)
+    @test isequal(mean(skipmissing(Complex{Float64}[])), NaN)
 end
 
 function safe_cov(x, y, zm::Bool, cr::Bool)
