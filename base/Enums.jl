@@ -154,7 +154,8 @@ macro enum(T, syms...)
             else
                 print(io, x, "::")
                 show(IOContext(io, :compact => true), typeof(x))
-                print(io, " = ", $basetype(x))
+                print(io, " = ")
+                show(io, $basetype(x))
             end
         end
         function Base.show(io::IO, t::Type{$(esc(typename))})

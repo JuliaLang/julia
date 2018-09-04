@@ -149,8 +149,12 @@ let b = IOBuffer()
     @test deserialize(b) === apple
 end
 
-@enum UI8::UInt8 ten=0x0A thr=0x03 sevn=0x07
-@test repr("text/plain", UI8) == "Enum $(string(UI8)):\nten = 0x0a\nthr = 0x03\nsevn = 0x07"
+@enum UI8::UInt8 ten=0x0A thr=0x03 sevn=0x07 fiftn=0xF0
+@test repr("text/plain", UI8)   == "Enum $(string(UI8)):\nten = 0x0a\nthr = 0x03\nsevn = 0x07\nfiftn = 0xf0"
+@test repr("text/plain", ten)   == "$(string(ten))::UI8 = 0x0a"
+@test repr("text/plain", thr)   == "$(string(thr))::UI8 = 0x03"
+@test repr("text/plain", sevn)  == "$(string(sevn))::UI8 = 0x07"
+@test repr("text/plain", fiftn) == "$(string(fiftn))::UI8 = 0xf0"
 
 # test block form
 @enum BritishFood begin
