@@ -333,7 +333,7 @@ is_project_uuid(env::EnvCache, uuid::UUID) =
 ###########
 # Context #
 ###########
-stdlib_dir() = joinpath(Sys.BINDIR, "..", "share", "julia", "stdlib", "v$(VERSION.major).$(VERSION.minor)")
+stdlib_dir() = normpath(joinpath(Sys.BINDIR, "..", "share", "julia", "stdlib", "v$(VERSION.major).$(VERSION.minor)"))
 stdlib_path(stdlib::String) = joinpath(stdlib_dir(), stdlib)
 function gather_stdlib_uuids()
     stdlibs = Dict{UUID,String}()
@@ -492,9 +492,22 @@ function isdir_windows_workaround(path::String)
     end
 end
 
+# try to call realpath on as much as possible
+function safe_realpath(path)
+    ispath(path) && return realpath(path)
+    a, b = splitdir(path)
+    return joinpath(safe_realpath(a), b)
+end
+function relative_project_path(ctx::Context, path::String)
+    # compute path relative the project
+    # realpath needed to expand symlinks before taking the relative path
+    return relpath(safe_realpath(abspath(path)),
+                   safe_realpath(dirname(ctx.env.project_file)))
+end
+
 casesensitive_isdir(dir::String) = isdir_windows_workaround(dir) && dir in readdir(joinpath(dir, ".."))
 
-function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}, devdir::String)
+function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}; shared::Bool)
     Base.shred!(LibGit2.CachedCredentials()) do creds
         env = ctx.env
         new_uuids = UUID[]
@@ -512,8 +525,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}, 
                 else
                     # Relative paths are given relative pwd() so we
                     # translate that to be relative the project instead.
-                    # `realpath` is needed to expand symlinks before taking the relative path.
-                    pkg.path = relpath(realpath(abspath(pkg.repo.url)), realpath(dirname(ctx.env.project_file)))
+                    pkg.path = relative_project_path(ctx, pkg.repo.url)
                 end
                 folder_already_downloaded = true
                 project_path = pkg.repo.url
@@ -550,7 +562,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}, 
                     else
                         rev = string(LibGit2.GitHash(LibGit2.head(repo)))
                     end
-                    gitobject, isbranch = get_object_branch(repo, rev)
+                    gitobject, isbranch = get_object_branch(repo, rev, creds)
                     try
                         LibGit2.transact(repo) do r
                             if isbranch
@@ -565,6 +577,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}, 
                 end
 
                 parse_package!(ctx, pkg, project_path)
+                devdir = shared ? Pkg.devdir() : joinpath(dirname(ctx.env.project_file), "dev")
                 dev_pkg_path = joinpath(devdir, pkg.name)
                 if isdir(dev_pkg_path)
                     if !isfile(joinpath(dev_pkg_path, "src", pkg.name * ".jl"))
@@ -577,11 +590,12 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec}, 
                     mv(project_path, dev_pkg_path; force=true)
                     push!(new_uuids, pkg.uuid)
                 end
-                # Save the path as relative if the location is inside the project
-                # (e.g. from `dev --local`), otherwise put in the absolute path.
-                pkg.path = Pkg.Operations.relative_project_path_if_in_project(ctx, dev_pkg_path)
+                # Save the path as relative if it is a --local dev,
+                # otherwise put in the absolute path.
+                pkg.path = shared ? dev_pkg_path : relative_project_path(ctx, dev_pkg_path)
             end
             @assert pkg.path != nothing
+            @assert has_uuid(pkg)
         end
         return new_uuids
     end
@@ -607,35 +621,32 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec};
             project_path = nothing
             folder_already_downloaded = false
             try
-                repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
-                    r = GitTools.clone(pkg.repo.url, repo_path, isbare=true, credentials=creds)
-                    GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
-                    r, true
+                repo = if ispath(repo_path)
+                    LibGit2.GitRepo(repo_path)
+                else
+                    GitTools.clone(pkg.repo.url, repo_path, isbare=true, credentials=creds)
                 end
                 info = manifest_info(env, pkg.uuid)
                 pinned = (info != nothing && get(info, "pinned", false))
-                if upgrade_or_add && !pinned && !just_cloned
-                    rev = pkg.repo.rev
-                    GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
-                end
                 upgrading = upgrade_or_add && !pinned
                 if upgrading
+                    GitTools.fetch(repo; refspecs=refspecs, credentials=creds)
                     rev = pkg.repo.rev
+                    # see if we can get rev as a branch
+                    if isempty(rev)
+                        if LibGit2.isattached(repo)
+                            rev = LibGit2.branch(repo)
+                        else
+                            rev = string(LibGit2.GitHash(LibGit2.head(repo)))
+                        end
+                    end
                 else
                     # Not upgrading so the rev should be the current git-tree-sha
                     rev = info["git-tree-sha1"]
                     pkg.version = VersionNumber(info["version"])
                 end
 
-                # see if we can get rev as a branch
-                if isempty(rev)
-                    if LibGit2.isattached(repo)
-                        rev = LibGit2.branch(repo)
-                    else
-                        rev = string(LibGit2.GitHash(LibGit2.head(repo)))
-                    end
-                end
-                gitobject, isbranch = get_object_branch(repo, rev)
+                gitobject, isbranch = get_object_branch(repo, rev, creds)
                 # If the user gave a shortened commit SHA, might as well update it to the full one
                 try
                     if upgrading
@@ -652,7 +663,6 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec};
                             info = manifest_info(env, pkg.uuid)
                             if info != nothing && get(info, "git-tree-sha1", "") == string(pkg.repo.git_tree_sha1) && folder_already_downloaded
                                 # Same tree sha and this version already downloaded, nothing left to do
-                                pkg.version = VersionNumber(info["version"])
                                 do_nothing_more = true
                             end
                         end
@@ -679,7 +689,7 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec};
                 mv(project_path, version_path; force=true)
                 push!(new_uuids, pkg.uuid)
             end
-            @assert pkg.version isa VersionNumber
+            @assert has_uuid(pkg)
         end
         return new_uuids
     finally
@@ -694,14 +704,7 @@ function parse_package!(ctx, pkg, project_path)
         project_data = read_package(project_file)
         pkg.uuid = UUID(project_data["uuid"])
         pkg.name = project_data["name"]
-        if haskey(project_data, "version")
-            pkg.version = VersionNumber(project_data["version"])
-        else
-            @warn "project file for $(pkg.name) at $(project_path) is missing a `version` entry"
-            Pkg.Operations.set_maximum_version_registry!(env, pkg)
-        end
     else
-        # @warn "package $(pkg.name) at $(project_path) will need to have a [Julia]Project.toml file in the future"
         if !isempty(ctx.old_pkg2_clone_name) # remove when legacy CI script support is removed
             pkg.name = ctx.old_pkg2_clone_name
         else
@@ -723,14 +726,9 @@ function parse_package!(ctx, pkg, project_path)
                 pkg.uuid = uuid5(uuid_unreg_pkg, pkg.name)
                 @info "Assigning UUID $(pkg.uuid) to $(pkg.name)"
             end
-            pkg.version = v"0.0"
         else
-            # TODO: Fix
             @assert length(reg_uuids) == 1
             pkg.uuid = reg_uuids[1]
-            # Old style registered package
-            # What version does this package have? We have no idea... let's give it the latest one with a `+`...
-            Pkg.Operations.set_maximum_version_registry!(env, pkg)
         end
     end
 end
@@ -744,7 +742,7 @@ function set_repo_for_pkg!(env, pkg)
     _, pkg.repo.url = Types.registered_info(env, pkg.uuid, "repo")[1]
 end
 
-function get_object_branch(repo, rev)
+function get_object_branch(repo, rev, creds)
     gitobject = nothing
     isbranch = false
     try
@@ -758,7 +756,13 @@ function get_object_branch(repo, rev)
             gitobject = LibGit2.GitObject(repo, rev)
         catch err
             err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-            pkgerror("git object $(rev) could not be found")
+            GitTools.fetch(repo; refspecs=refspecs, credentials=creds)
+            try
+                gitobject = LibGit2.GitObject(repo, rev)
+            catch err
+                err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+                pkgerror("git object $(rev) could not be found")
+            end
         end
     end
     return gitobject, isbranch
@@ -1109,20 +1113,12 @@ function printpkgstyle(ctx::Context, cmd::Symbol, text::String, ignore_indent::B
 end
 
 
-function pathrepr(ctx::Union{Nothing, Context}, path::String, base::String=pwd())
-    project_path = dirname(ctx.env.project_file)
-    path = joinpath(project_path, path)
-    if startswith(path, project_path) && startswith(base, project_path)
-        # We are in project and path is in project
-        path = relpath(path, base)
+function pathrepr(path::String)
+    # print stdlib paths as @stdlib/Name
+    if startswith(path, stdlib_dir())
+        path = "@stdlib/" * basename(path)
     end
-    if !Sys.iswindows() && isabspath(path)
-        home = joinpath(homedir(), "")
-        if startswith(path, home)
-            path = joinpath("~", path[nextind(path, lastindex(home)):end])
-        end
-    end
-    return "`" * path * "`"
+    return "`" * Base.contractuser(path) * "`"
 end
 
 function project_key_order(key::String)
@@ -1145,7 +1141,7 @@ function write_env(ctx::Context; display_diff=true)
     isempty(project["deps"]) && delete!(project, "deps")
     if !isempty(project) || ispath(env.project_file)
         if display_diff && !(ctx.currently_running_target)
-            printpkgstyle(ctx, :Updating, pathrepr(ctx, env.project_file))
+            printpkgstyle(ctx, :Updating, pathrepr(env.project_file))
             Pkg.Display.print_project_diff(ctx, old_env, env)
         end
         if !ctx.preview
@@ -1158,7 +1154,7 @@ function write_env(ctx::Context; display_diff=true)
     # update the manifest file
     if !isempty(env.manifest) || ispath(env.manifest_file)
         if display_diff && !(ctx.currently_running_target)
-            printpkgstyle(ctx, :Updating, pathrepr(ctx, env.manifest_file))
+            printpkgstyle(ctx, :Updating, pathrepr(env.manifest_file))
             Pkg.Display.print_manifest_diff(ctx, old_env, env)
         end
         manifest = deepcopy(env.manifest)
