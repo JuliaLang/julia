@@ -782,7 +782,7 @@ end
 # Disambiguate name/uuid package specifications using project info.
 function project_deps_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     uuids = env.project["deps"]
-    names = Dict(uuid => name for (uuid, name) in uuids)
+    names = Dict(uuid => name for (name, uuid) in uuids)
     length(uuids) < length(names) && # TODO: handle this somehow?
         pkgerror("duplicate UUID found in project file's [deps] section")
     for pkg in pkgs
