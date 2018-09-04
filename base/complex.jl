@@ -360,19 +360,31 @@ inv(z::Complex{<:Union{Float16,Float32}}) =
 #             c + i*d
 function /(z::ComplexF64, w::ComplexF64)
     a, b = reim(z); c, d = reim(w)
-    half = 0.5
-    two = 2.0
     ab = max(abs(a), abs(b))
     cd = max(abs(c), abs(d))
-    ov = floatmax(a)
-    un = floatmin(a)
-    ϵ = eps(Float64)
+
+    # constants
+    ov = floatmax(Float64)
+    un = floatmin(Float64)
+    ϵ  = eps(Float64)
+    half = 0.5; halfov = half*ov
+    two = 2.0;  twounϵ = un*two/ϵ
     bs = two/(ϵ*ϵ)
+
+    # scaling
     s = 1.0
-    ab >= half*ov  && (a=half*a; b=half*b; s=two*s ) # scale down a,b
-    cd >= half*ov  && (c=half*c; d=half*d; s=s*half) # scale down c,d
-    ab <= un*two/ϵ && (a=a*bs; b=b*bs; s=s/bs      ) # scale up a,b
-    cd <= un*two/ϵ && (c=c*bs; d=d*bs; s=s*bs      ) # scale up c,d
+    if ab >= halfov
+        a*=half; b*=half; s*=two  # scale down a,b
+    elseif ab <= twounϵ
+        a*=bs;   b*=bs;   s/=bs   # scale up a,b
+    end
+    if cd >= halfov
+        c*=half; d*=half; s*=half # scale down c,d
+    elseif cd <= twounϵ
+        c*=bs;   d*=bs;   s*=bs   # scale up c,d
+    end
+
+    # division operations
     abs(d)<=abs(c) ? ((p,q)=robust_cdiv1(a,b,c,d)  ) : ((p,q)=robust_cdiv1(b,a,d,c); q=-q)
     return ComplexF64(p*s,q*s) # undo scaling
 end
