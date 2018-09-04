@@ -89,46 +89,7 @@ julia> unique(Real[1, 1.0, 2])
  2
 ```
 """
-function unique(itr)
-    T = @default_eltype(itr)
-    out = Vector{T}()
-    seen = Set{T}()
-    y = iterate(itr)
-    y === nothing && return out
-    x, i = y
-    if !isconcretetype(T) && IteratorEltype(itr) == EltypeUnknown()
-        S = typeof(x)
-        return _unique_from(itr, S[x], Set{S}((x,)), i)
-    end
-    push!(seen, x)
-    push!(out, x)
-    return unique_from(itr, out, seen, i)
-end
-
-_unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
-@inline function unique_from(itr, out::Vector{T}, seen, i) where T
-    while true
-        y = iterate(itr, i)
-        y === nothing && break
-        x, i = y
-        S = typeof(x)
-        if !(S === T || S <: T)
-            R = promote_typejoin(S, T)
-            seenR = convert(Set{R}, seen)
-            outR = convert(Vector{R}, out)
-            if !in(x, seenR)
-                push!(seenR, x)
-                push!(outR, x)
-            end
-            return _unique_from(itr, outR, seenR, i)
-        end
-        if !in(x, seen)
-            push!(seen, x)
-            push!(out, x)
-        end
-    end
-    return out
-end
+unique(itr) = _unique(itr)
 
 """
     unique(f, itr)
@@ -145,57 +106,7 @@ julia> unique(x -> x^2, [1, -1, 3, -3, 4])
  4
 ```
 """
-function unique(f::Callable, C)
-    out = Vector{eltype(C)}()
-    seen = Set()
-    for x in C
-        y = f(x)
-        if !in(y, seen)
-            push!(seen, y)
-            push!(out, x)
-        end
-    end
-    out
-end
-
-# If A is not grouped, then we will need to keep track of all of the elements that we have
-# seen so far.
-function _unique!(A::AbstractVector)
-    seen = Set{eltype(A)}()
-    idxs = eachindex(A)
-    y = iterate(idxs)
-    count = 0
-    for x in A
-        if x ∉ seen
-            push!(seen, x)
-            count += 1
-            A[y[1]] = x
-            y = iterate(idxs, y[2])
-        end
-    end
-    resize!(A, count)
-end
-
-# If A is grouped, so that each unique element is in a contiguous group, then we only
-# need to keep track of one element at a time. We replace the elements of A with the
-# unique elements that we see in the order that we see them. Once we have iterated
-# through A, we resize A based on the number of unique elements that we see.
-function _groupedunique!(A::AbstractVector)
-    isempty(A) && return A
-    idxs = eachindex(A)
-    y = first(A)
-    # We always keep the first element
-    it = iterate(idxs, iterate(idxs)[2])
-    count = 1
-    for x in Iterators.drop(A, 1)
-        if !isequal(x, y)
-            y = A[it[1]] = x
-            count += 1
-            it = iterate(idxs, it[2])
-        end
-    end
-    resize!(A, count)
-end
+unique(f::Callable, itr) = _unique(itr, f)
 
 """
     unique!(A::AbstractVector)
@@ -231,25 +142,123 @@ julia> unique!(B)
  42
 ```
 """
-function unique!(A::Union{AbstractVector{<:Real}, AbstractVector{<:AbstractString},
-                          AbstractVector{<:Symbol}})
-    if isempty(A)
-        return A
-    elseif issorted(A) || issorted(A, rev=true)
-        return _groupedunique!(A)
-    else
-        return _unique!(A)
-    end
-end
+unique!(A::AbstractVector) = _unique!(A, nothing, false)
+
 # issorted fails for some element types, so the method above has to be restricted to
-# elements with isless/< defined.
-function unique!(A)
-    if isempty(A)
-        return A
+# elements with isless/< defined. "hasmethod(isless,...)" is too slow for this purpose.
+unique!(A::AbstractVector{<:Union{Real,AbstractString,Symbol}}) =
+            _unique!(A, nothing, issorted(A) || issorted(A, rev = true))
+
+
+"""
+    unique!(f, A::AbstractVector)
+
+Modifies the array `A` to contain one value from `A` for each unique value produced by `f`
+applied to elements of `A`.
+
+# Examples
+```jldoctest
+julia> unique!(x -> x^2, [1, -1, 3, -3, 4])
+3-element Array{Int64,1}:
+ 1
+ 3
+ 4
+```
+"""
+unique!(f::Callable, A::AbstractVector) = _unique!(A, f, false)
+
+# Two concrete types for inplace and out of place unique algorithms
+abstract type Uniquifier end
+struct UO{I,T,S} <: Uniquifier itr::I; out::Vector{T}; seen::Set{S}; end
+struct UI{I,S} <: Uniquifier itr::I; seen::Set{S}; i::Vector{Int}; end
+struct UOF{I,T,S,F <: Callable} <: Uniquifier itr::I; out::Vector{T}; seen::Set{S}; f::F; end
+struct UIF{I,S,F <: Callable} <: Uniquifier itr::I; seen::Set{S}; i::Vector{Int}; f::F; end
+
+# Implementation bodies for unique and unique!
+function _unique(itr, f::Union{Nothing, Callable} = nothing)
+    T = @default_eltype(itr)
+    y = iterate(itr)
+    y === nothing && return T[]
+    x, st = y
+    R = !isconcretetype(T) && IteratorEltype(itr) == EltypeUnknown() ? typeof(x) : T
+    if f !== nothing
+        fx = f(x)
+        return __uniquify(UOF(itr, R[], Set{typeof(fx)}(), f), st, x, fx)
     else
-        return _unique!(A)
+        return __uniquify(UO(itr, R[], Set{R}()), st, x)
     end
 end
+
+function _unique!(A::AbstractVector, f::Union{Callable, Nothing}, sorted::Bool)
+    isempty(A) && return A
+    sorted && return _uniquify_sorted(A)
+    x, st = iterate(A)
+    if f !== nothing
+        fx = f(x)
+        return __uniquify(UIF(A, Set{typeof(fx)}(), [firstindex(A)], f), st, x, fx)
+    else
+        return __uniquify(UI(A, Set{typeof(x)}(), [firstindex(A)]), st, x)
+    end
+end
+
+# Generic implementations of unique/unique! with and without function application
+__uniquify(u, st, x, fx = nothing) = _uniquify(u, st, x, fx)
+@inline function _uniquify(u::T, st, x, fx = nothing) where {T<:Uniquifier}
+    _register(u, x, fx)
+    y = iterate(u.itr, st)
+    while y !== nothing
+        x, st = y
+        fx = _element(u, x)
+        _fits(u, x, fx) || return __uniquify(_recreate(u, x, fx), st, x, fx)
+        _register(u, x, fx)
+        y = iterate(u.itr, st)
+    end
+    return _finish(u)
+end
+
+# Specififc implementation for sorted data with inplace update
+function _uniquify_sorted(A::AbstractVector)
+    i = firstindex(A) + 1
+    a = iterate(A)
+    lx, st = a
+    while a !== nothing
+        x, st = a
+        isequal(lx, x) || (lx = A[i] = x; i += 1)
+        a = iterate(A, st)
+    end
+    resize!(A, i - firstindex(A))
+end
+
+@inline _element(u::Union{UOF,UIF}, x) = u.f(x)
+@inline _element(::Union{UO,UI}, ::Any) = nothing
+
+# checks if the value has been dealt with before and process it otherwise
+@inline _register(u::UO, x, ::Nothing) = !in(x, u.seen) && (push!(u.seen, x); push!(u.out, x))
+@inline _register(u::UI, x, ::Nothing) = !in(x, u.seen) && (push!(u.seen, x); u.itr[u.i[1]] = x; u.i[1] += 1)
+@inline _register(u::UOF, x, fx) = !in(fx, u.seen) && (push!(u.seen, fx); push!(u.out, x))
+@inline _register(u::UIF, x, fx) = !in(fx, u.seen) && (push!(u.seen, fx); u.itr[u.i[1]] = x; u.i[1] += 1)
+
+# Does the current values fit in the data structures?
+@inline _fits(u::UOF{I,T,S}, x, fx) where {I,T,S} = x isa T && fx isa S
+@inline _fits(u::UIF{I,S},  x, fx) where {I,S} = fx isa S
+@inline _fits(u::UO{I,T,S}, x, ::Nothing) where {I,T,S} = x isa T
+@inline _fits(u::UI{I,S}, x, ::Nothing) where {I,S} = x isa S
+
+# Recreates the data structures with adjusted types
+_recreate(u::UOF, x, fx) = UOF(u.itr, _adjust(u.out, x), _adjust(u.seen, fx), u.f)
+_recreate(u::UIF, x, fx) = UIF(u.itr, _adjust(u.seen, fx), u.i, u.f)
+_recreate(u::UO, x, ::Nothing) = UO(u.itr, _adjust(u.out, x), _adjust(u.seen, x))
+_recreate(u::UI, x, ::Nothing) = UI(u.itr, _adjust(u.seen, x), u.i)
+# if an unfitting element type appears, adjust the data structures
+# make sure the 'out' array always fits the element
+# if the 'seen' set has to deal abstract type switch to Any
+_adjust(out::Vector{T}, ::U) where {T,U} = convert(Vector{promote_typejoin(T,U)}, out)
+_adjust(seen::Set{T}, ::U) where {T,U} = convert(Set{T === U ? T : Any}, seen)
+
+# return of uniquify functions depends on inplace/out of place
+_finish(u::Union{UO,UOF}) = u.out
+_finish(u::Union{UI,UIF}) = resize!(u.itr, u.i[1] - firstindex(u.itr))
+
 
 """
     allunique(itr) -> Bool

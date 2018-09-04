@@ -381,6 +381,28 @@ end
     u = [1,2,5,1,3,2]
 end
 
+@testset "unique(!) types" begin
+    @test @inferred(unique!(collect(1:1))) == [1]
+    @test unique(Real[1., 1])::Vector{Real} == unique!(Real[1., 1])::Vector{Real} == [1.]
+    @test unique(Real[1, 1.])::Vector{Real} == unique!(Real[1, 1.])::Vector{Real} == [1]
+    for t in [Int, Integer, Any]
+        a = t[1,-1, 1, -1]
+        g = (x for x in a)
+        @test unique(abs,a)::typeof(a) == unique!(abs, copy(a))::typeof(a) == [1]
+        @test unique(a)::typeof(a) == unique!(copy(a))::typeof(a) == [1,-1]
+        @test unique(abs, g)::Vector{Int} == [1]
+        @test unique(g)::Vector{Int} == [1,-1]
+    end
+end
+
+@testset "unique!(f)" begin
+    a = [5, 1, 8, 9, 3, 4, 10, 7, 2, 6]
+    b = copy(a)
+    @test unique!(iseven, a) === a == [5, 8]
+    @test unique!(n -> n % 3, b) === b == [5, 1, 9]
+    @test unique!(n -> n % 3, Int[]) == Int[]
+end
+
 @testset "allunique" begin
     @test allunique([])
     @test allunique(Set())
