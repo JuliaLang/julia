@@ -355,7 +355,7 @@ julia> extrema(b)
 
     LinearIndices(inds::CartesianIndices) -> R
     LinearIndices(sz::Dims) -> R
-    LinearIndices(istart:istop, jstart:jstop, ...) -> R
+    LinearIndices((istart:istop, jstart:jstop, ...)) -> R
 
 Return a `LinearIndices` array with the specified shape or [`axes`](@ref).
 
