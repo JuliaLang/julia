@@ -87,18 +87,20 @@ end
     @test isequal(mean([missing 1.0; 2.0 3.0], dims=1), [missing 2.0])
     @test mean(skipmissing([1, missing, 2])) === 1.5
     @test isequal(mean(Complex{Float64}[]), NaN+NaN*im)
-    @test isequal(mean(skipmissing(Complex{Float64}[])), NaN+NaN*im)
     @test mean(Complex{Float64}[]) isa Complex{Float64}
+    @test isequal(mean(skipmissing(Complex{Float64}[])), NaN+NaN*im)
     @test mean(skipmissing(Complex{Float64}[])) isa Complex{Float64}
     @test isequal(mean(abs, Complex{Float64}[]), NaN)
-    @test isequal(mean(abs, skipmissing(Complex{Float64}[])), NaN)
     @test mean(abs, Complex{Float64}[]) isa Float64
+    @test isequal(mean(abs, skipmissing(Complex{Float64}[])), NaN)
     @test mean(abs, skipmissing(Complex{Float64}[])) isa Float64
+    @test isequal(mean(Int[]), NaN)
+    @test mean(Int[]) isa Float64
+    @test isequal(mean(skipmissing(Int[])), NaN)
+    @test mean(skipmissing(Int[])) isa Float64
     @test_throws MethodError mean([])
     @test_throws MethodError mean(skipmissing([]))
-    @test_throws MethodError mean((1 for i in 2:1))
-    @test mean(Int[]) isa Float64
-    @test mean(skipmissing(Int[])) isa Float64
+    @test_throws ArgumentError mean((1 for i in 2:1))
 
     # Check that small types are accumulated using wider type
     for T in (Int8, UInt8)
@@ -260,13 +262,15 @@ end
     end
 
     @test isequal(var(Complex{Float64}[]), NaN)
-    @test isequal(var(skipmissing(Complex{Float64}[])), NaN)
     @test var(Complex{Float64}[]) isa Float64
+    @test isequal(var(skipmissing(Complex{Float64}[])), NaN)
     @test var(skipmissing(Complex{Float64}[])) isa Float64
     @test_throws MethodError var([])
     @test_throws MethodError var(skipmissing([]))
-    @test_throws ArgumentError var((1 for i in 2:1))
+    @test_throws MethodError var((1 for i in 2:1))
+    @test isequal(var(Int[]), NaN)
     @test var(Int[]) isa Float64
+    @test isequal(var(skipmissing(Int[])), NaN)
     @test var(skipmissing(Int[])) isa Float64
 end
 
