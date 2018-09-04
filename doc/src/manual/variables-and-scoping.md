@@ -140,11 +140,9 @@ julia> x = 0;
 
 julia> for i = 1:10
            local x # this is also the default
-           x = i + 1
+           println(x + i)
        end
-
-julia> x
-0
+ERROR: UndefVarError: x not defined
 ```
 
 Inside a local scope a global variable can be assigned to by using the keyword `global`:
