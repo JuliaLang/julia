@@ -379,12 +379,12 @@
                          ;; in keyword arg A=B, don't transform "A"
                          (unescape (cadr (cadr e))))
                     ,(resolve-expansion-vars- (caddr (cadr e)) env m parent-scope inarg))
-                   ,(resolve-expansion-vars- (caddr e) env m parent-scope inarg)))
+                   ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg)))
              (else
               `(kw ,(if inarg
                         (resolve-expansion-vars- (cadr e) env m parent-scope inarg)
                         (unescape (cadr e)))
-                   ,(resolve-expansion-vars- (caddr e) env m parent-scope inarg)))))
+                   ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg)))))
 
            ((let)
             (let* ((newenv (new-expansion-env-for e env))
