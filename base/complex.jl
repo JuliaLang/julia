@@ -360,8 +360,8 @@ inv(z::Complex{<:Union{Float16,Float32}}) =
 #             c + i*d
 function /(z::ComplexF64, w::ComplexF64)
     a, b = reim(z); c, d = reim(w)
-    ab = max(abs(a), abs(b))
-    cd = max(abs(c), abs(d))
+    @fastmath ab = max(abs(a), abs(b))
+    @fastmath cd = max(abs(c), abs(d))
 
     # constants
     ov = floatmax(Float64)
