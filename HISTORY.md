@@ -625,7 +625,7 @@ Library improvements
   * The `crc32c` function for CRC-32c checksums is now exported ([#22274]).
 
   * `eye(::Type{Diagonal{T}}, m::Integer)` has been deprecated in favor of
-    `Diagonal{T}(I, m)` ([#24413]).
+    `Diagonal{T}(I, m)` ([#24415]).
 
   * The output of `versioninfo` is now controlled with keyword arguments ([#21974]).
 
@@ -1247,7 +1247,7 @@ Deprecated or removed
   * `search(buf::IOBuffer, delim::UInt8)` has been deprecated in favor of either `occursin(delim, buf)`
     (to test containment) or `readuntil(buf, delim)` (to read data up to `delim`) ([#26600]).
 
-  * `ismatch(regex, str)` has been deprecated in favor of `contains(str, regex)` ([#24673]).
+  * `ismatch(regex, str)` has been deprecated in favor of `occursin(regex, str)` ([#26283]).
 
   * `matchall` has been deprecated in favor of `collect(m.match for m in eachmatch(r, s))` ([#26071]).
 
@@ -1575,6 +1575,7 @@ Command-line option changes
 [#24404]: https://github.com/JuliaLang/julia/issues/24404
 [#24413]: https://github.com/JuliaLang/julia/issues/24413
 [#24414]: https://github.com/JuliaLang/julia/issues/24414
+[#24415]: https://github.com/JuliaLang/julia/issues/24415
 [#24438]: https://github.com/JuliaLang/julia/issues/24438
 [#24445]: https://github.com/JuliaLang/julia/issues/24445
 [#24452]: https://github.com/JuliaLang/julia/issues/24452

@@ -847,7 +847,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         sv.params.inlining || continue
 
         # Special case inliners for regular functions
-        if late_inline_special_case!(ir, idx, stmt, atypes, f, ft) || f === return_type
+        if late_inline_special_case!(ir, idx, stmt, atypes, f, ft) || is_return_type(f)
             continue
         end
 
@@ -1061,7 +1061,7 @@ function late_inline_special_case!(ir::IRCode, idx::Int, stmt::Expr, atypes::Vec
         subtype_call = Expr(:call, GlobalRef(Core, :(<:)), stmt.args[3], stmt.args[2])
         ir[SSAValue(idx)] = subtype_call
         return true
-    elseif f === return_type
+    elseif is_return_type(f)
         if isconstType(typ)
             ir[SSAValue(idx)] = quoted(typ.parameters[1])
             return true

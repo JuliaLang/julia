@@ -692,12 +692,7 @@ The following operators are supported for arrays:
 2. Binary arithmetic -- `-`, `+`, `*`, `/`, `\`, `^`
 3. Comparison -- `==`, `!=`, `≈` ([`isapprox`](@ref)), `≉`
 
-Most of the binary arithmetic operators listed above also operate elementwise
-when one argument is scalar: `-`, `+`, and `*` when either argument is scalar,
-and `/` and `\` when the denominator is scalar. For example, `[1, 2] + 3 == [4, 5]`
-and `[6, 4] / 2 == [3, 2]`.
-
-Additionally, to enable convenient vectorization of mathematical and other operations,
+To enable convenient vectorization of mathematical and other operations,
 Julia [provides the dot syntax](@ref man-vectorized) `f.(args...)`, e.g. `sin.(x)`
 or `min.(x,y)`, for elementwise operations over arrays or mixtures of arrays and
 scalars (a [Broadcasting](@ref) operation); these have the additional advantage of

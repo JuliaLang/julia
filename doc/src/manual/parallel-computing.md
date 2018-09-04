@@ -465,7 +465,7 @@ julia> function g_fix(r)
 g_fix (generic function with 1 method)
 
 julia>  r = let m = MersenneTwister(1)
-                [m; accumulate(Future.randjump, m, fill(big(10)^20, nthreads()-1))]
+                [m; accumulate(Future.randjump, fill(big(10)^20, nthreads()-1), init=m)]
             end;
 
 julia> g_fix(r)
@@ -1086,7 +1086,7 @@ julia> for p in workers() # start tasks on the workers to process requests in pa
 
 julia> @elapsed while n > 0 # print out results
            job_id, exec_time, where = take!(results)
-           println("$job_id finished in $(round(exec_time,2)) seconds on worker $where")
+           println("$job_id finished in $(round(exec_time; digits=2)) seconds on worker $where")
            n = n - 1
        end
 1 finished in 0.18 seconds on worker 4
