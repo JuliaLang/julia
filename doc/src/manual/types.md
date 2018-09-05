@@ -1037,7 +1037,7 @@ true
 
 We have said that a parametric type like `Ptr` acts as a supertype of all its instances
 (`Ptr{Int64}` etc.). How does this work? `Ptr` itself cannot be a normal data type, since without
-knowing the type of the referenced data the type clearly cannot be used for memory operations.
+knowing the type of the referenced data clearly, we cannot use the type for memory operations.
 The answer is that `Ptr` (or other parametric types like `Array`) is a different kind of type called a
 [`UnionAll`](@ref) type. Such a type expresses the *iterated union* of types for all values of some parameter.
 
