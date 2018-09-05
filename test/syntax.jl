@@ -1673,3 +1673,14 @@ end
 @test A28593.var.name === :S
 @test B28593.var.name === :S
 @test C28593.var.name === :S
+
+# issue #28900
+macro foo28900(x)
+    quote
+        $x
+    end
+end
+f28900(; kwarg) = kwarg
+let g = @foo28900 f28900(kwarg = x->2x)
+    @test g(10) == 20
+end
