@@ -1647,6 +1647,14 @@ end
 @test Meta.isexpr(Meta.parse("1 == 2 ?"), :incomplete)
 @test Meta.isexpr(Meta.parse("1 == 2 ? 3 :"), :incomplete)
 
+# issue #28991
+eval(Expr(:toplevel,
+          Expr(:module, true, :Mod28991,
+               Expr(:block,
+                    Expr(:export, :Inner),
+                    Expr(:abstract, :Inner)))))
+@test names(Mod28991) == Symbol[:Inner, :Mod28991]
+
 # issue #28593
 macro a28593()
     quote
