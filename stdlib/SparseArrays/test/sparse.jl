@@ -2300,7 +2300,7 @@ end
 @testset "Issue #28934" begin
     A = sprand(5,5,0.5)
     D = Diagonal(rand(5))
-    C = deepcopy(A)
+    C = copy(A)
     m1 = @which mul!(C,A,D)
     m2 = @which mul!(C,D,A)
     @test m1.module == SparseArrays
