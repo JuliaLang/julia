@@ -97,6 +97,8 @@ function generate_precompile_statements()
                     while true
                         sleep(0.5)
                         s = String(readavailable(master))
+                        print(s)
+                        flush(stdout)
                         write(repl_output_buffer, s)
                         if occursin("__PRECOMPILE_END__", s)
                             break
@@ -109,6 +111,8 @@ function generate_precompile_statements()
                     end
                 end
                 write(master, "print(\"__PRECOMPILE\", \"_END__\")", '\n')
+                println("Waiting reader task...")
+                flush(stdout)
                 wait(t)
 
                 # TODO Figure out why exit() on Windows doesn't exit the process
@@ -116,9 +120,13 @@ function generate_precompile_statements()
                     print(master, "ccall(:_exit, Cvoid, (Cint,), 0)\n")
                 else
                     write(master, "exit()\n")
+                    println("Waiting reading exit signature...")
+                    flush(stdout)
                     readuntil(master, "exit()\r\e[13C\r\n")
                     @assert bytesavailable(master) == 0
                 end
+                println("Waiting REPL exit...")
+                flush(stdout)
                 wait(p)
             else
                 # Is this even needed or is this already recorded just from starting this process?
