@@ -367,21 +367,21 @@ function /(z::ComplexF64, w::ComplexF64)
     ov = floatmax(Float64)
     un = floatmin(Float64)
     ϵ  = eps(Float64)
-    half = 0.5; halfov = half*ov
-    two = 2.0;  twounϵ = un*two/ϵ
-    bs = two/(ϵ*ϵ)
+    halfov = 0.5*ov
+    twounϵ = un*2.0/ϵ
+    bs = 2.0/(ϵ*ϵ)
 
     # scaling
     s = 1.0
     if ab >= halfov
-        a*=half; b*=half; s*=two  # scale down a,b
+        a*=0.5; b*=0.5; s*=2.0  # scale down a,b
     elseif ab <= twounϵ
-        a*=bs;   b*=bs;   s/=bs   # scale up a,b
+        a*=bs;  b*=bs;  s/=bs   # scale up a,b
     end
     if cd >= halfov
-        c*=half; d*=half; s*=half # scale down c,d
+        c*=0.5; d*=0.5; s*=0.5  # scale down c,d
     elseif cd <= twounϵ
-        c*=bs;   d*=bs;   s*=bs   # scale up c,d
+        c*=bs;  d*=bs;  s*=bs   # scale up c,d
     end
 
     # division operations
