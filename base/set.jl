@@ -67,6 +67,21 @@ rehash!(s::Set) = (rehash!(s.dict); s)
 
 iterate(s::Set, i...)       = iterate(KeySet(s.dict), i...)
 
+# get rid of pathological cases where length(s) <<< length(t)
+# the 0.5*length is a very conservative threshold
+function setdiff!(s::Set, t::Set)
+    if length(s) < length(t) * 0.5
+        for x in s
+            x in t && delete!(s, x)
+        end
+    else
+        for x in t
+            delete!(s, x)
+        end
+    end
+    return s
+end
+
 """
     unique(itr)
 
