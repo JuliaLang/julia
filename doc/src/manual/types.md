@@ -910,8 +910,19 @@ false
 Notice that `Vararg{T}` corresponds to zero or more elements of type `T`. Vararg tuple types are
 used to represent the arguments accepted by varargs methods (see [Varargs Functions](@ref)).
 
-The type `Vararg{T,N}` corresponds to exactly `N` elements of type `T`.  `NTuple{N,T}` is a convenient
-alias for `Tuple{Vararg{T,N}}`, i.e. a tuple type containing exactly `N` elements of type `T`.
+The type `Vararg{T,n}` corresponds to exactly `n` elements of type `T`.  `NTuple{n,T}` is a convenient
+alias for `Tuple{Vararg{T,n}}`, i.e. a tuple type containing exactly `n` elements of type `T`.
+
+```jldoctest
+julia> Vararg{Real, 3}
+Vararg{Real,3}
+
+julia> NTuple{3, Real} # NTuple actually is not N*T
+Tuple{Real,Real,Real}
+
+julia> Tuple{Vararg{Real, 3}}
+Tuple{Real,Real,Real}
+```
 
 ### Named Tuple Types
 
