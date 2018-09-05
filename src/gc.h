@@ -75,13 +75,6 @@ typedef struct {
     int         full_sweep;
 } jl_gc_num_t;
 
-typedef struct {
-    void **pc; // Current stack address for the pc (up growing)
-    jl_gc_mark_data_t *data; // Current stack address for the data (up growing)
-    void **pc_start; // Cached value of `gc_cache->pc_stack`
-    void **pc_end; // Cached value of `gc_cache->pc_stack_end`
-} jl_gc_mark_sp_t;
-
 enum {
     GC_MARK_L_marked_obj,
     GC_MARK_L_scan_only,
