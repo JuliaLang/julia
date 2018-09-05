@@ -8,6 +8,7 @@ using LinearAlgebra
 using Base.Printf: @printf
 using Random
 using Test: guardseed
+using InteractiveUtils: @which
 
 @testset "issparse" begin
     @test issparse(sparse(fill(1,5,5)))
@@ -2293,6 +2294,17 @@ end
     a = SparseMatrixCSC{Int8, Int16}([1 2; 3 4])
     na = SparseMatrixCSC(a)
     @test typeof(a) === typeof(na)
+end
+
+#PR #29045
+@testset "Issue #28934" begin
+    A = sprand(5,5,0.5)
+    D = Diagonal(rand(5))
+    C = copy(A)
+    m1 = @which mul!(C,A,D)
+    m2 = @which mul!(C,D,A)
+    @test m1.module == SparseArrays
+    @test m2.module == SparseArrays
 end
 
 end # module
