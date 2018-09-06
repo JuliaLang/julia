@@ -523,6 +523,29 @@ int jl_is_toplevel_only_expr(jl_value_t *e)
          ((jl_expr_t*)e)->head == jl_incomplete_sym);
 }
 
+int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
+{
+    if (!jl_is_expr(e))
+        return 0;
+    jl_expr_t *ex = (jl_expr_t*)e;
+    jl_sym_t *head = ex->head;
+    if (head == module_sym || head == import_sym || head == using_sym ||
+        head == export_sym || head == thunk_sym || head == toplevel_sym ||
+        head == error_sym || head == jl_incomplete_sym || head == method_sym) {
+        return 0;
+    }
+    if (head == global_sym) {
+        size_t i, l = jl_array_len(ex->args);
+        for (i = 0; i < l; i++) {
+            jl_value_t *a = jl_exprarg(ex, i);
+            if (!jl_is_symbol(a) && !jl_is_globalref(a))
+                return 1;
+        }
+        return 0;
+    }
+    return 1;
+}
+
 void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
                               int binding_effects);
 
@@ -600,22 +623,36 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     }
 
     jl_expr_t *ex = (jl_expr_t*)e;
+
     if (ex->head == dot_sym) {
         if (jl_expr_nargs(ex) != 2)
             jl_error("syntax: malformed \".\" expression");
         jl_value_t *lhs = jl_exprarg(ex, 0);
         jl_value_t *rhs = jl_exprarg(ex, 1);
-        // only handle `a.b` syntax here
+        // only handle `a.b` syntax here, so qualified names can be eval'd in pure contexts
         if (jl_is_quotenode(rhs) && jl_is_symbol(jl_fieldref(rhs,0)))
             return jl_eval_dot_expr(m, lhs, rhs, fast);
     }
+
     if (ptls->in_pure_callback) {
         jl_error("eval cannot be used in a generated function");
     }
-    else if (ex->head == module_sym) {
-        return jl_eval_module_expr(m, ex);
+
+    jl_method_instance_t *li = NULL;
+    jl_code_info_t *thk = NULL;
+    JL_GC_PUSH3(&li, &thk, &ex);
+
+    if (!expanded && jl_needs_lowering(e)) {
+        ex = (jl_expr_t*)jl_expand(e, m);
     }
-    else if (ex->head == using_sym) {
+    jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
+
+    if (head == module_sym) {
+        jl_value_t *val = jl_eval_module_expr(m, ex);
+        JL_GC_POP();
+        return val;
+    }
+    else if (head == using_sym) {
         size_t last_age = ptls->world_age;
         ptls->world_age = jl_world_counter;
         jl_sym_t *name = NULL;
@@ -652,9 +689,10 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
             }
         }
         ptls->world_age = last_age;
+        JL_GC_POP();
         return jl_nothing;
     }
-    else if (ex->head == import_sym) {
+    else if (head == import_sym) {
         size_t last_age = ptls->world_age;
         ptls->world_age = jl_world_counter;
         jl_sym_t *name = NULL;
@@ -679,53 +717,41 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
             }
         }
         ptls->world_age = last_age;
+        JL_GC_POP();
         return jl_nothing;
     }
-    else if (ex->head == export_sym) {
+    else if (head == export_sym) {
         for (size_t i = 0; i < jl_array_len(ex->args); i++) {
             jl_sym_t *name = (jl_sym_t*)jl_array_ptr_ref(ex->args, i);
             if (!jl_is_symbol(name))
                 jl_error("syntax: malformed \"export\" statement");
             jl_module_export(m, name);
         }
+        JL_GC_POP();
         return jl_nothing;
     }
-    else if (ex->head == global_sym) {
+    else if (head == global_sym) {
         // create uninitialized mutable binding for "global x" decl
         size_t i, l = jl_array_len(ex->args);
         for (i = 0; i < l; i++) {
-            jl_value_t *a = jl_exprarg(ex, i);
-            if (!jl_is_symbol(a) && !jl_is_globalref(a))
-                break;
-        }
-        if (i == l) {
-            for (i = 0; i < l; i++) {
-                jl_sym_t *gs = (jl_sym_t*)jl_exprarg(ex, i);
-                jl_module_t *gm = m;
-                if (jl_is_globalref(gs)) {
-                    gm = jl_globalref_mod(gs);
-                    gs = jl_globalref_name(gs);
-                }
-                assert(jl_is_symbol(gs));
-                jl_get_binding_wr(gm, gs, 0);
+            jl_value_t *arg = jl_exprarg(ex, i);
+            jl_module_t *gm;
+            jl_sym_t *gs;
+            if (jl_is_globalref(arg)) {
+                gm = jl_globalref_mod(arg);
+                gs = jl_globalref_name(arg);
             }
-            return jl_nothing;
+            else {
+                assert(jl_is_symbol(arg));
+                gm = m;
+                gs = (jl_sym_t*)arg;
+            }
+            jl_get_binding_wr(gm, gs, 0);
         }
-        // fall-through to expand to normalize the syntax
+        JL_GC_POP();
+        return jl_nothing;
     }
-
-    jl_method_instance_t *li = NULL;
-    jl_code_info_t *thk = NULL;
-    JL_GC_PUSH3(&li, &thk, &ex);
-
-    if (!expanded && ex->head != thunk_sym && ex->head != method_sym && ex->head != toplevel_sym &&
-        ex->head != error_sym && ex->head != jl_incomplete_sym) {
-        // not yet expanded
-        ex = (jl_expr_t*)jl_expand(e, m);
-    }
-    jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
-
-    if (head == toplevel_sym) {
+    else if (head == toplevel_sym) {
         size_t last_age = ptls->world_age;
         jl_value_t *res = jl_nothing;
         int i;
