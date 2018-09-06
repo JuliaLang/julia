@@ -1682,6 +1682,20 @@ end
 @test B28593.var.name === :S
 @test C28593.var.name === :S
 
+# issue #25955
+macro noeffect25955(e)
+    return e
+end
+
+struct foo25955
+end
+
+@noeffect25955 function (f::foo25955)()
+    42
+end
+
+@test foo25955()() == 42
+
 # issue #28833
 macro m28833(expr)
     esc(:(global a28833))
