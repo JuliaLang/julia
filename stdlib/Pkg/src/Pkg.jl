@@ -74,7 +74,7 @@ const UpgradeLevel = Types.UpgradeLevel
 
 # Define new variables so tab comleting Pkg. works.
 """
-    Pkg.add(pkg::Union{String, Vector{String})
+    Pkg.add(pkg::Union{String, Vector{String}})
     Pkg.add(pkg::Union{PackageSpec, Vector{PackageSpec}})
 
 Add a package to the current project. This package will be available using the
@@ -94,7 +94,7 @@ See also [`PackageSpec`](@ref).
 const add = API.add
 
 """
-    Pkg.rm(pkg::Union{String, Vector{String})
+    Pkg.rm(pkg::Union{String, Vector{String}})
     Pkg.rm(pkg::Union{PackageSpec, Vector{PackageSpec}})
 
 Remove a package from the current project. If the `mode` of `pkg` is
@@ -107,7 +107,7 @@ const rm = API.rm
 
 """
     Pkg.update(; level::UpgradeLevel=UPLEVEL_MAJOR, mode::PackageMode = PKGMODE_PROJECT)
-    Pkg.update(pkg::Union{String, Vector{String})
+    Pkg.update(pkg::Union{String, Vector{String}})
     Pkg.update(pkg::Union{PackageSpec, Vector{PackageSpec}})
 
 Update a package `pkg`. If no posistional argument is given, update all packages in the manifest if `mode` is `PKGMODE_MANIFEST` and packages in both manifest and project if `mode` is `PKGMODE_PROJECT`.
@@ -162,7 +162,7 @@ const gc = API.gc
 
 """
     Pkg.build()
-    Pkg.build(pkg::Union{String, Vector{String})
+    Pkg.build(pkg::Union{String, Vector{String}})
     Pkg.build(pkgs::Union{PackageSpec, Vector{PackageSpec}})
 
 Run the build script in `deps/build.jl` for `pkg` and all of the dependencies in
@@ -178,7 +178,7 @@ const build = API.build
 const installed = API.installed
 
 """
-    Pkg.pin(pkg::Union{String, Vector{String})
+    Pkg.pin(pkg::Union{String, Vector{String}})
     Pkg.pin(pkgs::Union{Packagespec, Vector{Packagespec}})
 
 Pin a package to the current version (or the one given in the `packagespec` or a certain
@@ -187,7 +187,7 @@ git revision. A pinned package is never updated.
 const pin = API.pin
 
 """
-    Pkg.free(pkg::Union{String, Vector{String})
+    Pkg.free(pkg::Union{String, Vector{String}})
     Pkg.free(pkgs::Union{Packagespec, Vector{Packagespec}})
 
 Free a package which removes a `pin` if it exists, or if the package is tracking a path,
@@ -203,7 +203,7 @@ const free = API.free
 
 
 """
-    Pkg.develop(pkg::Union{String, Vector{String})
+    Pkg.develop(pkg::Union{String, Vector{String}})
     Pkg.develop(pkgs::Union{Packagespec, Vector{Packagespec}})
 
 Make a package available for development by tracking it by path.
