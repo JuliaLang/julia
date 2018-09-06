@@ -72,17 +72,17 @@ Applying it to any other types of arguments will result in a [`MethodError`](@re
 julia> f(2.0, 3)
 ERROR: MethodError: no method matching f(::Float64, ::Int64)
 Closest candidates are:
-  f(::Float64, !Matched::Float64) at none:1
+  f(::Float64, !Matched::Float64) at REPL[n]:1
 
 julia> f(Float32(2.0), 3.0)
 ERROR: MethodError: no method matching f(::Float32, ::Float64)
 Closest candidates are:
-  f(!Matched::Float64, ::Float64) at none:1
+  f(!Matched::Float64, ::Float64) at REPL[n]:1
 
 julia> f(2.0, "3.0")
 ERROR: MethodError: no method matching f(::Float64, ::String)
 Closest candidates are:
-  f(::Float64, !Matched::Float64) at none:1
+  f(::Float64, !Matched::Float64) at REPL[n]:1
 
 julia> f("2.0", "3.0")
 ERROR: MethodError: no method matching f(::String, ::String)
@@ -145,13 +145,13 @@ and applying it will still result in a [`MethodError`](@ref):
 julia> f("foo", 3)
 ERROR: MethodError: no method matching f(::String, ::Int64)
 Closest candidates are:
-  f(!Matched::Number, ::Number) at none:1
+  f(!Matched::Number, ::Number) at REPL[n]:1
 
 julia> f()
 ERROR: MethodError: no method matching f()
 Closest candidates are:
-  f(!Matched::Float64, !Matched::Float64) at none:1
-  f(!Matched::Number, !Matched::Number) at none:1
+  f(!Matched::Float64, !Matched::Float64) at REPL[n]:1
+  f(!Matched::Number, !Matched::Number) at REPL[n]:1
 ```
 
 You can easily see which methods exist for a function by entering the function object itself in
@@ -168,13 +168,14 @@ of those methods are, use the [`methods`](@ref) function:
 ```julia-repl
 julia> methods(f)
 # 2 methods for generic function "f":
-[1] f(x::Float64, y::Float64) in Main at none:1
-[2] f(x::Number, y::Number) in Main at none:1
+[1] f(x::Float64, y::Float64) in Main at REPL[n]:1
+[2] f(x::Number, y::Number) in Main at REPL[n]:1
 ```
 
 which shows that `f` has two methods, one taking two `Float64` arguments and one taking arguments
 of type `Number`. It also indicates the file and line number where the methods were defined: because
-these methods were defined at the REPL, we get the apparent line number `none:1`.
+these methods were defined at the REPL, we get the apparent line number `REPL[n]:1` where `n` may
+different in yours (it indicates the nth execution since the REPL startup).
 
 In the absence of a type declaration with `::`, the type of a method parameter is `Any` by default,
 meaning that it is unconstrained since all values in Julia are instances of the abstract type
@@ -243,8 +244,8 @@ julia> g(2, 3.0)
 
 julia> g(2.0, 3.0)
 ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
-  g(x, y::Float64) in Main at none:1
-  g(x::Float64, y) in Main at none:1
+  g(x, y::Float64) in Main at REPL[n]:1
+  g(x::Float64, y) in Main at REPL[n]:1
 Possible fix, define
   g(::Float64, ::Float64)
 ```
@@ -334,7 +335,7 @@ julia> myappend([1,2,3],4)
 julia> myappend([1,2,3],2.5)
 ERROR: MethodError: no method matching myappend(::Array{Int64,1}, ::Float64)
 Closest candidates are:
-  myappend(::Array{T,1}, !Matched::T) where T at none:1
+  myappend(::Array{T,1}, !Matched::T) where T at REPL[n]:1
 
 julia> myappend([1.0,2.0,3.0],4.0)
 4-element Array{Float64,1}:
@@ -346,7 +347,7 @@ julia> myappend([1.0,2.0,3.0],4.0)
 julia> myappend([1.0,2.0,3.0],4)
 ERROR: MethodError: no method matching myappend(::Array{Float64,1}, ::Int64)
 Closest candidates are:
-  myappend(::Array{T,1}, !Matched::T) where T at none:1
+  myappend(::Array{T,1}, !Matched::T) where T at REPL[n]:1
 ```
 
 As you can see, the type of the appended element must match the element type of the vector it
@@ -386,8 +387,8 @@ true
 julia> same_type_numeric("foo", 2.0)
 ERROR: MethodError: no method matching same_type_numeric(::String, ::Float64)
 Closest candidates are:
-  same_type_numeric(!Matched::T<:Number, ::T<:Number) where T<:Number at none:1
-  same_type_numeric(!Matched::Number, ::Number) at none:1
+  same_type_numeric(!Matched::T<:Number, ::T<:Number) where T<:Number at REPL[n]:1
+  same_type_numeric(!Matched::Number, ::Number) at REPL[n]:1
 
 julia> same_type_numeric("foo", "bar")
 ERROR: MethodError: no method matching same_type_numeric(::String, ::String)
@@ -428,8 +429,8 @@ julia> tryeval()
 ERROR: MethodError: no method matching newfun()
 The applicable method may be too new: running in world age xxxx1, while current world is xxxx2.
 Closest candidates are:
-  newfun() at none:1 (method too new to be called from this world context.)
- in tryeval() at none:1
+  newfun() at REPL[n]:1 (method too new to be called from this world context.)
+ in tryeval() at REPL[n]:1
  ...
 
 julia> newfun()
@@ -775,7 +776,7 @@ bar (generic function with 1 method)
 julia> bar(1,2,3)
 ERROR: MethodError: no method matching bar(::Int64, ::Int64, ::Int64)
 Closest candidates are:
-  bar(::Any, ::Any, ::Any, !Matched::Any) at none:1
+  bar(::Any, ::Any, ::Any, !Matched::Any) at REPL[n]:1
 
 julia> bar(1,2,3,4)
 (1, 2, (3, 4))
@@ -783,7 +784,7 @@ julia> bar(1,2,3,4)
 julia> bar(1,2,3,4,5)
 ERROR: MethodError: no method matching bar(::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
 Closest candidates are:
-  bar(::Any, ::Any, ::Any, ::Any) at none:1
+  bar(::Any, ::Any, ::Any, ::Any) at REPL[n]:1
 ```
 
 More usefully, it is possible to constrain varargs methods by a parameter. For example:
