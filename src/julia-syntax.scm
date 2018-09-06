@@ -2430,7 +2430,7 @@
          '(null))
         ((eq? (car e) 'require-existing-local)
          (if (not (memq (cadr e) env))
-             (error "no outer variable declaration exists for \"for outer\""))
+             (error "no outer local variable declaration exists for \"for outer\""))
          '(null))
         ((eq? (car e) 'lambda)
          (let* ((lv   (lam:vars e))

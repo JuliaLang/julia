@@ -3256,7 +3256,7 @@ let
     @test forouter() == 3
 end
 
-@test_throws ErrorException("syntax: no outer variable declaration exists for \"for outer\"") @eval function f()
+@test_throws ErrorException("syntax: no outer local variable declaration exists for \"for outer\"") @eval function f()
     for outer i = 1:2
     end
 end
