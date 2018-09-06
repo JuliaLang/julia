@@ -1371,3 +1371,10 @@ end # module NonStandardIntegerRangeTest
         end
     end
 end
+
+@testset "allocation of TwicePrecision call" begin
+    0:286.493442:360
+    0:286:360
+    @test @allocated(0:286.493442:360) == 0
+    @test @allocated(0:286:360) == 0
+end
