@@ -842,6 +842,16 @@ JL_DLLEXPORT unsigned int jl_sockaddr_host6(struct sockaddr_in6 *addr, char *hos
     return addr->sin6_scope_id;
 }
 
+JL_DLLEXPORT unsigned short jl_sockaddr_port4(struct sockaddr_in *addr)
+{
+    return addr->sin_port;
+}
+
+JL_DLLEXPORT unsigned short jl_sockaddr_port6(struct sockaddr_in6 *addr)
+{
+    return addr->sin6_port;
+}
+
 JL_DLLEXPORT void jl_sockaddr_set_port(struct sockaddr_storage *addr,
                                        uint16_t port)
 {

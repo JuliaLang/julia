@@ -276,7 +276,7 @@ end
 Read a UDP packet from the specified socket, and return the bytes received. This call blocks.
 """
 function recv(sock::UDPSocket)
-    addr, data = recvfrom(sock)
+    addr, port, data = recvfrom(sock)
     return data
 end
 
@@ -296,7 +296,7 @@ function recvfrom(sock::UDPSocket)
                                     sock.handle, Base.uv_jl_alloc_buf::Ptr{Cvoid}, uv_jl_recvcb::Ptr{Cvoid}))
     end
     sock.status = StatusActive
-    return stream_wait(sock, sock.recvnotify)::Tuple{Union{IPv4, IPv6}, Vector{UInt8}}
+    return stream_wait(sock, sock.recvnotify)::Tuple{Union{IPv4, IPv6}, UInt16, Vector{UInt8}}
 end
 
 alloc_buf_hook(sock::UDPSocket, size::UInt) = (Libc.malloc(size), size)
@@ -314,17 +314,17 @@ function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::P
         buf_addr = ccall(:jl_uv_buf_base, Ptr{Cvoid}, (Ptr{Cvoid},), buf)
         buf_size = ccall(:jl_uv_buf_len, Csize_t, (Ptr{Cvoid},), buf)
         # need to check the address type in order to convert to a Julia IPAddr
-        addrout = if addr == C_NULL
-                      IPv4(0)
+        addrout, port = if addr == C_NULL
+                      IPv4(0), 0x0000
                   elseif ccall(:jl_sockaddr_in_is_ip4, Cint, (Ptr{Cvoid},), addr) == 1
-                      IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Cvoid},), addr)))
+                      IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Cvoid},), addr))), ntoh(ccall(:jl_sockaddr_port4, UInt16, (Ptr{Cvoid}, ), addr))
                   else
                       tmp = [UInt128(0)]
                       ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ptr{UInt8}), addr, pointer(tmp))
-                      IPv6(ntoh(tmp[1]))
+                      IPv6(ntoh(tmp[1])), ntoh(ccall(:jl_sockaddr_port6, UInt16, (Ptr{Cvoid}, ), addr))
                   end
         buf = unsafe_wrap(Array, convert(Ptr{UInt8}, buf_addr), Int(nread), own = true)
-        notify(sock.recvnotify, (addrout, buf))
+        notify(sock.recvnotify, (addrout, port, buf))
     end
     ccall(:uv_udp_recv_stop, Cint, (Ptr{Cvoid},), sock.handle)
     sock.status = StatusOpen
