@@ -317,7 +317,7 @@ end
 """
     cp(src::AbstractString, dst::AbstractString; force::Bool=false, follow_symlinks::Bool=false)
 
-Copy the file, link, or directory from `src` to `dest`.
+Copy the file, link, or directory from `src` to `dst`.
 `force=true` will first remove an existing `dst`.
 
 If `follow_symlinks=false`, and `src` is a symbolic link, `dst` will be created as a
