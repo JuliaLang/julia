@@ -1416,7 +1416,7 @@ julia> firstlast(Val(false))
 For consistency across Julia, the call site should always pass a `Val`*instance* rather than using
 a *type*, i.e., use `foo(Val(:bar))` rather than `foo(Val{:bar})`.
 
-It's worth noting that it's extremely easy to mis-use parametric "value" types, including `Val`;
+It's worth noting that it's extremely easy to misuse parametric "value" types, including `Val`;
 in unfavorable cases, you can easily end up making the performance of your code much *worse*.
  In particular, you would never want to write actual code as illustrated above.  For more information
 about the proper (and improper) uses of `Val`, please read the more extensive discussion in [the performance tips](@ref man-performance-tips).
