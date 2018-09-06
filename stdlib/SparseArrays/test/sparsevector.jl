@@ -166,7 +166,7 @@ end
             @test isa(xr, SparseVector{Complex{Float64},Int})
             @test length(xr) == 1000
             if !isempty(nonzeros(xr))
-                @test any(nonzeros(xr) .> 0.0) && any(nonzeros(xr) .< 0.0)
+                @test any(real.(nonzeros(xr)) .> 0.0) && any(real.(nonzeros(xr)) .< 0.0) && any(imag.(nonzeros(xr)) .> 0.0) && any(imag.(nonzeros(xr)) .< 0.0)
             end
         end
 
