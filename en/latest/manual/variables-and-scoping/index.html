@@ -196,7 +196,7 @@ julia&gt; Fs[2]()
        end;
 
 julia&gt; f()
-0</code></pre><p>However, it is occasionally useful to reuse an existing variable as the iteration variable. This can be done conveniently by adding the keyword <code>outer</code>:</p><pre><code class="language-julia-repl">julia&gt; function f()
+0</code></pre><p>However, it is occasionally useful to reuse an existing local variable as the iteration variable. This can be done conveniently by adding the keyword <code>outer</code>:</p><pre><code class="language-julia-repl">julia&gt; function f()
            i = 0
            for outer i = 1:3
            end
