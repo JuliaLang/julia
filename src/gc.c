@@ -3246,14 +3246,10 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
 
 JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void)
 {
-    static jl_mutex_t conservative_gc_lock;
     static_assert(jl_buff_tag % GC_PAGE_SZ == 0,
         "jl_buff_tag must be a multiple of GC_PAGE_SZ");
     if (jl_is_initialized()) {
-        JL_LOCK_NOGC(&conservative_gc_lock);
-        int result = support_conservative_marking;
-        support_conservative_marking = 1;
-        JL_UNLOCK_NOGC(&conservative_gc_lock);
+        int result = jl_atomic_fetch_or(&support_conservative_marking, 1);
         if (!result) {
             // Do a full collection to ensure that age bits are updated
             // properly. We don't have to worry about race conditions
@@ -3271,7 +3267,7 @@ JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void)
 
 JL_DLLEXPORT int jl_gc_conservative_gc_support_enabled(void)
 {
-    return support_conservative_marking;
+    return jl_atomic_load(&support_conservative_marking);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
