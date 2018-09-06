@@ -29,6 +29,7 @@ add_or_develop(pkgs::Vector{String}; kwargs...)            = add_or_develop([che
 add_or_develop(pkgs::Vector{PackageSpec}; kwargs...)       = add_or_develop(Context(), pkgs; kwargs...)
 
 function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, shared::Bool=true, kwargs...)
+    pkgs = deepcopy(pkgs)  # deepcopy for avoid mutating PackageSpec members
     Context!(ctx; kwargs...)
 
     # All developed packages should go through handle_repos_develop so just give them an empty repo
@@ -73,6 +74,7 @@ rm(pkgs::Vector{String}; kwargs...)            = rm([PackageSpec(pkg) for pkg in
 rm(pkgs::Vector{PackageSpec}; kwargs...)       = rm(Context(), pkgs; kwargs...)
 
 function rm(ctx::Context, pkgs::Vector{PackageSpec}; mode=PKGMODE_PROJECT, kwargs...)
+    pkgs = deepcopy(pkgs)  # deepcopy for avoid mutating PackageSpec members
     for pkg in pkgs
         # TODO only overwrite pkg.mode if default value ?
         pkg.mode = mode
@@ -166,6 +168,7 @@ up(pkgs::Vector{PackageSpec}; kwargs...)       = up(Context(), pkgs; kwargs...)
 
 function up(ctx::Context, pkgs::Vector{PackageSpec};
             level::UpgradeLevel=UPLEVEL_MAJOR, mode::PackageMode=PKGMODE_PROJECT, do_update_registry=true, kwargs...)
+    pkgs = deepcopy(pkgs)  # deepcopy for avoid mutating PackageSpec members
     for pkg in pkgs
         # TODO only override if they are not already set
         pkg.mode = mode
@@ -205,6 +208,7 @@ pin(pkgs::Vector{String}; kwargs...)            = pin([PackageSpec(pkg) for pkg 
 pin(pkgs::Vector{PackageSpec}; kwargs...)       = pin(Context(), pkgs; kwargs...)
 
 function pin(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
+    pkgs = deepcopy(pkgs)  # deepcopy for avoid mutating PackageSpec members
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     project_deps_resolve!(ctx.env, pkgs)
@@ -219,6 +223,7 @@ free(pkgs::Vector{String}; kwargs...)            = free([PackageSpec(pkg) for pk
 free(pkgs::Vector{PackageSpec}; kwargs...)       = free(Context(), pkgs; kwargs...)
 
 function free(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
+    pkgs = deepcopy(pkgs)  # deepcopy for avoid mutating PackageSpec members
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     registry_resolve!(ctx.env, pkgs)
@@ -250,6 +255,7 @@ test(pkgs::Vector{String}; kwargs...)             = test([PackageSpec(pkg) for p
 test(pkgs::Vector{PackageSpec}; kwargs...)        = test(Context(), pkgs; kwargs...)
 
 function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...)
+    pkgs = deepcopy(pkgs)  # deepcopy for avoid mutating PackageSpec members
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     if isempty(pkgs)
@@ -423,6 +429,7 @@ build(pkg::Array{Union{}, 1}) = build(PackageSpec[])
 build(pkg::PackageSpec) = build([pkg])
 build(pkgs::Vector{PackageSpec}) = build(Context(), pkgs)
 function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
+    pkgs = deepcopy(pkgs)  # deepcopy for avoid mutating PackageSpec members
     Context!(ctx; kwargs...)
 
     ctx.preview && preview_info()

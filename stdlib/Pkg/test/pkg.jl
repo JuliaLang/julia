@@ -508,6 +508,16 @@ end
     @test Pkg.Types.pathrepr(path) == "`@stdlib/Test`"
 end
 
+
+temp_pkg_dir() do project_path
+    @testset "Pkg.add should not mutate" begin
+        package_names = ["JSON"]
+        packages = PackageSpec.(package_names)
+        Pkg.add(packages)
+        @test [p.name for p in packages] == package_names
+    end
+end
+
 include("repl.jl")
 include("api.jl")
 
