@@ -154,6 +154,22 @@ end
             end
         end
 
+        let xr = sprandn(Float32, 1000, 0.9)
+            @test isa(xr, SparseVector{Float32,Int})
+            @test length(xr) == 1000
+            if !isempty(nonzeros(xr))
+                @test any(nonzeros(xr) .> 0.0) && any(nonzeros(xr) .< 0.0)
+            end
+        end
+
+        let xr = sprandn(Complex{Float64}, 1000, 0.9)
+            @test isa(xr, SparseVector{Complex{Float64},Int})
+            @test length(xr) == 1000
+            if !isempty(nonzeros(xr))
+                @test any(nonzeros(xr) .> 0.0) && any(nonzeros(xr) .< 0.0)
+            end
+        end
+
         let xr = sprand(Bool, 1000, 0.9)
             @test isa(xr, SparseVector{Bool,Int})
             @test length(xr) == 1000
