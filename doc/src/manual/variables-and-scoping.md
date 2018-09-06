@@ -449,7 +449,7 @@ julia> f()
 0
 ```
 
-However, it is occasionally useful to reuse an existing variable as the iteration variable.
+However, it is occasionally useful to reuse an existing local variable as the iteration variable.
 This can be done conveniently by adding the keyword `outer`:
 
 ```jldoctest
