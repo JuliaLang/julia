@@ -60,7 +60,7 @@
 
    ;; function definition
    (pattern-lambda (function (-$ (call name . argl) (|::| (call name . argl) _t)) body)
-                   (cons 'varlist (safe-llist-positional-args (fix-arglist argl))))
+                   (cons 'varlist (safe-llist-positional-args (fix-arglist (append (self-argname name) argl)))))
    (pattern-lambda (function (where callspec . wheres) body)
                    (let ((others (pattern-expand1 vars-introduced-by-patterns `(function ,callspec ,body))))
                      (cons 'varlist (append (if (and (pair? others) (eq? (car others) 'varlist))
@@ -75,7 +75,7 @@
    (pattern-lambda (= (call (curly name . sparams) . argl) body)
                    `(function (call (curly ,name . ,sparams) . ,argl) ,body))
    (pattern-lambda (= (-$ (call name . argl) (|::| (call name . argl) _t)) body)
-                   `(function (call ,name ,@argl) ,body))
+                   `(function ,(cadr __) ,body))
    (pattern-lambda (= (where callspec . wheres) body)
                    (cons 'function (cdr __)))
 
@@ -256,6 +256,12 @@
      (safe-arg-names kwargs #t)
      ;; count escaped argument names as "keywords" to prevent renaming
      (safe-llist-positional-args lst #t))))
+
+;; argument name for the function itself given `function (f::T)(...)`, otherwise ()
+(define (self-argname name)
+  (if (and (length= name 3) (eq? (car name) '|::|))
+      (list (cadr name))
+      '()))
 
 ;; resolve-expansion-vars-with-new-env, but turn on `inarg` once we get inside
 ;; the formal argument list. `e` in general might be e.g. `(f{T}(x)::T) where T`,
