@@ -1916,16 +1916,19 @@
                                     (ssavalue? x))
                                 x (make-ssavalue)))
                        (ini (if (eq? x xx) '() `((= ,xx ,(expand-forms x)))))
+                       (n   (length lhss))
                        (st  (gensy)))
                   `(block
                     ,@ini
                     ,.(map (lambda (i lhs)
                              (expand-forms
                               (lower-tuple-assignment
-                               (list lhs st)
+                               (if (= i (- n 1))
+                                   (list lhs)
+                                   (list lhs st))
                                `(call (top indexed_iterate)
                                       ,xx ,(+ i 1) ,.(if (eq? i 0) '() `(,st))))))
-                           (iota (length lhss))
+                           (iota n)
                            lhss)
                     (unnecessary ,xx))))))
          ((typed_hcat)
