@@ -330,7 +330,7 @@ Base.convert(::Type{Array{T,n}}, a::Array) where {T<:Number,n} =
 
 empty(Dict(),  Pair{Union{},Union{}})
 """
-f_22330 = tempname()
-write(f_22330, str_22330)
-@test success(`$(Base.julia_cmd()) --startup-file=no $f_22330`)
-
+mktemp() do f_22330, _
+    write(f_22330, str_22330)
+    @test success(`$(Base.julia_cmd()) --startup-file=no $f_22330`)
+end

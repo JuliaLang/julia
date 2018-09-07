@@ -764,10 +764,9 @@ end
         @test_throws InterruptException throw(InterruptException())
     end
 
-    f = tempname()
-
-    write(f,
-    """
+    mktemp() do f, _
+        write(f,
+        """
     using Test
     @testset begin
         try
@@ -794,8 +793,10 @@ end
     catch e
         @test e isa InterruptException
     end
-    """)
-    msg = success(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=devnull))
+        """)
+        msg = success(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`),
+                               stderr=devnull))
+    end
 end
 
 @testset "non AbstractTestSet as testset" begin
@@ -812,6 +813,7 @@ end
     msg = read(err, String)
     @test occursin("Expected `desc` to be an AbstractTestSet, it is a String", msg)
     rm(f; force=true)
+    rm(err, force=true)
 end
 
 f25835(;x=nothing) = _f25835(x)
