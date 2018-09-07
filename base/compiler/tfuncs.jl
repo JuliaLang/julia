@@ -1058,7 +1058,7 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         length(argtypes) == 1 || return false
         return sizeof_nothrow(argtypes[1])
     elseif f === Core.kwfunc
-        length(argtypes) == 2 || return false
+        length(argtypes) == 1 || return false
         return isa(rt, Const)
     end
     return false
