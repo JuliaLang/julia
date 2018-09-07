@@ -1990,3 +1990,10 @@ struct VoxelIndices{T <: Integer}
 end
 f28641(x::VoxelIndices, f) = getfield(x, f)
 @test Base.return_types(f28641, (Any,Symbol)) == Any[Tuple]
+
+# issue #29036
+function f29036(s, i)
+    val, i = iterate(s, i)
+    val
+end
+@test Base.return_types(f29036, (String, Int)) == Any[Char]

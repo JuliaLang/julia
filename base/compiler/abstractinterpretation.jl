@@ -55,12 +55,15 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
     rettype = Bottom
     edgecycle = false
     edges = Any[]
+    nonbot = 0  # the index of the only non-Bottom inference result if > 0
+    seen = 0    # number of signatures actually inferred
     for i in 1:napplicable
         match = applicable[i]::SimpleVector
         method = match[3]::Method
         sig = match[1]
         sigtuple = unwrap_unionall(sig)::DataType
         splitunions = false
+        this_rt = Bottom
         # TODO: splitunions = 1 < countunionsplit(sigtuple.parameters) * napplicable <= sv.params.MAX_UNION_SPLITTING
         # currently this triggers a bug in inference recursion detection
         if splitunions
@@ -71,24 +74,32 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
                     push!(edges, edge)
                 end
                 edgecycle |= edgecycle1::Bool
-                rettype = tmerge(rettype, rt)
-                rettype === Any && break
+                this_rt = tmerge(this_rt, rt)
+                this_rt === Any && break
             end
-            rettype === Any && break
         else
-            rt, edgecycle, edge = abstract_call_method(method, sig, match[2]::SimpleVector, sv)
+            this_rt, edgecycle, edge = abstract_call_method(method, sig, match[2]::SimpleVector, sv)
             if edge !== nothing
                 push!(edges, edge)
             end
-            rettype = tmerge(rettype, rt)
-            rettype === Any && break
         end
+        if this_rt !== Bottom
+            if nonbot === 0
+                nonbot = i
+            else
+                nonbot = -1
+            end
+        end
+        seen += 1
+        rettype = tmerge(rettype, this_rt)
+        rettype === Any && break
     end
-    if napplicable == 1 && !edgecycle && isa(rettype, Type) && sv.params.ipo_constant_propagation
+    # try constant propagation if only 1 method is inferred to non-Bottom
+    if nonbot > 0 && seen == napplicable && !edgecycle && isa(rettype, Type) && sv.params.ipo_constant_propagation
         # if there's a possibility we could constant-propagate a better result
         # (hopefully without doing too much work), try to do that now
         # TODO: it feels like this could be better integrated into abstract_call_method / typeinf_edge
-        const_rettype = abstract_call_method_with_const_args(f, argtypes, applicable[1]::SimpleVector, sv)
+        const_rettype = abstract_call_method_with_const_args(f, argtypes, applicable[nonbot]::SimpleVector, sv)
         if const_rettype ⊑ rettype
             # use the better result, if it's a refinement of rettype
             rettype = const_rettype
