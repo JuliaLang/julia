@@ -625,7 +625,7 @@ extern volatile int jl_in_stackwalk;
 typedef unw_context_t bt_context_t;
 typedef unw_cursor_t bt_cursor_t;
 #  if (!defined(SYSTEM_LIBUNWIND) || UNW_VERSION_MAJOR > 1 ||   \
-       (UNW_VERSION_MAJOR == 1 && UNW_VERSION_MINOR > 1))
+       (UNW_VERSION_MAJOR == 1 && UNW_VERSION_MINOR != 0 && UNW_VERSION_MINOR != 1))
 // Enable our memory manager only for libunwind with our patch or
 // on a newer release
 #    define JL_UNW_HAS_FORMAT_IP 1
