@@ -692,7 +692,7 @@
                             ,@(map make-decl field-names field-types))
                       (block
                        ,@locs
-                       (new ,name ,@field-names))))
+                       (new (outerref ,name) ,@field-names))))
          any-ctor)
         (list any-ctor))))
 

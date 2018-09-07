@@ -1502,6 +1502,12 @@ function test27710()
 end
 @test test27710() === Int64
 
+# issue #29064
+struct X29064
+    X29064::Int
+end
+@test X29064(1) isa X29064
+
 # issue #27268
 function f27268()
     g(col::AbstractArray{<:Real}) = col
