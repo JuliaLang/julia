@@ -250,7 +250,7 @@ end
 
     tsk = @async begin
         @test begin
-            (addr,data) = recvfrom(a)
+            (addr, port, data) = recvfrom(a)
             addr == ip"127.0.0.1" && String(data) == "Hello World"
         end
     end
@@ -270,7 +270,7 @@ end
 
         tsk = @async begin
             @test begin
-                (addr, data) = recvfrom(a)
+                (addr, port, data) = recvfrom(a)
                 addr == ip"::1" && String(data) == "Hello World"
             end
         end
