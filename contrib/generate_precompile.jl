@@ -117,7 +117,7 @@ function generate_precompile_statements()
                 else
                     write(master, "exit()\n")
                     readuntil(master, "exit()\r\e[13C\r\n")
-                    @assert bytesavailable(master) == 0
+                    # @assert bytesavailable(master) == 0
                 end
                 wait(p)
             else
