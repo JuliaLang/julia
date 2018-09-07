@@ -137,3 +137,7 @@ end
     (src, _) = code_typed(sum27403, Tuple{Vector{Int}})[1]
     @test !any(x -> x isa Expr && x.head === :invoke, src.code)
 end
+
+# check that type.mutable can be fully eliminated
+f_mutable_nothrow(s::String) = Val{typeof(s).mutable}
+@test length(code_typed(f_mutable_nothrow, (String,))[1][1].code) == 1
