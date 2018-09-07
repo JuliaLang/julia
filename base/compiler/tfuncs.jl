@@ -537,8 +537,10 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), @nospecialize
             sv = s00.val
         end
         if isa(name, Const)
-            (isa(sv, Module) && isa(name.val, Symbol)) || return false
-            (isa(name.val, Symbol) || isa(name.val, Int)) || return false
+            if !isa(name.val, Symbol)
+                isa(sv, Module) && return false
+                isa(name.val, Int) || return false
+            end
             return isdefined(sv, name.val)
         end
         if bounds_check_disabled && !isa(sv, Module)
