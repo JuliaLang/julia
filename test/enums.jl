@@ -77,8 +77,8 @@ end
 @test Int(_neg4) === -4
 @test Int(_neg3) === -3
 
-@test_throws ArgumentError("invalid value for Enum Test1, _zerofp = 0.0=0.0; values must be integers") @macrocall(@enum Test1 _zerofp=0.0)
-@test_throws ArgumentError("invalid value for Enum Test11, _zerofp2 = 0.5=0.5; values must be integers") @macrocall(@enum Test11 _zerofp2=0.5)
+@test_throws ArgumentError("invalid value for Enum Test1, _zerofp = 0.0; values must be integers") @macrocall(@enum Test1 _zerofp=0.0)
+@test_throws ArgumentError("invalid value for Enum Test11, _zerofp2 = 0.5; values must be integers") @macrocall(@enum Test11 _zerofp2=0.5)
 @enum Test111 _zerobi=BigInt(1)
 @test Integer(_zerobi) == 1
 
@@ -107,9 +107,9 @@ end
 @test typeof(Integer(_one_Test6)) == UInt128
 
 # enum values must be integers
-@test_throws ArgumentError("invalid value for Enum Test7, _zero = \"zero\"=zero; values must be integers") @macrocall(@enum Test7 _zero="zero")
-@test_throws ArgumentError("invalid value for Enum Test8, _zero = '0'=0; values must be integers") @macrocall(@enum Test8 _zero='0')
-@test_throws ArgumentError("invalid value for Enum Test9, _zero = 0.5=0.5; values must be integers") @macrocall(@enum Test9 _zero=0.5)
+@test_throws ArgumentError("invalid value for Enum Test7, _zero = \"zero\"; values must be integers") @macrocall(@enum Test7 _zero="zero")
+@test_throws ArgumentError("invalid value for Enum Test8, _zero = '0'; values must be integers") @macrocall(@enum Test8 _zero='0')
+@test_throws ArgumentError("invalid value for Enum Test9, _zero = 0.5; values must be integers") @macrocall(@enum Test9 _zero=0.5)
 
 # test macro handles keyword arguments
 @enum(Test11, _zero_Test11=2,
