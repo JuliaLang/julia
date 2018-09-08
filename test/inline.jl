@@ -151,3 +151,12 @@ end
 # check that type.mutable can be fully eliminated
 f_mutable_nothrow(s::String) = Val{typeof(s).mutable}
 @test length(code_typed(f_mutable_nothrow, (String,))[1][1].code) == 1
+
+# check that ifelse can be fully eliminated
+function f_ifelse(x)
+    a = ifelse(true, false, true)
+    b = ifelse(a, true, false)
+    return b ? x + 1 : x
+end
+# 2 for now because the compiler leaves a GotoNode around
+@test length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
