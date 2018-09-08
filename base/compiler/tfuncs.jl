@@ -1060,6 +1060,9 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
     elseif f === Core.kwfunc
         length(argtypes) == 1 || return false
         return isa(rt, Const)
+    elseif f === Core.ifelse
+        length(argtypes) == 3 || return false
+        return argtypes[1] ⊑ Bool
     end
     return false
 end
