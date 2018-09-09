@@ -174,6 +174,9 @@ struct _jl_tls_states_t {
     pthread_t system_id;
     void *signal_stack;
 #endif
+#ifdef _OS_WINDOWS_
+    int needs_resetstkoflw;
+#endif
     // execution of certain certain impure
     // statements is prohibited from certain
     // callbacks (such as generated functions)

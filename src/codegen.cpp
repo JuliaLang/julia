@@ -320,7 +320,6 @@ static Function *jlgetnthfieldchecked_func;
 //static Function *jlsetnthfield_func;
 static Function *jlgetcfunctiontrampoline_func;
 #ifdef _OS_WINDOWS_
-static Function *resetstkoflw_func;
 #if defined(_CPU_X86_64_)
 Function *juliapersonality_func;
 #endif
@@ -6182,21 +6181,7 @@ static std::unique_ptr<Module> emit_function(
             handlr = BB[lname];
             workstack.push_back(lname - 1);
             come_from_bb[cursor + 1] = ctx.builder.GetInsertBlock();
-#ifdef _OS_WINDOWS_
-            BasicBlock *cond_resetstkoflw_blk = BasicBlock::Create(jl_LLVMContext, "cond_resetstkoflw", f);
-            BasicBlock *resetstkoflw_blk = BasicBlock::Create(jl_LLVMContext, "resetstkoflw", f);
-            ctx.builder.CreateCondBr(isz, tryblk, cond_resetstkoflw_blk);
-            ctx.builder.SetInsertPoint(cond_resetstkoflw_blk);
-            ctx.builder.CreateCondBr(ctx.builder.CreateICmpEQ(
-                                     maybe_decay_untracked(literal_pointer_val(ctx, jl_stackovf_exception)),
-                                     ctx.builder.CreateLoad(emit_exc_in_transit(ctx), /*isvolatile*/true)),
-                                 resetstkoflw_blk, handlr);
-            ctx.builder.SetInsertPoint(resetstkoflw_blk);
-            ctx.builder.CreateCall(prepare_call(resetstkoflw_func), {});
-            ctx.builder.CreateBr(handlr);
-#else
             ctx.builder.CreateCondBr(isz, tryblk, handlr);
-#endif
             ctx.builder.SetInsertPoint(tryblk);
         }
         else {
@@ -7088,9 +7073,6 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jlenter_func, &jl_enter_handler);
 
 #ifdef _OS_WINDOWS_
-    resetstkoflw_func = Function::Create(FunctionType::get(T_int32, false),
-            Function::ExternalLinkage, "_resetstkoflw", m);
-    add_named_global(resetstkoflw_func, &_resetstkoflw);
 #if defined(_CPU_X86_64_)
     juliapersonality_func = Function::Create(FunctionType::get(T_int32, true),
             Function::ExternalLinkage, "__julia_personality", m);

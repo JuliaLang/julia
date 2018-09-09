@@ -282,6 +282,9 @@ static void ti_initthread(int16_t tid)
     }
     memset(bt_data, 0, sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
     ptls->bt_data = (uintptr_t*)bt_data;
+#ifdef _OS_WINDOWS_
+    ptls->needs_resetstkoflw = 0;
+#endif
     jl_init_thread_heap(ptls);
     jl_install_thread_signal_handler(ptls);
 
