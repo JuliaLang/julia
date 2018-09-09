@@ -86,7 +86,7 @@ function doc(binding::Binding, sig::Type = Union{})
         result = getdoc(resolve(binding), sig)
         result === nothing || return result
     end
-    results, groups = DocStr[], MultiDoc[]
+    results, groups, sigs = DocStr[], MultiDoc[], Any[]
     # Lookup `binding` and `sig` for matches in all modules of the docsystem.
     for mod in modules
         dict = meta(mod)
@@ -94,7 +94,10 @@ function doc(binding::Binding, sig::Type = Union{})
             multidoc = dict[binding]
             push!(groups, multidoc)
             for msig in multidoc.order
-                sig <: msig && push!(results, multidoc.docs[msig])
+                if typeintersect(msig, sig) != Union{}
+                    push!(sigs, msig)
+                    push!(results, multidoc.docs[msig])
+                end
             end
         end
     end
@@ -111,6 +114,15 @@ function doc(binding::Binding, sig::Type = Union{})
         if isempty(results)
             for group in groups, each in group.order
                 push!(results, group.docs[each])
+            end
+        elseif sig != Union{}
+            # If the signature is abstract, only show more specific methods
+            morespec = [x <: sig && x != Union{} for x in sigs]
+            if !any(morespec)
+                # If not any method is more specific that sig, show the most specific one
+                results = DocStr[results[first(sortperm(sigs, lt = (a,b) -> a <: b))]]
+            else
+                results = results[morespec]
             end
         end
         # Get parsed docs and concatenate them.

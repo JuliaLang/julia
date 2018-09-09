@@ -1159,3 +1159,57 @@ end
 end
 @test M27832.xs == ":(\$(Expr(:\$, :fn)))"
 Core.atdoc!(_last_atdoc)
+
+# issue #20064
+
+"""
+f_20064
+"""
+function f_20064 end
+
+"""
+Number
+"""
+f_20064(x::Number) = x
+
+"""
+Real
+"""
+f_20064(x::Real) = x
+
+"""
+Int
+"""
+f_20064(x::Int) = x
+
+"""
+Real, Int
+"""
+f_20064(x::Real, y::Int) = x
+
+@test docstrings_equal(Docs.doc(f_20064, Tuple{Int}),
+                       doc"""
+                       Int
+                       """)
+
+@test docstrings_equal(Docs.doc(f_20064, Tuple{Float64}),
+                       doc"""
+                       Real
+                       """)
+
+@test docstrings_equal(Docs.doc(f_20064, Tuple{Float64, Int}),
+                       doc"""
+                       Real, Int
+                       """)
+
+@test docstrings_equal(Docs.doc(f_20064, Tuple{Real}),
+                       doc"""
+                       Real
+
+                       Int
+                       """)
+
+@test docstrings_equal(Docs.doc(f_20064, Tuple{Real, Real}),
+                       doc"""
+                       Real, Int
+                       """)
