@@ -5,8 +5,8 @@ Julia provides a variety of control flow constructs:
   * [Compound Expressions](@ref man-compound-expressions): `begin` and `(;)`.
   * [Conditional Evaluation](@ref man-conditional-evaluation): `if`-`elseif`-`else` and `?:` (ternary operator).
   * [Short-Circuit Evaluation](@ref): `&&`, `||` and chained comparisons.
-  * [Repeated Evaluation: Loops](@ref man-loops): `while` and `for`.
-  * [Exception Handling](@ref): `try`-`catch`, [`error`](@ref) and [`throw`](@ref).
+  * [Repeated Evaluation (aka Loops)](@ref man-loops): `while` and `for`.
+  * [Exception Handling](@ref): `try`-`catch`-`finally`, [`error`](@ref) and [`throw`](@ref).
   * [Tasks (aka Coroutines)](@ref man-tasks): [`yieldto`](@ref).
 
 The first five control flow mechanisms are standard to high-level programming languages. [`Task`](@ref)s
@@ -101,7 +101,7 @@ expressions or blocks are evaluated.
 
 `if` blocks are "leaky", i.e. they do not introduce a local scope. This means that new variables
 defined inside the `if` clauses can be used after the `if` block, even if they weren't defined
-before. So, we could have defined the `test` function above as
+before. So, we could have defined the `test` function above as:
 
 ```jldoctest
 julia> function test(x,y)
@@ -122,7 +122,7 @@ x is greater than y.
 
 The variable `relation` is declared inside the `if` block, but used outside. However, when depending
 on this behavior, make sure all possible code paths define a value for the variable. The following
-change to the above function results in a runtime error
+change to the above function results in a runtime error:
 
 ```jldoctest; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
 julia> function test(x,y)
@@ -146,7 +146,7 @@ Stacktrace:
 
 `if` blocks also return a value, which may seem unintuitive to users coming from many other languages.
 This value is simply the return value of the last executed statement in the branch that was chosen,
-so
+so:
 
 ```jldoctest
 julia> x = 3

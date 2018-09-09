@@ -910,8 +910,19 @@ false
 Notice that `Vararg{T}` corresponds to zero or more elements of type `T`. Vararg tuple types are
 used to represent the arguments accepted by varargs methods (see [Varargs Functions](@ref)).
 
-The type `Vararg{T,N}` corresponds to exactly `N` elements of type `T`.  `NTuple{N,T}` is a convenient
-alias for `Tuple{Vararg{T,N}}`, i.e. a tuple type containing exactly `N` elements of type `T`.
+The type `Vararg{T,n}` corresponds to exactly `n` elements of type `T`.  `NTuple{n,T}` is a convenient
+alias for `Tuple{Vararg{T,n}}`, i.e. a tuple type containing exactly `n` elements of type `T`.
+
+```jldoctest
+julia> Vararg{Real, 3}
+Vararg{Real,3}
+
+julia> NTuple{3, Real} # NTuple actually is not N*T
+Tuple{Real,Real,Real}
+
+julia> Tuple{Vararg{Real, 3}}
+Tuple{Real,Real,Real}
+```
 
 ### Named Tuple Types
 
@@ -1026,7 +1037,7 @@ true
 
 We have said that a parametric type like `Ptr` acts as a supertype of all its instances
 (`Ptr{Int64}` etc.). How does this work? `Ptr` itself cannot be a normal data type, since without
-knowing the type of the referenced data the type clearly cannot be used for memory operations.
+knowing the type of the referenced data clearly, we cannot use the type for memory operations.
 The answer is that `Ptr` (or other parametric types like `Array`) is a different kind of type called a
 [`UnionAll`](@ref) type. Such a type expresses the *iterated union* of types for all values of some parameter.
 
@@ -1405,7 +1416,7 @@ julia> firstlast(Val(false))
 For consistency across Julia, the call site should always pass a `Val`*instance* rather than using
 a *type*, i.e., use `foo(Val(:bar))` rather than `foo(Val{:bar})`.
 
-It's worth noting that it's extremely easy to mis-use parametric "value" types, including `Val`;
+It's worth noting that it's extremely easy to misuse parametric "value" types, including `Val`;
 in unfavorable cases, you can easily end up making the performance of your code much *worse*.
  In particular, you would never want to write actual code as illustrated above.  For more information
 about the proper (and improper) uses of `Val`, please read the more extensive discussion in [the performance tips](@ref man-performance-tips).

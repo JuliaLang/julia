@@ -468,7 +468,7 @@ operator, consistent with common mathematical use.
 More precisely, the set of all finite-length strings *S* together with the string concatenation operator
 `*` forms a [free monoid](https://en.wikipedia.org/wiki/Free_monoid) (*S*, `*`). The identity element
 of this set is the empty string, `""`. Whenever a free monoid is not commutative, the operation is
-typically represented as `\cdot`, `*`, or a similar symbol, rather than `+`, which as stated usually
+typically represented as `⋅`, `*`, or a similar symbol, rather than `+`, which as stated usually
 implies commutativity.
 
 ## [Interpolation](@id string-interpolation)

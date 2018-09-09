@@ -56,43 +56,41 @@ julia> 1234
 1234
 ```
 
-The default type for an integer literal depends on whether the target system has a 32-bit architecture
-or a 64-bit architecture:
+The default type for an integer literal depends on version of julia, 32-bit or 64-bit:
 
 ```julia-repl
-# 32-bit system:
+# 32-bit julia:
 julia> typeof(1)
 Int32
 
-# 64-bit system:
+# 64-bit julia:
 julia> typeof(1)
 Int64
 ```
 
-The Julia internal variable [`Sys.WORD_SIZE`](@ref) indicates whether the target system is 32-bit
-or 64-bit:
+The Julia internal variable [`Sys.WORD_SIZE`](@ref) indicates whether julia is 32-bit or 64-bit:
 
 ```julia-repl
-# 32-bit system:
+# 32-bit julia:
 julia> Sys.WORD_SIZE
 32
 
-# 64-bit system:
+# 64-bit julia:
 julia> Sys.WORD_SIZE
 64
 ```
 
-Julia also defines the types `Int` and `UInt`, which are aliases for the system's signed and unsigned
+Julia also defines the types `Int` and `UInt`, which are aliases for the julia's signed and unsigned
 native integer types respectively:
 
 ```julia-repl
-# 32-bit system:
+# 32-bit julia:
 julia> Int
 Int32
 julia> UInt
 UInt32
 
-# 64-bit system:
+# 64-bit julia:
 julia> Int
 Int64
 julia> UInt
@@ -100,10 +98,10 @@ UInt64
 ```
 
 Larger integer literals that cannot be represented using only 32 bits but can be represented in
-64 bits always create 64-bit integers, regardless of the system type:
+64 bits always create 64-bit integers, regardless of the julia type:
 
 ```jldoctest
-# 32-bit or 64-bit system:
+# 32-bit or 64-bit julia:
 julia> typeof(3000000000)
 Int64
 ```
@@ -221,17 +219,20 @@ with some existing programming experience.)
 
 ### Overflow behavior
 
-In Julia, exceeding the maximum representable value of a given type results in a wraparound behavior:
+In Julia, exceeding boundaries, the minimum or the maximum representable value of a given type results in a wraparound behavior:
 
 ```jldoctest
-julia> x = typemax(Int64)
-9223372036854775807
-
-julia> x + 1
+julia> left = typemin(Int)
 -9223372036854775808
 
-julia> x + 1 == typemin(Int64)
-true
+julia> right = typemax(Int)
+9223372036854775807
+
+julia> left - 1
+9223372036854775807
+
+julia> right + 1
+-9223372036854775808
 ```
 
 Thus, arithmetic with Julia integers is actually a form of [modular arithmetic](https://en.wikipedia.org/wiki/Modular_arithmetic).
