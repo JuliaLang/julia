@@ -541,10 +541,10 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         A2 = A * A
         A4 = A2 * A2
         A6 = A2 * A4
-        U  = A * (A6 * (CC[14]*A6 + CC[12]*A4 + CC[10]*A2) +
-                  CC[8]*A6 + CC[6]*A4 + CC[4]*A2 + CC[2]*Inn)
-        V  = A6 * (CC[13]*A6 + CC[11]*A4 + CC[9]*A2) +
-                   CC[7]*A6 + CC[5]*A4 + CC[3]*A2 + CC[1]*Inn
+        U  = A * (A6 * (CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2) .+
+                  CC[8].*A6 .+ CC[6].*A4 .+ CC[4].*A2 .+ CC[2].*Inn)
+        V  = A6 * (CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2) .+
+                   CC[7].*A6 .+ CC[5].*A4 .+ CC[3].*A2 .+ CC[1].*Inn
 
         X = V + U
         LAPACK.gesv!(V-U, X)
