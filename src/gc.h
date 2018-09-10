@@ -80,7 +80,7 @@ typedef struct {
     jl_gc_mark_data_t *data; // Current stack address for the data (up growing)
     void **pc_start; // Cached value of `gc_cache->pc_stack`
     void **pc_end; // Cached value of `gc_cache->pc_stack_end`
-} gc_mark_sp_t;
+} jl_gc_mark_sp_t;
 
 enum {
     GC_MARK_L_marked_obj,
@@ -190,7 +190,7 @@ union _jl_gc_mark_data {
 // Pop a data struct from the mark data stack (i.e. decrease the stack pointer)
 // This should be used after dispatch and therefore the pc stack pointer is already popped from
 // the stack.
-STATIC_INLINE void *gc_pop_markdata_(gc_mark_sp_t *sp, size_t size)
+STATIC_INLINE void *gc_pop_markdata_(jl_gc_mark_sp_t *sp, size_t size)
 {
     jl_gc_mark_data_t *data = (jl_gc_mark_data_t *)(((char*)sp->data) - size);
     sp->data = data;
@@ -201,7 +201,7 @@ STATIC_INLINE void *gc_pop_markdata_(gc_mark_sp_t *sp, size_t size)
 // Re-push a frame to the mark stack (both data and pc)
 // The data and pc are expected to be on the stack (or updated in place) already.
 // Mainly useful to pause the current scanning in order to scan an new object.
-STATIC_INLINE void *gc_repush_markdata_(gc_mark_sp_t *sp, size_t size)
+STATIC_INLINE void *gc_repush_markdata_(jl_gc_mark_sp_t *sp, size_t size)
 {
     jl_gc_mark_data_t *data = sp->data;
     sp->pc++;
@@ -479,7 +479,7 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list)
     *list = hdr;
 }
 
-STATIC_INLINE void gc_mark_sp_init(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp)
+STATIC_INLINE void gc_mark_sp_init(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
 {
     sp->pc = gc_cache->pc_stack;
     sp->data = gc_cache->data_stack;
@@ -487,10 +487,10 @@ STATIC_INLINE void gc_mark_sp_init(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *s
     sp->pc_end = gc_cache->pc_stack_end;
 }
 
-void gc_mark_queue_all_roots(jl_ptls_t ptls, gc_mark_sp_t *sp);
-void gc_mark_queue_finlist(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp,
+void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_mark_sp_t *sp);
+void gc_mark_queue_finlist(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp,
                            arraylist_t *list, size_t start);
-void gc_mark_loop(jl_ptls_t ptls, gc_mark_sp_t sp);
+void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp);
 void gc_debug_init(void);
 
 extern void *gc_mark_label_addrs[_GC_MARK_L_MAX];
@@ -615,7 +615,7 @@ extern int gc_verifying;
 #endif
 int gc_slot_to_fieldidx(void *_obj, void *slot);
 int gc_slot_to_arrayidx(void *_obj, void *begin);
-NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset);
+NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_offset);
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;
