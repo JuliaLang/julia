@@ -1489,8 +1489,8 @@ julia> sprandn(2, 2, 0.75)
 """
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
 sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n,density)
-sprandn(r::AbstractRNG, ::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where {T} = sprand(r, T, m, n, density)
-sprandn(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where {T} = sprandn(GLOBAL_RNG, T, m, n, density)
+sprandn(r::AbstractRNG, ::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where {T} = sprand(r,m,n,density,randn,T)
+sprandn(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where {T} = sprandn(GLOBAL_RNG,T,m,n,density)
 
 LinearAlgebra.fillstored!(S::SparseMatrixCSC, x) = (fill!(nzvalview(S), x); S)
 
