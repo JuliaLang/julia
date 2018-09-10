@@ -1647,6 +1647,7 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->file = (jl_sym_t*)jl_deserialize_value(s, NULL);
     m->line = read_int32(s->s);
     m->min_world = jl_world_counter;
+    m->max_world = ~(size_t)0;
     m->ambig = jl_deserialize_value(s, (jl_value_t**)&m->ambig);
     jl_gc_wb(m, m->ambig);
     m->called = read_int32(s->s);
@@ -2992,7 +2993,7 @@ static jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li
     //assert(ti != jl_bottom_type); (void)ti;
     if (ti == jl_bottom_type)
         env = jl_emptysvec; // the intersection may fail now if the type system had made an incorrect subtype env in the past
-    jl_method_instance_t *_new = jl_specializations_get_linfo(m, (jl_value_t*)argtypes, env, jl_world_counter);
+    jl_method_instance_t *_new = jl_specializations_get_linfo(m, (jl_value_t*)argtypes, env, jl_world_counter < max_world ? jl_world_counter : max_world);
     _new->max_world = max_world;
     jl_update_backref_list((jl_value_t*)li, (jl_value_t*)_new, start);
     return _new;
