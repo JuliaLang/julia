@@ -2,9 +2,7 @@
 
 # file downloading
 
-downloadcmd = nothing
 if Sys.iswindows()
-    downloadcmd = "powershell"
     function download(url::AbstractString, filename::AbstractString)
         ps = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
         tls12 = "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12"
@@ -25,28 +23,16 @@ if Sys.iswindows()
     end
 else
     function download(url::AbstractString, filename::AbstractString)
-        global downloadcmd
-        if downloadcmd === nothing
-            for checkcmd in ("curl", "wget", "fetch")
-                try
-                    # Sys.which() will throw() if it can't find `checkcmd`
-                    Sys.which(checkcmd)
-                    downloadcmd = checkcmd
-                    break
-                catch
-                end
-            end
-        end
-        if downloadcmd == "wget"
+        if Sys.which("curl") !== nothing
+            run(`curl -g -L -f -o $filename $url`)
+        elseif Sys.which("wget") !== nothing
             try
                 run(`wget -O $filename $url`)
             catch
-                rm(filename)  # wget always creates a file
+                rm(filename, force=true)  # wget always creates a file
                 rethrow()
             end
-        elseif downloadcmd == "curl"
-            run(`curl -g -L -f -o $filename $url`)
-        elseif downloadcmd == "fetch"
+        elseif Sys.which("fetch") !== nothing
             run(`fetch -f $filename $url`)
         else
             error("no download agent available; install curl, wget, or fetch")

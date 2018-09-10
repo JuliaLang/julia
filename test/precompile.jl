@@ -136,6 +136,12 @@ try
               const x28297 = Result(missing)
 
 
+              # issue #28998
+              const x28998 = [missing, 2, missing, 6, missing,
+                              missing, missing, missing,
+                              missing, missing, missing,
+                              missing, missing, 6]
+
               let some_method = which(Base.include, (String,))
                     # global const some_method // FIXME: support for serializing a direct reference to an external Method not implemented
                   global const some_linfo =
@@ -180,6 +186,8 @@ try
         @test Foo.abigint_x::BigInt + 1 == big"125"
 
         @test Foo.x28297.result === missing
+
+        @test Foo.x28998[end] == 6
     end
 
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")

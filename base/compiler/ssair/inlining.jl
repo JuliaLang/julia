@@ -70,6 +70,7 @@ mutable struct CFGInliningState
     todo_bbs::Vector{Tuple{Int, Int}}
     first_bb::Int
     bb_rename::Vector{Int}
+    dead_blocks::Vector{Int}
     split_targets::BitSet
     merged_orig_blocks::BitSet
     cfg::CFG
@@ -82,6 +83,7 @@ function CFGInliningState(ir::IRCode)
         Tuple{Int, Int}[],
         0,
         zeros(Int, length(ir.cfg.blocks)),
+        Vector{Int}(),
         BitSet(),
         BitSet(),
         ir.cfg
@@ -172,17 +174,23 @@ function cfg_inline_item!(item::InliningTodo, state::CFGInliningState, from_unio
         push!(state.new_cfg_blocks[first(bb_rename_range)].preds, first(bb_rename_range)-1)
     end
 
+    any_edges = false
     for (old_block, new_block) in enumerate(bb_rename_range)
         if (length(state.new_cfg_blocks[new_block].succs) == 0)
             terminator_idx = last(inlinee_cfg.blocks[old_block].stmts)
             terminator = item.ir[SSAValue(terminator_idx)]
             if isa(terminator, ReturnNode) && isdefined(terminator, :val)
+                any_edges = true
                 push!(state.new_cfg_blocks[new_block].succs, post_bb_id)
                 if need_split
                     push!(state.new_cfg_blocks[post_bb_id].preds, new_block)
                 end
             end
         end
+    end
+
+    if !any_edges
+        push!(state.dead_blocks, post_bb_id)
     end
 end
 
@@ -263,6 +271,13 @@ function finish_cfg_inline!(state::CFGInliningState)
             return succ_bb < 0 ? state.bb_rename[-succ_bb] : succ_bb
         end
     end
+
+    # Kill dead blocks
+    for block in state.dead_blocks
+        for succ in state.new_cfg_blocks[block].succs
+            kill_edge!(state.new_cfg_blocks, block, succ)
+        end
+    end
 end
 
 function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
@@ -322,7 +337,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         # This implements the need_split_before flag above
         need_split_before = !isempty(item.ir.cfg.blocks[1].preds)
         if need_split_before
-            finish_current_bb!(compact)
+            finish_current_bb!(compact, 0)
         end
         pn = PhiNode()
         #compact[idx] = nothing
@@ -413,7 +428,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
         end
         insert_node_here!(compact, GotoIfNot(cond, next_cond_bb), Union{}, line)
         bb = next_cond_bb - 1
-        finish_current_bb!(compact)
+        finish_current_bb!(compact, 0)
         argexprs′ = argexprs
         if !isa(case, ConstantCase)
             argexprs′ = copy(argexprs)
@@ -434,10 +449,14 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
             case = case::ConstantCase
             val = case.val
         end
-        push!(pn.edges, bb)
-        push!(pn.values, val)
-        insert_node_here!(compact, GotoNode(join_bb), Union{}, line)
-        finish_current_bb!(compact)
+        if !isempty(compact.result_bbs[bb].preds)
+            push!(pn.edges, bb)
+            push!(pn.values, val)
+            insert_node_here!(compact, GotoNode(join_bb), Union{}, line)
+        else
+            insert_node_here!(compact, ReturnNode(), Union{}, line)
+        end
+        finish_current_bb!(compact, 0)
     end
     bb += 1
     # We're now in the fall through block, decide what to do
@@ -445,13 +464,13 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
         e = Expr(:call, GlobalRef(Core, :throw), fatal_type_bound_error)
         insert_node_here!(compact, e, Union{}, line)
         insert_node_here!(compact, ReturnNode(), Union{}, line)
-        finish_current_bb!(compact)
+        finish_current_bb!(compact, 0)
     else
         ssa = insert_node_here!(compact, stmt, typ, line)
         push!(pn.edges, bb)
         push!(pn.values, ssa)
         insert_node_here!(compact, GotoNode(join_bb), Union{}, line)
-        finish_current_bb!(compact)
+        finish_current_bb!(compact, 0)
     end
 
     # We're now in the join block.
@@ -479,7 +498,7 @@ function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfo
         boundscheck = :propagate
     end
 
-    let compact = IncrementalCompact(ir)
+    let compact = IncrementalCompact(ir, false)
         compact.result_bbs = state.new_cfg_blocks
         # This needs to be a minimum and is more of a size hint
         nn = 0
@@ -517,7 +536,7 @@ function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfo
                     ir_inline_unionsplit!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
                 end
                 compact[idx] = nothing
-                refinish && finish_current_bb!(compact)
+                refinish && finish_current_bb!(compact, 0)
                 if !isempty(todo)
                     item = popfirst!(todo)
                     inline_idx = item.idx
@@ -847,7 +866,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         sv.params.inlining || continue
 
         # Special case inliners for regular functions
-        if late_inline_special_case!(ir, idx, stmt, atypes, f, ft) || f === return_type
+        if late_inline_special_case!(ir, idx, stmt, atypes, f, ft) || is_return_type(f)
             continue
         end
 
@@ -1061,7 +1080,7 @@ function late_inline_special_case!(ir::IRCode, idx::Int, stmt::Expr, atypes::Vec
         subtype_call = Expr(:call, GlobalRef(Core, :(<:)), stmt.args[3], stmt.args[2])
         ir[SSAValue(idx)] = subtype_call
         return true
-    elseif f === return_type
+    elseif is_return_type(f)
         if isconstType(typ)
             ir[SSAValue(idx)] = quoted(typ.parameters[1])
             return true

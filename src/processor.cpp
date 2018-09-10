@@ -621,23 +621,33 @@ template<typename F>
 static inline jl_sysimg_fptrs_t parse_sysimg(void *hdl, F &&callback)
 {
     jl_sysimg_fptrs_t res = {nullptr, 0, nullptr, 0, nullptr, nullptr};
-    // .data base
-    auto data_base = (char*)jl_dlsym(hdl, "jl_sysimg_gvars_base");
-    // .text base
-    res.base = (const char*)jl_dlsym(hdl, "jl_sysimg_fvars_base");
-    auto offsets = ((const int32_t*)jl_dlsym(hdl, "jl_sysimg_fvars_offsets")) + 1;
-    uint32_t nfunc = ((const uint32_t*)offsets)[-1];
-    res.offsets = offsets;
+    char * data_base;
 
-    void *ids = jl_dlsym(hdl, "jl_dispatch_target_ids");
+    // .data base
+    jl_dlsym(hdl, "jl_sysimg_gvars_base", (void **)&data_base, 1);
+    // .text base
+    jl_dlsym(hdl, "jl_sysimg_fvars_base", (void **)&res.base, 1);
+
+    const int32_t * offsets;
+    jl_dlsym(hdl, "jl_sysimg_fvars_offsets", (void **)&offsets, 1);
+    uint32_t nfunc = offsets[0];
+    res.offsets = offsets + 1;
+
+    void *ids;
+    jl_dlsym(hdl, "jl_dispatch_target_ids", &ids, 1);
     uint32_t target_idx = callback(ids);
 
-    auto reloc_slots = ((const int32_t*)jl_dlsym(hdl, "jl_dispatch_reloc_slots")) + 1;
-    auto nreloc = ((const uint32_t*)reloc_slots)[-1];
-    auto clone_idxs = (const uint32_t*)jl_dlsym(hdl, "jl_dispatch_fvars_idxs");
-    auto clone_offsets = (const int32_t*)jl_dlsym(hdl, "jl_dispatch_fvars_offsets");
+    const int32_t * reloc_slots;
+    jl_dlsym(hdl, "jl_dispatch_reloc_slots",(void **) &reloc_slots, 1);
+    const uint32_t nreloc = reloc_slots[0];
+    reloc_slots += 1;
+    const uint32_t * clone_idxs;
+    const int32_t * clone_offsets;
+    jl_dlsym(hdl, "jl_dispatch_fvars_idxs", (void **)&clone_idxs, 1);
+    jl_dlsym(hdl, "jl_dispatch_fvars_offsets", (void **)&clone_offsets, 1);
     uint32_t tag_len = clone_idxs[0];
     clone_idxs += 1;
+
     assert(tag_len & jl_sysimg_tag_mask);
     std::vector<const int32_t*> base_offsets = {res.offsets};
     // Find target

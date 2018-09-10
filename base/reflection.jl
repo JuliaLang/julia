@@ -1008,6 +1008,8 @@ end
 Determine whether the given generic function has a method matching the given
 `Tuple` of argument types with the upper bound of world age given by `world`.
 
+See also [`applicable`](@ref).
+
 # Examples
 ```jldoctest
 julia> hasmethod(length, Tuple{Array})

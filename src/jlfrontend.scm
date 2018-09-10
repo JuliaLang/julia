@@ -133,16 +133,19 @@
   (jl-expand-to-thunk
    (let* ((name (caddr e))
           (body (cadddr e))
-          (loc (cadr body))
-          (x (if (eq? name 'x) 'y 'x)))
+          (loc  (cadr body))
+          (loc  (if (and (pair? loc) (eq? (car loc) 'line))
+                    (list loc)
+                    '()))
+          (x    (if (eq? name 'x) 'y 'x)))
      `(block
        (= (call eval ,x)
           (block
-           ,loc
+           ,@loc
            (call (core eval) ,name ,x)))
        (= (call include ,x)
           (block
-           ,loc
+           ,@loc
            (call (top include) ,name ,x)))))))
 
 ;; parse only, returning end position, no expansion.

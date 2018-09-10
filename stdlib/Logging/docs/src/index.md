@@ -193,6 +193,43 @@ Similarly, the environment variable can be used to enable debug logging of
 modules, such as `Pkg`, or module roots (see [`Base.moduleroot`](@ref)). To
 enable all debug logging, use the special value `all`.
 
+## Writing log events to a file
+
+Sometimes it can be useful to write log events to a file. Here is an example
+of how to use a task-local and global logger to write information to a text
+file:
+
+```julia-repl
+# Load the logging module
+julia> using Logging
+
+# Open a textfile for writing
+julia> io = open("log.txt", "w+")
+IOStream(<file log.txt>)
+
+# Create a simple logger
+julia> logger = SimpleLogger(io)
+SimpleLogger(IOStream(<file log.txt>), Info, Dict{Any,Int64}())
+
+# Log a task-specific message
+julia> with_logger(logger) do
+           @info("a context specific log message")
+       end
+
+# Write all buffered messages to the file
+julia> flush(io)
+
+# Set the global logger to logger
+julia> global_logger(logger)
+SimpleLogger(IOStream(<file log.txt>), Info, Dict{Any,Int64}())
+
+# This message will now also be written to the file
+julia> @info("a global log message")
+
+# Close the file
+julia> close(io)
+```
+
 
 ## Reference
 
