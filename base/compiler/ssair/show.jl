@@ -21,13 +21,15 @@ function Base.show(io::IO, cfg::CFG)
 end
 
 function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool)
-    indent = maxlength_idx + 4
     if idx in used
-        pad = " "^(maxlength_idx - length(string(idx)) + 1)
-        print(io, "%", idx, pad, "= ")
+        idx_s = string(idx)
+        pad = " "^(maxlength_idx - length(idx_s) + 1)
+        print(io, "%", idx_s, pad, "= ")
     else
-        print(io, " "^indent)
+        print(io, " "^(maxlength_idx + 4))
     end
+    # TODO: `indent` is supposed to be the full width of the leader for correct alignment
+    indent = 16
     if !color && stmt isa PiNode
         # when the outer context is already colored (yellow, for pending nodes), don't use the usual coloring printer
         print(io, "π (")
@@ -314,6 +316,145 @@ end
 
 Base.show(io::IO, code::IRCode) = show_ir(io, code)
 
+
+lineinfo_disabled(io::IO, linestart::String, lineidx::Int32) = ""
+
+function DILineInfoPrinter(linetable::Vector)
+    context = LineInfoNode[]
+    context_depth = Ref(0)
+    indent(s::String) = s^(max(context_depth[], 1) - 1)
+    function emit_lineinfo_update(io::IO, linestart::String, lineidx::Int32)
+        # internal configuration options:
+        collapse = true
+        indent_all = true
+        # convert lineidx to a vector
+        lineidx == 0 && return indent_all ? indent("│") : "" # just skip over lines with no debug info at all
+        DI = LineInfoNode[]
+        while lineidx != 0
+            entry = linetable[lineidx]::LineInfoNode
+            push!(DI, entry)
+            lineidx = entry.inlined_at
+        end
+        nframes = length(DI)
+        nctx = 0
+        pop_skips = 0
+        # compute the size of the matching prefix in the inlining information stack
+        for i = 1:min(length(context), nframes)
+            CtxLine = context[i]
+            FrameLine = DI[nframes - i + 1]
+            CtxLine === FrameLine || break
+            nctx = i
+        end
+        update_line_only = false
+        if collapse && 0 < nctx
+            # check if we're adding more frames with the same method name,
+            # if so, drop all existing calls to it from the top of the context
+            # AND check if instead the context was previously printed that way
+            # but now has removed the recursive frames
+            let method = context[nctx].method
+                if (nctx < nframes && DI[nframes - nctx].method === method) ||
+                   (nctx < length(context) && context[nctx + 1].method === method)
+                    update_line_only = true
+                    while nctx > 0 && context[nctx].method === method
+                        nctx -= 1
+                    end
+                end
+            end
+        end
+        # examine what frames we're returning from
+        if nctx < length(context)
+            # compute the new inlining depth
+            if collapse
+                npops = 1
+                let Prev = context[nctx + 1].method
+                    for i = (nctx + 2):length(context)
+                        Next = context[i].method
+                        Prev === Next || (npops += 1)
+                        Prev = Next
+                    end
+                end
+            else
+                npops = length(context) - nctx
+            end
+            # look at the first non-matching element to see if we are only changing the line number
+            if !update_line_only && nctx < nframes
+                let CtxLine = context[nctx + 1],
+                    FrameLine = DI[nframes - nctx]
+                    if CtxLine.file == FrameLine.file &&
+                            CtxLine.method == FrameLine.method &&
+                            CtxLine.mod == FrameLine.mod
+                        update_line_only = true
+                    end
+                end
+            end
+            resize!(context, nctx)
+            update_line_only && (npops -= 1)
+            if npops > 0
+                context_depth[] -= npops
+                print(io, linestart, indent("│"), "┘"^npops, "\n")
+            end
+        end
+        # see what change we made to the outermost line number
+        if update_line_only
+            frame = DI[nframes - nctx]
+            nctx += 1
+            push!(context, frame)
+            if frame.line != typemax(frame.line) && frame.line != 0
+                print(io, linestart, indent("│"), " @ ", frame.file, ":", frame.line, " within `", frame.method, "'")
+                if collapse
+                    method = frame.method
+                    while nctx < nframes
+                        frame = DI[nframes - nctx]
+                        frame.method === method || break
+                        nctx += 1
+                        push!(context, frame)
+                        print(io, " @ ", frame.file, ":", frame.line)
+                    end
+                end
+                print(io, "\n")
+            end
+        end
+        # now print the rest of the new frames
+        while nctx < nframes
+            frame = DI[nframes - nctx]
+            print(io, linestart, indent("│"))
+            nctx += 1
+            push!(context, frame)
+            context_depth[] += 1
+            nctx != 1 && print(io, "┌")
+            print(io, " @ ", frame.file)
+            if frame.line != typemax(frame.line) && frame.line != 0
+                print(io, ":", frame.line)
+            end
+            print(io, " within `", frame.method, "'")
+            if collapse
+                method = frame.method
+                while nctx < nframes
+                    frame = DI[nframes - nctx]
+                    frame.method === method || break
+                    nctx += 1
+                    push!(context, frame)
+                    print(io, " @ ", frame.file, ":", frame.line)
+                end
+            end
+            print(io, "\n")
+        end
+        # FOR DEBUGGING `collapse`:
+        #let Prev = context[1].method,
+        #    depth2 = 1
+        #    for i = 2:nctx
+        #        Next = context[i].method
+        #        (collapse && Prev === Next) || (depth2 += 1)
+        #        Prev = Next
+        #    end
+        #    @assert context_depth[] == depth2
+        #end
+        return indent_all ? indent("│") : ""
+    end
+    return emit_lineinfo_update
+end
+
+
 function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_printer; verbose_linetable=false)
     cols = displaysize(io)[2]
     used = BitSet()
@@ -465,7 +606,7 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
     end
 end
 
-function show_ir(io::IO, code::CodeInfo, expr_type_printer=default_expr_type_printer; verbose_linetable=false)
+function show_ir(io::IO, code::CodeInfo, line_info_preprinter=DILineInfoPrinter(code.linetable), line_info_postprinter=default_expr_type_printer)
     cols = displaysize(io)[2]
     used = BitSet()
     stmts = code.code
@@ -483,14 +624,6 @@ function show_ir(io::IO, code::CodeInfo, expr_type_printer=default_expr_type_pri
         maxused = maximum(used)
         maxlength_idx = length(string(maxused))
     end
-    if !verbose_linetable
-        (loc_annotations, loc_methods, loc_lineno) = compute_ir_line_annotations(code)
-        max_loc_width = maximum(length(str) for str in loc_annotations)
-        max_lineno_width = maximum(length(str) for str in loc_lineno)
-        max_method_width = maximum(length(str) for str in loc_methods)
-    end
-    max_depth = maximum(compute_inlining_depth(code.linetable, line) for line in code.codelocs)
-    last_stack = []
     for idx in eachindex(stmts)
         if !isassigned(stmts, idx)
             # This is invalid, but do something useful rather
@@ -499,63 +632,24 @@ function show_ir(io::IO, code::CodeInfo, expr_type_printer=default_expr_type_pri
             continue
         end
         stmt = stmts[idx]
-        # Compute BB guard rail
         bbrange = cfg.blocks[bb_idx].stmts
         bbrange = bbrange.first:bbrange.last
-        bb_idx_str = string(bb_idx)
-        bb_pad = max_bb_idx_size - length(bb_idx_str)
-        bb_type = length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄"
-        bb_start_str = string(bb_idx_str, " ", bb_type, "─"^bb_pad, " ")
-        bb_guard_rail_cont = string("│  ", " "^max_bb_idx_size)
+        # Print line info update
+        linestart = idx == first(bbrange) ? "  " : sprint(io -> printstyled(io, "│ ", color=:light_black), context=io)
+        linestart *= " "^max_bb_idx_size
+        inlining_indent = line_info_preprinter(io, linestart, code.codelocs[idx])
+        # Compute BB guard rail
         if idx == first(bbrange)
-            bb_guard_rail = bb_start_str
+            bb_idx_str = string(bb_idx)
+            bb_pad = max_bb_idx_size - length(bb_idx_str)
+            bb_type = length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄"
+            printstyled(io, bb_idx_str, " ", bb_type, "─"^bb_pad, color=:light_black)
+        elseif idx == last(bbrange) # print separator
+            printstyled(io, "└", "─"^(1 + max_bb_idx_size), color=:light_black)
         else
-            bb_guard_rail = bb_guard_rail_cont
+            printstyled(io, "│ ", " "^max_bb_idx_size, color=:light_black)
         end
-        # Print linetable information
-        if verbose_linetable
-            stack = compute_loc_stack(code.linetable, code.codelocs[idx])
-            # We need to print any stack frames that did not exist in the last stack
-            ndepth = max(1, length(stack))
-            rail = string(" "^(max_depth+1-ndepth), "│"^ndepth)
-            start_column = cols - max_depth - 10
-            for (i, x) in enumerate(stack)
-                if i > length(last_stack) || last_stack[i] != x
-                    entry = code.linetable[x]
-                    printstyled(io, "\e[$(start_column)G$(rail)\e[1G", color = :light_black)
-                    print(io, bb_guard_rail)
-                    ssa_guard = " "^(maxlength_idx + 4 + (i - 1))
-                    entry_label = "$(ssa_guard)$(entry.method) at $(entry.file):$(entry.line) "
-                    hline = string("─"^(start_column-length(entry_label)-length(bb_guard_rail)+max_depth-i), "┐")
-                    printstyled(io, string(entry_label, hline), "\n"; color=:light_black)
-                    bb_guard_rail = bb_guard_rail_cont
-                end
-            end
-            printstyled(io, "\e[$(start_column)G$(rail)\e[1G", color = :light_black)
-            last_stack = stack
-        else
-            annotation = loc_annotations[idx]
-            loc_method = loc_methods[idx]
-            lineno = loc_lineno[idx]
-            # Print location information right aligned. If the line below is too long, it'll overwrite this,
-            # but that's what we want.
-            if get(io, :color, false)
-                method_start_column = cols - max_method_width - max_loc_width - 2
-                filler = " "^(max_loc_width-length(annotation))
-                printstyled(io, "\e[$(method_start_column)G$(annotation)$(filler)$(loc_method)\e[1G", color = :light_black)
-            end
-            printstyled(io, lineno, " "^(max_lineno_width-length(lineno)+1); color = :light_black)
-        end
-        idx != last(bbrange) && print(io, bb_guard_rail)
-        if idx == last(bbrange) # print separator
-            if idx == first(bbrange)
-                print(io, bb_start_str)
-            elseif idx == last(bbrange)
-                print(io, "└", "─"^(1 + max_bb_idx_size), " ")
-            else
-                print(io, "│  ", " "^max_bb_idx_size)
-            end
-        end
+        print(io, inlining_indent, " ")
         if idx == last(bbrange)
             bb_idx += 1
         end
@@ -582,7 +676,7 @@ function show_ir(io::IO, code::CodeInfo, expr_type_printer=default_expr_type_pri
                 printstyled(io, "::#UNDEF", color=:red)
             elseif show_type
                 typ = types[idx]
-                expr_type_printer(io, typ, idx in used)
+                line_info_postprinter(io, typ, idx in used)
             end
         end
         println(io)
