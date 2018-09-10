@@ -17,7 +17,7 @@ function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
 end
 
 """
-    code_warntype([io::IO], f, types)
+    code_warntype([io::IO], f, types; verbose_linetable=false)
 
 Prints lowered and type-inferred ASTs for the methods matching the given generic function
 and type signature to `io` which defaults to `stdout`. The ASTs are annotated in such a way
@@ -26,9 +26,12 @@ This serves as a warning of potential type instability. Not all non-leaf types a
 problematic for performance, so the results need to be used judiciously.
 In particular, unions containing either [`missing`](@ref) or [`nothing`](@ref) are displayed in yellow, since
 these are often intentional.
+If the `verbose_linetable` keyword is set, the linetable will be printed
+in verbose mode, showing all available information (rather than applying
+the usual heuristics).
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
-function code_warntype(io::IO, @nospecialize(f), @nospecialize(t))
+function code_warntype(io::IO, @nospecialize(f), @nospecialize(t); verbose_linetable=false)
     for (src, rettype) in code_typed(f, t)
         lambda_io::IOContext = io
         if src.slotnames !== nothing
@@ -38,7 +41,8 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t))
         warntype_type_printer(io, rettype, true)
         println(io)
         # TODO: static parameter values
-        Base.IRShow.show_ir(lambda_io, src, Base.IRShow.DILineInfoPrinter(src.linetable), warntype_type_printer)
+        Base.IRShow.show_ir(lambda_io, src, warntype_type_printer;
+                            verbose_linetable = verbose_linetable)
     end
     nothing
 end

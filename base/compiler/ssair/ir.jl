@@ -85,11 +85,11 @@ function basic_blocks_starts(stmts::Vector{Any})
                 push!(jump_dests, idx)
                 push!(jump_dests, idx+1)
                 # The catch block is a jump dest
-                push!(jump_dests, stmt.args[1]::Int)
+                push!(jump_dests, stmt.args[1])
             elseif stmt.head === :gotoifnot
                 # also tolerate expr form of IR
                 push!(jump_dests, idx+1)
-                push!(jump_dests, stmt.args[2]::Int)
+                push!(jump_dests, stmt.args[2])
             elseif stmt.head === :return
                 # also tolerate expr form of IR
                 # This is a fake dest to force the next stmt to start a bb
@@ -130,7 +130,7 @@ function compute_basic_blocks(stmts::Vector{Any})
     # Compute successors/predecessors
     for (num, b) in enumerate(blocks)
         terminator = stmts[last(b.stmts)]
-        if isa(terminator, ReturnNode) || isexpr(terminator, :return)
+        if isa(terminator, ReturnNode)
             # return never has any successors
             continue
         end
@@ -150,28 +150,17 @@ function compute_basic_blocks(stmts::Vector{Any})
                 push!(blocks[block′].preds, num)
                 push!(b.succs, block′)
             end
-        elseif isa(terminator, Expr)
-            if terminator.head == :enter
-                # :enter gets a virtual edge to the exception handler and
-                # the exception handler gets a virtual edge from outside
-                # the function.
-                # See the devdocs on exception handling in SSA form (or
-                # bug Keno to write them, if you're reading this and they
-                # don't exist)
-                block′ = block_for_inst(basic_block_index, terminator.args[1]::Int)
-                push!(blocks[block′].preds, num)
-                push!(blocks[block′].preds, 0)
-                push!(b.succs, block′)
-            elseif terminator.head == :gotoifnot
-                block′ = block_for_inst(basic_block_index, terminator.args[2]::Int)
-                if block′ == num + 1
-                    # This GotoIfNot acts like a noop - treat it as such.
-                    # We will drop it during SSA renaming
-                else
-                    push!(blocks[block′].preds, num)
-                    push!(b.succs, block′)
-                end
-            end
+        elseif isa(terminator, Expr) && terminator.head == :enter
+            # :enter gets a virtual edge to the exception handler and
+            # the exception handler gets a virtual edge from outside
+            # the function.
+            # See the devdocs on exception handling in SSA form (or
+            # bug Keno to write them, if you're reading this and they
+            # don't exist)
+            block′ = block_for_inst(basic_block_index, terminator.args[1])
+            push!(blocks[block′].preds, num)
+            push!(blocks[block′].preds, 0)
+            push!(b.succs, block′)
         end
         # statement fall-through
         if num + 1 <= length(blocks)
