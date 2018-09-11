@@ -214,3 +214,14 @@ f27361(::M) where M <: Tuple{3} = nothing
 
 @test  args_morespecific(Tuple{Type{Any}, Type}, Tuple{Type{T}, Type{T}} where T)
 @test !args_morespecific(Tuple{Type{Any}, Type}, Tuple{Type{T}, Type{T}} where T<:Union{})
+
+# issue #22592
+abstract type Colorant22592{T,N} end
+abstract type Color22592{T, N} <: Colorant22592{T,N} end
+abstract type AbstractRGB22592{T} <: Color22592{T,3} end
+AbstractGray22592{T} = Color22592{T,1}
+MathTypes22592{T,C} = Union{AbstractRGB22592{T},AbstractGray22592{T}}
+@test !args_morespecific(Tuple{MathTypes22592}, Tuple{AbstractGray22592})
+@test !args_morespecific(Tuple{MathTypes22592, MathTypes22592}, Tuple{AbstractGray22592})
+
+@test args_morespecific(Union{Set,Dict,Vector}, Union{Vector,AbstractSet})
