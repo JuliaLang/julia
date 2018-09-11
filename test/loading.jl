@@ -163,10 +163,10 @@ end
                 this = Base.explicit_project_deps_get(project_file, "This")
                 that = Base.explicit_project_deps_get(project_file, "That")
                 # test that the correct answers are given
-                @test root == (something(n, N+1) ≥ something(d, N+1) ? false :
+                @test root == (something(n, N+1) ≥ something(d, N+1) ? nothing :
                                something(u, N+1) < something(d, N+1) ? root_uuid : proj_uuid)
-                @test this == (something(d, N+1) < something(t, N+1) ≤ N ? this_uuid : false)
-                @test that == false
+                @test this == (something(d, N+1) < something(t, N+1) ≤ N ? this_uuid : nothing)
+                @test that == nothing
             end
         end
     end
@@ -502,7 +502,7 @@ function test_find(
     for name in NAMES
         id = identify_package(name)
         @test id == get(roots, name, nothing)
-        path = locate_package(id)
+        path = id === nothing ? nothing : locate_package(id)
         @test path == get(paths, id, nothing)
     end
     # check indirect dependencies
@@ -512,7 +512,7 @@ function test_find(
         for name in NAMES
             id = identify_package(where, name)
             @test id == get(deps, name, nothing)
-            path = locate_package(id)
+            path = id === nothing ? nothing : locate_package(id)
             @test path == get(paths, id, nothing)
         end
     end
