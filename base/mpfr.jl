@@ -116,7 +116,17 @@ BigFloat(x)
 widen(::Type{Float64}) = BigFloat
 widen(::Type{BigFloat}) = BigFloat
 
-BigFloat(x::BigFloat) = x
+function BigFloat(x::BigFloat)
+    if precision(BigFloat) == precision(x)
+        x
+    else
+        z = BigFloat()
+        ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Int32),
+              z, x, ROUNDING_MODE[])
+        z
+    end
+end
+
 
 # convert to BigFloat
 for (fJ, fC) in ((:si,:Clong), (:ui,:Culong))

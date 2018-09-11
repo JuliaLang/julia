@@ -9,6 +9,9 @@ New language features
 Language changes
 ----------------
 
+  * the constructor `BigFloat(::BigFloat)` now respects the global precision setting and always
+    returns a `BigFloat` with precision equal to `precision(BigFloat)` ([#29127]).
+
 
 Standard Library Changes
 ------------------------
