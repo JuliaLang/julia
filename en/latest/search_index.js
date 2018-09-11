@@ -2469,7 +2469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Parallel Computing",
     "title": "Network Requirements for LocalManager and SSHManager",
     "category": "section",
-    "text": "Julia clusters are designed to be executed on already secured environments on infrastructure such as local laptops, departmental clusters, or even the cloud. This section covers network security requirements for the inbuilt LocalManager and SSHManager:The master process does not listen on any port. It only connects out to the workers.\nEach worker binds to only one of the local interfaces and listens on an ephemeral port number assigned by the OS.\nLocalManager, used by addprocs(N), by default binds only to the loopback interface. This means that workers started later on remote hosts (or by anyone with malicious intentions) are unable to connect to the cluster. An addprocs(4) followed by an addprocs([\"remote_host\"]) will fail. Some users may need to create a cluster comprising their local system and a few remote systems. This can be done by explicitly requesting LocalManager to bind to an external network interface via the restrict keyword argument: addprocs(4; restrict=false).\nSSHManager, used by addprocs(list_of_remote_hosts), launches workers on remote hosts via SSH. By default SSH is only used to launch Julia workers. Subsequent master-worker and worker-worker connections use plain, unencrypted TCP/IP sockets. The remote hosts must have passwordless login enabled. Additional SSH flags or credentials may be specified via keyword argument sshflags.\naddprocs(list_of_remote_hosts; tunnel=true, sshflags=<ssh keys and other flags>) is useful when we wish to use SSH connections for master-worker too. A typical scenario for this is a local laptop running the Julia REPL (i.e., the master) with the rest of the cluster on the cloud, say on Amazon EC2. In this case only port 22 needs to be opened at the remote cluster coupled with SSH client authenticated via public key infrastructure (PKI). Authentication credentials can be supplied via sshflags, for example sshflags=`-e <keyfile>`.\nIn an all-to-all topology (the default), all workers connect to each other via plain TCP sockets. The security policy on the cluster nodes must thus ensure free connectivity between workers for the ephemeral port range (varies by OS).\nSecuring and encrypting all worker-worker traffic (via SSH) or encrypting individual messages can be done via a custom ClusterManager."
+    "text": "Julia clusters are designed to be executed on already secured environments on infrastructure such as local laptops, departmental clusters, or even the cloud. This section covers network security requirements for the inbuilt LocalManager and SSHManager:The master process does not listen on any port. It only connects out to the workers.\nEach worker binds to only one of the local interfaces and listens on an ephemeral port number assigned by the OS.\nLocalManager, used by addprocs(N), by default binds only to the loopback interface. This means that workers started later on remote hosts (or by anyone with malicious intentions) are unable to connect to the cluster. An addprocs(4) followed by an addprocs([\"remote_host\"]) will fail. Some users may need to create a cluster comprising their local system and a few remote systems. This can be done by explicitly requesting LocalManager to bind to an external network interface via the restrict keyword argument: addprocs(4; restrict=false).\nSSHManager, used by addprocs(list_of_remote_hosts), launches workers on remote hosts via SSH. By default SSH is only used to launch Julia workers. Subsequent master-worker and worker-worker connections use plain, unencrypted TCP/IP sockets. The remote hosts must have passwordless login enabled. Additional SSH flags or credentials may be specified via keyword argument sshflags.\naddprocs(list_of_remote_hosts; tunnel=true, sshflags=<ssh keys and other flags>) is useful when we wish to use SSH connections for master-worker too. A typical scenario for this is a local laptop running the Julia REPL (i.e., the master) with the rest of the cluster on the cloud, say on Amazon EC2. In this case only port 22 needs to be opened at the remote cluster coupled with SSH client authenticated via public key infrastructure (PKI). Authentication credentials can be supplied via sshflags, for example sshflags=`-i <keyfile>`.\nIn an all-to-all topology (the default), all workers connect to each other via plain TCP sockets. The security policy on the cluster nodes must thus ensure free connectivity between workers for the ephemeral port range (varies by OS).\nSecuring and encrypting all worker-worker traffic (via SSH) or encrypting individual messages can be done via a custom ClusterManager."
 },
 
 {
@@ -7405,7 +7405,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
@@ -15013,7 +15013,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Distributed.nprocs",
     "category": "function",
-    "text": "nprocs()\n\nGet the number of available processes.\n\n\n\n\n\n"
+    "text": "nprocs()\n\nGet the number of available processes.\n\nExamples\n\njulia> nprocs()\n3\n\njulia> workers()\n5-element Array{Int64,1}:\n 2\n 3\n\n\n\n\n\n"
 },
 
 {
@@ -15021,7 +15021,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Distributed.nworkers",
     "category": "function",
-    "text": "nworkers()\n\nGet the number of available worker processes. This is one less than nprocs(). Equal to nprocs() if nprocs() == 1.\n\n\n\n\n\n"
+    "text": "nworkers()\n\nGet the number of available worker processes. This is one less than nprocs(). Equal to nprocs() if nprocs() == 1.\n\nExamples\n\n$ julia -p 5\n\njulia> nprocs()\n6\n\njulia> nworkers()\n5\n\n\n\n\n\n"
 },
 
 {
@@ -15029,7 +15029,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Distributed.procs",
     "category": "method",
-    "text": "procs()\n\nReturn a list of all process identifiers.\n\n\n\n\n\n"
+    "text": "procs()\n\nReturn a list of all process identifiers, including pid 1 (which is not included by workers()).\n\nExamples\n\n$ julia -p 5\n\njulia> procs()\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\n\n\n\n\n"
 },
 
 {
@@ -15045,7 +15045,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Distributed.workers",
     "category": "function",
-    "text": "workers()\n\nReturn a list of all worker process identifiers.\n\n\n\n\n\n"
+    "text": "workers()\n\nReturn a list of all worker process identifiers.\n\nExamples\n\n$ julia -p 5\n\njulia> workers()\n2-element Array{Int64,1}:\n 2\n 3\n\n\n\n\n\n"
 },
 
 {
@@ -15053,7 +15053,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Distributed.rmprocs",
     "category": "function",
-    "text": "rmprocs(pids...; waitfor=typemax(Int))\n\nRemove the specified workers. Note that only process 1 can add or remove workers.\n\nArgument waitfor specifies how long to wait for the workers to shut down:     - If unspecified, rmprocs will wait until all requested pids are removed.     - An ErrorException is raised if all workers cannot be terminated before       the requested waitfor seconds.     - With a waitfor value of 0, the call returns immediately with the workers       scheduled for removal in a different task. The scheduled Task object is       returned. The user should call wait on the task before invoking any other       parallel calls.\n\n\n\n\n\n"
+    "text": "rmprocs(pids...; waitfor=typemax(Int))\n\nRemove the specified workers. Note that only process 1 can add or remove workers.\n\nArgument waitfor specifies how long to wait for the workers to shut down:\n\nIf unspecified, rmprocs will wait until all requested pids are removed.\nAn ErrorException is raised if all workers cannot be terminated before the requested waitfor seconds.\nWith a waitfor value of 0, the call returns immediately with the workers scheduled for removal in a different task. The scheduled Task object is returned. The user should call wait on the task before invoking any other parallel calls.\n\nExamples\n\n$ julia -p 5\n\njulia> t = rmprocs(2, 3, waitfor=0)\nTask (runnable) @0x0000000107c718d0\n\njulia> wait(t)\n\njulia> workers()\n3-element Array{Int64,1}:\n 4\n 5\n 6\n\n\n\n\n\n"
 },
 
 {
@@ -15069,7 +15069,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Distributed.myid",
     "category": "function",
-    "text": "myid()\n\nGet the id of the current process.\n\n\n\n\n\n"
+    "text": "myid()\n\nGet the id of the current process.\n\nExamples\n\njulia> myid()\n1\n\njulia> remotecall_fetch(() -> myid(), 4)\n4\n\n\n\n\n\n"
 },
 
 {
@@ -20549,7 +20549,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sockets",
     "title": "Base.bind",
     "category": "function",
-    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
+    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
 },
 
 {
