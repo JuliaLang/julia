@@ -56,28 +56,27 @@ julia> 1234
 1234
 ```
 
-The default type for an integer literal depends on whether the target system has a 32-bit architecture
-or a 64-bit architecture:
+The default type for an integer literal depends on version of julia, 32-bit or 64-bit:
 
 ```julia-repl
-# 32-bit system:
+# 32-bit julia:
 julia> typeof(1)
 Int32
 
-# 64-bit system:
+# 64-bit julia:
 julia> typeof(1)
 Int64
 ```
 
-The Julia internal variable [`Sys.WORD_SIZE`](@ref) indicates whether the target system is 32-bit
+The Julia internal variable [`Sys.WORD_SIZE`](@ref) indicates whether julia is 32-bit
 or 64-bit:
 
 ```julia-repl
-# 32-bit system:
+# 32-bit julia:
 julia> Sys.WORD_SIZE
 32
 
-# 64-bit system:
+# 64-bit julia:
 julia> Sys.WORD_SIZE
 64
 ```
@@ -86,13 +85,13 @@ Julia also defines the types `Int` and `UInt`, which are aliases for the system'
 native integer types respectively:
 
 ```julia-repl
-# 32-bit system:
+# 32-bit julia:
 julia> Int
 Int32
 julia> UInt
 UInt32
 
-# 64-bit system:
+# 64-bit julia:
 julia> Int
 Int64
 julia> UInt
@@ -103,7 +102,7 @@ Larger integer literals that cannot be represented using only 32 bits but can be
 64 bits always create 64-bit integers, regardless of the system type:
 
 ```jldoctest
-# 32-bit or 64-bit system:
+# 32-bit or 64-bit julia:
 julia> typeof(3000000000)
 Int64
 ```
