@@ -1595,7 +1595,7 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
     running the Julia REPL (i.e., the master) with the rest of the cluster on the cloud, say on Amazon
     EC2. In this case only port 22 needs to be opened at the remote cluster coupled with SSH client
     authenticated via public key infrastructure (PKI). Authentication credentials can be supplied
-    via `sshflags`, for example ```sshflags=`-e <keyfile>` ```.
+    via `sshflags`, for example ```sshflags=`-i <keyfile>` ```.
 
     In an all-to-all topology (the default), all workers connect to each other via plain TCP sockets.
     The security policy on the cluster nodes must thus ensure free connectivity between workers for
