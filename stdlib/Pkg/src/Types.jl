@@ -240,13 +240,13 @@ function find_project_file(env::Union{Nothing,String}=nothing)
     project_file = nothing
     if env isa Nothing
         project_file = Base.active_project()
-        project_file == nothing && error("no active project")
+        project_file == nothing && pkgerror("no active project")
     elseif startswith(env, '@')
         project_file = Base.load_path_expand(env)
-        project_file === nothing && error("package environment does not exist: $env")
+        project_file === nothing && pkgerror("package environment does not exist: $env")
     elseif env isa String
         if isdir(env)
-            isempty(readdir(env)) || error("environment is a package directory: $env")
+            isempty(readdir(env)) || pkgerror("environment is a package directory: $env")
             project_file = joinpath(env, Base.project_names[end])
         else
             project_file = endswith(env, ".toml") ? abspath(env) :
