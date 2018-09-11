@@ -273,6 +273,8 @@ mutable struct Options
     backspace_adjust::Bool
     confirm_exit::Bool # ^D must be repeated to confirm exit
     auto_indent::Bool # indent a newline like line above
+    # cancel auto-indent when next character is entered within this time frame :
+    auto_indent_time_threshold::Float64
 end
 
 Options(;
@@ -286,12 +288,14 @@ Options(;
         beep_use_current = true,
         backspace_align = true, backspace_adjust = backspace_align,
         confirm_exit = false,
-        auto_indent = true) =
+        auto_indent = true,
+        auto_indent_time_threshold = 0.005) =
             Options(hascolor, extra_keymap, tabwidth,
                     kill_ring_max, region_animation_duration,
                     beep_duration, beep_blink, beep_maxduration,
                     beep_colors, beep_use_current,
-                    backspace_align, backspace_adjust, confirm_exit, auto_indent)
+                    backspace_align, backspace_adjust, confirm_exit,
+                    auto_indent, auto_indent_time_threshold)
 
 # for use by REPLs not having an options field
 const GlobalOptions = Options()

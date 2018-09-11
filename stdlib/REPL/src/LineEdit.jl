@@ -80,6 +80,8 @@ mutable struct PromptState <: ModeState
     refresh_lock::Threads.AbstractLock
     # this would better be Threads.Atomic{Float64}, but not supported on some platforms
     beeping::Float64
+    # this option is to detect when code is pasted in non-"bracketed paste mode" :
+    last_newline::Float64 # register when last newline was entered
 end
 
 options(s::PromptState) =
@@ -678,6 +680,20 @@ end
 edit_splice!(s, ins::AbstractString) = edit_splice!(s, region(s), ins)
 
 function edit_insert(s::PromptState, c)
+    if time() - s.last_newline < options(s).auto_indent_time_threshold
+        # the first inserted character since last newline was inserted very fast,
+        # so it must have been inserted automatically (e.g. "paste" which is not
+        # recognized as so)
+        buf = buffer(s)
+        pos = position(buf)
+        nl = findprev(c -> c == _newline, buf.data, pos)::Int
+        seek(buf, nl)
+        # delete auto-inserted spaces
+        edit_splice!(buf, nl => pos)
+        s.last_newline = -Inf
+        refresh_line(s) # necessary, as the code below doesn't do it necessarily
+    end
+
     push_undo(s)
     buf = s.input_buffer
     str = string(c)
@@ -717,6 +733,7 @@ function edit_insert_newline(s::PromptState, align::Int = 0 - options(s).auto_in
         align < 0 && (align = buf.size-beg)
     end
     edit_insert(buf, '\n' * ' '^align)
+    align > 0 && (s.last_newline = time())
     refresh_line(s)
 end
 
@@ -2247,7 +2264,7 @@ run_interface(::Prompt) = nothing
 
 init_state(terminal, prompt::Prompt) =
     PromptState(terminal, prompt, IOBuffer(), :off, IOBuffer[], 1, InputAreaState(1, 1),
-                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0)
+                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf)
 
 function init_state(terminal, m::ModalInterface)
     s = MIState(m, m.modes[1], false, IdDict{Any,Any}())
