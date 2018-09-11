@@ -873,7 +873,6 @@ julia> collect(Iterators.flatten((1:2, 8:9)))
 flatten(itr) = Flatten(itr)
 
 eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
-IteratorEltype(::Type{Union{}}) = EltypeUnknown()
 IteratorEltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, IteratorEltype(I))
 _flatteneltype(I, ::HasEltype) = IteratorEltype(eltype(I))
 _flatteneltype(I, et) = EltypeUnknown()

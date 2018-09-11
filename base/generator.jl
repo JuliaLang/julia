@@ -126,3 +126,4 @@ IteratorEltype(::Type) = HasEltype()  # HasEltype is the default
 IteratorEltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()
 
 IteratorEltype(::Type{Any}) = EltypeUnknown()
+IteratorEltype(::Type{Union{}}) = EltypeUnknown()
