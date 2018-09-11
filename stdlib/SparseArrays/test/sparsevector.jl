@@ -180,8 +180,8 @@ end
             @test sprand(r1, 100, .9) == sprand(r2, 100, .9)
             @test sprandn(r1, 100, .9) == sprandn(r2, 100, .9)
             @test sprand(r1, Bool, 100, .9) == sprand(r2,  Bool, 100, .9)
-            @test sprandn(r1, Float32, 100, .9) == sprand(r2,  Float32, 100, .9)
-            @test sprandn(r1, Complex{Float64}, 100, .9) == sprand(r2,  Complex{Float64}, 100, .9)
+            @test sprandn(r1, Float32, 100, .9) == sprandn(r2, Float32, 100, .9)
+            @test sprandn(r1, Complex{Float64}, 100, .9) == sprandn(r2, Complex{Float64}, 100, .9)
         end
     end
 end

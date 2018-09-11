@@ -55,8 +55,8 @@ using Random
             @test sprand(r1, 10, 10, .9) == sprand(r2, 10, 10, .9)
             @test sprandn(r1, 10, 10, .9) == sprandn(r2, 10, 10, .9)
             @test sprand(r1, Bool, 10, 10, .9) == sprand(r2,  Bool, 10, 10, .9)
-            @test sprandn(r1, Float32, 10, 10, .9) == sprand(r2,  Float32, 10, 10, .9)
-            @test sprandn(r1, Complex{Float64}, 10, 10, .9) == sprand(r2,  Complex{Float64}, 10, 10, .9)
+            @test sprandn(r1, Float32, 10, 10, .9) == sprandn(r2,  Float32, 10, 10, .9)
+            @test sprandn(r1, Complex{Float64}, 10, 10, .9) == sprandn(r2,  Complex{Float64}, 10, 10, .9)
         end
     end
 
