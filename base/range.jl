@@ -690,7 +690,7 @@ function getindex(r::LinRange, s::OrdinalRange{<:Integer})
 end
 
 show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
-show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
+show(io::IO, r::AbstractUnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
 
 ==(r::T, s::T) where {T<:AbstractRange} =
