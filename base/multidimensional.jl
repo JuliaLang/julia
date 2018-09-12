@@ -156,7 +156,7 @@ module IteratorsMD
     # Iteration
     """
         CartesianIndices(sz::Dims) -> R
-        CartesianIndices(istart:istop, jstart:jstop, ...) -> R
+        CartesianIndices((istart:istop, jstart:jstop, ...)) -> R
 
     Define a region `R` spanning a multidimensional rectangular range
     of integer indices. These are most commonly encountered in the

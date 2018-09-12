@@ -102,8 +102,7 @@ void restore_signals(void)
     // turn on ctrl-c handler
     SetConsoleCtrlHandler(NULL, 0);
     // see if SetThreadStackGuarantee exists
-    pSetThreadStackGuarantee = (BOOL (*)(PULONG)) jl_dlsym_e(jl_kernel32_handle,
-        "SetThreadStackGuarantee");
+    jl_dlsym(jl_kernel32_handle, "SetThreadStackGuarantee", (const void **)&pSetThreadStackGuarantee, 0);
 }
 
 void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)

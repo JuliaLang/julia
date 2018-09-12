@@ -463,7 +463,7 @@ JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROO
 jl_value_t *jl_nth_slot_type(jl_value_t *sig JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 void jl_compute_field_offsets(jl_datatype_t *st);
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
-                                             int isunboxed, int elsz);
+                                             int isunboxed, int isunion, int elsz);
 void jl_module_run_initializer(jl_module_t *m);
 jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT;
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
@@ -625,7 +625,7 @@ extern volatile int jl_in_stackwalk;
 typedef unw_context_t bt_context_t;
 typedef unw_cursor_t bt_cursor_t;
 #  if (!defined(SYSTEM_LIBUNWIND) || UNW_VERSION_MAJOR > 1 ||   \
-       (UNW_VERSION_MAJOR == 1 && UNW_VERSION_MINOR > 1))
+       (UNW_VERSION_MAJOR == 1 && UNW_VERSION_MINOR != 0 && UNW_VERSION_MINOR != 1))
 // Enable our memory manager only for libunwind with our patch or
 // on a newer release
 #    define JL_UNW_HAS_FORMAT_IP 1

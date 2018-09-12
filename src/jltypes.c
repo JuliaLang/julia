@@ -1131,9 +1131,9 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     }
 
     jl_datatype_t *ndt = NULL;
-    JL_GC_PUSH2(&p, &ndt);
-
     jl_value_t *last = iparams[ntp - 1];
+    JL_GC_PUSH3(&p, &ndt, &last);
+
     int isvatuple = 0;
     if (istuple && ntp > 0 && jl_is_vararg_type(last)) {
         isvatuple = 1;
@@ -1149,17 +1149,13 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             JL_GC_POP();
             return (jl_value_t*)jl_anytuple_type;
         }
-        {
-            JL_GC_PUSH1(&last);
-            jl_value_t *last2 = normalize_vararg(last);
-            if (last2 != last) {
-                last = last2;
-                p = jl_alloc_svec(ntp);
-                for (size_t i = 0; i < ntp-1; i++)
-                    jl_svecset(p, i, iparams[i]);
-                jl_svecset(p, ntp-1, last);
-            }
-            JL_GC_POP();
+        int did_normalize = 0;
+        jl_value_t *last2 = normalize_vararg(last);
+        if (last2 != last) {
+            last = last2;
+            did_normalize = 1;
+            va = jl_unwrap_unionall(last);
+            va0 = jl_tparam0(va); va1 = jl_tparam1(va);
         }
         if (jl_is_long(va1)) {
             ssize_t nt = jl_unbox_long(va1);
@@ -1182,6 +1178,12 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                 JL_GC_POP();
                 return ndt;
             }
+        }
+        if (did_normalize) {
+            p = jl_alloc_svec(ntp);
+            for (size_t i = 0; i < ntp-1; i++)
+                jl_svecset(p, i, iparams[i]);
+            jl_svecset(p, ntp-1, last);
         }
     }
 
@@ -2061,13 +2063,14 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(19,
+                        jl_perm_symsvec(20,
                             "name",
                             "module",
                             "file",
                             "line",
                             "sig",
                             "min_world",
+                            "max_world",
                             "ambig",
                             "specializations",
                             "sparam_syms",
@@ -2081,12 +2084,13 @@ void jl_init_types(void) JL_GC_DISABLED
                             "nospecialize",
                             "isva",
                             "pure"),
-                        jl_svec(19,
+                        jl_svec(20,
                             jl_sym_type,
                             jl_module_type,
                             jl_sym_type,
                             jl_int32_type,
                             jl_type_type,
+                            jl_long_type,
                             jl_long_type,
                             jl_any_type, // Union{Array, Nothing}
                             jl_any_type, // TypeMap
@@ -2101,7 +2105,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_int32_type,
                             jl_bool_type,
                             jl_bool_type),
-                        0, 1, 9);
+                        0, 1, 10);
 
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"), core,
@@ -2213,7 +2217,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_methtable_type->types, 7, jl_int32_type); // DWORD
 #endif
     jl_svecset(jl_methtable_type->types, 8, jl_int32_type); // uint32_t
-    jl_svecset(jl_method_type->types, 10, jl_method_instance_type);
+    jl_svecset(jl_method_type->types, 11, jl_method_instance_type);
     jl_svecset(jl_method_instance_type->types, 11, jl_voidpointer_type);
     jl_svecset(jl_method_instance_type->types, 12, jl_voidpointer_type);
     jl_svecset(jl_method_instance_type->types, 13, jl_voidpointer_type);

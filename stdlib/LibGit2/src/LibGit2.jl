@@ -978,7 +978,7 @@ end
 
     atexit() do
         # refcount zero, no objects to be finalized
-        if Threads.atomic_sub!(REFCOUNT, 1) >= 1
+        if Threads.atomic_sub!(REFCOUNT, 1) == 1
             ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
         end
     end

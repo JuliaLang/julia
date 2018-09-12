@@ -1377,3 +1377,10 @@ end
 @testset "getindex" begin
     @test getindex((typemax(UInt64)//one(UInt64):typemax(UInt64)//one(UInt64)), 1) == typemax(UInt64)//one(UInt64)
 end
+
+@testset "allocation of TwicePrecision call" begin
+    0:286.493442:360
+    0:286:360
+    @test @allocated(0:286.493442:360) == 0
+    @test @allocated(0:286:360) == 0
+end

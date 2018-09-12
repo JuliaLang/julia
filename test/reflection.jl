@@ -775,6 +775,18 @@ typeparam(::Type{T}, a::AbstractArray{T}) where T = 2
 @test typeparam(Float64, rand(2))  == 1
 @test typeparam(Int, rand(Int, 2)) == 2
 
+# prior ambiguities (issue #28899)
+uambig(::Union{Int,Nothing}) = 1
+uambig(::Union{Float64,Nothing}) = 2
+@test uambig(1) == 1
+@test uambig(1.0) == 2
+@test_throws MethodError uambig(nothing)
+m = which(uambig, Tuple{Int})
+Base.delete_method(m)
+@test_throws MethodError uambig(1)
+@test uambig(1.0) == 2
+@test uambig(nothing) == 2
+
 end
 
 # issue #26267

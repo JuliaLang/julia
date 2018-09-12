@@ -467,7 +467,7 @@ end
 ```
 
 the annotation of `c` harms performance. To write performant code involving types constructed at
-run-time, use the [function-barrier technique](@ref kernal-functions) discussed below, and ensure
+run-time, use the [function-barrier technique](@ref kernel-functions) discussed below, and ensure
 that the constructed type appears among the argument types of the kernel function so that the kernel
 operations are properly specialized by the compiler. For example, in the above snippet, as soon as
 `b` is constructed, it can be passed to another function `k`, the kernel. If, for example, function
@@ -576,7 +576,7 @@ optimize the body of the loop. There are several possible fixes:
   * Use an explicit conversion: `x = oneunit(Float64)`
   * Initialize with the first loop iteration, to `x = 1 / rand()`, then loop `for i = 2:10`
 
-## [Separate kernel functions (aka, function barriers)](@id kernal-functions)
+## [Separate kernel functions (aka, function barriers)](@id kernel-functions)
 
 Many functions follow a pattern of performing some set-up work, and then running many iterations
 to perform a core computation. Where possible, it is a good idea to put these core computations
@@ -675,7 +675,7 @@ does not (and cannot) predict its value in advance. This means that code using t
 function has to be conservative, checking the type on each access of `A`; such code will be very
 slow.
 
-Now, one very good way to solve such problems is by using the [function-barrier technique](@ref kernal-functions).
+Now, one very good way to solve such problems is by using the [function-barrier technique](@ref kernel-functions).
 However, in some cases you might want to eliminate the type-instability altogether. In such cases,
 one approach is to pass the dimensionality as a parameter, for example through `Val{T}()` (see
 ["Value types"](@ref)):
@@ -1231,7 +1231,7 @@ function mynorm(u::Vector)
     @fastmath @inbounds @simd for i in 1:n
         s += u[i]^2
     end
-    @fastmath @inbounds return sqrt(s/n)
+    @fastmath @inbounds return sqrt(s)
 end
 
 function main()

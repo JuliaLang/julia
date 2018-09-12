@@ -19,8 +19,9 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src, spvals::S
         ea = e.args
         if head === :call
             f = argextype(ea[1], src, spvals)
-            f = isa(f, Const) ? f.val : isType(f) ? f.parameters[1] : return false
-            f === return_type && return true
+            f = singleton_type(f)
+            f === nothing && return false
+            is_return_type(f) && return true
             contains_is(_PURE_BUILTINS, f) && return true
             contains_is(_PURE_OR_ERROR_BUILTINS, f) || return false
             rt === Bottom && return false
@@ -74,5 +75,5 @@ function is_known_call(e::Expr, @nospecialize(func), src::IncrementalCompact)
         return false
     end
     f = compact_exprtype(src, e.args[1])
-    return isa(f, Const) && f.val === func
+    return singleton_type(f) === func
 end

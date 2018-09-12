@@ -180,7 +180,7 @@ mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer) =
     mapreduce(f, op, itr; [init])
 
 Apply function `f` to each element in `itr`, and then reduce the result using the binary
-function `op`. If provided, `init` must be a neutral element for `op` that will be returne
+function `op`. If provided, `init` must be a neutral element for `op` that will be returned
 for empty collections. It is unspecified whether `init` is used for non-empty collections.
 In general, it will be necessary to provide `init` to work with empty collections.
 
