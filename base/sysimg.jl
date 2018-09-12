@@ -361,6 +361,10 @@ using .FastMath
 
 function deepcopy_internal end
 
+# enums
+include("Enums.jl")
+using .Enums
+
 # BigInts and BigFloats
 include("gmp.jl")
 using .GMP
@@ -392,10 +396,6 @@ include("printf.jl")
 
 # metaprogramming
 include("meta.jl")
-
-# enums
-include("Enums.jl")
-using .Enums
 
 # concurrency and parallelism
 include("channels.jl")
