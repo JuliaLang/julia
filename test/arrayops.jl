@@ -1729,7 +1729,7 @@ end
     @test a[1,2] == 7
     @test 2*CartesianIndex{3}(1,2,3) == CartesianIndex{3}(2,4,6)
 
-    R = CartesianIndices(map(Base.Slice, (2:5, 3:5)))
+    R = CartesianIndices(map(Base.IdentityUnitRange, (2:5, 3:5)))
     @test eltype(R) <: CartesianIndex{2}
     @test eltype(typeof(R)) <: CartesianIndex{2}
     @test eltype(CartesianIndices{2}) <: CartesianIndex{2}

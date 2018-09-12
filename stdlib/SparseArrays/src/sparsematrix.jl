@@ -42,7 +42,7 @@ size(S::SparseMatrixCSC) = (S.m, S.n)
 # underlying SparseMatrixCSC
 const SparseMatrixCSCView{Tv,Ti} =
     SubArray{Tv,2,SparseMatrixCSC{Tv,Ti},
-        Tuple{Base.Slice{Base.OneTo{Int},true},I}} where {I<:AbstractUnitRange}
+        Tuple{Base.Slice{Base.OneTo{Int}},I}} where {I<:AbstractUnitRange}
 const SparseMatrixCSCUnion{Tv,Ti} = Union{SparseMatrixCSC{Tv,Ti}, SparseMatrixCSCView{Tv,Ti}}
 
 getcolptr(S::SparseMatrixCSC)     = S.colptr

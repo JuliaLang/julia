@@ -298,7 +298,8 @@ _maybetail(t::Tuple) = tail(t)
 """
    Slice(indices)
 
-Represent an AbstractUnitRange of indices as a vector of the indices themselves.
+Represent an AbstractUnitRange of indices as a vector of the indices themselves,
+with special handling to signal they represent a complete slice of a dimension (:).
 
 Upon calling `to_indices`, Colons are converted to Slice objects to represent
 the indices over which the Colon spans. Slice objects are themselves unit
@@ -306,21 +307,13 @@ ranges with the same indices as those they wrap. This means that indexing into
 Slice objects with an integer always returns that exact integer, and they
 iterate over all the wrapped indices, even supporting offset indices.
 """
-struct Slice{T<:AbstractUnitRange, wholedim} <: AbstractUnitRange{Int}
+struct Slice{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
     indices::T
 end
-Slice(r::AbstractUnitRange) = Slice{typeof(r), false}(r)
-Slice(S::Slice) = Slice{typeof(S.indices), false}(S.indices)
-Slice(S::Slice{<:Any, false}) = S
-const WholeSlice{T} = Slice{T, true}
-WholeSlice(r::AbstractUnitRange) = Slice{typeof(r), true}(r)
-WholeSlice(S::Slice) = Slice{typeof(S.indices), true}(S.indices)
-WholeSlice(S::WholeSlice) = S
-# Slices are offset and thus have offset axes, so they are their own axes... but
-# we need to strip the wholedim marker because we don't know how they'll be used
-axes(S::Slice) = (Slice(S),)
-unsafe_indices(S::Slice) = (Slice(S),)
-axes1(S::Slice) = Slice(S)
+Slice(S::Slice) = S
+axes(S::Slice) = (IdentityUnitRange(S.indices),)
+unsafe_indices(S::Slice) = (IdentityUnitRange(S.indices),)
+axes1(S::Slice) = IdentityUnitRange(S.indices)
 axes(S::Slice{<:OneTo}) = (S.indices,)
 unsafe_indices(S::Slice{<:OneTo}) = (S.indices,)
 axes1(S::Slice{<:OneTo}) = S.indices
@@ -335,6 +328,38 @@ getindex(S::Slice, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundsche
 getindex(S::Slice, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::Slice) = print(io, "Base.Slice(", r.indices, ")")
 iterate(S::Slice, s...) = iterate(S.indices, s...)
+
+
+"""
+   IdentityUnitRange(range::AbstractUnitRange)
+
+Represent an AbstractUnitRange `range` as an offset vector such that `range[i] == i`.
+
+`IdentityUnitRange`s are frequently used as axes for offset arrays.
+"""
+struct IdentityUnitRange{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
+    indices::T
+end
+IdentityUnitRange(S::IdentityUnitRange) = S
+# IdentityUnitRanges are offset and thus have offset axes, so they are their own axes... but
+# we need to strip the wholedim marker because we don't know how they'll be used
+axes(S::IdentityUnitRange) = (S,)
+unsafe_indices(S::IdentityUnitRange) = (S,)
+axes1(S::IdentityUnitRange) = S
+axes(S::IdentityUnitRange{<:OneTo}) = (S.indices,)
+unsafe_indices(S::IdentityUnitRange{<:OneTo}) = (S.indices,)
+axes1(S::IdentityUnitRange{<:OneTo}) = S.indices
+
+first(S::IdentityUnitRange) = first(S.indices)
+last(S::IdentityUnitRange) = last(S.indices)
+size(S::IdentityUnitRange) = (length(S.indices),)
+length(S::IdentityUnitRange) = length(S.indices)
+unsafe_length(S::IdentityUnitRange) = unsafe_length(S.indices)
+getindex(S::IdentityUnitRange, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+getindex(S::IdentityUnitRange, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indices, ")")
+iterate(S::IdentityUnitRange, s...) = iterate(S.indices, s...)
 
 """
     LinearIndices(A::AbstractArray)

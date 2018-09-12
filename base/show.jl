@@ -1818,7 +1818,7 @@ dims2string(d) = isempty(d) ? "0-dimensional" :
 
 inds2string(inds) = join(map(_indsstring,inds), '×')
 _indsstring(i) = string(i)
-_indsstring(i::Slice) = string(i.indices)
+_indsstring(i::Union{IdentityUnitRange, Slice}) = string(i.indices)
 
 # anything array-like gets summarized e.g. 10-element Array{Int64,1}
 summary(io::IO, a::AbstractArray) = summary(io, a, axes(a))
@@ -1893,7 +1893,7 @@ function showarg(io::IO, v::SubArray, toplevel)
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(v))
 end
-showindices(io, ::Slice, inds...) =
+showindices(io, ::Union{Slice,IdentityUnitRange}, inds...) =
     (print(io, ", :"); showindices(io, inds...))
 showindices(io, ind1, inds...) =
     (print(io, ", ", ind1); showindices(io, inds...))

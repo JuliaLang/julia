@@ -489,7 +489,7 @@ using .Main.OffsetArrays
 
 @testset "offset axes" begin
     s = Base.Slice(-3:3)'
-    @test axes(s) === (Base.OneTo(1), Base.Slice(-3:3))
+    @test axes(s) === (Base.OneTo(1), Base.IdentityUnitRange(-3:3))
     @test collect(LinearIndices(s)) == reshape(1:7, 1, 7)
     @test collect(CartesianIndices(s)) == reshape([CartesianIndex(1,i) for i = -3:3], 1, 7)
     @test s[1] == -3

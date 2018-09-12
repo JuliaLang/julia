@@ -19,7 +19,6 @@ import .Base:
     sort!,
     issorted,
     sortperm,
-    Slice,
     to_indices
 
 export # also exported by Base

@@ -505,7 +505,7 @@ checkindex(::Type{Bool}, inds::AbstractUnitRange, i) =
     throw(ArgumentError("unable to check bounds for indices of type $(typeof(i))"))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::Real) = (first(inds) <= i) & (i <= last(inds))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Colon) = true
-checkindex(::Type{Bool}, inds::AbstractUnitRange, ::WholeSlice) = true
+checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Slice) = true
 function checkindex(::Type{Bool}, inds::AbstractUnitRange, r::AbstractRange)
     @_propagate_inbounds_meta
     isempty(r) | (checkindex(Bool, inds, first(r)) & checkindex(Bool, inds, last(r)))
@@ -1739,7 +1739,7 @@ end
 
 nextL(L, l::Integer) = L*l
 nextL(L, r::AbstractUnitRange) = L*unsafe_length(r)
-nextL(L, r::WholeSlice) = L*unsafe_length(r.indices)
+nextL(L, r::Slice) = L*unsafe_length(r.indices)
 offsetin(i, l::Integer) = i-1
 offsetin(i, r::AbstractUnitRange) = i-first(r)
 
@@ -1901,7 +1901,7 @@ function mapslices(f, A::AbstractArray; dims)
     idx = Any[first(ind) for ind in axes(A)]
     itershape   = tuple(dimsA[otherdims]...)
     for d in dims
-        idx[d] = WholeSlice(axes(A, d))
+        idx[d] = Slice(axes(A, d))
     end
 
     # Apply the function to the first slice in order to determine the next steps
