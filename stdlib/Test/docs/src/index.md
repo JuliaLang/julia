@@ -231,7 +231,7 @@ that `Test` provides.
 Defining a basic `AbstractTestSet` subtype might look like:
 
 ```julia
-import Test: record, finish
+import Test: Test, record, finish
 using Test: AbstractTestSet, Result, Pass, Fail, Error
 using Test: get_testset_depth, get_testset
 struct CustomTestSet <: Test.AbstractTestSet
