@@ -181,6 +181,8 @@ endif
 $(eval $(call symlink_system_library,libgmp,GMP))
 $(eval $(call symlink_system_library,libmpfr,MPFR))
 $(eval $(call symlink_system_library,libmbedtls,MBEDTLS))
+$(eval $(call symlink_system_library,libmbedcrypto,MBEDTLS))
+$(eval $(call symlink_system_library,libmbedx509,MBEDTLS))
 $(eval $(call symlink_system_library,libssh2,LIBSSH2))
 $(eval $(call symlink_system_library,libcurl,CURL))
 $(eval $(call symlink_system_library,libgit2,LIBGIT2))
