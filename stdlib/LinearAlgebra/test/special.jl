@@ -120,7 +120,7 @@ end
     Dense = rand(20, 20)
     mats = [UpTri, LoTri, Diag, Tridiag, UpBi, LoBi, Sym, Dense]
 
-    for op in (+, -)
+    for op in (+,-)
         for A in mats
             for B in mats
                 @test (op)(A, B) ≈ (op)(Matrix(A), Matrix(B)) ≈ Matrix((op)(A, B))

@@ -111,7 +111,14 @@ for op in (:+, :-)
             end
         end
     end
+    # todo add the others that had regressions
 end
+
++(A::Bidiagonal, B::Diagonal) = Bidiagonal(broadcast(+, A.dv, B.diag), A.ev, A.uplo)
+-(A::Bidiagonal, B::Diagonal) = Bidiagonal(broadcast(-, A.dv, B.diag), A.ev, A.uplo)
++(A::Diagonal, B::Bidiagonal) = Bidiagonal(broadcast(+, A.diag, B.dv), B.ev, B.uplo)
+-(A::Diagonal, B::Bidiagonal) = Bidiagonal(broadcast(-, A.diag, B.dv), -B.ev, B.uplo)
+
 
 rmul!(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
     (B = adjB.parent; rmul!(full!(A), adjoint(B)))
