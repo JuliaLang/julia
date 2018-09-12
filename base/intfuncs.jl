@@ -440,7 +440,7 @@ function ndigits0znb(x::Integer, b::Integer)
     return d
 end
 
-ndigits0znb(x::Unsigned, b::Integer) = ndigits0znb(signed(x), b)
+ndigits0znb(x::Unsigned, b::Integer) = ndigits0znb(Signed(x), b)
 ndigits0znb(x::Bool, b::Integer) = x % Int
 
 # The suffix "pb" stands for "positive base"

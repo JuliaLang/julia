@@ -139,6 +139,9 @@ end
     @test iszero([Base.ndigits0z(false, b) for b in [-20:-2;2:20]])
     @test all(n -> n == 1, Base.ndigits0z(true, b) for b in [-20:-2;2:20])
     @test all(n -> n == 1, ndigits(x, base=b) for b in [-20:-2;2:20] for x in [true, false])
+
+    # with negative bases, we don't support yet unsigned integers which can't be converted to Signed
+    @test_throws InexactError ndigits(typemax(UInt64), base=-2)
 end
 @testset "bin/oct/dec/hex/bits" begin
     @test string(UInt32('3'), base = 2) == "110011"
