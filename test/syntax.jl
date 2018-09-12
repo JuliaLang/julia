@@ -1718,3 +1718,13 @@ f28900(; kwarg) = kwarg
 let g = @foo28900 f28900(kwarg = x->2x)
     @test g(10) == 20
 end
+
+# issue #26037
+x26037() = 10
+function test_26037()
+    [x26037() for _ in 1:3]
+    for x26037 in 1:3
+       x26037 += x26037
+    end
+end
+@test test_26037() === nothing  # no UndefVarError
