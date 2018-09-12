@@ -456,7 +456,7 @@ shell> cat ~/.julia/packages/MbedTLS/h1Vu/deps/build.log
 ## Creating your own projects
 
 So far we have added packages to the default project at `~/.julia/environments/v1.0`, it is, however, easy to create other, independent, projects.
-It should be pointed out if two projects uses the same package at the same version, the content of this package is not duplicated.
+It should be pointed out if two projects use the same package at the same version, the content of this package is not duplicated.
 In order to create a new project, create a directory for it and then activate that directory to make it the "active project" which package operations manipulate:
 
 ```
