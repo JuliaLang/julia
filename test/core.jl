@@ -6786,3 +6786,14 @@ let a = [1,2,3,4,missing,6,7]
     foo(x) = x > 0 ? x : missing
     @test_throws TypeError foo(missing)
 end
+
+# issue #29152
+function f29152()
+    try
+        g29152()
+    finally
+    end
+end
+g29152() = (_true29152 ? error() : _true29152 ? 0 : false)
+_true29152 = true;
+@test_throws ErrorException f29152()
