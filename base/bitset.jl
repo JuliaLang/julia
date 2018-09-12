@@ -321,15 +321,10 @@ end
 
 length(s::BitSet) = bitcount(s.bits) # = mapreduce(count_ones, +, s.bits; init=0)
 
-function show(io::IO, s::BitSet)
-    print(io, "BitSet([")
-    first = true
-    for n in s
-        !first && print(io, ", ")
-        print(io, n)
-        first = false
-    end
-    print(io, "])")
+function show(io::IO, bs::BitSet)
+    print(io, "BitSet(")
+    show_vector(io,bs)
+    print(io, ')')
 end
 
 function _check0(a::Vector{UInt64}, b::Int, e::Int)
