@@ -6193,10 +6193,18 @@ static std::unique_ptr<Module> emit_function(
             // If the val is null, we can ignore the store.
             // The middle end guarantees that the value from this
             // upsilon node is not dynamically observed.
+            jl_varinfo_t &vi = ctx.phic_slots[upsilon_to_phic[cursor+1]];
             if (val) {
                 jl_cgval_t rval_info = emit_expr(ctx, val);
-                jl_varinfo_t &vi = ctx.phic_slots[upsilon_to_phic[cursor+1]];
                 emit_varinfo_assign(ctx, vi, rval_info);
+            } else if (vi.pTIndex) {
+                // We don't care what the contents of the variable are, but it
+                // does need to satisfy the union invariants (i.e. inbounds
+                // tindex).
+                ctx.builder.CreateStore(
+                    vi.boxroot ? ConstantInt::get(T_int8, 0x80) :
+                                 ConstantInt::get(T_int8, 0x01),
+                    vi.pTIndex, true);
             }
             find_next_stmt(cursor + 1);
             continue;
