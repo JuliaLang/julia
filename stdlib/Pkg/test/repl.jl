@@ -462,6 +462,10 @@ temp_pkg_dir() do project_path; cd(project_path) do
         @test apply_completion("add ./tes") == (Sys.iswindows() ? "add ./testdir\\\\" : "add ./testdir/")
         c, r = test_complete("dev ./")
         @test (Sys.iswindows() ? ("testdir\\\\" in c) : ("testdir/" in c))
+        # dont complete files
+        touch("README.md")
+        c, r = test_complete("add RE")
+        @test !("README.md" in c)
     end # testset
 end end
 

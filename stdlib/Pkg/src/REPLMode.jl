@@ -764,7 +764,8 @@ end
 
 function complete_local_path(s, i1, i2)
     cmp = REPL.REPLCompletions.complete_path(s, i2)
-    [REPL.REPLCompletions.completion_text(p) for p in cmp[1]], cmp[2], !isempty(cmp[1])
+    completions = filter!(isdir, [REPL.REPLCompletions.completion_text(p) for p in cmp[1]])
+    return completions, cmp[2], !isempty(completions)
 end
 
 function complete_installed_package(s, i1, i2, project_opt)
