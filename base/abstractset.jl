@@ -3,6 +3,13 @@
 eltype(::Type{<:AbstractSet{T}}) where {T} = @isdefined(T) ? T : Any
 sizehint!(s::AbstractSet, n) = nothing
 
+function show(io::IO, s::AbstractSet)
+    print(io, string(typeof(s).name))
+    print(io,'(')
+    show_vector(io, s)
+    print(io, ')')
+end
+
 """
     union(s, itrs...)
     ∪(s, itrs...)
