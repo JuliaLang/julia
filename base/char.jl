@@ -51,6 +51,15 @@ Char
 (::Type{T})(x::T) where {T<:AbstractChar} = x
 
 """
+    ncodeunits(c::Char) -> Int
+
+Return the number of code units required to encode a character as UTF-8.
+This is the number of bytes which will be printed if the character is written
+to an output stream, or `ncodeunits(string(c))` but computed efficiently.
+"""
+ncodeunits(c::Char) = write(devnull, c) # this is surprisingly efficient
+
+"""
     codepoint(c::AbstractChar) -> Integer
 
 Return the Unicode codepoint (an unsigned integer) corresponding
@@ -197,7 +206,6 @@ hash(x::Char, h::UInt) =
     hash_uint64(((reinterpret(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
 
 first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8
-codelen(c::Char) = 4 - (trailing_zeros(0xff000000 | reinterpret(UInt32, c)) >> 3)
 
 # fallbacks:
 isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))

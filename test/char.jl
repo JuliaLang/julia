@@ -256,3 +256,26 @@ Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
     @test_throws MethodError write(IOBuffer(), ASCIIChar('x'))
     @test_throws MethodError read(IOBuffer('x'), ASCIIChar)
 end
+
+@testset "ncodeunits(::Char)" begin
+    # valid encodings
+    @test ncodeunits('\0')       == 1
+    @test ncodeunits('\x1')      == 1
+    @test ncodeunits('\x7f')     == 1
+    @test ncodeunits('\u80')     == 2
+    @test ncodeunits('\uff')     == 2
+    @test ncodeunits('\u7ff')    == 2
+    @test ncodeunits('\u800')    == 3
+    @test ncodeunits('\uffff')   == 3
+    @test ncodeunits('\U10000')  == 4
+    @test ncodeunits('\U10ffff') == 4
+    # invalid encodings
+    @test ncodeunits(reinterpret(Char, 0x80_00_00_00)) == 1
+    @test ncodeunits(reinterpret(Char, 0x81_00_00_00)) == 1
+    @test ncodeunits(reinterpret(Char, 0x80_80_00_00)) == 2
+    @test ncodeunits(reinterpret(Char, 0x80_01_00_00)) == 2
+    @test ncodeunits(reinterpret(Char, 0x80_00_80_00)) == 3
+    @test ncodeunits(reinterpret(Char, 0x80_00_01_00)) == 3
+    @test ncodeunits(reinterpret(Char, 0x80_00_00_80)) == 4
+    @test ncodeunits(reinterpret(Char, 0x80_00_00_01)) == 4
+end
