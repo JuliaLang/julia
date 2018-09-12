@@ -57,7 +57,9 @@ The 32-bit (i686) binary will run on either a 32-bit and 64-bit operating system
 The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise refuse to launch.
 
  1. [Download](https://julialang.org/downloads) the latest version of Julia.
-    Extract the binary to a reasonable destination folder, e.g. `C:\julia`.
+    Extract the binary to a reasonable destination folder, e.g. `C:\julia`. By default, 
+    Julia will installed into `C:\Users\YOURNAME\AppData\Local\Julia-1.0.0\bin`, You can put this path
+    to windows PATH env variable. YOURNAME was your windows user name.
 
  2. Double-click the `julia` shortcut to launch Julia.
 
