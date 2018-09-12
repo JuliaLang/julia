@@ -196,6 +196,9 @@ isless(x::Char, y::Char) = reinterpret(UInt32, x) < reinterpret(UInt32, y)
 hash(x::Char, h::UInt) =
     hash_uint64(((reinterpret(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
 
+first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8
+codelen(c::Char) = 4 - (trailing_zeros(0xff000000 | reinterpret(UInt32, c)) >> 3)
+
 # fallbacks:
 isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))
 ==(x::AbstractChar, y::AbstractChar) = Char(x) == Char(y)

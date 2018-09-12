@@ -67,6 +67,26 @@ rehash!(s::Set) = (rehash!(s.dict); s)
 
 iterate(s::Set, i...)       = iterate(KeySet(s.dict), i...)
 
+# In case the size(s) is smaller than size(t) its more efficient to iterate through
+# elements of s instead and only delete the ones also contained in t.
+# The threshold for this decision boils down to a tradeoff between
+# size(s) * cost(in() + delete!()) ≶ size(t) * cost(delete!())
+# Empirical observations on Ints point towards a threshold of 0.8.
+# To be on the safe side (e.g. cost(in) >>> cost(delete!) ) a
+# conservative threshold of 0.5 was chosen.
+function setdiff!(s::Set, t::Set)
+    if 2 * length(s) < length(t)
+        for x in s
+            x in t && delete!(s, x)
+        end
+    else
+        for x in t
+            delete!(s, x)
+        end
+    end
+    return s
+end
+
 """
     unique(itr)
 
