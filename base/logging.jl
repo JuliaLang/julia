@@ -496,7 +496,7 @@ with_logger(f::Function, logger::AbstractLogger) = with_logstate(f, LogState(log
     current_logger()
 
 Return the logger for the current task, or the global logger if none is
-is attached to the task.
+attached to the task.
 """
 current_logger() = current_logstate().logger
 
