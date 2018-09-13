@@ -114,11 +114,39 @@ for op in (:+, :-)
     # todo add the others that had regressions
 end
 
-+(A::Bidiagonal, B::Diagonal) = Bidiagonal(broadcast(+, A.dv, B.diag), A.ev, A.uplo)
--(A::Bidiagonal, B::Diagonal) = Bidiagonal(broadcast(-, A.dv, B.diag), A.ev, A.uplo)
-+(A::Diagonal, B::Bidiagonal) = Bidiagonal(broadcast(+, A.diag, B.dv), B.ev, B.uplo)
--(A::Diagonal, B::Bidiagonal) = Bidiagonal(broadcast(-, A.diag, B.dv), -B.ev, B.uplo)
+# specialized +/- for structured matrices. If these are removed, it falls
+# back to broadcasting which has ~2-10x speed regressions.
+# For the other structure matrix pairs, broadcasting works well.
 
++(A::Bidiagonal, B::Diagonal) = Bidiagonal(A.dv+B.diag, A.ev, A.uplo)
+-(A::Bidiagonal, B::Diagonal) = Bidiagonal(A.dv-B.diag, A.ev, A.uplo)
++(A::Diagonal, B::Bidiagonal) = Bidiagonal(A.diag+B.dv, B.ev, B.uplo)
+-(A::Diagonal, B::Bidiagonal) = Bidiagonal(A.diag-B.dv, -B.ev, B.uplo)
+
++(A::Diagonal, B::SymTridiagonal) = SymTridiagonal(A.diag+B.dv, B.ev)
+-(A::Diagonal, B::SymTridiagonal) = SymTridiagonal(A.diag-B.dv, -B.ev)
++(A::SymTridiagonal, B::Diagonal) = SymTridiagonal(A.dv+B.diag, A.ev)
+-(A::SymTridiagonal, B::Diagonal) = SymTridiagonal(A.dv-B.diag, A.ev)
+
++(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl+B.ev, A.d+B.dv, A.du+B.ev)
+-(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl-B.ev, A.d-B.dv, A.du-B.ev)
++(A::SymTridiagonal, B::Tridiagonal) = Tridiagonal(A.ev+B.dl, A.dv+B.d, A.ev+B.du)
+-(A::SymTridiagonal, B::Tridiagonal) = Tridiagonal(A.ev-B.dl, A.dv-B.d, A.ev-B.du)
+
++(A::Diagonal, B::Tridiagonal) = Tridiagonal(B.dl, A.diag+B.d, B.du)
+-(A::Diagonal, B::Tridiagonal) = Tridiagonal(-B.dl, A.diag-B.d, -B.du)
++(A::Tridiagonal, B::Diagonal) = Tridiagonal(A.dl, A.d+B.diag, A.du)
+-(A::Tridiagonal, B::Diagonal) = Tridiagonal(A.dl, A.d-B.diag, A.du)
+
++(A::Bidiagonal, B::Tridiagonal) = Tridiagonal((A.uplo == 'U' ? (B.dl, A.dv+B.d, A.ev+B.du) : (A.ev+B.dl, A.dv+B.d, B.du))...)
+-(A::Bidiagonal, B::Tridiagonal) = Tridiagonal((A.uplo == 'U' ? (-B.dl, A.dv-B.d, A.ev-B.du) : (A.ev-B.dl, A.dv-B.d, -B.du))...)
++(A::Tridiagonal, B::Bidiagonal) = Tridiagonal((B.uplo == 'U' ? (A.dl, A.d+B.dv, A.du+B.ev) : (A.dl+B.ev, A.d+B.dv, A.du))...)
+-(A::Tridiagonal, B::Bidiagonal) = Tridiagonal((B.uplo == 'U' ? (A.dl, A.d-B.dv, A.du-B.ev) : (A.dl-B.ev, A.d-B.dv, A.du))...)
+
++(A::Bidiagonal, B::SymTridiagonal) = Tridiagonal((A.uplo == 'U' ? (B.ev, A.dv+B.dv, A.ev+B.ev) : (A.ev+B.ev, A.dv+B.dv, B.ev))...)
+-(A::Bidiagonal, B::SymTridiagonal) = Tridiagonal((A.uplo == 'U' ? (-B.ev, A.dv-B.dv, A.ev-B.ev) : (A.ev-B.ev, A.dv-B.dv, -B.ev))...)
++(A::SymTridiagonal, B::Bidiagonal) = Tridiagonal((B.uplo == 'U' ? (A.ev, A.dv+B.dv, A.ev+B.ev) : (A.ev+B.ev, A.dv+B.dv, A.ev))...)
+-(A::SymTridiagonal, B::Bidiagonal) = Tridiagonal((B.uplo == 'U' ? (A.ev, A.dv-B.dv, A.ev-B.ev) : (A.ev-B.ev, A.dv-B.dv, A.ev))...)
 
 rmul!(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
     (B = adjB.parent; rmul!(full!(A), adjoint(B)))
