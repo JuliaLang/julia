@@ -139,6 +139,15 @@ end
     @test iszero([Base.ndigits0z(false, b) for b in [-20:-2;2:20]])
     @test all(n -> n == 1, Base.ndigits0z(true, b) for b in [-20:-2;2:20])
     @test all(n -> n == 1, ndigits(x, base=b) for b in [-20:-2;2:20] for x in [true, false])
+
+    # issue #29148
+    @test ndigits(typemax(UInt64), base=-2) == ndigits(big(typemax(UInt64)), base=-2)
+    for T in Base.BitInteger_types
+        n = rand(T)
+        b = -rand(2:100)
+        @test ndigits(n, base=b) == ndigits(big(n), base=b)
+    end
+
 end
 @testset "bin/oct/dec/hex/bits" begin
     @test string(UInt32('3'), base = 2) == "110011"
