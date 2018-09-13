@@ -1,4 +1,4 @@
-commit c5fb7f3e573645787ea765511fa8c554ea176de1
+commit 11e52448390e0d8a80565ccd1ca4865df7787f21
 Author: Keno Fischer <keno@juliacomputing.com>
 Date:   Sun Sep 9 16:45:35 2018 -0400
 
@@ -90,10 +90,20 @@ index 5d806fe60b8..7a82b299301 100644
    CCIfType<[i1, i8, i16, v1i1], CCPromoteToType<i32>>,
  
 diff --git a/lib/Target/X86/X86ISelLowering.cpp b/lib/Target/X86/X86ISelLowering.cpp
-index 86e71cba87b..c922aaad63f 100644
+index 86e71cba87b..412d015824b 100644
 --- a/lib/Target/X86/X86ISelLowering.cpp
 +++ b/lib/Target/X86/X86ISelLowering.cpp
-@@ -3540,13 +3540,27 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
+@@ -3062,7 +3062,8 @@ SDValue X86TargetLowering::LowerFormalArguments(
+     }
+ 
+     // If value is passed via pointer - do a load.
+-    if (VA.getLocInfo() == CCValAssign::Indirect)
++    if (VA.getLocInfo() == CCValAssign::Indirect &&
++        !Ins[I].Flags.isByVal())
+       ArgValue =
+           DAG.getLoad(VA.getValVT(), dl, Chain, ArgValue, MachinePointerInfo());
+ 
+@@ -3540,13 +3541,27 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
        Arg = DAG.getBitcast(RegVT, Arg);
        break;
      case CCValAssign::Indirect: {
