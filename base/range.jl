@@ -689,9 +689,11 @@ function getindex(r::LinRange, s::OrdinalRange{<:Integer})
     return LinRange(vfirst, vlast, length(s))
 end
 
-show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
-show(io::IO, r::AbstractUnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
-show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
+show(io::IO, r::AbstractRange) = print(io, typeof(r), '(', repr(first(r)), ':', repr(step(r)), ':', repr(last(r)), ')')
+show(io::IO, r::AbstractUnitRange) = print(io, typeof(r), '(', repr(first(r)), ':', repr(last(r)), ')')
+show(io::IO, r::Union{StepRange, StepRangeLen}) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
+show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
+show(io::IO, r::OneTo) = print(io, typeof(r), '(', repr(last(r)), ')')
 
 ==(r::T, s::T) where {T<:AbstractRange} =
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
