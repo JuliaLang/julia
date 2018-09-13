@@ -129,27 +129,41 @@ Base.unsafe_convert(::Type{Ref{BigFloat}}, x::Ptr{BigFloat}) = x
     return convert(Ptr{BigFloat}, Base.pointer_from_objref(x))
 end
 
-
 """
-    BigFloat(x)
+    BigFloat(x::Union{Real, AbstractString} [, rounding::RoundingMode=rounding(BigFloat)]; [precision::Integer=precision(BigFloat)])
 
-Create an arbitrary precision floating point number. `x` may be an [`Integer`](@ref), a
-[`Float64`](@ref) or a [`BigInt`](@ref). The usual mathematical operators are defined for
-this type, and results are promoted to a [`BigFloat`](@ref).
+Create an arbitrary precision floating point number from `x`, with precision
+`precision`. The `rounding` argument specifies the direction in which the result should be
+rounded if the conversion cannot be done exactly. If not provided, these are set by the current global values.
 
-Note that because decimal literals are converted to floating point numbers when parsed,
-`BigFloat(2.1)` may not yield what you expect. You may instead prefer to initialize
-constants from strings via [`parse`](@ref), or using the `big` string literal.
+`BigFloat(x::Real)` is the same as `convert(BigFloat,x)`, except if `x` itself is already
+`BigFloat`, in which case it will return a value with the precision set to the current
+global precision; `convert` will always return `x`.
+
+`BigFloat(x::AbstractString)` is identical to [`parse`](@ref), but is provided for
+convenience since decimal literals are converted to floating point numbers when parsed.
+`BigFloat(2.1)` may not yield what you expect.
 
 ```jldoctest
-julia> BigFloat(2.1)
+julia> BigFloat(2.1) # 2.1 here is a Float64
 2.100000000000000088817841970012523233890533447265625
 
-julia> big"2.1"
+julia> BigFloat("2.1") # the closest BigFloat to 2.1
 2.099999999999999999999999999999999999999999999999999999999999999999999999999986
+
+julia> BigFloat("2.1", RoundUp)
+2.100000000000000000000000000000000000000000000000000000000000000000000000000021
+
+julia> BigFloat("2.1", RoundUp, precision=128)
+2.100000000000000000000000000000000000007
 ```
+
+# See also
+- [`@big_str`](@ref)
+- [`rounding`](@ref) and [`setrounding`](@ref)
+- [`precision`](@ref) and [`setprecision`](@ref)
 """
-BigFloat(x)
+BigFloat(x, r::RoundingMode)
 
 widen(::Type{Float64}) = BigFloat
 widen(::Type{BigFloat}) = BigFloat
@@ -213,6 +227,9 @@ function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precisio
     err == 0 ? z : nothing
 end
 
+BigFloat(x::AbstractString, r::MPFRRoundingMode=ROUNDING_MODE[]; precision=precision(BigFloat)) =
+    parse(BigFloat, x; precision=precision, rounding=r)
+
 Rational(x::BigFloat) = convert(Rational{BigInt}, x)
 AbstractFloat(x::BigInt) = BigFloat(x)
 
@@ -220,7 +237,7 @@ float(::Type{BigInt}) = BigFloat
 
 BigFloat(x::Real, r::RoundingMode; precision::Integer=precision(BigFloat)) =
     BigFloat(x, convert(MPFRRoundingMode, r); precision=precision)
-BigFloat(x::String, r::RoundingMode; precision::Integer=precision(BigFloat)) =
+BigFloat(x::AbstractString, r::RoundingMode; precision::Integer=precision(BigFloat)) =
     BigFloat(x, convert(MPFRRoundingMode, r); precision=precision)
 
 # TODO: deprecate in 2.0
@@ -230,15 +247,6 @@ BigFloat(x, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision
 
 BigFloat(x::Real, prec::Int) = BigFloat(x; precision=prec)
 BigFloat(x::Real, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
-
-
-"""
-    BigFloat(x::String)
-
-Create a representation of the string `x` as a [`BigFloat`](@ref).
-"""
-BigFloat(x::AbstractString, r::MPFRRoundingMode=ROUNDING_MODE[]; precision=precision(BigFloat)) = parse(BigFloat, x; precision=precision, rounding=r)
-
 
 ## BigFloat -> Integer
 unsafe_cast(T, x::BigFloat, r::RoundingMode) = unsafe_cast(T, x, convert(MPFRRoundingMode, r))
