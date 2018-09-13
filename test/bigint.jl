@@ -425,3 +425,10 @@ end
     @test c ∈ (-1, 0, 1)
     @test c isa Int
 end
+
+@testset "generic conversion from Integer" begin
+    x = rand(Int128)
+    @test BigInt(x) % Int128 === x
+    y = rand(UInt128)
+    @test BigInt(y) % UInt128 === y
+end
