@@ -4,6 +4,7 @@ eltype(::Type{<:AbstractSet{T}}) where {T} = @isdefined(T) ? T : Any
 sizehint!(s::AbstractSet, n) = nothing
 
 function show(io::IO, s::AbstractSet)
+    s isa BitSet && isempty(s) && return print(io, "BitSet([])")
     print(io, string(typeof(s).name))
     print(io,'(')
     show_vector(io, s)
