@@ -2619,18 +2619,6 @@ static int args_morespecific_fix1(jl_value_t *a, jl_value_t *b, int swap, jl_typ
     return ret;
 }
 
-static int partially_morespecific(jl_value_t *a, jl_value_t *b, int invariant, jl_typeenv_t *env)
-{
-    if (jl_is_uniontype(b)) {
-        jl_uniontype_t *u = (jl_uniontype_t*)b;
-        if (type_morespecific_(a, u->a, invariant, env) ||
-            type_morespecific_(a, u->b, invariant, env))
-            return 1;
-        return 0;
-    }
-    return type_morespecific_(a, b, invariant, env);
-}
-
 static int count_occurs(jl_value_t *t, jl_tvar_t *v)
 {
     if (t == (jl_value_t*)v)
@@ -2702,9 +2690,18 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
     if (jl_is_uniontype(a)) {
         // Union a is more specific than b if some element of a is more specific than b, but
         // not vice-versa.
+        if (sub_msp(b, a, env))
+            return 0;
         jl_uniontype_t *u = (jl_uniontype_t*)a;
-        return ((partially_morespecific(u->a, b, invariant, env) || partially_morespecific(u->b, b, invariant, env)) &&
-                !partially_morespecific(b, a, invariant, env));
+        if (type_morespecific_(u->a, b, invariant, env) || type_morespecific_(u->b, b, invariant, env)) {
+            if (jl_is_uniontype(b)) {
+                jl_uniontype_t *v = (jl_uniontype_t*)b;
+                if (type_morespecific_(v->a, a, invariant, env) || type_morespecific_(v->b, a, invariant, env))
+                    return 0;
+            }
+            return 1;
+        }
+        return 0;
     }
 
     if (jl_is_type_type(a) && !invariant) {
