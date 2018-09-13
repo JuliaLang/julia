@@ -424,8 +424,12 @@ subsections, and arrays of booleans to select elements at their `true` indices.
 
 If `X` is an array, it must have the same number of elements as the product of the lengths of
 the indices: `prod(length(I_1), length(I_2), ..., length(I_n))`. The value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]`
-of `A` is overwritten with the value `X[i_1, i_2, ..., i_n]`. If `X` is not an array, its value
-is written to all referenced locations of `A`.
+of `A` is overwritten with the value `X[i_1, i_2, ..., i_n]`. If `X` is a scalar, use the
+element-wise assignment operator `.=` to write the value to all referenced locations of `A`:
+
+```
+A[I_1, I_2, ..., I_n] .= X
+```
 
 Just as in [Indexing](@ref man-array-indexing), the `end` keyword may be used
 to represent the last index of each dimension within the indexing brackets, as
