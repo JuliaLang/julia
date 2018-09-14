@@ -710,9 +710,9 @@ The elementwise pipe operator `.|>` is a useful combination of the chaining/pipi
 ```jldoctest
 julia> ["a", "list", "of", "strings"] .|> [uppercase, reverse, titlecase, length]
 4-element Array{Any,1}:
-  "A"   
+  "A"
   "tsil"
-  "Of"  
+  "Of"
  7
 ```
 
