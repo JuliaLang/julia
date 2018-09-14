@@ -3,6 +3,8 @@
 eltype(::Type{<:AbstractSet{T}}) where {T} = @isdefined(T) ? T : Any
 sizehint!(s::AbstractSet, n) = nothing
 
+copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
+
 """
     union(s, itrs...)
     ∪(s, itrs...)

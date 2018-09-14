@@ -136,6 +136,17 @@ end
     @test !in(100,c)
     @test !in(200,s)
 end
+
+@testset "copy!" begin
+    for S = (Set, BitSet)
+        s = S([1, 2])
+        for a = ([1], UInt[1], [3, 4, 5], UInt[3, 4, 5])
+            @test s === copy!(s, Set(a)) == S(a)
+            @test s === copy!(s, BitSet(a)) == S(a)
+        end
+    end
+end
+
 @testset "sizehint, empty" begin
     s = Set([1])
     @test isequal(sizehint!(s, 10), Set([1]))

@@ -146,13 +146,8 @@ The default is to return an empty `Dict`.
 empty(a::AbstractDict) = empty(a, keytype(a), valtype(a))
 empty(a::AbstractDict, ::Type{V}) where {V} = empty(a, keytype(a), V) # Note: this is the form which makes sense for `Vector`.
 
-function copy(a::AbstractDict)
-    b = empty(a)
-    for (k,v) in a
-        b[k] = v
-    end
-    return b
-end
+copy(a::AbstractDict) = merge!(empty(a), a)
+copy!(dst::AbstractDict, src::AbstractDict) = merge!(empty!(dst), src)
 
 """
     merge!(d::AbstractDict, others::AbstractDict...)
