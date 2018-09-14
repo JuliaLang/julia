@@ -17,7 +17,7 @@ symbol `sym`.
 """
 struct Irrational{sym} <: AbstractIrrational end
 
-show(io::IO, x::Irrational{sym}) where {sym} = print(io, "$sym = $(string(float(x))[1:15])...")
+show(io::IO, x::Irrational{sym}) where {sym} = print(io, "$sym = $(string(float(x))[1:min(end,15)])...")
 
 promote_rule(::Type{<:AbstractIrrational}, ::Type{Float16}) = Float16
 promote_rule(::Type{<:AbstractIrrational}, ::Type{Float32}) = Float32
@@ -30,24 +30,25 @@ Float16(x::AbstractIrrational) = Float16(Float32(x))
 Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
 
 @pure function Rational{T}(x::AbstractIrrational) where T<:Integer
-    o = precision(BigFloat)
-    p = 256
-    while true
-        setprecision(BigFloat, p)
+    prec_orig = precision(BigFloat)
+    for prec in Iterators.countfrom(256, 32)
+        setprecision(BigFloat, prec)
         bx = BigFloat(x)
         r = rationalize(T, bx, tol=0)
         if abs(BigFloat(r) - bx) > eps(bx)
-            setprecision(BigFloat, o)
+            setprecision(BigFloat, prec_orig)
             return r
         end
-        p += 32
     end
 end
+
 (::Type{Rational{BigInt}})(x::AbstractIrrational) = throw(ArgumentError("Cannot convert an AbstractIrrational to a Rational{BigInt}: use rationalize(Rational{BigInt}, x) instead"))
 
 @pure function (t::Type{T})(x::AbstractIrrational, r::RoundingMode) where T<:Union{Float32,Float64}
-    setprecision(BigFloat, 256) do
-        T(BigFloat(x), r)
+    for prec in Iterators.countfrom(256, 32)
+        bx = BigFloat(x, prec)
+        u = T(bx, r)
+        u != bx && return u
     end
 end
 
@@ -76,12 +77,23 @@ end
 <(x::Float32, y::AbstractIrrational) = x <= Float32(y,RoundDown)
 <(x::AbstractIrrational, y::Float16) = Float32(x,RoundUp) <= y
 <(x::Float16, y::AbstractIrrational) = x <= Float32(y,RoundDown)
-<(x::AbstractIrrational, y::BigFloat) = setprecision(precision(y)+32) do
-    big(x) < y
+
+function cmp(x::BigFloat, y::AbstractIrrational)
+    if cmp(x, Float64(y, RoundDown)) < 0
+        return -1
+    elseif cmp(x, Float64(y, RoundUp)) > 0
+        return +1
+    else
+        for prec in Iterators.countfrom(precision(x), 32)
+            c = cmp(x, BigFloat(y, prec))
+            c != 0 && return c
+        end
+    end
 end
-<(x::BigFloat, y::AbstractIrrational) = setprecision(precision(x)+32) do
-    x < big(y)
-end
+cmp(x::AbstractIrrational, y::BigFloat) = -cmp(y,x)
+
+<(x::AbstractIrrational, y::BigFloat)    = !isnan(y) && cmp(y,x) > 0
+<(x::BigFloat, y::AbstractIrrational)    = !isnan(x) && cmp(x,y) < 0
 
 <=(x::AbstractIrrational, y::AbstractFloat) = x < y
 <=(x::AbstractFloat, y::AbstractIrrational) = x < y

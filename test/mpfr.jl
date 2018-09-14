@@ -944,3 +944,13 @@ end
         @test big(typeof(complex(x, x))) == typeof(big(complex(x, x)))
     end
 end
+
+Base.@irrational zzz 1.0 1+pi*BigFloat(1e-100)
+
+@testset "Irrational edge cases" begin
+    @test Float64(zzz, RoundDown) < Float64(zzz, RoundUp)
+    @test BigFloat(1.0) < zzz
+    @test !(nextfloat(BigFloat(1.0)) < zzz)
+    @test !(zzz < BigFloat(1.0))
+    @test zzz < nextfloat(BigFloat(1.0))
+end
