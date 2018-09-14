@@ -6702,3 +6702,11 @@ end
 @test_throws ErrorException Array{Int, 2}(undef, 0, -10)
 @test_throws ErrorException Array{Int, 2}(undef, -10, 0)
 @test_throws ErrorException Array{Int, 2}(undef, -1, -1)
+
+# issue #29145
+struct T29145{A,B}
+    function T29145()
+        new{S,Ref{S}}() where S
+    end
+end
+@test_throws TypeError T29145()
