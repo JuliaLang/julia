@@ -808,7 +808,7 @@ function setprecision(::Type{BigFloat}, precision::Integer)
     return precision
 end
 
-setprecision(precision::Int) = setprecision(BigFloat, precision)
+setprecision(precision::Integer) = setprecision(BigFloat, precision)
 
 maxintfloat(x::BigFloat) = BigFloat(2)^precision(x)
 maxintfloat(::Type{BigFloat}) = BigFloat(2)^precision(BigFloat)
