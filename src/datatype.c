@@ -689,8 +689,9 @@ static jl_value_t *boxed_char_cache[128];
 JL_DLLEXPORT jl_value_t *jl_box_char(uint32_t x)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (0 < (int32_t)x)
-        return boxed_char_cache[x >> 24];
+    uint32_t u = bswap_32(x);
+    if (u < 128)
+        return boxed_char_cache[(uint8_t)u];
     jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), jl_char_type);
     *(uint32_t*)jl_data_ptr(v) = x;
     return v;
