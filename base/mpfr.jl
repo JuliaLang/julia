@@ -72,7 +72,7 @@ function convert(::Type{RoundingMode}, r::MPFRRoundingMode)
 end
 
 const ROUNDING_MODE = Ref{MPFRRoundingMode}(MPFRRoundNearest)
-const DEFAULT_PRECISION = Ref{Int}(256)
+const DEFAULT_PRECISION = Ref{Clong}(256)
 
 # Basic type and initialization definitions
 
@@ -107,7 +107,7 @@ mutable struct BigFloat <: AbstractFloat
         #d = Vector{Limb}(undef, nb)
         d = _string_n(nb * Core.sizeof(Limb))
         EXP_NAN = Clong(1) - Clong(typemax(Culong) >> 1)
-        return _BigFloat(precision, one(Cint), EXP_NAN, d) # +NAN
+        return _BigFloat(Clong(precision), one(Cint), EXP_NAN, d) # +NAN
     end
 end
 
@@ -800,7 +800,7 @@ precision(::Type{BigFloat}) = DEFAULT_PRECISION[] # precision of the type BigFlo
 
 Set the precision (in bits) to be used for `T` arithmetic.
 """
-function setprecision(::Type{BigFloat}, precision::Int)
+function setprecision(::Type{BigFloat}, precision::Integer)
     if precision < 2
         throw(DomainError(precision, "`precision` cannot be less than 2."))
     end
