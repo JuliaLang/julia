@@ -15,22 +15,50 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
                 $(fcn)(Core.kwfunc(arg1),
                        Tuple{typeof(kwargs), Core.Typeof(arg1), map(Core.Typeof, args)...})
             end
-        elseif ex0.head == :call
+        elseif ex0.head === :call
             return Expr(:call, fcn, esc(ex0.args[1]),
                         Expr(:call, typesof, map(esc, ex0.args[2:end])...))
-        elseif ex0.head == :(=) && length(ex0.args) == 2 && ex0.args[1].head == :(.)
-            return Expr(:call, fcn, Base.setproperty!,
-                        Expr(:call, typesof, map(esc, [ex0.args[1].args..., ex0.args[2]])...))
+        elseif ex0.head === :(=) && length(ex0.args) == 2
+            lhs, rhs = ex0.args
+            if isa(lhs, Expr)
+                if lhs.head === :(.)
+                    return Expr(:call, fcn, Base.setproperty!,
+                                Expr(:call, typesof, map(esc, lhs.args)..., esc(rhs)))
+                elseif lhs.head === :ref
+                    return Expr(:call, fcn, Base.setindex!,
+                                Expr(:call, typesof, esc(lhs.args[1]), esc(rhs), map(esc, lhs.args[2:end])...))
+                end
+            end
+        elseif ex0.head === :vcat || ex0.head === :typed_vcat
+            if ex0.head === :vcat
+                f, hf = Base.vcat, Base.hvcat
+                args = ex0.args
+            else
+                f, hf = Base.typed_vcat, Base.typed_hvcat
+                args = ex0.args[2:end]
+            end
+            if any(a->isa(a,Expr) && a.head === :row, args)
+                rows = Any[ (isa(x,Expr) && x.head === :row ? x.args : Any[x]) for x in args ]
+                lens = map(length, rows)
+                return Expr(:call, fcn, hf,
+                            Expr(:call, typesof,
+                                 (ex0.head === :vcat ? [] : Any[esc(ex0.args[1])])...,
+                                 Expr(:tuple, lens...),
+                                 map(esc, vcat(rows...))...))
+            else
+                return Expr(:call, fcn, f,
+                            Expr(:call, typesof, map(esc, ex0.args)...))
+            end
         else
-            for (head, f) in (:ref => Base.getindex, :vcat => Base.vcat, :hcat => Base.hcat, :(.) => Base.getproperty, :vect => Base.vect)
-                if ex0.head == head
+            for (head, f) in (:ref => Base.getindex, :hcat => Base.hcat, :(.) => Base.getproperty, :vect => Base.vect, Symbol("'") => Base.adjoint, :typed_hcat => Base.typed_hcat, :string => string)
+                if ex0.head === head
                     return Expr(:call, fcn, f,
                                 Expr(:call, typesof, map(esc, ex0.args)...))
                 end
             end
         end
     end
-    if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
+    if isa(ex0, Expr) && ex0.head === :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
         return Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
     end
 
@@ -40,8 +68,8 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
     end
 
     exret = Expr(:none)
-    if ex.head == :call
-        if any(e->(isa(e, Expr) && e.head==:(...)), ex0.args) &&
+    if ex.head === :call
+        if any(e->(isa(e, Expr) && e.head === :(...)), ex0.args) &&
             (ex.args[1] === GlobalRef(Core,:_apply) ||
              ex.args[1] === GlobalRef(Base,:_apply))
             # check for splatting
@@ -53,7 +81,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
                          Expr(:call, typesof, map(esc, ex.args[2:end])...))
         end
     end
-    if ex.head == :thunk || exret.head == :none
+    if ex.head === :thunk || exret.head === :none
         exret = Expr(:call, :error, "expression is not a function call, "
                                   * "or is too complex for @$fcn to analyze; "
                                   * "break it down to simpler parts if possible")
