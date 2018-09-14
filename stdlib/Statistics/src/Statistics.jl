@@ -131,8 +131,8 @@ mean(A::AbstractArray; dims=:) = _mean(A, dims)
 _mean(A::AbstractArray{T}, region) where {T} = mean!(Base.reducedim_init(t -> t/2, +, A, region), A)
 _mean(A::AbstractArray, ::Colon) = sum(A) / length(A)
 
-function mean(r::AbstractRange{<:Real})
-    isempty(r) && throw(ArgumentError("mean of an empty range is undefined"))
+function Statistics.mean(r::AbstractRange{<:Real})
+    isempty(r) && return oftype((first(r) + last(r)) / 2, NaN)
     (first(r) + last(r)) / 2
 end
 
@@ -150,7 +150,7 @@ function _var(iterable, corrected::Bool, mean)
     y = iterate(iterable)
     if y === nothing
         T = eltype(iterable)
-        return typeof((abs2(zero(T)) + abs2(zero(T)))/2)(NaN)
+        return oftype((abs2(zero(T)) + abs2(zero(T)))/2, NaN)
     end
     count = 1
     value, state = y
@@ -267,7 +267,7 @@ varm(A::AbstractArray, m; corrected::Bool=true) = _varm(A, m, corrected, :)
 
 function _varm(A::AbstractArray{T}, m, corrected::Bool, ::Colon) where T
     n = length(A)
-    n == 0 && return typeof((abs2(zero(T)) + abs2(zero(T)))/2)(NaN)
+    n == 0 && return oftype((abs2(zero(T)) + abs2(zero(T)))/2, NaN)
     return centralize_sumabs2(A, m) / (n - Int(corrected))
 end
 

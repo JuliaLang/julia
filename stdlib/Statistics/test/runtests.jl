@@ -119,6 +119,8 @@ end
             @test f(2:0.1:n) ≈ f([2:0.1:n;])
         end
     end
+    @test mean(2:1) === NaN
+    @test mean(big(2):1) isa BigFloat
 end
 
 @testset "var & std" begin
