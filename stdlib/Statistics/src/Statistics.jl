@@ -131,7 +131,7 @@ mean(A::AbstractArray; dims=:) = _mean(A, dims)
 _mean(A::AbstractArray{T}, region) where {T} = mean!(Base.reducedim_init(t -> t/2, +, A, region), A)
 _mean(A::AbstractArray, ::Colon) = sum(A) / length(A)
 
-function Statistics.mean(r::AbstractRange{<:Real})
+function mean(r::AbstractRange{<:Real})
     isempty(r) && return oftype((first(r) + last(r)) / 2, NaN)
     (first(r) + last(r)) / 2
 end
