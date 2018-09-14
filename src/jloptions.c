@@ -78,7 +78,8 @@ static const char opts[]  =
     " -h, --help                Print this message\n\n"
 
     // startup options
-    " --project=<dir>           Start with `dir` as the home project"
+    " --project, --project=<dir>\n"
+    "                           Start with current directory `@.` or with `dir` as the home project\n"
     " -J, --sysimage <file>     Start up with the given system image file\n"
     " -H, --home <dir>          Set location of `julia` executable\n"
     " --startup-file={yes|no}   Load `~/.julia/config/startup.jl`\n"
