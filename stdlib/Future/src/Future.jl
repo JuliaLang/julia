@@ -6,6 +6,30 @@ module Future
 
 using Random
 
+## copy!
+
+# This has now been moved to Base (#29178), and should be deprecated in the
+# next "deprecation phase".
+
+"""
+    Future.copy!(dst, src) -> dst
+
+Copy `src` into `dst`.
+For collections of the same type, copy the elements of `src` into `dst`,
+discarding any pre-existing elements in `dst`.
+Usually, `dst == src` holds after the call.
+"""
+copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
+copy!(dst::AbstractDict, src::AbstractDict) = merge!(empty!(dst), src)
+copy!(dst::AbstractVector, src::AbstractVector) = append!(empty!(dst), src)
+
+function copy!(dst::AbstractArray, src::AbstractArray)
+    axes(dst) == axes(src) || throw(ArgumentError(
+        "arrays must have the same axes for copy! (consider using `copyto!`)"))
+    copyto!(dst, src)
+end
+
+
 ## randjump
 
 """
