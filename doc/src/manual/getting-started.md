@@ -93,7 +93,7 @@ julia [switches] -- [programfile] [args...]
 |:---                                   |:---|
 |`-v`, `--version`                      |Display version information|
 |`-h`, `--help`                         |Print this message|
-|`--project=<dir>`                      |Start up with the given project|
+|`--project=<dir>`                      |Start with `dir` as the home project|
 |`-J`, `--sysimage <file>`              |Start up with the given system image file|
 |`-H`, `--home <dir>`                   |Set location of `julia` executable|
 |`--startup-file={yes\|no}`             |Load `~/.julia/config/startup.jl`|
