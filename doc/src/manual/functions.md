@@ -667,7 +667,7 @@ Functions in Julia can be combined by composing or piping (chaining) them togeth
 Function composition is when you combine functions together and apply the resulting composition to arguments.
 You use the function composition operator (`∘`) to compose the functions, so `(f ∘ g)(args...)` is the same as `f(g(args...))`.
 
-You can type the composition operator at the REPL and suitably-configued editors using `\circ<tab>`.
+You can type the composition operator at the REPL and suitably-configured editors using `\circ<tab>`.
 
 For example, the `sqrt` and `+` functions can be composed like this:
 
@@ -705,7 +705,7 @@ julia> (sqrt ∘ sum)(1:10)
 7.416198487095663
 ```
 
-The elementwise pipe operator `.|>` is a useful combination of the chaining/piping and dot vectorization syntax (described next).
+The pipe operator can also be used with broadcasting, as `.|>`, to provide a useful combination of the chaining/piping and dot vectorization syntax (described next).
 
 ```jldoctest
 julia> ["a", "list", "of", "strings"] .|> [uppercase, reverse, titlecase, length]
