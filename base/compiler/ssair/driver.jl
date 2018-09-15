@@ -113,6 +113,10 @@ end
 function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     ir = just_construct_ssa(ci, copy_exprargs(ci.code), nargs, sv)
     #@Base.show ("after_construct", ir)
+    run_passes(ir, sv)
+end
+
+function run_passes(ir::IRCode, sv::OptimizationState)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv)
