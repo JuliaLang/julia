@@ -106,21 +106,14 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
         return nothing
     end
 
-    base = convert(T, base)
-    m::T = div(typemax(T) - base + 1, base)
+    base = convert(T,base)
+    m::T = div(typemax(T)-base+1,base)
     n::T = 0
     a::Int = base <= 36 ? 10 : 36
-    _0 = UInt32('0')
-    _9 = UInt32('9')
-    _A = UInt32('A')
-    _a = UInt32('a')
-    _Z = UInt32('Z')
-    _z = UInt32('z')
     while n <= m
-        _c = UInt32(c)
-        d::T = _0 <= _c <= _9 ? _c-_0             :
-               _A <= _c <= _Z ? _c-_A+ UInt32(10) :
-               _a <= _c <= _z ? _c-_a+a           : base
+        d::T = '0' <= c <= '9' ? c-'0'    :
+               'A' <= c <= 'Z' ? c-'A'+10 :
+               'a' <= c <= 'z' ? c-'a'+a  : base
         if d >= base
             raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(SubString(s,startpos,endpos)))"))
             return nothing
@@ -136,10 +129,9 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     end
     (T <: Signed) && (n *= sgn)
     while !isspace(c)
-        _c = UInt32(c)
-        d::T = _0 <= _c <= _9 ? _c-_0             :
-               _A <= _c <= _Z ? _c-_A+ UInt32(10) :
-               _a <= _c <= _z ? _c-_a+a           : base
+        d::T = '0' <= c <= '9' ? c-'0'    :
+        'A' <= c <= 'Z' ? c-'A'+10 :
+            'a' <= c <= 'z' ? c-'a'+a  : base
         if d >= base
             raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(SubString(s,startpos,endpos)))"))
             return nothing

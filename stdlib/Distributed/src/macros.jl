@@ -251,7 +251,7 @@ end
 
 function preduce(reducer, f, R)
     N = length(R)
-    chunks = splitrange(Int(N), nworkers())
+    chunks = splitrange(N, nworkers())
     all_w = workers()[1:length(chunks)]
 
     w_exec = Task[]

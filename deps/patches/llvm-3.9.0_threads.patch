@@ -1,0 +1,5545 @@
+From d1cc48989b13780f21c408fef17dceb104a09c9d Mon Sep 17 00:00:00 2001
+From: Alex Crichton <alex@alexcrichton.com>
+Date: Thu, 28 Jan 2016 20:44:50 -0800
+Subject: [PATCH] Don't compile usage of std::thread
+
+As of the time of this writing it's not actually used anywhere meaningfullly
+throughout the LLVM repo that we need, and it unfortunately uses `std::thread`
+which isn't available in mingw-w64 toolchains with the win32 threading model
+(the one that we use).
+
+The change made to achive this was to just always use the single-threaded
+support in `include/llvm/Support/thread.h`, and hopefuly that'll be enough...
+
+For reference, the upstream LLVM bug has been reported [1]
+
+[1]: https://llvm.org/bugs/show_bug.cgi?id=26365
+---
+ include/llvm/ExecutionEngine/Orc/RPCChannel.h |   13 -
+ include/llvm/ExecutionEngine/Orc/RPCUtils.h   |   16 +-
+ include/llvm/Support/ThreadPool.h             |    4 +
+ include/llvm/Support/thread.h                 |    2 +-
+ lib/CodeGen/ParallelCG.cpp                    |    2 +
+ lib/LTO/ThinLTOCodeGenerator.cpp              |    4 +-
+ lib/Support/ThreadPool.cpp                    |    6 +-
+ test/CMakeLists.txt                           |    1 -
+ tools/lli/CMakeLists.txt                      |    5 -
+ tools/lli/ChildTarget/CMakeLists.txt          |   10 -
+ tools/lli/ChildTarget/ChildTarget.cpp         |   78 --
+ tools/lli/ChildTarget/LLVMBuild.txt           |   21 -
+ tools/lli/LLVMBuild.txt                       |    3 -
+ tools/lli/OrcLazyJIT.cpp                      |  158 ----
+ tools/lli/OrcLazyJIT.h                        |  163 ----
+ tools/lli/RemoteJITUtils.h                    |  152 ---
+ tools/lli/lli.cpp                             |    7 +
+ tools/llvm-cov/CMakeLists.txt                 |   18 +-
+ tools/llvm-cov/CodeCoverage.cpp               |  727 ---------------
+ tools/llvm-cov/CoverageFilters.cpp            |   59 --
+ tools/llvm-cov/CoverageFilters.h              |  127 ---
+ tools/llvm-cov/CoverageReport.cpp             |  235 -----
+ tools/llvm-cov/CoverageReport.h               |   41 -
+ tools/llvm-cov/CoverageSummaryInfo.cpp        |   71 --
+ tools/llvm-cov/CoverageSummaryInfo.h          |  162 ----
+ tools/llvm-cov/CoverageViewOptions.h          |   52 --
+ tools/llvm-cov/RenderingSupport.h             |   61 --
+ tools/llvm-cov/SourceCoverageView.cpp         |  233 -----
+ tools/llvm-cov/SourceCoverageView.h           |  285 ------
+ tools/llvm-cov/SourceCoverageViewHTML.cpp     |  436 ---------
+ tools/llvm-cov/SourceCoverageViewHTML.h       |   83 --
+ tools/llvm-cov/SourceCoverageViewText.cpp     |  213 -----
+ tools/llvm-cov/SourceCoverageViewText.h       |   83 --
+ tools/llvm-cov/TestingSupport.cpp             |   92 --
+ tools/llvm-cov/gcov.cpp                       |  145 ---
+ tools/llvm-cov/llvm-cov.cpp                   |   79 --
+ tools/sancov/sancov.cc                        | 1244 +------------------------
+ 37 files changed, 43 insertions(+), 5048 deletions(-)
+ delete mode 100644 tools/lli/ChildTarget/CMakeLists.txt
+ delete mode 100644 tools/lli/ChildTarget/ChildTarget.cpp
+ delete mode 100644 tools/lli/ChildTarget/LLVMBuild.txt
+ delete mode 100644 tools/lli/OrcLazyJIT.cpp
+ delete mode 100644 tools/lli/OrcLazyJIT.h
+ delete mode 100644 tools/lli/RemoteJITUtils.h
+ delete mode 100644 tools/llvm-cov/CodeCoverage.cpp
+ delete mode 100644 tools/llvm-cov/CoverageFilters.cpp
+ delete mode 100644 tools/llvm-cov/CoverageFilters.h
+ delete mode 100644 tools/llvm-cov/CoverageReport.cpp
+ delete mode 100644 tools/llvm-cov/CoverageReport.h
+ delete mode 100644 tools/llvm-cov/CoverageSummaryInfo.cpp
+ delete mode 100644 tools/llvm-cov/CoverageSummaryInfo.h
+ delete mode 100644 tools/llvm-cov/CoverageViewOptions.h
+ delete mode 100644 tools/llvm-cov/RenderingSupport.h
+ delete mode 100644 tools/llvm-cov/SourceCoverageView.cpp
+ delete mode 100644 tools/llvm-cov/SourceCoverageView.h
+ delete mode 100644 tools/llvm-cov/SourceCoverageViewHTML.cpp
+ delete mode 100644 tools/llvm-cov/SourceCoverageViewHTML.h
+ delete mode 100644 tools/llvm-cov/SourceCoverageViewText.cpp
+ delete mode 100644 tools/llvm-cov/SourceCoverageViewText.h
+ delete mode 100644 tools/llvm-cov/TestingSupport.cpp
+ delete mode 100644 tools/llvm-cov/gcov.cpp
+
+diff --git a/include/llvm/ExecutionEngine/Orc/RPCChannel.h b/include/llvm/ExecutionEngine/Orc/RPCChannel.h
+index c569e3c..9fb0141 100644
+--- a/include/llvm/ExecutionEngine/Orc/RPCChannel.h
++++ b/include/llvm/ExecutionEngine/Orc/RPCChannel.h
+@@ -40,42 +40,29 @@ class RPCChannel {
+ 
+   /// Flush the stream if possible.
+   virtual Error send() = 0;
+-
+-  /// Get the lock for stream reading.
+-  std::mutex &getReadLock() { return readLock; }
+-
+-  /// Get the lock for stream writing.
+-  std::mutex &getWriteLock() { return writeLock; }
+-
+-private:
+-  std::mutex readLock, writeLock;
+ };
+ 
+ /// Notify the channel that we're starting a message send.
+ /// Locks the channel for writing.
+ inline Error startSendMessage(RPCChannel &C) {
+-  C.getWriteLock().lock();
+   return Error::success();
+ }
+ 
+ /// Notify the channel that we're ending a message send.
+ /// Unlocks the channel for writing.
+ inline Error endSendMessage(RPCChannel &C) {
+-  C.getWriteLock().unlock();
+   return Error::success();
+ }
+ 
+ /// Notify the channel that we're starting a message receive.
+ /// Locks the channel for reading.
+ inline Error startReceiveMessage(RPCChannel &C) {
+-  C.getReadLock().lock();
+   return Error::success();
+ }
+ 
+ /// Notify the channel that we're ending a message receive.
+ /// Unlocks the channel for reading.
+ inline Error endReceiveMessage(RPCChannel &C) {
+-  C.getReadLock().unlock();
+   return Error::success();
+ }
+ 
+diff --git a/include/llvm/ExecutionEngine/Orc/RPCUtils.h b/include/llvm/ExecutionEngine/Orc/RPCUtils.h
+index 966a496..b6c8ebd 100644
+--- a/include/llvm/ExecutionEngine/Orc/RPCUtils.h
++++ b/include/llvm/ExecutionEngine/Orc/RPCUtils.h
+@@ -102,6 +102,7 @@ class RPCBase {
+ 
+     template <typename ChannelT>
+     static Error readResult(ChannelT &C, std::promise<OptionalReturn> &P) {
++#if 0
+       RetT Val;
+       auto Err = deserialize(C, Val);
+       auto Err2 = endReceiveMessage(C);
+@@ -112,11 +113,14 @@ class RPCBase {
+         return Err;
+       }
+       P.set_value(std::move(Val));
++#endif
+       return Error::success();
+     }
+ 
+     static void abandon(std::promise<OptionalReturn> &P) {
++#if 0
+       P.set_value(OptionalReturn());
++#endif
+     }
+ 
+     template <typename ChannelT, typename SequenceNumberT>
+@@ -159,11 +163,17 @@ class RPCBase {
+     template <typename ChannelT>
+     static Error readResult(ChannelT &C, std::promise<OptionalReturn> &P) {
+       // Void functions don't have anything to deserialize, so we're good.
++#if 0
+       P.set_value(true);
++#endif
+       return endReceiveMessage(C);
+     }
+ 
+-    static void abandon(std::promise<OptionalReturn> &P) { P.set_value(false); }
++    static void abandon(std::promise<OptionalReturn> &P) {
++#if 0
++        P.set_value(false);
++#endif
++    }
+ 
+     template <typename ChannelT, typename SequenceNumberT>
+     static Error respond(ChannelT &C, SequenceNumberT SeqNo,
+@@ -617,13 +627,11 @@ class RPC : public RPCBase {
+     }
+ 
+     void reset() {
+-      std::lock_guard<std::mutex> Lock(SeqNoLock);
+       NextSequenceNumber = 0;
+       FreeSequenceNumbers.clear();
+     }
+ 
+     SequenceNumberT getSequenceNumber() {
+-      std::lock_guard<std::mutex> Lock(SeqNoLock);
+       if (FreeSequenceNumbers.empty())
+         return NextSequenceNumber++;
+       auto SequenceNumber = FreeSequenceNumbers.back();
+@@ -632,12 +640,10 @@ class RPC : public RPCBase {
+     }
+ 
+     void releaseSequenceNumber(SequenceNumberT SequenceNumber) {
+-      std::lock_guard<std::mutex> Lock(SeqNoLock);
+       FreeSequenceNumbers.push_back(SequenceNumber);
+     }
+ 
+   private:
+-    std::mutex SeqNoLock;
+     SequenceNumberT NextSequenceNumber = 0;
+     std::vector<SequenceNumberT> FreeSequenceNumbers;
+   };
+diff --git a/include/llvm/Support/ThreadPool.h b/include/llvm/Support/ThreadPool.h
+index 665cec2..c3aa64d 100644
+--- a/include/llvm/Support/ThreadPool.h
++++ b/include/llvm/Support/ThreadPool.h
+@@ -16,6 +16,8 @@
+ 
+ #include "llvm/Support/thread.h"
+ 
++# if 0
++
+ #ifdef _MSC_VER
+ // concrt.h depends on eh.h for __uncaught_exception declaration
+ // even if we disable exceptions.
+@@ -134,4 +136,6 @@ class ThreadPool {
+ };
+ }
+ 
++# endif
++
+ #endif // LLVM_SUPPORT_THREAD_POOL_H
+diff --git a/include/llvm/Support/thread.h b/include/llvm/Support/thread.h
+index 9c45418..27d42d2 100644
+--- a/include/llvm/Support/thread.h
++++ b/include/llvm/Support/thread.h
+@@ -19,7 +19,7 @@
+ 
+ #include "llvm/Config/llvm-config.h"
+ 
+-#if LLVM_ENABLE_THREADS
++#if LLVM_ENABLE_THREADS && 0
+ 
+ #ifdef _MSC_VER
+ // concrt.h depends on eh.h for __uncaught_exception declaration
+diff --git a/lib/CodeGen/ParallelCG.cpp b/lib/CodeGen/ParallelCG.cpp
+index ccdaec1..1f35590 100644
+--- a/lib/CodeGen/ParallelCG.cpp
++++ b/lib/CodeGen/ParallelCG.cpp
+@@ -49,6 +49,7 @@ std::unique_ptr<Module> llvm::splitCodeGen(
+     return M;
+   }
+ 
++#if 0
+   // Create ThreadPool in nested scope so that threads will be joined
+   // on destruction.
+   {
+@@ -95,5 +96,6 @@ std::unique_ptr<Module> llvm::splitCodeGen(
+         PreserveLocals);
+   }
+ 
++#endif
+   return {};
+ }
+diff --git a/lib/LTO/ThinLTOCodeGenerator.cpp b/lib/LTO/ThinLTOCodeGenerator.cpp
+index bfb0980..e4f9977 100644
+--- a/lib/LTO/ThinLTOCodeGenerator.cpp
++++ b/lib/LTO/ThinLTOCodeGenerator.cpp
+@@ -64,7 +64,7 @@ extern cl::opt<bool> LTODiscardValueNames;
+ namespace {
+ 
+ static cl::opt<int> ThreadCount("threads",
+-                                cl::init(std::thread::hardware_concurrency()));
++                                cl::init(1));
+ 
+ static void diagnosticHandler(const DiagnosticInfo &DI) {
+   DiagnosticPrinterRawOStream DP(errs());
+@@ -667,6 +667,7 @@ std::unique_ptr<MemoryBuffer> ThinLTOCodeGenerator::codegen(Module &TheModule) {
+ 
+ // Main entry point for the ThinLTO processing
+ void ThinLTOCodeGenerator::run() {
++#if 0
+   if (CodeGenOnly) {
+     // Perform only parallel codegen and return.
+     ThreadPool Pool;
+@@ -832,4 +833,5 @@ void ThinLTOCodeGenerator::run() {
+   // If statistics were requested, print them out now.
+   if (llvm::AreStatisticsEnabled())
+     llvm::PrintStatistics();
++#endif
+ }
+diff --git a/lib/Support/ThreadPool.cpp b/lib/Support/ThreadPool.cpp
+index db03a4d..71f4933 100644
+--- a/lib/Support/ThreadPool.cpp
++++ b/lib/Support/ThreadPool.cpp
+@@ -11,6 +11,8 @@
+ //
+ //===----------------------------------------------------------------------===//
+ 
++#if 0
++
+ #include "llvm/Support/ThreadPool.h"
+ 
+ #include "llvm/Config/llvm-config.h"
+@@ -18,7 +20,7 @@
+ 
+ using namespace llvm;
+ 
+-#if LLVM_ENABLE_THREADS
++#if LLVM_ENABLE_THREADS && 0
+ 
+ // Default to std::thread::hardware_concurrency
+ ThreadPool::ThreadPool() : ThreadPool(std::thread::hardware_concurrency()) {}
+@@ -156,3 +158,5 @@ ThreadPool::~ThreadPool() {
+ }
+ 
+ #endif
++
++#endif
+diff --git a/test/CMakeLists.txt b/test/CMakeLists.txt
+index e5773bd..40122bd 100644
+--- a/test/CMakeLists.txt
++++ b/test/CMakeLists.txt
+@@ -27,7 +27,6 @@ set(LLVM_TEST_DEPENDS
+           count
+           llc
+           lli
+-          lli-child-target
+           llvm-ar
+           llvm-as
+           llvm-bcanalyzer
+diff --git a/tools/lli/CMakeLists.txt b/tools/lli/CMakeLists.txt
+index 2bdd066..8a4c9d0 100644
+--- a/tools/lli/CMakeLists.txt
++++ b/tools/lli/CMakeLists.txt
+@@ -1,7 +1,3 @@
+-if ( LLVM_INCLUDE_UTILS )
+-  add_subdirectory(ChildTarget)
+-endif()
+-
+ set(LLVM_LINK_COMPONENTS
+   CodeGen
+   Core
+diff --git a/tools/lli/ChildTarget/CMakeLists.txt b/tools/lli/ChildTarget/CMakeLists.txt
+deleted file mode 100644
+index e4fe0c7..0000000
+--- a/tools/lli/ChildTarget/CMakeLists.txt
++++ /dev/null
+@@ -1,10 +0,0 @@
+-set(LLVM_LINK_COMPONENTS
+-  OrcJIT
+-  RuntimeDyld
+-  Support
+-  )
+-
+-add_llvm_utility(lli-child-target
+-  ChildTarget.cpp
+-)
+-
+diff --git a/tools/lli/ChildTarget/ChildTarget.cpp b/tools/lli/ChildTarget/ChildTarget.cpp
+deleted file mode 100644
+index f6d2413..0000000
+--- a/tools/lli/ChildTarget/ChildTarget.cpp
++++ /dev/null
+@@ -1,78 +0,0 @@
+-#include "llvm/ExecutionEngine/Orc/OrcABISupport.h"
+-#include "llvm/ExecutionEngine/Orc/OrcRemoteTargetServer.h"
+-#include "llvm/Support/Debug.h"
+-#include "llvm/Support/DynamicLibrary.h"
+-#include "llvm/Support/Process.h"
+-#include <sstream>
+-
+-#include "../RemoteJITUtils.h"
+-
+-using namespace llvm;
+-using namespace llvm::orc;
+-using namespace llvm::sys;
+-
+-#ifdef __x86_64__
+-typedef OrcX86_64_SysV HostOrcArch;
+-#else
+-typedef OrcGenericABI HostOrcArch;
+-#endif
+-
+-ExitOnError ExitOnErr;
+-
+-int main(int argc, char *argv[]) {
+-
+-  if (argc != 3) {
+-    errs() << "Usage: " << argv[0] << " <input fd> <output fd>\n";
+-    return 1;
+-  }
+-
+-  ExitOnErr.setBanner(std::string(argv[0]) + ":");
+-
+-  int InFD;
+-  int OutFD;
+-  {
+-    std::istringstream InFDStream(argv[1]), OutFDStream(argv[2]);
+-    InFDStream >> InFD;
+-    OutFDStream >> OutFD;
+-  }
+-
+-  if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr)) {
+-    errs() << "Error loading program symbols.\n";
+-    return 1;
+-  }
+-
+-  auto SymbolLookup = [](const std::string &Name) {
+-    return RTDyldMemoryManager::getSymbolAddressInProcess(Name);
+-  };
+-
+-  auto RegisterEHFrames = [](uint8_t *Addr, uint32_t Size) {
+-    RTDyldMemoryManager::registerEHFramesInProcess(Addr, Size);
+-  };
+-
+-  auto DeregisterEHFrames = [](uint8_t *Addr, uint32_t Size) {
+-    RTDyldMemoryManager::deregisterEHFramesInProcess(Addr, Size);
+-  };
+-
+-  FDRPCChannel Channel(InFD, OutFD);
+-  typedef remote::OrcRemoteTargetServer<FDRPCChannel, HostOrcArch> JITServer;
+-  JITServer Server(Channel, SymbolLookup, RegisterEHFrames, DeregisterEHFrames);
+-
+-  while (1) {
+-    uint32_t RawId;
+-    ExitOnErr(Server.startReceivingFunction(Channel, RawId));
+-    auto Id = static_cast<JITServer::JITFuncId>(RawId);
+-    switch (Id) {
+-    case JITServer::TerminateSessionId:
+-      ExitOnErr(Server.handleTerminateSession());
+-      return 0;
+-    default:
+-      ExitOnErr(Server.handleKnownFunction(Id));
+-      break;
+-    }
+-  }
+-
+-  close(InFD);
+-  close(OutFD);
+-
+-  return 0;
+-}
+diff --git a/tools/lli/ChildTarget/LLVMBuild.txt b/tools/lli/ChildTarget/LLVMBuild.txt
+deleted file mode 100644
+index daf6df1..0000000
+--- a/tools/lli/ChildTarget/LLVMBuild.txt
++++ /dev/null
+@@ -1,21 +0,0 @@
+-;===- ./tools/lli/ChildTarget/LLVMBuild.txt --------------------*- Conf -*--===;
+-;
+-;                     The LLVM Compiler Infrastructure
+-;
+-; This file is distributed under the University of Illinois Open Source
+-; License. See LICENSE.TXT for details.
+-;
+-;===------------------------------------------------------------------------===;
+-;
+-; This is an LLVMBuild description file for the components in this subdirectory.
+-;
+-; For more information on the LLVMBuild system, please see:
+-;
+-;   http://llvm.org/docs/LLVMBuild.html
+-;
+-;===------------------------------------------------------------------------===;
+-
+-[component_0]
+-type = Tool
+-name = lli-child-target
+-parent = lli
+diff --git a/tools/lli/LLVMBuild.txt b/tools/lli/LLVMBuild.txt
+index 9d889bf..4738504 100644
+--- a/tools/lli/LLVMBuild.txt
++++ b/tools/lli/LLVMBuild.txt
+@@ -15,9 +15,6 @@
+ ;
+ ;===------------------------------------------------------------------------===;
+ 
+-[common]
+-subdirectories = ChildTarget
+-
+ [component_0]
+ type = Tool
+ name = lli
+diff --git a/tools/lli/OrcLazyJIT.cpp b/tools/lli/OrcLazyJIT.cpp
+index b13e769..8b13789 100644
+--- a/tools/lli/OrcLazyJIT.cpp
++++ b/tools/lli/OrcLazyJIT.cpp
+@@ -1,158 +1 @@
+-//===------ OrcLazyJIT.cpp - Basic Orc-based JIT for lazy execution -------===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-
+-#include "OrcLazyJIT.h"
+-#include "llvm/ExecutionEngine/Orc/OrcABISupport.h"
+-#include "llvm/Support/Debug.h"
+-#include "llvm/Support/DynamicLibrary.h"
+-#include <cstdio>
+-#include <system_error>
+-
+-using namespace llvm;
+-
+-namespace {
+-
+-  enum class DumpKind { NoDump, DumpFuncsToStdOut, DumpModsToStdErr,
+-                        DumpModsToDisk };
+-
+-  cl::opt<DumpKind> OrcDumpKind("orc-lazy-debug",
+-                                cl::desc("Debug dumping for the orc-lazy JIT."),
+-                                cl::init(DumpKind::NoDump),
+-                                cl::values(
+-                                  clEnumValN(DumpKind::NoDump, "no-dump",
+-                                             "Don't dump anything."),
+-                                  clEnumValN(DumpKind::DumpFuncsToStdOut,
+-                                             "funcs-to-stdout",
+-                                             "Dump function names to stdout."),
+-                                  clEnumValN(DumpKind::DumpModsToStdErr,
+-                                             "mods-to-stderr",
+-                                             "Dump modules to stderr."),
+-                                  clEnumValN(DumpKind::DumpModsToDisk,
+-                                             "mods-to-disk",
+-                                             "Dump modules to the current "
+-                                             "working directory. (WARNING: "
+-                                             "will overwrite existing files)."),
+-                                  clEnumValEnd),
+-                                cl::Hidden);
+-
+-  cl::opt<bool> OrcInlineStubs("orc-lazy-inline-stubs",
+-                               cl::desc("Try to inline stubs"),
+-                               cl::init(true), cl::Hidden);
+-}
+-
+-OrcLazyJIT::TransformFtor OrcLazyJIT::createDebugDumper() {
+-
+-  switch (OrcDumpKind) {
+-  case DumpKind::NoDump:
+-    return [](std::unique_ptr<Module> M) { return M; };
+-
+-  case DumpKind::DumpFuncsToStdOut:
+-    return [](std::unique_ptr<Module> M) {
+-      printf("[ ");
+-
+-      for (const auto &F : *M) {
+-        if (F.isDeclaration())
+-          continue;
+-
+-        if (F.hasName()) {
+-          std::string Name(F.getName());
+-          printf("%s ", Name.c_str());
+-        } else
+-          printf("<anon> ");
+-      }
+-
+-      printf("]\n");
+-      return M;
+-    };
+-
+-  case DumpKind::DumpModsToStdErr:
+-    return [](std::unique_ptr<Module> M) {
+-             dbgs() << "----- Module Start -----\n" << *M
+-                    << "----- Module End -----\n";
+-
+-             return M;
+-           };
+-
+-  case DumpKind::DumpModsToDisk:
+-    return [](std::unique_ptr<Module> M) {
+-             std::error_code EC;
+-             raw_fd_ostream Out(M->getModuleIdentifier() + ".ll", EC,
+-                                sys::fs::F_Text);
+-             if (EC) {
+-               errs() << "Couldn't open " << M->getModuleIdentifier()
+-                      << " for dumping.\nError:" << EC.message() << "\n";
+-               exit(1);
+-             }
+-             Out << *M;
+-             return M;
+-           };
+-  }
+-  llvm_unreachable("Unknown DumpKind");
+-}
+-
+-// Defined in lli.cpp.
+-CodeGenOpt::Level getOptLevel();
+-
+-
+-template <typename PtrTy>
+-static PtrTy fromTargetAddress(orc::TargetAddress Addr) {
+-  return reinterpret_cast<PtrTy>(static_cast<uintptr_t>(Addr));
+-}
+-
+-int llvm::runOrcLazyJIT(std::unique_ptr<Module> M, int ArgC, char* ArgV[]) {
+-  // Add the program's symbols into the JIT's search space.
+-  if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr)) {
+-    errs() << "Error loading program symbols.\n";
+-    return 1;
+-  }
+-
+-  // Grab a target machine and try to build a factory function for the
+-  // target-specific Orc callback manager.
+-  EngineBuilder EB;
+-  EB.setOptLevel(getOptLevel());
+-  auto TM = std::unique_ptr<TargetMachine>(EB.selectTarget());
+-  Triple T(TM->getTargetTriple());
+-  auto CompileCallbackMgr = orc::createLocalCompileCallbackManager(T, 0);
+-
+-  // If we couldn't build the factory function then there must not be a callback
+-  // manager for this target. Bail out.
+-  if (!CompileCallbackMgr) {
+-    errs() << "No callback manager available for target '"
+-           << TM->getTargetTriple().str() << "'.\n";
+-    return 1;
+-  }
+-
+-  auto IndirectStubsMgrBuilder = orc::createLocalIndirectStubsManagerBuilder(T);
+-
+-  // If we couldn't build a stubs-manager-builder for this target then bail out.
+-  if (!IndirectStubsMgrBuilder) {
+-    errs() << "No indirect stubs manager available for target '"
+-           << TM->getTargetTriple().str() << "'.\n";
+-    return 1;
+-  }
+-
+-  // Everything looks good. Build the JIT.
+-  OrcLazyJIT J(std::move(TM), std::move(CompileCallbackMgr),
+-               std::move(IndirectStubsMgrBuilder),
+-               OrcInlineStubs);
+-
+-  // Add the module, look up main and run it.
+-  auto MainHandle = J.addModule(std::move(M));
+-  auto MainSym = J.findSymbolIn(MainHandle, "main");
+-
+-  if (!MainSym) {
+-    errs() << "Could not find main function.\n";
+-    return 1;
+-  }
+-
+-  typedef int (*MainFnPtr)(int, char*[]);
+-  auto Main = fromTargetAddress<MainFnPtr>(MainSym.getAddress());
+-  return Main(ArgC, ArgV);
+-}
+ 
+diff --git a/tools/lli/OrcLazyJIT.h b/tools/lli/OrcLazyJIT.h
+deleted file mode 100644
+index 733bdd8..0000000
+--- a/tools/lli/OrcLazyJIT.h
++++ /dev/null
+@@ -1,163 +0,0 @@
+-//===--- OrcLazyJIT.h - Basic Orc-based JIT for lazy execution --*- C++ -*-===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-//
+-// Simple Orc-based JIT. Uses the compile-on-demand layer to break up and
+-// lazily compile modules.
+-//
+-//===----------------------------------------------------------------------===//
+-
+-#ifndef LLVM_TOOLS_LLI_ORCLAZYJIT_H
+-#define LLVM_TOOLS_LLI_ORCLAZYJIT_H
+-
+-#include "llvm/ADT/Triple.h"
+-#include "llvm/ExecutionEngine/Orc/CompileOnDemandLayer.h"
+-#include "llvm/ExecutionEngine/Orc/CompileUtils.h"
+-#include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
+-#include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
+-#include "llvm/ExecutionEngine/Orc/IRTransformLayer.h"
+-#include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
+-#include "llvm/ExecutionEngine/RTDyldMemoryManager.h"
+-
+-namespace llvm {
+-
+-class OrcLazyJIT {
+-public:
+-
+-  typedef orc::JITCompileCallbackManager CompileCallbackMgr;
+-  typedef orc::ObjectLinkingLayer<> ObjLayerT;
+-  typedef orc::IRCompileLayer<ObjLayerT> CompileLayerT;
+-  typedef std::function<std::unique_ptr<Module>(std::unique_ptr<Module>)>
+-    TransformFtor;
+-  typedef orc::IRTransformLayer<CompileLayerT, TransformFtor> IRDumpLayerT;
+-  typedef orc::CompileOnDemandLayer<IRDumpLayerT, CompileCallbackMgr> CODLayerT;
+-  typedef CODLayerT::IndirectStubsManagerBuilderT
+-    IndirectStubsManagerBuilder;
+-  typedef CODLayerT::ModuleSetHandleT ModuleHandleT;
+-
+-  OrcLazyJIT(std::unique_ptr<TargetMachine> TM,
+-             std::unique_ptr<CompileCallbackMgr> CCMgr,
+-             IndirectStubsManagerBuilder IndirectStubsMgrBuilder,
+-             bool InlineStubs)
+-      : TM(std::move(TM)), DL(this->TM->createDataLayout()),
+-	CCMgr(std::move(CCMgr)),
+-	ObjectLayer(),
+-        CompileLayer(ObjectLayer, orc::SimpleCompiler(*this->TM)),
+-        IRDumpLayer(CompileLayer, createDebugDumper()),
+-        CODLayer(IRDumpLayer, extractSingleFunction, *this->CCMgr,
+-                 std::move(IndirectStubsMgrBuilder), InlineStubs),
+-        CXXRuntimeOverrides(
+-            [this](const std::string &S) { return mangle(S); }) {}
+-
+-  ~OrcLazyJIT() {
+-    // Run any destructors registered with __cxa_atexit.
+-    CXXRuntimeOverrides.runDestructors();
+-    // Run any IR destructors.
+-    for (auto &DtorRunner : IRStaticDestructorRunners)
+-      DtorRunner.runViaLayer(CODLayer);
+-  }
+-
+-  ModuleHandleT addModule(std::unique_ptr<Module> M) {
+-    // Attach a data-layout if one isn't already present.
+-    if (M->getDataLayout().isDefault())
+-      M->setDataLayout(DL);
+-
+-    // Record the static constructors and destructors. We have to do this before
+-    // we hand over ownership of the module to the JIT.
+-    std::vector<std::string> CtorNames, DtorNames;
+-    for (auto Ctor : orc::getConstructors(*M))
+-      CtorNames.push_back(mangle(Ctor.Func->getName()));
+-    for (auto Dtor : orc::getDestructors(*M))
+-      DtorNames.push_back(mangle(Dtor.Func->getName()));
+-
+-    // Symbol resolution order:
+-    //   1) Search the JIT symbols.
+-    //   2) Check for C++ runtime overrides.
+-    //   3) Search the host process (LLI)'s symbol table.
+-    auto Resolver =
+-      orc::createLambdaResolver(
+-        [this](const std::string &Name) {
+-          if (auto Sym = CODLayer.findSymbol(Name, true))
+-            return Sym.toRuntimeDyldSymbol();
+-          if (auto Sym = CXXRuntimeOverrides.searchOverrides(Name))
+-            return Sym;
+-
+-          if (auto Addr =
+-              RTDyldMemoryManager::getSymbolAddressInProcess(Name))
+-            return RuntimeDyld::SymbolInfo(Addr, JITSymbolFlags::Exported);
+-
+-          return RuntimeDyld::SymbolInfo(nullptr);
+-        },
+-        [](const std::string &Name) {
+-          return RuntimeDyld::SymbolInfo(nullptr);
+-        }
+-      );
+-
+-    // Add the module to the JIT.
+-    std::vector<std::unique_ptr<Module>> S;
+-    S.push_back(std::move(M));
+-    auto H = CODLayer.addModuleSet(std::move(S),
+-				   llvm::make_unique<SectionMemoryManager>(),
+-				   std::move(Resolver));
+-
+-    // Run the static constructors, and save the static destructor runner for
+-    // execution when the JIT is torn down.
+-    orc::CtorDtorRunner<CODLayerT> CtorRunner(std::move(CtorNames), H);
+-    CtorRunner.runViaLayer(CODLayer);
+-
+-    IRStaticDestructorRunners.emplace_back(std::move(DtorNames), H);
+-
+-    return H;
+-  }
+-
+-  orc::JITSymbol findSymbol(const std::string &Name) {
+-    return CODLayer.findSymbol(mangle(Name), true);
+-  }
+-
+-  orc::JITSymbol findSymbolIn(ModuleHandleT H, const std::string &Name) {
+-    return CODLayer.findSymbolIn(H, mangle(Name), true);
+-  }
+-
+-private:
+-
+-  std::string mangle(const std::string &Name) {
+-    std::string MangledName;
+-    {
+-      raw_string_ostream MangledNameStream(MangledName);
+-      Mangler::getNameWithPrefix(MangledNameStream, Name, DL);
+-    }
+-    return MangledName;
+-  }
+-
+-  static std::set<Function*> extractSingleFunction(Function &F) {
+-    std::set<Function*> Partition;
+-    Partition.insert(&F);
+-    return Partition;
+-  }
+-
+-  static TransformFtor createDebugDumper();
+-
+-  std::unique_ptr<TargetMachine> TM;
+-  DataLayout DL;
+-  SectionMemoryManager CCMgrMemMgr;
+-
+-  std::unique_ptr<CompileCallbackMgr> CCMgr;
+-  ObjLayerT ObjectLayer;
+-  CompileLayerT CompileLayer;
+-  IRDumpLayerT IRDumpLayer;
+-  CODLayerT CODLayer;
+-
+-  orc::LocalCXXRuntimeOverrides CXXRuntimeOverrides;
+-  std::vector<orc::CtorDtorRunner<CODLayerT>> IRStaticDestructorRunners;
+-};
+-
+-int runOrcLazyJIT(std::unique_ptr<Module> M, int ArgC, char* ArgV[]);
+-
+-} // end namespace llvm
+-
+-#endif
+diff --git a/tools/lli/RemoteJITUtils.h b/tools/lli/RemoteJITUtils.h
+deleted file mode 100644
+index 15068d2..0000000
+--- a/tools/lli/RemoteJITUtils.h
++++ /dev/null
+@@ -1,152 +0,0 @@
+-//===-- RemoteJITUtils.h - Utilities for remote-JITing with LLI -*- C++ -*-===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-//
+-// Utilities for remote-JITing with LLI.
+-//
+-//===----------------------------------------------------------------------===//
+-
+-#ifndef LLVM_TOOLS_LLI_REMOTEJITUTILS_H
+-#define LLVM_TOOLS_LLI_REMOTEJITUTILS_H
+-
+-#include "llvm/ExecutionEngine/Orc/RPCChannel.h"
+-#include "llvm/ExecutionEngine/RTDyldMemoryManager.h"
+-#include <mutex>
+-
+-#if !defined(_MSC_VER) && !defined(__MINGW32__)
+-#include <unistd.h>
+-#else
+-#include <io.h>
+-#endif
+-
+-/// RPC channel that reads from and writes from file descriptors.
+-class FDRPCChannel final : public llvm::orc::remote::RPCChannel {
+-public:
+-  FDRPCChannel(int InFD, int OutFD) : InFD(InFD), OutFD(OutFD) {}
+-
+-  llvm::Error readBytes(char *Dst, unsigned Size) override {
+-    assert(Dst && "Attempt to read into null.");
+-    ssize_t Completed = 0;
+-    while (Completed < static_cast<ssize_t>(Size)) {
+-      ssize_t Read = ::read(InFD, Dst + Completed, Size - Completed);
+-      if (Read <= 0) {
+-        auto ErrNo = errno;
+-        if (ErrNo == EAGAIN || ErrNo == EINTR)
+-          continue;
+-        else
+-          return llvm::errorCodeToError(
+-                   std::error_code(errno, std::generic_category()));
+-      }
+-      Completed += Read;
+-    }
+-    return llvm::Error::success();
+-  }
+-
+-  llvm::Error appendBytes(const char *Src, unsigned Size) override {
+-    assert(Src && "Attempt to append from null.");
+-    ssize_t Completed = 0;
+-    while (Completed < static_cast<ssize_t>(Size)) {
+-      ssize_t Written = ::write(OutFD, Src + Completed, Size - Completed);
+-      if (Written < 0) {
+-        auto ErrNo = errno;
+-        if (ErrNo == EAGAIN || ErrNo == EINTR)
+-          continue;
+-        else
+-          return llvm::errorCodeToError(
+-                   std::error_code(errno, std::generic_category()));
+-      }
+-      Completed += Written;
+-    }
+-    return llvm::Error::success();
+-  }
+-
+-  llvm::Error send() override { return llvm::Error::success(); }
+-
+-private:
+-  int InFD, OutFD;
+-};
+-
+-// launch the remote process (see lli.cpp) and return a channel to it.
+-std::unique_ptr<FDRPCChannel> launchRemote();
+-
+-namespace llvm {
+-
+-// ForwardingMM - Adapter to connect MCJIT to Orc's Remote memory manager.
+-class ForwardingMemoryManager : public llvm::RTDyldMemoryManager {
+-public:
+-  void setMemMgr(std::unique_ptr<RuntimeDyld::MemoryManager> MemMgr) {
+-    this->MemMgr = std::move(MemMgr);
+-  }
+-
+-  void setResolver(std::unique_ptr<RuntimeDyld::SymbolResolver> Resolver) {
+-    this->Resolver = std::move(Resolver);
+-  }
+-
+-  uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
+-                               unsigned SectionID,
+-                               StringRef SectionName) override {
+-    return MemMgr->allocateCodeSection(Size, Alignment, SectionID, SectionName);
+-  }
+-
+-  uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
+-                               unsigned SectionID, StringRef SectionName,
+-                               bool IsReadOnly) override {
+-    return MemMgr->allocateDataSection(Size, Alignment, SectionID, SectionName,
+-                                       IsReadOnly);
+-  }
+-
+-  void reserveAllocationSpace(uintptr_t CodeSize, uint32_t CodeAlign,
+-                              uintptr_t RODataSize, uint32_t RODataAlign,
+-                              uintptr_t RWDataSize,
+-                              uint32_t RWDataAlign) override {
+-    MemMgr->reserveAllocationSpace(CodeSize, CodeAlign, RODataSize, RODataAlign,
+-                                   RWDataSize, RWDataAlign);
+-  }
+-
+-  bool needsToReserveAllocationSpace() override {
+-    return MemMgr->needsToReserveAllocationSpace();
+-  }
+-
+-  void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
+-                        size_t Size) override {
+-    MemMgr->registerEHFrames(Addr, LoadAddr, Size);
+-  }
+-
+-  void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr,
+-                          size_t Size) override {
+-    MemMgr->deregisterEHFrames(Addr, LoadAddr, Size);
+-  }
+-
+-  bool finalizeMemory(std::string *ErrMsg = nullptr) override {
+-    return MemMgr->finalizeMemory(ErrMsg);
+-  }
+-
+-  void notifyObjectLoaded(RuntimeDyld &RTDyld,
+-                          const object::ObjectFile &Obj) override {
+-    MemMgr->notifyObjectLoaded(RTDyld, Obj);
+-  }
+-
+-  // Don't hide the sibling notifyObjectLoaded from RTDyldMemoryManager.
+-  using RTDyldMemoryManager::notifyObjectLoaded;
+-
+-  RuntimeDyld::SymbolInfo findSymbol(const std::string &Name) override {
+-    return Resolver->findSymbol(Name);
+-  }
+-
+-  RuntimeDyld::SymbolInfo
+-  findSymbolInLogicalDylib(const std::string &Name) override {
+-    return Resolver->findSymbolInLogicalDylib(Name);
+-  }
+-
+-private:
+-  std::unique_ptr<RuntimeDyld::MemoryManager> MemMgr;
+-  std::unique_ptr<RuntimeDyld::SymbolResolver> Resolver;
+-};
+-}
+-
+-#endif
+diff --git a/tools/lli/lli.cpp b/tools/lli/lli.cpp
+index 92de5da..7203af2 100644
+--- a/tools/lli/lli.cpp
++++ b/tools/lli/lli.cpp
+@@ -13,6 +13,8 @@
+ //
+ //===----------------------------------------------------------------------===//
+ 
++#if 0
++
+ #include "OrcLazyJIT.h"
+ #include "RemoteJITUtils.h"
+ #include "llvm/IR/LLVMContext.h"
+@@ -751,3 +753,8 @@ std::unique_ptr<FDRPCChannel> launchRemote() {
+   return llvm::make_unique<FDRPCChannel>(PipeFD[1][0], PipeFD[0][1]);
+ #endif
+ }
++#endif
++
++int main(int argc, char **argv, char * const *envp) {
++  return 0;
++}
+diff --git a/tools/llvm-cov/CodeCoverage.cpp b/tools/llvm-cov/CodeCoverage.cpp
+index 0a4d1a6..8b13789 100644
+--- a/tools/llvm-cov/CodeCoverage.cpp
++++ b/tools/llvm-cov/CodeCoverage.cpp
+@@ -1,727 +1 @@
+-//===- CodeCoverage.cpp - Coverage tool based on profiling instrumentation-===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-//
+-// The 'CodeCoverageTool' class implements a command line tool to analyze and
+-// report coverage information using the profiling instrumentation and code
+-// coverage mapping.
+-//
+-//===----------------------------------------------------------------------===//
+ 
+-#include "CoverageFilters.h"
+-#include "CoverageReport.h"
+-#include "CoverageViewOptions.h"
+-#include "RenderingSupport.h"
+-#include "SourceCoverageView.h"
+-#include "llvm/ADT/SmallString.h"
+-#include "llvm/ADT/StringRef.h"
+-#include "llvm/ADT/Triple.h"
+-#include "llvm/ProfileData/Coverage/CoverageMapping.h"
+-#include "llvm/ProfileData/InstrProfReader.h"
+-#include "llvm/Support/CommandLine.h"
+-#include "llvm/Support/FileSystem.h"
+-#include "llvm/Support/Format.h"
+-#include "llvm/Support/MemoryBuffer.h"
+-#include "llvm/Support/Path.h"
+-#include "llvm/Support/Process.h"
+-#include "llvm/Support/Program.h"
+-#include "llvm/Support/ThreadPool.h"
+-#include "llvm/Support/ToolOutputFile.h"
+-#include <functional>
+-#include <system_error>
+-
+-using namespace llvm;
+-using namespace coverage;
+-
+-namespace {
+-/// \brief The implementation of the coverage tool.
+-class CodeCoverageTool {
+-public:
+-  enum Command {
+-    /// \brief The show command.
+-    Show,
+-    /// \brief The report command.
+-    Report
+-  };
+-
+-  /// \brief Print the error message to the error output stream.
+-  void error(const Twine &Message, StringRef Whence = "");
+-
+-  /// \brief Record (but do not print) an error message in a thread-safe way.
+-  void deferError(const Twine &Message, StringRef Whence = "");
+-
+-  /// \brief Record (but do not print) a warning message in a thread-safe way.
+-  void deferWarning(const Twine &Message, StringRef Whence = "");
+-
+-  /// \brief Print (and then clear) all deferred error and warning messages.
+-  void consumeDeferredMessages();
+-
+-  /// \brief Append a reference to a private copy of \p Path into SourceFiles.
+-  void addCollectedPath(const std::string &Path);
+-
+-  /// \brief Return a memory buffer for the given source file.
+-  ErrorOr<const MemoryBuffer &> getSourceFile(StringRef SourceFile);
+-
+-  /// \brief Create source views for the expansions of the view.
+-  void attachExpansionSubViews(SourceCoverageView &View,
+-                               ArrayRef<ExpansionRecord> Expansions,
+-                               const CoverageMapping &Coverage);
+-
+-  /// \brief Create the source view of a particular function.
+-  std::unique_ptr<SourceCoverageView>
+-  createFunctionView(const FunctionRecord &Function,
+-                     const CoverageMapping &Coverage);
+-
+-  /// \brief Create the main source view of a particular source file.
+-  std::unique_ptr<SourceCoverageView>
+-  createSourceFileView(StringRef SourceFile, const CoverageMapping &Coverage);
+-
+-  /// \brief Load the coverage mapping data. Return nullptr if an error occured.
+-  std::unique_ptr<CoverageMapping> load();
+-
+-  /// \brief If a demangler is available, demangle all symbol names.
+-  void demangleSymbols(const CoverageMapping &Coverage);
+-
+-  /// \brief Demangle \p Sym if possible. Otherwise, just return \p Sym.
+-  StringRef getSymbolForHumans(StringRef Sym) const;
+-
+-  int run(Command Cmd, int argc, const char **argv);
+-
+-  typedef llvm::function_ref<int(int, const char **)> CommandLineParserType;
+-
+-  int show(int argc, const char **argv,
+-           CommandLineParserType commandLineParser);
+-
+-  int report(int argc, const char **argv,
+-             CommandLineParserType commandLineParser);
+-
+-  std::string ObjectFilename;
+-  CoverageViewOptions ViewOpts;
+-  std::string PGOFilename;
+-  CoverageFiltersMatchAll Filters;
+-  std::vector<StringRef> SourceFiles;
+-  bool CompareFilenamesOnly;
+-  StringMap<std::string> RemappedFilenames;
+-  std::string CoverageArch;
+-
+-private:
+-  /// A cache for demangled symbol names.
+-  StringMap<std::string> DemangledNames;
+-
+-  /// File paths (absolute, or otherwise) to input source files.
+-  std::vector<std::string> CollectedPaths;
+-
+-  /// Errors and warnings which have not been printed.
+-  std::mutex DeferredMessagesLock;
+-  std::vector<std::string> DeferredMessages;
+-
+-  /// A container for input source file buffers.
+-  std::mutex LoadedSourceFilesLock;
+-  std::vector<std::pair<std::string, std::unique_ptr<MemoryBuffer>>>
+-      LoadedSourceFiles;
+-};
+-}
+-
+-static std::string getErrorString(const Twine &Message, StringRef Whence,
+-                                  bool Warning) {
+-  std::string Str = (Warning ? "warning" : "error");
+-  Str += ": ";
+-  if (!Whence.empty())
+-    Str += Whence.str() + ": ";
+-  Str += Message.str() + "\n";
+-  return Str;
+-}
+-
+-void CodeCoverageTool::error(const Twine &Message, StringRef Whence) {
+-  errs() << getErrorString(Message, Whence, false);
+-}
+-
+-void CodeCoverageTool::deferError(const Twine &Message, StringRef Whence) {
+-  std::unique_lock<std::mutex> Guard{DeferredMessagesLock};
+-  DeferredMessages.emplace_back(getErrorString(Message, Whence, false));
+-}
+-
+-void CodeCoverageTool::deferWarning(const Twine &Message, StringRef Whence) {
+-  std::unique_lock<std::mutex> Guard{DeferredMessagesLock};
+-  DeferredMessages.emplace_back(getErrorString(Message, Whence, true));
+-}
+-
+-void CodeCoverageTool::consumeDeferredMessages() {
+-  std::unique_lock<std::mutex> Guard{DeferredMessagesLock};
+-  for (const std::string &Message : DeferredMessages)
+-    ViewOpts.colored_ostream(errs(), raw_ostream::RED) << Message;
+-  DeferredMessages.clear();
+-}
+-
+-void CodeCoverageTool::addCollectedPath(const std::string &Path) {
+-  CollectedPaths.push_back(Path);
+-  SourceFiles.emplace_back(CollectedPaths.back());
+-}
+-
+-ErrorOr<const MemoryBuffer &>
+-CodeCoverageTool::getSourceFile(StringRef SourceFile) {
+-  // If we've remapped filenames, look up the real location for this file.
+-  std::unique_lock<std::mutex> Guard{LoadedSourceFilesLock};
+-  if (!RemappedFilenames.empty()) {
+-    auto Loc = RemappedFilenames.find(SourceFile);
+-    if (Loc != RemappedFilenames.end())
+-      SourceFile = Loc->second;
+-  }
+-  for (const auto &Files : LoadedSourceFiles)
+-    if (sys::fs::equivalent(SourceFile, Files.first))
+-      return *Files.second;
+-  auto Buffer = MemoryBuffer::getFile(SourceFile);
+-  if (auto EC = Buffer.getError()) {
+-    deferError(EC.message(), SourceFile);
+-    return EC;
+-  }
+-  LoadedSourceFiles.emplace_back(SourceFile, std::move(Buffer.get()));
+-  return *LoadedSourceFiles.back().second;
+-}
+-
+-void CodeCoverageTool::attachExpansionSubViews(
+-    SourceCoverageView &View, ArrayRef<ExpansionRecord> Expansions,
+-    const CoverageMapping &Coverage) {
+-  if (!ViewOpts.ShowExpandedRegions)
+-    return;
+-  for (const auto &Expansion : Expansions) {
+-    auto ExpansionCoverage = Coverage.getCoverageForExpansion(Expansion);
+-    if (ExpansionCoverage.empty())
+-      continue;
+-    auto SourceBuffer = getSourceFile(ExpansionCoverage.getFilename());
+-    if (!SourceBuffer)
+-      continue;
+-
+-    auto SubViewExpansions = ExpansionCoverage.getExpansions();
+-    auto SubView =
+-        SourceCoverageView::create(Expansion.Function.Name, SourceBuffer.get(),
+-                                   ViewOpts, std::move(ExpansionCoverage));
+-    attachExpansionSubViews(*SubView, SubViewExpansions, Coverage);
+-    View.addExpansion(Expansion.Region, std::move(SubView));
+-  }
+-}
+-
+-std::unique_ptr<SourceCoverageView>
+-CodeCoverageTool::createFunctionView(const FunctionRecord &Function,
+-                                     const CoverageMapping &Coverage) {
+-  auto FunctionCoverage = Coverage.getCoverageForFunction(Function);
+-  if (FunctionCoverage.empty())
+-    return nullptr;
+-  auto SourceBuffer = getSourceFile(FunctionCoverage.getFilename());
+-  if (!SourceBuffer)
+-    return nullptr;
+-
+-  auto Expansions = FunctionCoverage.getExpansions();
+-  auto View = SourceCoverageView::create(getSymbolForHumans(Function.Name),
+-                                         SourceBuffer.get(), ViewOpts,
+-                                         std::move(FunctionCoverage));
+-  attachExpansionSubViews(*View, Expansions, Coverage);
+-
+-  return View;
+-}
+-
+-std::unique_ptr<SourceCoverageView>
+-CodeCoverageTool::createSourceFileView(StringRef SourceFile,
+-                                       const CoverageMapping &Coverage) {
+-  auto SourceBuffer = getSourceFile(SourceFile);
+-  if (!SourceBuffer)
+-    return nullptr;
+-  auto FileCoverage = Coverage.getCoverageForFile(SourceFile);
+-  if (FileCoverage.empty())
+-    return nullptr;
+-
+-  auto Expansions = FileCoverage.getExpansions();
+-  auto View = SourceCoverageView::create(SourceFile, SourceBuffer.get(),
+-                                         ViewOpts, std::move(FileCoverage));
+-  attachExpansionSubViews(*View, Expansions, Coverage);
+-
+-  for (const auto *Function : Coverage.getInstantiations(SourceFile)) {
+-    auto SubViewCoverage = Coverage.getCoverageForFunction(*Function);
+-    auto SubViewExpansions = SubViewCoverage.getExpansions();
+-    auto SubView = SourceCoverageView::create(
+-        getSymbolForHumans(Function->Name), SourceBuffer.get(), ViewOpts,
+-        std::move(SubViewCoverage));
+-    attachExpansionSubViews(*SubView, SubViewExpansions, Coverage);
+-
+-    if (SubView) {
+-      unsigned FileID = Function->CountedRegions.front().FileID;
+-      unsigned Line = 0;
+-      for (const auto &CR : Function->CountedRegions)
+-        if (CR.FileID == FileID)
+-          Line = std::max(CR.LineEnd, Line);
+-      View->addInstantiation(Function->Name, Line, std::move(SubView));
+-    }
+-  }
+-  return View;
+-}
+-
+-static bool modifiedTimeGT(StringRef LHS, StringRef RHS) {
+-  sys::fs::file_status Status;
+-  if (sys::fs::status(LHS, Status))
+-    return false;
+-  auto LHSTime = Status.getLastModificationTime();
+-  if (sys::fs::status(RHS, Status))
+-    return false;
+-  auto RHSTime = Status.getLastModificationTime();
+-  return LHSTime > RHSTime;
+-}
+-
+-std::unique_ptr<CoverageMapping> CodeCoverageTool::load() {
+-  if (modifiedTimeGT(ObjectFilename, PGOFilename))
+-    errs() << "warning: profile data may be out of date - object is newer\n";
+-  auto CoverageOrErr = CoverageMapping::load(ObjectFilename, PGOFilename,
+-                                             CoverageArch);
+-  if (Error E = CoverageOrErr.takeError()) {
+-    colored_ostream(errs(), raw_ostream::RED)
+-        << "error: Failed to load coverage: " << toString(std::move(E)) << "\n";
+-    return nullptr;
+-  }
+-  auto Coverage = std::move(CoverageOrErr.get());
+-  unsigned Mismatched = Coverage->getMismatchedCount();
+-  if (Mismatched) {
+-    colored_ostream(errs(), raw_ostream::RED)
+-        << "warning: " << Mismatched << " functions have mismatched data. ";
+-    errs() << "\n";
+-  }
+-
+-  if (CompareFilenamesOnly) {
+-    auto CoveredFiles = Coverage.get()->getUniqueSourceFiles();
+-    for (auto &SF : SourceFiles) {
+-      StringRef SFBase = sys::path::filename(SF);
+-      for (const auto &CF : CoveredFiles)
+-        if (SFBase == sys::path::filename(CF)) {
+-          RemappedFilenames[CF] = SF;
+-          SF = CF;
+-          break;
+-        }
+-    }
+-  }
+-
+-  demangleSymbols(*Coverage);
+-
+-  return Coverage;
+-}
+-
+-void CodeCoverageTool::demangleSymbols(const CoverageMapping &Coverage) {
+-  if (!ViewOpts.hasDemangler())
+-    return;
+-
+-  // Pass function names to the demangler in a temporary file.
+-  int InputFD;
+-  SmallString<256> InputPath;
+-  std::error_code EC =
+-      sys::fs::createTemporaryFile("demangle-in", "list", InputFD, InputPath);
+-  if (EC) {
+-    error(InputPath, EC.message());
+-    return;
+-  }
+-  tool_output_file InputTOF{InputPath, InputFD};
+-
+-  unsigned NumSymbols = 0;
+-  for (const auto &Function : Coverage.getCoveredFunctions()) {
+-    InputTOF.os() << Function.Name << '\n';
+-    ++NumSymbols;
+-  }
+-  InputTOF.os().close();
+-
+-  // Use another temporary file to store the demangler's output.
+-  int OutputFD;
+-  SmallString<256> OutputPath;
+-  EC = sys::fs::createTemporaryFile("demangle-out", "list", OutputFD,
+-                                    OutputPath);
+-  if (EC) {
+-    error(OutputPath, EC.message());
+-    return;
+-  }
+-  tool_output_file OutputTOF{OutputPath, OutputFD};
+-  OutputTOF.os().close();
+-
+-  // Invoke the demangler.
+-  std::vector<const char *> ArgsV;
+-  for (const std::string &Arg : ViewOpts.DemanglerOpts)
+-    ArgsV.push_back(Arg.c_str());
+-  ArgsV.push_back(nullptr);
+-  StringRef InputPathRef = InputPath.str();
+-  StringRef OutputPathRef = OutputPath.str();
+-  StringRef StderrRef;
+-  const StringRef *Redirects[] = {&InputPathRef, &OutputPathRef, &StderrRef};
+-  std::string ErrMsg;
+-  int RC = sys::ExecuteAndWait(ViewOpts.DemanglerOpts[0], ArgsV.data(),
+-                               /*env=*/nullptr, Redirects, /*secondsToWait=*/0,
+-                               /*memoryLimit=*/0, &ErrMsg);
+-  if (RC) {
+-    error(ErrMsg, ViewOpts.DemanglerOpts[0]);
+-    return;
+-  }
+-
+-  // Parse the demangler's output.
+-  auto BufOrError = MemoryBuffer::getFile(OutputPath);
+-  if (!BufOrError) {
+-    error(OutputPath, BufOrError.getError().message());
+-    return;
+-  }
+-
+-  std::unique_ptr<MemoryBuffer> DemanglerBuf = std::move(*BufOrError);
+-
+-  SmallVector<StringRef, 8> Symbols;
+-  StringRef DemanglerData = DemanglerBuf->getBuffer();
+-  DemanglerData.split(Symbols, '\n', /*MaxSplit=*/NumSymbols,
+-                      /*KeepEmpty=*/false);
+-  if (Symbols.size() != NumSymbols) {
+-    error("Demangler did not provide expected number of symbols");
+-    return;
+-  }
+-
+-  // Cache the demangled names.
+-  unsigned I = 0;
+-  for (const auto &Function : Coverage.getCoveredFunctions())
+-    DemangledNames[Function.Name] = Symbols[I++];
+-}
+-
+-StringRef CodeCoverageTool::getSymbolForHumans(StringRef Sym) const {
+-  const auto DemangledName = DemangledNames.find(Sym);
+-  if (DemangledName == DemangledNames.end())
+-    return Sym;
+-  return DemangledName->getValue();
+-}
+-
+-int CodeCoverageTool::run(Command Cmd, int argc, const char **argv) {
+-  cl::opt<std::string, true> ObjectFilename(
+-      cl::Positional, cl::Required, cl::location(this->ObjectFilename),
+-      cl::desc("Covered executable or object file."));
+-
+-  cl::list<std::string> InputSourceFiles(
+-      cl::Positional, cl::desc("<Source files>"), cl::ZeroOrMore);
+-
+-  cl::opt<std::string, true> PGOFilename(
+-      "instr-profile", cl::Required, cl::location(this->PGOFilename),
+-      cl::desc(
+-          "File with the profile data obtained after an instrumented run"));
+-
+-  cl::opt<std::string> Arch(
+-      "arch", cl::desc("architecture of the coverage mapping binary"));
+-
+-  cl::opt<bool> DebugDump("dump", cl::Optional,
+-                          cl::desc("Show internal debug dump"));
+-
+-  cl::opt<CoverageViewOptions::OutputFormat> Format(
+-      "format", cl::desc("Output format for line-based coverage reports"),
+-      cl::values(clEnumValN(CoverageViewOptions::OutputFormat::Text, "text",
+-                            "Text output"),
+-                 clEnumValN(CoverageViewOptions::OutputFormat::HTML, "html",
+-                            "HTML output"),
+-                 clEnumValEnd),
+-      cl::init(CoverageViewOptions::OutputFormat::Text));
+-
+-  cl::opt<bool> FilenameEquivalence(
+-      "filename-equivalence", cl::Optional,
+-      cl::desc("Treat source files as equivalent to paths in the coverage data "
+-               "when the file names match, even if the full paths do not"));
+-
+-  cl::OptionCategory FilteringCategory("Function filtering options");
+-
+-  cl::list<std::string> NameFilters(
+-      "name", cl::Optional,
+-      cl::desc("Show code coverage only for functions with the given name"),
+-      cl::ZeroOrMore, cl::cat(FilteringCategory));
+-
+-  cl::list<std::string> NameRegexFilters(
+-      "name-regex", cl::Optional,
+-      cl::desc("Show code coverage only for functions that match the given "
+-               "regular expression"),
+-      cl::ZeroOrMore, cl::cat(FilteringCategory));
+-
+-  cl::opt<double> RegionCoverageLtFilter(
+-      "region-coverage-lt", cl::Optional,
+-      cl::desc("Show code coverage only for functions with region coverage "
+-               "less than the given threshold"),
+-      cl::cat(FilteringCategory));
+-
+-  cl::opt<double> RegionCoverageGtFilter(
+-      "region-coverage-gt", cl::Optional,
+-      cl::desc("Show code coverage only for functions with region coverage "
+-               "greater than the given threshold"),
+-      cl::cat(FilteringCategory));
+-
+-  cl::opt<double> LineCoverageLtFilter(
+-      "line-coverage-lt", cl::Optional,
+-      cl::desc("Show code coverage only for functions with line coverage less "
+-               "than the given threshold"),
+-      cl::cat(FilteringCategory));
+-
+-  cl::opt<double> LineCoverageGtFilter(
+-      "line-coverage-gt", cl::Optional,
+-      cl::desc("Show code coverage only for functions with line coverage "
+-               "greater than the given threshold"),
+-      cl::cat(FilteringCategory));
+-
+-  cl::opt<cl::boolOrDefault> UseColor(
+-      "use-color", cl::desc("Emit colored output (default=autodetect)"),
+-      cl::init(cl::BOU_UNSET));
+-
+-  cl::list<std::string> DemanglerOpts(
+-      "Xdemangler", cl::desc("<demangler-path>|<demangler-option>"));
+-
+-  auto commandLineParser = [&, this](int argc, const char **argv) -> int {
+-    cl::ParseCommandLineOptions(argc, argv, "LLVM code coverage tool\n");
+-    ViewOpts.Debug = DebugDump;
+-    CompareFilenamesOnly = FilenameEquivalence;
+-
+-    ViewOpts.Format = Format;
+-    switch (ViewOpts.Format) {
+-    case CoverageViewOptions::OutputFormat::Text:
+-      ViewOpts.Colors = UseColor == cl::BOU_UNSET
+-                            ? sys::Process::StandardOutHasColors()
+-                            : UseColor == cl::BOU_TRUE;
+-      break;
+-    case CoverageViewOptions::OutputFormat::HTML:
+-      if (UseColor == cl::BOU_FALSE)
+-        error("Color output cannot be disabled when generating html.");
+-      ViewOpts.Colors = true;
+-      break;
+-    }
+-
+-    // If a demangler is supplied, check if it exists and register it.
+-    if (DemanglerOpts.size()) {
+-      auto DemanglerPathOrErr = sys::findProgramByName(DemanglerOpts[0]);
+-      if (!DemanglerPathOrErr) {
+-        error("Could not find the demangler!",
+-              DemanglerPathOrErr.getError().message());
+-        return 1;
+-      }
+-      DemanglerOpts[0] = *DemanglerPathOrErr;
+-      ViewOpts.DemanglerOpts.swap(DemanglerOpts);
+-    }
+-
+-    // Create the function filters
+-    if (!NameFilters.empty() || !NameRegexFilters.empty()) {
+-      auto NameFilterer = new CoverageFilters;
+-      for (const auto &Name : NameFilters)
+-        NameFilterer->push_back(llvm::make_unique<NameCoverageFilter>(Name));
+-      for (const auto &Regex : NameRegexFilters)
+-        NameFilterer->push_back(
+-            llvm::make_unique<NameRegexCoverageFilter>(Regex));
+-      Filters.push_back(std::unique_ptr<CoverageFilter>(NameFilterer));
+-    }
+-    if (RegionCoverageLtFilter.getNumOccurrences() ||
+-        RegionCoverageGtFilter.getNumOccurrences() ||
+-        LineCoverageLtFilter.getNumOccurrences() ||
+-        LineCoverageGtFilter.getNumOccurrences()) {
+-      auto StatFilterer = new CoverageFilters;
+-      if (RegionCoverageLtFilter.getNumOccurrences())
+-        StatFilterer->push_back(llvm::make_unique<RegionCoverageFilter>(
+-            RegionCoverageFilter::LessThan, RegionCoverageLtFilter));
+-      if (RegionCoverageGtFilter.getNumOccurrences())
+-        StatFilterer->push_back(llvm::make_unique<RegionCoverageFilter>(
+-            RegionCoverageFilter::GreaterThan, RegionCoverageGtFilter));
+-      if (LineCoverageLtFilter.getNumOccurrences())
+-        StatFilterer->push_back(llvm::make_unique<LineCoverageFilter>(
+-            LineCoverageFilter::LessThan, LineCoverageLtFilter));
+-      if (LineCoverageGtFilter.getNumOccurrences())
+-        StatFilterer->push_back(llvm::make_unique<LineCoverageFilter>(
+-            RegionCoverageFilter::GreaterThan, LineCoverageGtFilter));
+-      Filters.push_back(std::unique_ptr<CoverageFilter>(StatFilterer));
+-    }
+-
+-    if (!Arch.empty() &&
+-        Triple(Arch).getArch() == llvm::Triple::ArchType::UnknownArch) {
+-      errs() << "error: Unknown architecture: " << Arch << "\n";
+-      return 1;
+-    }
+-    CoverageArch = Arch;
+-
+-    for (const auto &File : InputSourceFiles) {
+-      SmallString<128> Path(File);
+-      if (!CompareFilenamesOnly)
+-        if (std::error_code EC = sys::fs::make_absolute(Path)) {
+-          errs() << "error: " << File << ": " << EC.message();
+-          return 1;
+-        }
+-      addCollectedPath(Path.str());
+-    }
+-    return 0;
+-  };
+-
+-  switch (Cmd) {
+-  case Show:
+-    return show(argc, argv, commandLineParser);
+-  case Report:
+-    return report(argc, argv, commandLineParser);
+-  }
+-  return 0;
+-}
+-
+-int CodeCoverageTool::show(int argc, const char **argv,
+-                           CommandLineParserType commandLineParser) {
+-
+-  cl::OptionCategory ViewCategory("Viewing options");
+-
+-  cl::opt<bool> ShowLineExecutionCounts(
+-      "show-line-counts", cl::Optional,
+-      cl::desc("Show the execution counts for each line"), cl::init(true),
+-      cl::cat(ViewCategory));
+-
+-  cl::opt<bool> ShowRegions(
+-      "show-regions", cl::Optional,
+-      cl::desc("Show the execution counts for each region"),
+-      cl::cat(ViewCategory));
+-
+-  cl::opt<bool> ShowBestLineRegionsCounts(
+-      "show-line-counts-or-regions", cl::Optional,
+-      cl::desc("Show the execution counts for each line, or the execution "
+-               "counts for each region on lines that have multiple regions"),
+-      cl::cat(ViewCategory));
+-
+-  cl::opt<bool> ShowExpansions("show-expansions", cl::Optional,
+-                               cl::desc("Show expanded source regions"),
+-                               cl::cat(ViewCategory));
+-
+-  cl::opt<bool> ShowInstantiations("show-instantiations", cl::Optional,
+-                                   cl::desc("Show function instantiations"),
+-                                   cl::cat(ViewCategory));
+-
+-  cl::opt<std::string> ShowOutputDirectory(
+-      "output-dir", cl::init(""),
+-      cl::desc("Directory in which coverage information is written out"));
+-  cl::alias ShowOutputDirectoryA("o", cl::desc("Alias for --output-dir"),
+-                                 cl::aliasopt(ShowOutputDirectory));
+-
+-  auto Err = commandLineParser(argc, argv);
+-  if (Err)
+-    return Err;
+-
+-  ViewOpts.ShowLineNumbers = true;
+-  ViewOpts.ShowLineStats = ShowLineExecutionCounts.getNumOccurrences() != 0 ||
+-                           !ShowRegions || ShowBestLineRegionsCounts;
+-  ViewOpts.ShowRegionMarkers = ShowRegions || ShowBestLineRegionsCounts;
+-  ViewOpts.ShowLineStatsOrRegionMarkers = ShowBestLineRegionsCounts;
+-  ViewOpts.ShowExpandedRegions = ShowExpansions;
+-  ViewOpts.ShowFunctionInstantiations = ShowInstantiations;
+-  ViewOpts.ShowOutputDirectory = ShowOutputDirectory;
+-
+-  if (ViewOpts.hasOutputDirectory()) {
+-    if (auto E = sys::fs::create_directories(ViewOpts.ShowOutputDirectory)) {
+-      error("Could not create output directory!", E.message());
+-      return 1;
+-    }
+-  }
+-
+-  auto Coverage = load();
+-  if (!Coverage)
+-    return 1;
+-
+-  auto Printer = CoveragePrinter::create(ViewOpts);
+-
+-  if (!Filters.empty()) {
+-    auto OSOrErr = Printer->createViewFile("functions", /*InToplevel=*/true);
+-    if (Error E = OSOrErr.takeError()) {
+-      error("Could not create view file!", toString(std::move(E)));
+-      return 1;
+-    }
+-    auto OS = std::move(OSOrErr.get());
+-
+-    // Show functions.
+-    for (const auto &Function : Coverage->getCoveredFunctions()) {
+-      if (!Filters.matches(Function))
+-        continue;
+-
+-      auto mainView = createFunctionView(Function, *Coverage);
+-      if (!mainView) {
+-        ViewOpts.colored_ostream(errs(), raw_ostream::RED)
+-            << "warning: Could not read coverage for '" << Function.Name << "'."
+-            << "\n";
+-        continue;
+-      }
+-
+-      mainView->print(*OS.get(), /*WholeFile=*/false, /*ShowSourceName=*/true);
+-    }
+-
+-    Printer->closeViewFile(std::move(OS));
+-    return 0;
+-  }
+-
+-  // Show files
+-  bool ShowFilenames = SourceFiles.size() != 1;
+-
+-  if (SourceFiles.empty())
+-    // Get the source files from the function coverage mapping.
+-    for (StringRef Filename : Coverage->getUniqueSourceFiles())
+-      SourceFiles.push_back(Filename);
+-
+-  // Create an index out of the source files.
+-  if (ViewOpts.hasOutputDirectory()) {
+-    if (Error E = Printer->createIndexFile(SourceFiles)) {
+-      error("Could not create index file!", toString(std::move(E)));
+-      return 1;
+-    }
+-  }
+-
+-  // In -output-dir mode, it's safe to use multiple threads to print files.
+-  unsigned ThreadCount = 1;
+-  if (ViewOpts.hasOutputDirectory())
+-    ThreadCount = std::thread::hardware_concurrency();
+-  ThreadPool Pool(ThreadCount);
+-
+-  for (StringRef SourceFile : SourceFiles) {
+-    Pool.async([this, SourceFile, &Coverage, &Printer, ShowFilenames] {
+-      auto View = createSourceFileView(SourceFile, *Coverage);
+-      if (!View) {
+-        deferWarning("The file '" + SourceFile.str() + "' isn't covered.");
+-        return;
+-      }
+-
+-      auto OSOrErr = Printer->createViewFile(SourceFile, /*InToplevel=*/false);
+-      if (Error E = OSOrErr.takeError()) {
+-        deferError("Could not create view file!", toString(std::move(E)));
+-        return;
+-      }
+-      auto OS = std::move(OSOrErr.get());
+-
+-      View->print(*OS.get(), /*Wholefile=*/true,
+-                  /*ShowSourceName=*/ShowFilenames);
+-      Printer->closeViewFile(std::move(OS));
+-    });
+-  }
+-
+-  Pool.wait();
+-
+-  consumeDeferredMessages();
+-
+-  return 0;
+-}
+-
+-int CodeCoverageTool::report(int argc, const char **argv,
+-                             CommandLineParserType commandLineParser) {
+-  auto Err = commandLineParser(argc, argv);
+-  if (Err)
+-    return Err;
+-
+-  if (ViewOpts.Format == CoverageViewOptions::OutputFormat::HTML)
+-    error("HTML output for summary reports is not yet supported.");
+-
+-  auto Coverage = load();
+-  if (!Coverage)
+-    return 1;
+-
+-  CoverageReport Report(ViewOpts, std::move(Coverage));
+-  if (SourceFiles.empty())
+-    Report.renderFileReports(llvm::outs());
+-  else
+-    Report.renderFunctionReports(SourceFiles, llvm::outs());
+-  return 0;
+-}
+-
+-int showMain(int argc, const char *argv[]) {
+-  CodeCoverageTool Tool;
+-  return Tool.run(CodeCoverageTool::Show, argc, argv);
+-}
+-
+-int reportMain(int argc, const char *argv[]) {
+-  CodeCoverageTool Tool;
+-  return Tool.run(CodeCoverageTool::Report, argc, argv);
+-}
+diff --git a/tools/llvm-cov/CoverageFilters.cpp b/tools/llvm-cov/CoverageFilters.cpp
+index 325dd72..8b13789 100644
+--- a/tools/llvm-cov/CoverageFilters.cpp
++++ b/tools/llvm-cov/CoverageFilters.cpp
+@@ -1,59 +1 @@
+-//===- CoverageFilters.cpp - Function coverage mapping filters ------------===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-//
+-// These classes provide filtering for function coverage mapping records.
+-//
+-//===----------------------------------------------------------------------===//
+ 
+-#include "CoverageFilters.h"
+-#include "CoverageSummaryInfo.h"
+-#include "llvm/Support/Regex.h"
+-
+-using namespace llvm;
+-
+-bool NameCoverageFilter::matches(const coverage::FunctionRecord &Function) {
+-  StringRef FuncName = Function.Name;
+-  return FuncName.find(Name) != StringRef::npos;
+-}
+-
+-bool
+-NameRegexCoverageFilter::matches(const coverage::FunctionRecord &Function) {
+-  return llvm::Regex(Regex).match(Function.Name);
+-}
+-
+-bool RegionCoverageFilter::matches(const coverage::FunctionRecord &Function) {
+-  return PassesThreshold(FunctionCoverageSummary::get(Function)
+-                             .RegionCoverage.getPercentCovered());
+-}
+-
+-bool LineCoverageFilter::matches(const coverage::FunctionRecord &Function) {
+-  return PassesThreshold(
+-      FunctionCoverageSummary::get(Function).LineCoverage.getPercentCovered());
+-}
+-
+-void CoverageFilters::push_back(std::unique_ptr<CoverageFilter> Filter) {
+-  Filters.push_back(std::move(Filter));
+-}
+-
+-bool CoverageFilters::matches(const coverage::FunctionRecord &Function) {
+-  for (const auto &Filter : Filters) {
+-    if (Filter->matches(Function))
+-      return true;
+-  }
+-  return false;
+-}
+-
+-bool
+-CoverageFiltersMatchAll::matches(const coverage::FunctionRecord &Function) {
+-  for (const auto &Filter : Filters) {
+-    if (!Filter->matches(Function))
+-      return false;
+-  }
+-  return true;
+-}
+diff --git a/tools/llvm-cov/CoverageFilters.h b/tools/llvm-cov/CoverageFilters.h
+deleted file mode 100644
+index 756c4b4..0000000
+--- a/tools/llvm-cov/CoverageFilters.h
++++ /dev/null
+@@ -1,127 +0,0 @@
+-//===- CoverageFilters.h - Function coverage mapping filters --------------===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-//
+-// These classes provide filtering for function coverage mapping records.
+-//
+-//===----------------------------------------------------------------------===//
+-
+-#ifndef LLVM_COV_COVERAGEFILTERS_H
+-#define LLVM_COV_COVERAGEFILTERS_H
+-
+-#include "llvm/ProfileData/Coverage/CoverageMapping.h"
+-#include <memory>
+-#include <vector>
+-
+-namespace llvm {
+-
+-/// \brief Matches specific functions that pass the requirement of this filter.
+-class CoverageFilter {
+-public:
+-  virtual ~CoverageFilter() {}
+-
+-  /// \brief Return true if the function passes the requirements of this filter.
+-  virtual bool matches(const coverage::FunctionRecord &Function) {
+-    return true;
+-  }
+-};
+-
+-/// \brief Matches functions that contain a specific string in their name.
+-class NameCoverageFilter : public CoverageFilter {
+-  StringRef Name;
+-
+-public:
+-  NameCoverageFilter(StringRef Name) : Name(Name) {}
+-
+-  bool matches(const coverage::FunctionRecord &Function) override;
+-};
+-
+-/// \brief Matches functions whose name matches a certain regular expression.
+-class NameRegexCoverageFilter : public CoverageFilter {
+-  StringRef Regex;
+-
+-public:
+-  NameRegexCoverageFilter(StringRef Regex) : Regex(Regex) {}
+-
+-  bool matches(const coverage::FunctionRecord &Function) override;
+-};
+-
+-/// \brief Matches numbers that pass a certain threshold.
+-template <typename T> class StatisticThresholdFilter {
+-public:
+-  enum Operation { LessThan, GreaterThan };
+-
+-protected:
+-  Operation Op;
+-  T Threshold;
+-
+-  StatisticThresholdFilter(Operation Op, T Threshold)
+-      : Op(Op), Threshold(Threshold) {}
+-
+-  /// \brief Return true if the given number is less than
+-  /// or greater than the certain threshold.
+-  bool PassesThreshold(T Value) const {
+-    switch (Op) {
+-    case LessThan:
+-      return Value < Threshold;
+-    case GreaterThan:
+-      return Value > Threshold;
+-    }
+-    return false;
+-  }
+-};
+-
+-/// \brief Matches functions whose region coverage percentage
+-/// is above/below a certain percentage.
+-class RegionCoverageFilter : public CoverageFilter,
+-                             public StatisticThresholdFilter<double> {
+-public:
+-  RegionCoverageFilter(Operation Op, double Threshold)
+-      : StatisticThresholdFilter(Op, Threshold) {}
+-
+-  bool matches(const coverage::FunctionRecord &Function) override;
+-};
+-
+-/// \brief Matches functions whose line coverage percentage
+-/// is above/below a certain percentage.
+-class LineCoverageFilter : public CoverageFilter,
+-                           public StatisticThresholdFilter<double> {
+-public:
+-  LineCoverageFilter(Operation Op, double Threshold)
+-      : StatisticThresholdFilter(Op, Threshold) {}
+-
+-  bool matches(const coverage::FunctionRecord &Function) override;
+-};
+-
+-/// \brief A collection of filters.
+-/// Matches functions that match any filters contained
+-/// in an instance of this class.
+-class CoverageFilters : public CoverageFilter {
+-protected:
+-  std::vector<std::unique_ptr<CoverageFilter>> Filters;
+-
+-public:
+-  /// \brief Append a filter to this collection.
+-  void push_back(std::unique_ptr<CoverageFilter> Filter);
+-
+-  bool empty() const { return Filters.empty(); }
+-
+-  bool matches(const coverage::FunctionRecord &Function) override;
+-};
+-
+-/// \brief A collection of filters.
+-/// Matches functions that match all of the filters contained
+-/// in an instance of this class.
+-class CoverageFiltersMatchAll : public CoverageFilters {
+-public:
+-  bool matches(const coverage::FunctionRecord &Function) override;
+-};
+-
+-} // namespace llvm
+-
+-#endif // LLVM_COV_COVERAGEFILTERS_H
+diff --git a/tools/llvm-cov/CoverageReport.cpp b/tools/llvm-cov/CoverageReport.cpp
+index 10e53b3..8b13789 100644
+--- a/tools/llvm-cov/CoverageReport.cpp
++++ b/tools/llvm-cov/CoverageReport.cpp
+@@ -1,235 +1 @@
+-//===- CoverageReport.cpp - Code coverage report -------------------------===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-//
+-// This class implements rendering of a code coverage report.
+-//
+-//===----------------------------------------------------------------------===//
+ 
+-#include "CoverageReport.h"
+-#include "RenderingSupport.h"
+-#include "llvm/Support/FileSystem.h"
+-#include "llvm/Support/Format.h"
+-
+-using namespace llvm;
+-namespace {
+-/// \brief Helper struct which prints trimmed and aligned columns.
+-struct Column {
+-  enum TrimKind { NoTrim, WidthTrim, LeftTrim, RightTrim };
+-
+-  enum AlignmentKind { LeftAlignment, RightAlignment };
+-
+-  StringRef Str;
+-  unsigned Width;
+-  TrimKind Trim;
+-  AlignmentKind Alignment;
+-
+-  Column(StringRef Str, unsigned Width)
+-      : Str(Str), Width(Width), Trim(WidthTrim), Alignment(LeftAlignment) {}
+-
+-  Column &set(TrimKind Value) {
+-    Trim = Value;
+-    return *this;
+-  }
+-
+-  Column &set(AlignmentKind Value) {
+-    Alignment = Value;
+-    return *this;
+-  }
+-
+-  void render(raw_ostream &OS) const;
+-};
+-
+-raw_ostream &operator<<(raw_ostream &OS, const Column &Value) {
+-  Value.render(OS);
+-  return OS;
+-}
+-}
+-
+-void Column::render(raw_ostream &OS) const {
+-  if (Str.size() <= Width) {
+-    if (Alignment == RightAlignment) {
+-      OS.indent(Width - Str.size());
+-      OS << Str;
+-      return;
+-    }
+-    OS << Str;
+-    OS.indent(Width - Str.size());
+-    return;
+-  }
+-
+-  switch (Trim) {
+-  case NoTrim:
+-    OS << Str;
+-    break;
+-  case WidthTrim:
+-    OS << Str.substr(0, Width);
+-    break;
+-  case LeftTrim:
+-    OS << "..." << Str.substr(Str.size() - Width + 3);
+-    break;
+-  case RightTrim:
+-    OS << Str.substr(0, Width - 3) << "...";
+-    break;
+-  }
+-}
+-
+-static Column column(StringRef Str, unsigned Width) {
+-  return Column(Str, Width);
+-}
+-
+-template <typename T>
+-static Column column(StringRef Str, unsigned Width, const T &Value) {
+-  return Column(Str, Width).set(Value);
+-}
+-
+-static size_t FileReportColumns[] = {25, 10, 8, 8, 10, 10};
+-static size_t FunctionReportColumns[] = {25, 10, 8, 8, 10, 8, 8};
+-
+-/// \brief  Adjust column widths to fit long file paths and function names.
+-static void adjustColumnWidths(coverage::CoverageMapping *CM) {
+-  for (StringRef Filename : CM->getUniqueSourceFiles()) {
+-    FileReportColumns[0] = std::max(FileReportColumns[0], Filename.size());
+-    for (const auto &F : CM->getCoveredFunctions(Filename)) {
+-      FunctionReportColumns[0] =
+-          std::max(FunctionReportColumns[0], F.Name.size());
+-    }
+-  }
+-}
+-
+-/// \brief Prints a horizontal divider which spans across the given columns.
+-template <typename T, size_t N>
+-static void renderDivider(T (&Columns)[N], raw_ostream &OS) {
+-  unsigned Length = 0;
+-  for (unsigned I = 0; I < N; ++I)
+-    Length += Columns[I];
+-  for (unsigned I = 0; I < Length; ++I)
+-    OS << '-';
+-}
+-
+-/// \brief Return the color which correponds to the coverage
+-/// percentage of a certain metric.
+-template <typename T>
+-static raw_ostream::Colors determineCoveragePercentageColor(const T &Info) {
+-  if (Info.isFullyCovered())
+-    return raw_ostream::GREEN;
+-  return Info.getPercentCovered() >= 80.0 ? raw_ostream::YELLOW
+-                                          : raw_ostream::RED;
+-}
+-
+-void CoverageReport::render(const FileCoverageSummary &File, raw_ostream &OS) {
+-  OS << column(File.Name, FileReportColumns[0], Column::NoTrim)
+-     << format("%*u", FileReportColumns[1],
+-               (unsigned)File.RegionCoverage.NumRegions);
+-  Options.colored_ostream(OS, File.RegionCoverage.isFullyCovered()
+-                                  ? raw_ostream::GREEN
+-                                  : raw_ostream::RED)
+-      << format("%*u", FileReportColumns[2], (unsigned)File.RegionCoverage.NotCovered);
+-  Options.colored_ostream(OS,
+-                          determineCoveragePercentageColor(File.RegionCoverage))
+-      << format("%*.2f", FileReportColumns[3] - 1,
+-                File.RegionCoverage.getPercentCovered()) << '%';
+-  OS << format("%*u", FileReportColumns[4],
+-               (unsigned)File.FunctionCoverage.NumFunctions);
+-  Options.colored_ostream(
+-      OS, determineCoveragePercentageColor(File.FunctionCoverage))
+-      << format("%*.2f", FileReportColumns[5] - 1,
+-                File.FunctionCoverage.getPercentCovered()) << '%';
+-  OS << "\n";
+-}
+-
+-void CoverageReport::render(const FunctionCoverageSummary &Function,
+-                            raw_ostream &OS) {
+-  OS << column(Function.Name, FunctionReportColumns[0], Column::RightTrim)
+-     << format("%*u", FunctionReportColumns[1],
+-               (unsigned)Function.RegionCoverage.NumRegions);
+-  Options.colored_ostream(OS, Function.RegionCoverage.isFullyCovered()
+-                                  ? raw_ostream::GREEN
+-                                  : raw_ostream::RED)
+-      << format("%*u", FunctionReportColumns[2],
+-                (unsigned)Function.RegionCoverage.NotCovered);
+-  Options.colored_ostream(
+-      OS, determineCoveragePercentageColor(Function.RegionCoverage))
+-      << format("%*.2f", FunctionReportColumns[3] - 1,
+-                Function.RegionCoverage.getPercentCovered()) << '%';
+-  OS << format("%*u", FunctionReportColumns[4],
+-               (unsigned)Function.LineCoverage.NumLines);
+-  Options.colored_ostream(OS, Function.LineCoverage.isFullyCovered()
+-                                  ? raw_ostream::GREEN
+-                                  : raw_ostream::RED)
+-      << format("%*u", FunctionReportColumns[5],
+-                (unsigned)Function.LineCoverage.NotCovered);
+-  Options.colored_ostream(
+-      OS, determineCoveragePercentageColor(Function.LineCoverage))
+-      << format("%*.2f", FunctionReportColumns[6] - 1,
+-                Function.LineCoverage.getPercentCovered()) << '%';
+-  OS << "\n";
+-}
+-
+-void CoverageReport::renderFunctionReports(ArrayRef<StringRef> Files,
+-                                           raw_ostream &OS) {
+-  adjustColumnWidths(Coverage.get());
+-  bool isFirst = true;
+-  for (StringRef Filename : Files) {
+-    if (isFirst)
+-      isFirst = false;
+-    else
+-      OS << "\n";
+-    OS << "File '" << Filename << "':\n";
+-    OS << column("Name", FunctionReportColumns[0])
+-       << column("Regions", FunctionReportColumns[1], Column::RightAlignment)
+-       << column("Miss", FunctionReportColumns[2], Column::RightAlignment)
+-       << column("Cover", FunctionReportColumns[3], Column::RightAlignment)
+-       << column("Lines", FunctionReportColumns[4], Column::RightAlignment)
+-       << column("Miss", FunctionReportColumns[5], Column::RightAlignment)
+-       << column("Cover", FunctionReportColumns[6], Column::RightAlignment);
+-    OS << "\n";
+-    renderDivider(FunctionReportColumns, OS);
+-    OS << "\n";
+-    FunctionCoverageSummary Totals("TOTAL");
+-    for (const auto &F : Coverage->getCoveredFunctions(Filename)) {
+-      FunctionCoverageSummary Function = FunctionCoverageSummary::get(F);
+-      ++Totals.ExecutionCount;
+-      Totals.RegionCoverage += Function.RegionCoverage;
+-      Totals.LineCoverage += Function.LineCoverage;
+-      render(Function, OS);
+-    }
+-    if (Totals.ExecutionCount) {
+-      renderDivider(FunctionReportColumns, OS);
+-      OS << "\n";
+-      render(Totals, OS);
+-    }
+-  }
+-}
+-
+-void CoverageReport::renderFileReports(raw_ostream &OS) {
+-  adjustColumnWidths(Coverage.get());
+-  OS << column("Filename", FileReportColumns[0])
+-     << column("Regions", FileReportColumns[1], Column::RightAlignment)
+-     << column("Miss", FileReportColumns[2], Column::RightAlignment)
+-     << column("Cover", FileReportColumns[3], Column::RightAlignment)
+-     << column("Functions", FileReportColumns[4], Column::RightAlignment)
+-     << column("Executed", FileReportColumns[5], Column::RightAlignment)
+-     << "\n";
+-  renderDivider(FileReportColumns, OS);
+-  OS << "\n";
+-
+-  FileCoverageSummary Totals("TOTAL");
+-  for (StringRef Filename : Coverage->getUniqueSourceFiles()) {
+-    FileCoverageSummary Summary(Filename);
+-    for (const auto &F : Coverage->getCoveredFunctions(Filename)) {
+-      FunctionCoverageSummary Function = FunctionCoverageSummary::get(F);
+-      Summary.addFunction(Function);
+-      Totals.addFunction(Function);
+-    }
+-    render(Summary, OS);
+-  }
+-  renderDivider(FileReportColumns, OS);
+-  OS << "\n";
+-  render(Totals, OS);
+-}
+diff --git a/tools/llvm-cov/CoverageReport.h b/tools/llvm-cov/CoverageReport.h
+deleted file mode 100644
+index bb3d734..0000000
+--- a/tools/llvm-cov/CoverageReport.h
++++ /dev/null
+@@ -1,41 +0,0 @@
+-//===- CoverageReport.h - Code coverage report ---------------------------===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-//
+-// This class implements rendering of a code coverage report.
+-//
+-//===----------------------------------------------------------------------===//
+-
+-#ifndef LLVM_COV_COVERAGEREPORT_H
+-#define LLVM_COV_COVERAGEREPORT_H
+-
+-#include "CoverageSummaryInfo.h"
+-#include "CoverageViewOptions.h"
+-
+-namespace llvm {
+-
+-/// \brief Displays the code coverage report.
+-class CoverageReport {
+-  const CoverageViewOptions &Options;
+-  std::unique_ptr<coverage::CoverageMapping> Coverage;
+-
+-  void render(const FileCoverageSummary &File, raw_ostream &OS);
+-  void render(const FunctionCoverageSummary &Function, raw_ostream &OS);
+-
+-public:
+-  CoverageReport(const CoverageViewOptions &Options,
+-                 std::unique_ptr<coverage::CoverageMapping> Coverage)
+-      : Options(Options), Coverage(std::move(Coverage)) {}
+-
+-  void renderFunctionReports(ArrayRef<StringRef> Files, raw_ostream &OS);
+-
+-  void renderFileReports(raw_ostream &OS);
+-};
+-}
+-
+-#endif // LLVM_COV_COVERAGEREPORT_H
+diff --git a/tools/llvm-cov/CoverageSummaryInfo.cpp b/tools/llvm-cov/CoverageSummaryInfo.cpp
+index de89750..8b13789 100644
+--- a/tools/llvm-cov/CoverageSummaryInfo.cpp
++++ b/tools/llvm-cov/CoverageSummaryInfo.cpp
+@@ -1,71 +1 @@
+-//===- CoverageSummaryInfo.cpp - Coverage summary for function/file -------===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-//
+-// These structures are used to represent code coverage metrics
+-// for functions/files.
+-//
+-//===----------------------------------------------------------------------===//
+ 
+-#include "CoverageSummaryInfo.h"
+-
+-using namespace llvm;
+-using namespace coverage;
+-
+-FunctionCoverageSummary
+-FunctionCoverageSummary::get(const coverage::FunctionRecord &Function) {
+-  // Compute the region coverage
+-  size_t NumCodeRegions = 0, CoveredRegions = 0;
+-  for (auto &CR : Function.CountedRegions) {
+-    if (CR.Kind != CounterMappingRegion::CodeRegion)
+-      continue;
+-    ++NumCodeRegions;
+-    if (CR.ExecutionCount != 0)
+-      ++CoveredRegions;
+-  }
+-
+-  // Compute the line coverage
+-  size_t NumLines = 0, CoveredLines = 0;
+-  for (unsigned FileID = 0, E = Function.Filenames.size(); FileID < E;
+-       ++FileID) {
+-    // Find the line start and end of the function's source code
+-    // in that particular file
+-    unsigned LineStart = std::numeric_limits<unsigned>::max();
+-    unsigned LineEnd = 0;
+-    for (auto &CR : Function.CountedRegions) {
+-      if (CR.FileID != FileID)
+-        continue;
+-      LineStart = std::min(LineStart, CR.LineStart);
+-      LineEnd = std::max(LineEnd, CR.LineEnd);
+-    }
+-    unsigned LineCount = LineEnd - LineStart + 1;
+-
+-    // Get counters
+-    llvm::SmallVector<uint64_t, 16> ExecutionCounts;
+-    ExecutionCounts.resize(LineCount, 0);
+-    for (auto &CR : Function.CountedRegions) {
+-      if (CR.FileID != FileID)
+-        continue;
+-      // Ignore the lines that were skipped by the preprocessor.
+-      auto ExecutionCount = CR.ExecutionCount;
+-      if (CR.Kind == CounterMappingRegion::SkippedRegion) {
+-        LineCount -= CR.LineEnd - CR.LineStart + 1;
+-        ExecutionCount = 1;
+-      }
+-      for (unsigned I = CR.LineStart; I <= CR.LineEnd; ++I)
+-        ExecutionCounts[I - LineStart] = ExecutionCount;
+-    }
+-    CoveredLines += LineCount - std::count(ExecutionCounts.begin(),
+-                                           ExecutionCounts.end(), 0);
+-    NumLines += LineCount;
+-  }
+-  return FunctionCoverageSummary(
+-      Function.Name, Function.ExecutionCount,
+-      RegionCoverageInfo(CoveredRegions, NumCodeRegions),
+-      LineCoverageInfo(CoveredLines, 0, NumLines));
+-}
+diff --git a/tools/llvm-cov/CoverageSummaryInfo.h b/tools/llvm-cov/CoverageSummaryInfo.h
+deleted file mode 100644
+index 822742b..0000000
+--- a/tools/llvm-cov/CoverageSummaryInfo.h
++++ /dev/null
+@@ -1,162 +0,0 @@
+-//===- CoverageSummaryInfo.h - Coverage summary for function/file ---------===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-//
+-// These structures are used to represent code coverage metrics
+-// for functions/files.
+-//
+-//===----------------------------------------------------------------------===//
+-
+-#ifndef LLVM_COV_COVERAGESUMMARYINFO_H
+-#define LLVM_COV_COVERAGESUMMARYINFO_H
+-
+-#include "llvm/ProfileData/Coverage/CoverageMapping.h"
+-#include "llvm/Support/raw_ostream.h"
+-
+-namespace llvm {
+-
+-/// \brief Provides information about region coverage for a function/file.
+-struct RegionCoverageInfo {
+-  /// \brief The number of regions that were executed at least once.
+-  size_t Covered;
+-
+-  /// \brief The number of regions that weren't executed.
+-  size_t NotCovered;
+-
+-  /// \brief The total number of regions in a function/file.
+-  size_t NumRegions;
+-
+-  RegionCoverageInfo() : Covered(0), NotCovered(0), NumRegions(0) {}
+-
+-  RegionCoverageInfo(size_t Covered, size_t NumRegions)
+-      : Covered(Covered), NotCovered(NumRegions - Covered),
+-        NumRegions(NumRegions) {}
+-
+-  RegionCoverageInfo &operator+=(const RegionCoverageInfo &RHS) {
+-    Covered += RHS.Covered;
+-    NotCovered += RHS.NotCovered;
+-    NumRegions += RHS.NumRegions;
+-    return *this;
+-  }
+-
+-  bool isFullyCovered() const { return Covered == NumRegions; }
+-
+-  double getPercentCovered() const {
+-    if (NumRegions == 0)
+-      return 0.0;
+-    return double(Covered) / double(NumRegions) * 100.0;
+-  }
+-};
+-
+-/// \brief Provides information about line coverage for a function/file.
+-struct LineCoverageInfo {
+-  /// \brief The number of lines that were executed at least once.
+-  size_t Covered;
+-
+-  /// \brief The number of lines that weren't executed.
+-  size_t NotCovered;
+-
+-  /// \brief The number of lines that aren't code.
+-  size_t NonCodeLines;
+-
+-  /// \brief The total number of lines in a function/file.
+-  size_t NumLines;
+-
+-  LineCoverageInfo()
+-      : Covered(0), NotCovered(0), NonCodeLines(0), NumLines(0) {}
+-
+-  LineCoverageInfo(size_t Covered, size_t NumNonCodeLines, size_t NumLines)
+-      : Covered(Covered), NotCovered(NumLines - NumNonCodeLines - Covered),
+-        NonCodeLines(NumNonCodeLines), NumLines(NumLines) {}
+-
+-  LineCoverageInfo &operator+=(const LineCoverageInfo &RHS) {
+-    Covered += RHS.Covered;
+-    NotCovered += RHS.NotCovered;
+-    NonCodeLines += RHS.NonCodeLines;
+-    NumLines += RHS.NumLines;
+-    return *this;
+-  }
+-
+-  bool isFullyCovered() const { return Covered == (NumLines - NonCodeLines); }
+-
+-  double getPercentCovered() const {
+-    if (NumLines - NonCodeLines == 0)
+-      return 0.0;
+-    return double(Covered) / double(NumLines - NonCodeLines) * 100.0;
+-  }
+-};
+-
+-/// \brief Provides information about function coverage for a file.
+-struct FunctionCoverageInfo {
+-  /// \brief The number of functions that were executed.
+-  size_t Executed;
+-
+-  /// \brief The total number of functions in this file.
+-  size_t NumFunctions;
+-
+-  FunctionCoverageInfo() : Executed(0), NumFunctions(0) {}
+-
+-  FunctionCoverageInfo(size_t Executed, size_t NumFunctions)
+-      : Executed(Executed), NumFunctions(NumFunctions) {}
+-
+-  void addFunction(bool Covered) {
+-    if (Covered)
+-      ++Executed;
+-    ++NumFunctions;
+-  }
+-
+-  bool isFullyCovered() const { return Executed == NumFunctions; }
+-
+-  double getPercentCovered() const {
+-    if (NumFunctions == 0)
+-      return 0.0;
+-    return double(Executed) / double(NumFunctions) * 100.0;
+-  }
+-};
+-
+-/// \brief A summary of function's code coverage.
+-struct FunctionCoverageSummary {
+-  StringRef Name;
+-  uint64_t ExecutionCount;
+-  RegionCoverageInfo RegionCoverage;
+-  LineCoverageInfo LineCoverage;
+-
+-  FunctionCoverageSummary(StringRef Name) : Name(Name), ExecutionCount(0) {}
+-
+-  FunctionCoverageSummary(StringRef Name, uint64_t ExecutionCount,
+-                          const RegionCoverageInfo &RegionCoverage,
+-                          const LineCoverageInfo &LineCoverage)
+-      : Name(Name), ExecutionCount(ExecutionCount),
+-        RegionCoverage(RegionCoverage), LineCoverage(LineCoverage) {
+-  }
+-
+-  /// \brief Compute the code coverage summary for the given function coverage
+-  /// mapping record.
+-  static FunctionCoverageSummary
+-  get(const coverage::FunctionRecord &Function);
+-};
+-
+-/// \brief A summary of file's code coverage.
+-struct FileCoverageSummary {
+-  StringRef Name;
+-  RegionCoverageInfo RegionCoverage;
+-  LineCoverageInfo LineCoverage;
+-  FunctionCoverageInfo FunctionCoverage;
+-
+-  FileCoverageSummary(StringRef Name) : Name(Name) {}
+-
+-  void addFunction(const FunctionCoverageSummary &Function) {
+-    RegionCoverage += Function.RegionCoverage;
+-    LineCoverage += Function.LineCoverage;
+-    FunctionCoverage.addFunction(/*Covered=*/Function.ExecutionCount > 0);
+-  }
+-};
+-
+-} // namespace llvm
+-
+-#endif // LLVM_COV_COVERAGESUMMARYINFO_H
+diff --git a/tools/llvm-cov/CoverageViewOptions.h b/tools/llvm-cov/CoverageViewOptions.h
+deleted file mode 100644
+index 350c264..0000000
+--- a/tools/llvm-cov/CoverageViewOptions.h
++++ /dev/null
+@@ -1,52 +0,0 @@
+-//===- CoverageViewOptions.h - Code coverage display options -------------===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-
+-#ifndef LLVM_COV_COVERAGEVIEWOPTIONS_H
+-#define LLVM_COV_COVERAGEVIEWOPTIONS_H
+-
+-#include "RenderingSupport.h"
+-#include <vector>
+-
+-namespace llvm {
+-
+-/// \brief The options for displaying the code coverage information.
+-struct CoverageViewOptions {
+-  enum class OutputFormat {
+-    Text,
+-    HTML
+-  };
+-
+-  bool Debug;
+-  bool Colors;
+-  bool ShowLineNumbers;
+-  bool ShowLineStats;
+-  bool ShowRegionMarkers;
+-  bool ShowLineStatsOrRegionMarkers;
+-  bool ShowExpandedRegions;
+-  bool ShowFunctionInstantiations;
+-  bool ShowFullFilenames;
+-  OutputFormat Format;
+-  std::string ShowOutputDirectory;
+-  std::vector<std::string> DemanglerOpts;
+-
+-  /// \brief Change the output's stream color if the colors are enabled.
+-  ColoredRawOstream colored_ostream(raw_ostream &OS,
+-                                    raw_ostream::Colors Color) const {
+-    return llvm::colored_ostream(OS, Color, Colors);
+-  }
+-
+-  /// \brief Check if an output directory has been specified.
+-  bool hasOutputDirectory() const { return !ShowOutputDirectory.empty(); }
+-
+-  /// \brief Check if a demangler has been specified.
+-  bool hasDemangler() const { return !DemanglerOpts.empty(); }
+-};
+-}
+-
+-#endif // LLVM_COV_COVERAGEVIEWOPTIONS_H
+diff --git a/tools/llvm-cov/RenderingSupport.h b/tools/llvm-cov/RenderingSupport.h
+deleted file mode 100644
+index aa70fbc..0000000
+--- a/tools/llvm-cov/RenderingSupport.h
++++ /dev/null
+@@ -1,61 +0,0 @@
+-//===- RenderingSupport.h - output stream rendering support functions  ----===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-
+-#ifndef LLVM_COV_RENDERINGSUPPORT_H
+-#define LLVM_COV_RENDERINGSUPPORT_H
+-
+-#include "llvm/Support/raw_ostream.h"
+-#include <utility>
+-
+-namespace llvm {
+-
+-/// \brief A helper class that resets the output stream's color if needed
+-/// when destroyed.
+-class ColoredRawOstream {
+-  ColoredRawOstream(const ColoredRawOstream &OS) = delete;
+-
+-public:
+-  raw_ostream &OS;
+-  bool IsColorUsed;
+-
+-  ColoredRawOstream(raw_ostream &OS, bool IsColorUsed)
+-      : OS(OS), IsColorUsed(IsColorUsed) {}
+-
+-  ColoredRawOstream(ColoredRawOstream &&Other)
+-      : OS(Other.OS), IsColorUsed(Other.IsColorUsed) {
+-    // Reset the other IsColorUsed so that the other object won't reset the
+-    // color when destroyed.
+-    Other.IsColorUsed = false;
+-  }
+-
+-  ~ColoredRawOstream() {
+-    if (IsColorUsed)
+-      OS.resetColor();
+-  }
+-};
+-
+-template <typename T>
+-inline raw_ostream &operator<<(const ColoredRawOstream &OS, T &&Value) {
+-  return OS.OS << std::forward<T>(Value);
+-}
+-
+-/// \brief Change the color of the output stream if the `IsColorUsed` flag
+-/// is true. Returns an object that resets the color when destroyed.
+-inline ColoredRawOstream colored_ostream(raw_ostream &OS,
+-                                         raw_ostream::Colors Color,
+-                                         bool IsColorUsed = true,
+-                                         bool Bold = false, bool BG = false) {
+-  if (IsColorUsed)
+-    OS.changeColor(Color, Bold, BG);
+-  return ColoredRawOstream(OS, IsColorUsed);
+-}
+-
+-} // namespace llvm
+-
+-#endif // LLVM_COV_RENDERINGSUPPORT_H
+diff --git a/tools/llvm-cov/SourceCoverageView.cpp b/tools/llvm-cov/SourceCoverageView.cpp
+index baf7c14..8b13789 100644
+--- a/tools/llvm-cov/SourceCoverageView.cpp
++++ b/tools/llvm-cov/SourceCoverageView.cpp
+@@ -1,233 +1 @@
+-//===- SourceCoverageView.cpp - Code coverage view for source code --------===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-///
+-/// \file This class implements rendering for code coverage of source code.
+-///
+-//===----------------------------------------------------------------------===//
+ 
+-#include "SourceCoverageView.h"
+-#include "SourceCoverageViewHTML.h"
+-#include "SourceCoverageViewText.h"
+-#include "llvm/ADT/SmallString.h"
+-#include "llvm/ADT/StringExtras.h"
+-#include "llvm/Support/FileSystem.h"
+-#include "llvm/Support/LineIterator.h"
+-#include "llvm/Support/Path.h"
+-
+-using namespace llvm;
+-
+-void CoveragePrinter::StreamDestructor::operator()(raw_ostream *OS) const {
+-  if (OS == &outs())
+-    return;
+-  delete OS;
+-}
+-
+-std::string CoveragePrinter::getOutputPath(StringRef Path, StringRef Extension,
+-                                           bool InToplevel, bool Relative) {
+-  assert(Extension.size() && "The file extension may not be empty");
+-
+-  SmallString<256> FullPath;
+-
+-  if (!Relative)
+-    FullPath.append(Opts.ShowOutputDirectory);
+-
+-  if (!InToplevel)
+-    sys::path::append(FullPath, getCoverageDir());
+-
+-  SmallString<256> ParentPath = sys::path::parent_path(Path);
+-  sys::path::remove_dots(ParentPath, /*remove_dot_dots=*/true);
+-  sys::path::append(FullPath, sys::path::relative_path(ParentPath));
+-
+-  auto PathFilename = (sys::path::filename(Path) + "." + Extension).str();
+-  sys::path::append(FullPath, PathFilename);
+-
+-  return FullPath.str();
+-}
+-
+-Expected<CoveragePrinter::OwnedStream>
+-CoveragePrinter::createOutputStream(StringRef Path, StringRef Extension,
+-                                    bool InToplevel) {
+-  if (!Opts.hasOutputDirectory())
+-    return OwnedStream(&outs());
+-
+-  std::string FullPath = getOutputPath(Path, Extension, InToplevel, false);
+-
+-  auto ParentDir = sys::path::parent_path(FullPath);
+-  if (auto E = sys::fs::create_directories(ParentDir))
+-    return errorCodeToError(E);
+-
+-  std::error_code E;
+-  raw_ostream *RawStream = new raw_fd_ostream(FullPath, E, sys::fs::F_RW);
+-  auto OS = CoveragePrinter::OwnedStream(RawStream);
+-  if (E)
+-    return errorCodeToError(E);
+-  return std::move(OS);
+-}
+-
+-std::unique_ptr<CoveragePrinter>
+-CoveragePrinter::create(const CoverageViewOptions &Opts) {
+-  switch (Opts.Format) {
+-  case CoverageViewOptions::OutputFormat::Text:
+-    return llvm::make_unique<CoveragePrinterText>(Opts);
+-  case CoverageViewOptions::OutputFormat::HTML:
+-    return llvm::make_unique<CoveragePrinterHTML>(Opts);
+-  }
+-  llvm_unreachable("Unknown coverage output format!");
+-}
+-
+-std::string SourceCoverageView::formatCount(uint64_t N) {
+-  std::string Number = utostr(N);
+-  int Len = Number.size();
+-  if (Len <= 3)
+-    return Number;
+-  int IntLen = Len % 3 == 0 ? 3 : Len % 3;
+-  std::string Result(Number.data(), IntLen);
+-  if (IntLen != 3) {
+-    Result.push_back('.');
+-    Result += Number.substr(IntLen, 3 - IntLen);
+-  }
+-  Result.push_back(" kMGTPEZY"[(Len - 1) / 3]);
+-  return Result;
+-}
+-
+-bool SourceCoverageView::shouldRenderRegionMarkers(
+-    bool LineHasMultipleRegions) const {
+-  return getOptions().ShowRegionMarkers &&
+-         (!getOptions().ShowLineStatsOrRegionMarkers || LineHasMultipleRegions);
+-}
+-
+-bool SourceCoverageView::hasSubViews() const {
+-  return !ExpansionSubViews.empty() || !InstantiationSubViews.empty();
+-}
+-
+-std::unique_ptr<SourceCoverageView>
+-SourceCoverageView::create(StringRef SourceName, const MemoryBuffer &File,
+-                           const CoverageViewOptions &Options,
+-                           coverage::CoverageData &&CoverageInfo) {
+-  switch (Options.Format) {
+-  case CoverageViewOptions::OutputFormat::Text:
+-    return llvm::make_unique<SourceCoverageViewText>(SourceName, File, Options,
+-                                                     std::move(CoverageInfo));
+-  case CoverageViewOptions::OutputFormat::HTML:
+-    return llvm::make_unique<SourceCoverageViewHTML>(SourceName, File, Options,
+-                                                     std::move(CoverageInfo));
+-  }
+-  llvm_unreachable("Unknown coverage output format!");
+-}
+-
+-void SourceCoverageView::addExpansion(
+-    const coverage::CounterMappingRegion &Region,
+-    std::unique_ptr<SourceCoverageView> View) {
+-  ExpansionSubViews.emplace_back(Region, std::move(View));
+-}
+-
+-void SourceCoverageView::addInstantiation(
+-    StringRef FunctionName, unsigned Line,
+-    std::unique_ptr<SourceCoverageView> View) {
+-  InstantiationSubViews.emplace_back(FunctionName, Line, std::move(View));
+-}
+-
+-void SourceCoverageView::print(raw_ostream &OS, bool WholeFile,
+-                               bool ShowSourceName, unsigned ViewDepth) {
+-  if (ShowSourceName)
+-    renderSourceName(OS);
+-
+-  renderViewHeader(OS);
+-
+-  // We need the expansions and instantiations sorted so we can go through them
+-  // while we iterate lines.
+-  std::sort(ExpansionSubViews.begin(), ExpansionSubViews.end());
+-  std::sort(InstantiationSubViews.begin(), InstantiationSubViews.end());
+-  auto NextESV = ExpansionSubViews.begin();
+-  auto EndESV = ExpansionSubViews.end();
+-  auto NextISV = InstantiationSubViews.begin();
+-  auto EndISV = InstantiationSubViews.end();
+-
+-  // Get the coverage information for the file.
+-  auto NextSegment = CoverageInfo.begin();
+-  auto EndSegment = CoverageInfo.end();
+-
+-  unsigned FirstLine = NextSegment != EndSegment ? NextSegment->Line : 0;
+-  const coverage::CoverageSegment *WrappedSegment = nullptr;
+-  SmallVector<const coverage::CoverageSegment *, 8> LineSegments;
+-  for (line_iterator LI(File, /*SkipBlanks=*/false); !LI.is_at_eof(); ++LI) {
+-    // If we aren't rendering the whole file, we need to filter out the prologue
+-    // and epilogue.
+-    if (!WholeFile) {
+-      if (NextSegment == EndSegment)
+-        break;
+-      else if (LI.line_number() < FirstLine)
+-        continue;
+-    }
+-
+-    // Collect the coverage information relevant to this line.
+-    if (LineSegments.size())
+-      WrappedSegment = LineSegments.back();
+-    LineSegments.clear();
+-    while (NextSegment != EndSegment && NextSegment->Line == LI.line_number())
+-      LineSegments.push_back(&*NextSegment++);
+-
+-    // Calculate a count to be for the line as a whole.
+-    LineCoverageStats LineCount;
+-    if (WrappedSegment && WrappedSegment->HasCount)
+-      LineCount.addRegionCount(WrappedSegment->Count);
+-    for (const auto *S : LineSegments)
+-      if (S->HasCount && S->IsRegionEntry)
+-        LineCount.addRegionStartCount(S->Count);
+-
+-    renderLinePrefix(OS, ViewDepth);
+-    if (getOptions().ShowLineStats)
+-      renderLineCoverageColumn(OS, LineCount);
+-    if (getOptions().ShowLineNumbers)
+-      renderLineNumberColumn(OS, LI.line_number());
+-
+-    // If there are expansion subviews, we want to highlight the first one.
+-    unsigned ExpansionColumn = 0;
+-    if (NextESV != EndESV && NextESV->getLine() == LI.line_number() &&
+-        getOptions().Colors)
+-      ExpansionColumn = NextESV->getStartCol();
+-
+-    // Display the source code for the current line.
+-    renderLine(OS, {*LI, LI.line_number()}, WrappedSegment, LineSegments,
+-               ExpansionColumn, ViewDepth);
+-
+-    // Show the region markers.
+-    if (shouldRenderRegionMarkers(LineCount.hasMultipleRegions()))
+-      renderRegionMarkers(OS, LineSegments, ViewDepth);
+-
+-    // Show the expansions and instantiations for this line.
+-    bool RenderedSubView = false;
+-    for (; NextESV != EndESV && NextESV->getLine() == LI.line_number();
+-         ++NextESV) {
+-      renderViewDivider(OS, ViewDepth + 1);
+-
+-      // Re-render the current line and highlight the expansion range for
+-      // this subview.
+-      if (RenderedSubView) {
+-        ExpansionColumn = NextESV->getStartCol();
+-        renderExpansionSite(OS, {*LI, LI.line_number()}, WrappedSegment,
+-                            LineSegments, ExpansionColumn, ViewDepth);
+-        renderViewDivider(OS, ViewDepth + 1);
+-      }
+-
+-      renderExpansionView(OS, *NextESV, ViewDepth + 1);
+-      RenderedSubView = true;
+-    }
+-    for (; NextISV != EndISV && NextISV->Line == LI.line_number(); ++NextISV) {
+-      renderViewDivider(OS, ViewDepth + 1);
+-      renderInstantiationView(OS, *NextISV, ViewDepth + 1);
+-      RenderedSubView = true;
+-    }
+-    if (RenderedSubView)
+-      renderViewDivider(OS, ViewDepth + 1);
+-    renderLineSuffix(OS, ViewDepth);
+-  }
+-
+-  renderViewFooter(OS);
+-}
+diff --git a/tools/llvm-cov/SourceCoverageView.h b/tools/llvm-cov/SourceCoverageView.h
+deleted file mode 100644
+index feef959..0000000
+--- a/tools/llvm-cov/SourceCoverageView.h
++++ /dev/null
+@@ -1,285 +0,0 @@
+-//===- SourceCoverageView.h - Code coverage view for source code ----------===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-///
+-/// \file This class implements rendering for code coverage of source code.
+-///
+-//===----------------------------------------------------------------------===//
+-
+-#ifndef LLVM_COV_SOURCECOVERAGEVIEW_H
+-#define LLVM_COV_SOURCECOVERAGEVIEW_H
+-
+-#include "CoverageViewOptions.h"
+-#include "llvm/ProfileData/Coverage/CoverageMapping.h"
+-#include "llvm/Support/MemoryBuffer.h"
+-#include <vector>
+-
+-namespace llvm {
+-
+-class SourceCoverageView;
+-
+-/// \brief A view that represents a macro or include expansion.
+-struct ExpansionView {
+-  coverage::CounterMappingRegion Region;
+-  std::unique_ptr<SourceCoverageView> View;
+-
+-  ExpansionView(const coverage::CounterMappingRegion &Region,
+-                std::unique_ptr<SourceCoverageView> View)
+-      : Region(Region), View(std::move(View)) {}
+-  ExpansionView(ExpansionView &&RHS)
+-      : Region(std::move(RHS.Region)), View(std::move(RHS.View)) {}
+-  ExpansionView &operator=(ExpansionView &&RHS) {
+-    Region = std::move(RHS.Region);
+-    View = std::move(RHS.View);
+-    return *this;
+-  }
+-
+-  unsigned getLine() const { return Region.LineStart; }
+-  unsigned getStartCol() const { return Region.ColumnStart; }
+-  unsigned getEndCol() const { return Region.ColumnEnd; }
+-
+-  friend bool operator<(const ExpansionView &LHS, const ExpansionView &RHS) {
+-    return LHS.Region.startLoc() < RHS.Region.startLoc();
+-  }
+-};
+-
+-/// \brief A view that represents a function instantiation.
+-struct InstantiationView {
+-  StringRef FunctionName;
+-  unsigned Line;
+-  std::unique_ptr<SourceCoverageView> View;
+-
+-  InstantiationView(StringRef FunctionName, unsigned Line,
+-                    std::unique_ptr<SourceCoverageView> View)
+-      : FunctionName(FunctionName), Line(Line), View(std::move(View)) {}
+-  InstantiationView(InstantiationView &&RHS)
+-      : FunctionName(std::move(RHS.FunctionName)), Line(std::move(RHS.Line)),
+-        View(std::move(RHS.View)) {}
+-  InstantiationView &operator=(InstantiationView &&RHS) {
+-    FunctionName = std::move(RHS.FunctionName);
+-    Line = std::move(RHS.Line);
+-    View = std::move(RHS.View);
+-    return *this;
+-  }
+-
+-  friend bool operator<(const InstantiationView &LHS,
+-                        const InstantiationView &RHS) {
+-    return LHS.Line < RHS.Line;
+-  }
+-};
+-
+-/// \brief Coverage statistics for a single line.
+-struct LineCoverageStats {
+-  uint64_t ExecutionCount;
+-  unsigned RegionCount;
+-  bool Mapped;
+-
+-  LineCoverageStats() : ExecutionCount(0), RegionCount(0), Mapped(false) {}
+-
+-  bool isMapped() const { return Mapped; }
+-
+-  bool hasMultipleRegions() const { return RegionCount > 1; }
+-
+-  void addRegionStartCount(uint64_t Count) {
+-    // The max of all region starts is the most interesting value.
+-    addRegionCount(RegionCount ? std::max(ExecutionCount, Count) : Count);
+-    ++RegionCount;
+-  }
+-
+-  void addRegionCount(uint64_t Count) {
+-    Mapped = true;
+-    ExecutionCount = Count;
+-  }
+-};
+-
+-/// \brief A file manager that handles format-aware file creation.
+-class CoveragePrinter {
+-  const CoverageViewOptions &Opts;
+-
+-public:
+-  struct StreamDestructor {
+-    void operator()(raw_ostream *OS) const;
+-  };
+-
+-  using OwnedStream = std::unique_ptr<raw_ostream, StreamDestructor>;
+-
+-protected:
+-  CoveragePrinter(const CoverageViewOptions &Opts) : Opts(Opts) {}
+-
+-  /// \brief Return `OutputDir/ToplevelDir/Path.Extension`. If \p InToplevel is
+-  /// false, skip the ToplevelDir component. If \p Relative is false, skip the
+-  /// OutputDir component.
+-  std::string getOutputPath(StringRef Path, StringRef Extension,
+-                            bool InToplevel, bool Relative = true);
+-
+-  /// \brief If directory output is enabled, create a file in that directory
+-  /// at the path given by getOutputPath(). Otherwise, return stdout.
+-  Expected<OwnedStream> createOutputStream(StringRef Path, StringRef Extension,
+-                                           bool InToplevel);
+-
+-  /// \brief Return the sub-directory name for file coverage reports.
+-  static StringRef getCoverageDir() { return "coverage"; }
+-
+-public:
+-  static std::unique_ptr<CoveragePrinter>
+-  create(const CoverageViewOptions &Opts);
+-
+-  virtual ~CoveragePrinter() {}
+-
+-  /// @name File Creation Interface
+-  /// @{
+-
+-  /// \brief Create a file to print a coverage view into.
+-  virtual Expected<OwnedStream> createViewFile(StringRef Path,
+-                                               bool InToplevel) = 0;
+-
+-  /// \brief Close a file which has been used to print a coverage view.
+-  virtual void closeViewFile(OwnedStream OS) = 0;
+-
+-  /// \brief Create an index which lists reports for the given source files.
+-  virtual Error createIndexFile(ArrayRef<StringRef> SourceFiles) = 0;
+-
+-  /// @}
+-};
+-
+-/// \brief A code coverage view of a source file or function.
+-///
+-/// A source coverage view and its nested sub-views form a file-oriented
+-/// representation of code coverage data. This view can be printed out by a
+-/// renderer which implements the Rendering Interface.
+-class SourceCoverageView {
+-  /// A function or file name.
+-  StringRef SourceName;
+-
+-  /// A memory buffer backing the source on display.
+-  const MemoryBuffer &File;
+-
+-  /// Various options to guide the coverage renderer.
+-  const CoverageViewOptions &Options;
+-
+-  /// Complete coverage information about the source on display.
+-  coverage::CoverageData CoverageInfo;
+-
+-  /// A container for all expansions (e.g macros) in the source on display.
+-  std::vector<ExpansionView> ExpansionSubViews;
+-
+-  /// A container for all instantiations (e.g template functions) in the source
+-  /// on display.
+-  std::vector<InstantiationView> InstantiationSubViews;
+-
+-protected:
+-  struct LineRef {
+-    StringRef Line;
+-    int64_t LineNo;
+-
+-    LineRef(StringRef Line, int64_t LineNo) : Line(Line), LineNo(LineNo) {}
+-  };
+-
+-  using CoverageSegmentArray = ArrayRef<const coverage::CoverageSegment *>;
+-
+-  /// @name Rendering Interface
+-  /// @{
+-
+-  /// \brief Render a header for the view.
+-  virtual void renderViewHeader(raw_ostream &OS) = 0;
+-
+-  /// \brief Render a footer for the view.
+-  virtual void renderViewFooter(raw_ostream &OS) = 0;
+-
+-  /// \brief Render the source name for the view.
+-  virtual void renderSourceName(raw_ostream &OS) = 0;
+-
+-  /// \brief Render the line prefix at the given \p ViewDepth.
+-  virtual void renderLinePrefix(raw_ostream &OS, unsigned ViewDepth) = 0;
+-
+-  /// \brief Render the line suffix at the given \p ViewDepth.
+-  virtual void renderLineSuffix(raw_ostream &OS, unsigned ViewDepth) = 0;
+-
+-  /// \brief Render a view divider at the given \p ViewDepth.
+-  virtual void renderViewDivider(raw_ostream &OS, unsigned ViewDepth) = 0;
+-
+-  /// \brief Render a source line with highlighting.
+-  virtual void renderLine(raw_ostream &OS, LineRef L,
+-                          const coverage::CoverageSegment *WrappedSegment,
+-                          CoverageSegmentArray Segments, unsigned ExpansionCol,
+-                          unsigned ViewDepth) = 0;
+-
+-  /// \brief Render the line's execution count column.
+-  virtual void renderLineCoverageColumn(raw_ostream &OS,
+-                                        const LineCoverageStats &Line) = 0;
+-
+-  /// \brief Render the line number column.
+-  virtual void renderLineNumberColumn(raw_ostream &OS, unsigned LineNo) = 0;
+-
+-  /// \brief Render all the region's execution counts on a line.
+-  virtual void renderRegionMarkers(raw_ostream &OS,
+-                                   CoverageSegmentArray Segments,
+-                                   unsigned ViewDepth) = 0;
+-
+-  /// \brief Render the site of an expansion.
+-  virtual void
+-  renderExpansionSite(raw_ostream &OS, LineRef L,
+-                      const coverage::CoverageSegment *WrappedSegment,
+-                      CoverageSegmentArray Segments, unsigned ExpansionCol,
+-                      unsigned ViewDepth) = 0;
+-
+-  /// \brief Render an expansion view and any nested views.
+-  virtual void renderExpansionView(raw_ostream &OS, ExpansionView &ESV,
+-                                   unsigned ViewDepth) = 0;
+-
+-  /// \brief Render an instantiation view and any nested views.
+-  virtual void renderInstantiationView(raw_ostream &OS, InstantiationView &ISV,
+-                                       unsigned ViewDepth) = 0;
+-
+-  /// @}
+-
+-  /// \brief Format a count using engineering notation with 3 significant
+-  /// digits.
+-  static std::string formatCount(uint64_t N);
+-
+-  /// \brief Check if region marker output is expected for a line.
+-  bool shouldRenderRegionMarkers(bool LineHasMultipleRegions) const;
+-
+-  /// \brief Check if there are any sub-views attached to this view.
+-  bool hasSubViews() const;
+-
+-  SourceCoverageView(StringRef SourceName, const MemoryBuffer &File,
+-                     const CoverageViewOptions &Options,
+-                     coverage::CoverageData &&CoverageInfo)
+-      : SourceName(SourceName), File(File), Options(Options),
+-        CoverageInfo(std::move(CoverageInfo)) {}
+-
+-public:
+-  static std::unique_ptr<SourceCoverageView>
+-  create(StringRef SourceName, const MemoryBuffer &File,
+-         const CoverageViewOptions &Options,
+-         coverage::CoverageData &&CoverageInfo);
+-
+-  virtual ~SourceCoverageView() {}
+-
+-  StringRef getSourceName() const { return SourceName; }
+-
+-  const CoverageViewOptions &getOptions() const { return Options; }
+-
+-  /// \brief Add an expansion subview to this view.
+-  void addExpansion(const coverage::CounterMappingRegion &Region,
+-                    std::unique_ptr<SourceCoverageView> View);
+-
+-  /// \brief Add a function instantiation subview to this view.
+-  void addInstantiation(StringRef FunctionName, unsigned Line,
+-                        std::unique_ptr<SourceCoverageView> View);
+-
+-  /// \brief Print the code coverage information for a specific portion of a
+-  /// source file to the output stream.
+-  void print(raw_ostream &OS, bool WholeFile, bool ShowSourceName,
+-             unsigned ViewDepth = 0);
+-};
+-
+-} // namespace llvm
+-
+-#endif // LLVM_COV_SOURCECOVERAGEVIEW_H
+diff --git a/tools/llvm-cov/SourceCoverageViewHTML.cpp b/tools/llvm-cov/SourceCoverageViewHTML.cpp
+index 81963e5..8b13789 100644
+--- a/tools/llvm-cov/SourceCoverageViewHTML.cpp
++++ b/tools/llvm-cov/SourceCoverageViewHTML.cpp
+@@ -1,436 +1 @@
+-//===- SourceCoverageViewHTML.cpp - A html code coverage view -------------===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-///
+-/// \file This file implements the html coverage renderer.
+-///
+-//===----------------------------------------------------------------------===//
+ 
+-#include "SourceCoverageViewHTML.h"
+-#include "llvm/ADT/Optional.h"
+-#include "llvm/ADT/SmallString.h"
+-#include "llvm/ADT/StringExtras.h"
+-#include "llvm/Support/Path.h"
+-
+-using namespace llvm;
+-
+-namespace {
+-
+-const char *BeginHeader =
+-  "<head>"
+-    "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+-    "<meta charset='UTF-8'>";
+-
+-const char *CSSForCoverage =
+-  "<style>"
+-R"(
+-
+-.red {
+-  background-color: #FFD0D0;
+-}
+-.cyan {
+-  background-color: cyan;
+-}
+-.black {
+-  background-color: black;
+-  color: white;
+-}
+-.green {
+-  background-color: #98FFA6;
+-  color: white;
+-}
+-.magenta {
+-  background-color: #F998FF;
+-  color: white;
+-}
+-body {
+-  font-family: -apple-system, sans-serif;
+-}
+-pre {
+-  margin-top: 0px !important;
+-  margin-bottom: 0px !important;
+-}
+-.source-name-title {
+-  padding: 5px 10px;
+-  border-bottom: 1px solid #dbdbdb;
+-  background-color: #eee;
+-}
+-.centered {
+-  display: table;
+-  margin-left: auto;
+-  margin-right: auto;
+-  border: 1px solid #dbdbdb;
+-  border-radius: 3px;
+-}
+-.expansion-view {
+-  background-color: rgba(0, 0, 0, 0);
+-  margin-left: 0px;
+-  margin-top: 5px;
+-  margin-right: 5px;
+-  margin-bottom: 5px;
+-  border: 1px solid #dbdbdb;
+-  border-radius: 3px;
+-}
+-table {
+-  border-collapse: collapse;
+-}
+-.line-number {
+-  text-align: right;
+-  color: #aaa;
+-}
+-.covered-line {
+-  text-align: right;
+-  color: #0080ff;
+-}
+-.uncovered-line {
+-  text-align: right;
+-  color: #ff3300;
+-}
+-.tooltip {
+-  position: relative;
+-  display: inline;
+-  background-color: #b3e6ff;
+-  text-decoration: none;
+-}
+-.tooltip span.tooltip-content {
+-  position: absolute;
+-  width: 100px;
+-  margin-left: -50px;
+-  color: #FFFFFF;
+-  background: #000000;
+-  height: 30px;
+-  line-height: 30px;
+-  text-align: center;
+-  visibility: hidden;
+-  border-radius: 6px;
+-}
+-.tooltip span.tooltip-content:after {
+-  content: '';
+-  position: absolute;
+-  top: 100%;
+-  left: 50%;
+-  margin-left: -8px;
+-  width: 0; height: 0;
+-  border-top: 8px solid #000000;
+-  border-right: 8px solid transparent;
+-  border-left: 8px solid transparent;
+-}
+-:hover.tooltip span.tooltip-content {
+-  visibility: visible;
+-  opacity: 0.8;
+-  bottom: 30px;
+-  left: 50%;
+-  z-index: 999;
+-}
+-th, td {
+-  vertical-align: top;
+-  padding: 2px 5px;
+-  border-collapse: collapse;
+-  border-right: solid 1px #eee;
+-  border-left: solid 1px #eee;
+-}
+-td:first-child {
+-  border-left: none;
+-}
+-td:last-child {
+-  border-right: none;
+-}
+-
+-)"
+-  "</style>";
+-
+-const char *EndHeader = "</head>";
+-
+-const char *BeginCenteredDiv = "<div class='centered'>";
+-
+-const char *EndCenteredDiv = "</div>";
+-
+-const char *BeginSourceNameDiv = "<div class='source-name-title'>";
+-
+-const char *EndSourceNameDiv = "</div>";
+-
+-const char *BeginCodeTD = "<td class='code'>";
+-
+-const char *EndCodeTD = "</td>";
+-
+-const char *BeginPre = "<pre>";
+-
+-const char *EndPre = "</pre>";
+-
+-const char *BeginExpansionDiv = "<div class='expansion-view'>";
+-
+-const char *EndExpansionDiv = "</div>";
+-
+-const char *BeginTable = "<table>";
+-
+-const char *EndTable = "</table>";
+-
+-void emitPrelude(raw_ostream &OS) {
+-  OS << "<!doctype html>"
+-        "<html>"
+-     << BeginHeader << CSSForCoverage << EndHeader << "<body>"
+-     << BeginCenteredDiv;
+-}
+-
+-void emitEpilog(raw_ostream &OS) {
+-  OS << EndCenteredDiv << "</body>"
+-                          "</html>";
+-}
+-
+-// Return a string with the special characters in \p Str escaped.
+-std::string escape(StringRef Str) {
+-  std::string Result;
+-  for (char C : Str) {
+-    if (C == '&')
+-      Result += "&amp;";
+-    else if (C == '<')
+-      Result += "&lt;";
+-    else if (C == '>')
+-      Result += "&gt;";
+-    else if (C == '\"')
+-      Result += "&quot;";
+-    else
+-      Result += C;
+-  }
+-  return Result;
+-}
+-
+-// Create a \p Name tag around \p Str, and optionally set its \p ClassName.
+-std::string tag(const std::string &Name, const std::string &Str,
+-                const std::string &ClassName = "") {
+-  std::string Tag = "<" + Name;
+-  if (ClassName != "")
+-    Tag += " class='" + ClassName + "'";
+-  return Tag + ">" + Str + "</" + Name + ">";
+-}
+-
+-// Create an anchor to \p Link with the label \p Str.
+-std::string a(const std::string &Link, const std::string &Str) {
+-  return "<a href='" + Link + "'>" + Str + "</a>";
+-}
+-
+-} // anonymous namespace
+-
+-Expected<CoveragePrinter::OwnedStream>
+-CoveragePrinterHTML::createViewFile(StringRef Path, bool InToplevel) {
+-  auto OSOrErr = createOutputStream(Path, "html", InToplevel);
+-  if (!OSOrErr)
+-    return OSOrErr;
+-
+-  OwnedStream OS = std::move(OSOrErr.get());
+-  emitPrelude(*OS.get());
+-  return std::move(OS);
+-}
+-
+-void CoveragePrinterHTML::closeViewFile(OwnedStream OS) {
+-  emitEpilog(*OS.get());
+-}
+-
+-Error CoveragePrinterHTML::createIndexFile(ArrayRef<StringRef> SourceFiles) {
+-  auto OSOrErr = createOutputStream("index", "html", /*InToplevel=*/true);
+-  if (Error E = OSOrErr.takeError())
+-    return E;
+-  auto OS = std::move(OSOrErr.get());
+-  raw_ostream &OSRef = *OS.get();
+-
+-  // Emit a table containing links to reports for each file in the covmapping.
+-  emitPrelude(OSRef);
+-  OSRef << BeginSourceNameDiv << "Index" << EndSourceNameDiv;
+-  OSRef << BeginTable;
+-  for (StringRef SF : SourceFiles) {
+-    std::string LinkText = escape(sys::path::relative_path(SF));
+-    std::string LinkTarget =
+-        escape(getOutputPath(SF, "html", /*InToplevel=*/false));
+-    OSRef << tag("tr", tag("td", tag("pre", a(LinkTarget, LinkText), "code")));
+-  }
+-  OSRef << EndTable;
+-  emitEpilog(OSRef);
+-
+-  return Error::success();
+-}
+-
+-void SourceCoverageViewHTML::renderViewHeader(raw_ostream &OS) {
+-  OS << BeginTable;
+-}
+-
+-void SourceCoverageViewHTML::renderViewFooter(raw_ostream &OS) {
+-  OS << EndTable;
+-}
+-
+-void SourceCoverageViewHTML::renderSourceName(raw_ostream &OS) {
+-  OS << BeginSourceNameDiv << tag("pre", escape(getSourceName()))
+-     << EndSourceNameDiv;
+-}
+-
+-void SourceCoverageViewHTML::renderLinePrefix(raw_ostream &OS, unsigned) {
+-  OS << "<tr>";
+-}
+-
+-void SourceCoverageViewHTML::renderLineSuffix(raw_ostream &OS, unsigned) {
+-  // If this view has sub-views, renderLine() cannot close the view's cell.
+-  // Take care of it here, after all sub-views have been rendered.
+-  if (hasSubViews())
+-    OS << EndCodeTD;
+-  OS << "</tr>";
+-}
+-
+-void SourceCoverageViewHTML::renderViewDivider(raw_ostream &, unsigned) {
+-  // The table-based output makes view dividers unnecessary.
+-}
+-
+-void SourceCoverageViewHTML::renderLine(
+-    raw_ostream &OS, LineRef L, const coverage::CoverageSegment *WrappedSegment,
+-    CoverageSegmentArray Segments, unsigned ExpansionCol, unsigned) {
+-  StringRef Line = L.Line;
+-
+-  // Steps for handling text-escaping, highlighting, and tooltip creation:
+-  //
+-  // 1. Split the line into N+1 snippets, where N = |Segments|. The first
+-  //    snippet starts from Col=1 and ends at the start of the first segment.
+-  //    The last snippet starts at the last mapped column in the line and ends
+-  //    at the end of the line. Both are required but may be empty.
+-
+-  SmallVector<std::string, 8> Snippets;
+-
+-  unsigned LCol = 1;
+-  auto Snip = [&](unsigned Start, unsigned Len) {
+-    assert(Start + Len <= Line.size() && "Snippet extends past the EOL");
+-    Snippets.push_back(Line.substr(Start, Len));
+-    LCol += Len;
+-  };
+-
+-  Snip(LCol - 1, Segments.empty() ? 0 : (Segments.front()->Col - 1));
+-
+-  for (unsigned I = 1, E = Segments.size(); I < E; ++I) {
+-    assert(LCol == Segments[I - 1]->Col && "Snippet start position is wrong");
+-    Snip(LCol - 1, Segments[I]->Col - LCol);
+-  }
+-
+-  // |Line| + 1 is needed to avoid underflow when, e.g |Line| = 0 and LCol = 1.
+-  Snip(LCol - 1, Line.size() + 1 - LCol);
+-  assert(LCol == Line.size() + 1 && "Final snippet doesn't reach the EOL");
+-
+-  // 2. Escape all of the snippets.
+-
+-  for (unsigned I = 0, E = Snippets.size(); I < E; ++I)
+-    Snippets[I] = escape(Snippets[I]);
+-
+-  // 3. Use \p WrappedSegment to set the highlight for snippets 0 and 1. Use
+-  //    segment 1 to set the highlight for snippet 2, segment 2 to set the
+-  //    highlight for snippet 3, and so on.
+-
+-  Optional<std::string> Color;
+-  auto Highlight = [&](const std::string &Snippet) {
+-    return tag("span", Snippet, Color.getValue());
+-  };
+-
+-  auto CheckIfUncovered = [](const coverage::CoverageSegment *S) {
+-    return S && S->HasCount && S->Count == 0;
+-  };
+-
+-  if (CheckIfUncovered(WrappedSegment) ||
+-      CheckIfUncovered(Segments.empty() ? nullptr : Segments.front())) {
+-    Color = "red";
+-    Snippets[0] = Highlight(Snippets[0]);
+-    Snippets[1] = Highlight(Snippets[1]);
+-  }
+-
+-  for (unsigned I = 1, E = Segments.size(); I < E; ++I) {
+-    const auto *CurSeg = Segments[I];
+-    if (CurSeg->Col == ExpansionCol)
+-      Color = "cyan";
+-    else if (CheckIfUncovered(CurSeg))
+-      Color = "red";
+-    else
+-      Color = None;
+-
+-    if (Color.hasValue())
+-      Snippets[I + 1] = Highlight(Snippets[I + 1]);
+-  }
+-
+-  // 4. Snippets[1:N+1] correspond to \p Segments[0:N]: use these to generate
+-  //    sub-line region count tooltips if needed.
+-
+-  bool HasMultipleRegions = [&] {
+-    unsigned RegionCount = 0;
+-    for (const auto *S : Segments)
+-      if (S->HasCount && S->IsRegionEntry)
+-        if (++RegionCount > 1)
+-          return true;
+-    return false;
+-  }();
+-
+-  if (shouldRenderRegionMarkers(HasMultipleRegions)) {
+-    for (unsigned I = 0, E = Segments.size(); I < E; ++I) {
+-      const auto *CurSeg = Segments[I];
+-      if (!CurSeg->IsRegionEntry || !CurSeg->HasCount)
+-        continue;
+-
+-      Snippets[I + 1] =
+-          tag("div", Snippets[I + 1] + tag("span", formatCount(CurSeg->Count),
+-                                          "tooltip-content"),
+-              "tooltip");
+-    }
+-  }
+-
+-  OS << BeginCodeTD;
+-  OS << BeginPre;
+-  for (const auto &Snippet : Snippets)
+-    OS << Snippet;
+-  OS << EndPre;
+-
+-  // If there are no sub-views left to attach to this cell, end the cell.
+-  // Otherwise, end it after the sub-views are rendered (renderLineSuffix()).
+-  if (!hasSubViews())
+-    OS << EndCodeTD;
+-}
+-
+-void SourceCoverageViewHTML::renderLineCoverageColumn(
+-    raw_ostream &OS, const LineCoverageStats &Line) {
+-  std::string Count = "";
+-  if (Line.isMapped())
+-    Count = tag("pre", formatCount(Line.ExecutionCount));
+-  std::string CoverageClass =
+-      (Line.ExecutionCount > 0) ? "covered-line" : "uncovered-line";
+-  OS << tag("td", Count, CoverageClass);
+-}
+-
+-void SourceCoverageViewHTML::renderLineNumberColumn(raw_ostream &OS,
+-                                                    unsigned LineNo) {
+-  OS << tag("td", tag("pre", utostr(uint64_t(LineNo))), "line-number");
+-}
+-
+-void SourceCoverageViewHTML::renderRegionMarkers(raw_ostream &,
+-                                                 CoverageSegmentArray,
+-                                                 unsigned) {
+-  // Region markers are rendered in-line using tooltips.
+-}
+-
+-void SourceCoverageViewHTML::renderExpansionSite(
+-    raw_ostream &OS, LineRef L, const coverage::CoverageSegment *WrappedSegment,
+-    CoverageSegmentArray Segments, unsigned ExpansionCol, unsigned ViewDepth) {
+-  // Render the line containing the expansion site. No extra formatting needed.
+-  renderLine(OS, L, WrappedSegment, Segments, ExpansionCol, ViewDepth);
+-}
+-
+-void SourceCoverageViewHTML::renderExpansionView(raw_ostream &OS,
+-                                                 ExpansionView &ESV,
+-                                                 unsigned ViewDepth) {
+-  OS << BeginExpansionDiv;
+-  ESV.View->print(OS, /*WholeFile=*/false, /*ShowSourceName=*/false,
+-                  ViewDepth + 1);
+-  OS << EndExpansionDiv;
+-}
+-
+-void SourceCoverageViewHTML::renderInstantiationView(raw_ostream &OS,
+-                                                     InstantiationView &ISV,
+-                                                     unsigned ViewDepth) {
+-  OS << BeginExpansionDiv;
+-  ISV.View->print(OS, /*WholeFile=*/false, /*ShowSourceName=*/true, ViewDepth);
+-  OS << EndExpansionDiv;
+-}
+diff --git a/tools/llvm-cov/SourceCoverageViewHTML.h b/tools/llvm-cov/SourceCoverageViewHTML.h
+deleted file mode 100644
+index 50ecf2b..0000000
+--- a/tools/llvm-cov/SourceCoverageViewHTML.h
++++ /dev/null
+@@ -1,83 +0,0 @@
+-//===- SourceCoverageViewHTML.h - A html code coverage view ---------------===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-///
+-/// \file This file defines the interface to the html coverage renderer.
+-///
+-//===----------------------------------------------------------------------===//
+-
+-#ifndef LLVM_COV_SOURCECOVERAGEVIEWHTML_H
+-#define LLVM_COV_SOURCECOVERAGEVIEWHTML_H
+-
+-#include "SourceCoverageView.h"
+-
+-namespace llvm {
+-
+-/// \brief A coverage printer for html output.
+-class CoveragePrinterHTML : public CoveragePrinter {
+-public:
+-  Expected<OwnedStream> createViewFile(StringRef Path,
+-                                       bool InToplevel) override;
+-
+-  void closeViewFile(OwnedStream OS) override;
+-
+-  Error createIndexFile(ArrayRef<StringRef> SourceFiles) override;
+-
+-  CoveragePrinterHTML(const CoverageViewOptions &Opts)
+-      : CoveragePrinter(Opts) {}
+-};
+-
+-/// \brief A code coverage view which supports html-based rendering.
+-class SourceCoverageViewHTML : public SourceCoverageView {
+-  void renderViewHeader(raw_ostream &OS) override;
+-
+-  void renderViewFooter(raw_ostream &OS) override;
+-
+-  void renderSourceName(raw_ostream &OS) override;
+-
+-  void renderLinePrefix(raw_ostream &OS, unsigned ViewDepth) override;
+-
+-  void renderLineSuffix(raw_ostream &OS, unsigned ViewDepth) override;
+-
+-  void renderViewDivider(raw_ostream &OS, unsigned ViewDepth) override;
+-
+-  void renderLine(raw_ostream &OS, LineRef L,
+-                  const coverage::CoverageSegment *WrappedSegment,
+-                  CoverageSegmentArray Segments, unsigned ExpansionCol,
+-                  unsigned ViewDepth) override;
+-
+-  void renderExpansionSite(raw_ostream &OS, LineRef L,
+-                           const coverage::CoverageSegment *WrappedSegment,
+-                           CoverageSegmentArray Segments, unsigned ExpansionCol,
+-                           unsigned ViewDepth) override;
+-
+-  void renderExpansionView(raw_ostream &OS, ExpansionView &ESV,
+-                           unsigned ViewDepth) override;
+-
+-  void renderInstantiationView(raw_ostream &OS, InstantiationView &ISV,
+-                               unsigned ViewDepth) override;
+-
+-  void renderLineCoverageColumn(raw_ostream &OS,
+-                                const LineCoverageStats &Line) override;
+-
+-  void renderLineNumberColumn(raw_ostream &OS, unsigned LineNo) override;
+-
+-  void renderRegionMarkers(raw_ostream &OS, CoverageSegmentArray Segments,
+-                           unsigned ViewDepth) override;
+-
+-public:
+-  SourceCoverageViewHTML(StringRef SourceName, const MemoryBuffer &File,
+-                         const CoverageViewOptions &Options,
+-                         coverage::CoverageData &&CoverageInfo)
+-      : SourceCoverageView(SourceName, File, Options, std::move(CoverageInfo)) {
+-  }
+-};
+-
+-} // namespace llvm
+-
+-#endif // LLVM_COV_SOURCECOVERAGEVIEWHTML_H
+diff --git a/tools/llvm-cov/SourceCoverageViewText.cpp b/tools/llvm-cov/SourceCoverageViewText.cpp
+index ae9d6da..8b13789 100644
+--- a/tools/llvm-cov/SourceCoverageViewText.cpp
++++ b/tools/llvm-cov/SourceCoverageViewText.cpp
+@@ -1,213 +1 @@
+-//===- SourceCoverageViewText.cpp - A text-based code coverage view -------===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-///
+-/// \file This file implements the text-based coverage renderer.
+-///
+-//===----------------------------------------------------------------------===//
+ 
+-#include "SourceCoverageViewText.h"
+-#include "llvm/ADT/Optional.h"
+-#include "llvm/ADT/SmallString.h"
+-#include "llvm/ADT/StringExtras.h"
+-
+-using namespace llvm;
+-
+-Expected<CoveragePrinter::OwnedStream>
+-CoveragePrinterText::createViewFile(StringRef Path, bool InToplevel) {
+-  return createOutputStream(Path, "txt", InToplevel);
+-}
+-
+-void CoveragePrinterText::closeViewFile(OwnedStream OS) {
+-  OS->operator<<('\n');
+-}
+-
+-Error CoveragePrinterText::createIndexFile(ArrayRef<StringRef> SourceFiles) {
+-  auto OSOrErr = createOutputStream("index", "txt", /*InToplevel=*/true);
+-  if (Error E = OSOrErr.takeError())
+-    return E;
+-  auto OS = std::move(OSOrErr.get());
+-  raw_ostream &OSRef = *OS.get();
+-
+-  for (StringRef SF : SourceFiles)
+-    OSRef << getOutputPath(SF, "txt", /*InToplevel=*/false) << '\n';
+-
+-  return Error::success();
+-}
+-
+-namespace {
+-
+-static const unsigned LineCoverageColumnWidth = 7;
+-static const unsigned LineNumberColumnWidth = 5;
+-
+-/// \brief Get the width of the leading columns.
+-unsigned getCombinedColumnWidth(const CoverageViewOptions &Opts) {
+-  return (Opts.ShowLineStats ? LineCoverageColumnWidth + 1 : 0) +
+-         (Opts.ShowLineNumbers ? LineNumberColumnWidth + 1 : 0);
+-}
+-
+-/// \brief The width of the line that is used to divide between the view and
+-/// the subviews.
+-unsigned getDividerWidth(const CoverageViewOptions &Opts) {
+-  return getCombinedColumnWidth(Opts) + 4;
+-}
+-
+-} // anonymous namespace
+-
+-void SourceCoverageViewText::renderViewHeader(raw_ostream &) {}
+-
+-void SourceCoverageViewText::renderViewFooter(raw_ostream &) {}
+-
+-void SourceCoverageViewText::renderSourceName(raw_ostream &OS) {
+-  getOptions().colored_ostream(OS, raw_ostream::CYAN) << getSourceName()
+-                                                      << ":\n";
+-}
+-
+-void SourceCoverageViewText::renderLinePrefix(raw_ostream &OS,
+-                                              unsigned ViewDepth) {
+-  for (unsigned I = 0; I < ViewDepth; ++I)
+-    OS << "  |";
+-}
+-
+-void SourceCoverageViewText::renderLineSuffix(raw_ostream &, unsigned) {}
+-
+-void SourceCoverageViewText::renderViewDivider(raw_ostream &OS,
+-                                               unsigned ViewDepth) {
+-  assert(ViewDepth != 0 && "Cannot render divider at top level");
+-  renderLinePrefix(OS, ViewDepth - 1);
+-  OS.indent(2);
+-  unsigned Length = getDividerWidth(getOptions());
+-  for (unsigned I = 0; I < Length; ++I)
+-    OS << '-';
+-  OS << '\n';
+-}
+-
+-void SourceCoverageViewText::renderLine(
+-    raw_ostream &OS, LineRef L,
+-    const coverage::CoverageSegment *WrappedSegment,
+-    CoverageSegmentArray Segments, unsigned ExpansionCol, unsigned ViewDepth) {
+-  StringRef Line = L.Line;
+-  unsigned LineNumber = L.LineNo;
+-
+-  Optional<raw_ostream::Colors> Highlight;
+-  SmallVector<std::pair<unsigned, unsigned>, 2> HighlightedRanges;
+-
+-  // The first segment overlaps from a previous line, so we treat it specially.
+-  if (WrappedSegment && WrappedSegment->HasCount && WrappedSegment->Count == 0)
+-    Highlight = raw_ostream::RED;
+-
+-  // Output each segment of the line, possibly highlighted.
+-  unsigned Col = 1;
+-  for (const auto *S : Segments) {
+-    unsigned End = std::min(S->Col, static_cast<unsigned>(Line.size()) + 1);
+-    colored_ostream(OS, Highlight ? *Highlight : raw_ostream::SAVEDCOLOR,
+-                    getOptions().Colors && Highlight, /*Bold=*/false,
+-                    /*BG=*/true)
+-        << Line.substr(Col - 1, End - Col);
+-    if (getOptions().Debug && Highlight)
+-      HighlightedRanges.push_back(std::make_pair(Col, End));
+-    Col = End;
+-    if (Col == ExpansionCol)
+-      Highlight = raw_ostream::CYAN;
+-    else if (S->HasCount && S->Count == 0)
+-      Highlight = raw_ostream::RED;
+-    else
+-      Highlight = None;
+-  }
+-
+-  // Show the rest of the line.
+-  colored_ostream(OS, Highlight ? *Highlight : raw_ostream::SAVEDCOLOR,
+-                  getOptions().Colors && Highlight, /*Bold=*/false, /*BG=*/true)
+-      << Line.substr(Col - 1, Line.size() - Col + 1);
+-  OS << '\n';
+-
+-  if (getOptions().Debug) {
+-    for (const auto &Range : HighlightedRanges)
+-      errs() << "Highlighted line " << LineNumber << ", " << Range.first
+-             << " -> " << Range.second << '\n';
+-    if (Highlight)
+-      errs() << "Highlighted line " << LineNumber << ", " << Col << " -> ?\n";
+-  }
+-}
+-
+-void SourceCoverageViewText::renderLineCoverageColumn(
+-    raw_ostream &OS, const LineCoverageStats &Line) {
+-  if (!Line.isMapped()) {
+-    OS.indent(LineCoverageColumnWidth) << '|';
+-    return;
+-  }
+-  std::string C = formatCount(Line.ExecutionCount);
+-  OS.indent(LineCoverageColumnWidth - C.size());
+-  colored_ostream(OS, raw_ostream::MAGENTA,
+-                  Line.hasMultipleRegions() && getOptions().Colors)
+-      << C;
+-  OS << '|';
+-}
+-
+-void SourceCoverageViewText::renderLineNumberColumn(raw_ostream &OS,
+-                                                    unsigned LineNo) {
+-  SmallString<32> Buffer;
+-  raw_svector_ostream BufferOS(Buffer);
+-  BufferOS << LineNo;
+-  auto Str = BufferOS.str();
+-  // Trim and align to the right.
+-  Str = Str.substr(0, std::min(Str.size(), (size_t)LineNumberColumnWidth));
+-  OS.indent(LineNumberColumnWidth - Str.size()) << Str << '|';
+-}
+-
+-void SourceCoverageViewText::renderRegionMarkers(
+-    raw_ostream &OS, CoverageSegmentArray Segments, unsigned ViewDepth) {
+-  renderLinePrefix(OS, ViewDepth);
+-  OS.indent(getCombinedColumnWidth(getOptions()));
+-
+-  unsigned PrevColumn = 1;
+-  for (const auto *S : Segments) {
+-    if (!S->IsRegionEntry)
+-      continue;
+-    // Skip to the new region.
+-    if (S->Col > PrevColumn)
+-      OS.indent(S->Col - PrevColumn);
+-    PrevColumn = S->Col + 1;
+-    std::string C = formatCount(S->Count);
+-    PrevColumn += C.size();
+-    OS << '^' << C;
+-  }
+-  OS << '\n';
+-
+-  if (getOptions().Debug)
+-    for (const auto *S : Segments)
+-      errs() << "Marker at " << S->Line << ":" << S->Col << " = "
+-             << formatCount(S->Count) << (S->IsRegionEntry ? "\n" : " (pop)\n");
+-}
+-
+-void SourceCoverageViewText::renderExpansionSite(
+-    raw_ostream &OS, LineRef L, const coverage::CoverageSegment *WrappedSegment,
+-    CoverageSegmentArray Segments, unsigned ExpansionCol, unsigned ViewDepth) {
+-  renderLinePrefix(OS, ViewDepth);
+-  OS.indent(getCombinedColumnWidth(getOptions()) + (ViewDepth == 0 ? 0 : 1));
+-  renderLine(OS, L, WrappedSegment, Segments, ExpansionCol, ViewDepth);
+-}
+-
+-void SourceCoverageViewText::renderExpansionView(raw_ostream &OS,
+-                                                 ExpansionView &ESV,
+-                                                 unsigned ViewDepth) {
+-  // Render the child subview.
+-  if (getOptions().Debug)
+-    errs() << "Expansion at line " << ESV.getLine() << ", " << ESV.getStartCol()
+-           << " -> " << ESV.getEndCol() << '\n';
+-  ESV.View->print(OS, /*WholeFile=*/false, /*ShowSourceName=*/false,
+-                  ViewDepth + 1);
+-}
+-
+-void SourceCoverageViewText::renderInstantiationView(raw_ostream &OS,
+-                                                     InstantiationView &ISV,
+-                                                     unsigned ViewDepth) {
+-  renderLinePrefix(OS, ViewDepth);
+-  OS << ' ';
+-  ISV.View->print(OS, /*WholeFile=*/false, /*ShowSourceName=*/true, ViewDepth);
+-}
+diff --git a/tools/llvm-cov/SourceCoverageViewText.h b/tools/llvm-cov/SourceCoverageViewText.h
+deleted file mode 100644
+index b233124..0000000
+--- a/tools/llvm-cov/SourceCoverageViewText.h
++++ /dev/null
+@@ -1,83 +0,0 @@
+-//===- SourceCoverageViewText.h - A text-based code coverage view ---------===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-///
+-/// \file This file defines the interface to the text-based coverage renderer.
+-///
+-//===----------------------------------------------------------------------===//
+-
+-#ifndef LLVM_COV_SOURCECOVERAGEVIEWTEXT_H
+-#define LLVM_COV_SOURCECOVERAGEVIEWTEXT_H
+-
+-#include "SourceCoverageView.h"
+-
+-namespace llvm {
+-
+-/// \brief A coverage printer for text output.
+-class CoveragePrinterText : public CoveragePrinter {
+-public:
+-  Expected<OwnedStream> createViewFile(StringRef Path,
+-                                       bool InToplevel) override;
+-
+-  void closeViewFile(OwnedStream OS) override;
+-
+-  Error createIndexFile(ArrayRef<StringRef> SourceFiles) override;
+-
+-  CoveragePrinterText(const CoverageViewOptions &Opts)
+-      : CoveragePrinter(Opts) {}
+-};
+-
+-/// \brief A code coverage view which supports text-based rendering.
+-class SourceCoverageViewText : public SourceCoverageView {
+-  void renderViewHeader(raw_ostream &OS) override;
+-
+-  void renderViewFooter(raw_ostream &OS) override;
+-
+-  void renderSourceName(raw_ostream &OS) override;
+-
+-  void renderLinePrefix(raw_ostream &OS, unsigned ViewDepth) override;
+-
+-  void renderLineSuffix(raw_ostream &OS, unsigned ViewDepth) override;
+-
+-  void renderViewDivider(raw_ostream &OS, unsigned ViewDepth) override;
+-
+-  void renderLine(raw_ostream &OS, LineRef L,
+-                  const coverage::CoverageSegment *WrappedSegment,
+-                  CoverageSegmentArray Segments, unsigned ExpansionCol,
+-                  unsigned ViewDepth) override;
+-
+-  void renderExpansionSite(raw_ostream &OS, LineRef L,
+-                           const coverage::CoverageSegment *WrappedSegment,
+-                           CoverageSegmentArray Segments, unsigned ExpansionCol,
+-                           unsigned ViewDepth) override;
+-
+-  void renderExpansionView(raw_ostream &OS, ExpansionView &ESV,
+-                           unsigned ViewDepth) override;
+-
+-  void renderInstantiationView(raw_ostream &OS, InstantiationView &ISV,
+-                               unsigned ViewDepth) override;
+-
+-  void renderLineCoverageColumn(raw_ostream &OS,
+-                                const LineCoverageStats &Line) override;
+-
+-  void renderLineNumberColumn(raw_ostream &OS, unsigned LineNo) override;
+-
+-  void renderRegionMarkers(raw_ostream &OS, CoverageSegmentArray Segments,
+-                           unsigned ViewDepth) override;
+-
+-public:
+-  SourceCoverageViewText(StringRef SourceName, const MemoryBuffer &File,
+-                         const CoverageViewOptions &Options,
+-                         coverage::CoverageData &&CoverageInfo)
+-      : SourceCoverageView(SourceName, File, Options, std::move(CoverageInfo)) {
+-  }
+-};
+-
+-} // namespace llvm
+-
+-#endif // LLVM_COV_SOURCECOVERAGEVIEWTEXT_H
+diff --git a/tools/llvm-cov/TestingSupport.cpp b/tools/llvm-cov/TestingSupport.cpp
+index 72768f4..8b13789 100644
+--- a/tools/llvm-cov/TestingSupport.cpp
++++ b/tools/llvm-cov/TestingSupport.cpp
+@@ -1,92 +1 @@
+-//===- TestingSupport.cpp - Convert objects files into test files --------===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+ 
+-#include "llvm/Object/ObjectFile.h"
+-#include "llvm/ProfileData/InstrProf.h"
+-#include "llvm/Support/CommandLine.h"
+-#include "llvm/Support/LEB128.h"
+-#include "llvm/Support/raw_ostream.h"
+-#include <functional>
+-#include <system_error>
+-
+-using namespace llvm;
+-using namespace object;
+-
+-int convertForTestingMain(int argc, const char *argv[]) {
+-  cl::opt<std::string> InputSourceFile(cl::Positional, cl::Required,
+-                                       cl::desc("<Source file>"));
+-
+-  cl::opt<std::string> OutputFilename(
+-      "o", cl::Required,
+-      cl::desc(
+-          "File with the profile data obtained after an instrumented run"));
+-
+-  cl::ParseCommandLineOptions(argc, argv, "LLVM code coverage tool\n");
+-
+-  auto ObjErr = llvm::object::ObjectFile::createObjectFile(InputSourceFile);
+-  if (!ObjErr) {
+-    std::string Buf;
+-    raw_string_ostream OS(Buf);
+-    logAllUnhandledErrors(ObjErr.takeError(), OS, "");
+-    OS.flush();
+-    errs() << "error: " << Buf;
+-    return 1;
+-  }
+-  ObjectFile *OF = ObjErr.get().getBinary();
+-  auto BytesInAddress = OF->getBytesInAddress();
+-  if (BytesInAddress != 8) {
+-    errs() << "error: 64 bit binary expected\n";
+-    return 1;
+-  }
+-
+-  // Look for the sections that we are interested in.
+-  int FoundSectionCount = 0;
+-  SectionRef ProfileNames, CoverageMapping;
+-  for (const auto &Section : OF->sections()) {
+-    StringRef Name;
+-    if (Section.getName(Name))
+-      return 1;
+-    if (Name == llvm::getInstrProfNameSectionName(false)) {
+-      ProfileNames = Section;
+-    } else if (Name == llvm::getInstrProfCoverageSectionName(false)) {
+-      CoverageMapping = Section;
+-    } else
+-      continue;
+-    ++FoundSectionCount;
+-  }
+-  if (FoundSectionCount != 2)
+-    return 1;
+-
+-  // Get the contents of the given sections.
+-  uint64_t ProfileNamesAddress = ProfileNames.getAddress();
+-  StringRef CoverageMappingData;
+-  StringRef ProfileNamesData;
+-  if (CoverageMapping.getContents(CoverageMappingData) ||
+-      ProfileNames.getContents(ProfileNamesData))
+-    return 1;
+-
+-  int FD;
+-  if (auto Err =
+-          sys::fs::openFileForWrite(OutputFilename, FD, sys::fs::F_None)) {
+-    errs() << "error: " << Err.message() << "\n";
+-    return 1;
+-  }
+-
+-  raw_fd_ostream OS(FD, true);
+-  OS << "llvmcovmtestdata";
+-  encodeULEB128(ProfileNamesData.size(), OS);
+-  encodeULEB128(ProfileNamesAddress, OS);
+-  OS << ProfileNamesData;
+-  // Coverage mapping data is expected to have an alignment of 8.
+-  for (unsigned Pad = OffsetToAlignment(OS.tell(), 8); Pad; --Pad)
+-    OS.write(uint8_t(0));
+-  OS << CoverageMappingData;
+-
+-  return 0;
+-}
+diff --git a/tools/llvm-cov/gcov.cpp b/tools/llvm-cov/gcov.cpp
+index 4652fed..8b13789 100644
+--- a/tools/llvm-cov/gcov.cpp
++++ b/tools/llvm-cov/gcov.cpp
+@@ -1,145 +1 @@
+-//===- gcov.cpp - GCOV compatible LLVM coverage tool ----------------------===//
+-//
+-//                     The LLVM Compiler Infrastructure
+-//
+-// This file is distributed under the University of Illinois Open Source
+-// License. See LICENSE.TXT for details.
+-//
+-//===----------------------------------------------------------------------===//
+-//
+-// llvm-cov is a command line tools to analyze and report coverage information.
+-//
+-//===----------------------------------------------------------------------===//
+ 
+-#include "llvm/ADT/SmallString.h"
+-#include "llvm/Support/CommandLine.h"
+-#include "llvm/Support/Errc.h"
+-#include "llvm/Support/FileSystem.h"
+-#include "llvm/Support/GCOV.h"
+-#include "llvm/Support/Path.h"
+-#include <system_error>
+-using namespace llvm;
+-
+-static void reportCoverage(StringRef SourceFile, StringRef ObjectDir,
+-                           const std::string &InputGCNO,
+-                           const std::string &InputGCDA, bool DumpGCOV,
+-                           const GCOV::Options &Options) {
+-  SmallString<128> CoverageFileStem(ObjectDir);
+-  if (CoverageFileStem.empty()) {
+-    // If no directory was specified with -o, look next to the source file.
+-    CoverageFileStem = sys::path::parent_path(SourceFile);
+-    sys::path::append(CoverageFileStem, sys::path::stem(SourceFile));
+-  } else if (sys::fs::is_directory(ObjectDir))
+-    // A directory name was given. Use it and the source file name.
+-    sys::path::append(CoverageFileStem, sys::path::stem(SourceFile));
+-  else
+-    // A file was given. Ignore the source file and look next to this file.
+-    sys::path::replace_extension(CoverageFileStem, "");
+-
+-  std::string GCNO = InputGCNO.empty()
+-                         ? std::string(CoverageFileStem.str()) + ".gcno"
+-                         : InputGCNO;
+-  std::string GCDA = InputGCDA.empty()
+-                         ? std::string(CoverageFileStem.str()) + ".gcda"
+-                         : InputGCDA;
+-  GCOVFile GF;
+-
+-  ErrorOr<std::unique_ptr<MemoryBuffer>> GCNO_Buff =
+-      MemoryBuffer::getFileOrSTDIN(GCNO);
+-  if (std::error_code EC = GCNO_Buff.getError()) {
+-    errs() << GCNO << ": " << EC.message() << "\n";
+-    return;
+-  }
+-  GCOVBuffer GCNO_GB(GCNO_Buff.get().get());
+-  if (!GF.readGCNO(GCNO_GB)) {
+-    errs() << "Invalid .gcno File!\n";
+-    return;
+-  }
+-
+-  ErrorOr<std::unique_ptr<MemoryBuffer>> GCDA_Buff =
+-      MemoryBuffer::getFileOrSTDIN(GCDA);
+-  if (std::error_code EC = GCDA_Buff.getError()) {
+-    if (EC != errc::no_such_file_or_directory) {
+-      errs() << GCDA << ": " << EC.message() << "\n";
+-      return;
+-    }
+-    // Clear the filename to make it clear we didn't read anything.
+-    GCDA = "-";
+-  } else {
+-    GCOVBuffer GCDA_GB(GCDA_Buff.get().get());
+-    if (!GF.readGCDA(GCDA_GB)) {
+-      errs() << "Invalid .gcda File!\n";
+-      return;
+-    }
+-  }
+-
+-  if (DumpGCOV)
+-    GF.dump();
+-
+-  FileInfo FI(Options);
+-  GF.collectLineCounts(FI);
+-  FI.print(llvm::outs(), SourceFile, GCNO, GCDA);
+-}
+-
+-int gcovMain(int argc, const char *argv[]) {
+-  cl::list<std::string> SourceFiles(cl::Positional, cl::OneOrMore,
+-                                    cl::desc("SOURCEFILE"));
+-
+-  cl::opt<bool> AllBlocks("a", cl::Grouping, cl::init(false),
+-                          cl::desc("Display all basic blocks"));
+-  cl::alias AllBlocksA("all-blocks", cl::aliasopt(AllBlocks));
+-
+-  cl::opt<bool> BranchProb("b", cl::Grouping, cl::init(false),
+-                           cl::desc("Display branch probabilities"));
+-  cl::alias BranchProbA("branch-probabilities", cl::aliasopt(BranchProb));
+-
+-  cl::opt<bool> BranchCount("c", cl::Grouping, cl::init(false),
+-                            cl::desc("Display branch counts instead "
+-                                     "of percentages (requires -b)"));
+-  cl::alias BranchCountA("branch-counts", cl::aliasopt(BranchCount));
+-
+-  cl::opt<bool> LongNames("l", cl::Grouping, cl::init(false),
+-                          cl::desc("Prefix filenames with the main file"));
+-  cl::alias LongNamesA("long-file-names", cl::aliasopt(LongNames));
+-
+-  cl::opt<bool> FuncSummary("f", cl::Grouping, cl::init(false),
+-                            cl::desc("Show coverage for each function"));
+-  cl::alias FuncSummaryA("function-summaries", cl::aliasopt(FuncSummary));
+-
+-  cl::opt<bool> NoOutput("n", cl::Grouping, cl::init(false),
+-                         cl::desc("Do not output any .gcov files"));
+-  cl::alias NoOutputA("no-output", cl::aliasopt(NoOutput));
+-
+-  cl::opt<std::string> ObjectDir(
+-      "o", cl::value_desc("DIR|FILE"), cl::init(""),
+-      cl::desc("Find objects in DIR or based on FILE's path"));
+-  cl::alias ObjectDirA("object-directory", cl::aliasopt(ObjectDir));
+-  cl::alias ObjectDirB("object-file", cl::aliasopt(ObjectDir));
+-
+-  cl::opt<bool> PreservePaths("p", cl::Grouping, cl::init(false),
+-                              cl::desc("Preserve path components"));
+-  cl::alias PreservePathsA("preserve-paths", cl::aliasopt(PreservePaths));
+-
+-  cl::opt<bool> UncondBranch("u", cl::Grouping, cl::init(false),
+-                             cl::desc("Display unconditional branch info "
+-                                      "(requires -b)"));
+-  cl::alias UncondBranchA("unconditional-branches", cl::aliasopt(UncondBranch));
+-
+-  cl::OptionCategory DebugCat("Internal and debugging options");
+-  cl::opt<bool> DumpGCOV("dump", cl::init(false), cl::cat(DebugCat),
+-                         cl::desc("Dump the gcov file to stderr"));
+-  cl::opt<std::string> InputGCNO("gcno", cl::cat(DebugCat), cl::init(""),
+-                                 cl::desc("Override inferred gcno file"));
+-  cl::opt<std::string> InputGCDA("gcda", cl::cat(DebugCat), cl::init(""),
+-                                 cl::desc("Override inferred gcda file"));
+-
+-  cl::ParseCommandLineOptions(argc, argv, "LLVM code coverage tool\n");
+-
+-  GCOV::Options Options(AllBlocks, BranchProb, BranchCount, FuncSummary,
+-                        PreservePaths, UncondBranch, LongNames, NoOutput);
+-
+-  for (const auto &SourceFile : SourceFiles)
+-    reportCoverage(SourceFile, ObjectDir, InputGCNO, InputGCDA, DumpGCOV,
+-                   Options);
+-  return 0;
+-}
+diff --git a/tools/llvm-cov/llvm-cov.cpp b/tools/llvm-cov/llvm-cov.cpp
+index ba60cd9..aa1f228 100644
+--- a/tools/llvm-cov/llvm-cov.cpp
++++ b/tools/llvm-cov/llvm-cov.cpp
+@@ -10,85 +10,6 @@
+ // llvm-cov is a command line tools to analyze and report coverage information.
+ //
+ //===----------------------------------------------------------------------===//
+-
+-#include "llvm/ADT/StringRef.h"
+-#include "llvm/ADT/StringSwitch.h"
+-#include "llvm/Support/CommandLine.h"
+-#include "llvm/Support/ManagedStatic.h"
+-#include "llvm/Support/Path.h"
+-#include "llvm/Support/PrettyStackTrace.h"
+-#include "llvm/Support/Process.h"
+-#include "llvm/Support/Signals.h"
+-#include "llvm/Support/raw_ostream.h"
+-#include <string>
+-
+-using namespace llvm;
+-
+-/// \brief The main entry point for the 'show' subcommand.
+-int showMain(int argc, const char *argv[]);
+-
+-/// \brief The main entry point for the 'report' subcommand.
+-int reportMain(int argc, const char *argv[]);
+-
+-/// \brief The main entry point for the 'convert-for-testing' subcommand.
+-int convertForTestingMain(int argc, const char *argv[]);
+-
+-/// \brief The main entry point for the gcov compatible coverage tool.
+-int gcovMain(int argc, const char *argv[]);
+-
+-/// \brief Top level help.
+-static int helpMain(int argc, const char *argv[]) {
+-  errs() << "Usage: llvm-cov {gcov|report|show} [OPTION]...\n\n"
+-         << "Shows code coverage information.\n\n"
+-         << "Subcommands:\n"
+-         << "  gcov:   Work with the gcov format.\n"
+-         << "  show:   Annotate source files using instrprof style coverage.\n"
+-         << "  report: Summarize instrprof style coverage information.\n";
+-  return 0;
+-}
+-
+-/// \brief Top level version information.
+-static int versionMain(int argc, const char *argv[]) {
+-  cl::PrintVersionMessage();
+-  return 0;
+-}
+-
+ int main(int argc, const char **argv) {
+-  // Print a stack trace if we signal out.
+-  sys::PrintStackTraceOnErrorSignal(argv[0]);
+-  PrettyStackTraceProgram X(argc, argv);
+-  llvm_shutdown_obj Y; // Call llvm_shutdown() on exit.
+-
+-  // If argv[0] is or ends with 'gcov', always be gcov compatible
+-  if (sys::path::stem(argv[0]).endswith_lower("gcov"))
+-    return gcovMain(argc, argv);
+-
+-  // Check if we are invoking a specific tool command.
+-  if (argc > 1) {
+-    typedef int (*MainFunction)(int, const char *[]);
+-    MainFunction Func = StringSwitch<MainFunction>(argv[1])
+-                            .Case("convert-for-testing", convertForTestingMain)
+-                            .Case("gcov", gcovMain)
+-                            .Case("report", reportMain)
+-                            .Case("show", showMain)
+-                            .Cases("-h", "-help", "--help", helpMain)
+-                            .Cases("-version", "--version", versionMain)
+-                            .Default(nullptr);
+-
+-    if (Func) {
+-      std::string Invocation = std::string(argv[0]) + " " + argv[1];
+-      argv[1] = Invocation.c_str();
+-      return Func(argc - 1, argv + 1);
+-    }
+-  }
+-
+-  if (argc > 1) {
+-    if (sys::Process::StandardErrHasColors())
+-      errs().changeColor(raw_ostream::RED);
+-    errs() << "Unrecognized command: " << argv[1] << ".\n\n";
+-    if (sys::Process::StandardErrHasColors())
+-      errs().resetColor();
+-  }
+-  helpMain(argc, argv);
+   return 1;
+ }
+diff --git a/tools/sancov/sancov.cc b/tools/sancov/sancov.cc
+index 55b0370..c869a73 100644
+--- a/tools/sancov/sancov.cc
++++ b/tools/sancov/sancov.cc
+@@ -10,1249 +10,7 @@
+ // This file is a command-line tool for reading and analyzing sanitizer
+ // coverage.
+ //===----------------------------------------------------------------------===//
+-#include "llvm/ADT/STLExtras.h"
+-#include "llvm/ADT/Twine.h"
+-#include "llvm/DebugInfo/Symbolize/Symbolize.h"
+-#include "llvm/MC/MCAsmInfo.h"
+-#include "llvm/MC/MCContext.h"
+-#include "llvm/MC/MCDisassembler/MCDisassembler.h"
+-#include "llvm/MC/MCInst.h"
+-#include "llvm/MC/MCInstPrinter.h"
+-#include "llvm/MC/MCInstrAnalysis.h"
+-#include "llvm/MC/MCInstrInfo.h"
+-#include "llvm/MC/MCObjectFileInfo.h"
+-#include "llvm/MC/MCRegisterInfo.h"
+-#include "llvm/MC/MCSubtargetInfo.h"
+-#include "llvm/Object/Archive.h"
+-#include "llvm/Object/Binary.h"
+-#include "llvm/Object/ELFObjectFile.h"
+-#include "llvm/Object/ObjectFile.h"
+-#include "llvm/Support/Casting.h"
+-#include "llvm/Support/CommandLine.h"
+-#include "llvm/Support/Errc.h"
+-#include "llvm/Support/ErrorOr.h"
+-#include "llvm/Support/FileSystem.h"
+-#include "llvm/Support/LineIterator.h"
+-#include "llvm/Support/MD5.h"
+-#include "llvm/Support/ManagedStatic.h"
+-#include "llvm/Support/MemoryBuffer.h"
+-#include "llvm/Support/Path.h"
+-#include "llvm/Support/PrettyStackTrace.h"
+-#include "llvm/Support/Regex.h"
+-#include "llvm/Support/Signals.h"
+-#include "llvm/Support/SpecialCaseList.h"
+-#include "llvm/Support/TargetRegistry.h"
+-#include "llvm/Support/TargetSelect.h"
+-#include "llvm/Support/ToolOutputFile.h"
+-#include "llvm/Support/raw_ostream.h"
+-
+-#include <algorithm>
+-#include <set>
+-#include <stdio.h>
+-#include <string>
+-#include <utility>
+-#include <vector>
+-
+-using namespace llvm;
+-
+-namespace {
+-
+-// --------- COMMAND LINE FLAGS ---------
+-
+-enum ActionType {
+-  PrintAction,
+-  PrintCovPointsAction,
+-  CoveredFunctionsAction,
+-  NotCoveredFunctionsAction,
+-  HtmlReportAction,
+-  StatsAction
+-};
+-
+-cl::opt<ActionType> Action(
+-    cl::desc("Action (required)"), cl::Required,
+-    cl::values(clEnumValN(PrintAction, "print", "Print coverage addresses"),
+-               clEnumValN(PrintCovPointsAction, "print-coverage-pcs",
+-                          "Print coverage instrumentation points addresses."),
+-               clEnumValN(CoveredFunctionsAction, "covered-functions",
+-                          "Print all covered funcions."),
+-               clEnumValN(NotCoveredFunctionsAction, "not-covered-functions",
+-                          "Print all not covered funcions."),
+-               clEnumValN(HtmlReportAction, "html-report",
+-                          "Print HTML coverage report."),
+-               clEnumValN(StatsAction, "print-coverage-stats",
+-                          "Print coverage statistics."),
+-               clEnumValEnd));
+-
+-static cl::list<std::string>
+-    ClInputFiles(cl::Positional, cl::OneOrMore,
+-                 cl::desc("(<binary file>|<.sancov file>)..."));
+-
+-static cl::opt<bool> ClDemangle("demangle", cl::init(true),
+-                                cl::desc("Print demangled function name."));
+-
+-static cl::opt<std::string> ClStripPathPrefix(
+-    "strip_path_prefix", cl::init(""),
+-    cl::desc("Strip this prefix from file paths in reports."));
+-
+-static cl::opt<std::string>
+-    ClBlacklist("blacklist", cl::init(""),
+-                cl::desc("Blacklist file (sanitizer blacklist format)."));
+-
+-static cl::opt<bool> ClUseDefaultBlacklist(
+-    "use_default_blacklist", cl::init(true), cl::Hidden,
+-    cl::desc("Controls if default blacklist should be used."));
+-
+-static const char *const DefaultBlacklistStr = "fun:__sanitizer_.*\n"
+-                                               "src:/usr/include/.*\n"
+-                                               "src:.*/libc\\+\\+/.*\n";
+-
+-// --------- FORMAT SPECIFICATION ---------
+-
+-struct FileHeader {
+-  uint32_t Bitness;
+-  uint32_t Magic;
+-};
+-
+-static const uint32_t BinCoverageMagic = 0xC0BFFFFF;
+-static const uint32_t Bitness32 = 0xFFFFFF32;
+-static const uint32_t Bitness64 = 0xFFFFFF64;
+-
+-// --------- ERROR HANDLING ---------
+-
+-static void Fail(const llvm::Twine &E) {
+-  errs() << "Error: " << E << "\n";
+-  exit(1);
+-}
+-
+-static void FailIfError(std::error_code Error) {
+-  if (!Error)
+-    return;
+-  errs() << "Error: " << Error.message() << "(" << Error.value() << ")\n";
+-  exit(1);
+-}
+-
+-template <typename T> static void FailIfError(const ErrorOr<T> &E) {
+-  FailIfError(E.getError());
+-}
+-
+-static void FailIfError(Error Err) {
+-  if (Err) {
+-    logAllUnhandledErrors(std::move(Err), errs(), "Error: ");
+-    exit(1);
+-  }
+-}
+-
+-template <typename T> static void FailIfError(Expected<T> &E) {
+-  FailIfError(E.takeError());
+-}
+-
+-static void FailIfNotEmpty(const llvm::Twine &E) {
+-  if (E.str().empty())
+-    return;
+-  Fail(E);
+-}
+-
+-template <typename T>
+-static void FailIfEmpty(const std::unique_ptr<T> &Ptr,
+-                        const std::string &Message) {
+-  if (Ptr.get())
+-    return;
+-  Fail(Message);
+-}
+-
+-// ---------
+-
+-// Produces std::map<K, std::vector<E>> grouping input
+-// elements by FuncTy result.
+-template <class RangeTy, class FuncTy>
+-static inline auto group_by(const RangeTy &R, FuncTy F)
+-    -> std::map<typename std::decay<decltype(F(*R.begin()))>::type,
+-                std::vector<typename std::decay<decltype(*R.begin())>::type>> {
+-  std::map<typename std::decay<decltype(F(*R.begin()))>::type,
+-           std::vector<typename std::decay<decltype(*R.begin())>::type>>
+-      Result;
+-  for (const auto &E : R) {
+-    Result[F(E)].push_back(E);
+-  }
+-  return Result;
+-}
+-
+-template <typename T>
+-static void readInts(const char *Start, const char *End,
+-                     std::set<uint64_t> *Ints) {
+-  const T *S = reinterpret_cast<const T *>(Start);
+-  const T *E = reinterpret_cast<const T *>(End);
+-  std::copy(S, E, std::inserter(*Ints, Ints->end()));
+-}
+-
+-struct FileLoc {
+-  bool operator<(const FileLoc &RHS) const {
+-    return std::tie(FileName, Line) < std::tie(RHS.FileName, RHS.Line);
+-  }
+-
+-  std::string FileName;
+-  uint32_t Line;
+-};
+-
+-struct FileFn {
+-  bool operator<(const FileFn &RHS) const {
+-    return std::tie(FileName, FunctionName) <
+-           std::tie(RHS.FileName, RHS.FunctionName);
+-  }
+-
+-  std::string FileName;
+-  std::string FunctionName;
+-};
+-
+-struct FnLoc {
+-  bool operator<(const FnLoc &RHS) const {
+-    return std::tie(Loc, FunctionName) < std::tie(RHS.Loc, RHS.FunctionName);
+-  }
+-
+-  FileLoc Loc;
+-  std::string FunctionName;
+-};
+-
+-std::string stripPathPrefix(std::string Path) {
+-  if (ClStripPathPrefix.empty())
+-    return Path;
+-  size_t Pos = Path.find(ClStripPathPrefix);
+-  if (Pos == std::string::npos)
+-    return Path;
+-  return Path.substr(Pos + ClStripPathPrefix.size());
+-}
+-
+-static std::unique_ptr<symbolize::LLVMSymbolizer> createSymbolizer() {
+-  symbolize::LLVMSymbolizer::Options SymbolizerOptions;
+-  SymbolizerOptions.Demangle = ClDemangle;
+-  SymbolizerOptions.UseSymbolTable = true;
+-  return std::unique_ptr<symbolize::LLVMSymbolizer>(
+-      new symbolize::LLVMSymbolizer(SymbolizerOptions));
+-}
+-
+-// A DILineInfo with address.
+-struct AddrInfo : public DILineInfo {
+-  uint64_t Addr;
+-
+-  AddrInfo(const DILineInfo &DI, uint64_t Addr) : DILineInfo(DI), Addr(Addr) {
+-    FileName = normalizeFilename(FileName);
+-  }
+-
+-private:
+-  static std::string normalizeFilename(const std::string &FileName) {
+-    SmallString<256> S(FileName);
+-    sys::path::remove_dots(S, /* remove_dot_dot */ true);
+-    return S.str().str();
+-  }
+-};
+-
+-class Blacklists {
+-public:
+-  Blacklists()
+-      : DefaultBlacklist(createDefaultBlacklist()),
+-        UserBlacklist(createUserBlacklist()) {}
+-
+-  // AddrInfo contains normalized filename. It is important to check it rather
+-  // than DILineInfo.
+-  bool isBlacklisted(const AddrInfo &AI) {
+-    if (DefaultBlacklist && DefaultBlacklist->inSection("fun", AI.FunctionName))
+-      return true;
+-    if (DefaultBlacklist && DefaultBlacklist->inSection("src", AI.FileName))
+-      return true;
+-    if (UserBlacklist && UserBlacklist->inSection("fun", AI.FunctionName))
+-      return true;
+-    if (UserBlacklist && UserBlacklist->inSection("src", AI.FileName))
+-      return true;
+-    return false;
+-  }
+-
+-private:
+-  static std::unique_ptr<SpecialCaseList> createDefaultBlacklist() {
+-    if (!ClUseDefaultBlacklist)
+-      return std::unique_ptr<SpecialCaseList>();
+-    std::unique_ptr<MemoryBuffer> MB =
+-        MemoryBuffer::getMemBuffer(DefaultBlacklistStr);
+-    std::string Error;
+-    auto Blacklist = SpecialCaseList::create(MB.get(), Error);
+-    FailIfNotEmpty(Error);
+-    return Blacklist;
+-  }
+-
+-  static std::unique_ptr<SpecialCaseList> createUserBlacklist() {
+-    if (ClBlacklist.empty())
+-      return std::unique_ptr<SpecialCaseList>();
+-
+-    return SpecialCaseList::createOrDie({{ClBlacklist}});
+-  }
+-  std::unique_ptr<SpecialCaseList> DefaultBlacklist;
+-  std::unique_ptr<SpecialCaseList> UserBlacklist;
+-};
+-
+-// Collect all debug info for given addresses.
+-static std::vector<AddrInfo> getAddrInfo(const std::string &ObjectFile,
+-                                         const std::set<uint64_t> &Addrs,
+-                                         bool InlinedCode) {
+-  std::vector<AddrInfo> Result;
+-  auto Symbolizer(createSymbolizer());
+-  Blacklists B;
+-
+-  for (auto Addr : Addrs) {
+-    auto LineInfo = Symbolizer->symbolizeCode(ObjectFile, Addr);
+-    FailIfError(LineInfo);
+-    auto LineAddrInfo = AddrInfo(*LineInfo, Addr);
+-    if (B.isBlacklisted(LineAddrInfo))
+-      continue;
+-    Result.push_back(LineAddrInfo);
+-    if (InlinedCode) {
+-      auto InliningInfo = Symbolizer->symbolizeInlinedCode(ObjectFile, Addr);
+-      FailIfError(InliningInfo);
+-      for (uint32_t I = 0; I < InliningInfo->getNumberOfFrames(); ++I) {
+-        auto FrameInfo = InliningInfo->getFrame(I);
+-        auto FrameAddrInfo = AddrInfo(FrameInfo, Addr);
+-        if (B.isBlacklisted(FrameAddrInfo))
+-          continue;
+-        Result.push_back(FrameAddrInfo);
+-      }
+-    }
+-  }
+-
+-  return Result;
+-}
+-
+-// Locate __sanitizer_cov* function addresses that are used for coverage
+-// reporting.
+-static std::set<uint64_t>
+-findSanitizerCovFunctions(const object::ObjectFile &O) {
+-  std::set<uint64_t> Result;
+-
+-  for (const object::SymbolRef &Symbol : O.symbols()) {
+-    Expected<uint64_t> AddressOrErr = Symbol.getAddress();
+-    FailIfError(errorToErrorCode(AddressOrErr.takeError()));
+-
+-    Expected<StringRef> NameOrErr = Symbol.getName();
+-    FailIfError(errorToErrorCode(NameOrErr.takeError()));
+-    StringRef Name = NameOrErr.get();
+-
+-    if (Name == "__sanitizer_cov" || Name == "__sanitizer_cov_with_check" ||
+-        Name == "__sanitizer_cov_trace_func_enter") {
+-      if (!(Symbol.getFlags() & object::BasicSymbolRef::SF_Undefined))
+-        Result.insert(AddressOrErr.get());
+-    }
+-  }
+-
+-  return Result;
+-}
+-
+-// Locate addresses of all coverage points in a file. Coverage point
+-// is defined as the 'address of instruction following __sanitizer_cov
+-// call - 1'.
+-static void getObjectCoveragePoints(const object::ObjectFile &O,
+-                                    std::set<uint64_t> *Addrs) {
+-  Triple TheTriple("unknown-unknown-unknown");
+-  TheTriple.setArch(Triple::ArchType(O.getArch()));
+-  auto TripleName = TheTriple.getTriple();
+-
+-  std::string Error;
+-  const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, Error);
+-  FailIfNotEmpty(Error);
+-
+-  std::unique_ptr<const MCSubtargetInfo> STI(
+-      TheTarget->createMCSubtargetInfo(TripleName, "", ""));
+-  FailIfEmpty(STI, "no subtarget info for target " + TripleName);
+-
+-  std::unique_ptr<const MCRegisterInfo> MRI(
+-      TheTarget->createMCRegInfo(TripleName));
+-  FailIfEmpty(MRI, "no register info for target " + TripleName);
+-
+-  std::unique_ptr<const MCAsmInfo> AsmInfo(
+-      TheTarget->createMCAsmInfo(*MRI, TripleName));
+-  FailIfEmpty(AsmInfo, "no asm info for target " + TripleName);
+-
+-  std::unique_ptr<const MCObjectFileInfo> MOFI(new MCObjectFileInfo);
+-  MCContext Ctx(AsmInfo.get(), MRI.get(), MOFI.get());
+-  std::unique_ptr<MCDisassembler> DisAsm(
+-      TheTarget->createMCDisassembler(*STI, Ctx));
+-  FailIfEmpty(DisAsm, "no disassembler info for target " + TripleName);
+-
+-  std::unique_ptr<const MCInstrInfo> MII(TheTarget->createMCInstrInfo());
+-  FailIfEmpty(MII, "no instruction info for target " + TripleName);
+-
+-  std::unique_ptr<const MCInstrAnalysis> MIA(
+-      TheTarget->createMCInstrAnalysis(MII.get()));
+-  FailIfEmpty(MIA, "no instruction analysis info for target " + TripleName);
+-
+-  auto SanCovAddrs = findSanitizerCovFunctions(O);
+-  if (SanCovAddrs.empty())
+-    Fail("__sanitizer_cov* functions not found");
+-
+-  for (object::SectionRef Section : O.sections()) {
+-    if (Section.isVirtual() || !Section.isText()) // llvm-objdump does the same.
+-      continue;
+-    uint64_t SectionAddr = Section.getAddress();
+-    uint64_t SectSize = Section.getSize();
+-    if (!SectSize)
+-      continue;
+-
+-    StringRef BytesStr;
+-    FailIfError(Section.getContents(BytesStr));
+-    ArrayRef<uint8_t> Bytes(reinterpret_cast<const uint8_t *>(BytesStr.data()),
+-                            BytesStr.size());
+-
+-    for (uint64_t Index = 0, Size = 0; Index < Section.getSize();
+-         Index += Size) {
+-      MCInst Inst;
+-      if (!DisAsm->getInstruction(Inst, Size, Bytes.slice(Index),
+-                                  SectionAddr + Index, nulls(), nulls())) {
+-        if (Size == 0)
+-          Size = 1;
+-        continue;
+-      }
+-      uint64_t Addr = Index + SectionAddr;
+-      // Sanitizer coverage uses the address of the next instruction - 1.
+-      uint64_t CovPoint = Addr + Size - 1;
+-      uint64_t Target;
+-      if (MIA->isCall(Inst) &&
+-          MIA->evaluateBranch(Inst, SectionAddr + Index, Size, Target) &&
+-          SanCovAddrs.find(Target) != SanCovAddrs.end())
+-        Addrs->insert(CovPoint);
+-    }
+-  }
+-}
+-
+-static void
+-visitObjectFiles(const object::Archive &A,
+-                 function_ref<void(const object::ObjectFile &)> Fn) {
+-  Error Err;
+-  for (auto &C : A.children(Err)) {
+-    Expected<std::unique_ptr<object::Binary>> ChildOrErr = C.getAsBinary();
+-    FailIfError(errorToErrorCode(ChildOrErr.takeError()));
+-    if (auto *O = dyn_cast<object::ObjectFile>(&*ChildOrErr.get()))
+-      Fn(*O);
+-    else
+-      FailIfError(object::object_error::invalid_file_type);
+-  }
+-  FailIfError(std::move(Err));
+-}
+-
+-static void
+-visitObjectFiles(const std::string &FileName,
+-                 function_ref<void(const object::ObjectFile &)> Fn) {
+-  Expected<object::OwningBinary<object::Binary>> BinaryOrErr =
+-      object::createBinary(FileName);
+-  if (!BinaryOrErr)
+-    FailIfError(errorToErrorCode(BinaryOrErr.takeError()));
+-
+-  object::Binary &Binary = *BinaryOrErr.get().getBinary();
+-  if (object::Archive *A = dyn_cast<object::Archive>(&Binary))
+-    visitObjectFiles(*A, Fn);
+-  else if (object::ObjectFile *O = dyn_cast<object::ObjectFile>(&Binary))
+-    Fn(*O);
+-  else
+-    FailIfError(object::object_error::invalid_file_type);
+-}
+-
+-std::set<uint64_t> findSanitizerCovFunctions(const std::string &FileName) {
+-  std::set<uint64_t> Result;
+-  visitObjectFiles(FileName, [&](const object::ObjectFile &O) {
+-    auto Addrs = findSanitizerCovFunctions(O);
+-    Result.insert(Addrs.begin(), Addrs.end());
+-  });
+-  return Result;
+-}
+-
+-// Locate addresses of all coverage points in a file. Coverage point
+-// is defined as the 'address of instruction following __sanitizer_cov
+-// call - 1'.
+-std::set<uint64_t> getCoveragePoints(const std::string &FileName) {
+-  std::set<uint64_t> Result;
+-  visitObjectFiles(FileName, [&](const object::ObjectFile &O) {
+-    getObjectCoveragePoints(O, &Result);
+-  });
+-  return Result;
+-}
+-
+-static void printCovPoints(const std::string &ObjFile, raw_ostream &OS) {
+-  for (uint64_t Addr : getCoveragePoints(ObjFile)) {
+-    OS << "0x";
+-    OS.write_hex(Addr);
+-    OS << "\n";
+-  }
+-}
+-
+-static std::string escapeHtml(const std::string &S) {
+-  std::string Result;
+-  Result.reserve(S.size());
+-  for (char Ch : S) {
+-    switch (Ch) {
+-    case '&':
+-      Result.append("&amp;");
+-      break;
+-    case '\'':
+-      Result.append("&apos;");
+-      break;
+-    case '"':
+-      Result.append("&quot;");
+-      break;
+-    case '<':
+-      Result.append("&lt;");
+-      break;
+-    case '>':
+-      Result.append("&gt;");
+-      break;
+-    default:
+-      Result.push_back(Ch);
+-      break;
+-    }
+-  }
+-  return Result;
+-}
+-
+-// Adds leading zeroes wrapped in 'lz' style.
+-// Leading zeroes help locate 000% coverage.
+-static std::string formatHtmlPct(size_t Pct) {
+-  Pct = std::max(std::size_t{0}, std::min(std::size_t{100}, Pct));
+-
+-  std::string Num = std::to_string(Pct);
+-  std::string Zeroes(3 - Num.size(), '0');
+-  if (!Zeroes.empty())
+-    Zeroes = "<span class='lz'>" + Zeroes + "</span>";
+-
+-  return Zeroes + Num;
+-}
+-
+-static std::string anchorName(const std::string &Anchor) {
+-  llvm::MD5 Hasher;
+-  llvm::MD5::MD5Result Hash;
+-  Hasher.update(Anchor);
+-  Hasher.final(Hash);
+-
+-  SmallString<32> HexString;
+-  llvm::MD5::stringifyResult(Hash, HexString);
+-  return HexString.str().str();
+-}
+-
+-static ErrorOr<bool> isCoverageFile(const std::string &FileName) {
+-  ErrorOr<std::unique_ptr<MemoryBuffer>> BufOrErr =
+-      MemoryBuffer::getFile(FileName);
+-  if (!BufOrErr) {
+-    errs() << "Warning: " << BufOrErr.getError().message() << "("
+-           << BufOrErr.getError().value()
+-           << "), filename: " << llvm::sys::path::filename(FileName) << "\n";
+-    return BufOrErr.getError();
+-  }
+-  std::unique_ptr<MemoryBuffer> Buf = std::move(BufOrErr.get());
+-  if (Buf->getBufferSize() < 8) {
+-    return false;
+-  }
+-  const FileHeader *Header =
+-      reinterpret_cast<const FileHeader *>(Buf->getBufferStart());
+-  return Header->Magic == BinCoverageMagic;
+-}
+-
+-struct CoverageStats {
+-  CoverageStats() : AllPoints(0), CovPoints(0), AllFns(0), CovFns(0) {}
+-
+-  size_t AllPoints;
+-  size_t CovPoints;
+-  size_t AllFns;
+-  size_t CovFns;
+-};
+-
+-static raw_ostream &operator<<(raw_ostream &OS, const CoverageStats &Stats) {
+-  OS << "all-edges: " << Stats.AllPoints << "\n";
+-  OS << "cov-edges: " << Stats.CovPoints << "\n";
+-  OS << "all-functions: " << Stats.AllFns << "\n";
+-  OS << "cov-functions: " << Stats.CovFns << "\n";
+-  return OS;
+-}
+-
+-class CoverageData {
+-public:
+-  // Read single file coverage data.
+-  static ErrorOr<std::unique_ptr<CoverageData>>
+-  read(const std::string &FileName) {
+-    ErrorOr<std::unique_ptr<MemoryBuffer>> BufOrErr =
+-        MemoryBuffer::getFile(FileName);
+-    if (!BufOrErr)
+-      return BufOrErr.getError();
+-    std::unique_ptr<MemoryBuffer> Buf = std::move(BufOrErr.get());
+-    if (Buf->getBufferSize() < 8) {
+-      errs() << "File too small (<8): " << Buf->getBufferSize();
+-      return make_error_code(errc::illegal_byte_sequence);
+-    }
+-    const FileHeader *Header =
+-        reinterpret_cast<const FileHeader *>(Buf->getBufferStart());
+-
+-    if (Header->Magic != BinCoverageMagic) {
+-      errs() << "Wrong magic: " << Header->Magic;
+-      return make_error_code(errc::illegal_byte_sequence);
+-    }
+-
+-    auto Addrs = llvm::make_unique<std::set<uint64_t>>();
+-
+-    switch (Header->Bitness) {
+-    case Bitness64:
+-      readInts<uint64_t>(Buf->getBufferStart() + 8, Buf->getBufferEnd(),
+-                         Addrs.get());
+-      break;
+-    case Bitness32:
+-      readInts<uint32_t>(Buf->getBufferStart() + 8, Buf->getBufferEnd(),
+-                         Addrs.get());
+-      break;
+-    default:
+-      errs() << "Unsupported bitness: " << Header->Bitness;
+-      return make_error_code(errc::illegal_byte_sequence);
+-    }
+-
+-    return std::unique_ptr<CoverageData>(new CoverageData(std::move(Addrs)));
+-  }
+-
+-  // Merge multiple coverage data together.
+-  static std::unique_ptr<CoverageData>
+-  merge(const std::vector<std::unique_ptr<CoverageData>> &Covs) {
+-    auto Addrs = llvm::make_unique<std::set<uint64_t>>();
+-
+-    for (const auto &Cov : Covs)
+-      Addrs->insert(Cov->Addrs->begin(), Cov->Addrs->end());
+-
+-    return std::unique_ptr<CoverageData>(new CoverageData(std::move(Addrs)));
+-  }
+-
+-  // Read list of files and merges their coverage info.
+-  static ErrorOr<std::unique_ptr<CoverageData>>
+-  readAndMerge(const std::vector<std::string> &FileNames) {
+-    std::vector<std::unique_ptr<CoverageData>> Covs;
+-    for (const auto &FileName : FileNames) {
+-      auto Cov = read(FileName);
+-      if (!Cov)
+-        return Cov.getError();
+-      Covs.push_back(std::move(Cov.get()));
+-    }
+-    return merge(Covs);
+-  }
+-
+-  // Print coverage addresses.
+-  void printAddrs(raw_ostream &OS) {
+-    for (auto Addr : *Addrs) {
+-      OS << "0x";
+-      OS.write_hex(Addr);
+-      OS << "\n";
+-    }
+-  }
+-
+-protected:
+-  explicit CoverageData(std::unique_ptr<std::set<uint64_t>> Addrs)
+-      : Addrs(std::move(Addrs)) {}
+-
+-  friend class CoverageDataWithObjectFile;
+-
+-  std::unique_ptr<std::set<uint64_t>> Addrs;
+-};
+-
+-// Coverage data translated into source code line-level information.
+-// Fetches debug info in constructor and calculates various information per
+-// request.
+-class SourceCoverageData {
+-public:
+-  enum LineStatus {
+-    // coverage information for the line is not available.
+-    // default value in maps.
+-    UNKNOWN = 0,
+-    // the line is fully covered.
+-    COVERED = 1,
+-    // the line is fully uncovered.
+-    NOT_COVERED = 2,
+-    // some points in the line a covered, some are not.
+-    MIXED = 3
+-  };
+-
+-  SourceCoverageData(std::string ObjectFile, const std::set<uint64_t> &Addrs)
+-      : AllCovPoints(getCoveragePoints(ObjectFile)) {
+-    if (!std::includes(AllCovPoints.begin(), AllCovPoints.end(), Addrs.begin(),
+-                       Addrs.end())) {
+-      Fail("Coverage points in binary and .sancov file do not match.");
+-    }
+-
+-    AllAddrInfo = getAddrInfo(ObjectFile, AllCovPoints, true);
+-    CovAddrInfo = getAddrInfo(ObjectFile, Addrs, true);
+-  }
+-
+-  // Compute number of coverage points hit/total in a file.
+-  // file_name -> <coverage, all_coverage>
+-  std::map<std::string, std::pair<size_t, size_t>> computeFileCoverage() {
+-    std::map<std::string, std::pair<size_t, size_t>> FileCoverage;
+-    auto AllCovPointsByFile =
+-        group_by(AllAddrInfo, [](const AddrInfo &AI) { return AI.FileName; });
+-    auto CovPointsByFile =
+-        group_by(CovAddrInfo, [](const AddrInfo &AI) { return AI.FileName; });
+-
+-    for (const auto &P : AllCovPointsByFile) {
+-      const std::string &FileName = P.first;
+-
+-      FileCoverage[FileName] =
+-          std::make_pair(CovPointsByFile[FileName].size(),
+-                         AllCovPointsByFile[FileName].size());
+-    }
+-    return FileCoverage;
+-  }
+-
+-  // line_number -> line_status.
+-  typedef std::map<int, LineStatus> LineStatusMap;
+-  // file_name -> LineStatusMap
+-  typedef std::map<std::string, LineStatusMap> FileLineStatusMap;
+-
+-  // fills in the {file_name -> {line_no -> status}} map.
+-  FileLineStatusMap computeLineStatusMap() {
+-    FileLineStatusMap StatusMap;
+-
+-    auto AllLocs = group_by(AllAddrInfo, [](const AddrInfo &AI) {
+-      return FileLoc{AI.FileName, AI.Line};
+-    });
+-    auto CovLocs = group_by(CovAddrInfo, [](const AddrInfo &AI) {
+-      return FileLoc{AI.FileName, AI.Line};
+-    });
+-
+-    for (const auto &P : AllLocs) {
+-      const FileLoc &Loc = P.first;
+-      auto I = CovLocs.find(Loc);
+-
+-      if (I == CovLocs.end()) {
+-        StatusMap[Loc.FileName][Loc.Line] = NOT_COVERED;
+-      } else {
+-        StatusMap[Loc.FileName][Loc.Line] =
+-            (I->second.size() == P.second.size()) ? COVERED : MIXED;
+-      }
+-    }
+-    return StatusMap;
+-  }
+-
+-  std::set<FileFn> computeAllFunctions() const {
+-    std::set<FileFn> Fns;
+-    for (const auto &AI : AllAddrInfo) {
+-      Fns.insert(FileFn{AI.FileName, AI.FunctionName});
+-    }
+-    return Fns;
+-  }
+-
+-  std::set<FileFn> computeCoveredFunctions() const {
+-    std::set<FileFn> Fns;
+-    auto CovFns = group_by(CovAddrInfo, [](const AddrInfo &AI) {
+-      return FileFn{AI.FileName, AI.FunctionName};
+-    });
+-
+-    for (const auto &P : CovFns) {
+-      Fns.insert(P.first);
+-    }
+-    return Fns;
+-  }
+-
+-  std::set<FileFn> computeNotCoveredFunctions() const {
+-    std::set<FileFn> Fns;
+-
+-    auto AllFns = group_by(AllAddrInfo, [](const AddrInfo &AI) {
+-      return FileFn{AI.FileName, AI.FunctionName};
+-    });
+-    auto CovFns = group_by(CovAddrInfo, [](const AddrInfo &AI) {
+-      return FileFn{AI.FileName, AI.FunctionName};
+-    });
+-
+-    for (const auto &P : AllFns) {
+-      if (CovFns.find(P.first) == CovFns.end()) {
+-        Fns.insert(P.first);
+-      }
+-    }
+-    return Fns;
+-  }
+-
+-  // Compute % coverage for each function.
+-  std::map<FileFn, int> computeFunctionsCoverage() const {
+-    std::map<FileFn, int> FnCoverage;
+-    auto AllFns = group_by(AllAddrInfo, [](const AddrInfo &AI) {
+-      return FileFn{AI.FileName, AI.FunctionName};
+-    });
+-
+-    auto CovFns = group_by(CovAddrInfo, [](const AddrInfo &AI) {
+-      return FileFn{AI.FileName, AI.FunctionName};
+-    });
+-
+-    for (const auto &P : AllFns) {
+-      FileFn F = P.first;
+-      FnCoverage[F] = CovFns[F].size() * 100 / P.second.size();
+-    }
+-
+-    return FnCoverage;
+-  }
+-
+-  typedef std::map<FileLoc, std::set<std::string>> FunctionLocs;
+-  // finds first line number in a file for each function.
+-  FunctionLocs resolveFunctions(const std::set<FileFn> &Fns) const {
+-    std::vector<AddrInfo> FnAddrs;
+-    for (const auto &AI : AllAddrInfo) {
+-      if (Fns.find(FileFn{AI.FileName, AI.FunctionName}) != Fns.end())
+-        FnAddrs.push_back(AI);
+-    }
+-
+-    auto GroupedAddrs = group_by(FnAddrs, [](const AddrInfo &AI) {
+-      return FnLoc{FileLoc{AI.FileName, AI.Line}, AI.FunctionName};
+-    });
+-
+-    FunctionLocs Result;
+-    std::string LastFileName;
+-    std::set<std::string> ProcessedFunctions;
+-
+-    for (const auto &P : GroupedAddrs) {
+-      const FnLoc &Loc = P.first;
+-      std::string FileName = Loc.Loc.FileName;
+-      std::string FunctionName = Loc.FunctionName;
+-
+-      if (LastFileName != FileName)
+-        ProcessedFunctions.clear();
+-      LastFileName = FileName;
+-
+-      if (!ProcessedFunctions.insert(FunctionName).second)
+-        continue;
+-
+-      auto FLoc = FileLoc{FileName, Loc.Loc.Line};
+-      Result[FLoc].insert(FunctionName);
+-    }
+-    return Result;
+-  }
+-
+-  std::set<std::string> files() const {
+-    std::set<std::string> Files;
+-    for (const auto &AI : AllAddrInfo) {
+-      Files.insert(AI.FileName);
+-    }
+-    return Files;
+-  }
+-
+-  void collectStats(CoverageStats *Stats) const {
+-    Stats->AllPoints += AllCovPoints.size();
+-    Stats->AllFns += computeAllFunctions().size();
+-    Stats->CovFns += computeCoveredFunctions().size();
+-  }
+-
+-private:
+-  const std::set<uint64_t> AllCovPoints;
+-
+-  std::vector<AddrInfo> AllAddrInfo;
+-  std::vector<AddrInfo> CovAddrInfo;
+-};
+-
+-static void printFunctionLocs(const SourceCoverageData::FunctionLocs &FnLocs,
+-                              raw_ostream &OS) {
+-  for (const auto &Fns : FnLocs) {
+-    for (const auto &Fn : Fns.second) {
+-      OS << stripPathPrefix(Fns.first.FileName) << ":" << Fns.first.Line << " "
+-         << Fn << "\n";
+-    }
+-  }
+-}
+-
+-// Holder for coverage data + filename of corresponding object file.
+-class CoverageDataWithObjectFile : public CoverageData {
+-public:
+-  static ErrorOr<std::unique_ptr<CoverageDataWithObjectFile>>
+-  readAndMerge(const std::string &ObjectFile,
+-               const std::vector<std::string> &FileNames) {
+-    auto MergedDataOrError = CoverageData::readAndMerge(FileNames);
+-    if (!MergedDataOrError)
+-      return MergedDataOrError.getError();
+-    return std::unique_ptr<CoverageDataWithObjectFile>(
+-        new CoverageDataWithObjectFile(ObjectFile,
+-                                       std::move(MergedDataOrError.get())));
+-  }
+-
+-  std::string object_file() const { return ObjectFile; }
+-
+-  // Print list of covered functions.
+-  // Line format: <file_name>:<line> <function_name>
+-  void printCoveredFunctions(raw_ostream &OS) const {
+-    SourceCoverageData SCovData(ObjectFile, *Addrs);
+-    auto CoveredFns = SCovData.computeCoveredFunctions();
+-    printFunctionLocs(SCovData.resolveFunctions(CoveredFns), OS);
+-  }
+-
+-  // Print list of not covered functions.
+-  // Line format: <file_name>:<line> <function_name>
+-  void printNotCoveredFunctions(raw_ostream &OS) const {
+-    SourceCoverageData SCovData(ObjectFile, *Addrs);
+-    auto NotCoveredFns = SCovData.computeNotCoveredFunctions();
+-    printFunctionLocs(SCovData.resolveFunctions(NotCoveredFns), OS);
+-  }
+-
+-  void printReport(raw_ostream &OS) const {
+-    SourceCoverageData SCovData(ObjectFile, *Addrs);
+-    auto LineStatusMap = SCovData.computeLineStatusMap();
+-
+-    std::set<FileFn> AllFns = SCovData.computeAllFunctions();
+-    // file_loc -> set[function_name]
+-    auto AllFnsByLoc = SCovData.resolveFunctions(AllFns);
+-    auto FileCoverage = SCovData.computeFileCoverage();
+-
+-    auto FnCoverage = SCovData.computeFunctionsCoverage();
+-    auto FnCoverageByFile =
+-        group_by(FnCoverage, [](const std::pair<FileFn, int> &FileFn) {
+-          return FileFn.first.FileName;
+-        });
+-
+-    // TOC
+-
+-    size_t NotCoveredFilesCount = 0;
+-    std::set<std::string> Files = SCovData.files();
+-
+-    // Covered Files.
+-    OS << "<details open><summary>Touched Files</summary>\n";
+-    OS << "<table>\n";
+-    OS << "<tr><th>File</th><th>Coverage %</th>";
+-    OS << "<th>Hit (Total) Fns</th></tr>\n";
+-    for (const auto &FileName : Files) {
+-      std::pair<size_t, size_t> FC = FileCoverage[FileName];
+-      if (FC.first == 0) {
+-        NotCoveredFilesCount++;
+-        continue;
+-      }
+-      size_t CovPct = FC.second == 0 ? 100 : 100 * FC.first / FC.second;
+-
+-      OS << "<tr><td><a href=\"#" << anchorName(FileName) << "\">"
+-         << stripPathPrefix(FileName) << "</a></td>"
+-         << "<td>" << formatHtmlPct(CovPct) << "%</td>"
+-         << "<td>" << FC.first << " (" << FC.second << ")"
+-         << "</tr>\n";
+-    }
+-    OS << "</table>\n";
+-    OS << "</details>\n";
+-
+-    // Not covered files.
+-    if (NotCoveredFilesCount) {
+-      OS << "<details><summary>Not Touched Files</summary>\n";
+-      OS << "<table>\n";
+-      for (const auto &FileName : Files) {
+-        std::pair<size_t, size_t> FC = FileCoverage[FileName];
+-        if (FC.first == 0)
+-          OS << "<tr><td>" << stripPathPrefix(FileName) << "</td>\n";
+-      }
+-      OS << "</table>\n";
+-      OS << "</details>\n";
+-    } else {
+-      OS << "<p>Congratulations! All source files are touched.</p>\n";
+-    }
+-
+-    // Source
+-    for (const auto &FileName : Files) {
+-      std::pair<size_t, size_t> FC = FileCoverage[FileName];
+-      if (FC.first == 0)
+-        continue;
+-      OS << "<a name=\"" << anchorName(FileName) << "\"></a>\n";
+-      OS << "<h2>" << stripPathPrefix(FileName) << "</h2>\n";
+-      OS << "<details open><summary>Function Coverage</summary>";
+-      OS << "<div class='fnlist'>\n";
+-
+-      auto &FileFnCoverage = FnCoverageByFile[FileName];
+-
+-      for (const auto &P : FileFnCoverage) {
+-        std::string FunctionName = P.first.FunctionName;
+-
+-        OS << "<div class='fn' style='order: " << P.second << "'>";
+-        OS << "<span class='pct'>" << formatHtmlPct(P.second)
+-           << "%</span>&nbsp;";
+-        OS << "<span class='name'><a href=\"#"
+-           << anchorName(FileName + "::" + FunctionName) << "\">";
+-        OS << escapeHtml(FunctionName) << "</a></span>";
+-        OS << "</div>\n";
+-      }
+-      OS << "</div></details>\n";
+-
+-      ErrorOr<std::unique_ptr<MemoryBuffer>> BufOrErr =
+-          MemoryBuffer::getFile(FileName);
+-      if (!BufOrErr) {
+-        OS << "Error reading file: " << FileName << " : "
+-           << BufOrErr.getError().message() << "("
+-           << BufOrErr.getError().value() << ")\n";
+-        continue;
+-      }
+-
+-      OS << "<pre>\n";
+-      const auto &LineStatuses = LineStatusMap[FileName];
+-      for (line_iterator I = line_iterator(*BufOrErr.get(), false);
+-           !I.is_at_eof(); ++I) {
+-        uint32_t Line = I.line_number();
+-        { // generate anchors (if any);
+-          FileLoc Loc = FileLoc{FileName, Line};
+-          auto It = AllFnsByLoc.find(Loc);
+-          if (It != AllFnsByLoc.end()) {
+-            for (const std::string &Fn : It->second) {
+-              OS << "<a name=\"" << anchorName(FileName + "::" + Fn)
+-                 << "\"></a>";
+-            };
+-          }
+-        }
+-
+-        OS << "<span ";
+-        auto LIT = LineStatuses.find(I.line_number());
+-        auto Status = (LIT != LineStatuses.end()) ? LIT->second
+-                                                  : SourceCoverageData::UNKNOWN;
+-        switch (Status) {
+-        case SourceCoverageData::UNKNOWN:
+-          OS << "class=unknown";
+-          break;
+-        case SourceCoverageData::COVERED:
+-          OS << "class=covered";
+-          break;
+-        case SourceCoverageData::NOT_COVERED:
+-          OS << "class=notcovered";
+-          break;
+-        case SourceCoverageData::MIXED:
+-          OS << "class=mixed";
+-          break;
+-        }
+-        OS << ">";
+-        OS << escapeHtml(*I) << "</span>\n";
+-      }
+-      OS << "</pre>\n";
+-    }
+-  }
+-
+-  void collectStats(CoverageStats *Stats) const {
+-    Stats->CovPoints += Addrs->size();
+-
+-    SourceCoverageData SCovData(ObjectFile, *Addrs);
+-    SCovData.collectStats(Stats);
+-  }
+-
+-private:
+-  CoverageDataWithObjectFile(std::string ObjectFile,
+-                             std::unique_ptr<CoverageData> Coverage)
+-      : CoverageData(std::move(Coverage->Addrs)),
+-        ObjectFile(std::move(ObjectFile)) {}
+-  const std::string ObjectFile;
+-};
+-
+-// Multiple coverage files data organized by object file.
+-class CoverageDataSet {
+-public:
+-  static ErrorOr<std::unique_ptr<CoverageDataSet>>
+-  readCmdArguments(std::vector<std::string> FileNames) {
+-    // Short name => file name.
+-    std::map<std::string, std::string> ObjFiles;
+-    std::string FirstObjFile;
+-    std::set<std::string> CovFiles;
+-
+-    // Partition input values into coverage/object files.
+-    for (const auto &FileName : FileNames) {
+-      auto ErrorOrIsCoverage = isCoverageFile(FileName);
+-      if (!ErrorOrIsCoverage)
+-        continue;
+-      if (ErrorOrIsCoverage.get()) {
+-        CovFiles.insert(FileName);
+-      } else {
+-        auto ShortFileName = llvm::sys::path::filename(FileName);
+-        if (ObjFiles.find(ShortFileName) != ObjFiles.end()) {
+-          Fail("Duplicate binary file with a short name: " + ShortFileName);
+-        }
+-
+-        ObjFiles[ShortFileName] = FileName;
+-        if (FirstObjFile.empty())
+-          FirstObjFile = FileName;
+-      }
+-    }
+-
+-    Regex SancovRegex("(.*)\\.[0-9]+\\.sancov");
+-    SmallVector<StringRef, 2> Components;
+-
+-    // Object file => list of corresponding coverage file names.
+-    auto CoverageByObjFile = group_by(CovFiles, [&](std::string FileName) {
+-      auto ShortFileName = llvm::sys::path::filename(FileName);
+-      auto Ok = SancovRegex.match(ShortFileName, &Components);
+-      if (!Ok) {
+-        Fail("Can't match coverage file name against "
+-             "<module_name>.<pid>.sancov pattern: " +
+-             FileName);
+-      }
+-
+-      auto Iter = ObjFiles.find(Components[1]);
+-      if (Iter == ObjFiles.end()) {
+-        Fail("Object file for coverage not found: " + FileName);
+-      }
+-      return Iter->second;
+-    });
+-
+-    // Read coverage.
+-    std::vector<std::unique_ptr<CoverageDataWithObjectFile>> MergedCoverage;
+-    for (const auto &Pair : CoverageByObjFile) {
+-      if (findSanitizerCovFunctions(Pair.first).empty()) {
+-        for (const auto &FileName : Pair.second) {
+-          CovFiles.erase(FileName);
+-        }
+-
+-        errs()
+-            << "Ignoring " << Pair.first
+-            << " and its coverage because  __sanitizer_cov* functions were not "
+-               "found.\n";
+-        continue;
+-      }
+-
+-      auto DataOrError =
+-          CoverageDataWithObjectFile::readAndMerge(Pair.first, Pair.second);
+-      FailIfError(DataOrError);
+-      MergedCoverage.push_back(std::move(DataOrError.get()));
+-    }
+-
+-    return std::unique_ptr<CoverageDataSet>(
+-        new CoverageDataSet(FirstObjFile, &MergedCoverage, CovFiles));
+-  }
+-
+-  void printCoveredFunctions(raw_ostream &OS) const {
+-    for (const auto &Cov : Coverage) {
+-      Cov->printCoveredFunctions(OS);
+-    }
+-  }
+-
+-  void printNotCoveredFunctions(raw_ostream &OS) const {
+-    for (const auto &Cov : Coverage) {
+-      Cov->printNotCoveredFunctions(OS);
+-    }
+-  }
+-
+-  void printStats(raw_ostream &OS) const {
+-    CoverageStats Stats;
+-    for (const auto &Cov : Coverage) {
+-      Cov->collectStats(&Stats);
+-    }
+-    OS << Stats;
+-  }
+-
+-  void printReport(raw_ostream &OS) const {
+-    auto Title =
+-        (llvm::sys::path::filename(MainObjFile) + " Coverage Report").str();
+-
+-    OS << "<html>\n";
+-    OS << "<head>\n";
+-
+-    // Stylesheet
+-    OS << "<style>\n";
+-    OS << ".covered { background: #7F7; }\n";
+-    OS << ".notcovered { background: #F77; }\n";
+-    OS << ".mixed { background: #FF7; }\n";
+-    OS << "summary { font-weight: bold; }\n";
+-    OS << "details > summary + * { margin-left: 1em; }\n";
+-    OS << ".fnlist { display: flex; flex-flow: column nowrap; }\n";
+-    OS << ".fn { display: flex; flex-flow: row nowrap; }\n";
+-    OS << ".pct { width: 3em; text-align: right; margin-right: 1em; }\n";
+-    OS << ".name { flex: 2; }\n";
+-    OS << ".lz { color: lightgray; }\n";
+-    OS << "</style>\n";
+-    OS << "<title>" << Title << "</title>\n";
+-    OS << "</head>\n";
+-    OS << "<body>\n";
+-
+-    // Title
+-    OS << "<h1>" << Title << "</h1>\n";
+-
+-    // Modules TOC.
+-    if (Coverage.size() > 1) {
+-      for (const auto &CovData : Coverage) {
+-        OS << "<li><a href=\"#module_" << anchorName(CovData->object_file())
+-           << "\">" << llvm::sys::path::filename(CovData->object_file())
+-           << "</a></li>\n";
+-      }
+-    }
+-
+-    for (const auto &CovData : Coverage) {
+-      if (Coverage.size() > 1) {
+-        OS << "<h2>" << llvm::sys::path::filename(CovData->object_file())
+-           << "</h2>\n";
+-      }
+-      OS << "<a name=\"module_" << anchorName(CovData->object_file())
+-         << "\"></a>\n";
+-      CovData->printReport(OS);
+-    }
+-
+-    // About
+-    OS << "<details><summary>About</summary>\n";
+-    OS << "Coverage files:<ul>";
+-    for (const auto &InputFile : CoverageFiles) {
+-      llvm::sys::fs::file_status Status;
+-      llvm::sys::fs::status(InputFile, Status);
+-      OS << "<li>" << stripPathPrefix(InputFile) << " ("
+-         << Status.getLastModificationTime().str() << ")</li>\n";
+-    }
+-    OS << "</ul></details>\n";
+-
+-    OS << "</body>\n";
+-    OS << "</html>\n";
+-  }
+-
+-  bool empty() const { return Coverage.empty(); }
+-
+-private:
+-  explicit CoverageDataSet(
+-      const std::string &MainObjFile,
+-      std::vector<std::unique_ptr<CoverageDataWithObjectFile>> *Data,
+-      const std::set<std::string> &CoverageFiles)
+-      : MainObjFile(MainObjFile), CoverageFiles(CoverageFiles) {
+-    Data->swap(this->Coverage);
+-  }
+-
+-  const std::string MainObjFile;
+-  std::vector<std::unique_ptr<CoverageDataWithObjectFile>> Coverage;
+-  const std::set<std::string> CoverageFiles;
+-};
+-
+-} // namespace
+ 
+ int main(int argc, char **argv) {
+-  // Print stack trace if we signal out.
+-  sys::PrintStackTraceOnErrorSignal(argv[0]);
+-  PrettyStackTraceProgram X(argc, argv);
+-  llvm_shutdown_obj Y; // Call llvm_shutdown() on exit.
+-
+-  llvm::InitializeAllTargetInfos();
+-  llvm::InitializeAllTargetMCs();
+-  llvm::InitializeAllDisassemblers();
+-
+-  cl::ParseCommandLineOptions(argc, argv, "Sanitizer Coverage Processing Tool");
+-
+-  // -print doesn't need object files.
+-  if (Action == PrintAction) {
+-    auto CovData = CoverageData::readAndMerge(ClInputFiles);
+-    FailIfError(CovData);
+-    CovData.get()->printAddrs(outs());
+-    return 0;
+-  } else if (Action == PrintCovPointsAction) {
+-    // -print-coverage-points doesn't need coverage files.
+-    for (const std::string &ObjFile : ClInputFiles) {
+-      printCovPoints(ObjFile, outs());
+-    }
+-    return 0;
+-  }
+-
+-  auto CovDataSet = CoverageDataSet::readCmdArguments(ClInputFiles);
+-  FailIfError(CovDataSet);
+-
+-  if (CovDataSet.get()->empty()) {
+-    Fail("No coverage files specified.");
+-  }
+-
+-  switch (Action) {
+-  case CoveredFunctionsAction: {
+-    CovDataSet.get()->printCoveredFunctions(outs());
+-    return 0;
+-  }
+-  case NotCoveredFunctionsAction: {
+-    CovDataSet.get()->printNotCoveredFunctions(outs());
+-    return 0;
+-  }
+-  case HtmlReportAction: {
+-    CovDataSet.get()->printReport(outs());
+-    return 0;
+-  }
+-  case StatsAction: {
+-    CovDataSet.get()->printStats(outs());
+-    return 0;
+-  }
+-  case PrintAction:
+-  case PrintCovPointsAction:
+-    llvm_unreachable("unsupported action");
+-  }
++  return 0;
+ }
+diff --git a/unittests/Support/ThreadPool.cpp b/unittests/Support/ThreadPool.cpp
+index 69a24bc..b185859 100644
+--- a/unittests/Support/ThreadPool.cpp
++++ b/unittests/Support/ThreadPool.cpp
+@@ -7,6 +7,8 @@
+ //
+ //===----------------------------------------------------------------------===//
+ 
++#if 0
++
+ #include "llvm/Support/ThreadPool.h"
+ 
+ #include "llvm/ADT/STLExtras.h"
+@@ -166,3 +168,5 @@ TEST_F(ThreadPoolTest, PoolDestruction) {
+   }
+   ASSERT_EQ(5, checked_in);
+ }
++
++#endif

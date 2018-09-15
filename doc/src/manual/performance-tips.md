@@ -1151,7 +1151,7 @@ The common idiom of using 1:n to index into an AbstractArray is not safe if the 
 and may cause a segmentation fault if bounds checking is turned off. Use `LinearIndices(x)` or `eachindex(x)`
 instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays)).
 
-!!! note
+!!!note
     While `@simd` needs to be placed directly in front of an innermost `for` loop, both `@inbounds` and `@fastmath`
     can be applied to either single expressions or all the expressions that appear within nested blocks of code, e.g.,
     using `@inbounds begin` or `@inbounds for ...`.

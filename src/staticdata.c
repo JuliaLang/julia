@@ -128,12 +128,12 @@ typedef enum {
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc((s)))
 
-static void write_uint32(ios_t *s, uint32_t i) JL_NOTSAFEPOINT
+static void write_uint32(ios_t *s, uint32_t i)
 {
     ios_write(s, (char*)&i, 4);
 }
 
-static uint32_t read_uint32(ios_t *s) JL_NOTSAFEPOINT
+static uint32_t read_uint32(ios_t *s)
 {
     uint32_t x = 0;
     ios_read(s, (char*)&x, 4);
@@ -307,7 +307,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
     }
 }
 
-static void ios_ensureroom(ios_t *s, size_t newsize) JL_NOTSAFEPOINT
+static void ios_ensureroom(ios_t *s, size_t newsize)
 {
     size_t prevsize = s->size;
     if (prevsize < newsize) {
@@ -317,7 +317,7 @@ static void ios_ensureroom(ios_t *s, size_t newsize) JL_NOTSAFEPOINT
     }
 }
 
-static void record_gvar(jl_serializer_state *s, int gid, uintptr_t reloc_id) JL_NOTSAFEPOINT
+static void record_gvar(jl_serializer_state *s, int gid, uintptr_t reloc_id)
 {
     if (gid == 0)
         return;
@@ -328,7 +328,7 @@ static void record_gvar(jl_serializer_state *s, int gid, uintptr_t reloc_id) JL_
 }
 
 
-static void write_padding(ios_t *s, size_t nb) JL_NOTSAFEPOINT
+static void write_padding(ios_t *s, size_t nb)
 {
     static const char zeros[16] = {0};
     while (nb > 16) {
@@ -340,7 +340,7 @@ static void write_padding(ios_t *s, size_t nb) JL_NOTSAFEPOINT
 }
 
 
-static void write_pointer(ios_t *s) JL_NOTSAFEPOINT
+static void write_pointer(ios_t *s)
 {
     assert((ios_pos(s) & (sizeof(void*) - 1)) == 0 && "stream misaligned for writing a word-sized value");
     write_padding(s, sizeof(void*));
@@ -348,7 +348,7 @@ static void write_pointer(ios_t *s) JL_NOTSAFEPOINT
 
 
 #define backref_id(s, v) _backref_id(s, (jl_value_t*)(v))
-static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPOINT
+static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v)
 {
     assert(v != NULL && "cannot get backref to NULL object");
     void *idx = HT_NOTFOUND;
@@ -376,7 +376,7 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPO
 }
 
 
-static void write_pointerfield(jl_serializer_state *s, jl_value_t *fld) JL_NOTSAFEPOINT
+static void write_pointerfield(jl_serializer_state *s, jl_value_t *fld)
 {
     if (fld != NULL) {
         arraylist_push(&s->relocs_list, (void*)(uintptr_t)ios_pos(s->s));
@@ -385,7 +385,7 @@ static void write_pointerfield(jl_serializer_state *s, jl_value_t *fld) JL_NOTSA
     write_pointer(s->s);
 }
 
-static void write_gctaggedfield(jl_serializer_state *s, uintptr_t ref) JL_NOTSAFEPOINT
+static void write_gctaggedfield(jl_serializer_state *s, uintptr_t ref)
 {
     arraylist_push(&s->gctags_list, (void*)(uintptr_t)ios_pos(s->s));
     arraylist_push(&s->gctags_list, (void*)ref);
@@ -475,7 +475,7 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
                 write_pointer(s->s);
                 tot += sizeof(void*);
             }
-            // newm = (jl_module_t*)&s->s->buf[reloc_offset];
+            newm = (jl_module_t*)&s->s->buf[reloc_offset];
         }
     }
 }
@@ -1096,7 +1096,7 @@ static void jl_finalize_serializer(jl_serializer_state *s)
 }
 
 
-void jl_typemap_rehash(jl_typemap_t *ml, int8_t offs);
+void jl_typemap_rehash(union jl_typemap_t ml, int8_t offs);
 static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -1490,7 +1490,6 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     deser_tag.items[0] = (void*)const_data.buf;
     jl_read_relocations(&s, GC_OLD_MARKED); // gctags
     size_t sizeof_tags = ios_pos(&relocs);
-    (void)sizeof_tags;
     jl_read_relocations(&s, 0); // general relocs
     ios_close(&relocs);
     ios_close(&const_data);

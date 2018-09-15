@@ -44,9 +44,6 @@ f (generic function with 1 method)
 
 julia> f(apple)
 "I'm a Fruit with value: 1"
-
-julia> Fruit(1)
-apple::Fruit = 1
 ```
 
 Values can also be specified inside a `begin` block, e.g.

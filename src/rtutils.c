@@ -462,20 +462,20 @@ JL_DLLEXPORT int jl_substrtof(char *str, int offset, size_t len, float *out)
 
 // showing --------------------------------------------------------------------
 
-JL_DLLEXPORT void jl_flush_cstdio(void) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_flush_cstdio(void)
 {
     fflush(stdout);
     fflush(stderr);
 }
 
-JL_DLLEXPORT jl_value_t *jl_stdout_obj(void) JL_NOTSAFEPOINT
+JL_DLLEXPORT jl_value_t *jl_stdout_obj(void)
 {
     if (jl_base_module == NULL) return NULL;
     jl_value_t *stdout_obj = jl_get_global(jl_base_module, jl_symbol("stdout"));
     return stdout_obj;
 }
 
-JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
+JL_DLLEXPORT jl_value_t *jl_stderr_obj(void)
 {
     if (jl_base_module == NULL) return NULL;
     jl_value_t *stderr_obj = jl_get_global(jl_base_module, jl_symbol("stderr"));
@@ -484,7 +484,7 @@ JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
 
 // toys for debugging ---------------------------------------------------------
 
-static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, const char *head, const char *opn, const char *cls) JL_NOTSAFEPOINT
+static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, const char *head, const char *opn, const char *cls)
 {
     size_t i, n=0, len = jl_svec_len(t);
     n += jl_printf(out, "%s", head);
@@ -504,12 +504,12 @@ struct recur_list {
     jl_value_t *v;
 };
 
-static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth) JL_NOTSAFEPOINT;
+static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth);
 
-JL_DLLEXPORT int jl_id_start_char(uint32_t wc) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_id_char(uint32_t wc) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_id_start_char(uint32_t wc);
+JL_DLLEXPORT int jl_id_char(uint32_t wc);
 
-JL_DLLEXPORT int jl_is_identifier(char *str) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_is_identifier(char *str)
 {
     size_t i = 0;
     uint32_t wc = u8_nextchar(str, &i);
@@ -528,7 +528,7 @@ JL_DLLEXPORT int jl_is_identifier(char *str) JL_NOTSAFEPOINT
 // This is necessary to make sure that this function doesn't allocate any
 // memory through the Julia GC
 static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt,
-                                struct recur_list *depth) JL_NOTSAFEPOINT
+                                struct recur_list *depth)
 {
     size_t n = 0;
     if ((uintptr_t)vt < 4096U) {
@@ -596,7 +596,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         if (globname && !strchr(jl_symbol_name(globname), '#') &&
             !strchr(jl_symbol_name(globname), '@') && dv->name->module &&
             jl_binding_resolved_p(dv->name->module, globname)) {
-            jl_binding_t *b = jl_get_module_binding(dv->name->module, globname);
+            jl_binding_t *b = jl_get_binding(dv->name->module, globname);
             if (b && jl_typeof(b->value) == v)
                 globfunc = 1;
         }
@@ -953,7 +953,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     return n;
 }
 
-static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth) JL_NOTSAFEPOINT
+static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth)
 {
     // show values without calling a julia method or allocating through the GC
     if (v == NULL) {
@@ -973,12 +973,12 @@ static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list 
     return jl_static_show_x_(out, v, (jl_datatype_t*)jl_typeof(v), &this_item);
 }
 
-JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) JL_NOTSAFEPOINT
+JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
 {
     return jl_static_show_x(out, v, 0);
 }
 
-JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_NOTSAFEPOINT
+JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
 {
     jl_value_t *ftype = (jl_value_t*)jl_first_argument_datatype(type);
     if (ftype == NULL)

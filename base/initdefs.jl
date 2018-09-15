@@ -138,9 +138,8 @@ function init_load_path()
         unsafe_string(Base.JLOptions().project) :
         get(ENV, "JULIA_PROJECT", nothing))
     HOME_PROJECT[] =
-        project == nothing ? nothing :
         project == "" ? nothing :
-        project == "@." ? current_project() : abspath(project)
+        project == "@." ? current_project() : project
     append!(empty!(LOAD_PATH), paths)
 end
 

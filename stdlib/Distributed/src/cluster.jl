@@ -644,7 +644,7 @@ end
 
 Return the cluster cookie.
 """
-cluster_cookie() = (init_multi(); LPROC.cookie)
+cluster_cookie() = LPROC.cookie
 
 """
     cluster_cookie(cookie) -> cookie
@@ -652,7 +652,6 @@ cluster_cookie() = (init_multi(); LPROC.cookie)
 Set the passed cookie as the cluster cookie, then returns it.
 """
 function cluster_cookie(cookie)
-    init_multi()
     # The cookie must be an ASCII string with length <=  HDR_COOKIE_LEN
     @assert isascii(cookie)
     @assert length(cookie) <= HDR_COOKIE_LEN

@@ -254,9 +254,6 @@ locate_package(::Nothing) = nothing
 
 Return the path of `m.jl` file that was used to `import` module `m`,
 or `nothing` if `m` was not imported from a package.
-
-Use [`dirname`](@ref) to get the directory part and [`basename`](@ref)
-to get the file name part of the path.
 """
 function pathof(m::Module)
     pkgid = get(Base.module_keys, m, nothing)
@@ -819,7 +816,7 @@ function require(into::Module, mod::Symbol)
         if where.uuid === nothing
             throw(ArgumentError("""
                 Package $mod not found in current path:
-                - Run `import Pkg; Pkg.add($(repr(String(mod))))` to install the $mod package.
+                - Run `Pkg.add($(repr(String(mod))))` to install the $mod package.
                 """))
         else
             s = """

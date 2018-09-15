@@ -604,16 +604,3 @@ end
         end
     end
 end
-
-struct OpenInterval{T}
-    lower::T
-    upper::T
-end
-Base.in(x, i::OpenInterval) = i.lower < x < i.upper
-Base.IteratorSize(::Type{<:OpenInterval}) = Base.SizeUnknown()
-
-@testset "Continuous sets" begin
-    i = OpenInterval(2, 4)
-    @test 3 ∈ i
-    @test issubset(3, i)
-end

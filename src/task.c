@@ -41,9 +41,7 @@ volatile int jl_in_stackwalk = 0;
 #endif
 
 /* This probing code is derived from Douglas Jones' user thread library */
-static void _probe_arch(void);
 
-#ifndef __clang_analyzer__
 /* true if stack grows up, false if down */
 static int _stack_grows_up;
 
@@ -139,7 +137,6 @@ static void _probe_arch(void)
     intptr_t prior_diff = p.probe_local - p.prior_local;
     _frame_offset = labs(prior_diff);
 }
-#endif
 
 /* end probing code */
 
@@ -199,7 +196,7 @@ static void NOINLINE restore_stack(jl_ptls_t ptls, char *p)
 
 static jl_function_t *task_done_hook_func=NULL;
 
-static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE_UNROOTED)
+static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_SIGATOMIC_BEGIN();
@@ -243,7 +240,7 @@ static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE
     abort();
 }
 
-static void record_backtrace(void) JL_NOTSAFEPOINT
+static void record_backtrace(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE);
@@ -535,7 +532,7 @@ static void init_task(jl_task_t *t, char *stack)
 #endif /* !COPY_STACKS */
 
 jl_timing_block_t *jl_pop_timing_block(jl_timing_block_t *cur_block);
-JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e) JL_NOTSAFEPOINT
+JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e)
 {
     jl_printf(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
     jl_static_show(JL_STDERR, e);
@@ -545,15 +542,15 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e) JL_NOTSAFEPOINT
 }
 
 // yield to exception handler
-void JL_NORETURN throw_internal(jl_value_t *e JL_MAYBE_UNROOTED)
+void JL_NORETURN throw_internal(jl_value_t *e)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     ptls->io_wait = 0;
     if (ptls->safe_restore)
         jl_longjmp(*ptls->safe_restore, 1);
+    jl_gc_unsafe_enter(ptls);
     assert(e != NULL);
     ptls->exception_in_transit = e;
-    jl_gc_unsafe_enter(ptls);
     jl_handler_t *eh = ptls->current_task->eh;
     if (eh != NULL) {
 #ifdef ENABLE_TIMINGS
@@ -670,7 +667,7 @@ JL_DLLEXPORT jl_value_t *jl_get_current_task(void)
 jl_function_t *jl_unprotect_stack_func;
 
 // Do one-time initializations for task system
-void jl_init_tasks(void) JL_GC_DISABLED
+void jl_init_tasks(void)
 {
     _probe_arch();
     jl_task_type = (jl_datatype_t*)

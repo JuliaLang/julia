@@ -38,7 +38,11 @@
 #include <functional>
 
 // target machine computation
+#if JL_LLVM_VERSION >= 60000
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
+#else
+#include <llvm/Target/TargetSubtargetInfo.h>
+#endif
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/Support/Host.h>
@@ -66,7 +70,11 @@
 #include <llvm/Transforms/Utils/Cloning.h> // for llvmcall inlining
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/IR/Verifier.h> // for llvmcall validation
-#include <llvm/Bitcode/BitcodeWriter.h>
+#if JL_LLVM_VERSION >= 40000
+#  include <llvm/Bitcode/BitcodeWriter.h>
+#else
+#  include <llvm/Bitcode/ReaderWriter.h>
+#endif
 
 // C API
 #include <llvm-c/Types.h>
@@ -104,7 +112,11 @@ namespace llvm {
 // LLVM version compatibility macros
 legacy::PassManager *jl_globalPM;
 
+#if JL_LLVM_VERSION >= 40000
 #define DIFlagZero (DINode::FlagZero)
+#else
+#define DIFlagZero (0)
+#endif
 
 extern "C" {
 
@@ -350,7 +362,11 @@ extern "C" {
 template<typename T>
 static void add_return_attr(T *f, Attribute::AttrKind Kind)
 {
+#if JL_LLVM_VERSION >= 50000
     f->addAttribute(AttributeList::ReturnIndex, Kind);
+#else
+    f->addAttribute(AttributeSet::ReturnIndex, Kind);
+#endif
 }
 
 static MDNode *best_tbaa(jl_value_t *jt) {
@@ -575,7 +591,9 @@ static GlobalVariable *get_pointer_to_constant(Constant *val, StringRef name, Mo
 static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty, int arraysize=1)
 {
     return new AllocaInst(lty,
+#if JL_LLVM_VERSION >= 50000
             0,
+#endif
             ConstantInt::get(T_int32, arraysize), "", /*InsertBefore=*/ctx.ptlsStates);
 }
 
@@ -1256,7 +1274,11 @@ static void jl_setup_module(Module *m, const jl_cgparams_t *params = &jl_default
     if (!getModuleFlag(m,"Debug Info Version"))
         m->addModuleFlag(llvm::Module::Error, "Debug Info Version",
             llvm::DEBUG_METADATA_VERSION);
+#if JL_LLVM_VERSION >= 40000
     m->setDataLayout(jl_data_layout);
+#else
+    m->setDataLayout(jl_ExecutionEngine->getDataLayout());
+#endif
     m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
 
 }
@@ -1289,9 +1311,13 @@ uint64_t jl_get_llvm_fptr(void *function)
     Function *F = (Function*)function;
     uint64_t addr = getAddressForFunction(F->getName());
     if (!addr) {
+#if JL_LLVM_VERSION >= 50000
         if (auto exp_addr = jl_ExecutionEngine->findUnmangledSymbol(F->getName()).getAddress()) {
             addr = exp_addr.get();
         }
+#else
+        addr = jl_ExecutionEngine->findUnmangledSymbol(F->getName()).getAddress();
+#endif
     }
     return addr;
 }
@@ -3361,7 +3387,11 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
                 ctx.builder.CreateStore(unbox, ssaslot);
             }
             else {
+#if JL_LLVM_VERSION >= 40000
                 const DataLayout &DL = jl_data_layout;
+#else
+                const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
+#endif
                 uint64_t sz = DL.getTypeStoreSize(T);
                 emit_memcpy(ctx, ssaslot, tbaa_stack, vi.value, sz, al);
             }
@@ -4240,7 +4270,11 @@ static Function* gen_cfun_wrapper(
         M = new Module(name, jl_LLVMContext);
         jl_setup_module(M);
     }
+#if JL_LLVM_VERSION >= 50000
     AttributeList attributes = sig.attributes;
+#else
+    AttributeSet attributes = sig.attributes;
+#endif
     FunctionType *functype;
     if (nest) {
         // add nest parameter (pointer to jl_value_t* data array) after sret arg
@@ -4861,14 +4895,15 @@ static Function *jl_cfunction_object(jl_value_t *ff, jl_value_t *declrt, jl_tupl
     // first split on `ft` using a simple eqtable
     // then use the typemap to split on argt
     // and finally, pick declrt from the pair-list
-    jl_typemap_t *cache_l2 = NULL;
+    union jl_typemap_t cache_l2 = { NULL };
+    // cache_l2.unknown = NULL;
     jl_typemap_entry_t *cache_l3 = NULL;
     if (!jl_cfunction_list) {
         jl_cfunction_list = jl_alloc_vec_any(16);
     }
     else {
-        cache_l2 = jl_eqtable_get(jl_cfunction_list, ft, NULL);
-        if (cache_l2) {
+        cache_l2.unknown = jl_eqtable_get(jl_cfunction_list, ft, NULL);
+        if (cache_l2.unknown) {
             cache_l3 = jl_typemap_assoc_by_type(cache_l2, (jl_value_t*)argt, NULL,
                 /*subtype*/0, /*offs*/0, /*world*/1, /*max_world_mask*/0);
             if (cache_l3) {
@@ -4885,13 +4920,13 @@ static Function *jl_cfunction_object(jl_value_t *ff, jl_value_t *declrt, jl_tupl
     }
 
     if (cache_l3 == NULL) {
-        jl_typemap_t *insert = cache_l2;
-        if (!insert)
-            insert = jl_nothing;
-        cache_l3 = jl_typemap_insert(&insert, (jl_value_t*)insert, (jl_tupletype_t*)argt,
+        union jl_typemap_t insert = cache_l2;
+        if (!insert.unknown)
+            insert.unknown = jl_nothing;
+        cache_l3 = jl_typemap_insert(&insert, (jl_value_t*)insert.unknown, (jl_tupletype_t*)argt,
             NULL, jl_emptysvec, (jl_value_t*)jl_emptysvec, /*offs*/0, &cfunction_cache, 1, ~(size_t)0, NULL);
-        if (insert != cache_l2)
-            jl_cfunction_list = jl_eqtable_put(jl_cfunction_list, ft, insert, NULL);
+        if (insert.unknown != cache_l2.unknown)
+            jl_cfunction_list = jl_eqtable_put(jl_cfunction_list, ft, insert.unknown, NULL);
     }
 
     // compute / validate return type
@@ -5133,7 +5168,11 @@ static jl_returninfo_t get_specsig_function(Module *M, const std::string &name, 
             rt = T_prjlvalue;
         }
     }
+#if JL_LLVM_VERSION >= 50000
     AttributeList attributes; // function declaration attributes
+#else
+    AttributeSet attributes; // function declaration attributes
+#endif
     if (props.cc == jl_returninfo_t::SRet) {
         attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::StructRet);
         attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::NoAlias);
@@ -5406,7 +5445,13 @@ static std::unique_ptr<Module> emit_function(
     // i686 Windows (which uses a 4-byte-aligned stack)
     AttrBuilder *attr = new AttrBuilder();
     attr->addStackAlignmentAttr(16);
+#if JL_LLVM_VERSION >= 50000
     f->addAttributes(AttributeList::FunctionIndex, *attr);
+#else
+    f->addAttributes(AttributeSet::FunctionIndex,
+        AttributeSet::get(f->getContext(),
+            AttributeSet::FunctionIndex, *attr));
+#endif
 #endif
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
     f->setHasUWTable(); // force NeedsWinEH
@@ -5440,7 +5485,12 @@ static std::unique_ptr<Module> emit_function(
     if (ctx.debug_enabled) {
         // TODO: Fix when moving to new LLVM version
         topfile = dbuilder.createFile(filename, ".");
+#if JL_LLVM_VERSION >= 40000
         DICompileUnit *CU = dbuilder.createCompileUnit(0x01, topfile, "julia", true, "", 0);
+#else
+        DICompileUnit *CU = dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
+#endif
+
         DISubroutineType *subrty;
         if (jl_options.debug_level <= 1) {
             subrty = jl_di_func_null_sig;
@@ -5616,7 +5666,11 @@ static std::unique_ptr<Module> emit_function(
             specsig || // for arguments, give them stack slots if they aren't in `argArray` (otherwise, will use that pointer)
             (va && (int)i == ctx.vaSlot) || // or it's the va arg tuple
             i == 0) { // or it is the first argument (which isn't in `argArray`)
+#if JL_LLVM_VERSION >= 50000
             AllocaInst *av = new AllocaInst(T_prjlvalue, 0,
+#else
+            AllocaInst *av = new AllocaInst(T_prjlvalue,
+#endif
                 jl_symbol_name(s), /*InsertBefore*/ctx.ptlsStates);
             StoreInst *SI = new StoreInst(
                 ConstantPointerNull::get(cast<PointerType>(T_prjlvalue)), av,
@@ -5736,7 +5790,11 @@ static std::unique_ptr<Module> emit_function(
                     if (ctx.debug_enabled && vi.dinfo && !vi.boxroot && !vi.value.V) {
                         SmallVector<uint64_t, 8> addr;
                         addr.push_back(llvm::dwarf::DW_OP_deref);
+#if JL_LLVM_VERSION >= 50000
                         addr.push_back(llvm::dwarf::DW_OP_plus_uconst);
+#else
+                        addr.push_back(llvm::dwarf::DW_OP_plus);
+#endif
                         addr.push_back((i - 1) * sizeof(void*));
                         if ((Metadata*)vi.dinfo->getType() != jl_pvalue_dillvmt)
                             addr.push_back(llvm::dwarf::DW_OP_deref);
@@ -7358,6 +7416,8 @@ extern "C" void *jl_init_llvm(void)
         // Make sure we are using the large code model on 64bit
         // Let LLVM pick a default suitable for jitting on 32bit
         .setCodeModel(CodeModel::Large)
+#elif JL_LLVM_VERSION < 60000
+        .setCodeModel(CodeModel::JITDefault)
 #endif
 #ifdef DISABLE_OPT
         .setOptLevel(CodeGenOpt::None)
@@ -7404,14 +7464,11 @@ extern "C" void *jl_init_llvm(void)
     init_julia_llvm_meta();
     jl_ExecutionEngine = new JuliaOJIT(*jl_TargetMachine);
 
-    // Mark our address spaces as non-integral
+// Mark our address spaces as non-integral
+#if JL_LLVM_VERSION >= 40000
     jl_data_layout = jl_ExecutionEngine->getDataLayout();
     std::string DL = jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13";
     jl_data_layout.reset(DL);
-
-// Register GDB event listener
-#ifdef JL_DEBUG_BUILD
-    jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createGDBRegistrationListener());
 #endif
 
 #ifdef JL_USE_INTEL_JITEVENTS

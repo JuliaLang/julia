@@ -1977,16 +1977,3 @@ function bar28444()
     e[1]
 end
 @test bar28444() == 1
-
-# issue #28641
-struct VoxelIndices{T <: Integer}
-    voxCrnrPos::NTuple{8,NTuple{3,T}}
-    voxEdgeCrnrs::NTuple{19, NTuple{2,T}}
-    voxEdgeDir::NTuple{19,T}
-    voxEdgeIx::NTuple{8,NTuple{8,T}}
-    subTets::NTuple{6,NTuple{4,T}}
-    tetEdgeCrnrs::NTuple{6,NTuple{2,T}}
-    tetTri::NTuple{16,NTuple{6,T}}
-end
-f28641(x::VoxelIndices, f) = getfield(x, f)
-@test Base.return_types(f28641, (Any,Symbol)) == Any[Tuple]

@@ -78,11 +78,9 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
 JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 {
     JL_TYPECHK(cglobal, type, ty);
-    JL_GC_PUSH1(&v);
     jl_value_t *rt =
-        ty == (jl_value_t*)jl_void_type ? (jl_value_t*)jl_voidpointer_type : // a common case
+        v == (jl_value_t*)jl_void_type ? (jl_value_t*)jl_voidpointer_type : // a common case
             (jl_value_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, ty);
-    JL_GC_PROMISE_ROOTED(rt); // (JL_ALWAYS_LEAFTYPE)
 
     if (!jl_is_concrete_type(rt))
         jl_error("cglobal: type argument not concrete");
@@ -90,15 +88,12 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
     if (jl_is_tuple(v) && jl_nfields(v) == 1)
         v = jl_fieldref(v, 0);
 
-    if (jl_is_pointer(v)) {
-        v = jl_bitcast(rt, v);
-        JL_GC_POP();
-        return v;
-    }
+    if (jl_is_pointer(v))
+        return jl_bitcast(rt, v);
 
     char *f_lib = NULL;
     if (jl_is_tuple(v) && jl_nfields(v) > 1) {
-        jl_value_t *t1 = jl_fieldref_noalloc(v, 1);
+        jl_value_t *t1 = jl_fieldref(v, 1);
         v = jl_fieldref(v, 0);
         if (jl_is_symbol(t1))
             f_lib = jl_symbol_name((jl_sym_t*)t1);
@@ -126,7 +121,6 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
     jl_value_t *jv = jl_gc_alloc_1w();
     jl_set_typeof(jv, rt);
     *(void**)jl_data_ptr(jv) = ptr;
-    JL_GC_POP();
     return jv;
 }
 
@@ -134,19 +128,19 @@ JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v) {
     return jl_cglobal(v, (jl_value_t*)jl_void_type);
 }
 
-static inline char signbitbyte(void *a, unsigned bytes) JL_NOTSAFEPOINT
+static inline char signbitbyte(void *a, unsigned bytes)
 {
     // sign bit of an signed number of n bytes, as a byte
     return (((signed char*)a)[bytes - 1] < 0) ? ~0 : 0;
 }
 
-static inline char usignbitbyte(void *a, unsigned bytes) JL_NOTSAFEPOINT
+static inline char usignbitbyte(void *a, unsigned bytes)
 {
     // sign bit of an unsigned number
     return 0;
 }
 
-static inline unsigned select_by_size(unsigned sz) JL_NOTSAFEPOINT
+static inline unsigned select_by_size(unsigned sz)
 {
     /* choose the right sized function specialization */
     switch (sz) {
@@ -161,7 +155,7 @@ static inline unsigned select_by_size(unsigned sz) JL_NOTSAFEPOINT
 
 #define SELECTOR_FUNC(intrinsic) \
     typedef intrinsic##_t select_##intrinsic##_t[6]; \
-    static inline intrinsic##_t select_##intrinsic(unsigned sz, const select_##intrinsic##_t list) JL_NOTSAFEPOINT \
+    static inline intrinsic##_t select_##intrinsic(unsigned sz, const select_##intrinsic##_t list) \
     { \
         intrinsic##_t thunk = list[select_by_size(sz)]; \
         if (!thunk) thunk = list[0]; \
@@ -181,7 +175,7 @@ static inline unsigned select_by_size(unsigned sz) JL_NOTSAFEPOINT
 // nbits::number of bits
 // c_type::c_type corresponding to nbits
 #define un_iintrinsic_ctype(OP, name, nbits, c_type) \
-static inline void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pr) JL_NOTSAFEPOINT \
+static inline void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pr) \
 { \
     c_type a = *(c_type*)pa; \
     *(c_type*)pr = OP(a); \
@@ -193,7 +187,7 @@ static inline void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pr) 
 // nbits::number of bits
 // c_type::c_type corresponding to nbits
 #define uu_iintrinsic_ctype(OP, name, nbits, c_type) \
-static inline unsigned jl_##name##nbits(unsigned runtime_nbits, void *pa) JL_NOTSAFEPOINT \
+static inline unsigned jl_##name##nbits(unsigned runtime_nbits, void *pa) \
 { \
     c_type a = *(c_type*)pa; \
     return OP(a); \
@@ -205,7 +199,7 @@ static inline unsigned jl_##name##nbits(unsigned runtime_nbits, void *pa) JL_NOT
 // nbits::number of bits in the *input*
 // c_type::c_type corresponding to nbits
 #define un_fintrinsic_ctype(OP, name, c_type) \
-static inline void name(unsigned osize, void *pa, void *pr) JL_NOTSAFEPOINT \
+static inline void name(unsigned osize, void *pa, void *pr) \
 { \
     c_type a = *(c_type*)pa; \
     OP((c_type*)pr, a); \
@@ -217,7 +211,7 @@ static inline void name(unsigned osize, void *pa, void *pr) JL_NOTSAFEPOINT \
 // nbits::number of bits
 // c_type::c_type corresponding to nbits
 #define bi_intrinsic_ctype(OP, name, nbits, c_type) \
-static void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *pr) JL_NOTSAFEPOINT \
+static void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *pr) \
 { \
     c_type a = *(c_type*)pa; \
     c_type b = *(c_type*)pb; \
@@ -230,7 +224,7 @@ static void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *p
 // nbits::number of bits
 // c_type::c_type corresponding to nbits
 #define bool_intrinsic_ctype(OP, name, nbits, c_type) \
-static int jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb) JL_NOTSAFEPOINT \
+static int jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb) \
 { \
     c_type a = *(c_type*)pa; \
     c_type b = *(c_type*)pb; \
@@ -243,7 +237,7 @@ static int jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb) JL_NOTSA
 // nbits::number of bits
 // c_type::c_type corresponding to nbits
 #define checked_intrinsic_ctype(CHECK_OP, OP, name, nbits, c_type) \
-static int jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *pr) JL_NOTSAFEPOINT \
+static int jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *pr) \
 { \
     c_type a = *(c_type*)pa; \
     c_type b = *(c_type*)pb; \
@@ -259,7 +253,7 @@ static int jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *pr
 // nbits::number of bits
 // c_type::c_type corresponding to nbits
 #define ter_intrinsic_ctype(OP, name, nbits, c_type) \
-static void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *pc, void *pr) JL_NOTSAFEPOINT \
+static void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *pc, void *pr) \
 { \
     c_type a = *(c_type*)pa; \
     c_type b = *(c_type*)pb; \
@@ -500,7 +494,7 @@ static const select_intrinsic_cmp_t name##_list = { \
 }; \
 cmp_iintrinsic(name, u)
 
-typedef int (*intrinsic_checked_t)(unsigned, void*, void*, void*) JL_NOTSAFEPOINT;
+typedef int (*intrinsic_checked_t)(unsigned, void*, void*, void*);
 SELECTOR_FUNC(intrinsic_checked)
 #define checked_iintrinsic(name, u, lambda_checked) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
@@ -592,7 +586,6 @@ static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, v
     params[0] = ty;
     params[1] = (jl_value_t*)jl_bool_type;
     jl_datatype_t *tuptyp = jl_apply_tuple_type_v(params, 2);
-    JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALAWYS_LEAFTYPE)
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *newv = jl_gc_alloc(ptls, ((jl_datatype_t*)tuptyp)->size, tuptyp);
 

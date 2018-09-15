@@ -124,7 +124,7 @@ SECT_INTERP void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 
 static void eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
 {
-    jl_value_t **args = jl_array_ptr_data(ex->args);
+    jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     if (inside_typedef)
         jl_error("cannot eval a new abstract type definition while defining another type");
     jl_value_t *name = args[0];
@@ -134,7 +134,7 @@ static void eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
     jl_datatype_t *dt = NULL;
     jl_value_t *w = NULL;
     jl_module_t *modu = s->module;
-    JL_GC_PUSH5(&para, &super, &temp, &w, &dt);
+    JL_GC_PUSH4(&para, &super, &temp, &w);
     assert(jl_is_svec(para));
     if (jl_is_globalref(name)) {
         modu = jl_globalref_mod(name);
@@ -168,7 +168,7 @@ static void eval_abstracttype(jl_expr_t *ex, interpreter_state *s)
 
 static void eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
 {
-    jl_value_t **args = (jl_value_t**)jl_array_ptr_data(ex->args);
+    jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     if (inside_typedef)
         jl_error("cannot eval a new primitive type definition while defining another type");
     jl_value_t *name = args[0];
@@ -219,7 +219,7 @@ static void eval_primitivetype(jl_expr_t *ex, interpreter_state *s)
 
 static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
 {
-    jl_value_t **args = jl_array_ptr_data(ex->args);
+    jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     if (inside_typedef)
         jl_error("cannot eval a new struct type definition while defining another type");
     jl_value_t *name = args[0];
@@ -285,7 +285,7 @@ static void eval_structtype(jl_expr_t *ex, interpreter_state *s)
 
 static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 {
-    jl_value_t **args = jl_array_ptr_data(ex->args);
+    jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     jl_sym_t *fname = (jl_sym_t*)args[0];
     jl_module_t *modu = s->module;
     if (jl_is_globalref(fname)) {
@@ -348,12 +348,12 @@ SECT_INTERP jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
     return v;
 }
 
-SECT_INTERP static int jl_source_nslots(jl_code_info_t *src) JL_NOTSAFEPOINT
+SECT_INTERP static int jl_source_nslots(jl_code_info_t *src)
 {
     return jl_array_len(src->slotflags);
 }
 
-SECT_INTERP static int jl_source_nssavalues(jl_code_info_t *src) JL_NOTSAFEPOINT
+SECT_INTERP static int jl_source_nssavalues(jl_code_info_t *src)
 {
     return jl_is_long(src->ssavaluetypes) ? jl_unbox_long(src->ssavaluetypes) : jl_array_len(src->ssavaluetypes);
 }
@@ -397,9 +397,7 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     if (jl_is_pinode(e)) {
         jl_value_t *val = eval_value(jl_fieldref_noalloc(e, 0), s);
 #ifndef JL_NDEBUG
-        JL_GC_PUSH1(&val);
         jl_typeassert(val, jl_fieldref_noalloc(e, 1));
-        JL_GC_POP();
 #endif
         return val;
     }
@@ -417,13 +415,13 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             // edges list doesn't contain last branch. this value should be unused.
             return NULL;
         }
-        jl_value_t *val = jl_array_ptr_ref((jl_array_t*)jl_fieldref_noalloc(e, 1), edge);
+        jl_value_t *val = jl_arrayref((jl_array_t*)jl_fieldref_noalloc(e, 1), edge);
         return eval_value(val, s);
     }
     if (!jl_is_expr(e))
         return e;
     jl_expr_t *ex = (jl_expr_t*)e;
-    jl_value_t **args = jl_array_ptr_data(ex->args);
+    jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t nargs = jl_array_len(ex->args);
     jl_sym_t *head = ex->head;
     if (head == call_sym) {
@@ -746,7 +744,6 @@ SECT_INTERP CALLBACK_ABI void *jl_interpret_call_callback(interpreter_state *s, 
 {
     struct jl_interpret_call_args *args =
         (struct jl_interpret_call_args *)vargs;
-    JL_GC_PROMISE_ROOTED(args);
     jl_code_info_t *src = jl_code_for_interpreter(args->lam);
     args->lam->inferred = (jl_value_t*)src;
     jl_gc_wb(args->lam, src);
@@ -788,7 +785,6 @@ struct jl_interpret_toplevel_thunk_args {
 SECT_INTERP CALLBACK_ABI void *jl_interpret_toplevel_thunk_callback(interpreter_state *s, void *vargs) {
     struct jl_interpret_toplevel_thunk_args *args =
         (struct jl_interpret_toplevel_thunk_args*)vargs;
-    JL_GC_PROMISE_ROOTED(args);
     jl_array_t *stmts = args->src->code;
     assert(jl_typeis(stmts, jl_array_any_type));
     jl_value_t **locals;
@@ -826,7 +822,6 @@ SECT_INTERP CALLBACK_ABI void *jl_interpret_toplevel_expr_in_callback(interprete
 {
     struct interpret_toplevel_expr_in_args *args =
         (struct interpret_toplevel_expr_in_args*)vargs;
-    JL_GC_PROMISE_ROOTED(args);
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *v=NULL;
     jl_module_t *last_m = ptls->current_module;

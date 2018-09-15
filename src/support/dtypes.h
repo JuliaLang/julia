@@ -13,7 +13,6 @@
 #endif
 
 #include "platform.h"
-#include "analyzer_annotations.h"
 
 #if !defined(_OS_WINDOWS_)
 #include <inttypes.h>
@@ -145,7 +144,7 @@ typedef uint32_t uint_t;
 typedef int32_t int_t;
 #endif
 
-STATIC_INLINE unsigned int next_power_of_two(unsigned int val) JL_NOTSAFEPOINT
+STATIC_INLINE unsigned int next_power_of_two(unsigned int val)
 {
     /* this function taken from libuv src/unix/core.c */
     val -= 1;
