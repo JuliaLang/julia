@@ -387,7 +387,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
     while node !== -1
         push!(result_order, node)
         cs = domtree.nodes[node].children
-        terminator = ir.stmts[ir.cfg.blocks[node].stmts.last]
+        terminator = ir.stmts[last(ir.cfg.blocks[node].stmts)]
         iscondbr = isa(terminator, GotoIfNot)
         let old_node = node + 1
             if length(cs) >= 1

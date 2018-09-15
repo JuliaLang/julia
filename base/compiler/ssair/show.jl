@@ -360,7 +360,7 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
         stmt = stmts[idx]
         # Compute BB guard rail
         bbrange = cfg.blocks[bb_idx].stmts
-        bbrange = bbrange.first:bbrange.last
+        bbrange = bbrange.start:bbrange.stop
         bb_idx_str = string(bb_idx)
         bb_pad = max_bb_idx_size - length(bb_idx_str)
         bb_type = length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄"
