@@ -1,12 +1,8 @@
-# Julia 1.0 Documentation
+# Julia 0.7 Documentation
 
-Welcome to the documentation for Julia 1.0.
+Welcome to the documentation for Julia 0.7.
 
-Please read the [release blog post](https://julialang.org/blog/2018/08/one-point-zero) for a general overview of the language and
-many of the changes since Julia v0.6. Note that version 0.7 was released alongside
-1.0 to provide an upgrade path for packages and code that predates the 1.0 release.
-The only difference between 0.7 and 1.0 is the removal of deprecation warnings.
-For a complete list of all the changes since 0.6, see the [release notes for version 0.7](https://docs.julialang.org/en/v0.7.0/NEWS/)
+Please read the [release notes](NEWS.md) to see what has changed since the last release.
 
 ### [Introduction](@id man-introduction)
 

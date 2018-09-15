@@ -124,6 +124,7 @@ export
     InvalidStateException,
     KeyError,
     MissingException,
+    ParseError,
     SystemError,
     StringIndexError,
 
@@ -410,6 +411,8 @@ export
     rot180,
     rotl90,
     rotr90,
+    shuffle,
+    shuffle!,
     size,
     selectdim,
     sort!,
@@ -604,6 +607,9 @@ export
     summary,
 
 # logging
+    info,
+    logging,
+    warn,
     @debug,
     @info,
     @warn,
@@ -618,6 +624,9 @@ export
     set_zero_subnormals,
 
 # iteration
+    done,
+    next,
+    start,
     iterate,
 
     enumerate,  # re-exported from Iterators

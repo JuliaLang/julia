@@ -690,6 +690,43 @@ function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
     Core._apply_latest(inner)
 end
 
+# iteration protocol
+
+"""
+    next(iter, state) -> item, state
+
+For a given iterable object and iteration state, return the current item and the next iteration state.
+
+# Examples
+```jldoctest
+julia> next(1:5, 3)
+(3, 4)
+
+julia> next(1:5, 5)
+(5, 6)
+```
+"""
+function next end
+
+"""
+    start(iter) -> state
+
+Get initial iteration state for an iterable object.
+
+# Examples
+```jldoctest
+julia> start(1:5)
+1
+
+julia> start([1;2;3])
+1
+
+julia> start([4;2;3])
+1
+```
+"""
+function start end
+
 """
     isempty(collection) -> Bool
 

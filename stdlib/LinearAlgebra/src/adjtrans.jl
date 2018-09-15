@@ -150,7 +150,7 @@ similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent,
 
 # sundry basic definitions
 parent(A::AdjOrTrans) = A.parent
-vec(v::TransposeAbsVec) = parent(v)
+vec(v::AdjOrTransAbsVec) = v.parent
 
 cmp(A::AdjOrTransAbsVec, B::AdjOrTransAbsVec) = cmp(parent(A), parent(B))
 isless(A::AdjOrTransAbsVec, B::AdjOrTransAbsVec) = isless(parent(A), parent(B))

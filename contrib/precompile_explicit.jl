@@ -474,6 +474,7 @@ precompile(Tuple{typeof(Base.similar), Type{Array{Method, N} where N}, Tuple{Bas
 precompile(Tuple{typeof(Base.sizeof), String})
 precompile(Tuple{typeof(Base.skip_deleted_floor!), Base.Dict{Symbol, Any}})
 precompile(Tuple{typeof(Base.sort!), Array{Int64, 1}, Base.Sort.QuickSortAlg, Base.Order.Perm{Base.Order.ForwardOrdering, Array{Tuple{Float64, Int64}, 1}}})
+precompile(Tuple{typeof(Base.start), Nothing})
 precompile(Tuple{typeof(Base.startswith), Base.SubString{String}, String})
 precompile(Tuple{typeof(Base.startswith), String, Char})
 precompile(Tuple{typeof(Base.stream_wait), Base.Timer, Base.Condition})

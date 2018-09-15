@@ -1383,7 +1383,7 @@ for cases where you don't need a more elaborate hierarchy.
 julia> struct Val{x}
        end
 
-julia> Val(x) = Val{x}()
+julia> Base.@pure Val(x) = Val{x}()
 Val
 ```
 
