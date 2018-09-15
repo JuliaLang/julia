@@ -489,7 +489,7 @@ function precompile(ctx::Context)
         sourcepath = Base.locate_package(pkg)
         if sourcepath == nothing
             # XXX: this isn't supposed to be fatal
-            pkgerror("couldn't find path to $(pkg.name) when trying to precompilie project")
+            pkgerror("couldn't find path to $(pkg.name) when trying to precompile project")
         end
         stale = true
         for path_to_try in paths::Vector{String}
