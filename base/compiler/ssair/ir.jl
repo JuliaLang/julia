@@ -26,12 +26,12 @@ Like UnitRange{Int}, but can handle the `last` field, being temporarily
 < first (this can happen during compacting)
 """
 struct StmtRange <: AbstractUnitRange{Int}
-    first::Int
-    last::Int
+    start::Int
+    stop::Int
 end
-first(r::StmtRange) = r.first
-last(r::StmtRange) = r.last
-iterate(r::StmtRange, state=0) = (r.last - r.first < state) ? nothing : (r.first + state, state + 1)
+first(r::StmtRange) = r.start
+last(r::StmtRange) = r.stop
+iterate(r::StmtRange, state=0) = (last(r) - first(r) < state) ? nothing : (first(r) + state, state + 1)
 
 StmtRange(range::UnitRange{Int}) = StmtRange(first(range), last(range))
 
