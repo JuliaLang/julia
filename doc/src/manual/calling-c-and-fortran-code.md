@@ -130,7 +130,7 @@ Here is a slightly more complex example that discovers the local machine's hostn
 
 ```julia
 function gethostname()
-    hostname = Vector{UInt8}(128)
+    hostname = Vector{UInt8}(undef, 128)
     ccall((:gethostname, "libc"), Int32,
           (Ptr{UInt8}, Csize_t),
           hostname, sizeof(hostname))
@@ -820,7 +820,7 @@ function sf_bessel_Jn_array(nmin::Integer, nmax::Integer, x::Real)
     if nmax < nmin
         throw(DomainError())
     end
-    result_array = Vector{Cdouble}(nmax - nmin + 1)
+    result_array = Vector{Cdouble}(undef, nmax - nmin + 1)
     errorcode = ccall(
         (:gsl_sf_bessel_Jn_array, :libgsl), # name of C function and library
         Cint,                               # output type
@@ -973,7 +973,7 @@ Other supported conventions are: `stdcall`, `cdecl`, `fastcall`, and `thiscall` 
 signature for Windows:
 
 ```julia
-hn = Vector{UInt8}(256)
+hn = Vector{UInt8}(undef, 256)
 err = ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
 ```
 
