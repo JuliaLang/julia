@@ -234,232 +234,16 @@ function dot(A::SparseMatrixCSC{T1,S1},B::SparseMatrixCSC{T2,S2}) where {T1,T2,S
     return r
 end
 
-## triangular sparse handling
-
-possible_adjoint(adj::Bool, a::Real ) = a
-possible_adjoint(adj::Bool, a ) = adj ? adjoint(a) : a
-
-const UnitDiagonalTriangular = Union{UnitUpperTriangular,UnitLowerTriangular}
-
-const LowerTriangularPlain{T} = Union{
-            LowerTriangular{T,<:SparseMatrixCSCUnion{T}},
-            UnitLowerTriangular{T,<:SparseMatrixCSCUnion{T}}}
-
-const LowerTriangularWrapped{T} = Union{
-            Adjoint{T,<:UpperTriangular{T,<:SparseMatrixCSCUnion{T}}},
-            Adjoint{T,<:UnitUpperTriangular{T,<:SparseMatrixCSCUnion{T}}},
-            Transpose{T,<:UpperTriangular{T,<:SparseMatrixCSCUnion{T}}},
-            Transpose{T,<:UnitUpperTriangular{T,<:SparseMatrixCSCUnion{T}}}} where T
-
-const UpperTriangularPlain{T} = Union{
-            UpperTriangular{T,<:SparseMatrixCSCUnion{T}},
-            UnitUpperTriangular{T,<:SparseMatrixCSCUnion{T}}}
-
-const UpperTriangularWrapped{T} = Union{
-            Adjoint{T,<:LowerTriangular{T,<:SparseMatrixCSCUnion{T}}},
-            Adjoint{T,<:UnitLowerTriangular{T,<:SparseMatrixCSCUnion{T}}},
-            Transpose{T,<:LowerTriangular{T,<:SparseMatrixCSCUnion{T}}},
-            Transpose{T,<:UnitLowerTriangular{T,<:SparseMatrixCSCUnion{T}}}} where T
-
-const UpperTriangularSparse{T} = Union{
-            UpperTriangularWrapped{T}, UpperTriangularPlain{T}} where T
-
-const LowerTriangularSparse{T} = Union{
-            LowerTriangularWrapped{T}, LowerTriangularPlain{T}} where T
-
-const TriangularSparse{T} = Union{
-            LowerTriangularSparse{T}, UpperTriangularSparse{T}} where T
-
-## triangular multipliers
-function lmul!(A::TriangularSparse{T}, B::StridedVecOrMat{T}) where T
+## solvers
+function fwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat)
+# forward substitution for CSC matrices
     @assert !has_offset_axes(A, B)
     nrowB, ncolB  = size(B, 1), size(B, 2)
     ncol = LinearAlgebra.checksquare(A)
     if nrowB != ncol
         throw(DimensionMismatch("A is $(ncol) columns and B has $(nrowB) rows"))
     end
-    _lmul!(A, B)
-end
 
-# forward multiplication for UpperTriangular SparseCSC matrices
-function _lmul!(U::UpperTriangularPlain, B::StridedVecOrMat)
-    A = U.data
-    unit = U isa UnitDiagonalTriangular
-
-    nrowB, ncolB  = size(B, 1), size(B, 2)
-    aa = getnzval(A)
-    ja = getrowval(A)
-    ia = getcolptr(A)
-
-    joff = 0
-    for k = 1:ncolB
-        for j = 1:nrowB
-            i1 = ia[j]
-            i2 = ia[j + 1] - 1
-            done = unit
-
-            bj = B[joff + j]
-            for ii = i1:i2
-                jai = ja[ii]
-                aii = aa[ii]
-                if jai < j
-                    B[joff + jai] += aii * bj
-                elseif jai == j
-                    if !unit
-                        B[joff + j] *= aii
-                        done = true
-                    end
-                else
-                    break
-                end
-            end
-            if !done
-                B[joff + j] -= B[joff + j]
-            end
-        end
-        joff += nrowB
-    end
-    B
-end
-
-# backward multiplication for LowerTriangular SparseCSC matrices
-function _lmul!(L::LowerTriangularPlain, B::StridedVecOrMat)
-    A = L.data
-    unit = L isa UnitDiagonalTriangular
-
-    nrowB, ncolB = size(B, 1), size(B, 2)
-    aa = getnzval(A)
-    ja = getrowval(A)
-    ia = getcolptr(A)
-
-    joff = 0
-    for k = 1:ncolB
-        for j = nrowB:-1:1
-            i1 = ia[j]
-            i2 = ia[j + 1] - 1
-            done = unit
-
-            bj = B[joff + j]
-            for ii = i2:-1:i1
-                jai = ja[ii]
-                aii = aa[ii]
-                if jai > j
-                    B[joff + jai] += aii * bj
-                elseif jai == j
-                    if !unit
-                        B[joff + j] *= aii
-                        done = true
-                    end
-                else
-                    break
-                end
-            end
-            if !done
-                B[joff + j] -= B[joff + j]
-            end
-        end
-        joff += nrowB
-    end
-    B
-end
-
-# forward multiplication for adjoint and transpose of LowerTriangular CSC matrices
-function _lmul!(U::UpperTriangularWrapped, B::StridedVecOrMat)
-    A = U.parent.data
-    unit = U.parent isa UnitDiagonalTriangular
-    adj = U isa Adjoint
-
-    nrowB, ncolB  = size(B, 1), size(B, 2)
-    aa = getnzval(A)
-    ja = getrowval(A)
-    ia = getcolptr(A)
-    Z = zero(eltype(A))
-
-    joff = 0
-    for k = 1:ncolB
-        for j = 1:nrowB
-            i1 = ia[j]
-            i2 = ia[j + 1] - 1
-            akku = Z
-            j0 = !unit ? j : j + 1
-
-            # loop through column j of A - only structural non-zeros
-            for ii = i2:-1:i1
-                jai = ja[ii]
-                if jai >= j0
-                    aai = possible_adjoint(adj, aa[ii])
-                    akku += B[joff + jai] * aai
-                else
-                    break
-                end
-            end
-            if unit
-                akku += B[joff + j]
-            end
-            B[joff + j] = akku
-        end
-        joff += nrowB
-    end
-    B
-end
-
-# backward multiplication with adjoint and transpose of LowerTriangular CSC matrices
-function _lmul!(L::LowerTriangularWrapped, B::StridedVecOrMat)
-    A = L.parent.data
-    unit = L.parent isa UnitDiagonalTriangular
-    adj = L isa Adjoint
-
-    nrowB, ncolB  = size(B, 1), size(B, 2)
-    aa = getnzval(A)
-    ja = getrowval(A)
-    ia = getcolptr(A)
-    Z = zero(eltype(A))
-
-    joff = 0
-    for k = 1:ncolB
-        for j = nrowB:-1:1
-            i1 = ia[j]
-            i2 = ia[j + 1] - 1
-            akku = Z
-            j0 = !unit ? j : j - 1
-
-            # loop through column j of A - only structural non-zeros
-            for ii = i1:i2
-                jai = ja[ii]
-                if jai <= j0
-                    aai = possible_adjoint(adj, aa[ii])
-                    akku += B[joff + jai] * aai
-                else
-                    break
-                end
-            end
-            if unit
-                akku += B[joff + j]
-            end
-            B[joff + j] = akku
-        end
-        joff += nrowB
-    end
-    B
-end
-
-## triangular solvers
-function ldiv!(A::TriangularSparse{T}, B::StridedVecOrMat{T}) where T
-    @assert !has_offset_axes(A, B)
-    nrowB, ncolB  = size(B, 1), size(B, 2)
-    ncol = LinearAlgebra.checksquare(A)
-    if nrowB != ncol
-        throw(DimensionMismatch("A is $(ncol) columns and B has $(nrowB) rows"))
-    end
-    _ldiv!(A, B)
-end
-
-# forward substitution for LowerTriangular CSC matrices
-function _ldiv!(L::LowerTriangularPlain, B::StridedVecOrMat)
-    A = L.data
-    unit = L isa UnitDiagonalTriangular
-
-    nrowB, ncolB  = size(B, 1), size(B, 2)
     aa = getnzval(A)
     ja = getrowval(A)
     ia = getcolptr(A)
@@ -470,26 +254,26 @@ function _ldiv!(L::LowerTriangularPlain, B::StridedVecOrMat)
             i1 = ia[j]
             i2 = ia[j + 1] - 1
 
-            # find diagonal element
-            ii = searchsortedfirst(ja, j, i1, i2, Base.Order.Forward)
-            ii > i2 && ( ii = i1)
+            # loop through the structural zeros
+            ii = i1
             jai = ja[ii]
+            while ii <= i2 && jai < j
+                ii += 1
+                jai = ja[ii]
+            end
 
-            bj = B[joff + j]
             # check for zero pivot and divide with pivot
             if jai == j
-                if !unit
-                    bj /= aa[ii]
-                    B[joff + j] = bj
-                end
+                bj = B[joff + jai]/aa[ii]
+                B[joff + jai] = bj
                 ii += 1
-            elseif !unit
+            else
                 throw(LinearAlgebra.SingularException(j))
             end
 
             # update remaining part
             for i = ii:i2
-                B[joff + ja[i]] -= bj * aa[i]
+                B[joff + ja[i]] -= bj*aa[i]
             end
         end
         joff += nrowB
@@ -497,12 +281,15 @@ function _ldiv!(L::LowerTriangularPlain, B::StridedVecOrMat)
     B
 end
 
-# backward substitution for UpperTriangular CSC matrices
-function _ldiv!(U::UpperTriangularPlain, B::StridedVecOrMat)
-    A = U.data
-    unit = U isa UnitDiagonalTriangular
-
+function bwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat)
+# backward substitution for CSC matrices
+    @assert !has_offset_axes(A, B)
     nrowB, ncolB = size(B, 1), size(B, 2)
+    ncol = LinearAlgebra.checksquare(A)
+    if nrowB != ncol
+        throw(DimensionMismatch("A is $(ncol) columns and B has $(nrowB) rows"))
+    end
+
     aa = getnzval(A)
     ja = getrowval(A)
     ia = getcolptr(A)
@@ -513,26 +300,26 @@ function _ldiv!(U::UpperTriangularPlain, B::StridedVecOrMat)
             i1 = ia[j]
             i2 = ia[j + 1] - 1
 
-            # find diagonal element
-            ii = searchsortedlast(ja, j, i1, i2, Base.Order.Forward)
-            ii < i1 && ( ii = i2)
+            # loop through the structural zeros
+            ii = i2
             jai = ja[ii]
+            while ii >= i1 && jai > j
+                ii -= 1
+                jai = ja[ii]
+            end
 
-            bj = B[joff + j]
             # check for zero pivot and divide with pivot
             if jai == j
-                if !unit
-                    bj /= aa[ii]
-                    B[joff + j] = bj
-                end
+                bj = B[joff + jai]/aa[ii]
+                B[joff + jai] = bj
                 ii -= 1
-            elseif !unit
+            else
                 throw(LinearAlgebra.SingularException(j))
             end
 
             # update remaining part
             for i = ii:-1:i1
-                B[joff + ja[i]] -= bj * aa[i]
+                B[joff + ja[i]] -= bj*aa[i]
             end
         end
         joff += nrowB
@@ -540,13 +327,21 @@ function _ldiv!(U::UpperTriangularPlain, B::StridedVecOrMat)
     B
 end
 
-# forward substitution for adjoint and transpose of UpperTriangular CSC matrices
-function _ldiv!(L::LowerTriangularWrapped, B::StridedVecOrMat)
-    A = L.parent.data
-    unit = L.parent isa UnitDiagonalTriangular
-    adj = L isa Adjoint
+fwdTriSolve!(aA::Adjoint{<:Any,<:SparseMatrixCSCUnion}, B::AbstractVecOrMat) =
+    _fwdTriSolve!(aA.parent, B, true)
 
+fwdTriSolve!(aA::Transpose{<:Any,<:SparseMatrixCSCUnion}, B::AbstractVecOrMat) =
+    _fwdTriSolve!(aA.parent, B, false)
+
+function _fwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat, adj::Bool)
+# forward substitution for adjoints of CSC matrices
+    @assert !has_offset_axes(A, B)
     nrowB, ncolB  = size(B, 1), size(B, 2)
+    ncol = LinearAlgebra.checksquare(A)
+    if nrowB != ncol
+        throw(DimensionMismatch("A is $(ncol) columns and B has $(nrowB) rows"))
+    end
+
     aa = getnzval(A)
     ja = getrowval(A)
     ia = getcolptr(A)
@@ -560,39 +355,41 @@ function _ldiv!(L::LowerTriangularWrapped, B::StridedVecOrMat)
             done = false
 
             # loop through column j of A - only structural non-zeros
-            for ii = i1:i2
-                jai = ja[ii]
-                if jai < j
-                    aai = possible_adjoint(adj, aa[ii])
-                    akku -= B[joff + jai] * aai
-                elseif jai == j
-                    if !unit
-                        aai = possible_adjoint(adj, aa[ii])
-                        akku /= aai
-                    end
+            for ip = i1:i2
+                i = ja[ip]
+                aai = adj ? aa[ip]' : aa[ip]
+                if i < j
+                    akku -= B[joff + i] * aai
+                elseif i == j
+                    B[joff + j] = akku / aai
                     done = true
-                    break
-                else
                     break
                 end
             end
-            if !done && !unit
+            if !done
                 throw(LinearAlgebra.SingularException(j))
             end
-            B[joff + j] = akku
         end
         joff += nrowB
     end
     B
 end
 
-# backward substitution for adjoint and transpose of LowerTriangular CSC matrices
-function _ldiv!(U::UpperTriangularWrapped, B::StridedVecOrMat)
-    A = U.parent.data
-    unit = U.parent isa UnitDiagonalTriangular
-    adj = U isa Adjoint
+bwdTriSolve!(aA::Adjoint{<:Any,<:SparseMatrixCSCUnion}, B::AbstractVecOrMat) =
+    _bwdTriSolve!(aA.parent, B, true)
 
-    nrowB, ncolB = size(B, 1), size(B, 2)
+bwdTriSolve!(aA::Transpose{<:Any,<:SparseMatrixCSCUnion}, B::AbstractVecOrMat) =
+    _bwdTriSolve!(aA.parent, B, false)
+
+function _bwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat, adj::Bool)
+# forward substitution for adjoints of CSC matrices
+    @assert !has_offset_axes(A, B)
+    nrowB, ncolB  = size(B, 1), size(B, 2)
+    ncol = LinearAlgebra.checksquare(A)
+    if nrowB != ncol
+        throw(DimensionMismatch("A is $(ncol) columns and B has $(nrowB) rows"))
+    end
+
     aa = getnzval(A)
     ja = getrowval(A)
     ia = getcolptr(A)
@@ -606,36 +403,43 @@ function _ldiv!(U::UpperTriangularWrapped, B::StridedVecOrMat)
             done = false
 
             # loop through column j of A - only structural non-zeros
-            for ii = i2:-1:i1
-                jai = ja[ii]
-                if jai > j
-                    aai = possible_adjoint(adj, aa[ii])
-                    akku -= B[joff + jai] * aai
-                elseif jai == j
-                    if !unit
-                        aai = possible_adjoint(adj, aa[ii])
-                        akku /= aai
-                    end
+            for ip = i2:-1:i1
+                i = ja[ip]
+                aai = adj ? aa[ip]' : aa[ip]
+                if i > j
+                    akku -= B[joff + i] * aai
+                elseif i == j
+                    B[joff + j] = akku / aai
                     done = true
-                    break
-                else
                     break
                 end
             end
-            if !done && !unit
+            if !done
                 throw(LinearAlgebra.SingularException(j))
             end
-            B[joff + j] = akku
         end
         joff += nrowB
     end
     B
 end
 
-(\)(L::TriangularSparse, B::SparseMatrixCSC) = ldiv!(L, Array(B))
-(*)(L::TriangularSparse, B::SparseMatrixCSC) = lmul!(L, Array(B))
+ldiv!(L::LowerTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where {T} = fwdTriSolve!(L.data, B)
+ldiv!(L::Adjoint{T,<:UpperTriangular{T,<:SparseMatrixCSCUnion{T}}}, B::StridedVecOrMat) where {T} = _fwdTriSolve!(L.parent.data, B, true)
+ldiv!(L::Transpose{T,<:UpperTriangular{T,<:SparseMatrixCSCUnion{T}}}, B::StridedVecOrMat) where {T} = _fwdTriSolve!(L.parent.data, B, false)
 
-## end of triangular
+ldiv!(U::UpperTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where {T} = bwdTriSolve!(U.data, B)
+ldiv!(L::Adjoint{T,<:LowerTriangular{T,<:SparseMatrixCSCUnion{T}}}, B::StridedVecOrMat) where {T} = _bwdTriSolve!(L.parent.data, B, true)
+ldiv!(L::Transpose{T,<:LowerTriangular{T,<:SparseMatrixCSCUnion{T}}}, B::StridedVecOrMat) where {T} = _bwdTriSolve!(L.parent.data, B, false)
+
+(\)(L::Union{LowerTriangular{T,<:SparseMatrixCSCUnion{T}},
+             Adjoint{T,<:UpperTriangular{T,<:SparseMatrixCSCUnion{T}}},
+             Transpose{T,<:UpperTriangular{T,<:SparseMatrixCSCUnion{T}}}},
+    B::SparseMatrixCSC) where {T} = ldiv!(L, Array(B))
+
+(\)(U::Union{UpperTriangular{T,<:SparseMatrixCSCUnion{T}},
+             Adjoint{T,<:LowerTriangular{T,<:SparseMatrixCSCUnion{T}}},
+             Transpose{T,<:LowerTriangular{T,<:SparseMatrixCSCUnion{T}}}},
+    B::SparseMatrixCSC) where {T} = ldiv!(U, Array(B))
 
 \(A::Transpose{<:Real,<:Hermitian{<:Real,<:SparseMatrixCSC}}, B::Vector) = A.parent \ B
 \(A::Transpose{<:Complex,<:Hermitian{<:Complex,<:SparseMatrixCSC}}, B::Vector) = copy(A) \ B

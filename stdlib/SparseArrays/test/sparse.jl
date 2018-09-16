@@ -2289,29 +2289,4 @@ end
     @test adjoint(MC) == copy(adjoint(SC))
 end
 
-@testset "Triangular matrices" begin
-    rng = Random.MersenneTwister(0)
-    n = 1000
-    A = sprand(rng, n, n, 0.01)
-    B = ones(n)
-    MA = Matrix(A)
-    for tr in (identity, adjoint, transpose)
-        for wr in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
-            AW = tr(wr(A))
-            MAW = tr(wr(MA))
-            @test AW * B ≈ MAW * B
-        end
-    end
-    A = A - Diagonal(diag(A))
-    A += 2I
-    MA = Matrix(A)
-    for tr in (identity, adjoint, transpose)
-        for wr in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
-            AW = tr(wr(A))
-            MAW = tr(wr(MA))
-            @test AW \ B ≈ MAW \ B
-        end
-    end
-end
-
 end # module
