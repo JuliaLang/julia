@@ -1345,8 +1345,17 @@ end
 _cs(d, a, b) = (a == b ? a : throw(DimensionMismatch(
     "mismatch in dimension $d (expected $a got $b)")))
 
-dims2cat(::Val{n}) where {n} = ntuple(i -> (i == n), Val(n))
-dims2cat(dims) = ntuple(in(dims), maximum(dims))
+function dims2cat(::Val{n}) where {n}
+    n <= 0 && throw(ArgumentError("cat dimension must be a positive integer, but got $n"))
+    ntuple(i -> (i == n), Val(n))
+end
+
+function dims2cat(dims)
+    if any(dims .<= 0)
+        throw(ArgumentError("All cat dimensions must be positive integers, but got $dims"))
+    end
+    ntuple(in(dims), maximum(dims))
+end
 
 _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
 
