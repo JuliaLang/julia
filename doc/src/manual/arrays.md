@@ -692,12 +692,7 @@ The following operators are supported for arrays:
 2. Binary arithmetic -- `-`, `+`, `*`, `/`, `\`, `^`
 3. Comparison -- `==`, `!=`, `≈` ([`isapprox`](@ref)), `≉`
 
-Most of the binary arithmetic operators listed above also operate elementwise
-when one argument is scalar: `-`, `+`, and `*` when either argument is scalar,
-and `/` and `\` when the denominator is scalar. For example, `[1, 2] + 3 == [4, 5]`
-and `[6, 4] / 2 == [3, 2]`.
-
-Additionally, to enable convenient vectorization of mathematical and other operations,
+To enable convenient vectorization of mathematical and other operations,
 Julia [provides the dot syntax](@ref man-vectorized) `f.(args...)`, e.g. `sin.(x)`
 or `min.(x,y)`, for elementwise operations over arrays or mixtures of arrays and
 scalars (a [Broadcasting](@ref) operation); these have the additional advantage of
@@ -782,7 +777,7 @@ julia> string.(1:3, ". ", ["First", "Second", "Third"])
 
 ## Implementation
 
-The base array type in Julia is the abstract type [`AbstractArray{T,N}`](@ref). It is parametrized by
+The base array type in Julia is the abstract type [`AbstractArray{T,N}`](@ref). It is parameterized by
 the number of dimensions `N` and the element type `T`. [`AbstractVector`](@ref) and [`AbstractMatrix`](@ref) are
 aliases for the 1-d and 2-d cases. Operations on `AbstractArray` objects are defined using higher
 level operators and functions, in a way that is independent of the underlying storage. These operations
@@ -833,7 +828,7 @@ index of dimension `k` by `1` should increase the index `i` of [`getindex(A,i)`]
 [`stride(A,k)`](@ref). If a pointer conversion method [`Base.unsafe_convert(Ptr{T}, A)`](@ref) is
 provided, the memory layout must correspond in the same way to these strides. `DenseArray` is a
 very specific example of a strided array where the elements are arranged contiguously, thus it
-provides its subtypes with the approporiate definition of `strides`. More concrete examples
+provides its subtypes with the appropriate definition of `strides`. More concrete examples
 can be found within the [interface guide for strided arrays](@ref man-interface-strided-arrays).
 [`StridedVector`](@ref) and [`StridedMatrix`](@ref) are convenient aliases for many of the builtin array types that
 are considered strided arrays, allowing them to dispatch to select specialized implementations that

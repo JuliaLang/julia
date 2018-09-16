@@ -127,6 +127,12 @@ temp_pkg_dir() do project_path
         @test isinstalled(TEST_PKG)
         Pkg.rm(TEST_PKG.name)
         @test !isinstalled(TEST_PKG)
+        # https://github.com/JuliaLang/Pkg.jl/issues/601
+        pkgdir = joinpath(Pkg.depots1(), "packages")
+        touch(joinpath(pkgdir, ".DS_Store"))
+        Pkg.gc()
+        rm(joinpath(pkgdir, ".DS_Store"))
+        @test isempty(readdir(pkgdir))
     end
 
     @testset "package with wrong UUID" begin
@@ -144,6 +150,9 @@ temp_pkg_dir() do project_path
         # VersionRange
         Pkg.add(PackageSpec(TEST_PKG.name, VersionSpec(VersionRange("0.3.0-0.3.2"))))
         @test Pkg.API.__installed()[TEST_PKG.name] == v"0.3.2"
+        # Check that adding another packages doesn't upgrade other packages
+        Pkg.add("Test")
+        @test Pkg.API.__installed()[TEST_PKG.name] == v"0.3.2"
         Pkg.update(; level = UPLEVEL_PATCH)
         @test Pkg.API.__installed()[TEST_PKG.name] == v"0.3.3"
         Pkg.update(; level = UPLEVEL_MINOR)
@@ -153,7 +162,6 @@ temp_pkg_dir() do project_path
 
     @testset "testing" begin
         # TODO: Check that preview = true doesn't actually execute the test
-        # TODO: Test-only dependencies
         Pkg.add(TEST_PKG.name)
         Pkg.test(TEST_PKG.name; coverage=true)
         pkgdir = Base.locate_package(Base.PkgId(TEST_PKG.uuid, TEST_PKG.name))
@@ -414,6 +422,51 @@ temp_pkg_dir() do project_path
     end
 end
 
+temp_pkg_dir() do project_path; cd(project_path) do
+    @testset "instantiating updated repo" begin
+        tmp = mktempdir()
+        cd(tmp)
+        depo1 = mktempdir()
+        depo2 = mktempdir()
+
+        empty!(DEPOT_PATH)
+        pushfirst!(DEPOT_PATH, depo1)
+        LibGit2.close(LibGit2.clone("https://github.com/JuliaLang/Example.jl", "Example.jl"))
+        mkdir("machine1")
+        cd("machine1")
+        Pkg.activate(".")
+        Pkg.add(PackageSpec(path="../Example.jl"))
+        cd("..")
+        cp("machine1", "machine2")
+        empty!(DEPOT_PATH)
+        pushfirst!(DEPOT_PATH, depo2)
+        cd("machine2")
+        Pkg.activate(".")
+        Pkg.instantiate()
+        cd("..")
+        cd("Example.jl")
+        open("README.md", "a") do io
+            print(io, "Hello")
+        end
+        LibGit2.with(LibGit2.GitRepo(".")) do repo
+            LibGit2.add!(repo, "*")
+            LibGit2.commit(repo, "changes"; author=TEST_SIG, committer=TEST_SIG)
+        end
+        cd("../machine1")
+        empty!(DEPOT_PATH)
+        pushfirst!(DEPOT_PATH, depo1)
+        Pkg.activate(".")
+        Pkg.update()
+        cd("..")
+        cp("machine1/Manifest.toml", "machine2/Manifest.toml"; force=true)
+        cd("machine2")
+        empty!(DEPOT_PATH)
+        pushfirst!(DEPOT_PATH, depo2)
+        Pkg.activate(".")
+        Pkg.instantiate()
+    end
+end end
+
 temp_pkg_dir() do project_path
     cd(project_path) do
         project = """
@@ -446,6 +499,11 @@ end
             Pkg.test("x3")
         end end end
     end
+end
+
+@testset "printing of stdlib paths, issue #605" begin
+    path = Pkg.Types.stdlib_path("Test")
+    @test Pkg.Types.pathrepr(path) == "`@stdlib/Test`"
 end
 
 include("repl.jl")

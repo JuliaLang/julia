@@ -90,8 +90,8 @@ function current_project(dir::AbstractString)
             file = joinpath(dir, proj)
             isfile_casesensitive(file) && return file
         end
-        # bail at home directory or top of git repo
-        (dir == home || ispath(joinpath(dir, ".git"))) && break
+        # bail at home directory
+        dir == home && break
         old, dir = dir, dirname(dir)
         dir == old && break
     end

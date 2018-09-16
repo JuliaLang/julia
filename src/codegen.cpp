@@ -5967,7 +5967,7 @@ static std::unique_ptr<Module> emit_function(
 
     // First go through and collect all branch targets, so we know where to
     // split basic blocks.
-    std::set<int> branch_targets;
+    std::set<int> branch_targets; // 1-indexed
     {
         for (size_t i = 0; i < stmtslen; ++i) {
             jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
@@ -5999,6 +5999,13 @@ static std::unique_ptr<Module> emit_function(
                 branch_targets.insert(dest);
                 if (i + 2 <= stmtslen)
                     branch_targets.insert(i + 2);
+            } else if (jl_is_phinode(stmt)) {
+                jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(stmt, 0);
+                for (size_t j = 0; j < jl_array_len(edges); ++j) {
+                    size_t edge = jl_unbox_long(jl_array_ptr_ref(edges, j));
+                    if (edge == i)
+                        branch_targets.insert(i + 1);
+                }
             }
         }
     }

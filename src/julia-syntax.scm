@@ -692,7 +692,7 @@
                             ,@(map make-decl field-names field-types))
                       (block
                        ,@locs
-                       (new ,name ,@field-names))))
+                       (new (outerref ,name) ,@field-names))))
          any-ctor)
         (list any-ctor))))
 
@@ -1916,16 +1916,19 @@
                                     (ssavalue? x))
                                 x (make-ssavalue)))
                        (ini (if (eq? x xx) '() `((= ,xx ,(expand-forms x)))))
+                       (n   (length lhss))
                        (st  (gensy)))
                   `(block
                     ,@ini
                     ,.(map (lambda (i lhs)
                              (expand-forms
                               (lower-tuple-assignment
-                               (list lhs st)
+                               (if (= i (- n 1))
+                                   (list lhs)
+                                   (list lhs st))
                                `(call (top indexed_iterate)
                                       ,xx ,(+ i 1) ,.(if (eq? i 0) '() `(,st))))))
-                           (iota (length lhss))
+                           (iota n)
                            lhss)
                     (unnecessary ,xx))))))
          ((typed_hcat)
@@ -2430,7 +2433,7 @@
          '(null))
         ((eq? (car e) 'require-existing-local)
          (if (not (memq (cadr e) env))
-             (error "no outer variable declaration exists for \"for outer\""))
+             (error "no outer local variable declaration exists for \"for outer\""))
          '(null))
         ((eq? (car e) 'lambda)
          (let* ((lv   (lam:vars e))

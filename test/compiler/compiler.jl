@@ -1990,3 +1990,36 @@ struct VoxelIndices{T <: Integer}
 end
 f28641(x::VoxelIndices, f) = getfield(x, f)
 @test Base.return_types(f28641, (Any,Symbol)) == Any[Tuple]
+
+# issue #29036
+function f29036(s, i)
+    val, i = iterate(s, i)
+    val
+end
+@test Base.return_types(f29036, (String, Int)) == Any[Char]
+
+# issue #26729
+module I26729
+struct Less{O}
+    is_less::O
+end
+
+struct By{T,O}
+    by::T
+    is_less::O
+end
+
+struct Reverse{O}
+    is_less::O
+end
+
+function get_order(by = identity, func = isless, rev = false)
+    ord = By(by, Less(func))
+    rev ? Reverse(ord) : ord
+end
+
+get_order_kwargs(; by = identity, func = isless, rev = false) = get_order(by, func, rev)
+
+# test that this doesn't cause an internal error
+get_order_kwargs()
+end

@@ -264,6 +264,14 @@ end
     s = Set([1,2,3,4])
     setdiff!(s, Set([2,4,5,6]))
     @test isequal(s,Set([1,3]))
+
+    # setdiff iterates the shorter set - make sure this algorithm works
+    sa, sb = Set([1,2,3,4,5,6,7]), Set([2,3,9])
+    @test Set([1,4,5,6,7]) == setdiff(sa, sb) !== sa
+    @test Set([1,4,5,6,7]) == setdiff!(sa, sb) === sa
+    sa, sb = Set([1,2,3,4,5,6,7]), Set([2,3,9])
+    @test Set([9]) == setdiff(sb, sa) !== sb
+    @test Set([9]) == setdiff!(sb, sa) === sb
 end
 
 @testset "ordering" begin

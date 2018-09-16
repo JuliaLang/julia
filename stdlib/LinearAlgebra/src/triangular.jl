@@ -58,7 +58,7 @@ UpperTriangular(U::LowerTriangular) = throw(ArgumentError(
 """
     LowerTriangular(A::AbstractMatrix)
 
-Construct a `LowerTriangular` view of the the matrix `A`.
+Construct a `LowerTriangular` view of the matrix `A`.
 
 # Examples
 ```jldoctest
@@ -79,7 +79,7 @@ LowerTriangular
 """
     UpperTriangular(A::AbstractMatrix)
 
-Construct an `UpperTriangular` view of the the matrix `A`.
+Construct an `UpperTriangular` view of the matrix `A`.
 
 # Examples
 ```jldoctest

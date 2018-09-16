@@ -41,7 +41,7 @@ function choosetests(choices = [])
         "intfuncs", "simdloop", "vecelement", "rational",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
         "operators", "path", "ccall", "parse", "loading", "bigint",
-        "bigfloat", "sorting", "spawn", "backtrace",
+        "sorting", "spawn", "backtrace",
         "file", "read", "version", "namedtuple",
         "mpfr", "broadcast", "complex",
         "floatapprox", "stdlib", "reflection", "regex", "float16",

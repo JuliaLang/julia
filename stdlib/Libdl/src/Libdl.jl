@@ -66,14 +66,15 @@ end
 """
     dlsym_e(handle, sym)
 
-Look up a symbol from a shared library handle, silently return `NULL` pointer on lookup failure.  It is preferred to use dlsym(handle, sym; throw_error=false).
+Look up a symbol from a shared library handle, silently return `C_NULL` on lookup failure.
+This method is now deprecated in favor of `dlsym(handle, sym; throw_error=false)`.
 """
 function dlsym_e(hnd::Ptr, s::Union{Symbol,AbstractString})
-    return dlsym(hnd, s; throw_error=false)
+    return something(dlsym(hnd, s; throw_error=false), C_NULL)
 end
 
 """
-    dlopen(libfile::AbstractString [, flags::Integer])
+    dlopen(libfile::AbstractString [, flags::Integer]; throw_error:Bool = true)
 
 Load a shared library, returning an opaque handle.
 
@@ -96,7 +97,8 @@ instance `RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL` allows the library's symbols to b
 for usage in other shared libraries, addressing situations where there are dependencies
 between shared libraries.
 
-If the library cannot be found, this method returns `nothing`.
+If the library cannot be found, this method throws an error, unless the keyword argument
+`throw_error` is set to `false`, in which case this method returns `nothing`.
 """
 function dlopen end
 
@@ -114,10 +116,10 @@ end
 """
     dlopen_e(libfile::AbstractString [, flags::Integer])
 
-Similar to [`dlopen`](@ref), except returns a `NULL` pointer instead of raising errors.
-It is preferred to directly call dlopen(libfile, flags; throw_error=false)`
+Similar to [`dlopen`](@ref), except returns `C_NULL` instead of raising errors.
+This method is now deprecated in favor of `dlsym(handle, sym; throw_error=false)`.
 """
-dlopen_e(args...) = dlopen(args...; throw_error=false)
+dlopen_e(args...) = something(dlopen(args...; throw_error=false), C_NULL)
 
 """
     dlclose(handle)

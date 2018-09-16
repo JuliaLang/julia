@@ -320,7 +320,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
 
     # test passing arguments
     mktempdir() do dir
-        testfile = joinpath(dir, tempname())
+        testfile, _ = mktemp(dir)
         # write a julia source file that just prints ARGS to stdout
         write(testfile, """
             println(ARGS)

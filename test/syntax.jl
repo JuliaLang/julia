@@ -1502,6 +1502,12 @@ function test27710()
 end
 @test test27710() === Int64
 
+# issue #29064
+struct X29064
+    X29064::Int
+end
+@test X29064(1) isa X29064
+
 # issue #27268
 function f27268()
     g(col::AbstractArray{<:Real}) = col
@@ -1647,6 +1653,14 @@ end
 @test Meta.isexpr(Meta.parse("1 == 2 ?"), :incomplete)
 @test Meta.isexpr(Meta.parse("1 == 2 ? 3 :"), :incomplete)
 
+# issue #28991
+eval(Expr(:toplevel,
+          Expr(:module, true, :Mod28991,
+               Expr(:block,
+                    Expr(:export, :Inner),
+                    Expr(:abstract, :Inner)))))
+@test names(Mod28991) == Symbol[:Inner, :Mod28991]
+
 # issue #28593
 macro a28593()
     quote
@@ -1673,3 +1687,44 @@ end
 @test A28593.var.name === :S
 @test B28593.var.name === :S
 @test C28593.var.name === :S
+
+# issue #25955
+macro noeffect25955(e)
+    return e
+end
+
+struct foo25955
+end
+
+@noeffect25955 function (f::foo25955)()
+    42
+end
+
+@test foo25955()() == 42
+
+# issue #28833
+macro m28833(expr)
+    esc(:(global a28833))
+end
+@m28833 1+1
+
+# issue #28900
+macro foo28900(x)
+    quote
+        $x
+    end
+end
+f28900(; kwarg) = kwarg
+let g = @foo28900 f28900(kwarg = x->2x)
+    @test g(10) == 20
+end
+
+# issue #26037
+x26037() = 10
+function test_26037()
+    [x26037() for _ in 1:3]
+    for x26037 in 1:3
+       x26037 += x26037
+    end
+end
+@test test_26037() === nothing  # no UndefVarError

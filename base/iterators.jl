@@ -880,6 +880,7 @@ _flatteneltype(I, et) = EltypeUnknown()
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:NTuple{N,Any}}) where {N} = HasLength()
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Tuple}) = SizeUnknown()
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Number}) = HasLength()
+flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{Union{}}) = SizeUnknown()
 flatten_iteratorsize(a, b) = SizeUnknown()
 
 _flatten_iteratorsize(sz, ::EltypeUnknown, I) = SizeUnknown()

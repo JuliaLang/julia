@@ -133,8 +133,7 @@ function BigFloat(x::Float64)
     z = BigFloat()
     ccall((:mpfr_set_d, :libmpfr), Int32, (Ref{BigFloat}, Float64, Int32), z, x, ROUNDING_MODE[])
     if isnan(x) && signbit(x) != signbit(z)
-        # for some reason doing mpfr_neg in-place doesn't work here
-        return -z
+        z.sign = -z.sign
     end
     return z
 end

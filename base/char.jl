@@ -2,7 +2,7 @@
 
 """
 The `AbstractChar` type is the supertype of all character implementations
-in Julia.   A character represents a Unicode code point, and can be converted
+in Julia. A character represents a Unicode code point, and can be converted
 to an integer via the [`codepoint`](@ref) function in order to obtain the
 numerical value of the code point, or constructed from the same integer.
 These numerical values determine how characters are compared with `<` and `==`,
@@ -11,7 +11,7 @@ method and a `T(::UInt32)` constructor, at minimum.
 
 A given `AbstractChar` subtype may be capable of representing only a subset
 of Unicode, in which case conversion from an unsupported `UInt32` value
-may throw an error.  Conversely, the built-in [`Char`](@ref) type represents
+may throw an error. Conversely, the built-in [`Char`](@ref) type represents
 a *superset* of Unicode (in order to losslessly encode invalid byte streams),
 in which case conversion of a non-Unicode value *to* `UInt32` throws an error.
 The [`isvalid`](@ref) function can be used to check which codepoints are
@@ -34,7 +34,7 @@ AbstractChar
     Char(c::Union{Number,AbstractChar})
 
 `Char` is a 32-bit [`AbstractChar`](@ref) type that is the default representation
-of characters in Julia.  `Char` is the type used for character literals like `'x'`
+of characters in Julia. `Char` is the type used for character literals like `'x'`
 and it is also the element type of [`String`](@ref).
 
 In order to losslessly represent arbitrary byte streams stored in a `String`,
@@ -50,18 +50,27 @@ Char
 (::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(codepoint(x))
 (::Type{T})(x::T) where {T<:AbstractChar} = x
 
-codepoint(c::Char) = UInt32(c)
+"""
+    ncodeunits(c::Char) -> Int
+
+Return the number of code units required to encode a character as UTF-8.
+This is the number of bytes which will be printed if the character is written
+to an output stream, or `ncodeunits(string(c))` but computed efficiently.
+"""
+ncodeunits(c::Char) = write(devnull, c) # this is surprisingly efficient
 
 """
-    codepoint(c::AbstractChar)
+    codepoint(c::AbstractChar) -> Integer
 
 Return the Unicode codepoint (an unsigned integer) corresponding
 to the character `c` (or throw an exception if `c` does not represent
-a valid character).   For `Char`, this is a `UInt32` value, but
+a valid character). For `Char`, this is a `UInt32` value, but
 `AbstractChar` types that represent only a subset of Unicode may
 return a different-sized integer (e.g. `UInt8`).
 """
-codepoint # defined for Char in boot.jl
+function codepoint end
+
+codepoint(c::Char) = UInt32(c)
 
 struct InvalidCharError{T<:AbstractChar} <: Exception
     char::T
@@ -91,7 +100,7 @@ end
 #           not to support malformed or overlong encodings.
 
 """
-    ismalformed(c::AbstractChar)
+    ismalformed(c::AbstractChar) -> Bool
 
 Return `true` if `c` represents malformed (non-Unicode) data according to the
 encoding used by `c`.  Defaults to `false` for non-`Char` types.  See also
@@ -100,9 +109,9 @@ encoding used by `c`.  Defaults to `false` for non-`Char` types.  See also
 ismalformed(c::AbstractChar) = false
 
 """
-    isoverlong(c::AbstractChar)
+    isoverlong(c::AbstractChar) -> Bool
 
-Return `true` if `c` represents an overlong UTF-8 sequence.  Defaults
+Return `true` if `c` represents an overlong UTF-8 sequence. Defaults
 to `false` for non-`Char` types.  See also [`decode_overlong`](@ref)
 and [`show_invalid`](@ref).
 """
@@ -123,6 +132,15 @@ function UInt32(c::Char)
     ((u & 0x007f0000) >> 4) | ((u & 0x7f000000) >> 6)
 end
 
+"""
+    decode_overlong(c::AbstractChar) -> Integer
+
+When [`isoverlong(c)`](@ref) is `true`, `decode_overlong(c)` returns
+the Unicode codepoint value of `c`. `AbstractChar` implementations
+that support overlong encodings should implement `Base.decode_overlong`.
+"""
+function decode_overlong end
+
 function decode_overlong(c::Char)
     u = reinterpret(UInt32, c)
     l1 = leading_ones(u)
@@ -132,15 +150,6 @@ function decode_overlong(c::Char)
     ((u & 0x0000007f) >> 0) | ((u & 0x00007f00) >> 2) |
     ((u & 0x007f0000) >> 4) | ((u & 0x7f000000) >> 6)
 end
-
-"""
-    decode_overlong(c::AbstractChar)
-
-When [`isoverlong(c)`](@ref) is `true`, `decode_overlong(c)` returns
-the Unicode codepoint value of `c`.   `AbstractChar` implementations
-that support overlong encodings should implement `Base.decode_overlong`.
-"""
-decode_overlong
 
 function Char(u::UInt32)
     u < 0x80 && return reinterpret(Char, u << 24)
@@ -195,6 +204,8 @@ in(x::AbstractChar, y::AbstractChar) = x == y
 isless(x::Char, y::Char) = reinterpret(UInt32, x) < reinterpret(UInt32, y)
 hash(x::Char, h::UInt) =
     hash_uint64(((reinterpret(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
+
+first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8
 
 # fallbacks:
 isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))
@@ -267,7 +278,7 @@ function show(io::IO, c::AbstractChar)
         write(io, 0x27)
     else # unprintable, well-formed, non-overlong Unicode
         u = codepoint(c)
-        write(io, 0x27, 0x5c, c <= '\x7f' ? 0x78 : c <= '\uffff' ? 0x75 : 0x55)
+        write(io, 0x27, 0x5c, u <= 0x7f ? 0x78 : u <= 0xffff ? 0x75 : 0x55)
         d = max(2, 8 - (leading_zeros(u) >> 2))
         while 0 < d
             write(io, hex_chars[((u >> ((d -= 1) << 2)) & 0xf) + 1])

@@ -178,9 +178,9 @@ let dl = C_NULL
         @test_throws ErrorException Libdl.dlsym(dl, :foo)
 
         fptr = Libdl.dlsym_e(dl, :set_verbose)
-        @test fptr !== nothing
+        @test fptr != C_NULL
         fptr = Libdl.dlsym_e(dl, :foo)
-        @test fptr === nothing
+        @test fptr == C_NULL
     finally
         Libdl.dlclose(dl)
     end
