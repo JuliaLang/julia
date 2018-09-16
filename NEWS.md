@@ -46,6 +46,8 @@ Standard library changes
     returns a `BigFloat` with precision equal to `precision(BigFloat)` ([#29127]). The optional
     `precision` argument to override the global setting is now a keyword instead of positional
     argument ([#29157]).
+  * The use of scientific notation when printing `BigFloat` values is now consistent with other floating point
+    types ([#29211]).
   * `Regex` and `TimeZone` now behave like scalars when used in broadcasting ([#29913], [#30159]).
   * `Char` now behaves like a read-only 0-dimensional array ([#29819]).
   * `parse` now allows strings representing integer 0 and 1 for type `Bool` ([#29980]).

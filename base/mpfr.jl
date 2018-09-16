@@ -961,8 +961,20 @@ function _prettify_bigfloat(s::String)::String
     if endswith(mantissa, '.')
         mantissa = string(mantissa, '0')
     end
-    if exponent == "+00"
-        mantissa
+    expo = parse(Int, exponent)
+    if -5 < expo < 6
+        expo == 0 && return mantissa
+        int, frac = split(mantissa, '.')
+        if expo > 0
+            expo < length(frac) ?
+                string(int, frac[1:expo], '.', frac[expo+1:end]) :
+                string(int, frac, '0'^(expo-length(frac)), '.', '0')
+        else
+            neg = startswith(int, '-')
+            neg == true && (int = lstrip(int, '-'))
+            @assert length(int) == 1
+            string(neg ? '-' : "", '0', '.', '0'^(-expo-1), int, frac)
+        end
     else
         string(mantissa, 'e', exponent)
     end
