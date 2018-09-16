@@ -6714,3 +6714,19 @@ struct T29145{A,B}
     end
 end
 @test_throws TypeError T29145()
+
+# interpreted but inferred/optimized top-level expressions with vars
+let code = """
+           while true
+               try
+                   this_is_undefined_29213
+                   ed = 0
+                   break
+               finally
+                   break
+               end
+           end
+           print(42)
+           """
+    @test read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String) == "42"
+end
