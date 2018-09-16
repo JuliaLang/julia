@@ -794,7 +794,7 @@ devnull
 """
     Nothing
 
-A type with no fields that is the type [`nothing`](@ref).
+A type with no fields that is the type of [`nothing`](@ref).
 """
 Nothing
 
