@@ -743,26 +743,23 @@ julia> digits!([2,2,2,2,2,2], 10, base = 2)
  0
 ```
 """
-function digits!(a::AbstractVector{T}, n::Integer; base::Integer = 10, _skipfirst=false) where T<:Integer
+function digits!(a::AbstractVector{T}, n::Integer; base::Integer = 10) where T<:Integer
     2 <= abs(base) || throw(ArgumentError("base must be ≥ 2 or ≤ -2, got $base"))
     hastypemax(T) && abs(base) - 1 > typemax(T) &&
         throw(ArgumentError("type $T too small for base $base"))
     isempty(a) && return a
-
+    skipfirst = false
     if base < 0 && n isa Unsigned
         d = mod(n, -base)
-        ns = -signed(fld(n, -base))
-        digits!(a, ns, base = base, _skipfirst=true)
-        a[firstindex(a)] = d
-        return a
+        n = -signed(fld(n, -base))
+        skipfirst = true
     end
 
     for i in eachindex(a)
-        if _skipfirst
-            _skipfirst = false
-            continue
-        end
-        if base > 0
+        if skipfirst
+            skipfirst = false
+            a[i] = d
+        elseif base > 0
             a[i] = rem(n, base)
             n = div(n, base)
         else
