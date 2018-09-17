@@ -789,6 +789,42 @@ run(pipeline(`cat test.txt`, devnull))
 """
 devnull
 
+""" 
+    `\$`
+The `\$` before a variable will interpolate values into string literals.  Also constructs `Expr`
+objects with value arguments, but note it will error on unquoted expressions. Splatting the interpolation
+with [`...`](@ref) will make an array of expressions into arguments of a surrounding expression. See the
+manual section on [string interpolation](https://docs.julialang.org/en/stable/manual/strings/#string-interpolation-1) and
+[expression interpolation](https://docs.julialang.org/en/stable/manual/metaprogramming/#Interpolation-1) for further details and examples.
+
+# Examples
+```julia-repl
+
+julia> "1 + 2 = $(1 + 2)"
+"1 + 2 = 3"
+
+julia> v = [1,2,3]
+3-element Array{Int64,1}:
+1
+2
+3
+
+julia> "v: $v"
+"v: [1, 2, 3]"
+
+julia> a = 1;
+
+julia> ex = :($a + b)
+:(1 + b)
+
+julia> args = [:x, :y, :z];
+
+julia> :(f(1, $(args...)))
+:(f(1, x, y, z))
+```
+"""
+kw"$"
+
 # doc strings for code in boot.jl and built-ins
 
 """
