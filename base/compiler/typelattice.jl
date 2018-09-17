@@ -127,24 +127,33 @@ function ⊑(@nospecialize(a), @nospecialize(b))
     end
     if isa(a, PartialTuple)
         if isa(b, PartialTuple)
-            if !(length(a.fields) == length(b.fields) && a.typ <: b.typ)
-                return false
-            end
-            for i in 1:length(b.fields)
+            a.typ <: b.typ || return false
+            alen, blen = length(a.fields), length(b.fields)
+            #if !(length(a.fields) == length(b.fields) && a.typ <: b.typ)
+            #    return false
+            #end
+            for i in 1:min(alen, blen)
+                ai, bi = a.fields[i], b.fields[i]
+                (isvarargtype(ai) || isvarargtype(bi)) && break
                 # XXX: let's handle varargs later
-                ⊑(a.fields[i], b.fields[i]) || return false
+                ai ⊑ bi || return false
             end
             return true
         end
         return isa(b, Type) && a.typ <: b
     elseif isa(b, PartialTuple)
         if isa(a, Const)
+            a.val isa Tuple || return false
+            return PartialTuple(typeof(a.val), Any[ Const(getfield(a.val, i)) for i = 1:nfields(a.val) ]) ⊑ b
+            #=
+            aval = a.val
             nfields(a.val) == length(b.fields) || return false
             for i in 1:nfields(a.val)
                 # XXX: let's handle varargs later
                 ⊑(Const(getfield(a.val, i)), b.fields[i]) || return false
             end
             return true
+            =#
         end
         return false
     end

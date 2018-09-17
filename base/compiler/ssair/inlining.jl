@@ -804,7 +804,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             ok = true
             for i = 3:length(atypes)
                 typ = atypes[i]
-                typ isa PartialTuple && continue
+                #typ isa PartialTuple && continue
                 typ = widenconst(typ)
                 # TODO: We could basically run the iteration protocol here
                 if !isa(typ, DataType) || typ.name !== Tuple.name ||
@@ -951,7 +951,7 @@ end
 
 function mk_tuplecall!(compact::IncrementalCompact, args::Vector{Any}, line_idx::Int32)
     e = Expr(:call, TOP_TUPLE, args...)
-    etyp = tuple_tfunc(Any[compact_exprtype(compact, args[i]) for i in 1:length(args)])
+    etyp = widenconst(tuple_tfunc(Any[widenconst(compact_exprtype(compact, args[i])) for i in 1:length(args)]))
     return insert_node_here!(compact, e, etyp, line_idx)
 end
 
@@ -1133,7 +1133,7 @@ function find_inferred(linfo::MethodInstance, @nospecialize(atypes), sv::Optimiz
         a = atypes[i]
         if isa(a, Const) && !isdefined(typeof(a.val), :instance) && !(isa(a.val, Type) && issingletontype(a.val))
             # have new information from argtypes that wasn't available from the signature
-            haveconst = true
+            #haveconst = true
             break
         end
     end
