@@ -23,7 +23,7 @@ function compute_inf_result_argtypes(linfo::MethodInstance, caller_argtypes = no
     nargs::Int = toplevel ? 0 : linfo.def.nargs
     if !toplevel && caller_argtypes !== nothing
         for i in 1:length(caller_argtypes)
-            a = maybe_widen_conditional(given_argtypes[i])
+            a = maybe_widen_conditional(caller_argtypes[i])
             if i > length(given_argtypes)
                 push!(given_argtypes, a)
             elseif a isa Const
