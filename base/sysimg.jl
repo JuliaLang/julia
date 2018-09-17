@@ -466,12 +466,12 @@ function __init__()
     end
     # for the few uses of Libc.rand in Base:
     Libc.srand()
-    # Base library init
-    reinit_stdio()
-    Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
     # initialize loading
     init_depot_path()
     init_load_path()
+    # Base library init
+    reinit_stdio()
+    Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
     nothing
 end
 
