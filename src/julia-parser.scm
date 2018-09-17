@@ -154,7 +154,7 @@
 
 (define initial-reserved-word? (Set initial-reserved-words))
 
-(define reserved-words (append initial-reserved-words '(end else catch finally true false))) ;; todo: make this more complete
+(define reserved-words (append initial-reserved-words '(end else elseif catch finally true false))) ;; todo: make this more complete
 
 (define reserved-word? (Set reserved-words))
 
