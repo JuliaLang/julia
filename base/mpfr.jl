@@ -108,7 +108,7 @@ mutable struct BigFloat <: AbstractFloat
         return new(prec, sign, exp, pointer(d), d)
     end
 
-    function BigFloat(; precision::Integer=precision(BigFloat))
+    function BigFloat(; precision::Integer=DEFAULT_PRECISION[])
         nb = ccall((:mpfr_custom_get_size,:libmpfr), Csize_t, (Clong,), precision)
         nb = (nb + Core.sizeof(Limb) - 1) ÷ Core.sizeof(Limb) # align to number of Limb allocations required for this
         #d = Vector{Limb}(undef, nb)
@@ -175,7 +175,7 @@ BigFloat(x, r::RoundingMode)
 widen(::Type{Float64}) = BigFloat
 widen(::Type{BigFloat}) = BigFloat
 
-function BigFloat(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=precision(BigFloat))
+function BigFloat(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
     if precision == MPFR.precision(x)
         x
     else
@@ -190,7 +190,7 @@ end
 # convert to BigFloat
 for (fJ, fC) in ((:si,:Clong), (:ui,:Culong))
     @eval begin
-        function BigFloat(x::($fC), r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=precision(BigFloat))
+        function BigFloat(x::($fC), r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
             z = BigFloat(;precision=precision)
             ccall(($(string(:mpfr_set_,fJ)), :libmpfr), Int32, (Ref{BigFloat}, $fC, MPFRRoundingMode), z, x, r)
             return z
@@ -198,7 +198,7 @@ for (fJ, fC) in ((:si,:Clong), (:ui,:Culong))
     end
 end
 
-function BigFloat(x::Float64, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=precision(BigFloat))
+function BigFloat(x::Float64, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
     z = BigFloat(;precision=precision)
     ccall((:mpfr_set_d, :libmpfr), Int32, (Ref{BigFloat}, Float64, MPFRRoundingMode), z, x, r)
     if isnan(x) && signbit(x) != signbit(z)
@@ -207,34 +207,34 @@ function BigFloat(x::Float64, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::In
     return z
 end
 
-function BigFloat(x::BigInt, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=precision(BigFloat))
+function BigFloat(x::BigInt, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
     z = BigFloat(;precision=precision)
     ccall((:mpfr_set_z, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigInt}, MPFRRoundingMode), z, x, r)
     return z
 end
 
-BigFloat(x::Integer, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=precision(BigFloat)) =
+BigFloat(x::Integer, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(BigInt(x), r; precision=precision)
 
-BigFloat(x::Union{Bool,Int8,Int16,Int32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=precision(BigFloat)) =
+BigFloat(x::Union{Bool,Int8,Int16,Int32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(convert(Clong, x), r; precision=precision)
-BigFloat(x::Union{UInt8,UInt16,UInt32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=precision(BigFloat)) =
+BigFloat(x::Union{UInt8,UInt16,UInt32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(convert(Culong, x), r; precision=precision)
 
-BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=precision(BigFloat)) =
+BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(Float64(x), r; precision=precision)
 
-BigFloat(x::Rational, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=precision(BigFloat)) =
+BigFloat(x::Rational, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(numerator(x), r ;precision=precision) / BigFloat(denominator(x), r ;precision=precision)
 
-function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=precision(BigFloat), rounding::MPFRRoundingMode=ROUNDING_MODE[])
+function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=DEFAULT_PRECISION[], rounding::MPFRRoundingMode=ROUNDING_MODE[])
     !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s), base = base)
     z = BigFloat(precision=precision)
     err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ref{BigFloat}, Cstring, Int32, MPFRRoundingMode), z, s, base, rounding)
     err == 0 ? z : nothing
 end
 
-BigFloat(x::AbstractString, r::MPFRRoundingMode=ROUNDING_MODE[]; precision=precision(BigFloat)) =
+BigFloat(x::AbstractString, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
     parse(BigFloat, x; precision=precision, rounding=r)
 
 Rational(x::BigFloat) = convert(Rational{BigInt}, x)
@@ -242,9 +242,9 @@ AbstractFloat(x::BigInt) = BigFloat(x)
 
 float(::Type{BigInt}) = BigFloat
 
-BigFloat(x::Real, r::RoundingMode; precision::Integer=precision(BigFloat)) =
+BigFloat(x::Real, r::RoundingMode; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(x, convert(MPFRRoundingMode, r); precision=precision)
-BigFloat(x::AbstractString, r::RoundingMode; precision::Integer=precision(BigFloat)) =
+BigFloat(x::AbstractString, r::RoundingMode; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(x, convert(MPFRRoundingMode, r); precision=precision)
 
 # TODO: deprecate in 2.0
@@ -806,7 +806,7 @@ end
 
 Get the precision (in bits) currently used for [`BigFloat`](@ref) arithmetic.
 """
-precision(::Type{BigFloat}) = DEFAULT_PRECISION[] # precision of the type BigFloat itself
+precision(::Type{BigFloat}) = Int(DEFAULT_PRECISION[]) # precision of the type BigFloat itself
 
 """
     setprecision([T=BigFloat,] precision::Int)
