@@ -39,14 +39,21 @@ function __init__()
     nothing
 end
 
-# Matches the MPFR_RNDN, etc.
-# https://www.mpfr.org/mpfr-current/mpfr.html#Rounding-Modes
+"""
+    MPFR.MPFRRoundingMode
+
+Matches the `mpfr_rnd_t` enum provided by MPFR, see
+https://www.mpfr.org/mpfr-current/mpfr.html#Rounding-Modes
+
+This is for internal use, and ensures that `ROUNDING_MODE[]` is type-stable.
+"""
 @enum MPFRRoundingMode begin
     MPFRRoundNearest
     MPFRRoundToZero
     MPFRRoundUp
     MPFRRoundDown
     MPFRRoundFromZero
+    MPFRRoundFaithful
 end
 
 convert(::Type{MPFRRoundingMode}, ::RoundingMode{:Nearest})  = MPFRRoundNearest
@@ -140,8 +147,8 @@ rounded if the conversion cannot be done exactly. If not provided, these are set
 `BigFloat`, in which case it will return a value with the precision set to the current
 global precision; `convert` will always return `x`.
 
-`BigFloat(x::AbstractString)` is identical to [`parse`](@ref), but is provided for
-convenience since decimal literals are converted to floating point numbers when parsed.
+`BigFloat(x::AbstractString)` is identical to [`parse`](@ref). This is provided for
+convenience since decimal literals are converted to `Float64` when parsed, so
 `BigFloat(2.1)` may not yield what you expect.
 
 ```jldoctest
@@ -249,6 +256,12 @@ BigFloat(x::Real, prec::Int) = BigFloat(x; precision=prec)
 BigFloat(x::Real, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
 
 ## BigFloat -> Integer
+"""
+    MPFR.unsafe_cast(T, x::BigFloat, r::RoundingMode)
+
+Convert `x` to integer type `T`, rounding the direction of `r`. If the value is not
+representable by T, an arbitrary value will be returned.
+"""
 unsafe_cast(T, x::BigFloat, r::RoundingMode) = unsafe_cast(T, x, convert(MPFRRoundingMode, r))
 
 function unsafe_cast(::Type{Int64}, x::BigFloat, r::MPFRRoundingMode)
