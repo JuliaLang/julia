@@ -467,7 +467,8 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
 
 JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 {
-    jl_value_t *s = jl_gc_alloc(jl_get_ptls_states(), sizeof(size_t)+len+1, jl_string_type);
+    size_t sz = sizeof(size_t) + len + 1; // add space for trailing \nul protector and size
+    jl_value_t *s = jl_gc_alloc_(jl_get_ptls_states(), sz, jl_string_type); // force inlining
     *(size_t*)s = len;
     memcpy((char*)s + sizeof(size_t), str, len);
     ((char*)s + sizeof(size_t))[len] = 0;
@@ -476,7 +477,8 @@ JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 
 JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
 {
-    jl_value_t *s = jl_gc_alloc(jl_get_ptls_states(), sizeof(size_t)+len+1, jl_string_type);
+    size_t sz = sizeof(size_t) + len + 1; // add space for trailing \nul protector and size
+    jl_value_t *s = jl_gc_alloc_(jl_get_ptls_states(), sz, jl_string_type); // force inlining
     *(size_t*)s = len;
     ((char*)s + sizeof(size_t))[len] = 0;
     return s;
