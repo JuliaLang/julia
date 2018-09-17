@@ -271,11 +271,18 @@ end
     @test ncodeunits('\U10ffff') == 4
     # invalid encodings
     @test ncodeunits(reinterpret(Char, 0x80_00_00_00)) == 1
-    @test ncodeunits(reinterpret(Char, 0x81_00_00_00)) == 1
-    @test ncodeunits(reinterpret(Char, 0x80_80_00_00)) == 2
-    @test ncodeunits(reinterpret(Char, 0x80_01_00_00)) == 2
-    @test ncodeunits(reinterpret(Char, 0x80_00_80_00)) == 3
-    @test ncodeunits(reinterpret(Char, 0x80_00_01_00)) == 3
-    @test ncodeunits(reinterpret(Char, 0x80_00_00_80)) == 4
-    @test ncodeunits(reinterpret(Char, 0x80_00_00_01)) == 4
+    @test ncodeunits(reinterpret(Char, 0x01_00_00_00)) == 1
+    @test ncodeunits(reinterpret(Char, 0x00_80_00_00)) == 2
+    @test ncodeunits(reinterpret(Char, 0x00_01_00_00)) == 2
+    @test ncodeunits(reinterpret(Char, 0x00_00_80_00)) == 3
+    @test ncodeunits(reinterpret(Char, 0x00_00_01_00)) == 3
+    @test ncodeunits(reinterpret(Char, 0x00_00_00_80)) == 4
+    @test ncodeunits(reinterpret(Char, 0x00_00_00_01)) == 4
+end
+
+@testset "reinterpret(Char, ::UInt32)" begin
+    for s = 0:31
+        u = one(UInt32) << s
+        @test reinterpret(UInt32, reinterpret(Char, u)) === u
+    end
 end
