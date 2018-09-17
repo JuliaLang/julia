@@ -708,14 +708,16 @@ function parse_package!(ctx, pkg, project_path)
         if !isempty(ctx.old_pkg2_clone_name) # remove when legacy CI script support is removed
             pkg.name = ctx.old_pkg2_clone_name
         else
-            # This is an old style package, get the name from src/PackageName
-            if isdir_windows_workaround(pkg.repo.url)
-                m = match(reg_pkg, abspath(pkg.repo.url))
-            else
-                m = match(reg_pkg, pkg.repo.url)
+            # This is an old style package, if not set, get the name from src/PackageName
+            if !has_name(pkg)
+                if isdir_windows_workaround(pkg.repo.url)
+                    m = match(reg_pkg, abspath(pkg.repo.url))
+                else
+                    m = match(reg_pkg, pkg.repo.url)
+                end
+                m === nothing && pkgerror("cannot determine package name from URL or path: $(pkg.repo.url), provide a name argument to `PackageSpec`")
+                pkg.name = m.captures[1]
             end
-            m === nothing && pkgerror("cannot determine package name from URL or path: $(pkg.repo.url)")
-            pkg.name = m.captures[1]
         end
         reg_uuids = registered_uuids(env, pkg.name)
         is_registered = !isempty(reg_uuids)
