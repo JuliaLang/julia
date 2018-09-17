@@ -37,6 +37,21 @@ ans
 
 ## Keywords
 
+This is the list of reserved keywords in Julia:
+`baremodule`, `begin`, `break`, `catch`, `const`, `continue`, `do`,
+`else`, `elseif`, `end`, `export`, `false`, `finally`, `for`, `function`,
+`global`, `if`, `import`, `let`, `local`, `macro`, `module`, `quote`,
+`return`, `struct`, `true`, `try`, `using`, `while`.
+Those keywords are not allowed to be used as variable names.
+
+The follwoing two word sequences are reserved:
+`abstract type`, `mutable struct`, `primitive type`.
+However, you can create variables with names:
+`abstract`, `mutable`, `primitive` and `type`.
+
+Finally `where` is resolved contextually as a keyword in parametric method
+definition syntax, but creation of variable named `where` is allowed.
+
 ```@docs
 module
 export
@@ -65,6 +80,7 @@ struct
 mutable struct
 abstract type
 primitive type
+where
 ...
 ;
 ```
