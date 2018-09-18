@@ -124,11 +124,6 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname, jl_value_t *expec
     jl_type_error_rt(fname, "", expected, got);
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_type_error_new_expr(jl_value_t *ty, jl_value_t *got)
-{
-    jl_type_error_rt("Type", "new", ty, got);
-}
-
 JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var)
 {
     jl_throw(jl_new_struct(jl_undefvarerror_type, var));
@@ -192,7 +187,7 @@ JL_DLLEXPORT void JL_NORETURN jl_eof_error(void)
     jl_datatype_t *eof_error =
         (jl_datatype_t*)jl_get_global(jl_base_module, jl_symbol("EOFError"));
     assert(eof_error != NULL);
-    jl_exceptionf(eof_error, "");
+    jl_throw(jl_new_struct(eof_error));
 }
 
 // get kwsorter field, with appropriate error check and message

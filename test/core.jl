@@ -6730,3 +6730,12 @@ let code = """
            """
     @test read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String) == "42"
 end
+
+# issue #29175
+function f29175(tuple::T) where {T<:Tuple}
+    prefix::Tuple{T.parameters[1:end-1]...} = tuple[1:length(T.parameters)-1]
+    x = prefix
+    prefix = x  # force another conversion to declared type
+    return prefix
+end
+@test f29175((1,2,3)) === (1,2)
