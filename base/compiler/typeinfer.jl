@@ -503,11 +503,13 @@ end
 #### entry points for inferring a MethodInstance given a type signature ####
 
 # compute an inferred AST and return type
-function typeinf_code(method::Method, @nospecialize(atypes), sparams::SimpleVector, run_optimizer::Bool, params::Params)
-    code = code_for_method(method, atypes, sparams, params.world)
+function typeinf_code(method::Method, @nospecialize(msig), sparams::SimpleVector,
+                      run_optimizer::Bool, params::Params,
+                      atypes::Union{Nothing, Vector{Any}} = nothing)
+    code = code_for_method(method, msig, sparams, params.world)
     code === nothing && return (nothing, Any)
     ccall(:jl_typeinf_begin, Cvoid, ())
-    result = InferenceResult(code)
+    result = atypes === nothing ? InferenceResult(code) : InferenceResult(code, atypes)
     frame = InferenceState(result, false, params)
     frame === nothing && return (nothing, Any)
     if typeinf(frame) && run_optimizer

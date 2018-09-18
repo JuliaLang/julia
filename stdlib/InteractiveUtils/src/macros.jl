@@ -6,65 +6,179 @@ import Base: typesof, insert!
 
 separate_kwargs(args...; kwargs...) = (args, kwargs.data)
 
-function gen_call_with_extracted_types(__module__, fcn, ex0)
+gen_call_with_extracted_types(__module__, fcn, ex0; kws...) = _gen_call_with_extracted_types(__module__, fcn, ex0)[1]
+
+const _cat_msg = "constant interpolation not yet allowed for concat syntax"
+const _kw_msg = "constant interpolation not yet allowed for keyword arguments"
+const _disallowed_msg = "constant interpolation is not yet supported for this macro"
+function strip_dollar_add_error!(setup, exarg, msg = _kw_msg)
+    if isa(exarg, Expr) && exarg.head == :$
+        # TODO: Make this work
+        push!(setup.args, Expr(:call, :error, msg))
+        # Strip `$` for better error message
+        return esc(exarg.args[1])
+    end
+    return esc(exarg)
+end
+
+function process_args!(setup, exargs, allow_const_interp)
+    allow_const_interp && push!(setup.args, :(resize!(argvals, $(length(exargs)))))
+    found_any = false
+    for (idx, arg) in pairs(exargs)
+        if isa(arg, Expr) && arg.head === :$
+            if allow_const_interp
+                sym = gensym()
+                push!(setup.args, quote
+                    $sym = $(esc(arg.args[1]))
+                    argvals[$idx] = $sym
+                end)
+                exargs[idx] = sym
+                found_any = true
+            else
+                exargs[idx] = strip_dollar_add_error!(setup,
+                    arg, _disallowed_msg)
+            end
+        elseif isa(arg, Expr) && arg.head == :kw
+            exargs[idx] = Expr(:kw, arg.args[1],
+                strip_dollar_add_error!(setup, arg.args[2]))
+        elseif isa(arg, Expr) && arg.head == :parameters
+            for i in 1:length(arg.args)
+                parg = arg.args[i]
+                if isa(parg, Expr) && parg.head == :kw
+                    parg = Expr(:kw, parg.args[1],
+                        strip_dollar_add_error!(setup, parg.args[2]))
+                else
+                    parg = strip_dollar_add_error!(setup, parg)
+                end
+                arg.args[i] = parg
+            end
+        elseif arg !== nothing
+            exargs[idx] = esc(exargs[idx])
+        end
+    end
+    return found_any
+end
+
+function combine_setup_call(setup, call)
+    # It would be ok to always include the setup code, but we sometimes
+    # show the output of the (simple form of) these macros to show how
+    # they work under the hood and we'd like that to be as clean as
+    # possible.
+    all_code = isempty(setup.args) ? call : Expr(:block, setup, call)
+    (all_code, call)
+end
+function _gen_call_with_extracted_types(__module__, fcn, ex0; allow_const_interp=false)
+    setup = allow_const_interp ? quote
+        argvals = Vector{Any}(undef, 0)
+    end : Expr(:block)
+    found_any = false
     if isa(ex0, Expr)
         if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
-            return quote
-                local arg1 = $(esc(ex0.args[1]))
-                local args, kwargs = $separate_kwargs($(map(esc, ex0.args[2:end])...))
-                $(fcn)(Core.kwfunc(arg1),
-                       Tuple{typeof(kwargs), Core.Typeof(arg1), map(Core.Typeof, args)...})
-            end
+            exargs = copy(ex0.args)
+            found_any = process_args!(setup, exargs, allow_const_interp)
+            push!(setup.args, quote
+                local arg1 = $(exargs[1])
+                local args, kwargs = $separate_kwargs($(exargs[2:end]...))
+            end)
+            call = :($(fcn)(Core.kwfunc(arg1),
+                       Tuple{typeof(kwargs), Core.Typeof(arg1), map(Core.Typeof, args)...},
+                       $((found_any ? (:argvals,) : ())...)))
+            return combine_setup_call(setup, call)
         elseif ex0.head === :call
-            return Expr(:call, fcn, esc(ex0.args[1]),
-                        Expr(:call, typesof, map(esc, ex0.args[2:end])...))
+            exargs = copy(ex0.args)
+            found_any = process_args!(setup, exargs, allow_const_interp)
+            call = Expr(:call, fcn, exargs[1],
+                        Expr(:call, typesof, exargs[2:end]...),
+                        (found_any ? (:argvals,) : ())...)
+            return combine_setup_call(setup, call)
         elseif ex0.head === :(=) && length(ex0.args) == 2
             lhs, rhs = ex0.args
-            if isa(lhs, Expr)
+            if isa(lhs, Expr) && lhs.head in (:(.), :ref)
                 if lhs.head === :(.)
-                    return Expr(:call, fcn, Base.setproperty!,
-                                Expr(:call, typesof, map(esc, lhs.args)..., esc(rhs)))
-                elseif lhs.head === :ref
-                    return Expr(:call, fcn, Base.setindex!,
-                                Expr(:call, typesof, esc(lhs.args[1]), esc(rhs), map(esc, lhs.args[2:end])...))
+                    exargs = Any[nothing, lhs.args..., rhs]
+                    # For setproperty!, if the element we're setting is a symbol,
+                    # automatically pass that symbol through as a constant.
+                    sym = exargs[3]
+                    if isa(sym, QuoteNode) && isa(sym.value, Symbol) && allow_const_interp
+                        found_any = true
+                        push!(setup.args, quote
+                            resize!(argvals, 3)
+                            argvals[3] = $(sym)
+                        end)
+                    end
+                    f = Base.setproperty!
+                else
+                    exargs = Any[nothing, lhs.args[1], rhs, lhs.args[2:end]...]
+                    f = Base.setindex!
                 end
+                found_any |= process_args!(setup, exargs, allow_const_interp)
+                call = Expr(:call, fcn, f,
+                    Expr(:call, typesof, exargs[2:end]...),
+                    (found_any ? (:argvals,) : ())...)
+                return combine_setup_call(setup, call)
             end
         elseif ex0.head === :vcat || ex0.head === :typed_vcat
+            args = ex0.args
             if ex0.head === :vcat
                 f, hf = Base.vcat, Base.hvcat
-                args = ex0.args
             else
                 f, hf = Base.typed_vcat, Base.typed_hvcat
-                args = ex0.args[2:end]
             end
             if any(a->isa(a,Expr) && a.head === :row, args)
-                rows = Any[ (isa(x,Expr) && x.head === :row ? x.args : Any[x]) for x in args ]
+                rows = Any[ (isa(x,Expr) && x.head === :row ? x.args : Any[x]) for x in (
+                    f === Base.vcat ? args : args[2:end])]
                 lens = map(length, rows)
-                return Expr(:call, fcn, hf,
+                rowargs = vcat(rows...)
+                rowargs = map(arg->strip_dollar_add_error!(setup, arg, _cat_msg), rowargs)
+                targ = ()
+                if f === Base.typed_vcat
+                    targ = (strip_dollar_add_error!(setup, args[1], _cat_msg),)
+                end
+                call = Expr(:call, fcn, hf,
                             Expr(:call, typesof,
-                                 (ex0.head === :vcat ? [] : Any[esc(ex0.args[1])])...,
+                                 targ...,
                                  Expr(:tuple, lens...),
-                                 map(esc, vcat(rows...))...))
+                                 rowargs...))
             else
-                return Expr(:call, fcn, f,
-                            Expr(:call, typesof, map(esc, ex0.args)...))
+                args = map(arg->strip_dollar_add_error!(setup, arg, _cat_msg), args)
+                call = Expr(:call, fcn, f,  Expr(:call, typesof, args...))
             end
+            return combine_setup_call(setup, call)
         else
             for (head, f) in (:ref => Base.getindex, :hcat => Base.hcat, :(.) => Base.getproperty, :vect => Base.vect, Symbol("'") => Base.adjoint, :typed_hcat => Base.typed_hcat, :string => string)
                 if ex0.head === head
-                    return Expr(:call, fcn, f,
-                                Expr(:call, typesof, map(esc, ex0.args)...))
+                    exargs = Any[nothing, ex0.args...]
+                    if f === Base.getproperty && allow_const_interp
+                        # For getproperty, if the element we're setting is a symbol,
+                        # automatically pass that symbol through as a constant.
+                        sym = exargs[3]
+                        if isa(sym, QuoteNode) && isa(sym.value, Symbol)
+                            found_any = true
+                            push!(setup.args, quote
+                                resize!(argvals, 3)
+                                argvals[3] = $(sym)
+                            end)
+                        end
+                    end
+                    found_any |= process_args!(setup, exargs, allow_const_interp)
+                    call = Expr(:call, fcn, f,
+                                Expr(:call, typesof, exargs[2:end]...),
+                                (found_any ? (:argvals,) : ())...)
+                    return combine_setup_call(setup, call)
                 end
             end
         end
     end
+
     if isa(ex0, Expr) && ex0.head === :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
-        return Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
+        call = Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
+        return combine_setup_call(setup, call)
     end
 
     ex = Meta.lower(__module__, ex0)
     if !isa(ex, Expr)
-        return Expr(:call, :error, "expression is not a function call or symbol")
+        call = Expr(:call, :error, "expression is not a function call or symbol")
+        return combine_setup_call(setup, call)
     end
 
     exret = Expr(:none)
@@ -86,7 +200,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
                                   * "or is too complex for @$fcn to analyze; "
                                   * "break it down to simpler parts if possible")
     end
-    return exret
+    return (exret, exret)
 end
 
 """
@@ -94,7 +208,7 @@ Same behaviour as gen_call_with_extracted_types except that keyword arguments
 of the form "foo=bar" are passed on to the called function as well.
 The keyword arguments must be given before the mandatory argument.
 """
-function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
+function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0; kw...)
     kwargs = Vector{Any}[]
     arg = ex0[end] # Mandatory argument
     for i in 1:length(ex0)-1
@@ -105,7 +219,7 @@ function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
             return Expr(:call, :error, "@$fcn expects only one non-keyword argument")
         end
     end
-    thecall = gen_call_with_extracted_types(__module__, fcn, arg)
+    (code, thecall) = _gen_call_with_extracted_types(__module__, fcn, arg; kw...)
     for kwarg in kwargs
         if length(kwarg) != 2
             x = string(Expr(:(=), kwarg...))
@@ -113,7 +227,7 @@ function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
         end
         push!(thecall.args, Expr(:kw, kwarg[1], kwarg[2]))
     end
-    return thecall
+    return code
 end
 
 for fname in [:which, :less, :edit, :functionloc, :code_warntype, :code_native]
@@ -133,7 +247,7 @@ macro code_llvm(ex0...)
 end
 
 macro code_typed(ex0...)
-    thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_typed, ex0)
+    thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_typed, ex0; allow_const_interp=true)
     quote
         results = $thecall
         length(results) == 1 ? results[1] : results
