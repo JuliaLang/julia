@@ -866,7 +866,8 @@ end
     sortperm!(ix, v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
 
 Like [`sortperm`](@ref), but accepts a preallocated index vector `ix`.  If `initialized` is `false`
-(the default), `ix` is initialized to contain the values `1:length(v)`.
+(the default), `ix` is initialized to contain the values `1:length(v)`. Note that if `initialized` is `true`,
+and `ix` is not properly initialized, julia is likely to crash.
 
 # Examples
 ```jldoctest
