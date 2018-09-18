@@ -141,12 +141,14 @@ function (*)(A::AbstractMatrix, B::AbstractMatrix)
     mul!(similar(B, TS, (size(A,1), size(B,2))), A, B)
 end
 mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = gemm_wrapper!(C, 'N', 'N', A, B)
+# Complex Matrix times real matrix: We use that it is generally faster to reinterpret the
+# first matrix as a real matrix and carry out real matrix matrix multiply
 for elty in (Float32,Float64)
     @eval begin
         function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, B::StridedVecOrMat{$elty})
             Afl = reinterpret($elty, A)
             Cfl = reinterpret($elty, C)
-            gemm_wrapper!(Cfl, 'N', 'N', Afl, B)
+            mul!(Cfl, Afl, B)
             return C
         end
     end
