@@ -813,7 +813,7 @@ end
 
 @testset "fast(a:b)" begin
     for bounds = (rand(Int, 2), rand(-1000:1000, 2))
-        a, b = minmax(bounds...)
+        a, b = minmax((bounds .>> 2)...) # right-shift to avoid overflow in length(a:1:b)
         a == b && continue
         @test rand(Random.fast(a:b)) ∈ a:b
         @test rand(Random.fast(a:1:b)) ∈ a:b
