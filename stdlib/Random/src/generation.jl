@@ -166,13 +166,15 @@ end
 
 ### BitInteger
 
-# there are two implemented samplers for unit ranges, which assume that Float64 (i.e.
-# 52 random bits) is the native type for the RNG:
-# 1) "Fast", which is the most efficient when the underlying RNG produces rand(Float64)
-#     "fast enough". The tradeoff is faster creation of the sampler, but more
-#     consumption of entropy bits
+# there are three implemented samplers for unit ranges, the two first of which
+# assume that Float64 (i.e. 52 random bits) is the native type for the RNG:
+# 1) "Fast", which is most efficient when the underlying RNG produces rand(Float64)
+#    "fast enough". The tradeoff is faster creation of the sampler, but more
+#    consumption of entropy bits
 # 2) "Default" which tries to use as few entropy bits as possible, at the cost of a
 #    a bigger upfront price associated with the creation of the sampler
+# 3) "Nearly Division Less", which is the fastest algorithm for types of size
+#    up to 64 bits. This will be the default in a future realease.
 
 #### helper functions
 
@@ -294,6 +296,45 @@ function rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt128}) where T<:BitInte
                        rand(rng, LessThan(sp.u, uniform(UInt128)))
     return ((sp.a % UInt128) + rem_knuth(x, sp.k)) % T
 end
+
+#### Nearly Division Less
+
+# cf. https://arxiv.org/abs/1805.10941
+
+struct SamplerRangeNDL{U<:Unsigned,T} <: Sampler{T}
+    a::T  # first element of the range
+    s::U  # range length or zero for full range
+end
+
+function SamplerRangeNDL(r::AbstractUnitRange{T}) where {T}
+    isempty(r) && throw(ArgumentError("range must be non-empty"))
+    a = first(r)
+    U = uint_sup(T)
+    s = (last(r) - first(r)) % unsigned(T) % U + one(U) # overflow ok
+    # mod(-s, s) could be put in the Sampler object for repeated calls, but
+    # this would be an advantage only for very big s and number of calls
+    SamplerRangeNDL(a, s)
+end
+
+function rand(rng::AbstractRNG, sp::SamplerRangeNDL{U,T}) where {U,T}
+    s = sp.s
+    x = widen(rand(rng, U))
+    m = x * s
+    l = m % U
+    if l < s
+        t = mod(-s, s)
+        while l < t
+            x = widen(rand(rng, U))
+            m = x * s
+            l = m % U
+        end
+    end
+    (s == 0 ? x : m >> (8*sizeof(U))) % T + sp.a
+end
+
+# API until this is made the default
+fast(r::AbstractUnitRange{<:Base.BitInteger64}) = SamplerRangeNDL(r)
+fast(r::AbstractArray) = Random.SamplerSimple(r, fast(firstindex(r):lastindex(r)))
 
 
 ### BigInt
