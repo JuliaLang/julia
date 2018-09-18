@@ -6,27 +6,56 @@ import Base: typesof, insert!
 
 separate_kwargs(args...; kwargs...) = (args, kwargs.data)
 
-function gen_call_with_extracted_types(__module__, fcn, ex0)
+gen_call_with_extracted_types(__module__, fcn, ex0; kws...) = _gen_call_with_extracted_types(__module__, fcn, ex0)[1]
+function _gen_call_with_extracted_types(__module__, fcn, ex0; allow_const_interp=false)
     if isa(ex0, Expr)
         if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
-            return quote
+            setup = quote
                 local arg1 = $(esc(ex0.args[1]))
                 local args, kwargs = $separate_kwargs($(map(esc, ex0.args[2:end])...))
-                $(fcn)(Core.kwfunc(arg1),
-                       Tuple{typeof(kwargs), Core.Typeof(arg1), map(Core.Typeof, args)...})
             end
+            call = :($(fcn)(Core.kwfunc(arg1),
+                       Tuple{typeof(kwargs), Core.Typeof(arg1), map(Core.Typeof, args)...}))
+            return (quote; $setup; $call; end, call)
         elseif ex0.head === :call
-            return Expr(:call, fcn, esc(ex0.args[1]),
-                        Expr(:call, typesof, map(esc, ex0.args[2:end])...))
+            exargs = ex0.args
+            found_any = false
+            setup = quote
+                argvals = Vector{Any}(undef, $(length(exargs)))
+            end
+            for (idx, arg) in pairs(exargs)
+                if allow_const_interp && isa(arg, Expr) && arg.head === :$
+                    sym = gensym()
+                    push!(setup.args, quote
+                        $sym = $(esc(arg.args[1]))
+                        argvals[$idx] = $sym
+                    end)
+                    exargs[idx] = sym
+                    found_any = true
+                else
+                    exargs[idx] = esc(exargs[idx])
+                end
+            end
+            call = Expr(:call, fcn, exargs[1],
+                        Expr(:call, typesof, exargs[2:end]...),
+                        (found_any ? (:argvals,) : ())...)
+            code = found_any ? quote
+                $setup
+                $call
+            end : call
+            return (code, call)
         elseif ex0.head === :(=) && length(ex0.args) == 2
             lhs, rhs = ex0.args
             if isa(lhs, Expr)
                 if lhs.head === :(.)
-                    return Expr(:call, fcn, Base.setproperty!,
+                    call = Expr(:call, fcn, Base.setproperty!,
                                 Expr(:call, typesof, map(esc, lhs.args)..., esc(rhs)))
+                    return (call, call)
+
                 elseif lhs.head === :ref
-                    return Expr(:call, fcn, Base.setindex!,
+                    call = Expr(:call, fcn, Base.setindex!,
                                 Expr(:call, typesof, esc(lhs.args[1]), esc(rhs), map(esc, lhs.args[2:end])...))
+                    return (call, call)
                 end
             end
         elseif ex0.head === :vcat || ex0.head === :typed_vcat
@@ -40,31 +69,36 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
             if any(a->isa(a,Expr) && a.head === :row, args)
                 rows = Any[ (isa(x,Expr) && x.head === :row ? x.args : Any[x]) for x in args ]
                 lens = map(length, rows)
-                return Expr(:call, fcn, hf,
+                call = Expr(:call, fcn, hf,
                             Expr(:call, typesof,
                                  (ex0.head === :vcat ? [] : Any[esc(ex0.args[1])])...,
                                  Expr(:tuple, lens...),
                                  map(esc, vcat(rows...))...))
             else
-                return Expr(:call, fcn, f,
+                call = Expr(:call, fcn, f,
                             Expr(:call, typesof, map(esc, ex0.args)...))
             end
+            return (call, call)
         else
             for (head, f) in (:ref => Base.getindex, :hcat => Base.hcat, :(.) => Base.getproperty, :vect => Base.vect, Symbol("'") => Base.adjoint, :typed_hcat => Base.typed_hcat, :string => string)
                 if ex0.head === head
-                    return Expr(:call, fcn, f,
+                    call = Expr(:call, fcn, f,
                                 Expr(:call, typesof, map(esc, ex0.args)...))
+                    return (call, call)
                 end
             end
         end
     end
+
     if isa(ex0, Expr) && ex0.head === :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
-        return Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
+        call = Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
+        return (call, call)
     end
 
     ex = Meta.lower(__module__, ex0)
     if !isa(ex, Expr)
-        return Expr(:call, :error, "expression is not a function call or symbol")
+        call = Expr(:call, :error, "expression is not a function call or symbol")
+        return (call, call)
     end
 
     exret = Expr(:none)
@@ -86,7 +120,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
                                   * "or is too complex for @$fcn to analyze; "
                                   * "break it down to simpler parts if possible")
     end
-    return exret
+    return (exret, exret)
 end
 
 """
@@ -94,7 +128,7 @@ Same behaviour as gen_call_with_extracted_types except that keyword arguments
 of the form "foo=bar" are passed on to the called function as well.
 The keyword arguments must be given before the mandatory argument.
 """
-function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
+function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0; kw...)
     kwargs = Vector{Any}[]
     arg = ex0[end] # Mandatory argument
     for i in 1:length(ex0)-1
@@ -105,7 +139,7 @@ function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
             return Expr(:call, :error, "@$fcn expects only one non-keyword argument")
         end
     end
-    thecall = gen_call_with_extracted_types(__module__, fcn, arg)
+    (code, thecall) = _gen_call_with_extracted_types(__module__, fcn, arg; kw...)
     for kwarg in kwargs
         if length(kwarg) != 2
             x = string(Expr(:(=), kwarg...))
@@ -113,7 +147,7 @@ function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
         end
         push!(thecall.args, Expr(:kw, kwarg[1], kwarg[2]))
     end
-    return thecall
+    return code
 end
 
 for fname in [:which, :less, :edit, :functionloc, :code_warntype, :code_native]
@@ -133,7 +167,7 @@ macro code_llvm(ex0...)
 end
 
 macro code_typed(ex0...)
-    thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_typed, ex0)
+    thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_typed, ex0; allow_const_interp=true)
     quote
         results = $thecall
         length(results) == 1 ? results[1] : results

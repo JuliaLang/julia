@@ -862,13 +862,18 @@ function func_for_method_checked(m::Method, @nospecialize types)
 end
 
 """
-    code_typed(f, types; optimize=true)
+    code_typed(f, types [, constvals::Vector{Any}]; optimize=true)
 
 Returns an array of type-inferred lowered form (IR) for the methods matching the given
 generic function and type signature. The keyword argument `optimize` controls whether
 additional optimizations, such as inlining, are also applied.
+
+If `constvals` is specified, every non #undef argument, specified in
+`constvals` will be provided to inference (as it would during interprocedural
+constant propagation). This is useful for IPO debugging purposes.
 """
-function code_typed(@nospecialize(f), @nospecialize(types=Tuple); optimize=true)
+function code_typed(@nospecialize(f), @nospecialize(types=Tuple),
+                    constvals::Union{Nothing, Array{Any, 1}}=nothing; optimize=true)
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -879,7 +884,7 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple); optimize=true)
     params = Core.Compiler.Params(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
-        (code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, params)
+        (code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], constvals, optimize, params)
         code === nothing && error("inference not successful") # inference disabled?
         push!(asts, code => ty)
     end
