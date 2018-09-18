@@ -180,13 +180,20 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
         atypes = get_argtypes(inf_result)
         if method.isva
             vargs = argtypes[(nargs + 1):end]
+            all_vargs_const = true
             for i in 1:length(vargs)
                 a = maybe_widen_conditional(vargs[i])
+                all_vargs_const &= a isa Const
                 if i > length(inf_result.vargs)
                     push!(inf_result.vargs, a)
                 elseif a isa Const
                     inf_result.vargs[i] = a
                 end
+            end
+            # If all vargs are const, the result may be a constant
+            # tuple. If so, we should make sure to treat it as such
+            if all_vargs_const
+                atypes[nargs + 1] = builtin_tfunction(tuple, inf_result.vargs, sv)
             end
         end
         for i in 1:nargs

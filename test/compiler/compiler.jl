@@ -2030,3 +2030,10 @@ get_order_kwargs(; by = identity, func = isless, rev = false) = get_order(by, fu
 # test that this doesn't cause an internal error
 get_order_kwargs()
 end
+
+# Test that tail-like functions don't block constant propagation
+my_tail_const_prop(i, tail...) = tail
+function foo_tail_const_prop()
+    Val{my_tail_const_prop(1,2,3,4)}()
+end
+@test (@inferred foo_tail_const_prop()) == Val{(2,3,4)}()
