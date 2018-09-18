@@ -547,3 +547,10 @@ end
     @test ps isa Iterators.Pairs
     @test collect(ps) == [1 => :a, 2 => :b]
 end
+
+@testset "inference for large zip #26765" begin
+    x = zip(1:1, ["a"], (1.0,), Base.OneTo(1), Iterators.repeated("a"), 1.0:0.2:2.0,
+            (1 for i in 1:1), ["a"], (1.0 for i in 1:2, j in 1:3), 1)
+    z = Iterators.filter(x -> x[1] == 1, x)
+    @test @inferred(first(z)) == (1, "a", 1.0, 1, "a", 1.0, 1, "a", 1.0, 1)
+end
