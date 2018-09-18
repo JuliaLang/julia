@@ -230,15 +230,19 @@ function optimize(opt::OptimizationState, @nospecialize(result))
     if force_noinline
         opt.src.inlineable = false
     elseif isa(def, Method)
-        bonus = 0
-        if result ⊑ Tuple && !isbitstype(widenconst(result))
-            bonus = opt.params.inline_tupleret_bonus
+        if opt.src.inlineable && isdispatchtuple(opt.linfo.specTypes)
+            # obey @inline declaration if a dispatch barrier would not help
+        else
+            bonus = 0
+            if result ⊑ Tuple && !isbitstype(widenconst(result))
+                bonus = opt.params.inline_tupleret_bonus
+            end
+            if opt.src.inlineable
+                # For functions declared @inline, increase the cost threshold 20x
+                bonus += opt.params.inline_cost_threshold*19
+            end
+            opt.src.inlineable = isinlineable(def, opt, bonus)
         end
-        if opt.src.inlineable
-            # For functions declared @inline, increase the cost threshold 20x
-            bonus += opt.params.inline_cost_threshold*19
-        end
-        opt.src.inlineable = isinlineable(def, opt, bonus)
     end
     nothing
 end
