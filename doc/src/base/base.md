@@ -44,13 +44,14 @@ This is the list of reserved keywords in Julia:
 `return`, `struct`, `true`, `try`, `using`, `while`.
 Those keywords are not allowed to be used as variable names.
 
-The follwoing two word sequences are reserved:
+The following two word sequences are reserved:
 `abstract type`, `mutable struct`, `primitive type`.
 However, you can create variables with names:
 `abstract`, `mutable`, `primitive` and `type`.
 
-Finally `where` is resolved contextually as a keyword in parametric method
-definition syntax, but creation of variable named `where` is allowed.
+Finally `where` is parsed as an infix operator for writing parametric method
+and type definitions. Also `in` and `isa` are parsed as infix operators.
+Creation of variable named `where`, `is` or `isa` is allowed though.
 
 ```@docs
 module
