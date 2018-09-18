@@ -389,3 +389,51 @@ if Sys.iswindows() || Sys.isapple()
         @test clipboard() == str
     end
 end
+
+### @code_typed with interpolated constants
+# Simple call
+let a = @code_typed $(1) + $(1)
+    @test length(a[1].code) == 1
+end
+
+# Interpolation Keyword arguments are disallowed for now
+let f(a; b=0) = Val(a+b)
+    @test_throws ErrorException @code_typed f($(1); b = $(2))
+end
+
+# Interpolation in concatenation is disallowed for now
+@test_throws ErrorException @code_typed [$(1); $(2); $(3)]
+
+# setproperty!/getproperty special cases
+struct ConstCodeTypedA; end
+Base.setproperty!(val::ConstCodeTypedA, name::Symbol, x) =
+    Val(x + (name == :x ? 1 : 2))
+Base.getproperty(val::ConstCodeTypedA, name::Symbol) =
+    Val(name == :x ? 1 : 2)
+struct ConstCodeTypedB; end
+Base.setproperty!(val::ConstCodeTypedB, name::Symbol, x) =
+    Val(name == :x ? 1 : 2)
+# Should not be able to infer these
+@test (@code_typed setproperty!(ConstCodeTypedA(), :x, 1))[2] == Val
+@test (@code_typed getproperty(ConstCodeTypedA(), :x))[2] == Val
+@test (@code_typed setproperty!(ConstCodeTypedB(), :x, 1))[2] == Val
+@test (@code_typed ConstCodeTypedA().x = 1)[2] == Val
+# Should be able to infer this one, because we automatically promote
+# the symbol argument to `Const`.
+@test (@code_typed setproperty!(ConstCodeTypedB(), $(:x), 1))[2] == Val{1}
+@test (@code_typed ConstCodeTypedB().x = 1)[2] == Val{1}
+@test (@code_typed setproperty!(ConstCodeTypedA(), $(:y), $(1)))[2] == Val{3}
+@test (@code_typed ConstCodeTypedA().x)[2] == Val{1}
+
+# Interpolations in other syntax forms
+Base.setindex!(::ConstCodeTypedA, idx::Int, val::Int) =
+    Val(idx + val)
+Base.getindex(::ConstCodeTypedA, idx::Int) =
+    Val(idx)
+@test (@code_typed ConstCodeTypedA()[$(1)] = $(2))[2] == Val{3}
+@test (@code_typed ConstCodeTypedA()[$(1)])[2] == Val{1}
+
+# Interpolations for varargs functions
+let f(args...) = Val(args[1]+args[2]+args[3])
+     @test (@code_typed f($(1), $(2), $(3)))[2] == Val{6}
+end
