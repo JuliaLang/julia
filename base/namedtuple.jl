@@ -242,7 +242,7 @@ merge(a::NamedTuple{()}, b::NamedTuple) = b
 merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, b.data)
 
 """
-    merge(a::NamedTuple, b::NamedTuple)
+    merge(a::NamedTuple, b::NamedTuple...)
 
 Perform a recursive merge of two or more named tuples.
 
