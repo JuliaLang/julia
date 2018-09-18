@@ -173,6 +173,8 @@ end
                 AB_correct = copy(A)*B
                 AB = A*B;  # view times matrix
                 @test AB ≈ AB_correct
+                A1 = view(A0,:,1:2)  # rectangular view times matrix
+                @test A1*B ≈ copy(A1)*B
                 B1 = view(B,1:2,1:2);
                 AB1 = A*B1; # view times view
                 @test AB1 ≈ AB_correct
