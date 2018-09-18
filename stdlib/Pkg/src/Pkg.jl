@@ -270,16 +270,16 @@ that is modified by executing package commands.
 The logic for what path is activated is as follows:
 
   * If `shared` is `true`, the first existing environment named `s` from the depots
-    in the depot stack will be activated. If no such environment exists yet,
-    activate it in the first depot.
-  * If `s` is a path that exist, that environment will be activated.
-  * If `s` is a package name in the current project activate that is tracking a path,
-    activate the environment at that path.
-  * If `s` is a non-existing path, activate that path.
+    in the depot stack will be activated. If no such environment exists,
+    create and activate that environment in the first depot.
+  * If `s` is an existing path, then activate the environment at that path.
+  * If `s` is a package in the current project and `s` is tracking a path, then
+    activate the environment at the tracked path.
+  * Else, `s` is interpreted as a non-existing path, activate that path.
 
-If no argument is given to `activate`, activate the home project,
-which is the one specified by either `--project` command line when starting julia,
-or `JULIA_PROJECT` environment variable.
+If no argument is given to `activate`, then activate the home project.
+The home project is specified by either the `--project` command line option to
+the julia executable, or the `JULIA_PROJECT` environment variable.
 
 # Examples
 ```
