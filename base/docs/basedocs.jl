@@ -790,9 +790,9 @@ run(pipeline(`cat test.txt`, devnull))
 devnull
 
 """ 
-    `$`
+    $
 
-A `$` before a variable interpolates values into string literals, quoted expressions, and commands ([`Cmd`](@ref)). Note
+A `\$` before a variable interpolates values into string literals, quoted expressions, and commands ([`Cmd`](@ref)). Note
 it will error on unquoted expressions. Splatting the interpolation with [`...`](@ref) makes an array of expressions
 into arguments of a surrounding expression. See the manual section on [string interpolation](https://docs.julialang.org/en/stable/manual/strings/#string-interpolation-1)
 and [expression interpolation](https://docs.julialang.org/en/stable/manual/metaprogramming/#Interpolation-1) for further details and examples.
