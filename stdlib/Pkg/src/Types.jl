@@ -1056,12 +1056,16 @@ function registered_uuid(env::EnvCache, name::String)::UUID
         end
     end
     length(choices_cache) == 1 && return choices_cache[1][1]
-    # prompt for which UUID was intended:
-    menu = RadioMenu(choices)
-    choice = request("There are multiple registered `$name` packages, choose one:", menu)
-    choice == -1 && return UUID(zero(UInt128))
-    env.paths[choices_cache[choice][1]] = [choices_cache[choice][2]]
-    return choices_cache[choice][1]
+    if isinteractive()
+        # prompt for which UUID was intended:
+        menu = RadioMenu(choices)
+        choice = request("There are multiple registered `$name` packages, choose one:", menu)
+        choice == -1 && return UUID(zero(UInt128))
+        env.paths[choices_cache[choice][1]] = [choices_cache[choice][2]]
+        return choices_cache[choice][1]
+    else
+        pkgerror("there are multiple registered `$name` packages, explicitly set the uuid")
+    end
 end
 
 # Determine current name for a given package UUID
