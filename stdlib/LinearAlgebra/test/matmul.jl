@@ -186,6 +186,9 @@ end
                 Ax1 = A*x1  # view times viewed vector
                 @test Ax1 ≈ Ax_exact
                 @test copy(A)*x1 ≈ Ax_exact # matrix times viewed vector
+                # View times transposed matrix
+                Bt = transpose(B);
+                @test A*Bt ≈ A*copy(Bt)
             end
         end
     end

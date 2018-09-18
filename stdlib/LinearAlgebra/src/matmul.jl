@@ -62,12 +62,13 @@ end
 (*)(a::AbstractVector, B::AbstractMatrix) = reshape(a,length(a),1)*B
 
 mul!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T}) where {T<:BlasFloat} = gemv!(y, 'N', A, x)
+# Complex matrix times real vector. Reinterpret the matrix as a real matrix and do real matvec compuation.
 for elty in (Float32,Float64)
     @eval begin
         function mul!(y::StridedVector{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, x::StridedVector{$elty})
             Afl = reinterpret($elty,A)
             yfl = reinterpret($elty,y)
-            gemv!(yfl,'N',Afl,x)
+            mul!(yfl,Afl,x)
             return y
         end
     end
@@ -236,13 +237,13 @@ function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, transB::Transpose{<:An
         return gemm_wrapper!(C, 'N', 'T', A, B)
     end
 end
+# Complex matrix times transposed real matrix. Reinterpret the first matrix to real for efficiency.
 for elty in (Float32,Float64)
     @eval begin
         function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, transB::Transpose{<:Any,<:StridedVecOrMat{$elty}})
-            B = transB.parent
             Afl = reinterpret($elty, A)
             Cfl = reinterpret($elty, C)
-            gemm_wrapper!(Cfl, 'N', 'T', Afl, B)
+            mul!(Cfl,Afl,transB)
             return C
         end
     end
