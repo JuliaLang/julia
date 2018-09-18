@@ -790,12 +790,12 @@ run(pipeline(`cat test.txt`, devnull))
 devnull
 
 """ 
-    `\$`
-The `\$` before a variable will interpolate values into string literals.  Also constructs `Expr`
-objects with value arguments, but note it will error on unquoted expressions. Splatting the interpolation
-with [`...`](@ref) will make an array of expressions into arguments of a surrounding expression. See the
-manual section on [string interpolation](https://docs.julialang.org/en/stable/manual/strings/#string-interpolation-1) and
-[expression interpolation](https://docs.julialang.org/en/stable/manual/metaprogramming/#Interpolation-1) for further details and examples.
+    `$`
+
+A `$` before a variable interpolates values into string literals, quoted expressions, and commands ([`Cmd`](@ref)). Note
+it will error on unquoted expressions. Splatting the interpolation with [`...`](@ref) makes an array of expressions
+into arguments of a surrounding expression. See the manual section on [string interpolation](https://docs.julialang.org/en/stable/manual/strings/#string-interpolation-1)
+and [expression interpolation](https://docs.julialang.org/en/stable/manual/metaprogramming/#Interpolation-1) for further details and examples.
 
 # Examples
 ```julia-repl
@@ -803,11 +803,7 @@ manual section on [string interpolation](https://docs.julialang.org/en/stable/ma
 julia> "1 + 2 = $(1 + 2)"
 "1 + 2 = 3"
 
-julia> v = [1,2,3]
-3-element Array{Int64,1}:
-1
-2
-3
+julia> v = [1,2,3];
 
 julia> "v: $v"
 "v: [1, 2, 3]"
