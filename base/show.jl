@@ -1559,6 +1559,7 @@ module IRShow
     import ..Base
     import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument, isexpr, compute_basic_blocks, block_for_inst
     Base.size(r::Compiler.StmtRange) = Compiler.size(r)
+    Base.getindex(r::Compiler.StmtRange, i::Int) = Compiler.getindex(r, i)
     Base.show(io::IO, r::Compiler.StmtRange) = print(io, Compiler.first(r):Compiler.last(r))
     include("compiler/ssair/show.jl")
 end
