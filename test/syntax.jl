@@ -1719,6 +1719,13 @@ let g = @foo28900 f28900(kwarg = x->2x)
     @test g(10) == 20
 end
 
+# Line continuation - issue #27533
+@test Meta.parse("[1 ⤸\n 2]") == Expr(:hcat, 1, 2)
+@test Meta.parse("@f ⤸\n a") == Expr(:macrocall, Symbol("@f"), LineNumberNode(1, :none), :a)
+@test Meta.isexpr(Meta.parse("@f ⤸"), :incomplete)
+@test_throws ParseError("Line continuation '⤸' is only allowed for space separated lists like macros arugments and matrix literals") Meta.parse("x ⤸\n = 1")
+@test_throws ParseError("Line continuation '⤸' must be followed by a newline. Got \"⤸ \" instead") Meta.parse("@x ⤸ \n")
+
 # issue #26037
 x26037() = 10
 function test_26037()

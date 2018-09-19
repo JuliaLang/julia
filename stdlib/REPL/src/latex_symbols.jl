@@ -107,6 +107,7 @@ const latex_symbols = Dict(
     "\\impliedby" => "⟸",
     "\\to" => "→",
     "\\euler" => "ℯ",
+    "\\linecontinuation" => "⤸",
 
     # Superscripts
     "\\^0" => "⁰",
