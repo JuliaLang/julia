@@ -242,16 +242,16 @@ merge(a::NamedTuple{()}, b::NamedTuple) = b
 merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, b.data)
 
 """
-    merge(a::NamedTuple, b::NamedTuple...)
+    merge(a::NamedTuple, b::NamedTuple, cs::NamedTuple...)
 
-Perform a recursive merge of two or more named tuples.
+Perform a left-associative merge of three or more named tuples.
 
 ```jldoctest
 julia> merge((a=1, b=2), (b=3, c=(f=1)), (c=(f=2),))
 (a = 1, b = 3, c = (d = 2,))
 ```
 """
-merge(a::NamedTuple, b::NamedTuple...) = merge(merge(a, b[1]), b[2:end]...)
+merge(a::NamedTuple, b::NamedTuple, cs::NamedTuple...) = merge(merge(a, b), cs...)
 
 """
     merge(a::NamedTuple, iterable)

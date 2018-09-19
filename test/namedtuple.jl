@@ -241,6 +241,6 @@ y = map(v -> (a=v.a, b=v.a + v.b), [(a=1, b=missing), (a=1, b=2)])
 @test NamedTuple{(:a, :b), Tuple{Int, Float64}}(Any[1.0, 2]) === (a=1, b=2.0)
 @test NamedTuple{(:a, :b)}(Any[1.0, 2]) === (a=1.0, b=2)
 
-# Recursive merge, issue #29215
+# Left-associative merge, issue #29215
 @test merge((a=1, b=2), (b=3, c=4), (c=5,)) === (a=1, b=3, c=5)
 @test merge((a=1, b=2), (b=3, c=(d=1,)), (c=(d=2,),)) === (a=1, b=3, c=(d=2,))
