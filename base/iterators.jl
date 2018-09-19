@@ -12,7 +12,7 @@ using .Base:
     @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
     tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
     IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange,
-    LinearIndices, (:), |, +, -, !==, !, <=, <, missing, map
+    LinearIndices, (:), |, +, -, !==, !, <=, <, missing, map, any
 
 import .Base:
     first, last,
@@ -335,7 +335,7 @@ end
 
 @propagate_inbounds function _zip_iterate_all(is, ss)
     ds = _zip_isdone(is, ss)
-    ds === true && return nothing
+    any(map(d -> d === true, ds)) === true && return nothing
     xs1 = _zip_iterate_some(is, ss, ds, missing)
     xs1 === nothing && return nothing
     xs2 = _zip_iterate_some(is, ss, ds, false)
@@ -366,10 +366,8 @@ _zip_iterate_interleave(::Tuple{}, ::Tuple{}, ::Tuple{}) = ((), ())
 
 function _zip_isdone(is, ss)
     d = isdone(is[1], ss[1]...)
-    d === true && return true
-    ds = _zip_isdone(tail(is), tail(ss))
-    ds === true && return true
-    return (d, ds...)
+    d === true && return map(_ -> true, is) # no need to check the remaining ones, but fill with trues for type stability
+    return (d, _zip_isdone(tail(is), tail(ss))...)
 end
 _zip_isdone(::Tuple{}, ::Tuple{}) = ()
 
