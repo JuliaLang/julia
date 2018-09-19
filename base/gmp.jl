@@ -283,7 +283,7 @@ BigInt(x::Float16) = BigInt(Float64(x))
 BigInt(x::Float32) = BigInt(Float64(x))
 
 function BigInt(x::Integer)
-    x == 0 && return BigInt(0)
+    x == 0 && return BigInt(Culong(0))
     nd = ndigits(x, base=2)
     z = MPZ.realloc2(nd)
     s = sign(x)
