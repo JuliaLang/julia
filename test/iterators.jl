@@ -540,6 +540,60 @@ end
 	@test isempty(collect(zip(b,a)))
 	@test !isempty(a)
     end
+    let a = Iterators.Stateful("a"), b = "", c = Iterators.Stateful("c")
+       @test isempty(collect(zip(a,b,c)))
+       @test !isempty(a)
+       @test !isempty(c)
+       @test isempty(collect(zip(a,c,b)))
+       @test !isempty(a)
+       @test !isempty(c)
+       @test isempty(collect(zip(b,a,c)))
+       @test !isempty(a)
+       @test !isempty(c)
+       @test isempty(collect(zip(b,c,a)))
+       @test !isempty(a)
+       @test !isempty(c)
+       @test isempty(collect(zip(c,a,b)))
+       @test !isempty(a)
+       @test !isempty(c)
+       @test isempty(collect(zip(c,b,a)))
+       @test !isempty(a)
+       @test !isempty(c)
+    end
+    let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+       @test length(collect(zip(a,b,c))) == 1
+       @test !isempty(a)
+       @test !isempty(c)
+   end
+   let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+       @test length(collect(zip(a,c,b))) == 1
+       @test !isempty(a)
+       @test !isempty(c)
+   end
+   let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+       @test length(collect(zip(b,a,c))) == 1
+       @test !isempty(a)
+       @test !isempty(c)
+   end
+   let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+       @test length(collect(zip(b,c,a))) == 1
+       @test !isempty(a)
+       @test !isempty(c)
+   end
+   let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+       @test length(collect(zip(c,a,b))) == 1
+       @test !isempty(a)
+       @test !isempty(c)
+   end
+   let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+       @test length(collect(zip(c,b,a))) == 1
+       @test !isempty(a)
+       @test !isempty(c)
+    end
+    let z = zip(Iterators.Stateful("ab"), Iterators.Stateful("b"), Iterators.Stateful("c"))
+        v, s = iterate(z)
+        @test Base.isdone(z, s)
+    end
 end
 
 @testset "pair for Svec" begin

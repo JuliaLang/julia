@@ -395,25 +395,91 @@ _zip_eltype(::Type{Tuple{}}) = Tuple{}
 @inline _zip_any_isdone(is, ss) =
     isdone(is[1], ss[1]) === true || _zip_any_isdone(tail(is), tail(ss))
 @inline _zip_any_isdone(::Tuple{}, ::Tuple{}) = false
-@propagate_inbounds iterate(z::Zip) = isdone(z) === true ? nothing : _zip_iterate_all(z.is)
-@propagate_inbounds function _zip_iterate_all(is)
-    x = iterate(is[1])
-    x === nothing && return nothing
-    y = _zip_iterate_all(tail(is))
-    y === nothing && return nothing
-    return ((x[1], y[1]...), (x[2], y[2]...))
+
+@propagate_inbounds function iterate(z::Zip)
+    ds = _zip_isdone(z.is)
+    ds === true && return nothing
+    xs = _zip_iterate_all1(z.is, ds)
+    xs === nothing && return nothing
+    _zip_iterate_all2(z.is, ds, xs)
 end
-_zip_iterate_all(::Tuple{}) = ((), ())
-@propagate_inbounds iterate(z::Zip, ss) =
-    isdone(z, ss) === true ? nothing : _zip_iterate_all(z.is, ss)
-@propagate_inbounds function _zip_iterate_all(is, ss)
-    x = iterate(is[1], ss[1])
-    x === nothing && return nothing
-    y = _zip_iterate_all(tail(is), tail(ss))
-    y === nothing && return nothing
-    return ((x[1], y[1]...), (x[2], y[2]...))
+@propagate_inbounds function _zip_iterate_all1(is, ds)
+    if ds[1] === missing
+        x = iterate(is[1])
+        x === nothing && return nothing
+        y = _zip_iterate_all1(tail(is), tail(ds))
+        y === nothing && return nothing
+        return (x, y...)
+    else
+        _zip_iterate_all1(tail(is), tail(ds))
+    end
 end
-_zip_iterate_all(::Tuple{}, ::Tuple{}) = ((), ())
+_zip_iterate_all1(::Tuple{}, ::Tuple{}) = ()
+@propagate_inbounds function _zip_iterate_all2(is, ds, xs)
+    if ds[1] !== missing
+        x = iterate(is[1])
+        x === nothing && return nothing
+        y = _zip_iterate_all2(tail(is), tail(ds), xs)
+        y === nothing && return nothing
+        return ((x[1], y[1]...), (x[2], y[2]...))
+    else
+        y = _zip_iterate_all2(tail(is), tail(ds), tail(xs))
+        y === nothing && return nothing
+        return ((xs[1][1], y[1]...), (xs[1][2], y[2]...))
+    end
+end
+_zip_iterate_all2(::Tuple{}, ::Tuple{}, ::Tuple{}) = ((), ())
+function _zip_isdone(is)
+    d = isdone(is[1])
+    d === true && return true
+    ds = _zip_isdone(tail(is))
+    ds === true && return true
+    return (d, ds...)
+end
+_zip_isdone(::Tuple{}) = ()
+
+@propagate_inbounds function iterate(z::Zip, ss)
+    ds = _zip_isdone(z.is, ss)
+    ds === true && return nothing
+    xs = _zip_iterate_all1(z.is, ss, ds)
+    xs === nothing && return nothing
+    _zip_iterate_all2(z.is, ss, ds, xs)
+end
+@propagate_inbounds function _zip_iterate_all1(is, ss, ds)
+    if ds[1] === missing
+        x = iterate(is[1], ss[1])
+        x === nothing && return nothing
+        y = _zip_iterate_all1(tail(is), tail(ss), tail(ds))
+        y === nothing && return nothing
+        return (x, y...)
+    else
+        _zip_iterate_all1(tail(is), tail(ss), tail(ds))
+    end
+end
+_zip_iterate_all1(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
+@propagate_inbounds function _zip_iterate_all2(is, ss, ds, xs)
+    if ds[1] !== missing
+        x = iterate(is[1], ss[1])
+        x === nothing && return nothing
+        y = _zip_iterate_all2(tail(is), tail(ss), tail(ds), xs)
+        y === nothing && return nothing
+        return ((x[1], y[1]...), (x[2], y[2]...))
+    else
+        y = _zip_iterate_all2(tail(is), tail(ss), tail(ds), tail(xs))
+        y === nothing && return nothing
+        return ((xs[1][1], y[1]...), (xs[1][2], y[2]...))
+    end
+end
+_zip_iterate_all2(::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ((), ())
+function _zip_isdone(is, ss)
+    d = isdone(is[1], ss[1])
+    d === true && return true
+    ds = _zip_isdone(tail(is), tail(ss))
+    ds === true && return true
+    return (d, ds...)
+end
+_zip_isdone(::Tuple{}, ::Tuple{}) = ()
+
 
 IteratorSize(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_iterator_size(Is)
 _zip_iterator_size(::Type{Is}) where {Is<:Tuple} =
