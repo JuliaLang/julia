@@ -2089,3 +2089,14 @@ f30394(foo::T1, ::Type{T2}) where {T2, T1 <: T2} = foo
 f30394(foo, T2) = f30394(foo.foo_inner, T2)
 
 @test Base.return_types(f30394, (Foo30394_2, Type{Base30394})) == Any[Base30394]
+
+# test that this doesn't cause an internal error
+get_order_kwargs()
+end
+
+# Test that tail-like functions don't block constant propagation
+my_tail_const_prop(i, tail...) = tail
+function foo_tail_const_prop()
+    Val{my_tail_const_prop(1,2,3,4)}()
+end
+@test (@inferred foo_tail_const_prop()) == Val{(2,3,4)}()
