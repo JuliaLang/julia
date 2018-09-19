@@ -247,7 +247,7 @@ merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge
 Perform a left-associative merge of three or more named tuples.
 
 ```jldoctest
-julia> merge((a=1, b=2), (b=3, c=(f=1,)), (c=(f=2,),))
+julia> merge((a=1, b=2), (b=3, c=(d=1,)), (c=(d=2,),))
 (a = 1, b = 3, c = (d = 2,))
 ```
 """
