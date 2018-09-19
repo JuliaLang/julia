@@ -240,13 +240,13 @@ function find_project_file(env::Union{Nothing,String}=nothing)
     project_file = nothing
     if env isa Nothing
         project_file = Base.active_project()
-        project_file == nothing && error("no active project")
+        project_file == nothing && pkgerror("no active project")
     elseif startswith(env, '@')
         project_file = Base.load_path_expand(env)
-        project_file === nothing && error("package environment does not exist: $env")
+        project_file === nothing && pkgerror("package environment does not exist: $env")
     elseif env isa String
         if isdir(env)
-            isempty(readdir(env)) || error("environment is a package directory: $env")
+            isempty(readdir(env)) || pkgerror("environment is a package directory: $env")
             project_file = joinpath(env, Base.project_names[end])
         else
             project_file = endswith(env, ".toml") ? abspath(env) :
@@ -708,14 +708,16 @@ function parse_package!(ctx, pkg, project_path)
         if !isempty(ctx.old_pkg2_clone_name) # remove when legacy CI script support is removed
             pkg.name = ctx.old_pkg2_clone_name
         else
-            # This is an old style package, get the name from src/PackageName
-            if isdir_windows_workaround(pkg.repo.url)
-                m = match(reg_pkg, abspath(pkg.repo.url))
-            else
-                m = match(reg_pkg, pkg.repo.url)
+            # This is an old style package, if not set, get the name from src/PackageName
+            if !has_name(pkg)
+                if isdir_windows_workaround(pkg.repo.url)
+                    m = match(reg_pkg, abspath(pkg.repo.url))
+                else
+                    m = match(reg_pkg, pkg.repo.url)
+                end
+                m === nothing && pkgerror("cannot determine package name from URL or path: $(pkg.repo.url), provide a name argument to `PackageSpec`")
+                pkg.name = m.captures[1]
             end
-            m === nothing && pkgerror("cannot determine package name from URL or path: $(pkg.repo.url)")
-            pkg.name = m.captures[1]
         end
         reg_uuids = registered_uuids(env, pkg.name)
         is_registered = !isempty(reg_uuids)
@@ -786,7 +788,7 @@ end
 # Disambiguate name/uuid package specifications using project info.
 function project_deps_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     uuids = env.project["deps"]
-    names = Dict(uuid => name for (uuid, name) in uuids)
+    names = Dict(uuid => name for (name, uuid) in uuids)
     length(uuids) < length(names) && # TODO: handle this somehow?
         pkgerror("duplicate UUID found in project file's [deps] section")
     for pkg in pkgs
@@ -1054,12 +1056,16 @@ function registered_uuid(env::EnvCache, name::String)::UUID
         end
     end
     length(choices_cache) == 1 && return choices_cache[1][1]
-    # prompt for which UUID was intended:
-    menu = RadioMenu(choices)
-    choice = request("There are multiple registered `$name` packages, choose one:", menu)
-    choice == -1 && return UUID(zero(UInt128))
-    env.paths[choices_cache[choice][1]] = [choices_cache[choice][2]]
-    return choices_cache[choice][1]
+    if isinteractive()
+        # prompt for which UUID was intended:
+        menu = RadioMenu(choices)
+        choice = request("There are multiple registered `$name` packages, choose one:", menu)
+        choice == -1 && return UUID(zero(UInt128))
+        env.paths[choices_cache[choice][1]] = [choices_cache[choice][2]]
+        return choices_cache[choice][1]
+    else
+        pkgerror("there are multiple registered `$name` packages, explicitly set the uuid")
+    end
 end
 
 # Determine current name for a given package UUID
