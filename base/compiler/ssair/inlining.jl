@@ -829,7 +829,6 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             ok = true
             for i = 3:length(atypes)
                 typ = atypes[i]
-                typ isa PartialTuple && continue
                 typ = widenconst(typ)
                 # TODO: We could basically run the iteration protocol here
                 if !isa(typ, DataType) || typ.name !== Tuple.name ||
