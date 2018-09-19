@@ -7405,7 +7405,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
@@ -19573,7 +19573,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Pkg",
     "title": "Compatibility",
     "category": "section",
-    "text": "Compatibility refers to the ability to restrict what version of the dependencies that your project is compatible with. If the compatibility for a dependency is not given, the project is assumed to be compatible with all versions of that dependency.Compatibility for a dependency is entered in the Project.toml file as for example:[compat]\nExample = \"0.4.3\"After a compatibility entry is put into the project file, up can be used to apply it.The format of the version specifier is described in detail below.info: Info\nThere is currently no way to give compatibility from the Pkg REPL mode so for now, one has to manually edit the project file."
+    "text": "Compatibility refers to the ability to restrict what version of the dependencies that your project is compatible with. If the compatibility for a dependency is not given, the project is assumed to be compatible with all versions of that dependency.Compatibility for a dependency is entered in the Project.toml file as for example:[compat]\njulia = \"1.0\"\nExample = \"0.4.3\"After a compatibility entry is put into the project file, up can be used to apply it.The format of the version specifier is described in detail below.info: Info\nThere is currently no way to give compatibility from the Pkg REPL mode so for now, one has to manually edit the project file."
 },
 
 {
@@ -19661,7 +19661,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Pkg",
     "title": "Pkg.add",
     "category": "function",
-    "text": "Pkg.add(pkg::Union{String, Vector{String})\nPkg.add(pkg::Union{PackageSpec, Vector{PackageSpec}})\n\nAdd a package to the current project. This package will be available using the import and using keywords in the Julia REPL and if the current project is a package, also inside that package.\n\nExamples\n\nPkg.add(\"Example\") # Add a package from registry\nPkg.add(PackageSpec(name=\"Example\", version=\"0.3\")) # Specify version\nPkg.add(PackageSpec(url=\"https://github.com/JuliaLang/Example.jl\", rev=\"master\")) # From url\nPkg.add(PackageSpec(url=\"/remote/mycompany/juliapackages/OurPackage\"))` # From path (has to be a gitrepo)\n\nSee also PackageSpec.\n\n\n\n\n\n"
+    "text": "Pkg.add(pkg::Union{String, Vector{String}})\nPkg.add(pkg::Union{PackageSpec, Vector{PackageSpec}})\n\nAdd a package to the current project. This package will be available using the import and using keywords in the Julia REPL and if the current project is a package, also inside that package.\n\nExamples\n\nPkg.add(\"Example\") # Add a package from registry\nPkg.add(PackageSpec(name=\"Example\", version=\"0.3\")) # Specify version\nPkg.add(PackageSpec(url=\"https://github.com/JuliaLang/Example.jl\", rev=\"master\")) # From url\nPkg.add(PackageSpec(url=\"/remote/mycompany/juliapackages/OurPackage\"))` # From path (has to be a gitrepo)\n\nSee also PackageSpec.\n\n\n\n\n\n"
 },
 
 {
@@ -19669,7 +19669,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Pkg",
     "title": "Pkg.develop",
     "category": "function",
-    "text": "Pkg.develop(pkg::Union{String, Vector{String})\nPkg.develop(pkgs::Union{Packagespec, Vector{Packagespec}})\n\nMake a package available for development by tracking it by path. If pkg is given with only a name or by a URL the packages will be downloaded to the location by the environment variable JULIA_PKG_DEVDIR with .julia/dev as the default.\n\nIf pkg is given as a local path, the package at that path will be tracked.\n\nExamples\n\n# By name\nPkg.develop(\"Example\")\n\n# By url\nPkg.develop(PackageSpec(url=\"https://github.com/JuliaLang/Compat.jl\"))\n\n# By path\nPkg.develop(PackageSpec(path=\"MyJuliaPackages/Package.jl\")\n\nSee also PackageSpec\n\n\n\n\n\n"
+    "text": "Pkg.develop(pkg::Union{String, Vector{String}})\nPkg.develop(pkgs::Union{Packagespec, Vector{Packagespec}})\n\nMake a package available for development by tracking it by path. If pkg is given with only a name or by a URL the packages will be downloaded to the location by the environment variable JULIA_PKG_DEVDIR with .julia/dev as the default.\n\nIf pkg is given as a local path, the package at that path will be tracked.\n\nExamples\n\n# By name\nPkg.develop(\"Example\")\n\n# By url\nPkg.develop(PackageSpec(url=\"https://github.com/JuliaLang/Compat.jl\"))\n\n# By path\nPkg.develop(PackageSpec(path=\"MyJuliaPackages/Package.jl\")\n\nSee also PackageSpec\n\n\n\n\n\n"
 },
 
 {
@@ -19677,7 +19677,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Pkg",
     "title": "Pkg.activate",
     "category": "function",
-    "text": "Pkg.activate([s::String]; shared::Bool=false)\n\nActivate the environment at s. The active environment is the environment that is modified by executing package commands. The logic for what path is activated is as follows:\n\nIf shared is true, the first existing environment named s from the depots in the depot stack will be activated. If no such environment exists yet, activate it in the first depot.\nIf s is a path that exist, that environment will be activated.\nIf s is a package name in the current project activate that is tracking a path, activate the environment at that path.\nIf s is a non-existing path, activate that path.\n\nIf no argument is given to activate, activate the home project, which is the one specified by either --project command line when starting julia, or JULIA_PROJECT environment variable.\n\nExamples\n\nPkg.activate()\nPkg.activate(\"local/path\")\nPkg.activate(\"MyDependency\")\n\n\n\n\n\n"
+    "text": "Pkg.activate([s::String]; shared::Bool=false)\n\nActivate the environment at s. The active environment is the environment that is modified by executing package commands. The logic for what path is activated is as follows:\n\nIf shared is true, the first existing environment named s from the depots in the depot stack will be activated. If no such environment exists, create and activate that environment in the first depot.\nIf s is an existing path, then activate the environment at that path.\nIf s is a package in the current project and s is tracking a path, then activate the environment at the tracked path.\nElse, s is interpreted as a non-existing path, activate that path.\n\nIf no argument is given to activate, then activate the home project. The home project is specified by either the --project command line option to the julia executable, or the JULIA_PROJECT environment variable.\n\nExamples\n\nPkg.activate()\nPkg.activate(\"local/path\")\nPkg.activate(\"MyDependency\")\n\n\n\n\n\n"
 },
 
 {
@@ -19685,7 +19685,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Pkg",
     "title": "Pkg.rm",
     "category": "function",
-    "text": "Pkg.rm(pkg::Union{String, Vector{String})\nPkg.rm(pkg::Union{PackageSpec, Vector{PackageSpec}})\n\nRemove a package from the current project. If the mode of pkg is PKGMODE_MANIFEST also remove it from the manifest including all recursive dependencies of pkg.\n\nSee also PackageSpec, PackageMode.\n\n\n\n\n\n"
+    "text": "Pkg.rm(pkg::Union{String, Vector{String}})\nPkg.rm(pkg::Union{PackageSpec, Vector{PackageSpec}})\n\nRemove a package from the current project. If the mode of pkg is PKGMODE_MANIFEST also remove it from the manifest including all recursive dependencies of pkg.\n\nSee also PackageSpec, PackageMode.\n\n\n\n\n\n"
 },
 
 {
@@ -19693,7 +19693,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Pkg",
     "title": "Pkg.update",
     "category": "function",
-    "text": "Pkg.update(; level::UpgradeLevel=UPLEVEL_MAJOR, mode::PackageMode = PKGMODE_PROJECT)\nPkg.update(pkg::Union{String, Vector{String})\nPkg.update(pkg::Union{PackageSpec, Vector{PackageSpec}})\n\nUpdate a package pkg. If no posistional argument is given, update all packages in the manifest if mode is PKGMODE_MANIFEST and packages in both manifest and project if mode is PKGMODE_PROJECT. If no positional argument is given level can be used to control what how much packages are allowed to be upgraded (major, minor, patch, fixed).\n\nSee also PackageSpec, PackageMode, UpgradeLevel.\n\n\n\n\n\n"
+    "text": "Pkg.update(; level::UpgradeLevel=UPLEVEL_MAJOR, mode::PackageMode = PKGMODE_PROJECT)\nPkg.update(pkg::Union{String, Vector{String}})\nPkg.update(pkg::Union{PackageSpec, Vector{PackageSpec}})\n\nUpdate a package pkg. If no posistional argument is given, update all packages in the manifest if mode is PKGMODE_MANIFEST and packages in both manifest and project if mode is PKGMODE_PROJECT. If no positional argument is given level can be used to control what how much packages are allowed to be upgraded (major, minor, patch, fixed).\n\nSee also PackageSpec, PackageMode, UpgradeLevel.\n\n\n\n\n\n"
 },
 
 {
@@ -19709,7 +19709,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Pkg",
     "title": "Pkg.build",
     "category": "function",
-    "text": "Pkg.build()\nPkg.build(pkg::Union{String, Vector{String})\nPkg.build(pkgs::Union{PackageSpec, Vector{PackageSpec}})\n\nRun the build script in deps/build.jl for pkg and all of the dependencies in depth-first recursive order. If no argument is given to build, the current project is built, which thus needs to be a package. This function is called automatically one any package that gets installed for the first time.\n\n\n\n\n\n"
+    "text": "Pkg.build()\nPkg.build(pkg::Union{String, Vector{String}})\nPkg.build(pkgs::Union{PackageSpec, Vector{PackageSpec}})\n\nRun the build script in deps/build.jl for pkg and all of the dependencies in depth-first recursive order. If no argument is given to build, the current project is built, which thus needs to be a package. This function is called automatically one any package that gets installed for the first time.\n\n\n\n\n\n"
 },
 
 {
@@ -19717,7 +19717,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Pkg",
     "title": "Pkg.pin",
     "category": "function",
-    "text": "Pkg.pin(pkg::Union{String, Vector{String})\nPkg.pin(pkgs::Union{Packagespec, Vector{Packagespec}})\n\nPin a package to the current version (or the one given in the packagespec or a certain git revision. A pinned package is never updated.\n\n\n\n\n\n"
+    "text": "Pkg.pin(pkg::Union{String, Vector{String}})\nPkg.pin(pkgs::Union{Packagespec, Vector{Packagespec}})\n\nPin a package to the current version (or the one given in the packagespec or a certain git revision. A pinned package is never updated.\n\n\n\n\n\n"
 },
 
 {
@@ -19725,7 +19725,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Pkg",
     "title": "Pkg.free",
     "category": "function",
-    "text": "Pkg.free(pkg::Union{String, Vector{String})\nPkg.free(pkgs::Union{Packagespec, Vector{Packagespec}})\n\nFree a package which removes a pin if it exists, or if the package is tracking a path, e.g. after Pkg.develop, go back to tracking registered versions.\n\nExamples\n\nPkg.free(\"Package\")\nPkg.free(PackageSpec(\"Package\"))\n\n\n\n\n\n"
+    "text": "Pkg.free(pkg::Union{String, Vector{String}})\nPkg.free(pkgs::Union{Packagespec, Vector{Packagespec}})\n\nFree a package which removes a pin if it exists, or if the package is tracking a path, e.g. after Pkg.develop, go back to tracking registered versions.\n\nExamples\n\nPkg.free(\"Package\")\nPkg.free(PackageSpec(\"Package\"))\n\n\n\n\n\n"
 },
 
 {
