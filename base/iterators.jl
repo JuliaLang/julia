@@ -390,10 +390,13 @@ eltype(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_eltype(Is)
 _zip_eltype(::Type{Is}) where {Is<:Tuple} =
     tuple_type_cons(eltype(tuple_type_head(Is)), _zip_eltype(tuple_type_tail(Is)))
 _zip_eltype(::Type{Tuple{}}) = Tuple{}
-@inline isdone(z::Zip) = any(isdone, z.is)
-@inline isdone(z::Zip, ss) = _zip_any_isdone(z.is, ss)
-@inline _zip_any_isdone(is, ss) =
-    isdone(is[1], ss[1]) === true || _zip_any_isdone(tail(is), tail(ss))
+@inline isdone(z::Zip) = _zip_any_isdone(z.is, map(_ -> (), z.is))
+@inline isdone(z::Zip, ss) = _zip_any_isdone(z.is, map(tuple, ss))
+@inline function _zip_any_isdone(is, ss)
+    d1 = isdone(is[1], ss[1]...)
+    d1 === true && return true
+    return d1 | _zip_any_isdone(tail(is), tail(ss))
+end
 @inline _zip_any_isdone(::Tuple{}, ::Tuple{}) = false
 
 @propagate_inbounds iterate(z::Zip) = _zip_iterate_all(z.is, map(_ -> (), z.is))
