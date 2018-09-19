@@ -12,7 +12,7 @@ using .Base:
     @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
     tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
     IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange,
-    LinearIndices, (:), |, +, -, !==, !, <=, <, missing
+    LinearIndices, (:), |, +, -, !==, !, <=, <, missing, map
 
 import .Base:
     first, last,
@@ -254,84 +254,13 @@ get(f::Base.Callable, v::Pairs, key) = get(f, v.data, key)
 
 # zip
 
-abstract type AbstractZipIterator end
-
 zip_iteratorsize(a, b) = and_iteratorsize(a,b) # as `and_iteratorsize` but inherit `Union{HasLength,IsInfinite}` of the shorter iterator
 zip_iteratorsize(::HasLength, ::IsInfinite) = HasLength()
 zip_iteratorsize(::HasShape, ::IsInfinite) = HasLength()
 zip_iteratorsize(a::IsInfinite, b) = zip_iteratorsize(b,a)
 zip_iteratorsize(a::IsInfinite, b::IsInfinite) = IsInfinite()
 
-
-struct Zip1{I} <: AbstractZipIterator
-    a::I
-end
-zip(a) = Zip1(a)
-length(z::Zip1) = length(z.a)
-size(z::Zip1) = size(z.a)
-axes(z::Zip1) = axes(z.a)
-eltype(::Type{Zip1{I}}) where {I} = Tuple{eltype(I)}
-@propagate_inbounds function iterate(z::Zip1, state...)
-    n = iterate(z.a, state...)
-    n === nothing && return n
-    return ((n[1],), n[2])
-end
-@inline isdone(z::Zip1, state...) = isdone(z.a, state...)
-
-IteratorSize(::Type{Zip1{I}}) where {I} = IteratorSize(I)
-IteratorEltype(::Type{Zip1{I}}) where {I} = IteratorEltype(I)
-
-struct Zip2{I1, I2} <: AbstractZipIterator
-    a::I1
-    b::I2
-end
-zip(a, b) = Zip2(a, b)
-length(z::Zip2) = _min_length(z.a, z.b, IteratorSize(z.a), IteratorSize(z.b))
-size(z::Zip2) = promote_shape(size(z.a), size(z.b))
-axes(z::Zip2) = promote_shape(axes(z.a), axes(z.b))
-eltype(::Type{Zip2{I1,I2}}) where {I1,I2} = Tuple{eltype(I1), eltype(I2)}
-@inline isdone(z::Zip2) = isdone(z.a) | isdone(z.b)
-@inline isdone(z::Zip2, (sa, sb)::Tuple{Any, Any}) = isdone(z.a, sa) | isdone(z.b, sb)
-function zip_iterate(a, b, sta, stb) # the states are either Tuple{} or Tuple{Any}
-    da, db = isdone(a), isdone(b)
-    da === true && return nothing
-    db === true && return nothing
-    if da === missing
-       ya = iterate(a, sta...)
-       ya === nothing && return nothing
-    end
-    if db === missing
-       yb = iterate(b, stb...)
-       yb === nothing && return nothing
-    end
-    if da === false
-         ya = iterate(a, sta...)
-         ya === nothing && return nothing
-    end
-    if db === false
-         yb = iterate(b, stb...)
-         yb === nothing && return nothing
-    end
-    return (ya, yb)
-end
-let interleave(a, b) = ((a[1], b[1]), (a[2], b[2]))
-    global iterate
-    @propagate_inbounds function iterate(z::Zip2)
-        ys = zip_iterate(z.a, z.b, (), ())
-        ys === nothing && return nothing
-        return interleave(ys...)
-    end
-    @propagate_inbounds function iterate(z::Zip2, st::Tuple{Any, Any})
-        ys = zip_iterate(z.a, z.b, (st[1],), (st[2],))
-        ys === nothing && return nothing
-        return interleave(ys...)
-    end
-end
-
-IteratorSize(::Type{Zip2{I1,I2}}) where {I1,I2} = zip_iteratorsize(IteratorSize(I1),IteratorSize(I2))
-IteratorEltype(::Type{Zip2{I1,I2}}) where {I1,I2} = and_iteratoreltype(IteratorEltype(I1),IteratorEltype(I2))
-
-struct Zip{Is<:Tuple} <: AbstractZipIterator
+struct Zip{Is<:Tuple}
     is::Is
 end
 
@@ -355,7 +284,7 @@ julia> b = ["e","d","b","c","a"]
  "a"
 
 julia> c = zip(a,b)
-Base.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5, ["e", "d", "b", "c", "a"])
+Base.Iterators.Zip{Tuple{UnitRange{Int64},Array{String,1}}}((1:5, ["e", "d", "b", "c", "a"]))
 
 julia> length(c)
 5
@@ -364,7 +293,7 @@ julia> first(c)
 (1, "e")
 ```
 """
-zip(a, b, c...) = Zip((a, b, c...))
+zip(a, b...) = Zip((a, b...))
 length(z::Zip) = _zip_min_length(nothing, z.is)
 function _zip_min_length(::Nothing, is)
     i = is[1]
@@ -442,7 +371,6 @@ function _zip_isdone(is, ss)
 end
 _zip_isdone(::Tuple{}, ::Tuple{}) = ()
 
-
 IteratorSize(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_iterator_size(Is)
 _zip_iterator_size(::Type{Is}) where {Is<:Tuple} =
     zip_iteratorsize(IteratorSize(tuple_type_head(Is)),
@@ -454,8 +382,6 @@ _zip_iterator_eltype(::Type{Is}) where {Is<:Tuple} =
                        _zip_iterator_eltype(tuple_type_tail(Is)))
 _zip_iterator_eltype(::Type{Tuple{I}}) where {I} = IteratorEltype(I)
 
-reverse(z::Zip1) = Zip1(reverse(z.a))
-reverse(z::Zip2) = Zip2(reverse(z.a), reverse(z.b))
 reverse(z::Zip) = Zip(map(reverse, z.is))
 
 # filter
