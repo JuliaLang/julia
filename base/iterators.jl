@@ -293,7 +293,7 @@ julia> first(c)
 (1, "e")
 ```
 """
-zip(a, b...) = Zip((a, b...))
+zip(a...) = Zip(a)
 length(z::Zip) = _zip_min_length(nothing, z.is)
 function _zip_min_length(::Nothing, is)
     i = is[1]
@@ -378,11 +378,12 @@ _zip_iterator_size(::Type{Is}) where {Is<:Tuple} =
     zip_iteratorsize(IteratorSize(tuple_type_head(Is)),
                      _zip_iterator_size(tuple_type_tail(Is)))
 _zip_iterator_size(::Type{Tuple{I}}) where {I} = IteratorSize(I)
+_zip_iterator_size(::Type{Tuple{}}) = IsInfinite()
 IteratorEltype(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_iterator_eltype(Is)
 _zip_iterator_eltype(::Type{Is}) where {Is<:Tuple} =
     and_iteratoreltype(IteratorEltype(tuple_type_head(Is)),
                        _zip_iterator_eltype(tuple_type_tail(Is)))
-_zip_iterator_eltype(::Type{Tuple{I}}) where {I} = IteratorEltype(I)
+_zip_iterator_eltype(::Type{Tuple{}}) = HasEltype()
 
 reverse(z::Zip) = Zip(map(reverse, z.is))
 
