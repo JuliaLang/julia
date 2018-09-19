@@ -460,10 +460,10 @@ It should be pointed out if two projects uses the same package at the same versi
 In order to create a new project, create a directory for it and then activate that directory to make it the "active project" which package operations manipulate:
 
 ```
-shell> mkdir MyProject
+julia> mkdir("MyProject")
 
-shell> cd MyProject
-/Users/kristoffer/MyProject
+julia> cd("MyProject")
+/Users/UserName/MyProject
 
 (v1.0) pkg> activate .
 
@@ -474,23 +474,32 @@ shell> cd MyProject
 Note that the REPL prompt changed when the new project is activated. Since this is a newly created project, the status command show it contains no packages, and in fact, it has no project or manifest file until we add a package to it:
 
 ```
-shell> ls -l
-total 0
+julia> readdir()
+0-element Array{String,1}
 
 (MyProject) pkg> add Example
-  Updating registry at `~/.julia/registries/General`
-  Updating git-repo `https://github.com/JuliaRegistries/General.git`
  Resolving package versions...
+ Installed Example ─ v0.5.1
   Updating `Project.toml`
   [7876af07] + Example v0.5.1
   Updating `Manifest.toml`
   [7876af07] + Example v0.5.1
+  [2a0f44e3] + Base64
+  [8ba89e20] + Distributed
+  [b77e0a4c] + InteractiveUtils
+  [8f399da3] + Libdl
+  [37e2e46d] + LinearAlgebra
+  [56ddb016] + Logging
+  [d6f4376e] + Markdown
+  [9a3f8284] + Random
+  [9e88b42a] + Serialization
+  [6462fe0b] + Sockets
   [8dfed614] + Test
 
-shell> ls -l
-total 8
--rw-r--r-- 1 stefan staff 207 Jul  3 16:35 Manifest.toml
--rw-r--r-- 1 stefan staff  56 Jul  3 16:35 Project.toml
+julia> readdir()
+2-element Array{String,1}:
+ "Manifest.toml"
+ "Project.toml"
 
 shell> cat Project.toml
 [deps]
@@ -548,7 +557,7 @@ To generate files for a new package, use `pkg> generate`.
 This creates a new project `HelloWorld` with the following files (visualized with the external [`tree` command](https://linux.die.net/man/1/tree)):
 
 ```jl
-shell> cd HelloWorld
+julia> cd("HelloWorld")
 
 shell> tree .
 .
