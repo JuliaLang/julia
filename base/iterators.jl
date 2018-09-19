@@ -402,38 +402,33 @@ _zip_eltype(::Type{Tuple{}}) = Tuple{}
 @propagate_inbounds function _zip_iterate_all(is, ss)
     ds = _zip_isdone(is, ss)
     ds === true && return nothing
-    xs = _zip_iterate_all1(is, ss, ds)
-    xs === nothing && return nothing
-    return _zip_iterate_all2(is, ss, ds, xs)
+    xs1 = _zip_iterate_some(is, ss, ds, missing)
+    xs1 === nothing && return nothing
+    xs2 = _zip_iterate_some(is, ss, ds, false)
+    xs2 === nothing && return nothing
+    return _zip_iterate_interleave(xs1, xs2, ds)
 end
 
-@propagate_inbounds function _zip_iterate_all1(is, ss, ds)
-    if ds[1] === missing
-        x = iterate(is[1], ss[1]...)
-        x === nothing && return nothing
-        y = _zip_iterate_all1(tail(is), tail(ss), tail(ds))
-        y === nothing && return nothing
-        return (x, y...)
-    else
-        _zip_iterate_all1(tail(is), tail(ss), tail(ds))
-    end
+@propagate_inbounds function _zip_iterate_some(is, ss, ds::Tuple{T,Vararg{Any}}, f::T) where T
+    x = iterate(is[1], ss[1]...)
+    x === nothing && return nothing
+    y = _zip_iterate_some(tail(is), tail(ss), tail(ds), f)
+    y === nothing && return nothing
+    return (x, y...)
 end
-_zip_iterate_all1(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
+@propagate_inbounds _zip_iterate_some(is, ss, ds::Tuple{Any,Vararg{Any}}, f) =
+    _zip_iterate_some(tail(is), tail(ss), tail(ds), f)
+_zip_iterate_some(::Tuple{}, ::Tuple{}, ::Tuple{}, ::Any) = ()
 
-@propagate_inbounds function _zip_iterate_all2(is, ss, ds, xs)
-    if ds[1] !== missing
-        x = iterate(is[1], ss[1]...)
-        x === nothing && return nothing
-        y = _zip_iterate_all2(tail(is), tail(ss), tail(ds), xs)
-        y === nothing && return nothing
-        return ((x[1], y[1]...), (x[2], y[2]...))
-    else
-        y = _zip_iterate_all2(tail(is), tail(ss), tail(ds), tail(xs))
-        y === nothing && return nothing
-        return ((xs[1][1], y[1]...), (xs[1][2], y[2]...))
-    end
+function _zip_iterate_interleave(xs1, xs2, ds)
+    t = _zip_iterate_interleave(tail(xs1), xs2, tail(ds))
+    ((xs1[1][1], t[1]...), (xs1[1][2], t[2]...))
 end
-_zip_iterate_all2(::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ((), ())
+function _zip_iterate_interleave(xs1, xs2, ds::Tuple{Bool,Vararg{Any}})
+    t = _zip_iterate_interleave(xs1, tail(xs2), tail(ds))
+    ((xs2[1][1], t[1]...), (xs2[1][2], t[2]...))
+end
+_zip_iterate_interleave(::Tuple{}, ::Tuple{}, ::Tuple{}) = ((), ())
 
 function _zip_isdone(is, ss)
     d = isdone(is[1], ss[1]...)
