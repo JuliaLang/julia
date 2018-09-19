@@ -986,7 +986,7 @@ function tuple_tfunc(atypes::Vector{Any})
         # TODO ignore singleton Const (don't forget to update cache logic if you implement this)
         anyinfo || (anyinfo = !isa(x, Type) || isType(x))
         if isa(x, Const)
-            p[i] = typeof(x.val)
+            p[i] = Core.Typeof(x.val)
         else
             x = widenconst(x)
             if isType(x)
