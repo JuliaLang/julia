@@ -50,7 +50,7 @@ Many functions for constructing and initializing arrays are provided. In the fol
 such functions, calls with a `dims...` argument can either take a single tuple of dimension sizes
 or a series of dimension sizes passed as a variable number of arguments. Most of these functions
 also accept a first input `T`, which is the element type of the array. If the type `T` is
-omitted it will default to [`Float64`](@ref).
+omitted it will default to [`Float64`](@ref). For identity matrix, first type `using LinearAlgebra` for `I` to be defined.
 
 | Function                           | Description                                                                                                                                                                                                                                  |
 |:---------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
