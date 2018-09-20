@@ -947,7 +947,7 @@ void gc_time_mallocd_array_end(void)
 }
 
 void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
-                        int64_t perm_scanned_bytes)
+                        int64_t old_scanned_bytes)
 {
     int64_t last_remset_len = 0;
     int64_t remset_nptr = 0;
@@ -960,8 +960,8 @@ void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
               "scanned %" PRId64 " kB = %" PRId64 " + %" PRId64 " | "
               "remset %" PRId64 " %" PRId64 "\n",
               jl_ns2ms(gc_premark_end - t0),
-              (scanned_bytes + perm_scanned_bytes) / 1024,
-              scanned_bytes / 1024, perm_scanned_bytes / 1024,
+              (scanned_bytes + old_scanned_bytes) / 1024,
+              scanned_bytes / 1024, old_scanned_bytes / 1024,
               last_remset_len, remset_nptr);
 }
 

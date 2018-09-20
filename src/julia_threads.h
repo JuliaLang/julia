@@ -59,8 +59,8 @@ typedef struct {
 // This is sync'd after marking.
 typedef union _jl_gc_mark_data jl_gc_mark_data_t;
 typedef struct {
-    // thread local increment of `perm_scanned_bytes`
-    size_t perm_scanned_bytes;
+    // thread local increment of `old_scanned_bytes`
+    size_t old_scanned_bytes;
     // thread local increment of `scanned_bytes`
     size_t scanned_bytes;
     // Number of queued big objects (<= 1024)

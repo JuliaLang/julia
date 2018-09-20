@@ -417,8 +417,8 @@ static int mark_reset_age = 0;
 // - the size of the age storage in jl_gc_pagemeta_t
 
 
-static int64_t scanned_bytes; // young bytes scanned while marking
-static int64_t perm_scanned_bytes; // old bytes scanned while marking
+static int64_t scanned_bytes;     // young bytes scanned while marking
+static int64_t old_scanned_bytes; // old bytes scanned while marking
 static int prev_sweep_full = 1;
 
 #define inc_sat(v,s) v = (v) >= s ? s : (v)+1
@@ -427,35 +427,27 @@ static int prev_sweep_full = 1;
 static int64_t live_bytes = 0;
 static int64_t promoted_bytes = 0;
 
-static int64_t last_full_live_ub = 0;
-static int64_t last_full_live_est = 0;
-// upper bound and estimated live object sizes
+static int64_t last_old_live_est = 0; // estimate of size of old objects
+// Trigger a full collection if estimated old object size has grown.
 // This heuristic should be really unlikely to trigger.
 // However, this should be simple enough to trigger a full collection
 // when it's necessary if other heuristics are messed up.
 // It is also possible to take the total memory available into account
 // if necessary.
-STATIC_INLINE int gc_check_heap_size(int64_t sz_ub, int64_t sz_est)
+STATIC_INLINE int gc_check_old_heap_size(int64_t old_sz_est)
 {
-    if (__unlikely(!last_full_live_ub || last_full_live_ub > sz_ub)) {
-        last_full_live_ub = sz_ub;
+    if (__unlikely(!last_old_live_est || last_old_live_est > old_sz_est)) {
+        last_old_live_est = old_sz_est;
     }
-    else if (__unlikely(last_full_live_ub * 3 / 2 < sz_ub)) {
-        return 1;
-    }
-    if (__unlikely(!last_full_live_est || last_full_live_est > sz_est)) {
-        last_full_live_est = sz_est;
-    }
-    else if (__unlikely(last_full_live_est * 2 < sz_est)) {
+    else if (__unlikely(last_old_live_est * 3 / 2 < old_sz_est)) {
         return 1;
     }
     return 0;
 }
 
-STATIC_INLINE void gc_update_heap_size(int64_t sz_ub, int64_t sz_est)
+STATIC_INLINE void gc_update_old_heap_size(int64_t old_sz_est)
 {
-    last_full_live_ub = sz_ub;
-    last_full_live_est = sz_est;
+    last_old_live_est = old_sz_est;
 }
 
 static void gc_sync_cache_nolock(jl_ptls_t ptls, jl_gc_mark_cache_t *gc_cache) JL_NOTSAFEPOINT
@@ -474,9 +466,9 @@ static void gc_sync_cache_nolock(jl_ptls_t ptls, jl_gc_mark_cache_t *gc_cache) J
         }
     }
     gc_cache->nbig_obj = 0;
-    perm_scanned_bytes += gc_cache->perm_scanned_bytes;
+    old_scanned_bytes += gc_cache->old_scanned_bytes;
     scanned_bytes += gc_cache->scanned_bytes;
-    gc_cache->perm_scanned_bytes = 0;
+    gc_cache->old_scanned_bytes = 0;
     gc_cache->scanned_bytes = 0;
 }
 
@@ -550,7 +542,7 @@ STATIC_INLINE void gc_setmark_big(jl_ptls_t ptls, jl_taggedvalue_t *o,
     assert(!page_metadata(o));
     bigval_t *hdr = bigval_header(o);
     if (mark_mode == GC_OLD_MARKED) {
-        ptls->gc_cache.perm_scanned_bytes += hdr->sz & ~3;
+        ptls->gc_cache.old_scanned_bytes += hdr->sz & ~3;
         gc_queue_big_marked(ptls, hdr, 0);
     }
     else {
@@ -578,7 +570,7 @@ STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
     gc_setmark_big(ptls, o, mark_mode);
 #else
     if (mark_mode == GC_OLD_MARKED) {
-        ptls->gc_cache.perm_scanned_bytes += page->osize;
+        ptls->gc_cache.old_scanned_bytes += page->osize;
         jl_atomic_fetch_add_relaxed(&page->nold, 1);
     }
     else {
@@ -2072,7 +2064,7 @@ mark: {
                     objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED,
                                      array_nbytes(a));
                     if (bits == GC_OLD_MARKED) {
-                        ptls->gc_cache.perm_scanned_bytes += array_nbytes(a);
+                        ptls->gc_cache.old_scanned_bytes += array_nbytes(a);
                     }
                     else {
                         ptls->gc_cache.scanned_bytes += array_nbytes(a);
@@ -2394,7 +2386,7 @@ static void jl_gc_premark(jl_ptls_t ptls2)
     ptls2->heap.remset_nptr = 0;
 
     // avoid counting remembered objects & bindings twice
-    // in `perm_scanned_bytes`
+    // in `old_scanned_bytes`
     size_t len = remset->len;
     void **items = remset->items;
     for (size_t i = 0; i < len; i++) {
@@ -2452,7 +2444,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     gc_mark_sp_init(gc_cache, &sp);
 
     uint64_t t0 = jl_hrtime();
-    int64_t last_perm_scanned_bytes = perm_scanned_bytes;
+    int64_t last_old_scanned_bytes = old_scanned_bytes;
 
     // 1. fix GC bits of objects in the remset.
     for (int t_i = 0; t_i < jl_n_threads; t_i++)
@@ -2474,7 +2466,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     gc_mark_sp_init(gc_cache, &sp);
     gc_num.since_sweep += gc_num.allocd + (int64_t)gc_num.interval;
     gc_settime_premark_end();
-    gc_time_mark_pause(t0, scanned_bytes, perm_scanned_bytes);
+    gc_time_mark_pause(t0, scanned_bytes, old_scanned_bytes);
     int64_t actual_allocd = gc_num.since_sweep;
     // marking is over
 
@@ -2514,7 +2506,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     gc_sync_all_caches_nolock(ptls);
 
     int64_t live_sz_ub = live_bytes + actual_allocd;
-    int64_t live_sz_est = scanned_bytes + perm_scanned_bytes;
+    int64_t live_sz_est = scanned_bytes + old_scanned_bytes;
     int64_t estimate_freed = live_sz_ub - live_sz_est;
 
     gc_verify(ptls);
@@ -2525,7 +2517,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     objprofile_reset();
     gc_num.total_allocd += gc_num.since_sweep;
     if (!prev_sweep_full)
-        promoted_bytes += perm_scanned_bytes - last_perm_scanned_bytes;
+        promoted_bytes += old_scanned_bytes - last_old_scanned_bytes;
     // 5. next collection decision
     int not_freed_enough = estimate_freed < (7*(actual_allocd/10));
     int nptr = 0;
@@ -2537,9 +2529,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     if ((full || large_frontier ||
          ((not_freed_enough || promoted_bytes >= gc_num.interval) &&
           (promoted_bytes >= default_collect_interval || prev_sweep_full)) ||
-         gc_check_heap_size(live_sz_ub, live_sz_est)) &&
+         gc_check_old_heap_size(old_scanned_bytes)) &&
         gc_num.pause > 1) {
-        gc_update_heap_size(live_sz_ub, live_sz_est);
+        gc_update_old_heap_size(old_scanned_bytes);
         recollect = full;
         if (large_frontier)
             gc_num.interval = last_long_collect_interval;
@@ -2560,7 +2552,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
         sweep_full = gc_sweep_always_full;
     }
     if (sweep_full)
-        perm_scanned_bytes = 0;
+        old_scanned_bytes = 0;
     scanned_bytes = 0;
     // 5. start sweeping
     sweep_weak_refs();
@@ -2698,7 +2690,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     arraylist_new(&ptls->finalizers, 0);
 
     jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
-    gc_cache->perm_scanned_bytes = 0;
+    gc_cache->old_scanned_bytes = 0;
     gc_cache->scanned_bytes = 0;
     gc_cache->nbig_obj = 0;
     JL_MUTEX_INIT(&gc_cache->stack_lock);
@@ -2857,7 +2849,7 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
         jl_throw(jl_memory_exception);
 
     if (jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED) {
-        ptls->gc_cache.perm_scanned_bytes += allocsz - oldsz;
+        ptls->gc_cache.old_scanned_bytes += allocsz - oldsz;
         live_bytes += allocsz - oldsz;
     }
     else if (allocsz < oldsz)
