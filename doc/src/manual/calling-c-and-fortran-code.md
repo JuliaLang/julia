@@ -254,7 +254,7 @@ to the specified type. For example, the following call:
 ccall((:foo, "libfoo"), Cvoid, (Int32, Float64), x, y)
 ```
 
-will behave as if it were written as:
+will behave as if it were written like this:
 
 ```julia
 ccall((:foo, "libfoo"), Cvoid, (Int32, Float64),
@@ -408,7 +408,7 @@ checks and is only meant to improve readability of the call.
     `wint_t`) on all platforms.
 
 !!! warning
-    A return type of `Union{}` means the function will not return i.e., C++11 `[[noreturn]]` or C11
+    A return type of `Union{}` means the function will not return, i.e., C++11 `[[noreturn]]` or C11
     `_Noreturn` (e.g. `jl_throw` or `longjmp`). Do not use this for functions that return no value
     (`void`) but do return, use `Cvoid` instead.
 
@@ -468,7 +468,7 @@ checks and is only meant to improve readability of the call.
 
 ### Struct Type correspondences
 
-Composite types, e.g., `struct` in C or `TYPE` in Fortran90 (or `STRUCTURE` / `RECORD` in some variants
+Composite types such as `struct` in C or `TYPE` in Fortran90 (or `STRUCTURE` / `RECORD` in some variants
 of F77), can be mirrored in Julia by creating a `struct` definition with the same
 field layout.
 
