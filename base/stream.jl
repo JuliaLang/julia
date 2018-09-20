@@ -253,7 +253,7 @@ end
 
 function check_open(x::Union{LibuvStream, LibuvServer})
     if !isopen(x) || x.status == StatusClosing
-        throw(ArgumentError("stream is closed or unusable"))
+        throw(IOError("stream is closed or unusable", 0))
     end
 end
 
