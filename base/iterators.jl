@@ -267,8 +267,11 @@ end
 """
     zip(iters...)
 
-For a set of iterable objects, return an iterable of tuples, where the `i`th tuple contains
-the `i`th component of each input iterable.
+Run multiple iterators at the same time, until any of them is exhausted. The value type of
+the `zip` iterator is a tuple of values of its subiterators.
+
+Note: `zip` orders the calls to its subiterators in such a way that stateful iterators will
+not advance when another iterator finishes in the current iteration.
 
 # Examples
 ```jldoctest
