@@ -366,7 +366,8 @@ private:
     void PopGCFrame(AllocaInst *gcframe, Instruction *InsertBefore);
     std::vector<int> ColorRoots(const State &S);
     void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame, Instruction *InsertionPoint);
-    void PlaceGCFrameStores(State &S, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame);
+    void PlaceGCFrameStore(State &S, Value *Val, unsigned MinColorRoot, unsigned Color, Value *GCFrame, Instruction *InsertionPoint);
+    void PlaceGCFrameStores(State &S, unsigned MinColorRoot, unsigned MaxColor, const std::vector<int> &Colors, Value *GCFrame);
     void PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
     bool doInitialization(Module &M) override;
     void reinitFunctions(Module &M);
@@ -1913,25 +1914,39 @@ static void AddInPredLiveOuts(BasicBlock *BB, BitVector &LiveIn, State &S)
     }
 }
 
+void LateLowerGCFrame::PlaceGCFrameStore(State &S, Value *Val, unsigned MinColorRoot,
+                                         unsigned Color, Value *GCFrame,
+                                         Instruction *InsertionPoint) {
+    Value *args[1] = {
+        ConstantInt::get(T_int32, Color+MinColorRoot)
+    };
+    GetElementPtrInst *gep = GetElementPtrInst::Create(T_prjlvalue, GCFrame, makeArrayRef(args));
+    gep->insertBefore(InsertionPoint);
+    new StoreInst(Val, gep, InsertionPoint);
+}
+
 void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot,
                                          const std::vector<int> &Colors, Value *GCFrame,
                                          Instruction *InsertionPoint) {
     Value *Val = GetPtrForNumber(S, R, InsertionPoint);
-    Value *args[1] = {
-        ConstantInt::get(T_int32, Colors[R]+MinColorRoot)
-    };
-    GetElementPtrInst *gep = GetElementPtrInst::Create(T_prjlvalue, GCFrame, makeArrayRef(args));
-    gep->insertBefore(InsertionPoint);
     Val = MaybeExtractUnion(std::make_pair(Val, -1), InsertionPoint);
     // Pointee types don't have semantics, so the optimizer is
     // free to rewrite them if convenient. We need to change
     // it back here for the store.
     if (Val->getType() != T_prjlvalue)
         Val = new BitCastInst(Val, T_prjlvalue, "", InsertionPoint);
-    new StoreInst(Val, gep, InsertionPoint);
+    PlaceGCFrameStore(S, Val, MinColorRoot, Colors[R], GCFrame, InsertionPoint);
 }
 
-void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
+static void LiveColorsFromValues(BitVector &LiveColors, const BitVector &LiveValues, const std::vector<int> &Colors)
+{
+    LiveColors.reset();
+    for (int Idx = LiveValues.find_first(); Idx >= 0; Idx = LiveValues.find_next(Idx)) {
+        LiveColors[Colors[Idx]] = 1;
+    }
+}
+
+void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot, unsigned MaxColor,
                                           const std::vector<int> &Colors, Value *GCFrame)
 {
     for (auto &BB : *S.F) {
@@ -1939,12 +1954,15 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
         if (!BBS.HasSafepoint) {
             continue;
         }
-        BitVector LiveIn;
+        BitVector LiveIn, LiveColors0{MaxColor+1}, LiveColors1{MaxColor+1};
         AddInPredLiveOuts(&BB, LiveIn, S);
         const BitVector *LastLive = &LiveIn;
+        BitVector *LastLiveColors = &LiveColors0, *NowLiveColors = &LiveColors1;
+        LiveColorsFromValues(*LastLiveColors, LiveIn, Colors);
         for(auto rit = BBS.Safepoints.rbegin();
               rit != BBS.Safepoints.rend(); ++rit ) {
             const BitVector &NowLive = S.LiveSets[*rit];
+            LiveColorsFromValues(*NowLiveColors, NowLive, Colors);
             for (int Idx = NowLive.find_first(); Idx >= 0; Idx = NowLive.find_next(Idx)) {
                 if (!HasBitSet(*LastLive, Idx)) {
                     PlaceGCFrameStore(S, Idx, MinColorRoot, Colors, GCFrame,
@@ -1952,6 +1970,15 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
                 }
             }
             LastLive = &NowLive;
+            // Store null to any slots that were previously used but now aren't, allowing
+            // objects to be freed sooner.
+            for (int Idx = LastLiveColors->find_first(); Idx >= 0; Idx = LastLiveColors->find_next(Idx)) {
+                if (!HasBitSet(*NowLiveColors, Idx)) {
+                    PlaceGCFrameStore(S, ConstantPointerNull::get(cast<PointerType>(T_prjlvalue)), MinColorRoot, Idx, GCFrame,
+                                      S.ReverseSafepointNumbering[*rit]);
+                }
+            }
+            std::swap(LastLiveColors, NowLiveColors);
         }
     }
 }
@@ -2011,7 +2038,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
         }
         unsigned MinColorRoot = AllocaSlot;
         // Insert GC frame stores
-        PlaceGCFrameStores(S, MinColorRoot, Colors, gcframe);
+        PlaceGCFrameStores(S, MinColorRoot, MaxColor, Colors, gcframe);
         // Insert GCFrame pops
         for(Function::iterator I = F->begin(), E = F->end(); I != E; ++I) {
             if (isa<ReturnInst>(I->getTerminator())) {
