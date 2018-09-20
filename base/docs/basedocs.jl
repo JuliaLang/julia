@@ -223,14 +223,14 @@ true
 ```
 Arrays passed to functions are also not copied. Thus reassignment within a function can modify the content of array arguments. (The names of functions which do this are conventionally suffixed with '!'.)
 ```jldoctest
-julia> function f!(x); x[:] = x[:]+1; end
+julia> function f!(x); x[:] = x[:] .+ 1; end
 f! (generic function with 1 method)
 
 julia> a = [1]
 1-element Array{Int64,1}:
  1
 
-julia> f(a)
+julia> f!(a)
 1-element Array{Int64,1}:
  2
 
@@ -259,7 +259,7 @@ julia> a = zeros(3,3)
  0.0  0.0  0.0
  0.0  0.0  0.0
 
-julia> diag(a) .= 1
+julia> using LinearAlgebra; diag(a) .= 1
 3-element Array{Float64,1}:
  1.0
  1.0
