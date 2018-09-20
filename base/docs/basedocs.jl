@@ -198,6 +198,125 @@ julia> z
 kw"global"
 
 """
+    =
+
+`=` is the assignment operator. `a = b` assigns `a` to `b`, making `a === b` return  `true`.
+
+# Examples
+Assigning `a` to `b` does not create a copy of `b`; instead use `copy` or `deepcopy`.
+
+```jldoctest
+julia> b = [1]; a = b
+1-element Array{Int64,1}:
+ 1
+
+julia> b[1] = 2
+2
+
+julia> a
+1-element Array{Int64,1}:
+ 2
+
+julia> b = [1]; a = copy(b); b[1] = 2; a == [1]
+true
+
+```
+Arrays passed to functions are also not copied. Thus reassignment within a function can modify the content of array arguments. (The names of functions which do this are conventionally suffixed with '!'.)
+```jldoctest
+julia> function f!(x); x[:] = x[:]+1; end
+f! (generic function with 1 method)
+
+julia> a = [1]
+1-element Array{Int64,1}:
+ 1
+
+julia> f(a)
+1-element Array{Int64,1}:
+ 2
+
+julia> a
+1-element Array{Int64,1}:
+ 2
+
+```
+Assignment can operate on multiple values in parallel by use of tuples. (Enclosing parentheses are not strictly necessary.)
+```jldoctest
+julia> (a, b) = (1, 2)
+(1, 2)
+
+julia> a, b = 3, 4
+(3, 4)
+
+julia> a
+3
+
+```
+An array cannot be modified by assigning new values to the output of a function. Such modifications can instead be made by assigning new values at corresponding indices.
+```jldoctest
+julia> a = zeros(3,3)
+3×3 Array{Float64,2}:
+ 0.0  0.0  0.0
+ 0.0  0.0  0.0
+ 0.0  0.0  0.0
+
+julia> diag(a) .= 1
+3-element Array{Float64,1}:
+ 1.0
+ 1.0
+ 1.0
+
+julia> a
+3×3 Array{Float64,2}:
+ 0.0  0.0  0.0
+ 0.0  0.0  0.0
+ 0.0  0.0  0.0
+
+julia> a[diagind(a)] .= 1
+3-element view(::Array{Float64,1}, 1:4:9) with eltype Float64:
+ 1.0
+ 1.0
+ 1.0
+
+julia> a
+3×3 Array{Float64,2}:
+ 1.0  0.0  0.0
+ 0.0  1.0  0.0
+ 0.0  0.0  1.0
+
+```
+Assignment cannot grow an array; assignment at out-of-bounds indices is an error. If the array is a `Vector` it can instead be grown with `push!` or `append!`.
+```jldoctest
+julia> a = [0, 0]; a[3]
+ERROR: BoundsError: attempt to access 2-element Array{Int64,1} at index [3]
+[...]
+
+julia> a = [1, 1]; push!(a, 2, 3)
+4-element Array{Int64,1}:
+ 1
+ 1
+ 2
+ 3
+
+```
+Assignment cannot eliminate elements from an array; instead use `filter` or `filter!`.
+```jldoctest
+julia> a = collect(1:3)
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> filter(a -> a > 1, a)
+2-element Array{Int64,1}:
+ 2
+ 3
+
+```
+
+"""
+kw"="
+
+"""
     let
 
 `let` statements allocate new variable bindings each time they run. Whereas an
