@@ -85,7 +85,7 @@ julia> zeros(Int8, 2, 3)
  0  0  0
 
 julia> zeros(Int8, (2, 3))
-2×3 Array{Int8,3}:
+2×3 Array{Int8,2}:
  0  0  0
  0  0  0
 
