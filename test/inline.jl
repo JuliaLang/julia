@@ -204,3 +204,16 @@ function f_apply_typevar(T)
     return T
 end
 @test length(code_typed(f_apply_typevar, (Type{Any},))[1][1].code) == 1
+
+# check that div can be fully eliminated
+function f_div(x)
+	div(x, 1)
+	return x
+end
+@test length(code_typed(f_div, (Int,))[1][1].code) == 1
+# ...unless we div by an unknown amount
+function f_div(x, y)
+    div(x, y)
+    return x
+end
+@test length(code_typed(f_div, (Int, Int))[1][1].code) > 1
