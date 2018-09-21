@@ -5,9 +5,10 @@
 #####################
 
 function rewrap(@nospecialize(t), @nospecialize(u))
-    isa(t, Const) && return t
-    isa(t, Conditional) && return t
-    return rewrap_unionall(t, u)
+    if isa(t, TypeVar) || isa(t, Type)
+        return rewrap_unionall(t, u)
+    end
+    return t
 end
 
 isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
