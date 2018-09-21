@@ -4521,6 +4521,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "base/base/#where",
+    "page": "Essentials",
+    "title": "where",
+    "category": "keyword",
+    "text": "where\n\nThe where keyword creates a type that is an iterated union of other types, over all values of some variable. For example Vector{T} where T<:Real includes all Vectors where the element type is some kind of Real number.\n\nThe variable bound defaults to Any if it is omitted:\n\nVector{T} where T    # short for `where T<:Any`\n\nVariables can also have lower bounds:\n\nVector{T} where T>:Int\nVector{T} where Int<:T<:Real\n\nThere is also a concise syntax for nested where expressions. For example, this:\n\nPair{T, S} where S<:Array{T} where T<:Number\n\ncan be shortened to:\n\nPair{T, S} where {T<:Number, S<:Array{T}}\n\nThis form is often found on method signatures.\n\nNote that in this form, the variables are listed outermost-first. This matches the order in which variables are substituted when a type is \"applied\" to parameter values using the syntax T{p1, p2, ...}.\n\n\n\n\n\n"
+},
+
+{
     "location": "base/base/#...",
     "page": "Essentials",
     "title": "...",
@@ -4541,7 +4549,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Keywords",
     "category": "section",
-    "text": "module\nexport\nimport\nusing\nbaremodule\nfunction\nmacro\nreturn\ndo\nbegin\nend\nlet\nif\nfor\nwhile\nbreak\ncontinue\ntry\nfinally\nquote\nlocal\nglobal\nconst\nstruct\nmutable struct\nabstract type\nprimitive type\n...\n;"
+    "text": "This is the list of reserved keywords in Julia: baremodule, begin, break, catch, const, continue, do, else, elseif, end, export, false, finally, for, function, global, if, import, let, local, macro, module, quote, return, struct, true, try, using, while. Those keywords are not allowed to be used as variable names.The following two word sequences are reserved: abstract type, mutable struct, primitive type. However, you can create variables with names: abstract, mutable, primitive and type.Finally where is parsed as an infix operator for writing parametric method and type definitions. Also in and isa are parsed as infix operators. Creation of variable named where, is or isa is allowed though.module\nexport\nimport\nusing\nbaremodule\nfunction\nmacro\nreturn\ndo\nbegin\nend\nlet\nif\nfor\nwhile\nbreak\ncontinue\ntry\nfinally\nquote\nlocal\nglobal\nconst\nstruct\nmutable struct\nabstract type\nprimitive type\nwhere\n...\n;"
 },
 
 {
@@ -7085,7 +7093,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "function",
-    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\n"
+    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\n"
 },
 
 {
