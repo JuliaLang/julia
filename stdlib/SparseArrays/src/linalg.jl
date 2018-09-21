@@ -1027,8 +1027,11 @@ function rmul!(A::SparseMatrixCSC, D::Diagonal{T}) where T
     m, n = size(A)
     (n == size(D, 1)) || throw(DimensionMismatch())
     Anzval = A.nzval
-    for col = 1:n, p = A.colptr[col]:(A.colptr[col+1]-1)
-        @inbounds Anzval[p] *= D.diag[col]
+    @inbounds for col = 1:n
+        scale = D.diag[col]
+        for p = A.colptr[col]:(A.colptr[col + 1] - 1)
+            Anzval[p] *= scale
+        end
     end
     return A
 end
@@ -1038,8 +1041,8 @@ function lmul!(D::Diagonal{T}, A::SparseMatrixCSC) where T
     (m == size(D, 2)) || throw(DimensionMismatch())
     Anzval = A.nzval
     Arowval = A.rowval
-    for col = 1:n, p = A.colptr[col]:(A.colptr[col+1]-1)
-        @inbounds Anzval[p] *= D.diag[Arowval[p]]
+    @inbounds for col = 1:n, p = A.colptr[col]:(A.colptr[col + 1] - 1)
+        Anzval[p] *= D.diag[Arowval[p]]
     end
     return A
 end
