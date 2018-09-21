@@ -229,12 +229,12 @@ julia> a = [1]; f!(a); a
  2
 
 ```
-Assignment can operate on multiple variables in parallel, by assigning a [`Tuple`](@ref) to a `Tuple` or to an iterator.
+Assignment can operate on multiple variables in parallel, by assigning a [`Tuple`](@ref) to any iterable of at least the same length.
 ```jldoctest
 julia> (a, b) = (0, 1) # tuple to tuple
 (0, 1)
 
-julia> a, b = 1:3 # tuple to iterator (tuples don't always need enclosing parens)
+julia> a, b = 1:3 # tuple to a longer range (tuples don't always need enclosing parens)
 1:3
 
 julia> a, b
