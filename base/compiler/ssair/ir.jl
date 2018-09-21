@@ -471,7 +471,7 @@ mutable struct IncrementalCompact
     active_result_bb::Int
     renamed_new_nodes::Bool
     allow_cfg_transforms::Bool
-    function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=true)
+    function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false)
         # Sort by position with attach after nodes affter regular ones
         perm = my_sortperm(Int[(code.new_nodes[i].pos*2 + Int(code.new_nodes[i].attach_after)) for i in 1:length(code.new_nodes)])
         new_len = length(code.stmts) + length(code.new_nodes)
