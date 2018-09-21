@@ -7,7 +7,15 @@ mutable struct InferenceResult
     argtypes::Vector{Any}
     result # ::Type, or InferenceState if WIP
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
-    function InferenceResult(linfo::MethodInstance, caller_argtypes = nothing)
+    function InferenceResult(linfo::MethodInstance)
+        if isdefined(linfo, :inferred_const)
+            result = Const(linfo.inferred_const)
+        else
+            result = linfo.rettype
+        end
+        return new(linfo, compute_inf_result_argtypes(linfo), result, nothing)
+    end
+    function InferenceResult(linfo::MethodInstance, caller_argtypes::Vector{Any})
         if isdefined(linfo, :inferred_const)
             result = Const(linfo.inferred_const)
         else
@@ -17,20 +25,35 @@ mutable struct InferenceResult
     end
 end
 
-function compute_inf_result_argtypes(linfo::MethodInstance, caller_argtypes = nothing)
+function compute_inf_result_argtypes(linfo::MethodInstance, caller_argtypes::Vector{Any})
+    toplevel = !isa(linfo.def, Method)
+    @assert !toplevel
+    nargs::Int = linfo.def.nargs
+    @assert length(caller_argtypes) >= (nargs - 1) # TODO do we need this assert
+    # TODO better names for all these argtypes man
+    tmp_argtypes = Vector{Any}(undef, length(caller_argtypes))
+    for i in 1:length(caller_argtypes)
+        a = caller_argtypes[i]
+        if !isa(a, PartialTuple) && !isa(a, Const)
+            a = widenconst(a)
+        end
+        tmp_argtypes[i] = a
+    end
+    if linfo.def.isva
+        result_argtypes = Vector{Any}(undef, nargs)
+        for i = 1:(nargs - 1)
+            result_argtypes[i] = tmp_argtypes[i]
+        end
+        result_argtypes[nargs] = tuple_tfunc(tmp_argtypes[(nargs - 1):end])
+        return result_argtypes
+    end
+    return tmp_argtypes
+end
+
+function compute_inf_result_argtypes(linfo::MethodInstance)
     toplevel = !isa(linfo.def, Method)
     given_argtypes = Any[unwrap_unionall(linfo.specTypes).parameters...]
     nargs::Int = toplevel ? 0 : linfo.def.nargs
-    if !toplevel && caller_argtypes !== nothing
-        for i in 1:length(caller_argtypes)
-            a = maybe_widen_conditional(caller_argtypes[i])
-            if i > length(given_argtypes)
-                push!(given_argtypes, a)
-            elseif a isa Const
-                given_argtypes[i] = a
-            end
-        end
-    end
     result_argtypes = Vector{Any}(undef, nargs)
     # First, if we're dealing with a varargs method, then we set the last element of `args`
     # to the appropriate `Tuple` type or `PartialTuple` instance.
@@ -124,7 +147,7 @@ function cache_lookup(code::MethodInstance, argtypes::Vector{Any}, cache::Vector
                 a = maybe_widen_conditional(argtypes[i])
                 ca = cache_argtypes[i]
                 # verify that all Const argument types match between the call and cache
-                if (isa(a, Const) || isa(ca, Const)) && !(a === ca)
+                if (isa(a, Const) || isa(ca, Const) || isa(a, PartialTuple) || isa(ca, PartialTuple)) && !(a === ca)
                     cache_match = false
                     break
                 end
@@ -140,7 +163,7 @@ function cache_lookup(code::MethodInstance, argtypes::Vector{Any}, cache::Vector
                     else
                         ca = nothing # not Const
                     end
-                    if (isa(a, Const) || isa(ca, Const)) && !(a === ca)
+                    if (isa(a, Const) || isa(ca, Const) || isa(a, PartialTuple) || isa(ca, PartialTuple)) && !(a === ca)
                         cache_match = false
                         break
                     end
