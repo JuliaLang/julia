@@ -293,9 +293,32 @@ repl(io::IO, other) = esc(:(@doc $other))
 
 repl(x) = repl(stdout, x)
 
+_repl_typeof(arg::Symbol) = :(::(@isdefined($arg) ? typeof($arg) : Any))
+_repl_typeof(arg) = isexpr(arg, :kw) ? :(Expr(:kw, arg[1], _repl_typeof(arg[2]))) :
+                                       :(typeof($arg))
+
 function _repl(x)
-    if (isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args))
-        x.args[2:end] = [:(::typeof($arg)) for arg in x.args[2:end]]
+    if isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args)
+        # determine the types of the values
+        if length(x.args) >= 2 && isexpr(x.args[2], :parameters)
+            kwargs = x.args[2]
+            _args =  x.args[3:end]
+        else
+            kwargs = Expr(:parameters)
+            _args = x.args[2:end]
+        end
+        args = Any[]
+        for arg in _args
+            if isexpr(arg, :kw)
+                push!(kwargs.args, arg)
+            else
+                push!(args, arg)
+            end
+        end
+        args = _repl_typeof.(args)
+        kwargs.args = _repl_typeof.(kwargs.args)
+
+        x.args = Any[x.args[1], kwargs, args...]
     end
     #docs = lookup_doc(x) # TODO
     docs = esc(:(@doc $x))
