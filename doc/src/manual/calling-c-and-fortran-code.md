@@ -97,7 +97,7 @@ julia> (Cstring,)
 
 In practice, especially when providing reusable functionality, one generally wraps [`ccall`](@ref)
 uses in Julia functions that set up arguments and then check for errors in whatever manner the
-C or Fortran function spedifies. And if an error occurs it is thrown as a normal Julia exception. This is especially
+C or Fortran function specifies. And if an error occurs it is thrown as a normal Julia exception. This is especially
 important since C and Fortran APIs are notoriously inconsistent about how they indicate error
 conditions. For example, the `getenv` C library function is wrapped in the following Julia function,
 which is a simplified version of the actual definition from [`env.jl`](https://github.com/JuliaLang/julia/blob/master/base/env.jl):
