@@ -214,6 +214,40 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
     return result
 end
 
+# Returns -1 when patype is less complex than catype, 0 when they are equal, 1 when patype is more complex
+# May overapproximate and return 0 (e.g. when the result is indeterminate because the types are not comparable)
+function argtype_cmp_complexity(patype, catype)
+    patype === catype && return 0
+    if isa(patype, DataType) && isa(catype, DataType) && patype.name == catype.name
+        pcmp = cmp(length(patype.parameters), length(catype.parameters))
+        pcmp == 0 || return pcmp
+        length(patype.parameters) == 0 && return 0
+        acmp = 0
+        for i = 1:length(patype.parameters)
+            bcmp = argtype_cmp_complexity(patype.parameters[i], catype.parameters[i])
+            acmp == 0 && (acmp = bcmp)
+            if acmp == -1 || (bcmp != 0 && acmp != bcmp)
+                return 0
+            end
+        end
+        return acmp
+    end
+    return 0
+end
+
+function argtypes_strictly_less_comples(@nospecialize(patypes), @nospecialize(catypes))
+    length(catypes) < length(patypes) && return true
+    length(patypes) > length(catypes) && return false
+    # At least one argtype must be strictly less complex (and none may be more complex)
+    acc = 0
+    for i = 1:length(catypes)
+        cmp = argtype_cmp_complexity(patypes[i], catypes[i])
+        cmp == -1 && return false
+        acc += cmp
+    end
+    return acc > 0
+end
+
 function abstract_call_method(method::Method, @nospecialize(sig), sparams::SimpleVector, sv::InferenceState)
     if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
         return Any, false, nothing
@@ -268,8 +302,10 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                         parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
                         parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
                         if (parent.cached || parent.limited) && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
-                            topmost = infstate
-                            edgecycle = true
+                            if !argtypes_strictly_less_comples(get_argtypes(parent.result), get_argtypes(sv.result))
+                                topmost = infstate
+                                edgecycle = true
+                            end
                         end
                     end
                 end
