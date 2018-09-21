@@ -200,97 +200,79 @@ kw"global"
 """
     =
 
-`=` is the assignment operator. `a = b` assigns `a` to `b`, making `a === b` return  `true`.
+`=` is the assignment operator.
+* For variables `a` and `b`, `a = b` assigns `a` to `b`, making `a === b` return  `true`.
+* For functions `f(x)`, `f(x) = x` defines a new function constant `f`, or adds a new method to `f` if `f` is already defined; this usage is equivalent to `function f(x); x; end`.
+* `a[i] = v` calls [`setindex!`](@ref)`(a,v,i)`
+* `a.b = c` calls [`setproperty!`](@ref)`(a,:b,c)`
 
 # Examples
-Assigning `a` to `b` does not create a copy of `b`; instead use `copy` or `deepcopy`.
+Assigning `a` to an `b` does not create a copy of `b`; instead use [`copy`](@ref) or [`deepcopy`](@ref).
 
 ```jldoctest
-julia> b = [1]; a = b
-1-element Array{Int64,1}:
- 1
-
-julia> b[1] = 2
-2
-
-julia> a
+julia> b = [1]; a = b; b[1] = 2; a
 1-element Array{Int64,1}:
  2
 
-julia> b = [1]; a = copy(b); b[1] = 2; a == [1]
-true
+julia> b = [1]; a = copy(b); b[1] = 2; a
+1-element Array{Int64,1}:
+ 1
 
 ```
-Arrays passed to functions are also not copied. Thus reassignment within a function can modify the content of array arguments. (The names of functions which do this are conventionally suffixed with '!'.)
+Collections passed to functions are also not copied. Thus reassignment within a function can modify the content of an argument. (The names of functions which do this are conventionally suffixed with '!'.)
 ```jldoctest
 julia> function f!(x); x[:] = x[:] .+ 1; end
 f! (generic function with 1 method)
 
-julia> a = [1]
-1-element Array{Int64,1}:
- 1
-
-julia> f!(a)
-1-element Array{Int64,1}:
- 2
-
-julia> a
+julia> a = [1]; f!(a); a
 1-element Array{Int64,1}:
  2
 
 ```
-Assignment can operate on multiple values in parallel by use of tuples. (Enclosing parentheses are not strictly necessary.)
+Assignment can operate on multiple variables in parallel, by assigning a [`Tuple`](@ref) to a `Tuple` or to an iterator.
 ```jldoctest
-julia> (a, b) = (1, 2)
+julia> (a, b) = (0, 1) # tuple to tuple
+(0, 1)
+
+julia> a, b = 1:3 # tuple to iterator (tuples don't always need enclosing parens)
+1:3
+
+julia> a, b
 (1, 2)
 
-julia> a, b = 3, 4
-(3, 4)
+```
+Assignment can operate on multiple variables in series, and will return the result of evaluating the right-hand-most variable.
+```jldoctest
+julia> a = [1]; b = [2]; c = [3]; a = b = c
+1-element Array{Int64,1}
+ 3
 
-julia> a
-3
+julia> b[1] = 2; a, b, c
+([2], [2], [2])
 
 ```
-An array cannot be modified by assigning new values to the output of a function. Such modifications can instead be made by assigning new values at corresponding indices.
+A collection cannot be modified by assigning new values to the output of a function. Such modifications can instead be made by assigning new values at corresponding indices.
 ```jldoctest
-julia> a = zeros(3,3)
+julia> a = zeros(3,3); using LinearAlgebra; diag(a) .= 1; a # this won't actually modify a
 3×3 Array{Float64,2}:
  0.0  0.0  0.0
  0.0  0.0  0.0
  0.0  0.0  0.0
 
-julia> using LinearAlgebra; diag(a) .= 1
-3-element Array{Float64,1}:
- 1.0
- 1.0
- 1.0
-
-julia> a
-3×3 Array{Float64,2}:
- 0.0  0.0  0.0
- 0.0  0.0  0.0
- 0.0  0.0  0.0
-
-julia> a[diagind(a)] .= 1
-3-element view(::Array{Float64,1}, 1:4:9) with eltype Float64:
- 1.0
- 1.0
- 1.0
-
-julia> a
+julia> a[diagind(a)] .= 1; a # this will modify a
 3×3 Array{Float64,2}:
  1.0  0.0  0.0
  0.0  1.0  0.0
  0.0  0.0  1.0
 
 ```
-Assignment cannot grow an array; assignment at out-of-bounds indices is an error. If the array is a `Vector` it can instead be grown with `push!` or `append!`.
+Assignment at out-of-bounds indices does not grow an `Array`. If the array is a [`Vector`](@ref) it can instead be grown with [`push!`](@ref) or [`append!`](@ref).
 ```jldoctest
-julia> a = [0, 0]; a[3]
+julia> a = [1, 1]; a[3] = 2
 ERROR: BoundsError: attempt to access 2-element Array{Int64,1} at index [3]
 [...]
 
-julia> a = [1, 1]; push!(a, 2, 3)
+julia> push!(a, 2, 3)
 4-element Array{Int64,1}:
  1
  1
@@ -298,21 +280,18 @@ julia> a = [1, 1]; push!(a, 2, 3)
  3
 
 ```
-Assignment cannot eliminate elements from an array; instead use `filter` or `filter!`.
+Assignment to `[]` does not eliminate elements from an array; instead use `filter!`.
 ```jldoctest
-julia> a = collect(1:3)
-3-element Array{Int64,1}:
- 1
- 2
- 3
+julia> a = collect(1:3); a[a .<= 1] = []
+ERROR: DimensionMismatch("tried to assign 0 elements to 1 destinations")
+[...]
 
-julia> filter(a -> a > 1, a)
+julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1]
 2-element Array{Int64,1}:
  2
  3
 
 ```
-
 """
 kw"="
 
