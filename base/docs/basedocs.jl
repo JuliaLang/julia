@@ -221,7 +221,7 @@ julia> b = [1]; a = copy(b); b[1] = 2; a
 ```
 Collections passed to functions are also not copied. Thus reassignment within a function can modify the content of an argument. (The names of functions which do this are conventionally suffixed with '!'.)
 ```jldoctest
-julia> function f!(x); x[:] = x[:] .+ 1; end
+julia> function f!(x); x[:] .+= 1; end
 f! (generic function with 1 method)
 
 julia> a = [1]; f!(a); a
