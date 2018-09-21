@@ -947,7 +947,7 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         t = abstract_eval_call(e.args, argtypes, vtypes, sv)
     elseif e.head === :new
         t = instanceof_tfunc(abstract_eval(e.args[1], vtypes, sv))[1]
-        if isbitstype(t)
+        if isa(t, DataType) && !(t.mutable)
             args = Vector{Any}(undef, length(e.args)-1)
             isconst = true
             for i = 2:length(e.args)
