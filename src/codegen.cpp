@@ -7245,7 +7245,7 @@ jl_compile_result_t jl_emit_codeinst(
                      // and there is something to delete (test this before calling jl_ir_flag_inlineable)
                      codeinst->inferred != jl_nothing &&
                      // don't delete inlineable code, unless it is constant
-                     (codeinst->invoke == jl_fptr_const_return || !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) &&
+                     (codeinst->invoke == jl_fptr_const_return || ((jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred) & 0x1) == 0x0)) &&
                      // don't delete code when generating a precompile file
                      !imaging_mode) {
                 // if not inlineable, code won't be needed again

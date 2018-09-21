@@ -326,7 +326,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
         return ci
     end
     cache_the_tree = !may_discard_trees(interp) || (ci.inferred &&
-        (ci.inlineable ||
+        ((ci.inlineable & CI_INLINEABLE) != 0 ||
         ccall(:jl_isa_compileable_sig, Int32, (Any, Any), linfo.specTypes, def) != 0))
     if cache_the_tree
         if may_compress(interp)
@@ -386,7 +386,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # we can throw everything else away now
         me.cached = false
         unlock_mi_inference(interp, me.linfo)
-        me.src.inlineable = false
+        me.src.inlineable &= ~CI_INLINEABLE
     else
         # annotate fulltree with type information
         type_annotate!(me)
@@ -802,7 +802,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 tree.inferred = true
                 tree.ssaflags = UInt8[0]
                 tree.pure = true
-                tree.inlineable = true
+                tree.inlineable = CI_INLINEABLE
                 tree.parent = mi
                 tree.rettype = Core.Typeof(code.rettype_const)
                 tree.min_world = code.min_world

@@ -2156,7 +2156,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_ulong_type,
                             jl_ulong_type,
                             jl_bool_type,
-                            jl_bool_type,
+                            jl_uint8_type,
                             jl_bool_type,
                             jl_bool_type),
                         0, 1, 18);

@@ -691,7 +691,7 @@ function resolve_todo(todo::InliningTodo, et::Union{EdgeTracker, Nothing}, cache
 
     if isa(src, CodeInfo) || isa(src, Vector{UInt8})
         src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
-        src_inlineable = ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
+        src_inlineable = ((ccall(:jl_ir_flag_inlineable, UInt8, (Any,), src) & CI_INLINEABLE) != 0
 
         if !(src_inferred && src_inlineable)
             return compileable_specialization(et, spec.match)

@@ -133,6 +133,9 @@ const _PURE_OR_ERROR_BUILTINS = [
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
+const CI_INLINEABLE = 0x1
+const CI_DECLARED_NOINLINE = 0x80
+
 #########
 # logic #
 #########
@@ -186,6 +189,10 @@ function finish(opt::OptimizationState, params::OptimizationParams, ir, @nospeci
 
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
+    if force_noinline
+        opt.src.inlineable |= CI_DECLARED_NOINLINE
+    end
+
     # compute inlining and other related optimizations
     if (isa(result, Const) || isconstType(result))
         proven_pure = false
@@ -226,7 +233,9 @@ function finish(opt::OptimizationState, params::OptimizationParams, ir, @nospeci
             if !(isa(result, Const) && !is_inlineable_constant(result.val))
                 opt.const_api = true
             end
-            force_noinline || (opt.src.inlineable = true)
+            if !force_noinline
+                opt.src.inlineable |= CI_INLINEABLE
+            end
         end
     end
 
@@ -247,25 +256,29 @@ function finish(opt::OptimizationState, params::OptimizationParams, ir, @nospeci
         else
             force_noinline = true
         end
-        if !opt.src.inlineable && result === Union{}
+        if (opt.src.inlineable & CI_INLINEABLE) == 0 && result === Union{}
             force_noinline = true
         end
     end
     if force_noinline
-        opt.src.inlineable = false
+        opt.src.inlineable &= ~CI_INLINEABLE
     elseif isa(def, Method)
-        if opt.src.inlineable && isdispatchtuple(opt.linfo.specTypes)
+        if (opt.src.inlineable & CI_INLINEABLE) != 0 && isdispatchtuple(opt.linfo.specTypes)
             # obey @inline declaration if a dispatch barrier would not help
         else
             bonus = 0
             if result ⊑ Tuple && !isconcretetype(widenconst(result))
                 bonus = params.inline_tupleret_bonus
             end
-            if opt.src.inlineable
+            if (opt.src.inlineable & CI_INLINEABLE) != 0
                 # For functions declared @inline, increase the cost threshold 20x
                 bonus += params.inline_cost_threshold*19
             end
-            opt.src.inlineable = isinlineable(def, opt, params, union_penalties, bonus)
+            if isinlineable(def, opt, params, union_penalties, bonus)
+                opt.src.inlineable |= CI_INLINEABLE
+            else
+                opt.src.inlineable &= ~CI_INLINEABLE
+            end
         end
     end
     nothing
