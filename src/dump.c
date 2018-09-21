@@ -2452,10 +2452,10 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
     };
 
     uint8_t flags = (code->inferred << 3)
-                  | (code->inlineable << 2)
                   | (code->propagate_inbounds << 1)
                   | (code->pure << 0);
     write_uint8(s.s, flags);
+    write_uint8(s.s, code->inlineable);
 
     size_t nsyms = jl_array_len(code->slotnames);
     assert(nsyms >= m->nargs && nsyms < INT32_MAX); // required by generated functions
@@ -2532,9 +2532,9 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_array_t *data)
                                        jl_code_info_type);
     uint8_t flags = read_uint8(s.s);
     code->inferred = !!(flags & (1 << 3));
-    code->inlineable = !!(flags & (1 << 2));
     code->propagate_inbounds = !!(flags & (1 << 1));
     code->pure = !!(flags & (1 << 0));
+    code->inlineable = read_uint8(s.s);
 
     size_t nslots = read_int32(&src);
     jl_array_t *syms = jl_alloc_vec_any(nslots);
@@ -2595,8 +2595,7 @@ JL_DLLEXPORT uint8_t jl_ast_flag_inlineable(jl_array_t *data)
     if (jl_is_code_info(data))
         return ((jl_code_info_t*)data)->inlineable;
     assert(jl_typeis(data, jl_array_uint8_type));
-    uint8_t flags = ((uint8_t*)data->data)[0];
-    return !!(flags & (1 << 2));
+    return ((uint8_t*)data->data)[1];
 }
 
 JL_DLLEXPORT uint8_t jl_ast_flag_pure(jl_array_t *data)
