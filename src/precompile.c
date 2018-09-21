@@ -324,7 +324,7 @@ static int precompile_enq_specialization_(jl_typemap_entry_t *l, void *closure)
             (l->func.linfo->inferred &&
              l->func.linfo->inferred != jl_nothing &&
              jl_ast_flag_inferred((jl_array_t*)l->func.linfo->inferred) &&
-             !jl_ast_flag_inlineable((jl_array_t*)l->func.linfo->inferred)))
+             ((jl_ast_flag_inlineable((jl_array_t*)l->func.linfo->inferred) & 0x1) == 0x0)))
         jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)l->sig);
     return 1;
 }

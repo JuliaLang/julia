@@ -117,7 +117,7 @@ function cache_result(result::InferenceResult, min_valid::UInt, max_valid::UInt)
             end
             if !toplevel && inferred_result isa CodeInfo
                 cache_the_tree = result.src.inferred &&
-                    (result.src.inlineable ||
+                    ((result.src.inlineable & CI_INLINEABLE) != 0 ||
                      ccall(:jl_isa_compileable_sig, Int32, (Any, Any), result.linfo.specTypes, def) != 0)
                 if cache_the_tree
                     # compress code for non-toplevel thunks
@@ -149,7 +149,7 @@ function finish(me::InferenceState)
         # we can throw everything else away now
         me.cached = false
         me.linfo.inInference = false
-        me.src.inlineable = false
+        me.src.inlineable &= ~CI_INLINEABLE
     else
         # annotate fulltree with type information
         type_annotate!(me)
@@ -568,7 +568,7 @@ function typeinf_ext(linfo::MethodInstance, params::Params)
                     tree.inferred = true
                     tree.ssaflags = UInt8[]
                     tree.pure = true
-                    tree.inlineable = true
+                    tree.inlineable = CI_INLINEABLE
                     i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                     return svec(linfo, tree)
                 elseif isa(inf, CodeInfo)

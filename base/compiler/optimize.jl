@@ -94,6 +94,9 @@ const _PURE_OR_ERROR_BUILTINS = [
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
+const CI_INLINEABLE = 0x1
+const CI_DECLARED_NOINLINE = 0x80
+
 #########
 # logic #
 #########
@@ -162,6 +165,10 @@ function optimize(opt::OptimizationState, @nospecialize(result))
     @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] == :noinline, ir.meta)
 
+    if force_noinline
+        opt.src.inlineable |= CI_DECLARED_NOINLINE
+    end
+
     # compute inlining and other related optimizations
     if (isa(result, Const) || isconstType(result))
         proven_pure = false
@@ -201,7 +208,9 @@ function optimize(opt::OptimizationState, @nospecialize(result))
             if !(isa(result, Const) && !is_inlineable_constant(result.val))
                 opt.const_api = true
             end
-            force_noinline || (opt.src.inlineable = true)
+            if !force_noinline
+                opt.src.inlineable |= CI_INLINEABLE
+            end
         end
     end
 
@@ -223,22 +232,26 @@ function optimize(opt::OptimizationState, @nospecialize(result))
         else
             force_noinline = true
         end
-        if !opt.src.inlineable && result === Union{}
+        if (opt.src.inlineable & CI_INLINEABLE) == 0 && result === Union{}
             force_noinline = true
         end
     end
     if force_noinline
-        opt.src.inlineable = false
+        opt.src.inlineable &= ~CI_INLINEABLE
     elseif isa(def, Method)
         bonus = 0
         if result ⊑ Tuple && !isbitstype(widenconst(result))
             bonus = opt.params.inline_tupleret_bonus
         end
-        if opt.src.inlineable
+        if (opt.src.inlineable & CI_INLINEABLE) != 0
             # For functions declared @inline, increase the cost threshold 20x
             bonus += opt.params.inline_cost_threshold*19
         end
-        opt.src.inlineable = isinlineable(def, opt, bonus)
+        if isinlineable(def, opt, bonus)
+            opt.src.inlineable |= CI_INLINEABLE
+        else
+            opt.src.inlineable &= ~CI_INLINEABLE
+        end
     end
     nothing
 end

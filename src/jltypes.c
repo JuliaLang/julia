@@ -2055,7 +2055,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             // serializer
                             jl_array_any_type,
                             jl_bool_type,
-                            jl_bool_type,
+                            jl_uint8_type,
                             jl_bool_type,
                             jl_bool_type),
                         0, 1, 12);
