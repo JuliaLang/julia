@@ -7,8 +7,10 @@ using Base: has_offset_axes
 export
     Base64EncodePipe,
     base64encode,
+    base64urlencode,
     Base64DecodePipe,
     base64decode,
+    base64urldecode,
     stringmime
 
 # Base64EncodePipe is a pipe-like IO object, which converts into base64 data

@@ -4,12 +4,20 @@
 const BASE64_CODE_END = 0x40
 const BASE64_CODE_PAD = 0x41
 const BASE64_CODE_IGN = 0x42
+
 const BASE64_DECODE = fill(BASE64_CODE_IGN, 256)
 for (i, c) in enumerate(BASE64_ENCODE)
     BASE64_DECODE[Int(c)+1] = UInt8(i - 1)
 end
 BASE64_DECODE[Int(encodepadding())+1] = BASE64_CODE_PAD
-decode(x::UInt8) = @inbounds return BASE64_DECODE[x + 1]
+decode_base64(x::UInt8) = @inbounds return BASE64_DECODE[x + 1]
+
+const BASE64URL_DECODE = fill(BASE64_CODE_IGN, 256)
+for (i, c) in enumerate(BASE64URL_ENCODE)
+    BASE64URL_DECODE[Int(c)+1] = UInt8(i - 1)
+end
+BASE64URL_DECODE[Int(encodepadding())+1] = BASE64_CODE_PAD
+decode_base64url(x::UInt8) = @inbounds return BASE64URL_DECODE[x + 1]
 
 """
     Base64DecodePipe(istream)
@@ -32,14 +40,15 @@ julia> String(read(iob64_decode))
 "Hello!"
 ```
 """
-struct Base64DecodePipe <: IO
+struct Base64DecodePipe{F<:Function} <: IO
     io::IO
     buffer::Buffer
     rest::Vector{UInt8}
+    decode::F
 
-    function Base64DecodePipe(io::IO)
+    function Base64DecodePipe(io::IO; decoder::T=decode_base64) where {T<:Function}
         buffer = Buffer(512)
-        return new(io, buffer, UInt8[])
+        return new{T}(io, buffer, UInt8[], decoder)
     end
 end
 
@@ -71,17 +80,17 @@ function read_until_end(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
             unsafe_store!(p + 2, b3 << 6 | b4     )
             p += 3
         else
-            i, p, ended = decode_slow(b1, b2, b3, b4, buffer, i, pipe.io, p, p_end - p, pipe.rest)
+            i, p, ended = decode_slow(b1, b2, b3, b4, buffer, i, pipe.io, p, p_end - p, pipe.rest, pipe.decode)
             if ended
                 break
             end
         end
         if p < p_end
             if i + 4 ≤ lastindex(buffer)
-                b1 = decode(buffer[i+1])
-                b2 = decode(buffer[i+2])
-                b3 = decode(buffer[i+3])
-                b4 = decode(buffer[i+4])
+                b1 = pipe.decode(buffer[i+1])
+                b2 = pipe.decode(buffer[i+2])
+                b3 = pipe.decode(buffer[i+3])
+                b4 = pipe.decode(buffer[i+4])
                 i += 4
             else
                 consumed!(buffer, i)
@@ -127,7 +136,7 @@ Base.eof(pipe::Base64DecodePipe) = isempty(pipe.rest) && eof(pipe.io)
 Base.close(pipe::Base64DecodePipe) = nothing
 
 # Decode data from (b1, b2, b3, b5, buffer, input) into (ptr, rest).
-function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
+function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest, decoder)
     # Skip ignore code.
     while true
         if b1 == BASE64_CODE_IGN
@@ -142,9 +151,9 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
             break
         end
         if i + 1 ≤ lastindex(buffer)
-            b4 = decode(buffer[i+=1])
+            b4 = decoder(buffer[i+=1])
         elseif !eof(input)
-            b4 = decode(read(input, UInt8))
+            b4 = decoder(read(input, UInt8))
         else
             b4 = BASE64_CODE_END
             break
@@ -212,6 +221,15 @@ function base64decode(s)
     b = IOBuffer(s)
     try
         return read(Base64DecodePipe(b))
+    finally
+        close(b)
+    end
+end
+
+function base64urldecode(s)
+    b = IOBuffer(s)
+    try
+        return read(Base64DecodePipe(b, decoder=decode_base64url))
     finally
         close(b)
     end

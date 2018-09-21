@@ -2,7 +2,12 @@
 
 # Generate encode table.
 const BASE64_ENCODE = [UInt8(x) for x in ['A':'Z'; 'a':'z'; '0':'9'; '+'; '/']]
-encode(x::UInt8) = @inbounds return BASE64_ENCODE[(x & 0x3f) + 1]
+
+# '-' and '_' instead of '+' and '/'
+const BASE64URL_ENCODE = [UInt8(x) for x in ['A':'Z'; 'a':'z'; '0':'9'; '-'; '_']]
+
+encode_base64(x::UInt8) = @inbounds return BASE64_ENCODE[(x & 0x3f) + 1]
+encode_base64url(x::UInt8) = @inbounds return BASE64URL_ENCODE[(x & 0x3f) + 1]
 encodepadding()  = UInt8('=')
 
 """
@@ -31,14 +36,15 @@ julia> String(base64decode(str))
 "Hello!"
 ```
 """
-struct Base64EncodePipe <: IO
+struct Base64EncodePipe{F<:Function} <: IO
     io::IO
     buffer::Buffer
+    encode::F
 
-    function Base64EncodePipe(io::IO)
+    function Base64EncodePipe(io::IO; encoder::T=encode_base64) where {T<:Function}
         # The buffer size must be at least 3.
         buffer = Buffer(512)
-        pipe = new(io, buffer)
+        pipe = new{T}(io, buffer, encoder)
         finalizer(_ -> close(pipe), buffer)
         return pipe
     end
@@ -66,10 +72,10 @@ function Base.unsafe_write(pipe::Base64EncodePipe, ptr::Ptr{UInt8}, n::UInt)::In
     i = 0
     p_end = ptr + n
     while true
-        buffer[i+1] = encode(b1 >> 2          )
-        buffer[i+2] = encode(b1 << 4 | b2 >> 4)
-        buffer[i+3] = encode(b2 << 2 | b3 >> 6)
-        buffer[i+4] = encode(          b3     )
+        buffer[i+1] = pipe.encode(b1 >> 2          )
+        buffer[i+2] = pipe.encode(b1 << 4 | b2 >> 4)
+        buffer[i+3] = pipe.encode(b2 << 2 | b3 >> 6)
+        buffer[i+4] = pipe.encode(          b3     )
         i += 4
         if p + 2 < p_end
             b1 = unsafe_load(p, 1)
@@ -110,23 +116,23 @@ function Base.close(pipe::Base64EncodePipe)
         # no leftover and padding
     elseif k == 1
         write(pipe.io,
-              encode(b1 >> 2),
-              encode(b1 << 4),
+              pipe.encode(b1 >> 2),
+              pipe.encode(b1 << 4),
               encodepadding(),
               encodepadding())
     elseif k == 2
         write(pipe.io,
-              encode(          b1 >> 2),
-              encode(b1 << 4 | b2 >> 4),
-              encode(b2 << 2          ),
+              pipe.encode(          b1 >> 2),
+              pipe.encode(b1 << 4 | b2 >> 4),
+              pipe.encode(b2 << 2          ),
               encodepadding())
     else
         @assert k == 3
         write(pipe.io,
-              encode(b1 >> 2          ),
-              encode(b1 << 4 | b2 >> 4),
-              encode(b2 << 2 | b3 >> 6),
-              encode(          b3     ))
+              pipe.encode(b1 >> 2          ),
+              pipe.encode(b1 << 4 | b2 >> 4),
+              pipe.encode(b2 << 2 | b3 >> 6),
+              pipe.encode(          b3     ))
     end
     return nothing
 end
@@ -211,3 +217,16 @@ function base64encode(f::Function, args...; context=nothing)
     return String(take!(s))
 end
 base64encode(args...; context=nothing) = base64encode(write, args...; context=context)
+
+function base64urlencode(f::Function, args...; context=nothing)
+    s = IOBuffer()
+    b = Base64EncodePipe(s, encoder=encode_base64url)
+    if context === nothing
+        f(b, args...)
+    else
+        f(IOContext(b, context), args...)
+    end
+    close(b)
+    return String(take!(s))
+end
+base64urlencode(args...; context=nothing) = base64urlencode(write, args...; context=context)

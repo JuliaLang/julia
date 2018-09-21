@@ -4,8 +4,10 @@ using Test, Random
 import Base64:
     Base64EncodePipe,
     base64encode,
+    base64urlencode,
     Base64DecodePipe,
     base64decode,
+    base64urldecode,
     stringmime
 
 const inputText = "Man is distinguished, not only by his reason, but by this singular passion from other animals, which is a lust of the mind, that by a perseverance of delight in the continued and indefatigable generation of knowledge, exceeds the short vehemence of any carnal pleasure."
@@ -67,6 +69,19 @@ ZSBzaG9ydCB2ZWhlbWVuY2Ugb2YgYW55IGNhcm5hbCBwbGVhc3VyZS4="""
 
     # issue #21314
     @test base64decode(chomp("test")) == base64decode("test")
+
+    # base64url
+    let
+        data = "?d?.?/.>>a"
+        data_encoded_base64    = "P2Q/Lj8vLj4+YQ=="
+        data_encoded_base64url = "P2Q_Lj8vLj4-YQ=="
+
+        @test base64encode(data) == data_encoded_base64
+        @test String(base64decode(data_encoded_base64)) == data
+
+        @test base64urlencode(data) == data_encoded_base64url
+        @test String(base64urldecode(data_encoded_base64url)) == data
+    end
 end
 
 @testset "Random data" begin
@@ -74,6 +89,7 @@ end
     for _ in 1:1000
         data = rand(mt, UInt8, rand(0:300))
         @test hash(base64decode(base64encode(data))) == hash(data)
+        @test hash(base64urldecode(base64urlencode(data))) == hash(data)
     end
 end
 
