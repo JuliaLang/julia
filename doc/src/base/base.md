@@ -51,7 +51,7 @@ However, you can create variables with names:
 
 Finally `where` is parsed as an infix operator for writing parametric method
 and type definitions. Also `in` and `isa` are parsed as infix operators.
-Creation of variable named `where`, `is` or `isa` is allowed though.
+Creation of variable named `where`, `in` or `isa` is allowed though.
 
 ```@docs
 module
