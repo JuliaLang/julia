@@ -1047,9 +1047,12 @@ function early_inline_special_case(ir::IRCode, @nospecialize(f), @nospecialize(f
         if isa(etype, Const) # || isconstType(etype)
             val = etype.val
             is_inlineable_constant(val) || return nothing
-            if ispuretopfunction(f) ||
-                    (isa(f, IntrinsicFunction) ? is_pure_intrinsic_optim(f) :
-                    contains_is(_PURE_BUILTINS, f))
+            if isa(f, IntrinsicFunction)
+                if is_pure_intrinsic_infer(f) &&
+                    (intrinsic_nothrow(f) || intrinsic_nothrow(f, atypes[2:end]))
+                    return quoted(val)
+                end
+            elseif ispuretopfunction(f) || contains_is(_PURE_BUILTINS, f)
                 return quoted(val)
             elseif contains_is(_PURE_OR_ERROR_BUILTINS, f)
                 if _builtin_nothrow(f, atypes[2:end], etype)

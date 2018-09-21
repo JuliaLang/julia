@@ -262,19 +262,6 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
              f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
 end
 
-# whether `f` is pure for optimizations
-function is_pure_intrinsic_optim(f::IntrinsicFunction)
-    return !(f === Intrinsics.pointerref || # this one is volatile
-             f === Intrinsics.pointerset || # this one is never effect-free
-             f === Intrinsics.llvmcall ||   # this one is never effect-free
-             f === Intrinsics.arraylen ||   # this one is volatile
-             f === Intrinsics.checked_sdiv_int ||  # these may throw errors
-             f === Intrinsics.checked_udiv_int ||
-             f === Intrinsics.checked_srem_int ||
-             f === Intrinsics.checked_urem_int ||
-             f === Intrinsics.cglobal)  # cglobal throws an error for symbol-not-found
-end
-
 ## Computing the cost of a function body
 
 # saturating sum (inputs are nonnegative), prevents overflow with typemax(Int) below
