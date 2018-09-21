@@ -652,29 +652,54 @@ Stacktrace:
 """
 macro kwdef(expr)
     expr = macroexpand(__module__, expr) # to expand @static
+    expr isa Expr && expr.head == :struct || error("Invalid usage of @kwdef")
     T = expr.args[2]
-    params_ex = Expr(:parameters)
-    call_ex = Expr(:call, T)
-    _kwdef!(expr.args[3], params_ex, call_ex)
-    ret = quote
-        Base.@__doc__($(esc(expr)))
+    if T isa Expr && T.head == :<:
+        T = T.args[1]
     end
+
+    params_ex = Expr(:parameters)
+    call_args = Any[]
+
+    _kwdef!(expr.args[3], params_ex.args, call_args)
     # Only define a constructor if the type has fields, otherwise we'll get a stack
     # overflow on construction
     if !isempty(params_ex.args)
-        push!(ret.args, :($(esc(Expr(:call, T, params_ex))) = $(esc(call_ex))))
+        if T isa Symbol
+            kwdefs = :(($(esc(T)))($params_ex) = ($(esc(T)))($(call_args...)))
+        elseif T isa Expr && T.head == :curly
+            # if T == S{A<:AA,B<:BB}, define two methods
+            #   S(...) = ...
+            #   S{A,B}(...) where {A<:AA,B<:BB} = ...
+            S = T.args[1]
+            P = T.args[2:end]
+            Q = [U isa Expr && U.head == :<: ? U.args[1] : U for U in P]
+            SQ = :($S{$(Q...)})
+            kwdefs = quote
+                ($(esc(S)))($params_ex) =($(esc(S)))($(call_args...))
+                ($(esc(SQ)))($params_ex) where {$(esc.(P)...)} =
+                    ($(esc(SQ)))($(call_args...))
+            end
+        else
+            error("Invalid usage of @kwdef")
+        end
+    else
+        kwdefs = nothing
     end
-    ret
+    quote
+        Base.@__doc__($(esc(expr)))
+        $kwdefs
+    end
 end
 
 # @kwdef helper function
 # mutates arguments inplace
-function _kwdef!(blk, params_ex, call_ex)
+function _kwdef!(blk, params_args, call_args)
     for i in eachindex(blk.args)
         ei = blk.args[i]
         if isa(ei, Symbol)
-            push!(params_ex.args, ei)
-            push!(call_ex.args, ei)
+            push!(params_args, ei)
+            push!(call_args, ei)
         elseif !isa(ei, Expr)
             continue
         elseif ei.head == :(=)
@@ -686,17 +711,17 @@ function _kwdef!(blk, params_ex, call_ex)
                 var = dec
             end
             def = ei.args[2]  # defexpr
-            push!(params_ex.args, Expr(:kw, var, def))
-            push!(call_ex.args, var)
+            push!(params_args, Expr(:kw, var, def))
+            push!(call_args, var)
             blk.args[i] = dec
         elseif ei.head == :(::)
             dec = ei # var::Typ
             var = dec.args[1] # var
-            push!(params_ex.args, var)
-            push!(call_ex.args, var)
+            push!(params_args, var)
+            push!(call_args, var)
         elseif ei.head == :block
             # can arise with use of @static inside type decl
-            _kwdef!(ei, params_ex, call_ex)
+            _kwdef!(ei, params_args, call_args)
         end
     end
     blk

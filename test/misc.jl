@@ -679,6 +679,18 @@ end
     @test Test27970Empty() == Test27970Empty()
 end
 
+abstract type AbstractTest29307 end
+@kwdef struct Test29307{T<:Integer} <: AbstractTest29307
+    a::T=2
+end
+
+@testset "subtyped @kwdef" begin
+    @test Test29307() == Test29307{Int}(2)
+    @test Test29307(a=0x03) == Test29307{UInt8}(0x03)
+    @test Test29307{UInt32}() == Test29307{UInt32}(2)
+    @test Test29307{UInt32}(a=0x03) == Test29307{UInt32}(0x03)
+end
+
 @testset "exports of modules" begin
     for (_, mod) in Base.loaded_modules
        for v in names(mod)
