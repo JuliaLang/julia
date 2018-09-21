@@ -241,7 +241,7 @@ function argtypes_strictly_less_comples(@nospecialize(patypes), @nospecialize(ca
     # At least one argtype must be strictly less complex (and none may be more complex)
     acc = 0
     for i = 1:length(catypes)
-        cmp = argtype_cmp_complexity(patypes[i], catypes[i])
+        cmp = argtype_cmp_complexity(widenconst(patypes[i]), widenconst(catypes[i]))
         cmp == -1 && return false
         acc += cmp
     end
