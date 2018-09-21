@@ -1169,6 +1169,29 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
     return tf[3](argtypes...)
 end
 
+# Query whether the given intrinsic is nothrow
+intrinsic_nothrow(f::IntrinsicFunction) = !(
+        f === Intrinsics.checked_sdiv_int ||
+        f === Intrinsics.checked_udiv_int ||
+        f === Intrinsics.checked_srem_int ||
+        f === Intrinsics.checked_urem_int
+    )
+
+function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
+    if f === Intrinsics.checked_udiv_int || f === Intrinsics.checked_urem_int || f === Intrinsics.checked_srem_int || f === Intrinsics.checked_sdiv_int
+        # Nothrow as long as the second argument is guaranteed not to be zero
+        isa(argtypes[2], Const) || return false
+        den_val = argtypes[2].val
+        den_val !== zero(typeof(den_val)) || return false
+    end
+    if f === Intrinsics.checked_sdiv_int
+        # Nothrow as long as we additionally don't do typemin(T)/-1
+        return den_val !== -1 || (isa(argtypes[1], Const) &&
+            argtypes[1].val !== typemin(typeof(den_val)))
+    end
+    return true
+end
+
 # TODO: this function is a very buggy and poor model of the return_type function
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both

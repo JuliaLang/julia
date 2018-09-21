@@ -22,6 +22,12 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src, spvals::S
             f = singleton_type(f)
             f === nothing && return false
             is_return_type(f) && return true
+            if isa(f, IntrinsicFunction)
+                is_pure_intrinsic_infer(f) || return false
+                return intrinsic_nothrow(f) ||
+                    intrinsic_nothrow(f,
+                        Any[argextype(ea[i], src, spvals) for i = 2:length(ea)])
+            end
             contains_is(_PURE_BUILTINS, f) && return true
             contains_is(_PURE_OR_ERROR_BUILTINS, f) || return false
             rt === Bottom && return false
