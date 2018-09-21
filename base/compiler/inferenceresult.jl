@@ -56,7 +56,7 @@ function compute_inf_result_argtypes(linfo::MethodInstance, caller_argtypes = no
                 vargtype_elements = Any[]
                 for p in given_argtypes[nargs:given_argtypes_length]
                     p = isvarargtype(p) ? unconstrain_vararg_length(p) : p
-                    push!(vargtype_elements, rewrap_unionall(p, linfo.specTypes))
+                    push!(vargtype_elements, rewrap(p, linfo.specTypes))
                 end
                 for i in 1:length(vargtype_elements)
                     atyp = vargtype_elements[i]
@@ -97,7 +97,7 @@ function compute_inf_result_argtypes(linfo::MethodInstance, caller_argtypes = no
             elseif isconstType(atyp)
                 atyp = Const(atyp.parameters[1])
             else
-                atyp = rewrap_unionall(atyp, linfo.specTypes)
+                atyp = rewrap(atyp, linfo.specTypes)
             end
             i == n && (lastatype = atyp)
             result_argtypes[i] = atyp
