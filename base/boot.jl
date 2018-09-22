@@ -337,12 +337,9 @@ mutable struct WeakRef
                                       (Ptr{Cvoid}, Any), getptls(), v)
 end
 
-TypeVar(n::Symbol) =
-    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, Any)
-TypeVar(n::Symbol, @nospecialize(ub)) =
-    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, ub)
-TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) =
-    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb, ub)
+TypeVar(n::Symbol) = _typevar(n, Union{}, Any)
+TypeVar(n::Symbol, @nospecialize(ub)) = _typevar(n, Union{}, ub)
+TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) = _typevar(n, lb, ub)
 
 UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
