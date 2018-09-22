@@ -449,7 +449,7 @@ julia> f()
 0
 ```
 
-However, it is occasionally useful to reuse an existing variable as the iteration variable.
+However, it is occasionally useful to reuse an existing local variable as the iteration variable.
 This can be done conveniently by adding the keyword `outer`:
 
 ```jldoctest
@@ -555,8 +555,11 @@ WARNING: redefining constant a
  1
 ```
 
-Note that although possible, changing the value of a variable that is declared as constant
-is strongly discouraged. For instance, if a method references a constant and is already
+Note that although sometimes possible, changing the value of a `const` variable
+is strongly discouraged, and is intended only for convenience during
+interactive use.
+Changing constants can cause various problems or unexpected behaviors.
+For instance, if a method references a constant and is already
 compiled before the constant is changed then it might keep using the old value:
 ```jldoctest
 julia> const x = 1

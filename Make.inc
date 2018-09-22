@@ -10,6 +10,10 @@
 ## variable declarations. The spaces between the variable value and the
 ## comment will be included in the value.
 
+# Julia precompilation options
+# Set to zero to turn off extra precompile (e.g. for the REPL)
+JULIA_PRECOMPILE ?= 1
+
 # OPENBLAS build options
 OPENBLAS_TARGET_ARCH:=
 OPENBLAS_SYMBOLSUFFIX:=

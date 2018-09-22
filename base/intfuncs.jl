@@ -440,7 +440,8 @@ function ndigits0znb(x::Integer, b::Integer)
     return d
 end
 
-ndigits0znb(x::Unsigned, b::Integer) = ndigits0znb(signed(x), b)
+# do first division before conversion with signed here, which can otherwise overflow
+ndigits0znb(x::Unsigned, b::Integer) = ndigits0znb(-signed(fld(x, -b)), b) + (x != 0)
 ndigits0znb(x::Bool, b::Integer) = x % Int
 
 # The suffix "pb" stands for "positive base"
@@ -743,17 +744,25 @@ julia> digits!([2,2,2,2,2,2], 10, base = 2)
 ```
 """
 function digits!(a::AbstractVector{T}, n::Integer; base::Integer = 10) where T<:Integer
-    base < 0 && isa(n, Unsigned) && return digits!(a, convert(Signed, n), base = base)
     2 <= abs(base) || throw(ArgumentError("base must be ≥ 2 or ≤ -2, got $base"))
     hastypemax(T) && abs(base) - 1 > typemax(T) &&
         throw(ArgumentError("type $T too small for base $base"))
-    for i in eachindex(a)
-        if base > 0
-            a[i] = rem(n, base)
-            n = div(n, base)
-        else
-            a[i] = mod(n, -base)
-            n = cld(n, base)
+    isempty(a) && return a
+
+    if base > 0
+        for i in eachindex(a)
+            n, d = divrem(n, base)
+            a[i] = d
+        end
+    else
+        # manually peel one loop iteration for type stability
+        n, d = fldmod(n, -base)
+        a[firstindex(a)] = d
+        n = -signed(n)
+        for i in firstindex(a)+1:lastindex(a)
+            n, d = fldmod(n, -base)
+            a[i] = d
+            n = -n
         end
     end
     return a

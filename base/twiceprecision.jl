@@ -332,11 +332,14 @@ const F_or_FF = Union{AbstractFloat, Tuple{AbstractFloat,AbstractFloat}}
 asF64(x::AbstractFloat) = Float64(x)
 asF64(x::Tuple{AbstractFloat,AbstractFloat}) = Float64(x[1]) + Float64(x[2])
 
+# Defined to prevent splatting in the function below which here has a performance impact
+_TP(x) = TwicePrecision{Float64}(x)
+_TP(x::Tuple{Any, Any}) = TwicePrecision{Float64}(x[1], x[2])
 function steprangelen_hp(::Type{Float64}, ref::F_or_FF,
                          step::F_or_FF, nb::Integer,
                          len::Integer, offset::Integer)
-    StepRangeLen(TwicePrecision{Float64}(ref...),
-                 twiceprecision(TwicePrecision{Float64}(step...), nb), Int(len), offset)
+    StepRangeLen(_TP(ref),
+                 twiceprecision(_TP(step), nb), Int(len), offset)
 end
 
 function steprangelen_hp(::Type{T}, ref::F_or_FF,
@@ -354,7 +357,7 @@ StepRangeLen(ref::TwicePrecision{T}, step::TwicePrecision{T},
 
 # Construct range for rational start=start_n/den, step=step_n/den
 function floatrange(::Type{T}, start_n::Integer, step_n::Integer, len::Integer, den::Integer) where T
-    if len < 2
+    if len < 2 || step_n == 0
         return steprangelen_hp(T, (start_n, den), (step_n, den), 0, Int(len), 1)
     end
     # index of smallest-magnitude value

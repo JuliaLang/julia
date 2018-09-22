@@ -888,7 +888,7 @@ julia> append!([1, 2, 3], [4, 5, 6])
 ```
 
 Use [`push!`](@ref) to add individual items to `collection` which are not already
-themselves in another collection. The result is of the preceding example is equivalent to
+themselves in another collection. The result of the preceding example is equivalent to
 `push!([1, 2, 3], 4, 5, 6)`.
 """
 function append!(a::Array{<:Any,1}, items::AbstractVector)

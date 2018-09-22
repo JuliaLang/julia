@@ -247,14 +247,16 @@ static uint64_t resolve_atomic(const char *name)
 #elif defined(_OS_WINDOWS_)
     static const char *const libatomic = "libatomic-1.dll";
 #endif
-    static void *atomic_hdl = jl_load_dynamic_library_e(libatomic,
-                                                        JL_RTLD_LOCAL);
+    static void *atomic_hdl = jl_load_dynamic_library(libatomic,
+                                                      JL_RTLD_LOCAL, 0);
     static const char *const atomic_prefix = "__atomic_";
     if (!atomic_hdl)
         return 0;
     if (strncmp(name, atomic_prefix, strlen(atomic_prefix)) != 0)
         return 0;
-    return (uintptr_t)jl_dlsym_e(atomic_hdl, name);
+    uintptr_t value;
+    jl_dlsym(atomic_hdl, name, (void **)&value, 0);
+    return value;
 }
 #endif
 

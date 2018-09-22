@@ -70,6 +70,8 @@ ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
 endif
 LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
+LLVM_CMAKE += -DLLVM_UTILS_INSTALL_DIR=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
+LLVM_CMAKE += -DLLVM_INCLUDE_UTILS=ON -DLLVM_INSTALL_UTILS=ON
 LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_HISTEDIT_H=Off -DHAVE_LIBEDIT=Off
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_CMAKE += -DLLVM_ENABLE_ASSERTIONS:BOOL=ON
@@ -425,6 +427,7 @@ $(eval $(call LLVM_PATCH,llvm-rL326967-aligned-load)) # remove for 7.0
 ifeq ($(LLVM_VER_PATCH), 0)
 $(eval $(call LLVM_PATCH,llvm-windows-race))
 endif
+$(eval $(call LLVM_PATCH,llvm-D51842-win64-byval-cc))
 endif # LLVM_VER
 
 # Independent to the llvm version add a JL prefix to the version map
@@ -461,7 +464,9 @@ endif
 $(build_prefix)/manifest/llvm: | $(llvm_python_workaround)
 
 LLVM_INSTALL = \
-	cd $1 && $$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
+	cd $1 && mkdir -p $2$$(build_depsbindir) && \
+    cp -r $$(LLVM_SRC_DIR)/utils/lit $2$$(build_depsbindir)/ && \
+    $$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
 ifeq ($(OS), WINNT)
 LLVM_INSTALL += && cp $2$$(build_shlibdir)/LLVM.dll $2$$(build_depsbindir)
 endif
@@ -525,7 +530,7 @@ $(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/build-compiled: | $(BUILDDIR)/llvm-$
 $(eval $(call staged-install,llvm,llvm-$$(LLVM_VER)-$$(LLVM_BB_REL),,,,))
 
 #Override provision of stage tarball
-$(build_staging)/llvm-$(LLVM_VER)-$(LLVM_BB_REL).tgz: $(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/LLVM.$(BINARYBUILDER_TRIPLET).tar.gz
+$(build_staging)/llvm-$(LLVM_VER)-$(LLVM_BB_REL).tgz: $(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/LLVM.$(BINARYBUILDER_TRIPLET).tar.gz | $(build_staging)
 	cp $< $@
 
 clean-llvm:

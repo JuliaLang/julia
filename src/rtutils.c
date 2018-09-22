@@ -124,11 +124,6 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname, jl_value_t *expec
     jl_type_error_rt(fname, "", expected, got);
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_type_error_new_expr(jl_value_t *ty, jl_value_t *got)
-{
-    jl_type_error_rt("Type", "new", ty, got);
-}
-
 JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var)
 {
     jl_throw(jl_new_struct(jl_undefvarerror_type, var));
@@ -192,7 +187,7 @@ JL_DLLEXPORT void JL_NORETURN jl_eof_error(void)
     jl_datatype_t *eof_error =
         (jl_datatype_t*)jl_get_global(jl_base_module, jl_symbol("EOFError"));
     assert(eof_error != NULL);
-    jl_exceptionf(eof_error, "");
+    jl_throw(jl_new_struct(eof_error));
 }
 
 // get kwsorter field, with appropriate error check and message
@@ -539,6 +534,26 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, (jl_value_t*)vt, depth);
         n += jl_printf(out, ">");
     }
+    // These need to be special cased because they
+    // exist only by pointer identity in early startup
+    else if (v == (jl_value_t*)jl_simplevector_type) {
+        n += jl_printf(out, "Core.SimpleVector");
+    }
+    else if (v == (jl_value_t*)jl_typename_type) {
+        n += jl_printf(out, "Core.TypeName");
+    }
+    else if (v == (jl_value_t*)jl_sym_type) {
+        n += jl_printf(out, "Symbol");
+    }
+    else if (v == (jl_value_t*)jl_methtable_type) {
+        n += jl_printf(out, "Core.MethodTable");
+    }
+    else if (v == (jl_value_t*)jl_any_type) {
+        n += jl_printf(out, "Any");
+    }
+    else if (v == (jl_value_t*)jl_type_type) {
+        n += jl_printf(out, "Type");
+    }
     else if (vt == jl_method_type) {
         jl_method_t *m = (jl_method_t*)v;
         n += jl_static_show_x(out, (jl_value_t*)m->module, depth);
@@ -591,7 +606,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         else if (globfunc) {
             n += jl_printf(out, "typeof(");
         }
-        if (dv->name->module != jl_core_module || !jl_module_exports_p(jl_core_module, sym)) {
+        if (jl_core_module && (dv->name->module != jl_core_module || !jl_module_exports_p(jl_core_module, sym))) {
             n += jl_static_show_x(out, (jl_value_t*)dv->name->module, depth);
             if (!hidden) {
                 n += jl_printf(out, ".");
@@ -661,7 +676,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (vt == jl_uint8_type) {
         n += jl_printf(out, "0x%02" PRIx8, *(uint8_t*)v);
     }
-    else if (jl_is_cpointer_type((jl_value_t*)vt)) {
+    else if (jl_pointer_type && jl_is_cpointer_type((jl_value_t*)vt)) {
 #ifdef _P64
         n += jl_printf(out, "0x%016" PRIx64, *(uint64_t*)v);
 #else
@@ -677,7 +692,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (vt == jl_bool_type) {
         n += jl_printf(out, "%s", *(uint8_t*)v ? "true" : "false");
     }
-    else if ((jl_value_t*)vt == jl_typeof(jl_nothing)) {
+    else if (v == jl_nothing || (jl_nothing && vt == jl_typeof(jl_nothing))) {
         n += jl_printf(out, "nothing");
     }
     else if (vt == jl_string_type) {
@@ -814,7 +829,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             n += jl_printf(out, ")");
         }
     }
-    else if (jl_is_array_type(vt)) {
+    else if (jl_array_type && jl_is_array_type(vt)) {
         n += jl_printf(out, "Array{");
         n += jl_static_show_x(out, (jl_value_t*)jl_tparam0(vt), depth);
         n += jl_printf(out, ", (");
@@ -873,7 +888,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, *(jl_value_t**)v, depth);
         n += jl_printf(out, ")");
     }
-    else if (jl_is_datatype(vt)) {
+    else if (jl_datatype_type && jl_is_datatype(vt)) {
         int istuple = jl_is_tuple_type(vt), isnamedtuple = jl_is_namedtuple_type(vt);
         size_t tlen = jl_datatype_nfields(vt);
         if (isnamedtuple) {
@@ -1052,7 +1067,7 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
     if (!logmsg_func) {
         ios_t str_;
         ios_mem(&str_, 300);
-        uv_stream_t* str = (uv_stream_t*)&str_;
+        JL_STREAM* str = (JL_STREAM*)&str_;
         if (jl_is_string(msg)) {
             jl_uv_puts(str, jl_string_data(msg), jl_string_len(msg));
         }

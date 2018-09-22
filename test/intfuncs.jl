@@ -139,6 +139,15 @@ end
     @test iszero([Base.ndigits0z(false, b) for b in [-20:-2;2:20]])
     @test all(n -> n == 1, Base.ndigits0z(true, b) for b in [-20:-2;2:20])
     @test all(n -> n == 1, ndigits(x, base=b) for b in [-20:-2;2:20] for x in [true, false])
+
+    # issue #29148
+    @test ndigits(typemax(UInt64), base=-2) == ndigits(big(typemax(UInt64)), base=-2)
+    for T in Base.BitInteger_types
+        n = rand(T)
+        b = -rand(2:100)
+        @test ndigits(n, base=b) == ndigits(big(n), base=b)
+    end
+
 end
 @testset "bin/oct/dec/hex/bits" begin
     @test string(UInt32('3'), base = 2) == "110011"
@@ -170,10 +179,17 @@ end
     @test digits(5, base = 3) == [2, 1]
 
     @testset "digits/base with negative bases" begin
-        @testset "digits(n::$T, base = b)" for T in (Int, UInt, BigInt, Int32)
+        @testset "digits(n::$T, base = b)" for T in (Int, UInt, BigInt, Int32, UInt32)
             @test digits(T(8163), base = -10) == [3, 4, 2, 2, 1]
             if !(T<:Unsigned)
                 @test digits(T(-8163), base = -10) == [7, 7, 9, 9]
+            end
+            if T !== BigInt
+                b = rand(-32:-2)
+                for n = T[rand(T), typemax(T), typemin(T)]
+                    # issue #29183
+                    @test digits(n, base=b) == digits(signed(widen(n)), base=b)
+                end
             end
         end
         @test [string(n, base = b)

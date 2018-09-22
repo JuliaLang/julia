@@ -55,12 +55,15 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
     rettype = Bottom
     edgecycle = false
     edges = Any[]
+    nonbot = 0  # the index of the only non-Bottom inference result if > 0
+    seen = 0    # number of signatures actually inferred
     for i in 1:napplicable
         match = applicable[i]::SimpleVector
         method = match[3]::Method
         sig = match[1]
         sigtuple = unwrap_unionall(sig)::DataType
         splitunions = false
+        this_rt = Bottom
         # TODO: splitunions = 1 < countunionsplit(sigtuple.parameters) * napplicable <= sv.params.MAX_UNION_SPLITTING
         # currently this triggers a bug in inference recursion detection
         if splitunions
@@ -71,24 +74,32 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
                     push!(edges, edge)
                 end
                 edgecycle |= edgecycle1::Bool
-                rettype = tmerge(rettype, rt)
-                rettype === Any && break
+                this_rt = tmerge(this_rt, rt)
+                this_rt === Any && break
             end
-            rettype === Any && break
         else
-            rt, edgecycle, edge = abstract_call_method(method, sig, match[2]::SimpleVector, sv)
+            this_rt, edgecycle, edge = abstract_call_method(method, sig, match[2]::SimpleVector, sv)
             if edge !== nothing
                 push!(edges, edge)
             end
-            rettype = tmerge(rettype, rt)
-            rettype === Any && break
         end
+        if this_rt !== Bottom
+            if nonbot === 0
+                nonbot = i
+            else
+                nonbot = -1
+            end
+        end
+        seen += 1
+        rettype = tmerge(rettype, this_rt)
+        rettype === Any && break
     end
-    if napplicable == 1 && !edgecycle && isa(rettype, Type) && sv.params.ipo_constant_propagation
+    # try constant propagation if only 1 method is inferred to non-Bottom
+    if nonbot > 0 && seen == napplicable && !edgecycle && isa(rettype, Type) && sv.params.ipo_constant_propagation
         # if there's a possibility we could constant-propagate a better result
         # (hopefully without doing too much work), try to do that now
         # TODO: it feels like this could be better integrated into abstract_call_method / typeinf_edge
-        const_rettype = abstract_call_method_with_const_args(f, argtypes, applicable[1]::SimpleVector, sv)
+        const_rettype = abstract_call_method_with_const_args(f, argtypes, applicable[nonbot]::SimpleVector, sv)
         if const_rettype ⊑ rettype
             # use the better result, if it's a refinement of rettype
             rettype = const_rettype
@@ -169,13 +180,20 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
         atypes = get_argtypes(inf_result)
         if method.isva
             vargs = argtypes[(nargs + 1):end]
+            all_vargs_const = true
             for i in 1:length(vargs)
                 a = maybe_widen_conditional(vargs[i])
+                all_vargs_const &= a isa Const
                 if i > length(inf_result.vargs)
                     push!(inf_result.vargs, a)
                 elseif a isa Const
                     inf_result.vargs[i] = a
                 end
+            end
+            # If all vargs are const, the result may be a constant
+            # tuple. If so, we should make sure to treat it as such
+            if all_vargs_const
+                atypes[nargs + 1] = builtin_tfunction(tuple, inf_result.vargs, sv)
             end
         end
         for i in 1:nargs
@@ -704,7 +722,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
             return ret
         end
         return Any
-    elseif f === return_type
+    elseif is_return_type(f)
         rt_rt = return_type_tfunc(argtypes, vtypes, sv)
         if rt_rt !== NOT_FOUND
             return rt_rt
@@ -755,7 +773,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
     t = pure_eval_call(f, argtypes, atype, sv)
     t !== false && return t
 
-    if istopfunction(f, :typejoin) || f === return_type
+    if istopfunction(f, :typejoin) || is_return_type(f)
         return Type # don't try to infer these function edges directly -- it won't actually come up with anything useful
     end
 
@@ -893,9 +911,28 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         t = abstract_eval_call(e.args, argtypes, vtypes, sv)
     elseif e.head === :new
         t = instanceof_tfunc(abstract_eval(e.args[1], vtypes, sv))[1]
-        for i = 2:length(e.args)
-            if abstract_eval(e.args[i], vtypes, sv) === Bottom
-                rt = Bottom
+        if isbitstype(t)
+            args = Vector{Any}(undef, length(e.args)-1)
+            isconst = true
+            for i = 2:length(e.args)
+                at = abstract_eval(e.args[i], vtypes, sv)
+                if at === Bottom
+                    t = Bottom
+                    isconst = false
+                    break
+                elseif at isa Const
+                    if !(at.val isa fieldtype(t, i - 1))
+                        t = Bottom
+                        isconst = false
+                        break
+                    end
+                    args[i-1] = at.val
+                else
+                    isconst = false
+                end
+            end
+            if isconst
+                t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, args, length(args)))
             end
         end
     elseif e.head === :&

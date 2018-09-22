@@ -121,7 +121,8 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
         f_lib = (char*)jl_dlfind_win32(f_name);
 #endif
 
-    void *ptr = jl_dlsym(jl_get_library(f_lib), f_name);
+    void *ptr;
+    jl_dlsym(jl_get_library(f_lib), f_name, &ptr, 1);
     jl_value_t *jv = jl_gc_alloc_1w();
     jl_set_typeof(jv, rt);
     *(void**)jl_data_ptr(jv) = ptr;

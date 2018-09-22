@@ -167,6 +167,21 @@ function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     nothing
 end
 
+function read(from::GenericIOBuffer, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
+    from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
+    avail = bytesavailable(from)
+    nb = sizeof(T)
+    if nb > avail
+        throw(EOFError())
+    end
+    GC.@preserve from begin
+        ptr::Ptr{T} = pointer(from.data, from.ptr)
+        x = unsafe_load(ptr)
+    end
+    from.ptr += nb
+    return x
+end
+
 function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
     @assert !has_offset_axes(a)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))

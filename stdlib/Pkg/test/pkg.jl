@@ -88,6 +88,9 @@ import Pkg.Types: semver_spec, VersionSpec
     @test_throws ErrorException semver_spec("^^0.2.3")
     @test_throws ErrorException semver_spec("^^0.2.3.4")
     @test_throws ErrorException semver_spec("0.0.0")
+
+    @test Pkg.Types.isjoinable(Pkg.Types.VersionBound((1,5)), Pkg.Types.VersionBound((1,6)))
+    @test !(Pkg.Types.isjoinable(Pkg.Types.VersionBound((1,5)), Pkg.Types.VersionBound((1,6,0))))
 end
 
 # TODO: Should rewrite these tests not to rely on internals like field names
@@ -127,6 +130,12 @@ temp_pkg_dir() do project_path
         @test isinstalled(TEST_PKG)
         Pkg.rm(TEST_PKG.name)
         @test !isinstalled(TEST_PKG)
+        # https://github.com/JuliaLang/Pkg.jl/issues/601
+        pkgdir = joinpath(Pkg.depots1(), "packages")
+        touch(joinpath(pkgdir, ".DS_Store"))
+        Pkg.gc()
+        rm(joinpath(pkgdir, ".DS_Store"))
+        @test isempty(readdir(pkgdir))
     end
 
     @testset "package with wrong UUID" begin
@@ -144,6 +153,9 @@ temp_pkg_dir() do project_path
         # VersionRange
         Pkg.add(PackageSpec(TEST_PKG.name, VersionSpec(VersionRange("0.3.0-0.3.2"))))
         @test Pkg.API.__installed()[TEST_PKG.name] == v"0.3.2"
+        # Check that adding another packages doesn't upgrade other packages
+        Pkg.add("Test")
+        @test Pkg.API.__installed()[TEST_PKG.name] == v"0.3.2"
         Pkg.update(; level = UPLEVEL_PATCH)
         @test Pkg.API.__installed()[TEST_PKG.name] == v"0.3.3"
         Pkg.update(; level = UPLEVEL_MINOR)
@@ -153,7 +165,6 @@ temp_pkg_dir() do project_path
 
     @testset "testing" begin
         # TODO: Check that preview = true doesn't actually execute the test
-        # TODO: Test-only dependencies
         Pkg.add(TEST_PKG.name)
         Pkg.test(TEST_PKG.name; coverage=true)
         pkgdir = Base.locate_package(Base.PkgId(TEST_PKG.uuid, TEST_PKG.name))
@@ -246,6 +257,23 @@ temp_pkg_dir() do project_path
                     Pkg.setprotocol!("https")
                     Pkg.develop("Example")
                     @test isinstalled(TEST_PKG)
+                finally
+                    Pkg.setprotocol!()
+                end
+            end
+        end
+        mktempdir() do devdir
+            withenv("JULIA_PKG_DEVDIR" => devdir) do
+                try
+                    https_url = "https://github.com/JuliaLang/Example.jl.git"
+                    ssh_url = "ssh://git@github.com/JuliaLang/Example.jl.git"
+                    @test Pkg.GitTools.normalize_url(https_url) == https_url
+                    Pkg.setprotocol!("ssh")
+                    @test Pkg.GitTools.normalize_url(https_url) == ssh_url
+                    # TODO: figure out how to test this without
+                    #       having to deploy a ssh key on github
+                    #Pkg.develop("Example")
+                    #@test isinstalled(TEST_PKG)
                 finally
                     Pkg.setprotocol!()
                 end
@@ -346,7 +374,6 @@ temp_pkg_dir() do project_path
     end
 end
 
-#=
 temp_pkg_dir() do project_path
     @testset "valid project file names" begin
         extract_uuid(toml_path) = begin
@@ -362,6 +389,8 @@ temp_pkg_dir() do project_path
         end
 
         cd(project_path) do
+            target_dir = mktempdir()
+            uuid = nothing
             mktempdir() do tmp; cd(tmp) do
                 pkg_name = "FooBar"
                 # create a project and grab its uuid
@@ -373,20 +402,21 @@ temp_pkg_dir() do project_path
                 Pkg.activate(abspath(pkg_name))
                 # add an example project to populate manifest file
                 Pkg.add("Example")
-                Pkg.activate()
                 # change away from default names
-                mv(joinpath(pkg_name, "Project.toml"), joinpath(pkg_name, "JuliaProject.toml"))
-                mv(joinpath(pkg_name, "Manifest.toml"), joinpath(pkg_name, "JuliaManifest.toml"))
-                # make sure things still work
-                Pkg.develop(PackageSpec(url = abspath(pkg_name)))
-                @test isinstalled((name=pkg_name, uuid=UUID(uuid)))
-                Pkg.rm(pkg_name)
-                @test !isinstalled((name=pkg_name, uuid=UUID(uuid)))
+                ## note: this is written awkwardly because a `mv` here causes failures on AppVeyor
+                cp(joinpath(pkg_name, "src"), joinpath(target_dir, "src"))
+                cp(joinpath(pkg_name, "Project.toml"), joinpath(target_dir, "JuliaProject.toml"))
+                cp(joinpath(pkg_name, "Manifest.toml"), joinpath(target_dir, "JuliaManifest.toml"))
             end end
+            Pkg.activate()
+            # make sure things still work
+            Pkg.REPLMode.pkgstr("dev $target_dir")
+            @test isinstalled((name="FooBar", uuid=UUID(uuid)))
+            Pkg.rm("FooBar")
+            @test !isinstalled((name="FooBar", uuid=UUID(uuid)))
         end # cd project_path
     end # @testset
 end
-=#
 
 temp_pkg_dir() do project_path
     @testset "invalid repo url" begin
@@ -413,6 +443,51 @@ temp_pkg_dir() do project_path
         end
     end
 end
+
+temp_pkg_dir() do project_path; cd(project_path) do
+    @testset "instantiating updated repo" begin
+        tmp = mktempdir()
+        cd(tmp)
+        depo1 = mktempdir()
+        depo2 = mktempdir()
+
+        empty!(DEPOT_PATH)
+        pushfirst!(DEPOT_PATH, depo1)
+        LibGit2.close(LibGit2.clone("https://github.com/JuliaLang/Example.jl", "Example.jl"))
+        mkdir("machine1")
+        cd("machine1")
+        Pkg.activate(".")
+        Pkg.add(PackageSpec(path="../Example.jl"))
+        cd("..")
+        cp("machine1", "machine2")
+        empty!(DEPOT_PATH)
+        pushfirst!(DEPOT_PATH, depo2)
+        cd("machine2")
+        Pkg.activate(".")
+        Pkg.instantiate()
+        cd("..")
+        cd("Example.jl")
+        open("README.md", "a") do io
+            print(io, "Hello")
+        end
+        LibGit2.with(LibGit2.GitRepo(".")) do repo
+            LibGit2.add!(repo, "*")
+            LibGit2.commit(repo, "changes"; author=TEST_SIG, committer=TEST_SIG)
+        end
+        cd("../machine1")
+        empty!(DEPOT_PATH)
+        pushfirst!(DEPOT_PATH, depo1)
+        Pkg.activate(".")
+        Pkg.update()
+        cd("..")
+        cp("machine1/Manifest.toml", "machine2/Manifest.toml"; force=true)
+        cd("machine2")
+        empty!(DEPOT_PATH)
+        pushfirst!(DEPOT_PATH, depo2)
+        Pkg.activate(".")
+        Pkg.instantiate()
+    end
+end end
 
 temp_pkg_dir() do project_path
     cd(project_path) do
@@ -445,6 +520,21 @@ end
             end
             Pkg.test("x3")
         end end end
+    end
+end
+
+@testset "printing of stdlib paths, issue #605" begin
+    path = Pkg.Types.stdlib_path("Test")
+    @test Pkg.Types.pathrepr(path) == "`@stdlib/Test`"
+end
+
+
+temp_pkg_dir() do project_path
+    @testset "Pkg.add should not mutate" begin
+        package_names = ["JSON"]
+        packages = PackageSpec.(package_names)
+        Pkg.add(packages)
+        @test [p.name for p in packages] == package_names
     end
 end
 

@@ -764,38 +764,39 @@ end
         @test_throws InterruptException throw(InterruptException())
     end
 
-    f = tempname()
+    mktemp() do f, _
+        write(f,
+        """
+        using Test
+        @testset begin
+            try
+                @test_throws ErrorException throw(InterruptException())
+            catch e
+                @test e isa InterruptException
+            end
+        end
 
-    write(f,
-    """
-    using Test
-    @testset begin
         try
-            @test_throws ErrorException throw(InterruptException())
+            @testset begin
+                @test 1 == 1
+                throw(InterruptException())
+            end
         catch e
             @test e isa InterruptException
         end
-    end
 
-    try
-        @testset begin
-            @test 1 == 1
-            throw(InterruptException())
+        try
+            @testset for i in 1:1
+                @test 1 == 1
+                throw(InterruptException())
+            end
+        catch e
+            @test e isa InterruptException
         end
-    catch e
-        @test e isa InterruptException
+        """)
+        cmd = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+        msg = success(pipeline(ignorestatus(cmd), stderr=devnull))
     end
-
-    try
-        @testset for i in 1:1
-            @test 1 == 1
-            throw(InterruptException())
-        end
-    catch e
-        @test e isa InterruptException
-    end
-    """)
-    msg = success(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=devnull))
 end
 
 @testset "non AbstractTestSet as testset" begin
@@ -812,6 +813,7 @@ end
     msg = read(err, String)
     @test occursin("Expected `desc` to be an AbstractTestSet, it is a String", msg)
     rm(f; force=true)
+    rm(err, force=true)
 end
 
 f25835(;x=nothing) = _f25835(x)

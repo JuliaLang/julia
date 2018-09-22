@@ -29,6 +29,7 @@ add_or_develop(pkgs::Vector{String}; kwargs...)            = add_or_develop([che
 add_or_develop(pkgs::Vector{PackageSpec}; kwargs...)       = add_or_develop(Context(), pkgs; kwargs...)
 
 function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, shared::Bool=true, kwargs...)
+    pkgs = deepcopy(pkgs)  # deepcopy for avoid mutating PackageSpec members
     Context!(ctx; kwargs...)
 
     # All developed packages should go through handle_repos_develop so just give them an empty repo
@@ -48,8 +49,7 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, s
 
     ctx.preview && preview_info()
     if mode == :develop
-        devdir = shared ? Pkg.devdir() : joinpath(dirname(ctx.env.project_file), "dev")
-        new_git = handle_repos_develop!(ctx, pkgs, devdir)
+        new_git = handle_repos_develop!(ctx, pkgs, shared = shared)
     else
         new_git = handle_repos_add!(ctx, pkgs; upgrade_or_add=true)
     end
@@ -74,8 +74,9 @@ rm(pkgs::Vector{String}; kwargs...)            = rm([PackageSpec(pkg) for pkg in
 rm(pkgs::Vector{PackageSpec}; kwargs...)       = rm(Context(), pkgs; kwargs...)
 
 function rm(ctx::Context, pkgs::Vector{PackageSpec}; mode=PKGMODE_PROJECT, kwargs...)
+    pkgs = deepcopy(pkgs)  # deepcopy for avoid mutating PackageSpec members
     for pkg in pkgs
-        #TODO only overwrite pkg.mode is default value ?
+        # TODO only overwrite pkg.mode if default value ?
         pkg.mode = mode
     end
 
@@ -97,16 +98,25 @@ function update_registry(ctx)
     else
         for reg in registries()
             if isdir(joinpath(reg, ".git"))
-                regpath = pathrepr(ctx, reg)
+                regpath = pathrepr(reg)
                 printpkgstyle(ctx, :Updating, "registry at " * regpath)
-                LibGit2.with(LibGit2.GitRepo, reg) do repo
+                # Using LibGit2.with here crashes julia when running the
+                # tests for PkgDev wiht "Unreachable reached".
+                # This seems to work around it.
+                local repo
+                try
+                    repo = LibGit2.GitRepo(reg)
                     if LibGit2.isdirty(repo)
                         push!(errors, (regpath, "registry dirty"))
-                        return
+                        @goto done
                     end
                     if !LibGit2.isattached(repo)
                         push!(errors, (regpath, "registry detached"))
-                        return
+                        @goto done
+                    end
+                    if !("origin" in LibGit2.remotes(repo))
+                        push!(errors, (regpath, "origin not in the list of remotes"))
+                        @goto done
                     end
                     branch = LibGit2.headname(repo)
                     try
@@ -114,14 +124,14 @@ function update_registry(ctx)
                     catch e
                         e isa PkgError || rethrow(e)
                         push!(errors, (reg, "failed to fetch from repo"))
-                        return
+                        @goto done
                     end
                     ff_succeeded = try
                         LibGit2.merge!(repo; branch="refs/remotes/origin/$branch", fastforward=true)
                     catch e
                         e isa LibGit2.GitError && e.code == LibGit2.Error.ENOTFOUND || rethrow(e)
                         push!(errors, (reg, "branch origin/$branch not found"))
-                        return
+                        @goto done
                     end
 
                     if !ff_succeeded
@@ -129,9 +139,12 @@ function update_registry(ctx)
                         catch e
                             e isa LibGit2.GitError || rethrow(e)
                             push!(errors, (reg, "registry failed to rebase on origin/$branch"))
-                            return
+                            @goto done
                         end
                     end
+                    @label done
+                finally
+                    close(repo)
                 end
             end
         end
@@ -155,6 +168,7 @@ up(pkgs::Vector{PackageSpec}; kwargs...)       = up(Context(), pkgs; kwargs...)
 
 function up(ctx::Context, pkgs::Vector{PackageSpec};
             level::UpgradeLevel=UPLEVEL_MAJOR, mode::PackageMode=PKGMODE_PROJECT, do_update_registry=true, kwargs...)
+    pkgs = deepcopy(pkgs)  # deepcopy for avoid mutating PackageSpec members
     for pkg in pkgs
         # TODO only override if they are not already set
         pkg.mode = mode
@@ -194,6 +208,7 @@ pin(pkgs::Vector{String}; kwargs...)            = pin([PackageSpec(pkg) for pkg 
 pin(pkgs::Vector{PackageSpec}; kwargs...)       = pin(Context(), pkgs; kwargs...)
 
 function pin(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
+    pkgs = deepcopy(pkgs)  # deepcopy for avoid mutating PackageSpec members
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     project_deps_resolve!(ctx.env, pkgs)
@@ -208,6 +223,7 @@ free(pkgs::Vector{String}; kwargs...)            = free([PackageSpec(pkg) for pk
 free(pkgs::Vector{PackageSpec}; kwargs...)       = free(Context(), pkgs; kwargs...)
 
 function free(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
+    pkgs = deepcopy(pkgs)  # deepcopy for avoid mutating PackageSpec members
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     registry_resolve!(ctx.env, pkgs)
@@ -239,6 +255,7 @@ test(pkgs::Vector{String}; kwargs...)             = test([PackageSpec(pkg) for p
 test(pkgs::Vector{PackageSpec}; kwargs...)        = test(Context(), pkgs; kwargs...)
 
 function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...)
+    pkgs = deepcopy(pkgs)  # deepcopy for avoid mutating PackageSpec members
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     if isempty(pkgs)
@@ -270,16 +287,6 @@ function __installed(mode::PackageMode=PKGMODE_MANIFEST)
 end
 
 function gc(ctx::Context=Context(); kwargs...)
-    function recursive_dir_size(path)
-        size = 0
-        for (root, dirs, files) in walkdir(path)
-            for file in files
-                size += stat(joinpath(root, file)).size
-            end
-        end
-        return size
-    end
-
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     env = ctx.env
@@ -327,10 +334,12 @@ function gc(ctx::Context=Context(); kwargs...)
         packagedir = abspath(depot, "packages")
         if isdir(packagedir)
             for name in readdir(packagedir)
-                for slug in readdir(joinpath(packagedir, name))
-                    versiondir = joinpath(packagedir, name, slug)
-                    if !(versiondir in paths_to_keep)
-                        push!(paths_to_delete, versiondir)
+                if isdir(joinpath(packagedir, name))
+                    for slug in readdir(joinpath(packagedir, name))
+                        versiondir = joinpath(packagedir, name, slug)
+                        if !(versiondir in paths_to_keep)
+                            push!(paths_to_delete, versiondir)
+                        end
                     end
                 end
             end
@@ -343,6 +352,16 @@ function gc(ctx::Context=Context(); kwargs...)
     end
 
     # Delete paths for noreachable package versions and compute size saved
+    function recursive_dir_size(path)
+        size = 0
+        for (root, dirs, files) in walkdir(path)
+            for file in files
+                size += stat(joinpath(root, file)).size
+            end
+        end
+        return size
+    end
+
     sz = 0
     for path in paths_to_delete
         sz_pkg = recursive_dir_size(path)
@@ -363,8 +382,10 @@ function gc(ctx::Context=Context(); kwargs...)
         if isdir(packagedir)
             for name in readdir(packagedir)
                 name_path = joinpath(packagedir, name)
-                if isempty(readdir(name_path))
-                    !ctx.preview && Base.rm(name_path)
+                if isdir(name_path)
+                    if isempty(readdir(name_path))
+                        !ctx.preview && Base.rm(name_path)
+                    end
                 end
             end
         end
@@ -408,6 +429,7 @@ build(pkg::Array{Union{}, 1}) = build(PackageSpec[])
 build(pkg::PackageSpec) = build([pkg])
 build(pkgs::Vector{PackageSpec}) = build(Context(), pkgs)
 function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
+    pkgs = deepcopy(pkgs)  # deepcopy for avoid mutating PackageSpec members
     Context!(ctx; kwargs...)
 
     ctx.preview && preview_info()
@@ -474,7 +496,7 @@ function precompile(ctx::Context)
         sourcepath = Base.locate_package(pkg)
         if sourcepath == nothing
             # XXX: this isn't supposed to be fatal
-            pkgerror("couldn't find path to $(pkg.name) when trying to precompilie project")
+            pkgerror("couldn't find path to $(pkg.name) when trying to precompile project")
         end
         stale = true
         for path_to_try in paths::Vector{String}
@@ -572,7 +594,7 @@ function activate(path::String; shared::Bool=false)
             fullpath = abspath(devpath)
         else
             fullpath = abspath(path)
-            isdir(fullpath) || @info("new environment will be placed at $fullpath")
+            isdir(fullpath) || @info("activating new environment at $(Base.contractuser(fullpath)).")
         end
     else
         # initialize `fullpath` in case of empty `Pkg.depots()`
@@ -589,7 +611,7 @@ function activate(path::String; shared::Bool=false)
         # unless the shared environment already exists, place it in the first depots
         if !isdir(fullpath)
             fullpath = joinpath(Pkg.envdir(Pkg.depots1()), path)
-            @info("new shared environment \"$path\" will be placed at $fullpath")
+            @info("activating new environment at $(Base.contractuser(fullpath)).")
         end
     end
     Base.ACTIVE_PROJECT[] = Base.load_path_expand(fullpath)

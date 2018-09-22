@@ -298,6 +298,12 @@ end
     x = BigFloat(12)
     y = BigFloat(4)
     @test x^y == BigFloat(20736)
+
+    @test big(2.0)^big(3) == 8
+    for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt]
+        @test T(2)^big(3.0) == 8
+        @test big(2.0)^T(3) == 8
+    end
 end
 @testset "iterated arithmetic" begin
     a = BigFloat(12.25)
@@ -454,6 +460,8 @@ end
     x = BigFloat(12)
     @test precision(x) == old_precision
     @test_throws DomainError setprecision(1)
+    # issue 15659
+    @test (setprecision(53) do; big(1/3); end) < 1//3
 end
 @testset "isinteger" begin
     @test !isinteger(BigFloat(1.2))
@@ -927,5 +935,12 @@ end
         @test to_string(big"-0.0") == "-0.0"
         @test to_string(big"1.0") == "1.0"
         @test to_string(big"-1.0") == "-1.0"
+    end
+end
+
+@testset "big(::Type)" begin
+    for x in (2f0, pi, 7.8, big(ℯ))
+        @test big(typeof(x)) == typeof(big(x))
+        @test big(typeof(complex(x, x))) == typeof(big(complex(x, x)))
     end
 end

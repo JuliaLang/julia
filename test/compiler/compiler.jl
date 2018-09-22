@@ -932,6 +932,13 @@ f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 @test @inferred(f21771(Val{Union{}}())) === Tuple{Union{}}
 @test @inferred(f21771(Val{Integer}())) === Tuple{Integer}
 
+# PR #28284, check that constants propagate through calls to new
+struct t28284
+  x::Int
+end
+f28284() = Val(t28284(1))
+@inferred f28284()
+
 # missing method should be inferred as Union{}, ref https://github.com/JuliaLang/julia/issues/20033#issuecomment-282228948
 @test Base.return_types(f -> f(1), (typeof((x::String) -> x),)) == Any[Union{}]
 
@@ -1990,3 +1997,43 @@ struct VoxelIndices{T <: Integer}
 end
 f28641(x::VoxelIndices, f) = getfield(x, f)
 @test Base.return_types(f28641, (Any,Symbol)) == Any[Tuple]
+
+# issue #29036
+function f29036(s, i)
+    val, i = iterate(s, i)
+    val
+end
+@test Base.return_types(f29036, (String, Int)) == Any[Char]
+
+# issue #26729
+module I26729
+struct Less{O}
+    is_less::O
+end
+
+struct By{T,O}
+    by::T
+    is_less::O
+end
+
+struct Reverse{O}
+    is_less::O
+end
+
+function get_order(by = identity, func = isless, rev = false)
+    ord = By(by, Less(func))
+    rev ? Reverse(ord) : ord
+end
+
+get_order_kwargs(; by = identity, func = isless, rev = false) = get_order(by, func, rev)
+
+# test that this doesn't cause an internal error
+get_order_kwargs()
+end
+
+# Test that tail-like functions don't block constant propagation
+my_tail_const_prop(i, tail...) = tail
+function foo_tail_const_prop()
+    Val{my_tail_const_prop(1,2,3,4)}()
+end
+@test (@inferred foo_tail_const_prop()) == Val{(2,3,4)}()
