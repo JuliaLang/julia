@@ -820,7 +820,31 @@ function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
     # We know the apply_type is well formed. Oherwise our rt would have been
     # Bottom (or Type).
     (headtype === Union) && return true
-    return isa(rt, Const)
+    isa(rt, Const) && return true
+    u = headtype
+    for i = 2:length(argtypes)
+        isa(u, UnionAll) || return false
+        ai = maybe_widen_conditional(argtypes[i])
+        if ai === TypeVar
+            # We don't know anything about the bounds of this typevar, but as
+            # long as the UnionAll is not constrained, that's ok.
+            if !(u.var.lb === Union{} && u.var.ub === Any)
+                return false
+            end
+        elseif isa(ai, Const) && isa(ai.val, Type)
+            ai = ai.val
+            if has_free_typevars(u.var.lb) || has_free_typevars(u.var.ub)
+                return false
+            end
+            if !(u.var.lb <: ai <: u.var.ub)
+                return false
+            end
+        else
+            return false
+        end
+        u = u.body
+    end
+    return true
 end
 
 # TODO: handle e.g. apply_type(T, R::Union{Type{Int32},Type{Float64}})
