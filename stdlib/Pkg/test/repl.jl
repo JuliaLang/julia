@@ -498,12 +498,12 @@ temp_pkg_dir() do project_path; cd(project_path) do
                 print(io, """
 
                 [compat]
-                JSON = "0.16.0"
+                JSON = "0.18.0"
                 """
                 )
             end
             pkg"up"
-            @test Pkg.API.installed()["JSON"].minor == 16
+            @test Pkg.API.installed()["JSON"].minor == 18
             write("Project.toml", old_project)
             pkg"up"
             @test Pkg.API.installed()["JSON"] == current_json
