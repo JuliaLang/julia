@@ -6723,3 +6723,10 @@ function f29175(tuple::T) where {T<:Tuple}
     return prefix
 end
 @test f29175((1,2,3)) === (1,2)
+
+# issue #29306
+let a = [1,2,3,4,missing,6,7]
+    @test_throws TypeError [ (x>6 ? missing : x)  for x in a]
+    foo(x) = x > 0 ? x : missing
+    @test_throws TypeError foo(missing)
+end
