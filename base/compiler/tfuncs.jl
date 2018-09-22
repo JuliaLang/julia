@@ -340,6 +340,50 @@ add_tfunc(nfields, 1, 1,
         return Int
     end, 0)
 add_tfunc(Core._expr, 1, INT_INF, (@nospecialize args...)->Expr, 100)
+function typevar_tfunc(@nospecialize(n), @nospecialize(lb_arg), @nospecialize(ub_arg))
+    lb = Union{}
+    ub = Any
+    ub_certain = lb_certain = true
+    if isa(n, Const)
+        isa(n.val, Symbol) || return Union{}
+        if isa(lb_arg, Const)
+            lb = lb_arg.val
+        elseif isType(lb_arg)
+            lb = lb_arg.parameters[1]
+            lb_certain = false
+        else
+            return TypeVar
+        end
+        if isa(ub_arg, Const)
+            ub = ub_arg.val
+        elseif isType(ub_arg)
+            ub = ub_arg.parameters[1]
+            ub_certain = false
+        else
+            return TypeVar
+        end
+        tv = TypeVar(n.val, lb, ub)
+        return PartialTypeVar(tv, lb_certain, ub_certain)
+    end
+    return TypeVar
+end
+function typebound_nothrow(b)
+    b = widenconst(b)
+    (b ⊑ TypeVar) && return true
+    if isType(b)
+        b = unwrap_unionall(b.parameters[1])
+        b === Union{} && return true
+        return !isa(b, DataType) || b.name != _va_typename
+    end
+    return false
+end
+function typevar_nothrow(n, lb, ub)
+    (n ⊑ Symbol) || return false
+    typebound_nothrow(lb) || return false
+    typebound_nothrow(ub) || return false
+    return true
+end
+add_tfunc(Core._typevar, 3, 3, typevar_tfunc, 100)
 add_tfunc(applicable, 1, INT_INF, (@nospecialize(f), args...)->Bool, 100)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecialize(x)->Int, 4)
 add_tfunc(arraysize, 2, 2, (@nospecialize(a), @nospecialize(d))->Int, 4)
@@ -1061,6 +1105,9 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
+    elseif f === Core._typevar
+        length(argtypes) == 3 || return false
+        return typevar_nothrow(argtypes[1], argtypes[2], argtypes[3])
     elseif f === invoke
         return false
     elseif f === getfield

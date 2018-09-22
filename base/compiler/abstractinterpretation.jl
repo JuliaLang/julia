@@ -660,37 +660,19 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         end
         return Any
     elseif f === TypeVar
-        lb = Union{}
-        ub = Any
-        ub_certain = lb_certain = true
-        if length(argtypes) >= 2 && isa(argtypes[2], Const)
-            nv = argtypes[2].val
-            ubidx = 3
-            if length(argtypes) >= 4
-                ubidx = 4
-                if isa(argtypes[3], Const)
-                    lb = argtypes[3].val
-                elseif isType(argtypes[3])
-                    lb = argtypes[3].parameters[1]
-                    lb_certain = false
-                else
-                    return TypeVar
-                end
-            end
-            if length(argtypes) >= ubidx
-                if isa(argtypes[ubidx], Const)
-                    ub = argtypes[ubidx].val
-                elseif isType(argtypes[ubidx])
-                    ub = argtypes[ubidx].parameters[1]
-                    ub_certain = false
-                else
-                    return TypeVar
-                end
-            end
-            tv = TypeVar(nv, lb, ub)
-            return PartialTypeVar(tv, lb_certain, ub_certain)
+        # Manually look through the definition of TypeVar to
+        # make sure to be able to get `PartialTypeVar`s out.
+        (length(argtypes) < 2 || length(argtypes) > 4) && return Union{}
+        n = argtypes[2]
+        ub_var = Const(Any)
+        lb_var = Const(Union{})
+        if length(argtypes) == 4
+            ub_var = argtypes[4]
+            lb_var = argtypes[3]
+        elseif length(argtypes) == 3
+            ub_var = argtypes[3]
         end
-        return TypeVar
+        return typevar_tfunc(n, lb_var, ub_var)
     elseif f === UnionAll
         if length(argtypes) == 3
             canconst = true
