@@ -145,9 +145,13 @@ end
 # These affect control flow within the function (so may not be removed
 # if there is no usage within the function), but don't affect the purity
 # of the function as a whole.
-function stmt_affects_purity(@nospecialize stmt)
-    if isa(stmt, GotoIfNot) || isa(stmt, GotoNode) || isa(stmt, ReturnNode)
+function stmt_affects_purity(@nospecialize(stmt), ir)
+    if isa(stmt, GotoNode) || isa(stmt, ReturnNode)
         return false
+    end
+    if isa(stmt, GotoIfNot)
+        t = argextype(stmt.cond, ir, ir.spvals)
+        return !(t ⊑ Bool)
     end
     if isa(stmt, Expr)
         return stmt.head != :simdloop && stmt.head != :enter
@@ -173,7 +177,7 @@ function optimize(opt::OptimizationState, @nospecialize(result))
             proven_pure = true
             for i in 1:length(ir.stmts)
                 stmt = ir.stmts[i]
-                if stmt_affects_purity(stmt) && !stmt_effect_free(stmt, ir.types[i], ir, ir.spvals)
+                if stmt_affects_purity(stmt, ir) && !stmt_effect_free(stmt, ir.types[i], ir, ir.spvals)
                     proven_pure = false
                     break
                 end
