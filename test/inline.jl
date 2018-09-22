@@ -197,3 +197,10 @@ function cprop_inline_baz2()
     return cprop_inline_bar(cprop_inline_foo2()..., cprop_inline_foo2()...)
 end
 @test length(code_typed(cprop_inline_baz2, ())[1][1].code) == 2
+
+# Check that apply_type/TypeVar can be fully eliminated
+function f_apply_typevar(T)
+    NTuple{N, T} where N
+    return T
+end
+@test length(code_typed(f_apply_typevar, (Type{Any},))[1][1].code) == 1
