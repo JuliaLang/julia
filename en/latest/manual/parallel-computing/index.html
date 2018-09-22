@@ -574,7 +574,7 @@ CuArray{Float64,1}</code></pre><p>Keep in mind that some Julia features are not 
     end
 
     return v, norm(M*v) / norm(v)  # or  (M*v) ./ v
-end</code></pre><p><code>power_method</code> repeteavely creates a new vector and normalizes it. We have not specified any type signature in function declaration, let&#39;s see if it works with the aforementioned datatypes:</p><pre><code class="language-julia-repl">julia&gt; M = [2. 1; 1 1];
+end</code></pre><p><code>power_method</code> repeatedly creates a new vector and normalizes it. We have not specified any type signature in function declaration, let&#39;s see if it works with the aforementioned datatypes:</p><pre><code class="language-julia-repl">julia&gt; M = [2. 1; 1 1];
 
 julia&gt; v = rand(2)
 2-element Array{Float64,1}:
