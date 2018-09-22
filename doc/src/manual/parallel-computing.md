@@ -1727,7 +1727,7 @@ function power_method(M, v)
 end
 ```
 
-`power_method` repeteavely creates a new vector and normalizes it. We have not specified any type signature in
+`power_method` repeatedly creates a new vector and normalizes it. We have not specified any type signature in
 function declaration, let's see if it works with the aforementioned datatypes:
 
 ```julia-repl
