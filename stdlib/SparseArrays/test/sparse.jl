@@ -2027,6 +2027,12 @@ end
     @test nnz(A) == 1
 end
 
+@testset "setindex with vector eltype (#29034)" begin
+    A = sparse([1], [1], [Vector{Float64}(undef, 3)], 3, 3)
+    A[1,1] = [1.0, 2.0, 3.0]
+    @test A[1,1] == [1.0, 2.0, 3.0]
+end
+
 @testset "show" begin
     io = IOBuffer()
     show(io, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
