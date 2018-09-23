@@ -615,6 +615,9 @@ end
 # and it reconnects the Base.Docs.META
 function _include_from_serialized(path::String, depmods::Vector{Any})
     sv = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
+    if isa(sv, Exception)
+        return sv
+    end
     restored = sv[1]
     if !isa(restored, Exception)
         for M in restored::Vector{Any}
