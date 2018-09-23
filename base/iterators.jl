@@ -158,7 +158,7 @@ end
 end
 
 """
-    Iterators.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
+    Iterators.Pairs(keys, values) <: AbstractDict{eltype(keys), eltype(values)}
 
 Transforms an indexable container into an Dictionary-view of the same data.
 Modifying the key-space of the underlying data may invalidate this object.
