@@ -159,4 +159,4 @@ function f_ifelse(x)
     return b ? x + 1 : x
 end
 # 2 for now because the compiler leaves a GotoNode around
-@test length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
+@test_broken length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
