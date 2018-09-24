@@ -295,7 +295,7 @@ repl(x) = repl(stdout, x)
 
 _repl_typeof(arg::Symbol) = :(::(@isdefined($arg) ? typeof($arg) : Any))
 _repl_typeof(arg) = isexpr(arg, :kw) ? :(Expr(:kw, arg[1], _repl_typeof(arg[2]))) :
-                                       :(typeof($arg))
+                                       :(::typeof($arg))
 
 function _repl(x)
     if isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args)
