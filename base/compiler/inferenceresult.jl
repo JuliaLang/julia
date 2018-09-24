@@ -22,10 +22,9 @@ end
 # to return a valid value for `cache_lookup(linfo, argtypes, cache).argtypes`,
 # so that we can construct cache-correct `InferenceResult`s in the first place.
 function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector)
-    toplevel = !isa(linfo.def, Method)
-    @assert !toplevel
+    @assert isa(linfo.def, Method) # !toplevel
     nargs::Int = linfo.def.nargs
-    @assert length(given_argtypes) >= (nargs - 1) # TODO do we need this assert
+    @assert length(given_argtypes) >= (nargs - 1)
     result_argtypes = Vector{Any}(undef, length(given_argtypes))
     for i in 1:length(given_argtypes)
         a = given_argtypes[i]
@@ -42,6 +41,7 @@ function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector)
         isva_result_argtypes[nargs] = tuple_tfunc(result_argtypes[(nargs - 1):end])
         return isva_result_argtypes
     end
+    @assert length(result_argtypes) === nargs
     return result_argtypes
 end
 
