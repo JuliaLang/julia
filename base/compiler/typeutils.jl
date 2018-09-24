@@ -32,6 +32,11 @@ function issingletontype(@nospecialize t)
     return false
 end
 
+function has_nontrivial_const_info(@nospecialize t)
+    isa(t, PartialTuple) && return true
+    return isa(t, Const) && !isdefined(typeof(t.val), :instance) && !(isa(t.val, Type) && issingletontype(t.val))
+end
+
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
 # some of these queries, this check can be used to somewhat protect against making incorrect
 # decisions based on incorrect subtyping. Note that this check, itself, is broken for

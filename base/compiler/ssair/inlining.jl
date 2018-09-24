@@ -1157,8 +1157,7 @@ function find_inferred(linfo::MethodInstance, @nospecialize(atypes), sv::Optimiz
     # or an existing inferred code info store in `.inferred`
     haveconst = false
     for i in 1:length(atypes)
-        a = atypes[i]
-        if isa(a, Const) && !isdefined(typeof(a.val), :instance) && !(isa(a.val, Type) && issingletontype(a.val))
+        if has_nontrivial_const_info(atypes[i])
             # have new information from argtypes that wasn't available from the signature
             haveconst = true
             break

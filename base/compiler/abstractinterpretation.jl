@@ -136,13 +136,9 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
     haveconst = false
     for a in argtypes
         a = maybe_widen_conditional(a)
-        if isa(a, PartialTuple)
-            haveconst = true
-            break
-        end
-        if isa(a, Const) && !isdefined(typeof(a.val), :instance) && !(isa(a.val, Type) && issingletontype(a.val))
+        if has_nontrivial_const_info(a)
             # have new information from argtypes that wasn't available from the signature
-            if isa(a.val, Symbol) || isa(a.val, Type) || (!isa(a.val, String) && isimmutable(a.val))
+            if !isa(a, Const) || (isa(a.val, Symbol) || isa(a.val, Type) || (!isa(a.val, String) && isimmutable(a.val)))
                 # don't consider mutable values or Strings useful constants
                 haveconst = true
                 break
