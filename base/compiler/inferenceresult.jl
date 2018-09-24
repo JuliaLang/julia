@@ -129,6 +129,10 @@ function matching_cache_argtypes(linfo::MethodInstance, ::Nothing)
     return result_argtypes
 end
 
+function is_argtype_mismatch(@nospecialize(a), @nospecialize(b))
+    return (isa(a, Const) || isa(b, Const) || isa(a, PartialTuple) || isa(b, PartialTuple)) && !(a === b)
+end
+
 function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache::Vector{InferenceResult})
     method = linfo.def::Method
     nargs::Int = method.nargs
@@ -142,7 +146,7 @@ function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache:
                 a = maybe_widen_conditional(given_argtypes[i])
                 ca = cache_argtypes[i]
                 # verify that all Const argument types match between the call and cache
-                if (isa(a, Const) || isa(ca, Const) || isa(a, PartialTuple) || isa(ca, PartialTuple)) && !(a === ca)
+                if is_argtype_mismatch(a, ca)
                     cache_match = false
                     break
                 end
@@ -158,7 +162,7 @@ function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache:
                     else
                         ca = nothing # not Const
                     end
-                    if (isa(a, Const) || isa(ca, Const) || isa(a, PartialTuple) || isa(ca, PartialTuple)) && !(a === ca)
+                    if is_argtype_mismatch(a, ca)
                         cache_match = false
                         break
                     end
