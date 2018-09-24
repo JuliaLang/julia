@@ -1718,3 +1718,10 @@ f28900(; kwarg) = kwarg
 let g = @foo28900 f28900(kwarg = x->2x)
     @test g(10) == 20
 end
+
+# range and interval operators
+@test Meta.parse("1…2") == Expr(:call, :…, 1, 2)
+@test Meta.parse("1⁝2") == Expr(:call, :⁝, 1, 2)
+@test Meta.parse("1..2") == Expr(:call, :.., 1, 2)
+# we don't parse chains of these since the associativity and meaning aren't clear
+@test_throws ParseError Meta.parse("1..2..3")
