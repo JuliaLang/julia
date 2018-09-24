@@ -697,31 +697,37 @@ end
 function _kwdef!(blk, params_args, call_args)
     for i in eachindex(blk.args)
         ei = blk.args[i]
-        if isa(ei, Symbol)
+        if ei isa Symbol
+            #  var
             push!(params_args, ei)
             push!(call_args, ei)
-        elseif !isa(ei, Expr)
-            continue
-        elseif ei.head == :(=)
-            # var::Typ = defexpr
-            dec = ei.args[1]  # var::Typ
-            if isa(dec, Expr) && dec.head == :(::)
-                var = dec.args[1]
-            else
-                var = dec
+        elseif ei isa Expr
+            if ei.head == :(=)
+                lhs = ei.args[1]
+                if lhs isa Symbol
+                    #  var = defexpr
+                    var = lhs
+                elseif lhs isa Expr && lhs.head == :(::) && lhs.args[1] isa Symbol
+                    #  var::T = defexpr
+                    var = lhs.args[1]
+                else
+                    # something else, e.g. inline inner constructor
+                    #   F(...) = ...
+                    continue
+                end
+                defexpr = ei.args[2]  # defexpr
+                push!(params_args, Expr(:kw, var, defexpr))
+                push!(call_args, var)
+                blk.args[i] = lhs
+            elseif ei.head == :(::) && ei.args[1] isa Symbol
+                # var::Typ
+                var = ei.args[1]
+                push!(params_args, var)
+                push!(call_args, var)
+            elseif ei.head == :block
+                # can arise with use of @static inside type decl
+                _kwdef!(ei, params_args, call_args)
             end
-            def = ei.args[2]  # defexpr
-            push!(params_args, Expr(:kw, var, def))
-            push!(call_args, var)
-            blk.args[i] = dec
-        elseif ei.head == :(::)
-            dec = ei # var::Typ
-            var = dec.args[1] # var
-            push!(params_args, var)
-            push!(call_args, var)
-        elseif ei.head == :block
-            # can arise with use of @static inside type decl
-            _kwdef!(ei, params_args, call_args)
         end
     end
     blk

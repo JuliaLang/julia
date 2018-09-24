@@ -691,6 +691,33 @@ end
     @test Test29307{UInt32}(a=0x03) == Test29307{UInt32}(0x03)
 end
 
+@kwdef struct TestInnerConstructor
+    a = 1
+    TestInnerConstructor(a::Int) = (@assert a>0; new(a))
+    function TestInnerConstructor(a::String)
+        @assert length(a) > 0
+        new(a)
+    end
+end
+
+@testset "@kwdef inner constructor" begin
+    @test TestInnerConstructor() == TestInnerConstructor(1)
+    @test TestInnerConstructor(a=2) == TestInnerConstructor(2)
+    @test_throws AssertionError TestInnerConstructor(a=0)
+    @test TestInnerConstructor(a="2") == TestInnerConstructor("2")
+    @test_throws AssertionError TestInnerConstructor(a="")
+end
+
+
+const outsidevar = 7
+@kwdef struct TestOutsideVar
+    a::Int=outsidevar
+end
+@test TestOutsideVar() == TestOutsideVar(7)
+
+
+
+
 @testset "exports of modules" begin
     for (_, mod) in Base.loaded_modules
        for v in names(mod)
