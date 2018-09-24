@@ -28,10 +28,7 @@ function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector)
     result_argtypes = Vector{Any}(undef, length(given_argtypes))
     for i in 1:length(given_argtypes)
         a = given_argtypes[i]
-        if !isa(a, PartialTuple) && !isa(a, Const)
-            a = widenconst(a)
-        end
-        result_argtypes[i] = a
+        result_argtypes[i] = !(isa(a, PartialTuple) || isa(a, Const)) ? widenconst(a) : a
     end
     if linfo.def.isva
         isva_result_argtypes = Vector{Any}(undef, nargs)
@@ -55,7 +52,7 @@ function matching_cache_argtypes(linfo::MethodInstance, ::Nothing)
     if !toplevel && linfo.def.isva
         if linfo.specTypes == Tuple
             if nargs > 1
-                linfo_argtypes = svec(Any[ Any for i = 1:(nargs - 1) ]..., Tuple.parameters[1])
+                linfo_argtypes = svec(Any[Any for i = 1:(nargs - 1)]..., Tuple.parameters[1])
             end
             vargtype = Tuple
         else
@@ -153,18 +150,25 @@ function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache:
             end
             if method.isva && cache_match
                 last_argtype = cache_argtypes[end]
-                for i in (nargs + 1):length(given_argtypes)
-                    a = maybe_widen_conditional(given_argtypes[i])
-                    if isa(last_argtype, PartialTuple)
-                        ca = last_argtype.fields[i - nargs]
-                    elseif isa(last_argtype, Const) && isa(last_argtype.val, Tuple)
-                        ca = Const(last_argtype.val[i - nargs])
-                    else
-                        ca = nothing # not Const
-                    end
-                    if is_argtype_mismatch(a, ca)
-                        cache_match = false
-                        break
+                last_argtype_elements = nothing
+                wrap_all_as_const = false
+                if isa(last_argtype, PartialTuple)
+                    last_argtype_elements = last_argtype.fields
+                elseif isa(last_argtype, Const) && isa(last_argtype.val, Tuple)
+                    last_argtype_elements = last_argtype.val
+                    wrap_all_as_const = true
+                else
+                    cache_match = false
+                end
+                if last_argtype_elements !== nothing
+                    for i in (nargs + 1):length(given_argtypes)
+                        a = maybe_widen_conditional(given_argtypes[i])
+                        ca = last_argtype_elements[i - nargs]
+                        ca = wrap_all_as_const ? Const(ca) : ca
+                        if is_argtype_mismatch(a, ca)
+                            cache_match = false
+                            break
+                        end
                     end
                 end
             end
