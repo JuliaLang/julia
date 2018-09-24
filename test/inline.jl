@@ -151,3 +151,49 @@ end
 # check that type.mutable can be fully eliminated
 f_mutable_nothrow(s::String) = Val{typeof(s).mutable}
 @test length(code_typed(f_mutable_nothrow, (String,))[1][1].code) == 1
+
+# check that ifelse can be fully eliminated
+function f_ifelse(x)
+    a = ifelse(true, false, true)
+    b = ifelse(a, true, false)
+    return b ? x + 1 : x
+end
+# 2 for now because the compiler leaves a GotoNode around
+@test_broken length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
+
+# Test that inlining of _apply properly hits the inference cache
+@noinline cprop_inline_foo1() = (1, 1)
+@noinline cprop_inline_foo2() = (2, 2)
+function cprop_inline_bar(x...)
+    if x === (1, 1, 1, 1)
+        return x
+    else
+        # What you put here doesn't really matter,
+        # the point is to prevent inlining when
+        # x is not known to be (1, 1, 1, 1)
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        return x
+    end
+    x
+end
+
+function cprop_inline_baz1()
+    return cprop_inline_bar(cprop_inline_foo1()..., cprop_inline_foo1()...)
+end
+@test length(code_typed(cprop_inline_baz1, ())[1][1].code) == 1
+
+function cprop_inline_baz2()
+    return cprop_inline_bar(cprop_inline_foo2()..., cprop_inline_foo2()...)
+end
+@test length(code_typed(cprop_inline_baz2, ())[1][1].code) == 2
