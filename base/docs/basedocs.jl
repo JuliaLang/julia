@@ -203,11 +203,11 @@ kw"global"
 `=` is the assignment operator.
 * For variables `a` and `b`, `a = b` assigns `a` to `b`, making `a === b` return  `true`.
 * For functions `f(x)`, `f(x) = x` defines a new function constant `f`, or adds a new method to `f` if `f` is already defined; this usage is equivalent to `function f(x); x; end`.
-* `a[i] = v` calls [`setindex!`](@ref)`(a,v,i)`
-* `a.b = c` calls [`setproperty!`](@ref)`(a,:b,c)`
+* `a[i] = v` calls [`setindex!`](@ref)`(a,v,i)`.
+* `a.b = c` calls [`setproperty!`](@ref)`(a,:b,c)`.
 
 # Examples
-Assigning `a` to an `b` does not create a copy of `b`; instead use [`copy`](@ref) or [`deepcopy`](@ref).
+Assigning `a` to `b` does not create a copy of `b`; instead use [`copy`](@ref) or [`deepcopy`](@ref).
 
 ```jldoctest
 julia> b = [1]; a = b; b[1] = 2; a
@@ -229,7 +229,7 @@ julia> a = [1]; f!(a); a
  2
 
 ```
-Assignment can operate on multiple variables in parallel, by assigning a [`Tuple`](@ref) to any iterable of at least the same length.
+Assignment can operate on multiple variables in parallel, by assigning a [`Tuple`](@ref) to an iterable of at least the same length.
 ```jldoctest
 julia> (a, b) = (0, 1) # tuple to tuple
 (0, 1)
@@ -251,7 +251,7 @@ julia> b[1] = 2; a, b, c
 ([2], [2], [2])
 
 ```
-A collection cannot be modified by assigning new values to the output of a function. Such modifications can instead be made by assigning new values at corresponding indices.
+A collection cannot be modified by assigning new values to the output of a function. Such modifications can instead be made by assigning new values at the corresponding indices.
 ```jldoctest
 julia> a = zeros(3,3); using LinearAlgebra; diag(a) .= 1; a # this won't actually modify a
 3×3 Array{Float64,2}:
@@ -266,7 +266,7 @@ julia> a[diagind(a)] .= 1; a # this will modify a
  0.0  0.0  1.0
 
 ```
-Assignment at out-of-bounds indices does not grow an `Array`. If the array is a [`Vector`](@ref) it can instead be grown with [`push!`](@ref) or [`append!`](@ref).
+Assignment at out-of-bounds indices does not grow a collection. If the collection is a [`Vector`](@ref) it can instead be grown with [`push!`](@ref) or [`append!`](@ref).
 ```jldoctest
 julia> a = [1, 1]; a[3] = 2
 ERROR: BoundsError: attempt to access 2-element Array{Int64,1} at index [3]
@@ -280,7 +280,7 @@ julia> push!(a, 2, 3)
  3
 
 ```
-Assignment to `[]` does not eliminate elements from an array; instead use `filter!`.
+Assignment to `[]` does not eliminate elements from a collection; instead use `filter!`.
 ```jldoctest
 julia> a = collect(1:3); a[a .<= 1] = []
 ERROR: DimensionMismatch("tried to assign 0 elements to 1 destinations")
