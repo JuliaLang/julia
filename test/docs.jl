@@ -983,14 +983,14 @@ let dt1 = _repl(:(dynamic_test(1.0)))
     @test dt1.args[1] isa Expr
     @test dt1.args[1].head === :macrocall
     @test dt1.args[1].args[1] == Symbol("@doc")
-    @test dt1.args[1].args[3] == :(dynamic_test(::typeof(1.0)))
+    @test dt1.args[1].args[3] == :(dynamic_test(::typeof(1.0;)))
 end
 let dt2 = _repl(:(dynamic_test(::String)))
     @test dt2 isa Expr
     @test dt2.args[1] isa Expr
     @test dt2.args[1].head === :macrocall
     @test dt2.args[1].args[1] == Symbol("@doc")
-    @test dt2.args[1].args[3] == :(dynamic_test(::String))
+    @test dt2.args[1].args[3] == :(dynamic_test(::String;))
 end
 
 # Equality testing
