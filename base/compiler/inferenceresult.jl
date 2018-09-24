@@ -25,11 +25,7 @@ function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector)
     @assert isa(linfo.def, Method) # !toplevel
     nargs::Int = linfo.def.nargs
     @assert length(given_argtypes) >= (nargs - 1)
-    result_argtypes = Vector{Any}(undef, length(given_argtypes))
-    for i in 1:length(given_argtypes)
-        a = given_argtypes[i]
-        result_argtypes[i] = !(isa(a, PartialTuple) || isa(a, Const)) ? widenconst(a) : a
-    end
+    result_argtypes = Any[maybe_widen_conditional(a) for a in given_argtypes]
     if linfo.def.isva
         isva_result_argtypes = Vector{Any}(undef, nargs)
         for i = 1:(nargs - 1)
