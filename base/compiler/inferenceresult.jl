@@ -151,7 +151,7 @@ function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache:
                     break
                 end
             end
-            if method.isva
+            if method.isva && cache_match
                 last_argtype = cache_argtypes[end]
                 for i in (nargs + 1):length(given_argtypes)
                     a = maybe_widen_conditional(given_argtypes[i])
