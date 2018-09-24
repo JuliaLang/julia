@@ -221,15 +221,20 @@ macro error(exs...) logmsg_code((@_sourceinfo)..., :Error, exs...) end
 @eval @doc $_logmsg_docs :(@warn)
 @eval @doc $_logmsg_docs :(@error)
 
-_log_record_ids = Set{Symbol}()
+_log_record_ids = Dict{String, Symbol}()
 # Generate a unique, stable, short, human readable identifier for a logging
 # statement.  The idea here is to have a key against which log records can be
 # filtered and otherwise manipulated. The key should uniquely identify the
 # source location in the originating module, but should be stable across
 # versions of the originating module, provided the log generating statement
 # itself doesn't change.
-function log_record_id(_module, level, message_ex)
+function log_record_id(_module, file, line, level, message_ex)
     modname = _module === nothing ?  "" : join(fullname(_module), "_")
+    get!(_log_record_ids, string(modname, file, line),
+        new_log_record_id(modname, level, message_ex))
+end
+
+function new_log_record_id(modname, level, message_ex)
     # Use (1<<31) to fit well within an (arbitriraly chosen) eight hex digits,
     # as we increment h to resolve any collisions.
     h = hash(string(modname, level, message_ex)) % (1<<31)
@@ -239,8 +244,7 @@ function log_record_id(_module, level, message_ex)
         # compilation, to ensure uniqueness of ids.  Note that this state will
         # only persist during module compilation so it will be empty when a
         # precompiled module is loaded.
-        if !(id in _log_record_ids)
-            push!(_log_record_ids, id)
+        if !(id in values(_log_record_ids))
             return id
         end
         h += 1
@@ -290,7 +294,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
     end
 
     # Note that it may be necessary to set `id` and `group` manually during bootstrap
-    id = something(id, :(log_record_id(_module, level, $exs)))
+    id = something(id, :(log_record_id(_module, file, line, level, $exs)))
     if group == nothing
         group = if isdefined(Base, :basename) && isa(file, String)
             # precompute if we can
@@ -311,12 +315,12 @@ function logmsg_code(_module, file, line, level, message, exs...)
             _module = $_module
             logger = current_logger_for_env(std_level, group, _module)
             if !(logger === nothing)
+                file = $file
+                line = $line
                 id = $id
                 # Second chance at an early bail-out (before computing the message),
                 # based on arbitrary logger-specific logic.
                 if shouldlog(logger, level, _module, group, id)
-                    file = $file
-                    line = $line
                     try
                         msg = $(esc(message))
                         handle_message(logger, level, msg, _module, group, id, file, line; $(kwargs...))
