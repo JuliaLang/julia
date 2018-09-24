@@ -487,34 +487,6 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym)
 end
 
 const SpecialMatrix = Union{Bidiagonal,SymTridiagonal,Tridiagonal}
-# to avoid ambiguity warning, but shouldn't be necessary
-#*(A::AbstractTriangular, B::SpecialMatrix) = Array(A) * Array(B)
-#*(A::SpecialMatrix, B::SpecialMatrix) = Array(A) * Array(B)
-
-# moving several to SparseArrays since they call sparse matrix constructors
-
-# *(A::SymTridiagonal,     B::BiTriSym) = A_mul_B_td!(zeros(eltype(A), size(A)...), A, B)
-
-# *(A::BiTri,              B::BiTriSym) = A_mul_B_td!(zeros(size(A)...), A, B)
-# *(A::BiTriSym,           B::BiTriSym) = A_mul_B_td!(zero(A), A, B)
-
-# here we are going to specialize when the uplo values match
-# *(A::AbstractTriangular, B::BiTriSym) = A_mul_B_td!(zeros(size(A)...), A, B)
-# function *(A::AbstractTriangular, B::BiTri)
-#     if A.uplo == B.uplo
-#         A_mul_B_td!(zero(A), A, B)
-#     else
-#         A_mul_B_td!(zeros(size(A)...), A, B)
-#     end
-# end
-
-# TS = promote_op(matprod, eltype(A), eltype(B))
-# mul!(similar(B, TS, (size(A,2), size(B,2))), adjoint(A), B)
-
-# function *(A::AbstractMatrix, B::Diagonal)
-#     TS = promote_op(matprod, eltype(A), eltype(B))
-#     A_mul_B_td!(similar(A, TS), A, B)
-# end
 
 function *(A::AbstractTriangular, B::Union{SymTridiagonal, Tridiagonal})
     TS = promote_op(matprod, eltype(A), eltype(B))

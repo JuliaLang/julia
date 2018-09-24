@@ -2290,7 +2290,6 @@ end
     @test adjoint(MC) == copy(adjoint(SC))
 end
 
-
 @testset "Issue #28634" begin
     a = SparseMatrixCSC{Int8, Int16}([1 2; 3 4])
     na = SparseMatrixCSC(a)

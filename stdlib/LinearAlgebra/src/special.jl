@@ -111,7 +111,6 @@ for op in (:+, :-)
             end
         end
     end
-    # todo add the others that had regressions
 end
 
 # specialized +/- for structured matrices. If these are removed, it falls
