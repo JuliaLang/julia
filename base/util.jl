@@ -716,7 +716,7 @@ function _kwdef!(blk, params_args, call_args)
                     continue
                 end
                 defexpr = ei.args[2]  # defexpr
-                push!(params_args, Expr(:kw, var, defexpr))
+                push!(params_args, Expr(:kw, var, esc(defexpr)))
                 push!(call_args, var)
                 blk.args[i] = lhs
             elseif ei.head == :(::) && ei.args[1] isa Symbol

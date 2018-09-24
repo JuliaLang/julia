@@ -708,14 +708,11 @@ end
     @test_throws AssertionError TestInnerConstructor(a="")
 end
 
-
 const outsidevar = 7
 @kwdef struct TestOutsideVar
     a::Int=outsidevar
 end
 @test TestOutsideVar() == TestOutsideVar(7)
-
-
 
 
 @testset "exports of modules" begin
