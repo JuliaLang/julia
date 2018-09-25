@@ -1741,6 +1741,15 @@ function f15276(x)
 end
 @test Base.return_types(f15276(1), (Int,)) == [Int]
 
+# issue #29326
+function f29326()::Any
+    begin
+        a = 1
+        (() -> a)()
+    end
+end
+@test Base.return_types(f29326, ()) == [Int]
+
 function g15276()
     spp = Int[0]
     sol = [spp[i] for i=1:0]
