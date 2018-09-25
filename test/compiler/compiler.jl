@@ -2058,3 +2058,12 @@ f28955(::Type{Bool}, x, y) = x
 f28955(::DataType, x, y) = y
 
 @test @inferred(d28955(f28955, 1, 2.0)) === 1
+
+function g28955(x, y)
+    _1 = tuple(Bool)
+    _2 = isa(y, Int) ? nothing : _1
+    _3 = tuple(_1..., x...)
+    return getfield(_3, 1)
+end
+
+@test @inferred(g28955((1,), 1.0)) === Bool
