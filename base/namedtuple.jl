@@ -242,6 +242,24 @@ merge(a::NamedTuple{()}, b::NamedTuple) = b
 merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, b.data)
 
 """
+    merge(a::NamedTuple, bs::NamedTuple...)
+
+Construct a new named tuple by merging several existing ones.  The order of
+fields in earlier named tuples are preserved, but values are taken from later
+fields in each `b` from bs.
+
+```jldoctest
+julia> merge((a=1, b=2, c=3), (b=4, c=5, d=6, e=7), (c=8, e=9, f=9))
+(a = 1, b = 4, c = 8, d = 5, e = 9, f = 9)
+julia> merge((a=1, b=2, c=3))
+(a = 1, b = 2, c = 3)
+```
+"""
+merge(a::NamedTuple, b::NamedTuple, cs::NamedTuple...) = merge(merge(a, b), cs...)
+merge(a::NamedTuple) = a
+
+
+"""
     merge(a::NamedTuple, iterable)
 
 Interpret an iterable of key-value pairs as a named tuple, and perform a merge.
