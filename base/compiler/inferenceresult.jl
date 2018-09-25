@@ -31,7 +31,7 @@ function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector)
         for i = 1:(nargs - 1)
             isva_result_argtypes[i] = result_argtypes[i]
         end
-        isva_result_argtypes[nargs] = tuple_tfunc(result_argtypes[(nargs - 1):end])
+        isva_result_argtypes[nargs] = tuple_tfunc(result_argtypes[nargs:end])
         return isva_result_argtypes
     end
     @assert length(result_argtypes) === nargs
