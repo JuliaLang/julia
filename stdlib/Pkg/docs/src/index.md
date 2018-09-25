@@ -751,7 +751,7 @@ Similar to other package managers, the Julia package manager respects [semantic 
 As an example, a version specifier is given as e.g. `1.2.3` is therefore assumed to be compatible with the versions `[1.2.3 - 2.0.0)` where `)` is a non-inclusive upper bound.
 More specifically, a version specifier is either given as a **caret specifier**, e.g. `^1.2.3`  or a **tilde specifier** `~1.2.3`.
 Caret specifiers are the default and hence `1.2.3 == ^1.2.3`. The difference between a caret and tilde is described in the next section.
-The intersection of multiple version specifiers can be formed by comma separating indiviual version specifiers.
+The union of multiple version specifiers can be formed by comma separating individual version specifiers.
 
 ##### Caret specifiers
 
