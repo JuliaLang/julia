@@ -146,25 +146,18 @@ function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache:
             end
             if method.isva && cache_match
                 last_argtype = cache_argtypes[end]
-                last_argtype_elements = nothing
-                wrap_all_as_const = false
-                if isa(last_argtype, PartialTuple)
-                    last_argtype_elements = last_argtype.fields
-                elseif isa(last_argtype, Const) && isa(last_argtype.val, Tuple)
-                    last_argtype_elements = last_argtype.val
-                    wrap_all_as_const = true
-                else
-                    cache_match = false
-                end
-                if last_argtype_elements !== nothing
-                    for i in (nargs + 1):length(given_argtypes)
-                        a = maybe_widen_conditional(given_argtypes[i])
-                        ca = last_argtype_elements[i - nargs]
-                        ca = wrap_all_as_const ? Const(ca) : ca
-                        if is_argtype_mismatch(a, ca)
-                            cache_match = false
-                            break
-                        end
+                for i in (nargs + 1):length(given_argtypes)
+                    a = maybe_widen_conditional(given_argtypes[i])
+                    if isa(last_argtype, PartialTuple)
+                        ca = last_argtype.fields[i - nargs]
+                    elseif isa(last_argtype, Const) && isa(last_argtype.val, Tuple)
+                        ca = Const(last_argtype.val[i - nargs])
+                    else
+                        ca = nothing # cache_match is false
+                    end
+                    if is_argtype_mismatch(a, ca)
+                        cache_match = false
+                        break
                     end
                 end
             end
