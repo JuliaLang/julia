@@ -20,17 +20,15 @@ typedef struct {
     jl_module_t *module; // context for globals
     jl_value_t **locals; // slots for holding local slots and ssavalues
     jl_svec_t *sparam_vals; // method static parameters, if eval-ing a method body
-    size_t last_branch_from; // Points at the last branch statement instruction (for evaluating phi nodes)
-    size_t last_branch_target; // Points at the last branch statement destination (for evaluating phi nodes)
-    size_t ip; // Points to the currently-evaluating statement
-    int preevaluation; // use special rules for pre-evaluating expressions
+    size_t ip; // Leak the currently-evaluating statement index to backtrace capture
+    int preevaluation; // use special rules for pre-evaluating expressions (deprecated--only for ccall handling)
     int continue_at; // statement index to jump to after leaving exception handler (0 if none)
 } interpreter_state;
 
 #include "interpreter-stacktrace.c"
 
 static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s);
-static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start, int toplevel);
+static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel);
 
 int jl_is_toplevel_only_expr(jl_value_t *e);
 
@@ -363,8 +361,6 @@ SECT_INTERP static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s)
 {
     jl_value_t *res = eval_value(stmt, s);
     s->locals[jl_source_nslots(s->src) + s->ip] = res;
-    if (!jl_is_phinode(stmt))
-        s->last_branch_from = s->last_branch_target = s->ip;
 }
 
 SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
@@ -404,35 +400,7 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 #endif
         return val;
     }
-    if (jl_is_phinode(e)) {
-        jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(e, 0);
-        ssize_t edge = -1;
-        ssize_t closest = -1;
-        ssize_t closest_edge = -1;
-        for (int i = 0; i < jl_array_len(edges); ++i) {
-            size_t from = jl_unbox_long(jl_arrayref(edges, i)); // 1-indexed
-            if (from == s->last_branch_from + 1) {
-                edge = i;
-            }
-            if ((closest < 0 || (size_t)closest < from) && (from < s->ip + 1)) {
-                closest_edge = i;
-                closest = from;
-            }
-        }
-        if (closest > 0 && (size_t)closest >= s->last_branch_target + 1) {
-            // if we found a nearer implicit branch from fall-through,
-            // that occurred since the last explicit branch,
-            // we should use the value from that edge instead
-            s->last_branch_from = closest;
-            edge = closest_edge;
-        }
-        else if (edge == -1) {
-            // edges list doesn't contain last branch. this value should be unused.
-            return NULL;
-        }
-        jl_value_t *val = jl_array_ptr_ref((jl_array_t*)jl_fieldref_noalloc(e, 1), edge);
-        return eval_value(val, s);
-    }
+    assert(!jl_is_phinode(e) && !jl_is_phicnode(e) && !jl_is_upsilonnode(e) && "malformed AST");
     if (!jl_is_expr(e))
         return e;
     jl_expr_t *ex = (jl_expr_t*)e;
@@ -536,27 +504,106 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     abort();
 }
 
-SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start, int toplevel)
+// phi nodes don't behave like proper instructions, so we require a special interpreter to handle them
+SECT_INTERP static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_t to)
+{
+    size_t from = s->ip;
+    size_t ip = to;
+    unsigned nphi = 0;
+    for (ip = to; ip < ns; ip++) {
+        jl_value_t *e = jl_array_ptr_ref(stmts, ip);
+        if (!jl_is_phinode(e))
+            break;
+        nphi += 1;
+    }
+    if (nphi) {
+        jl_value_t **dest = &s->locals[jl_source_nslots(s->src) + to];
+        jl_value_t **phis; // = (jl_value_t**)alloca(sizeof(jl_value_t*) * nphi);
+        JL_GC_PUSHARGS(phis, nphi);
+        for (unsigned i = 0; i < nphi; i++) {
+            jl_value_t *e = jl_array_ptr_ref(stmts, to + i);
+            assert(jl_is_phinode(e));
+            jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(e, 0);
+            ssize_t edge = -1;
+            size_t closest = to; // implicit edge has `to <= edge - 1 < to + i`
+            // this is because we could see the following IR (all 1-indexed):
+            //   goto %3 unless %cond
+            //   %2 = phi ...
+            //   %3 = phi (1)[1 => %a], (2)[2 => %b]
+            // from = 1, to = closest = 2, i = 1 --> edge = 2, edge_from = 2, from = 2
+            for (unsigned j = 0; j < jl_array_len(edges); ++j) {
+                size_t edge_from = jl_unbox_long(jl_arrayref(edges, j)); // 1-indexed
+                if (edge_from == from + 1) {
+                    if (edge == -1)
+                        edge = j;
+                }
+                else if (closest < edge_from && edge_from < (to + i + 1)) {
+                    // if we found a nearer implicit branch from fall-through,
+                    // that occurred since the last explicit branch,
+                    // we should use the value from that edge instead
+                    edge = j;
+                    closest = edge_from;
+                }
+            }
+            jl_value_t *val = NULL;
+            unsigned n_oldphi = closest - to;
+            if (n_oldphi) {
+                // promote this implicit branch to a basic block start
+                // and move all phi values to their position in edges
+                // note that we might have already processed some phi nodes
+                // in this basic block, so we need to be extra careful here
+                // to ignore those
+                for (unsigned j = 0; j < n_oldphi; j++) {
+                    dest[j] = phis[j];
+                }
+                for (unsigned j = n_oldphi; j < i; j++) {
+                    // move the rest to the start of phis
+                    phis[j - n_oldphi] = phis[j];
+                    phis[j] = NULL;
+                }
+                from = closest - 1;
+                i -= n_oldphi;
+                dest += n_oldphi;
+                to += n_oldphi;
+                nphi -= n_oldphi;
+            }
+            if (edge != -1) {
+                // if edges list doesn't contain last branch, this value should be unused.
+                jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(e, 1);
+                val = jl_array_ptr_ref(values, edge);
+                val = eval_value(val, s);
+            }
+            phis[i] = val;
+        }
+        // now move all phi values to their position in edges
+        for (unsigned j = 0; j < nphi; j++) {
+            dest[j] = phis[j];
+        }
+        JL_GC_POP();
+    }
+    return ip;
+}
+
+SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel)
 {
     jl_handler_t __eh;
-    s->last_branch_from = s->last_branch_target = s->ip = start;
     size_t ns = jl_array_len(stmts);
 
     while (1) {
-        if (s->ip >= ns)
+        s->ip = ip;
+        if (ip >= ns)
             jl_error("`body` expression must terminate in `return`. Use `block` instead.");
         if (toplevel)
             jl_get_ptls_states()->world_age = jl_world_counter;
-        jl_value_t *stmt = jl_array_ptr_ref(stmts, s->ip);
+        jl_value_t *stmt = jl_array_ptr_ref(stmts, ip);
+        assert(!jl_is_phinode(stmt));
+        size_t next_ip = ip + 1;
+        assert(!jl_is_phinode(stmt) && !jl_is_phicnode(stmt) && !jl_is_upsilonnode(stmt) && "malformed AST");
         if (jl_is_gotonode(stmt)) {
-            s->last_branch_from = s->ip;
-            s->ip = jl_gotonode_label(stmt) - 1;
-            s->last_branch_target = s->ip;
-            continue;
+            next_ip = jl_gotonode_label(stmt) - 1;
         }
         else if (jl_is_expr(stmt)) {
             // Most exprs are allowed to end a BB by fall through
-            s->last_branch_from = s->last_branch_target = s->ip;
             jl_sym_t *head = ((jl_expr_t*)stmt)->head;
             assert(head != unreachable_sym);
             if (head == return_sym) {
@@ -568,7 +615,7 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                 if (jl_is_slot(lhs)) {
                     ssize_t n = jl_slot_number(lhs);
                     assert(n <= jl_source_nslots(s->src) && n > 0);
-                    s->locals[n-1] = rhs;
+                    s->locals[n - 1] = rhs;
                 }
                 else {
                     jl_module_t *modu;
@@ -589,17 +636,13 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                 }
             }
             else if (head == goto_ifnot_sym) {
-                s->last_branch_from = s->ip;
                 jl_value_t *cond = eval_value(jl_exprarg(stmt, 0), s);
                 if (cond == jl_false) {
-                    s->ip = jl_unbox_long(jl_exprarg(stmt, 1)) - 1;
-                    s->last_branch_target = s->ip;
-                    continue;
+                    next_ip = jl_unbox_long(jl_exprarg(stmt, 1)) - 1;
                 }
                 else if (cond != jl_true) {
                     jl_type_error_rt("toplevel", "if", (jl_value_t*)jl_bool_type, cond);
                 }
-                s->last_branch_target = s->ip + 1;
             }
             else if (head == enter_sym) {
                 jl_enter_handler(&__eh);
@@ -626,27 +669,25 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                     }
                     catch_ip += 1;
                 }
-                if (!jl_setjmp(__eh.eh_ctx,1)) {
-                    return eval_body(stmts, s, s->ip + 1, toplevel);
+                if (!jl_setjmp(__eh.eh_ctx, 1)) {
+                    return eval_body(stmts, s, next_ip, toplevel);
                 }
-                else if (s->continue_at) {
-                    s->ip = s->continue_at;
-                    s->last_branch_target = s->ip;
+                else if (s->continue_at) { // means we reached a :leave expression
+                    ip = s->continue_at;
                     s->continue_at = 0;
                     continue;
                 }
-                else {
+                else { // a real exeception
 #ifdef _OS_WINDOWS_
                     if (jl_get_ptls_states()->exception_in_transit == jl_stackovf_exception)
                         _resetstkoflw();
 #endif
-                    s->ip = jl_unbox_long(jl_exprarg(stmt, 0)) - 1;
-                    s->last_branch_target = s->ip;
+                    ip = jl_unbox_long(jl_exprarg(stmt, 0)) - 1;
                     continue;
                 }
             }
             else if (head == leave_sym) {
-                int hand_n_leave = jl_unbox_long(jl_exprarg(stmt,0));
+                int hand_n_leave = jl_unbox_long(jl_exprarg(stmt, 0));
                 assert(hand_n_leave > 0);
                 // equivalent to jl_pop_handler(hand_n_leave) :
                 jl_ptls_t ptls = jl_get_ptls_states();
@@ -655,7 +696,7 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                     eh = eh->prev;
                 jl_eh_restore_state(eh);
                 // pop jmp_bufs from stack
-                s->continue_at = s->ip + 1;
+                s->continue_at = next_ip;
                 jl_longjmp(eh->eh_ctx, 1);
             }
             else if (head == const_sym) {
@@ -702,7 +743,6 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
             }
         }
         else if (jl_is_newvarnode(stmt)) {
-            s->last_branch_from = s->last_branch_target = s->ip;
             jl_value_t *var = jl_fieldref(stmt, 0);
             assert(jl_is_slot(var));
             ssize_t n = jl_slot_number(var);
@@ -715,7 +755,7 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
         else {
             eval_stmt_value(stmt, s);
         }
-        s->ip++;
+        ip = eval_phi(stmts, s, ns, next_ip);
     }
     abort();
 }
@@ -785,6 +825,7 @@ SECT_INTERP CALLBACK_ABI void *jl_interpret_call_callback(interpreter_state *s, 
     }
     s->locals = locals + 2;
     s->sparam_vals = args->lam->sparam_vals;
+    s->preevaluation = 0;
     s->continue_at = 0;
     s->mi = args->lam;
     size_t i;
