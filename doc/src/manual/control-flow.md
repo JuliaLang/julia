@@ -9,11 +9,12 @@ Julia provides a variety of control flow constructs:
   * [Exception Handling](@ref): `try`-`catch`, [`error`](@ref) and [`throw`](@ref).
   * [Tasks (aka Coroutines)](@ref man-tasks): [`yieldto`](@ref).
 
-The first five control flow mechanisms are standard to high-level programming languages. [`Task`](@ref)s
-are not so standard: they provide non-local control flow, making it possible to switch between
-temporarily-suspended computations. This is a powerful construct: both exception handling and
-cooperative multitasking are implemented in Julia using tasks. Everyday programming requires no
-direct usage of tasks, but certain problems can be solved much more easily by using tasks.
+The first five control flow mechanisms are fairly common in high-level programming
+languages. [`Task`](@ref)s are not so common: they provide non-local control flow, making it
+possible to switch between temporarily-suspended computations. This is a powerful construct:
+both exception handling and cooperative multitasking are implemented in Julia using tasks.
+The explicit use of tasks is not needed for everyday programming, but certain problems can
+be solved much more easily using tasks.
 
 ## [Compound Expressions](@id man-compound-expressions)
 
@@ -31,8 +32,8 @@ julia> z = begin
 3
 ```
 
-Since these are fairly small, simple expressions, they could easily be placed onto a single line,
-which is where the `(;)` chain syntax comes in handy:
+Since these are fairly small, simple expressions, they could easily be written on a single
+line, which is where the `(;)` chain syntax comes in handy:
 
 ```jldoctest
 julia> z = (x = 1; y = 2; x + y)
@@ -55,8 +56,9 @@ julia> (x = 1;
 
 ## [Conditional Evaluation](@id man-conditional-evaluation)
 
-Conditional evaluation allows portions of code to be evaluated or not evaluated depending on the
-value of a boolean expression. Here is the anatomy of the `if`-`elseif`-`else` conditional syntax:
+Conditional evaluation allows portions of code to be evaluated or not evaluated depending on
+the value of a boolean expression. Here is an example of the `if`-`elseif`-`else`
+conditional syntax:
 
 ```julia
 if x < y
@@ -101,7 +103,7 @@ expressions or blocks are evaluated.
 
 `if` blocks are "leaky", i.e. they do not introduce a local scope. This means that new variables
 defined inside the `if` clauses can be used after the `if` block, even if they weren't defined
-before. So, we could have defined the `test` function above as
+before. So, we could have defined the `test` function above as:
 
 ```jldoctest
 julia> function test(x,y)
@@ -120,9 +122,9 @@ julia> test(2, 1)
 x is greater than y.
 ```
 
-The variable `relation` is declared inside the `if` block, but used outside. However, when depending
-on this behavior, make sure all possible code paths define a value for the variable. The following
-change to the above function results in a runtime error
+The variable `relation` is declared inside the `if` block, but used outside. However, when
+depending on this behavior, you must make sure that all possible code paths define a value
+for the variable. The following change to the above function results in a runtime error:
 
 ```jldoctest; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
 julia> function test(x,y)
@@ -144,9 +146,9 @@ Stacktrace:
  [1] test(::Int64, ::Int64) at ./none:7
 ```
 
-`if` blocks also return a value, which may seem unintuitive to users coming from many other languages.
-This value is simply the return value of the last executed statement in the branch that was chosen,
-so
+`if` blocks also return a value, which may seem unintuitive to users coming from many other
+languages. This value is simply the return value of the last executed statement in the
+branch that was chosen. For example:
 
 ```jldoctest
 julia> x = 3
@@ -163,8 +165,9 @@ julia> if x > 0
 Note that very short conditional statements (one-liners) are frequently expressed using Short-Circuit
 Evaluation in Julia, as outlined in the next section.
 
-Unlike C, MATLAB, Perl, Python, and Ruby -- but like Java, and a few other stricter, typed languages
--- it is an error if the value of a conditional expression is anything but `true` or `false`:
+Unlike C, MATLAB, Perl, Python, and Ruby -- but like Java, Rust, and a few other stricter,
+typed languages -- it is an error if the value of a conditional expression is anything but
+`true` or `false`:
 
 ```jldoctest
 julia> if 1
@@ -208,9 +211,9 @@ julia> println(x < y ? "less than" : "not less than")
 not less than
 ```
 
-If the expression `x < y` is true, the entire ternary operator expression evaluates to the string
-`"less than"` and otherwise it evaluates to the string `"not less than"`. The original three-way
-example requires chaining multiple uses of the ternary operator together:
+If the expression `x < y` is true, the entire ternary operator expression evaluates to the
+string `"less than"`; otherwise it evaluates to the string `"not less than"`. The original
+three-way example requires chaining multiple uses of the ternary operator together:
 
 ```jldoctest
 julia> test(x, y) = println(x < y ? "x is less than y"    :
@@ -247,19 +250,19 @@ no
 
 ## Short-Circuit Evaluation
 
-Short-circuit evaluation is quite similar to conditional evaluation. The behavior is found in
-most imperative programming languages having the `&&` and `||` boolean operators: in a series
-of boolean expressions connected by these operators, only the minimum number of expressions are
-evaluated as are necessary to determine the final boolean value of the entire chain. Explicitly,
-this means that:
+Short-circuit evaluation is quite similar to conditional evaluation. The behavior is found
+in most imperative programming languages having the `&&` and `||` boolean operators. In a
+series of boolean expressions connected by these operators, only the minimum number of
+expressions are evaluated as are necessary to determine the final boolean value of the
+entire chain. This means that:
 
   * In the expression `a && b`, the subexpression `b` is only evaluated if `a` evaluates to `true`.
   * In the expression `a || b`, the subexpression `b` is only evaluated if `a` evaluates to `false`.
 
 The reasoning is that `a && b` must be `false` if `a` is `false`, regardless of the value of
-`b`, and likewise, the value of `a || b` must be true if `a` is `true`, regardless of the value
-of `b`. Both `&&` and `||` associate to the right, but `&&` has higher precedence than `||` does.
-It's easy to experiment with this behavior:
+`b`, and likewise, the value of `a || b` must be true if `a` is `true`, regardless of the
+value of `b`. Both `&&` and `||` associate to the right, but `&&` has higher precedence than
+`||`. It's easy to experiment with this behavior:
 
 ```jldoctest tandf
 julia> t(x) = (println(x); true)
@@ -353,9 +356,9 @@ julia> t(1) | t(2)
 true
 ```
 
-Just like condition expressions used in `if`, `elseif` or the ternary operator, the operands of
-`&&` or `||` must be boolean values (`true` or `false`). Using a non-boolean value anywhere except
-for the last entry in a conditional chain is an error:
+Just like the condition expressions used with `if`, `elseif` or the ternary operator, the
+operands used with `&&` and `||` must be boolean values (`true` or `false`). Using a
+non-boolean value anywhere except for the last entry in a conditional chain is an error:
 
 ```jldoctest
 julia> 1 && true
@@ -392,9 +395,13 @@ julia> while i <= 5
 5
 ```
 
-The `while` loop evaluates the condition expression (`i <= 5` in this case), and as long it remains
-`true`, keeps also evaluating the body of the `while` loop. If the condition expression is `false`
-when the `while` loop is first reached, the body is never evaluated.
+The `while` loop evaluates the condition expression (`i <= 5` in this example), and if it is
+`true`, the body of the loop is executed. Otherwise, the loop's body is skipped and
+execution continues from the statement after the loop's `end`. After each execution of the
+loop's body, control returns to the `while` loop whose condition is once again evaluated as
+just described. Of course, if the condition is `false` when the `while` loop's condition is
+first evaluated, the loop's body is skipped and execution continues from after the end of
+the loop.
 
 The `for` loop makes common repeated evaluation idioms easier to write. Since counting up and
 down like the above `while` loop does is so common, it can be expressed more concisely with a
@@ -411,13 +418,13 @@ julia> for i = 1:5
 5
 ```
 
-Here the `1:5` is a range object, representing the sequence of numbers 1, 2, 3, 4, 5. The `for`
-loop iterates through these values, assigning each one in turn to the variable `i`. One rather
-important distinction between the previous `while` loop form and the `for` loop form is the scope
-during which the variable is visible. If the variable `i` has not been introduced in another
-scope, in the `for` loop form, it is visible only inside of the `for` loop, and not
-outside/afterwards. You'll either need a new interactive session instance or a different variable
-name to test this:
+Here the `1:5` is a range object, representing the sequence of numbers 1, 2, 3, 4, 5. The
+`for` loop iterates through these values, assigning each one in turn to the variable `i`. An
+important distinction between the previous `while` loop form and the `for` loop form is the
+scope during which the variable is visible. If the variable `i` has not been introduced in
+another scope, in the `for` loop form, it is visible only inside the `for` loop, and not
+beyond the loop's `end`. To test this, you'll either need a new interactive session instance
+or a different variable name:
 
 ```jldoctest
 julia> for j = 1:5
@@ -459,9 +466,9 @@ baz
 Various types of iterable containers will be introduced and discussed in later sections of the
 manual (see, e.g., [Multi-dimensional Arrays](@ref man-multi-dim-arrays)).
 
-It is sometimes convenient to terminate the repetition of a `while` before the test condition
-is falsified or stop iterating in a `for` loop before the end of the iterable object is reached.
-This can be accomplished with the `break` keyword:
+It is sometimes convenient to stop a `while` before the test condition becomes `false` or
+stop iterating in a `for` loop before the end of the iterable object is reached. This can be
+accomplished with the `break` keyword:
 
 ```jldoctest
 julia> i = 1;
@@ -494,8 +501,8 @@ julia> for j = 1:1000
 
 Without the `break` keyword, the above `while` loop would never terminate on its own, and the `for` loop would iterate up to 1000. These loops are both exited early by using `break`.
 
-In other circumstances, it is handy to be able to stop an iteration and move on to the next one
-immediately. The `continue` keyword accomplishes this:
+In other circumstances, it can be useful to move straight to the next iteration before
+reaching the end of the loop's body. This can be done using the `continue` keyword:
 
 ```jldoctest
 julia> for i = 1:10
@@ -549,10 +556,10 @@ be different: the second and fourth values would contain `0`.
 
 ## Exception Handling
 
-When an unexpected condition occurs, a function may be unable to return a reasonable value to
-its caller. In such cases, it may be best for the exceptional condition to either terminate the
-program while printing a diagnostic error message, or if the programmer has provided code to handle
-such exceptional circumstances then allow that code to take the appropriate action.
+When an unexpected condition occurs, a function may be unable to return a reasonable value
+to its caller. In such cases, it may be best for the exceptional condition to either
+terminate the program after printing a diagnostic error message, or to execute code
+specifically written to handle exceptional circumstances.
 
 ### Built-in `Exception`s
 
@@ -653,10 +660,12 @@ julia> Base.showerror(io::IO, e::MyUndefVarError) = print(io, e.var, " not defin
 ```
 
 !!! note
-    When writing an error message, it is preferred to make the first word lowercase. For example,
+    When writing an error message, it is preferred that the first word is lowercase. For
+    example,
+
     `size(A) == size(B) || throw(DimensionMismatch("size of A not equal to size of B"))`
 
-    is preferred over
+    is preferred to
 
     `size(A) == size(B) || throw(DimensionMismatch("Size of A not equal to size of B"))`.
 
@@ -782,9 +791,9 @@ try bad() catch x end
 Instead, use a semicolon or insert a line break after `catch`:
 
 ```julia
-try bad() catch; x end
+try good() catch; x end
 
-try bad()
+try good()
 catch
     x
 end
@@ -826,13 +835,14 @@ Tasks are a control flow feature that allows computations to be suspended and re
 manner. This feature is sometimes called by other names, such as symmetric coroutines, lightweight
 threads, cooperative multitasking, or one-shot continuations.
 
-When a piece of computing work (in practice, executing a particular function) is designated as
-a [`Task`](@ref), it becomes possible to interrupt it by switching to another [`Task`](@ref).
-The original [`Task`](@ref) can later be resumed, at which point it will pick up right where it
-left off. At first, this may seem similar to a function call. However there are two key differences.
-First, switching tasks does not use any space, so any number of task switches can occur without
-consuming the call stack. Second, switching among tasks can occur in any order, unlike function
-calls, where the called function must finish executing before control returns to the calling function.
+When a piece of computing work (in practice, executing a particular function) is designated
+as a [`Task`](@ref), it becomes possible to interrupt it by switching to another
+[`Task`](@ref). The original [`Task`](@ref) can later be resumed, at which point it will
+pick up right where it left off. At first, this may seem similar to a function call. However
+there are two key differences. First, switching tasks does not use any extra stack space, so
+any number of task switches can occur without consuming the call stack. Second, switching
+among tasks can occur in any order, unlike function calls, where the called function must
+finish executing before control returns to the calling function.
 
 This kind of control flow can make it much easier to solve certain problems. In some problems,
 the various pieces of required work are not naturally related by function calls; there is no obvious
@@ -844,12 +854,12 @@ and consumer can both run as long as they need to, passing values back and forth
 
 Julia provides a [`Channel`](@ref) mechanism for solving this problem.
 A [`Channel`](@ref) is a waitable first-in first-out queue which can have
-multiple tasks reading from and writing to it.
+multiple tasks reading from it and writing to it.
 
-Let's define a producer task, which produces values via the [`put!`](@ref) call.
-To consume values, we need to schedule the producer to run in a new task. A special [`Channel`](@ref)
-constructor which accepts a 1-arg function as an argument can be used to run a task bound to a channel.
-We can then [`take!`](@ref) values repeatedly from the channel object:
+Let's define a producer task, which produces values via the [`put!`](@ref) call. To consume
+values, we need to schedule the producer to run in a new task. A special [`Channel`](@ref)
+constructor which accepts a 1-argument function as an argument can be used to run a task
+bound to a channel. We can then [`take!`](@ref) values repeatedly from the channel object:
 
 ```jldoctest producer
 julia> function producer(c::Channel)
@@ -926,7 +936,7 @@ can be used in conjunction with [`Task`](@ref) and [`Channel`](@ref)
 constructors to explicitly link a set of channels with a set of producer/consumer tasks.
 
 Note that currently Julia tasks are not scheduled to run on separate CPU cores.
-True kernel threads are discussed under the topic of [Parallel Computing](@ref).
+True kernel threads are discussed in [Parallel Computing](@ref).
 
 ### Core task operations
 
@@ -989,3 +999,4 @@ symbols:
 | `:queued`   | In the scheduler's run queue about to be restarted |
 | `:done`     | Successfully finished executing                    |
 | `:failed`   | Finished with an uncaught exception                |
+
