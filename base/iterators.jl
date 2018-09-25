@@ -297,25 +297,21 @@ julia> first(c)
 ```
 """
 zip(a...) = Zip(a)
-length(z::Zip) = _zip_min_length(nothing, z.is)
-function _zip_min_length(::Nothing, is)
+function length(z::Zip)
+    n = _zip_min_length(z.is)
+    n === nothing && throw(ArgumentError("iterator is of undefined length"))
+    return n
+end
+function _zip_min_length(is)
     i = is[1]
+    n = _zip_min_length(tail(is))
     if IteratorSize(i) isa IsInfinite
-        return _zip_min_length(nothing, tail(is))
+        return n
     else
-        return _zip_min_length(length(i), tail(is))
+        return n === nothing ? length(i) : min(n, length(i))
     end
 end
-_zip_min_length(::Nothing, is::Tuple{Any}) = length(is[1])
-function _zip_min_length(n, is)
-    i = is[1]
-    if IteratorSize(i) isa IsInfinite
-        return _zip_min_length(n, tail(is))
-    else
-        return _zip_min_length(min(n, length(i)), tail(is))
-    end
-end
-_zip_min_length(n::Integer, is::Tuple{}) = n
+_zip_min_length(is::Tuple{}) = nothing
 size(z::Zip) = _promote_shape(map(size, z.is)...)
 axes(z::Zip) = _promote_shape(map(axes, z.is)...)
 _promote_shape(a, b...) = promote_shape(a, _promote_shape(b...))
