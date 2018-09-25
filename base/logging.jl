@@ -221,7 +221,7 @@ macro error(exs...) logmsg_code((@_sourceinfo)..., :Error, exs...) end
 @eval @doc $_logmsg_docs :(@warn)
 @eval @doc $_logmsg_docs :(@error)
 
-_log_record_ids = Dict{String, Symbol}()
+_log_record_ids = Dict{Any, Symbol}()
 # Generate a unique, stable, short, human readable identifier for a logging
 # statement.  The idea here is to have a key against which log records can be
 # filtered and otherwise manipulated. The key should uniquely identify the
@@ -230,7 +230,7 @@ _log_record_ids = Dict{String, Symbol}()
 # itself doesn't change.
 function log_record_id(_module, file, line, level, message_ex)
     modname = _module === nothing ?  "" : join(fullname(_module), "_")
-    get!(_log_record_ids, string(modname, file, line),
+    get!(_log_record_ids, (modname, file, line),
         new_log_record_id(modname, level, message_ex))
 end
 
