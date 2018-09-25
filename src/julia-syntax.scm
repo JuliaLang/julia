@@ -160,21 +160,11 @@
                    (let ((meta (take-while (lambda (x) (and (pair? x)
                                                             (memq (car x) '(line meta))))
                                            (cdr body)))
-                         (val (last body)))
-                     ;; wrap one-liners in `convert` instead of adding an ssavalue
-                     (if (and (length= (cdr body) (+ 1 (length meta)))
-                              (not (expr-contains-p return? (if (return? val)
-                                                                (cadr val)
-                                                                val))))
-                         `(,(car body) ,@meta
-                           ,(if (return? val)
-                                `(return ,(convert-for-type-decl (cadr val) rett))
-                                (convert-for-type-decl val rett)))
-                         (let ((R (make-ssavalue)))
-                           `(,(car body) ,@meta
-                             (= ,R ,rett)
-                             (meta ret-type ,R)
-                             ,@(list-tail body (+ 1 (length meta))))))))))))
+                         (R (make-ssavalue)))
+                     `(,(car body) ,@meta
+                       (= ,R ,rett)
+                       (meta ret-type ,R)
+                       ,@(list-tail body (+ 1 (length meta))))))))))
 
 ;; convert x<:T<:y etc. exprs into (name lower-bound upper-bound)
 ;; a bound is #f if not specified
