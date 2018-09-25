@@ -1,18 +1,20 @@
 # Environment Variables
 
-Julia may be configured with a number of environment variables, either in the
-usual way of the operating system, or in a portable way from within Julia.
-Suppose you want to set the environment variable `JULIA_EDITOR` to
-`vim`, then either type `ENV["JULIA_EDITOR"] = "vim"` for instance in the REPL
-to make this change on a case by case basis, or add the same to the user
-configuration file `~/.julia/config/startup.jl` in the user's home directory to have
-a permanent effect. The current value of the same environment variable is
-determined by evaluating `ENV["JULIA_EDITOR"]`.
+Julia can be configured using various environment variables, either in the standard way for
+the operating system, or in a portable way from within Julia itself. Suppose you want to set
+the environment variable `JULIA_EDITOR` to `vim`, then either type `ENV["JULIA_EDITOR"] =
+"vim"` for instance in the REPL to make this change on a case by case basis, or add this
+expression to the user configuration file `~/.julia/config/startup.jl` in your home
+directory to produce a permanent effect.[^1] The current value of the same environment
+variable is determined by evaluating `ENV["JULIA_EDITOR"]`.
+
+[^1]: Note that the `~/.julia/config` directory and the `~/.julia/config/startup.jl` file
+may have to be created the first time you need them.
 
 The environment variables that Julia uses generally start with `JULIA`. If
 [`InteractiveUtils.versioninfo`](@ref) is called with `verbose` equal to `true`, then the
-output will list defined environment variables relevant for Julia, including
-those for which `JULIA` appears in the name.
+output will list the defined environment variables relevant for Julia, including those which
+include `JULIA` in their names.
 
 ## File locations
 
@@ -70,7 +72,7 @@ and a global configuration search path of
 A directory path that points to the current Julia project. Setting this
 environment variable has the same effect as specifying the `--project` start-up
 option, but `--project` has higher precedence.  If the variable is set to `@.`,
-Julia tries to find a project directory that contains `Project.toml` or
+Julia tries to find a project directory that contains a `Project.toml` or
 `JuliaProject.toml` file from the current directory and its parents.  See also
 the chapter on [Code Loading](@ref).
 
@@ -96,10 +98,10 @@ $HOME/.julia/logs/repl_history.jl
 
 ### `JULIA_PKGRESOLVE_ACCURACY`
 
-A positive `Int` that determines how much time the max-sum subroutine
-`MaxSum.maxsum()` of the package dependency resolver
-will devote to attempting satisfying constraints before giving up: this value is
-by default `1`, and larger values correspond to larger amounts of time.
+A positive `Int` that determines how much time the package dependency resolver's max-sum
+subroutine `MaxSum.maxsum()` will devote to attempting to satisfy constraints before giving
+up. This value's default is `1`, with higher values corresponding to longer amounts of
+time.
 
 Suppose the value of `$JULIA_PKGRESOLVE_ACCURACY` is `n`. Then
 
@@ -125,10 +127,10 @@ falls back to `/bin/sh` if `$SHELL` is unset.
 The editor returned by `InteractiveUtils.editor()` and used in, e.g., [`InteractiveUtils.edit`](@ref),
 referring to the command of the preferred editor, for instance `vim`.
 
-`$JULIA_EDITOR` takes precedence over `$VISUAL`, which in turn takes precedence
-over `$EDITOR`. If none of these environment variables is set, then the editor
-is taken to be `open` on Windows and OS X, or `/etc/alternatives/editor` if it
-exists, or `emacs` otherwise.
+`$JULIA_EDITOR` takes precedence over `$VISUAL`, which in turn takes precedence over
+`$EDITOR`. If none of these environment variables is set, then the editor is taken to be
+`start` on Windows, or `open` on macOS, or `/etc/alternatives/editor` if it exists, or
+`emacs` otherwise.
 
 ## Parallelization
 
@@ -282,4 +284,3 @@ Arguments to be passed to the LLVM backend.
 
 If set, then Julia prints detailed information about the cache in the loading
 process of [`Base.require`](@ref).
-
