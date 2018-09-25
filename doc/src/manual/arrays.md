@@ -9,7 +9,7 @@ from [`AbstractArray`](@ref). See the [manual section on the AbstractArray inter
 on implementing a custom array type.
 
 An array is a collection of objects stored in a multi-dimensional grid. In the most general case,
-an array may contain objects of type `Any`. For most computational purposes, arrays should contain
+an array may contain objects of type [`Any`](@ref). For most computational purposes, arrays should contain
 objects of a more specific type, such as [`Float64`](@ref) or [`Int32`](@ref).
 
 In general, unlike many other technical computing languages, Julia does not expect programs to
@@ -38,8 +38,8 @@ copy of the input, and returning that copy.
 | [`ndims(A)`](@ref)     | the number of dimensions of `A`                                                  |
 | [`size(A)`](@ref)      | a tuple containing the dimensions of `A`                                         |
 | [`size(A,n)`](@ref)    | the size of `A` along dimension `n`                                              |
-| [`axes(A)`](@ref)   | a tuple containing the valid indices of `A`                                      |
-| [`axes(A,n)`](@ref) | a range expressing the valid indices along dimension `n`                         |
+| [`axes(A)`](@ref)      | a tuple containing the valid indices of `A`                                      |
+| [`axes(A,n)`](@ref)    | a range expressing the valid indices along dimension `n`                         |
 | [`eachindex(A)`](@ref) | an efficient iterator for visiting each position in `A`                          |
 | [`stride(A,k)`](@ref)  | the stride (linear index distance between adjacent elements) along dimension `k` |
 | [`strides(A)`](@ref)   | a tuple of the strides in each dimension                                         |

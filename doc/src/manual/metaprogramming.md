@@ -89,7 +89,7 @@ julia> ex3 = Meta.parse("(4 + 4) / 2")
 :((4 + 4) / 2)
 ```
 
-Another way to view expressions is with Meta.show_sexpr, which displays the [S-expression](https://en.wikipedia.org/wiki/S-expression)
+Another way to view expressions is with `Meta.show_sexpr`, which displays the [S-expression](https://en.wikipedia.org/wiki/S-expression)
 form of a given `Expr`, which may look very familiar to users of Lisp. Here's an example illustrating
 the display on a nested `Expr`:
 
@@ -1070,7 +1070,7 @@ syntax tree.
 
 ## Generated functions
 
-A very special macro is `@generated`, which allows you to define so-called *generated functions*.
+A very special macro is [`@generated`](@ref), which allows you to define so-called *generated functions*.
 These have the capability to generate specialized code depending on the types of their arguments
 with more flexibility and/or less code than what can be achieved with multiple dispatch. While
 macros work with expressions at parse time and cannot access the types of their inputs, a generated
@@ -1269,7 +1269,7 @@ run during inference, it must respect all of the limitations of that code.
 Some operations that should not be attempted include:
 
 1. Caching of native pointers.
-2. Interacting with the contents or methods of Core.Compiler in any way.
+2. Interacting with the contents or methods of `Core.Compiler` in any way.
 3. Observing any mutable state.
 
      * Inference on the generated function may be run at *any* time, including while your code is attempting

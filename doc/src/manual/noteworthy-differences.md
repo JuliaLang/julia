@@ -50,12 +50,12 @@ may trip up Julia users accustomed to MATLAB:
     over every element of an array when called with a single argument, as in `sum(A)`, even if `A`
     has more than one dimension.
   * In Julia, parentheses must be used to call a function with zero arguments, like in [`rand()`](@ref).
-  * Julia discourages the used of semicolons to end statements. The results of statements are not
+  * Julia discourages the use of semicolons to end statements. The results of statements are not
     automatically printed (except at the interactive prompt), and lines of code do not need to end
     with semicolons. [`println`](@ref) or [`@printf`](@ref) can be used to print specific output.
   * In Julia, if `A` and `B` are arrays, logical comparison operations like `A == B` do not return
     an array of booleans. Instead, use `A .== B`, and similarly for the other boolean operators like
-    [`<`](@ref), [`>`](@ref) and `=`.
+    [`<`](@ref), [`>`](@ref).
   * In Julia, the operators [`&`](@ref), [`|`](@ref), and [`⊻`](@ref xor) ([`xor`](@ref)) perform the
     bitwise operations equivalent to `and`, `or`, and `xor` respectively in MATLAB, and have precedence
     similar to Python's bitwise operators (unlike C). They can operate on scalars or element-wise
@@ -164,8 +164,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     in R, but both arguments need to have the same dimensions.  While [`maximum`](@ref) and [`minimum`](@ref)
     replace `max` and `min` in R, there are important differences.
   * Julia's [`sum`](@ref), [`prod`](@ref), [`maximum`](@ref), and [`minimum`](@ref) are different
-    from their counterparts in R. They all accept one or two arguments. The first argument is an iterable
-    collection such as an array.  If there is a second argument, then this argument indicates the
+    from their counterparts in R. They all accept an optional keyword argument `dims`, which indicates the
     dimensions, over which the operation is carried out.  For instance, let `A = [1 2; 3 4]` in Julia
     and `B <- rbind(c(1,2),c(3,4))` be the same matrix in R.  Then `sum(A)` gives the same result as
     `sum(B)`, but `sum(A, dims=1)` is a row vector containing the sum over each column and `sum(A, dims=2)`
@@ -181,9 +180,10 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Julia is eagerly evaluated and does not support R-style lazy evaluation. For most users, this
     means that there are very few unquoted expressions or column names.
   * Julia does not support the `NULL` type. The closest equivalent is [`nothing`](@ref), but it
-    behaves like a scalar value rather than like a list. Use `x == nothing` instead of `is.null(x)`.
+    behaves like a scalar value rather than like a list. Use `x === nothing` instead of `is.null(x)`.
   * In Julia, missing values are represented by the [`missing`](@ref) object rather than by `NA`.
-    Use [`ismissing(x)`](@ref) instead of `isna(x)`. The [`skipmissing`](@ref) function is generally
+    Use [`ismissing(x)`](@ref) (or `ismissing.(x)` for element-wise operation on vectors) instead of
+    `is.na(x)`. The [`skipmissing`](@ref) function is generally
     used instead of `na.rm=TRUE` (though in some particular cases functions take a `skipmissing`
     argument).
   * Julia lacks the equivalent of R's `assign` or `get`.
@@ -297,7 +297,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     useful if the macro appears within another expression, and is often clearest. The statement-like
     form is often used to annotate blocks, as in the distributed `for` construct: `@distributed for i in 1:n; #= body =#; end`.
     Where the end of the macro construct may be unclear, use the function-like form.
-  * Julia now has an enumeration type, expressed using the macro `@enum(name, value1, value2, ...)`
+  * Julia has an enumeration type, expressed using the macro `@enum(name, value1, value2, ...)`
     For example: `@enum(Fruit, banana=1, apple, pear)`
   * By convention, functions that modify their arguments have a `!` at the end of the name, for example
     `push!`.

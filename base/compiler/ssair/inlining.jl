@@ -593,14 +593,20 @@ function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, at
             def_atypes = sv.result_vargs
         else
             def_atypes = Any[]
-            for p in widenconst(atypes[i]).parameters
-                if isa(p, DataType) && isdefined(p, :instance)
-                    # replace singleton types with their equivalent Const object
-                    p = Const(p.instance)
-                elseif isconstType(p)
-                    p = Const(p.parameters[1])
+            if isa(atypes[i], Const)
+                for p in atypes[i].val
+                    push!(def_atypes, Const(p))
                 end
-                push!(def_atypes, p)
+            else
+                for p in widenconst(atypes[i]).parameters
+                    if isa(p, DataType) && isdefined(p, :instance)
+                        # replace singleton types with their equivalent Const object
+                        p = Const(p.instance)
+                    elseif isconstType(p)
+                        p = Const(p.parameters[1])
+                    end
+                    push!(def_atypes, p)
+                end
             end
         end
         # now push flattened types into new_atypes and getfield exprs into new_argexprs
