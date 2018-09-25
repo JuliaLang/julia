@@ -62,7 +62,7 @@ end
     @test record.file == Base.source_path()
     @test record.line == kwargs[:real_line]
     @test record.id isa Symbol
-    @test occursin(r"^.*logging_[[:xdigit:]]{8}$", String(record.id))
+    @test occursin(r"^.*[[:xdigit:]]{8}$", String(record.id))
 
     # User-defined metadata
     @test kwargs[:bar_val] === bar_val
@@ -336,6 +336,23 @@ end
     ignored = Test.Ignored()
     @test_logs (:warn, "a", ignored, ignored, ignored, "foo.jl") (@warn "a" _file="foo.jl")
     @test_logs (:warn, "a", Base) (@warn "a" _module=Base)
+end
+
+@testset "ID generation" begin
+    id1 = Base.CoreLogging.log_record_id(Main, "test.jl", 42, Info, ())
+    id2 = Base.CoreLogging.log_record_id(Main, "test.jl", 42, Info, ())
+    @test id1 == id2
+
+    logs,_ = collect_test_logs() do
+        for i in 1:2
+            @info "test"
+            @info "test"
+        end
+    end
+    @test length(logs) == 4
+    @test logs[1].id == logs[3].id
+    @test logs[2].id == logs[4].id
+    @test logs[1].id != logs[2].id
 end
 
 end
