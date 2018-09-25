@@ -1047,32 +1047,34 @@ function tuple_tfunc(atypes::Vector{Any})
     if all_are_const
         return Const(tuple(Any[atypes[i].val for i in 1:length(atypes)]...))
     end
-    p = Vector{Any}(undef, length(atypes))
+    params = Vector{Any}(undef, length(atypes))
     anyinfo = false
     for i in 1:length(atypes)
         x = atypes[i]
         # TODO ignore singleton Const (don't forget to update cache logic if you implement this)
-        anyinfo || (anyinfo = !isa(x, Type) || isType(x))
+        if !anyinfo
+            anyinfo = !isa(x, Type) || isType(x)
+        end
         if isa(x, Const)
-            p[i] = typeof(x.val)
+            params[i] = typeof(x.val)
         else
             x = widenconst(x)
             if isType(x)
                 xparam = x.parameters[1]
                 if issingletontype(xparam) || xparam === Bottom
-                    p[i] = typeof(xparam)
+                    params[i] = typeof(xparam)
                 else
-                    p[i] = Type
+                    params[i] = Type
                 end
             else
-                p[i] = x
+                params[i] = x
             end
         end
     end
-    t = Tuple{p...}
+    typ = Tuple{params...}
     # replace a singleton type with its equivalent Const object
-    isdefined(t, :instance) && return Const(t.instance)
-    return anyinfo ? PartialTuple(t, atypes) : t
+    isdefined(typ, :instance) && return Const(typ.instance)
+    return anyinfo ? PartialTuple(typ, atypes) : typ
 end
 
 function array_type_undefable(@nospecialize(a))

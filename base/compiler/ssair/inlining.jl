@@ -588,12 +588,12 @@ function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, at
             def_atypes = def_type.fields
         else
             def_atypes = Any[]
-            if isa(atypes[i], Const)
-                for p in atypes[i].val
+            if isa(def_type, Const) # && isa(def_type.val, Tuple) is implied
+                for p in def_type.val
                     push!(def_atypes, Const(p))
                 end
             else
-                for p in widenconst(atypes[i]).parameters
+                for p in widenconst(def_type).parameters
                     if isa(p, DataType) && isdefined(p, :instance)
                         # replace singleton types with their equivalent Const object
                         p = Const(p.instance)
