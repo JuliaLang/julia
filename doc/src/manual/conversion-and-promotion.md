@@ -13,18 +13,20 @@ languages fall into two camps with respect to promotion of arithmetic arguments:
     C, Java, Perl, and Python, to name a few, all correctly compute the sum `1 + 1.5` as the floating-point
     value `2.5`, even though one of the operands to `+` is an integer. These systems are convenient
     and designed carefully enough that they are generally all-but-invisible to the programmer: hardly
-    anyone consciously thinks of this promotion taking place when writing such an expression, but
-    compilers and interpreters must perform conversion before addition since integers and floating-point
-    values cannot be added as-is. Complex rules for such automatic conversions are thus inevitably
-    part of specifications and implementations for such languages.
-  * **No automatic promotion.** This camp includes Ada and ML -- very "strict" statically typed languages.
-    In these languages, every conversion must be explicitly specified by the programmer. Thus, the
-    example expression `1 + 1.5` would be a compilation error in both Ada and ML. Instead one must
-    write `real(1) + 1.5`, explicitly converting the integer `1` to a floating-point value before
-    performing addition. Explicit conversion everywhere is so inconvenient, however, that even Ada
-    has some degree of automatic conversion: integer literals are promoted to the expected integer
-    type automatically, and floating-point literals are similarly promoted to appropriate floating-point
-    types.
+    anyone consciously thinks of this promotion taking place when writing such an expression.
+    However, compilers and interpreters must perform conversion before addition since
+    integers and floating-point values cannot be added as-is. Complex rules for such
+    automatic conversions are thus inevitably part of the specifications and implementations
+    for such languages.
+  * **No automatic promotion.** This camp includes Ada, ML and Rust -- very "strict"
+    statically typed languages. In these languages, every conversion must be explicitly
+    specified by the programmer. Thus, the example expression `1 + 1.5` would be a
+    compilation error in Ada, ML and Rust. Instead one must write something like `real(1) +
+    1.5`, explicitly converting the integer `1` to a floating-point value before performing
+    addition. Explicit conversion everywhere is so inconvenient, however, that even Ada has
+    some degree of automatic conversion: integer literals are promoted to the expected
+    integer type automatically, and floating-point literals are similarly promoted to
+    appropriate floating-point types.
 
 In a sense, Julia falls into the "no automatic promotion" category: mathematical operators are
 just functions with special syntax, and the arguments of functions are never automatically converted.
@@ -49,9 +51,10 @@ One example is assigning a value into an array: if `A` is a `Vector{Float64}`, t
 storing the result in the array.
 This is done via the `convert` function.
 
-The `convert` function generally takes two arguments: the first is a type object and the second is
-a value to convert to that type. The returned value is the value converted to an instance of given type.
-The simplest way to understand this function is to see it in action:
+The `convert` function generally takes two arguments: the first is a type object and the
+second is a value to convert to that type. The returned value is the value converted to an
+instance of the specified type. The simplest way to understand this function is to see it in
+action:
 
 ```jldoctest
 julia> x = 12
@@ -92,11 +95,11 @@ ERROR: MethodError: Cannot `convert` an object of type String to an object of ty
 [...]
 ```
 
-Some languages consider parsing strings as numbers or formatting numbers as strings to be conversions
-(many dynamic languages will even perform conversion for you automatically), however Julia does
-not: even though some strings can be parsed as numbers, most strings are not valid representations
-of numbers, and only a very limited subset of them are. Therefore in Julia the dedicated `parse`
-function must be used to perform this operation, making it more explicit.
+Some languages consider parsing strings as numbers or formatting numbers as strings to be
+conversions (many dynamic languages will even perform conversion for you automatically).
+Even though some strings can be parsed as numbers, most strings are not valid
+representations of numbers. Therefore in Julia, converting strings to numbers must be done
+explicitly using the dedicated `parse` function.
 
 ### When is `convert` called?
 
@@ -310,10 +313,11 @@ one does not need to define both `promote_rule(::Type{A}, ::Type{B})` and
 `promote_rule(::Type{B}, ::Type{A})` -- the symmetry is implied by the way `promote_rule`
 is used in the promotion process.
 
-The `promote_rule` function is used as a building block to define a second function called `promote_type`,
-which, given any number of type objects, returns the common type to which those values, as arguments
-to `promote` should be promoted. Thus, if one wants to know, in absence of actual values, what
-type a collection of values of certain types would promote to, one can use `promote_type`:
+The `promote_rule` function is used as a building block to define a second function called
+`promote_type`, which, given any number of type objects, returns the common type to which
+those values, as arguments to `promote` should be promoted. Thus, if one wants to know, in
+the absence of actual values, what type a collection of values of certain types would
+promote to, one can use `promote_type`:
 
 ```jldoctest
 julia> promote_type(Int8, Int64)
@@ -348,3 +352,4 @@ This small handful of promotion rules, together with the type's constructors and
 naturally with all of Julia's other numeric types -- integers, floating-point numbers, and complex
 numbers. By providing appropriate conversion methods and promotion rules in the same manner, any
 user-defined numeric type can interoperate just as naturally with Julia's predefined numerics.
+
