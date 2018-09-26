@@ -494,10 +494,9 @@ function precompile(ctx::Context)
     for pkg in pkgids
         paths = Base.find_all_in_cache_path(pkg)
         sourcepath = Base.locate_package(pkg)
-        if sourcepath == nothing
-            # XXX: this isn't supposed to be fatal
-            pkgerror("couldn't find path to $(pkg.name) when trying to precompile project")
-        end
+        sourcepath == nothing && continue
+        # Heuristic for when precompilation is disabled
+        occursin(r"\b__precompile__\(\s*false\s*\)", read(sourcepath, String)) && continue
         stale = true
         for path_to_try in paths::Vector{String}
             staledeps = Base.stale_cachefile(sourcepath, path_to_try)
