@@ -240,7 +240,7 @@ function find_project_file(env::Union{Nothing,String}=nothing)
     project_file = nothing
     if env isa Nothing
         project_file = Base.active_project()
-        project_file == nothing && pkgerror("no active project")
+        project_file == nothing && pkgerror("no active environment")
     elseif startswith(env, '@')
         project_file = Base.load_path_expand(env)
         project_file === nothing && pkgerror("package environment does not exist: $env")
