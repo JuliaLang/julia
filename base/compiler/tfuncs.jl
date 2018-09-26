@@ -537,8 +537,10 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), @nospecialize
             sv = s00.val
         end
         if isa(name, Const)
-            (isa(sv, Module) && isa(name.val, Symbol)) || return false
-            (isa(name.val, Symbol) || isa(name.val, Int)) || return false
+            if !isa(name.val, Symbol)
+                isa(sv, Module) && return false
+                isa(name.val, Int) || return false
+            end
             return isdefined(sv, name.val)
         end
         if bounds_check_disabled && !isa(sv, Module)
@@ -1056,7 +1058,7 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         length(argtypes) == 1 || return false
         return sizeof_nothrow(argtypes[1])
     elseif f === Core.kwfunc
-        length(argtypes) == 2 || return false
+        length(argtypes) == 1 || return false
         return isa(rt, Const)
     end
     return false

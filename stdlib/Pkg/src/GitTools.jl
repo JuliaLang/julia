@@ -75,8 +75,13 @@ setprotocol!(proto::Union{Nothing, AbstractString}=nothing) = GIT_PROTOCOL[] = p
 # TODO: extend this to more urls
 function normalize_url(url::AbstractString)
     m = match(GITHUB_REGEX, url)
-    (m === nothing || GIT_PROTOCOL[] === nothing) ?
-        url : "$(GIT_PROTOCOL[])://github.com/$(m.captures[1]).git"
+    if m === nothing || GIT_PROTOCOL[] === nothing
+        url
+    elseif GIT_PROTOCOL[] == "ssh"
+        "ssh://git@github.com/$(m.captures[1]).git"
+    else
+        "$(GIT_PROTOCOL[])://github.com/$(m.captures[1]).git"
+    end
 end
 
 function clone(url, source_path; header=nothing, kwargs...)

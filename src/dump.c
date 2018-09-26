@@ -638,14 +638,15 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
     }
     else if (jl_is_array(v)) {
         jl_array_t *ar = (jl_array_t*)v;
-        if (ar->flags.ndims == 1 && ar->elsize < 128) {
+        int isunion = jl_is_uniontype(jl_tparam0(jl_typeof(ar)));
+        if (ar->flags.ndims == 1 && ar->elsize <= 0x3f) {
             write_uint8(s->s, TAG_ARRAY1D);
-            write_uint8(s->s, (ar->flags.ptrarray<<7) | (ar->elsize & 0x7f));
+            write_uint8(s->s, (ar->flags.ptrarray<<7) | (isunion << 6) | (ar->elsize & 0x3f));
         }
         else {
             write_uint8(s->s, TAG_ARRAY);
             write_uint16(s->s, ar->flags.ndims);
-            write_uint16(s->s, (ar->flags.ptrarray<<15) | (ar->elsize & 0x7fff));
+            write_uint16(s->s, (ar->flags.ptrarray << 15) | (isunion << 14) | (ar->elsize & 0x3fff));
         }
         for (i = 0; i < ar->flags.ndims; i++)
             jl_serialize_value(s, jl_box_long(jl_array_dim(ar,i)));
@@ -1210,7 +1211,7 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
 }
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 6;
+static const int JI_FORMAT_VERSION = 7;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 static void write_header(ios_t *s)
@@ -1495,18 +1496,20 @@ static jl_value_t *jl_deserialize_value_array(jl_serializer_state *s, uint8_t ta
 {
     int usetable = (s->mode != MODE_IR);
     int16_t i, ndims;
-    int isunboxed, elsize;
+    int isunboxed, isunion, elsize;
     if (tag == TAG_ARRAY1D) {
         ndims = 1;
         elsize = read_uint8(s->s);
         isunboxed = !(elsize >> 7);
-        elsize = elsize & 0x7f;
+        isunion = elsize >> 6;
+        elsize = elsize & 0x3f;
     }
     else {
         ndims = read_uint16(s->s);
         elsize = read_uint16(s->s);
         isunboxed = !(elsize >> 15);
-        elsize = elsize & 0x7fff;
+        isunion = elsize >> 14;
+        elsize = elsize & 0x3fff;
     }
     uintptr_t pos = backref_list.len;
     if (usetable)
@@ -1515,7 +1518,8 @@ static jl_value_t *jl_deserialize_value_array(jl_serializer_state *s, uint8_t ta
     for (i = 0; i < ndims; i++) {
         dims[i] = jl_unbox_long(jl_deserialize_value(s, NULL));
     }
-    jl_array_t *a = jl_new_array_for_deserialization((jl_value_t*)NULL, ndims, dims, isunboxed, elsize);
+    jl_array_t *a = jl_new_array_for_deserialization(
+            (jl_value_t*)NULL, ndims, dims, isunboxed, isunion, elsize);
     if (usetable)
         backref_list.items[pos] = a;
     jl_value_t *aty = jl_deserialize_value(s, &jl_astaggedvalue(a)->type);
@@ -1643,6 +1647,7 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->file = (jl_sym_t*)jl_deserialize_value(s, NULL);
     m->line = read_int32(s->s);
     m->min_world = jl_world_counter;
+    m->max_world = ~(size_t)0;
     m->ambig = jl_deserialize_value(s, (jl_value_t**)&m->ambig);
     jl_gc_wb(m, m->ambig);
     m->called = read_int32(s->s);
@@ -2988,7 +2993,7 @@ static jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li
     //assert(ti != jl_bottom_type); (void)ti;
     if (ti == jl_bottom_type)
         env = jl_emptysvec; // the intersection may fail now if the type system had made an incorrect subtype env in the past
-    jl_method_instance_t *_new = jl_specializations_get_linfo(m, (jl_value_t*)argtypes, env, jl_world_counter);
+    jl_method_instance_t *_new = jl_specializations_get_linfo(m, (jl_value_t*)argtypes, env, jl_world_counter < max_world ? jl_world_counter : max_world);
     _new->max_world = max_world;
     jl_update_backref_list((jl_value_t*)li, (jl_value_t*)_new, start);
     return _new;

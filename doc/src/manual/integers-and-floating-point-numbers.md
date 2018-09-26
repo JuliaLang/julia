@@ -178,7 +178,7 @@ of the binary data item is the minimal needed size, if the leading digit of the 
 `0`. In the case of leading zeros, the size is determined by the minimal needed size for a
 literal, which has the same length but leading digit `1`. That allows the user to control
 the size.
-Values, which cannot be stored in `UInt128` cannot be written as such literals.
+Values which cannot be stored in `UInt128` cannot be written as such literals.
 
 Binary, octal, and hexadecimal literals may be signed by a `-` immediately preceding the
 unsigned literal. They produce an unsigned integer of the same size as the unsigned literal
@@ -215,7 +215,7 @@ UInt128: [0,340282366920938463463374607431768211455]
 ```
 
 The values returned by [`typemin`](@ref) and [`typemax`](@ref) are always of the given argument
-type. (The above expression uses several features we have yet to introduce, including [for loops](@ref man-loops),
+type. (The above expression uses several features that have yet to be introduced, including [for loops](@ref man-loops),
 [Strings](@ref man-strings), and [Interpolation](@ref), but should be easy enough to understand for users
 with some existing programming experience.)
 
@@ -678,7 +678,7 @@ where syntactic conflicts arise:
   * The 32-bit floating-point literal expression `1.5f22` could be interpreted as the numeric literal
     `1.5` multiplied by the variable `f22`.
 
-In all cases, we resolve the ambiguity in favor of interpretation as numeric literals:
+In all cases the ambiguity is resolved in favor of interpretation as numeric literals:
 
   * Expressions starting with `0x` are always hexadecimal literals.
   * Expressions starting with a numeric literal followed by `e` or `E` are always floating-point literals.

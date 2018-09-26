@@ -187,7 +187,7 @@ julia> Dates.dayofweekofmonth(Date("2000-02-08"))
 
 julia> Dates.dayofweekofmonth(Date("2000-02-15"))
 3
-````
+```
 """
 function dayofweekofmonth(dt::TimeType)
     d = day(dt)

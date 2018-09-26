@@ -770,7 +770,16 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
                                         uint32_t na)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (type->instance != NULL) return type->instance;
+    if (type->instance != NULL) {
+        for (size_t i = 0; i < na; i++) {
+            jl_value_t *ft = jl_field_type(type, i);
+            if (!jl_isa(args[i], ft))
+                jl_type_error("new", ft, args[i]);
+        }
+        return type->instance;
+    }
+    if (type->layout == NULL)
+        jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
     size_t nf = jl_datatype_nfields(type);
     jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
     JL_GC_PUSH1(&jv);
@@ -783,8 +792,8 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
     for(size_t i=na; i < nf; i++) {
         if (jl_field_isptr(type, i)) {
             *(jl_value_t**)((char*)jl_data_ptr(jv)+jl_field_offset(type,i)) = NULL;
-
-        } else {
+        }
+        else {
             jl_value_t *ft = jl_field_type(type, i);
             if (jl_is_uniontype(ft)) {
                 uint8_t *psel = &((uint8_t *)jv)[jl_field_offset(type, i) + jl_field_size(type, i) - 1];

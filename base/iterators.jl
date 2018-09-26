@@ -181,9 +181,9 @@ Also similar to `enumerate(A)`, except `i` will be a valid index
 for `A`, while `enumerate` always counts from 1 regardless of the indices
 of `A`.
 
-Specifying `IndexLinear()` ensures that `i` will be an integer;
-specifying `IndexCartesian()` ensures that `i` will be a
-`CartesianIndex`; specifying `IndexStyle(A)` chooses whichever has
+Specifying [`IndexLinear()`](@ref) ensures that `i` will be an integer;
+specifying [`IndexCartesian()`](@ref) ensures that `i` will be a
+[`CartesianIndex`](@ref); specifying `IndexStyle(A)` chooses whichever has
 been defined as the native indexing style for array `A`.
 
 Mutation of the bounds of the underlying array will invalidate this iterator.
@@ -880,6 +880,7 @@ _flatteneltype(I, et) = EltypeUnknown()
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:NTuple{N,Any}}) where {N} = HasLength()
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Tuple}) = SizeUnknown()
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Number}) = HasLength()
+flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{Union{}}) = SizeUnknown()
 flatten_iteratorsize(a, b) = SizeUnknown()
 
 _flatten_iteratorsize(sz, ::EltypeUnknown, I) = SizeUnknown()

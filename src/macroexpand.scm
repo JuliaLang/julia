@@ -60,7 +60,7 @@
 
    ;; function definition
    (pattern-lambda (function (-$ (call name . argl) (|::| (call name . argl) _t)) body)
-                   (cons 'varlist (safe-llist-positional-args (fix-arglist argl))))
+                   (cons 'varlist (safe-llist-positional-args (fix-arglist (append (self-argname name) argl)))))
    (pattern-lambda (function (where callspec . wheres) body)
                    (let ((others (pattern-expand1 vars-introduced-by-patterns `(function ,callspec ,body))))
                      (cons 'varlist (append (if (and (pair? others) (eq? (car others) 'varlist))
@@ -75,7 +75,7 @@
    (pattern-lambda (= (call (curly name . sparams) . argl) body)
                    `(function (call (curly ,name . ,sparams) . ,argl) ,body))
    (pattern-lambda (= (-$ (call name . argl) (|::| (call name . argl) _t)) body)
-                   `(function (call ,name ,@argl) ,body))
+                   `(function ,(cadr __) ,body))
    (pattern-lambda (= (where callspec . wheres) body)
                    (cons 'function (cdr __)))
 
@@ -135,16 +135,21 @@
                    (if var (list 'varlist var) '()))
 
    ;; type definition
-   (pattern-lambda (struct mut (<: (curly tn . tvars) super) body)
-                   (list* 'varlist (cons (unescape tn) (unescape tn)) '(new . new)
-                          (typevar-names tvars)))
-   (pattern-lambda (struct mut (curly tn . tvars) body)
-                   (list* 'varlist (cons (unescape tn) (unescape tn)) '(new . new)
-                          (typevar-names tvars)))
-   (pattern-lambda (struct mut (<: tn super) body)
-                   (list 'varlist (cons (unescape tn) (unescape tn)) '(new . new)))
-   (pattern-lambda (struct mut tn body)
-                   (list 'varlist (cons (unescape tn) (unescape tn)) '(new . new)))
+   (pattern-lambda (struct mut spec body)
+                   (let ((tn (typedef-expr-name spec))
+                         (tv (typedef-expr-tvars spec)))
+                     (list* 'varlist (cons (unescape tn) (unescape tn)) '(new . new)
+                            (typevar-names tv))))
+   (pattern-lambda (abstract spec)
+                   (let ((tn (typedef-expr-name spec))
+                         (tv (typedef-expr-tvars spec)))
+                     (list* 'varlist (cons (unescape tn) (unescape tn))
+                            (typevar-names tv))))
+   (pattern-lambda (primitive spec nb)
+                   (let ((tn (typedef-expr-name spec))
+                         (tv (typedef-expr-tvars spec)))
+                     (list* 'varlist (cons (unescape tn) (unescape tn))
+                            (typevar-names tv))))
 
    )) ; vars-introduced-by-patterns
 
@@ -177,6 +182,17 @@
   (if (and (pair? e) (eq? (car e) 'escape))
       (cadr e)
       e))
+
+(define (typedef-expr-name e)
+  (cond ((atom? e) e)
+        ((or (eq? (car e) 'curly) (eq? (car e) '<:)) (typedef-expr-name (cadr e)))
+        (else e)))
+
+(define (typedef-expr-tvars e)
+  (cond ((atom? e) '())
+        ((eq? (car e) '<:) (typedef-expr-tvars (cadr e)))
+        ((eq? (car e) 'curly) (cddr e))
+        (else '())))
 
 (define (typevar-expr-name e) (car (analyze-typevar e)))
 
@@ -240,6 +256,12 @@
      (safe-arg-names kwargs #t)
      ;; count escaped argument names as "keywords" to prevent renaming
      (safe-llist-positional-args lst #t))))
+
+;; argument name for the function itself given `function (f::T)(...)`, otherwise ()
+(define (self-argname name)
+  (if (and (length= name 3) (eq? (car name) '|::|))
+      (list (cadr name))
+      '()))
 
 ;; resolve-expansion-vars-with-new-env, but turn on `inarg` once we get inside
 ;; the formal argument list. `e` in general might be e.g. `(f{T}(x)::T) where T`,
@@ -363,12 +385,12 @@
                          ;; in keyword arg A=B, don't transform "A"
                          (unescape (cadr (cadr e))))
                     ,(resolve-expansion-vars- (caddr (cadr e)) env m parent-scope inarg))
-                   ,(resolve-expansion-vars- (caddr e) env m parent-scope inarg)))
+                   ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg)))
              (else
               `(kw ,(if inarg
                         (resolve-expansion-vars- (cadr e) env m parent-scope inarg)
                         (unescape (cadr e)))
-                   ,(resolve-expansion-vars- (caddr e) env m parent-scope inarg)))))
+                   ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg)))))
 
            ((let)
             (let* ((newenv (new-expansion-env-for e env))

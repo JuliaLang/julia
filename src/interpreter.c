@@ -397,7 +397,9 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     if (jl_is_pinode(e)) {
         jl_value_t *val = eval_value(jl_fieldref_noalloc(e, 0), s);
 #ifndef JL_NDEBUG
+        JL_GC_PUSH1(&val);
         jl_typeassert(val, jl_fieldref_noalloc(e, 1));
+        JL_GC_POP();
 #endif
         return val;
     }
@@ -475,18 +477,12 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return jl_nothing;
     }
     else if (head == new_sym) {
-        jl_value_t *thetype = eval_value(args[0], s);
-        jl_value_t *v=NULL, *fldv=NULL;
-        JL_GC_PUSH3(&thetype, &v, &fldv);
-        assert(jl_is_structtype(thetype));
-        v = jl_new_struct_uninit((jl_datatype_t*)thetype);
-        for (size_t i = 1; i < nargs; i++) {
-            jl_value_t *ft = jl_field_type(thetype, i - 1);
-            fldv = eval_value(args[i], s);
-            if (!jl_isa(fldv, ft))
-                jl_type_error("new", ft, fldv);
-            jl_set_nth_field(v, i - 1, fldv);
-        }
+        jl_value_t **argv;
+        JL_GC_PUSHARGS(argv, nargs);
+        for (size_t i = 0; i < nargs; i++)
+            argv[i] = eval_value(args[i], s);
+        assert(jl_is_structtype(argv[0]));
+        jl_value_t *v = jl_new_structv((jl_datatype_t*)argv[0], &argv[1], nargs - 1);
         JL_GC_POP();
         return v;
     }

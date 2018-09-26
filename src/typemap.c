@@ -743,7 +743,7 @@ jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_valu
 {
     // some manually-unrolled common special cases
     while (ml->simplesig == (void*)jl_nothing && ml->guardsigs == jl_emptysvec && ml->isleafsig) {
-        // use a tight loop for a long as possible
+        // use a tight loop for as long as possible
         if (world >= ml->min_world && world <= ml->max_world) {
             if (n == jl_field_count(ml->sig) && jl_typeof(args[0]) == jl_tparam(ml->sig, 0)) {
                 if (n == 1)

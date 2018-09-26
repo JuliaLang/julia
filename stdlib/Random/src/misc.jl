@@ -121,10 +121,24 @@ function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real
 end
 
 """
-    randsubseq!(S, A, p)
+    randsubseq!([rng=GLOBAL_RNG,] S, A, p)
 
 Like [`randsubseq`](@ref), but the results are stored in `S`
 (which is resized as needed).
+
+# Examples
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> S = Int64[];
+
+julia> randsubseq!(rng, S, collect(1:8), 0.3);
+
+julia> S
+2-element Array{Int64,1}:
+ 7
+ 8
+```
 """
 randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(GLOBAL_RNG, S, A, p)
 
@@ -132,12 +146,22 @@ randsubseq(r::AbstractRNG, A::AbstractArray{T}, p::Real) where {T} =
     randsubseq!(r, T[], A, p)
 
 """
-    randsubseq(A, p) -> Vector
+    randsubseq([rng=GLOBAL_RNG,] A, p) -> Vector
 
 Return a vector consisting of a random subsequence of the given array `A`, where each
 element of `A` is included (in order) with independent probability `p`. (Complexity is
 linear in `p*length(A)`, so this function is efficient even if `p` is small and `A` is
 large.) Technically, this process is known as "Bernoulli sampling" of `A`.
+
+# Examples
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> randsubseq(rng, collect(1:8), 0.3)
+2-element Array{Int64,1}:
+ 7
+ 8
+```
 """
 randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
 
@@ -182,6 +206,7 @@ julia> shuffle!(rng, Vector(1:16))
 function shuffle!(r::AbstractRNG, a::AbstractArray)
     @assert !has_offset_axes(a)
     n = length(a)
+    n <= 1 && return a # nextpow below won't work with n == 0
     @assert n <= Int64(2)^52
     mask = nextpow(2, n) - 1
     for i = n:-1:2

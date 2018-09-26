@@ -56,14 +56,14 @@ function status(ctx::Context, mode::PackageMode, use_as_api=false)
         m₁ = filter_manifest(in_project(project₁["deps"]), manifest₁)
         diff = manifest_diff(ctx, m₀, m₁)
         if !use_as_api
-            printpkgstyle(ctx, :Status, pathrepr(ctx, env.project_file), #=ignore_indent=# true)
+            printpkgstyle(ctx, :Status, pathrepr(env.project_file), #=ignore_indent=# true)
             print_diff(ctx, diff, #=status=# true)
         end
     end
     if mode == PKGMODE_MANIFEST
         diff = manifest_diff(ctx, manifest₀, manifest₁)
         if !use_as_api
-            printpkgstyle(ctx, :Status, pathrepr(ctx, env.manifest_file), #=ignore_indent=# true)
+            printpkgstyle(ctx, :Status, pathrepr(env.manifest_file), #=ignore_indent=# true)
             print_diff(ctx, diff, #=status=# true)
         end
     elseif mode == PKGMODE_COMBINED
@@ -73,7 +73,7 @@ function status(ctx::Context, mode::PackageMode, use_as_api=false)
         c_diff = filter!(x->x.old != x.new, manifest_diff(ctx, m₀, m₁))
         if !isempty(c_diff)
             if !use_as_api
-                printpkgstyle(ctx, :Status, pathrepr(ctx, env.manifest_file), #=ignore_indent=# true)
+                printpkgstyle(ctx, :Status, pathrepr(env.manifest_file), #=ignore_indent=# true)
                 print_diff(ctx, c_diff, #=status=# true)
             end
             diff = Base.vcat(c_diff, diff)
@@ -116,7 +116,7 @@ revstring(str::String) = occursin(r"\b([a-f0-9]{40})\b", str) ? str[1:7] : str
 vstring(ctx::Context, a::VerInfo) =
     string((a.ver == nothing && a.hash != nothing) ? "[$(string(a.hash)[1:16])]" : "",
            a.ver != nothing ? "v$(a.ver)" : "",
-           a.path != nothing ? " [$(pathrepr(ctx, a.path))]" : "",
+           a.path != nothing ? " [$(pathrepr(a.path))]" : "",
            a.repo != nothing ? " #$(revstring(a.repo.rev)) ($(a.repo.url))" : "",
            a.pinned == true ? " ⚲" : "",
            )

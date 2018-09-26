@@ -142,19 +142,32 @@ function reverse(s::Union{String,SubString{String}})::String
     end
 end
 
-function string(a::Union{String, SubString{String}}...)
-    if length(a) == 1
-        return String(a[1])
-    end
+string(a::String)            = String(a)
+string(a::SubString{String}) = String(a)
+
+function string(a::Union{Char, String, SubString{String}}...)
     n = 0
-    for str in a
-        n += sizeof(str)
+    for v in a
+        if v isa Char
+            n += codelen(v)
+        else
+            n += sizeof(v)
+        end
     end
     out = _string_n(n)
     offs = 1
-    for str in a
-        unsafe_copyto!(pointer(out,offs), pointer(str), sizeof(str))
-        offs += sizeof(str)
+    for v in a
+        if v isa Char
+           x = bswap(reinterpret(UInt32, v))
+           for j in 1:codelen(v)
+               unsafe_store!(pointer(out, offs), x % UInt8)
+               offs += 1
+               x >>= 8
+           end
+        else
+            unsafe_copyto!(pointer(out,offs), pointer(v), sizeof(v))
+            offs += sizeof(v)
+        end
     end
     return out
 end

@@ -74,7 +74,7 @@ const UpgradeLevel = Types.UpgradeLevel
 
 # Define new variables so tab comleting Pkg. works.
 """
-    Pkg.add(pkg::Union{String, Vector{String})
+    Pkg.add(pkg::Union{String, Vector{String}})
     Pkg.add(pkg::Union{PackageSpec, Vector{PackageSpec}})
 
 Add a package to the current project. This package will be available using the
@@ -94,7 +94,7 @@ See also [`PackageSpec`](@ref).
 const add = API.add
 
 """
-    Pkg.rm(pkg::Union{String, Vector{String})
+    Pkg.rm(pkg::Union{String, Vector{String}})
     Pkg.rm(pkg::Union{PackageSpec, Vector{PackageSpec}})
 
 Remove a package from the current project. If the `mode` of `pkg` is
@@ -107,7 +107,7 @@ const rm = API.rm
 
 """
     Pkg.update(; level::UpgradeLevel=UPLEVEL_MAJOR, mode::PackageMode = PKGMODE_PROJECT)
-    Pkg.update(pkg::Union{String, Vector{String})
+    Pkg.update(pkg::Union{String, Vector{String}})
     Pkg.update(pkg::Union{PackageSpec, Vector{PackageSpec}})
 
 Update a package `pkg`. If no posistional argument is given, update all packages in the manifest if `mode` is `PKGMODE_MANIFEST` and packages in both manifest and project if `mode` is `PKGMODE_PROJECT`.
@@ -162,7 +162,7 @@ const gc = API.gc
 
 """
     Pkg.build()
-    Pkg.build(pkg::Union{String, Vector{String})
+    Pkg.build(pkg::Union{String, Vector{String}})
     Pkg.build(pkgs::Union{PackageSpec, Vector{PackageSpec}})
 
 Run the build script in `deps/build.jl` for `pkg` and all of the dependencies in
@@ -178,7 +178,7 @@ const build = API.build
 const installed = API.installed
 
 """
-    Pkg.pin(pkg::Union{String, Vector{String})
+    Pkg.pin(pkg::Union{String, Vector{String}})
     Pkg.pin(pkgs::Union{Packagespec, Vector{Packagespec}})
 
 Pin a package to the current version (or the one given in the `packagespec` or a certain
@@ -187,7 +187,7 @@ git revision. A pinned package is never updated.
 const pin = API.pin
 
 """
-    Pkg.free(pkg::Union{String, Vector{String})
+    Pkg.free(pkg::Union{String, Vector{String}})
     Pkg.free(pkgs::Union{Packagespec, Vector{Packagespec}})
 
 Free a package which removes a `pin` if it exists, or if the package is tracking a path,
@@ -203,7 +203,7 @@ const free = API.free
 
 
 """
-    Pkg.develop(pkg::Union{String, Vector{String})
+    Pkg.develop(pkg::Union{String, Vector{String}})
     Pkg.develop(pkgs::Union{Packagespec, Vector{Packagespec}})
 
 Make a package available for development by tracking it by path.
@@ -219,10 +219,10 @@ If `pkg` is given as a local path, the package at that path will be tracked.
 Pkg.develop("Example")
 
 # By url
-Pkg.develop(PackageSpec(url="https://github.com/JuliaLang/Compat.jl", rev="master"))
+Pkg.develop(PackageSpec(url="https://github.com/JuliaLang/Compat.jl"))
 
-# By path (also uses url keyword to PackageSpec)
-Pkg.develop(PackageSpec(url="MyJuliaPackages/Package.jl")
+# By path
+Pkg.develop(PackageSpec(path="MyJuliaPackages/Package.jl")
 ```
 
 See also [`PackageSpec`](@ref)
@@ -270,16 +270,16 @@ that is modified by executing package commands.
 The logic for what path is activated is as follows:
 
   * If `shared` is `true`, the first existing environment named `s` from the depots
-    in the depot stack will be activated. If no such environment exists yet,
-    activate it in the first depot.
-  * If `s` is a path that exist, that environment will be activated.
-  * If `s` is a package name in the current project activate that is tracking a path,
-    activate the environment at that path.
-  * If `s` is a non-existing path, activate that path.
+    in the depot stack will be activated. If no such environment exists,
+    create and activate that environment in the first depot.
+  * If `s` is an existing path, then activate the environment at that path.
+  * If `s` is a package in the current project and `s` is tracking a path, then
+    activate the environment at the tracked path.
+  * Else, `s` is interpreted as a non-existing path, activate that path.
 
-If no argument is given to `activate`, activate the home project,
-which is the one specified by either `--project` command line when starting julia,
-or `JULIA_PROJECT` environment variable.
+If no argument is given to `activate`, then activate the home project.
+The home project is specified by either the `--project` command line option to
+the julia executable, or the `JULIA_PROJECT` environment variable.
 
 # Examples
 ```

@@ -148,7 +148,7 @@ static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 // get or create the MethodInstance for a specialization
 JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m, jl_value_t *type, jl_svec_t *sparams, size_t world)
 {
-    assert(world >= m->min_world && "typemap lookup is corrupted");
+    assert(world >= m->min_world && world <= m->max_world && "typemap lookup is corrupted");
     JL_LOCK(&m->writelock);
     jl_typemap_entry_t *sf =
         jl_typemap_assoc_by_type(m->specializations, type, NULL, /*subtype*/0, /*offs*/0, world, /*max_world_mask*/0);
@@ -169,7 +169,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m, 
         li->min_world = world;
     }
     if (world == jl_world_counter) {
-        li->max_world = ~(size_t)0;
+        li->max_world = m->max_world;
     }
     else {
         li->max_world = world;
@@ -358,6 +358,7 @@ JL_DLLEXPORT jl_method_instance_t* jl_set_method_inferred(
         else {
             JL_LOCK(&li->def.method->writelock);
             assert(min_world >= li->def.method->min_world);
+            assert(max_world <= li->def.method->max_world);
             int isinferred =  jl_is_rettype_inferred(li);
             if (!isinferred && li->min_world >= min_world && li->max_world <= max_world) {
                 // expand the current (uninferred) entry to cover the full inferred range
@@ -955,7 +956,7 @@ static jl_method_instance_t *cache_method(
     jl_tupletype_t *cachett = tt;
     jl_svec_t* guardsigs = jl_emptysvec;
     size_t min_valid = definition->min_world;
-    size_t max_valid = ~(size_t)0;
+    size_t max_valid = definition->max_world;
     if (!cache_with_orig) {
         // now examine what will happen if we chose to use this sig in the cache
         temp = ml_matches(mt->defs, 0, compilationsig, -1, 0, world, &min_valid, &max_valid); // TODO: use MAX_UNSPECIALIZED_CONFLICTS?
@@ -1501,6 +1502,7 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
         jl_error("method not in method table");
     JL_LOCK(&mt->writelock);
     // Narrow the world age on the method to make it uncallable
+    method->max_world = jl_world_counter;
     methodentry->max_world = jl_world_counter++;
     // Recompute ambiguities (deleting a more specific method might reveal ambiguities that it previously resolved)
     check_ambiguous_matches(mt->defs, methodentry, check_disabled_ambiguous_visitor); // TODO: decrease repeated work?
@@ -1525,7 +1527,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     JL_LOCK(&mt->writelock);
     jl_typemap_entry_t *newentry = jl_typemap_insert(&mt->defs, (jl_value_t*)mt,
             (jl_tupletype_t*)type, simpletype, jl_emptysvec, (jl_value_t*)method, 0, &method_defs,
-            method->min_world, ~(size_t)0, &oldvalue);
+            method->min_world, method->max_world, &oldvalue);
     if (oldvalue) {
         if (oldvalue == (jl_value_t*)method) {
             // redundant add of same method; no need to do anything
@@ -1982,7 +1984,7 @@ JL_DLLEXPORT int jl_is_call_ambiguous(jl_value_t *types, jl_method_t *m)
         return 0;
     for (size_t i = 0; i < jl_array_len(m->ambig); i++) {
         jl_method_t *mambig = (jl_method_t*)jl_array_ptr_ref(m->ambig, i);
-        if (jl_subtype((jl_value_t*)types, (jl_value_t*)mambig->sig))
+        if (mambig->min_world <= jl_world_counter && jl_world_counter <= mambig->max_world && jl_subtype((jl_value_t*)types, (jl_value_t*)mambig->sig))
             return 1;
     }
     return 0;
@@ -1996,7 +1998,7 @@ JL_DLLEXPORT int jl_has_call_ambiguities(jl_value_t *types, jl_method_t *m)
         return 0;
     for (size_t i = 0; i < jl_array_len(m->ambig); i++) {
         jl_method_t *mambig = (jl_method_t*)jl_array_ptr_ref(m->ambig, i);
-        if (!jl_has_empty_intersection(mambig->sig, types))
+        if (mambig->min_world <= jl_world_counter && jl_world_counter <= mambig->max_world && !jl_has_empty_intersection(mambig->sig, types))
             return 1;
     }
     return 0;

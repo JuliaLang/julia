@@ -507,6 +507,7 @@ $(eval $(call LLVM_PATCH,llvm-rL323946-LSRTy)) # Remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-D50010-VNCoercion-ni))
 $(eval $(call LLVM_PATCH,llvm-D50167-scev-umin))
 $(eval $(call LLVM_PATCH,llvm-windows-race))
+$(eval $(call LLVM_PATCH,llvm-rL326967-aligned-load)) # remove for 7.0
 endif # LLVM_VER
 
 # Remove hardcoded OS X requirements in compilter-rt cmake build

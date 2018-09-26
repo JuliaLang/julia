@@ -547,6 +547,22 @@ finally
     popfirst!(LOAD_PATH)
 end
 
+@testset "--project and JULIA_PROJECT paths should be absolutified" begin
+    mktempdir() do dir; cd(dir) do
+        mkdir("foo")
+        script = """
+        using Test
+        old = Base.active_project()
+        cd("foo")
+        @test Base.active_project() == old
+        """
+        @test success(`$(Base.julia_cmd()) --project=foo -e $(script)`)
+        withenv("JULIA_PROJECT" => "foo") do
+            @test success(`$(Base.julia_cmd()) -e $(script)`)
+        end
+    end; end
+end
+
 ## cleanup after tests ##
 
 for env in keys(envs)

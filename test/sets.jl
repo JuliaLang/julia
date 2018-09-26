@@ -264,6 +264,14 @@ end
     s = Set([1,2,3,4])
     setdiff!(s, Set([2,4,5,6]))
     @test isequal(s,Set([1,3]))
+
+    # setdiff iterates the shorter set - make sure this algorithm works
+    sa, sb = Set([1,2,3,4,5,6,7]), Set([2,3,9])
+    @test Set([1,4,5,6,7]) == setdiff(sa, sb) !== sa
+    @test Set([1,4,5,6,7]) == setdiff!(sa, sb) === sa
+    sa, sb = Set([1,2,3,4,5,6,7]), Set([2,3,9])
+    @test Set([9]) == setdiff(sb, sa) !== sb
+    @test Set([9]) == setdiff!(sb, sa) === sb
 end
 
 @testset "ordering" begin
@@ -603,4 +611,17 @@ end
             @test !issetequal(A, D(B))
         end
     end
+end
+
+struct OpenInterval{T}
+    lower::T
+    upper::T
+end
+Base.in(x, i::OpenInterval) = i.lower < x < i.upper
+Base.IteratorSize(::Type{<:OpenInterval}) = Base.SizeUnknown()
+
+@testset "Continuous sets" begin
+    i = OpenInterval(2, 4)
+    @test 3 ∈ i
+    @test issubset(3, i)
 end

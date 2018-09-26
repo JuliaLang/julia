@@ -260,7 +260,7 @@ kw"'"
 """
     const
 
-`const` is used to declare global variables which are also constant. In almost all code
+`const` is used to declare global variables whose values will not change. In almost all code
 (and particularly performance sensitive code) global variables should be declared
 constant in this way.
 
@@ -275,15 +275,17 @@ const y, z = 7, 11
 
 Note that `const` only applies to one `=` operation, therefore `const x = y = 1`
 declares `x` to be constant but not `y`. On the other hand, `const x = const y = 1`
-declares both `x` and `y` as constants.
+declares both `x` and `y` constant.
 
-Note that "constant-ness" is not enforced inside containers, so if `x` is an array or
-dictionary (for example) you can still add and remove elements.
+Note that "constant-ness" does not extend into mutable containers; only the
+association between a variable and its value is constant.
+If `x` is an array or dictionary (for example) you can still modify, add, or remove elements.
 
-Technically, you can even redefine `const` variables, although this will generate a
-warning from the compiler. The only strict requirement is that the *type* of the
-variable does not change, which is why `const` variables are much faster than regular
-globals.
+In some cases changing the value of a `const` variable gives a warning instead of
+an error.
+However, this can produce unpredictable behavior or corrupt the state of your program,
+and so should be avoided.
+This feature is intended only for convenience during interactive use.
 """
 kw"const"
 
@@ -855,7 +857,7 @@ ErrorException
     WrappedException(msg)
 
 Generic type for `Exception`s wrapping another `Exception`, such as `LoadError` and
-`InitError`. Those exceptions contain information about the the root cause of an
+`InitError`. Those exceptions contain information about the root cause of an
 exception. Subtypes define a field `error` containing the causing `Exception`.
 """
 Core.WrappedException
@@ -1082,6 +1084,8 @@ InterruptException
     applicable(f, args...) -> Bool
 
 Determine whether the given generic function has a method applicable to the given arguments.
+
+See also [`hasmethod`](@ref).
 
 # Examples
 ```jldoctest

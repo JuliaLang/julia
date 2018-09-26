@@ -111,6 +111,16 @@ let a = read21311()
     @test a[] == 1
 end
 
+# issue #29083
+f29083(;μ,σ) = μ + σ*randn()
+g29083() = f29083(μ=2.0,σ=0.1)
+let c = code_typed(g29083, ())[1][1].code
+    # make sure no call to kwfunc remains
+    @test !any(e->(isa(e,Expr) && ((e.head === :invoke && e.args[1].def.name === :kwfunc) ||
+                                   (e.head === :foreigncall && e.args[1] === QuoteNode(:jl_get_keyword_sorter)))),
+               c)
+end
+
 @testset "issue #19122: [no]inline of short func. def. with return type annotation" begin
     exf19122 = @macroexpand(@inline f19122()::Bool = true)
     exg19122 = @macroexpand(@noinline g19122()::Bool = true)
@@ -137,3 +147,7 @@ end
     (src, _) = code_typed(sum27403, Tuple{Vector{Int}})[1]
     @test !any(x -> x isa Expr && x.head === :invoke, src.code)
 end
+
+# check that type.mutable can be fully eliminated
+f_mutable_nothrow(s::String) = Val{typeof(s).mutable}
+@test length(code_typed(f_mutable_nothrow, (String,))[1][1].code) == 1

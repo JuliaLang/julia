@@ -1371,3 +1371,44 @@ end # module NonStandardIntegerRangeTest
         end
     end
 end
+
+@testset "constant-valued ranges (issues #10391 and #29052)" begin
+    for r in ((1:4), (1:1:4), (1.0:4.0))
+        if eltype(r) === Int
+            @test_broken @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0]
+            @test_broken @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0]
+            @test_broken @inferred(r + (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+            @test_broken @inferred(r .+ (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+        else
+            @test @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0]
+            @test @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0]
+            @test @inferred(r + (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+            @test @inferred(r .+ (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+        end
+        @test @inferred(r .+ (4.0:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+        @test @inferred(0.0 * r) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(0.0 .* r) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(r / Inf) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(r ./ Inf) == [0.0, 0.0, 0.0, 0.0]
+    end
+
+    @test_broken @inferred(range(0, step=0, length=4)) == [0, 0, 0, 0]
+    @test @inferred(range(0, stop=0, length=4)) == [0, 0, 0, 0]
+    @test @inferred(range(0.0, step=0.0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0.0, stop=0.0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0, step=0.0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0.0, step=0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0, stop=0.0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0.0, stop=0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+
+    z4 = 0.0 * (1:4)
+    @test @inferred(z4 .+ (1:4)) === 1.0:1.0:4.0
+    @test @inferred(z4 .+ z4) === z4
+end
+
+@testset "allocation of TwicePrecision call" begin
+    0:286.493442:360
+    0:286:360
+    @test @allocated(0:286.493442:360) == 0
+    @test @allocated(0:286:360) == 0
+end

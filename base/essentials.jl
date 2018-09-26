@@ -79,7 +79,7 @@ end
     @specialize
 
 Reset the specialization hint for an argument back to the default.
-For details, see [`@specialize`](@ref).
+For details, see [`@nospecialize`](@ref).
 """
 macro specialize(vars...)
     if nfields(vars) === 1
@@ -264,10 +264,21 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-convert(::Type{T}, x::T) where {T<:Tuple{Any, Vararg{Any}}} = x
-convert(::Type{Tuple{}}, x::Tuple{Any, Vararg{Any}}) = throw(MethodError(convert, (Tuple{}, x)))
-convert(::Type{T}, x::Tuple{Any, Vararg{Any}}) where {T<:Tuple} =
+const AtLeast1 = Tuple{Any, Vararg{Any}}
+
+# converting to empty tuple type
+convert(::Type{Tuple{}}, ::Tuple{}) = ()
+convert(::Type{Tuple{}}, x::AtLeast1) = throw(MethodError(convert, (Tuple{}, x)))
+
+# converting to tuple types with at least one element
+convert(::Type{T}, x::T) where {T<:AtLeast1} = x
+convert(::Type{T}, x::AtLeast1) where {T<:AtLeast1} =
     (convert(tuple_type_head(T), x[1]), convert(tuple_type_tail(T), tail(x))...)
+
+# converting to Vararg tuple types
+convert(::Type{Tuple{Vararg{V}}}, x::Tuple{Vararg{V}}) where {V} = x
+convert(T::Type{Tuple{Vararg{V}}}, x::Tuple) where {V} =
+    (convert(tuple_type_head(T), x[1]), convert(T, tail(x))...)
 
 # TODO: the following definitions are equivalent (behaviorally) to the above method
 # I think they may be faster / more efficient for inference,
@@ -795,7 +806,7 @@ isdone(itr, state...) = missing
     iterate(iter [, state]) -> Union{Nothing, Tuple{Any, Any}}
 
 Advance the iterator to obtain the next element. If no elements
-remain, nothing should be returned. Otherwise, a 2-tuple of the
+remain, `nothing` should be returned. Otherwise, a 2-tuple of the
 next element and the new iteration state should be returned.
 """
 function iterate end

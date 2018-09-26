@@ -449,7 +449,7 @@ julia> f()
 0
 ```
 
-However, it is occasionally useful to reuse an existing variable as the iteration variable.
+However, it is occasionally useful to reuse an existing local variable as the iteration variable.
 This can be done conveniently by adding the keyword `outer`:
 
 ```jldoctest
@@ -495,7 +495,7 @@ are constant by default.
 
 Note that `const` only affects the variable binding; the variable may be bound to a mutable
 object (such as an array), and that object may still be modified. Additionally when one tries
-to assign a value a variable that is declared constant the following scenarios are possible:
+to assign a value to a variable that is declared constant the following scenarios are possible:
 
 * if a new value has a different type than the type of the constant then an error is thrown:
 ```jldoctest
@@ -522,7 +522,7 @@ julia> const z = 100
 julia> z = 100
 100
 ```
-The last rule applies for immutable objects even if the vairable binding would change, e.g.:
+The last rule applies for immutable objects even if the variable binding would change, e.g.:
 ```julia-repl
 julia> const s1 = "1"
 "1"
@@ -555,8 +555,11 @@ WARNING: redefining constant a
  1
 ```
 
-Note that although possible, changing the value of a variable that is declared as constant
-is strongly discouraged. For instance, if a method references a constant and is already
+Note that although sometimes possible, changing the value of a `const` variable
+is strongly discouraged, and is intended only for convenience during
+interactive use.
+Changing constants can cause various problems or unexpected behaviors.
+For instance, if a method references a constant and is already
 compiled before the constant is changed then it might keep using the old value:
 ```jldoctest
 julia> const x = 1

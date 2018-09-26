@@ -81,7 +81,7 @@ identify the package in projects that depend on it.
 
 **Application:** a project which provides standalone functionality not intended
 to be reused by other Julia projects. For example a web application or a
-commmand-line utility, or simulation/analytics code accompanying a scientific paper.
+command-line utility, or simulation/analytics code accompanying a scientific paper.
 An application may have a UUID but does not need one.
 An application may also provide global configuration options for packages it
 depends on. Packages, on the other hand, may not provide global configuration
@@ -146,7 +146,7 @@ format using ranges of package versions.
 **Depot:** a directory on a system where various package-related resources live,
 including:
 
-- `environments`: shared named environments (e.g. `v0.7`, `devtools`)
+- `environments`: shared named environments (e.g. `v1.0`, `devtools`)
 - `clones`: bare clones of package repositories
 - `compiled`: cached compiled package images (`.ji` files)
 - `config`: global configuration files (e.g. `startup.jl`)
@@ -181,11 +181,11 @@ managed by system administrators.
 The Pkg REPL-mode is entered from the Julia REPL using the key `]`.
 
 ```
-(v0.7) pkg>
+(v1.0) pkg>
 ```
 
 The part inside the parenthesis of the prompt shows the name of the current project.
-Since we haven't created our own project yet, we are in the default project, located at `~/.julia/environments/v0.7`
+Since we haven't created our own project yet, we are in the default project, located at `~/.julia/environments/v1.0`
 (or whatever version of Julia you happen to run).
 
 To return to the `julia>` prompt, either press backspace when the input line is empty or press Ctrl+C.
@@ -207,15 +207,15 @@ The most frequently used one is `add` and its usage is described first.
 In the Pkg REPL packages can be added with the `add` command followed by the name of the package, for example:
 
 ```
-(v0.7) pkg> add Example
+(v1.0) pkg> add Example
    Cloning default registries into /Users/kristoffer/.julia/registries
    Cloning registry General from "https://github.com/JuliaRegistries/General.git"
   Updating registry at `~/.julia/registries/General`
   Updating git-repo `https://github.com/JuliaRegistries/General.git`
  Resolving package versions...
-  Updating `~/.julia/environments/v0.7/Project.toml`
+  Updating `~/.julia/environments/v1.0/Project.toml`
   [7876af07] + Example v0.5.1
-  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  Updating `~/.julia/environments/v1.0/Manifest.toml`
   [7876af07] + Example v0.5.1
   [8dfed614] + Test
 ```
@@ -228,7 +228,7 @@ Since standard libraries (e.g. `Test`) are shipped with Julia, they do not have 
 you have added yourself, in this case, `Example`:
 
 ```
-(v0.7) pkg> st
+(v1.0) pkg> st
     Status `Project.toml`
   [7876af07] Example v0.5.1
 ```
@@ -236,7 +236,7 @@ you have added yourself, in this case, `Example`:
 The manifest status, in addition, includes the dependencies of explicitly added packages.
 
 ```
-(v0.7) pkg> st --manifest
+(v1.0) pkg> st --manifest
     Status `Manifest.toml`
   [7876af07] Example v0.5.1
   [8dfed614] Test
@@ -256,11 +256,11 @@ julia> Example.hello("User")
 A specific version can be installed by appending a version after a `@` symbol, e.g. `@v0.4`, to the package name:
 
 ```
-(v0.7) pkg> add Example@0.4
+(v1.0) pkg> add Example@0.4
  Resolving package versions...
-  Updating `~/.julia/environments/v0.7/Project.toml`
+  Updating `~/.julia/environments/v1.0/Project.toml`
   [7876af07] + Example v0.4.1
-  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  Updating `~/.julia/environments/v1.0/Manifest.toml`
   [7876af07] + Example v0.4.1
 ```
 
@@ -268,12 +268,12 @@ If the master branch (or a certain commit SHA) of `Example` has a hotfix that ha
 we can explicitly track a branch (or commit) by appending `#branch` (or `#commit`) to the package name:
 
 ```
-(v0.7) pkg> add Example#master
+(v1.0) pkg> add Example#master
   Updating git-repo `https://github.com/JuliaLang/Example.jl.git`
  Resolving package versions...
-  Updating `~/.julia/environments/v0.7/Project.toml`
+  Updating `~/.julia/environments/v1.0/Project.toml`
   [7876af07] ~ Example v0.5.1 ⇒ v0.5.1+ #master (https://github.com/JuliaLang/Example.jl.git)
-  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  Updating `~/.julia/environments/v1.0/Manifest.toml`
   [7876af07] ~ Example v0.5.1 ⇒ v0.5.1+ #master (https://github.com/JuliaLang/Example.jl.git)
 ```
 
@@ -283,11 +283,11 @@ When updating packages, we will pull updates from that branch.
 To go back to tracking the registry version of `Example`, the command `free` is used:
 
 ```
-(v0.7) pkg> free Example
+(v1.0) pkg> free Example
  Resolving package versions...
-  Updating `~/.julia/environments/v0.7/Project.toml`
+  Updating `~/.julia/environments/v1.0/Project.toml`
   [7876af07] ~ Example v0.5.1+ #master (https://github.com/JuliaLang/Example.jl.git) ⇒ v0.5.1
-  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  Updating `~/.julia/environments/v1.0/Manifest.toml`
   [7876af07] ~ Example v0.5.1+ #master )https://github.com/JuliaLang/Example.jl.git) ⇒ v0.5.1
 ```
 
@@ -297,13 +297,13 @@ To go back to tracking the registry version of `Example`, the command `free` is 
 If a package is not in a registry, it can still be added by instead of the package name giving the URL to the repository to `add`.
 
 ```
-(v0.7) pkg> add https://github.com/fredrikekre/ImportMacros.jl
+(v1.0) pkg> add https://github.com/fredrikekre/ImportMacros.jl
   Updating git-repo `https://github.com/fredrikekre/ImportMacros.jl`
  Resolving package versions...
 Downloaded MacroTools ─ v0.4.1
-  Updating `~/.julia/environments/v0.7/Project.toml`
+  Updating `~/.julia/environments/v1.0/Project.toml`
   [e6797606] + ImportMacros v0.0.0 # (https://github.com/fredrikekre/ImportMacros.jl)
-  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  Updating `~/.julia/environments/v1.0/Manifest.toml`
   [e6797606] + ImportMacros v0.0.0 # (https://github.com/fredrikekre/ImportMacros.jl)
   [1914dd2f] + MacroTools v0.4.1
 ```
@@ -330,12 +330,12 @@ However, when you are developing a package, it is more convenient to load packag
 Let's try to `dev` a registered package:
 
 ```
-(v0.7) pkg> dev Example
+(v1.0) pkg> dev Example
   Updating git-repo `https://github.com/JuliaLang/Example.jl.git`
  Resolving package versions...
-  Updating `~/.julia/environments/v0.7/Project.toml`
+  Updating `~/.julia/environments/v1.0/Project.toml`
   [7876af07] + Example v0.5.1+ [`~/.julia/dev/Example`]
-  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  Updating `~/.julia/environments/v1.0/Manifest.toml`
   [7876af07] + Example v0.5.1+ [`~/.julia/dev/Example`]
 ```
 
@@ -347,7 +347,7 @@ If we try to `dev` a package at some branch that already exists at `~/.julia/dev
 For example:
 
 ```
-(v0.7) pkg> dev Example
+(v1.0) pkg> dev Example
   Updating git-repo `https://github.com/JuliaLang/Example.jl.git`
 [ Info: Path `/Users/kristoffer/.julia/dev/Example` exists and looks like the correct package, using existing path instead of cloning
 ```
@@ -361,11 +361,11 @@ The path will be recorded relative to the project file, unless it is given as an
 To stop tracking a path and use the registered version again, use `free`
 
 ```
-(v0.7) pkg> free Example
+(v1.0) pkg> free Example
  Resolving package versions...
-  Updating `~/.julia/environments/v0.7/Project.toml`
+  Updating `~/.julia/environments/v1.0/Project.toml`
   [7876af07] ↓ Example v0.5.1+ [`~/.julia/dev/Example`] ⇒ v0.5.1
-  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  Updating `~/.julia/environments/v1.0/Manifest.toml`
   [7876af07] ↓ Example v0.5.1+ [`~/.julia/dev/Example`] ⇒ v0.5.1
 ```
 
@@ -390,13 +390,13 @@ When new versions of packages the project is using are released, it is a good id
 to the latest compatible version. Sometimes this is not what you want. You can specify a subset of the dependencies to upgrade by giving them as arguments to `up`, e.g:
 
 ```
-(v0.7) pkg> up Example
+(v1.0) pkg> up Example
 ```
 
 The version of all other packages direct dependencies will stay the same. If you only want to update the minor version of packages, to reduce the risk that your project breaks, you can give the `--minor` flag, e.g:
 
 ```
-(v0.7) pkg> up --minor Example
+(v1.0) pkg> up --minor Example
 ```
 
 Packages that track a repository are not updated when a minor upgrade is done.
@@ -407,30 +407,30 @@ Packages that track a path are never touched by the package manager.
 A pinned package will never be updated. A package can be pinned using `pin` as for example
 
 ```
-(v0.7) pkg> pin Example
+(v1.0) pkg> pin Example
  Resolving package versions...
-  Updating `~/.julia/environments/v0.7/Project.toml`
+  Updating `~/.julia/environments/v1.0/Project.toml`
   [7876af07] ~ Example v0.5.1 ⇒ v0.5.1 ⚲
-  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  Updating `~/.julia/environments/v1.0/Manifest.toml`
   [7876af07] ~ Example v0.5.1 ⇒ v0.5.1 ⚲
 ```
 
 Note the pin symbol `⚲` showing that the package is pinned. Removing the pin is done using `free`
 
 ```
-(v0.7) pkg> free Example
-  Updating `~/.julia/environments/v0.7/Project.toml`
+(v1.0) pkg> free Example
+  Updating `~/.julia/environments/v1.0/Project.toml`
   [7876af07] ~ Example v0.5.1 ⚲ ⇒ v0.5.1
-  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  Updating `~/.julia/environments/v1.0/Manifest.toml`
   [7876af07] ~ Example v0.5.1 ⚲ ⇒ v0.5.1
 ```
 
 ### Testing packages
 
-The tests for a package can be run using `test`command:
+The tests for a package can be run using `test` command:
 
 ```
-(v0.7) pkg> test Example
+(v1.0) pkg> test Example
    Testing Example
    Testing Example tests passed
 ```
@@ -442,7 +442,7 @@ The output of the build process is directed to a file.
 To explicitly run the build step for a package the `build` command is used:
 
 ```
-(v0.7) pkg> build MbedTLS
+(v1.0) pkg> build MbedTLS
   Building MbedTLS → `~/.julia/packages/MbedTLS/h1Vu/deps/build.log`
 
 shell> cat ~/.julia/packages/MbedTLS/h1Vu/deps/build.log
@@ -455,7 +455,7 @@ shell> cat ~/.julia/packages/MbedTLS/h1Vu/deps/build.log
 
 ## Creating your own projects
 
-So far we have added packages to the default project at `~/.julia/environments/v0.7`, it is, however, easy to create other, independent, projects.
+So far we have added packages to the default project at `~/.julia/environments/v1.0`, it is, however, easy to create other, independent, projects.
 It should be pointed out if two projects uses the same package at the same version, the content of this package is not duplicated.
 In order to create a new project, create a directory for it and then activate that directory to make it the "active project" which package operations manipulate:
 
@@ -465,7 +465,7 @@ shell> mkdir MyProject
 shell> cd MyProject
 /Users/kristoffer/MyProject
 
-(v0.7) pkg> activate .
+(v1.0) pkg> activate .
 
 (MyProject) pkg> st
     Status `Project.toml`
@@ -518,7 +518,7 @@ and what packages those projects used. The rest can be deleted.
 This is done with the `gc` command:
 
 ```
-(v0.7) pkg> gc
+(v1.0) pkg> gc
     Active manifests at:
         `/Users/kristoffer/BinaryProvider/Manifest.toml`
         ...
@@ -542,7 +542,7 @@ This file is executed when the package is loaded.
 To generate files for a new package, use `pkg> generate`.
 
 ```
-(v0.7) pkg> generate HelloWorld
+(v1.0) pkg> generate HelloWorld
 ```
 
 This creates a new project `HelloWorld` with the following files (visualized with the external [`tree` command](https://linux.die.net/man/1/tree)):
@@ -731,6 +731,7 @@ Compatibility for a dependency is entered in the `Project.toml` file as for exam
 
 ```toml
 [compat]
+julia = "1.0"
 Example = "0.4.3"
 ```
 
@@ -825,7 +826,7 @@ However, nothing would be installed and your `Project.toml` and `Manifest.toml` 
 Simply clone their project using e.g. `git clone`, `cd` to the project directory and call
 
 ```
-(v0.7) pkg> activate .
+(v1.0) pkg> activate .
 
 (SomeProject) pkg> instantiate
 ```

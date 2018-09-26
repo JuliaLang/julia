@@ -98,7 +98,6 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
             path = pkg.path
         elseif info !== nothing && haskey(info, "repo-url")
             path = find_installed(pkg.name, pkg.uuid, SHA1(info["git-tree-sha1"]))
-            pkg.version = VersionNumber(info["version"])
             pkg.repo = Types.GitRepo(info["repo-url"], info["repo-rev"], SHA1(info["git-tree-sha1"]))
         else
             continue
@@ -310,38 +309,49 @@ function resolve_versions!(ctx::Context, pkgs::Vector{PackageSpec})::Dict{UUID,V
         uuid_to_name[uuid] = name
 
         uuid_idx = findfirst(isequal(uuid), uuids)
-        ver = VersionSpec()
+        info = manifest_info(ctx.env, uuid)
+        if info !== nothing && haskey(info, "version") # stdlibs might not have a version
+            ver = VersionSpec(VersionNumber(info["version"]))
+        else
+            ver = VersionSpec()
+        end
         if uuid_idx != nothing
             pkg = pkgs[uuid_idx]
-            info = manifest_info(ctx.env, uuid)
-            if info !== nothing && haskey(info, "version") # stdlibs might not have a version
-                ver = VersionNumber(info["version"])
-                    if pkg.special_action != PKGSPEC_FREED && get(info, "pinned", false)
-                        # This is a pinned package, fix its version
-                        pkg.version = ver
-                end
+            if info !== nothing && pkg.special_action != PKGSPEC_FREED && get(info, "pinned", false)
+                # This is a pinned package, fix its version
+                pkg.version = ver
             end
         else
             pkg = PackageSpec(name, uuid, ver)
             push!(pkgs, pkg)
         end
-        proj_compat = Types.project_compatibility(ctx, name)
-        v = intersect(pkg.version, proj_compat)
-        if isempty(v)
-            pkgerror(string("for package $(pkg.name) intersection between project compatibility $(proj_compat) ",
-                            "and package version $(pkg.version) is empty"))
-        end
-        pkg.version = v
-    end
-    proj_compat = Types.project_compatibility(ctx, "julia")
-    v = intersect(VERSION, proj_compat)
-    if isempty(v)
-        @warn("julia version requirement for project not satisfied")
     end
 
     # construct data structures for resolver and call it
-    reqs = Requires(pkg.uuid => VersionSpec(pkg.version) for pkg in pkgs if pkg.uuid ≠ uuid_julia)
+    # this also sets pkg.version for fixed packages
     fixed = collect_fixed!(ctx, pkgs, uuid_to_name)
+
+    # compatibility
+    proj_compat = Types.project_compatibility(ctx, "julia")
+    v = intersect(VERSION, proj_compat)
+    if isempty(v)
+        @warn "julia version requirement for project not satisfied" _module=nothing _file=nothing
+    end
+
+    for pkg in pkgs
+        proj_compat = Types.project_compatibility(ctx, pkg.name)
+        v = intersect(pkg.version, proj_compat)
+        if isempty(v)
+            pkgerror(string("empty intersection between $(pkg.name)@$(pkg.version) and project ",
+                            "compatibility $(proj_compat)"))
+        end
+        # Work around not clobbering 0.x.y+ for checked out old type of packages
+        if !(pkg.version isa VersionNumber)
+            pkg.version = v
+        end
+    end
+
+    reqs = Requires(pkg.uuid => VersionSpec(pkg.version) for pkg in pkgs if pkg.uuid ≠ uuid_julia)
     fixed[uuid_julia] = Fixed(VERSION)
     graph = deps_graph(ctx, uuid_to_name, reqs, fixed)
 
@@ -647,17 +657,8 @@ function find_stdlib_deps(ctx::Context, path::String)
     return stdlib_deps
 end
 
-function relative_project_path_if_in_project(ctx::Context, path::String)
-    # Check if path is in project => relative
-    project_path = dirname(ctx.env.project_file)
-    if startswith(normpath(path), project_path)
-        return relpath(path, project_path)
-    else
-        return abspath(path)
-    end
-end
-
-project_rel_path(ctx::Context, path::String) = joinpath(dirname(ctx.env.project_file), path)
+project_rel_path(ctx::Context, path::String) =
+    normpath(joinpath(dirname(ctx.env.project_file), path))
 
 function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothing})
     env = ctx.env
@@ -1037,7 +1038,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
     for (uuid, name, hash_or_path, build_file, version) in builds
         log_file = splitext(build_file)[1] * ".log"
         printpkgstyle(ctx, :Building,
-            rpad(name * " ", max_name + 1, "─") * "→ " * Types.pathrepr(ctx, log_file))
+            rpad(name * " ", max_name + 1, "─") * "→ " * Types.pathrepr(log_file))
         code = """
             $(Base.load_path_setup_code(false))
             cd($(repr(dirname(build_file))))
@@ -1045,7 +1046,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
             """
         cmd = ```
             $(Base.julia_cmd()) -O0 --color=no --history-file=no
-            --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
+            --startup-file=$(Base.JLOptions().startupfile == 1 ? "yes" : "no")
             --compiled-modules=$(Bool(Base.JLOptions().use_compiled_modules) ? "yes" : "no")
             --eval $code
             ```
