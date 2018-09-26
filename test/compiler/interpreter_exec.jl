@@ -63,3 +63,39 @@ let m = Meta.@lower 1 + 1
     global test29262 = false
     @test (:b, :a, :c, :b) === @eval $m
 end
+
+let m = Meta.@lower 1 + 1
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::Core.CodeInfo
+    src.code = Any[
+        # block 1
+        QuoteNode(:a),
+        QuoteNode(:b),
+        GlobalRef(@__MODULE__, :test29262),
+        # block 2
+        Expr(:enter, 11),
+        # block 3
+        Core.UpsilonNode(),
+        Core.UpsilonNode(),
+        Core.UpsilonNode(Core.SSAValue(2)),
+        Expr(:gotoifnot, Core.SSAValue(3), 10),
+        # block 4
+        Core.UpsilonNode(Core.SSAValue(1)),
+        # block 5
+        Expr(:throw_undef_if_not, :expected, false),
+        # block 6
+        Core.PhiCNode(Any[Core.SSAValue(5), Core.SSAValue(7), Core.SSAValue(9)]), # NULL, :a, :b
+        Core.PhiCNode(Any[Core.SSAValue(6)]), # NULL
+        Expr(:leave, 1),
+        # block 7
+        Expr(:return, Core.SSAValue(11)),
+    ]
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.codelocs = fill(Int32(1), nstmts)
+    Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
+    global test29262 = true
+    @test :a === @eval $m
+    global test29262 = false
+    @test :b === @eval $m
+end

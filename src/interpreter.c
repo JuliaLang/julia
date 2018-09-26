@@ -598,9 +598,18 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
         jl_value_t *stmt = jl_array_ptr_ref(stmts, ip);
         assert(!jl_is_phinode(stmt));
         size_t next_ip = ip + 1;
-        assert(!jl_is_phinode(stmt) && !jl_is_phicnode(stmt) && !jl_is_upsilonnode(stmt) && "malformed AST");
+        assert(!jl_is_phinode(stmt) && !jl_is_phicnode(stmt) && "malformed AST");
         if (jl_is_gotonode(stmt)) {
             next_ip = jl_gotonode_label(stmt) - 1;
+        }
+        else if (jl_is_upsilonnode(stmt)) {
+            jl_value_t *val = jl_fieldref_noalloc(stmt, 0);
+            if (val)
+                val = eval_value(val, s);
+            jl_value_t *phic = s->locals[jl_source_nslots(s->src) + ip];
+            assert(jl_is_ssavalue(phic));
+            ssize_t id = ((jl_ssavalue_t*)phic)->id - 1;
+            s->locals[jl_source_nslots(s->src) + id] = val;
         }
         else if (jl_is_expr(stmt)) {
             // Most exprs are allowed to end a BB by fall through
@@ -665,8 +674,11 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                     for (size_t i = 0; i < jl_array_len(values); ++i) {
                         jl_value_t *val = jl_array_ptr_ref(values, i);
                         assert(jl_is_ssavalue(val));
-                        s->locals[jl_source_nslots(s->src) + ((jl_ssavalue_t*)val)->id - 1] = jl_box_ssavalue(catch_ip);
+                        size_t upsilon = ((jl_ssavalue_t*)val)->id - 1;
+                        assert(jl_is_upsilonnode(jl_array_ptr_ref(stmts, upsilon)));
+                        s->locals[jl_source_nslots(s->src) + upsilon] = jl_box_ssavalue(catch_ip + 1);
                     }
+                    s->locals[jl_source_nslots(s->src) + catch_ip] = NULL;
                     catch_ip += 1;
                 }
                 if (!jl_setjmp(__eh.eh_ctx, 1)) {
@@ -682,7 +694,7 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                     if (jl_get_ptls_states()->exception_in_transit == jl_stackovf_exception)
                         _resetstkoflw();
 #endif
-                    ip = jl_unbox_long(jl_exprarg(stmt, 0)) - 1;
+                    ip = catch_ip;
                     continue;
                 }
             }
