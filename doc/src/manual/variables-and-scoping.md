@@ -2,7 +2,7 @@
 
 The *scope* of a variable is the region of code within which a variable is visible. Variable scoping
 helps avoid variable naming conflicts. The concept is intuitive: two functions can both have arguments
-called `x` without the two `x`'s referring to the same thing. Similarly there are many other cases
+called `x` without the two `x`'s referring to the same thing. Similarly, there are many other cases
 where different blocks of code can use the same name without referring to the same thing. The
 rules for when the same variable name does or doesn't refer to the same thing are called scope
 rules; this section spells them out in detail.
@@ -10,7 +10,7 @@ rules; this section spells them out in detail.
 Certain constructs in the language introduce *scope blocks*, which are regions of code that are
 eligible to be the scope of some set of variables. The scope of a variable cannot be an arbitrary
 set of source lines; instead, it will always line up with one of these blocks. There are two
-main types of scopes in Julia, *global scope* and *local scope*, the latter can be nested. The
+main types of scopes in Julia, *global scope* and *local scope*. The latter can be nested. The
 constructs introducing scope blocks are:
 
 # [](@id man-scope-table)
@@ -19,19 +19,19 @@ constructs introducing scope blocks are:
 
     - global scope
 
-      + module, baremodule
+      + [`module`](@ref), [`baremodule`](@ref)
 
       + at interactive prompt (REPL)
 
     - local scope (don't allow nesting)
 
-      + (mutable) struct, macro
+      + (mutable) [`struct`](@ref), [`macro`](@ref)
 
   * Scope blocks which may nest anywhere (in global or local scope):
 
     - local scope
 
-      + for, while, try-catch-finally, let
+      + [`for`](@ref), [`while`](@ref), [`try-catch-finally`](@ref try), [`let`](@ref)
 
       + functions (either syntax, anonymous & do-blocks)
 
@@ -110,8 +110,8 @@ A new local scope is introduced by most code blocks (see above
 [table](@ref man-scope-table) for a complete list).
 A local scope inherits all the variables from a parent local scope,
 both for reading and writing.
-Additionally, the local scope inherits all globals that are assigned
-to in its parent global scope block (if it is surrounded by a global `if` or `begin` scope).
+Additionally, the local scope inherits all global variables that are assigned
+in its parent global scope block (if it is surrounded by a global `if` or `begin` scope).
 Unlike global scopes, local scopes are not namespaces,
 thus variables in an inner scope cannot be retrieved from the parent scope through some sort of
 qualified access.
@@ -130,10 +130,11 @@ julia> z
 ERROR: UndefVarError: z not defined
 ```
 
-(Note, in this and all following examples it is assumed that their top-level is a global scope
-with a clean workspace, for instance a newly started REPL.)
+!!! note
+    In this and all following examples it is assumed that their top-level is a global scope
+    with a clean workspace, for instance a newly started REPL.
 
-Inside a local scope a variable can be forced to be a new local variable using the `local` keyword:
+Inside a local scope a variable can be forced to be a new local variable using the [`local`](@ref) keyword:
 
 ```jldoctest
 julia> x = 0;
@@ -147,7 +148,7 @@ julia> x
 0
 ```
 
-Inside a local scope a global variable can be assigned to by using the keyword `global`:
+Inside a local scope a global variable can be assigned to by using the keyword [`global`](@ref):
 
 ```jldoctest
 julia> for i = 1:10
@@ -184,7 +185,7 @@ global scope block unless:
   * an assignment would result in a modified *global* variable, or
   * a variable is specifically marked with the keyword `local`.
 
-Thus global variables are only inherited for reading but not for writing:
+Thus global variables are only inherited for reading, not for writing:
 
 ```jldoctest
 julia> x, y = 1, 2;
@@ -208,7 +209,7 @@ An explicit `global` is needed to assign to a global variable:
     to be a programming best-practice.
     One reason for this is that remotely changing the state of global variables in other
     modules should be done with care as it makes the local behavior of the program hard to reason about.
-    This is why the scope blocks that introduce local scope require the ``global``
+    This is why the scope blocks that introduce local scope require the `global`
     keyword to declare the intent to modify a global variable.
 
 ```jldoctest
@@ -247,7 +248,7 @@ julia> x, y # verify that global x and y are unchanged
 
 The reason to allow *modifying local* variables of parent scopes in
 nested functions is to allow constructing [`closures`](https://en.wikipedia.org/wiki/Closure_%28computer_programming%29)
-which have a private state, for instance the ``state`` variable in the
+which have a private state, for instance the `state` variable in the
 following example:
 
 ```jldoctest
@@ -262,15 +263,15 @@ julia> counter()
 2
 ```
 
-See also the closures in the examples in the next two sections. A variable
-such as `x` in the first example and `state` in the second that is inherited
+See also the closures in the examples in the next two sections. A variable,
+such as `x` in the first example and `state` in the second, that is inherited
 from the enclosing scope by the inner function is sometimes called a
 *captured* variable. Captured variables can present performance challenges
 discussed in [performance tips](@ref man-performance-tips).
 
 The distinction between inheriting global scope and nesting local scope
 can lead to some slight differences between functions
-defined in local vs. global scopes for variable assignments.
+defined in local versus global scopes for variable assignments.
 Consider the modification of the last example by moving `bar` to the global scope:
 
 ```jldoctest
@@ -467,7 +468,7 @@ julia> f()
 ## Constants
 
 A common use of variables is giving names to specific, unchanging values. Such variables are only
-assigned once. This intent can be conveyed to the compiler using the `const` keyword:
+assigned once. This intent can be conveyed to the compiler using the [`const`](@ref) keyword:
 
 ```jldoctest
 julia> const e  = 2.71828182845904523536;
