@@ -1373,6 +1373,17 @@ let src = code_typed(my_fun28173, (Int,))[1][1]
     @test lines1 == lines2
 end
 
+# Verify that extra instructions at the end of the IR
+# don't throw errors in the printing, but instead print
+# with as unnamed "!" BB.
+let src = code_typed(gcd, (Int, Int))[1][1]
+    ir = Core.Compiler.inflate_ir(src)
+    push!(ir.stmts, Core.Compiler.ReturnNode())
+    lines = split(sprint(show, ir), '\n')
+    @test isempty(pop!(lines))
+    @test pop!(lines) == "   ! ──       unreachable::#UNDEF"
+end
+
 # issue #27352
 @test_throws ArgumentError print(nothing)
 @test_throws ArgumentError print(stdout, nothing)
