@@ -432,3 +432,11 @@ end
     y = rand(UInt128)
     @test BigInt(y) % UInt128 === y
 end
+
+@testset "conversion from typemin(T)" begin
+    @test big(Int8(-128)) == big"-128"
+    @test big(Int16(-32768)) == big"-32768"
+    @test big(Int32(-2147483648)) == big"-2147483648"
+    @test big(Int64(-9223372036854775808)) == big"-9223372036854775808"
+    @test big(Int128(-170141183460469231731687303715884105728)) == big"-170141183460469231731687303715884105728"
+end
