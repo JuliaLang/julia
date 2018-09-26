@@ -7,10 +7,12 @@
 Julia does not have an analog of MATLAB's `clear` function; once a name is defined in a Julia
 session (technically, in module `Main`), it is always present.
 
-If memory usage is your concern, you can always replace objects with ones that consume less memory.
- For example, if `A` is a gigabyte-sized array that you no longer need, you can free the memory
-with `A = nothing`.  The memory will be released the next time the garbage collector runs; you can force
-this to happen with [`gc()`](@ref Base.GC.gc). Moreover, an attempt to use `A` will likely result in an error, because most methods are not defined on type `Nothing`.
+If memory usage is a concern, you can always replace objects with ones that consume less
+memory. For example, if `A` is a gigabyte-sized array that you no longer need, you can free
+the memory with `A = nothing`.  The memory will be released the next time the garbage
+collector runs; you can force this to happen with [`gc()`](@ref Base.GC.gc). Moreover, an
+attempt to use `A` will likely result in an error, because most methods are not defined on
+type `Nothing`.
 
 ### How can I modify the declaration of a type in my session?
 
@@ -74,9 +76,9 @@ When calling `change_value!(x)` in the above example, `y` is a newly created var
 to the value of `x`, i.e. `10`; then `y` is rebound to the constant `17`, while the variable
 `x` of the outer scope is left untouched.
 
-But here is a thing you should pay attention to: suppose `x` is bound to an object of type `Array`
-(or any other *mutable* type). From within the function, you cannot "unbind" `x` from this Array,
-but you can change its content. For example:
+However, if `x` is bound to an object of type `Array` (or any other *mutable* type). From
+within the function, you cannot "unbind" `x` from this Array, but you *can* change its
+content. For example:
 
 ```jldoctest
 julia> x = [1,2,3]
@@ -250,8 +252,8 @@ julia> threearr()
 
 ### [What does "type-stable" mean?](@id man-type-stability)
 
-It means that the type of the output is predictable from the types of the inputs.  In particular,
-it means that the type of the output cannot vary depending on the *values* of the inputs. The
+It means that the return type is predictable from the types of the inputs.  In particular,
+it means that the return type cannot vary depending on the *values* of the inputs. The
 following code is *not* type-stable:
 
 ```jldoctest
@@ -267,8 +269,8 @@ unstable (generic function with 1 method)
 
 It returns either an `Int` or a [`Float64`](@ref) depending on the value of its argument.
 Since Julia can't predict the return type of this function at compile-time, any computation
-that uses it will have to guard against both types possibly occurring, making generation of
-fast machine code difficult.
+that uses it must be able to cope with both return types, which makes it hard to produce
+fast machine code.
 
 ### [Why does Julia give a `DomainError` for certain seemingly-sensible operations?](@id faq-domain-errors)
 
@@ -321,15 +323,16 @@ Clearly, this is far from the way mathematical integers behave, and you might th
 ideal for a high-level programming language to expose this to the user. For numerical work where
 efficiency and transparency are at a premium, however, the alternatives are worse.
 
-One alternative to consider would be to check each integer operation for overflow and promote
-results to bigger integer types such as [`Int128`](@ref) or [`BigInt`](@ref) in the case of overflow.
-Unfortunately, this introduces major overhead on every integer operation (think incrementing a
-loop counter) – it requires emitting code to perform run-time overflow checks after arithmetic
-instructions and branches to handle potential overflows. Worse still, this would cause every computation
-involving integers to be type-unstable. As we mentioned above, [type-stability is crucial](@ref man-type-stability)
-for effective generation of efficient code. If you can't count on the results of integer operations
-being integers, it's impossible to generate fast, simple code the way C and Fortran compilers
-do.
+One alternative to consider would be to check each integer operation for overflow and
+promote results to bigger integer types such as [`Int128`](@ref) or [`BigInt`](@ref) in the
+case of overflow. Unfortunately, this would introduce a significant overhead on every
+integer operation (think incrementing a loop counter) – it requires emitting code to perform
+run-time overflow checks after arithmetic instructions and branches to handle potential
+overflows. Worse still, this would cause every computation involving integers to be
+type-unstable. As we mentioned above, [type-stability is crucial](@ref man-type-stability)
+for effective generation of efficient code. If you can't count on the results of integer
+operations being integers, it's impossible to generate fast, simple code the way C and
+Fortran compilers do.
 
 A variation on this approach, which avoids the appearance of type instability is to merge the
 `Int` and [`BigInt`](@ref) types into a single hybrid integer type, that internally changes representation
@@ -379,15 +382,16 @@ ans =
  -9223372036854775808
 ```
 
-At first blush, this seems reasonable enough since 9223372036854775807 is much closer to 9223372036854775808
-than -9223372036854775808 is and integers are still represented with a fixed size in a natural
-way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic.
-The first and most obvious issue is that this is not the way machine integer arithmetic works,
-so implementing saturated operations requires emitting instructions after each machine integer
-operation to check for underflow or overflow and replace the result with [`typemin(Int)`](@ref)
-or [`typemax(Int)`](@ref) as appropriate. This alone expands each integer operation from a single,
-fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets
-worse – saturating integer arithmetic isn't associative. Consider this Matlab computation:
+At first blush, this seems reasonable enough since 9223372036854775807 is much closer to
+9223372036854775808 than -9223372036854775808 is and integers are still represented with a
+fixed size in a natural way that is compatible with C and Fortran. Saturated integer
+arithmetic, however, is deeply problematic. The first and most obvious issue is that this is
+not the way machine integer arithmetic works, so implementing saturated operations requires
+emitting instructions after each machine integer operation to check for underflow or
+overflow and replacing the result with [`typemin(Int)`](@ref) or [`typemax(Int)`](@ref) as
+appropriate. This alone expands each integer operation from a single, fast instruction into
+half a dozen instructions, probably including branches. But it gets worse – saturating
+integer arithmetic isn't associative. Consider this Matlab computation:
 
 ```
 >> n = int64(2)^62
@@ -426,11 +430,11 @@ ans =
 Oops. Adding a `>>>` operator to Matlab wouldn't help, because saturation that occurs when adding
 `n` and `2n` has already destroyed the information necessary to compute the correct midpoint.
 
-Not only is lack of associativity unfortunate for programmers who cannot rely it for techniques
-like this, but it also defeats almost anything compilers might want to do to optimize integer
-arithmetic. For example, since Julia integers use normal machine integer arithmetic, LLVM is free
-to aggressively optimize simple little functions like `f(k) = 5k-1`. The machine code for this
-function is just this:
+Not only is lack of associativity unfortunate for programmers who cannot rely on it for
+techniques like this, but it also defeats almost anything compilers might want to do to
+optimize integer arithmetic. For example, since Julia integers use normal machine integer
+arithmetic, LLVM is free to aggressively optimize simple little functions like `f(k) =
+5k-1`. The machine code for this function is just this:
 
 ```julia-repl
 julia> code_native(f, Tuple{Int})
@@ -513,13 +517,14 @@ kind of optimization since associativity and distributivity can fail at each loo
 different outcomes depending on which iteration the failure occurs in. The compiler can unroll
 the loop, but it cannot algebraically reduce multiple operations into fewer equivalent operations.
 
-The most reasonable alternative to having integer arithmetic silently overflow is to do checked
-arithmetic everywhere, raising errors when adds, subtracts, and multiplies overflow, producing
-values that are not value-correct. In this [blog post](http://danluu.com/integer-overflow/), Dan
-Luu analyzes this and finds that rather than the trivial cost that this approach should in theory
-have, it ends up having a substantial cost due to compilers (LLVM and GCC) not gracefully optimizing
-around the added overflow checks. If this improves in the future, we could consider defaulting
-to checked integer arithmetic in Julia, but for now, we have to live with the possibility of overflow.
+The most reasonable alternative to having integer arithmetic silently overflow is to do
+checked arithmetic everywhere, raising errors when adds, subtracts, and multiplies overflow,
+producing values that are not value-correct. In this [blog
+post](http://danluu.com/integer-overflow/), Dan Luu analyzes this and finds that rather than
+the trivial cost that this approach should in theory have, it ends up having a substantial
+cost due to compilers (LLVM and GCC) not gracefully optimizing around the added overflow
+checks. If this improves in the future, we could consider defaulting to checked integer
+arithmetic in Julia, but for now, we must live with the possibility of overflow.
 
 ### What are the possible causes of an `UndefVarError` during remote execution?
 
@@ -645,8 +650,8 @@ generate efficient code when working with `Union{T, Nothing}` arguments or field
 To represent missing data in the statistical sense (`NA` in R or `NULL` in SQL), use the
 [`missing`](@ref) object. See the [`Missing Values`](@ref missing) section for more details.
 
-The empty tuple (`()`) is another form of nothingness. But, it should not really be thought of
-as nothing but rather a tuple of zero values.
+The empty tuple (`()`) is another form of nothingness. But, it should not really be thought
+of as nothing but rather a tuple of length zero.
 
 The empty (or "bottom") type, written as `Union{}` (an empty union type), is a type with
 no values and no subtypes (except itself). You will generally not need to use this type.
@@ -746,11 +751,10 @@ julia> @sync for i in 1:3
 
 ### What are the differences between zero-dimensional arrays and scalars?
 
-Zero-dimensional arrays are arrays of the form `Array{T,0}`. They behave similar
-to scalars, but there are important differences. They deserve a special mention
-because they are a special case which makes logical sense given the generic
-definition of arrays, but might be a bit unintuitive at first. The following
-line defines a zero-dimensional array:
+Zero-dimensional arrays are arrays of the form `Array{T,0}`. They behave similarly to
+scalars, but there are important differences. They deserve special mention because they are
+a special case which makes logical sense given the generic definition of arrays, although
+this might seem unintuitive at first. The following line defines a zero-dimensional array:
 
 ```
 julia> A = zeros()
@@ -800,9 +804,10 @@ binaries are tested before they are published to ensure they are fully functiona
 You may prefer the nightly version of Julia if you want to take advantage of the latest updates
 to the language, and don't mind if the version available today occasionally doesn't actually work.
 
-Finally, you may also consider building Julia from source for yourself. This option is mainly
-for those individuals who are comfortable at the command line, or interested in learning. If this
-describes you, you may also be interested in reading our [guidelines for contributing](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md).
+Finally, you may also consider building Julia from source for yourself. This option is
+mainly for those who are comfortable using the command line, or interested in learning. If this
+describes you, you may also be interested in reading our [guidelines for
+contributing](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md).
 
 Links to each of these download types can be found on the download page at [https://julialang.org/downloads/](https://julialang.org/downloads/).
 Note that not all versions of Julia are available for all platforms.
@@ -811,3 +816,4 @@ Note that not all versions of Julia are available for all platforms.
 
 Deprecated functions are removed after the subsequent release. For example, functions marked as
 deprecated in the 0.1 release will not be available starting with the 0.2 release.
+
