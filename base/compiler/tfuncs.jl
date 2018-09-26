@@ -405,11 +405,9 @@ add_tfunc(pointerref, 3, 3,
 add_tfunc(pointerset, 4, 4, (@nospecialize(a), @nospecialize(v), @nospecialize(i), @nospecialize(align)) -> a, 5)
 
 function typeof_tfunc(@nospecialize(t))
-    if isa(t, Const)
-        return Const(typeof(t.val))
-    elseif isa(t, Conditional)
-        return Const(Bool)
-    elseif isType(t)
+    isa(t, Const) && return Const(typeof(t.val))
+    t = widenconst(t)
+    if isType(t)
         tp = t.parameters[1]
         if issingletontype(tp)
             return Const(typeof(tp))
