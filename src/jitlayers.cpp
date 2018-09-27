@@ -29,6 +29,8 @@
 #include <llvm/Transforms/Vectorize.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
+#include <llvm/Transforms/IPO/FunctionAttrs.h>
+#include <llvm/Transforms/IPO/InferFunctionAttrs.h>
 
 namespace llvm {
     extern Pass *createLowerSimdLoopPass();
@@ -230,6 +232,8 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     // Clean up write barrier and ptls lowering
     PM->add(createCFGSimplificationPass());
     PM->add(createCombineMulAddPass());
+    // we just want the attrs
+    PM->add(createPostOrderFunctionAttrsLegacyPass());
 }
 
 extern "C" JL_DLLEXPORT
