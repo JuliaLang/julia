@@ -15,13 +15,14 @@ import Markdown
 Markdown.parse("```\n\$ julia\n\n$(banner)\njulia> 1 + 2\n3\n\njulia> ans\n3\n```")
 ```
 
-To exit the interactive session, type `CTRL-D` (press the Control/`^` key together with the `d` key), or type
-`exit()`. When run in interactive mode, `julia` displays a banner and prompts the user for input.
-Once the user has entered a complete expression, such as `1 + 2`, and hits enter, the interactive
-session evaluates the expression and shows its value. If an expression is entered into an interactive
-session with a trailing semicolon, its value is not shown. The variable `ans` is bound to the
-value of the last evaluated expression whether it is shown or not. The `ans` variable is only
-bound in interactive sessions, not when Julia code is run in other ways.
+To exit the interactive session, type `Ctrl-D` (press the Control/`^` key together with the
+`d` key), or type `exit()`. When run in interactive mode, `julia` displays a banner and
+prompts the user for input. Once the user has entered a complete expression, such as `1 +
+2`, and presses Enter, the interactive session evaluates the expression and shows its value.
+If an expression is entered into an interactive session with a trailing semicolon, its value
+is not shown. The variable `ans` is bound to the value of the last evaluated expression
+whether it is shown or not. The `ans` variable is only bound in interactive sessions, not
+when Julia code is run in other ways.
 
 To evaluate expressions written in a source file `file.jl`, write `include("file.jl")`.
 
@@ -82,6 +83,10 @@ Greetings! 你好! 안녕하세요?
 ...
 ```
 
+Note that although you should have a `~/.julia` directory once you've run Julia for the
+first time, you may need to create the `~/.julia/config` folder and the
+`~/.julia/config/startup.jl` file if you use it.
+
 There are various ways to run Julia code and provide options, similar to those available for the
 `perl` and `ruby` programs:
 
@@ -125,3 +130,4 @@ julia [switches] -- [programfile] [args...]
 ## Resources
 
 A curated list of useful learning resources to help new users get started can be found on the [learning](https://julialang.org/learning/) page of the main Julia web site.
+
