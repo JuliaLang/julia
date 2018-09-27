@@ -59,12 +59,9 @@ limited_worker_rss && move_to_node1("Distributed")
 
 import LinearAlgebra
 cd(dirname(@__FILE__)) do
-    n = 1
-    if net_on
-        n = min(Sys.CPU_THREADS, length(tests))
-        n > 1 && addprocs_with_testenv(n)
-        LinearAlgebra.BLAS.set_num_threads(1)
-    end
+    n = min(Sys.CPU_THREADS, length(tests))
+    n > 1 && addprocs_with_testenv(n)
+    LinearAlgebra.BLAS.set_num_threads(1)
     skipped = 0
 
     @everywhere include("testdefs.jl")
