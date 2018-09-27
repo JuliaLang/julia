@@ -366,7 +366,6 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
         )
 {
     addTargetPasses(&PM, &TM);
-    addOptimizationPasses(&PM, jl_generating_output() ? 0 : jl_options.opt_level);
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
         llvm_unreachable("Target does not support MC emission.");
 

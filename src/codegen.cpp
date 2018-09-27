@@ -1032,7 +1032,8 @@ static std::unique_ptr<Module> emit_function(
         jl_code_info_t *src,
         size_t world,
         jl_llvm_functions_t *declarations,
-        const jl_cgparams_t *params);
+        const jl_cgparams_t *params,
+        bool optimize);
 void jl_add_linfo_in_flight(StringRef name, jl_method_instance_t *linfo, const DataLayout &DL);
 
 const char *name_from_method_instance(jl_method_instance_t *li)
@@ -1138,7 +1139,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
                 pdecls = &li->functionObjectsDecls;
             else
                 pdecls = &decls;
-            m = emit_function(li, src, world, pdecls, params);
+            m = emit_function(li, src, world, pdecls, params, true);
             if (params->cached && world)
                 decls = li->functionObjectsDecls;
             //n_emit++;
@@ -1486,7 +1487,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
     jl_llvm_functions_t declarations;
     std::unique_ptr<Module> m;
     JL_TRY {
-        m = emit_function(linfo, src, world, &declarations, &params);
+        m = emit_function(linfo, src, world, &declarations, &params, optimize);
     }
     JL_CATCH {
         // something failed!
@@ -1495,9 +1496,6 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
         const char *mname = name_from_method_instance(linfo);
         jl_rethrow_with_add("error compiling %s", mname);
     }
-
-    if (optimize)
-        jl_globalPM->run(*m.get());
 
     // swap declarations for definitions and destroy declarations
     const char *fname = declarations.functionObject;
@@ -5213,7 +5211,8 @@ static std::unique_ptr<Module> emit_function(
         jl_code_info_t *src,
         size_t world,
         jl_llvm_functions_t *declarations,
-        const jl_cgparams_t *params)
+        const jl_cgparams_t *params,
+        bool optimize)
 {
     assert(declarations && "Capturing declarations is always required");
 
@@ -6560,6 +6559,9 @@ static std::unique_ptr<Module> emit_function(
         ctx.roots = NULL;
         JL_UNLOCK(&m->writelock);
     }
+
+    if (optimize)
+        jl_globalPM->run(*M);
 
     if (JL_HOOK_TEST(ctx.params, emitted_function)) {
         JL_HOOK_CALL(ctx.params, emitted_function, 3, (jl_value_t*)ctx.linfo,
