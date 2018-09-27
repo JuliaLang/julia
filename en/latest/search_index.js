@@ -2797,7 +2797,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Handling Operating System Variation",
     "title": "Handling Operating System Variation",
     "category": "section",
-    "text": "When dealing with platform libraries, it is often necessary to provide special cases for various platforms. The variable Sys.KERNEL can be used to write these special cases. There are several functions in the Sys module intended to make this easier: isunix, islinux, isapple, isbsd, and iswindows. These may be used as follows:if Sys.iswindows()\n    some_complicated_thing(a)\nendNote that islinux and isapple are mutually exclusive subsets of isunix. Additionally, there is a macro @static which makes it possible to use these functions to conditionally hide invalid code, as demonstrated in the following examples.Simple blocks:ccall((@static Sys.iswindows() ? :_fopen : :fopen), ...)Complex blocks:@static if Sys.islinux()\n    some_complicated_thing(a)\nelse\n    some_different_thing(a)\nendWhen chaining conditionals (including if/elseif/end), the @static must be repeated for each level (parentheses optional, but recommended for readability):@static Sys.iswindows() ? :a : (@static Sys.isapple() ? :b : :c)"
+    "text": "When writing cross-platform applications or libraries, it is often necessary to allow for differences between operating systems. The variable Sys.KERNEL can be used to handle such cases. There are several functions in the Sys module intended to make this easier: isunix, islinux, isapple, isbsd, and iswindows. These may be used as follows:if Sys.iswindows()\n    windows_specific_thing(a)\nendNote that islinux and isapple are mutually exclusive subsets of isunix. Additionally, there is a macro @static which makes it possible to use these functions to conditionally hide invalid code, as demonstrated in the following examples.Simple blocks:ccall((@static Sys.iswindows() ? :_fopen : :fopen), ...)Complex blocks:@static if Sys.islinux()\n    linux_specific_thing(a)\nelse\n    generic_thing(a)\nendWhen chaining conditionals (including if/elseif/end), the @static must be repeated for each level (parentheses optional, but recommended for readability):@static Sys.iswindows() ? :a : (@static Sys.isapple() ? :b : :c)"
 },
 
 {
@@ -7413,7 +7413,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
