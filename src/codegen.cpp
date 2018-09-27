@@ -2940,6 +2940,9 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
     jl_returninfo_t returninfo = get_specsig_function(jl_Module, specFunctionObject, li->specTypes, jlretty);
     FunctionType *cft = returninfo.decl->getFunctionType();
 
+    if (li->functionObjectsDecls.specFunctionAttrs)
+        returninfo.decl->addFnAttr(Attribute::ReadNone);
+
     size_t nfargs = cft->getNumParams();
     Value **argvals = (Value**)alloca(nfargs * sizeof(Value*));
     unsigned idx = 0;
@@ -6562,6 +6565,7 @@ static std::unique_ptr<Module> emit_function(
 
     if (optimize)
         jl_globalPM->run(*M);
+    declarations->specFunctionAttrs = f->hasFnAttribute(Attribute::ReadNone);
 
     if (JL_HOOK_TEST(ctx.params, emitted_function)) {
         JL_HOOK_CALL(ctx.params, emitted_function, 3, (jl_value_t*)ctx.linfo,

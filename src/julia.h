@@ -231,6 +231,7 @@ JL_EXTENSION typedef union {
 typedef struct _jl_llvm_functions_t {
     const char *functionObject;         // jl_callptr_t llvm Function name
     const char *specFunctionObject;     // specialized llvm Function name (on sig+rettype)
+    uint8_t specFunctionAttrs;          // readnone | readonly
 } jl_llvm_functions_t;
 
 // This type describes a single function body
