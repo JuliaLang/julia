@@ -8,7 +8,7 @@ using Base.Printf: @sprintf
 include("choosetests.jl")
 include("testenv.jl")
 
-tests, net_on, exit_on_error, seed = choosetests(ARGS)
+tests, exit_on_error, seed = choosetests(ARGS)
 tests = unique(tests)
 
 const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")

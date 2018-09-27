@@ -7,7 +7,7 @@ const STDLIBS = filter!(x -> isdir(joinpath(STDLIB_DIR, x)), readdir(STDLIB_DIR)
 
 """
 
-`tests, net_on, exit_on_error, seed = choosetests(choices)` selects a set of tests to be
+`tests, exit_on_error, seed = choosetests(choices)` selects a set of tests to be
 run. `choices` should be a vector of test names; if empty or set to
 `["all"]`, all tests are selected.
 
@@ -17,7 +17,6 @@ directories.
 
 Upon return:
   - `tests` is a vector of fully-expanded test names,
-  - `net_on` is true if networking is available (required for some tests),
   - `exit_on_error` is true if an error in one test should cancel
     remaining tests to be run (otherwise, all tests are run unconditionally),
   - `seed` is a seed which will be used to initialize the global RNG for each
@@ -182,5 +181,5 @@ function choosetests(choices = [])
     # Filter out tests from the test groups in the stdlibs
     filter!(!in(skip_tests), tests)
 
-    tests, net_on, exit_on_error, seed
+    tests, exit_on_error, seed
 end
