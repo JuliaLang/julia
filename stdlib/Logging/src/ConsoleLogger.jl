@@ -58,10 +58,11 @@ function default_logcolor(level)
 end
 
 function default_metafmt(level, _module, group, id, file, line)
-    color = default_logcolor(level)
+    prefix_color = default_logcolor(level)
     prefix = (level == Warn ? "Warning" : string(level))*':'
     suffix = ""
-    Info <= level < Warn && return color, prefix, suffix
+    suffix_color = :light_black
+    Info <= level < Warn && return prefix_color, prefix, suffix_color, suffix
     _module !== nothing && (suffix *= "$(_module)")
     if file !== nothing
         _module !== nothing && (suffix *= " ")
@@ -71,7 +72,7 @@ function default_metafmt(level, _module, group, id, file, line)
         end
     end
     !isempty(suffix) && (suffix = "@ " * suffix)
-    return color, prefix, suffix
+    return prefix_color, prefix, suffix_color, suffix
 end
 
 # Length of a string as it will appear in the terminal (after ANSI color codes
@@ -127,7 +128,8 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
 
     # Format lines as text with appropriate indentation and with a box
     # decoration on the left.
-    color,prefix,suffix = logger.meta_formatter(level, _module, group, id, filepath, line)
+    prefix_color, prefix, suffix_color ,suffix =
+        logger.meta_formatter(level, _module, group, id, filepath, line)
     minsuffixpad = 2
     buf = IOBuffer()
     iob = IOContext(buf, logger.stream)
@@ -145,15 +147,15 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
                  i == 1                ? "┌ " :
                  i < length(msglines)  ? "│ " :
                                          "└ "
-        printstyled(iob, boxstr, bold=true, color=color)
+        printstyled(iob, boxstr, bold=true, color=prefix_color)
         if i == 1 && !isempty(prefix)
-            printstyled(iob, prefix, " ", bold=true, color=color)
+            printstyled(iob, prefix, " ", bold=true, color=prefix_color)
         end
         print(iob, " "^indent, msg)
         if i == length(msglines) && !isempty(suffix)
             npad = max(0, justify_width - nonpadwidth) + minsuffixpad
             print(iob, " "^npad)
-            printstyled(iob, suffix, color=:light_black)
+            printstyled(iob, suffix, color=suffix_color)
         end
         println(iob)
     end

@@ -43,28 +43,28 @@ import Logging: min_enabled_level, shouldlog, handle_message
 
     @testset "Default metadata formatting" begin
         @test Logging.default_metafmt(Logging.Debug, Base, :g, :i, expanduser("~/somefile.jl"), 42) ==
-            (:blue,      "Debug:",   "@ Base ~/somefile.jl:42")
+            (:blue,      "Debug:",   :light_black, "@ Base ~/somefile.jl:42")
         @test Logging.default_metafmt(Logging.Info,  Main, :g, :i, "a.jl", 1) ==
-            (:cyan,      "Info:",    "")
+            (:cyan,      "Info:",    :light_black, "")
         @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", 2) ==
-            (:yellow,    "Warning:", "@ Main b.jl:2")
+            (:yellow,    "Warning:", :light_black, "@ Main b.jl:2")
         @test Logging.default_metafmt(Logging.Error, Main, :g, :i, "", 0) ==
-            (:light_red, "Error:",   "@ Main :0")
+            (:light_red, "Error:",   :light_black, "@ Main :0")
         # formatting of nothing
         @test Logging.default_metafmt(Logging.Warn,  nothing, :g, :i, "b.jl", 2) ==
-            (:yellow,    "Warning:", "@ b.jl:2")
+            (:yellow,    "Warning:", :light_black, "@ b.jl:2")
         @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, nothing, 2) ==
-            (:yellow,    "Warning:", "@ Main")
+            (:yellow,    "Warning:", :light_black, "@ Main")
         @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", nothing) ==
-            (:yellow,    "Warning:", "@ Main b.jl")
+            (:yellow,    "Warning:", :light_black, "@ Main b.jl")
         @test Logging.default_metafmt(Logging.Warn,  nothing, :g, :i, nothing, 2) ==
-            (:yellow,    "Warning:", "")
+            (:yellow,    "Warning:", :light_black, "")
         @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", 2:5) ==
-            (:yellow,    "Warning:", "@ Main b.jl:2-5")
+            (:yellow,    "Warning:", :light_black, "@ Main b.jl:2-5")
     end
 
     function dummy_metafmt(level, _module, group, id, file, line)
-        :cyan,"PREFIX","SUFFIX"
+        :cyan,"PREFIX",:light_black,"SUFFIX"
     end
 
     # Log formatting
@@ -98,7 +98,7 @@ import Logging: min_enabled_level, shouldlog, handle_message
     # Full metadata formatting
     @test genmsg("msg", level=Logging.Debug,
                  meta_formatter=(level, _module, group, id, file, line)->
-                                (:white,"Foo!", "$level $_module $group $id $file $line")) ==
+                                (:white,"Foo!",:red, "$level $_module $group $id $file $line")) ==
     """
     ┌ Foo! msg
     └ Debug Main a_group an_id some/path.jl 101
@@ -116,11 +116,11 @@ import Logging: min_enabled_level, shouldlog, handle_message
         └ SUFFIX
         """
         # Behavior with empty prefix / suffix
-        @test genmsg("msg", meta_formatter=(args...)->(:white, "PREFIX", "")) ==
+        @test genmsg("msg", meta_formatter=(args...)->(:white, "PREFIX", :red, "")) ==
         """
         [ PREFIX msg
         """
-        @test genmsg("msg", meta_formatter=(args...)->(:white, "", "SUFFIX")) ==
+        @test genmsg("msg", meta_formatter=(args...)->(:white, "", :red, "SUFFIX")) ==
         """
         ┌ msg
         └ SUFFIX
