@@ -53,8 +53,8 @@ julia> ∑(2, 3)
 
 ## Argument Passing Behavior
 
-Julia function arguments follow a convention sometimes called "pass-by-sharing" or
-"pass-by-reference". This means that values are not copied when they are passed to
+Julia function arguments follow a convention sometimes called "pass-by-sharing".
+This means that values are not copied when they are passed to
 functions. The function arguments themselves act as new variable *bindings* (new locations
 that can refer to values), but the values they refer to are identical to the passed in
 values. Modifications to mutable values (such as `Array`s) made within a function will be
