@@ -288,6 +288,7 @@ function BigInt(x::Integer)
     z = MPZ.realloc2(nd)
     s = sign(x)
     s == -1 && (x = -x)
+    x = unsigned(x)
     size = 0
     limbnbits = sizeof(Limb) << 3
     while nd > 0

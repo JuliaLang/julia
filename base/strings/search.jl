@@ -257,7 +257,6 @@ findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, i)
 
 """
     findlast(pattern::AbstractString, string::AbstractString)
-    findlast(pattern::Regex, string::String)
 
 Find the last occurrence of `pattern` in `string`. Equivalent to
 [`findlast(pattern, string, lastindex(s))`](@ref).
@@ -406,11 +405,8 @@ end
 
 """
     findprev(pattern::AbstractString, string::AbstractString, start::Integer)
-    findprev(pattern::Regex, string::String, start::Integer)
 
 Find the previous occurrence of `pattern` in `string` starting at position `start`.
-`pattern` can be either a string, or a regular expression, in which case `string`
-must be of type `String`.
 
 The return value is a range of indices where the matching sequence is found, such that
 `s[findprev(x, s, i)] == x`:

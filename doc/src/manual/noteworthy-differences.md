@@ -182,7 +182,8 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Julia does not support the `NULL` type. The closest equivalent is [`nothing`](@ref), but it
     behaves like a scalar value rather than like a list. Use `x === nothing` instead of `is.null(x)`.
   * In Julia, missing values are represented by the [`missing`](@ref) object rather than by `NA`.
-    Use [`ismissing(x)`](@ref) instead of `isna(x)`. The [`skipmissing`](@ref) function is generally
+    Use [`ismissing(x)`](@ref) (or `ismissing.(x)` for element-wise operation on vectors) instead of
+    `is.na(x)`. The [`skipmissing`](@ref) function is generally
     used instead of `na.rm=TRUE` (though in some particular cases functions take a `skipmissing`
     argument).
   * Julia lacks the equivalent of R's `assign` or `get`.

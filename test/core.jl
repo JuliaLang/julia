@@ -6715,6 +6715,22 @@ struct T29145{A,B}
 end
 @test_throws TypeError T29145()
 
+# interpreted but inferred/optimized top-level expressions with vars
+let code = """
+           while true
+               try
+                   this_is_undefined_29213
+                   ed = 0
+                   break
+               finally
+                   break
+               end
+           end
+           print(42)
+           """
+    @test read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String) == "42"
+end
+
 # issue #29175
 function f29175(tuple::T) where {T<:Tuple}
     prefix::Tuple{T.parameters[1:end-1]...} = tuple[1:length(T.parameters)-1]

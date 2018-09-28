@@ -1246,7 +1246,6 @@ Create a project called `pkgname` in the current folder.
     precompile
 
 Precompile all the dependencies of the project by running `import` on all of them in a new process.
-The `startup.jl` file is disabled during precompilation unless julia is started with `--startup-file=yes`.
     """,
 ),( CMD_STATUS,
     ["status", "st"],

@@ -477,26 +477,22 @@ end
     @inbounds begin
         mi = (lo+hi)>>>1
 
-        # sort the values in v[lo], v[mi], v[hi]
-
-        if lt(o, v[mi], v[lo])
+        # sort v[mi] <= v[lo] <= v[hi] such that the pivot is immediately in place
+        if lt(o, v[lo], v[mi])
             v[mi], v[lo] = v[lo], v[mi]
         end
-        if lt(o, v[hi], v[mi])
-            if lt(o, v[hi], v[lo])
-                v[lo], v[mi], v[hi] = v[hi], v[lo], v[mi]
+
+        if lt(o, v[hi], v[lo])
+            if lt(o, v[hi], v[mi])
+                v[hi], v[lo], v[mi] = v[lo], v[mi], v[hi]
             else
-                v[hi], v[mi] = v[mi], v[hi]
+                v[hi], v[lo] = v[lo], v[hi]
             end
         end
 
-        # move v[mi] to v[lo] and use it as the pivot
-        v[lo], v[mi] = v[mi], v[lo]
-        pivot = v[lo]
+        # return the pivot
+        return v[lo]
     end
-
-    # return the pivot
-    return pivot
 end
 
 # partition!
