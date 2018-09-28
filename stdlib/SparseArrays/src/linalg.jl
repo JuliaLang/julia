@@ -1023,7 +1023,7 @@ function lmul!(b::Number, A::SparseMatrixCSC)
     return A
 end
 
-function rmul!(A::SparseMatrixCSC, D::Diagonal{T}) where T
+function rmul!(A::SparseMatrixCSC, D::Diagonal)
     m, n = size(A)
     (n == size(D, 1)) || throw(DimensionMismatch())
     Anzval = A.nzval
@@ -1033,7 +1033,7 @@ function rmul!(A::SparseMatrixCSC, D::Diagonal{T}) where T
     return A
 end
 
-function lmul!(D::Diagonal{T}, A::SparseMatrixCSC) where T
+function lmul!(D::Diagonal, A::SparseMatrixCSC)
     m, n = size(A)
     (m == size(D, 2)) || throw(DimensionMismatch())
     Anzval = A.nzval
