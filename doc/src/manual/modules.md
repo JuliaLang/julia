@@ -316,7 +316,7 @@ that also generates compiled code.
 
 Other known potential failure scenarios include:
 
-1. Global counters (for example, for attempting to uniquely identify objects) Consider the following
+1. Global counters (for example, for attempting to uniquely identify objects), consider the following
    code snippet:
 
    ```julia
@@ -341,12 +341,12 @@ Other known potential failure scenarios include:
    future, a mechanism may be provided to register an initializer function.)
 3. Depending on compile-time side-effects persisting through load-time. Example include: modifying
    arrays or other variables in other Julia modules; maintaining handles to open files or devices;
-   storing pointers to other system resources (including memory);
+   storing pointers to other system resources (including memory).
 4. Creating accidental "copies" of global state from another module, by referencing it directly instead
    of via its lookup path. For example, (in global scope):
 
    ```julia
-   #mystdout = Base.stdout #= will not work correctly, since this will copy Base.stdout into this module =#
+   # mystdout = Base.stdout #= will not work correctly, since this will copy Base.stdout into this module. =#
    # instead use accessor functions:
    getstdout() = Base.stdout #= best option =#
    # or move the assignment into the runtime:
@@ -359,15 +359,15 @@ code to help the user avoid other wrong-behavior situations:
 1. Calling [`eval`](@ref) to cause a side-effect in another module. This will also cause a warning to be
    emitted when the incremental precompile flag is set.
 2. `global const` statements from local scope after `__init__()` has been started (see issue #12010
-   for plans to add an error for this)
+   for plans to add an error for this and had been resolved by PR #25586).
 3. Replacing a module is a runtime error while doing an incremental precompile.
 
 A few other points to be aware of:
 
 1. No code reload / cache invalidation is performed after changes are made to the source files themselves,
-   (including by [`Pkg.update`], and no cleanup is done after [`Pkg.rm`]
+   (including by [`Pkg.update`], and no cleanup is done after [`Pkg.rm`].
 2. The memory sharing behavior of a reshaped array is disregarded by precompilation (each view gets
-   its own copy)
+   its own copy).
 3. Expecting the filesystem to be unchanged between compile-time and runtime e.g. [`@__FILE__`](@ref)/`source_path()`
    to find resources at runtime, or the BinDeps `@checked_lib` macro. Sometimes this is unavoidable.
    However, when possible, it can be good practice to copy resources into the module at compile-time
