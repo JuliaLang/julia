@@ -955,6 +955,16 @@ function test_intersection()
     @testintersect(Tuple{Ref{Ref{T}} where T, Ref},
                    Tuple{Ref{T}, Ref{T}} where T,
                    Tuple{Ref{Ref{T}}, Ref{Ref{T}}} where T)
+    # issue #29208
+    @testintersect(Tuple{Ref{Ref{T}} where T, Ref{Ref{Int}}},
+                   Tuple{Ref{T}, Ref{T}} where T,
+                   Tuple{Ref{Ref{Int}}, Ref{Ref{Int}}})
+    @testintersect(Tuple{Vector{Pair{K,V}}, Vector{Pair{K,V}}} where K where V,
+                   Tuple{(Array{Pair{Ref{_2},_1},1} where _2 where _1),
+                         Array{Pair{Ref{Int64},Rational{Int64}},1}},
+                   Tuple{Vector{Pair{Ref{Int64},Rational{Int64}}},
+                         Vector{Pair{Ref{Int64},Rational{Int64}}}})
+    @testintersect(Vector{>:Missing}, Vector{Int}, Union{})
 
     # issue #23685
     @testintersect(Pair{Type{Z},Z} where Z,

@@ -1379,13 +1379,15 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     if (param == 2) {
         jl_value_t *ub = R ? intersect_ufirst(a, bb->ub, e, d) : intersect_ufirst(bb->ub, a, e, d);
         JL_GC_PUSH2(&ub, &root);
-        save_env(e, &root, &se);
-        int issub = subtype_in_env(bb->lb, ub, e);
-        restore_env(e, root, &se);
-        free(se.buf);
-        if (!issub) {
-            JL_GC_POP();
-            return jl_bottom_type;
+        if (!jl_has_free_typevars(ub) && !jl_has_free_typevars(bb->lb)) {
+            save_env(e, &root, &se);
+            int issub = subtype_in_env(bb->lb, ub, e);
+            restore_env(e, root, &se);
+            free(se.buf);
+            if (!issub) {
+                JL_GC_POP();
+                return jl_bottom_type;
+            }
         }
         if (ub != (jl_value_t*)b) {
             if (jl_has_free_typevars(ub)) {
