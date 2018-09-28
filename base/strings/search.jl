@@ -238,8 +238,8 @@ must be of type `String`.
 The return value is a range of indices where the matching sequence is found, such that
 `s[findnext(x, s, i)] == x`:
 
-`findnext("substring", string, i)` = `start:end` such that
-`string[start:end] == "substring"`, or `nothing` if unmatched.
+`findnext("substring", string, i)` == `start:stop` such that
+`string[start:stop] == "substring"` and `i <= start`, or `nothing` if unmatched.
 
 # Examples
 ```jldoctest
@@ -411,8 +411,8 @@ Find the previous occurrence of `pattern` in `string` starting at position `star
 The return value is a range of indices where the matching sequence is found, such that
 `s[findprev(x, s, i)] == x`:
 
-`findprev("substring", string, i)` = `start:end` such that
-`string[start:end] == "substring"`, or `nothing` if unmatched.
+`findprev("substring", string, i)` == `start:stop` such that
+`string[start:stop] == "substring"` and `stop <= i`, or `nothing` if unmatched.
 
 # Examples
 ```jldoctest
