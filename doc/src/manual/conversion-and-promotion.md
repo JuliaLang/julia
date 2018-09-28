@@ -300,7 +300,7 @@ be promoted to 64-bit floating-point. The promotion type does not need to be one
 types, however; the following promotion rules both occur in Julia Base:
 
 ```julia
-promote_rule(::Type{UInt8}, ::Type{Int8}) = Int
+promote_rule(::Type{BigInt}, ::Type{Float64}) = BigFloat
 promote_rule(::Type{BigInt}, ::Type{Int8}) = BigInt
 ```
 
