@@ -251,3 +251,6 @@ struct InetAddr{T<:IPAddr}
 end
 
 InetAddr(ip::IPAddr, port) = InetAddr{typeof(ip)}(ip, port)
+function show(io::IO, addr::InetAddr{T}) where T
+    print(io, "InetAddr{", T, "}(", addr.host, ", ", Int(addr.port), ")")
+end
