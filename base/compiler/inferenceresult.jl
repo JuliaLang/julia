@@ -123,6 +123,7 @@ function matching_cache_argtypes(linfo::MethodInstance, ::Nothing)
 end
 
 function is_argtype_mismatch(@nospecialize(a), @nospecialize(b))
+    # TODO `===` is correct but too strict for PartialTuples
     return (isa(a, Const) || isa(b, Const) || isa(a, PartialTuple) || isa(b, PartialTuple)) && !(a === b)
 end
 
