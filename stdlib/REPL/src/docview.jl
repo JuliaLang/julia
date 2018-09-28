@@ -293,32 +293,57 @@ repl(io::IO, other) = esc(:(@doc $other))
 
 repl(x) = repl(stdout, x)
 
-_repl_typeof(arg::Symbol) = :(::(@isdefined($arg) ? typeof($arg) : Any))
-_repl_typeof(arg) = isexpr(arg, :kw) ? :(Expr(:kw, arg[1], _repl_typeof(arg[2]))) :
-                                       :(::typeof($arg))
-
 function _repl(x)
-    if isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args)
+    if isexpr(x, :call)
         # determine the types of the values
-        if length(x.args) >= 2 && isexpr(x.args[2], :parameters)
-            kwargs = x.args[2]
-            _args =  x.args[3:end]
-        else
-            kwargs = Expr(:parameters)
-            _args = x.args[2:end]
-        end
-        args = Any[]
-        for arg in _args
-            if isexpr(arg, :kw)
-                push!(kwargs.args, arg)
+        kwargs = nothing
+        pargs = Any[]
+        for arg in x.args[2:end]
+            if isexpr(arg, :parameters)
+                kwargs = map(arg.args) do kwarg
+                    if kwarg isa Symbol
+                        kwarg = :($kwarg::Any)
+                    elseif isexpr(kwarg, :kw)
+                        lhs = kwarg.args[1]
+                        rhs = kwarg.args[2]
+                        if lhs isa Symbol
+                            if rhs isa Symbol
+                                kwarg.args[1] = :($lhs::(@isdefined($rhs) ? typeof($rhs) : Any))
+                            else
+                                kwarg.args[1] = :($lhs::typeof($rhs))
+                            end
+                        end
+                    end
+                    kwarg
+                end
+            elseif isexpr(arg, :kw)
+                if kwargs == nothing
+                    kwargs = Any[]
+                end
+                lhs = arg.args[1]
+                rhs = arg.args[2]
+                if lhs isa Symbol
+                    if rhs isa Symbol
+                        arg.args[1] = :($lhs::(@isdefined($rhs) ? typeof($rhs) : Any))
+                    else
+                        arg.args[1] = :($lhs::typeof($rhs))
+                    end
+                end
+                push!(kwargs, arg)
             else
-                push!(args, arg)
+                if arg isa Symbol
+                    arg = :($arg::(@isdefined($arg) ? typeof($arg) : Any))
+                elseif !isexpr(arg, :(::))
+                    arg = :(::typeof($arg))
+                end
+                push!(pargs, arg)
             end
         end
-        args = _repl_typeof.(args)
-        kwargs.args = _repl_typeof.(kwargs.args)
-
-        x.args = Any[x.args[1], kwargs, args...]
+        if kwargs == nothing
+            x.args = Any[x.args[1], pargs...]
+        else
+            x.args = Any[x.args[1], Expr(:parameters, kwargs...), pargs...]
+        end
     end
     #docs = lookup_doc(x) # TODO
     docs = esc(:(@doc $x))
