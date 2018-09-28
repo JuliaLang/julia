@@ -255,6 +255,13 @@ int jl_obviously_unequal(jl_value_t *a, jl_value_t *b)
     return obviously_unequal(a, b);
 }
 
+static int in_union(jl_value_t *u, jl_value_t *x)
+{
+    if (u == x) return 1;
+    if (!jl_is_uniontype(u)) return 0;
+    return in_union(((jl_uniontype_t*)u)->a, x) || in_union(((jl_uniontype_t*)u)->b, x);
+}
+
 static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
 {
     if (a == b || a == (jl_value_t*)jl_any_type || b == (jl_value_t*)jl_any_type)
@@ -315,6 +322,26 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
         for(i=0; i < np; i++) {
             jl_value_t *ai = jl_tparam(ad,i);
             jl_value_t *bi = jl_tparam(bd,i);
+            if (!istuple && specificity) {
+                // X{<:SomeDataType} and X{Union{Y,Z,...}} need to be disjoint to
+                // avoid this transitivity problem:
+                // A = Tuple{Type{LinearIndices{N,R}}, LinearIndices{N}} where {N,R}
+                // B = Tuple{Type{T},T} where T<:AbstractArray
+                // C = Tuple{Type{Union{Nothing, T}}, Union{Nothing, T}} where T
+                // A is more specific than B. It would be easy to think B is more specific
+                // than C, but we can't have that since A should not be more specific than C.
+                jl_value_t *aub = jl_is_typevar(ai) ? ((jl_tvar_t*)ai)->ub : ai;
+                jl_value_t *bub = jl_is_typevar(bi) ? ((jl_tvar_t*)bi)->ub : bi;
+                aub = jl_unwrap_unionall(aub);
+                bub = jl_unwrap_unionall(bub);
+                if ((jl_is_typevar(ai) + jl_is_typevar(bi) < 2) &&
+                    aub != (jl_value_t*)jl_any_type && bub != (jl_value_t*)jl_any_type &&
+                    ((jl_is_uniontype(aub) && jl_is_datatype(bub) && !in_union(aub, bub) &&
+                      (jl_is_typevar(bi) || !jl_is_typevar(ai))) ||
+                     (jl_is_uniontype(bub) && jl_is_datatype(aub) && !in_union(bub, aub) &&
+                      (jl_is_typevar(ai) || !jl_is_typevar(bi)))))
+                    return 1;
+            }
             if (jl_is_typevar(ai) || jl_is_typevar(bi))
                 continue;
             if (jl_is_type(ai)) {
@@ -342,13 +369,6 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
         return 1;
     }
     return 0;
-}
-
-static int in_union(jl_value_t *u, jl_value_t *x)
-{
-    if (u == x) return 1;
-    if (!jl_is_uniontype(u)) return 0;
-    return in_union(((jl_uniontype_t*)u)->a, x) || in_union(((jl_uniontype_t*)u)->b, x);
 }
 
 // compute a least upper bound of `a` and `b`
