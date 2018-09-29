@@ -647,7 +647,7 @@ function to_tuple_type(@nospecialize(t))
         t = Tuple{t...}
     end
     if isa(t,Type) && t<:Tuple
-        for p in t.parameters
+        for p in unwrap_unionall(t).parameters
             if !(isa(p,Type) || isa(p,TypeVar))
                 error("argument tuple type must contain only types")
             end
@@ -660,8 +660,12 @@ end
 
 function signature_type(@nospecialize(f), @nospecialize(args))
     f_type = isa(f, Type) ? Type{f} : typeof(f)
-    arg_types = isa(args, Type) ? args.parameters : args
-    return Tuple{f_type, arg_types...}
+    if isa(args, Type)
+        u = unwrap_unionall(args)
+        return rewrap_unionall(Tuple{f_type, u.parameters...}, args)
+    else
+        return Tuple{f_type, args...}
+    end
 end
 
 """
