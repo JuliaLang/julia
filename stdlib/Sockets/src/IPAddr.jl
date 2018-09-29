@@ -252,5 +252,8 @@ end
 
 InetAddr(ip::IPAddr, port) = InetAddr{typeof(ip)}(ip, port)
 function show(io::IO, addr::InetAddr{T}) where T
-    print(io, "InetAddr{", T, "}(", addr.host, ", ", Int(addr.port), ")")
+    show(io, typeof(addr))
+    print(io, "(")
+    show(io, addr.host)
+    print(io, ", ", Int(addr.port), ")")
 end
