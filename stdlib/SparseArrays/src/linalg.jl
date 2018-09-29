@@ -1017,8 +1017,30 @@ function rmul!(A::SparseMatrixCSC, b::Number)
     rmul!(A.nzval, b)
     return A
 end
+
 function lmul!(b::Number, A::SparseMatrixCSC)
     lmul!(b, A.nzval)
+    return A
+end
+
+function rmul!(A::SparseMatrixCSC, D::Diagonal)
+    m, n = size(A)
+    (n == size(D, 1)) || throw(DimensionMismatch())
+    Anzval = A.nzval
+    @inbounds for col = 1:n, p = A.colptr[col]:(A.colptr[col + 1] - 1)
+         Anzval[p] *= D.diag[col]
+    end
+    return A
+end
+
+function lmul!(D::Diagonal, A::SparseMatrixCSC)
+    m, n = size(A)
+    (m == size(D, 2)) || throw(DimensionMismatch())
+    Anzval = A.nzval
+    Arowval = A.rowval
+    @inbounds for col = 1:n, p = A.colptr[col]:(A.colptr[col + 1] - 1)
+        Anzval[p] *= D.diag[Arowval[p]]
+    end
     return A
 end
 
