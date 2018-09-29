@@ -834,15 +834,26 @@ cvt_iintrinsic(LLVMUItoFP, uitofp)
 cvt_iintrinsic(LLVMFPtoSI, fptosi)
 cvt_iintrinsic(LLVMFPtoUI, fptoui)
 
-#define fpcvt(pr, a) \
+#define fptrunc(pr, a) \
+        if (!(osize < 8 * sizeof(a))) \
+            jl_error("fptrunc: output bitsize must be < input bitsize"); \
         if (osize == 32) \
             *(float*)pr = a; \
         else if (osize == 64) \
             *(double*)pr = a; \
         else \
-            jl_error("fptrunc/fpext: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
-un_fintrinsic_withtype(fpcvt,fptrunc)
-un_fintrinsic_withtype(fpcvt,fpext)
+            jl_error("fptrunc: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
+#define fpext(pr, a) \
+        if (!(osize > 8 * sizeof(a))) \
+            jl_error("fpext: output bitsize must be > input bitsize"); \
+        if (osize == 32) \
+            *(float*)pr = a; \
+        else if (osize == 64) \
+            *(double*)pr = a; \
+        else \
+            jl_error("fpext: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
+un_fintrinsic_withtype(fptrunc,fptrunc)
+un_fintrinsic_withtype(fpext,fpext)
 
 // checked arithmetic
 #define check_sadd_int(a,b) \
