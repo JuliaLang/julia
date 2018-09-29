@@ -321,17 +321,6 @@ end
 
 length(s::BitSet) = bitcount(s.bits) # = mapreduce(count_ones, +, s.bits; init=0)
 
-function show(io::IO, s::BitSet)
-    print(io, "BitSet([")
-    first = true
-    for n in s
-        !first && print(io, ", ")
-        print(io, n)
-        first = false
-    end
-    print(io, "])")
-end
-
 function _check0(a::Vector{UInt64}, b::Int, e::Int)
     @inbounds for i in b:e
         a[i] == CHK0 || return false

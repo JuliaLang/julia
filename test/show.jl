@@ -1402,3 +1402,13 @@ end
 replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color => true),
                                          MIME("text/plain"), x), x)
 @test occursin("\e[", replstrcolor(`curl abc`))
+
+# PR 29143: Show BitSet according to IOContext
+@testset "Limited sets in REPL" begin
+    @test replstr(BitSet(1:2)) == "BitSet([1, 2])"
+    for s in [Set,BitSet]
+        @test !occursin("\u2026", replstr(s(1:2)))
+        @test occursin("\u2026", replstr(s(1:200)))
+        @test length(replstr(s(1:200))) < 200
+    end
+end
