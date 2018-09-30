@@ -633,6 +633,10 @@ expression. The default argument is supplied by declaring fields of the form `fi
 default` or `field = default`. If no default is provided then the keyword argument becomes
 a required keyword argument in the resulting type constructor.
 
+Inner constructors can still be defined, but at least one should accept arguments in the
+same form as the default inner constructor (i.e. one positional argument per field) in
+order to function correctly with the keyword outer constructor.
+
 # Examples
 ```jldoctest
 julia> Base.@kwdef struct Foo
