@@ -61,7 +61,7 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, s
     any(pkg -> Types.collides_with_project(ctx.env, pkg), pkgs) &&
         pkgerror("Cannot $mode package with the same name or uuid as the project")
 
-    Operations.add_or_develop(ctx, pkgs; new_git=new_git)
+    Operations.add_or_develop(ctx, pkgs; new_git=new_git, mode=mode)
     ctx.preview && preview_info()
     return
 end

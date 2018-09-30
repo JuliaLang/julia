@@ -126,6 +126,7 @@ temp_pkg_dir() do project_path
         Pkg.add(TEST_PKG.name)
         @test isinstalled(TEST_PKG)
         @eval import $(Symbol(TEST_PKG.name))
+        @test_throws SystemError open(pathof(eval(Symbol(TEST_PKG.name))), "w") do io end  # check read-only
         Pkg.rm(TEST_PKG.name; preview = true)
         @test isinstalled(TEST_PKG)
         Pkg.rm(TEST_PKG.name)
@@ -318,6 +319,8 @@ temp_pkg_dir() do project_path
     @testset "libgit2 downloads" begin
         Pkg.add(TEST_PKG.name; use_libgit2_for_all_downloads=true)
         @test haskey(Pkg.installed(), TEST_PKG.name)
+        @eval import $(Symbol(TEST_PKG.name))
+        @test_throws SystemError open(pathof(eval(Symbol(TEST_PKG.name))), "w") do io end  # check read-only
         Pkg.rm(TEST_PKG.name)
     end
 
