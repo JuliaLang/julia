@@ -86,14 +86,11 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
 {
     jl_value_t *r;
     JL_TRY {
-        const char *filename = "none";
+        const char filename[] = "none";
         jl_value_t *ast = jl_parse_input_line(str, strlen(str),
                 filename, strlen(filename));
         JL_GC_PUSH1(&ast);
-        size_t last_age = jl_get_ptls_states()->world_age;
-        jl_get_ptls_states()->world_age = jl_get_world_counter();
         r = jl_toplevel_eval_in(jl_main_module, ast);
-        jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }

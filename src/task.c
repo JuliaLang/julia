@@ -254,16 +254,6 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
     ptls->pgcstack = t->gcstack;
     ptls->world_age = t->world_age;
     t->gcstack = NULL;
-
-    // DEPRECATED:
-    // restore task's current module, looking at parent tasks
-    // if it hasn't set one.
-    jl_task_t *last = t;
-    while (last->current_module == NULL && last != last->parent)
-        last = last->parent;
-    if (last->current_module != NULL)
-        jl_current_module = last->current_module;
-
     ptls->current_task = t;
 
     jl_ucontext_t *lastt_ctx = (killed ? NULL : &lastt->ctx);
@@ -404,8 +394,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
             ssize = MINSTKSZ;
         t->bufsz = ssize;
     }
-    t->current_module = NULL;
-    t->parent = ptls->current_task;
     t->tls = jl_nothing;
     t->state = runnable_sym;
     t->start = start;
@@ -454,8 +442,7 @@ void jl_init_tasks(void) JL_GC_DISABLED
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(9,
-                                        "parent",
+                        jl_perm_symsvec(8,
                                         "storage",
                                         "state",
                                         "donenotify",
@@ -464,8 +451,7 @@ void jl_init_tasks(void) JL_GC_DISABLED
                                         "backtrace",
                                         "logstate",
                                         "code"),
-                        jl_svec(9,
-                                jl_any_type,
+                        jl_svec(8,
                                 jl_any_type,
                                 jl_sym_type,
                                 jl_any_type,
@@ -474,9 +460,7 @@ void jl_init_tasks(void) JL_GC_DISABLED
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type),
-                        0, 1, 8);
-    jl_svecset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
-
+                        0, 1, 7);
     done_sym = jl_symbol("done");
     failed_sym = jl_symbol("failed");
     runnable_sym = jl_symbol("runnable");
@@ -820,8 +804,6 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->stkbuf = stack;
     ptls->current_task->bufsz = ssize;
     ptls->current_task->started = 1;
-    ptls->current_task->parent = ptls->current_task;
-    ptls->current_task->current_module = ptls->current_module;
     ptls->current_task->tls = jl_nothing;
     ptls->current_task->state = runnable_sym;
     ptls->current_task->start = NULL;

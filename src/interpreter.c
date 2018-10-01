@@ -904,28 +904,13 @@ SECT_INTERP CALLBACK_ABI void *jl_interpret_toplevel_expr_in_callback(interprete
     struct interpret_toplevel_expr_in_args *args =
         (struct interpret_toplevel_expr_in_args*)vargs;
     JL_GC_PROMISE_ROOTED(args);
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *v=NULL;
-    jl_module_t *last_m = ptls->current_module;
-    jl_module_t *task_last_m = ptls->current_task->current_module;
     s->src = args->src;
     s->module = args->m;
     s->sparam_vals = args->sparam_vals;
     s->preevaluation = (s->sparam_vals != NULL);
     s->continue_at = 0;
     s->mi = NULL;
-
-    JL_TRY {
-        ptls->current_task->current_module = ptls->current_module = args->m;
-        v = eval_value(args->e, s);
-    }
-    JL_CATCH {
-        ptls->current_module = last_m;
-        ptls->current_task->current_module = task_last_m;
-        jl_rethrow();
-    }
-    ptls->current_module = last_m;
-    ptls->current_task->current_module = task_last_m;
+    jl_value_t *v = eval_value(args->e, s);
     assert(v);
     return (void*)v;
 }
