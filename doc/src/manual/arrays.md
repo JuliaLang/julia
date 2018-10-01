@@ -23,7 +23,7 @@ sharing](https://en.wikipedia.org/wiki/Evaluation_strategy#Call_by_sharing)
 while this prevents accidental modification by callees of a value in the caller,
 it makes avoiding unwanted copying of arrays difficult. By convention, a
 function name ending with a `!` indicates that it will mutate or destroy the
-value of one or more of its arguments (see, for example, [`sort`](@ref) and [`sort!`](@ref)).
+value of one or more of its arguments (compare, for example, [`sort`](@ref) and [`sort!`](@ref)).
 Callees must make explicit copies to ensure that they don't modify inputs that
 they don't intend to change. Many non- mutating functions are implemented by
 calling a function of the same name with an added `!` at the end on an explicit
@@ -73,28 +73,28 @@ omitted it will default to [`Float64`](@ref).
 
 [^1]: *iid*, independently and identically distributed.
 
-The syntax `[A, B, C, ...]` constructs a 1-d array (vector) of its arguments. If all
+The syntax `[A, B, C, ...]` constructs a 1-d array (i.e., a vector) of its arguments. If all
 arguments have a common [promotion type](@ref conversion-and-promotion) then they get
 converted to that type using [`convert`](@ref).
 
 To see the various ways we can pass dimensions to these constructors, consider the following examples:
 ```jldoctest
-julia> zeros(Int8, 2, 2)
-2×2 Array{Int8,2}:
- 0  0
- 0  0
+julia> zeros(Int8, 2, 3)
+2×3 Array{Int8,2}:
+ 0  0  0
+ 0  0  0
 
-julia> zeros(Int8, (2, 2))
-2×2 Array{Int8,2}:
- 0  0
- 0  0
+julia> zeros(Int8, (2, 3))
+2×3 Array{Int8,2}:
+ 0  0  0
+ 0  0  0
 
-julia> zeros((2, 2))
-2×2 Array{Float64,2}:
- 0.0  0.0
- 0.0  0.0
+julia> zeros((2, 3))
+2×3 Array{Float64,2}:
+ 0.0  0.0  0.0
+ 0.0  0.0  0.0
 ```
-Here, `(2, 2)` is a [`Tuple`](@ref).
+Here, `(2, 3)` is a [`Tuple`](@ref).
 
 ## Concatenation
 
@@ -244,11 +244,11 @@ julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
  (0.333333, 2)  (0.25, 4)
 ```
 
-Generators are implemented via inner functions. As in other cases of
-inner functions in the language, variables from the enclosing scope can be
+Generators are implemented via inner functions. Just like
+inner functions used elsewhere in the language, variables from the enclosing scope can be
 "captured" in the inner function.  For example, `sum(p[i] - q[i] for i=1:n)`
 captures the three variables `p`, `q` and `n` from the enclosing scope.
-Captured variables can present performance challenges described in
+Captured variables can present performance challenges; see
 [performance tips](@ref man-performance-tips).
 
 
@@ -404,7 +404,7 @@ the insertion point of a value not found in a sorted array:
 ```jldoctest
 julia> a = [1,2,5,6,7];
 
-julia> searchsorted(a, 3)
+julia> searchsorted(a, 4)
 3:2
 ```
 
@@ -538,7 +538,7 @@ true
 Considered alone, this may seem relatively trivial; `CartesianIndex` simply
 gathers multiple integers together into one object that represents a single
 multidimensional index. When combined with other indexing forms and iterators
-that yield `CartesianIndex`es, however, this can lead directly to very elegant
+that yield `CartesianIndex`es, however, this can produce very elegant
 and efficient code. See [Iteration](@ref) below, and for some more advanced
 examples, see [this blog post on multidimensional algorithms and
 iteration](https://julialang.org/blog/2016/02/iteration).
@@ -725,7 +725,7 @@ julia> repeat(a,1,3)+A
  1.56851  1.86401  1.67846
 ```
 
-This is wasteful when dimensions get large, so Julia offers [`broadcast`](@ref), which expands
+This is wasteful when dimensions get large, so Julia provides [`broadcast`](@ref), which expands
 singleton dimensions in array arguments to match the corresponding dimension in the other array
 without using extra memory, and applies the given function elementwise:
 
@@ -748,7 +748,7 @@ julia> broadcast(+, a, b)
 [Dotted operators](@ref man-dot-operators) such as `.+` and `.*` are equivalent
 to `broadcast` calls (except that they fuse, as described below). There is also a
 [`broadcast!`](@ref) function to specify an explicit destination (which can also
-be accessed in a fusing fashion by `.=` assignment). Moreover, `f.(args...)`
+be accessed in a fusing fashion by `.=` assignment). In fact, `f.(args...)`
 is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broadcast any function
 ([dot syntax](@ref man-vectorized)). Nested "dot calls" `f.(...)` (including calls to `.+` etcetera)
 [automatically fuse](@ref man-dot-operators) into a single `broadcast` call.
@@ -799,7 +799,7 @@ the length of the tuple returned by [`size`](@ref). For more details on defining
 `DenseArray` is an abstract subtype of `AbstractArray` intended to include all arrays where
 elements are stored contiguously in column-major order (see additional notes in
 [Performance Tips](@ref man-performance-tips)). The [`Array`](@ref) type is a specific instance
-of `DenseArray`  [`Vector`](@ref) and [`Matrix`](@ref) are aliases for the 1-d and 2-d cases.
+of `DenseArray`;  [`Vector`](@ref) and [`Matrix`](@ref) are aliases for the 1-d and 2-d cases.
 Very few operations are implemented specifically for `Array` beyond those that are required
 for all `AbstractArrays`s; much of the array library is implemented in a generic
 manner that allows all custom arrays to behave similarly.
