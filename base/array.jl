@@ -517,8 +517,25 @@ julia> collect(Float64, 1:2:5)
 """
 collect(::Type{T}, itr) where {T} = _collect(T, itr, IteratorSize(itr))
 
-_collect(::Type{T}, itr, isz::HasLength) where {T} = copyto!(Vector{T}(undef, Int(length(itr)::Integer)), itr)
-_collect(::Type{T}, itr, isz::HasShape) where {T}  = copyto!(similar(Array{T}, axes(itr)), itr)
+function copyto_check_length!(dest::Array, src)
+    len = length(dest)
+    i = 0
+    for x in src
+        i == len &&
+            throw(ErrorException("iterator returned more elements than its declared length"))
+        i += 1
+        @inbounds dest[i] = x
+    end
+    if i < len
+        throw(ErrorException("iterator returned fewer elements than its declared length"))
+    end
+    return dest
+end
+
+_collect(::Type{T}, itr, isz::HasLength) where {T} =
+    copyto_check_length!(Vector{T}(undef, Int(length(itr)::Integer)), itr)
+_collect(::Type{T}, itr, isz::HasShape) where {T}  =
+    copyto_check_length!(similar(Array{T}, axes(itr)), itr)
 function _collect(::Type{T}, itr, isz::SizeUnknown) where T
     a = Vector{T}()
     for x in itr
@@ -561,7 +578,7 @@ collect(A::AbstractArray) = _collect_indices(axes(A), A)
 collect_similar(cont, itr) = _collect(cont, itr, IteratorEltype(itr), IteratorSize(itr))
 
 _collect(cont, itr, ::HasEltype, isz::Union{HasLength,HasShape}) =
-    copyto!(_similar_for(cont, eltype(itr), itr, isz), itr)
+    copyto_check_length!(_similar_for(cont, eltype(itr), itr, isz), itr)
 
 function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     a = _similar_for(cont, eltype(itr), itr, isz)
@@ -618,6 +635,9 @@ function collect(itr::Generator)
     else
         y = iterate(itr)
         if y === nothing
+            if isa(isz, Union{HasLength, HasShape}) && length(itr) != 0
+                throw(ErrorException("iterator returned fewer elements than its declared length"))
+            end
             return _array_for(et, itr.iter, isz)
         end
         v1, st = y
@@ -667,6 +687,10 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
             return collect_to!(new, itr, i+1, st)
         end
     end
+    i-1 < length(dest) &&
+        throw(ErrorException("iterator returned fewer elements than its declared length"))
+    i-1 > length(dest) &&
+        throw(ErrorException("iterator returned more elements than its declared length"))
     return dest
 end
 
