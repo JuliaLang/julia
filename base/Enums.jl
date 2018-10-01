@@ -158,9 +158,6 @@ macro enum(T, syms...)
                 show(io, $basetype(x))
             end
         end
-        function Base.show(io::IO, t::Type{$(esc(typename))})
-            Base.show_datatype(io, t)
-        end
         function Base.show(io::IO, ::MIME"text/plain", t::Type{$(esc(typename))})
             print(io, "Enum ")
             Base.show_datatype(io, t)
