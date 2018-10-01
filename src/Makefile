@@ -89,12 +89,8 @@ endif
 PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLIC_HEADERS)) $(UV_HEADERS))
 
 ifeq ($(JULIACODEGEN),LLVM)
-# In LLVM < 3.4, --ldflags includes both options and libraries, so use it both before and after --libs
-# In LLVM >= 3.4, --ldflags has only options, and --system-libs has the libraries.
-ifneq ($(USE_LLVM_SHLIB),1)
-LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS)) $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
-else
-LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM
+LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags --libs --system-libs)
+ifeq ($(USE_LLVM_SHLIB),1)
 FLAGS += -DLLVM_SHLIB
 endif # USE_LLVM_SHLIB == 1
 endif
