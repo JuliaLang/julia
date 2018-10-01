@@ -190,12 +190,26 @@ end
     for T in (Matrix, SparseMatrixCSC)
         A = T(rand(3,4))
         B = T(rand(3,3))
+        C = T(rand(0,3))
+        D = T(rand(2,0))
         @test (hcat(A, 2I))::T == hcat(A, Matrix(2I, 3, 3))
         @test (vcat(A, 2I))::T == vcat(A, Matrix(2I, 4, 4))
+        @test (hcat(C, 2I))::T == C
+        @test (vcat(D, 2I))::T == D
         @test (hcat(I, 3I, A, 2I))::T == hcat(Matrix(I, 3, 3), Matrix(3I, 3, 3), A, Matrix(2I, 3, 3))
         @test (vcat(I, 3I, A, 2I))::T == vcat(Matrix(I, 4, 4), Matrix(3I, 4, 4), A, Matrix(2I, 4, 4))
         @test (hvcat((2,1,2), B, 2I, I, 3I, 4I))::T ==
             hvcat((2,1,2), B, Matrix(2I, 3, 3), Matrix(I, 6, 6), Matrix(3I, 3, 3), Matrix(4I, 3, 3))
+        @test hvcat((3,1), C, C, I, 3I) == hvcat((2,1), C, C, Matrix(3I, 6,6))
+        @test hvcat((2,2,2), I, 2I, 3I, 4I, C, C) ==
+            hvcat((2,2,2), Matrix(I, 3, 3), Matrix(2I, 3,3 ), Matrix(3I, 3,3), Matrix(4I, 3,3), C, C)
+        @test hvcat((2,2,4), C, C, I, 2I, 3I, 4I, 5I, D) ==
+            hvcat((2,2,4), C, C, Matrix(I, 3, 3), Matrix(2I,3,3),
+                Matrix(3I, 2, 2), Matrix(4I, 2, 2), Matrix(5I,2,2), D)
+        @test (hvcat((2,3,2), B, 2I, C, C, I, 3I, 4I))::T ==
+            hvcat((2,2,2), B, Matrix(2I, 3, 3), C, C, Matrix(3I, 3, 3), Matrix(4I, 3, 3))
+        @test hvcat((3,2,1), C, C, I, B ,3I, 2I) ==
+            hvcat((2,2,1), C, C, B, Matrix(3I,3,3), Matrix(2I,6,6))
     end
 end
 
