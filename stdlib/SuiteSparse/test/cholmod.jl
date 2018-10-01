@@ -204,7 +204,7 @@ end
     @test ishermitian(Sparse(Hermitian(complex(ACSC), :U)))
 end
 
-@testset "test Sparse constructor for c_SparseVoid (and read_sparse)" begin
+@testset "test Sparse constructor for C_Sparse{Cvoid} (and read_sparse)" begin
     mktempdir() do temp_dir
         testfile = joinpath(temp_dir, "tmp.mtx")
 
@@ -225,12 +225,12 @@ end
 
 @testset "test that Sparse(Ptr) constructor throws the right places" begin
     @test_throws ArgumentError CHOLMOD.Sparse(convert(Ptr{CHOLMOD.C_Sparse{Float64}}, C_NULL))
-    @test_throws ArgumentError CHOLMOD.Sparse(convert(Ptr{CHOLMOD.C_SparseVoid}, C_NULL))
+    @test_throws ArgumentError CHOLMOD.Sparse(convert(Ptr{CHOLMOD.C_Sparse{Cvoid}}, C_NULL))
 end
 
 ## The struct pointer must be constructed by the library constructor and then modified afterwards to checks that the method throws
 @testset "illegal dtype (for now but should be supported at some point)" begin
-    p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
+    p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
         (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
         1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
     puint = convert(Ptr{UInt32}, p)
@@ -239,7 +239,7 @@ end
 end
 
 @testset "illegal dtype" begin
-    p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
+    p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
         (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
         1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
     puint = convert(Ptr{UInt32}, p)
@@ -248,7 +248,7 @@ end
 end
 
 @testset "illegal xtype" begin
-    p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
+    p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
         (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
         1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
     puint = convert(Ptr{UInt32}, p)
@@ -257,7 +257,7 @@ end
 end
 
 @testset "illegal itype I" begin
-    p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
+    p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
         (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
         1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
     puint = convert(Ptr{UInt32}, p)
@@ -266,7 +266,7 @@ end
 end
 
 @testset "illegal itype II" begin
-    p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
+    p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
         (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
         1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
     puint = convert(Ptr{UInt32}, p)
@@ -316,11 +316,11 @@ end
 end
 
 # Test Sparse and Factor
-@testset "test free_sparse!" begin
+@testset "test free!" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Float64}},
         (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
         1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
-    @test CHOLMOD.free_sparse!(p)
+    @test CHOLMOD.free!(p)
 end
 
 @testset "Core functionality" for elty in (Float64, Complex{Float64})
@@ -644,6 +644,11 @@ end
 
 @testset "Issue 14076" begin
     @test cholesky(sparse([1,2,3,4], [1,2,3,4], Float32[1,4,16,64]))\[1,4,16,64] == fill(1, 4)
+end
+
+@testset "Issue 29367" begin
+    @test cholesky(sparse(Int32[1,2,3,4], Int32[1,2,3,4], Float64[1,4,16,64]))\[1,4,16,64] == fill(1, 4)
+    @test cholesky(sparse(Int32[1,2,3,4], Int32[1,2,3,4], Float32[1,4,16,64]))\[1,4,16,64] == fill(1, 4)
 end
 
 @testset "Issue 14134" begin

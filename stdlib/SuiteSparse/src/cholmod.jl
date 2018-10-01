@@ -1,5 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Theoretically CHOLMOD supports both Int32 and Int64 indices on 64-bit.
+# However experience suggests that using both in the same session causes memory
+# leaks, so we restrict indices to be SuiteSparse_long (see cholmod_h.jl).
+# Ref: https://github.com/JuliaLang/julia/issues/12664
+
+# Additionally, only Float64/ComplexF64 are supported in practice.
+# Ref: https://github.com/JuliaLang/julia/issues/25986
+
 module CHOLMOD
 
 import Base: (*), convert, copy, eltype, getindex, getproperty, show, size,
@@ -211,7 +219,9 @@ end
 Dense(p::Ptr{C_Dense{Tv}}) where {Tv<:VTypes} = Dense{Tv}(p)
 
 # Sparse
-struct C_Sparse{Tv<:VTypes} <: SuiteSparseStruct
+# allow Cvoid pointer for reading matrices of unknown type from files as in
+# cholmod_read_sparse
+struct C_Sparse{Tv<:Union{Cvoid, VTypes}} <: SuiteSparseStruct
     nrow::Csize_t
     ncol::Csize_t
     nzmax::Csize_t
@@ -228,32 +238,23 @@ struct C_Sparse{Tv<:VTypes} <: SuiteSparseStruct
     packed::Cint
 end
 
-# Corresponds to the exact definition of cholmod_sparse_struct in the library.
-# Useful when reading matrices of unknown type from files as in
-# cholmod_read_sparse
-struct C_SparseVoid <: SuiteSparseStruct
-    nrow::Csize_t
-    ncol::Csize_t
-    nzmax::Csize_t
-    p::Ptr{Cvoid}
-    i::Ptr{Cvoid}
-    nz::Ptr{Cvoid}
-    x::Ptr{Cvoid}
-    z::Ptr{Cvoid}
-    stype::Cint
-    itype::Cint
-    xtype::Cint
-    dtype::Cint
-    sorted::Cint
-    packed::Cint
-end
-
 mutable struct Sparse{Tv<:VTypes} <: AbstractSparseMatrix{Tv,SuiteSparse_long}
     ptr::Ptr{C_Sparse{Tv}}
     function Sparse{Tv}(ptr::Ptr{C_Sparse{Tv}}) where Tv<:VTypes
         if ptr == C_NULL
             throw(ArgumentError("sparse matrix construction failed for " *
                 "unknown reasons. Please submit a bug report."))
+        end
+        s = unsafe_load(ptr)
+        if s.itype != ityp(SuiteSparse_long)
+            free!(ptr)
+            throw(CHOLMODException("itype=$(s.itype) not supported"))
+        elseif s.xtype != xtyp(Tv)
+            free!(ptr)
+            throw(CHOLMODException("xtype=$(s.xtype) not supported"))
+        elseif s.dtype != dtyp(Tv)
+            free!(ptr)
+            throw(CHOLMODException("dtype=$(s.dtype) not supported"))
         end
         A = new(ptr)
         finalizer(free!, A)
@@ -262,73 +263,52 @@ mutable struct Sparse{Tv<:VTypes} <: AbstractSparseMatrix{Tv,SuiteSparse_long}
 end
 Sparse(p::Ptr{C_Sparse{Tv}}) where {Tv<:VTypes} = Sparse{Tv}(p)
 
+# Useful when reading in files, but not type stable
+function Sparse(p::Ptr{C_Sparse{Cvoid}})
+    if p == C_NULL
+        throw(ArgumentError("sparse matrix construction failed for " *
+                            "unknown reasons. Please submit a bug report."))
+    end
+    s = unsafe_load(p)
+    Tv = s.xtype == REAL ? Float64 : Complex{Float64}
+    Sparse(convert(Ptr{C_Sparse{Tv}}, p))
+end
+
 Base.unsafe_convert(::Type{Ptr{Tv}}, A::Sparse{Tv}) where {Tv} = getfield(A, :ptr)
 
 # Factor
-
-if build_version >= v"2.1.0" # CHOLMOD version 2.1.0 or later
-    struct C_Factor{Tv<:VTypes} <: SuiteSparseStruct
-        n::Csize_t
-        minor::Csize_t
-        Perm::Ptr{SuiteSparse_long}
-        ColCount::Ptr{SuiteSparse_long}
-        IPerm::Ptr{SuiteSparse_long}        # this pointer was added in version 2.1.0
-        nzmax::Csize_t
-        p::Ptr{SuiteSparse_long}
-        i::Ptr{SuiteSparse_long}
-        x::Ptr{Tv}
-        z::Ptr{Cvoid}
-        nz::Ptr{SuiteSparse_long}
-        next::Ptr{SuiteSparse_long}
-        prev::Ptr{SuiteSparse_long}
-        nsuper::Csize_t
-        ssize::Csize_t
-        xsize::Csize_t
-        maxcsize::Csize_t
-        maxesize::Csize_t
-        super::Ptr{SuiteSparse_long}
-        pi::Ptr{SuiteSparse_long}
-        px::Ptr{SuiteSparse_long}
-        s::Ptr{SuiteSparse_long}
-        ordering::Cint
-        is_ll::Cint
-        is_super::Cint
-        is_monotonic::Cint
-        itype::Cint
-        xtype::Cint
-        dtype::Cint
+struct C_Factor{Tv<:VTypes} <: SuiteSparseStruct
+    n::Csize_t
+    minor::Csize_t
+    Perm::Ptr{SuiteSparse_long}
+    ColCount::Ptr{SuiteSparse_long}
+    @static if build_version >= v"2.1.0"
+        IPerm::Ptr{SuiteSparse_long}  # this pointer was added in version 2.1.0
     end
-else
-    struct C_Factor{Tv<:VTypes} <: SuiteSparseStruct
-        n::Csize_t
-        minor::Csize_t
-        Perm::Ptr{SuiteSparse_long}
-        ColCount::Ptr{SuiteSparse_long}
-        nzmax::Csize_t
-        p::Ptr{SuiteSparse_long}
-        i::Ptr{SuiteSparse_long}
-        x::Ptr{Tv}
-        z::Ptr{Cvoid}
-        nz::Ptr{SuiteSparse_long}
-        next::Ptr{SuiteSparse_long}
-        prev::Ptr{SuiteSparse_long}
-        nsuper::Csize_t
-        ssize::Csize_t
-        xsize::Csize_t
-        maxcsize::Csize_t
-        maxesize::Csize_t
-        super::Ptr{SuiteSparse_long}
-        pi::Ptr{SuiteSparse_long}
-        px::Ptr{SuiteSparse_long}
-        s::Ptr{SuiteSparse_long}
-        ordering::Cint
-        is_ll::Cint
-        is_super::Cint
-        is_monotonic::Cint
-        itype::Cint
-        xtype::Cint
-        dtype::Cint
-    end
+    nzmax::Csize_t
+    p::Ptr{SuiteSparse_long}
+    i::Ptr{SuiteSparse_long}
+    x::Ptr{Tv}
+    z::Ptr{Cvoid}
+    nz::Ptr{SuiteSparse_long}
+    next::Ptr{SuiteSparse_long}
+    prev::Ptr{SuiteSparse_long}
+    nsuper::Csize_t
+    ssize::Csize_t
+    xsize::Csize_t
+    maxcsize::Csize_t
+    maxesize::Csize_t
+    super::Ptr{SuiteSparse_long}
+    pi::Ptr{SuiteSparse_long}
+    px::Ptr{SuiteSparse_long}
+    s::Ptr{SuiteSparse_long}
+    ordering::Cint
+    is_ll::Cint
+    is_super::Cint
+    is_monotonic::Cint
+    itype::Cint
+    xtype::Cint
+    dtype::Cint
 end
 
 mutable struct Factor{Tv} <: Factorization{Tv}
@@ -412,7 +392,7 @@ function allocate_dense(nrow::Integer, ncol::Integer, d::Integer, ::Type{Complex
         nrow, ncol, d, COMPLEX, common_struct))
 end
 
-free_dense!(p::Ptr{C_Dense{T}}) where {T} = ccall((:cholmod_l_free_dense, :libcholmod),
+free!(p::Ptr{C_Dense{T}}) where {T} = ccall((:cholmod_l_free_dense, :libcholmod),
     Cint, (Ref{Ptr{C_Dense{T}}}, Ptr{Cvoid}), p, common_struct)
 
 function zeros(m::Integer, n::Integer, ::Type{T}) where T<:VTypes
@@ -492,19 +472,13 @@ function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer,
                 nrow, ncol, nzmax, sorted,
                 packed, stype, COMPLEX, common_struct))
 end
-function free_sparse!(ptr::Ptr{C_Sparse{Tv}}) where Tv<:VTypes
+function free!(ptr::Ptr{C_Sparse{Tv}}) where Tv<:VTypes
     @isok ccall((@cholmod_name("free_sparse", SuiteSparse_long), :libcholmod), Cint,
             (Ref{Ptr{C_Sparse{Tv}}}, Ptr{UInt8}),
                 ptr, common_struct)
 end
 
-function free_sparse!(ptr::Ptr{C_SparseVoid})
-    @isok ccall((@cholmod_name("free_sparse", SuiteSparse_long), :libcholmod), Cint,
-            (Ref{Ptr{C_SparseVoid}}, Ptr{UInt8}),
-                ptr, common_struct)
-end
-
-function free_factor!(ptr::Ptr{C_Factor{Tv}}) where Tv<:VTypes
+function free!(ptr::Ptr{C_Factor{Tv}}) where Tv<:VTypes
     # Warning! Important that finalizer doesn't modify the global Common struct.
     @isok ccall((@cholmod_name("free_factor", SuiteSparse_long), :libcholmod), Cint,
             (Ref{Ptr{C_Factor{Tv}}}, Ptr{Cvoid}),
@@ -797,7 +771,7 @@ end
 # Autodetects the types
 function read_sparse(file::Libc.FILE, ::Type{SuiteSparse_long})
     ptr = ccall((@cholmod_name("read_sparse", SuiteSparse_long), :libcholmod),
-        Ptr{C_SparseVoid},
+        Ptr{C_Sparse{Cvoid}},
             (Ptr{Cvoid}, Ptr{UInt8}),
                 file.ptr, common_struct)
     if ptr == C_NULL
@@ -911,16 +885,38 @@ function Sparse(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer) where T
     for i = 1:nnz(A)
         unsafe_store!(s.i, A.rowval[i] - 1, i)
     end
-    unsafe_copyto!(s.x, pointer(A.nzval), nnz(A))
+    if Tv <: Complex && stype != 0
+        # Need to remove any non real elements in the diagonal because, in contrast to
+        # BLAS/LAPACK these are not ignored by CHOLMOD. If even tiny imaginary parts are
+        # present CHOLMOD will fail with a non-positive definite/zero pivot error.
+        for j = 1:A.n
+            for ip = A.colptr[j]:A.colptr[j + 1] - 1
+                v = A.nzval[ip]
+                unsafe_store!(s.x, A.rowval[ip] == j ? Complex(real(v)) : v, ip)
+            end
+        end
+    else
+        unsafe_copyto!(s.x, pointer(A.nzval), nnz(A))
+    end
 
     @isok check_sparse(o)
 
     return o
 end
 
+# handle promotion
+function Sparse(A::SparseMatrixCSC{Tv}, stype::Integer) where {Tv}
+    T = promote_type(Tv,Float64)
+    if T == Float64 || T == ComplexF64
+        return Sparse(SparseMatrixCSC{T, SuiteSparse_long}(A), stype)
+    else
+        throw(MethodError(Sparse, (A,stype)))
+    end
+end
+
 # convert SparseVectors into CHOLMOD Sparse types through a mx1 CSC matrix
-Sparse(A::SparseVector{<:VTypes,SuiteSparse_long}) = Sparse(SparseMatrixCSC(A))
-function Sparse(A::SparseMatrixCSC{<:VTypes,<:ITypes})
+Sparse(A::SparseVector) = Sparse(SparseMatrixCSC(A))
+function Sparse(A::SparseMatrixCSC)
     o = Sparse(A, 0)
     # check if array is symmetric and change stype if it is
     if ishermitian(o)
@@ -928,96 +924,11 @@ function Sparse(A::SparseMatrixCSC{<:VTypes,<:ITypes})
     end
     o
 end
-Sparse(A::SparseMatrixCSC{Complex{Float32},<:ITypes}) =
-    Sparse(SparseMatrixCSC{Complex{Float64},SuiteSparse_long}(A))
-Sparse(A::Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}) =
+
+Sparse(A::Symmetric{Tv, SparseMatrixCSC{Tv,Ti}}) where {Tv<:Real, Ti} =
     Sparse(A.data, A.uplo == 'L' ? -1 : 1)
-# The convert method for Hermitian is very similar to the general convert method, but we need to
-# remove any non real elements in the diagonal because, in contrast to BLAS/LAPACK these are not
-# ignored by CHOLMOD. If even tiny imaginary parts are present CHOLMOD will fail with a non-positive
-# definite/zero pivot error.
-function Sparse(AH::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}) where {Tv<:VTypes}
-    A = AH.data
-
-    # Here we allocate a Symmetric/Hermitian CHOLMOD.Sparse matrix so we only need to copy
-    # a single triangle of AH
-    o = allocate_sparse(A.m, A.n, length(A.nzval), true, true, AH.uplo == 'L' ? -1 : 1, Tv)
-    s = unsafe_load(pointer(o))
-    for i = 1:length(A.colptr)
-        unsafe_store!(s.p, A.colptr[i] - 1, i)
-    end
-    for i = 1:length(A.rowval)
-        unsafe_store!(s.i, A.rowval[i] - 1, i)
-    end
-    for j = 1:A.n
-        for ip = A.colptr[j]:A.colptr[j + 1] - 1
-            v = A.nzval[ip]
-            unsafe_store!(s.x, ifelse(A.rowval[ip] == j, real(v), v), ip)
-        end
-    end
-
-    @isok check_sparse(o)
-
-    return o
-end
-function Sparse(A::Union{SparseMatrixCSC{BigFloat,Ti},
-                         Symmetric{BigFloat,SparseMatrixCSC{BigFloat,Ti}},
-                         Hermitian{Complex{BigFloat},SparseMatrixCSC{Complex{BigFloat},Ti}}},
-                args...) where Ti<:ITypes
-    throw(MethodError(Sparse, (A,)))
-end
-function Sparse(A::Union{SparseMatrixCSC{T,Ti},
-                         Symmetric{T,SparseMatrixCSC{T,Ti}},
-                         Hermitian{T,SparseMatrixCSC{T,Ti}}},
-                args...) where T where Ti<:ITypes
-    return Sparse(AbstractMatrix{promote_type(Float64, T)}(A), args...)
-end
-
-# Useful when reading in files, but not type stable
-function Sparse(p::Ptr{C_SparseVoid})
-    if p == C_NULL
-        throw(ArgumentError("sparse matrix construction failed for " *
-            "unknown reasons. Please submit a bug report."))
-    end
-
-    s = unsafe_load(p)
-
-    # Check integer type
-    if s.itype == INT
-        free_sparse!(p)
-        throw(CHOLMODException("the value of itype was $s.itype. " *
-            "Only integer type of $SuiteSparse_long is supported."))
-    elseif s.itype == INTLONG
-        free_sparse!(p)
-        throw(CHOLMODException("the value of itype was $s.itype. This combination " *
-            "of integer types shouldn't happen. Please submit a bug report."))
-    elseif s.itype != LONG # must be s.itype == LONG
-        free_sparse!(p)
-        throw(CHOLMODException("illegal value of itype: $s.itype"))
-    end
-
-    # Check for double or single precision
-    if s.dtype == DOUBLE
-        Tv = Float64
-    elseif s.dtype == SINGLE
-        # Tv = Float32 # this should be supported at some point
-        free_sparse!(p)
-        throw(CHOLMODException("single precision not supported yet"))
-    else
-        free_sparse!(p)
-        throw(CHOLMODException("illegal value of dtype: $s.dtype"))
-    end
-
-    # Check for real or complex
-    if s.xtype == COMPLEX
-        Tv = Complex{Tv}
-    elseif s.xtype != REAL
-        free_sparse!(p)
-        throw(CHOLMODException("illegal value of xtype: $s.xtype"))
-    end
-
-    return Sparse(convert(Ptr{C_Sparse{Tv}}, p))
-end
+Sparse(A::Hermitian{Tv,SparseMatrixCSC{Tv,Ti}}) where {Tv, Ti} =
+    Sparse(A.data, A.uplo == 'L' ? -1 : 1)
 
 Sparse(A::Dense) = dense_to_sparse(A, SuiteSparse_long)
 Sparse(L::Factor) = factor_to_sparse!(copy(L))
@@ -1181,9 +1092,9 @@ let offset = fieldoffset(C_Sparse{Float64}, findfirst(name -> name === :stype, f
     end
 end
 
-free!(A::Dense)  = free_dense!( pointer(A))
-free!(A::Sparse) = free_sparse!(pointer(A))
-free!(F::Factor) = free_factor!(pointer(F))
+free!(A::Dense)  = free!(pointer(A))
+free!(A::Sparse) = free!(pointer(A))
+free!(F::Factor) = free!(pointer(F))
 
 eltype(::Type{Dense{T}}) where {T<:VTypes} = T
 eltype(::Type{Factor{T}}) where {T<:VTypes} = T
