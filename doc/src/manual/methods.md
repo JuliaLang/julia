@@ -708,30 +708,30 @@ function matmul(a::AbstractMatrix, b::AbstractMatrix)
     ## this is insufficient because it assumes `one(eltype(a))` is constructable:
     # R = typeof(op(one(eltype(a)), one(eltype(b))))
 
-    ## this fails because it assumes `a[1]` exists and is representative of all elements of the array
+    ## this fails because it assumes `a[1]` exists and is representative of all elements of the array:
     # R = typeof(op(a[1], b[1]))
 
     ## this is incorrect because it assumes that `+` calls `promote_type`
     ## but this is not true for some types, such as Bool:
     # R = promote_type(ai, bi)
 
-    # this is wrong, since depending on the return value
-    # of type-inference is very brittle (as well as not being optimizable):
+    ## this is wrong, since depending on the return value
+    ## of type-inference is very brittle (as well as not being optimizable):
     # R = Base.return_types(op, (eltype(a), eltype(b)))
 
     ## but, finally, this works:
     R = promote_op(op, eltype(a), eltype(b))
-    ## although sometimes it may give a larger type than desired
-    ## it will always give a correct type
+    ## although sometimes it may give a larger type than desired,
+    ## it will always give a correct type.
 
     output = similar(b, R, (size(a, 1), size(b, 2)))
     if size(a, 2) > 0
         for j in 1:size(b, 2)
             for i in 1:size(b, 1)
                 ## here we don't use `ab = zero(R)`,
-                ## since `R` might be `Any` and `zero(Any)` is not defined
+                ## since `R` might be `Any` and `zero(Any)` is not defined;
                 ## we also must declare `ab::R` to make the type of `ab` constant in the loop,
-                ## since it is possible that typeof(a * b) != typeof(a * b + a * b) == R
+                ## since it is possible that `typeof(a * b) != typeof(a * b + a * b) == R`:
                 ab::R = a[i, 1] * b[1, j]
                 for k in 2:size(a, 2)
                     ab += a[i, k] * b[k, j]
@@ -953,7 +953,7 @@ f(x::B, y::A) = ...
 f(x::B, y::B) = ...
 ```
 
-you might consider defining
+you might consider defining:
 
 ```julia
 f(x::A, y::A) = ...
@@ -964,7 +964,7 @@ where `g` converts the argument to type `A`. This is a very specific
 example of the more general principle of
 [orthogonal design](https://en.wikipedia.org/wiki/Orthogonality_(programming)),
 in which separate concepts are assigned to separate methods. Here, `g`
-will most likely need a fallback definition
+will most likely need a fallback definition:
 
 ```julia
 g(x::A) = x
@@ -1034,7 +1034,7 @@ When this approach is not possible, it may be worth starting a
 discussion with other developers about resolving the ambiguity; just
 because one method was defined first does not necessarily mean that it
 can't be modified or eliminated.  As a last resort, one developer can
-define the "band-aid" method
+define the "band-aid" method:
 
 ```julia
 -(A::MyArrayType{T}, b::Date) where {T<:Date} = ...
