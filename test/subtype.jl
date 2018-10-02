@@ -1343,3 +1343,17 @@ struct A28256{names, T<:NamedTuple{names, <:Tuple}}
     x::T
 end
 @test A28256{(:a,), NamedTuple{(:a,),Tuple{Int}}}((a=1,)) isa A28256
+
+# issue #29468
+@testintersect(Tuple{Vararg{Val{N}, N}} where N,
+               Tuple{Val{2}, Vararg{Val{2}}},
+               Tuple{Val{2}, Val{2}})
+@testintersect(Tuple{Vararg{Val{N}, N}} where N,
+               Tuple{Val{3}, Vararg{Val{3}}},
+               Tuple{Val{3}, Val{3}, Val{3}})
+@testintersect(Tuple{Vararg{Val{N}, N}} where N,
+               Tuple{Val{1}, Vararg{Val{2}}},
+               Tuple{Val{1}})
+@testintersect(Tuple{Vararg{Val{N}, N}} where N,
+               Tuple{Val{2}, Vararg{Val{3}}},
+               Union{})
