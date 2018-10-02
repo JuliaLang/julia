@@ -487,7 +487,7 @@ function show(io::IO, mime::MIME"text/plain", S::SharedArray)
         invoke(show, Tuple{IO,MIME"text/plain",DenseArray}, io, MIME"text/plain"(), S)
     else
         # retrieve from the first worker mapping the array.
-        println(io, summary(S), ":")
+        summary(io, S); println(io, ":")
         Base.print_array(io, remotecall_fetch(sharr->sharr.s, S.pids[1], S))
     end
 end

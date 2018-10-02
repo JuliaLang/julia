@@ -319,7 +319,7 @@ function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
 end
 
 function show(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
-    print(io, summary(mt))
+    summary(io, mt)
     if !isempty(mt)
         print(io, ":<ul>")
         for d in mt

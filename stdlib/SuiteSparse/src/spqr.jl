@@ -321,7 +321,7 @@ function Base.propertynames(F::QRSparse, private::Bool=false)
 end
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, F::QRSparse)
-    println(io, summary(F))
+    summary(io, F); println(io)
     println(io, "Q factor:")
     show(io, mime, F.Q)
     println(io, "\nR factor:")

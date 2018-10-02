@@ -116,7 +116,7 @@ Base.propertynames(F::Schur) =
     (:Schur, :vectors, fieldnames(typeof(F))...)
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Schur)
-    println(io, summary(F))
+    summary(io, F); println(io)
     println(io, "T factor:")
     show(io, mime, F.T)
     println(io, "\nZ factor:")
@@ -261,7 +261,7 @@ Base.propertynames(F::GeneralizedSchur) =
     (:values, :left, :right, fieldnames(typeof(F))...)
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::GeneralizedSchur)
-    println(io, summary(F))
+    summary(io, F); println(io)
     println(io, "S factor:")
     show(io, mime, F.S)
     println(io, "\nT factor:")

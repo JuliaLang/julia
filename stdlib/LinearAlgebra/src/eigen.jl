@@ -489,7 +489,7 @@ julia> eigvecs(A, B)
 eigvecs(A::AbstractMatrix, B::AbstractMatrix) = eigvecs(eigen(A, B))
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,GeneralizedEigen})
-    println(io, summary(F))
+    summary(io, F); println(io)
     println(io, "eigenvalues:")
     show(io, mime, F.values)
     println(io, "\neigenvectors:")

@@ -250,7 +250,7 @@ issuccess(B::BunchKaufman) = B.info == 0
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, B::BunchKaufman)
     if issuccess(B)
-        println(io, summary(B))
+        summary(io, B); println(io)
         println(io, "D factor:")
         show(io, mime, B.D)
         println(io, "\n$(B.uplo) factor:")
