@@ -100,12 +100,10 @@
 
 // task options ---------------------------------------------------------------
 
-// select an implementation of stack switching.
-// currently only COPY_STACKS is recommended.
-#ifndef COPY_STACKS
+// select whether to enable the COPY_STACKS stack switching optimization
 #define COPY_STACKS
-#endif
 
+#define JL_STACK_SIZE (8*1024*1024)
 
 // threading options ----------------------------------------------------------
 

@@ -361,13 +361,11 @@ void ti_threadfun(void *arg)
 
     // initialize this thread (set tid, create heap, etc.)
     ti_initthread(ta->tid);
-    jl_init_stack_limits(0);
+    void *stack_lo, *stack_hi;
+    jl_init_stack_limits(0, &stack_lo, &stack_hi);
 
     // set up tasking
-    jl_init_root_task(ptls->stack_lo, ptls->stack_hi - ptls->stack_lo);
-#ifdef COPY_STACKS
-    jl_set_base_ctx((char*)&arg);
-#endif
+    jl_init_root_task(stack_lo, stack_hi);
 
     // set the thread-local tid and wait for a thread group
     while (jl_atomic_load_acquire(&ta->state) == TI_THREAD_INIT)

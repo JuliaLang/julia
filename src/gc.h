@@ -495,6 +495,7 @@ void gc_mark_queue_all_roots(jl_ptls_t ptls, gc_mark_sp_t *sp);
 void gc_mark_queue_finlist(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp,
                            arraylist_t *list, size_t start);
 void gc_mark_loop(jl_ptls_t ptls, gc_mark_sp_t sp);
+void sweep_stack_pools(void);
 void gc_debug_init(void);
 
 extern void *gc_mark_label_addrs[_GC_MARK_L_MAX];
