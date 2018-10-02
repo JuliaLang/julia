@@ -24,6 +24,10 @@ ifneq (,$(findstring $(OS),Linux FreeBSD))
 LIBSSH2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
+ifeq ($(LIBSSH2_ENABLE_TESTS), 0)
+LIBSSH2_OPTS += -DBUILD_TESTING=OFF
+endif
+
 $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied: $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/source-extracted
 	cd $(SRCCACHE)/$(LIBSSH2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libssh2-encryptedpem.patch
 	echo 1 > $@
