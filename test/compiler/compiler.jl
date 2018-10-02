@@ -939,6 +939,17 @@ end
 f28284() = Val(t28284(1))
 @inferred f28284()
 
+# ...even if we have a non-bitstype
+struct NonBitstype
+    a::NTuple{N, Int} where N
+    b::NTuple{N, Int} where N
+end
+function fNonBitsTypeConstants()
+    val = NonBitstype((1,2),(3,4))
+    Val((val.a[1],val.b[2]))
+end
+@test @inferred(fNonBitsTypeConstants()) === Val((1,4))
+
 # missing method should be inferred as Union{}, ref https://github.com/JuliaLang/julia/issues/20033#issuecomment-282228948
 @test Base.return_types(f -> f(1), (typeof((x::String) -> x),)) == Any[Union{}]
 
