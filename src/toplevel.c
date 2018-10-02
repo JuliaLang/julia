@@ -84,13 +84,21 @@ void jl_module_run_initializer(jl_module_t *m)
     jl_function_t *f = jl_module_get_initializer(m);
     if (f == NULL)
         return;
-    size_t last_age = jl_get_ptls_states()->world_age;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    size_t last_age = ptls->world_age;
+    jl_module_t *last_m = ptls->current_module;
+    jl_module_t *task_last_m = ptls->current_task->current_module;
+    // set current module to `m` so that no warning is printed when an
+    // __init__ method evals into its own module.
+    ptls->current_task->current_module = ptls->current_module = m;
     JL_TRY {
-        jl_get_ptls_states()->world_age = jl_world_counter;
+        ptls->world_age = jl_world_counter;
         jl_apply(&f, 1);
-        jl_get_ptls_states()->world_age = last_age;
+        ptls->world_age = last_age;
     }
     JL_CATCH {
+        ptls->current_module = last_m;
+        ptls->current_task->current_module = task_last_m;
         if (jl_initerror_type == NULL) {
             jl_rethrow();
         }
@@ -99,6 +107,8 @@ void jl_module_run_initializer(jl_module_t *m)
                                            jl_exception_in_transit));
         }
     }
+    ptls->current_module = last_m;
+    ptls->current_task->current_module = task_last_m;
 }
 
 // load time init procedure: in build mode, only record order
@@ -242,8 +252,6 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     }
     JL_GC_POP();
     ptls->world_age = last_age;
-    ptls->current_module = last_module;
-    ptls->current_task->current_module = task_last_m;
     outermost = prev_outermost;
 
 #if 0
@@ -269,7 +277,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
 
     arraylist_push(&module_stack, newm);
 
-    if (outermost == NULL || parent_module == jl_main_module) {
+    if (outermost == NULL || parent_module == jl_main_module || newm->parent == newm) {
         JL_TRY {
             size_t i, l = module_stack.len;
             for (i = stackidx; i < l; i++) {
@@ -281,10 +289,14 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
             module_stack.len = stackidx;
         }
         JL_CATCH {
+            ptls->current_module = last_module;
+            ptls->current_task->current_module = task_last_m;
             module_stack.len = stackidx;
             jl_rethrow();
         }
     }
+    ptls->current_module = last_module;
+    ptls->current_task->current_module = task_last_m;
 
     return (jl_value_t*)newm;
 }
