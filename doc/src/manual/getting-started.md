@@ -62,6 +62,8 @@ The `--` delimiter can be used to separate command-line arguments intended for t
 $ julia --color=yes -O -- foo.jl arg1 arg2..
 ```
 
+See also [Scripting](@ref man-scripting) for more information on writing Julia scripts.
+
 Julia can be started in parallel mode with either the `-p` or the `--machine-file` options. `-p n`
 will launch an additional `n` worker processes, while `--machine-file file` will launch a worker
 for each line in file `file`. The machines defined in `file` must be accessible via a password-less
