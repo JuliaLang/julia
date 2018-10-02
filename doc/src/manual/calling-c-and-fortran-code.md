@@ -486,14 +486,15 @@ the Julia field to be only of that type.
 
 Arrays of parameters can be expressed with `NTuple`:
 
-```
 in C:
+```c
 struct B {
     int A[3];
 };
 b_a_2 = B.A[2];
-
+```
 in Julia:
+```julia
 struct B
     A::NTuple{3, CInt}
 end
