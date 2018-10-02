@@ -217,7 +217,7 @@ Hello World!
 Since our example has just one function call, which has done its job of printing "Hello World!",
 the stack now rapidly unwinds back to `main()`.
 
-## jl_atexit_hook()
+## jl\_atexit_hook()
 
 `main()` calls [`jl_atexit_hook()`](https://github.com/JuliaLang/julia/blob/master/src/init.c).
 This calls `_atexit` for each module, then calls [`jl_gc_run_all_finalizers()`](https://github.com/JuliaLang/julia/blob/master/src/gc.c)
