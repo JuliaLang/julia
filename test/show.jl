@@ -1402,3 +1402,11 @@ end
 replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color => true),
                                          MIME("text/plain"), x), x)
 @test occursin("\e[", replstrcolor(`curl abc`))
+
+module TestMainIndependentShowing
+# make sure state of Main does not affect `show`
+using Sockets, Test
+@test repr(IPv4) == "Sockets.IPv4"
+Core.eval(Main, :(using Sockets))
+@test repr(IPv4) == "Sockets.IPv4"
+end
