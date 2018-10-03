@@ -285,6 +285,7 @@ end
 Base.unsafe_convert(::Type{Ptr{Tv}}, A::Sparse{Tv}) where {Tv} = getfield(A, :ptr)
 
 # Factor
+# Cvoid is used for pattern-only factors
 struct C_Factor{Tv<:VTypes} <: SuiteSparseStruct
     n::Csize_t
     minor::Csize_t
@@ -319,7 +320,7 @@ struct C_Factor{Tv<:VTypes} <: SuiteSparseStruct
     dtype::Cint
 end
 
-mutable struct Factor{Tv} <: Factorization{Tv}
+mutable struct Factor{Tv<:VTypes} <: Factorization{Tv}
     ptr::Ptr{C_Factor{Tv}}
     function Factor{Tv}(ptr::Ptr{C_Factor{Tv}}, register_finalizer = true) where Tv
         if ptr == C_NULL
@@ -330,7 +331,7 @@ mutable struct Factor{Tv} <: Factorization{Tv}
         if s.itype != ityp(SuiteSparse_long)
             free!(ptr)
             throw(CHOLMODException("itype=$(s.itype) not supported"))
-        elseif s.xtype != xtyp(Tv) || x.stype != PATTERN
+        elseif s.xtype != xtyp(Tv) || s.xtype != PATTERN
             free!(ptr)
             throw(CHOLMODException("xtype=$(s.xtype) not supported"))
         elseif s.dtype != dtyp(Tv)
@@ -431,7 +432,7 @@ end
 eye(m::Integer, n::Integer) = eye(m, n, Float64)
 eye(n::Integer) = eye(n, n, Float64)
 
-function copy_dense(A::Dense{Tv}) where Tv<:VTypes
+function copy(A::Dense{Tv}) where Tv<:VTypes
     Dense(ccall((@cholmod_name("copy_dense"), :libcholmod), Ptr{C_Dense{Tv}},
                 (Ptr{C_Dense{Tv}}, Ptr{UInt8}),
                 A, common_struct))
@@ -469,23 +470,15 @@ end
 # Non-Dense wrappers
 ### cholmod_core.h ###
 function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer,
-        sorted::Bool, packed::Bool, stype::Integer, ::Type{Float64})
+        sorted::Bool, packed::Bool, stype::Integer, ::Type{Tv}) where {Tv<:VTypes}
     Sparse(ccall((@cholmod_name("allocate_sparse"), :libcholmod),
             Ptr{C_Sparse{Float64}},
                 (Csize_t, Csize_t, Csize_t, Cint,
                  Cint, Cint, Cint, Ptr{Cvoid}),
                 nrow, ncol, nzmax, sorted,
-                packed, stype, REAL, common_struct))
+                packed, stype, xtyp(Tv), common_struct))
 end
-function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer,
-        sorted::Bool, packed::Bool, stype::Integer, ::Type{Complex{Float64}})
-    Sparse(ccall((@cholmod_name("allocate_sparse"), :libcholmod),
-            Ptr{C_Sparse{Complex{Float64}}},
-                (Csize_t, Csize_t, Csize_t, Cint,
-                 Cint, Cint, Cint, Ptr{Cvoid}),
-                nrow, ncol, nzmax, sorted,
-                packed, stype, COMPLEX, common_struct))
-end
+
 function free!(ptr::Ptr{C_Sparse{Tv}}) where Tv<:VTypes
     @isok ccall((@cholmod_name("free_sparse"), :libcholmod), Cint,
             (Ref{Ptr{C_Sparse{Tv}}}, Ptr{UInt8}),
@@ -521,29 +514,18 @@ end
 
 function factor_to_sparse!(F::Factor{Tv}) where Tv<:VTypes
     ss = unsafe_load(pointer(F))
-    ss.xtype > PATTERN || throw(CHOLMODException("only numeric factors are supported"))
+    ss.xtype == PATTERN && throw(CHOLMODException("only numeric factors are supported"))
     Sparse(ccall((@cholmod_name("factor_to_sparse"),:libcholmod),
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Factor{Tv}}, Ptr{UInt8}),
                 F, common_struct))
 end
 
-function change_factor!(::Type{Float64}, to_ll::Bool,
-        to_super::Bool, to_packed::Bool, to_monotonic::Bool, F::Factor{Tv}) where Tv<:VTypes
+function change_factor!(F::Factor{Tv}, to_ll::Bool, to_super::Bool, to_packed::Bool,
+                        to_monotonic::Bool) where Tv<:VTypes
     @isok ccall((@cholmod_name("change_factor"),:libcholmod), Cint,
             (Cint, Cint, Cint, Cint, Cint, Ptr{C_Factor{Tv}}, Ptr{UInt8}),
-                REAL, to_ll, to_super, to_packed, to_monotonic, F, common_struct)
-    # don't register finalizer since we reuse object
-    Factor{Float64}(pointer(F), false)
-end
-
-function change_factor!(::Type{Complex{Float64}}, to_ll::Bool,
-        to_super::Bool, to_packed::Bool, to_monotonic::Bool, F::Factor{Tv}) where Tv<:VTypes
-    @isok ccall((@cholmod_name("change_factor"),:libcholmod), Cint,
-            (Cint, Cint, Cint, Cint, Cint, Ptr{C_Factor{Tv}}, Ptr{UInt8}),
-                COMPLEX, to_ll, to_super, to_packed, to_monotonic, F, common_struct)
-    # don't register finalizer since we reuse object
-    Factor{Complex{Float64}}(pointer(F), false)
+                xtyp(Tv), to_ll, to_super, to_packed, to_monotonic, F, common_struct)
 end
 
 function check_sparse(A::Sparse{Tv}) where Tv<:VTypes
@@ -585,13 +567,13 @@ function transpose_(A::Sparse{Tv}, values::Integer) where Tv<:VTypes
                 A, values, common_struct))
 end
 
-function copy_factor(F::Factor{Tv}) where Tv<:VTypes
+function copy(F::Factor{Tv}) where Tv<:VTypes
     Factor(ccall((@cholmod_name("copy_factor"),:libcholmod),
         Ptr{C_Factor{Tv}},
             (Ptr{C_Factor{Tv}}, Ptr{UInt8}),
                 F, common_struct))
 end
-function copy_sparse(A::Sparse{Tv}) where Tv<:VTypes
+function copy(A::Sparse{Tv}) where Tv<:VTypes
     Sparse(ccall((@cholmod_name("copy_sparse"),:libcholmod),
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
@@ -1144,10 +1126,6 @@ show(io::IO, ::MIME"text/plain", F::Factor) = show(io, F)
 isvalid(A::Dense) = check_dense(A)
 isvalid(A::Sparse) = check_sparse(A)
 isvalid(A::Factor) = check_factor(A)
-
-copy(A::Dense) = copy_dense(A)
-copy(A::Sparse) = copy_sparse(A)
-copy(A::Factor) = copy_factor(A)
 
 function size(A::Union{Dense,Sparse})
     s = unsafe_load(pointer(A))
