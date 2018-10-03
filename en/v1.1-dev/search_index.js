@@ -4573,7 +4573,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Keywords",
     "category": "section",
-    "text": "This is the list of reserved keywords in Julia: baremodule, begin, break, catch, const, continue, do, else, elseif, end, export, false, finally, for, function, global, if, import, let, local, macro, module, quote, return, struct, true, try, using, while. Those keywords are not allowed to be used as variable names.The following two-word sequences are reserved: abstract type, mutable struct, primitive type. However, you can create variables with names: abstract, mutable, primitive and type.Finally where is parsed as an infix operator for writing parametric method and type definitions. Also in and isa are parsed as infix operators. Creation of a variable named where, in or isa is allowed though.module\nexport\nimport\nusing\nbaremodule\nfunction\nmacro\nreturn\ndo\nbegin\nend\nlet\nif\nfor\nwhile\nbreak\ncontinue\ntry\nfinally\nquote\nlocal\nglobal\nconst\nstruct\nmutable struct\nabstract type\nprimitive type\nwhere\n...\n;"
+    "text": "This is the list of reserved keywords in Julia: baremodule, begin, break, catch, const, continue, do, else, elseif, end, export, false, finally, for, function, global, if, import, let, local, macro, module, quote, return, struct, true, try, using, while. Those keywords are not allowed to be used as variable names.The following two word sequences are reserved: abstract type, mutable struct, primitive type. However, you can create variables with names: abstract, mutable, primitive and type.Finally where is parsed as an infix operator for writing parametric method and type definitions. Also in and isa are parsed as infix operators. Creation of variable named where, in or isa is allowed though.module\nexport\nimport\nusing\nbaremodule\nfunction\nmacro\nreturn\ndo\nbegin\nend\nlet\nif\nfor\nwhile\nbreak\ncontinue\ntry\nfinally\nquote\nlocal\nglobal\nconst\nstruct\nmutable struct\nabstract type\nprimitive type\nwhere\n...\n;"
 },
 
 {
@@ -7437,7 +7437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
