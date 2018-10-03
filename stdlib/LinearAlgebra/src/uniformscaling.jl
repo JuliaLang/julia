@@ -110,6 +110,30 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
     end
 end
 
+# Adding a complex UniformScaling to the diagonal of a Hermitian
+# matrix breaks the hermiticity, if the UniformScaling is non-real.
+# However, to preserve type stability, we do not special-case a
+# UniformScaling{<:Complex} that happens to be real.
+function (+)(A::Hermitian, J::UniformScaling{<:Complex})
+    checksquare(A)
+    A_ = copytri!(copy(parent(A)), A.uplo)
+    B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, A_)
+    @inbounds for i in axes(A, 1)
+        B[i,i] += J
+    end
+    return B
+end
+
+function (-)(J::UniformScaling{<:Complex}, A::Hermitian)
+    checksquare(A)
+    A_ = copytri!(copy(parent(A)), A.uplo)
+    B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, -A_)
+    @inbounds for i in axes(A, 1)
+        B[i,i] += J
+    end
+    return B
+end
+
 function (+)(A::AbstractMatrix, J::UniformScaling)
     checksquare(A)
     B = copy_oftype(A, Base._return_type(+, Tuple{eltype(A), typeof(J)}))

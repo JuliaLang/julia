@@ -90,6 +90,17 @@ end
                 @test (-Hermitian(aherm))::typeof(Hermitian(aherm)) == -aherm
             end
 
+            @testset "Addition and subtraction for Symmetric/Hermitian matrices" begin
+                for f in (+, -)
+                    @test (f(Symmetric(asym), Symmetric(aposs)))::typeof(Symmetric(asym)) == f(asym, aposs)
+                    @test (f(Hermitian(aherm), Hermitian(apos)))::typeof(Hermitian(aherm)) == f(aherm, apos)
+                    @test (f(Symmetric(real(asym)), Hermitian(aherm)))::typeof(Hermitian(aherm)) == f(real(asym), aherm)
+                    @test (f(Hermitian(aherm), Symmetric(real(asym))))::typeof(Hermitian(aherm)) == f(aherm, real(asym))
+                    @test (f(Symmetric(asym), Hermitian(aherm))) == f(asym, aherm)
+                    @test (f(Hermitian(aherm), Symmetric(asym))) == f(aherm, asym)
+                end
+            end
+
             @testset "getindex and unsafe_getindex" begin
                 @test aherm[1,1] == Hermitian(aherm)[1,1]
                 @test asym[1,1] == Symmetric(asym)[1,1]
@@ -415,9 +426,6 @@ end
 
         @test T([true false; false true]) .+ true == T([2 1; 1 2])
     end
-
-    @test_throws ArgumentError Hermitian(X) + 2im*I
-    @test_throws ArgumentError Hermitian(X) - 2im*I
 end
 
 @testset "Issue #21981" begin
