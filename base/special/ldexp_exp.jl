@@ -88,7 +88,7 @@ function _frexp_exp(x::T) where T<:Union{Float32, Float64}
 
 	# We use exp(x) = exp(x - kln2) * 2**k, carefully chosen to
     # minimize |exp(kln2) - 2**k|.
-	kr = T == Type{Float32} ? UInt32(235) : UInt32(1799)
+	kr = T == Float32 ? UInt32(235) : UInt32(1799)
 
 	# We also scale the exponent of exp_x to exponent_bias + the largest finite
 	# exponent (exponent of T(Inf)-1, so that the result can be multiplied by
