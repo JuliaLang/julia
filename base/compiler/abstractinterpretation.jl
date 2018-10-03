@@ -759,23 +759,6 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         return Type # don't try to infer these function edges directly -- it won't actually come up with anything useful
     end
 
-    if sv.params.inlining
-        # need to model the special inliner for ^
-        # to ensure we have added the same edge
-        if isdefined(Main, :Base) &&
-            ((isdefined(Main.Base, :^) && f === Main.Base.:^) ||
-             (isdefined(Main.Base, :.^) && f === Main.Base.:.^)) &&
-            length(argtypes) == 3 && (argtypes[3] ⊑ Int32 || argtypes[3] ⊑ Int64)
-
-            a1 = argtypes[2]
-            basenumtype = Union{CoreNumType, Main.Base.ComplexF32, Main.Base.ComplexF64, Main.Base.Rational}
-            if a1 ⊑ basenumtype
-                ftimes = Main.Base.:*
-                ta1 = widenconst(a1)
-                abstract_call_gf_by_type(ftimes, Any[ftimes, a1, a1], Tuple{typeof(ftimes), ta1, ta1}, sv)
-            end
-        end
-    end
     return abstract_call_gf_by_type(f, argtypes, atype, sv)
 end
 
