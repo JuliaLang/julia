@@ -330,7 +330,7 @@ mutable struct Factor{Tv} <: Factorization{Tv}
         if s.itype != ityp(SuiteSparse_long)
             free!(ptr)
             throw(CHOLMODException("itype=$(s.itype) not supported"))
-        elseif s.xtype != xtyp(Tv)
+        elseif s.xtype != xtyp(Tv) || x.stype != PATTERN
             free!(ptr)
             throw(CHOLMODException("xtype=$(s.xtype) not supported"))
         elseif s.dtype != dtyp(Tv)
@@ -1273,7 +1273,7 @@ end
 
 ## Compute that symbolic factorization only
 function fact_(A::Sparse{<:VTypes}, cm::Array{UInt8};
-    perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[],
+    perm::Union{Nothing,AbstractVector{SuiteSparse_long}}=nothing,
     postorder::Bool=true, userperm_only::Bool=true)
 
     sA = unsafe_load(pointer(A))
@@ -1283,7 +1283,7 @@ function fact_(A::Sparse{<:VTypes}, cm::Array{UInt8};
         unsafe_store!(common_postorder[], 0)
     end
 
-    if isempty(perm)
+    if perm === nothing || isempty(perm) # TODO: deprecate empty perm
         F = analyze(A, cm)
     else # user permutation provided
         if userperm_only # use perm even if it is worse than AMD
@@ -1332,7 +1332,7 @@ cholesky!(F::Factor, A::Union{SparseMatrixCSC{T},
     cholesky!(F, Sparse(A); shift = shift, check = check)
 
 function cholesky(A::Sparse; shift::Real=0.0, check::Bool = true,
-    perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[])
+    perm::Union{Nothing,AbstractVector{SuiteSparse_long}}=nothing)
 
     cm = defaults(common_struct)
     set_print_level(cm, 0)
@@ -1347,7 +1347,7 @@ function cholesky(A::Sparse; shift::Real=0.0, check::Bool = true,
 end
 
 """
-    cholesky(A; shift = 0.0, check = true, perm = Int[]) -> CHOLMOD.Factor
+    cholesky(A; shift = 0.0, check = true, perm = nothing) -> CHOLMOD.Factor
 
 Compute the Cholesky factorization of a sparse positive definite matrix `A`.
 `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
@@ -1370,7 +1370,7 @@ When `check = false`, responsibility for checking the decomposition's
 validity (via [`issuccess`](@ref)) lies with the user.
 
 Setting the optional `shift` keyword argument computes the factorization of
-`A+shift*I` instead of `A`. If the `perm` argument is nonempty,
+`A+shift*I` instead of `A`. If the `perm` argument is provided,
 it should be a permutation of `1:size(A,1)` giving the ordering to use
 (instead of CHOLMOD's default AMD ordering).
 
@@ -1496,7 +1496,7 @@ ldlt!(F::Factor, A::Union{SparseMatrixCSC{T},
     ldlt!(F, Sparse(A), shift = shift, check = check)
 
 function ldlt(A::Sparse; shift::Real=0.0, check::Bool = true,
-    perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[])
+    perm::Union{Nothing,AbstractVector{SuiteSparse_long}}=nothing)
 
     cm = defaults(common_struct)
     set_print_level(cm, 0)
@@ -1516,7 +1516,7 @@ function ldlt(A::Sparse; shift::Real=0.0, check::Bool = true,
 end
 
 """
-    ldlt(A; shift = 0.0, check = true, perm=Int[]) -> CHOLMOD.Factor
+    ldlt(A; shift = 0.0, check = true, perm=nothing) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of a sparse matrix `A`.
 `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
@@ -1540,7 +1540,7 @@ When `check = false`, responsibility for checking the decomposition's
 validity (via [`issuccess`](@ref)) lies with the user.
 
 Setting the optional `shift` keyword argument computes the factorization of
-`A+shift*I` instead of `A`. If the `perm` argument is nonempty,
+`A+shift*I` instead of `A`. If the `perm` argument is provided,
 it should be a permutation of `1:size(A,1)` giving the ordering to use
 (instead of CHOLMOD's default AMD ordering).
 
