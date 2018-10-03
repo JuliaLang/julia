@@ -204,12 +204,20 @@ struct C_Dense{T<:VTypes} <: SuiteSparseStruct
     dtype::Cint
 end
 
-mutable struct Dense{T<:VTypes} <: DenseMatrix{T}
-    ptr::Ptr{C_Dense{T}}
+mutable struct Dense{Tv<:VTypes} <: DenseMatrix{Tv}
+    ptr::Ptr{C_Dense{Tv}}
     function Dense{Tv}(ptr::Ptr{C_Dense{Tv}}) where Tv<:VTypes
         if ptr == C_NULL
             throw(ArgumentError("dense matrix construction failed for " *
                 "unknown reasons. Please submit a bug report."))
+        end
+        s = unsafe_load(ptr)
+        if s.xtype != xtyp(Tv)
+            free!(ptr)
+            throw(CHOLMODException("xtype=$(s.xtype) not supported"))
+        elseif s.dtype != dtyp(Tv)
+            free!(ptr)
+            throw(CHOLMODException("dtype=$(s.dtype) not supported"))
         end
         A = new(ptr)
         finalizer(free!, A)
@@ -318,6 +326,17 @@ mutable struct Factor{Tv} <: Factorization{Tv}
             throw(ArgumentError("factorization construction failed for " *
                 "unknown reasons. Please submit a bug report."))
         end
+        s = unsafe_load(ptr)
+        if s.itype != ityp(SuiteSparse_long)
+            free!(ptr)
+            throw(CHOLMODException("itype=$(s.itype) not supported"))
+        elseif s.xtype != xtyp(Tv)
+            free!(ptr)
+            throw(CHOLMODException("xtype=$(s.xtype) not supported"))
+        elseif s.dtype != dtyp(Tv)
+            free!(ptr)
+            throw(CHOLMODException("dtype=$(s.dtype) not supported"))
+        end
         F = new(ptr)
         if register_finalizer
             finalizer(free!, F)
@@ -377,56 +396,51 @@ Factor(FC::FactorComponent) = Factor(FC.F)
 #################
 
 # Dense wrappers
-## Note! Integer type defaults to Cint, but this is actually not necessary, but
-## making this a choice would require another type parameter in the Dense type
 
 ### cholmod_core_h ###
-function allocate_dense(nrow::Integer, ncol::Integer, d::Integer, ::Type{Float64})
-    Dense(ccall((:cholmod_l_allocate_dense, :libcholmod), Ptr{C_Dense{Float64}},
-        (Csize_t, Csize_t, Csize_t, Cint, Ptr{Cvoid}),
-        nrow, ncol, d, REAL, common_struct))
-end
-function allocate_dense(nrow::Integer, ncol::Integer, d::Integer, ::Type{Complex{Float64}})
-    Dense(ccall((:cholmod_l_allocate_dense, :libcholmod), Ptr{C_Dense{Complex{Float64}}},
-        (Csize_t, Csize_t, Csize_t, Cint, Ptr{Cvoid}),
-        nrow, ncol, d, COMPLEX, common_struct))
+function allocate_dense(m::Integer, n::Integer, d::Integer, ::Type{Tv}) where {Tv<:VTypes}
+    Dense(ccall((@cholmod_name("allocate_dense"), :libcholmod), Ptr{C_Dense{Tv}},
+                (Csize_t, Csize_t, Csize_t, Cint, Ptr{Cvoid}),
+                m, n, d, xtyp(Tv), common_struct))
 end
 
-free!(p::Ptr{C_Dense{T}}) where {T} = ccall((:cholmod_l_free_dense, :libcholmod),
-    Cint, (Ref{Ptr{C_Dense{T}}}, Ptr{Cvoid}), p, common_struct)
-
-function zeros(m::Integer, n::Integer, ::Type{T}) where T<:VTypes
-    Dense(ccall((:cholmod_l_zeros, :libcholmod), Ptr{C_Dense{T}},
-        (Csize_t, Csize_t, Cint, Ptr{UInt8}),
-         m, n, xtyp(T), common_struct))
+function free!(p::Ptr{C_Dense{Tv}}) where {Tv<:VTypes}
+    @isok ccall((@cholmod_name("free_dense"), :libcholmod), Cint,
+                (Ref{Ptr{C_Dense{Tv}}}, Ptr{Cvoid}),
+                p, common_struct)
+end
+function zeros(m::Integer, n::Integer, ::Type{Tv}) where Tv<:VTypes
+    Dense(ccall((@cholmod_name("zeros"), :libcholmod), Ptr{C_Dense{Tv}},
+                (Csize_t, Csize_t, Cint, Ptr{UInt8}),
+                m, n, xtyp(Tv), common_struct))
 end
 zeros(m::Integer, n::Integer) = zeros(m, n, Float64)
 
-function ones(m::Integer, n::Integer, ::Type{T}) where T<:VTypes
-    Dense(ccall((:cholmod_l_ones, :libcholmod), Ptr{C_Dense{T}},
-        (Csize_t, Csize_t, Cint, Ptr{UInt8}),
-         m, n, xtyp(T), common_struct))
+function ones(m::Integer, n::Integer, ::Type{Tv}) where Tv<:VTypes
+    Dense(ccall((@cholmod_name("ones"), :libcholmod), Ptr{C_Dense{Tv}},
+                (Csize_t, Csize_t, Cint, Ptr{UInt8}),
+                m, n, xtyp(Tv), common_struct))
 end
 ones(m::Integer, n::Integer) = ones(m, n, Float64)
 
-function eye(m::Integer, n::Integer, ::Type{T}) where T<:VTypes
-    Dense(ccall((:cholmod_l_eye, :libcholmod), Ptr{C_Dense{T}},
-        (Csize_t, Csize_t, Cint, Ptr{UInt8}),
-         m, n, xtyp(T), common_struct))
+function eye(m::Integer, n::Integer, ::Type{Tv}) where Tv<:VTypes
+    Dense(ccall((@cholmod_name("eye"), :libcholmod), Ptr{C_Dense{Tv}},
+                (Csize_t, Csize_t, Cint, Ptr{UInt8}),
+                m, n, xtyp(Tv), common_struct))
 end
 eye(m::Integer, n::Integer) = eye(m, n, Float64)
 eye(n::Integer) = eye(n, n, Float64)
 
 function copy_dense(A::Dense{Tv}) where Tv<:VTypes
-    Dense(ccall((:cholmod_l_copy_dense, :libcholmod), Ptr{C_Dense{Tv}},
-        (Ptr{C_Dense{Tv}}, Ptr{UInt8}),
-         A, common_struct))
+    Dense(ccall((@cholmod_name("copy_dense"), :libcholmod), Ptr{C_Dense{Tv}},
+                (Ptr{C_Dense{Tv}}, Ptr{UInt8}),
+                A, common_struct))
 end
 
 function sort!(S::Sparse{Tv}) where Tv<:VTypes
-    @isok ccall((:cholmod_l_sort, :libcholmod), SuiteSparse_long,
-        (Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
-         S, common_struct)
+    @isok ccall((@cholmod_name("sort"), :libcholmod), Cint,
+                (Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
+                S, common_struct)
     return S
 end
 
@@ -440,15 +454,15 @@ function norm_dense(D::Dense{Tv}, p::Integer) where Tv<:VTypes
     elseif p != 0 && p != 1
         throw(ArgumentError("second argument must be either 0 (Inf norm), 1, or 2"))
     end
-    ccall((:cholmod_l_norm_dense, :libcholmod), Cdouble,
+    ccall((@cholmod_name("norm_dense"), :libcholmod), Cdouble,
         (Ptr{C_Dense{Tv}}, Cint, Ptr{UInt8}),
           D, p, common_struct)
 end
 
 ### cholmod_check.h ###
-function check_dense(A::Dense{T}) where T<:VTypes
-    ccall((:cholmod_l_check_dense, :libcholmod), Cint,
-          (Ptr{C_Dense{T}}, Ptr{UInt8}),
+function check_dense(A::Dense{Tv}) where Tv<:VTypes
+    ccall((@cholmod_name("check_dense"), :libcholmod), Cint,
+          (Ptr{C_Dense{Tv}}, Ptr{UInt8}),
           pointer(A), common_struct) != 0
 end
 
@@ -1563,7 +1577,7 @@ function lowrankupdowndate!(F::Factor{Tv}, C::Sparse{Tv}, update::Cint) where Tv
     if lF.n != lC.nrow
         throw(DimensionMismatch("matrix dimensions do not fit"))
     end
-    @isok ccall((:cholmod_l_updown, :libcholmod), Cint,
+    @isok ccall((@cholmod_name("updown"), :libcholmod), Cint,
         (Cint, Ptr{C_Sparse{Tv}}, Ptr{C_Factor{Tv}}, Ptr{Cvoid}),
         update, C, F, common_struct)
     F
