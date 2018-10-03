@@ -329,8 +329,7 @@ transpose(A::Hermitian{<:Real}) = A
 adjoint(A::Symmetric) = Adjoint(A)
 transpose(A::Hermitian) = Transpose(A)
 
-real(A::Symmetric{<:Real}) = copy(A)
-real(A::Hermitian{<:Real}) = copy(A)
+real(A::HermOrSym{<:Real}) = A
 real(A::Symmetric) = Symmetric(real(A.data), sym_uplo(A.uplo))
 real(A::Hermitian) = Hermitian(real(A.data), sym_uplo(A.uplo))
 imag(A::Symmetric) = Symmetric(imag(A.data), sym_uplo(A.uplo))
