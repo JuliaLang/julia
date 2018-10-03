@@ -331,7 +331,7 @@ mutable struct Factor{Tv<:VTypes} <: Factorization{Tv}
         if s.itype != ityp(SuiteSparse_long)
             free!(ptr)
             throw(CHOLMODException("itype=$(s.itype) not supported"))
-        elseif s.xtype != xtyp(Tv) || s.xtype != PATTERN
+        elseif s.xtype != xtyp(Tv) && s.xtype != PATTERN
             free!(ptr)
             throw(CHOLMODException("xtype=$(s.xtype) not supported"))
         elseif s.dtype != dtyp(Tv)
