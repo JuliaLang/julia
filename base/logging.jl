@@ -70,7 +70,7 @@ logger type.
 catch_exceptions(logger) = true
 
 
-# The logger equivalent of /dev/null, for when a placeholder is needed
+
 """
     NullLogger()
 
