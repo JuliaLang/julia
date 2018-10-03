@@ -1342,7 +1342,7 @@ static jl_value_t *set_var_to_const(jl_varbinding_t *bb, jl_value_t *v, jl_varbi
         bb->lb = bb->ub = v;
     }
     else if (jl_is_long(v) && jl_is_long(bb->lb)) {
-        if (jl_unbox_long(v) + offset != jl_unbox_long(bb->lb))
+        if (jl_unbox_long(v) != jl_unbox_long(bb->lb))
             return jl_bottom_type;
     }
     else if (!jl_egal(v, bb->lb)) {
