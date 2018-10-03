@@ -51,16 +51,7 @@ exponential functions.  We assume l2 is small (0 or -1), and the caller
 has filtered out very large x, for which overflow would be inevitable.
 """
 function _ldexp_exp(x::T, l2) where T <: Union{Float32, Float64}
-	# This function is intended for use in our hyperbolic and exponential functions,
-	# and should only be used for values in the range (let T = typeof(x)):
-	#
-	#     log(prevfloat(typemax(x))) <= x < log(2 * prevfloat(typemax(x) / nextfloat(T(0)))
-	#
-	# where the upper bound is around 192.7f0 and ~= 1454.91. The function outputs
-	# exp_x in the ranges
-	# 	[2f0^127, 2f0^128) and
-	# 	[2.0^1023, 2.0^1024)
-	# respectively.
+	# This function is intended for use in our hyperbolic and exponential functions.
 
 	# Calculate exp(x) = (exp(x-kr*log(2))*2^ks*)2^k2 = exp_x*2^k2
 	exp_x, k2 = _frexp_exp(x)
@@ -85,7 +76,15 @@ to be outside the normal floating point range.
 This function is intended for use in our hyperbolic and exponential functions.
 """
 function _frexp_exp(x::T) where T<:Union{Float32, Float64}
-    # For input and output details see the ldexp_exp comments.
+	# and should only be used for values in the range (let T = typeof(x)):
+	#
+	#     log(prevfloat(typemax(x))) <= x < log(2 * prevfloat(typemax(x) / nextfloat(T(0)))
+	#
+	# where the upper bound is around 192.7f0 and ~= 1454.91. The function outputs
+	# exp_x in the ranges
+	# 	[2f0^127, 2f0^128) and
+	# 	[2.0^1023, 2.0^1024)
+	# respectively.
 
 	# We use exp(x) = exp(x - kln2) * 2**k, carefully chosen to
     # minimize |exp(kln2) - 2**k|.
