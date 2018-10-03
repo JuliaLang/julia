@@ -1035,6 +1035,7 @@ end
 # convert the dispatch tuple type argtype to the real (concrete) type of
 # the tuple of those values
 function tuple_tfunc(atypes::Vector{Any})
+    atypes = anymap(maybe_widen_conditional, atypes)
     all_are_const = true
     for i in 1:length(atypes)
         if !isa(atypes[i], Const)

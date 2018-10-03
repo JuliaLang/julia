@@ -169,6 +169,24 @@ function ⊑(@nospecialize(a), @nospecialize(b))
     end
 end
 
+# Check if two lattice elements are partial order equivalent. This is basically
+# `a ⊑ b && b ⊑ a` but with extra performance optimizations.
+function is_lattice_equal(@nospecialize(a), @nospecialize(b))
+    a === b && return true
+    if isa(a, PartialTuple)
+        isa(b, PartialTuple) || return false
+        length(a.fields) == length(b.fields) || return false
+        for i in 1:length(a.fields)
+            is_lattice_equal(a.fields[i], b.fields[i]) || return false
+        end
+        return true
+    end
+    isa(b, PartialTuple) && return false
+    a isa Const && return false
+    b isa Const && return false
+    return a ⊑ b && b ⊑ a
+end
+
 widenconst(c::Conditional) = Bool
 function widenconst(c::Const)
     if isa(c.val, Type)
