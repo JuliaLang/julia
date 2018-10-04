@@ -1052,7 +1052,7 @@ function typeinf_local(frame::InferenceState)
             elseif hd === :return
                 pc´ = n + 1
                 rt = maybe_widen_conditional(abstract_eval(stmt.args[1], s[pc], frame))
-                if !isa(rt, Const) && !isa(rt, Type)
+                if !isa(rt, Const) && !isa(rt, Type) && (!isa(rt, PartialTuple) || frame.cached)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally
                     rt = widenconst(rt)
