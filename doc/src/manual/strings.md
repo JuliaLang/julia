@@ -292,6 +292,27 @@ In this case, the character `∀` is a three-byte character, so the indices 2 an
 and the next character's index is 4; this next valid index can be computed by [`nextind(s,1)`](@ref),
 and the next index after that by `nextind(s,4)` and so on.
 
+Since `end` is always the last valid index into a collection, `end - 1` references an invalid
+byte index most of the times, except when the second to last character in the string happens
+to be a non-multibyte character.
+
+```jldoctest unicodesting
+julia> s[end-1]
+' ': ASCII/Unicode U+0020 (category Zs: Separator, space)
+
+julia> s[end-2]
+ERROR: StringIndexError("∀ x ∃ y", 9)
+Stacktrace:
+[...]
+
+julia> s[prevind(s, end, 2)]
+'∃': Unicode U+2203 (category Sm: Symbol, math)
+```
+
+The first case works, because the last character `y` and the space are one byte characters,
+whereas `end-2` indexes in the middle of the `∃` multibyte representation. The correct
+way for this case is using `prevind(s, end, 2)`.
+
 Extraction of a substring using range indexing also expects valid byte indices or an error is thrown:
 
 ```jldoctest unicodestring
