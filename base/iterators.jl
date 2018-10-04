@@ -364,11 +364,7 @@ function _zip_iterate_interleave(xs1, xs2, ds::Tuple{Bool,Vararg{Any}})
 end
 _zip_iterate_interleave(::Tuple{}, ::Tuple{}, ::Tuple{}) = ((), ())
 
-function _zip_isdone(is, ss)
-    d = isdone(is[1], ss[1]...)
-    d === true && return map(_ -> true, is) # no need to check the remaining ones, but fill with trues for type stability
-    return (d, _zip_isdone(tail(is), tail(ss))...)
-end
+_zip_isdone(is, ss) = (isdone(is[1], ss[1]...), _zip_isdone(tail(is), tail(ss))...)
 _zip_isdone(::Tuple{}, ::Tuple{}) = ()
 
 IteratorSize(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_iterator_size(Is)
