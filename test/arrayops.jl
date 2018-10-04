@@ -1753,6 +1753,10 @@ end
 
     @test @inferred(convert(NTuple{2,UnitRange}, R)) === (2:5, 3:5)
     @test @inferred(convert(Tuple{Vararg{UnitRange}}, R)) === (2:5, 3:5)
+
+    I = CartesianIndex(2,3)
+    J = CartesianIndex(5,4)
+    @test I:J === CartesianIndices((2:5, 3:4))
 end
 
 # All we really care about is that we have an optimized
