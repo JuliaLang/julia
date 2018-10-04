@@ -3,7 +3,7 @@
 ### Multidimensional iterators
 module IteratorsMD
     import .Base: eltype, length, size, first, last, in, getindex,
-                 setindex!, IndexStyle, min, max, zero, one, isless, eachindex,
+                 setindex!, IndexStyle, min, max, zero, oneunit, isless, eachindex,
                  ndims, IteratorSize, convert, show, iterate, promote_rule
 
     import .Base: +, -, *, (:)
@@ -97,8 +97,8 @@ module IteratorsMD
     # zeros and ones
     zero(::CartesianIndex{N}) where {N} = zero(CartesianIndex{N})
     zero(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 0, Val(N)))
-    one(::CartesianIndex{N}) where {N} = one(CartesianIndex{N})
-    one(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val(N)))
+    oneunit(::CartesianIndex{N}) where {N} = oneunit(CartesianIndex{N})
+    oneunit(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val(N)))
 
     # arithmetic, min/max
     @inline (-)(index::CartesianIndex{N}) where {N} =
