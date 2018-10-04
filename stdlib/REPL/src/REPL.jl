@@ -623,12 +623,17 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     b = b ≤ ncodeunits(response_str) ? prevind(response_str, b) : b-1
     b = min(lastindex(response_str), b) # ensure that b is valid
 
-    !skip_current && searchdata == response_str[a:b] && return true
-
     searchfunc1, searchfunc2, searchstart, skipfunc = backwards ?
                                                       (findlast, findprev, b, prevind) :
                                                       (findfirst, findnext, a, nextind)
-    skip_current && (searchstart = skipfunc(response_str, searchstart))
+
+    if searchdata == response_str[a:b]
+        if skip_current
+            searchstart = skipfunc(response_str, searchstart)
+        else
+            return true
+        end
+    end
 
     # Start searching
     # First the current response buffer

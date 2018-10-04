@@ -601,6 +601,16 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         @test buffercontents(LineEdit.buffer(s)) == "x ΔxΔ"
         @test position(LineEdit.buffer(s)) == 0
 
+        LineEdit.edit_clear(s)
+        LineEdit.enter_search(s, histp, true)
+        ss = LineEdit.state(s, histp)
+        write(ss.query_buffer, "Å") # should not be in history
+        LineEdit.update_display_buffer(ss, ss)
+        @test buffercontents(ss.response_buffer) == ""
+        @test position(ss.response_buffer) == 0
+        LineEdit.history_next_result(s, ss) # should not throw BoundsError
+        LineEdit.accept_result(s, histp)
+
         # Try entering search mode while in custom repl mode
         LineEdit.enter_search(s, custom_histp, true)
     end
