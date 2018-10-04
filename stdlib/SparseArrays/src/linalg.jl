@@ -36,18 +36,21 @@ function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}
     size(A, 2) == size(C, 1) || throw(DimensionMismatch())
     size(A, 1) == size(B, 1) || throw(DimensionMismatch())
     size(B, 2) == size(C, 2) || throw(DimensionMismatch())
+    colptrA = getcolptr(A)
     nzv = nonzeros(A)
     rv = rowvals(A)
     if β != 1
         β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
     end
     for k = 1:size(C, 2)
-        @inbounds for col = 1:size(A, 2)
-            tmp = zero(eltype(C))
-            for j = getcolptr(A)[col]:(getcolptr(A)[col + 1] - 1)
-                tmp += adjoint(nzv[j])*B[rv[j],k]
+        Threads.@threads for col = 1:size(A, 2)
+            @inbounds begin
+                tmp = zero(eltype(C))
+                for j = colptrA[col]:(colptrA[col+1] - 1)
+                    tmp += adjoint(nzv[j])*B[rv[j],k]
+                end
+                C[col,k] += α*tmp
             end
-            C[col,k] += tmp * α
         end
     end
     C
