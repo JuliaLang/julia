@@ -83,17 +83,6 @@ end
 (-)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) - tons(y)))
 (+)(y::Period, x::TimeType) = x + y
 
-(+)(x::AbstractArray{<:TimeType}, y::GeneralPeriod) = x .+ y
-(+)(x::StridedArray{<:GeneralPeriod}, y::TimeType) = x .+ y
-(+)(y::GeneralPeriod, x::AbstractArray{<:TimeType}) = x .+ y
-(+)(y::TimeType, x::StridedArray{<:GeneralPeriod}) = x .+ y
-(-)(x::AbstractArray{<:TimeType}, y::GeneralPeriod) = x .- y
-(-)(x::StridedArray{<:GeneralPeriod}, y::TimeType) = x .- y
-
-# TimeType, AbstractArray{TimeType}
-(-)(x::AbstractArray{T}, y::T) where {T<:TimeType} = x .- y
-(-)(y::T, x::AbstractArray{T}) where {T<:TimeType} = y .- x
-
 # AbstractArray{TimeType}, AbstractArray{TimeType}
 (-)(x::OrdinalRange{T}, y::OrdinalRange{T}) where {T<:TimeType} = Vector(x) - Vector(y)
 (-)(x::AbstractRange{T}, y::AbstractRange{T}) where {T<:TimeType} = Vector(x) - Vector(y)
