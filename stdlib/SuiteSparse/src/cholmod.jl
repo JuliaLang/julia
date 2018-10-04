@@ -472,7 +472,7 @@ end
 function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer,
         sorted::Bool, packed::Bool, stype::Integer, ::Type{Tv}) where {Tv<:VTypes}
     Sparse(ccall((@cholmod_name("allocate_sparse"), :libcholmod),
-            Ptr{C_Sparse{Float64}},
+            Ptr{C_Sparse{Tv}},
                 (Csize_t, Csize_t, Csize_t, Cint,
                  Cint, Cint, Cint, Ptr{Cvoid}),
                 nrow, ncol, nzmax, sorted,
@@ -861,7 +861,7 @@ function Sparse(m::Integer, n::Integer,
     o
 end
 
-function Sparse(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer) where Tv<:VTypes
+function Sparse{Tv}(A::SparseMatrixCSC, stype::Integer) where Tv<:VTypes
     ## Check length of input. This should never fail but see #20024
     if length(A.colptr) <= A.n
         throw(ArgumentError("length of colptr must be at least size(A,2) + 1 = $(A.n + 1) but was $(length(A.colptr))"))
@@ -891,8 +891,12 @@ function Sparse(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer) where T
                 unsafe_store!(s.x, A.rowval[ip] == j ? Complex(real(v)) : v, ip)
             end
         end
-    else
+    elseif Tv == eltype(A.nzval)
         unsafe_copyto!(s.x, pointer(A.nzval), nnz(A))
+    else
+        for i = 1:nnz(A)
+            unsafe_store!(s.x, A.nzval[i], i)
+        end
     end
 
     @isok check_sparse(o)
@@ -901,13 +905,9 @@ function Sparse(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer) where T
 end
 
 # handle promotion
-function Sparse(A::SparseMatrixCSC{Tv}, stype::Integer) where {Tv}
-    T = promote_type(Tv,Float64)
-    if T == Float64 || T == ComplexF64
-        return Sparse(SparseMatrixCSC{T, SuiteSparse_long}(A), stype)
-    else
-        throw(MethodError(Sparse, (A,stype)))
-    end
+function Sparse(A::SparseMatrixCSC, stype::Integer)
+    T = promote_type(eltype(A), Float64)
+    return Sparse{T}(A, stype)
 end
 
 # convert SparseVectors into CHOLMOD Sparse types through a mx1 CSC matrix
