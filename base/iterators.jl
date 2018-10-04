@@ -337,8 +337,8 @@ end
 # it returned false, again terminating immediately if any iterator is exhausted. Finally,
 # the results are interleaved appropriately.
 @propagate_inbounds function _zip_iterate_all(is, ss)
-    ds = _zip_isdone(is, ss)
-    any(map(d -> d === true, ds)) === true && return nothing
+    d, ds = _zip_isdone(is, ss)
+    d && return nothing
     xs1 = _zip_iterate_some(is, ss, ds, missing)
     xs1 === nothing && return nothing
     xs2 = _zip_iterate_some(is, ss, ds, false)
@@ -367,8 +367,12 @@ function _zip_iterate_interleave(xs1, xs2, ds::Tuple{Bool,Vararg{Any}})
 end
 _zip_iterate_interleave(::Tuple{}, ::Tuple{}, ::Tuple{}) = ((), ())
 
-_zip_isdone(is, ss) = (isdone(is[1], ss[1]...), _zip_isdone(tail(is), tail(ss))...)
-_zip_isdone(::Tuple{}, ::Tuple{}) = ()
+function _zip_isdone(is, ss)
+    d = isdone(is[1], ss[1]...)
+    d´, ds = _zip_isdone(tail(is), tail(ss))
+    return (d === true || d´, (d, ds...))
+end
+_zip_isdone(::Tuple{}, ::Tuple{}) = (false, ())
 
 IteratorSize(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_iterator_size(Is)
 _zip_iterator_size(::Type{Is}) where {Is<:Tuple} =
