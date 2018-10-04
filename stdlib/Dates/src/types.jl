@@ -350,6 +350,9 @@ function ==(a::Time, b::Time)
         microsecond(a) == microsecond(b) && nanosecond(a) == nanosecond(b)
 end
 (==)(x::TimeType, y::TimeType) = (===)(promote(x, y)...)
+Base.hash(x::Time, h::UInt) =
+    hash(hour(x), hash(minute(x), hash(second(x),
+        hash(millisecond(x), hash(microsecond(x), hash(nanosecond(x), h))))))
 
 import Base: sleep, Timer, timedwait
 sleep(time::Period) = sleep(toms(time) / 1000)
