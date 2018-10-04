@@ -312,7 +312,7 @@ end
     @test isa(CHOLMOD.eye(3, 4, Float64), CHOLMOD.Dense{Float64})
     @test isa(CHOLMOD.eye(3, 4), CHOLMOD.Dense{Float64})
     @test isa(CHOLMOD.eye(3), CHOLMOD.Dense{Float64})
-    @test isa(CHOLMOD.copy_dense(CHOLMOD.eye(3)), CHOLMOD.Dense{Float64})
+    @test isa(copy(CHOLMOD.eye(3)), CHOLMOD.Dense{Float64})
 end
 
 # Test Sparse and Factor
@@ -438,9 +438,9 @@ end
 
     ### cholesky!/ldlt!
     F = cholesky(A1pd)
-    CHOLMOD.change_factor!(elty, false, false, true, true, F)
+    CHOLMOD.change_factor!(F, false, false, true, true)
     @test unsafe_load(pointer(F)).is_ll == 0
-    CHOLMOD.change_factor!(elty, true, false, true, true, F)
+    CHOLMOD.change_factor!(F, true, false, true, true)
     @test CHOLMOD.Sparse(cholesky!(copy(F), A1pd)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
     @test size(F, 2) == 5
     @test size(F, 3) == 1
