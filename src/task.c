@@ -140,6 +140,8 @@ static void _probe_arch(void)
 
 /* end probing code */
 
+#define ROOT_TASK_STACK_ADJUSTMENT 3000000
+
 static jl_sym_t *done_sym;
 static jl_sym_t *failed_sym;
 static jl_sym_t *runnable_sym;
@@ -238,6 +240,37 @@ static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
     }
     gc_debug_critical_error();
     abort();
+}
+
+JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *tid)
+{
+    size_t off = 0;
+#ifndef _OS_WINDOWS_
+    if (jl_all_tls_states[0]->root_task == task) {
+        // See jl_init_root_task(). The root task of the main thread
+        // has its buffer enlarged by an artificial 3000000 bytes, but
+        // that means that the start of the buffer usually points to
+        // inaccessible memory. We need to correct for this.
+// FIXME: does not apply to Julia 1.0.x
+//         off = ROOT_TASK_STACK_ADJUSTMENT;
+    }
+#endif
+    *tid = -1;
+    for (int i = 0; i < jl_n_threads; i++) {
+        jl_ptls_t ptls = jl_all_tls_states[i];
+        if (ptls->current_task == task) {
+            *tid = i;
+#ifdef COPY_STACKS
+            if (task->copy_stack) {
+                *size = ptls->stacksize;
+                return (char *)ptls->stackbase - *size;
+            }
+#endif
+            break; // continue with normal return
+        }
+    }
+    *size = task->bufsz - off;
+    return (void *)((char *)task->stkbuf + off);
 }
 
 static void record_backtrace(void)
