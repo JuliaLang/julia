@@ -2979,6 +2979,12 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
             argvals[idx] = maybe_decay_untracked(boxed(ctx, arg));
         }
         else if (et->isAggregateType()) {
+            if (!arg.ispointer()) {
+                // This can happen in dead code if there's a type mismatch
+                // Exit early
+                CreateTrap(ctx.builder);
+                return jl_cgval_t();
+            }
             // can lazy load on demand, no copy needed
             assert(at == PointerType::get(et, AddressSpace::Derived));
             assert(arg.ispointer());
@@ -2987,7 +2993,13 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
         }
         else {
             assert(at == et);
-            argvals[idx] = emit_unbox(ctx, et, arg, jt);
+            Value *val = emit_unbox(ctx, et, arg, jt);
+            if (!val) {
+                // There was a type mismatch of some sort - exit early
+                CreateTrap(ctx.builder);
+                return jl_cgval_t();
+            }
+            argvals[idx] = val;
         }
         idx++;
     }
