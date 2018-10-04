@@ -1440,7 +1440,7 @@ function ldlt!(F::Factor{Tv}, A::Sparse{Tv};
     set_print_level(cm, 0)
 
     # Makes it an LDLt
-    change_factor!(eltype(F), false, false, true, false, F)
+    change_factor!(F, false, false, true, false)
 
     # Compute the numerical factorization
     factorize_p!(A, shift, F, cm)
@@ -1776,10 +1776,10 @@ function isposdef(F::Factor)
             return true
         else
             # try conversion to LLt
-            change_factor!(eltype(F), true, s.is_super, true, s.is_monotonic, F)
+            change_factor!(F, true, s.is_super, true, s.is_monotonic)
             b = issuccess(F)
             # convert back
-            change_factor!(eltype(F), false, s.is_super, true, s.is_monotonic, F)
+            change_factor!(F, false, s.is_super, true, s.is_monotonic)
             return b
         end
     else
