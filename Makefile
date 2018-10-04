@@ -312,9 +312,23 @@ $(eval $(call std_dll,ssp-0))
 $(eval $(call std_dll,winpthread-1))
 $(eval $(call std_dll,atomic-1))
 endif
+
+
 define stringreplace
 	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep '$2' | awk '{print $$1;}') '$3' 255 "$(call cygpath_w,$1)"
 endef
+
+# Run fixup-libgfortran on all platforms but Windows and FreeBSD. On FreeBSD we
+# pull in the GCC libraries earlier and use them for the build to make sure we
+# don't inadvertently link to /lib/libgcc_s.so.1, which is incompatible with
+# libgfortran, and on Windows we copy them in earlier as well.
+ifeq (,$(findstring $(OS),FreeBSD WINNT))
+julia-base: $(build_libdir)/libgfortran.$(SHLIB_EXT)
+$(build_libdir)/libgfortran.$(SHLIB_EXT): | $(build_libdir)
+	-$(CUSTOM_LD_LIBRARY_PATH) PATH=$(PATH):$(build_depsbindir) $(JULIAHOME)/contrib/fixup-libgfortran.sh --verbose $(build_libdir)
+JL_PRIVATE_LIBS-0 += libgfortran libgcc_s libquadmath
+endif
+
 
 install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
 	@$(MAKE) $(QUIET_MAKE) all
@@ -372,6 +386,7 @@ endif
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 endif
+
 	# Copy in system image build script
 	$(INSTALL_M) $(JULIAHOME)/contrib/build_sysimg.jl $(DESTDIR)$(datarootdir)/julia/
 	# Copy in all .jl sources as well
@@ -454,13 +469,6 @@ ifneq ($(DESTDIR),)
 endif
 	@$(MAKE) -C $(BUILDROOT) -f $(JULIAHOME)/Makefile install
 	cp $(JULIAHOME)/LICENSE.md $(BUILDROOT)/julia-$(JULIA_COMMIT)
-	# Run fixup-libgfortran on all platforms but Windows and FreeBSD. On FreeBSD we
-	# pull in the GCC libraries earlier and use them for the build to make sure we
-	# don't inadvertently link to /lib/libgcc_s.so.1, which is incompatible with
-	# libgfortran.
-ifeq (,$(findstring $(OS),FreeBSD WINNT))
-	-$(CUSTOM_LD_LIBRARY_PATH) PATH=$(PATH):$(build_depsbindir) $(JULIAHOME)/contrib/fixup-libgfortran.sh $(DESTDIR)$(private_libdir)
-endif
 ifeq ($(OS), Linux)
 	-$(JULIAHOME)/contrib/fixup-libstdc++.sh $(DESTDIR)$(libdir) $(DESTDIR)$(private_libdir)
 
