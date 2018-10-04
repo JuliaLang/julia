@@ -114,4 +114,11 @@ JL_DLLEXPORT int jl_gc_conservative_gc_support_enabled(void);
 // jl_typeof(obj) is an actual type object.
 JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p);
 
+// Return a non-null pointer to the start of the stack area if the task
+// has an associated stack buffer. In that case, *size will also contain
+// the size of that stack buffer upon return. Also, if task is a thread's
+// current task, that thread's id will be stored in *tid; otherwise,
+// *tid will be set to -1.
+JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *tid);
+
 #endif // _JULIA_GCEXT_H
