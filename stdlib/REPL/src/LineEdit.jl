@@ -726,15 +726,18 @@ end
 function edit_insert_newline(s::PromptState, align::Int = 0 - options(s).auto_indent)
     push_undo(s)
     buf = buffer(s)
-    if align < 0
+    autoindent = align < 0
+    if autoindent
         beg = beginofline(buf)
         align = min(something(findnext(_notspace, buf.data[beg+1:buf.size], 1), 0) - 1,
                     position(buf) - beg) # indentation must not increase
         align < 0 && (align = buf.size-beg)
     end
     edit_insert(buf, '\n' * ' '^align)
-    align > 0 && (s.last_newline = time())
     refresh_line(s)
+    # updating s.last_newline should happen after refresh_line(s) which can take
+    # an unpredictable amount of time and makes "paste detection" unreliable
+    autoindent && align > 0 && (s.last_newline = time())
 end
 
 # align: delete up to 4 spaces to align to a multiple of 4 chars
