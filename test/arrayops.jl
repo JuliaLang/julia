@@ -2546,7 +2546,8 @@ end
     @test_throws ErrorException collect(InvalidIter2())
     @test_throws ErrorException collect(Any, InvalidIter2())
     @test_throws ErrorException collect(Int, InvalidIter2())
-    @test_throws ErrorException [x for x in InvalidIter2()]
-    # Should also throw ErrorException
-    @test_broken length(Int[x for x in InvalidIter2()]) != 2
+    # These cases cannot be tested without writing to invalid memory
+    # unless the function checked bounds on each iteration (#29458)
+    # @test_throws ErrorException [x for x in InvalidIter2()]
+    # @test_throws ErrorException Int[x for x in InvalidIter2()]
 end

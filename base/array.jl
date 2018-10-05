@@ -687,9 +687,10 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
             return collect_to!(new, itr, i+1, st)
         end
     end
-    i-1 < length(dest) &&
+    lastidx = lastindex(dest)
+    i-1 < lastidx &&
         throw(ErrorException("iterator returned fewer elements than its declared length"))
-    i-1 > length(dest) &&
+    i-1 > lastidx &&
         throw(ErrorException("iterator returned more elements than its declared length"))
     return dest
 end
