@@ -683,9 +683,9 @@ end
     @test cholesky(sparse(Float16(1)I, 5, 5))\x == x
     @test cholesky(Symmetric(sparse(Float16(1)I, 5, 5)))\x == x
     @test cholesky(Hermitian(sparse(Complex{Float16}(1)I, 5, 5)))\x == x
-    @test_throws MethodError cholesky(sparse(BigFloat(1)I, 5, 5))
-    @test_throws MethodError cholesky(Symmetric(sparse(BigFloat(1)I, 5, 5)))
-    @test_throws MethodError cholesky(Hermitian(sparse(Complex{BigFloat}(1)I, 5, 5)))
+    @test_throws TypeError cholesky(sparse(BigFloat(1)I, 5, 5))
+    @test_throws TypeError cholesky(Symmetric(sparse(BigFloat(1)I, 5, 5)))
+    @test_throws TypeError cholesky(Hermitian(sparse(Complex{BigFloat}(1)I, 5, 5)))
 end
 
 @testset "test \\ for Factor and StridedVecOrMat" begin
