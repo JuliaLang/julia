@@ -65,7 +65,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
     c1 = Channel(32)
     c2 = Channel(32)
 
-    # and a function `foo` which reads items from from c1, processes the item read
+    # and a function `foo` which reads items from c1, processes the item read
     # and writes a result to c2,
     function foo()
         while true
