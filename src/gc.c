@@ -2439,10 +2439,6 @@ extern jl_array_t *jl_all_methods;
 static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp,
                                      jl_ptls_t ptls2)
 {
-    // `current_module` might not have a value when the thread is not
-    // running.
-    if (ptls2->current_module)
-        gc_mark_queue_obj(gc_cache, sp, ptls2->current_module);
     gc_mark_queue_obj(gc_cache, sp, ptls2->current_task);
     gc_mark_queue_obj(gc_cache, sp, ptls2->root_task);
     gc_mark_queue_obj(gc_cache, sp, ptls2->exception_in_transit);
@@ -2453,13 +2449,17 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
 {
     // modules
     gc_mark_queue_obj(gc_cache, sp, jl_main_module);
-    gc_mark_queue_obj(gc_cache, sp, jl_internal_main_module);
 
     // invisible builtin values
     if (jl_an_empty_vec_any != NULL)
         gc_mark_queue_obj(gc_cache, sp, jl_an_empty_vec_any);
     if (jl_module_init_order != NULL)
         gc_mark_queue_obj(gc_cache, sp, jl_module_init_order);
+    for (size_t i = 0; i < jl_current_modules.size; i += 2) {
+        if (jl_current_modules.table[i + 1] != HT_NOTFOUND) {
+            gc_mark_queue_obj(gc_cache, sp, jl_current_modules.table[i]);
+        }
+    }
     if (jl_cfunction_list != NULL)
         gc_mark_queue_obj(gc_cache, sp, jl_cfunction_list);
     gc_mark_queue_obj(gc_cache, sp, jl_anytuple_type_type);

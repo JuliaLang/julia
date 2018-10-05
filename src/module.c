@@ -55,12 +55,15 @@ uint32_t jl_module_next_counter(jl_module_t *m)
 
 JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports)
 {
+    // TODO: should we prohibit this during incremental compilation?
     jl_module_t *m = jl_new_module(name);
     JL_GC_PUSH1(&m);
-    m->parent = jl_main_module;
+    m->parent = jl_main_module; // TODO: this is a lie
     jl_gc_wb(m, m->parent);
-    if (std_imports) jl_add_standard_imports(m);
+    if (std_imports)
+        jl_add_standard_imports(m);
     JL_GC_POP();
+    // TODO: should we somehow try to gc-root this correctly?
     return (jl_value_t*)m;
 }
 

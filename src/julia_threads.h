@@ -150,7 +150,6 @@ struct _jl_tls_states_t {
     volatile int8_t in_finalizer;
     int8_t disable_gc;
     volatile sig_atomic_t defer_signal;
-    struct _jl_module_t *current_module;
     struct _jl_task_t *volatile current_task;
     struct _jl_task_t *root_task;
 //#ifdef COPY_STACKS

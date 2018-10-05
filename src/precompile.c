@@ -48,8 +48,16 @@ void jl_write_compiler_output(void)
     int i, l = jl_array_len(worklist);
     for (i = 0; i < l; i++) {
         jl_value_t *m = jl_ptrarrayref(worklist, i);
-        if (jl_get_global((jl_module_t*)m, jl_symbol("__init__"))) {
+        jl_value_t *f = jl_get_global((jl_module_t*)m, jl_symbol("__init__"));
+        if (f) {
             jl_array_ptr_1d_push(jl_module_init_order, m);
+            // TODO: this would be better handled if moved entirely to jl_precompile
+            // since it's a slightly duplication of effort
+            jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
+            JL_GC_PUSH1(&tt);
+            tt = (jl_value_t*)jl_apply_tuple_type_v(&tt, 1);
+            jl_compile_hint((jl_tupletype_t*)tt);
+            JL_GC_POP();
         }
     }
 
@@ -86,6 +94,13 @@ void jl_write_compiler_output(void)
                            jl_options.outputunoptbc,
                            jl_options.outputo,
                            (const char*)s->buf, (size_t)s->size);
+        }
+    }
+    for (size_t i = 0; i < jl_current_modules.size; i += 2) {
+        if (jl_current_modules.table[i + 1] != HT_NOTFOUND) {
+            jl_printf(JL_STDERR, "\nWARNING: detected unclosed module: ");
+            jl_static_show(JL_STDERR, (jl_value_t*)jl_current_modules.table[i]);
+            jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for this module **\n\n");
         }
     }
     JL_GC_POP();
