@@ -640,7 +640,9 @@ emptymutable(itr, ::Type{U}) where {U} = Vector{U}()
 
 ## from general iterable to any array
 
-function copyto!(dest::AbstractArray, src)
+copyto!(dest::AbstractArray, src) = _copyto_impl!(dest, src, true)
+
+function _copyto_impl!(dest::AbstractArray, src, allowshorter::Bool)
     destiter = eachindex(dest)
     y = iterate(destiter)
     for x in src
@@ -648,6 +650,9 @@ function copyto!(dest::AbstractArray, src)
             throw(ArgumentError(string("destination has fewer elements than required")))
         dest[y[1]] = x
         y = iterate(destiter, y[2])
+    end
+    if !allowshorter && y !== nothing
+        throw(ArgumentError(string("source has fewer elements than destination")))
     end
     return dest
 end
@@ -720,8 +725,12 @@ end
 ## copy between abstract arrays - generally more efficient
 ## since a single index variable can be used.
 
-copyto!(dest::AbstractArray, src::AbstractArray) =
+function _copyto_impl!(dest::AbstractArray, src::AbstractArray, allowshorter::Bool)
+    if !allowshorter && length(src) < length(dest)
+        throw(ArgumentError("source has fewer elements than destination"))
+    end
     copyto!(IndexStyle(dest), dest, IndexStyle(src), src)
+end
 
 function copyto!(::IndexStyle, dest::AbstractArray, ::IndexStyle, src::AbstractArray)
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)

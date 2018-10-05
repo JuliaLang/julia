@@ -815,8 +815,12 @@ julia> y
 """
 copyto!(dest, src)
 
-function copyto!(dest::AbstractArray{T,N}, src::AbstractArray{T,N}) where {T,N}
+function _copyto_impl!(dest::AbstractArray{T,N}, src::AbstractArray{T,N},
+                       allowshorter::Bool) where {T,N}
     checkbounds(dest, axes(src)...)
+    if !allowshorter && length(src) < length(dest)
+        throw(ArgumentError("source has fewer elements than destination"))
+    end
     src′ = unalias(dest, src)
     for I in eachindex(IndexStyle(src′,dest), src′)
         @inbounds dest[I] = src′[I]

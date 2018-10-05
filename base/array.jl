@@ -274,7 +274,12 @@ function copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, 
     unsafe_copyto!(dest, doffs, src, soffs, n)
 end
 
-copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, length(src))
+function _copyto_impl!(dest::Array{T}, src::Array{T}, allowshorter::Bool) where {T}
+    if !allowshorter && length(src) < length(dest)
+        throw(ArgumentError("source has fewer elements than destination"))
+    end
+    copyto!(dest, 1, src, 1, length(src))
+end
 
 # N.B: The generic definition in multidimensional.jl covers, this, this is just here
 # for bootstrapping purposes.
@@ -517,25 +522,10 @@ julia> collect(Float64, 1:2:5)
 """
 collect(::Type{T}, itr) where {T} = _collect(T, itr, IteratorSize(itr))
 
-function copyto_check_length!(dest::Array, src)
-    len = length(dest)
-    i = 0
-    for x in src
-        i == len &&
-            throw(ErrorException("iterator returned more elements than its declared length"))
-        i += 1
-        @inbounds dest[i] = x
-    end
-    if i < len
-        throw(ErrorException("iterator returned fewer elements than its declared length"))
-    end
-    return dest
-end
-
 _collect(::Type{T}, itr, isz::HasLength) where {T} =
-    copyto_check_length!(Vector{T}(undef, Int(length(itr)::Integer)), itr)
+    _copyto_impl!(Vector{T}(undef, Int(length(itr)::Integer)), itr, false)
 _collect(::Type{T}, itr, isz::HasShape) where {T}  =
-    copyto_check_length!(similar(Array{T}, axes(itr)), itr)
+    _copyto_impl!(similar(Array{T}, axes(itr)), itr, false)
 function _collect(::Type{T}, itr, isz::SizeUnknown) where T
     a = Vector{T}()
     for x in itr
@@ -578,7 +568,7 @@ collect(A::AbstractArray) = _collect_indices(axes(A), A)
 collect_similar(cont, itr) = _collect(cont, itr, IteratorEltype(itr), IteratorSize(itr))
 
 _collect(cont, itr, ::HasEltype, isz::Union{HasLength,HasShape}) =
-    copyto_check_length!(_similar_for(cont, eltype(itr), itr, isz), itr)
+    _copyto_impl!(_similar_for(cont, eltype(itr), itr, isz), itr, false)
 
 function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     a = _similar_for(cont, eltype(itr), itr, isz)
@@ -636,7 +626,7 @@ function collect(itr::Generator)
         y = iterate(itr)
         if y === nothing
             if isa(isz, Union{HasLength, HasShape}) && length(itr) != 0
-                throw(ErrorException("iterator returned fewer elements than its declared length"))
+                throw(ArgumentError("iterator returned fewer elements than its declared length"))
             end
             return _array_for(et, itr.iter, isz)
         end
@@ -689,9 +679,9 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
     end
     lastidx = lastindex(dest)
     i-1 < lastidx &&
-        throw(ErrorException("iterator returned fewer elements than its declared length"))
+        throw(ArgumentError("iterator returned fewer elements than its declared length"))
     i-1 > lastidx &&
-        throw(ErrorException("iterator returned more elements than its declared length"))
+        throw(ArgumentError("iterator returned more elements than its declared length"))
     return dest
 end
 
