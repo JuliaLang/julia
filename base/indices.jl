@@ -90,7 +90,7 @@ function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
 end
 
 function promote_shape(a::Tuple{Int,Int}, b::Tuple{Int,})
-    if a[1] != b[1] || a[2] != 1
+    if a[2] != b[1] || a[2] != 1  
         throw(DimensionMismatch("dimensions must match"))
     end
     return a
