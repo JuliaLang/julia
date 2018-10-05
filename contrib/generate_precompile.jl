@@ -163,6 +163,7 @@ function generate_precompile_statements()
             # println(statement)
             # Work around #28808
             occursin("\"YYYY-mm-dd\\THH:MM:SS\"", statement) && continue
+            statement == "precompile(Tuple{typeof(Base.show), Base.IOContext{Base.TTY}, Type{Vararg{Any, N} where N}})" && continue
             try
                 Base.include_string(PrecompileStagingArea, statement)
             catch ex

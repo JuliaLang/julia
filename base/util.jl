@@ -633,6 +633,10 @@ expression. The default argument is supplied by declaring fields of the form `fi
 default` or `field = default`. If no default is provided then the keyword argument becomes
 a required keyword argument in the resulting type constructor.
 
+Inner constructors can still be defined, but at least one should accept arguments in the
+same form as the default inner constructor (i.e. one positional argument per field) in
+order to function correctly with the keyword outer constructor.
+
 # Examples
 ```jldoctest
 julia> Base.@kwdef struct Foo
@@ -652,51 +656,82 @@ Stacktrace:
 """
 macro kwdef(expr)
     expr = macroexpand(__module__, expr) # to expand @static
+    expr isa Expr && expr.head == :struct || error("Invalid usage of @kwdef")
     T = expr.args[2]
-    params_ex = Expr(:parameters)
-    call_ex = Expr(:call, T)
-    _kwdef!(expr.args[3], params_ex, call_ex)
-    ret = quote
-        Base.@__doc__($(esc(expr)))
+    if T isa Expr && T.head == :<:
+        T = T.args[1]
     end
+
+    params_ex = Expr(:parameters)
+    call_args = Any[]
+
+    _kwdef!(expr.args[3], params_ex.args, call_args)
     # Only define a constructor if the type has fields, otherwise we'll get a stack
     # overflow on construction
     if !isempty(params_ex.args)
-        push!(ret.args, :($(esc(Expr(:call, T, params_ex))) = $(esc(call_ex))))
+        if T isa Symbol
+            kwdefs = :(($(esc(T)))($params_ex) = ($(esc(T)))($(call_args...)))
+        elseif T isa Expr && T.head == :curly
+            # if T == S{A<:AA,B<:BB}, define two methods
+            #   S(...) = ...
+            #   S{A,B}(...) where {A<:AA,B<:BB} = ...
+            S = T.args[1]
+            P = T.args[2:end]
+            Q = [U isa Expr && U.head == :<: ? U.args[1] : U for U in P]
+            SQ = :($S{$(Q...)})
+            kwdefs = quote
+                ($(esc(S)))($params_ex) =($(esc(S)))($(call_args...))
+                ($(esc(SQ)))($params_ex) where {$(esc.(P)...)} =
+                    ($(esc(SQ)))($(call_args...))
+            end
+        else
+            error("Invalid usage of @kwdef")
+        end
+    else
+        kwdefs = nothing
     end
-    ret
+    quote
+        Base.@__doc__($(esc(expr)))
+        $kwdefs
+    end
 end
 
 # @kwdef helper function
 # mutates arguments inplace
-function _kwdef!(blk, params_ex, call_ex)
+function _kwdef!(blk, params_args, call_args)
     for i in eachindex(blk.args)
         ei = blk.args[i]
-        if isa(ei, Symbol)
-            push!(params_ex.args, ei)
-            push!(call_ex.args, ei)
-        elseif !isa(ei, Expr)
-            continue
-        elseif ei.head == :(=)
-            # var::Typ = defexpr
-            dec = ei.args[1]  # var::Typ
-            if isa(dec, Expr) && dec.head == :(::)
-                var = dec.args[1]
-            else
-                var = dec
+        if ei isa Symbol
+            #  var
+            push!(params_args, ei)
+            push!(call_args, ei)
+        elseif ei isa Expr
+            if ei.head == :(=)
+                lhs = ei.args[1]
+                if lhs isa Symbol
+                    #  var = defexpr
+                    var = lhs
+                elseif lhs isa Expr && lhs.head == :(::) && lhs.args[1] isa Symbol
+                    #  var::T = defexpr
+                    var = lhs.args[1]
+                else
+                    # something else, e.g. inline inner constructor
+                    #   F(...) = ...
+                    continue
+                end
+                defexpr = ei.args[2]  # defexpr
+                push!(params_args, Expr(:kw, var, esc(defexpr)))
+                push!(call_args, var)
+                blk.args[i] = lhs
+            elseif ei.head == :(::) && ei.args[1] isa Symbol
+                # var::Typ
+                var = ei.args[1]
+                push!(params_args, var)
+                push!(call_args, var)
+            elseif ei.head == :block
+                # can arise with use of @static inside type decl
+                _kwdef!(ei, params_args, call_args)
             end
-            def = ei.args[2]  # defexpr
-            push!(params_ex.args, Expr(:kw, var, def))
-            push!(call_ex.args, var)
-            blk.args[i] = dec
-        elseif ei.head == :(::)
-            dec = ei # var::Typ
-            var = dec.args[1] # var
-            push!(params_ex.args, var)
-            push!(call_ex.args, var)
-        elseif ei.head == :block
-            # can arise with use of @static inside type decl
-            _kwdef!(ei, params_ex, call_ex)
         end
     end
     blk
