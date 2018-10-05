@@ -450,7 +450,7 @@ add_tfunc(typeassert, 2, 2,
                   end
                   return v
               end
-              return typeintersect(v, t)
+              return typeintersect(widenconst(v), t)
           end, 4)
 
 function isa_tfunc(@nospecialize(v), @nospecialize(tt))
@@ -472,11 +472,14 @@ function isa_tfunc(@nospecialize(v), @nospecialize(tt))
             # this tests for knowledge of a leaftype appearing on the LHS
             # (ensuring the isa is precise)
             return Const(false)
-        elseif typeintersect(v, t) === Bottom
-            # similar to `isnotbrokensubtype` check above, `typeintersect(v, t)`
-            # can't be trusted for kind types so we do an extra check here
-            if !iskindtype(v)
-                return Const(false)
+        else
+            v = widenconst(v)
+            if typeintersect(v, t) === Bottom
+                # similar to `isnotbrokensubtype` check above, `typeintersect(v, t)`
+                # can't be trusted for kind types so we do an extra check here
+                if !iskindtype(v)
+                    return Const(false)
+                end
             end
         end
     end
@@ -914,7 +917,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
                 end
             else
                 if !isType(ai)
-                    if !isa(ai, Type) || typeintersect(ai, Type) != Bottom
+                    if !isa(ai, Type) || typeintersect(ai, Type) !== Bottom
                         hasnonType = true
                     else
                         return Bottom
