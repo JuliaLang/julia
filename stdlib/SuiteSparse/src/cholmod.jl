@@ -58,7 +58,7 @@ ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
 
 ## macro to generate the name of the C function according to the integer type
 macro cholmod_name(nm)
-    string("cholmod_", SuiteSparse_long == Int64 ? "l_" : "", nm)
+    string("cholmod_l_", nm)
 end
 
 function start(a::Vector{UInt8})
