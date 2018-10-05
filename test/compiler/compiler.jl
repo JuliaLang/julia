@@ -2058,3 +2058,23 @@ function foo_tail_const_prop()
     Val{my_tail_const_prop(1,2,3,4)}()
 end
 @test (@inferred foo_tail_const_prop()) == Val{(2,3,4)}()
+
+# PR #28955
+
+a28955(f, args...) = f(args...)
+b28955(args::Tuple) = a28955(args...)
+c28955(args...) = b28955(args)
+d28955(f, x, y) = c28955(f, Bool, x, y)
+f28955(::Type{Bool}, x, y) = x
+f28955(::DataType, x, y) = y
+
+@test @inferred(d28955(f28955, 1, 2.0)) === 1
+
+function g28955(x, y)
+    _1 = tuple(Bool)
+    _2 = isa(y, Int) ? nothing : _1
+    _3 = tuple(_1..., x...)
+    return getfield(_3, 1)
+end
+
+@test @inferred(g28955((1,), 1.0)) === Bool
