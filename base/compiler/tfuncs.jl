@@ -672,6 +672,14 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
             end
         end
         s = typeof(sv)
+    elseif isa(s, PartialTuple)
+        if isa(name, Const)
+            nv = name.val
+            if isa(nv, Int) && 1 <= nv <= length(s.fields)
+                return s.fields[nv]
+            end
+        end
+        s = widenconst(s)
     end
     if isType(s) || !isa(s, DataType) || s.abstract
         return Any

@@ -903,7 +903,7 @@ function process_node!(compact::IncrementalCompact, result::Vector{Any},
         # performance turns out ok
         stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)::PiNode
         if !isa(stmt.val, AnySSAValue) && !isa(stmt.val, GlobalRef)
-            valtyp = isa(stmt.val, QuoteNode) ? typeof(stmt.val.val) : typeof(stmt.val)
+            valtyp = isa(stmt.val, QuoteNode) ? typeof(stmt.val.value) : typeof(stmt.val)
             if valtyp === stmt.typ
                 ssa_rename[idx] = stmt.val
                 return result_idx
