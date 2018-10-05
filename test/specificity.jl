@@ -225,3 +225,10 @@ MathTypes22592{T,C} = Union{AbstractRGB22592{T},AbstractGray22592{T}}
 @test !args_morespecific(Tuple{MathTypes22592, MathTypes22592}, Tuple{AbstractGray22592})
 
 @test args_morespecific(Union{Set,Dict,Vector}, Union{Vector,AbstractSet})
+
+# issue #29528
+@test !args_morespecific(Tuple{Array,Vararg{Int64,N} where N}, Tuple{AbstractArray, Array})
+@test !args_morespecific(Tuple{Array,Vararg{Int64,N}} where N, Tuple{AbstractArray, Array})
+@test  args_morespecific(Tuple{Array,Int64}, Tuple{Array,Vararg{Int64,N}} where N)
+@test  args_morespecific(Tuple{Array,Int64}, Tuple{Array,Vararg{Int64,N} where N})
+@test !args_morespecific(Tuple{Array,Int64}, Tuple{AbstractArray, Array})
