@@ -62,6 +62,7 @@ export
 
 
 const libblas = Base.libblas_name
+const libcblas = Base.libcblas_name
 const liblapack = Base.liblapack_name
 
 import LinearAlgebra
@@ -98,6 +99,16 @@ if vendor() == :openblas64
     end
 else
     macro blasfunc(x)
+        return Expr(:quote, x)
+    end
+end
+
+if libcblas == libblas
+     macro cblasfunc(x)
+        return @blasfunc(x)
+    end
+else
+    macro cblasfunc(x)
         return Expr(:quote, x)
     end
 end
@@ -301,7 +312,7 @@ for (fname, elty) in ((:cblas_zdotc_sub,:ComplexF64),
                 #       DOUBLE PRECISION DX(*),DY(*)
         function dotc(n::Integer, DX::Union{Ptr{$elty},AbstractArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},AbstractArray{$elty}}, incy::Integer)
             result = Ref{$elty}()
-            ccall((@blasfunc($fname), libblas), Cvoid,
+            ccall((@cblasfunc($fname), libcblas), Cvoid,
                 (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
                  n, DX, incx, DY, incy, result)
             result[]
@@ -319,7 +330,7 @@ for (fname, elty) in ((:cblas_zdotu_sub,:ComplexF64),
                 #       DOUBLE PRECISION DX(*),DY(*)
         function dotu(n::Integer, DX::Union{Ptr{$elty},AbstractArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},AbstractArray{$elty}}, incy::Integer)
             result = Ref{$elty}()
-            ccall((@blasfunc($fname), libblas), Cvoid,
+            ccall((@cblasfunc($fname), libcblas), Cvoid,
                 (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
                  n, DX, incx, DY, incy, result)
             result[]

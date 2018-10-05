@@ -42,6 +42,7 @@ else
 endif
 	@echo "const libm_name = \"$(LIBMNAME)\"" >> $@
 	@echo "const libblas_name = \"$(LIBBLASNAME)\"" >> $@
+	@echo "const libcblas_name = \"$(LIBCBLASNAME)\"" >> $@
 	@echo "const liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
 ifeq ($(USE_BLAS64), 1)
 	@echo "const USE_BLAS64 = true" >> $@
@@ -175,6 +176,9 @@ endif
 $(eval $(call symlink_system_library,libpcre2-8,PCRE))
 $(eval $(call symlink_system_library,libdSFMT,DSFMT))
 $(eval $(call symlink_system_library,$(LIBBLASNAME),BLAS))
+ifneq ($(LIBCBLASNAME),$(LIBBLASNAME))
+$(eval $(call symlink_system_library,$(LIBCBLASNAME),CBLAS))
+endif
 ifneq ($(LIBLAPACKNAME),$(LIBBLASNAME))
 $(eval $(call symlink_system_library,$(LIBLAPACKNAME),LAPACK))
 endif

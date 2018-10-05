@@ -886,6 +886,7 @@ endif
 ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 USE_BLAS64 := 0
+USE_SYSTEM_CBLAS := 0
 USE_SYSTEM_LAPACK := 0
 LIBBLAS := -L$(build_libdir) -lgfortblas
 LIBBLASNAME := libgfortblas
@@ -898,12 +899,21 @@ LIBBLAS := -L$(build_shlibdir) -lopenblas
 LIBBLASNAME := libopenblas
 endif
 
-# OpenBLAS builds LAPACK as part of its build.
+# OpenBLAS builds cblas/LAPACK as part of its build.
 # We only need to build LAPACK if we are not using OpenBLAS.
 ifeq ($(USE_SYSTEM_BLAS), 0)
+LIBCBLAS := $(LIBBLAS)
+LIBCBLASNAME := $(LIBBLASNAME)
 LIBLAPACK := $(LIBBLAS)
 LIBLAPACKNAME := $(LIBBLASNAME)
 else
+ifeq ($(USE_SYSTEM_CBLAS), 1)
+LIBCBLAS ?= -lcblas
+LIBCBLASNAME ?= libcblas
+else
+LIBCBLAS := -L$(build_shlibdir) -lcblas $(LIBBLAS)
+LIBCBLASNAME := libcblas
+endif
 ifeq ($(USE_SYSTEM_LAPACK), 1)
 LIBLAPACK ?= -llapack
 LIBLAPACKNAME ?= liblapack
