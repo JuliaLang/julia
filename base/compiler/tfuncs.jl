@@ -405,11 +405,9 @@ add_tfunc(pointerref, 3, 3,
 add_tfunc(pointerset, 4, 4, (@nospecialize(a), @nospecialize(v), @nospecialize(i), @nospecialize(align)) -> a, 5)
 
 function typeof_tfunc(@nospecialize(t))
-    if isa(t, Const)
-        return Const(typeof(t.val))
-    elseif isa(t, Conditional)
-        return Const(Bool)
-    elseif isType(t)
+    isa(t, Const) && return Const(typeof(t.val))
+    t = widenconst(t)
+    if isType(t)
         tp = t.parameters[1]
         if issingletontype(tp)
             return Const(typeof(tp))
@@ -452,7 +450,7 @@ add_tfunc(typeassert, 2, 2,
                   end
                   return v
               end
-              return typeintersect(v, t)
+              return typeintersect(widenconst(v), t)
           end, 4)
 
 function isa_tfunc(@nospecialize(v), @nospecialize(tt))
@@ -474,11 +472,14 @@ function isa_tfunc(@nospecialize(v), @nospecialize(tt))
             # this tests for knowledge of a leaftype appearing on the LHS
             # (ensuring the isa is precise)
             return Const(false)
-        elseif typeintersect(v, t) === Bottom
-            # similar to `isnotbrokensubtype` check above, `typeintersect(v, t)`
-            # can't be trusted for kind types so we do an extra check here
-            if !iskindtype(v)
-                return Const(false)
+        else
+            v = widenconst(v)
+            if typeintersect(v, t) === Bottom
+                # similar to `isnotbrokensubtype` check above, `typeintersect(v, t)`
+                # can't be trusted for kind types so we do an extra check here
+                if !iskindtype(v)
+                    return Const(false)
+                end
             end
         end
     end
@@ -671,6 +672,14 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
             end
         end
         s = typeof(sv)
+    elseif isa(s, PartialTuple)
+        if isa(name, Const)
+            nv = name.val
+            if isa(nv, Int) && 1 <= nv <= length(s.fields)
+                return s.fields[nv]
+            end
+        end
+        s = widenconst(s)
     end
     if isType(s) || !isa(s, DataType) || s.abstract
         return Any
@@ -916,7 +925,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
                 end
             else
                 if !isType(ai)
-                    if !isa(ai, Type) || typeintersect(ai, Type) != Bottom
+                    if !isa(ai, Type) || typeintersect(ai, Type) !== Bottom
                         hasnonType = true
                     else
                         return Bottom
@@ -1036,27 +1045,46 @@ end
 
 # convert the dispatch tuple type argtype to the real (concrete) type of
 # the tuple of those values
-function tuple_tfunc(@nospecialize(argtype))
-    if isa(argtype, DataType) && argtype.name === Tuple.name
-        p = Vector{Any}()
-        for x in argtype.parameters
+function tuple_tfunc(atypes::Vector{Any})
+    atypes = anymap(maybe_widen_conditional, atypes)
+    all_are_const = true
+    for i in 1:length(atypes)
+        if !isa(atypes[i], Const)
+            all_are_const = false
+            break
+        end
+    end
+    if all_are_const
+        return Const(tuple(Any[atypes[i].val for i in 1:length(atypes)]...))
+    end
+    params = Vector{Any}(undef, length(atypes))
+    anyinfo = false
+    for i in 1:length(atypes)
+        x = atypes[i]
+        # TODO ignore singleton Const (don't forget to update cache logic if you implement this)
+        if !anyinfo
+            anyinfo = !isa(x, Type) || isType(x)
+        end
+        if isa(x, Const)
+            params[i] = typeof(x.val)
+        else
+            x = widenconst(x)
             if isType(x)
                 xparam = x.parameters[1]
                 if issingletontype(xparam) || xparam === Bottom
-                    push!(p, typeof(xparam))
+                    params[i] = typeof(xparam)
                 else
-                    push!(p, Type)
+                    params[i] = Type
                 end
             else
-                push!(p, x)
+                params[i] = x
             end
         end
-        t = Tuple{p...}
-        # replace a singleton type with its equivalent Const object
-        isdefined(t, :instance) && return Const(t.instance)
-        return t
     end
-    return argtype
+    typ = Tuple{params...}
+    # replace a singleton type with its equivalent Const object
+    isdefined(typ, :instance) && return Const(typ.instance)
+    return anyinfo ? PartialTuple(typ, atypes) : typ
 end
 
 function array_type_undefable(@nospecialize(a))
@@ -1148,12 +1176,7 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
                            sv::Union{InferenceState,Nothing}, params::Params = sv.params)
     isva = !isempty(argtypes) && isvarargtype(argtypes[end])
     if f === tuple
-        for a in argtypes # TODO: permit Conditional here too
-            if !isa(a, Const)
-                return tuple_tfunc(argtypes_to_type(argtypes))
-            end
-        end
-        return Const(tuple(anymap(a::Const -> a.val, argtypes)...))
+        return tuple_tfunc(argtypes)
     elseif f === svec
         return SimpleVector
     elseif f === arrayset
