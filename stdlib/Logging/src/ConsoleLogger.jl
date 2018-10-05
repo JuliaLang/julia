@@ -61,7 +61,7 @@ function default_metafmt(level, _module, group, id, file, line)
     prefix_color = default_logcolor(level)
     prefix = (level == Warn ? "Warning" : string(level))*':'
     suffix = ""
-    suffix_color = :light_black
+    suffix_color = Base.stackframe_lineinfo_color()
     Info <= level < Warn && return prefix_color, prefix, suffix_color, suffix
     _module !== nothing && (suffix *= "$(_module)")
     if file !== nothing
