@@ -454,6 +454,67 @@ void root_scanner(int full)
     }
 }
 
+// Test stack direction
+static int is_lower_stack_frame(volatile char *frame_addr) {
+  volatile char buf[1];
+  return (uintptr_t) buf < (uintptr_t) frame_addr;
+}
+
+typedef volatile int (*volatile test_frame_func)(volatile char *frame_addr);
+
+// To prevent inlining, we make this a volatile function pointer.
+
+static test_frame_func is_lower_stack_frame_ptr =
+        (test_frame_func) is_lower_stack_frame;
+
+static int stack_grows_down(void) {
+  volatile char buf[1];
+  return is_lower_stack_frame_ptr(buf);
+}
+
+void task_scanner(jl_task_t *task, int root_task)
+{
+    // The task scanner is not necessary for liveness, as the
+    // corresponding task stack is already part of the stack.
+    // Its purpose is simply to test that the task scanner
+    // doing actual work does not trigger a problem.
+    size_t size;
+    int tid;
+    void *stack = jl_task_stack_buffer(task, &size, &tid);
+    if (tid >= 0) {
+        // this is the live stack of a thread. Is it ours?
+        if (stack && tid == jl_threadid()) {
+            // only scan the live portion of the stack.
+            char *end_stack = (char *) stack + size;
+            if (lt_ptr(stack, &size) && lt_ptr(&size, (char *)stack + size)) {
+                if (stack_grows_down()) {
+                    size = end_stack - (char *)&size;
+                    stack = (void *)&size;
+                }
+                else {
+                    size = (char *) end_stack - (char *) &size;
+                }
+            } else {
+                // error, current stack frame must be on the live stack.
+                jl_error("stack frame not part of the current task");
+            }
+        }
+        else
+            stack = NULL;
+    }
+    if (stack) {
+        void **start = (void **) stack;
+        void **end = start + size / sizeof(void *);
+        while (start < end) {
+            void *p = *start++;
+            void *q = jl_gc_internal_obj_base_ptr(p);
+            if (q) {
+                jl_gc_mark_queue_obj(ptls, q);
+            }
+        }
+    }
+}
+
 // Hooks to run before and after GC.
 //
 // As a simple example, we only track counters for full
@@ -545,6 +606,7 @@ int main()
         abort();
     ptls = jl_get_ptls_states();
     jl_gc_set_cb_root_scanner(root_scanner, 1);
+    jl_gc_set_cb_task_scanner(task_scanner, 1);
     jl_gc_set_cb_pre_gc(pre_gc_func, 1);
     jl_gc_set_cb_post_gc(post_gc_func, 1);
     // Test that deregistration works
