@@ -215,6 +215,15 @@ close(s)
 # This section tests temporary file and directory creation.           #
 #######################################################################
 
+@testset "quoting filenames" begin
+    try
+        open("foo bar")
+    catch e
+        isa(e, SystemError) || rethrow(e)
+        @test sprint(showerror, e) == "SystemError: opening file \"foo bar\": No such file or directory"
+    end
+end
+
 my_tempdir = tempdir()
 @test isdir(my_tempdir) == true
 
