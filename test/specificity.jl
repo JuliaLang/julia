@@ -233,3 +233,10 @@ let N = Tuple{Type{Union{Nothing, T}}, Union{Nothing, T}} where T,
     @test !args_morespecific(A, N)
     @test !args_morespecific(LI, N)
 end
+
+# issue #29528
+@test !args_morespecific(Tuple{Array,Vararg{Int64,N} where N}, Tuple{AbstractArray, Array})
+@test !args_morespecific(Tuple{Array,Vararg{Int64,N}} where N, Tuple{AbstractArray, Array})
+@test  args_morespecific(Tuple{Array,Int64}, Tuple{Array,Vararg{Int64,N}} where N)
+@test  args_morespecific(Tuple{Array,Int64}, Tuple{Array,Vararg{Int64,N} where N})
+@test !args_morespecific(Tuple{Array,Int64}, Tuple{AbstractArray, Array})
