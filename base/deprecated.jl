@@ -160,4 +160,10 @@ function promote_eltype_op end
 
 # BEGIN 1.0 deprecations
 
+# @deprecate one(i::CartesianIndex) oneunit(i)
+# @deprecate one(::Type{I}) where I<:CartesianIndex oneunit(I)
+# TODO: deprecate these
+one(::CartesianIndex{N}) where {N} = one(CartesianIndex{N})
+one(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val(N)))
+
 # END 1.0 deprecations
