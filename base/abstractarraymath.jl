@@ -61,6 +61,11 @@ julia> a = reshape(Vector(1:4),(2,2,1,1))
  1  3
  2  4
 
+julia> dropdims(a)
+2×2 Array{Int64,2}:
+ 1  3
+ 2  4
+
 julia> dropdims(a; dims=3)
 2×2×1 Array{Int64,3}:
 [:, :, 1] =
@@ -68,7 +73,7 @@ julia> dropdims(a; dims=3)
  2  4
 ```
 """
-dropdims(A; dims) = _dropdims(A, dims)
+dropdims(A; dims=((i for (i,j) in enumerate(size(A)) if j == 1)...,)) = _dropdims(A, dims)
 function _dropdims(A::AbstractArray, dims::Dims)
     for i in 1:length(dims)
         1 <= dims[i] <= ndims(A) || throw(ArgumentError("dropped dims must be in range 1:ndims(A)"))
