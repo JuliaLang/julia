@@ -68,6 +68,7 @@ IndexStyle(a::ReinterpretArray) = IndexStyle(a.parent)
 
 parent(a::ReinterpretArray) = a.parent
 dataids(a::ReinterpretArray) = dataids(a.parent)
+mightalias(A::ReinterpretArray, B::ReinterpretArray) = mightalias(parent(A), parent(B))
 
 function size(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)
