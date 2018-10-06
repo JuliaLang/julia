@@ -297,14 +297,15 @@ JL_DLLEXPORT void jl_restore_exc_stack(size_t state)
     }
 }
 
-void jl_copy_exc_stack(jl_exc_stack_t *dest, jl_exc_stack_t *src)
+void jl_copy_exc_stack(jl_exc_stack_t *dest, jl_exc_stack_t *src) JL_NOTSAFEPOINT
 {
     assert(dest->reserved_size >= src->top);
     memcpy(jl_excstk_raw(dest), jl_excstk_raw(src), sizeof(uintptr_t)*src->top);
     dest->top = src->top;
 }
 
-void jl_reserve_exc_stack(jl_exc_stack_t **stack, size_t reserved_size)
+void jl_reserve_exc_stack(jl_exc_stack_t **stack JL_REQUIRE_ROOTED_SLOT,
+                          size_t reserved_size)
 {
     jl_exc_stack_t *s = *stack;
     if (s && s->reserved_size >= reserved_size)
@@ -318,7 +319,8 @@ void jl_reserve_exc_stack(jl_exc_stack_t **stack, size_t reserved_size)
     *stack = new_s;
 }
 
-void jl_push_exc_stack(jl_exc_stack_t **stack, jl_value_t *exception,
+void jl_push_exc_stack(jl_exc_stack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
+                       jl_value_t *exception JL_ROOTED_ARGUMENT,
                        uintptr_t *bt_data, size_t bt_size)
 {
     jl_reserve_exc_stack(stack, (*stack ? (*stack)->top : 0) + bt_size + 2);
@@ -327,17 +329,6 @@ void jl_push_exc_stack(jl_exc_stack_t **stack, jl_value_t *exception,
     s->top += bt_size + 2;
     jl_excstk_raw(s)[s->top-2] = bt_size;
     jl_excstk_raw(s)[s->top-1] = (uintptr_t)exception;
-}
-
-void jl_pop_exc_stack(jl_exc_stack_t *stack, size_t n)
-{
-    size_t top = stack->top;
-    while (n != 0 && top > 0) {
-        top = jl_exc_stack_next(stack, top);
-        --n;
-    }
-    stack->top = top;
-    assert(n == 0);
 }
 
 // misc -----------------------------------------------------------------------

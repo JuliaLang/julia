@@ -667,17 +667,23 @@ typedef struct _jl_exc_stack_t {
     // uintptr_t data[]; // Access with jl_excstk_raw
 #define jl_excstk_raw(stack) ((uintptr_t*)((char*)(stack) + sizeof(jl_exc_stack_t)))
 } jl_exc_stack_t;
+
 // Stack access
-#define jl_exc_stack_exception(stack, itr) ((jl_value_t*)jl_excstk_raw(stack)[(itr)-1])
+static inline jl_value_t *jl_exc_stack_exception(jl_exc_stack_t *stack JL_PROPAGATES_ROOT,
+                                                 size_t itr) JL_NOTSAFEPOINT
+{
+    return (jl_value_t*)jl_excstk_raw(stack)[(itr)-1];
+}
 #define jl_exc_stack_bt_size(stack, itr)   ((size_t)jl_excstk_raw(stack)[(itr)-2])
 #define jl_exc_stack_bt_data(stack, itr)   (jl_excstk_raw(stack) + itr - 2 - jl_excstk_raw(stack)[(itr)-2])
 // Exception stack iteration (start at itr=stack->top, stop at itr=0)
 #define jl_exc_stack_next(stack, itr)      ((itr) - 2 - jl_exc_stack_bt_size(stack,itr))
-void jl_reserve_exc_stack(jl_exc_stack_t **stack, size_t reserved_size);
-void jl_push_exc_stack(jl_exc_stack_t **stack, jl_value_t *exception,
+void jl_reserve_exc_stack(jl_exc_stack_t **stack JL_REQUIRE_ROOTED_SLOT,
+                          size_t reserved_size);
+void jl_push_exc_stack(jl_exc_stack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
+                       jl_value_t *exception JL_ROOTED_ARGUMENT,
                        uintptr_t *bt_data, size_t bt_size);
-void jl_pop_exc_stack(jl_exc_stack_t *stack, size_t n);
-void jl_copy_exc_stack(jl_exc_stack_t *dest, jl_exc_stack_t *src);
+void jl_copy_exc_stack(jl_exc_stack_t *dest, jl_exc_stack_t *src) JL_NOTSAFEPOINT;
 
 // timers
 // Returns time in nanosec

@@ -1428,7 +1428,7 @@ JL_DLLEXPORT void JL_NORETURN jl_eof_error(void);
 // Return the exception currently being handled, or nothing if we are not
 // inside the scope of a JL_CATCH.  Note that catch scope is determined
 // dynamically so this works in functions called from a catch block.
-JL_DLLEXPORT jl_value_t *jl_current_exception(void);
+JL_DLLEXPORT jl_value_t *jl_current_exception(void) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_value_t *jl_exception_occurred(void);
 JL_DLLEXPORT void jl_exception_clear(void) JL_NOTSAFEPOINT;
 

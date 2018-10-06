@@ -102,7 +102,9 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
     return r;
 }
 
-JL_DLLEXPORT jl_value_t *jl_current_exception(void)
+// FIXME: annotating this with JL_GLOBALLY_ROOTED is over optimistic. It's
+// rooted by the task which is rooted in the TLS.
+JL_DLLEXPORT jl_value_t *jl_current_exception(void) JL_GLOBALLY_ROOTED
 {
     jl_exc_stack_t *s = jl_get_ptls_states()->current_task->exc_stack;
     return s && s->top != 0 ? jl_exc_stack_exception(s, s->top) : jl_nothing;

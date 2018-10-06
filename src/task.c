@@ -364,17 +364,16 @@ void JL_NORETURN throw_internal(jl_value_t *exception JL_MAYBE_UNROOTED)
     ptls->io_wait = 0;
     if (ptls->safe_restore)
         jl_longjmp(*ptls->safe_restore, 1);
+    JL_GC_PUSH1(&exception);
     jl_gc_unsafe_enter(ptls);
     if (exception) {
         // The temporary ptls->bt_data is rooted by special purpose code in the
         // GC. This exists only for the purpose of preserving bt_data until we
         // set ptls->bt_size=0 below.
-        JL_GC_PUSH1(&exception);
         assert(ptls->current_task);
         jl_push_exc_stack(&ptls->current_task->exc_stack, exception,
                           ptls->bt_data, ptls->bt_size);
         ptls->bt_size = 0;
-        JL_GC_POP();
     }
     assert(ptls->current_task->exc_stack && ptls->current_task->exc_stack->top);
     jl_handler_t *eh = ptls->current_task->eh;
@@ -395,7 +394,7 @@ void JL_NORETURN throw_internal(jl_value_t *exception JL_MAYBE_UNROOTED)
 }
 
 // record backtrace and raise an error
-JL_DLLEXPORT void jl_throw(jl_value_t *e)
+JL_DLLEXPORT void jl_throw(jl_value_t *e JL_MAYBE_UNROOTED)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(e != NULL);
@@ -426,7 +425,7 @@ JL_DLLEXPORT void jl_sig_throw(void)
     throw_internal(e);
 }
 
-JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e)
+JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
 {
     // TODO: Should uses of `rethrow(exc)` be replaced with a normal throw, now
     // that exception stacks allow root cause analysis?
@@ -435,6 +434,7 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e)
         jl_error("rethrow(exc) not allowed outside a catch block");
     // overwrite exception on top of stack. see jl_exc_stack_exception
     jl_excstk_raw(exc_stack)[exc_stack->top-1] = (uintptr_t)e;
+    JL_GC_PROMISE_ROOTED(e);
     throw_internal(NULL);
 }
 

@@ -183,28 +183,26 @@ JL_DLLEXPORT void jl_get_backtrace(jl_array_t **btout, jl_array_t **bt2out)
 // interleaved.
 JL_DLLEXPORT jl_value_t *jl_get_exc_stack(jl_value_t* task, int include_bt, int max_entries)
 {
+    if (!jl_typeis(task, jl_task_type))
+        jl_error("Cannot get exception stack from a non-Task type");
     jl_array_t *stack = NULL;
     jl_array_t *bt = NULL;
     jl_array_t *bt2 = NULL;
     JL_GC_PUSH3(&stack, &bt, &bt2);
     stack = jl_alloc_array_1d(jl_array_any_type, 0);
-    if (!jl_typeis(task, jl_task_type))
-        jl_error("Cannot get exception stack from a non-Task type");
-    jl_exc_stack_t *s = ((jl_task_t*)task)->exc_stack;
-    if (!s)
-        return (jl_value_t*)stack;
-    size_t itr = s->top;
+    jl_exc_stack_t *exc_stack = ((jl_task_t*)task)->exc_stack;
+    size_t itr = exc_stack ? exc_stack->top : 0;
     int i = 0;
     while (itr > 0 && i < max_entries) {
-        jl_array_ptr_1d_push(stack, jl_exc_stack_exception(s, itr));
+        jl_array_ptr_1d_push(stack, jl_exc_stack_exception(exc_stack, itr));
         if (include_bt) {
-            decode_backtrace(jl_exc_stack_bt_data(s, itr),
-                             jl_exc_stack_bt_size(s, itr),
+            decode_backtrace(jl_exc_stack_bt_data(exc_stack, itr),
+                             jl_exc_stack_bt_size(exc_stack, itr),
                              &bt, &bt2);
             jl_array_ptr_1d_push(stack, (jl_value_t*)bt);
             jl_array_ptr_1d_push(stack, (jl_value_t*)bt2);
         }
-        itr = jl_exc_stack_next(s, itr);
+        itr = jl_exc_stack_next(exc_stack, itr);
         i++;
     }
     JL_GC_POP();
