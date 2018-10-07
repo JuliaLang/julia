@@ -245,9 +245,10 @@ end
 ## Other array functions ##
 
 """
-    repeat(A::AbstractArray, counts::Integer...)
+    repeat(A::AbstractArray, counts...)
 
 Construct an array by repeating array `A` a given number of times in each dimension, specified by `counts`.
+Specify repetitions for each row or column by passing a Vector to `counts`.
 
 # Examples
 ```jldoctest
@@ -268,6 +269,25 @@ julia> repeat([1, 2, 3], 2, 3)
  1  1  1
  2  2  2
  3  3  3
+
+julia> repeat([1, 2, 3], 1:3)
+6-element Array{Int64,1}:
+ 1
+ 2
+ 2
+ 3
+ 3
+ 3
+
+julia> repeat([1, 2, 3], 1:3, 2)
+6×2 Array{Int64,2}:
+ 1  1
+ 2  2
+ 2  2
+ 3  3
+ 3  3
+ 3  3
+
 ```
 """
 repeat(a::AbstractArray, counts::Integer...) = repeat(a, outer = counts)
