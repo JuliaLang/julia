@@ -286,6 +286,72 @@ function repeat(a::AbstractVecOrMat, m::Integer, n::Integer=1)
     return b
 end
 
+function repeat(a::AbstractVecOrMat, m::AbstractVector{<:Integer}, n::Integer=1)
+    o, p = size(a,1), size(a,2)
+    length(m) == o || throw(ArgumentError("m must be a single Integer or an AbstractVector{<:Integer} of same dimension as a"))
+    b = similar(a, sum(m), p*n)
+    for j=1:n
+        d = (j-1)*p+1
+        R = d:d+p-1
+        c = 0
+        for i ∈ eachindex(m)
+            r = m[i]
+            v = a[i,:]
+            while r > 0
+                b[c+=1, R] = v
+                r -= 1
+            end
+        end
+    end
+    return b
+end
+
+function repeat(a::AbstractVecOrMat, m::Integer, n::AbstractVector{<:Integer})
+    o, p = size(a,1), size(a,2)
+    length(n) == p || throw(ArgumentError("n must be a single Integer or an AbstractVector{<:Integer} of same dimension as a"))
+    b = similar(a, o*m, sum(n))
+    sumj = 0
+    for j ∈ eachindex(n)
+        r = n[j]
+        v = a[:,j]
+        d = sumj + 1
+        sumj += r
+        R = d:sumj
+        for k ∈ R
+            for i=1:m
+               c = (i-1)*o+1
+               b[c:c+o-1, k] = v
+            end
+        end
+    end
+    return b
+end
+
+function repeat(a::AbstractVecOrMat, m::AbstractVector{<:Integer}, n::AbstractVector{<:Integer})
+    o, p = size(a,1), size(a,2)
+    length(n) == p || throw(ArgumentError("n must be a single Integer or an AbstractVector{<:Integer} of same dimension as a"))
+    length(m) == o || throw(ArgumentError("m must be a single Integer or an AbstractVector{<:Integer} of same dimension as a"))
+    b = similar(a, sum(m), sum(n))
+    sumj = 0
+    for (j, r) ∈ enumerate(n)
+        v = a[:,j]
+        d = sumj + 1
+        sumj += r
+        R = d:sumj
+        for k ∈ R
+            c = 0
+            for (i, mi) ∈ enumerate(m)
+                mv = v[i]
+                while mi > 0
+                    b[c+=1, k] = mv
+                    mi -= 1
+                end
+            end
+        end
+    end
+    return b
+end
+
 function repeat(a::AbstractVector, m::Integer)
     o = length(a)
     b = similar(a, o*m)
@@ -295,6 +361,22 @@ function repeat(a::AbstractVector, m::Integer)
     end
     return b
 end
+
+function repeat(a::AbstractVector, m::AbstractVector{<:Integer})
+    length(m) = length(a) || throw(ArgumentError("a and m must have the same length"))
+    b = similar(a, sum(m))
+    c = 0
+    for i ∈ eachindex(m)
+        j = m[i]
+        v = a[i]
+        while j > 0
+            b[c+=1] = v
+            j -= 1
+        end
+    end
+    return b
+end
+
 
 """
     repeat(A::AbstractArray; inner=ntuple(x->1, ndims(A)), outer=ntuple(x->1, ndims(A)))
