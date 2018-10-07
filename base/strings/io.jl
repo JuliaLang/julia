@@ -576,7 +576,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
     String(take!(buf))
 end
 
-function String(a::Vector{Char})
+function String(a::AbstractVector{Char})
     n = 0
     for v in a
         n += ncodeunits(v)
@@ -584,7 +584,7 @@ function String(a::Vector{Char})
     out = _string_n(n)
     offs = 1
     for v in a
-        offs += __string!(out, v, offs)
+        offs += __unsafe_string!(out, v, offs)
     end
     return out
 end

@@ -145,7 +145,7 @@ end
 string(a::String)            = String(a)
 string(a::SubString{String}) = String(a)
 
-@inline function __string!(out, c::Char, offs::Integer)
+@inline function __unsafe_string!(out, c::Char, offs::Integer)
     x = bswap(reinterpret(UInt32, c))
     n = ncodeunits(c)
     unsafe_store!(pointer(out, offs), x % UInt8)
@@ -161,7 +161,7 @@ string(a::SubString{String}) = String(a)
     return n
 end
 
-@inline function __string!(out, s::Union{String, SubString{String}}, offs::Integer)
+@inline function __unsafe_string!(out, s::Union{String, SubString{String}}, offs::Integer)
     n = sizeof(s)
     unsafe_copyto!(pointer(out, offs), pointer(s), n)
     return n
@@ -179,7 +179,7 @@ function string(a::Union{Char, String, SubString{String}}...)
     out = _string_n(n)
     offs = 1
     for v in a
-        offs += __string!(out, v, offs)
+        offs += __unsafe_string!(out, v, offs)
     end
     return out
 end
