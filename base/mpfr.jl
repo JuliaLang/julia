@@ -225,7 +225,7 @@ BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precisi
     BigFloat(Float64(x), r; precision=precision)
 
 BigFloat(x::Rational, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
-    BigFloat(numerator(x), r ;precision=precision) / BigFloat(denominator(x), r ;precision=precision)
+    BigFloat(numerator(x), r; precision=precision) / BigFloat(denominator(x), r ;precision=precision)
 
 function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=DEFAULT_PRECISION[], rounding::MPFRRoundingMode=ROUNDING_MODE[])
     !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s), base = base)
@@ -286,7 +286,6 @@ function unsafe_cast(::Type{BigInt}, x::BigFloat, r::MPFRRoundingMode)
 end
 unsafe_cast(::Type{Int128}, x::BigFloat, r::MPFRRoundingMode) = Int128(unsafe_cast(BigInt, x, r))
 unsafe_cast(::Type{UInt128}, x::BigFloat, r::MPFRRoundingMode) = UInt128(unsafe_cast(BigInt, x, r))
-unsafe_cast(::Type{T}, x::BigFloat, r::MPFRRoundingMode) where {T<:Integer} = unsafe_cast(T, x, r)
 
 unsafe_trunc(::Type{T}, x::BigFloat) where {T<:Integer} = unsafe_cast(T, x, RoundToZero)
 
@@ -335,22 +334,18 @@ function (::Type{T})(x::BigFloat) where T<:Integer
 end
 
 ## BigFloat -> AbstractFloat
-
 _cpynansgn(x::AbstractFloat, y::BigFloat) = isnan(x) && signbit(x) != signbit(y) ? -x : x
 
-Float64(x::BigFloat) =
-    _cpynansgn(ccall((:mpfr_get_d,:libmpfr), Float64, (Ref{BigFloat}, MPFRRoundingMode), x, ROUNDING_MODE[]), x)
-Float32(x::BigFloat) =
-    _cpynansgn(ccall((:mpfr_get_flt,:libmpfr), Float32, (Ref{BigFloat}, MPFRRoundingMode), x, ROUNDING_MODE[]), x)
+Float64(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]) =
+    _cpynansgn(ccall((:mpfr_get_d,:libmpfr), Float64, (Ref{BigFloat}, MPFRRoundingMode), x, r), x)
+Float64(x::BigFloat, r::RoundingMode) = Float64(x, convert(MPFRRoundingMode, r))
+
+Float32(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]) =
+    _cpynansgn(ccall((:mpfr_get_flt,:libmpfr), Float32, (Ref{BigFloat}, MPFRRoundingMode), x, r), x)
+Float32(x::BigFloat, r::RoundingMode) = Float32(x, convert(MPFRRoundingMode, r))
+
 # TODO: avoid double rounding
 Float16(x::BigFloat) = Float16(Float32(x))
-
-Float64(x::BigFloat, r::MPFRRoundingMode) =
-    _cpynansgn(ccall((:mpfr_get_d,:libmpfr), Float64, (Ref{BigFloat}, MPFRRoundingMode), x, r), x)
-Float32(x::BigFloat, r::MPFRRoundingMode) =
-    _cpynansgn(ccall((:mpfr_get_flt,:libmpfr), Float32, (Ref{BigFloat}, MPFRRoundingMode), x, r), x)
-# TODO: avoid double rounding
-Float16(x::BigFloat, r::RoundingMode) = Float16(Float32(x, r))
 
 promote_rule(::Type{BigFloat}, ::Type{<:Real}) = BigFloat
 promote_rule(::Type{BigInt}, ::Type{<:AbstractFloat}) = BigFloat
