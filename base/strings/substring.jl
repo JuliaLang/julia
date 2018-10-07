@@ -145,6 +145,28 @@ end
 string(a::String)            = String(a)
 string(a::SubString{String}) = String(a)
 
+@inline function __string!(out, c::Char, offs::Integer)
+    x = bswap(reinterpret(UInt32, c))
+    n = ncodeunits(c)
+    unsafe_store!(pointer(out, offs), x % UInt8)
+    n == 1 && return n
+    x >>= 8
+    unsafe_store!(pointer(out, offs+1), x % UInt8)
+    n == 2 && return n
+    x >>= 8
+    unsafe_store!(pointer(out, offs+2), x % UInt8)
+    n == 3 && return n
+    x >>= 8
+    unsafe_store!(pointer(out, offs+3), x % UInt8)
+    return n
+end
+
+@inline function __string!(out, s::Union{String, SubString{String}}, offs::Integer)
+    n = sizeof(s)
+    unsafe_copyto!(pointer(out, offs), pointer(s), n)
+    return n
+end
+
 function string(a::Union{Char, String, SubString{String}}...)
     n = 0
     for v in a
@@ -157,17 +179,7 @@ function string(a::Union{Char, String, SubString{String}}...)
     out = _string_n(n)
     offs = 1
     for v in a
-        if v isa Char
-           x = bswap(reinterpret(UInt32, v))
-           for j in 1:ncodeunits(v)
-               unsafe_store!(pointer(out, offs), x % UInt8)
-               offs += 1
-               x >>= 8
-           end
-        else
-            unsafe_copyto!(pointer(out,offs), pointer(v), sizeof(v))
-            offs += sizeof(v)
-        end
+        offs += __string!(out, v, offs)
     end
     return out
 end

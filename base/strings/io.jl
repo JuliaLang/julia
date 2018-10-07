@@ -576,6 +576,19 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
     String(take!(buf))
 end
 
+function String(a::Vector{Char})
+    n = 0
+    for v in a
+        n += ncodeunits(v)
+    end
+    out = _string_n(n)
+    offs = 1
+    for v in a
+        offs += __string!(out, v, offs)
+    end
+    return out
+end
+
 function String(chars::AbstractVector{<:AbstractChar})
     sprint(sizehint=length(chars)) do io
         for c in chars
