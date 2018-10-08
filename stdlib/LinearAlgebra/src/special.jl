@@ -117,35 +117,177 @@ end
 # back to broadcasting which has ~2-10x speed regressions.
 # For the other structure matrix pairs, broadcasting works well.
 
-+(A::Bidiagonal, B::Diagonal) = Bidiagonal(A.dv+B.diag, A.ev, A.uplo)
--(A::Bidiagonal, B::Diagonal) = Bidiagonal(A.dv-B.diag, A.ev, A.uplo)
-+(A::Diagonal, B::Bidiagonal) = Bidiagonal(A.diag+B.dv, B.ev, B.uplo)
--(A::Diagonal, B::Bidiagonal) = Bidiagonal(A.diag-B.dv, -B.ev, B.uplo)
+# For structured matrix types with different non-zero diagonals the underlying
+# representations must be promoted to the same type.
+# For example, in Diagonal + Bidiagonal only the main diagonal is touched so
+# the off diagonal could be a different type after the operation resulting in
+# an error. See issue #28994
 
-+(A::Diagonal, B::SymTridiagonal) = SymTridiagonal(A.diag+B.dv, B.ev)
--(A::Diagonal, B::SymTridiagonal) = SymTridiagonal(A.diag-B.dv, -B.ev)
-+(A::SymTridiagonal, B::Diagonal) = SymTridiagonal(A.dv+B.diag, A.ev)
--(A::SymTridiagonal, B::Diagonal) = SymTridiagonal(A.dv-B.diag, A.ev)
+function (+)(A::Bidiagonal, B::Diagonal)
+    newdv = A.dv + B.diag
+    Bidiagonal(newdv, typeof(newdv)(A.ev), A.uplo)
+end
+
+function (-)(A::Bidiagonal, B::Diagonal)
+    newdv = A.dv - B.diag
+    Bidiagonal(newdv, typeof(newdv)(A.ev), A.uplo)
+end
+
+function (+)(A::Diagonal, B::Bidiagonal)
+    newdv = A.diag + B.dv
+    Bidiagonal(newdv, typeof(newdv)(B.ev), B.uplo)
+end
+
+function (-)(A::Diagonal, B::Bidiagonal)
+    newdv = A.diag-B.dv
+    Bidiagonal(newdv, typeof(newdv)(-B.ev), B.uplo)
+end
+
+function (+)(A::Diagonal, B::SymTridiagonal)
+    newdv = A.diag+B.dv
+    SymTridiagonal(A.diag+B.dv, typeof(newdv)(B.ev))
+end
+
+function (-)(A::Diagonal, B::SymTridiagonal)
+    newdv = A.diag-B.dv
+    SymTridiagonal(newdv, typeof(newdv)(-B.ev))
+end
+
+function (+)(A::SymTridiagonal, B::Diagonal)
+    newdv = A.dv+B.diag
+    SymTridiagonal(newdv, typeof(newdv)(A.ev))
+end
+
+function (-)(A::SymTridiagonal, B::Diagonal)
+    newdv = A.dv-B.diag
+    SymTridiagonal(newdv, typeof(newdv)(A.ev))
+end
+
+# this set doesn't have the aforementioned problem
 
 +(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl+B.ev, A.d+B.dv, A.du+B.ev)
 -(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl-B.ev, A.d-B.dv, A.du-B.ev)
 +(A::SymTridiagonal, B::Tridiagonal) = Tridiagonal(A.ev+B.dl, A.dv+B.d, A.ev+B.du)
 -(A::SymTridiagonal, B::Tridiagonal) = Tridiagonal(A.ev-B.dl, A.dv-B.d, A.ev-B.du)
 
-+(A::Diagonal, B::Tridiagonal) = Tridiagonal(B.dl, A.diag+B.d, B.du)
--(A::Diagonal, B::Tridiagonal) = Tridiagonal(-B.dl, A.diag-B.d, -B.du)
-+(A::Tridiagonal, B::Diagonal) = Tridiagonal(A.dl, A.d+B.diag, A.du)
--(A::Tridiagonal, B::Diagonal) = Tridiagonal(A.dl, A.d-B.diag, A.du)
 
-+(A::Bidiagonal, B::Tridiagonal) = Tridiagonal((A.uplo == 'U' ? (B.dl, A.dv+B.d, A.ev+B.du) : (A.ev+B.dl, A.dv+B.d, B.du))...)
--(A::Bidiagonal, B::Tridiagonal) = Tridiagonal((A.uplo == 'U' ? (-B.dl, A.dv-B.d, A.ev-B.du) : (A.ev-B.dl, A.dv-B.d, -B.du))...)
-+(A::Tridiagonal, B::Bidiagonal) = Tridiagonal((B.uplo == 'U' ? (A.dl, A.d+B.dv, A.du+B.ev) : (A.dl+B.ev, A.d+B.dv, A.du))...)
--(A::Tridiagonal, B::Bidiagonal) = Tridiagonal((B.uplo == 'U' ? (A.dl, A.d-B.dv, A.du-B.ev) : (A.dl-B.ev, A.d-B.dv, A.du))...)
+function (+)(A::Diagonal, B::Tridiagonal)
+    newdv = A.diag+B.d
+    Tridiagonal(typeof(newdv)(B.dl), newdv, typeof(newdv)(B.du))
+end
 
-+(A::Bidiagonal, B::SymTridiagonal) = Tridiagonal((A.uplo == 'U' ? (B.ev, A.dv+B.dv, A.ev+B.ev) : (A.ev+B.ev, A.dv+B.dv, B.ev))...)
--(A::Bidiagonal, B::SymTridiagonal) = Tridiagonal((A.uplo == 'U' ? (-B.ev, A.dv-B.dv, A.ev-B.ev) : (A.ev-B.ev, A.dv-B.dv, -B.ev))...)
-+(A::SymTridiagonal, B::Bidiagonal) = Tridiagonal((B.uplo == 'U' ? (A.ev, A.dv+B.dv, A.ev+B.ev) : (A.ev+B.ev, A.dv+B.dv, A.ev))...)
--(A::SymTridiagonal, B::Bidiagonal) = Tridiagonal((B.uplo == 'U' ? (A.ev, A.dv-B.dv, A.ev-B.ev) : (A.ev-B.ev, A.dv-B.dv, A.ev))...)
+function (-)(A::Diagonal, B::Tridiagonal)
+    newdv = A.diag-B.d
+    Tridiagonal(typeof(newdv)(-B.dl), newdv, typeof(newdv)(-B.du))
+end
+
+function (+)(A::Tridiagonal, B::Diagonal)
+    newdv = A.d+B.diag
+    Tridiagonal(typeof(newdv)(A.dl), newdv, typeof(newdv)(A.du))
+end
+
+function (-)(A::Tridiagonal, B::Diagonal)
+    newdv = A.d-B.diag
+    Tridiagonal(typeof(newdv)(A.dl), newdv, typeof(newdv)(A.du))
+end
+
+function (+)(A::Bidiagonal, B::Tridiagonal)
+    newdv = A.dv+B.d
+    Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(B.dl), newdv, A.ev+B.du) : (A.ev+B.dl, newdv, typeof(newdv)(B.du)))...)
+end
+
+function (-)(A::Bidiagonal, B::Tridiagonal)
+    newdv = A.dv-B.d
+    Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(-B.dl), newdv, A.ev-B.du) : (A.ev-B.dl, newdv, typeof(newdv)(-B.du)))...)
+end
+
+function (+)(A::Tridiagonal, B::Bidiagonal)
+    newdv = A.d+B.dv
+    Tridiagonal((B.uplo == 'U' ? (typeof(newdv)(A.dl), newdv, A.du+B.ev) : (A.dl+B.ev, newdv, typeof(newdv)(A.du)))...)
+end
+
+function (-)(A::Tridiagonal, B::Bidiagonal)
+    newdv = A.d-B.dv
+    Tridiagonal((B.uplo == 'U' ? (typeof(newdv)(A.dl), newdv, A.du-B.ev) : (A.dl-B.ev, newdv, typeof(newdv)(A.du)))...)
+end
+
+function (+)(A::Bidiagonal, B::SymTridiagonal)
+    newdv = A.dv+B.dv
+    Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(B.ev), A.dv+B.dv, A.ev+B.ev) : (A.ev+B.ev, A.dv+B.dv, typeof(newdv)(B.ev)))...)
+end
+
+function (-)(A::Bidiagonal, B::SymTridiagonal)
+    newdv = A.dv-B.dv
+    Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(-B.ev), newdv, A.ev-B.ev) : (A.ev-B.ev, newdv, typeof(newdv)(-B.ev)))...)
+end
+
+function (+)(A::SymTridiagonal, B::Bidiagonal)
+    newdv = A.dv+B.dv
+    Tridiagonal((B.uplo == 'U' ? (typeof(newdv)(A.ev), newdv, A.ev+B.ev) : (A.ev+B.ev, newdv, typeof(newdv)(A.ev)))...)
+end
+
+function (-)(A::SymTridiagonal, B::Bidiagonal)
+    newdv = A.dv-B.dv
+    Tridiagonal((B.uplo == 'U' ? (typeof(newdv)(A.ev), newdv, A.ev-B.ev) : (A.ev-B.ev, newdv, typeof(newdv)(A.ev)))...)
+end
+# fixing uniform scaling problems from #28994
+
+function (+)(A::Tridiagonal, B::UniformScaling)
+    newd = A.d .+ B.λ
+    Tridiagonal(typeof(newd)(A.dl), newd, typeof(newd)(A.du))
+end
+
+function (+)(A::SymTridiagonal, B::UniformScaling)
+    newdv = A.dv .+ B.λ
+    SymTridiagonal(newdv, typeof(newdv)(A.ev))
+end
+
+function (+)(A::Bidiagonal, B::UniformScaling)
+    newdv = A.dv .+ B.λ
+    Bidiagonal(newdv, typeof(newdv)(A.ev), A.uplo)
+end
+
+function (+)(A::Diagonal, B::UniformScaling)
+    Diagonal(A.diag .+ B.λ)
+end
+
+function (+)(A::UniformScaling, B::Tridiagonal)
+    newd = A.λ .+ B.d
+    Tridiagonal(typeof(newd)(B.dl), newd, typeof(newd)(B.du))
+end
+
+function (+)(A::UniformScaling, B::SymTridiagonal)
+    newdv = A.λ .+ B.dv
+    SymTridiagonal(newdv, typeof(newdv)(B.ev))
+end
+
+function (+)(A::UniformScaling, B::Bidiagonal)
+    newdv = A.λ .+ B.dv
+    Bidiagonal(newdv, typeof(newdv)(B.ev), B.uplo)
+end
+
+function (+)(A::UniformScaling, B::Diagonal)
+    Diagonal(A.λ .+ B.diag)
+end
+
+function (-)(A::UniformScaling, B::Tridiagonal)
+    newd = A.λ .- B.d
+    Tridiagonal(typeof(newd)(-B.dl), newd, typeof(newd)(-B.du))
+end
+
+function (-)(A::UniformScaling, B::SymTridiagonal)
+    newdv = A.λ .- B.dv
+    SymTridiagonal(newdv, typeof(newdv)(-B.ev))
+end
+
+function (-)(A::UniformScaling, B::Bidiagonal)
+    newdv = A.λ .- B.dv
+    Bidiagonal(newdv, typeof(newdv)(-B.ev), B.uplo)
+end
+
+function (-)(A::UniformScaling, B::Diagonal)
+    Diagonal(A.λ .- B.diag)
+end
 
 rmul!(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
     (B = adjB.parent; rmul!(full!(A), adjoint(B)))

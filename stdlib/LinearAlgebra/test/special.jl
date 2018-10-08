@@ -129,6 +129,34 @@ end
     end
 end
 
+@testset "+ and - among structured matrices with different container types" begin
+    diag = 1:5
+    offdiag = 1:4
+    uniformscalingmats = [UniformScaling(3), UniformScaling(1.0), UniformScaling(3//5), UniformScaling(Complex{Float64}(1.3, 3.5))]
+    mats = [Diagonal(diag), Bidiagonal(diag, offdiag, 'U'), Bidiagonal(diag, offdiag, 'L'), Tridiagonal(offdiag, diag, offdiag), SymTridiagonal(diag, offdiag)]
+    for T in [ComplexF64, Int64, Rational{Int64}, Float64]
+        push!(mats, Diagonal(Vector{T}(diag)))
+        push!(mats, Bidiagonal(Vector{T}(diag), Vector{T}(offdiag), 'U'))
+        push!(mats, Bidiagonal(Vector{T}(diag), Vector{T}(offdiag), 'L'))
+        push!(mats, Tridiagonal(Vector{T}(offdiag), Vector{T}(diag), Vector{T}(offdiag)))
+        push!(mats, SymTridiagonal(Vector{T}(diag), Vector{T}(offdiag)))
+    end
+
+    for op in (+,*) # to do: fix when operation is - and the matrix has a range as the underlying representation and we get a step size of 0.
+        for A in mats
+            for B in mats
+                @test (op)(A, B) ≈ (op)(Matrix(A), Matrix(B)) ≈ Matrix((op)(A, B))
+            end
+        end
+
+        for A in mats
+            for B in uniformscalingmats
+                @test (op)(A, B) ≈ (op)(Matrix(A), B) ≈ Matrix((op)(A, B))
+            end
+        end
+    end
+end
+
 @testset "Triangular Types and QR" begin
     for typ in [UpperTriangular,LowerTriangular,LinearAlgebra.UnitUpperTriangular,LinearAlgebra.UnitLowerTriangular]
         a = rand(n,n)

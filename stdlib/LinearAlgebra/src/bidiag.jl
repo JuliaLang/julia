@@ -304,7 +304,8 @@ function +(A::Bidiagonal, B::Bidiagonal)
     if A.uplo == B.uplo
         Bidiagonal(A.dv+B.dv, A.ev+B.ev, A.uplo)
     else
-        Tridiagonal((A.uplo == 'U' ? (B.ev,A.dv+B.dv,A.ev) : (A.ev,A.dv+B.dv,B.ev))...)
+        newdv = A.dv+B.dv
+        Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(B.ev), newdv, typeof(newdv)(A.ev)) : (typeof(newdv)(A.ev), newdv, typeof(newdv)(B.ev)))...)
     end
 end
 
@@ -312,7 +313,8 @@ function -(A::Bidiagonal, B::Bidiagonal)
     if A.uplo == B.uplo
         Bidiagonal(A.dv-B.dv, A.ev-B.ev, A.uplo)
     else
-        Tridiagonal((A.uplo == 'U' ? (-B.ev,A.dv-B.dv,A.ev) : (A.ev,A.dv-B.dv,-B.ev))...)
+        newdv = A.dv-B.dv
+        Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(-B.ev), newdv, typeof(newdv)(A.ev)) : (typeof(newdv)(A.ev), newdv, typeof(newdv)(-B.ev)))...)
     end
 end
 
