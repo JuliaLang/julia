@@ -102,6 +102,14 @@ typedef struct {
 // Cache of thread local change to global metadata during GC
 // This is sync'd after marking.
 typedef union _jl_gc_mark_data jl_gc_mark_data_t;
+
+typedef struct {
+    void **pc; // Current stack address for the pc (up growing)
+    jl_gc_mark_data_t *data; // Current stack address for the data (up growing)
+    void **pc_start; // Cached value of `gc_cache->pc_stack`
+    void **pc_end; // Cached value of `gc_cache->pc_stack_end`
+} jl_gc_mark_sp_t;
+
 typedef struct {
     // thread local increment of `perm_scanned_bytes`
     size_t perm_scanned_bytes;
@@ -142,7 +150,6 @@ struct _jl_tls_states_t {
     volatile int8_t in_finalizer;
     int8_t disable_gc;
     volatile sig_atomic_t defer_signal;
-    struct _jl_module_t *current_module;
     struct _jl_task_t *volatile current_task;
     struct _jl_task_t *root_task;
 //#ifdef COPY_STACKS
@@ -176,6 +183,8 @@ struct _jl_tls_states_t {
     int finalizers_inhibited;
     arraylist_t finalizers;
     jl_gc_mark_cache_t gc_cache;
+    arraylist_t sweep_objs;
+    jl_gc_mark_sp_t gc_mark_sp;
 };
 
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`

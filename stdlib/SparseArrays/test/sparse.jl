@@ -2290,6 +2290,34 @@ end
     @test adjoint(MC) == copy(adjoint(SC))
 end
 
+begin
+    rng = Random.MersenneTwister(0)
+    n = 1000
+    B = ones(n)
+    A = sprand(rng, n, n, 0.01)
+    MA = Matrix(A)
+    @testset "triangular multiply with $tr($wr)" for tr in (identity, adjoint, transpose),
+    wr in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        AW = tr(wr(A))
+        MAW = tr(wr(MA))
+        @test AW * B ≈ MAW * B
+    end
+    A = A - Diagonal(diag(A)) + 2I # avoid rounding errors by division
+    MA = Matrix(A)
+    @testset "triangular solver for $tr($wr)" for tr in (identity, adjoint, transpose),
+    wr in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        AW = tr(wr(A))
+        MAW = tr(wr(MA))
+        @test AW \ B ≈ MAW \ B
+    end
+    @testset "triangular singular exceptions" begin
+        A = LowerTriangular(sparse([0 2.0;0 1]))
+        @test_throws SingularException(1) A \ ones(2)
+        A = UpperTriangular(sparse([1.0 0;0 0]))
+        @test_throws SingularException(2) A \ ones(2)
+    end
+end
+
 @testset "Issue #28634" begin
     a = SparseMatrixCSC{Int8, Int16}([1 2; 3 4])
     na = SparseMatrixCSC(a)

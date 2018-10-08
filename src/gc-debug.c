@@ -200,7 +200,7 @@ static void gc_verify_track(jl_ptls_t ptls)
 {
     jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
     do {
-        gc_mark_sp_t sp;
+        jl_gc_mark_sp_t sp;
         gc_mark_sp_init(gc_cache, &sp);
         arraylist_push(&lostval_parents_done, lostval);
         jl_printf(JL_STDERR, "Now looking for %p =======\n", lostval);
@@ -247,7 +247,7 @@ static void gc_verify_track(jl_ptls_t ptls)
 void gc_verify(jl_ptls_t ptls)
 {
     jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
-    gc_mark_sp_t sp;
+    jl_gc_mark_sp_t sp;
     gc_mark_sp_init(gc_cache, &sp);
     lostval = NULL;
     lostval_parents.len = 0;
@@ -1242,7 +1242,7 @@ int gc_slot_to_arrayidx(void *obj, void *_slot)
 
 // Print a backtrace from the bottom (start) of the mark stack up to `sp`
 // `pc_offset` will be added to `sp` for convenience in the debugger.
-NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset)
+NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_offset)
 {
     jl_jmp_buf *old_buf = ptls->safe_restore;
     jl_jmp_buf buf;

@@ -1338,7 +1338,6 @@ JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s);
 
 // modules and global variables
 extern JL_DLLEXPORT jl_module_t *jl_main_module JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_module_t *jl_internal_main_module JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_core_module JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_base_module JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_top_module JL_GLOBALLY_ROOTED;
@@ -1372,7 +1371,6 @@ JL_DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from,
 JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_module_t *jl_new_main_module(void);
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m);
 STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 {
@@ -1599,7 +1597,6 @@ typedef struct _jl_handler_t {
 
 typedef struct _jl_task_t {
     JL_DATA_TYPE
-    struct _jl_task_t *parent;
     jl_value_t *tls;
     jl_sym_t *state;
     jl_value_t *donenotify;
@@ -1620,8 +1617,6 @@ typedef struct _jl_task_t {
     jl_handler_t *eh;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
-    // current module, or NULL if this task has not set one
-    jl_module_t *current_module;
     // current world age
     size_t world_age;
 
@@ -1932,7 +1927,6 @@ typedef struct {
     float value;
 } jl_nullable_float32_t;
 
-#define jl_current_module (jl_get_ptls_states()->current_module)
 #define jl_current_task (jl_get_ptls_states()->current_task)
 #define jl_root_task (jl_get_ptls_states()->root_task)
 #define jl_exception_in_transit (jl_get_ptls_states()->exception_in_transit)

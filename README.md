@@ -63,7 +63,7 @@ Julia is built and tested regularly on the following platforms:
 | macOS 10.8+      | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 | Windows 7+       | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 |                  | i686 (32-bit)    | ✓  | ✓        | Official      |
-| FreeBSD 11.0+    | x86-64 (64-bit)  | ✓  |          | Community     |
+| FreeBSD 11.0+    | x86-64 (64-bit)  | [✓](https://build.julialang.org/#/builders/68)  |          | Community     |
 
 All systems marked with ✓ for CI are tested using continuous integration for every commit.
 Systems with ✓ for binaries have official binaries available on the [downloads](https://julialang.org/downloads) page and are tested regularly. The PTX backend needs the [CUDAnative.jl](https://github.com/JuliaGPU/CUDAnative.jl) package.

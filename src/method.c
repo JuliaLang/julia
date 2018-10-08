@@ -394,14 +394,10 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
     jl_ptls_t ptls = jl_get_ptls_states();
     int last_lineno = jl_lineno;
     int last_in = ptls->in_pure_callback;
-    jl_module_t *last_m = ptls->current_module;
-    jl_module_t *task_last_m = ptls->current_task->current_module;
     size_t last_age = jl_get_ptls_states()->world_age;
 
     JL_TRY {
         ptls->in_pure_callback = 1;
-        // need to eval macros in the right module
-        ptls->current_task->current_module = ptls->current_module = linfo->def.method->module;
         // and the right world
         ptls->world_age = def->min_world;
 
@@ -425,16 +421,12 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 
         ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
-        ptls->current_module = last_m;
-        ptls->current_task->current_module = task_last_m;
         ptls->world_age = last_age;
         jl_linenumber_to_lineinfo(func, def->module, def->name);
     }
     JL_CATCH {
         ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
-        ptls->current_module = last_m;
-        ptls->current_task->current_module = task_last_m;
         jl_rethrow();
     }
     JL_GC_POP();

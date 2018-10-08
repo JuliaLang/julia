@@ -576,29 +576,24 @@ function spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(
     linfo
 end
 
+# This assumes the caller has verified that all arguments to the _apply call are Tuples.
 function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, atypes::Vector{Any}, sv::OptimizationState)
     new_argexprs = Any[argexprs[2]]
     new_atypes = Any[atypes[2]]
     # loop over original arguments and flatten any known iterators
     for i in 3:length(argexprs)
         def = argexprs[i]
-        # As a special case, if we can see the tuple() call, look at it's arguments to find
-        # our types. They can be more precise (e.g. f(Bool, A...) would be lowered as
-        # _apply(f, tuple(Bool)::Tuple{DataType}, A), which might not be precise enough to
-        # get a good method match). This pattern is used in the array code a bunch.
-        if isa(def, SSAValue) && is_tuple_call(ir, ir[def])
-            def_args = ir[def].args
-            def_atypes = Any[argextype(def_args[i], ir, sv.sp) for i in 2:length(def_args)]
-        elseif isa(def, Argument) && def.n === length(ir.argtypes) && !isempty(sv.result_vargs)
-            def_atypes = sv.result_vargs
+        def_type = atypes[i]
+        if def_type isa PartialTuple
+            def_atypes = def_type.fields
         else
             def_atypes = Any[]
-            if isa(atypes[i], Const)
-                for p in atypes[i].val
+            if isa(def_type, Const) # && isa(def_type.val, Tuple) is implied
+                for p in def_type.val
                     push!(def_atypes, Const(p))
                 end
             else
-                for p in widenconst(atypes[i]).parameters
+                for p in widenconst(def_type).parameters
                     if isa(p, DataType) && isdefined(p, :instance)
                         # replace singleton types with their equivalent Const object
                         p = Const(p.instance)
@@ -833,7 +828,8 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             # and if rewrite_apply_exprargs can deal with this form
             ok = true
             for i = 3:length(atypes)
-                typ = widenconst(atypes[i])
+                typ = atypes[i]
+                typ = widenconst(typ)
                 # TODO: We could basically run the iteration protocol here
                 if !isa(typ, DataType) || typ.name !== Tuple.name ||
                     isvatuple(typ) || length(typ.parameters) > sv.params.MAX_TUPLE_SPLAT
@@ -979,7 +975,7 @@ end
 
 function mk_tuplecall!(compact::IncrementalCompact, args::Vector{Any}, line_idx::Int32)
     e = Expr(:call, TOP_TUPLE, args...)
-    etyp = tuple_tfunc(Tuple{Any[widenconst(compact_exprtype(compact, args[i])) for i in 1:length(args)]...})
+    etyp = tuple_tfunc(Any[compact_exprtype(compact, args[i]) for i in 1:length(args)])
     return insert_node_here!(compact, e, etyp, line_idx)
 end
 
@@ -1161,8 +1157,7 @@ function find_inferred(linfo::MethodInstance, @nospecialize(atypes), sv::Optimiz
     # or an existing inferred code info store in `.inferred`
     haveconst = false
     for i in 1:length(atypes)
-        a = atypes[i]
-        if isa(a, Const) && !isdefined(typeof(a.val), :instance) && !(isa(a.val, Type) && issingletontype(a.val))
+        if has_nontrivial_const_info(atypes[i])
             # have new information from argtypes that wasn't available from the signature
             haveconst = true
             break

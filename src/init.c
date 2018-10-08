@@ -612,6 +612,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_safepoint_init();
     libsupport_init();
+    htable_new(&jl_current_modules, 0);
     ios_set_io_wait_func = jl_set_io_wait;
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
@@ -728,18 +729,10 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_core_module = jl_new_module(jl_symbol("Core"));
         jl_type_typename->mt->module = jl_core_module;
         jl_top_module = jl_core_module;
-        ptls->current_module = jl_core_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();
         jl_get_builtins();
-
-        jl_new_main_module();
-        jl_internal_main_module = jl_main_module;
-
-        ptls->current_module = jl_core_module;
-        for (int t = 0; t < jl_n_threads; t++) {
-            jl_all_tls_states[t]->root_task->current_module = jl_core_module;
-        }
+        jl_init_main_module();
 
         jl_load(jl_core_module, "boot.jl");
         jl_get_builtin_hooks();
@@ -783,10 +776,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     // it does "using Base" if Base is available.
     if (jl_base_module != NULL) {
         jl_add_standard_imports(jl_main_module);
-    }
-    ptls->current_module = jl_main_module;
-    for (int t = 0; t < jl_n_threads; t++) {
-        jl_all_tls_states[t]->root_task->current_module = jl_main_module;
     }
 
     // This needs to be after jl_start_threads

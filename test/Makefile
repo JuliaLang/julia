@@ -16,6 +16,8 @@ TESTS = all stdlib $(TESTGROUPS) \
 
 EMBEDDING_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/embedding" "CC=$(CC)"
 
+GCEXT_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/gcext" "CC=$(CC)"
+
 default: all
 
 $(TESTS):
@@ -25,7 +27,11 @@ $(TESTS):
 embedding:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(EMBEDDING_ARGS)
 
+gcext:
+	@$(MAKE) -C $(SRCDIR)/$@ check $(GCEXT_ARGS)
+
 clean:
 	@$(MAKE) -C embedding $@ $(EMBEDDING_ARGS)
+	@$(MAKE) -C gcext $@ $(GCEXT_ARGS)
 
-.PHONY: $(TESTS) embedding clean
+.PHONY: $(TESTS) embedding gcext clean

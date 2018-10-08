@@ -59,7 +59,7 @@ mutable struct InferenceState
 
         # initial types
         nslots = length(src.slotnames)
-        argtypes = get_argtypes(result)
+        argtypes = result.argtypes
         nargs = length(argtypes)
         s_argtypes = VarTable(undef, nslots)
         slottypes = Vector{Any}(undef, nslots)
