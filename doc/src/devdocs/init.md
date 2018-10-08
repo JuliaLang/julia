@@ -2,7 +2,7 @@
 
 How does the Julia runtime execute `julia -e 'println("Hello World!")'` ?
 
-## main()
+## `main()`
 
 Execution starts at [`main()` in `ui/repl.c`](https://github.com/JuliaLang/julia/blob/master/ui/repl.c).
 
@@ -16,7 +16,7 @@ or early initialization. Other options are handled later by [`process_options()`
 
 `jl_parse_opts()` stores command line options in the [global `jl_options` struct](https://github.com/JuliaLang/julia/blob/master/src/julia.h).
 
-## julia_init()
+## `julia_init()`
 
 [`julia_init()` in `task.c`](https://github.com/JuliaLang/julia/blob/master/src/task.c) is called
 by `main()` and calls [`_julia_init()` in `init.c`](https://github.com/JuliaLang/julia/blob/master/src/init.c).
@@ -137,7 +137,7 @@ and `main()` calls `true_main(argc, (char**)argv)`.
     Note: [`jl_restore_system_image()` (and `staticdata.c` in general)](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c)
     uses the [Legacy `ios.c` library](@ref).
 
-## true_main()
+## `true_main()`
 
 [`true_main()`](https://github.com/JuliaLang/julia/blob/master/ui/repl.c) loads the contents of
 `argv[]` into [`Base.ARGS`](@ref).
@@ -152,13 +152,13 @@ However, in our example (`julia -e 'println("Hello World!")'`), [`jl_get_global(
 looks up [`Base._start`](https://github.com/JuliaLang/julia/blob/master/base/client.jl) and [`jl_apply()`](https://github.com/JuliaLang/julia/blob/master/src/julia.h)
 executes it.
 
-## Base._start
+## `Base._start`
 
 [`Base._start`](https://github.com/JuliaLang/julia/blob/master/base/client.jl) calls [`Base.process_options`](https://github.com/JuliaLang/julia/blob/master/base/client.jl)
 which calls [`jl_parse_input_line("println("Hello World!")")`](https://github.com/JuliaLang/julia/blob/master/src/ast.c)
 to create an expression object and [`Base.eval()`](@ref eval) to execute it.
 
-## Base.eval
+## `Base.eval`
 
 [`Base.eval()`](@ref eval) was [mapped to `jl_f_top_eval`](https://github.com/JuliaLang/julia/blob/master/src/builtins.c)
 by `jl_init_primitives()`.
@@ -217,13 +217,13 @@ Hello World!
 Since our example has just one function call, which has done its job of printing "Hello World!",
 the stack now rapidly unwinds back to `main()`.
 
-## jl_atexit_hook()
+## `jl_atexit_hook()`
 
 `main()` calls [`jl_atexit_hook()`](https://github.com/JuliaLang/julia/blob/master/src/init.c).
 This calls `_atexit` for each module, then calls [`jl_gc_run_all_finalizers()`](https://github.com/JuliaLang/julia/blob/master/src/gc.c)
 and cleans up libuv handles.
 
-## julia_save()
+## `julia_save()`
 
 Finally, `main()` calls [`julia_save()`](https://github.com/JuliaLang/julia/blob/master/src/init.c),
 which if requested on the command line, saves the runtime state to a new system image. See [`jl_compile_all()`](https://github.com/JuliaLang/julia/blob/master/src/gf.c)
