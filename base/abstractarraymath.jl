@@ -313,12 +313,12 @@ function repeat(a::AbstractVecOrMat, m::AbstractVector{<:Integer}, n::Integer=1)
     for j=1:n
         d = (j-1)*p+1
         R = d:d+p-1
-        c = 0
-        for i ∈ eachindex(m)
-            r = m[i]
+        c = 1
+        for (i,r) ∈ enumerate(m)
             v = a[i,:]
             while r > 0
-                b[c+=1, R] = v
+                b[c, R] = v
+                c += 1
                 r -= 1
             end
         end
@@ -330,10 +330,9 @@ function repeat(a::AbstractVecOrMat, m::Integer, n::AbstractVector{<:Integer})
     o, p = size(a,1), size(a,2)
     length(n) == p || throw(ArgumentError("n must be a single Integer or an AbstractVector{<:Integer} of same dimension as a"))
     b = similar(a, o*m, sum(n))
-    sumj = 0
-    for j ∈ eachindex(n)
-        r = n[j]
-        v = a[:,j]
+    sumj = zero(eltype(n))
+    for (j, r) ∈ enumerate(n)
+        v = @view a[:,j]
         d = sumj + 1
         sumj += r
         R = d:sumj
@@ -386,8 +385,7 @@ function repeat(a::AbstractVector, m::AbstractVector{<:Integer})
     length(m) = length(a) || throw(ArgumentError("a and m must have the same length"))
     b = similar(a, sum(m))
     c = 0
-    for i ∈ eachindex(m)
-        j = m[i]
+    for (i, j) ∈ enumerate(m)
         v = a[i]
         while j > 0
             b[c+=1] = v
