@@ -551,28 +551,6 @@ function *(A::SymTridiagonal, B::Diagonal)
     A_mul_B_td!(Tridiagonal(zeros(TS, size(A)...)), A, B)
 end
 
-# todo update the specialized output types here.
-# right now I am just fixing it so the eltype is correct
-function *(A::Adjoint{<:Any,<:Diagonal}, B::BiTriSym)
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    A_mul_B_td!(zeros(TS, size(A)...), A, B)
-end
-
-function *(A::Transpose{<:Any,<:Diagonal}, B::BiTriSym)
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    A_mul_B_td!(zeros(TS, size(A)...), A, B)
-end
-
-function *(A::Adjoint{<:Any,<:AbstractTriangular}, B::BiTriSym)
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    A_mul_B_td!(zeros(TS, size(A)...), A, B)
-end
-
-function *(A::Transpose{<:Any,<:AbstractTriangular}, B::BiTriSym)
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    A_mul_B_td!(zeros(TS, size(A)...), A, B)
-end
-
 #Generic multiplication
 *(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = *(Array(A), B)
 *(adjA::Adjoint{<:Any,<:Bidiagonal{T}}, B::AbstractVector{T}) where {T} = *(adjoint(Array(adjA.parent)), B)
