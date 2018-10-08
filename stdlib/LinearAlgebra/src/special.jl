@@ -230,62 +230,64 @@ function (-)(A::SymTridiagonal, B::Bidiagonal)
     newdv = A.dv-B.dv
     Tridiagonal((B.uplo == 'U' ? (typeof(newdv)(A.ev), newdv, A.ev-B.ev) : (A.ev-B.ev, newdv, typeof(newdv)(A.ev)))...)
 end
-# fixing uniform scaling problems from #28994
 
-function (+)(A::Tridiagonal, B::UniformScaling)
+# fixing uniform scaling problems from #28994
+# {<:Number} is required due to the test case from PR #27289 where eltype is a matrix.
+
+function (+)(A::Tridiagonal{<:Number}, B::UniformScaling)
     newd = A.d .+ B.λ
     Tridiagonal(typeof(newd)(A.dl), newd, typeof(newd)(A.du))
 end
 
-function (+)(A::SymTridiagonal, B::UniformScaling)
+function (+)(A::SymTridiagonal{<:Number}, B::UniformScaling)
     newdv = A.dv .+ B.λ
     SymTridiagonal(newdv, typeof(newdv)(A.ev))
 end
 
-function (+)(A::Bidiagonal, B::UniformScaling)
+function (+)(A::Bidiagonal{<:Number}, B::UniformScaling)
     newdv = A.dv .+ B.λ
     Bidiagonal(newdv, typeof(newdv)(A.ev), A.uplo)
 end
 
-function (+)(A::Diagonal, B::UniformScaling)
+function (+)(A::Diagonal{<:Number}, B::UniformScaling)
     Diagonal(A.diag .+ B.λ)
 end
 
-function (+)(A::UniformScaling, B::Tridiagonal)
+function (+)(A::UniformScaling, B::Tridiagonal{<:Number})
     newd = A.λ .+ B.d
     Tridiagonal(typeof(newd)(B.dl), newd, typeof(newd)(B.du))
 end
 
-function (+)(A::UniformScaling, B::SymTridiagonal)
+function (+)(A::UniformScaling, B::SymTridiagonal{<:Number})
     newdv = A.λ .+ B.dv
     SymTridiagonal(newdv, typeof(newdv)(B.ev))
 end
 
-function (+)(A::UniformScaling, B::Bidiagonal)
+function (+)(A::UniformScaling, B::Bidiagonal{<:Number})
     newdv = A.λ .+ B.dv
     Bidiagonal(newdv, typeof(newdv)(B.ev), B.uplo)
 end
 
-function (+)(A::UniformScaling, B::Diagonal)
+function (+)(A::UniformScaling, B::Diagonal{<:Number})
     Diagonal(A.λ .+ B.diag)
 end
 
-function (-)(A::UniformScaling, B::Tridiagonal)
+function (-)(A::UniformScaling, B::Tridiagonal{<:Number})
     newd = A.λ .- B.d
     Tridiagonal(typeof(newd)(-B.dl), newd, typeof(newd)(-B.du))
 end
 
-function (-)(A::UniformScaling, B::SymTridiagonal)
+function (-)(A::UniformScaling, B::SymTridiagonal{<:Number})
     newdv = A.λ .- B.dv
     SymTridiagonal(newdv, typeof(newdv)(-B.ev))
 end
 
-function (-)(A::UniformScaling, B::Bidiagonal)
+function (-)(A::UniformScaling, B::Bidiagonal{<:Number})
     newdv = A.λ .- B.dv
     Bidiagonal(newdv, typeof(newdv)(-B.ev), B.uplo)
 end
 
-function (-)(A::UniformScaling, B::Diagonal)
+function (-)(A::UniformScaling, B::Diagonal{<:Number})
     Diagonal(A.λ .- B.diag)
 end
 
