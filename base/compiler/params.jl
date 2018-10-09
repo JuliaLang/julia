@@ -57,7 +57,7 @@ struct Params
         return new(Vector{InferenceResult}(),
                    world, true,
                    #=inlining, ipo_constant_propagation, aggressive_constant_propagation, inline_cost_threshold, inline_nonleaf_penalty,=#
-                   inlining, true, false, 100, 1000,
+                   inlining, true, true, 100, 1000,
                    #=inline_tupleret_bonus, max_methods, union_splitting, apply_union_enum=#
                    400, 4, 4, 8,
                    #=tupletype_depth, tuple_splat=#
