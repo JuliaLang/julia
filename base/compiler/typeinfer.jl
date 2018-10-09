@@ -385,8 +385,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # a top parent will be cached still, but not this intermediate work
         # we can throw everything else away now
         me.cached = false
-        unlock_mi_inference(interp, me.linfo)
-        me.src.inlineable &= ~CI_INLINEABLE
+        me.result.src = nothing
     else
         # annotate fulltree with type information
         type_annotate!(me)
