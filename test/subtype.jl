@@ -955,6 +955,16 @@ function test_intersection()
     @testintersect(Tuple{Ref{Ref{T}} where T, Ref},
                    Tuple{Ref{T}, Ref{T}} where T,
                    Tuple{Ref{Ref{T}}, Ref{Ref{T}}} where T)
+    # issue #29208
+    @testintersect(Tuple{Ref{Ref{T}} where T, Ref{Ref{Int}}},
+                   Tuple{Ref{T}, Ref{T}} where T,
+                   Tuple{Ref{Ref{Int}}, Ref{Ref{Int}}})
+    @testintersect(Tuple{Vector{Pair{K,V}}, Vector{Pair{K,V}}} where K where V,
+                   Tuple{(Array{Pair{Ref{_2},_1},1} where _2 where _1),
+                         Array{Pair{Ref{Int64},Rational{Int64}},1}},
+                   Tuple{Vector{Pair{Ref{Int64},Rational{Int64}}},
+                         Vector{Pair{Ref{Int64},Rational{Int64}}}})
+    @testintersect(Vector{>:Missing}, Vector{Int}, Union{})
 
     # issue #23685
     @testintersect(Pair{Type{Z},Z} where Z,
@@ -1333,3 +1343,17 @@ struct A28256{names, T<:NamedTuple{names, <:Tuple}}
     x::T
 end
 @test A28256{(:a,), NamedTuple{(:a,),Tuple{Int}}}((a=1,)) isa A28256
+
+# issue #29468
+@testintersect(Tuple{Vararg{Val{N}, N}} where N,
+               Tuple{Val{2}, Vararg{Val{2}}},
+               Tuple{Val{2}, Val{2}})
+@testintersect(Tuple{Vararg{Val{N}, N}} where N,
+               Tuple{Val{3}, Vararg{Val{3}}},
+               Tuple{Val{3}, Val{3}, Val{3}})
+@testintersect(Tuple{Vararg{Val{N}, N}} where N,
+               Tuple{Val{1}, Vararg{Val{2}}},
+               Tuple{Val{1}})
+@testintersect(Tuple{Vararg{Val{N}, N}} where N,
+               Tuple{Val{2}, Vararg{Val{3}}},
+               Union{})

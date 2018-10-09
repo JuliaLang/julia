@@ -240,12 +240,19 @@ function compute_ir_line_annotations(code::Union{IRCode, CodeInfo})
     lines = (code isa IRCode ? code.lines : code.codelocs)
     for idx in eachindex(stmts)
         buf = IOBuffer()
-        line = lines[idx]
+        # N.B.: The line array length not matching is invalid,
+        # but let's be robust here
+        if idx > length(lines)
+            line = Int32(0)
+            print(buf, "!")
+        else
+            line = lines[idx]
+            print(buf, "│")
+        end
         depth = compute_inlining_depth(linetable, line)
         iline = line
         lineno = 0
         loc_method = ""
-        print(buf, "│")
         if line != 0
             stack = compute_loc_stack(linetable, line)
             lineno = linetable[stack[1]].line
@@ -359,11 +366,18 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
         end
         stmt = stmts[idx]
         # Compute BB guard rail
-        bbrange = cfg.blocks[bb_idx].stmts
-        bbrange = bbrange.first:bbrange.last
-        bb_idx_str = string(bb_idx)
+        if bb_idx > length(cfg.blocks)
+            # Even if invariants are violated, try our best to still print
+            bbrange = (last(cfg.blocks[end].stmts) + 1):typemax(Int)
+            bb_idx_str = "!"
+            bb_type = "─"
+        else
+            bbrange = cfg.blocks[bb_idx].stmts
+            bbrange = bbrange.start:bbrange.stop
+            bb_idx_str = string(bb_idx)
+            bb_type = length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄"
+        end
         bb_pad = max_bb_idx_size - length(bb_idx_str)
-        bb_type = length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄"
         bb_start_str = string(bb_idx_str, " ", bb_type, "─"^bb_pad, " ")
         bb_guard_rail_cont = string("│  ", " "^max_bb_idx_size)
         if idx == first(bbrange)
@@ -500,11 +514,18 @@ function show_ir(io::IO, code::CodeInfo, expr_type_printer=default_expr_type_pri
         end
         stmt = stmts[idx]
         # Compute BB guard rail
-        bbrange = cfg.blocks[bb_idx].stmts
-        bbrange = bbrange.first:bbrange.last
-        bb_idx_str = string(bb_idx)
+        if bb_idx > length(cfg.blocks)
+            # Even if invariants are violated, try out best to still print
+            bb_range = last(cfg.blocks[end].stmts):typemax(Int)
+            bb_idx_str = "!!!"
+            bb_type = "─"
+        else
+            bbrange = cfg.blocks[bb_idx].stmts
+            bbrange = bbrange.start:bbrange.stop
+            bb_idx_str = string(bb_idx)
+            bb_type = length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄"
+        end
         bb_pad = max_bb_idx_size - length(bb_idx_str)
-        bb_type = length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄"
         bb_start_str = string(bb_idx_str, " ", bb_type, "─"^bb_pad, " ")
         bb_guard_rail_cont = string("│  ", " "^max_bb_idx_size)
         if idx == first(bbrange)

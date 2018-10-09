@@ -477,26 +477,22 @@ end
     @inbounds begin
         mi = (lo+hi)>>>1
 
-        # sort the values in v[lo], v[mi], v[hi]
-
-        if lt(o, v[mi], v[lo])
+        # sort v[mi] <= v[lo] <= v[hi] such that the pivot is immediately in place
+        if lt(o, v[lo], v[mi])
             v[mi], v[lo] = v[lo], v[mi]
         end
-        if lt(o, v[hi], v[mi])
-            if lt(o, v[hi], v[lo])
-                v[lo], v[mi], v[hi] = v[hi], v[lo], v[mi]
+
+        if lt(o, v[hi], v[lo])
+            if lt(o, v[hi], v[mi])
+                v[hi], v[lo], v[mi] = v[lo], v[mi], v[hi]
             else
-                v[hi], v[mi] = v[mi], v[hi]
+                v[hi], v[lo] = v[lo], v[hi]
             end
         end
 
-        # move v[mi] to v[lo] and use it as the pivot
-        v[lo], v[mi] = v[mi], v[lo]
-        pivot = v[lo]
+        # return the pivot
+        return v[lo]
     end
-
-    # return the pivot
-    return pivot
 end
 
 # partition!
@@ -938,6 +934,8 @@ Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
 keyword arguments.
 
+To sort slices of an array, refer to [`sortslices`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [4 3; 1 2]
@@ -985,6 +983,53 @@ end
         sort!(Av, s, s+n-1, alg, order)
     end
     Av
+end
+
+"""
+    sort!(A; dims::Integer, alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+
+Sort the multidimensional array `A` along dimension `dims`.
+See [`sort!`](@ref) for a description of possible keyword arguments.
+
+To sort slices of an array, refer to [`sortslices`](@ref).
+
+# Examples
+```jldoctest
+julia> A = [4 3; 1 2]
+2×2 Array{Int64,2}:
+ 4  3
+ 1  2
+
+julia> sort!(A, dims = 1); A
+2×2 Array{Int64,2}:
+ 1  2
+ 4  3
+
+julia> sort!(A, dims = 2); A
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+```
+"""
+function sort!(A::AbstractArray;
+               dims::Integer,
+               alg::Algorithm=defalg(A),
+               lt=isless,
+               by=identity,
+               rev::Union{Bool,Nothing}=nothing,
+               order::Ordering=Forward)
+    ordr = ord(lt, by, rev, order)
+    nd = ndims(A)
+    k = dims
+
+    1 <= k <= nd || throw(ArgumentError("dimension out of range"))
+
+    remdims = ntuple(i -> i == k ? 1 : size(A, i), nd)
+    for idx in CartesianIndices(remdims)
+        Av = view(A, ntuple(i -> i == k ? Colon() : idx[i], nd)...)
+        sort!(Av, alg, ordr)
+    end
+    A
 end
 
 ## fast clever sorting for floats ##

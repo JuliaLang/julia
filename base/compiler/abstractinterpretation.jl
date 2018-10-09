@@ -136,9 +136,9 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
     haveconst = false
     for a in argtypes
         a = maybe_widen_conditional(a)
-        if isa(a, Const) && !isdefined(typeof(a.val), :instance) && !(isa(a.val, Type) && issingletontype(a.val))
+        if has_nontrivial_const_info(a)
             # have new information from argtypes that wasn't available from the signature
-            if isa(a.val, Symbol) || isa(a.val, Type) || (!isa(a.val, String) && isimmutable(a.val))
+            if !isa(a, Const) || (isa(a.val, Symbol) || isa(a.val, Type) || (!isa(a.val, String) && isimmutable(a.val)))
                 # don't consider mutable values or Strings useful constants
                 haveconst = true
                 break
@@ -176,25 +176,7 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
     end
     inf_result = cache_lookup(code, argtypes, sv.params.cache)
     if inf_result === nothing
-        inf_result = InferenceResult(code)
-        atypes = get_argtypes(inf_result)
-        if method.isva
-            vargs = argtypes[(nargs + 1):end]
-            for i in 1:length(vargs)
-                a = maybe_widen_conditional(vargs[i])
-                if i > length(inf_result.vargs)
-                    push!(inf_result.vargs, a)
-                elseif a isa Const
-                    inf_result.vargs[i] = a
-                end
-            end
-        end
-        for i in 1:nargs
-            a = maybe_widen_conditional(argtypes[i])
-            if a isa Const
-                atypes[i] = a # inject Const argtypes into inference
-            end
-        end
+        inf_result = InferenceResult(code, argtypes)
         frame = InferenceState(inf_result, #=cache=#false, sv.params)
         frame.limited = true
         frame.parent = sv
@@ -361,6 +343,10 @@ end
 # Union of Tuples of the same length is converted to Tuple of Unions.
 # returns an array of types
 function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::VarTable, sv::InferenceState)
+    if isa(typ, PartialTuple)
+        return typ.fields
+    end
+
     if isa(typ, Const)
         val = typ.val
         if isa(val, SimpleVector) || isa(val, Tuple)
@@ -369,14 +355,9 @@ function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::
     end
 
     arg = ssa_def_expr(arg, sv)
-    if is_specializable_vararg_slot(arg, sv.nargs, sv.result.vargs)
-        return sv.result.vargs
-    end
-
     tti0 = widenconst(typ)
     tti = unwrap_unionall(tti0)
-    if isa(arg, Expr) && arg.head === :call && (abstract_evals_to_constant(arg.args[1], svec, vtypes, sv) ||
-                                                abstract_evals_to_constant(arg.args[1], tuple, vtypes, sv))
+    if isa(arg, Expr) && arg.head === :call && abstract_evals_to_constant(arg.args[1], svec, vtypes, sv)
         aa = arg.args
         result = Any[ abstract_eval(aa[j],vtypes,sv) for j=2:length(aa) ]
         if _any(isvarargtype, result)
@@ -653,37 +634,19 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         end
         return Any
     elseif f === TypeVar
-        lb = Union{}
-        ub = Any
-        ub_certain = lb_certain = true
-        if length(argtypes) >= 2 && isa(argtypes[2], Const)
-            nv = argtypes[2].val
-            ubidx = 3
-            if length(argtypes) >= 4
-                ubidx = 4
-                if isa(argtypes[3], Const)
-                    lb = argtypes[3].val
-                elseif isType(argtypes[3])
-                    lb = argtypes[3].parameters[1]
-                    lb_certain = false
-                else
-                    return TypeVar
-                end
-            end
-            if length(argtypes) >= ubidx
-                if isa(argtypes[ubidx], Const)
-                    ub = argtypes[ubidx].val
-                elseif isType(argtypes[ubidx])
-                    ub = argtypes[ubidx].parameters[1]
-                    ub_certain = false
-                else
-                    return TypeVar
-                end
-            end
-            tv = TypeVar(nv, lb, ub)
-            return PartialTypeVar(tv, lb_certain, ub_certain)
+        # Manually look through the definition of TypeVar to
+        # make sure to be able to get `PartialTypeVar`s out.
+        (length(argtypes) < 2 || length(argtypes) > 4) && return Union{}
+        n = argtypes[2]
+        ub_var = Const(Any)
+        lb_var = Const(Union{})
+        if length(argtypes) == 4
+            ub_var = argtypes[4]
+            lb_var = argtypes[3]
+        elseif length(argtypes) == 3
+            ub_var = argtypes[3]
         end
-        return TypeVar
+        return typevar_tfunc(n, lb_var, ub_var)
     elseif f === UnionAll
         if length(argtypes) == 3
             canconst = true
@@ -770,23 +733,6 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         return Type # don't try to infer these function edges directly -- it won't actually come up with anything useful
     end
 
-    if sv.params.inlining
-        # need to model the special inliner for ^
-        # to ensure we have added the same edge
-        if isdefined(Main, :Base) &&
-            ((isdefined(Main.Base, :^) && f === Main.Base.:^) ||
-             (isdefined(Main.Base, :.^) && f === Main.Base.:.^)) &&
-            length(argtypes) == 3 && (argtypes[3] ⊑ Int32 || argtypes[3] ⊑ Int64)
-
-            a1 = argtypes[2]
-            basenumtype = Union{CoreNumType, Main.Base.ComplexF32, Main.Base.ComplexF64, Main.Base.Rational}
-            if a1 ⊑ basenumtype
-                ftimes = Main.Base.:*
-                ta1 = widenconst(a1)
-                abstract_call_gf_by_type(ftimes, Any[ftimes, a1, a1], Tuple{typeof(ftimes), ta1, ta1}, sv)
-            end
-        end
-    end
     return abstract_call_gf_by_type(f, argtypes, atype, sv)
 end
 
@@ -904,9 +850,28 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         t = abstract_eval_call(e.args, argtypes, vtypes, sv)
     elseif e.head === :new
         t = instanceof_tfunc(abstract_eval(e.args[1], vtypes, sv))[1]
-        for i = 2:length(e.args)
-            if abstract_eval(e.args[i], vtypes, sv) === Bottom
-                rt = Bottom
+        if isconcretetype(t) && !t.mutable
+            args = Vector{Any}(undef, length(e.args)-1)
+            isconst = true
+            for i = 2:length(e.args)
+                at = abstract_eval(e.args[i], vtypes, sv)
+                if at === Bottom
+                    t = Bottom
+                    isconst = false
+                    break
+                elseif at isa Const
+                    if !(at.val isa fieldtype(t, i - 1))
+                        t = Bottom
+                        isconst = false
+                        break
+                    end
+                    args[i-1] = at.val
+                else
+                    isconst = false
+                end
+            end
+            if isconst
+                t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, args, length(args)))
             end
         end
     elseif e.head === :&
@@ -1070,7 +1035,7 @@ function typeinf_local(frame::InferenceState)
             elseif hd === :return
                 pc´ = n + 1
                 rt = maybe_widen_conditional(abstract_eval(stmt.args[1], s[pc], frame))
-                if !isa(rt, Const) && !isa(rt, Type)
+                if !isa(rt, Const) && !isa(rt, Type) && (!isa(rt, PartialTuple) || frame.cached)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally
                     rt = widenconst(rt)

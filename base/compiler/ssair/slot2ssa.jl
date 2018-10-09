@@ -363,11 +363,7 @@ function rename_phinode_edges(node, bb, result_order, bb_rename)
             resize!(new_values, length(new_values)+1)
         end
     end
-    if length(new_edges) == 1
-        return isassigned(new_values, 1) ? new_values[1] : PhiNode(Any[], Any[])
-    else
-        return PhiNode(new_edges, new_values)
-    end
+    return PhiNode(new_edges, new_values)
 end
 
 """
@@ -387,7 +383,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
     while node !== -1
         push!(result_order, node)
         cs = domtree.nodes[node].children
-        terminator = ir.stmts[ir.cfg.blocks[node].stmts.last]
+        terminator = ir.stmts[last(ir.cfg.blocks[node].stmts)]
         iscondbr = isa(terminator, GotoIfNot)
         let old_node = node + 1
             if length(cs) >= 1

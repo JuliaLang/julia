@@ -764,7 +764,8 @@ end
 
 function complete_local_path(s, i1, i2)
     cmp = REPL.REPLCompletions.complete_path(s, i2)
-    [REPL.REPLCompletions.completion_text(p) for p in cmp[1]], cmp[2], !isempty(cmp[1])
+    completions = filter!(isdir, [REPL.REPLCompletions.completion_text(p) for p in cmp[1]])
+    return completions, cmp[2], !isempty(completions)
 end
 
 function complete_installed_package(s, i1, i2, project_opt)
@@ -1174,7 +1175,7 @@ The `startup.jl` file is disabled during building unless julia is started with `
     resolve
 
 Resolve the project i.e. run package resolution and update the Manifest. This is useful in case the dependencies of developed
-packages have changed causing the current Manifest to_indices be out of sync.
+packages have changed causing the current Manifest to be out of sync.
     """,
 ),( CMD_ACTIVATE,
     ["activate"],
@@ -1245,7 +1246,6 @@ Create a project called `pkgname` in the current folder.
     precompile
 
 Precompile all the dependencies of the project by running `import` on all of them in a new process.
-The `startup.jl` file is disabled during precompilation unless julia is started with `--startup-file=yes`.
     """,
 ),( CMD_STATUS,
     ["status", "st"],

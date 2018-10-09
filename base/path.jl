@@ -15,7 +15,8 @@ export
     relpath,
     splitdir,
     splitdrive,
-    splitext
+    splitext,
+    splitpath
 
 if Sys.isunix()
     const path_separator    = "/"
@@ -129,6 +130,12 @@ julia> splitdir("/home/myuser")
 """
 function splitdir(path::String)
     a, b = splitdrive(path)
+    _splitdir_nodrive(a,b)
+end
+
+# Common splitdir functionality without splitdrive, needed for splitpath.
+_splitdir_nodrive(path::String) = _splitdir_nodrive("", path)
+function _splitdir_nodrive(a::String, b::String)
     m = match(path_dir_splitter,b)
     m === nothing && return (a,b)
     a = string(a, isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1])
@@ -194,6 +201,41 @@ function pathsep(paths::AbstractString...)
         m !== nothing && return m.match[1:1]
     end
     return path_separator
+end
+
+"""
+    splitpath(path::AbstractString) -> Vector{String}
+
+Split a file path into all its path components. This is the opposite of
+`joinpath`. Returns an array of substrings, one for each directory or file in
+the path, including the root directory if present.
+
+# Examples
+```jldoctest
+julia> splitpath("/home/myuser/example.jl")
+4-element Array{String,1}:
+ "/"
+ "home"
+ "myuser"
+ "example.jl"
+```
+"""
+function splitpath(p::String)
+    drive, p = splitdrive(p)
+    out = String[]
+    isempty(p) && (pushfirst!(out,p))  # "" means the current directory.
+    while !isempty(p)
+        dir, base = _splitdir_nodrive(p)
+        dir == p && (pushfirst!(out, dir); break)  # Reached root node.
+        if !isempty(base)  # Skip trailing '/' in basename
+            pushfirst!(out, base)
+        end
+        p = dir
+    end
+    if !isempty(drive)  # Tack the drive back on to the first element.
+        out[1] = drive*out[1]  # Note that length(out) is always >= 1.
+    end
+    return out
 end
 
 joinpath(a::AbstractString) = a

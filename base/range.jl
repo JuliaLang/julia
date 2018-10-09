@@ -41,7 +41,7 @@ Range operator. `a:b` constructs a range from `a` to `b` with a step size of 1 (
 # without the second method above, the first method above is ambiguous with
 # (:)(start::A, step, stop::C) where {A<:Real,C<:Real}
 function _colon(start::T, step, stop::T) where T
-    T′ = typeof(start+step)
+    T′ = typeof(start+zero(step))
     StepRange(convert(T′,start), step, convert(T′,stop))
 end
 
@@ -487,7 +487,7 @@ step_hp(r::AbstractRange) = step(r)
 unsafe_length(r::AbstractRange) = length(r)  # generic fallback
 
 function unsafe_length(r::StepRange)
-    n = Integer(div(r.stop+r.step - r.start, r.step))
+    n = Integer(div((r.stop - r.start) + r.step, r.step))
     isempty(r) ? zero(n) : n
 end
 length(r::StepRange) = unsafe_length(r)
@@ -583,7 +583,7 @@ _in_unit_range(v::UnitRange, val, i::Integer) = i > 0 && val <= v.stop && val >=
 
 function getindex(v::UnitRange{T}, i::Integer) where T
     @_inline_meta
-    val = convert(T, v.start + i - 1)
+    val = convert(T, v.start + (i - 1))
     @boundscheck _in_unit_range(v, val, i) || throw_boundserror(v, i)
     val
 end
@@ -593,7 +593,7 @@ const OverflowSafe = Union{Bool,Int8,Int16,Int32,Int64,Int128,
 
 function getindex(v::UnitRange{T}, i::Integer) where {T<:OverflowSafe}
     @_inline_meta
-    val = v.start + i - 1
+    val = v.start + (i - 1)
     @boundscheck _in_unit_range(v, val, i) || throw_boundserror(v, i)
     val % T
 end

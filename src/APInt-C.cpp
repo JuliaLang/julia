@@ -412,7 +412,8 @@ void LLVMUItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPar
 
 extern "C" JL_DLLEXPORT
 void LLVMSExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
-    assert(inumbits < onumbits);
+    if (!(onumbits > inumbits))
+        jl_error("SExt: output bitsize must be > input bitsize");
     unsigned inumbytes = RoundUpToAlignment(inumbits, host_char_bit) / host_char_bit;
     unsigned onumbytes = RoundUpToAlignment(onumbits, host_char_bit) / host_char_bit;
     int bits = (0 - inumbits) % host_char_bit;
@@ -430,7 +431,8 @@ void LLVMSExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart
 
 extern "C" JL_DLLEXPORT
 void LLVMZExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
-    assert(inumbits < onumbits);
+    if (!(onumbits > inumbits))
+        jl_error("ZExt: output bitsize must be > input bitsize");
     unsigned inumbytes = RoundUpToAlignment(inumbits, host_char_bit) / host_char_bit;
     unsigned onumbytes = RoundUpToAlignment(onumbits, host_char_bit) / host_char_bit;
     int bits = (0 - inumbits) % host_char_bit;
@@ -446,7 +448,8 @@ void LLVMZExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart
 
 extern "C" JL_DLLEXPORT
 void LLVMTrunc(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
-    assert(inumbits > onumbits);
+    if (!(onumbits < inumbits))
+        jl_error("Trunc: output bitsize must be < input bitsize");
     unsigned onumbytes = RoundUpToAlignment(onumbits, host_char_bit) / host_char_bit;
     memcpy(pr, pa, onumbytes);
 }

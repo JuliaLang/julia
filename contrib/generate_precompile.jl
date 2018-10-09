@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+if !isempty(ARGS)
+    ARGS[1] == "0" && exit(0)
+end
+
 # Prevent this from being put into the Main namespace
 let
 M = Module()
@@ -84,7 +88,8 @@ function generate_precompile_statements()
             slave, master = open_fake_pty()
         end
         done = false
-        withenv("JULIA_HISTORY" => tempname(), "JULIA_PROJECT" => nothing,
+        blackhole = Sys.isunix() ? "/dev/null" : "nul"
+        withenv("JULIA_HISTORY" => blackhole, "JULIA_PROJECT" => nothing,
                 "TERM" => "") do
             if have_repl
                 p = run(`$(julia_cmd()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
@@ -159,6 +164,7 @@ function generate_precompile_statements()
             # println(statement)
             # Work around #28808
             occursin("\"YYYY-mm-dd\\THH:MM:SS\"", statement) && continue
+            statement == "precompile(Tuple{typeof(Base.show), Base.IOContext{Base.TTY}, Type{Vararg{Any, N} where N}})" && continue
             try
                 Base.include_string(PrecompileStagingArea, statement)
             catch ex

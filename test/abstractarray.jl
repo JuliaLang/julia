@@ -661,6 +661,10 @@ function test_cat(::Type{TestAbstractArray})
 
     @test @inferred(vcat(["a"], "b"))::Vector{String} == ["a", "b"]
     @test @inferred(vcat((1,), (2.0,)))::Vector{Tuple{Real}} == [(1,), (2.0,)]
+
+    # 29172
+    @test_throws ArgumentError cat([1], [2], dims=0)
+    @test_throws ArgumentError cat([1], [2], dims=[5, -3])
 end
 
 function test_ind2sub(::Type{TestAbstractArray})

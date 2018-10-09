@@ -199,7 +199,7 @@ endif # WINNT
 
 symlink_libLLVM: $(build_private_libdir)/libLLVM.dylib
 $(build_private_libdir)/libLLVM.dylib:
-	REALPATH=`$(LLVM_CONFIG_HOST) --libdir`/libLLVM.$(SHLIB_EXT) && \
+	REALPATH=`$(LLVM_CONFIG_HOST) --libfiles` && \
 	$(call resolve_path,REALPATH) && \
 	[ -e "$$REALPATH" ] && \
 	([ ! -e "$@" ] || rm "$@") && \

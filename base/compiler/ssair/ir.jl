@@ -26,12 +26,12 @@ Like UnitRange{Int}, but can handle the `last` field, being temporarily
 < first (this can happen during compacting)
 """
 struct StmtRange <: AbstractUnitRange{Int}
-    first::Int
-    last::Int
+    start::Int
+    stop::Int
 end
-first(r::StmtRange) = r.first
-last(r::StmtRange) = r.last
-iterate(r::StmtRange, state=0) = (r.last - r.first < state) ? nothing : (r.first + state, state + 1)
+first(r::StmtRange) = r.start
+last(r::StmtRange) = r.stop
+iterate(r::StmtRange, state=0) = (last(r) - first(r) < state) ? nothing : (first(r) + state, state + 1)
 
 StmtRange(range::UnitRange{Int}) = StmtRange(first(range), last(range))
 
@@ -471,7 +471,7 @@ mutable struct IncrementalCompact
     active_result_bb::Int
     renamed_new_nodes::Bool
     allow_cfg_transforms::Bool
-    function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=true)
+    function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false)
         # Sort by position with attach after nodes affter regular ones
         perm = my_sortperm(Int[(code.new_nodes[i].pos*2 + Int(code.new_nodes[i].attach_after)) for i in 1:length(code.new_nodes)])
         new_len = length(code.stmts) + length(code.new_nodes)
@@ -902,13 +902,18 @@ function process_node!(compact::IncrementalCompact, result::Vector{Any},
         # type equality. We may want to consider using == in either a separate pass or if
         # performance turns out ok
         stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)::PiNode
-        if ((!isa(stmt.val, AnySSAValue) && !isa(stmt.val, GlobalRef)) ||
-            (isa(stmt.val, SSAValue) && (stmt.typ === compact.result_types[stmt.val.id])))
+        if !isa(stmt.val, AnySSAValue) && !isa(stmt.val, GlobalRef)
+            valtyp = isa(stmt.val, QuoteNode) ? typeof(stmt.val.value) : typeof(stmt.val)
+            if valtyp === stmt.typ
+                ssa_rename[idx] = stmt.val
+                return result_idx
+            end
+        elseif isa(stmt.val, SSAValue) && stmt.typ === compact.result_types[stmt.val.id]
             ssa_rename[idx] = stmt.val
-        else
-            result[result_idx] = stmt
-            result_idx += 1
+            return result_idx
         end
+        result[result_idx] = stmt
+        result_idx += 1
     elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode) || isa(stmt, GotoIfNot)
         result[result_idx] = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)
         result_idx += 1

@@ -181,7 +181,7 @@ As in the example above, we recommend following some simple conventions when wri
 9. Respect the line length limit used in the surrounding code.
 
    Docstrings are edited using the same tools as code. Therefore, the same conventions should apply.
-   It it advised to add line breaks after 92 characters.
+   It is advised to add line breaks after 92 characters.
 6. Provide information allowing custom types to implement the function in an
    `# Implementation` section. These implementation details intended for developers
    rather than users, explaining e.g. which functions should be overridden and which functions
@@ -568,7 +568,7 @@ A paragraph containing a **bold** word.
 Surround words with one asterisk, `*`, to display the enclosed text in italics.
 
 ```
-A paragraph containing an *emphasised* word.
+A paragraph containing an *emphasized* word.
 ```
 
 #### Literals
@@ -665,7 +665,7 @@ in the [Inline elements](@ref) section above, with one or more blank lines above
 ```
 This is a paragraph.
 
-And this is *another* one containing some emphasised text.
+And this is *another* one containing some emphasized text.
 A new line, but still part of the same paragraph.
 ```
 

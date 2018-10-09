@@ -226,13 +226,27 @@ end
 
 function char_uplo(uplo::Symbol)
     if uplo == :U
-        'U'
+        return 'U'
     elseif uplo == :L
-        'L'
+        return 'L'
     else
-        throw(ArgumentError("uplo argument must be either :U (upper) or :L (lower)"))
+        throw_uplo()
     end
 end
+
+function sym_uplo(uplo::Char)
+    if uplo == 'U'
+        return :U
+    elseif uplo == 'L'
+        return :L
+    else
+        throw_uplo()
+    end
+end
+
+
+@noinline throw_uplo() = throw(ArgumentError("uplo argument must be either :U (upper) or :L (lower)"))
+
 
 """
     ldiv!(Y, A, B) -> Y

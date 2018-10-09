@@ -432,6 +432,8 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 end
                 if ex.world < min_world(method)
                     print(iob, " (method too new to be called from this world context.)")
+                elseif ex.world > max_world(method)
+                    print(iob, " (method deleted before this world age.)")
                 end
                 # TODO: indicate if it's in the wrong world
                 push!(lines, (buf, right_matches))

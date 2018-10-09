@@ -1199,11 +1199,13 @@ end
     @test issorted(as[:,1])
     @test issorted(as[:,2])
     @test issorted(as[:,3])
+    @test sort!(copy(a), dims=1) == as
 
     as = sort(a, dims=2)
     @test issorted(as[1,:])
     @test issorted(as[2,:])
     @test issorted(as[3,:])
+    @test sort!(copy(a), dims=2) == as
 
     local b = rand(21,21,2)
 
@@ -1212,15 +1214,18 @@ end
         @test issorted(bs[:,i,1])
         @test issorted(bs[:,i,2])
     end
+    @test sort!(copy(b), dims=1) == bs
 
     bs = sort(b, dims=2)
     for i in 1:21
         @test issorted(bs[i,:,1])
         @test issorted(bs[i,:,2])
     end
+    @test sort!(copy(b), dims=2) == bs
 
     bs = sort(b, dims=3)
     @test all(bs[:,:,1] .<= bs[:,:,2])
+    @test sort!(copy(b), dims=3) == bs
 end
 
 @testset "higher dimensional sortslices" begin
@@ -1686,13 +1691,13 @@ end
     @test I2 + I1 == CartesianIndex((1,8,2))
     @test I1 - I2 == CartesianIndex((3,-2,-2))
     @test I2 - I1 == CartesianIndex((-3,2,2))
-    @test I1 + 1*one(I1) == CartesianIndex((3,4,1))
-    @test I1 - 2*one(I1) == CartesianIndex((0,1,-2))
+    @test I1 + 1*oneunit(I1) == CartesianIndex((3,4,1))
+    @test I1 - 2*oneunit(I1) == CartesianIndex((0,1,-2))
 
     @test zero(CartesianIndex{2}) == CartesianIndex((0,0))
     @test zero(CartesianIndex((2,3))) == CartesianIndex((0,0))
-    @test one(CartesianIndex{2}) == CartesianIndex((1,1))
-    @test one(CartesianIndex((2,3))) == CartesianIndex((1,1))
+    @test oneunit(CartesianIndex{2}) == CartesianIndex((1,1))
+    @test oneunit(CartesianIndex((2,3))) == CartesianIndex((1,1))
 
     @test min(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((2,2))
     @test max(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((5,3))
@@ -1748,6 +1753,10 @@ end
 
     @test @inferred(convert(NTuple{2,UnitRange}, R)) === (2:5, 3:5)
     @test @inferred(convert(Tuple{Vararg{UnitRange}}, R)) === (2:5, 3:5)
+
+    I = CartesianIndex(2,3)
+    J = CartesianIndex(5,4)
+    @test I:J === CartesianIndices((2:5, 3:4))
 end
 
 # All we really care about is that we have an optimized

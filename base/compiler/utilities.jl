@@ -122,7 +122,7 @@ function retrieve_code_info(linfo::MethodInstance)
 end
 
 function code_for_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, world::UInt, preexisting::Bool=false)
-    if world < min_world(method)
+    if world < min_world(method) || world > max_world(method)
         return nothing
     end
     if isdefined(method, :generator) && !isdispatchtuple(atypes)

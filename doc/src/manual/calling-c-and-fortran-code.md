@@ -130,7 +130,7 @@ Here is a slightly more complex example that discovers the local machine's hostn
 
 ```julia
 function gethostname()
-    hostname = Vector{UInt8}(128)
+    hostname = Vector{UInt8}(undef, 128)
     ccall((:gethostname, "libc"), Int32,
           (Ptr{UInt8}, Csize_t),
           hostname, sizeof(hostname))
@@ -277,7 +277,7 @@ First, a review of some relevant Julia type terminology:
 
 | Syntax / Keyword              | Example                                     | Description                                                                                                                                                                                                                                                                    |
 |:----------------------------- |:------------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `mutable struct`              | `String`                                    | "Leaf Type" :: A group of related data that includes a type-tag, is managed by the Julia GC, and is defined by object-identity. The type parameters of a leaf type must be fully defined (no `TypeVars` are allowed) in order for the instance to be constructed.              |
+| `mutable struct`              | `BitSet`                                    | "Leaf Type" :: A group of related data that includes a type-tag, is managed by the Julia GC, and is defined by object-identity. The type parameters of a leaf type must be fully defined (no `TypeVars` are allowed) in order for the instance to be constructed.              |
 | `abstract type`               | `Any`, `AbstractArray{T, N}`, `Complex{T}`  | "Super Type" :: A super-type (not a leaf-type) that cannot be instantiated, but can be used to describe a group of types.                                                                                                                                                      |
 | `T{A}`                        | `Vector{Int}`                               | "Type Parameter" :: A specialization of a type (typically used for dispatch or storage optimization).                                                                                                                                                                          |
 |                               |                                             | "TypeVar" :: The `T` in the type parameter declaration is referred to as a TypeVar (short for type variable).                                                                                                                                                                  |
@@ -486,14 +486,15 @@ the Julia field to be only of that type.
 
 Arrays of parameters can be expressed with `NTuple`:
 
-```
 in C:
+```c
 struct B {
     int A[3];
 };
 b_a_2 = B.A[2];
-
+```
 in Julia:
+```julia
 struct B
     A::NTuple{3, CInt}
 end
@@ -820,7 +821,7 @@ function sf_bessel_Jn_array(nmin::Integer, nmax::Integer, x::Real)
     if nmax < nmin
         throw(DomainError())
     end
-    result_array = Vector{Cdouble}(nmax - nmin + 1)
+    result_array = Vector{Cdouble}(undef, nmax - nmin + 1)
     errorcode = ccall(
         (:gsl_sf_bessel_Jn_array, :libgsl), # name of C function and library
         Cint,                               # output type
@@ -973,7 +974,7 @@ Other supported conventions are: `stdcall`, `cdecl`, `fastcall`, and `thiscall` 
 signature for Windows:
 
 ```julia
-hn = Vector{UInt8}(256)
+hn = Vector{UInt8}(undef, 256)
 err = ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
 ```
 

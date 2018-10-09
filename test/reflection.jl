@@ -775,6 +775,18 @@ typeparam(::Type{T}, a::AbstractArray{T}) where T = 2
 @test typeparam(Float64, rand(2))  == 1
 @test typeparam(Int, rand(Int, 2)) == 2
 
+# prior ambiguities (issue #28899)
+uambig(::Union{Int,Nothing}) = 1
+uambig(::Union{Float64,Nothing}) = 2
+@test uambig(1) == 1
+@test uambig(1.0) == 2
+@test_throws MethodError uambig(nothing)
+m = which(uambig, Tuple{Int})
+Base.delete_method(m)
+@test_throws MethodError uambig(1)
+@test uambig(1.0) == 2
+@test uambig(nothing) == 2
+
 end
 
 # issue #26267
@@ -785,3 +797,11 @@ end
 @test !(:Test in names(M26267, all=true, imported=false))
 @test :Test in names(M26267, all=true, imported=true)
 @test :Test in names(M26267, all=false, imported=true)
+
+# issue #20872
+f20872(::Val{N}, ::Val{N}) where {N} = true
+f20872(::Val, ::Val) = false
+@test which(f20872, Tuple{Val{N},Val{N}} where N).sig == Tuple{typeof(f20872), Val{N}, Val{N}} where N
+@test which(f20872, Tuple{Val,Val}).sig == Tuple{typeof(f20872), Val, Val}
+@test which(f20872, Tuple{Val,Val{N}} where N).sig == Tuple{typeof(f20872), Val, Val}
+@test_throws ErrorException which(f20872, Tuple{Any,Val{N}} where N)

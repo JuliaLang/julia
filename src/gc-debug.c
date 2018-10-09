@@ -200,7 +200,7 @@ static void gc_verify_track(jl_ptls_t ptls)
 {
     jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
     do {
-        gc_mark_sp_t sp;
+        jl_gc_mark_sp_t sp;
         gc_mark_sp_init(gc_cache, &sp);
         arraylist_push(&lostval_parents_done, lostval);
         jl_printf(JL_STDERR, "Now looking for %p =======\n", lostval);
@@ -247,7 +247,7 @@ static void gc_verify_track(jl_ptls_t ptls)
 void gc_verify(jl_ptls_t ptls)
 {
     jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
-    gc_mark_sp_t sp;
+    jl_gc_mark_sp_t sp;
     gc_mark_sp_init(gc_cache, &sp);
     lostval = NULL;
     lostval_parents.len = 0;
@@ -595,11 +595,11 @@ static void gc_scrub_task(jl_task_t *ta)
 #else
     jl_task_t *thread_task = ptls2->root_task;
 #endif
-    if (ta == thread_task)
-        gc_scrub_range(ptls2->stack_lo, ptls2->stack_hi);
-    if (ta->stkbuf == (void*)(intptr_t)(-1) || !ta->stkbuf)
-        return;
-    gc_scrub_range((char*)ta->stkbuf, (char*)ta->stkbuf + ta->ssize);
+    void *stkbuf = ta->stkbuf;
+    if (ta == thread_task && ptls->copy_stack)
+        gc_scrub_range(ptls2->stackbase, ptls2->stacksize);
+    else if (stkbuf)
+        gc_scrub_range((char*)stkbuf, (char*)stkbuf + ta->bufsz);
 }
 
 void gc_scrub(void)
@@ -1242,7 +1242,7 @@ int gc_slot_to_arrayidx(void *obj, void *_slot)
 
 // Print a backtrace from the bottom (start) of the mark stack up to `sp`
 // `pc_offset` will be added to `sp` for convenience in the debugger.
-NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset)
+NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_offset)
 {
     jl_jmp_buf *old_buf = ptls->safe_restore;
     jl_jmp_buf buf;

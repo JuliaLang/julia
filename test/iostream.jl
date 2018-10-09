@@ -30,9 +30,9 @@
         @test read(file, Char) == 'n'
 
         # test it correctly handles unicode
-        for (byte,char) in zip(1:4, ('@','߷','࿊','𐋺'))
+        for (byte, char) in zip(1:4, ('@','߷','࿊','𐋺'))
             append_to_file("abcdef$char")
-            @test Base.codelen(char) == byte
+            @test ncodeunits(char) == byte
             @test !eof(skipchars(isletter, file))
             @test read(file, Char) == char
         end

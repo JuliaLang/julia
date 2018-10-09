@@ -149,7 +149,7 @@ function string(a::Union{Char, String, SubString{String}}...)
     n = 0
     for v in a
         if v isa Char
-            n += codelen(v)
+            n += ncodeunits(v)
         else
             n += sizeof(v)
         end
@@ -159,7 +159,7 @@ function string(a::Union{Char, String, SubString{String}}...)
     for v in a
         if v isa Char
            x = bswap(reinterpret(UInt32, v))
-           for j in 1:codelen(v)
+           for j in 1:ncodeunits(v)
                unsafe_store!(pointer(out, offs), x % UInt8)
                offs += 1
                x >>= 8

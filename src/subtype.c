@@ -255,6 +255,13 @@ int jl_obviously_unequal(jl_value_t *a, jl_value_t *b)
     return obviously_unequal(a, b);
 }
 
+static int in_union(jl_value_t *u, jl_value_t *x)
+{
+    if (u == x) return 1;
+    if (!jl_is_uniontype(u)) return 0;
+    return in_union(((jl_uniontype_t*)u)->a, x) || in_union(((jl_uniontype_t*)u)->b, x);
+}
+
 static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
 {
     if (a == b || a == (jl_value_t*)jl_any_type || b == (jl_value_t*)jl_any_type)
@@ -315,6 +322,26 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
         for(i=0; i < np; i++) {
             jl_value_t *ai = jl_tparam(ad,i);
             jl_value_t *bi = jl_tparam(bd,i);
+            if (!istuple && specificity) {
+                // X{<:SomeDataType} and X{Union{Y,Z,...}} need to be disjoint to
+                // avoid this transitivity problem:
+                // A = Tuple{Type{LinearIndices{N,R}}, LinearIndices{N}} where {N,R}
+                // B = Tuple{Type{T},T} where T<:AbstractArray
+                // C = Tuple{Type{Union{Nothing, T}}, Union{Nothing, T}} where T
+                // A is more specific than B. It would be easy to think B is more specific
+                // than C, but we can't have that since A should not be more specific than C.
+                jl_value_t *aub = jl_is_typevar(ai) ? ((jl_tvar_t*)ai)->ub : ai;
+                jl_value_t *bub = jl_is_typevar(bi) ? ((jl_tvar_t*)bi)->ub : bi;
+                aub = jl_unwrap_unionall(aub);
+                bub = jl_unwrap_unionall(bub);
+                if ((jl_is_typevar(ai) + jl_is_typevar(bi) < 2) &&
+                    aub != (jl_value_t*)jl_any_type && bub != (jl_value_t*)jl_any_type &&
+                    ((jl_is_uniontype(aub) && jl_is_datatype(bub) && !in_union(aub, bub) &&
+                      (jl_is_typevar(bi) || !jl_is_typevar(ai))) ||
+                     (jl_is_uniontype(bub) && jl_is_datatype(aub) && !in_union(bub, aub) &&
+                      (jl_is_typevar(ai) || !jl_is_typevar(bi)))))
+                    return 1;
+            }
             if (jl_is_typevar(ai) || jl_is_typevar(bi))
                 continue;
             if (jl_is_type(ai)) {
@@ -342,13 +369,6 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
         return 1;
     }
     return 0;
-}
-
-static int in_union(jl_value_t *u, jl_value_t *x)
-{
-    if (u == x) return 1;
-    if (!jl_is_uniontype(u)) return 0;
-    return in_union(((jl_uniontype_t*)u)->a, x) || in_union(((jl_uniontype_t*)u)->b, x);
 }
 
 // compute a least upper bound of `a` and `b`
@@ -1355,7 +1375,7 @@ static jl_value_t *set_var_to_const(jl_varbinding_t *bb, jl_value_t *v JL_MAYBE_
         bb->lb = bb->ub = v;
     }
     else if (jl_is_long(v) && jl_is_long(bb->lb)) {
-        if (jl_unbox_long(v) + offset != jl_unbox_long(bb->lb))
+        if (jl_unbox_long(v) != jl_unbox_long(bb->lb))
             return jl_bottom_type;
     }
     else if (!jl_egal(v, bb->lb)) {
@@ -1392,13 +1412,15 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     if (param == 2) {
         jl_value_t *ub = R ? intersect_ufirst(a, bb->ub, e, d) : intersect_ufirst(bb->ub, a, e, d);
         JL_GC_PUSH2(&ub, &root);
-        save_env(e, &root, &se);
-        int issub = subtype_in_env(bb->lb, ub, e);
-        restore_env(e, root, &se);
-        free(se.buf);
-        if (!issub) {
-            JL_GC_POP();
-            return jl_bottom_type;
+        if (!jl_has_free_typevars(ub) && !jl_has_free_typevars(bb->lb)) {
+            save_env(e, &root, &se);
+            int issub = subtype_in_env(bb->lb, ub, e);
+            restore_env(e, root, &se);
+            free(se.buf);
+            if (!issub) {
+                JL_GC_POP();
+                return jl_bottom_type;
+            }
         }
         if (ub != (jl_value_t*)b) {
             if (jl_has_free_typevars(ub)) {
@@ -2634,18 +2656,6 @@ static int args_morespecific_fix1(jl_value_t *a, jl_value_t *b, int swap, jl_typ
     return ret;
 }
 
-static int partially_morespecific(jl_value_t *a, jl_value_t *b, int invariant, jl_typeenv_t *env)
-{
-    if (jl_is_uniontype(b)) {
-        jl_uniontype_t *u = (jl_uniontype_t*)b;
-        if (type_morespecific_(a, u->a, invariant, env) ||
-            type_morespecific_(a, u->b, invariant, env))
-            return 1;
-        return 0;
-    }
-    return type_morespecific_(a, b, invariant, env);
-}
-
 static int count_occurs(jl_value_t *t, jl_tvar_t *v)
 {
     if (t == (jl_value_t*)v)
@@ -2717,9 +2727,18 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
     if (jl_is_uniontype(a)) {
         // Union a is more specific than b if some element of a is more specific than b, but
         // not vice-versa.
+        if (sub_msp(b, a, env))
+            return 0;
         jl_uniontype_t *u = (jl_uniontype_t*)a;
-        return ((partially_morespecific(u->a, b, invariant, env) || partially_morespecific(u->b, b, invariant, env)) &&
-                !partially_morespecific(b, a, invariant, env));
+        if (type_morespecific_(u->a, b, invariant, env) || type_morespecific_(u->b, b, invariant, env)) {
+            if (jl_is_uniontype(b)) {
+                jl_uniontype_t *v = (jl_uniontype_t*)b;
+                if (type_morespecific_(v->a, a, invariant, env) || type_morespecific_(v->b, a, invariant, env))
+                    return 0;
+            }
+            return 1;
+        }
+        return 0;
     }
 
     if (jl_is_type_type(a) && !invariant) {

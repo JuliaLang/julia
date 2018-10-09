@@ -388,6 +388,20 @@ Any remote exceptions are captured in a
 [`RemoteException`](@ref) and thrown.
 
 See also [`fetch`](@ref) and [`remotecall`](@ref).
+
+# Examples
+```julia-repl
+\$ julia -p 2
+
+julia> remotecall_fetch(sqrt, 2, 4)
+2.0
+
+julia> remotecall_fetch(sqrt, 2, -4)
+ERROR: On worker 2:
+DomainError with -4.0:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+...
+```
 """
 remotecall_fetch(f, id::Integer, args...; kwargs...) =
     remotecall_fetch(f, worker_from_id(id), args...; kwargs...)
@@ -481,14 +495,14 @@ end
 """
     wait(r::Future)
 
-Wait for a value to become available for the specified future.
+Wait for a value to become available for the specified [`Future`](@ref).
 """
 wait(r::Future) = (r.v !== nothing && return r; call_on_owner(wait_ref, r, myid()); r)
 
 """
     wait(r::RemoteChannel, args...)
 
-Wait for a value to become available on the specified remote channel.
+Wait for a value to become available on the specified [`RemoteChannel`](@ref).
 """
 wait(r::RemoteChannel, args...) = (call_on_owner(wait_ref, r, myid(), args...); r)
 

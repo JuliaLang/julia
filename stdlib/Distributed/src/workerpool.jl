@@ -32,7 +32,15 @@ end
 """
     WorkerPool(workers::Vector{Int})
 
-Create a WorkerPool from a vector of worker ids.
+Create a `WorkerPool` from a vector of worker ids.
+
+# Examples
+```julia-repl
+\$ julia -p 3
+
+julia> WorkerPool([2, 3])
+WorkerPool(Channel{Int64}(sz_max:9223372036854775807,sz_curr:2), Set([2, 3]), RemoteChannel{Channel{Any}}(1, 1, 6))
+```
 """
 function WorkerPool(workers::Vector{Int})
     pool = WorkerPool()
@@ -155,7 +163,20 @@ end
 """
     remotecall(f, pool::AbstractWorkerPool, args...; kwargs...) -> Future
 
-`WorkerPool` variant of `remotecall(f, pid, ....)`. Waits for and takes a free worker from `pool` and performs a `remotecall` on it.
+[`WorkerPool`](@ref) variant of `remotecall(f, pid, ....)`. Wait for and take a free worker from `pool` and perform a `remotecall` on it.
+
+# Examples
+```julia-repl
+\$ julia -p 3
+
+julia> wp = WorkerPool([2, 3]);
+
+julia> A = rand(3000);
+
+julia> f = remotecall(maximum, wp, A)
+Future(2, 1, 6, nothing)
+```
+In this example, the task ran on pid 2, called from pid 1.
 """
 remotecall(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(remotecall, f, pool, args...; kwargs...)
 
@@ -163,8 +184,23 @@ remotecall(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(re
 """
     remotecall_wait(f, pool::AbstractWorkerPool, args...; kwargs...) -> Future
 
-`WorkerPool` variant of `remotecall_wait(f, pid, ....)`. Waits for and takes a free worker from `pool` and
-performs a `remotecall_wait` on it.
+[`WorkerPool`](@ref) variant of `remotecall_wait(f, pid, ....)`. Wait for and take a free worker from `pool` and
+perform a `remotecall_wait` on it.
+
+# Examples
+```julia-repl
+\$ julia -p 3
+
+julia> wp = WorkerPool([2, 3]);
+
+julia> A = rand(3000);
+
+julia> f = remotecall_wait(maximum, wp, A)
+Future(3, 1, 9, nothing)
+
+julia> fetch(f)
+0.9995177101692958
+```
 """
 remotecall_wait(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(remotecall_wait, f, pool, args...; kwargs...)
 
@@ -172,16 +208,28 @@ remotecall_wait(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_po
 """
     remotecall_fetch(f, pool::AbstractWorkerPool, args...; kwargs...) -> result
 
-`WorkerPool` variant of `remotecall_fetch(f, pid, ....)`. Waits for and takes a free worker from `pool` and
+[`WorkerPool`](@ref) variant of `remotecall_fetch(f, pid, ....)`. Waits for and takes a free worker from `pool` and
 performs a `remotecall_fetch` on it.
+
+# Examples
+```julia-repl
+\$ julia -p 3
+
+julia> wp = WorkerPool([2, 3]);
+
+julia> A = rand(3000);
+
+julia> remotecall_fetch(maximum, wp, A)
+0.9995177101692958
+```
 """
 remotecall_fetch(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(remotecall_fetch, f, pool, args...; kwargs...)
 
 """
     remote_do(f, pool::AbstractWorkerPool, args...; kwargs...) -> nothing
 
-`WorkerPool` variant of `remote_do(f, pid, ....)`. Waits for and takes a free worker from `pool` and
-performs a `remote_do` on it.
+[`WorkerPool`](@ref) variant of `remote_do(f, pid, ....)`. Wait for and take a free worker from `pool` and
+perform a `remote_do` on it.
 """
 remote_do(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(remote_do, f, pool, args...; kwargs...)
 
@@ -190,7 +238,15 @@ const _default_worker_pool = Ref{Union{WorkerPool, Nothing}}(nothing)
 """
     default_worker_pool()
 
-`WorkerPool` containing idle `workers` - used by `remote(f)` and [`pmap`](@ref) (by default).
+[`WorkerPool`](@ref) containing idle [`workers`](@ref) - used by `remote(f)` and [`pmap`](@ref) (by default).
+
+# Examples
+```julia-repl
+\$ julia -p 3
+
+julia> default_worker_pool()
+WorkerPool(Channel{Int64}(sz_max:9223372036854775807,sz_curr:3), Set([4, 2, 3]), RemoteChannel{Channel{Any}}(1, 1, 4))
+```
 """
 function default_worker_pool()
     # On workers retrieve the default worker pool from the master when accessed
@@ -206,10 +262,10 @@ function default_worker_pool()
 end
 
 """
-    remote([::AbstractWorkerPool], f) -> Function
+    remote([p::AbstractWorkerPool], f) -> Function
 
 Return an anonymous function that executes function `f` on an available worker
-using [`remotecall_fetch`](@ref).
+(drawn from [`WorkerPool`](@ref) `p` if provided) using [`remotecall_fetch`](@ref).
 """
 remote(f) = (args...; kwargs...)->remotecall_fetch(f, default_worker_pool(), args...; kwargs...)
 remote(p::AbstractWorkerPool, f) = (args...; kwargs...)->remotecall_fetch(f, p, args...; kwargs...)
