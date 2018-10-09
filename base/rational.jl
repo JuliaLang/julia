@@ -226,7 +226,7 @@ signbit(x::Rational) = signbit(x.num)
 copysign(x::Rational, y::Real) = copysign(x.num,y) // x.den
 copysign(x::Rational, y::Rational) = copysign(x.num,y.num) // x.den
 
-abs(x::Rational{T}) where {T<:Unsigned} = x
+abs(x::Rational) = Rational(abs(x.num), x.den)
 
 typemin(::Type{Rational{T}}) where {T<:Integer} = -one(T)//zero(T)
 typemax(::Type{Rational{T}}) where {T<:Integer} = one(T)//zero(T)
