@@ -995,3 +995,107 @@ function type_lift_pass!(ir::IRCode)
     end
     ir
 end
+
+function cfg_simplify!(ir::IRCode)
+    bbs = ir.cfg.blocks
+    merge_into = zeros(Int64, length(bbs))
+    merged_succ = zeros(Int64, length(bbs))
+
+    # Walk the CFG at from the entry block and aggressively combine blocks
+    for (idx, bb) in enumerate(bbs)
+        if length(bb.succs) == 1
+            succ = bb.succs[1]
+            if length(bbs[succ].preds) == 1
+                merge_into[succ] = idx
+                merged_succ[idx] = succ
+            end
+        end
+    end
+    max_bb_num = 1
+    bb_rename_succ = zeros(Int64, length(bbs))
+    for i = 1:length(bbs)
+        if merge_into[i] != 0
+            bb_rename_succ[i] = -1
+            continue
+        end
+        bb_rename_succ[i] = max_bb_num
+        max_bb_num += 1
+    end
+    bb_rename_pred = zeros(Int64, length(bbs))
+    for i = 1:length(bbs)
+        if merged_succ[i] != 0
+            bb_rename_pred[i] = -1
+            continue
+        end
+        bbnum = i
+        while merge_into[bbnum] != 0
+            bbnum = merge_into[bbnum]
+        end
+        bb_rename_pred[i] = bb_rename_succ[bbnum]
+    end
+    result_bbs = [findfirst(j->i==j, bb_rename_succ) for i = 1:max_bb_num-1]
+    result_bbs_lengths = zeros(Int, max_bb_num-1)
+    compact = IncrementalCompact(ir, true)
+    compact.bb_rename_succ = bb_rename_succ
+    compact.bb_rename_pred = bb_rename_pred
+    for (idx, orig_bb) in enumerate(result_bbs)
+        ms = orig_bb
+        while ms != 0
+            result_bbs_lengths[idx] += length(bbs[ms].stmts)
+            ms = merged_succ[ms]
+        end
+    end
+    bb_starts = Vector(undef, 1+length(result_bbs_lengths))
+    bb_starts[1] = 1
+    for i = 1:length(result_bbs_lengths)
+        bb_starts[i+1] = bb_starts[i] + result_bbs_lengths[i]
+    end
+    # Look at the original successor
+    function compute_succs(i)
+        orig_bb = result_bbs[i]
+        while merged_succ[orig_bb] != 0
+            orig_bb = merged_succ[orig_bb]
+        end
+        map(i->bb_rename_succ[i], bbs[orig_bb].succs)
+    end
+
+    function compute_preds(i)
+        orig_bb = result_bbs[i]
+        preds = bbs[orig_bb].preds
+        map(preds) do pred
+            while merge_into[pred] != 0
+                pred = merge_into[pred]
+            end
+            bb_rename_succ[pred]
+        end
+    end
+    compact.result_bbs = [BasicBlock(
+        Compiler.StmtRange(bb_starts[i], i+1 > length(bb_starts) ? length(compact.result) : bb_starts[i+1]-1),
+        compute_preds(i), compute_succs(i)) for i = 1:length(result_bbs)]
+    result_idx = 1
+    for (idx, orig_bb) in enumerate(result_bbs)
+        ms = orig_bb
+        while ms != 0
+            for i in bbs[ms].stmts
+                stmt = ir.stmts[i]
+                compact.result[compact.result_idx] = nothing
+                compact.result_types[compact.result_idx] = ir.types[i]
+                compact.result_lines[compact.result_idx] = ir.lines[i]
+                compact.result_flags[compact.result_idx] = ir.flags[i]
+                # If we merged a basic block, we need remove the trailing GotoNode (if any)
+                if isa(stmt, GotoNode) && merged_succ[ms] != 0
+                    # Do nothing
+                else
+                    process_node!(compact, compact.result_idx, stmt, i, i, ms, true)
+                end
+                # We always increase the result index to ensure a predicatable
+                # placement of the resulting nodes.
+                compact.result_idx += 1
+            end
+            ms = merged_succ[ms]
+        end
+    end
+
+    compact.active_result_bb = length(bb_starts)
+    return Compiler.finish(compact)
+end

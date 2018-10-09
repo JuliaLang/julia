@@ -37,3 +37,37 @@ let m = Meta.@lower 1 + 1
     Core.Compiler.verify_ir(ir)
     @test isa(ir.stmts[3], Core.PhiNode) && length(ir.stmts[3].edges) == 1
 end
+
+# Tests for cfg simplification
+let src = code_typed(gcd, Tuple{Int, Int})[1].first
+    # Test that cfg_simplify doesn't mangle IR on code with loops
+    ir = Core.Compiler.inflate_ir(src)
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+end
+
+let m = Meta.@lower 1 + 1
+    # Test that CFG simplify combines redundant basic blocks
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::Core.CodeInfo
+    src.code = Any[
+        Core.Compiler.GotoNode(2),
+        Core.Compiler.GotoNode(3),
+        Core.Compiler.GotoNode(4),
+        Core.Compiler.GotoNode(5),
+        Core.Compiler.GotoNode(6),
+        Core.Compiler.GotoNode(7),
+        Expr(:return, 2)
+    ]
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.codelocs = fill(Int32(1), nstmts)
+    src.ssaflags = fill(Int32(0), nstmts)
+    ir = Core.Compiler.inflate_ir(src)
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.compact!(ir)
+    @test length(ir.cfg.blocks) == 1 && length(ir.stmts) == 1
+end
