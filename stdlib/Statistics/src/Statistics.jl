@@ -906,7 +906,7 @@ julia> quantile(0:20, [0.1, 0.5, 0.9])
 
 julia> quantile(skipmissing([1, 10, missing]), 0.5)
 5.5
- ```
+```
 """
 quantile(itr, p; sorted::Bool=false) = quantile!(collect(itr), p, sorted=sorted)
 
