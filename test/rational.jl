@@ -97,6 +97,7 @@ using Test
     @test !(1//3 == NaN)
     @test !(1//3 > NaN)
 
+    # PR 29561
     @test abs(one(Rational{UInt})) === one(Rational{UInt})
     @test abs(one(Rational{Int})) === one(Rational{Int})
     @test abs(-one(Rational{Int})) === one(Rational{Int})
