@@ -898,7 +898,7 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple),
             end
             if meth.isva
                 # Adjust for varargs
-                vargs = tuple_tfunc(argtypes[meth.nargs:end])
+                vargs = Core.Compiler.tuple_tfunc(argtypes[meth.nargs:end])
                 resize!(argtypes, meth.nargs)
                 argtypes[meth.nargs] = vargs
             end
