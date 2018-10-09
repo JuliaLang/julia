@@ -148,8 +148,7 @@ function finish(me::InferenceState)
         # a top parent will be cached still, but not this intermediate work
         # we can throw everything else away now
         me.cached = false
-        me.linfo.inInference = false
-        me.src.inlineable &= ~CI_INLINEABLE
+        me.result.src = nothing
     else
         # annotate fulltree with type information
         type_annotate!(me)
