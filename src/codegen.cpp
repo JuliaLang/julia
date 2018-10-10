@@ -1594,7 +1594,7 @@ void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapp
 // get a native disassembly for f (an LLVM function)
 // warning: this takes ownership of, and destroys, f
 extern "C" JL_DLLEXPORT
-const jl_value_t *jl_dump_function_asm(void *f, int raw_mc, const char* asm_variant)
+const jl_value_t *jl_dump_function_asm(void *f, int raw_mc, const char* asm_variant, const char *debuginfo)
 {
     Function *llvmf = dyn_cast_or_null<Function>((Function*)f);
     if (!llvmf)
@@ -1604,7 +1604,7 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc, const char* asm_vari
     if (fptr == 0)
         fptr = (uintptr_t)jl_ExecutionEngine->getPointerToGlobalIfAvailable(llvmf);
     delete llvmf;
-    return jl_dump_fptr_asm(fptr, raw_mc, asm_variant);
+    return jl_dump_fptr_asm(fptr, raw_mc, asm_variant, debuginfo);
 }
 
 // Logging for code coverage and memory allocation
