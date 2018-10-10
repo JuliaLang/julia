@@ -631,7 +631,7 @@ julia> findfirst(isequal('z'), "xylophone")
 ```
 
 You can start the search for a character at a given offset by using
-[`findnext`](@ref) and [`findprev`](@ref) with a three arguments:
+the functions [`findnext`](@ref) and [`findprev`](@ref):
 
 ```jldoctest
 julia> findnext(isequal('o'), "xylophone", 1)
