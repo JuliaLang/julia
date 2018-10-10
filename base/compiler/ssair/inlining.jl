@@ -676,7 +676,7 @@ function compileable_specialization(et::Union{EdgeTracker, Nothing}, match::Meth
     return mi
 end
 
-function resolve_todo(todo::InliningTodo, et::Union{EdgeTracker, Nothing}, caches::InferenceCaches)
+function resolve_todo(todo::InliningTodo, et::Union{EdgeTracker, Nothing}, caches::InferenceCaches, params::OptimizationParams)
     spec = todo.spec::DelayedInliningSpec
     isconst, src = find_inferred(todo.mi, spec.atypes, caches, spec.stmttype)
 
@@ -691,7 +691,9 @@ function resolve_todo(todo::InliningTodo, et::Union{EdgeTracker, Nothing}, cache
 
     if isa(src, CodeInfo) || isa(src, Vector{UInt8})
         src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
-        src_inlineable = ((ccall(:jl_ir_flag_inlineable, UInt8, (Any,), src) & CI_INLINEABLE) != 0
+        src_inlineable = params.ignore_all_inlining_heuristics ?
+             !((ccall(:jl_ir_flag_inlineable, UInt8, (Any,), src) & CI_DECLARED_NOINLINE) != 0) :
+             ((ccall(:jl_ir_flag_inlineable, UInt8, (Any,), src) & CI_INLINEABLE) != 0)
 
         if !(src_inferred && src_inlineable)
             return compileable_specialization(et, spec.match)
@@ -704,15 +706,15 @@ function resolve_todo(todo::InliningTodo, et::Union{EdgeTracker, Nothing}, cache
     return InliningTodo(todo.mi, src)
 end
 
-function resolve_todo(todo::UnionSplit, et::Union{EdgeTracker, Nothing}, caches::InferenceCaches)
+function resolve_todo(todo::UnionSplit, et::Union{EdgeTracker, Nothing}, caches::InferenceCaches, params::OptimizationParams)
     UnionSplit(todo.fully_covered, todo.atype,
-        Pair{Any,Any}[sig=>resolve_todo(item, et, caches) for (sig, item) in todo.cases])
+        Pair{Any,Any}[sig=>resolve_todo(item, et, caches, params) for (sig, item) in todo.cases])
 end
 
-function resolve_todo!(todo::Vector{Pair{Int, Any}}, et::Union{EdgeTracker, Nothing}, caches::InferenceCaches)
+function resolve_todo!(todo::Vector{Pair{Int, Any}}, et::Union{EdgeTracker, Nothing}, caches::InferenceCaches, params::OptimizationParams)
     for i = 1:length(todo)
         idx, item = todo[i]
-        todo[i] = idx=>resolve_todo(item, et, caches)
+        todo[i] = idx=>resolve_todo(item, et, caches, params)
     end
     todo
 end
@@ -755,7 +757,7 @@ function analyze_method!(match::MethodMatch, atypes::Vector{Any},
     # If we don't have caches here, delay resolving this MethodInstance
     # until the batch inlining step (or an external post-processing pass)
     caches === nothing && return todo
-    return resolve_todo(todo, et, caches)
+    return resolve_todo(todo, et, caches, params)
 end
 
 function InliningTodo(mi::MethodInstance, ir::IRCode)

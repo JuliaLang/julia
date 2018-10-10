@@ -47,6 +47,9 @@ struct OptimizationParams
     inline_tupleret_bonus::Int  # extra inlining willingness for non-concrete tuple return types (in hopes of splitting it up)
     inline_error_path_cost::Int # cost of (un-optimized) calls in blocks that throw
 
+    # Hack: Ignore all inlining heuristics and fully inline
+    ignore_all_inlining_heuristics::Bool
+
     # Duplicating for now because optimizer inlining requires it.
     # Keno assures me this will be removed in the near future
     MAX_METHODS::Int
@@ -61,6 +64,7 @@ struct OptimizationParams
             inline_nonleaf_penalty::Int = 1000,
             inline_tupleret_bonus::Int = 250,
             inline_error_path_cost::Int = 20,
+            ignore_all_inlining_heuristics::Bool = false,
             max_methods::Int = 3,
             tuple_splat::Int = 32,
             union_splitting::Int = 4,
@@ -72,6 +76,7 @@ struct OptimizationParams
             inline_nonleaf_penalty,
             inline_tupleret_bonus,
             inline_error_path_cost,
+            ignore_all_inlining_heuristics,
             max_methods,
             tuple_splat,
             union_splitting,
