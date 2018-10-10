@@ -220,17 +220,20 @@ julia&gt; &quot;Hello, world.&quot; != &quot;Goodbye, world.&quot;
 true
 
 julia&gt; &quot;1 + 2 = 3&quot; == &quot;1 + 2 = $(1 + 2)&quot;
-true</code></pre><p>You can search for the index of a particular character using the <a href="../../base/strings/#Base.findfirst-Tuple{AbstractString,AbstractString}"><code>findfirst</code></a> function:</p><pre><code class="language-julia-repl">julia&gt; findfirst(isequal(&#39;x&#39;), &quot;xylophone&quot;)
-1
+true</code></pre><p>You can search for the index of a particular character using the <a href="../../base/strings/#Base.findfirst-Tuple{AbstractString,AbstractString}"><code>findfirst</code></a> and <a href="../../base/strings/#Base.findlast-Tuple{AbstractString,AbstractString}"><code>findlast</code></a> functions:</p><pre><code class="language-julia-repl">julia&gt; findfirst(isequal(&#39;o&#39;), &quot;xylophone&quot;)
+4
 
-julia&gt; findfirst(isequal(&#39;p&#39;), &quot;xylophone&quot;)
-5
+julia&gt; findlast(isequal(&#39;o&#39;), &quot;xylophone&quot;)
+7
 
-julia&gt; findfirst(isequal(&#39;z&#39;), &quot;xylophone&quot;)</code></pre><p>You can start the search for a character at a given offset by using <a href="../../base/strings/#Base.findnext-Tuple{AbstractString,AbstractString,Integer}"><code>findnext</code></a> with a third argument:</p><pre><code class="language-julia-repl">julia&gt; findnext(isequal(&#39;o&#39;), &quot;xylophone&quot;, 1)
+julia&gt; findfirst(isequal(&#39;z&#39;), &quot;xylophone&quot;)</code></pre><p>You can start the search for a character at a given offset by using the functions <a href="../../base/strings/#Base.findnext-Tuple{AbstractString,AbstractString,Integer}"><code>findnext</code></a> and <a href="../../base/strings/#Base.findprev-Tuple{AbstractString,AbstractString,Integer}"><code>findprev</code></a>:</p><pre><code class="language-julia-repl">julia&gt; findnext(isequal(&#39;o&#39;), &quot;xylophone&quot;, 1)
 4
 
 julia&gt; findnext(isequal(&#39;o&#39;), &quot;xylophone&quot;, 5)
 7
+
+julia&gt; findprev(isequal(&#39;o&#39;), &quot;xylophone&quot;, 5)
+4
 
 julia&gt; findnext(isequal(&#39;o&#39;), &quot;xylophone&quot;, 8)</code></pre><p>You can use the <a href="../../base/strings/#Base.occursin"><code>occursin</code></a> function to check if a substring is found within a string:</p><pre><code class="language-julia-repl">julia&gt; occursin(&quot;world&quot;, &quot;Hello, world.&quot;)
 true
