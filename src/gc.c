@@ -2078,20 +2078,20 @@ excstack: {
             size_t bt_size = jl_exc_stack_bt_size(exc_stack, itr);
             uintptr_t *bt_data = jl_exc_stack_bt_data(exc_stack, itr);
             while (i+2 < bt_size) {
-                if (bt_data[i] != (uintptr_t)-1) {
+                if (bt_data[i] != JL_BT_INTERP_FRAME) {
                     i++;
                     continue;
                 }
                 // found an interpreter frame to mark
                 new_obj = (jl_value_t*)bt_data[i+1];
                 uintptr_t nptr = 0;
+                i += 3;
                 if (gc_try_setmark(new_obj, &nptr, &tag, &bits)) {
-                    stackitr->i = i + 3;
+                    stackitr->i = i;
                     stackitr->itr = itr;
                     gc_repush_markdata(&sp, gc_mark_exc_stack_t);
                     goto mark;
                 }
-                i += 3;
             }
             // mark the exception
             new_obj = jl_exc_stack_exception(exc_stack, itr);
@@ -2660,7 +2660,7 @@ static void jl_gc_queue_bt_buf(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp
 {
     size_t n = 0;
     while (n+2 < ptls2->bt_size) {
-        if (ptls2->bt_data[n] == (uintptr_t)-1) {
+        if (ptls2->bt_data[n] == JL_BT_INTERP_FRAME) {
             gc_mark_queue_obj(gc_cache, sp, (jl_value_t*)ptls2->bt_data[n+1]);
             n += 2;
         }

@@ -127,7 +127,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp)
 
         n = 0;
         while (n < jl_array_len(ip)) {
-            if ((uintptr_t)jl_array_ptr_ref(ip, n) == (uintptr_t)-1) {
+            if ((uintptr_t)jl_array_ptr_ref(ip, n) == JL_BT_INTERP_FRAME) {
                 jl_array_ptr_1d_push(bt2, jl_array_ptr_ref(ip, n+1));
                 n += 2;
             }
@@ -154,7 +154,7 @@ void decode_backtrace(uintptr_t *bt_data, size_t bt_size,
     // Scan the stack for any interpreter frames
     size_t n = 0;
     while (n < bt_size) {
-        if (bt_data[n] == (uintptr_t)-1) {
+        if (bt_data[n] == JL_BT_INTERP_FRAME) {
             jl_array_ptr_1d_push(bt2, (jl_value_t*)bt_data[n+1]);
             n += 2;
         }
@@ -326,9 +326,8 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
     *sp = (uintptr_t)cursor->stackframe.AddrStack.Offset;
     if (fp)
         *fp = (uintptr_t)cursor->stackframe.AddrFrame.Offset;
-    if (*ip == 0 || *ip == ((uintptr_t)0)-1) {
-        // -1 is a special marker in the backtrace,
-        // don't leave it in there since it can corrupt the GC.
+    if (*ip == 0 || *ip == JL_BT_INTERP_FRAME) {
+        // don't leave special marker in the bt data as it can corrupt the GC.
         *ip = 0;
         if (!readable_pointer((LPCVOID)*sp))
             return 0;
@@ -345,9 +344,8 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
     *sp = (uintptr_t)cursor->Rsp;
     if (fp)
         *fp = (uintptr_t)cursor->Rbp;
-    if (*ip == 0 || *ip == ((uintptr_t)0)-1) {
-        // -1 is a special marker in the backtrace,
-        // don't leave it in there since it can corrupt the GC.
+    if (*ip == 0 || *ip == JL_BT_INTERP_FRAME) {
+        // don't leave special marker in the bt data as it can corrupt the GC.
         *ip = 0;
         if (!readable_pointer((LPCVOID)*sp))
             return 0;
@@ -401,9 +399,8 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintpt
     unw_word_t reg;
     if (unw_get_reg(cursor, UNW_REG_IP, &reg) < 0)
         return 0;
-    // -1 is a special marker in the backtrace,
-    // don't leave it in there since it can corrupt the GC.
-    *ip = reg == (uintptr_t)-1 ? 0 : reg;
+    // don't leave special marker in the bt data as it can corrupt the GC.
+    *ip = reg == JL_BT_INTERP_FRAME ? 0 : reg;
     if (unw_get_reg(cursor, UNW_REG_SP, &reg) < 0)
         return 0;
     *sp = reg;
@@ -522,8 +519,16 @@ JL_DLLEXPORT void jlbacktrace(void)
         return;
     size_t bt_size = jl_exc_stack_bt_size(s, s->top);
     uintptr_t *bt_data = jl_exc_stack_bt_data(s, s->top);
-    for (size_t i = 0; i < bt_size; i++)
-        jl_gdblookup(bt_data[i] - 1);
+    for (size_t i = 0; i < bt_size; ) {
+        if (bt_data[i] == JL_BT_INTERP_FRAME) {
+            jl_safe_printf("Interpreter frame (ip: %d)\n", (int)bt_data[i+2]);
+            jl_static_show(JL_STDERR, (jl_value_t*)bt_data[i+1]);
+            i += 3;
+        } else {
+            jl_gdblookup(bt_data[i] - 1);
+            i += 1;
+        }
+    }
 }
 
 #ifdef __cplusplus

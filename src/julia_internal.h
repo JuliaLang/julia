@@ -630,6 +630,8 @@ typedef unw_cursor_t bt_cursor_t;
 typedef int bt_context_t;
 typedef int bt_cursor_t;
 #endif
+// Special marker in backtrace data for encoding interpreter frames
+#define JL_BT_INTERP_FRAME (((uintptr_t)0)-1)
 size_t rec_backtrace(uintptr_t *data, size_t maxsize) JL_NOTSAFEPOINT;
 size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx) JL_NOTSAFEPOINT;
 #ifdef LIBOSXUNWIND
