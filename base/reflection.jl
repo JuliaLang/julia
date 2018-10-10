@@ -669,7 +669,7 @@ function signature_type(@nospecialize(f), @nospecialize(args))
 end
 
 """
-    code_lowered(f, types; generated = true)
+    code_lowered(f, types; generated=true, debuginfo=:default)
 
 Return an array of the lowered forms (IR) for the methods matching the given generic function
 and type signature.
@@ -679,10 +679,17 @@ implementations. An error is thrown if no fallback implementation exists.
 If `generated` is `true`, these `CodeInfo` instances will correspond to the method bodies
 yielded by expanding the generators.
 
+The keyword debuginfo controls the amount of code metadata present in the output.
+
 Note that an error will be thrown if `types` are not leaf types when `generated` is
-`true` and the corresponding method is a `@generated` method.
+`true` and any of the corresponding methods are an `@generated` method.
 """
-function code_lowered(@nospecialize(f), @nospecialize(t = Tuple); generated::Bool = true)
+function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=true, debuginfo::Symbol=:default)
+    if debuginfo == :default
+        debuginfo = :source
+    elseif debuginfo != :source && debuginfo != :none
+        throw(ArgumentError("'debuginfo' must be either :source or :none"))
+    end
     return map(method_instances(f, t)) do m
         if generated && isgenerated(m)
             if isa(m, Core.MethodInstance)
@@ -693,7 +700,9 @@ function code_lowered(@nospecialize(f), @nospecialize(t = Tuple); generated::Boo
                       "not leaf types, but the `generated` argument is `true`.")
             end
         end
-        return uncompressed_ast(m)
+        code = uncompressed_ast(m)
+        debuginfo == :none && remove_linenums!(code)
+        return code
     end
 end
 
@@ -811,10 +820,10 @@ function length(mt::Core.MethodTable)
 end
 isempty(mt::Core.MethodTable) = (mt.defs === nothing)
 
-uncompressed_ast(m::Method) = isdefined(m,:source) ? uncompressed_ast(m, m.source) :
-                              isdefined(m,:generator) ? error("Method is @generated; try `code_lowered` instead.") :
+uncompressed_ast(m::Method) = isdefined(m, :source) ? uncompressed_ast(m, m.source) :
+                              isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
                               error("Code for this Method is not available.")
-uncompressed_ast(m::Method, s::CodeInfo) = s
+uncompressed_ast(m::Method, s::CodeInfo) = copy(s)
 uncompressed_ast(m::Method, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Any), m, s)::CodeInfo
 uncompressed_ast(m::Core.MethodInstance) = uncompressed_ast(m.def)
 
@@ -866,16 +875,22 @@ function func_for_method_checked(m::Method, @nospecialize types)
 end
 
 """
-    code_typed(f, types; optimize=true)
+    code_typed(f, types; optimize=true, debuginfo=:default)
 
 Returns an array of type-inferred lowered form (IR) for the methods matching the given
 generic function and type signature. The keyword argument `optimize` controls whether
 additional optimizations, such as inlining, are also applied.
+The keyword debuginfo controls the amount of code metadata present in the output.
 """
-function code_typed(@nospecialize(f), @nospecialize(types=Tuple); optimize=true)
+function code_typed(@nospecialize(f), @nospecialize(types=Tuple); optimize=true, debuginfo::Symbol=:default)
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
+    end
+    if debuginfo == :default
+        debuginfo = :source
+    elseif debuginfo != :source && debuginfo != :none
+        throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     types = to_tuple_type(types)
     asts = []
@@ -885,6 +900,7 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple); optimize=true)
         meth = func_for_method_checked(x[3], types)
         (code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, params)
         code === nothing && error("inference not successful") # inference disabled?
+        debuginfo == :none && remove_linenums!(code)
         push!(asts, code => ty)
     end
     return asts

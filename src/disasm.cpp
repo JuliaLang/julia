@@ -81,10 +81,28 @@ class DILineInfoPrinter {
     const char* LineStart = "; ";
     bool bracket_outer = false;
     bool collapse_recursive = true;
+
+    enum {
+        output_none = 0,
+        output_source = 1,
+    } verbosity = output_source;
 public:
     DILineInfoPrinter(const char *LineStart, bool bracket_outer)
         : LineStart(LineStart),
           bracket_outer(bracket_outer) {};
+    void SetVerbosity(const char *c)
+    {
+        if (StringRef("default") == c) {
+            verbosity = output_source;
+        }
+        else if (StringRef("source") == c) {
+            verbosity = output_source;
+        }
+        else if (StringRef("none") == c) {
+            verbosity = output_none;
+        }
+    }
+
     void emit_finish(raw_ostream &Out);
     void emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> &DI);
 
@@ -149,6 +167,8 @@ void DILineInfoPrinter::emit_finish(raw_ostream &Out)
 
 void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> &DI)
 {
+    if (verbosity == output_none)
+        return;
     bool update_line_only = false;
     uint32_t nframes = DI.size();
     if (nframes == 0)
@@ -282,7 +302,10 @@ class LineNumberAnnotatedWriter : public AssemblyAnnotationWriter {
     DenseMap<const Instruction *, DILocation *> DebugLoc;
     DenseMap<const Function *, DISubprogram *> Subprogram;
 public:
-    LineNumberAnnotatedWriter() {}
+    LineNumberAnnotatedWriter(const char *debuginfo)
+    {
+        LinePrinter.SetVerbosity(debuginfo);
+    }
     virtual void emitFunctionAnnot(const Function *, formatted_raw_ostream &);
     virtual void emitInstructionAnnot(const Instruction *, formatted_raw_ostream &);
     virtual void emitBasicBlockEndAnnot(const BasicBlock *, formatted_raw_ostream &);
@@ -356,7 +379,7 @@ void LineNumberAnnotatedWriter::emitBasicBlockEndAnnot(
 // print an llvm IR acquired from jl_get_llvmf
 // warning: this takes ownership of, and destroys, f->getParent()
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_module)
+jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_module, const char *debuginfo)
 {
     std::string code;
     llvm::raw_string_ostream stream(code);
@@ -366,7 +389,7 @@ jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_modul
         jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
 
     JL_LOCK(&codegen_lock); // Might GC
-    LineNumberAnnotatedWriter AAW;
+    LineNumberAnnotatedWriter AAW{debuginfo};
     if (!llvmf->getParent()) {
         // print the function declaration as-is
         llvmf->print(stream, &AAW);
@@ -429,7 +452,8 @@ static void jl_dump_asm_internal(
         const object::ObjectFile *object,
         DIContext *di_ctx,
         raw_ostream &rstream,
-        const char* asm_variant);
+        const char* asm_variant,
+        const char* debuginfo);
 
 // This isn't particularly fast, but neither is printing assembly, and they're only used for interactive mode
 static uint64_t compute_obj_symsize(const object::ObjectFile *obj, uint64_t offset)
@@ -478,7 +502,7 @@ static uint64_t compute_obj_symsize(const object::ObjectFile *obj, uint64_t offs
 
 // print a native disassembly for the function starting at fptr
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant)
+jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant, const char *debuginfo)
 {
     assert(fptr != 0);
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -514,7 +538,8 @@ jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant)
             fptr, symsize, slide,
             object, context,
             stream,
-            asm_variant);
+            asm_variant,
+            debuginfo);
     jl_gc_safe_leave(ptls, gc_state);
 
     return jl_pchar_to_string(stream.str().data(), stream.str().size());
@@ -718,7 +743,8 @@ static void jl_dump_asm_internal(
         const object::ObjectFile *object,
         DIContext *di_ctx,
         raw_ostream &rstream,
-        const char* asm_variant)
+        const char* asm_variant,
+        const char* debuginfo)
 {
     // GC safe
     // Get the host information

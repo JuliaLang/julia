@@ -1562,9 +1562,17 @@ module IRShow
     Base.first(r::Compiler.StmtRange) = Compiler.first(r)
     Base.last(r::Compiler.StmtRange) = Compiler.last(r)
     include("compiler/ssair/show.jl")
+
+    const debuginfo = Dict{Symbol, Any}(
+        # :full => src -> Base.IRShow.DILineInfoPrinter(src.linetable), # and add variable slot information
+        :source => src -> Base.IRShow.DILineInfoPrinter(src.linetable),
+        # :incomplete => src -> Base.IRShow.PartialLineInfoPrinter(src.linetable),
+        :none => src -> Base.IRShow.lineinfo_disabled,
+        )
+    debuginfo[:default] = debuginfo[:source]
 end
 
-function show(io::IO, src::CodeInfo)
+function show(io::IO, src::CodeInfo; debuginfo::Symbol=:default)
     # Fix slot names and types in function body
     print(io, "CodeInfo(")
     lambda_io::IOContext = io
@@ -1575,7 +1583,7 @@ function show(io::IO, src::CodeInfo)
     if isempty(src.linetable) || src.linetable[1] isa LineInfoNode
         println(io)
         # TODO: static parameter values?
-        IRShow.show_ir(lambda_io, src)
+        IRShow.show_ir(lambda_io, src, IRShow.debuginfo[debuginfo](src))
     else
         # this is a CodeInfo that has not been used as a method yet, so its locations are still LineNumberNodes
         body = Expr(:block)
