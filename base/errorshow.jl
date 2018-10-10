@@ -145,7 +145,7 @@ function showerror(io::IO, ex::UndefVarError)
         Then do `using LegacyStrings` to get `$(ex.var)`.
         """))
     end
-    print(io, "UndefVarError: $(ex.var) not defined")
+    print(io, "UndefVarError: $(ex.var) not defined (consider https://docs.julialang.org/en/v1/manual/variables-and-scoping/)")
 end
 
 function showerror(io::IO, ex::InexactError)
