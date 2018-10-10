@@ -680,7 +680,9 @@ function analyze_method!(idx::Int, @nospecialize(f), @nospecialize(ft), @nospeci
     end
 
     src_inferred = ccall(:jl_ast_flag_inferred, Bool, (Any,), inferred)
-    src_inlineable = (ccall(:jl_ast_flag_inlineable, UInt8, (Any,), inferred) & CI_INLINEABLE) != 0
+    src_inlineable = sv.params.ignore_all_inlining_heuristics ?
+         !((ccall(:jl_ast_flag_inlineable, UInt8, (Any,), inferred) & CI_DECLARED_NOINLINE) != 0) :
+         ((ccall(:jl_ast_flag_inlineable, UInt8, (Any,), inferred) & CI_INLINEABLE) != 0)
 
     if !(src_inferred && src_inlineable)
         return spec_lambda(atype_unlimited, sv, invoke_data)

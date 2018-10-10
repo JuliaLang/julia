@@ -9,6 +9,8 @@ struct Params
     inlining::Bool
     ipo_constant_propagation::Bool
     aggressive_constant_propagation::Bool
+    # Hack: Ignore all inlining heuristics and fully inline
+    ignore_all_inlining_heuristics::Bool
     inline_cost_threshold::Int  # number of CPU cycles beyond which it's not worth inlining
     inline_nonleaf_penalty::Int # penalty for dynamic dispatch
     inline_tupleret_bonus::Int  # extra willingness for non-isbits tuple return types
@@ -41,6 +43,8 @@ struct Params
                     inline_cost_threshold::Int = DEFAULT_PARAMS.inline_cost_threshold,
                     inline_nonleaf_penalty::Int = DEFAULT_PARAMS.inline_nonleaf_penalty,
                     inline_tupleret_bonus::Int = DEFAULT_PARAMS.inline_tupleret_bonus,
+                    aggressive_constant_propagation::Bool = DEFAULT_PARAMS.aggressive_constant_propagation,
+                    ignore_all_inlining_heuristics::Bool = false,
                     max_methods::Int = DEFAULT_PARAMS.MAX_METHODS,
                     tupletype_depth::Int = DEFAULT_PARAMS.TUPLE_COMPLEXITY_LIMIT_DEPTH,
                     tuple_splat::Int = DEFAULT_PARAMS.MAX_TUPLE_SPLAT,
@@ -48,7 +52,7 @@ struct Params
                     apply_union_enum::Int = DEFAULT_PARAMS.MAX_APPLY_UNION_ENUM)
         return new(Vector{InferenceResult}(),
                    world, false,
-                   inlining, true, false, inline_cost_threshold, inline_nonleaf_penalty,
+                   inlining, true, aggressive_constant_propagation, ignore_all_inlining_heuristics, inline_cost_threshold, inline_nonleaf_penalty,
                    inline_tupleret_bonus, max_methods, union_splitting, apply_union_enum,
                    tupletype_depth, tuple_splat)
     end
@@ -57,7 +61,7 @@ struct Params
         return new(Vector{InferenceResult}(),
                    world, true,
                    #=inlining, ipo_constant_propagation, aggressive_constant_propagation, inline_cost_threshold, inline_nonleaf_penalty,=#
-                   inlining, true, false, 100, 1000,
+                   inlining, true, false, false, 100, 1000,
                    #=inline_tupleret_bonus, max_methods, union_splitting, apply_union_enum=#
                    400, 4, 4, 8,
                    #=tupletype_depth, tuple_splat=#
