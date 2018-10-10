@@ -922,7 +922,7 @@ function process_node!(compact::IncrementalCompact, result::Vector{Any},
         values = process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, do_rename_ssa)
         if length(stmt.edges) == 1 && isassigned(values, 1) &&
                 length(compact.allow_cfg_transforms ?
-                    compact.result_bbs[compact.bb_rename_pred[active_bb]].preds :
+                    compact.result_bbs[compact.bb_rename_succ[active_bb]].preds :
                     compact.ir.cfg.blocks[active_bb].preds) == 1
             # There's only one predecessor left - just replace it
             ssa_rename[idx] = values[1]

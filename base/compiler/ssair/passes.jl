@@ -1070,7 +1070,7 @@ function cfg_simplify!(ir::IRCode)
         end
     end
     compact.result_bbs = [BasicBlock(
-        Compiler.StmtRange(bb_starts[i], i+1 > length(bb_starts) ? length(compact.result) : bb_starts[i+1]-1),
+        StmtRange(bb_starts[i], i+1 > length(bb_starts) ? length(compact.result) : bb_starts[i+1]-1),
         compute_preds(i), compute_succs(i)) for i = 1:length(result_bbs)]
     result_idx = 1
     for (idx, orig_bb) in enumerate(result_bbs)
@@ -1097,5 +1097,5 @@ function cfg_simplify!(ir::IRCode)
     end
 
     compact.active_result_bb = length(bb_starts)
-    return Compiler.finish(compact)
+    return finish(compact)
 end
