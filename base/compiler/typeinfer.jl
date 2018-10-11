@@ -117,7 +117,7 @@ function cache_result(result::InferenceResult, min_valid::UInt, max_valid::UInt)
             end
             if !toplevel && inferred_result isa CodeInfo
                 cache_the_tree = result.src.inferred &&
-                    ((result.src.inlineable & CI_INLINEABLE) != 0 ||
+                    ((result.src.inlineable & CI_DECLARED_NOINLINE) == 0 ||
                      ccall(:jl_isa_compileable_sig, Int32, (Any, Any), result.linfo.specTypes, def) != 0)
                 if cache_the_tree
                     # compress code for non-toplevel thunks
@@ -504,12 +504,13 @@ end
 # compute an inferred AST and return type
 function typeinf_code(method::Method, @nospecialize(msig), sparams::SimpleVector,
                       run_optimizer::Bool, params::Params,
-                      atypes::Union{Nothing, Vector{Any}} = nothing)
+                      atypes::Union{Nothing, Vector{Any}} = nothing,
+                      cached = false)
     code = code_for_method(method, msig, sparams, params.world)
     code === nothing && return (nothing, Any)
     ccall(:jl_typeinf_begin, Cvoid, ())
     result = atypes === nothing ? InferenceResult(code) : InferenceResult(code, atypes)
-    frame = InferenceState(result, false, params)
+    frame = InferenceState(result, cached, params)
     frame === nothing && return (nothing, Any)
     if typeinf(frame) && run_optimizer
         opt = OptimizationState(frame)
