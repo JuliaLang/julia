@@ -483,7 +483,7 @@ static void enqueue_task(jl_task_t *task)
         multiq_insert(task, task->prio);
 
     /* stop the event loop */
-    uv_stop(jl_global_event_loop());
+    jl_uv_stop(jl_uv_global_event_loop());
 
     /* wake up threads */
     if (jl_thread_sleep_threshold) {
@@ -691,7 +691,7 @@ static int run_next(void)
 
         if (!task) {
             if (ptls->tid == 0)
-                jl_process_events(jl_global_event_loop());
+                jl_process_events(jl_uv_global_event_loop());
             else
                 jl_cpu_pause();
 
@@ -704,7 +704,7 @@ static int run_next(void)
                         // thread 0 makes a blocking call to the event loop
                         if (ptls->tid == 0) {
                             uv_mutex_unlock(&sleep_lock);
-                            jl_run_once(jl_global_event_loop());
+                            jl_run_once(jl_uv_global_event_loop());
                         }
                         // other threads just sleep
                         else {

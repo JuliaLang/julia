@@ -506,7 +506,7 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
             ((bytesavailable(stream.buffer) >= stream.throttle) ||
              (bytesavailable(stream.buffer) >= stream.buffer.maxsize)))
             # save cycles by stopping kernel notifications from arriving
-            ccall(:uv_read_stop, Cint, (Ptr{Cvoid},), stream)
+            ccall(:jl_uv_read_stop, Cint, (Ptr{Cvoid},), stream)
             stream.status = StatusOpen
         end
         nothing
@@ -645,7 +645,7 @@ function start_reading(stream::LibuvStream)
         # libuv may call the alloc callback immediately
         # for a TTY on Windows, so ensure the status is set first
         stream.status = StatusActive
-        ret = ccall(:uv_read_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+        ret = ccall(:jl_uv_read_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
                     stream, uv_jl_alloc_buf::Ptr{Cvoid}, uv_jl_readcb::Ptr{Cvoid})
         return ret
     elseif stream.status == StatusPaused
@@ -667,7 +667,7 @@ if Sys.iswindows()
     function stop_reading(stream::LibuvStream)
         if stream.status == StatusActive
             stream.status = StatusOpen
-            ccall(:uv_read_stop, Cint, (Ptr{Cvoid},), stream)
+            ccall(:jl_uv_read_stop, Cint, (Ptr{Cvoid},), stream)
         end
         nothing
     end

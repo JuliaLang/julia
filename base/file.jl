@@ -620,7 +620,7 @@ function readdir(path::AbstractString)
     uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 
     # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
-    err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Cint, Ptr{Cvoid}),
+    err = ccall(:jl_uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Cint, Ptr{Cvoid}),
                 eventloop(), uv_readdir_req, path, 0, C_NULL)
     err < 0 && throw(SystemError("unable to read directory $path", -err))
     #uv_error("unable to read directory $path", err)
@@ -805,7 +805,7 @@ Return the target location a symbolic link `path` points to.
 function readlink(path::AbstractString)
     req = Libc.malloc(_sizeof_uv_fs)
     try
-        ret = ccall(:uv_fs_readlink, Int32,
+        ret = ccall(:jl_uv_fs_readlink, Int32,
             (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
             eventloop(), req, path, C_NULL)
         if ret < 0

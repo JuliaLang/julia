@@ -153,9 +153,11 @@ static void jl_uv_exitcleanup_add(uv_handle_t *handle, struct uv_shutdown_queue 
     struct uv_shutdown_queue_item *item = (struct uv_shutdown_queue_item*)malloc(sizeof(struct uv_shutdown_queue_item));
     item->h = handle;
     item->next = NULL;
+    JL_UV_LOCK();
     if (queue->last) queue->last->next = item;
     if (!queue->first) queue->first = item;
     queue->last = item;
+    JL_UV_UNLOCK();
 }
 
 static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
@@ -248,13 +250,14 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 
     jl_gc_run_all_finalizers(ptls);
 
-    uv_loop_t *loop = jl_global_event_loop();
+    uv_loop_t *loop = jl_uv_global_event_loop();
 
     if (loop == NULL) {
         return;
     }
 
     struct uv_shutdown_queue queue = {NULL, NULL};
+    JL_UV_LOCK();
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
     struct uv_shutdown_queue_item *item = queue.first;
     if (ptls->current_task != NULL) {
@@ -284,6 +287,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 
     // force libuv to spin until everything has finished closing
     loop->stop_flag = 0;
+    JL_UV_UNLOCK();
     while (uv_run(loop, UV_RUN_DEFAULT)) { }
 
     jl_destroy_timing();
@@ -405,6 +409,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         break;
     case UV_NAMED_PIPE:
         handle = malloc(sizeof(uv_pipe_t));
+        JL_UV_LOCK();
         if ((err = uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle, 0))) {
             jl_errorf("error initializing %s in uv_pipe_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
@@ -419,9 +424,11 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
             ((uv_pipe_t*)handle)->flags &= ~UV_STREAM_READABLE;
 #endif
         ((uv_pipe_t*)handle)->data = NULL;
+        JL_UV_UNLOCK();
         break;
     case UV_TCP:
         handle = malloc(sizeof(uv_tcp_t));
+        JL_UV_LOCK();
         if ((err = uv_tcp_init(jl_io_loop, (uv_tcp_t*)handle))) {
             jl_errorf("error initializing %s in uv_tcp_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
@@ -429,6 +436,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
             jl_errorf("error initializing %s in uv_tcp_open: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
         ((uv_tcp_t*)handle)->data = NULL;
+        JL_UV_UNLOCK();
         break;
     }
     return handle;

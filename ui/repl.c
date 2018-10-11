@@ -147,7 +147,7 @@ static NOINLINE int true_main(int argc, char *argv[])
             jl_printf(JL_STDOUT, "\n");
             free(line);
             line = NULL;
-            uv_run(jl_global_event_loop(),UV_RUN_NOWAIT);
+            uv_run(jl_uv_global_event_loop(),UV_RUN_NOWAIT);
         }
         JL_CATCH {
             if (line) {

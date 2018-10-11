@@ -1871,7 +1871,7 @@ JL_DLLEXPORT void jl_run_event_loop(uv_loop_t *loop);
 JL_DLLEXPORT int jl_run_once(uv_loop_t *loop);
 JL_DLLEXPORT int jl_process_events(uv_loop_t *loop);
 
-JL_DLLEXPORT uv_loop_t *jl_global_event_loop(void);
+JL_DLLEXPORT uv_loop_t *jl_uv_global_event_loop(void);
 
 JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle);
 

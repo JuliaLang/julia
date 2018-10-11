@@ -116,7 +116,7 @@ function reinit_stdio()
     global uv_jl_asynccb       = @cfunction(uv_asynccb, Cvoid, (Ptr{Cvoid},))
     global uv_jl_timercb       = @cfunction(uv_timercb, Cvoid, (Ptr{Cvoid},))
 
-    global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Cvoid}, ())
+    global uv_eventloop = ccall(:jl_uv_global_event_loop, Ptr{Cvoid}, ())
     global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))
     global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))
     global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))
