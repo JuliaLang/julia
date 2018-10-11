@@ -423,6 +423,8 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         new{T,V}(dl, d, du, du2)
     end
 end
+Tridiagonal{T, V}(A::Tridiagonal) where {T, V<:AbstractVector{T}} = Tridiagonal(map(x->convert(V, x), (A.dl, A.d, A.du))...)
+Tridiagonal{T, V}(A::SymTridiagonal) where {T, V<:AbstractVector{T}} = Tridiagonal(map(x->convert(V, x), (A.ev, A.dv, A.ev))...)
 
 """
     Tridiagonal(dl::V, d::V, du::V) where V <: AbstractVector
@@ -454,6 +456,9 @@ Tridiagonal(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}} = Tridiag
 function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector) where {T}
     Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du))...)
 end
+function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector, du2::AbstractVector) where {T}
+    Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du, du2))...)
+end
 
 """
     Tridiagonal(A)
@@ -481,14 +486,12 @@ julia> Tridiagonal(A)
 Tridiagonal(A::AbstractMatrix) = Tridiagonal(diag(A,-1), diag(A,0), diag(A,1))
 
 Tridiagonal(A::Tridiagonal) = A
-Tridiagonal{T}(A::Tridiagonal{T}) where {T} = A
+Tridiagonal{T}(A::SymTridiagonal) where T = Tridiagonal{T}(A.ev, A.dv, A.ev)
 function Tridiagonal{T}(A::Tridiagonal) where {T}
-    dl, d, du = map(x->convert(AbstractVector{T}, x)::AbstractVector{T},
-                    (A.dl, A.d, A.du))
     if isdefined(A, :du2)
-        Tridiagonal(dl, d, du, convert(AbstractVector{T}, A.du2)::AbstractVector{T})
+        Tridiagonal{T}(A.dl, A.d, A.du, A.du2)
     else
-        Tridiagonal(dl, d, du)
+        Tridiagonal{T}(A.dl, A.d, A.du)
     end
 end
 

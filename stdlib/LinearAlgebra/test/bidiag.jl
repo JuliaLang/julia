@@ -298,6 +298,14 @@ end
 # test construct from range
 @test Bidiagonal(1:3, 1:2, :U) == [1 1 0; 0 2 2; 0 0 3]
 
+# Issue 29054
+@testset "conversion and ranges" begin
+    Brange = Bidiagonal(1:3, 1:2, :U)
+    @test isa(Bidiagonal{Float64, Vector{Float64}}(Brange), Bidiagonal{Float64, Vector{Float64}})
+    @test isa(convert(Bidiagonal{ComplexF64, Vector{ComplexF64}}, Brange), Bidiagonal{ComplexF64, Vector{ComplexF64}})
+    @test typeof(Bidiagonal{Float64}(Brange)) <: Bidiagonal{Float64}
+end
+
 @testset "promote_rule" begin
     A = Bidiagonal(fill(1f0,10),fill(1f0,9),:U)
     B = rand(Float64,10,10)

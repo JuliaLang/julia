@@ -12,7 +12,7 @@ struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
 end
 Diagonal(v::AbstractVector{T}) where {T} = Diagonal{T,typeof(v)}(v)
 Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v)::AbstractVector{T})
-
+Diagonal{T, V}(A::Diagonal) where {T, V<:AbstractVector{T}} = Diagonal(convert(V, A.diag))
 """
     Diagonal(A::AbstractMatrix)
 

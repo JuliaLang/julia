@@ -19,6 +19,7 @@ Random.seed!(1)
     end
     D = Diagonal(dd)
     DM = Matrix(Diagonal(dd))
+    Drange = Diagonal(1:3)
 
     @testset "constructor" begin
         for x in (dd, GenericArray(dd))
@@ -34,12 +35,15 @@ Random.seed!(1)
         @test isa(Diagonal{elty}(DI), Diagonal{elty})
         # issue #26178
         @test_throws MethodError convert(Diagonal, [1, 2, 3, 4])
+        @test isa(Diagonal{Float64, Vector{Float64}}(Drange), Diagonal{Float64, Vector{Float64}})
     end
 
     @testset "Basic properties" begin
         @test_throws ArgumentError size(D,0)
         @test typeof(convert(Diagonal{ComplexF32},D)) <: Diagonal{ComplexF32}
         @test typeof(convert(AbstractMatrix{ComplexF32},D)) <: Diagonal{ComplexF32}
+        @test typeof(convert(Diagonal{ComplexF64},Drange)) <: Diagonal{ComplexF64}
+        @test typeof(convert(Diagonal{ComplexF64, Vector{ComplexF64}},Drange)) <: Diagonal{ComplexF64, Vector{ComplexF64}}
 
         @test Array(real(D)) == real(DM)
         @test Array(abs.(D)) == abs.(DM)

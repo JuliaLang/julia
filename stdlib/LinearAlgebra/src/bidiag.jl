@@ -21,6 +21,7 @@ function Bidiagonal{T}(dv::AbstractVector, ev::AbstractVector, uplo::Union{Symbo
                convert(AbstractVector{T}, ev)::AbstractVector{T},
                uplo)
 end
+Bidiagonal{T, V}(A::Bidiagonal) where {T, V<:AbstractVector{T}} = Bidiagonal(convert(V, A.dv), convert(V, A.ev), A.uplo)
 
 """
     Bidiagonal(dv::V, ev::V, uplo::Symbol) where V <: AbstractVector

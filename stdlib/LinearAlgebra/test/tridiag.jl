@@ -98,6 +98,8 @@ end
         @test isa(TTI2y, Tridiagonal{elty})
         @test TTI2y.du2 == convert(Vector{elty}, [1,2])
     end
+
+    # Added tests here for Issue #29054
     @testset "interconversion of Tridiagonal and SymTridiagonal" begin
         @test Tridiagonal(dl, d, dl) == SymTridiagonal(d, dl)
         @test SymTridiagonal(d, dl) == Tridiagonal(dl, d, dl)
@@ -105,6 +107,14 @@ end
         @test SymTridiagonal(d, dl) + Tridiagonal(dl, d, du) == Tridiagonal(dl + dl, d+d, dl+du)
         @test convert(SymTridiagonal,Tridiagonal(SymTridiagonal(d, dl))) == SymTridiagonal(d, dl)
         @test Array(convert(SymTridiagonal{ComplexF32},Tridiagonal(SymTridiagonal(d, dl)))) == convert(Matrix{ComplexF32}, SymTridiagonal(d, dl))
+
+        Trange = Tridiagonal(1:2, 1:3, 1:2)
+        Srange = SymTridiagonal(1:3, 1:2)
+        @test isa(convert(Tridiagonal{Int64, Vector{Int64}}, Trange), Tridiagonal{Int64, Vector{Int64}})
+        @test isa(convert(Tridiagonal{Float64, Vector{Float64}}, Srange), Tridiagonal{Float64, Vector{Float64}})
+        @test Tridiagonal{Float64, Vector{Float64}}(Srange) == Srange
+        #@test typeof(Tridiagonal{ComplexF64}(Trange)) <: Tridiagonal{ComplexF64}
+        #@test typeof(Tridiagonal{ComplexF64}(Srange)) <: Tridiagonal{ComplexF64}
     end
     @testset "tril/triu" begin
         zerosd = fill!(similar(d), 0)
