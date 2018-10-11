@@ -113,8 +113,8 @@ end
         @test isa(convert(Tridiagonal{Int64, Vector{Int64}}, Trange), Tridiagonal{Int64, Vector{Int64}})
         @test isa(convert(Tridiagonal{Float64, Vector{Float64}}, Srange), Tridiagonal{Float64, Vector{Float64}})
         @test Tridiagonal{Float64, Vector{Float64}}(Srange) == Srange
-        #@test typeof(Tridiagonal{ComplexF64}(Trange)) <: Tridiagonal{ComplexF64}
-        #@test typeof(Tridiagonal{ComplexF64}(Srange)) <: Tridiagonal{ComplexF64}
+        @test typeof(Tridiagonal{ComplexF64}(Trange)) <: Tridiagonal{ComplexF64}
+        @test typeof(Tridiagonal{ComplexF64}(Srange)) <: Tridiagonal{ComplexF64}
     end
     @testset "tril/triu" begin
         zerosd = fill!(similar(d), 0)

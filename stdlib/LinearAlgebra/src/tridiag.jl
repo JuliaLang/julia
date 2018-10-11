@@ -419,6 +419,12 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     # constructor used in lu!
     function Tridiagonal{T,V}(dl, d, du, du2) where {T,V<:AbstractVector{T}}
         @assert !has_offset_axes(dl, d, du, du2)
+        n = length(d)
+        if (length(dl) != n-1 || length(du) != n-1 || length(du2) != n-2)
+            throw(ArgumentError(string("cannot construct Tridiagonal from incompatible ",
+            "lengths of subdiagonal, diagonal and superdiagonal: ",
+            "($(length(dl)), $(length(d)), $(length(du)), $(length(du2)))")))
+        end
         # length checks?
         new{T,V}(dl, d, du, du2)
     end
@@ -488,7 +494,7 @@ Tridiagonal(A::AbstractMatrix) = Tridiagonal(diag(A,-1), diag(A,0), diag(A,1))
 Tridiagonal(A::Tridiagonal) = A
 Tridiagonal{T}(A::SymTridiagonal) where T = Tridiagonal{T}(A.ev, A.dv, A.ev)
 function Tridiagonal{T}(A::Tridiagonal) where {T}
-    if isdefined(A, :du2)
+    if isdefined(A, :du2) && (length(A.du2) == length(A.d)-2)
         Tridiagonal{T}(A.dl, A.d, A.du, A.du2)
     else
         Tridiagonal{T}(A.dl, A.d, A.du)
