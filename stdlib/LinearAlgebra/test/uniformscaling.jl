@@ -60,7 +60,7 @@ end
 end
 
 @testset "det and logdet" begin
-    @test det(I) === true
+    @test det(I) === Int8(1)
     @test det(1.0I) === 1.0
     @test det(0I) === 0
     @test det(0.0I) === 0.0
@@ -79,7 +79,7 @@ let
         @test ndims(J) == 2
         @test transpose(J) == J
         @test J * [1 0; 0 1] == conj(*(adjoint(J), [1 0; 0 1])) # ctranpose (and A(c)_mul_B)
-        @test I + I === UniformScaling(2) # +
+        @test I + I === UniformScaling(Int8(2)) # +
         @test inv(I) == I
         @test inv(J) == UniformScaling(inv(λ))
         @test cond(I) == 1
@@ -103,7 +103,7 @@ let
                 I22 = Matrix(I, size(A))
                 @test @inferred(A + I) == A + I22
                 @test @inferred(I + A) == A + I22
-                @test @inferred(I - I) === UniformScaling(0)
+                @test @inferred(I - I) === UniformScaling(Int8(0))
                 @test @inferred(B - I) == B - I22
                 @test @inferred(I - B) == I22 - B
                 @test @inferred(A - I) == A - I22

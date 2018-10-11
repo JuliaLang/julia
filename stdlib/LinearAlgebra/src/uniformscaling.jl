@@ -46,7 +46,7 @@ julia> [1 2im 3; 1im 2 3] * I
  0+1im  2+0im  3+0im
 ```
 """
-const I = UniformScaling(true)
+const I = UniformScaling(Int8(1))
 
 eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2

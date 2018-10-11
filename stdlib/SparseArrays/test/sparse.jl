@@ -583,7 +583,7 @@ end
 
 @testset "findall" begin
     # issue described in https://groups.google.com/d/msg/julia-users/Yq4dh8NOWBQ/GU57L90FZ3EJ
-    A = sparse(I, 5, 5)
+    A = sparse(Diagonal(trues(5)))
     @test findall(A) == findall(x -> x == true, A) == findall(Array(A))
     # Non-stored entries are true
     @test findall(x -> x == false, A) == findall(x -> x == false, Array(A))
