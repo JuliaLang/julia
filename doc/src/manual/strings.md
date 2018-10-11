@@ -293,8 +293,7 @@ and the next character's index is 4; this next valid index can be computed by [`
 and the next index after that by `nextind(s,4)` and so on.
 
 Since `end` is always the last valid index into a collection, `end - 1` references an invalid
-byte index most of the times, except when the second to last character in the string happens
-to be a non-multibyte character.
+byte index if the second last is a multibyte character.
 
 ```jldoctest unicodesting
 julia> s[end-1]
