@@ -5,7 +5,25 @@
 #  include <sys/resource.h>
 #endif
 
-const size_t jl_guard_size = (4096 * 16);
+#ifdef _P64
+# ifdef _OS_WINDOWS_
+#  define MAX_STACK_MAPPINGS 500
+# else
+#  define MAX_STACK_MAPPINGS 30000
+# endif
+#else
+# ifdef _OS_WINDOWS_
+#  define MAX_STACK_MAPPINGS 250
+# else
+#  define MAX_STACK_MAPPINGS 500
+# endif
+#endif
+
+// number of stacks to always keep available per pool
+#define MIN_STACK_MAPPINGS_PER_POOL 5
+
+const size_t jl_guard_size = (4096 * 8);
+static volatile uint32_t num_stack_mappings = 0;
 
 #ifdef _OS_WINDOWS_
 #define MAP_FAILED NULL
@@ -19,6 +37,7 @@ static void *malloc_stack(size_t bufsz)
         VirtualFree(stk, 0, MEM_RELEASE);
         return MAP_FAILED;
     }
+    jl_atomic_fetch_add(&num_stack_mappings, 1);
     return stk;
 }
 
@@ -26,6 +45,7 @@ static void *malloc_stack(size_t bufsz)
 static void free_stack(void *stkbuf, size_t bufsz)
 {
     VirtualFree(stkbuf, 0, MEM_RELEASE);
+    jl_atomic_fetch_add(&num_stack_mappings, -1);
 }
 
 #else
@@ -42,12 +62,14 @@ static void *malloc_stack(size_t bufsz)
         return MAP_FAILED;
     }
 #endif
+    jl_atomic_fetch_add(&num_stack_mappings, 1);
     return stk;
 }
 
 static void free_stack(void *stkbuf, size_t bufsz)
 {
     munmap(stkbuf, bufsz);
+    jl_atomic_fetch_add(&num_stack_mappings, -1);
 }
 #endif
 
@@ -132,10 +154,12 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner)
         ssize = LLT_ALIGN(ssize, jl_page_size);
     }
     if (stk == NULL) {
+        if (num_stack_mappings >= MAX_STACK_MAPPINGS)
+            return NULL;
         // TODO: allocate blocks of stacks? but need to mprotect individually anyways
         stk = malloc_stack(ssize);
         if (stk == MAP_FAILED)
-            jl_throw(jl_memory_exception);
+            return NULL;
     }
     *bufsz = ssize;
     if (owner) {
@@ -147,18 +171,38 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner)
 
 void sweep_stack_pools(void)
 {
-//    TODO: deallocate stacks if we have too many sitting around unused
-//    for (stk in halfof(free_stacks))
-//        free_stack(stk, pool_sz);
-//    // then sweep the task stacks
-//    for (t in live_tasks)
-//        if (!gc-marked(t))
-//            stkbuf = t->stkbuf
-//            bufsz = t->bufsz
-//            if (stkbuf)
-//                push(free_stacks[sz], stkbuf)
+    // Stack sweeping algorithm:
+    //    // deallocate stacks if we have too many sitting around unused
+    //    for (stk in halfof(free_stacks))
+    //        free_stack(stk, pool_sz);
+    //    // then sweep the task stacks
+    //    for (t in live_tasks)
+    //        if (!gc-marked(t))
+    //            stkbuf = t->stkbuf
+    //            bufsz = t->bufsz
+    //            if (stkbuf)
+    //                push(free_stacks[sz], stkbuf)
     for (int i = 0; i < jl_n_threads; i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
+
+        // free half of stacks that remain unused since last sweep
+        for (int p = 0; p < JL_N_STACK_POOLS; p++) {
+            arraylist_t *al = &ptls2->heap.free_stacks[p];
+            size_t n_to_free;
+            if (al->len > MIN_STACK_MAPPINGS_PER_POOL) {
+                n_to_free = al->len / 2;
+                if (n_to_free > (al->len - MIN_STACK_MAPPINGS_PER_POOL))
+                    n_to_free = al->len - MIN_STACK_MAPPINGS_PER_POOL;
+            }
+            else {
+                n_to_free = 0;
+            }
+            for (int n = 0; n < n_to_free; n++) {
+                void *stk = arraylist_pop(al);
+                free_stack(stk, pool_sizes[p]);
+            }
+        }
+
         arraylist_t *live_tasks = &ptls2->heap.live_tasks;
         size_t n = 0;
         size_t ndel = 0;
