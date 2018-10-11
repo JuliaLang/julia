@@ -287,12 +287,13 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli JL_ROOTS_TEMPORARILY, s
     in_inference--;
     li->inInference = 0;
 
-    if (linfo_src &&
-            jl_is_svec(linfo_src) && jl_svec_len(linfo_src) == 2 &&
-            jl_is_method_instance(jl_svecref(linfo_src, 0)) &&
-            jl_is_code_info(jl_svecref(linfo_src, 1))) {
-        *pli = (jl_method_instance_t*)jl_svecref(linfo_src, 0);
-        src = (jl_code_info_t*)jl_svecref(linfo_src, 1);
+    if (linfo_src && jl_is_svec(linfo_src) && jl_svec_len(linfo_src) == 2) {
+        jl_value_t *mi = jl_svecref(linfo_src, 0);
+        jl_value_t *ci = jl_svecref(linfo_src, 1);
+        if (jl_is_method_instance(mi) && jl_is_code_info(ci)) {
+            *pli = (jl_method_instance_t*)mi;
+            src = (jl_code_info_t*)ci;
+        }
     }
     JL_GC_POP();
 #endif
