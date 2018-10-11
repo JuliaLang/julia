@@ -86,7 +86,7 @@ global const Workqueue = Task[]
 
 function enq_work(t::Task)
     t.state == :runnable || error("schedule: Task not runnable")
-    ccall(:uv_stop, Cvoid, (Ptr{Cvoid},), eventloop())
+    ccall(:jl_uv_stop, Cvoid, (Ptr{Cvoid},), eventloop())
     push!(Workqueue, t)
     t.state = :queued
     return t
@@ -359,8 +359,8 @@ mutable struct Timer
         associate_julia_struct(this.handle, this)
         finalizer(uvfinalize, this)
 
-        ccall(:uv_update_time, Cvoid, (Ptr{Cvoid},), eventloop())
-        ccall(:uv_timer_start,  Cint,  (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
+        ccall(:jl_uv_update_time, Cvoid, (Ptr{Cvoid},), eventloop())
+        ccall(:jl_uv_timer_start,  Cint,  (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
               this, uv_jl_timercb::Ptr{Cvoid},
               UInt64(round(timeout * 1000)) + 1, UInt64(round(interval * 1000)))
         return this
@@ -380,7 +380,7 @@ isopen(t::Union{Timer, AsyncCondition}) = t.isopen
 function close(t::Union{Timer, AsyncCondition})
     if t.handle != C_NULL && isopen(t)
         t.isopen = false
-        isa(t, Timer) && ccall(:uv_timer_stop, Cint, (Ptr{Cvoid},), t)
+        isa(t, Timer) && ccall(:jl_uv_timer_stop, Cint, (Ptr{Cvoid},), t)
         ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
     end
     nothing

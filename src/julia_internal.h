@@ -108,6 +108,16 @@ static inline void jl_assume_(int cond)
 #  define JL_USE_IFUNC 0
 #endif
 
+#ifdef JULIA_ENABLE_THREADING
+JL_DLLEXPORT void jl_uv_lock();
+JL_DLLEXPORT void jl_uv_unlock();
+#define JL_UV_LOCK() jl_uv_lock()
+#define JL_UV_UNLOCK() jl_uv_unlock()
+#else
+#define JL_UV_LOCK() do {} while(0)
+#define JL_UV_UNLOCK() do {} while(0)
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -830,6 +840,8 @@ JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
 int jl_array_store_unboxed(jl_value_t *el_type);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);
+
+JL_DLLEXPORT void jl_uv_stop(uv_loop_t* loop);
 
 // -- synchronization utilities -- //
 
