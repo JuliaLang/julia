@@ -174,6 +174,16 @@ function occursin(r::Regex, s::SubString; offset::Integer=0)
                      r.match_data)
 end
 
+function startswith(s::AbstractString, r::Regex)
+    rr = Regex("^"*r.pattern, r.compile_options, r.match_options)
+    return occursin(rr, s)
+end
+
+function endswith(s::AbstractString, r::Regex)
+    rr = Regex(r.pattern*"\$", r.compile_options, r.match_options)
+    return occursin(rr, s)
+end
+
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
 
