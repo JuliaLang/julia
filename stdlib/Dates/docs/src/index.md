@@ -511,7 +511,8 @@ it could represent, in days, a value of 28, 29, 30, or 31 depending on the year 
 Or a year could represent 365 or 366 days in the case of a leap year. [`Period`](@ref) types are
 simple [`Int64`](@ref) wrappers and are constructed by wrapping any `Int64` convertible type, i.e. `Year(1)`
 or `Month(3.0)`. Arithmetic between [`Period`](@ref) of the same type behave like integers, and
-limited `Period-Real` arithmetic is available.  You can extract the underlying integer with `Dates.value`.
+limited `Period-Real` arithmetic is available.  You can extract the underlying integer with
+[`Dates.value`](@ref).
 
 ```jldoctest
 julia> y1 = Dates.Year(1)
