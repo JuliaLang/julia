@@ -743,6 +743,7 @@ Dates.toprev(::Function, ::Dates.TimeType)
 ```@docs
 Dates.Period(::Any)
 Dates.CompoundPeriod(::Vector{<:Dates.Period})
+Dates.value
 Dates.default
 ```
 
