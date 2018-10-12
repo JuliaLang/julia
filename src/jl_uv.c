@@ -939,7 +939,7 @@ JL_DLLEXPORT int jl_tcp6_connect(uv_tcp_t *handle, void *host, uint16_t port,
     addr.sin6_family = AF_INET6;
     memcpy(&addr.sin6_addr, host, 16);
     addr.sin6_port = port;
-    JL_UV_UNLOCK();
+    JL_UV_LOCK();
     int r = uv_tcp_connect(req,handle,(struct sockaddr*)&addr,cb);
     JL_UV_UNLOCK();
     return r;

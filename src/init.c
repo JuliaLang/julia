@@ -413,9 +413,11 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         handle = malloc(sizeof(uv_pipe_t));
         JL_UV_LOCK();
         if ((err = uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle, 0))) {
+            JL_UV_UNLOCK();
             jl_errorf("error initializing %s in uv_pipe_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
         if ((err = uv_pipe_open((uv_pipe_t*)handle, fd))) {
+            JL_UV_UNLOCK();
             jl_errorf("error initializing %s in uv_pipe_open: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
 #ifndef _OS_WINDOWS_
