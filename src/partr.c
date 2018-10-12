@@ -1036,6 +1036,11 @@ JL_DLLEXPORT jl_value_t *jl_task_yield(int requeue)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
 
+    if (ptls->in_finalizer)
+        jl_error("task switch not allowed from inside gc finalizer");
+    if (ptls->in_pure_callback)
+        jl_error("task switch not allowed from inside staged nor pure functions");
+
     if (requeue)
         enqueue_task(ptls->current_task);
 
