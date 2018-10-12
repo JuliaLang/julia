@@ -133,13 +133,14 @@ julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
 ```
 """
 function reverse(s::Union{String,SubString{String}})::String
-    sprint(sizehint=sizeof(s)) do io
-        i, j = firstindex(s), lastindex(s)
-        while i ≤ j
-            c, j = s[j], prevind(s, j)
-            write(io, c)
-        end
+    out = _string_n(sizeof(s))
+    i, j = firstindex(s), lastindex(s)
+    offs = 1
+    while i ≤ j
+        c, j = s[j], prevind(s, j)
+        offs += __unsafe_string!(out, c, offs)
     end
+    return out
 end
 
 string(a::String)            = String(a)
