@@ -34,6 +34,7 @@ extern jl_sym_t *done_sym;
 extern jl_sym_t *failed_sym;
 extern jl_sym_t *runnable_sym;
 extern void jl_switchto(jl_task_t **pt);
+extern char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner);
 
 // the lovely task-done-hook hack
 extern jl_function_t *task_done_hook_func;
