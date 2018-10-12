@@ -18,12 +18,12 @@ notify_error(c::Condition, err) = notify(c, err, true, true)
 isempty(c::Condition) = ccall(:jl_condition_isempty, Cint, (Ref{Condition},), c) == 1
 
 schedule(t::Task, @nospecialize(arg = nothing); error=false) =
-    ccall(:jl_task_spawn, Ref{Task}, (Ref{Task},Any,Int8,Int8,Int8,Int8),
-          t, arg, error, false, 0, 0)
+    ccall(:jl_task_spawn, Ref{Task}, (Ref{Task},Any,Int8,Int8,Int8),
+          t, arg, error, false, 0)
 
 unyielding_schedule(t::Task, @nospecialize(arg = nothing); error=false) =
-    ccall(:jl_task_spawn, Ref{Task}, (Ref{Task},Any,Int8,Int8,Int8,Int8),
-          t, arg, error, true, 0, 0)
+    ccall(:jl_task_spawn, Ref{Task}, (Ref{Task},Any,Int8,Int8,Int8),
+          t, arg, error, true, 0)
 
 fetch(t::Task) = ccall(:jl_task_sync, Any, (Ref{Task},), t)
 

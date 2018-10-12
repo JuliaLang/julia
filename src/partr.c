@@ -463,8 +463,7 @@ void jl_threadfun(void *arg)
 static void enqueue_task(jl_task_t *task)
 {
     /* sticky tasks go to the thread's sticky queue */
-    if (task->settings & TASK_IS_STICKY) {
-        assert(task->sticky_tid != -1);
+    if (task->sticky_tid != -1) {
         jl_taskq_t *taskq = &sticky_taskqs[task->sticky_tid];
         JL_LOCK(&taskq->lock);
         if (!taskq->head)
@@ -583,19 +582,16 @@ void NOINLINE JL_NORETURN start_task(void)
         sync_grains(task);
 
     /* add back any tasks in this one's completion queue */
-    if (!(task->settings & TASK_IS_DETACHED)) {
-        JL_LOCK(&task->cq.lock);
-        jl_task_t *qtask = task->cq.head;
-        task->cq.head = NULL;
-        JL_UNLOCK(&task->cq.lock);
-
-        jl_task_t *qnext;
-        while (qtask) {
-            qnext = qtask->next;
-            qtask->next = NULL;
-            enqueue_task(qtask);
-            qtask = qnext;
-        }
+    JL_LOCK(&task->cq.lock);
+    jl_task_t *qtask = task->cq.head;
+    task->cq.head = NULL;
+    JL_UNLOCK(&task->cq.lock);
+    jl_task_t *qnext;
+    while (qtask) {
+        qnext = qtask->next;
+        qtask->next = NULL;
+        enqueue_task(qtask);
+        qtask = qnext;
     }
 
     JL_SIGATOMIC_BEGIN();
@@ -712,6 +708,7 @@ static int run_next(void)
                             uv_mutex_unlock(&sleep_lock);
                         }
                     }
+                    else uv_mutex_unlock(&sleep_lock);
                     spin_start = 0;
                 }
             }
@@ -814,18 +811,13 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *_taskentry, size_t ssize)
     is set, the spawned task cannot be synced. Generally yields the calling task.
  */
 JL_DLLEXPORT jl_task_t *jl_task_spawn(jl_task_t *task, jl_value_t *arg, int8_t err,
-                                      int8_t unyielding, int8_t sticky, int8_t detach)
+                                      int8_t unyielding, int8_t sticky)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
 
     if (!task->started) {
         task->prio = ptls->tid;
-        if (sticky) {
-            task->settings |= TASK_IS_STICKY;
-            task->sticky_tid = ptls->tid;
-        }
-        if (detach)
-            task->settings |= TASK_IS_DETACHED;
+        if (sticky) task->settings |= TASK_IS_STICKY;
     }
     if (err) {
         task->exception = arg;
@@ -972,9 +964,6 @@ static void taskq_delete(jl_task_t **pnext, jl_task_t *tgt)
  */
 JL_DLLEXPORT jl_value_t *jl_task_sync(jl_task_t *task)
 {
-    if (task->settings & TASK_IS_DETACHED)
-        return jl_nothing;
-
     jl_ptls_t ptls = jl_get_ptls_states();
 
     if (task == ptls->current_task)

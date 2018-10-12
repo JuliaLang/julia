@@ -1639,8 +1639,6 @@ typedef struct _jl_task_t {
 
 #if defined(JULIA_ENABLE_THREADING) && defined(JULIA_ENABLE_PARTR)
 /* task settings */
-#define TASK_IS_DETACHED        0x02
-    /* clean up the task on completion */
 #define TASK_IS_STICKY          0x04
     /* task is sticky to the thread that first runs it */
 
@@ -1742,7 +1740,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 #ifdef JULIA_ENABLE_PARTR
 
 JL_DLLEXPORT jl_task_t *jl_task_spawn(jl_task_t *task, jl_value_t *arg, int8_t err,
-                                      int8_t unyielding, int8_t sticky, int8_t detach);
+                                      int8_t unyielding, int8_t sticky);
 JL_DLLEXPORT jl_task_t *jl_task_new_multi(jl_value_t *args, size_t ssize,
                                           int64_t count, jl_value_t *rargs);
 JL_DLLEXPORT int jl_task_spawn_multi(jl_task_t *task);
