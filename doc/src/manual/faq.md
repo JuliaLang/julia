@@ -822,29 +822,3 @@ be converted to the contained scalar via `a[]`. Another difference is that
 a scalar can participate in linear algebra operations such as `2 * rand(2,2)`,
 but the analogous operation with a zero-dimensional array
 `fill(2) * rand(2,2)` is an error.
-
-## Julia Releases
-
-### Do I want to use a release, beta, or nightly version of Julia?
-
-You may prefer the release version of Julia if you are looking for a stable code base. Releases
-generally occur every 6 months, giving you a stable platform for writing code.
-
-You may prefer the beta version of Julia if you don't mind being slightly behind the latest bugfixes
-and changes, but find the slightly faster rate of changes more appealing. Additionally, these
-binaries are tested before they are published to ensure they are fully functional.
-
-You may prefer the nightly version of Julia if you want to take advantage of the latest updates
-to the language, and don't mind if the version available today occasionally doesn't actually work.
-
-Finally, you may also consider building Julia from source for yourself. This option is mainly
-for those individuals who are comfortable at the command line, or interested in learning. If this
-describes you, you may also be interested in reading our [guidelines for contributing](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md).
-
-Links to each of these download types can be found on the download page at [https://julialang.org/downloads/](https://julialang.org/downloads/).
-Note that not all versions of Julia are available for all platforms.
-
-### When are deprecated functions removed?
-
-Deprecated functions are removed after the subsequent release. For example, functions marked as
-deprecated in the 0.1 release will not be available starting with the 0.2 release.
