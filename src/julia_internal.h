@@ -109,8 +109,8 @@ static inline void jl_assume_(int cond)
 #endif
 
 #ifdef JULIA_ENABLE_THREADING
-JL_DLLEXPORT void jl_uv_lock();
-JL_DLLEXPORT void jl_uv_unlock();
+JL_DLLEXPORT void jl_uv_lock(void);
+JL_DLLEXPORT void jl_uv_unlock(void);
 #define JL_UV_LOCK() jl_uv_lock()
 #define JL_UV_UNLOCK() jl_uv_unlock()
 #else
