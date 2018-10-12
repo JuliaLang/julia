@@ -17,10 +17,6 @@ extern "C" {
 #ifdef JULIA_ENABLE_THREADING
 #ifdef JULIA_ENABLE_PARTR
 
-#ifdef JULIA_VALGRIND
-#include <valgrind/valgrind.h>
-#endif
-
 // empirically, finish_task needs about 64k stack space to infer/run
 // and additionally, gc-stack reserves 64k for the guard pages
 #if defined(MINSIGSTKSZ) && MINSIGSTKSZ > 131072

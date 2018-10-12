@@ -592,10 +592,6 @@ JCFLAGS += $(SANITIZE_OPTS)
 JLDFLAGS += $(SANITIZE_LDFLAGS)
 endif
 
-ifeq ($(VALGRIND),1)
-JCFLAGS += -DMEMDEBUG -DMEMDEBUG2 -DJULIA_VALGRIND
-endif
-
 TAR := $(shell which gtar 2>/dev/null || which tar 2>/dev/null)
 TAR_TEST := $(shell $(TAR) --help 2>&1  | egrep 'bsdtar|strip-components')
 ifeq (,$(findstring components,$(TAR_TEST)))

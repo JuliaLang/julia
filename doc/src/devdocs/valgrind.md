@@ -17,7 +17,7 @@ memory pools disabled.  The compile-time flag `MEMDEBUG` disables memory pools i
 line to `Make.user`:
 
 ```julia
-VALGRIND = 1
+CFLAGS = -DMEMDEBUG -DMEMDEBUG2
 ```
 
 Another thing to note: if your program uses multiple workers processes, it is likely that you

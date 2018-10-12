@@ -1700,10 +1700,6 @@ struct _jl_task_t {
     unsigned int copy_stack:31; // sizeof stack for copybuf
     unsigned int started:1;
 
-//#ifdef JL_ASAN_ENABLED
-    void *fakestack;
-//#endif
-
     arraylist_t locks;
 
     /* current exception handler */
