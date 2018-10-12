@@ -1,4 +1,5 @@
 # -*- mode: makefile-gmake -*-
+# vi:syntax=make
 
 ## Note:
 ##   It is generally preferable to change these options, for
@@ -8,6 +9,10 @@
 ## For developers, take care to not insert comments on the same line as
 ## variable declarations. The spaces between the variable value and the
 ## comment will be included in the value.
+
+# Julia precompilation options
+# Set to zero to turn off extra precompile (e.g. for the REPL)
+JULIA_PRECOMPILE ?= 1
 
 # OPENBLAS build options
 OPENBLAS_TARGET_ARCH:=
@@ -22,21 +27,21 @@ OPENBLAS_DYNAMIC_ARCH:=1
 endif
 OPENBLAS_USE_THREAD:=1
 
-# Use libraries available on the system instead of building them
+# Flags for using libraries available on the system instead of building them.
+# Please read the notes around usage of SYSTEM flags in README.md
+# Issues resulting from use of SYSTEM versions will generally not be accepted.
 USE_SYSTEM_LLVM:=0
 USE_SYSTEM_LIBUNWIND:=0
+DISABLE_LIBUNWIND:=0
 USE_SYSTEM_PCRE:=0
 USE_SYSTEM_LIBM:=0
 USE_SYSTEM_OPENLIBM:=0
 UNTRUSTED_SYSTEM_LIBM:=0
-USE_SYSTEM_OPENSPECFUN:=0
 USE_SYSTEM_DSFMT:=0
 USE_SYSTEM_BLAS:=0
 USE_SYSTEM_LAPACK:=0
-USE_SYSTEM_FFTW:=0
 USE_SYSTEM_GMP:=0
 USE_SYSTEM_MPFR:=0
-USE_SYSTEM_ARPACK:=0
 USE_SYSTEM_SUITESPARSE:=0
 USE_SYSTEM_LIBUV:=0
 USE_SYSTEM_UTF8PROC:=0
@@ -52,8 +57,6 @@ USE_LLVM_SHLIB := 1
 ## Settings for various Intel tools
 # Set to 1 to use MKL
 USE_INTEL_MKL ?= 0
-# Set to 1 to use MKL FFT
-USE_INTEL_MKL_FFT ?= 0
 # Set to 1 to use Intel LIBM
 USE_INTEL_LIBM ?= 0
 # Set to 1 to enable profiling with Intel VTune Amplifier
@@ -72,6 +75,9 @@ endif
 
 # Set to 1 to enable profiling with OProfile
 USE_OPROFILE_JITEVENTS ?= 0
+
+# Set to 1 to enable profiling with perf
+USE_PERF_JITEVENTS ?= 0
 
 # libc++ is standard on OS X 10.9, but not for earlier releases
 USE_LIBCPP := 0
@@ -168,11 +174,16 @@ else
 JULIA_COMMIT := $(JULIA_VERSION)
 endif
 
+# Override `JULIA_COMMIT` to `JULIA_VERSION` if we're on a tagged commit
+ifeq ($(shell git describe --tags --exact-match > /dev/null 2>&1 && echo true),true)
+JULIA_COMMIT := $(JULIA_VERSION)
+endif
+
 # Whether to use GPL libraries or not.
 USE_GPL_LIBS ?= 1
 
 # Directories where said libraries get installed to
-prefix ?= $(abspath julia-$(JULIA_COMMIT))
+prefix ?= $(BUILDROOT)/julia-$(JULIA_COMMIT)
 bindir := $(prefix)/bin
 libdir := $(prefix)/lib
 libexecdir := $(prefix)/libexec
@@ -191,7 +202,6 @@ build_depsbindir := $(build_prefix)/tools
 build_libdir := $(build_prefix)/lib
 build_libexecdir := $(build_prefix)/libexec
 build_datarootdir := $(build_prefix)/share
-build_docdir := $(build_datarootdir)/doc/julia
 build_mandir := $(build_datarootdir)/man
 build_man1dir := $(build_mandir)/man1
 build_includedir := $(build_prefix)/include
@@ -221,17 +231,27 @@ includedir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(incl
 INSTALL_F := $(JULIAHOME)/contrib/install.sh 644
 INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
 
+# BinaryBuilder options
+# TODO: Autodiscover triplet
+USE_BINARYBUILDER_LLVM := 0
+# Use the Assertions build
+BINARYBUILDER_LLVM_ASSERTS := 0
+BINARYBUILDER_TRIPLET :=
+
 # LLVM Options
 LLVMROOT := $(build_prefix)
 LLVM_ASSERTIONS := 0
 LLVM_DEBUG := 0
-#LLVM_USE_CMAKE: defined in deps/llvm-ver.mk as it depends on LLVM_VER_SHORT
 # set to 1 to get clang and compiler-rt
 BUILD_LLVM_CLANG := 0
 # set to 1 to get lldb (often does not work, no chance with llvm3.2 and earlier)
 # see http://lldb.llvm.org/build.html for dependencies
 BUILD_LLDB := 0
+
+# Options to enable Polly and its code-generation options
 USE_POLLY := 0
+USE_POLLY_OPENMP := 0  # Enable OpenMP code-generation
+USE_POLLY_ACC := 0     # Enable GPU code-generation
 
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
@@ -241,7 +261,11 @@ USE_POLLY := 0
 CMAKE ?= cmake
 CMAKE_GENERATOR ?= make
 
-# Point pkg-config to only look at our libraries
+# Point pkg-config to only look at our libraries, overriding whatever
+# the user may have unwittingly set.  To pass PKG_CONFIG_* variables
+# through to the buildsystem, these must be set either on the command
+# line, or through `override` directives within Make.user
+export PKG_CONFIG_PATH = $(JULIAHOME)/usr/lib/pkgconfig
 export PKG_CONFIG_LIBDIR = $(JULIAHOME)/usr/lib/pkgconfig
 
 # Figure out OS and architecture
@@ -256,13 +280,13 @@ CROSS_COMPILE:=
 # delayed expansion of $(CC), since it won't be computed until later
 HOSTCC = $(CC)
 else
-HOSTCC := gcc
-override OPENBLAS_DYNAMIC_ARCH := 1
+HOSTCC ?= gcc
+OPENBLAS_DYNAMIC_ARCH := 1
 override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
-STD_LIB_PATH := $(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed -e "s/^programs: =//")
-STD_LIB_PATH := $(STD_LIB_PATH):$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed -e "s/^libraries: =//")
+STD_LIB_PATH := $(shell LANG=C $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed -e "s/^programs: =//")
+STD_LIB_PATH := $(STD_LIB_PATH):$(shell LANG=C $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed -e "s/^libraries: =//")
 ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # the cygwin-mingw32 compiler lies about it search directory paths
 STD_LIB_PATH := $(shell echo '$(STD_LIB_PATH)' | sed -e "s!/lib/!/bin/!g")
 endif
@@ -310,9 +334,13 @@ JULIACODEGEN := LLVM
 
 # flag for disabling assertions
 ifeq ($(FORCE_ASSERTIONS), 1)
+# C++ code needs to include LLVM header with the same assertion flag as LLVM
+# Use this flag to re-enable assertion in our code after all the LLVM headers are included
+CXX_DISABLE_ASSERTION :=
 DISABLE_ASSERTIONS :=
 else
-DISABLE_ASSERTIONS := -DNDEBUG
+CXX_DISABLE_ASSERTION := -DJL_NDEBUG
+DISABLE_ASSERTIONS := -DNDEBUG -DJL_NDEBUG
 endif
 
 # Compiler specific stuff
@@ -403,12 +431,14 @@ DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS := -O3 -g
 ifeq ($(OS), Darwin)
 ifeq ($(USE_LIBCPP), 1)
-CC += -stdlib=libc++ -mmacosx-version-min=10.7
-CXX += -stdlib=libc++ -mmacosx-version-min=10.7
-FC += -mmacosx-version-min=10.7
+MACOSX_VERSION_MIN := 10.8
+CC += -stdlib=libc++ -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+CXX += -stdlib=libc++ -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+FC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 else
-CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
-CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
+MACOSX_VERSION_MIN := 10.6
+CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 endif
 JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
@@ -431,19 +461,22 @@ SHIPFLAGS := -O3 -g -falign-functions
 endif
 
 ifeq ($(USECCACHE), 1)
-# expand CC and CXX at declaration time because we will redefine them
-# Expand CC and CXX here already because we want the original definition and not the ccache version.
+# Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
 CC_ARG   := $(CC)
 CXX_ARG  := $(CXX)
-# Expand CC and CXX here already to avoid recursive referencing.
+FC_ARG   := $(FC)
+# Expand CC, CXX and FC here already to avoid recursive referencing.
 CC_FULL  := ccache $(CC)
 CXX_FULL := ccache $(CXX)
-# Add an extra indirection to make CC/CXX non-simple vars
+FC_FULL  := ccache $(FC)
+# Add an extra indirection to make CC/CXX/FC non-simple vars
 # (because of how -m$(BINARY) is added later on).
 CC       := $(CC_FULL)
 CXX      := $(CXX_FULL)
+FC       := $(FC_FULL)
 CC_BASE  := ccache
 CXX_BASE := ccache
+FC_BASE  := ccache
 ifeq ($(USECLANG),1)
 # ccache and Clang don't do well together
 # http://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
@@ -457,6 +490,8 @@ CC_BASE := $(shell echo $(CC) | cut -d' ' -f1)
 CC_ARG := $(shell echo $(CC) | cut -s -d' ' -f2-)
 CXX_BASE := $(shell echo $(CXX) | cut -d' ' -f1)
 CXX_ARG := $(shell echo $(CXX) | cut -s -d' ' -f2-)
+FC_BASE := $(shell echo $(FC) | cut -d' ' -f1)
+FC_ARG := $(shell echo $(FC) | cut -s -d' ' -f2-)
 endif
 
 JFFLAGS := -O2 $(fPIC)
@@ -494,12 +529,45 @@ else
 build_shlibdir := $(build_libdir)
 endif
 
+ifeq ($(OS), FreeBSD)
+LOCALBASE ?= /usr/local
+else
+LOCALBASE ?= /usr
+endif
+
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
 endif
 ifeq (exists, $(shell [ -e $(BUILDROOT)/Make.user ] && echo exists ))
 include $(BUILDROOT)/Make.user
 endif
+
+# A bit of a kludge to work around libraries linking to FreeBSD's outdated system libgcc_s
+# Instead, let's link to the libgcc_s corresponding to the installation of gfortran
+ifeq ($(OS),FreeBSD)
+ifneq (,$(findstring gfortran,$(FC)))
+
+# First let's figure out what version of GCC we're dealing with
+_GCCMAJOR := $(shell $(FC) -dumpversion | cut -d'.' -f1)
+_GCCMINOR := $(shell $(FC) -dumpversion | cut -d'.' -f2)
+
+# The ports system uses major and minor for GCC < 5 (e.g. gcc49 for GCC 4.9), otherwise major only
+ifeq ($(_GCCMAJOR),4)
+  _GCCVER := $(_GCCMAJOR)$(_GCCMINOR)
+else
+  _GCCVER := $(_GCCMAJOR)
+endif
+
+# Allow the user to specify this in Make.user
+GCCPATH ?= $(LOCALBASE)/lib/gcc$(_GCCVER)
+
+# We're going to copy over the libraries we need from GCCPATH into build_libdir, then
+# tell everyone to look for them there. At install time, the build_libdir added into
+# the RPATH here is removed by patchelf.
+LDFLAGS += -L$(build_libdir) -Wl,-rpath,$(build_libdir)
+
+endif # gfortran
+endif # FreeBSD
 
 ifneq ($(CC_BASE)$(CXX_BASE),$(shell echo $(CC) | cut -d' ' -f1)$(shell echo $(CXX) | cut -d' ' -f1))
     $(error Forgot override directive on CC or CXX in Make.user? Cowardly refusing to build)
@@ -515,12 +583,7 @@ SANITIZE_LDFLAGS := -fsanitize=address
 endif
 JCXXFLAGS += $(SANITIZE_OPTS)
 JCFLAGS += $(SANITIZE_OPTS)
-LDFLAGS += $(SANITIZE_LDFLAGS)
-# FIXME: sanitizing all dependencies doesn't work because of -Wl,--no-undefined
-#        https://github.com/JuliaLang/julia/issues/13858
-#        use LLVM_SANITIZE to sanitize LLVM
-#DEPS_CFLAGS += $(SANITIZE_OPTS)
-#DEPS_CXXFLAGS += $(SANITIZE_OPTS)
+JLDFLAGS += $(SANITIZE_LDFLAGS)
 endif
 
 TAR := $(shell which gtar 2>/dev/null || which tar 2>/dev/null)
@@ -640,11 +703,11 @@ endif
 # If we are running on powerpc64le or ppc64le, set certain options automatically
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 JCFLAGS += -fsigned-char
-override LLVM_VER:=3.9.0
-override OPENBLAS_DYNAMIC_ARCH:=0
-override OPENBLAS_TARGET_ARCH:=POWER8
+OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_TARGET_ARCH:=POWER8
+BINARY:=64
 # GCC doesn't do -march= on ppc64le
-override MARCH=
+MARCH=
 endif
 
 # If we are running on powerpc64 or ppc64, fail out dramatically
@@ -652,15 +715,45 @@ ifneq (,$(filter $(ARCH), powerpc64 ppc64))
 $(error Big-endian PPC64 is not supported, to ignore this error, set ARCH=ppc64le)
 endif
 
+# File name of make binary-dist result
+ifeq ($(JULIA_BINARYDIST_FILENAME),)
+DIST_OS:=$(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
+ifeq (WINNT,$(OS))
+DIST_OS:=win
+endif
+ifeq (Linux,$(OS))
+DIST_OS:=linux
+endif
+ifeq (Darwin,$(OS))
+DIST_OS:=mac
+endif
+DIST_ARCH:=$(ARCH)
+ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
+DIST_ARCH:=ppc64le
+endif
+ifeq (1,$(ISX86))
+DIST_ARCH:=$(BINARY)
+endif
+ifneq (,$(findstring arm,$(ARCH)))
+DIST_ARCH:=arm
+endif
+
+JULIA_BINARYDIST_FILENAME := julia-$(JULIA_COMMIT)-$(DIST_OS)$(DIST_ARCH)
+endif
+
 # If we are running on ARM, set certain options automatically
 ifneq (,$(findstring arm,$(ARCH)))
 JCFLAGS += -fsigned-char
+USE_BLAS64:=0
+OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_TARGET_ARCH:=ARMV7
+USE_SYSTEM_LIBM:=1
+endif
 
-override LLVM_VER:=3.8.1
-override USE_BLAS64:=0
-override OPENBLAS_DYNAMIC_ARCH:=0
-override OPENBLAS_TARGET_ARCH:=ARMV7
-override USE_SYSTEM_LIBM:=1
+# If we are running on aarch64 (e.g. ARMv8 or ARM64), set certain options automatically
+ifneq (,$(findstring aarch64,$(ARCH)))
+OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_TARGET_ARCH:=ARMV8
 endif
 
 # Set MARCH-specific flags
@@ -687,6 +780,13 @@ endif
 
 JULIA_CPU_TARGET ?= native
 
+ifneq ($(OS),WINNT)
+# Windows headers with this configuration conflicts with LLVM
+# (Symbol renames are done with macros)
+# We mainly need this on linux for cgmemmgr so don't worry about windows for now...
+JCXXFLAGS += -D_FILE_OFFSET_BITS=64
+endif
+
 # Set some ARCH-specific flags
 ifneq ($(USEICC),1)
 ifeq ($(ISX86),1)
@@ -695,6 +795,7 @@ CXX += -m$(BINARY)
 FC += -m$(BINARY)
 CC_ARG += -m$(BINARY)
 CXX_ARG += -m$(BINARY)
+FC_ARG += -m$(BINARY)
 endif
 endif
 
@@ -714,6 +815,8 @@ endif
 endif
 
 ifeq ($(OS),WINNT)
+LIBUNWIND:=
+else ifneq ($(DISABLE_LIBUNWIND), 0)
 LIBUNWIND:=
 else
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
@@ -810,14 +913,6 @@ LIBLAPACKNAME := liblapack
 endif
 endif
 
-ifeq ($(OS), WINNT)
-LIBFFTWNAME := libfftw3
-LIBFFTWFNAME := libfftw3f
-else
-LIBFFTWNAME := libfftw3_threads
-LIBFFTWFNAME := libfftw3f_threads
-endif
-
 ifeq ($(USE_SYSTEM_LIBM), 1)
 LIBM := -lm
 LIBMNAME := libm
@@ -827,8 +922,8 @@ LIBMNAME := libopenlibm
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 1)
-  LIBUV := /usr/lib/libuv-julia.a
-  LIBUV_INC := /usr/include
+  LIBUV := $(LOCALBASE)/lib/libuv-julia.a
+  LIBUV_INC := $(LOCALBASE)/include
 else
   LIBUV := $(build_libdir)/libuv.a
   LIBUV_INC := $(build_includedir)
@@ -836,7 +931,7 @@ endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 1)
   LIBUTF8PROC := -lutf8proc
-  UTF8PROC_INC := /usr/include
+  UTF8PROC_INC := $(LOCALBASE)/include
 else
   LIBUTF8PROC := $(build_libdir)/libutf8proc.a
   UTF8PROC_INC := $(build_includedir)
@@ -874,12 +969,15 @@ else ifeq ($(OS), Darwin)
   RPATH := -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
   RPATH_ORIGIN := -Wl,-rpath,'@loader_path/'
   RPATH_ESCAPED_ORIGIN := $(RPATH_ORIGIN)
-  RPATH_LIB := -Wl,-rpath,'@loader_path/' -Wl,-rpath,'@loader_path/julia/'
+  RPATH_LIB := -Wl,-rpath,'@loader_path/julia/' -Wl,-rpath,'@loader_path/'
 else
   RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin
+ifeq ($(OS), FreeBSD)
+  RPATH += -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)'
+endif
   RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
-  RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin
-  RPATH_LIB := -Wl,-rpath,'$$ORIGIN' -Wl,-rpath,'$$ORIGIN/julia' -Wl,-z,origin
+  RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin -Wl,-rpath-link,$(build_shlibdir)
+  RPATH_LIB := -Wl,-rpath,'$$ORIGIN/julia' -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
 endif
 
 # --whole-archive
@@ -893,6 +991,11 @@ endif
 
 ifeq ($(OS), Linux)
 OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -Wl,--export-dynamic,--as-needed,--no-whole-archive $(LIBUNWIND)
+# Detect if ifunc is supported
+IFUNC_DETECT_SRC := 'void (*f0(void))(void) { return (void(*)(void))0L; }; void f(void) __attribute__((ifunc("f0")));'
+ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /dev/null > /dev/null 2>&1 && echo supported))
+JCPPFLAGS += -DJULIA_HAS_IFUNC_SUPPORT=1
+endif
 ifneq ($(SANITIZE),1)
 ifneq ($(SANITIZE_MEMORY),1)
 ifneq ($(LLVM_SANITIZE),1)
@@ -912,7 +1015,16 @@ endif
 
 ifeq ($(OS), FreeBSD)
 JLDFLAGS := -Wl,-Bdynamic
-OSLIBS += -lelf -lkvm -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
+OSLIBS += -lelf -lkvm -lrt
+
+# Tweak order of libgcc_s in DT_NEEDED,
+# make it loaded first to
+# prevent from linking to outdated system libs.
+# See #21788
+OSLIBS += -lgcc_s
+
+OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
+	$(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
 endif
 
 ifeq ($(OS), Darwin)
@@ -958,6 +1070,16 @@ ifeq ($(USE_OPROFILE_JITEVENTS), 1)
 JCPPFLAGS += -DJL_USE_OPROFILE_JITEVENTS
 endif
 
+ifeq ($(DISABLE_LIBUNWIND), 1)
+JCPPFLAGS += -DJL_DISABLE_LIBUNWIND
+endif
+
+# perf
+ifeq ($(USE_PERF_JITEVENTS), 1)
+JCPPFLAGS += -DJL_USE_PERF_JITEVENTS
+endif
+
+
 # Intel libraries
 
 ifeq ($(USE_INTEL_LIBM), 1)
@@ -987,12 +1109,6 @@ ifneq ($(strip $(MKLLIB)),)
 endif
 LIBBLAS   := $(MKL_LDFLAGS)
 LIBLAPACK := $(MKL_LDFLAGS)
-endif
-
-ifeq ($(USE_INTEL_MKL_FFT), 1)
-USE_SYSTEM_FFTW := 1
-LIBFFTWNAME := libmkl_rt
-LIBFFTWFNAME := libmkl_rt
 endif
 
 ifeq ($(HAVE_SSP),1)
@@ -1035,8 +1151,14 @@ endif
 # Custom libcxx
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LDFLAGS += -L$(build_libdir)
-CXXLDFLAGS += -L$(build_libdir) -lc++abi -stdlib=libc++ -lc++
-CPPFLAGS += -I$(build_includedir)/c++/v1
+CXXLDFLAGS += -L$(build_libdir) -lc++abi -lc++
+ifeq ($(USECLANG),1)
+CXXLDFLAGS += -stdlib=libc++
+else
+ifeq ($(USEGCC),1)
+$(error BUILD_CUSTOM_LIBCXX is currently only supported with Clang. Try setting BUILD_CUSTOM_LIBCXX=0)
+endif
+endif # Clang
 CUSTOM_LD_LIBRARY_PATH := LD_LIBRARY_PATH="$(build_libdir)"
 ifeq ($(USEICC),1)
 CXXFLAGS += -cxxlib-nostd -static-intel
@@ -1060,19 +1182,19 @@ endef
 endif
 
 define symlink_target
-CLEAN_TARGETS += clean-$(2)/$(1)
-clean-$$(abspath $(2)/$(1)):
+CLEAN_TARGETS += clean-$(2)/$(3)
+clean-$$(abspath $(2)/$(3)):
 ifeq ($(BUILD_OS), WINNT)
-	@-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&)
+	@-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&)
 else
-	@-rm $$(abspath $(2)/$(1))
+	@-rm $$(abspath $(2)/$(3))
 endif
-$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1))
-$$(abspath $(2)/$(1)): | $$(abspath $(2))
+$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(3))): $$(abspath $(2)/$(3))
+$$(abspath $(2)/$(3)): | $$(abspath $(2))
 ifeq ($(BUILD_OS), WINNT)
-	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&) $$(call mingw_to_dos,$(1),)
+	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&) $$(call mingw_to_dos,$(1),)
 else ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
-	@cmd /C mklink /J $$(call cygpath_w,$(2)/$(1)) $$(call cygpath_w,$(1))
+	@cmd /C mklink /J $$(call cygpath_w,$(2)/$(3)) $$(call cygpath_w,$(1))
 else ifdef JULIA_VAGRANT_BUILD
 	@cp -R $$(abspath $(1)) $$@
 else

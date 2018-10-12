@@ -16,8 +16,8 @@ const print_result = true  # prints files which where not processed.
 const rootdirs = [
     "../base",
     "../contrib",
-    "../examples",
     "../src",
+    "../stdlib",
     "../test",
 ]
 
@@ -30,11 +30,11 @@ const excludedirs = [
 
 const skipfiles = [
     "../contrib/add_license_to_files.jl",
-    "../contrib/windows/juliarc.jl",
     # files to check - already copyright
     # see: https://github.com/JuliaLang/julia/pull/11073#issuecomment-98099389
     "../base/special/trig.jl",
-    "../base/linalg/givens.jl",
+    "../base/special/exp.jl",
+    "../base/special/rem_pio2.jl",
     #
     "../src/abi_llvm.cpp",
     "../src/abi_ppc64le.cpp",
@@ -56,18 +56,18 @@ const skipfiles = [
     "../src/support/strtod.c",
     "../src/support/tzfile.h",
     "../src/support/utf8.c",
-    "../test/perf/micro/randmtzig.c",
+    "../src/crc32c.c",
 ]
 
 const ext_prefix = Dict([
-(".jl", "# "),
-(".sh", "# "),
-(".h", "\/\/ "),
-(".c", "\/\/ "),
-(".cpp", "\/\/ "),
+    (".jl", "# "),
+    (".sh", "# "),
+    (".h", "// "),
+    (".c", "// "),
+    (".cpp", "// "),
 ])
 
-const new_license = "This file is a part of Julia. License is MIT: http://julialang.org/license"
+const new_license = "This file is a part of Julia. License is MIT: https://julialang.org/license"
 
 # Old License text if such should be first removed - or empty string
 const old_license = ""
@@ -81,7 +81,7 @@ function check_lines!(
     remove = []
     for i in 1:length(lines)
         line = lines[i]
-        if contains(line, checktxt)
+        if occursin(checktxt, line)
             if strip(line) == strip(prefix * checktxt) || strip(line) == strip(checktxt)
                 push!(remove, i)
             else
@@ -133,7 +133,7 @@ function add_license_line!(unprocessed::Vector, src::AbstractString, new_license
             if ext in keys(ext_prefix)
                 prefix = ext_prefix[ext]
                 f = open(path, "r")
-                lines = readlines(f)
+                lines = readlines(f, keep=true)
                 close(f)
                 isempty(lines) && (push!(unprocessed, path); continue)
                 isempty(old_license) || check_lines!(path, lines, old_license, prefix, true)

@@ -1,5 +1,5 @@
 # This file is a part of Julia, but is derived from
-# https://github.com/floitsch/double-conversion which has the following license
+# https://github.com/google/double-conversion which has the following license
 #
 # Copyright 2006-2014, the V8 project authors. All rights reserved.
 # Redistribution and use in source and binary forms, with or without
@@ -79,7 +79,7 @@ function generateshortestdigits!(num,den,minus,plus,is_even,buffer)
         in_delta_room_minus = is_even ?
             Bignums.lessequal(num,minus) : Bignums.less(num,minus)
         in_delta_room_plus = is_even ?
-            Bignums.pluscompare(num,plus,den) >= 0: Bignums.pluscompare(num,plus,den) > 0
+            Bignums.pluscompare(num,plus,den) >= 0 : Bignums.pluscompare(num,plus,den) > 0
         if !in_delta_room_minus && !in_delta_room_plus
             Bignums.times10!(num)
             Bignums.times10!(minus)

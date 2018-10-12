@@ -38,26 +38,21 @@
 //
 //===----------------------------------------------------------------------===//
 
+struct ABI_LLVMLayout : AbiLayout {
 
-typedef bool AbiState;
-AbiState default_abi_state = 0;
-
-bool use_sret(AbiState *state,jl_value_t *ty)
+bool use_sret(jl_datatype_t *ty) override
 {
     return false;
 }
 
-void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg)
+bool needPassByRef(jl_datatype_t *ty, AttrBuilder &ab) override
 {
-    return;
+    return false;
 }
 
-Type *preferred_llvm_type(jl_value_t *ty, bool isret)
+Type *preferred_llvm_type(jl_datatype_t *ty, bool isret) const override
 {
     return NULL;
 }
 
-bool need_private_copy(jl_value_t *ty, bool byRef)
-{
-    return false;
-}
+};

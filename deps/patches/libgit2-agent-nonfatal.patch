@@ -4,6 +4,9 @@ Date:   Wed Jul 20 19:59:00 2016 -0400
 
     Make failure to connect to ssh-agent non-fatal
 
+    Julia issue: https://github.com/JuliaLang/julia/pull/17459
+    Upstream: https://github.com/libgit2/libgit2/issues/3866
+
 diff --git a/src/transports/ssh.c b/src/transports/ssh.c
 index cfd5736..82d2c63 100644
 --- a/src/transports/ssh.c
@@ -16,6 +19,7 @@ index cfd5736..82d2c63 100644
 +	if (rc != LIBSSH2_ERROR_NONE) {
 +		rc = LIBSSH2_ERROR_AUTHENTICATION_FAILED;
  		goto shutdown;
-+        }
++	}
  
  	rc = libssh2_agent_list_identities(agent);
+ 

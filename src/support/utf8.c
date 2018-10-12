@@ -109,11 +109,11 @@ size_t u8_toucs(uint32_t *dest, size_t sz, const char *src, size_t srcsz)
         ch = 0;
         switch (nb) {
             /* these fall through deliberately */
-        case 5: ch += (unsigned char)*src++; ch <<= 6;
-        case 4: ch += (unsigned char)*src++; ch <<= 6;
-        case 3: ch += (unsigned char)*src++; ch <<= 6;
-        case 2: ch += (unsigned char)*src++; ch <<= 6;
-        case 1: ch += (unsigned char)*src++; ch <<= 6;
+        case 5: ch += (unsigned char)*src++; ch <<= 6; JL_FALLTHROUGH;
+        case 4: ch += (unsigned char)*src++; ch <<= 6; JL_FALLTHROUGH;
+        case 3: ch += (unsigned char)*src++; ch <<= 6; JL_FALLTHROUGH;
+        case 2: ch += (unsigned char)*src++; ch <<= 6; JL_FALLTHROUGH;
+        case 1: ch += (unsigned char)*src++; ch <<= 6; JL_FALLTHROUGH;
         case 0: ch += (unsigned char)*src++;
         }
         ch -= offsetsFromUTF8[nb];
@@ -167,9 +167,9 @@ size_t u8_toutf8(char *dest, size_t sz, const uint32_t *src, size_t srcsz)
             if (dest >= dest_end-2)
                 break;
             // invalid: use replacement char \ufffd
-            *dest++ = 0xef;
-            *dest++ = 0xbf;
-            *dest++ = 0xbd;
+            *dest++ = (char)0xef;
+            *dest++ = (char)0xbf;
+            *dest++ = (char)0xbd;
         }
         i++;
     }
@@ -200,9 +200,9 @@ size_t u8_wc_toutf8(char *dest, uint32_t ch)
         dest[3] = (ch & 0x3F) | 0x80;
         return 4;
     }
-    dest[0] = 0xef;
-    dest[1] = 0xbf;
-    dest[2] = 0xbd;
+    dest[0] = (char)0xef;
+    dest[1] = (char)0xbf;
+    dest[2] = (char)0xbd;
     return 3;
 }
 
@@ -252,11 +252,11 @@ size_t u8_strwidth(const char *s)
             ch = 0;
             switch (nb) {
                 /* these fall through deliberately */
-            case 5: ch += (unsigned char)*s++; ch <<= 6;
-            case 4: ch += (unsigned char)*s++; ch <<= 6;
-            case 3: ch += (unsigned char)*s++; ch <<= 6;
-            case 2: ch += (unsigned char)*s++; ch <<= 6;
-            case 1: ch += (unsigned char)*s++; ch <<= 6;
+            case 5: ch += (unsigned char)*s++; ch <<= 6; JL_FALLTHROUGH;
+            case 4: ch += (unsigned char)*s++; ch <<= 6; JL_FALLTHROUGH;
+            case 3: ch += (unsigned char)*s++; ch <<= 6; JL_FALLTHROUGH;
+            case 2: ch += (unsigned char)*s++; ch <<= 6; JL_FALLTHROUGH;
+            case 1: ch += (unsigned char)*s++; ch <<= 6; JL_FALLTHROUGH;
             case 0: ch += (unsigned char)*s++;
             }
             ch -= offsetsFromUTF8[nb];

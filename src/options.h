@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #ifndef JL_OPTIONS_H
 #define JL_OPTIONS_H
@@ -27,6 +27,11 @@
 // delete julia IR for non-inlineable functions after they're codegen'd
 #define JL_DELETE_NON_INLINEABLE 1
 
+// fill in the jl_all_methods in world-counter order
+// so that it is possible to map (in a debugger) from
+// an inferred world validity range back to the offending definition
+// #define RECORD_METHOD_ORDER
+
 // GC options -----------------------------------------------------------------
 
 // debugging options
@@ -47,7 +52,7 @@
 #ifdef GC_DEBUG_ENV
 #define GC_VERIFY
 #else
-// It is recommanded to use the WITH_GC_VERIFY make option to turn on this
+// It is recommended to use the WITH_GC_VERIFY make option to turn on this
 // option. Keep the document here before a better build system is ready.
 // #define GC_VERIFY
 #endif
@@ -95,12 +100,18 @@
 
 // task options ---------------------------------------------------------------
 
-// select an implementation of stack switching.
-// currently only COPY_STACKS is recommended.
-#ifndef COPY_STACKS
+// select whether to allow the COPY_STACKS stack switching implementation
 #define COPY_STACKS
-#endif
+// select whether to use COPY_STACKS for new Tasks by default
+//#define ALWAYS_COPY_STACKS
 
+// When not using COPY_STACKS the task-system is less memory efficient so
+// you probably want to choose a smaller default stack size (factor of 8-10)
+#ifdef _P64
+#define JL_STACK_SIZE (4*1024*1024)
+#else
+#define JL_STACK_SIZE (2*1024*1024)
+#endif
 
 // threading options ----------------------------------------------------------
 

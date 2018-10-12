@@ -1,6 +1,15 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.Docs: meta, @var, DocStr, parsedoc
+
+using Markdown
+using REPL
+
+using REPL: @repl, repl_latex, _repl, accessible
+using InteractiveUtils: apropos
+
+# For curmod_*
+include("testenv.jl")
 
 # Test helpers.
 function docstrings_equal(d1, d2)
@@ -8,7 +17,7 @@ function docstrings_equal(d1, d2)
     io2 = IOBuffer()
     show(io1, MIME"text/markdown"(), d1)
     show(io2, MIME"text/markdown"(), d2)
-    takebuf_string(io1) == takebuf_string(io2)
+    String(take!(io1)) == String(take!(io2))
 end
 docstrings_equal(d1::DocStr, d2) = docstrings_equal(parsedoc(d1), d2)
 
@@ -17,19 +26,34 @@ function docstring_startswith(d1, d2)
     io2 = IOBuffer()
     show(io1, MIME"text/markdown"(), d1)
     show(io2, MIME"text/markdown"(), d2)
-    startswith(takebuf_string(io1), takebuf_string(io2))
+    startswith(String(take!(io1)), String(take!(io2)))
 end
 docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
-@doc "Doc abstract type" ->
-abstract C74685 <: AbstractArray
-@test stringmime("text/plain", Docs.doc(C74685))=="Doc abstract type\n"
+@doc "Doc abstract type"
+abstract type C74685{T,N} <: AbstractArray{T,N} end
+@test repr("text/plain", Docs.doc(C74685))=="  Doc abstract type"
+@test string(Docs.doc(C74685))=="Doc abstract type\n"
 
 macro macro_doctest() end
-@doc "Helps test if macros can be documented with `@doc \"...\" -> @...`." ->
+@doc "Helps test if macros can be documented with `@doc \"...\" @...`."
 :@macro_doctest
 
 @test (@doc @macro_doctest) !== nothing
+
+# test that random stuff interpolated into docstrings doesn't break search or other methods here
+@doc doc"""
+break me:
+
+    code
+
+$:asymbol # a symbol
+$1 # a number
+$string # a function
+$$latex literal$$
+### header!
+"""
+function break_me_docs end
 
 # issue #11548
 
@@ -45,9 +69,11 @@ end
 
 # General tests for docstrings.
 
-const LINE_NUMBER = @__LINE__+1
+const LINE_NUMBER = @__LINE__() + 1
 "DocsTest"
 module DocsTest
+
+using Markdown
 
 "f-1"
 function f(x)
@@ -69,16 +95,16 @@ end
 function g end
 
 "AT"
-abstract AT
+abstract type AT end
 
 "BT"
-bitstype 8 BT
+primitive type BT 8 end
 
 "BT2"
-bitstype 8 BT2 <: Integer
+primitive type BT2 <: Integer 8 end
 
 "T"
-type T <: AT
+mutable struct T <: AT
     "T.x"
     x
     "T.y"
@@ -86,7 +112,7 @@ type T <: AT
 end
 
 "IT"
-immutable IT
+struct IT
     "IT.x"
     x :: Int
     "IT.y"
@@ -94,7 +120,7 @@ immutable IT
 end
 
 "TA"
-typealias TA Union{T, IT}
+const TA = Union{T, IT}
 
 "@mac()"
 macro mac() end
@@ -118,7 +144,7 @@ const K = :K
 
 t(x::AbstractString) = x
 t(x::Int, y) = y
-t{S <: Integer}(x::S) = x
+t(x::S) where {S <: Integer} = x
 
 "t-1"
 t(::AbstractString)
@@ -128,7 +154,7 @@ t(::Int, ::Any)
 t{S <: Integer}(::S)
 
 "FieldDocs"
-type FieldDocs
+mutable struct FieldDocs
     "one"
     one
     doc"two"
@@ -148,7 +174,7 @@ import .Inner.@m
 "Inner.@m"
 :@m
 
-type Foo
+mutable struct Foo
     x
 end
 
@@ -312,10 +338,10 @@ macro m() end
 const C = 1
 
 "A"
-abstract A
+abstract type A end
 
 "T"
-type T
+mutable struct T
     "x"
     x
     "y"
@@ -411,7 +437,7 @@ end
 
 module DocVars
 
-immutable __FIELDS__ end
+struct __FIELDS__ end
 
 function Docs.formatdoc(buffer, docstr, ::Type{__FIELDS__})
     fields = get(docstr.data, :fields, Dict())
@@ -428,7 +454,7 @@ end
 
 $__FIELDS__
 """
-type T
+mutable struct T
     "x"
     x
     "y"
@@ -441,7 +467,7 @@ end
 
 $__FIELDS__
 """
-type S
+mutable struct S
     x
     y
     z
@@ -450,10 +476,13 @@ end
 end
 
 let T = meta(DocVars)[@var(DocVars.T)],
-    S = meta(DocVars)[@var(DocVars.S)]
+    S = meta(DocVars)[@var(DocVars.S)],
+    Tname = Markdown.parse("```\n$(curmod_prefix)DocVars.T\n```"),
+    Sname = Markdown.parse("```\n$(curmod_prefix)DocVars.S\n```")
+    # Splicing the expression directly doesn't work
     @test docstrings_equal(T.docs[Union{}],
         doc"""
-            DocVars.T
+        $Tname
 
         # Fields
 
@@ -464,7 +493,7 @@ let T = meta(DocVars)[@var(DocVars.T)],
     )
     @test docstrings_equal(S.docs[Union{}],
         doc"""
-            DocVars.S
+        $Sname
 
         """
     )
@@ -475,31 +504,36 @@ end
 
 # Issue #16359. Error message for invalid doc syntax.
 
-for each in [ # valid syntax
-        :(f()),
-        :(f(x)),
-        :(f(x::Int)),
-        :(f(x...)),
-        :(f(x = 1)),
-        :(f(; x = 1))
-    ]
-    @test Meta.isexpr(Docs.docm("...", each), :block)
-end
-for each in [ # invalid syntax
-        :(f("...")),
-        :(f(1, 2)),
-        :(f(() -> ()))
-    ]
-    result = Docs.docm("...", each)
-    @test Meta.isexpr(result, :call)
-    @test result.args[1] === error
+let __source__ = LineNumberNode(0),
+    __module__ = @__MODULE__
+    for each in [ # valid syntax
+            :(f()),
+            :(f(x)),
+            :(f(x::Int)),
+            :(f(x...)),
+            :(f(x = 1)),
+            :(f(; x = 1))
+        ]
+        @test Meta.isexpr(Docs.docm(__source__, __module__, "...", each), :block)
+    end
+    for each in [ # invalid syntax
+            :(f("...")),
+            :(f(1, 2)),
+            :(f(() -> ()))
+        ]
+        result = Docs.docm(__source__, __module__, "...", each)
+        @test Meta.isexpr(result, :call)
+        @test result.args[1] === error
+    end
 end
 
 # Issue #15424. Non-markdown docstrings.
 
 module I15424
 
-immutable LazyHelp
+using REPL
+
+struct LazyHelp
     text
 end
 
@@ -517,7 +551,7 @@ function Base.Docs.catdoc(hs::LazyHelp...)
     end
 end
 
-Docs.docsearch(haystack::LazyHelp, needle) = Docs.docsearch(haystack.text, needle)
+REPL.docsearch(haystack::LazyHelp, needle) = REPL.docsearch(haystack.text, needle)
 
 @doc LazyHelp("LazyHelp\n") LazyHelp
 @doc LazyHelp("LazyHelp(text)\n") LazyHelp(text)
@@ -525,11 +559,16 @@ Docs.docsearch(haystack::LazyHelp, needle) = Docs.docsearch(haystack.text, needl
 end
 
 let d = @doc(I15424.LazyHelp)
-    @test stringmime("text/plain", d) == "LazyHelp\nLazyHelp(text)\n"
+    @test repr("text/plain", d) == "LazyHelp\nLazyHelp(text)\n"
 end
 
 # Issue #13385.
-@test @doc(I) !== nothing
+struct I13385
+    λ
+end
+"issue #13385"
+const i13385 = I13385(true)
+@test @doc(i13385) !== nothing
 
 # Issue #12700.
 @test docstrings_equal(@doc(DocsTest.@m), doc"Inner.@m")
@@ -545,11 +584,12 @@ end
 
 @doc "This should document @m1... since its the result of expansion" @m2_11993
 @test (@doc @m1_11993) !== nothing
-let d = (@doc :@m2_11993)
+let d = (@doc :@m2_11993),
+    macro_doc = Markdown.parse("`$(curmod_prefix)@m2_11993` is a macro.")
     @test docstring_startswith(d, doc"""
     No documentation found.
 
-    `@m2_11993` is a macro.""")
+    $macro_doc""")
 end
 
 @doc "Now @m2... should be documented" :@m2_11993
@@ -562,7 +602,7 @@ end
 
 f1_11993()
 
-@doc "Document inline function with old syntax" ->
+@doc "Document inline function with old syntax"
 @inline f2_11993() = nothing
 
 @test (@doc f2_11993) !== nothing
@@ -586,15 +626,15 @@ end
 
 module I12515
 
-immutable EmptyType{T} end
+struct EmptyType{T} end
 
 "A new method"
-Base.collect{T}(::Type{EmptyType{T}}) = "borked"
+Base.collect(::Type{EmptyType{T}}) where {T} = "borked"
 
 end
 
 let fd = meta(I12515)[@var(Base.collect)]
-    @test fd.order[1] == Tuple{Type{I12515.EmptyType{TypeVar(:T, Any, true)}}}
+    @test fd.order[1] == (Union{Tuple{Type{I12515.EmptyType{T}}}, Tuple{T}} where T)
 end
 
 # PR #12593
@@ -609,29 +649,29 @@ f12593_2() = 1
 @test (@doc f12593_2) !== nothing
 
 # @test Docs.doc(svdvals, Tuple{Vector{Float64}}) === nothing
-@test Docs.doc(svdvals, Tuple{Float64}) !== nothing
+# @test Docs.doc(svdvals, Tuple{Float64}) !== nothing
 
 # crude test to make sure we sort docstring output by method specificity
 @test !docstrings_equal(Docs.doc(getindex, Tuple{Dict{Int,Int},Int}),
                         Docs.doc(getindex, Tuple{Type{Int64},Int}))
 
 # test that macro documentation works
-@test (Docs.@repl :@assert) !== nothing
+@test (@repl :@assert) !== nothing
 
-@test (Docs.@repl 0) !== nothing
+@test (@repl 0) !== nothing
 
 let t = @doc(DocsTest.t(::Int, ::Int))
-    @test docstrings_equal(Docs.@repl(DocsTest.t(0, 0)), t)
-    @test docstrings_equal(Docs.@repl(DocsTest.t(::Int, ::Int)), t)
+    @test docstrings_equal(@repl(DocsTest.t(0, 0)), t)
+    @test docstrings_equal(@repl(DocsTest.t(::Int, ::Int)), t)
 end
 
 # Issue #13467.
-@test (Docs.@repl :@r_str) !== nothing
+@test (@repl :@r_str) !== nothing
 
 # Simple tests for apropos:
-@test contains(sprint(apropos, "pearson"), "cor")
-@test contains(sprint(apropos, r"ind(exes|ices)"), "eachindex")
-@test contains(sprint(apropos, "print"), "Profile.print")
+@test occursin("eachindex", sprint(apropos, r"ind(exes|ices)"))
+using Profile
+@test occursin("Profile.print", sprint(apropos, "print"))
 
 # Issue #13068.
 
@@ -682,18 +722,29 @@ end
 )
 
 # Issue #13905.
-@test macroexpand(:(@doc "" f() = @x)) == Expr(:error, UndefVarError(Symbol("@x")))
+let err = try; @macroexpand(@doc "" f() = @x); false; catch ex; ex; end
+    __source__ = LineNumberNode(@__LINE__() -  1, Symbol(@__FILE__))
+    err::LoadError
+    @test err.file === string(__source__.file)
+    @test err.line === __source__.line
+    err = err.error::LoadError
+    @test err.file === string(__source__.file)
+    @test err.line === __source__.line
+    err = err.error::UndefVarError
+    @test err.var == Symbol("@x")
+ end
+
 
 # Undocumented DataType Summaries.
 
 module Undocumented
 
-abstract A
-abstract B <: A
+abstract type A end
+abstract type B <: A end
 
-type C <: A end
+mutable struct C <: A end
 
-immutable D <: B
+struct D <: B
     one
     two::String
     three::Float64
@@ -707,83 +758,103 @@ undocumented(x,y) = 3
 
 end
 
-@test docstrings_equal(@doc(Undocumented.bindingdoesnotexist), doc"""
+doc_str = Markdown.parse("""
 No documentation found.
 
-Binding `Undocumented.bindingdoesnotexist` does not exist.
+Binding `$(curmod_prefix)Undocumented.bindingdoesnotexist` does not exist.
 """)
+@test docstrings_equal(@doc(Undocumented.bindingdoesnotexist), doc"$doc_str")
 
-@test docstrings_equal(@doc(Undocumented.A), doc"""
+doc_str = Markdown.parse("""
 No documentation found.
 
-**Summary:**
+# Summary
 ```
-abstract Undocumented.A <: Any
-```
-
-**Subtypes:**
-```
-Undocumented.B
-Undocumented.C
-```
-""")
-
-@test docstrings_equal(@doc(Undocumented.B), doc"""
-No documentation found.
-
-**Summary:**
-```
-abstract Undocumented.B <: Undocumented.A
+abstract type $(curmod_prefix)Undocumented.A <: Any
 ```
 
-**Subtypes:**
+# Subtypes
 ```
-Undocumented.D
+$(curmod_prefix)Undocumented.B
+$(curmod_prefix)Undocumented.C
 ```
 """)
+@test docstrings_equal(@doc(Undocumented.A), doc"$doc_str")
 
-@test docstrings_equal(@doc(Undocumented.C), doc"""
+doc_str = Markdown.parse("""
 No documentation found.
 
-**Summary:**
+# Summary
 ```
-type Undocumented.C <: Undocumented.A
+abstract type $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A
+```
+
+# Subtypes
+```
+$(curmod_prefix)Undocumented.D
+```
+
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
 ```
 """)
+@test docstrings_equal(@doc(Undocumented.B), doc"$doc_str")
 
-@test docstrings_equal(@doc(Undocumented.D), doc"""
+doc_str = Markdown.parse("""
 No documentation found.
 
-**Summary:**
+# Summary
 ```
-immutable Undocumented.D <: Undocumented.B
+mutable struct $(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A
 ```
 
-**Fields:**
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.C), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+```
+struct $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B
+```
+
+# Fields
 ```
 one   :: Any
 two   :: String
 three :: Float64
 ```
-""")
 
-let d = @doc Undocumented.f
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.D), doc"$doc_str")
+
+let d = @doc(Undocumented.f)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
-    @test startswith(takebuf_string(io),"""
+    @test startswith(String(take!(io)),"""
     No documentation found.
 
-    `Undocumented.f` is a `Function`.
+    `$(curmod_prefix)Undocumented.f` is a `Function`.
     """)
 end
 
-let d = @doc Undocumented.undocumented
+let d = @doc(Undocumented.undocumented)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
-    @test startswith(takebuf_string(io), """
+    @test startswith(String(take!(io)), """
     No documentation found.
 
-    `Undocumented.undocumented` is a `Function`.
+    `$(curmod_prefix)Undocumented.undocumented` is a `Function`.
     """)
 end
 
@@ -825,15 +896,15 @@ let x = Binding(Base, Symbol("@time"))
     @test defined(x) == true
     @test @var(@time) == x
     @test @var(Base.@time) == x
-    @test @var(Base.Pkg.@time) == x
+    @test @var(Base.Iterators.@time) == x
 end
 
-let x = Binding(Base.LinAlg, :norm)
+let x = Binding(Iterators, :enumerate)
     @test defined(x) == true
-    @test @var(norm) == x
-    @test @var(Base.norm) == x
-    @test @var(Base.LinAlg.norm) == x
-    @test @var(Base.Pkg.Dir.norm) == x
+    @test @var(enumerate) == x
+    @test @var(Base.enumerate) == x
+    @test @var(Iterators.enumerate) == x
+    @test @var(Base.Iterators.enumerate) == x
 end
 
 let x = Binding(Core, :Int)
@@ -841,14 +912,13 @@ let x = Binding(Core, :Int)
     @test @var(Int) == x
     @test @var(Base.Int) == x
     @test @var(Core.Int) == x
-    @test @var(Base.Pkg.Resolve.Int) == x
 end
 
-let x = Binding(Base, :Pkg)
+let x = Binding(Base, :Iterators)
     @test defined(x) == true
-    @test @var(Pkg) == x
-    @test @var(Base.Pkg) == x
-    @test @var(Main.Pkg) == x
+    @test @var(Iterators) == x
+    @test @var(Base.Iterators) == x
+    @test @var(Main.Iterators) == x
 end
 
 let x = Binding(Base, :VERSION)
@@ -862,38 +932,230 @@ let x = Binding(Base, :bindingdoesnotexist)
     @test @var(Base.bindingdoesnotexist) == x
 end
 
-let x = Binding(Main, :bindingdoesnotexist)
+let x = Binding(curmod, :bindingdoesnotexist)
     @test defined(x) == false
     @test @var(bindingdoesnotexist) == x
 end
 
 let x = Binding(Main, :+)
-    @test parse(string(x)) == :(Base.:+)
+    @test Meta.parse(string(x)) == :(Base.:+)
 end
 
-let x = Binding(Base, :parse)
-    @test parse(string(x)) == :(Base.parse)
+let x = Binding(Meta, :parse)
+    @test Meta.parse(string(x)) == :(Base.Meta.parse)
 end
 
 let x = Binding(Main, :⊕)
-    @test parse(string(x)) == :(⊕)
+    @test Meta.parse(string(x)) == :(⊕)
 end
 
-# Docs.helpmode tests: we test whether the correct expressions are being generated here,
-# rather than complete integration with Julia's REPL mode system.
-for (line, expr) in Pair[
-    "sin"          => :sin,
-    "Base.sin"     => :(Base.sin),
-    "@time(x)"     => :(@time(x)),
-    "@time"        => :(:@time),
-    ":@time"       => :(:@time),
-    "@time()"      => :(@time),
-    "Base.@time()" => :(Base.@time),
-    "ccall"        => :ccall, # keyword
-    "while       " => :while, # keyword, trailing spaces should be stripped.
-    "0"            => 0,
-    "\"...\""      => "...",
-    "r\"...\""     => :(r"..."),
-    ]
-    @test Docs.helpmode(line) == :(Base.Docs.@repl($expr))
+doc_util_path = Symbol(joinpath("docs", "utils.jl"))
+
+@test sprint(repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
+@test sprint(repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
+
+# issue #15684
+begin
+    """
+    abc
+    """
+    f15684(x) = 1
 end
+
+@test string(@doc f15684) == "abc\n"
+
+# Dynamic docstrings
+
+mutable struct DynamicDocType
+    x
+end
+
+Base.Docs.getdoc(d::DynamicDocType, sig) = "$(d.x) $(sig)"
+
+dynamic_test = DynamicDocType("test 1")
+@test @doc(dynamic_test) == "test 1 Union{}"
+dynamic_test.x = "test 2"
+@test @doc(dynamic_test) == "test 2 Union{}"
+@test @doc(dynamic_test(::String)) == "test 2 Tuple{String}"
+
+let dt1 = _repl(:(dynamic_test(1.0)))
+    @test dt1 isa Expr
+    @test dt1.args[1] isa Expr
+    @test dt1.args[1].head === :macrocall
+    @test dt1.args[1].args[1] == Symbol("@doc")
+    @test dt1.args[1].args[3] == :(dynamic_test(::typeof(1.0)))
+end
+let dt2 = _repl(:(dynamic_test(::String)))
+    @test dt2 isa Expr
+    @test dt2.args[1] isa Expr
+    @test dt2.args[1].head === :macrocall
+    @test dt2.args[1].args[1] == Symbol("@doc")
+    @test dt2.args[1].args[3] == :(dynamic_test(::String))
+end
+let dt3 = _repl(:(dynamic_test(a)))
+    @test dt3 isa Expr
+    @test dt3.args[1] isa Expr
+    @test dt3.args[1].head === :macrocall
+    @test dt3.args[1].args[1] == Symbol("@doc")
+    @test dt3.args[1].args[3].args[2].head == :(::) # can't test equality due to line numbers
+end
+let dt4 = _repl(:(dynamic_test(1.0,u=2.0)))
+    @test dt4 isa Expr
+    @test dt4.args[1] isa Expr
+    @test dt4.args[1].head === :macrocall
+    @test dt4.args[1].args[1] == Symbol("@doc")
+    @test dt4.args[1].args[3] == :(dynamic_test(::typeof(1.0); u::typeof(2.0)=2.0))
+end
+
+# Equality testing
+
+@test Text("docstring") == Text("docstring")
+@test hash(Text("docstring")) == hash(Text("docstring"))
+@test HTML("<b>docstring</b>") == HTML("<b>docstring</b>")
+@test Text("docstring1") ≠ Text("docstring2")
+@test hash(Text("docstring1")) ≠ hash(Text("docstring2"))
+@test hash(Text("docstring")) ≠ hash(HTML("docstring"))
+
+# issue #25172
+@test repr(MIME"text/html"(), HTML("a","b")) == "ab"
+
+# issue 21016
+module I21016
+
+struct Struct{T}
+end
+
+"String 1"
+function Struct{T}(arg1) where T<:Float64
+end
+
+"String 2"
+function Struct{T}(arg1) where T
+end
+
+"String 3"
+function Struct{T}(arg1) where Integer <: T <: Real
+end
+
+"String 4"
+function Struct{T}(arg1) where T >: Int
+end
+
+end
+
+@test docstrings_equal(
+    @doc(I21016.Struct),
+    doc"""
+    String 1
+
+    String 2
+
+    String 3
+
+    String 4
+    """
+)
+
+# issue #22105
+module I22105
+    lineno = @__LINE__
+    """foo docs"""
+    function foo end
+end
+
+let foo_docs = meta(I22105)[@var(I22105.foo)].docs
+    @test length(foo_docs) === 1
+    @test isa(first(foo_docs), Pair)
+    local docstr = first(foo_docs).second
+    @test isa(docstr, DocStr)
+    @test docstr.data[:path] == Base.source_path()
+    @test docstr.data[:linenumber] == I22105.lineno + 1
+    @test docstr.data[:module] === I22105
+    @test docstr.data[:typesig] === Union{}
+    @test docstr.data[:binding] == Binding(I22105, :foo)
+end
+
+# issue #23011
+@test_nowarn @eval Main begin
+    @doc "first" f23011() = 1
+    @doc "second" f23011() = 2
+end
+@test Main.f23011() == 2
+@test docstrings_equal(@doc(Main.f23011), doc"second")
+
+# issue 22098
+"an empty macro"
+macro mdoc22098 end
+@test docstrings_equal(@doc(:@mdoc22098), doc"an empty macro")
+
+# issue #24468
+let ex = try
+    include_string(@__MODULE__, """
+
+    \"\"\"
+    an example
+    \"\"\"
+    function hello(param::Vector{In64_nOt_DeFiNeD__})
+    end
+    """)
+catch e
+    e
+end
+    @test ex.line == 2
+end
+
+struct t_docs_abc end
+@test "t_docs_abc" in accessible(@__MODULE__)
+
+# Call overloading issue #20087
+"""
+Docs for `MyFunc` struct.
+"""
+mutable struct MyFunc
+    x
+end
+
+"""
+Docs for calling `f::MyFunc`.
+"""
+function (f::MyFunc)(x)
+    f.x = x
+    return f
+end
+
+@test docstrings_equal(@doc(MyFunc(2)),
+doc"""
+Docs for calling `f::MyFunc`.
+""")
+
+struct A_20087 end
+
+"""a"""
+(a::A_20087)() = a
+
+@test docstrings_equal(@doc(A_20087()), doc"a")
+
+struct B_20087 end
+
+"""b"""
+(::B_20087)() = a
+
+@test docstrings_equal(@doc(B_20087()), doc"b")
+
+# issue #27832
+
+_last_atdoc = Core.atdoc
+Core.atdoc!(Core.Compiler.CoreDocs.docm)  # test bootstrap doc system
+
+"""
+"""
+module M27832
+macro foo(x)
+    repr(x)
+end
+for fn in (:isdone,)
+    global xs = @foo $fn
+end
+end
+@test M27832.xs == ":(\$(Expr(:\$, :fn)))"
+Core.atdoc!(_last_atdoc)

@@ -4,6 +4,7 @@
 /dist-extras
 /julia
 /usr
+/oprofile_data
 /usr-staging
 /Make.user
 /julia-*
@@ -12,6 +13,7 @@
 
 *.exe
 *.dll
+*.dwo
 *.do
 *.o
 *.obj
@@ -23,4 +25,5 @@
 *.jl.mem
 *.ji
 
+/perf*
 .DS_Store

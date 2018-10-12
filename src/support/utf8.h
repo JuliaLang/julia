@@ -1,11 +1,13 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef UTF8_H
-#define UTF8_H
+#ifndef JL_UTF8_H
+#define JL_UTF8_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include "analyzer_annotations.h"
 
 /* is c the start of a utf8 sequence? */
 #define isutf(c) (((c)&0xC0)!=0x80)
@@ -28,7 +30,7 @@ JL_DLLEXPORT size_t u8_offset(const char *str, size_t charnum);
 JL_DLLEXPORT size_t u8_charnum(const char *str, size_t offset);
 
 /* return next character, updating an index variable */
-uint32_t u8_nextchar(const char *s, size_t *i);
+uint32_t u8_nextchar(const char *s, size_t *i) JL_NOTSAFEPOINT;
 
 /* next character without NUL character terminator */
 uint32_t u8_nextmemchar(const char *s, size_t *i);

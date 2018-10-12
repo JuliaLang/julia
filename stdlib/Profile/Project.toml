@@ -1,0 +1,12 @@
+name = "Profile"
+uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
+
+[deps]
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+
+[targets]
+test = ["Test", "Serialization"]

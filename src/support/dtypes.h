@@ -1,7 +1,7 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef DTYPES_H
-#define DTYPES_H
+#ifndef JL_DTYPES_H
+#define JL_DTYPES_H
 
 #include <stddef.h>
 #include <stddef.h> // double include of stddef.h fixes #3421
@@ -13,6 +13,7 @@
 #endif
 
 #include "platform.h"
+#include "analyzer_annotations.h"
 
 #if !defined(_OS_WINDOWS_)
 #include <inttypes.h>
@@ -103,13 +104,10 @@
 
 #if defined(_OS_WINDOWS_) && defined(_COMPILER_INTEL_)
 #  define STATIC_INLINE static
-#  define INLINE
 #elif defined(_OS_WINDOWS_) && defined(_COMPILER_MICROSOFT_)
 #  define STATIC_INLINE static __inline
-#  define INLINE __inline
 #else
 #  define STATIC_INLINE static inline
-#  define INLINE inline
 #endif
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
@@ -147,7 +145,7 @@ typedef uint32_t uint_t;
 typedef int32_t int_t;
 #endif
 
-STATIC_INLINE unsigned int next_power_of_two(unsigned int val)
+STATIC_INLINE unsigned int next_power_of_two(unsigned int val) JL_NOTSAFEPOINT
 {
     /* this function taken from libuv src/unix/core.c */
     val -= 1;
@@ -166,9 +164,11 @@ STATIC_INLINE unsigned int next_power_of_two(unsigned int val)
 #ifdef __GNUC__
 #define __unlikely(x) __builtin_expect(!!(x), 0)
 #define __likely(x)   __builtin_expect(!!(x), 1)
+#define JL_EXTENSION __extension__
 #else
 #define __unlikely(x) (x)
 #define __likely(x)   (x)
+#define JL_EXTENSION
 #endif
 
 #define DBL_MAXINT 9007199254740992LL
@@ -202,6 +202,22 @@ typedef enum { T_INT8, T_UINT8, T_INT16, T_UINT16, T_INT32, T_UINT32,
 #else
 # define T_PTRDIFF T_INT32
 # define T_SIZE T_UINT32
+#endif
+
+#if defined(__GNUC__) && __GNUC__ >= 7
+#define JL_FALLTHROUGH __attribute__((fallthrough))
+#elif defined(__cplusplus) && defined(__clang_major__) && \
+    defined(__clang_minor__) && (__clang_major__ > 4 || __clang_minor__ >= 5)
+// We require at least clang 3.x
+#define JL_FALLTHROUGH [[clang::fallthrough]]
+#else
+#define JL_FALLTHROUGH
+#endif
+
+#if defined(__GNUC__)
+#define JL_UNUSED __attribute__((__unused__))
+#else
+#define JL_UNUSED
 #endif
 
 #endif /* DTYPES_H */

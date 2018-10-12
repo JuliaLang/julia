@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #ifndef THREADING_H
 #define THREADING_H
@@ -11,7 +11,7 @@ extern "C" {
 #include "threadgroup.h"
 #include "julia.h"
 
-#define PROFILE_JL_THREADING            1
+#define PROFILE_JL_THREADING            0
 
 // thread ID
 extern jl_ptls_t *jl_all_tls_states;
@@ -38,11 +38,13 @@ enum {
 
 // work command to thread function
 typedef struct {
-    uint8_t       command;
-    jl_function_t *fun;
-    jl_svec_t     *args;
-    jl_value_t    *ret;
-    jl_module_t   *current_module;
+    uint8_t command;
+    jl_method_instance_t *mfunc;
+    jl_callptr_t fptr;
+    jl_value_t **args;
+    uint32_t nargs;
+    jl_value_t *ret;
+    size_t world_age;
 } ti_threadwork_t;
 
 // thread function

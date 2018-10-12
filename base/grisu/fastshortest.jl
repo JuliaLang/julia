@@ -1,5 +1,5 @@
 # This file is a part of Julia, but is derived from
-# https://github.com/floitsch/double-conversion which has the following license
+# https://github.com/google/double-conversion which has the following license
 #
 # Copyright 2006-2014, the V8 project authors. All rights reserved.
 # Redistribution and use in source and binary forms, with or without
@@ -55,7 +55,7 @@ const SmallPowersOfTen = [
         1000000, 10000000, 100000000, 1000000000]
 
 function bigpowten(n,n_bits)
-    guess = (n_bits + 1) * 1233 >> 12
+    guess = ((n_bits + 1) * 1233) >> 12
     guess += 1
     i = SmallPowersOfTen[guess+1]
     return n < i ? (SmallPowersOfTen[guess], guess-1) : (i,guess)
@@ -102,7 +102,7 @@ function digitgen(low,w,high,buffer)
     end
 end
 
-function fastshortest(v, buffer = Array{UInt8}(17))
+function fastshortest(v, buffer = Vector{UInt8}(undef, 17))
     f = normalize(Float64(v))
     bound_minus, bound_plus = normalizedbound(v)
     ten_mk_min_exp = kMinExp - (f.e + FloatSignificandSize)

@@ -1,37 +1,87 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # definitions related to C interface
 
-import Core.Intrinsics: cglobal, box
-
-cfunction(f::Function, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
+import Core.Intrinsics: cglobal, bitcast
 
 """
-    Ptr{T}
+    cglobal((symbol, library) [, type=Cvoid])
 
-A memory address referring to data of type `T`.  However, there is no guarantee that the
-memory is actually valid, or that it actually represents data of the specified type.
+Obtain a pointer to a global variable in a C-exported shared library, specified exactly as
+in [`ccall`](@ref).
+Returns a `Ptr{Type}`, defaulting to `Ptr{Cvoid}` if no `Type` argument is
+supplied.
+The values can be read or written by [`unsafe_load`](@ref) or [`unsafe_store!`](@ref),
+respectively.
 """
-Ptr
+cglobal
 
 """
-    Ref{T}
+    CFunction struct
 
-An object that safely references data of type `T`. This type is guaranteed to point to
-valid, Julia-allocated memory of the correct type. The underlying data is protected from
-freeing by the garbage collector as long as the `Ref` itself is referenced.
+Garbage-collection handle for the return value from `@cfunction`
+when the first argument is annotated with '\\\$'.
+Like all `cfunction` handles, it should be passed to `ccall` as a `Ptr{Cvoid}`,
+and will be converted automatically at the call site to the appropriate type.
 
-When passed as a `ccall` argument (either as a `Ptr` or `Ref` type), a `Ref` object will be
-converted to a native pointer to the data it references.
-
-There is no invalid (NULL) `Ref`.
+See [`@cfunction`](@ref).
 """
-Ref
+struct CFunction <: Ref{Cvoid}
+    ptr::Ptr{Cvoid}
+    f::Any
+    _1::Ptr{Cvoid}
+    _2::Ptr{Cvoid}
+    let constructor = false end
+end
+unsafe_convert(::Type{Ptr{Cvoid}}, cf::CFunction) = cf.ptr
+
+"""
+    @cfunction(callable, ReturnType, (ArgumentTypes...,)) -> Ptr{Cvoid}
+    @cfunction(\$callable, ReturnType, (ArgumentTypes...,)) -> CFunction
+
+Generate a C-callable function pointer from the Julia function `closure`
+for the given type signature.
+To pass the return value to a `ccall`, use the argument type `Ptr{Cvoid}` in the signature.
+
+Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression
+(although it can include a splat expression). And that these arguments will be evaluated in global scope
+during compile-time (not deferred until runtime).
+Adding a '\\\$' in front of the function argument changes this to instead create a runtime closure
+over the local variable `callable`.
+
+See [manual section on ccall and cfunction usage](@ref Calling-C-and-Fortran-Code).
+
+# Examples
+```julia-repl
+julia> function foo(x::Int, y::Int)
+           return x + y
+       end
+
+julia> @cfunction(foo, Int, (Int, Int))
+Ptr{Cvoid} @0x000000001b82fcd0
+```
+"""
+macro cfunction(f, at, rt)
+    if !(isa(rt, Expr) && rt.head === :tuple)
+        throw(ArgumentError("@cfunction argument types must be a literal tuple"))
+    end
+    rt.head = :call
+    pushfirst!(rt.args, GlobalRef(Core, :svec))
+    if isa(f, Expr) && f.head === :$
+        fptr = f.args[1]
+        typ = CFunction
+    else
+        fptr = QuoteNode(f)
+        typ = Ptr{Cvoid}
+    end
+    cfun = Expr(:cfunction, typ, fptr, at, rt, QuoteNode(:ccall))
+    return esc(cfun)
+end
 
 if ccall(:jl_is_char_signed, Ref{Bool}, ())
-    typealias Cchar Int8
+    const Cchar = Int8
 else
-    typealias Cchar UInt8
+    const Cchar = UInt8
 end
 """
     Cchar
@@ -40,138 +90,98 @@ Equivalent to the native `char` c-type.
 """
 Cchar
 
-"""
-    Cuchar
-
-Equivalent to the native `unsigned char` c-type (`UInt8`).
-"""
-typealias Cuchar UInt8
-"""
-    Cshort
-
-Equivalent to the native `signed short` c-type (`Int16`).
-"""
-typealias Cshort Int16
-"""
-    Cushort
-
-Equivalent to the native `unsigned short` c-type (`UInt16`).
-"""
-typealias Cushort UInt16
-"""
-    Cint
-
-Equivalent to the native `signed int` c-type (`Int32`).
-"""
-typealias Cint Int32
-"""
-    Cuint
-
-Equivalent to the native `unsigned int` c-type (`UInt32`).
-"""
-typealias Cuint UInt32
-if is_windows()
-    typealias Clong Int32
-    typealias Culong UInt32
-    typealias Cwchar_t UInt16
+# The ccall here is equivalent to Sys.iswindows(), but that's not defined yet
+@static if ccall(:jl_get_UNAME, Any, ()) === :NT
+    const Clong = Int32
+    const Culong = UInt32
+    const Cwchar_t = UInt16
 else
-    typealias Clong Int
-    typealias Culong UInt
-    typealias Cwchar_t Int32
+    const Clong = Int
+    const Culong = UInt
+    const Cwchar_t = Int32
 end
+
 """
     Clong
 
 Equivalent to the native `signed long` c-type.
 """
 Clong
+
 """
     Culong
 
 Equivalent to the native `unsigned long` c-type.
 """
 Culong
+
 """
     Cwchar_t
 
-Equivalent to the native `wchar_t` c-type (`Int32`).
+Equivalent to the native `wchar_t` c-type ([`Int32`](@ref)).
 """
 Cwchar_t
 
 """
-    Cptrdiff_t
+    Cwstring
 
-Equivalent to the native `ptrdiff_t` c-type (`Int`).
-"""
-typealias Cptrdiff_t Int
-"""
-    Csize_t
+A C-style string composed of the native wide character type
+[`Cwchar_t`](@ref)s. `Cwstring`s are NUL-terminated. For
+C-style strings composed of the native character
+type, see [`Cstring`](@ref). For more information
+about string interopability with C, see the
+[manual](@ref man-bits-types).
 
-Equivalent to the native `size_t` c-type (`UInt`).
 """
-typealias Csize_t UInt
-"""
-    Cssize_t
+Cwstring
 
-Equivalent to the native `ssize_t` c-type.
 """
-typealias Cssize_t Int
-"""
-    Cintmax_t
+    Cstring
 
-Equivalent to the native `intmax_t` c-type (`Int64`).
+A C-style string composed of the native character type
+[`Cchar`](@ref)s. `Cstring`s are NUL-terminated. For
+C-style strings composed of the native wide character
+type, see [`Cwstring`](@ref). For more information
+about string interopability with C, see the
+[manual](@ref man-bits-types).
 """
-typealias Cintmax_t Int64
-"""
-    Cuintmax_t
+Cstring
 
-Equivalent to the native `uintmax_t` c-type (`UInt64`).
-"""
-typealias Cuintmax_t UInt64
-"""
-    Clonglong
-
-Equivalent to the native `signed long long` c-type (`Int64`).
-"""
-typealias Clonglong Int64
-"""
-    Culonglong
-
-Equivalent to the native `unsigned long long` c-type (`UInt64`).
-"""
-typealias Culonglong UInt64
-"""
-    Cfloat
-
-Equivalent to the native `float` c-type (`Float32`).
-"""
-typealias Cfloat Float32
-"""
-    Cdouble
-
-Equivalent to the native `double` c-type (`Float64`).
-"""
-typealias Cdouble Float64
-
-if !is_windows()
+@static if ccall(:jl_get_UNAME, Any, ()) !== :NT
     const sizeof_mode_t = ccall(:jl_sizeof_mode_t, Cint, ())
     if sizeof_mode_t == 2
-        typealias Cmode_t Int16
+        const Cmode_t = Int16
     elseif sizeof_mode_t == 4
-        typealias Cmode_t Int32
+        const Cmode_t = Int32
     elseif sizeof_mode_t == 8
-        typealias Cmode_t Int64
+        const Cmode_t = Int64
     end
 end
 
-# construction from typed pointers
-convert{T<:Union{Int8,UInt8}}(::Type{Cstring}, p::Ptr{T}) = box(Cstring, p)
-convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = box(Cwstring, p)
-convert{T<:Union{Int8,UInt8}}(::Type{Ptr{T}}, p::Cstring) = box(Ptr{T}, p)
-convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = box(Ptr{Cwchar_t}, p)
+# construction from pointers
+Cstring(p::Union{Ptr{Int8},Ptr{UInt8},Ptr{Cvoid}}) = bitcast(Cstring, p)
+Cwstring(p::Union{Ptr{Cwchar_t},Ptr{Cvoid}})       = bitcast(Cwstring, p)
+(::Type{Ptr{T}})(p::Cstring) where {T<:Union{Int8,UInt8,Cvoid}} = bitcast(Ptr{T}, p)
+(::Type{Ptr{T}})(p::Cwstring) where {T<:Union{Cwchar_t,Cvoid}}  = bitcast(Ptr{Cwchar_t}, p)
 
-# construction from untyped pointers
-convert{T<:Union{Cstring,Cwstring}}(::Type{T}, p::Ptr{Void}) = box(T, p)
+convert(::Type{Cstring}, p::Union{Ptr{Int8},Ptr{UInt8},Ptr{Cvoid}}) = Cstring(p)
+convert(::Type{Cwstring}, p::Union{Ptr{Cwchar_t},Ptr{Cvoid}}) = Cwstring(p)
+convert(::Type{Ptr{T}}, p::Cstring) where {T<:Union{Int8,UInt8,Cvoid}} = Ptr{T}(p)
+convert(::Type{Ptr{T}}, p::Cwstring) where {T<:Union{Cwchar_t,Cvoid}} = Ptr{T}(p)
+
+"""
+    pointer(array [, index])
+
+Get the native address of an array or string, optionally at a given location `index`.
+
+This function is "unsafe". Be careful to ensure that a Julia reference to
+`array` exists as long as this pointer will be used. The [`GC.@preserve`](@ref)
+macro should be used to protect the `array` argument from garbage collection
+within a given block of code.
+
+Calling [`Ref(array[, index])`](@ref Ref) is generally preferable to this function as it guarantees validity.
+"""
+function pointer end
 
 pointer(p::Cstring) = convert(Ptr{UInt8}, p)
 pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
@@ -180,21 +190,15 @@ pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
 ==(x::Union{Cstring,Cwstring}, y::Ptr) = pointer(x) == y
 ==(x::Ptr, y::Union{Cstring,Cwstring}) = x == pointer(y)
 
-# here, not in pointer.jl, to avoid bootstrapping problems in coreimg.jl
-unsafe_wrap(::Type{String}, p::Cstring, own::Bool=false) = unsafe_wrap(String, convert(Ptr{UInt8}, p), own)
-unsafe_wrap(::Type{String}, p::Cstring, len::Integer, own::Bool=false) =
-    unsafe_wrap(String, convert(Ptr{UInt8}, p), len, own)
 unsafe_string(s::Cstring) = unsafe_string(convert(Ptr{UInt8}, s))
 
 # convert strings to String etc. to pass as pointers
-cconvert(::Type{Cstring}, s::String) =
-    ccall(:jl_array_cconvert_cstring, Ref{Vector{UInt8}},
-          (Vector{UInt8},), s.data)
+cconvert(::Type{Cstring}, s::String) = s
 cconvert(::Type{Cstring}, s::AbstractString) =
     cconvert(Cstring, String(s)::String)
 
 function cconvert(::Type{Cwstring}, s::AbstractString)
-    v = transcode(Cwchar_t, String(s).data)
+    v = transcode(Cwchar_t, String(s))
     !isempty(v) && v[end] == 0 || push!(v, 0)
     return v
 end
@@ -207,7 +211,7 @@ containsnul(p::Ptr, len) =
 containsnul(s::String) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
 containsnul(s::AbstractString) = '\0' in s
 
-function unsafe_convert(::Type{Cstring}, s::Vector{UInt8})
+function unsafe_convert(::Type{Cstring}, s::Union{String,AbstractVector{UInt8}})
     p = unsafe_convert(Ptr{Cchar}, s)
     containsnul(p, sizeof(s)) &&
         throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
@@ -226,21 +230,22 @@ function unsafe_convert(::Type{Cwstring}, v::Vector{Cwchar_t})
 end
 
 # symbols are guaranteed not to contain embedded NUL
-convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
+cconvert(::Type{Cstring}, s::Symbol) = s
+unsafe_convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
 
-if is_windows()
+@static if ccall(:jl_get_UNAME, Any, ()) === :NT
 """
     Base.cwstring(s)
 
 Converts a string `s` to a NUL-terminated `Vector{Cwchar_t}`, suitable for passing to C
 functions expecting a `Ptr{Cwchar_t}`. The main advantage of using this over the implicit
-conversion provided by `Cwstring` is if the function is called multiple times with the
+conversion provided by [`Cwstring`](@ref) is if the function is called multiple times with the
 same argument.
 
 This is only available on Windows.
 """
 function cwstring(s::AbstractString)
-    bytes = String(s).data
+    bytes = codeunits(String(s))
     0 in bytes && throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
     return push!(transcode(UInt16, bytes), 0)
 end
@@ -256,7 +261,7 @@ Convert string data between Unicode encodings. `src` is either a
 `String` or a `Vector{UIntXX}` of UTF-XX code units, where
 `XX` is 8, 16, or 32. `T` indicates the encoding of the return value:
 `String` to return a (UTF-8 encoded) `String` or `UIntXX`
-to return a `Vector{UIntXX}` of UTF-`XX` data.   (The alias `Cwchar_t`
+to return a `Vector{UIntXX}` of UTF-`XX` data. (The alias [`Cwchar_t`](@ref)
 can also be used as the integer type, for converting `wchar_t*` strings
 used by external C libraries.)
 
@@ -268,19 +273,26 @@ Only conversion to/from UTF-8 is currently supported.
 """
 function transcode end
 
-transcode{T<:Union{UInt8,UInt16,UInt32,Int32}}(::Type{T}, src::Vector{T}) = src
-transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::String) = T[T(c) for c in src]
-transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::Vector{UInt8}) = transcode(T, String(src))
-function transcode{S<:Union{Int32,UInt32}}(::Type{UInt8}, src::Vector{S})
+transcode(::Type{T}, src::AbstractVector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
+transcode(::Type{T}, src::String) where {T<:Union{Int32,UInt32}} = T[T(c) for c in src]
+transcode(::Type{T}, src::AbstractVector{UInt8}) where {T<:Union{Int32,UInt32}} =
+    transcode(T, String(Vector(src)))
+transcode(::Type{T}, src::CodeUnits{UInt8,String}) where {T<:Union{Int32,UInt32}} =
+    transcode(T, String(src))
+
+function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
     buf = IOBuffer()
-    for c in src; print(buf, Char(c)); end
-    takebuf_array(buf)
+    for c in src
+        print(buf, Char(c))
+    end
+    take!(buf)
 end
 transcode(::Type{String}, src::String) = src
-transcode(T, src::String) = transcode(T, src.data)
+transcode(T, src::String) = transcode(T, codeunits(src))
 transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
-function transcode(::Type{UInt16}, src::Vector{UInt8})
+function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
+    @assert !has_offset_axes(src)
     dst = UInt16[]
     i, n = 1, length(src)
     n > 0 || return dst
@@ -294,24 +306,24 @@ function transcode(::Type{UInt16}, src::Vector{UInt8})
                 push!(dst, a)
                 a = b; continue
             elseif a < 0xe0 # 2-byte UTF-8
-                push!(dst, 0x3080 $ (UInt16(a) << 6) $ b)
+                push!(dst, xor(0x3080, UInt16(a) << 6, b))
             elseif i < n # 3/4-byte character
                 c = src[i += 1]
                 if -64 <= (c % Int8) # invalid UTF-8 (non-continuation)
                     push!(dst, a, b)
                     a = c; continue
                 elseif a < 0xf0 # 3-byte UTF-8
-                    push!(dst, 0x2080 $ (UInt16(a) << 12) $ (UInt16(b) << 6) $ c)
+                    push!(dst, xor(0x2080, UInt16(a) << 12, UInt16(b) << 6, c))
                 elseif i < n
                     d = src[i += 1]
                     if -64 <= (d % Int8) # invalid UTF-8 (non-continuation)
                         push!(dst, a, b, c)
                         a = d; continue
                     elseif a == 0xf0 && b < 0x90 # overlong encoding
-                        push!(dst, 0x2080 $ (UInt16(b) << 12) $ (UInt16(c) << 6) $ d)
+                        push!(dst, xor(0x2080, UInt16(b) << 12, UInt16(c) << 6, d))
                     else # 4-byte UTF-8
                         push!(dst, 0xe5b8 + (UInt16(a) << 8) + (UInt16(b) << 2) + (c >> 4),
-                                   0xdc80 $ (UInt16(c & 0xf) << 6) $ d)
+                                   xor(0xdc80, UInt16(c & 0xf) << 6, d))
                     end
                 else # too short
                     push!(dst, a, b, c)
@@ -330,7 +342,8 @@ function transcode(::Type{UInt16}, src::Vector{UInt8})
     return dst
 end
 
-function transcode(::Type{UInt8}, src::Vector{UInt16})
+function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
+    @assert !has_offset_axes(src)
     n = length(src)
     n == 0 && return UInt8[]
 
@@ -364,7 +377,7 @@ function transcode(::Type{UInt8}, src::Vector{UInt16})
         a = src[i += 1]
     end
 
-    dst = Array{UInt8}(m)
+    dst = StringVector(m)
     a = src[1]
     i, j = 1, 0
     while true
@@ -380,7 +393,7 @@ function transcode(::Type{UInt8}, src::Vector{UInt16})
                 a += 0x2840
                 dst[j += 1] = 0xf0 | ((a >> 8) % UInt8)
                 dst[j += 1] = 0x80 | ((a % UInt8) >> 2)
-                dst[j += 1] = 0xf0 $ ((((a % UInt8) << 4) & 0x3f) $ (b >> 6) % UInt8)
+                dst[j += 1] = xor(0xf0, ((a % UInt8) << 4) & 0x3f, (b >> 6) % UInt8)
                 dst[j += 1] = 0x80 | ((b % UInt8) & 0x3f)
             else
                 dst[j += 1] = 0xe0 | ((a >> 12) % UInt8)
@@ -408,8 +421,8 @@ end
 # reennable_sigint is provided so that immediate ctrl-c handling is
 # re-enabled within a sigatomic region, e.g. inside a Julia callback function
 # within a long-running C routine.
-sigatomic_begin() = ccall(:jl_sigatomic_begin, Void, ())
-sigatomic_end() = ccall(:jl_sigatomic_end, Void, ())
+sigatomic_begin() = ccall(:jl_sigatomic_begin, Cvoid, ())
+sigatomic_end() = ccall(:jl_sigatomic_end, Cvoid, ())
 
 """
     disable_sigint(f::Function)
@@ -440,7 +453,7 @@ end
     reenable_sigint(f::Function)
 
 Re-enable Ctrl-C handler during execution of a function.
-Temporarily reverses the effect of `disable_sigint`.
+Temporarily reverses the effect of [`disable_sigint`](@ref).
 """
 function reenable_sigint(f::Function)
     sigatomic_end()
@@ -451,12 +464,21 @@ function reenable_sigint(f::Function)
 end
 
 function ccallable(f::Function, rt::Type, argt::Type, name::Union{AbstractString,Symbol}=string(f))
-    ccall(:jl_extern_c, Void, (Any, Any, Any, Cstring), f, rt, argt, name)
+    ccall(:jl_extern_c, Cvoid, (Any, Any, Any, Cstring), f, rt, argt, name)
 end
 
-macro ccallable(rt, def)
+function expand_ccallable(rt, def)
     if isa(def,Expr) && (def.head === :(=) || def.head === :function)
         sig = def.args[1]
+        if sig.head === :(::)
+            if rt === nothing
+                rt = sig.args[2]
+            end
+            sig = sig.args[1]
+        end
+        if rt === nothing
+            error("@ccallable requires a return type")
+        end
         if sig.head === :call
             name = sig.args[1]
             at = map(sig.args[2:end]) do a
@@ -473,4 +495,11 @@ macro ccallable(rt, def)
         end
     end
     error("expected method definition in @ccallable")
+end
+
+macro ccallable(def)
+    expand_ccallable(nothing, def)
+end
+macro ccallable(rt, def)
+    expand_ccallable(rt, def)
 end

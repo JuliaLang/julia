@@ -1,7 +1,7 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef APINT_C_H
-#define APINT_C_H
+#ifndef JL_APINT_C_H
+#define JL_APINT_C_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -9,7 +9,7 @@ extern "C" {
 #include "dtypes.h"
 
 #ifdef LLVM_VERSION_MAJOR
-using llvm::integerPart;
+using integerPart = llvm::APInt::WordType;
 #else
 typedef void integerPart;
 #endif

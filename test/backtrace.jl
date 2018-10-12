@@ -1,21 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
-
-bt = backtrace()
-have_backtrace = false
-for l in bt
-    lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), l, true)
-    if lkup[1][1] == :backtrace
-        @test lkup[1][5] == false # fromC
-        have_backtrace = true
-        break
-    end
-end
-
-@test have_backtrace
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Test location information for inlined code (ref issues #1334 #12544)
 module test_inline_bt
-using Base.Test
+using Test
 
 function get_bt_frames(functionname, bt)
     for i = 1:length(bt)
@@ -26,12 +13,15 @@ end
 
 # same-file inline
 eval(Expr(:function, Expr(:call, :test_inline_1),
-          Expr(:block, Expr(:line, 42, Symbol("backtrace.jl")),
-                       Expr(:block, Expr(:meta, :push_loc, Symbol("backtrace.jl"), :inlfunc),
+          Expr(:block, Expr(:line, 99, Symbol("backtrace.jl")),
+                       Expr(:block, Expr(:line, 42),
+                                    Expr(:meta, :push_loc, Symbol("backtrace.jl"), :inlfunc),
                                     Expr(:line, 37),
                                     Expr(:call, :throw, "foo"),
-                                    Expr(:meta, :pop_loc)))))
+                                    Expr(:meta, :pop_loc),
+                                    Expr(:line, 99)))))
 
+@test functionloc(test_inline_1) == ("backtrace.jl", 99)
 try
     test_inline_1()
     error("unexpected")
@@ -40,20 +30,23 @@ catch err
     @test length(lkup) == 2
     @test endswith(string(lkup[2].file), "backtrace.jl")
     @test lkup[2].line == 42
-    @test lkup[1].func == :inlfunc
+    # TODO: we don't support surface AST locations with inlined function names
+    @test_broken lkup[1].func == :inlfunc
     @test endswith(string(lkup[1].file), "backtrace.jl")
     @test lkup[1].line == 37
 end
 
 # different-file inline
-const absfilepath = is_windows() ? "C:\\foo\\bar\\baz.jl" : "/foo/bar/baz.jl"
+const absfilepath = Sys.iswindows() ? "C:\\foo\\bar\\baz.jl" : "/foo/bar/baz.jl"
 eval(Expr(:function, Expr(:call, :test_inline_2),
-          Expr(:block, Expr(:line, 99, Symbol("backtrace.jl")),
+          Expr(:block, Expr(:line, 81, Symbol("backtrace.jl")),
                        Expr(:block, Expr(:meta, :push_loc, Symbol(absfilepath)),
                                     Expr(:line, 111),
                                     Expr(:call, :throw, "foo"),
-                                    Expr(:meta, :pop_loc)))))
+                                    Expr(:meta, :pop_loc),
+                                    Expr(:line, 99)))))
 
+@test functionloc(test_inline_2) == ("backtrace.jl", 81)
 try
     test_inline_2()
     error("unexpected")
@@ -61,7 +54,7 @@ catch err
     lkup = get_bt_frames(:test_inline_2, catch_backtrace())
     @test length(lkup) == 2
     @test endswith(string(lkup[2].file), "backtrace.jl")
-    @test lkup[2].line == 99
+    @test lkup[2].line == 81
     @test string(lkup[1].file) == absfilepath
     @test lkup[1].line == 111
 end
@@ -99,7 +92,7 @@ end
 
 module BackTraceTesting
 
-using Base.Test
+using Test
 
 @inline bt2() = backtrace()
 @inline bt1() = bt2()
@@ -110,19 +103,15 @@ hasbt = hasbt2 = false
 for sfs in lkup
     for sf in sfs
         if sf.func == :bt
-            hasbt = true
+            global hasbt = true
         end
         if sf.func == :bt2
-            hasbt2 = true
+            global hasbt2 = true
         end
     end
 end
 @test hasbt
-if Base.JLOptions().can_inline != 0
-    @test_broken hasbt2
-else
-    @test hasbt2
-end
+@test hasbt2
 
 function btmacro()
     ret = @timed backtrace()
@@ -133,14 +122,58 @@ hasme = hasbtmacro = false
 for sfs in lkup
     for sf in sfs
         if sf.func == Symbol("macro expansion")
-            hasme = true
+            global hasme = true
         end
         if sf.func == :btmacro
-            hasbtmacro = true
+            global hasbtmacro = true
         end
     end
 end
 @test hasme
 @test hasbtmacro
 
+end
+
+# Interpreter backtraces
+bt = eval(quote
+    try
+        error()
+    catch
+        catch_backtrace()
+    end
+end)
+lkup = map(StackTraces.lookup, bt)
+hastoplevel = false
+for sfs in lkup
+    for sf in sfs
+        if sf.linfo isa Core.CodeInfo
+            global hastoplevel = true
+        end
+    end
+end
+@test hastoplevel
+
+# issue #23971
+let
+    for i = 1:1
+        global bt23971 = backtrace()
+    end
+end
+let st = stacktrace(bt23971)
+    @test StackTraces.is_top_level_frame(st[1])
+    @test string(st[1].file) == @__FILE__
+    @test !occursin("missing", string(st[2].file))
+end
+
+# issue #27959
+let bt, found = false
+    @testset begin
+        bt = backtrace()
+    end
+    for frame in map(StackTraces.lookup, bt)
+        if frame[1].line == @__LINE__() - 3 && frame[1].file == Symbol(@__FILE__)
+            found = true; break
+        end
+    end
+    @test found
 end

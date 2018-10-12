@@ -1,47 +1,6 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Tests that do not really go anywhere else
-
-# Test info
-@test contains(sprint(io->info(io,"test")), "INFO:")
-@test contains(sprint(io->info(io,"test")), "INFO: test")
-@test contains(sprint(io->info(io,"test ",1,2,3)), "INFO: test 123")
-@test contains(sprint(io->info(io,"test", prefix="MYINFO: ")), "MYINFO: test")
-
-# Test warn
-@test contains(sprint(io->Base.warn_once(io,"test")), "WARNING: test")
-@test isempty(sprint(io->Base.warn_once(io,"test")))
-
-@test contains(sprint(io->warn(io)), "WARNING:")
-@test contains(sprint(io->warn(io, "test")), "WARNING: test")
-@test contains(sprint(io->warn(io, "test ",1,2,3)), "WARNING: test 123")
-@test contains(sprint(io->warn(io, "test", prefix="MYWARNING: ")), "MYWARNING: test")
-@test contains(sprint(io->warn(io, "testonce", once=true)), "WARNING: testonce")
-@test isempty(sprint(io->warn(io, "testonce", once=true)))
-@test !isempty(sprint(io->warn(io, "testonce", once=true, key=hash("testonce",hash("testanother")))))
-let bt = backtrace()
-    ws = split(chomp(sprint(io->warn(io,"test", bt))), '\n')
-    bs = split(chomp(sprint(io->Base.show_backtrace(io,bt))), '\n')
-    @test contains(ws[1],"WARNING: test")
-    for (l,b) in zip(ws[2:end],bs)
-        @test contains(l, b)
-    end
-end
-
-# test assert() method
-@test_throws AssertionError assert(false)
-let res = assert(true)
-    @test res === nothing
-end
-let
-    try
-        assert(false)
-        error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test isempty(ex.msg)
-    end
-end
 
 # test @assert macro
 @test_throws AssertionError (@assert 1 == 2)
@@ -55,7 +14,7 @@ let
         error("unexpected")
     catch ex
         @test isa(ex, AssertionError)
-        @test contains(ex.msg, "1 == 2")
+        @test occursin("1 == 2", ex.msg)
     end
 end
 # test @assert message
@@ -85,8 +44,8 @@ let
         error("unexpected")
     catch ex
         @test isa(ex, AssertionError)
-        @test !contains(ex.msg,  "1 == 2")
-        @test contains(ex.msg, "random_object")
+        @test !occursin("1 == 2", ex.msg)
+        @test occursin("random_object", ex.msg)
     end
 end
 # if the second argument is an expression, c
@@ -109,30 +68,21 @@ let # test the process title functions, issue #9957
     @test Sys.get_process_title() == oldtitle
 end
 
-
-# test gc_enable/disable
-@test gc_enable(true)
-@test gc_enable(false)
-@test gc_enable(false) == false
-@test gc_enable(true) == false
-@test gc_enable(true)
-
-# test methodswith
-immutable NoMethodHasThisType end
-@test isempty(methodswith(NoMethodHasThisType))
-@test !isempty(methodswith(Int))
-immutable Type4Union end
-func4union(::Union{Type4Union,Int}) = ()
-@test !isempty(methodswith(Type4Union))
+# test GC.enable/disable
+@test GC.enable(true)
+@test GC.enable(false)
+@test GC.enable(false) == false
+@test GC.enable(true) == false
+@test GC.enable(true)
 
 # PR #10984
-# Disable on windows because of issue (missing flush) when redirecting STDERR.
+# Disable on windows because of issue (missing flush) when redirecting stderr.
 let
-    redir_err = "redirect_stderr(STDOUT)"
+    redir_err = "redirect_stderr(stdout)"
     exename = Base.julia_cmd()
     script = "$redir_err; module A; f() = 1; end; A.f() = 1"
-    warning_str = readstring(`$exename --startup-file=no -e $script`)
-    @test contains(warning_str, "f()")
+    warning_str = read(`$exename --warn-overwrite=yes --startup-file=no -e $script`, String)
+    @test occursin("f()", warning_str)
 end
 
 # lock / unlock
@@ -152,16 +102,53 @@ let l = ReentrantLock()
             @test false
         end === false
     end
-    wait(t)
+    Base.wait(t)
     unlock(l)
     @test_throws ErrorException unlock(l)
+end
+
+# task switching
+
+@noinline function f6597(c)
+    t = @async nothing
+    finalizer(t -> c[] += 1, t)
+    Base.wait(t)
+    @test c[] == 0
+    Base.wait(t)
+    nothing
+end
+let c = Ref(0),
+    t2 = @async (wait(); c[] += 99)
+    @test c[] == 0
+    f6597(c)
+    GC.gc() # this should run the finalizer for t
+    @test c[] == 1
+    yield()
+    @test c[] == 1
+    yield(t2)
+    @test c[] == 100
+end
+
+# test that @sync is lexical (PR #27164)
+
+const x27164 = Ref(0)
+do_something_async_27164() = @async(begin sleep(1); x27164[] = 2; end)
+
+let t = nothing
+    @sync begin
+        t = do_something_async_27164()
+        @async (sleep(0.05); x27164[] = 1)
+    end
+    @test x27164[] == 1
+    fetch(t)
+    @test x27164[] == 2
 end
 
 # timing macros
 
 # test that they don't introduce global vars
 global v11801, t11801, names_before_timing
-names_before_timing = names(current_module(), true)
+names_before_timing = names(@__MODULE__, all = true)
 
 let t = @elapsed 1+1
     @test isa(t, Real) && t >= 0
@@ -180,20 +167,28 @@ v11801, t11801 = @timed sin(1)
 @test v11801 == sin(1)
 @test isa(t11801,Real) && t11801 >= 0
 
-@test names(current_module(), true) == names_before_timing
+@test names(@__MODULE__, all = true) == names_before_timing
 
 # interactive utilities
 
 import Base.summarysize
-@test summarysize(Core) > summarysize(Core.Inference) > Core.sizeof(Core)
-@test summarysize(Base) > 10_000*sizeof(Int)
-module _test_whos_
-export x
-x = 1.0
+@test summarysize(Core) > (summarysize(Core.Compiler) + Base.summarysize(Core.Intrinsics)) > Core.sizeof(Core)
+@test summarysize(Base) > 100_000 * sizeof(Ptr)
+
+let R = Ref{Any}(nothing), depth = 10^6
+    for i = 1:depth
+        R = Ref{Any}(R)
+    end
+    R = Core.svec(R, R)
+    @test summarysize(R) == (depth + 4) * sizeof(Ptr)
 end
-@test sprint(whos, Main, r"^$") == ""
-let v = sprint(whos, _test_whos_)
-    @test contains(v, "x      8 bytes  Float64")
+
+# issue #25367 - summarysize with reshaped arrays
+let A = zeros(1000), B = reshape(A, (1,1000))
+    @test summarysize((A,B)) < 2 * sizeof(A)
+
+    # check that object header is accounted for
+    @test summarysize(A) > sizeof(A)
 end
 
 # issue #13021
@@ -205,33 +200,6 @@ catch ex
 end
     @test isa(ex, ErrorException) && ex.msg == "cannot assign variables in other modules"
 end
-
-@test !Base.is_unix(:Windows)
-@test !Base.is_linux(:Windows)
-@test Base.is_linux(:Linux)
-@test Base.is_windows(:Windows)
-@test Base.is_windows(:NT)
-@test !Base.is_windows(:Darwin)
-@test Base.is_apple(:Darwin)
-@test Base.is_apple(:Apple)
-@test !Base.is_apple(:Windows)
-@test Base.is_unix(:Darwin)
-@test Base.is_unix(:FreeBSD)
-@test_throws ArgumentError Base.is_unix(:BeOS)
-if !is_windows()
-    @test Sys.windows_version() === (0, 0)
-else
-    @test (Sys.windows_version()::Tuple{Int,Int})[1] > 0
-end
-
-# Issue 14173
-module Tmp14173
-    export A
-    A = randn(2000, 2000)
-end
-whos(IOBuffer(), Tmp14173) # warm up
-const MEMDEBUG = ccall(:jl_is_memdebug, Bool, ())
-@test @allocated(whos(IOBuffer(), Tmp14173)) < (MEMDEBUG ? 30000 : 8000)
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
@@ -321,7 +289,7 @@ for s in [map(first,V8); X8],
     ss = s[i:j]
     ss in X8 || push!(X8, ss)
 end
-sort!(X8, lt=lexless)
+sort!(X8, lt=isless)
 sort!(X8, by=length)
 
 I8 = [(s,map(UInt16,s)) for s in X8]
@@ -402,22 +370,31 @@ end
 
 let s = "abcα🐨\0x\0"
     for T in (UInt8, UInt16, UInt32, Int32)
-        @test transcode(T, s) == transcode(T, s.data)
+        @test transcode(T, s) == transcode(T, codeunits(s))
         @test transcode(String, transcode(T, s)) == s
     end
 end
 
-# clipboard functionality
-if is_windows()
-    for str in ("Hello, world.", "∀ x ∃ y", "")
-        clipboard(str)
-        @test clipboard() == str
+let X = UInt8[0x30,0x31,0x32]
+    for T in (UInt8, UInt16, UInt32, Int32)
+        @test transcode(UInt8,transcode(T, X)) == X
+        @test transcode(UInt8,transcode(T, 0x30:0x32)) == X
     end
 end
 
-optstring = sprint(show, Base.JLOptions())
-@test startswith(optstring, "JLOptions(")
-@test endswith(optstring, ")")
+let optstring = repr("text/plain", Base.JLOptions())
+    @test startswith(optstring, "JLOptions(\n")
+    @test !occursin("Ptr", optstring)
+    @test endswith(optstring, "\n)")
+    @test occursin(" = \"", optstring)
+end
+let optstring = repr(Base.JLOptions())
+    @test startswith(optstring, "JLOptions(")
+    @test endswith(optstring, ")")
+    @test !occursin("\n", optstring)
+    @test !occursin("Ptr", optstring)
+    @test occursin(" = \"", optstring)
+end
 
 # Base.securezero! functions (#17579)
 import Base: securezero!, unsafe_securezero!
@@ -427,28 +404,321 @@ let a = [1,2,3]
     @test unsafe_securezero!(pointer(a), length(a)) == pointer(a)
     @test a == [0,0,0]
     a[:] = 1:3
-    @test unsafe_securezero!(Ptr{Void}(pointer(a)), sizeof(a)) == Ptr{Void}(pointer(a))
+    @test unsafe_securezero!(Ptr{Cvoid}(pointer(a)), sizeof(a)) == Ptr{Cvoid}(pointer(a))
     @test a == [0,0,0]
 end
-let creds = Base.LibGit2.CachedCredentials()
-    LibGit2.get_creds!(creds, "foo", LibGit2.SSHCredentials()).pass = "bar"
-    securezero!(creds)
-    @test LibGit2.get_creds!(creds, "foo", nothing).pass == "\0\0\0"
+
+# PR #28038 (prompt/getpass stream args)
+@test_throws MethodError Base.getpass(IOBuffer(), stdout, "pass")
+let buf = IOBuffer()
+    @test Base.prompt(IOBuffer("foo\nbar\n"), buf, "baz") == "foo"
+    @test String(take!(buf)) == "baz: "
+    @test Base.prompt(IOBuffer("\n"), buf, "baz", default="foobar") == "foobar"
+    @test String(take!(buf)) == "baz [foobar]: "
+    @test Base.prompt(IOBuffer("blah\n"), buf, "baz", default="foobar") == "blah"
 end
 
 # Test that we can VirtualProtect jitted code to writable
-if is_windows()
-    @noinline function WeVirtualProtectThisToRWX(x, y)
-        x+y
-    end
-
-    let addr = cfunction(WeVirtualProtectThisToRWX, UInt64, (UInt64, UInt64))
-        addr = addr-(UInt64(addr)%4096)
-        const PAGE_EXECUTE_READWRITE = 0x40
+@noinline function WeVirtualProtectThisToRWX(x, y)
+    return x + y
+end
+@static if Sys.iswindows()
+    let addr = @cfunction(WeVirtualProtectThisToRWX, UInt64, (UInt64, UInt64))
+        addr = addr - (UInt64(addr) % 4096)
+        PAGE_EXECUTE_READWRITE = 0x40
         oldPerm = Ref{UInt32}()
-        err18083 = ccall(:VirtualProtect,stdcall,Cint,
-            (Ptr{Void}, Csize_t, UInt32, Ptr{UInt32}),
+        err18083 = ccall(:VirtualProtect, stdcall, Cint,
+            (Ptr{Cvoid}, Csize_t, UInt32, Ptr{UInt32}),
             addr, 4096, PAGE_EXECUTE_READWRITE, oldPerm)
         err18083 == 0 && error(Libc.GetLastError())
     end
+end
+
+let buf = IOBuffer()
+    printstyled(IOContext(buf, :color=>true), "foo", color=:red)
+    @test startswith(String(take!(buf)), Base.text_colors[:red])
+end
+
+# Test that `printstyled` accepts non-string values, just as `print` does
+let buf_color = IOBuffer()
+    args = (3.2, "foo", :testsym)
+    printstyled(IOContext(buf_color, :color=>true), args..., color=:red)
+    buf_plain = IOBuffer()
+    print(buf_plain, args...)
+    expected_str = string(Base.text_colors[:red],
+                          String(take!(buf_plain)),
+                          Base.text_colors[:default])
+    @test expected_str == String(take!(buf_color))
+end
+
+# Test that `printstyled` on multiline input prints the ANSI codes
+# on each line
+let buf_color = IOBuffer()
+    str = "Two\nlines"
+    printstyled(IOContext(buf_color, :color=>true), str; bold=true, color=:red)
+    @test String(take!(buf_color)) == "\e[31m\e[1mTwo\e[22m\e[39m\n\e[31m\e[1mlines\e[22m\e[39m"
+end
+
+if stdout isa Base.TTY
+    @test haskey(stdout, :color) == true
+    @test haskey(stdout, :bar) == false
+    @test (:color=>Base.have_color) in stdout
+    @test (:color=>!Base.have_color) ∉ stdout
+    @test stdout[:color] == get(stdout, :color, nothing) == Base.have_color
+    @test get(stdout, :bar, nothing) === nothing
+    @test_throws KeyError stdout[:bar]
+end
+
+let
+    global c_18711 = 0
+    buf = IOContext(IOBuffer(), :hascontext => true)
+    Base.with_output_color(:red, buf) do buf
+        global c_18711
+        get(buf, :hascontext, false) && (c_18711 += 1)
+    end
+    @test c_18711 == 1
+end
+
+let buf = IOBuffer()
+    buf_color = IOContext(buf, :color => true)
+    printstyled(buf_color, "foo", color=:red)
+    # Check that we get back to normal text color in the end
+    @test String(take!(buf)) == "\e[31mfoo\e[39m"
+
+    # Check that boldness is turned off
+    printstyled(buf_color, "foo"; bold=true, color=:red)
+    @test String(take!(buf)) == "\e[31m\e[1mfoo\e[22m\e[39m"
+end
+
+abstract type DA_19281{T, N} <: AbstractArray{T, N} end
+Base.convert(::Type{Array{S, N}}, ::DA_19281{T, N}) where {S,T,N} = error()
+x_19281 = [(), (1,)]
+mutable struct Foo_19281
+    f::Vector{Tuple}
+    Foo_19281() = new(x_19281)
+end
+
+@testset "test this does not segfault #19281" begin
+    @test Foo_19281().f[1] == ()
+    @test Foo_19281().f[2] == (1,)
+end
+
+let
+    x_notdefined = Ref{String}()
+    @test !isassigned(x_notdefined)
+
+    x_defined = Ref{String}("Test")
+    @test isassigned(x_defined)
+end
+
+mutable struct Demo_20254
+    arr::Array{String}
+end
+
+# these cause stack overflows and are a little flaky on CI, ref #20256
+if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+    function Demo_20254(arr::AbstractArray=Any[])
+        Demo_20254(string.(arr))
+    end
+
+    _get_19433(x::NTuple{1}) = (something(x[1]),)
+    _get_19433(xs::Vararg) = (something(xs[1]), _get_19433(xs[2:end])...)
+
+    f_19433(f_19433, xs...) = f_19433(_get_19433(xs)...)
+
+    @testset "test this does not crash, issue #19433 and #20254" begin
+        @test_throws StackOverflowError Demo_20254()
+        @test_throws StackOverflowError f_19433(+, 1, 2)
+    end
+end
+
+# Test issue #19774 invokelatest fix.
+
+# we define this in a module to allow rewriting
+# rather than needing an extra eval.
+module Issue19774
+f(x) = 1
+end
+
+# First test the world issue condition.
+let foo() = begin
+        @eval Issue19774.f(x::Int) = 2
+        return Issue19774.f(0)
+    end
+    @test foo() == 1    # We should be using the original function.
+end
+
+# Now check that invokelatest fixes that issue.
+let foo() = begin
+        @eval Issue19774.f(x::Int) = 3
+        return Base.invokelatest(Issue19774.f, 0)
+    end
+    @test foo() == 3
+end
+
+# Check that the kwargs conditions also works
+module Kwargs19774
+f(x, y; z=0) = x * y + z
+end
+
+@test Kwargs19774.f(2, 3; z=1) == 7
+
+let foo() = begin
+        @eval Kwargs19774.f(x::Int, y::Int; z=3) = z
+        return Base.invokelatest(Kwargs19774.f, 2, 3; z=1)
+    end
+    @test foo() == 1
+end
+
+# Endian tests
+# For now, we only support little endian.
+# Add an `Sys.ARCH` test for big endian when/if we add support for that.
+# Do **NOT** use `ENDIAN_BOM` to figure out the endianness
+# since that's exactly what we want to test.
+@test ENDIAN_BOM == 0x04030201
+@test ntoh(0x1) == 0x1
+@test hton(0x1) == 0x1
+@test ltoh(0x1) == 0x1
+@test htol(0x1) == 0x1
+@test ntoh(0x102) == 0x201
+@test hton(0x102) == 0x201
+@test ltoh(0x102) == 0x102
+@test htol(0x102) == 0x102
+@test ntoh(0x1020304) == 0x4030201
+@test hton(0x1020304) == 0x4030201
+@test ltoh(0x1020304) == 0x1020304
+@test htol(0x1020304) == 0x1020304
+@test ntoh(0x102030405060708) == 0x807060504030201
+@test hton(0x102030405060708) == 0x807060504030201
+@test ltoh(0x102030405060708) == 0x102030405060708
+@test htol(0x102030405060708) == 0x102030405060708
+
+@testset "inline bug #18735" begin
+    @noinline f(n) = n ? error() : Int
+    g() = Union{f(true)}
+    @test_throws ErrorException g()
+end
+
+include("testenv.jl")
+
+let flags = Cmd(filter(a->!occursin("depwarn", a), collect(test_exeflags)))
+    local cmd = `$test_exename $flags deprecation_exec.jl`
+
+    if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
+        error("Deprecation test failed, cmd : $cmd")
+    end
+end
+
+# PR #23664, make sure names don't get added to the default `Main` workspace
+@test readlines(`$(Base.julia_cmd()) --startup-file=no -e 'foreach(println, names(Main))'`) == ["Base","Core","Main"]
+
+# issue #26310
+@test_warn "could not import" Core.eval(@__MODULE__, :(import .notdefined_26310__))
+@test_warn "could not import" Core.eval(Main,        :(import ........notdefined_26310__))
+@test_nowarn Core.eval(Main, :(import .Main))
+@test_nowarn Core.eval(Main, :(import ....Main))
+
+# issue #27239
+@testset "strftime tests issue #27239" begin
+
+    # save current locales
+    locales = Dict()
+    for cat in 0:9999
+        cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, C_NULL)
+        if cstr != C_NULL
+            locales[cat] = unsafe_string(cstr)
+        end
+    end
+
+    # change to non-Unicode Korean
+    for (cat, _) in locales
+        korloc = ["ko_KR.EUC-KR", "ko_KR.CP949", "ko_KR.949", "Korean_Korea.949"]
+        for lc in korloc
+            cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, lc)
+        end
+    end
+
+    # system dependent formats
+    timestr_c = Libc.strftime(0.0)
+    timestr_aAbBpZ = Libc.strftime("%a %A %b %B %p %Z", 0)
+
+    # recover locales
+    for (cat, lc) in locales
+        cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, lc)
+    end
+
+    # tests
+    @test isvalid(timestr_c)
+    @test isvalid(timestr_aAbBpZ)
+end
+
+
+using Base: @kwdef
+
+@kwdef struct Test27970Typed
+    a::Int
+    b::String = "hi"
+end
+
+@kwdef struct Test27970Untyped
+    a
+end
+
+@kwdef struct Test27970Empty end
+
+@testset "No default values in @kwdef" begin
+    @test Test27970Typed(a=1) == Test27970Typed(1, "hi")
+    # Implicit type conversion (no assertion on kwarg)
+    @test Test27970Typed(a=0x03) == Test27970Typed(3, "hi")
+    @test_throws UndefKeywordError Test27970Typed()
+
+    @test Test27970Untyped(a=1) == Test27970Untyped(1)
+    @test_throws UndefKeywordError Test27970Untyped()
+
+    # Just checking that this doesn't stack overflow on construction
+    @test Test27970Empty() == Test27970Empty()
+end
+
+abstract type AbstractTest29307 end
+@kwdef struct Test29307{T<:Integer} <: AbstractTest29307
+    a::T=2
+end
+
+@testset "subtyped @kwdef" begin
+    @test Test29307() == Test29307{Int}(2)
+    @test Test29307(a=0x03) == Test29307{UInt8}(0x03)
+    @test Test29307{UInt32}() == Test29307{UInt32}(2)
+    @test Test29307{UInt32}(a=0x03) == Test29307{UInt32}(0x03)
+end
+
+@kwdef struct TestInnerConstructor
+    a = 1
+    TestInnerConstructor(a::Int) = (@assert a>0; new(a))
+    function TestInnerConstructor(a::String)
+        @assert length(a) > 0
+        new(a)
+    end
+end
+
+@testset "@kwdef inner constructor" begin
+    @test TestInnerConstructor() == TestInnerConstructor(1)
+    @test TestInnerConstructor(a=2) == TestInnerConstructor(2)
+    @test_throws AssertionError TestInnerConstructor(a=0)
+    @test TestInnerConstructor(a="2") == TestInnerConstructor("2")
+    @test_throws AssertionError TestInnerConstructor(a="")
+end
+
+const outsidevar = 7
+@kwdef struct TestOutsideVar
+    a::Int=outsidevar
+end
+@test TestOutsideVar() == TestOutsideVar(7)
+
+
+@testset "exports of modules" begin
+    for (_, mod) in Base.loaded_modules
+       for v in names(mod)
+           @test isdefined(mod, v)
+       end
+   end
 end

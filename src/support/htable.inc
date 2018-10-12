@@ -189,7 +189,7 @@ int HTNAME##_remove(htable_t *h, void *key)                             \
                                                                         \
 void HTNAME##_adjoin(htable_t *h, void *key, void *val)                 \
 {                                                                       \
-    return HTNAME##_adjoin_r(h, key, val, NULL);                        \
+    HTNAME##_adjoin_r(h, key, val, NULL);                               \
 }
 
 #define HTIMPL_R(HTNAME, HFUNC, EQFUNC) _HTIMPL_EX(HTNAME, HFUNC, EQFUNC, )
