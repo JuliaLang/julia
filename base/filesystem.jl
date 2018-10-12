@@ -63,7 +63,7 @@ mutable struct File <: AbstractFile
     File(fd::OS_HANDLE) = new(true, fd)
 end
 if OS_HANDLE !== RawFD
-    File(fd::RawFD) = File(Libc._get_osfhandle(fd))
+    File(fd::RawFD) = File(Libc._get_osfhandle(fd)) # TODO: calling close would now destroy the wrong handle
 end
 
 rawhandle(file::File) = file.handle
@@ -94,12 +94,13 @@ function check_open(f::File)
 end
 
 function close(f::File)
-    check_open(f)
-    err = ccall(:jl_fs_close, Int32, (OS_HANDLE,), f.handle)
-    uv_error("close", err)
-    f.handle = INVALID_OS_HANDLE
-    f.open = false
-    return nothing
+    if isopen(f)
+        f.open = false
+        err = ccall(:jl_fs_close, Int32, (OS_HANDLE,), f.handle)
+        f.handle = INVALID_OS_HANDLE
+        uv_error("close", err)
+    end
+    nothing
 end
 
 # sendfile is the most efficient way to copy from a file descriptor
@@ -159,7 +160,7 @@ end
 
 function read(f::File, ::Type{Char})
     b0 = read(f, UInt8)
-    l = 8(4-leading_ones(b0))
+    l = 8 * (4 - leading_ones(b0))
     c = UInt32(b0) << 24
     if l < 24
         s = 16
@@ -176,6 +177,7 @@ function read(f::File, ::Type{Char})
     end
     return reinterpret(Char, c)
 end
+
 read(f::File, ::Type{T}) where {T<:AbstractChar} = T(read(f, Char)) # fallback
 
 function unsafe_read(f::File, p::Ptr{UInt8}, nel::UInt)
