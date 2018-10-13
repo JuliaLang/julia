@@ -583,9 +583,9 @@ function bytes2hex end
 
 function bytes2hex(a::AbstractArray{UInt8})
     b = Base.StringVector(2*length(a))
-    for i in 1:length(a)
-      @inbounds b[2i - 1] = hex_chars[1 + a[i] >> 4]
-      @inbounds b[2i] = hex_chars[1 + a[i] & 0xf]
+    @inbounds for (i, x) in enumerate(a)
+      b[2i - 1] = hex_chars[1 + x >> 4]
+      b[2i    ] = hex_chars[1 + x & 0xf]
     end
     return String(b)
 end
