@@ -3,21 +3,30 @@
 # matmul.jl: Everything to do with dense matrix multiplication
 
 """
-    @mul0(x, y)
+    @muladd01!(alpha, x, beta, y)
 
-Short-circuiting multiplication. `y` is not evaluated when `x` is 0.
+Short-circuiting version of `y = alpha * x + beta * y`.
 """
-macro mul0(x, y)
+macro muladd01!(alpha, x, beta, y)
+    alpha = esc(alpha)
+    beta = esc(beta)
     x = esc(x)
     y = esc(y)
     quote
-        if iszero($x)
-            $x
+        if iszero($beta)
+            $y = mul1($alpha, $x)
         else
-            $x * $y
+            $y = mul1($alpha, $x) + $beta * $y
         end
     end
 end
+
+"""
+    mul1(alpha, x)
+
+Short-circuiting multiplication. `x` is returned as-is when `alpha` is 1.
+"""
+mul1(alpha, x) = isone(alpha) ? x : alpha * x
 
 matprod(x, y) = x*y + x*y
 
@@ -594,7 +603,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
             for i = 1:nA
                 s += transpose(A[aoffs+i]) * B[i]
             end
-            C[k] = alpha * s + @mul0(beta, C[k])
+            @muladd01!(alpha, s, beta, C[k])
         end
     elseif tA == 'C'
         for k = 1:mA
@@ -607,7 +616,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
             for i = 1:nA
                 s += A[aoffs + i]'B[i]
             end
-            C[k] = alpha * s + @mul0(beta, C[k])
+            @muladd01!(alpha, s, beta, C[k])
         end
     else # tA == 'N'
         for i = 1:mA
@@ -621,7 +630,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
         end
         for k = 1:mB
             aoffs = (k-1)*Astride
-            b = alpha * B[k]
+            b = mul1(alpha, B[k])
             for i = 1:mA
                 C[i] += A[aoffs + i] * b
             end
@@ -706,7 +715,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         s += Atile[aoff+k] * Btile[boff+k]
                     end
-                    C[i,j] = alpha * s + @mul0(beta, C[i,j])
+                    @muladd01!(alpha, s, beta, C[i,j])
                 end
             end
         else
@@ -756,7 +765,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += A[i, k]*B[k, j]
                     end
-                    C[i,j] = alpha * Ctmp + @mul0(beta, C[i,j])
+                    @muladd01!(alpha, Ctmp, beta, C[i,j])
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
@@ -765,7 +774,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += A[i, k] * transpose(B[j, k])
                     end
-                    C[i,j] = alpha * Ctmp + @mul0(beta, C[i,j])
+                    @muladd01!(alpha, Ctmp, beta, C[i,j])
                 end
             else
                 for i = 1:mA, j = 1:nB
@@ -774,7 +783,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += A[i, k]*B[j, k]'
                     end
-                    C[i,j] = alpha * Ctmp + @mul0(beta, C[i,j])
+                    @muladd01!(alpha, Ctmp, beta, C[i,j])
                 end
             end
         elseif tA == 'T'
@@ -785,7 +794,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += transpose(A[k, i]) * B[k, j]
                     end
-                    C[i,j] = alpha * Ctmp + @mul0(beta, C[i,j])
+                    @muladd01!(alpha, Ctmp, beta, C[i,j])
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
@@ -794,7 +803,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += transpose(A[k, i]) * transpose(B[j, k])
                     end
-                    C[i,j] = alpha * Ctmp + @mul0(beta, C[i,j])
+                    @muladd01!(alpha, Ctmp, beta, C[i,j])
                 end
             else
                 for i = 1:mA, j = 1:nB
@@ -803,7 +812,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += transpose(A[k, i]) * adjoint(B[j, k])
                     end
-                    C[i,j] = alpha * Ctmp + @mul0(beta, C[i,j])
+                    @muladd01!(alpha, Ctmp, beta, C[i,j])
                 end
             end
         else
@@ -814,7 +823,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += A[k, i]'B[k, j]
                     end
-                    C[i,j] = alpha * Ctmp + @mul0(beta, C[i,j])
+                    @muladd01!(alpha, Ctmp, beta, C[i,j])
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
@@ -823,7 +832,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += adjoint(A[k, i]) * transpose(B[j, k])
                     end
-                    C[i,j] = alpha * Ctmp + @mul0(beta, C[i,j])
+                    @muladd01!(alpha, Ctmp, beta, C[i,j])
                 end
             else
                 for i = 1:mA, j = 1:nB
@@ -832,7 +841,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += A[k, i]'B[j, k]'
                     end
-                    C[i,j] = alpha * Ctmp + @mul0(beta, C[i,j])
+                    @muladd01!(alpha, Ctmp, beta, C[i,j])
                 end
             end
         end
@@ -877,10 +886,10 @@ function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
         B11 = B[1,1]; B12 = B[1,2];
         B21 = B[2,1]; B22 = B[2,2]
     end
-    C[1,1] = alpha * (A11*B11 + A12*B21) + @mul0(beta, C[1,1])
-    C[1,2] = alpha * (A11*B12 + A12*B22) + @mul0(beta, C[1,2])
-    C[2,1] = alpha * (A21*B11 + A22*B21) + @mul0(beta, C[2,1])
-    C[2,2] = alpha * (A21*B12 + A22*B22) + @mul0(beta, C[2,2])
+    @muladd01!(alpha, A11*B11 + A12*B21, beta, C[1,1])
+    @muladd01!(alpha, A11*B12 + A12*B22, beta, C[1,2])
+    @muladd01!(alpha, A21*B11 + A22*B21, beta, C[2,1])
+    @muladd01!(alpha, A21*B12 + A22*B22, beta, C[2,2])
     end # inbounds
     C
 end
@@ -929,17 +938,17 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
         B31 = B[3,1]; B32 = B[3,2]; B33 = B[3,3]
     end
 
-    C[1,1] = alpha * (A11*B11 + A12*B21 + A13*B31) + @mul0(beta, C[1,1])
-    C[1,2] = alpha * (A11*B12 + A12*B22 + A13*B32) + @mul0(beta, C[1,2])
-    C[1,3] = alpha * (A11*B13 + A12*B23 + A13*B33) + @mul0(beta, C[1,3])
+    @muladd01!(alpha, A11*B11 + A12*B21 + A13*B31, beta, C[1,1])
+    @muladd01!(alpha, A11*B12 + A12*B22 + A13*B32, beta, C[1,2])
+    @muladd01!(alpha, A11*B13 + A12*B23 + A13*B33, beta, C[1,3])
 
-    C[2,1] = alpha * (A21*B11 + A22*B21 + A23*B31) + @mul0(beta, C[2,1])
-    C[2,2] = alpha * (A21*B12 + A22*B22 + A23*B32) + @mul0(beta, C[2,2])
-    C[2,3] = alpha * (A21*B13 + A22*B23 + A23*B33) + @mul0(beta, C[2,3])
+    @muladd01!(alpha, A21*B11 + A22*B21 + A23*B31, beta, C[2,1])
+    @muladd01!(alpha, A21*B12 + A22*B22 + A23*B32, beta, C[2,2])
+    @muladd01!(alpha, A21*B13 + A22*B23 + A23*B33, beta, C[2,3])
 
-    C[3,1] = alpha * (A31*B11 + A32*B21 + A33*B31) + @mul0(beta, C[3,1])
-    C[3,2] = alpha * (A31*B12 + A32*B22 + A33*B32) + @mul0(beta, C[3,2])
-    C[3,3] = alpha * (A31*B13 + A32*B23 + A33*B33) + @mul0(beta, C[3,3])
+    @muladd01!(alpha, A31*B11 + A32*B21 + A33*B31, beta, C[3,1])
+    @muladd01!(alpha, A31*B12 + A32*B22 + A33*B32, beta, C[3,2])
+    @muladd01!(alpha, A31*B13 + A32*B23 + A33*B33, beta, C[3,3])
     end # inbounds
     C
 end
