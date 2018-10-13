@@ -815,6 +815,9 @@ JL_DLLEXPORT jl_task_t *jl_task_spawn(jl_task_t *task, jl_value_t *arg, int8_t e
 {
     jl_ptls_t ptls = jl_get_ptls_states();
 
+    if (task->state != runnable_sym)
+        jl_error("schedule: Task not runnable");
+
     if (!task->started) {
         task->prio = ptls->tid;
         if (sticky) task->settings |= TASK_IS_STICKY;
