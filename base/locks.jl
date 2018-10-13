@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import .Base: _uv_hook_close, unsafe_convert,
-    lock, trylock, unlock, islocked
+    lock, trylock, unlock, islocked, wait, notify
 
-export SpinLock, RecursiveSpinLock, Mutex
+export SpinLock, RecursiveSpinLock, Mutex, Event
 
 
 ##########################################
@@ -238,3 +238,57 @@ end
 function islocked(m::Mutex)
     return m.ownertid != 0
 end
+
+"""
+    Event()
+
+Create a level-triggered event source. Tasks that call [`wait`](@ref) on an
+`Event` are suspended and queued until `notify` is called on the `Event`.
+After `notify` is called, the `Event` remains in a signaled state and
+tasks will no longer block when waiting for it.
+"""
+mutable struct Event
+    lock::Mutex
+    q::Vector{Task}
+    set::Bool
+    # TODO: use a Condition with its paired lock
+    Event() = new(Mutex(), Task[], false)
+end
+
+function wait(e::Event)
+    e.set && return
+    lock(e.lock)
+    while !e.set
+        ct = current_task()
+        push!(e.q, ct)
+        unlock(e.lock)
+        try
+            wait()
+        catch
+            filter!(x->x!==ct, e.q)
+            rethrow()
+        end
+        lock(e.lock)
+    end
+    unlock(e.lock)
+    return nothing
+end
+
+function notify(e::Event)
+    lock(e.lock)
+    if !e.set
+        e.set = true
+        for t in e.q
+            schedule(t)
+        end
+        empty!(e.q)
+    end
+    unlock(e.lock)
+    return nothing
+end
+
+# TODO: decide what to call this
+#function clear(e::Event)
+#    e.set = false
+#    return nothing
+#end

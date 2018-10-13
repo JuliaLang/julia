@@ -503,3 +503,16 @@ function test_thread_too_few_iters()
     @test !(true in found[nthreads():end])
 end
 test_thread_too_few_iters()
+
+let e = Event()
+    done = false
+    t = @async (wait(e); done = true)
+    sleep(0.1)
+    @test done == false
+    notify(e)
+    wait(t)
+    @test done == true
+    blocked = true
+    wait(@async (wait(e); blocked = false))
+    @test !blocked
+end
