@@ -221,34 +221,38 @@ julia> B
 """
 lmul!(A, B)
 
-function mul!(C::StridedMatrix{T}, transA::Transpose{<:Any,<:StridedVecOrMat{T}}, B::StridedVecOrMat{T}) where {T<:BlasFloat}
+function mul!(C::StridedMatrix{T}, transA::Transpose{<:Any,<:StridedVecOrMat{T}}, B::StridedVecOrMat{T},
+              alpha::Union{T, Bool} = true, beta::Union{T, Bool} = false) where {T<:BlasFloat}
     A = transA.parent
     if A===B
-        return syrk_wrapper!(C, 'T', A)
+        return syrk_wrapper!(C, 'T', A, alpha, beta)
     else
-        return gemm_wrapper!(C, 'T', 'N', A, B)
+        return gemm_wrapper!(C, 'T', 'N', A, B, alpha, beta)
     end
 end
-function mul!(C::AbstractMatrix, transA::Transpose{<:Any,<:AbstractVecOrMat}, B::AbstractVecOrMat)
+function mul!(C::AbstractMatrix, transA::Transpose{<:Any,<:AbstractVecOrMat}, B::AbstractVecOrMat,
+              alpha::Number = true, beta::Number = false)
     A = transA.parent
-    return generic_matmatmul!(C, 'T', 'N', A, B)
+    return generic_matmatmul!(C, 'T', 'N', A, B, alpha, beta)
 end
 
-function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, transB::Transpose{<:Any,<:StridedVecOrMat{T}}) where {T<:BlasFloat}
+function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, transB::Transpose{<:Any,<:StridedVecOrMat{T}},
+              alpha::Union{T, Bool} = true, beta::Union{T, Bool} = false) where {T<:BlasFloat}
     B = transB.parent
     if A===B
-        return syrk_wrapper!(C, 'N', A)
+        return syrk_wrapper!(C, 'N', A, alpha, beta)
     else
-        return gemm_wrapper!(C, 'N', 'T', A, B)
+        return gemm_wrapper!(C, 'N', 'T', A, B, alpha, beta)
     end
 end
 # Complex matrix times transposed real matrix. Reinterpret the first matrix to real for efficiency.
 for elty in (Float32,Float64)
     @eval begin
-        function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, transB::Transpose{<:Any,<:StridedVecOrMat{$elty}})
+        function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, transB::Transpose{<:Any,<:StridedVecOrMat{$elty}},
+                      alpha::Union{$elty, Bool} = true, beta::Union{$elty, Bool} = false)
             Afl = reinterpret($elty, A)
             Cfl = reinterpret($elty, C)
-            mul!(Cfl,Afl,transB)
+            mul!(Cfl, Afl, transB, alpha, beta)
             return C
         end
     end
@@ -379,7 +383,9 @@ function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::
     return generic_matvecmul!(y, tA, A, x)
 end
 
-function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat{T}) where T<:BlasFloat
+function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat{T},
+                       alpha::Union{Bool, T} = true,
+                       beta::Union{Bool, T} = false) where T<:BlasFloat
     nC = checksquare(C)
     if tA == 'T'
         (nA, mA) = size(A,1), size(A,2)
@@ -392,19 +398,23 @@ function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat
         throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
     end
     if mA == 0 || nA == 0
-        return fill!(C,0)
+        if iszero(beta)
+            return fill!(C, 0)
+        else
+            return rmul!(C, beta)
+        end
     end
     if mA == 2 && nA == 2
-        return matmul2x2!(C,tA,tAt,A,A)
+        return matmul2x2!(C, tA, tAt, A, A, alpha, beta)
     end
     if mA == 3 && nA == 3
-        return matmul3x3!(C,tA,tAt,A,A)
+        return matmul3x3!(C, tA, tAt, A, A, alpha, beta)
     end
 
     if stride(A, 1) == stride(C, 1) == 1 && stride(A, 2) >= size(A, 1) && stride(C, 2) >= size(C, 1)
-        return copytri!(BLAS.syrk!('U', tA, one(T), A, zero(T), C), 'U')
+        return copytri!(BLAS.syrk!('U', tA, alpha, A, beta, C), 'U')
     end
-    return generic_matmatmul!(C, tA, tAt, A, A)
+    return generic_matmatmul!(C, tA, tAt, A, A, alpha, beta)
 end
 
 function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA::AbstractChar, A::Union{StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}}) where T<:BlasReal

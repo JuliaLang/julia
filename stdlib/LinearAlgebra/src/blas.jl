@@ -1305,8 +1305,8 @@ for (fname, elty) in ((:dsyrk_,:Float64),
        # *     .. Array Arguments ..
        #       REAL A(LDA,*),C(LDC,*)
        function syrk!(uplo::AbstractChar, trans::AbstractChar,
-                      alpha::($elty), A::AbstractVecOrMat{$elty},
-                      beta::($elty), C::AbstractMatrix{$elty})
+                      alpha::Union{($elty), Bool}, A::AbstractVecOrMat{$elty},
+                      beta::Union{($elty), Bool}, C::AbstractMatrix{$elty})
            @assert !has_offset_axes(A, C)
            n = checksquare(C)
            nn = size(A, trans == 'N' ? 1 : 2)
