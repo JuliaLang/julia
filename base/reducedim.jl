@@ -296,6 +296,15 @@ julia> mapreduce(isodd, *, a, dims=1)
 julia> mapreduce(isodd, |, true, a, dims=1)
 1×4 Array{Bool,2}:
  true  true  true  true
+
+julia> b = [1 missing 5; 2 4 missing]
+2×3 Array{Union{Missing, Int64},2}:
+ 1   missing  5
+ 2  4          missing
+
+julia> mapreduce(isodd, *, skipmissing(b), dims=1)
+1×3 Array{Bool,2}:
+ false  false  true
 ```
 """
 mapreduce(f, op, A::AbstractArray; dims=:, kw...) = _mapreduce_dim(f, op, kw.data, A, dims)
@@ -340,6 +349,15 @@ julia> reduce(max, a, dims=2)
 julia> reduce(max, a, dims=1)
 1×4 Array{Int64,2}:
  4  8  12  16
+
+julia> b = [1 missing 5; 2 4 missing]
+2×3 Array{Union{Missing, Int64},2}:
+ 1   missing  5
+ 2  4          missing
+
+julia> reduce(+, skipmissing(b), dims=1)
+1×3 Array{Int64,2}:
+ 3  4  5
 ```
 """
 reduce(op, A::AbstractArray; kw...) = mapreduce(identity, op, A; kw...)
@@ -349,6 +367,12 @@ reduce(op, A::AbstractArray; kw...) = mapreduce(identity, op, A; kw...)
     sum(A::AbstractArray; dims)
 
 Sum elements of an array over the given dimensions.
+
+!!! note
+    If `A` contains `NaN` or [`missing`](@ref) values, they are propagated to the
+    corresponding result (`missing` takes precedence if a slice contains both).
+    Use [`skipmissing(A)`](@ref) to omit `missing` entries and compute the
+    sum of non-missing values.
 
 # Examples
 ```jldoctest
@@ -364,6 +388,20 @@ julia> sum(A, dims=1)
 julia> sum(A, dims=2)
 2×1 Array{Int64,2}:
  3
+ 7
+
+julia> B = [1 missing; 3 4]
+2×2 Array{Union{Missing, Int64},2}:
+ 1   missing
+ 3  4
+
+julia> sum(skipmissing(B), dims=1)
+1×2 Array{Int64,2}:
+ 4  4
+
+julia> sum(skipmissing(B), dims=2)
+2×1 Array{Int64,2}:
+ 1
  7
 ```
 """
@@ -398,6 +436,12 @@ sum!(r, A)
 
 Multiply elements of an array over the given dimensions.
 
+!!! note
+    If `A` contains `NaN` or [`missing`](@ref) values, they are propagated to the
+    corresponding result (`missing` takes precedence if a slice contains both).
+    Use [`skipmissing(A)`](@ref) to omit `missing` entries and compute the
+    product of non-missing values.
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -412,6 +456,20 @@ julia> prod(A, dims=1)
 julia> prod(A, dims=2)
 2×1 Array{Int64,2}:
   2
+ 12
+
+julia> B = [1 missing; 3 4]
+2×2 Array{Union{Missing, Int64},2}:
+ 1   missing
+ 3  4
+
+julia> prod(skipmissing(B), dims=1)
+1×2 Array{Int64,2}:
+ 3  4
+
+julia> prod(skipmissing(B), dims=2)
+2×1 Array{Int64,2}:
+  1
  12
 ```
 """
@@ -448,6 +506,12 @@ Compute the maximum value of an array over the given dimensions. See also the
 [`max(a,b)`](@ref) function to take the maximum of two or more arguments,
 which can be applied elementwise to arrays via `max.(a,b)`.
 
+!!! note
+    If `A` contains `NaN` or [`missing`](@ref) values, they are propagated to the
+    corresponding result (`missing` takes precedence if a slice contains both).
+    Use [`skipmissing(A)`](@ref) to omit `missing` entries and compute the
+    maximum of non-missing values.
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -462,6 +526,20 @@ julia> maximum(A, dims=1)
 julia> maximum(A, dims=2)
 2×1 Array{Int64,2}:
  2
+ 4
+
+julia> B = [1 missing; 3 4]
+2×2 Array{Union{Missing, Int64},2}:
+ 1   missing
+ 3  4
+
+julia> maximum(skipmissing(B), dims=1)
+1×2 Array{Int64,2}:
+ 3  4
+
+julia> maximum(skipmissing(B), dims=2)
+2×1 Array{Int64,2}:
+ 1
  4
 ```
 """
@@ -498,6 +576,12 @@ Compute the minimum value of an array over the given dimensions. See also the
 [`min(a,b)`](@ref) function to take the minimum of two or more arguments,
 which can be applied elementwise to arrays via `min.(a,b)`.
 
+!!! note
+    If `A` contains `NaN` or [`missing`](@ref) values, they are propagated to the
+    corresponding result (`missing` takes precedence if a slice contains both).
+    Use [`skipmissing(A)`](@ref) to omit `missing` entries and compute the
+    minimum of non-missing values.
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -510,6 +594,20 @@ julia> minimum(A, dims=1)
  1  2
 
 julia> minimum(A, dims=2)
+2×1 Array{Int64,2}:
+ 1
+ 3
+
+julia> B = [1 missing; 3 4]
+2×2 Array{Union{Missing, Int64},2}:
+ 1   missing
+ 3  4
+
+julia> minimum(skipmissing(B), dims=1)
+1×2 Array{Int64,2}:
+ 1  4
+
+julia> minimum(skipmissing(B), dims=2)
 2×1 Array{Int64,2}:
  1
  3
@@ -643,6 +741,7 @@ for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod, 
     @eval begin
         # User-facing methods with keyword arguments
         @inline ($fname)(a::AbstractArray; dims=:) = ($_fname)(a, dims)
+        @inline ($fname)(a::SkipMissing{<:AbstractArray}; dims=:) = ($_fname)(a, dims)
         @inline ($fname)(f::Callable, a::AbstractArray; dims=:) = ($_fname)(f, a, dims)
 
         # Underlying implementations using dispatch

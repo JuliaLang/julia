@@ -305,7 +305,36 @@ julia> mapreduce(sqrt, +, skipmissing([3, missing, 2, 1]))
 4.146264369941973
 ```
 
-Use [`collect`](@ref) to extract non-`missing` values and store them in an array
+Reduction over dimensions is also supported
+```jldoctest
+julia> B = [1 missing; 3 4]
+2×2 Array{Union{Missing, Int64},2}:
+ 1   missing
+ 3  4
+
+julia> sum(skipmissing(B), dims=1)
+1×2 Array{Int64,2}:
+ 4  4
+
+julia> sum(skipmissing(B), dims=2)
+2×1 Array{Int64,2}:
+ 1
+ 7
+
+julia> reduce(*, skipmissing(B), dims=1)
+1×2 Array{Int64,2}:
+ 3  4
+
+julia> mapreduce(cos, +, skipmissing(B), dims=1)
+1×2 Array{Float64,2}:
+ -0.44969  -0.653644
+```
+
+However, note that the special iterator object returned by `skipmissing` is not an
+`AbstractArray`: since `missing` entries of the original array are skipped,
+it does not have a regular shape and cannot be indexed.
+Use [`collect`](@ref) to extract non-`missing` values and store them in a vector,
+losing the shape of the original array
 ```jldoctest
 julia> collect(skipmissing([3, missing, 2, 1]))
 3-element Array{Int64,1}:
