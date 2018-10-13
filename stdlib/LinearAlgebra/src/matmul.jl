@@ -296,12 +296,13 @@ function mul!(C::StridedMatrix{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, B:
     A = adjA.parent
     return mul!(C, transpose(A), B, alpha, beta)
 end
-function mul!(C::StridedMatrix{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, B::StridedVecOrMat{T}) where {T<:BlasComplex}
+function mul!(C::StridedMatrix{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, B::StridedVecOrMat{T},
+              alpha::Union{T, Bool} = true, beta::Union{T, Bool} = false) where {T<:BlasComplex}
     A = adjA.parent
     if A===B
-        return herk_wrapper!(C,'C',A)
+        return herk_wrapper!(C, 'C', A, alpha, beta)
     else
-        return gemm_wrapper!(C,'C', 'N', A, B)
+        return gemm_wrapper!(C, 'C', 'N', A, B, alpha, beta)
     end
 end
 function mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, B::AbstractVecOrMat,
@@ -315,12 +316,13 @@ function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:
     B = adjB.parent
     return mul!(C, A, transpose(B), alpha, beta)
 end
-function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:StridedVecOrMat{T}}) where {T<:BlasComplex}
+function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:StridedVecOrMat{T}},
+              alpha::Union{T, Bool} = true, beta::Union{T, Bool} = false) where {T<:BlasComplex}
     B = adjB.parent
     if A === B
-        return herk_wrapper!(C, 'N', A)
+        return herk_wrapper!(C, 'N', A, alpha, beta)
     else
-        return gemm_wrapper!(C, 'N', 'C', A, B)
+        return gemm_wrapper!(C, 'N', 'C', A, B, alpha, beta)
     end
 end
 function mul!(C::AbstractMatrix, A::AbstractVecOrMat, adjB::Adjoint{<:Any,<:AbstractVecOrMat},
@@ -417,7 +419,8 @@ function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat
     return generic_matmatmul!(C, tA, tAt, A, A, alpha, beta)
 end
 
-function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA::AbstractChar, A::Union{StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}}) where T<:BlasReal
+function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA::AbstractChar, A::Union{StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}},
+                       alpha::Union{T, Bool} = true, beta::Union{T, Bool} = false) where T<:BlasReal
     nC = checksquare(C)
     if tA == 'C'
         (nA, mA) = size(A,1), size(A,2)
@@ -430,22 +433,26 @@ function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA
         throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
     end
     if mA == 0 || nA == 0
-        return fill!(C,0)
+        if iszero(beta)
+            return fill!(C, 0)
+        else
+            return rmul!(C, beta)
+        end
     end
     if mA == 2 && nA == 2
-        return matmul2x2!(C,tA,tAt,A,A)
+        return matmul2x2!(C, tA, tAt, A, A, alpha, beta)
     end
     if mA == 3 && nA == 3
-        return matmul3x3!(C,tA,tAt,A,A)
+        return matmul3x3!(C, tA, tAt, A, A, alpha, beta)
     end
 
     # Result array does not need to be initialized as long as beta==0
     #    C = Matrix{T}(undef, mA, mA)
 
     if stride(A, 1) == stride(C, 1) == 1 && stride(A, 2) >= size(A, 1) && stride(C, 2) >= size(C, 1)
-        return copytri!(BLAS.herk!('U', tA, one(T), A, zero(T), C), 'U', true)
+        return copytri!(BLAS.herk!('U', tA, alpha, A, beta, C), 'U', true)
     end
-    return generic_matmatmul!(C,tA, tAt, A, A)
+    return generic_matmatmul!(C, tA, tAt, A, A, alpha, beta)
 end
 
 function gemm_wrapper(tA::AbstractChar, tB::AbstractChar,

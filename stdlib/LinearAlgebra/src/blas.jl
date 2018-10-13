@@ -1362,8 +1362,9 @@ for (fname, elty, relty) in ((:zherk_, :ComplexF64, :Float64),
        # *     ..
        # *     .. Array Arguments ..
        #       COMPLEX A(LDA,*),C(LDC,*)
-       function herk!(uplo::AbstractChar, trans::AbstractChar, α::$relty, A::AbstractVecOrMat{$elty},
-                      β::$relty, C::AbstractMatrix{$elty})
+       function herk!(uplo::AbstractChar, trans::AbstractChar,
+                      α::Union{$relty, Bool}, A::AbstractVecOrMat{$elty},
+                      β::Union{$relty, Bool}, C::AbstractMatrix{$elty})
            @assert !has_offset_axes(A, C)
            n = checksquare(C)
            nn = size(A, trans == 'N' ? 1 : 2)
