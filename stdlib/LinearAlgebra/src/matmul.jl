@@ -61,19 +61,24 @@ function *(a::AbstractVector, adjB::Adjoint{<:Any,<:AbstractMatrix})
 end
 (*)(a::AbstractVector, B::AbstractMatrix) = reshape(a,length(a),1)*B
 
-mul!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T}) where {T<:BlasFloat} = gemv!(y, 'N', A, x)
+mul!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T},
+     alpha::Union{T, Bool} = true, beta::Union{T, Bool} = false) where {T<:BlasFloat} =
+    gemv!(y, 'N', A, x, alpha, beta)
 # Complex matrix times real vector. Reinterpret the matrix as a real matrix and do real matvec compuation.
 for elty in (Float32,Float64)
     @eval begin
-        function mul!(y::StridedVector{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, x::StridedVector{$elty})
+        function mul!(y::StridedVector{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, x::StridedVector{$elty},
+                      alpha::Union{$elty, Bool} = true, beta::Union{$elty, Bool} = false)
             Afl = reinterpret($elty,A)
             yfl = reinterpret($elty,y)
-            mul!(yfl,Afl,x)
+            mul!(yfl, Afl, x, alpha, beta)
             return y
         end
     end
 end
-mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector) = generic_matvecmul!(y, 'N', A, x)
+mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
+     alpha::Number = true, beta::Number = false) =
+    generic_matvecmul!(y, 'N', A, x, alpha, beta)
 
 function *(transA::Transpose{<:Any,<:StridedMatrix{T}}, x::StridedVector{S}) where {T<:BlasFloat,S}
     A = transA.parent
@@ -85,13 +90,15 @@ function *(transA::Transpose{<:Any,<:AbstractMatrix{T}}, x::AbstractVector{S}) w
     TS = promote_op(matprod, T, S)
     mul!(similar(x,TS,size(A,2)), transpose(A), x)
 end
-function mul!(y::StridedVector{T}, transA::Transpose{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T}) where {T<:BlasFloat}
+function mul!(y::StridedVector{T}, transA::Transpose{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T},
+              alpha::Union{T, Bool} = true, beta::Union{T, Bool} = false) where {T<:BlasFloat}
     A = transA.parent
-    return gemv!(y, 'T', A, x)
+    return gemv!(y, 'T', A, x, alpha, beta)
 end
-function mul!(y::AbstractVector, transA::Transpose{<:Any,<:AbstractVecOrMat}, x::AbstractVector)
+function mul!(y::AbstractVector, transA::Transpose{<:Any,<:AbstractVecOrMat}, x::AbstractVector,
+              alpha::Number = true, beta::Number = false)
     A = transA.parent
-    return generic_matvecmul!(y, 'T', A, x)
+    return generic_matvecmul!(y, 'T', A, x, alpha, beta)
 end
 
 function *(adjA::Adjoint{<:Any,<:StridedMatrix{T}}, x::StridedVector{S}) where {T<:BlasFloat,S}
@@ -105,17 +112,20 @@ function *(adjA::Adjoint{<:Any,<:AbstractMatrix{T}}, x::AbstractVector{S}) where
     mul!(similar(x,TS,size(A,2)), adjoint(A), x)
 end
 
-function mul!(y::StridedVector{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T}) where {T<:BlasReal}
+function mul!(y::StridedVector{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T},
+              alpha::Union{T, Bool} = true, beta::Union{T, Bool} = false) where {T<:BlasReal}
     A = adjA.parent
-    return mul!(y, transpose(A), x)
+    return mul!(y, transpose(A), x, alpha, beta)
 end
-function mul!(y::StridedVector{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T}) where {T<:BlasComplex}
+function mul!(y::StridedVector{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T},
+              alpha::Union{T, Bool} = true, beta::Union{T, Bool} = false) where {T<:BlasComplex}
     A = adjA.parent
-    return gemv!(y, 'C', A, x)
+    return gemv!(y, 'C', A, x, alpha, beta)
 end
-function mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, x::AbstractVector)
+function mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, x::AbstractVector,
+              alpha::Number = true, beta::Number = false)
     A = adjA.parent
-    return generic_matvecmul!(y, 'C', A, x)
+    return generic_matvecmul!(y, 'C', A, x, alpha, beta)
 end
 
 # Vector-Matrix multiplication
@@ -367,7 +377,8 @@ function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false)
     A
 end
 
-function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::StridedVector{T}) where T<:BlasFloat
+function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::StridedVector{T},
+               alpha::Union{T, Bool} = true, beta::Union{T, Bool} = false) where T<:BlasFloat
     mA, nA = lapack_size(tA, A)
     if nA != length(x)
         throw(DimensionMismatch("second dimension of A, $nA, does not match length of x, $(length(x))"))
@@ -379,10 +390,16 @@ function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::
         return y
     end
     if nA == 0
-        return fill!(y,0)
+        if iszero(beta)
+            return fill!(y, 0)
+        else
+            return rmul!(y, beta)
+        end
     end
-    stride(A, 1) == 1 && stride(A, 2) >= size(A, 1) && return BLAS.gemv!(tA, one(T), A, x, zero(T), y)
-    return generic_matvecmul!(y, tA, A, x)
+    if stride(A, 1) == 1 && stride(A, 2) >= size(A, 1)
+        return BLAS.gemv!(tA, alpha, A, x, beta, y)
+    end
+    return generic_matvecmul!(y, tA, A, x, alpha, beta)
 end
 
 function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat{T},
@@ -534,7 +551,8 @@ end
 # NOTE: the generic version is also called as fallback for
 #       strides != 1 cases
 
-function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::AbstractVector) where R
+function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::AbstractVector,
+                            alpha::Number = true, beta::Number = false) where R
     @assert !has_offset_axes(C, A, B)
     mB = length(B)
     mA, nA = lapack_size(tA, A)
@@ -559,7 +577,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
             for i = 1:nA
                 s += transpose(A[aoffs+i]) * B[i]
             end
-            C[k] = s
+            C[k] = alpha * s + beta * C[k]
         end
     elseif tA == 'C'
         for k = 1:mA
@@ -572,19 +590,19 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
             for i = 1:nA
                 s += A[aoffs + i]'B[i]
             end
-            C[k] = s
+            C[k] = alpha * s + beta * C[k]
         end
     else # tA == 'N'
         for i = 1:mA
-            if mB == 0
-                C[i] = zero(R)
+            if mB == 0 || !iszero(beta)
+                C[i] *= beta
             else
                 C[i] = zero(A[i]*B[1] + A[i]*B[1])
             end
         end
         for k = 1:mB
             aoffs = (k-1)*Astride
-            b = B[k]
+            b = alpha * B[k]
             for i = 1:mA
                 C[i] += A[aoffs + i] * b
             end

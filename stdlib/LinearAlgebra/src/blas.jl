@@ -563,7 +563,9 @@ for (fname, elty) in ((:dgemv_,:Float64),
              #      CHARACTER TRANS
              #*     .. Array Arguments ..
              #      DOUBLE PRECISION A(LDA,*),X(*),Y(*)
-        function gemv!(trans::AbstractChar, alpha::($elty), A::AbstractVecOrMat{$elty}, X::AbstractVector{$elty}, beta::($elty), Y::AbstractVector{$elty})
+        function gemv!(trans::AbstractChar, alpha::Union{($elty), Bool},
+                       A::AbstractVecOrMat{$elty}, X::AbstractVector{$elty},
+                       beta::Union{($elty), Bool}, Y::AbstractVector{$elty})
             @assert !has_offset_axes(A, X, Y)
             m,n = size(A,1),size(A,2)
             if trans == 'N' && (length(X) != n || length(Y) != m)
