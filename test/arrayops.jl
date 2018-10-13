@@ -699,6 +699,11 @@ end
     @test_throws MethodError repeat(1, 2, 3)
     @test repeat([1, 2], 1, 2, 3) == repeat([1, 2], outer = (1, 2, 3))
 
+    # issue 29614
+    @test repeat(ones(2,2), 1, 1, 1) == ones(2,2,1)
+    @test repeat(ones(2,2), 2, 2, 2) == ones(4,4,2)
+    @test repeat(ones(2), 2, 2, 2) == ones(4,2,2)
+
     R = repeat([1, 2])
     @test R == [1, 2]
     R = repeat([1, 2], inner=1)
