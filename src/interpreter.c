@@ -681,7 +681,7 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                     s->locals[jl_source_nslots(s->src) + catch_ip] = NULL;
                     catch_ip += 1;
                 }
-                // store current top of exception stack for restore in pop_exc.
+                // store current top of exception stack for restore in pop_exception.
                 s->locals[jl_source_nslots(s->src) + ip] = jl_box_ulong(jl_exc_stack_state());
                 if (!jl_setjmp(__eh.eh_ctx, 1)) {
                     return eval_body(stmts, s, next_ip, toplevel);
@@ -710,7 +710,7 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                 s->continue_at = next_ip;
                 jl_longjmp(eh->eh_ctx, 1);
             }
-            else if (head == pop_exc_sym) {
+            else if (head == pop_exception_sym) {
                 size_t prev_state = jl_unbox_ulong(eval_value(jl_exprarg(stmt, 0), s));
                 jl_restore_exc_stack(prev_state);
             }

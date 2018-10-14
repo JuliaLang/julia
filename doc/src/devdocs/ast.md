@@ -147,13 +147,13 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
   * `enter`
 
     Enters an exception handler (`setjmp`). `args[1]` is the label of the catch block to jump to on
-    error.  Yields a token which is consumed by `pop_exc`.
+    error.  Yields a token which is consumed by `pop_exception`.
 
   * `leave`
 
     Pop exception handlers. `args[1]` is the number of handlers to pop.
 
-  * `pop_exc`
+  * `pop_exception`
 
     Pop the stack of current exceptions back to the state at the associated `enter` when leaving a
     catch block. `args[1]` contains the token from the associated `enter`.

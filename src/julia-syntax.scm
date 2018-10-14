@@ -3435,7 +3435,7 @@ f(x) = yt(x)
                                  (if (eq? (cdr s) dest-tokens)
                                      (car s)
                                      (loop (cdr s))))))
-            `(pop_exc ,restore-token))))
+            `(pop_exception ,restore-token))))
     (define (emit-return x)
       (define (actually-return x)
         (let* ((x   (if rett
@@ -3736,7 +3736,7 @@ f(x) = yt(x)
             ;; exception handlers are lowered using
             ;; (= tok (enter L)) - push handler with catch block at label L, yielding token
             ;; (leave n) - pop N exception handlers
-            ;; (pop_exc tok) - pop exception stack back to state of associated enter
+            ;; (pop_exception tok) - pop exception stack back to state of associated enter
             ((trycatch tryfinally)
              (let ((handler-token (make-ssavalue))
                    (catch (make-label))
@@ -3791,7 +3791,7 @@ f(x) = yt(x)
                      (begin (set! catch-token-stack (cons handler-token catch-token-stack))
                             (let ((v2 (compile (caddr e) break-labels value tail)))
                               (if val (emit-assignment val v2))
-                              (if (not tail) (emit `(pop_exc ,handler-token)))
+                              (if (not tail) (emit `(pop_exception ,handler-token)))
                                              ;; else done in emit-return from compile
                               (if endl (mark-label endl)))
                             (set! catch-token-stack (cdr catch-token-stack))))

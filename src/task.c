@@ -556,9 +556,9 @@ static void NOINLINE JL_NORETURN start_task(void)
             res = jl_current_exception();
             t->exception = res;
             jl_gc_wb(t, res);
-            goto skip_pop_exc;
+            goto skip_pop_exception;
         }
-skip_pop_exc:;
+skip_pop_exception:;
     }
     finish_task(t, res);
     gc_debug_critical_error();

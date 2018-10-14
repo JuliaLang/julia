@@ -3774,7 +3774,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
         ctx.builder.CreateCall(prepare_call(jlleave_func),
                            ConstantInt::get(T_int32, jl_unbox_long(args[0])));
     }
-    else if (head == pop_exc_sym) {
+    else if (head == pop_exception_sym) {
         jl_cgval_t exc_stack_state = emit_expr(ctx, jl_exprarg(expr, 0));
         assert(exc_stack_state.V && exc_stack_state.V->getType() == T_size);
         ctx.builder.CreateCall(prepare_call(jl_restore_exc_stack_func), exc_stack_state.V);
@@ -4032,8 +4032,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
     else if (head == leave_sym) {
         jl_error("Expr(:leave) in value position");
     }
-    else if (head == pop_exc_sym) {
-        jl_error("Expr(:pop_exc) in value position");
+    else if (head == pop_exception_sym) {
+        jl_error("Expr(:pop_exception) in value position");
     }
     else if (head == enter_sym) {
         jl_error("Expr(:enter) in value position");
@@ -6194,8 +6194,7 @@ static std::unique_ptr<Module> emit_function(
 
             assert(jl_is_long(args[0]));
             int lname = jl_unbox_long(args[0]);
-            // Save exception stack depth at enter for use in pop_exc
-
+            // Save exception stack depth at enter for use in pop_exception
             Value *exc_stack_state =
                 ctx.builder.CreateCall(prepare_call(jl_exc_stack_state_func));
             assert(!ctx.ssavalue_assigned.at(cursor));
