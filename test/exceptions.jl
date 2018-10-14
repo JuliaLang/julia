@@ -1,13 +1,14 @@
 using Test
 
-@testset "Exception stack nesting" begin
-    # Basic exception stack handling
+@testset "Basic exception stack handling" begin
+    # Exiting the catch block normally pops the exception
     try
         error("A")
     catch
         @test length(catch_stack()) == 1
     end
     @test length(catch_stack()) == 0
+    # Exiting via a finally block does not pop the exception
     try
         try
             error("A")
@@ -17,7 +18,16 @@ using Test
     catch
         @test length(catch_stack()) == 1
     end
-    # Errors stack up
+    # The combined try-catch-finally form obeys the same rules as above
+    try
+        error("A")
+    catch
+        @test length(catch_stack()) == 1
+    finally
+        @test length(catch_stack()) == 0
+    end
+    @test length(catch_stack()) == 0
+    # Errors are pushed onto the stack according to catch block nesting
     try
         error("RootCause")
     catch
@@ -35,7 +45,10 @@ using Test
         @test length(stack) == 1
         @test stack[1][1].msg == "RootCause"
     end
-    # Lowering - value position
+end
+
+@testset "Exception stack lowering special cases" begin
+    # try block in value position
     val = try
         error("A")
     catch
@@ -44,7 +57,7 @@ using Test
     end
     @test val == 1
     function test_exc_stack_tailpos()
-        # exercise lowering code path for tail position
+        # try block in tail position
         try
             error("A")
         catch
@@ -55,7 +68,9 @@ using Test
     @test length(catch_stack()) == 0
 end
 
-@testset "Exception stacks and gotos" begin
+@testset "Exception stacks - early exit from try or catch" begin
+    # Exiting a catch block early with normal control flow — break, continue,
+    # return, goto — will result in popping of the exception stack.
     function test_exc_stack_catch_return()
         try
             error("A")
@@ -89,13 +104,47 @@ end
     end
     @label outofcatch
     @test length(catch_stack()) == 0
+
+    # Exiting from a try block in various ways should not affect the exception
+    # stack state.
+    try
+        error("ExceptionInOuterTry")
+    catch
+        @test length(catch_stack()) == 1
+        function test_exc_stack_try_return()
+            try
+                return
+            catch
+            end
+        end
+        test_exc_stack_try_return()
+        for i=1:1
+            try
+                break
+            catch
+            end
+        end
+        for i=1:1
+            try
+                continue
+            catch
+            end
+        end
+        try
+            @goto outoftry
+        catch
+        end
+        @label outoftry
+        @test length(catch_stack()) == 1
+        @test catch_stack()[1][1] == ErrorException("ExceptionInOuterTry")
+    end
 end
 
 @testset "Deep exception stacks" begin
+    # Generate deep exception stack with recursive handlers Note that if you
+    # let this overflow the program stack (not the exception stack) julia will
+    # crash. See #28577
     function test_exc_stack_deep(n)
-        # Generate deep exception stack with recursive handlers
-        # Note that if you let this overflow the program stack (not the exception
-        # stack) julia will crash. See #28577
         n != 1 || error("RootCause")
         try
             test_exc_stack_deep(n-1)
@@ -106,20 +155,21 @@ end
     @test try
         test_exc_stack_deep(100)
     catch
+        @test catch_stack()[1][1] == ErrorException("RootCause")
         length(catch_stack())
     end == 100
     @test length(catch_stack()) == 0
 end
 
 @testset "Exception stacks and Tasks" begin
-    # See #12485
+    # Task switching should not affect exception state. See #12485.
     try
         error("A")
     catch
         t = @task try
             error("B")
-        catch ex
-            ex
+        catch exc
+            exc
         end
         yield(t)
         @test t.state == :done
@@ -138,8 +188,8 @@ end
             bt = catch_backtrace()
             t = @task try
                 error("B")
-            catch ex
-                ex
+            catch exc
+                exc
             end
             yield(t)
             @test t.state == :done
@@ -160,8 +210,8 @@ end
         catch
             t = @task try
                 error("B")
-            catch ex
-                ex
+            catch exc
+                exc
             end
             yield(t)
             @test t.state == :done
@@ -199,12 +249,12 @@ end
 @testset "rethrow" begin
     @test try
         rethrow()
-    catch ex
-        ex
+    catch exc
+        exc
     end == ErrorException("rethrow() not allowed outside a catch block")
     @test try
         rethrow(ErrorException("A"))
-    catch ex
-        ex
+    catch exc
+        exc
     end == ErrorException("rethrow(exc) not allowed outside a catch block")
 end
