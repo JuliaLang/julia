@@ -660,26 +660,41 @@ JL_DLLEXPORT int jl_is_enter_interpreter_frame(uintptr_t ip);
 JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintptr_t fp, size_t space_remaining);
 
 // Exception stack: a stack of pairs of (exception,raw_backtrace).
-// The stack may be traversed and accessed with the macros below.
+// The stack may be traversed and accessed with the functions below.
 typedef struct _jl_exc_stack_t {
     size_t top;
     size_t reserved_size;
     // Pack all stack entries into a growable buffer to amortize allocation
     // across repeated exception handling.
+    // Layout: [bt_data1... bt_size1 exc1  bt_data2... bt_size2 exc2  ..]
     // uintptr_t data[]; // Access with jl_excstk_raw
-#define jl_excstk_raw(stack) ((uintptr_t*)((char*)(stack) + sizeof(jl_exc_stack_t)))
 } jl_exc_stack_t;
 
-// Stack access
-static inline jl_value_t *jl_exc_stack_exception(jl_exc_stack_t *stack JL_PROPAGATES_ROOT,
+STATIC_INLINE uintptr_t *jl_excstk_raw(jl_exc_stack_t* stack)
+{
+    return (uintptr_t*)(stack + 1);
+}
+
+// Exception stack access
+STATIC_INLINE jl_value_t *jl_exc_stack_exception(jl_exc_stack_t *stack JL_PROPAGATES_ROOT,
                                                  size_t itr) JL_NOTSAFEPOINT
 {
-    return (jl_value_t*)jl_excstk_raw(stack)[(itr)-1];
+    return (jl_value_t*)(jl_excstk_raw(stack)[itr-1]);
 }
-#define jl_exc_stack_bt_size(stack, itr)   ((size_t)jl_excstk_raw(stack)[(itr)-2])
-#define jl_exc_stack_bt_data(stack, itr)   (jl_excstk_raw(stack) + itr - 2 - jl_excstk_raw(stack)[(itr)-2])
+STATIC_INLINE size_t jl_exc_stack_bt_size(jl_exc_stack_t *stack, size_t itr)
+{
+    return jl_excstk_raw(stack)[itr-2];
+}
+STATIC_INLINE uintptr_t *jl_exc_stack_bt_data(jl_exc_stack_t *stack, size_t itr)
+{
+    return jl_excstk_raw(stack) + itr-2 - jl_exc_stack_bt_size(stack, itr);
+}
 // Exception stack iteration (start at itr=stack->top, stop at itr=0)
-#define jl_exc_stack_next(stack, itr)      ((itr) - 2 - jl_exc_stack_bt_size(stack,itr))
+STATIC_INLINE size_t jl_exc_stack_next(jl_exc_stack_t *stack, size_t itr)
+{
+    return itr-2 - jl_exc_stack_bt_size(stack, itr);
+}
+// Exception stack manipulation
 void jl_reserve_exc_stack(jl_exc_stack_t **stack JL_REQUIRE_ROOTED_SLOT,
                           size_t reserved_size);
 void jl_push_exc_stack(jl_exc_stack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,

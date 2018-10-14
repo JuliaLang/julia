@@ -183,8 +183,7 @@ JL_DLLEXPORT void jl_get_backtrace(jl_array_t **btout, jl_array_t **bt2out)
 // interleaved.
 JL_DLLEXPORT jl_value_t *jl_get_exc_stack(jl_value_t* task, int include_bt, int max_entries)
 {
-    if (!jl_typeis(task, jl_task_type))
-        jl_error("Cannot get exception stack from a non-Task type");
+    JL_TYPECHK(catch_stack, task, task);
     jl_array_t *stack = NULL;
     jl_array_t *bt = NULL;
     jl_array_t *bt2 = NULL;

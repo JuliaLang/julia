@@ -1425,9 +1425,14 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_tuple_int(jl_value_t **v,
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_unboxed_int(void *v, jl_value_t *vt, size_t i);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v, size_t *idxs, size_t nidxs);
 JL_DLLEXPORT void JL_NORETURN jl_eof_error(void);
-// Return the exception currently being handled, or nothing if we are not
-// inside the scope of a JL_CATCH.  Note that catch scope is determined
-// dynamically so this works in functions called from a catch block.
+
+// Return the exception currently being handled, or `jl_nothing`.
+//
+// The catch scope is determined dynamically so this works in functions called
+// from a catch block.  The returned value is gc rooted until we exit the
+// enclosing JL_CATCH.
+// FIXME: Teach the static analyzer about this rather than using
+// JL_GLOBALLY_ROOTED which is far too optimistic.
 JL_DLLEXPORT jl_value_t *jl_current_exception(void) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_value_t *jl_exception_occurred(void);
 JL_DLLEXPORT void jl_exception_clear(void) JL_NOTSAFEPOINT;
