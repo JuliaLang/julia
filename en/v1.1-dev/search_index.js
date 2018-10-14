@@ -14037,7 +14037,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates",
     "title": "Period Types",
     "category": "section",
-    "text": "Periods are a human view of discrete, sometimes irregular durations of time. Consider 1 month; it could represent, in days, a value of 28, 29, 30, or 31 depending on the year and month context. Or a year could represent 365 or 366 days in the case of a leap year. Period types are simple Int64 wrappers and are constructed by wrapping any Int64 convertible type, i.e. Year(1) or Month(3.0). Arithmetic between Period of the same type behave like integers, and limited Period-Real arithmetic is available.julia> y1 = Dates.Year(1)\n1 year\n\njulia> y2 = Dates.Year(2)\n2 years\n\njulia> y3 = Dates.Year(10)\n10 years\n\njulia> y1 + y2\n3 years\n\njulia> div(y3,y2)\n5\n\njulia> y3 - y2\n8 years\n\njulia> y3 % y2\n0 years\n\njulia> div(y3,3) # mirrors integer division\n3 years"
+    "text": "Periods are a human view of discrete, sometimes irregular durations of time. Consider 1 month; it could represent, in days, a value of 28, 29, 30, or 31 depending on the year and month context. Or a year could represent 365 or 366 days in the case of a leap year. Period types are simple Int64 wrappers and are constructed by wrapping any Int64 convertible type, i.e. Year(1) or Month(3.0). Arithmetic between Period of the same type behave like integers, and limited Period-Real arithmetic is available.  You can extract the underlying integer with Dates.value.julia> y1 = Dates.Year(1)\n1 year\n\njulia> y2 = Dates.Year(2)\n2 years\n\njulia> y3 = Dates.Year(10)\n10 years\n\njulia> y1 + y2\n3 years\n\njulia> div(y3,y2)\n5\n\njulia> y3 - y2\n8 years\n\njulia> y3 % y2\n0 years\n\njulia> div(y3,3) # mirrors integer division\n3 years\n\njulia> Dates.value(Dates.Millisecond(10))\n10"
 },
 
 {
@@ -14777,6 +14777,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/Dates/#Dates.value",
+    "page": "Dates",
+    "title": "Dates.value",
+    "category": "function",
+    "text": "Dates.value(x::Period) -> Int64\n\nFor a given period, return the value associated with that period.  For example, value(Millisecond(10)) returns 10 as an integer.\n\n\n\n\n\n"
+},
+
+{
     "location": "stdlib/Dates/#Dates.default",
     "page": "Dates",
     "title": "Dates.default",
@@ -14789,7 +14797,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates",
     "title": "Periods",
     "category": "section",
-    "text": "Dates.Period(::Any)\nDates.CompoundPeriod(::Vector{<:Dates.Period})\nDates.default"
+    "text": "Dates.Period(::Any)\nDates.CompoundPeriod(::Vector{<:Dates.Period})\nDates.value\nDates.default"
 },
 
 {
@@ -20589,7 +20597,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sockets",
     "title": "Base.bind",
     "category": "function",
-    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
+    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
 },
 
 {
