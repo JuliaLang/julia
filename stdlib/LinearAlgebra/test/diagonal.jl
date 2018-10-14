@@ -50,6 +50,7 @@ Random.seed!(1)
         @test D[1,2] == 0
 
         @test issymmetric(D)
+        @test isdiag(D)
         @test istriu(D)
         @test istril(D)
         if elty <: Real
