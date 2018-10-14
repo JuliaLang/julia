@@ -1598,46 +1598,9 @@ typedef struct _jl_handler_t {
     size_t world_age;
 } jl_handler_t;
 
-#if !defined(JULIA_ENABLE_THREADING) || !defined(JULIA_ENABLE_PARTR)
+typedef struct _jl_task_t jl_task_t;
 
-typedef struct _jl_task_t {
-    JL_DATA_TYPE
-    jl_value_t *tls;
-    jl_sym_t *state;
-    jl_value_t *donenotify;
-    jl_value_t *result;
-    jl_value_t *exception;
-    jl_value_t *backtrace;
-    jl_value_t *logstate;
-    jl_function_t *start;
-
-// hidden state:
-    jl_ucontext_t ctx; // saved thread state
-    void *stkbuf; // malloc'd memory (either copybuf or stack)
-    size_t bufsz; // actual sizeof stkbuf
-    unsigned int copy_stack:31; // sizeof stack for copybuf
-    unsigned int started:1;
-
-    // current exception handler
-    jl_handler_t *eh;
-    // saved gc stack top for context switches
-    jl_gcframe_t *gcstack;
-    // current world age
-    size_t world_age;
-
-    // id of owning thread
-    // does not need to be defined until the task runs
-    int16_t tid;
-#ifdef JULIA_ENABLE_THREADING
-    // This is statically initialized when the task is not holding any locks
-    arraylist_t locks;
-#endif
-    jl_timing_block_t *timing_stack;
-} jl_task_t;
-
-#endif // !JULIA_ENABLE_THREADING || ! JULIA_ENABLE_PARTR
-
-#if defined(JULIA_ENABLE_THREADING) && defined(JULIA_ENABLE_PARTR)
+#if defined(JULIA_ENABLE_PARTR)
 /* task settings */
 #define TASK_IS_STICKY          0x04
     /* task is sticky to the thread that first runs it */
@@ -1647,7 +1610,6 @@ typedef struct _reducer_t reducer_t;
 
 typedef struct _jl_taskq_t jl_taskq_t;
 typedef struct _jl_taskq_t jl_condition_t;
-typedef struct _jl_task_t jl_task_t;
 
 struct _jl_taskq_t {
     JL_DATA_TYPE
@@ -1655,6 +1617,7 @@ struct _jl_taskq_t {
     jl_task_t *head;
     jl_mutex_t lock;
 };
+#endif
 
 struct _jl_task_t {
     JL_DATA_TYPE
@@ -1665,6 +1628,11 @@ struct _jl_task_t {
     /* state */
     jl_sym_t *state;
 
+#ifndef JULIA_ENABLE_PARTR
+    /* completion queue */
+    jl_value_t *donenotify;
+#endif
+
     /* execution result */
     jl_value_t *result;
     jl_value_t *exception;
@@ -1674,6 +1642,7 @@ struct _jl_task_t {
     /* task entry point */
     jl_function_t *taskentry;
 
+#ifdef JULIA_ENABLE_PARTR
     /* reduction function entry point */
     jl_function_t *redentry;
 
@@ -1688,7 +1657,7 @@ struct _jl_task_t {
 
     /* parfor reduction result */
     jl_value_t *redresult;
-
+#endif
     /* --- hidden --- */
 
     /* context and stack */
@@ -1697,8 +1666,6 @@ struct _jl_task_t {
     size_t bufsz;               // actual sizeof stkbuf
     unsigned int copy_stack:31; // sizeof stack for copybuf
     unsigned int started:1;
-
-    arraylist_t locks;
 
     /* current exception handler */
     jl_handler_t *eh;
@@ -1711,7 +1678,10 @@ struct _jl_task_t {
 
     /* thread currently running this task */
     int16_t current_tid;
-
+#ifdef JULIA_ENABLE_THREADING
+    arraylist_t locks;
+#endif
+#ifdef JULIA_ENABLE_PARTR
     /* grain's range, for parfors */
     int64_t start, end;
 
@@ -1730,10 +1700,9 @@ struct _jl_task_t {
 
     /* for the multiqueue */
     int16_t prio;
-
+#endif
     jl_timing_block_t *timing_stack;
 };
-#endif // JULIA_ENABLE_THREADING && JULIA_ENABLE_PARTR
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 
@@ -1750,20 +1719,13 @@ JL_DLLEXPORT jl_condition_t *jl_condition_new(void);
 JL_DLLEXPORT jl_value_t *jl_task_wait(jl_condition_t *c);
 JL_DLLEXPORT void jl_task_notify(jl_condition_t *c, jl_value_t *arg, int8_t all, int8_t err);
 
-JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
-JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
-JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED);
-JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e);
-
-#else // JULIA_ENABLE_PARTR
+#endif // !JULIA_ENABLE_PARTR
 
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt);
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e);
-
-#endif // !JULIA_ENABLE_PARTR
 
 #include "locks.h"   // requires jl_task_t definition
 

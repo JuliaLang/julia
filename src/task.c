@@ -463,9 +463,9 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
         if (t->stkbuf == NULL)
             jl_throw(jl_memory_exception);
     }
-    t->tls = jl_nothing;
+    t->storage = jl_nothing;
     t->state = runnable_sym;
-    t->start = start;
+    t->taskentry = start;
     t->result = jl_nothing;
     t->donenotify = jl_nothing;
     t->exception = jl_nothing;
@@ -474,10 +474,9 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->logstate = ptls->current_task->logstate;
     // there is no active exception handler available on this stack yet
     t->eh = NULL;
-    t->tid = 0;
+    t->current_tid = 0;
     t->gcstack = NULL;
     t->stkbuf = NULL;
-    t->tid = 0;
     t->started = 0;
 #ifdef ENABLE_TIMINGS
     t->timing_stack = NULL;
@@ -543,7 +542,7 @@ void jl_init_tasks(void) JL_GC_DISABLED
                                         "exception",
                                         "backtrace",
                                         "logstate",
-                                        "taskentry",
+                                        "code",
                                         "redentry",
                                         "cq_head",
                                         "cq_lock_owner",
@@ -602,7 +601,7 @@ void NOINLINE JL_NORETURN start_task(void)
             }
             JL_TIMING(ROOT);
             ptls->world_age = jl_world_counter;
-            res = jl_apply(&t->start, 1);
+            res = jl_apply(&t->taskentry, 1);
         }
         JL_CATCH {
             res = jl_exception_in_transit;
@@ -930,15 +929,12 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->bufsz = ssize;
     ptls->current_task->started = 1;
 #ifdef JULIA_ENABLE_PARTR
-    ptls->current_task->storage = jl_nothing;
-    ptls->current_task->taskentry = NULL;
     ptls->current_task->redentry = NULL;
     ptls->current_task->cq.head = NULL;
     JL_MUTEX_INIT(&ptls->current_task->cq.lock);
     ptls->current_task->next = NULL;
     ptls->current_task->parent = ptls->current_task;
     ptls->current_task->redresult = jl_nothing;
-    ptls->current_task->current_tid = ptls->tid;
     ptls->current_task->arr = NULL;
     ptls->current_task->red = NULL;
     //TODO kp: commenting this for debugging
@@ -948,11 +944,11 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->sticky_tid = -1;
     ptls->current_task->grain_num = -1;
 #else
-    ptls->current_task->tls = jl_nothing;
-    ptls->current_task->start = NULL;
-    ptls->current_task->tid = ptls->tid;
     ptls->current_task->donenotify = jl_nothing;
 #endif
+    ptls->current_task->current_tid = ptls->tid;
+    ptls->current_task->storage = jl_nothing;
+    ptls->current_task->taskentry = NULL;
     ptls->current_task->state = runnable_sym;
     ptls->current_task->result = jl_nothing;
     ptls->current_task->exception = jl_nothing;

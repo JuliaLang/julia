@@ -78,7 +78,6 @@ static int ti_threadgroup_create(uint8_t num_sockets, uint8_t num_cores,
     int i;
     ti_threadgroup_t *tg;
     int num_threads = num_sockets * num_cores * num_threads_per_core;
-    char *cp;
 
     tg = (ti_threadgroup_t*)jl_malloc_aligned(sizeof(ti_threadgroup_t), 64);
     tg->tid_map = (int16_t*)jl_malloc_aligned(num_threads * sizeof(int16_t), 64);
