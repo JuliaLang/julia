@@ -670,7 +670,7 @@ typedef struct _jl_exc_stack_t {
     // uintptr_t data[]; // Access with jl_excstk_raw
 } jl_exc_stack_t;
 
-STATIC_INLINE uintptr_t *jl_excstk_raw(jl_exc_stack_t* stack)
+STATIC_INLINE uintptr_t *jl_excstk_raw(jl_exc_stack_t* stack) JL_NOTSAFEPOINT
 {
     return (uintptr_t*)(stack + 1);
 }
@@ -681,16 +681,16 @@ STATIC_INLINE jl_value_t *jl_exc_stack_exception(jl_exc_stack_t *stack JL_PROPAG
 {
     return (jl_value_t*)(jl_excstk_raw(stack)[itr-1]);
 }
-STATIC_INLINE size_t jl_exc_stack_bt_size(jl_exc_stack_t *stack, size_t itr)
+STATIC_INLINE size_t jl_exc_stack_bt_size(jl_exc_stack_t *stack, size_t itr) JL_NOTSAFEPOINT
 {
     return jl_excstk_raw(stack)[itr-2];
 }
-STATIC_INLINE uintptr_t *jl_exc_stack_bt_data(jl_exc_stack_t *stack, size_t itr)
+STATIC_INLINE uintptr_t *jl_exc_stack_bt_data(jl_exc_stack_t *stack, size_t itr) JL_NOTSAFEPOINT
 {
     return jl_excstk_raw(stack) + itr-2 - jl_exc_stack_bt_size(stack, itr);
 }
 // Exception stack iteration (start at itr=stack->top, stop at itr=0)
-STATIC_INLINE size_t jl_exc_stack_next(jl_exc_stack_t *stack, size_t itr)
+STATIC_INLINE size_t jl_exc_stack_next(jl_exc_stack_t *stack, size_t itr) JL_NOTSAFEPOINT
 {
     return itr-2 - jl_exc_stack_bt_size(stack, itr);
 }
