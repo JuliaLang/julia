@@ -384,4 +384,11 @@ end
     @test SymTridiagonal(ones(0), ones(0)) * ones(0, 2) == ones(0, 2)
 end
 
+@testset "issue #29644" begin
+    F = lu(Tridiagonal(sparse(1.0I, 3, 3)))
+    @test F.L == Matrix(I, 3, 3)
+    @test startswith(sprint(show, MIME("text/plain"), F),
+                     "LU{Float64,Tridiagonal{Float64,SparseVector")
+end
+
 end # module TestTridiagonal
