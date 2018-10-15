@@ -1040,6 +1040,11 @@ const char *name_from_method_instance(jl_method_instance_t *li)
     return jl_is_method(li->def.method) ? jl_symbol_name(li->def.method->name) : "top-level scope";
 }
 
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+// Use of `li` is not clobbered in JL_TRY, see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65041
+#pragma GCC diagnostic ignored "-Wclobbered"
+#endif
 // this generates llvm code for the lambda info
 // and adds the result to the jitlayers
 // (and the shadow module), but doesn't yet compile
@@ -1232,6 +1237,9 @@ locked_out:
     JL_GC_POP();
     return decls;
 }
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 
 #define getModuleFlag(m,str) m->getModuleFlag(str)
 
@@ -3784,6 +3792,11 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     }
 }
 
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+// `expr` is not clobbered in JL_TRY, see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65041
+#pragma GCC diagnostic ignored "-Wclobbered"
+#endif
 static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
 {
     if (jl_is_symbol(expr)) {
@@ -4093,6 +4106,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
     }
     return jl_cgval_t();
 }
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 
 // --- generate function bodies ---
 
