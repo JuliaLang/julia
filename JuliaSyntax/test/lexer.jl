@@ -239,7 +239,6 @@ end
                     "abstract",
                     "baremodule",
                     "begin",
-                    "bitstype",
                     "break",
                     "catch",
                     "const",
@@ -257,7 +256,6 @@ end
                     "let",
                     "local",
                     "if",
-                    "immutable",
                     "import",
                     "importall",
                     "macro",
@@ -270,7 +268,6 @@ end
                     #"true",
                     "try",
                     "type",
-                    "typealias",
                     "using",
                     "while"]
                     

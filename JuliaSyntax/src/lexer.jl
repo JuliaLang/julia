@@ -5,9 +5,9 @@ include("utilities.jl")
 import ..Tokens
 import ..Tokens: AbstractToken, Token, RawToken, Kind, TokenError, UNICODE_OPS, EMPTY_TOKEN, isliteral
 
-import ..Tokens: FUNCTION, ABSTRACT, IDENTIFIER, BAREMODULE, BEGIN, BITSTYPE, BREAK, CATCH, CONST, CONTINUE,
-                 DO, ELSE, ELSEIF, END, EXPORT, FALSE, FINALLY, FOR, FUNCTION, GLOBAL, LET, LOCAL, IF, IMMUTABLE,
-                 IMPORT, IMPORTALL, MACRO, MODULE, OUTER, QUOTE, RETURN, TRUE, TRY, TYPE, TYPEALIAS, USING, WHILE, ISA, IN,
+import ..Tokens: FUNCTION, ABSTRACT, IDENTIFIER, BAREMODULE, BEGIN, BREAK, CATCH, CONST, CONTINUE,
+                 DO, ELSE, ELSEIF, END, EXPORT, FALSE, FINALLY, FOR, FUNCTION, GLOBAL, LET, LOCAL, IF,
+                 IMPORT, IMPORTALL, MACRO, MODULE, OUTER, QUOTE, RETURN, TRUE, TRY, TYPE, USING, WHILE, ISA, IN,
                  MUTABLE, PRIMITIVE, STRUCT, WHERE
 
 
@@ -993,9 +993,6 @@ function lex_identifier(l, c)
         elseif c == 'e'
             c = readchar(l)
             return tryread(l, ('g', 'i', 'n'), BEGIN, c)
-        elseif c == 'i'
-            c = readchar(l)
-            return tryread(l, ('t', 's', 't', 'y', 'p', 'e'), BITSTYPE, c)
         elseif c == 'r'
             c = readchar(l)
             return tryread(l, ('e', 'a', 'k'), BREAK, c)
@@ -1098,10 +1095,7 @@ function lex_identifier(l, c)
         elseif c == 'm'
             readchar(l)
             c = peekchar(l)
-            if c == 'm'
-                readchar(l)
-                return tryread(l, ('u', 't', 'a', 'b', 'l', 'e'), IMMUTABLE, c)
-            elseif c == 'p'
+            if c == 'p'
                 readchar(l)
                 c = peekchar(l)
                 if c == 'o'
@@ -1213,9 +1207,6 @@ function lex_identifier(l, c)
                     c = peekchar(l)
                     if !is_identifier_char(c)
                         return emit(l, TYPE)
-                    elseif c == 'a'
-                        c = readchar(l)
-                        return tryread(l, ('l', 'i', 'a', 's'), TYPEALIAS, c)
                     else
                         c = readchar(l)
                         return _doret(l, c)
