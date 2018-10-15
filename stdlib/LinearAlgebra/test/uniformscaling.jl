@@ -40,6 +40,8 @@ end
     @test !ishermitian(UniformScaling(complex(1.0,1.0)))
     @test isposdef(I)
     @test !isposdef(-I)
+    @test isposdef(UniformScaling(complex(1.0, 0.0)))
+    @test !isposdef(UniformScaling(complex(1.0, 1.0)))
     @test UniformScaling(4.00000000000001) ≈ UniformScaling(4.0)
     @test UniformScaling(4.32) ≈ UniformScaling(4.3) rtol=0.1 atol=0.01
     @test UniformScaling(4.32) ≈ 4.3 * [1 0; 0 1] rtol=0.1 atol=0.01
