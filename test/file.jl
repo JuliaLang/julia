@@ -216,7 +216,7 @@ close(s)
 #######################################################################
 
 @testset "quoting filenames" begin
-    try
+    @test try
         open("this file is not expected to exist")
         false
     catch e
