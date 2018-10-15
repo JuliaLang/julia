@@ -126,6 +126,7 @@ let c = Ref(0),
     yield()
     @test c[] == 1
     yield(t2)
+    wait(t2)
     @test c[] == 100
 end
 
