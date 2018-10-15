@@ -523,20 +523,34 @@ end
         L.mask[idx] && return (idx, s)
     end
 end
-# When wrapping a BitArray, lean heavily upon its internals -- this is a common
-# case. Just use the Int index and count as its state.
-@inline function iterate(L::LogicalIndex{Int,<:BitArray}, s=(0,1))
-    s[2] > length(L) && return nothing
-    i, n = s
+# When wrapping a BitArray, optimize by leaning heavily upon its internals. 
+# We hoist a number of intermediate parts of the computation into a 4-tuple state:
+# (c, u, i0, n) = s
+#   c: the previously accessed "chunk" from the BitArray
+#   u: the previously used one-hot bitmask to select the bit from the chunk
+#   i0: a 0-based linear index representing the previous bit offset
+#   n: the total number of indices returned so far
+_rol1(x::UInt64) = (x >>> 63) | (x << 1)
+@inline function iterate(L::LogicalIndex{Int,<:BitArray}, s=(UInt64(0),0x8000_0000_0000_0000,0,0))
+    c, u, i0, n = s
+    n >= length(L) && return nothing
     Bc = L.mask.chunks
     while true
-        if Bc[_div64(i)+1] & (UInt64(1)<<_mod64(i)) != 0
-            i += 1
-            return (i, (i, n+1))
+        if u == UInt64(0x8000_0000_0000_0000)
+            c = Bc[_div64(i0)+1]
+            if c == 0
+                i0 += 64
+                continue
+            end
         end
-        i += 1
+        i0 += 1
+        u = _rol1(u)
+        if c & u != 0
+            return (i0, (c, u, i0, n+1))
+        end
     end
 end
+
 
 @inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex{<:Any,<:AbstractArray{Bool,1}}) =
     eachindex(IndexLinear(), A) == eachindex(IndexLinear(), I.mask)
