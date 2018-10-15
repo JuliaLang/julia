@@ -449,3 +449,27 @@ function hash(r::Regex, h::UInt)
     h = hash(r.compile_options, h)
     h = hash(r.match_options, h)
 end
+
+## escaping ##
+"""
+    regex_escape(s::AbstractString)
+
+Sanitize a string to make it safe for use in regular expression pattern construction. Any
+regular expression metacharacters are escaped along with whitespace.
+
+# Examples
+```jldoctest
+julia> regex_escape("Bang!")
+"Bang\\!"
+
+julia> regex_escape("  ( [ { . ? *")
+"\\ \\ \\(\\ \\[\\ \\{\\ \\.\\ \\?\\ \\*"
+
+julia> regex_escape("/^[a-z0-9_-]{3,16}\$/")
+"/\\^\\[a\\-z0\\-9_\\-\\]\\{3,16\\}\\\$/"
+```
+"""
+function regex_escape(s::AbstractString)
+    res = replace(s, r"([()[\]{}?*+\-|^\$\\.&~#\s=!<>|:])" => s"\\\1")
+    replace(res, "\0" => "\\0")
+end

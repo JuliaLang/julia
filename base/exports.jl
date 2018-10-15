@@ -443,6 +443,7 @@ export
     findprev,
     match,
     occursin,
+    regex_escape,
     searchsorted,
     searchsortedfirst,
     searchsortedlast,

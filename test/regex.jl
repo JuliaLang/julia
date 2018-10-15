@@ -61,3 +61,16 @@ end
 # 'a' flag to disable UCP
 @test match(r"\w+", "Düsseldorf").match == "Düsseldorf"
 @test match(r"\w+"a, "Düsseldorf").match == "D"
+
+# Test escaping strings for use in regular expressions.  We take some regular expressions and
+# make sure we can construct a regular expression from them that matches the original string.
+test_strings = [
+    ".**",
+    raw"/^[a-z0-9_-]{3,16}$/",
+    raw"/^<([a-z]+)([^<]+)*(?:>(.*)<\/\1>|\s+\/>)$/"
+]
+for s in test_strings
+    r = Regex(string("(", regex_escape(s), ")"))
+    m = match(r, s)
+    @test length(m.captures) == 1
+end

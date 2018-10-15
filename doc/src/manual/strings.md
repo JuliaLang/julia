@@ -936,6 +936,16 @@ ERROR: syntax: invalid escape sequence
 Triple-quoted regex strings, of the form `r"""..."""`, are also supported (and may be convenient
 for regular expressions containing quotation marks or newlines).
 
+The `regex_escape` function allows you to escape a string for use in constructing a regular expression.  All whitespace and PCRE metacharacters are escaped.  
+
+```julia-repl
+julia> regex_escape("Bang!")
+"Bang\\!"
+
+julia> regex_escape("  ( [ { . ? *")
+"\\ \\ \\(\\ \\[\\ \\{\\ \\.\\ \\?\\ \\*"
+```
+
 ## [Byte Array Literals](@id man-byte-array-literals)
 
 Another useful non-standard string literal is the byte-array string literal: `b"..."`. This
