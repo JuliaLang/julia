@@ -499,6 +499,10 @@ LogicalIndex(mask::AbstractArray{Bool, N}) where {N} = LogicalIndex{CartesianInd
 size(L::LogicalIndex) = (L.sum,)
 length(L::LogicalIndex) = L.sum
 collect(L::LogicalIndex) = [i for i in L]
+# While theoretically we should be able to do better than the naive findall
+# as we already know the total `count` of trues, the BitArray implementation
+# is so specialized that this is still a win:
+collect(L::LogicalIndex{<:Any, <:BitArray}) = findall(L.mask)
 show(io::IO, r::LogicalIndex) = print(io, "Base.LogicalIndex(", r.mask, ")")
 # Iteration over LogicalIndex is very performance-critical, but it also must
 # support arbitrary AbstractArray{Bool}s with both Int and CartesianIndex.
@@ -523,30 +527,30 @@ end
         L.mask[idx] && return (idx, s)
     end
 end
-# When wrapping a BitArray, optimize by leaning heavily upon its internals. 
+# When wrapping a BitArray, optimize by leaning heavily upon its internals.
 # We hoist a number of intermediate parts of the computation into a 4-tuple state:
 # (c, u, i0, n) = s
 #   c: the previously accessed "chunk" from the BitArray
 #   u: the previously used one-hot bitmask to select the bit from the chunk
-#   i0: a 0-based linear index representing the previous bit offset
+#   i: a linear index representing the previous bit offset
 #   n: the total number of indices returned so far
 _rol1(x::UInt64) = (x >>> 63) | (x << 1)
 @inline function iterate(L::LogicalIndex{Int,<:BitArray}, s=(UInt64(0),0x8000_0000_0000_0000,0,0))
-    c, u, i0, n = s
+    c, u, i, n = s
     n >= length(L) && return nothing
     Bc = L.mask.chunks
     while true
-        if u == UInt64(0x8000_0000_0000_0000)
-            c = Bc[_div64(i0)+1]
+        if u == 0x8000_0000_0000_0000
+            c = Bc[_div64(i)+1]
             if c == 0
-                i0 += 64
+                i += 64
                 continue
             end
         end
-        i0 += 1
+        i += 1
         u = _rol1(u)
         if c & u != 0
-            return (i0, (c, u, i0, n+1))
+            return (i, (c, u, i, n+1))
         end
     end
 end
