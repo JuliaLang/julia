@@ -116,7 +116,7 @@ ishermitian(D::Diagonal{<:Number}) = isreal(D.diag)
 ishermitian(D::Diagonal) = all(ishermitian, D.diag)
 issymmetric(D::Diagonal{<:Number}) = true
 issymmetric(D::Diagonal) = all(issymmetric, D.diag)
-isposdef(D::Diagonal) = all(x -> x > 0, D.diag)
+isposdef(D::Diagonal) = all(isposdef, D.diag)
 
 factorize(D::Diagonal) = D
 
