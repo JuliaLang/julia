@@ -123,7 +123,8 @@ factorize(D::Diagonal) = D
 real(D::Diagonal) = Diagonal(real(D.diag))
 imag(D::Diagonal) = Diagonal(imag(D.diag))
 
-isdiag(D::Diagonal) = true
+isdiag(D::Diagonal) = all(isdiag, D.diag)
+isdiag(D::Diagonal{<:Number}) = true
 istriu(D::Diagonal) = true
 istril(D::Diagonal) = true
 function triu!(D::Diagonal,k::Integer=0)
