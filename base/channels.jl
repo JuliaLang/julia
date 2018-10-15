@@ -314,7 +314,7 @@ function put_buffered(c::Channel, v)
             wait(c.cond_put)
         else
             push!(c.data, v)
-            notify(c.cond_take)
+            notify(c.cond_take, nothing, true, false)
             unlock(c.lock)
             return v
         end
@@ -369,7 +369,7 @@ function put_unbuffered(c::Channel, v)
         end
     end
     taker = popfirst!(c.takers)
-    yield(taker, v) # immediately give taker a chance to run but don't block the current task
+    yield(taker, v) # immediately give taker a chance to run, but don't block the current task
     return v
 end
 

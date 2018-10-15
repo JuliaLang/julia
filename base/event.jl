@@ -31,10 +31,9 @@ yield() = ccall(:jl_task_yield, Any, (Cint,), 1)
 yield(t::Task, @nospecialize x = nothing) = schedule(t, x)
 yieldto(t::Task, @nospecialize x = nothing) = (unyielding_schedule(t, x); wait())
 try_yieldto(undo, reftask::Ref{Task}) = (unyielding_schedule(reftask[]); wait())
+throwto(t::Task, @nospecialize exc) = (unyielding_schedule(t, exc, error=true); wait())
 
 wait() = ccall(:jl_task_yield, Any, (Cint,), 0)
-
-throwto(t::Task, @nospecialize exc) = () # TODO: should throwto() still work? what if the task is running in another thread?
 
 
 else # !JULIA_PARTR

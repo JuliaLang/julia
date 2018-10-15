@@ -840,6 +840,7 @@ JL_DLLEXPORT jl_task_t *jl_task_spawn(jl_task_t *task, jl_value_t *arg, int8_t e
        been started, or if the calling task is sticky, we don't yield.
      */
     if (!unyielding
+            &&  !ptls->in_finalizer  // allow e.g. async printing from finalizers
             &&  !task->started
             &&  (ptls->current_task  &&  !(ptls->current_task->settings & TASK_IS_STICKY)))
         jl_task_yield(1);
