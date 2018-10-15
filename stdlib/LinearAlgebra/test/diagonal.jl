@@ -51,6 +51,8 @@ Random.seed!(1)
 
         @test issymmetric(D)
         @test isdiag(D)
+        @test isdiag(Diagonal([[1 0; 0 1], [1 0; 0 1]]))
+        @test !isdiag(Diagonal([[1 0; 0 1], [1 0; 1 1]]))
         @test istriu(D)
         @test istril(D)
         if elty <: Real
