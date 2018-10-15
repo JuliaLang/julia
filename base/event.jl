@@ -28,9 +28,9 @@ unyielding_schedule(t::Task, @nospecialize(arg = nothing); error=false) =
 fetch(t::Task) = ccall(:jl_task_sync, Any, (Ref{Task},), t)
 
 yield() = ccall(:jl_task_yield, Any, (Cint,), 1)
-yield(t::Task, @nospecialize x = nothing) = (schedule(t, x); yield())
-yieldto(t::Task, @nospecialize x = nothing) = yield(t, x)
-try_yieldto(undo, reftask::Ref{Task}) = (schedule(reftask[]); yield())
+yield(t::Task, @nospecialize x = nothing) = schedule(t, x)
+yieldto(t::Task, @nospecialize x = nothing) = (unyielding_schedule(t, x); wait())
+try_yieldto(undo, reftask::Ref{Task}) = (unyielding_schedule(reftask[]); wait())
 
 wait() = ccall(:jl_task_yield, Any, (Cint,), 0)
 

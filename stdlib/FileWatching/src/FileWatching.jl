@@ -338,7 +338,7 @@ function uv_pollcb(handle::Ptr{Cvoid}, status::Int32, events::Int32)
     else
         t.events |= events
         if t.active[1] || t.active[2]
-            if isempty(t.notify.waitq)
+            if isempty(t.notify)
                 # if we keep hearing about events when nobody appears to be listening,
                 # stop the poll to save cycles
                 t.active = (false, false)
@@ -400,7 +400,7 @@ function start_watching(t::PollingFileWatcher)
 end
 
 function stop_watching(t::PollingFileWatcher)
-    if t.active && isempty(t.notify.waitq)
+    if t.active && isempty(t.notify)
         t.active = false
         uv_error("PollingFileWatcher (stop)",
                  ccall(:uv_fs_poll_stop, Int32, (Ptr{Cvoid},), t.handle))
@@ -420,7 +420,7 @@ function start_watching(t::FileMonitor)
 end
 
 function stop_watching(t::FileMonitor)
-    if t.active && isempty(t.notify.waitq)
+    if t.active && isempty(t.notify)
         t.active = false
         uv_error("FileMonitor (stop)",
                  ccall(:uv_fs_event_stop, Int32, (Ptr{Cvoid},), t.handle))
