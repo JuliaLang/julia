@@ -388,7 +388,7 @@ end
     F = lu(Tridiagonal(sparse(1.0I, 3, 3)))
     @test F.L == Matrix(I, 3, 3)
     @test startswith(sprint(show, MIME("text/plain"), F),
-                     "LU{Float64,Tridiagonal{Float64,SparseVector")
+          "LinearAlgebra.LU{Float64,LinearAlgebra.Tridiagonal{Float64,SparseArrays.SparseVector")
 end
 
 end # module TestTridiagonal
