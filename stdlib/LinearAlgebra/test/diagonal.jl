@@ -301,6 +301,10 @@ end
 @testset "isposdef" begin
     @test isposdef(Diagonal(1.0 .+ rand(n)))
     @test !isposdef(Diagonal(-1.0 * rand(n)))
+    @test isposdef(Diagonal(complex(1.0, 0.0) .+ rand(n)))
+    @test !isposdef(Diagonal(complex(1.0, 1.0) .+ rand(n)))
+    @test isposdef(Diagonal([[1 0; 0 1], [1 0; 0 1]]))
+    @test !isposdef(Diagonal([[1 0; 0 1], [1 0; 1 1]]))
 end
 
 @testset "getindex" begin
