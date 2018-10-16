@@ -105,6 +105,7 @@ function generate_precompile_statements()
                         print(s)
                         write(repl_output_buffer, s)
                         if occursin("__PRECOMPILE_END__", s)
+                            println("Broke out of t task")
                             break
                         end
                     end
@@ -115,6 +116,7 @@ function generate_precompile_statements()
                     end
                 end
                 write(master, "print(\"__PRECOMPILE\", \"_END__\")", '\n')
+                println("Waiting on t to finish")
                 wait(t)
 
                 # TODO Figure out why exit() on Windows doesn't exit the process
@@ -125,6 +127,7 @@ function generate_precompile_statements()
                     readuntil(master, "exit()\r\e[13C\r\n")
                     # @assert bytesavailable(master) == 0
                 end
+                println("Waiting on p to finish")
                 wait(p)
             else
                 # Is this even needed or is this already recorded just from starting this process?
