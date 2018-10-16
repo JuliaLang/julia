@@ -102,6 +102,7 @@ function generate_precompile_statements()
                     while true
                         sleep(0.5)
                         s = String(readavailable(master))
+                        print(s)
                         write(repl_output_buffer, s)
                         if occursin("__PRECOMPILE_END__", s)
                             break
