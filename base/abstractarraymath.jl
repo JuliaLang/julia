@@ -377,7 +377,7 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
 
     # fill the first inner block
     if all(x -> x == 1, inner)
-        idxs = (axes(A)..., ntuple(n->OneTo(1), length(shape) - length(inner))...)
+        idxs = (axes(A)..., ntuple(n->1, length(shape) - length(inner))...) # keep dimension consistent
         R[idxs...] = A
     else
         inner_indices = [1:n for n in inner]
