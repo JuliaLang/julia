@@ -648,17 +648,7 @@ static jl_task_t *get_next_task(void)
     JL_UNLOCK(&ptls->sticky_taskq->lock);
 
     /* no sticky tasks, go to the multiq */
-    if (!task) {
-        task = multiq_deletemin();
-
-        if (task) {
-            /* a sticky task will only come out of the multiq if it has not been run */
-            if (task->settings & TASK_IS_STICKY) {
-                assert(task->sticky_tid == -1);
-                task->sticky_tid = ptls->tid;
-            }
-        }
-    }
+    if (!task) task = multiq_deletemin();
 
     JL_GC_POP();
     return task;
@@ -779,7 +769,6 @@ static void init_task(jl_task_t *task, size_t ssize)
     task->current_tid = -1;
     task->arr = NULL;
     task->red = NULL;
-    task->settings = 0;
     task->sticky_tid = -1;
     task->grain_num = -1;
 
@@ -807,8 +796,9 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *_taskentry, size_t ssize)
 
 /*  jl_task_spawn() -- enqueue a task for execution
 
-    If `sticky` is set, the task will only run on the current thread. If `detach`
-    is set, the spawned task cannot be synced. Generally yields the calling task.
+    If `sticky` is set, the task will only run on the current thread. Continues
+    the current task if `unyielding` is set or in a few other cases, otherwise
+    yields.
  */
 JL_DLLEXPORT jl_task_t *jl_task_spawn(jl_task_t *task, jl_value_t *arg, int8_t err,
                                       int8_t unyielding, int8_t sticky)
@@ -820,7 +810,7 @@ JL_DLLEXPORT jl_task_t *jl_task_spawn(jl_task_t *task, jl_value_t *arg, int8_t e
 
     if (!task->started) {
         task->prio = ptls->tid;
-        if (sticky) task->settings |= TASK_IS_STICKY;
+        if (sticky) task->sticky_tid = ptls->tid;
     }
     if (err) {
         task->exception = arg;
@@ -837,12 +827,11 @@ JL_DLLEXPORT jl_task_t *jl_task_spawn(jl_task_t *task, jl_value_t *arg, int8_t e
        scheduling. However, this breaks some assumptions made by parts of
        the Julia runtime -- I/O and channels. So, we have to allow the caller
        to disallow yielding. Also, if the task being scheduled has already
-       been started, or if the calling task is sticky, we don't yield.
+       been started, we don't yield.
      */
     if (!unyielding
             &&  !ptls->in_finalizer  // allow e.g. async printing from finalizers
-            &&  !task->started
-            &&  (ptls->current_task  &&  !(ptls->current_task->settings & TASK_IS_STICKY)))
+            &&  !task->started)
         jl_task_yield(1);
 
     return task;
@@ -938,9 +927,8 @@ JL_DLLEXPORT int jl_task_spawn_multi(jl_task_t *task)
         t = t->next;
     }
 
-    /* only yield if we're running a non-sticky task */
-    if (ptls->current_task  &&  !(ptls->current_task->settings & TASK_IS_STICKY))
-        jl_task_yield(1);
+    /* yield to allow depth-first scheduling */
+    jl_task_yield(1);
 
     return 0;
 }
@@ -963,8 +951,7 @@ static void taskq_delete(jl_task_t **pnext, jl_task_t *tgt)
 
 /*  jl_task_sync() -- get the return value of task `t`
 
-    Returns NULL immediately if task was created detached. Otherwise,
-    returns only when task `t` has completed.
+    Returns only when task `t` has completed.
  */
 JL_DLLEXPORT jl_value_t *jl_task_sync(jl_task_t *task)
 {

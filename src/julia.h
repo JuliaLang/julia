@@ -1601,10 +1601,6 @@ typedef struct _jl_handler_t {
 typedef struct _jl_task_t jl_task_t;
 
 #if defined(JULIA_ENABLE_PARTR)
-/* task settings */
-#define TASK_IS_STICKY          0x04
-    /* task is sticky to the thread that first runs it */
-
 typedef struct _arriver_t arriver_t;
 typedef struct _reducer_t reducer_t;
 
@@ -1688,9 +1684,6 @@ struct _jl_task_t {
     /* to synchronize/reduce grains of a parfor */
     arriver_t *arr;
     reducer_t *red;
-
-    /* task settings */
-    int8_t settings;
 
     /* tid of the thread to which this task is sticky */
     int16_t sticky_tid;

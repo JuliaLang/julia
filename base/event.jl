@@ -19,19 +19,15 @@ isempty(c::Condition) = ccall(:jl_condition_isempty, Cint, (Ref{Condition},), c)
 
 schedule(t::Task, @nospecialize(arg = nothing); error=false) =
     ccall(:jl_task_spawn, Ref{Task}, (Ref{Task},Any,Int8,Int8,Int8),
-          t, arg, error, false, 0)
-
-unyielding_schedule(t::Task, @nospecialize(arg = nothing); error=false) =
-    ccall(:jl_task_spawn, Ref{Task}, (Ref{Task},Any,Int8,Int8,Int8),
-          t, arg, error, true, 0)
+          t, arg, error, true, true)
 
 fetch(t::Task) = ccall(:jl_task_sync, Any, (Ref{Task},), t)
 
 yield() = ccall(:jl_task_yield, Any, (Cint,), 1)
 yield(t::Task, @nospecialize x = nothing) = schedule(t, x)
-yieldto(t::Task, @nospecialize x = nothing) = (unyielding_schedule(t, x); wait())
-try_yieldto(undo, reftask::Ref{Task}) = (unyielding_schedule(reftask[]); wait())
-throwto(t::Task, @nospecialize exc) = (unyielding_schedule(t, exc, error=true); wait())
+yieldto(t::Task, @nospecialize x = nothing) = (schedule(t, x); wait())
+try_yieldto(undo, reftask::Ref{Task}) = (schedule(reftask[]); wait())
+throwto(t::Task, @nospecialize exc) = (schedule(t, exc, error=true); wait())
 
 wait() = ccall(:jl_task_yield, Any, (Cint,), 0)
 
@@ -104,9 +100,6 @@ function schedule(t::Task, arg; error=false)
     end
     return enq_work(t)
 end
-
-unyielding_schedule(t::Task, @nospecialize(arg = nothing); error=false) =
-    schedule(t, arg, error=error)
 
 yield() = (enq_work(current_task()); wait())
 

@@ -937,10 +937,6 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->redresult = jl_nothing;
     ptls->current_task->arr = NULL;
     ptls->current_task->red = NULL;
-    //TODO kp: commenting this for debugging
-    //ptls->current_task->settings = TASK_IS_STICKY | TASK_IS_DETACHED;
-    //ptls->current_task->sticky_tid = ptls->tid;
-    ptls->current_task->settings = 0;
     ptls->current_task->sticky_tid = -1;
     ptls->current_task->grain_num = -1;
 #else
