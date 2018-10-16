@@ -244,6 +244,8 @@ function Base.copy(tB::Transpose{<:Any,<:Bidiagonal})
     return Bidiagonal(map(x -> copy.(transpose.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U)
 end
 
+iszero(M::Bidiagonal) = iszero(M.dv) && iszero(M.ev)
+isone(M::Bidiagonal) = all(isone, M.dv) && iszero(M.ev)
 istriu(M::Bidiagonal) = M.uplo == 'U' || iszero(M.ev)
 istril(M::Bidiagonal) = M.uplo == 'L' || iszero(M.ev)
 

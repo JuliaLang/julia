@@ -123,6 +123,9 @@ factorize(D::Diagonal) = D
 real(D::Diagonal) = Diagonal(real(D.diag))
 imag(D::Diagonal) = Diagonal(imag(D.diag))
 
+iszero(D::Diagonal) = all(iszero, D.diag)
+iszero(D::Diagonal{<:Number}) = iszero(D.diag)
+isone(D::Diagonal) = all(isone, D.diag)
 isdiag(D::Diagonal) = all(isdiag, D.diag)
 isdiag(D::Diagonal{<:Number}) = true
 istriu(D::Diagonal) = true
