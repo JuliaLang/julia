@@ -1038,9 +1038,14 @@ jl_assume_aligned(T ptr, unsigned align)
 #  define jl_unreachable() ((void)jl_assume(0))
 #endif
 
-// GCC misidentifies some variables as being clobbered in JL_TRY, so we'll define a macro
-// to stop and resume GCC diagnostics for -Wclobbered that can be used to wrap affected code
-// See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65041
+// Tools for locally disabling spurious compiler warnings
+//
+// Particular calls which are used elsewhere in the code include:
+//
+// * JL_GCC_IGNORE_START(-Wclobbered) - gcc misidentifies some variables which
+//   are used inside a JL_TRY as being "clobbered" if JL_CATCH is entered. This
+//   warning is spurious if the variable is not modified inside the JL_TRY.
+//   See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65041
 #ifdef _COMPILER_GCC_
 #define JL_DO_PRAGMA(s) _Pragma(#s)
 #define JL_GCC_IGNORE_START(warning) \
