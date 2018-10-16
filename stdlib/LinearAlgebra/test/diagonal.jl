@@ -201,7 +201,17 @@ Random.seed!(1)
         DM3= Matrix(D3)
         Matrix(kron(D, D3)) ≈ kron(DM, DM3)
     end
-    @testset "triu/tril" begin
+    @testset "iszero, isone, triu, tril" begin
+        Dzero = Diagonal(zeros(elty, 10))
+        Done = Diagonal(ones(elty, 10))
+        Dmix = Diagonal(zeros(elty, 10))
+        Dmix[end,end] = one(elty)
+        @test iszero(Dzero)
+        @test !isone(Dzero)
+        @test !iszero(Done)
+        @test isone(Done)
+        @test !iszero(Dmix)
+        @test !isone(Dmix)
         @test istriu(D)
         @test istril(D)
         @test iszero(triu(D,1))
