@@ -496,6 +496,10 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 
     return t;
 }
+
+JL_DLLEXPORT void jl_task_scheduler(void)
+{
+}
 #endif // !JULIA_ENABLE_PARTR
 
 JL_DLLEXPORT jl_value_t *jl_get_current_task(void)
@@ -937,10 +941,6 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->redresult = jl_nothing;
     ptls->current_task->arr = NULL;
     ptls->current_task->red = NULL;
-    //TODO kp: commenting this for debugging
-    //ptls->current_task->settings = TASK_IS_STICKY | TASK_IS_DETACHED;
-    //ptls->current_task->sticky_tid = ptls->tid;
-    ptls->current_task->settings = 0;
     ptls->current_task->sticky_tid = -1;
     ptls->current_task->grain_num = -1;
 #else

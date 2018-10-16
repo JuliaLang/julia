@@ -386,6 +386,9 @@ Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module
 function Task(@nospecialize(f), reserved_stack::Int=0)
     return ccall(:jl_new_task, Ref{Task}, (Any, Int), f, reserved_stack)
 end
+#function task_scheduler()
+#    ccall(:jl_task_scheduler, Void, ())
+#end
 
 # simple convert for use by constructors of types in Core
 # note that there is no actual conversion defined here,

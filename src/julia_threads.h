@@ -158,6 +158,7 @@ struct _jl_tls_states_t {
     jl_jmp_buf *safe_restore;
     int16_t tid;
 #ifdef JULIA_ENABLE_PARTR
+    struct _jl_task_t *scheduler;
     uint64_t rngseed;
     struct _jl_taskq_t *sticky_taskq;
 #endif

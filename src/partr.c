@@ -25,6 +25,8 @@ extern "C" {
 #define MINSTKSZ 131072
 #endif
 
+#define SCHEDULER_STACK_SIZE 8192
+
 // task states and stack switching
 extern jl_sym_t *done_sym;
 extern jl_sym_t *failed_sym;
@@ -424,41 +426,6 @@ void jl_init_started_threads(jl_threadarg_t **targs)
 }
 
 
-static int run_next(void);
-
-
-// thread function: used by all except the main thread
-void jl_threadfun(void *arg)
-{
-    jl_threadarg_t *targ = (jl_threadarg_t *)arg;
-
-    // initialize this thread (set tid, create heap, set up root task)
-    jl_init_threadtls(targ->tid);
-    void *stack_lo, *stack_hi;
-    jl_init_stack_limits(0, &stack_lo, &stack_hi);
-    init_started_thread();
-    jl_init_root_task(stack_lo, stack_hi);
-
-    // Assuming the functions called below don't contain unprotected GC
-    // critical region. In general, the following part of this function
-    // shouldn't call any managed code without calling `jl_gc_unsafe_enter`
-    // first.
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_gc_state_set(ptls, JL_GC_STATE_SAFE, 0);
-    uv_barrier_wait(targ->barrier);
-
-    // free the thread argument here
-    free(targ);
-
-    jl_current_task->state = done_sym;
-    run_next();
-
-    // shouldn't get here
-    gc_debug_critical_error();
-    abort();
-}
-
-
 // enqueue the specified task for execution
 static void enqueue_task(jl_task_t *task)
 {
@@ -490,6 +457,137 @@ static void enqueue_task(jl_task_t *task)
         uv_cond_broadcast(&sleep_alarm);
         uv_mutex_unlock(&sleep_lock);
     }
+}
+
+
+// get the next runnable task
+static jl_task_t *get_next_task(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *task = NULL;
+    JL_GC_PUSH1(&task);
+
+    /* first check for sticky tasks */
+    JL_LOCK(&ptls->sticky_taskq->lock);
+    task = ptls->sticky_taskq->head;
+    if (task) {
+        ptls->sticky_taskq->head = task->next;
+        task->next = NULL;
+    }
+    JL_UNLOCK(&ptls->sticky_taskq->lock);
+
+    /* no sticky tasks, go to the multiq */
+    if (!task) task = multiq_deletemin();
+
+    JL_GC_POP();
+    return task;
+}
+
+
+// set up the scheduler task
+static void JL_NORETURN start_scheduler(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    ptls->scheduler = jl_new_task(jl_get_global(jl_core_module, jl_symbol("task_scheduler")),
+                                  SCHEDULER_STACK_SIZE);
+    ptls->scheduler->sticky_tid = ptls->tid;
+    jl_task_t *scheduler = ptls->scheduler;
+    jl_switchto(&scheduler);
+
+    // shouldn't get here
+    gc_debug_critical_error();
+    abort();
+}
+
+
+/*  jl_task_scheduler()
+
+ */
+JL_DLLEXPORT void jl_task_scheduler(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *task = NULL;
+    JL_GC_PUSH1(&task);
+    uint64_t spin_ns, spin_start = 0;
+
+    for (; ;) {
+        while (!task) {
+            if (jl_thread_sleep_threshold) {
+                if (spin_start == 0) {
+                    spin_start = uv_hrtime();
+                    continue;
+                }
+            }
+
+            task = get_next_task();
+
+            if (!task) {
+                if (ptls->tid == 0)
+                    jl_process_events(jl_global_event_loop());
+                else
+                    jl_cpu_pause();
+
+                if (jl_thread_sleep_threshold) {
+                    spin_ns = uv_hrtime() - spin_start;
+                    if (spin_ns > jl_thread_sleep_threshold) {
+                        uv_mutex_lock(&sleep_lock);
+                        task = get_next_task();
+                        if (!task) {
+                            // thread 0 makes a blocking call to the event loop
+                            if (ptls->tid == 0) {
+                                uv_mutex_unlock(&sleep_lock);
+                                jl_run_once(jl_global_event_loop());
+                            }
+                            // other threads just sleep
+                            else {
+                                uv_cond_wait(&sleep_alarm, &sleep_lock);
+                                uv_mutex_unlock(&sleep_lock);
+                            }
+                        }
+                        else uv_mutex_unlock(&sleep_lock);
+                        spin_start = 0;
+                    }
+                }
+            }
+        }
+
+        jl_switchto(&task);
+    }
+    JL_GC_POP();
+}
+
+
+// thread function: used by all except the main thread
+void jl_threadfun(void *arg)
+{
+    jl_threadarg_t *targ = (jl_threadarg_t *)arg;
+
+    // initialize this thread (set tid, create heap, set up root task)
+    jl_init_threadtls(targ->tid);
+    void *stack_lo, *stack_hi;
+    jl_init_stack_limits(0, &stack_lo, &stack_hi);
+    init_started_thread();
+    jl_init_root_task(stack_lo, stack_hi);
+
+    // Assuming the functions called below don't contain unprotected GC
+    // critical region. In general, the following part of this function
+    // shouldn't call any managed code without calling `jl_gc_unsafe_enter`
+    // first.
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_gc_state_set(ptls, JL_GC_STATE_SAFE, 0);
+    uv_barrier_wait(targ->barrier);
+
+    // free the thread argument here
+    free(targ);
+
+    jl_current_task->state = done_sym;
+
+    // start the scheduler (doesn't return)
+    start_scheduler();
+
+    // shouldn't get here
+    gc_debug_critical_error();
+    abort();
 }
 
 
@@ -622,103 +720,13 @@ void NOINLINE JL_NORETURN start_task(void)
 
     JL_SIGATOMIC_END();
 
-    /* next task */
-    run_next();
+    /* run the scheduler */
+    task = ptls->scheduler;
+    jl_switchto(&task);
 
     /* shouldn't reach here */
     gc_debug_critical_error();
     abort();
-}
-
-
-// get the next runnable task
-static jl_task_t *get_next_task(void)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_task_t *task = NULL;
-    JL_GC_PUSH1(&task);
-
-    /* first check for sticky tasks */
-    JL_LOCK(&ptls->sticky_taskq->lock);
-    task = ptls->sticky_taskq->head;
-    if (task) {
-        ptls->sticky_taskq->head = task->next;
-        task->next = NULL;
-    }
-    JL_UNLOCK(&ptls->sticky_taskq->lock);
-
-    /* no sticky tasks, go to the multiq */
-    if (!task) {
-        task = multiq_deletemin();
-
-        if (task) {
-            /* a sticky task will only come out of the multiq if it has not been run */
-            if (task->settings & TASK_IS_STICKY) {
-                assert(task->sticky_tid == -1);
-                task->sticky_tid = ptls->tid;
-            }
-        }
-    }
-
-    JL_GC_POP();
-    return task;
-}
-
-
-// run the next available task
-// TODO: deal with the case where another thread gets the task from which a thread is
-// still trying to switch away
-static int run_next(void)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_task_t *task = NULL;
-    JL_GC_PUSH1(&task);
-
-    uint64_t spin_ns, spin_start = 0;
-    while (!task) {
-        if (jl_thread_sleep_threshold) {
-            if (spin_start == 0) {
-                spin_start = uv_hrtime();
-                continue;
-            }
-        }
-
-        task = get_next_task();
-
-        if (!task) {
-            if (ptls->tid == 0)
-                jl_process_events(jl_global_event_loop());
-            else
-                jl_cpu_pause();
-
-            if (jl_thread_sleep_threshold) {
-                spin_ns = uv_hrtime() - spin_start;
-                if (spin_ns > jl_thread_sleep_threshold) {
-                    uv_mutex_lock(&sleep_lock);
-                    task = get_next_task();
-                    if (!task) {
-                        // thread 0 makes a blocking call to the event loop
-                        if (ptls->tid == 0) {
-                            uv_mutex_unlock(&sleep_lock);
-                            jl_run_once(jl_global_event_loop());
-                        }
-                        // other threads just sleep
-                        else {
-                            uv_cond_wait(&sleep_alarm, &sleep_lock);
-                            uv_mutex_unlock(&sleep_lock);
-                        }
-                    }
-                    else uv_mutex_unlock(&sleep_lock);
-                    spin_start = 0;
-                }
-            }
-        }
-    }
-
-    jl_switchto(&task);
-
-    JL_GC_POP();
-    return 1;
 }
 
 
@@ -779,7 +787,6 @@ static void init_task(jl_task_t *task, size_t ssize)
     task->current_tid = -1;
     task->arr = NULL;
     task->red = NULL;
-    task->settings = 0;
     task->sticky_tid = -1;
     task->grain_num = -1;
 
@@ -807,8 +814,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *_taskentry, size_t ssize)
 
 /*  jl_task_spawn() -- enqueue a task for execution
 
-    If `sticky` is set, the task will only run on the current thread. If `detach`
-    is set, the spawned task cannot be synced. Generally yields the calling task.
+    If `sticky` is set, the task will only run on the current thread. If `unyielding`
+    is set or in a few other cases, returns but otherwise yields the calling task.
  */
 JL_DLLEXPORT jl_task_t *jl_task_spawn(jl_task_t *task, jl_value_t *arg, int8_t err,
                                       int8_t unyielding, int8_t sticky)
@@ -820,7 +827,7 @@ JL_DLLEXPORT jl_task_t *jl_task_spawn(jl_task_t *task, jl_value_t *arg, int8_t e
 
     if (!task->started) {
         task->prio = ptls->tid;
-        if (sticky) task->settings |= TASK_IS_STICKY;
+        if (sticky) task->sticky_tid = ptls->tid;
     }
     if (err) {
         task->exception = arg;
@@ -837,19 +844,18 @@ JL_DLLEXPORT jl_task_t *jl_task_spawn(jl_task_t *task, jl_value_t *arg, int8_t e
        scheduling. However, this breaks some assumptions made by parts of
        the Julia runtime -- I/O and channels. So, we have to allow the caller
        to disallow yielding. Also, if the task being scheduled has already
-       been started, or if the calling task is sticky, we don't yield.
+       been started, we don't yield.
      */
     if (!unyielding
             &&  !ptls->in_finalizer  // allow e.g. async printing from finalizers
-            &&  !task->started
-            &&  (ptls->current_task  &&  !(ptls->current_task->settings & TASK_IS_STICKY)))
+            &&  !task->started)
         jl_task_yield(1);
 
     return task;
 }
 
 
-/*  jl_task_new_multi() -- create multiple tasks for `f(arg)`
+/*  jl_new_task_multi() -- create multiple tasks for `f(arg)`
 
     Create multiple tasks, each of which invokes `f(arg, start, end)` such
     that the sum of `end-start` for all tasks is `count`. If `_redentry` is
@@ -857,7 +863,7 @@ JL_DLLEXPORT jl_task_t *jl_task_spawn(jl_task_t *task, jl_value_t *arg, int8_t e
     be retrieved by sync'ing on the parent task which is returned. All the
     tasks can be spawned by passing the parent task to `jl_task_spawn_multi()`.
  */
-JL_DLLEXPORT jl_task_t *jl_task_new_multi(jl_function_t *_taskentry, size_t ssize,
+JL_DLLEXPORT jl_task_t *jl_new_task_multi(jl_function_t *_taskentry, size_t ssize,
                                           int64_t count,
                                           jl_function_t *_redentry)
 {
@@ -938,9 +944,8 @@ JL_DLLEXPORT int jl_task_spawn_multi(jl_task_t *task)
         t = t->next;
     }
 
-    /* only yield if we're running a non-sticky task */
-    if (ptls->current_task  &&  !(ptls->current_task->settings & TASK_IS_STICKY))
-        jl_task_yield(1);
+    /* yield to allow depth-first scheduling */
+    jl_task_yield(1);
 
     return 0;
 }
@@ -963,8 +968,7 @@ static void taskq_delete(jl_task_t **pnext, jl_task_t *tgt)
 
 /*  jl_task_sync() -- get the return value of task `t`
 
-    Returns NULL immediately if task was created detached. Otherwise,
-    returns only when task `t` has completed.
+    Returns only when task `t` has completed.
  */
 JL_DLLEXPORT jl_value_t *jl_task_sync(jl_task_t *task)
 {
@@ -1037,8 +1041,9 @@ JL_DLLEXPORT jl_value_t *jl_task_yield(int requeue)
     if (requeue)
         enqueue_task(ptls->current_task);
 
-    // run the next available task
-    run_next();
+    // run the scheduler
+    jl_task_t *scheduler = ptls->scheduler;
+    jl_switchto(&scheduler);
 
     // yielding task (eventually) continues
     jl_value_t *exc = ptls->current_task->exception;
