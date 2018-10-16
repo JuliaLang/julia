@@ -157,11 +157,8 @@ static void trampoline_deleter(void **f)
         free(nval);
 }
 
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-// Use of `cache` is not clobbered in JL_TRY, see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65041
-#pragma GCC diagnostic ignored "-Wclobbered"
-#endif
+// Use of `cache` is not clobbered in JL_TRY
+JL_GCC_IGNORE_START("-Wclobbered")
 // TODO: need a thread lock around the cache access parts of this function
 extern "C" JL_DLLEXPORT
 jl_value_t *jl_get_cfunction_trampoline(
@@ -245,6 +242,4 @@ jl_value_t *jl_get_cfunction_trampoline(
     ptrhash_put(cache, (void*)fobj, result);
     return result;
 }
-#ifdef __GNUC__
-#pragma GCC diagnostic pop
-#endif
+JL_GCC_IGNORE_STOP
