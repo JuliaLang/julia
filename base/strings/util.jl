@@ -323,7 +323,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, 
         while 0 < j <= n && length(strs) != limit-1
             if i < k
                 if keepempty || i < j
-                    push!(strs, SubString(str,i,prevind(str,j)))
+                    push!(strs, @inbounds SubString(str,i,prevind(str,j)))
                 end
                 i = k
             end
@@ -334,7 +334,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, 
         end
     end
     if keepempty || i <= ncodeunits(str)
-        push!(strs, SubString(str,i))
+        push!(strs, @inbounds SubString(str,i))
     end
     return strs
 end
