@@ -608,7 +608,7 @@ V = view(A, 1:1 ,:, 1:3, :)
 A = rand(5,5,5,5)
 V = view(A, 2:5, :, 2:5, 1:2:5)
 @test @inferred(Base.unaliascopy(V)) == V == A[2:5, :, 2:5, 1:2:5]
-@test @inferred(sum(Base.unaliascopy(V))) == sum(V) == sum(A[2:5, :, 2:5, 1:2:5])
+@test @inferred(sum(Base.unaliascopy(V))) ≈ sum(V) ≈ sum(A[2:5, :, 2:5, 1:2:5])
 
 # issue #27632
 function _test_27632(A)

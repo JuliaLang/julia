@@ -323,7 +323,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, 
         while 0 < j <= n && length(strs) != limit-1
             if i < k
                 if keepempty || i < j
-                    push!(strs, SubString(str,i,prevind(str,j)))
+                    push!(strs, @inbounds SubString(str,i,prevind(str,j)))
                 end
                 i = k
             end
@@ -334,7 +334,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, 
         end
     end
     if keepempty || i <= ncodeunits(str)
-        push!(strs, SubString(str,i))
+        push!(strs, @inbounds SubString(str,i))
     end
     return strs
 end
@@ -596,14 +596,13 @@ bytes2hex(io::IO, a::AbstractArray{UInt8}) =
     end
 
 # check for pure ASCII-ness
-
 function ascii(s::String)
-    for i = 1:sizeof(s)
-        b = codeunit(s,i)
-        b < 0x80 || throw(ArgumentError("invalid ASCII at index $i in $(repr(s))"))
+    for i in 1:sizeof(s)
+        @inbounds codeunit(s, i) < 0x80 || __throw_invalid_ascii(s, i)
     end
     return s
 end
+@noinline __throw_invalid_ascii(s, i) = throw(ArgumentError("invalid ASCII at index $i in $(repr(s))"))
 
 """
     ascii(s::AbstractString)
