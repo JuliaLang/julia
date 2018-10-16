@@ -597,14 +597,13 @@ bytes2hex(io::IO, a::AbstractArray{UInt8}) =
     end
 
 # check for pure ASCII-ness
-
 function ascii(s::String)
-    for i = 1:sizeof(s)
-        b = codeunit(s,i)
-        b < 0x80 || throw(ArgumentError("invalid ASCII at index $i in $(repr(s))"))
+    for i in 1:sizeof(s)
+        @inbounds codeunit(s, i) < 0x80 || __throw_invalid_ascii(s, i)
     end
     return s
 end
+@noinline __throw_invalid_ascii(s, i) = throw(ArgumentError("invalid ASCII at index $i in $(repr(s))"))
 
 """
     ascii(s::AbstractString)
