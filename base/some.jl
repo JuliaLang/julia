@@ -45,7 +45,8 @@ notnothing(::Nothing) = throw(ArgumentError("nothing passed to notnothing"))
 
 Return `true` if `x === nothing`, and return `false` if not.
 """
-isnothing(x::Any) = x === nothing ? true : false
+isnothing(::Any) = false
+isnothing(::Nothing) = true
 
 
 """
