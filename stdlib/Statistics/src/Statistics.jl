@@ -54,7 +54,7 @@ julia> mean([√1, √2, √3])
 1.3820881233139908
 ```
 """
-function mean(f::Base.Callable, itr)
+function mean(f, itr)
     y = iterate(itr)
     if y === nothing
         return Base.mapreduce_empty_iter(f, Base.add_sum, itr,
@@ -73,7 +73,7 @@ function mean(f::Base.Callable, itr)
     end
     return total/count
 end
-mean(f::Base.Callable, A::AbstractArray) = sum(f, A) / length(A)
+mean(f, A::AbstractArray) = sum(f, A) / length(A)
 
 """
     mean!(r, v)

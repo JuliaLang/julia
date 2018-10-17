@@ -465,8 +465,8 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     v
 end
 
-maximum(f::Callable, a) = mapreduce(f, max, a)
-minimum(f::Callable, a) = mapreduce(f, min, a)
+maximum(f, a) = mapreduce(f, max, a)
+minimum(f, a) = mapreduce(f, min, a)
 
 """
     maximum(itr)
