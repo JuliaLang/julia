@@ -2235,27 +2235,41 @@ function permute_rows!(S::SparseMatrixCSC{Tv,Ti}, pI::Vector{Int}) where {Tv,Ti}
     colptrS = S.colptr; rowvalS = S.rowval; nzvalS = S.nzval
     # preallocate temporary sort space
     nr = min(nnz(S), m)
+
     rowperm = Vector{Int}(undef, nr)
-    rowvalTemp = Vector{Ti}(undef, nr)
-    nzvalTemp = Vector{Tv}(undef, nr)
+    rowval_temp = Vector{Ti}(undef, nr)
+    rnzval_temp = Vector{Tv}(undef, nr)
+    perm = Base.Perm(Base.ord(isless, identity, false, Base.Order.Forward), rowval_temp)
 
     @inbounds for j in 1:n
-        rowrange = colptrS[j]:(colptrS[j+1]-1)
+        rowrange = nzrange(S, j)
         nr = length(rowrange)
+        resize!(rowperm, nr)
+        resize!(rowval_temp, nr)
         (nr > 0) || continue
         k = 1
         for i in rowrange
             rowA = rowvalS[i]
-            rowvalTemp[k] = pI[rowA]
-            nzvalTemp[k] = nzvalS[i]
+            rowval_temp[k] = pI[rowA]
+            rnzval_temp[k] = nzvalS[i]
             k += 1
         end
-        sortperm!(unsafe_wrap(Vector{Int}, pointer(rowperm), nr), unsafe_wrap(Vector{Ti}, pointer(rowvalTemp), nr))
+
+        if nr <= 16
+            alg = Base.Sort.InsertionSort
+        else
+            alg = Base.Sort.QuickSort
+        end
+
+        # Reset permutation
+        rowperm .= 1:nr
+        sort!(rowperm, alg, perm)
+
         k = 1
         for i in rowrange
             kperm = rowperm[k]
-            rowvalS[i] = rowvalTemp[kperm]
-            nzvalS[i] = nzvalTemp[kperm]
+            rowvalS[i] = rowval_temp[kperm]
+            nzvalS[i] = rnzval_temp[kperm]
             k += 1
         end
     end
