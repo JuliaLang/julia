@@ -545,12 +545,12 @@ end
 
 function *(A::Diagonal, B::SymTridiagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
-    A_mul_B_td!(Tridiagonal(zeros(TS, size(A)...)), A, B)
+    A_mul_B_td!(Tridiagonal(zeros(TS, size(A, 1)-1), zeros(TS, size(A, 1)), zeros(TS, size(A, 1)-1)), A, B)
 end
 
 function *(A::SymTridiagonal, B::Diagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
-    A_mul_B_td!(Tridiagonal(zeros(TS, size(A)...)), A, B)
+    A_mul_B_td!(Tridiagonal(zeros(TS, size(A, 1)-1), zeros(TS, size(A, 1)), zeros(TS, size(A, 1)-1)), A, B)
 end
 
 #Generic multiplication
