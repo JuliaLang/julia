@@ -579,27 +579,25 @@ static void gc_scrub_task(jl_task_t *ta)
     int16_t tid = ta->tid;
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_ptls_t ptls2 = jl_all_tls_states[tid];
+
+    char *low;
+    char *high;
+    if (ta->copy_stack && ta == ptls2->current_task) {
+        low  = (char*)ptls2->stackbase - ptls2->stacksize;
+        high = (char*)ptls2->stackbase;
+    }
+    else if (ta->stkbuf) {
+        low  = (char*)ta->stkbuf;
+        high = (char*)ta->stkbuf + ta->bufsz;
+    }
+    else
+        return;
+
     if (ptls == ptls2 && ta == ptls2->current_task) {
         // scan up to current `sp` for current thread and task
-        char *low = (char*)jl_get_frame_addr();
-#ifdef COPY_STACKS
-        gc_scrub_range(low, ptls2->stack_hi);
-#else
-        gc_scrub_range(low, (char*)ta->stkbuf + ta->ssize);
-#endif
-        return;
+        low = (char*)jl_get_frame_addr();
     }
-    // The task that owns/is running on the threads's stack.
-#ifdef COPY_STACKS
-    jl_task_t *thread_task = ptls2->current_task;
-#else
-    jl_task_t *thread_task = ptls2->root_task;
-#endif
-    void *stkbuf = ta->stkbuf;
-    if (ta == thread_task && ptls->copy_stack)
-        gc_scrub_range(ptls2->stackbase, ptls2->stacksize);
-    else if (stkbuf)
-        gc_scrub_range((char*)stkbuf, (char*)stkbuf + ta->bufsz);
+    gc_scrub_range(low, high);
 }
 
 void gc_scrub(void)

@@ -50,6 +50,9 @@ Random.seed!(1)
         @test D[1,2] == 0
 
         @test issymmetric(D)
+        @test isdiag(D)
+        @test isdiag(Diagonal([[1 0; 0 1], [1 0; 0 1]]))
+        @test !isdiag(Diagonal([[1 0; 0 1], [1 0; 1 1]]))
         @test istriu(D)
         @test istril(D)
         if elty <: Real
@@ -198,7 +201,17 @@ Random.seed!(1)
         DM3= Matrix(D3)
         Matrix(kron(D, D3)) ≈ kron(DM, DM3)
     end
-    @testset "triu/tril" begin
+    @testset "iszero, isone, triu, tril" begin
+        Dzero = Diagonal(zeros(elty, 10))
+        Done = Diagonal(ones(elty, 10))
+        Dmix = Diagonal(zeros(elty, 10))
+        Dmix[end,end] = one(elty)
+        @test iszero(Dzero)
+        @test !isone(Dzero)
+        @test !iszero(Done)
+        @test isone(Done)
+        @test !iszero(Dmix)
+        @test !isone(Dmix)
         @test istriu(D)
         @test istril(D)
         @test iszero(triu(D,1))
@@ -298,6 +311,10 @@ end
 @testset "isposdef" begin
     @test isposdef(Diagonal(1.0 .+ rand(n)))
     @test !isposdef(Diagonal(-1.0 * rand(n)))
+    @test isposdef(Diagonal(complex(1.0, 0.0) .+ rand(n)))
+    @test !isposdef(Diagonal(complex(1.0, 1.0) .+ rand(n)))
+    @test isposdef(Diagonal([[1 0; 0 1], [1 0; 0 1]]))
+    @test !isposdef(Diagonal([[1 0; 0 1], [1 0; 1 1]]))
 end
 
 @testset "getindex" begin
