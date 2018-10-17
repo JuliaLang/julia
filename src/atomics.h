@@ -43,6 +43,10 @@
  *        which is very hard unless the layout of the object is fully
  *        specified.
  */
+
+// TODO: volatile does not guarantee atomicity according to C++ standard
+typedef volatile unsigned long jl_atomic_ulong;
+
 #if defined(__GNUC__)
 #  define jl_signal_fence() __atomic_signal_fence(__ATOMIC_SEQ_CST)
 #  define jl_atomic_fetch_add_relaxed(obj, arg)         \

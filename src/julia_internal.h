@@ -108,9 +108,9 @@ static inline void jl_assume_(int cond)
 #  define JL_USE_IFUNC 0
 #endif
 
-#ifdef JULIA_ENABLE_THREADING
 JL_DLLEXPORT void jl_uv_lock(void);
 JL_DLLEXPORT void jl_uv_unlock(void);
+#ifdef JULIA_ENABLE_THREADING
 #define JL_UV_LOCK() jl_uv_lock()
 #define JL_UV_UNLOCK() jl_uv_unlock()
 #else
@@ -498,7 +498,7 @@ void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo);
 void jl_init_root_task(void *stack_lo, void *stack_hi);
 void jl_init_serializer(void);
 void jl_gc_init(void);
-void jl_init_signal_async(void);
+void jl_init_uv(void);
 void jl_init_debuginfo(void);
 void jl_init_thread_heap(jl_ptls_t ptls);
 
