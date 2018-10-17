@@ -90,7 +90,7 @@ By default, you will be building the latest unstable version of Julia. However, 
 
 Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes. (See [Platform Specific Build Notes](https://github.com/JuliaLang/julia#platform-specific-build-notes) for details.)
 When compiled the first time, it will automatically download and build its [external dependencies](#required-build-tools-and-external-libraries).
-This takes a while but only has to be done once. If the defaults in the build do not work for you, and you need to set specific make parameters, you can save them in `Make.user`, and place the file in the root of your Julia source. The build will automatically check for the existence of `Make.user` and use it if it exists.
+This takes a while, but only has to be done once. If the defaults in the build do not work for you, and you need to set specific make parameters, you can save them in `Make.user`, and place the file in the root of your Julia source. The build will automatically check for the existence of `Make.user` and use it if it exists.
 Building Julia requires 5GiB of disk space and approximately 2GiB of virtual memory.
 
 You can create out-of-tree builds of Julia by specifying `make O=<build-directory> configure` on the command line. This will create a directory mirror, with all of the necessary Makefiles to build Julia, in the specified directory. These builds will share the source files in Julia and `deps/srccache`. Each out-of-tree build directory can have its own `Make.user` file to override the global `Make.user` file in the top-level folder.
@@ -154,14 +154,14 @@ latest version.
    ```
 
    As described, running `make clean && make` is usually sufficient.
-   Occasionally, the stronger cleanup is done by `make cleanall` is needed.
+   Occasionally, the stronger cleanup done by `make cleanall` is needed.
 
 2. New versions of external dependencies may be introduced which may
    occasionally cause conflicts with existing builds of older versions.
 
    a. Special `make` targets exist to help wipe the existing build of a
-      dependency. For example, `make -C deps clean-llvm` will clean out
-      an existing build of `llvm` so that `llvm` will be rebuilt from the
+      dependency. For example, `make -C deps clean-llvm` will clean out the
+      existing build of `llvm` so that `llvm` will be rebuilt from the
       downloaded source distribution the next time `make` is called.
       `make -C deps distclean-llvm` is a stronger wipe which will also delete
       the downloaded source distribution, ensuring that a fresh copy of the
@@ -236,7 +236,7 @@ Illegal Instruction error | Check if your CPU supports AVX while your OS does no
 ### OS X
 
 You need to have the current Xcode command line utilities installed: run `xcode-select --install` in the terminal.
-You will need to rerun this terminal command after each OS X update, otherwise, you may run into errors involving missing libraries or headers.
+You will need to rerun this terminal command after each OS X update, otherwise you may run into errors involving missing libraries or headers.
 You will also need a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 (and newer) compilers in Brew, Fink, and MacPorts work for building Julia.
 
 Clang is now used by default to build Julia on OS X 10.7 and above. On OS X 10.6, the Julia build will automatically use `gcc`.
@@ -244,7 +244,7 @@ On current systems, we recommend that you install the command line tools as desc
 
 If you have set `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` in your `.bashrc` or equivalent, Julia may be unable to find various libraries that come bundled with it. These environment variables need to be unset for Julia to work.
 
-If you see build failures in OpenBLAS or if you prefer to experiment, you can use the Apple-provided BLAS in vecLib by building with `USE_SYSTEM_BLAS=1`. Julia does not use the Apple-provided LAPACK, as it is too old.
+If you see build failures in OpenBLAS or if you prefer to experiment, you can use the Apple provided BLAS in vecLib by building with `USE_SYSTEM_BLAS=1`. Julia does not use the Apple-provided LAPACK, as it is too old.
 
 When building Julia, or its dependencies, libraries installed by third-party package managers can redirect the compiler to use an incompatible version of the software it is looking for. One example of this happening is when a piece of software called the "linker" gives an error involving "Undefined symbols." If that happens, you can usually figure out what software package is causing the error from the names in the error text. This sort of error can be bypassed by, temporarily, uninstalling the offending package. If the offending package cannot be uninstalled by itself, it may be possible to just uninstall the development headers (for example a package ending in "-dev" in Fink).
 
@@ -380,7 +380,7 @@ Julia uses a custom fork of libuv. It is a small dependency, and can be safely b
 
 ### BLAS and LAPACK
 
-As a high-performance numerical language, Julia should be linked to a multi-threaded BLAS and LAPACK, such as OpenBLAS or ATLAS, which will provide much better performance than the reference `libblas` implementations which may default on some systems.
+As a high-performance numerical language, Julia should be linked to a multi-threaded BLAS and LAPACK, such as OpenBLAS or ATLAS, which will provide much better performance than the reference `libblas` implementations which may be default on some systems.
 
 ### Intel MKL
 
@@ -414,7 +414,7 @@ The Julia source code is organized as follows:
 
 If you would rather not compile the latest Julia from source, platform-specific tarballs with pre-compiled binaries are also [available for download](https://julialang.org/downloads/).
 
-You can either run the `julia` executable using its full path in the directory created above or add that directory to your executable path so that you can run the Julia program from anywhere (in the current shell session):
+You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the Julia program from anywhere (in the current shell session):
 
     export PATH="$(pwd)/julia:$PATH"
 
