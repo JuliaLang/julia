@@ -1069,9 +1069,9 @@ let
     strct = LoadError("yofile", 0, "bad")
     @test nfields(strct) == 3 # sanity test
     @test_throws BoundsError(strct, 10) getfield(strct, 10)
-    @test_throws ErrorException("type LoadError is immutable") setfield!(strct, 0, "")
-    @test_throws ErrorException("type LoadError is immutable") setfield!(strct, 4, "")
-    @test_throws ErrorException("type is immutable") setfield!(strct, :line, 0)
+    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, 0, "")
+    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, 4, "")
+    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, :line, 0)
     @test strct.file == "yofile"
     @test strct.line === 0
     @test strct.error == "bad"
