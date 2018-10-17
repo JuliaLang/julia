@@ -35,11 +35,11 @@ struct SubString{T<:AbstractString} <: AbstractString
     end
 end
 
-SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
-SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i), Int(j))
-SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, first(r), last(r))
+@propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
+@propagate_inbounds SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i), Int(j))
+@propagate_inbounds SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, first(r), last(r))
 
-function SubString(s::SubString, i::Int, j::Int)
+@propagate_inbounds function SubString(s::SubString, i::Int, j::Int)
     @boundscheck i ≤ j && checkbounds(s, i:j)
     SubString(s.string, s.offset+i, s.offset+j)
 end
@@ -133,13 +133,14 @@ julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
 ```
 """
 function reverse(s::Union{String,SubString{String}})::String
-    sprint(sizehint=sizeof(s)) do io
-        i, j = firstindex(s), lastindex(s)
-        while i ≤ j
-            c, j = s[j], prevind(s, j)
-            write(io, c)
-        end
+    # Read characters forwards from `s` and write backwards to `out`
+    out = _string_n(sizeof(s))
+    offs = sizeof(s) + 1
+    for c in s
+        offs -= ncodeunits(c)
+        __unsafe_string!(out, c, offs)
     end
+    return out
 end
 
 string(a::String)            = String(a)

@@ -294,4 +294,5 @@ end
 # test at macro execution time
 @test_throws ArgumentError("@sprintf: wrong number of arguments (2) should be (3)") (@sprintf "%d%d%d" 1:2...)
 
-
+# issue #29662
+@test (@sprintf "%12.3e" pi*1e100) == "  3.142e+100"
