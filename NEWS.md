@@ -5,6 +5,7 @@ New language features
 ---------------------
 
   * `CartesianIndices` can now be constructed from two `CartesianIndex`es `I` and `J` with `I:J` ([#29440]).
+  * An *exception stack* is maintained on each task to make exception handling more robust and enable root cause analysis using `catch_stack` ([#28878]).
 
 Language changes
 ----------------

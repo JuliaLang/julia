@@ -303,6 +303,7 @@ Core.throw
 Base.rethrow
 Base.backtrace
 Base.catch_backtrace
+Base.catch_stack
 Base.@assert
 Base.ArgumentError
 Base.AssertionError
