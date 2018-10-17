@@ -850,6 +850,116 @@ external C function. As a result, the code may produce a memory leak if `result_
 freed by the garbage collector, or if the garbage collector prematurely frees `result_array`,
 the C function may end up throwing an invalid memory access exception.
 
+## Some Examples Calling Fortran
+
+### Put the Fortran functions in a module
+Assume we have the following functions.
+
+```fortran
+module funcs_for_julia
+  integer, parameter :: dp = kind(1.d0) ! double precision
+
+contains
+
+!!! The simplest function: take real, return real
+  double precision function double_x(x)
+
+
+    real(dp) :: x
+
+    double_x = 2*x
+  end function double_x
+
+!!! Second simplest function: take two reals, change one of them, return real
+  double precision function double_x_give_answer(x, answers)
+
+    real(dp) :: x
+    real(dp) :: answers(2)
+
+    answers(1) = 42.0
+    answers(2) = 42.01
+
+    double_x_give_answer = 2*x
+  end function double_x_give_answer
+
+!!! A function that takes a function and returns a value
+  double precision function eval_func(f, x)
+    real(dp) :: x
+
+    interface
+       double precision function f(y)
+         integer, parameter :: dp = kind(1.d0) ! double precision
+         real(dp) :: y
+       end function f
+    end interface
+
+    eval_func = f(x)
+  end function eval_func
+
+end module funcs_for_julia
+```
+
+Put those functions into a module!
+
+### Create a shared library
+
+Then we have to compile the code into a shared library. Shared libraries contain compiled code, that can be called from other programs. Depending on your operating system they have specific endings. On a Mac, they are called `xxx.dylib`.
+
+In the terminal run
+
+```bash
+gfortran -shared -fPIC funcs-for-julia.f90 -o funcs-for-julia.dylib
+```
+
+This produces a file called `funcs-for-julia.dylib`.
+
+### Call the functions from Julia
+
+Now we can proceed to call these from `Julia` using the function `ccall`.
+
+#### Example 1: passing a float
+
+Note that the input types need to be a tuple. For one input that is written like `(Cdouble,)`.
+
+```
+x_fort = Ref{Cdouble}(2.0)
+
+result = ccall((:__funcs_for_julia_MOD_double_x, "funcs-for-julia"), Cdouble, (Ptr{Cdouble},), x_fort)
+# result = 4.0
+```
+#### Example 2: passing an array
+
+Next we want to call the function `double_x_give_answer(x::Float64, answers::Array{Float64})`. It takes an array `answers` and mutates it. Passing arrays is easier than passing numbers.
+
+```julia
+x_fort = Ref{Cdouble}(2.0) ## like before, create a pointer to the value 2.0
+answers_f = zeros(Float64, 2) ## initialize the array
+answers_i = zeros(Cint, 2) ## integers don't work
+
+result = ccall((:__funcs_for_julia_MOD_double_x_give_answer, "funcs-for-julia"),
+    Cdouble, 
+(Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}),
+    x_fort, answers_f, answers_i)
+## result = 4.0
+## answers_f = [42.0,42.01]
+## answers_i = Int32[0,0]
+```
+
+#### Example 3: passing a function
+In order to pass a function, we need to create a pointer to this function.
+
+```julia
+x_fort = Ref{Cdouble}(pi/2)
+sin_fort = cfunction(sin, Float64, (Ref{Float64},))
+
+result = ccall((:__funcs_for_julia_MOD_eval_func, "funcs-for-julia"),
+    Cdouble, 
+   (Ptr{Void}, Ptr{Cdouble}),
+sin_fort, x_fort)
+
+## result = 1.0
+```
+
 ## Garbage Collection Safety
 
 When passing data to a [`ccall`](@ref), it is best to avoid using the [`pointer`](@ref) function.
