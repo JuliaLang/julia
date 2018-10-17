@@ -1449,6 +1449,54 @@ Setting the optional `shift` keyword argument computes the factorization of
 it should be a permutation of `1:size(A,1)` giving the ordering to use
 (instead of CHOLMOD's default AMD ordering).
 
+# Examples
+```jldoctest
+julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+3×3 Array{Float64,2}:
+   4.0   12.0  -16.0
+  12.0   37.0  -43.0
+ -16.0  -43.0   98.0
+
+julia> p = [2, 3, 1]
+3-element Array{Int64,1}:
+ 2
+ 3
+ 1
+
+julia> C = cholesky(sparse(A), perm=p)
+SuiteSparse.CHOLMOD.Factor{Float64}
+type:    LLt
+method:  simplicial
+maxnnz:  6
+nnz:     6
+success: true
+
+
+juila> L = sparse(C.L)
+3×3 SparseMatrixCSC{Float64,Int64} with 6 stored entries:
+  [1, 1]  =  6.08276
+  [2, 1]  =  -7.06916
+  [3, 1]  =  1.97279
+  [2, 2]  =  6.93015
+  [3, 2]  =  -0.296394
+  [3, 3]  =  0.142334
+
+julia> C.p == p
+true
+
+julia> L * L' ≈ A[p, p]
+true
+
+julia> P = sparse(1:3, C.p, ones(3))
+3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+  [3, 1]  =  1.0
+  [1, 2]  =  1.0
+  [2, 3]  =  1.0
+
+julia> P' * L * L' * P ≈ A
+true
+```
+
 !!! note
     This method uses the CHOLMOD library from SuiteSparse, which only supports
     doubles or complex doubles. Input matrices not of those element types will

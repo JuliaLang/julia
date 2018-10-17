@@ -142,6 +142,32 @@ end
         @test istril(Tridiagonal(dl,d,zerosdu))
     end
 
+    @testset "iszero and isone" begin
+        Tzero = Tridiagonal(zeros(elty, 9), zeros(elty, 10), zeros(elty, 9))
+        Tone = Tridiagonal(zeros(elty, 9), ones(elty, 10), zeros(elty, 9))
+        Tmix = Tridiagonal(zeros(elty, 9), zeros(elty, 10), zeros(elty, 9))
+        Tmix[end, end] = one(elty)
+
+        Szero = SymTridiagonal(zeros(elty, 10), zeros(elty, 9))
+        Sone = SymTridiagonal(ones(elty, 10), zeros(elty, 9))
+        Smix = SymTridiagonal(zeros(elty, 10), zeros(elty, 9))
+        Smix[end, end] = one(elty)
+
+        @test iszero(Tzero)
+        @test !isone(Tzero)
+        @test !iszero(Tone)
+        @test isone(Tone)
+        @test !iszero(Tmix)
+        @test !isone(Tmix)
+
+        @test iszero(Szero)
+        @test !isone(Szero)
+        @test !iszero(Sone)
+        @test isone(Sone)
+        @test !iszero(Smix)
+        @test !isone(Smix)
+    end
+
     @testset for mat_type in (Tridiagonal, SymTridiagonal)
         A = mat_type == Tridiagonal ? mat_type(dl, d, du) : mat_type(d, dl)
         fA = map(elty <: Complex ? ComplexF64 : Float64, Array(A))
@@ -382,6 +408,33 @@ end
     x = ones(1)
     @test T*x == ones(1)
     @test SymTridiagonal(ones(0), ones(0)) * ones(0, 2) == ones(0, 2)
+end
+
+@testset "issue #29644" begin
+    F = lu(Tridiagonal(sparse(1.0I, 3, 3)))
+    @test F.L == Matrix(I, 3, 3)
+    @test startswith(sprint(show, MIME("text/plain"), F),
+          "LinearAlgebra.LU{Float64,LinearAlgebra.Tridiagonal{Float64,SparseArrays.SparseVector")
+end
+
+@testset "Issue 29630" begin
+    function central_difference_discretization(N; dfunc = x -> 12x^2 - 2N^2,
+                                               dufunc = x -> N^2 + 4N*x,
+                                               dlfunc = x -> N^2 - 4N*x,
+                                               bfunc = x -> 114ℯ^-x * (1 + 3x),
+                                               b0 = 0, bf = 57/ℯ,
+                                               x0 = 0, xf = 1)
+        h = 1/N
+        d, du, dl, b = map(dfunc, (x0+h):h:(xf-h)), map(dufunc, (x0+h):h:(xf-2h)),
+                       map(dlfunc, (x0+2h):h:(xf-h)), map(bfunc, (x0+h):h:(xf-h))
+        b[1] -= dlfunc(x0)*b0     # subtract the boundary term
+        b[end] -= dufunc(xf)*bf   # subtract the boundary term
+        Tridiagonal(dl, d, du), b
+    end
+
+    A90, b90 = central_difference_discretization(90)
+
+    @test A90\b90 ≈ inv(A90)*b90
 end
 
 end # module TestTridiagonal

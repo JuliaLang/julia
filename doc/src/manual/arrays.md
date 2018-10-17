@@ -801,7 +801,7 @@ elements are stored contiguously in column-major order (see additional notes in
 [Performance Tips](@ref man-performance-tips)). The [`Array`](@ref) type is a specific instance
 of `DenseArray`;  [`Vector`](@ref) and [`Matrix`](@ref) are aliases for the 1-d and 2-d cases.
 Very few operations are implemented specifically for `Array` beyond those that are required
-for all `AbstractArrays`s; much of the array library is implemented in a generic
+for all `AbstractArray`s; much of the array library is implemented in a generic
 manner that allows all custom arrays to behave similarly.
 
 `SubArray` is a specialization of `AbstractArray` that performs indexing by

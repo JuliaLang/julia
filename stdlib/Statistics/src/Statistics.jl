@@ -57,7 +57,8 @@ julia> mean([√1, √2, √3])
 function mean(f::Base.Callable, itr)
     y = iterate(itr)
     if y === nothing
-        throw(ArgumentError("mean of empty collection undefined: $(repr(itr))"))
+        return Base.mapreduce_empty_iter(f, Base.add_sum, itr,
+                                         Base.IteratorEltype(itr)) / 0
     end
     count = 1
     value, state = y
@@ -131,7 +132,7 @@ _mean(A::AbstractArray{T}, region) where {T} = mean!(Base.reducedim_init(t -> t/
 _mean(A::AbstractArray, ::Colon) = sum(A) / length(A)
 
 function mean(r::AbstractRange{<:Real})
-    isempty(r) && throw(ArgumentError("mean of an empty range is undefined"))
+    isempty(r) && return oftype((first(r) + last(r)) / 2, NaN)
     (first(r) + last(r)) / 2
 end
 
@@ -148,7 +149,8 @@ var(iterable; corrected::Bool=true, mean=nothing) = _var(iterable, corrected, me
 function _var(iterable, corrected::Bool, mean)
     y = iterate(iterable)
     if y === nothing
-        throw(ArgumentError("variance of empty collection undefined: $(repr(iterable))"))
+        T = eltype(iterable)
+        return oftype((abs2(zero(T)) + abs2(zero(T)))/2, NaN)
     end
     count = 1
     value, state = y
@@ -265,7 +267,7 @@ varm(A::AbstractArray, m; corrected::Bool=true) = _varm(A, m, corrected, :)
 
 function _varm(A::AbstractArray{T}, m, corrected::Bool, ::Colon) where T
     n = length(A)
-    n == 0 && return typeof((abs2(zero(T)) + abs2(zero(T)))/2)(NaN)
+    n == 0 && return oftype((abs2(zero(T)) + abs2(zero(T)))/2, NaN)
     return centralize_sumabs2(A, m) / (n - Int(corrected))
 end
 

@@ -2078,3 +2078,11 @@ function g28955(x, y)
 end
 
 @test @inferred(g28955((1,), 1.0)) === Bool
+
+# Test that inlining can look through repeated _applys
+foo_inlining_apply(args...) = ccall(:jl_, Nothing, (Any,), args[1])
+bar_inlining_apply() = Core._apply(Core._apply, (foo_inlining_apply,), ((1,),))
+let ci = code_typed(bar_inlining_apply, Tuple{})[1].first
+    @test length(ci.code) == 2
+    @test ci.code[1].head == :foreigncall
+end
