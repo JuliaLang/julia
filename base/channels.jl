@@ -344,7 +344,7 @@ function put_unbuffered(c::Channel, v)
         if length(c.takers) > 0
             taker = popfirst!(c.takers)
             unlock(c.lock)
-            schedule(taker, v)
+            yield(taker, v)
             return v
         else
             unlock(c.lock)
