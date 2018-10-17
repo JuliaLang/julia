@@ -889,7 +889,7 @@ jl_value_t *jl_parse_eval_all(const char *fname,
         form = jl_pchar_to_string(fname, len);
         result = jl_box_long(jl_lineno);
         err = 1;
-        goto finally; // skip jl_restore_exc_stack
+        goto finally; // skip jl_restore_excstack
     }
 finally:
     jl_get_ptls_states()->world_age = last_age;

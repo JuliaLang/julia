@@ -104,8 +104,8 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
 
 JL_DLLEXPORT jl_value_t *jl_current_exception(void) JL_GLOBALLY_ROOTED
 {
-    jl_exc_stack_t *s = jl_get_ptls_states()->current_task->exc_stack;
-    return s && s->top != 0 ? jl_exc_stack_exception(s, s->top) : jl_nothing;
+    jl_excstack_t *s = jl_get_ptls_states()->current_task->excstack;
+    return s && s->top != 0 ? jl_excstack_exception(s, s->top) : jl_nothing;
 }
 
 JL_DLLEXPORT jl_value_t *jl_exception_occurred(void)

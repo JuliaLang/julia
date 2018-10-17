@@ -132,7 +132,7 @@ typedef struct {
     jl_gc_mark_data_t *data_stack;
 } jl_gc_mark_cache_t;
 
-typedef struct _jl_exc_stack_t jl_exc_stack_t;
+typedef struct _jl_excstack_t jl_excstack_t;
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
 #define JL_MAX_BT_SIZE 80000

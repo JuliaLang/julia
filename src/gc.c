@@ -2070,13 +2070,13 @@ stack: {
 
 excstack: {
         // Scan an exception stack
-        gc_mark_exc_stack_t *stackitr = gc_pop_markdata(&sp, gc_mark_exc_stack_t);
-        jl_exc_stack_t *exc_stack = stackitr->s;
+        gc_mark_excstack_t *stackitr = gc_pop_markdata(&sp, gc_mark_excstack_t);
+        jl_excstack_t *excstack = stackitr->s;
         size_t itr = stackitr->itr;
         size_t i = stackitr->i;
         while (itr > 0) {
-            size_t bt_size = jl_exc_stack_bt_size(exc_stack, itr);
-            uintptr_t *bt_data = jl_exc_stack_bt_data(exc_stack, itr);
+            size_t bt_size = jl_excstack_bt_size(excstack, itr);
+            uintptr_t *bt_data = jl_excstack_bt_data(excstack, itr);
             while (i+2 < bt_size) {
                 if (bt_data[i] != JL_BT_INTERP_FRAME) {
                     i++;
@@ -2089,19 +2089,19 @@ excstack: {
                 if (gc_try_setmark(new_obj, &nptr, &tag, &bits)) {
                     stackitr->i = i;
                     stackitr->itr = itr;
-                    gc_repush_markdata(&sp, gc_mark_exc_stack_t);
+                    gc_repush_markdata(&sp, gc_mark_excstack_t);
                     goto mark;
                 }
             }
             // mark the exception
-            new_obj = jl_exc_stack_exception(exc_stack, itr);
-            itr = jl_exc_stack_next(exc_stack, itr);
+            new_obj = jl_excstack_exception(excstack, itr);
+            itr = jl_excstack_next(excstack, itr);
             i = 0;
             uintptr_t nptr = 0;
             if (gc_try_setmark(new_obj, &nptr, &tag, &bits)) {
                 stackitr->i = i;
                 stackitr->itr = itr;
-                gc_repush_markdata(&sp, gc_mark_exc_stack_t);
+                gc_repush_markdata(&sp, gc_mark_excstack_t);
                 goto mark;
             }
         }
@@ -2367,10 +2367,10 @@ mark: {
                 gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(stack),
                                    &stackdata, sizeof(stackdata), 1);
             }
-            if (ta->exc_stack) {
-                gc_setmark_buf_(ptls, ta->exc_stack, bits, sizeof(jl_exc_stack_t) +
-                                sizeof(uintptr_t)*ta->exc_stack->reserved_size);
-                gc_mark_exc_stack_t stackdata = {ta->exc_stack, ta->exc_stack->top, 0};
+            if (ta->excstack) {
+                gc_setmark_buf_(ptls, ta->excstack, bits, sizeof(jl_excstack_t) +
+                                sizeof(uintptr_t)*ta->excstack->reserved_size);
+                gc_mark_excstack_t stackdata = {ta->excstack, ta->excstack->top, 0};
                 gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(excstack),
                                    &stackdata, sizeof(stackdata), 1);
             }

@@ -153,10 +153,10 @@ typedef struct {
 
 // Exception stack data
 typedef struct {
-    jl_exc_stack_t *s; // Stack of exceptions
+    jl_excstack_t *s; // Stack of exceptions
     size_t itr;        // Iterator into exception stack
     size_t i;          // Iterator into backtrace data for exception
-} gc_mark_exc_stack_t;
+} gc_mark_excstack_t;
 
 // Module bindings. This is also the beginning of module scanning.
 // The loop will start marking other references in a module after the bindings are marked
@@ -185,7 +185,7 @@ union _jl_gc_mark_data {
     gc_mark_obj16_t obj16;
     gc_mark_obj32_t obj32;
     gc_mark_stackframe_t stackframe;
-    gc_mark_exc_stack_t excstackframe;
+    gc_mark_excstack_t excstackframe;
     gc_mark_binding_t binding;
     gc_mark_finlist_t finlist;
 };

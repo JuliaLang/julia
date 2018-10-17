@@ -371,11 +371,11 @@ void JL_NORETURN throw_internal(jl_value_t *exception JL_MAYBE_UNROOTED)
         // GC. This exists only for the purpose of preserving bt_data until we
         // set ptls->bt_size=0 below.
         assert(ptls->current_task);
-        jl_push_exc_stack(&ptls->current_task->exc_stack, exception,
+        jl_push_excstack(&ptls->current_task->excstack, exception,
                           ptls->bt_data, ptls->bt_size);
         ptls->bt_size = 0;
     }
-    assert(ptls->current_task->exc_stack && ptls->current_task->exc_stack->top);
+    assert(ptls->current_task->excstack && ptls->current_task->excstack->top);
     jl_handler_t *eh = ptls->current_task->eh;
     if (eh != NULL) {
 #ifdef ENABLE_TIMINGS
@@ -404,11 +404,11 @@ JL_DLLEXPORT void jl_throw(jl_value_t *e JL_MAYBE_UNROOTED)
     throw_internal(e);
 }
 
-// rethrow with current exc_stack state
+// rethrow with current excstack state
 JL_DLLEXPORT void jl_rethrow(void)
 {
-    jl_exc_stack_t *exc_stack = jl_get_ptls_states()->current_task->exc_stack;
-    if (!exc_stack || exc_stack->top == 0)
+    jl_excstack_t *excstack = jl_get_ptls_states()->current_task->excstack;
+    if (!excstack || excstack->top == 0)
         jl_error("rethrow() not allowed outside a catch block");
     throw_internal(NULL);
 }
@@ -429,11 +429,11 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
 {
     // TODO: Should uses of `rethrow(exc)` be replaced with a normal throw, now
     // that exception stacks allow root cause analysis?
-    jl_exc_stack_t *exc_stack = jl_get_ptls_states()->current_task->exc_stack;
-    if (!exc_stack || exc_stack->top == 0)
+    jl_excstack_t *excstack = jl_get_ptls_states()->current_task->excstack;
+    if (!excstack || excstack->top == 0)
         jl_error("rethrow(exc) not allowed outside a catch block");
-    // overwrite exception on top of stack. see jl_exc_stack_exception
-    jl_excstk_raw(exc_stack)[exc_stack->top-1] = (uintptr_t)e;
+    // overwrite exception on top of stack. see jl_excstack_exception
+    jl_excstack_raw(excstack)[excstack->top-1] = (uintptr_t)e;
     JL_GC_PROMISE_ROOTED(e);
     throw_internal(NULL);
 }
@@ -469,7 +469,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->eh = NULL;
     t->tid = 0;
     t->gcstack = NULL;
-    t->exc_stack = NULL;
+    t->excstack = NULL;
     t->stkbuf = NULL;
     t->tid = 0;
     t->started = 0;
@@ -538,7 +538,7 @@ static void NOINLINE JL_NORETURN start_task(void)
     t->started = 1;
     if (t->exception != jl_nothing) {
         record_backtrace(ptls);
-        jl_push_exc_stack(&t->exc_stack, t->exception,
+        jl_push_excstack(&t->excstack, t->exception,
                           ptls->bt_data, ptls->bt_size);
         res = t->exception;
     }
@@ -881,7 +881,7 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->logstate = jl_nothing;
     ptls->current_task->eh = NULL;
     ptls->current_task->gcstack = NULL;
-    ptls->current_task->exc_stack = NULL;
+    ptls->current_task->excstack = NULL;
     ptls->current_task->tid = ptls->tid;
 #ifdef JULIA_ENABLE_THREADING
     arraylist_new(&ptls->current_task->locks, 0);

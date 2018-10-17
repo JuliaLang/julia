@@ -1629,7 +1629,7 @@ typedef struct _jl_task_t {
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
     // saved exception stack
-    jl_exc_stack_t *exc_stack;
+    jl_excstack_t *excstack;
     // current world age
     size_t world_age;
 
@@ -1656,8 +1656,8 @@ JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e);
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh);
 JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh);
 JL_DLLEXPORT void jl_pop_handler(int n);
-JL_DLLEXPORT size_t jl_exc_stack_state(void);
-JL_DLLEXPORT void jl_restore_exc_stack(size_t state);
+JL_DLLEXPORT size_t jl_excstack_state(void);
+JL_DLLEXPORT void jl_restore_excstack(size_t state);
 
 #if defined(_OS_WINDOWS_)
 #if defined(_COMPILER_MINGW_)
@@ -1697,14 +1697,14 @@ extern int had_exception;
 
 #define JL_TRY                                                    \
     int i__tr, i__ca; jl_handler_t __eh;                          \
-    size_t __exc_stack_state = jl_exc_stack_state();              \
+    size_t __excstack_state = jl_excstack_state();                \
     jl_enter_handler(&__eh);                                      \
     if (!jl_setjmp(__eh.eh_ctx,0))                                \
         for (i__tr=1; i__tr; i__tr=0, jl_eh_restore_state(&__eh))
 
 #define JL_CATCH                                                \
     else                                                        \
-        for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0, jl_restore_exc_stack(__exc_stack_state))
+        for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0, jl_restore_excstack(__excstack_state))
 
 #endif
 

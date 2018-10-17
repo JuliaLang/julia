@@ -661,46 +661,46 @@ JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintp
 
 // Exception stack: a stack of pairs of (exception,raw_backtrace).
 // The stack may be traversed and accessed with the functions below.
-typedef struct _jl_exc_stack_t {
+typedef struct _jl_excstack_t {
     size_t top;
     size_t reserved_size;
     // Pack all stack entries into a growable buffer to amortize allocation
     // across repeated exception handling.
     // Layout: [bt_data1... bt_size1 exc1  bt_data2... bt_size2 exc2  ..]
-    // uintptr_t data[]; // Access with jl_excstk_raw
-} jl_exc_stack_t;
+    // uintptr_t data[]; // Access with jl_excstack_raw
+} jl_excstack_t;
 
-STATIC_INLINE uintptr_t *jl_excstk_raw(jl_exc_stack_t* stack) JL_NOTSAFEPOINT
+STATIC_INLINE uintptr_t *jl_excstack_raw(jl_excstack_t* stack) JL_NOTSAFEPOINT
 {
     return (uintptr_t*)(stack + 1);
 }
 
 // Exception stack access
-STATIC_INLINE jl_value_t *jl_exc_stack_exception(jl_exc_stack_t *stack JL_PROPAGATES_ROOT,
+STATIC_INLINE jl_value_t *jl_excstack_exception(jl_excstack_t *stack JL_PROPAGATES_ROOT,
                                                  size_t itr) JL_NOTSAFEPOINT
 {
-    return (jl_value_t*)(jl_excstk_raw(stack)[itr-1]);
+    return (jl_value_t*)(jl_excstack_raw(stack)[itr-1]);
 }
-STATIC_INLINE size_t jl_exc_stack_bt_size(jl_exc_stack_t *stack, size_t itr) JL_NOTSAFEPOINT
+STATIC_INLINE size_t jl_excstack_bt_size(jl_excstack_t *stack, size_t itr) JL_NOTSAFEPOINT
 {
-    return jl_excstk_raw(stack)[itr-2];
+    return jl_excstack_raw(stack)[itr-2];
 }
-STATIC_INLINE uintptr_t *jl_exc_stack_bt_data(jl_exc_stack_t *stack, size_t itr) JL_NOTSAFEPOINT
+STATIC_INLINE uintptr_t *jl_excstack_bt_data(jl_excstack_t *stack, size_t itr) JL_NOTSAFEPOINT
 {
-    return jl_excstk_raw(stack) + itr-2 - jl_exc_stack_bt_size(stack, itr);
+    return jl_excstack_raw(stack) + itr-2 - jl_excstack_bt_size(stack, itr);
 }
 // Exception stack iteration (start at itr=stack->top, stop at itr=0)
-STATIC_INLINE size_t jl_exc_stack_next(jl_exc_stack_t *stack, size_t itr) JL_NOTSAFEPOINT
+STATIC_INLINE size_t jl_excstack_next(jl_excstack_t *stack, size_t itr) JL_NOTSAFEPOINT
 {
-    return itr-2 - jl_exc_stack_bt_size(stack, itr);
+    return itr-2 - jl_excstack_bt_size(stack, itr);
 }
 // Exception stack manipulation
-void jl_reserve_exc_stack(jl_exc_stack_t **stack JL_REQUIRE_ROOTED_SLOT,
+void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
                           size_t reserved_size);
-void jl_push_exc_stack(jl_exc_stack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
+void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
                        jl_value_t *exception JL_ROOTED_ARGUMENT,
                        uintptr_t *bt_data, size_t bt_size);
-void jl_copy_exc_stack(jl_exc_stack_t *dest, jl_exc_stack_t *src) JL_NOTSAFEPOINT;
+void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT;
 
 // timers
 // Returns time in nanosec

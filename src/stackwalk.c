@@ -167,12 +167,12 @@ void decode_backtrace(uintptr_t *bt_data, size_t bt_size,
 
 JL_DLLEXPORT void jl_get_backtrace(jl_array_t **btout, jl_array_t **bt2out)
 {
-    jl_exc_stack_t *s = jl_get_ptls_states()->current_task->exc_stack;
+    jl_excstack_t *s = jl_get_ptls_states()->current_task->excstack;
     uintptr_t *bt_data = NULL;
     size_t bt_size = 0;
     if (s && s->top) {
-        bt_data = jl_exc_stack_bt_data(s, s->top);
-        bt_size = jl_exc_stack_bt_size(s, s->top);
+        bt_data = jl_excstack_bt_data(s, s->top);
+        bt_size = jl_excstack_bt_size(s, s->top);
     }
     decode_backtrace(bt_data, bt_size, btout, bt2out);
 }
@@ -181,7 +181,7 @@ JL_DLLEXPORT void jl_get_backtrace(jl_array_t **btout, jl_array_t **bt2out)
 // with the top of the stack and returning up to `max_entries`. If requested by
 // setting the `include_bt` flag, backtrace data in bt,bt2 format is
 // interleaved.
-JL_DLLEXPORT jl_value_t *jl_get_exc_stack(jl_value_t* task, int include_bt, int max_entries)
+JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_value_t* task, int include_bt, int max_entries)
 {
     JL_TYPECHK(catch_stack, task, task);
     jl_array_t *stack = NULL;
@@ -189,19 +189,19 @@ JL_DLLEXPORT jl_value_t *jl_get_exc_stack(jl_value_t* task, int include_bt, int 
     jl_array_t *bt2 = NULL;
     JL_GC_PUSH3(&stack, &bt, &bt2);
     stack = jl_alloc_array_1d(jl_array_any_type, 0);
-    jl_exc_stack_t *exc_stack = ((jl_task_t*)task)->exc_stack;
-    size_t itr = exc_stack ? exc_stack->top : 0;
+    jl_excstack_t *excstack = ((jl_task_t*)task)->excstack;
+    size_t itr = excstack ? excstack->top : 0;
     int i = 0;
     while (itr > 0 && i < max_entries) {
-        jl_array_ptr_1d_push(stack, jl_exc_stack_exception(exc_stack, itr));
+        jl_array_ptr_1d_push(stack, jl_excstack_exception(excstack, itr));
         if (include_bt) {
-            decode_backtrace(jl_exc_stack_bt_data(exc_stack, itr),
-                             jl_exc_stack_bt_size(exc_stack, itr),
+            decode_backtrace(jl_excstack_bt_data(excstack, itr),
+                             jl_excstack_bt_size(excstack, itr),
                              &bt, &bt2);
             jl_array_ptr_1d_push(stack, (jl_value_t*)bt);
             jl_array_ptr_1d_push(stack, (jl_value_t*)bt2);
         }
-        itr = jl_exc_stack_next(exc_stack, itr);
+        itr = jl_excstack_next(excstack, itr);
         i++;
     }
     JL_GC_POP();
@@ -513,11 +513,11 @@ JL_DLLEXPORT void jl_gdblookup(uintptr_t ip)
 
 JL_DLLEXPORT void jlbacktrace(void)
 {
-    jl_exc_stack_t *s = jl_get_ptls_states()->current_task->exc_stack;
+    jl_excstack_t *s = jl_get_ptls_states()->current_task->excstack;
     if (!s)
         return;
-    size_t bt_size = jl_exc_stack_bt_size(s, s->top);
-    uintptr_t *bt_data = jl_exc_stack_bt_data(s, s->top);
+    size_t bt_size = jl_excstack_bt_size(s, s->top);
+    uintptr_t *bt_data = jl_excstack_bt_data(s, s->top);
     for (size_t i = 0; i < bt_size; ) {
         if (bt_data[i] == JL_BT_INTERP_FRAME) {
             jl_safe_printf("Interpreter frame (ip: %d)\n", (int)bt_data[i+2]);

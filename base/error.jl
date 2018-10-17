@@ -105,7 +105,7 @@ arbitrary task. This is useful for inspecting tasks which have failed due to
 uncaught exceptions.
 """
 function catch_stack(task=current_task(); include_bt=true)
-    raw = ccall(:jl_get_exc_stack, Any, (Any,Cint,Cint), task, include_bt, typemax(Cint))
+    raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint), task, include_bt, typemax(Cint))
     formatted = Any[]
     stride = include_bt ? 3 : 1
     for i = reverse(1:stride:length(raw))
