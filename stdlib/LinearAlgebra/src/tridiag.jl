@@ -272,6 +272,9 @@ eigvecs(A::SymTridiagonal{<:BlasFloat}, eigvals::Vector{<:Real}) = LAPACK.stein!
 
 istriu(M::SymTridiagonal) = iszero(M.ev)
 istril(M::SymTridiagonal) = iszero(M.ev)
+iszero(M::SymTridiagonal) = iszero(M.ev) && iszero(M.dv)
+isone(M::SymTridiagonal) = iszero(M.ev) && all(isone, M.dv)
+isdiag(M::SymTridiagonal) = iszero(M.ev)
 
 function tril!(M::SymTridiagonal, k::Integer=0)
     n = length(M.dv)
@@ -598,6 +601,8 @@ end
 
 #tril and triu
 
+iszero(M::Tridiagonal) = iszero(M.dl) && iszero(M.d) && iszero(M.du)
+isone(M::Tridiagonal) = iszero(M.dl) && all(isone, M.d) && iszero(M.du)
 istriu(M::Tridiagonal) = iszero(M.dl)
 istril(M::Tridiagonal) = iszero(M.du)
 

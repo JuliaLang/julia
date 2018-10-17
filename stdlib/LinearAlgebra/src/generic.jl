@@ -1177,7 +1177,7 @@ end
         for i = 2:n
             normu += abs2(x[i])
         end
-        if normu == zero(normu)
+        if iszero(normu)
             return zero(ξ1/normu)
         end
         normu = sqrt(normu)

@@ -1867,6 +1867,9 @@ typeassert
     getproperty(value, name::Symbol)
 
 The syntax `a.b` calls `getproperty(a, :b)`.
+
+See also [`propertynames`](@ref Base.propertynames) and
+[`setproperty!`](@ref Base.setproperty!).
 """
 Base.getproperty
 
@@ -1874,6 +1877,9 @@ Base.getproperty
     setproperty!(value, name::Symbol, x)
 
 The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
+
+See also [`propertynames`](@ref Base.propertynames) and
+[`getproperty`](@ref Base.getproperty).
 """
 Base.setproperty!
 
