@@ -66,7 +66,7 @@ stricterupper(a::VersionBound, b::VersionBound) = isless_uu(a, b) ? a : b
 # `2.3.4` can be joined with `2.3.5` etc.
 
 function isjoinable(up::VersionBound, lo::VersionBound)
-    up.n == 0 && up.lo == 0 && return true
+    up.n == 0 && lo.n == 0 && return true
     if up.n == lo.n
         n = up.n
         for i = 1:(n - 1)

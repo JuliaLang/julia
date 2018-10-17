@@ -63,7 +63,8 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     jl_f_tuple, jl_f_svec, jl_f_intrinsic_call, jl_f_invoke_kwsorter,
     jl_f_getfield, jl_f_setfield, jl_f_fieldtype, jl_f_nfields,
     jl_f_arrayref, jl_f_arrayset, jl_f_arraysize, jl_f_apply_type,
-    jl_f_applicable, jl_f_invoke, jl_f_sizeof, jl_f__expr, jl_f_ifelse,
+    jl_f_applicable, jl_f_invoke, jl_f_sizeof, jl_f__expr, jl_f__typevar,
+    jl_f_ifelse,
     NULL };
 
 typedef enum _DUMP_MODES {
@@ -1427,7 +1428,6 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 static void jl_restore_system_image_from_stream(ios_t *f)
 {
     JL_TIMING(SYSIMG_LOAD);
-    jl_ptls_t ptls = jl_get_ptls_states();
     int en = jl_gc_enable(0);
     jl_init_serializer2(0);
     ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record;
@@ -1519,7 +1519,6 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     jl_module_init_order = jl_finalize_deserializer(&s, NULL);
     jl_main_module = (jl_module_t*)jl_read_value(&s);
     jl_top_module = (jl_module_t*)jl_read_value(&s);
-    jl_internal_main_module = jl_main_module;
 
     jl_typeinf_func = (jl_function_t*)jl_read_value(&s);
     jl_typeinf_world = read_uint32(f);
@@ -1545,7 +1544,6 @@ static void jl_restore_system_image_from_stream(ios_t *f)
 
     jl_core_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Core"));
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base"));
-    ptls->current_module = jl_base_module; // run start_image in Base
 
     uint32_t uid_ctr = read_uint32(f);
     uint32_t gs_ctr = read_uint32(f);

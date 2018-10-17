@@ -30,13 +30,18 @@ end
     @test conj(UniformScaling(1.0+1.0im))::UniformScaling{Complex{Float64}} == UniformScaling(1.0-1.0im)
 end
 
-@testset "istriu, istril, issymmetric, ishermitian, isapprox" begin
+@testset "isdiag, istriu, istril, issymmetric, ishermitian, isposdef, isapprox" begin
+    @test isdiag(I)
     @test istriu(I)
     @test istril(I)
     @test issymmetric(I)
     @test issymmetric(UniformScaling(complex(1.0,1.0)))
     @test ishermitian(I)
     @test !ishermitian(UniformScaling(complex(1.0,1.0)))
+    @test isposdef(I)
+    @test !isposdef(-I)
+    @test isposdef(UniformScaling(complex(1.0, 0.0)))
+    @test !isposdef(UniformScaling(complex(1.0, 1.0)))
     @test UniformScaling(4.00000000000001) ≈ UniformScaling(4.0)
     @test UniformScaling(4.32) ≈ UniformScaling(4.3) rtol=0.1 atol=0.01
     @test UniformScaling(4.32) ≈ 4.3 * [1 0; 0 1] rtol=0.1 atol=0.01
@@ -267,6 +272,17 @@ end
 @testset "broadcasting of I (#23197)" begin
     @test_throws MethodError I .+ 1
     @test_throws MethodError I .+ [1 1; 1 1]
+end
+
+@testset "in-place mul! methods" begin
+    J = randn()*I
+    A = randn(4, 3)
+    C = similar(A)
+    target = J * A
+    @test mul!(C, J, A) == target
+    @test mul!(C, A, J) == target
+    @test lmul!(J, copyto!(C, A)) == target
+    @test rmul!(copyto!(C, A), J) == target
 end
 
 end # module TestUniformscaling

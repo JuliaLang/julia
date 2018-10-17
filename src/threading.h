@@ -44,7 +44,6 @@ typedef struct {
     jl_value_t **args;
     uint32_t nargs;
     jl_value_t *ret;
-    jl_module_t *current_module;
     size_t world_age;
 } ti_threadwork_t;
 

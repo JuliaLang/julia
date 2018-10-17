@@ -734,6 +734,7 @@ Compatibility for a dependency is entered in the `Project.toml` file as for exam
 
 ```toml
 [compat]
+julia = "1.0"
 Example = "0.4.3"
 ```
 

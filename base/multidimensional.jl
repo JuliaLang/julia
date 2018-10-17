@@ -3,10 +3,10 @@
 ### Multidimensional iterators
 module IteratorsMD
     import .Base: eltype, length, size, first, last, in, getindex,
-                 setindex!, IndexStyle, min, max, zero, one, isless, eachindex,
+                 setindex!, IndexStyle, min, max, zero, oneunit, isless, eachindex,
                  ndims, IteratorSize, convert, show, iterate, promote_rule
 
-    import .Base: +, -, *
+    import .Base: +, -, *, (:)
     import .Base: simd_outer_range, simd_inner_length, simd_index
     using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail
     using .Base.Iterators: Reverse
@@ -97,8 +97,8 @@ module IteratorsMD
     # zeros and ones
     zero(::CartesianIndex{N}) where {N} = zero(CartesianIndex{N})
     zero(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 0, Val(N)))
-    one(::CartesianIndex{N}) where {N} = one(CartesianIndex{N})
-    one(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val(N)))
+    oneunit(::CartesianIndex{N}) where {N} = oneunit(CartesianIndex{N})
+    oneunit(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val(N)))
 
     # arithmetic, min/max
     @inline (-)(index::CartesianIndex{N}) where {N} =
@@ -227,6 +227,9 @@ module IteratorsMD
         CartesianIndices(map(i->first(i):last(i), inds))
 
     CartesianIndices(A::AbstractArray) = CartesianIndices(axes(A))
+
+    (:)(I::CartesianIndex{N}, J::CartesianIndex{N}) where N =
+        CartesianIndices(map((i,j) -> i:j, Tuple(I), Tuple(J)))
 
     promote_rule(::Type{CartesianIndices{N,R1}}, ::Type{CartesianIndices{N,R2}}) where {N,R1,R2} =
         CartesianIndices{N,Base.indices_promote_type(R1,R2)}

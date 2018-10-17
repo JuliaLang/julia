@@ -181,6 +181,8 @@ endif
 $(eval $(call symlink_system_library,libgmp,GMP))
 $(eval $(call symlink_system_library,libmpfr,MPFR))
 $(eval $(call symlink_system_library,libmbedtls,MBEDTLS))
+$(eval $(call symlink_system_library,libmbedcrypto,MBEDTLS))
+$(eval $(call symlink_system_library,libmbedx509,MBEDTLS))
 $(eval $(call symlink_system_library,libssh2,LIBSSH2))
 $(eval $(call symlink_system_library,libcurl,CURL))
 $(eval $(call symlink_system_library,libgit2,LIBGIT2))
@@ -199,7 +201,7 @@ endif # WINNT
 
 symlink_libLLVM: $(build_private_libdir)/libLLVM.dylib
 $(build_private_libdir)/libLLVM.dylib:
-	REALPATH=`$(LLVM_CONFIG_HOST) --libdir`/libLLVM.$(SHLIB_EXT) && \
+	REALPATH=`$(LLVM_CONFIG_HOST) --libfiles` && \
 	$(call resolve_path,REALPATH) && \
 	[ -e "$$REALPATH" ] && \
 	([ ! -e "$@" ] || rm "$@") && \

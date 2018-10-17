@@ -107,7 +107,7 @@ function choosetests(choices = [])
         prepend!(tests, ["subarray"])
     end
 
-    compilertests = ["compiler/compiler", "compiler/validation"]
+    compilertests = ["compiler/compiler", "compiler/validation", "compiler/ssair", "compiler/irpasses"]
 
     if "compiler" in skip_tests
         filter!(x -> (x != "compiler" && !(x in compilertests)), tests)

@@ -11,6 +11,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
+#include "julia_gcext.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -526,6 +527,34 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
     return bt;
 }
 
+JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
+                                                 jl_module_t *module,
+                                                 jl_datatype_t *super,
+                                                 jl_markfunc_t markfunc,
+                                                 jl_sweepfunc_t sweepfunc,
+                                                 int haspointers,
+                                                 int large)
+{
+    jl_datatype_t *bt = jl_new_datatype(name, module, super,
+      jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 1, 0);
+    bt->size = large ? GC_MAX_SZCLASS+1 : 0;
+    jl_datatype_layout_t *layout = (jl_datatype_layout_t *)
+      jl_gc_perm_alloc(sizeof(jl_datatype_layout_t) + sizeof(jl_fielddescdyn_t),
+        0, 4, 0);
+    layout->nfields = 0;
+    layout->alignment = sizeof(void *);
+    layout->haspadding = 1;
+    layout->npointers = haspointers;
+    layout->fielddesc_type = 3;
+    jl_fielddescdyn_t * desc =
+      (jl_fielddescdyn_t *) ((char *)layout + sizeof(*layout));
+    desc->markfunc = markfunc;
+    desc->sweepfunc = sweepfunc;
+    bt->layout = layout;
+    bt->instance = NULL;
+    return bt;
+}
+
 // bits constructors ----------------------------------------------------------
 
 JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *dt, void *data)
@@ -689,8 +718,9 @@ static jl_value_t *boxed_char_cache[128];
 JL_DLLEXPORT jl_value_t *jl_box_char(uint32_t x)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (0 < (int32_t)x)
-        return boxed_char_cache[x >> 24];
+    uint32_t u = bswap_32(x);
+    if (u < 128)
+        return boxed_char_cache[(uint8_t)u];
     jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), jl_char_type);
     *(uint32_t*)jl_data_ptr(v) = x;
     return v;

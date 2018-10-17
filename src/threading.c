@@ -274,7 +274,6 @@ static void ti_initthread(int16_t tid)
                                     sizeof(size_t));
     }
     ptls->defer_signal = 0;
-    ptls->current_module = NULL;
     void *bt_data = malloc(sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
     memset(bt_data, 0, sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
     if (bt_data == NULL) {
@@ -361,13 +360,11 @@ void ti_threadfun(void *arg)
 
     // initialize this thread (set tid, create heap, etc.)
     ti_initthread(ta->tid);
-    jl_init_stack_limits(0);
+    void *stack_lo, *stack_hi;
+    jl_init_stack_limits(0, &stack_lo, &stack_hi);
 
     // set up tasking
-    jl_init_root_task(ptls->stack_lo, ptls->stack_hi - ptls->stack_lo);
-#ifdef COPY_STACKS
-    jl_set_base_ctx((char*)&arg);
-#endif
+    jl_init_root_task(stack_lo, stack_hi);
 
     // set the thread-local tid and wait for a thread group
     while (jl_atomic_load_acquire(&ta->state) == TI_THREAD_INIT)
@@ -415,15 +412,10 @@ void ti_threadfun(void *arg)
                 //       enter GC unsafe region when starting the work.
                 int8_t gc_state = jl_gc_unsafe_enter(ptls);
                 // This is probably always NULL for now
-                jl_module_t *last_m = ptls->current_module;
                 size_t last_age = ptls->world_age;
-                JL_GC_PUSH1(&last_m);
-                ptls->current_module = work->current_module;
                 ptls->world_age = work->world_age;
                 ti_run_fun(work->fptr, work->mfunc, work->args, work->nargs);
-                ptls->current_module = last_m;
                 ptls->world_age = last_age;
-                JL_GC_POP();
                 jl_gc_unsafe_leave(ptls, gc_state);
             }
         }
@@ -705,7 +697,6 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_value_t *_args)
     threadwork.args = args;
     threadwork.nargs = nargs;
     threadwork.ret = jl_nothing;
-    threadwork.current_module = ptls->current_module;
     threadwork.world_age = world;
 
 #if PROFILE_JL_THREADING

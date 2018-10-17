@@ -5,12 +5,8 @@
 # Please add new deprecations at the bottom of the file.
 # A function deprecated in a release will be removed in the next one.
 # Please also add a reference to the pull request which introduced the
-# deprecation.
-#
-# For simple cases where a direct replacement is available, use @deprecate:
-# the first argument is the signature of the deprecated method, the second one
-# is the call which replaces it. Remove the definition of the deprecated method
-# and unexport it, as @deprecate takes care of calling the replacement
+# deprecation. For simple cases where a direct replacement is available,
+# use @deprecate. @deprecate takes care of calling the replacement
 # and of exporting the function.
 #
 # For more complex cases, move the body of the deprecated method in this file,
@@ -18,6 +14,12 @@
 # the name of the function, which is used to ensure that the deprecation warning
 # is only printed the first time for each call place.
 
+"""
+    @deprecate old new
+
+The first argument `old` is the signature of the deprecated method, the second one
+`new` is the call which replaces it. @deprecate exports the function.
+"""
 macro deprecate(old, new, ex=true)
     meta = Expr(:meta, :noinline)
     if isa(old, Symbol)
@@ -159,5 +161,11 @@ function promote_eltype_op end
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
+
+# @deprecate one(i::CartesianIndex) oneunit(i)
+# @deprecate one(::Type{I}) where I<:CartesianIndex oneunit(I)
+# TODO: deprecate these
+one(::CartesianIndex{N}) where {N} = one(CartesianIndex{N})
+one(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val(N)))
 
 # END 1.0 deprecations

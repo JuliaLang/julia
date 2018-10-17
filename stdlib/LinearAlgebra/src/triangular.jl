@@ -1144,7 +1144,7 @@ function naivesub!(A::UpperTriangular, b::AbstractVector, x::AbstractVector = b)
         throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
     end
     @inbounds for j in n:-1:1
-        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
+        iszero(A.data[j,j]) && throw(SingularException(j))
         xj = x[j] = A.data[j,j] \ b[j]
         for i in j-1:-1:1 # counterintuitively 1:j-1 performs slightly better
             b[i] -= A.data[i,j] * xj
@@ -1173,7 +1173,7 @@ function naivesub!(A::LowerTriangular, b::AbstractVector, x::AbstractVector = b)
         throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
     end
     @inbounds for j in 1:n
-        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
+        iszero(A.data[j,j]) && throw(SingularException(j))
         xj = x[j] = A.data[j,j] \ b[j]
         for i in j+1:n
             b[i] -= A.data[i,j] * xj
@@ -1209,7 +1209,7 @@ function ldiv!(transA::Transpose{<:Any,<:LowerTriangular}, b::AbstractVector, x:
         for i in n:-1:j+1
             z -= A.data[i,j] * x[i]
         end
-        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
+        iszero(A.data[j,j]) && throw(SingularException(j))
         x[j] = A.data[j,j] \ z
     end
     x
@@ -1246,7 +1246,7 @@ function ldiv!(transA::Transpose{<:Any,<:UpperTriangular}, b::AbstractVector, x:
         for i in 1:j-1
             z -= A.data[i,j] * x[i]
         end
-        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
+        iszero(A.data[j,j]) && throw(SingularException(j))
         x[j] = A.data[j,j] \ z
     end
     x
@@ -1283,7 +1283,7 @@ function ldiv!(adjA::Adjoint{<:Any,<:LowerTriangular}, b::AbstractVector, x::Abs
         for i in n:-1:j+1
             z -= A.data[i,j]' * x[i]
         end
-        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
+        iszero(A.data[j,j]) && throw(SingularException(j))
         x[j] = A.data[j,j]' \ z
     end
     x
@@ -1320,7 +1320,7 @@ function ldiv!(adjA::Adjoint{<:Any,<:UpperTriangular}, b::AbstractVector, x::Abs
         for i in 1:j-1
             z -= A.data[i,j]' * x[i]
         end
-        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
+        iszero(A.data[j,j]) && throw(SingularException(j))
         x[j] = A.data[j,j]' \ z
     end
     x

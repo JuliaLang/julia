@@ -932,6 +932,24 @@ f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 @test @inferred(f21771(Val{Union{}}())) === Tuple{Union{}}
 @test @inferred(f21771(Val{Integer}())) === Tuple{Integer}
 
+# PR #28284, check that constants propagate through calls to new
+struct t28284
+  x::Int
+end
+f28284() = Val(t28284(1))
+@inferred f28284()
+
+# ...even if we have a non-bitstype
+struct NonBitstype
+    a::NTuple{N, Int} where N
+    b::NTuple{N, Int} where N
+end
+function fNonBitsTypeConstants()
+    val = NonBitstype((1,2),(3,4))
+    Val((val.a[1],val.b[2]))
+end
+@test @inferred(fNonBitsTypeConstants()) === Val((1,4))
+
 # missing method should be inferred as Union{}, ref https://github.com/JuliaLang/julia/issues/20033#issuecomment-282228948
 @test Base.return_types(f -> f(1), (typeof((x::String) -> x),)) == Any[Union{}]
 
@@ -947,13 +965,14 @@ let f, m
     f() = 0
     m = first(methods(f))
     m.source = Base.uncompressed_ast(m)::CodeInfo
-    m.source.ssavaluetypes = 3
-    m.source.codelocs = Int32[1, 1, 1]
     m.source.code = Any[
         Expr(:call, GlobalRef(Core, :svec), 1, 2, 3),
         Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(1)),
         Expr(:return, SSAValue(2))
     ]
+    nstmts = length(m.source.code)
+    m.source.ssavaluetypes = nstmts
+    m.source.codelocs = fill(Int32(1), nstmts)
     @test @inferred(f()) == 6
 end
 
@@ -1741,6 +1760,15 @@ function f15276(x)
 end
 @test Base.return_types(f15276(1), (Int,)) == [Int]
 
+# issue #29326
+function f29326()::Any
+    begin
+        a = 1
+        (() -> a)()
+    end
+end
+@test Base.return_types(f29326, ()) == [Int]
+
 function g15276()
     spp = Int[0]
     sol = [spp[i] for i=1:0]
@@ -2022,4 +2050,39 @@ get_order_kwargs(; by = identity, func = isless, rev = false) = get_order(by, fu
 
 # test that this doesn't cause an internal error
 get_order_kwargs()
+end
+
+# Test that tail-like functions don't block constant propagation
+my_tail_const_prop(i, tail...) = tail
+function foo_tail_const_prop()
+    Val{my_tail_const_prop(1,2,3,4)}()
+end
+@test (@inferred foo_tail_const_prop()) == Val{(2,3,4)}()
+
+# PR #28955
+
+a28955(f, args...) = f(args...)
+b28955(args::Tuple) = a28955(args...)
+c28955(args...) = b28955(args)
+d28955(f, x, y) = c28955(f, Bool, x, y)
+f28955(::Type{Bool}, x, y) = x
+f28955(::DataType, x, y) = y
+
+@test @inferred(d28955(f28955, 1, 2.0)) === 1
+
+function g28955(x, y)
+    _1 = tuple(Bool)
+    _2 = isa(y, Int) ? nothing : _1
+    _3 = tuple(_1..., x...)
+    return getfield(_3, 1)
+end
+
+@test @inferred(g28955((1,), 1.0)) === Bool
+
+# Test that inlining can look through repeated _applys
+foo_inlining_apply(args...) = ccall(:jl_, Nothing, (Any,), args[1])
+bar_inlining_apply() = Core._apply(Core._apply, (foo_inlining_apply,), ((1,),))
+let ci = code_typed(bar_inlining_apply, Tuple{})[1].first
+    @test length(ci.code) == 2
+    @test ci.code[1].head == :foreigncall
 end

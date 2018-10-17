@@ -596,74 +596,6 @@ JL_CALLABLE(jl_f__apply_latest)
     return ret;
 }
 
-// eval -----------------------------------------------------------------------
-
-JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (ptls->in_pure_callback)
-        jl_error("eval cannot be used in a generated function");
-    jl_value_t *v = NULL;
-    int last_lineno = jl_lineno;
-    size_t last_age = ptls->world_age;
-    jl_module_t *last_m = ptls->current_module;
-    jl_module_t *task_last_m = ptls->current_task->current_module;
-    if (jl_options.incremental && jl_generating_output()) {
-        if (m != last_m) {
-            jl_printf(JL_STDERR, "WARNING: eval from module %s to %s:    \n",
-                      jl_symbol_name(m->name), jl_symbol_name(last_m->name));
-            jl_static_show(JL_STDERR, ex);
-            jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for this module **\n\n");
-        }
-    }
-    JL_TRY {
-        ptls->current_task->current_module = ptls->current_module = m;
-        ptls->world_age = jl_world_counter;
-        v = jl_toplevel_eval(m, ex);
-    }
-    JL_CATCH {
-        jl_lineno = last_lineno;
-        ptls->current_module = last_m;
-        ptls->current_task->current_module = task_last_m;
-        jl_rethrow();
-    }
-    jl_lineno = last_lineno;
-    ptls->world_age = last_age;
-    ptls->current_module = last_m;
-    ptls->current_task->current_module = task_last_m;
-    assert(v);
-    return v;
-}
-
-JL_CALLABLE(jl_f_isdefined)
-{
-    jl_module_t *m = NULL;
-    jl_sym_t *s = NULL;
-    JL_NARGS(isdefined, 2, 2);
-    if (!jl_is_module(args[0])) {
-        jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(args[0]);
-        assert(jl_is_datatype(vt));
-        size_t idx;
-        if (jl_is_long(args[1])) {
-            idx = jl_unbox_long(args[1])-1;
-            if (idx >= jl_datatype_nfields(vt))
-                return jl_false;
-        }
-        else {
-            JL_TYPECHK(isdefined, symbol, args[1]);
-            idx = jl_field_index(vt, (jl_sym_t*)args[1], 0);
-            if ((int)idx == -1)
-                return jl_false;
-        }
-        return jl_field_isdefined(args[0], idx) ? jl_true : jl_false;
-    }
-    JL_TYPECHK(isdefined, module, args[0]);
-    JL_TYPECHK(isdefined, symbol, args[1]);
-    m = (jl_module_t*)args[0];
-    s = (jl_sym_t*)args[1];
-    return jl_boundp(m, s) ? jl_true : jl_false;
-}
-
 // tuples ---------------------------------------------------------------------
 
 JL_CALLABLE(jl_f_tuple)
@@ -840,6 +772,36 @@ JL_CALLABLE(jl_f_nfields)
     return jl_box_long(jl_field_count(jl_typeof(x)));
 }
 
+JL_CALLABLE(jl_f_isdefined)
+{
+    jl_module_t *m = NULL;
+    jl_sym_t *s = NULL;
+    JL_NARGS(isdefined, 2, 2);
+    if (!jl_is_module(args[0])) {
+        jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(args[0]);
+        assert(jl_is_datatype(vt));
+        size_t idx;
+        if (jl_is_long(args[1])) {
+            idx = jl_unbox_long(args[1]) - 1;
+            if (idx >= jl_datatype_nfields(vt))
+                return jl_false;
+        }
+        else {
+            JL_TYPECHK(isdefined, symbol, args[1]);
+            idx = jl_field_index(vt, (jl_sym_t*)args[1], 0);
+            if ((int)idx == -1)
+                return jl_false;
+        }
+        return jl_field_isdefined(args[0], idx) ? jl_true : jl_false;
+    }
+    JL_TYPECHK(isdefined, module, args[0]);
+    JL_TYPECHK(isdefined, symbol, args[1]);
+    m = (jl_module_t*)args[0];
+    s = (jl_sym_t*)args[1];
+    return jl_boundp(m, s) ? jl_true : jl_false;
+}
+
+
 // apply_type -----------------------------------------------------------------
 
 static int valid_type_param(jl_value_t *v)
@@ -1001,6 +963,28 @@ JL_CALLABLE(jl_f__expr)
     ex->args = ar;
     JL_GC_POP();
     return (jl_value_t*)ex;
+}
+
+// Typevar constructor for internal use
+JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub)
+{
+    if ((lb != jl_bottom_type && !jl_is_type(lb) && !jl_is_typevar(lb)) || jl_is_vararg_type(lb))
+        jl_type_error_rt("TypeVar", "lower bound", (jl_value_t *)jl_type_type, lb);
+    if ((ub != (jl_value_t *)jl_any_type && !jl_is_type(ub) && !jl_is_typevar(ub)) || jl_is_vararg_type(ub))
+        jl_type_error_rt("TypeVar", "upper bound", (jl_value_t *)jl_type_type, ub);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_tvar_t *tv = (jl_tvar_t *)jl_gc_alloc(ptls, sizeof(jl_tvar_t), jl_tvar_type);
+    tv->name = name;
+    tv->lb = lb;
+    tv->ub = ub;
+    return tv;
+}
+
+JL_CALLABLE(jl_f__typevar)
+{
+    JL_NARGS(TypeVar, 3, 3);
+    JL_TYPECHK(arraysize, symbol, args[0]);
+    return (jl_value_t *)jl_new_typevar((jl_sym_t*)args[0], args[1], args[2]);
 }
 
 // arrays ---------------------------------------------------------------------
@@ -1223,6 +1207,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("_apply_pure", jl_f__apply_pure);
     add_builtin_func("_apply_latest", jl_f__apply_latest);
     add_builtin_func("_expr", jl_f__expr);
+    add_builtin_func("_typevar", jl_f__typevar);
     add_builtin_func("svec", jl_f_svec);
 
     // builtin types

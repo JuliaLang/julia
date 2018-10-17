@@ -16,7 +16,7 @@ Julia also supports experimental multi-threading, where execution is forked and 
 threads.
 Known as the fork-join approach, parallel threads execute independently, and must ultimately be joined in Julia's main thread to allow serial execution to continue.
 Multi-threading is supported using the `Base.Threads` module that is still considered experimental, as Julia is
-not yet fully thread-safe. In particular segfaults seem to occur during I\O operations and task switching.
+not yet fully thread-safe. In particular segfaults seem to occur during I/O operations and task switching.
 As an up-to-date reference, keep an eye on [the issue tracker](https://github.com/JuliaLang/julia/issues?q=is%3Aopen+is%3Aissue+label%3Amultithreading).
 Multi-Threading should only be used if you take into consideration global variables, locks and
 atomics, all of which are explained later.
@@ -65,7 +65,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
     c1 = Channel(32)
     c2 = Channel(32)
 
-    # and a function `foo` which reads items from from c1, processes the item read
+    # and a function `foo` which reads items from c1, processes the item read
     # and writes a result to c2,
     function foo()
         while true
@@ -629,7 +629,7 @@ As for v0.7 and beyond, the feeder tasks are able to share state via `nextidx` b
 they all run on the same process.
 Even if `Tasks` are scheduled cooperatively, locking may still be required in some contexts, as in [asynchronous I\O](https://docs.julialang.org/en/stable/manual/faq/#Asynchronous-IO-and-concurrent-synchronous-writes-1).
 This means context switches only occur at well-defined points: in this case,
-when [`remotecall_fetch`](@ref) is called. This is the current state of implementation (dev v0.7) and it may change
+when [`remotecall_fetch`](@ref) is called. This is the current state of implementation and it may change
 for future Julia versions, as it is intended to make it possible to run up to N `Tasks` on M `Process`, aka
 [M:N Threading](https://en.wikipedia.org/wiki/Thread_(computing)#Models). Then a lock acquiring\releasing
 model for `nextidx` will be needed, as it is not safe to let multiple processes read-write a resource at
@@ -1649,13 +1649,13 @@ in future releases.
 Outside of Julia parallelism there are plenty of external packages that should be mentioned.
 For example [MPI.jl](https://github.com/JuliaParallel/MPI.jl) is a Julia wrapper for the `MPI` protocol, or
 [DistributedArrays.jl](https://github.com/JuliaParallel/Distributedarrays.jl), as presented in [Shared Arrays](@ref).
-A mention must be done to the Julia's GPU programming ecosystem, which includes :
+A mention must be made of Julia's GPU programming ecosystem, which includes:
 
 1. Low-level (C kernel) based operations [OpenCL.jl](https://github.com/JuliaGPU/OpenCL.jl) and [CUDAdrv.jl](https://github.com/JuliaGPU/CUDAdrv.jl) which are respectively an OpenCL interface and a CUDA wrapper.
 
 2. Low-level (Julia Kernel) interfaces like [CUDAnative.jl](https://github.com/JuliaGPU/CUDAnative.jl) which is a Julia native CUDA implementation.
 
-3. High-level vendor specific abstractions like [CuArrays.jl](https://github.com/JuliaGPU/CuArrays.jl) and [CLArrays.jl](https://github.com/JuliaGPU/CLArrays.jl)
+3. High-level vendor-specific abstractions like [CuArrays.jl](https://github.com/JuliaGPU/CuArrays.jl) and [CLArrays.jl](https://github.com/JuliaGPU/CLArrays.jl)
 
 4. High-level libraries like [ArrayFire.jl](https://github.com/JuliaComputing/ArrayFire.jl) and [GPUArrays.jl](https://github.com/JuliaGPU/GPUArrays.jl)
 
@@ -1727,7 +1727,7 @@ function power_method(M, v)
 end
 ```
 
-`power_method` repeteavely creates a new vector and normalizes it. We have not specified any type signature in
+`power_method` repeatedly creates a new vector and normalizes it. We have not specified any type signature in
 function declaration, let's see if it works with the aforementioned datatypes:
 
 ```julia-repl
