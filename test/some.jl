@@ -96,7 +96,5 @@ using Base: notnothing
 @test_throws ArgumentError notnothing(nothing)
 
 # isnothing()
-
-using Base: isnothing
 @test !isnothing(1)
 @test isnothing(nothing)
