@@ -4,6 +4,7 @@
 #ifndef JL_THREADS_H
 #define JL_THREADS_H
 
+#include <atomics.h>
 // threading ------------------------------------------------------------------
 
 // WARNING: Threading support is incomplete and experimental
@@ -53,7 +54,7 @@ typedef ucontext_t jl_ucontext_t;
 
 // Recursive spin lock
 typedef struct {
-    volatile unsigned long owner;
+    jl_atomic_ulong owner;
     uint32_t count;
 } jl_mutex_t;
 

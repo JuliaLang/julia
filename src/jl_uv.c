@@ -19,6 +19,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "locks.h"
 #include "support/ios.h"
 #include "uv.h"
 
@@ -65,17 +66,22 @@ void jl_init_signal_async(void)
 }
 #endif
 
-#ifdef JULIA_ENABLE_THREADING
-JL_DLLEXPORT void jl_uv_lock()
+static jl_mutex_t jl_uv_mutex;
+
+JL_DLLEXPORT void jl_uv_lock(void)
 {
-    // TODO: put recursive lock here
+    JL_LOCK_NOGC(&jl_uv_mutex);
 }
 
-JL_DLLEXPORT void jl_uv_unlock()
+JL_DLLEXPORT void jl_uv_unlock(void)
 {
-    // TODO: unlock the lock here
+    JL_UNLOCK_NOGC(&jl_uv_mutex);
 }
-#endif
+
+void jl_init_uv(void) {
+    jl_init_signal_async();
+    JL_MUTEX_INIT(&jl_uv_mutex);
+}
 
 void jl_uv_call_close_callback(jl_value_t *val)
 {
