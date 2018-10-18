@@ -376,7 +376,12 @@ end
 
 # sub-functionality for /(z::ComplexF64, w::ComplexF64)
 function cdiv(a::Float64, b::Float64, c::Float64, d::Float64)
-    abs(d)<=abs(c) ? (p,q)=robust_cdiv1(a,b,c,d) : ((p,q)=robust_cdiv1(b,a,d,c); q=-q)
+    if abs(d)<=abs(c)
+        p,q = robust_cdiv1(a,b,c,d)
+    else
+        p,q = robust_cdiv1(b,a,d,c)
+        q = -q
+    end
     return p,q
 end
 @noinline function scaling_cdiv(a::Float64, b::Float64, c::Float64, d::Float64, ab::Float64, cd::Float64)
