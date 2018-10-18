@@ -223,9 +223,13 @@ end
     A = randn(3,2)
     Ac = copy(A')
     b = randn(3)
+    b0 = copy(b)
     c = randn(2)
+    c0 = copy(c)
     @test A \b ≈ ldiv!(c, qr(A ), b)
+    @test b == b0
     @test Ac\c ≈ ldiv!(b, qr(Ac, Val(true)), c)
+    @test c == c0
 end
 
 end # module TestQR
