@@ -65,19 +65,13 @@ function compile(x, ivdep)
         let $r = $range
             for $j in Base.simd_outer_range($r)
                 let $n = Base.simd_inner_length($r,$j)
-                    if zero($n) < $n
-                        # Lower loop in way that seems to work best for LLVM 3.3 vectorizer.
-                        let $i = zero($n)
-                            while $i < $n
-                                local $var = Base.simd_index($r,$j,$i)
-                                $(x.args[2])        # Body of loop
-                                $i += 1
-                                $(Expr(:simdloop, ivdep))  # Mark loop as SIMD loop
-                            end
-                        end
-                        # Set index to last value just like a regular for loop would
-                        $var = last($r)
+                    for $i in 0:($n-1)
+                        local $var = Base.simd_index($r,$j,$i)
+                        $(x.args[2])        # Body of loop
+                        $(Expr(:simdloop, ivdep))  # Mark loop as SIMD loop
                     end
+                    # Set index to last value just like a regular for loop would
+                    $var = last($r)
                 end
             end
         end
