@@ -511,7 +511,7 @@ write(s::IO, x::Bool) = write(s, UInt8(x))
 write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
 function write(io::IO, x::T) where T
-    if isbits(T)
+    if isbitstype(T)
         write(io, Ref(x))
     else
         throw(MethodError(write, (io, x)))
