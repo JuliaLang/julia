@@ -103,6 +103,10 @@ enum {
     JL_TARGET_CLONE_SIMD = 1 << 4,
     // The CPU name is unknown
     JL_TARGET_UNKNOWN_NAME = 1 << 5,
+    // Optimize for size for this target
+    JL_TARGET_OPTSIZE = 1 << 6,
+    // Only optimize for size for this target
+    JL_TARGET_MINSIZE = 1 << 7,
 };
 
 #define JL_FEATURE_DEF_NAME(name, bit, llvmver, str) JL_FEATURE_DEF(name, bit, llvmver)

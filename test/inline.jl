@@ -20,15 +20,14 @@ Helper to test that every slot is in range after inlining.
 """
 function test_inlined_symbols(func, argtypes)
     src, rettype = code_typed(func, argtypes)[1]
-    nl = length(src.slottypes)
-    ast = Expr(:body)
+    nl = length(src.slotnames)
+    ast = Expr(:block)
     ast.args = src.code
-    ast.typ = rettype
     walk(ast) do e
-        if isa(e, Slot)
+        if isa(e, Core.Slot)
             @test 1 <= e.id <= nl
         end
-        if isa(e, NewvarNode)
+        if isa(e, Core.NewvarNode)
             @test 1 <= e.slot.id <= nl
         end
     end
@@ -67,7 +66,7 @@ function bar12620()
         foo_inl(i==1)
     end
 end
-@test_throws UndefVarError bar12620()
+@test_throws UndefVarError(:y) bar12620()
 
 # issue #16165
 @inline f16165(x) = (x = UInt(x) + 1)
@@ -112,6 +111,16 @@ let a = read21311()
     @test a[] == 1
 end
 
+# issue #29083
+f29083(;μ,σ) = μ + σ*randn()
+g29083() = f29083(μ=2.0,σ=0.1)
+let c = code_typed(g29083, ())[1][1].code
+    # make sure no call to kwfunc remains
+    @test !any(e->(isa(e,Expr) && ((e.head === :invoke && e.args[1].def.name === :kwfunc) ||
+                                   (e.head === :foreigncall && e.args[1] === QuoteNode(:jl_get_keyword_sorter)))),
+               c)
+end
+
 @testset "issue #19122: [no]inline of short func. def. with return type annotation" begin
     exf19122 = @macroexpand(@inline f19122()::Bool = true)
     exg19122 = @macroexpand(@noinline g19122()::Bool = true)
@@ -123,3 +132,88 @@ end
     @test f19122()
     @test g19122()
 end
+
+@testset "issue #27403: getindex is inlined with Union{Int,Missing}" begin
+    function sum27403(X::AbstractArray)
+        s = zero(eltype(X)) + zero(eltype(X))
+        for x in X
+            if !ismissing(x)
+                s += x
+            end
+        end
+        s
+    end
+
+    (src, _) = code_typed(sum27403, Tuple{Vector{Int}})[1]
+    @test !any(x -> x isa Expr && x.head === :invoke, src.code)
+end
+
+# check that type.mutable can be fully eliminated
+f_mutable_nothrow(s::String) = Val{typeof(s).mutable}
+@test length(code_typed(f_mutable_nothrow, (String,))[1][1].code) == 1
+
+# check that ifelse can be fully eliminated
+function f_ifelse(x)
+    a = ifelse(true, false, true)
+    b = ifelse(a, true, false)
+    return b ? x + 1 : x
+end
+# 2 for now because the compiler leaves a GotoNode around
+@test_broken length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
+
+# Test that inlining of _apply properly hits the inference cache
+@noinline cprop_inline_foo1() = (1, 1)
+@noinline cprop_inline_foo2() = (2, 2)
+function cprop_inline_bar(x...)
+    if x === (1, 1, 1, 1)
+        return x
+    else
+        # What you put here doesn't really matter,
+        # the point is to prevent inlining when
+        # x is not known to be (1, 1, 1, 1)
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        return x
+    end
+    x
+end
+
+function cprop_inline_baz1()
+    return cprop_inline_bar(cprop_inline_foo1()..., cprop_inline_foo1()...)
+end
+@test length(code_typed(cprop_inline_baz1, ())[1][1].code) == 1
+
+function cprop_inline_baz2()
+    return cprop_inline_bar(cprop_inline_foo2()..., cprop_inline_foo2()...)
+end
+@test length(code_typed(cprop_inline_baz2, ())[1][1].code) == 2
+
+# Check that apply_type/TypeVar can be fully eliminated
+function f_apply_typevar(T)
+    NTuple{N, T} where N
+    return T
+end
+@test length(code_typed(f_apply_typevar, (Type{Any},))[1][1].code) == 1
+
+# check that div can be fully eliminated
+function f_div(x)
+	div(x, 1)
+	return x
+end
+@test length(code_typed(f_div, (Int,))[1][1].code) == 1
+# ...unless we div by an unknown amount
+function f_div(x, y)
+    div(x, y)
+    return x
+end
+@test length(code_typed(f_div, (Int, Int))[1][1].code) > 1

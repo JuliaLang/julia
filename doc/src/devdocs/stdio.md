@@ -29,24 +29,24 @@ void jl_safe_printf(const char *str, ...);
 
 ## Interface between JL_STD* and Julia code
 
-[`Base.STDIN`](@ref), [`Base.STDOUT`](@ref) and [`Base.STDERR`](@ref) are bound to the `JL_STD*` libuv
+[`Base.stdin`](@ref), [`Base.stdout`](@ref) and [`Base.stderr`](@ref) are bound to the `JL_STD*` libuv
 streams defined in the runtime.
 
 Julia's `__init__()` function (in `base/sysimg.jl`) calls `reinit_stdio()` (in `base/stream.jl`)
-to create Julia objects for [`Base.STDIN`](@ref), [`Base.STDOUT`](@ref) and [`Base.STDERR`](@ref).
+to create Julia objects for [`Base.stdin`](@ref), [`Base.stdout`](@ref) and [`Base.stderr`](@ref).
 
 `reinit_stdio()` uses [`ccall`](@ref) to retrieve pointers to `JL_STD*` and calls `jl_uv_handle_type()`
 to inspect the type of each stream.  It then creates a Julia `Base.IOStream`, `Base.TTY` or `Base.PipeEndpoint`
 object to represent each stream, e.g.:
 
 ```
-$ julia -e 'println(typeof((STDIN, STDOUT, STDERR)))'
+$ julia -e 'println(typeof((stdin, stdout, stderr)))'
 Tuple{Base.TTY,Base.TTY,Base.TTY}
 
-$ julia -e 'println(typeof((STDIN, STDOUT, STDERR)))' < /dev/null 2>/dev/null
+$ julia -e 'println(typeof((stdin, stdout, stderr)))' < /dev/null 2>/dev/null
 Tuple{IOStream,Base.TTY,IOStream}
 
-$ echo hello | julia -e 'println(typeof((STDIN, STDOUT, STDERR)))' | cat
+$ echo hello | julia -e 'println(typeof((stdin, stdout, stderr)))' | cat
 Tuple{Base.PipeEndpoint,Base.PipeEndpoint,Base.TTY}
 ```
 

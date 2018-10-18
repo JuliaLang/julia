@@ -11,6 +11,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
+#include "julia_gcext.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,7 +19,7 @@ extern "C" {
 
 // allocating TypeNames -----------------------------------------------------------
 
-jl_sym_t *jl_demangle_typename(jl_sym_t *s)
+jl_sym_t *jl_demangle_typename(jl_sym_t *s) JL_NOTSAFEPOINT
 {
     char *n = jl_symbol_name(s);
     if (n[0] != '#')
@@ -40,8 +41,8 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
                                      jl_methtable_type);
     mt->name = jl_demangle_typename(name);
     mt->module = module;
-    mt->defs.unknown = jl_nothing;
-    mt->cache.unknown = jl_nothing;
+    mt->defs = jl_nothing;
+    mt->cache = jl_nothing;
     mt->max_args = 0;
     mt->kwsorter = NULL;
     mt->backedges = NULL;
@@ -61,7 +62,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->cache = jl_emptysvec;
     tn->linearcache = jl_emptysvec;
     tn->names = NULL;
-    tn->hash = bitmix(bitmix(module ? module->uuid : 0, name->hash), 0xa1ada1da);
+    tn->hash = bitmix(bitmix(module ? module->build_id : 0, name->hash), 0xa1ada1da);
     tn->mt = NULL;
     return tn;
 }
@@ -77,17 +78,20 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_datatype_t *t = (jl_datatype_t*)jl_gc_alloc(ptls, sizeof(jl_datatype_t), jl_datatype_type);
-    t->depth = 0;
     t->hasfreetypevars = 0;
-    t->isleaftype = 1;
+    t->isdispatchtuple = 0;
+    t->isbitstype = 0;
+    t->zeroinit = 0;
+    t->isinlinealloc = 0;
     t->layout = NULL;
+    t->names = NULL;
     return t;
 }
 
 static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
                                            uint32_t alignment,
                                            int haspadding,
-                                           jl_fielddesc32_t desc[])
+                                           jl_fielddesc32_t desc[]) JL_NOTSAFEPOINT
 {
     // compute the smallest fielddesc type that can hold the layout description
     int fielddesc_type = 0;
@@ -219,7 +223,7 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
 STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
 {
     return (!d->abstract && jl_datatype_size(d) == 0 && d != jl_sym_type && d->name != jl_array_typename &&
-            d->uid != 0 && (d->types == jl_emptysvec || !d->mutabl));
+            d->uid != 0 && !d->mutabl);
 }
 
 STATIC_INLINE void jl_allocate_singleton_instance(jl_datatype_t *st)
@@ -228,15 +232,6 @@ STATIC_INLINE void jl_allocate_singleton_instance(jl_datatype_t *st)
         st->instance = jl_gc_alloc(jl_get_ptls_states(), 0, st);
         jl_gc_wb(st, st->instance);
     }
-}
-
-static int jl_layout_isbits(jl_value_t *ty)
-{
-    if (jl_isbits(ty) && jl_is_leaf_type(ty)) {
-        if (((jl_datatype_t*)ty)->layout) // layout check handles possible layout recursion
-            return 1;
-    }
-    return 0;
 }
 
 static unsigned union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align)
@@ -250,7 +245,7 @@ static unsigned union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align)
             return 0;
         return na + nb;
     }
-    if (jl_layout_isbits(ty)) {
+    if (jl_isbits(ty)) {
         size_t sz = jl_datatype_size(ty);
         size_t al = jl_datatype_align(ty);
         if (*nbytes < sz)
@@ -265,7 +260,30 @@ static unsigned union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align)
 JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al)
 {
     unsigned countbits = union_isbits(eltype, fsz, al);
-    return countbits > 0 && countbits < 127;
+    return (countbits > 0 && countbits < 127) ? countbits : 0;
+}
+
+static int references_name(jl_value_t *p, jl_typename_t *name) JL_NOTSAFEPOINT
+{
+    if (jl_is_uniontype(p))
+        return references_name(((jl_uniontype_t*)p)->a, name) ||
+               references_name(((jl_uniontype_t*)p)->b, name);
+    if (jl_is_unionall(p))
+        return references_name((jl_value_t*)((jl_unionall_t*)p)->var, name) ||
+               references_name(((jl_unionall_t*)p)->body, name);
+    if (jl_is_typevar(p))
+        return references_name(((jl_tvar_t*)p)->ub, name) ||
+               references_name(((jl_tvar_t*)p)->lb, name);
+    if (jl_is_datatype(p)) {
+        if (((jl_datatype_t*)p)->name == name)
+            return 1;
+        size_t i, l = jl_nparams(p);
+        for (i = 0; i < l; i++) {
+            if (references_name(jl_tparam(p, i), name))
+                return 1;
+        }
+    }
+    return 0;
 }
 
 void jl_compute_field_offsets(jl_datatype_t *st)
@@ -277,18 +295,44 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     uint64_t max_size = max_offset >> 1;
 
     if (st->name->wrapper) {
+        jl_datatype_t *w = (jl_datatype_t*)jl_unwrap_unionall(st->name->wrapper);
+        // compute whether this type can be inlined
+        // based on whether its definition is self-referential
+        if (w->types != NULL) {
+            st->isbitstype = st->isconcretetype && !st->mutabl;
+            size_t i, nf = jl_field_count(st);
+            for (i = 0; i < nf; i++) {
+                jl_value_t *fld = jl_field_type(st, i);
+                if (st->isbitstype)
+                    st->isbitstype = jl_is_datatype(fld) && ((jl_datatype_t*)fld)->isbitstype;
+                if (!st->zeroinit)
+                    st->zeroinit = (jl_is_datatype(fld) && ((jl_datatype_t*)fld)->isinlinealloc) ? ((jl_datatype_t*)fld)->zeroinit : 1;
+            }
+            if (st->isbitstype) {
+                st->isinlinealloc = 1;
+                size_t i, nf = jl_field_count(w);
+                for (i = 0; i < nf; i++) {
+                    jl_value_t *fld = jl_field_type(w, i);
+                    if (references_name(fld, w->name)) {
+                        st->isinlinealloc = 0;
+                        st->isbitstype = 0;
+                        st->zeroinit = 1;
+                        break;
+                    }
+                }
+            }
+        }
         // If layout doesn't depend on type parameters, it's stored in st->name->wrapper
         // and reused by all subtypes.
-        jl_datatype_t *w = (jl_datatype_t*)jl_unwrap_unionall(st->name->wrapper);
-        if (st != w &&  // this check allows us to re-compute layout for some types during init
-            w->layout) {
+        if (st != w && // this check allows us to re-compute layout for some types during init
+                w->layout) {
             st->layout = w->layout;
             st->size = w->size;
             jl_allocate_singleton_instance(st);
             return;
         }
     }
-    if (st->types == NULL)
+    if (st->types == NULL || (jl_is_namedtuple_type(st) && !jl_is_concrete_type((jl_value_t*)st)))
         return;
     uint32_t nfields = jl_svec_len(st->types);
     if (nfields == 0) {
@@ -309,7 +353,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         }
         return;
     }
-    if (!jl_is_leaf_type((jl_value_t*)st)) {
+    if (!jl_is_concrete_type((jl_value_t*)st)) {
         // compute layout whenever field types have no free variables
         for (size_t i = 0; i < nfields; i++) {
             if (jl_has_free_typevars(jl_field_type(st, i)))
@@ -319,10 +363,11 @@ void jl_compute_field_offsets(jl_datatype_t *st)
 
     size_t descsz = nfields * sizeof(jl_fielddesc32_t);
     jl_fielddesc32_t *desc;
-    if (descsz < jl_page_size)
-        desc = (jl_fielddesc32_t*)alloca(descsz);
-    else
+    int should_malloc = descsz >= jl_page_size;
+    if (should_malloc)
         desc = (jl_fielddesc32_t*)malloc(descsz);
+    else
+        desc = (jl_fielddesc32_t*)alloca(descsz);
     int haspadding = 0;
     assert(st->name == jl_tuple_typename ||
            st == jl_sym_type ||
@@ -331,7 +376,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
 
     for (size_t i = 0; i < nfields; i++) {
         jl_value_t *ty = jl_field_type(st, i);
-        size_t fsz = 0, al = 0;
+        size_t fsz = 0, al = 1;
         if (jl_islayout_inline(ty, &fsz, &al)) {
             if (__unlikely(fsz > max_size))
                 // Should never happen
@@ -384,15 +429,13 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     if (st->size > sz)
         haspadding = 1;
     st->layout = jl_get_layout(nfields, alignm, haspadding, desc);
-    if (descsz >= jl_page_size) free(desc);
+    if (should_malloc) free(desc);
     jl_allocate_singleton_instance(st);
     return;
  throw_ovf:
-    if (descsz >= jl_page_size) free(desc);
+    if (should_malloc) free(desc);
     jl_errorf("type %s has field offset %d that exceeds the page size", jl_symbol_name(st->name->name), descsz);
 }
-
-extern int jl_boot_file_loaded;
 
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
         jl_sym_t *name,
@@ -477,8 +520,37 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
     uint32_t alignm = next_power_of_two(nbytes);
     if (alignm > MAX_ALIGN)
         alignm = MAX_ALIGN;
+    bt->isbitstype = bt->isinlinealloc = (parameters == jl_emptysvec);
     bt->size = nbytes;
     bt->layout = jl_get_layout(0, alignm, 0, NULL);
+    bt->instance = NULL;
+    return bt;
+}
+
+JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
+                                                 jl_module_t *module,
+                                                 jl_datatype_t *super,
+                                                 jl_markfunc_t markfunc,
+                                                 jl_sweepfunc_t sweepfunc,
+                                                 int haspointers,
+                                                 int large)
+{
+    jl_datatype_t *bt = jl_new_datatype(name, module, super,
+      jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 1, 0);
+    bt->size = large ? GC_MAX_SZCLASS+1 : 0;
+    jl_datatype_layout_t *layout = (jl_datatype_layout_t *)
+      jl_gc_perm_alloc(sizeof(jl_datatype_layout_t) + sizeof(jl_fielddescdyn_t),
+        0, 4, 0);
+    layout->nfields = 0;
+    layout->alignment = sizeof(void *);
+    layout->haspadding = 1;
+    layout->npointers = haspointers;
+    layout->fielddesc_type = 3;
+    jl_fielddescdyn_t * desc =
+      (jl_fielddescdyn_t *) ((char *)layout + sizeof(*layout));
+    desc->markfunc = markfunc;
+    desc->sweepfunc = sweepfunc;
+    bt->layout = layout;
     bt->instance = NULL;
     return bt;
 }
@@ -487,21 +559,24 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
 
 JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *dt, void *data)
 {
-    // data may not have the alignment required by the data type.
+    // data may not have the alignment required by the size
+    // but will always have the alignment required by the datatype
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(jl_is_datatype(dt));
     jl_datatype_t *bt = (jl_datatype_t*)dt;
     size_t nb = jl_datatype_size(bt);
+    // some types have special pools to minimize allocations
     if (nb == 0)               return jl_new_struct_uninit(bt); // returns bt->instance
+    if (bt == jl_bool_type)    return (1 & *(int8_t*)data) ? jl_true : jl_false;
     if (bt == jl_uint8_type)   return jl_box_uint8(*(uint8_t*)data);
-    if (bt == jl_int64_type)   return jl_box_int64(jl_load_unaligned_i64(data));
-    if (bt == jl_bool_type)    return (*(int8_t*)data) ? jl_true : jl_false;
-    if (bt == jl_int32_type)   return jl_box_int32(jl_load_unaligned_i32(data));
-    if (bt == jl_float64_type) {
-        double f;
-        memcpy(&f, data, 8);
-        return jl_box_float64(f);
-    }
+    if (bt == jl_int64_type)   return jl_box_int64(*(int64_t*)data);
+    if (bt == jl_int32_type)   return jl_box_int32(*(int32_t*)data);
+    if (bt == jl_int8_type)    return jl_box_int8(*(int8_t*)data);
+    if (bt == jl_int16_type)   return jl_box_int16(*(int16_t*)data);
+    if (bt == jl_uint64_type)  return jl_box_uint64(*(uint64_t*)data);
+    if (bt == jl_uint32_type)  return jl_box_uint32(*(uint32_t*)data);
+    if (bt == jl_uint16_type)  return jl_box_uint16(*(uint16_t*)data);
+    if (bt == jl_char_type)    return jl_box_char(*(uint32_t*)data);
 
     jl_value_t *v = jl_gc_alloc(ptls, nb, bt);
     switch (nb) {
@@ -543,16 +618,7 @@ void jl_assign_bits(void *dest, jl_value_t *bits)
     }
 }
 
-#define BOXN_FUNC(nb,nw)                                                \
-    JL_DLLEXPORT jl_value_t *jl_box##nb(jl_datatype_t *t, int##nb##_t x) \
-    {                                                                   \
-        jl_ptls_t ptls = jl_get_ptls_states();                          \
-        assert(jl_isbits(t));                                           \
-        assert(jl_datatype_size(t) == sizeof(x));                       \
-        jl_value_t *v = jl_gc_alloc(ptls, nw * sizeof(void*), t);       \
-        *(int##nb##_t*)jl_data_ptr(v) = x;                              \
-        return v;                                                       \
-    }                                                                   \
+#define PERMBOXN_FUNC(nb,nw)                                            \
     jl_value_t *jl_permbox##nb(jl_datatype_t *t, int##nb##_t x)         \
     {                                                                   \
         assert(jl_isbits(t));                                           \
@@ -561,13 +627,13 @@ void jl_assign_bits(void *dest, jl_value_t *bits)
         *(int##nb##_t*)jl_data_ptr(v) = x;                              \
         return v;                                                       \
     }
-BOXN_FUNC(8,  1)
-BOXN_FUNC(16, 1)
-BOXN_FUNC(32, 1)
+PERMBOXN_FUNC(8,  1)
+PERMBOXN_FUNC(16, 1)
+PERMBOXN_FUNC(32, 1)
 #ifdef _P64
-BOXN_FUNC(64, 1)
+PERMBOXN_FUNC(64, 1)
 #else
-BOXN_FUNC(64, 2)
+PERMBOXN_FUNC(64, 2)
 #endif
 
 #define UNBOX_FUNC(j_type,c_type)                                       \
@@ -638,7 +704,6 @@ SIBOX_FUNC(int16,  int16_t, 1)
 SIBOX_FUNC(int32,  int32_t, 1)
 UIBOX_FUNC(uint16, uint16_t, 1)
 UIBOX_FUNC(uint32, uint32_t, 1)
-UIBOX_FUNC(char,   uint32_t, 1)
 UIBOX_FUNC(ssavalue, size_t, 1)
 UIBOX_FUNC(slotnumber, size_t, 1)
 #ifdef _P64
@@ -648,6 +713,18 @@ UIBOX_FUNC(uint64, uint64_t, 1)
 SIBOX_FUNC(int64,  int64_t, 2)
 UIBOX_FUNC(uint64, uint64_t, 2)
 #endif
+
+static jl_value_t *boxed_char_cache[128];
+JL_DLLEXPORT jl_value_t *jl_box_char(uint32_t x)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    uint32_t u = bswap_32(x);
+    if (u < 128)
+        return boxed_char_cache[(uint8_t)u];
+    jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), jl_char_type);
+    *(uint32_t*)jl_data_ptr(v) = x;
+    return v;
+}
 
 static jl_value_t *boxed_int8_cache[256];
 JL_DLLEXPORT jl_value_t *jl_box_int8(int8_t x)
@@ -682,14 +759,16 @@ void jl_init_int32_int64_cache(void)
 void jl_init_box_caches(void)
 {
     int64_t i;
+    for(i=0; i < 128; i++) {
+        boxed_char_cache[i] = jl_permbox32(jl_char_type, i << 24);
+    }
     for(i=0; i < 256; i++) {
-        boxed_int8_cache[i]  = jl_permbox8(jl_int8_type, i);
+        boxed_int8_cache[i] = jl_permbox8(jl_int8_type, i);
     }
     for(i=0; i < NBOX_C; i++) {
         boxed_int16_cache[i]  = jl_permbox16(jl_int16_type, i-NBOX_C/2);
         boxed_uint16_cache[i] = jl_permbox16(jl_uint16_type, i);
         boxed_uint32_cache[i] = jl_permbox32(jl_uint32_type, i);
-        boxed_char_cache[i]   = jl_permbox32(jl_char_type, i);
         boxed_uint64_cache[i] = jl_permbox64(jl_uint64_type, i);
     }
 }
@@ -722,9 +801,19 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
                                         uint32_t na)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (type->instance != NULL) return type->instance;
+    if (type->instance != NULL) {
+        for (size_t i = 0; i < na; i++) {
+            jl_value_t *ft = jl_field_type(type, i);
+            if (!jl_isa(args[i], ft))
+                jl_type_error("new", ft, args[i]);
+        }
+        return type->instance;
+    }
+    if (type->layout == NULL)
+        jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
     size_t nf = jl_datatype_nfields(type);
     jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
+    JL_GC_PUSH1(&jv);
     for (size_t i = 0; i < na; i++) {
         jl_value_t *ft = jl_field_type(type, i);
         if (!jl_isa(args[i], ft))
@@ -734,8 +823,8 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
     for(size_t i=na; i < nf; i++) {
         if (jl_field_isptr(type, i)) {
             *(jl_value_t**)((char*)jl_data_ptr(jv)+jl_field_offset(type,i)) = NULL;
-
-        } else {
+        }
+        else {
             jl_value_t *ft = jl_field_type(type, i);
             if (jl_is_uniontype(ft)) {
                 uint8_t *psel = &((uint8_t *)jv)[jl_field_offset(type, i) + jl_field_size(type, i) - 1];
@@ -743,6 +832,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
             }
         }
     }
+    JL_GC_POP();
     return jv;
 }
 
@@ -791,6 +881,15 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
     return jl_new_bits(ty, (char*)v + offs);
 }
 
+JL_DLLEXPORT jl_value_t *jl_get_nth_field_noalloc(jl_value_t *v JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
+{
+    jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
+    assert(i < jl_datatype_nfields(st));
+    size_t offs = jl_field_offset(st,i);
+    assert(jl_field_isptr(st,i));
+    return *(jl_value_t**)((char*)v + offs);
+}
+
 JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
@@ -814,7 +913,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
     return jl_new_bits(ty, (char*)v + offs);
 }
 
-JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
+JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs) JL_NOTSAFEPOINT
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     size_t offs = jl_field_offset(st, i);
@@ -852,13 +951,6 @@ JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
     if (ty->layout == NULL || field > jl_datatype_nfields(ty) || field < 1)
         jl_bounds_error_int((jl_value_t*)ty, field);
     return jl_field_offset(ty, field - 1);
-}
-
-JL_DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
-{
-    if (ty->layout == NULL)
-        jl_error("non-leaf type doesn't have an alignment");
-    return jl_datatype_align(ty);
 }
 
 #ifdef __cplusplus

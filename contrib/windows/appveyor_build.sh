@@ -45,6 +45,7 @@ if [ "$ARCH" = x86_64 ]; then
   echo 'USE_BLAS64 = 1' >> Make.user
   echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas64_' >> Make.user
   echo 'LIBBLASNAME = libopenblas64_' >> Make.user
+  echo 'BINARYBUILDER_TRIPLET = x86_64-w64-mingw32' >> Make.user
 else
   bits=32
   archsuffix=86
@@ -52,6 +53,7 @@ else
   echo "override MARCH = pentium4" >> Make.user
   echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas' >> Make.user
   echo 'LIBBLASNAME = libopenblas' >> Make.user
+  echo 'BINARYBUILDER_TRIPLET = i686-w64-mingw32' >> Make.user
 fi
 echo "override JULIA_CPU_TARGET=generic;native" >> Make.user
 
@@ -100,6 +102,9 @@ for i in bin/*.dll; do
 done
 for i in share/julia/base/pcre_h.jl; do
   $SEVENZIP e -y julia-installer.exe "$i" -obase >> get-deps.log
+  # Touch the file to adjust the modification time, thereby (hopefully) avoiding
+  # issues with clock skew during the build
+  touch "base/$(basename $i)"
 done
 echo "override PCRE_INCL_PATH =" >> Make.user
 # Remove libjulia.dll if it was copied from downloaded binary
@@ -110,6 +115,8 @@ rm -f usr/bin/libgfortran-3.dll
 rm -f usr/bin/libquadmath-0.dll
 rm -f usr/bin/libssp-0.dll
 rm -f usr/bin/libstdc++-6.dll
+rm -f usr/bin/libccalltest.dll
+rm -f usr/bin/libpthread.dll
 
 if [ -z "$USEMSVC" ]; then
   if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" ]; then
@@ -123,8 +130,7 @@ if [ -z "$USEMSVC" ]; then
     rm -f mingw$bits/bin/make.exe
   fi
   export AR=${CROSS_COMPILE}ar
-
-  f=llvm-3.9.1-$ARCH-w64-mingw32-juliadeps-r07.7z
+  mkdir -p usr/tools
 else
   echo "override USEMSVC = 1" >> Make.user
   echo "override ARCH = $ARCH" >> Make.user
@@ -138,12 +144,11 @@ else
   echo "override LD = $LD -DEBUG" >> Make.user
 
   f=llvm-3.3-$ARCH-msvc12-juliadeps.7z
+  checksum_download \
+      "$f" "https://bintray.com/artifact/download/tkelman/generic/$f"
+  echo "Extracting $f"
+  $SEVENZIP x -y $f >> get-deps.log
 fi
-
-checksum_download \
-    "$f" "https://bintray.com/artifact/download/tkelman/generic/$f"
-echo "Extracting $f"
-$SEVENZIP x -y $f >> get-deps.log
 
 if [ -z "`which make 2>/dev/null`" ]; then
   if [ -n "`uname | grep CYGWIN`" ]; then
@@ -165,7 +170,7 @@ if ! [ -e usr/bin/busybox.exe ]; then
   echo "Downloading $f"
   $curlflags -o usr/bin/busybox.exe http://frippery.org/files/busybox/$f
 fi
-chmod +x usr/bin/* usr/tools/*
+chmod -R +x usr/bin usr/tools
 
 for lib in SUITESPARSE ARPACK BLAS LAPACK \
     GMP MPFR PCRE LIBUNWIND; do
@@ -197,7 +202,12 @@ if [ -n "$USEMSVC" ]; then
     -e 's|$dir/$lib|$dir/lib$lib|g' deps/srccache/libuv/compile > linkld
   chmod +x linkld
 else
-  echo 'override DEP_LIBS += openlibm' >> Make.user
+  # Use BinaryBuilder
+  echo 'USE_BINARYBUILDER_LLVM = 1' >> Make.user
+  echo 'BINARYBUILDER_LLVM_ASSERTS = 1' >> Make.user
+  echo 'override DEP_LIBS += llvm openlibm' >> Make.user
+  export CCACHE_DIR=/cygdrive/c/ccache
+  echo 'USECCACHE=1' >> Make.user
   make check-whitespace
   make VERBOSE=1 -C base version_git.jl.phony
   echo 'NO_GIT = 1' >> Make.user
@@ -205,8 +215,9 @@ fi
 echo 'FORCE_ASSERTIONS = 1' >> Make.user
 
 cat Make.user
-make -j3 VERBOSE=1 all
+make -j3 VERBOSE=1 release
 make -j3 VERBOSE=1 install
-make VERBOSE=1 -C examples
+make VERBOSE=1 JULIA=../../usr/bin/julia.exe BIN=. "$(make print-CC)" -C test/embedding release
 cp usr/bin/busybox.exe julia-*/bin
 make build-stats
+ccache -s

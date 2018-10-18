@@ -44,13 +44,13 @@ check_body!(x) = true
 simd_outer_range(r) = 0:0
 
 # Get trip count for inner loop.
-@inline simd_inner_length(r,j::Int) = length(r)
+@inline simd_inner_length(r,j::Int) = Base.length(r)
 
 # Construct user-level element from original range, outer loop index j, and inner loop index i.
-@inline simd_index(r,j::Int,i) = (@inbounds ret = r[i+1]; ret)
+@inline simd_index(r,j::Int,i) = (@inbounds ret = r[i+firstindex(r)]; ret)
 
 # Compile Expr x in context of @simd.
-function compile(x)
+function compile(x, ivdep)
     (isa(x, Expr) && x.head == :for) || throw(SimdError("for loop expected"))
     length(x.args) == 2 || throw(SimdError("1D for loop expected"))
     check_body!(x)
@@ -72,7 +72,7 @@ function compile(x)
                                 local $var = Base.simd_index($r,$j,$i)
                                 $(x.args[2])        # Body of loop
                                 $i += 1
-                                $(Expr(:simdloop))  # Mark loop as SIMD loop
+                                $(Expr(:simdloop, ivdep))  # Mark loop as SIMD loop
                             end
                         end
                         # Set index to last value just like a regular for loop would
@@ -85,8 +85,53 @@ function compile(x)
     end
 end
 
+"""
+    @simd
+
+Annotate a `for` loop to allow the compiler to take extra liberties to allow loop re-ordering
+
+!!! warning
+    This feature is experimental and could change or disappear in future versions of Julia.
+    Incorrect use of the `@simd` macro may cause unexpected results.
+
+The object iterated over in a `@simd for` loop should be a one-dimensional range.
+By using `@simd`, you are asserting several properties of the loop:
+
+    * It is safe to execute iterations in arbitrary or overlapping order, with special consideration for reduction variables.
+    * Floating-point operations on reduction variables can be reordered, possibly causing different results than without `@simd`.
+
+In many cases, Julia is able to automatically vectorize inner for loops without the use of `@simd`.
+Using `@simd` gives the compiler a little extra leeway to make it possible in more situations. In
+either case, your inner loop should have the following properties to allow vectorization:
+
+    * The loop must be an innermost loop
+    * The loop body must be straight-line code. Therefore, [`@inbounds`](@ref) is
+      currently needed for all array accesses. The compiler can sometimes turn
+      short `&&`, `||`, and `?:` expressions into straight-line code if it is safe
+      to evaluate all operands unconditionally. Consider using the [`ifelse`](@ref)
+      function instead of `?:` in the loop if it is safe to do so.
+    * Accesses must have a stride pattern and cannot be "gathers" (random-index
+      reads) or "scatters" (random-index writes).
+    * The stride should be unit stride.
+
+!!! note
+    The `@simd` does not assert by default that the loop is completely free of loop-carried
+    memory dependencies, which is an assumption that can easily be violated in generic code.
+    If you are writing non-generic code, you can use `@simd ivdep for ... end` to also assert that:
+
+        * There exists no loop-carried memory dependencies
+        * No iteration ever waits on a previous iteration to make forward progress.
+"""
 macro simd(forloop)
-    esc(compile(forloop))
+    esc(compile(forloop, false))
+end
+
+macro simd(ivdep, forloop)
+    if ivdep == :ivdep
+        esc(compile(forloop, true))
+    else
+        throw(SimdError("Only ivdep is valid as the first argument to @simd"))
+    end
 end
 
 end # module SimdLoop

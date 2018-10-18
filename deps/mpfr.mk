@@ -33,11 +33,7 @@ $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted: $(SRCCACHE)/mpfr-$(MPFR_VER).tar.
 	touch -c $(SRCCACHE)/mpfr-$(MPFR_VER)/configure # old target
 	echo 1 > $@
 
-$(SRCCACHE)/mpfr-$(MPFR_VER)/build-patched: $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted
-	cd $(dir $@) && patch -p0 < $(SRCDIR)/patches/mpfr-sincos.patch
-	echo 1 > $@
-
-$(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured: $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted $(SRCCACHE)/mpfr-$(MPFR_VER)/build-patched
+$(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured: $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) $(MPFR_OPTS) F77= --enable-shared --disable-static

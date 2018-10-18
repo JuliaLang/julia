@@ -4,7 +4,7 @@ Here are some tips for working with Julia efficiently.
 
 ## REPL-based workflow
 
-As already elaborated in [Interacting With Julia](@ref), Julia's REPL provides rich functionality
+As already elaborated in [The Julia REPL](@ref), Julia's REPL provides rich functionality
 that facilitates an efficient interactive workflow. Here are some tips that might further enhance
 your experience at the command line.
 
@@ -29,11 +29,7 @@ line. A common pattern includes the following elements:
     import Tmp
     ```
 
-    and includes tests for the contents of `Tmp`. The value of using `import` versus `using` is that
-    you can call `reload("Tmp")` instead of having to restart the REPL when your definitions change.
-    Of course, the cost is the need to prepend `Tmp.` to uses of names defined in your module. (You
-    can lower that cost by keeping your module name short.)
-
+    and includes tests for the contents of `Tmp`.
     Alternatively, you can wrap the contents of your test file in a module, as
 
     ```
@@ -49,12 +45,6 @@ line. A common pattern includes the following elements:
     `Tmp.` everywhere. The disadvantage is that code can no longer be selectively copied to the REPL
     without some tweaking.
   * **Lather. Rinse. Repeat.** Explore ideas at the `julia` command prompt. Save good ideas in `tst.jl`.
-    Occasionally restart the REPL, issuing
-
-    ```julia
-    reload("Tmp")
-    include("tst.jl")
-    ```
 
 ### Simplify initialization
 
@@ -65,7 +55,7 @@ which you can run on startup by issuing the command:
 julia -L _init.jl
 ```
 
-If you further add the following to your `.juliarc.jl` file
+If you further add the following to your `~/.julia/config/startup.jl` file
 
 ```julia
 isfile("_init.jl") && include(joinpath(pwd(), "_init.jl"))

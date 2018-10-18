@@ -3,7 +3,6 @@
 // Windows
 
 #define sig_stack_size 131072 // 128k reserved for SEGV handling
-static BOOL (*pSetThreadStackGuarantee)(PULONG);
 
 // Copied from MINGW_FLOAT_H which may not be found due to a collision with the builtin gcc float.h
 // eventually we can probably integrate this into OpenLibm.
@@ -97,30 +96,47 @@ void __cdecl crt_sig_handler(int sig, int num)
     }
 }
 
+static jl_ucontext_t collect_backtrace_fiber;
+static jl_ucontext_t error_return_fiber;
+static PCONTEXT error_ctx;
+static int have_backtrace_fiber;
+static void JL_NORETURN start_backtrace_fiber(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    // collect the backtrace
+    ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, error_ctx);
+    // switch back to the execution fiber
+    jl_setcontext(&error_return_fiber);
+    abort();
+}
+
 void restore_signals(void)
 {
     // turn on ctrl-c handler
     SetConsoleCtrlHandler(NULL, 0);
-    // see if SetThreadStackGuarantee exists
-    pSetThreadStackGuarantee = (BOOL (*)(PULONG)) jl_dlsym_e(jl_kernel32_handle,
-        "SetThreadStackGuarantee");
 }
 
-void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
+void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
 #if defined(_CPU_X86_64_)
-    DWORD64 Rsp = (ctxThread->Rsp&(DWORD64)-16) - 8;
+    DWORD64 Rsp = (ctxThread->Rsp & (DWORD64)-16) - 8;
 #elif defined(_CPU_X86_)
-    DWORD32 Esp = (ctxThread->Esp&(DWORD32)-16) - 4;
+    DWORD32 Esp = (ctxThread->Esp & (DWORD32)-16) - 4;
 #else
 #error WIN16 not supported :P
 #endif
     if (!ptls->safe_restore) {
         assert(excpt != NULL);
-        ptls->bt_size = bt ? rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
-                                               ctxThread) : 0;
-        ptls->exception_in_transit = excpt;
+        ptls->bt_size = 0;
+        if (excpt != jl_stackovf_exception) {
+            ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread);
+        }
+        else if (have_backtrace_fiber) {
+            error_ctx = ctxThread;
+            jl_swapcontext(&error_return_fiber, &collect_backtrace_fiber);
+        }
+        jl_exception_in_transit = excpt;
     }
 #if defined(_CPU_X86_64_)
     *(DWORD64*)Rsp = 0;
@@ -161,7 +177,7 @@ static void jl_try_deliver_sigint(void)
             jl_safe_printf("error: GetThreadContext failed\n");
             return;
         }
-        jl_throw_in_ctx(jl_interrupt_exception, &ctxThread, 1);
+        jl_throw_in_ctx(jl_interrupt_exception, &ctxThread);
         ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         if (!SetThreadContext(hMainThread, &ctxThread)) {
             jl_safe_printf("error: SetThreadContext failed\n");
@@ -194,19 +210,17 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     return 1;
 }
 
-static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo, int in_ctx)
+LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
             case EXCEPTION_INT_DIVIDE_BY_ZERO:
                 fpreset();
-                jl_throw_in_ctx(jl_diverror_exception,
-                    ExceptionInfo->ContextRecord,in_ctx);
+                jl_throw_in_ctx(jl_diverror_exception, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
             case EXCEPTION_STACK_OVERFLOW:
-                jl_throw_in_ctx(jl_stackovf_exception,
-                    ExceptionInfo->ContextRecord,in_ctx&&pSetThreadStackGuarantee);
+                jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
             case EXCEPTION_ACCESS_VIOLATION:
                 if (jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1])) {
@@ -221,18 +235,16 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                     }
                     else if (jl_safepoint_consume_sigint()) {
                         jl_clear_force_sigint();
-                        jl_throw_in_ctx(jl_interrupt_exception,
-                                        ExceptionInfo->ContextRecord, in_ctx);
+                        jl_throw_in_ctx(jl_interrupt_exception, ExceptionInfo->ContextRecord);
                     }
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
                 if (ptls->safe_restore) {
-                    jl_throw_in_ctx(NULL, ExceptionInfo->ContextRecord, in_ctx);
+                    jl_throw_in_ctx(NULL, ExceptionInfo->ContextRecord);
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
                 if (ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1) { // writing to read-only memory (e.g. mmap)
-                    jl_throw_in_ctx(jl_readonlymemory_exception,
-                        ExceptionInfo->ContextRecord,in_ctx);
+                    jl_throw_in_ctx(jl_readonlymemory_exception, ExceptionInfo->ContextRecord);
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
         }
@@ -298,38 +310,6 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
     }
     return EXCEPTION_CONTINUE_SEARCH;
 }
-
-static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
-{
-    return _exception_handler(ExceptionInfo,1);
-}
-
-#if defined(_CPU_X86_64_)
-JL_DLLEXPORT EXCEPTION_DISPOSITION __julia_personality(
-        PEXCEPTION_RECORD ExceptionRecord,
-        void *EstablisherFrame,
-        PCONTEXT ContextRecord,
-        void *DispatcherContext)
-{
-    EXCEPTION_POINTERS ExceptionInfo;
-    ExceptionInfo.ExceptionRecord = ExceptionRecord;
-    ExceptionInfo.ContextRecord = ContextRecord;
-
-    EXCEPTION_DISPOSITION rval;
-    switch (_exception_handler(&ExceptionInfo,1)) {
-        case EXCEPTION_CONTINUE_EXECUTION:
-            rval = ExceptionContinueExecution; break;
-        case EXCEPTION_CONTINUE_SEARCH:
-            rval = ExceptionContinueSearch; break;
-#ifndef _MSC_VER
-        case EXCEPTION_EXECUTE_HANDLER:
-            rval = ExceptionExecuteHandler; break;
-#endif
-    }
-
-    return rval;
-}
-#endif
 
 JL_DLLEXPORT void jl_install_sigint_handler(void)
 {
@@ -429,17 +409,15 @@ void jl_install_default_signal_handlers(void)
     if (signal(SIGABRT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
         jl_error("fatal error: Couldn't set SIGABRT");
     }
-    SetUnhandledExceptionFilter(exception_handler);
+    SetUnhandledExceptionFilter(jl_exception_handler);
 }
 
 void jl_install_thread_signal_handler(jl_ptls_t ptls)
 {
-    (void)ptls;
-    // Ensure the stack overflow handler has enough space to collect the backtrace
-    ULONG StackSizeInBytes = sig_stack_size;
-    if (pSetThreadStackGuarantee) {
-        if (!pSetThreadStackGuarantee(&StackSizeInBytes)) {
-            pSetThreadStackGuarantee = NULL;
-        }
-    }
+    size_t ssize = sig_stack_size;
+    void *stk = jl_malloc_stack(&ssize, NULL);
+    collect_backtrace_fiber.uc_stack.ss_sp = (void*)stk;
+    collect_backtrace_fiber.uc_stack.ss_size = ssize;
+    jl_makecontext(&collect_backtrace_fiber, start_backtrace_fiber);
+    have_backtrace_fiber = 1;
 }

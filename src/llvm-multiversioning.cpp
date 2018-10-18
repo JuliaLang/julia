@@ -257,7 +257,7 @@ private:
     uint32_t collect_func_info(Function &F);
     void check_partial(Group &grp, Target &tgt);
     void clone_partial(Group &grp, Target &tgt);
-    void add_features(Function *F, StringRef name, StringRef features) const;
+    void add_features(Function *F, StringRef name, StringRef features, uint32_t flags) const;
     template<typename T>
     T *add_comdat(T *G) const;
     uint32_t get_func_id(Function *F);
@@ -510,7 +510,8 @@ void CloneCtx::clone_all_partials()
         // now that all the actual cloning is done.
         auto &base_spec = specs[grp.idx];
         for (auto orig_f: orig_funcs) {
-            add_features(grp.base_func(orig_f), base_spec.cpu_name, base_spec.cpu_features);
+            add_features(grp.base_func(orig_f), base_spec.cpu_name,
+                         base_spec.cpu_features, base_spec.flags);
         }
     }
     func_infos.clear(); // We don't need this anymore
@@ -541,7 +542,7 @@ void CloneCtx::check_partial(Group &grp, Target &tgt)
         grp.clone_fs.insert(i);
         all_origs.insert(orig_f);
     }
-    std::set<Function*> sets[2] = {all_origs, {}};
+    std::set<Function*> sets[2]{all_origs, std::set<Function*>{}};
     auto *cur_set = &sets[0];
     auto *next_set = &sets[1];
     // Reduce dispatch by expand the cloning set to functions that are directly called by
@@ -612,12 +613,12 @@ void CloneCtx::clone_partial(Group &grp, Target &tgt)
             clone_function(F, new_f, vmap);
             // We can set the feature strings now since no one is going to
             // clone these functions again.
-            add_features(new_f, spec.cpu_name, spec.cpu_features);
+            add_features(new_f, spec.cpu_name, spec.cpu_features, spec.flags);
         }
     }
 }
 
-void CloneCtx::add_features(Function *F, StringRef name, StringRef features) const
+void CloneCtx::add_features(Function *F, StringRef name, StringRef features, uint32_t flags) const
 {
     auto attr = F->getFnAttribute("target-features");
     if (attr.isStringAttribute()) {
@@ -630,6 +631,14 @@ void CloneCtx::add_features(Function *F, StringRef name, StringRef features) con
         F->addFnAttr("target-features", features);
     }
     F->addFnAttr("target-cpu", name);
+    if (!F->hasFnAttribute(Attribute::OptimizeNone)) {
+        if (flags & JL_TARGET_OPTSIZE) {
+            F->addFnAttr(Attribute::OptimizeForSize);
+        }
+        else if (flags & JL_TARGET_MINSIZE) {
+            F->addFnAttr(Attribute::MinSize);
+        }
+    }
 }
 
 uint32_t CloneCtx::get_func_id(Function *F)
@@ -805,6 +814,7 @@ void CloneCtx::fix_inst_uses()
                     std::tie(id, slot) = get_reloc_slot(orig_f);
                     Instruction *ptr = new LoadInst(T_pvoidfunc, slot, "", false, insert_before);
                     ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+                    ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ctx, None));
                     ptr = new BitCastInst(ptr, F->getType(), "", insert_before);
                     use_i->setOperand(info.use->getOperandNo(),
                                       rewrite_inst_use(uses.get_stack(), ptr,
@@ -1016,6 +1026,9 @@ bool MultiVersioning::runOnModule(Module &M)
     //     * Cloned function -> Original function (add as we clone functions)
     //     * Original function -> Base function (target specific and updated by LLVM)
     //     * ID -> relocation slots (const).
+    if (M.getName() == "sysimage")
+        return false;
+
     CloneCtx clone(this, M);
 
     // Collect a list of original functions and clone base functions

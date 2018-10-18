@@ -1,279 +1,62 @@
-commit 4d69ea1172fec234e0f3c8cee8574e9e13bf825e
-Author: Etienne Samson <samson.etienne@gmail.com>
-Date:   Fri Jun 23 22:40:56 2017 +0000
+Enables MbedTLS support
 
-    mbedtls support for libgit2 v0.26.0
-    
-    See https://github.com/libgit2/libgit2/pull/4173
-    
-    cmake: simplify https support selection & tests
-    
-    Gather streams to src/streams
-    
-    Don't include OpenSSL from global.h so it doesn't namespace-leak
-    
-    Have clar exit immediately on initialization failure
-    
-    Generalize Travis' dependency installation
-    
-    Add USE_HTTPS as a CMake option
-    
-    It defaults to ON, e.g. "pick whatever default is appropriate for the platform".
-    It accepts one of SecureTransport, OpenSSL, WinHTTP, or OFF.
-    It errors if the backend library couldn't be found.
-    
-    mbedtls: initial support
-    
-    mbedtls: proper certificate verification
-    
-    mbedtls: use libmbedcrypto for hashing
-    
-    mbedtls: add global initialization
-    
-    mbedtls: default cipher list support
-    
-    mbedtls: load default CA certificates
-    
-    mbedtls: fix libgit2 hanging due to incomplete writes
-    
-    mbedtls: enable Travis CI tests
-    
-    mbedtls: use our own certificate validation
-    
-    Otherwise REQUIRED means that `git_stream_certificate` will always error.
-    We're doing the mbedtls check in verify_server_cert though.
-    
-    mbedtls: try all CA locations, stopping after any loaded
-    
-    WIP: distribution paths
+Upstream: https://github.com/libgit2/libgit2/pull/4173
+
+git diff ca3b2234dc7f1bd0d0f81488d3e29980b47a85b4^..cb2da47e56159faaaf143943c74ffb8f60a988b1 > libgit2-mbedtls.patch
+
+mbedtls: initial support
+mbedtls: proper certificate verification
+mbedtls: use libmbedcrypto for hashing
+mbedtls: add global initialization
+mbedtls: default cipher list support
+mbedtls: fix libgit2 hanging due to incomplete writes
+mbedtls: enable Travis CI tests
+mbedtls: use our own certificate validation
+mbedtls: use mbedTLS certificate verification
+mbedtls: load default CA certificates
+mbedtls: display error codes as hex for consistency with mbedTLS docs
+tests: clarify comment
+cmake: make our preferred backend ordering consistent
+travis: just grab what we need from mbedtls
+travis: pass -fPIC when configuring mbedtls
 
 diff --git a/.travis.yml b/.travis.yml
-index af38252..e1be760 100644
+index a4c8e91df..b5f1c6ff6 100644
 --- a/.travis.yml
 +++ b/.travis.yml
-@@ -45,11 +45,21 @@ matrix:
-        - VALGRIND=1
+@@ -55,6 +55,16 @@ matrix:
           OPTIONS="-DBUILD_CLAR=ON -DBUILD_EXAMPLES=OFF -DDEBUG_POOL=ON -DCMAKE_BUILD_TYPE=Debug"
       os: linux
+      dist: trusty
 +   - compiler: gcc
 +     env:
 +         MBEDTLS=1
-+         OPTIONS="-DTHREADSAFE=ON -DCMAKE_BUILD_TYPE=Release -DUSE_TLS=mbedTLS -DMBEDTLS_ROOT_DIR=../mbedtls"
++         OPTIONS="-DTHREADSAFE=ON -DCMAKE_BUILD_TYPE=Release -DUSE_HTTPS=mbedTLS -DMBEDTLS_ROOT_DIR=../deps/mbedtls"
 +     os: linux
 +   - compiler: gcc
 +     env:
 +         MBEDTLS=1
-+         OPTIONS="-DTHREADSAFE=OFF -DBUILD_EXAMPLES=ON -DUSE_TLS=mbedTLS -DMBEDTLS_ROOT_DIR=../mbedtls"
++         OPTIONS="-DTHREADSAFE=OFF -DBUILD_EXAMPLES=ON -DUSE_HTTPS=mbedTLS -DMBEDTLS_ROOT_DIR=../deps/mbedtls"
 +     os: linux
   allow_failures:
     - env: COVERITY=1
  
- install:
--  - if [ "$TRAVIS_OS_NAME" = "osx" ]; then ./script/install-deps-${TRAVIS_OS_NAME}.sh; fi
-+  - if [ -x "./script/install-deps-${TRAVIS_OS_NAME}.sh" ]; then ./script/install-deps-${TRAVIS_OS_NAME}.sh; fi
- 
- # Run the Build script and tests
- script:
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 4783e3e..5d7dbe3 100644
+index 2ca5354a7..9176eee04 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -40,6 +40,7 @@ OPTION( LIBGIT2_FILENAME	"Name of the produced binary"			OFF )
- OPTION( USE_SHA1DC			"Use SHA-1 with collision detection"	OFF )
- OPTION( USE_ICONV			"Link with and use iconv library" 		OFF )
+@@ -48,7 +48,7 @@ OPTION( PROFILE				"Generate profiling information"		OFF )
+ OPTION( ENABLE_TRACE		"Enables tracing support"				OFF )
+ OPTION( LIBGIT2_FILENAME	"Name of the produced binary"			OFF )
+ 
+-SET(SHA1_BACKEND "CollisionDetection" CACHE STRING "Backend to use for SHA1. One of Generic, OpenSSL, Win32, CommonCrypto, CollisionDetection. ")
++SET(SHA1_BACKEND "CollisionDetection" CACHE STRING "Backend to use for SHA1. One of Generic, OpenSSL, Win32, CommonCrypto, mbedTLS, CollisionDetection. ")
  OPTION( USE_SSH				"Link with libssh to enable SSH support" ON )
-+OPTION( USE_HTTPS			"Enable HTTPS support"					ON )
+ OPTION( USE_HTTPS			"Enable HTTPS support. Can be set to a specific backend"	ON )
  OPTION( USE_GSSAPI			"Link with libgssapi for SPNEGO auth"   OFF )
- OPTION( VALGRIND			"Configure build for valgrind"			OFF )
- OPTION( CURL			"Use curl for HTTP if available" ON)
-@@ -89,10 +90,6 @@ IF(MSVC)
- 	OPTION(MSVC_CRTDBG "Enable CRTDBG memory leak reporting" OFF)
- ENDIF()
- 
--IF (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
--	OPTION( USE_OPENSSL                     "Link with and use openssl library"             ON )
--ENDIF()
--
- CHECK_STRUCT_HAS_MEMBER ("struct stat" st_mtim "sys/types.h;sys/stat.h"
- 	HAVE_STRUCT_STAT_ST_MTIM LANGUAGE C)
- CHECK_STRUCT_HAS_MEMBER ("struct stat" st_mtimespec "sys/types.h;sys/stat.h"
-@@ -208,21 +205,6 @@ STRING(REGEX REPLACE "^.*LIBGIT2_SOVERSION ([0-9]+)$" "\\1" LIBGIT2_SOVERSION "$
- # Find required dependencies
- INCLUDE_DIRECTORIES(src include)
- 
--IF (SECURITY_FOUND)
--  # OS X 10.7 and older do not have some functions we use, fall back to OpenSSL there
--  CHECK_LIBRARY_EXISTS("${SECURITY_DIRS}" SSLCreateContext "Security/SecureTransport.h" HAVE_NEWER_SECURITY)
--  IF (HAVE_NEWER_SECURITY)
--    MESSAGE("-- Found Security ${SECURITY_DIRS}")
--    LIST(APPEND LIBGIT2_PC_LIBS "-framework Security")
--  ELSE()
--    MESSAGE("-- Security framework is too old, falling back to OpenSSL")
--    SET(SECURITY_FOUND "NO")
--    SET(SECURITY_DIRS "")
--    SET(SECURITY_DIR "")
--    SET(USE_OPENSSL "ON")
--  ENDIF()
--ENDIF()
--
- IF (COREFOUNDATION_FOUND)
-   MESSAGE("-- Found CoreFoundation ${COREFOUNDATION_DIRS}")
-   LIST(APPEND LIBGIT2_PC_LIBS "-framework CoreFoundation")
-@@ -280,10 +262,14 @@ ELSE ()
- 		PKG_CHECK_MODULES(CURL libcurl)
- 	ENDIF ()
- 
--	IF (NOT AMIGA AND USE_OPENSSL)
-+	IF (NOT AMIGA AND (USE_HTTPS STREQUAL "OpenSSL" OR USE_HTTPS STREQUAL "ON"))
- 		FIND_PACKAGE(OpenSSL)
- 	ENDIF ()
- 
-+	IF (NOT AMIGA AND (USE_HTTPS STREQUAL "mbedTLS" OR USE_HTTPS STREQUAL "ON"))
-+		FIND_PACKAGE(mbedTLS)
-+	ENDIF ()
-+
- 	IF (CURL_FOUND)
- 		ADD_DEFINITIONS(-DGIT_CURL)
- 		INCLUDE_DIRECTORIES(${CURL_INCLUDE_DIRS})
-@@ -293,6 +279,69 @@ ELSE ()
- 	ENDIF()
- ENDIF()
- 
-+IF (USE_HTTPS STREQUAL "ON")
-+	IF (SECURITY_FOUND)
-+		# OS X 10.7 and older do not have some functions we use, fall back to OpenSSL there
-+		CHECK_LIBRARY_EXISTS("${SECURITY_DIRS}" SSLCreateContext "Security/SecureTransport.h" HAVE_NEWER_SECURITY)
-+		IF (HAVE_NEWER_SECURITY)
-+			MESSAGE("-- Found Security ${SECURITY_DIRS}")
-+			LIST(APPEND LIBGIT2_PC_LIBS "-framework Security")
-+			SET(HTTPS_BACKEND "SecureTransport")
-+		ELSE()
-+			MESSAGE("-- Security framework is too old, falling back to OpenSSL")
-+			SET(SECURITY_FOUND "NO")
-+			SET(SECURITY_DIRS "")
-+			SET(SECURITY_DIR "")
-+			SET(HTTPS_BACKEND "OpenSSL")
-+		ENDIF()
-+	ELSEIF(WINHTTP)
-+		SET(HTTPS_BACKEND "WinHTTP")
-+	ELSEIF(MBEDTLS_FOUND)
-+		SET(HTTPS_BACKEND "mbedTLS")
-+	ELSE()
-+		SET(HTTPS_BACKEND "OpenSSL")
-+	ENDIF()
-+ELSE()
-+	SET(HTTPS_BACKEND ${USE_HTTPS})
-+ENDIF()
-+
-+MESSAGE(STATUS "Using HTTPS backend ${HTTPS_BACKEND}")
-+
-+IF (HTTPS_BACKEND STREQUAL "SecureTransport")
-+	IF (NOT SECURITY_FOUND)
-+		MESSAGE(FATAL_ERROR "Asked for SecureTransport HTTPS backend, but it wasn't found")
-+	ENDIF()
-+
-+	ADD_DEFINITIONS(-DGIT_SECURE_TRANSPORT)
-+	INCLUDE_DIRECTORIES(${SECURITY_INCLUDE_DIR})
-+ELSEIF (HTTPS_BACKEND STREQUAL "OpenSSL")
-+	IF (NOT OPENSSL_FOUND)
-+		MESSAGE(FATAL_ERROR "Asked for OpenSSL HTTPS backend, but it wasn't found")
-+	ENDIF()
-+
-+	ADD_DEFINITIONS(-DGIT_OPENSSL)
-+	INCLUDE_DIRECTORIES(${OPENSSL_INCLUDE_DIR})
-+	SET(SSL_LIBRARIES ${OPENSSL_LIBRARIES})
-+ELSEIF (TLS_BACKEND STREQUAL "mbedTLS")
-+	IF (NOT MBEDTLS_FOUND)
-+		MESSAGE(FATAL_ERROR "Asked for mbedTLS backend, but it wasn't found")
-+	ENDIF()
-+
-+	ADD_DEFINITIONS(-DGIT_MBEDTLS)
-+	INCLUDE_DIRECTORIES(${MBEDTLS_INCLUDE_DIR})
-+	LINK_DIRECTORIES(${MBEDTLS_LIBRARY_DIR})
-+	SET(SSL_LIBRARIES ${MBEDTLS_LIBRARIES})
-+ELSEIF(HTTPS_BACKEND STREQUAL "WinHTTP")
-+ENDIF()
-+
-+IF (USE_HTTPS AND NOT HTTPS_BACKEND)
-+	MESSAGE(FATAL_ERROR "Asked for backend " ${HTTPS_BACKEND} " but it wasn't found")
-+ENDIF()
-+
-+IF (HTTPS_BACKEND)
-+	ADD_DEFINITIONS(-DGIT_HTTPS)
-+ENDIF()
-+
- # Specify sha1 implementation
- IF (USE_SHA1DC)
- 	ADD_DEFINITIONS(-DGIT_SHA1_COLLISIONDETECT)
-@@ -303,15 +352,18 @@ IF (USE_SHA1DC)
- ELSEIF (WIN32 AND NOT MINGW)
- 	ADD_DEFINITIONS(-DGIT_SHA1_WIN32)
- 	FILE(GLOB SRC_SHA1 src/hash/hash_win32.c)
--ELSEIF (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-+ELSEIF (TLS_BACKEND MATCHES "SecureTransport")
- 	ADD_DEFINITIONS(-DGIT_SHA1_COMMON_CRYPTO)
--ELSEIF (OPENSSL_FOUND)
-+ELSEIF (TLS_BACKEND MATCHES "OpenSSL")
- 	ADD_DEFINITIONS(-DGIT_SHA1_OPENSSL)
- 	IF (CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
- 		LIST(APPEND LIBGIT2_PC_LIBS "-lssl")
- 	ELSE()
- 		SET(LIBGIT2_PC_REQUIRES "${LIBGIT2_PC_REQUIRES} openssl")
- 	ENDIF ()
-+ELSEIF (TLS_BACKEND STREQUAL "mbedTLS")
-+	ADD_DEFINITIONS(-DMBEDTLS_SHA1)
-+	FILE(GLOB SRC_SHA1 src/hash/hash_mbedtls.c)
- ELSE()
- 	FILE(GLOB SRC_SHA1 src/hash/hash_generic.c)
- ENDIF()
-@@ -543,21 +595,6 @@ ELSE()
- 	# that uses CMAKE_CONFIGURATION_TYPES and not CMAKE_BUILD_TYPE
- ENDIF()
- 
--IF (SECURITY_FOUND)
--  ADD_DEFINITIONS(-DGIT_SECURE_TRANSPORT)
--  ADD_DEFINITIONS(-DGIT_HTTPS)
--  INCLUDE_DIRECTORIES(${SECURITY_INCLUDE_DIR})
--ENDIF ()
--
--IF (OPENSSL_FOUND)
--  ADD_DEFINITIONS(-DGIT_OPENSSL)
--  ADD_DEFINITIONS(-DGIT_HTTPS)
--  INCLUDE_DIRECTORIES(${OPENSSL_INCLUDE_DIR})
--  SET(SSL_LIBRARIES ${OPENSSL_LIBRARIES})
--ENDIF()
--
--
--
- IF (THREADSAFE)
- 	IF (NOT WIN32)
- 		FIND_PACKAGE(Threads REQUIRED)
-@@ -595,7 +632,12 @@ ELSE()
- 	ENDIF()
- 	FILE(GLOB SRC_OS src/unix/*.c src/unix/*.h)
- ENDIF()
--FILE(GLOB SRC_GIT2 src/*.c src/*.h src/transports/*.c src/transports/*.h src/xdiff/*.c src/xdiff/*.h)
-+FILE(GLOB SRC_GIT2
-+	src/*.c src/*.h
-+	src/streams/*.c src/streams/*.h
-+	src/transports/*.c src/transports/*.h
-+	src/xdiff/*.c src/xdiff/*.h
-+)
- 
- # Determine architecture of the machine
- IF (CMAKE_SIZEOF_VOID_P EQUAL 8)
-@@ -703,7 +745,7 @@ IF (BUILD_CLAR)
- 	ENDIF ()
- 
- 	ENABLE_TESTING()
--	IF (WINHTTP OR OPENSSL_FOUND OR SECURITY_FOUND)
-+	IF (HAS_HTTPS_SUPPORT)
- 		ADD_TEST(libgit2_clar libgit2_clar -ionline -xclone::local::git_style_unc_paths -xclone::local::standard_unc_paths_are_written_git_style)
- 	ELSE ()
- 		ADD_TEST(libgit2_clar libgit2_clar -v -xclone::local::git_style_unc_paths -xclone::local::standard_unc_paths_are_written_git_style)
 diff --git a/cmake/Modules/FindmbedTLS.cmake b/cmake/Modules/FindmbedTLS.cmake
 new file mode 100644
-index 0000000..9329755
+index 000000000..93297555e
 --- /dev/null
 +++ b/cmake/Modules/FindmbedTLS.cmake
 @@ -0,0 +1,93 @@
@@ -372,466 +155,182 @@ index 0000000..9329755
 +)
 diff --git a/script/install-deps-linux.sh b/script/install-deps-linux.sh
 new file mode 100755
-index 0000000..94309b0
+index 000000000..99cbde4e0
 --- /dev/null
 +++ b/script/install-deps-linux.sh
-@@ -0,0 +1,12 @@
+@@ -0,0 +1,13 @@
 +#!/bin/sh
 +
-+echo "Installing dependencies"
++set -x
++
 +if [ "$MBEDTLS" ]; then
-+  git clone https://github.com/ARMmbed/mbedtls.git ../mbedtls
-+  cd ../mbedtls
-+  git checkout mbedtls-2.4.2
-+  cmake -DENABLE_PROGRAMS=OFF -DENABLE_TESTING=OFF -DUSE_SHARED_MBEDTLS_LIBRARY=ON -DUSE_STATIC_MBEDTLS_LIBRARY=OFF .
++  git clone --depth 10 --single-branch --branch mbedtls-2.6.1 https://github.com/ARMmbed/mbedtls.git ./deps/mbedtls
++  cd ./deps/mbedtls
++  # We pass -fPIC explicitely because we'll include it in libgit2.so
++  CFLAGS=-fPIC cmake -DENABLE_PROGRAMS=OFF -DENABLE_TESTING=OFF -DUSE_SHARED_MBEDTLS_LIBRARY=OFF -DUSE_STATIC_MBEDTLS_LIBRARY=ON .
 +  cmake --build .
 +
 +  echo "mbedTLS built in `pwd`"
 +fi
-diff --git a/src/curl_stream.c b/src/curl_stream.c
-deleted file mode 100644
-index 4e0455c..0000000
---- a/src/curl_stream.c
-+++ /dev/null
-@@ -1,362 +0,0 @@
--/*
-- * Copyright (C) the libgit2 contributors. All rights reserved.
-- *
-- * This file is part of libgit2, distributed under the GNU GPL v2 with
-- * a Linking Exception. For full terms see the included COPYING file.
-- */
--
--#ifdef GIT_CURL
--
--#include <curl/curl.h>
--
--#include "stream.h"
--#include "git2/transport.h"
--#include "buffer.h"
--#include "vector.h"
--#include "proxy.h"
--
--/* This is for backwards compatibility with curl<7.45.0. */
--#ifndef CURLINFO_ACTIVESOCKET
--# define CURLINFO_ACTIVESOCKET CURLINFO_LASTSOCKET
--# define GIT_CURL_BADSOCKET -1
--# define git_activesocket_t long
--#else
--# define GIT_CURL_BADSOCKET CURL_SOCKET_BAD
--# define git_activesocket_t curl_socket_t
--#endif
--
--typedef struct {
--	git_stream parent;
--	CURL *handle;
--	curl_socket_t socket;
--	char curl_error[CURL_ERROR_SIZE + 1];
--	git_cert_x509 cert_info;
--	git_strarray cert_info_strings;
--	git_proxy_options proxy;
--	git_cred *proxy_cred;
--} curl_stream;
--
--static int seterr_curl(curl_stream *s)
--{
--	giterr_set(GITERR_NET, "curl error: %s\n", s->curl_error);
--	return -1;
--}
--
--GIT_INLINE(int) error_no_credentials(void)
--{
--	giterr_set(GITERR_NET, "proxy authentication required, but no callback provided");
--	return GIT_EAUTH;
--}
--
--static int apply_proxy_creds(curl_stream *s)
--{
--	CURLcode res;
--	git_cred_userpass_plaintext *userpass;
--
--	if (!s->proxy_cred)
--		return GIT_ENOTFOUND;
--
--	userpass = (git_cred_userpass_plaintext *) s->proxy_cred;
--	if ((res = curl_easy_setopt(s->handle, CURLOPT_PROXYUSERNAME, userpass->username)) != CURLE_OK)
--		return seterr_curl(s);
--	if ((res = curl_easy_setopt(s->handle, CURLOPT_PROXYPASSWORD, userpass->password)) != CURLE_OK)
--		return seterr_curl(s);
--
--	return 0;
--}
--
--static int ask_and_apply_proxy_creds(curl_stream *s)
--{
--	int error;
--	git_proxy_options *opts = &s->proxy;
--
--	if (!opts->credentials)
--		return error_no_credentials();
--
--	/* TODO: see if PROXYAUTH_AVAIL helps us here */
--	git_cred_free(s->proxy_cred);
--	s->proxy_cred = NULL;
--	giterr_clear();
--	error = opts->credentials(&s->proxy_cred, opts->url, NULL, GIT_CREDTYPE_USERPASS_PLAINTEXT, opts->payload);
--	if (error == GIT_PASSTHROUGH)
--		return error_no_credentials();
--	if (error < 0) {
--		if (!giterr_last())
--			giterr_set(GITERR_NET, "proxy authentication was aborted by the user");
--		return error;
--	}
--
--	if (s->proxy_cred->credtype != GIT_CREDTYPE_USERPASS_PLAINTEXT) {
--		giterr_set(GITERR_NET, "credentials callback returned invalid credential type");
--		return -1;
--	}
--
--	return apply_proxy_creds(s);
--}
--
--static int curls_connect(git_stream *stream)
--{
--	curl_stream *s = (curl_stream *) stream;
--	git_activesocket_t sockextr;
--	long connect_last = 0;
--	int failed_cert = 0, error;
--	bool retry_connect;
--	CURLcode res;
--
--	/* Apply any credentials we've already established */
--	error = apply_proxy_creds(s);
--	if (error < 0 && error != GIT_ENOTFOUND)
--		return seterr_curl(s);
--
--	do {
--		retry_connect = 0;
--		res = curl_easy_perform(s->handle);
--
--		curl_easy_getinfo(s->handle, CURLINFO_HTTP_CONNECTCODE, &connect_last);
--
--		/* HTTP 407 Proxy Authentication Required */
--		if (connect_last == 407) {
--			if ((error = ask_and_apply_proxy_creds(s)) < 0)
--				return error;
--
--			retry_connect = true;
--		}
--	} while (retry_connect);
--
--	if (res != CURLE_OK && res != CURLE_PEER_FAILED_VERIFICATION)
--		return seterr_curl(s);
--	if (res == CURLE_PEER_FAILED_VERIFICATION)
--		failed_cert = 1;
--
--	if ((res = curl_easy_getinfo(s->handle, CURLINFO_ACTIVESOCKET, &sockextr)) != CURLE_OK) {
--		return seterr_curl(s);
--	}
--
--	if (sockextr == GIT_CURL_BADSOCKET) {
--		giterr_set(GITERR_NET, "curl socket is no longer valid");
--		return -1;
--	}
--
--	s->socket = sockextr;
--
--	if (s->parent.encrypted && failed_cert)
--		return GIT_ECERTIFICATE;
--
--	return 0;
--}
--
--static int curls_certificate(git_cert **out, git_stream *stream)
--{
--	int error;
--	CURLcode res;
--	struct curl_slist *slist;
--	struct curl_certinfo *certinfo;
--	git_vector strings = GIT_VECTOR_INIT;
--	curl_stream *s = (curl_stream *) stream;
--
--	if ((res = curl_easy_getinfo(s->handle, CURLINFO_CERTINFO, &certinfo)) != CURLE_OK)
--		return seterr_curl(s);
--
--	/* No information is available, can happen with SecureTransport */
--	if (certinfo->num_of_certs == 0) {
--		s->cert_info.parent.cert_type = GIT_CERT_NONE;
--		s->cert_info.data             = NULL;
--		s->cert_info.len              = 0;
--		return 0;
--	}
--
--	if ((error = git_vector_init(&strings, 8, NULL)) < 0)
--		return error;
--
--	for (slist = certinfo->certinfo[0]; slist; slist = slist->next) {
--		char *str = git__strdup(slist->data);
--		GITERR_CHECK_ALLOC(str);
--		git_vector_insert(&strings, str);
--	}
--
--	/* Copy the contents of the vector into a strarray so we can expose them */
--	s->cert_info_strings.strings = (char **) strings.contents;
--	s->cert_info_strings.count   = strings.length;
--
--	s->cert_info.parent.cert_type = GIT_CERT_STRARRAY;
--	s->cert_info.data             = &s->cert_info_strings;
--	s->cert_info.len              = strings.length;
--
--	*out = &s->cert_info.parent;
--
--	return 0;
--}
--
--static int curls_set_proxy(git_stream *stream, const git_proxy_options *proxy_opts)
--{
--	int error;
--	CURLcode res;
--	curl_stream *s = (curl_stream *) stream;
--
--	if ((error = git_proxy_options_dup(&s->proxy, proxy_opts)) < 0)
--		return error;
--
--	if ((res = curl_easy_setopt(s->handle, CURLOPT_PROXY, s->proxy.url)) != CURLE_OK)
--		return seterr_curl(s);
--
--	if ((res = curl_easy_setopt(s->handle, CURLOPT_PROXYAUTH, CURLAUTH_ANY)) != CURLE_OK)
--		return seterr_curl(s);
--
--	return 0;
--}
--
--static int wait_for(curl_socket_t fd, bool reading)
--{
--	int ret;
--	fd_set infd, outfd, errfd;
--
--	FD_ZERO(&infd);
--	FD_ZERO(&outfd);
--	FD_ZERO(&errfd);
--
--	assert(fd >= 0);
--	FD_SET(fd, &errfd);
--	if (reading)
--		FD_SET(fd, &infd);
--	else
--		FD_SET(fd, &outfd);
--
--	if ((ret = select(fd + 1, &infd, &outfd, &errfd, NULL)) < 0) {
--		giterr_set(GITERR_OS, "error in select");
--		return -1;
--	}
--
--	return 0;
--}
--
--static ssize_t curls_write(git_stream *stream, const char *data, size_t len, int flags)
--{
--	int error;
--	size_t off = 0, sent;
--	CURLcode res;
--	curl_stream *s = (curl_stream *) stream;
--
--	GIT_UNUSED(flags);
--
--	do {
--		if ((error = wait_for(s->socket, false)) < 0)
--			return error;
--
--		res = curl_easy_send(s->handle, data + off, len - off, &sent);
--		if (res == CURLE_OK)
--			off += sent;
--	} while ((res == CURLE_OK || res == CURLE_AGAIN) && off < len);
--
--	if (res != CURLE_OK)
--		return seterr_curl(s);
--
--	return len;
--}
--
--static ssize_t curls_read(git_stream *stream, void *data, size_t len)
--{
--	int error;
--	size_t read;
--	CURLcode res;
--	curl_stream *s = (curl_stream *) stream;
--
--	do {
--		if ((error = wait_for(s->socket, true)) < 0)
--			return error;
--
--		res = curl_easy_recv(s->handle, data, len, &read);
--	} while (res == CURLE_AGAIN);
--
--	if (res != CURLE_OK)
--		return seterr_curl(s);
--
--	return read;
--}
--
--static int curls_close(git_stream *stream)
--{
--	curl_stream *s = (curl_stream *) stream;
--
--	if (!s->handle)
--		return 0;
--
--	curl_easy_cleanup(s->handle);
--	s->handle = NULL;
--	s->socket = 0;
--
--	return 0;
--}
--
--static void curls_free(git_stream *stream)
--{
--	curl_stream *s = (curl_stream *) stream;
--
--	curls_close(stream);
--	git_strarray_free(&s->cert_info_strings);
--	git__free(s);
--}
--
--int git_curl_stream_new(git_stream **out, const char *host, const char *port)
--{
--	curl_stream *st;
--	CURL *handle;
--	int iport = 0, error;
--
--	st = git__calloc(1, sizeof(curl_stream));
--	GITERR_CHECK_ALLOC(st);
--
--	handle = curl_easy_init();
--	if (handle == NULL) {
--		giterr_set(GITERR_NET, "failed to create curl handle");
--		git__free(st);
--		return -1;
--	}
--
--	if ((error = git__strtol32(&iport, port, NULL, 10)) < 0) {
--		git__free(st);
--		return error;
--	}
--
--	curl_easy_setopt(handle, CURLOPT_URL, host);
--	curl_easy_setopt(handle, CURLOPT_ERRORBUFFER, st->curl_error);
--	curl_easy_setopt(handle, CURLOPT_PORT, iport);
--	curl_easy_setopt(handle, CURLOPT_CONNECT_ONLY, 1);
--	curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 1);
--	curl_easy_setopt(handle, CURLOPT_CERTINFO, 1);
--	curl_easy_setopt(handle, CURLOPT_HTTPPROXYTUNNEL, 1);
--	curl_easy_setopt(handle, CURLOPT_PROXYAUTH, CURLAUTH_ANY);
--
--	/* curl_easy_setopt(handle, CURLOPT_VERBOSE, 1); */
--
--	st->parent.version = GIT_STREAM_VERSION;
--	st->parent.encrypted = 0; /* we don't encrypt ourselves */
--	st->parent.proxy_support = 1;
--	st->parent.connect = curls_connect;
--	st->parent.certificate = curls_certificate;
--	st->parent.set_proxy = curls_set_proxy;
--	st->parent.read = curls_read;
--	st->parent.write = curls_write;
--	st->parent.close = curls_close;
--	st->parent.free = curls_free;
--	st->handle = handle;
--
--	*out = (git_stream *) st;
--	return 0;
--}
--
--#else
--
--#include "stream.h"
--
--int git_curl_stream_new(git_stream **out, const char *host, const char *port)
--{
--	GIT_UNUSED(out);
--	GIT_UNUSED(host);
--	GIT_UNUSED(port);
--
--	giterr_set(GITERR_NET, "curl is not supported in this version");
--	return -1;
--}
--
--
--#endif
-diff --git a/src/curl_stream.h b/src/curl_stream.h
-deleted file mode 100644
-index 283f0fe..0000000
---- a/src/curl_stream.h
-+++ /dev/null
-@@ -1,14 +0,0 @@
--/*
-- * Copyright (C) the libgit2 contributors. All rights reserved.
-- *
-- * This file is part of libgit2, distributed under the GNU GPL v2 with
-- * a Linking Exception. For full terms see the included COPYING file.
-- */
--#ifndef INCLUDE_curl_stream_h__
--#define INCLUDE_curl_stream_h__
--
--#include "git2/sys/stream.h"
--
--extern int git_curl_stream_new(git_stream **out, const char *host, const char *port);
--
--#endif
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index b03b96af9..0f5d78547 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -133,6 +133,9 @@ ELSE ()
+ ENDIF()
+ 
+ IF (USE_HTTPS)
++	# We try to find any packages our backends might use
++	FIND_PACKAGE(OpenSSL)
++	FIND_PACKAGE(mbedTLS)
+ 	IF (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+ 		FIND_PACKAGE(Security)
+ 		FIND_PACKAGE(CoreFoundation)
+@@ -149,8 +152,13 @@ IF (USE_HTTPS)
+ 			ENDIF()
+ 		ELSEIF (WINHTTP)
+ 			SET(HTTPS_BACKEND "WinHTTP")
+-		ELSE()
++		ELSEIF(OPENSSL_FOUND)
+ 			SET(HTTPS_BACKEND "OpenSSL")
++		ELSEIF(MBEDTLS_FOUND)
++			SET(HTTPS_BACKEND "mbedTLS")
++		ELSE()
++			MESSAGE(FATAL_ERROR "Unable to autodetect a usable HTTPS backend."
++				"Please pass the backend name explicitly (-DUSE_HTTPS=backend)")
+ 		ENDIF()
+ 	ELSE()
+ 		# Backend was explicitly set
+@@ -174,8 +182,6 @@ IF (USE_HTTPS)
+ 		LIST(APPEND LIBGIT2_LIBS ${COREFOUNDATION_LIBRARIES} ${SECURITY_LIBRARIES})
+ 		LIST(APPEND LIBGIT2_PC_LIBS ${COREFOUNDATION_LDFLAGS} ${SECURITY_LDFLAGS})
+ 	ELSEIF (HTTPS_BACKEND STREQUAL "OpenSSL")
+-		FIND_PACKAGE(OpenSSL)
+-
+ 		IF (NOT OPENSSL_FOUND)
+ 			MESSAGE(FATAL_ERROR "Asked for OpenSSL TLS backend, but it wasn't found")
+ 		ENDIF()
+@@ -185,6 +191,53 @@ IF (USE_HTTPS)
+ 		LIST(APPEND LIBGIT2_LIBS ${OPENSSL_LIBRARIES})
+ 		LIST(APPEND LIBGIT2_PC_LIBS ${OPENSSL_LDFLAGS})
+ 		LIST(APPEND LIBGIT2_PC_REQUIRES "openssl")
++	ELSEIF(HTTPS_BACKEND STREQUAL "mbedTLS")
++		IF (NOT MBEDTLS_FOUND)
++			MESSAGE(FATAL_ERROR "Asked for mbedTLS backend, but it wasn't found")
++		ENDIF()
++
++		IF(NOT CERT_LOCATION)
++			MESSAGE("Auto-detecting default certificates location")
++			IF(CMAKE_SYSTEM_NAME MATCHES Darwin)
++				# Check for an Homebrew installation
++				SET(OPENSSL_CMD "/usr/local/opt/openssl/bin/openssl")
++			ELSE()
++				SET(OPENSSL_CMD "openssl")
++			ENDIF()
++			EXECUTE_PROCESS(COMMAND ${OPENSSL_CMD} version -d OUTPUT_VARIABLE OPENSSL_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
++			IF(OPENSSL_DIR)
++				STRING(REGEX REPLACE "^OPENSSLDIR: \"(.*)\"$" "\\1/" OPENSSL_DIR ${OPENSSL_DIR})
++
++				SET(OPENSSL_CA_LOCATIONS
++					"ca-bundle.pem"             # OpenSUSE Leap 42.1
++					"cert.pem"                  # Ubuntu 14.04, FreeBSD
++					"certs/ca-certificates.crt" # Ubuntu 16.04
++					"certs/ca.pem"              # Debian 7
++				)
++				FOREACH(SUFFIX IN LISTS OPENSSL_CA_LOCATIONS)
++					SET(LOC "${OPENSSL_DIR}${SUFFIX}")
++					IF(NOT CERT_LOCATION AND EXISTS "${OPENSSL_DIR}${SUFFIX}")
++						SET(CERT_LOCATION ${LOC})
++					ENDIF()
++				ENDFOREACH()
++			ELSE()
++				MESSAGE("Unable to find OpenSSL executable. Please provide default certificate location via CERT_LOCATION")
++			ENDIF()
++		ENDIF()
++
++		IF(CERT_LOCATION)
++			IF(NOT EXISTS ${CERT_LOCATION})
++				MESSAGE(FATAL_ERROR "Cannot use CERT_LOCATION=${CERT_LOCATION} as it doesn't exist")
++			ENDIF()
++			ADD_FEATURE_INFO(CERT_LOCATION ON "using certificates from ${CERT_LOCATION}")
++			ADD_DEFINITIONS(-DGIT_DEFAULT_CERT_LOCATION="${CERT_LOCATION}")
++		ENDIF()
++
++		SET(GIT_MBEDTLS 1)
++		LIST(APPEND LIBGIT2_INCLUDES ${MBEDTLS_INCLUDE_DIR})
++		LIST(APPEND LIBGIT2_LIBS ${MBEDTLS_LIBRARIES})
++		LIST(APPEND LIBGIT2_PC_LIBS ${MBEDTLS_LDFLAGS})
++		LIST(APPEND LIBGIT2_PC_REQUIRES "mbedtls")
+ 	ELSEIF (HTTPS_BACKEND STREQUAL "WinHTTP")
+ 		# WinHTTP setup was handled in the WinHTTP-specific block above
+ 	ELSE()
+@@ -230,6 +283,11 @@ ELSEIF(SHA1_BACKEND STREQUAL "Win32")
+ ELSEIF(SHA1_BACKEND STREQUAL "CommonCrypto")
+ 	ADD_FEATURE_INFO(SHA ON "using CommonCrypto")
+ 	SET(GIT_SHA1_COMMON_CRYPTO 1)
++ELSEIF (SHA1_BACKEND STREQUAL "mbedTLS")
++	ADD_FEATURE_INFO(SHA ON "using mbedTLS")
++	SET(GIT_SHA1_MBEDTLS 1)
++	FILE(GLOB SRC_SHA1 src/hash/hash_mbedtls.c)
++	LIST(APPEND LIBGIT2_PC_REQUIRES "mbedtls")
+ ELSE()
+ 	MESSAGE(FATAL_ERROR "Asked for unknown SHA1 backend ${SHA1_BACKEND}")
+ ENDIF()
+diff --git a/src/features.h.in b/src/features.h.in
+index e03b7a251..f414c5843 100644
+--- a/src/features.h.in
++++ b/src/features.h.in
+@@ -27,10 +27,12 @@
+ #cmakedefine GIT_HTTPS 1
+ #cmakedefine GIT_OPENSSL 1
+ #cmakedefine GIT_SECURE_TRANSPORT 1
++#cmakedefine GIT_MBEDTLS 1
+ 
+ #cmakedefine GIT_SHA1_COLLISIONDETECT 1
+ #cmakedefine GIT_SHA1_WIN32 1
+ #cmakedefine GIT_SHA1_COMMON_CRYPTO 1
+ #cmakedefine GIT_SHA1_OPENSSL 1
++#cmakedefine GIT_SHA1_MBEDTLS 1
+ 
+ #endif
 diff --git a/src/global.c b/src/global.c
-index afa57e1..66f1d44 100644
+index 2f9b45bcd..02aedf57d 100644
 --- a/src/global.c
 +++ b/src/global.c
-@@ -10,7 +10,8 @@
- #include "sysdir.h"
+@@ -12,6 +12,7 @@
  #include "filter.h"
  #include "merge_driver.h"
--#include "openssl_stream.h"
+ #include "streams/curl.h"
 +#include "streams/mbedtls.h"
-+#include "streams/openssl.h"
+ #include "streams/openssl.h"
  #include "thread-utils.h"
  #include "git2/global.h"
- #include "transports/ssh.h"
-@@ -62,7 +63,8 @@ static int init_common(void)
- 		(ret = git_filter_global_init()) == 0 &&
+@@ -65,7 +66,8 @@ static int init_common(void)
  		(ret = git_merge_driver_global_init()) == 0 &&
  		(ret = git_transport_ssh_global_init()) == 0 &&
--		(ret = git_openssl_stream_global_init()) == 0)
-+		(ret = git_openssl_stream_global_init()) == 0 &&
+ 		(ret = git_openssl_stream_global_init()) == 0 &&
+-		(ret = git_curl_stream_global_init()) == 0)
++		(ret = git_curl_stream_global_init()) == 0 &&
 +		(ret = git_mbedtls_stream_global_init()) == 0)
  		ret = git_mwindow_global_init();
  
  	GIT_MEMORY_BARRIER;
-diff --git a/src/global.h b/src/global.h
-index 88f40aa..e4bbabf 100644
---- a/src/global.h
-+++ b/src/global.h
-@@ -24,11 +24,6 @@ typedef struct {
- 	git_thread *current_thread;
- } git_global_st;
- 
--#ifdef GIT_OPENSSL
--# include <openssl/ssl.h>
--extern SSL_CTX *git__ssl_ctx;
--#endif
--
- git_global_st *git__global_state(void);
- 
- extern git_mutex git__mwindow_mutex;
 diff --git a/src/hash.h b/src/hash.h
-index 0db0339..cba4462 100644
+index 31eaf8889..93765adf3 100644
 --- a/src/hash.h
 +++ b/src/hash.h
-@@ -24,6 +24,8 @@ void git_hash_ctx_cleanup(git_hash_ctx *ctx);
+@@ -26,6 +26,8 @@ void git_hash_ctx_cleanup(git_hash_ctx *ctx);
  # include "hash/hash_openssl.h"
  #elif defined(GIT_SHA1_WIN32)
  # include "hash/hash_win32.h"
-+#elif defined(MBEDTLS_SHA1)
++#elif defined(GIT_SHA1_MBEDTLS)
 +# include "hash/hash_mbedtls.h"
  #else
  # include "hash/hash_generic.h"
  #endif
 diff --git a/src/hash/hash_mbedtls.c b/src/hash/hash_mbedtls.c
 new file mode 100644
-index 0000000..a19d763
+index 000000000..a19d76308
 --- /dev/null
 +++ b/src/hash/hash_mbedtls.c
 @@ -0,0 +1,38 @@
@@ -875,7 +374,7 @@ index 0000000..a19d763
 +}
 diff --git a/src/hash/hash_mbedtls.h b/src/hash/hash_mbedtls.h
 new file mode 100644
-index 0000000..24196c5
+index 000000000..24196c5bf
 --- /dev/null
 +++ b/src/hash/hash_mbedtls.h
 @@ -0,0 +1,20 @@
@@ -899,801 +398,11 @@ index 0000000..24196c5
 +#define git_hash_ctx_init(ctx) git_hash_init(ctx)
 +
 +#endif /* INCLUDE_hash_mbedtld_h__ */
-diff --git a/src/openssl_stream.c b/src/openssl_stream.c
-deleted file mode 100644
-index 759c501..0000000
---- a/src/openssl_stream.c
-+++ /dev/null
-@@ -1,656 +0,0 @@
--/*
-- * Copyright (C) the libgit2 contributors. All rights reserved.
-- *
-- * This file is part of libgit2, distributed under the GNU GPL v2 with
-- * a Linking Exception. For full terms see the included COPYING file.
-- */
--
--#ifdef GIT_OPENSSL
--
--#include <ctype.h>
--
--#include "global.h"
--#include "posix.h"
--#include "stream.h"
--#include "socket_stream.h"
--#include "openssl_stream.h"
--#include "netops.h"
--#include "git2/transport.h"
--#include "git2/sys/openssl.h"
--
--#ifdef GIT_CURL
--# include "curl_stream.h"
--#endif
--
--#ifndef GIT_WIN32
--# include <sys/types.h>
--# include <sys/socket.h>
--# include <netinet/in.h>
--#endif
--
--#include <openssl/ssl.h>
--#include <openssl/err.h>
--#include <openssl/x509v3.h>
--#include <openssl/bio.h>
--
--SSL_CTX *git__ssl_ctx;
--
--#define GIT_SSL_DEFAULT_CIPHERS "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-DSS-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA:DHE-DSS-AES128-SHA256:DHE-DSS-AES256-SHA256:DHE-DSS-AES128-SHA:DHE-DSS-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA"
--
--#if defined(GIT_THREADS) && OPENSSL_VERSION_NUMBER < 0x10100000L
--
--static git_mutex *openssl_locks;
--
--static void openssl_locking_function(
--	int mode, int n, const char *file, int line)
--{
--	int lock;
--
--	GIT_UNUSED(file);
--	GIT_UNUSED(line);
--
--	lock = mode & CRYPTO_LOCK;
--
--	if (lock) {
--		git_mutex_lock(&openssl_locks[n]);
--	} else {
--		git_mutex_unlock(&openssl_locks[n]);
--	}
--}
--
--static void shutdown_ssl_locking(void)
--{
--	int num_locks, i;
--
--	num_locks = CRYPTO_num_locks();
--	CRYPTO_set_locking_callback(NULL);
--
--	for (i = 0; i < num_locks; ++i)
--		git_mutex_free(&openssl_locks[i]);
--	git__free(openssl_locks);
--}
--
--#endif /* GIT_THREADS && OPENSSL_VERSION_NUMBER < 0x10100000L */
--
--static BIO_METHOD *git_stream_bio_method;
--static int init_bio_method(void);
--
--/**
-- * This function aims to clean-up the SSL context which
-- * we allocated.
-- */
--static void shutdown_ssl(void)
--{
--	if (git_stream_bio_method) {
--		BIO_meth_free(git_stream_bio_method);
--		git_stream_bio_method = NULL;
--	}
--
--	if (git__ssl_ctx) {
--		SSL_CTX_free(git__ssl_ctx);
--		git__ssl_ctx = NULL;
--	}
--}
--
--int git_openssl_stream_global_init(void)
--{
--#ifdef GIT_OPENSSL
--	long ssl_opts = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
--	const char *ciphers = git_libgit2__ssl_ciphers();
--
--	/* Older OpenSSL and MacOS OpenSSL doesn't have this */
--#ifdef SSL_OP_NO_COMPRESSION
--	ssl_opts |= SSL_OP_NO_COMPRESSION;
--#endif
--
--#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
--	SSL_load_error_strings();
--	OpenSSL_add_ssl_algorithms();
--#else
--	OPENSSL_init_ssl(0, NULL);
--#endif
--
--	/*
--	 * Load SSLv{2,3} and TLSv1 so that we can talk with servers
--	 * which use the SSL hellos, which are often used for
--	 * compatibility. We then disable SSL so we only allow OpenSSL
--	 * to speak TLSv1 to perform the encryption itself.
--	 */
--	git__ssl_ctx = SSL_CTX_new(SSLv23_method());
--	SSL_CTX_set_options(git__ssl_ctx, ssl_opts);
--	SSL_CTX_set_mode(git__ssl_ctx, SSL_MODE_AUTO_RETRY);
--	SSL_CTX_set_verify(git__ssl_ctx, SSL_VERIFY_NONE, NULL);
--	if (!SSL_CTX_set_default_verify_paths(git__ssl_ctx)) {
--		SSL_CTX_free(git__ssl_ctx);
--		git__ssl_ctx = NULL;
--		return -1;
--	}
--
--	if (!ciphers) {
--		ciphers = GIT_SSL_DEFAULT_CIPHERS;
--	}
--
--	if(!SSL_CTX_set_cipher_list(git__ssl_ctx, ciphers)) {
--		SSL_CTX_free(git__ssl_ctx);
--		git__ssl_ctx = NULL;
--		return -1;
--	}
--
--	if (init_bio_method() < 0) {
--		SSL_CTX_free(git__ssl_ctx);
--		git__ssl_ctx = NULL;
--		return -1;
--	}
--
--#endif
--
--	git__on_shutdown(shutdown_ssl);
--
--	return 0;
--}
--
--int git_openssl_set_locking(void)
--{
--#if defined(GIT_THREADS) && OPENSSL_VERSION_NUMBER < 0x10100000L
--	int num_locks, i;
--
--	num_locks = CRYPTO_num_locks();
--	openssl_locks = git__calloc(num_locks, sizeof(git_mutex));
--	GITERR_CHECK_ALLOC(openssl_locks);
--
--	for (i = 0; i < num_locks; i++) {
--		if (git_mutex_init(&openssl_locks[i]) != 0) {
--			giterr_set(GITERR_SSL, "failed to initialize openssl locks");
--			return -1;
--		}
--	}
--
--	CRYPTO_set_locking_callback(openssl_locking_function);
--	git__on_shutdown(shutdown_ssl_locking);
--	return 0;
--#elif OPENSSL_VERSION_NUMBER >= 0x10100000L
--	return 0;
--#else
--	giterr_set(GITERR_THREAD, "libgit2 was not built with threads");
--	return -1;
--#endif
--}
--
--
--static int bio_create(BIO *b)
--{
--	BIO_set_init(b, 1);
--	BIO_set_data(b, NULL);
--
--	return 1;
--}
--
--static int bio_destroy(BIO *b)
--{
--	if (!b)
--		return 0;
--
--	BIO_set_data(b, NULL);
--
--	return 1;
--}
--
--static int bio_read(BIO *b, char *buf, int len)
--{
--	git_stream *io = (git_stream *) BIO_get_data(b);
--
--	return (int) git_stream_read(io, buf, len);
--}
--
--static int bio_write(BIO *b, const char *buf, int len)
--{
--	git_stream *io = (git_stream *) BIO_get_data(b);
--
--	return (int) git_stream_write(io, buf, len, 0);
--}
--
--static long bio_ctrl(BIO *b, int cmd, long num, void *ptr)
--{
--	GIT_UNUSED(b);
--	GIT_UNUSED(num);
--	GIT_UNUSED(ptr);
--
--	if (cmd == BIO_CTRL_FLUSH)
--		return 1;
--
--	return 0;
--}
--
--static int bio_gets(BIO *b, char *buf, int len)
--{
--	GIT_UNUSED(b);
--	GIT_UNUSED(buf);
--	GIT_UNUSED(len);
--	return -1;
--}
--
--static int bio_puts(BIO *b, const char *str)
--{
--	return bio_write(b, str, strlen(str));
--}
--
--static int init_bio_method(void)
--{
--	/* Set up the BIO_METHOD we use for wrapping our own stream implementations */
--	git_stream_bio_method = BIO_meth_new(BIO_TYPE_SOURCE_SINK | BIO_get_new_index(), "git_stream");
--	GITERR_CHECK_ALLOC(git_stream_bio_method);
--
--	BIO_meth_set_write(git_stream_bio_method, bio_write);
--	BIO_meth_set_read(git_stream_bio_method, bio_read);
--	BIO_meth_set_puts(git_stream_bio_method, bio_puts);
--	BIO_meth_set_gets(git_stream_bio_method, bio_gets);
--	BIO_meth_set_ctrl(git_stream_bio_method, bio_ctrl);
--	BIO_meth_set_create(git_stream_bio_method, bio_create);
--	BIO_meth_set_destroy(git_stream_bio_method, bio_destroy);
--
--	return 0;
--}
--
--static int ssl_set_error(SSL *ssl, int error)
--{
--	int err;
--	unsigned long e;
--
--	err = SSL_get_error(ssl, error);
--
--	assert(err != SSL_ERROR_WANT_READ);
--	assert(err != SSL_ERROR_WANT_WRITE);
--
--	switch (err) {
--	case SSL_ERROR_WANT_CONNECT:
--	case SSL_ERROR_WANT_ACCEPT:
--		giterr_set(GITERR_NET, "SSL error: connection failure");
--		break;
--	case SSL_ERROR_WANT_X509_LOOKUP:
--		giterr_set(GITERR_NET, "SSL error: x509 error");
--		break;
--	case SSL_ERROR_SYSCALL:
--		e = ERR_get_error();
--		if (e > 0) {
--			giterr_set(GITERR_NET, "SSL error: %s",
--					ERR_error_string(e, NULL));
--			break;
--		} else if (error < 0) {
--			giterr_set(GITERR_OS, "SSL error: syscall failure");
--			break;
--		}
--		giterr_set(GITERR_NET, "SSL error: received early EOF");
--		return GIT_EEOF;
--		break;
--	case SSL_ERROR_SSL:
--		e = ERR_get_error();
--		giterr_set(GITERR_NET, "SSL error: %s",
--				ERR_error_string(e, NULL));
--		break;
--	case SSL_ERROR_NONE:
--	case SSL_ERROR_ZERO_RETURN:
--	default:
--		giterr_set(GITERR_NET, "SSL error: unknown error");
--		break;
--	}
--	return -1;
--}
--
--static int ssl_teardown(SSL *ssl)
--{
--	int ret;
--
--	ret = SSL_shutdown(ssl);
--	if (ret < 0)
--		ret = ssl_set_error(ssl, ret);
--	else
--		ret = 0;
--
--	return ret;
--}
--
--static int check_host_name(const char *name, const char *host)
--{
--	if (!strcasecmp(name, host))
--		return 0;
--
--	if (gitno__match_host(name, host) < 0)
--		return -1;
--
--	return 0;
--}
--
--static int verify_server_cert(SSL *ssl, const char *host)
--{
--	X509 *cert;
--	X509_NAME *peer_name;
--	ASN1_STRING *str;
--	unsigned char *peer_cn = NULL;
--	int matched = -1, type = GEN_DNS;
--	GENERAL_NAMES *alts;
--	struct in6_addr addr6;
--	struct in_addr addr4;
--	void *addr;
--	int i = -1,j;
--
--	if (SSL_get_verify_result(ssl) != X509_V_OK) {
--		giterr_set(GITERR_SSL, "the SSL certificate is invalid");
--		return GIT_ECERTIFICATE;
--	}
--
--	/* Try to parse the host as an IP address to see if it is */
--	if (p_inet_pton(AF_INET, host, &addr4)) {
--		type = GEN_IPADD;
--		addr = &addr4;
--	} else {
--		if(p_inet_pton(AF_INET6, host, &addr6)) {
--			type = GEN_IPADD;
--			addr = &addr6;
--		}
--	}
--
--
--	cert = SSL_get_peer_certificate(ssl);
--	if (!cert) {
--		giterr_set(GITERR_SSL, "the server did not provide a certificate");
--		return -1;
--	}
--
--	/* Check the alternative names */
--	alts = X509_get_ext_d2i(cert, NID_subject_alt_name, NULL, NULL);
--	if (alts) {
--		int num;
--
--		num = sk_GENERAL_NAME_num(alts);
--		for (i = 0; i < num && matched != 1; i++) {
--			const GENERAL_NAME *gn = sk_GENERAL_NAME_value(alts, i);
--			const char *name = (char *) ASN1_STRING_get0_data(gn->d.ia5);
--			size_t namelen = (size_t) ASN1_STRING_length(gn->d.ia5);
--
--			/* Skip any names of a type we're not looking for */
--			if (gn->type != type)
--				continue;
--
--			if (type == GEN_DNS) {
--				/* If it contains embedded NULs, don't even try */
--				if (memchr(name, '\0', namelen))
--					continue;
--
--				if (check_host_name(name, host) < 0)
--					matched = 0;
--				else
--					matched = 1;
--			} else if (type == GEN_IPADD) {
--				/* Here name isn't so much a name but a binary representation of the IP */
--				matched = !!memcmp(name, addr, namelen);
--			}
--		}
--	}
--	GENERAL_NAMES_free(alts);
--
--	if (matched == 0)
--		goto cert_fail_name;
--
--	if (matched == 1)
--		return 0;
--
--	/* If no alternative names are available, check the common name */
--	peer_name = X509_get_subject_name(cert);
--	if (peer_name == NULL)
--		goto on_error;
--
--	if (peer_name) {
--		/* Get the index of the last CN entry */
--		while ((j = X509_NAME_get_index_by_NID(peer_name, NID_commonName, i)) >= 0)
--			i = j;
--	}
--
--	if (i < 0)
--		goto on_error;
--
--	str = X509_NAME_ENTRY_get_data(X509_NAME_get_entry(peer_name, i));
--	if (str == NULL)
--		goto on_error;
--
--	/* Work around a bug in OpenSSL whereby ASN1_STRING_to_UTF8 fails if it's already in utf-8 */
--	if (ASN1_STRING_type(str) == V_ASN1_UTF8STRING) {
--		int size = ASN1_STRING_length(str);
--
--		if (size > 0) {
--			peer_cn = OPENSSL_malloc(size + 1);
--			GITERR_CHECK_ALLOC(peer_cn);
--			memcpy(peer_cn, ASN1_STRING_get0_data(str), size);
--			peer_cn[size] = '\0';
--		} else {
--			goto cert_fail_name;
--		}
--	} else {
--		int size = ASN1_STRING_to_UTF8(&peer_cn, str);
--		GITERR_CHECK_ALLOC(peer_cn);
--		if (memchr(peer_cn, '\0', size))
--			goto cert_fail_name;
--	}
--
--	if (check_host_name((char *)peer_cn, host) < 0)
--		goto cert_fail_name;
--
--	OPENSSL_free(peer_cn);
--
--	return 0;
--
--on_error:
--	OPENSSL_free(peer_cn);
--	return ssl_set_error(ssl, 0);
--
--cert_fail_name:
--	OPENSSL_free(peer_cn);
--	giterr_set(GITERR_SSL, "hostname does not match certificate");
--	return GIT_ECERTIFICATE;
--}
--
--typedef struct {
--	git_stream parent;
--	git_stream *io;
--	bool connected;
--	char *host;
--	SSL *ssl;
--	git_cert_x509 cert_info;
--} openssl_stream;
--
--int openssl_close(git_stream *stream);
--
--int openssl_connect(git_stream *stream)
--{
--	int ret;
--	BIO *bio;
--	openssl_stream *st = (openssl_stream *) stream;
--
--	if ((ret = git_stream_connect(st->io)) < 0)
--		return ret;
--
--	st->connected = true;
--
--	bio = BIO_new(git_stream_bio_method);
--	GITERR_CHECK_ALLOC(bio);
--
--	BIO_set_data(bio, st->io);
--	SSL_set_bio(st->ssl, bio, bio);
--
--	/* specify the host in case SNI is needed */
--#ifdef SSL_CTRL_SET_TLSEXT_HOSTNAME
--	SSL_set_tlsext_host_name(st->ssl, st->host);
--#endif
--
--	if ((ret = SSL_connect(st->ssl)) <= 0)
--		return ssl_set_error(st->ssl, ret);
--
--	return verify_server_cert(st->ssl, st->host);
--}
--
--int openssl_certificate(git_cert **out, git_stream *stream)
--{
--	openssl_stream *st = (openssl_stream *) stream;
--	int len;
--	X509 *cert = SSL_get_peer_certificate(st->ssl);
--	unsigned char *guard, *encoded_cert;
--
--	/* Retrieve the length of the certificate first */
--	len = i2d_X509(cert, NULL);
--	if (len < 0) {
--		giterr_set(GITERR_NET, "failed to retrieve certificate information");
--		return -1;
--	}
--
--	encoded_cert = git__malloc(len);
--	GITERR_CHECK_ALLOC(encoded_cert);
--	/* i2d_X509 makes 'guard' point to just after the data */
--	guard = encoded_cert;
--
--	len = i2d_X509(cert, &guard);
--	if (len < 0) {
--		git__free(encoded_cert);
--		giterr_set(GITERR_NET, "failed to retrieve certificate information");
--		return -1;
--	}
--
--	st->cert_info.parent.cert_type = GIT_CERT_X509;
--	st->cert_info.data = encoded_cert;
--	st->cert_info.len = len;
--
--	*out = &st->cert_info.parent;
--
--	return 0;
--}
--
--static int openssl_set_proxy(git_stream *stream, const git_proxy_options *proxy_opts)
--{
--	openssl_stream *st = (openssl_stream *) stream;
--
--	return git_stream_set_proxy(st->io, proxy_opts);
--}
--
--ssize_t openssl_write(git_stream *stream, const char *data, size_t len, int flags)
--{
--	openssl_stream *st = (openssl_stream *) stream;
--	int ret;
--
--	GIT_UNUSED(flags);
--
--	if ((ret = SSL_write(st->ssl, data, len)) <= 0) {
--		return ssl_set_error(st->ssl, ret);
--	}
--
--	return ret;
--}
--
--ssize_t openssl_read(git_stream *stream, void *data, size_t len)
--{
--	openssl_stream *st = (openssl_stream *) stream;
--	int ret;
--
--	if ((ret = SSL_read(st->ssl, data, len)) <= 0)
--		return ssl_set_error(st->ssl, ret);
--
--	return ret;
--}
--
--int openssl_close(git_stream *stream)
--{
--	openssl_stream *st = (openssl_stream *) stream;
--	int ret;
--
--	if (st->connected && (ret = ssl_teardown(st->ssl)) < 0)
--		return -1;
--
--	st->connected = false;
--
--	return git_stream_close(st->io);
--}
--
--void openssl_free(git_stream *stream)
--{
--	openssl_stream *st = (openssl_stream *) stream;
--
--	SSL_free(st->ssl);
--	git__free(st->host);
--	git__free(st->cert_info.data);
--	git_stream_free(st->io);
--	git__free(st);
--}
--
--int git_openssl_stream_new(git_stream **out, const char *host, const char *port)
--{
--	int error;
--	openssl_stream *st;
--
--	st = git__calloc(1, sizeof(openssl_stream));
--	GITERR_CHECK_ALLOC(st);
--
--	st->io = NULL;
--#ifdef GIT_CURL
--	error = git_curl_stream_new(&st->io, host, port);
--#else
--	error = git_socket_stream_new(&st->io, host, port);
--#endif
--
--	if (error < 0)
--		goto out_err;
--
--	st->ssl = SSL_new(git__ssl_ctx);
--	if (st->ssl == NULL) {
--		giterr_set(GITERR_SSL, "failed to create ssl object");
--		error = -1;
--		goto out_err;
--	}
--
--	st->host = git__strdup(host);
--	GITERR_CHECK_ALLOC(st->host);
--
--	st->parent.version = GIT_STREAM_VERSION;
--	st->parent.encrypted = 1;
--	st->parent.proxy_support = git_stream_supports_proxy(st->io);
--	st->parent.connect = openssl_connect;
--	st->parent.certificate = openssl_certificate;
--	st->parent.set_proxy = openssl_set_proxy;
--	st->parent.read = openssl_read;
--	st->parent.write = openssl_write;
--	st->parent.close = openssl_close;
--	st->parent.free = openssl_free;
--
--	*out = (git_stream *) st;
--	return 0;
--
--out_err:
--	git_stream_free(st->io);
--	git__free(st);
--
--	return error;
--}
--
--#else
--
--#include "stream.h"
--#include "git2/sys/openssl.h"
--
--int git_openssl_stream_global_init(void)
--{
--	return 0;
--}
--
--int git_openssl_set_locking(void)
--{
--	giterr_set(GITERR_SSL, "libgit2 was not built with OpenSSL support");
--	return -1;
--}
--
--int git_openssl_stream_new(git_stream **out, const char *host, const char *port)
--{
--	GIT_UNUSED(out);
--	GIT_UNUSED(host);
--	GIT_UNUSED(port);
--
--	giterr_set(GITERR_SSL, "openssl is not supported in this version");
--	return -1;
--}
--
--#endif
-diff --git a/src/openssl_stream.h b/src/openssl_stream.h
-deleted file mode 100644
-index f5e59da..0000000
---- a/src/openssl_stream.h
-+++ /dev/null
-@@ -1,122 +0,0 @@
--/*
-- * Copyright (C) the libgit2 contributors. All rights reserved.
-- *
-- * This file is part of libgit2, distributed under the GNU GPL v2 with
-- * a Linking Exception. For full terms see the included COPYING file.
-- */
--#ifndef INCLUDE_openssl_stream_h__
--#define INCLUDE_openssl_stream_h__
--
--#include "git2/sys/stream.h"
--
--extern int git_openssl_stream_global_init(void);
--
--extern int git_openssl_stream_new(git_stream **out, const char *host, const char *port);
--
--/*
-- * OpenSSL 1.1 made BIO opaque so we have to use functions to interact with it
-- * which do not exist in previous versions. We define these inline functions so
-- * we can program against the interface instead of littering the implementation
-- * with ifdefs.
-- */
--#ifdef GIT_OPENSSL
--# include <openssl/ssl.h>
--# include <openssl/err.h>
--# include <openssl/x509v3.h>
--# include <openssl/bio.h>
--
--
--
--# if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
--
--GIT_INLINE(BIO_METHOD*) BIO_meth_new(int type, const char *name)
--{
--	BIO_METHOD *meth = git__calloc(1, sizeof(BIO_METHOD));
--	if (!meth) {
--		return NULL;
--	}
--
--	meth->type = type;
--	meth->name = name;
--
--	return meth;
--}
--
--GIT_INLINE(void) BIO_meth_free(BIO_METHOD *biom)
--{
--	git__free(biom);
--}
--
--GIT_INLINE(int) BIO_meth_set_write(BIO_METHOD *biom, int (*write) (BIO *, const char *, int))
--{
--	biom->bwrite = write;
--	return 1;
--}
--
--GIT_INLINE(int) BIO_meth_set_read(BIO_METHOD *biom, int (*read) (BIO *, char *, int))
--{
--	biom->bread = read;
--	return 1;
--}
--
--GIT_INLINE(int) BIO_meth_set_puts(BIO_METHOD *biom, int (*puts) (BIO *, const char *))
--{
--	biom->bputs = puts;
--	return 1;
--}
--
--GIT_INLINE(int) BIO_meth_set_gets(BIO_METHOD *biom, int (*gets) (BIO *, char *, int))
--
--{
--	biom->bgets = gets;
--	return 1;
--}
--
--GIT_INLINE(int) BIO_meth_set_ctrl(BIO_METHOD *biom, long (*ctrl) (BIO *, int, long, void *))
--{
--	biom->ctrl = ctrl;
--	return 1;
--}
--
--GIT_INLINE(int) BIO_meth_set_create(BIO_METHOD *biom, int (*create) (BIO *))
--{
--	biom->create = create;
--	return 1;
--}
--
--GIT_INLINE(int) BIO_meth_set_destroy(BIO_METHOD *biom, int (*destroy) (BIO *))
--{
--	biom->destroy = destroy;
--	return 1;
--}
--
--GIT_INLINE(int) BIO_get_new_index(void)
--{
--	/* This exists as of 1.1 so before we'd just have 0 */
--	return 0;
--}
--
--GIT_INLINE(void) BIO_set_init(BIO *b, int init)
--{
--	b->init = init;
--}
--
--GIT_INLINE(void) BIO_set_data(BIO *a, void *ptr)
--{
--	a->ptr = ptr;
--}
--
--GIT_INLINE(void*) BIO_get_data(BIO *a)
--{
--	return a->ptr;
--}
--
--GIT_INLINE(const unsigned char *) ASN1_STRING_get0_data(const ASN1_STRING *x)
--{
--	return ASN1_STRING_data((ASN1_STRING *)x);
--}
--
--# endif // OpenSSL < 1.1
--#endif // GIT_OPENSSL
--
--#endif
 diff --git a/src/settings.c b/src/settings.c
-index 52b861b..3a46f0d 100644
+index 2a52ffbf6..f6bc5b270 100644
 --- a/src/settings.c
 +++ b/src/settings.c
-@@ -9,6 +9,10 @@
+@@ -11,6 +11,10 @@
  # include <openssl/err.h>
  #endif
  
@@ -1702,1006 +411,55 @@ index 52b861b..3a46f0d 100644
 +#endif
 +
  #include <git2.h>
- #include "common.h"
  #include "sysdir.h"
-@@ -18,6 +22,8 @@
- #include "odb.h"
+ #include "cache.h"
+@@ -20,6 +24,7 @@
  #include "refs.h"
  #include "transports/smart.h"
-+#include "streams/openssl.h"
+ #include "streams/openssl.h"
 +#include "streams/mbedtls.h"
  
  void git_libgit2_version(int *major, int *minor, int *rev)
  {
-@@ -171,14 +177,19 @@ int git_libgit2_opts(int key, ...)
- 		{
- 			const char *file = va_arg(ap, const char *);
+@@ -175,6 +180,15 @@ int git_libgit2_opts(int key, ...)
  			const char *path = va_arg(ap, const char *);
--			if (!SSL_CTX_load_verify_locations(git__ssl_ctx, file, path)) {
--				giterr_set(GITERR_NET, "SSL error: %s",
--					ERR_error_string(ERR_get_error(), NULL));
--				error = -1;
--			}
-+			error = git_openssl_set_cert_file(file, path);
-+		}
-+#elif GIT_MBEDTLS
+ 			error = git_openssl__set_cert_location(file, path);
+ 		}
++#elif defined(GIT_MBEDTLS)
 +		{
 +			const char *file = va_arg(ap, const char *);
 +			const char *path = va_arg(ap, const char *);
 +			if (file)
-+				error = git_mbedtls_set_cert_file(file, 0);
++				error = git_mbedtls__set_cert_location(file, 0);
 +			if (error && path)
-+				error = git_mbedtls_set_cert_file(path, 0);
- 		}
- #else
--		giterr_set(GITERR_NET, "cannot set certificate locations: OpenSSL is not enabled");
-+		giterr_set(GITERR_NET, "cannot set certificate locations: OpenSSL or mbedTLS is not enabled");
- 		error = -1;
- #endif
- 		break;
-diff --git a/src/socket_stream.c b/src/socket_stream.c
-deleted file mode 100644
-index c0a1684..0000000
---- a/src/socket_stream.c
-+++ /dev/null
-@@ -1,210 +0,0 @@
--/*
-- * Copyright (C) the libgit2 contributors. All rights reserved.
-- *
-- * This file is part of libgit2, distributed under the GNU GPL v2 with
-- * a Linking Exception. For full terms see the included COPYING file.
-- */
--
--#include "common.h"
--#include "posix.h"
--#include "netops.h"
--#include "stream.h"
--#include "socket_stream.h"
--
--#ifndef _WIN32
--#	include <sys/types.h>
--#	include <sys/socket.h>
--#	include <sys/select.h>
--#	include <sys/time.h>
--#	include <netdb.h>
--#	include <netinet/in.h>
--#       include <arpa/inet.h>
--#else
--#	include <winsock2.h>
--#	include <ws2tcpip.h>
--#	ifdef _MSC_VER
--#		pragma comment(lib, "ws2_32")
--#	endif
--#endif
--
--#ifdef GIT_WIN32
--static void net_set_error(const char *str)
--{
--	int error = WSAGetLastError();
--	char * win32_error = git_win32_get_error_message(error);
--
--	if (win32_error) {
--		giterr_set(GITERR_NET, "%s: %s", str, win32_error);
--		git__free(win32_error);
--	} else {
--		giterr_set(GITERR_NET, str);
--	}
--}
--#else
--static void net_set_error(const char *str)
--{
--	giterr_set(GITERR_NET, "%s: %s", str, strerror(errno));
--}
--#endif
--
--static int close_socket(GIT_SOCKET s)
--{
--	if (s == INVALID_SOCKET)
--		return 0;
--
--#ifdef GIT_WIN32
--	if (SOCKET_ERROR == closesocket(s))
--		return -1;
--
--	if (0 != WSACleanup()) {
--		giterr_set(GITERR_OS, "winsock cleanup failed");
--		return -1;
--	}
--
--	return 0;
--#else
--	return close(s);
--#endif
--
--}
--
--int socket_connect(git_stream *stream)
--{
--	struct addrinfo *info = NULL, *p;
--	struct addrinfo hints;
--	git_socket_stream *st = (git_socket_stream *) stream;
--	GIT_SOCKET s = INVALID_SOCKET;
--	int ret;
--
--#ifdef GIT_WIN32
--	/* on win32, the WSA context needs to be initialized
--	 * before any socket calls can be performed */
--	WSADATA wsd;
--
--	if (WSAStartup(MAKEWORD(2,2), &wsd) != 0) {
--		giterr_set(GITERR_OS, "winsock init failed");
--		return -1;
--	}
--
--	if (LOBYTE(wsd.wVersion) != 2 || HIBYTE(wsd.wVersion) != 2) {
--		WSACleanup();
--		giterr_set(GITERR_OS, "winsock init failed");
--		return -1;
--	}
--#endif
--
--	memset(&hints, 0x0, sizeof(struct addrinfo));
--	hints.ai_socktype = SOCK_STREAM;
--	hints.ai_family = AF_UNSPEC;
--
--	if ((ret = p_getaddrinfo(st->host, st->port, &hints, &info)) != 0) {
--		giterr_set(GITERR_NET,
--			   "failed to resolve address for %s: %s", st->host, p_gai_strerror(ret));
--		return -1;
--	}
--
--	for (p = info; p != NULL; p = p->ai_next) {
--		s = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
--
--		if (s == INVALID_SOCKET)
--			continue;
--
--		if (connect(s, p->ai_addr, (socklen_t)p->ai_addrlen) == 0)
--			break;
--
--		/* If we can't connect, try the next one */
--		close_socket(s);
--		s = INVALID_SOCKET;
--	}
--
--	/* Oops, we couldn't connect to any address */
--	if (s == INVALID_SOCKET && p == NULL) {
--		giterr_set(GITERR_OS, "failed to connect to %s", st->host);
--		p_freeaddrinfo(info);
--		return -1;
--	}
--
--	st->s = s;
--	p_freeaddrinfo(info);
--	return 0;
--}
--
--ssize_t socket_write(git_stream *stream, const char *data, size_t len, int flags)
--{
--	ssize_t ret;
--	size_t off = 0;
--	git_socket_stream *st = (git_socket_stream *) stream;
--
--	while (off < len) {
--		errno = 0;
--		ret = p_send(st->s, data + off, len - off, flags);
--		if (ret < 0) {
--			net_set_error("Error sending data");
--			return -1;
--		}
--
--		off += ret;
--	}
--
--	return off;
--}
--
--ssize_t socket_read(git_stream *stream, void *data, size_t len)
--{
--	ssize_t ret;
--	git_socket_stream *st = (git_socket_stream *) stream;
--
--	if ((ret = p_recv(st->s, data, len, 0)) < 0)
--		net_set_error("Error receiving socket data");
--
--	return ret;
--}
--
--int socket_close(git_stream *stream)
--{
--	git_socket_stream *st = (git_socket_stream *) stream;
--	int error;
--
--	error = close_socket(st->s);
--	st->s = INVALID_SOCKET;
--
--	return error;
--}
--
--void socket_free(git_stream *stream)
--{
--	git_socket_stream *st = (git_socket_stream *) stream;
--
--	git__free(st->host);
--	git__free(st->port);
--	git__free(st);
--}
--
--int git_socket_stream_new(git_stream **out, const char *host, const char *port)
--{
--	git_socket_stream *st;
--
--	assert(out && host);
--
--	st = git__calloc(1, sizeof(git_socket_stream));
--	GITERR_CHECK_ALLOC(st);
--
--	st->host = git__strdup(host);
--	GITERR_CHECK_ALLOC(st->host);
--
--	if (port) {
--		st->port = git__strdup(port);
--		GITERR_CHECK_ALLOC(st->port);
--	}
--
--	st->parent.version = GIT_STREAM_VERSION;
--	st->parent.connect = socket_connect;
--	st->parent.write = socket_write;
--	st->parent.read = socket_read;
--	st->parent.close = socket_close;
--	st->parent.free = socket_free;
--	st->s = INVALID_SOCKET;
--
--	*out = (git_stream *) st;
--	return 0;
--}
-diff --git a/src/socket_stream.h b/src/socket_stream.h
-deleted file mode 100644
-index 8e9949f..0000000
---- a/src/socket_stream.h
-+++ /dev/null
-@@ -1,21 +0,0 @@
--/*
-- * Copyright (C) the libgit2 contributors. All rights reserved.
-- *
-- * This file is part of libgit2, distributed under the GNU GPL v2 with
-- * a Linking Exception. For full terms see the included COPYING file.
-- */
--#ifndef INCLUDE_socket_stream_h__
--#define INCLUDE_socket_stream_h__
--
--#include "netops.h"
--
--typedef struct {
--	git_stream parent;
--	char *host;
--	char *port;
--	GIT_SOCKET s;
--} git_socket_stream;
--
--extern int git_socket_stream_new(git_stream **out, const char *host, const char *port);
--
--#endif
-diff --git a/src/stransport_stream.c b/src/stransport_stream.c
-deleted file mode 100644
-index 50ed945..0000000
---- a/src/stransport_stream.c
-+++ /dev/null
-@@ -1,294 +0,0 @@
--/*
-- * Copyright (C) the libgit2 contributors. All rights reserved.
-- *
-- * This file is part of libgit2, distributed under the GNU GPL v2 with
-- * a Linking Exception. For full terms see the included COPYING file.
-- */
--
--#ifdef GIT_SECURE_TRANSPORT
--
--#include <CoreFoundation/CoreFoundation.h>
--#include <Security/SecureTransport.h>
--#include <Security/SecCertificate.h>
--
--#include "git2/transport.h"
--
--#include "socket_stream.h"
--#include "curl_stream.h"
--
--static int stransport_error(OSStatus ret)
--{
--	CFStringRef message;
--
--	if (ret == noErr || ret == errSSLClosedGraceful) {
--		giterr_clear();
--		return 0;
--	}
--
--#if !TARGET_OS_IPHONE
--	message = SecCopyErrorMessageString(ret, NULL);
--	GITERR_CHECK_ALLOC(message);
--
--	giterr_set(GITERR_NET, "SecureTransport error: %s", CFStringGetCStringPtr(message, kCFStringEncodingUTF8));
--	CFRelease(message);
--#else
--    giterr_set(GITERR_NET, "SecureTransport error: OSStatus %d", (unsigned int)ret);
--    GIT_UNUSED(message);
--#endif
--
--	return -1;
--}
--
--typedef struct {
--	git_stream parent;
--	git_stream *io;
--	SSLContextRef ctx;
--	CFDataRef der_data;
--	git_cert_x509 cert_info;
--} stransport_stream;
--
--static int stransport_connect(git_stream *stream)
--{
--	stransport_stream *st = (stransport_stream *) stream;
--	int error;
--	SecTrustRef trust = NULL;
--	SecTrustResultType sec_res;
--	OSStatus ret;
--
--	if ((error = git_stream_connect(st->io)) < 0)
--		return error;
--
--	ret = SSLHandshake(st->ctx);
--	if (ret != errSSLServerAuthCompleted) {
--		giterr_set(GITERR_SSL, "unexpected return value from ssl handshake %d", ret);
--		return -1;
--	}
--
--	if ((ret = SSLCopyPeerTrust(st->ctx, &trust)) != noErr)
--		goto on_error;
--
--	if (!trust)
--		return GIT_ECERTIFICATE;
--
--	if ((ret = SecTrustEvaluate(trust, &sec_res)) != noErr)
--		goto on_error;
--
--	CFRelease(trust);
--
--	if (sec_res == kSecTrustResultInvalid || sec_res == kSecTrustResultOtherError) {
--		giterr_set(GITERR_SSL, "internal security trust error");
--		return -1;
--	}
--
--	if (sec_res == kSecTrustResultDeny || sec_res == kSecTrustResultRecoverableTrustFailure ||
--	    sec_res == kSecTrustResultFatalTrustFailure)
--		return GIT_ECERTIFICATE;
--
--	return 0;
--
--on_error:
--	if (trust)
--		CFRelease(trust);
--
--	return stransport_error(ret);
--}
--
--static int stransport_certificate(git_cert **out, git_stream *stream)
--{
--	stransport_stream *st = (stransport_stream *) stream;
--	SecTrustRef trust = NULL;
--	SecCertificateRef sec_cert;
--	OSStatus ret;
--
--	if ((ret = SSLCopyPeerTrust(st->ctx, &trust)) != noErr)
--		return stransport_error(ret);
--
--	sec_cert = SecTrustGetCertificateAtIndex(trust, 0);
--	st->der_data = SecCertificateCopyData(sec_cert);
--	CFRelease(trust);
--
--	if (st->der_data == NULL) {
--		giterr_set(GITERR_SSL, "retrieved invalid certificate data");
--		return -1;
--	}
--
--	st->cert_info.parent.cert_type = GIT_CERT_X509;
--	st->cert_info.data = (void *) CFDataGetBytePtr(st->der_data);
--	st->cert_info.len = CFDataGetLength(st->der_data);
--
--	*out = (git_cert *)&st->cert_info;
--	return 0;
--}
--
--static int stransport_set_proxy(
--	git_stream *stream,
--	const git_proxy_options *proxy_opts)
--{
--	stransport_stream *st = (stransport_stream *) stream;
--
--	return git_stream_set_proxy(st->io, proxy_opts);
--}
--
--/*
-- * Contrary to typical network IO callbacks, Secure Transport write callback is
-- * expected to write *all* passed data, not just as much as it can, and any
-- * other case would be considered a failure.
-- *
-- * This behavior is actually not specified in the Apple documentation, but is
-- * required for things to work correctly (and incidentally, that's also how
-- * Apple implements it in its projects at opensource.apple.com).
-- *
-- * Libgit2 streams happen to already have this very behavior so this is just
-- * passthrough.
-- */
--static OSStatus write_cb(SSLConnectionRef conn, const void *data, size_t *len)
--{
--	git_stream *io = (git_stream *) conn;
--
--	if (git_stream_write(io, data, *len, 0) < 0) {
--		return -36; /* "ioErr" from MacErrors.h which is not available on iOS */
--	}
--
--	return noErr;
--}
--
--static ssize_t stransport_write(git_stream *stream, const char *data, size_t len, int flags)
--{
--	stransport_stream *st = (stransport_stream *) stream;
--	size_t data_len, processed;
--	OSStatus ret;
--
--	GIT_UNUSED(flags);
--
--	data_len = len;
--	if ((ret = SSLWrite(st->ctx, data, data_len, &processed)) != noErr)
--		return stransport_error(ret);
--
--	return processed;
--}
--
--/*
-- * Contrary to typical network IO callbacks, Secure Transport read callback is
-- * expected to read *exactly* the requested number of bytes, not just as much
-- * as it can, and any other case would be considered a failure.
-- *
-- * This behavior is actually not specified in the Apple documentation, but is
-- * required for things to work correctly (and incidentally, that's also how
-- * Apple implements it in its projects at opensource.apple.com).
-- */
--static OSStatus read_cb(SSLConnectionRef conn, void *data, size_t *len)
--{
--	git_stream *io = (git_stream *) conn;
--	OSStatus error = noErr;
--	size_t off = 0;
--	ssize_t ret;
--
--	do {
--		ret = git_stream_read(io, data + off, *len - off);
--		if (ret < 0) {
--			error = -36; /* "ioErr" from MacErrors.h which is not available on iOS */
--			break;
--		}
--		if (ret == 0) {
--			error = errSSLClosedGraceful;
--			break;
--		}
--
--		off += ret;
--	} while (off < *len);
--
--	*len = off;
--	return error;
--}
--
--static ssize_t stransport_read(git_stream *stream, void *data, size_t len)
--{
--	stransport_stream *st = (stransport_stream *) stream;
--	size_t processed;
--	OSStatus ret;
--
--	if ((ret = SSLRead(st->ctx, data, len, &processed)) != noErr)
--		return stransport_error(ret);
--
--	return processed;
--}
--
--static int stransport_close(git_stream *stream)
--{
--	stransport_stream *st = (stransport_stream *) stream;
--	OSStatus ret;
--
--	ret = SSLClose(st->ctx);
--	if (ret != noErr && ret != errSSLClosedGraceful)
--		return stransport_error(ret);
--
--	return git_stream_close(st->io);
--}
--
--static void stransport_free(git_stream *stream)
--{
--	stransport_stream *st = (stransport_stream *) stream;
--
--	git_stream_free(st->io);
--	CFRelease(st->ctx);
--	if (st->der_data)
--		CFRelease(st->der_data);
--	git__free(st);
--}
--
--int git_stransport_stream_new(git_stream **out, const char *host, const char *port)
--{
--	stransport_stream *st;
--	int error;
--	OSStatus ret;
--
--	assert(out && host);
--
--	st = git__calloc(1, sizeof(stransport_stream));
--	GITERR_CHECK_ALLOC(st);
--
--#ifdef GIT_CURL
--	error = git_curl_stream_new(&st->io, host, port);
--#else
--	error = git_socket_stream_new(&st->io, host, port);
--#endif
--
--	if (error < 0){
--		git__free(st);
--		return error;
--	}
--
--	st->ctx = SSLCreateContext(NULL, kSSLClientSide, kSSLStreamType);
--	if (!st->ctx) {
--		giterr_set(GITERR_NET, "failed to create SSL context");
--		git__free(st);
--		return -1;
--	}
--
--	if ((ret = SSLSetIOFuncs(st->ctx, read_cb, write_cb)) != noErr ||
--	    (ret = SSLSetConnection(st->ctx, st->io)) != noErr ||
--	    (ret = SSLSetSessionOption(st->ctx, kSSLSessionOptionBreakOnServerAuth, true)) != noErr ||
--	    (ret = SSLSetProtocolVersionMin(st->ctx, kTLSProtocol1)) != noErr ||
--	    (ret = SSLSetProtocolVersionMax(st->ctx, kTLSProtocol12)) != noErr ||
--	    (ret = SSLSetPeerDomainName(st->ctx, host, strlen(host))) != noErr) {
--		CFRelease(st->ctx);
--		git__free(st);
--		return stransport_error(ret);
--	}
--
--	st->parent.version = GIT_STREAM_VERSION;
--	st->parent.encrypted = 1;
--	st->parent.proxy_support = git_stream_supports_proxy(st->io);
--	st->parent.connect = stransport_connect;
--	st->parent.certificate = stransport_certificate;
--	st->parent.set_proxy = stransport_set_proxy;
--	st->parent.read = stransport_read;
--	st->parent.write = stransport_write;
--	st->parent.close = stransport_close;
--	st->parent.free = stransport_free;
--
--	*out = (git_stream *) st;
--	return 0;
--}
--
--#endif
-diff --git a/src/stransport_stream.h b/src/stransport_stream.h
-deleted file mode 100644
-index 714f902..0000000
---- a/src/stransport_stream.h
-+++ /dev/null
-@@ -1,14 +0,0 @@
--/*
-- * Copyright (C) the libgit2 contributors. All rights reserved.
-- *
-- * This file is part of libgit2, distributed under the GNU GPL v2 with
-- * a Linking Exception. For full terms see the included COPYING file.
-- */
--#ifndef INCLUDE_stransport_stream_h__
--#define INCLUDE_stransport_stream_h__
--
--#include "git2/sys/stream.h"
--
--extern int git_stransport_stream_new(git_stream **out, const char *host, const char *port);
--
--#endif
-diff --git a/src/streams/curl.c b/src/streams/curl.c
-new file mode 100644
-index 0000000..4e0455c
---- /dev/null
-+++ b/src/streams/curl.c
-@@ -0,0 +1,362 @@
-+/*
-+ * Copyright (C) the libgit2 contributors. All rights reserved.
-+ *
-+ * This file is part of libgit2, distributed under the GNU GPL v2 with
-+ * a Linking Exception. For full terms see the included COPYING file.
-+ */
-+
-+#ifdef GIT_CURL
-+
-+#include <curl/curl.h>
-+
-+#include "stream.h"
-+#include "git2/transport.h"
-+#include "buffer.h"
-+#include "vector.h"
-+#include "proxy.h"
-+
-+/* This is for backwards compatibility with curl<7.45.0. */
-+#ifndef CURLINFO_ACTIVESOCKET
-+# define CURLINFO_ACTIVESOCKET CURLINFO_LASTSOCKET
-+# define GIT_CURL_BADSOCKET -1
-+# define git_activesocket_t long
-+#else
-+# define GIT_CURL_BADSOCKET CURL_SOCKET_BAD
-+# define git_activesocket_t curl_socket_t
-+#endif
-+
-+typedef struct {
-+	git_stream parent;
-+	CURL *handle;
-+	curl_socket_t socket;
-+	char curl_error[CURL_ERROR_SIZE + 1];
-+	git_cert_x509 cert_info;
-+	git_strarray cert_info_strings;
-+	git_proxy_options proxy;
-+	git_cred *proxy_cred;
-+} curl_stream;
-+
-+static int seterr_curl(curl_stream *s)
-+{
-+	giterr_set(GITERR_NET, "curl error: %s\n", s->curl_error);
-+	return -1;
-+}
-+
-+GIT_INLINE(int) error_no_credentials(void)
-+{
-+	giterr_set(GITERR_NET, "proxy authentication required, but no callback provided");
-+	return GIT_EAUTH;
-+}
-+
-+static int apply_proxy_creds(curl_stream *s)
-+{
-+	CURLcode res;
-+	git_cred_userpass_plaintext *userpass;
-+
-+	if (!s->proxy_cred)
-+		return GIT_ENOTFOUND;
-+
-+	userpass = (git_cred_userpass_plaintext *) s->proxy_cred;
-+	if ((res = curl_easy_setopt(s->handle, CURLOPT_PROXYUSERNAME, userpass->username)) != CURLE_OK)
-+		return seterr_curl(s);
-+	if ((res = curl_easy_setopt(s->handle, CURLOPT_PROXYPASSWORD, userpass->password)) != CURLE_OK)
-+		return seterr_curl(s);
-+
-+	return 0;
-+}
-+
-+static int ask_and_apply_proxy_creds(curl_stream *s)
-+{
-+	int error;
-+	git_proxy_options *opts = &s->proxy;
-+
-+	if (!opts->credentials)
-+		return error_no_credentials();
-+
-+	/* TODO: see if PROXYAUTH_AVAIL helps us here */
-+	git_cred_free(s->proxy_cred);
-+	s->proxy_cred = NULL;
-+	giterr_clear();
-+	error = opts->credentials(&s->proxy_cred, opts->url, NULL, GIT_CREDTYPE_USERPASS_PLAINTEXT, opts->payload);
-+	if (error == GIT_PASSTHROUGH)
-+		return error_no_credentials();
-+	if (error < 0) {
-+		if (!giterr_last())
-+			giterr_set(GITERR_NET, "proxy authentication was aborted by the user");
-+		return error;
-+	}
-+
-+	if (s->proxy_cred->credtype != GIT_CREDTYPE_USERPASS_PLAINTEXT) {
-+		giterr_set(GITERR_NET, "credentials callback returned invalid credential type");
-+		return -1;
-+	}
-+
-+	return apply_proxy_creds(s);
-+}
-+
-+static int curls_connect(git_stream *stream)
-+{
-+	curl_stream *s = (curl_stream *) stream;
-+	git_activesocket_t sockextr;
-+	long connect_last = 0;
-+	int failed_cert = 0, error;
-+	bool retry_connect;
-+	CURLcode res;
-+
-+	/* Apply any credentials we've already established */
-+	error = apply_proxy_creds(s);
-+	if (error < 0 && error != GIT_ENOTFOUND)
-+		return seterr_curl(s);
-+
-+	do {
-+		retry_connect = 0;
-+		res = curl_easy_perform(s->handle);
-+
-+		curl_easy_getinfo(s->handle, CURLINFO_HTTP_CONNECTCODE, &connect_last);
-+
-+		/* HTTP 407 Proxy Authentication Required */
-+		if (connect_last == 407) {
-+			if ((error = ask_and_apply_proxy_creds(s)) < 0)
-+				return error;
-+
-+			retry_connect = true;
++				error = git_mbedtls__set_cert_location(path, 1);
 +		}
-+	} while (retry_connect);
-+
-+	if (res != CURLE_OK && res != CURLE_PEER_FAILED_VERIFICATION)
-+		return seterr_curl(s);
-+	if (res == CURLE_PEER_FAILED_VERIFICATION)
-+		failed_cert = 1;
-+
-+	if ((res = curl_easy_getinfo(s->handle, CURLINFO_ACTIVESOCKET, &sockextr)) != CURLE_OK) {
-+		return seterr_curl(s);
-+	}
-+
-+	if (sockextr == GIT_CURL_BADSOCKET) {
-+		giterr_set(GITERR_NET, "curl socket is no longer valid");
-+		return -1;
-+	}
-+
-+	s->socket = sockextr;
-+
-+	if (s->parent.encrypted && failed_cert)
-+		return GIT_ECERTIFICATE;
-+
-+	return 0;
-+}
-+
-+static int curls_certificate(git_cert **out, git_stream *stream)
-+{
-+	int error;
-+	CURLcode res;
-+	struct curl_slist *slist;
-+	struct curl_certinfo *certinfo;
-+	git_vector strings = GIT_VECTOR_INIT;
-+	curl_stream *s = (curl_stream *) stream;
-+
-+	if ((res = curl_easy_getinfo(s->handle, CURLINFO_CERTINFO, &certinfo)) != CURLE_OK)
-+		return seterr_curl(s);
-+
-+	/* No information is available, can happen with SecureTransport */
-+	if (certinfo->num_of_certs == 0) {
-+		s->cert_info.parent.cert_type = GIT_CERT_NONE;
-+		s->cert_info.data             = NULL;
-+		s->cert_info.len              = 0;
-+		return 0;
-+	}
-+
-+	if ((error = git_vector_init(&strings, 8, NULL)) < 0)
-+		return error;
-+
-+	for (slist = certinfo->certinfo[0]; slist; slist = slist->next) {
-+		char *str = git__strdup(slist->data);
-+		GITERR_CHECK_ALLOC(str);
-+		git_vector_insert(&strings, str);
-+	}
-+
-+	/* Copy the contents of the vector into a strarray so we can expose them */
-+	s->cert_info_strings.strings = (char **) strings.contents;
-+	s->cert_info_strings.count   = strings.length;
-+
-+	s->cert_info.parent.cert_type = GIT_CERT_STRARRAY;
-+	s->cert_info.data             = &s->cert_info_strings;
-+	s->cert_info.len              = strings.length;
-+
-+	*out = &s->cert_info.parent;
-+
-+	return 0;
-+}
-+
-+static int curls_set_proxy(git_stream *stream, const git_proxy_options *proxy_opts)
-+{
-+	int error;
-+	CURLcode res;
-+	curl_stream *s = (curl_stream *) stream;
-+
-+	if ((error = git_proxy_options_dup(&s->proxy, proxy_opts)) < 0)
-+		return error;
-+
-+	if ((res = curl_easy_setopt(s->handle, CURLOPT_PROXY, s->proxy.url)) != CURLE_OK)
-+		return seterr_curl(s);
-+
-+	if ((res = curl_easy_setopt(s->handle, CURLOPT_PROXYAUTH, CURLAUTH_ANY)) != CURLE_OK)
-+		return seterr_curl(s);
-+
-+	return 0;
-+}
-+
-+static int wait_for(curl_socket_t fd, bool reading)
-+{
-+	int ret;
-+	fd_set infd, outfd, errfd;
-+
-+	FD_ZERO(&infd);
-+	FD_ZERO(&outfd);
-+	FD_ZERO(&errfd);
-+
-+	assert(fd >= 0);
-+	FD_SET(fd, &errfd);
-+	if (reading)
-+		FD_SET(fd, &infd);
-+	else
-+		FD_SET(fd, &outfd);
-+
-+	if ((ret = select(fd + 1, &infd, &outfd, &errfd, NULL)) < 0) {
-+		giterr_set(GITERR_OS, "error in select");
-+		return -1;
-+	}
-+
-+	return 0;
-+}
-+
-+static ssize_t curls_write(git_stream *stream, const char *data, size_t len, int flags)
-+{
-+	int error;
-+	size_t off = 0, sent;
-+	CURLcode res;
-+	curl_stream *s = (curl_stream *) stream;
-+
-+	GIT_UNUSED(flags);
-+
-+	do {
-+		if ((error = wait_for(s->socket, false)) < 0)
-+			return error;
-+
-+		res = curl_easy_send(s->handle, data + off, len - off, &sent);
-+		if (res == CURLE_OK)
-+			off += sent;
-+	} while ((res == CURLE_OK || res == CURLE_AGAIN) && off < len);
-+
-+	if (res != CURLE_OK)
-+		return seterr_curl(s);
-+
-+	return len;
-+}
-+
-+static ssize_t curls_read(git_stream *stream, void *data, size_t len)
-+{
-+	int error;
-+	size_t read;
-+	CURLcode res;
-+	curl_stream *s = (curl_stream *) stream;
-+
-+	do {
-+		if ((error = wait_for(s->socket, true)) < 0)
-+			return error;
-+
-+		res = curl_easy_recv(s->handle, data, len, &read);
-+	} while (res == CURLE_AGAIN);
-+
-+	if (res != CURLE_OK)
-+		return seterr_curl(s);
-+
-+	return read;
-+}
-+
-+static int curls_close(git_stream *stream)
-+{
-+	curl_stream *s = (curl_stream *) stream;
-+
-+	if (!s->handle)
-+		return 0;
-+
-+	curl_easy_cleanup(s->handle);
-+	s->handle = NULL;
-+	s->socket = 0;
-+
-+	return 0;
-+}
-+
-+static void curls_free(git_stream *stream)
-+{
-+	curl_stream *s = (curl_stream *) stream;
-+
-+	curls_close(stream);
-+	git_strarray_free(&s->cert_info_strings);
-+	git__free(s);
-+}
-+
-+int git_curl_stream_new(git_stream **out, const char *host, const char *port)
-+{
-+	curl_stream *st;
-+	CURL *handle;
-+	int iport = 0, error;
-+
-+	st = git__calloc(1, sizeof(curl_stream));
-+	GITERR_CHECK_ALLOC(st);
-+
-+	handle = curl_easy_init();
-+	if (handle == NULL) {
-+		giterr_set(GITERR_NET, "failed to create curl handle");
-+		git__free(st);
-+		return -1;
-+	}
-+
-+	if ((error = git__strtol32(&iport, port, NULL, 10)) < 0) {
-+		git__free(st);
-+		return error;
-+	}
-+
-+	curl_easy_setopt(handle, CURLOPT_URL, host);
-+	curl_easy_setopt(handle, CURLOPT_ERRORBUFFER, st->curl_error);
-+	curl_easy_setopt(handle, CURLOPT_PORT, iport);
-+	curl_easy_setopt(handle, CURLOPT_CONNECT_ONLY, 1);
-+	curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 1);
-+	curl_easy_setopt(handle, CURLOPT_CERTINFO, 1);
-+	curl_easy_setopt(handle, CURLOPT_HTTPPROXYTUNNEL, 1);
-+	curl_easy_setopt(handle, CURLOPT_PROXYAUTH, CURLAUTH_ANY);
-+
-+	/* curl_easy_setopt(handle, CURLOPT_VERBOSE, 1); */
-+
-+	st->parent.version = GIT_STREAM_VERSION;
-+	st->parent.encrypted = 0; /* we don't encrypt ourselves */
-+	st->parent.proxy_support = 1;
-+	st->parent.connect = curls_connect;
-+	st->parent.certificate = curls_certificate;
-+	st->parent.set_proxy = curls_set_proxy;
-+	st->parent.read = curls_read;
-+	st->parent.write = curls_write;
-+	st->parent.close = curls_close;
-+	st->parent.free = curls_free;
-+	st->handle = handle;
-+
-+	*out = (git_stream *) st;
-+	return 0;
-+}
-+
-+#else
-+
-+#include "stream.h"
-+
-+int git_curl_stream_new(git_stream **out, const char *host, const char *port)
-+{
-+	GIT_UNUSED(out);
-+	GIT_UNUSED(host);
-+	GIT_UNUSED(port);
-+
-+	giterr_set(GITERR_NET, "curl is not supported in this version");
-+	return -1;
-+}
-+
-+
-+#endif
-diff --git a/src/streams/curl.h b/src/streams/curl.h
-new file mode 100644
-index 0000000..283f0fe
---- /dev/null
-+++ b/src/streams/curl.h
-@@ -0,0 +1,14 @@
-+/*
-+ * Copyright (C) the libgit2 contributors. All rights reserved.
-+ *
-+ * This file is part of libgit2, distributed under the GNU GPL v2 with
-+ * a Linking Exception. For full terms see the included COPYING file.
-+ */
-+#ifndef INCLUDE_curl_stream_h__
-+#define INCLUDE_curl_stream_h__
-+
-+#include "git2/sys/stream.h"
-+
-+extern int git_curl_stream_new(git_stream **out, const char *host, const char *port);
-+
-+#endif
+ #else
+ 		giterr_set(GITERR_SSL, "TLS backend doesn't support certificate locations");
+ 		error = -1;
+@@ -199,7 +213,7 @@ int git_libgit2_opts(int key, ...)
+ 		break;
+ 
+ 	case GIT_OPT_SET_SSL_CIPHERS:
+-#ifdef GIT_OPENSSL
++#if (GIT_OPENSSL || GIT_MBEDTLS)
+ 		{
+ 			git__free(git__ssl_ciphers);
+ 			git__ssl_ciphers = git__strdup(va_arg(ap, const char *));
 diff --git a/src/streams/mbedtls.c b/src/streams/mbedtls.c
 new file mode 100644
-index 0000000..0376ee4
+index 000000000..0a49a36a6
 --- /dev/null
 +++ b/src/streams/mbedtls.c
-@@ -0,0 +1,538 @@
+@@ -0,0 +1,452 @@
 +/*
 + * Copyright (C) the libgit2 contributors. All rights reserved.
 + *
 + * This file is part of libgit2, distributed under the GNU GPL v2 with
 + * a Linking Exception. For full terms see the included COPYING file.
 + */
++
++#include "streams/mbedtls.h"
 +
 +#ifdef GIT_MBEDTLS
 +
@@ -2718,22 +476,15 @@ index 0000000..0376ee4
 +# include "streams/curl.h"
 +#endif
 +
++#ifndef GIT_DEFAULT_CERT_LOCATION
++#define GIT_DEFAULT_CERT_LOCATION NULL
++#endif
++
 +#include <mbedtls/config.h>
 +#include <mbedtls/ssl.h>
 +#include <mbedtls/error.h>
 +#include <mbedtls/entropy.h>
 +#include <mbedtls/ctr_drbg.h>
-+
-+#ifndef OPENSSLDIR
-+//# define OPENSSLDIR
-+# define OPENSSLDIR              "/etc/ssl" // Debian
-+//# define OPENSSLDIR              "/usr/lib/ssl" //Ubuntu
-+//# define OPENSSLDIR              "/usr/local/etc/openssl" // mostly-Darwin
-+#endif
-+#define X509_CERT_DIR            OPENSSLDIR "/certs"
-+#define X509_CERT_FILE           OPENSSLDIR "/cert.pem"
-+#define X509_CERT_DIR_EVP        "SSL_CERT_DIR"
-+#define X509_CERT_FILE_EVP       "SSL_CERT_FILE"
 +
 +mbedtls_ssl_config *git__ssl_conf;
 +mbedtls_entropy_context *mbedtls_entropy;
@@ -2763,12 +514,12 @@ index 0000000..0376ee4
 +	}
 +}
 +
-+int git_mbedtls_set_cert_file(const char *path, int is_dir);
++int git_mbedtls__set_cert_location(const char *path, int is_dir);
 +
 +int git_mbedtls_stream_global_init(void)
 +{
-+	int found = -1, loaded = 0;
-+	char *crtpath;
++	int loaded = 0;
++	char *crtpath = GIT_DEFAULT_CERT_LOCATION;
 +	struct stat statbuf;
 +	mbedtls_ctr_drbg_context *ctr_drbg = NULL;
 +
@@ -2783,21 +534,22 @@ index 0000000..0376ee4
 +	git__ssl_conf = git__malloc(sizeof(mbedtls_ssl_config));
 +	mbedtls_ssl_config_init(git__ssl_conf);
 +	if (mbedtls_ssl_config_defaults(git__ssl_conf,
-+									MBEDTLS_SSL_IS_CLIENT,
-+									MBEDTLS_SSL_TRANSPORT_STREAM,
-+									MBEDTLS_SSL_PRESET_DEFAULT) != 0) {
++		                            MBEDTLS_SSL_IS_CLIENT,
++		                            MBEDTLS_SSL_TRANSPORT_STREAM,
++		                            MBEDTLS_SSL_PRESET_DEFAULT) != 0) {
 +		giterr_set(GITERR_SSL, "failed to initialize mbedTLS");
 +		goto cleanup;
 +	}
 +
-+	// configure TLSv1
++	/* configure TLSv1 */
 +	mbedtls_ssl_conf_min_version(git__ssl_conf, MBEDTLS_SSL_MAJOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_0);
-+	// verify_server_cert is responsible for making the check.
-+	// OPTIONAL because REQUIRED drops the certificate as soon as the check
-+	// is made, so we can never see the certificate and override it.
++
++	/* verify_server_cert is responsible for making the check.
++	 * OPTIONAL because REQUIRED drops the certificate as soon as the check
++	 * is made, so we can never see the certificate and override it. */
 +	mbedtls_ssl_conf_authmode(git__ssl_conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
 +
-+	// set the list of allowed ciphersuites
++	/* set the list of allowed ciphersuites */
 +	ciphers_list = calloc(GIT_SSL_DEFAULT_CIPHERS_COUNT, sizeof(int));
 +	ciphers_known = 0;
 +	cipher_string = cipher_string_tmp = git__strdup(GIT_SSL_DEFAULT_CIPHERS);
@@ -2815,46 +567,26 @@ index 0000000..0376ee4
 +	}
 +	mbedtls_ssl_conf_ciphersuites(git__ssl_conf, ciphers_list);
 +
-+	// Seeding the random number generator
++	/* Seeding the random number generator */
 +	mbedtls_entropy = git__malloc(sizeof(mbedtls_entropy_context));
 +	mbedtls_entropy_init(mbedtls_entropy);
 +
 +	ctr_drbg = git__malloc(sizeof(mbedtls_ctr_drbg_context));
 +	mbedtls_ctr_drbg_init(ctr_drbg);
 +	if (mbedtls_ctr_drbg_seed(ctr_drbg,
-+							  mbedtls_entropy_func,
-+							  mbedtls_entropy, NULL, 0) != 0) {
++		                      mbedtls_entropy_func,
++		                      mbedtls_entropy, NULL, 0) != 0) {
 +		giterr_set(GITERR_SSL, "failed to initialize mbedTLS entropy pool");
 +		goto cleanup;
 +	}
 +
 +	mbedtls_ssl_conf_rng(git__ssl_conf, mbedtls_ctr_drbg_random, ctr_drbg);
 +
-+	// find locations for which CA certificates
-+	{
-+		crtpath = getenv(X509_CERT_FILE_EVP);
-+		found = crtpath != NULL && stat(crtpath, &statbuf) == 0 && S_ISREG(statbuf.st_mode);
-+		if (found)
-+			loaded = (git_mbedtls_set_cert_file(crtpath, 0) == 0);
-+	}
-+	if (!loaded) {
-+		crtpath = getenv(X509_CERT_DIR_EVP);
-+		found = crtpath != NULL && stat(crtpath, &statbuf) == 0 && S_ISDIR(statbuf.st_mode);
-+		if (found)
-+			loaded = (git_mbedtls_set_cert_file(crtpath, 1) == 0);
-+	}
-+	if (!loaded) {
-+		crtpath = X509_CERT_FILE;
-+		found = crtpath != NULL && stat(crtpath, &statbuf) == 0 && S_ISREG(statbuf.st_mode);
-+		if (found)
-+			loaded = (git_mbedtls_set_cert_file(crtpath, 0) == 0);
-+	}
-+	if (!loaded) {
-+		crtpath = X509_CERT_DIR;
-+		found = crtpath != NULL && stat(crtpath, &statbuf) == 0 && S_ISDIR(statbuf.st_mode);
-+		if (found)
-+			loaded = (git_mbedtls_set_cert_file(crtpath, 1) == 0);
-+	}
++	/* load default certificates */
++	if (crtpath != NULL && stat(crtpath, &statbuf) == 0 && S_ISREG(statbuf.st_mode))
++		loaded = (git_mbedtls__set_cert_location(crtpath, 0) == 0);
++	if (!loaded && crtpath != NULL && stat(crtpath, &statbuf) == 0 && S_ISDIR(statbuf.st_mode))
++		loaded = (git_mbedtls__set_cert_location(crtpath, 1) == 0);
 +
 +	git__on_shutdown(shutdown_ssl);
 +
@@ -2897,18 +629,18 @@ index 0000000..0376ee4
 +	if (error != 0)
 +		mbedtls_strerror( error, errbuf, 512 );
 +
-+	switch(error){
++	switch(error) {
 +		case 0:
 +		giterr_set(GITERR_SSL, "SSL error: unknown error");
 +		break;
 +
 +	case MBEDTLS_ERR_X509_CERT_VERIFY_FAILED:
-+		giterr_set(GITERR_SSL, "SSL error: %x[%x] - %s", error, ssl->session_negotiate->verify_result, errbuf);
++		giterr_set(GITERR_SSL, "SSL error: %#04x [%x] - %s", error, ssl->session_negotiate->verify_result, errbuf);
 +		ret = GIT_ECERTIFICATE;
 +		break;
 +
 +	default:
-+		giterr_set(GITERR_SSL, "SSL error: %x - %s", error, errbuf);
++		giterr_set(GITERR_SSL, "SSL error: %#04x - %s", error, errbuf);
 +	}
 +
 +	return ret;
@@ -2926,82 +658,19 @@ index 0000000..0376ee4
 +	return ret;
 +}
 +
-+static int check_host_name(const char *name, const char *host)
++static int verify_server_cert(mbedtls_ssl_context *ssl)
 +{
-+	if (!strcasecmp(name, host))
-+		return 0;
-+
-+	if (gitno__match_host(name, host) < 0)
-+		return -1;
-+
-+	return 0;
-+}
-+
-+static int verify_server_cert(mbedtls_ssl_context *ssl, const char *host)
-+{
-+	const mbedtls_x509_crt *cert;
-+	const mbedtls_x509_sequence *alts;
-+	int ret, matched = -1;
-+	size_t sn_size = 512;
-+	char subject_name[sn_size], alt_name[sn_size];
-+
++	int ret = -1;
 +
 +	if ((ret = mbedtls_ssl_get_verify_result(ssl)) != 0) {
 +		char vrfy_buf[512];
-+		mbedtls_x509_crt_verify_info( vrfy_buf, sizeof( vrfy_buf ), "  ! ", ret );
-+		giterr_set(GITERR_SSL, "The SSL certificate is invalid: %s", vrfy_buf);
++		int len = mbedtls_x509_crt_verify_info(vrfy_buf, sizeof(vrfy_buf), "", ret);
++		if (len >= 1) vrfy_buf[len - 1] = '\0'; /* Remove trailing \n */
++		giterr_set(GITERR_SSL, "the SSL certificate is invalid: %#04x - %s", ret, vrfy_buf);
 +		return GIT_ECERTIFICATE;
 +	}
 +
-+	cert = mbedtls_ssl_get_peer_cert(ssl);
-+	if (!cert) {
-+		giterr_set(GITERR_SSL, "the server did not provide a certificate");
-+		return -1;
-+	}
-+
-+	/* Check the alternative names */
-+	alts = &cert->subject_alt_names;
-+	while (alts != NULL && matched != 1) {
-+		// Buffer is too small
-+		if( alts->buf.len >= sn_size )
-+			goto on_error;
-+
-+		memcpy(alt_name, alts->buf.p, alts->buf.len);
-+		alt_name[alts->buf.len] = '\0';
-+
-+		if (!memchr(alt_name, '\0', alts->buf.len)) {
-+			if (check_host_name(alt_name, host) < 0)
-+				matched = 0;
-+			else
-+				matched = 1;
-+		}
-+
-+		alts = alts->next;
-+	}
-+	if (matched == 0)
-+		goto cert_fail_name;
-+
-+	if (matched == 1)
-+		return 0;
-+
-+	/* If no alternative names are available, check the common name */
-+	ret = mbedtls_x509_dn_gets(subject_name, sn_size, &cert->subject);
-+	if (ret == 0)
-+		goto on_error;
-+	if (memchr(subject_name, '\0', ret))
-+		goto cert_fail_name;
-+
-+	if (check_host_name(subject_name, host) < 0)
-+		goto cert_fail_name;
-+
 +	return 0;
-+
-+on_error:
-+	return ssl_set_error(ssl, 0);
-+
-+cert_fail_name:
-+	giterr_set(GITERR_SSL, "hostname does not match certificate");
-+	return GIT_ECERTIFICATE;
 +}
 +
 +typedef struct {
@@ -3031,7 +700,7 @@ index 0000000..0376ee4
 +	if ((ret = mbedtls_ssl_handshake(st->ssl)) != 0)
 +		return ssl_set_error(st->ssl, ret);
 +
-+	return verify_server_cert(st->ssl, st->host);
++	return verify_server_cert(st->ssl);
 +}
 +
 +int mbedtls_certificate(git_cert **out, git_stream *stream)
@@ -3175,7 +844,7 @@ index 0000000..0376ee4
 +	return error;
 +}
 +
-+int git_mbedtls_set_cert_file(const char *path, int is_dir)
++int git_mbedtls__set_cert_location(const char *path, int is_dir)
 +{
 +	int ret = 0;
 +	char errbuf[512];
@@ -3190,12 +859,12 @@ index 0000000..0376ee4
 +	} else {
 +		ret = mbedtls_x509_crt_parse_file(cacert, path);
 +	}
-+	// mbedtls_x509_crt_parse_path returns the number of invalid certs on success
-+	if (ret <= 0) {
++	/* mbedtls_x509_crt_parse_path returns the number of invalid certs on success */
++	if (ret < 0) {
 +		mbedtls_x509_crt_free(cacert);
 +		git__free(cacert);
 +		mbedtls_strerror( ret, errbuf, 512 );
-+		giterr_set(GITERR_SSL, "failed to load CA certificates : %s (%d)", errbuf, ret);
++		giterr_set(GITERR_SSL, "failed to load CA certificates: %#04x - %s", ret, errbuf);
 +		return -1;
 +	}
 +
@@ -3225,8 +894,9 @@ index 0000000..0376ee4
 +	return -1;
 +}
 +
-+int git_mbedtls_set_cert_file(const char *path, int is_dir)
++int git_mbedtls__set_cert_location(const char *path, int is_dir)
 +{
++	GIT_UNUSED(path);
 +	GIT_UNUSED(is_dir);
 +
 +	giterr_set(GITERR_SSL, "mbedTLS is not supported in this version");
@@ -3236,18 +906,20 @@ index 0000000..0376ee4
 +#endif
 diff --git a/src/streams/mbedtls.h b/src/streams/mbedtls.h
 new file mode 100644
-index 0000000..7501397
+index 000000000..7283698ff
 --- /dev/null
 +++ b/src/streams/mbedtls.h
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,20 @@
 +/*
 + * Copyright (C) the libgit2 contributors. All rights reserved.
 + *
 + * This file is part of libgit2, distributed under the GNU GPL v2 with
 + * a Linking Exception. For full terms see the included COPYING file.
 + */
-+#ifndef INCLUDE_mbedtls_stream_h__
-+#define INCLUDE_mbedtls_stream_h__
++#ifndef INCLUDE_steams_mbedtls_h__
++#define INCLUDE_steams_mbedtls_h__
++
++#include "common.h"
 +
 +#include "git2/sys/stream.h"
 +
@@ -3255,1400 +927,22 @@ index 0000000..7501397
 +
 +extern int git_mbedtls_stream_new(git_stream **out, const char *host, const char *port);
 +
-+extern int git_mbedtls_set_cert_file(const char *path, int is_dir);
++extern int git_mbedtls__set_cert_location(const char *path, int is_dir);
 +
 +#endif
-diff --git a/src/streams/openssl.c b/src/streams/openssl.c
-new file mode 100644
-index 0000000..8668b78
---- /dev/null
-+++ b/src/streams/openssl.c
-@@ -0,0 +1,675 @@
-+/*
-+ * Copyright (C) the libgit2 contributors. All rights reserved.
-+ *
-+ * This file is part of libgit2, distributed under the GNU GPL v2 with
-+ * a Linking Exception. For full terms see the included COPYING file.
-+ */
-+
-+#ifdef GIT_OPENSSL
-+
-+#include <ctype.h>
-+
-+#include "global.h"
-+#include "posix.h"
-+#include "stream.h"
-+#include "streams/socket.h"
-+#include "streams/openssl.h"
-+#include "netops.h"
-+#include "git2/transport.h"
-+#include "git2/sys/openssl.h"
-+
-+#ifdef GIT_CURL
-+# include "streams/curl.h"
-+#endif
-+
-+#ifndef GIT_WIN32
-+# include <sys/types.h>
-+# include <sys/socket.h>
-+# include <netinet/in.h>
-+#endif
-+
-+#include <openssl/ssl.h>
-+#include <openssl/err.h>
-+#include <openssl/x509v3.h>
-+#include <openssl/bio.h>
-+
-+SSL_CTX *git__ssl_ctx;
-+
-+#define GIT_SSL_DEFAULT_CIPHERS "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-DSS-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA:DHE-DSS-AES128-SHA256:DHE-DSS-AES256-SHA256:DHE-DSS-AES128-SHA:DHE-DSS-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA"
-+
-+#if defined(GIT_THREADS) && OPENSSL_VERSION_NUMBER < 0x10100000L
-+
-+static git_mutex *openssl_locks;
-+
-+static void openssl_locking_function(
-+	int mode, int n, const char *file, int line)
-+{
-+	int lock;
-+
-+	GIT_UNUSED(file);
-+	GIT_UNUSED(line);
-+
-+	lock = mode & CRYPTO_LOCK;
-+
-+	if (lock) {
-+		git_mutex_lock(&openssl_locks[n]);
-+	} else {
-+		git_mutex_unlock(&openssl_locks[n]);
-+	}
-+}
-+
-+static void shutdown_ssl_locking(void)
-+{
-+	int num_locks, i;
-+
-+	num_locks = CRYPTO_num_locks();
-+	CRYPTO_set_locking_callback(NULL);
-+
-+	for (i = 0; i < num_locks; ++i)
-+		git_mutex_free(&openssl_locks[i]);
-+	git__free(openssl_locks);
-+}
-+
-+#endif /* GIT_THREADS && OPENSSL_VERSION_NUMBER < 0x10100000L */
-+
-+static BIO_METHOD *git_stream_bio_method;
-+static int init_bio_method(void);
-+
-+/**
-+ * This function aims to clean-up the SSL context which
-+ * we allocated.
-+ */
-+static void shutdown_ssl(void)
-+{
-+	if (git_stream_bio_method) {
-+		BIO_meth_free(git_stream_bio_method);
-+		git_stream_bio_method = NULL;
-+	}
-+
-+	if (git__ssl_ctx) {
-+		SSL_CTX_free(git__ssl_ctx);
-+		git__ssl_ctx = NULL;
-+	}
-+}
-+
-+int git_openssl_stream_global_init(void)
-+{
-+#ifdef GIT_OPENSSL
-+	long ssl_opts = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
-+	const char *ciphers = git_libgit2__ssl_ciphers();
-+
-+	/* Older OpenSSL and MacOS OpenSSL doesn't have this */
-+#ifdef SSL_OP_NO_COMPRESSION
-+	ssl_opts |= SSL_OP_NO_COMPRESSION;
-+#endif
-+
-+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
-+	SSL_load_error_strings();
-+	OpenSSL_add_ssl_algorithms();
-+#else
-+	OPENSSL_init_ssl(0, NULL);
-+#endif
-+
-+	/*
-+	 * Load SSLv{2,3} and TLSv1 so that we can talk with servers
-+	 * which use the SSL hellos, which are often used for
-+	 * compatibility. We then disable SSL so we only allow OpenSSL
-+	 * to speak TLSv1 to perform the encryption itself.
-+	 */
-+	git__ssl_ctx = SSL_CTX_new(SSLv23_method());
-+	SSL_CTX_set_options(git__ssl_ctx, ssl_opts);
-+	SSL_CTX_set_mode(git__ssl_ctx, SSL_MODE_AUTO_RETRY);
-+	SSL_CTX_set_verify(git__ssl_ctx, SSL_VERIFY_NONE, NULL);
-+	if (!SSL_CTX_set_default_verify_paths(git__ssl_ctx)) {
-+		SSL_CTX_free(git__ssl_ctx);
-+		git__ssl_ctx = NULL;
-+		return -1;
-+	}
-+
-+	if (!ciphers) {
-+		ciphers = GIT_SSL_DEFAULT_CIPHERS;
-+	}
-+
-+	if(!SSL_CTX_set_cipher_list(git__ssl_ctx, ciphers)) {
-+		SSL_CTX_free(git__ssl_ctx);
-+		git__ssl_ctx = NULL;
-+		return -1;
-+	}
-+
-+	if (init_bio_method() < 0) {
-+		SSL_CTX_free(git__ssl_ctx);
-+		git__ssl_ctx = NULL;
-+		return -1;
-+	}
-+
-+#endif
-+
-+	git__on_shutdown(shutdown_ssl);
-+
-+	return 0;
-+}
-+
-+int git_openssl_set_locking(void)
-+{
-+#if defined(GIT_THREADS) && OPENSSL_VERSION_NUMBER < 0x10100000L
-+	int num_locks, i;
-+
-+	num_locks = CRYPTO_num_locks();
-+	openssl_locks = git__calloc(num_locks, sizeof(git_mutex));
-+	GITERR_CHECK_ALLOC(openssl_locks);
-+
-+	for (i = 0; i < num_locks; i++) {
-+		if (git_mutex_init(&openssl_locks[i]) != 0) {
-+			giterr_set(GITERR_SSL, "failed to initialize openssl locks");
-+			return -1;
-+		}
-+	}
-+
-+	CRYPTO_set_locking_callback(openssl_locking_function);
-+	git__on_shutdown(shutdown_ssl_locking);
-+	return 0;
-+#elif OPENSSL_VERSION_NUMBER >= 0x10100000L
-+	return 0;
-+#else
-+	giterr_set(GITERR_THREAD, "libgit2 was not built with threads");
-+	return -1;
-+#endif
-+}
-+
-+
-+static int bio_create(BIO *b)
-+{
-+	BIO_set_init(b, 1);
-+	BIO_set_data(b, NULL);
-+
-+	return 1;
-+}
-+
-+static int bio_destroy(BIO *b)
-+{
-+	if (!b)
-+		return 0;
-+
-+	BIO_set_data(b, NULL);
-+
-+	return 1;
-+}
-+
-+static int bio_read(BIO *b, char *buf, int len)
-+{
-+	git_stream *io = (git_stream *) BIO_get_data(b);
-+
-+	return (int) git_stream_read(io, buf, len);
-+}
-+
-+static int bio_write(BIO *b, const char *buf, int len)
-+{
-+	git_stream *io = (git_stream *) BIO_get_data(b);
-+
-+	return (int) git_stream_write(io, buf, len, 0);
-+}
-+
-+static long bio_ctrl(BIO *b, int cmd, long num, void *ptr)
-+{
-+	GIT_UNUSED(b);
-+	GIT_UNUSED(num);
-+	GIT_UNUSED(ptr);
-+
-+	if (cmd == BIO_CTRL_FLUSH)
-+		return 1;
-+
-+	return 0;
-+}
-+
-+static int bio_gets(BIO *b, char *buf, int len)
-+{
-+	GIT_UNUSED(b);
-+	GIT_UNUSED(buf);
-+	GIT_UNUSED(len);
-+	return -1;
-+}
-+
-+static int bio_puts(BIO *b, const char *str)
-+{
-+	return bio_write(b, str, strlen(str));
-+}
-+
-+static int init_bio_method(void)
-+{
-+	/* Set up the BIO_METHOD we use for wrapping our own stream implementations */
-+	git_stream_bio_method = BIO_meth_new(BIO_TYPE_SOURCE_SINK | BIO_get_new_index(), "git_stream");
-+	GITERR_CHECK_ALLOC(git_stream_bio_method);
-+
-+	BIO_meth_set_write(git_stream_bio_method, bio_write);
-+	BIO_meth_set_read(git_stream_bio_method, bio_read);
-+	BIO_meth_set_puts(git_stream_bio_method, bio_puts);
-+	BIO_meth_set_gets(git_stream_bio_method, bio_gets);
-+	BIO_meth_set_ctrl(git_stream_bio_method, bio_ctrl);
-+	BIO_meth_set_create(git_stream_bio_method, bio_create);
-+	BIO_meth_set_destroy(git_stream_bio_method, bio_destroy);
-+
-+	return 0;
-+}
-+
-+static int ssl_set_error(SSL *ssl, int error)
-+{
-+	int err;
-+	unsigned long e;
-+
-+	err = SSL_get_error(ssl, error);
-+
-+	assert(err != SSL_ERROR_WANT_READ);
-+	assert(err != SSL_ERROR_WANT_WRITE);
-+
-+	switch (err) {
-+	case SSL_ERROR_WANT_CONNECT:
-+	case SSL_ERROR_WANT_ACCEPT:
-+		giterr_set(GITERR_NET, "SSL error: connection failure");
-+		break;
-+	case SSL_ERROR_WANT_X509_LOOKUP:
-+		giterr_set(GITERR_NET, "SSL error: x509 error");
-+		break;
-+	case SSL_ERROR_SYSCALL:
-+		e = ERR_get_error();
-+		if (e > 0) {
-+			giterr_set(GITERR_NET, "SSL error: %s",
-+					ERR_error_string(e, NULL));
-+			break;
-+		} else if (error < 0) {
-+			giterr_set(GITERR_OS, "SSL error: syscall failure");
-+			break;
-+		}
-+		giterr_set(GITERR_NET, "SSL error: received early EOF");
-+		return GIT_EEOF;
-+		break;
-+	case SSL_ERROR_SSL:
-+		e = ERR_get_error();
-+		giterr_set(GITERR_NET, "SSL error: %s",
-+				ERR_error_string(e, NULL));
-+		break;
-+	case SSL_ERROR_NONE:
-+	case SSL_ERROR_ZERO_RETURN:
-+	default:
-+		giterr_set(GITERR_NET, "SSL error: unknown error");
-+		break;
-+	}
-+	return -1;
-+}
-+
-+static int ssl_teardown(SSL *ssl)
-+{
-+	int ret;
-+
-+	ret = SSL_shutdown(ssl);
-+	if (ret < 0)
-+		ret = ssl_set_error(ssl, ret);
-+	else
-+		ret = 0;
-+
-+	return ret;
-+}
-+
-+static int check_host_name(const char *name, const char *host)
-+{
-+	if (!strcasecmp(name, host))
-+		return 0;
-+
-+	if (gitno__match_host(name, host) < 0)
-+		return -1;
-+
-+	return 0;
-+}
-+
-+static int verify_server_cert(SSL *ssl, const char *host)
-+{
-+	X509 *cert;
-+	X509_NAME *peer_name;
-+	ASN1_STRING *str;
-+	unsigned char *peer_cn = NULL;
-+	int matched = -1, type = GEN_DNS;
-+	GENERAL_NAMES *alts;
-+	struct in6_addr addr6;
-+	struct in_addr addr4;
-+	void *addr;
-+	int i = -1,j;
-+
-+	if (SSL_get_verify_result(ssl) != X509_V_OK) {
-+		giterr_set(GITERR_SSL, "the SSL certificate is invalid");
-+		return GIT_ECERTIFICATE;
-+	}
-+
-+	/* Try to parse the host as an IP address to see if it is */
-+	if (p_inet_pton(AF_INET, host, &addr4)) {
-+		type = GEN_IPADD;
-+		addr = &addr4;
-+	} else {
-+		if(p_inet_pton(AF_INET6, host, &addr6)) {
-+			type = GEN_IPADD;
-+			addr = &addr6;
-+		}
-+	}
-+
-+
-+	cert = SSL_get_peer_certificate(ssl);
-+	if (!cert) {
-+		giterr_set(GITERR_SSL, "the server did not provide a certificate");
-+		return -1;
-+	}
-+
-+	/* Check the alternative names */
-+	alts = X509_get_ext_d2i(cert, NID_subject_alt_name, NULL, NULL);
-+	if (alts) {
-+		int num;
-+
-+		num = sk_GENERAL_NAME_num(alts);
-+		for (i = 0; i < num && matched != 1; i++) {
-+			const GENERAL_NAME *gn = sk_GENERAL_NAME_value(alts, i);
-+			const char *name = (char *) ASN1_STRING_get0_data(gn->d.ia5);
-+			size_t namelen = (size_t) ASN1_STRING_length(gn->d.ia5);
-+
-+			/* Skip any names of a type we're not looking for */
-+			if (gn->type != type)
-+				continue;
-+
-+			if (type == GEN_DNS) {
-+				/* If it contains embedded NULs, don't even try */
-+				if (memchr(name, '\0', namelen))
-+					continue;
-+
-+				if (check_host_name(name, host) < 0)
-+					matched = 0;
-+				else
-+					matched = 1;
-+			} else if (type == GEN_IPADD) {
-+				/* Here name isn't so much a name but a binary representation of the IP */
-+				matched = !!memcmp(name, addr, namelen);
-+			}
-+		}
-+	}
-+	GENERAL_NAMES_free(alts);
-+
-+	if (matched == 0)
-+		goto cert_fail_name;
-+
-+	if (matched == 1)
-+		return 0;
-+
-+	/* If no alternative names are available, check the common name */
-+	peer_name = X509_get_subject_name(cert);
-+	if (peer_name == NULL)
-+		goto on_error;
-+
-+	if (peer_name) {
-+		/* Get the index of the last CN entry */
-+		while ((j = X509_NAME_get_index_by_NID(peer_name, NID_commonName, i)) >= 0)
-+			i = j;
-+	}
-+
-+	if (i < 0)
-+		goto on_error;
-+
-+	str = X509_NAME_ENTRY_get_data(X509_NAME_get_entry(peer_name, i));
-+	if (str == NULL)
-+		goto on_error;
-+
-+	/* Work around a bug in OpenSSL whereby ASN1_STRING_to_UTF8 fails if it's already in utf-8 */
-+	if (ASN1_STRING_type(str) == V_ASN1_UTF8STRING) {
-+		int size = ASN1_STRING_length(str);
-+
-+		if (size > 0) {
-+			peer_cn = OPENSSL_malloc(size + 1);
-+			GITERR_CHECK_ALLOC(peer_cn);
-+			memcpy(peer_cn, ASN1_STRING_get0_data(str), size);
-+			peer_cn[size] = '\0';
-+		} else {
-+			goto cert_fail_name;
-+		}
-+	} else {
-+		int size = ASN1_STRING_to_UTF8(&peer_cn, str);
-+		GITERR_CHECK_ALLOC(peer_cn);
-+		if (memchr(peer_cn, '\0', size))
-+			goto cert_fail_name;
-+	}
-+
-+	if (check_host_name((char *)peer_cn, host) < 0)
-+		goto cert_fail_name;
-+
-+	OPENSSL_free(peer_cn);
-+
-+	return 0;
-+
-+on_error:
-+	OPENSSL_free(peer_cn);
-+	return ssl_set_error(ssl, 0);
-+
-+cert_fail_name:
-+	OPENSSL_free(peer_cn);
-+	giterr_set(GITERR_SSL, "hostname does not match certificate");
-+	return GIT_ECERTIFICATE;
-+}
-+
-+typedef struct {
-+	git_stream parent;
-+	git_stream *io;
-+	bool connected;
-+	char *host;
-+	SSL *ssl;
-+	git_cert_x509 cert_info;
-+} openssl_stream;
-+
-+int openssl_close(git_stream *stream);
-+
-+int openssl_connect(git_stream *stream)
-+{
-+	int ret;
-+	BIO *bio;
-+	openssl_stream *st = (openssl_stream *) stream;
-+
-+	if ((ret = git_stream_connect(st->io)) < 0)
-+		return ret;
-+
-+	st->connected = true;
-+
-+	bio = BIO_new(git_stream_bio_method);
-+	GITERR_CHECK_ALLOC(bio);
-+
-+	BIO_set_data(bio, st->io);
-+	SSL_set_bio(st->ssl, bio, bio);
-+
-+	/* specify the host in case SNI is needed */
-+#ifdef SSL_CTRL_SET_TLSEXT_HOSTNAME
-+	SSL_set_tlsext_host_name(st->ssl, st->host);
-+#endif
-+
-+	if ((ret = SSL_connect(st->ssl)) <= 0)
-+		return ssl_set_error(st->ssl, ret);
-+
-+	return verify_server_cert(st->ssl, st->host);
-+}
-+
-+int openssl_certificate(git_cert **out, git_stream *stream)
-+{
-+	openssl_stream *st = (openssl_stream *) stream;
-+	int len;
-+	X509 *cert = SSL_get_peer_certificate(st->ssl);
-+	unsigned char *guard, *encoded_cert;
-+
-+	/* Retrieve the length of the certificate first */
-+	len = i2d_X509(cert, NULL);
-+	if (len < 0) {
-+		giterr_set(GITERR_NET, "failed to retrieve certificate information");
-+		return -1;
-+	}
-+
-+	encoded_cert = git__malloc(len);
-+	GITERR_CHECK_ALLOC(encoded_cert);
-+	/* i2d_X509 makes 'guard' point to just after the data */
-+	guard = encoded_cert;
-+
-+	len = i2d_X509(cert, &guard);
-+	if (len < 0) {
-+		git__free(encoded_cert);
-+		giterr_set(GITERR_NET, "failed to retrieve certificate information");
-+		return -1;
-+	}
-+
-+	st->cert_info.parent.cert_type = GIT_CERT_X509;
-+	st->cert_info.data = encoded_cert;
-+	st->cert_info.len = len;
-+
-+	*out = &st->cert_info.parent;
-+
-+	return 0;
-+}
-+
-+static int openssl_set_proxy(git_stream *stream, const git_proxy_options *proxy_opts)
-+{
-+	openssl_stream *st = (openssl_stream *) stream;
-+
-+	return git_stream_set_proxy(st->io, proxy_opts);
-+}
-+
-+ssize_t openssl_write(git_stream *stream, const char *data, size_t len, int flags)
-+{
-+	openssl_stream *st = (openssl_stream *) stream;
-+	int ret;
-+
-+	GIT_UNUSED(flags);
-+
-+	if ((ret = SSL_write(st->ssl, data, len)) <= 0) {
-+		return ssl_set_error(st->ssl, ret);
-+	}
-+
-+	return ret;
-+}
-+
-+ssize_t openssl_read(git_stream *stream, void *data, size_t len)
-+{
-+	openssl_stream *st = (openssl_stream *) stream;
-+	int ret;
-+
-+	if ((ret = SSL_read(st->ssl, data, len)) <= 0)
-+		return ssl_set_error(st->ssl, ret);
-+
-+	return ret;
-+}
-+
-+int openssl_close(git_stream *stream)
-+{
-+	openssl_stream *st = (openssl_stream *) stream;
-+	int ret;
-+
-+	if (st->connected && (ret = ssl_teardown(st->ssl)) < 0)
-+		return -1;
-+
-+	st->connected = false;
-+
-+	return git_stream_close(st->io);
-+}
-+
-+void openssl_free(git_stream *stream)
-+{
-+	openssl_stream *st = (openssl_stream *) stream;
-+
-+	SSL_free(st->ssl);
-+	git__free(st->host);
-+	git__free(st->cert_info.data);
-+	git_stream_free(st->io);
-+	git__free(st);
-+}
-+
-+int git_openssl_stream_new(git_stream **out, const char *host, const char *port)
-+{
-+	int error;
-+	openssl_stream *st;
-+
-+	st = git__calloc(1, sizeof(openssl_stream));
-+	GITERR_CHECK_ALLOC(st);
-+
-+	st->io = NULL;
-+#ifdef GIT_CURL
-+	error = git_curl_stream_new(&st->io, host, port);
-+#else
-+	error = git_socket_stream_new(&st->io, host, port);
-+#endif
-+
-+	if (error < 0)
-+		goto out_err;
-+
-+	st->ssl = SSL_new(git__ssl_ctx);
-+	if (st->ssl == NULL) {
-+		giterr_set(GITERR_SSL, "failed to create ssl object");
-+		error = -1;
-+		goto out_err;
-+	}
-+
-+	st->host = git__strdup(host);
-+	GITERR_CHECK_ALLOC(st->host);
-+
-+	st->parent.version = GIT_STREAM_VERSION;
-+	st->parent.encrypted = 1;
-+	st->parent.proxy_support = git_stream_supports_proxy(st->io);
-+	st->parent.connect = openssl_connect;
-+	st->parent.certificate = openssl_certificate;
-+	st->parent.set_proxy = openssl_set_proxy;
-+	st->parent.read = openssl_read;
-+	st->parent.write = openssl_write;
-+	st->parent.close = openssl_close;
-+	st->parent.free = openssl_free;
-+
-+	*out = (git_stream *) st;
-+	return 0;
-+
-+out_err:
-+	git_stream_free(st->io);
-+	git__free(st);
-+
-+	return error;
-+}
-+
-+int git_openssl_set_cert_file(const char *file, const char *path)
-+{
-+	if (SSL_CTX_load_verify_locations(git__ssl_ctx, file, path) == 0) {
-+		giterr_set(GITERR_SSL, "SSL error: %s",
-+				   ERR_error_string(ERR_get_error(), NULL));
-+		return -1;
-+	}
-+	return 0;
-+}
-+
-+#else
-+
-+#include "stream.h"
-+#include "git2/sys/openssl.h"
-+
-+int git_openssl_stream_global_init(void)
-+{
-+	return 0;
-+}
-+
-+int git_openssl_set_locking(void)
-+{
-+	giterr_set(GITERR_SSL, "libgit2 was not built with OpenSSL support");
-+	return -1;
-+}
-+
-+int git_openssl_stream_new(git_stream **out, const char *host, const char *port)
-+{
-+	GIT_UNUSED(out);
-+	GIT_UNUSED(host);
-+	GIT_UNUSED(port);
-+
-+	giterr_set(GITERR_SSL, "openssl is not supported in this version");
-+	return -1;
-+}
-+
-+int git_openssl_set_ca_location(const char *file, const char *path)
-+{
-+	GIT_UNUSED(file);
-+	GIT_UNUSED(path);
-+
-+	giterr_set(GITERR_SSL, "openssl is not supported in this version");
-+	return -1;
-+}
-+
-+#endif
-diff --git a/src/streams/openssl.h b/src/streams/openssl.h
-new file mode 100644
-index 0000000..8c7a84d
---- /dev/null
-+++ b/src/streams/openssl.h
-@@ -0,0 +1,124 @@
-+/*
-+ * Copyright (C) the libgit2 contributors. All rights reserved.
-+ *
-+ * This file is part of libgit2, distributed under the GNU GPL v2 with
-+ * a Linking Exception. For full terms see the included COPYING file.
-+ */
-+#ifndef INCLUDE_openssl_stream_h__
-+#define INCLUDE_openssl_stream_h__
-+
-+#include "git2/sys/stream.h"
-+
-+extern int git_openssl_stream_global_init(void);
-+
-+extern int git_openssl_stream_new(git_stream **out, const char *host, const char *port);
-+
-+extern int git_openssl_set_cert_file(const char *file, const char *path);
-+
-+/*
-+ * OpenSSL 1.1 made BIO opaque so we have to use functions to interact with it
-+ * which do not exist in previous versions. We define these inline functions so
-+ * we can program against the interface instead of littering the implementation
-+ * with ifdefs.
-+ */
-+#ifdef GIT_OPENSSL
-+# include <openssl/ssl.h>
-+# include <openssl/err.h>
-+# include <openssl/x509v3.h>
-+# include <openssl/bio.h>
-+
-+
-+
-+# if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
-+
-+GIT_INLINE(BIO_METHOD*) BIO_meth_new(int type, const char *name)
-+{
-+	BIO_METHOD *meth = git__calloc(1, sizeof(BIO_METHOD));
-+	if (!meth) {
-+		return NULL;
-+	}
-+
-+	meth->type = type;
-+	meth->name = name;
-+
-+	return meth;
-+}
-+
-+GIT_INLINE(void) BIO_meth_free(BIO_METHOD *biom)
-+{
-+	git__free(biom);
-+}
-+
-+GIT_INLINE(int) BIO_meth_set_write(BIO_METHOD *biom, int (*write) (BIO *, const char *, int))
-+{
-+	biom->bwrite = write;
-+	return 1;
-+}
-+
-+GIT_INLINE(int) BIO_meth_set_read(BIO_METHOD *biom, int (*read) (BIO *, char *, int))
-+{
-+	biom->bread = read;
-+	return 1;
-+}
-+
-+GIT_INLINE(int) BIO_meth_set_puts(BIO_METHOD *biom, int (*puts) (BIO *, const char *))
-+{
-+	biom->bputs = puts;
-+	return 1;
-+}
-+
-+GIT_INLINE(int) BIO_meth_set_gets(BIO_METHOD *biom, int (*gets) (BIO *, char *, int))
-+
-+{
-+	biom->bgets = gets;
-+	return 1;
-+}
-+
-+GIT_INLINE(int) BIO_meth_set_ctrl(BIO_METHOD *biom, long (*ctrl) (BIO *, int, long, void *))
-+{
-+	biom->ctrl = ctrl;
-+	return 1;
-+}
-+
-+GIT_INLINE(int) BIO_meth_set_create(BIO_METHOD *biom, int (*create) (BIO *))
-+{
-+	biom->create = create;
-+	return 1;
-+}
-+
-+GIT_INLINE(int) BIO_meth_set_destroy(BIO_METHOD *biom, int (*destroy) (BIO *))
-+{
-+	biom->destroy = destroy;
-+	return 1;
-+}
-+
-+GIT_INLINE(int) BIO_get_new_index(void)
-+{
-+	/* This exists as of 1.1 so before we'd just have 0 */
-+	return 0;
-+}
-+
-+GIT_INLINE(void) BIO_set_init(BIO *b, int init)
-+{
-+	b->init = init;
-+}
-+
-+GIT_INLINE(void) BIO_set_data(BIO *a, void *ptr)
-+{
-+	a->ptr = ptr;
-+}
-+
-+GIT_INLINE(void*) BIO_get_data(BIO *a)
-+{
-+	return a->ptr;
-+}
-+
-+GIT_INLINE(const unsigned char *) ASN1_STRING_get0_data(const ASN1_STRING *x)
-+{
-+	return ASN1_STRING_data((ASN1_STRING *)x);
-+}
-+
-+# endif // OpenSSL < 1.1
-+#endif // GIT_OPENSSL
-+
-+#endif
-diff --git a/src/streams/socket.c b/src/streams/socket.c
-new file mode 100644
-index 0000000..1150b40
---- /dev/null
-+++ b/src/streams/socket.c
-@@ -0,0 +1,210 @@
-+/*
-+ * Copyright (C) the libgit2 contributors. All rights reserved.
-+ *
-+ * This file is part of libgit2, distributed under the GNU GPL v2 with
-+ * a Linking Exception. For full terms see the included COPYING file.
-+ */
-+
-+#include "common.h"
-+#include "posix.h"
-+#include "netops.h"
-+#include "stream.h"
-+#include "streams/socket.h"
-+
-+#ifndef _WIN32
-+#	include <sys/types.h>
-+#	include <sys/socket.h>
-+#	include <sys/select.h>
-+#	include <sys/time.h>
-+#	include <netdb.h>
-+#	include <netinet/in.h>
-+#       include <arpa/inet.h>
-+#else
-+#	include <winsock2.h>
-+#	include <ws2tcpip.h>
-+#	ifdef _MSC_VER
-+#		pragma comment(lib, "ws2_32")
-+#	endif
-+#endif
-+
-+#ifdef GIT_WIN32
-+static void net_set_error(const char *str)
-+{
-+	int error = WSAGetLastError();
-+	char * win32_error = git_win32_get_error_message(error);
-+
-+	if (win32_error) {
-+		giterr_set(GITERR_NET, "%s: %s", str, win32_error);
-+		git__free(win32_error);
-+	} else {
-+		giterr_set(GITERR_NET, str);
-+	}
-+}
-+#else
-+static void net_set_error(const char *str)
-+{
-+	giterr_set(GITERR_NET, "%s: %s", str, strerror(errno));
-+}
-+#endif
-+
-+static int close_socket(GIT_SOCKET s)
-+{
-+	if (s == INVALID_SOCKET)
-+		return 0;
-+
-+#ifdef GIT_WIN32
-+	if (SOCKET_ERROR == closesocket(s))
-+		return -1;
-+
-+	if (0 != WSACleanup()) {
-+		giterr_set(GITERR_OS, "winsock cleanup failed");
-+		return -1;
-+	}
-+
-+	return 0;
-+#else
-+	return close(s);
-+#endif
-+
-+}
-+
-+int socket_connect(git_stream *stream)
-+{
-+	struct addrinfo *info = NULL, *p;
-+	struct addrinfo hints;
-+	git_socket_stream *st = (git_socket_stream *) stream;
-+	GIT_SOCKET s = INVALID_SOCKET;
-+	int ret;
-+
-+#ifdef GIT_WIN32
-+	/* on win32, the WSA context needs to be initialized
-+	 * before any socket calls can be performed */
-+	WSADATA wsd;
-+
-+	if (WSAStartup(MAKEWORD(2,2), &wsd) != 0) {
-+		giterr_set(GITERR_OS, "winsock init failed");
-+		return -1;
-+	}
-+
-+	if (LOBYTE(wsd.wVersion) != 2 || HIBYTE(wsd.wVersion) != 2) {
-+		WSACleanup();
-+		giterr_set(GITERR_OS, "winsock init failed");
-+		return -1;
-+	}
-+#endif
-+
-+	memset(&hints, 0x0, sizeof(struct addrinfo));
-+	hints.ai_socktype = SOCK_STREAM;
-+	hints.ai_family = AF_UNSPEC;
-+
-+	if ((ret = p_getaddrinfo(st->host, st->port, &hints, &info)) != 0) {
-+		giterr_set(GITERR_NET,
-+			   "failed to resolve address for %s: %s", st->host, p_gai_strerror(ret));
-+		return -1;
-+	}
-+
-+	for (p = info; p != NULL; p = p->ai_next) {
-+		s = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-+
-+		if (s == INVALID_SOCKET)
-+			continue;
-+
-+		if (connect(s, p->ai_addr, (socklen_t)p->ai_addrlen) == 0)
-+			break;
-+
-+		/* If we can't connect, try the next one */
-+		close_socket(s);
-+		s = INVALID_SOCKET;
-+	}
-+
-+	/* Oops, we couldn't connect to any address */
-+	if (s == INVALID_SOCKET && p == NULL) {
-+		giterr_set(GITERR_OS, "failed to connect to %s", st->host);
-+		p_freeaddrinfo(info);
-+		return -1;
-+	}
-+
-+	st->s = s;
-+	p_freeaddrinfo(info);
-+	return 0;
-+}
-+
-+ssize_t socket_write(git_stream *stream, const char *data, size_t len, int flags)
-+{
-+	ssize_t ret;
-+	size_t off = 0;
-+	git_socket_stream *st = (git_socket_stream *) stream;
-+
-+	while (off < len) {
-+		errno = 0;
-+		ret = p_send(st->s, data + off, len - off, flags);
-+		if (ret < 0) {
-+			net_set_error("Error sending data");
-+			return -1;
-+		}
-+
-+		off += ret;
-+	}
-+
-+	return off;
-+}
-+
-+ssize_t socket_read(git_stream *stream, void *data, size_t len)
-+{
-+	ssize_t ret;
-+	git_socket_stream *st = (git_socket_stream *) stream;
-+
-+	if ((ret = p_recv(st->s, data, len, 0)) < 0)
-+		net_set_error("Error receiving socket data");
-+
-+	return ret;
-+}
-+
-+int socket_close(git_stream *stream)
-+{
-+	git_socket_stream *st = (git_socket_stream *) stream;
-+	int error;
-+
-+	error = close_socket(st->s);
-+	st->s = INVALID_SOCKET;
-+
-+	return error;
-+}
-+
-+void socket_free(git_stream *stream)
-+{
-+	git_socket_stream *st = (git_socket_stream *) stream;
-+
-+	git__free(st->host);
-+	git__free(st->port);
-+	git__free(st);
-+}
-+
-+int git_socket_stream_new(git_stream **out, const char *host, const char *port)
-+{
-+	git_socket_stream *st;
-+
-+	assert(out && host);
-+
-+	st = git__calloc(1, sizeof(git_socket_stream));
-+	GITERR_CHECK_ALLOC(st);
-+
-+	st->host = git__strdup(host);
-+	GITERR_CHECK_ALLOC(st->host);
-+
-+	if (port) {
-+		st->port = git__strdup(port);
-+		GITERR_CHECK_ALLOC(st->port);
-+	}
-+
-+	st->parent.version = GIT_STREAM_VERSION;
-+	st->parent.connect = socket_connect;
-+	st->parent.write = socket_write;
-+	st->parent.read = socket_read;
-+	st->parent.close = socket_close;
-+	st->parent.free = socket_free;
-+	st->s = INVALID_SOCKET;
-+
-+	*out = (git_stream *) st;
-+	return 0;
-+}
-diff --git a/src/streams/socket.h b/src/streams/socket.h
-new file mode 100644
-index 0000000..8e9949f
---- /dev/null
-+++ b/src/streams/socket.h
-@@ -0,0 +1,21 @@
-+/*
-+ * Copyright (C) the libgit2 contributors. All rights reserved.
-+ *
-+ * This file is part of libgit2, distributed under the GNU GPL v2 with
-+ * a Linking Exception. For full terms see the included COPYING file.
-+ */
-+#ifndef INCLUDE_socket_stream_h__
-+#define INCLUDE_socket_stream_h__
-+
-+#include "netops.h"
-+
-+typedef struct {
-+	git_stream parent;
-+	char *host;
-+	char *port;
-+	GIT_SOCKET s;
-+} git_socket_stream;
-+
-+extern int git_socket_stream_new(git_stream **out, const char *host, const char *port);
-+
-+#endif
-diff --git a/src/streams/stransport.c b/src/streams/stransport.c
-new file mode 100644
-index 0000000..4c099f9
---- /dev/null
-+++ b/src/streams/stransport.c
-@@ -0,0 +1,294 @@
-+/*
-+ * Copyright (C) the libgit2 contributors. All rights reserved.
-+ *
-+ * This file is part of libgit2, distributed under the GNU GPL v2 with
-+ * a Linking Exception. For full terms see the included COPYING file.
-+ */
-+
-+#ifdef GIT_SECURE_TRANSPORT
-+
-+#include <CoreFoundation/CoreFoundation.h>
-+#include <Security/SecureTransport.h>
-+#include <Security/SecCertificate.h>
-+
-+#include "git2/transport.h"
-+
-+#include "streams/socket.h"
-+#include "streams/curl.h"
-+
-+static int stransport_error(OSStatus ret)
-+{
-+	CFStringRef message;
-+
-+	if (ret == noErr || ret == errSSLClosedGraceful) {
-+		giterr_clear();
-+		return 0;
-+	}
-+
-+#if !TARGET_OS_IPHONE
-+	message = SecCopyErrorMessageString(ret, NULL);
-+	GITERR_CHECK_ALLOC(message);
-+
-+	giterr_set(GITERR_NET, "SecureTransport error: %s", CFStringGetCStringPtr(message, kCFStringEncodingUTF8));
-+	CFRelease(message);
-+#else
-+    giterr_set(GITERR_NET, "SecureTransport error: OSStatus %d", (unsigned int)ret);
-+    GIT_UNUSED(message);
-+#endif
-+
-+	return -1;
-+}
-+
-+typedef struct {
-+	git_stream parent;
-+	git_stream *io;
-+	SSLContextRef ctx;
-+	CFDataRef der_data;
-+	git_cert_x509 cert_info;
-+} stransport_stream;
-+
-+static int stransport_connect(git_stream *stream)
-+{
-+	stransport_stream *st = (stransport_stream *) stream;
-+	int error;
-+	SecTrustRef trust = NULL;
-+	SecTrustResultType sec_res;
-+	OSStatus ret;
-+
-+	if ((error = git_stream_connect(st->io)) < 0)
-+		return error;
-+
-+	ret = SSLHandshake(st->ctx);
-+	if (ret != errSSLServerAuthCompleted) {
-+		giterr_set(GITERR_SSL, "unexpected return value from ssl handshake %d", ret);
-+		return -1;
-+	}
-+
-+	if ((ret = SSLCopyPeerTrust(st->ctx, &trust)) != noErr)
-+		goto on_error;
-+
-+	if (!trust)
-+		return GIT_ECERTIFICATE;
-+
-+	if ((ret = SecTrustEvaluate(trust, &sec_res)) != noErr)
-+		goto on_error;
-+
-+	CFRelease(trust);
-+
-+	if (sec_res == kSecTrustResultInvalid || sec_res == kSecTrustResultOtherError) {
-+		giterr_set(GITERR_SSL, "internal security trust error");
-+		return -1;
-+	}
-+
-+	if (sec_res == kSecTrustResultDeny || sec_res == kSecTrustResultRecoverableTrustFailure ||
-+	    sec_res == kSecTrustResultFatalTrustFailure)
-+		return GIT_ECERTIFICATE;
-+
-+	return 0;
-+
-+on_error:
-+	if (trust)
-+		CFRelease(trust);
-+
-+	return stransport_error(ret);
-+}
-+
-+static int stransport_certificate(git_cert **out, git_stream *stream)
-+{
-+	stransport_stream *st = (stransport_stream *) stream;
-+	SecTrustRef trust = NULL;
-+	SecCertificateRef sec_cert;
-+	OSStatus ret;
-+
-+	if ((ret = SSLCopyPeerTrust(st->ctx, &trust)) != noErr)
-+		return stransport_error(ret);
-+
-+	sec_cert = SecTrustGetCertificateAtIndex(trust, 0);
-+	st->der_data = SecCertificateCopyData(sec_cert);
-+	CFRelease(trust);
-+
-+	if (st->der_data == NULL) {
-+		giterr_set(GITERR_SSL, "retrieved invalid certificate data");
-+		return -1;
-+	}
-+
-+	st->cert_info.parent.cert_type = GIT_CERT_X509;
-+	st->cert_info.data = (void *) CFDataGetBytePtr(st->der_data);
-+	st->cert_info.len = CFDataGetLength(st->der_data);
-+
-+	*out = (git_cert *)&st->cert_info;
-+	return 0;
-+}
-+
-+static int stransport_set_proxy(
-+	git_stream *stream,
-+	const git_proxy_options *proxy_opts)
-+{
-+	stransport_stream *st = (stransport_stream *) stream;
-+
-+	return git_stream_set_proxy(st->io, proxy_opts);
-+}
-+
-+/*
-+ * Contrary to typical network IO callbacks, Secure Transport write callback is
-+ * expected to write *all* passed data, not just as much as it can, and any
-+ * other case would be considered a failure.
-+ *
-+ * This behavior is actually not specified in the Apple documentation, but is
-+ * required for things to work correctly (and incidentally, that's also how
-+ * Apple implements it in its projects at opensource.apple.com).
-+ *
-+ * Libgit2 streams happen to already have this very behavior so this is just
-+ * passthrough.
-+ */
-+static OSStatus write_cb(SSLConnectionRef conn, const void *data, size_t *len)
-+{
-+	git_stream *io = (git_stream *) conn;
-+
-+	if (git_stream_write(io, data, *len, 0) < 0) {
-+		return -36; /* "ioErr" from MacErrors.h which is not available on iOS */
-+	}
-+
-+	return noErr;
-+}
-+
-+static ssize_t stransport_write(git_stream *stream, const char *data, size_t len, int flags)
-+{
-+	stransport_stream *st = (stransport_stream *) stream;
-+	size_t data_len, processed;
-+	OSStatus ret;
-+
-+	GIT_UNUSED(flags);
-+
-+	data_len = len;
-+	if ((ret = SSLWrite(st->ctx, data, data_len, &processed)) != noErr)
-+		return stransport_error(ret);
-+
-+	return processed;
-+}
-+
-+/*
-+ * Contrary to typical network IO callbacks, Secure Transport read callback is
-+ * expected to read *exactly* the requested number of bytes, not just as much
-+ * as it can, and any other case would be considered a failure.
-+ *
-+ * This behavior is actually not specified in the Apple documentation, but is
-+ * required for things to work correctly (and incidentally, that's also how
-+ * Apple implements it in its projects at opensource.apple.com).
-+ */
-+static OSStatus read_cb(SSLConnectionRef conn, void *data, size_t *len)
-+{
-+	git_stream *io = (git_stream *) conn;
-+	OSStatus error = noErr;
-+	size_t off = 0;
-+	ssize_t ret;
-+
-+	do {
-+		ret = git_stream_read(io, data + off, *len - off);
-+		if (ret < 0) {
-+			error = -36; /* "ioErr" from MacErrors.h which is not available on iOS */
-+			break;
-+		}
-+		if (ret == 0) {
-+			error = errSSLClosedGraceful;
-+			break;
-+		}
-+
-+		off += ret;
-+	} while (off < *len);
-+
-+	*len = off;
-+	return error;
-+}
-+
-+static ssize_t stransport_read(git_stream *stream, void *data, size_t len)
-+{
-+	stransport_stream *st = (stransport_stream *) stream;
-+	size_t processed;
-+	OSStatus ret;
-+
-+	if ((ret = SSLRead(st->ctx, data, len, &processed)) != noErr)
-+		return stransport_error(ret);
-+
-+	return processed;
-+}
-+
-+static int stransport_close(git_stream *stream)
-+{
-+	stransport_stream *st = (stransport_stream *) stream;
-+	OSStatus ret;
-+
-+	ret = SSLClose(st->ctx);
-+	if (ret != noErr && ret != errSSLClosedGraceful)
-+		return stransport_error(ret);
-+
-+	return git_stream_close(st->io);
-+}
-+
-+static void stransport_free(git_stream *stream)
-+{
-+	stransport_stream *st = (stransport_stream *) stream;
-+
-+	git_stream_free(st->io);
-+	CFRelease(st->ctx);
-+	if (st->der_data)
-+		CFRelease(st->der_data);
-+	git__free(st);
-+}
-+
-+int git_stransport_stream_new(git_stream **out, const char *host, const char *port)
-+{
-+	stransport_stream *st;
-+	int error;
-+	OSStatus ret;
-+
-+	assert(out && host);
-+
-+	st = git__calloc(1, sizeof(stransport_stream));
-+	GITERR_CHECK_ALLOC(st);
-+
-+#ifdef GIT_CURL
-+	error = git_curl_stream_new(&st->io, host, port);
-+#else
-+	error = git_socket_stream_new(&st->io, host, port);
-+#endif
-+
-+	if (error < 0){
-+		git__free(st);
-+		return error;
-+	}
-+
-+	st->ctx = SSLCreateContext(NULL, kSSLClientSide, kSSLStreamType);
-+	if (!st->ctx) {
-+		giterr_set(GITERR_NET, "failed to create SSL context");
-+		git__free(st);
-+		return -1;
-+	}
-+
-+	if ((ret = SSLSetIOFuncs(st->ctx, read_cb, write_cb)) != noErr ||
-+	    (ret = SSLSetConnection(st->ctx, st->io)) != noErr ||
-+	    (ret = SSLSetSessionOption(st->ctx, kSSLSessionOptionBreakOnServerAuth, true)) != noErr ||
-+	    (ret = SSLSetProtocolVersionMin(st->ctx, kTLSProtocol1)) != noErr ||
-+	    (ret = SSLSetProtocolVersionMax(st->ctx, kTLSProtocol12)) != noErr ||
-+	    (ret = SSLSetPeerDomainName(st->ctx, host, strlen(host))) != noErr) {
-+		CFRelease(st->ctx);
-+		git__free(st);
-+		return stransport_error(ret);
-+	}
-+
-+	st->parent.version = GIT_STREAM_VERSION;
-+	st->parent.encrypted = 1;
-+	st->parent.proxy_support = git_stream_supports_proxy(st->io);
-+	st->parent.connect = stransport_connect;
-+	st->parent.certificate = stransport_certificate;
-+	st->parent.set_proxy = stransport_set_proxy;
-+	st->parent.read = stransport_read;
-+	st->parent.write = stransport_write;
-+	st->parent.close = stransport_close;
-+	st->parent.free = stransport_free;
-+
-+	*out = (git_stream *) st;
-+	return 0;
-+}
-+
-+#endif
-diff --git a/src/streams/stransport.h b/src/streams/stransport.h
-new file mode 100644
-index 0000000..714f902
---- /dev/null
-+++ b/src/streams/stransport.h
-@@ -0,0 +1,14 @@
-+/*
-+ * Copyright (C) the libgit2 contributors. All rights reserved.
-+ *
-+ * This file is part of libgit2, distributed under the GNU GPL v2 with
-+ * a Linking Exception. For full terms see the included COPYING file.
-+ */
-+#ifndef INCLUDE_stransport_stream_h__
-+#define INCLUDE_stransport_stream_h__
-+
-+#include "git2/sys/stream.h"
-+
-+extern int git_stransport_stream_new(git_stream **out, const char *host, const char *port);
-+
-+#endif
-diff --git a/src/tls_stream.c b/src/tls_stream.c
-index 83e2d06..27e5cc2 100644
---- a/src/tls_stream.c
-+++ b/src/tls_stream.c
-@@ -8,8 +8,9 @@
+diff --git a/src/streams/tls.c b/src/streams/tls.c
+index d6ca7d40d..1bcb0d984 100644
+--- a/src/streams/tls.c
++++ b/src/streams/tls.c
+@@ -9,6 +9,7 @@
+ 
  #include "git2/errors.h"
- #include "common.h"
  
--#include "openssl_stream.h"
--#include "stransport_stream.h"
 +#include "streams/mbedtls.h"
-+#include "streams/openssl.h"
-+#include "streams/stransport.h"
+ #include "streams/openssl.h"
+ #include "streams/stransport.h"
  
- static git_stream_cb tls_ctor;
- 
-@@ -30,6 +31,8 @@ int git_tls_stream_new(git_stream **out, const char *host, const char *port)
+@@ -31,6 +32,8 @@ int git_tls_stream_new(git_stream **out, const char *host, const char *port)
  	return git_stransport_stream_new(out, host, port);
  #elif defined(GIT_OPENSSL)
  	return git_openssl_stream_new(out, host, port);
@@ -4657,75 +951,19 @@ index 83e2d06..27e5cc2 100644
  #else
  	GIT_UNUSED(out);
  	GIT_UNUSED(host);
-diff --git a/src/transports/git.c b/src/transports/git.c
-index 01edfdc..cae10c3 100644
---- a/src/transports/git.c
-+++ b/src/transports/git.c
-@@ -10,7 +10,7 @@
- #include "netops.h"
- #include "git2/sys/transport.h"
- #include "stream.h"
--#include "socket_stream.h"
-+#include "streams/socket.h"
- 
- #define OWNING_SUBTRANSPORT(s) ((git_subtransport *)(s)->parent.subtransport)
- 
-diff --git a/src/transports/http.c b/src/transports/http.c
-index cb4a6d0..b602adf 100644
---- a/src/transports/http.c
-+++ b/src/transports/http.c
-@@ -16,8 +16,8 @@
- #include "auth.h"
- #include "auth_negotiate.h"
- #include "tls_stream.h"
--#include "socket_stream.h"
--#include "curl_stream.h"
-+#include "streams/socket.h"
-+#include "streams/curl.h"
- 
- git_http_auth_scheme auth_schemes[] = {
- 	{ GIT_AUTHTYPE_NEGOTIATE, "Negotiate", GIT_CREDTYPE_DEFAULT, git_http_auth_negotiate },
-diff --git a/src/transports/ssh.c b/src/transports/ssh.c
-index 4c55e3f..3cb5655 100644
---- a/src/transports/ssh.c
-+++ b/src/transports/ssh.c
-@@ -15,7 +15,7 @@
- #include "netops.h"
- #include "smart.h"
- #include "cred.h"
--#include "socket_stream.h"
-+#include "streams/socket.h"
- #include "ssh.h"
- 
- #ifdef GIT_SSH
 diff --git a/tests/core/stream.c b/tests/core/stream.c
-index 0cbf442..2da4b2f 100644
+index 9bed4ae27..262888b10 100644
 --- a/tests/core/stream.c
 +++ b/tests/core/stream.c
-@@ -37,8 +37,7 @@ void test_core_stream__register_tls(void)
- 	 * or when openssl support is disabled (except on OSX
- 	 * with Security framework).
+@@ -33,9 +33,8 @@ void test_core_stream__register_tls(void)
+ 	cl_git_pass(git_stream_register_tls(NULL));
+ 	error = git_tls_stream_new(&stream, "localhost", "443");
+ 
+-	/* We don't have arbitrary TLS stream support on Windows
+-	 * or when openssl support is disabled (except on OSX
+-	 * with Security framework).
++	/* We don't have TLS support enabled, or we're on Windows,
++	 * which has no arbitrary TLS stream support.
  	 */
--#if defined(GIT_WIN32) || \
--	(!defined(GIT_SECURE_TRANSPORT) && !defined(GIT_OPENSSL))
-+#if defined(GIT_WIN32) || !defined(GIT_HTTPS)
+ #if defined(GIT_WIN32) || !defined(GIT_HTTPS)
  	cl_git_fail_with(-1, error);
- #else
- 	cl_git_pass(error);
-diff --git a/tests/main.c b/tests/main.c
-index f67c8ff..3dadc5d 100644
---- a/tests/main.c
-+++ b/tests/main.c
-@@ -11,7 +11,11 @@ int main(int argc, char *argv[])
- 
- 	clar_test_init(argc, argv);
- 
--	git_libgit2_init();
-+	res = git_libgit2_init();
-+	if (res < 0) {
-+		return res;
-+	}
-+
- 	cl_global_trace_register();
- 	cl_sandbox_set_search_path_defaults();
- 

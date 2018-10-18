@@ -108,7 +108,7 @@ end
     @test NaN16 != NaN16
     @test isequal(NaN16, NaN16)
     @test repr(NaN16) == "NaN16"
-    @test sprint(showcompact, NaN16) == "NaN"
+    @test sprint(show, NaN16, context=:compact => true) == "NaN"
 
     @test isinf(Inf16)
     @test isinf(-Inf16)
@@ -120,7 +120,7 @@ end
     @test -Inf16 < Inf16
     @test isequal(Inf16, Inf16)
     @test repr(Inf16) == "Inf16"
-    @test sprint(showcompact, Inf16) == "Inf"
+    @test sprint(show, Inf16, context=:compact => true) == "Inf"
 
     @test isnan(reinterpret(Float16,0x7c01))
     @test !isinf(reinterpret(Float16,0x7c01))
@@ -151,11 +151,11 @@ end
         @test abs(f32 - f16) < abs(f32 - prevfloat(f16))
     end
     # halfway between and last bit is 1
-    f = reinterpret(Float32,                           0b00111110101010100011000000000000)
-    @test Float32(Float16(f)) === reinterpret(Float32, 0b00111110101010100100000000000000)
+    ff = reinterpret(Float32,                           0b00111110101010100011000000000000)
+    @test Float32(Float16(ff)) === reinterpret(Float32, 0b00111110101010100100000000000000)
     # halfway between and last bit is 0
-    f = reinterpret(Float32,                           0b00111110101010100001000000000000)
-    @test Float32(Float16(f)) === reinterpret(Float32, 0b00111110101010100000000000000000)
+    ff = reinterpret(Float32,                           0b00111110101010100001000000000000)
+    @test Float32(Float16(ff)) === reinterpret(Float32, 0b00111110101010100000000000000000)
 end
 
 # issue #5948

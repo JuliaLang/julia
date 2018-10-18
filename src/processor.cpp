@@ -49,7 +49,7 @@
 // Features that are not recognized will be passed to LLVM directly during codegen
 // but ignored otherwise.
 
-// Two special features are supported:
+// A few special features are supported:
 // 1. `clone_all`
 //
 //     This forces the target to have all functions in sysimg cloned.
@@ -63,6 +63,14 @@
 //     will use the version in the base target. This option causes the base target to be
 //     fully cloned (as if `clone_all` is specified for it) if it is not the default target (0).
 //     The index can only be smaller than the current index.
+//
+// 3. `opt_size`
+//
+//     Optimize for size with minimum performance impact. Clang/GCC's `-Os`.
+//
+// 4. `min_size`
+//
+//     Optimize only for size. Clang's `-Oz`.
 
 bool jl_processor_print_help = false;
 
@@ -548,6 +556,20 @@ parse_cmdline(const char *option, F &&feature_cb)
                     arg.en.flags &= ~JL_TARGET_CLONE_ALL;
                 }
             }
+            else if (llvm::StringRef(fname, p - fname) == "opt_size") {
+                if (disable)
+                    jl_error("Invalid target option: disabled opt_size.");
+                if (arg.en.flags & JL_TARGET_MINSIZE)
+                    jl_error("Conflicting target option: both opt_size and min_size are specified.");
+                arg.en.flags |= JL_TARGET_OPTSIZE;
+            }
+            else if (llvm::StringRef(fname, p - fname) == "min_size") {
+                if (disable)
+                    jl_error("Invalid target option: disabled min_size.");
+                if (arg.en.flags & JL_TARGET_OPTSIZE)
+                    jl_error("Conflicting target option: both opt_size and min_size are specified.");
+                arg.en.flags |= JL_TARGET_MINSIZE;
+            }
             else if (int base = get_clone_base(fname, p)) {
                 if (disable)
                     jl_error("Invalid target option: disabled base index.");
@@ -599,23 +621,33 @@ template<typename F>
 static inline jl_sysimg_fptrs_t parse_sysimg(void *hdl, F &&callback)
 {
     jl_sysimg_fptrs_t res = {nullptr, 0, nullptr, 0, nullptr, nullptr};
-    // .data base
-    auto data_base = (char*)jl_dlsym(hdl, "jl_sysimg_gvars_base");
-    // .text base
-    res.base = (const char*)jl_dlsym(hdl, "jl_sysimg_fvars_base");
-    auto offsets = ((const int32_t*)jl_dlsym(hdl, "jl_sysimg_fvars_offsets")) + 1;
-    uint32_t nfunc = ((const uint32_t*)offsets)[-1];
-    res.offsets = offsets;
+    char * data_base;
 
-    void *ids = jl_dlsym(hdl, "jl_dispatch_target_ids");
+    // .data base
+    jl_dlsym(hdl, "jl_sysimg_gvars_base", (void **)&data_base, 1);
+    // .text base
+    jl_dlsym(hdl, "jl_sysimg_fvars_base", (void **)&res.base, 1);
+
+    const int32_t * offsets;
+    jl_dlsym(hdl, "jl_sysimg_fvars_offsets", (void **)&offsets, 1);
+    uint32_t nfunc = offsets[0];
+    res.offsets = offsets + 1;
+
+    void *ids;
+    jl_dlsym(hdl, "jl_dispatch_target_ids", &ids, 1);
     uint32_t target_idx = callback(ids);
 
-    auto reloc_slots = ((const int32_t*)jl_dlsym(hdl, "jl_dispatch_reloc_slots")) + 1;
-    auto nreloc = ((const uint32_t*)reloc_slots)[-1];
-    auto clone_idxs = (const uint32_t*)jl_dlsym(hdl, "jl_dispatch_fvars_idxs");
-    auto clone_offsets = (const int32_t*)jl_dlsym(hdl, "jl_dispatch_fvars_offsets");
+    const int32_t * reloc_slots;
+    jl_dlsym(hdl, "jl_dispatch_reloc_slots",(void **) &reloc_slots, 1);
+    const uint32_t nreloc = reloc_slots[0];
+    reloc_slots += 1;
+    const uint32_t * clone_idxs;
+    const int32_t * clone_offsets;
+    jl_dlsym(hdl, "jl_dispatch_fvars_idxs", (void **)&clone_idxs, 1);
+    jl_dlsym(hdl, "jl_dispatch_fvars_offsets", (void **)&clone_offsets, 1);
     uint32_t tag_len = clone_idxs[0];
     clone_idxs += 1;
+
     assert(tag_len & jl_sysimg_tag_mask);
     std::vector<const int32_t*> base_offsets = {res.offsets};
     // Find target
@@ -702,6 +734,14 @@ static inline void check_cmdline(T &&cmdline, bool imaging)
         }
         if (cmdline[0].en.flags & JL_TARGET_CLONE_ALL) {
             jl_error("\"clone_all\" feature specified "
+                     "without a `--output-` flag specified");
+        }
+        if (cmdline[0].en.flags & JL_TARGET_OPTSIZE) {
+            jl_error("\"opt_size\" feature specified "
+                     "without a `--output-` flag specified");
+        }
+        if (cmdline[0].en.flags & JL_TARGET_MINSIZE) {
+            jl_error("\"min_size\" feature specified "
                      "without a `--output-` flag specified");
         }
     }

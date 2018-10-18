@@ -1,6 +1,6 @@
 # Memory layout of Julia Objects
 
-## Object layout (jl_value_t)
+## Object layout (`jl_value_t`)
 
 The `jl_value_t` struct is the name for a block of memory owned by the Julia Garbage Collector,
 representing the data associated with a Julia object in memory. Absent any type information, it
@@ -197,7 +197,7 @@ objects.
 
 !!! sidebar "Singleton Types"
     Singleton types have only one instance and no data fields. Singleton instances have a size of
-    0 bytes, and consist only of their metadata. e.g. `nothing::Void`.
+    0 bytes, and consist only of their metadata. e.g. `nothing::Nothing`.
 
     See [Singleton Types](@ref man-singleton-types) and [Nothingness and missing values](@ref)
 

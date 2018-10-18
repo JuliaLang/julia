@@ -13,7 +13,7 @@ or the [documentation](https://docs.julialang.org/).
 ### Unicode font support
 
 The built-in Windows fonts have rather poor coverage of the Unicode character
-space.  The free [`DejaVu Sans Mono`](http://dejavu-fonts.org/) font can be used
+space.  The free [`DejaVu Sans Mono`](https://dejavu-fonts.github.io/) font can be used
 as a replacement font in the Windows console.  Since Windows 2000, simply
 downloading the font and installing it is insufficient, since Windows keeps a
 list of approved fonts in the registry.
@@ -23,7 +23,7 @@ Instructions for adding fonts to the terminal are available at
 
 Additionally, rather than sticking with the default command prompt, you may want
 to use a different terminal emulator program, such as
-[Conemu](https://code.google.com/p/conemu-maximus5/) or [Mintty](
+[Conemu](https://conemu.github.io/) or [Mintty](
 https://github.com/mintty/mintty) (note that running Julia on Mintty needs a
 copy of `stty.exe` in your `%PATH%` to work properly).  Alternatively, you may
 prefer the features of a more full-function IDE, such as [Juno](http://junolab.org),
@@ -63,7 +63,7 @@ The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise re
 
  3. Julia's home directory is the location pointed to by the Windows environment
     variable `%HOME%`: this directory is for instance where the startup file
-    `.juliarc.jl` resides. `%HOMEDRIVE%\%HOMEPATH%` is used as a fallback if
+    `.julia/config/startup.jl` resides. `%HOMEDRIVE%\%HOMEPATH%` is used as a fallback if
     `%HOME%` is not defined.
 
 ## Source distribution
@@ -131,7 +131,7 @@ MinGW-w64 compilers available through Cygwin's package manager.
 
     3. Start the build
        ```sh
-       make -j 4   # Adjust the number of cores (4) to match your build environment.
+       make -j 4   # Adjust the number of threads (4) to match your build environment.
        ```
 
 

@@ -82,9 +82,9 @@ void add_lostval_parent(jl_value_t *parent)
  by C code directly, look for missing jl_gc_wb() on pointer updates. Be aware that there are
  innocent looking functions which allocate (and thus trigger marking) only on special cases.
 
- If you cant find it, you can try the following :
+ If you can't find it, you can try the following :
  - Ensure that should_timeout() is deterministic instead of clock based.
- - Once you have a completly deterministic program which crashes on gc_verify, the addresses
+ - Once you have a completely deterministic program which crashes on gc_verify, the addresses
    should stay constant between different runs (with same binary, same environment ...).
    Do not forget to turn off ASLR (linux: echo 0 > /proc/sys/kernel/randomize_va_space).
    At this point you should be able to run under gdb and use a hw watch to look for writes
@@ -200,7 +200,7 @@ static void gc_verify_track(jl_ptls_t ptls)
 {
     jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
     do {
-        gc_mark_sp_t sp;
+        jl_gc_mark_sp_t sp;
         gc_mark_sp_init(gc_cache, &sp);
         arraylist_push(&lostval_parents_done, lostval);
         jl_printf(JL_STDERR, "Now looking for %p =======\n", lostval);
@@ -247,7 +247,7 @@ static void gc_verify_track(jl_ptls_t ptls)
 void gc_verify(jl_ptls_t ptls)
 {
     jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
-    gc_mark_sp_t sp;
+    jl_gc_mark_sp_t sp;
     gc_mark_sp_init(gc_cache, &sp);
     lostval = NULL;
     lostval_parents.len = 0;
@@ -579,27 +579,25 @@ static void gc_scrub_task(jl_task_t *ta)
     int16_t tid = ta->tid;
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_ptls_t ptls2 = jl_all_tls_states[tid];
+
+    char *low;
+    char *high;
+    if (ta->copy_stack && ta == ptls2->current_task) {
+        low  = (char*)ptls2->stackbase - ptls2->stacksize;
+        high = (char*)ptls2->stackbase;
+    }
+    else if (ta->stkbuf) {
+        low  = (char*)ta->stkbuf;
+        high = (char*)ta->stkbuf + ta->bufsz;
+    }
+    else
+        return;
+
     if (ptls == ptls2 && ta == ptls2->current_task) {
         // scan up to current `sp` for current thread and task
-        char *low = (char*)jl_get_frame_addr();
-#ifdef COPY_STACKS
-        gc_scrub_range(low, ptls2->stack_hi);
-#else
-        gc_scrub_range(low, (char*)ta->stkbuf + ta->ssize);
-#endif
-        return;
+        low = (char*)jl_get_frame_addr();
     }
-    // The task that owns/is running on the threads's stack.
-#ifdef COPY_STACKS
-    jl_task_t *thread_task = ptls2->current_task;
-#else
-    jl_task_t *thread_task = ptls2->root_task;
-#endif
-    if (ta == thread_task)
-        gc_scrub_range(ptls2->stack_lo, ptls2->stack_hi);
-    if (ta->stkbuf == (void*)(intptr_t)(-1) || !ta->stkbuf)
-        return;
-    gc_scrub_range((char*)ta->stkbuf, (char*)ta->stkbuf + ta->ssize);
+    gc_scrub_range(low, high);
 }
 
 void gc_scrub(void)
@@ -1242,7 +1240,7 @@ int gc_slot_to_arrayidx(void *obj, void *_slot)
 
 // Print a backtrace from the bottom (start) of the mark stack up to `sp`
 // `pc_offset` will be added to `sp` for convenience in the debugger.
-NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset)
+NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_offset)
 {
     jl_jmp_buf *old_buf = ptls->safe_restore;
     jl_jmp_buf buf;
@@ -1254,7 +1252,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         return;
     }
     void **top = sp.pc + pc_offset;
-    char *data_top = sp.data;
+    jl_gc_mark_data_t *data_top = sp.data;
     sp.data = ptls->gc_cache.data_stack;
     sp.pc = ptls->gc_cache.pc_stack;
     int isroot = 1;
@@ -1264,7 +1262,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         isroot = 0;
         if (pc == gc_mark_label_addrs[GC_MARK_L_marked_obj]) {
             gc_mark_marked_obj_t *data = gc_repush_markdata(&sp, gc_mark_marked_obj_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
@@ -1275,7 +1273,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         }
         else if (pc == gc_mark_label_addrs[GC_MARK_L_scan_only]) {
             gc_mark_marked_obj_t *data = gc_repush_markdata(&sp, gc_mark_marked_obj_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
@@ -1286,7 +1284,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         }
         else if (pc == gc_mark_label_addrs[GC_MARK_L_finlist]) {
             gc_mark_finlist_t *data = gc_repush_markdata(&sp, gc_mark_finlist_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
@@ -1296,7 +1294,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         }
         else if (pc == gc_mark_label_addrs[GC_MARK_L_objarray]) {
             gc_mark_objarray_t *data = gc_repush_markdata(&sp, gc_mark_objarray_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
@@ -1307,7 +1305,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         }
         else if (pc == gc_mark_label_addrs[GC_MARK_L_obj8]) {
             gc_mark_obj8_t *data = gc_repush_markdata(&sp, gc_mark_obj8_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
@@ -1320,7 +1318,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         }
         else if (pc == gc_mark_label_addrs[GC_MARK_L_obj16]) {
             gc_mark_obj16_t *data = gc_repush_markdata(&sp, gc_mark_obj16_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
@@ -1333,7 +1331,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         }
         else if (pc == gc_mark_label_addrs[GC_MARK_L_obj32]) {
             gc_mark_obj32_t *data = gc_repush_markdata(&sp, gc_mark_obj32_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
@@ -1346,7 +1344,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         }
         else if (pc == gc_mark_label_addrs[GC_MARK_L_stack]) {
             gc_mark_stackframe_t *data = gc_repush_markdata(&sp, gc_mark_stackframe_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
@@ -1358,7 +1356,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
         else if (pc == gc_mark_label_addrs[GC_MARK_L_module_binding]) {
             // module_binding
             gc_mark_binding_t *data = gc_repush_markdata(&sp, gc_mark_binding_t);
-            if ((char*)data > data_top) {
+            if ((jl_gc_mark_data_t *)data > data_top) {
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }

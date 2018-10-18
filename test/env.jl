@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 @test !("f=a=k=e=n=a=m=e" ∈ keys(ENV))
 
 @testset "issue #10994" begin
@@ -48,8 +50,8 @@ end
         io = IOBuffer()
         show(io, ENV)
         s = String(take!(io))
-        @test contains(s, "$k1=$k1")
-        @test contains(s, "$k2=$k2")
+        @test occursin("$k1=$k1", s)
+        @test occursin("$k2=$k2", s)
 
         @test pop!(ENV, k1) == k1
         @test !haskey(ENV, k1)
@@ -70,4 +72,12 @@ for (k, v) in ENV
     if length(v) > 0
         @test v[end] != '\0'
     end
+end
+
+@testset "push" begin
+    @test !haskey(ENV, "testing_envdict")
+    push!(ENV, "testing_envdict" => "tested")
+    @test haskey(ENV, "testing_envdict")
+    @test ENV["testing_envdict"] == "tested"
+    delete!(ENV, "testing_envdict")
 end

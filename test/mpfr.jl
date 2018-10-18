@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Serialization
+
 import Base.MPFR
 @testset "constructors" begin
     setprecision(53) do
@@ -7,22 +9,10 @@ import Base.MPFR
         x = BigFloat(12)
     end
     x = BigFloat(12)
-    y = BigFloat(x)
-    @test x ≈ y
-    y = BigFloat(0xc)
-    @test x ≈ y
-    y = BigFloat(12.)
-    @test x ≈ y
-    y = BigFloat(BigInt(12))
-    @test x ≈ y
-    y = BigFloat(BigFloat(12))
-    @test x ≈ y
-    y = parse(BigFloat,"12")
-    @test x ≈ y
-    y = BigFloat(Float32(12.))
-    @test x ≈ y
-    y = BigFloat(12//1)
-    @test x ≈ y
+    @test x == BigFloat(x) == BigFloat(0xc) == BigFloat(12.) ==
+          BigFloat(BigInt(12)) == BigFloat(BigFloat(12)) == parse(BigFloat,"12") ==
+          parse(BigFloat,"12 ") == parse(BigFloat," 12") == parse(BigFloat," 12 ") ==
+          BigFloat(Float32(12.)) == BigFloat(12//1) == BigFloat(SubString("12"))
 
     @test typeof(BigFloat(typemax(Int8))) == BigFloat
     @test typeof(BigFloat(typemax(Int16))) == BigFloat
@@ -37,8 +27,8 @@ import Base.MPFR
     @test typeof(BigFloat(typemax(UInt64))) == BigFloat
     @test typeof(BigFloat(typemax(UInt128))) == BigFloat
 
-    @test typeof(BigFloat(realmax(Float32))) == BigFloat
-    @test typeof(BigFloat(realmax(Float64))) == BigFloat
+    @test typeof(BigFloat(floatmax(Float32))) == BigFloat
+    @test typeof(BigFloat(floatmax(Float64))) == BigFloat
 
     @test typeof(BigFloat(BigInt(1))) == BigFloat
     @test typeof(BigFloat(BigFloat(1))) == BigFloat
@@ -301,11 +291,19 @@ end
         end
         # BigInt division
         @test a / BigInt(2) == c
+        # inv
+        @test inv(x) == one(x)/x == 1/x == x^-1 == Clong(1)/x
     end
     #^
     x = BigFloat(12)
     y = BigFloat(4)
     @test x^y == BigFloat(20736)
+
+    @test big(2.0)^big(3) == 8
+    for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt]
+        @test T(2)^big(3.0) == 8
+        @test big(2.0)^T(3) == 8
+    end
 end
 @testset "iterated arithmetic" begin
     a = BigFloat(12.25)
@@ -365,6 +363,7 @@ end
     y = BigFloat(-1)
     @test copysign(x, y) == y
     @test copysign(y, x) == x
+    @test copysign(1.0, BigFloat(NaN)) == 1.0
 end
 @testset "isfinite / isinf / isnan" begin
     x = BigFloat(Inf)
@@ -392,6 +391,9 @@ end
     @test typeof(convert(BigFloat, parse(BigInt,"9223372036854775808"))) == BigFloat
     @test convert(AbstractFloat, parse(BigInt,"9223372036854775808")) == parse(BigFloat,"9223372036854775808")
     @test typeof(convert(AbstractFloat, parse(BigInt,"9223372036854775808"))) == BigFloat
+
+    @test signbit(BigFloat(NaN)) == 0
+    @test signbit(BigFloat(-NaN)) == 1
 end
 @testset "convert from BigFloat" begin
     @test convert(Float64, BigFloat(0.5)) == 0.5
@@ -400,6 +402,9 @@ end
     @test convert(Bool, BigFloat(0.0)) == false
     @test convert(Bool, BigFloat(1.0)) == true
     @test_throws InexactError convert(Bool, BigFloat(0.1))
+
+    @test signbit(Float64(BigFloat(NaN))) == 0
+    @test signbit(Float64(-BigFloat(NaN))) == 1
 end
 @testset "exponent, frexp, significand" begin
     x = BigFloat(0)
@@ -455,6 +460,8 @@ end
     x = BigFloat(12)
     @test precision(x) == old_precision
     @test_throws DomainError setprecision(1)
+    # issue 15659
+    @test (setprecision(53) do; big(1/3); end) < 1//3
 end
 @testset "isinteger" begin
     @test !isinteger(BigFloat(1.2))
@@ -502,13 +509,20 @@ end
     # total ordering
     @test isless(big(-0.0), big(0.0))
     @test isless(big(1.0), big(NaN))
+    @test isless(big(Inf), big(NaN))
+    @test isless(big(Inf), -big(NaN))
+    @test !isless(big(NaN), big(NaN))
+    @test !isless(big(-NaN), big(NaN))
+    @test !isless(-big(NaN), big(NaN))
+    @test !isless(-big(NaN), big(1.0))
+    @test !isless(-big(NaN), 1.0)
 
     # cmp
-    @test cmp(big(-0.0), big(0.0)) == 0
-    @test cmp(big(0.0), big(-0.0)) == 0
-    @test_throws DomainError cmp(big(1.0), big(NaN))
-    @test_throws DomainError cmp(big(NaN), big(NaN))
-    @test_throws DomainError cmp(big(NaN), big(1.0))
+    @test cmp(big(-0.0), big(0.0)) == -1
+    @test cmp(big(0.0), big(-0.0)) == 1
+    @test cmp(big(1.0), big(NaN)) == -1
+    @test cmp(big(NaN), big(NaN)) == 0
+    @test cmp(big(NaN), big(1.0)) == 1
 end
 @testset "signbit" begin
     @test signbit(BigFloat(-1.0)) == 1
@@ -555,7 +569,7 @@ end
     z = BigFloat(3)
     w = BigFloat(4)
     @test sum([x,y,z,w]) == BigFloat(10)
-    big_array = ones(BigFloat, 100)
+    big_array = fill(BigFloat(1), 100)
     @test sum(big_array) == BigFloat(100)
     @test sum(BigFloat[]) == BigFloat(0)
 end
@@ -642,11 +656,11 @@ end
     @test BigFloat(1) + x == BigFloat(1) + prevfloat(x)
     @test eps(BigFloat) == eps(BigFloat(1))
 end
-@testset "realmin/realmax" begin
-    x = realmin(BigFloat)
+@testset "floatmin/floatmax" begin
+    x = floatmin(BigFloat)
     @test x > 0
     @test prevfloat(x) == 0
-    x = realmax(BigFloat)
+    x = floatmax(BigFloat)
     @test !isinf(x)
     @test isinf(nextfloat(x))
 end
@@ -690,9 +704,9 @@ end
     # hypot
     @test hypot(BigFloat(3), BigFloat(4)) == 5
 
-    # atan2
+    # atan
     setprecision(53) do
-        @test atan2(12,2) == atan2(BigFloat(12), BigFloat(2))
+        @test atan(12,2) == atan(BigFloat(12), BigFloat(2))
     end
 end
 @testset "ldexp" begin
@@ -847,11 +861,17 @@ end
 @test_throws ArgumentError parse(BigFloat, "1\0")
 
 @testset "serialization (issue #12386)" begin
-    b = IOBuffer()
-    x = 2.1 * big(pi)
-    serialize(b, x)
-    seekstart(b)
-    @test deserialize(b) == x
+    b = PipeBuffer()
+    let x = setprecision(53) do
+            return 2.1 * big(pi)
+        end
+        serialize(b, x)
+        @test deserialize(b) == x
+    end
+    let x = BigFloat(Inf, 46)
+        serialize(b, x)
+        @test deserialize(b) == x == BigFloat(Inf, 2)
+    end
 end
 @test isnan(sqrt(BigFloat(NaN)))
 
@@ -876,8 +896,9 @@ end
         end
     end
 end
+
 # issue #22758
-if MPFR.version() > v"3.1.5" || "r11590" in MPFR.version().build
+if MPFR.version() > v"3.1.5" || "r11590" in MPFR.patches()
     setprecision(2_000_000) do
         @test abs(sin(big(pi)/6) - 0.5) < ldexp(big(1.0),-1_999_000)
     end
@@ -888,7 +909,7 @@ end
         ends::String="",
         starts::String="")
         sx = sprint(show, x)
-        scx = sprint(showcompact, x)
+        scx = sprint(show, x, context=:compact => true)
         strx = string(x)
         @test sx == strx
         @test length(scx) < 20
@@ -896,7 +917,7 @@ end
         @test x == parse(BigFloat, sx)
         @test ≈(x, parse(BigFloat, scx), rtol=1e-4)
         for s in (sx, scx)
-            @test contains(s, 'e') == contains_e
+            @test occursin('e', s) == contains_e
             @test startswith(s, starts)
             @test endswith(s, ends)
         end
@@ -908,11 +929,18 @@ end
     test_show_bigfloat(big"-2.3457645687563543266576889678956787e-10000", starts="-2.345", ends="e-10000")
 
     for to_string in [string,
-        x->sprint(show, x),
-        x->sprint(showcompact,x)]
+                      x->sprint(show, x),
+                      x->sprint(show, x, context=:compact => true)]
         @test to_string(big"0.0") == "0.0"
         @test to_string(big"-0.0") == "-0.0"
         @test to_string(big"1.0") == "1.0"
         @test to_string(big"-1.0") == "-1.0"
+    end
+end
+
+@testset "big(::Type)" begin
+    for x in (2f0, pi, 7.8, big(ℯ))
+        @test big(typeof(x)) == typeof(big(x))
+        @test big(typeof(complex(x, x))) == typeof(big(complex(x, x)))
     end
 end

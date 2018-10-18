@@ -23,6 +23,7 @@ Base.@irrational catalan  0.91596559417721901505  catalan
 
 The constant pi.
 
+# Examples
 ```jldoctest
 julia> pi
 π = 3.1415926535897...
@@ -36,6 +37,7 @@ julia> pi
 
 The constant ℯ.
 
+# Examples
 ```jldoctest
 julia> ℯ
 ℯ = 2.7182818284590...
@@ -49,8 +51,9 @@ julia> ℯ
 
 Euler's constant.
 
+# Examples
 ```jldoctest
-julia> MathConstants.eulergamma
+julia> Base.MathConstants.eulergamma
 γ = 0.5772156649015...
 ```
 """
@@ -62,8 +65,9 @@ julia> MathConstants.eulergamma
 
 The golden ratio.
 
+# Examples
 ```jldoctest
-julia> MathConstants.golden
+julia> Base.MathConstants.golden
 φ = 1.6180339887498...
 ```
 """
@@ -74,17 +78,19 @@ julia> MathConstants.golden
 
 Catalan's constant.
 
+# Examples
 ```jldoctest
-julia> MathConstants.catalan
+julia> Base.MathConstants.catalan
 catalan = 0.9159655941772...
 ```
 """
 catalan
 
 # loop over types to prevent ambiguities for ^(::Number, x)
-for T in (Irrational, Rational, Integer, Number)
+for T in (AbstractIrrational, Rational, Integer, Number, Complex)
     Base.:^(::Irrational{:ℯ}, x::T) = exp(x)
 end
+Base.literal_pow(::typeof(^), ::Irrational{:ℯ}, ::Val{p}) where {p} = exp(p)
 
 Base.log(::Irrational{:ℯ}) = 1 # use 1 to correctly promote expressions like log(x)/log(ℯ)
 Base.log(::Irrational{:ℯ}, x::Number) = log(x)

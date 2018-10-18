@@ -3,9 +3,10 @@
 Julia enables package developers and users to document functions, types and other objects easily
 via a built-in documentation system since Julia 0.4.
 
-The basic syntax is very simple: any string appearing at the top-level right before an object
+The basic syntax is simple: any string appearing at the top-level right before an object
 (function, macro, type or instance) will be interpreted as documenting it (these are called *docstrings*).
-Here is a very simple example:
+Note that no blank lines or comments may intervene between a docstring and the documented object.
+Here is a basic example:
 
 ```julia
 "Tell whether there are too foo items in the array."
@@ -125,8 +126,8 @@ As in the example above, we recommend following some simple conventions when wri
        Note that whitespace in your doctest is significant! The doctest will fail if you misalign the
        output of pretty-printing an array, for example.
 
-   You can then run `make -C doc doctest` to run all the doctests in the Julia Manual, which will
-   ensure that your example works.
+   You can then run `make -C doc doctest=true` to run all the doctests in the Julia Manual and API
+   documentation, which will ensure that your example works.
 
    To indicate that the output result is truncated, you may write
    `[...]` at the line where checking should stop. This is useful to
@@ -180,7 +181,12 @@ As in the example above, we recommend following some simple conventions when wri
 9. Respect the line length limit used in the surrounding code.
 
    Docstrings are edited using the same tools as code. Therefore, the same conventions should apply.
-   It it advised to add line breaks after 92 characters.
+   It is advised to add line breaks after 92 characters.
+6. Provide information allowing custom types to implement the function in an
+   `# Implementation` section. These implementation details intended for developers
+   rather than users, explaining e.g. which functions should be overridden and which functions
+   automatically use appropriate fallbacks, are better kept separate from the main description of
+   the function's behavior.
 
 ## Accessing Documentation
 
@@ -248,6 +254,20 @@ The `@doc` macro associates its first argument with its second in a per-module d
 macro simply creates an object representing the Markdown content. In the future it is likely to
 do more advanced things such as allowing for relative image or link paths.
 
+To make it easier to write documentation, the parser treats the macro name `@doc` specially:
+if a call to `@doc` has one argument, but another expression appears after a single line
+break, then that additional expression is added as an argument to the macro.
+Therefore the following syntax is parsed as a 2-argument call to `@doc`:
+
+```julia
+@doc raw"""
+...
+"""
+f(x) = x
+```
+
+This makes it easy to use an arbitrary object (here a `raw` string) as a docstring.
+
 When used for retrieving documentation, the `@doc` macro (or equally, the `doc` function) will
 search all `META` dictionaries for metadata relevant to the given object and return it. The returned
 object (some Markdown content, for example) will by default display itself intelligently. This
@@ -308,24 +328,9 @@ y = MyType("y")
 
 A comprehensive overview of all documentable Julia syntax.
 
-In the following examples `"..."` is used to illustrate an arbitrary docstring which may be one
-of the follow four variants and contain arbitrary text:
+In the following examples `"..."` is used to illustrate an arbitrary docstring.
 
-```julia
-"..."
-
-doc"..."
-
-"""
-...
-"""
-
-doc"""
-...
-"""
-```
-
-`@doc_str` should only be used when the docstring contains `$` or `\` characters that should not
+`doc""` should only be used when the docstring contains `$` or `\` characters that should not
 be parsed by Julia such as LaTeX syntax or Julia source code examples containing interpolation.
 
 ### Functions and Methods
@@ -338,7 +343,7 @@ function f end
 f
 ```
 
-Adds docstring `"..."` to function `f`. The first version is the preferred syntax, however both
+Adds docstring `"..."` to the function `f`. The first version is the preferred syntax, however both
 are equivalent.
 
 ```julia
@@ -354,7 +359,7 @@ end
 f(x)
 ```
 
-Adds docstring `"..."` to the `Method` `f(::Any)`.
+Adds docstring `"..."` to the method `f(::Any)`.
 
 ```julia
 "..."
@@ -496,7 +501,7 @@ sym
 ```
 
 Adds docstring `"..."` to the value associated with `sym`. Users should prefer documenting `sym`
-at it's definition.
+at its definition.
 
 ### Multiple Objects
 
@@ -534,7 +539,7 @@ Macro authors should take note that only macros that generate a single expressio
 support docstrings. If a macro returns a block containing multiple subexpressions then the subexpression
 that should be documented must be marked using the [`@__doc__`](@ref Core.@__doc__) macro.
 
-The `@enum` macro makes use of `@__doc__` to allow for documenting `Enum`s. Examining it's definition
+The `@enum` macro makes use of `@__doc__` to allow for documenting `Enum`s. Examining its definition
 should serve as an example of how to use `@__doc__` correctly.
 
 ```@docs
@@ -563,7 +568,7 @@ A paragraph containing a **bold** word.
 Surround words with one asterisk, `*`, to display the enclosed text in italics.
 
 ```
-A paragraph containing an *emphasised* word.
+A paragraph containing an *emphasized* word.
 ```
 
 #### Literals
@@ -616,16 +621,17 @@ the Julia documentation itself. For example:
 
 ```julia
 """
-    eigvals!(A,[irange,][vl,][vu]) -> values
+    tryparse(type, str; base)
 
-Same as [`eigvals`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
+Like [`parse`](@ref), but returns either a value of the requested type,
+or [`nothing`](@ref) if the string does not contain a valid number.
 """
 ```
 
-This will create a link in the generated docs to the `eigvals` documentation
-(which has more information about what this function actually does). It's good to include
-cross references to mutating/non-mutating versions of a function, or to highlight a difference
-between two similar-seeming functions.
+This will create a link in the generated docs to the [`parse`](@ref) documentation
+(which has more information about what this function actually does), and to the
+[`nothing`](@ref) documentation. It's good to include cross references to mutating/non-mutating
+versions of a function, or to highlight a difference between two similar-seeming functions.
 
 !!! note
     The above cross referencing is *not* a Markdown feature, and relies on
@@ -659,7 +665,7 @@ in the [Inline elements](@ref) section above, with one or more blank lines above
 ```
 This is a paragraph.
 
-And this is *another* one containing some emphasised text.
+And this is *another* one containing some emphasized text.
 A new line, but still part of the same paragraph.
 ```
 
@@ -720,7 +726,7 @@ end
 ````
 
 !!! note
-    "Fenced" code blocks, as shown in the last example, should be prefered over indented code blocks
+    "Fenced" code blocks, as shown in the last example, should be preferred over indented code blocks
     since there is no way to specify what language an indented code block is written in.
 
 #### Block quotes
@@ -881,9 +887,8 @@ cannot span multiple rows or columns of the table.
 
 #### Admonitions
 
-Specially formatted blocks with titles such as "Notes", "Warning", or "Tips" are known as admonitions
-and are used when some part of a document needs special attention. They can be defined using the
-following `!!!` syntax:
+Specially formatted blocks, known as admonitions, can be used to highlight particular remarks.
+They can be defined using the following `!!!` syntax:
 
 ```
 !!! note
@@ -897,9 +902,14 @@ following `!!!` syntax:
     This warning admonition has a custom title: `"Beware!"`.
 ```
 
-Admonitions, like most other toplevel elements, can contain other toplevel elements. When no title
-text, specified after the admonition type in double quotes, is included then the title used will
-be the type of the block, i.e. `"Note"` in the case of the `note` admonition.
+The type of the admonition can be any word, but some types produce special styling,
+namely (in order of decreasing severity): `danger`, `warning`, `info`/`note`, and `tip`.
+
+A custom title for the box can be provided as a string (in double quotes) after the admonition type.
+If no title text is specified after the admonition type, then the title used will be the type of the block,
+i.e. `"Note"` in the case of the `note` admonition.
+
+Admonitions, like most other toplevel elements, can contain other toplevel elements.
 
 ## Markdown Syntax Extensions
 
