@@ -74,10 +74,12 @@ oneunit(J::UniformScaling{T}) where {T} = oneunit(UniformScaling{T})
 zero(::Type{UniformScaling{T}}) where {T} = UniformScaling(zero(T))
 zero(J::UniformScaling{T}) where {T} = zero(UniformScaling{T})
 
+isdiag(::UniformScaling) = true
 istriu(::UniformScaling) = true
 istril(::UniformScaling) = true
 issymmetric(::UniformScaling) = true
 ishermitian(J::UniformScaling) = isreal(J.λ)
+isposdef(J::UniformScaling) = isposdef(J.λ)
 
 (+)(J::UniformScaling, x::Number) = J.λ + x
 (+)(x::Number, J::UniformScaling) = x + J.λ

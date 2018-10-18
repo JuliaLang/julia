@@ -135,7 +135,7 @@ defaultport = rand(2000:4000)
 
     mktempdir() do tmpdir
         socketname = Sys.iswindows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
-        c = Condition()
+        c = Threads.Event()
         tsk = @async begin
             s = listen(socketname)
             notify(c)
@@ -411,7 +411,7 @@ end
 
     let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
         srv = listen(addr)
-        r = @async close(srv)
+        r = @async (sleep(1); close(srv))
         @test_throws Base._UVError("accept", Base.UV_ECONNABORTED) accept(srv)
         fetch(r)
     end
@@ -420,7 +420,7 @@ end
         srv = listen(addr)
         s = Sockets.TCPSocket()
         Sockets.connect!(s, addr)
-        r = @async close(s)
+        r = @async (yield(); close(s))
         @test_throws Base._UVError("connect", Base.UV_ECANCELED) Sockets.wait_connected(s)
         fetch(r)
     end

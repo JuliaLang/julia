@@ -756,11 +756,9 @@ function f13168(n)
     val
 end
 let t = schedule(@task f13168(100))
-    @test t.state == :queued
+    wait(t)
     @test_throws ErrorException schedule(t)
-    yield()
     @test t.state == :done
-    @test_throws ErrorException schedule(t)
     @test isa(fetch(t),Float64)
 end
 

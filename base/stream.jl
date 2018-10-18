@@ -883,9 +883,9 @@ function uv_writecb_task(req::Ptr{Cvoid}, status::Cint)
         t = unsafe_pointer_to_objref(d)::Task
         if status < 0
             err = _UVError("write", status)
-            unyielding_schedule(t, err, error=true)
+            schedule(t, err, error=true)
         else
-            unyielding_schedule(t)
+            schedule(t)
         end
     else
         # no owner for this req, safe to just free it

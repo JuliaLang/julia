@@ -18,23 +18,18 @@ notify_error(c::Condition, err) = notify(c, err, true, true)
 isempty(c::Condition) = ccall(:jl_condition_isempty, Cint, (Ref{Condition},), c) == 1
 
 schedule(t::Task, @nospecialize(arg = nothing); error=false) =
-    ccall(:jl_task_spawn, Ref{Task}, (Ref{Task},Any,Int8,Int8,Int8,Int8),
-          t, arg, error, false, 0, 0)
-
-unyielding_schedule(t::Task, @nospecialize(arg = nothing); error=false) =
-    ccall(:jl_task_spawn, Ref{Task}, (Ref{Task},Any,Int8,Int8,Int8,Int8),
-          t, arg, error, true, 0, 0)
+    ccall(:jl_task_spawn, Ref{Task}, (Ref{Task},Any,Int8,Int8,Int8),
+          t, arg, error, true, true)
 
 fetch(t::Task) = ccall(:jl_task_sync, Any, (Ref{Task},), t)
 
 yield() = ccall(:jl_task_yield, Any, (Cint,), 1)
 yield(t::Task, @nospecialize x = nothing) = (schedule(t, x); yield())
-yieldto(t::Task, @nospecialize x = nothing) = yield(t, x)
-try_yieldto(undo, reftask::Ref{Task}) = (schedule(reftask[]); yield())
+yieldto(t::Task, @nospecialize x = nothing) = (schedule(t, x); wait())
+try_yieldto(undo, reftask::Ref{Task}) = (schedule(reftask[]); wait())
+throwto(t::Task, @nospecialize exc) = (schedule(t, exc, error=true); wait())
 
 wait() = ccall(:jl_task_yield, Any, (Cint,), 0)
-
-throwto(t::Task, @nospecialize exc) = () # TODO: should throwto() still work? what if the task is running in another thread?
 
 
 else # !JULIA_PARTR
@@ -105,9 +100,6 @@ function schedule(t::Task, arg; error=false)
     end
     return enq_work(t)
 end
-
-unyielding_schedule(t::Task, @nospecialize(arg = nothing); error=false) =
-    schedule(t, arg, error=error)
 
 yield() = (enq_work(current_task()); wait())
 

@@ -16,7 +16,7 @@ function uv_getaddrinfocb(req::Ptr{Cvoid}, status::Cint, addrinfo::Ptr{Cvoid})
         t = unsafe_pointer_to_objref(data)::Task
         uv_req_set_data(req, C_NULL)
         if status != 0 || addrinfo == C_NULL
-            schedule(t, _UVError("getaddrinfocb", status))
+            Base.schedule(t, _UVError("getaddrinfocb", status))
         else
             freeaddrinfo = addrinfo
             addrs = IPAddr[]
@@ -33,7 +33,7 @@ function uv_getaddrinfocb(req::Ptr{Cvoid}, status::Cint, addrinfo::Ptr{Cvoid})
                 addrinfo = ccall(:jl_next_from_addrinfo, Ptr{Cvoid}, (Ptr{Cvoid},), addrinfo)
             end
             ccall(:uv_freeaddrinfo, Cvoid, (Ptr{Cvoid},), freeaddrinfo)
-            schedule(t, addrs)
+            Base.schedule(t, addrs)
         end
     else
         # no owner for this req, safe to just free it
@@ -130,9 +130,9 @@ function uv_getnameinfocb(req::Ptr{Cvoid}, status::Cint, hostname::Cstring, serv
         t = unsafe_pointer_to_objref(data)::Task
         uv_req_set_data(req, C_NULL)
         if status != 0
-            schedule(t, _UVError("getnameinfocb", status))
+            Base.schedule(t, _UVError("getnameinfocb", status))
         else
-            schedule(t, unsafe_string(hostname))
+            Base.schedule(t, unsafe_string(hostname))
         end
     else
         # no owner for this req, safe to just free it
