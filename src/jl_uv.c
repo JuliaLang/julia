@@ -194,9 +194,9 @@ JL_DLLEXPORT int jl_run_once(uv_loop_t *loop)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (loop) {
-        loop->stop_flag = 0;
         jl_gc_safepoint_(ptls);
         JL_UV_LOCK();
+        loop->stop_flag = 0;
         int r = uv_run(loop,UV_RUN_ONCE);
         JL_UV_UNLOCK();
         return r;
@@ -208,9 +208,9 @@ JL_DLLEXPORT void jl_run_event_loop(uv_loop_t *loop)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (loop) {
-        loop->stop_flag = 0;
         jl_gc_safepoint_(ptls);
         JL_UV_LOCK();
+        loop->stop_flag = 0;
         uv_run(loop,UV_RUN_DEFAULT);
         JL_UV_UNLOCK();
     }
@@ -220,9 +220,9 @@ JL_DLLEXPORT int jl_process_events(uv_loop_t *loop)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (loop) {
-        loop->stop_flag = 0;
         jl_gc_safepoint_(ptls);
         JL_UV_LOCK();
+        loop->stop_flag = 0;
         int r = uv_run(loop,UV_RUN_NOWAIT);
         JL_UV_UNLOCK();
         return r;
