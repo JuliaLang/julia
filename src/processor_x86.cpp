@@ -715,7 +715,10 @@ static uint32_t sysimg_init_cb(const void *id)
     // We translate `generic` to `pentium4` or `x86-64` before sending it to LLVM
     // (see `get_llvm_target_noext`) which will be serialized into the sysimg target data.
     // Translate them back so we can actually match them.
-    bool sysimg_allows_no_cx16 = false;
+    // We also track to see if the sysimg allows -cx16, however if the user does
+    // something silly like add +cx16 on a 32bit target, we want to disable this
+    // check, hence the pointer size check.
+    bool sysimg_allows_no_cx16 = sizeof(void *) == 4;;
     for (auto &t: sysimg) {
         if (auto nname = normalize_cpu_name(t.name)) {
             t.name = nname;
