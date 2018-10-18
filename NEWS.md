@@ -5,6 +5,7 @@ New language features
 ---------------------
 
   * `CartesianIndices` can now be constructed from two `CartesianIndex`es `I` and `J` with `I:J` ([#29440]).
+  * `isnothing(::Any)` function can now be called to check whether something is a `Nothing`, returns a `Bool` ([#29679])
 
 Language changes
 ----------------

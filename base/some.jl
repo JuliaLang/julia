@@ -41,6 +41,15 @@ notnothing(x::Any) = x
 notnothing(::Nothing) = throw(ArgumentError("nothing passed to notnothing"))
 
 """
+    isnothing(x)
+
+Return `true` if `x === nothing`, and return `false` if not.
+"""
+isnothing(::Any) = false
+isnothing(::Nothing) = true
+
+
+"""
     something(x, y...)
 
 Return the first value in the arguments which is not equal to [`nothing`](@ref),
