@@ -171,7 +171,7 @@ julia> triu!(M, 1)
 function triu!(M::AbstractMatrix, k::Integer)
     @assert !has_offset_axes(M)
     m, n = size(M)
-    for j in 1:min(n, n + k)
+    for j in 1:min(n, m + k)
         for i in max(1, j - k + 1):m
             M[i,j] = zero(M[i,j])
         end

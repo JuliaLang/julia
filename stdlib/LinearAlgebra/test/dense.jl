@@ -152,6 +152,18 @@ end # for eltya
     end
 end
 
+@testset "triu M > N case bug fix"
+    mat=[1 2;
+         3 4;
+         5 6;
+         7 8]
+    res=[1 2;
+         3 4;
+         0 6;
+         0 0]
+    @test triu(mat, -1) == res
+end
+
 @testset "Tests norms" begin
     nnorm = 10
     mmat = 10
