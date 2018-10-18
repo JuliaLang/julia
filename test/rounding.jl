@@ -134,6 +134,15 @@ end
         end
     end
 
+    for Tf in [Float16,Float32,Float64]
+        @test round(eps(Tf)/8, RoundNearest) === zero(Tf)
+        @test round(-eps(Tf)/8, RoundNearest) === -zero(Tf)
+        @test round(eps(Tf)/8, RoundNearestTiesAway) === zero(Tf)
+        @test round(-eps(Tf)/8, RoundNearestTiesAway) === -zero(Tf)
+        @test round(eps(Tf)/8, RoundNearestTiesUp) === zero(Tf)
+        @test round(-eps(Tf)/8, RoundNearestTiesUp) === -zero(Tf)
+    end
+
     @test_throws InexactError round(Int,Inf)
     @test_throws InexactError round(Int,NaN)
     @test round(Int,2.5) == 2
