@@ -375,7 +375,7 @@ function /(z::ComplexF64, w::ComplexF64)
 end
 
 # sub-functionality for /(z::ComplexF64, w::ComplexF64)
-function cdiv(a::Float64, b::Float64, c::Float64, d::Float64)
+@inline function cdiv(a::Float64, b::Float64, c::Float64, d::Float64)
     if abs(d)<=abs(c)
         p,q = robust_cdiv1(a,b,c,d)
     else
@@ -411,7 +411,7 @@ function scaleargs_cdiv(a::Float64, b::Float64, c::Float64, d::Float64, ab::Floa
 
     return a,b,c,d,s
 end
-function robust_cdiv1(a::Float64, b::Float64, c::Float64, d::Float64)
+@inline function robust_cdiv1(a::Float64, b::Float64, c::Float64, d::Float64)
     r = d/c
     t = 1.0/(c+d*r)
     p = robust_cdiv2(a,b,c,d,r,t)
