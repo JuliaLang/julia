@@ -19,7 +19,6 @@
 
 #include "julia.h"
 #include "julia_internal.h"
-#include "locks.h"
 #include "support/ios.h"
 #include "uv.h"
 
@@ -66,21 +65,11 @@ void jl_init_signal_async(void)
 }
 #endif
 
-static jl_mutex_t jl_uv_mutex;
-
-JL_DLLEXPORT void jl_uv_lock(void)
-{
-    JL_LOCK_NOGC(&jl_uv_mutex);
-}
-
-JL_DLLEXPORT void jl_uv_unlock(void)
-{
-    JL_UNLOCK_NOGC(&jl_uv_mutex);
-}
+jl_mutex_t jl_uv_mutex;
 
 void jl_init_uv(void) {
     jl_init_signal_async();
-    JL_MUTEX_INIT(&jl_uv_mutex);
+    JL_MUTEX_INIT(&jl_uv_mutex); // a file-scope initializer can be used instead
 }
 
 void jl_uv_call_close_callback(jl_value_t *val)
@@ -107,7 +96,7 @@ static void jl_uv_closeHandle(uv_handle_t *handle)
     // also let the client app do its own cleanup
     if (handle->type != UV_FILE && handle->data) {
         size_t last_age = jl_get_ptls_states()->world_age;
-        // TODO: potential data race
+        // TODO: data race on jl_world_counter across many files, to be fixed in a separate revision
         jl_get_ptls_states()->world_age = jl_world_counter;
         jl_uv_call_close_callback((jl_value_t*)handle->data);
         jl_get_ptls_states()->world_age = last_age;
@@ -371,12 +360,16 @@ JL_DLLEXPORT uv_loop_t *jl_global_event_loop(void)
     return jl_io_loop;
 }
 
+// If this is detected in a backtrace of segfault, it means the functions
+// that use this value must be reworked into their async form with cb arg
+// provided and with JL_UV_LOCK used around the calls
+static uv_loop_t *const unused_loop_arg = (uv_loop_t *)0xBAD10;
+
 JL_DLLEXPORT int jl_fs_unlink(char *path)
 {
     uv_fs_t req;
     JL_SIGATOMIC_BEGIN();
-    // no callback, no lock needed TODO: remove any blocking calls
-    int ret = uv_fs_unlink(jl_io_loop, &req, path, NULL);
+    int ret = uv_fs_unlink(unused_loop_arg, &req, path, NULL);
     uv_fs_req_cleanup(&req);
     JL_SIGATOMIC_END();
     return ret;
@@ -386,8 +379,7 @@ JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path)
 {
     uv_fs_t req;
     JL_SIGATOMIC_BEGIN();
-    // no callback, no lock needed TODO: remove any blocking calls
-    int ret = uv_fs_rename(jl_io_loop, &req, src_path, dst_path, NULL);
+    int ret = uv_fs_rename(unused_loop_arg, &req, src_path, dst_path, NULL);
     uv_fs_req_cleanup(&req);
     JL_SIGATOMIC_END();
     return ret;
@@ -398,8 +390,7 @@ JL_DLLEXPORT int jl_fs_sendfile(uv_os_fd_t src_fd, uv_os_fd_t dst_fd,
 {
     uv_fs_t req;
     JL_SIGATOMIC_BEGIN();
-    // no callback, no lock needed TODO: remove any blocking calls
-    int ret = uv_fs_sendfile(jl_io_loop, &req, dst_fd, src_fd,
+    int ret = uv_fs_sendfile(unused_loop_arg, &req, dst_fd, src_fd,
                              in_offset, len, NULL);
     uv_fs_req_cleanup(&req);
     JL_SIGATOMIC_END();
@@ -409,8 +400,7 @@ JL_DLLEXPORT int jl_fs_sendfile(uv_os_fd_t src_fd, uv_os_fd_t dst_fd,
 JL_DLLEXPORT int jl_fs_symlink(char *path, char *new_path, int flags)
 {
     uv_fs_t req;
-    // no callback, no lock needed TODO: remove any blocking calls
-    int ret = uv_fs_symlink(jl_io_loop, &req, path, new_path, flags, NULL);
+    int ret = uv_fs_symlink(unused_loop_arg, &req, path, new_path, flags, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
@@ -418,8 +408,7 @@ JL_DLLEXPORT int jl_fs_symlink(char *path, char *new_path, int flags)
 JL_DLLEXPORT int jl_fs_chmod(char *path, int mode)
 {
     uv_fs_t req;
-    // no callback, no lock needed TODO: remove any blocking calls
-    int ret = uv_fs_chmod(jl_io_loop, &req, path, mode, NULL);
+    int ret = uv_fs_chmod(unused_loop_arg, &req, path, mode, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
@@ -427,8 +416,7 @@ JL_DLLEXPORT int jl_fs_chmod(char *path, int mode)
 JL_DLLEXPORT int jl_fs_chown(char *path, int uid, int gid)
 {
     uv_fs_t req;
-    // no callback, no lock needed TODO: remove any blocking calls
-    int ret = uv_fs_chown(jl_io_loop, &req, path, uid, gid, NULL);
+    int ret = uv_fs_chown(unused_loop_arg, &req, path, uid, gid, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
@@ -450,8 +438,7 @@ JL_DLLEXPORT int jl_fs_write(uv_os_fd_t handle, const char *data, size_t len,
     buf[0].len = len;
     if (!jl_io_loop)
         jl_io_loop = uv_default_loop();
-    // no callback, no lock needed TODO: remove any blocking calls
-    int ret = uv_fs_write(jl_io_loop, &req, handle, buf, 1, offset, NULL);
+    int ret = uv_fs_write(unused_loop_arg, &req, handle, buf, 1, offset, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
@@ -462,8 +449,7 @@ JL_DLLEXPORT int jl_fs_read(uv_os_fd_t handle, char *data, size_t len)
     uv_buf_t buf[1];
     buf[0].base = data;
     buf[0].len = len;
-    // no callback, no lock needed TODO: remove any blocking calls
-    int ret = uv_fs_read(jl_io_loop, &req, handle, buf, 1, -1, NULL);
+    int ret = uv_fs_read(unused_loop_arg, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
@@ -475,8 +461,7 @@ JL_DLLEXPORT int jl_fs_read_byte(uv_os_fd_t handle)
     uv_buf_t buf[1];
     buf[0].base = (char*)&c;
     buf[0].len = 1;
-    // no callback, no lock needed TODO: remove any blocking calls
-    int ret = uv_fs_read(jl_io_loop, &req, handle, buf, 1, -1, NULL);
+    int ret = uv_fs_read(unused_loop_arg, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);
     switch (ret) {
     case -1: return ret;
@@ -491,8 +476,7 @@ JL_DLLEXPORT int jl_fs_read_byte(uv_os_fd_t handle)
 JL_DLLEXPORT int jl_fs_close(uv_os_fd_t handle)
 {
     uv_fs_t req;
-    // no callback, no lock needed TODO: remove any blocking calls
-    int ret = uv_fs_close(jl_io_loop, &req, handle, NULL);
+    int ret = uv_fs_close(unused_loop_arg, &req, handle, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
