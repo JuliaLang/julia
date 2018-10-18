@@ -123,11 +123,11 @@ end
 function chomp(s::String)
     i = lastindex(s)
     if i < 1 || codeunit(s,i) != 0x0a
-        SubString(s, 1, i)
+        return @inbounds SubString(s, 1, i)
     elseif i < 2 || codeunit(s,i-1) != 0x0d
-        SubString(s, 1, prevind(s, i))
+        return @inbounds SubString(s, 1, prevind(s, i))
     else
-        SubString(s, 1, prevind(s, i-1))
+        return @inbounds SubString(s, 1, prevind(s, i-1))
     end
 end
 
@@ -156,7 +156,7 @@ julia> lstrip(a)
 function lstrip(f, s::AbstractString)
     e = lastindex(s)
     for (i, c) in pairs(s)
-        !f(c) && return SubString(s, i, e)
+        !f(c) && return @inbounds SubString(s, i, e)
     end
     SubString(s, e+1, e)
 end
@@ -187,7 +187,7 @@ julia> rstrip(a)
 """
 function rstrip(f, s::AbstractString)
     for (i, c) in Iterators.reverse(pairs(s))
-        f(c) || return SubString(s, 1, i)
+        f(c) || return @inbounds SubString(s, 1, i)
     end
     SubString(s, 1, 0)
 end
@@ -393,7 +393,7 @@ function _rsplit(str::AbstractString, splitter, limit::Integer, keepempty::Bool,
     r = something(findlast(splitter, str), 0)
     j, k = first(r), last(r)
     while j > 0 && k > 0 && length(strs) != limit-1
-        (keepempty || k < n) && pushfirst!(strs, SubString(str,nextind(str,k),n))
+        (keepempty || k < n) && pushfirst!(strs, @inbounds SubString(str,nextind(str,k),n))
         n = prevind(str, j)
         r = something(findprev(splitter,str,n), 0)
         j, k = first(r), last(r)
