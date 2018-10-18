@@ -4,6 +4,7 @@
 #define JL_INTERNAL_H
 
 #include "options.h"
+#include "locks.h"
 #include <uv.h>
 #if !defined(_MSC_VER) && !defined(__MINGW32__)
 #include <unistd.h>
@@ -108,15 +109,9 @@ static inline void jl_assume_(int cond)
 #  define JL_USE_IFUNC 0
 #endif
 
-JL_DLLEXPORT void jl_uv_lock(void);
-JL_DLLEXPORT void jl_uv_unlock(void);
-#ifdef JULIA_ENABLE_THREADING
-#define JL_UV_LOCK() jl_uv_lock()
-#define JL_UV_UNLOCK() jl_uv_unlock()
-#else
-#define JL_UV_LOCK() do {} while(0)
-#define JL_UV_UNLOCK() do {} while(0)
-#endif
+extern jl_mutex_t jl_uv_mutex;
+#define JL_UV_LOCK() JL_LOCK(&jl_uv_mutex)
+#define JL_UV_UNLOCK() JL_UNLOCK(&jl_uv_mutex)
 
 #ifdef __cplusplus
 extern "C" {
