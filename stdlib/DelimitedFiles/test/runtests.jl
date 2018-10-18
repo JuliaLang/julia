@@ -217,7 +217,7 @@ end
             "Yugoslavia (Cyrillic)", "Djordje Balasevic", "Југославија", "Ђорђе Балашевић",
             "Yugoslavia (Latin)", "Djordje Balasevic", "Jugoslavija", "Đorđe Balašević"]
 
-        i18n_arr = permutedims(reshape(i18n_data, 4, Int(floor(length(i18n_data)/4))), [2, 1])
+        i18n_arr = permutedims(reshape(i18n_data, 4, fld(length(i18n_data),4)), [2, 1])
         i18n_buff = PipeBuffer()
         writedlm(i18n_buff, i18n_arr, ',')
         @test i18n_arr == readdlm(i18n_buff, ',')

@@ -2153,7 +2153,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
         else
             logAk = log(Ak)
             logAkp1 = log(Akp1)
-            w = atanh((Akp1 - Ak)/(Akp1 + Ak)) + im*pi*ceil((imag(logAkp1-logAk)-pi)/(2*pi))
+            w = atanh((Akp1 - Ak)/(Akp1 + Ak)) + im*pi*cld((imag(logAkp1-logAk)-pi),(2*pi))
             dd = 2 * exp(p*(logAk+logAkp1)/2) * sinh(p*w) / (Akp1 - Ak)
             A[k,k+1] = A0[k,k+1] * dd
         end
@@ -2215,7 +2215,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
         elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak)
             Y[k,k+1] = A0[k,k+1] * (logAkp1 - logAk) / (Akp1 - Ak)
         else
-            w = atanh((Akp1 - Ak)/(Akp1 + Ak) + im*pi*(ceil((imag(logAkp1-logAk) - pi)/(2*pi))))
+            w = atanh((Akp1 - Ak)/(Akp1 + Ak) + im*pi*(cld((imag(logAkp1-logAk) - pi),(2*pi))))
             Y[k,k+1] = 2 * A0[k,k+1] * w / (Akp1 - Ak)
         end
     end
