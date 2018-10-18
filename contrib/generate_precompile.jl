@@ -88,7 +88,8 @@ function generate_precompile_statements()
             slave, master = open_fake_pty()
         end
         done = false
-        withenv("JULIA_HISTORY" => tempname(), "JULIA_PROJECT" => nothing,
+        blackhole = Sys.isunix() ? "/dev/null" : "nul"
+        withenv("JULIA_HISTORY" => blackhole, "JULIA_PROJECT" => nothing,
                 "TERM" => "") do
             if have_repl
                 p = run(`$(julia_cmd()) -O0 --trace-compile=$precompile_file --sysimage $sysimg

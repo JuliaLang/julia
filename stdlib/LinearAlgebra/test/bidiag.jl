@@ -152,6 +152,22 @@ Random.seed!(1)
             @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), n + 2)
         end
 
+        @testset "iszero and isone" begin
+            for uplo in (:U, :L)
+                BDzero = Bidiagonal(zeros(elty, 10), zeros(elty, 9), uplo)
+                BDone = Bidiagonal(ones(elty, 10), zeros(elty, 9), uplo)
+                BDmix = Bidiagonal(zeros(elty, 10), zeros(elty, 9), uplo)
+                BDmix[end,end] = one(elty)
+
+                @test iszero(BDzero)
+                @test !isone(BDzero)
+                @test !iszero(BDone)
+                @test isone(BDone)
+                @test !iszero(BDmix)
+                @test !isone(BDmix)
+            end
+        end
+
         Tfull = Array(T)
         @testset "Linear solves" begin
             if relty <: AbstractFloat

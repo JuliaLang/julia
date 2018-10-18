@@ -534,7 +534,11 @@ end
         @test Fs.p == p
         Afp = Af[p,p]
         Lfp = cholesky(Afp).L
-        @test sparse(Fs.L) ≈ Lfp
+        Ls = sparse(Fs.L)
+        @test Ls ≈ Lfp
+        @test Ls * Ls' ≈ Afp
+        P = sparse(1:3, Fs.p, ones(3))
+        @test P' * Ls * Ls' * P ≈ As
         @test sparse(Fs) ≈ As
         b = rand(3)
         @test Fs\b ≈ Af\b

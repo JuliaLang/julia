@@ -244,11 +244,23 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
     }
 #endif
 
-    int started = (t->stkbuf != NULL);
+    int started = t->started;
     int killed = (lastt->state == done_sym || lastt->state == failed_sym);
     if (!started && !t->copy_stack) {
         // may need to allocate the stack
-        t->stkbuf = jl_alloc_fiber(&t->ctx, &t->bufsz, t);
+        if (t->stkbuf == NULL) {
+            t->stkbuf = jl_alloc_fiber(&t->ctx, &t->bufsz, t);
+            if (t->stkbuf == NULL) {
+#ifdef COPY_STACKS
+                // fall back to stack copying if mmap fails
+                t->copy_stack = 1;
+                t->bufsz = 0;
+                memcpy(&t->ctx, &ptls->base_ctx, sizeof(t->ctx));
+#else
+                jl_throw(jl_memory_exception);
+#endif
+            }
+        }
     }
 
     if (killed) {
@@ -299,8 +311,10 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
         if (t->copy_stack) {
             if (lastt_ctx)
                 restore_stack2(ptls, lastt);
+            else if (lastt->copy_stack)
+                restore_stack(ptls, NULL);     // (doesn't return)
             else
-                restore_stack(ptls, NULL); // (doesn't return)
+                restore_stack(ptls, (char*)1); // (doesn't return)
         }
         else
 #endif
@@ -444,17 +458,22 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     jl_task_t *t = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), jl_task_type);
     t->copy_stack = 0;
     if (ssize == 0) {
-#ifdef COPY_STACKS
+        // stack size unspecified; use default
+#if defined(COPY_STACKS) && defined(ALWAYS_COPY_STACKS)
         t->copy_stack = 1;
         t->bufsz = 0;
 #else
-        t->bufsz = JL_STACK_SIZE; // unspecified -- use the default size
+        t->bufsz = JL_STACK_SIZE;
 #endif
     }
     else {
+        // user requested dedicated stack of a certain size
         if (ssize < MINSTKSZ)
             ssize = MINSTKSZ;
         t->bufsz = ssize;
+        t->stkbuf = jl_alloc_fiber(&t->ctx, &t->bufsz, t);
+        if (t->stkbuf == NULL)
+            jl_throw(jl_memory_exception);
     }
     t->tls = jl_nothing;
     t->state = runnable_sym;
@@ -581,6 +600,8 @@ static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
         jl_error("getcontext failed");
 #endif
     void *stk = jl_malloc_stack(ssize, owner);
+    if (stk == NULL)
+        return NULL;
     t->uc_stack.ss_sp = stk;
     t->uc_stack.ss_size = *ssize;
 #ifdef _OS_WINDOWS_
@@ -638,6 +659,8 @@ static void start_basefiber(void)
 static char *jl_alloc_fiber(unw_context_t *t, size_t *ssize, jl_task_t *owner)
 {
     char *stkbuf = (char*)jl_malloc_stack(ssize, owner);
+    if (stkbuf == NULL)
+        return NULL;
     char *stk = stkbuf;
     stk += *ssize;
     PUSH_RET(&jl_basecursor, stk);
@@ -694,6 +717,8 @@ static void jl_init_basefiber(size_t ssize)
 static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
 {
     char *stkbuf = (char*)jl_malloc_stack(ssize, owner);
+    if (stkbuf == NULL)
+        return NULL;
     ((char**)t)[0] = stkbuf; // stash the stack pointer somewhere for start_fiber
     ((size_t*)t)[1] = *ssize; // stash the stack size somewhere for start_fiber
     return stkbuf;
@@ -779,6 +804,8 @@ static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
     struct sigaction sa, osa;
     sigset_t set, oset;
     void *stk = jl_malloc_stack(ssize, owner);
+    if (stk == NULL)
+        return NULL;
     // setup
     jl_ucontext_t base_ctx;
     memcpy(&base_ctx, &ptls->base_ctx, sizeof(ptls->base_ctx));

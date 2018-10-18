@@ -669,6 +669,7 @@ export
     missing,
     skipmissing,
     something,
+    isnothing,
 
 # time
     sleep,

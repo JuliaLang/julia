@@ -199,6 +199,7 @@ Core.NamedTuple
 Base.Val
 Core.Vararg
 Core.Nothing
+Base.isnothing
 Base.Some
 Base.something
 Base.Enums.@enum

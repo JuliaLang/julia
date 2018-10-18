@@ -272,6 +272,9 @@ eigvecs(A::SymTridiagonal{<:BlasFloat}, eigvals::Vector{<:Real}) = LAPACK.stein!
 
 istriu(M::SymTridiagonal) = iszero(M.ev)
 istril(M::SymTridiagonal) = iszero(M.ev)
+iszero(M::SymTridiagonal) = iszero(M.ev) && iszero(M.dv)
+isone(M::SymTridiagonal) = iszero(M.ev) && all(isone, M.dv)
+isdiag(M::SymTridiagonal) = iszero(M.ev)
 
 function tril!(M::SymTridiagonal, k::Integer=0)
     n = length(M.dv)
@@ -320,44 +323,13 @@ function Base.replace_in_print_matrix(A::SymTridiagonal, i::Integer, j::Integer,
     i==j-1||i==j||i==j+1 ? s : Base.replace_with_centered_mark(s)
 end
 
-#Implements the inverse using the recurrence relation between principal minors
+# Implements the determinant using principal minors
 # a, b, c are assumed to be the subdiagonal, diagonal, and superdiagonal of
 # a tridiagonal matrix.
 #Reference:
 #    R. Usmani, "Inversion of a tridiagonal Jacobi matrix",
 #    Linear Algebra and its Applications 212-213 (1994), pp.413-414
 #    doi:10.1016/0024-3795(94)90414-6
-function inv_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
-    @assert !has_offset_axes(a, b, c)
-    n = length(b)
-    θ = zeros(T, n+1) #principal minors of A
-    θ[1] = 1
-    n>=1 && (θ[2] = b[1])
-    for i=2:n
-        θ[i+1] = b[i]*θ[i]-a[i-1]*c[i-1]*θ[i-1]
-    end
-    φ = zeros(T, n+1)
-    φ[n+1] = 1
-    n>=1 && (φ[n] = b[n])
-    for i=n-1:-1:1
-        φ[i] = b[i]*φ[i+1]-a[i]*c[i]*φ[i+2]
-    end
-    α = Matrix{T}(undef, n, n)
-    for i=1:n, j=1:n
-        sign = (i+j)%2==0 ? (+) : (-)
-        if i<j
-            α[i,j]=(sign)(prod(c[i:j-1]))*θ[i]*φ[j+1]/θ[n+1]
-        elseif i==j
-            α[i,i]=                       θ[i]*φ[i+1]/θ[n+1]
-        else #i>j
-            α[i,j]=(sign)(prod(a[j:i-1]))*θ[j]*φ[i+1]/θ[n+1]
-        end
-    end
-    α
-end
-
-#Implements the determinant using principal minors
-#Inputs and reference are as above for inv_usmani()
 function det_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
     @assert !has_offset_axes(a, b, c)
     n = length(b)
@@ -366,13 +338,12 @@ function det_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
         return θa
     end
     θb = b[1]
-    for i=2:n
-        θb, θa = b[i]*θb-a[i-1]*c[i-1]*θa, θb
+    for i in 2:n
+        θb, θa = b[i]*θb - a[i-1]*c[i-1]*θa, θb
     end
     return θb
 end
 
-inv(A::SymTridiagonal) = inv_usmani(A.ev, A.dv, A.ev)
 det(A::SymTridiagonal) = det_usmani(A.ev, A.dv, A.ev)
 
 function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
@@ -598,6 +569,8 @@ end
 
 #tril and triu
 
+iszero(M::Tridiagonal) = iszero(M.dl) && iszero(M.d) && iszero(M.du)
+isone(M::Tridiagonal) = iszero(M.dl) && all(isone, M.d) && iszero(M.du)
 istriu(M::Tridiagonal) = iszero(M.dl)
 istril(M::Tridiagonal) = iszero(M.du)
 
@@ -651,7 +624,6 @@ end
 ==(A::Tridiagonal, B::SymTridiagonal) = (A.dl==A.du==B.ev) && (A.d==B.dv)
 ==(A::SymTridiagonal, B::Tridiagonal) = (B.dl==B.du==A.ev) && (B.d==A.dv)
 
-inv(A::Tridiagonal) = inv_usmani(A.dl, A.d, A.du)
 det(A::Tridiagonal) = det_usmani(A.dl, A.d, A.du)
 
 AbstractMatrix{T}(M::Tridiagonal) where {T} = Tridiagonal{T}(M)

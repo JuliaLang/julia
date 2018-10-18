@@ -1083,6 +1083,26 @@ jl_assume_aligned(T ptr, unsigned align)
 #  define jl_unreachable() ((void)jl_assume(0))
 #endif
 
+// Tools for locally disabling spurious compiler warnings
+//
+// Particular calls which are used elsewhere in the code include:
+//
+// * JL_GCC_IGNORE_START(-Wclobbered) - gcc misidentifies some variables which
+//   are used inside a JL_TRY as being "clobbered" if JL_CATCH is entered. This
+//   warning is spurious if the variable is not modified inside the JL_TRY.
+//   See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65041
+#ifdef _COMPILER_GCC_
+#define JL_DO_PRAGMA(s) _Pragma(#s)
+#define JL_GCC_IGNORE_START(warning) \
+    JL_DO_PRAGMA(GCC diagnostic push) \
+    JL_DO_PRAGMA(GCC diagnostic ignored warning)
+#define JL_GCC_IGNORE_STOP \
+    JL_DO_PRAGMA(GCC diagnostic pop)
+#else
+#define JL_GCC_IGNORE_START(w)
+#define JL_GCC_IGNORE_STOP
+#endif // _COMPILER_GCC_
+
 #ifdef __cplusplus
 }
 #endif

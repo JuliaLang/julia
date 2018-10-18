@@ -753,7 +753,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (vt == jl_bool_type) {
         n += jl_printf(out, "%s", *(uint8_t*)v ? "true" : "false");
     }
-    else if (v == jl_nothing || (jl_nothing && vt == jl_typeof(jl_nothing))) {
+    else if (v == jl_nothing || (jl_nothing && (jl_value_t*)vt == jl_typeof(jl_nothing))) {
         n += jl_printf(out, "nothing");
     }
     else if (vt == jl_string_type) {
