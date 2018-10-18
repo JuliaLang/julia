@@ -703,6 +703,7 @@ end
     @test repeat(ones(2,2), 1, 1, 1) == ones(2,2,1)
     @test repeat(ones(2,2), 2, 2, 2) == ones(4,4,2)
     @test repeat(ones(2), 2, 2, 2) == ones(4,2,2)
+    @test repeat(ones(2,2), inner=(1, 1, 1), outer=(2, 2, 2)) == ones(4,2,2)
 
     R = repeat([1, 2])
     @test R == [1, 2]
