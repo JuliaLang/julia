@@ -65,13 +65,11 @@ function compile(x, ivdep)
         let $r = $range
             for $j in Base.simd_outer_range($r)
                 let $n = Base.simd_inner_length($r,$j)
-                    for $i in 0:($n-1)
-                        local $var = Base.simd_index($r,$j,$i)
+                    for $i in 1:$n
+                        local $var = Base.simd_index($r,$j,$i-1)
                         $(x.args[2])        # Body of loop
                         $(Expr(:simdloop, ivdep))  # Mark loop as SIMD loop
                     end
-                    # Set index to last value just like a regular for loop would
-                    $var = last($r)
                 end
             end
         end
