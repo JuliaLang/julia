@@ -148,3 +148,119 @@ function fill!(A::Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}, x)
     throw(ArgumentError("array of type $(typeof(A)) and size $(size(A)) can
     not be filled with $x, since some of its entries are constrained."))
 end
+
+# equals and approx equals methods for structured matrices
+# SymTridiagonal == Tridiagonal is already defined in tridiag.jl
+
+# SymTridiagonal and Bidiagonal have the same field names
+==(A::Diagonal, B::Union{SymTridiagonal, Bidiagonal}) = iszero(B.ev) && A.diag == B.dv
+==(B::Bidiagonal, A::Diagonal) = A == B
+
+==(A::Diagonal, B::Tridiagonal) = iszero(B.dl) && iszero(B.du) && A.diag == B.d
+==(B::Tridiagonal, A::Diagonal) = A == B
+
+function ==(A::Bidiagonal, B::Tridiagonal)
+    if A.uplo == 'U'
+        return iszero(B.dl) && A.dv == B.d && A.ev == B.du
+    else
+        return iszero(B.du) && A.dv == B.d && A.ev == B.dl
+    end
+end
+==(B::Tridiagonal, A::Bidiagonal) = A == B
+
+==(A::Bidiagonal, B::SymTridiagonal) = iszero(B.ev) && iszero(A.ev) && A.dv == B.dv
+==(B::SymTridiagonal, A::Bidiagonal) = A == B
+
+function isapprox(A::Diagonal, B::Diagonal;
+    atol::Real=0,
+    rtol::Real=Base.rtoldefault(promote_leaf_eltypes(A),promote_leaf_eltypes(B),atol),
+    nans::Bool=false, norm::Function=norm)
+
+    return isapprox(A.diag, B.diag; rtol=rtol, atol=atol, nans=nans)
+end
+
+function isapprox(A::Diagonal, B::Union{Bidiagonal, SymTridiagonal};
+    atol::Real=0,
+    rtol::Real=Base.rtoldefault(promote_leaf_eltypes(A),promote_leaf_eltypes(B),atol),
+    nans::Bool=false, norm::Function=norm)
+
+    return iszero(B.ev) && isapprox(A.diag, B.dv; rtol=rtol, atol=atol, nans=nans)
+end
+
+function isapprox(B::Union{Bidiagonal, SymTridiagonal}, A::Diagonal;
+    atol::Real=0,
+    rtol::Real=Base.rtoldefault(promote_leaf_eltypes(A),promote_leaf_eltypes(B),atol),
+    nans::Bool=false, norm::Function=norm)
+
+    return isapprox(A, B; rtol=rtol, atol=atol, nans=nans)
+end
+
+function isapprox(A::Diagonal, B::Tridiagonal;
+    atol::Real=0,
+    rtol::Real=Base.rtoldefault(promote_leaf_eltypes(A),promote_leaf_eltypes(B),atol),
+    nans::Bool=false, norm::Function=norm)
+
+    return iszero(B.dl) && iszero(B.du) && isapprox(A.diag, B.d; rtol=rtol, atol=atol, nans=nans)
+end
+
+function isapprox(B::Tridiagonal, A::Diagonal;
+    atol::Real=0,
+    rtol::Real=Base.rtoldefault(promote_leaf_eltypes(A),promote_leaf_eltypes(B),atol),
+    nans::Bool=false, norm::Function=norm)
+
+    return isapprox(A, B; rtol=rtol, atol=atol, nans=nans)
+end
+
+function isapprox(A::Bidiagonal, B::Tridiagonal;
+    atol::Real=0,
+    rtol::Real=Base.rtoldefault(promote_leaf_eltypes(A),promote_leaf_eltypes(B),atol),
+    nans::Bool=false, norm::Function=norm)
+
+    if A.uplo == 'U'
+        return iszero(B.dl) && isapprox(A.dv, B.d; rtol=rtol, atol=atol, nans=nans) && isapprox(A.ev, B.du; rtol=rtol, atol=atol, nans=nans)
+    else
+        return iszero(B.du) && isapprox(A.dv, B.d; rtol=rtol, atol=atol, nans=nans) && isapprox(A.ev, B.dl; rtol=rtol, atol=atol, nans=nans)
+    end
+end
+
+function isapprox(B::Tridiagonal, A::Bidiagonal;
+    atol::Real=0,
+    rtol::Real=Base.rtoldefault(promote_leaf_eltypes(A),promote_leaf_eltypes(B),atol),
+    nans::Bool=false, norm::Function=norm)
+
+    return isapprox(A, B; rtol=rtol, atol=atol, nans=nans)
+end
+
+function isapprox(A::Bidiagonal, B::SymTridiagonal;
+    atol::Real=0,
+    rtol::Real=Base.rtoldefault(promote_leaf_eltypes(A),promote_leaf_eltypes(B),atol),
+    nans::Bool=false, norm::Function=norm)
+
+    return iszero(B.ev) && iszero(A.ev) && isapprox(A.dv, B.dv; rtol=rtol, atol=atol, nans=nans)
+end
+
+function isapprox(B::SymTridiagonal, A::Bidiagonal;
+    atol::Real=0,
+    rtol::Real=Base.rtoldefault(promote_leaf_eltypes(A),promote_leaf_eltypes(B),atol),
+    nans::Bool=false, norm::Function=norm)
+
+    return isapprox(A, B; rtol=rtol, atol=atol, nans=nans)
+end
+
+function isapprox(A::Tridiagonal, B::SymTridiagonal;
+    atol::Real=0,
+    rtol::Real=Base.rtoldefault(promote_leaf_eltypes(A),promote_leaf_eltypes(B),atol),
+    nans::Bool=false, norm::Function=norm)
+
+    return isapprox(A.dl, B.ev; rtol=rtol, atol=atol, nans=nans) &&
+           isapprox(A.d, B.dv; rtol=rtol, atol=atol, nans=nans)  &&
+           isapprox(A.du, B.ev; rtol=rtol, atol=atol, nans=nans)
+end
+
+function isapprox(B::SymTridiagonal, A::Tridiagonal;
+    atol::Real=0,
+    rtol::Real=Base.rtoldefault(promote_leaf_eltypes(A),promote_leaf_eltypes(B),atol),
+    nans::Bool=false, norm::Function=norm)
+
+    return isapprox(A, B; rtol=rtol, atol=atol, nans=nans)
+end
