@@ -4,16 +4,23 @@ Julia v1.1.0 Release Notes
 New language features
 ---------------------
 
-  * `CartesianIndices` can now be constructed from two `CartesianIndex`es `I` and `J` with `I:J` ([#29440]).
-  * `isnothing(::Any)` function can now be called to check whether something is a `Nothing`, returns a `Bool` ([#29679])
 
 Language changes
 ----------------
 
-Standard Library Changes
+  * Parser inputs ending with a comma are now consistently treated as incomplete.
+    Previously they were sometimes parsed as tuples, depending on whitespace ([#28506]).
+
+New library functions
+---------------------
+
+  * `splitpath(p::String)` function, which is the opposite of `joinpath(parts...)`: it splits a filepath into its components ([#28156]).
+  * `isnothing(::Any)` function, to check whether something is a `Nothing`, returns a `Bool` ([#29679]).
+
+Standard library changes
 ------------------------
 
-  * New `splitpath(p::String)` function added, which is the opposite of `joinpath(parts...)`: it splits a filepath into its components ([#28156]).
+  * `CartesianIndices` can now be constructed from two `CartesianIndex`es `I` and `J` with `I:J` ([#29440]).
 
 Compiler/Runtime improvements
 -----------------------------
