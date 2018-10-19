@@ -596,16 +596,9 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
                 jlasttype = ty;
                 bool isptr;
                 size_t fsz = 0, al = 0;
-                if (jst->layout) {
-                    isptr = jl_field_isptr(jst, i);
-                    fsz = jl_field_size(jst, i);
-                    al = jl_field_align(jst, i);
-                }
-                else { // compute what jl_compute_field_offsets would say
-                    isptr = !jl_islayout_inline(ty, &fsz, &al);
-                    if (!isptr && jl_is_uniontype(jst))
-                        fsz += 1;
-                }
+                isptr = !jl_islayout_inline(ty, &fsz, &al);
+                if (!isptr && jl_is_uniontype(ty))
+                    fsz += 1;
                 Type *lty;
                 if (isptr) {
                     lty = T_pjlvalue;
