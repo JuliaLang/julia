@@ -1361,18 +1361,17 @@ end
     # The largest positive floating point number whose inverse is less than infinity
     δ = inv(prevfloat(typemax(nrm)))
 
-    if nrm == Inf  # Just divide since performance isn't important in this corner case
-        v ./= Inf
-    elseif nrm ≥ δ # Safe to multiply with inverse
+    if nrm ≥ δ # Safe to multiply with inverse
         invnrm = inv(nrm)
         rmul!(v, invnrm)
-    else           # Scale elements to avoid overflow
+
+    else # scale elements to avoid overflow
         εδ = eps(one(nrm))/δ
         rmul!(v, εδ)
         rmul!(v, inv(nrm*εδ))
     end
 
-    return v
+    v
 end
 
 """

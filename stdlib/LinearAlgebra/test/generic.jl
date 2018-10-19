@@ -256,13 +256,6 @@ end
     @test norm(normalize!(v) - w, Inf) < eps()
 end
 
-@testset "normalize with Infs. Issue 29681." begin
-    @test all(isequal.(normalize([1, -1, Inf]),
-                       [0.0, -0.0, NaN]))
-    @test all(isequal.(normalize([complex(1), complex(0, -1), complex(Inf, -Inf)]),
-                       [0.0 + 0.0im, 0.0 - 0.0im, NaN + NaN*im]))
-end
-
 @testset "Issue 14657" begin
     @test det([true false; false true]) == det(Matrix(1I, 2, 2))
 end
