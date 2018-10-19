@@ -538,6 +538,11 @@ function *(A::Bidiagonal, B::LowerTriangular)
     end
 end
 
+function *(A::Bidiagonal, B::Diagonal)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(similar(A, TS), A, B)
+end
+
 function *(A::Diagonal, B::BiTri)
     TS = promote_op(matprod, eltype(A), eltype(B))
     A_mul_B_td!(similar(B, TS), A, B)
