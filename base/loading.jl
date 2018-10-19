@@ -96,7 +96,7 @@ string(hash::SHA1) = bytes2hex(hash.bytes)
 print(io::IO, hash::SHA1) = bytes2hex(io, hash.bytes)
 show(io::IO, hash::SHA1) = print(io, "SHA1(\"", hash, "\")")
 
-isless(a::SHA1, b::SHA1) = lexless(a.bytes, b.bytes)
+isless(a::SHA1, b::SHA1) = isless(a.bytes, b.bytes)
 hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
 ==(a::SHA1, b::SHA1) = a.bytes == b.bytes
 
