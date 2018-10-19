@@ -560,7 +560,7 @@ void jl_init_tasks(void) JL_GC_DISABLED
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
-                                jl_int64_type,
+                                jl_long_type,
                                 jl_int32_type,
                                 jl_any_type,
                                 jl_any_type,

@@ -53,7 +53,7 @@ typedef ucontext_t jl_ucontext_t;
 
 // Recursive spin lock
 typedef struct {
-    volatile unsigned long owner;
+    volatile uintptr_t owner;
     uint32_t count;
 } jl_mutex_t;
 
