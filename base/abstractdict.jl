@@ -44,8 +44,10 @@ struct ValueIterator{T<:AbstractDict}
     dict::T
 end
 
-summary(iter::T) where {T<:Union{KeySet,ValueIterator}} =
-    string(T.name, " for a ", summary(iter.dict))
+function summary(io::IO, iter::T) where {T<:Union{KeySet,ValueIterator}}
+    print(io, T.name, " for a ")
+    summary(io, iter.dict)
+end
 
 show(io::IO, iter::Union{KeySet,ValueIterator}) = show_vector(io, iter)
 
