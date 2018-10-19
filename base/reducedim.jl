@@ -643,7 +643,7 @@ for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod, 
     @eval begin
         # User-facing methods with keyword arguments
         @inline ($fname)(a::AbstractArray; dims=:) = ($_fname)(a, dims)
-        @inline ($fname)(f::Callable, a::AbstractArray; dims=:) = ($_fname)(f, a, dims)
+        @inline ($fname)(f, a::AbstractArray; dims=:) = ($_fname)(f, a, dims)
 
         # Underlying implementations using dispatch
         ($_fname)(a, ::Colon) = ($_fname)(identity, a, :)
