@@ -413,3 +413,54 @@ julia> h(1)
 
 Thus, use `Int` literals when possible, with `Rational{Int}` for literal non-integer numbers,
 in order to make it easier to use your code.
+
+## In long-form function definitions, prefer explicit `return` over implicit return values
+
+Explicit `return` on an expression makes it clear that the expression is intended to be returned and 
+is not only used for its side effect. It also makes it possible to locally see that a certain sub-expression
+in a larger expression is returned while for an implicit return value one needs to analyze the whole outer expression.
+
+For example, prefer 
+
+```jl
+function f(x)
+    if x > 2
+        return "a"
+    else
+        return "b"
+    end
+end
+
+function g(x)
+    y = compute(x)
+    return compute(y)
+end
+
+function h!(x)
+    fill!(x, compute(x))
+    modify!(x)
+    return nothing
+end
+```
+
+over
+
+```jl
+function f(x)
+    if x > 2
+        "a"
+    else
+        "b"
+    end
+end
+
+function g(x)
+    y = compute(x)
+    compute(y)
+end
+
+function h!(x)
+    fill!(x, compute(x))
+    modify!(x)
+end
+```
