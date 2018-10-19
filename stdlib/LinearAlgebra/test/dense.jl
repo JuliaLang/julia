@@ -152,7 +152,7 @@ end # for eltya
     end
 end
 
-@testset "triu M > N case bug fix"
+@testset "triu M > N case bug fix" begin
     mat=[1 2;
          3 4;
          5 6;
