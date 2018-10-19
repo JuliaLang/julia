@@ -39,9 +39,9 @@ struct Cholesky{T,S<:AbstractMatrix} <: Factorization{T}
     end
 end
 Cholesky(A::AbstractMatrix{T}, uplo::Symbol, info::Integer) where {T} =
-    Cholesky{T,typeof(A)}(A, char_uplo(uplo), BlasInt(info))
+    Cholesky{T,typeof(A)}(A, char_uplo(uplo), info)
 Cholesky(A::AbstractMatrix{T}, uplo::AbstractChar, info::Integer) where {T} =
-    Cholesky{T,typeof(A)}(A, uplo, BlasInt(info))
+    Cholesky{T,typeof(A)}(A, uplo, info)
 
 struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
@@ -58,8 +58,7 @@ struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
 end
 function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{<:Integer},
                             rank::Integer, tol::Real, info::Integer) where T
-    CholeskyPivoted{T,typeof(A)}(A, uplo, convert(Vector{BlasInt}, piv), BlasInt(rank), tol,
-                                 BlasInt(info))
+    CholeskyPivoted{T,typeof(A)}(A, uplo, convert(Vector{BlasInt}, piv), rank, tol, info)
 end
 
 # make a copy that allow inplace Cholesky factorization
