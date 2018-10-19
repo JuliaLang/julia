@@ -144,7 +144,13 @@ _small_enough(A::SymTridiagonal) = size(A, 1) <= 2
 
 function fill!(A::Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}, x)
     xT = convert(eltype(A), x)
+    print("here ", iszero(xT), " ", _small_enough(A))
     (iszero(xT) || _small_enough(A)) && return fillstored!(A, xT)
     throw(ArgumentError("array of type $(typeof(A)) and size $(size(A)) can
     not be filled with $x, since some of its entries are constrained."))
 end
+
+one(A::Diagonal{T}) where T = Diagonal(fill(one(T), size(A, 1)))
+one(A::Bidiagonal{T}) where T = Bidiagonal(fill(one(T), size(A, 1)), zeros(T, size(A, 1)-1), A.uplo)
+one(A::Tridiagonal{T}) where T = Tridiagonal(zeros(T, size(A, 1)-1), fill(one(T), size(A, 1)), zeros(T, size(A, 1)-1))
+one(A::SymTridiagonal{T}) where T = SymTridiagonal(fill(one(T), size(A, 1)), zeros(T, size(A, 1)-1))
