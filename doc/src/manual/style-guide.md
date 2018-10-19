@@ -416,11 +416,11 @@ in order to make it easier to use your code.
 
 ## In long-form function definitions, prefer explicit `return` over implicit return values
 
-Explicit `return` on an expression makes it clear that the expression is intended to be returned and 
+Explicit `return` on an expression makes it clear that the expression is intended to be returned and
 is not only used for its side effect. It also makes it possible to locally see that a certain sub-expression
 in a larger expression is returned while for an implicit return value one needs to analyze the whole outer expression.
 
-For example, prefer 
+For example, prefer
 
 ```jl
 function f(x)
