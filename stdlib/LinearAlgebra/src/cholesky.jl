@@ -58,7 +58,7 @@ struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
 end
 function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{<:Integer},
                             rank::Integer, tol::Real, info::Integer) where T
-    CholeskyPivoted{T,typeof(A)}(A, uplo, convert(Vector{BlasInt}, piv), rank, tol, info)
+    CholeskyPivoted{T,typeof(A)}(A, uplo, piv, rank, tol, info)
 end
 
 # make a copy that allow inplace Cholesky factorization
