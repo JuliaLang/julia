@@ -67,7 +67,7 @@ bimg  = randn(n,2)/2
             end
 
             @testset "Test nullspace" begin
-                a15null = nullspace(copy(a[:,1:n1]'))
+                a15null = nullspace(a[:,1:n1]')
                 @test rank([a[:,1:n1] a15null]) == 10
                 @test norm(a[:,1:n1]'a15null,Inf) ≈ zero(eltya) atol=300ε
                 @test norm(a15null'a[:,1:n1],Inf) ≈ zero(eltya) atol=400ε
@@ -75,6 +75,9 @@ bimg  = randn(n,2)/2
                 @test size(nullspace(b, 100*εb), 2) == 0
                 @test nullspace(zeros(eltya,n)) == Matrix(I, 1, 1)
                 @test nullspace(zeros(eltya,n), 0.1) == Matrix(I, 1, 1)
+                # test empty cases
+                @test nullspace(zeros(n, 0)) == Matrix(I, 0, 0)
+                @test nullspace(zeros(0, n)) == Matrix(I, n, n)
             end
         end
     end # for eltyb
