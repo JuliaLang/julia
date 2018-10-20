@@ -515,10 +515,9 @@ endif
 
 # Make tarball with only Julia code
 light-source-dist: light-source-dist.tmp
-	# Prefix everything with the current directory name (usually "julia"), then create tarball
-	DIRNAME=$$(basename $$(pwd)); \
-	sed -e "s_.*_$$DIRNAME/&_" light-source-dist.tmp > light-source-dist.tmp1; \
-	cd ../ && tar -cz --no-recursion -T $$DIRNAME/light-source-dist.tmp1 -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
+	# The --transform option prepends julia-$(commit-sha)/ or julia-$(version)/ to filenames
+	# (but requires a tar implementation supporting it).
+	tar -cz --no-recursion --transform "s/^/julia-$(JULIA_COMMIT)\//" -T light-source-dist.tmp -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
 
 source-dist:
 	@echo \'source-dist\' target is deprecated: use \'full-source-dist\' instead.
@@ -533,10 +532,9 @@ full-source-dist: light-source-dist.tmp
 	cp light-source-dist.tmp full-source-dist.tmp
 	-ls deps/srccache/*.tar.gz deps/srccache/*.tar.bz2 deps/srccache/*.tar.xz deps/srccache/*.tgz deps/srccache/*.zip deps/srccache/*.pem stdlib/srccache/*.tar.gz >> full-source-dist.tmp
 
-	# Prefix everything with the current directory name (usually "julia"), then create tarball
-	DIRNAME=$$(basename $$(pwd)); \
-	sed -e "s_.*_$$DIRNAME/&_" full-source-dist.tmp > full-source-dist.tmp1; \
-	cd ../ && tar -cz --no-recursion -T $$DIRNAME/full-source-dist.tmp1 -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT)-full.tar.gz
+	# Create the tarball. The --transform option prepends julia-$(commit-sha)/ or
+	# julia-$(version)/ to filenames (but requires a tar implementation supporting it).
+	tar -cz --no-recursion --transform "s/^/julia-$(JULIA_COMMIT)\//" -T full-source-dist.tmp -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT)-full.tar.gz
 
 clean: | $(CLEAN_TARGETS)
 	@-$(MAKE) -C $(BUILDROOT)/base clean
