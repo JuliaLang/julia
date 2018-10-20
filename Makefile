@@ -515,9 +515,14 @@ endif
 
 # Make tarball with only Julia code
 light-source-dist: light-source-dist.tmp
-	# The --transform option prepends julia-$(commit-sha)/ or julia-$(version)/ to filenames
-	# (but requires a tar implementation supporting it).
-	tar -cz --no-recursion --transform "s/^/julia-$(JULIA_COMMIT)\//" -T light-source-dist.tmp -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
+	# Prefix everything with "julia-$(commit-sha)/" or "julia-$(version)/" and then create tarball
+	# To achieve prefixing, we temporarily create a symlink in the source directory that points back
+	# to the source directory.
+	DIRNAME=julia-$(JULIA_COMMIT); \
+	sed -e "s_.*_$$DIRNAME/&_" light-source-dist.tmp > light-source-dist.tmp1; \
+	ln -s . $$DIRNAME || exit 1; \
+	tar -cz --no-recursion -T light-source-dist.tmp1 -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz; \
+	rm -v $$DIRNAME
 
 source-dist:
 	@echo \'source-dist\' target is deprecated: use \'full-source-dist\' instead.
@@ -531,9 +536,14 @@ full-source-dist: light-source-dist.tmp
 	cp light-source-dist.tmp full-source-dist.tmp
 	-ls deps/srccache/*.tar.gz deps/srccache/*.tar.bz2 deps/srccache/*.tar.xz deps/srccache/*.tgz deps/srccache/*.zip deps/srccache/*.pem >> full-source-dist.tmp
 
-	# Create the tarball. The --transform option prepends julia-$(commit-sha)/ or
-	# julia-$(version)/ to filenames (but requires a tar implementation supporting it).
-	tar -cz --no-recursion --transform "s/^/julia-$(JULIA_COMMIT)\//" -T full-source-dist.tmp -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT)-full.tar.gz
+	# Prefix everything with "julia-$(commit-sha)/" or "julia-$(version)/" and then create tarball
+	# To achieve prefixing, we temporarily create a symlink in the source directory that points back
+	# to the source directory.
+	DIRNAME=julia-$(JULIA_COMMIT); \
+	sed -e "s_.*_$$DIRNAME/&_" full-source-dist.tmp > full-source-dist.tmp1; \
+	ln -s . $$DIRNAME || exit 1; \
+	tar -cz --no-recursion -T full-source-dist.tmp1 -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT)-full.tar.gz; \
+	rm -v $$DIRNAME
 
 clean: | $(CLEAN_TARGETS)
 	@-$(MAKE) -C $(BUILDROOT)/base clean
