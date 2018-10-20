@@ -21,6 +21,10 @@ Standard library changes
 ------------------------
 
   * `CartesianIndices` can now be constructed from two `CartesianIndex`es `I` and `J` with `I:J` ([#29440]).
+  * `copy!` support for arrays, dicts, and sets has been moved to Base from the Future package ([#29173]).
+  * Channels now convert inserted values (like containers) instead of requiring types to match ([#29092]).
+  * `range` can accept the stop value as a positional argument, e.g. `range(1,10,step=2)` ([#28708]).
+  * `edit` can now be called on a module to edit the file that defines it ([#29636]).
 
 Compiler/Runtime improvements
 -----------------------------
