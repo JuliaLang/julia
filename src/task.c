@@ -572,7 +572,7 @@ void jl_init_tasks(void) JL_GC_DISABLED
     jl_condition_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("Condition"), NULL, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(3, "head", "lock_owner", "lock_count"),
-                        jl_svec(3, jl_task_type, jl_int64_type, jl_int32_type),
+                        jl_svec(3, jl_task_type, jl_long_type, jl_int32_type),
                         0, 1, 0);
 #endif /* JULIA_ENABLE_PARTR */
 
