@@ -632,9 +632,6 @@ promote_rule(::Type{UInt32},  ::Type{Int32} ) = UInt32
 promote_rule(::Type{UInt64},  ::Type{Int64} ) = UInt64
 promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
-_default_type(::Type{Unsigned}) = UInt
-_default_type(::Union{Type{Integer},Type{Signed}}) = Int
-
 ## traits ##
 
 """

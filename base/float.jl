@@ -381,8 +381,6 @@ promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 widen(::Type{Float16}) = Float32
 widen(::Type{Float32}) = Float64
 
-_default_type(T::Union{Type{Real},Type{AbstractFloat}}) = Float64
-
 ## floating point arithmetic ##
 -(x::Float64) = neg_float(x)
 -(x::Float32) = neg_float(x)
