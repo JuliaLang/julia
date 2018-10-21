@@ -1435,7 +1435,7 @@ function Base.iterate(it::MatrixDimIterator, state = 1)
     end 
 end 
 
-Base.eltype(it::MatrixDimIterator) = Array{eltype(it.M), 1}
+Base.eltype(it::MatrixDimIterator) = it.row == true ? typeof(@view it.M[1, :]) : typeof(@view it.M[:, 1])
 Base.length(it::MatrixDimIterator) = it.length 
 """
     rows(m::Matrix{T})
