@@ -1421,22 +1421,22 @@ struct MatrixDimIterator{T}
     row::Bool
     length::Int
     M::Matrix{T}
-end 
+end
 
-function Base.iterate(it::MatrixDimIterator, state = 1) 
-    if state > it.length 
-        return nothing 
-    elseif it.row == true 
+function Base.iterate(it::MatrixDimIterator, state = 1)
+    if state > it.length
+        return nothing
+    elseif it.row == true
         obj = @view it.M[state, :]
         return (obj, state+1)
-    else 
+    else
         obj = @view it.M[:, state]
         return (obj, state+1)
-    end 
-end 
+    end
+end
 
 Base.eltype(it::MatrixDimIterator) = it.row == true ? typeof(@view it.M[1, :]) : typeof(@view it.M[:, 1])
-Base.length(it::MatrixDimIterator) = it.length 
+Base.length(it::MatrixDimIterator) = it.length
 """
     rows(m::Matrix{T})
 
@@ -1453,4 +1453,3 @@ Get a iterator for the columns of m.
 See also [`rows`](@ref).
 """
 cols(m::Matrix) = MatrixDimIterator(false, size(M, 2), M)
-
