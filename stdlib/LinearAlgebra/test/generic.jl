@@ -327,8 +327,9 @@ end
 
 @testset "rows and columns tests" begin
     M = [1 2 3; 4 5 6; 7 8 9]
-    @test collect(eachrow(M)) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
-    @test collect(eachcolumn(M)) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
+    @test collect(eachrow(M)) == collect(eachslice(M, 1)) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    @test collect(eachcol(M)) == collect(eachslice(M, 2)) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
+    @test_throws ArgumentError eachslice(M, 4)
 end
 
 @testset "generic functions for checking whether matrices have banded structure" begin

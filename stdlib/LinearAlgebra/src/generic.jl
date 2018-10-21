@@ -1441,24 +1441,24 @@ Base.length(it::MatrixDimIterator) = it.length
     eachrow(M::Matrix)
 
 Get an iterator for the rows of M.
-See also [`eachcolumn`](@ref).
+See also [`eachcol`](@ref) and [`eachslice`](@ref).
 """
 eachrow(M::Matrix) = MatrixDimIterator(true, size(M, 1), M)
 
 
 """
-    eachcolumn(M::Matrix)
+    eachcol(M::Matrix)
 
 Get a iterator for the columns of M.
-See also [`eachrow`](@ref).
+See also [`eachrow`](@ref) and [`eachslice`](@ref).
 """
-eachcolumn(M::Matrix) = MatrixDimIterator(false, size(M, 2), M)
+eachcol(M::Matrix) = MatrixDimIterator(false, size(M, 2), M)
 
 """
     eachslice(M::Matrix, dim)
 
 Get an iterator either for the rows of M
 (dim = 1), or the cols. 
-See also [`eachrow`](@ref) and [`eachcolumn`](@ref).
+See also [`eachrow`](@ref) and [`eachcol`](@ref).
 """
-eachslice(M::Matrix, dim) = MatrixDimIterator(dim == 1, size(M, dim), M)
+eachslice(M::Matrix, dim) = dim ∈ [1, 2] ? MatrixDimIterator(dim == 1, size(M, dim), M) : throw(ArgumentError("dim must be 1 or 2"))

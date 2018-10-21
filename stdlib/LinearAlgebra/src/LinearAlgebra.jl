@@ -74,7 +74,7 @@ export
     diagind,
     diagm,
     dot,
-    eachcolumn,
+    eachcol,
     eachrow,
     eigen,
     eigen!,
