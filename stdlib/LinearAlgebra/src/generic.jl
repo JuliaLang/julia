@@ -1443,7 +1443,7 @@ Base.length(it::MatrixDimIterator) = it.length
 Get an iterator for the rows of M.
 See also [`cols`](@ref).
 """
-rows(M::Matrix) = MatrixDimIterator(true, size(M, 1), M)
+eachrow(M::Matrix) = MatrixDimIterator(true, size(M, 1), M)
 
 
 """
@@ -1452,4 +1452,4 @@ rows(M::Matrix) = MatrixDimIterator(true, size(M, 1), M)
 Get a iterator for the columns of M.
 See also [`rows`](@ref).
 """
-cols(M::Matrix) = MatrixDimIterator(false, size(M, 2), M)
+eachcolumn(M::Matrix) = MatrixDimIterator(false, size(M, 2), M)
