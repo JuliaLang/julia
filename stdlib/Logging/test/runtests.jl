@@ -21,7 +21,7 @@ import Logging: min_enabled_level, shouldlog, handle_message
     handle_message(logger, Logging.Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
     @test shouldlog(logger, Logging.Info, Base, :group, :asdf) === false
 
-    # Check that maxlog works without an explicit ID
+    # Check that maxlog works without an explicit ID (#28786)
     buf = IOBuffer()
     io = IOContext(buf, :displaysize=>(30,80), :color=>false)
     logger = ConsoleLogger(io)
