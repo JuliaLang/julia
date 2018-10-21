@@ -220,6 +220,8 @@ manner. Merging proceeds left-to-right, between pairs of named tuples, and so th
 present in both the leftmost and rightmost named tuples take the same position as they are found in the
 leftmost named tuple. However, values are taken from matching fields in the rightmost named tuple that
 contains that field. Fields present in only the rightmost named tuple of a pair are appended at the end.
+A fallback is implemented for when only a single named tuple is supplied,
+with signature `merge(a::NamedTuple)`.
 
 ```jldoctest
 julia> merge((a=1, b=2, c=3), (b=4, d=5))
@@ -249,6 +251,8 @@ merge(a::NamedTuple{()}, b::NamedTuple) = b
 merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, b.data)
 
 merge(a::NamedTuple, b::NamedTuple, cs::NamedTuple...) = merge(merge(a, b), cs...)
+
+merge(a::NamedTuple) = a
 
 """
     merge(a::NamedTuple, iterable)
