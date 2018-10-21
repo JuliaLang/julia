@@ -107,6 +107,16 @@ Suppose the value of `$JULIA_PKGRESOLVE_ACCURACY` is `n`. Then
 *   the number of iterations between decimation steps is `10*n`, and
 *   at decimation steps, at most one in every `20*n` packages is decimated.
 
+### `JULIA_DEPOT_HOME`
+
+A directory path that points to the default location for storage of Julia packages. If `$JULIA_DEPOT_HOME` is not set, then `REPL.DEPOT_PATH` defaults to
+
+```
+$HOME/.julia
+$HOME/.julia/Julia-<release>/local/share/julia
+$HOME/.julia/Julia-<release>/share/julia
+```
+
 ## External applications
 
 ### `JULIA_SHELL`
