@@ -1415,3 +1415,31 @@ function normalize(v::AbstractVector, p::Real = 2)
         return T[]
     end
 end
+
+"""
+    rows(m::Matrix{T})
+
+Get a collection containing the rows of m.
+See also [`cols`](@ref).
+
+# Examples 
+```jldoctest 
+
+````
+"""
+rows(m::Matrix) = [m[i, :] for i in 1:size(m, 1)]
+
+
+"""
+    cols(m::Matrix{T})
+
+Get a collection containing the columns of m.
+See also [`rows`](@ref).
+
+# Examples 
+```jldoctest 
+
+````
+"""
+cols(m::Matrix) = [m[:, i] for i in 1:size(m, 2)]
+
