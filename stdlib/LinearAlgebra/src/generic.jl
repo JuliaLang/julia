@@ -1438,18 +1438,27 @@ end
 Base.eltype(it::MatrixDimIterator) = it.row == true ? typeof(@view it.M[1, :]) : typeof(@view it.M[:, 1])
 Base.length(it::MatrixDimIterator) = it.length
 """
-    rows(M::Matrix{T})
+    eachrow(M::Matrix)
 
 Get an iterator for the rows of M.
-See also [`cols`](@ref).
+See also [`eachcolumn`](@ref).
 """
 eachrow(M::Matrix) = MatrixDimIterator(true, size(M, 1), M)
 
 
 """
-    cols(M::Matrix{T})
+    eachcolumn(M::Matrix)
 
 Get a iterator for the columns of M.
-See also [`rows`](@ref).
+See also [`eachrow`](@ref).
 """
 eachcolumn(M::Matrix) = MatrixDimIterator(false, size(M, 2), M)
+
+"""
+    eachslice(M::Matrix, dim)
+
+Get an iterator either for the rows of M
+(dim = 1), or the cols. 
+See also [`eachrow`](@ref) and [`eachcolumn`](@ref).
+"""
+eachslice(M::Matrix, dim) = MatrixDimIterator(dim == 1, size(M, dim), M)
