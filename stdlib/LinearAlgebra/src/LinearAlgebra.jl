@@ -75,7 +75,7 @@ export
     diagm,
     dot,
     eachcolumn,
-    eachrow
+    eachrow,
     eigen,
     eigen!,
     eigmax,
