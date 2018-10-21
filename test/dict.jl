@@ -990,3 +990,13 @@ end
     @test String(take!(buf)) ==
         "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
 end
+
+@testset "copy!" begin
+    s = Dict(1=>2, 2=>3)
+    for a = ([3=>4], [0x3=>0x4], [3=>4, 5=>6, 7=>8], Pair{UInt,UInt}[3=>4, 5=>6, 7=>8])
+        @test s === copy!(s, Dict(a)) == Dict(a)
+        if length(a) == 1 # current limitation of Base.ImmutableDict
+            @test s === copy!(s, Base.ImmutableDict(a[])) == Dict(a[])
+        end
+    end
+end

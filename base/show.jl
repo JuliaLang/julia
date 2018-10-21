@@ -11,7 +11,7 @@ function show(io::IO, ::MIME"text/plain", r::LinRange)
     # range(1, stop=3, length=7)
     # 7-element LinRange{Float64}:
     #   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
-    print(io, summary(r))
+    summary(io, r)
     if !isempty(r)
         println(io, ":")
         print_range(io, r)
@@ -41,7 +41,7 @@ function show(io::IO, ::MIME"text/plain", f::Function)
 end
 
 function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
-    print(io, summary(iter))
+    summary(io, iter)
     isempty(iter) && return
     print(io, ". ", isa(iter,KeySet) ? "Keys" : "Values", ":")
     limit::Bool = get(io, :limit, false)
@@ -78,7 +78,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         recur_io = IOContext(recur_io, :compact => true)
     end
 
-    print(io, summary(t))
+    summary(io, t)
     isempty(t) && return
     print(io, ":")
     show_circular(io, t) && return
@@ -1654,7 +1654,7 @@ function dump_elts(io::IOContext, x::Array, n::Int, indent, i0, i1)
 end
 
 function dump(io::IOContext, x::Array, n::Int, indent)
-    print(io, "Array{$(eltype(x))}($(size(x)))")
+    print(io, "Array{", eltype(x), "}(", size(x), ")")
     if eltype(x) <: Number
         print(io, " ")
         show(io, x)
@@ -1739,7 +1739,11 @@ MyStruct
   y: Tuple{Int64,Int64}
 ```
 """
-dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = dump(IOContext(stdout::IO, :limit => true), arg; maxdepth=maxdepth)
+function dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH)
+    # this is typically used interactively, so default to being in Main
+    mod = get(stdout, :module, Main)
+    dump(IOContext(stdout::IO, :limit => true, :module => mod), arg; maxdepth=maxdepth)
+end
 
 
 """
@@ -1909,14 +1913,14 @@ function showarg(io::IO, r::ReshapedArray, toplevel)
 end
 
 function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
-    print(io, "reinterpret($T, ")
+    print(io, "reinterpret(", T, ", ")
     showarg(io, parent(r), false)
     print(io, ')')
 end
 
 # pretty printing for Iterators.Pairs
 function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, toplevel) where T<:AbstractArray
-    print(io, "pairs(IndexLinear(), ::$T)")
+    print(io, "pairs(IndexLinear(), ::", T, ")")
 end
 
 function Base.showarg(io::IO, r::Iterators.Pairs{Symbol, <:Any, <:Any, T}, toplevel) where {T <: NamedTuple}
@@ -1924,7 +1928,7 @@ function Base.showarg(io::IO, r::Iterators.Pairs{Symbol, <:Any, <:Any, T}, tople
 end
 
 function Base.showarg(io::IO, r::Iterators.Pairs{<:Any, <:Any, I, D}, toplevel) where {D, I}
-    print(io, "Iterators.Pairs(::$D, ::$I)")
+    print(io, "Iterators.Pairs(::", D, ", ::", I, ")")
 end
 
 # printing BitArrays

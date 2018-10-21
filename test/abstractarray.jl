@@ -916,3 +916,19 @@ end
     @test hcat(1:2, fill(1, (2,1))) == hcat([1:2;], fill(1, (2,1))) == reshape([1,2,1,1],2,2)
     @test [(1:3) (4:6); fill(1, (3,2))] == reshape([1,2,3,1,1,1,4,5,6,1,1,1], 6,2)
 end
+
+@testset "copy!" begin
+    @testset "AbstractVector" begin
+        s = Vector([1, 2])
+        for a = ([1], UInt[1], [3, 4, 5], UInt[3, 4, 5])
+            @test s === copy!(s, Vector(a)) == Vector(a)
+            @test s === copy!(s, SparseVector(a)) == Vector(a)
+        end
+    end
+    @testset "AbstractArray" begin
+        @test_throws ArgumentError copy!(zeros(2, 3), zeros(3, 2))
+        s = zeros(2, 2)
+        @test s === copy!(s, fill(1, 2, 2)) == fill(1, 2, 2)
+        @test s === copy!(s, fill(1.0, 2, 2)) == fill(1.0, 2, 2)
+    end
+end

@@ -46,14 +46,6 @@ emptymutable(s::BitSet, ::Type{Int}=Int) = BitSet()
 copy(s1::BitSet) = copy!(BitSet(), s1)
 copymutable(s::BitSet) = copy(s)
 
-"""
-    copy!(dst, src)
-
-In-place [`copy`](@ref) of `src` into `dst`. After the call to `copy!`,
-`dst` must be left equal to `src`, otherwise an error is thrown; this
-function appropriately resizes `dst` if necessary.
-See also [`copyto!`](@ref).
-"""
 function copy!(dest::BitSet, src::BitSet)
     resize!(dest.bits, length(src.bits))
     copyto!(dest.bits, src.bits)
