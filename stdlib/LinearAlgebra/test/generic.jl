@@ -327,8 +327,8 @@ end
 
 @testset "rows and columns tests" begin 
     M = [1 2 3; 4 5 6; 7 8 9]
-    @test rows(M) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
-    @test cols(M) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
+    @test collect(rows(M)) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    @test collect(cols(M)) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
 end 
 
 @testset "generic functions for checking whether matrices have banded structure" begin

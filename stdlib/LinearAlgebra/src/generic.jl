@@ -1416,30 +1416,41 @@ function normalize(v::AbstractVector, p::Real = 2)
     end
 end
 
+# Iterator for the rows() and cols()
+struct MatrixDimIterator{T}
+    row::Bool
+    length::Int
+    M::Matrix{T}
+end 
+
+function Base.iterate(it::MatrixDimIterator, state = 1) 
+    if state > it.length 
+        return nothing 
+    elseif it.row == true 
+        obj = @view it.M[state, :]
+        return (obj, state+1)
+    else 
+        obj = @view it.M[:, state]
+        return (obj, state+1)
+    end 
+end 
+
+Base.eltype(it::MatrixDimIterator) = Array{eltype(it.M), 1}
+Base.length(it::MatrixDimIterator) = it.length 
 """
     rows(m::Matrix{T})
 
-Get a collection containing the rows of m.
+Get an iterator for the rows of m.
 See also [`cols`](@ref).
-
-# Examples 
-```jldoctest 
-
-````
 """
-rows(m::Matrix) = [m[i, :] for i in 1:size(m, 1)]
+rows(m::Matrix) = MatrixDimIterator(true, size(M, 1), M)
 
 
 """
     cols(m::Matrix{T})
 
-Get a collection containing the columns of m.
+Get a iterator for the columns of m.
 See also [`rows`](@ref).
-
-# Examples 
-```jldoctest 
-
-````
 """
-cols(m::Matrix) = [m[:, i] for i in 1:size(m, 2)]
+cols(m::Matrix) = MatrixDimIterator(false, size(M, 2), M)
 
