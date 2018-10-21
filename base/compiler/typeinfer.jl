@@ -326,7 +326,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
         return ci
     end
     cache_the_tree = !may_discard_trees(interp) || (ci.inferred &&
-        ((ci.inlineable & CI_INLINEABLE) != 0 ||
+        ((ci.inlineable & CI_DECLARED_NOINLINE) == 0 ||
         ccall(:jl_isa_compileable_sig, Int32, (Any, Any), linfo.specTypes, def) != 0))
     if cache_the_tree
         if may_compress(interp)
@@ -762,11 +762,11 @@ end
 #### entry points for inferring a MethodInstance given a type signature ####
 
 # compute an inferred AST and return type
-function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atypes), sparams::SimpleVector, run_optimizer::Bool)
+function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atypes), sparams::SimpleVector, run_optimizer::Bool, cached = false)
     mi = specialize_method(method, atypes, sparams)::MethodInstance
     ccall(:jl_typeinf_begin, Cvoid, ())
     result = InferenceResult(mi)
-    frame = InferenceState(result, false, interp)
+    frame = InferenceState(result, cached, interp)
     frame === nothing && return (nothing, Any)
     if typeinf(interp, frame) && run_optimizer
         opt_params = OptimizationParams(interp)
