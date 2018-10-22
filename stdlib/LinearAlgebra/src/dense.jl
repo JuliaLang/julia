@@ -1240,7 +1240,7 @@ julia> M * N
 
 [^KY88]: Konstantinos Konstantinides and Kung Yao, "Statistical analysis of effective singular values in matrix rank determination", IEEE Transactions on Acoustics, Speech and Signal Processing, 36(5), 1988, 757-763. [doi:10.1109/29.1585](https://doi.org/10.1109/29.1585)
 """
-function pinv(A::StridedMatrix{T}, rtol::Real) where T
+function pinv(A::AbstractMatrix{T}, rtol::Real) where T
     m, n = size(A)
     Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
     if m == 0 || n == 0
@@ -1269,7 +1269,7 @@ function pinv(A::StridedMatrix{T}, rtol::Real) where T
     Sinv[findall(.!isfinite.(Sinv))] .= zero(Stype)
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
-function pinv(A::StridedMatrix{T}) where T
+function pinv(A::AbstractMatrix{T}) where T
     rtol = eps(real(float(one(T))))*min(size(A)...)
     return pinv(A, rtol)
 end
