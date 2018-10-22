@@ -102,7 +102,7 @@ function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)
     if m > n
         ldiv!(A, B)
         return copyto!(Y, view(B, 1:n, :))
-    else        
+    else
         return copyto!(Y, ldiv!(A, copyto!(copy(Y), view(B, 1:m, :))))
     end
 end
