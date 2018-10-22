@@ -1,4 +1,5 @@
 # Install dependencies needed to build the documentation.
+# must pass first argument to this script which defines where the docs are built to
 empty!(LOAD_PATH)
 push!(LOAD_PATH, @__DIR__, "@stdlib")
 empty!(DEPOT_PATH)
@@ -146,9 +147,10 @@ for stdlib in STDLIB_DOCS
     @eval using $(stdlib.stdlib)
 end
 
+const buildroot = ARGS[1]
 const render_pdf = "pdf" in ARGS
 makedocs(
-    build     = joinpath(@__DIR__, "_build", (render_pdf ? "pdf" : "html"), "en"),
+    build     = joinpath(buildroot, "_build", (render_pdf ? "pdf" : "html"), "en"),
     modules   = [Base, Core, BuildSysImg, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
     clean     = true,
     doctest   = ("doctest=fix" in ARGS) ? (:fix) : ("doctest=true" in ARGS) ? true : false,
@@ -171,7 +173,7 @@ makedocs(
 if "deploy" in ARGS && Sys.ARCH === :x86_64 && Sys.KERNEL === :Linux
     deploydocs(
         repo = "github.com/JuliaLang/julia.git",
-        target = "_build/html/en",
+        target = joinpath(buildroot, "doc", "_build", "html", "en"),
         dirname = "en",
         devurl = "v1.1-dev",
         versions = ["v#.#", "v1.1-dev" => "v1.1-dev"]
