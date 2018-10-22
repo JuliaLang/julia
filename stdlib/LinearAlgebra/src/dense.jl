@@ -171,7 +171,7 @@ julia> triu!(M, 1)
 function triu!(M::AbstractMatrix, k::Integer)
     @assert !has_offset_axes(M)
     m, n = size(M)
-    for j in 1:min(n, n + k)
+    for j in 1:min(n, m + k)
         for i in max(1, j - k + 1):m
             M[i,j] = zero(M[i,j])
         end
@@ -1332,14 +1332,14 @@ julia> nullspace(M, 2)
  0.0  0.0  1.0
 ```
 """
-function nullspace(A::StridedMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
+function nullspace(A::AbstractMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
     m, n = size(A)
-    (m == 0 || n == 0) && return Matrix{T}(I, n, n)
+    (m == 0 || n == 0) && return Matrix{eltype(A)}(I, n, n)
     SVD = svd(A, full=true)
-    indstart = sum(SVD.S .> SVD.S[1]*tol) + 1
+    indstart = sum(s -> s .> SVD.S[1]*tol, SVD.S) + 1
     return copy(SVD.Vt[indstart:end,:]')
 end
-nullspace(a::StridedVector, tol::Real = min(size(a)...)*eps(real(float(one(eltype(a)))))) = nullspace(reshape(a, length(a), 1), tol)
+nullspace(a::AbstractVector, tol::Real = min(size(a)...)*eps(real(float(one(eltype(a)))))) = nullspace(reshape(a, length(a), 1), tol)
 
 """
     cond(M, p::Real=2)

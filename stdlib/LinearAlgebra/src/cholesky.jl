@@ -38,9 +38,9 @@ struct Cholesky{T,S<:AbstractMatrix} <: Factorization{T}
         new(factors, uplo, info)
     end
 end
-Cholesky(A::AbstractMatrix{T}, uplo::Symbol, info::BlasInt) where {T} =
+Cholesky(A::AbstractMatrix{T}, uplo::Symbol, info::Integer) where {T} =
     Cholesky{T,typeof(A)}(A, char_uplo(uplo), info)
-Cholesky(A::AbstractMatrix{T}, uplo::AbstractChar, info::BlasInt) where {T} =
+Cholesky(A::AbstractMatrix{T}, uplo::AbstractChar, info::Integer) where {T} =
     Cholesky{T,typeof(A)}(A, uplo, info)
 
 struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
@@ -56,8 +56,8 @@ struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
         new(factors, uplo, piv, rank, tol, info)
     end
 end
-function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{BlasInt},
-                            rank::BlasInt, tol::Real, info::BlasInt) where T
+function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{<:Integer},
+                            rank::Integer, tol::Real, info::Integer) where T
     CholeskyPivoted{T,typeof(A)}(A, uplo, piv, rank, tol, info)
 end
 
@@ -379,7 +379,7 @@ issuccess(C::Cholesky) = C.info == 0
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:AbstractMatrix})
     if issuccess(C)
-        println(io, summary(C))
+        summary(io, C); println(io)
         println(io, "$(C.uplo) factor:")
         show(io, mime, C.UL)
     else
@@ -388,7 +388,7 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:Abst
 end
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, C::CholeskyPivoted{<:Any,<:AbstractMatrix})
-    println(io, summary(C))
+    summary(io, C); println(io)
     println(io, "$(C.uplo) factor with rank $(rank(C)):")
     show(io, mime, C.uplo == 'U' ? C.U : C.L)
     println(io, "\npermutation:")

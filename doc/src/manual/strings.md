@@ -404,7 +404,7 @@ further discussion of UTF-8 encoding issues, see the section below on [byte arra
 The [`transcode`](@ref) function is provided to convert data between the various UTF-xx encodings,
 primarily for working with external data and libraries.
 
-## Concatenation
+## [Concatenation](@id man-concatenation)
 
 One of the most common and useful string operations is concatenation:
 

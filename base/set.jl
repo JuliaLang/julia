@@ -165,7 +165,7 @@ julia> unique(x -> x^2, [1, -1, 3, -3, 4])
  4
 ```
 """
-function unique(f::Callable, C)
+function unique(f, C)
     out = Vector{eltype(C)}()
     seen = Set()
     for x in C

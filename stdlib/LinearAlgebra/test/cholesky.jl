@@ -306,4 +306,30 @@ end
     @test_throws InexactError cholesky!(Diagonal([2, 1]))
 end
 
+@testset "constructor with non-BlasInt arguments" begin
+
+    x = rand(5,5)
+    chol = cholesky(x'x)
+
+    factors, uplo, info = chol.factors, chol.uplo, chol.info
+
+    @test Cholesky(factors, uplo, Int32(info)) == chol
+    @test Cholesky(factors, uplo, Int64(info)) == chol
+
+    cholp = cholesky(x'x, Val(true))
+
+    factors, uplo, piv, rank, tol, info =
+        cholp.factors, cholp.uplo, cholp.piv, cholp.rank, cholp.tol, cholp.info
+
+    @test CholeskyPivoted(factors, uplo, Vector{Int32}(piv), rank, tol, info) == cholp
+    @test CholeskyPivoted(factors, uplo, Vector{Int64}(piv), rank, tol, info) == cholp
+
+    @test CholeskyPivoted(factors, uplo, piv, Int32(rank), tol, info) == cholp
+    @test CholeskyPivoted(factors, uplo, piv, Int64(rank), tol, info) == cholp
+
+    @test CholeskyPivoted(factors, uplo, piv, rank, tol, Int32(info)) == cholp
+    @test CholeskyPivoted(factors, uplo, piv, rank, tol, Int64(info)) == cholp
+
+end
+
 end # module TestCholesky

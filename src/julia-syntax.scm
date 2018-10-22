@@ -1589,7 +1589,7 @@
                    (car ranges)
                    `(call (top product) ,@ranges)))
          (iter (if filt?
-                   `(call (|.| (top Iterators) 'Filter)
+                   `(call (top Filter)
                           ,(func-for-generator-ranges (cadr (caddr e)) range-exprs #f '())
                           ,iter)
                    iter))
@@ -1630,7 +1630,7 @@
              (kws (car kws+args))
              (kws (if (null? kws) kws (list (cons 'parameters kws))))
              (args (map dot-to-fuse (cdr kws+args)))
-             (make `(call (|.| (top Broadcast) ,(if (null? kws) ''broadcasted ''broadcasted_kwsyntax)) ,@kws ,f ,@args)))
+             (make `(call (top ,(if (null? kws) 'broadcasted 'broadcasted_kwsyntax)) ,@kws ,f ,@args)))
         (if top (cons 'fuse make) make)))
     (if (and (pair? e) (eq? (car e) '|.|))
         (let ((f (cadr e)) (x (caddr e)))
@@ -1655,12 +1655,13 @@
     (if (fuse? e)
         ; expanded to a fuse op call
         (if (null? lhs)
-            (expand-forms `(call (|.| (top Broadcast) 'materialize) ,(cdr e)))
-            (expand-forms `(call (|.| (top Broadcast) 'materialize!) ,lhs-view ,(cdr e))))
+            (expand-forms `(call (top materialize) ,(cdr e)))
+            (expand-forms `(call (top materialize!) ,lhs-view ,(cdr e))))
         ; expanded to something else (like a getfield)
         (if (null? lhs)
             (expand-forms e)
-            (expand-forms `(call (|.| (top Broadcast) 'materialize!) ,lhs-view (call (|.| (top Broadcast) 'broadcasted) (top identity) ,e)))))))
+            (expand-forms `(call (top materialize!) ,lhs-view
+                                 (call (top broadcasted) (top identity) ,e)))))))
 
 
 (define (expand-where body var)

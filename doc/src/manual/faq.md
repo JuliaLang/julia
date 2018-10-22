@@ -637,6 +637,17 @@ julia> remotecall_fetch(anon_bar, 2)
 1
 ```
 
+### Why does Julia use `*` for string concatenation? Why not `+` or something else?
+
+The [main argument](@ref man-concatenation) against `+` is that string concatenation is not
+commutative, while `+` is generally used as a commutative operator. While the Julia community
+recognizes that other languages use different operators and `*` may be unfamiliar for some
+users, it communicates certain algebraic properties.
+
+Note that you can also use `string(...)` to concatenate strings (and other values converted
+to strings); similarly, `repeat` can be used instead of `^` to repeat strings. The
+[interpolation syntax](@ref string-interpolation) is also useful for constructing strings.
+
 ## Packages and Modules
 
 ### What is the difference between "using" and "import"?

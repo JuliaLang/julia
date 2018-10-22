@@ -246,8 +246,9 @@ Append an item `v` to the channel `c`. Blocks if the channel is full.
 For unbuffered channels, blocks until a [`take!`](@ref) is performed by a different
 task.
 """
-function put!(c::Channel, v)
+function put!(c::Channel{T}, v) where T
     check_channel_state(c)
+    v = convert(T, v)
     isbuffered(c) ? put_buffered(c,v) : put_unbuffered(c,v)
 end
 
