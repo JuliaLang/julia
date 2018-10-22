@@ -1875,11 +1875,11 @@ if-branch as shown below.
 
 ```
 struct MyType
-  x
+    x
 end
 
 function Base.getproperty(obj::MyType, sym::Symbol)
-    if sym == :special
+    if sym === :special
         obj.x + 1
     else
         # fallback to getfield
