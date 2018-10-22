@@ -1428,7 +1428,7 @@ eachrow(A::AbstractVecOrMat) = (view(A, i, :) for i in axes(A, 1))
 """
     eachcol(A::AbstractVecOrMat)
 
-Get a generator over views of A's second dimension. 
+Get a generator over views of A's second dimension.
 See also [`eachrow`](@ref) and [`eachslice`](@ref).
 """
 eachcol(A::AbstractVecOrMat) = (view(A, :, i) for i in axes(A, 2))
