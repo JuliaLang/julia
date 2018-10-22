@@ -433,6 +433,21 @@ end
     end
 end
 
+@static if !Sys.iswindows()
+    # Issue #29234
+    @testset "TCPSocket stdin" begin
+        let addr = Sockets.InetAddr(ip"127.0.0.1", 4455)
+            srv = listen(addr)
+            s = connect(addr)
+
+            @test success(pipeline(`$(Base.julia_cmd()) -e "exit()" -i`, stdin=s))
+
+            close(s)
+            close(srv)
+        end
+    end
+end
+
 # Issues #18818 and #24169
 mutable struct RLimit
     cur::Int64
