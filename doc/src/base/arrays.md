@@ -136,6 +136,20 @@ Base.findnext(::Any, ::Integer)
 Base.findnext(::Function, ::Any, ::Integer)
 Base.findprev(::Any, ::Integer)
 Base.findprev(::Function, ::Any, ::Integer)
+Base.findmin(::AbstractArray)
+Base.findmin!(::AbstractArray, ::AbstractArray, ::Abstractarray)
+Base.argmin(::AbstractArray)
+Base.findmax(::AbstractArray)
+Base.findmax!(::AbstractArray, ::AbstractArray, ::Abstractarray)
+Base.argmax(::AbstractArray)
+Base.minimum(::AbstractArray)
+Base.minimum!
+Base.maximum(::AbstractArray)
+Base.maximum!
+Base.all(::AbstractArray)
+Base.all!
+Base.any(::AbstractArray)
+Base.any!
 Base.permutedims
 Base.permutedims!
 Base.PermutedDimsArray
@@ -147,8 +161,12 @@ Base.promote_shape
 ```@docs
 Base.accumulate
 Base.accumulate!
+Base.prod(::AbstractArray)
+Base.prod!
 Base.cumprod
 Base.cumprod!
+Base.sum(::AbstractArray)
+Base.sum!
 Base.cumsum
 Base.cumsum!
 Base.diff
@@ -157,6 +175,8 @@ Base.rot180
 Base.rotl90
 Base.rotr90
 Base.mapslices
+Base.reduce(::Any, ::AbstractArray)
+Base.mapreduce(::Any, ::Any, ::AbstractArray)
 ```
 
 ## Combinatorics
