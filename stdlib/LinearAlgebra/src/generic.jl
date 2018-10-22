@@ -1416,49 +1416,29 @@ function normalize(v::AbstractVector, p::Real = 2)
     end
 end
 
-# Iterator for the rows() and cols()
-struct MatrixDimIterator{T}
-    row::Bool
-    length::Int
-    M::Matrix{T}
-end
-
-function Base.iterate(it::MatrixDimIterator, state = 1)
-    if state > it.length
-        return nothing
-    elseif it.row == true
-        obj = @view it.M[state, :]
-        return (obj, state+1)
-    else
-        obj = @view it.M[:, state]
-        return (obj, state+1)
-    end
-end
-
-Base.eltype(it::MatrixDimIterator) = it.row == true ? typeof(@view it.M[1, :]) : typeof(@view it.M[:, 1])
-Base.length(it::MatrixDimIterator) = it.length
 """
-    eachrow(M::Matrix)
+    eachrow(A::AbstractVecOrMat)
 
-Get an iterator for the rows of M.
+Get a generator over views of A's first dimension.
 See also [`eachcol`](@ref) and [`eachslice`](@ref).
 """
-eachrow(M::Matrix) = MatrixDimIterator(true, size(M, 1), M)
+eachrow(A::AbstractVecOrMat) = (view(A, i, :) for i in axes(A, 1))
 
 
 """
-    eachcol(M::Matrix)
+    eachcol(A::AbstractVecOrMat)
 
-Get a iterator for the columns of M.
+Get a generator over views of A's second dimension. 
 See also [`eachrow`](@ref) and [`eachslice`](@ref).
 """
-eachcol(M::Matrix) = MatrixDimIterator(false, size(M, 2), M)
+eachcol(A::AbstractVecOrMat) = (view(A, :, i) for i in axes(A, 2))
 
 """
-    eachslice(M::Matrix, dim)
+    eachslice(A::AbstractArray, d)
 
-Get an iterator either for the rows of M
-(dim = 1), or the cols. 
+Get an iterator over views of A's dth dimension. If
+A has less than d dimensions, collect(eachslice(A, d))
+will just return a trivial collection with a view into A.
 See also [`eachrow`](@ref) and [`eachcol`](@ref).
 """
-eachslice(M::Matrix, dim) = dim ∈ [1, 2] ? MatrixDimIterator(dim == 1, size(M, dim), M) : throw(ArgumentError("dim must be 1 or 2"))
+eachslice(A, d) = (view(A, ntuple(n->n==d ? i : (:), ndims(A))...) for i in axes(A, d))

@@ -326,10 +326,17 @@ end
 
 
 @testset "rows and columns tests" begin
+    # Simple ones 
     M = [1 2 3; 4 5 6; 7 8 9]
     @test collect(eachrow(M)) == collect(eachslice(M, 1)) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
     @test collect(eachcol(M)) == collect(eachslice(M, 2)) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
-    @test_throws ArgumentError eachslice(M, 4)
+    @test collect(eachslice(M, 4))[1] == M
+
+    # Higher-dimensional case 
+    M = reshape([(1:16)...], 2, 2, 2, 2)
+    @test_throws MethodError collect(eachrow(M))
+    @test_throws MethodError collect(eachcol(M))
+    @test collect(eachslice(M, 1))[1][:, :, 1] == [1 5; 3 7]
 end
 
 @testset "generic functions for checking whether matrices have banded structure" begin

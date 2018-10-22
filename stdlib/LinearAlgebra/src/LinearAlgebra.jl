@@ -76,6 +76,7 @@ export
     dot,
     eachcol,
     eachrow,
+    eachslice,
     eigen,
     eigen!,
     eigmax,
