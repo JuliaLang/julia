@@ -1868,6 +1868,29 @@ typeassert
 
 The syntax `a.b` calls `getproperty(a, :b)`.
 
+For example, to run custom code to evaluate
+a property by a specific symbol name, you can
+override this method and create a specific
+if-branch as shown below.
+
+```
+struct MyType
+  x
+end
+
+function Base.getproperty(obj::MyType, sym::Symbol)
+    if sym == :special
+        obj.x + 1
+    else
+        # fallback to getfield
+        getfield(obj, sym)
+    end
+end
+
+obj = MyType(1)
+obj.special
+```
+
 See also [`propertynames`](@ref Base.propertynames) and
 [`setproperty!`](@ref Base.setproperty!).
 """
