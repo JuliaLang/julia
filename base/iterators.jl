@@ -909,6 +909,33 @@ length(f::Flatten{Tuple{}}) = 0
     iterate(f, (x[2], x[1]))
 end
 
+@propagate_inbounds function iterate(f::Flatten{<:AbstractArray})
+    it = f.it
+    length(it) == 0 && return nothing
+    idx = firstindex(it)
+    sn = iterate(it[idx])
+    while sn === nothing
+        idx += 1
+        idx <= lastindex(it) || return nothing
+        sn = iterate(it[idx])
+    end
+    elem, s_inner = sn
+    return (elem, (idx, s_inner))
+end
+
+@propagate_inbounds function iterate(f::Flatten{<:AbstractArray}, state)
+    idx, s_inner = state
+    it = f.it
+    sn = iterate(it[idx], s_inner)
+    while sn === nothing
+        idx += 1
+        idx <= lastindex(it) || return nothing
+        sn = iterate(it[idx])
+    end
+    elem, s_inner = sn
+    return (elem, (idx, s_inner))
+end
+
 reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))
 
 """
