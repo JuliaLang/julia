@@ -529,16 +529,16 @@ end
     Bc = L.mask.chunks
     return iterate(L::Base.LogicalIndex{Int,<:BitArray}, (1, @inbounds Bc[1]))
 end
-@propagate_inbounds function iterate(L::Base.LogicalIndex{Int,<:BitArray}, s)
+@inline function iterate(L::Base.LogicalIndex{Int,<:BitArray}, s)
     Bc = L.mask.chunks
     i1, c = s
     while c==0
-        i1 == length(Bc) && return nothing
+        i1 % UInt >= length(Bc) % UInt && return nothing
         i1 += 1
-        c = Bc[i1]
+        @inbounds c = Bc[i1]
     end
     tz = trailing_zeros(c) + 1
-    c = _BLSR(c)
+    c = _blsr(c)
     return ((i1-1)<<6 + tz, (i1, c))
 end
 
