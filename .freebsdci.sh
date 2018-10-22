@@ -1,13 +1,13 @@
 #!/bin/sh
 # FreeBSD CI Build Scripts
 # The flow of a FreeBSD CI (https://freebsdci.julialang.org) build:
-#
+
 # 1. `cleanup`
 # 2. `compile`
 # 3. `build-state`
 # 4. `runtests`
 # 5. `test-embedding`
-#
+
 # Detail of flow is controlled by the variable `factory`
 # here.
 # https://github.com/iblis17/julia-fbsd-buildbot/blob/master/master/master.cfg
