@@ -138,9 +138,6 @@ fillstored!(A::Bidiagonal, x) = (fill!(A.dv, x); fill!(A.ev, x); A)
 fillstored!(A::Tridiagonal, x) = (fill!(A.dl, x); fill!(A.d, x); fill!(A.du, x); A)
 fillstored!(A::SymTridiagonal, x) = (fill!(A.dv, x); fill!(A.ev, x); A)
 
-# these are to check if filling every element in the matrix (not just the ones on diagonals) will
-# fit into the structure
-_small_enough(A::Diagonal) = size(A, 1) <= 1
 _small_enough(A::Bidiagonal) = size(A, 1) <= 1
 _small_enough(A::Tridiagonal) = size(A, 1) <= 2
 _small_enough(A::SymTridiagonal) = size(A, 1) <= 2
