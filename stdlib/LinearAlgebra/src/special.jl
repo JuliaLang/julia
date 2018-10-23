@@ -152,8 +152,7 @@ function fill!(A::Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}, x)
     not be filled with $x, since some of its entries are constrained."))
 end
 
-# make sure container type is correct (except for range?)
-one(A::Diagonal{T}) where T = Diagonal(fill(one(T), size(A, 1)))
-one(A::Bidiagonal{T}) where T = Bidiagonal(fill(one(T), size(A, 1)), zeros(T, size(A, 1)-1), A.uplo)
-one(A::Tridiagonal{T}) where T = Tridiagonal(zeros(T, size(A, 1)-1), fill(one(T), size(A, 1)), zeros(T, size(A, 1)-1))
-one(A::SymTridiagonal{T}) where T = SymTridiagonal(fill(one(T), size(A, 1)), zeros(T, size(A, 1)-1))
+one(A::Diagonal{T}) where T = Diagonal(fill!(similar(A.diag), one(T)))
+one(A::Bidiagonal{T}) where T = Bidiagonal(fill!(similar(A.dv), one(T)), zero(A.ev), A.uplo)
+one(A::Tridiagonal{T}) where T = Tridiagonal(zero(A.du), fill!(similar(A.d), one(T)), zero(A.dl))
+one(A::SymTridiagonal{T}) where T = SymTridiagonal(fill!(similar(A.dv), one(T)), zero(A.ev))
