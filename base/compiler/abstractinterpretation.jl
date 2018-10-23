@@ -330,7 +330,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
             end
             infstate = sv
             topmost = topmost::InferenceState
-            while !(infstate.parent === topmost.parent)
+            while !(infstate === topmost.parent)
                 if call_result_unused(infstate)
                     # If we won't propagate the result any further (since it's typically unused),
                     # it's OK that we keep and cache the "limited" result in the parents
