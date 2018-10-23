@@ -151,7 +151,13 @@ function showerror(io::IO, ex::UndefVarError)
 end
 
 function showerror(io::IO, ex::InexactError)
-    print(io, "InexactError: ", ex.func, '(', ex.T, ", ", ex.val, ')')
+    f = string(ex.func)
+    t = string(ex.T)
+    print(io, "InexactError: ", f, '(')
+    if f != t
+        print(io, t, ", ")
+    end
+    print(io, ex.val, ')')
 end
 
 typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}

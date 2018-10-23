@@ -268,6 +268,7 @@ struct InexactError <: Exception
     val
     InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@_noinline_meta; new(f, T, val))
 end
+InexactError(@nospecialize(T), @nospecialize(val)) = InexactError(Symbol(T), T, val)
 struct OverflowError <: Exception
     msg::AbstractString
 end
