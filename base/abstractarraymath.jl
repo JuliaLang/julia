@@ -377,7 +377,8 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
 
     # fill the first inner block
     if all(x -> x == 1, inner)
-        R[axes(A)...] = A
+        idxs = (axes(A)..., ntuple(n->OneTo(1), ndims(R)-ndims(A))...) # keep dimension consistent
+        R[idxs...] = A
     else
         inner_indices = [1:n for n in inner]
         for c in CartesianIndices(axes(A))
