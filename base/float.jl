@@ -70,7 +70,7 @@ for t1 in (Float32, Float64)
 end
 (::Type{T})(x::Float16) where {T<:Integer} = T(Float32(x))
 
-Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(Bool, x))
+Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, x))
 
 promote_rule(::Type{Float64}, ::Type{UInt128}) = Float64
 promote_rule(::Type{Float64}, ::Type{Int128}) = Float64
@@ -259,7 +259,7 @@ AbstractFloat(x::UInt32)  = Float64(x)
 AbstractFloat(x::UInt64)  = Float64(x) # LOSSY
 AbstractFloat(x::UInt128) = Float64(x) # LOSSY
 
-Bool(x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError(Bool, x))
+Bool(x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, x))
 
 """
     float(x)
@@ -676,7 +676,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (round(x, RoundToZero) == x)
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
+                        throw(InexactError($(Expr(:quote,Ti.name.name)), x))
                     end
                 end
             end
@@ -697,7 +697,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (round(x, RoundToZero) == x)
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
+                        throw(InexactError($(Expr(:quote,Ti.name.name)), x))
                     end
                 end
             end

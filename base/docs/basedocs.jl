@@ -948,10 +948,10 @@ Stacktrace:
 BoundsError
 
 """
-    InexactError(T, val)
+    InexactError(name::Symbol, val)
     InexactError(name::Symbol, T, val)
 
-Cannot exactly convert `val` to type `T` in its constructor or in a method of function `name`.
+Cannot exactly convert `val` to type `T` in a method of function `name`.
 
 # Examples
 ```jldoctest

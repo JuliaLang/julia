@@ -265,15 +265,15 @@ round(::Type{Integer}, x::BigFloat) = round(BigInt, x)
 function Bool(x::BigFloat)
     iszero(x) && return false
     isone(x) && return true
-    throw(InexactError(Bool, x))
+    throw(InexactError(:Bool, x))
 end
 function BigInt(x::BigFloat)
-    isinteger(x) || throw(InexactError(BigInt, x))
+    isinteger(x) || throw(InexactError(:BigInt, x))
     trunc(BigInt, x)
 end
 
 function (::Type{T})(x::BigFloat) where T<:Integer
-    isinteger(x) || throw(InexactError(T, x))
+    isinteger(x) || throw(InexactError(Symbol(T), x))
     trunc(T,x)
 end
 

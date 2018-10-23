@@ -81,9 +81,9 @@ Rational{T}(x::Integer) where {T<:Integer} = Rational{T}(convert(T,x), convert(T
 Rational(x::Rational) = x
 
 Bool(x::Rational) = x==0 ? false : x==1 ? true :
-    throw(InexactError(Bool, x)) # to resolve ambiguity
+    throw(InexactError(:Bool, x)) # to resolve ambiguity
 (::Type{T})(x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num) :
-    throw(InexactError(T, x)))
+    throw(InexactError(Symbol(T), x)))
 
 AbstractFloat(x::Rational) = float(x.num)/float(x.den)
 function (::Type{T})(x::Rational{S}) where T<:AbstractFloat where S
@@ -93,7 +93,7 @@ end
 
 function Rational{T}(x::AbstractFloat) where T<:Integer
     r = rationalize(T, x, tol=0)
-    x == convert(typeof(x), r) || throw(InexactError(Rational{T}, x))
+    x == convert(typeof(x), r) || throw(InexactError(Symbol(Rational{T}), x))
     r
 end
 Rational(x::Float64) = Rational{Int64}(x)

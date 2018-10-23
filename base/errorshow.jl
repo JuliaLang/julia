@@ -151,11 +151,9 @@ function showerror(io::IO, ex::UndefVarError)
 end
 
 function showerror(io::IO, ex::InexactError)
-    f = string(ex.func)
-    t = string(ex.T)
-    print(io, "InexactError: ", f, '(')
-    if f != t
-        print(io, t, ", ")
+    print(io, "InexactError: ", ex.func, '(')
+    if isdefined(ex, :T)
+        print(io, ex.T, ", ")
     end
     print(io, ex.val, ')')
 end
