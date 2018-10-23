@@ -306,6 +306,7 @@ end
             end
         end
     end
+    return
 end
 
 @inline ensureroom(io::GenericIOBuffer, nshort::Int) = ensureroom(io, UInt(nshort))
