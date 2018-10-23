@@ -267,11 +267,19 @@ offset `do`. Return `dest`.
 """
 function copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where T
     n == 0 && return dest
-    n > 0 || throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
+    n > 0 || _throw_argerror(n)
     if soffs < 1 || doffs < 1 || soffs+n-1 > length(src) || doffs+n-1 > length(dest)
         throw(BoundsError())
     end
     unsafe_copyto!(dest, doffs, src, soffs, n)
+    return dest
+end
+
+# Outlining this because otherwise a catastrophic inference slowdown
+# occurs, see discussion in #27874
+function _throw_argerror(n)
+    @_noinline_meta
+    throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
 end
 
 copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, length(src))
@@ -284,7 +292,7 @@ function fill!(dest::Array{T}, x) where T
     for i in 1:length(dest)
         @inbounds dest[i] = xT
     end
-    dest
+    return dest
 end
 
 """
