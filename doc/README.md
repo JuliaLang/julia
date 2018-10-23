@@ -23,7 +23,7 @@ from the root directory. This will build the HTML documentation and output it to
 To run the doctests found in the manual run
 
 ```sh
-$ make -C doc check
+$ make -C doc doctest=true
 ```
 
 from the root directory.
