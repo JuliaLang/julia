@@ -340,6 +340,9 @@ rdiv!(A, B)
 copy_oftype(A::AbstractArray{T}, ::Type{T}) where {T} = copy(A)
 copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractArray{S,N}, A)
 
+# matrix exponentials for ℯ
+Base.:^(::Irrational{:ℯ}, A::AbstractMatrix) = exp(A)
+
 include("adjtrans.jl")
 include("transpose.jl")
 

@@ -401,6 +401,10 @@ end
                                                  [4.000000000000000  -1.414213562373094  -1.414213562373095
                                                   -1.414213562373095   4.999999999999996  -0.000000000000000
                                                   0  -0.000000000000002   3.000000000000000])
+
+        # alias using ℯ, should be exact
+        @test ℯ^(fill(2, (4,4))) == exp(fill(2, (4,4)))
+        @test ℯ^(fill(2.4, (4,4))) == exp(fill(2.4, (4,4)))
     end
 
     @testset "Additional tests for $elty" for elty in (Float64, Complex{Float64})
