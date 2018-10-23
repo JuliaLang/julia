@@ -164,6 +164,21 @@ end
                     @test transpose(H) ==  Hermitian(copy(transpose(aherm)))
                 end
             end
+
+            @testset "real, imag" begin
+                S = Symmetric(asym)
+                H = Hermitian(aherm)
+                @test issymmetric(real(S))
+                @test ishermitian(real(H))
+                if eltya <: Real
+                    @test real(S) === S == asym
+                    @test real(H) === H == aherm
+                elseif eltya <: Complex
+                    @test issymmetric(imag(S))
+                    @test !ishermitian(imag(H))
+                end
+            end
+
         end
 
         @testset "linalg unary ops" begin
