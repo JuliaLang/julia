@@ -97,26 +97,16 @@ Base.reduce(::Any, ::Any)
 Base.foldl(::Any, ::Any)
 Base.foldr(::Any, ::Any)
 Base.maximum
-Base.maximum!
 Base.minimum
-Base.minimum!
 Base.extrema
 Base.argmax
 Base.argmin
 Base.findmax
 Base.findmin
-Base.findmax!
-Base.findmin!
 Base.sum
-Base.sum!
 Base.prod
-Base.prod!
 Base.any(::Any)
-Base.any(::AbstractArray, ::Any)
-Base.any!
 Base.all(::Any)
-Base.all(::AbstractArray, ::Any)
-Base.all!
 Base.count
 Base.any(::Any, ::Any)
 Base.all(::Any, ::Any)
