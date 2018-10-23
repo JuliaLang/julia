@@ -40,6 +40,11 @@ end
     @test ℯ^2 == exp(2)
     @test ℯ^2.4 == exp(2.4)
     @test ℯ^(2//3) == exp(2//3)
+    @test ℯ^(fill(2, (4,4))) == exp(fill(2, (4,4)))
+    @test ℯ^(fill(2.4, (4,4))) == exp(fill(2.4, (4,4)))
+    # currently missing `exp` methods for matrices of Rational and Irrational
+    # @test ℯ^(fill(π, (4,4))) == exp(fill(π, (4,4)))
+    # @test ℯ^(fill(2//3, (4,4))) == exp(fill(2//3, (4,4)))
 
     @test Float16(3.0) < pi
     @test pi < Float16(4.0)
