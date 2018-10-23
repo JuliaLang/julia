@@ -346,7 +346,7 @@ using LinearAlgebra: fillstored!, UnitLowerTriangular
         sparse(rand(3)),
         # LowerTriangular(randn(3,3)), # AbstractTriangular fill! deprecated, see below
         # UpperTriangular(randn(3,3)) # AbstractTriangular fill! deprecated, see below
-        ]
+        Diagonal(rand(3))]
         for A in exotic_arrays
             @test iszero(fill!(A, 0))
         end
@@ -363,13 +363,15 @@ using LinearAlgebra: fillstored!, UnitLowerTriangular
         val = randn()
         b = Bidiagonal(randn(1,1), :U)
         st = SymTridiagonal(randn(1,1))
-        for x in (b, st)
+        d = Diagonal(rand(1))
+        for x in (b, st, d)
             @test Array(fill!(x, val)) == fill!(Array(x), val)
         end
         b = Bidiagonal(randn(2,2), :U)
         st = SymTridiagonal(randn(3), randn(2))
         t = Tridiagonal(randn(3,3))
-        for x in (b, t, st)
+        d = Diagonal(rand(3))
+        for x in (b, t, st, d)
             @test_throws ArgumentError fill!(x, val)
             @test Array(fill!(x, 0)) == fill!(Array(x), 0)
         end
