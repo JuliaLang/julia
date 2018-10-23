@@ -89,6 +89,7 @@ catalan
 # loop over types to prevent ambiguities for ^(::Number, x)
 for T in (AbstractIrrational, Rational, Integer, Number, Complex)
     Base.:^(::Irrational{:ℯ}, x::T) = exp(x)
+    Base.:^(::Irrational{:ℯ}, x::AbstractMatrix{T}) = exp(x)
 end
 Base.literal_pow(::typeof(^), ::Irrational{:ℯ}, ::Val{p}) where {p} = exp(p)
 
