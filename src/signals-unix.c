@@ -745,7 +745,17 @@ static void fpe_handler(int sig, siginfo_t *info, void *context)
 {
     (void)info;
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_throw_in_ctx(ptls, jl_diverror_exception, sig, context);
+    jl_value_t *exc = NULL;
+    switch (info->si_code)
+    {
+        case FPE_FLTDIV: exc = jl_diverror_exception; break; // Floating-point divide by zero.
+        case FPE_FLTOVF: exc = jl_fltovf_exception;   break; // Floating-point overflow.
+        case FPE_FLTUND: exc = jl_fltund_exception;   break; // Floating-point underflow.
+        case FPE_FLTRES: exc = jl_fltres_exception;   break; // Floating-point inexact result.
+        case FPE_FLTINV: exc = jl_fltinv_exception;   break; // Floating-point invalid operation.
+        default: exc = jl_diverror_exception; assert(0);
+    }
+    jl_throw_in_ctx(ptls, exc, sig, context);
 }
 
 static void sigint_handler(int sig)

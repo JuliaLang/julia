@@ -842,6 +842,10 @@ void jl_get_builtin_hooks(void)
     jl_errorexception_type = (jl_datatype_t*)core("ErrorException");
     jl_stackovf_exception  = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
     jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
+    jl_fltovf_exception    = jl_new_struct_uninit((jl_datatype_t*)core("FloatOverflowError"));
+    jl_fltund_exception    = jl_new_struct_uninit((jl_datatype_t*)core("FloatUnderflowError"));
+    jl_fltres_exception    = jl_new_struct_uninit((jl_datatype_t*)core("FloatInexactError"));
+    jl_fltinv_exception    = jl_new_struct_uninit((jl_datatype_t*)core("FloatInvalidOperationError"));
     jl_undefref_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
     jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
     jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));

@@ -241,6 +241,10 @@ struct BoundsError <: Exception
     BoundsError(@nospecialize(a), i) = (@_noinline_meta; new(a,i))
 end
 struct DivideError         <: Exception end
+struct FloatOverflowError  <: Exception end
+struct FloatUnderflowError <: Exception end
+struct FloatInexactError   <: Exception end
+struct FloatInvalidOperationError <: Exception end
 struct OutOfMemoryError    <: Exception end
 struct ReadOnlyMemoryError <: Exception end
 struct SegmentationFault   <: Exception end

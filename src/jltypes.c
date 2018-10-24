@@ -124,6 +124,10 @@ jl_value_t *jl_stackovf_exception;
 jl_value_t *jl_segv_exception;
 #endif
 JL_DLLEXPORT jl_value_t *jl_diverror_exception;
+JL_DLLEXPORT jl_value_t *jl_fltovf_exception;
+JL_DLLEXPORT jl_value_t *jl_fltund_exception;
+JL_DLLEXPORT jl_value_t *jl_fltres_exception;
+JL_DLLEXPORT jl_value_t *jl_fltinv_exception;
 JL_DLLEXPORT jl_value_t *jl_domain_exception;
 JL_DLLEXPORT jl_value_t *jl_overflow_exception;
 JL_DLLEXPORT jl_value_t *jl_undefref_exception;
