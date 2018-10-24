@@ -252,6 +252,12 @@ end
     @test isa((@inferred vcat(Float64[], spzeros(1))), SparseVector)
 end
 
+
+# for testing types with a dimension
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
+
 @testset "zero and one for structured matrices" begin
     for elty in (Int64, Float64, ComplexF64)
         D = Diagonal(rand(elty, 10))
@@ -263,6 +269,8 @@ end
         for A in mats
             @test iszero(zero(A))
             @test isone(one(A))
+            @test zero(A) == zero(Matrix(A))
+            @test one(A) == one(Matrix(A))
         end
 
         @test zero(D) isa Diagonal
@@ -291,6 +299,8 @@ end
     for A in mats
         @test iszero(zero(A))
         @test isone(one(A))
+        @test zero(A) == zero(Matrix(A))
+        @test one(A) == one(Matrix(A))
     end
 
     @test zero(D) isa Diagonal
@@ -307,6 +317,21 @@ end
     @test one(T) isa Tridiagonal
     @test zero(S) isa SymTridiagonal
     @test one(S) isa SymTridiagonal
+
+    # eltype with dimensions
+    D = Diagonal{Furlong{2, Int64}}([1, 2, 3, 4])
+    Bu = Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3], 'U')
+    Bl =  Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3], 'L')
+    T = Tridiagonal{Furlong{2, Int64}}([1, 2, 3], [1, 2, 3, 4], [1, 2, 3])
+    S = SymTridiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3])
+    mats = [D, Bu, Bl, T, S]
+    for A in mats
+        @test iszero(zero(A))
+        @test isone(one(A))
+        @test zero(A) == zero(Matrix(A))
+        @test one(A) == one(Matrix(A))
+        @test eltype(one(A)) == typeof(one(eltype(A)))
+    end
 end
 
 end # module TestSpecial
