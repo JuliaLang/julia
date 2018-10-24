@@ -520,19 +520,23 @@ end
         L.mask[idx] && return (idx, s)
     end
 end
-# When wrapping a BitArray, lean heavily upon its internals -- this is a common
-# case. Just use the Int index and count as its state.
-@inline function iterate(L::LogicalIndex{Int,<:BitArray}, s=(0,1))
-    s[2] > length(L) && return nothing
-    i, n = s
+# When wrapping a BitArray, lean heavily upon its internals.
+@inline function iterate(L::Base.LogicalIndex{Int,<:BitArray})
+    L.sum == 0 && return nothing
     Bc = L.mask.chunks
-    while true
-        if Bc[_div64(i)+1] & (UInt64(1)<<_mod64(i)) != 0
-            i += 1
-            return (i, (i, n+1))
-        end
-        i += 1
+    return iterate(L, (1, @inbounds Bc[1]))
+end
+@inline function iterate(L::Base.LogicalIndex{Int,<:BitArray}, s)
+    Bc = L.mask.chunks
+    i1, c = s
+    while c==0
+        i1 % UInt >= length(Bc) % UInt && return nothing
+        i1 += 1
+        @inbounds c = Bc[i1]
     end
+    tz = trailing_zeros(c) + 1
+    c = _blsr(c)
+    return ((i1-1)<<6 + tz, (i1, c))
 end
 
 @inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex{<:Any,<:AbstractArray{Bool,1}}) =
