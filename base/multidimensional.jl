@@ -527,7 +527,7 @@ end
 @inline function iterate(L::Base.LogicalIndex{Int,<:BitArray})
     L.sum == 0 && return nothing
     Bc = L.mask.chunks
-    return iterate(L::Base.LogicalIndex{Int,<:BitArray}, (1, @inbounds Bc[1]))
+    return iterate(L, (1, @inbounds Bc[1]))
 end
 @inline function iterate(L::Base.LogicalIndex{Int,<:BitArray}, s)
     Bc = L.mask.chunks
