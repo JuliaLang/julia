@@ -1224,8 +1224,8 @@ factorize(A::Transpose) = transpose(factorize(parent(A)))
 Computes the Moore-Penrose pseudoinverse.
 
 For matrices `M` with floating point elements, it is convenient to compute
-the pseudoinverse by inverting only singular values above a given threshold,
-`tol`.
+the pseudoinverse by inverting only singular values greater than
+`tol * maximum(svdvals(M))`.
 
 The optimal choice of `tol` varies both with the value of `M` and the intended application
 of the pseudoinverse. The default value of `tol` is
