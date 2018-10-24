@@ -21,8 +21,8 @@ Construct | Scope type | Scope blocks it may be nested in
 interactive prompt (REPL)                         | global | other global
 (mutable) [`struct`](@ref), [`macro`](@ref)       | local  | other global
 [`for`](@ref), [`while`](@ref), [`try-catch-finally`](@ref try), [`let`](@ref) |local | other local
- functions (either syntax, anonymous & do-blocks) | local | other local 
- comprehensions, broadcast-fusing                 | local | other local 
+functions (either syntax, anonymous & do-blocks) | local | other local
+comprehensions, broadcast-fusing                 | local | other local
 
 Notably missing from this table are
 [begin blocks](@ref man-compound-expressions) and [if blocks](@ref man-conditional-evaluation)
