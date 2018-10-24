@@ -596,15 +596,15 @@ function link_pipe!(read_end::PipeEndpoint, reader_supports_async::Bool,
     try
         try
             open_pipe!(read_end, rd, true, false)
-        catch e
+        catch
             close_pipe_sync(rd)
-            rethrow(e)
+            rethrow()
         end
         read_end.status = StatusOpen
         open_pipe!(write_end, wr, false, true)
-    catch e
+    catch
         close_pipe_sync(wr)
-        rethrow(e)
+        rethrow()
     end
     write_end.status = StatusOpen
     nothing

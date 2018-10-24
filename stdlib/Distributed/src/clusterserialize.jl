@@ -159,7 +159,7 @@ function serialize_global_from_main(s::ClusterSerializer, sym)
             if isa(ex, ErrorException)
                 record_v = false
             else
-                rethrow(ex)
+                rethrow()
             end
         end
     end

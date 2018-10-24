@@ -126,7 +126,7 @@ cd(dirname(@__FILE__)) do
                         end
                     end
                 catch e
-                    isa(e, InterruptException) || rethrow(e)
+                    isa(e, InterruptException) || rethrow()
                 finally
                     REPL.Terminals.raw!(term, false)
                 end
@@ -191,7 +191,7 @@ cd(dirname(@__FILE__)) do
             push!(results, (t, resp))
         end
     catch e
-        isa(e, InterruptException) || rethrow(e)
+        isa(e, InterruptException) || rethrow()
         # If the test suite was merely interrupted, still print the
         # summary, which can be useful to diagnose what's going on
         foreach(task->try; schedule(task, InterruptException(); error=true); catch; end, all_tasks)

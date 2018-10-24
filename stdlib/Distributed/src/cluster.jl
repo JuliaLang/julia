@@ -136,7 +136,7 @@ function exec_conn_func(w::Worker)
         f()
     catch e
         w.conn_func = () -> throw(e)
-        rethrow(e)
+        rethrow()
     end
     nothing
 end
@@ -505,9 +505,9 @@ function create_worker(manager, wconfig)
     local r_s, w_s
     try
         (r_s, w_s) = connect(manager, w.id, wconfig)
-    catch e
+    catch
         deregister_worker(w.id)
-        rethrow(e)
+        rethrow()
     end
 
     w = Worker(w.id, r_s, w_s, manager; config=wconfig)

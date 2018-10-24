@@ -122,9 +122,9 @@ function eval_user_input(@nospecialize(ast), show_value::Bool)
                     end
                     try
                         invokelatest(display, value)
-                    catch err
+                    catch
                         println(stderr, "Evaluation succeeded, but an error occurred while showing value of type ", typeof(value), ":")
-                        rethrow(err)
+                        rethrow()
                     end
                     println()
                 end

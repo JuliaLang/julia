@@ -224,11 +224,11 @@ function runsubarraytests(@nospecialize(A), I...)
     local S
     try
         S = view(A, I...)
-    catch err
+    catch
         @show typeof(A)
         @show A.indices
         @show I
-        rethrow(err)
+        rethrow()
     end
     test_linear(S, C)
     test_cartesian(S, C)

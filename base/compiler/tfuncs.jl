@@ -315,7 +315,7 @@ function _const_sizeof(@nospecialize(x))
         # Might return
         # "argument is an abstract type; size is indeterminate" or
         # "type does not have a fixed size"
-        isa(ex, ErrorException) || rethrow(ex)
+        isa(ex, ErrorException) || rethrow()
         return Int
     end
     return Const(size)
