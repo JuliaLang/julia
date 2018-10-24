@@ -1154,7 +1154,7 @@ end
     @test Base.OneTo{Int32}(1:2) === Base.OneTo{Int32}(2)
     @test Base.OneTo(Int32(1):Int32(2)) === Base.OneTo{Int32}(2)
     @test Base.OneTo{Int16}(3.0) === Base.OneTo{Int16}(3)
-    @test_throws InexactError(:Int16, Int16, 3.2) Base.OneTo{Int16}(3.2)
+    @test_throws InexactError Base.OneTo{Int16}(3.2)
 end
 
 @testset "range of other types" begin
