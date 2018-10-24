@@ -363,7 +363,7 @@ static inline jl_value_t *reduce(arriver_t *arr, reducer_t *red, jl_function_t *
             val = fptr(mfunc, rargs, nrargs);
         }
         JL_CATCH {
-            val = jl_get_ptls_states()->exception_in_transit;
+            val = jl_current_exception();
         }
 
         /* move up the tree */
@@ -553,6 +553,8 @@ void NOINLINE JL_NORETURN start_task(void)
 
     if (task->exception != jl_nothing) {
         ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE);
+        jl_push_excstack(&task->excstack, task->exception,
+                         ptls->bt_data, ptls->bt_size);
         task->result = task->exception;
         jl_gc_wb(task, task->result);
         new_state = failed_sym;
@@ -570,11 +572,13 @@ void NOINLINE JL_NORETURN start_task(void)
             new_state = done_sym;
         }
         JL_CATCH {
-            task->result = task->exception = jl_exception_in_transit;
+            task->result = task->exception = jl_current_exception();
             jl_gc_wb(task, task->exception);
             jl_gc_wb(task, task->result);
             new_state = failed_sym;
+            goto skip_pop_exception;
         }
+skip_pop_exception:;
     }
 
     /* grain tasks must synchronize */
@@ -616,7 +620,7 @@ void NOINLINE JL_NORETURN start_task(void)
             jl_apply(args, 2);
         }
         JL_CATCH {
-            jl_no_exc_handler(jl_exception_in_transit);
+            jl_no_exc_handler(jl_current_exception());
         }
     }
 
@@ -765,6 +769,7 @@ static void init_task(jl_task_t *task, size_t ssize)
     arraylist_new(&task->locks, 0);
     task->eh = NULL;
     task->gcstack = NULL;
+    task->excstack = NULL;
     task->world_age = ptls->world_age;
     task->current_tid = -1;
     task->arr = NULL;

@@ -236,7 +236,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
             }
             JL_CATCH {
                 jl_printf(JL_STDERR, "\natexit hook threw an error: ");
-                jl_static_show(JL_STDERR, ptls->exception_in_transit);
+                jl_static_show(JL_STDERR, jl_current_exception());
             }
         }
     }
@@ -270,7 +270,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
                 assert(item);
                 uv_unref(item->h);
                 jl_printf(JL_STDERR, "error during exit cleanup: close: ");
-                jl_static_show(JL_STDERR, ptls->exception_in_transit);
+                jl_static_show(JL_STDERR, jl_current_exception());
                 item = next_shutdown_queue_item(item);
             }
         }
@@ -285,6 +285,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     // force libuv to spin until everything has finished closing
     loop->stop_flag = 0;
     while (uv_run(loop, UV_RUN_DEFAULT)) { }
+
+    // TODO: Destroy threads
 
     jl_destroy_timing();
 #ifdef ENABLE_TIMINGS
@@ -609,7 +611,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     // Make sure we finalize the tls callback before starting any threads.
     jl_get_ptls_states_getter();
 #endif
-    jl_ptls_t ptls = jl_get_ptls_states();
     jl_safepoint_init();
     libsupport_init();
     htable_new(&jl_current_modules, 0);
@@ -745,7 +746,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         }
         JL_CATCH {
             jl_printf(JL_STDERR, "error during init:\n");
-            jl_static_show(JL_STDERR, ptls->exception_in_transit);
+            jl_static_show(JL_STDERR, jl_current_exception());
             jl_printf(JL_STDERR, "\n");
             jl_exit(1);
         }
