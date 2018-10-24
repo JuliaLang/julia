@@ -340,11 +340,6 @@ rdiv!(A, B)
 copy_oftype(A::AbstractArray{T}, ::Type{T}) where {T} = copy(A)
 copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractArray{S,N}, A)
 
-# matrix exponentials
-Base.:^(b::Number, A::AbstractMatrix) = exp(log(b)*A)
-# method for ℯ to explicitly elide the log(b) multiplication
-Base.:^(::Irrational{:ℯ}, A::AbstractMatrix) = exp(A)
-
 include("adjtrans.jl")
 include("transpose.jl")
 
