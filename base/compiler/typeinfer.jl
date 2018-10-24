@@ -408,7 +408,7 @@ function union_caller_cycle!(a::InferenceState, b::InferenceState)
     return
 end
 
-function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, child::InferenceState)
+function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, child::InferenceState, limited::Bool)
     # add backedge of parent <- child
     # then add all backedges of parent <- parent.parent
     # and merge all of the callers into ancestor.callers_in_cycle
@@ -419,6 +419,11 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
         child = parent
         parent = child.parent
         child === ancestor && break
+    end
+    if limited
+        for caller in ancestor.callers_in_cycle
+            caller.limited = true
+        end
     end
 end
 
@@ -432,17 +437,19 @@ end
 function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
     frame = parent
     uncached = false
+    limited = false
     while isa(frame, InferenceState)
         uncached |= !frame.cached # ensure we never add an uncached frame to a cycle
+        limited |= frame.limited
         if frame.linfo === linfo
             uncached && return true
-            merge_call_chain!(parent, frame, frame)
+            merge_call_chain!(parent, frame, frame, limited)
             return frame
         end
         for caller in frame.callers_in_cycle
             if caller.linfo === linfo
                 uncached && return true
-                merge_call_chain!(parent, frame, caller)
+                merge_call_chain!(parent, frame, caller, limited)
                 return caller
             end
         end
