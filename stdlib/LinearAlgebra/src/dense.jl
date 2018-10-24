@@ -1219,20 +1219,20 @@ factorize(A::Transpose) = transpose(factorize(parent(A)))
 ## Moore-Penrose pseudoinverse
 
 """
-    pinv(M[, tol::Real])
+    pinv(M[, rtol::Real])
 
 Computes the Moore-Penrose pseudoinverse.
 
 For matrices `M` with floating point elements, it is convenient to compute
 the pseudoinverse by inverting only singular values greater than
-`tol * maximum(svdvals(M))`.
+`rtol * maximum(svdvals(M))`.
 
-The optimal choice of `tol` varies both with the value of `M` and the intended application
-of the pseudoinverse. The default value of `tol` is
+The optimal choice of `rtol` varies both with the value of `M` and the intended application
+of the pseudoinverse. The default value of `rtol` is
 `eps(real(float(one(eltype(M)))))*minimum(size(M))`, which is essentially machine epsilon
 for the real part of a matrix element multiplied by the larger matrix dimension. For
 inverting dense ill-conditioned matrices in a least-squares sense,
-`tol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
+`rtol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
 
 For more information, see [^issue8859], [^B96], [^S84], [^KY88].
 
@@ -1262,7 +1262,7 @@ julia> M * N
 
 [^KY88]: Konstantinos Konstantinides and Kung Yao, "Statistical analysis of effective singular values in matrix rank determination", IEEE Transactions on Acoustics, Speech and Signal Processing, 36(5), 1988, 757-763. [doi:10.1109/29.1585](https://doi.org/10.1109/29.1585)
 """
-function pinv(A::StridedMatrix{T}, tol::Real) where T
+function pinv(A::StridedMatrix{T}, rtol::Real) where T
     m, n = size(A)
     Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
     if m == 0 || n == 0
@@ -1273,7 +1273,7 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
             maxabsA = maximum(abs.(diag(A)))
             B = zeros(Tout, n, m)
             for i = 1:min(m, n)
-                if abs(A[i,i]) > tol*maxabsA
+                if abs(A[i,i]) > rtol*maxabsA
                     Aii = inv(A[i,i])
                     if isfinite(Aii)
                         B[i,i] = Aii
@@ -1286,14 +1286,14 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
     SVD         = svd(A, full = false)
     Stype       = eltype(SVD.S)
     Sinv        = zeros(Stype, length(SVD.S))
-    index       = SVD.S .> tol*maximum(SVD.S)
+    index       = SVD.S .> rtol*maximum(SVD.S)
     Sinv[index] = one(Stype) ./ SVD.S[index]
     Sinv[findall(.!isfinite.(Sinv))] .= zero(Stype)
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
 function pinv(A::StridedMatrix{T}) where T
-    tol = eps(real(float(one(T))))*min(size(A)...)
-    return pinv(A, tol)
+    rtol = eps(real(float(one(T))))*min(size(A)...)
+    return pinv(A, rtol)
 end
 function pinv(x::Number)
     xi = inv(x)
@@ -1303,12 +1303,12 @@ end
 ## Basis for null space
 
 """
-    nullspace(M[, tol::Real])
+    nullspace(M[, rtol::Real])
 
 Computes a basis for the nullspace of `M` by including the singular
-vectors of A whose singular have magnitude are greater than `tol*σ₁`,
+vectors of A whose singular have magnitude are greater than `rtol*σ₁`,
 where `σ₁` is `A`'s largest singular values. By default, the value of
-`tol` is the smallest dimension of `A` multiplied by the [`eps`](@ref)
+`rtol` is the smallest dimension of `A` multiplied by the [`eps`](@ref)
 of the [`eltype`](@ref) of `A`.
 
 # Examples
@@ -1332,14 +1332,14 @@ julia> nullspace(M, 2)
  0.0  0.0  1.0
 ```
 """
-function nullspace(A::AbstractMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
+function nullspace(A::AbstractMatrix, rtol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
     m, n = size(A)
     (m == 0 || n == 0) && return Matrix{eltype(A)}(I, n, n)
     SVD = svd(A, full=true)
-    indstart = sum(s -> s .> SVD.S[1]*tol, SVD.S) + 1
+    indstart = sum(s -> s .> SVD.S[1]*rtol, SVD.S) + 1
     return copy(SVD.Vt[indstart:end,:]')
 end
-nullspace(a::AbstractVector, tol::Real = min(size(a)...)*eps(real(float(one(eltype(a)))))) = nullspace(reshape(a, length(a), 1), tol)
+nullspace(a::AbstractVector, rtol::Real = min(size(a)...)*eps(real(float(one(eltype(a)))))) = nullspace(reshape(a, length(a), 1), rtol)
 
 """
     cond(M, p::Real=2)
