@@ -342,17 +342,19 @@ using LinearAlgebra: fillstored!, UnitLowerTriangular
         Bidiagonal(randn(3), randn(2), rand([:U,:L])),
         SymTridiagonal(randn(3), randn(2)),
         sparse(randn(3,4)),
-        # Diagonal(randn(5)), # Diagonal fill! deprecated, see below
+        Diagonal(randn(5)),
         sparse(rand(3)),
         # LowerTriangular(randn(3,3)), # AbstractTriangular fill! deprecated, see below
         # UpperTriangular(randn(3,3)) # AbstractTriangular fill! deprecated, see below
-        Diagonal(rand(3))]
+        ]
         for A in exotic_arrays
             @test iszero(fill!(A, 0))
         end
-        # Diagonal and AbstractTriangular fill! were defined as fillstored!,
-        # not matching the general behavior of fill!, and so have been deprecated.
-        # In a future dev cycle, these fill! methods should probably be reintroduced
+
+        # Diagonal fill! is no longer deprecated. See #29780
+        # AbstractTriangular fill! was defined as fillstored!,
+        # not matching the general behavior of fill!, and so it has been deprecated.
+        # In a future dev cycle, this fill! methods should probably be reintroduced
         # with behavior matching that of fill! for other structured matrix types.
         # In the interim, equivalently test fillstored! below
         @test iszero(fillstored!(Diagonal(fill(1, 3)), 0))
