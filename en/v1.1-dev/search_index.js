@@ -763,9 +763,9 @@ var documenterSearchIndex = {"docs": [
 {
     "location": "manual/variables-and-scoping/#man-scope-table-1",
     "page": "Scope of Variables",
-    "title": "",
+    "title": "Scope constructs",
     "category": "section",
-    "text": "Scope blocks that may nest only in other global scope blocks:\nglobal scope\nmodule, baremodule\nat interactive prompt (REPL)\nlocal scope (don\'t allow nesting)\n(mutable) struct, macro\nScope blocks which may nest anywhere (in global or local scope):\nlocal scope\nfor, while, try-catch-finally, let\nfunctions (either syntax, anonymous & do-blocks)\ncomprehensions, broadcast-fusingNotably missing from this table are begin blocks and if blocks which do not introduce new scope blocks. Both types of scopes follow somewhat different rules which will be explained below.Julia uses lexical scoping, meaning that a function\'s scope does not inherit from its caller\'s scope, but from the scope in which the function was defined. For example, in the following code the x inside foo refers to the x in the global scope of its module Bar:julia> module Bar\n           x = 1\n           foo() = x\n       end;and not a x in the scope where foo is used:julia> import .Bar\n\njulia> x = -1;\n\njulia> Bar.foo()\n1Thus lexical scope means that the scope of variables can be inferred from the source code alone."
+    "text": "Construct Scope type Scope blocks it may be nested in\nmodule, baremodule global global\ninteractive prompt (REPL) global global\n(mutable) struct, macro local global\nfor, while, try-catch-finally, let local global or local\nfunctions (either syntax, anonymous & do-blocks) local global or local\ncomprehensions, broadcast-fusing local global or localNotably missing from this table are begin blocks and if blocks which do not introduce new scope blocks. Both types of scopes follow somewhat different rules which will be explained below.Julia uses lexical scoping, meaning that a function\'s scope does not inherit from its caller\'s scope, but from the scope in which the function was defined. For example, in the following code the x inside foo refers to the x in the global scope of its module Bar:julia> module Bar\n           x = 1\n           foo() = x\n       end;and not a x in the scope where foo is used:julia> import .Bar\n\njulia> x = -1;\n\njulia> Bar.foo()\n1Thus lexical scope means that the scope of variables can be inferred from the source code alone."
 },
 
 {
@@ -4797,7 +4797,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.getproperty",
     "category": "function",
-    "text": "getproperty(value, name::Symbol)\n\nThe syntax a.b calls getproperty(a, :b).\n\nSee also propertynames and setproperty!.\n\n\n\n\n\n"
+    "text": "getproperty(value, name::Symbol)\n\nThe syntax a.b calls getproperty(a, :b).\n\nExamples\n\njulia> struct MyType\n           x\n       end\n\njulia> function Base.getproperty(obj::MyType, sym::Symbol)\n           if sym === :special\n               return obj.x + 1\n           else # fallback to getfield\n               return getfield(obj, sym)\n           end\n       end\n\njulia> obj = MyType(1);\n\njulia> obj.special\n2\n\njulia> obj.x\n1\n\nSee also propertynames and setproperty!.\n\n\n\n\n\n"
 },
 
 {
@@ -7461,7 +7461,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
 },
 
 {
