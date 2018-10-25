@@ -4,7 +4,7 @@
 
 if Sys.iswindows()
     function download(url::AbstractString, filename::AbstractString)
-        ps = joinpath(ENV["WINDIR"], "System32\\WindowsPowerShell\\v1.0\\powershell.exe")
+        ps = joinpath(get(ENV, "WINDIR", "C:\\Windows"), "System32\\WindowsPowerShell\\v1.0\\powershell.exe")
         tls12 = "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12"
         client = "New-Object System.Net.Webclient"
         # in the following we escape ' with '' (see https://ss64.com/ps/syntax-esc.html)
