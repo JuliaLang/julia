@@ -4,7 +4,6 @@
 
 ## BLAS cutoff threshold constants
 
-const SCAL_CUTOFF = 2048
 #TODO const DOT_CUTOFF = 128
 const ASUM_CUTOFF = 32
 const NRM2_CUTOFF = 32
@@ -13,27 +12,6 @@ const NRM2_CUTOFF = 32
 # L1 cache: 32K, L2 cache: 256K, L3 cache: 6144K
 # This constant should ideally be determined by the actual CPU cache size
 const ISONE_CUTOFF = 2^21 # 2M
-
-function rmul!(X::Array{T}, s::T) where T<:BlasFloat
-    s == 0 && return fill!(X, zero(T))
-    s == 1 && return X
-    if length(X) < SCAL_CUTOFF
-        generic_rmul!(X, s)
-    else
-        BLAS.scal!(length(X), s, X, 1)
-    end
-    X
-end
-
-lmul!(s::T, X::Array{T}) where {T<:BlasFloat} = rmul!(X, s)
-
-rmul!(X::Array{T}, s::Number) where {T<:BlasFloat} = rmul!(X, convert(T, s))
-function rmul!(X::Array{T}, s::Real) where T<:BlasComplex
-    R = typeof(real(zero(T)))
-    GC.@preserve X BLAS.scal!(2*length(X), convert(R,s), convert(Ptr{R},pointer(X)), 1)
-    X
-end
-
 
 function isone(A::StridedMatrix)
     m, n = size(A)

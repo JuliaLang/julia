@@ -127,7 +127,7 @@ end
         @testset "Scaling with rmul! and lmul" begin
             @test rmul!(copy(a), 5.) == a*5
             @test lmul!(5., copy(a)) == a*5
-            b = randn(LinearAlgebra.SCAL_CUTOFF) # make sure we try BLAS path
+            b = randn(2048)
             subB = view(b, :, :)
             @test rmul!(copy(b), 5.) == b*5
             @test rmul!(copy(subB), 5.) == subB*5

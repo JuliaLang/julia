@@ -2,22 +2,6 @@
 
 ## linalg.jl: Some generic Linear Algebra definitions
 
-# For better performance when input and output are the same array
-# See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
-function generic_rmul!(X::AbstractArray, s::Number)
-    @simd for I in eachindex(X)
-        @inbounds X[I] *= s
-    end
-    X
-end
-
-function generic_lmul!(s::Number, X::AbstractArray)
-    @simd for I in eachindex(X)
-        @inbounds X[I] = s*X[I]
-    end
-    X
-end
-
 function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
@@ -42,6 +26,8 @@ end
 mul!(C::AbstractArray, s::Number, X::AbstractArray) = generic_mul!(C, X, s)
 mul!(C::AbstractArray, X::AbstractArray, s::Number) = generic_mul!(C, s, X)
 
+# For better performance when input and output are the same array
+# See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
 """
     rmul!(A::AbstractArray, b::Number)
 
@@ -60,7 +46,13 @@ julia> rmul!(A, 2)
  6  8
 ```
 """
-rmul!(A::AbstractArray, b::Number) = generic_rmul!(A, b)
+function rmul!(X::AbstractArray, s::Number)
+    @simd for I in eachindex(X)
+        @inbounds X[I] *= s
+    end
+    X
+end
+
 
 """
     lmul!(a::Number, B::AbstractArray)
@@ -80,7 +72,12 @@ julia> lmul!(2, B)
  6  8
 ```
 """
-lmul!(a::Number, B::AbstractArray) = generic_lmul!(a, B)
+function lmul!(s::Number, X::AbstractArray)
+    @simd for I in eachindex(X)
+        @inbounds X[I] = s*X[I]
+    end
+    X
+end
 
 """
     cross(x, y)
@@ -1361,18 +1358,17 @@ end
     # The largest positive floating point number whose inverse is less than infinity
     δ = inv(prevfloat(typemax(nrm)))
 
-    if nrm == Inf  # Just divide since performance isn't important in this corner case
-        v ./= Inf
-    elseif nrm ≥ δ # Safe to multiply with inverse
+    if nrm ≥ δ # Safe to multiply with inverse
         invnrm = inv(nrm)
         rmul!(v, invnrm)
-    else           # Scale elements to avoid overflow
+
+    else # scale elements to avoid overflow
         εδ = eps(one(nrm))/δ
         rmul!(v, εδ)
         rmul!(v, inv(nrm*εδ))
     end
 
-    return v
+    v
 end
 
 """
