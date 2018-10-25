@@ -175,12 +175,12 @@ function occursin(r::Regex, s::SubString; offset::Integer=0)
 end
 
 function startswith(s::AbstractString, r::Regex)
-    rr = Regex("^"*r.pattern, r.compile_options, r.match_options)
+    rr = Regex(r.pattern, r.compile_options | PCRE.ANCHORED, r.match_options)
     return occursin(rr, s)
 end
 
 function endswith(s::AbstractString, r::Regex)
-    rr = Regex(r.pattern*"\$", r.compile_options, r.match_options)
+    rr = Regex(r.pattern, r.compile_options | PCRE.ENDANCHORED, r.match_options)
     return occursin(rr, s)
 end
 
