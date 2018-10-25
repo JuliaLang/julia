@@ -64,3 +64,12 @@ end
 
 @test startswith("abc", r"a")
 @test endswith("abc", r"c")
+@test !startswith("abc", r"b")
+@test !startswith("abc", r"c")
+@test !endswith("abc", r"a")
+@test !endswith("abc", r"b")
+
+@test !startswith("abc", r"A")
+@test startswith("abc", r"A"i)
+@test !endswith("abc", r"C")
+@test endswith("abc", r"C"i)
