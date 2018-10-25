@@ -991,7 +991,3 @@ function complex(A::AbstractArray{T}) where T
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)
 end
-
-## promotion to complex ##
-
-_default_type(T::Type{Complex}) = Complex{Int}
