@@ -174,11 +174,37 @@ function occursin(r::Regex, s::SubString; offset::Integer=0)
                      r.match_data)
 end
 
+"""
+    startswith(s::AbstractString, prefix::Regex)
+
+Return `true` if `s` starts with the Regex pattern, `prefix`.
+
+See also [`endswith`](@ref).
+
+# Examples
+```jldoctest
+julia> startswith("JuliaLang", r"Julia|Romeo")
+true
+```
+"""
 function startswith(s::AbstractString, r::Regex)
     rr = Regex(r.pattern, r.compile_options | PCRE.ANCHORED, r.match_options)
     return occursin(rr, s)
 end
 
+"""
+    endswith(s::AbstractString, suffix::Regex)
+
+Return `true` if `s` ends with the Regex pattern, `suffix`.
+
+See also [`startswith`](@ref).
+
+# Examples
+```jldoctest
+julia> endswith("JuliaLang", r"Lang|Roberts")
+true
+```
+"""
 function endswith(s::AbstractString, r::Regex)
     rr = Regex(r.pattern, r.compile_options | PCRE.ENDANCHORED, r.match_options)
     return occursin(rr, s)
