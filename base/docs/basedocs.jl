@@ -1868,6 +1868,29 @@ typeassert
 
 The syntax `a.b` calls `getproperty(a, :b)`.
 
+# Examples
+```jldoctest
+julia> struct MyType
+           x
+       end
+
+julia> function Base.getproperty(obj::MyType, sym::Symbol)
+           if sym === :special
+               return obj.x + 1
+           else # fallback to getfield
+               return getfield(obj, sym)
+           end
+       end
+
+julia> obj = MyType(1);
+
+julia> obj.special
+2
+
+julia> obj.x
+1
+```
+
 See also [`propertynames`](@ref Base.propertynames) and
 [`setproperty!`](@ref Base.setproperty!).
 """
