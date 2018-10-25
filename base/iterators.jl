@@ -705,14 +705,15 @@ many times (equivalent to `take(repeated(x), n)`).
 
 # Examples
 ```jldoctest
-julia> a = Iterators.repeated([1 2], 4);
+julia> a = Iterators.repeated("hello", 4);
 
 julia> collect(a)
-4-element Array{Array{Int64,2},1}:
- [1 2]
- [1 2]
- [1 2]
- [1 2]
+4-element Array{String,1}:
+ "hello"
+ "hello"
+ "hello"
+ "hello"
+
 ```
 """
 repeated(x, n::Integer) = take(repeated(x), Int(n))
