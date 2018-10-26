@@ -105,6 +105,9 @@ end
 @test get(()->0, (a=1, b=2, c=3), :a) == 1
 @test get(()->0, NamedTuple(), :a) == 0
 @test get(()->0, (a=1,), :b) == 0
+@test Base.tail((a = 1, b = 2.0, c = 'x')) ≡ (b = 2.0, c = 'x')
+@test Base.tail((a = 1, )) ≡ NamedTuple()
+@test_throws MethodError Base.tail(NamedTuple())
 
 # syntax errors
 
