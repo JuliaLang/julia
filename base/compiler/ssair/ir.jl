@@ -498,7 +498,7 @@ mutable struct IncrementalCompact
                 bb_rename[i] == 0 && continue
                 preds, succs = blocks[i].preds, blocks[i].succs
                 # Rename preds
-                for j = 1:length(preds); preds[j] = bb_rename[preds[j]]; end
+                for j = 1:length(preds); preds[j] = preds[j] == 0 ? 0 : bb_rename[preds[j]]; end
                 # Dead blocks get removed from the predecessor list
                 filter!(x->x !== 0, preds)
                 # Rename succs
