@@ -128,7 +128,7 @@ end
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     io = outstream(d.repl)
     get(io, :color, false) && write(io, answer_color(d.repl))
-    show(IOContext(io, :limit => true), mime, x)
+    show(IOContext(io, :limit => true, :module => Main), mime, x)
     println(io)
     nothing
 end
@@ -136,7 +136,8 @@ display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
 function print_response(repl::AbstractREPL, @nospecialize(val), bt, show_value::Bool, have_color::Bool)
     repl.waserror = bt !== nothing
-    print_response(outstream(repl), val, bt, show_value, have_color, specialdisplay(repl))
+    io = IOContext(outstream(repl), :module => Main)
+    print_response(io, val, bt, show_value, have_color, specialdisplay(repl))
     nothing
 end
 function print_response(errio::IO, @nospecialize(val), bt, show_value::Bool, have_color::Bool, specialdisplay=nothing)
@@ -620,15 +621,20 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     # FIXME: I'm pretty sure this is broken since it uses an index
     # into the search data to index into the response string
     b = a + sizeof(searchdata)
-    b = b ≤ ncodeunits(response_str) ? prevind(response_str, b) : b-1
+    b = b ≤ ncodeunits(response_str) ? prevind(response_str, b) : b-1
     b = min(lastindex(response_str), b) # ensure that b is valid
-
-    !skip_current && searchdata == response_str[a:b] && return true
 
     searchfunc1, searchfunc2, searchstart, skipfunc = backwards ?
                                                       (findlast, findprev, b, prevind) :
                                                       (findfirst, findnext, a, nextind)
-    skip_current && (searchstart = skipfunc(response_str, searchstart))
+
+    if searchdata == response_str[a:b]
+        if skip_current
+            searchstart = skipfunc(response_str, searchstart)
+        else
+            return true
+        end
+    end
 
     # Start searching
     # First the current response buffer

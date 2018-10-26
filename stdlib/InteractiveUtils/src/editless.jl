@@ -84,14 +84,21 @@ end
 
 """
     edit(function, [types])
+    edit(module)
 
-Edit the definition of a function, optionally specifying a tuple of types to
-indicate which method to edit. The editor can be changed by setting `JULIA_EDITOR`,
-`VISUAL` or `EDITOR` as an environment variable.
+Edit the definition of a function, optionally specifying a tuple of types to indicate which
+method to edit.
+
+For modules, open the main source file. The module needs to be loaded with `using` or
+`import` first.
+
+The editor can be changed by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment
+variable.
 """
 edit(f)                   = edit(functionloc(f)...)
 edit(f, @nospecialize t)  = edit(functionloc(f,t)...)
 edit(file, line::Integer) = error("could not find source file for function")
+edit(m::Module) = edit(pathof(m))
 
 # terminal pager
 

@@ -1100,7 +1100,6 @@ static void jl_finalize_serializer(jl_serializer_state *s)
 void jl_typemap_rehash(jl_typemap_t *ml, int8_t offs);
 static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
         switch (how) {
             case 1: { // rehash IdDict
@@ -1173,7 +1172,7 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
         jl_printf(JL_STDERR, "WARNING: error while reinitializing value ");
         jl_static_show(JL_STDERR, v);
         jl_printf(JL_STDERR, ":\n");
-        jl_static_show(JL_STDERR, ptls->exception_in_transit);
+        jl_static_show(JL_STDERR, jl_current_exception());
         jl_printf(JL_STDERR, "\n");
     }
 }
@@ -1428,7 +1427,6 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 static void jl_restore_system_image_from_stream(ios_t *f)
 {
     JL_TIMING(SYSIMG_LOAD);
-    jl_ptls_t ptls = jl_get_ptls_states();
     int en = jl_gc_enable(0);
     jl_init_serializer2(0);
     ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record;
@@ -1520,7 +1518,6 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     jl_module_init_order = jl_finalize_deserializer(&s, NULL);
     jl_main_module = (jl_module_t*)jl_read_value(&s);
     jl_top_module = (jl_module_t*)jl_read_value(&s);
-    jl_internal_main_module = jl_main_module;
 
     jl_typeinf_func = (jl_function_t*)jl_read_value(&s);
     jl_typeinf_world = read_uint32(f);
@@ -1546,7 +1543,6 @@ static void jl_restore_system_image_from_stream(ios_t *f)
 
     jl_core_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Core"));
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base"));
-    ptls->current_module = jl_base_module; // run start_image in Base
 
     uint32_t uid_ctr = read_uint32(f);
     uint32_t gs_ctr = read_uint32(f);

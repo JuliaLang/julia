@@ -281,7 +281,9 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty);
 #  define jl_gc_alloc(ptls, sz, ty) jl_gc_alloc_(ptls, sz, ty)
 #endif
 
-#define jl_buff_tag ((uintptr_t)0x4eade800)
+// jl_buff_tag must be a multiple of GC_PAGE_SZ so that it can't be
+// confused for an actual type reference.
+#define jl_buff_tag ((uintptr_t)0x4eadc000)
 typedef void jl_gc_tracked_buffer_t; // For the benefit of the static analyzer
 STATIC_INLINE jl_gc_tracked_buffer_t *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz)
 {
@@ -423,6 +425,7 @@ void jl_assign_bits(void *dest, jl_value_t *bits) JL_NOTSAFEPOINT;
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
 jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, int iskw);
+void jl_init_main_module(void);
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
 jl_array_t *jl_get_loaded_modules(void);
 
@@ -458,6 +461,7 @@ jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, 
 void jl_module_run_initializer(jl_module_t *m);
 jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT;
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
+extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
 extern jl_array_t *jl_cfunction_list JL_GLOBALLY_ROOTED;
 
 #ifdef JL_USE_INTEL_JITEVENTS
@@ -626,13 +630,14 @@ typedef unw_cursor_t bt_cursor_t;
 typedef int bt_context_t;
 typedef int bt_cursor_t;
 #endif
+// Special marker in backtrace data for encoding interpreter frames
+#define JL_BT_INTERP_FRAME (((uintptr_t)0)-1)
 size_t rec_backtrace(uintptr_t *data, size_t maxsize) JL_NOTSAFEPOINT;
 size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx) JL_NOTSAFEPOINT;
 #ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 #endif
 JL_DLLEXPORT void jl_get_backtrace(jl_array_t **bt, jl_array_t **bt2);
-JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, uint32_t nargs, int drop_exceptions);
 void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_t *bt_size);
 JL_DLLEXPORT void jl_raise_debugger(void);
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline);
@@ -653,6 +658,49 @@ STATIC_INLINE char *jl_copy_str(char **to, const char *from)
 JL_DLLEXPORT int jl_is_interpreter_frame(uintptr_t ip);
 JL_DLLEXPORT int jl_is_enter_interpreter_frame(uintptr_t ip);
 JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintptr_t fp, size_t space_remaining);
+
+// Exception stack: a stack of pairs of (exception,raw_backtrace).
+// The stack may be traversed and accessed with the functions below.
+typedef struct _jl_excstack_t {
+    size_t top;
+    size_t reserved_size;
+    // Pack all stack entries into a growable buffer to amortize allocation
+    // across repeated exception handling.
+    // Layout: [bt_data1... bt_size1 exc1  bt_data2... bt_size2 exc2  ..]
+    // uintptr_t data[]; // Access with jl_excstack_raw
+} jl_excstack_t;
+
+STATIC_INLINE uintptr_t *jl_excstack_raw(jl_excstack_t* stack) JL_NOTSAFEPOINT
+{
+    return (uintptr_t*)(stack + 1);
+}
+
+// Exception stack access
+STATIC_INLINE jl_value_t *jl_excstack_exception(jl_excstack_t *stack JL_PROPAGATES_ROOT,
+                                                 size_t itr) JL_NOTSAFEPOINT
+{
+    return (jl_value_t*)(jl_excstack_raw(stack)[itr-1]);
+}
+STATIC_INLINE size_t jl_excstack_bt_size(jl_excstack_t *stack, size_t itr) JL_NOTSAFEPOINT
+{
+    return jl_excstack_raw(stack)[itr-2];
+}
+STATIC_INLINE uintptr_t *jl_excstack_bt_data(jl_excstack_t *stack, size_t itr) JL_NOTSAFEPOINT
+{
+    return jl_excstack_raw(stack) + itr-2 - jl_excstack_bt_size(stack, itr);
+}
+// Exception stack iteration (start at itr=stack->top, stop at itr=0)
+STATIC_INLINE size_t jl_excstack_next(jl_excstack_t *stack, size_t itr) JL_NOTSAFEPOINT
+{
+    return itr-2 - jl_excstack_bt_size(stack, itr);
+}
+// Exception stack manipulation
+void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
+                          size_t reserved_size);
+void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
+                       jl_value_t *exception JL_ROOTED_ARGUMENT,
+                       uintptr_t *bt_data, size_t bt_size);
+void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT;
 
 // timers
 // Returns time in nanosec
@@ -943,6 +991,7 @@ extern jl_sym_t *method_sym;  extern jl_sym_t *core_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *error_sym;
 extern jl_sym_t *new_sym;     extern jl_sym_t *using_sym;
+extern jl_sym_t *pop_exception_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *primtype_sym;
 extern jl_sym_t *structtype_sym;   extern jl_sym_t *foreigncall_sym;
@@ -1033,6 +1082,26 @@ jl_assume_aligned(T ptr, unsigned align)
 #else
 #  define jl_unreachable() ((void)jl_assume(0))
 #endif
+
+// Tools for locally disabling spurious compiler warnings
+//
+// Particular calls which are used elsewhere in the code include:
+//
+// * JL_GCC_IGNORE_START(-Wclobbered) - gcc misidentifies some variables which
+//   are used inside a JL_TRY as being "clobbered" if JL_CATCH is entered. This
+//   warning is spurious if the variable is not modified inside the JL_TRY.
+//   See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65041
+#ifdef _COMPILER_GCC_
+#define JL_DO_PRAGMA(s) _Pragma(#s)
+#define JL_GCC_IGNORE_START(warning) \
+    JL_DO_PRAGMA(GCC diagnostic push) \
+    JL_DO_PRAGMA(GCC diagnostic ignored warning)
+#define JL_GCC_IGNORE_STOP \
+    JL_DO_PRAGMA(GCC diagnostic pop)
+#else
+#define JL_GCC_IGNORE_START(w)
+#define JL_GCC_IGNORE_STOP
+#endif // _COMPILER_GCC_
 
 #ifdef __cplusplus
 }

@@ -169,13 +169,13 @@ SOMINOR := $(JULIA_MINOR_VERSION)
 endif
 
 ifneq ($(NO_GIT), 1)
-JULIA_COMMIT := $(shell git rev-parse --short=10 HEAD)
+JULIA_COMMIT := $(shell git -C $(JULIAHOME) rev-parse --short=10 HEAD)
 else
 JULIA_COMMIT := $(JULIA_VERSION)
 endif
 
 # Override `JULIA_COMMIT` to `JULIA_VERSION` if we're on a tagged commit
-ifeq ($(shell git describe --tags --exact-match > /dev/null 2>&1 && echo true),true)
+ifeq ($(shell git -C $(JULIAHOME) describe --tags --exact-match > /dev/null 2>&1 && echo true),true)
 JULIA_COMMIT := $(JULIA_VERSION)
 endif
 

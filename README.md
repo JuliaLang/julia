@@ -63,7 +63,7 @@ Julia is built and tested regularly on the following platforms:
 | macOS 10.8+      | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 | Windows 7+       | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 |                  | i686 (32-bit)    | ✓  | ✓        | Official      |
-| FreeBSD 11.0+    | x86-64 (64-bit)  | ✓  |          | Community     |
+| FreeBSD 11.0+    | x86-64 (64-bit)  | [✓](https://build.julialang.org/#/builders/68)  |          | Community     |
 
 All systems marked with ✓ for CI are tested using continuous integration for every commit.
 Systems with ✓ for binaries have official binaries available on the [downloads](https://julialang.org/downloads) page and are tested regularly. The PTX backend needs the [CUDAnative.jl](https://github.com/JuliaGPU/CUDAnative.jl) package.
@@ -252,7 +252,8 @@ When building Julia, or its dependencies, libraries installed by third party pac
 ### FreeBSD
 
 Clang is the default compiler on FreeBSD 11.0-RELEASE and above.
-The remaining build tools are available from the Ports Collection, and can be installed using `pkg install git gcc gmake cmake`.
+The remaining build tools are available from the Ports Collection, and can be installed using
+`pkg install git gcc gmake cmake pkgconf`.
 To build Julia, simply run `gmake`.
 (Note that `gmake` must be used rather than `make`, since `make` on FreeBSD corresponds to the incompatible BSD Make rather than GNU Make.)
 

@@ -699,6 +699,12 @@ end
     @test_throws MethodError repeat(1, 2, 3)
     @test repeat([1, 2], 1, 2, 3) == repeat([1, 2], outer = (1, 2, 3))
 
+    # issue 29614
+    @test repeat(ones(2, 2), 1, 1, 1) == ones(2, 2, 1)
+    @test repeat(ones(2, 2), 2, 2, 2) == ones(4, 4, 2)
+    @test repeat(ones(2), 2, 2, 2) == ones(4, 2, 2)
+    @test repeat(ones(2, 2), inner=(1, 1, 1), outer=(2, 2, 2)) == ones(4, 4, 2)
+
     R = repeat([1, 2])
     @test R == [1, 2]
     R = repeat([1, 2], inner=1)
@@ -1691,13 +1697,13 @@ end
     @test I2 + I1 == CartesianIndex((1,8,2))
     @test I1 - I2 == CartesianIndex((3,-2,-2))
     @test I2 - I1 == CartesianIndex((-3,2,2))
-    @test I1 + 1*one(I1) == CartesianIndex((3,4,1))
-    @test I1 - 2*one(I1) == CartesianIndex((0,1,-2))
+    @test I1 + 1*oneunit(I1) == CartesianIndex((3,4,1))
+    @test I1 - 2*oneunit(I1) == CartesianIndex((0,1,-2))
 
     @test zero(CartesianIndex{2}) == CartesianIndex((0,0))
     @test zero(CartesianIndex((2,3))) == CartesianIndex((0,0))
-    @test one(CartesianIndex{2}) == CartesianIndex((1,1))
-    @test one(CartesianIndex((2,3))) == CartesianIndex((1,1))
+    @test oneunit(CartesianIndex{2}) == CartesianIndex((1,1))
+    @test oneunit(CartesianIndex((2,3))) == CartesianIndex((1,1))
 
     @test min(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((2,2))
     @test max(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((5,3))

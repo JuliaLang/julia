@@ -157,6 +157,8 @@ static void trampoline_deleter(void **f)
         free(nval);
 }
 
+// Use of `cache` is not clobbered in JL_TRY
+JL_GCC_IGNORE_START("-Wclobbered")
 // TODO: need a thread lock around the cache access parts of this function
 extern "C" JL_DLLEXPORT
 jl_value_t *jl_get_cfunction_trampoline(
@@ -240,3 +242,4 @@ jl_value_t *jl_get_cfunction_trampoline(
     ptrhash_put(cache, (void*)fobj, result);
     return result;
 }
+JL_GCC_IGNORE_STOP

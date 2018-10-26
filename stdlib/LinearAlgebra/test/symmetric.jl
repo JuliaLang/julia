@@ -517,4 +517,48 @@ end
     @test Hermitian(A, :U)[1,1] == Hermitian(A, :L)[1,1] == real(A[1,1])
 end
 
+@testset "issue #29392: SymOrHerm scaled with Number" begin
+    R = rand(Float64, 2, 2); C = rand(ComplexF64, 2, 2)
+    # Symmetric * Real, Real * Symmetric
+    A = Symmetric(R); x = 2.0
+    @test (A * x)::Symmetric == (x * A)::Symmetric
+    A = Symmetric(C); x = 2.0
+    @test (A * x)::Symmetric == (x * A)::Symmetric
+    # Symmetric * Complex, Complex * Symmetrics
+    A = Symmetric(R); x = 2.0im
+    @test (A * x)::Symmetric == (x * A)::Symmetric
+    A = Symmetric(C); x = 2.0im
+    @test (A * x)::Symmetric == (x * A)::Symmetric
+    # Hermitian * Real, Real * Hermitian
+    A = Hermitian(R); x = 2.0
+    @test (A * x)::Hermitian == (x * A)::Hermitian
+    A = Hermitian(C); x = 2.0
+    @test (A * x)::Hermitian == (x * A)::Hermitian
+    # Hermitian * Complex, Complex * Hermitian
+    A = Hermitian(R); x = 2.0im
+    @test (A * x)::Matrix == (x * A)::Matrix
+    A = Hermitian(C); x = 2.0im
+    @test (A * x)::Matrix == (x * A)::Matrix
+    # Symmetric / Real
+    A = Symmetric(R); x = 2.0
+    @test (A / x)::Symmetric == Matrix(A) / x
+    A = Symmetric(C); x = 2.0
+    @test (A / x)::Symmetric == Matrix(A) / x
+    # Symmetric / Complex
+    A = Symmetric(R); x = 2.0im
+    @test (A / x)::Symmetric == Matrix(A) / x
+    A = Symmetric(C); x = 2.0im
+    @test (A / x)::Symmetric == Matrix(A) / x
+    # Hermitian / Real
+    A = Hermitian(R); x = 2.0
+    @test (A / x)::Hermitian == Matrix(A) / x
+    A = Hermitian(C); x = 2.0
+    @test (A / x)::Hermitian == Matrix(A) / x
+    # Hermitian / Complex
+    A = Hermitian(R); x = 2.0im
+    @test (A / x)::Matrix == Matrix(A) / x
+    A = Hermitian(C); x = 2.0im
+    @test (A / x)::Matrix == Matrix(A) / x
+end
+
 end # module TestSymmetric

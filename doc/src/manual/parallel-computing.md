@@ -65,7 +65,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
     c1 = Channel(32)
     c2 = Channel(32)
 
-    # and a function `foo` which reads items from from c1, processes the item read
+    # and a function `foo` which reads items from c1, processes the item read
     # and writes a result to c2,
     function foo()
         while true
@@ -629,7 +629,7 @@ As for v0.7 and beyond, the feeder tasks are able to share state via `nextidx` b
 they all run on the same process.
 Even if `Tasks` are scheduled cooperatively, locking may still be required in some contexts, as in [asynchronous I\O](https://docs.julialang.org/en/stable/manual/faq/#Asynchronous-IO-and-concurrent-synchronous-writes-1).
 This means context switches only occur at well-defined points: in this case,
-when [`remotecall_fetch`](@ref) is called. This is the current state of implementation (dev v0.7) and it may change
+when [`remotecall_fetch`](@ref) is called. This is the current state of implementation and it may change
 for future Julia versions, as it is intended to make it possible to run up to N `Tasks` on M `Process`, aka
 [M:N Threading](https://en.wikipedia.org/wiki/Thread_(computing)#Models). Then a lock acquiring\releasing
 model for `nextidx` will be needed, as it is not safe to let multiple processes read-write a resource at

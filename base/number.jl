@@ -320,8 +320,6 @@ julia> import Dates; oneunit(Dates.Day)
 oneunit(x::T) where {T} = T(one(x))
 oneunit(::Type{T}) where {T} = T(one(T))
 
-_default_type(::Type{Number}) = Int
-
 """
     big(T::Type)
 

@@ -208,7 +208,7 @@ end
 
 function show(io::IO, M::Bidiagonal)
     # TODO: make this readable and one-line
-    println(io, summary(M), ":")
+    summary(io, M); println(io, ":")
     print(io, " diag:")
     print_matrix(io, (M.dv)')
     print(io, M.uplo == 'U' ? "\n super:" : "\n sub:")
@@ -244,6 +244,8 @@ function Base.copy(tB::Transpose{<:Any,<:Bidiagonal})
     return Bidiagonal(map(x -> copy.(transpose.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U)
 end
 
+iszero(M::Bidiagonal) = iszero(M.dv) && iszero(M.ev)
+isone(M::Bidiagonal) = all(isone, M.dv) && iszero(M.ev)
 istriu(M::Bidiagonal) = M.uplo == 'U' || iszero(M.ev)
 istril(M::Bidiagonal) = M.uplo == 'L' || iszero(M.ev)
 

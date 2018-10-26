@@ -363,11 +363,7 @@ function rename_phinode_edges(node, bb, result_order, bb_rename)
             resize!(new_values, length(new_values)+1)
         end
     end
-    if length(new_edges) == 1
-        return isassigned(new_values, 1) ? new_values[1] : PhiNode(Any[], Any[])
-    else
-        return PhiNode(new_edges, new_values)
-    end
+    return PhiNode(new_edges, new_values)
 end
 
 """
@@ -806,6 +802,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
             end
         elseif isexpr(stmt, :enter)
             new_code[idx] = Expr(:enter, block_for_inst(cfg, stmt.args[1]))
+            ssavalmap[idx] = SSAValue(idx) # Slot to store token for pop_exception
         elseif isexpr(stmt, :leave) || isexpr(stmt, :(=)) || isexpr(stmt, :return) ||
             isexpr(stmt, :meta) || isa(stmt, NewvarNode)
             new_code[idx] = stmt

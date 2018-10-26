@@ -127,7 +127,7 @@ end
         @testset "Scaling with rmul! and lmul" begin
             @test rmul!(copy(a), 5.) == a*5
             @test lmul!(5., copy(a)) == a*5
-            b = randn(LinearAlgebra.SCAL_CUTOFF) # make sure we try BLAS path
+            b = randn(2048)
             subB = view(b, :, :)
             @test rmul!(copy(b), 5.) == b*5
             @test rmul!(copy(subB), 5.) == subB*5
@@ -254,6 +254,13 @@ end
     @test w ≈ [1/√2, -1/√2]
     @test norm(w) === 1.0
     @test norm(normalize!(v) - w, Inf) < eps()
+end
+
+@testset "normalize with Infs. Issue 29681." begin
+    @test all(isequal.(normalize([1, -1, Inf]),
+                       [0.0, -0.0, NaN]))
+    @test all(isequal.(normalize([complex(1), complex(0, -1), complex(Inf, -Inf)]),
+                       [0.0 + 0.0im, 0.0 - 0.0im, NaN + NaN*im]))
 end
 
 @testset "Issue 14657" begin

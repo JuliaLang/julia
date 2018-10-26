@@ -152,6 +152,22 @@ Random.seed!(1)
             @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), n + 2)
         end
 
+        @testset "iszero and isone" begin
+            for uplo in (:U, :L)
+                BDzero = Bidiagonal(zeros(elty, 10), zeros(elty, 9), uplo)
+                BDone = Bidiagonal(ones(elty, 10), zeros(elty, 9), uplo)
+                BDmix = Bidiagonal(zeros(elty, 10), zeros(elty, 9), uplo)
+                BDmix[end,end] = one(elty)
+
+                @test iszero(BDzero)
+                @test !isone(BDzero)
+                @test !iszero(BDone)
+                @test isone(BDone)
+                @test !iszero(BDmix)
+                @test !isone(BDmix)
+            end
+        end
+
         Tfull = Array(T)
         @testset "Linear solves" begin
             if relty <: AbstractFloat
@@ -326,7 +342,7 @@ using LinearAlgebra: fillstored!, UnitLowerTriangular
         Bidiagonal(randn(3), randn(2), rand([:U,:L])),
         SymTridiagonal(randn(3), randn(2)),
         sparse(randn(3,4)),
-        # Diagonal(randn(5)), # Diagonal fill! deprecated, see below
+        Diagonal(randn(5)),
         sparse(rand(3)),
         # LowerTriangular(randn(3,3)), # AbstractTriangular fill! deprecated, see below
         # UpperTriangular(randn(3,3)) # AbstractTriangular fill! deprecated, see below
@@ -334,9 +350,11 @@ using LinearAlgebra: fillstored!, UnitLowerTriangular
         for A in exotic_arrays
             @test iszero(fill!(A, 0))
         end
-        # Diagonal and AbstractTriangular fill! were defined as fillstored!,
-        # not matching the general behavior of fill!, and so have been deprecated.
-        # In a future dev cycle, these fill! methods should probably be reintroduced
+
+        # Diagonal fill! is no longer deprecated. See #29780
+        # AbstractTriangular fill! was defined as fillstored!,
+        # not matching the general behavior of fill!, and so it has been deprecated.
+        # In a future dev cycle, this fill! methods should probably be reintroduced
         # with behavior matching that of fill! for other structured matrix types.
         # In the interim, equivalently test fillstored! below
         @test iszero(fillstored!(Diagonal(fill(1, 3)), 0))
@@ -347,13 +365,15 @@ using LinearAlgebra: fillstored!, UnitLowerTriangular
         val = randn()
         b = Bidiagonal(randn(1,1), :U)
         st = SymTridiagonal(randn(1,1))
-        for x in (b, st)
+        d = Diagonal(rand(1))
+        for x in (b, st, d)
             @test Array(fill!(x, val)) == fill!(Array(x), val)
         end
         b = Bidiagonal(randn(2,2), :U)
         st = SymTridiagonal(randn(3), randn(2))
         t = Tridiagonal(randn(3,3))
-        for x in (b, t, st)
+        d = Diagonal(rand(3))
+        for x in (b, t, st, d)
             @test_throws ArgumentError fill!(x, val)
             @test Array(fill!(x, 0)) == fill!(Array(x), 0)
         end
