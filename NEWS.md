@@ -10,6 +10,8 @@ New language features
 Language changes
 ----------------
 
+  * the constructor `BigFloat(::BigFloat)` now respects the global precision setting and always
+    returns a `BigFloat` with precision equal to `precision(BigFloat)` ([#29127]).
   * Parser inputs ending with a comma are now consistently treated as incomplete.
     Previously they were sometimes parsed as tuples, depending on whitespace ([#28506]).
 

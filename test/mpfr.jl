@@ -35,6 +35,20 @@ import Base.MPFR
 
     @test typeof(BigFloat(1//1)) == BigFloat
     @test typeof(BigFloat(one(Rational{BigInt}))) == BigFloat
+
+    # BigFloat constructor respects global precision when not specified
+    let prec = precision(BigFloat) < 16 ? 256 : precision(BigFloat) ÷ 2
+        xs = Real[T(1) for T in (Int, BigInt, Float32, Float64, BigFloat)]
+        f = xs[end]
+        @test BigFloat(f) === f # no-op when precision of operand is the same as global's one
+        setprecision(prec) do
+            @test precision(xs[end]) != prec
+            for x in xs
+                @test precision(BigFloat(x)) == prec
+                @test precision(BigFloat(x, prec ÷ 2)) == prec ÷ 2
+            end
+        end
+    end
 end
 @testset "basic arithmetic" begin
     tol = 1e-12
