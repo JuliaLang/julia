@@ -55,7 +55,7 @@ let
                     @test maximum(dr) == last(dr)
                     @test dr[1] == f
                     @test dr[end] <= l
-                    @test iterate(dr) == (first(dr), 1)
+                    @test iterate(dr) == (first(dr), (length(dr), 1))
 
                     if len < 10000
                         dr1 = [i for i in dr]
@@ -113,7 +113,7 @@ let
                     @test maximum(dr) == first(dr)
                     @test dr[1] == l
                     @test dr[end] >= f
-                    @test iterate(dr) == (first(dr), 1)
+                    @test iterate(dr) == (first(dr), (length(dr), 1))
 
                     if len < 10000
                         dr1 = [i for i in dr]
@@ -173,7 +173,7 @@ let
                         @test maximum(dr) == last(dr)
                         @test dr[1] == f
                         @test dr[end] <= l
-                        @test iterate(dr) == (first(dr), 1)
+                        @test iterate(dr) == (first(dr), (length(dr), 1))
 
                         if len < 10000
                             dr1 = [i for i in dr]
@@ -231,7 +231,7 @@ let
                         @test maximum(dr) == first(dr)
                         @test dr[1] == l
                         @test dr[end] >= f
-                        @test iterate(dr) == (first(dr), 1)
+                        @test iterate(dr) == (first(dr), (length(dr), 1))
 
                         if len < 10000
                             dr1 = [i for i in dr]

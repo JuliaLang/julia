@@ -1418,3 +1418,20 @@ end
     @test @allocated(0:286.493442:360) == 0
     @test @allocated(0:286:360) == 0
 end
+
+@testset "range with start and stop" begin
+    for starts in [-1, 0, 1, 10]
+        for stops in [-2, 0, 2, 100]
+            for lengths in [2, 10, 100]
+                if stops >= starts
+                    @test range(starts, stops, length=lengths) == range(starts, stop=stops, length=lengths)
+                end
+            end
+            for steps in [0.01, 1, 2]
+                @test range(starts, stops, step=steps) == range(starts, stop=stops, step=steps)
+            end
+        end
+    end
+    # require a keyword arg
+    @test_throws ArgumentError range(1, 100)
+end

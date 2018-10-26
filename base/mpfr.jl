@@ -177,12 +177,12 @@ widen(::Type{BigFloat}) = BigFloat
 
 function BigFloat(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
     if precision == MPFR.precision(x)
-        x
+        return x
     else
         z = BigFloat(;precision=precision)
         ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode),
               z, x, r)
-        z
+        return z
     end
 end
 

@@ -100,10 +100,18 @@
 
 // task options ---------------------------------------------------------------
 
-// select whether to enable the COPY_STACKS stack switching optimization
+// select whether to allow the COPY_STACKS stack switching implementation
 #define COPY_STACKS
+// select whether to use COPY_STACKS for new Tasks by default
+//#define ALWAYS_COPY_STACKS
 
-#define JL_STACK_SIZE (8*1024*1024)
+// When not using COPY_STACKS the task-system is less memory efficient so
+// you probably want to choose a smaller default stack size (factor of 8-10)
+#ifdef _P64
+#define JL_STACK_SIZE (4*1024*1024)
+#else
+#define JL_STACK_SIZE (2*1024*1024)
+#endif
 
 // threading options ----------------------------------------------------------
 

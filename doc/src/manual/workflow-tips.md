@@ -8,45 +8,59 @@ As already elaborated in [The Julia REPL](@ref), Julia's REPL provides rich func
 that facilitates an efficient interactive workflow. Here are some tips that might further enhance
 your experience at the command line.
 
-### A basic editor/REPL workflow
+## Command-line-based basic editor/REPL workflow
 
 The most basic Julia workflows involve using a text editor in conjunction with the `julia` command
 line. A common pattern includes the following elements:
 
-  * **Put code under development in a temporary module.** Create a file, say `Tmp.jl`, and include
-    within it
+  * **Generate a new project**
+
+  ```
+  $ julia -e 'using Pkg;Pkg.generate("Tmp")'
+Generating project Tmp:
+    Tmp/Project.toml
+    Tmp/src/Tmp.jl
+  $ ls -R Tmp
+Tmp:
+Project.toml  src
+
+Tmp/src:
+Tmp.jl
+  $ cat -n Tmp/src/Tmp.jl
+     1	module Tmp
+     2
+     3	greet() = print("Hello World!")
+     4
+     5	end # module
+  ```
+
+  * **Create a test folder**
+  ```
+  $ mkdir Tmp/test
+  ```
+  * **Put your test code in `test/runtests.jl` file.**
 
     ```
-    module Tmp
-
-    <your definitions here>
-
-    end
-    ```
-  * **Put your test code in another file.** Create another file, say `tst.jl`, which begins with
-
-    ```julia
-    import Tmp
+    $ cat -n Tmp/test/runtests.jl
+     1	using Tmp
+     2	Tmp.greet()
     ```
 
-    and includes tests for the contents of `Tmp`.
-    Alternatively, you can wrap the contents of your test file in a module, as
+  * **Run test**
+  ```
+  $ julia  -e 'using Pkg;Pkg.activate("Tmp");Pkg.test()'
+  Updating registry at `~/.julia/registries/General`
+  Updating git-repo `https://github.com/JuliaRegistries/General.git`
+ Resolving package versions...
+  Updating `~/Tmp/Project.toml`
+ [no changes]
+   Testing Tmp
+ Resolving package versions...
+Hello World!   Testing Tmp tests passed
+  ```
+  * **Lather. Rinse. Repeat.** Explore ideas at the `julia` command prompt. Save good ideas in `Tmp.jl` and test with `runtests.jl`.
 
-    ```
-    module Tst
-        using Tmp
-
-        <scratch work>
-
-    end
-    ```
-
-    The advantage is that you can now do `using Tmp` in your test code and can therefore avoid prepending
-    `Tmp.` everywhere. The disadvantage is that code can no longer be selectively copied to the REPL
-    without some tweaking.
-  * **Lather. Rinse. Repeat.** Explore ideas at the `julia` command prompt. Save good ideas in `tst.jl`.
-
-### Simplify initialization
+## Simplify initialization
 
 To simplify restarting the REPL, put project-specific initialization code in a file, say `_init.jl`,
 which you can run on startup by issuing the command:

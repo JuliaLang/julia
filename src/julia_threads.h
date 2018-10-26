@@ -132,12 +132,13 @@ typedef struct {
     jl_gc_mark_data_t *data_stack;
 } jl_gc_mark_cache_t;
 
+typedef struct _jl_excstack_t jl_excstack_t;
 // This includes all the thread local states we care about for a thread.
+// Changes to TLS field types must be reflected in codegen.
 #define JL_MAX_BT_SIZE 80000
 struct _jl_tls_states_t {
     struct _jl_gcframe_t *pgcstack;
     size_t world_age;
-    struct _jl_value_t *exception_in_transit;
     volatile size_t *safepoint;
     // Whether it is safe to execute GC at the same time.
 #define JL_GC_STATE_WAITING 1
@@ -152,16 +153,16 @@ struct _jl_tls_states_t {
     volatile sig_atomic_t defer_signal;
     struct _jl_task_t *volatile current_task;
     struct _jl_task_t *root_task;
-//#ifdef COPY_STACKS
     void *stackbase;
     size_t stacksize;
     jl_ucontext_t base_ctx; // base context of stack
-//#endif
     jl_jmp_buf *safe_restore;
     int16_t tid;
-    size_t bt_size;
-    // JL_MAX_BT_SIZE + 1 elements long
-    uintptr_t *bt_data;
+    // Temp storage for exception thrown in signal handler. Not rooted.
+    struct _jl_value_t *sig_exception;
+    // Temporary backtrace buffer. Scanned for gc roots when bt_size > 0.
+    uintptr_t *bt_data; // JL_MAX_BT_SIZE + 1 elements long
+    size_t bt_size;    // Size for backtrace in transit in bt_data
     // Atomically set by the sender, reset by the handler.
     volatile sig_atomic_t signal_request;
     // Allow the sigint to be raised asynchronously
@@ -174,6 +175,9 @@ struct _jl_tls_states_t {
     pthread_t system_id;
     void *signal_stack;
 #endif
+#ifdef _OS_WINDOWS_
+    int needs_resetstkoflw;
+#endif
     // execution of certain certain impure
     // statements is prohibited from certain
     // callbacks (such as generated functions)
@@ -185,6 +189,9 @@ struct _jl_tls_states_t {
     jl_gc_mark_cache_t gc_cache;
     arraylist_t sweep_objs;
     jl_gc_mark_sp_t gc_mark_sp;
+    // Saved exception for previous external API call or NULL if cleared.
+    // Access via jl_exception_occurred().
+    struct _jl_value_t *previous_exception;
 };
 
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`

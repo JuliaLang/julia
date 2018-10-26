@@ -168,7 +168,7 @@ include("abstractdict.jl")
 
 include("iterators.jl")
 using .Iterators: zip, enumerate
-using .Iterators: Flatten, product  # for generators
+using .Iterators: Flatten, Filter, product  # for generators
 
 include("namedtuple.jl")
 
@@ -264,6 +264,7 @@ using .PermutedDimsArrays
 
 include("broadcast.jl")
 using .Broadcast
+using .Broadcast: broadcasted, broadcasted_kwsyntax, materialize, materialize!
 
 # define the real ntuple functions
 @inline function ntuple(f::F, ::Val{N}) where {F,N}

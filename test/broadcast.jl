@@ -744,6 +744,11 @@ let
     @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 60.8
 end
 
+let
+  bc = Broadcasted(+, (Broadcasted(*, ([1, 2, 3], 4)), 5))
+  @test isbits(Broadcast.flatten(bc).f)
+end
+
 # Issue #26127: multiple splats in a fused dot-expression
 let f(args...) = *(args...)
     x, y, z = (1,2), 3, (4, 5)

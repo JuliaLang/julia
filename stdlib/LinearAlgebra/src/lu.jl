@@ -305,7 +305,7 @@ issuccess(F::LU) = F.info == 0
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::LU)
     if issuccess(F)
-        println(io, summary(F))
+        summary(io, F); println(io)
         println(io, "L factor:")
         show(io, mime, F.L)
         println(io, "\nU factor:")
@@ -496,7 +496,8 @@ factorize(A::Tridiagonal) = lu(A)
 function getproperty(F::LU{T,Tridiagonal{T,V}}, d::Symbol) where {T,V}
     m, n = size(F)
     if d == :L
-        L = Array(Bidiagonal(fill(one(T), n), getfield(getfield(F, :factors), :dl), d))
+        dl = getfield(getfield(F, :factors), :dl)
+        L = Array(Bidiagonal(fill!(similar(dl, n), one(T)), dl, d))
         for i = 2:n
             tmp = L[getfield(F, :ipiv)[i], 1:i - 1]
             L[getfield(F, :ipiv)[i], 1:i - 1] = L[i, 1:i - 1]

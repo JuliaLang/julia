@@ -58,7 +58,7 @@ function show(io::IO, J::UniformScaling)
     if occursin(r"\w+\s*[\+\-]\s*\w+", s)
         s = "($s)"
     end
-    print(io, "$(typeof(J))\n$s*I")
+    print(io, typeof(J), "\n$s*I")
 end
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
@@ -74,10 +74,12 @@ oneunit(J::UniformScaling{T}) where {T} = oneunit(UniformScaling{T})
 zero(::Type{UniformScaling{T}}) where {T} = UniformScaling(zero(T))
 zero(J::UniformScaling{T}) where {T} = zero(UniformScaling{T})
 
+isdiag(::UniformScaling) = true
 istriu(::UniformScaling) = true
 istril(::UniformScaling) = true
 issymmetric(::UniformScaling) = true
 ishermitian(J::UniformScaling) = isreal(J.λ)
+isposdef(J::UniformScaling) = isposdef(J.λ)
 
 (+)(J::UniformScaling, x::Number) = J.λ + x
 (+)(x::Number, J::UniformScaling) = x + J.λ
@@ -244,18 +246,18 @@ promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling}}}) 
 for (f,dim,name) in ((:hcat,1,"rows"), (:vcat,2,"cols"))
     @eval begin
         function $f(A::Union{AbstractVecOrMat,UniformScaling}...)
-            n = 0
+            n = -1
             for a in A
                 if !isa(a, UniformScaling)
                     @assert !has_offset_axes(a)
                     na = size(a,$dim)
-                    n > 0 && n != na &&
+                    n >= 0 && n != na &&
                         throw(DimensionMismatch(string("number of ", $name,
                             " of each array must match (got ", n, " and ", na, ")")))
                     n = na
                 end
             end
-            n == 0 && throw(ArgumentError($("$f of only UniformScaling objects cannot determine the matrix size")))
+            n == -1 && throw(ArgumentError($("$f of only UniformScaling objects cannot determine the matrix size")))
             return $f(promote_to_arrays(fill(n,length(A)),1, promote_to_array_type(A), A...)...)
         end
     end
@@ -266,20 +268,20 @@ function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScalin
     @assert !has_offset_axes(A...)
     nr = length(rows)
     sum(rows) == length(A) || throw(ArgumentError("mismatch between row sizes and number of arguments"))
-    n = zeros(Int, length(A))
+    n = fill(-1, length(A))
     needcols = false # whether we also need to infer some sizes from the column count
     j = 0
     for i = 1:nr # infer UniformScaling sizes from row counts, if possible:
-        ni = 0 # number of rows in this block-row
+        ni = -1 # number of rows in this block-row, -1 indicates unknown
         for k = 1:rows[i]
             if !isa(A[j+k], UniformScaling)
                 na = size(A[j+k], 1)
-                ni > 0 && ni != na &&
+                ni >= 0 && ni != na &&
                     throw(DimensionMismatch("mismatch in number of rows"))
                 ni = na
             end
         end
-        if ni > 0
+        if ni >= 0
             for k = 1:rows[i]
                 n[j+k] = ni
             end
@@ -289,21 +291,22 @@ function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScalin
         j += rows[i]
     end
     if needcols # some sizes still unknown, try to infer from column count
-        nc = j = 0
+        nc = -1
+        j = 0
         for i = 1:nr
             nci = 0
-            rows[i] > 0 && n[j+1] == 0 && continue # column count unknown in this row
+            rows[i] > 0 && n[j+1] == -1 && (j += rows[i]; continue)
             for k = 1:rows[i]
                 nci += isa(A[j+k], UniformScaling) ? n[j+k] : size(A[j+k], 2)
             end
-            nc > 0 && nc != nci && throw(DimensionMismatch("mismatch in number of columns"))
+            nc >= 0 && nc != nci && throw(DimensionMismatch("mismatch in number of columns"))
             nc = nci
             j += rows[i]
         end
-        nc == 0 && throw(ArgumentError("sizes of UniformScalings could not be inferred"))
+        nc == -1 && throw(ArgumentError("sizes of UniformScalings could not be inferred"))
         j = 0
         for i = 1:nr
-            if rows[i] > 0 && n[j+1] == 0 # this row consists entirely of UniformScalings
+            if rows[i] > 0 && n[j+1] == -1 # this row consists entirely of UniformScalings
                 nci = nc ÷ rows[i]
                 nci * rows[i] != nc && throw(DimensionMismatch("indivisible UniformScaling sizes"))
                 for k = 1:rows[i]

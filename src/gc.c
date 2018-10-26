@@ -234,7 +234,7 @@ static void run_finalizer(jl_ptls_t ptls, jl_value_t *o, jl_value_t *ff)
     }
     JL_CATCH {
         jl_printf(JL_STDERR, "error in running finalizer: ");
-        jl_static_show(JL_STDERR, ptls->exception_in_transit);
+        jl_static_show(JL_STDERR, jl_current_exception());
         jl_printf(JL_STDERR, "\n");
     }
 }
@@ -313,27 +313,11 @@ static void jl_gc_run_finalizers_in_list(jl_ptls_t ptls, arraylist_t *list)
     jl_value_t **items = (jl_value_t**)list->items;
     size_t len = list->len;
     JL_UNLOCK_NOGC(&finalizers_lock);
-    // from jl_apply_with_saved_exception_state; to hoist state saving out of the loop
-    jl_value_t *exc = ptls->exception_in_transit;
-    jl_array_t *bt = NULL;
-    jl_array_t *bt2 = NULL;
-    JL_GC_PUSH3(&exc, &bt, &bt2);
-    if (ptls->bt_size > 0) {
-        jl_get_backtrace(&bt, &bt2);
-        ptls->bt_size = 0;
-    }
     // run finalizers in reverse order they were added, so lower-level finalizers run last
     for (size_t i = len-4; i >= 2; i -= 2)
         run_finalizer(ptls, items[i], items[i + 1]);
     // first entries were moved last to make room for GC frame metadata
     run_finalizer(ptls, items[len-2], items[len-1]);
-    ptls->exception_in_transit = exc;
-    if (bt != NULL) {
-        // This is sufficient because bt2 roots the managed values
-        memcpy(ptls->bt_data, bt->data, jl_array_len(bt) * sizeof(void*));
-        ptls->bt_size = jl_array_len(bt);
-    }
-    JL_GC_POP();
     // matches the jl_gc_push_arraylist above
     JL_GC_POP();
 }
@@ -1844,6 +1828,8 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
             goto obj32;                         \
         case GC_MARK_L_stack:                   \
             goto stack;                         \
+        case GC_MARK_L_excstack:                \
+            goto excstack;                      \
         case GC_MARK_L_module_binding:          \
             goto module_binding;                \
         default:                                \
@@ -1929,6 +1915,7 @@ JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp)
         gc_mark_label_addrs[GC_MARK_L_obj16] = gc_mark_laddr(obj16);
         gc_mark_label_addrs[GC_MARK_L_obj32] = gc_mark_laddr(obj32);
         gc_mark_label_addrs[GC_MARK_L_stack] = gc_mark_laddr(stack);
+        gc_mark_label_addrs[GC_MARK_L_excstack] = gc_mark_laddr(excstack);
         gc_mark_label_addrs[GC_MARK_L_module_binding] = gc_mark_laddr(module_binding);
         return;
     }
@@ -2079,6 +2066,46 @@ stack: {
             }
             goto pop;
         }
+    }
+
+excstack: {
+        // Scan an exception stack
+        gc_mark_excstack_t *stackitr = gc_pop_markdata(&sp, gc_mark_excstack_t);
+        jl_excstack_t *excstack = stackitr->s;
+        size_t itr = stackitr->itr;
+        size_t i = stackitr->i;
+        while (itr > 0) {
+            size_t bt_size = jl_excstack_bt_size(excstack, itr);
+            uintptr_t *bt_data = jl_excstack_bt_data(excstack, itr);
+            while (i+2 < bt_size) {
+                if (bt_data[i] != JL_BT_INTERP_FRAME) {
+                    i++;
+                    continue;
+                }
+                // found an interpreter frame to mark
+                new_obj = (jl_value_t*)bt_data[i+1];
+                uintptr_t nptr = 0;
+                i += 3;
+                if (gc_try_setmark(new_obj, &nptr, &tag, &bits)) {
+                    stackitr->i = i;
+                    stackitr->itr = itr;
+                    gc_repush_markdata(&sp, gc_mark_excstack_t);
+                    goto mark;
+                }
+            }
+            // mark the exception
+            new_obj = jl_excstack_exception(excstack, itr);
+            itr = jl_excstack_next(excstack, itr);
+            i = 0;
+            uintptr_t nptr = 0;
+            if (gc_try_setmark(new_obj, &nptr, &tag, &bits)) {
+                stackitr->i = i;
+                stackitr->itr = itr;
+                gc_repush_markdata(&sp, gc_mark_excstack_t);
+                goto mark;
+            }
+        }
+        goto pop;
     }
 
 module_binding: {
@@ -2340,13 +2367,22 @@ mark: {
                 gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(stack),
                                    &stackdata, sizeof(stackdata), 1);
             }
+            if (ta->excstack) {
+                gc_setmark_buf_(ptls, ta->excstack, bits, sizeof(jl_excstack_t) +
+                                sizeof(uintptr_t)*ta->excstack->reserved_size);
+                gc_mark_excstack_t stackdata = {ta->excstack, ta->excstack->top, 0};
+                gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(excstack),
+                                   &stackdata, sizeof(stackdata), 1);
+            }
             const jl_datatype_layout_t *layout = jl_task_type->layout;
             assert(layout->fielddesc_type == 0);
             size_t nfields = layout->nfields;
             assert(nfields > 0);
             obj8_begin = (jl_fielddesc8_t*)jl_dt_layout_fields(layout);
             obj8_end = obj8_begin + nfields;
-            gc_mark_obj8_t markdata = {new_obj, obj8_begin, obj8_end, (9 << 2) | 1 | bits};
+            // assume tasks always reference young objects: set lowest bit
+            uintptr_t nptr = (9 << 2) | 1 | bits;
+            gc_mark_obj8_t markdata = {new_obj, obj8_begin, obj8_end, nptr};
             gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(obj8),
                                &markdata, sizeof(markdata), 0);
             obj8 = (gc_mark_obj8_t*)sp.data;
@@ -2441,7 +2477,8 @@ static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp
 {
     gc_mark_queue_obj(gc_cache, sp, ptls2->current_task);
     gc_mark_queue_obj(gc_cache, sp, ptls2->root_task);
-    gc_mark_queue_obj(gc_cache, sp, ptls2->exception_in_transit);
+    if (ptls2->previous_exception)
+        gc_mark_queue_obj(gc_cache, sp, ptls2->previous_exception);
 }
 
 // mark the initial root set
@@ -2623,7 +2660,7 @@ static void jl_gc_queue_bt_buf(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp
 {
     size_t n = 0;
     while (n+2 < ptls2->bt_size) {
-        if (ptls2->bt_data[n] == (uintptr_t)-1) {
+        if (ptls2->bt_data[n] == JL_BT_INTERP_FRAME) {
             gc_mark_queue_obj(gc_cache, sp, (jl_value_t*)ptls2->bt_data[n+1]);
             n += 2;
         }

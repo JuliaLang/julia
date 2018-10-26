@@ -78,7 +78,7 @@ void jl_module_run_initializer(jl_module_t *m)
         }
         else {
             jl_rethrow_other(jl_new_struct(jl_initerror_type, m->name,
-                                           jl_exception_in_transit));
+                                           jl_current_exception()));
         }
     }
 }
@@ -166,7 +166,6 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
         }
         // add `eval` function
         form = jl_call_scm_on_ast("module-default-defs", (jl_value_t*)ex, newm);
-        ptls->world_age = jl_world_counter;
         jl_toplevel_eval_flex(newm, form, 0, 1);
         form = NULL;
     }
@@ -179,6 +178,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
         ptls->world_age = jl_world_counter;
         (void)jl_toplevel_eval_flex(newm, form, 1, 1);
     }
+    newm->primary_world = jl_world_counter;
     ptls->world_age = last_age;
 
 #if 0
@@ -243,8 +243,9 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     return (jl_value_t*)newm;
 }
 
-jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f, int fast)
+static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f, int fast)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 3);
     args[1] = jl_toplevel_eval_flex(m, x, fast, 0);
@@ -255,7 +256,10 @@ jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f, int f
     }
     else {
         args[0] = jl_eval_global_var(jl_base_relative_to(m), jl_symbol("getproperty"));
+        size_t last_age = ptls->world_age;
+        ptls->world_age = jl_world_counter;
         args[0] = jl_apply(args, 3);
+        ptls->world_age = last_age;
     }
     JL_GC_POP();
     return args[0];
@@ -377,26 +381,21 @@ static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs
 static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_ROOTED
 {
     static jl_value_t *require_func = NULL;
-    static size_t require_world = 0;
     int build_mode = jl_generating_output();
     jl_module_t *m = NULL;
     jl_ptls_t ptls = jl_get_ptls_states();
     if (require_func == NULL && jl_base_module != NULL) {
         require_func = jl_get_global(jl_base_module, jl_symbol("require"));
-        if (build_mode)
-            require_world = ptls->world_age;
     }
     if (require_func != NULL) {
         size_t last_age = ptls->world_age;
-        if (build_mode)
-            ptls->world_age = require_world;
+        ptls->world_age = (build_mode ? jl_base_module->primary_world : jl_world_counter);
         jl_value_t *reqargs[3];
         reqargs[0] = require_func;
         reqargs[1] = (jl_value_t*)mod;
         reqargs[2] = (jl_value_t*)var;
         m = (jl_module_t*)jl_apply(reqargs, 3);
-        if (build_mode)
-            ptls->world_age = last_age;
+        ptls->world_age = last_age;
     }
     if (m == NULL || !jl_is_module(m)) {
         jl_errorf("failed to load module %s", jl_symbol_name(var));
@@ -407,7 +406,8 @@ static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_RO
 // either:
 //   - sets *name and returns the module to import *name from
 //   - sets *name to NULL and returns a module to import
-static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from JL_PROPAGATES_ROOT, jl_array_t *args, jl_sym_t **name, const char *keyword) JL_GLOBALLY_ROOTED
+static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from JL_PROPAGATES_ROOT,
+                                     jl_array_t *args, jl_sym_t **name, const char *keyword) JL_GLOBALLY_ROOTED
 {
     jl_sym_t *var = (jl_sym_t*)jl_array_ptr_ref(args, 0);
     size_t i = 1;
@@ -589,8 +589,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         jl_value_t *lhs = jl_exprarg(ex, 0);
         jl_value_t *rhs = jl_exprarg(ex, 1);
         // only handle `a.b` syntax here, so qualified names can be eval'd in pure contexts
-        if (jl_is_quotenode(rhs) && jl_is_symbol(jl_fieldref(rhs,0)))
+        if (jl_is_quotenode(rhs) && jl_is_symbol(jl_fieldref(rhs, 0))) {
             return jl_eval_dot_expr(m, lhs, rhs, fast);
+        }
     }
 
     if (ptls->in_pure_callback) {
@@ -601,8 +602,11 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     jl_code_info_t *thk = NULL;
     JL_GC_PUSH3(&li, &thk, &ex);
 
+    size_t last_age = ptls->world_age;
     if (!expanded && jl_needs_lowering(e)) {
+        ptls->world_age = jl_world_counter;
         ex = (jl_expr_t*)jl_expand(e, m);
+        ptls->world_age = last_age;
     }
     jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
 
@@ -612,8 +616,6 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         return val;
     }
     else if (head == using_sym) {
-        size_t last_age = ptls->world_age;
-        ptls->world_age = jl_world_counter;
         jl_sym_t *name = NULL;
         jl_module_t *from = eval_import_from(m, ex, "using");
         size_t i = 0;
@@ -625,7 +627,6 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
             jl_value_t *a = jl_exprarg(ex, i);
             if (jl_is_expr(a) && ((jl_expr_t*)a)->head == dot_sym) {
                 name = NULL;
-                ptls->world_age = jl_world_counter;
                 jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)a)->args, &name, "using");
                 jl_module_t *u = import;
                 if (name != NULL)
@@ -647,13 +648,10 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                 }
             }
         }
-        ptls->world_age = last_age;
         JL_GC_POP();
         return jl_nothing;
     }
     else if (head == import_sym) {
-        size_t last_age = ptls->world_age;
-        ptls->world_age = jl_world_counter;
         jl_sym_t *name = NULL;
         jl_module_t *from = eval_import_from(m, ex, "import");
         size_t i = 0;
@@ -665,7 +663,6 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
             jl_value_t *a = jl_exprarg(ex, i);
             if (jl_is_expr(a) && ((jl_expr_t*)a)->head == dot_sym) {
                 name = NULL;
-                ptls->world_age = jl_world_counter;
                 jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)a)->args, &name, "import");
                 if (name == NULL) {
                     import_module(m, import);
@@ -675,7 +672,6 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                 }
             }
         }
-        ptls->world_age = last_age;
         JL_GC_POP();
         return jl_nothing;
     }
@@ -711,23 +707,20 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         return jl_nothing;
     }
     else if (head == toplevel_sym) {
-        size_t last_age = ptls->world_age;
         jl_value_t *res = jl_nothing;
         int i;
         for (i = 0; i < jl_array_len(ex->args); i++) {
-            ptls->world_age = jl_world_counter; // eval each statement in the newest world age
             res = jl_toplevel_eval_flex(m, jl_array_ptr_ref(ex->args, i), fast, 0);
         }
-        ptls->world_age = last_age;
         JL_GC_POP();
         return res;
     }
     else if (head == error_sym || head == jl_incomplete_sym) {
         if (jl_expr_nargs(ex) == 0)
             jl_errorf("malformed \"%s\" expression", jl_symbol_name(head));
-        if (jl_is_string(jl_exprarg(ex,0)))
-            jl_errorf("syntax: %s", jl_string_data(jl_exprarg(ex,0)));
-        jl_throw(jl_exprarg(ex,0));
+        if (jl_is_string(jl_exprarg(ex, 0)))
+            jl_errorf("syntax: %s", jl_string_data(jl_exprarg(ex, 0)));
+        jl_throw(jl_exprarg(ex, 0));
     }
     else if (jl_is_symbol(ex)) {
         JL_GC_POP();
@@ -740,7 +733,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
 
     int has_intrinsics = 0, has_defs = 0, has_loops = 0;
     assert(head == thunk_sym);
-    thk = (jl_code_info_t*)jl_exprarg(ex,0);
+    thk = (jl_code_info_t*)jl_exprarg(ex, 0);
     assert(jl_is_code_info(thk));
     assert(jl_typeis(thk->code, jl_array_any_type));
     body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops);
@@ -756,7 +749,6 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         // worthwhile and also unsound (see #24316).
         // TODO: This is still not correct since an `eval` can happen elsewhere, but it
         // helps in common cases.
-        size_t last_age = ptls->world_age;
         size_t world = jl_world_counter;
         ptls->world_age = world;
         if (!has_defs) {
