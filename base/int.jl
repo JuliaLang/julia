@@ -637,7 +637,8 @@ promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 """
     typemin(T)
 
-The lowest value representable by the given (real) numeric DataType `T`.
+The lowest value representable by the given (real) numeric DataType `T`. If the type does
+not have a minimum value then `nothing` will be returned.
 
 # Examples
 ```jldoctest
@@ -653,7 +654,8 @@ function typemin end
 """
     typemax(T)
 
-The highest value representable by the given (real) numeric `DataType`.
+The highest value representable by the given (real) numeric `DataType`. If the type does not
+have a maximum value then `nothing` will be returned.
 
 # Examples
 ```jldoctest

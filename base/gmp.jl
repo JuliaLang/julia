@@ -10,7 +10,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             hastypemax
+             typemin, typemax, hastypemax
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -225,6 +225,9 @@ end # module MPZ
 const ZERO = BigInt()
 const ONE  = BigInt()
 const _ONE = Limb[1]
+
+typemin(::Type{BigInt}) = nothing
+typemax(::Type{BigInt}) = nothing
 
 widen(::Type{Int128})  = BigInt
 widen(::Type{UInt128}) = BigInt

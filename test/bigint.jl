@@ -69,6 +69,10 @@ ee = typemax(Int64)
             @test big(typeof(complex(x, x))) == typeof(big(complex(x, x)))
         end
     end
+    @testset "limits" begin
+        @test typemin(BigInt) === nothing
+        @test typemax(BigInt) === nothing
+    end
 end
 @testset "div, fld, mod, rem" begin
     for i = -10:10, j = [-10:-1; 1:10]

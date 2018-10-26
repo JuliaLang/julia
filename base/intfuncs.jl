@@ -712,10 +712,10 @@ end
 """
     hastypemax(T::Type) -> Bool
 
-Return `true` if and only if `typemax(T)` is defined.
+Return `true` if and only if `typemax(T)` is defined and does not return `nothing`.
 """
 hastypemax(::Base.BitIntegerType) = true
-hastypemax(::Type{T}) where {T} = applicable(typemax, T)
+hastypemax(::Type{T}) where {T} = applicable(typemax, T) && typemax(T) !== nothing
 
 """
     digits!(array, n::Integer; base::Integer = 10)
