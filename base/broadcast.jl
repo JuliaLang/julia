@@ -325,7 +325,7 @@ cat_nested() = ()
 """
     make_makeargs(makeargs_tail::Function, t::Tuple) -> Function
 
-Each element of `t` is one (consequtive) node in a broadcast tree.
+Each element of `t` is one (consecutive) node in a broadcast tree.
 Ignoring `makeargs_tail` for the moment, the job of `make_makeargs` is
 to return a function that takes in flattened argument list and returns a
 tuple (each entry corresponding to an entry in `t`, having evaluated
