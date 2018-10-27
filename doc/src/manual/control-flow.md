@@ -723,8 +723,8 @@ in the below code the function for square root would normally throw an exception
 placing a `try/catch` block around it we can mitigate that here. You may choose how
 you wish to handle this exception, whether logging it, return a placeholder value or
 as in the case below where we just printed out a statement. One thing to think about
-when deciding how to handle unexpected situations is that using a `try/catch` block is 
-much slower than using conditional branching to handle those situations. 
+when deciding how to handle unexpected situations is that using a `try/catch` block is
+much slower than using conditional branching to handle those situations.
 Below there are more examples of handling exceptions with a `try/catch` block:
 
 ```jldoctest
