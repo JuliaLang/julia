@@ -735,13 +735,6 @@ julia> try
        end
 You should have entered a numeric value
 
-julia> f(1)
-1.0
-
-julia> f(-1)
-0.0 + 1.0im
-```
-
 `try/catch` statements also allow the `Exception` to be saved in a variable. The following
 contrived example calculates the square root of the second element of `x` if `x`
 is indexable, otherwise assumes `x` is a real number and returns its square root:
