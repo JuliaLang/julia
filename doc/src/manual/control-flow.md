@@ -717,17 +717,16 @@ Stacktrace:
 
 ### The `try/catch` statement
 
-The `try/catch` statement allows for `Exception`s to be tested for. For example, a customized
-square root function can be written to automatically call either the real or complex square root
-method on demand using `Exception`s :
+The `try/catch` statement allows for `Exception`s to be tested for, and for the graceful handling of things that may ordinarily break your application. For example, in the below code the function for square root would normally throw an exception and break your application. By placing a `try/catch` block around it we can mitigate that here. You may choose how you wish to handle this exception, whether logging it, return a placeholder value or as in the case below where we just printed out a statement. On line 740 and below there are more examples of handling exceptions with
+the `try/catch` block:
 
 ```jldoctest
-julia> f(x) = try
-           sqrt(x)
-       catch
-           sqrt(complex(x, 0))
+julia> try
+        sqrt("ten")
+       catch e
+       println("You should have entered a numeric value")
        end
-f (generic function with 1 method)
+       
 
 julia> f(1)
 1.0
