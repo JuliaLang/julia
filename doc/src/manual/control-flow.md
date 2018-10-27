@@ -722,9 +722,10 @@ graceful handling of things that may ordinarily break your application. For exam
 in the below code the function for square root would normally throw an exception. By
 placing a `try/catch` block around it we can mitigate that here. You may choose how
 you wish to handle this exception, whether logging it, return a placeholder value or
-as in the case below where we just printed out a statement. Below there are more
-examples of handling exceptions with
-the `try/catch` block:
+as in the case below where we just printed out a statement. One thing to think about
+when deciding how to handle unexpected situations is that using a `try/catch` block is 
+much slower than using conditional branching to handle those situations. 
+Below there are more examples of handling exceptions with a `try/catch` block:
 
 ```jldoctest
 julia> try
@@ -732,15 +733,14 @@ julia> try
        catch e
            println("You should have entered a numeric value")
        end
+You should have entered a numeric value
+
 julia> f(1)
 1.0
 
 julia> f(-1)
 0.0 + 1.0im
 ```
-
-It is important to note that in real code computing this function, one would compare `x` to zero
-instead of catching an exception. The exception is much slower than simply comparing and branching.
 
 `try/catch` statements also allow the `Exception` to be saved in a variable. The following
 contrived example calculates the square root of the second element of `x` if `x`
