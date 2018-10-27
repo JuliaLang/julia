@@ -734,6 +734,7 @@ julia> try
            println("You should have entered a numeric value")
        end
 You should have entered a numeric value
+```
 
 `try/catch` statements also allow the `Exception` to be saved in a variable. The following
 contrived example calculates the square root of the second element of `x` if `x`
