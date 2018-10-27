@@ -299,6 +299,16 @@ end
         @test dt - Dates.Day(100) == Dates.Date(1999, 9, 18)
         @test dt - Dates.Day(1000) == Dates.Date(1997, 4, 1)
     end
+    @testset "Date-Time arithmetic" begin
+        dt = Dates.Date(1999, 12, 27)
+        @test dt + Dates.Time(0, 0, 0) == Dates.DateTime(1999, 12, 27, 0, 0, 0)
+        @test dt + Dates.Time(1, 0, 0) == Dates.DateTime(1999, 12, 27, 1, 0, 0)
+        @test dt + Dates.Time(0, 1, 0) == Dates.DateTime(1999, 12, 27, 0, 1, 0)
+        @test dt + Dates.Time(0, 0, 1) == Dates.DateTime(1999, 12, 27, 0, 0, 1)
+
+        t = Dates.Time(0, 0, 0) + Dates.Hour(24)
+        @test dt + t == Dates.DateTime(1999, 12, 27, 0, 0, 0)
+    end
 end
 @testset "Time-TimePeriod arithmetic" begin
     t = Dates.Time(0)
