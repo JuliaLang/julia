@@ -732,7 +732,6 @@ julia> try
        catch e
            println("You should have entered a numeric value")
        end
-       
 julia> f(1)
 1.0
 
