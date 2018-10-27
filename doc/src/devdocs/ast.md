@@ -125,7 +125,7 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
   * `const`
 
-    Declares a (global) variable as constant.
+    Declares a (global) constant value.
   * `null`
 
     Has no arguments; simply yields the value `nothing`.
