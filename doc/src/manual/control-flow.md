@@ -717,17 +717,22 @@ Stacktrace:
 
 ### The `try/catch` statement
 
-The `try/catch` statement allows for `Exception`s to be tested for, and for the graceful handling of things that may ordinarily break your application. For example, in the below code the function for square root would normally throw an exception and break your application. By placing a `try/catch` block around it we can mitigate that here. You may choose how you wish to handle this exception, whether logging it, return a placeholder value or as in the case below where we just printed out a statement. On line 740 and below there are more examples of handling exceptions with
+The `try/catch` statement allows for `Exception`s to be tested for, and for the
+graceful handling of things that may ordinarily break your application. For example,
+in the below code the function for square root would normally throw an exception. By
+placing a `try/catch` block around it we can mitigate that here. You may choose how
+you wish to handle this exception, whether logging it, return a placeholder value or
+as in the case below where we just printed out a statement. Below there are more
+examples of handling exceptions with
 the `try/catch` block:
 
 ```jldoctest
 julia> try
-        sqrt("ten")
+           sqrt("ten")
        catch e
-       println("You should have entered a numeric value")
+           println("You should have entered a numeric value")
        end
        
-
 julia> f(1)
 1.0
 
