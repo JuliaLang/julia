@@ -518,11 +518,10 @@ light-source-dist: light-source-dist.tmp
 	# Prefix everything with "julia-$(commit-sha)/" or "julia-$(version)/" and then create tarball
 	# To achieve prefixing, we temporarily create a symlink in the source directory that points back
 	# to the source directory.
-	DIRNAME=julia-$(JULIA_COMMIT); \
-	sed -e "s_.*_$$DIRNAME/&_" light-source-dist.tmp > light-source-dist.tmp1; \
-	ln -s . $$DIRNAME || exit; \
-	tar -cz --no-recursion -T light-source-dist.tmp1 -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz; \
-	rm -v $$DIRNAME
+	sed -e "s_.*_julia-${JULIA_COMMIT}/&_" light-source-dist.tmp > light-source-dist.tmp1
+	ln -s . julia-${JULIA_COMMIT}
+	tar -cz --no-recursion -T light-source-dist.tmp1 -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
+	rm julia-${JULIA_COMMIT}
 
 source-dist:
 	@echo \'source-dist\' target is deprecated: use \'full-source-dist\' instead.
@@ -539,11 +538,10 @@ full-source-dist: light-source-dist.tmp
 	# Prefix everything with "julia-$(commit-sha)/" or "julia-$(version)/" and then create tarball
 	# To achieve prefixing, we temporarily create a symlink in the source directory that points back
 	# to the source directory.
-	DIRNAME=julia-$(JULIA_COMMIT); \
-	sed -e "s_.*_$$DIRNAME/&_" full-source-dist.tmp > full-source-dist.tmp1; \
-	ln -s . $$DIRNAME || exit; \
-	tar -cz --no-recursion -T full-source-dist.tmp1 -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT)-full.tar.gz; \
-	rm -v $$DIRNAME
+	sed -e "s_.*_julia-${JULIA_COMMIT}/&_" full-source-dist.tmp > full-source-dist.tmp1
+	ln -s . julia-${JULIA_COMMIT}
+	tar -cz --no-recursion -T full-source-dist.tmp1 -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT)-full.tar.gz
+	rm julia-${JULIA_COMMIT}
 
 clean: | $(CLEAN_TARGETS)
 	@-$(MAKE) -C $(BUILDROOT)/base clean
