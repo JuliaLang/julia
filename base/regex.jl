@@ -188,6 +188,16 @@ true
 ```
 """
 function startswith(s::AbstractString, r::Regex)
+    compile(r)
+    return PCRE.exec(r.regex, String(s), 0, r.match_options | PCRE.ANCHORED,
+                     r.match_data)
+end
+
+function startswith(s::SubString, r::Regex)
+    compile(r)
+    return PCRE.exec(r.regex, s, 0, r.match_options | PCRE.ANCHORED,
+                     r.match_data)
+end
     rr = Regex(r.pattern, r.compile_options | PCRE.ANCHORED, r.match_options)
     return occursin(rr, s)
 end
