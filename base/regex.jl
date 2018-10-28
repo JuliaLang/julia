@@ -206,6 +206,16 @@ true
 ```
 """
 function endswith(s::AbstractString, r::Regex)
+    compile(r)
+    return PCRE.exec(r.regex, String(s), 0, r.match_options | PCRE.ENDANCHORED,
+                     r.match_data)
+end
+
+function endswith(s::SubString, r::Regex)
+    compile(r)
+    return PCRE.exec(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED,
+                     r.match_data)
+end
     rr = Regex(r.pattern, r.compile_options | PCRE.ENDANCHORED, r.match_options)
     return occursin(rr, s)
 end
