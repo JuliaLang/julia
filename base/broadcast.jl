@@ -304,7 +304,7 @@ function flatten(bc::Broadcasted{Style}) where {Style}
     #     makeargs(w, x, y, z) = (w, makeargs1(x, y, z)...)
     #                          = (w, g(x, y), makeargs2(z)...)
     #                          = (w, g(x, y), z)
-    let makeargs = make_makeargs(bc), f = bc.f
+    let makeargs = make_makeargs(()->(), bc.args), f = bc.f
         newf = @inline function(args::Vararg{Any,N}) where N
             f(makeargs(args...)...)
         end
@@ -322,28 +322,48 @@ cat_nested(t::Broadcasted, rest...) = (cat_nested(t.args...)..., cat_nested(rest
 cat_nested(t::Any, rest...) = (t, cat_nested(rest...)...)
 cat_nested() = ()
 
-make_makeargs(bc::Broadcasted) = make_makeargs(()->(), bc.args)
-@inline function make_makeargs(makeargs, t::Tuple)
-    let makeargs = make_makeargs(makeargs, tail(t))
-        return @inline function(head, tail::Vararg{Any,N}) where N
-            (head, makeargs(tail...)...)
-        end
-    end
+"""
+    make_makeargs(makeargs_tail::Function, t::Tuple) -> Function
+
+Each element of `t` is one (consecutive) node in a broadcast tree.
+Ignoring `makeargs_tail` for the moment, the job of `make_makeargs` is
+to return a function that takes in flattened argument list and returns a
+tuple (each entry corresponding to an entry in `t`, having evaluated
+the corresponding element in the broadcast tree). As an additional
+complication, the passed in tuple may be longer than the number of leaves
+in the subtree described by `t`. The `makeargs_tail` function should
+be called on such additional arguments (but not the arguments consumed
+by `t`).
+"""
+@inline make_makeargs(makeargs_tail, t::Tuple{}) = makeargs_tail
+@inline function make_makeargs(makeargs_tail, t::Tuple)
+    makeargs = make_makeargs(makeargs_tail, tail(t))
+    (head, tail...)->(head, makeargs(tail...)...)
 end
-@inline function make_makeargs(makeargs, t::Tuple{<:Broadcasted,Vararg{Any}})
+function make_makeargs(makeargs_tail, t::Tuple{<:Broadcasted, Vararg{Any}})
     bc = t[1]
-    let makeargs = make_makeargs(makeargs, tail(t)), f = bc.f
-        let makeargs = make_makeargs(makeargs, bc.args)
-            headargs, tailargs = make_headargs(bc.args), make_tailargs(bc.args)
-            return @inline function(args::Vararg{Any,N}) where N
-                args1 = makeargs(args...)
-                a, b = headargs(args1...), tailargs(args1...)
-                (f(a...), b...)
-            end
+    # c.f. the same expression in the function on leaf nodes above. Here
+    # we recurse into siblings in the broadcast tree.
+    let makeargs_tail = make_makeargs(makeargs_tail, tail(t)),
+            # Here we recurse into children. It would be valid to pass in makeargs_tail
+            # here, and not use it below. However, in that case, our recursion is no
+            # longer purely structural because we're building up one argument (the closure)
+            # while destructuing another.
+            makeargs_head = make_makeargs((args...)->args, bc.args),
+            f = bc.f
+        # Create two functions, one that splits of the first length(bc.args)
+        # elements from the tuple and one that yields the remaining arguments.
+        # N.B. We can't call headargs on `args...` directly because
+        # args is flattened (i.e. our children have not been evaluated
+        # yet).
+        headargs, tailargs = make_headargs(bc.args), make_tailargs(bc.args)
+        return @inline function(args::Vararg{Any,N}) where N
+            args1 = makeargs_head(args...)
+            a, b = headargs(args1...), makeargs_tail(tailargs(args1...)...)
+            (f(a...), b...)
         end
     end
 end
-make_makeargs(makeargs, ::Tuple{}) = makeargs
 
 @inline function make_headargs(t::Tuple)
     let headargs = make_headargs(tail(t))
