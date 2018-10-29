@@ -514,6 +514,10 @@ end
     # We're looking for the n-th true element, using iterator r at state i
     n = s[1]
     n > length(L) && return nothing
+    #unroll once to help inference, cf issue #29418
+    idx, i = iterate(tail(s)...)
+    s = (n+1, s[2], i)
+    L.mask[idx] && return (idx, s)
     while true
         idx, i = iterate(tail(s)...)
         s = (n+1, s[2], i)
