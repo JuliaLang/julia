@@ -53,6 +53,8 @@ end
     @test issorted([1,2,3])
     @test reverse([2,3,1]) == [1,3,2]
     @test sum(randperm(6)) == 21
+    @test length(reverse(0x1:0x2)) == 2
+    @test issorted(sort(rand(UInt64(1):UInt64(2), 7); rev=true); rev=true) # issue #43034
 end
 
 @testset "partialsort" begin
@@ -217,7 +219,6 @@ end
             end
         end
 
-        @test_broken length(reverse(0x1:0x2)) == 2
         @testset "issue #34408" begin
             r = 1f8-10:1f8
             # collect(r) = Float32[9.999999e7, 9.999999e7, 9.999999e7, 9.999999e7, 1.0e8, 1.0e8, 1.0e8, 1.0e8, 1.0e8]

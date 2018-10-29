@@ -1239,7 +1239,7 @@ issubset(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) =
 
 ## linear operations on ranges ##
 
--(r::OrdinalRange) = range(-first(r), step=-step(r), length=length(r))
+-(r::OrdinalRange) = range(-first(r), step=negate(step(r)), length=length(r))
 -(r::StepRangeLen{T,R,S,L}) where {T,R,S,L} =
     StepRangeLen{T,R,S,L}(-r.ref, -r.step, r.len, r.offset)
 function -(r::LinRange)
@@ -1345,13 +1345,13 @@ end
 Array{T,1}(r::AbstractRange{T}) where {T} = vcat(r)
 collect(r::AbstractRange) = vcat(r)
 
-_reverse(r::OrdinalRange, ::Colon) = (:)(last(r), -step(r), first(r))
+_reverse(r::OrdinalRange, ::Colon) = (:)(last(r), negate(step(r)), first(r))
 function _reverse(r::StepRangeLen, ::Colon)
     # If `r` is empty, `length(r) - r.offset + 1 will be nonpositive hence
     # invalid. As `reverse(r)` is also empty, any offset would work so we keep
     # `r.offset`
     offset = isempty(r) ? r.offset : length(r)-r.offset+1
-    return typeof(r)(r.ref, -r.step, length(r), offset)
+    return typeof(r)(r.ref, negate(r.step), length(r), offset)
 end
 _reverse(r::LinRange{T}, ::Colon) where {T} = typeof(r)(r.stop, r.start, length(r))
 
