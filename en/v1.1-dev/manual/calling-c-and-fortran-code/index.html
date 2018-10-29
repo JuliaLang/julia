@@ -69,7 +69,7 @@ ccall(:test, Void, (Ptr{UInt8}, Ptr{UInt8}, Csize_t, Csize_t),
     int A[3];
 };
 b_a_2 = B.A[2];</code></pre><p>in Julia:</p><pre><code class="language-julia">struct B
-    A::NTuple{3, CInt}
+    A::NTuple{3, Cint}
 end
 b_a_2 = B.A[3]  # note the difference in indexing (1-based in Julia, 0-based in C)</code></pre><p>Arrays of unknown size (C99-compliant variable length structs specified by <code>[]</code> or <code>[0]</code>) are not directly supported. Often the best way to deal with these is to deal with the byte offsets directly. For example, if a C library declared a proper string type and returned a pointer to it:</p><pre><code class="language-c">struct String {
     int strlen;
