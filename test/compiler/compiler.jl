@@ -1205,8 +1205,7 @@ isdefined_f3(x) = isdefined(x, 3)
 @test @inferred(isdefined_f3(())) == false
 @test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]), isdefined, 3)
 
-let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
-        findfirst(x->x===isa, Core.Compiler.T_FFUNC_KEY)][3]
+let isa_tfunc = Core.Compiler.isa_tfunc
     @test isa_tfunc(Array, Const(AbstractArray)) === Const(true)
     @test isa_tfunc(Array, Type{AbstractArray}) === Const(true)
     @test isa_tfunc(Array, Type{AbstractArray{Int}}) == Bool
@@ -1220,7 +1219,7 @@ let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test isa_tfunc(UnionAll, Const(Type{Array})) === Bool
     @test isa_tfunc(Union, Const(Union{Float32, Float64})) === Bool
     @test isa_tfunc(Union, Type{Union}) === Const(true)
-    @test isa_tfunc(typeof(Union{}), Const(Int)) === Const(false) # any result is ok
+    @test isa_tfunc(typeof(Union{}), Const(Int)) === Const(false)
     @test isa_tfunc(typeof(Union{}), Const(Union{})) === Const(false)
     @test isa_tfunc(typeof(Union{}), typeof(Union{})) === Const(false)
     @test isa_tfunc(typeof(Union{}), Union{}) === Union{}
@@ -1245,8 +1244,7 @@ let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test isa_tfunc(Union{Int64, Float64}, Type{AbstractArray}) === Const(false)
 end
 
-let subtype_tfunc = Core.Compiler.T_FFUNC_VAL[
-        findfirst(x->x===(<:), Core.Compiler.T_FFUNC_KEY)][3]
+let subtype_tfunc = Core.Compiler.subtype_tfunc
     @test subtype_tfunc(Type{<:Array}, Const(AbstractArray)) === Const(true)
     @test subtype_tfunc(Type{<:Array}, Type{AbstractArray}) === Const(true)
     @test subtype_tfunc(Type{<:Array}, Type{AbstractArray{Int}}) == Bool
