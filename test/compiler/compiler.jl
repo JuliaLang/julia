@@ -1204,7 +1204,7 @@ let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test isa_tfunc(typeof(Union{}), Const(Int)) === Const(false) # any result is ok
     @test isa_tfunc(typeof(Union{}), Const(Union{})) === Const(false)
     @test isa_tfunc(typeof(Union{}), typeof(Union{})) === Const(false)
-    @test isa_tfunc(typeof(Union{}), Union{}) === Union{}
+    @test isa_tfunc(typeof(Union{}), Union{}) === Union{} # any result is ok
     @test isa_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true)
     @test isa_tfunc(typeof(Union{}), Const(typeof(Union{}))) === Const(true)
     let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
@@ -1219,7 +1219,7 @@ let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test isa_tfunc(Val{1}, Type{Val{T}} where T) === Bool
     @test isa_tfunc(Val{1}, DataType) === Bool
     @test isa_tfunc(Any, Const(Any)) === Const(true)
-    @test isa_tfunc(Any, Union{}) === Union{}
+    @test isa_tfunc(Any, Union{}) === Union{} # any result is ok
     @test isa_tfunc(Any, Type{Union{}}) === Const(false)
     @test isa_tfunc(Union{Int64, Float64}, Type{Real}) === Const(true)
     @test isa_tfunc(Union{Int64, Float64}, Type{Integer}) === Bool
@@ -1275,6 +1275,68 @@ let subtype_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test subtype_tfunc(Union{Type{Int64}, Type{Float64}}, Type{Real}) === Const(true)
     @test subtype_tfunc(Union{Type{Int64}, Type{Float64}}, Type{Integer}) === Bool
     @test subtype_tfunc(Union{Type{Int64}, Type{Float64}}, Type{AbstractArray}) === Const(false)
+end
+
+let egal_tfunc
+    function egal_tfunc(a, b)
+        r = Core.Compiler.egal_tfunc(a, b)
+        @test r === Core.Compiler.egal_tfunc(b, a)
+        return r
+    end
+    @test egal_tfunc(Const(12345.12345), Const(12344.12345 + 1)) == Const(true)
+    @test egal_tfunc(Array, Const(Array)) === Const(false)
+    @test egal_tfunc(Array, Type{Array}) === Const(false)
+    @test egal_tfunc(Int, Int) == Bool
+    @test egal_tfunc(Array, Array) == Bool
+    @test egal_tfunc(Array, AbstractArray{Int}) == Bool
+    @test egal_tfunc(Array{Real}, AbstractArray{Int}) === Const(false)
+    @test egal_tfunc(Array{Real, 2}, AbstractArray{Real, 2}) === Bool
+    @test egal_tfunc(Array{Real, 2}, AbstractArray{Int, 2}) === Const(false)
+    @test egal_tfunc(DataType, Int) === Const(false)
+    @test egal_tfunc(DataType, Const(Int)) === Bool
+    @test egal_tfunc(DataType, Const(Array)) === Const(false)
+    @test egal_tfunc(UnionAll, Const(Int)) === Const(false)
+    @test egal_tfunc(UnionAll, Const(Array)) === Bool
+    @test egal_tfunc(Union, Const(Union{Float32, Float64})) === Bool
+    @test egal_tfunc(Const(Union{Float32, Float64}), Const(Union{Float32, Float64})) === Const(true)
+    @test egal_tfunc(Type{Union{Float32, Float64}}, Type{Union{Float32, Float64}}) === Bool
+    @test egal_tfunc(typeof(Union{}), typeof(Union{})) === Bool # could be improved
+    @test egal_tfunc(Const(typeof(Union{})), Const(typeof(Union{}))) === Const(true)
+    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
+        @test egal_tfunc(c, Const(Bool)) === Const(false)
+        @test egal_tfunc(c, Type{Bool}) === Const(false)
+        @test egal_tfunc(c, Const(Real)) === Const(false)
+        @test egal_tfunc(c, Type{Real}) === Const(false)
+        @test egal_tfunc(c, Const(Signed)) === Const(false)
+        @test egal_tfunc(c, Type{Complex}) === Const(false)
+        @test egal_tfunc(c, Type{Complex{T}} where T) === Const(false)
+        @test egal_tfunc(c, Bool) === Bool
+        @test egal_tfunc(c, Any) === Bool
+    end
+    let c = Conditional(Core.SlotNumber(0), Union{}, Const(Union{})) # === Const(false)
+        @test egal_tfunc(c, Const(false)) === Conditional(c.var, c.elsetype, Union{})
+        @test egal_tfunc(c, Const(true)) === Conditional(c.var, Union{}, c.elsetype)
+        @test egal_tfunc(c, Const(nothing)) === Const(false)
+        @test egal_tfunc(c, Int) === Const(false)
+        @test egal_tfunc(c, Bool) === Bool
+        @test egal_tfunc(c, Any) === Bool
+    end
+    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Union{}) # === Const(true)
+        @test egal_tfunc(c, Const(false)) === Conditional(c.var, Union{}, c.vtype)
+        @test egal_tfunc(c, Const(true)) === Conditional(c.var, c.vtype, Union{})
+        @test egal_tfunc(c, Const(nothing)) === Const(false)
+        @test egal_tfunc(c, Int) === Const(false)
+        @test egal_tfunc(c, Bool) === Bool
+        @test egal_tfunc(c, Any) === Bool
+    end
+    @test egal_tfunc(Type{Val{1}}, Type{Val{T}} where T) === Bool
+    @test egal_tfunc(Type{Val{1}}, DataType) === Bool
+    @test egal_tfunc(Const(Any), Const(Any)) === Const(true)
+    @test egal_tfunc(Any, Union{}) === Const(false) # any result is ok
+    @test egal_tfunc(Type{Any}, Type{Union{}}) === Const(false)
+    @test egal_tfunc(Union{Int64, Float64}, Real) === Bool
+    @test egal_tfunc(Union{Int64, Float64}, Integer) === Bool
+    @test egal_tfunc(Union{Int64, Float64}, AbstractArray) === Const(false)
 end
 
 function f23024(::Type{T}, ::Int) where T
