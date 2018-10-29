@@ -227,7 +227,7 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
         if (myid() == 1) && (wpid > 1)
             if oldstate != W_TERMINATING
                 println(stderr, "Worker $wpid terminated.")
-                rethrow(e)
+                rethrow()
             end
         end
 

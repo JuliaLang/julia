@@ -517,7 +517,7 @@ function wait(m::FolderMonitor)
                 if ex isa InvalidStateException && ex.state == :closed
                     rethrow(EOFError()) # `wait(::Channel)` throws the wrong exception
                 end
-                rethrow(ex)
+                rethrow()
             end
     end
     if evt isa Pair{String, FileEvent}

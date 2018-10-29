@@ -270,9 +270,9 @@ function put_unbuffered(c::Channel, v)
 
         try
             wait()
-        catch ex
+        catch
             filter!(x->x!=current_task(), c.putters)
-            rethrow(ex)
+            rethrow()
         end
     end
     taker = popfirst!(c.takers)
@@ -329,9 +329,9 @@ function take_unbuffered(c::Channel{T}) where T
         else
             return wait()::T
         end
-    catch ex
+    catch
         filter!(x->x!=current_task(), c.takers)
-        rethrow(ex)
+        rethrow()
     end
 end
 
@@ -389,7 +389,7 @@ function iterate(c::Channel, state=nothing)
         if isa(e, InvalidStateException) && e.state==:closed
             return nothing
         else
-            rethrow(e)
+            rethrow()
         end
     end
 end

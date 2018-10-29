@@ -246,7 +246,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false)::Completion
                     continue
                 else
                     # We only handle SystemErrors here
-                    rethrow(e)
+                    rethrow()
                 end
             end
 

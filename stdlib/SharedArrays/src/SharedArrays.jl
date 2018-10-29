@@ -637,9 +637,9 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
 
     try
         A = _shm_mmap_array(T, dims, shm_seg_name, mode)
-    catch e
+    catch
         print_shmem_limits(prod(dims)*sizeof(T))
-        rethrow(e)
+        rethrow()
 
     finally
         if s !== nothing
