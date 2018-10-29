@@ -305,7 +305,7 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector
                 atyp = argextype(ex.args[3], src, spvals, slottypes)
                 return isknowntype(atyp) ? 4 : params.inline_nonleaf_penalty
             end
-            fidx = findfirst(x->x===f, T_FFUNC_KEY)
+            fidx = find_tfunc(f)
             if fidx === nothing
                 # unknown/unhandled builtin or anonymous function
                 # Use the generic cost of a direct function call
