@@ -205,23 +205,25 @@ cglobal_tfunc(@nospecialize(fptr)) = Ptr{Cvoid}
 cglobal_tfunc(@nospecialize(fptr), @nospecialize(t)) = (isType(t) ? Ptr{t.parameters[1]} : Ptr)
 cglobal_tfunc(@nospecialize(fptr), t::Const) = (isa(t.val, Type) ? Ptr{t.val} : Ptr)
 add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
-add_tfunc(ifelse, 3, 3,
-    function (@nospecialize(cnd), @nospecialize(x), @nospecialize(y))
-        if isa(cnd, Const)
-            if cnd.val === true
-                return x
-            elseif cnd.val === false
-                return y
-            else
-                return Bottom
-            end
-        elseif isa(cnd, Conditional)
-            # optimized (if applicable) in abstract_call
-        elseif !(Bool ⊑ cnd)
+
+function ifelse_tfunc(@nospecialize(cnd), @nospecialize(x), @nospecialize(y))
+    if isa(cnd, Const)
+        if cnd.val === true
+            return x
+        elseif cnd.val === false
+            return y
+        else
             return Bottom
         end
-        return tmerge(x, y)
-    end, 1)
+    elseif isa(cnd, Conditional)
+        # optimized (if applicable) in abstract_call
+    elseif !(Bool ⊑ cnd)
+        return Bottom
+    end
+    return tmerge(x, y)
+end
+add_tfunc(ifelse, 3, 3, ifelse_tfunc, 1)
+
 function egal_tfunc(@nospecialize(x), @nospecialize(y))
     xx = maybe_widen_conditional(x)
     yy = maybe_widen_conditional(y)
@@ -243,6 +245,7 @@ function egal_tfunc(@nospecialize(x), @nospecialize(y))
     return Bool
 end
 add_tfunc(===, 2, 2, egal_tfunc, 1)
+
 function isdefined_nothrow(argtypes::Array{Any, 1})
     length(argtypes) == 2 || return false
     return typeintersect(widenconst(argtypes[1]), Module) === Union{} ?
@@ -442,23 +445,24 @@ function typeof_tfunc(@nospecialize(t))
     end
 end
 add_tfunc(typeof, 1, 1, typeof_tfunc, 0)
-add_tfunc(typeassert, 2, 2,
-          function (@nospecialize(v), @nospecialize(t))
-              t = instanceof_tfunc(t)[1]
-              t === Any && return v
-              if isa(v, Const)
-                  if !has_free_typevars(t) && !isa(v.val, t)
-                      return Bottom
-                  end
-                  return v
-              elseif isa(v, Conditional)
-                  if !(Bool <: t)
-                      return Bottom
-                  end
-                  return v
-              end
-              return typeintersect(widenconst(v), t)
-          end, 4)
+
+function typeassert_tfunc(@nospecialize(v), @nospecialize(t))
+    t = instanceof_tfunc(t)[1]
+    t === Any && return v
+    if isa(v, Const)
+        if !has_free_typevars(t) && !isa(v.val, t)
+            return Bottom
+        end
+        return v
+    elseif isa(v, Conditional)
+        if !(Bool <: t)
+            return Bottom
+        end
+        return v
+    end
+    return typeintersect(widenconst(v), t)
+end
+add_tfunc(typeassert, 2, 2, typeassert_tfunc, 4)
 
 function isa_tfunc(@nospecialize(v), @nospecialize(tt))
     t, isexact = instanceof_tfunc(tt)
@@ -494,23 +498,24 @@ function isa_tfunc(@nospecialize(v), @nospecialize(tt))
     return Bool
 end
 add_tfunc(isa, 2, 2, isa_tfunc, 0)
-add_tfunc(<:, 2, 2,
-          function (@nospecialize(a), @nospecialize(b))
-              a, isexact_a = instanceof_tfunc(a)
-              b, isexact_b = instanceof_tfunc(b)
-              if !has_free_typevars(a) && !has_free_typevars(b)
-                  if a <: b
-                      if isexact_b || a === Bottom
-                          return Const(true)
-                      end
-                  else
-                      if isexact_a || (b !== Bottom && typeintersect(a, b) === Union{})
-                          return Const(false)
-                      end
-                  end
-              end
-              return Bool
-          end, 0)
+
+function subtype_tfunc(@nospecialize(a), @nospecialize(b))
+    a, isexact_a = instanceof_tfunc(a)
+    b, isexact_b = instanceof_tfunc(b)
+    if !has_free_typevars(a) && !has_free_typevars(b)
+        if a <: b
+            if isexact_b || a === Bottom
+                return Const(true)
+            end
+        else
+            if isexact_a || (b !== Bottom && typeintersect(a, b) === Union{})
+                return Const(false)
+            end
+        end
+    end
+    return Bool
+end
+add_tfunc(<:, 2, 2, subtype_tfunc, 0)
 
 function const_datatype_getfield_tfunc(@nospecialize(sv), fld::Int)
     if (fld == DATATYPE_NAME_FIELDINDEX ||
