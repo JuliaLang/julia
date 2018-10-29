@@ -198,9 +198,6 @@ function startswith(s::SubString, r::Regex)
     return PCRE.exec(r.regex, s, 0, r.match_options | PCRE.ANCHORED,
                      r.match_data)
 end
-    rr = Regex(r.pattern, r.compile_options | PCRE.ANCHORED, r.match_options)
-    return occursin(rr, s)
-end
 
 """
     endswith(s::AbstractString, suffix::Regex)
@@ -225,9 +222,6 @@ function endswith(s::SubString, r::Regex)
     compile(r)
     return PCRE.exec(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED,
                      r.match_data)
-end
-    rr = Regex(r.pattern, r.compile_options | PCRE.ENDANCHORED, r.match_options)
-    return occursin(rr, s)
 end
 
 """
