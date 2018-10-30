@@ -161,7 +161,7 @@ string(a::SubString{String}) = String(a)
         unsafe_store!(pointer(out, offs + 1), (0x80 | (0x3f & x >>  6)) % UInt8)
         unsafe_store!(pointer(out, offs + 2), (0x80 | (0x3f & x >>  0)) % UInt8)
         l = 3
-    elseif x <= 0x10ffff
+    else
         unsafe_store!(pointer(out, offs + 0), (0xF0 |         x >> 18)  % UInt8)
         unsafe_store!(pointer(out, offs + 1), (0x80 | (0x3f & x >> 12)) % UInt8)
         unsafe_store!(pointer(out, offs + 2), (0x80 | (0x3f & x >>  6)) % UInt8)
