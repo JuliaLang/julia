@@ -100,7 +100,9 @@ function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)
     @assert !has_offset_axes(Y, B)
     m, n = size(A, 1), size(A, 2)
     if m > n
-        return ldiv!(A, copyto!(Y, view(B, 1:n, :)))
+        Bc = copy(B)
+        ldiv!(A, Bc)
+        return copyto!(Y, view(Bc, 1:n, :))
     else
         return ldiv!(A, copyto!(Y, view(B, 1:m, :)))
     end
