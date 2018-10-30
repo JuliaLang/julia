@@ -177,9 +177,11 @@ end
 """
     startswith(s::AbstractString, prefix::Regex)
 
-Return `true` if `s` starts with the Regex pattern, `prefix`.
+Return `true` if `s` starts with the regex pattern, `prefix`.  Note:
+the regex version of `occursin` is recommended over `startswith` in
+performance critical situations.
 
-See also [`endswith`](@ref).
+See also [`occursin`](@ref) and [`endswith`](@ref).
 
 # Examples
 ```jldoctest
@@ -202,9 +204,11 @@ end
 """
     endswith(s::AbstractString, suffix::Regex)
 
-Return `true` if `s` ends with the Regex pattern, `suffix`.
+Return `true` if `s` ends with the regex pattern, `suffix`.  Note: the
+regex version of `occursin` is recommended over `endswith` in
+performance critical situations.
 
-See also [`startswith`](@ref).
+See also [`occursin`](@ref) and [`startswith`](@ref).
 
 # Examples
 ```jldoctest
