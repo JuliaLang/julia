@@ -31,7 +31,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
     # TODO: `indent` is supposed to be the full width of the leader for correct alignment
     indent = 16
     if !color && stmt isa PiNode
-        # when the outer context is already colored (yellow, for pending nodes), don't use the usual coloring printer
+        # when the outer context is already colored (green, for pending nodes), don't use the usual coloring printer
         print(io, "π (")
         show_unquoted(io, stmt.val, indent)
         print(io, ", ")
@@ -332,131 +332,157 @@ function DILineInfoPrinter(linetable::Vector)
     indent(s::String) = s^(max(context_depth[], 1) - 1)
     function emit_lineinfo_update(io::IO, linestart::String, lineidx::Int32)
         # internal configuration options:
+        linecolor = :yellow
         collapse = true
         indent_all = true
         # convert lineidx to a vector
-        lineidx == 0 && return indent_all ? indent("│") : "" # just skip over lines with no debug info at all
-        DI = LineInfoNode[]
-        while lineidx != 0
-            entry = linetable[lineidx]::LineInfoNode
-            push!(DI, entry)
-            lineidx = entry.inlined_at
-        end
-        nframes = length(DI)
-        nctx = 0
-        pop_skips = 0
-        # compute the size of the matching prefix in the inlining information stack
-        for i = 1:min(length(context), nframes)
-            CtxLine = context[i]
-            FrameLine = DI[nframes - i + 1]
-            CtxLine === FrameLine || break
-            nctx = i
-        end
-        update_line_only = false
-        if collapse && 0 < nctx
-            # check if we're adding more frames with the same method name,
-            # if so, drop all existing calls to it from the top of the context
-            # AND check if instead the context was previously printed that way
-            # but now has removed the recursive frames
-            let method = context[nctx].method
-                if (nctx < nframes && DI[nframes - nctx].method === method) ||
-                   (nctx < length(context) && context[nctx + 1].method === method)
-                    update_line_only = true
-                    while nctx > 0 && context[nctx].method === method
-                        nctx -= 1
-                    end
-                end
+        if lineidx < 0
+            # sentinel value: reset internal (and external) state
+            pops = indent("┘")
+            if !isempty(pops)
+                print(io, linestart)
+                printstyled(io, pops; color=linecolor)
+                println(io)
             end
-        end
-        # examine what frames we're returning from
-        if nctx < length(context)
-            # compute the new inlining depth
-            if collapse
-                npops = 1
-                let Prev = context[nctx + 1].method
-                    for i = (nctx + 2):length(context)
-                        Next = context[i].method
-                        Prev === Next || (npops += 1)
-                        Prev = Next
-                    end
-                end
-            else
-                npops = length(context) - nctx
+            empty!(context)
+            context_depth[] = 0
+        elseif lineidx > 0 # just skip over lines with no debug info at all
+            DI = LineInfoNode[]
+            while lineidx != 0
+                entry = linetable[lineidx]::LineInfoNode
+                push!(DI, entry)
+                lineidx = entry.inlined_at
             end
-            # look at the first non-matching element to see if we are only changing the line number
-            if !update_line_only && nctx < nframes
-                let CtxLine = context[nctx + 1],
-                    FrameLine = DI[nframes - nctx]
-                    if CtxLine.file == FrameLine.file &&
-                            CtxLine.method == FrameLine.method &&
-                            CtxLine.mod == FrameLine.mod
+            # FOR DEBUGGING, or if you just like very excessive output:
+            # this prints out the context in full for every statement
+            #empty!(context)
+            #context_depth[] = 0
+            nframes = length(DI)
+            nctx = 0
+            pop_skips = 0
+            # compute the size of the matching prefix in the inlining information stack
+            for i = 1:min(length(context), nframes)
+                CtxLine = context[i]
+                FrameLine = DI[nframes - i + 1]
+                CtxLine === FrameLine || break
+                nctx = i
+            end
+            update_line_only = false
+            if collapse && 0 < nctx
+                # check if we're adding more frames with the same method name,
+                # if so, drop all existing calls to it from the top of the context
+                # AND check if instead the context was previously printed that way
+                # but now has removed the recursive frames
+                let method = context[nctx].method
+                    if (nctx < nframes && DI[nframes - nctx].method === method) ||
+                       (nctx < length(context) && context[nctx + 1].method === method)
                         update_line_only = true
+                        while nctx > 0 && context[nctx].method === method
+                            nctx -= 1
+                        end
                     end
                 end
             end
-            resize!(context, nctx)
-            update_line_only && (npops -= 1)
-            if npops > 0
-                context_depth[] -= npops
-                print(io, linestart, indent("│"), "┘"^npops, "\n")
-            end
-        end
-        # see what change we made to the outermost line number
-        if update_line_only
-            frame = DI[nframes - nctx]
-            nctx += 1
-            push!(context, frame)
-            if frame.line != typemax(frame.line) && frame.line != 0
-                print(io, linestart, indent("│"), " @ ", frame.file, ":", frame.line, " within `", frame.method, "'")
+            # examine what frames we're returning from
+            if nctx < length(context)
+                # compute the new inlining depth
                 if collapse
-                    method = frame.method
-                    while nctx < nframes
-                        frame = DI[nframes - nctx]
-                        frame.method === method || break
-                        nctx += 1
-                        push!(context, frame)
-                        print(io, " @ ", frame.file, ":", frame.line)
+                    npops = 1
+                    let Prev = context[nctx + 1].method
+                        for i = (nctx + 2):length(context)
+                            Next = context[i].method
+                            Prev === Next || (npops += 1)
+                            Prev = Next
+                        end
+                    end
+                else
+                    npops = length(context) - nctx
+                end
+                # look at the first non-matching element to see if we are only changing the line number
+                if !update_line_only && nctx < nframes
+                    let CtxLine = context[nctx + 1],
+                        FrameLine = DI[nframes - nctx]
+                        if CtxLine.file == FrameLine.file &&
+                                CtxLine.method == FrameLine.method &&
+                                CtxLine.mod == FrameLine.mod
+                            update_line_only = true
+                        end
                     end
                 end
-                print(io, "\n")
+                resize!(context, nctx)
+                update_line_only && (npops -= 1)
+                if npops > 0
+                    context_depth[] -= npops
+                    print(io, linestart)
+                    printstyled(io, indent("│"), "┘"^npops; color=linecolor)
+                    println(io)
+                end
             end
-        end
-        # now print the rest of the new frames
-        while nctx < nframes
-            frame = DI[nframes - nctx]
-            print(io, linestart, indent("│"))
-            nctx += 1
-            push!(context, frame)
-            context_depth[] += 1
-            nctx != 1 && print(io, "┌")
-            print(io, " @ ", frame.file)
-            if frame.line != typemax(frame.line) && frame.line != 0
-                print(io, ":", frame.line)
+            # see what change we made to the outermost line number
+            if update_line_only
+                frame = DI[nframes - nctx]
+                nctx += 1
+                push!(context, frame)
+                if frame.line != typemax(frame.line) && frame.line != 0
+                    print(io, linestart)
+                    Base.with_output_color(linecolor, io) do io
+                        print(io, indent("│"), " @ ", frame.file, ":", frame.line, " within `", frame.method, "'")
+                        if collapse
+                            method = frame.method
+                            while nctx < nframes
+                                frame = DI[nframes - nctx]
+                                frame.method === method || break
+                                nctx += 1
+                                push!(context, frame)
+                                print(io, " @ ", frame.file, ":", frame.line)
+                            end
+                        end
+                    end
+                    println(io)
+                end
             end
-            print(io, " within `", frame.method, "'")
-            if collapse
-                method = frame.method
-                while nctx < nframes
-                    frame = DI[nframes - nctx]
-                    frame.method === method || break
+            # now print the rest of the new frames
+            while nctx < nframes
+                frame = DI[nframes - nctx]
+                print(io, linestart)
+                Base.with_output_color(linecolor, io) do io
+                    print(io, indent("│"))
                     nctx += 1
                     push!(context, frame)
-                    print(io, " @ ", frame.file, ":", frame.line)
+                    context_depth[] += 1
+                    nctx != 1 && print(io, "┌")
+                    print(io, " @ ", frame.file)
+                    if frame.line != typemax(frame.line) && frame.line != 0
+                        print(io, ":", frame.line)
+                    end
+                    print(io, " within `", frame.method, "'")
+                    if collapse
+                        method = frame.method
+                        while nctx < nframes
+                            frame = DI[nframes - nctx]
+                            frame.method === method || break
+                            nctx += 1
+                            push!(context, frame)
+                            print(io, " @ ", frame.file, ":", frame.line)
+                        end
+                    end
                 end
+                println(io)
             end
-            print(io, "\n")
+            # FOR DEBUGGING `collapse`:
+            # this double-checks the computation of context_depth
+            #let Prev = context[1].method,
+            #    depth2 = 1
+            #    for i = 2:nctx
+            #        Next = context[i].method
+            #        (collapse && Prev === Next) || (depth2 += 1)
+            #        Prev = Next
+            #    end
+            #    @assert context_depth[] == depth2
+            #end
         end
-        # FOR DEBUGGING `collapse`:
-        #let Prev = context[1].method,
-        #    depth2 = 1
-        #    for i = 2:nctx
-        #        Next = context[i].method
-        #        (collapse && Prev === Next) || (depth2 += 1)
-        #        Prev = Next
-        #    end
-        #    @assert context_depth[] == depth2
-        #end
-        return indent_all ? indent("│") : ""
+        indent_all || return ""
+        return sprint(io -> printstyled(io, indent("│"), color=linecolor), context=io)
     end
     return emit_lineinfo_update
 end
@@ -584,7 +610,7 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
             print_sep = true
             floop = false
             show_type = should_print_ssa_type(new_node.node)
-            with_output_color(:yellow, io) do io′
+            with_output_color(:green, io) do io′
                 print_stmt(io′, node_idx, new_node.node, used, maxlength_idx, false, show_type)
             end
             if show_type
@@ -702,6 +728,10 @@ function show_ir(io::IO, code::CodeInfo, line_info_preprinter=DILineInfoPrinter(
         end
         println(io)
     end
+    let linestart = " "^(max_bb_idx_size + 2)
+        line_info_preprinter(io, linestart, typemin(Int32))
+    end
+    nothing
 end
 
 @specialize
