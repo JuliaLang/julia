@@ -6975,15 +6975,14 @@ static void init_julia_llvm_env(Module *m)
 
     std::vector<Type*> te_args(0);
     te_args.push_back(T_pint8);
-    te_args.push_back(T_pint8);
     te_args.push_back(T_prjlvalue);
     te_args.push_back(PointerType::get(T_jlvalue, AddressSpace::CalleeRooted));
     jltypeerror_func =
         Function::Create(FunctionType::get(T_void, te_args, false),
                          Function::ExternalLinkage,
-                         "jl_type_error_rt", m);
+                         "jl_type_error", m);
     jltypeerror_func->setDoesNotReturn();
-    add_named_global(jltypeerror_func, &jl_type_error_rt);
+    add_named_global(jltypeerror_func, &jl_type_error);
 
     std::vector<Type *> args_2ptrs(0);
     args_2ptrs.push_back(T_pjlvalue);

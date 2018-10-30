@@ -3410,7 +3410,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :apply_type
+        @test err.func == :Vararg
         @test err.expected == Int
         @test err.got == Int
     end
@@ -3420,7 +3420,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :apply_type
+        @test err.func == :Vararg
         @test err.expected == Int
         @test err.got == 0x1
     end
@@ -6805,3 +6805,9 @@ end
 g29152() = (_true29152 ? error() : _true29152 ? 0 : false)
 _true29152 = true;
 @test_throws ErrorException f29152()
+
+# issue #29828
+f29828() = 2::String
+g29828() = 2::Any[String][1]
+@test_throws TypeError(:typeassert, String, 2) f29828()
+@test_throws TypeError(:typeassert, String, 2) g29828()

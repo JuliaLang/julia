@@ -639,7 +639,7 @@ function fieldcount(@nospecialize t)
         throw(ArgumentError("The empty type does not have a well-defined number of fields since it does not have instances."))
     end
     if !(t isa DataType)
-        throw(TypeError(:fieldcount, "", Type, t))
+        throw(TypeError(:fieldcount, DataType, t))
     end
     if t.name === NamedTuple_typename
         names, types = t.parameters
