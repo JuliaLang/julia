@@ -147,19 +147,28 @@ string(a::String)            = String(a)
 string(a::SubString{String}) = String(a)
 
 @inline function __unsafe_string!(out, c::Char, offs::Integer)
-    x = bswap(reinterpret(UInt32, c))
-    n = ncodeunits(c)
-    unsafe_store!(pointer(out, offs), x % UInt8)
-    n == 1 && return n
-    x >>= 8
-    unsafe_store!(pointer(out, offs+1), x % UInt8)
-    n == 2 && return n
-    x >>= 8
-    unsafe_store!(pointer(out, offs+2), x % UInt8)
-    n == 3 && return n
-    x >>= 8
-    unsafe_store!(pointer(out, offs+3), x % UInt8)
-    return n
+    x = c % UInt32
+    l = 0
+    if x <= 0x7f
+        unsafe_store!(pointer(out, offs + 0),                 x >>  0   % UInt8)
+        l = 1
+    elseif x < 0x7ff
+        unsafe_store!(pointer(out, offs + 0), (0xC0 |         x >>  6)  % UInt8)
+        unsafe_store!(pointer(out, offs + 1), (0x80 | (0x3f & x >>  0)) % UInt8)
+        l = 2
+    elseif x <= 0xffff
+        unsafe_store!(pointer(out, offs + 0), (0xE0 |         x >> 12)  % UInt8)
+        unsafe_store!(pointer(out, offs + 1), (0x80 | (0x3f & x >>  6)) % UInt8)
+        unsafe_store!(pointer(out, offs + 2), (0x80 | (0x3f & x >>  0)) % UInt8)
+        l = 3
+    elseif x <= 0x10ffff
+        unsafe_store!(pointer(out, offs + 0), (0xF0 |         x >> 18)  % UInt8)
+        unsafe_store!(pointer(out, offs + 1), (0x80 | (0x3f & x >> 12)) % UInt8)
+        unsafe_store!(pointer(out, offs + 2), (0x80 | (0x3f & x >>  6)) % UInt8)
+        unsafe_store!(pointer(out, offs + 3), (0x80 | (0x3f & x >>  0)) % UInt8)
+        l = 4
+    end
+    return l
 end
 
 @inline function __unsafe_string!(out, s::Union{String, SubString{String}}, offs::Integer)
