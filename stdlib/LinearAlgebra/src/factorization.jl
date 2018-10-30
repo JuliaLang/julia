@@ -100,12 +100,12 @@ function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)
     @assert !has_offset_axes(Y, B)
     m, n = size(A, 1), size(A, 2)
     if m > n
-        ldiv!(A, B)
-        return copyto!(Y, view(B, 1:n, :))
+        return ldiv!(A, copyto!(Y, view(B, 1:n, :)))
     else
-        return copyto!(Y, ldiv!(A, copyto!(copy(Y), view(B, 1:m, :))))
+        return ldiv!(A, copyto!(Y, view(B, 1:m, :)))
     end
 end
+
 function ldiv!(Y::AbstractVecOrMat, adjA::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
     checksquare(adjA)
     return ldiv!(adjA, copyto!(Y, B))
