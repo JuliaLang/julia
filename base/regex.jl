@@ -177,9 +177,11 @@ end
 """
     startswith(s::AbstractString, prefix::Regex)
 
-Return `true` if `s` starts with the regex pattern, `prefix`.  Note:
-`occursin` is recommended over the regex version of `startswith` in
-performance critical situations.
+Return `true` if `s` starts with the regex pattern, `prefix`.
+
+!!! note
+    `occursin` is recommended over the regex version of `startswith`
+    in performance critical situations.
 
 See also [`occursin`](@ref) and [`endswith`](@ref).
 
@@ -204,9 +206,11 @@ end
 """
     endswith(s::AbstractString, suffix::Regex)
 
-Return `true` if `s` ends with the regex pattern, `suffix`.  Note:
-`occursin` is recommended over the regex version of `endswith` in
-performance critical situations.
+Return `true` if `s` ends with the regex pattern, `suffix`.
+
+!!! note
+    `occursin` is recommended over the regex version of `endswith` in
+    performance critical situations.
 
 See also [`occursin`](@ref) and [`startswith`](@ref).
 
