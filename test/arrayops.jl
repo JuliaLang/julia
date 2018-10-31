@@ -2283,6 +2283,9 @@ end
 
 @testset "diff" begin
     # test diff, throw ArgumentError for invalid dimension argument
+    v = [7, 3, 5, 1, 9]
+    @test diff(v) == [-4, 2, -4, 8]
+    @test diff(v,dims=1) == [-4, 2, -4, 8]
     X = [3  9   5;
          7  4   2;
          2  1  10]
@@ -2292,6 +2295,9 @@ end
     @test diff(view(X, 1:2, 1:2),dims=2) == reshape([6; -3], (2,1))
     @test diff(view(X, 2:3, 2:3),dims=1) == [-3 8]
     @test diff(view(X, 2:3, 2:3),dims=2) == reshape([-2; 9], (2,1))
+    Y = cat([1 3; 4 3], [6 5; 1 4], dims=3)
+    @test diff(Y, dims=3) == reshape([5 2; -3 1], (2, 2, 1))
+    @test_throws UndefKeywordError diff(X)
     @test_throws ArgumentError diff(X,dims=3)
     @test_throws ArgumentError diff(X,dims=-1)
 end

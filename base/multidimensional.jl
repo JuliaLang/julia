@@ -663,17 +663,15 @@ end
     end
 end
 
-function diff(a::AbstractVector)
-    @assert !has_offset_axes(a)
-    [ a[i+1] - a[i] for i=1:length(a)-1 ]
-end
+diff(a::AbstractVector) = diff(a, dims=1)
 
 """
     diff(A::AbstractVector)
-    diff(A::AbstractMatrix; dims::Integer)
+    diff(A::AbstractArray; dims::Integer)
 
-Finite difference operator of matrix or vector `A`. If `A` is a matrix,
-specify the dimension over which to operate with the `dims` keyword argument.
+Finite difference operator on a vector or a multidimensional array `A`. In the
+latter case the dimension to operate on needs to be specified with the `dims`
+keyword argument.
 
 # Examples
 ```jldoctest
@@ -694,14 +692,15 @@ julia> diff(vec(a))
  12
 ```
 """
-function diff(A::AbstractMatrix; dims::Integer)
-    if dims == 1
-        [A[i+1,j] - A[i,j] for i=1:size(A,1)-1, j=1:size(A,2)]
-    elseif dims == 2
-        [A[i,j+1] - A[i,j] for i=1:size(A,1), j=1:size(A,2)-1]
-    else
-        throw(ArgumentError("dimension must be 1 or 2, got $dims"))
-    end
+function diff(a::AbstractArray{T,N}; dims::Integer) where {T,N}
+    has_offset_axes(a) && throw(ArgumentError("offset axes unsupported"))
+    1 <= dims <= N || throw(ArgumentError("dimension $dims out of range (1:$N)"))
+
+    r = axes(a)
+    r0 = ntuple(i -> i == dims ? UnitRange(1, last(r[i]) - 1) : UnitRange(r[i]), N)
+    r1 = ntuple(i -> i == dims ? UnitRange(2, last(r[i])) : UnitRange(r[i]), N)
+
+    return view(a, r1...) .- view(a, r0...)
 end
 
 ### from abstractarray.jl
