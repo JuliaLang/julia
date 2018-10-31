@@ -501,19 +501,24 @@ for Ti in (Int64,UInt64,Int128,UInt128)
         end
     end
 end
+==(x::Float16, y::Union{Int128,UInt128}) = Float64(x)==Float64(y)
+==(x::Union{Int128,UInt128}, y::Float16) = Float64(x)==Float64(y)
 
-for Ti in (Int64,UInt64,Int128,UInt128)
-    @eval begin
-        ==(x::Float16, y::$Ti) = Float64(x)==Float64(y)
-        ==(x::$Ti, y::Float16) = Float64(x)==Float64(y)
+<(x::Float16, y::Union{Int128,UInt128}) = Float64(x)<Float64(y)
+<(x::Union{Int128,UInt128}, y::Float16) = Float64(x)<Float64(y)
 
-        <(x::Float16, y::$Ti) = Float64(x)<Float64(y)
-        <(x::$Ti, y::Float16) = Float64(x)<Float64(y)
+<=(x::Float16, y::Union{Int128,UInt128}) = Float64(x)<=Float64(y)
+<=(x::Union{Int128,UInt128}, y::Float16) = Float64(x)<=Float64(y)
 
-        <=(x::Float16, y::$Ti) = Float64(x)<=Float64(y)
-        <=(x::$Ti, y::Float16) = Float64(x)<=Float64(y)
-    end
-end
+==(x::Float16, y::Union{Int64,UInt64}) = Float64(x)==Float64(y)
+==(x::Union{Int64,UInt64}, y::Float16) = Float64(x)==Float64(y)
+
+<(x::Float16, y::Union{Int64,UInt64}) = Float64(x)<Float64(y)
+<(x::Union{Int64,UInt64}, y::Float16) = Float64(x)<Float64(y)
+
+<=(x::Float16, y::Union{Int64,UInt64}) = Float64(x)<=Float64(y)
+<=(x::Union{Int64,UInt64}, y::Float16) = Float64(x)<=Float64(y)
+
 ==(x::Float16, y::Union{Int16,UInt16}) = Float32(x)==Float32(y)
 ==(x::Union{Int16,UInt16}, y::Float16) = Float32(x)==Float32(y)
 
