@@ -502,6 +502,18 @@ for Ti in (Int64,UInt64,Int128,UInt128)
     end
 end
 
+for Ti in (Int64,UInt64,Int128,UInt128)
+    @eval begin
+        ==(x::Float16, y::$Ti) = Float64(x)==Float64(y)
+        ==(x::$Ti, y::Float16) = Float64(x)==Float64(y)
+
+        <(x::Float16, y::$Ti) = Float64(x)<Float64(y)
+        <(x::$Ti, y::Float16) = Float64(x)<Float64(y)
+
+        <=(x::Float16, y::$Ti) = Float64(x)<=Float64(y)
+        <=(x::$Ti, y::Float16) = Float64(x)<=Float64(y)
+    end
+end
 ==(x::Float32, y::Union{Int32,UInt32}) = Float64(x)==Float64(y)
 ==(x::Union{Int32,UInt32}, y::Float32) = Float64(x)==Float64(y)
 
