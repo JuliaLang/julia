@@ -619,3 +619,16 @@ function _test_27632(A)
 end
 # check that this doesn't crash
 _test_27632(view(ones(Int64, (1, 1, 1)), 1, 1, 1))
+
+@testset "copyto! subarrays" begin
+    a = view(rand(2,2), :, :)
+    b = view(rand(2,2), :, :)
+    copyto!(a, b)
+    @test a == b
+    c = view(rand(Float32, 2, 2), :, :)
+    copyto!(c, a)
+    @test Float32.(a) == c
+    d = rand(2)
+    copyto!(a, d)
+    @test a[:, 1] == d
+end

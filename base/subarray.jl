@@ -380,3 +380,9 @@ function parentdims(s::SubArray)
     end
     dimindex
 end
+
+# We opt in into using the inline version of `copyto!` for `SubArray`
+# since this means their allocation can be elided.
+@inline copyto!(A::SubArray{<:Any,N},      B::AbstractArray{<:Any,N}) where {N} = __copyto_inline!(A, B)
+@inline copyto!(A::AbstractArray{<:Any,N}, B::SubArray{<:Any,N})      where {N} = __copyto_inline!(A, B)
+@inline copyto!(A::SubArray{<:Any,N},      B::SubArray{<:Any,N})      where {N} = __copyto_inline!(A, B)

@@ -826,7 +826,7 @@ julia> y
 """
 copyto!(dest, src)
 
-function copyto!(dest::AbstractArray{T1,N}, src::AbstractArray{T2,N}) where {T1,T2,N}
+@inline function __copyto_inline!(dest::AbstractArray{T1,N}, src::AbstractArray{T2,N}) where {T1,T2,N}
     checkbounds(dest, axes(src)...)
     src′ = unalias(dest, src)
     for I in eachindex(IndexStyle(src′,dest), src′)
@@ -834,6 +834,8 @@ function copyto!(dest::AbstractArray{T1,N}, src::AbstractArray{T2,N}) where {T1,
     end
     dest
 end
+
+copyto!(dest::AbstractArray{T1, N}, src::AbstractArray{T2, N}) where {T1,T2,N} = __copyto_inline!(dest, src)
 
 function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
                   src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
