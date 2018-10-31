@@ -247,14 +247,6 @@ BigFloat(x::Real, r::RoundingMode; precision::Integer=DEFAULT_PRECISION[]) =
 BigFloat(x::AbstractString, r::RoundingMode; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(x, convert(MPFRRoundingMode, r); precision=precision)
 
-# TODO: deprecate in 2.0
-BigFloat(x, prec::Int) = BigFloat(x; precision=prec)
-BigFloat(x, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
-# avoid ambiguity
-
-BigFloat(x::Real, prec::Int) = BigFloat(x; precision=prec)
-BigFloat(x::Real, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
-
 ## BigFloat -> Integer
 """
     MPFR.unsafe_cast(T, x::BigFloat, r::RoundingMode)
