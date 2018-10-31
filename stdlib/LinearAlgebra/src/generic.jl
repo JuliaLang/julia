@@ -1441,4 +1441,4 @@ A has less than d dimensions, collect(eachslice(A, d))
 will just return a trivial collection with a view into A.
 See also [`eachrow`](@ref) and [`eachcol`](@ref).
 """
-eachslice(A, d) = (view(A, ntuple(n->n==d ? i : (:), ndims(A))...) for i in axes(A, d))
+eachslice(A, dim) = (selectdim(A, dim, i) for i in axes(A, dim))
