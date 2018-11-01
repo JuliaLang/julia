@@ -400,7 +400,18 @@ printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) 
 printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
     printstyled(stdout, msg...; bold=bold, color=color)
 
-function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
+"""
+    julia_cmd([julia]) :: Cmd
+
+Return a [`Cmd`](@ref) that can be used to launch a `julia` program
+that inherits the command line options of the current executing
+process.  An optional argument can be passed to specify the `julia`
+program to be used instead of [`julia_basecmd`](@ref).  Note that
+package load path settings are not automatically reflected in the
+launched process.  Use [`Base.load_path_setup_code`](@ref) to
+replicate the load paths.
+"""
+function julia_cmd(julia=julia_basecmd())
     opts = JLOptions()
     cpu_target = unsafe_string(opts.cpu_target)
     image_file = unsafe_string(opts.image_file)
@@ -434,6 +445,32 @@ function julia_exename()
     else
         return @static Sys.iswindows() ? "julia-debug.exe" : "julia-debug"
     end
+end
+
+"""
+    default_julia_basecmd() :: Cmd
+
+Default `julia` executable and options.
+"""
+default_julia_basecmd() = `$(joinpath(Sys.BINDIR::String, julia_exename()))`
+
+const _julia_basecmd = Ref(default_julia_basecmd())
+
+"""
+    julia_basecmd() :: Cmd
+
+Julia executable which is used by [`julia_cmd`](@ref).  It may be
+changed by [`set_julia_basecmd`](@ref).
+"""
+julia_basecmd() = _julia_basecmd[]
+
+"""
+    set_julia_basecmd(path::Cmd)
+
+Set the Julia executable used by [`julia_cmd`](@ref).
+"""
+function set_julia_basecmd(cmd::Cmd)
+    _julia_basecmd[] = cmd
 end
 
 """
