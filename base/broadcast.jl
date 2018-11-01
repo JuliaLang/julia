@@ -10,8 +10,11 @@ module Broadcast
 using .Base.Cartesian
 using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
-import .Base: copy, copyto!
+import .Base: copy, copyto!, axes
 export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__
+
+## Computing the result's axes: deprecated name
+const broadcast_axes = axes
 
 ### Objects with customized broadcasting behavior should declare a BroadcastStyle
 
@@ -199,16 +202,6 @@ Base.similar(bc::Broadcasted{ArrayConflict}, ::Type{ElType}) where ElType =
     similar(Array{ElType}, axes(bc))
 Base.similar(bc::Broadcasted{ArrayConflict}, ::Type{Bool}) =
     similar(BitArray, axes(bc))
-
-## Computing the result's axes. Most types probably won't need to specialize this.
-"""
-    Base.broadcast_axes(A)
-
-Compute the axes for `A`.
-
-This should only be specialized for objects that do not define [`axes`](@ref) but want to participate in broadcasting.
-"""
-@inline broadcast_axes(A) = axes(A)
 
 @inline Base.axes(bc::Broadcasted) = _axes(bc, bc.axes)
 _axes(::Broadcasted, axes::Tuple) = axes
@@ -425,8 +418,8 @@ One of these should be undefined (and thus return Broadcast.Unknown).""")
 end
 
 # Indices utilities
-@inline combine_axes(A, B...) = broadcast_shape(broadcast_axes(A), combine_axes(B...))
-combine_axes(A) = broadcast_axes(A)
+@inline combine_axes(A, B...) = broadcast_shape(axes(A), combine_axes(B...))
+combine_axes(A) = axes(A)
 
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
@@ -458,7 +451,7 @@ function check_broadcast_shape(shp, Ashp::Tuple)
     _bcsm(shp[1], Ashp[1]) || throw(DimensionMismatch("array could not be broadcast to match destination"))
     check_broadcast_shape(tail(shp), tail(Ashp))
 end
-check_broadcast_axes(shp, A) = check_broadcast_shape(shp, broadcast_axes(A))
+check_broadcast_axes(shp, A) = check_broadcast_shape(shp, axes(A))
 # comparing many inputs
 @inline function check_broadcast_axes(shp, A, As...)
     check_broadcast_axes(shp, A)
@@ -482,8 +475,8 @@ an `Int`.
     Any remaining indices in `I` beyond the length of the `keep` tuple are truncated. The `keep` and `default`
     tuples may be created by `newindexer(argument)`.
 """
-Base.@propagate_inbounds newindex(arg, I::CartesianIndex) = CartesianIndex(_newindex(broadcast_axes(arg), I.I))
-Base.@propagate_inbounds newindex(arg, I::Integer) = CartesianIndex(_newindex(broadcast_axes(arg), (I,)))
+Base.@propagate_inbounds newindex(arg, I::CartesianIndex) = CartesianIndex(_newindex(axes(arg), I.I))
+Base.@propagate_inbounds newindex(arg, I::Integer) = CartesianIndex(_newindex(axes(arg), (I,)))
 Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple) = (ifelse(Base.unsafe_length(ax[1])==1, ax[1][1], I[1]), _newindex(tail(ax), tail(I))...)
 Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple) = ()
 Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple{}) = (ax[1][1], _newindex(tail(ax), ())...)
@@ -499,7 +492,7 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 
 # newindexer(A) generates `keep` and `Idefault` (for use by `newindex` above)
 # for a particular array `A`; `shapeindexer` does so for its axes.
-@inline newindexer(A) = shapeindexer(broadcast_axes(A))
+@inline newindexer(A) = shapeindexer(axes(A))
 @inline shapeindexer(ax) = _newindexer(ax)
 @inline _newindexer(indsA::Tuple{}) = (), ()
 @inline function _newindexer(indsA::Tuple)
@@ -542,7 +535,7 @@ struct Extruded{T, K, D}
     keeps::K    # A tuple of booleans, specifying which indices should be passed normally
     defaults::D # A tuple of integers, specifying the index to use when keeps[i] is false (as defaults[i])
 end
-@inline broadcast_axes(b::Extruded) = broadcast_axes(b.x)
+@inline axes(b::Extruded) = axes(b.x)
 Base.@propagate_inbounds _broadcast_getindex(b::Extruded, i) = b.x[newindex(i, b.keeps, b.defaults)]
 extrude(x::AbstractArray) = Extruded(x, newindexer(x)...)
 extrude(x) = x
@@ -948,10 +941,10 @@ end
 ## Tuple methods
 
 @inline function copy(bc::Broadcasted{Style{Tuple}})
-    axes = broadcast_axes(bc)
-    length(axes) == 1 || throw(DimensionMismatch("tuple only supports one dimension"))
-    N = Val(length(axes[1]))
-    return ntuple(k -> @inbounds(_broadcast_getindex(bc, k)), N)
+    dim = axes(bc)
+    length(dim) == 1 || throw(DimensionMismatch("tuple only supports one dimension"))
+    N = length(dim[1])
+    return ntuple(k -> @inbounds(_broadcast_getindex(bc, k)), Val(N))
 end
 
 ## scalar-range broadcast operations ##
