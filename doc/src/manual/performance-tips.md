@@ -843,6 +843,8 @@ function copy_row_col(x::Vector{T}) where T
 end
 ```
 
+(Note that the assignment operation `out[_] = x[_]` is an implicit inner loop.)
+
 Now we will time each of these functions using the same random `10000` by `1` input vector:
 
 ```julia-repl
