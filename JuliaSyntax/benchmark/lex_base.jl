@@ -1,5 +1,6 @@
 using Tokenize
 using BenchmarkTools
+using Printf
 
 function speed_test(::Type{T}=Tokenize.Tokens.Token) where T <: Tokenize.Tokens.AbstractToken
     tot_files = 0
