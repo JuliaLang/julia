@@ -5,7 +5,7 @@ function speed_test(::Type{T}=Tokenize.Tokens.Token) where T <: Tokenize.Tokens.
     tot_files = 0
     tot_tokens = 0
     tot_errors = 0
-    dir = dirname(Base.find_source_file("base.jl"))
+    dir = dirname(Base.find_source_file("int.jl"))
     for (root, dirs, files) in walkdir(dir)
         for file in files
             if endswith(file, ".jl")
