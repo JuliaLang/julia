@@ -248,6 +248,8 @@ jl_typemap_t *mtcache_hash_lookup(const struct jl_ordereddict_t *a JL_PROPAGATES
     jl_typemap_t *ml = jl_nothing;
     if (!uid)
         return ml;
+    if (a->indices == jl_nothing)
+        return ml;
     size_t idx = jl_intref(a->indices, uid & (a->indices->nrows-1));
     if (idx > 0) {
         ml = jl_array_ptr_ref(a->values, idx - 1);
