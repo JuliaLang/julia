@@ -59,9 +59,9 @@ volatile int jl_in_stackwalk = 0;
 
 #define ROOT_TASK_STACK_ADJUSTMENT 3000000
 
-static jl_sym_t *done_sym;
-static jl_sym_t *failed_sym;
-static jl_sym_t *runnable_sym;
+jl_sym_t *done_sym;
+jl_sym_t *failed_sym;
+jl_sym_t *runnable_sym;
 
 extern size_t jl_page_size;
 jl_datatype_t *jl_task_type;
