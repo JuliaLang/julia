@@ -77,10 +77,10 @@ The system also generates some standard information for each event:
 
 * The `module` in which the logging macro was expanded.
 * The `file` and `line` where the logging macro occurs in the source code.
-* A message `id` that is unique for each logging macro invocation. This is
-  very useful as a key for caching information or actions associated with an
-  event. For instance, it can be used to limit the number of times a message
-  is presented to the user.
+* A message `id` that is a unique, fixed identifier for the *source code
+  statement* where the logging macro appears. This identifier is designed to be
+  fairly stable even if the source code of the file changes, as long as the
+  logging statement itself remains the same.
 * A `group` for the event, which is set to the base name of the file by default,
   without extension.  This can be used to group messages into categories more
   finely than the log level (for example, all deprecation warnings have group
