@@ -5081,6 +5081,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "base/base/#Base.fieldtypes",
+    "page": "Essentials",
+    "title": "Base.fieldtypes",
+    "category": "function",
+    "text": "fieldtypes(T::Type)\n\nThe declared types of all fields in a composite DataType T as a tuple.\n\nExamples\n\njulia> struct Foo\n           x::Int64\n           y::String\n       end\n\njulia> fieldtypes(Foo)\n(Int64, String)\n\n\n\n\n\n"
+},
+
+{
     "location": "base/base/#Base.fieldcount",
     "page": "Essentials",
     "title": "Base.fieldcount",
@@ -5125,7 +5133,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Memory layout",
     "category": "section",
-    "text": "Base.sizeof(::Type)\nBase.isconcretetype\nBase.isbits\nBase.isbitstype\nCore.fieldtype\nBase.fieldcount\nBase.fieldoffset\nBase.datatype_alignment\nBase.datatype_haspadding\nBase.datatype_pointerfree"
+    "text": "Base.sizeof(::Type)\nBase.isconcretetype\nBase.isbits\nBase.isbitstype\nCore.fieldtype\nBase.fieldtypes\nBase.fieldcount\nBase.fieldoffset\nBase.datatype_alignment\nBase.datatype_haspadding\nBase.datatype_pointerfree"
 },
 
 {
@@ -7461,7 +7469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
 },
 
 {
