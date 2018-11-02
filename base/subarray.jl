@@ -46,7 +46,7 @@ check_parent_index_match(parent, ::NTuple{N, Bool}) where {N} =
     throw(BoundsError(T(parent, indices, offset1, stride1), I))
 
 # This computes the linear indexing compatibility for a given tuple of indices
-viewindexing() = IndexLinear()
+viewindexing(I::Tuple{}) = IndexLinear()
 # Leading scalar indices simply increase the stride
 viewindexing(I::Tuple{ScalarIndex, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
 # Slices may begin a section which may be followed by any number of Slices
@@ -236,8 +236,10 @@ function getindex(V::FastSubArray, i::Int)
     @inbounds r = V.parent[V.offset1 + V.stride1*i]
     r
 end
-# We can avoid a multiplication if the first parent index is a Colon or AbstractUnitRange
-FastContiguousSubArray{T,N,P,I<:Tuple{Union{Slice, AbstractUnitRange}, Vararg{Any}}} = SubArray{T,N,P,I,true}
+# We can avoid a multiplication if the first parent index is a Colon or AbstractUnitRange,
+# or if all the indices are scalars, i.e. the view is for a single value only
+FastContiguousSubArray{T,N,P,I<:Union{Tuple{Union{Slice, AbstractUnitRange}, Vararg{Any}},
+                                      Tuple{Vararg{ScalarIndex}}}} = SubArray{T,N,P,I,true}
 function getindex(V::FastContiguousSubArray, i::Int)
     @_inline_meta
     @boundscheck checkbounds(V, i)
@@ -283,6 +285,7 @@ stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end
 compute_stride1(parent::AbstractArray, I::NTuple{N,Any}) where {N} =
     (@_inline_meta; compute_stride1(1, fill_to_length(axes(parent), OneTo(1), Val(N)), I))
 compute_stride1(s, inds, I::Tuple{}) = s
+compute_stride1(s, inds, I::Tuple{Vararg{ScalarIndex}}) = s
 compute_stride1(s, inds, I::Tuple{ScalarIndex, Vararg{Any}}) =
     (@_inline_meta; compute_stride1(s*unsafe_length(inds[1]), tail(inds), tail(I)))
 compute_stride1(s, inds, I::Tuple{AbstractRange, Vararg{Any}}) = s*step(I[1])

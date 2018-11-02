@@ -619,3 +619,6 @@ function _test_27632(A)
 end
 # check that this doesn't crash
 _test_27632(view(ones(Int64, (1, 1, 1)), 1, 1, 1))
+
+# issue #29608 - views of single values can be considered contiguous
+@test Base.iscontiguous(view(ones(1), 1))
