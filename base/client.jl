@@ -363,10 +363,12 @@ Register a one-argument function to be called before the REPL interface is initi
 interactive sessions; this is useful to customize the interface. The argument of `f` is the
 REPL object. This function should be called from within the `.julia/config/startup.jl`
 initialization file.
+The function `f` is not called if REPL is already initialized.  Use [`afterreplinit`](@ref)
+to call `f` even when REPL is already initialized.
 """
 atreplinit(f::Function) = (pushfirst!(repl_hooks, f); nothing)
 
-function __atreplinit(repl)
+function _run_repl_hooks(repl, repl_hooks)
     for f in repl_hooks
         try
             f(repl)
@@ -376,7 +378,28 @@ function __atreplinit(repl)
         end
     end
 end
-_atreplinit(repl) = invokelatest(__atreplinit, repl)
+_atreplinit(repl) = invokelatest(_run_repl_hooks, repl, repl_hooks)
+
+const _afterreplinit_hooks = []
+
+_afterreplinit(repl) = invokelatest(_run_repl_hooks, repl, _afterreplinit_hooks)
+
+"""
+    afterreplinit(f)
+
+Like [`atreplinit`](@ref) but calls `f` _after_ `Base.active_repl` is initialized.
+In case of `LineEditREPL`, it means that its interface and channels are ready.
+Unlike `atreplinit`, `f` is called even when `afterreplinit(f)` is invoked after the REPL
+is initialized.
+"""
+function afterreplinit(f)
+    if isdefined(Base, :active_repl) && isdefined(Base, :active_repl_backend)
+        f(active_repl)
+    else
+        pushfirst!(_afterreplinit_hooks, f)
+    end
+    return nothing
+end
 
 function load_InteractiveUtils(mod::Module=Main)
     # load interactive-only libraries
@@ -418,7 +441,10 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
             # REPLDisplay
             pushdisplay(REPL.REPLDisplay(repl))
             _atreplinit(repl)
-            REPL.run_repl(repl, backend->(global active_repl_backend = backend))
+            REPL.run_repl(repl, function(backend)
+                global repl_backend = backend
+                _afterreplinit(repl)
+            end)
         end
     else
         # otherwise provide a simple fallback

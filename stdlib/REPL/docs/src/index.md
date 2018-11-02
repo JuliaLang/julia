@@ -784,6 +784,7 @@ Prior to Julia 1.6, and still supported throughout Julia 1.x, one can also confi
 
 ```@docs
 Base.atreplinit
+Base.afterreplinit
 ```
 
 ### TerminalMenus
