@@ -246,7 +246,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
             if infstate.linfo.specTypes == sig
                 # avoid widening when detecting self-recursion
                 # TODO: merge call cycle and return right away
-                if call_result_unused(infstate)
+                if call_result_unused(sv)
                     # since we don't use the result (typically),
                     # we have a self-cycle in the call-graph, but not in the inference graph (typically):
                     # break this edge now (before we record it) by returning early
