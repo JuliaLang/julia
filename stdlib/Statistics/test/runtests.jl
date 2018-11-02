@@ -57,6 +57,13 @@ end
     @test median!([1 2; 3 4]) == 2.5
 
     @test invoke(median, Tuple{AbstractVector}, 1:10) == median(1:10) == 5.5
+
+    @test median(Float32[1.0, NaN, 3.0]) === NaN32
+    @test median(Float32[1.0, -NaN, 3.0]) === -NaN32
+    @test median(Float16[1.0, NaN, 3.0]) === NaN16
+    @test median(Float16[1.0, -NaN, 3.0]) === -NaN16
+    @test median(BigFloat[1.0, NaN, 3.0]) isa BigFloat
+    @test isequal(median(BigFloat[1.0, NaN, 3.0]), NaN)
 end
 
 @testset "mean" begin
