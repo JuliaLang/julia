@@ -858,7 +858,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         end
         isinvoke = (invoke_data !== nothing)
 
-        atype = argtypes_to_type(atypes)
+        atype = argtypes_to_signature_type(atypes)
 
         # In :invoke, make sure that the arguments we're passing are a subtype of the
         # signature we're invoking.
@@ -921,7 +921,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         if nu != 1 && nu <= sv.params.MAX_UNION_SPLITTING
             fully_covered = true
             for sig in UnionSplitSignature(atypes)
-                metharg′ = argtypes_to_type(sig)
+                metharg′ = argtypes_to_signature_type(sig)
                 if !isdispatchtuple(metharg′)
                     fully_covered = false
                     continue

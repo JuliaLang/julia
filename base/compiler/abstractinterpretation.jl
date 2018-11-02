@@ -371,11 +371,7 @@ function ssa_def_slot(@nospecialize(arg), sv::InferenceState)
     return arg
 end
 
-# `typ` is the inferred type for expression `arg`.
-# if the expression constructs a container (e.g. `svec(x,y,z)`),
-# refine its type to an array of element types.
-# Union of Tuples of the same length is converted to Tuple of Unions.
-# returns an array of types
+# Union of Tuples of the same length is converted to Tuple of Unions. Returns a Vector of types
 function precise_container_type(@nospecialize(typ), vtypes::VarTable, sv::InferenceState)
     if isa(typ, PartialTuple)
         return typ.fields
@@ -467,53 +463,53 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
     return ret
 end
 
-# do apply(af, fargs...), where af is a function value
-function abstract_apply(@nospecialize(aft), aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
-    if !isa(aft, Const) && (!isType(aft) || has_free_typevars(aft))
-        if !isconcretetype(aft) || (aft <: Builtin)
+# do apply(f, args...), where f is a function value
+function abstract_apply(@nospecialize(ft), argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
+    if !isa(ft, Const) && (!isType(ft) || has_free_typevars(ft))
+        if !isconcretetype(ft) || (ft <: Builtin)
             # non-constant function of unknown type: bail now,
             # since it seems unlikely that abstract_call will be able to do any better after splitting
             # this also ensures we don't call abstract_call_gf_by_type below on an IntrinsicFunction or Builtin
             return Any
         end
     end
-    res = Union{}
-    nargs = length(aargtypes)
-    splitunions = 1 < countunionsplit(aargtypes) <= sv.params.MAX_APPLY_UNION_ENUM
-    ctypes = Any[Any[aft]]
+    result_type = Union{}
+    nargs = length(argtypes)
+    splitunions = 1 < countunionsplit(argtypes) <= sv.params.MAX_APPLY_UNION_ENUM
+    call_types = Any[Any[ft]]
     for i = 1:nargs
-        ctypes´ = []
-        for ti in (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
+        call_types´ = []
+        for ti in (splitunions ? uniontypes(argtypes[i]) : Any[argtypes[i]])
             cti = precise_container_type(ti, vtypes, sv)
             if _any(t -> t === Bottom, cti)
                 continue
             end
-            for ct in ctypes
+            for ct in call_types
                 if isvarargtype(ct[end])
                     tail = tuple_tail_elem(unwrapva(ct[end]), cti)
-                    push!(ctypes´, push!(ct[1:(end - 1)], tail))
+                    push!(call_types´, push!(ct[1:(end - 1)], tail))
                 else
-                    push!(ctypes´, append_any(ct, cti))
+                    push!(call_types´, append_any(ct, cti))
                 end
             end
         end
-        ctypes = ctypes´
+        call_types = call_types´
     end
-    for ct in ctypes
-        if isa(aft, Const)
-            rt = abstract_call(aft.val, (), ct, vtypes, sv)
-        elseif isconstType(aft)
-            rt = abstract_call(aft.parameters[1], (), ct, vtypes, sv)
+    for ct in call_types
+        if isa(ft, Const)
+            rt = abstract_call(ft.val, (), ct, vtypes, sv)
+        elseif isconstType(ft)
+            rt = abstract_call(ft.parameters[1], (), ct, vtypes, sv)
         else
-            astype = argtypes_to_type(ct)
-            rt = abstract_call_gf_by_type(nothing, ct, astype, sv)
+            arg_sig_type = argtypes_to_signature_type(ct)
+            rt = abstract_call_gf_by_type(nothing, ct, arg_sig_type, sv)
         end
-        res = tmerge(res, rt)
-        if res === Any
+        result_type = tmerge(result_type, rt)
+        if result_type === Any
             break
         end
     end
-    return res
+    return result_type
 end
 
 function pure_eval_call(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState)
@@ -750,7 +746,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         return typename_static(argtypes[2])
     end
 
-    atype = argtypes_to_type(argtypes)
+    atype = argtypes_to_signature_type(argtypes)
     t = pure_eval_call(f, argtypes, atype, sv)
     t !== false && return t
 
@@ -785,7 +781,7 @@ function abstract_eval_call(fargs::Union{Tuple{},Vector{Any}}, argtypes::Vector{
         if typeintersect(widenconst(ft), Builtin) != Union{}
             return Any
         end
-        return abstract_call_gf_by_type(nothing, argtypes, argtypes_to_type(argtypes), sv)
+        return abstract_call_gf_by_type(nothing, argtypes, argtypes_to_signature_type(argtypes), sv)
     end
     return abstract_call(f, fargs, argtypes, vtypes, sv)
 end

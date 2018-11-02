@@ -1248,7 +1248,7 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
                 sigty = nothing
             end
             if isa(sigty, Type) && !has_free_typevars(sigty) && sigty <: Tuple
-                return invoke_tfunc(ft, sigty, argtypes_to_type(argtypes[3:end]), sv)
+                return invoke_tfunc(ft, sigty, argtypes_to_signature_type(argtypes[3:end]), sv)
             end
         end
         return Any
@@ -1328,7 +1328,7 @@ function return_type_tfunc(argtypes::Vector{Any}, vtypes::VarTable, sv::Inferenc
                     if contains_is(argtypes_vec, Union{})
                         return Const(Union{})
                     end
-                    astype = argtypes_to_type(argtypes_vec)
+                    astype = argtypes_to_signature_type(argtypes_vec)
                     if isa(aft, Const)
                         rt = abstract_call(aft.val, (), argtypes_vec, vtypes, sv)
                     elseif isconstType(aft)
