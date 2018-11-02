@@ -76,15 +76,15 @@ Dict{String,Int64} with 2 entries:
   "A" => 1
 ```
 """
-mutable struct Dict{K,V} <: AbstractDict{K,V}
+struct Dict{K,V} <: AbstractDict{K,V}
     slots::Array{UInt8,1}
     keys::Array{K,1}
     vals::Array{V,1}
-    ndel::Int
-    count::Int
-    age::UInt
-    idxfloor::Int  # an index <= the indices of all used slots
-    maxprobe::Int
+    ndel::Ref{Int}
+    count::Ref{Int}
+    age::Ref{UInt}
+    idxfloor::Ref{Int}  # an index <= the indices of all used slots
+    maxprobe::Ref{Int}
 
     function Dict{K,V}() where V where K
         n = 16
@@ -178,23 +178,23 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     oldv = h.vals
     sz = length(olds)
     newsz = _tablesz(newsz)
-    h.age += 1
-    h.idxfloor = 1
-    if h.count == 0
+    h.age[] += 1
+    h.idxfloor[]= 1
+    if h.count[] == 0
         resize!(h.slots, newsz)
         fill!(h.slots, 0)
         resize!(h.keys, newsz)
         resize!(h.vals, newsz)
-        h.ndel = 0
+        h.ndel[] = 0
         return h
     end
 
     slots = zeros(UInt8,newsz)
     keys = Vector{K}(undef, newsz)
     vals = Vector{V}(undef, newsz)
-    age0 = h.age
+    age0 = h.age[]
     count = 0
-    maxprobe = h.maxprobe
+    maxprobe = h.maxprobe[]
 
     for i = 1:sz
         @inbounds if olds[i] == 0x1
@@ -211,20 +211,23 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
             vals[index] = v
             count += 1
 
-            if h.age != age0
+            if h.age[] != age0
                 # if `h` is changed by a finalizer, retry
                 return rehash!(h, newsz)
             end
         end
     end
 
-    h.slots = slots
-    h.keys = keys
-    h.vals = vals
-    h.count = count
-    h.ndel = 0
-    h.maxprobe = maxprobe
-    @assert h.age == age0
+    resize!(h.slots, length(slots))
+    copy!(h.slots, slots)
+    resize!(h.keys, length(keys))
+    copy!(h.keys, keys)
+    resize!(h.vals, length(vals))
+    copy!(h.vals, vals)
+    h.count[] = count
+    h.ndel[] = 0
+    h.maxprobe[] = maxprobe
+    @assert h.age[] == age0
 
     return h
 end
@@ -268,10 +271,10 @@ function empty!(h::Dict{K,V}) where V where K
     empty!(h.vals)
     resize!(h.keys, sz)
     resize!(h.vals, sz)
-    h.ndel = 0
-    h.count = 0
-    h.age += 1
-    h.idxfloor = 1
+    h.ndel[] = 0
+    h.count[] = 0
+    h.age[] += 1
+    h.idxfloor[] = 1
     return h
 end
 
@@ -279,7 +282,7 @@ end
 function ht_keyindex(h::Dict{K,V}, key) where V where K
     sz = length(h.keys)
     iter = 0
-    maxprobe = h.maxprobe
+    maxprobe = h.maxprobe[]
     index = hashindex(key, sz)
     keys = h.keys
 
@@ -302,10 +305,9 @@ end
 # and the key would be inserted at pos
 # This version is for use by setindex! and get!
 function ht_keyindex2!(h::Dict{K,V}, key) where V where K
-    age0 = h.age
     sz = length(h.keys)
     iter = 0
-    maxprobe = h.maxprobe
+    maxprobe = h.maxprobe[]
     index = hashindex(key, sz)
     avail = 0
     keys = h.keys
@@ -339,14 +341,14 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
     # Check if key is not present, may need to keep searching to find slot
     @inbounds while iter < maxallowed
         if !isslotfilled(h,index)
-            h.maxprobe = iter
+            h.maxprobe[] = iter
             return -index
         end
         index = (index & (sz-1)) + 1
         iter += 1
     end
 
-    rehash!(h, h.count > 64000 ? sz*2 : sz*4)
+    rehash!(h, h.count[] > 64000 ? sz*2 : sz*4)
 
     return ht_keyindex2!(h, key)
 end
@@ -355,17 +357,17 @@ end
     h.slots[index] = 0x1
     h.keys[index] = key
     h.vals[index] = v
-    h.count += 1
-    h.age += 1
-    if index < h.idxfloor
-        h.idxfloor = index
+    h.count[] += 1
+    h.age[] += 1
+    if index < h.idxfloor[]
+        h.idxfloor[] = index
     end
 
     sz = length(h.keys)
     # Rehash now if necessary
-    if h.ndel >= ((3*sz)>>2) || h.count*3 > sz*2
+    if h.ndel[] >= ((3*sz)>>2) || h.count[]*3 > sz*2
         # > 3/4 deleted or > 2/3 full
-        rehash!(h, h.count > 64000 ? h.count*2 : h.count*4)
+        rehash!(h, h.count[] > 64000 ? h.count[]*2 : h.count[]*4)
     end
 end
 
@@ -382,7 +384,7 @@ function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     index = ht_keyindex2!(h, key)
 
     if index > 0
-        h.age += 1
+        h.age[] += 1
         @inbounds h.keys[index] = key
         @inbounds h.vals[index] = v
     else
@@ -449,13 +451,13 @@ function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
 
     index > 0 && return h.vals[index]
 
-    age0 = h.age
+    age0 = h.age[]
     v = convert(V, default())
-    if h.age != age0
+    if h.age[] != age0
         index = ht_keyindex2!(h, key)
     end
     if index > 0
-        h.age += 1
+        h.age[] += 1
         @inbounds h.keys[index] = key
         @inbounds h.vals[index] = v
     else
@@ -623,9 +625,9 @@ function _delete!(h::Dict, index)
     h.slots[index] = 0x2
     ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.keys, index-1)
     ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.vals, index-1)
-    h.ndel += 1
-    h.count -= 1
-    h.age += 1
+    h.ndel[] += 1
+    h.count[] -= 1
+    h.age[] += 1
     return h
 end
 
@@ -664,8 +666,8 @@ function skip_deleted(h::Dict, i)
     return i
 end
 function skip_deleted_floor!(h::Dict)
-    idx = skip_deleted(h, h.idxfloor)
-    h.idxfloor = idx
+    idx = skip_deleted(h, h.idxfloor[])
+    h.idxfloor[] = idx
     idx
 end
 
@@ -675,11 +677,11 @@ end
 end
 @propagate_inbounds iterate(t::Dict, i) = _iterate(t, skip_deleted(t, i))
 
-isempty(t::Dict) = (t.count == 0)
-length(t::Dict) = t.count
+isempty(t::Dict) = (t.count[] == 0)
+length(t::Dict) = t.count[]
 
 @propagate_inbounds function iterate(v::Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}},
-                                     i=v.dict.idxfloor)
+                                     i=v.dict.idxfloor[])
     i = skip_deleted(v.dict, i)
     i > length(v.dict.vals) && return nothing
     (v isa KeySet ? v.dict.keys[i] : v.dict.vals[i], i+1)
