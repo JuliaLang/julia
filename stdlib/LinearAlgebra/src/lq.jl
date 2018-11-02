@@ -113,7 +113,9 @@ end
 
 LQPackedQ{T}(Q::LQPackedQ) where {T} = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
 AbstractMatrix{T}(Q::LQPackedQ) where {T} = LQPackedQ{T}(Q)
-Matrix(A::LQPackedQ) = LAPACK.orglq!(copy(A.factors),A.τ)
+Matrix{T}(A::LQPackedQ) where {T} = convert(Matrix{T}, LAPACK.orglq!(copy(A.factors),A.τ))
+Matrix(A::LQPackedQ{T}) where {T} = Matrix{T}(A)
+Array{T}(A::LQPackedQ{T}) where {T} = Matrix{T}(A)
 Array(A::LQPackedQ) = Matrix(A)
 
 size(F::LQ, dim::Integer) = size(getfield(F, :factors), dim)
