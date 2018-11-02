@@ -61,3 +61,6 @@ end
 # 'a' flag to disable UCP
 @test match(r"\w+", "Düsseldorf").match == "Düsseldorf"
 @test match(r"\w+"a, "Düsseldorf").match == "D"
+
+# Regex behaves like a scalar in broadcasting
+@test occursin.(r"Hello", ["Hello", "World"]) == [true, false]
