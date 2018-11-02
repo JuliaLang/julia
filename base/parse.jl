@@ -107,7 +107,10 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     end
 
     base = convert(T, base)
-    m::T = div(typemax(T) - base + 1, base)
+    # Special case the common cases of base being 10 or 16 to avoid expensive runtime div
+    m::T = base == 10 ? div(typemax(T) - T(9), T(10)) :
+           base == 16 ? div(typemax(T) - T(15), T(16)) :
+                        div(typemax(T) - base + 1, base)
     n::T = 0
     a::Int = base <= 36 ? 10 : 36
     _0 = UInt32('0')
