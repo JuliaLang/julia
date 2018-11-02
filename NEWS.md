@@ -14,6 +14,7 @@ Language changes
     returns a `BigFloat` with precision equal to `precision(BigFloat)` ([#29127]).
   * Parser inputs ending with a comma are now consistently treated as incomplete.
     Previously they were sometimes parsed as tuples, depending on whitespace ([#28506]).
+  * `Regex` now behave like a scalar when used in broadcasting ([#29913]).
 
 New library functions
 ---------------------
