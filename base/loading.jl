@@ -135,6 +135,7 @@ end
 
 function package_slug(uuid::UUID, p::Int=5)
     crc = _crc32c(uuid)
+    crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
     return slug(crc, p)
 end
 
