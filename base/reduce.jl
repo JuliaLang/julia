@@ -231,6 +231,9 @@ reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
+reduce_empty(::typeof(max), T::Type{<:AbstractFloat}) = typemin(T)
+reduce_empty(::typeof(min), T::Type{<:AbstractFloat}) = typemax(T)
+
 reduce_empty(::typeof(add_sum), T) = reduce_empty(+, T)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallSigned}  = zero(Int)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
@@ -252,8 +255,10 @@ mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
 mapreduce_empty(::typeof(abs), op, T)      = abs(reduce_empty(op, T))
 mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
 
-mapreduce_empty(f::typeof(abs),  ::typeof(max), T) = abs(zero(T))
-mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
+mapreduce_empty(::typeof(abs),  ::typeof(max), T) = abs(zero(T))
+mapreduce_empty(::typeof(abs),  ::typeof(min), T::Type{<:AbstractFloat}) = typemax(T)
+mapreduce_empty(::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
+mapreduce_empty(::typeof(abs2),  ::typeof(min), T::Type{<:AbstractFloat}) = typemax(T)
 
 mapreduce_empty_iter(f, op, itr, ::HasEltype) = mapreduce_empty(f, op, eltype(itr))
 mapreduce_empty_iter(f, op::typeof(&), itr, ::EltypeUnknown) = true
