@@ -18,6 +18,13 @@ const T_IFUNC_COST = Vector{Int}(undef, N_IFUNC)
 const T_FFUNC_KEY = Vector{Any}()
 const T_FFUNC_VAL = Vector{Tuple{Int, Int, Any}}()
 const T_FFUNC_COST = Vector{Int}()
+function find_tfunc(@nospecialize f)
+    for i = 1:length(T_FFUNC_KEY)
+        if T_FFUNC_KEY[i] === f
+            return i
+        end
+    end
+end
 
 const DATATYPE_NAME_FIELDINDEX = fieldindex(DataType, :name)
 const DATATYPE_PARAMETERS_FIELDINDEX = fieldindex(DataType, :parameters)
@@ -221,10 +228,11 @@ function egal_tfunc(@nospecialize(x), @nospecialize(y))
     if isa(x, Conditional) && isa(yy, Const)
         yy.val === false && return Conditional(x.var, x.elsetype, x.vtype)
         yy.val === true && return x
-        return x
+        return Const(false)
     elseif isa(y, Conditional) && isa(xx, Const)
         xx.val === false && return Conditional(y.var, y.elsetype, y.vtype)
         xx.val === true && return y
+        return Const(false)
     elseif isa(xx, Const) && isa(yy, Const)
         return Const(xx.val === yy.val)
     elseif typeintersect(widenconst(xx), widenconst(yy)) === Bottom
@@ -1151,7 +1159,7 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
         end
         tf = T_IFUNC[iidx]
     else
-        fidx = findfirst(x->x===f, T_FFUNC_KEY)
+        fidx = find_tfunc(f)
         if fidx === nothing
             # unknown/unhandled builtin function
             return Any

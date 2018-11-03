@@ -38,9 +38,9 @@ struct Cholesky{T,S<:AbstractMatrix} <: Factorization{T}
         new(factors, uplo, info)
     end
 end
-Cholesky(A::AbstractMatrix{T}, uplo::Symbol, info::BlasInt) where {T} =
+Cholesky(A::AbstractMatrix{T}, uplo::Symbol, info::Integer) where {T} =
     Cholesky{T,typeof(A)}(A, char_uplo(uplo), info)
-Cholesky(A::AbstractMatrix{T}, uplo::AbstractChar, info::BlasInt) where {T} =
+Cholesky(A::AbstractMatrix{T}, uplo::AbstractChar, info::Integer) where {T} =
     Cholesky{T,typeof(A)}(A, uplo, info)
 
 struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
@@ -56,8 +56,8 @@ struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
         new(factors, uplo, piv, rank, tol, info)
     end
 end
-function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{BlasInt},
-                            rank::BlasInt, tol::Real, info::BlasInt) where T
+function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{<:Integer},
+                            rank::Integer, tol::Real, info::Integer) where T
     CholeskyPivoted{T,typeof(A)}(A, uplo, piv, rank, tol, info)
 end
 
@@ -356,9 +356,9 @@ function getproperty(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
     if d == :U
-        return UpperTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        return UpperTriangular(sym_uplo(Cuplo) == d ? Cfactors : copy(Cfactors'))
     elseif d == :L
-        return LowerTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        return LowerTriangular(sym_uplo(Cuplo) == d ? Cfactors : copy(Cfactors'))
     elseif d == :p
         return getfield(C, :piv)
     elseif d == :P

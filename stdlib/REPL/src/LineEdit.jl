@@ -1546,23 +1546,26 @@ mutable struct SearchState <: ModeState
     backward::Bool
     query_buffer::IOBuffer
     response_buffer::IOBuffer
+    failed::Bool
     ias::InputAreaState
     #The prompt whose input will be replaced by the matched history
     parent::Prompt
     SearchState(terminal, histprompt, backward, query_buffer, response_buffer) =
-        new(terminal, histprompt, backward, query_buffer, response_buffer, InputAreaState(0,0))
+        new(terminal, histprompt, backward, query_buffer, response_buffer, false, InputAreaState(0,0))
 end
 
 terminal(s::SearchState) = s.terminal
 
 function update_display_buffer(s::SearchState, data)
-    history_search(data.histprompt.hp, data.query_buffer, data.response_buffer, data.backward, false) || beep(s)
+    s.failed = !history_search(data.histprompt.hp, data.query_buffer, data.response_buffer, data.backward, false)
+    s.failed && beep(s)
     refresh_line(s)
     nothing
 end
 
 function history_next_result(s::MIState, data::SearchState)
-    history_search(data.histprompt.hp, data.query_buffer, data.response_buffer, data.backward, true) || beep(s)
+    data.failed = !history_search(data.histprompt.hp, data.query_buffer, data.response_buffer, data.backward, true)
+    data.failed && beep(s)
     refresh_line(data)
     nothing
 end
@@ -1584,6 +1587,7 @@ function reset_state(s::SearchState)
         s.response_buffer.ptr = 1
     end
     reset_state(s.histprompt.hp)
+    s.failed = false
     nothing
 end
 
@@ -1688,7 +1692,9 @@ function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     write(buf, read(s.response_buffer, String))
     buf.ptr = offset + ptr - 1
     s.response_buffer.ptr = ptr
-    ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(forward-i-search)`")
+    failed = s.failed ? "failed " : ""
+    ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias,
+                             s.backward ? "($(failed)reverse-i-search)`" : "($(failed)forward-i-search)`")
     s.ias = ias
     return ias
 end
@@ -1744,6 +1750,7 @@ function enter_search(s::MIState, p::HistoryPrompt, backward::Bool)
         ss.parent = parent
         ss.backward = backward
         truncate(ss.query_buffer, 0)
+        ss.failed = false
         copybuf!(ss.response_buffer, buf)
     end
     nothing
@@ -1842,7 +1849,7 @@ function setup_search_keymap(hp)
         # Bracketed paste mode
         "\e[200~" => (s,data,c)-> begin
             ps = state(s, mode(s))
-            input = readuntil(ps.terminal, "\e[201~", keep=true)
+            input = readuntil(ps.terminal, "\e[201~", keep=false)
             edit_insert(data.query_buffer, input); update_display_buffer(s, data)
         end,
         "*"       => (s,data,c)->(edit_insert(data.query_buffer, c); update_display_buffer(s, data))

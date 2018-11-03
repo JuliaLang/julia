@@ -35,7 +35,7 @@ which propagate them (like standard operators). Packages should consider
 whether it makes sense to propagate missing values when defining new functions,
 and define methods appropriately if that is the case. Passing a `missing` value
 to a function for which no method accepting arguments of type `Missing` is defined
-throws a `MethodError`, just like for any other type.
+throws a [`MethodError`](@ref), just like for any other type.
 
 ## Equality and Comparison Operators
 
@@ -191,7 +191,7 @@ Control flow operators including [`if`](@ref), [`while`](@ref) and the
 [ternary operator](@ref man-conditional-evaluation) `x ? y : z`
 do not allow for missing values. This is because of the uncertainty about whether
 the actual value would be `true` or `false` if we could observe it,
-which implies that we do not know how the program should behave. A `TypeError`
+which implies that we do not know how the program should behave. A [`TypeError`](@ref)
 is thrown as soon as a `missing` value is encountered in this context
 ```jldoctest
 julia> if missing

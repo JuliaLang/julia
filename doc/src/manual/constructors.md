@@ -22,7 +22,7 @@ julia> foo.baz
 ```
 
 For many types, forming new objects by binding their field values together is all that is ever
-needed to create instances. There are, however, cases where more functionality is required when
+needed to create instances. However, in some cases more functionality is required when
 creating composite objects. Sometimes invariants must be enforced, either by checking arguments
 or by transforming them. [Recursive data structures](https://en.wikipedia.org/wiki/Recursion_%28computer_science%29#Recursive_data_structures_.28structural_recursion.29),
 especially those that may be self-referential, often cannot be constructed cleanly without first
@@ -34,7 +34,7 @@ addresses all of these cases and more.
 [^1]:
     Nomenclature: while the term "constructor" generally refers to the entire function which constructs
     objects of a type, it is common to abuse terminology slightly and refer to specific constructor
-    methods as "constructors". In such situations, it is generally clear from context that the term
+    methods as "constructors". In such situations, it is generally clear from the context that the term
     is used to mean "constructor method" rather than "constructor function", especially as it is often
     used in the sense of singling out a particular method of the constructor from all of the others.
 
@@ -77,7 +77,7 @@ While outer constructor methods succeed in addressing the problem of providing a
 methods for constructing objects, they fail to address the other two use cases mentioned in the
 introduction of this chapter: enforcing invariants, and allowing construction of self-referential
 objects. For these problems, one needs *inner* constructor methods. An inner constructor method
-is much like an outer constructor method, with two differences:
+is like an outer constructor method, except for two differences:
 
 1. It is declared inside the block of a type declaration, rather than outside of it like normal methods.
 2. It has access to a special locally existent function called [`new`](@ref) that creates objects of the
@@ -110,7 +110,7 @@ Stacktrace:
 ```
 
 If the type were declared `mutable`, you could reach in and directly change the field values to
-violate this invariant, but messing around with an object's internals uninvited is considered poor form.
+violate this invariant. Of course, messing around with an object's internals uninvited is bad practice.
 You (or someone else) can also provide additional outer constructor methods at any later point, but
 once a type is declared, there is no way to add more inner constructor methods. Since outer constructor
 methods can only create objects by calling other constructor methods, ultimately, some inner constructor
@@ -160,7 +160,7 @@ julia> T2(1.0)
 T2(1)
 ```
 
-It is considered good form to provide as few inner constructor methods as possible: only those
+It is good practice to provide as few inner constructor methods as possible: only those
 taking all arguments explicitly and enforcing essential error checking and transformation. Additional
 convenience constructor methods, supplying default values or auxiliary transformations, should
 be provided as outer constructors that call the inner constructors to do the heavy lifting. This
@@ -194,8 +194,8 @@ value for the `obj` field of another instance, such as, for example, itself.
 To allow for the creation of incompletely initialized objects, Julia allows the [`new`](@ref) function
 to be called with fewer than the number of fields that the type has, returning an object with
 the unspecified fields uninitialized. The inner constructor method can then use the incomplete
-object, finishing its initialization before returning it. Here, for example, we take another crack
-at defining the `SelfReferential` type, with a zero-argument inner constructor returning instances
+object, finishing its initialization before returning it. Here, for example, is another attempt
+at defining the `SelfReferential` type, this time using a zero-argument inner constructor returning instances
 having `obj` fields pointing to themselves:
 
 ```jldoctest selfrefer2
@@ -222,11 +222,11 @@ true
 ```
 
 Although it is generally a good idea to return a fully initialized object from an inner constructor,
-incompletely initialized objects can be returned:
+it is possible to return incompletely initialized objects:
 
 ```jldoctest incomplete
 julia> mutable struct Incomplete
-           xx
+           data
            Incomplete() = new()
        end
 
@@ -237,7 +237,7 @@ While you are allowed to create objects with uninitialized fields, any access to
 reference is an immediate error:
 
 ```jldoctest incomplete
-julia> z.xx
+julia> z.data
 ERROR: UndefRefError: access to undefined reference
 ```
 
@@ -263,13 +263,13 @@ You can pass incomplete objects to other functions from inner constructors to de
 
 ```jldoctest
 julia> mutable struct Lazy
-           xx
+           data
            Lazy(v) = complete_me(new(), v)
        end
 ```
 
 As with incomplete objects returned from constructors, if `complete_me` or any of its callees
-try to access the `xx` field of the `Lazy` object before it has been initialized, an error will
+try to access the `data` field of the `Lazy` object before it has been initialized, an error will
 be thrown immediately.
 
 ## Parametric Constructors
@@ -513,8 +513,8 @@ it is short, self-contained, and implements an entire basic Julia type.
 As we have seen, a typical parametric type has inner constructors that are called when type parameters
 are known; e.g. they apply to `Point{Int}` but not to `Point`. Optionally, outer constructors
 that determine type parameters automatically can be added, for example constructing a `Point{Int}`
-from the call `Point(1,2)`. Outer constructors call inner constructors to do the core work of
-making an instance. However, in some cases one would rather not provide inner constructors, so
+from the call `Point(1,2)`. Outer constructors call inner constructors to actually
+make instances. However, in some cases one would rather not provide inner constructors, so
 that specific type parameters cannot be requested manually.
 
 For example, say we define a type that stores a vector along with an accurate representation of

@@ -256,3 +256,10 @@ Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
     @test_throws MethodError write(IOBuffer(), ASCIIChar('x'))
     @test_throws MethodError read(IOBuffer('x'), ASCIIChar)
 end
+
+@testset "reinterpret(Char, ::UInt32)" begin
+    for s = 0:31
+        u = one(UInt32) << s
+        @test reinterpret(UInt32, reinterpret(Char, u)) === u
+    end
+end

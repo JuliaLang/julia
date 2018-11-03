@@ -751,14 +751,25 @@ SECT_INTERP CALLBACK_ABI void *jl_interpret_call_callback(interpreter_state *s, 
     locals[0] = (jl_value_t*)src;
     locals[1] = (jl_value_t*)stmts;
     s->src = src;
-    s->module = args->lam->def.method->module;
+    size_t nargs;
+    int isva;
+    if (jl_is_module(args->lam->def.value)) {
+        s->module = args->lam->def.module;
+        nargs = 0;
+        isva = 0;
+    }
+    else {
+        s->module = args->lam->def.method->module;
+        nargs = args->lam->def.method->nargs;
+        isva = args->lam->def.method->isva;
+    }
     s->locals = locals + 2;
     s->sparam_vals = args->lam->sparam_vals;
     s->continue_at = 0;
     s->mi = args->lam;
     size_t i;
-    for (i = 0; i < args->lam->def.method->nargs; i++) {
-        if (args->lam->def.method->isva && i == args->lam->def.method->nargs - 1)
+    for (i = 0; i < nargs; i++) {
+        if (isva && i == nargs - 1)
             s->locals[i] = jl_f_tuple(NULL, &args->args[i], args->nargs - i);
         else
             s->locals[i] = args->args[i];

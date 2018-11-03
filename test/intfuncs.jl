@@ -179,10 +179,17 @@ end
     @test digits(5, base = 3) == [2, 1]
 
     @testset "digits/base with negative bases" begin
-        @testset "digits(n::$T, base = b)" for T in (Int, UInt, BigInt, Int32)
+        @testset "digits(n::$T, base = b)" for T in (Int, UInt, BigInt, Int32, UInt32)
             @test digits(T(8163), base = -10) == [3, 4, 2, 2, 1]
             if !(T<:Unsigned)
                 @test digits(T(-8163), base = -10) == [7, 7, 9, 9]
+            end
+            if T !== BigInt
+                b = rand(-32:-2)
+                for n = T[rand(T), typemax(T), typemin(T)]
+                    # issue #29183
+                    @test digits(n, base=b) == digits(signed(widen(n)), base=b)
+                end
             end
         end
         @test [string(n, base = b)

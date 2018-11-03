@@ -1,6 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #Period types
+"""
+    Dates.value(x::Period) -> Int64
+
+For a given period, return the value associated with that period.  For example,
+`value(Millisecond(10))` returns 10 as an integer.
+"""
 value(x::Period) = x.value
 
 # The default constructors for Periods work well in almost all cases

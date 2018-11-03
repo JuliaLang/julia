@@ -338,7 +338,7 @@ int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
         fd == NULL ||
         fd == (HANDLE) -2) {
         *dupfd = INVALID_HANDLE_VALUE;
-        return ERROR_INVALID_HANDLE;
+        return 0; // allow the execution to continue even if stdio is not available as in batchmode or without a console
     }
 
     current_process = GetCurrentProcess();

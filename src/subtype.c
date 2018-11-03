@@ -1342,7 +1342,7 @@ static jl_value_t *set_var_to_const(jl_varbinding_t *bb, jl_value_t *v, jl_varbi
         bb->lb = bb->ub = v;
     }
     else if (jl_is_long(v) && jl_is_long(bb->lb)) {
-        if (jl_unbox_long(v) + offset != jl_unbox_long(bb->lb))
+        if (jl_unbox_long(v) != jl_unbox_long(bb->lb))
             return jl_bottom_type;
     }
     else if (!jl_egal(v, bb->lb)) {
@@ -1379,13 +1379,15 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     if (param == 2) {
         jl_value_t *ub = R ? intersect_ufirst(a, bb->ub, e, d) : intersect_ufirst(bb->ub, a, e, d);
         JL_GC_PUSH2(&ub, &root);
-        save_env(e, &root, &se);
-        int issub = subtype_in_env(bb->lb, ub, e);
-        restore_env(e, root, &se);
-        free(se.buf);
-        if (!issub) {
-            JL_GC_POP();
-            return jl_bottom_type;
+        if (!jl_has_free_typevars(ub) && !jl_has_free_typevars(bb->lb)) {
+            save_env(e, &root, &se);
+            int issub = subtype_in_env(bb->lb, ub, e);
+            restore_env(e, root, &se);
+            free(se.buf);
+            if (!issub) {
+                JL_GC_POP();
+                return jl_bottom_type;
+            }
         }
         if (ub != (jl_value_t*)b) {
             if (jl_has_free_typevars(ub)) {
@@ -2508,7 +2510,8 @@ static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int invari
     size_t clen = jl_nparams(cdt);
     if (clen == 0) return 1;
     int i = 0;
-    jl_vararg_kind_t ckind = jl_vararg_kind(jl_tparam(cdt,clen-1));
+    jl_value_t *clast = jl_tparam(cdt,clen-1);
+    jl_vararg_kind_t ckind = jl_vararg_kind(clast);
     int cva = ckind > JL_VARARG_INT;
     int pva = jl_vararg_kind(jl_tparam(pdt,plen-1)) > JL_VARARG_INT;
     int cdiag = 0, pdiag = 0;
@@ -2556,7 +2559,7 @@ static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int invari
               C = Tuple{AbstractArray, Int, Array}
               we need A < B < C and A < C.
             */
-            return some_morespecific && cva && ckind == JL_VARARG_BOUND;
+            return some_morespecific && cva && ckind == JL_VARARG_BOUND && num_occurs((jl_tvar_t*)jl_tparam1(jl_unwrap_unionall(clast)), env) > 1;
         }
 
         // Tuple{..., T} not more specific than Tuple{..., Vararg{S}} if S is diagonal

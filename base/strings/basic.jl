@@ -142,8 +142,8 @@ eltype(::Type{<:AbstractString}) = Char # some string types may use another Abst
 """
     sizeof(str::AbstractString)
 
-Size, in bytes, of the string `s`. Equal to the number of code units in `s` multiplied by
-the size, in bytes, of one code unit in `s`.
+Size, in bytes, of the string `str`. Equal to the number of code units in `str` multiplied by
+the size, in bytes, of one code unit in `str`.
 
 # Examples
 ```jldoctest

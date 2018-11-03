@@ -73,7 +73,7 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
     (j == 0) && (return 0, 0, 0)
 
     if base == 0
-        if c == '0' && i <= ncodeunits(s)
+        if c == '0' && i <= endpos
             c, i = iterate(s,i)::Tuple{Char, Int}
             base = c=='b' ? 2 : c=='o' ? 8 : c=='x' ? 16 : 10
             if base != 10

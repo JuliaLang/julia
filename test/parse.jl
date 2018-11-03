@@ -30,6 +30,16 @@
 @test_throws ArgumentError parse(Int, 'a')
 @test_throws ArgumentError parse(Int,typemax(Char))
 
+# Issue 29451
+struct Issue29451String <: AbstractString end
+Base.ncodeunits(::Issue29451String) = 12345
+Base.lastindex(::Issue29451String) = 1
+Base.isvalid(::Issue29451String, i::Integer) = i == 1
+Base.iterate(::Issue29451String, i::Integer=1) = i == 1 ? ('0', 2) : nothing
+
+@test Issue29451String() == "0"
+@test parse(Int, Issue29451String()) == 0
+
 # Issue 20587
 for T in Any[BigInt, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8]
     T === BigInt && continue # TODO: make BigInt pass this test
