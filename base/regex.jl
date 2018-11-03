@@ -180,8 +180,10 @@ end
 Return `true` if `s` starts with the regex pattern, `prefix`.
 
 !!! note
-    `occursin` is recommended over the regex version of `startswith`
-    in performance critical situations.
+    `startswith` does not compile the anchoring into the regular
+    expression, but instead passes the anchoring as
+    `match_option` to PCRE. If compile time is amortized,
+    `occursin(r"^...", s)` is faster than `startswith(s, r"...")`.
 
 See also [`occursin`](@ref) and [`endswith`](@ref).
 
@@ -209,8 +211,10 @@ end
 Return `true` if `s` ends with the regex pattern, `suffix`.
 
 !!! note
-    `occursin` is recommended over the regex version of `endswith` in
-    performance critical situations.
+    `endswith` does not compile the anchoring into the regular
+    expression, but instead passes the anchoring as
+    `match_option` to PCRE. If compile time is amortized,
+    `occursin(r"...$", s)` is faster than `endswith(s, r"...")`.
 
 See also [`occursin`](@ref) and [`startswith`](@ref).
 
