@@ -34,6 +34,7 @@ end
     @test promote_type(Union{Int, Missing}, Int) == Union{Int, Missing}
     @test promote_type(Int, Union{Int, Missing}) == Union{Int, Missing}
     @test promote_type(Any, Union{Int, Missing}) == Any
+    @test promote_type(Union{Nothing, Missing}, Any) == Any
     @test promote_type(Union{Int, Missing}, Union{Int, Missing}) == Union{Int, Missing}
     @test promote_type(Union{Float64, Missing}, Union{String, Missing}) == Any
     @test promote_type(Union{Float64, Missing}, Union{Int, Missing}) == Union{Float64, Missing}
@@ -432,4 +433,19 @@ end
 
     @test coalesce(nothing, missing) === nothing
     @test coalesce(missing, nothing) === nothing
+end
+
+mutable struct Obj; x; end
+@testset "weak references" begin
+    @noinline function mk_wr(r, wr)
+        x = Obj(1)
+        push!(r, x)
+        push!(wr, WeakRef(x))
+        nothing
+    end
+    ref = []
+    wref = []
+    mk_wr(ref, wref)
+    @test ismissing(wref[1] == missing)
+    @test ismissing(missing == wref[1])
 end
