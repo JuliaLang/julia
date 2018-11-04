@@ -738,7 +738,7 @@ julia> rank(diagm(0 => [1, 0.001, 2]), abstol=0.00001, reltol=0.00001)
 ```
 """
 function rank(A::AbstractMatrix, abstol=0.0, reltol=0.0)
-    s= svdvals(A)
+    s = svdvals(A)
     count(x -> x > (abstol + reltol * s[1]), s)
 end
 rank(x::Number) = x == 0 ? 0 : 1
