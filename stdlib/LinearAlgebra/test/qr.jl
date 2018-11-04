@@ -220,12 +220,16 @@ end
 end
 
 @testset "Issue Test Factorization fallbacks for rectangular problems" begin
-    A = randn(3,2)
+    A  = randn(3,2)
     Ac = copy(A')
-    b = randn(3)
-    c = randn(2)
+    b  = randn(3)
+    b0 = copy(b)
+    c  = randn(2)
     @test A \b ≈ ldiv!(c, qr(A ), b)
+    @test b == b0
+    c0 = copy(c)
     @test Ac\c ≈ ldiv!(b, qr(Ac, Val(true)), c)
+    @test c0 == c
 end
 
 end # module TestQR
