@@ -2086,3 +2086,13 @@ let ci = code_typed(bar_inlining_apply, Tuple{})[1].first
     @test length(ci.code) == 2
     @test ci.code[1].head == :foreigncall
 end
+
+# Test that inlining can inline _applys of builtins/_applys on SimpleVectors
+function foo_apply_apply_type_svec()
+    A = (Tuple, Float32)
+    B = Tuple{Float32, Float32}
+    Core.apply_type(A..., B.types...)
+end
+let ci = code_typed(foo_apply_apply_type_svec, Tuple{})[1].first
+    @test length(ci.code) == 1
+end

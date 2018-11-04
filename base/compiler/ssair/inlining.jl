@@ -587,7 +587,7 @@ function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, at
             def_atypes = def_type.fields
         else
             def_atypes = Any[]
-            if isa(def_type, Const) # && isa(def_type.val, Tuple) is implied
+            if isa(def_type, Const) # && isa(def_type.val, Union{Tuple, SimpleVector}) is implied
                 for p in def_type.val
                     push!(def_atypes, Const(p))
                 end
@@ -606,8 +606,12 @@ function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, at
         # now push flattened types into new_atypes and getfield exprs into new_argexprs
         for j in 1:length(def_atypes)
             def_atype = def_atypes[j]
-            new_call = Expr(:call, Core.getfield, def, j)
-            new_argexpr = insert_node!(ir, idx, def_atype, new_call)
+            if isa(def_atype, Const) && is_inlineable_constant(def_atype.val)
+                new_argexpr = insert_node!(ir, idx, def_atype, quoted(def_atype.val))
+            else
+                new_call = Expr(:call, Core.getfield, def, j)
+                new_argexpr = insert_node!(ir, idx, def_atype, new_call)
+            end
             push!(new_argexprs, new_argexpr)
             push!(new_atypes, def_atype)
         end
@@ -775,6 +779,23 @@ function handle_single_case!(ir::IRCode, stmt::Expr, idx::Int, @nospecialize(cas
     nothing
 end
 
+function is_valid_type_for_apply_rewrite(@nospecialize(typ), sv)
+    if isa(typ, Const) && isa(typ.val, SimpleVector)
+        length(typ.val) > sv.params.MAX_TUPLE_SPLAT && return false
+        for p in typ.val
+            is_inlineable_constant(p) || return false
+        end
+        return true
+    end
+    typ = widenconst(typ)
+    isa(typ, DataType) || return false
+    if typ.name === Tuple.name
+        return !isvatuple(typ) && length(typ.parameters) <= sv.params.MAX_TUPLE_SPLAT
+    else
+        return false
+    end
+end
+
 function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
     # todo = (inline_idx, (isva, isinvoke, na), method, spvals, inline_linetable, inline_ir, lie)
     todo = Any[]
@@ -801,6 +822,29 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         end
         ok || continue
 
+        # Handle _apply
+        ok = true
+        while f === Core._apply
+            # Try to figure out the signature of the function being called
+            # and if rewrite_apply_exprargs can deal with this form
+            for i = 3:length(atypes)
+                # TODO: We could basically run the iteration protocol here
+                if !is_valid_type_for_apply_rewrite(atypes[i], sv)
+                    ok = false
+                    break
+                end
+            end
+            ok || break
+            # Independent of whether we can inline, the above analysis allows us to rewrite
+            # this apply call to a regular call
+            ft = atypes[2]
+            stmt.args, atypes = rewrite_apply_exprargs!(ir, idx, stmt.args, atypes, sv)
+            ok = !has_free_typevars(ft)
+            ok || break
+            f = singleton_type(ft)
+        end
+        ok || continue
+
         # Check if we match any of the early inliners
         calltype = ir.types[idx]
         res = early_inline_special_case(ir, f, ft, stmt, atypes, sv, calltype)
@@ -819,32 +863,6 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         # Special handling for Core.invoke and Core._apply, which can follow the normal inliner
         # logic with modified inlining target
         isinvoke = false
-
-        # Handle _apply
-        ok = true
-        while f === Core._apply
-            # Try to figure out the signature of the function being called
-            # and if rewrite_apply_exprargs can deal with this form
-            for i = 3:length(atypes)
-                typ = atypes[i]
-                typ = widenconst(typ)
-                # TODO: We could basically run the iteration protocol here
-                if !isa(typ, DataType) || typ.name !== Tuple.name ||
-                    isvatuple(typ) || length(typ.parameters) > sv.params.MAX_TUPLE_SPLAT
-                    ok = false
-                    break
-                end
-            end
-            ok || break
-            # Independent of whether we can inline, the above analysis allows us to rewrite
-            # this apply call to a regular call
-            ft = atypes[2]
-            stmt.args, atypes = rewrite_apply_exprargs!(ir, idx, stmt.args, atypes, sv)
-            ok = !has_free_typevars(ft)
-            ok || break
-            f = singleton_type(ft)
-        end
-        ok || continue
 
         if f !== Core.invoke && (isa(f, IntrinsicFunction) || ft ⊑ IntrinsicFunction || isa(f, Builtin) || ft ⊑ Builtin)
             # TODO: this test is wrong if we start to handle Unions of function types later
