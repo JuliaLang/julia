@@ -715,10 +715,9 @@ end
     rank(A[, tol::Real])
 
 Compute the rank of a matrix by counting how many singular
-values of `A` have magnitude greater than `tol*σ₁` where `σ₁` is
-`A`'s largest singular values. By default, the value of `tol` is the smallest
-dimension of `A` multiplied by the [`eps`](@ref)
-of the [`eltype`](@ref) of `A`.
+values of `A` have magnitude greater than `reltol*σ₁ + abstol` where `σ₁` is
+`A`'s largest singular values, abstol and reltol are the absolute and relative
+tolerance respectively.
 
 # Examples
 ```jldoctest
@@ -728,16 +727,19 @@ julia> rank(Matrix(I, 3, 3))
 julia> rank(diagm(0 => [1, 0, 2]))
 2
 
-julia> rank(diagm(0 => [1, 0.001, 2]), 0.1)
+julia> rank(diagm(0 => [1, 0.001, 2]), reltol=0.1)
 2
 
-julia> rank(diagm(0 => [1, 0.001, 2]), 0.00001)
+julia> rank(diagm(0 => [1, 0.001, 2]), reltol=0.00001)
+3
+
+julia> rank(diagm(0 => [1, 0.001, 2]), abstol=0.00001, reltol=0.00001)
 3
 ```
 """
-function rank(A::AbstractMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
-    s = svdvals(A)
-    count(x -> x > tol*s[1], s)
+function rank(A::AbstractMatrix; abstol=0.0, reltol=0.0)
+    s= svdvals(A)
+    count(x -> x > (abstol + reltol * s[1]), s)
 end
 rank(x::Number) = x == 0 ? 0 : 1
 
