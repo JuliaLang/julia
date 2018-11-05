@@ -568,10 +568,12 @@ SECT_INTERP static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size
                 nphi -= n_oldphi;
             }
             if (edge != -1) {
-                // if edges list doesn't contain last branch, this value should be unused.
+                // if edges list doesn't contain last branch, or the value is explicitly undefined
+                // then this value should be unused.
                 jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(e, 1);
                 val = jl_array_ptr_ref(values, edge);
-                val = eval_value(val, s);
+                if (val)
+                    val = eval_value(val, s);
             }
             phis[i] = val;
         }
