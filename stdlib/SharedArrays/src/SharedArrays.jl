@@ -549,10 +549,10 @@ function shmem_randn(dims; kwargs...)
 end
 shmem_randn(I::Int...; kwargs...) = shmem_randn(I; kwargs...)
 
-similar(S::SharedArray, T::Type, dims::Dims) = similar(S.s, T, dims)
-similar(S::SharedArray, T::Type) = similar(S.s, T, size(S))
-similar(S::SharedArray, dims::Dims) = similar(S.s, eltype(S), dims)
-similar(S::SharedArray) = similar(S.s, eltype(S), size(S))
+similar(S::SharedArray, T::Type, dims::Dims{N}; pids=S.pids) where N = SharedArray{T, N}(undef, dims; pids=pids)
+similar(S::SharedArray{ST, N}, T::Type; pids=S.pids) where {ST, N} = similar(S, T, size(S); pids=pids)
+similar(S::SharedArray, dims::Dims; pids=S.pids) = similar(S, eltype(S), dims; pids=pids)
+similar(S::SharedArray; pids=S.pids) = similar(S, eltype(S), size(S); pids=pids)
 
 reduce(f, S::SharedArray) =
     mapreduce(fetch, f, Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
