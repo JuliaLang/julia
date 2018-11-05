@@ -173,11 +173,14 @@ makedocs(
 # Only deploy docs from 64bit Linux to avoid committing multiple versions of the same
 # docs from different workers.
 if "deploy" in ARGS && Sys.ARCH === :x86_64 && Sys.KERNEL === :Linux
+# Override TRAVIS_REPO_SLUG since we deploy to a different repo
+withenv("TRAVIS_REPO_SLUG" => "JuliaLang/docs.julialang.org") do
     deploydocs(
-        repo = "github.com/JuliaLang/julia.git",
+        repo = "github.com/JuliaLang/docs.julialang.org.git",
         target = joinpath(buildroot, "doc", "_build", "html", "en"),
         dirname = "en",
         devurl = "v1.1-dev",
         versions = ["v#.#", "v1.1-dev" => "v1.1-dev"]
     )
+end
 end
