@@ -43,7 +43,7 @@ macro threadcall(f, rettype, argtypes, argvals...)
         push!(args, arg)
     end
     push!(body, :(ret = ccall($f, $rettype, ($(argtypes...),), $(args...))))
-    push!(body, :(unsafe_store!(convert(Ptr{$rettype}, retval_ptr), ret)))
+    push!(body, :(sizeof($rettype) != 0 && unsafe_store!(convert(Ptr{$rettype}, retval_ptr), ret)))
     push!(body, :(return Int(Core.sizeof($rettype))))
 
     # return code to generate wrapper function and send work request thread queue
@@ -94,7 +94,7 @@ function do_threadcall(fun_ptr::Ptr{Cvoid}, rettype::Type, argtypes::Vector, arg
         thread_notifiers[idx] = nothing
         release(threadcall_restrictor)
 
-        r = unsafe_load(convert(Ptr{rettype}, pointer(ret_arr)))
+        r = sizeof(rettype) == 0 ? rettype.instance : unsafe_load(convert(Ptr{rettype}, pointer(ret_arr)))
     end
     return r
 end

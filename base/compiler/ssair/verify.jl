@@ -13,6 +13,10 @@ end
 
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int)
     if isa(op, SSAValue)
+        if op.id <= 0
+            @verify_error "SSA id is zero or negative"
+            error()
+        end
         if op.id > length(ir.stmts)
             def_bb = block_for_inst(ir.cfg, ir.new_nodes[op.id - length(ir.stmts)].pos)
         else
