@@ -77,6 +77,7 @@ const DEFAULT_LOAD_PATH = ["@", "@v#.#", "@stdlib"]
 
 An array of paths for `using` and `import` statements to consider as project
 environments or package directories when loading code. See Code Loading.
+environments or package directories when loading code. See [Code Loading](@ref Code-Loading).
 """
 const LOAD_PATH = copy(DEFAULT_LOAD_PATH)
 const HOME_PROJECT = Ref{Union{String,Nothing}}(nothing)
