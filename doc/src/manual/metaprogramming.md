@@ -129,7 +129,7 @@ julia> Symbol(:var,'_',"sym")
 In the context of an expression, symbols are used to indicate access to variables; when an expression
 is evaluated, a symbol is replaced with the value bound to that symbol in the appropriate [scope](@ref scope-of-variables).
 
-Sometimes extra parentheses around the argument to `:` are needed to avoid ambiguity in parsing.:
+Sometimes extra parentheses around the argument to `:` are needed to avoid ambiguity in parsing:
 
 ```jldoctest
 julia> :(:)
@@ -710,13 +710,13 @@ julia> @macroexpand @assert a==b "a should equal b!"
 ```
 
 There is yet another case that the actual `@assert` macro handles: what if, in addition to printing
-"a should equal b," we wanted to print their values? One might naively try to use string interpolation
+"a should equal b!", we wanted to print their values? One might naively try to use string interpolation
 in the custom message, e.g., `@assert a==b "a ($a) should equal b ($b)!"`, but this won't work
 as expected with the above macro. Can you see why? Recall from [string interpolation](@ref string-interpolation) that
 an interpolated string is rewritten to a call to [`string`](@ref). Compare:
 
 ```jldoctest
-julia> typeof(:("a should equal b"))
+julia> typeof(:("a should equal b!"))
 String
 
 julia> typeof(:("a ($a) should equal b ($b)!"))
