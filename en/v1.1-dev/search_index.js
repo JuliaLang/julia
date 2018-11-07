@@ -15181,7 +15181,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "function",
-    "text": "wait(r::Future)\n\nWait for a value to become available for the specified Future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified RemoteChannel.\n\n\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\n"
+    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified Future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified RemoteChannel.\n\n\n\n\n\n"
 },
 
 {
@@ -20621,7 +20621,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sockets",
     "title": "Base.bind",
     "category": "function",
-    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
+    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
 },
 
 {
@@ -22670,6 +22670,190 @@ var documenterSearchIndex = {"docs": [
     "title": "The inlining algorithm (inline_worthy)",
     "category": "section",
     "text": "Much of the hardest work for inlining runs in inlining_pass. However, if your question is \"why didn\'t my function inline?\" then you will most likely be interested in isinlineable and its primary callee, inline_worthy. isinlineable handles a number of special cases (e.g., critical functions like next and done, incorporating a bonus for functions that return tuples, etc.). The main decision-making happens in inline_worthy, which returns true if the function should be inlined.inline_worthy implements a cost-model, where \"cheap\" functions get inlined; more specifically, we inline functions if their anticipated run-time is not large compared to the time it would take to issue a call to them if they were not inlined. The cost-model is extremely simple and ignores many important details: for example, all for loops are analyzed as if they will be executed once, and the cost of an if...else...end includes the summed cost of all branches. It\'s also worth acknowledging that we currently lack a suite of functions suitable for testing how well the cost model predicts the actual run-time cost, although BaseBenchmarks provides a great deal of indirect information about the successes and failures of any modification to the inlining algorithm.The foundation of the cost-model is a lookup table, implemented in add_tfunc and its callers, that assigns an estimated cost (measured in CPU cycles) to each of Julia\'s intrinsic functions. These costs are based on standard ranges for common architectures (see Agner Fog\'s analysis for more detail).We supplement this low-level lookup table with a number of special cases. For example, an :invoke expression (a call for which all input and output types were inferred in advance) is assigned a fixed cost (currently 20 cycles). In contrast, a :call expression, for functions other than intrinsics/builtins, indicates that the call will require dynamic dispatch, in which case we assign a cost set by Params.inline_nonleaf_penalty (currently set at 1000). Note that this is not a \"first-principles\" estimate of the raw cost of dynamic dispatch, but a mere heuristic indicating that dynamic dispatch is extremely expensive.Each statement gets analyzed for its total cost in a function called statement_cost. You can run this yourself by following the sketch below, where f is your function and tt is the Tuple-type of the arguments:# A demo on `fill(3.5, (2, 3))\nf = fill\ntt = Tuple{Float64, Tuple{Int,Int}}\n# Create the objects we need to interact with the compiler\nparams = Core.Compiler.Params(typemax(UInt))\nmi = Base.method_instances(f, tt)[1]\nci = code_typed(f, tt)[1][1]\nopt = Core.Compiler.OptimizationState(mi, params)\n# Calculate cost of each statement\ncost(stmt::Expr) = Core.Compiler.statement_cost(stmt, -1, ci, opt.sp, opt.slottypes, opt.params)\ncost(stmt) = 0\ncst = map(cost, ci.code)\n\n# output\n\n5-element Array{Int64,1}:\n  0\n  0\n 20\n 20\n  0The output is a Vector{Int} holding the estimated cost of each statement in ci.code.  Note that ci includes the consequences of inlining callees, and consequently the costs do too."
+},
+
+{
+    "location": "devdocs/ssair/#",
+    "page": "Julia SSA-form IR",
+    "title": "Julia SSA-form IR",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "devdocs/ssair/#Julia-SSA-form-IR-1",
+    "page": "Julia SSA-form IR",
+    "title": "Julia SSA-form IR",
+    "category": "section",
+    "text": ""
+},
+
+{
+    "location": "devdocs/ssair/#Background-1",
+    "page": "Julia SSA-form IR",
+    "title": "Background",
+    "category": "section",
+    "text": "Beginning in Julia 0.7, parts of the compiler use a new SSA-form intermediate representation. Historically, the compiler used to directly generate LLVM IR, from a lowered form of the Julia AST. This form had most syntactic abstractions removed, but still looked a lot like an abstract syntax tree. Over time, in order to facilitate optimizations, SSA values were introduced to this IR and the IR was linearized (i.e. a form where function arguments may only be SSA values or constants). However, non-ssa values (slots) remained in the IR due to the lack of Phi nodes in the IR (necessary for back-edges and re-merging of conditional control flow), negating much of the usefulfulness of the SSA form representation to perform middle end optimizations. Some heroic effort was put into making these optimizations work without a complete SSA form representation, but the lack of such a representation ultimately proved prohibitive."
+},
+
+{
+    "location": "devdocs/ssair/#New-IR-nodes-1",
+    "page": "Julia SSA-form IR",
+    "title": "New IR nodes",
+    "category": "section",
+    "text": "With the new IR representation, the compiler learned to handle four new IR nodes, Phi nodes, Pi nodes as well as PhiC nodes and Upsilon nodes (the latter two are only used for exception handling)."
+},
+
+{
+    "location": "devdocs/ssair/#Phi-nodes-and-Pi-nodes-1",
+    "page": "Julia SSA-form IR",
+    "title": "Phi nodes and Pi nodes",
+    "category": "section",
+    "text": "Phi nodes are part of generic SSA abstraction (see the link above if you\'re not familiar with the concept). In the Julia IR, these nodes are represented as:struct PhiNode\n    edges::Vector{Int}\n    values::Vector{Any}\nendwhere we ensure that both vectors always have the same length. In the canonical representation (the one handles by codegen and the interpreter), the edge values indicate come-from statement numbers (i.e. if edge has an entry of 15, there must be a goto, gotoifnot or implicit fall through from statement 15 that targets this phi node). Values are either SSA values or constants. It is also possible for a value to be unassigned if the variable was not defined on this path. However, undefinedness checks get explicitly inserted and represented as booleans after middle end optimizations, so code generators may assume that any use of a phi node will have an assigned value in the corresponding slot. It is also legal for the mapping to be incomplete, i.e. for a phi node to have missing incoming edges. In that case, it must be dynamically guaranteed that the corresponding value will not be used.PiNodes encode statically proven information that may be implicitly assumed in basic blocks dominated by a given pi node. They are conceptually equivalent to the technique introduced in the paper \"ABCD: Eliminating Array Bounds Checks on Demand\" or the predicate info nodes in LLVM. To see how they work, consider, e.g.%x::Union{Int, Float64} # %x is some Union{Int, Float64} typed ssa value\nif isa(x, Int)\n    # use x\nelse\n    # use x\nendwe can perform predicate insertion and turn this into:%x::Union{Int, Float64} # %x is some Union{Int, Float64} typed ssa value\nif isa(x, Int)\n    %x_int = PiNode(x, Int)\n    # use %x_int\nelse\n    %x_float = PiNode(x, Float64)\n    # use %x_float\nendPi nodes are generally ignored in the interpreter, since they don\'t have any effect on the values, but they may sometimes lead to code generation in the compiler (e.g. to change from an implicitly union split representation to a plain unboxed representation). The main usefulness of PiNodes stems from the fact that path conditions of the values can be accumulated simply by def-use chain walking that is generally done for most optimizations that care about these conditions anyway."
+},
+
+{
+    "location": "devdocs/ssair/#PhiC-nodes-and-Upsilon-nodes-1",
+    "page": "Julia SSA-form IR",
+    "title": "PhiC nodes and Upsilon nodes",
+    "category": "section",
+    "text": "Exception handling complicates the SSA story moderately, because exception handling introduces additional control flow edges into the IR across which values must be tracked. One approach to do so, which is followed by LLVM is to make calls which may throw exceptions into basic block terminators and add an explicit control flow edge to the catch handler:invoke @function_that_may_throw() to label %regular unwind to %catch\n\nregular:\n# Control flow continues here\n\ncatch:\n# Exceptions go hereHowever, this is problematic in a language like julia where at the start of the optimization pipeline, we do not now which calls throw. We would have to conservatively assume that every call (which in julia is every statement) throws. This would have several negative effects. On the one hand, it would essentially recuce the scope of every basic block to a single call, defeating the purpose of having operations be performed at the basic block level. On the other hand, every catch basic block would have n*m phi node arguments (n, the number of statements in the critical region, m the number of live values through the catch block). To work around this, we use a combination of Upsilon and PhiC (the C standing for catch, written φᶜ in the IR pretty printer, because unicode subscript c is not available) nodes. There is several ways to think of these nodes, but perhaps the easiest is to think of each PhiC as a load from a unique store-many, read-once slot, with Upsilon being the corresponding store operation. The PhiC has an operand list of all the upsilon nodes that store to its implicit slot. The Upsilon nodes however, do not record which PhiC node they store to. This is done for more natural integration with the rest of the SSA IR. E.g. if there are no more uses of a PhiC node, it is safe to delete is and the same is true of an Upsilon node. In most IR passes, PhiC nodes can be treated similar to Phi nodes. One can follow use-def chains through them, and they can be lifted to new PhiC nodes and new Upsilon nodes (in the same places as the original Upsilon nodes). The result of this scheme is that the number of Upsilon nodes (and PhiC arguments) is proportional to the number of assigned values to a particular variable (before SSA conversion), rather than the number of statements in the critical region.To see this scheme in action, consider the functionfunction foo()\n    x = 1\n    try\n        y = 2\n        error()\n    catch\n    end\n    (x, y)\nendThe corresponding IR (with irrelevant types stripped) is:ir = Code\n1 ─       nothing\n2 ─       $(Expr(:enter, 5))\n3 ─ %3  = ϒ (#undef)\n│   %4  = ϒ (1)\n│   %5  = ϒ (2)\n│         Main.bar()\n│   %7  = ϒ (3)\n└──       $(Expr(:leave, 1))\n4 ─       goto 6\n5 ─ %10 = φᶜ (%3, %5)\n│   %11 = φᶜ (%4, %7)\n└──       $(Expr(:leave, 1))\n6 ┄ %13 = φ (4 => 2, 5 => %10)::NotInferenceDontLookHere.MaybeUndef(NotInferenceDontLookHere.Const(2, false))\n│   %14 = φ (4 => 3, 5 => %11)::Int64\n│         $(Expr(:undefcheck, :y, Core.SSAValue(13)))\n│   %16 = Core.tuple(%14, %13)\n└──       return %17Note in particular that every value live into the critical region gets an upsilon node at the top of the critical region. This is because catch blocks are considered to have an invisible control flow edge from outside the function. As a result, no SSA value dominates the catch blocks, and all incoming values have to come through a φᶜ node."
+},
+
+{
+    "location": "devdocs/ssair/#Main-SSA-data-structure-1",
+    "page": "Julia SSA-form IR",
+    "title": "Main SSA data structure",
+    "category": "section",
+    "text": "The main SSAIR data structure is worthy of discussion. It draws inspiration from LLVM and Webkit\'s B3 IR. The core of the data structure is a flat vector of statements. Each statement is implicitly assigned an SSA values based on its position in the vector (i.e. the result of the statement at idx 1 can be accessed using SSAValue(1) etc). For each SSA value, we additionally maintain its type. Since, SSA values are definitionally assigned only once, this type is also the result type of the expression at the corresponding index. However, while this representation is rather efficient (since the assignments don\'t need to be explicitly) encoded, if of course carries the drawback that order is semantically significant, so reorderings and insertions change statement numbers. Additionally, we do not keep use lists (i.e. it is impossible to walk from a def to all its uses without explicitly computing this map - def lists however are trivial since you can lookup the corresponding statement from the index), so the LLVM-style RAUW (replace-all-uses-with) operation is unavailable.Instead, we do the following:We keep a separate buffer of nodes to insert (including the position to insert them at, the type of the corresponding value and the node itself). These nodes are numbered by their occurrence in the insertion buffer, allowing their values to be immediately used elesewhere in the IR (i.e. if there is 12 statements in the original statement list, the first new statement will be accessible as SSAValue(13))\nRAUW style operations are performed by setting the corresponding statement index to the replacement value.\nStatements are erased by setting the corresponding statement to nothing (this is essentially just a special-case convention of the above\nif there are any uses of the statement being erased they will be set to nothing)There is a compact! function that compacts the above data structure by performing the insertion of nodes in the appropriate place, trivial copy propagation and renaming of uses to any changed SSA values. However, the clever part of this scheme is that this compaction can be done lazily as part of the subsequent pass. Most optimization passes need to walk over the entire list of statements, performing analysis or modifications along the way. We provide an IncrementalCompact iterator that can be used to iterate over the statement list. It will perform any necessary compaction, and return the new index of the node, as well as the node itself. It is legal at this point to walk def-use chains, as well as make any modifications or deletions to the IR (insertions are disallowed however).The idea behind this arrangement is that, since the optimization passes need to touch the corresponding memory anyway, and incur the corresponding memory access penalty, performing the extra housekeeping should have comparatively little overhead (and save the overhead of maintaining these data structures during IR modification)."
+},
+
+{
+    "location": "devdocs/gc-sa/#",
+    "page": "Static analyzer annotations for GC correctness in C code",
+    "title": "Static analyzer annotations for GC correctness in C code",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "devdocs/gc-sa/#Static-analyzer-annotations-for-GC-correctness-in-C-code-1",
+    "page": "Static analyzer annotations for GC correctness in C code",
+    "title": "Static analyzer annotations for GC correctness in C code",
+    "category": "section",
+    "text": ""
+},
+
+{
+    "location": "devdocs/gc-sa/#General-Overview-1",
+    "page": "Static analyzer annotations for GC correctness in C code",
+    "title": "General Overview",
+    "category": "section",
+    "text": "Since Julia\'s GC is precise, it needs to maintain correct rooting information for any value that may be referenced at any time GC may occur. These places are known as safepoints and in the function local context, we extend this designation to any function call that may recursively end up at a safepoint.In generated code, this is taken care of automatically by the GC root placement pass (see the chapter on GC rooting in the LLVM codegen devdocs). However, in C code, we need to inform the runtime of any GC roots manually. This is done using the following macros:// The value assigned to any slot passed as an argument to these\n// is rooted for the duration of this GC frame.\nJL_GC_PUSH{1,...,6}(args...)\n// The values assigned into the size `n` array `rts` are rooted\n// for the duration of this GC frame.\nJL_GC_PUSHARGS(rts, n)\n// Pop a GC frame\nJL_GC_POPIf these macros are not used where they need to be, or they are used incorrectly, the result is silent memory corruption. As such it is very important that they are placed correctly in all applicable code.As such, we employ static analysis (and in particular the clang static analyzer) to help ensure that these macros are used correctly. The remainder of this document gives an overview of this static analysis and describes the support needed in the julia code base to make things work."
+},
+
+{
+    "location": "devdocs/gc-sa/#GC-Invariants-1",
+    "page": "Static analyzer annotations for GC correctness in C code",
+    "title": "GC Invariants",
+    "category": "section",
+    "text": "There is two simple invariants correctness:All GCPUSH calls need to be followed by an appropriate GCPOP (in practice we enforce this at the function level)\nIf a value was previously not rooted at any safepoint, it may no longer be referenced afterwardsOf course the devil is in the details here. In particular to satisfy the second of the above conditions, we need to know:Which calls are safepoints and which are not\nWhich values are rooted at any given safepoint and which are not\nWhen is a value referencedFor the second point in particular, we need to know which memory locations will be considered rooting at runtime (i.e. values assigned to such locations are rooted). This includes locations explicitly designated as such by passing them to one of the GC_PUSH macros, globally rooted locations and values, as well as any location recursively reachable from one of those locations."
+},
+
+{
+    "location": "devdocs/gc-sa/#Static-Analysis-Algorithm-1",
+    "page": "Static analyzer annotations for GC correctness in C code",
+    "title": "Static Analysis Algorithm",
+    "category": "section",
+    "text": "The idea itself is very simple, although the implementation is quite a bit more complicated (mainly due to a large number of special cases and intricacies of C and C++). In essence, we keep track of all locations that are rooting, all values that are rootable and any expression (assignments, allocations, etc) affect the rootedness of any rootable values. Then, at any safepoint, we perform a \"symbolic GC\" and poison any values that are not rooted at said location. If these values are later referenced, we emit an error.The clang static analyzer works by constructing a graph of states and exploring this graph for sources of errors. Several nodes in this graph are generated by the analyzer itself (e.g. for control flow), but the definitions above augment this graph with our own state.The static analyzer is interprocedural and can analyze control flow across function boundaries. However, the static analyzer is not fully recursive and makes heuristic decisions about which calls to explore (additionally some calls are cross-translation unit and invisible to the analyzer). In our case, our definition of correctness requires total information. As such, we need to annotate the prototypes of all function calls with whatever information the analysis required, even if that information would otherwise be available by interprocedural static analysis.Luckily however, we can still use this interprocedural analysis to ensure that the annotations we place on a given function are indeed correct given the implementation of said function."
+},
+
+{
+    "location": "devdocs/gc-sa/#The-analyzer-annotations-1",
+    "page": "Static analyzer annotations for GC correctness in C code",
+    "title": "The analyzer annotations",
+    "category": "section",
+    "text": "These annotations are found in src/support/analyzer_annotations.h. The are only active when the analyzer is being used and expand either to nothing (for prototype annotations) or to no-ops (for function like annotations)."
+},
+
+{
+    "location": "devdocs/gc-sa/#JL_NOTSAFEPOINT-1",
+    "page": "Static analyzer annotations for GC correctness in C code",
+    "title": "JL_NOTSAFEPOINT",
+    "category": "section",
+    "text": "This is perhaps the most common annotation, and should be placed on any function that is known not to possibly lead to reaching a GC safepoint. In general, it is only safe for such a function to perform arithmetic, memory accesses and calls to functions either annotated JL_NOTSAFEPOINT or otherwise known not to be safepoints (e.g. function in the C standard library, which are hardcoded as such in the analyzer)It is valid to keep values unrooted across calls to any function annotated with this attribute:Usage Example:void jl_get_one() JL_NOTSAFEPOINT {\n  return 1;\n}\n\njl_value_t *example() {\n  jl_value_t *val = jl_alloc_whatever();\n  // This is valid, even though `val` is unrooted, because\n  // jl_get_one is not a safepoint\n  jl_get_one();\n  return val;\n}"
+},
+
+{
+    "location": "devdocs/gc-sa/#JL*MAYBE*UNROOTED/JL*ROOTS*TEMPORARILY-1",
+    "page": "Static analyzer annotations for GC correctness in C code",
+    "title": "JLMAYBEUNROOTED/JLROOTSTEMPORARILY",
+    "category": "section",
+    "text": "When JL_MAYBE_UNROOTED is annotated as an argument on a function, indicates that said argument may be passed, even if it is not rooted. In the ordinary course of events, the julia ABI guarantees that callers root values before passing them to callees. However, some functions do not follow this ABI and allow values to be passed to them even though they are not rooted. Note however, that this does not automatically imply that said argument will be preserved. The ROOTS_TEMPORARILY annotation provides the stronger guarantee that, not only may the value be unrooted when passed, it will also be preserved across any internal safepoints by the callee.Note that JLNOTSAFEPOINT essentially implies JLMAYBEUNROOTED/JLROOTS_TEMPORARILY, because the rootedness of an argument is irrelevant if the function contains no safepoints.One additional point to note is that these annotations apply on both the caller and the callee side. On the caller side, they lift rootedness restrictions that are normally required for julia ABI functions. On the callee side, they have the reverse effect of preventing these arguments from being considered implicitly rooted.If either of these annotations is applied to the function as a whole, it applies to all arguments of the function. This should generally only be necessary for varargs functions.Usage example:JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);\njl_value_t *jl_alloc_error();\n\nvoid example() {\n  // The return value of the allocation is unrooted. This would normally\n  // be an error, but is allowed because of the above annotation.\n  jl_throw(jl_alloc_error());\n}"
+},
+
+{
+    "location": "devdocs/gc-sa/#JL*PROPAGATES*ROOT-1",
+    "page": "Static analyzer annotations for GC correctness in C code",
+    "title": "JLPROPAGATESROOT",
+    "category": "section",
+    "text": "This annotation is commonly found on accessor functions that return one rootable object stored within another. When annotated on a function argument, it tells the analyzer that the root for that argument also applies to the value returned by the function.Usage Example:jl_value_t *jl_svecref(jl_svec_t *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;\n\nsize_t example(jl_svec_t *svec) {\n  jl_value_t *val = jl_svecref(svec, 1)\n  // This is valid, because, as annotated by the PROPAGATES_ROOT annotation,\n  // jl_svecref propagates the rooted-ness from `svec` to `val`\n  jl_gc_safepoint();\n  return jl_unbox_long(val);\n}"
+},
+
+{
+    "location": "devdocs/gc-sa/#JL*ROOTING*ARGUMENT/JL*ROOTED*ARGUMENT-1",
+    "page": "Static analyzer annotations for GC correctness in C code",
+    "title": "JLROOTINGARGUMENT/JLROOTEDARGUMENT",
+    "category": "section",
+    "text": "This is essentially the assignment counterpart to JL_PROPAGATES_ROOT. When assigning a value to a field of another value that is already rooted, the assigned value will inherit the root of the value it is assigned into.Usage Example:void jl_svecset(void *t JL_ROOTING_ARGUMENT, size_t i, void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT\n\n\nsize_t example(jl_svec_t *svec) {\n  jl_value_t *val = jl_box_long(10000);\n  jl_svecset(svec, val);\n  // This is valid, because the annotations imply that the\n  // jl_svecset propagates the rooted-ness from `svec` to `val`\n  jl_gc_safepoint();\n  return jl_unbox_long(val);\n}"
+},
+
+{
+    "location": "devdocs/gc-sa/#JL*GC*DISABLED-1",
+    "page": "Static analyzer annotations for GC correctness in C code",
+    "title": "JLGCDISABLED",
+    "category": "section",
+    "text": "This annotation implies that this function is only called with the GC runtime-disabled. Functions of this kind are most often encountered during startup and in the GC code itself. Note that this annotation is checked against the runtime enable/disable calls, so clang will know if you lie. This is not a good way to disable processing of a given function if the GC is not actually disabled (use ifdef clang_analyzer for that if you must).Usage example:void jl_do_magic() JL_GC_DISABLED {\n  // Wildly allocate here with no regard for roots\n}\n\nvoid example() {\n  int en = jl_gc_enable(0);\n  jl_do_magic();\n  jl_gc_enable(en);\n}"
+},
+
+{
+    "location": "devdocs/gc-sa/#JL*REQUIRE*ROOTED_SLOT-1",
+    "page": "Static analyzer annotations for GC correctness in C code",
+    "title": "JLREQUIREROOTED_SLOT",
+    "category": "section",
+    "text": "This annotation requires the caller to pass in a slot that is rooted (i.e. values assigned to this slot will be rooted).Usage example:void jl_do_processing(jl_value_t **slot JL_REQUIRE_ROOTED_SLOT) {\n  *slot = jl_box_long(1);\n  // Ok, only, because the slot was annotated as rooting\n  jl_gc_safepoint();\n}\n\nvoid example() {\n  jl_value_t *slot = NULL;\n  JL_GC_PUSH1(&slot);\n  jl_do_processing(&slot);\n  JL_GC_POP();\n}"
+},
+
+{
+    "location": "devdocs/gc-sa/#JL*GLOBALLY*ROOTED-1",
+    "page": "Static analyzer annotations for GC correctness in C code",
+    "title": "JLGLOBALLYROOTED",
+    "category": "section",
+    "text": "This annotation implies that a given value is always globally rooted. It can be applied to global variable declarations, in which case it will apply to the value of those variables (or values if the declaration if for an array), or to functions, in which case it will apply to the return value of such functions (e.g. for functions that always return some private, globally rooted value).Usage example:extern JL_DLLEXPORT jl_datatype_t *jl_any_type JL_GLOBALLY_ROOTED;\njl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED;"
+},
+
+{
+    "location": "devdocs/gc-sa/#JL*ALWAYS*LEAFTYPE-1",
+    "page": "Static analyzer annotations for GC correctness in C code",
+    "title": "JLALWAYSLEAFTYPE",
+    "category": "section",
+    "text": "This annotations is essentially equivalent to JLGLOBALLYROOTED, except that is should only be used if those values are globally rooted by virtue of being a leaftype. The rooting of leaftypes is a bit complicated. They are generally rooted through cache field of the corresponding TypeName, which itself is rooted by the containing module (so they\'re rooted as long as the containing module is ok) and we can generally assume that leaftypes are rooted where they are used, but we may refine this property in the future, so the separate annotation helps split out the reason for being globally rooted.The analyzer also automatically detects checks for leaftype-ness and will not complain about missing GC roots on these paths.JL_DLLEXPORT jl_value_t *jl_apply_array_type(jl_value_t *type, size_t dim) JL_ALWAYS_LEAFTYPE;"
+},
+
+{
+    "location": "devdocs/gc-sa/#JL*GC*PROMISE_ROOTED-1",
+    "page": "Static analyzer annotations for GC correctness in C code",
+    "title": "JLGCPROMISE_ROOTED",
+    "category": "section",
+    "text": "This is a function-like annotation. Any value passed to this annotation will be considered rooted for the scope of the current function. It is designed as an escape hatch for analyzer inadequacy or complicated situations. However, it should be used sparingly, in favor of improving the analyzer itself.void example() {\n  jl_value_t *val = jl_alloc_something();\n  if (some_condition) {\n    // We happen to know for complicated external reasons\n    // that val is rooted under these conditions\n    JL_GC_PROMISE_ROOTED(val);\n  }\n}"
+},
+
+{
+    "location": "devdocs/gc-sa/#Completeness-of-analysis-1",
+    "page": "Static analyzer annotations for GC correctness in C code",
+    "title": "Completeness of analysis",
+    "category": "section",
+    "text": "The analyzer only looks at local information. In particular, e.g. in the PROPAGATES_ROOT case above, it assumes that such memory is only modified in ways it can see, not in any called functions (unless it happens to decide to consider them in its analysis) and not in any concurrently running threads. As such, it may miss a few problematic cases, though in practice such concurrent modification is fairly rare. Improving the analyzer to handle more such cases may be an interesting topic for future work."
 },
 
 {
