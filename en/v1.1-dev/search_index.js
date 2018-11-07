@@ -1685,7 +1685,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Documentation",
     "title": "LaTeX",
     "category": "section",
-    "text": "Surround text that should be displayed as mathematics using LaTeX syntax with double backticks, `` .A paragraph containing some ``\\LaTeX`` markup.tip: Tip\nAs with literals in the previous section, if literal backticks need to be written within double backticks use an even number greater than two. Note that if a single literal backtick needs to be included within LaTeX markup then two enclosing backticks is sufficient."
+    "text": "Surround text that should be displayed as mathematics using LaTeX syntax with double backticks, `` .A paragraph containing some ``\\LaTeX`` markup.tip: Tip\nAs with literals in the previous section, if literal backticks need to be written within double backticks use an even number greater than two. Note that if a single literal backtick needs to be included within LaTeX markup then two enclosing backticks is sufficient.note: Note\nThe \\ character should be escaped appropriately if the text is embedded in a Julia source code, for example, \"``\\\\LaTeX`` syntax in a docstring.\", since it is interpreted as a string literal."
 },
 
 {
@@ -7469,7 +7469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
 },
 
 {
@@ -8685,7 +8685,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.binomial",
     "category": "function",
-    "text": "binomial(n::Integer, k::Integer)\n\nThe binomial coefficient inomnk, being the coefficient of the kth term in the polynomial expansion of (1+x)^n.\n\nIf n is non-negative, then it is the number of ways to choose k out of n items:\n\ninomnk = racnk (n-k)\n\nwhere n is the factorial function.\n\nIf n is negative, then it is defined in terms of the identity\n\ninomnk = (-1)^k inomk-n-1k\n\nExamples\n\njulia> binomial(5, 3)\n10\n\njulia> factorial(5) ÷ (factorial(5-3) * factorial(3))\n10\n\njulia> binomial(-5, 3)\n-35\n\nSee also\n\nfactorial\n\nExternal links\n\nBinomial coeffient on Wikipedia.\n\n\n\n\n\n"
+    "text": "binomial(n::Integer, k::Integer)\n\nThe binomial coefficient binomnk, being the coefficient of the kth term in the polynomial expansion of (1+x)^n.\n\nIf n is non-negative, then it is the number of ways to choose k out of n items:\n\nbinomnk = fracnk (n-k)\n\nwhere n is the factorial function.\n\nIf n is negative, then it is defined in terms of the identity\n\nbinomnk = (-1)^k binomk-n-1k\n\nExamples\n\njulia> binomial(5, 3)\n10\n\njulia> factorial(5) ÷ (factorial(5-3) * factorial(3))\n10\n\njulia> binomial(-5, 3)\n-35\n\nSee also\n\nfactorial\n\nExternal links\n\nBinomial coeffient on Wikipedia.\n\n\n\n\n\n"
 },
 
 {
