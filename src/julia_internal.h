@@ -109,6 +109,11 @@ static inline void jl_assume_(int cond)
 #  define JL_USE_IFUNC 0
 #endif
 
+// If this is detected in a backtrace of segfault, it means the functions
+// that use this value must be reworked into their async form with cb arg
+// provided and with JL_UV_LOCK used around the calls
+static uv_loop_t *const unused_uv_loop_arg = (uv_loop_t *)0xBAD10;
+
 extern jl_mutex_t jl_uv_mutex;
 #define JL_UV_LOCK() JL_LOCK_NOGC(&jl_uv_mutex)
 #define JL_UV_UNLOCK() JL_UNLOCK_NOGC(&jl_uv_mutex)

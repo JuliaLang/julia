@@ -360,16 +360,11 @@ JL_DLLEXPORT uv_loop_t *jl_global_event_loop(void)
     return jl_io_loop;
 }
 
-// If this is detected in a backtrace of segfault, it means the functions
-// that use this value must be reworked into their async form with cb arg
-// provided and with JL_UV_LOCK used around the calls
-static uv_loop_t *const unused_loop_arg = (uv_loop_t *)0xBAD10;
-
 JL_DLLEXPORT int jl_fs_unlink(char *path)
 {
     uv_fs_t req;
     JL_SIGATOMIC_BEGIN();
-    int ret = uv_fs_unlink(unused_loop_arg, &req, path, NULL);
+    int ret = uv_fs_unlink(unused_uv_loop_arg, &req, path, NULL);
     uv_fs_req_cleanup(&req);
     JL_SIGATOMIC_END();
     return ret;
@@ -379,7 +374,7 @@ JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path)
 {
     uv_fs_t req;
     JL_SIGATOMIC_BEGIN();
-    int ret = uv_fs_rename(unused_loop_arg, &req, src_path, dst_path, NULL);
+    int ret = uv_fs_rename(unused_uv_loop_arg, &req, src_path, dst_path, NULL);
     uv_fs_req_cleanup(&req);
     JL_SIGATOMIC_END();
     return ret;
@@ -390,7 +385,7 @@ JL_DLLEXPORT int jl_fs_sendfile(uv_os_fd_t src_fd, uv_os_fd_t dst_fd,
 {
     uv_fs_t req;
     JL_SIGATOMIC_BEGIN();
-    int ret = uv_fs_sendfile(unused_loop_arg, &req, dst_fd, src_fd,
+    int ret = uv_fs_sendfile(unused_uv_loop_arg, &req, dst_fd, src_fd,
                              in_offset, len, NULL);
     uv_fs_req_cleanup(&req);
     JL_SIGATOMIC_END();
@@ -400,7 +395,7 @@ JL_DLLEXPORT int jl_fs_sendfile(uv_os_fd_t src_fd, uv_os_fd_t dst_fd,
 JL_DLLEXPORT int jl_fs_symlink(char *path, char *new_path, int flags)
 {
     uv_fs_t req;
-    int ret = uv_fs_symlink(unused_loop_arg, &req, path, new_path, flags, NULL);
+    int ret = uv_fs_symlink(unused_uv_loop_arg, &req, path, new_path, flags, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
@@ -408,7 +403,7 @@ JL_DLLEXPORT int jl_fs_symlink(char *path, char *new_path, int flags)
 JL_DLLEXPORT int jl_fs_chmod(char *path, int mode)
 {
     uv_fs_t req;
-    int ret = uv_fs_chmod(unused_loop_arg, &req, path, mode, NULL);
+    int ret = uv_fs_chmod(unused_uv_loop_arg, &req, path, mode, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
@@ -416,7 +411,7 @@ JL_DLLEXPORT int jl_fs_chmod(char *path, int mode)
 JL_DLLEXPORT int jl_fs_chown(char *path, int uid, int gid)
 {
     uv_fs_t req;
-    int ret = uv_fs_chown(unused_loop_arg, &req, path, uid, gid, NULL);
+    int ret = uv_fs_chown(unused_uv_loop_arg, &req, path, uid, gid, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
@@ -438,7 +433,7 @@ JL_DLLEXPORT int jl_fs_write(uv_os_fd_t handle, const char *data, size_t len,
     buf[0].len = len;
     if (!jl_io_loop)
         jl_io_loop = uv_default_loop();
-    int ret = uv_fs_write(unused_loop_arg, &req, handle, buf, 1, offset, NULL);
+    int ret = uv_fs_write(unused_uv_loop_arg, &req, handle, buf, 1, offset, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
@@ -449,7 +444,7 @@ JL_DLLEXPORT int jl_fs_read(uv_os_fd_t handle, char *data, size_t len)
     uv_buf_t buf[1];
     buf[0].base = data;
     buf[0].len = len;
-    int ret = uv_fs_read(unused_loop_arg, &req, handle, buf, 1, -1, NULL);
+    int ret = uv_fs_read(unused_uv_loop_arg, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
@@ -461,7 +456,7 @@ JL_DLLEXPORT int jl_fs_read_byte(uv_os_fd_t handle)
     uv_buf_t buf[1];
     buf[0].base = (char*)&c;
     buf[0].len = 1;
-    int ret = uv_fs_read(unused_loop_arg, &req, handle, buf, 1, -1, NULL);
+    int ret = uv_fs_read(unused_uv_loop_arg, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);
     switch (ret) {
     case -1: return ret;
@@ -476,7 +471,7 @@ JL_DLLEXPORT int jl_fs_read_byte(uv_os_fd_t handle)
 JL_DLLEXPORT int jl_fs_close(uv_os_fd_t handle)
 {
     uv_fs_t req;
-    int ret = uv_fs_close(unused_loop_arg, &req, handle, NULL);
+    int ret = uv_fs_close(unused_uv_loop_arg, &req, handle, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
