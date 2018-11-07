@@ -108,7 +108,7 @@ tostr_sizehint(x::AbstractString) = lastindex(x)
 tostr_sizehint(x::Float64) = 20
 tostr_sizehint(x::Float32) = 12
 
-function print_to_string(xs...; dontcare=nothing)
+function print_to_string(xs...; dontcare=nothing) # unused kwarg: JuliaLang/julia#29952
     if isempty(xs)
         return ""
     end
