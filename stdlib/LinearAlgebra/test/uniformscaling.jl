@@ -64,6 +64,16 @@ end
     @test UniformScaling(α)/α == UniformScaling(1.0)
 end
 
+@testset "conversion of Number" begin
+    α = randn()
+    J = UniformScaling(α)
+    A = randn(2, 2)
+    @test α + A == J + A
+    @test A + α == A + J
+    @test α - A == J - A
+    @test A - α == A - J
+end
+
 @testset "det and logdet" begin
     @test det(I) === true
     @test det(1.0I) === 1.0
