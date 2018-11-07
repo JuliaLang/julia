@@ -89,7 +89,7 @@ function IOBuffer(
         maxsize::Integer=typemax(Int),
         sizehint::Union{Integer,Nothing}=nothing)
     if maxsize < 0
-        throw(ArgumentError("negative maxsize: $(maxsize)"))
+        throw(ArgumentError("negative maxsize"))
     end
     if sizehint !== nothing
         sizehint!(data, sizehint)
