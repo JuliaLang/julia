@@ -1176,11 +1176,12 @@ timesofar("datamove")
     @check_bit_operation findall(b1) Vector{CartesianIndex{3}}
 
     # BitArrays of various dimensions
-    for dims = 2:8
+    for dims = 0:8
         t = Tuple(fill(2, dims))
-        @check_bit_operation findall(trues(t)) Vector{CartesianIndex{dims}}
-        @check_bit_operation findall(falses(t)) Vector{CartesianIndex{dims}}
-        @check_bit_operation findall(bitrand(t)) Vector{CartesianIndex{dims}}
+        ret_type = Vector{dims == 1 ? Int : CartesianIndex{dims}}
+        @check_bit_operation findall(trues(t)) ret_type
+        @check_bit_operation findall(falses(t)) ret_type
+        @check_bit_operation findall(bitrand(t)) ret_type
     end
 end
 

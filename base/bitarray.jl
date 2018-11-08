@@ -1534,19 +1534,19 @@ function allindices!(I, B::BitMatrix)
     end
 end
 
-@inline overflowind(i1, irest::Tuple{}, size) = (i1, irest)
-@inline function overflowind(i1, irest, size)
+@inline _overflowind(i1, irest::Tuple{}, size) = (i1, irest)
+@inline function _overflowind(i1, irest, size)
     i2 = irest[1]
     while i1 > size[1]
         i1 -= size[1]
         i2 += 1
     end
-    i2, irest = overflowind(i2, tail(irest), tail(size))
+    i2, irest = _overflowind(i2, tail(irest), tail(size))
     return (i1, (i2, irest...))
 end
 
-@inline toind(i1, irest::Tuple{}) = i1
-@inline toind(i1, irest) = CartesianIndex(i1, irest...)
+@inline _toind(i1, irest::Tuple{}) = i1
+@inline _toind(i1, irest) = CartesianIndex(i1, irest...)
 
 function findall(B::BitArray)
     nnzB = count(B)
@@ -1556,7 +1556,7 @@ function findall(B::BitArray)
     Bc = B.chunks
     Bs = size(B)
     Bi = i1 = i = 1
-    irest = ntuple(one, length(B.dims) - 1)
+    irest = ntuple(one, ndims(B) - 1)
     c = Bc[1]
     @inbounds while true
         while c == 0
@@ -1569,8 +1569,8 @@ function findall(B::BitArray)
         tz = trailing_zeros(c)
         c = _blsr(c)
 
-        i1, irest = overflowind(i1 + tz, irest, Bs)
-        I[i] = toind(i1, irest)
+        i1, irest = _overflowind(i1 + tz, irest, Bs)
+        I[i] = _toind(i1, irest)
         i += 1
         i1 -= tz
     end
