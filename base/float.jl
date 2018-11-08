@@ -501,41 +501,21 @@ for Ti in (Int64,UInt64,Int128,UInt128)
         end
     end
 end
-==(x::Float16, y::Union{Int128,UInt128}) = Float64(x)==Float64(y)
-==(x::Union{Int128,UInt128}, y::Float16) = Float64(x)==Float64(y)
+for op in (:(==), :<, :<=)
+    @eval begin
+        ($op)(x::Float16, y::Union{Int128,UInt128}) = ($op)(Float64(x), Float64(y))
+        ($op)(x::Union{Int128,UInt128}, y::Float16) = ($op)(Float64(x), Float64(y))
 
-<(x::Float16, y::Union{Int128,UInt128}) = Float64(x)<Float64(y)
-<(x::Union{Int128,UInt128}, y::Float16) = Float64(x)<Float64(y)
+        ($op)(x::Float16, y::Union{Int64,UInt64}) = ($op)(Float64(x), Float64(y))
+        ($op)(x::Union{Int64,UInt64}, y::Float16) = ($op)(Float64(x), Float64(y))
 
-<=(x::Float16, y::Union{Int128,UInt128}) = Float64(x)<=Float64(y)
-<=(x::Union{Int128,UInt128}, y::Float16) = Float64(x)<=Float64(y)
+        ($op)(x::Union{Float16,Float32}, y::Union{Int32,UInt32}) = ($op)(Float64(x), Float64(y))
+        ($op)(x::Union{Int32,UInt32}, y::Union{Float16,Float32}) = ($op)(Float64(x), Float64(y))
 
-==(x::Float16, y::Union{Int64,UInt64}) = Float64(x)==Float64(y)
-==(x::Union{Int64,UInt64}, y::Float16) = Float64(x)==Float64(y)
-
-<(x::Float16, y::Union{Int64,UInt64}) = Float64(x)<Float64(y)
-<(x::Union{Int64,UInt64}, y::Float16) = Float64(x)<Float64(y)
-
-<=(x::Float16, y::Union{Int64,UInt64}) = Float64(x)<=Float64(y)
-<=(x::Union{Int64,UInt64}, y::Float16) = Float64(x)<=Float64(y)
-
-==(x::Float16, y::Union{Int16,UInt16}) = Float32(x)==Float32(y)
-==(x::Union{Int16,UInt16}, y::Float16) = Float32(x)==Float32(y)
-
-<(x::Float16, y::Union{Int16,UInt16}) = Float32(x)<Float32(y)
-<(x::Union{Int16,UInt16}, y::Float16) = Float32(x)<Float32(y)
-
-<=(x::Float16, y::Union{Int16,UInt16}) = Float32(x)<=Float32(y)
-<=(x::Union{Int16,UInt16}, y::Float16) = Float32(x)<=Float32(y)
-
-==(x::Union{Float16,Float32}, y::Union{Int32,UInt32}) = Float64(x)==Float64(y)
-==(x::Union{Int32,UInt32}, y::Union{Float16,Float32}) = Float64(x)==Float64(y)
-
-<(x::Union{Float16,Float32}, y::Union{Int32,UInt32}) = Float64(x)<Float64(y)
-<(x::Union{Int32,UInt32}, y::Union{Float16,Float32}) = Float64(x)<Float64(y)
-
-<=(x::Union{Float16,Float32}, y::Union{Int32,UInt32}) = Float64(x)<=Float64(y)
-<=(x::Union{Int32,UInt32}, y::Union{Float16,Float32}) = Float64(x)<=Float64(y)
+        ($op)(x::Float16, y::Union{Int16,UInt16}) = ($op)(Float32(x), Float32(y))
+        ($op)(x::Union{Int16,UInt16}, y::Float16) = ($op)(Float32(x), Float32(y))
+    end
+end
 
 
 abs(x::Float16) = reinterpret(Float16, reinterpret(UInt16, x) & 0x7fff)
