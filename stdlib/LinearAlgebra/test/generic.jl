@@ -194,6 +194,7 @@ end
 end
 
 @test rank(fill(0, 0, 0)) == 0
+@test rank([1.0 0.0; 0.0 0.9],0.95) == 1
 @test rank([1.0 0.0; 0.0 0.9],rtol=0.95) == 1
 @test rank([1.0 0.0; 0.0 0.9],atol=0.95) == 1
 @test rank([1.0 0.0; 0.0 0.9],atol=0.95,rtol=0.95)==0

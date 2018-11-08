@@ -712,12 +712,15 @@ end
 ###########################################################################################
 
 """
-    rank(A[, tol::Real])
+    rank(A::AbstractArray, atol::Real, rtol::Real)
+    rank(A[, tol::Real]) = rank(A, rtol=tol)
 
 Compute the rank of a matrix by counting how many singular
-values of `A` have magnitude greater than `rtol*σ₁ + atol` where `σ₁` is
+values of `A` have magnitude greater than `max(atol, rtol*σ₁)` where `σ₁` is
 `A`'s largest singular values, atol and rtol are the absolute and relative
 tolerance respectively.
+
+Also, 
 
 # Examples
 ```jldoctest
@@ -725,6 +728,9 @@ julia> rank(Matrix(I, 3, 3))
 3
 
 julia> rank(diagm(0 => [1, 0, 2]))
+2
+
+julia> rank(diagm(0 => [1, 0.001, 2]), 0.1)
 2
 
 julia> rank(diagm(0 => [1, 0.001, 2]), rtol=0.1)
@@ -737,10 +743,12 @@ julia> rank(diagm(0 => [1, 0.001, 2]), atol=0.00001, rtol=0.00001)
 3
 ```
 """
-function rank(A::AbstractMatrix; atol=0.0, rtol=0.0)
+function rank(A::AbstractMatrix; atol::Real=0.0, rtol::Real=atol>0 ? (min(size(A)...)*eps(real(float(one(eltype(A)))))) : 0.0)
     s = svdvals(A)
-    count(x -> x > (atol + rtol * s[1]), s)
+    tol = max(atol, rtol*s[1])
+    count(x -> x > tol, s)
 end
+rank(A::AbstractMatrix, tol::Real) = rank(A,rtol=tol) # TODO: deprecate tol in 2.0
 rank(x::Number) = x == 0 ? 0 : 1
 
 """
