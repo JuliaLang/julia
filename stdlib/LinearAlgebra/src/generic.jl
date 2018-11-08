@@ -720,8 +720,6 @@ values of `A` have magnitude greater than `max(atol, rtol*σ₁)` where `σ₁` 
 `A`'s largest singular values, atol and rtol are the absolute and relative
 tolerance respectively.
 
-Also, 
-
 # Examples
 ```jldoctest
 julia> rank(Matrix(I, 3, 3))
