@@ -7469,7 +7469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
@@ -15181,7 +15181,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "function",
-    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified Future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified RemoteChannel.\n\n\n\n\n\n"
+    "text": "wait(r::Future)\n\nWait for a value to become available for the specified Future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified RemoteChannel.\n\n\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\n"
 },
 
 {
@@ -20621,7 +20621,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sockets",
     "title": "Base.bind",
     "category": "function",
-    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
+    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
 },
 
 {
@@ -22785,65 +22785,65 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/gc-sa/#JL*MAYBE*UNROOTED/JL*ROOTS*TEMPORARILY-1",
+    "location": "devdocs/gc-sa/#JL_MAYBE_UNROOTED/JL_ROOTS_TEMPORARILY-1",
     "page": "Static analyzer annotations for GC correctness in C code",
-    "title": "JLMAYBEUNROOTED/JLROOTSTEMPORARILY",
+    "title": "JL_MAYBE_UNROOTED/JL_ROOTS_TEMPORARILY",
     "category": "section",
-    "text": "When JL_MAYBE_UNROOTED is annotated as an argument on a function, indicates that said argument may be passed, even if it is not rooted. In the ordinary course of events, the julia ABI guarantees that callers root values before passing them to callees. However, some functions do not follow this ABI and allow values to be passed to them even though they are not rooted. Note however, that this does not automatically imply that said argument will be preserved. The ROOTS_TEMPORARILY annotation provides the stronger guarantee that, not only may the value be unrooted when passed, it will also be preserved across any internal safepoints by the callee.Note that JLNOTSAFEPOINT essentially implies JLMAYBEUNROOTED/JLROOTS_TEMPORARILY, because the rootedness of an argument is irrelevant if the function contains no safepoints.One additional point to note is that these annotations apply on both the caller and the callee side. On the caller side, they lift rootedness restrictions that are normally required for julia ABI functions. On the callee side, they have the reverse effect of preventing these arguments from being considered implicitly rooted.If either of these annotations is applied to the function as a whole, it applies to all arguments of the function. This should generally only be necessary for varargs functions.Usage example:JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);\njl_value_t *jl_alloc_error();\n\nvoid example() {\n  // The return value of the allocation is unrooted. This would normally\n  // be an error, but is allowed because of the above annotation.\n  jl_throw(jl_alloc_error());\n}"
+    "text": "When JL_MAYBE_UNROOTED is annotated as an argument on a function, indicates that said argument may be passed, even if it is not rooted. In the ordinary course of events, the julia ABI guarantees that callers root values before passing them to callees. However, some functions do not follow this ABI and allow values to be passed to them even though they are not rooted. Note however, that this does not automatically imply that said argument will be preserved. The ROOTS_TEMPORARILY annotation provides the stronger guarantee that, not only may the value be unrooted when passed, it will also be preserved across any internal safepoints by the callee.Note that JL_NOTSAFEPOINT essentially implies JL_MAYBE_UNROOTED/JL_ROOTS_TEMPORARILY, because the rootedness of an argument is irrelevant if the function contains no safepoints.One additional point to note is that these annotations apply on both the caller and the callee side. On the caller side, they lift rootedness restrictions that are normally required for julia ABI functions. On the callee side, they have the reverse effect of preventing these arguments from being considered implicitly rooted.If either of these annotations is applied to the function as a whole, it applies to all arguments of the function. This should generally only be necessary for varargs functions.Usage example:JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);\njl_value_t *jl_alloc_error();\n\nvoid example() {\n  // The return value of the allocation is unrooted. This would normally\n  // be an error, but is allowed because of the above annotation.\n  jl_throw(jl_alloc_error());\n}"
 },
 
 {
-    "location": "devdocs/gc-sa/#JL*PROPAGATES*ROOT-1",
+    "location": "devdocs/gc-sa/#JL_PROPAGATES_ROOT-1",
     "page": "Static analyzer annotations for GC correctness in C code",
-    "title": "JLPROPAGATESROOT",
+    "title": "JL_PROPAGATES_ROOT",
     "category": "section",
     "text": "This annotation is commonly found on accessor functions that return one rootable object stored within another. When annotated on a function argument, it tells the analyzer that the root for that argument also applies to the value returned by the function.Usage Example:jl_value_t *jl_svecref(jl_svec_t *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;\n\nsize_t example(jl_svec_t *svec) {\n  jl_value_t *val = jl_svecref(svec, 1)\n  // This is valid, because, as annotated by the PROPAGATES_ROOT annotation,\n  // jl_svecref propagates the rooted-ness from `svec` to `val`\n  jl_gc_safepoint();\n  return jl_unbox_long(val);\n}"
 },
 
 {
-    "location": "devdocs/gc-sa/#JL*ROOTING*ARGUMENT/JL*ROOTED*ARGUMENT-1",
+    "location": "devdocs/gc-sa/#JL_ROOTING_ARGUMENT/JL_ROOTED_ARGUMENT-1",
     "page": "Static analyzer annotations for GC correctness in C code",
-    "title": "JLROOTINGARGUMENT/JLROOTEDARGUMENT",
+    "title": "JL_ROOTING_ARGUMENT/JL_ROOTED_ARGUMENT",
     "category": "section",
     "text": "This is essentially the assignment counterpart to JL_PROPAGATES_ROOT. When assigning a value to a field of another value that is already rooted, the assigned value will inherit the root of the value it is assigned into.Usage Example:void jl_svecset(void *t JL_ROOTING_ARGUMENT, size_t i, void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT\n\n\nsize_t example(jl_svec_t *svec) {\n  jl_value_t *val = jl_box_long(10000);\n  jl_svecset(svec, val);\n  // This is valid, because the annotations imply that the\n  // jl_svecset propagates the rooted-ness from `svec` to `val`\n  jl_gc_safepoint();\n  return jl_unbox_long(val);\n}"
 },
 
 {
-    "location": "devdocs/gc-sa/#JL*GC*DISABLED-1",
+    "location": "devdocs/gc-sa/#JL_GC_DISABLED-1",
     "page": "Static analyzer annotations for GC correctness in C code",
-    "title": "JLGCDISABLED",
+    "title": "JL_GC_DISABLED",
     "category": "section",
-    "text": "This annotation implies that this function is only called with the GC runtime-disabled. Functions of this kind are most often encountered during startup and in the GC code itself. Note that this annotation is checked against the runtime enable/disable calls, so clang will know if you lie. This is not a good way to disable processing of a given function if the GC is not actually disabled (use ifdef clang_analyzer for that if you must).Usage example:void jl_do_magic() JL_GC_DISABLED {\n  // Wildly allocate here with no regard for roots\n}\n\nvoid example() {\n  int en = jl_gc_enable(0);\n  jl_do_magic();\n  jl_gc_enable(en);\n}"
+    "text": "This annotation implies that this function is only called with the GC runtime-disabled. Functions of this kind are most often encountered during startup and in the GC code itself. Note that this annotation is checked against the runtime enable/disable calls, so clang will know if you lie. This is not a good way to disable processing of a given function if the GC is not actually disabled (use ifdef __clang_analyzer__ for that if you must).Usage example:void jl_do_magic() JL_GC_DISABLED {\n  // Wildly allocate here with no regard for roots\n}\n\nvoid example() {\n  int en = jl_gc_enable(0);\n  jl_do_magic();\n  jl_gc_enable(en);\n}"
 },
 
 {
-    "location": "devdocs/gc-sa/#JL*REQUIRE*ROOTED_SLOT-1",
+    "location": "devdocs/gc-sa/#JL_REQUIRE_ROOTED_SLOT-1",
     "page": "Static analyzer annotations for GC correctness in C code",
-    "title": "JLREQUIREROOTED_SLOT",
+    "title": "JL_REQUIRE_ROOTED_SLOT",
     "category": "section",
     "text": "This annotation requires the caller to pass in a slot that is rooted (i.e. values assigned to this slot will be rooted).Usage example:void jl_do_processing(jl_value_t **slot JL_REQUIRE_ROOTED_SLOT) {\n  *slot = jl_box_long(1);\n  // Ok, only, because the slot was annotated as rooting\n  jl_gc_safepoint();\n}\n\nvoid example() {\n  jl_value_t *slot = NULL;\n  JL_GC_PUSH1(&slot);\n  jl_do_processing(&slot);\n  JL_GC_POP();\n}"
 },
 
 {
-    "location": "devdocs/gc-sa/#JL*GLOBALLY*ROOTED-1",
+    "location": "devdocs/gc-sa/#JL_GLOBALLY_ROOTED-1",
     "page": "Static analyzer annotations for GC correctness in C code",
-    "title": "JLGLOBALLYROOTED",
+    "title": "JL_GLOBALLY_ROOTED",
     "category": "section",
     "text": "This annotation implies that a given value is always globally rooted. It can be applied to global variable declarations, in which case it will apply to the value of those variables (or values if the declaration if for an array), or to functions, in which case it will apply to the return value of such functions (e.g. for functions that always return some private, globally rooted value).Usage example:extern JL_DLLEXPORT jl_datatype_t *jl_any_type JL_GLOBALLY_ROOTED;\njl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED;"
 },
 
 {
-    "location": "devdocs/gc-sa/#JL*ALWAYS*LEAFTYPE-1",
+    "location": "devdocs/gc-sa/#JL_ALWAYS_LEAFTYPE-1",
     "page": "Static analyzer annotations for GC correctness in C code",
-    "title": "JLALWAYSLEAFTYPE",
+    "title": "JL_ALWAYS_LEAFTYPE",
     "category": "section",
-    "text": "This annotations is essentially equivalent to JLGLOBALLYROOTED, except that is should only be used if those values are globally rooted by virtue of being a leaftype. The rooting of leaftypes is a bit complicated. They are generally rooted through cache field of the corresponding TypeName, which itself is rooted by the containing module (so they\'re rooted as long as the containing module is ok) and we can generally assume that leaftypes are rooted where they are used, but we may refine this property in the future, so the separate annotation helps split out the reason for being globally rooted.The analyzer also automatically detects checks for leaftype-ness and will not complain about missing GC roots on these paths.JL_DLLEXPORT jl_value_t *jl_apply_array_type(jl_value_t *type, size_t dim) JL_ALWAYS_LEAFTYPE;"
+    "text": "This annotations is essentially equivalent to JL_GLOBALLY_ROOTED, except that is should only be used if those values are globally rooted by virtue of being a leaftype. The rooting of leaftypes is a bit complicated. They are generally rooted through cache field of the corresponding TypeName, which itself is rooted by the containing module (so they\'re rooted as long as the containing module is ok) and we can generally assume that leaftypes are rooted where they are used, but we may refine this property in the future, so the separate annotation helps split out the reason for being globally rooted.The analyzer also automatically detects checks for leaftype-ness and will not complain about missing GC roots on these paths.JL_DLLEXPORT jl_value_t *jl_apply_array_type(jl_value_t *type, size_t dim) JL_ALWAYS_LEAFTYPE;"
 },
 
 {
-    "location": "devdocs/gc-sa/#JL*GC*PROMISE_ROOTED-1",
+    "location": "devdocs/gc-sa/#JL_GC_PROMISE_ROOTED-1",
     "page": "Static analyzer annotations for GC correctness in C code",
-    "title": "JLGCPROMISE_ROOTED",
+    "title": "JL_GC_PROMISE_ROOTED",
     "category": "section",
     "text": "This is a function-like annotation. Any value passed to this annotation will be considered rooted for the scope of the current function. It is designed as an escape hatch for analyzer inadequacy or complicated situations. However, it should be used sparingly, in favor of improving the analyzer itself.void example() {\n  jl_value_t *val = jl_alloc_something();\n  if (some_condition) {\n    // We happen to know for complicated external reasons\n    // that val is rooted under these conditions\n    JL_GC_PROMISE_ROOTED(val);\n  }\n}"
 },
