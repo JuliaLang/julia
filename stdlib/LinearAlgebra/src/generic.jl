@@ -741,7 +741,7 @@ julia> rank(diagm(0 => [1, 0.001, 2]), atol=0.00001, rtol=0.00001)
 3
 ```
 """
-function rank(A::AbstractMatrix; atol::Real=0.0, rtol::Real=atol>0 ? (min(size(A)...)*eps(real(float(one(eltype(A)))))) : 0.0)
+function rank(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol))
     s = svdvals(A)
     tol = max(atol, rtol*s[1])
     count(x -> x > tol, s)
