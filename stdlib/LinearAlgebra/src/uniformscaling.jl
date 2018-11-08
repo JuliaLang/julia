@@ -118,7 +118,7 @@ function (+)(A::Hermitian{T,S}, J::UniformScaling{<:Complex}) where {T,S}
     A_ = copytri!(copy(parent(A)), A.uplo)
     B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, A_)
     @inbounds for i in diagind(B)
-        B[i] += J.λ
+        B[i] += J
     end
     return B
 end
@@ -130,7 +130,7 @@ function (-)(J::UniformScaling{<:Complex}, A::Hermitian{T,S}) where {T,S}
         B[i] = -B[i]
     end
     @inbounds for i in diagind(B)
-        B[i] += J.λ
+        B[i] += J
     end
     return B
 end
