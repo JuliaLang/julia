@@ -84,12 +84,12 @@ These annotations are found in src/support/analyzer_annotations.h.
 The are only active when the analyzer is being used and expand either
 to nothing (for prototype annotations) or to no-ops (for function like annotations).
 
-### JL_NOTSAFEPOINT
+### `JL_NOTSAFEPOINT`
 
 This is perhaps the most common annotation, and should be placed on any function
 that is known not to possibly lead to reaching a GC safepoint. In general, it is
 only safe for such a function to perform arithmetic, memory accesses and calls to
-functions either annotated JL_NOTSAFEPOINT or otherwise known not to be safepoints (e.g.
+functions either annotated `JL_NOTSAFEPOINT` or otherwise known not to be safepoints (e.g.
 function in the C standard library, which are hardcoded as such in the analyzer)
 
 It is valid to keep values unrooted across calls to any function annotated with this
@@ -110,7 +110,7 @@ jl_value_t *example() {
 }
 ```
 
-### JL_MAYBE_UNROOTED/JL_ROOTS_TEMPORARILY
+### `JL_MAYBE_UNROOTED`/`JL_ROOTS_TEMPORARILY`
 
 When `JL_MAYBE_UNROOTED` is annotated as an argument on a function,
 indicates that said argument may be passed, even if it is not rooted.
@@ -123,7 +123,7 @@ The `ROOTS_TEMPORARILY` annotation provides the stronger guarantee that,
 not only may the value be unrooted when passed, it will also be preserved
 across any internal safepoints by the callee.
 
-Note that JL_NOTSAFEPOINT essentially implies JL_MAYBE_UNROOTED/JL_ROOTS_TEMPORARILY,
+Note that `JL_NOTSAFEPOINT` essentially implies `JL_MAYBE_UNROOTED`/`JL_ROOTS_TEMPORARILY`,
 because the rootedness of an argument is irrelevant if the function contains
 no safepoints.
 
@@ -149,7 +149,7 @@ void example() {
 }
 ```
 
-### JL_PROPAGATES_ROOT
+### `JL_PROPAGATES_ROOT`
 
 This annotation is commonly found on accessor functions that return one rootable
 object stored within another. When annotated on a function argument, it tells
@@ -169,7 +169,7 @@ size_t example(jl_svec_t *svec) {
 }
 ```
 
-### JL_ROOTING_ARGUMENT/JL_ROOTED_ARGUMENT
+### `JL_ROOTING_ARGUMENT`/`JL_ROOTED_ARGUMENT`
 
 This is essentially the assignment counterpart to `JL_PROPAGATES_ROOT`.
 When assigning a value to a field of another value that is already rooted,
@@ -190,13 +190,13 @@ size_t example(jl_svec_t *svec) {
 }
 ```
 
-### JL_GC_DISABLED
+### `JL_GC_DISABLED`
 
 This annotation implies that this function is only called with the GC runtime-disabled.
 Functions of this kind are most often encountered during startup and in the GC code itself.
 Note that this annotation is checked against the runtime enable/disable calls, so clang will
 know if you lie. This is not a good way to disable processing of a given function if the
-GC is not actually disabled (use ifdef __clang_analyzer__ for that if you must).
+GC is not actually disabled (use `ifdef __clang_analyzer__` for that if you must).
 
 Usage example:
 ```c
@@ -211,7 +211,7 @@ void example() {
 }
 ```
 
-### JL_REQUIRE_ROOTED_SLOT
+### `JL_REQUIRE_ROOTED_SLOT`
 
 This annotation requires the caller to pass in a slot that is rooted (i.e. values assigned
 to this slot will be rooted).
@@ -232,7 +232,7 @@ void example() {
 }
 ```
 
-### JL_GLOBALLY_ROOTED
+### `JL_GLOBALLY_ROOTED`
 
 This annotation implies that a given value is always globally rooted.
 It can be applied to global variable declarations, in which case it
@@ -247,9 +247,9 @@ extern JL_DLLEXPORT jl_datatype_t *jl_any_type JL_GLOBALLY_ROOTED;
 jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED;
 ```
 
-### JL_ALWAYS_LEAFTYPE
+### `JL_ALWAYS_LEAFTYPE`
 
-This annotations is essentially equivalent to JL_GLOBALLY_ROOTED, except that
+This annotations is essentially equivalent to `JL_GLOBALLY_ROOTED`, except that
 is should only be used if those values are globally rooted by virtue of being
 a leaftype. The rooting of leaftypes is a bit complicated. They are generally
 rooted through `cache` field of the corresponding `TypeName`, which itself is
@@ -265,7 +265,7 @@ complain about missing GC roots on these paths.
 JL_DLLEXPORT jl_value_t *jl_apply_array_type(jl_value_t *type, size_t dim) JL_ALWAYS_LEAFTYPE;
 ```
 
-### JL_GC_PROMISE_ROOTED
+### `JL_GC_PROMISE_ROOTED`
 
 This is a function-like annotation. Any value passed to this annotation will be considered
 rooted for the scope of the current function. It is designed as an escape hatch
