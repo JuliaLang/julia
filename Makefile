@@ -207,7 +207,7 @@ $$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(buil
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
 	if ! $$(call spawn,$3) $2 -C "$$(JULIA_CPU_TARGET)" --output-$$* $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
 		--startup-file=no --warn-overwrite=yes --sysimage $$(call cygpath_w,$$<) $$(call cygpath_w,$$(JULIAHOME)/contrib/generate_precompile.jl) $(JULIA_PRECOMPILE); then \
-		echo '*** This error is usually fixed by running `make clean`. If the error persists$(COMMA) try `make cleanall`. ***'; \
+		echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***'; \
 		false; \
 	fi )
 	@mv $$@.tmp $$@
