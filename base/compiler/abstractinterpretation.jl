@@ -189,10 +189,32 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
     return result
 end
 
+function max_type_depth(typ)
+    cmax = 0
+    if isa(typ, DataType)
+        for t in typ.parameters
+            cmax = max(cmax, max_type_depth(t))
+        end
+        return cmax + 1
+    elseif isbits(typ) || isa(typ, Tuple)
+        return cmax
+    else
+        return typemax(UInt)
+    end
+end
+
 # Returns -1 when patype is less complex than catype, 0 when they are equal, 1 when patype is more complex
 # May overapproximate and return 0 (e.g. when the result is indeterminate because the types are not comparable)
 function argtype_cmp_complexity(patype, catype)
     patype === catype && return 0
+    padepth, cadepth = max_type_depth(patype), max_type_depth(catype)
+    if padepth != typemax(UInt) && cadepth != typemax(UInt)
+        if padepth < cadepth
+            return -1
+        elseif cadepth < padepth
+            return 1
+        end
+    end
     if isa(patype, DataType) && isa(catype, DataType) && patype.name == catype.name
         pcmp = cmp(length(patype.parameters), length(catype.parameters))
         pcmp == 0 || return pcmp
@@ -246,6 +268,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
         infstate = infstate::InferenceState
         if method === infstate.linfo.def
             if infstate.linfo.specTypes == sig
+                #@Core.Main.Base.show (infstate.linfo.specTypes, sig, "LIMITING 1")
                 # avoid widening when detecting self-recursion
                 # TODO: merge call cycle and return right away
                 topmost = nothing
@@ -265,6 +288,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                     parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
                     parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
                     if parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
+                        #@Core.Main.Base.show (parent.result.argtypes, sv.result.argtypes, "LIMITING 2")
                         topmost = infstate
                         edgecycle = true
                         break
@@ -278,6 +302,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                         parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
                         if (parent.cached || parent.limited) && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
                             if !argtypes_strictly_less_complex(parent.result.argtypes, sv.result.argtypes)
+                                #@Core.Main.Base.show (parent.result.argtypes, sv.result.argtypes, "LIMITING 3")
                                 topmost = infstate
                                 edgecycle = true
                             end
