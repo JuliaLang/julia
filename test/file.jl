@@ -1015,13 +1015,15 @@ rm(dir)
 mktempdir() do dir
     name1 = joinpath(dir, "apples")
     name2 = joinpath(dir, "bannanas")
-    @test touch(name1)==name1
+    @test touch(name1) == name1 # when it doesn't exist
+    @test touch(name1) == name1 # when it does exist
     @test mv(name1, name2) == name2
     @test cp(name2, name1) == name1
     namedir = joinpath(dir, "chalk")
     namepath = joinpath(dir, "chalk","cheese","fresh")
-    @test mkdir(namedir) == namedir
-    @test mkpath(namepath) == namepath
+    @test mkdir(namedir) == namedir # when it doesn't exist
+    @test mkpath(namepath) == namepath # when it doesn't exist
+    @test mkpath(namepath) == namepath # when it does exist
 end
 
 
