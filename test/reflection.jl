@@ -809,3 +809,7 @@ f20872(::Val, ::Val) = false
 @test which(f20872, Tuple{Val,Val}).sig == Tuple{typeof(f20872), Val, Val}
 @test which(f20872, Tuple{Val,Val{N}} where N).sig == Tuple{typeof(f20872), Val, Val}
 @test_throws ErrorException which(f20872, Tuple{Any,Val{N}} where N)
+
+module M29962 end
+# make sure checking if a binding is deprecated does not resolve it
+@test !Base.isdeprecated(M29962, :sin) && !Base.isbindingresolved(M29962, :sin)
