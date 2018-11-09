@@ -319,7 +319,7 @@ Iterating the decomposition produces the components `Q`, `R`, and if extant `p`.
 The following functions are available for the `QR` objects: [`inv`](@ref), [`size`](@ref),
 and [`\\`](@ref). When `A` is rectangular, `\\` will return a least squares
 solution and if the solution is not unique, the one with smallest norm is returned. When
-`A` is not full rank, factorization with (column) pivoting is required to obtain a finite
+`A` is not full rank, factorization with (column) pivoting is required to obtain a minimum
 norm solution.
 
 Multiplication with respect to either full/square or non-full/square `Q` is allowed, i.e. both `F.Q*F.R`
