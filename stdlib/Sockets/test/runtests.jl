@@ -415,7 +415,7 @@ end
 
     let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
         srv = listen(addr)
-        r = @async (sleep(1); close(srv))
+        r = @async close(srv)
         @test_throws Base._UVError("accept", Base.UV_ECONNABORTED) accept(srv)
         fetch(r)
     end
@@ -424,7 +424,7 @@ end
         srv = listen(addr)
         s = Sockets.TCPSocket()
         Sockets.connect!(s, addr)
-        r = @async (sleep(1); close(s))
+        r = @async close(s)
         @test_throws Base._UVError("connect", Base.UV_ECANCELED) Sockets.wait_connected(s)
         fetch(r)
     end
