@@ -327,10 +327,32 @@ end
 
 const RECURSION_UNUSED_MSG = "Bounded recursion detected with unused result. Annotated return type may be wider than true result."
 
+function max_type_depth(typ)
+    cmax = 0
+    if isa(typ, DataType)
+        for t in typ.parameters
+            cmax = max(cmax, max_type_depth(t))
+        end
+        return cmax + 1
+    elseif isbits(typ) || isa(typ, Tuple)
+        return cmax
+    else
+        return typemax(UInt)
+    end
+end
+
 # Returns -1 when patype is less complex than catype, 0 when they are equal, 1 when patype is more complex
 # May overapproximate and return 0 (e.g. when the result is indeterminate because the types are not comparable)
 function argtype_cmp_complexity(patype, catype)
     patype === catype && return 0
+    padepth, cadepth = max_type_depth(patype), max_type_depth(catype)
+    if padepth != typemax(UInt) && cadepth != typemax(UInt)
+        if padepth < cadepth
+            return -1
+        elseif cadepth < padepth
+            return 1
+        end
+    end
     if isa(patype, DataType) && isa(catype, DataType) && patype.name == catype.name
         pcmp = cmp(length(patype.parameters), length(catype.parameters))
         pcmp == 0 || return pcmp
