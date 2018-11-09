@@ -164,9 +164,13 @@ mutable struct LocalProcess
 end
 
 
-import LinearAlgebra
 function disable_threaded_libs()
-    LinearAlgebra.BLAS.set_num_threads(1)
+    LA = Base.PkgId(Base.UUID((0x37e2e46d_f89d_539d,0xb4ee_838fcccc9c8e)), "LinearAlgebra")
+    if haskey(Base.loaded_modules, LA)
+        let LinearAlgebra = Base.require(LA)
+            LinearAlgebra.BLAS.set_num_threads(1)
+        end
+    end
 end
 
 worker_timeout() = parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0"))
