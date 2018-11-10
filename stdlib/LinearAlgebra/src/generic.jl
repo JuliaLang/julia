@@ -718,7 +718,7 @@ end
 Compute the rank of a matrix by counting how many singular
 values of `A` have magnitude greater than `max(atol, rtol*σ₁)` where `σ₁` is
 `A`'s largest singular value, `atol` and `rtol` are the absolute and relative
-tolerance, respectively.
+tolerances, respectively.
 
 # Examples
 ```jldoctest
