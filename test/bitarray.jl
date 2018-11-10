@@ -1159,9 +1159,30 @@ timesofar("datamove")
         @test findnextnot((.~(b1 >> i)) .⊻ submask, j) == i+1
     end
 
+    # Do a few more thorough tests for findall
     b1 = bitrand(n1, n2)
     @check_bit_operation findall(b1) Vector{CartesianIndex{2}}
     @check_bit_operation findall(!iszero, b1) Vector{CartesianIndex{2}}
+
+    # tall-and-skinny (test index overflow logic in findall)
+    @check_bit_operation findall(bitrand(1, 1, 1, 250)) Vector{CartesianIndex{4}}
+
+    # empty dimensions
+    @check_bit_operation findall(bitrand(0, 0, 10)) Vector{CartesianIndex{3}}
+
+    # sparse (test empty 64-bit chunks in findall)
+    b1 = falses(8, 8, 8)
+    b1[3,3,3] = b1[6,6,6] = true
+    @check_bit_operation findall(b1) Vector{CartesianIndex{3}}
+
+    # BitArrays of various dimensions
+    for dims = 0:8
+        t = Tuple(fill(2, dims))
+        ret_type = Vector{dims == 1 ? Int : CartesianIndex{dims}}
+        @check_bit_operation findall(trues(t)) ret_type
+        @check_bit_operation findall(falses(t)) ret_type
+        @check_bit_operation findall(bitrand(t)) ret_type
+    end
 end
 
 timesofar("find")
