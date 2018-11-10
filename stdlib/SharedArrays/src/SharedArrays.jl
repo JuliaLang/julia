@@ -487,7 +487,7 @@ function show(io::IO, mime::MIME"text/plain", S::SharedArray)
         invoke(show, Tuple{IO,MIME"text/plain",DenseArray}, io, MIME"text/plain"(), S)
     else
         # retrieve from the first worker mapping the array.
-        println(io, summary(S), ":")
+        summary(io, S); println(io, ":")
         Base.print_array(io, remotecall_fetch(sharr->sharr.s, S.pids[1], S))
     end
 end
@@ -637,9 +637,9 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
 
     try
         A = _shm_mmap_array(T, dims, shm_seg_name, mode)
-    catch e
+    catch
         print_shmem_limits(prod(dims)*sizeof(T))
-        rethrow(e)
+        rethrow()
 
     finally
         if s !== nothing

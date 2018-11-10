@@ -596,16 +596,9 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
                 jlasttype = ty;
                 bool isptr;
                 size_t fsz = 0, al = 0;
-                if (jst->layout) {
-                    isptr = jl_field_isptr(jst, i);
-                    fsz = jl_field_size(jst, i);
-                    al = jl_field_align(jst, i);
-                }
-                else { // compute what jl_compute_field_offsets would say
-                    isptr = !jl_islayout_inline(ty, &fsz, &al);
-                    if (!isptr && jl_is_uniontype(jst))
-                        fsz += 1;
-                }
+                isptr = !jl_islayout_inline(ty, &fsz, &al);
+                if (!isptr && jl_is_uniontype(ty))
+                    fsz += 1;
                 Type *lty;
                 if (isptr) {
                     lty = T_pjlvalue;
@@ -2428,8 +2421,10 @@ static void emit_setfield(jl_codectx_t &ctx,
         }
     }
     else {
-        // TODO: better error
-        emit_error(ctx, "type is immutable");
+        std::string msg = "setfield! immutable struct of type "
+            + std::string(jl_symbol_name(sty->name->name))
+            + " cannot be changed";
+        emit_error(ctx, msg);
     }
 }
 
@@ -2566,14 +2561,6 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         assert(!isboxed);
         return mark_julia_type(ctx, UndefValue::get(lt), false, ty);
     }
-}
-
-static Value *emit_exc_in_transit(jl_codectx_t &ctx)
-{
-    Value *pexc_in_transit = emit_bitcast(ctx, ctx.ptlsStates, T_pprjlvalue);
-    Constant *offset = ConstantInt::getSigned(T_int32,
-        offsetof(jl_tls_states_t, exception_in_transit) / sizeof(void*));
-    return ctx.builder.CreateInBoundsGEP(pexc_in_transit, ArrayRef<Value*>(offset), "jl_exception_in_transit");
 }
 
 static void emit_signal_fence(jl_codectx_t &ctx)

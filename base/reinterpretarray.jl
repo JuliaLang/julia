@@ -24,7 +24,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
             throw(ArgumentError("""
                 cannot reinterpret an `$(S)` array to `$(T)` whose first dimension has size `$(dim)`.
                 The resulting array would have non-integral first dimension.
-            """))
+                """))
         end
         function throwaxes1(::Type{S}, ::Type{T}, ax1)
             @_noinline_meta

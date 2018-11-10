@@ -12,7 +12,7 @@
 # matrix types, the unblocked Julia implementation in _chol! is used. For cholesky
 # and cholesky! pivoting is supported through a Val(Bool) argument. A type argument is
 # necessary for type stability since the output of cholesky and cholesky! is either
-# Cholesky or PivotedCholesky. The latter is only
+# Cholesky or CholeskyPivoted. The latter is only
 # supported for the four LAPACK element types. For other types, e.g. BigFloats Val(true) will
 # give an error. It is required that the input is Hermitian (including real symmetric) either
 # through the Hermitian and Symmetric views or exact symmetric or Hermitian elements which
@@ -38,9 +38,9 @@ struct Cholesky{T,S<:AbstractMatrix} <: Factorization{T}
         new(factors, uplo, info)
     end
 end
-Cholesky(A::AbstractMatrix{T}, uplo::Symbol, info::BlasInt) where {T} =
+Cholesky(A::AbstractMatrix{T}, uplo::Symbol, info::Integer) where {T} =
     Cholesky{T,typeof(A)}(A, char_uplo(uplo), info)
-Cholesky(A::AbstractMatrix{T}, uplo::AbstractChar, info::BlasInt) where {T} =
+Cholesky(A::AbstractMatrix{T}, uplo::AbstractChar, info::Integer) where {T} =
     Cholesky{T,typeof(A)}(A, uplo, info)
 
 struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
@@ -56,8 +56,8 @@ struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
         new(factors, uplo, piv, rank, tol, info)
     end
 end
-function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{BlasInt},
-                            rank::BlasInt, tol::Real, info::BlasInt) where T
+function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{<:Integer},
+                            rank::Integer, tol::Real, info::Integer) where T
     CholeskyPivoted{T,typeof(A)}(A, uplo, piv, rank, tol, info)
 end
 
@@ -283,7 +283,7 @@ Compute the pivoted Cholesky factorization of a dense symmetric positive semi-de
 and return a `CholeskyPivoted` factorization. The matrix `A` can either be a [`Symmetric`](@ref)
 or [`Hermitian`](@ref) `StridedMatrix` or a *perfectly* symmetric or Hermitian `StridedMatrix`.
 The triangular Cholesky factor can be obtained from the factorization `F` with: `F.L` and `F.U`.
-The following functions are available for `PivotedCholesky` objects:
+The following functions are available for `CholeskyPivoted` objects:
 [`size`](@ref), [`\\`](@ref), [`inv`](@ref), [`det`](@ref), and [`rank`](@ref).
 The argument `tol` determines the tolerance for determining the rank.
 For negative values, the tolerance is the machine precision.
@@ -379,7 +379,7 @@ issuccess(C::Cholesky) = C.info == 0
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:AbstractMatrix})
     if issuccess(C)
-        println(io, summary(C))
+        summary(io, C); println(io)
         println(io, "$(C.uplo) factor:")
         show(io, mime, C.UL)
     else
@@ -388,7 +388,7 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:Abst
 end
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, C::CholeskyPivoted{<:Any,<:AbstractMatrix})
-    println(io, summary(C))
+    summary(io, C); println(io)
     println(io, "$(C.uplo) factor with rank $(rank(C)):")
     show(io, mime, C.uplo == 'U' ? C.U : C.L)
     println(io, "\npermutation:")

@@ -10,8 +10,11 @@ module Broadcast
 using .Base.Cartesian
 using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
-import .Base: copy, copyto!
+import .Base: copy, copyto!, axes
 export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__
+
+## Computing the result's axes: deprecated name
+const broadcast_axes = axes
 
 ### Objects with customized broadcasting behavior should declare a BroadcastStyle
 
@@ -134,17 +137,17 @@ BroadcastStyle(a::AbstractArrayStyle, ::Style{Tuple})    = a
 BroadcastStyle(::A, ::A) where A<:ArrayStyle             = A()
 BroadcastStyle(::ArrayStyle, ::ArrayStyle)               = Unknown()
 BroadcastStyle(::A, ::A) where A<:AbstractArrayStyle     = A()
-Base.@pure function BroadcastStyle(a::A, b::B) where {A<:AbstractArrayStyle{M},B<:AbstractArrayStyle{N}} where {M,N}
-    if Base.typename(A).wrapper == Base.typename(B).wrapper
-        return A(_max(Val(M),Val(N)))
+function BroadcastStyle(a::A, b::B) where {A<:AbstractArrayStyle{M},B<:AbstractArrayStyle{N}} where {M,N}
+    if Base.typename(A) === Base.typename(B)
+        return A(Val(max(M, N)))
     end
-    Unknown()
+    return Unknown()
 end
 # Any specific array type beats DefaultArrayStyle
 BroadcastStyle(a::AbstractArrayStyle{Any}, ::DefaultArrayStyle) = a
 BroadcastStyle(a::AbstractArrayStyle{N}, ::DefaultArrayStyle{N}) where N = a
 BroadcastStyle(a::AbstractArrayStyle{M}, ::DefaultArrayStyle{N}) where {M,N} =
-    typeof(a)(_max(Val(M),Val(N)))
+    typeof(a)(Val(max(M, N)))
 
 ### Lazy-wrapper for broadcasting
 
@@ -200,23 +203,9 @@ Base.similar(bc::Broadcasted{ArrayConflict}, ::Type{ElType}) where ElType =
 Base.similar(bc::Broadcasted{ArrayConflict}, ::Type{Bool}) =
     similar(BitArray, axes(bc))
 
-## Computing the result's axes. Most types probably won't need to specialize this.
-broadcast_axes() = ()
-broadcast_axes(A::Tuple) = (OneTo(length(A)),)
-@inline broadcast_axes(A) = axes(A)
-"""
-    Base.broadcast_axes(A)
-
-Compute the axes for `A`.
-
-This should only be specialized for objects that do not define [`axes`](@ref) but want to participate in broadcasting.
-"""
-broadcast_axes
-
 @inline Base.axes(bc::Broadcasted) = _axes(bc, bc.axes)
 _axes(::Broadcasted, axes::Tuple) = axes
 @inline _axes(bc::Broadcasted, ::Nothing)  = combine_axes(bc.args...)
-_axes(bc::Broadcasted{Style{Tuple}}, ::Nothing) = (Base.OneTo(length(longest_tuple(nothing, bc.args))),)
 _axes(bc::Broadcasted{<:AbstractArrayStyle{0}}, ::Nothing) = ()
 
 BroadcastStyle(::Type{<:Broadcasted{Style}}) where {Style} = Style()
@@ -304,9 +293,9 @@ function flatten(bc::Broadcasted{Style}) where {Style}
     #     makeargs(w, x, y, z) = (w, makeargs1(x, y, z)...)
     #                          = (w, g(x, y), makeargs2(z)...)
     #                          = (w, g(x, y), z)
-    let makeargs = make_makeargs(bc)
+    let makeargs = make_makeargs(()->(), bc.args), f = bc.f
         newf = @inline function(args::Vararg{Any,N}) where N
-            bc.f(makeargs(args...)...)
+            f(makeargs(args...)...)
         end
         return Broadcasted{Style}(newf, args, bc.axes)
     end
@@ -322,28 +311,48 @@ cat_nested(t::Broadcasted, rest...) = (cat_nested(t.args...)..., cat_nested(rest
 cat_nested(t::Any, rest...) = (t, cat_nested(rest...)...)
 cat_nested() = ()
 
-make_makeargs(bc::Broadcasted) = make_makeargs(()->(), bc.args)
-@inline function make_makeargs(makeargs, t::Tuple)
-    let makeargs = make_makeargs(makeargs, tail(t))
-        return @inline function(head, tail::Vararg{Any,N}) where N
-            (head, makeargs(tail...)...)
-        end
-    end
+"""
+    make_makeargs(makeargs_tail::Function, t::Tuple) -> Function
+
+Each element of `t` is one (consecutive) node in a broadcast tree.
+Ignoring `makeargs_tail` for the moment, the job of `make_makeargs` is
+to return a function that takes in flattened argument list and returns a
+tuple (each entry corresponding to an entry in `t`, having evaluated
+the corresponding element in the broadcast tree). As an additional
+complication, the passed in tuple may be longer than the number of leaves
+in the subtree described by `t`. The `makeargs_tail` function should
+be called on such additional arguments (but not the arguments consumed
+by `t`).
+"""
+@inline make_makeargs(makeargs_tail, t::Tuple{}) = makeargs_tail
+@inline function make_makeargs(makeargs_tail, t::Tuple)
+    makeargs = make_makeargs(makeargs_tail, tail(t))
+    (head, tail...)->(head, makeargs(tail...)...)
 end
-@inline function make_makeargs(makeargs, t::Tuple{<:Broadcasted,Vararg{Any}})
+function make_makeargs(makeargs_tail, t::Tuple{<:Broadcasted, Vararg{Any}})
     bc = t[1]
-    let makeargs = make_makeargs(makeargs, tail(t))
-        let makeargs = make_makeargs(makeargs, bc.args)
-            headargs, tailargs = make_headargs(bc.args), make_tailargs(bc.args)
-            return @inline function(args::Vararg{Any,N}) where N
-                args1 = makeargs(args...)
-                a, b = headargs(args1...), tailargs(args1...)
-                (bc.f(a...), b...)
-            end
+    # c.f. the same expression in the function on leaf nodes above. Here
+    # we recurse into siblings in the broadcast tree.
+    let makeargs_tail = make_makeargs(makeargs_tail, tail(t)),
+            # Here we recurse into children. It would be valid to pass in makeargs_tail
+            # here, and not use it below. However, in that case, our recursion is no
+            # longer purely structural because we're building up one argument (the closure)
+            # while destructuing another.
+            makeargs_head = make_makeargs((args...)->args, bc.args),
+            f = bc.f
+        # Create two functions, one that splits of the first length(bc.args)
+        # elements from the tuple and one that yields the remaining arguments.
+        # N.B. We can't call headargs on `args...` directly because
+        # args is flattened (i.e. our children have not been evaluated
+        # yet).
+        headargs, tailargs = make_headargs(bc.args), make_tailargs(bc.args)
+        return @inline function(args::Vararg{Any,N}) where N
+            args1 = makeargs_head(args...)
+            a, b = headargs(args1...), makeargs_tail(tailargs(args1...)...)
+            (f(a...), b...)
         end
     end
 end
-make_makeargs(makeargs, ::Tuple{}) = makeargs
 
 @inline function make_headargs(t::Tuple)
     let headargs = make_headargs(tail(t))
@@ -374,16 +383,6 @@ end
 ## Broadcasting utilities ##
 
 ## logic for deciding the BroadcastStyle
-# Dimensionality: computing max(M,N) in the type domain so we preserve inferrability
-_max(V1::Val{Any}, V2::Val{Any}) = Val(Any)
-_max(V1::Val{Any}, V2::Val{N}) where N = Val(Any)
-_max(V1::Val{N}, V2::Val{Any}) where N = Val(Any)
-_max(V1::Val, V2::Val) = __max(longest(ntuple(identity, V1), ntuple(identity, V2)))
-__max(::NTuple{N,Bool}) where N = Val(N)
-longest(t1::Tuple, t2::Tuple) = (true, longest(Base.tail(t1), Base.tail(t2))...)
-longest(::Tuple{}, t2::Tuple) = (true, longest((), Base.tail(t2))...)
-longest(t1::Tuple, ::Tuple{}) = (true, longest(Base.tail(t1), ())...)
-longest(::Tuple{}, ::Tuple{}) = ()
 
 # combine_styles operates on values (arbitrarily many)
 combine_styles() = DefaultArrayStyle{0}()
@@ -419,8 +418,8 @@ One of these should be undefined (and thus return Broadcast.Unknown).""")
 end
 
 # Indices utilities
-@inline combine_axes(A, B...) = broadcast_shape(broadcast_axes(A), combine_axes(B...))
-combine_axes(A) = broadcast_axes(A)
+@inline combine_axes(A, B...) = broadcast_shape(axes(A), combine_axes(B...))
+combine_axes(A) = axes(A)
 
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
@@ -452,7 +451,7 @@ function check_broadcast_shape(shp, Ashp::Tuple)
     _bcsm(shp[1], Ashp[1]) || throw(DimensionMismatch("array could not be broadcast to match destination"))
     check_broadcast_shape(tail(shp), tail(Ashp))
 end
-check_broadcast_axes(shp, A) = check_broadcast_shape(shp, broadcast_axes(A))
+check_broadcast_axes(shp, A) = check_broadcast_shape(shp, axes(A))
 # comparing many inputs
 @inline function check_broadcast_axes(shp, A, As...)
     check_broadcast_axes(shp, A)
@@ -476,8 +475,8 @@ an `Int`.
     Any remaining indices in `I` beyond the length of the `keep` tuple are truncated. The `keep` and `default`
     tuples may be created by `newindexer(argument)`.
 """
-Base.@propagate_inbounds newindex(arg, I::CartesianIndex) = CartesianIndex(_newindex(broadcast_axes(arg), I.I))
-Base.@propagate_inbounds newindex(arg, I::Integer) = CartesianIndex(_newindex(broadcast_axes(arg), (I,)))
+Base.@propagate_inbounds newindex(arg, I::CartesianIndex) = CartesianIndex(_newindex(axes(arg), I.I))
+Base.@propagate_inbounds newindex(arg, I::Integer) = CartesianIndex(_newindex(axes(arg), (I,)))
 Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple) = (ifelse(Base.unsafe_length(ax[1])==1, ax[1][1], I[1]), _newindex(tail(ax), tail(I))...)
 Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple) = ()
 Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple{}) = (ax[1][1], _newindex(tail(ax), ())...)
@@ -493,7 +492,7 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 
 # newindexer(A) generates `keep` and `Idefault` (for use by `newindex` above)
 # for a particular array `A`; `shapeindexer` does so for its axes.
-@inline newindexer(A) = shapeindexer(broadcast_axes(A))
+@inline newindexer(A) = shapeindexer(axes(A))
 @inline shapeindexer(ax) = _newindexer(ax)
 @inline _newindexer(indsA::Tuple{}) = (), ()
 @inline function _newindexer(indsA::Tuple)
@@ -536,7 +535,7 @@ struct Extruded{T, K, D}
     keeps::K    # A tuple of booleans, specifying which indices should be passed normally
     defaults::D # A tuple of integers, specifying the index to use when keeps[i] is false (as defaults[i])
 end
-@inline broadcast_axes(b::Extruded) = broadcast_axes(b.x)
+@inline axes(b::Extruded) = axes(b.x)
 Base.@propagate_inbounds _broadcast_getindex(b::Extruded, i) = b.x[newindex(i, b.keeps, b.defaults)]
 extrude(x::AbstractArray) = Extruded(x, newindexer(x)...)
 extrude(x) = x
@@ -605,6 +604,7 @@ broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,R
 broadcastable(x::Ptr) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,Ref,Tuple,Broadcasted}) = x
+broadcastable(r::Regex) = Ref(r)
 # Default to collecting iterables — which will error for non-iterables
 broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
@@ -941,28 +941,12 @@ end
 
 ## Tuple methods
 
-@inline copy(bc::Broadcasted{Style{Tuple}}) =
-    tuplebroadcast(longest_tuple(nothing, bc.args), bc)
-@inline tuplebroadcast(::NTuple{N,Any}, bc) where {N} = ntuple(k -> @inbounds(_broadcast_getindex(bc, k)), Val(N))
-# This is a little tricky: find the longest tuple (first arg) within the list of arguments (second arg)
-# Start with nothing as a placeholder and go until we find the first tuple in the argument list
-longest_tuple(::Nothing, t::Tuple{Tuple,Vararg{Any}}) = longest_tuple(t[1], tail(t))
-# Or recurse through nested broadcast expressions
-longest_tuple(::Nothing, t::Tuple{Broadcasted,Vararg{Any}}) = longest_tuple(longest_tuple(nothing, t[1].args), tail(t))
-longest_tuple(::Nothing, t::Tuple) = longest_tuple(nothing, tail(t))
-# And then compare it against all other tuples we find in the argument list or nested broadcasts
-longest_tuple(l::Tuple, t::Tuple{Tuple,Vararg{Any}}) = longest_tuple(_longest_tuple(l, t[1]), tail(t))
-longest_tuple(l::Tuple, t::Tuple) = longest_tuple(l, tail(t))
-longest_tuple(l::Tuple, ::Tuple{}) = l
-longest_tuple(l::Tuple, t::Tuple{Broadcasted}) = longest_tuple(l, t[1].args)
-longest_tuple(l::Tuple, t::Tuple{Broadcasted,Vararg{Any}}) = longest_tuple(longest_tuple(l, t[1].args), tail(t))
-# Support only 1-tuples and N-tuples where there are no conflicts in N
-_longest_tuple(A::Tuple{Any}, B::Tuple{Any}) = A
-_longest_tuple(A::Tuple{Any}, B::NTuple{N,Any}) where N = B
-_longest_tuple(A::NTuple{N,Any}, B::Tuple{Any}) where N = A
-_longest_tuple(A::NTuple{N,Any}, B::NTuple{N,Any}) where N = A
-@noinline _longest_tuple(A, B) =
-    throw(DimensionMismatch("tuples $A and $B could not be broadcast to a common size"))
+@inline function copy(bc::Broadcasted{Style{Tuple}})
+    dim = axes(bc)
+    length(dim) == 1 || throw(DimensionMismatch("tuple only supports one dimension"))
+    N = length(dim[1])
+    return ntuple(k -> @inbounds(_broadcast_getindex(bc, k)), Val(N))
+end
 
 ## scalar-range broadcast operations ##
 # DefaultArrayStyle and \ are not available at the time of range.jl

@@ -150,7 +150,7 @@ end
     @test String(sym) == string(Char(0xdcdb))
     @test Meta.lower(Main, sym) === sym
     res = string(Meta.parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
-    @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\"\"))"""
+    @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\" near column 1\"))"""
 end
 
 @testset "Symbol and gensym" begin
@@ -467,9 +467,17 @@ end
             end
         end
     end
+    # Check for short three-byte sequences
+    @test isvalid(String, UInt8[0xe0]) == false
+    for (rng, flg) in ((0x00:0x9f, false), (0xa0:0xbf, true), (0xc0:0xff, false))
+        for cont in rng
+            @test isvalid(String, UInt8[0xe0, cont]) == false
+            @test isvalid(String, UInt8[0xe0, cont, 0x80]) == flg
+        end
+    end
     # Check three-byte sequences
-    for r1 in (0xe0:0xec, 0xee:0xef)
-        for byt = r1
+    for r1 in (0xe1:0xec, 0xee:0xef)
+        for byt in r1
             # Check for short sequence
             @test isvalid(String, UInt8[byt]) == false
             for (rng,flg) in ((0x00:0x7f, false), (0x80:0xbf, true), (0xc0:0xff, false))

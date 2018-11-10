@@ -252,7 +252,8 @@ When building Julia, or its dependencies, libraries installed by third party pac
 ### FreeBSD
 
 Clang is the default compiler on FreeBSD 11.0-RELEASE and above.
-The remaining build tools are available from the Ports Collection, and can be installed using `pkg install git gcc gmake cmake`.
+The remaining build tools are available from the Ports Collection, and can be installed using
+`pkg install git gcc gmake cmake pkgconf`.
 To build Julia, simply run `gmake`.
 (Note that `gmake` must be used rather than `make`, since `make` on FreeBSD corresponds to the incompatible BSD Make rather than GNU Make.)
 

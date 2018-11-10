@@ -233,6 +233,17 @@ close(s)
 # This section tests temporary file and directory creation.           #
 #######################################################################
 
+@testset "quoting filenames" begin
+    @test try
+        open("this file is not expected to exist")
+        false
+    catch e
+        isa(e, SystemError) || rethrow()
+        @test sprint(showerror, e) == "SystemError: opening file \"this file is not expected to exist\": No such file or directory"
+        true
+    end
+end
+
 my_tempdir = tempdir()
 @test isdir(my_tempdir) == true
 

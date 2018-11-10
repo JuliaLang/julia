@@ -13,29 +13,16 @@ set of source lines; instead, it will always line up with one of these blocks. T
 main types of scopes in Julia, *global scope* and *local scope*. The latter can be nested. The
 constructs introducing scope blocks are:
 
-# [](@id man-scope-table)
+### [Scope constructs](@id man-scope-table)
 
-  * Scope blocks that may nest only in other global scope blocks:
-
-    - global scope
-
-      + [`module`](@ref), [`baremodule`](@ref)
-
-      + at interactive prompt (REPL)
-
-    - local scope (don't allow nesting)
-
-      + (mutable) [`struct`](@ref), [`macro`](@ref)
-
-  * Scope blocks which may nest anywhere (in global or local scope):
-
-    - local scope
-
-      + [`for`](@ref), [`while`](@ref), [`try-catch-finally`](@ref try), [`let`](@ref)
-
-      + functions (either syntax, anonymous & do-blocks)
-
-      + comprehensions, broadcast-fusing
+Construct | Scope type | Scope blocks it may be nested in
+------------ | -------------  |---------------------------
+[`module`](@ref), [`baremodule`](@ref)            | global | global
+interactive prompt (REPL)                         | global | global
+(mutable) [`struct`](@ref), [`macro`](@ref)       | local  | global
+[`for`](@ref), [`while`](@ref), [`try-catch-finally`](@ref try), [`let`](@ref) |local | global or local
+functions (either syntax, anonymous & do-blocks) | local | global or local
+comprehensions, broadcast-fusing                 | local | global or local
 
 Notably missing from this table are
 [begin blocks](@ref man-compound-expressions) and [if blocks](@ref man-conditional-evaluation)

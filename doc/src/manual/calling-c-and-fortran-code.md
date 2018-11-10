@@ -496,7 +496,7 @@ b_a_2 = B.A[2];
 in Julia:
 ```julia
 struct B
-    A::NTuple{3, CInt}
+    A::NTuple{3, Cint}
 end
 b_a_2 = B.A[3]  # note the difference in indexing (1-based in Julia, 0-based in C)
 ```

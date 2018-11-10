@@ -43,6 +43,7 @@ typedef struct {
 
     int64_t fpos;       // cached file pos
     size_t lineno;    // current line number
+    size_t u_colno;     // current column number (in Unicode charwidths)
 
     // pointer-size integer to support platforms where it might have
     // to be a pointer

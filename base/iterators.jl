@@ -906,7 +906,13 @@ length(f::Flatten{Tuple{}}) = 0
     end
     x = (state === () ? iterate(f.it) : iterate(f.it, state[1]))
     x === nothing && return nothing
-    iterate(f, (x[2], x[1]))
+    y = iterate(x[1])
+    while y === nothing
+         x = iterate(f.it, x[2])
+         x === nothing && return nothing
+         y = iterate(x[1])
+    end
+    return y[1], (x[2], x[1], y[2])
 end
 
 reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))

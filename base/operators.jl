@@ -520,17 +520,17 @@ julia> 3 \\ 6
 julia> inv(3) * 6
 2.0
 
-julia> A = [1 2; 3 4]; x = [5, 6];
+julia> A = [4 3; 2 1]; x = [5, 6];
 
 julia> A \\ x
 2-element Array{Float64,1}:
- -4.0
-  4.5
+  6.5
+ -7.0
 
 julia> inv(A) * x
 2-element Array{Float64,1}:
- -4.0
-  4.5
+  6.5
+ -7.0
 ```
 """
 \(x,y) = adjoint(adjoint(y)/adjoint(x))

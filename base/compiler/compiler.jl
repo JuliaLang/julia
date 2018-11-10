@@ -73,7 +73,7 @@ include("abstractdict.jl")
 include("abstractset.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate
-using .Iterators: Flatten, product  # for generators
+using .Iterators: Flatten, Filter, product  # for generators
 include("namedtuple.jl")
 
 # core docsystem

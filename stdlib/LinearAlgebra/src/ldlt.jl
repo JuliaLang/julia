@@ -48,13 +48,13 @@ julia> S
   ⋅        0.545455  3.90909
 ```
 """
-function ldlt!(S::SymTridiagonal{T,V}) where {T<:Real,V}
+function ldlt!(S::SymTridiagonal{T,V}) where {T,V}
     n = size(S,1)
     d = S.dv
     e = S.ev
     @inbounds @simd for i = 1:n-1
         e[i] /= d[i]
-        d[i+1] -= abs2(e[i])*d[i]
+        d[i+1] -= e[i]^2*d[i]
     end
     return LDLt{T,SymTridiagonal{T,V}}(S)
 end

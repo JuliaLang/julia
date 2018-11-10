@@ -320,11 +320,12 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
 
     # test passing arguments
     mktempdir() do dir
-        testfile, _ = mktemp(dir)
+        testfile, io = mktemp(dir)
         # write a julia source file that just prints ARGS to stdout
-        write(testfile, """
+        write(io, """
             println(ARGS)
             """)
+        close(io)
         mkpath(joinpath(dir, ".julia", "config"))
         cp(testfile, joinpath(dir, ".julia", "config", "startup.jl"))
 
@@ -558,4 +559,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
             rm(infile)
         end
     end
+end
+
+# Issue #29855
+for yn in ("no", "yes")
+    exename = `$(Base.julia_cmd()) --startup-file=no --inline=$yn`
+    @test occursin("--inline=$yn", first(writereadpipeline("Base.julia_cmd()", exename)))
 end

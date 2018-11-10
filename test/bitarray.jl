@@ -73,6 +73,14 @@ allsizes = [((), BitArray{0}), ((v1,), BitVector),
     @test !any(d)
     @test all(b)
     @test sz == size(d)
+    @test !isassigned(a, 0)
+    @test !isassigned(b, 0)
+    for ii in 1:prod(sz)
+        @test isassigned(a, ii)
+        @test isassigned(b, ii)
+    end
+    @test !isassigned(a, length(a) + 1)
+    @test !isassigned(b, length(b) + 1)
 end
 
 
@@ -1304,6 +1312,8 @@ timesofar("reductions")
         b2 = bitrand(l)
         @test map(~, b1) == map(x->~x, b1) == broadcast(~, b1)
         @test map(identity, b1) == map(x->x, b1) == b1
+        @test map(zero, b1) == map(x->false, b1) == falses(l)
+        @test map(one, b1) == map(x->true, b1) == trues(l)
 
         @test map(&, b1, b2) == map((x,y)->x&y, b1, b2) == broadcast(&, b1, b2)
         @test map(|, b1, b2) == map((x,y)->x|y, b1, b2) == broadcast(|, b1, b2)

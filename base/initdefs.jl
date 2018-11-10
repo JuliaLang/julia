@@ -100,7 +100,7 @@ end
 function current_project()
     dir = try pwd()
     catch err
-        err isa IOError || rethrow(err)
+        err isa IOError || rethrow()
         return nothing
     end
     return current_project(dir)

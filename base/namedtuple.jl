@@ -213,15 +213,24 @@ end
 end
 
 """
-    merge(a::NamedTuple, b::NamedTuple)
+    merge(a::NamedTuple, bs::NamedTuple...)
 
-Construct a new named tuple by merging two existing ones.
-The order of fields in `a` is preserved, but values are taken from matching
-fields in `b`. Fields present only in `b` are appended at the end.
+Construct a new named tuple by merging two or more existing ones, in a left-associative
+manner. Merging proceeds left-to-right, between pairs of named tuples, and so the order of fields
+present in both the leftmost and rightmost named tuples take the same position as they are found in the
+leftmost named tuple. However, values are taken from matching fields in the rightmost named tuple that
+contains that field. Fields present in only the rightmost named tuple of a pair are appended at the end.
+A fallback is implemented for when only a single named tuple is supplied,
+with signature `merge(a::NamedTuple)`.
 
 ```jldoctest
 julia> merge((a=1, b=2, c=3), (b=4, d=5))
 (a = 1, b = 4, c = 3, d = 5)
+```
+
+```jldoctest
+julia> merge((a=1, b=2), (b=3, c=(d=1,)), (c=(d=2,),))
+(a = 1, b = 3, c = (d = 2,))
 ```
 """
 function merge(a::NamedTuple{an}, b::NamedTuple{bn}) where {an, bn}
@@ -240,6 +249,10 @@ end
 merge(a::NamedTuple{()}, b::NamedTuple) = b
 
 merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, b.data)
+
+merge(a::NamedTuple, b::NamedTuple, cs::NamedTuple...) = merge(merge(a, b), cs...)
+
+merge(a::NamedTuple) = a
 
 """
     merge(a::NamedTuple, iterable)
@@ -273,6 +286,7 @@ values(nt::NamedTuple) = Tuple(nt)
 haskey(nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key)
 get(nt::NamedTuple, key::Union{Integer, Symbol}, default) = haskey(nt, key) ? getfield(nt, key) : default
 get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = haskey(nt, key) ? getfield(nt, key) : f()
+tail(t::NamedTuple{names}) where names = NamedTuple{tail(names)}(t)
 
 @pure function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
     names = Symbol[]

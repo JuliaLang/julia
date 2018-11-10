@@ -216,8 +216,6 @@ unlock(s::LibuvStream) = unlock(s.lock)
 rawhandle(stream::LibuvStream) = stream.handle
 unsafe_convert(::Type{Ptr{Cvoid}}, s::Union{LibuvStream, LibuvServer}) = s.handle
 
-const Sockets_mod = Ref{Module}()
-
 function init_stdio(handle::Ptr{Cvoid})
     t = ccall(:jl_uv_handle_type, Int32, (Ptr{Cvoid},), handle)
     if t == UV_FILE
@@ -233,10 +231,8 @@ function init_stdio(handle::Ptr{Cvoid})
     elseif t == UV_TTY
         return TTY(handle, StatusOpen)
     elseif t == UV_TCP
-        if !isassigned(Sockets_mod)
-            Sockets_mod[] = Base.require(Base, :Sockets)
-        end
-        return Sockets_mod[].TCPSocket(handle, StatusOpen)
+        Sockets = require(PkgId(UUID((0x6462fe0b_24de_5631, 0x8697_dd941f90decc)), "Sockets"))
+        return Sockets.TCPSocket(handle, StatusOpen)
     elseif t == UV_NAMED_PIPE
         return PipeEndpoint(handle, StatusOpen)
     else
@@ -596,15 +592,15 @@ function link_pipe!(read_end::PipeEndpoint, reader_supports_async::Bool,
     try
         try
             open_pipe!(read_end, rd, true, false)
-        catch e
+        catch
             close_pipe_sync(rd)
-            rethrow(e)
+            rethrow()
         end
         read_end.status = StatusOpen
         open_pipe!(write_end, wr, false, true)
-    catch e
+    catch
         close_pipe_sync(wr)
-        rethrow(e)
+        rethrow()
     end
     write_end.status = StatusOpen
     nothing

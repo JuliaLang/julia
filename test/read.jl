@@ -56,7 +56,7 @@ function run_test_server(srv, text)
             catch e
                 if !(isa(e, Base.IOError) && e.code == Base.UV_EPIPE)
                     if !(isa(e, Base.IOError) && e.code == Base.UV_ECONNRESET)
-                        rethrow(e)
+                        rethrow()
                     end
                 end
             finally
