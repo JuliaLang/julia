@@ -717,8 +717,8 @@ end
 
 Compute the rank of a matrix by counting how many singular
 values of `A` have magnitude greater than `max(atol, rtol*σ₁)` where `σ₁` is
-`A`'s largest singular values, atol and rtol are the absolute and relative
-tolerance respectively.
+`A`'s largest singular value, `atol` and `rtol` are the absolute and relative
+tolerance, respectively.
 
 # Examples
 ```jldoctest
@@ -737,8 +737,8 @@ julia> rank(diagm(0 => [1, 0.001, 2]), rtol=0.1)
 julia> rank(diagm(0 => [1, 0.001, 2]), rtol=0.00001)
 3
 
-julia> rank(diagm(0 => [1, 0.001, 2]), atol=0.00001, rtol=0.00001)
-3
+julia> rank(diagm(0 => [1, 0.001, 2]), atol=1.5)
+1
 ```
 """
 function rank(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol))
