@@ -907,7 +907,7 @@ When a significant amount of repetitive boilerplate code is required, it is comm
 it programmatically to avoid redundancy. In most languages, this requires an extra build step,
 and a separate program to generate the repetitive code. In Julia, expression interpolation and
 [`eval`](@ref) allow such code generation to take place in the normal course of program execution.
-For example, consider the following custom type
+For example, consider the following custom type:
 
 ```jldoctest mynumber-codegen
 struct MyNumber
@@ -1100,7 +1100,7 @@ When defining generated functions, there are four main differences to ordinary f
    Due to an implementation limitation, this also means that they currently cannot define a closure
    or generator.
 
-It's easiest to illustrate this with an example. We can declare a generated function `foo` as
+It's easiest to illustrate this with an example. We can declare a generated function `foo` as:
 
 ```jldoctest generated
 julia> @generated function foo(x)
@@ -1119,6 +1119,7 @@ have to know whether you're calling a regular or generated function. Let's see h
 ```jldoctest generated
 julia> x = foo(2); # note: output is from println() statement in the body
 Int64
+4
 
 julia> x           # now we print x
 4
