@@ -270,7 +270,6 @@ end
     mats = [D, Bup, Blo, Bupd, Blod, T, Td, Tu, Tl, S, Sd]
     for a in mats
         for b in mats
-            println(typeof(a), " ", typeof(b))
             @test (a == b) == (Matrix(a) == Matrix(b)) == (b == a) == (Matrix(b) == Matrix(a))
             @test (a ≈ b) == (Matrix(a) ≈ Matrix(b)) == (b ≈ a) == (Matrix(b) ≈ Matrix(a))
         end

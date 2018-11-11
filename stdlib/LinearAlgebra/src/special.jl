@@ -171,6 +171,14 @@ end
 ==(A::Bidiagonal, B::SymTridiagonal) = iszero(B.ev) && iszero(A.ev) && A.dv == B.dv
 ==(B::SymTridiagonal, A::Bidiagonal) = A == B
 
+# helper method to check if off diagonals are approx zero
+function _isapproxzero(A; atol::Real=0,
+    rtol::Real=Base.rtoldefault(promote_leaf_eltypes(A),promote_leaf_eltypes(B),atol),
+    nans::Bool=false, norm::Function=norm)
+    z = zero(eltype(A))
+    return all(isapprox(x, z; rtol=rtol, atol=atol, nans=nans) for x in A)
+end
+
 function isapprox(A::Diagonal, B::Diagonal;
     atol::Real=0,
     rtol::Real=Base.rtoldefault(promote_leaf_eltypes(A),promote_leaf_eltypes(B),atol),
@@ -184,7 +192,7 @@ function isapprox(A::Diagonal, B::Union{Bidiagonal, SymTridiagonal};
     rtol::Real=Base.rtoldefault(promote_leaf_eltypes(A),promote_leaf_eltypes(B),atol),
     nans::Bool=false, norm::Function=norm)
 
-    return iszero(B.ev) && isapprox(A.diag, B.dv; rtol=rtol, atol=atol, nans=nans)
+    return _isapproxzero(B.ev; rtol=rtol, atol=atol, nans=nans) && isapprox(A.diag, B.dv; rtol=rtol, atol=atol, nans=nans)
 end
 
 function isapprox(B::Union{Bidiagonal, SymTridiagonal}, A::Diagonal;
@@ -200,7 +208,7 @@ function isapprox(A::Diagonal, B::Tridiagonal;
     rtol::Real=Base.rtoldefault(promote_leaf_eltypes(A),promote_leaf_eltypes(B),atol),
     nans::Bool=false, norm::Function=norm)
 
-    return iszero(B.dl) && iszero(B.du) && isapprox(A.diag, B.d; rtol=rtol, atol=atol, nans=nans)
+    return _isapproxzero(B.dl; rtol=rtol, atol=atol, nans=nans) && _isapproxzero(B.du; rtol=rtol, atol=atol, nans=nans) && isapprox(A.diag, B.d; rtol=rtol, atol=atol, nans=nans)
 end
 
 function isapprox(B::Tridiagonal, A::Diagonal;
@@ -217,9 +225,9 @@ function isapprox(A::Bidiagonal, B::Tridiagonal;
     nans::Bool=false, norm::Function=norm)
 
     if A.uplo == 'U'
-        return iszero(B.dl) && isapprox(A.dv, B.d; rtol=rtol, atol=atol, nans=nans) && isapprox(A.ev, B.du; rtol=rtol, atol=atol, nans=nans)
+        return _isapproxzero(B.dl; rtol=rtol, atol=atol, nans=nans) && isapprox(A.dv, B.d; rtol=rtol, atol=atol, nans=nans) && isapprox(A.ev, B.du; rtol=rtol, atol=atol, nans=nans)
     else
-        return iszero(B.du) && isapprox(A.dv, B.d; rtol=rtol, atol=atol, nans=nans) && isapprox(A.ev, B.dl; rtol=rtol, atol=atol, nans=nans)
+        return _isapproxzero(B.du; rtol=rtol, atol=atol, nans=nans) && isapprox(A.dv, B.d; rtol=rtol, atol=atol, nans=nans) && isapprox(A.ev, B.dl; rtol=rtol, atol=atol, nans=nans)
     end
 end
 
@@ -236,7 +244,7 @@ function isapprox(A::Bidiagonal, B::SymTridiagonal;
     rtol::Real=Base.rtoldefault(promote_leaf_eltypes(A),promote_leaf_eltypes(B),atol),
     nans::Bool=false, norm::Function=norm)
 
-    return iszero(B.ev) && iszero(A.ev) && isapprox(A.dv, B.dv; rtol=rtol, atol=atol, nans=nans)
+    return _isapproxzero(B.ev; rtol=rtol, atol=atol, nans=nans) && _isapproxzero(A.ev; rtol=rtol, atol=atol, nans=nans) && isapprox(A.dv, B.dv; rtol=rtol, atol=atol, nans=nans)
 end
 
 function isapprox(B::SymTridiagonal, A::Bidiagonal;
