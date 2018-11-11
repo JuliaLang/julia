@@ -44,8 +44,10 @@ struct ValueIterator{T<:AbstractDict}
     dict::T
 end
 
-summary(iter::T) where {T<:Union{KeySet,ValueIterator}} =
-    string(T.name, " for a ", summary(iter.dict))
+function summary(io::IO, iter::T) where {T<:Union{KeySet,ValueIterator}}
+    print(io, T.name, " for a ")
+    summary(io, iter.dict)
+end
 
 show(io::IO, iter::Union{KeySet,ValueIterator}) = show_vector(io, iter)
 
@@ -146,13 +148,8 @@ The default is to return an empty `Dict`.
 empty(a::AbstractDict) = empty(a, keytype(a), valtype(a))
 empty(a::AbstractDict, ::Type{V}) where {V} = empty(a, keytype(a), V) # Note: this is the form which makes sense for `Vector`.
 
-function copy(a::AbstractDict)
-    b = empty(a)
-    for (k,v) in a
-        b[k] = v
-    end
-    return b
-end
+copy(a::AbstractDict) = merge!(empty(a), a)
+copy!(dst::AbstractDict, src::AbstractDict) = merge!(empty!(dst), src)
 
 """
     merge!(d::AbstractDict, others::AbstractDict...)
@@ -405,7 +402,7 @@ function filter(f, d::AbstractDict)
                 end
             end
         else
-            rethrow(e)
+            rethrow()
         end
     end
     return df
@@ -553,12 +550,12 @@ end
 function IdDict(kv)
     try
         dict_with_eltype((K, V) -> IdDict{K, V}, kv, eltype(kv))
-    catch e
+    catch
         if !applicable(iterate, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError(
                 "IdDict(kv): kv needs to be an iterator of tuples or pairs"))
         else
-            rethrow(e)
+            rethrow()
         end
     end
 end

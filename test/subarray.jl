@@ -224,11 +224,11 @@ function runsubarraytests(@nospecialize(A), I...)
     local S
     try
         S = view(A, I...)
-    catch err
+    catch
         @show typeof(A)
         @show A.indices
         @show I
-        rethrow(err)
+        rethrow()
     end
     test_linear(S, C)
     test_cartesian(S, C)
@@ -619,3 +619,6 @@ function _test_27632(A)
 end
 # check that this doesn't crash
 _test_27632(view(ones(Int64, (1, 1, 1)), 1, 1, 1))
+
+# issue #29608 - views of single values can be considered contiguous
+@test Base.iscontiguous(view(ones(1), 1))

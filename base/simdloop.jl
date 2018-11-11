@@ -75,8 +75,6 @@ function compile(x, ivdep)
                                 $(Expr(:simdloop, ivdep))  # Mark loop as SIMD loop
                             end
                         end
-                        # Set index to last value just like a regular for loop would
-                        $var = last($r)
                     end
                 end
             end

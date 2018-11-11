@@ -679,6 +679,7 @@ export
 # errors
     backtrace,
     catch_backtrace,
+    catch_stack,
     error,
     rethrow,
     retry,
@@ -695,6 +696,7 @@ export
     fieldname,
     fieldnames,
     fieldcount,
+    fieldtypes,
     propertynames,
     isabstracttype,
     isbitstype,

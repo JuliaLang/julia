@@ -93,4 +93,10 @@ end
     @test propertynames(F) == (:R, :Q, :prow, :pcol)
     @test propertynames(F, true) == (:R, :Q, :prow, :pcol, :factors, :τ, :cpiv, :rpivinv)
 end
+
+@testset "rank" begin
+    @test rank(qr(sprandn(10, 5, 1.0)*sprandn(5, 10, 1.0))) == 5
+    @test all(iszero, (rank(qr(spzeros(10, i))) for i in 1:10))
+end
+
 end

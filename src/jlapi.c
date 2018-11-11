@@ -13,6 +13,7 @@
 #include "julia.h"
 #include "options.h"
 #include "julia_assert.h"
+#include "julia_internal.h"
 
 #ifdef __cplusplus
 #include <cfenv>
@@ -95,22 +96,26 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
         jl_exception_clear();
     }
     JL_CATCH {
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         r = NULL;
     }
     return r;
 }
 
+JL_DLLEXPORT jl_value_t *jl_current_exception(void) JL_GLOBALLY_ROOTED
+{
+    jl_excstack_t *s = jl_get_ptls_states()->current_task->excstack;
+    return s && s->top != 0 ? jl_excstack_exception(s, s->top) : jl_nothing;
+}
+
 JL_DLLEXPORT jl_value_t *jl_exception_occurred(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    return ptls->exception_in_transit == jl_nothing ? NULL :
-        ptls->exception_in_transit;
+    return jl_get_ptls_states()->previous_exception;
 }
 
 JL_DLLEXPORT void jl_exception_clear(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    ptls->exception_in_transit = jl_nothing;
+    jl_get_ptls_states()->previous_exception = NULL;
 }
 
 // get the name of a type as a string
@@ -164,6 +169,7 @@ JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t na
         jl_exception_clear();
     }
     JL_CATCH {
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -182,6 +188,7 @@ JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
         jl_exception_clear();
     }
     JL_CATCH {
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -202,6 +209,7 @@ JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
         jl_exception_clear();
     }
     JL_CATCH {
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -222,6 +230,7 @@ JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b
         jl_exception_clear();
     }
     JL_CATCH {
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -243,6 +252,7 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
         jl_exception_clear();
     }
     JL_CATCH {
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -267,6 +277,7 @@ JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld)
         jl_exception_clear();
     }
     JL_CATCH {
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;

@@ -73,6 +73,14 @@ allsizes = [((), BitArray{0}), ((v1,), BitVector),
     @test !any(d)
     @test all(b)
     @test sz == size(d)
+    @test !isassigned(a, 0)
+    @test !isassigned(b, 0)
+    for ii in 1:prod(sz)
+        @test isassigned(a, ii)
+        @test isassigned(b, ii)
+    end
+    @test !isassigned(a, length(a) + 1)
+    @test !isassigned(b, length(b) + 1)
 end
 
 
@@ -1159,9 +1167,30 @@ timesofar("datamove")
         @test findnextnot((.~(b1 >> i)) .⊻ submask, j) == i+1
     end
 
+    # Do a few more thorough tests for findall
     b1 = bitrand(n1, n2)
     @check_bit_operation findall(b1) Vector{CartesianIndex{2}}
     @check_bit_operation findall(!iszero, b1) Vector{CartesianIndex{2}}
+
+    # tall-and-skinny (test index overflow logic in findall)
+    @check_bit_operation findall(bitrand(1, 1, 1, 250)) Vector{CartesianIndex{4}}
+
+    # empty dimensions
+    @check_bit_operation findall(bitrand(0, 0, 10)) Vector{CartesianIndex{3}}
+
+    # sparse (test empty 64-bit chunks in findall)
+    b1 = falses(8, 8, 8)
+    b1[3,3,3] = b1[6,6,6] = true
+    @check_bit_operation findall(b1) Vector{CartesianIndex{3}}
+
+    # BitArrays of various dimensions
+    for dims = 0:8
+        t = Tuple(fill(2, dims))
+        ret_type = Vector{dims == 1 ? Int : CartesianIndex{dims}}
+        @check_bit_operation findall(trues(t)) ret_type
+        @check_bit_operation findall(falses(t)) ret_type
+        @check_bit_operation findall(bitrand(t)) ret_type
+    end
 end
 
 timesofar("find")
@@ -1304,6 +1333,8 @@ timesofar("reductions")
         b2 = bitrand(l)
         @test map(~, b1) == map(x->~x, b1) == broadcast(~, b1)
         @test map(identity, b1) == map(x->x, b1) == b1
+        @test map(zero, b1) == map(x->false, b1) == falses(l)
+        @test map(one, b1) == map(x->true, b1) == trues(l)
 
         @test map(&, b1, b2) == map((x,y)->x&y, b1, b2) == broadcast(&, b1, b2)
         @test map(|, b1, b2) == map((x,y)->x|y, b1, b2) == broadcast(|, b1, b2)

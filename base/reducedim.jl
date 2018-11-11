@@ -293,7 +293,7 @@ julia> mapreduce(isodd, *, a, dims=1)
 1×4 Array{Bool,2}:
  false  false  false  false
 
-julia> mapreduce(isodd, |, true, a, dims=1)
+julia> mapreduce(isodd, |, a, dims=1)
 1×4 Array{Bool,2}:
  true  true  true  true
 ```

@@ -606,6 +606,11 @@ A paragraph containing some ``\LaTeX`` markup.
     backticks use an even number greater than two. Note that if a single literal backtick needs to
     be included within ``\LaTeX`` markup then two enclosing backticks is sufficient.
 
+!!! note
+    The `\` character should be escaped appropriately if the text is embedded in a Julia source code,
+    for example, ``` "``\\LaTeX`` syntax in a docstring." ```, since it is interpreted as a string
+    literal.
+
 #### Links
 
 Links to either external or internal addresses can be written using the following syntax, where

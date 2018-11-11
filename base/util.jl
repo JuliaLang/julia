@@ -420,7 +420,12 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
               else
                   "yes"
               end
-    `$julia -C$cpu_target -J$image_file --compile=$compile --depwarn=$depwarn`
+    inline  = if opts.can_inline == 0
+                  "no"
+              else
+                  "yes"
+              end
+    `$julia -C$cpu_target -J$image_file --compile=$compile --depwarn=$depwarn --inline=$inline`
 end
 
 function julia_exename()

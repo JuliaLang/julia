@@ -169,7 +169,7 @@ end
 invmod(n::Integer, m::Integer) = invmod(promote(n,m)...)
 
 # ^ for any x supporting *
-to_power_type(x) = convert(promote_op(*, typeof(x), typeof(x)), x)
+to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
 @noinline throw_domerr_powbysq(::Any, p) = throw(DomainError(p,
     string("Cannot raise an integer x to a negative power ", p, '.',
            "\nConvert input to float.")))
@@ -828,18 +828,18 @@ end
 """
     binomial(n::Integer, k::Integer)
 
-The _binomial coefficient_ ``\binom{n}{k}``, being the coefficient of the ``k``th term in
+The _binomial coefficient_ ``\\binom{n}{k}``, being the coefficient of the ``k``th term in
 the polynomial expansion of ``(1+x)^n``.
 
 If ``n`` is non-negative, then it is the number of ways to choose `k` out of `n` items:
 ```math
-\binom{n}{k} = \frac{n!}{k! (n-k)!}
+\\binom{n}{k} = \\frac{n!}{k! (n-k)!}
 ```
 where ``n!`` is the [`factorial`](@ref) function.
 
 If ``n`` is negative, then it is defined in terms of the identity
 ```math
-\binom{n}{k} = (-1)^k \binom{k-n-1}{k}
+\\binom{n}{k} = (-1)^k \\binom{k-n-1}{k}
 ```
 
 # Examples

@@ -4,7 +4,6 @@
 
 ## BLAS cutoff threshold constants
 
-const SCAL_CUTOFF = 2048
 #TODO const DOT_CUTOFF = 128
 const ASUM_CUTOFF = 32
 const NRM2_CUTOFF = 32
@@ -13,27 +12,6 @@ const NRM2_CUTOFF = 32
 # L1 cache: 32K, L2 cache: 256K, L3 cache: 6144K
 # This constant should ideally be determined by the actual CPU cache size
 const ISONE_CUTOFF = 2^21 # 2M
-
-function rmul!(X::Array{T}, s::T) where T<:BlasFloat
-    s == 0 && return fill!(X, zero(T))
-    s == 1 && return X
-    if length(X) < SCAL_CUTOFF
-        generic_rmul!(X, s)
-    else
-        BLAS.scal!(length(X), s, X, 1)
-    end
-    X
-end
-
-lmul!(s::T, X::Array{T}) where {T<:BlasFloat} = rmul!(X, s)
-
-rmul!(X::Array{T}, s::Number) where {T<:BlasFloat} = rmul!(X, convert(T, s))
-function rmul!(X::Array{T}, s::Real) where T<:BlasComplex
-    R = typeof(real(zero(T)))
-    GC.@preserve X BLAS.scal!(2*length(X), convert(R,s), convert(Ptr{R},pointer(X)), 1)
-    X
-end
-
 
 function isone(A::StridedMatrix)
     m, n = size(A)
@@ -171,7 +149,7 @@ julia> triu!(M, 1)
 function triu!(M::AbstractMatrix, k::Integer)
     @assert !has_offset_axes(M)
     m, n = size(M)
-    for j in 1:min(n, n + k)
+    for j in 1:min(n, m + k)
         for i in max(1, j - k + 1):m
             M[i,j] = zero(M[i,j])
         end
@@ -488,6 +466,10 @@ julia> exp(A)
 """
 exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
 exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
+
+Base.:^(b::Number, A::AbstractMatrix) = exp!(log(b)*A)
+# method for ℯ to explicitly elide the log(b) multiplication
+Base.:^(::Irrational{:ℯ}, A::AbstractMatrix) = exp(A)
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
@@ -1219,20 +1201,20 @@ factorize(A::Transpose) = transpose(factorize(parent(A)))
 ## Moore-Penrose pseudoinverse
 
 """
-    pinv(M[, tol::Real])
+    pinv(M[, rtol::Real])
 
 Computes the Moore-Penrose pseudoinverse.
 
 For matrices `M` with floating point elements, it is convenient to compute
-the pseudoinverse by inverting only singular values above a given threshold,
-`tol`.
+the pseudoinverse by inverting only singular values greater than
+`rtol * maximum(svdvals(M))`.
 
-The optimal choice of `tol` varies both with the value of `M` and the intended application
-of the pseudoinverse. The default value of `tol` is
+The optimal choice of `rtol` varies both with the value of `M` and the intended application
+of the pseudoinverse. The default value of `rtol` is
 `eps(real(float(one(eltype(M)))))*minimum(size(M))`, which is essentially machine epsilon
 for the real part of a matrix element multiplied by the larger matrix dimension. For
 inverting dense ill-conditioned matrices in a least-squares sense,
-`tol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
+`rtol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
 
 For more information, see [^issue8859], [^B96], [^S84], [^KY88].
 
@@ -1262,7 +1244,7 @@ julia> M * N
 
 [^KY88]: Konstantinos Konstantinides and Kung Yao, "Statistical analysis of effective singular values in matrix rank determination", IEEE Transactions on Acoustics, Speech and Signal Processing, 36(5), 1988, 757-763. [doi:10.1109/29.1585](https://doi.org/10.1109/29.1585)
 """
-function pinv(A::StridedMatrix{T}, tol::Real) where T
+function pinv(A::AbstractMatrix{T}, rtol::Real) where T
     m, n = size(A)
     Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
     if m == 0 || n == 0
@@ -1273,7 +1255,7 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
             maxabsA = maximum(abs.(diag(A)))
             B = zeros(Tout, n, m)
             for i = 1:min(m, n)
-                if abs(A[i,i]) > tol*maxabsA
+                if abs(A[i,i]) > rtol*maxabsA
                     Aii = inv(A[i,i])
                     if isfinite(Aii)
                         B[i,i] = Aii
@@ -1286,14 +1268,14 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
     SVD         = svd(A, full = false)
     Stype       = eltype(SVD.S)
     Sinv        = zeros(Stype, length(SVD.S))
-    index       = SVD.S .> tol*maximum(SVD.S)
+    index       = SVD.S .> rtol*maximum(SVD.S)
     Sinv[index] = one(Stype) ./ SVD.S[index]
     Sinv[findall(.!isfinite.(Sinv))] .= zero(Stype)
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
-function pinv(A::StridedMatrix{T}) where T
-    tol = eps(real(float(one(T))))*min(size(A)...)
-    return pinv(A, tol)
+function pinv(A::AbstractMatrix{T}) where T
+    rtol = eps(real(float(one(T))))*min(size(A)...)
+    return pinv(A, rtol)
 end
 function pinv(x::Number)
     xi = inv(x)
@@ -1303,12 +1285,12 @@ end
 ## Basis for null space
 
 """
-    nullspace(M[, tol::Real])
+    nullspace(M[, rtol::Real])
 
 Computes a basis for the nullspace of `M` by including the singular
-vectors of A whose singular have magnitude are greater than `tol*σ₁`,
+vectors of A whose singular have magnitude are greater than `rtol*σ₁`,
 where `σ₁` is `A`'s largest singular values. By default, the value of
-`tol` is the smallest dimension of `A` multiplied by the [`eps`](@ref)
+`rtol` is the smallest dimension of `A` multiplied by the [`eps`](@ref)
 of the [`eltype`](@ref) of `A`.
 
 # Examples
@@ -1332,14 +1314,14 @@ julia> nullspace(M, 2)
  0.0  0.0  1.0
 ```
 """
-function nullspace(A::StridedMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
+function nullspace(A::AbstractMatrix, rtol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
     m, n = size(A)
-    (m == 0 || n == 0) && return Matrix{T}(I, n, n)
+    (m == 0 || n == 0) && return Matrix{eltype(A)}(I, n, n)
     SVD = svd(A, full=true)
-    indstart = sum(SVD.S .> SVD.S[1]*tol) + 1
+    indstart = sum(s -> s .> SVD.S[1]*rtol, SVD.S) + 1
     return copy(SVD.Vt[indstart:end,:]')
 end
-nullspace(a::StridedVector, tol::Real = min(size(a)...)*eps(real(float(one(eltype(a)))))) = nullspace(reshape(a, length(a), 1), tol)
+nullspace(a::AbstractVector, rtol::Real = min(size(a)...)*eps(real(float(one(eltype(a)))))) = nullspace(reshape(a, length(a), 1), rtol)
 
 """
     cond(M, p::Real=2)

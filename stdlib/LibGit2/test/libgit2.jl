@@ -1076,7 +1076,7 @@ mktempdir() do dir
                     if isa(err, LibGit2.Error.GitError) && err.class == LibGit2.Error.Invalid
                         @test false
                     else
-                        rethrow(err)
+                        rethrow()
                     end
                 end
             end

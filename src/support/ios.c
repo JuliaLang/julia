@@ -27,6 +27,7 @@
 
 #include "utils.h"
 #include "utf8.h"
+#include "utf8proc.h"
 #include "ios.h"
 #include "timefuncs.h"
 
@@ -858,6 +859,7 @@ static void _ios_init(ios_t *s)
     s->ndirty = 0;
     s->fpos = -1;
     s->lineno = 1;
+    s->u_colno = 0;
     s->fd = -1;
     s->ownbuf = 1;
     s->ownfd = 0;
@@ -1107,6 +1109,10 @@ int ios_getutf8(ios_t *s, uint32_t *pwc)
     c0 = (char)c;
     if ((unsigned char)c0 < 0x80) {
         *pwc = (uint32_t)(unsigned char)c0;
+        if (c == '\n')
+            s->u_colno = 0;
+        else
+            s->u_colno += utf8proc_charwidth(*pwc);
         return 1;
     }
     sz = u8_seqlen(&c0);
@@ -1117,6 +1123,7 @@ int ios_getutf8(ios_t *s, uint32_t *pwc)
         return IOS_EOF;
     size_t i = s->bpos;
     *pwc = u8_nextchar(s->buf, &i);
+    s->u_colno += utf8proc_charwidth(*pwc);
     ios_read(s, buf, sz);
     return 1;
 }

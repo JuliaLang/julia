@@ -246,6 +246,10 @@ simply calls the generic `to_index(i)`. This must return either an `Int` or an
 """
 to_index(A, i) = to_index(i)
 
+# This is ok for Array because values larger than
+# typemax(Int) will BoundsError anyway
+to_index(A::Array, i::UInt) = reinterpret(Int, i)
+
 """
     to_index(i)
 
