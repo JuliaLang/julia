@@ -1119,7 +1119,6 @@ have to know whether you're calling a regular or generated function. Let's see h
 ```jldoctest generated
 julia> x = foo(2); # note: output is from println() statement in the body
 Int64
-4
 
 julia> x           # now we print x
 4
