@@ -175,6 +175,13 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
         return nothing
     end
 
+    if isnumeric(sbuff[1])
+        intres = tryparse_internal(UInt8, sbuff, startpos, endpos, base, false)
+        (intres == 1) && return true
+        (intres == 0) && return false
+        raise && throw(ArgumentError("invalid Bool representation: $(repr(sbuff))"))
+    end
+
     orig_start = startpos
     orig_end   = endpos
 

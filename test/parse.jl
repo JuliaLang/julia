@@ -321,3 +321,14 @@ end
     @test eltype([tryparse(Float64, s) for s in String[]]) == Union{Nothing, Float64}
     @test eltype([tryparse(Complex{Int}, s) for s in String[]]) == Union{Nothing, Complex{Int}}
 end
+
+@testset "isssue #29980" begin
+    @test parse(Bool, "1") === true
+    @test parse(Bool, "01") === true
+    @test parse(Bool, "0") === false
+    @test parse(Bool, "000000000000000000000000000000000000000000000000001") === true
+    @test parse(Bool, "000000000000000000000000000000000000000000000000000") === false
+    @test_throws ArgumentError parse(Bool, "1000000000000000000000000000000000000000000000000000")
+    @test_throws ArgumentError parse(Bool, "2")
+    @test_throws ArgumentError parse(Bool, "02")
+end
