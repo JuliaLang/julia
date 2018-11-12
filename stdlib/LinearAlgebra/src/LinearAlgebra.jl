@@ -437,6 +437,8 @@ function __init__()
         Base.showerror_nostdio(ex,
             "WARNING: Error during initialization of module LinearAlgebra")
     end
+    # register a hook to disable BLAS threading
+    Base.at_disable_library_threading(() -> BLAS.set_num_threads(1))
 end
 
 end # module LinearAlgebra

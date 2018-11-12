@@ -43,6 +43,9 @@ New library functions
   * `uuid5` has been added to the `UUIDs` standard library ([#28761]).
   * Predicate functions `Sys.isfreebsd`, `Sys.isopenbsd`, `Sys.isnetbsd`, and `Sys.isdragonfly` for
     detecting BSD systems have been added ([#30249]).
+  * Internal `Base.disable_library_threading` that sets libraries to use one thread.
+    It executes function hooks that have been registered with
+    `Base.at_disable_library_threading` ([#30004]).
 
 Standard library changes
 ------------------------
