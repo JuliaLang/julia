@@ -7,6 +7,12 @@ New language features
 * The `extrema` function now accepts a function argument in the same manner as `minimum` and
   `maximum` ([#30323]).
 
+Multi-threading changes
+-----------------------
+
+  * The `Condition` type now has a thread-safe replacement, accessed as `Threads.Condition`.
+    With that addition, task scheduling primitives such as `ReentrantLock` are now thread-safe ([#30061]).
+
 Language changes
 ----------------
 
