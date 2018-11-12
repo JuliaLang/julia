@@ -343,6 +343,15 @@ Notice the extra set of parentheses in the definition of `range`.
 Without those, `range` would be a two-argument function, and this example would
 not work.
 
+For anonymous functions, destructuring a single tuple requires an extra comma:
+
+```
+julia> map(((x,y),) -> x + y, [(1,2), (3,4)])
+2-element Array{Int64,1}:
+ 3
+ 7
+```
+
 ## Varargs Functions
 
 It is often convenient to be able to write functions taking an arbitrary number of arguments.
