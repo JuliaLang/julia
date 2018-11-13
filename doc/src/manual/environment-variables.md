@@ -14,10 +14,10 @@ The environment variables that Julia uses generally start with `JULIA`. If
 output will list defined environment variables relevant for Julia, including
 those for which `JULIA` appears in the name.
 
-Some variables, such as `JULIA_NUM_THREADS` and `JULIA_PROJECT` needs to be set before Julia 
+Some variables, such as `JULIA_NUM_THREADS` and `JULIA_PROJECT` need to be set before Julia 
 starts, therefore adding these to `~/.julia/config/startup.jl` is too late in the startup process. 
 These must either be set manually before launching Julia through bash with 
-`export ENV["JULIA_NUM_THREADS"] = 4` etc. or added to `.bashrc` to achieve persistence.
+`export JULIA_NUM_THREADS = 4` etc. or added to `.bashrc` to achieve persistence.
 
 ## File locations
 
