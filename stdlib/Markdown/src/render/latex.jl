@@ -101,6 +101,9 @@ function latex(io::IO, md::List)
 end
 
 function show(io::IO, ::MIME"text/latex", md::HorizontalRule)
+    latex(io, md)
+end
+function latex(io::IO, md::HorizontalRule)
     println(io, "\\rule{\\textwidth}{1pt}")
 end
 
