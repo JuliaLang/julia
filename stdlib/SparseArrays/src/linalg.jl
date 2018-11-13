@@ -635,6 +635,71 @@ end
 
 ## end of triangular
 
+## symmetric/Hermitian wrappers of sparse matrices
+"""
+    SparseMatrixCSCSymmHerm
+
+`Symmetric` or `Hermitian` of a `SparseMatrixCSC` or `SparseMatrixCSCView`.
+"""
+const SparseMatrixCSCSymmHerm{Tv,Ti} = Union{Symmetric{Tv,<:SparseMatrixCSCUnion{Tv,Ti}},
+                                            Hermitian{Tv,<:SparseMatrixCSCUnion{Tv,Ti}}}
+
+# y .= A * x
+mul!(y::AbstractVector, A::SparseMatrixCSCSymmHerm, x::AbstractVector) = mul!(y, A, x, 1, 0)
+
+# C .= α * C + β * A * B
+function mul!(C::StridedVecOrMat{T}, sA::SparseMatrixCSCSymmHerm, B::StridedVecOrMat,
+              α::Number, β::Number) where T
+
+    fadj = sA isa Hermitian ? adjoint : transpose
+    fuplo = sA.uplo == 'U' ? nzrangeup : nzrangelo
+    _mul!(fuplo, fadj, C, sA, B, T(α), T(β))
+end
+
+function _mul!(nzrang::Function, fadj::Function, C, sA, B, α, β)
+    A = sA.data
+    n = A.n
+    m = size(B, 2)
+    n == size(B, 1) == size(C, 1) && m == size(C, 2) || throw(DimensionMismatch())
+    rv = rowvals(A)
+    nzv = nonzeros(A)
+    z = zero(eltype(C))
+    diagmap = fadj == transpose ? identity : real
+    if β != 1
+        β != 0 ? rmul!(C, β) : fill!(C, z)
+    end
+    for k = 1:m
+        @inbounds for col = 1:n
+            αxj = α * B[col,k]
+            sumcol = z
+            for j = nzrang(A, col)
+                row = rv[j]
+                aarc = nzv[j]
+                if row == col
+                    sumcol += diagmap(aarc) * αxj
+                else
+                    C[row,k] += aarc * αxj
+                    sumcol += fadj(aarc) * B[row,k]
+                end
+            end
+            C[col,k] += α * sumcol
+        end
+    end
+    C
+end
+
+# row range up to and including diagonal
+function nzrangeup(A, i)
+    r = nzrange(A, i); r1 = r.start; r2 = r.stop
+    r1:searchsortedlast(rowvals(A), i, r1, r2, Base.Order.Forward)
+end
+# row range from diagonal (included) to end
+function nzrangelo(A, i)
+    r = nzrange(A, i); r1 = r.start; r2 = r.stop
+    searchsortedfirst(rowvals(A), i, r1, r2, Base.Order.Forward):r2
+end
+## end of symmetric/Hermitian
+
 \(A::Transpose{<:Real,<:Hermitian{<:Real,<:SparseMatrixCSC}}, B::Vector) = A.parent \ B
 \(A::Transpose{<:Complex,<:Hermitian{<:Complex,<:SparseMatrixCSC}}, B::Vector) = copy(A) \ B
 \(A::Transpose{<:Number,<:Symmetric{<:Number,<:SparseMatrixCSC}}, B::Vector) = A.parent \ B
