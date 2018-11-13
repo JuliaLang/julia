@@ -286,7 +286,3 @@ end
         @test reinterpret(UInt32, reinterpret(Char, u)) === u
     end
 end
-
-@testset "broadcasting of Char" begin
-    @test identity.('a') == 'a'
-end
