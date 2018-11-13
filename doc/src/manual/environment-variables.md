@@ -14,6 +14,11 @@ The environment variables that Julia uses generally start with `JULIA`. If
 output will list defined environment variables relevant for Julia, including
 those for which `JULIA` appears in the name.
 
+Some variables, such as `JULIA_NUM_THREADS` and `JULIA_PROJECT` needs to be set before Julia 
+starts, therefore adding these to `~/.julia/config/startup.jl` is too late in the startup process. 
+These must either be set manually before launching Julia through bash with 
+`export ENV["JULIA_NUM_THREADS"] = 4` etc. or added to `.bashrc` to achieve persistence.
+
 ## File locations
 
 ### `JULIA_BINDIR`
@@ -73,6 +78,10 @@ option, but `--project` has higher precedence.  If the variable is set to `@.`,
 Julia tries to find a project directory that contains `Project.toml` or
 `JuliaProject.toml` file from the current directory and its parents.  See also
 the chapter on [Code Loading](@ref).
+
+!!! note
+
+    See note at top as `JULIA_PROJECT` cannot be set in `~/.julia/config/startup.jl`
 
 ### `JULIA_LOAD_PATH`
 
@@ -151,6 +160,10 @@ physical CPU cores, then the number of threads is set to the number of cores. If
 `$JULIA_NUM_THREADS` is not positive or is not set, or if the number of CPU
 cores cannot be determined through system calls, then the number of threads is
 set to `1`.
+
+!!! note
+
+    See note at top as `JULIA_NUM_THREADS` cannot be set in `~/.julia/config/startup.jl`
 
 ### `JULIA_THREAD_SLEEP_THRESHOLD`
 
