@@ -14,10 +14,12 @@ The environment variables that Julia uses generally start with `JULIA`. If
 output will list defined environment variables relevant for Julia, including
 those for which `JULIA` appears in the name.
 
-Some variables, such as `JULIA_NUM_THREADS` and `JULIA_PROJECT` need to be set before Julia 
-starts, therefore adding these to `~/.julia/config/startup.jl` is too late in the startup process. 
-These must either be set manually before launching Julia through bash with 
-`export JULIA_NUM_THREADS = 4` etc. or added to `-/.bashrc` and/or `~/.bash_profile` to achieve persistence.
+!!! note
+
+    Some variables, such as `JULIA_NUM_THREADS` and `JULIA_PROJECT` need to be set before Julia 
+    starts, therefore adding these to `~/.julia/config/startup.jl` is too late in the startup process. 
+    These must either be set manually before launching Julia through bash with 
+    `export JULIA_NUM_THREADS=4` etc. or added to `-/.bashrc` and/or `~/.bash_profile` to achieve persistence.
 
 ## File locations
 
@@ -81,7 +83,7 @@ the chapter on [Code Loading](@ref).
 
 !!! note
 
-    See note at top as `JULIA_PROJECT` cannot be set in `~/.julia/config/startup.jl`
+    `JULIA_PROJECT` must be defined before starting julia; defining it in `startup.jl` is too late in the startup process.
 
 ### `JULIA_LOAD_PATH`
 
@@ -163,7 +165,7 @@ set to `1`.
 
 !!! note
 
-    See note at top as `JULIA_NUM_THREADS` cannot be set in `~/.julia/config/startup.jl`
+    `JULIA_NUM_THREADS` must be defined before starting julia; defining it in `startup.jl` is too late in the startup process.
 
 ### `JULIA_THREAD_SLEEP_THRESHOLD`
 
