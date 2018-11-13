@@ -380,7 +380,11 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
                         print("julia> ")
                         flush(stdout)
                     end
-                    eval_user_input(parse_input_line(input), true)
+                    try
+                        eval_user_input(parse_input_line(input), true)
+                    catch err
+                        isa(err, InterruptException) ? print("\n\n") : rethrow()
+                    end
                 end
             end
         end
