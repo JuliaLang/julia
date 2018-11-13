@@ -4,21 +4,8 @@
 
 if Sys.iswindows()
     function download(url::AbstractString, filename::AbstractString)
-        ps = joinpath(get(ENV, "SYSTEMROOT", "C:\\Windows"), "System32\\WindowsPowerShell\\v1.0\\powershell.exe")
-        tls12 = "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12"
-        client = "New-Object System.Net.Webclient"
-        # in the following we escape ' with '' (see https://ss64.com/ps/syntax-esc.html)
-        downloadfile = "($client).DownloadFile('$(replace(url, "'" => "''"))', '$(replace(filename, "'" => "''"))')"
-        # PowerShell v3 or later is required for Tls12
-        proc = run(pipeline(`$ps -Version 3 -NoProfile -Command "$tls12; $downloadfile"`; stderr=stderr); wait=false)
-        if !success(proc)
-            if proc.exitcode % Int32 == -393216
-                # appears to be "wrong version" exit code, based on
-                # https://docs.microsoft.com/en-us/azure/cloud-services/cloud-services-startup-tasks-common
-                error("Downloading files requires Windows Management Framework 3.0 or later.")
-            end
-            pipeline_error(proc)
-        end
+        curl = joinpath(Sys.BINDIR,"curl.exe")
+        run(`$curl -g -L -f -o $filename $url`)
         filename
     end
 else
