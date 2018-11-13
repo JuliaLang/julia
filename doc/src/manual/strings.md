@@ -936,7 +936,7 @@ ERROR: syntax: invalid escape sequence
 Triple-quoted regex strings, of the form `r"""..."""`, are also supported (and may be convenient
 for regular expressions containing quotation marks or newlines).
 
-The Regex() constructor may be used to create a valid regex string programmatically.  This permits using the contents of string variables and other string operations when constructing the regex string. Any of the regex codes above can be used within the single string argument to Regex(). Here are some examples:
+The `Regex()` constructor may be used to create a valid regex string programmatically.  This permits using the contents of string variables and other string operations when constructing the regex string. Any of the regex codes above can be used within the single string argument to `Regex()`. Here are some examples:
 
 ```julia-repl
 julia> using Dates
