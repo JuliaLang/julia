@@ -474,7 +474,7 @@ endif
 
 ifeq ($(OS), WINNT)
 	[ ! -d $(JULIAHOME)/dist-extras ] || ( cd $(JULIAHOME)/dist-extras && \
-		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin )
+		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll curl.exe libcurl.dll curl-ca-bundle.crt $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin )
 ifeq ($(USE_GPL_LIBS), 1)
 	[ ! -d $(JULIAHOME)/dist-extras ] || ( cd $(JULIAHOME)/dist-extras && \
 		cp busybox.exe $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin )
@@ -603,6 +603,8 @@ endif
 endif
 ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd $(JULIAHOME)/dist-extras && \
+	$(JLDOWNLOAD) curl-7.62.0-win32-mingw.zip https://curl.haxx.se/windows/dl-7.62.0/curl-7.62.0-win32-mingw.zip && \
+	7z e -y curl-7.62.0-win64-mingw.zip curl-7.62.0-win64-mingw/bin/* -o.  && \
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z1604.exe && \
 	7z x -y 7z1604.exe 7z.exe 7z.dll && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_Leap_42.2 \
@@ -610,6 +612,9 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cp usr/i686-w64-mingw32/sys-root/mingw/bin/*.dll .
 else ifeq ($(ARCH),x86_64)
 	cd $(JULIAHOME)/dist-extras && \
+	$(JLDOWNLOAD) curl-7.62.0-win64-mingw.zip https://curl.haxx.se/windows/dl-7.62.0/curl-7.62.0-win64-mingw.zip && \
+	7z e -y curl-7.62.0-win64-mingw.zip curl-7.62.0-win64-mingw/bin/* -o.  && \
+	mv libcurl-x64.dll libcurl.dll && \
 	$(JLDOWNLOAD) 7z1604-x64.msi http://downloads.sourceforge.net/sevenzip/7z1604-x64.msi && \
 	7z x -y 7z1604-x64.msi _7z.exe _7z.dll && \
 	mv _7z.dll 7z.dll && \
