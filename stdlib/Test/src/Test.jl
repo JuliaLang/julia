@@ -1284,7 +1284,7 @@ Body::UNION{FLOAT64, INT64}
    ┌ @ operators.jl:286 within `>'
    │┌ @ int.jl:49 within `<'
 1 ─││ %1 = (Base.slt_int)(1, b)::Bool
-│  ┘┘
+│  └└
 └──      goto #3 if not %1
 2 ─      return 1
 3 ─      return 1.0

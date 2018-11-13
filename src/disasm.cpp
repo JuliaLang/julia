@@ -157,7 +157,7 @@ static raw_ostream &operator<<(raw_ostream &Out, struct DILineInfoPrinter::repea
 
 void DILineInfoPrinter::emit_finish(raw_ostream &Out)
 {
-    auto pops = inlining_indent("┘");
+    auto pops = inlining_indent("└");
     if (pops.times > 0)
         Out << LineStart << pops << '\n';
     context.clear();
@@ -225,7 +225,7 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
         update_line_only && (npops -= 1);
         if (npops > 0) {
             this->inline_depth -= npops;
-            Out << LineStart << inlining_indent("│") << repeat{npops, "┘"} << '\n';
+            Out << LineStart << inlining_indent("│") << repeat{npops, "└"} << '\n';
         }
     }
     // see what change we made to the outermost line number

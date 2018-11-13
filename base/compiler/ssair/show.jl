@@ -338,7 +338,7 @@ function DILineInfoPrinter(linetable::Vector)
         # convert lineidx to a vector
         if lineidx < 0
             # sentinel value: reset internal (and external) state
-            pops = indent("┘")
+            pops = indent("└")
             if !isempty(pops)
                 print(io, linestart)
                 printstyled(io, pops; color=linecolor)
@@ -414,7 +414,7 @@ function DILineInfoPrinter(linetable::Vector)
                 if npops > 0
                     context_depth[] -= npops
                     print(io, linestart)
-                    printstyled(io, indent("│"), "┘"^npops; color=linecolor)
+                    printstyled(io, indent("│"), "└"^npops; color=linecolor)
                     println(io)
                 end
             end
