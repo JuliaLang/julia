@@ -947,7 +947,7 @@ julia> d = Date(1962,7,10)
 julia> regex_d = Regex("Day " * string(day(d)))
 r"Day 10"
 
-julia> match(regex_d,"It happened on Day 10")
+julia> match(regex_d, "It happened on Day 10")
 RegexMatch("Day 10")
 
 julia> name = "Jon"
