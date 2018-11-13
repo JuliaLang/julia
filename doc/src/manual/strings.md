@@ -938,7 +938,7 @@ for regular expressions containing quotation marks or newlines).
 
 The `Regex()` constructor may be used to create a valid regex string programmatically.  This permits using the contents of string variables and other string operations when constructing the regex string. Any of the regex codes above can be used within the single string argument to `Regex()`. Here are some examples:
 
-```julia-repl
+```jldoctest
 julia> using Dates
 
 julia> d = Date(1962,7,10)
