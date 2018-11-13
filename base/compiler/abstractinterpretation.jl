@@ -381,7 +381,7 @@ end
 # refine its type to an array of element types.
 # Union of Tuples of the same length is converted to Tuple of Unions.
 # returns an array of types
-function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::VarTable, sv::InferenceState)
+function precise_container_type(@nospecialize(typ), vtypes::VarTable, sv::InferenceState)
     if isa(typ, PartialTuple)
         return typ.fields
     end
@@ -393,19 +393,11 @@ function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::
         end
     end
 
-    arg = ssa_def_expr(arg, sv)
     tti0 = widenconst(typ)
     tti = unwrap_unionall(tti0)
-    if isa(arg, Expr) && arg.head === :call && abstract_evals_to_constant(arg.args[1], svec, vtypes, sv)
-        aa = arg.args
-        result = Any[ abstract_eval(aa[j],vtypes,sv) for j=2:length(aa) ]
-        if _any(isvarargtype, result)
-            return Any[Vararg{Any}]
-        end
-        return result
-    elseif isa(tti, Union)
+    if isa(tti, Union)
         utis = uniontypes(tti)
-        if _any(t -> !isa(t,DataType) || !(t <: Tuple) || !isknownlength(t), utis)
+        if _any(t -> !isa(t, DataType) || !(t <: Tuple) || !isknownlength(t), utis)
             return Any[Vararg{Any}]
         end
         result = Any[rewrap_unionall(p, tti0) for p in utis[1].parameters]
@@ -418,7 +410,7 @@ function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::
             end
         end
         return result
-    elseif isa(tti0,DataType) && tti0 <: Tuple
+    elseif isa(tti0, DataType) && tti0 <: Tuple
         if isvatuple(tti0) && length(tti0.parameters) == 1
             return Any[Vararg{unwrapva(tti0.parameters[1])}]
         else
@@ -481,7 +473,7 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
 end
 
 # do apply(af, fargs...), where af is a function value
-function abstract_apply(@nospecialize(aft), fargs::Union{Tuple{},Vector{Any}}, aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
+function abstract_apply(@nospecialize(aft), aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
     if !isa(aft, Const) && (!isType(aft) || has_free_typevars(aft))
         if !isconcretetype(aft) || (aft <: Builtin)
             # non-constant function of unknown type: bail now,
@@ -492,13 +484,12 @@ function abstract_apply(@nospecialize(aft), fargs::Union{Tuple{},Vector{Any}}, a
     end
     res = Union{}
     nargs = length(aargtypes)
-    @assert fargs === () || nargs == length(fargs)
     splitunions = 1 < countunionsplit(aargtypes) <= sv.params.MAX_APPLY_UNION_ENUM
     ctypes = Any[Any[aft]]
     for i = 1:nargs
         ctypes´ = []
         for ti in (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
-            cti = precise_container_type(fargs === () ? nothing : fargs[i], ti, vtypes, sv)
+            cti = precise_container_type(ti, vtypes, sv)
             if _any(t -> t === Bottom, cti)
                 continue
             end
@@ -563,7 +554,7 @@ end
 
 function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
     if f === _apply
-        return abstract_apply(argtypes[2], fargs[3:end], argtypes[3:end], vtypes, sv)
+        return abstract_apply(argtypes[2], argtypes[3:end], vtypes, sv)
     end
 
     la = length(argtypes)
@@ -591,7 +582,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         end
         rt = builtin_tfunction(f, argtypes[2:end], sv)
         if f === getfield && isa(fargs, Vector{Any}) && length(argtypes) == 3 && isa(argtypes[3], Const) && isa(argtypes[3].val, Int) && argtypes[2] ⊑ Tuple
-            cti = precise_container_type(fargs[2], argtypes[2], vtypes, sv)
+            cti = precise_container_type(argtypes[2], vtypes, sv)
             idx = argtypes[3].val
             if 1 <= idx <= length(cti)
                 rt = unwrapva(cti[idx])
