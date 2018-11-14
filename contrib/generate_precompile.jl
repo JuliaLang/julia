@@ -53,6 +53,11 @@ Sockets.__init__()
 using Libdl
 empty!(LOAD_PATH)
 
+const precompile_blacklist = [
+    "precompile(Tuple{typeof(Base.show), Base.IOContext{Base.TTY}, Type{Vararg{Any, N} where N}})"
+    "precompile(Tuple{typeof(Base._promote_typejoin), Type{Base.Pair{String, _} where _}, Type{Base.Pair{String, String}}})"
+]
+
 function generate_precompile_statements()
     start_time = time()
 
@@ -164,7 +169,7 @@ function generate_precompile_statements()
             # println(statement)
             # Work around #28808
             occursin("\"YYYY-mm-dd\\THH:MM:SS\"", statement) && continue
-            statement == "precompile(Tuple{typeof(Base.show), Base.IOContext{Base.TTY}, Type{Vararg{Any, N} where N}})" && continue
+            statement in precompile_blacklist && continue
             try
                 Base.include_string(PrecompileStagingArea, statement)
             catch
