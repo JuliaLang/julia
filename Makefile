@@ -519,11 +519,16 @@ endif
 
 	# Create file light-source-dist.tmp to hold all the filenames that go into the tarball
 	echo "base/version_git.jl" > light-source-dist.tmp
+
+	# Download all stdlibs and include the tarball filenames in light-source-dist.tmp
+	@$(MAKE) -C stdlib getall
+	-ls stdlib/srccache/*.tar.gz >> light-source-dist.tmp
+
 	# Exclude git, github and CI config files
 	git ls-files | sed -E -e '/^\..+/d' -e '/\/\..+/d' -e '/appveyor.yml/d' >> light-source-dist.tmp
 	find doc/_build/html >> light-source-dist.tmp
 
-# Make tarball with only Julia code
+# Make tarball with only Julia code + stdlib tarballs
 light-source-dist: light-source-dist.tmp
 	# Prefix everything with the current directory name (usually "julia"), then create tarball
 	DIRNAME=$$(basename $$(pwd)); \
@@ -537,11 +542,10 @@ source-dist:
 full-source-dist: light-source-dist.tmp
 	# Get all the dependencies downloaded
 	@$(MAKE) -C deps getall NO_GIT=1
-	@$(MAKE) -C stdlib getall
 
 	# Create file full-source-dist.tmp to hold all the filenames that go into the tarball
 	cp light-source-dist.tmp full-source-dist.tmp
-	-ls deps/srccache/*.tar.gz deps/srccache/*.tar.bz2 deps/srccache/*.tar.xz deps/srccache/*.tgz deps/srccache/*.zip deps/srccache/*.pem stdlib/srccache/*.tar.gz >> full-source-dist.tmp
+	-ls deps/srccache/*.tar.gz deps/srccache/*.tar.bz2 deps/srccache/*.tar.xz deps/srccache/*.tgz deps/srccache/*.zip deps/srccache/*.pem >> full-source-dist.tmp
 
 	# Prefix everything with the current directory name (usually "julia"), then create tarball
 	DIRNAME=$$(basename $$(pwd)); \
