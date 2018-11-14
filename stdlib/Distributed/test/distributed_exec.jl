@@ -810,6 +810,36 @@ f=Future(id_other)
 remote_do(fut->put!(fut, myid()), id_other, f)
 @test fetch(f) == id_other
 
+
+# Issue #29932 - Ensure remote objects local to current process
+# do make a deepcopy of the value being stored.
+rc_buffered = RemoteChannel(()->Channel(10))
+v = zeros(Int, 2)
+for i in 1:10
+    v[1] = i
+    put!(rc_buffered, v)
+end
+for i in 1:10
+    @test take!(rc_buffered)[1] == i
+end
+
+# unbuffered remote channels and futures
+rc_unbuffered = RemoteChannel(()->Channel(0))
+v = zeros(Int, 2)
+@async put!(rc_unbuffered, v)
+yield()
+v[1] = 1
+@test take!(rc_unbuffered)[1] == 0
+
+fut = Future()
+v = zeros(Int, 2)
+@async put!(fut, v)
+yield()
+v[1] = 1
+@test fetch(fut)[1] == 0
+
+
+
 # github PR #14456
 n = DoFullTest ? 6 : 5
 for i = 1:10^n

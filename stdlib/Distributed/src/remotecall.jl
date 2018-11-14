@@ -357,6 +357,10 @@ end
 Call a function `f` asynchronously on the given arguments on the specified process.
 Return a [`Future`](@ref).
 Keyword arguments, if any, are passed through to `f`.
+
+The arguments are serialized and copied over to the remote node for execution.
+However, if `id` is the local process id, it is treated as a local call and
+has the same effect as executing `f` asynchronously in a different task locally.
 """
 remotecall(f, id::Integer, args...; kwargs...) = remotecall(f, worker_from_id(id), args...; kwargs...)
 
@@ -386,6 +390,10 @@ Perform `fetch(remotecall(...))` in one message.
 Keyword arguments, if any, are passed through to `f`.
 Any remote exceptions are captured in a
 [`RemoteException`](@ref) and thrown.
+
+The arguments are serialized and copied over to the remote node for execution.
+However, if `id` is the local process id, it is treated as a local call and
+has the same effect as executing `f` asynchronously in a different task locally.
 
 See also [`fetch`](@ref) and [`remotecall`](@ref).
 
@@ -428,6 +436,10 @@ end
 Perform a faster `wait(remotecall(...))` in one message on the `Worker` specified by worker id `id`.
 Keyword arguments, if any, are passed through to `f`.
 
+The arguments are serialized and copied over to the remote node for execution.
+However, if `id` is the local process id, it is treated as a local call and
+has the same effect as executing `f` asynchronously in a different task locally.
+
 See also [`wait`](@ref) and [`remotecall`](@ref).
 """
 remotecall_wait(f, id::Integer, args...; kwargs...) =
@@ -467,6 +479,10 @@ is executed before `f3` on worker 2.
 Any exceptions thrown by `f` are printed to [`stderr`](@ref) on the remote worker.
 
 Keyword arguments, if any, are passed through to `f`.
+
+The arguments are serialized and copied over to the remote node for execution.
+However, if `id` is the local process id, it is treated as a local call and
+has the same effect as executing `f` asynchronously in a different task locally.
 """
 remote_do(f, id::Integer, args...; kwargs...) = remote_do(f, worker_from_id(id), args...; kwargs...)
 
@@ -542,11 +558,22 @@ Store a value to a [`Future`](@ref) `rr`.
 A `put!` on an already set `Future` throws an `Exception`.
 All asynchronous remote calls return `Future`s and set the
 value to the return value of the call upon completion.
+
+Note that in all instances a copy of `v` is stored. If `rr`
+points to a remote process, `v` is serialized and the deserialized
+copy stored on the remote process. If `rr` is local, then `deepcopy`
+is transparently called on `v` and the copy is stored.
 """
 function put!(rr::Future, v)
     rr.v !== nothing && error("Future can be set only once")
-    call_on_owner(put_future, rr, v, myid())
-    rr.v = Some(v)
+
+    # Store a copy of the object being put if the Future is owned by the local process.
+    # This ensures that it is safe for the caller to modify the original object after
+    # the call returns.
+    safev = (rr.where == myid() ? deepcopy(v) : v)
+
+    call_on_owner(put_future, rr, safev, myid())
+    rr.v = Some(safev)
     rr
 end
 function put_future(rid, v, callee)
@@ -568,8 +595,21 @@ put_ref(rid, args...) = (put!(lookup_ref(rid), args...); nothing)
 Store a set of values to the [`RemoteChannel`](@ref).
 If the channel is full, blocks until space is available.
 Return the first argument.
+
+Note that in all instances a copy of `args` is stored. If `rr`
+points to a remote process, `args` is serialized and the deserialized
+copy stored on the remote process. If `rr` is local, then `deepcopy`
+is transparently called on `args` and the copy is stored.
 """
-put!(rr::RemoteChannel, args...) = (call_on_owner(put_ref, rr, args...); rr)
+function put!(rr::RemoteChannel, args...)
+    # Store a copy of the objects being put if the RemoteChannel is owned by the local process.
+    # This ensures that it is safe for the caller to modify original objects after
+    # the call returns.
+    safe_args = (rr.where == myid() ? deepcopy(args) : args)
+
+    call_on_owner(put_ref, rr, safe_args...)
+    return rr
+end
 
 # take! is not supported on Future
 
