@@ -6,12 +6,15 @@
 # Invalid Menu Params
 @test_throws ErrorException RadioMenu(["one"])
 @test_throws ErrorException RadioMenu(["one", "two", "three"], pagesize=1)
+@test_throws ErrorException RadioMenu(["one"], default=0)
+@test_throws ErrorException RadioMenu(["one"], default=2)
 
 # Constructor
 @test RadioMenu(["one", "two", "three"]).pagesize == 3
 @test RadioMenu(string.(1:30), pagesize=-1).pagesize == 30
 @test RadioMenu(string.(1:4), pagesize=10).pagesize == 4
 @test RadioMenu(string.(1:100)).pagesize == 10
+@test RadioMenu(string.(1:20), default=10).default == 10
 
 radio_menu = RadioMenu(string.(1:20))
 @test TerminalMenus.options(radio_menu) == string.(1:20)

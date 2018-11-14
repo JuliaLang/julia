@@ -45,6 +45,7 @@ subtypes.
 
   - `header(m::AbstractMenu)`
   - `keypress(m::AbstractMenu, i::UInt32)`
+  - `cursorstart(m::AbstractMenu)`
 
 """
 abstract type AbstractMenu end
@@ -108,6 +109,12 @@ If `true` is returned, `request()` will exit.
 keypress(m::AbstractMenu, i::UInt32) = false
 
 
+"""
+    cursorstart(m::AbstractMenu) -> Int
+
+Compute the starting cursor position.
+"""
+cursorstart(m::AbstractMenu) = 1
 
 
 """
@@ -119,7 +126,7 @@ varies based on menu type.
 request(m::AbstractMenu) = request(terminal, m)
 
 function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu)
-    cursor = 1
+    cursor = cursorstart(m)
 
     menu_header = header(m)
     !CONFIG[:supress_output] && menu_header != "" && println(term.out_stream, menu_header)
@@ -234,7 +241,7 @@ function printMenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
     lines = m.pagesize-1
 
     if init
-        m.pageoffset = 0
+        m.pageoffset = min(max(cursor-m.pagesize+1, 0), length(options(m))-m.pagesize)
     else
         # Move the cursor to the beginning of where it should print
         print(buf, "\x1b[999D\x1b[$(lines)A")

@@ -24,12 +24,13 @@ mutable struct RadioMenu <: AbstractMenu
     pagesize::Int
     pageoffset::Int
     selected::Int
+    default::Int
 end
 
 
 """
 
-    RadioMenu(options::Array{String,1}; pagesize::Int=10)
+    RadioMenu(options::Array{String,1}; pagesize::Int=10, default::Int=1)
 
 Create a RadioMenu object. Use `request(menu::RadioMenu)` to get user input.
 `request()` returns an `Int` which is the index of the option selected by the
@@ -39,8 +40,9 @@ user.
 
   - `options::Array{String, 1}`: Options to be displayed
   - `pagesize::Int=10`: The number of options to be displayed at one time, the menu will scroll if length(options) > pagesize
+  - `default::Int=1`: The index of the option which is first selected
 """
-function RadioMenu(options::Array{String,1}; pagesize::Int=10)
+function RadioMenu(options::Array{String,1}; pagesize::Int=10, default::Int=1)
     length(options) < 2 && error("RadioMenu must have at least two options")
 
     # if pagesize is -1, use automatic paging
@@ -49,11 +51,13 @@ function RadioMenu(options::Array{String,1}; pagesize::Int=10)
     pagesize = min(length(options), pagesize)
     # after other checks, pagesize must be greater than 2
     pagesize < 2 && error("pagesize must be >= 2")
+    # default must be in the range of the options
+    0 < default <= length(options) || error("default must be > 0 and <= $(length(options))")
 
     pageoffset = 0
     selected = -1 # none
 
-    RadioMenu(options, pagesize, pageoffset, selected)
+    RadioMenu(options, pagesize, pageoffset, selected, default)
 end
 
 
@@ -66,9 +70,11 @@ options(m::RadioMenu) = m.options
 
 cancel(m::RadioMenu) = m.selected = -1
 
+cursorstart(m::RadioMenu) = m.default
+
 function pick(menu::RadioMenu, cursor::Int)
     menu.selected = cursor
-    return true #break out of the menu
+    return true # break out of the menu
 end
 
 function writeLine(buf::IOBuffer, menu::RadioMenu, idx::Int, cursor::Bool)

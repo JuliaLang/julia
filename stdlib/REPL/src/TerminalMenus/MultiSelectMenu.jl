@@ -37,7 +37,7 @@ end
 
 """
 
-    MultiSelectMenu(options::Array{String,1}; pagesize::Int=10)
+    MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, default=Set{Int}())
 
 Create a MultiSelectMenu object. Use `request(menu::MultiSelectMenu)` to get
 user input. `request()` returns a `Set` containing the indices of options that
@@ -47,8 +47,9 @@ were selected by the user.
 
   - `options::Array{String, 1}`: Options to be displayed
   - `pagesize::Int=10`: The number of options to be displayed at one time, the menu will scroll if length(options) > pagesize
+  - `default=Set{Int}()`: The indices of options which are first selected, must be a collection of `Int`s
 """
-function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10)
+function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, default=Int[])
     length(options) < 2 && error("MultiSelectMenu must have at least two options")
 
     # if pagesize is -1, use automatic paging
@@ -57,9 +58,13 @@ function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10)
     pagesize = min(length(options), pagesize)
     # after other checks, pagesize must be greater than 2
     pagesize < 2 && error("pagesize must be >= 2")
+    # defaults must be in the range of the options
+    if !all(d -> 0 < d <= length(options), default)
+        error("defaults must be > 0 and <= $(length(options))")
+    end
 
     pageoffset = 0
-    selected = Set{Int}() # none
+    selected = Set{Int}(default)
 
     MultiSelectMenu(options, pagesize, pageoffset, selected)
 end

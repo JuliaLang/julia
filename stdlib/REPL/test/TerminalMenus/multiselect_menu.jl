@@ -6,6 +6,8 @@
 # Invalid Menu Params
 @test_throws ErrorException MultiSelectMenu(["one"])
 @test_throws ErrorException MultiSelectMenu(["one", "two", "three"], pagesize=1)
+@test_throws ErrorException MultiSelectMenu(["one", "two", "three"], default=[0, 1, 2])
+@test_throws ErrorException MultiSelectMenu(["one", "two", "three"], default=[2, 3, 4])
 
 # Constructor
 @test MultiSelectMenu(["one", "two", "three"]).pagesize == 3
@@ -13,7 +15,8 @@
 @test MultiSelectMenu(string.(1:4), pagesize=10).pagesize == 4
 @test MultiSelectMenu(string.(1:100)).pagesize == 10
 
-multi_menu = MultiSelectMenu(string.(1:20))
+multi_menu = MultiSelectMenu(string.(1:20), default=[2, 4, 6])
+@test multi_menu.selected == Set([2, 4, 6])
 @test TerminalMenus.options(multi_menu) == string.(1:20)
 @test TerminalMenus.header(multi_menu) == "[press: d=done, a=all, n=none]"
 
