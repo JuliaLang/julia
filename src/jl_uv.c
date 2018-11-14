@@ -293,11 +293,16 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv,
                           uv_stdio_container_t *stdio, int nstdio,
                           uint32_t flags, char **env, char *cwd, uv_exit_cb cb)
 {
-    uv_process_options_t opts;
+    uv_process_options_t opts = {0};
     opts.stdio = stdio;
     opts.file = name;
     opts.env = env;
     opts.flags = flags;
+    // unused fields:
+    //opts.uid = 0;
+    //opts.gid = 0;
+    //opts.cpumask = NULL;
+    //opts.cpumask_size = 0;
     opts.cwd = cwd;
     opts.args = argv;
     opts.stdio_count = nstdio;
