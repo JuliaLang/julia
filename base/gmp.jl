@@ -284,7 +284,10 @@ BigInt(x::Float32) = BigInt(Float64(x))
 
 function BigInt(x::Integer)
     x == 0 && return BigInt(Culong(0))
-    nd = ndigits(x, base=2)
+    # In the general case, ndigits contains a call to div after conversion to unsigned, but
+    # on 32-bit systems, div for UInt128 contains a call to BigInt, prohibiting successful
+    # inference. Hence the special case for UInt128 here. See #29923.
+    nd = isa(x, UInt128) ? sizeof(x)<<3 - leading_zeros(x) : ndigits(x, base=2)
     z = MPZ.realloc2(nd)
     s = sign(x)
     s == -1 && (x = -x)
