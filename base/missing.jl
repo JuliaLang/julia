@@ -28,6 +28,7 @@ for U in (:Nothing, :Missing)
     @eval begin
         promote_rule(::Type{$U}, ::Type{T}) where {T} = Union{T, $U}
         promote_rule(::Type{Union{S,$U}}, ::Type{T}) where {T,S} = Union{promote_type(T, S), $U}
+        promote_rule(::Type{Union{S,$U}}, ::Type{Any}) where {S} = Any
         promote_rule(::Type{Any}, ::Type{$U}) = Any
         promote_rule(::Type{$U}, ::Type{Any}) = Any
         # This definition is never actually used, but disambiguates the above definitions
@@ -39,11 +40,19 @@ promote_rule(::Type{Union{Nothing, Missing}}, ::Type{T}) where {T} =
     Union{Nothing, Missing, T}
 promote_rule(::Type{Union{Nothing, Missing, S}}, ::Type{T}) where {T,S} =
     Union{Nothing, Missing, promote_type(T, S)}
+promote_rule(::Type{Union{Nothing, Missing, S}}, ::Type{Any}) where {S} = Any
 
 convert(::Type{Union{T, Missing}}, x) where {T} = convert(T, x)
 # To fix ambiguities
+#convert(::Type{Union{T, Missing}}, x::T) where {T} = x
+#convert(::Type{Union{T, Missing, Nothing}}, x::T) where {T} = x
 convert(::Type{Missing}, ::Missing) = missing
-convert(::Type{Union{Nothing, Missing}}, x::Union{Nothing, Missing}) = x
+convert(::Type{Any}, x::Missing) = x
+#convert(::Type{Union{Nothing, Missing}}, x::Union{Nothing, Missing}) = x
+convert(::Type{Union{T, Missing}}, x::Missing) where {T} = x
+convert(::Type{Union{Nothing, Missing, T}}, x::Nothing) where {T} = x
+convert(::Type{Union{Nothing, Missing, T}}, x::Missing) where {T} = x
+convert(::Type{Union{Nothing, Missing, T}}, x) where {T} = convert(T, x)
 convert(::Type{Union{Nothing, Missing}}, x) =
     throw(MethodError(convert, (Union{Nothing, Missing}, x)))
 # To print more appropriate message than "T not defined"

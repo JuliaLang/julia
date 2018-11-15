@@ -849,8 +849,10 @@ function test_intersection()
 
     @testintersect(Tuple{T,T} where T<:Union{UpperTriangular, UnitUpperTriangular},
                    Tuple{AbstractArray{T,N}, AbstractArray{T,N}} where N where T,
-                   Union{Tuple{T,T} where T<:UpperTriangular,
-                         Tuple{T,T} where T<:UnitUpperTriangular})
+                   Tuple{A,A} where A<:(Union{UpperTriangular{T}, UnitUpperTriangular{T}} where T))
+                   # TODO: this answer also seems OK; see if it matters.
+                   #Union{Tuple{T,T} where T<:UpperTriangular,
+                   #      Tuple{T,T} where T<:UnitUpperTriangular}
 
     @testintersect(DataType, Type, DataType)
     @testintersect(DataType, Type{T} where T<:Integer, Type{T} where T<:Integer)
@@ -1153,7 +1155,10 @@ end
 struct TT20103{X,Y} end
 f20103(::Type{TT20103{X,Y}},x::X,y::Y) where {X,Y} = 1
 f20103(::Type{TT20103{X,X}},x::X) where {X} = 100
-@test_broken typeintersect(Type{NTuple{N,E}} where E where N, Type{NTuple{N,E} where N} where E) == Union{} # use @testintersect once fixed
+@testintersect(Type{NTuple{N,E}} where E where N,
+               Type{NTuple{N,E} where N} where E,
+               Union{})
+#@test_broken typeintersect(Type{NTuple{N,E}} where E where N, Type{NTuple{N,E} where N} where E) == Union{} # use @testintersect once fixed
 let ints = (Int, Int32, UInt, UInt32)
     Ints = Union{ints...}
     vecs = []
@@ -1379,3 +1384,28 @@ let M = M29955{T,Vector{Float64}} where T
     @test_throws TypeError M{Float32}
     @test_throws TypeError M{Real}
 end
+
+struct Concrete{N, C, U} <: AbstractArray{Union{C, U}, N}
+end
+@testintersect(Concrete, AbstractVector, Concrete{1})
+
+@testintersect(Array{Union{A,B},C} where {A,B,C},
+               AbstractVector,
+               Vector)
+
+import LinearAlgebra: RealHermSymComplexSym, RealHermSymComplexHerm
+
+let A = Tuple{Adjoint{<:Any,<:RealHermSymComplexHerm}, Adjoint{<:Any,<:RealHermSymComplexSym}},
+    B = Tuple{Adjoint{<:Any,<:AbstractMatrix}, Adjoint{<:Any,<:RealHermSymComplexHerm}}
+    @testintersect(A, B,
+                   Tuple{Adjoint{<:Any,<:RealHermSymComplexHerm},
+                         Adjoint{<:Any,<:Union{Hermitian{<:Real,<:Any},Symmetric{<:Real,<:Any}}}})
+end
+
+@testintersect(Ref{Union{Nothing,Some{T}}} where T,
+               Ref{Union{Nothing,Some}},
+               Union{})
+
+@testintersect(Tuple{Type{Union{Nothing,T}}, Any} where T,
+               Tuple{Type{T},T} where T,
+               Tuple{Type{Union{Nothing, T}},Union{Nothing, T}} where T)

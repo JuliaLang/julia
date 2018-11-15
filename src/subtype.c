@@ -1347,17 +1347,16 @@ static jl_value_t *intersect_union(jl_value_t *x, jl_uniontype_t *u, jl_stenv_t 
     return R ? intersect(x, choice, e, param) : intersect(choice, x, e, param);
 }
 
+static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
+
 static jl_value_t *intersect_ufirst(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int depth)
 {
     jl_value_t *res;
     int savedepth = e->invdepth;
     e->invdepth = depth;
-    if (jl_is_uniontype(x) && jl_is_typevar(y))
-        res = intersect_union(y, (jl_uniontype_t*)x, e, 0, 0);
-    else if (jl_is_typevar(x) && jl_is_uniontype(y))
-        res = intersect_union(x, (jl_uniontype_t*)y, e, 1, 0);
-    else
-        res = intersect(x, y, e, 0);
+    jl_unionstate_t oldRunions = e->Runions;
+    res = intersect_all(x, y, e, 0);
+    e->Runions = oldRunions;
     e->invdepth = savedepth;
     return res;
 }
@@ -1926,7 +1925,9 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         return (jl_subtype(x,y) && jl_subtype(y,x)) ? y : NULL;
     }
     e->invdepth++;
-    jl_value_t *ii = intersect(x, y, e, 2);
+    jl_unionstate_t oldRunions = e->Runions;
+    jl_value_t *ii = intersect_all(x, y, e, 2);
+    e->Runions = oldRunions;
     e->invdepth--;
     if (jl_is_typevar(x) && jl_is_typevar(y) && (jl_is_typevar(ii) || !jl_is_type(ii)))
         return ii;
@@ -1953,12 +1954,12 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     jl_savedenv_t se;
     JL_GC_PUSH2(&ii, &root);
     save_env(e, &root, &se);
-    if (!subtype_in_env(x, y, e)) {
+    if (!subtype_in_env(x, ii, e)) {
         ii = NULL;
     }
     else {
         flip_vars(e);
-        if (!subtype_in_env(y, x, e))
+        if (!subtype_in_env(y, ii, e))
             ii = NULL;
         flip_vars(e);
     }
@@ -2214,7 +2215,7 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
     return jl_bottom_type;
 }
 
-static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
+static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
 {
     e->Runions.depth = 0;
     e->Runions.more = 0;
@@ -2222,7 +2223,7 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     jl_value_t **is;
     JL_GC_PUSHARGS(is, 2);
     int lastset = 0, niter = 0, total_iter = 0;
-    jl_value_t *ii = intersect(x, y, e, 0);
+    jl_value_t *ii = intersect(x, y, e, param);
     while (e->Runions.more) {
         if (e->emptiness_only && ii != jl_bottom_type) {
             JL_GC_POP();
@@ -2237,7 +2238,7 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         lastset = set;
 
         is[0] = ii;
-        is[1] = intersect(x, y, e, 0);
+        is[1] = intersect(x, y, e, param);
         if (is[0] == jl_bottom_type)
             ii = is[1];
         else if (is[1] == jl_bottom_type)
@@ -2267,7 +2268,7 @@ static jl_value_t *intersect_types(jl_value_t *x, jl_value_t *y, int emptiness_o
     init_stenv(&e, NULL, 0);
     e.intersection = 1;
     e.emptiness_only = emptiness_only;
-    return intersect_all(x, y, &e);
+    return intersect_all(x, y, &e, 0);
 }
 
 JL_DLLEXPORT jl_value_t *jl_intersect_types(jl_value_t *x, jl_value_t *y)
@@ -2390,7 +2391,7 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         if (szb)
             memset(env, 0, szb*sizeof(void*));
         e.envsz = szb;
-        *ans = intersect_all(a, b, &e);
+        *ans = intersect_all(a, b, &e, 0);
         if (*ans == jl_bottom_type) goto bot;
         // TODO: code dealing with method signatures is not able to handle unions, so if
         // `a` and `b` are both tuples, we need to be careful and may not return a union,

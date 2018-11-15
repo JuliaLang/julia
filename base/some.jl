@@ -17,10 +17,16 @@ promote_rule(::Type{Some{T}}, ::Type{Nothing}) where {T} = Union{Some{T}, Nothin
 
 convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
 convert(::Type{Union{Some{T}, Nothing}}, x::Some) where {T} = convert(Some{T}, x)
+#convert(::Type{Union{Some, Nothing}}, x::Some) = x
+#convert(::Type{Union{Some, Nothing}}, x::Nothing) = x
+#convert(::Type{Union{Some{T}, Nothing}}, x::Some{T}) where {T} = x
 
 convert(::Type{Union{T, Nothing}}, x::Any) where {T} = convert(T, x)
-convert(::Type{Nothing}, x::Any) = throw(MethodError(convert, (Nothing, x)))
+convert(::Type{Union{T, Nothing}}, x::Nothing) where {T} = x
+convert(::Type{Any}, x::Nothing) = x
+#convert(::Type{Union{T, Nothing}}, x::T) where {T} = x
 convert(::Type{Nothing}, x::Nothing) = nothing
+convert(::Type{Nothing}, x::Any) = throw(MethodError(convert, (Nothing, x)))
 
 function show(io::IO, x::Some)
     if get(io, :typeinfo, Any) == typeof(x)
