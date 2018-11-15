@@ -795,7 +795,7 @@ const full_warning_showed = Ref(false)
 const modules_warned_for = Set{PkgId}()
 
 """
-    require(module::Symbol)
+    require(into::Module, module::Symbol)
 
 This function is part of the implementation of `using` / `import`, if a module is not
 already defined in `Main`. It can also be called directly to force reloading a module,
