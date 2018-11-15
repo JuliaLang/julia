@@ -2363,20 +2363,13 @@ end
     let types = (Base.BitInteger_types..., BigInt, Bool)
         for S in types
             T = @inferred Base.promote_op(~, S)
-            # FIXME: temporary work-around for #29923
-            if !(Sys.WORD_SIZE == 32 && S === Int128)
-                @inferred ~one(S)
-            end
-            t = ~one(S)
+            t = @inferred ~one(S)
             @test T === typeof(t)
+
             for R in types
                 for op in (&, |, <<, >>, (>>>), %, ÷)
                     T = @inferred Base.promote_op(op, S, R)
-                    # FIXME: temporary work-around for #29923
-                    if !(Sys.WORD_SIZE == 32 && T === Int128)
-                        @inferred op(one(S), one(R))
-                    end
-                    t = op(one(S), one(R))
+                    t = @inferred op(one(S), one(R))
                     @test T === typeof(t)
                 end
             end
