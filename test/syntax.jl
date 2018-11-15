@@ -1743,3 +1743,9 @@ end
 @test Meta.isexpr(Meta.parse("1, \n"), :incomplete)
 @test_throws LoadError include_string(@__MODULE__, "1,")
 @test_throws LoadError include_string(@__MODULE__, "1,\n")
+
+# issue #30030
+let x = 0
+    @test (a=1, b=2, c=(x=3)) == (a=1, b=2, c=3)
+    @test x == 3
+end
