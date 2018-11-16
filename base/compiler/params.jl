@@ -65,7 +65,7 @@ struct Params
                    #=inline_tupleret_bonus, max_methods, union_splitting, apply_union_enum=#
                    400, 4, 4, 8,
                    #=tupletype_depth, tuple_splat=#
-                   3, 32)
+                   10, 1000)
     end
 end
 const DEFAULT_PARAMS = Params(UInt(0))
