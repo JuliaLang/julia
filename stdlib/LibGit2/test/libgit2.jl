@@ -47,8 +47,8 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
         "Process output found:\n\"\"\"\n$str\n\"\"\""
     end
     out = IOBuffer()
-    with_fake_pty() do slave, master
-        p = run(detach(cmd), slave, slave, slave, wait=false)
+    with_fake_pty() do worker, master
+        p = run(detach(cmd), worker, worker, worker, wait=false)
 
         # Kill the process if it takes too long. Typically occurs when process is waiting
         # for input.
