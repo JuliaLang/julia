@@ -2008,7 +2008,10 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                         return xlb;
                     return jl_bottom_type;
                 }
-                if (!(subtype_in_env(xlb, yub, e) && subtype_in_env(ylb, xub, e)))
+                if (R) flip_vars(e);
+                int ccheck = subtype_in_env(xlb, yub, e) && subtype_in_env(ylb, xub, e);
+                if (R) flip_vars(e);
+                if (!ccheck)
                     return jl_bottom_type;
                 jl_value_t *ub=NULL, *lb=NULL;
                 JL_GC_PUSH2(&lb, &ub);
