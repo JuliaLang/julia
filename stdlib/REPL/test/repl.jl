@@ -729,10 +729,10 @@ ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
 let exename = Base.julia_cmd()
     # Test REPL in dumb mode
     if !Sys.iswindows()
-        with_fake_pty() do slave, master
+        with_fake_pty() do worker, master
             nENV = copy(ENV)
             nENV["TERM"] = "dumb"
-            p = run(setenv(`$exename --startup-file=no -q`,nENV),slave,slave,slave,wait=false)
+            p = run(setenv(`$exename --startup-file=no -q`,nENV),worker,worker,worker,wait=false)
             output = readuntil(master,"julia> ",keep=true)
             if ccall(:jl_running_on_valgrind,Cint,()) == 0
                 # If --trace-children=yes is passed to valgrind, we will get a

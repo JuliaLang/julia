@@ -81,11 +81,11 @@ function generate_precompile_statements()
             # Fake being cygwin
             pipename = """\\\\?\\pipe\\cygwin-$("0"^16)-pty10-abcdef"""
             server = listen(pipename)
-            slave = connect(pipename)
-            @assert ccall(:jl_ispty, Cint, (Ptr{Cvoid},), slave.handle) == 1
+            worker = connect(pipename)
+            @assert ccall(:jl_ispty, Cint, (Ptr{Cvoid},), worker.handle) == 1
             master = accept(server)
         else
-            slave, master = open_fake_pty()
+            worker, master = open_fake_pty()
         end
         done = false
         blackhole = Sys.isunix() ? "/dev/null" : "nul"
@@ -96,7 +96,7 @@ function generate_precompile_statements()
                         --compile=all --startup-file=no --color=yes
                         -e 'import REPL; REPL.Terminals.is_precompiling[] = true'
                         -i`,
-                        slave, slave, slave; wait=false)
+                        worker, worker, worker; wait=false)
                 readuntil(master, "julia>", keep=true)
                 t = @async begin
                     while true
