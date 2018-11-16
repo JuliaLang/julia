@@ -47,8 +47,8 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
         "Process output found:\n\"\"\"\n$str\n\"\"\""
     end
     out = IOBuffer()
-    with_fake_pty() do worker, master
-        p = run(detach(cmd), worker, worker, worker, wait=false)
+    with_fake_pty() do pty_slave, pty_master
+        p = run(detach(cmd), pty_slave, pty_slave, pty_slave, wait=false)
 
         # Kill the process if it takes too long. Typically occurs when process is waiting
         # for input.
@@ -75,21 +75,21 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
                 process_running(p) && kill(p, Base.SIGKILL)
             end
 
-            close(master)
+            close(pty_master)
         end
 
         for (challenge, response) in challenges
-            write(out, readuntil(master, challenge, keep=true))
-            if !isopen(master)
+            write(out, readuntil(pty_master, challenge, keep=true))
+            if !isopen(pty_master)
                 error("Could not locate challenge: \"$challenge\". ",
                       format_output(out))
             end
-            write(master, response)
+            write(pty_master, response)
         end
 
         # Capture output from process until `master` is closed
-        while !eof(master)
-            write(out, readavailable(master))
+        while !eof(pty_master)
+            write(out, readavailable(pty_master))
         end
 
         status = fetch(timer)
