@@ -301,6 +301,13 @@ end
 
 @test_throws ArgumentError LinearAlgebra.copytri!(Matrix{Float64}(undef,10,10),'Z')
 
+@testset "Issue 30055" begin
+    A = UpperTriangular([1+im 2+im 3+im; 4+im 5+im 6+im; 7+im 9+im 0])'
+    @test copy(A) == A # copy uses copytri!
+    A = LowerTriangular([1+im 2+im 3+im; 4+im 5+im 6+im; 7+im 9+im 0])'
+    @test copy(A) == A # copy uses copytri!
+end
+
 @testset "gemv! and gemm_wrapper for $elty" for elty in [Float32,Float64,ComplexF64,ComplexF32]
     A10x10, x10, x11 = Array{elty}.(undef, ((10,10), 10, 11))
     @test_throws DimensionMismatch LinearAlgebra.gemv!(x10,'N',A10x10,x11)

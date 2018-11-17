@@ -340,6 +340,11 @@ function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false)
     else
         throw(ArgumentError("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
     end
+    if conjugate
+        for i = 1:n
+            A[i,i] = adjoint(A[i,i])
+        end
+    end
     A
 end
 
