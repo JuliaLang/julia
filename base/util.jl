@@ -454,7 +454,7 @@ Default `julia` executable and options.
 """
 default_julia_basecmd() = `$(joinpath(Sys.BINDIR::String, julia_exename()))`
 
-const _julia_basecmd = Ref(default_julia_basecmd())
+const _julia_basecmd = Ref(``)
 
 """
     julia_basecmd() :: Cmd
@@ -465,11 +465,12 @@ changed by [`set_julia_basecmd`](@ref).
 julia_basecmd() = _julia_basecmd[]
 
 """
-    set_julia_basecmd(path::Cmd)
+    set_julia_basecmd([path::Cmd])
 
-Set the Julia executable used by [`julia_cmd`](@ref).
+Set the Julia executable used by [`julia_cmd`](@ref).  Reset to default
+when no argument is given.
 """
-function set_julia_basecmd(cmd::Cmd)
+function set_julia_basecmd(cmd::Cmd = default_julia_basecmd())
     _julia_basecmd[] = cmd
 end
 
