@@ -799,6 +799,8 @@ function inv(A::AbstractMatrix{T}) where T
     dest = Matrix{S0}(I, n, n)
     ldiv!(factorize(convert(AbstractMatrix{S}, A)), dest)
 end
+inv(A::Adjoint) = adjoint(inv(parent(A)))
+inv(A::Transpose) = transpose(inv(parent(A)))
 
 pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T<:Real} = _vectorpinv(transpose, v, tol)
 pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T<:Complex} = _vectorpinv(adjoint, v, tol)
