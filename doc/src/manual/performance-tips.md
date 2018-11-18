@@ -707,7 +707,7 @@ type-domain.
 
 ## The dangers of abusing multiple dispatch (aka, more on types with values-as-parameters)
 
-Once one learns to appreciate multiple dispatch, there's an understandable tendency to go crazy
+Once one learns to appreciate multiple dispatch, there's an understandable tendency to go overboard
 and try to use it for everything. For example, you might imagine using it to store information,
 e.g.
 
