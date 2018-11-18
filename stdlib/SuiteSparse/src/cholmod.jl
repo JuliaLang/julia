@@ -1428,7 +1428,7 @@ Compute the Cholesky factorization of a sparse positive definite matrix `A`.
 `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
 view of a `SparseMatrixCSC`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
-A fill-reducing permutation is used.
+If `perm` is not given, a fill-reducing permutation is used.
 `F = cholesky(A)` is most frequently used to solve systems of equations with `F\\b`,
 but also the methods [`diag`](@ref), [`det`](@ref), and
 [`logdet`](@ref) are defined for `F`.
@@ -1450,20 +1450,52 @@ it should be a permutation of `1:size(A,1)` giving the ordering to use
 (instead of CHOLMOD's default AMD ordering).
 
 # Examples
-```jldoctest
-julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
-3×3 Array{Float64,2}:
-   4.0   12.0  -16.0
-  12.0   37.0  -43.0
- -16.0  -43.0   98.0
 
-julia> p = [2, 3, 1]
+In the following example, the fill-reducing permutation used is `[3, 2, 1]`.
+If `perm` is set to `1:3` to enforce no permutation, the number of nonzero
+elements in the factor is 6.
+```jldoctest
+julia> A = [2 1 1; 1 2 0; 1 0 2]
+3×3 Array{Int64,2}:
+ 2  1  1
+ 1  2  0
+ 1  0  2
+
+julia> C = cholesky(sparse(A))
+SuiteSparse.CHOLMOD.Factor{Float64}
+type:    LLt
+method:  simplicial
+maxnnz:  5
+nnz:     5
+success: true
+
+julia> C.p
 3-element Array{Int64,1}:
- 2
  3
+ 2
  1
 
-julia> C = cholesky(sparse(A), perm=p)
+julia> L = sparse(C.L);
+
+julia> Matrix(L)
+3×3 Array{Float64,2}:
+ 1.41421   0.0       0.0
+ 0.0       1.41421   0.0
+ 0.707107  0.707107  1.0
+
+julia> L * L' ≈ A[C.p, C.p]
+true
+
+julia> P = sparse(1:3, C.p, ones(3))
+3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+  [3, 1]  =  1.0
+  [2, 2]  =  1.0
+  [1, 3]  =  1.0
+
+julia> P' * L * L' * P ≈ A
+true
+
+julia> C = cholesky(sparse(A), perm=1:3)
 SuiteSparse.CHOLMOD.Factor{Float64}
 type:    LLt
 method:  simplicial
@@ -1471,29 +1503,15 @@ maxnnz:  6
 nnz:     6
 success: true
 
+julia> L = sparse(C.L);
 
-juila> L = sparse(C.L)
-3×3 SparseMatrixCSC{Float64,Int64} with 6 stored entries:
-  [1, 1]  =  6.08276
-  [2, 1]  =  -7.06916
-  [3, 1]  =  1.97279
-  [2, 2]  =  6.93015
-  [3, 2]  =  -0.296394
-  [3, 3]  =  0.142334
+julia> Matrix(L)
+3×3 Array{Float64,2}:
+ 1.41421    0.0       0.0
+ 0.707107   1.22474   0.0
+ 0.707107  -0.408248  1.1547
 
-julia> C.p == p
-true
-
-julia> L * L' ≈ A[p, p]
-true
-
-julia> P = sparse(1:3, C.p, ones(3))
-3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
-  [3, 1]  =  1.0
-  [1, 2]  =  1.0
-  [2, 3]  =  1.0
-
-julia> P' * L * L' * P ≈ A
+julia> L * L' ≈ A
 true
 ```
 

@@ -709,7 +709,7 @@ struct T22053
     t
 end
 Broadcast.BroadcastStyle(::Type{T22053}) = Broadcast.Style{T22053}()
-Broadcast.broadcast_axes(::T22053) = ()
+Broadcast.axes(::T22053) = ()
 Broadcast.broadcastable(t::T22053) = t
 function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{T22053}})
     all(x->isa(x, T22053), bc.args) && return 1

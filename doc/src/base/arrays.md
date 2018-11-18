@@ -76,7 +76,6 @@ Base.@__dot__
 For specializing broadcast on custom types, see
 ```@docs
 Base.BroadcastStyle
-Base.broadcast_axes
 Base.Broadcast.AbstractArrayStyle
 Base.Broadcast.ArrayStyle
 Base.Broadcast.DefaultArrayStyle

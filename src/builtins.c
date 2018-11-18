@@ -677,10 +677,10 @@ JL_CALLABLE(jl_f_setfield)
         jl_type_error("setfield!", (jl_value_t*)jl_datatype_type, v);
     jl_datatype_t *st = (jl_datatype_t*)vt;
     if (!st->mutabl)
-        jl_errorf("type %s is immutable", jl_symbol_name(st->name->name));
+        jl_errorf("setfield! immutable struct of type %s cannot be changed", jl_symbol_name(st->name->name));
     size_t idx;
     if (jl_is_long(args[1])) {
-        idx = jl_unbox_long(args[1])-1;
+        idx = jl_unbox_long(args[1]) - 1;
         if (idx >= jl_datatype_nfields(st))
             jl_bounds_error(args[0], args[1]);
     }

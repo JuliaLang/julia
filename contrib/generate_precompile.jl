@@ -167,9 +167,9 @@ function generate_precompile_statements()
             statement == "precompile(Tuple{typeof(Base.show), Base.IOContext{Base.TTY}, Type{Vararg{Any, N} where N}})" && continue
             try
                 Base.include_string(PrecompileStagingArea, statement)
-            catch ex
+            catch
                 @error "Failed to precompile $statement"
-                rethrow(ex)
+                rethrow()
             end
         end
         print(" $(length(statements)) generated in ")

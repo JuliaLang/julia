@@ -87,6 +87,9 @@ bimg  = randn(n,2)/2
             pinva15 = pinv(a[:,1:n1])
             @test a[:,1:n1]*pinva15*a[:,1:n1] ≈ a[:,1:n1]
             @test pinva15*a[:,1:n1]*pinva15 ≈ pinva15
+            pinva15 = pinv(a[:,1:n1]') # the Adjoint case
+            @test a[:,1:n1]'*pinva15*a[:,1:n1]' ≈ a[:,1:n1]'
+            @test pinva15*a[:,1:n1]'*pinva15 ≈ pinva15
 
             @test size(pinv(Matrix{eltya}(undef,0,0))) == (0,0)
         end
@@ -426,6 +429,13 @@ end
             A4float  = convert(Matrix{elty2}, A4int)
             @test exp(A4int) == exp(A4float)
         end
+    end
+
+    @testset "^ tests" for elty in (Float32, Float64, ComplexF32, ComplexF64, Int32, Int64)
+        # should all be exact as the lhs functions are simple aliases
+        @test ℯ^(fill(elty(2), (4,4))) == exp(fill(elty(2), (4,4)))
+        @test 2^(fill(elty(2), (4,4))) == exp(log(2)*fill(elty(2), (4,4)))
+        @test 2.0^(fill(elty(2), (4,4))) == exp(log(2.0)*fill(elty(2), (4,4)))
     end
 
     A8 = 100 * [-1+1im 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1]

@@ -185,9 +185,9 @@ end
 function try_yieldto(undo, reftask::Ref{Task})
     try
         ccall(:jl_switchto, Cvoid, (Any,), reftask)
-    catch e
+    catch
         undo(reftask[])
-        rethrow(e)
+        rethrow()
     end
     ct = current_task()
     exc = ct.exception
@@ -315,7 +315,7 @@ function AsyncCondition(cb::Function)
                 wait(async)
                 true
             catch exc # ignore possible exception on close()
-                isa(exc, EOFError) || rethrow(exc)
+                isa(exc, EOFError) || rethrow()
             end
             success && cb(async)
         end
@@ -469,7 +469,7 @@ function Timer(cb::Function, timeout::Real; interval::Real = 0.0)
                 wait(t)
                 true
             catch exc # ignore possible exception on close()
-                isa(exc, EOFError) || rethrow(exc)
+                isa(exc, EOFError) || rethrow()
                 false
             end
             success && cb(t)

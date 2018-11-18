@@ -156,9 +156,9 @@ function print_response(errio::IO, @nospecialize(val), bt, show_value::Bool, hav
                         else
                             Base.invokelatest(display, specialdisplay, val)
                         end
-                    catch err
+                    catch
                         println(errio, "Error showing value of type ", typeof(val), ":")
-                        rethrow(err)
+                        rethrow()
                     end
                 end
             end

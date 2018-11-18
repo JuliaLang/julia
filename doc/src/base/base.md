@@ -167,6 +167,7 @@ Base.isconcretetype
 Base.isbits
 Base.isbitstype
 Core.fieldtype
+Base.fieldtypes
 Base.fieldcount
 Base.fieldoffset
 Base.datatype_alignment

@@ -1,9 +1,0 @@
-name = "x3"
-uuid = "53501efc-96b1-11e8-0d90-e1a45c33f0f8"
-version = "0.1.0"
-
-[extras]
-x2 = "52baf49e-96b1-11e8-23dd-2d073a3a6758"
-
-[targets]
-test = ["x2"]

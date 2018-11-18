@@ -33,7 +33,8 @@ let
     # XXX: missing @test
 end
 
-let cmd = `$(Base.julia_cmd()) --compile=min interpreter_exec.jl`
+for compile in ("min", "yes")
+    cmd = `$(Base.julia_cmd()) --compile=$compile interpreter_exec.jl`
     if !success(pipeline(Cmd(cmd, dir=@__DIR__); stdout=stdout, stderr=stderr))
         error("Interpreter test failed, cmd : $cmd")
     end

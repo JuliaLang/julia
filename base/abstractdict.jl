@@ -402,7 +402,7 @@ function filter(f, d::AbstractDict)
                 end
             end
         else
-            rethrow(e)
+            rethrow()
         end
     end
     return df
@@ -550,12 +550,12 @@ end
 function IdDict(kv)
     try
         dict_with_eltype((K, V) -> IdDict{K, V}, kv, eltype(kv))
-    catch e
+    catch
         if !applicable(iterate, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError(
                 "IdDict(kv): kv needs to be an iterator of tuples or pairs"))
         else
-            rethrow(e)
+            rethrow()
         end
     end
 end

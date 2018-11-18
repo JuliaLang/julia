@@ -107,10 +107,10 @@ typemin(::String) = typemin(String)
 
 ## thisind, nextind ##
 
-thisind(s::String, i::Int) = _thisind_str(s, i)
+Base.@propagate_inbounds thisind(s::String, i::Int) = _thisind_str(s, i)
 
 # s should be String or SubString{String}
-function _thisind_str(s, i::Int)
+@inline function _thisind_str(s, i::Int)
     i == 0 && return 0
     n = ncodeunits(s)
     i == n + 1 && return i
@@ -128,10 +128,10 @@ function _thisind_str(s, i::Int)
     return i
 end
 
-nextind(s::String, i::Int) = _nextind_str(s, i)
+Base.@propagate_inbounds nextind(s::String, i::Int) = _nextind_str(s, i)
 
 # s should be String or SubString{String}
-function _nextind_str(s, i::Int)
+@inline function _nextind_str(s, i::Int)
     i == 0 && return 1
     n = ncodeunits(s)
     @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
@@ -237,7 +237,7 @@ end
 
 getindex(s::String, r::UnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
 
-function getindex(s::String, r::UnitRange{Int})
+@inline function getindex(s::String, r::UnitRange{Int})
     isempty(r) && return ""
     i, j = first(r), last(r)
     @boundscheck begin
@@ -248,14 +248,11 @@ function getindex(s::String, r::UnitRange{Int})
     j = nextind(s, j) - 1
     n = j - i + 1
     ss = _string_n(n)
-    p = pointer(ss)
-    for k = 1:n
-        unsafe_store!(p, codeunit(s, i + k - 1), k)
-    end
+    unsafe_copyto!(pointer(ss), pointer(s, i), n)
     return ss
 end
 
-function length(s::String, i::Int, j::Int)
+@inline function length(s::String, i::Int, j::Int)
     @boundscheck begin
         0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
         0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))

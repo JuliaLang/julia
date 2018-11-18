@@ -240,7 +240,7 @@ function DateTime(y::Year, m::Month=Month(1), d::Day=Day(1),
                   h::Hour=Hour(0), mi::Minute=Minute(0),
                   s::Second=Second(0), ms::Millisecond=Millisecond(0))
     return DateTime(value(y), value(m), value(d),
-                        value(h), value(mi), value(s), value(ms))
+                    value(h), value(mi), value(s), value(ms))
 end
 
 Date(y::Year, m::Month=Month(1), d::Day=Day(1)) = Date(value(y), value(m), value(d))
@@ -308,6 +308,31 @@ function Time(period::TimePeriod, periods::TimePeriod...)
         isa(p, Nanosecond) && (ns = p::Nanosecond)
     end
     return Time(h, mi, s, ms, us, ns)
+end
+
+# Convenience constructor for DateTime from Date and Time
+"""
+    DateTime(d::Date, t::Time)
+
+Construct a `DateTime` type by `Date` and `Time`.
+Non-zero microseconds or nanoseconds in the `Time` type will result in an
+`InexactError`.
+
+```jldoctest
+julia> d = Date(2018, 1, 1)
+2018-01-01
+
+julia> t = Time(8, 15, 42)
+08:15:42
+
+julia> DateTime(d, t)
+2018-01-01T08:15:42
+```
+"""
+function DateTime(dt::Date, t::Time)
+    (microsecond(t) > 0 || nanosecond(t) > 0) && throw(InexactError(:DateTime, DateTime, t))
+    y, m, d = yearmonthday(dt)
+    return DateTime(y, m, d, hour(t), minute(t), second(t), millisecond(t))
 end
 
 # Fallback constructors

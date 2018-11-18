@@ -623,6 +623,24 @@ function fieldcount(@nospecialize t)
     return length(t.types)
 end
 
+"""
+    fieldtypes(T::Type)
+
+The declared types of all fields in a composite DataType `T` as a tuple.
+
+# Examples
+```jldoctest
+julia> struct Foo
+           x::Int64
+           y::String
+       end
+
+julia> fieldtypes(Foo)
+(Int64, String)
+```
+"""
+fieldtypes(T::Type) = ntuple(i -> fieldtype(T, i), fieldcount(T))
+
 # return all instances, for types that can be enumerated
 
 """

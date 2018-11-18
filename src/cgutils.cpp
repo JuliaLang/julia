@@ -2421,8 +2421,10 @@ static void emit_setfield(jl_codectx_t &ctx,
         }
     }
     else {
-        // TODO: better error
-        emit_error(ctx, "type is immutable");
+        std::string msg = "setfield! immutable struct of type "
+            + std::string(jl_symbol_name(sty->name->name))
+            + " cannot be changed";
+        emit_error(ctx, msg);
     }
 }
 

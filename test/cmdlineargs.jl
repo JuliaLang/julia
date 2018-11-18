@@ -560,3 +560,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         end
     end
 end
+
+# Issue #29855
+for yn in ("no", "yes")
+    exename = `$(Base.julia_cmd()) --startup-file=no --inline=$yn`
+    @test occursin("--inline=$yn", first(writereadpipeline("Base.julia_cmd()", exename)))
+end

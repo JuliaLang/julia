@@ -615,9 +615,9 @@ function open(f::Function, cmds::AbstractCmd, args...)
     P = open(cmds, args...)
     ret = try
         f(P)
-    catch e
+    catch
         kill(P)
-        rethrow(e)
+        rethrow()
     finally
         close(P.in)
     end
