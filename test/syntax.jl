@@ -1743,3 +1743,9 @@ end
 @test Meta.isexpr(Meta.parse("1, \n"), :incomplete)
 @test_throws LoadError include_string(@__MODULE__, "1,")
 @test_throws LoadError include_string(@__MODULE__, "1,\n")
+
+# issue #30062
+let er = Meta.lower(@__MODULE__, quote if false end, b+=2 end)
+    @test Meta.isexpr(er, :error)
+    @test startswith(er.args[1], "invalid multiple assignment location \"if")
+end
