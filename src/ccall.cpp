@@ -1018,7 +1018,10 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         jl_value_t *tti = jl_svecref(tt,i);
         bool toboxed;
         Type *t = julia_type_to_llvm(tti, &toboxed);
-        argtypes.push_back(t);
+        if (toboxed)
+            argtypes.push_back(T_prjlvalue);
+        else
+            argtypes.push_back(t);
         if (4 + i > nargs) {
             jl_error("Missing arguments to llvmcall!");
         }
@@ -1033,6 +1036,8 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     Function *f;
     bool retboxed;
     Type *rettype = julia_type_to_llvm(rtt, &retboxed);
+    if (retboxed)
+        rettype = T_prjlvalue;
     if (isString) {
         // Make sure to find a unique name
         std::string ir_name;
