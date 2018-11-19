@@ -11,7 +11,9 @@ Language changes
 ----------------
 
   * the constructor `BigFloat(::BigFloat)` now respects the global precision setting and always
-    returns a `BigFloat` with precision equal to `precision(BigFloat)` ([#29127]).
+    returns a `BigFloat` with precision equal to `precision(BigFloat)` ([#29127]). The optional
+    `precision` argument to override the global setting is now a keyword instead of positional
+    argument ([#29157]).
   * Parser inputs ending with a comma are now consistently treated as incomplete.
     Previously they were sometimes parsed as tuples, depending on whitespace ([#28506]).
   * `Regex` now behave like a scalar when used in broadcasting ([#29913]).
