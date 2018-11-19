@@ -650,7 +650,10 @@ for (fname, elty) in ((:dgbmv_,:Float64),
              #       CHARACTER TRANS
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
-        function gbmv!(trans::AbstractChar, m::Integer, kl::Integer, ku::Integer, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, beta::($elty), y::AbstractVector{$elty})
+        function gbmv!(trans::AbstractChar, m::Integer, kl::Integer, ku::Integer,
+                       alpha::Union{($elty), Bool}, A::AbstractMatrix{$elty},
+                       x::AbstractVector{$elty}, beta::Union{($elty), Bool},
+                       y::AbstractVector{$elty})
             @assert !has_offset_axes(A, x, y)
             chkstride1(A)
             ccall((@blasfunc($fname), libblas), Cvoid,
@@ -698,7 +701,9 @@ for (fname, elty, lib) in ((:dsymv_,:Float64,libblas),
              #      CHARACTER UPLO
              #     .. Array Arguments ..
              #      DOUBLE PRECISION A(LDA,*),X(*),Y(*)
-        function symv!(uplo::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, beta::($elty), y::AbstractVector{$elty})
+        function symv!(uplo::AbstractChar, alpha::Union{($elty), Bool},
+                       A::AbstractMatrix{$elty}, x::AbstractVector{$elty},
+                       beta::Union{($elty), Bool}, y::AbstractVector{$elty})
             @assert !has_offset_axes(A, x, y)
             m, n = size(A)
             if m != n
@@ -750,7 +755,7 @@ symv(ul, A, x)
 for (fname, elty) in ((:zhemv_,:ComplexF64),
                       (:chemv_,:ComplexF32))
     @eval begin
-        function hemv!(uplo::AbstractChar, α::$elty, A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, β::$elty, y::AbstractVector{$elty})
+        function hemv!(uplo::AbstractChar, α::Union{$elty, Bool}, A::AbstractMatrix{$elty}, x::AbstractVector{$elty}, β::Union{$elty, Bool}, y::AbstractVector{$elty})
             @assert !has_offset_axes(A, x, y)
             m, n = size(A)
             if m != n
@@ -1173,7 +1178,9 @@ for (mfname, elty) in ((:dsymm_,:Float64),
              #     CHARACTER SIDE,UPLO
              #     .. Array Arguments ..
              #     DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
-        function symm!(side::AbstractChar, uplo::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty}, beta::($elty), C::AbstractMatrix{$elty})
+        function symm!(side::AbstractChar, uplo::AbstractChar, alpha::Union{($elty), Bool},
+                       A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty},
+                       beta::Union{($elty), Bool}, C::AbstractMatrix{$elty})
             @assert !has_offset_axes(A, B, C)
             m, n = size(C)
             j = checksquare(A)
@@ -1242,7 +1249,9 @@ for (mfname, elty) in ((:zhemm_,:ComplexF64),
              #     CHARACTER SIDE,UPLO
              #     .. Array Arguments ..
              #     DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
-        function hemm!(side::AbstractChar, uplo::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty}, beta::($elty), C::AbstractMatrix{$elty})
+        function hemm!(side::AbstractChar, uplo::AbstractChar, alpha::Union{($elty), Bool},
+                       A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty},
+                       beta::Union{($elty), Bool}, C::AbstractMatrix{$elty})
             @assert !has_offset_axes(A, B, C)
             m, n = size(C)
             j = checksquare(A)
