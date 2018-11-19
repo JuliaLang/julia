@@ -656,7 +656,8 @@ function collect_to_with_first!(dest, v1, itr, st)
     return grow_to!(dest, itr, st)
 end
 
-@inline function setindex_widen!(dest::Array{T}, el, i) where T
+function setindex_widen!(dest::Array{T}, el, i) where T
+    @_inline_meta
     if el isa T || typeof(el) === T
         @inbounds dest[i] = el::T
         dest
@@ -696,7 +697,8 @@ function grow_to!(dest, itr)
     grow_to!(dest2, itr, y[2])
 end
 
-@inline function push_widen!(dest, el)
+function push_widen!(dest, el)
+    @_inline_meta
     T = eltype(dest)
     S = typeof(el)
     if S === T || S <: T
