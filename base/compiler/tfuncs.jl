@@ -24,6 +24,7 @@ const DATATYPE_PARAMETERS_FIELDINDEX = fieldindex(DataType, :parameters)
 const DATATYPE_TYPES_FIELDINDEX = fieldindex(DataType, :types)
 const DATATYPE_SUPER_FIELDINDEX = fieldindex(DataType, :super)
 const DATATYPE_MUTABLE_FIELDINDEX = fieldindex(DataType, :mutable)
+const DATATYPE_INSTANCE_FIELDINDEX = fieldindex(DataType, :instance)
 
 const TYPENAME_NAME_FIELDINDEX = fieldindex(Core.TypeName, :name)
 const TYPENAME_MODULE_FIELDINDEX = fieldindex(Core.TypeName, :module)
@@ -281,8 +282,11 @@ function isdefined_tfunc(@nospecialize(args...))
                 return Const(false)
             elseif !isvatuple(a1) && isbitstype(fieldtype(a1, idx))
                 return Const(true)
-            elseif isa(arg1, Const) && isimmutable((arg1::Const).val)
-                return Const(isdefined((arg1::Const).val, idx))
+            elseif isa(arg1, Const)
+                arg1v = (arg1::Const).val
+                if isimmutable(arg1v) || (isa(arg1v, DataType) && is_dt_const_field(idx))
+                    return Const(isdefined(arg1v, idx))
+                end
             end
         end
     end
@@ -505,13 +509,19 @@ add_tfunc(<:, 2, 2,
               return Bool
           end, 0)
 
+is_dt_const_field(fld) = (
+     fld == DATATYPE_NAME_FIELDINDEX ||
+     fld == DATATYPE_PARAMETERS_FIELDINDEX ||
+     fld == DATATYPE_TYPES_FIELDINDEX ||
+     fld == DATATYPE_SUPER_FIELDINDEX ||
+     fld == DATATYPE_MUTABLE_FIELDINDEX ||
+     fld == DATATYPE_INSTANCE_FIELDINDEX
+    )
 function const_datatype_getfield_tfunc(@nospecialize(sv), fld::Int)
-    if (fld == DATATYPE_NAME_FIELDINDEX ||
-            fld == DATATYPE_PARAMETERS_FIELDINDEX ||
-            fld == DATATYPE_TYPES_FIELDINDEX ||
-            fld == DATATYPE_SUPER_FIELDINDEX ||
-            fld == DATATYPE_MUTABLE_FIELDINDEX)
-        return AbstractEvalConstant(getfield(sv, fld))
+    if fld == DATATYPE_INSTANCE_FIELDINDEX
+        return isdefined(sv, fld) ? Const(getfield(sv, fld)) : Union{}
+    elseif is_dt_const_field(fld)
+        return Const(getfield(sv, fld))
     end
     return nothing
 end

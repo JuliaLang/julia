@@ -2096,3 +2096,7 @@ end
 let ci = code_typed(foo_apply_apply_type_svec, Tuple{})[1].first
     @test length(ci.code) == 1
 end
+
+# Test that inference can infer .instance of types
+f_instance(::Type{T}) where {T} = T.instance
+@test @inferred(f_instance(Nothing)) === nothing
