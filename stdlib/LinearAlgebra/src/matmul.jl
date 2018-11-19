@@ -224,7 +224,7 @@ julia> Y
 For custom matrix and vector types, it is recommended to implement [`addmul!`](@ref)
 rather than implementing `mul!` directly if possible.
 """
-function mul!(C::AbstractVecOrMat, A::AbstractVecOrMat, B::AbstractVecOrMat)
+function mul!(C, A, B)
     return addmul!(C, A, B, true, false)
 end
 

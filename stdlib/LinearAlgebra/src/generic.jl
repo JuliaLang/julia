@@ -2,29 +2,33 @@
 
 ## linalg.jl: Some generic Linear Algebra definitions
 
-function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number)
+function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
     end
+    _lmul_or_fill!(beta, C)
     for (IC, IX) in zip(eachindex(C), eachindex(X))
-        @inbounds C[IC] = X[IX]*s
+        @inbounds C[IC] += alpha * X[IX] * s
     end
     C
 end
 
-function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray)
+function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not
 match the length of the second, $(length(X))."))
     end
+    _lmul_or_fill!(beta, C)
     for (IC, IX) in zip(eachindex(C), eachindex(X))
-        @inbounds C[IC] = s*X[IX]
+        @inbounds C[IC] += alpha * s * X[IX]
     end
     C
 end
 
-mul!(C::AbstractArray, s::Number, X::AbstractArray) = generic_mul!(C, X, s)
-mul!(C::AbstractArray, X::AbstractArray, s::Number) = generic_mul!(C, s, X)
+addmul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number) =
+    generic_mul!(C, X, s, alpha, beta)
+addmul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number) =
+    generic_mul!(C, s, X, alpha, beta)
 
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729

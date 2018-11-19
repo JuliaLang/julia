@@ -165,8 +165,10 @@ end
 
 \(x::Number, J::UniformScaling) = UniformScaling(x\J.λ)
 
-mul!(C::AbstractMatrix, A::AbstractMatrix, J::UniformScaling) = mul!(C, A, J.λ)
-mul!(C::AbstractVecOrMat, J::UniformScaling, B::AbstractVecOrMat) = mul!(C, J.λ, B)
+addmul!(C::AbstractMatrix, A::AbstractMatrix, J::UniformScaling, alpha::Number, beta::Number) =
+    addmul!(C, A, J.λ, alpha, beta)
+addmul!(C::AbstractVecOrMat, J::UniformScaling, B::AbstractVecOrMat, alpha::Number, beta::Number) =
+    addmul!(C, J.λ, B, alpha, beta)
 rmul!(A::AbstractMatrix, J::UniformScaling) = rmul!(A, J.λ)
 lmul!(J::UniformScaling, B::AbstractVecOrMat) = lmul!(J.λ, B)
 
