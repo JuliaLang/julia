@@ -28,6 +28,15 @@ Short-circuiting multiplication. `x` is returned as-is when `alpha` is 1.
 """
 mul1(alpha, x) = isone(alpha) ? x : alpha * x
 
+@inline function _lmul_or_fill!(beta::Number, C::AbstractArray)
+    if iszero(beta)
+        fill!(C, zero(eltype(C)))
+    else
+        lmul!(beta, C)
+    end
+    return C
+end
+
 matprod(x, y) = x*y + x*y
 
 # dot products
@@ -444,11 +453,7 @@ function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::
         return y
     end
     if nA == 0
-        if iszero(beta)
-            return fill!(y, 0)
-        else
-            return lmul!(beta, y)
-        end
+        return _lmul_or_fill!(beta, y)
     end
     if stride(A, 1) == 1 && stride(A, 2) >= size(A, 1)
         return BLAS.gemv!(tA, alpha, A, x, beta, y)
@@ -471,11 +476,7 @@ function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat
         throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
     end
     if mA == 0 || nA == 0
-        if iszero(beta)
-            return fill!(C, 0)
-        else
-            return lmul!(beta, C)
-        end
+        return _lmul_or_fill!(beta, C)
     end
     if mA == 2 && nA == 2
         return matmul2x2!(C, tA, tAt, A, A, alpha, beta)
@@ -504,11 +505,7 @@ function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA
         throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
     end
     if mA == 0 || nA == 0
-        if iszero(beta)
-            return fill!(C, 0)
-        else
-            return lmul!(beta, C)
-        end
+        return _lmul_or_fill!(beta, C)
     end
     if mA == 2 && nA == 2
         return matmul2x2!(C, tA, tAt, A, A, alpha, beta)
@@ -554,11 +551,7 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
         if size(C) != (mA, nB)
             throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
         end
-        if iszero(beta)
-            return fill!(C, 0)
-        else
-            return lmul!(beta, C)
-        end
+        return _lmul_or_fill!(beta, C)
     end
 
     if mA == 2 && nA == 2 && nB == 2
@@ -711,11 +704,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
         throw(DimensionMismatch("result C has dimensions $(size(C)), needs ($mA,$nB)"))
     end
     if isempty(A) || isempty(B)
-        if iszero(beta)
-            return fill!(C, zero(R))
-        else
-            return lmul!(beta, C)
-        end
+        return _lmul_or_fill!(beta, C)
     end
 
     tile_size = 0
