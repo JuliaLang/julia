@@ -398,6 +398,95 @@ function copyto!(A::T, B::T) where T<:Union{LowerTriangular,UnitLowerTriangular}
     return A
 end
 
+function addmul!(A::UpperTriangular, B::UpperTriangular, c::Number, alpha::Number, beta::Number)
+    n = checksquare(B)
+    _lmul_or_fill!(beta, A)
+    for j = 1:n
+        for i = 1:j
+            @inbounds A[i,j] += alpha * B[i,j] * c
+        end
+    end
+    return A
+end
+function addmul!(A::UpperTriangular, c::Number, B::UpperTriangular, alpha::Number, beta::Number)
+    n = checksquare(B)
+    _lmul_or_fill!(beta, A)
+    for j = 1:n
+        for i = 1:j
+            @inbounds A[i,j] += alpha * c * B[i,j]
+        end
+    end
+    return A
+end
+function addmul!(A::UpperTriangular, B::UnitUpperTriangular, c::Number, alpha::Number, beta::Number)
+    n = checksquare(B)
+    _lmul_or_fill!(beta, A)
+    for j = 1:n
+        @inbounds A[j,j] += alpha * c
+        for i = 1:(j - 1)
+            @inbounds A[i,j] += alpha * B[i,j] * c
+        end
+    end
+    return A
+end
+function addmul!(A::UpperTriangular, c::Number, B::UnitUpperTriangular, alpha::Number, beta::Number)
+    n = checksquare(B)
+    _lmul_or_fill!(beta, A)
+    for j = 1:n
+        @inbounds A[j,j] += alpha * c
+        for i = 1:(j - 1)
+            @inbounds A[i,j] += alpha * c * B[i,j]
+        end
+    end
+    return A
+end
+function addmul!(A::LowerTriangular, B::LowerTriangular, c::Number, alpha::Number, beta::Number)
+    n = checksquare(B)
+    _lmul_or_fill!(beta, A)
+    for j = 1:n
+        for i = j:n
+            @inbounds A[i,j] += alpha * B[i,j] * c
+        end
+    end
+    return A
+end
+function addmul!(A::LowerTriangular, c::Number, B::LowerTriangular, alpha::Number, beta::Number)
+    n = checksquare(B)
+    _lmul_or_fill!(beta, A)
+    for j = 1:n
+        for i = j:n
+            @inbounds A[i,j] += alpha * c * B[i,j]
+        end
+    end
+    return A
+end
+function addmul!(A::LowerTriangular, B::UnitLowerTriangular, c::Number, alpha::Number, beta::Number)
+    n = checksquare(B)
+    _lmul_or_fill!(beta, A)
+    for j = 1:n
+        @inbounds A[j,j] += alpha * c
+        for i = (j + 1):n
+            @inbounds A[i,j] += alpha * B[i,j] * c
+        end
+    end
+    return A
+end
+function addmul!(A::LowerTriangular, c::Number, B::UnitLowerTriangular, alpha::Number, beta::Number)
+    n = checksquare(B)
+    _lmul_or_fill!(beta, A)
+    for j = 1:n
+            @inbounds A[j,j] += alpha * c
+        for i = (j + 1):n
+            @inbounds A[i,j] += alpha * c * B[i,j]
+        end
+    end
+    return A
+end
+
+# Same set of functions but without alpha and beta.  `mul!` for
+# triangular matrices are used for defining `lmul!` and `rmul!` hence
+# must support aliased arrays.
+
 function mul!(A::UpperTriangular, B::UpperTriangular, c::Number)
     n = checksquare(B)
     for j = 1:n
@@ -510,8 +599,10 @@ fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); 
 
 lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B) # is this necessary?
 
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal) = mul!(C, copyto!(similar(parent(A)), A), B)
-mul!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular) = mul!(C, A, copyto!(similar(parent(B)), B))
+addmul!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal, alpha::Number, beta::Number) =
+    addmul!(C, copyto!(similar(parent(A)), A), B, alpha, beta)
+addmul!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular, alpha::Number, beta::Number) =
+    addmul!(C, A, copyto!(similar(parent(B)), B), alpha, beta)
 mul!(C::AbstractVector, A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
     (B = transB.parent; lmul!(A, transpose!(C, B)))
 mul!(C::AbstractMatrix, A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
@@ -537,10 +628,14 @@ mul!(C::AbstractMatrix  , transA::Transpose{<:Any,<:AbstractTriangular}, B::Abst
     (A = transA.parent; lmul!(transpose(A), copyto!(C, B)))
 mul!(C::AbstractVecOrMat, transA::Transpose{<:Any,<:AbstractTriangular}, B::AbstractVecOrMat) =
     (A = transA.parent; lmul!(transpose(A), copyto!(C, B)))
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
+addmul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
+    addmul!(C, A, copy(B), alpha, beta)
+addmul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
+    addmul!(C, A, copy(B), alpha, beta)
+addmul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
+    addmul!(C, A, copy(B), alpha, beta)
+addmul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
+    addmul!(C, A, copy(B), alpha, beta)
 mul!(C::AbstractVector, A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 mul!(C::AbstractVector, A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 
