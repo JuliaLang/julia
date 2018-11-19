@@ -282,10 +282,10 @@ julia> [(i,j) for i=1:3 for j=1:i if i+j == 4]
 The general syntax for indexing into an n-dimensional array `A` is:
 
 ```
-X = A[I_1, I_2, ..., I_n]
+X = A[I₁, I₂, ..., Iₙ]
 ```
 
-where each `I_k` may be a scalar integer, an array of integers, or any other
+where each `Iₖ` may be a scalar integer, an array of integers, or any other
 [supported index](@ref man-supported-index-types). This includes
 [`Colon`](@ref) (`:`) to select all indices within the entire dimension,
 ranges of the form `a:c` or `a:b:c` to select contiguous or strided
@@ -295,8 +295,8 @@ If all the indices are scalars, then the result `X` is a single element from the
 `X` is an array with the same number of dimensions as the sum of the dimensionalities of all the
 indices.
 
-If all indices are vectors, for example, then the shape of `X` would be `(length(I_1), length(I_2), ..., length(I_n))`,
-with location `(i_1, i_2, ..., i_n)` of `X` containing the value `A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]`.
+If all indices are vectors, for example, then the shape of `X` would be `(length(I₁), length(I₂), ..., length(Iₙ))`,
+with location `(i₁, i₂, ..., iₙ)` of `X` containing the value `A[(I₁[i₁], I₂[i₂], ..., Iₙ[iₙ])]`.
 
 Example:
 
@@ -345,8 +345,8 @@ julia> A[[1, 2], [1], [1, 2], 1] # a mix of index types
 
 Note how the size of the resulting array is different in the last two cases.
 
-If `I_1` is changed to a two-dimensional matrix, then `X` becomes an `n+1`-dimensional array of
-shape `(size(I_1, 1), size(I_1, 2), length(I_2), ..., length(I_n))`. The matrix adds a dimension.
+If `I₁` is changed to a two-dimensional matrix, then `X` becomes an `n+1`-dimensional array of
+shape `(size(I₁, 1), size(I₁, 2), length(I₂), ..., length(Iₙ))`. The matrix adds a dimension.
 
 Example:
 
@@ -364,16 +364,16 @@ julia> A[[1 2; 1 2], 1, 2, 1]
  5  6
 ```
 
-The location `(i_1, i_2, i_3, ..., i_{n+1})` contains the value at `A[I_1[i_1, i_2], I_2[i_3], ..., I_n[i_{n+1}]]`.
-All dimensions indexed with scalars are dropped. For example, the result of `A[2, I, 3]` is an
-array with size `size(I)`. Its `i`th element is populated by `A[2, I[i], 3]`.
+The location `(i₁, i₂, i₃, ..., iₙ₊₁)` contains the value at `A[I₁[i₁, i₂], I₂[i₃], ..., Iₙ[iₙ₊₁]]`.
+All dimensions indexed with scalars are dropped. For example, the result of `A[2, J, 3]` is an
+array with size `size(J)`. Its `i`th element is populated by `A[2, J[i], 3]`.
 
 As a special part of this syntax, the `end` keyword may be used to represent the last index of
 each dimension within the indexing brackets, as determined by the size of the innermost array
 being indexed. Indexing syntax without the `end` keyword is equivalent to a call to [`getindex`](@ref):
 
 ```
-X = getindex(A, I_1, I_2, ..., I_n)
+X = getindex(A, I₁, I₂, ..., Iₙ)
 ```
 
 Example:
@@ -413,39 +413,39 @@ julia> searchsorted(a, 4)
 The general syntax for assigning values in an n-dimensional array `A` is:
 
 ```
-A[I_1, I_2, ..., I_n] = X
+A[I₁, I₂, ..., Iₙ] = X
 ```
 
-where each `I_k` may be a scalar integer, an array of integers, or any other
+where each `Iₖ` may be a scalar integer, an array of integers, or any other
 [supported index](@ref man-supported-index-types). This includes
 [`Colon`](@ref) (`:`) to select all indices within the entire dimension,
 ranges of the form `a:c` or `a:b:c` to select contiguous or strided
 subsections, and arrays of booleans to select elements at their `true` indices.
 
-If all indices `I_k` are integers, then the value in location `I_1, I_2, ..., I_n` of `A` is
+If all indices `Iₖ` are integers, then the value in location `I₁, I₂, ..., Iₙ` of `A` is
 overwritten with the value of `X`, [converting](@ref `convert`) to the [element type](@ref
 `eltype`) of `A` if necessary.
 
-If any index `I_k` selects more than one location, then the right hand side `X` must be an
-array with the same shape as the result of indexing `A[I_1, I_2, ..., I_n]` or a vector with
-the same number of elements. The value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]` of
-`A` is overwritten with the value `X[I_1, I_2, ..., I_n]`, converting if necessary. The
+If any index `Iₖ` selects more than one location, then the right hand side `X` must be an
+array with the same shape as the result of indexing `A[I₁, I₂, ..., Iₙ]` or a vector with
+the same number of elements. The value in location `I₁[i₁], I₂[i₂], ..., Iₙ[iₙ]` of
+`A` is overwritten with the value `X[I₁, I₂, ..., Iₙ]`, converting if necessary. The
 element-wise assignment operator `.=` may be used to [broadcast](@ref man-broadcasting) `X`
 across the selected locations:
 
 
 ```
-A[I_1, I_2, ..., I_n] .= X
+A[I₁, I₂, ..., Iₙ] .= X
 ```
 
 Just as in [Indexing](@ref man-array-indexing), the `end` keyword may be used
 to represent the last index of each dimension within the indexing brackets, as
 determined by the size of the array being assigned into. Indexed assignment
 syntax without the `end` keyword is equivalent to a call to
-[`setindex!`](@ref):
+([`setindex!`](@ref):
 
 ```
-setindex!(A, X, I_1, I_2, ..., I_n)
+setindex!(A, X, I₁, I₂, ..., Iₙ)
 ```
 
 Example:
@@ -470,7 +470,7 @@ julia> x
 
 ## [Supported index types](@id man-supported-index-types)
 
-In the expression `A[I_1, I_2, ..., I_n]`, each `I_k` may be a scalar index, an
+In the expression `A[I₁, I₂, ..., Iₙ]`, each `Iₖ` may be a scalar index, an
 array of scalar indices, or an object that represents an array of scalar
 indices and can be converted to such by [`to_indices`](@ref):
 
