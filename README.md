@@ -79,9 +79,9 @@ Then, acquire the source code by cloning the git repository:
     git clone git://github.com/JuliaLang/julia.git
 
 (If you are behind a firewall, you may need to use the `https` protocol instead of the `git` protocol:
-
-    git config --global url."https://".insteadOf git://
-
+```sh
+git config --global url."https://".insteadOf git://
+```
 Be sure to also configure your system to use the appropriate proxy settings, e.g. by setting the `https_proxy` and `http_proxy` variables.)
 
 By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `1.0` series of releases. You can get this version by changing to the Julia directory and running
@@ -135,10 +135,10 @@ or Windows, take a look at the detailed notes in
 
 If you have previously downloaded `julia` using `git clone`, you can update the
 existing source tree using `git pull` rather than starting anew:
-
-    cd julia
-    git pull && make
-
+```sh
+cd julia
+git pull && make
+```
 Assuming that you had made no changes to the source tree that will conflict
 with upstream updates, these commands will trigger a build to update to the
 latest version.
@@ -387,10 +387,10 @@ As a high-performance numerical language, Julia should be linked to a multi-thre
 ### Intel MKL
 
 For a 64-bit architecture, the environment should be set up as follows:
-
-    # bash
-    source /path/to/intel/bin/compilervars.sh intel64
-
+```sh
+# bash
+source /path/to/intel/bin/compilervars.sh intel64
+```
 Add the following to the `Make.user` file:
 
     USE_INTEL_MKL = 1
@@ -417,9 +417,9 @@ The Julia source code is organized as follows:
 If you would rather not compile the latest Julia from source, platform-specific tarballs with pre-compiled binaries are also [available for download](https://julialang.org/downloads/).
 
 You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the Julia program from anywhere (in the current shell session):
-
-    export PATH="$(pwd)/julia:$PATH"
-
+```sh
+export PATH="$(pwd)/julia:$PATH"
+```
 Now you should be able to run Julia like this:
 
     julia
