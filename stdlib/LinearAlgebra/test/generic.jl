@@ -3,7 +3,7 @@
 module TestGeneric
 
 using Test, LinearAlgebra, Random
-import Base: -, *, /, \
+import Base: +, -, *, /, \
 
 # A custom Quaternion type with minimal defined interface and methods.
 # Used to test mul and mul! methods to show non-commutativity.
@@ -14,12 +14,16 @@ struct Quaternion{T<:Real} <: Number
     v3::T
 end
 Quaternion(s::Real, v1::Real, v2::Real, v3::Real) = Quaternion(promote(s, v1, v2, v3)...)
+Base.convert(::Type{Quaternion{T}}, s::Real) where {T <: Real} =
+    Quaternion{T}(convert(T, s), zero(T), zero(T), zero(T))
 Base.abs2(q::Quaternion) = q.s*q.s + q.v1*q.v1 + q.v2*q.v2 + q.v3*q.v3
 Base.abs(q::Quaternion) = sqrt(abs2(q))
 Base.real(::Type{Quaternion{T}}) where {T} = T
 Base.conj(q::Quaternion) = Quaternion(q.s, -q.v1, -q.v2, -q.v3)
 Base.isfinite(q::Quaternion) = isfinite(q.s) & isfinite(q.v1) & isfinite(q.v2) & isfinite(q.v3)
 
+(+)(ql::Quaternion, qr::Quaternion) =
+    Quaternion(ql.s + qr.s, ql.v1 + qr.v1, ql.v2 + qr.v2, ql.v3 + qr.v3)
 (-)(ql::Quaternion, qr::Quaternion) =
     Quaternion(ql.s - qr.s, ql.v1 - qr.v1, ql.v2 - qr.v2, ql.v3 - qr.v3)
 (*)(q::Quaternion, w::Quaternion) = Quaternion(q.s*w.s - q.v1*w.v1 - q.v2*w.v2 - q.v3*w.v3,
@@ -150,6 +154,15 @@ end
             @test mul!(similar(a), a, Diagonal(1.:an)) == a.*Vector(1:an)'
             @test mul!(similar(a), a, Diagonal(1:an))  == a.*Vector(1:an)'
         end
+
+        @testset "Scaling with 5-argument addmul!" begin
+            @test addmul!(copy(a), 5., a, 10, 100) == a*150
+            @test addmul!(copy(a), a, 5., 10, 100) == a*150
+            @test addmul!(copy(a), Diagonal([1.; 2.]), a, 10, 100) == 10a.*[1; 2] .+ 100a
+            @test addmul!(copy(a), Diagonal([1; 2]), a, 10, 100)   == 10a.*[1; 2] .+ 100a
+            @test addmul!(copy(a), a, Diagonal(1.:an), 10, 100) == 10a.*Vector(1:an)' .+ 100a
+            @test addmul!(copy(a), a, Diagonal(1:an), 10, 100)  == 10a.*Vector(1:an)' .+ 100a
+        end
     end
 end
 
@@ -173,6 +186,10 @@ end
     @test conj(q*qmat) ≈ conj(qmat)*conj(q)
     @test q * (q \ qmat) ≈ qmat ≈ (qmat / q) * q
     @test q\qmat ≉ qmat/q
+    alpha = Quaternion(rand(4)...)
+    beta = Quaternion(0, 0, 0, 0)
+    @test addmul!(copy(qmat), qmat, q, alpha, beta) ≈ alpha * qmat * q
+    @test addmul!(copy(qmat), q, qmat, alpha, beta) ≈ alpha * q * qmat
 end
 @testset "ops on Numbers" begin
     @testset for elty in [Float32,Float64,ComplexF32,ComplexF64]
