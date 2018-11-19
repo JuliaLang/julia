@@ -447,7 +447,7 @@ function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::
         if iszero(beta)
             return fill!(y, 0)
         else
-            return rmul!(y, beta)
+            return lmul!(beta, y)
         end
     end
     if stride(A, 1) == 1 && stride(A, 2) >= size(A, 1)
@@ -474,7 +474,7 @@ function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat
         if iszero(beta)
             return fill!(C, 0)
         else
-            return rmul!(C, beta)
+            return lmul!(beta, C)
         end
     end
     if mA == 2 && nA == 2
@@ -507,7 +507,7 @@ function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA
         if iszero(beta)
             return fill!(C, 0)
         else
-            return rmul!(C, beta)
+            return lmul!(beta, C)
         end
     end
     if mA == 2 && nA == 2
@@ -557,7 +557,7 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
         if iszero(beta)
             return fill!(C, 0)
         else
-            return rmul!(C, beta)
+            return lmul!(beta, C)
         end
     end
 
@@ -714,7 +714,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
         if iszero(beta)
             return fill!(C, zero(R))
         else
-            return rmul!(C, beta)
+            return lmul!(beta, C)
         end
     end
 
