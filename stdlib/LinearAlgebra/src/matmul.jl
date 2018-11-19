@@ -210,11 +210,35 @@ julia> Y
  3.0  3.0
  7.0  7.0
 ```
+
+# Implementation
+For custom matrix and vector types, it is recommended to implement [`addmul!`](@ref)
+rather than implementing `mul!` directly if possible.
 """
 function mul!(C::AbstractVecOrMat, A::AbstractVecOrMat, B::AbstractVecOrMat)
     return addmul!(C, A, B, true, false)
 end
 
+"""
+    addmul!(C, A, B, α, β) -> C
+
+Combined inplace matrix-matrix or matrix-vector multiply-add ``α A B + β C``.
+The result is stored in `C` by overwriting it.  Note that `C` must not be
+aliased with either `A` or `B`.
+
+# Examples
+```jldoctest
+julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; C=[1.0 2.0; 3.0 4.0];
+
+julia> addmul!(C, A, B, 100.0, 10.0) === C
+true
+
+julia> C
+2×2 Array{Float64,2}:
+ 310.0  320.0
+ 730.0  740.0
+```
+"""
 addmul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat,
         alpha::Number, beta::Number) =
     generic_matmatmul!(C, 'N', 'N', A, B, alpha, beta)
