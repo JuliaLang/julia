@@ -285,6 +285,26 @@ mul!(out::AbstractMatrix, A::Diagonal, in::StridedMatrix) = out .= A.diag .* in
 mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::StridedMatrix) = out .= adjoint.(A.parent.diag) .* in
 mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix) = out .= transpose.(A.parent.diag) .* in
 
+addmul!(out::AbstractVector, A::Diagonal, in::AbstractVector,
+        alpha::Number, beta::Number) =
+    out .= alpha .* A.diag .* in .+ beta .* in
+addmul!(out::AbstractVector, A::Adjoint{<:Any,<:Diagonal}, in::AbstractVector,
+        alpha::Number, beta::Number) =
+    out .= alpha .* adjoint.(A.parent.diag) .* in .+ beta .* in
+addmul!(out::AbstractVector, A::Transpose{<:Any,<:Diagonal}, in::AbstractVector,
+        alpha::Number, beta::Number) =
+    out .= alpha .* transpose.(A.parent.diag) .* in .+ beta .* in
+
+addmul!(out::AbstractMatrix, A::Diagonal, in::StridedMatrix,
+        alpha::Number, beta::Number) =
+    out .= alpha .* A.diag .* in .+ beta .* out
+addmul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::StridedMatrix,
+        alpha::Number, beta::Number) =
+    out .= alpha .* adjoint.(A.parent.diag) .* in .+ beta .* out
+addmul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix,
+        alpha::Number, beta::Number) =
+    out .= alpha .* transpose.(A.parent.diag) .* in .+ beta .* out
+
 # ambiguities with Symmetric/Hermitian
 # RealHermSymComplex[Sym]/[Herm] only include Number; invariant to [c]transpose
 *(A::Diagonal, transB::Transpose{<:Any,<:RealHermSymComplexSym}) = A * transB.parent
@@ -295,11 +315,24 @@ mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix) = o
 *(transD::Transpose{<:Any,<:Diagonal}, transA::Transpose{<:Any,<:RealHermSymComplexSym}) = transD * transA.parent
 *(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, adjD::Adjoint{<:Any,<:Diagonal}) = adjA.parent * adjD
 *(adjD::Adjoint{<:Any,<:Diagonal}, adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}) = adjD * adjA.parent
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = mul!(C, A, B.parent)
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = mul!(C, A, B.parent)
 mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexSym}) = C .= adjoint.(A.parent.diag) .* B
 mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexHerm}) = C .= transpose.(A.parent.diag) .* B
 
+addmul!(C::AbstractMatrix,
+        A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexHerm},
+        alpha::Number, beta::Number) = addmul!(C, A, B.parent, alpha, beta)
+addmul!(C::AbstractMatrix,
+        A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexSym},
+        alpha::Number, beta::Number) = addmul!(C, A, B.parent, alpha, beta)
+
+addmul!(C::AbstractMatrix,
+        A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexSym},
+        alpha::Number, beta::Number) =
+    C .= alpha .* adjoint.(A.parent.diag) .* B .+ beta .* C
+addmul!(C::AbstractMatrix,
+        A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexHerm},
+        alpha::Number, beta::Number) =
+    C .= alpha .* transpose.(A.parent.diag) .* B .+ beta .* C
 
 (/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
 
