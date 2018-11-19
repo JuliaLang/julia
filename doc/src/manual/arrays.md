@@ -279,7 +279,7 @@ julia> [(i,j) for i=1:3 for j=1:i if i+j == 4]
 
 ## [Indexing](@id man-array-indexing)
 
-The general syntax for indexing into an n-dimensional array A is:
+The general syntax for indexing into an n-dimensional array `A` is:
 
 ```
 X = A[I_1, I_2, ..., I_n]
@@ -410,7 +410,7 @@ julia> searchsorted(a, 4)
 
 ## Assignment
 
-The general syntax for assigning values in an n-dimensional array A is:
+The general syntax for assigning values in an n-dimensional array `A` is:
 
 ```
 A[I_1, I_2, ..., I_n] = X
@@ -422,10 +422,17 @@ where each `I_k` may be a scalar integer, an array of integers, or any other
 ranges of the form `a:c` or `a:b:c` to select contiguous or strided
 subsections, and arrays of booleans to select elements at their `true` indices.
 
-If `X` is an array, it must have the same number of elements as the product of the lengths of
-the indices: `prod(length(I_1), length(I_2), ..., length(I_n))`. The value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]`
-of `A` is overwritten with the value `X[i_1, i_2, ..., i_n]`. If `X` is a scalar, use the
-element-wise assignment operator `.=` to write the value to all referenced locations of `A`:
+If all indices `I_k` are integers, then the value in location `I_1, I_2, ..., I_n` of `A` is
+overwritten with the value of `X`, [converting](@ref `convert`) to the [element type](@ref
+`eltype`) of `A` if necessary.
+
+If any index `I_k` selects more than one location, then the right hand side `X` must be an
+array with the same shape as the result of indexing `A[I_1, I_2, ..., I_n]` or a vector with
+the same number of elements. The value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]` of
+`A` is overwritten with the value `X[I_1, I_2, ..., I_n]`, converting if necessary. The
+element-wise assignment operator `.=` may be used to [broadcast](@ref man-broadcasting) `X`
+across the selected locations:
+
 
 ```
 A[I_1, I_2, ..., I_n] .= X
@@ -714,7 +721,7 @@ Also notice the difference between `max.(a,b)`, which [`broadcast`](@ref)s [`max
 elementwise over `a` and `b`, and [`maximum(a)`](@ref), which finds the largest value within
 `a`. The same relationship holds for `min.(a,b)` and `minimum(a)`.
 
-## Broadcasting
+## [Broadcasting](@id man-broadcasting)
 
 It is sometimes useful to perform element-by-element binary operations on arrays of different
 sizes, such as adding a vector to each column of a matrix. An inefficient way to do this would
