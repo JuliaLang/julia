@@ -2130,3 +2130,7 @@ let ci = code_typed(bar_inlining_apply, Tuple{})[1].first
     @test length(ci.code) == 2
     @test ci.code[1].head == :foreigncall
 end
+
+# Test that inference can infer .instance of types
+f_instance(::Type{T}) where {T} = T.instance
+@test @inferred(f_instance(Nothing)) === nothing
