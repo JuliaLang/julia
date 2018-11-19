@@ -77,7 +77,7 @@ and a global configuration search path of
 
 A directory path that points to the current Julia project. Setting this
 environment variable has the same effect as specifying the `--project` start-up
-option, but `--project` has higher precedence.  If the variable is set to `@.`,
+option, but `--project` has higher precedence.  If the variable is set to `@.` then
 Julia tries to find a project directory that contains `Project.toml` or
 `JuliaProject.toml` file from the current directory and its parents.  See also
 the chapter on [Code Loading](@ref).
@@ -89,8 +89,8 @@ the chapter on [Code Loading](@ref).
 ### `JULIA_LOAD_PATH`
 
 A separated list of absolute paths that are to be appended to the variable
-[`LOAD_PATH`](@ref). (In Unix-like systems, the path separator is `:`; in
-Windows systems, the path separator is `;`.) The `LOAD_PATH` variable is where
+[`LOAD_PATH`](@ref). (In Unix-like systems, `:` is the path separator; in
+Windows systems, `;` is the path separator.) The `LOAD_PATH` variable is where
 [`Base.require`](@ref) and `Base.load_in_path()` look for code; it defaults to
 the absolute path
 `$JULIA_HOME/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)` so that,
