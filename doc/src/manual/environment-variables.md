@@ -1,25 +1,26 @@
 # Environment Variables
 
-Julia may be configured with a number of environment variables, either in the
-usual way of the operating system, or in a portable way from within Julia.
-Suppose you want to set the environment variable `JULIA_EDITOR` to
-`vim`, then either type `ENV["JULIA_EDITOR"] = "vim"` for instance in the REPL
-to make this change on a case by case basis, or add the same to the user
-configuration file `~/.julia/config/startup.jl` in the user's home directory to have
-a permanent effect. The current value of the same environment variable is
+Julia can be configured with a number of environment variables, set either in
+the usual way for each operating system, or in a portable way from within Julia.
+Supposing that you want to set the environment variable `JULIA_EDITOR` to `vim`,
+you can type `ENV["JULIA_EDITOR"] = "vim"` (for instance, in the REPL) to make
+this change on a case by case basis, or add the same to the user configuration
+file `~/.julia/config/startup.jl` in the user's home directory to have a
+permanent effect. The current value of the same environment variable can be
 determined by evaluating `ENV["JULIA_EDITOR"]`.
 
 The environment variables that Julia uses generally start with `JULIA`. If
-[`InteractiveUtils.versioninfo`](@ref) is called with `verbose` equal to `true`, then the
+[`InteractiveUtils.versioninfo`](@ref) is called with the keyword `verbose=true`, then the
 output will list defined environment variables relevant for Julia, including
 those for which `JULIA` appears in the name.
 
 !!! note
 
-    Some variables, such as `JULIA_NUM_THREADS` and `JULIA_PROJECT` need to be set before Julia
+    Some variables, such as `JULIA_NUM_THREADS` and `JULIA_PROJECT`, need to be set before Julia
     starts, therefore adding these to `~/.julia/config/startup.jl` is too late in the startup process.
-    These must either be set manually before launching Julia through bash with
-    `export JULIA_NUM_THREADS=4` etc. or added to `-/.bashrc` and/or `~/.bash_profile` to achieve persistence.
+    In Bash, environment variables can either be set manually by running, e.g.,
+    `export JULIA_NUM_THREADS=4` before starting Julia, or by adding the same command to
+    `-/.bashrc` or `~/.bash_profile` to set the variable each time Bash is started.
 
 ## File locations
 
@@ -185,7 +186,7 @@ affinitized. Otherwise, Julia lets the operating system handle thread policy.
 Environment variables that determine how REPL output should be formatted at the
 terminal. Generally, these variables should be set to [ANSI terminal escape
 sequences](http://ascii-table.com/ansi-escape-sequences.php). Julia provides
-a high-level interface with much of the same functionality: see the section on
+a high-level interface with much of the same functionality; see the section on
 [The Julia REPL](@ref).
 
 ### `JULIA_ERROR_COLOR`
@@ -283,11 +284,10 @@ event listener for just-in-time (JIT) profiling.
 
     This environment variable only has an effect if Julia was compiled with JIT
     profiling support, using either
-
-*   Intel's [VTune™ Amplifier](https://software.intel.com/en-us/intel-vtune-amplifier-xe)
-    (`USE_INTEL_JITEVENTS` set to `1` in the build configuration), or
-*   [OProfile](http://oprofile.sourceforge.net/news/) (`USE_OPROFILE_JITEVENTS` set to `1`
-    in the build configuration).
+    * Intel's [VTune™ Amplifier](https://software.intel.com/en-us/intel-vtune-amplifier-xe)
+      (`USE_INTEL_JITEVENTS` set to `1` in the build configuration), or
+    * [OProfile](http://oprofile.sourceforge.net/news/) (`USE_OPROFILE_JITEVENTS` set to `1`
+      in the build configuration).
 
 ### `JULIA_LLVM_ARGS`
 
