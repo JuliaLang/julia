@@ -326,24 +326,24 @@ end
 
 const BiTriSym = Union{Bidiagonal,Tridiagonal,SymTridiagonal}
 const BiTri = Union{Bidiagonal,Tridiagonal}
-mul!(C::AbstractMatrix,   A::SymTridiagonal,     B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::BiTri,              B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::BiTriSym,           B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::AbstractTriangular, B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::AbstractMatrix,     B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::Diagonal,           B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractVecOrMat}, B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, B::BiTriSym) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractVector,   A::BiTri,              B::AbstractVector) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix,   A::BiTri,              B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractVecOrMat, A::BiTri,              B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractMatrix, A::BiTri, B::Transpose{<:Any,<:AbstractVecOrMat}) = A_mul_B_td!(C, A, B) # around bidiag line 330
-mul!(C::AbstractMatrix, A::BiTri, B::Adjoint{<:Any,<:AbstractVecOrMat}) = A_mul_B_td!(C, A, B)
-mul!(C::AbstractVector, A::BiTri, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
+addmul!(C::AbstractMatrix,   A::SymTridiagonal,     B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
+addmul!(C::AbstractMatrix,   A::BiTri,              B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
+addmul!(C::AbstractMatrix,   A::BiTriSym,           B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
+addmul!(C::AbstractMatrix,   A::AbstractTriangular, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
+addmul!(C::AbstractMatrix,   A::AbstractMatrix,     B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
+addmul!(C::AbstractMatrix,   A::Diagonal,           B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
+addmul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
+addmul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
+addmul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
+addmul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
+addmul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractVecOrMat}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
+addmul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
+addmul!(C::AbstractVector,   A::BiTri,              B::AbstractVector, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
+addmul!(C::AbstractMatrix,   A::BiTri,              B::AbstractVecOrMat, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
+addmul!(C::AbstractVecOrMat, A::BiTri,              B::AbstractVecOrMat, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
+addmul!(C::AbstractMatrix, A::BiTri, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta) # around bidiag line 330
+addmul!(C::AbstractMatrix, A::BiTri, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
+addmul!(C::AbstractVector, A::BiTri, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = throw(MethodError(addmul!, (C, A, B, alpha, beta)))
 
 function check_A_mul_B!_sizes(C, A, B)
     @assert !has_offset_axes(C)
@@ -375,11 +375,11 @@ function _diag(A::Bidiagonal, k)
     end
 end
 
-function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym)
+function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym, alpha, beta)
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
-    n <= 3 && return mul!(C, Array(A), Array(B))
-    fill!(C, zero(eltype(C)))
+    n <= 3 && return addmul!(C, Array(A), Array(B), alpha, beta)
+    _lmul_or_fill!(beta, C)
     Al = _diag(A, -1)
     Ad = _diag(A, 0)
     Au = _diag(A, 1)
@@ -388,14 +388,14 @@ function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym)
     Bu = _diag(B, 1)
     @inbounds begin
         # first row of C
-        C[1,1] = A[1,1]*B[1,1] + A[1, 2]*B[2, 1]
-        C[1,2] = A[1,1]*B[1,2] + A[1,2]*B[2,2]
-        C[1,3] = A[1,2]*B[2,3]
+        C[1,1] += alpha * (A[1,1]*B[1,1] + A[1, 2]*B[2, 1])
+        C[1,2] += alpha * (A[1,1]*B[1,2] + A[1,2]*B[2,2])
+        C[1,3] += alpha * (A[1,2]*B[2,3])
         # second row of C
-        C[2,1] = A[2,1]*B[1,1] + A[2,2]*B[2,1]
-        C[2,2] = A[2,1]*B[1,2] + A[2,2]*B[2,2] + A[2,3]*B[3,2]
-        C[2,3] = A[2,2]*B[2,3] + A[2,3]*B[3,3]
-        C[2,4] = A[2,3]*B[3,4]
+        C[2,1] += alpha * (A[2,1]*B[1,1] + A[2,2]*B[2,1])
+        C[2,2] += alpha * (A[2,1]*B[1,2] + A[2,2]*B[2,2] + A[2,3]*B[3,2])
+        C[2,3] += alpha * (A[2,2]*B[2,3] + A[2,3]*B[3,3])
+        C[2,4] += alpha * (A[2,3]*B[3,4])
         for j in 3:n-2
             Ajj₋1   = Al[j-1]
             Ajj     = Ad[j]
@@ -409,26 +409,26 @@ function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym)
             Bj₊1j   = Bl[j]
             Bj₊1j₊1 = Bd[j+1]
             Bj₊1j₊2 = Bu[j+1]
-            C[j,j-2]  = Ajj₋1*Bj₋1j₋2
-            C[j, j-1] = Ajj₋1*Bj₋1j₋1 + Ajj*Bjj₋1
-            C[j, j  ] = Ajj₋1*Bj₋1j   + Ajj*Bjj       + Ajj₊1*Bj₊1j
-            C[j, j+1] = Ajj  *Bjj₊1   + Ajj₊1*Bj₊1j₊1
-            C[j, j+2] = Ajj₊1*Bj₊1j₊2
+            C[j,j-2]  += alpha * ( Ajj₋1*Bj₋1j₋2)
+            C[j, j-1] += alpha * (Ajj₋1*Bj₋1j₋1 + Ajj*Bjj₋1)
+            C[j, j  ] += alpha * (Ajj₋1*Bj₋1j   + Ajj*Bjj       + Ajj₊1*Bj₊1j)
+            C[j, j+1] += alpha * (Ajj  *Bjj₊1   + Ajj₊1*Bj₊1j₊1)
+            C[j, j+2] += alpha * (Ajj₊1*Bj₊1j₊2)
         end
         # row before last of C
-        C[n-1,n-3] = A[n-1,n-2]*B[n-2,n-3]
-        C[n-1,n-2] = A[n-1,n-1]*B[n-1,n-2] + A[n-1,n-2]*B[n-2,n-2]
-        C[n-1,n-1] = A[n-1,n-2]*B[n-2,n-1] + A[n-1,n-1]*B[n-1,n-1] + A[n-1,n]*B[n,n-1]
-        C[n-1,n  ] = A[n-1,n-1]*B[n-1,n  ] + A[n-1,  n]*B[n  ,n  ]
+        C[n-1,n-3] += alpha * (A[n-1,n-2]*B[n-2,n-3])
+        C[n-1,n-2] += alpha * (A[n-1,n-1]*B[n-1,n-2] + A[n-1,n-2]*B[n-2,n-2])
+        C[n-1,n-1] += alpha * (A[n-1,n-2]*B[n-2,n-1] + A[n-1,n-1]*B[n-1,n-1] + A[n-1,n]*B[n,n-1])
+        C[n-1,n  ] += alpha * (A[n-1,n-1]*B[n-1,n  ] + A[n-1,  n]*B[n  ,n  ])
         # last row of C
-        C[n,n-2] = A[n,n-1]*B[n-1,n-2]
-        C[n,n-1] = A[n,n-1]*B[n-1,n-1] + A[n,n]*B[n,n-1]
-        C[n,n  ] = A[n,n-1]*B[n-1,n  ] + A[n,n]*B[n,n  ]
+        C[n,n-2] += alpha * (A[n,n-1]*B[n-1,n-2])
+        C[n,n-1] += alpha * (A[n,n-1]*B[n-1,n-1] + A[n,n]*B[n,n-1])
+        C[n,n  ] += alpha * (A[n,n-1]*B[n-1,n  ] + A[n,n]*B[n,n  ])
     end # inbounds
     C
 end
 
-function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat)
+function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat, alpha, beta)
     @assert !has_offset_axes(C)
     @assert !has_offset_axes(B)
     nA = size(A,1)
@@ -439,28 +439,30 @@ function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat)
     if size(C,2) != nB
         throw(DimensionMismatch("A has second dimension $nA, B has $(size(B,2)), C has $(size(C,2)) but all must match"))
     end
-    nA <= 3 && return mul!(C, Array(A), Array(B))
+    nA <= 3 && return addmul!(C, Array(A), Array(B), alpha, beta)
+    _lmul_or_fill!(beta, C)
     l = _diag(A, -1)
     d = _diag(A, 0)
     u = _diag(A, 1)
     @inbounds begin
         for j = 1:nB
             b₀, b₊ = B[1, j], B[2, j]
-            C[1, j] = d[1]*b₀ + u[1]*b₊
+            C[1, j] += alpha * (d[1]*b₀ + u[1]*b₊)
             for i = 2:nA - 1
                 b₋, b₀, b₊ = b₀, b₊, B[i + 1, j]
-                C[i, j] = l[i - 1]*b₋ + d[i]*b₀ + u[i]*b₊
+                C[i, j] += alpha * (l[i - 1]*b₋ + d[i]*b₀ + u[i]*b₊)
             end
-            C[nA, j] = l[nA - 1]*b₀ + d[nA]*b₊
+            C[nA, j] += alpha * (l[nA - 1]*b₀ + d[nA]*b₊)
         end
     end
     C
 end
 
-function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym)
+function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym, alpha, beta)
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
-    n <= 3 && return mul!(C, Array(A), Array(B))
+    n <= 3 && return addmul!(C, Array(A), Array(B), alpha, beta)
+    _lmul_or_fill!(beta, C)
     m = size(B,2)
     Bl = _diag(B, -1)
     Bd = _diag(B, 0)
@@ -472,8 +474,8 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym)
         Bmm = Bd[m]
         Bm₋1m = Bu[m-1]
         for i in 1:n
-            C[i, 1] = A[i,1] * B11 + A[i, 2] * B21
-            C[i, m] = A[i, m-1] * Bm₋1m + A[i, m] * Bmm
+            C[i, 1] += alpha * (A[i,1] * B11 + A[i, 2] * B21)
+            C[i, m] += alpha * (A[i, m-1] * Bm₋1m + A[i, m] * Bmm)
         end
         # middle columns of C
         for j = 2:m-1
@@ -481,7 +483,7 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym)
             Bjj = Bd[j]
             Bj₊1j = Bl[j]
             for i = 1:n
-                C[i, j] = A[i, j-1] * Bj₋1j + A[i, j]*Bjj + A[i, j+1] * Bj₊1j
+                C[i, j] += alpha * (A[i, j-1] * Bj₋1j + A[i, j]*Bjj + A[i, j+1] * Bj₊1j)
             end
         end
     end # inbounds
