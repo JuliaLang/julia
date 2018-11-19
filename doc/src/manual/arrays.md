@@ -295,8 +295,8 @@ If all the indices are scalars, then the result `X` is a single element from the
 `X` is an array with the same number of dimensions as the sum of the dimensionalities of all the
 indices.
 
-If all indices are vectors, for example, then the shape of `X` would be `(length(I₁), length(I₂), ..., length(Iₙ))`,
-with location `(i₁, i₂, ..., iₙ)` of `X` containing the value `A[(I₁[i₁], I₂[i₂], ..., Iₙ[iₙ])]`.
+If all indices `Iₖ` are vectors, for example, then the shape of `X` would be `(length(I₁), length(I₂), ..., length(Iₙ))`,
+with location `i₁, i₂, ..., iₙ` of `X` containing the value `A[I₁[i₁], I₂[i₂], ..., Iₙ[iₙ]]`.
 
 Example:
 
@@ -364,7 +364,7 @@ julia> A[[1 2; 1 2], 1, 2, 1]
  5  6
 ```
 
-The location `(i₁, i₂, i₃, ..., iₙ₊₁)` contains the value at `A[I₁[i₁, i₂], I₂[i₃], ..., Iₙ[iₙ₊₁]]`.
+The location `i₁, i₂, i₃, ..., iₙ₊₁` contains the value at `A[I₁[i₁, i₂], I₂[i₃], ..., Iₙ[iₙ₊₁]]`.
 All dimensions indexed with scalars are dropped. For example, the result of `A[2, J, 3]` is an
 array with size `size(J)`. Its `i`th element is populated by `A[2, J[i], 3]`.
 
@@ -442,7 +442,7 @@ Just as in [Indexing](@ref man-array-indexing), the `end` keyword may be used
 to represent the last index of each dimension within the indexing brackets, as
 determined by the size of the array being assigned into. Indexed assignment
 syntax without the `end` keyword is equivalent to a call to
-([`setindex!`](@ref):
+[`setindex!`](@ref):
 
 ```
 setindex!(A, X, I₁, I₂, ..., Iₙ)
