@@ -352,6 +352,17 @@ julia> map(((x,y),) -> x + y, [(1,2), (3,4)])
  7
 ```
 
+However, destructuring the argument to a do-block does not require an extra comma:
+
+```
+julia> map([(1,2), (3,4)]) do (x,y)
+           x + y
+       end
+2-element Array{Int64,1}:
+ 3
+ 7
+```
+
 ## Varargs Functions
 
 It is often convenient to be able to write functions taking an arbitrary number of arguments.
@@ -625,8 +636,8 @@ end
 ```
 
 The `do x` syntax creates an anonymous function with argument `x` and passes it as the first argument
-to [`map`](@ref). Similarly, `do a,b` would create a two-argument anonymous function, and a
-plain `do` would declare that what follows is an anonymous function of the form `() -> ...`.
+to [`map`](@ref). Similarly, `do a,b` would create a two-argument anonymous function. Note that `do (a,b)` would create a one-argument anonymous function,
+whose argument is a tuple to be deconstructed. A plain `do` would declare that what follows is an anonymous function of the form `() -> ...`.
 
 How these arguments are initialized depends on the "outer" function; here, [`map`](@ref) will
 sequentially set `x` to `A`, `B`, `C`, calling the anonymous function on each, just as would happen
