@@ -1725,3 +1725,18 @@ end
 @test Meta.parse("1..2") == Expr(:call, :.., 1, 2)
 # we don't parse chains of these since the associativity and meaning aren't clear
 @test_throws ParseError Meta.parse("1..2..3")
+
+# issue #30048
+@test Meta.isexpr(Meta.lower(@__MODULE__, :(for a in b
+           c = try
+               try
+                   d() do
+                       if  GC.@preserve c begin
+                           end
+                       end
+                   end
+               finally
+               end
+           finally
+           end
+       end)), :thunk)

@@ -3870,8 +3870,9 @@ f(x) = yt(x)
              '(null))
 
             ((gc_preserve_begin)
-             (let ((s (make-ssavalue)))
-               (emit `(= ,s ,e))
+             (let ((s    (make-ssavalue))
+                   (args (compile-args (cdr e) break-labels linearize-args)))
+               (emit `(= ,s ,(cons (car e) args)))
                s))
 
             ;; metadata expressions
