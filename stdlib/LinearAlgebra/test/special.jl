@@ -301,7 +301,7 @@ end
             @test isapprox(a, b; norm=LinearAlgebra.norm1) == isapprox(Matrix(a), Matrix(b); norm=LinearAlgebra.norm1)
         end
     end
-    
+
     # explicitly testing _isapproxzero
     diag = rand(10)
     offdiag = zeros(9)
