@@ -297,6 +297,14 @@ end
     @test mul!(C, A, J) == target
     @test lmul!(J, copyto!(C, A)) == target
     @test rmul!(copyto!(C, A), J) == target
+
+    A = randn(4, 3)
+    C = randn!(similar(A))
+    alpha = randn()
+    beta = randn()
+    target = alpha * J * A + beta * C
+    @test addmul!(copy(C), J, A, alpha, beta) ≈ target
+    @test addmul!(copy(C), A, J, alpha, beta) ≈ target
 end
 
 end # module TestUniformscaling
