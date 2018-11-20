@@ -382,4 +382,8 @@ end
     @test ismissing(norm(missing))
 end
 
+@testset "peakflops" begin
+    @test LinearAlgebra.peakflops() > 0
+end
+
 end # module TestGeneric

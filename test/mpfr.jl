@@ -45,7 +45,7 @@ import Base.MPFR
             @test precision(xs[end]) != prec
             for x in xs
                 @test precision(BigFloat(x)) == prec
-                @test precision(BigFloat(x, prec ÷ 2)) == prec ÷ 2
+                @test precision(BigFloat(x; precision=prec ÷ 2)) == prec ÷ 2
             end
         end
     end

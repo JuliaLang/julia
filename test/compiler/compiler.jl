@@ -960,22 +960,6 @@ f21653() = f21653()
 @test code_typed(f21653, Tuple{}, optimize=false)[1] isa Pair{CodeInfo, typeof(Union{})}
 @test which(f21653, ()).specializations.func.rettype === Union{}
 
-# ensure _apply can "see-through" SSAValue to infer precise container types
-let f, m
-    f() = 0
-    m = first(methods(f))
-    m.source = Base.uncompressed_ast(m)::CodeInfo
-    m.source.code = Any[
-        Expr(:call, GlobalRef(Core, :svec), 1, 2, 3),
-        Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(1)),
-        Expr(:return, SSAValue(2))
-    ]
-    nstmts = length(m.source.code)
-    m.source.ssavaluetypes = nstmts
-    m.source.codelocs = fill(Int32(1), nstmts)
-    @test @inferred(f()) == 6
-end
-
 # issue #22290
 f22290() = return 3
 for i in 1:3
@@ -2146,3 +2130,7 @@ let ci = code_typed(bar_inlining_apply, Tuple{})[1].first
     @test length(ci.code) == 2
     @test ci.code[1].head == :foreigncall
 end
+
+# Test that inference can infer .instance of types
+f_instance(::Type{T}) where {T} = T.instance
+@test @inferred(f_instance(Nothing)) === nothing

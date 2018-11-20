@@ -23,7 +23,7 @@ end
 @test_throws ArgumentError Libdl.dlsym(C_NULL, :foo)
 @test_throws ArgumentError Libdl.dlsym_e(C_NULL, :foo)
 
-cd(dirname(@__FILE__)) do
+cd(@__DIR__) do
 
 # Find the library directory by finding the path of libjulia (or libjulia-debug, as the case may be)
 # and then adding on /julia to that directory path to get the private library directory, if we need
@@ -114,7 +114,7 @@ let dl = C_NULL,
     fpath = joinpath(tmpdir,"libccalltest")
     try
         write(open(fpath,"w"))
-        push!(Libdl.DL_LOAD_PATH, dirname(@__FILE__))
+        push!(Libdl.DL_LOAD_PATH, @__DIR__)
         push!(Libdl.DL_LOAD_PATH, dirname(fpath))
         dl = Libdl.dlopen_e("libccalltest")
         @test dl != C_NULL
@@ -134,7 +134,7 @@ let dl = C_NULL,
     try
         write(open(fpath,"w"))
         push!(Libdl.DL_LOAD_PATH, dirname(fpath))
-        push!(Libdl.DL_LOAD_PATH, dirname(@__FILE__))
+        push!(Libdl.DL_LOAD_PATH, @__DIR__)
         dl = Libdl.dlopen_e("libccalltest")
         @test dl != C_NULL
     finally

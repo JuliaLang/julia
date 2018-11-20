@@ -765,21 +765,21 @@ if Core.sizeof(Int) == 4
 
     function div(x::Int128, y::Int128)
         (x == typemin(Int128)) & (y == -1) && throw(DivideError())
-        return Int128(div(BigInt(x), BigInt(y)))
+        return Int128(div(BigInt(x), BigInt(y)))::Int128
     end
     function div(x::UInt128, y::UInt128)
         return UInt128(div(BigInt(x), BigInt(y)))::UInt128
     end
 
     function rem(x::Int128, y::Int128)
-        return Int128(rem(BigInt(x), BigInt(y)))
+        return Int128(rem(BigInt(x), BigInt(y)))::Int128
     end
     function rem(x::UInt128, y::UInt128)
-        return UInt128(rem(BigInt(x), BigInt(y)))
+        return UInt128(rem(BigInt(x), BigInt(y)))::UInt128
     end
 
     function mod(x::Int128, y::Int128)
-        return Int128(mod(BigInt(x), BigInt(y)))
+        return Int128(mod(BigInt(x), BigInt(y)))::Int128
     end
 else
     *(x::T, y::T) where {T<:Union{Int128,UInt128}}  = mul_int(x, y)
