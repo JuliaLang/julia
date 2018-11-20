@@ -423,7 +423,7 @@ ranges of the form `a:c` or `a:b:c` to select contiguous or strided
 subsections, and arrays of booleans to select elements at their `true` indices.
 
 If all indices `Iₖ` are integers, then the value in location `I₁, I₂, ..., Iₙ` of `A` is
-overwritten with the value of `X`, [converting](@ref Base.convert) to the
+overwritten with the value of `X`, [`convert`](@ref)ing to the
 [element type](@ref Base.eltype) of `A` if necessary.
 
 If any index `Iₖ` selects more than one location, then the right hand side `X` must be an
