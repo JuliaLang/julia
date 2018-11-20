@@ -430,7 +430,7 @@ If any index `Iₖ` selects more than one location, then the right hand side `X`
 array with the same shape as the result of indexing `A[I₁, I₂, ..., Iₙ]` or a vector with
 the same number of elements. The value in location `I₁[i₁], I₂[i₂], ..., Iₙ[iₙ]` of
 `A` is overwritten with the value `X[I₁, I₂, ..., Iₙ]`, converting if necessary. The
-element-wise assignment operator `.=` may be used to [broadcast](@ref man-broadcasting) `X`
+element-wise assignment operator `.=` may be used to [broadcast](@ref broadcasting) `X`
 across the selected locations:
 
 
@@ -721,7 +721,7 @@ Also notice the difference between `max.(a,b)`, which [`broadcast`](@ref)s [`max
 elementwise over `a` and `b`, and [`maximum(a)`](@ref), which finds the largest value within
 `a`. The same relationship holds for `min.(a,b)` and `minimum(a)`.
 
-## [Broadcasting](@id man-broadcasting)
+## Broadcasting
 
 It is sometimes useful to perform element-by-element binary operations on arrays of different
 sizes, such as adding a vector to each column of a matrix. An inefficient way to do this would
