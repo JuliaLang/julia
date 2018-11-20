@@ -424,7 +424,7 @@ subsections, and arrays of booleans to select elements at their `true` indices.
 
 If all indices `Iₖ` are integers, then the value in location `I₁, I₂, ..., Iₙ` of `A` is
 overwritten with the value of `X`, [`convert`](@ref)ing to the
-[element type](@ref Base.eltype) of `A` if necessary.
+[`eltype`](@ref) of `A` if necessary.
 
 If any index `Iₖ` selects more than one location, then the right hand side `X` must be an
 array with the same shape as the result of indexing `A[I₁, I₂, ..., Iₙ]` or a vector with
