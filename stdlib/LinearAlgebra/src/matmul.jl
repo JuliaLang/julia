@@ -46,7 +46,7 @@ julia> _modify!(_add, 123, C, 1)
 
 julia> C
 1-element Array{BigFloat,1}:
- 123.0
+ 1.23e+02
 ```
 """
 @inline @propagate_inbounds function _modify!(p::MulAddMul{ais1, bis0},
