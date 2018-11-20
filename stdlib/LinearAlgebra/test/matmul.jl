@@ -2,6 +2,7 @@
 
 module TestMatmul
 
+using Base: rtoldefault
 using Test, LinearAlgebra, Random
 using LinearAlgebra: mul!, addmul!
 
@@ -395,6 +396,10 @@ function test_mul(C, A, B)
     @test Array(A) * Array(B) ≈ C
     @test A*B ≈ C
 
+    # This is similar to how `isapprox` choose `rtol` (when `atol=0`)
+    # but consider all number types involved:
+    rtol = max(rtoldefault.(real.(eltype.((C, A, B))))...)
+
     rand!(C)
     T = promote_type(eltype.((A, B))...)
     α = rand(T)
@@ -402,8 +407,8 @@ function test_mul(C, A, B)
     βArrayC = β * Array(C)
     βC = β * C
     addmul!(C, A, B, α, β)
-    @test α * Array(A) * Array(B) .+ βArrayC ≈ C
-    @test α * A * B .+ βC ≈ C
+    @test α * Array(A) * Array(B) .+ βArrayC ≈ C  rtol=rtol
+    @test α * A * B .+ βC ≈ C  rtol=rtol
 end
 
 @testset "mul! vs * for special types" begin
