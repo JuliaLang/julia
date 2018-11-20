@@ -398,167 +398,91 @@ function copyto!(A::T, B::T) where T<:Union{LowerTriangular,UnitLowerTriangular}
     return A
 end
 
-function addmul!(A::UpperTriangular, B::UpperTriangular, c::Number, alpha::Number, beta::Number)
-    n = checksquare(B)
-    _lmul_or_fill!(beta, A)
-    for j = 1:n
-        for i = 1:j
-            @inbounds A[i,j] += alpha * B[i,j] * c
-        end
+# Define `addmul!` and `mul!` for (Unit){Upper,Lower}Triangular matrices
+# times a number.
+for (Trig, UnitTrig) in [(UpperTriangular, UnitUpperTriangular),
+                         (LowerTriangular, UnitLowerTriangular)]
+    for (TB, TC) in [(Trig, Number),
+                     (Number, Trig),
+                     (UnitTrig, Number),
+                     (Number, UnitTrig)]
+        @eval addmul!(A::$Trig, B::$TB, C::$TC, alpha::Number, beta::Number) =
+            _addmul!(A, B, C, MulAddMul(alpha, beta))
     end
-    return A
-end
-function addmul!(A::UpperTriangular, c::Number, B::UpperTriangular, alpha::Number, beta::Number)
-    n = checksquare(B)
-    _lmul_or_fill!(beta, A)
-    for j = 1:n
-        for i = 1:j
-            @inbounds A[i,j] += alpha * c * B[i,j]
-        end
-    end
-    return A
-end
-function addmul!(A::UpperTriangular, B::UnitUpperTriangular, c::Number, alpha::Number, beta::Number)
-    n = checksquare(B)
-    _lmul_or_fill!(beta, A)
-    for j = 1:n
-        @inbounds A[j,j] += alpha * c
-        for i = 1:(j - 1)
-            @inbounds A[i,j] += alpha * B[i,j] * c
-        end
-    end
-    return A
-end
-function addmul!(A::UpperTriangular, c::Number, B::UnitUpperTriangular, alpha::Number, beta::Number)
-    n = checksquare(B)
-    _lmul_or_fill!(beta, A)
-    for j = 1:n
-        @inbounds A[j,j] += alpha * c
-        for i = 1:(j - 1)
-            @inbounds A[i,j] += alpha * c * B[i,j]
-        end
-    end
-    return A
-end
-function addmul!(A::LowerTriangular, B::LowerTriangular, c::Number, alpha::Number, beta::Number)
-    n = checksquare(B)
-    _lmul_or_fill!(beta, A)
-    for j = 1:n
-        for i = j:n
-            @inbounds A[i,j] += alpha * B[i,j] * c
-        end
-    end
-    return A
-end
-function addmul!(A::LowerTriangular, c::Number, B::LowerTriangular, alpha::Number, beta::Number)
-    n = checksquare(B)
-    _lmul_or_fill!(beta, A)
-    for j = 1:n
-        for i = j:n
-            @inbounds A[i,j] += alpha * c * B[i,j]
-        end
-    end
-    return A
-end
-function addmul!(A::LowerTriangular, B::UnitLowerTriangular, c::Number, alpha::Number, beta::Number)
-    n = checksquare(B)
-    _lmul_or_fill!(beta, A)
-    for j = 1:n
-        @inbounds A[j,j] += alpha * c
-        for i = (j + 1):n
-            @inbounds A[i,j] += alpha * B[i,j] * c
-        end
-    end
-    return A
-end
-function addmul!(A::LowerTriangular, c::Number, B::UnitLowerTriangular, alpha::Number, beta::Number)
-    n = checksquare(B)
-    _lmul_or_fill!(beta, A)
-    for j = 1:n
-            @inbounds A[j,j] += alpha * c
-        for i = (j + 1):n
-            @inbounds A[i,j] += alpha * c * B[i,j]
-        end
-    end
-    return A
 end
 
-# Same set of functions but without alpha and beta.  `mul!` for
-# triangular matrices are used for defining `lmul!` and `rmul!` hence
-# must support aliased arrays.
-
-function mul!(A::UpperTriangular, B::UpperTriangular, c::Number)
+function _addmul!(A::UpperTriangular, B::UpperTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
     for j = 1:n
         for i = 1:j
-            @inbounds A[i,j] = B[i,j] * c
+            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
         end
     end
     return A
 end
-function mul!(A::UpperTriangular, c::Number, B::UpperTriangular)
+function _addmul!(A::UpperTriangular, c::Number, B::UpperTriangular, _add::MulAddMul)
     n = checksquare(B)
     for j = 1:n
         for i = 1:j
-            @inbounds A[i,j] = c * B[i,j]
+            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
         end
     end
     return A
 end
-function mul!(A::UpperTriangular, B::UnitUpperTriangular, c::Number)
+function _addmul!(A::UpperTriangular, B::UnitUpperTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
     for j = 1:n
-        @inbounds A[j,j] = c
+        @inbounds _modify!(_add, c, A, (j,j))
         for i = 1:(j - 1)
-            @inbounds A[i,j] = B[i,j] * c
+            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
         end
     end
     return A
 end
-function mul!(A::UpperTriangular, c::Number, B::UnitUpperTriangular)
+function _addmul!(A::UpperTriangular, c::Number, B::UnitUpperTriangular, _add::MulAddMul)
     n = checksquare(B)
     for j = 1:n
-        @inbounds A[j,j] = c
+        @inbounds _modify!(_add, c, A, (j,j))
         for i = 1:(j - 1)
-            @inbounds A[i,j] = c * B[i,j]
+            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
         end
     end
     return A
 end
-function mul!(A::LowerTriangular, B::LowerTriangular, c::Number)
+function _addmul!(A::LowerTriangular, B::LowerTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
     for j = 1:n
         for i = j:n
-            @inbounds A[i,j] = B[i,j] * c
+            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
         end
     end
     return A
 end
-function mul!(A::LowerTriangular, c::Number, B::LowerTriangular)
+function _addmul!(A::LowerTriangular, c::Number, B::LowerTriangular, _add::MulAddMul)
     n = checksquare(B)
     for j = 1:n
         for i = j:n
-            @inbounds A[i,j] = c * B[i,j]
+            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
         end
     end
     return A
 end
-function mul!(A::LowerTriangular, B::UnitLowerTriangular, c::Number)
+function _addmul!(A::LowerTriangular, B::UnitLowerTriangular, c::Number, _add::MulAddMul)
     n = checksquare(B)
     for j = 1:n
-            @inbounds A[j,j] = c
+        @inbounds _modify!(_add, c, A, (j,j))
         for i = (j + 1):n
-            @inbounds A[i,j] = B[i,j] * c
+            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
         end
     end
     return A
 end
-function mul!(A::LowerTriangular, c::Number, B::UnitLowerTriangular)
+function _addmul!(A::LowerTriangular, c::Number, B::UnitLowerTriangular, _add::MulAddMul)
     n = checksquare(B)
     for j = 1:n
-            @inbounds A[j,j] = c
+        @inbounds _modify!(_add, c, A, (j,j))
         for i = (j + 1):n
-            @inbounds A[i,j] = c * B[i,j]
+            @inbounds _modify!(_add, alpha * c * B[i,j], A, (i,j))
         end
     end
     return A

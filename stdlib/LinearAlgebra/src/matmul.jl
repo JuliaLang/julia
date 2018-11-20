@@ -3,30 +3,61 @@
 # matmul.jl: Everything to do with dense matrix multiplication
 
 """
-    @muladd01!(alpha, x, beta, y)
+    MulAddMul(alpha, beta)
 
-Short-circuiting version of `y = alpha * x + beta * y`.
+A callable for operating short-circuiting version of `alpha * x + beta * y`.
+
+# Examples
+```jldoctest
+julia> _add = MulAddMul(1, 0);
+julia> _add(123, nothing)
+123
+julia> MulAddMul(12, 34)(56, 78) == 12 * 56 + 34 * 78
+true
+```
 """
-macro muladd01!(alpha, x, beta, y)
-    alpha = esc(alpha)
-    beta = esc(beta)
-    x = esc(x)
-    y = esc(y)
-    quote
-        if iszero($beta)
-            $y = mul1($alpha, $x)
-        else
-            $y = mul1($alpha, $x) + $beta * $y
-        end
-    end
+struct MulAddMul{ais1, bis0, TA, TB}
+    alpha::TA
+    beta::TB
+
+    MulAddMul(alpha::TA, beta::TB) where {TA, TB} =
+        new{isone(alpha), iszero(beta), TA, TB}(alpha, beta)
 end
 
-"""
-    mul1(alpha, x)
+@inline (::MulAddMul{true, true})(x, ::Any = nothing) = x
+@inline (p::MulAddMul{false, true})(x, ::Any = nothing) = p.alpha * x
+@inline (p::MulAddMul{true, false})(x, y) = x + p.beta * y
+@inline (p::MulAddMul{false, false})(x, y) = p.alpha * x + p.beta * y
 
-Short-circuiting multiplication. `x` is returned as-is when `alpha` is 1.
 """
-mul1(alpha, x) = isone(alpha) ? x : alpha * x
+    _modify!(_add::MulAddMul, x, C, idx)
+
+Short-circuiting version of `C[idx] = _add(x, C[idx])`.
+
+Short-circuiting the indexing `C[idx]` is necessary for avoiding `UndefRefError`
+when mutating an array of non-primitive numbers such as `BigFloat`.
+
+# Examples
+```jldoctest
+julia> _add = MulAddMul(1, 0);
+       C = Vector{BigFloat}(undef, 1);
+
+julia> _modify!(_add, 123, C, 1)
+
+julia> C
+1-element Array{BigFloat,1}:
+ 123.0
+```
+"""
+@inline @propagate_inbounds function _modify!(p::MulAddMul{ais1, bis0},
+                                              x, C, idx) where {ais1, bis0}
+    if bis0
+        C[idx...] = p(x)
+    else
+        C[idx...] = p(x, C[idx...])
+    end
+    return
+end
 
 @inline function _lmul_or_fill!(beta::Number, C::AbstractArray)
     if iszero(beta)
@@ -599,7 +630,8 @@ end
 #       strides != 1 cases
 
 function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::AbstractVector,
-                            alpha::Number = true, beta::Number = false) where R
+                            alpha::Number = true, beta::Number = false,
+                            _add = MulAddMul(alpha, beta)) where R
     @assert !has_offset_axes(C, A, B)
     mB = length(B)
     mA, nA = lapack_size(tA, A)
@@ -624,7 +656,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
             for i = 1:nA
                 s += transpose(A[aoffs+i]) * B[i]
             end
-            @muladd01!(alpha, s, beta, C[k])
+            _modify!(_add, s, C, k)
         end
     elseif tA == 'C'
         for k = 1:mA
@@ -637,7 +669,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
             for i = 1:nA
                 s += A[aoffs + i]'B[i]
             end
-            @muladd01!(alpha, s, beta, C[k])
+            _modify!(_add, s, C, k)
         end
     else # tA == 'N'
         for i = 1:mA
@@ -651,7 +683,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
         end
         for k = 1:mB
             aoffs = (k-1)*Astride
-            b = mul1(alpha, B[k])
+            b = isone(alpha) ? B[k] : alpha * B[k]
             for i = 1:mA
                 C[i] += A[aoffs + i] * b
             end
@@ -693,7 +725,7 @@ generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::Abstract
     _generic_matmatmul!(C, tA, tB, A, B, alpha, beta)
 
 function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S},
-                             alpha = true, beta = false) where {T,S,R}
+                             alpha = true, beta = false, _add = MulAddMul(alpha, beta)) where {T,S,R}
     @assert !has_offset_axes(C, A, B)
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
@@ -732,7 +764,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         s += Atile[aoff+k] * Btile[boff+k]
                     end
-                    @muladd01!(alpha, s, beta, C[i,j])
+                    _modify!(_add, s, C, (i,j))
                 end
             end
         else
@@ -782,7 +814,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += A[i, k]*B[k, j]
                     end
-                    @muladd01!(alpha, Ctmp, beta, C[i,j])
+                    _modify!(_add, Ctmp, C, (i,j))
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
@@ -791,7 +823,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += A[i, k] * transpose(B[j, k])
                     end
-                    @muladd01!(alpha, Ctmp, beta, C[i,j])
+                    _modify!(_add, Ctmp, C, (i,j))
                 end
             else
                 for i = 1:mA, j = 1:nB
@@ -800,7 +832,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += A[i, k]*B[j, k]'
                     end
-                    @muladd01!(alpha, Ctmp, beta, C[i,j])
+                    _modify!(_add, Ctmp, C, (i,j))
                 end
             end
         elseif tA == 'T'
@@ -811,7 +843,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += transpose(A[k, i]) * B[k, j]
                     end
-                    @muladd01!(alpha, Ctmp, beta, C[i,j])
+                    _modify!(_add, Ctmp, C, (i,j))
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
@@ -820,7 +852,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += transpose(A[k, i]) * transpose(B[j, k])
                     end
-                    @muladd01!(alpha, Ctmp, beta, C[i,j])
+                    _modify!(_add, Ctmp, C, (i,j))
                 end
             else
                 for i = 1:mA, j = 1:nB
@@ -829,7 +861,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += transpose(A[k, i]) * adjoint(B[j, k])
                     end
-                    @muladd01!(alpha, Ctmp, beta, C[i,j])
+                    _modify!(_add, Ctmp, C, (i,j))
                 end
             end
         else
@@ -840,7 +872,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += A[k, i]'B[k, j]
                     end
-                    @muladd01!(alpha, Ctmp, beta, C[i,j])
+                    _modify!(_add, Ctmp, C, (i,j))
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
@@ -849,7 +881,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += adjoint(A[k, i]) * transpose(B[j, k])
                     end
-                    @muladd01!(alpha, Ctmp, beta, C[i,j])
+                    _modify!(_add, Ctmp, C, (i,j))
                 end
             else
                 for i = 1:mA, j = 1:nB
@@ -858,7 +890,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                     for k = 1:nA
                         Ctmp += A[k, i]'B[j, k]'
                     end
-                    @muladd01!(alpha, Ctmp, beta, C[i,j])
+                    _modify!(_add, Ctmp, C, (i,j))
                 end
             end
         end
@@ -874,7 +906,7 @@ function matmul2x2(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,
 end
 
 function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
-                    alpha = true, beta = false)
+                    alpha = true, beta = false, _add = MulAddMul(alpha, beta))
     @assert !has_offset_axes(C, A, B)
     if !(size(A) == size(B) == size(C) == (2,2))
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
@@ -903,10 +935,10 @@ function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
         B11 = B[1,1]; B12 = B[1,2];
         B21 = B[2,1]; B22 = B[2,2]
     end
-    @muladd01!(alpha, A11*B11 + A12*B21, beta, C[1,1])
-    @muladd01!(alpha, A11*B12 + A12*B22, beta, C[1,2])
-    @muladd01!(alpha, A21*B11 + A22*B21, beta, C[2,1])
-    @muladd01!(alpha, A21*B12 + A22*B22, beta, C[2,2])
+    _modify!(_add, A11*B11 + A12*B21, C, (1,1))
+    _modify!(_add, A11*B12 + A12*B22, C, (1,2))
+    _modify!(_add, A21*B11 + A22*B21, C, (2,1))
+    _modify!(_add, A21*B12 + A22*B22, C, (2,2))
     end # inbounds
     C
 end
@@ -917,7 +949,7 @@ function matmul3x3(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,
 end
 
 function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
-                    alpha = true, beta = false)
+                    alpha = true, beta = false, _add = MulAddMul(alpha, beta))
     @assert !has_offset_axes(C, A, B)
     if !(size(A) == size(B) == size(C) == (3,3))
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
@@ -955,17 +987,17 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
         B31 = B[3,1]; B32 = B[3,2]; B33 = B[3,3]
     end
 
-    @muladd01!(alpha, A11*B11 + A12*B21 + A13*B31, beta, C[1,1])
-    @muladd01!(alpha, A11*B12 + A12*B22 + A13*B32, beta, C[1,2])
-    @muladd01!(alpha, A11*B13 + A12*B23 + A13*B33, beta, C[1,3])
+    _modify!(_add, A11*B11 + A12*B21 + A13*B31, C, (1,1))
+    _modify!(_add, A11*B12 + A12*B22 + A13*B32, C, (1,2))
+    _modify!(_add, A11*B13 + A12*B23 + A13*B33, C, (1,3))
 
-    @muladd01!(alpha, A21*B11 + A22*B21 + A23*B31, beta, C[2,1])
-    @muladd01!(alpha, A21*B12 + A22*B22 + A23*B32, beta, C[2,2])
-    @muladd01!(alpha, A21*B13 + A22*B23 + A23*B33, beta, C[2,3])
+    _modify!(_add, A21*B11 + A22*B21 + A23*B31, C, (2,1))
+    _modify!(_add, A21*B12 + A22*B22 + A23*B32, C, (2,2))
+    _modify!(_add, A21*B13 + A22*B23 + A23*B33, C, (2,3))
 
-    @muladd01!(alpha, A31*B11 + A32*B21 + A33*B31, beta, C[3,1])
-    @muladd01!(alpha, A31*B12 + A32*B22 + A33*B32, beta, C[3,2])
-    @muladd01!(alpha, A31*B13 + A32*B23 + A33*B33, beta, C[3,3])
+    _modify!(_add, A31*B11 + A32*B21 + A33*B31, C, (3,1))
+    _modify!(_add, A31*B12 + A32*B22 + A33*B32, C, (3,2))
+    _modify!(_add, A31*B13 + A32*B23 + A33*B33, C, (3,3))
     end # inbounds
     C
 end
