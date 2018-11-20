@@ -1705,7 +1705,9 @@
 
 (define (named-tuple-expr names values)
   `(call (curly (core NamedTuple) (tuple ,@names))
-         (tuple ,@values)))
+         ;; NOTE: don't use `tuple` head, so an assignment expression as a value
+         ;; doesn't turn this into another named tuple.
+         (call (core tuple) ,@values)))
 
 (define (lower-named-tuple lst
                            (dup-error-fn (lambda (name) (string "field name \"" name "\" repeated in named tuple")))
@@ -3907,8 +3909,9 @@ f(x) = yt(x)
              '(null))
 
             ((gc_preserve_begin)
-             (let ((s (make-ssavalue)))
-               (emit `(= ,s ,e))
+             (let ((s    (make-ssavalue))
+                   (args (compile-args (cdr e) break-labels linearize-args)))
+               (emit `(= ,s ,(cons (car e) args)))
                s))
 
             ;; metadata expressions
