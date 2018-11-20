@@ -163,7 +163,14 @@ end
                 (A isa Diagonal && (eltype(A) <: Complex || !isreal(α)) &&
                  B isa AbstractTriangular && eltype(B) <: Real)
             # see https://github.com/JuliaLang/julia/issues/30094
-            @test_broken returned_mat ≈ α * A * B + β * Cc  rtol=rtol
+
+            # If `B` is an `AbstractTriangular{<:Integer}` and
+            # elements are all zero (which can happen with non-zero
+            # probability), this test can pass.  But let's keep this
+            # code here since it'd be useful for checking if the bugs
+            # are fixed.
+            # @test_broken returned_mat ≈ α * A * B + β * Cc  rtol=rtol
+
             Ac = Matrix(A)
             Bc = Matrix(B)
             @test returned_mat ≈ α * Ac * Bc + β * Cc  rtol=rtol
