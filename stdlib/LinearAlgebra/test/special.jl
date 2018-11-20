@@ -266,14 +266,63 @@ end
     Tl = Tridiagonal(offdiag, diag, zeros(9))
     S = SymTridiagonal(diag, offdiag)
     Sd = SymTridiagonal(diag, zeros(9))
-
     mats = [D, Bup, Blo, Bupd, Blod, T, Td, Tu, Tl, S, Sd]
+
+    diag = rand(10)
+    offdiag = rand(9)
+    D = Diagonal(rand(10))
+    Bup = Bidiagonal(diag, offdiag, 'U')
+    Blo = Bidiagonal(diag, offdiag, 'L')
+    Bupd = Bidiagonal(diag, zeros(9), 'U')
+    Blod = Bidiagonal(diag, zeros(9), 'L')
+    T = Tridiagonal(offdiag, diag, offdiag)
+    Td = Tridiagonal(zeros(9), diag, zeros(9))
+    Tu = Tridiagonal(zeros(9), diag, offdiag)
+    Tl = Tridiagonal(offdiag, diag, zeros(9))
+    S = SymTridiagonal(diag, offdiag)
+    Sd = SymTridiagonal(diag, zeros(9))
+
+    mats2 = [D, Bup, Blo, Bupd, Blod, T, Td, Tu, Tl, S, Sd]
     for a in mats
         for b in mats
             @test (a == b) == (Matrix(a) == Matrix(b)) == (b == a) == (Matrix(b) == Matrix(a))
             @test (a ≈ b) == (Matrix(a) ≈ Matrix(b)) == (b ≈ a) == (Matrix(b) ≈ Matrix(a))
+
+            @test isapprox(a, b; atol=.6) == isapprox(Matrix(a), Matrix(b); atol=.6)
+            @test isapprox(a, b; rtol=.001) == isapprox(Matrix(a), Matrix(b); rtol=.001)
+            @test isapprox(a, b; norm=LinearAlgebra.norm1) == isapprox(Matrix(a), Matrix(b); norm=LinearAlgebra.norm1)
+        end
+        for b in mats2
+            @test (a == b) == (Matrix(a) == Matrix(b)) == (b == a) == (Matrix(b) == Matrix(a))
+            @test (a ≈ b) == (Matrix(a) ≈ Matrix(b)) == (b ≈ a) == (Matrix(b) ≈ Matrix(a))
+
+            @test isapprox(a, b; atol=.6) == isapprox(Matrix(a), Matrix(b); atol=.6)
+            @test isapprox(a, b; rtol=.001) == isapprox(Matrix(a), Matrix(b); rtol=.001)
+            @test isapprox(a, b; norm=LinearAlgebra.norm1) == isapprox(Matrix(a), Matrix(b); norm=LinearAlgebra.norm1)
         end
     end
+    
+    # explicitly testing _isapproxzero
+    diag = rand(10)
+    offdiag = zeros(9)
+
+    Bup = Bidiagonal(diag, offdiag, 'U')
+    Blo = Bidiagonal(diag, offdiag, 'L')
+    T = Tridiagonal(offdiag, diag, offdiag)
+    S = SymTridiagonal(diag, offdiag)
+
+    offdiag = zeros(9)
+    offdiag[7] = .1
+
+    Bup2 = Bidiagonal(diag, offdiag, 'U')
+    Blo2 = Bidiagonal(diag, offdiag, 'L')
+    T2 = Tridiagonal(offdiag, diag, offdiag)
+    S2 = SymTridiagonal(diag, offdiag)
+
+    @test isapprox(Bup, Bup2; atol=.2)
+    @test isapprox(Blo, Blo2; atol=.2)
+    @test isapprox(T, T2; atol=.2)
+    @test isapprox(S, S2; atol=.2)
 end
 
 end # module TestSpecial
