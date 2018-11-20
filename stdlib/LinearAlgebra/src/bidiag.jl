@@ -375,6 +375,12 @@ function _diag(A::Bidiagonal, k)
     end
 end
 
+function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym, alpha, beta,
+                     _add::MulAddMul)
+    # This is for resolving the method ambiguity.
+    throw(MethodError(A_mul_B_td!, (C, A, B, alpha, beta, _add)))
+end
+
 function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym, alpha, beta)
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
@@ -428,7 +434,8 @@ function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym, alpha, beta)
     C
 end
 
-function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat, alpha, beta)
+function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat,
+                     alpha, beta, _add::MulAddMul = MulAddMul(alpha, beta))
     @assert !has_offset_axes(C)
     @assert !has_offset_axes(B)
     nA = size(A,1)
@@ -440,29 +447,28 @@ function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat, alph
         throw(DimensionMismatch("A has second dimension $nA, B has $(size(B,2)), C has $(size(C,2)) but all must match"))
     end
     nA <= 3 && return addmul!(C, Array(A), Array(B), alpha, beta)
-    _lmul_or_fill!(beta, C)
     l = _diag(A, -1)
     d = _diag(A, 0)
     u = _diag(A, 1)
     @inbounds begin
         for j = 1:nB
             b₀, b₊ = B[1, j], B[2, j]
-            C[1, j] += alpha * (d[1]*b₀ + u[1]*b₊)
+            _modify!(_add, d[1]*b₀ + u[1]*b₊, C, (1, j))
             for i = 2:nA - 1
                 b₋, b₀, b₊ = b₀, b₊, B[i + 1, j]
-                C[i, j] += alpha * (l[i - 1]*b₋ + d[i]*b₀ + u[i]*b₊)
+                _modify!(_add, l[i - 1]*b₋ + d[i]*b₀ + u[i]*b₊, C, (i, j))
             end
-            C[nA, j] += alpha * (l[nA - 1]*b₀ + d[nA]*b₊)
+            _modify!(_add, l[nA - 1]*b₀ + d[nA]*b₊, C, (nA, j))
         end
     end
     C
 end
 
-function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym, alpha, beta)
+function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym,
+                     alpha, beta, _add::MulAddMul = MulAddMul(alpha, beta))
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
     n <= 3 && return addmul!(C, Array(A), Array(B), alpha, beta)
-    _lmul_or_fill!(beta, C)
     m = size(B,2)
     Bl = _diag(B, -1)
     Bd = _diag(B, 0)
@@ -474,8 +480,8 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym, alpha, b
         Bmm = Bd[m]
         Bm₋1m = Bu[m-1]
         for i in 1:n
-            C[i, 1] += alpha * (A[i,1] * B11 + A[i, 2] * B21)
-            C[i, m] += alpha * (A[i, m-1] * Bm₋1m + A[i, m] * Bmm)
+            _modify!(_add, A[i,1] * B11 + A[i, 2] * B21, C, (i, 1))
+            _modify!(_add, A[i, m-1] * Bm₋1m + A[i, m] * Bmm, C, (i, m))
         end
         # middle columns of C
         for j = 2:m-1
@@ -483,7 +489,7 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym, alpha, b
             Bjj = Bd[j]
             Bj₊1j = Bl[j]
             for i = 1:n
-                C[i, j] += alpha * (A[i, j-1] * Bj₋1j + A[i, j]*Bjj + A[i, j+1] * Bj₊1j)
+                _modify!(_add, A[i, j-1] * Bj₋1j + A[i, j]*Bjj + A[i, j+1] * Bj₊1j, C, (i, j))
             end
         end
     end # inbounds
