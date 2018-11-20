@@ -647,8 +647,10 @@ end
 end
 
 @testset "Issue 29367" begin
-    @test cholesky(sparse(Int32[1,2,3,4], Int32[1,2,3,4], Float64[1,4,16,64]))\[1,4,16,64] == fill(1, 4)
-    @test cholesky(sparse(Int32[1,2,3,4], Int32[1,2,3,4], Float32[1,4,16,64]))\[1,4,16,64] == fill(1, 4)
+    if Int != Int32
+        @test_throws MethodError cholesky(sparse(Int32[1,2,3,4], Int32[1,2,3,4], Float64[1,4,16,64]))
+        @test_throws MethodError cholesky(sparse(Int32[1,2,3,4], Int32[1,2,3,4], Float32[1,4,16,64]))
+    end
 end
 
 @testset "Issue 14134" begin

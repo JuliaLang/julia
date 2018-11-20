@@ -905,8 +905,8 @@ function Sparse{Tv}(A::SparseMatrixCSC, stype::Integer) where Tv<:VTypes
 end
 
 # handle promotion
-function Sparse(A::SparseMatrixCSC, stype::Integer)
-    T = promote_type(eltype(A), Float64)
+function Sparse(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer) where {Tv}
+    T = promote_type(Tv, Float64)
     return Sparse{T}(A, stype)
 end
 
