@@ -401,7 +401,7 @@ printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
     printstyled(stdout, msg...; bold=bold, color=color)
 
 """
-    julia_cmd([julia]) :: Cmd
+    julia_cmd([julia]) -> Cmd
 
 Return a [`Cmd`](@ref) that can be used to launch a `julia` program
 that inherits the command line options of the current executing
@@ -448,7 +448,7 @@ function julia_exename()
 end
 
 """
-    default_julia_basecmd() :: Cmd
+    default_julia_basecmd() -> Cmd
 
 Default `julia` executable and options.
 """
@@ -457,7 +457,7 @@ default_julia_basecmd() = `$(joinpath(Sys.BINDIR::String, julia_exename()))`
 const _julia_basecmd = Ref(``)
 
 """
-    julia_basecmd() :: Cmd
+    julia_basecmd() -> Cmd
 
 Julia executable which is used by [`julia_cmd`](@ref).  It may be
 changed by [`set_julia_basecmd`](@ref).
