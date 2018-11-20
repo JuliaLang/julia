@@ -658,16 +658,11 @@ end
 
 function setindex_widen!(dest::Array{T}, el, i) where T
     @_inline_meta
-    if el isa T || typeof(el) === T
-        @inbounds dest[i] = el::T
-        dest
-    else
-        R = promote_typejoin(T, typeof(el))
-        new = similar(dest, R)
-        copyto!(new,1, dest,1, i-1)
-        @inbounds new[i] = el
-        new
-    end
+    R = promote_typejoin(T, typeof(el))
+    new = similar(dest, R)
+    copyto!(new,1, dest,1, i-1)
+    @inbounds new[i] = el
+    return new
 end
 
 function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
@@ -678,7 +673,7 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
         y = iterate(itr, st)
         y === nothing && break
         el, st = y
-        if el isa T || typeof(el) === T
+        if el isa T
             @inbounds dest[i] = el::T
             i += 1
         else
@@ -701,20 +696,15 @@ function push_widen!(dest, el)
     @_inline_meta
     T = eltype(dest)
     S = typeof(el)
-    if S === T || S <: T
-        push!(dest, el::T)
-        dest
+    new = sizehint!(empty(dest, promote_typejoin(T, S)), length(dest))
+    if new isa AbstractSet
+        # TODO: merge back these two branches when copy! is re-enabled for sets/vectors
+        union!(new, dest)
     else
-        new = sizehint!(empty(dest, promote_typejoin(T, S)), length(dest))
-        if new isa AbstractSet
-            # TODO: merge back these two branches when copy! is re-enabled for sets/vectors
-            union!(new, dest)
-        else
-            append!(new, dest)
-        end
-        push!(new, el)
-        new
+        append!(new, dest)
     end
+    push!(new, el)
+    return new
 end
 
 function grow_to!(dest, itr, st)
