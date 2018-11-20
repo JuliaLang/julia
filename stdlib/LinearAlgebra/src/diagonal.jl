@@ -287,13 +287,13 @@ mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix) = o
 
 addmul!(out::AbstractVector, A::Diagonal, in::AbstractVector,
         alpha::Number, beta::Number) =
-    out .= alpha .* A.diag .* in .+ beta .* in
+    out .= alpha .* A.diag .* in .+ beta .* out
 addmul!(out::AbstractVector, A::Adjoint{<:Any,<:Diagonal}, in::AbstractVector,
         alpha::Number, beta::Number) =
-    out .= alpha .* adjoint.(A.parent.diag) .* in .+ beta .* in
+    out .= alpha .* adjoint.(A.parent.diag) .* in .+ beta .* out
 addmul!(out::AbstractVector, A::Transpose{<:Any,<:Diagonal}, in::AbstractVector,
         alpha::Number, beta::Number) =
-    out .= alpha .* transpose.(A.parent.diag) .* in .+ beta .* in
+    out .= alpha .* transpose.(A.parent.diag) .* in .+ beta .* out
 
 addmul!(out::AbstractMatrix, A::Diagonal, in::StridedMatrix,
         alpha::Number, beta::Number) =

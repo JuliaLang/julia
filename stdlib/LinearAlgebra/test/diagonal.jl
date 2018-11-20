@@ -3,7 +3,7 @@
 module TestDiagonal
 
 using Test, LinearAlgebra, SparseArrays, Random
-using LinearAlgebra: mul!, rmul!, lmul!, ldiv!, rdiv!, BlasFloat, BlasComplex, SingularException
+using LinearAlgebra: mul!, addmul!, rmul!, lmul!, ldiv!, rdiv!, BlasFloat, BlasComplex, SingularException
 
 n=12 #Size of matrix problem to test
 Random.seed!(1)
@@ -183,6 +183,46 @@ Random.seed!(1)
         @test (r = Matrix(D) * UU   ; mul!(UUU, D, UU) ≈ r ≈ UUU)
         @test (r = Matrix(D)' * UU  ; mul!(UUU, adjoint(D), UU) ≈ r ≈ UUU)
         @test (r = transpose(Matrix(D)) * UU ; mul!(UUU, transpose(D), UU) ≈ r ≈ UUU)
+
+        alpha = elty(randn())  # randn(elty) does not work with BigFloat
+        beta = elty(randn())
+        @test begin
+            vvv = similar(vv)
+            vvv .= randn(size(vvv))  # randn!(vvv) does not work with BigFloat
+            r = alpha * Matrix(D) * vv + beta * vvv
+            addmul!(vvv, D, vv, alpha, beta)  ≈ r ≈ vvv
+        end
+        @test begin
+            vvv = similar(vv)
+            vvv .= randn(size(vvv))  # randn!(vvv) does not work with BigFloat
+            r = alpha * Matrix(D)' * vv + beta * vvv
+            addmul!(vvv, adjoint(D), vv, alpha, beta) ≈ r ≈ vvv
+        end
+        @test begin
+            vvv = similar(vv)
+            vvv .= randn(size(vvv))  # randn!(vvv) does not work with BigFloat
+            r = alpha * transpose(Matrix(D)) * vv + beta * vvv
+            addmul!(vvv, transpose(D), vv, alpha, beta) ≈ r ≈ vvv
+        end
+
+        @test begin
+            UUU = similar(UU)
+            UUU .= randn(size(UUU))  # randn!(UUU) does not work with BigFloat
+            r = alpha * Matrix(D) * UU + beta * UUU
+            addmul!(UUU, D, UU, alpha, beta) ≈ r ≈ UUU
+        end
+        @test begin
+            UUU = similar(UU)
+            UUU .= randn(size(UUU))  # randn!(UUU) does not work with BigFloat
+            r = alpha * Matrix(D)' * UU + beta * UUU
+            addmul!(UUU, adjoint(D), UU, alpha, beta) ≈ r ≈ UUU
+        end
+        @test begin
+            UUU = similar(UU)
+            UUU .= randn(size(UUU))  # randn!(UUU) does not work with BigFloat
+            r = alpha * transpose(Matrix(D)) * UU + beta * UUU
+            addmul!(UUU, transpose(D), UU, alpha, beta) ≈ r ≈ UUU
+        end
 
         # make sure that mul!(A, {Adj|Trans}(B)) works with B as a Diagonal
         VV = Array(D)
