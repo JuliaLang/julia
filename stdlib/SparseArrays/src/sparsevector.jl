@@ -1486,9 +1486,9 @@ function (*)(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
 end
 
 mul!(y::AbstractVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, A, x, one(Tx), zero(Ty))
+    addmul!(y, A, x, one(Tx), zero(Ty))
 
-function mul!(y::AbstractVector, A::StridedMatrix, x::AbstractSparseVector, α::Number, β::Number)
+function addmul!(y::AbstractVector, A::StridedMatrix, x::AbstractSparseVector, α::Number, β::Number)
     @assert !has_offset_axes(y, A, x)
     m, n = size(A)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
@@ -1526,9 +1526,9 @@ function *(transA::Transpose{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector
 end
 
 mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = transA.parent; mul!(y, transpose(A), x, one(Tx), zero(Ty)))
+    (A = transA.parent; addmul!(y, transpose(A), x, one(Tx), zero(Ty)))
 
-function mul!(y::AbstractVector, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector, α::Number, β::Number)
+function addmul!(y::AbstractVector, transA::Transpose{<:Any,<:StridedMatrix}, x::AbstractSparseVector, α::Number, β::Number)
     A = transA.parent
     @assert !has_offset_axes(y, A, x)
     m, n = size(A)
@@ -1587,9 +1587,9 @@ end
 # * and mul!
 
 mul!(y::AbstractVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, A, x, one(Tx), zero(Ty))
+    addmul!(y, A, x, one(Tx), zero(Ty))
 
-function mul!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractSparseVector, α::Number, β::Number)
+function addmul!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractSparseVector, α::Number, β::Number)
     @assert !has_offset_axes(y, A, x)
     m, n = size(A)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
@@ -1621,13 +1621,13 @@ end
 # * and *(Tranpose(A), B)
 
 mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = transA.parent; mul!(y, transpose(A), x, one(Tx), zero(Ty)))
+    (A = transA.parent; addmul!(y, transpose(A), x, one(Tx), zero(Ty)))
 
 mul!(y::AbstractVector, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
     (A = transA.parent; _At_or_Ac_mul_B!(*, y, A, x, α, β))
 
 mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = adjA.parent; mul!(y, adjoint(A), x, one(Tx), zero(Ty)))
+    (A = adjA.parent; addmul!(y, adjoint(A), x, one(Tx), zero(Ty)))
 
 mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
     (A = adjA.parent; _At_or_Ac_mul_B!(dot, y, A, x, α, β))
