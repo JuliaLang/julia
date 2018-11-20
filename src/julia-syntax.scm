@@ -1690,7 +1690,9 @@
 
 (define (named-tuple-expr names values)
   `(call (curly (core NamedTuple) (tuple ,@names))
-         (tuple ,@values)))
+         ;; NOTE: don't use `tuple` head, so an assignment expression as a value
+         ;; doesn't turn this into another named tuple.
+         (call (core tuple) ,@values)))
 
 (define (lower-named-tuple lst
                            (dup-error-fn (lambda (name) (string "field name \"" name "\" repeated in named tuple")))
