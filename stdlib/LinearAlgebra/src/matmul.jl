@@ -19,10 +19,10 @@ true
 struct MulAddMul{ais1, bis0, TA, TB}
     alpha::TA
     beta::TB
-
-    MulAddMul(alpha::TA, beta::TB) where {TA, TB} =
-        new{isone(alpha), iszero(beta), TA, TB}(alpha, beta)
 end
+
+MulAddMul(alpha::TA, beta::TB) where {TA, TB} =
+    MulAddMul{isone(alpha), iszero(beta), TA, TB}(alpha, beta)
 
 @inline (::MulAddMul{true, true})(x, ::Any = nothing) = x
 @inline (p::MulAddMul{false, true})(x, ::Any = nothing) = p.alpha * x
