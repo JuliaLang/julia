@@ -567,6 +567,11 @@ end
     @test isnan(findmax([NaN, NaN, 0.0/0.0])[1])
     @test findmax([NaN, NaN, 0.0/0.0])[2] == 1
 
+    # Check that cartesian indices are returned for matrices
+    @test argmax([10 12; 9 11]) === CartesianIndex(1, 2)
+    @test argmin([10 12; 9 11]) === CartesianIndex(2, 1)
+    @test findmax([10 12; 9 11]) === (12, CartesianIndex(1, 2))
+    @test findmin([10 12; 9 11]) === (9, CartesianIndex(2, 1))
 end
 
 @testset "permutedims" begin

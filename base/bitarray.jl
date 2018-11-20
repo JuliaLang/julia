@@ -1510,7 +1510,6 @@ function findprev(testf::Function, B::BitArray, start::Integer)
 end
 #findlast(testf::Function, B::BitArray) = findprev(testf, B, 1)  ## defined in array.jl
 
-
 function findmax(a::BitArray)
     isempty(a) && throw(ArgumentError("BitArray must be non-empty"))
     m, mi = false, 1
@@ -1519,9 +1518,9 @@ function findmax(a::BitArray)
     for i = 1:length(ac)
         @inbounds k = trailing_zeros(ac[i])
         ti += k
-        k == 64 || return (true, ti)
+        k == 64 || return (true, @inbounds keys(a)[ti])
     end
-    return m, mi
+    return m, @inbounds keys(a)[mi]
 end
 
 function findmin(a::BitArray)
@@ -1532,13 +1531,13 @@ function findmin(a::BitArray)
     for i = 1:length(ac)-1
         @inbounds k = trailing_ones(ac[i])
         ti += k
-        k == 64 || return (false, ti)
+        k == 64 || return (false, @inbounds keys(a)[ti])
     end
     l = Base._mod64(length(a)-1) + 1
     @inbounds k = trailing_ones(ac[end] & Base._msk_end(l))
     ti += k
-    k == l || return (false, ti)
-    return m, mi
+    k == l || return (false, @inbounds keys(a)[ti])
+    return (m, @inbounds keys(a)[mi])
 end
 
 # findall helper functions
