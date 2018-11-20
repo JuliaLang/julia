@@ -58,7 +58,7 @@ move_to_node1("stress")
 limited_worker_rss && move_to_node1("Distributed")
 
 import LinearAlgebra
-cd(dirname(@__FILE__)) do
+cd(@__DIR__) do
     n = 1
     if net_on
         n = min(Sys.CPU_THREADS, length(tests))

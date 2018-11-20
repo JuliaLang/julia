@@ -435,11 +435,19 @@ end
 _bcs1(a::Integer, b::Integer) = a == 1 ? b : (b == 1 ? a : (a == b ? a : throw(DimensionMismatch("arrays could not be broadcast to a common size"))))
 _bcs1(a::Integer, b) = a == 1 ? b : (first(b) == 1 && last(b) == a ? b : throw(DimensionMismatch("arrays could not be broadcast to a common size")))
 _bcs1(a, b::Integer) = _bcs1(b, a)
-_bcs1(a, b) = _bcsm(b, a) ? b : (_bcsm(a, b) ? a : throw(DimensionMismatch("arrays could not be broadcast to a common size")))
+_bcs1(a, b) = _bcsm(b, a) ? _sametype(b, a) : (_bcsm(a, b) ? _sametype(a, b) : throw(DimensionMismatch("arrays could not be broadcast to a common size")))
 # _bcsm tests whether the second index is consistent with the first
 _bcsm(a, b) = a == b || length(b) == 1
 _bcsm(a, b::Number) = b == 1
 _bcsm(a::Number, b::Number) = a == b || b == 1
+# Ensure inferrability when dealing with axes of different AbstractUnitRange types
+# (We may not want to define general promotion rules between, say, OneTo and Slice, but if
+#  we get here we know the axes are at least consistent)
+_sametype(a::T, b::T) where T = a
+_sametype(a::OneTo, b::OneTo) = OneTo{Int}(a)
+_sametype(a::OneTo, b) = OneTo{Int}(a)
+_sametype(a, b::OneTo) = OneTo{Int}(a)
+_sametype(a, b) = UnitRange{Int}(a)
 
 ## Check that all arguments are broadcast compatible with shape
 # comparing one input against a shape
@@ -1005,6 +1013,18 @@ broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::UnitRange) = big(r.start):
 broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::StepRange) = big(r.start):big(r.step):big(last(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::StepRangeLen) = StepRangeLen(big(r.ref), big(r.step), length(r), r.offset)
 broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::LinRange) = LinRange(big(r.start), big(r.stop), length(r))
+
+## CartesianIndices
+broadcasted(::typeof(+), I::CartesianIndices{N}, j::CartesianIndex{N}) where N =
+    CartesianIndices(map((rng, offset)->rng .+ offset, I.indices, Tuple(j)))
+broadcasted(::typeof(+), j::CartesianIndex{N}, I::CartesianIndices{N}) where N =
+    I .+ j
+broadcasted(::typeof(-), I::CartesianIndices{N}, j::CartesianIndex{N}) where N =
+    CartesianIndices(map((rng, offset)->rng .- offset, I.indices, Tuple(j)))
+function broadcasted(::typeof(-), j::CartesianIndex{N}, I::CartesianIndices{N}) where N
+    diffrange(offset, rng) = range(offset-last(rng), length=length(rng))
+    Iterators.reverse(CartesianIndices(map(diffrange, Tuple(j), I.indices)))
+end
 
 ## In specific instances, we can broadcast masked BitArrays whole chunks at a time
 # Very intentionally do not support much functionality here: scalar indexing would be O(n)
