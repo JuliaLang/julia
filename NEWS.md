@@ -11,7 +11,9 @@ Language changes
 ----------------
 
   * the constructor `BigFloat(::BigFloat)` now respects the global precision setting and always
-    returns a `BigFloat` with precision equal to `precision(BigFloat)` ([#29127]).
+    returns a `BigFloat` with precision equal to `precision(BigFloat)` ([#29127]). The optional
+    `precision` argument to override the global setting is now a keyword instead of positional
+    argument ([#29157]).
   * Parser inputs ending with a comma are now consistently treated as incomplete.
     Previously they were sometimes parsed as tuples, depending on whitespace ([#28506]).
   * `Regex` now behave like a scalar when used in broadcasting ([#29913]).
@@ -21,16 +23,20 @@ New library functions
 
   * `splitpath(p::String)` function, which is the opposite of `joinpath(parts...)`: it splits a filepath into its components ([#28156]).
   * `isnothing(::Any)` function, to check whether something is a `Nothing`, returns a `Bool` ([#29679]).
+  * `getpid(::Process)` method ([#24064]).
+
 
 Standard library changes
 ------------------------
 
   * `CartesianIndices` can now be constructed from two `CartesianIndex`es `I` and `J` with `I:J` ([#29440]).
+  * `CartesianIndices` support broadcasting arithmetic (+ and -) with a `CartesianIndex` ([#29890]).
   * `copy!` support for arrays, dicts, and sets has been moved to Base from the Future package ([#29173]).
   * Channels now convert inserted values (like containers) instead of requiring types to match ([#29092]).
   * `range` can accept the stop value as a positional argument, e.g. `range(1,10,step=2)` ([#28708]).
   * `edit` can now be called on a module to edit the file that defines it ([#29636]).
   * `diff` now supports arrays of arbitrary dimensionality and can operate over any dimension ([#29827]).
+  * `sprandn` now supports result types like `ComplexF64` or `Float32` ([#30083]).
 
 Compiler/Runtime improvements
 -----------------------------

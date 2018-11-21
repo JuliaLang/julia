@@ -310,9 +310,23 @@ $(eval $(call std_dll,ssp-0))
 $(eval $(call std_dll,winpthread-1))
 $(eval $(call std_dll,atomic-1))
 endif
+
+
 define stringreplace
 	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep '$2' | awk '{print $$1;}') '$3' 255 "$(call cygpath_w,$1)"
 endef
+
+# Run fixup-libgfortran on all platforms but Windows and FreeBSD. On FreeBSD we
+# pull in the GCC libraries earlier and use them for the build to make sure we
+# don't inadvertently link to /lib/libgcc_s.so.1, which is incompatible with
+# libgfortran, and on Windows we copy them in earlier as well.
+ifeq (,$(findstring $(OS),FreeBSD WINNT))
+julia-base: $(build_libdir)/libgfortran.$(SHLIB_EXT)
+$(build_libdir)/libgfortran.$(SHLIB_EXT): | $(build_libdir)
+	-$(CUSTOM_LD_LIBRARY_PATH) PATH=$(PATH):$(build_depsbindir) $(JULIAHOME)/contrib/fixup-libgfortran.sh --verbose $(build_libdir)
+JL_PRIVATE_LIBS-0 += libgfortran libgcc_s libquadmath
+endif
+
 
 install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
 	@$(MAKE) $(QUIET_MAKE) all
@@ -370,6 +384,7 @@ endif
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 endif
+
 	# Copy in system image build script
 	$(INSTALL_M) $(JULIAHOME)/contrib/build_sysimg.jl $(DESTDIR)$(datarootdir)/julia/
 	# Copy in all .jl sources as well
@@ -452,13 +467,6 @@ ifneq ($(DESTDIR),)
 endif
 	@$(MAKE) -C $(BUILDROOT) -f $(JULIAHOME)/Makefile install
 	cp $(JULIAHOME)/LICENSE.md $(BUILDROOT)/julia-$(JULIA_COMMIT)
-	# Run fixup-libgfortran on all platforms but Windows and FreeBSD. On FreeBSD we
-	# pull in the GCC libraries earlier and use them for the build to make sure we
-	# don't inadvertently link to /lib/libgcc_s.so.1, which is incompatible with
-	# libgfortran.
-ifeq (,$(findstring $(OS),FreeBSD WINNT))
-	-$(CUSTOM_LD_LIBRARY_PATH) PATH=$(PATH):$(build_depsbindir) $(JULIAHOME)/contrib/fixup-libgfortran.sh $(DESTDIR)$(private_libdir)
-endif
 ifeq ($(OS), Linux)
 	-$(JULIAHOME)/contrib/fixup-libstdc++.sh $(DESTDIR)$(libdir) $(DESTDIR)$(private_libdir)
 
@@ -475,10 +483,6 @@ endif
 ifeq ($(OS), WINNT)
 	[ ! -d $(JULIAHOME)/dist-extras ] || ( cd $(JULIAHOME)/dist-extras && \
 		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin )
-ifeq ($(USE_GPL_LIBS), 1)
-	[ ! -d $(JULIAHOME)/dist-extras ] || ( cd $(JULIAHOME)/dist-extras && \
-		cp busybox.exe $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin )
-endif
 	cd $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 
 	# create file listing for uninstall. note: must have Windows path separators and line endings.
@@ -509,11 +513,16 @@ endif
 
 	# Create file light-source-dist.tmp to hold all the filenames that go into the tarball
 	echo "base/version_git.jl" > light-source-dist.tmp
+
+	# Download all stdlibs and include the tarball filenames in light-source-dist.tmp
+	@$(MAKE) -C stdlib getall
+	-ls stdlib/srccache/*.tar.gz >> light-source-dist.tmp
+
 	# Exclude git, github and CI config files
 	git ls-files | sed -E -e '/^\..+/d' -e '/\/\..+/d' -e '/appveyor.yml/d' >> light-source-dist.tmp
 	find doc/_build/html >> light-source-dist.tmp
 
-# Make tarball with only Julia code
+# Make tarball with only Julia code + stdlib tarballs
 light-source-dist: light-source-dist.tmp
 	# Prefix everything with "julia-$(commit-sha)/" or "julia-$(version)/" and then create tarball
 	# To achieve prefixing, we temporarily create a symlink in the source directory that points back
@@ -530,11 +539,10 @@ source-dist:
 full-source-dist: light-source-dist.tmp
 	# Get all the dependencies downloaded
 	@$(MAKE) -C deps getall NO_GIT=1
-	@$(MAKE) -C stdlib getall
 
 	# Create file full-source-dist.tmp to hold all the filenames that go into the tarball
 	cp light-source-dist.tmp full-source-dist.tmp
-	-ls deps/srccache/*.tar.gz deps/srccache/*.tar.bz2 deps/srccache/*.tar.xz deps/srccache/*.tgz deps/srccache/*.zip deps/srccache/*.pem stdlib/srccache/*.tar.gz >> full-source-dist.tmp
+	-ls deps/srccache/*.tar.gz deps/srccache/*.tar.bz2 deps/srccache/*.tar.xz deps/srccache/*.tgz deps/srccache/*.zip deps/srccache/*.pem >> full-source-dist.tmp
 
 	# Prefix everything with "julia-$(commit-sha)/" or "julia-$(version)/" and then create tarball
 	# To achieve prefixing, we temporarily create a symlink in the source directory that points back
@@ -603,15 +611,15 @@ endif
 endif
 ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z1604.exe && \
-	7z x -y 7z1604.exe 7z.exe 7z.dll && \
+	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z1805.exe && \
+	7z x -y 7z1805.exe 7z.exe 7z.dll && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_Leap_42.2 \
 		"mingw32-libexpat1 mingw32-zlib1" && \
 	cp usr/i686-w64-mingw32/sys-root/mingw/bin/*.dll .
 else ifeq ($(ARCH),x86_64)
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) 7z1604-x64.msi http://downloads.sourceforge.net/sevenzip/7z1604-x64.msi && \
-	7z x -y 7z1604-x64.msi _7z.exe _7z.dll && \
+	$(JLDOWNLOAD) 7z1805-x64.msi http://downloads.sourceforge.net/sevenzip/7z1805-x64.msi && \
+	7z x -y 7z1805-x64.msi _7z.exe _7z.dll && \
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_Leap_42.2 \
@@ -621,17 +629,12 @@ else
 	$(error no win-extras target for ARCH=$(ARCH))
 endif
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z1604-extra.7z && \
+	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z1805-extra.7z && \
 	$(JLDOWNLOAD) https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/unsis/nsis-2.46.5-Unicode-setup.exe && \
 	chmod a+x 7z.exe && \
 	chmod a+x 7z.dll && \
 	$(call spawn,./7z.exe) x -y -onsis nsis-2.46.5-Unicode-setup.exe && \
 	chmod a+x ./nsis/makensis.exe
-ifeq ($(USE_GPL_LIBS), 1)
-	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) busybox.exe http://frippery.org/files/busybox/busybox-w32-FRP-875-gc6ec14a.exe && \
-	chmod a+x busybox.exe
-endif
 
 # various statistics about the build that may interest the user
 ifeq ($(USE_SYSTEM_LLVM), 1)
