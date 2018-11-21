@@ -1471,7 +1471,7 @@ sprand(r::AbstractRNG, ::Type{Bool}, m::Integer, n::Integer, density::AbstractFl
 sprand(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where {T} = sprand(GLOBAL_RNG, T, m, n, density)
 
 """
-    sprandn([rng], m[,n],p::AbstractFloat)
+    sprandn([rng][,Type],m[,n],p::AbstractFloat)
 
 Create a random sparse vector of length `m` or sparse matrix of size `m` by `n`
 with the specified (independent) probability `p` of any entry being nonzero,
@@ -1488,6 +1488,8 @@ julia> sprandn(2, 2, 0.75)
 """
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
 sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n,density)
+sprandn(r::AbstractRNG, ::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where T = sprand(r,m,n,density,(r,i) -> randn(r,T,i), T)
+sprandn(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where T = sprandn(GLOBAL_RNG,T,m,n,density)
 
 LinearAlgebra.fillstored!(S::SparseMatrixCSC, x) = (fill!(nzvalview(S), x); S)
 
