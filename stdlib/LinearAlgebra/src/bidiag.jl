@@ -326,23 +326,23 @@ end
 
 const BiTriSym = Union{Bidiagonal,Tridiagonal,SymTridiagonal}
 const BiTri = Union{Bidiagonal,Tridiagonal}
-@inline addmul!(C::AbstractMatrix,   A::SymTridiagonal,     B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
-@inline addmul!(C::AbstractMatrix,   A::BiTri,              B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
-@inline addmul!(C::AbstractMatrix,   A::BiTriSym,           B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
-@inline addmul!(C::AbstractMatrix,   A::AbstractTriangular, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
-@inline addmul!(C::AbstractMatrix,   A::AbstractMatrix,     B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
-@inline addmul!(C::AbstractMatrix,   A::Diagonal,           B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
-@inline addmul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
-@inline addmul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
-@inline addmul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
-@inline addmul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
-@inline addmul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractVecOrMat}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
-@inline addmul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
-@inline addmul!(C::AbstractVector,   A::BiTri,              B::AbstractVector, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
-@inline addmul!(C::AbstractMatrix,   A::BiTri,              B::AbstractVecOrMat, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
-@inline addmul!(C::AbstractVecOrMat, A::BiTri,              B::AbstractVecOrMat, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
-@inline addmul!(C::AbstractMatrix, A::BiTri, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta) # around bidiag line 330
-@inline addmul!(C::AbstractMatrix, A::BiTri, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, alpha, beta)
+@inline addmul!(C::AbstractMatrix,   A::SymTridiagonal,     B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline addmul!(C::AbstractMatrix,   A::BiTri,              B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline addmul!(C::AbstractMatrix,   A::BiTriSym,           B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline addmul!(C::AbstractMatrix,   A::AbstractTriangular, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline addmul!(C::AbstractMatrix,   A::AbstractMatrix,     B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline addmul!(C::AbstractMatrix,   A::Diagonal,           B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline addmul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline addmul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline addmul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline addmul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline addmul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractVecOrMat}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline addmul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline addmul!(C::AbstractVector,   A::BiTri,              B::AbstractVector, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline addmul!(C::AbstractMatrix,   A::BiTri,              B::AbstractVecOrMat, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline addmul!(C::AbstractVecOrMat, A::BiTri,              B::AbstractVecOrMat, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline addmul!(C::AbstractMatrix, A::BiTri, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta)) # around bidiag line 330
+@inline addmul!(C::AbstractMatrix, A::BiTri, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
 @inline addmul!(C::AbstractVector, A::BiTri, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = throw(MethodError(addmul!, (C, A, B, alpha, beta)))
 
 function check_A_mul_B!_sizes(C, A, B)
@@ -375,13 +375,10 @@ function _diag(A::Bidiagonal, k)
     end
 end
 
-function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym, alpha, beta,
-                     _add::MulAddMul)
-    # This is for resolving the method ambiguity.
-    throw(MethodError(A_mul_B_td!, (C, A, B, alpha, beta, _add)))
-end
-
-function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym, alpha, beta)
+function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym,
+                     _add::MulAddMul = MulAddMul())
+    alpha = _add.alpha
+    beta = _add.beta
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
     n <= 3 && return addmul!(C, Array(A), Array(B), alpha, beta)
@@ -435,7 +432,7 @@ function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym, alpha, beta)
 end
 
 function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat,
-                     alpha, beta, _add::MulAddMul = MulAddMul(alpha, beta))
+                     _add::MulAddMul = MulAddMul())
     @assert !has_offset_axes(C)
     @assert !has_offset_axes(B)
     nA = size(A,1)
@@ -446,7 +443,7 @@ function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat,
     if size(C,2) != nB
         throw(DimensionMismatch("A has second dimension $nA, B has $(size(B,2)), C has $(size(C,2)) but all must match"))
     end
-    nA <= 3 && return addmul!(C, Array(A), Array(B), alpha, beta)
+    nA <= 3 && return addmul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     l = _diag(A, -1)
     d = _diag(A, 0)
     u = _diag(A, 1)
@@ -465,10 +462,10 @@ function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat,
 end
 
 function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym,
-                     alpha, beta, _add::MulAddMul = MulAddMul(alpha, beta))
+                     _add::MulAddMul = MulAddMul())
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
-    n <= 3 && return addmul!(C, Array(A), Array(B), alpha, beta)
+    n <= 3 && return addmul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     m = size(B,2)
     Bl = _diag(B, -1)
     Bd = _diag(B, 0)
