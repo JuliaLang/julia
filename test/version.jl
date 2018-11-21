@@ -210,7 +210,7 @@ end
 # check_new_version
 import Base.check_new_version
 @test check_new_version([v"1", v"2"], v"3") === nothing
-@test_throws AssertionError check_new_version([v"2", v"1"], v"3")
+@test check_new_version([v"2", v"1"], v"3") === nothing
 @test_throws ErrorException check_new_version([v"1", v"2"], v"2")
 @test check_new_version(VersionNumber[], v"0") === nothing
 @test check_new_version(VersionNumber[], v"0.0.1") === nothing
@@ -225,6 +225,11 @@ import Base.check_new_version
 @test check_new_version([v"1", v"2"], v"2.0.1") === nothing
 @test check_new_version([v"1", v"2"], v"2.1") === nothing
 @test check_new_version([v"1", v"2"], v"3") === nothing
+
+let vers = [v"2", v"1"]
+    @test check_new_version(vers, v"3") == nothing
+    @test vers == [v"2", v"1"] # no mutation
+end
 
 # banner
 import Base.banner
