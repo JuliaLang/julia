@@ -1201,7 +1201,7 @@ factorize(A::Transpose) = transpose(factorize(parent(A)))
 ## Moore-Penrose pseudoinverse
 
 """
-    pinv(M, atol::Real, rtol::Real)
+    pinv(M; atol::Real, rtol::Real)
     pinv(M[, tol::Real]) = pinv(M, rtol=tol)
 
 Computes the Moore-Penrose pseudoinverse.
@@ -1276,7 +1276,7 @@ function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(flo
     Sinv[findall(.!isfinite.(Sinv))] .= zero(Stype)
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
-pinv(A::AbstractMatrix{T}, tol::Real) where T = nullspace(A, rtol=tol) # TODO: deprecate tol in 2.0
+pinv(A::AbstractMatrix{T}, tol::Real) where T = pinv(A, rtol=tol) # TODO: deprecate tol in 2.0
 function pinv(x::Number)
     xi = inv(x)
     return ifelse(isfinite(xi), xi, zero(xi))
@@ -1285,7 +1285,7 @@ end
 ## Basis for null space
 
 """
-    nullspace(M, atol::Real, rtol::Real)
+    nullspace(M; atol::Real, rtol::Real)
     nullspace(M[, tol::Real]) = nullspace(M, rtol=tol)
 
 Computes a basis for the nullspace of `M` by including the singular
