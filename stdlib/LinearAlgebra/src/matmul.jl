@@ -495,7 +495,7 @@ function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::
 end
 
 function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat{T},
-                       _add = MulAddMul()) where T<:BlasFloat
+                       _add::MulAddMul = MulAddMul()) where T<:BlasFloat
     nC = checksquare(C)
     if tA == 'T'
         (nA, mA) = size(A,1), size(A,2)
@@ -524,7 +524,7 @@ function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat
 end
 
 function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA::AbstractChar, A::Union{StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}},
-                       _add = MulAddMul(),) where T<:BlasReal
+                       _add::MulAddMul = MulAddMul()) where T<:BlasReal
     nC = checksquare(C)
     if tA == 'C'
         (nA, mA) = size(A,1), size(A,2)
@@ -566,7 +566,7 @@ end
 
 function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar,
                        A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
-                       _add = MulAddMul()) where T<:BlasFloat
+                       _add::MulAddMul = MulAddMul()) where T<:BlasFloat
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
 
@@ -630,7 +630,7 @@ end
 #       strides != 1 cases
 
 function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::AbstractVector,
-                            _add = MulAddMul()) where R
+                            _add::MulAddMul = MulAddMul()) where R
     @assert !has_offset_axes(C, A, B)
     mB = length(B)
     mA, nA = lapack_size(tA, A)
@@ -706,7 +706,7 @@ const Bbuf = [Vector{UInt8}(undef, tilebufsize)]
 const Cbuf = [Vector{UInt8}(undef, tilebufsize)]
 
 function generic_matmatmul!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
-                            _add = MulAddMul())
+                            _add::MulAddMul = MulAddMul())
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     mC, nC = size(C)
@@ -720,11 +720,11 @@ function generic_matmatmul!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::Abs
     _generic_matmatmul!(C, tA, tB, A, B, _add)
 end
 
-generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::AbstractVecOrMat, _add) =
+generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::AbstractVecOrMat, _add::MulAddMul) =
     _generic_matmatmul!(C, tA, tB, A, B, _add)
 
 function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S},
-                             _add) where {T,S,R}
+                             _add::MulAddMul) where {T,S,R}
     @assert !has_offset_axes(C, A, B)
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
@@ -903,7 +903,7 @@ function matmul2x2(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,
 end
 
 function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
-                    _add = MulAddMul())
+                    _add::MulAddMul = MulAddMul())
     @assert !has_offset_axes(C, A, B)
     if !(size(A) == size(B) == size(C) == (2,2))
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
@@ -946,7 +946,7 @@ function matmul3x3(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,
 end
 
 function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
-                    _add = MulAddMul())
+                    _add::MulAddMul = MulAddMul())
     @assert !has_offset_axes(C, A, B)
     if !(size(A) == size(B) == size(C) == (3,3))
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
