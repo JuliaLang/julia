@@ -673,7 +673,7 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
         y = iterate(itr, st)
         y === nothing && break
         el, st = y
-        if el isa T
+        if el isa T || typeof(el) === T
             @inbounds dest[i] = el::T
             i += 1
         else
