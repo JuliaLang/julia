@@ -650,6 +650,8 @@ end
     if Int != Int32
         @test_throws MethodError cholesky(sparse(Int32[1,2,3,4], Int32[1,2,3,4], Float64[1,4,16,64]))
         @test_throws MethodError cholesky(sparse(Int32[1,2,3,4], Int32[1,2,3,4], Float32[1,4,16,64]))
+        @test_throws MethodError ldlt(sparse(Int32[1,2,3,4], Int32[1,2,3,4], Float64[1,4,16,64]))
+        @test_throws MethodError ldlt(sparse(Int32[1,2,3,4], Int32[1,2,3,4], Float32[1,4,16,64]))
     end
 end
 
