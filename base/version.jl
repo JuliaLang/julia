@@ -220,6 +220,7 @@ function check_new_version(existing::Vector{VersionNumber}, ver::VersionNumber)
     end
     issorted(existing) || (existing = sort(existing))
     idx = searchsortedlast(existing, ver)
+    idx > 0 || error("version $ver less than least existing version $(existing[1])")
     prv = existing[idx]
     ver == prv && error("version $ver already exists")
     nxt = thismajor(ver) != thismajor(prv) ? nextmajor(prv) :
