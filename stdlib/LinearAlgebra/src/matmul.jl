@@ -219,8 +219,8 @@ function (*)(A::AbstractMatrix, B::AbstractMatrix)
     TS = promote_op(matprod, eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A,1), size(B,2))), A, B)
 end
-addmul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
-        alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
+@inline addmul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
+                alpha::Union{T, Bool}, beta::Union{T, Bool}) where {T<:BlasFloat} =
     gemm_wrapper!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
 # Complex Matrix times real matrix: We use that it is generally faster to reinterpret the
 # first matrix as a real matrix and carry out real matrix matrix multiply
@@ -257,7 +257,7 @@ julia> Y
 For custom matrix and vector types, it is recommended to implement [`addmul!`](@ref)
 rather than implementing `mul!` directly if possible.
 """
-function mul!(C, A, B)
+@inline function mul!(C, A, B)
     return addmul!(C, A, B, true, false)
 end
 
