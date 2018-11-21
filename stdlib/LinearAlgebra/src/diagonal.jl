@@ -285,24 +285,24 @@ mul!(out::AbstractMatrix, A::Diagonal, in::StridedMatrix) = out .= A.diag .* in
 mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::StridedMatrix) = out .= adjoint.(A.parent.diag) .* in
 mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix) = out .= transpose.(A.parent.diag) .* in
 
-addmul!(out::AbstractVector, A::Diagonal, in::AbstractVector,
-        alpha::Number, beta::Number) =
+@inline addmul!(out::AbstractVector, A::Diagonal, in::AbstractVector,
+                alpha::Number, beta::Number) =
     out .= alpha .* A.diag .* in .+ beta .* out
-addmul!(out::AbstractVector, A::Adjoint{<:Any,<:Diagonal}, in::AbstractVector,
-        alpha::Number, beta::Number) =
+@inline addmul!(out::AbstractVector, A::Adjoint{<:Any,<:Diagonal}, in::AbstractVector,
+                alpha::Number, beta::Number) =
     out .= alpha .* adjoint.(A.parent.diag) .* in .+ beta .* out
-addmul!(out::AbstractVector, A::Transpose{<:Any,<:Diagonal}, in::AbstractVector,
-        alpha::Number, beta::Number) =
+@inline addmul!(out::AbstractVector, A::Transpose{<:Any,<:Diagonal}, in::AbstractVector,
+                alpha::Number, beta::Number) =
     out .= alpha .* transpose.(A.parent.diag) .* in .+ beta .* out
 
-addmul!(out::AbstractMatrix, A::Diagonal, in::StridedMatrix,
-        alpha::Number, beta::Number) =
+@inline addmul!(out::AbstractMatrix, A::Diagonal, in::StridedMatrix,
+                alpha::Number, beta::Number) =
     out .= alpha .* A.diag .* in .+ beta .* out
-addmul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::StridedMatrix,
-        alpha::Number, beta::Number) =
+@inline addmul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::StridedMatrix,
+                alpha::Number, beta::Number) =
     out .= alpha .* adjoint.(A.parent.diag) .* in .+ beta .* out
-addmul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix,
-        alpha::Number, beta::Number) =
+@inline addmul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix,
+                alpha::Number, beta::Number) =
     out .= alpha .* transpose.(A.parent.diag) .* in .+ beta .* out
 
 # ambiguities with Symmetric/Hermitian
@@ -318,19 +318,19 @@ addmul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix,
 mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexSym}) = C .= adjoint.(A.parent.diag) .* B
 mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexHerm}) = C .= transpose.(A.parent.diag) .* B
 
-addmul!(C::AbstractMatrix,
-        A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexHerm},
+@inline addmul!(C::AbstractMatrix,
+                A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexHerm},
         alpha::Number, beta::Number) = addmul!(C, A, B.parent, alpha, beta)
-addmul!(C::AbstractMatrix,
-        A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexSym},
+@inline addmul!(C::AbstractMatrix,
+                A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexSym},
         alpha::Number, beta::Number) = addmul!(C, A, B.parent, alpha, beta)
 
-addmul!(C::AbstractMatrix,
-        A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexSym},
+@inline addmul!(C::AbstractMatrix,
+                A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexSym},
         alpha::Number, beta::Number) =
     C .= alpha .* adjoint.(A.parent.diag) .* B .+ beta .* C
-addmul!(C::AbstractMatrix,
-        A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexHerm},
+@inline addmul!(C::AbstractMatrix,
+                A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexHerm},
         alpha::Number, beta::Number) =
     C .= alpha .* transpose.(A.parent.diag) .* B .+ beta .* C
 
