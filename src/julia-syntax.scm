@@ -3922,7 +3922,7 @@ f(x) = yt(x)
                            (set-car! (cdr point) `(leave ,(- hl target-level))))))))
               handler-goto-fixups)
     (if global-const-error
-        (error (string "`global const` delcaration not allowed inside function" (format-loc global-const-error))))
+        (error (string "`global const` declaration not allowed inside function" (format-loc global-const-error))))
     (let* ((stmts (reverse! code))
            (di    (definitely-initialized-vars stmts vi))
            (body  (cons 'block (filter (lambda (e)
