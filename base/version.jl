@@ -213,10 +213,10 @@ nextmajor(v::VersionNumber) = v < thismajor(v) ? thismajor(v) : VersionNumber(v.
 
 function check_new_version(existing::Vector{VersionNumber}, ver::VersionNumber)
     if isempty(existing)
-        for v in [v"0", v"0.0.1", v"0.1", v"1"]
+        for v in [v"0.0.1", v"0.1", v"1"]
             lowerbound(v) <= ver <= v && return
         end
-        error("$ver is not a valid initial version (try 0.0.0, 0.0.1, 0.1 or 1.0)")
+        error("$ver is not a valid initial version (try 0.0.1, 0.1 or 1.0)")
     end
     issorted(existing) || (existing = sort(existing))
     idx = searchsortedlast(existing, ver)
