@@ -973,7 +973,7 @@ function _copy(f, args...)
     parevalf, passedargstup = capturescalars(f, args)
     return _copy(parevalf, passedargstup...)
 end
-_copy(f) = throw(MethodError(_copy, (f)))  # avoid method ambiguity
+_copy(f) = throw(MethodError(_copy, (f,)))  # avoid method ambiguity
 
 function _shapecheckbc(f, args...)
     _aresameshape(args...) ? _noshapecheck_map(f, args...) : _diffshape_broadcast(f, args...)

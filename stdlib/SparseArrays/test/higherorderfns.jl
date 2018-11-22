@@ -639,4 +639,21 @@ end
     @test_broken ((_, _, _, _, x) -> x).(Int, Int, Int, Int, spzeros(3)) == spzeros(3)
 end
 
+using SparseArrays.HigherOrderFns: SparseVecStyle
+
+@testset "Issue #30120: method ambiguity" begin
+    # HigherOrderFns._copy(f) was ambiguous.  It may be impossible to
+    # invoke this from dot notation and it is an error anyway.  But
+    # when someone invokes it by accident, we want it to produce a
+    # meaningful error.
+    err = try
+        copy(Broadcast.Broadcasted{SparseVecStyle}(rand, ()))
+    catch err
+        err
+    end
+    @test err isa MethodError
+    @test !occursin("is ambiguous", sprint(showerror, err))
+    @test occursin("no method matching _copy(::typeof(rand))", sprint(showerror, err))
+end
+
 end # module
