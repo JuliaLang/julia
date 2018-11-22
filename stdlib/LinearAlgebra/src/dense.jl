@@ -1337,9 +1337,9 @@ function nullspace(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A
 end
 nullspace(A::AbstractMatrix, tol::Real) = nullspace(A, rtol=tol) # TODO: deprecate tol in 2.0
 
-nullspace(A::AbstractVector; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol)) = nullspace(reshape(a, length(a), 1), rtol= rtol, atol= atol)
+nullspace(A::AbstractVector; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol)) = nullspace(reshape(A, length(A), 1), rtol= rtol, atol= atol)
 
-nullspace(A::AbstractVector, tol::Real) = nullspace(reshape(a, length(a), 1), rtol= tol) # TODO: deprecate tol in 2.0
+nullspace(A::AbstractVector, tol::Real) = nullspace(reshape(A, length(A), 1), rtol= tol) # TODO: deprecate tol in 2.0
 
 """
     cond(M, p::Real=2)
