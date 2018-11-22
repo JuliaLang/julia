@@ -345,9 +345,14 @@ end
 @testset "degree-based trig functions" begin
     @testset "$T" for T = (Float32,Float64,Rational{Int})
         fT = typeof(float(one(T)))
+        fTsc = typeof( (float(one(T)), float(one(T))) )
         for x = -400:40:400
             @test sind(convert(T,x))::fT ≈ convert(fT,sin(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
             @test cosd(convert(T,x))::fT ≈ convert(fT,cos(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
+
+            s,c = sincosd(convert(T,x))
+            @test s::fT ≈ convert(fT,sin(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
+            @test c::fT ≈ convert(fT,cos(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
         end
         @testset "sind" begin
             @test sind(convert(T,0.0))::fT === zero(fT)
@@ -362,6 +367,12 @@ end
             @test cosd(convert(T,270))::fT === zero(fT)
             @test cosd(convert(T,-90))::fT === zero(fT)
             @test cosd(convert(T,-270))::fT === zero(fT)
+        end
+        @testset "sincosd" begin
+            @test sincosd(convert(T,  0))::fTsc === ( sin( convert(fT, 0)),     cos( convert(fT, 0))     )
+            @test sincosd(convert(T, 90))::fTsc === ( sin( convert(fT, pi/2)),  cos( convert(fT, pi/2))  )
+            @test sincosd(convert(T,180))::fTsc === ( sin( convert(fT, pi)),    cos( convert(fT, pi))    )
+            @test sincosd(convert(T,270))::fTsc === ( sin( convert(fT, 3pi/2)), cos( convert(fT, 3pi/2)) )
         end
 
         @testset "sinpi and cospi" begin

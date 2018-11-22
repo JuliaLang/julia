@@ -1073,6 +1073,26 @@ end
 
 tand(x::Real) = sind(x) / cosd(x)
 
+"""
+    sincosd(x)
+
+Simultaneously compute the sine and cosine of `x`, where `x` is in degrees.
+
+"""
+function sincosd(x::Real)
+    if isinf(x)
+        return throw(DomainError(x, "sincosd(x) is only defined for finite `x`."))
+    elseif isnan(x)
+        return ( oftype(x,NaN), oftype(x,NaN) )
+    end
+
+    rx = float(rem(x,360))
+
+    return sincos(deg2rad(rx))
+end
+
+sincosd(::Missing) = (missing, missing)
+
 for (fd, f, fn) in ((:sind, :sin, "sine"), (:cosd, :cos, "cosine"), (:tand, :tan, "tangent"))
     name = string(fd)
     @eval begin
