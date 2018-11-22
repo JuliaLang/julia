@@ -632,4 +632,11 @@ end
     @test minimum(sparse([1, 2], [1, 2], ones(Int32, 2)), dims = 1) isa Matrix
 end
 
+@testset "Issue #30118" begin
+    @test ((_, x) -> x).(Int, spzeros(3)) == spzeros(3)
+    @test ((_, _, x) -> x).(Int, Int, spzeros(3)) == spzeros(3)
+    @test ((_, _, _, x) -> x).(Int, Int, Int, spzeros(3)) == spzeros(3)
+    @test_broken ((_, _, _, _, x) -> x).(Int, Int, Int, Int, spzeros(3)) == spzeros(3)
+end
+
 end # module
