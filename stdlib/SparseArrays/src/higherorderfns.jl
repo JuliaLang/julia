@@ -1006,10 +1006,6 @@ end
     _copyto!(parevalf, dest, passedsrcargstup...)
 end
 
-struct CapturedScalars{F, Args, Order}
-    args::Args
-end
-
 # capturescalars takes a function (f) and a tuple of mixed sparse vectors/matrices and
 # broadcast scalar arguments (mixedargs), and returns a function (parevalf, i.e. partially
 # evaluated f) and a reduced argument tuple (passedargstup) containing only the sparse
