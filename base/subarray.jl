@@ -92,6 +92,8 @@ julia> parentindices(V)
 parentindices(a::AbstractArray) = map(OneTo, size(a))
 
 ## Aliasing detection
+# Note: Not defining `aliasingroots(::SubArray)` since `SubArray` needs to act
+# as a root for the custom `mightalias` check to work.
 dataids(A::SubArray) = (dataids(A.parent)..., _splatmap(dataids, A.indices)...)
 _splatmap(f, ::Tuple{}) = ()
 _splatmap(f, t::Tuple) = (f(t[1])..., _splatmap(f, tail(t))...)

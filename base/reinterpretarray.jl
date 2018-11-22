@@ -68,7 +68,7 @@ IndexStyle(a::ReinterpretArray) = IndexStyle(a.parent)
 
 parent(a::ReinterpretArray) = a.parent
 dataids(a::ReinterpretArray) = dataids(a.parent)
-aliasingroots(a::ReinterpretArray) = (a.parent,)
+aliasingroots(a::ReinterpretArray) = aliasingroots(a.parent)
 
 function size(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)

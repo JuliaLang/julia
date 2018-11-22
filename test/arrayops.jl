@@ -1150,6 +1150,7 @@ end
     @test @views mightalias(A[:], A[3,1:1])
     @test @views mightalias(A[:,:], A[3,1:1])
 
+    # view of reshape
     B = reshape(A,10,2)
     @test mightalias(A, A)
     @test mightalias(A, B)
@@ -1157,6 +1158,25 @@ end
     @test @views mightalias(B[:], A[:])
     @test @views mightalias(B[1:2], A[1:2])
     @test @views !mightalias(B[1:end÷2], A[end÷2+1:end])
+
+    # reshape of view
+    A1 = @view A[:, 1]
+    A2 = @view A[:, 2]
+    @test !mightalias(reshape(A1, (:, 1)), A2)
+    @test mightalias(reshape(A1, (:, 1)), A1)
+    @test !mightalias(reshape(A1, (:, 1)), reshape(A2, (1, :)))
+    @test mightalias(reshape(A1, (:, 1)), reshape(A1, (1, :)))
+
+    # reinterpret of view
+    buffer = zeros(UInt8, 4 * sizeof(Int))
+    x1 = reinterpret(Int, @view buffer[1:end÷2])
+    x2 = reinterpret(Int, @view buffer[end÷2+1:end])
+    @test Base.mightalias(x1, x1)
+    @test !Base.mightalias(x1, x2)
+    @test @views Base.mightalias(x1[1:1], x1[1:end])
+    @test @views !Base.mightalias(x1[1:1], x1[2:end])
+    @test Base.mightalias(reshape(x1, (1, :)), reshape(x1, (:, 1)))
+    @test !Base.mightalias(reshape(x1, (1, :)), reshape(x2, (:, 1)))
 
     AA = [[1],[2]]
     @test @views mightalias(AA, AA[:])
