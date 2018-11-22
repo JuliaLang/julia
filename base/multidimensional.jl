@@ -707,7 +707,7 @@ end
 
 # In the common case where we have two views into the same parent, aliasing checks
 # are _much_ easier and more important to get right
-function mightalias(A::SubArray{T,<:Any,P}, B::SubArray{T,<:Any,P}) where {T,P}
+function _mightalias(A::SubArray{T,<:Any,P}, B::SubArray{T,<:Any,P}) where {T,P}
     if !_parentsmatch(A.parent, B.parent)
         # We cannot do any better than the usual dataids check
         return !_isdisjoint(dataids(A), dataids(B))

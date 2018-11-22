@@ -1128,8 +1128,33 @@ Perform a conservative test to check if arrays `A` and `B` might share the same 
 By default, this simply checks if either of the arrays reference the same memory
 regions, as identified by their [`Base.dataids`](@ref).
 """
-mightalias(A::AbstractArray, B::AbstractArray) = !isbits(A) && !isbits(B) && !_isdisjoint(dataids(A), dataids(B))
-mightalias(x, y) = false
+mightalias(A, B) = _anymightalias(aliasingroots(A), aliasingroots(B))
+
+_anymightalias(::Tuple{}, ::Tuple) = false
+_anymightalias(as::Tuple, bs::Tuple) =
+    any(b -> _mightalias(as[1], b), bs) || _anymightalias(tail(as), bs)
+
+_mightalias(A::AbstractArray, B::AbstractArray) =
+     !isbits(A) && !isbits(B) && !_isdisjoint(dataids(A), dataids(B))
+
+"""
+    Base.aliasingroots(A) -> Tuple
+
+Return a tuple of "parent" arrays in which the mutable data for `A` is stored.
+
+Custom arrays that would like to opt-in to aliasing detection of their component
+parts can specialize this method to return the concatenation of the
+`aliasingroots` of their component parts.  A typical definition for an array
+that wraps a parent is
+`Base.aliasingroots(C::CustomArray) = Base.aliasingroots(C.parent)`.
+
+See also [`Base.dataids`](@ref).
+"""
+aliasingroots(A::AbstractArray) = (A,)
+
+# For non-array object, we suppose that it has no mutable data.  It then ensures
+# that `mightalias` returns `false` if one of its argument is not an array.
+aliasingroots(::Any) = ()
 
 _isdisjoint(as::Tuple{}, bs::Tuple{}) = true
 _isdisjoint(as::Tuple{}, bs::Tuple{Any}) = true
@@ -1146,10 +1171,8 @@ _isdisjoint(as::Tuple, bs::Tuple) = !(as[1] in bs) && _isdisjoint(tail(as), bs)
 
 Return a tuple of `UInt`s that represent the mutable data segments of an array.
 
-Custom arrays that would like to opt-in to aliasing detection of their component
-parts can specialize this method to return the concatenation of the `dataids` of
-their component parts.  A typical definition for an array that wraps a parent is
-`Base.dataids(C::CustomArray) = dataids(C.parent)`.
+For custom array types wrapping other array types (e.g., `ReshapedArray`), it is
+recommended to define [`Base.aliasingroots`](@ref) instead of `Base.dataids`.
 """
 dataids(A::AbstractArray) = (UInt(objectid(A)),)
 dataids(A::Array) = (UInt(pointer(A)),)
