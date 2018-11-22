@@ -955,12 +955,6 @@ end
             end
         end
     end
-
-    was_defined = isdefined(Base, :active_repl)
-    if was_defined
-        repl = Base.active_repl
-    end
-
 end
 
 let ends_with_semicolon = REPL.ends_with_semicolon
