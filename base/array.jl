@@ -656,11 +656,11 @@ function collect_to_with_first!(dest, v1, itr, st)
     return grow_to!(dest, itr, st)
 end
 
-function setindex_widen!(dest::Array{T}, el, i) where T
+function setindex_widen_up_to(dest::AbstractArray{T}, el, i) where T
     @_inline_meta
     R = promote_typejoin(T, typeof(el))
     new = similar(dest, R)
-    copyto!(new,1, dest,1, i-1)
+    copyto!(new, firstindex(new), dest, firstindex(dest), i-1)
     @inbounds new[i] = el
     return new
 end
@@ -677,7 +677,7 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
             @inbounds dest[i] = el::T
             i += 1
         else
-            new = setindex_widen!(dest, el, i)
+            new = setindex_widen_up_to(dest, el, i)
             return collect_to!(new, itr, i+1, st)
         end
     end
@@ -692,7 +692,7 @@ function grow_to!(dest, itr)
     grow_to!(dest2, itr, y[2])
 end
 
-function push_widen!(dest, el)
+function push_widen(dest, el)
     @_inline_meta
     T = eltype(dest)
     S = typeof(el)
@@ -716,7 +716,7 @@ function grow_to!(dest, itr, st)
         if S === T || S <: T
             push!(dest, el::T)
         else
-            new = push_widen!(dest, el)
+            new = push_widen(dest, el)
             return grow_to!(new, itr, st)
         end
         y = iterate(itr, st)
