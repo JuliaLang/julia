@@ -934,9 +934,9 @@ end
             try
                 empty!(Base._afterreplinit_hooks)
                 called = Ref(false)
-                Base.afterreplinit((_) -> (called[] = true))
+                Base.afterreplinit((_, _) -> (called[] = true))
                 if !(repl_was_defined && backend_was_defined)
-                    Base._afterreplinit(nothing)
+                    Base._afterreplinit(nothing, nothing)
                 end
                 @test called[]
 
@@ -944,8 +944,9 @@ end
                 Base.eval(Base, :(active_repl_backend = :DUMMY_BACKEND))
                 called = Ref(false)
                 n = length(Base._afterreplinit_hooks)
-                Base.afterreplinit() do repl
+                Base.afterreplinit() do repl, backend
                     @test repl == :DUMMY_REPL
+                    @test backend == :DUMMY_BACKEND
                     called[] = true
                 end
                 @test called[]

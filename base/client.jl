@@ -368,33 +368,37 @@ to call `f` even when REPL is already initialized.
 """
 atreplinit(f::Function) = (pushfirst!(repl_hooks, f); nothing)
 
-function _run_repl_hooks(repl, repl_hooks)
+function _run_repl_hooks(repl_hooks, args...)
     for f in repl_hooks
         try
-            f(repl)
+            f(args...)
         catch err
             showerror(stderr, err)
             println(stderr)
         end
     end
 end
-_atreplinit(repl) = invokelatest(_run_repl_hooks, repl, repl_hooks)
+_atreplinit(repl) = invokelatest(_run_repl_hooks, repl_hooks, repl)
 
 const _afterreplinit_hooks = []
 
-_afterreplinit(repl) = invokelatest(_run_repl_hooks, repl, _afterreplinit_hooks)
+_afterreplinit(repl, backend) =
+    invokelatest(_run_repl_hooks, _afterreplinit_hooks, repl, backend)
 
 """
     afterreplinit(f)
 
-Like [`atreplinit`](@ref) but calls `f` _after_ `Base.active_repl` is initialized.
-In case of `LineEditREPL`, it means that its interface and channels are ready.
-Unlike `atreplinit`, `f` is called even when `afterreplinit(f)` is invoked after the REPL
+Register a two-argument function to be called after the REPL interface and its backend are
+initialized in interactive sessions.  This is useful to customize the interface like
+registering a new keybind.  The function `f` has to accept two arguments: the REPL object
+(e.g., `REPL.LineEditREPL`) and its backend (e.g., `REPL.REPLBackend`).  `afterreplinit`
+may be called from `.julia/config/startup.jl` and `__init__` of a module.  Unlike
+[`atreplinit`](@ref), `f` is called even when `afterreplinit(f)` is invoked after the REPL
 is initialized.
 """
 function afterreplinit(f)
     if isdefined(Base, :active_repl) && isdefined(Base, :active_repl_backend)
-        f(active_repl)
+        f(active_repl, active_repl_backend)
     else
         pushfirst!(_afterreplinit_hooks, f)
     end
@@ -442,8 +446,8 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
             pushdisplay(REPL.REPLDisplay(repl))
             _atreplinit(repl)
             REPL.run_repl(repl, function(backend)
-                global repl_backend = backend
-                _afterreplinit(repl)
+                global active_repl_backend = backend
+                _afterreplinit(repl, backend)
             end)
         end
     else
