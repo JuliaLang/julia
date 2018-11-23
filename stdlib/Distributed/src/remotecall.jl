@@ -480,10 +480,10 @@ function call_on_owner(f, rr::AbstractRemoteRef, args...)
     end
 end
 
-function wait_ref(rid, callee, args...)
+function wait_ref(rid, caller, args...)
     v = fetch_ref(rid, args...)
     if isa(v, RemoteException)
-        if myid() == callee
+        if myid() == caller
             throw(v)
         else
             return v
@@ -549,12 +549,12 @@ function put!(rr::Future, v)
     rr.v = Some(v)
     rr
 end
-function put_future(rid, v, callee)
+function put_future(rid, v, caller)
     rv = lookup_ref(rid)
     isready(rv) && error("Future can be set only once")
     put!(rv, v)
-    # The callee has the value and hence can be removed from the remote store.
-    del_client(rid, callee)
+    # The caller has the value and hence can be removed from the remote store.
+    del_client(rid, caller)
     nothing
 end
 
@@ -574,9 +574,9 @@ put!(rr::RemoteChannel, args...) = (call_on_owner(put_ref, rr, args...); rr)
 # take! is not supported on Future
 
 take!(rv::RemoteValue, args...) = take!(rv.c, args...)
-function take_ref(rid, callee, args...)
+function take_ref(rid, caller, args...)
     v=take!(lookup_ref(rid), args...)
-    isa(v, RemoteException) && (myid() == callee) && throw(v)
+    isa(v, RemoteException) && (myid() == caller) && throw(v)
     v
 end
 
