@@ -869,7 +869,7 @@ julia> let B = B
            remotecall_fetch(()->B, 2)
        end;
 
-julia> @fetchfrom 2 varinfo()
+julia> @fetchfrom 2 InteractiveUtils.varinfo()
 name           size summary
 ––––––––– ––––––––– ––––––––––––––––––––––
 A         800 bytes 10×10 Array{Float64,2}
