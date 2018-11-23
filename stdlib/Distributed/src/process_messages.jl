@@ -10,10 +10,33 @@ mutable struct RemoteValue
 
     waitingfor::Int   # processor we need to hear from to fill this, or 0
 
-    RemoteValue(c) = new(c, BitSet(), 0)
+    synctake::Union{ReentrantLock, Nothing}  # A lock used to synchronize the
+                      # specific case of a local put! / remote take! on an
+                      # unbuffered store. github issue #29932
+
+    function RemoteValue(c)
+        c_is_buffered = false
+        try
+            c_is_buffered = isbuffered(c)
+        catch
+        end
+
+        if c_is_buffered
+            return new(c, BitSet(), 0, nothing)
+        else
+            return new(c, BitSet(), 0, ReentrantLock())
+        end
+    end
 end
 
 wait(rv::RemoteValue) = wait(rv.c)
+
+# A wrapper type to handle issue #29932 which requires locking / unlocking of
+# RemoteValue.synctake outside of lexical scope.
+struct SyncTake
+    v::Any
+    rv::RemoteValue
+end
 
 ## core messages: do, call, fetch, wait, ref, put! ##
 struct RemoteException <: Exception
@@ -267,7 +290,15 @@ end
 function handle_msg(msg::CallMsg{:call_fetch}, header, r_stream, w_stream, version)
     @async begin
         v = run_work_thunk(()->msg.f(msg.args...; msg.kwargs...), false)
-        deliver_result(w_stream, :call_fetch, header.notify_oid, v)
+        if isa(v, SyncTake)
+            try
+                deliver_result(w_stream, :call_fetch, header.notify_oid, v.v)
+            finally
+                unlock(v.rv.synctake)
+            end
+        else
+            deliver_result(w_stream, :call_fetch, header.notify_oid, v)
+        end
     end
 end
 
