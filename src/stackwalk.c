@@ -79,12 +79,10 @@ size_t jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, size_t ma
 size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize,
                          bt_context_t *context)
 {
-    size_t n = 0;
     bt_cursor_t cursor;
     if (!jl_unw_init(&cursor, context))
         return 0;
-    n = jl_unw_stepn(&cursor, data, NULL, maxsize, 1);
-    return n > maxsize ? maxsize : n;
+    return jl_unw_stepn(&cursor, data, NULL, maxsize, 1);
 }
 
 size_t rec_backtrace(uintptr_t *data, size_t maxsize)
@@ -429,12 +427,10 @@ int jl_unw_init_dwarf(bt_cursor_t *cursor, bt_context_t *uc)
 size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize,
                                bt_context_t *context)
 {
-    size_t n;
     bt_cursor_t cursor;
     if (!jl_unw_init_dwarf(&cursor, context))
         return 0;
-    n = jl_unw_stepn(&cursor, data, NULL, maxsize, 1);
-    return n > maxsize ? maxsize : n;
+    return jl_unw_stepn(&cursor, data, NULL, maxsize, 1);
 }
 #endif
 

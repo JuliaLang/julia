@@ -667,9 +667,15 @@ static void *signal_listener(void *arg)
             // do backtrace on thread contexts for critical signals
             // this part must be signal-handler safe
             if (critical) {
-                bt_size += rec_backtrace_ctx(bt_data + bt_size,
-                        JL_MAX_BT_SIZE / jl_n_threads - 1,
-                        signal_context);
+                size_t n = rec_backtrace_ctx(bt_data + bt_size,
+                                             JL_MAX_BT_SIZE / jl_n_threads - 1,
+                                             signal_context);
+                // If we have overrun our backtrace buffer, warn the user that this
+                // backtrace might be inaccurate
+                if (n == JL_MAX_BT_SIZE / jl_n_threads) {
+                    jl_safe_printf("WARNING: Backtrace buffer overrun, backtrace may be unreliable.\n");
+                }
+                bt_size += n;
                 bt_data[bt_size++] = 0;
             }
 
@@ -687,16 +693,27 @@ static void *signal_listener(void *arg)
                         jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
                     } else {
                         // Get backtrace data
-                        bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
-                                bt_size_max - bt_size_cur - 1, signal_context);
+                        size_t n = rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
+                                                     bt_size_max - bt_size_cur - 1,
+                                                     signal_context);
+
+                        // Check to see if we have overrun our backtrace buffer, and if we have, do not record
+                        // that backtrace.  We take this as a sign that we should quit profiling early.
+                        if (n == bt_size_max - bt_size_cur) {
+                            bt_overflow = 1;
+                            jl_profile_stop_timer();
+                        } else {
+                            // If we didn't overrun, then include this block by moving up the current index
+                            bt_size_cur += n;
+                        }
                     }
                     ptls->safe_restore = old_buf;
 
-                    // Mark the end of this block with 0
+                    // Mark the end of every block (even bad ones) with 0
                     bt_data_prof[bt_size_cur++] = 0;
                 }
                 if (bt_size_cur >= bt_size_max - 1) {
-                    // Buffer full: Delete the timer
+                    // Buffer perfectly full: delete the timer
                     jl_profile_stop_timer();
                 }
             }

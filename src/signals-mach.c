@@ -438,6 +438,7 @@ void *mach_profile_listener(void *arg)
 
             unw_context_t *uc;
             jl_thread_suspend_and_get_state(i, &uc);
+            size_t bt_size_step = 0;
 
 #ifdef LIBOSXUNWIND
             /*
@@ -459,10 +460,10 @@ void *mach_profile_listener(void *arg)
 
             if (forceDwarf == 0) {
                 // Save the backtrace
-                bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+                bt_size_step = rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
             }
             else if (forceDwarf == 1) {
-                bt_size_cur += rec_backtrace_ctx_dwarf((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+                bt_size_step = rec_backtrace_ctx_dwarf((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
             }
             else if (forceDwarf == -1) {
                 jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
@@ -470,14 +471,23 @@ void *mach_profile_listener(void *arg)
 
             forceDwarf = -2;
 #else
-            bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+            bt_size_step = rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
 #endif
-
-            // Mark the end of this block with 0
-            bt_data_prof[bt_size_cur++] = 0;
-
             // We're done! Resume the thread.
             jl_thread_resume(i, 0);
+
+            // Check to see if we have overrun our backtrace buffer, and if we have, do not record
+            // that backtrace.  We take this as a sign that we should quit profiling early.
+            if (bt_size_step == bt_size_max - bt_size_cur) {
+                bt_overflow = 1;
+                jl_profile_stop_timer();
+            } else {
+                // If we didn't overrun, then include this block by moving up the current index
+                bt_size_cur += bt_size_step;
+            }
+
+            // Mark the end of every block (even bad ones) with 0
+            bt_data_prof[bt_size_cur++] = 0;
 
             if (running) {
                 // Reset the alarm

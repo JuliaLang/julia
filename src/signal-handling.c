@@ -21,6 +21,7 @@ extern "C" {
 static volatile intptr_t *bt_data_prof = NULL;
 static volatile size_t bt_size_max = 0;
 static volatile size_t bt_size_cur = 0;
+static volatile uint8_t bt_overflow = 0;
 static volatile uint64_t nsecprof = 0;
 static volatile int running = 0;
 static const    uint64_t GIGA = 1000000000ULL;
@@ -241,6 +242,13 @@ void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_
 ///////////////////////
 // Utility functions //
 ///////////////////////
+
+JL_DLLEXPORT void jl_profile_clear_data(void)
+{
+    bt_size_cur = 0;
+    bt_overflow = 0;
+}
+
 JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
 {
     bt_size_max = maxsize;
@@ -250,7 +258,8 @@ JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
     bt_data_prof = (intptr_t*) calloc(maxsize, sizeof(intptr_t));
     if (bt_data_prof == NULL && maxsize > 0)
         return -1;
-    bt_size_cur = 0;
+
+    jl_profile_clear_data();
     return 0;
 }
 
@@ -274,14 +283,14 @@ JL_DLLEXPORT uint64_t jl_profile_delay_nsec(void)
     return nsecprof;
 }
 
-JL_DLLEXPORT void jl_profile_clear_data(void)
-{
-    bt_size_cur = 0;
-}
-
 JL_DLLEXPORT int jl_profile_is_running(void)
 {
     return running;
+}
+
+JL_DLLEXPORT int jl_profile_overflow(void)
+{
+    return bt_overflow;
 }
 
 #ifdef __cplusplus
