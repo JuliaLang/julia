@@ -323,8 +323,8 @@ endef
 # don't inadvertently link to /lib/libgcc_s.so.1, which is incompatible with
 # libgfortran, and on Windows we copy them in earlier as well.
 ifeq (,$(findstring $(OS),FreeBSD WINNT))
-julia-base: $(build_libdir)/libgfortran.$(SHLIB_EXT)
-$(build_libdir)/libgfortran.$(SHLIB_EXT): | $(build_libdir)
+julia-base: $(build_libdir)/libgfortran*.$(SHLIB_EXT)*
+$(build_libdir)/libgfortran*.$(SHLIB_EXT)*: | $(build_libdir) julia-deps
 	-$(CUSTOM_LD_LIBRARY_PATH) PATH=$(PATH):$(build_depsbindir) $(JULIAHOME)/contrib/fixup-libgfortran.sh --verbose $(build_libdir)
 JL_PRIVATE_LIBS-0 += libgfortran libgcc_s libquadmath
 endif
