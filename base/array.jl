@@ -658,8 +658,7 @@ end
 
 function setindex_widen_up_to(dest::AbstractArray{T}, el, i) where T
     @_inline_meta
-    R = promote_typejoin(T, typeof(el))
-    new = similar(dest, R)
+    new = similar(dest, promote_typejoin(T, typeof(el)))
     copyto!(new, firstindex(new), dest, firstindex(dest), i-1)
     @inbounds new[i] = el
     return new
@@ -694,9 +693,7 @@ end
 
 function push_widen(dest, el)
     @_inline_meta
-    T = eltype(dest)
-    S = typeof(el)
-    new = sizehint!(empty(dest, promote_typejoin(T, S)), length(dest))
+    new = sizehint!(empty(dest, promote_typejoin(eltype(dest), typeof(el))), length(dest))
     if new isa AbstractSet
         # TODO: merge back these two branches when copy! is re-enabled for sets/vectors
         union!(new, dest)
