@@ -570,6 +570,11 @@ Compute the hypotenuse ``\\sqrt{\\sum x_i^2}`` avoiding overflow and underflow.
 hypot(x::Number...) = sqrt(sum(abs2(y) for y in x))
 
 atan(y::Real, x::Real) = atan(promote(float(y),float(x))...)
+
+atan(::Missing, ::Real)    = missing
+atan(::Real, ::Missing)    = missing
+atan(::Missing, ::Missing) = missing
+
 atan(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan", T)
 
 max(x::T, y::T) where {T<:AbstractFloat} = ifelse((y > x) | (signbit(y) < signbit(x)),
