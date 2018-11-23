@@ -329,7 +329,7 @@ private:
     CheckInst::Stack check_stack;
     Lifetime::Stack lifetime_stack;
     ReplaceUses::Stack replace_stack;
-    std::map<BasicBlock*,Instruction*> first_safepoint;
+    std::map<BasicBlock*, llvm::WeakVH> first_safepoint;
 };
 
 void Optimizer::pushInstruction(Instruction *I)
@@ -423,8 +423,11 @@ bool Optimizer::isSafepoint(Instruction *inst)
 Instruction *Optimizer::getFirstSafepoint(BasicBlock *bb)
 {
     auto it = first_safepoint.find(bb);
-    if (it != first_safepoint.end())
-        return it->second;
+    if (it != first_safepoint.end()) {
+        Value *Val = it->second;
+        if (Val)
+            return cast<Instruction>(Val);
+    }
     Instruction *first = nullptr;
     for (auto &I: *bb) {
         if (isSafepoint(&I)) {
