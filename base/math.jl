@@ -1066,7 +1066,7 @@ include("special/log.jl")
 for f in (:(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
           :(sin), :(sinh), :(cos), :(cosh), :(tan), :(tanh),
           :(exp), :(exp2), :(expm1), :(log), :(log10), :(log1p),
-          :(log2), :(exponent), :(sqrt))
+          :(log2), :(exponent), :(sqrt), :(deg2rad), :(rad2deg))
     @eval $(f)(::Missing) = missing
 end
 

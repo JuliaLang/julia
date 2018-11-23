@@ -340,6 +340,8 @@ end
     end
     @test deg2rad(180 + 60im) ≈ pi + (pi/3)*im
     @test rad2deg(pi + (pi/3)*im) ≈ 180 + 60im
+    @test ismissing(deg2rad(missing)) == true
+    @test ismissing(rad2deg(missing)) == true
 end
 
 @testset "degree-based trig functions" begin

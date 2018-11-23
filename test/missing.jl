@@ -156,7 +156,8 @@ Base.one(::Type{Unit}) = 1
                             identity, zero, one, oneunit,
                             iseven, isodd, ispow2,
                             isfinite, isinf, isnan, iszero,
-                            isinteger, isreal, transpose, adjoint, float]
+                            isinteger, isreal, transpose, adjoint, float,
+                            deg2rad, rad2deg]
 
     # All elementary functions return missing when evaluating missing
     for f in elementary_functions
