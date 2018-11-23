@@ -199,9 +199,8 @@ function sincos(x::T) where T<:Union{Float32, Float64}
 end
 
 _sincos(x::AbstractFloat) = sincos(x)
-_sincos(x) = (sin(x), cos(x))
-
-sincos(x) = _sincos(float(x))
+_sincos(x::Real) = (sin(x), cos(x))
+sincos(x::Real) = _sincos(float(x))
 
 
 
