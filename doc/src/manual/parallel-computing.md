@@ -1142,6 +1142,96 @@ sent to the remote node to go ahead and remove its reference to the value.
 
 Once finalized, a reference becomes invalid and cannot be used in any further calls.
 
+
+## Local invocations(@id man-distributed-local-invocations)
+
+Data is necessarily copied over to the remote node for execution. This is the case for both
+remotecalls and when data is stored to a[`RemoteChannel`](@ref) / [`Future`](@ref) on
+a different node. As expected, this results in a copy of the serialized objects
+on the remote node. However, when the destination node is the local node, i.e.
+the calling process id is the same as the remote node id, it is executed
+as a local call. It is usually(not always) executed in a different task - but there is no
+serialization/deserialization of data. Consequently, the call refers to the same object instances
+as passed - no copies are created. This behavior is highlighted below:
+
+```julia-repl
+julia> using Distributed;
+
+julia> rc = RemoteChannel(()->Channel(3));   # RemoteChannel created on local node
+
+julia> v = [0];
+
+julia> for i in 1:3
+           v[1] = i                          # Reusing `v`
+           put!(rc, v)
+       end;
+
+julia> result = [take!(rc) for _ in 1:3];
+
+julia> println(result);
+Array{Int64,1}[[3], [3], [3]]
+
+julia> println("Num Unique objects : ", length(unique(map(objectid, result))));
+Num Unique objects : 1
+
+julia> addprocs(1);
+
+julia> rc = RemoteChannel(()->Channel(3), workers()[1]);   # RemoteChannel created on remote node
+
+julia> v = [0];
+
+julia> for i in 1:3
+           v[1] = i
+           put!(rc, v)
+       end;
+
+julia> result = [take!(rc) for _ in 1:3];
+
+julia> println(result);
+Array{Int64,1}[[1], [2], [3]]
+
+julia> println("Num Unique objects : ", length(unique(map(objectid, result))));
+Num Unique objects : 3
+```
+
+As can be seen, [`put!`](@ref) on a locally owned [`RemoteChannel`](@ref) with the same
+object `v` modifed between calls results in the same single object instance stored. As
+opposed to copies of `v` being created when the node owning `rc` is a different node.
+
+It is to be noted that this is generally not an issue. It is something to be factored in only
+if the object is both being stored locally and modifed post the call. In such cases it may be
+appropriate to store a `deepcopy` of the object.
+
+This is also true for remotecalls on the local node as seen in the following example:
+
+```julia-repl
+julia> using Distributed; addprocs(1);
+
+julia> v = [0];
+
+julia> v2 = remotecall_fetch(x->(x[1] = 1; x), myid(), v);     # Executed on local node
+
+julia> println("v=$v, v2=$v2, ", v === v2);
+v=[1], v2=[1], true
+
+julia> v = [0];
+
+julia> v2 = remotecall_fetch(x->(x[1] = 1; x), workers()[1], v); # Executed on remote node
+
+julia> println("v=$v, v2=$v2, ", v === v2);
+v=[0], v2=[1], false
+```
+
+As can be seen once again, a remote call onto the local node behaves just like a direct invocation.
+The call modifies local objects passed as arguments. In the remote invocation, it operates on
+a copy of the arguments.
+
+To repeat, in general this is not an issue. If the local node is also being used as a compute
+node, and the arguments used post the call, this behavior needs to be factored in and if required
+deep copies of arguments must be passed to the call invoked on the local node. Calls on remote nodes
+will always operate on copies of arguments.
+
+
 ## [Shared Arrays](@id man-shared-arrays)
 
 Shared Arrays use system shared memory to map the same array across many processes. While there
