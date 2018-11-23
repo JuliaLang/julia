@@ -164,6 +164,14 @@ Base.one(::Type{Unit}) = 1
         @test ismissing(f(missing))
     end
 
+    # The version of `atan` with two arguments should return `missing` if any of
+    # the inputs is missing.
+    for T in (Int, Float32, Float64)
+        @test ismissing( atan(missing,  one(T)) ) == true
+        @test ismissing( atan(one(T),  missing) ) == true
+        @test ismissing( atan(missing, missing) ) == true
+    end
+
     for T in (Int, Float64)
         @test zero(Union{T, Missing}) === T(0)
         @test one(Union{T, Missing}) === T(1)
