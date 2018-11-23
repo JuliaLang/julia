@@ -977,6 +977,10 @@ for (finv, f, finvh, fh, finvd, fd, fn) in ((:sec, :cos, :sech, :cosh, :secd, :c
 
         Compute the $($fn) of `x`, where `x` is in degrees.
         """ ($finvd)(z::T) where {T<:Number} = one(T) / (($fd)(z))
+
+        ($finv)(::Missing)  = missing
+        ($finvh)(::Missing) = missing
+        ($finvd)(::Missing) = missing
     end
 end
 
@@ -992,6 +996,9 @@ for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
         @doc """
             $($hname)(x)
         Compute the inverse hyperbolic $($fn) of `x`. """ ($hfa)(y::T) where {T<:Number} = ($hfainv)(one(T) / y)
+
+        ($tfa)(::Missing) = missing
+        ($hfa)(::Missing) = missing
     end
 end
 
