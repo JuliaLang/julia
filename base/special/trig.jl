@@ -200,9 +200,8 @@ end
 
 _sincos(x::AbstractFloat) = sincos(x)
 _sincos(x) = (sin(x), cos(x))
-
-sincos(x) = _sincos(float(x))
-
+sincos(x::Number) = _sincos(float(x))
+sincos(x) = (sin(x), cos(x))
 
 
 # There's no need to write specialized kernels, as inlining takes care of remo-
