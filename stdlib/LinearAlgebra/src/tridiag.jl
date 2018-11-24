@@ -1144,9 +1144,9 @@ function opnorm(A::Tridiagonal, p::Real=2)
     if p == 2
         return opnorm2(A)
     elseif p == 1
-        return opnorm1(A)
+        return _opnorm1(A)
     elseif p == Inf
-        return opnormInf(A)
+        return _opnormInf(A)
     else
         throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
     end
