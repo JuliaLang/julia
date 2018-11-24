@@ -645,7 +645,7 @@ const SparseMatrixCSCSymmHerm{Tv,Ti} = Union{Symmetric{Tv,<:SparseMatrixCSCUnion
                                             Hermitian{Tv,<:SparseMatrixCSCUnion{Tv,Ti}}}
 
 # y .= A * x
-mul!(y::AbstractVector, A::SparseMatrixCSCSymmHerm, x::AbstractVector) = mul!(y, A, x, 1, 0)
+mul!(y::StridedVecOrMat, A::SparseMatrixCSCSymmHerm, x::StridedVecOrMat) = mul!(y,A,x,1,0)
 
 # C .= α * A * B + β * C
 function mul!(C::StridedVecOrMat{T}, sA::SparseMatrixCSCSymmHerm, B::StridedVecOrMat,
