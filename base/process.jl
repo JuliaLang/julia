@@ -385,6 +385,7 @@ function uv_return_spawn(p::Ptr{Cvoid}, exit_status::Int64, termsignal::Int32)
     proc.exitcode = exit_status
     proc.termsignal = termsignal
     ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
+    proc.handle = C_NULL
     notify(proc.exitnotify)
     nothing
 end
@@ -682,7 +683,7 @@ function test_success(proc::Process)
         #TODO: this codepath is not currently tested
         throw(_UVError("could not start process $(string(proc.cmd))", proc.exitcode))
     end
-    proc.exitcode == 0 && (proc.termsignal == 0 || proc.termsignal == SIGPIPE)
+    return proc.exitcode == 0 && (proc.termsignal == 0 || proc.termsignal == SIGPIPE)
 end
 
 function success(x::Process)
@@ -744,6 +745,20 @@ kill(ps::Vector{Process}) = foreach(kill, ps)
 kill(ps::ProcessChain) = foreach(kill, ps.processes)
 kill(p::Process) = kill(p, SIGTERM)
 
+"""
+    getpid(process) -> Int32
+
+Get the child process ID, if it still exists.
+"""
+function Libc.getpid(p::Process)
+    ppid = Int32(0)
+    if p.handle != C_NULL
+        ppid = ccall(:jl_uv_process_pid, Int32, (Ptr{Cvoid},), p.handle)
+    end
+    ppid <= 0 && throw(_UVError("getpid", UV_ESRCH))
+    return ppid
+end
+
 function _contains_newline(bufptr::Ptr{Cvoid}, len::Int32)
     return (ccall(:memchr, Ptr{Cvoid}, (Ptr{Cvoid},Int32,Csize_t), bufptr, '\n', len) != C_NULL)
 end
@@ -755,7 +770,7 @@ end
 
 Determine whether a process is currently running.
 """
-process_running(s::Process) = s.exitcode == typemin(fieldtype(Process, :exitcode))
+process_running(s::Process) = s.handle != C_NULL
 process_running(s::Vector{Process}) = any(process_running, s)
 process_running(s::ProcessChain) = process_running(s.processes)
 

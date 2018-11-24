@@ -187,6 +187,7 @@ size(c::AbstractChar,d) = convert(Int, d) < 1 ? throw(BoundsError()) : 1
 ndims(c::AbstractChar) = 0
 ndims(::Type{<:AbstractChar}) = 0
 length(c::AbstractChar) = 1
+IteratorSize(::Type{Char}) = HasShape{0}()
 firstindex(c::AbstractChar) = 1
 lastindex(c::AbstractChar) = 1
 getindex(c::AbstractChar) = c

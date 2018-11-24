@@ -506,6 +506,8 @@ sprand(::Type{T}, n::Integer, p::AbstractFloat) where {T} = sprand(GLOBAL_RNG, T
 
 sprandn(n::Integer, p::AbstractFloat) = sprand(GLOBAL_RNG, n, p, randn)
 sprandn(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, randn)
+sprandn(::Type{T}, n::Integer, p::AbstractFloat) where T = sprand(GLOBAL_RNG, n, p, (r, i) -> randn(r, T, i))
+sprandn(r::AbstractRNG, ::Type{T}, n::Integer, p::AbstractFloat) where T = sprand(r, n, p, (r, i) -> randn(r, T, i))
 
 ## Indexing into Matrices can return SparseVectors
 

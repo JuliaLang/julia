@@ -1691,7 +1691,9 @@
 
 (define (named-tuple-expr names values)
   `(call (curly (core NamedTuple) (tuple ,@names))
-         (tuple ,@values)))
+         ;; NOTE: don't use `tuple` head, so an assignment expression as a value
+         ;; doesn't turn this into another named tuple.
+         (call (core tuple) ,@values)))
 
 (define (lower-named-tuple lst
                            (dup-error-fn (lambda (name) (string "field name \"" name "\" repeated in named tuple")))
@@ -3893,8 +3895,9 @@ f(x) = yt(x)
              '(null))
 
             ((gc_preserve_begin)
-             (let ((s (make-ssavalue)))
-               (emit `(= ,s ,e))
+             (let ((s    (make-ssavalue))
+                   (args (compile-args (cdr e) break-labels linearize-args)))
+               (emit `(= ,s ,(cons (car e) args)))
                s))
 
             ;; metadata expressions
@@ -3948,7 +3951,7 @@ f(x) = yt(x)
                       (if pexc (set-cdr! point (cons pexc (cdr point))))))))
               handler-goto-fixups)
     (if global-const-error
-        (error (string "`global const` delcaration not allowed inside function" (format-loc global-const-error))))
+        (error (string "`global const` declaration not allowed inside function" (format-loc global-const-error))))
     (let* ((stmts (reverse! code))
            (di    (definitely-initialized-vars stmts vi))
            (body  (cons 'block (filter (lambda (e)
@@ -4049,13 +4052,13 @@ f(x) = yt(x)
                                                    `(line ,current-line ,current-file)
                                                    `(line ,current-line ,current-file ,(caar locstack)))
                                                linetable))
-                         (set! current-loc (+ 1 current-loc)))))
+                         (set! current-loc (- (length linetable) 1)))))
                   ((and (length> e 2) (eq? (car e) 'meta) (eq? (cadr e) 'push_loc))
                    (set! locstack (cons (list current-loc current-line current-file) locstack))
                    (set! current-file (caddr e))
                    (set! current-line 0)
                    (set! linetable (cons `(line ,current-line ,current-file ,current-loc) linetable))
-                   (set! current-loc (+ 1 current-loc)))
+                   (set! current-loc (- (length linetable) 1)))
                   ((and (length= e 2) (eq? (car e) 'meta) (eq? (cadr e) 'pop_loc))
                    (let ((l (car locstack)))
                      (set! locstack (cdr locstack))

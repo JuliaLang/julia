@@ -28,7 +28,6 @@ end
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
 function gcd(a::T, b::T) where T<:Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128}
-    @noinline throw1(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
     a == 0 && return abs(b)
     b == 0 && return abs(a)
     za = trailing_zeros(a)
@@ -45,9 +44,10 @@ function gcd(a::T, b::T) where T<:Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int
     end
     r = u << k
     # T(r) would throw InexactError; we want OverflowError instead
-    r > typemax(T) && throw1(a, b)
+    r > typemax(T) && __throw_gcd_overflow(a, b)
     r % T
 end
+@noinline __throw_gcd_overflow(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
 
 """
     lcm(x,y)
