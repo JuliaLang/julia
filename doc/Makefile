@@ -35,16 +35,16 @@ cleanall: clean
 
 html: deps
 	@echo "Building HTML documentation."
-	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) $(DOCUMENTER_OPTIONS)
+	$(JULIA_EXECUTABLE) --color=yes --startup-file=no $(call cygpath_w,$(SRCDIR)/make.jl) $(DOCUMENTER_OPTIONS)
 	@echo "Build finished. The HTML pages are in _build/html."
 
 pdf: deps
 	@echo "Building PDF documentation."
-	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- pdf $(DOCUMENTER_OPTIONS)
+	$(JULIA_EXECUTABLE) --color=yes --startup-file=no $(call cygpath_w,$(SRCDIR)/make.jl) -- pdf $(DOCUMENTER_OPTIONS)
 	@echo "Build finished."
 
 # The deploy target should only be called in Travis builds
 deploy: deps
 	@echo "Deploying HTML documentation."
-	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- deploy $(DOCUMENTER_OPTIONS)
+	$(JULIA_EXECUTABLE) --color=yes --startup-file=no $(call cygpath_w,$(SRCDIR)/make.jl) -- deploy $(DOCUMENTER_OPTIONS)
 	@echo "Build & deploy of docs finished."
