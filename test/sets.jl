@@ -398,6 +398,9 @@ end
     unique!(u)
     @test u == [5,"w","we","r"]
     u = [1,2,5,1,3,2]
+    @test unique!(x -> x ^ 2, [1, -1, 3, -3, 5, -5]) == [1, 3, 5]
+    @test unique!(n -> n % 3, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6]) == [5, 1, 9]
+    @test unique!(iseven, [2, 3, 5, 7, 9]) == [2, 3]
 end
 
 @testset "allunique" begin
