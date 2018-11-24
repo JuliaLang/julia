@@ -49,7 +49,7 @@ The following two-word sequences are reserved:
 However, you can create variables with names:
 `abstract`, `mutable`, `primitive` and `type`.
 
-Finally `where` is parsed as an infix operator for writing parametric method
+Finally,`where` is parsed as an infix operator for writing parametric method
 and type definitions. Also `in` and `isa` are parsed as infix operators.
 Creation of a variable named `where`, `in` or `isa` is allowed though.
 
@@ -167,6 +167,7 @@ Base.isconcretetype
 Base.isbits
 Base.isbitstype
 Core.fieldtype
+Base.fieldtypes
 Base.fieldcount
 Base.fieldoffset
 Base.datatype_alignment
@@ -199,6 +200,7 @@ Core.NamedTuple
 Base.Val
 Core.Vararg
 Core.Nothing
+Base.isnothing
 Base.Some
 Base.something
 Base.Enums.@enum
@@ -303,6 +305,7 @@ Core.throw
 Base.rethrow
 Base.backtrace
 Base.catch_backtrace
+Base.catch_stack
 Base.@assert
 Base.ArgumentError
 Base.AssertionError

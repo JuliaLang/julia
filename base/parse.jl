@@ -107,7 +107,10 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     end
 
     base = convert(T, base)
-    m::T = div(typemax(T) - base + 1, base)
+    # Special case the common cases of base being 10 or 16 to avoid expensive runtime div
+    m::T = base == 10 ? div(typemax(T) - T(9), T(10)) :
+           base == 16 ? div(typemax(T) - T(15), T(16)) :
+                        div(typemax(T) - base + 1, base)
     n::T = 0
     a::Int = base <= 36 ? 10 : 36
     _0 = UInt32('0')
@@ -347,8 +350,8 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     end
     return result
 end
-function tryparse_internal(::Type{T}, s::AbstractString, raise::Bool) where T<:Real
-    result = tryparse(T, s)
+function tryparse_internal(::Type{T}, s::AbstractString, raise::Bool; kwargs...) where T<:Real
+    result = tryparse(T, s; kwargs...)
     if raise && result === nothing
         _parse_failure(T, s)
     end
@@ -360,8 +363,8 @@ end
 tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Integer =
     tryparse_internal(T, s, startpos, endpos, 10, raise)
 
-parse(::Type{T}, s::AbstractString) where T<:Real =
-    convert(T, tryparse_internal(T, s, true))
+parse(::Type{T}, s::AbstractString; kwargs...) where T<:Real =
+    convert(T, tryparse_internal(T, s, true; kwargs...))
 parse(::Type{T}, s::AbstractString) where T<:Complex =
     convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s), true))
 

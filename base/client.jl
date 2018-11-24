@@ -122,9 +122,9 @@ function eval_user_input(@nospecialize(ast), show_value::Bool)
                     end
                     try
                         invokelatest(display, value)
-                    catch err
+                    catch
                         println(stderr, "Evaluation succeeded, but an error occurred while showing value of type ", typeof(value), ":")
-                        rethrow(err)
+                        rethrow()
                     end
                     println()
                 end
@@ -226,7 +226,11 @@ function exec_options(opts)
     # Load Distributed module only if any of the Distributed options have been specified.
     distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
-        Core.eval(Main, :(using Distributed))
+        let Distributed = require(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
+            Core.eval(Main, :(const Distributed = $Distributed))
+            Core.eval(Main, :(using .Distributed))
+        end
+
         invokelatest(Main.Distributed.process_opts, opts)
     end
 
@@ -376,7 +380,11 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
                         print("julia> ")
                         flush(stdout)
                     end
-                    eval_user_input(parse_input_line(input), true)
+                    try
+                        eval_user_input(parse_input_line(input), true)
+                    catch err
+                        isa(err, InterruptException) ? print("\n\n") : rethrow()
+                    end
                 end
             end
         end

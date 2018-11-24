@@ -318,7 +318,9 @@ Iterating the decomposition produces the components `Q`, `R`, and if extant `p`.
 
 The following functions are available for the `QR` objects: [`inv`](@ref), [`size`](@ref),
 and [`\\`](@ref). When `A` is rectangular, `\\` will return a least squares
-solution and if the solution is not unique, the one with smallest norm is returned.
+solution and if the solution is not unique, the one with smallest norm is returned. When
+`A` is not full rank, factorization with (column) pivoting is required to obtain a minimum
+norm solution.
 
 Multiplication with respect to either full/square or non-full/square `Q` is allowed, i.e. both `F.Q*F.R`
 and `F.Q*A` are supported. A `Q` matrix can be converted into a regular matrix with
@@ -395,7 +397,7 @@ Matrix(F::QRPivoted) = Array(AbstractArray(F))
 Array(F::QRPivoted) = Matrix(F)
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{QR, QRCompactWY, QRPivoted})
-    println(io, summary(F))
+    summary(io, F); println(io)
     println(io, "Q factor:")
     show(io, mime, F.Q)
     println(io, "\nR factor:")
@@ -500,7 +502,9 @@ AbstractMatrix{T}(Q::QRPackedQ) where {T} = QRPackedQ{T}(Q)
 QRCompactWYQ{S}(Q::QRCompactWYQ) where {S} = QRCompactWYQ(convert(AbstractMatrix{S}, Q.factors), convert(AbstractMatrix{S}, Q.T))
 AbstractMatrix{S}(Q::QRCompactWYQ{S}) where {S} = Q
 AbstractMatrix{S}(Q::QRCompactWYQ) where {S} = QRCompactWYQ{S}(Q)
-Matrix(A::AbstractQ{T}) where {T} = lmul!(A, Matrix{T}(I, size(A.factors, 1), min(size(A.factors)...)))
+Matrix{T}(A::AbstractQ) where {T} = lmul!(A, Matrix{T}(I, size(A.factors, 1), min(size(A.factors)...)))
+Matrix(A::AbstractQ{T}) where {T} = Matrix{T}(A)
+Array{T}(A::AbstractQ) where {T} = Matrix{T}(A)
 Array(A::AbstractQ) = Matrix(A)
 
 size(A::Union{QR,QRCompactWY,QRPivoted}, dim::Integer) = size(getfield(A, :factors), dim)

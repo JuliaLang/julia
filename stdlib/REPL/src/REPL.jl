@@ -128,7 +128,7 @@ end
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     io = outstream(d.repl)
     get(io, :color, false) && write(io, answer_color(d.repl))
-    show(IOContext(io, :limit => true), mime, x)
+    show(IOContext(io, :limit => true, :module => Main), mime, x)
     println(io)
     nothing
 end
@@ -136,7 +136,8 @@ display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
 function print_response(repl::AbstractREPL, @nospecialize(val), bt, show_value::Bool, have_color::Bool)
     repl.waserror = bt !== nothing
-    print_response(outstream(repl), val, bt, show_value, have_color, specialdisplay(repl))
+    io = IOContext(outstream(repl), :module => Main)
+    print_response(io, val, bt, show_value, have_color, specialdisplay(repl))
     nothing
 end
 function print_response(errio::IO, @nospecialize(val), bt, show_value::Bool, have_color::Bool, specialdisplay=nothing)
@@ -155,9 +156,9 @@ function print_response(errio::IO, @nospecialize(val), bt, show_value::Bool, hav
                         else
                             Base.invokelatest(display, specialdisplay, val)
                         end
-                    catch err
+                    catch
                         println(errio, "Error showing value of type ", typeof(val), ":")
-                        rethrow(err)
+                        rethrow()
                     end
                 end
             end

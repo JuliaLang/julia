@@ -1100,7 +1100,6 @@ static void jl_finalize_serializer(jl_serializer_state *s)
 void jl_typemap_rehash(jl_typemap_t *ml, int8_t offs);
 static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
         switch (how) {
             case 1: { // rehash IdDict
@@ -1173,7 +1172,7 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
         jl_printf(JL_STDERR, "WARNING: error while reinitializing value ");
         jl_static_show(JL_STDERR, v);
         jl_printf(JL_STDERR, ":\n");
-        jl_static_show(JL_STDERR, ptls->exception_in_transit);
+        jl_static_show(JL_STDERR, jl_current_exception());
         jl_printf(JL_STDERR, "\n");
     }
 }
@@ -1539,7 +1538,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
         jl_gc_wb(tn, tn->cache);
         tn->linearcache = (jl_svec_t*)jl_read_value(&s);
         jl_gc_wb(tn, tn->linearcache);
-        jl_resort_type_cache(tn->cache);
+        jl_sort_types(jl_svec_data(tn->cache), jl_svec_len(tn->cache));
     }
 
     jl_core_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Core"));

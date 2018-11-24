@@ -13,24 +13,26 @@ else
 end
 
 """
-    Base.add_sum(x,y)
+    Base.add_sum(x, y)
 
 The reduction operator used in `sum`. The main difference from [`+`](@ref) is that small
 integers are promoted to `Int`/`UInt`.
 """
-add_sum(x,y) = x + y
-add_sum(x::SmallSigned,y::SmallSigned) = Int(x) + Int(y)
-add_sum(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) + UInt(y)
+add_sum(x, y) = x + y
+add_sum(x::SmallSigned, y::SmallSigned) = Int(x) + Int(y)
+add_sum(x::SmallUnsigned, y::SmallUnsigned) = UInt(x) + UInt(y)
+add_sum(x::Real, y::Real)::Real = x + y
 
 """
-    Base.mul_prod(x,y)
+    Base.mul_prod(x, y)
 
 The reduction operator used in `prod`. The main difference from [`*`](@ref) is that small
 integers are promoted to `Int`/`UInt`.
 """
-mul_prod(x,y) = x * y
-mul_prod(x::SmallSigned,y::SmallSigned) = Int(x) * Int(y)
-mul_prod(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
+mul_prod(x, y) = x * y
+mul_prod(x::SmallSigned, y::SmallSigned) = Int(x) * Int(y)
+mul_prod(x::SmallUnsigned, y::SmallUnsigned) = UInt(x) * UInt(y)
+mul_prod(x::Real, y::Real)::Real = x * y
 
 ## foldl && mapfoldl
 
@@ -56,7 +58,7 @@ function mapfoldl_impl(f, op, nt::NamedTuple{()}, itr)
     end
     (x, i) = y
     init = mapreduce_first(f, op, x)
-    mapfoldl_impl(f, op, (init=init,), itr, i)
+    return mapfoldl_impl(f, op, (init=init,), itr, i)
 end
 
 
@@ -465,8 +467,8 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     v
 end
 
-maximum(f::Callable, a) = mapreduce(f, max, a)
-minimum(f::Callable, a) = mapreduce(f, min, a)
+maximum(f, a) = mapreduce(f, max, a)
+minimum(f, a) = mapreduce(f, min, a)
 
 """
     maximum(itr)

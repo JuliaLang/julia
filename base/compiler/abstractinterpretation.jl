@@ -12,6 +12,10 @@ const _REF_NAME = Ref.body.name
 # logic #
 #########
 
+# see if the inference result might affect the final answer
+call_result_unused(frame::InferenceState, pc::LineNum=frame.currpc) =
+    isexpr(frame.src.code[frame.currpc], :call) && isempty(frame.ssavalue_uses[pc])
+
 function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState)
     atype_params = unwrap_unionall(atype).parameters
     ft = unwrap_unionall(atype_params[1]) # TODO: ccall jl_first_argument_datatype here
@@ -95,6 +99,7 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
         rettype === Any && break
     end
     # try constant propagation if only 1 method is inferred to non-Bottom
+    # this is in preparation for inlining, or improving the return result
     if nonbot > 0 && seen == napplicable && !edgecycle && isa(rettype, Type) && sv.params.ipo_constant_propagation
         # if there's a possibility we could constant-propagate a better result
         # (hopefully without doing too much work), try to do that now
@@ -104,6 +109,15 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
             # use the better result, if it's a refinement of rettype
             rettype = const_rettype
         end
+    end
+    if call_result_unused(sv) && !(rettype === Bottom)
+        # We're mainly only here because the optimizer might want this code,
+        # but we ourselves locally don't typically care about it locally
+        # (beyond checking if it always throws).
+        # So avoid adding an edge, since we don't want to bother attempting
+        # to improve our result even if it does change (to always throw),
+        # and avoid keeping track of a more complex result type.
+        rettype = Any
     end
     if !(rettype === Any) # adding a new method couldn't refine (widen) this type
         for edge in edges
@@ -214,6 +228,13 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
             if infstate.linfo.specTypes == sig
                 # avoid widening when detecting self-recursion
                 # TODO: merge call cycle and return right away
+                if call_result_unused(sv)
+                    # since we don't use the result (typically),
+                    # we have a self-cycle in the call-graph, but not in the inference graph (typically):
+                    # break this edge now (before we record it) by returning early
+                    # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
+                    return Any, false, nothing
+                end
                 topmost = nothing
                 edgecycle = true
                 break
@@ -281,9 +302,27 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
         if newsig !== sig
             # continue inference, but note that we've limited parameter complexity
             # on this call (to ensure convergence), so that we don't cache this result
+            if call_result_unused(sv)
+                # if we don't (typically) actually care about this result,
+                # don't bother trying to examine some complex abstract signature
+                # since it's very unlikely that we'll try to inline this,
+                # or want make an invoke edge to its calling convention return type.
+                # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
+                return Any, false, nothing
+            end
             infstate = sv
             topmost = topmost::InferenceState
-            while !(infstate.parent === topmost.parent)
+            while !(infstate === topmost.parent)
+                if call_result_unused(infstate)
+                    # If we won't propagate the result any further (since it's typically unused),
+                    # it's OK that we keep and cache the "limited" result in the parents
+                    # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
+                    # TODO: we might be able to halt progress much more strongly here,
+                    # since now we know we won't be able to keep anything much that we learned.
+                    # We were mainly only here to compute the calling convention return type,
+                    # but in most situations now, we are unlikely to be able to use that information.
+                    break
+                end
                 infstate.limited = true
                 for infstate_cycle in infstate.callers_in_cycle
                     infstate_cycle.limited = true
@@ -342,7 +381,7 @@ end
 # refine its type to an array of element types.
 # Union of Tuples of the same length is converted to Tuple of Unions.
 # returns an array of types
-function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::VarTable, sv::InferenceState)
+function precise_container_type(@nospecialize(typ), vtypes::VarTable, sv::InferenceState)
     if isa(typ, PartialTuple)
         return typ.fields
     end
@@ -354,19 +393,11 @@ function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::
         end
     end
 
-    arg = ssa_def_expr(arg, sv)
     tti0 = widenconst(typ)
     tti = unwrap_unionall(tti0)
-    if isa(arg, Expr) && arg.head === :call && abstract_evals_to_constant(arg.args[1], svec, vtypes, sv)
-        aa = arg.args
-        result = Any[ abstract_eval(aa[j],vtypes,sv) for j=2:length(aa) ]
-        if _any(isvarargtype, result)
-            return Any[Vararg{Any}]
-        end
-        return result
-    elseif isa(tti, Union)
+    if isa(tti, Union)
         utis = uniontypes(tti)
-        if _any(t -> !isa(t,DataType) || !(t <: Tuple) || !isknownlength(t), utis)
+        if _any(t -> !isa(t, DataType) || !(t <: Tuple) || !isknownlength(t), utis)
             return Any[Vararg{Any}]
         end
         result = Any[rewrap_unionall(p, tti0) for p in utis[1].parameters]
@@ -379,7 +410,7 @@ function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::
             end
         end
         return result
-    elseif isa(tti0,DataType) && tti0 <: Tuple
+    elseif isa(tti0, DataType) && tti0 <: Tuple
         if isvatuple(tti0) && length(tti0.parameters) == 1
             return Any[Vararg{unwrapva(tti0.parameters[1])}]
         else
@@ -442,7 +473,7 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
 end
 
 # do apply(af, fargs...), where af is a function value
-function abstract_apply(@nospecialize(aft), fargs::Union{Tuple{},Vector{Any}}, aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
+function abstract_apply(@nospecialize(aft), aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
     if !isa(aft, Const) && (!isType(aft) || has_free_typevars(aft))
         if !isconcretetype(aft) || (aft <: Builtin)
             # non-constant function of unknown type: bail now,
@@ -453,13 +484,12 @@ function abstract_apply(@nospecialize(aft), fargs::Union{Tuple{},Vector{Any}}, a
     end
     res = Union{}
     nargs = length(aargtypes)
-    @assert fargs === () || nargs == length(fargs)
     splitunions = 1 < countunionsplit(aargtypes) <= sv.params.MAX_APPLY_UNION_ENUM
     ctypes = Any[Any[aft]]
     for i = 1:nargs
         ctypes´ = []
         for ti in (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
-            cti = precise_container_type(fargs === () ? nothing : fargs[i], ti, vtypes, sv)
+            cti = precise_container_type(ti, vtypes, sv)
             if _any(t -> t === Bottom, cti)
                 continue
             end
@@ -524,7 +554,7 @@ end
 
 function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
     if f === _apply
-        return abstract_apply(argtypes[2], fargs[3:end], argtypes[3:end], vtypes, sv)
+        return abstract_apply(argtypes[2], argtypes[3:end], vtypes, sv)
     end
 
     la = length(argtypes)
@@ -552,7 +582,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         end
         rt = builtin_tfunction(f, argtypes[2:end], sv)
         if f === getfield && isa(fargs, Vector{Any}) && length(argtypes) == 3 && isa(argtypes[3], Const) && isa(argtypes[3].val, Int) && argtypes[2] ⊑ Tuple
-            cti = precise_container_type(fargs[2], argtypes[2], vtypes, sv)
+            cti = precise_container_type(argtypes[2], vtypes, sv)
             idx = argtypes[3].val
             if 1 <= idx <= length(cti)
                 rt = unwrapva(cti[idx])
@@ -1045,7 +1075,9 @@ function typeinf_local(frame::InferenceState)
                     frame.bestguess = tmerge(frame.bestguess, rt)
                     for (caller, caller_pc) in frame.cycle_backedges
                         # notify backedges of updated type information
-                        if caller.stmt_types[caller_pc] !== ()
+                        typeassert(caller.stmt_types[caller_pc], VarTable) # we must have visited this statement before
+                        if !(caller.src.ssavaluetypes[caller_pc] === Any)
+                            # no reason to revisit if that call-site doesn't affect the final result
                             if caller_pc < caller.pc´´
                                 caller.pc´´ = caller_pc
                             end

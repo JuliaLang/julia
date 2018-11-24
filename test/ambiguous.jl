@@ -240,7 +240,7 @@ catch err
     if isa(err, MethodError)
         error("Test correctly returned a MethodError, please change to @test_throws MethodError")
     else
-        rethrow(err)
+        rethrow()
     end
 end
 

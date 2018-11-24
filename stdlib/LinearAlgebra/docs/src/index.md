@@ -415,6 +415,7 @@ LinearAlgebra.adjoint!
 Base.copy(::Union{Transpose,Adjoint})
 LinearAlgebra.stride1
 LinearAlgebra.checksquare
+LinearAlgebra.peakflops
 ```
 
 ## Low-level matrix operations

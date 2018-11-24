@@ -84,6 +84,7 @@ IndexStyle(::Type{<:BitArray}) = IndexLinear()
 const _msk64 = ~UInt64(0)
 @inline _div64(l) = l >> 6
 @inline _mod64(l) = l & 63
+@inline _blsr(x)= x & (x-1) #zeros the last set bit. Has native instruction on many archs. needed in multidimensional.jl
 @inline _msk_end(l::Integer) = _msk64 >>> _mod64(-l)
 @inline _msk_end(B::BitArray) = _msk_end(length(B))
 num_bit_chunks(n::Int) = _div64(n+63)
@@ -1509,37 +1510,70 @@ function findprev(testf::Function, B::BitArray, start::Integer)
 end
 #findlast(testf::Function, B::BitArray) = findprev(testf, B, 1)  ## defined in array.jl
 
-function findall(B::BitArray)
-    l = length(B)
-    nnzB = count(B)
+# findall helper functions
+# Generic case (>2 dimensions)
+function allindices!(I, B::BitArray)
     ind = first(keys(B))
-    I = Vector{typeof(ind)}(undef, nnzB)
-    nnzB == 0 && return I
-    Bc = B.chunks
-    Icount = 1
-    for i = 1:length(Bc)-1
-        u = UInt64(1)
-        c = Bc[i]
-        for j = 1:64
-            if c & u != 0
-                I[Icount] = ind
-                Icount += 1
-            end
-            ind = nextind(B, ind)
-            u <<= 1
-        end
-    end
-    u = UInt64(1)
-    c = Bc[end]
-    for j = 0:_mod64(l-1)
-        if c & u != 0
-            I[Icount] = ind
-            Icount += 1
-        end
+    for k = 1:length(B)
+        I[k] = ind
         ind = nextind(B, ind)
-        u <<= 1
     end
-    return I
+end
+
+# Optimized case for vector
+function allindices!(I, B::BitVector)
+    I[:] .= 1:length(B)
+end
+
+# Optimized case for matrix
+function allindices!(I, B::BitMatrix)
+    k = 1
+    for c = 1:size(B,2), r = 1:size(B,1)
+        I[k] = CartesianIndex(r, c)
+        k += 1
+    end
+end
+
+@inline _overflowind(i1, irest::Tuple{}, size) = (i1, irest)
+@inline function _overflowind(i1, irest, size)
+    i2 = irest[1]
+    while i1 > size[1]
+        i1 -= size[1]
+        i2 += 1
+    end
+    i2, irest = _overflowind(i2, tail(irest), tail(size))
+    return (i1, (i2, irest...))
+end
+
+@inline _toind(i1, irest::Tuple{}) = i1
+@inline _toind(i1, irest) = CartesianIndex(i1, irest...)
+
+function findall(B::BitArray)
+    nnzB = count(B)
+    I = Vector{eltype(keys(B))}(undef, nnzB)
+    nnzB == 0 && return I
+    nnzB == length(B) && (allindices!(I, B); return I)
+    Bc = B.chunks
+    Bs = size(B)
+    Bi = i1 = i = 1
+    irest = ntuple(one, ndims(B) - 1)
+    c = Bc[1]
+    @inbounds while true
+        while c == 0
+            Bi == length(Bc) && return I
+            i1 += 64
+            Bi += 1
+            c = Bc[Bi]
+        end
+
+        tz = trailing_zeros(c)
+        c = _blsr(c)
+
+        i1, irest = _overflowind(i1 + tz, irest, Bs)
+        I[i] = _toind(i1, irest)
+        i += 1
+        i1 -= tz
+    end
 end
 
 # For performance

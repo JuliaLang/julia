@@ -3089,7 +3089,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
                    Ptr{BlasInt}, Ref{$rtyp}, Ptr{$rtyp}, Ptr{BlasInt}),
                   uplo, n, A, max(1,stride(A,2)), piv, rank, tol, work, info)
             chkargsok(info[])
-            A, piv, rank[1], info[] #Stored in PivotedCholesky
+            A, piv, rank[1], info[] #Stored in CholeskyPivoted
         end
     end
 end

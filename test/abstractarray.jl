@@ -909,10 +909,36 @@ end
         J1, J2 = @inferred(promote(I1, I2))
         @test J1 === J2
     end
+
+    i = CartesianIndex(17,-2)
+    @test CR .+ i === i .+ CR === CartesianIndices((19:21, -1:3))
+    @test CR .- i === CartesianIndices((-15:-13, 3:7))
+    @test collect(i .- CR) == Ref(i) .- collect(CR)
 end
 
 @testset "issue #25770" begin
     @test vcat(1:3, fill(1, (2,1))) == vcat([1:3;], fill(1, (2,1))) == reshape([1,2,3,1,1], 5,1)
     @test hcat(1:2, fill(1, (2,1))) == hcat([1:2;], fill(1, (2,1))) == reshape([1,2,1,1],2,2)
     @test [(1:3) (4:6); fill(1, (3,2))] == reshape([1,2,3,1,1,1,4,5,6,1,1,1], 6,2)
+end
+
+@testset "copy!" begin
+    @testset "AbstractVector" begin
+        s = Vector([1, 2])
+        for a = ([1], UInt[1], [3, 4, 5], UInt[3, 4, 5])
+            @test s === copy!(s, Vector(a)) == Vector(a)
+            @test s === copy!(s, SparseVector(a)) == Vector(a)
+        end
+    end
+    @testset "AbstractArray" begin
+        @test_throws ArgumentError copy!(zeros(2, 3), zeros(3, 2))
+        s = zeros(2, 2)
+        @test s === copy!(s, fill(1, 2, 2)) == fill(1, 2, 2)
+        @test s === copy!(s, fill(1.0, 2, 2)) == fill(1.0, 2, 2)
+    end
+end
+
+@testset "map on Dicts/Sets is forbidden" begin
+    @test_throws ErrorException map(identity, Set([1,2,3]))
+    @test_throws ErrorException map(identity, Dict("a"=>"b"))
 end

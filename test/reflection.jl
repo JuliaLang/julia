@@ -262,6 +262,10 @@ tlayout = TLayout(5,7,11)
 @test fieldtype((NamedTuple{(:a,:b),T} where T<:Tuple{Vararg{Integer}}), 2) === Integer
 @test_throws BoundsError fieldtype(NamedTuple{(:a,:b)}, 3)
 
+@test fieldtypes(NamedTuple{(:a,:b)}) == (Any, Any)
+@test fieldtypes((NamedTuple{T,Tuple{Int,String}} where T)) === (Int, String)
+@test fieldtypes(TLayout) === (Int8, Int16, Int32)
+
 import Base: datatype_alignment, return_types
 @test datatype_alignment(UInt16) == 2
 @test datatype_alignment(TLayout) == 4
@@ -805,3 +809,7 @@ f20872(::Val, ::Val) = false
 @test which(f20872, Tuple{Val,Val}).sig == Tuple{typeof(f20872), Val, Val}
 @test which(f20872, Tuple{Val,Val{N}} where N).sig == Tuple{typeof(f20872), Val, Val}
 @test_throws ErrorException which(f20872, Tuple{Any,Val{N}} where N)
+
+module M29962 end
+# make sure checking if a binding is deprecated does not resolve it
+@test !Base.isdeprecated(M29962, :sin) && !Base.isbindingresolved(M29962, :sin)

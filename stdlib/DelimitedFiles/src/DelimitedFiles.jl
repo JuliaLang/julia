@@ -458,7 +458,7 @@ function readdlm_string(sbuff::String, dlm::AbstractChar, T::Type, eol::Abstract
             if isa(ex, TypeError) && (ex.func == :store_cell)
                 T = ex.expected
             else
-                rethrow(ex)
+                rethrow()
             end
             offset_handler = (dims === nothing) ? DLMOffsets(sbuff) : DLMStore(T, dims, has_header, sbuff, auto, eol)
         end
@@ -713,7 +713,7 @@ function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
         end
     catch ex
         if isa(ex, TypeError) && (ex.func == :store_cell)
-            rethrow(ex)
+            rethrow()
         else
             error("at row $(nrows+1), column $col : $ex)")
         end

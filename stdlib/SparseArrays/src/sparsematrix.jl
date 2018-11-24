@@ -1471,7 +1471,7 @@ sprand(r::AbstractRNG, ::Type{Bool}, m::Integer, n::Integer, density::AbstractFl
 sprand(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where {T} = sprand(GLOBAL_RNG, T, m, n, density)
 
 """
-    sprandn([rng], m[,n],p::AbstractFloat)
+    sprandn([rng][,Type],m[,n],p::AbstractFloat)
 
 Create a random sparse vector of length `m` or sparse matrix of size `m` by `n`
 with the specified (independent) probability `p` of any entry being nonzero,
@@ -1488,6 +1488,8 @@ julia> sprandn(2, 2, 0.75)
 """
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
 sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n,density)
+sprandn(r::AbstractRNG, ::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where T = sprand(r,m,n,density,(r,i) -> randn(r,T,i), T)
+sprandn(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where T = sprandn(GLOBAL_RNG,T,m,n,density)
 
 LinearAlgebra.fillstored!(S::SparseMatrixCSC, x) = (fill!(nzvalview(S), x); S)
 
@@ -2235,27 +2237,41 @@ function permute_rows!(S::SparseMatrixCSC{Tv,Ti}, pI::Vector{Int}) where {Tv,Ti}
     colptrS = S.colptr; rowvalS = S.rowval; nzvalS = S.nzval
     # preallocate temporary sort space
     nr = min(nnz(S), m)
+
     rowperm = Vector{Int}(undef, nr)
-    rowvalTemp = Vector{Ti}(undef, nr)
-    nzvalTemp = Vector{Tv}(undef, nr)
+    rowval_temp = Vector{Ti}(undef, nr)
+    rnzval_temp = Vector{Tv}(undef, nr)
+    perm = Base.Perm(Base.ord(isless, identity, false, Base.Order.Forward), rowval_temp)
 
     @inbounds for j in 1:n
-        rowrange = colptrS[j]:(colptrS[j+1]-1)
+        rowrange = nzrange(S, j)
         nr = length(rowrange)
+        resize!(rowperm, nr)
+        resize!(rowval_temp, nr)
         (nr > 0) || continue
         k = 1
         for i in rowrange
             rowA = rowvalS[i]
-            rowvalTemp[k] = pI[rowA]
-            nzvalTemp[k] = nzvalS[i]
+            rowval_temp[k] = pI[rowA]
+            rnzval_temp[k] = nzvalS[i]
             k += 1
         end
-        sortperm!(unsafe_wrap(Vector{Int}, pointer(rowperm), nr), unsafe_wrap(Vector{Ti}, pointer(rowvalTemp), nr))
+
+        if nr <= 16
+            alg = Base.Sort.InsertionSort
+        else
+            alg = Base.Sort.QuickSort
+        end
+
+        # Reset permutation
+        rowperm .= 1:nr
+        sort!(rowperm, alg, perm)
+
         k = 1
         for i in rowrange
             kperm = rowperm[k]
-            rowvalS[i] = rowvalTemp[kperm]
-            nzvalS[i] = nzvalTemp[kperm]
+            rowvalS[i] = rowval_temp[kperm]
+            nzvalS[i] = rnzval_temp[kperm]
             k += 1
         end
     end
@@ -3401,37 +3417,47 @@ function sortSparseMatrixCSC!(A::SparseMatrixCSC{Tv,Ti}; sortindices::Symbol = :
     row = zeros(Ti, m)
     val = zeros(Tv, m)
 
-    for i = 1:n
-        @inbounds col_start = colptr[i]
-        @inbounds col_end = (colptr[i+1] - 1)
+    perm = Base.Perm(Base.ord(isless, identity, false, Base.Order.Forward), row)
 
-        numrows = col_end - col_start + 1
+    @inbounds for i = 1:n
+        nzr = nzrange(A, i)
+        numrows = length(nzr)
         if numrows <= 1
             continue
         elseif numrows == 2
-            f = col_start
+            f = first(nzr)
             s = f+1
             if rowval[f] > rowval[s]
-                @inbounds rowval[f], rowval[s] = rowval[s], rowval[f]
-                @inbounds nzval[f],  nzval[s]  = nzval[s],  nzval[f]
+                rowval[f], rowval[s] = rowval[s], rowval[f]
+                nzval[f],  nzval[s]  = nzval[s],  nzval[f]
             end
             continue
         end
+        resize!(row, numrows)
+        resize!(index, numrows)
 
         jj = 1
-        @simd for j = col_start:col_end
-            @inbounds row[jj] = rowval[j]
-            @inbounds val[jj] = nzval[j]
+        @simd for j = nzr
+            row[jj] = rowval[j]
+            val[jj] = nzval[j]
             jj += 1
         end
 
-        sortperm!(unsafe_wrap(Vector{Ti}, pointer(index), numrows),
-                  unsafe_wrap(Vector{Ti}, pointer(row), numrows))
+        if numrows <= 16
+            alg = Base.Sort.InsertionSort
+        else
+            alg = Base.Sort.QuickSort
+        end
+
+        # Reset permutation
+        index .= 1:numrows
+
+        sort!(index, alg, perm)
 
         jj = 1
-        @simd for j = col_start:col_end
-            @inbounds rowval[j] = row[index[jj]]
-            @inbounds nzval[j] = val[index[jj]]
+        @simd for j = nzr
+            rowval[j] = row[index[jj]]
+            nzval[j] = val[index[jj]]
             jj += 1
         end
     end

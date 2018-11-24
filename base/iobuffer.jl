@@ -89,7 +89,7 @@ function IOBuffer(
         maxsize::Integer=typemax(Int),
         sizehint::Union{Integer,Nothing}=nothing)
     if maxsize < 0
-        throw(ArgumentError("negative maxsize: $(maxsize)"))
+        throw(ArgumentError("negative maxsize"))
     end
     if sizehint !== nothing
         sizehint!(data, sizehint)
@@ -289,11 +289,9 @@ function compact(io::GenericIOBuffer)
     return io
 end
 
-@inline ensureroom(io::GenericIOBuffer, nshort::Int) = ensureroom(io, UInt(nshort))
-@inline function ensureroom(io::GenericIOBuffer, nshort::UInt)
+@noinline function ensureroom_slowpath(io::GenericIOBuffer, nshort::UInt)
     io.writable || throw(ArgumentError("ensureroom failed, IOBuffer is not writeable"))
     if !io.seekable
-        nshort >= 0 || throw(ArgumentError("ensureroom failed, requested number of bytes must be ≥ 0, got $nshort"))
         if !ismarked(io) && io.ptr > 1 && io.size <= io.ptr - 1
             io.ptr = 1
             io.size = 0
@@ -308,9 +306,18 @@ end
             end
         end
     end
-    n = min(nshort + (io.append ? io.size : io.ptr-1), io.maxsize)
-    if n > length(io.data)
-        resize!(io.data, n)
+    return
+end
+
+@inline ensureroom(io::GenericIOBuffer, nshort::Int) = ensureroom(io, UInt(nshort))
+@inline function ensureroom(io::GenericIOBuffer, nshort::UInt)
+    if !io.writable || (!io.seekable && io.ptr > 1)
+        ensureroom_slowpath(io, nshort)
+    end
+    n = min((nshort % Int) + (io.append ? io.size : io.ptr-1), io.maxsize)
+    l = length(io.data)
+    if n > l
+        _growend!(io.data, (n - l) % UInt)
     end
     return io
 end

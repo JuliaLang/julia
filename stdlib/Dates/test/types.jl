@@ -194,6 +194,10 @@ c = Dates.Time(0)
     @test isfinite(Dates.Date)
     @test isfinite(Dates.DateTime)
     @test isfinite(Dates.Time)
+    @test c == c
+    @test c == (c + Dates.Hour(24))
+    @test hash(c) == hash(c + Dates.Hour(24))
+    @test hash(c + Dates.Nanosecond(10)) == hash(c + Dates.Hour(24) + Dates.Nanosecond(10))
 end
 @testset "Date-DateTime conversion/promotion" begin
     global a, b, c, d

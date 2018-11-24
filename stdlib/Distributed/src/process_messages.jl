@@ -227,7 +227,7 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
         if (myid() == 1) && (wpid > 1)
             if oldstate != W_TERMINATING
                 println(stderr, "Worker $wpid terminated.")
-                rethrow(e)
+                rethrow()
             end
         end
 
@@ -288,9 +288,10 @@ end
 
 function handle_msg(msg::IdentifySocketMsg, header, r_stream, w_stream, version)
     # register a new peer worker connection
-    w=Worker(msg.from_pid, r_stream, w_stream, cluster_manager; version=version)
+    w = Worker(msg.from_pid, r_stream, w_stream, cluster_manager; version=version)
     send_connection_hdr(w, false)
     send_msg_now(w, MsgHeader(), IdentifySocketAckMsg())
+    notify(w.initialized)
 end
 
 function handle_msg(msg::IdentifySocketAckMsg, header, r_stream, w_stream, version)
@@ -301,6 +302,7 @@ end
 function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
     LPROC.id = msg.self_pid
     controller = Worker(1, r_stream, w_stream, cluster_manager; version=version)
+    notify(controller.initialized)
     register_worker(LPROC)
     topology(msg.topology)
 
@@ -340,6 +342,7 @@ function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConf
         process_messages(w.r_stream, w.w_stream, false)
         send_connection_hdr(w, true)
         send_msg_now(w, MsgHeader(), IdentifySocketMsg(myid()))
+        notify(w.initialized)
     catch e
         @error "Error on $(myid()) while connecting to peer $rpid, exiting" exception=e,catch_backtrace()
         exit(1)

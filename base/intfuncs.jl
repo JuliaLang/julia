@@ -28,7 +28,6 @@ end
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
 function gcd(a::T, b::T) where T<:Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128}
-    @noinline throw1(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
     a == 0 && return abs(b)
     b == 0 && return abs(a)
     za = trailing_zeros(a)
@@ -45,9 +44,10 @@ function gcd(a::T, b::T) where T<:Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int
     end
     r = u << k
     # T(r) would throw InexactError; we want OverflowError instead
-    r > typemax(T) && throw1(a, b)
+    r > typemax(T) && __throw_gcd_overflow(a, b)
     r % T
 end
+@noinline __throw_gcd_overflow(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
 
 """
     lcm(x,y)
@@ -169,7 +169,7 @@ end
 invmod(n::Integer, m::Integer) = invmod(promote(n,m)...)
 
 # ^ for any x supporting *
-to_power_type(x) = convert(promote_op(*, typeof(x), typeof(x)), x)
+to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
 @noinline throw_domerr_powbysq(::Any, p) = throw(DomainError(p,
     string("Cannot raise an integer x to a negative power ", p, '.',
            "\nConvert input to float.")))
@@ -828,18 +828,18 @@ end
 """
     binomial(n::Integer, k::Integer)
 
-The _binomial coefficient_ ``\binom{n}{k}``, being the coefficient of the ``k``th term in
+The _binomial coefficient_ ``\\binom{n}{k}``, being the coefficient of the ``k``th term in
 the polynomial expansion of ``(1+x)^n``.
 
 If ``n`` is non-negative, then it is the number of ways to choose `k` out of `n` items:
 ```math
-\binom{n}{k} = \frac{n!}{k! (n-k)!}
+\\binom{n}{k} = \\frac{n!}{k! (n-k)!}
 ```
 where ``n!`` is the [`factorial`](@ref) function.
 
 If ``n`` is negative, then it is defined in terms of the identity
 ```math
-\binom{n}{k} = (-1)^k \binom{k-n-1}{k}
+\\binom{n}{k} = (-1)^k \\binom{k-n-1}{k}
 ```
 
 # Examples

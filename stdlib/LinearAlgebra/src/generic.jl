@@ -2,22 +2,6 @@
 
 ## linalg.jl: Some generic Linear Algebra definitions
 
-# For better performance when input and output are the same array
-# See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
-function generic_rmul!(X::AbstractArray, s::Number)
-    @simd for I in eachindex(X)
-        @inbounds X[I] *= s
-    end
-    X
-end
-
-function generic_lmul!(s::Number, X::AbstractArray)
-    @simd for I in eachindex(X)
-        @inbounds X[I] = s*X[I]
-    end
-    X
-end
-
 function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
@@ -42,6 +26,8 @@ end
 mul!(C::AbstractArray, s::Number, X::AbstractArray) = generic_mul!(C, X, s)
 mul!(C::AbstractArray, X::AbstractArray, s::Number) = generic_mul!(C, s, X)
 
+# For better performance when input and output are the same array
+# See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
 """
     rmul!(A::AbstractArray, b::Number)
 
@@ -60,7 +46,13 @@ julia> rmul!(A, 2)
  6  8
 ```
 """
-rmul!(A::AbstractArray, b::Number) = generic_rmul!(A, b)
+function rmul!(X::AbstractArray, s::Number)
+    @simd for I in eachindex(X)
+        @inbounds X[I] *= s
+    end
+    X
+end
+
 
 """
     lmul!(a::Number, B::AbstractArray)
@@ -80,7 +72,12 @@ julia> lmul!(2, B)
  6  8
 ```
 """
-lmul!(a::Number, B::AbstractArray) = generic_lmul!(a, B)
+function lmul!(s::Number, X::AbstractArray)
+    @simd for I in eachindex(X)
+        @inbounds X[I] = s*X[I]
+    end
+    X
+end
 
 """
     cross(x, y)
@@ -802,6 +799,8 @@ function inv(A::AbstractMatrix{T}) where T
     dest = Matrix{S0}(I, n, n)
     ldiv!(factorize(convert(AbstractMatrix{S}, A)), dest)
 end
+inv(A::Adjoint) = adjoint(inv(parent(A)))
+inv(A::Transpose) = transpose(inv(parent(A)))
 
 pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T<:Real} = _vectorpinv(transpose, v, tol)
 pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T<:Complex} = _vectorpinv(adjoint, v, tol)

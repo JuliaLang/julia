@@ -10,11 +10,13 @@ struct Rational{T<:Integer} <: Real
     den::T
 
     function Rational{T}(num::Integer, den::Integer) where T<:Integer
-        num == den == zero(T) && throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
+        num == den == zero(T) && __throw_rational_argerror(T)
         num2, den2 = (sign(den) < 0) ? divgcd(-num, -den) : divgcd(num, den)
         new(num2, den2)
     end
 end
+@noinline __throw_rational_argerror(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
+
 Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n,d)
 Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 Rational(n::Integer) = Rational(n,one(n))
@@ -155,7 +157,7 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
             p, pp = np, p
             q, qq = nq, q
         catch e
-            isa(e,InexactError) || isa(e,OverflowError) || rethrow(e)
+            isa(e,InexactError) || isa(e,OverflowError) || rethrow()
             return p // q
         end
 
@@ -180,7 +182,7 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
         nq = checked_add(checked_mul(ia,q),qq)
         return np // nq
     catch e
-        isa(e,InexactError) || isa(e,OverflowError) || rethrow(e)
+        isa(e,InexactError) || isa(e,OverflowError) || rethrow()
         return p // q
     end
 end

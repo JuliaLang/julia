@@ -459,7 +459,7 @@ function get_test_result(ex, source)
         try
             $testret
         catch _e
-            _e isa InterruptException && rethrow(_e)
+            _e isa InterruptException && rethrow()
             Threw(_e, catch_backtrace(), $(QuoteNode(source)))
         end
     end
@@ -536,7 +536,7 @@ macro test_throws(extype, ex)
             Returned($(esc(ex)), nothing, $(QuoteNode(__source__)))
         catch _e
             if $(esc(extype)) != InterruptException && _e isa InterruptException
-                rethrow(_e)
+                rethrow()
             end
             Threw(_e, nothing, $(QuoteNode(__source__)))
         end
@@ -1082,7 +1082,7 @@ function testset_beginend(args, tests, source)
             Random.seed!(GLOBAL_RNG.seed)
             $(esc(tests))
         catch err
-            err isa InterruptException && rethrow(err)
+            err isa InterruptException && rethrow()
             # something in the test block threw an error. Count that as an
             # error in this test set
             record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
@@ -1155,7 +1155,7 @@ function testset_forloop(args, testloop, source)
         try
             $(esc(tests))
         catch err
-            err isa InterruptException && rethrow(err)
+            err isa InterruptException && rethrow()
             # Something in the test block threw an error. Count that as an
             # error in this test set
             record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))

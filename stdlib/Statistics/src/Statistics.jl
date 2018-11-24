@@ -54,7 +54,7 @@ julia> mean([√1, √2, √3])
 1.3820881233139908
 ```
 """
-function mean(f::Base.Callable, itr)
+function mean(f, itr)
     y = iterate(itr)
     if y === nothing
         return Base.mapreduce_empty_iter(f, Base.add_sum, itr,
@@ -73,7 +73,7 @@ function mean(f::Base.Callable, itr)
     end
     return total/count
 end
-mean(f::Base.Callable, A::AbstractArray) = sum(f, A) / length(A)
+mean(f, A::AbstractArray) = sum(f, A) / length(A)
 
 """
     mean!(r, v)
@@ -694,7 +694,7 @@ Like [`median`](@ref), but may overwrite the input vector.
 function median!(v::AbstractVector)
     isempty(v) && throw(ArgumentError("median of an empty array is undefined, $(repr(v))"))
     eltype(v)>:Missing && any(ismissing, v) && return missing
-    (eltype(v)<:AbstractFloat || eltype(v)>:AbstractFloat) && any(isnan, v) && return NaN
+    (eltype(v)<:AbstractFloat || eltype(v)>:AbstractFloat) && any(isnan, v) && return convert(eltype(v), NaN)
     inds = axes(v, 1)
     n = length(inds)
     mid = div(first(inds)+last(inds),2)

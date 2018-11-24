@@ -699,6 +699,12 @@ end
     @test_throws MethodError repeat(1, 2, 3)
     @test repeat([1, 2], 1, 2, 3) == repeat([1, 2], outer = (1, 2, 3))
 
+    # issue 29614
+    @test repeat(ones(2, 2), 1, 1, 1) == ones(2, 2, 1)
+    @test repeat(ones(2, 2), 2, 2, 2) == ones(4, 4, 2)
+    @test repeat(ones(2), 2, 2, 2) == ones(4, 2, 2)
+    @test repeat(ones(2, 2), inner=(1, 1, 1), outer=(2, 2, 2)) == ones(4, 4, 2)
+
     R = repeat([1, 2])
     @test R == [1, 2]
     R = repeat([1, 2], inner=1)
@@ -1728,6 +1734,10 @@ end
     b[CartesianIndex{2}(1,1)] = 7
     @test a[1,2] == 7
     @test 2*CartesianIndex{3}(1,2,3) == CartesianIndex{3}(2,4,6)
+    @test CartesianIndex{3}(1,2,3)*2 == CartesianIndex{3}(2,4,6)
+    @test_throws ErrorException iterate(CartesianIndex{3}(1,2,3))
+    @test CartesianIndices(CartesianIndex{3}(1,2,3)) == CartesianIndices((1, 2, 3))
+    @test Tuple{}(CartesianIndices{0,Tuple{}}(())) == ()
 
     R = CartesianIndices(map(Base.Slice, (2:5, 3:5)))
     @test eltype(R) <: CartesianIndex{2}
@@ -2099,38 +2109,38 @@ let f = OOB_Functor([1,2])
     @test_throws BoundsError map(f, [1,2,3,4,5])
 end
 
-# issue 15654
-@test cumprod([5], dims=2) == [5]
-@test cumprod([1 2; 3 4], dims=3) == [1 2; 3 4]
-@test cumprod([1 2; 3 4], dims=1) == [1 2; 3 8]
-@test cumprod([1 2; 3 4], dims=2) == [1 2; 3 12]
+@testset "issue 15654" begin
+    @test cumprod([5], dims=2) == [5]
+    @test cumprod([1 2; 3 4], dims=3) == [1 2; 3 4]
+    @test cumprod([1 2; 3 4], dims=1) == [1 2; 3 8]
+    @test cumprod([1 2; 3 4], dims=2) == [1 2; 3 12]
 
-@test cumsum([5], dims=2) == [5]
-@test cumsum([1 2; 3 4], dims=1) == [1 2; 4 6]
-@test cumsum([1 2; 3 4], dims=2) == [1 3; 3 7]
-@test cumsum([1 2; 3 4], dims=3) == [1 2; 3 4]
+    @test cumsum([5], dims=2) == [5]
+    @test cumsum([1 2; 3 4], dims=1) == [1 2; 4 6]
+    @test cumsum([1 2; 3 4], dims=2) == [1 3; 3 7]
+    @test cumsum([1 2; 3 4], dims=3) == [1 2; 3 4]
 
-@test cumprod!(Vector{Int}(undef, 1), [5], dims=2) == [5]
-@test cumprod!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=3) == [1 2; 3 4]
-@test cumprod!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=1) == [1 2; 3 8]
-@test cumprod!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=2) == [1 2; 3 12]
+    @test cumprod!(Vector{Int}(undef, 1), [5], dims=2) == [5]
+    @test cumprod!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=3) == [1 2; 3 4]
+    @test cumprod!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=1) == [1 2; 3 8]
+    @test cumprod!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=2) == [1 2; 3 12]
 
-@test cumsum!(Vector{Int}(undef, 1), [5], dims=2) == [5]
-@test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=1) == [1 2; 4 6]
-@test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=2) == [1 3; 3 7]
-@test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=3) == [1 2; 3 4]
+    @test cumsum!(Vector{Int}(undef, 1), [5], dims=2) == [5]
+    @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=1) == [1 2; 4 6]
+    @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=2) == [1 3; 3 7]
+    @test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=3) == [1 2; 3 4]
+end
+@testset "issue #18363" begin
+    @test_throws DimensionMismatch cumsum!([0,0], 1:4)
+    @test cumsum(Any[])::Vector{Any} == Any[]
+    @test cumsum(Any[1, 2.3]) == [1, 3.3] == cumsum(Real[1, 2.3])::Vector{Real}
+    @test cumsum([true,true,true]) == [1,2,3]
+    @test cumsum(0x00:0xff)[end] === UInt(255*(255+1)÷2) # no overflow
+    @test accumulate(+, 0x00:0xff)[end] === 0x80         # overflow
+    @test_throws InexactError cumsum!(similar(0x00:0xff), 0x00:0xff) # overflow
 
-# issue #18363
-@test_throws DimensionMismatch cumsum!([0,0], 1:4)
-@test cumsum(Any[])::Vector{Any} == Any[]
-@test cumsum(Any[1, 2.3]) == [1, 3.3] == cumsum(Real[1, 2.3])::Vector{Real}
-@test cumsum([true,true,true]) == [1,2,3]
-@test cumsum(0x00:0xff)[end] === UInt(255*(255+1)÷2) # no overflow
-@test accumulate(+, 0x00:0xff)[end] === 0x80         # overflow
-@test_throws InexactError cumsum!(similar(0x00:0xff), 0x00:0xff) # overflow
-
-@test cumsum([[true], [true], [false]])::Vector{Vector{Int}} == [[1], [2], [2]]
-
+    @test cumsum([[true], [true], [false]])::Vector{Vector{Int}} == [[1], [2], [2]]
+end
 #issue #18336
 @test cumsum([-0.0, -0.0])[1] === cumsum([-0.0, -0.0])[2] === -0.0
 @test cumprod(-0.0im .+ (0:0))[1] === Complex(0.0, -0.0)
@@ -2277,6 +2287,9 @@ end
 
 @testset "diff" begin
     # test diff, throw ArgumentError for invalid dimension argument
+    v = [7, 3, 5, 1, 9]
+    @test diff(v) == [-4, 2, -4, 8]
+    @test diff(v,dims=1) == [-4, 2, -4, 8]
     X = [3  9   5;
          7  4   2;
          2  1  10]
@@ -2286,6 +2299,9 @@ end
     @test diff(view(X, 1:2, 1:2),dims=2) == reshape([6; -3], (2,1))
     @test diff(view(X, 2:3, 2:3),dims=1) == [-3 8]
     @test diff(view(X, 2:3, 2:3),dims=2) == reshape([-2; 9], (2,1))
+    Y = cat([1 3; 4 3], [6 5; 1 4], dims=3)
+    @test diff(Y, dims=3) == reshape([5 2; -3 1], (2, 2, 1))
+    @test_throws UndefKeywordError diff(X)
     @test_throws ArgumentError diff(X,dims=3)
     @test_throws ArgumentError diff(X,dims=-1)
 end
@@ -2300,6 +2316,8 @@ end
 
     @test accumulate(min, [1, 2, 5, -1, 3, -2]) == [1, 1, 1, -1, -1, -2]
     @test accumulate(max, [1, 2, 5, -1, 3, -2]) == [1, 2, 5, 5, 5, 5]
+    @test Base.accumulate_pairwise(min, [1, 2, 5, -1, 3, -2]) == [1, 1, 1, -1, -1, -2]
+    @test Base.accumulate_pairwise(max, [1, 2, 5, -1, 3, -2]) == [1, 2, 5, 5, 5, 5]
 
     @test accumulate(max, [1 0; 0 1], dims=1) == [1 0; 1 1]
     @test accumulate(max, [1 0; 0 1], dims=2) == [1 1; 0 1]
@@ -2331,6 +2349,9 @@ end
                 @test out ≈ accumulate_arr
             end
         end
+        arr_cop = similar(arr)
+        cumprod!(arr_cop, arr)
+        @test arr_cop ≈ cumprod(arr)
     end
 
     # exotic indexing

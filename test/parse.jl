@@ -1,34 +1,35 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# integer parsing
-@test parse(Int32,"0", base = 36) === Int32(0)
-@test parse(Int32,"1", base = 36) === Int32(1)
-@test parse(Int32,"9", base = 36) === Int32(9)
-@test parse(Int32,"A", base = 36) === Int32(10)
-@test parse(Int32,"a", base = 36) === Int32(10)
-@test parse(Int32,"B", base = 36) === Int32(11)
-@test parse(Int32,"b", base = 36) === Int32(11)
-@test parse(Int32,"F", base = 36) === Int32(15)
-@test parse(Int32,"f", base = 36) === Int32(15)
-@test parse(Int32,"Z", base = 36) === Int32(35)
-@test parse(Int32,"z", base = 36) === Int32(35)
+@testset "integer parsing" begin
+    @test parse(Int32,"0", base = 36) === Int32(0)
+    @test parse(Int32,"1", base = 36) === Int32(1)
+    @test parse(Int32,"9", base = 36) === Int32(9)
+    @test parse(Int32,"A", base = 36) === Int32(10)
+    @test parse(Int32,"a", base = 36) === Int32(10)
+    @test parse(Int32,"B", base = 36) === Int32(11)
+    @test parse(Int32,"b", base = 36) === Int32(11)
+    @test parse(Int32,"F", base = 36) === Int32(15)
+    @test parse(Int32,"f", base = 36) === Int32(15)
+    @test parse(Int32,"Z", base = 36) === Int32(35)
+    @test parse(Int32,"z", base = 36) === Int32(35)
 
-@test parse(Int,"0") == 0
-@test parse(Int,"-0") == 0
-@test parse(Int,"1") == 1
-@test parse(Int,"-1") == -1
-@test parse(Int,"9") == 9
-@test parse(Int,"-9") == -9
-@test parse(Int,"10") == 10
-@test parse(Int,"-10") == -10
-@test parse(Int64,"3830974272") == 3830974272
-@test parse(Int64,"-3830974272") == -3830974272
+    @test parse(Int,"0") == 0
+    @test parse(Int,"-0") == 0
+    @test parse(Int,"1") == 1
+    @test parse(Int,"-1") == -1
+    @test parse(Int,"9") == 9
+    @test parse(Int,"-9") == -9
+    @test parse(Int,"10") == 10
+    @test parse(Int,"-10") == -10
+    @test parse(Int64,"3830974272") == 3830974272
+    @test parse(Int64,"-3830974272") == -3830974272
 
-@test parse(Int,'3') == 3
-@test parse(Int,'3', base = 8) == 3
-@test parse(Int, 'a', base=16) == 10
-@test_throws ArgumentError parse(Int, 'a')
-@test_throws ArgumentError parse(Int,typemax(Char))
+    @test parse(Int,'3') == 3
+    @test parse(Int,'3', base = 8) == 3
+    @test parse(Int, 'a', base=16) == 10
+    @test_throws ArgumentError parse(Int, 'a')
+    @test_throws ArgumentError parse(Int,typemax(Char))
+end
 
 # Issue 29451
 struct Issue29451String <: AbstractString end
@@ -40,8 +41,7 @@ Base.iterate(::Issue29451String, i::Integer=1) = i == 1 ? ('0', 2) : nothing
 @test Issue29451String() == "0"
 @test parse(Int, Issue29451String()) == 0
 
-# Issue 20587
-for T in Any[BigInt, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8]
+@testset "Issue 20587, T=$T" for T in Any[BigInt, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8]
     T === BigInt && continue # TODO: make BigInt pass this test
     for s in ["", " ", "  "]
         # Without a base (handles things like "0x00001111", etc)
@@ -118,115 +118,123 @@ for T in Any[BigInt, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32,
     @test parse(Float64, ".5    "    ) == 0.5
 end
 
-@test parse(Bool, "\u202f true") === true
-@test parse(Bool, "\u202f false") === false
+@testset "parse as Bool, bin, hex, oct" begin
+    @test parse(Bool, "\u202f true") === true
+    @test parse(Bool, "\u202f false") === false
 
-parsebin(s) = parse(Int,s, base = 2)
-parseoct(s) = parse(Int,s, base = 8)
-parsehex(s) = parse(Int,s, base = 16)
+    parsebin(s) = parse(Int,s, base = 2)
+    parseoct(s) = parse(Int,s, base = 8)
+    parsehex(s) = parse(Int,s, base = 16)
 
-@test parsebin("0") == 0
-@test parsebin("-0") == 0
-@test parsebin("1") == 1
-@test parsebin("-1") == -1
-@test parsebin("10") == 2
-@test parsebin("-10") == -2
-@test parsebin("11") == 3
-@test parsebin("-11") == -3
-@test parsebin("1111000011110000111100001111") == 252645135
-@test parsebin("-1111000011110000111100001111") == -252645135
+    @test parsebin("0") == 0
+    @test parsebin("-0") == 0
+    @test parsebin("1") == 1
+    @test parsebin("-1") == -1
+    @test parsebin("10") == 2
+    @test parsebin("-10") == -2
+    @test parsebin("11") == 3
+    @test parsebin("-11") == -3
+    @test parsebin("1111000011110000111100001111") == 252645135
+    @test parsebin("-1111000011110000111100001111") == -252645135
 
-@test parseoct("0") == 0
-@test parseoct("-0") == 0
-@test parseoct("1") == 1
-@test parseoct("-1") == -1
-@test parseoct("7") == 7
-@test parseoct("-7") == -7
-@test parseoct("10") == 8
-@test parseoct("-10") == -8
-@test parseoct("11") == 9
-@test parseoct("-11") == -9
-@test parseoct("72") == 58
-@test parseoct("-72") == -58
-@test parseoct("3172207320") == 434704080
-@test parseoct("-3172207320") == -434704080
+    @test parseoct("0") == 0
+    @test parseoct("-0") == 0
+    @test parseoct("1") == 1
+    @test parseoct("-1") == -1
+    @test parseoct("7") == 7
+    @test parseoct("-7") == -7
+    @test parseoct("10") == 8
+    @test parseoct("-10") == -8
+    @test parseoct("11") == 9
+    @test parseoct("-11") == -9
+    @test parseoct("72") == 58
+    @test parseoct("-72") == -58
+    @test parseoct("3172207320") == 434704080
+    @test parseoct("-3172207320") == -434704080
 
-@test parsehex("0") == 0
-@test parsehex("-0") == 0
-@test parsehex("1") == 1
-@test parsehex("-1") == -1
-@test parsehex("9") == 9
-@test parsehex("-9") == -9
-@test parsehex("a") == 10
-@test parsehex("-a") == -10
-@test parsehex("f") == 15
-@test parsehex("-f") == -15
-@test parsehex("10") == 16
-@test parsehex("-10") == -16
-@test parsehex("0BADF00D") == 195948557
-@test parsehex("-0BADF00D") == -195948557
-@test parse(Int64,"BADCAB1E", base = 16) == 3135023902
-@test parse(Int64,"-BADCAB1E", base = 16) == -3135023902
-@test parse(Int64,"CafeBabe", base = 16) == 3405691582
-@test parse(Int64,"-CafeBabe", base = 16) == -3405691582
-@test parse(Int64,"DeadBeef", base = 16) == 3735928559
-@test parse(Int64,"-DeadBeef", base = 16) == -3735928559
-
-@test parse(Int,"2\n") == 2
-@test parse(Int,"   2 \n ") == 2
-@test parse(Int," 2 ") == 2
-@test parse(Int,"2 ") == 2
-@test parse(Int," 2") == 2
-@test parse(Int,"+2\n") == 2
-@test parse(Int,"-2") == -2
-@test_throws ArgumentError parse(Int,"   2 \n 0")
-@test_throws ArgumentError parse(Int,"2x")
-@test_throws ArgumentError parse(Int,"-")
-
-# multibyte spaces
-@test parse(Int, "3\u2003\u202F") == 3
-@test_throws ArgumentError parse(Int, "3\u2003\u202F,")
-
-@test parse(Int,"1234") == 1234
-@test parse(Int,"0x1234") == 0x1234
-@test parse(Int,"0o1234") == 0o1234
-@test parse(Int,"0b1011") == 0b1011
-@test parse(Int,"-1234") == -1234
-@test parse(Int,"-0x1234") == -Int(0x1234)
-@test parse(Int,"-0o1234") == -Int(0o1234)
-@test parse(Int,"-0b1011") == -Int(0b1011)
-
-for T in (Int8, Int16, Int32, Int64, Int128)
-    @test parse(T,string(typemin(T))) == typemin(T)
-    @test parse(T,string(typemax(T))) == typemax(T)
-    @test_throws OverflowError parse(T,string(big(typemin(T))-1))
-    @test_throws OverflowError parse(T,string(big(typemax(T))+1))
+    @test parsehex("0") == 0
+    @test parsehex("-0") == 0
+    @test parsehex("1") == 1
+    @test parsehex("-1") == -1
+    @test parsehex("9") == 9
+    @test parsehex("-9") == -9
+    @test parsehex("a") == 10
+    @test parsehex("-a") == -10
+    @test parsehex("f") == 15
+    @test parsehex("-f") == -15
+    @test parsehex("10") == 16
+    @test parsehex("-10") == -16
+    @test parsehex("0BADF00D") == 195948557
+    @test parsehex("-0BADF00D") == -195948557
+    @test parse(Int64,"BADCAB1E", base = 16) == 3135023902
+    @test parse(Int64,"-BADCAB1E", base = 16) == -3135023902
+    @test parse(Int64,"CafeBabe", base = 16) == 3405691582
+    @test parse(Int64,"-CafeBabe", base = 16) == -3405691582
+    @test parse(Int64,"DeadBeef", base = 16) == 3735928559
+    @test parse(Int64,"-DeadBeef", base = 16) == -3735928559
 end
 
-for T in (UInt8,UInt16,UInt32,UInt64,UInt128)
-    @test parse(T,string(typemin(T))) == typemin(T)
-    @test parse(T,string(typemax(T))) == typemax(T)
-    @test_throws ArgumentError parse(T,string(big(typemin(T))-1))
-    @test_throws OverflowError parse(T,string(big(typemax(T))+1))
+@testset "parse with delimiters" begin
+    @test parse(Int,"2\n") == 2
+    @test parse(Int,"   2 \n ") == 2
+    @test parse(Int," 2 ") == 2
+    @test parse(Int,"2 ") == 2
+    @test parse(Int," 2") == 2
+    @test parse(Int,"+2\n") == 2
+    @test parse(Int,"-2") == -2
+    @test_throws ArgumentError parse(Int,"   2 \n 0")
+    @test_throws ArgumentError parse(Int,"2x")
+    @test_throws ArgumentError parse(Int,"-")
+
+    # multibyte spaces
+    @test parse(Int, "3\u2003\u202F") == 3
+    @test_throws ArgumentError parse(Int, "3\u2003\u202F,")
 end
 
-# issue #15597
+@testset "parse from bin/hex/oct" begin
+    @test parse(Int,"1234") == 1234
+    @test parse(Int,"0x1234") == 0x1234
+    @test parse(Int,"0o1234") == 0o1234
+    @test parse(Int,"0b1011") == 0b1011
+    @test parse(Int,"-1234") == -1234
+    @test parse(Int,"-0x1234") == -Int(0x1234)
+    @test parse(Int,"-0o1234") == -Int(0o1234)
+    @test parse(Int,"-0b1011") == -Int(0b1011)
+end
+
+@testset "parsing extrema of Integer types" begin
+    for T in (Int8, Int16, Int32, Int64, Int128)
+        @test parse(T,string(typemin(T))) == typemin(T)
+        @test parse(T,string(typemax(T))) == typemax(T)
+        @test_throws OverflowError parse(T,string(big(typemin(T))-1))
+        @test_throws OverflowError parse(T,string(big(typemax(T))+1))
+    end
+
+    for T in (UInt8,UInt16,UInt32,UInt64,UInt128)
+        @test parse(T,string(typemin(T))) == typemin(T)
+        @test parse(T,string(typemax(T))) == typemax(T)
+        @test_throws ArgumentError parse(T,string(big(typemin(T))-1))
+        @test_throws OverflowError parse(T,string(big(typemax(T))+1))
+    end
+end
+
 # make sure base can be any Integer
-for T in (Int, BigInt)
+@testset "issue #15597, T=$T" for T in (Int, BigInt)
     let n = parse(T, "123", base = Int8(10))
         @test n == 123
         @test isa(n, T)
     end
 end
 
-# issue #17065
-@test parse(Int, "2") === 2
-@test parse(Bool, "true") === true
-@test parse(Bool, "false") === false
-@test tryparse(Bool, "true") === true
-@test tryparse(Bool, "false") === false
-@test_throws ArgumentError parse(Int, "2", base = 1)
-@test_throws ArgumentError parse(Int, "2", base = 63)
+@testset "issue #17065" begin
+    @test parse(Int, "2") === 2
+    @test parse(Bool, "true") === true
+    @test parse(Bool, "false") === false
+    @test tryparse(Bool, "true") === true
+    @test tryparse(Bool, "false") === false
+    @test_throws ArgumentError parse(Int, "2", base = 1)
+    @test_throws ArgumentError parse(Int, "2", base = 63)
+end
 
 # issue #17333: tryparse should still throw on invalid base
 for T in (Int32, BigInt), base in (0,1,100)
@@ -242,22 +250,24 @@ end
        1] == [2]
 @test [1 +1] == [1 1]
 
-# issue #16594, note for the macro tests, order is important
-# because the line number is included as part of the expression
-# (i.e. both macros must start on the same line)
-@test :(@test((1+1) == 2)) == :(@test 1 +
-                                      1 == 2)
-@test :(@x 1 +1 -1) == :(@x(1, +1, -1))
-@test :(@x 1 + 1 -1) == :(@x(1+1, -1))
-@test :(@x 1 + 1 - 1) == :(@x(1 + 1 - 1))
-@test :(@x(1 + 1 - 1)) == :(@x 1 +
-                               1 -
-                               1)
-@test :(@x(1 + 1 + 1)) == :(@x 1 +
-                               1 +
-                               1)
-@test :([x .+
-          y]) == :([x .+ y])
+@testset "issue #16594" begin
+    # note for the macro tests, order is important
+    # because the line number is included as part of the expression
+    # (i.e. both macros must start on the same line)
+    @test :(@test((1+1) == 2)) == :(@test 1 +
+                                          1 == 2)
+    @test :(@x 1 +1 -1) == :(@x(1, +1, -1))
+    @test :(@x 1 + 1 -1) == :(@x(1+1, -1))
+    @test :(@x 1 + 1 - 1) == :(@x(1 + 1 - 1))
+    @test :(@x(1 + 1 - 1)) == :(@x 1 +
+                                   1 -
+                                   1)
+    @test :(@x(1 + 1 + 1)) == :(@x 1 +
+                                   1 +
+                                   1)
+    @test :([x .+
+              y]) == :([x .+ y])
+end
 
 # line break in : expression disallowed
 @test_throws Meta.ParseError Meta.parse("[1 :\n2] == [1:2]")

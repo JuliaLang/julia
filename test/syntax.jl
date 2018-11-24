@@ -1735,3 +1735,32 @@ end
 @test Meta.parse("1..2") == Expr(:call, :.., 1, 2)
 # we don't parse chains of these since the associativity and meaning aren't clear
 @test_throws ParseError Meta.parse("1..2..3")
+
+# issue #30048
+@test Meta.isexpr(Meta.lower(@__MODULE__, :(for a in b
+           c = try
+               try
+                   d() do
+                       if  GC.@preserve c begin
+                           end
+                       end
+                   end
+               finally
+               end
+           finally
+           end
+       end)), :thunk)
+
+# issue #28506
+@test Meta.isexpr(Meta.parse("1,"), :incomplete)
+@test Meta.isexpr(Meta.parse("1, "), :incomplete)
+@test Meta.isexpr(Meta.parse("1,\n"), :incomplete)
+@test Meta.isexpr(Meta.parse("1, \n"), :incomplete)
+@test_throws LoadError include_string(@__MODULE__, "1,")
+@test_throws LoadError include_string(@__MODULE__, "1,\n")
+
+# issue #30030
+let x = 0
+    @test (a=1, b=2, c=(x=3)) == (a=1, b=2, c=3)
+    @test x == 3
+end
