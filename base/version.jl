@@ -216,7 +216,7 @@ function check_new_version(existing::Vector{VersionNumber}, ver::VersionNumber)
         for v in [v"0.0.1", v"0.1", v"1"]
             lowerbound(v) <= ver <= v && return
         end
-        error("$ver is not a valid initial version (try 0.0.1, 0.1 or 1.0)")
+        error("version $ver is invalid initial version (try 0.0.1, 0.1, 1.0)")
     end
     issorted(existing) || (existing = sort(existing))
     idx = searchsortedlast(existing, ver)
@@ -225,10 +225,10 @@ function check_new_version(existing::Vector{VersionNumber}, ver::VersionNumber)
     ver == prv && error("version $ver already exists")
     nxt = thismajor(ver) != thismajor(prv) ? nextmajor(prv) :
           thisminor(ver) != thisminor(prv) ? nextminor(prv) : nextpatch(prv)
-    ver <= nxt || error("$ver skips over $nxt")
+    ver <= nxt || error("version $ver skips over $nxt")
     thispatch(ver) <= ver && return # regular or build release
     idx < length(existing) && thispatch(existing[idx+1]) <= nxt &&
-        error("$ver is a pre-release of existing version $(existing[idx+1])")
+        error("version $ver is pre-release of existing version $(existing[idx+1])")
     return # acceptable new version
 end
 
