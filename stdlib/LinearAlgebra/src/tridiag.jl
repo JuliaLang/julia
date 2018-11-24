@@ -1096,4 +1096,89 @@ function show(io::IO, S::SymTridiagonal)
     print(io, ", ")
     show(io, S.ev)
     print(io, ")")
+###################
+#     opnorms     #
+###################
+
+# Tridiagonal
+
+function _opnorm1(A::Tridiagonal{T}) where T
+    n = size(A, 1)
+    Tnorm = typeof(float(real(zero(T))))
+    Tsum = promote_type(Float64, Tnorm)
+
+    #first col
+    nrm::Tsum = norm(A.d[1]) + norm(A.dl[1])
+    @inbounds begin
+        for i = 2:n-1
+            nrmj::Tsum = norm(A.d[i]) + norm(A.dl[i]) + norm(A.du[i-1])
+            nrm = max(nrm,nrmj)
+        end
+    end
+
+    # last col
+    @inbounds nrm = max(nrm, norm(A.d[n])+norm(A.du[n-1]))
+    return convert(Tnorm, nrm)
+end
+
+function _opnormInf(A::Tridiagonal{T}) where T
+    n = size(A, 1)
+    Tnorm = typeof(float(real(zero(T))))
+    Tsum = promote_type(Float64, Tnorm)
+
+    #first row
+    nrm::Tsum = norm(A.d[1]) + norm(A.du[1])
+    @inbounds begin
+        for i = 2:n-1
+            nrmj::Tsum = norm(A.d[i]) + norm(A.du[i]) + norm(A.dl[i-1])
+            nrm = max(nrm,nrmj)
+        end
+    end
+
+    # last row
+    @inbounds nrm = max(nrm, norm(A.d[n])+norm(A.dl[n-1]))
+    return convert(Tnorm, nrm)
+end
+
+function opnorm(A::Tridiagonal, p::Real=2)
+    if p == 2
+        return opnorm2(A)
+    elseif p == 1
+        return opnorm1(A)
+    elseif p == Inf
+        return opnormInf(A)
+    else
+        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
+    end
+end
+
+# SymTridiagonal
+
+function _opnormInf1(A::SymTridiagonal{T}) where T
+    n = size(A, 1)
+    Tnorm = typeof(float(real(zero(T))))
+    Tsum = promote_type(Float64, Tnorm)
+
+    #first col/row
+    nrm::Tsum = norm(A.dv[1]) + norm(A.ev[1])
+    @inbounds begin
+        for i = 2:n-1
+            nrmj::Tsum = norm(A.dv[i]) + norm(A.ev[i-1]) + norm(A.ev[i])
+            nrm = max(nrm,nrmj)
+        end
+    end
+
+    # last col/row
+    @inbounds nrm = max(nrm, norm(A.dv[n])+norm(A.ev[n-1]))
+    return convert(Tnorm, nrm)
+end
+
+function opnorm(A::SymTridiagonal, p::Real=2)
+    if p == 2
+        return opnorm2(A)
+    elseif p == 1 || p == Inf # these are the same for symmetric matrices
+        return _opnormInf1(A)
+    else
+        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
+    end
 end

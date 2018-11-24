@@ -248,6 +248,80 @@ function svd(M::Bidiagonal; kw...)
     svd!(copy(M), kw...)
 end
 
+###################
+#     opnorms     #
+###################
+
+# helpers for upper and lower bidiagonal matrices
+
+function _upopnorm1(A::Bidiagonal{T}) where T
+    n = size(A, 1)
+    Tnorm = typeof(float(real(zero(T))))
+    Tsum = promote_type(Float64, Tnorm)
+    nrm::Tsum = A.dv[1]
+    @inbounds begin
+        for i = 2:n
+            nrmj::Tsum = norm(A.dv[i]) + norm(A.ev[i-1])
+            nrm = max(nrm,nrmj)
+        end
+    end
+    return convert(Tnorm, nrm)
+end
+
+function _loopnorm1(A::Bidiagonal{T}) where T
+    n = size(A, 1)
+    Tnorm = typeof(float(real(zero(T))))
+    Tsum = promote_type(Float64, Tnorm)
+    nrm::Tsum = A.dv[end]
+    @inbounds begin
+        for i = 1:n-1
+            nrmj::Tsum = norm(A.dv[i]) + norm(A.ev[i])
+            nrm = max(nrm,nrmj)
+        end
+    end
+    return convert(Tnorm, nrm)
+end
+
+function _upopnormInf(A::Bidiagonal{T}) where T
+    n = size(A, 1)
+    Tnorm = typeof(float(real(zero(T))))
+    Tsum = promote_type(Float64, Tnorm)
+    nrm::Tsum = A.dv[end]
+    @inbounds begin
+        for i = 1:n-1
+            nrmj::Tsum = norm(A.dv[i]) + norm(A.ev[i])
+            nrm = max(nrm,nrmj)
+        end
+    end
+    return convert(Tnorm, nrm)
+end
+
+function _loopnormInf(A::Bidiagonal{T}) where T
+    n = size(A, 1)
+    Tnorm = typeof(float(real(zero(T))))
+    Tsum = promote_type(Float64, Tnorm)
+    nrm::Tsum = A.dv[1]
+    @inbounds begin
+        for i = 2:n
+            nrmj::Tsum = norm(A.dv[i]) + norm(A.ev[i-1])
+            nrm = max(nrm,nrmj)
+        end
+    end
+    return convert(Tnorm, nrm)
+end
+
+function opnorm(A::Bidiagonal, p::Real=2)
+    if p == 2
+        return opnorm2(A)
+    elseif p == 1
+        A.uplo == 'U' ? _upopnorm1(A) : _loopnorm1(A)
+    elseif p == Inf
+        A.uplo == 'U' ? _upopnormInf(A) : _loopnormInf(A)
+    else
+        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
+    end
+end
+
 ####################
 # Generic routines #
 ####################

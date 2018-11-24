@@ -1138,4 +1138,19 @@ end
     end
 end
 
+@testset "opnorms" begin
+    B = Bidiagonal([1,-2,3,-4], [1,2,3], 'U')
+
+    @test opnorm(B, 1) == opnorm(Matrix(B), 1)
+    @test opnorm(B, 2) ≈ opnorm(Matrix(B), 2)
+    @test opnorm(B, Inf) == opnorm(Matrix(B), Inf)
+
+    B = Bidiagonal([1,-2,3,-4], [1,2,3], 'L')
+
+    @test opnorm(B, 1) == opnorm(Matrix(B), 1)
+    @test opnorm(B, 2) ≈ opnorm(Matrix(B), 2)
+    @test opnorm(B, Inf) == opnorm(Matrix(B), Inf)
+end
+
+
 end # module TestBidiagonal

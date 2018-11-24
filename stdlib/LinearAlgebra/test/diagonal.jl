@@ -1452,4 +1452,12 @@ end
     @test kron(D2, D) == kron(Array{eltype(D2)}(D2), D)
 end
 
+@testset "opnorms" begin
+    D = Diagonal([1,-2,3,-4])
+
+    @test opnorm(D, 1) == opnorm(Matrix(D), 1)
+    @test opnorm(D, 2) ≈ opnorm(Matrix(D), 2)
+    @test opnorm(D, Inf) == opnorm(Matrix(D), Inf)
+end
+
 end # module TestDiagonal
