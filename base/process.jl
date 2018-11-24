@@ -783,12 +783,12 @@ An exception is raised if the process cannot be started.
 """
 success(cmd::AbstractCmd) = success(_spawn(cmd))
 
-struct ProcessExitedError
+struct ProcessExitedException
     procs::Vector{Process}
 end
-ProcessExitedError(proc::Process) = ProcessExitedError([proc])
+ProcessExitedException(proc::Process) = ProcessExitedException([proc])
 
-function show(io::IO, err::ProcessExitedError)
+function show(io::IO, err::ProcessExitedException)
     if length(err.procs) == 1
         proc = err.procs[1]
         println(io, "failed process: ", proc, " [", proc.exitcode, "]")
@@ -802,7 +802,7 @@ end
 
 function pipeline_error(proc::Process)
     if !proc.cmd.ignorestatus
-        throw(ProcessExitedError(proc))
+        throw(ProcessExitedException(proc))
     end
     nothing
 end
@@ -815,7 +815,7 @@ function pipeline_error(procs::ProcessChain)
         end
     end
     isempty(failed) && return nothing
-    throw(ProcessExitedError(failed))
+    throw(ProcessExitedException(failed))
 end
 
 """

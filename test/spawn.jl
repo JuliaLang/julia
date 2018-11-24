@@ -420,13 +420,24 @@ end
 
 @test Base.shell_split("\"\\\\\"") == ["\\"]
 
-# issue #13616
-
-pcatcmd = `$catcmd _doesnt_exist__111_`
-let p = eachline(pipeline(`$catcmd _doesnt_exist__111_`, stderr=devnull))
-    @test_throws(ProcessExitedError("failed process: Process($pcatcmd, ProcessExited(1)) [1]"),
-                 collect(p))
+# Test failing commands
+failing_cmd = `$catcmd _doesnt_exist__111_`
+failing_pipeline = pipeline(failing_cmd, stderr=devnull) # make quiet for tests
+for testrun in (failing_pipeline, pipeline(failing_pipeline, failing_pipeline))
+    try
+        run(testrun)
+    catch err
+        @test err isa ProcessExitedException
+        iobuf = IOBuffer()
+        show(iobuf, err)
+        errmsg = String(take!(iobuf))
+        @test occursin(string(failing_cmd), errmsg)
+    end
 end
+
+# issue #13616
+@test_throws(ProcessExitedException, collect(eachline(failing_pipeline)))
+
 
 # make sure windows_verbatim strips quotes
 if Sys.iswindows()
