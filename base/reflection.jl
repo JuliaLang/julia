@@ -169,7 +169,7 @@ julia> fieldnames(Rational)
 (:num, :den)
 ```
 """
-fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
+@pure fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
                            (_fieldnames(t)...,))
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames(::Core.TypeofBottom) =
