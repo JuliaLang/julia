@@ -319,7 +319,7 @@ fields if the function is type stable.
 Dictionary keys can also be tab completed:
 
 ```julia-repl
-julia> foo=Dict("qwer1"=>1, "qwer2"=>2, "asdf"=>3)
+julia> foo = Dict("qwer1"=>1, "qwer2"=>2, "asdf"=>3)
 Dict{String,Int64} with 3 entries:
   "qwer2" => 2
   "asdf"  => 3
