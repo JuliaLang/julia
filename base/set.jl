@@ -223,21 +223,7 @@ end
 
 # If A is not grouped, then we will need to keep track of all of the elements that we have
 # seen so far.
-function _unique!(A::AbstractVector)
-    seen = Set{eltype(A)}()
-    idxs = eachindex(A)
-    y = iterate(idxs)
-    count = 0
-    for x in A
-        if x ∉ seen
-            push!(seen, x)
-            count += 1
-            A[y[1]] = x
-            y = iterate(idxs, y[2])
-        end
-    end
-    resize!(A, count)
-end
+_unique!(A::AbstractVector) = unique!(identity, A::AbstractVector)
 
 # If A is grouped, so that each unique element is in a contiguous group, then we only
 # need to keep track of one element at a time. We replace the elements of A with the
