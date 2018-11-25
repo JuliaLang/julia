@@ -205,7 +205,7 @@ julia> unique!(iseven, [2, 3, 5, 7, 9])
 ```
 """
 function unique!(f, A::AbstractVector)
-    seen = Set{eltype(A)}()
+    seen = Set()
     idxs = eachindex(A)
     y = iterate(idxs)
     count = 0

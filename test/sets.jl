@@ -401,6 +401,7 @@ end
     @test unique!(x -> x ^ 2, [1, -1, 3, -3, 5, -5]) == [1, 3, 5]
     @test unique!(n -> n % 3, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6]) == [5, 1, 9]
     @test unique!(iseven, [2, 3, 5, 7, 9]) == [2, 3]
+    @test unique!(x -> x % 2 == 0 ? :even : :odd, [1, 2, 3, 4, 2, 2, 1]) == [1, 2]
 end
 
 @testset "allunique" begin
