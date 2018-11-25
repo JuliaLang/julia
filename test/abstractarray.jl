@@ -912,3 +912,8 @@ end
     @test hcat(1:2, fill(1, (2,1))) == hcat([1:2;], fill(1, (2,1))) == reshape([1,2,1,1],2,2)
     @test [(1:3) (4:6); fill(1, (3,2))] == reshape([1,2,3,1,1,1,4,5,6,1,1,1], 6,2)
 end
+
+@testset "Issue 30145" begin
+    X = [1,2,3]
+    @test isempty(X[Union{}[]])
+end
