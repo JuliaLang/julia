@@ -917,3 +917,8 @@ end
     X = [1,2,3]
     @test isempty(X[Union{}[]])
 end
+
+@testset "Issue 30145" begin
+    X = [1,2,3]
+    @test isempty(X[Union{}[]])
+end
