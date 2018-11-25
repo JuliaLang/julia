@@ -1083,12 +1083,12 @@ Simultaneously compute the sine and cosine of `x`, where `x` is in degrees.
     if isinf(x)
         return throw(DomainError(x, "sincosd(x) is only defined for finite `x`."))
     elseif isnan(x)
-        return ( oftype(x,NaN), oftype(x,NaN) )
+        return (oftype(x,NaN), oftype(x,NaN))
     end
 
     # It turns out that calling those functions separately yielded better
     # performance than considering each case and calling `sincos_kernel`.
-    ( sind(x), cosd(x) )
+    return (sind(x), cosd(x))
 end
 
 sincosd(::Missing) = (missing, missing)
