@@ -1744,7 +1744,10 @@ extern "C" void jl_write_coverage_data(void)
 
 extern "C" void jl_write_malloc_log(void)
 {
-    write_log_data(mallocData, ".mem");
+    std::ostringstream stm;
+    stm << jl_getpid();
+    std::string outf = "." + stm.str() + ".mem";
+    write_log_data(mallocData, outf.c_str());
 }
 
 // --- constant determination ---
