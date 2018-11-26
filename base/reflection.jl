@@ -171,10 +171,8 @@ julia> fieldnames(Rational)
 """
 function fieldnames(t::DataType)
     @_pure_meta
-    (
-        fieldcount(t); # error check to make sure type is specific enough
-        (_fieldnames(t)...,)
-    )
+    fieldcount(t) # error check to make sure type is specific enough
+    (_fieldnames(t)...,)
 end
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames(::Core.TypeofBottom) =
