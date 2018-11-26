@@ -813,3 +813,13 @@ f20872(::Val, ::Val) = false
 module M29962 end
 # make sure checking if a binding is deprecated does not resolve it
 @test !Base.isdeprecated(M29962, :sin) && !Base.isbindingresolved(M29962, :sin)
+
+# issue #29100
+function f29100(data)
+    names = propertynames(data)
+    map(
+        name -> getproperty(data, name),
+        names
+    )
+end
+@inferred f29100(:a => 1)
