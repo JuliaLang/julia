@@ -1280,11 +1280,7 @@ Int64
 
 julia> @code_warntype f(1, 2, 3)
 Body::UNION{FLOAT64, INT64}
-    @ none:1 within `f'
-   ┌ @ operators.jl:286 within `>'
-   │┌ @ int.jl:49 within `<'
-1 ─││ %1 = (Base.slt_int)(1, b)::Bool
-│  └└
+1 ─ %1 = (Base.slt_int)(1, b)::Bool
 └──      goto #3 if not %1
 2 ─      return 1
 3 ─      return 1.0

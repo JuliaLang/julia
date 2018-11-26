@@ -1569,7 +1569,7 @@ module IRShow
         # :oneliner => src -> Base.IRShow.PartialLineInfoPrinter(src.linetable),
         :none => src -> Base.IRShow.lineinfo_disabled,
         )
-    debuginfo[:default] = debuginfo[:source]
+    debuginfo[:default] = debuginfo[:none]
 end
 
 function show(io::IO, src::CodeInfo; debuginfo::Symbol=:default)

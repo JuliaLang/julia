@@ -27,7 +27,7 @@ problematic for performance, so the results need to be used judiciously.
 In particular, unions containing either [`missing`](@ref) or [`nothing`](@ref) are displayed in yellow, since
 these are often intentional.
 
-Keyword argument `debuginfo` may be one of source (default) or none, to specify the verbosity of code comments.
+Keyword argument `debuginfo` may be one of source or none (default), to specify the verbosity of code comments.
 
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
