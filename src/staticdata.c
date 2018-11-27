@@ -170,7 +170,9 @@ static void jl_load_sysimg_so(void)
         jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_offsets", (void **)&sysimg_gvars_offsets, 1);
         sysimg_gvars_offsets += 1;
         assert(sysimg_fptrs.base);
-        jl_dlsym(jl_sysimg_handle, "jl_globalUnique", (void **)&globalUnique, 1);
+        int* globalUnique_ptr;
+        jl_dlsym(jl_sysimg_handle, "jl_globalUnique", (void **)&globalUnique_ptr, 1);
+        globalUnique = *globalUnique_ptr;
 #ifdef JULIA_ENABLE_THREADING
         uintptr_t *tls_getter_slot;
         jl_dlsym(jl_sysimg_handle, "jl_get_ptls_states_slot", (void **)&tls_getter_slot, 1);
