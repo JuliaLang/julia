@@ -784,12 +784,15 @@ An exception is raised if the process cannot be started.
 success(cmd::AbstractCmd) = success(_spawn(cmd))
 
 struct ProcessExitedException
-    procs::Vector{Process}
+    procs::Union{Vector{Process},Nothing}
+    # ProcessExitedException(nothing) is allowed for Distributed stdlib compat
 end
 ProcessExitedException(proc::Process) = ProcessExitedException([proc])
 
 function show(io::IO, err::ProcessExitedException)
-    if length(err.procs) == 1
+    if procs == nothing
+        println(io, "The process has exited.")
+    elseif length(err.procs) == 1
         proc = err.procs[1]
         println(io, "failed process: ", proc, " [", proc.exitcode, "]")
     else

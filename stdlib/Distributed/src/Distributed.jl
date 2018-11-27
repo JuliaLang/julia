@@ -56,7 +56,6 @@ export
     Future,
     WorkerConfig,
     RemoteException,
-    ProcessExitedException,
 
     process_messages,
     remoteref_id,
