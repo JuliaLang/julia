@@ -470,6 +470,10 @@ A = OffsetArray(view(rand(4,4), 1:4, 4:-1:1), (-3,5))
 a = [1]
 b = OffsetArray(a, (0,))
 @test @inferred(a .+ b) == [2]
+a = OffsetArray([1, -2, 1], (-2,))
+@test a .* a' == OffsetArray([ 1 -2  1;
+                              -2  4 -2;
+                               1 -2  1], (-2,-2))
 
 end # let
 
