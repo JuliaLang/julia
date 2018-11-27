@@ -658,7 +658,7 @@ end
 
 function _mul!(nzrang::Function, fadj::Function, C, sA, B, α, β)
     A = sA.data
-    n = A.n
+    n = size(A, 2)
     m = size(B, 2)
     n == size(B, 1) == size(C, 1) && m == size(C, 2) || throw(DimensionMismatch())
     rv = rowvals(A)

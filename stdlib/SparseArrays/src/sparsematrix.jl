@@ -99,6 +99,7 @@ julia> nonzeros(A)
 ```
 """
 nonzeros(S::SparseMatrixCSC) = S.nzval
+nonzeros(S::SparseMatrixCSCView)  = nonzeros(S.parent)
 
 """
     rowvals(A::SparseMatrixCSC)
@@ -124,6 +125,7 @@ julia> rowvals(A)
 ```
 """
 rowvals(S::SparseMatrixCSC) = S.rowval
+rowvals(S::SparseMatrixCSCView) = rowvals(S.parent)
 
 """
     nzrange(A::SparseMatrixCSC, col::Integer)
@@ -145,6 +147,7 @@ column. In conjunction with [`nonzeros`](@ref) and
     end
 """
 nzrange(S::SparseMatrixCSC, col::Integer) = S.colptr[col]:(S.colptr[col+1]-1)
+nzrange(S::SparseMatrixCSCView, col::Integer) = nzrange(S.parent, S.indices[2][col])
 
 function Base.show(io::IO, ::MIME"text/plain", S::SparseMatrixCSC)
     xnnz = nnz(S)
