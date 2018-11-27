@@ -241,6 +241,11 @@ function redirect_worker_output(ident, stream)
     end
 end
 
+struct LaunchWorkerError <: Exception
+    msg::String
+end
+
+Base.showerror(io::IO, e::LaunchWorkerError) = print(io, e.msg)
 
 # The default TCP transport relies on the worker listening on a free
 # port available and printing its bind address and port.
@@ -272,7 +277,7 @@ function read_worker_host_port(io::IO)
 
             conninfo = fetch(readtask)
             if isempty(conninfo) && !isopen(io)
-                error("Unable to read host:port string from worker. Launch command exited with error?")
+                throw(LaunchWorkerError("Unable to read host:port string from worker. Launch command exited with error?"))
             end
 
             ntries -= 1
@@ -286,9 +291,9 @@ function read_worker_host_port(io::IO)
         end
         close(io)
         if ntries > 0
-            error("Timed out waiting to read host:port string from worker.")
+            throw(LaunchWorkerError("Timed out waiting to read host:port string from worker."))
         else
-            error("Unexpected output from worker launch command. Host:port string not found.")
+            throw(LaunchWorkerError("Unexpected output from worker launch command. Host:port string not found."))
         end
     finally
         for line in leader
@@ -499,9 +504,13 @@ function create_worker(manager, wconfig)
     local r_s, w_s
     try
         (r_s, w_s) = connect(manager, w.id, wconfig)
-    catch
-        deregister_worker(w.id)
-        rethrow()
+    catch ex
+        try
+            deregister_worker(w.id)
+            kill(manager, w.id, wconfig)
+        finally
+            rethrow(ex)
+        end
     end
 
     w = Worker(w.id, r_s, w_s, manager; config=wconfig)
