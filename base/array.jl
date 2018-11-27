@@ -375,6 +375,11 @@ getindex(::Type{T}, x) where {T} = (@_inline_meta; a = Vector{T}(undef, 1); @inb
 getindex(::Type{T}, x, y) where {T} = (@_inline_meta; a = Vector{T}(undef, 2); @inbounds (a[1] = x; a[2] = y); a)
 getindex(::Type{T}, x, y, z) where {T} = (@_inline_meta; a = Vector{T}(undef, 3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
 
+getindex(::Type{Any}) = Vector{Any}()
+getindex(::Type{Any}, @nospecialize(x)) = (a = Vector{Any}(undef, 1); @inbounds a[1] = x; a)
+getindex(::Type{Any}, @nospecialize(x), @nospecialize(y)) = (a = Vector{Any}(undef, 2); @inbounds (a[1] = x; a[2] = y); a)
+getindex(::Type{Any}, @nospecialize(x), @nospecialize(y), @nospecialize(z)) = (a = Vector{Any}(undef, 3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
+
 function getindex(::Type{Any}, @nospecialize vals...)
     a = Vector{Any}(undef, length(vals))
     @inbounds for i = 1:length(vals)
@@ -382,7 +387,6 @@ function getindex(::Type{Any}, @nospecialize vals...)
     end
     return a
 end
-getindex(::Type{Any}) = Vector{Any}()
 
 function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
     ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), a, x, length(a))

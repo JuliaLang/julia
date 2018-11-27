@@ -31,8 +31,8 @@ end
 let
     a = Tuple{Array{T,N}, Vararg{Int,N}} where T where N
     b = Tuple{Array,Int}
-    @test  args_morespecific(a, b)
-    @test !args_morespecific(b, a)
+    @test !args_morespecific(a, b)
+    @test  args_morespecific(b, a)
     a = Tuple{Array, Vararg{Int,N}} where N
     @test !args_morespecific(a, b)
     @test  args_morespecific(b, a)
@@ -43,6 +43,7 @@ _z_z_z_(x, y) = 1
 _z_z_z_(::Int, ::Int, ::Vector) = 2
 _z_z_z_(::Int, c...) = 3
 @test _z_z_z_(1, 1, []) == 2
+@test_throws MethodError _z_z_z_(1, 1)  # ambiguous
 
 @test  args_morespecific(Tuple{T,Vararg{T}} where T<:Number,  Tuple{Number,Number,Vararg{Number}})
 @test !args_morespecific(Tuple{Number,Number,Vararg{Number}}, Tuple{T,Vararg{T}} where T<:Number)
@@ -50,7 +51,8 @@ _z_z_z_(::Int, c...) = 3
 @test args_morespecific(Tuple{Array{T} where T<:Union{Float32,Float64,ComplexF32,ComplexF64}, Any},
                         Tuple{Array{T} where T<:Real, Any})
 
-@test  args_morespecific(Tuple{1,T} where T, Tuple{Any})
+@test !args_morespecific(Tuple{1,T} where T, Tuple{Any})
+@test  args_morespecific(Tuple{1,T} where T, Tuple{Any,Any})
 @test  args_morespecific(Tuple{T} where T, Tuple{T,T} where T)
 @test !args_morespecific(Type{T} where T<:Integer, Type{Any})
 
@@ -108,7 +110,7 @@ f17016(f, t::T_17016) = 0
 f17016(f, t1::Tuple) = 1
 @test f17016(0, (1,2,3)) == 0
 
-@test  args_morespecific(Tuple{Type{Any}, Any}, Tuple{Type{T}, Any} where T<:VecElement)
+@test !args_morespecific(Tuple{Type{Any}, Any}, Tuple{Type{T}, Any} where T<:VecElement)
 @test !args_morespecific((Tuple{Type{T}, Any} where T<:VecElement), Tuple{Type{Any}, Any})
 
 @test !args_morespecific(Tuple{Type{T}, Tuple{Any, Vararg{Any, N} where N}} where T<:Tuple{Any, Vararg{Any, N} where N},
@@ -118,12 +120,12 @@ f17016(f, t1::Tuple) = 1
 @test !args_morespecific(Tuple{Type{T}, T} where T<:Tuple{Any, Vararg{Any, N} where N},
                          Tuple{Type{T}, Any} where T<:VecElement)
 
-@test args_morespecific(Tuple{Any, Tuple{}, Tuple{}}, Tuple{Any, Tuple{Any}})
-@test args_morespecific(Tuple{Any, Tuple{Any}, Tuple{Any}}, Tuple{Any, Tuple{Any, Any}})
-@test args_morespecific(Tuple{Any, Vararg{Tuple{}, N} where N}, Tuple{Any, Tuple{Any}})
+@test !args_morespecific(Tuple{Any, Tuple{}, Tuple{}}, Tuple{Any, Tuple{Any}})
+@test !args_morespecific(Tuple{Any, Tuple{Any}, Tuple{Any}}, Tuple{Any, Tuple{Any, Any}})
+@test  args_morespecific(Tuple{Any, Vararg{Tuple{}, N} where N}, Tuple{Any, Tuple{Any}})
 
 @test  args_morespecific(Tuple{T, T} where T<:AbstractFloat, Tuple{T, T, T} where T<:AbstractFloat)
-@test  args_morespecific(Tuple{T, Real, T} where T<:AbstractFloat, Tuple{T, T} where T<:Real)
+@test !args_morespecific(Tuple{T, Real, T} where T<:AbstractFloat, Tuple{T, T} where T<:Real)
 @test  args_morespecific(Tuple{Real, Real}, Tuple{T, T, T} where T <: Real)
 @test !args_morespecific(Tuple{Real, Real, Real}, Tuple{T, T, T} where T <: Real)
 @test !args_morespecific(Tuple{Real, Real, Vararg{Real}}, Tuple{T, T, T} where T <: Real)
@@ -189,9 +191,9 @@ end
 let A = Tuple{Array{T,N}, Vararg{Int,N}} where {T,N},
     B = Tuple{Array, Int},
     C = Tuple{AbstractArray, Int, Array}
-    @test args_morespecific(A, B)
-    @test args_morespecific(B, C)
-    @test args_morespecific(A, C)
+    @test !args_morespecific(A, B)
+    @test  args_morespecific(B, C)
+    @test !args_morespecific(A, C)
 end
 
 # transitivity issue found in #26915
@@ -259,5 +261,52 @@ end
 @test  args_morespecific(Tuple{Type{SubArray{T,2,P} where T}, Array{T}} where T where P,
                          Tuple{Type{AbstractArray{T,N} where N},AbstractArray} where T)
 
-@test  args_morespecific(Tuple{Type{T},T} where T<:BitArray,
+@test !args_morespecific(Tuple{Type{T},T} where T<:BitArray,
                          Tuple{Type{BitArray},Any})
+
+@test !args_morespecific(Tuple{Array{Int}, Integer}, Tuple{AbstractArray})
+@test  args_morespecific(Tuple{AbstractArray},       Tuple{Any, Colon})
+@test !args_morespecific(Tuple{Array{Int}, Integer}, Tuple{Any, Colon})
+
+@test  args_morespecific(Tuple{Type{Any}}, Tuple{Type{Any},Vararg{Any}})
+@test !args_morespecific(Tuple{Type{Any},Vararg{Any}}, Tuple{Type{T},Any} where T)
+@test  args_morespecific(Tuple{Type{Any}}, Tuple{Type{T},Any} where T)
+
+let A = Tuple{Array{<:AbstractArray,N}, Vararg{Int64,N}} where N,
+    B = Tuple{Array{<:Array,N} where N, Int64},
+    C = Tuple{Array{<:Array,N} where N, Union{Colon, Integer, AbstractArray{T,1} where T}, Vararg{Any,N} where N}
+    @test !args_morespecific(A, B)
+    @test  args_morespecific(B, C)
+    @test !args_morespecific(A, C)
+end
+
+abstract type Domain{T} end
+
+abstract type AbstractInterval{T} <: Domain{T} end
+
+struct Interval{L,R,T} <: AbstractInterval{T}
+end
+
+let A = Tuple{Type{Interval{:closed,:closed,T} where T}, Interval{:closed,:closed,T} where T},
+    B = Tuple{Type{II},                                  AbstractInterval} where II<:(Interval{:closed,:closed,T} where T),
+    C = Tuple{Type{AbstractInterval},                    AbstractInterval}
+    @test  args_morespecific(A, B)
+    @test !args_morespecific(B, C)
+    @test !args_morespecific(A, C)
+end
+
+let A = Tuple{Type{Domain},              Interval{L,R,T} where T} where R where L,
+    B = Tuple{Type{II},                  AbstractInterval} where II<:(Interval{:closed,:closed,T} where T),
+    C = Tuple{Type{AbstractInterval{T}}, AbstractInterval{T}} where T
+    @test !args_morespecific(A, B)
+    @test  args_morespecific(B, C)
+    @test !args_morespecific(A, C)
+end
+
+let A = Tuple{Type{AbstractInterval},    Interval{L,R,T} where T} where R where L,
+    B = Tuple{Type{II},                  AbstractInterval} where II<:(Interval{:closed,:closed,T} where T),
+    C = Tuple{Type{AbstractInterval{T}}, AbstractInterval{T}} where T
+    @test !args_morespecific(A, B)
+    @test  args_morespecific(B, C)
+    @test  args_morespecific(A, C)
+end

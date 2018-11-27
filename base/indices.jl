@@ -331,7 +331,8 @@ getindex(S::Slice, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 getindex(S::Slice, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 getindex(S::Slice, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::Slice) = print(io, "Base.Slice(", r.indices, ")")
-iterate(S::Slice, s...) = iterate(S.indices, s...)
+iterate(S::Slice) = iterate(S.indices)
+iterate(S::Slice, s) = iterate(S.indices, s)
 
 """
     LinearIndices(A::AbstractArray)
@@ -419,7 +420,8 @@ function getindex(iter::LinearIndices, i::AbstractRange{<:Integer})
 end
 # More efficient iteration — predominantly for non-vector LinearIndices
 # but one-dimensional LinearIndices must be special-cased to support OffsetArrays
-iterate(iter::LinearIndices{1}, s...) = iterate(axes1(iter.indices[1]), s...)
+iterate(iter::LinearIndices{1})    = iterate(axes1(iter.indices[1]))
+iterate(iter::LinearIndices{1}, s) = iterate(axes1(iter.indices[1]), s)
 iterate(iter::LinearIndices, i=1) = i > length(iter) ? nothing : (i, i+1)
 
 # Needed since firstindex and lastindex are defined in terms of LinearIndices

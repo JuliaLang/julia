@@ -2552,8 +2552,13 @@ static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int invari
     jl_vararg_kind_t ckind = jl_vararg_kind(clast);
     int cva = ckind > JL_VARARG_INT;
     int pva = jl_vararg_kind(jl_tparam(pdt,plen-1)) > JL_VARARG_INT;
+    if (!cva && !pva && clen > plen)
+        return 0;
+    if (cva && !pva && clen > plen+1)
+        return 0;
     int cdiag = 0, pdiag = 0;
     int some_morespecific = 0;
+    int va_morespecific = 0; // c vararg type is more specific than all p types
     while (1) {
         if (cva && pva && i >= clen && i >= plen)
             break;
@@ -2588,76 +2593,25 @@ static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int invari
         int cms = type_morespecific_(ce, pe, invariant, env);
         int eqv = !cms && eq_msp(ce, pe, env);
 
-        if (!cms && !eqv && !sub_msp(ce, pe, env)) {
-            /*
-              A bound vararg tuple can be more specific despite disjoint elements in order to
-              preserve transitivity. For example in
-              A = Tuple{Array{T,N}, Vararg{Int,N}} where {T,N}
-              B = Tuple{Array, Int}
-              C = Tuple{AbstractArray, Int, Array}
-              we need A < B < C and A < C.
-            */
-            return some_morespecific && cva && ckind == JL_VARARG_BOUND && num_occurs((jl_tvar_t*)jl_tparam1(jl_unwrap_unionall(clast)), env) > 1;
-        }
+        if (!cms && !eqv && !sub_msp(ce, pe, env))
+            return 0;
 
         // Tuple{..., T} not more specific than Tuple{..., Vararg{S}} if S is diagonal
         if (eqv && i == clen-1 && clen == plen && !cva && pva && jl_is_typevar(ce) && jl_is_typevar(pe) && !cdiag && pdiag)
             return 0;
+
+        if (cms && cva && i == clen-1)
+            va_morespecific = 1;
 
         if (cms) some_morespecific = 1;
         i++;
     }
     if (cva && pva && clen > plen && (!pdiag || cdiag))
         return 1;
-    if (cva && !pva && !some_morespecific)
+    if (cva && !pva && !va_morespecific)
+        // ambiguity: c is more specific in type but p is more specific in count
         return 0;
     return some_morespecific || (cdiag && !pdiag);
-}
-
-static size_t tuple_full_length(jl_value_t *t)
-{
-    size_t n = jl_nparams(t);
-    if (n == 0) return 0;
-    jl_value_t *last = jl_unwrap_unionall(jl_tparam(t,n-1));
-    if (jl_is_vararg_type(last)) {
-        jl_value_t *N = jl_tparam1(last);
-        if (jl_is_long(N))
-            n += jl_unbox_long(N)-1;
-    }
-    return n;
-}
-
-// Called when a is a bound-vararg and b is not a vararg. Sets the vararg length
-// in a to match b, as long as this makes some earlier argument more specific.
-static int args_morespecific_fix1(jl_value_t *a, jl_value_t *b, int swap, jl_typeenv_t *env)
-{
-    size_t n = jl_nparams(a);
-    int taillen = tuple_full_length(b)-n+1;
-    if (taillen <= 0)
-        return -1;
-    assert(jl_is_va_tuple((jl_datatype_t*)a));
-    jl_datatype_t *new_a = NULL;
-    jl_value_t *e[2] = { jl_tparam1(jl_unwrap_unionall(jl_tparam(a, n-1))), jl_box_long(taillen) };
-    JL_GC_PUSH2(&new_a, &e[1]);
-    new_a = (jl_datatype_t*)jl_instantiate_type_with((jl_value_t*)a, e, 1);
-    int changed = 0;
-    for (size_t i = 0; i < n-1; i++) {
-        if (jl_tparam(a, i) != jl_tparam(new_a, i)) {
-            changed = 1;
-            break;
-        }
-    }
-    int ret = -1;
-    if (changed) {
-        if (eq_msp(b, (jl_value_t*)new_a, env))
-            ret = swap;
-        else if (swap)
-            ret = type_morespecific_(b, (jl_value_t*)new_a, 0, env);
-        else
-            ret = type_morespecific_((jl_value_t*)new_a, b, 0, env);
-    }
-    JL_GC_POP();
-    return ret;
 }
 
 static int count_occurs(jl_value_t *t, jl_tvar_t *v)
@@ -2698,33 +2652,7 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
     if (a == b)
         return 0;
 
-    if (jl_is_unionall(a)) {
-        jl_unionall_t *ua = (jl_unionall_t*)a;
-        jl_typeenv_t newenv = { ua->var, 0x0, env };
-        newenv.val = (jl_value_t*)(intptr_t)count_occurs(ua->body, ua->var);
-        return type_morespecific_(ua->body, b, invariant, &newenv);
-    }
-    if (jl_is_unionall(b)) {
-        jl_unionall_t *ub = (jl_unionall_t*)b;
-        jl_typeenv_t newenv = { ub->var, 0x0, env };
-        newenv.val = (jl_value_t*)(intptr_t)count_occurs(ub->body, ub->var);
-        return type_morespecific_(a, ub->body, invariant, &newenv);
-    }
-
     if (jl_is_tuple_type(a) && jl_is_tuple_type(b)) {
-        // When one is JL_VARARG_BOUND and the other has fixed length,
-        // allow the argument length to fix the tvar
-        jl_vararg_kind_t akind = jl_va_tuple_kind((jl_datatype_t*)a);
-        jl_vararg_kind_t bkind = jl_va_tuple_kind((jl_datatype_t*)b);
-        int ans = -1;
-        if (akind == JL_VARARG_BOUND && bkind < JL_VARARG_BOUND) {
-            ans = args_morespecific_fix1(a, b, 0, env);
-            if (ans == 1) return 1;
-        }
-        if (bkind == JL_VARARG_BOUND && akind < JL_VARARG_BOUND) {
-            ans = args_morespecific_fix1(b, a, 1, env);
-            if (ans == 0) return 0;
-        }
         return tuple_morespecific((jl_datatype_t*)a, (jl_datatype_t*)b, invariant, env);
     }
 
@@ -2805,6 +2733,12 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
                         ascore += 1;
                     else if (type_morespecific_(bpara, apara, 1, env) && (jl_is_typevar(bpara) || !bfree || afree))
                         bscore += 1;
+                    else if (eq_msp(apara, bpara, env)) {
+                        if (!afree && bfree)
+                            ascore += 1;
+                        else if (afree && !bfree)
+                            bscore += 1;
+                    }
                     if (jl_is_typevar(bpara) && !jl_is_typevar(apara) && !jl_is_type(apara))
                         ascore1 = 1;
                     else if (jl_is_typevar(apara) && !jl_is_typevar(bpara) && !jl_is_type(bpara))
@@ -2877,10 +2811,25 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
             else {
                 if (obviously_disjoint(a, ((jl_tvar_t*)b)->ub, 1))
                     return 0;
+                if (type_morespecific_(((jl_tvar_t*)b)->ub, a, 0, env))
+                    return 0;
                 return 1;
             }
         }
         return type_morespecific_(a, (jl_value_t*)((jl_tvar_t*)b)->ub, 0, env);
+    }
+
+    if (jl_is_unionall(a)) {
+        jl_unionall_t *ua = (jl_unionall_t*)a;
+        jl_typeenv_t newenv = { ua->var, 0x0, env };
+        newenv.val = (jl_value_t*)(intptr_t)count_occurs(ua->body, ua->var);
+        return type_morespecific_(ua->body, b, invariant, &newenv);
+    }
+    if (jl_is_unionall(b)) {
+        jl_unionall_t *ub = (jl_unionall_t*)b;
+        jl_typeenv_t newenv = { ub->var, 0x0, env };
+        newenv.val = (jl_value_t*)(intptr_t)count_occurs(ub->body, ub->var);
+        return type_morespecific_(a, ub->body, invariant, &newenv);
     }
 
     return 0;

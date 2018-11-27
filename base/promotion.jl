@@ -297,6 +297,7 @@ function promote(x, y, z, a...)
     p
 end
 
+promote(x::T, y::T) where {T} = (x, y)
 promote(x::T, y::T, zs::T...) where {T} = (x, y, zs...)
 
 not_sametype(x::T, y::T) where {T} = sametype_error(x)
