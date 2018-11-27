@@ -2134,3 +2134,11 @@ end
 # Test that inference can infer .instance of types
 f_instance(::Type{T}) where {T} = T.instance
 @test @inferred(f_instance(Nothing)) === nothing
+
+# test for some limit-cycle caching poisoning
+_false30098 = false
+f30098() = _false30098 ? g30098() : 3
+g30098() = (h30098(:f30098); 4)
+h30098(f) = getfield(@__MODULE__, f)()
+@test @inferred(g30098()) == 4 # make sure that this
+@test @inferred(f30098()) == 3 # doesn't pollute the inference cache of this
