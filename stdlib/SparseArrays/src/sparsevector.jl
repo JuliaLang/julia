@@ -30,9 +30,9 @@ end
 SparseVector(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti} =
     SparseVector{Tv,Ti}(n, nzind, nzval)
 
-# Define an alias for a view of a whole column of a SparseMatrixCSC. Many methods can be written for the
+# Define an alias for a view of a whole column of a GenericMatrixCSC. Many methods can be written for the
 # union of such a view and a SparseVector so we define an alias for such a union as well
-const SparseColumnView{T}  = SubArray{T,1,<:SparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int}},Int},false}
+const SparseColumnView{T}  = SubArray{T,1,<:GenericMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int}},Int},false}
 const SparseVectorUnion{T} = Union{SparseVector{T}, SparseColumnView{T}}
 
 ### Basic properties
@@ -69,11 +69,11 @@ _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) whe
     SparseVector(dims..., similar(S.nzind, TiNew, 0), similar(S.nzval, TvNew, 0))
 # parent method for similar that preserves storage space (for old and new dims differ, and new is 2d)
 _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
-    SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(S.nzind, TiNew), similar(S.nzval, TvNew))
+    GenericMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(S.nzind, TiNew), similar(S.nzval, TvNew))
 # The following methods hook into the AbstractArray similar hierarchy. The first method
 # covers similar(A[, Tv]) calls, which preserve stored-entry structure, and the latter
 # methods cover similar(A[, Tv], shape...) calls, which preserve nothing if the dims
-# specify a SparseVector result and storage space if the dims specify a SparseMatrixCSC result.
+# specify a SparseVector result and storage space if the dims specify a GenericMatrixCSC result.
 similar(S::SparseVector{<:Any,Ti}, ::Type{TvNew}) where {Ti,TvNew} =
     _sparsesimilar(S, TvNew, Ti)
 similar(S::SparseVector{<:Any,Ti}, ::Type{TvNew}, dims::Union{Dims{1},Dims{2}}) where {Ti,TvNew} =
@@ -346,15 +346,15 @@ end
 
 ### Conversion
 
-# convert SparseMatrixCSC to SparseVector
-function SparseVector{Tv,Ti}(s::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti<:Integer}
+# convert GenericMatrixCSC to SparseVector
+function SparseVector{Tv,Ti}(s::GenericMatrixCSC{Tv,Ti}) where {Tv,Ti<:Integer}
     size(s, 2) == 1 || throw(ArgumentError("The input argument must have a single-column."))
     SparseVector(s.m, s.rowval, s.nzval)
 end
 
-SparseVector{Tv}(s::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = SparseVector{Tv,Ti}(s)
+SparseVector{Tv}(s::GenericMatrixCSC{Tv,Ti}) where {Tv,Ti} = SparseVector{Tv,Ti}(s)
 
-SparseVector(s::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = SparseVector{Tv,Ti}(s)
+SparseVector(s::GenericMatrixCSC{Tv,Ti}) where {Tv,Ti} = SparseVector{Tv,Ti}(s)
 
 # convert Vector to SparseVector
 
@@ -425,7 +425,7 @@ SparseVector{Tv}(s::SparseVector{<:Any,Ti}) where {Tv,Ti} =
 
 convert(T::Type{<:SparseVector}, m::AbstractVector) = m isa T ? m : T(m)
 
-convert(T::Type{<:SparseVector}, m::SparseMatrixCSC) = T(m)
+convert(T::Type{<:SparseVector}, m::GenericMatrixCSC) = T(m)
 convert(T::Type{<:SparseMatrixCSC}, v::SparseVector) = T(v)
 
 ### copying
@@ -461,7 +461,7 @@ function copyto!(A::SparseVector, B::SparseVector)
     return A
 end
 
-function copyto!(A::SparseVector, B::SparseMatrixCSC)
+function copyto!(A::SparseVector, B::GenericMatrixCSC)
     prep_sparsevec_copy_dest!(A, length(B), nnz(B))
 
     ptr = 1
@@ -478,7 +478,7 @@ function copyto!(A::SparseVector, B::SparseMatrixCSC)
     return A
 end
 
-copyto!(A::SparseMatrixCSC, B::SparseVector{TvB,TiB}) where {TvB,TiB} =
+copyto!(A::GenericMatrixCSC, B::SparseVector{TvB,TiB}) where {TvB,TiB} =
     copyto!(A, SparseMatrixCSC{TvB,TiB}(B.n, 1, TiB[1, length(B.nzind)+1], B.nzind, B.nzval))
 
 
@@ -512,14 +512,14 @@ sprandn(r::AbstractRNG, ::Type{T}, n::Integer, p::AbstractFloat) where T = spran
 ## Indexing into Matrices can return SparseVectors
 
 # Column slices
-function getindex(x::SparseMatrixCSC, ::Colon, j::Integer)
+function getindex(x::GenericMatrixCSC, ::Colon, j::Integer)
     checkbounds(x, :, j)
     r1 = convert(Int, x.colptr[j])
     r2 = convert(Int, x.colptr[j+1]) - 1
     SparseVector(x.m, x.rowval[r1:r2], x.nzval[r1:r2])
 end
 
-function getindex(x::SparseMatrixCSC, I::AbstractUnitRange, j::Integer)
+function getindex(x::GenericMatrixCSC, I::AbstractUnitRange, j::Integer)
     checkbounds(x, I, j)
     # Get the selected column
     c1 = convert(Int, x.colptr[j])
@@ -530,15 +530,15 @@ function getindex(x::SparseMatrixCSC, I::AbstractUnitRange, j::Integer)
     SparseVector(length(I), [x.rowval[i] - first(I) + 1 for i = r1:r2], x.nzval[r1:r2])
 end
 
-# In the general case, we piggy back upon SparseMatrixCSC's optimized solution
-@inline function getindex(A::SparseMatrixCSC, I::AbstractVector, J::Integer)
+# In the general case, we piggy back upon GenericMatrixCSC's optimized solution
+@inline function getindex(A::GenericMatrixCSC, I::AbstractVector, J::Integer)
     M = A[I, [J]]
     SparseVector(M.m, M.rowval, M.nzval)
 end
 
 # Row slices
-getindex(A::SparseMatrixCSC, i::Integer, ::Colon) = A[i, 1:end]
-function Base.getindex(A::SparseMatrixCSC{Tv,Ti}, i::Integer, J::AbstractVector) where {Tv,Ti}
+getindex(A::GenericMatrixCSC, i::Integer, ::Colon) = A[i, 1:end]
+function Base.getindex(A::GenericMatrixCSC{Tv,Ti}, i::Integer, J::AbstractVector) where {Tv,Ti}
     @assert !has_offset_axes(A, J)
     checkbounds(A, i, J)
     nJ = length(J)
@@ -570,9 +570,9 @@ end
 
 
 # Logical and linear indexing into SparseMatrices
-getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}) = _logical_index(A, I) # Ambiguities
-getindex(A::SparseMatrixCSC, I::AbstractArray{Bool}) = _logical_index(A, I)
-function _logical_index(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool}) where Tv
+getindex(A::GenericMatrixCSC, I::AbstractVector{Bool}) = _logical_index(A, I) # Ambiguities
+getindex(A::GenericMatrixCSC, I::AbstractArray{Bool}) = _logical_index(A, I)
+function _logical_index(A::GenericMatrixCSC{Tv}, I::AbstractArray{Bool}) where Tv
     @assert !has_offset_axes(A, I)
     checkbounds(A, I)
     n = sum(I)
@@ -612,9 +612,9 @@ function _logical_index(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool}) where Tv
 end
 
 # TODO: further optimizations are available for ::Colon and other types of AbstractRange
-getindex(A::SparseMatrixCSC, ::Colon) = A[1:end]
+getindex(A::GenericMatrixCSC, ::Colon) = A[1:end]
 
-function getindex(A::SparseMatrixCSC{Tv}, I::AbstractUnitRange) where Tv
+function getindex(A::GenericMatrixCSC{Tv}, I::AbstractUnitRange) where Tv
     @assert !has_offset_axes(A, I)
     checkbounds(A, I)
     szA = size(A)
@@ -651,7 +651,7 @@ function getindex(A::SparseMatrixCSC{Tv}, I::AbstractUnitRange) where Tv
     SparseVector(n, rowvalB, nzvalB)
 end
 
-function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
+function getindex(A::GenericMatrixCSC{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
     @assert !has_offset_axes(A, I)
     szA = size(A)
     nA = szA[1]*szA[2]
@@ -804,14 +804,14 @@ end
 getindex(x::AbstractSparseVector, I::AbstractVector{Bool}) = x[findall(I)]
 getindex(x::AbstractSparseVector, I::AbstractArray{Bool}) = x[findall(I)]
 @inline function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
-    # SparseMatrixCSC has a nicely optimized routine for this; punt
-    S = SparseMatrixCSC(x.n, 1, Ti[1,length(x.nzind)+1], x.nzind, x.nzval)
+    # GenericMatrixCSC has a nicely optimized routine for this; punt
+    S = GenericMatrixCSC(x.n, 1, Ti[1,length(x.nzind)+1], x.nzind, x.nzval)
     S[I, 1]
 end
 
 function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractArray) where {Tv,Ti}
-    # punt to SparseMatrixCSC
-    S = SparseMatrixCSC(x.n, 1, Ti[1,length(x.nzind)+1], x.nzind, x.nzval)
+    # punt to GenericMatrixCSC
+    S = GenericMatrixCSC(x.n, 1, Ti[1,length(x.nzind)+1], x.nzind, x.nzval)
     S[I]
 end
 
@@ -915,7 +915,7 @@ complex(x::AbstractSparseVector) =
 
 # Without the first of these methods, horizontal concatenations of SparseVectors fall
 # back to the horizontal concatenation method that ensures that combinations of
-# sparse/special/dense matrix/vector types concatenate to SparseMatrixCSCs, instead
+# sparse/special/dense matrix/vector types concatenate to GenericMatrixCSCs, instead
 # of _absspvec_hcat below. The <:Integer qualifications are necessary for correct dispatch.
 hcat(X::SparseVector{Tv,Ti}...) where {Tv,Ti<:Integer} = _absspvec_hcat(X...)
 hcat(X::AbstractSparseVector{Tv,Ti}...) where {Tv,Ti<:Integer} = _absspvec_hcat(X...)
@@ -950,7 +950,7 @@ end
 
 # Without the first of these methods, vertical concatenations of SparseVectors fall
 # back to the vertical concatenation method that ensures that combinations of
-# sparse/special/dense matrix/vector types concatenate to SparseMatrixCSCs, instead
+# sparse/special/dense matrix/vector types concatenate to GenericMatrixCSCs, instead
 # of _absspvec_vcat below. The <:Integer qualifications are necessary for correct dispatch.
 vcat(X::SparseVector{Tv,Ti}...) where {Tv,Ti<:Integer} = _absspvec_vcat(X...)
 vcat(X::AbstractSparseVector{Tv,Ti}...) where {Tv,Ti<:Integer} = _absspvec_vcat(X...)
@@ -991,7 +991,7 @@ hcat(Xin::Union{Vector, AbstractSparseVector}...) = hcat(map(sparse, Xin)...)
 vcat(Xin::Union{Vector, AbstractSparseVector}...) = vcat(map(sparse, Xin)...)
 # Without the following method, vertical concatenations of SparseVectors with Vectors
 # fall back to the vertical concatenation method that ensures that combinations of
-# sparse/special/dense matrix/vector types concatenate to SparseMatrixCSCs (because
+# sparse/special/dense matrix/vector types concatenate to GenericMatrixCSCs (because
 # the vcat method immediately above is less specific, being defined in AbstractSparseVector
 # rather than SparseVector).
 vcat(X::Union{Vector,SparseVector}...) = vcat(map(sparse, X)...)
@@ -1005,7 +1005,7 @@ vcat(X::Union{Vector,SparseVector}...) = vcat(map(sparse, X)...)
 
 # TODO: A definition similar to the third exists in base/linalg/bidiag.jl. These definitions
 # should be consolidated in a more appropriate location, e.g. base/linalg/special.jl.
-const _SparseArrays = Union{SparseVector, SparseMatrixCSC, Adjoint{<:Any,<:SparseVector}, Transpose{<:Any,<:SparseVector}}
+const _SparseArrays = Union{SparseVector, GenericMatrixCSC, Adjoint{<:Any,<:SparseVector}, Transpose{<:Any,<:SparseVector}}
 const _SpecialArrays = Union{Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal}
 const _SparseConcatArrays = Union{_SpecialArrays, _SparseArrays}
 
@@ -1560,7 +1560,7 @@ end
 
 ### BLAS-2 / sparse A * sparse x -> dense y
 
-function densemv(A::SparseMatrixCSC, x::AbstractSparseVector; trans::AbstractChar='N')
+function densemv(A::GenericMatrixCSC, x::AbstractSparseVector; trans::AbstractChar='N')
     local xlen::Int, ylen::Int
     @assert !has_offset_axes(A, x)
     m, n = size(A)
@@ -1588,10 +1588,10 @@ end
 
 # * and mul!
 
-mul!(y::AbstractVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+mul!(y::AbstractVector{Ty}, A::GenericMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     mul!(y, A, x, one(Tx), zero(Ty))
 
-function mul!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractSparseVector, α::Number, β::Number)
+function mul!(y::AbstractVector, A::GenericMatrixCSC, x::AbstractSparseVector, α::Number, β::Number)
     @assert !has_offset_axes(y, A, x)
     m, n = size(A)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
@@ -1622,20 +1622,20 @@ end
 
 # * and *(Tranpose(A), B)
 
-mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:GenericMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     (A = transA.parent; mul!(y, transpose(A), x, one(Tx), zero(Ty)))
 
-mul!(y::AbstractVector, transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
+mul!(y::AbstractVector, transA::Transpose{<:Any,<:GenericMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
     (A = transA.parent; _At_or_Ac_mul_B!(*, y, A, x, α, β))
 
-mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
+mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:GenericMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     (A = adjA.parent; mul!(y, adjoint(A), x, one(Tx), zero(Ty)))
 
-mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
+mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:GenericMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
     (A = adjA.parent; _At_or_Ac_mul_B!(dot, y, A, x, α, β))
 
 function _At_or_Ac_mul_B!(tfun::Function,
-                          y::AbstractVector, A::SparseMatrixCSC, x::AbstractSparseVector,
+                          y::AbstractVector, A::GenericMatrixCSC, x::AbstractSparseVector,
                           α::Number, β::Number)
     @assert !has_offset_axes(y, A, x)
     m, n = size(A)
@@ -1665,20 +1665,20 @@ end
 
 ### BLAS-2 / sparse A * sparse x -> dense y
 
-function *(A::SparseMatrixCSC, x::AbstractSparseVector)
+function *(A::GenericMatrixCSC, x::AbstractSparseVector)
     @assert !has_offset_axes(A, x)
     y = densemv(A, x)
     initcap = min(nnz(A), size(A,1))
     _dense2sparsevec(y, initcap)
 end
 
-*(transA::Transpose{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector) =
+*(transA::Transpose{<:Any,<:GenericMatrixCSC}, x::AbstractSparseVector) =
     (A = transA.parent; _At_or_Ac_mul_B(*, A, x))
 
-*(adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector) =
+*(adjA::Adjoint{<:Any,<:GenericMatrixCSC}, x::AbstractSparseVector) =
     (A = adjA.parent; _At_or_Ac_mul_B(dot, A, x))
 
-function _At_or_Ac_mul_B(tfun::Function, A::SparseMatrixCSC{TvA,TiA}, x::AbstractSparseVector{TvX,TiX}) where {TvA,TiA,TvX,TiX}
+function _At_or_Ac_mul_B(tfun::Function, A::GenericMatrixCSC{TvA,TiA}, x::AbstractSparseVector{TvX,TiX}) where {TvA,TiA,TvX,TiX}
     @assert !has_offset_axes(A, x)
     m, n = size(A)
     length(x) == m || throw(DimensionMismatch())
@@ -1937,7 +1937,7 @@ julia> dropzeros(A)
 dropzeros(x::SparseVector; trim::Bool = true) = dropzeros!(copy(x), trim = trim)
 
 
-function _fillnonzero!(arr::SparseMatrixCSC{Tv, Ti}, val) where {Tv,Ti}
+function _fillnonzero!(arr::GenericMatrixCSC{Tv, Ti}, val) where {Tv,Ti}
     m, n = size(arr)
     resize!(arr.colptr, n+1)
     resize!(arr.rowval, m*n)
@@ -1966,7 +1966,7 @@ function _fillnonzero!(arr::SparseVector{Tv,Ti}, val) where {Tv,Ti}
 end
 
 import Base.fill!
-function fill!(A::Union{SparseVector, SparseMatrixCSC}, x)
+function fill!(A::Union{SparseVector, GenericMatrixCSC}, x)
     T = eltype(A)
     xT = convert(T, x)
     if xT == zero(T)

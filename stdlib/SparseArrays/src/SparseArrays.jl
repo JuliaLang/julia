@@ -31,7 +31,7 @@ import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
 
 using Random: GLOBAL_RNG, AbstractRNG, randsubseq, randsubseq!
 
-export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
+export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector, GenericMatrixCSC,
     SparseMatrixCSC, SparseVector, blockdiag, droptol!, dropzeros!, dropzeros,
     issparse, nonzeros, nzrange, rowvals, sparse, sparsevec, spdiagm,
     sprand, sprandn, spzeros, nnz, permute, findnz

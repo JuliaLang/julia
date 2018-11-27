@@ -1898,7 +1898,7 @@ end
 
 # Test temporary fix for issue #16548 in PR #16979. Somewhat brittle. Expect to remove with `\` revisions.
 @testset "issue #16548" begin
-    ms = methods(\, (SparseMatrixCSC, AbstractVecOrMat)).ms
+    ms = methods(\, (GenericMatrixCSC, AbstractVecOrMat)).ms
     @test all(m -> m.module == SparseArrays, ms)
 end
 
@@ -1959,7 +1959,7 @@ end
 
 # Check calling of unary minus method specialized for SparseMatrixCSCs
 @testset "issue #19503" begin
-    @test which(-, (SparseMatrixCSC,)).module == SparseArrays
+    @test which(-, (GenericMatrixCSC,)).module == SparseArrays
 end
 
 @testset "issue #14398" begin
