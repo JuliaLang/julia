@@ -11,7 +11,6 @@ function typeinf(result::InferenceResult, cached::Bool, params::Params)
 end
 
 function typeinf(frame::InferenceState)
-    cached = frame.cached
     typeinf_nocycle(frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
     frames = frame.callers_in_cycle
@@ -28,6 +27,7 @@ function typeinf(frame::InferenceState)
     # empty!(frames)
     min_valid = frame.min_valid
     max_valid = frame.max_valid
+    cached = frame.cached
     if cached || frame.parent !== nothing
         for caller in results
             opt = caller.src
@@ -442,13 +442,22 @@ function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
         uncached |= !frame.cached # ensure we never add an uncached frame to a cycle
         limited |= frame.limited
         if frame.linfo === linfo
-            uncached && return true
+            if uncached
+                # our attempt to speculate into a constant call lead to an undesired self-cycle
+                # that cannot be converged: poison our call-stack (up to the discovered duplicate frame)
+                # with the limited flag and abort (set return type to Any) now
+                poison_callstack(parent, frame, false)
+                return true
+            end
             merge_call_chain!(parent, frame, frame, limited)
             return frame
         end
         for caller in frame.callers_in_cycle
             if caller.linfo === linfo
-                uncached && return true
+                if uncached
+                    poison_callstack(parent, frame, false)
+                    return true
+                end
                 merge_call_chain!(parent, frame, caller, limited)
                 return caller
             end

@@ -942,3 +942,8 @@ end
     @test_throws ErrorException map(identity, Set([1,2,3]))
     @test_throws ErrorException map(identity, Dict("a"=>"b"))
 end
+
+@testset "Issue 30145" begin
+    X = [1,2,3]
+    @test isempty(X[Union{}[]])
+end

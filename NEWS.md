@@ -16,7 +16,8 @@ Language changes
     argument ([#29157]).
   * Parser inputs ending with a comma are now consistently treated as incomplete.
     Previously they were sometimes parsed as tuples, depending on whitespace ([#28506]).
-  * `Regex` now behave like a scalar when used in broadcasting ([#29913]).
+  * `Regex` now behaves like a scalar when used in broadcasting ([#29913]).
+  * `Char` now behaves like a read-only 0-dimensional array ([#29819]).
 
 New library functions
 ---------------------
