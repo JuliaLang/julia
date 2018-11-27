@@ -1003,9 +1003,9 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::SparseMatrixCSC{Tv,Ti}, mea
     isempty(R) || fill!(R, zero(S))
     isempty(A) && return R
 
-    colptr = A.colptr
-    rowval = A.rowval
-    nzval = A.nzval
+    colptr = getcolptr(A)
+    rowval = rowvals(A)
+    nzval = nonzeros(A)
     m = size(A, 1)
     n = size(A, 2)
 
