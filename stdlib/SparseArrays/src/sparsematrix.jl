@@ -6,20 +6,31 @@
 #      issorted(rowval[colptr[i]:(colptr[i+1]-1)]) == true
 
 """
-    SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
+    GenericMatrixCSC{Tv,
+                     Ti <: Integer,
+                     Tc <: AbstractVector{Ti},
+                     Tr <: AbstractVector{Ti},
+                     Tz <: AbstractVector{Tv}} <: AbstractSparseMatrix{Tv,Ti}
 
-Matrix type for storing sparse matrices in the
-[Compressed Sparse Column](@ref man-csc) format.
+A generalized version of [`SparseMatrixCSC`](@ref) where `colptr`, `rowval`
+`nzval` can be vectors of arbitrary type with compatible element types.
 """
-struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
+struct GenericMatrixCSC{Tv, Ti<:Integer,
+                        Tc<:AbstractVector{Ti},
+                        Tr<:AbstractVector{Ti},
+                        Tz<:AbstractVector{Tv}} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
-    colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
-    rowval::Vector{Ti}      # Row indices of stored values
-    nzval::Vector{Tv}       # Stored values, typically nonzeros
+    colptr::Tc              # Column i is in colptr[i]:(colptr[i+1]-1)
+    rowval::Tr              # Row indices of stored values
+    nzval::Tz               # Stored values, typically nonzeros
 
-    function SparseMatrixCSC{Tv,Ti}(m::Integer, n::Integer, colptr::Vector{Ti}, rowval::Vector{Ti},
-                                    nzval::Vector{Tv}) where {Tv,Ti<:Integer}
+    function GenericMatrixCSC{Tv,Ti,Tc,Tr,Tz}(m::Integer, n::Integer,
+                                              colptr::Tc, rowval::Tr, nzval::Tz) where {
+                                                  Tv, Ti<:Integer,
+                                                  Tc<:AbstractVector{Ti},
+                                                  Tr<:AbstractVector{Ti},
+                                                  Tz<:AbstractVector{Tv}}
         @noinline throwsz(str, lbl, k) =
             throw(ArgumentError("number of $str ($lbl) must be ≥ 0, got $k"))
         m < 0 && throwsz("rows", 'm', m)
@@ -27,10 +38,33 @@ struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
         new(Int(m), Int(n), colptr, rowval, nzval)
     end
 end
-function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector, nzval::Vector)
+
+function GenericMatrixCSC(m::Integer, n::Integer, colptr::AbstractVector,
+                          rowval::AbstractVector, nzval::AbstractVector)
     Tv = eltype(nzval)
     Ti = promote_type(eltype(colptr), eltype(rowval))
-    SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
+    Tc = typeof(colptr)
+    Tr = typeof(rowval)
+    Tz = typeof(nzval)
+    GenericMatrixCSC{Tv,Ti,Tc,Tr,Tz}(m, n, colptr, rowval, nzval)
+end
+
+"""
+    SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
+
+Matrix type for storing sparse matrices in the
+[Compressed Sparse Column](@ref man-csc) format.
+
+`SparseMatrixCSC` is actually an alias to [`GenericMatrixCSC`](@ref):
+
+```julia
+GenericMatrixCSC{Tv,Ti,Vector{Ti},Vector{Ti},Vector{Tv}}
+```
+"""
+const SparseMatrixCSC{Tv,Ti} = GenericMatrixCSC{Tv,Ti,Vector{Ti},Vector{Ti},Vector{Tv}}
+
+function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector, nzval::Vector)
+    GenericMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
 size(S::SparseMatrixCSC) = (S.m, S.n)

@@ -204,6 +204,7 @@ section of the standard library reference.
 ```@docs
 SparseArrays.SparseVector
 SparseArrays.SparseMatrixCSC
+SparseArrays.GenericMatrixCSC
 SparseArrays.sparse
 SparseArrays.sparsevec
 SparseArrays.issparse
