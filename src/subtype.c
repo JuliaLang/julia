@@ -2797,12 +2797,13 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
                 for(size_t i=0; i < jl_nparams(tta); i++) {
                     jl_value_t *apara = jl_tparam(tta,i);
                     jl_value_t *bpara = jl_tparam(ttb,i);
-                    if (!jl_has_free_typevars(apara) && !jl_has_free_typevars(bpara) &&
-                        !jl_types_equal(apara, bpara))
+                    int afree = jl_has_free_typevars(apara);
+                    int bfree = jl_has_free_typevars(bpara);
+                    if (!afree && !bfree && !jl_types_equal(apara, bpara))
                         return 0;
-                    if (type_morespecific_(apara, bpara, 1, env))
+                    if (type_morespecific_(apara, bpara, 1, env) && (jl_is_typevar(apara) || !afree || bfree))
                         ascore += 1;
-                    else if (type_morespecific_(bpara, apara, 1, env))
+                    else if (type_morespecific_(bpara, apara, 1, env) && (jl_is_typevar(bpara) || !bfree || afree))
                         bscore += 1;
                     if (jl_is_typevar(bpara) && !jl_is_typevar(apara) && !jl_is_type(apara))
                         ascore1 = 1;
@@ -2829,9 +2830,6 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
                     return 0;
                 return ascore > bscore || adiag > bdiag;
             }
-            else if (invariant) {
-                return 0;
-            }
             tta = tta->super; super = 1;
         }
         return 0;
@@ -2854,8 +2852,9 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
             if (((jl_tvar_t*)a)->ub == jl_bottom_type)
                 return 1;
             if (jl_has_free_typevars(b)) {
-                if (type_morespecific_(((jl_tvar_t*)a)->ub, b, 0, env) ||
-                    eq_msp(((jl_tvar_t*)a)->ub, b, env))
+                if (type_morespecific_(((jl_tvar_t*)a)->ub, b, 0, env))
+                    return 1;
+                if (eq_msp(((jl_tvar_t*)a)->ub, b, env))
                     return num_occurs((jl_tvar_t*)a, env) >= 2;
             }
             else {
@@ -2876,6 +2875,8 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
                     return num_occurs((jl_tvar_t*)b, env) < 2;
             }
             else {
+                if (obviously_disjoint(a, ((jl_tvar_t*)b)->ub, 1))
+                    return 0;
                 return 1;
             }
         }

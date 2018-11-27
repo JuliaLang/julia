@@ -240,3 +240,24 @@ end
 @test  args_morespecific(Tuple{Array,Int64}, Tuple{Array,Vararg{Int64,N}} where N)
 @test  args_morespecific(Tuple{Array,Int64}, Tuple{Array,Vararg{Int64,N} where N})
 @test !args_morespecific(Tuple{Array,Int64}, Tuple{AbstractArray, Array})
+
+# issue #30114
+let T1 = Tuple{Type{Tuple{Vararg{AbstractUnitRange{Int64},N} where N}},CartesianIndices{N,R} where R<:Tuple{Vararg{AbstractUnitRange{Int64},N}}} where N
+    T2 = Tuple{Type{T},T} where T<:AbstractArray
+    T3 = Tuple{Type{AbstractArray{T,N} where N},AbstractArray} where T
+    T4 = Tuple{Type{AbstractArray{T,N}},AbstractArray{s57,N} where s57} where N where T
+    @test !args_morespecific(T1, T2)
+    @test !args_morespecific(T1, T3)
+    @test !args_morespecific(T1, T4)
+    @test  args_morespecific(T2, T3)
+    @test  args_morespecific(T2, T4)
+end
+
+@test !args_morespecific(Tuple{Type{Tuple{Vararg{AbstractUnitRange{Int64},N}}},} where N,
+                         Tuple{Type{Tuple{Vararg{AbstractUnitRange,N} where N}},})
+
+@test  args_morespecific(Tuple{Type{SubArray{T,2,P} where T}, Array{T}} where T where P,
+                         Tuple{Type{AbstractArray{T,N} where N},AbstractArray} where T)
+
+@test  args_morespecific(Tuple{Type{T},T} where T<:BitArray,
+                         Tuple{Type{BitArray},Any})
