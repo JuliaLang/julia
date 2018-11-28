@@ -1185,18 +1185,31 @@ function compilecache(pkg::PkgId, path::String)
     else
         @logmsg verbosity "Precompiling $pkg"
     end
-    p = create_expr_cache(path, cachefile, concrete_deps, pkg.uuid)
-    if success(p)
-        # append checksum to the end of the .ji file:
-        open(cachefile, "a+") do f
-            write(f, _crc32c(seekstart(f)))
+    # create a temporary file in `cachepath` directory, write the cache in it,
+    # write the checksum, _and then_ atomically swap the file with `cachefile`.
+    tmppath, tmpio = mktemp(cachepath)
+    local p
+    try
+        close(tmpio)
+        p = create_expr_cache(path, tmppath, concrete_deps, pkg.uuid)
+        if success(p)
+            # append checksum to the end of the .ji file:
+            open(tmppath, "a+") do f
+                write(f, _crc32c(seekstart(f)))
+            end
+            # this is atomic according to POSIX:
+            rename(tmppath, cachefile)
+            return cachefile
         end
-    elseif p.exitcode == 125
+    finally
+        # not using `mktemp() do ...` to pass `force=true` to `rm`
+        rm(tmppath, force=true)
+    end
+    if p.exitcode == 125
         return PrecompilableError()
     else
         error("Failed to precompile $pkg to $cachefile.")
     end
-    return cachefile
 end
 
 module_build_id(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), m)
