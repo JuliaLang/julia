@@ -763,19 +763,71 @@ if Core.sizeof(Int) == 4
         return (lolo & 0xffffffffffffffff) + UInt128(w1) << 64
     end
 
+    function divrem(x::UInt128, y::UInt128)
+        iszero(y) && throw(DivideError())
+        n = leading_zeros(y) - leading_zeros(x)
+        q = zero(UInt128)
+        ys = y << n
+        for s in (96, 64, 32, 0)
+            q32 = zero(UInt32)
+            while n >= s
+                if ys <= x
+                    x -= ys
+                    q32 |= one(UInt32) << unsigned(n - s)
+                    if (x >> 64) % UInt64 == 0
+                        break
+                    end
+                end
+                ys >>>= 1
+                n -= 1
+            end
+            q |= UInt128(q32) << s
+            if (x >> 64) % UInt64 == 0
+                if (y >> 64) % UInt64 == 0
+                    q64, x64 = divrem(x % UInt64, y % UInt64)
+                    q |= q64
+                    x = UInt128(x64)
+                end
+                return q, x
+            end
+        end
+        return q, x
+    end
+
     function div(x::Int128, y::Int128)
         (x == typemin(Int128)) & (y == -1) && throw(DivideError())
         return Int128(div(BigInt(x), BigInt(y)))::Int128
     end
-    function div(x::UInt128, y::UInt128)
-        return UInt128(div(BigInt(x), BigInt(y)))::UInt128
-    end
+    div(x::UInt128, y::UInt128) = divrem(x, y)[1]
 
     function rem(x::Int128, y::Int128)
         return Int128(rem(BigInt(x), BigInt(y)))::Int128
     end
+
     function rem(x::UInt128, y::UInt128)
-        return UInt128(rem(BigInt(x), BigInt(y)))::UInt128
+        iszero(y) && throw(DivideError())
+        n = leading_zeros(y) - leading_zeros(x)
+        ys = y << n
+        for s in (96, 64, 32, 0)
+            while n >= s
+                if ys <= x
+                    x -= ys
+                    if (x >> 64) % UInt64 == 0
+                        break
+                    end
+                end
+                ys >>>= 1
+                n -= 1
+            end
+            if (x >> 64) % UInt64 == 0
+                if (y >> 64) % UInt64 == 0
+                    x64 = rem(x % UInt64, y % UInt64)
+                    x = UInt128(x64)
+                end
+                return x
+            end
+        end
+        return x
     end
 
     function mod(x::Int128, y::Int128)
