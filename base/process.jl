@@ -783,6 +783,19 @@ An exception is raised if the process cannot be started.
 """
 success(cmd::AbstractCmd) = success(_spawn(cmd))
 
+
+"""
+    ProcessExitedException
+
+Indicates problematic exit status of a process.
+
+Usages include:
+
+ - When running commands or pipelines, this is thrown to indicate
+ a nonzero exit code was returned (i.e. that the invoked process failed).
+ - In a [Distributed Computing](@ref) workflow, this is thrown
+ when work is sent to a worker julia process that has exited.
+"""
 struct ProcessExitedException
     procs::Union{Vector{Process},Nothing}
     # ProcessExitedException(nothing) is allowed for Distributed stdlib compat
