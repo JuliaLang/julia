@@ -18,6 +18,8 @@ Language changes
     Previously they were sometimes parsed as tuples, depending on whitespace ([#28506]).
   * `Regex` and `TimeZone` now behave like scalars when used in broadcasting ([#29913], [#30159]).
   * `Char` now behaves like a read-only 0-dimensional array ([#29819]).
+  * Using the same name for both a local variable and a static parameter is now an error instead
+    of a warning ([#29429]).
 
 New library functions
 ---------------------
