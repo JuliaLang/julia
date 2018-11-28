@@ -102,7 +102,8 @@ static const char opts[]  =
     " -i                        Interactive mode; REPL runs and isinteractive() is true\n"
     " -q, --quiet               Quiet startup: no banner, suppress REPL warnings\n"
     " --banner={yes|no|auto}    Enable or disable startup banner\n"
-    " --color={yes|no|auto}     Enable or disable color text\n"
+    " --color={yes|no|light|dark|auto}\n"
+    "                           Enable or disable color text, and/or choose a text color scheme\n"
     " --history-file={yes|no}   Load or save history\n\n"
 
     // error and warning options
@@ -402,10 +403,14 @@ restart_switch:
                 jl_options.color = JL_OPTIONS_COLOR_ON;
             else if (!strcmp(optarg, "no"))
                 jl_options.color = JL_OPTIONS_COLOR_OFF;
+            else if (!strcmp(optarg, "light"))
+                jl_options.color = JL_OPTIONS_COLOR_LIGHT;
+            else if (!strcmp(optarg, "dark"))
+                jl_options.color = JL_OPTIONS_COLOR_DARK;
             else if (!strcmp(optarg, "auto"))
                 jl_options.color = JL_OPTIONS_COLOR_AUTO;
             else
-                jl_errorf("julia: invalid argument to --color={yes|no|auto} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --color={yes|no|light|dark|auto} (%s)", optarg);
             break;
         case opt_history_file:
             if (!strcmp(optarg,"yes"))

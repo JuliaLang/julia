@@ -4,12 +4,30 @@
 ##             and REPL
 
 have_color = false
-default_color_warn = :yellow
-default_color_error = :light_red
-default_color_info = :cyan
-default_color_debug = :blue
-default_color_input = :normal
-default_color_answer = :normal
+text_color_dark = false
+
+# Default light and dark colors
+default_color_light_warn = :yellow
+default_color_light_error = :light_red
+default_color_light_info = :cyan
+default_color_light_debug = :blue
+default_color_light_input = :normal
+default_color_light_answer = :normal
+
+default_color_dark_warn = :magenta
+default_color_dark_error = :red
+default_color_dark_info = :blue
+default_color_dark_debug = :cyan
+default_color_dark_input = :normal
+default_color_dark_answer = :normal
+
+default_color_warn() = text_color_dark ? default_color_dark_warn : default_color_light_warn
+default_color_error() = text_color_dark ? default_color_dark_error : default_color_light_error
+default_color_info() = text_color_dark ? default_color_dark_info : default_color_light_info
+default_color_debug() = text_color_dark ? default_color_dark_debug : default_color_light_debug
+default_color_input() = text_color_dark ? default_color_dark_input : default_color_light_input
+default_color_answer() = text_color_dark ? default_color_dark_answer : default_color_light_answer
+
 color_normal = text_colors[:normal]
 
 function repl_color(key, default)
@@ -19,13 +37,13 @@ function repl_color(key, default)
     haskey(text_colors, c_conv) ? c_conv : default
 end
 
-error_color() = repl_color("JULIA_ERROR_COLOR", default_color_error)
-warn_color()  = repl_color("JULIA_WARN_COLOR" , default_color_warn)
-info_color()  = repl_color("JULIA_INFO_COLOR" , default_color_info)
-debug_color()  = repl_color("JULIA_DEBUG_COLOR" , default_color_debug)
+error_color() = repl_color("JULIA_ERROR_COLOR", default_color_error())
+warn_color()  = repl_color("JULIA_WARN_COLOR" , default_color_warn())
+info_color()  = repl_color("JULIA_INFO_COLOR" , default_color_info())
+debug_color()  = repl_color("JULIA_DEBUG_COLOR" , default_color_debug())
 
-input_color()  = text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input)]
-answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answer)]
+input_color()  = text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input())]
+answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answer())]
 
 stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
@@ -195,12 +213,14 @@ function exec_options(opts)
         idxs = findall(x -> x == "--", ARGS)
         length(idxs) > 0 && deleteat!(ARGS, idxs[1])
     end
-    quiet                 = (opts.quiet != 0)
-    startup               = (opts.startupfile != 2)
-    history_file          = (opts.historyfile != 0)
-    color_set             = (opts.color != 0) # --color!=auto
-    global have_color     = (opts.color == 1) # --color=on
-    global is_interactive = (opts.isinteractive != 0)
+    quiet                  = (opts.quiet != 0)
+    startup                = (opts.startupfile != 2)
+    history_file           = (opts.historyfile != 0)
+    color_set              = (opts.color != 0)    # --color!=auto
+    global have_color      = (opts.color >= 2)    # --color=[on|light|dark]
+    text_color_set         = (opts.color >= 3)    # --color=[light|dark]
+    global text_color_dark = (opts.color == 4)    # --color=dark
+    global is_interactive  = (opts.isinteractive != 0)
 
     # pre-process command line argument list
     arg_is_program = !isempty(ARGS)
@@ -274,7 +294,7 @@ function exec_options(opts)
         else
             banner = (opts.banner == 1) # --banner=yes
         end
-        run_main_repl(interactiveinput, quiet, banner, history_file, color_set)
+        run_main_repl(interactiveinput, quiet, banner, history_file, color_set, text_color_set)
     end
     nothing
 end
@@ -321,7 +341,7 @@ _atreplinit(repl) = invokelatest(__atreplinit, repl)
 const REPL_MODULE_REF = Ref{Module}()
 
 # run the requested sort of evaluation loop on stdio
-function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
+function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool, text_color_set::Bool)
     global active_repl
     # load interactive-only libraries
     if !isdefined(Main, :InteractiveUtils)
@@ -340,6 +360,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
             color_set || (global have_color = REPL.Terminals.hascolor(term))
+            text_color_set || (global text_color_dark = REPL.Terminals.has_light_background(term))
             banner && Base.banner(term)
             if term.term_type == "dumb"
                 active_repl = REPL.BasicREPL(term)

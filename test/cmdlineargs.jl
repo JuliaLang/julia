@@ -176,6 +176,11 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     # --color
     @test readchomp(`$exename --color=yes -E "Base.have_color"`) == "true"
     @test readchomp(`$exename --color=no -E "Base.have_color"`) == "false"
+    @test readchomp(`$exename --color=light -E "Base.have_color"`) == "true"
+    @test readchomp(`$exename --color=dark -E "Base.have_color"`) == "true"
+    @test readchomp(`$exename --color=light -E "Base.text_color_dark"`) == "false"
+    @test readchomp(`$exename --color=dark -E "Base.text_color_dark"`) == "true"
+    @test !success(`$exename --color=true`)
     @test !success(`$exename --color=false`)
 
     # --history-file
