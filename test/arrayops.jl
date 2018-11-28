@@ -2577,3 +2577,28 @@ Base.view(::T25958, args...) = args
     @test t[end,end,1]   == @view(t[end,end,1])   == @views t[end,end,1]
     @test t[end,end,end] == @view(t[end,end,end]) == @views t[end,end,end]
 end
+
+# Iterator with declared length too large
+struct InvalidIter1 end
+Base.length(::InvalidIter1) = 2
+Base.iterate(::InvalidIter1, i=1) = i > 1 ? nothing : (i, (i + 1))
+# Iterator with declared length too small
+struct InvalidIter2 end
+Base.length(::InvalidIter2) = 2
+Base.iterate(::InvalidIter2, i=1) = i > 3 ? nothing : (i, (i + 1))
+@testset "collect on iterator with incorrect length" begin
+    @test_throws ArgumentError collect(InvalidIter1())
+    @test_throws ArgumentError collect(Any, InvalidIter1())
+    @test_throws ArgumentError collect(Int, InvalidIter1())
+    @test_throws ArgumentError [x for x in InvalidIter1()]
+    # Should also throw ArgumentError
+    @test_broken length(Int[x for x in InvalidIter1()]) != 2
+
+    @test_throws ArgumentError collect(InvalidIter2())
+    @test_throws ArgumentError collect(Any, InvalidIter2())
+    @test_throws ArgumentError collect(Int, InvalidIter2())
+    # These cases cannot be tested without writing to invalid memory
+    # unless the function checked bounds on each iteration (#29458)
+    # @test_throws ErrorException [x for x in InvalidIter2()]
+    # @test_broken length(Int[x for x in InvalidIter2()]) != 2
+end
