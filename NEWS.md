@@ -18,6 +18,8 @@ Language changes
     Previously they were sometimes parsed as tuples, depending on whitespace ([#28506]).
   * `Regex` and `TimeZone` now behave like scalars when used in broadcasting ([#29913], [#30159]).
   * `Char` now behaves like a read-only 0-dimensional array ([#29819]).
+  * Spaces were accidentally allowed in broadcast call syntax, e.g. `f. (x)`. They are now
+    disallowed, consistent with normal function call syntax ([#29781]).
 
 New library functions
 ---------------------

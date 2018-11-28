@@ -1201,6 +1201,9 @@
              (loop
               (cond ((eqv? (peek-token s) #\()
                      (begin
+                       (if (ts:space? s)
+                           (error (string "space before \"(\" not allowed in \""
+                                          (deparse ex) ". (\"")))
                        (take-token s)
                        `(|.| ,ex (tuple ,@(parse-call-arglist s #\) )))))
                     ((eqv? (peek-token s) ':)
