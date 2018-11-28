@@ -428,17 +428,14 @@ for testrun in (failing_pipeline, pipeline(failing_pipeline, failing_pipeline))
         run(testrun)
     catch err
         @test err isa ProcessExitedException
-        iobuf = IOBuffer()
-        show(iobuf, err)
-        errmsg = String(take!(iobuf))
+        errmsg = sprint(show, err)
         @test occursin(string(failing_cmd), errmsg)
     end
 end
 
 let
-    iobuf = IOBuffer()
-    show(iobuf, ProcessExitedException())
-    @test length(String(take!(iobuf))) > 0
+    errmsg = sprint(show, ProcessExitedException())
+    @test occursin("exited" , errmsg)
 end
 
 # issue #13616

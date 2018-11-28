@@ -791,7 +791,7 @@ ProcessExitedException() = ProcessExitedException(nothing)
 ProcessExitedException(proc::Process) = ProcessExitedException([proc])
 
 function show(io::IO, err::ProcessExitedException)
-    if procs == nothing
+    if err.procs === nothing
         println(io, "The process has exited.")
     elseif length(err.procs) == 1
         proc = err.procs[1]
