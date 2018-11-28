@@ -437,7 +437,7 @@ end
 
 let
     iobuf = IOBuffer()
-    show(iobuf, ProcessExitedException(nothing))
+    show(iobuf, ProcessExitedException())
     @test length(String(take!(iobuf))) > 0
 end
 

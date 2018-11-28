@@ -787,6 +787,7 @@ struct ProcessExitedException
     procs::Union{Vector{Process},Nothing}
     # ProcessExitedException(nothing) is allowed for Distributed stdlib compat
 end
+ProcessExitedException() = ProcessExitedException(nothing)
 ProcessExitedException(proc::Process) = ProcessExitedException([proc])
 
 function show(io::IO, err::ProcessExitedException)

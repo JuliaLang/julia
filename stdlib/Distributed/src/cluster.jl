@@ -1033,7 +1033,7 @@ end
 worker_from_id(i) = worker_from_id(PGRP, i)
 function worker_from_id(pg::ProcessGroup, i)
     if !isempty(map_del_wrkr) && in(i, map_del_wrkr)
-        throw(ProcessExitedException(nothing))
+        throw(ProcessExitedException())
     end
     w = get(map_pid_wrkr, i, nothing)
     if w === nothing
