@@ -6,18 +6,14 @@ New language features
 
   * An *exception stack* is maintained on each task to make exception handling more robust and enable root cause analysis using `catch_stack` ([#28878]).
 
-
 Language changes
 ----------------
 
-  * the constructor `BigFloat(::BigFloat)` now respects the global precision setting and always
-    returns a `BigFloat` with precision equal to `precision(BigFloat)` ([#29127]). The optional
-    `precision` argument to override the global setting is now a keyword instead of positional
-    argument ([#29157]).
   * Parser inputs ending with a comma are now consistently treated as incomplete.
     Previously they were sometimes parsed as tuples, depending on whitespace ([#28506]).
-  * `Regex` and `TimeZone` now behave like scalars when used in broadcasting ([#29913], [#30159]).
-  * `Char` now behaves like a read-only 0-dimensional array ([#29819]).
+  * Big integer literals and command syntax (backticks) are now parsed with the name of
+    the macro (`@int128_str`, `@uint128_str`, `@big_str`, `@cmd`) qualified to refer
+    to the `Core` module ([#29968]).
 
 New library functions
 ---------------------
@@ -25,7 +21,6 @@ New library functions
   * `splitpath(p::String)` function, which is the opposite of `joinpath(parts...)`: it splits a filepath into its components ([#28156]).
   * `isnothing(::Any)` function, to check whether something is a `Nothing`, returns a `Bool` ([#29679]).
   * `getpid(::Process)` method ([#24064]).
-
 
 Standard library changes
 ------------------------
@@ -38,6 +33,12 @@ Standard library changes
   * `edit` can now be called on a module to edit the file that defines it ([#29636]).
   * `diff` now supports arrays of arbitrary dimensionality and can operate over any dimension ([#29827]).
   * `sprandn` now supports result types like `ComplexF64` or `Float32` ([#30083]).
+  * The constructor `BigFloat(::BigFloat)` now respects the global precision setting and always
+    returns a `BigFloat` with precision equal to `precision(BigFloat)` ([#29127]). The optional
+    `precision` argument to override the global setting is now a keyword instead of positional
+    argument ([#29157]).
+  * `Regex` and `TimeZone` now behave like scalars when used in broadcasting ([#29913], [#30159]).
+  * `Char` now behaves like a read-only 0-dimensional array ([#29819]).
 
 Compiler/Runtime improvements
 -----------------------------
