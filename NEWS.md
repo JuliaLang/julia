@@ -20,13 +20,18 @@ New language features
 Multi-threading changes
 -----------------------
 
-  * The `Condition` type now has a thread-safe replacement, accessed as `Threads.Condition`.
+* The `Condition` type now has a thread-safe replacement, accessed as `Threads.Condition`.
     With that addition, task scheduling primitives such as `ReentrantLock` are now thread-safe ([#30061]).
 
 Language changes
 ----------------
 * Empty entries in `JULIA_DEPOT_PATH` are now expanded to default depot entries ([#31009]).
 * `Enum` now behaves like a scalar when used in broadcasting ([#30670]).
+* If a `pipeline` is specified with `append=true` set, but no redirection, an `ArgumentError`
+is thrown, rather than a `ErrorException` ([#27900]).
+* Functions that invoke commands (e.g. `run(::Cmd)`) now throw a `ProcessExitedException`s
+rather than an `ErrorException`, if those commands fail and exit with non-zero exit code.
+([#27900]).
 
 Command-line option changes
 ---------------------------
