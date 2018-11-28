@@ -1415,32 +1415,3 @@ function normalize(v::AbstractVector, p::Real = 2)
         return T[]
     end
 end
-
-"""
-    eachrow(A::AbstractVecOrMat)
-
-Create a generator iterating over views of A's first dimension.
-See also [`eachcol`](@ref) and [`eachslice`](@ref).
-"""
-eachrow(A::AbstractVecOrMat) = (view(A, i, :) for i in axes(A, 1))
-
-
-"""
-    eachcol(A::AbstractVecOrMat)
-
-Create a generator iterating over views of A's second dimension.
-See also [`eachrow`](@ref) and [`eachslice`](@ref).
-"""
-eachcol(A::AbstractVecOrMat) = (view(A, :, i) for i in axes(A, 2))
-
-"""
-    eachslice(A; dims = 1)
-
-Create a generator iterating over views of A's nth dimension.
-See also [`eachrow`](@ref) and [`eachcol`](@ref).
-"""
-@inline function eachslice(A; dims = 1)
-    dims <= ndims(A) || throw(DimensionMismatch("A doesn't have that many dimensions"))
-    idx1, idx2 = ntuple(d->(:), dims-1), ntuple(d->(:), ndims(A)-dims)
-    return (view(A, idx1..., i, idx2...) for i in axes(A, dims))
-end
