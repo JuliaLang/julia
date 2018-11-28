@@ -1387,6 +1387,10 @@
                          (let ((g (make-ssavalue)))
                            (begin (set! a (cons `(= ,g ,(caddr x)) a))
                                   `(kw ,(cadr x) ,g)))))
+                    ((eq? (car x) 'tuple)
+                     (let ((tmp (map remove-argument-side-effects (cdr x))))
+                       (set! a (revappend (apply append (map cdr tmp)) a))
+                       `(tuple ,@(map car tmp))))
                     (else
                      (let ((g (make-ssavalue)))
                        (begin (set! a (cons `(= ,g ,x) a))
@@ -1429,10 +1433,20 @@
 ;; convert `a+=b` to `a=a+b`
 (define (expand-update-operator- op op= lhs rhs declT)
   (let ((e (remove-argument-side-effects lhs)))
-    `(block ,@(cdr e)
-            ,(if (null? declT)
-                 `(,op= ,(car e) (call ,op ,(car e) ,rhs))
-                 `(,op= ,(car e) (call ,op (:: ,(car e) ,(car declT)) ,rhs))))))
+    (let ((newlhs (car e)))
+      (if (and (pair? lhs) (eq? (car lhs) 'tuple))
+          (let loop ((a (cdr newlhs))
+                     (b (cdr lhs)))
+            (if (pair? a)
+                ;; if remove-argument-side-effects needed to replace an expression with
+                ;; an ssavalue, then it can't be updated by assignment. issue #30062
+                (begin (if (and (ssavalue? (car a)) (not (ssavalue? (car b))))
+                           (error (string "invalid multiple assignment location \"" (deparse (car b)) "\"")))
+                       (loop (cdr a) (cdr b))))))
+      `(block ,@(cdr e)
+              ,(if (null? declT)
+                   `(,op= ,newlhs (call ,op ,newlhs ,rhs))
+                   `(,op= ,newlhs (call ,op (:: ,newlhs ,(car declT)) ,rhs)))))))
 
 (define (partially-expand-ref e)
   (let ((a    (cadr e))
