@@ -530,6 +530,24 @@ end
 # show
 
 function Base.show(io::IO, dt::DateTime)
+    y,m,d = yearmonthday(dt)
+    h = hour(dt)
+    min = minute(dt)
+    s = second(dt)
+    ms = millisecond(dt)
+    if ms == 0
+        print(io, "DateTime(",y,", ",m,", ",d,", ",h,", ",min,", ",s,")")
+    else
+        print(io, "DateTime(",y,", ",m,", ",d,", ",h,", ",min,", ",s,", ",ms,")")
+    end
+end
+
+function Base.show(io::IO, dt::Date)
+    y,m,d = yearmonthday(value(dt))
+    print(io, "Date(",y,", ",m,", ",d,")")
+end
+
+function Base.print(io::IO, dt::DateTime)
     if millisecond(dt) == 0
         format(io, dt, dateformat"YYYY-mm-dd\THH:MM:SS")
     else
@@ -537,7 +555,7 @@ function Base.show(io::IO, dt::DateTime)
     end
 end
 
-function Base.show(io::IO, dt::Date)
+function Base.print(io::IO, dt::Date)
     format(io, dt, dateformat"YYYY-mm-dd")
 end
 
