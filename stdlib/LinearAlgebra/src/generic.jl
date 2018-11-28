@@ -1419,7 +1419,7 @@ end
 """
     eachrow(A::AbstractVecOrMat)
 
-Get a generator over views of A's first dimension.
+Create a generator iterating over views of A's first dimension.
 See also [`eachcol`](@ref) and [`eachslice`](@ref).
 """
 eachrow(A::AbstractVecOrMat) = (view(A, i, :) for i in axes(A, 1))
@@ -1428,17 +1428,19 @@ eachrow(A::AbstractVecOrMat) = (view(A, i, :) for i in axes(A, 1))
 """
     eachcol(A::AbstractVecOrMat)
 
-Get a generator over views of A's second dimension.
+Create a generator iterating over views of A's second dimension.
 See also [`eachrow`](@ref) and [`eachslice`](@ref).
 """
 eachcol(A::AbstractVecOrMat) = (view(A, :, i) for i in axes(A, 2))
 
 """
-    eachslice(A::AbstractArray, d)
+    eachslice(A; dims = 1)
 
-Get an iterator over views of A's dth dimension. If
-A has less than d dimensions, collect(eachslice(A, d))
-will just return a trivial collection with a view into A.
+Create a generator iterating over views of A's nth dimension.
 See also [`eachrow`](@ref) and [`eachcol`](@ref).
 """
-eachslice(A, dim) = (selectdim(A, dim, i) for i in axes(A, dim))
+@inline function eachslice(A; dims = 1)
+    dims <= ndims(A) || throw(DimensionMismatch("A doesn't have that many dimensions"))
+    idx1, idx2 = ntuple(d->(:), dims-1), ntuple(d->(:), ndims(A)-dims)
+    return (view(A, idx1..., i, idx2...) for i in axes(A, dims))
+end
