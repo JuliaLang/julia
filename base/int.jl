@@ -808,24 +808,22 @@ if Core.sizeof(Int) == 4
         iszero(y) && throw(DivideError())
         n = leading_zeros(y) - leading_zeros(x)
         ys = y << n
-        for s in (96, 64, 32, 0)
-            while n >= s
-                if ys <= x
-                    x -= ys
-                    if (x >> 64) % UInt64 == 0
-                        break
-                    end
+        while n >= 0
+            if ys <= x
+                x -= ys
+                if (x >> 64) % UInt64 == 0
+                    break
                 end
-                ys >>>= 1
-                n -= 1
             end
-            if (x >> 64) % UInt64 == 0
-                if (y >> 64) % UInt64 == 0
-                    x64 = rem(x % UInt64, y % UInt64)
-                    x = UInt128(x64)
-                end
-                return x
+            ys >>>= 1
+            n -= 1
+        end
+        if (x >> 64) % UInt64 == 0
+            if (y >> 64) % UInt64 == 0
+                x64 = rem(x % UInt64, y % UInt64)
+                x = UInt128(x64)
             end
+            return x
         end
         return x
     end
