@@ -11,6 +11,8 @@ Language changes
 
   * Parser inputs ending with a comma are now consistently treated as incomplete.
     Previously they were sometimes parsed as tuples, depending on whitespace ([#28506]).
+  * Spaces were accidentally allowed in broadcast call syntax, e.g. `f. (x)`. They are now
+    disallowed, consistent with normal function call syntax ([#29781]).
   * Big integer literals and command syntax (backticks) are now parsed with the name of
     the macro (`@int128_str`, `@uint128_str`, `@big_str`, `@cmd`) qualified to refer
     to the `Core` module ([#29968]).
