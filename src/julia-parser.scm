@@ -408,10 +408,10 @@
             ((eq? pred char-bin?) (fix-uint-neg neg (sized-uint-literal n s 1)))
             (is-float32-literal   (numchk n s) (float n))
             (n (if (and (integer? n) (> n 9223372036854775807))
-                   `(macrocall @int128_str (null) ,s)
+                   `(macrocall (core @int128_str) (null) ,s)
                    n))
-            ((within-int128? s) `(macrocall @int128_str (null) ,s))
-            (else `(macrocall @big_str (null) ,s))))))
+            ((within-int128? s) `(macrocall (core @int128_str) (null) ,s))
+            (else `(macrocall (core @big_str) (null) ,s))))))
 
 (define (fix-uint-neg neg n)
   (if neg
@@ -427,7 +427,7 @@
           ((<= l 16)  (numchk n s) (uint16 n))
           ((<= l 32)  (numchk n s) (uint32 n))
           ((<= l 64)  (numchk n s) (uint64 n))
-          ((<= l 128) `(macrocall @uint128_str (null) ,s))
+          ((<= l 128) `(macrocall (core @uint128_str) (null) ,s))
           (else       (error "Hex or binary literal too large for UInt128")))))
 
 (define (sized-uint-oct-literal n s)
@@ -440,7 +440,7 @@
                 (else             (uint64 n)))
           (begin (if (equal? s "0o") (numchk n s))
                  (if (oct-within-uint128? s)
-                     `(macrocall @uint128_str (null) ,s)
+                     `(macrocall (core @uint128_str) (null) ,s)
                      (error "Octal literal too large for UInt128"))))))
 
 (define (strip-leading-0s s)
@@ -471,9 +471,9 @@
       (>= 0 (compare-num-strings s "170141183460469231731687303715884105727"))))
 
 (define (large-number? t)
-  (and (pair? t)
-       (eq? (car t) 'macrocall)
-       (memq (cadr t) '(@int128_str @uint128_str @big_str))))
+  (and (pair? t) (eq? (car t) 'macrocall)
+       (pair? (cadr t)) (eq? (car (cadr t)) 'core)
+       (memq (cadadr t) '(@int128_str @uint128_str @big_str))))
 
 ;; skip to end of comment, starting at #:  either #...<eol> or #= .... =#.
 (define (skip-comment port)
@@ -996,10 +996,10 @@
   (if (eq? op '-)
       (if (large-number? num)
           (if (eqv? (cadddr num) "-170141183460469231731687303715884105728")
-              `(macrocall @big_str (null) "170141183460469231731687303715884105728")
+              `(macrocall (core @big_str) (null) "170141183460469231731687303715884105728")
               `(,(car num) ,(cadr num) ,(caddr num) ,(string.tail (cadddr num) 1)))
           (if (= num -9223372036854775808)
-              `(macrocall @int128_str (null) "9223372036854775808")
+              `(macrocall (core @int128_str) (null) "9223372036854775808")
               (- num)))
       num))
 
@@ -2343,7 +2343,7 @@
           ;; command syntax
           ((eqv? t #\`)
            (take-token s)
-           `(macrocall @cmd ,(line-number-node s) ,(parse-raw-literal s #\`)))
+           `(macrocall (core @cmd) ,(line-number-node s) ,(parse-raw-literal s #\`)))
 
           ((or (string? t) (number? t) (large-number? t)) (take-token s))
 
