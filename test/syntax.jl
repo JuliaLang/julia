@@ -1556,21 +1556,13 @@ end
 end
 @test A27807.@m()(1,1.0) === (1, 0.0)
 
-# issue #27896
-let oldstderr = stderr, newstderr, errtxt
-    try
-        newstderr = redirect_stderr()
-        @eval function foo(a::A, b::B) where {A,B}
-            B = eltype(A)
-            return convert(B, b)
-        end
-        errtxt = @async read(newstderr[1], String)
-    finally
-        redirect_stderr(oldstderr)
-        close(newstderr[2])
+# issue #27896 / #29429
+@test Meta.lower(@__MODULE__, quote
+    function foo(a::A, b::B) where {A,B}
+        B = eltype(A)
+        return convert(B, b)
     end
-    @test occursin("WARNING: local variable B conflicts with a static parameter", fetch(errtxt))
-end
+end) == Expr(:error, "local variable name \"B\" conflicts with a static parameter")
 
 # issue #28044
 code28044(x) = 10x
