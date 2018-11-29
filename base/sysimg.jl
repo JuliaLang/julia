@@ -72,7 +72,7 @@ convert(::Type{T}, arg)  where {T<:VecElement} = T(arg)
 convert(::Type{T}, arg::T) where {T<:VecElement} = arg
 
 # init core docsystem
-import Core: @doc, @__doc__, WrappedException
+import Core: @doc, @__doc__, WrappedException, @int128_str, @uint128_str, @big_str, @cmd
 if isdefined(Core, :Compiler)
     import Core.Compiler.CoreDocs
     Core.atdoc!(CoreDocs.docm)
