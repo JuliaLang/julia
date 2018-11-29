@@ -17,6 +17,13 @@ Language changes
     the macro (`@int128_str`, `@uint128_str`, `@big_str`, `@cmd`) qualified to refer
     to the `Core` module ([#29968]).
 
+Command-line option changes
+---------------------------
+
+  * When a script run in interactive mode (`-i`) throws an error, the REPL now starts after
+    the error is displayed. Previously the REPL only started if the script completed without
+    error ([#21233]).
+
 New library functions
 ---------------------
 
