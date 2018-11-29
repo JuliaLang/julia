@@ -122,7 +122,7 @@ rounding_raw(::Type{BigFloat}) = ROUNDING_MODE[]
 setrounding_raw(::Type{BigFloat}, r::MPFRRoundingMode) = ROUNDING_MODE[]=r
 
 rounding(::Type{BigFloat}) = convert(RoundingMode, rounding_raw(BigFloat))
-setrounding(::Type{BigFloat},r::RoundingMode) = setrounding_raw(BigFloat, convert(MPFRRoundingMode, r))
+setrounding(::Type{BigFloat}, r::RoundingMode) = setrounding_raw(BigFloat, convert(MPFRRoundingMode, r))
 
 
 # overload the definition of unsafe_convert to ensure that `x.d` is assigned
@@ -224,8 +224,13 @@ BigFloat(x::Union{UInt8,UInt16,UInt32}, r::MPFRRoundingMode=ROUNDING_MODE[]; pre
 BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(Float64(x), r; precision=precision)
 
-BigFloat(x::Rational, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
-    BigFloat(numerator(x), r; precision=precision) / BigFloat(denominator(x), r ;precision=precision)
+function BigFloat(x::Rational, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
+    setprecision(BigFloat, precision) do
+        setrounding_raw(BigFloat, r) do
+            BigFloat(numerator(x)) / BigFloat(denominator(x))
+        end
+    end
+end
 
 function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=DEFAULT_PRECISION[], rounding::MPFRRoundingMode=ROUNDING_MODE[])
     !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s), base = base)
