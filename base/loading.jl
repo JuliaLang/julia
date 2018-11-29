@@ -1186,7 +1186,7 @@ function compilecache(pkg::PkgId, path::String)
         @logmsg verbosity "Precompiling $pkg"
     end
     # create a temporary file in `cachepath` directory, write the cache in it,
-    # write the checksum, _and then_ atomically swap the file with `cachefile`.
+    # write the checksum, _and then_ atomically move the file to `cachefile`.
     tmppath, tmpio = mktemp(cachepath)
     local p
     try
