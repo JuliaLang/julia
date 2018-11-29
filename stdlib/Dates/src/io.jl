@@ -542,6 +542,14 @@ function Base.show(io::IO, dt::DateTime)
     end
 end
 
+function Base.show(io::IO, ::MIME"text/plain", dt::DateTime)
+    print(io, dt)
+end
+
+function Base.show(io::IO, ::MIME"text/plain", dt::Date)
+    print(io, dt)
+end
+
 function Base.show(io::IO, dt::Date)
     y,m,d = yearmonthday(value(dt))
     print(io, "Date(",y,", ",m,", ",d,")")
