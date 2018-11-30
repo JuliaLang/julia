@@ -519,6 +519,8 @@ end
     end
     let t = (2,3,5,7,11)
         @test Iterators.reverse(Iterators.reverse(t)) === t
+        @test first(Iterators.reverse(t)) === last(t)
+        @test last(Iterators.reverse(t)) === first(t)
     end
 end
 
