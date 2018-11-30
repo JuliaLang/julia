@@ -1933,6 +1933,7 @@ end
 end
 
 # row/column/slice iterator tests
+using Base: eachrow, eachcol
 @testset "row/column/slice iterators" begin
     # Simple ones
     M = [1 2 3; 4 5 6; 7 8 9]
