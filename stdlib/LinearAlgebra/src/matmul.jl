@@ -2,74 +2,6 @@
 
 # matmul.jl: Everything to do with dense matrix multiplication
 
-"""
-    MulAddMul(alpha, beta)
-
-A callable for operating short-circuiting version of `alpha * x + beta * y`.
-
-# Examples
-```jldoctest
-julia> _add = MulAddMul(1, 0);
-julia> _add(123, nothing)
-123
-julia> MulAddMul(12, 34)(56, 78) == 12 * 56 + 34 * 78
-true
-```
-"""
-struct MulAddMul{ais1, bis0, TA, TB}
-    alpha::TA
-    beta::TB
-end
-
-MulAddMul(alpha::TA, beta::TB) where {TA, TB} =
-    MulAddMul{isone(alpha), iszero(beta), TA, TB}(alpha, beta)
-
-MulAddMul() = MulAddMul(true, false)
-
-@inline (::MulAddMul{true, true})(x, ::Any = nothing) = x
-@inline (p::MulAddMul{false, true})(x, ::Any = nothing) = p.alpha * x
-@inline (p::MulAddMul{true, false})(x, y) = x + p.beta * y
-@inline (p::MulAddMul{false, false})(x, y) = p.alpha * x + p.beta * y
-
-"""
-    _modify!(_add::MulAddMul, x, C, idx)
-
-Short-circuiting version of `C[idx] = _add(x, C[idx])`.
-
-Short-circuiting the indexing `C[idx]` is necessary for avoiding `UndefRefError`
-when mutating an array of non-primitive numbers such as `BigFloat`.
-
-# Examples
-```jldoctest
-julia> _add = MulAddMul(1, 0);
-       C = Vector{BigFloat}(undef, 1);
-
-julia> _modify!(_add, 123, C, 1)
-
-julia> C
-1-element Array{BigFloat,1}:
- 1.23e+02
-```
-"""
-@inline @propagate_inbounds function _modify!(p::MulAddMul{ais1, bis0},
-                                              x, C, idx) where {ais1, bis0}
-    if bis0
-        C[idx...] = p(x)
-    else
-        C[idx...] = p(x, C[idx...])
-    end
-    return
-end
-
-@inline function _lmul_or_fill!(beta::Number, C::AbstractArray)
-    if iszero(beta)
-        fill!(C, zero(eltype(C)))
-    else
-        lmul!(beta, C)
-    end
-    return C
-end
-
 matprod(x, y) = x*y + x*y
 
 # dot products
@@ -264,7 +196,7 @@ end
 """
     addmul!(C, A, B, α, β) -> C
 
-Combined inplace matrix-matrix or matrix-vector multiply-add ``α A B + β C``.
+Combined inplace matrix-matrix or matrix-vector multiply-add ``A B α + C β``.
 The result is stored in `C` by overwriting it.  Note that `C` must not be
 aliased with either `A` or `B`.
 
@@ -486,7 +418,7 @@ function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::
         return y
     end
     if nA == 0
-        return _lmul_or_fill!(beta, y)
+        return _rmul_or_fill!(y, beta)
     end
     if stride(A, 1) == 1 && stride(A, 2) >= size(A, 1)
         return BLAS.gemv!(tA, alpha, A, x, beta, y)
@@ -508,7 +440,7 @@ function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat
         throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
     end
     if mA == 0 || nA == 0
-        return _lmul_or_fill!(_add.beta, C)
+        return _rmul_or_fill!(C, _add.beta)
     end
     if mA == 2 && nA == 2
         return matmul2x2!(C, tA, tAt, A, A, _add)
@@ -537,7 +469,7 @@ function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA
         throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
     end
     if mA == 0 || nA == 0
-        return _lmul_or_fill!(_add.beta, C)
+        return _rmul_or_fill!(C, _add.beta)
     end
     if mA == 2 && nA == 2
         return matmul2x2!(C, tA, tAt, A, A, _add)
@@ -582,7 +514,7 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
         if size(C) != (mA, nB)
             throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
         end
-        return _lmul_or_fill!(_add.beta, C)
+        return _rmul_or_fill!(C, _add.beta)
     end
 
     if mA == 2 && nA == 2 && nB == 2
@@ -735,7 +667,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
         throw(DimensionMismatch("result C has dimensions $(size(C)), needs ($mA,$nB)"))
     end
     if isempty(A) || isempty(B)
-        return _lmul_or_fill!(_add.beta, C)
+        return _rmul_or_fill!(C, _add.beta)
     end
 
     tile_size = 0

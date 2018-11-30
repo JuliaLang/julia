@@ -287,23 +287,23 @@ mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix) = o
 
 @inline addmul!(out::AbstractVector, A::Diagonal, in::AbstractVector,
                 alpha::Number, beta::Number) =
-    out .= alpha .* A.diag .* in .+ beta .* out
+    out .= A.diag .* in .* alpha .+ out .* beta
 @inline addmul!(out::AbstractVector, A::Adjoint{<:Any,<:Diagonal}, in::AbstractVector,
                 alpha::Number, beta::Number) =
-    out .= alpha .* adjoint.(A.parent.diag) .* in .+ beta .* out
+    out .= adjoint.(A.parent.diag) .* in .* alpha .+ out .* beta
 @inline addmul!(out::AbstractVector, A::Transpose{<:Any,<:Diagonal}, in::AbstractVector,
                 alpha::Number, beta::Number) =
-    out .= alpha .* transpose.(A.parent.diag) .* in .+ beta .* out
+    out .= transpose.(A.parent.diag) .* in .* alpha .+ out .* beta
 
 @inline addmul!(out::AbstractMatrix, A::Diagonal, in::StridedMatrix,
                 alpha::Number, beta::Number) =
-    out .= alpha .* A.diag .* in .+ beta .* out
+    out .= A.diag .* in .* alpha .+ out .* beta
 @inline addmul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::StridedMatrix,
                 alpha::Number, beta::Number) =
-    out .= alpha .* adjoint.(A.parent.diag) .* in .+ beta .* out
+    out .= adjoint.(A.parent.diag) .* in .* alpha .+ out .* beta
 @inline addmul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix,
                 alpha::Number, beta::Number) =
-    out .= alpha .* transpose.(A.parent.diag) .* in .+ beta .* out
+    out .= transpose.(A.parent.diag) .* in .* alpha .+ out .* beta
 
 # ambiguities with Symmetric/Hermitian
 # RealHermSymComplex[Sym]/[Herm] only include Number; invariant to [c]transpose
@@ -328,11 +328,11 @@ mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Rea
 @inline addmul!(C::AbstractMatrix,
                 A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexSym},
         alpha::Number, beta::Number) =
-    C .= alpha .* adjoint.(A.parent.diag) .* B .+ beta .* C
+    C .= adjoint.(A.parent.diag) .* B .* alpha .+ C .* beta
 @inline addmul!(C::AbstractMatrix,
                 A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexHerm},
         alpha::Number, beta::Number) =
-    C .= alpha .* transpose.(A.parent.diag) .* B .+ beta .* C
+    C .= transpose.(A.parent.diag) .* B .* alpha .+ C .* beta
 
 (/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
 

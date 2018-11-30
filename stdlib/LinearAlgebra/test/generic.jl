@@ -188,8 +188,8 @@ end
     @test q\qmat ≉ qmat/q
     alpha = Quaternion(rand(4)...)
     beta = Quaternion(0, 0, 0, 0)
-    @test addmul!(copy(qmat), qmat, q, alpha, beta) ≈ alpha * qmat * q
-    @test addmul!(copy(qmat), q, qmat, alpha, beta) ≈ alpha * q * qmat
+    @test addmul!(copy(qmat), qmat, q, alpha, beta) ≈ qmat * q * alpha
+    @test addmul!(copy(qmat), q, qmat, alpha, beta) ≈ q * qmat * alpha
 end
 @testset "ops on Numbers" begin
     @testset for elty in [Float32,Float64,ComplexF32,ComplexF64]
