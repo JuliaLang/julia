@@ -2203,7 +2203,11 @@ jl_method_instance_t *jl_lookup_generic(jl_value_t **args, uint32_t nargs, uint3
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
 {
     jl_method_instance_t *mfunc = jl_lookup_generic_(args, nargs,
+#ifdef _OS_WASM_
+                                                     0,
+#else
                                                      jl_int32hash_fast(jl_return_address()),
+#endif
                                                      jl_get_ptls_states()->world_age);
     JL_GC_PROMISE_ROOTED(mfunc);
     jl_value_t *res = mfunc->invoke(mfunc, args, nargs);
