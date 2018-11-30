@@ -425,7 +425,7 @@ See also [`eachrow`](@ref) and [`eachslice`](@ref).
 eachcol(A::AbstractVecOrMat) = (view(A, :, i) for i in axes(A, 2))
 
 """
-    eachslice(A; dims)
+    eachslice(A::AbstractArray; dims)
 
 Creates a generator that iterates over the given dims of A, returning views that select all the data from the other dimensions in A.
 
