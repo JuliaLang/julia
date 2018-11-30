@@ -940,7 +940,8 @@ end
 Returns an array of type-inferred lowered form (IR) for the methods matching the given
 generic function and type signature. The keyword argument `optimize` controls whether
 additional optimizations, such as inlining, are also applied.
-The keyword debuginfo controls the amount of code metadata present in the output.
+The keyword `debuginfo` controls the amount of code metadata present in the output,
+possible options are `:source` or `:none`.
 """
 function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
                     optimize=true, debuginfo::Symbol=:default,
