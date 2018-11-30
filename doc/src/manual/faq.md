@@ -834,6 +834,22 @@ a scalar can participate in linear algebra operations such as `2 * rand(2,2)`,
 but the analogous operation with a zero-dimensional array
 `fill(2) * rand(2,2)` is an error.
 
+## Computing cluster
+
+### How do I manage precompilation cache files in distributed file systems?
+
+When using `julia` in high-performance computing (HPC) facilities, invoking
+_n_ `julia` processes simultaneously creates at most _n_ temporary copies of
+cache files.  It may become a major issue in slow and/or small distributed
+file systems.  There are a few possible workarounds:
+
+1. Use `julia` with `--compilecache=no` flag to turn off precompilation.
+2. Configure a private writable depot using `pushfirst!(DEPOT_PATH, private_path)`
+   where `private_path` is a path unique to this `julia` process.  This
+   can also be done by setting environment variable `JULIA_DEPOT_PATH` to
+   `$private_path:$HOME/.julia`.
+3. Create a symlink from `~/.julia/compiled` to a directory in a scratch space.
+
 ## Julia Releases
 
 ### Do I want to use a release, beta, or nightly version of Julia?

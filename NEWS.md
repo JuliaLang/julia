@@ -18,6 +18,9 @@ Language changes
     Previously they were sometimes parsed as tuples, depending on whitespace ([#28506]).
   * `Regex` now behaves like a scalar when used in broadcasting ([#29913]).
   * `Char` now behaves like a read-only 0-dimensional array ([#29819]).
+  * Precompilation cache files are now created atomically ([#30174]).  Note that
+    invoking _n_ `julia` processes simultaneously may creates _n_ temporary
+    copies of cache files.
 
 New library functions
 ---------------------
