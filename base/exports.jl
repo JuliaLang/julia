@@ -365,7 +365,7 @@ export
     cumsum!,
     accumulate,
     accumulate!,
-    eachcol,
+    eachindex,
     eachslice,
     extrema,
     fill!,
