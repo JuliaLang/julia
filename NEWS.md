@@ -21,6 +21,13 @@ Language changes
   * Using the same name for both a local variable and a static parameter is now an error instead
     of a warning ([#29429]).
 
+Command-line option changes
+---------------------------
+
+  * When a script run in interactive mode (`-i`) throws an error, the REPL now starts after
+    the error is displayed. Previously the REPL only started if the script completed without
+    error ([#21233]).
+
 New library functions
 ---------------------
 
