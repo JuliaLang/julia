@@ -352,17 +352,6 @@ julia> map(((x,y),) -> x + y, [(1,2), (3,4)])
  7
 ```
 
-However, destructuring the argument to a do-block does not require an extra comma:
-
-```
-julia> map([(1,2), (3,4)]) do (x,y)
-           x + y
-       end
-2-element Array{Int64,1}:
- 3
- 7
-```
-
 ## Varargs Functions
 
 It is often convenient to be able to write functions taking an arbitrary number of arguments.
