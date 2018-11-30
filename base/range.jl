@@ -941,7 +941,10 @@ Array{T,1}(r::AbstractRange{T}) where {T} = vcat(r)
 collect(r::AbstractRange) = vcat(r)
 
 reverse(r::OrdinalRange) = (:)(last(r), -step(r), first(r))
+# -(::Unsigned) doesn't actually return a negative number — so convert to signed
+reverse(r::OrdinalRange{<:Any, <:Unsigned}) = (:)(last(r), -convert(Signed, step(r)), first(r))
 reverse(r::StepRangeLen) = StepRangeLen(r.ref, -r.step, length(r), length(r)-r.offset+1)
+reverse(r::StepRangeLen{<:Any, <:Any, <:Unsigned}) = StepRangeLen(r.ref, -convert(Signed, r.step), length(r), length(r)-r.offset+1)
 reverse(r::LinRange)     = LinRange(r.stop, r.start, length(r))
 
 ## sorting ##

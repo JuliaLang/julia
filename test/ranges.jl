@@ -269,10 +269,13 @@ end
             @test findall(in(span), r) == 1:6
         end
     end
-    @testset "reverse" begin
-        @test reverse(reverse(1:10)) == 1:10
-        @test reverse(reverse(typemin(Int):typemax(Int))) == typemin(Int):typemax(Int)
-        @test reverse(reverse(typemin(Int):2:typemax(Int))) == typemin(Int):2:typemax(Int)
+    @testset "reverse `[Step|Unit]Range{$T}`" for T in (Int8, UInt8, Int, UInt, Int128, UInt128)
+        @test reverse(T(1):T(10)) == T(10):-1:T(1)
+        @test reverse(typemin(T):typemax(T)) == typemax(T):-1:typemin(T)
+        @test reverse(typemin(T):2:typemax(T)) == typemax(T)-T(1):-2:typemin(T)
+        @test reverse(reverse(T(1):T(10))) == T(1):T(10)
+        @test reverse(reverse(typemin(T):typemax(T))) == typemin(T):typemax(T)
+        @test reverse(reverse(typemin(T):2:typemax(T))) == typemin(T):2:typemax(T)
     end
     @testset "intersect" begin
         @test intersect(1:5, 2:3) == 2:3
