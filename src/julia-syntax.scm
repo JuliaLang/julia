@@ -2535,6 +2535,11 @@
                                  (if (memq v argnames)
                                      (error (string "local variable name \"" v "\" conflicts with an argument"))))
                                locals-declared)))
+               (if (and (pair? sp) (eq? e (lam:body lam)))
+                   (for-each (lambda (v)
+                               (if (memq v all-vars)
+                                   (error (string "local variable name \"" v "\" conflicts with a static parameter"))))
+                             sp))
                (if lam ;; update in-place the list of local variables in lam
                    (set-car! (cddr lam)
                              (append real-new-vars real-new-vars-def (caddr lam))))

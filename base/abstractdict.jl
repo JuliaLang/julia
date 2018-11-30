@@ -645,6 +645,23 @@ copy(d::IdDict) = typeof(d)(d)
 
 get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V} = (d[key] = get(d, key, default))::V
 
+function get(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
+    val = get(d, key, secret_table_token)
+    if val === secret_table_token
+        val = default()
+    end
+    return val
+end
+
+function get!(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
+    val = get(d, key, secret_table_token)
+    if val === secret_table_token
+        val = default()
+        setindex!(d, val, key)
+    end
+    return val
+end
+
 in(@nospecialize(k), v::KeySet{<:Any,<:IdDict}) = get(v.dict, k, secret_table_token) !== secret_table_token
 
 # For some AbstractDict types, it is safe to implement filter!
