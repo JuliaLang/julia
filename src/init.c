@@ -782,7 +782,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         }
 #endif
 
-        jl_load(jl_core_module, "boot.jl");
+        jl_load(jl_core_module, "base/boot.jl");
         jl_get_builtin_hooks();
         jl_init_box_caches();
     }
