@@ -16,8 +16,11 @@ override CPPFLAGS += $(JCPPFLAGS)
 FLAGS := \
 	-D_GNU_SOURCE -I$(BUILDDIR) -I$(SRCDIR) \
 	-I$(SRCDIR)/flisp -I$(SRCDIR)/support \
-	-I$(LIBUV_INC) -I$(build_includedir) -DLIBRARY_EXPORTS \
+	-I$(build_includedir) -DLIBRARY_EXPORTS \
 	-I$(JULIAHOME)/deps/valgrind
+ifneq ($(OS),wasm)
+FLAGS += -I$(LIBUV_INC)
+endif
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common \
 		 -Wpointer-arith -Wundef
@@ -40,11 +43,17 @@ endif
 
 SRCS := \
 	jltypes gf typemap ast builtins module interpreter symbol \
-	dlload sys init task array dump staticdata toplevel jl_uv datatype \
-	simplevector APInt-C runtime_intrinsics runtime_ccall precompile \
-	threadgroup threading stackwalk gc gc-debug gc-pages method \
+	dlload sys init task array dump staticdata toplevel datatype \
+	simplevector runtime_intrinsics precompile \
+	stackwalk gc gc-debug gc-pages method \
 	jlapi signal-handling safepoint jloptions timing subtype rtutils \
-	crc32c processor
+	crc32c threading
+
+ifneq ($(OS),wasm)
+SRCS += jl_uv threadgroup processor
+else
+SRCS += jl_wasm
+endif
 
 ifeq ($(USEMSVC), 1)
 SRCS += getopt
@@ -99,7 +108,11 @@ FLAGS += -DLLVM_SHLIB
 endif # USE_LLVM_SHLIB == 1
 endif
 
-COMMON_LIBS := -L$(build_shlibdir) -L$(build_libdir) $(LIBUV) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LLVMLINK) $(OSLIBS)
+UVLIBS :=
+ifneq ($(OS),wasm)
+UVLIBS += $(LIBUV)
+endif
+COMMON_LIBS := -L$(build_shlibdir) -L$(build_libdir) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LLVMLINK) $(OSLIBS) $(UVLIBS)
 DEBUG_LIBS := $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport-debug.a $(COMMON_LIBS)
 RELEASE_LIBS := $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport.a $(COMMON_LIBS)
 
@@ -265,7 +278,7 @@ else
   SONAME_DEBUG :=
 endif
 
-$(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV)
+$(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(UVLIBS)
 	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(DEBUGFLAGS) $(DOBJS) $(RPATH_LIB) -o $@ $(LDFLAGS) $(JLIBLDFLAGS) $(DEBUG_LIBS) $(SONAME_DEBUG))
 	$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
 ifneq ($(OS), WINNT)
@@ -280,7 +293,7 @@ $(BUILDDIR)/libjulia-debug.a: $(SRCDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/
 
 libjulia-debug: $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(PUBLIC_HEADER_TARGETS)
 
-$(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
+$(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(UVLIBS)
 	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(OBJS) $(RPATH_LIB) -o $@ $(LDFLAGS) $(JLIBLDFLAGS) $(RELEASE_LIBS) $(SONAME))
 	$(INSTALL_NAME_CMD)libjulia.$(SHLIB_EXT) $@
 ifneq ($(OS), WINNT)

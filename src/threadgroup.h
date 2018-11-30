@@ -3,6 +3,7 @@
 #ifndef JL_THREADGROUP_H
 #define JL_THREADGROUP_H
 
+#ifndef _OS_WASM_
 #include <stdint.h>
 #include "uv.h"
 
@@ -40,5 +41,6 @@ int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid,
                         void **bcast_val, int init);
 int ti_threadgroup_join(ti_threadgroup_t *tg, int16_t ext_tid);
 int ti_threadgroup_destroy(ti_threadgroup_t *tg);
+#endif
 
 #endif  /* THREADGROUP_H */

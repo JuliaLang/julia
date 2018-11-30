@@ -181,7 +181,7 @@ extern bool jl_processor_print_help;
  * If the detected/specified CPU name is not available on the LLVM version specified,
  * a fallback CPU name will be used. Unsupported features will be ignored.
  */
-std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags);
+std::pair<std::string,std::vector<std::string> > jl_get_llvm_target(bool imaging, uint32_t &flags);
 
 /**
  * Returns the CPU name and feature string to be used by LLVM disassembler.

@@ -156,6 +156,7 @@ static void jl_find_stack_bottom(void)
     jl_init_stack_limits(1);
 }
 
+#ifndef _OS_WASM_
 struct uv_shutdown_queue_item { uv_handle_t *h; struct uv_shutdown_queue_item *next; };
 struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutdown_queue_item *last; };
 
@@ -302,6 +303,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     jl_print_timings();
 #endif
 }
+#endif
 
 void jl_get_builtin_hooks(void);
 void jl_get_builtins(void);
@@ -316,7 +318,9 @@ void *jl_crtdll_handle;
 void *jl_winsock_handle;
 #endif
 
+#ifndef _OS_WASM_
 uv_loop_t *jl_io_loop;
+#endif
 
 #ifndef _OS_WINDOWS_
 #define UV_STREAM_READABLE 0x20   /* The stream is readable */
@@ -357,7 +361,7 @@ int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
 
     return 0;
 }
-#else
+#elif !defined(_OS_WASM_)
 int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     if ((*dupfd = fcntl(fd, F_DUPFD_CLOEXEC, 3)) == -1)
         return -errno;
@@ -365,6 +369,7 @@ int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
 }
 #endif
 
+#ifndef _OS_WASM_
 static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
 {
     void *handle;
@@ -452,6 +457,9 @@ void init_stdio(void)
     JL_STDERR = (uv_stream_t*)init_stdio_handle("stderr", UV_STDERR_FD, 0);
     jl_flush_cstdio();
 }
+#else
+void init_stdio(void) {}
+#endif
 
 #ifdef JL_USE_INTEL_JITEVENTS
 char jl_using_intel_jitevents; // Non-zero if running under Intel VTune Amplifier
@@ -482,6 +490,12 @@ int isabspath(const char *in)
     return 0; // relative path
 }
 
+#ifdef _OS_WASM_
+static char *abspath(const char *in, int nprefix)
+{
+    return in;
+}
+#else
 static char *abspath(const char *in, int nprefix)
 { // compute an absolute path location, so that chdir doesn't change the file reference
   // ignores (copies directly over) nprefix characters at the start of abspath
@@ -537,6 +551,7 @@ static char *abspath(const char *in, int nprefix)
 #endif
     return out;
 }
+#endif
 
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
 {   // this function resolves the paths in jl_options to absolute file locations as needed
@@ -548,9 +563,14 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     // calling `julia_init()`
     char *free_path = (char*)malloc(PATH_MAX);
     size_t path_size = PATH_MAX;
+#ifdef _OS_WASM_
+    path_size = 7;
+    memcpy(free_path, "/julia", path_size);
+#else
     if (uv_exepath(free_path, &path_size)) {
         jl_error("fatal error: unexpected error while retrieving exepath");
     }
+#endif
     if (path_size >= PATH_MAX) {
         jl_error("fatal error: jl_options.julia_bin path too long");
     }
@@ -615,7 +635,9 @@ static void jl_set_io_wait(int v)
 
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
+#ifndef _OS_WASM_
     jl_init_timing();
+#endif
 #ifdef JULIA_ENABLE_THREADING
     // Make sure we finalize the tls callback before starting any threads.
     jl_get_ptls_states_getter();
@@ -624,10 +646,12 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_safepoint_init();
     libsupport_init();
     ios_set_io_wait_func = jl_set_io_wait;
+#ifndef _OS_WASM_
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
     jl_init_signal_async();
     restore_signals();
+#endif
 
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
@@ -637,12 +661,17 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_options.cpu_target = "native";
 
     jl_page_size = jl_getpagesize();
+#ifndef _OS_WASM_
     uint64_t total_mem = uv_get_total_memory();
     if (total_mem >= (size_t)-1) {
         total_mem = (size_t)-1;
     }
     jl_arr_xtralloc_limit = total_mem / 100;  // Extra allocation limited to 1% of total RAM
+#endif
     jl_find_stack_bottom();
+#ifdef _OS_WASM_
+    jl_dl_handle = NULL;
+#else
     jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
 #ifdef _OS_WINDOWS_
     jl_ntdll_handle = jl_dlopen("ntdll.dll", 0); // bypass julia's pathchecking for system dlls
@@ -668,6 +697,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_RTLD_DEFAULT_handle = RTLD_DEFAULT;
 #else
     jl_RTLD_DEFAULT_handle = jl_exe_handle;
+#endif
 #endif
 #endif
 
@@ -746,9 +776,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_internal_main_module = jl_main_module;
 
         ptls->current_module = jl_core_module;
+#ifdef JULIA_ENABLE_THREADING
         for (int t = 0; t < jl_n_threads; t++) {
             jl_all_tls_states[t]->root_task->current_module = jl_core_module;
         }
+#endif
 
         jl_load(jl_core_module, "boot.jl");
         jl_get_builtin_hooks();
@@ -794,9 +826,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_add_standard_imports(jl_main_module);
     }
     ptls->current_module = jl_main_module;
+#ifdef JULIA_ENABLE_THREADING
     for (int t = 0; t < jl_n_threads; t++) {
         jl_all_tls_states[t]->root_task->current_module = jl_main_module;
     }
+#endif
 
     // This needs to be after jl_start_threads
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
@@ -829,6 +863,7 @@ static jl_value_t *core(const char *name)
 void jl_get_builtin_hooks(void)
 {
     int t;
+#ifdef JULIA_ENABLE_THREADING
     for (t = 0; t < jl_n_threads; t++) {
         jl_ptls_t ptls2 = jl_all_tls_states[t];
         ptls2->root_task->tls = jl_nothing;
@@ -836,6 +871,7 @@ void jl_get_builtin_hooks(void)
         ptls2->root_task->exception = jl_nothing;
         ptls2->root_task->result = jl_nothing;
     }
+#endif
 
     jl_char_type    = (jl_datatype_t*)core("Char");
     jl_int8_type    = (jl_datatype_t*)core("Int8");

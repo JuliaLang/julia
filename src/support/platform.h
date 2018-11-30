@@ -71,6 +71,8 @@
 #define _OS_WINDOWS_
 #elif defined(__APPLE__) && defined(__MACH__)
 #define _OS_DARWIN_
+#elif defined(__EMSCRIPTEN__)
+#define _OS_WASM_
 #endif
 
 /*******************************************************************************

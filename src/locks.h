@@ -160,10 +160,7 @@ static inline void jl_mutex_init(jl_mutex_t *lock) JL_NOTSAFEPOINT
 #define JL_LOCK_NOGC(m) jl_mutex_lock_nogc(m)
 #define JL_UNLOCK_NOGC(m) jl_mutex_unlock_nogc(m)
 #else // JULIA_ENABLE_THREADING
-static inline void jl_mutex_check_type(jl_mutex_t *m)
-{
-    (void)m;
-}
+#define jl_mutex_check_type(m)
 #define JL_MUTEX_INIT(m) jl_mutex_check_type(m)
 #define JL_LOCK(m) do {                                   \
         JL_SIGATOMIC_BEGIN();                             \

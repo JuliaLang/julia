@@ -13,6 +13,10 @@ extern "C" {
 
 #define PROFILE_JL_THREADING            0
 
+#ifdef _OS_WASM_
+#define jl_n_threads 1
+extern jl_ptls_t *jl_all_tls_states;
+#else
 // thread ID
 extern jl_ptls_t *jl_all_tls_states;
 extern JL_DLLEXPORT int jl_n_threads;  // # threads we're actually using
@@ -53,6 +57,7 @@ void ti_threadfun(void *arg);
 
 // helpers for thread function
 jl_value_t *ti_runthread(jl_function_t *f, jl_svec_t *args, size_t nargs);
+#endif
 
 #ifdef __cplusplus
 }

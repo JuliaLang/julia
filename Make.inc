@@ -412,8 +412,15 @@ ifneq ($(OS), WINNT)
 # Do not enable on windows to avoid warnings from libuv.
 JCXXFLAGS += -pedantic
 endif
-DEBUGFLAGS := -O0 -ggdb2 -DJL_DEBUG_BUILD -fstack-protector-all
-SHIPFLAGS := -O3 -ggdb2 -falign-functions
+DEBUGFLAGS := -O0 -DJL_DEBUG_BUILD -fstack-protector-all
+SHIPFLAGS := -O3 -falign-functions
+ifneq ($(OS),wasm)
+DEBUGFLAGS += -ggdb2
+SHIPFLAGS += -ggdb2
+else
+DEBUGFLAGS += -g4
+SHIPFLAGS += -g4
+endif
 endif
 
 ifeq ($(USECLANG),1)

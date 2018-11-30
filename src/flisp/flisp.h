@@ -6,7 +6,9 @@
 
 #include "platform.h"
 #include "libsupport.h"
+#ifndef __EMSCRIPTEN__
 #include "uv.h"
+#endif
 
 //#define MEMDEBUG
 //#define MEMDEBUG2

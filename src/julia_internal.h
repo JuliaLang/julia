@@ -4,7 +4,9 @@
 #define JL_INTERNAL_H
 
 #include "options.h"
+#ifndef __EMSCRIPTEN__
 #include <uv.h>
+#endif
 #if !defined(_MSC_VER) && !defined(__MINGW32__)
 #include <unistd.h>
 #include <sched.h>
@@ -394,8 +396,10 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls);
 
 jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b);
 
+#ifndef __EMSCRIPTEN__
 extern uv_loop_t *jl_io_loop;
 void jl_uv_flush(uv_stream_t *stream);
+#endif
 
 typedef struct jl_typeenv_t {
     jl_tvar_t *var;

@@ -17,7 +17,6 @@
 #endif
 #include "julia.h"
 #include "julia_internal.h"
-#include "uv.h"
 #include "julia_assert.h"
 #include "intrinsics.h"
 
@@ -819,10 +818,12 @@ JL_DLLEXPORT jl_value_t *jl_load(jl_module_t *module, const char *fname)
         jl_uv_flush(JL_STDOUT);
 #endif
     }
+#ifndef _OS_WASM_
     uv_stat_t stbuf;
     if (jl_stat(fname, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
         jl_errorf("could not open file %s", fname);
     }
+#endif
     return jl_parse_eval_all(fname, NULL, 0, module);
 }
 
@@ -837,10 +838,12 @@ JL_DLLEXPORT jl_value_t *jl_prepend_cwd(jl_value_t *str)
 {
     size_t sz = 1024;
     char path[1024];
+#ifndef _OS_WASM_
     int c = uv_cwd(path, &sz);
     if (c < 0) {
         jl_errorf("could not get current directory");
     }
+#endif
     path[sz] = '/';  // fix later with normpath if Windows
     const char *fstr = (const char*)jl_string_data(str);
     if (strlen(fstr) + sz >= 1024) {
