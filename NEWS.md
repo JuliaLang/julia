@@ -13,6 +13,13 @@ Language changes
   * Parser inputs ending with a comma are now consistently treated as incomplete.
     Previously they were sometimes parsed as tuples, depending on whitespace ([#28506]).
 
+Command-line option changes
+---------------------------
+
+  * When a script run in interactive mode (`-i`) throws an error, the REPL now starts after
+    the error is displayed. Previously the REPL only started if the script completed without
+    error ([#21233]).
+
 New library functions
 ---------------------
 
