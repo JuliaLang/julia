@@ -43,15 +43,12 @@ promote_rule(::Type{Union{Nothing, Missing, S}}, ::Type{T}) where {T,S} =
     Union{Nothing, Missing, promote_type(T, S)}
 
 convert(::Type{Union{T, Missing}}, x::Union{T, Missing}) where {T} = x
-convert(::Type{Union{T, Missing}}, x) where {T} = convert(T, x)
+# To print more appropriate message than "T not defined"
+convert(::Type{Union{T, Missing}}, x) where {T} =
+    @isdefined(T) ? convert(T, x) : throw(MethodError(convert, (Missing, x)))
 # To fix ambiguities
-convert(::Type{Missing}, ::Missing) = missing
 convert(::Type{Union{Nothing, Missing}}, x::Union{Nothing, Missing}) = x
 convert(::Type{Union{Nothing, Missing, T}}, x::Union{Nothing, Missing, T}) where {T} = x
-convert(::Type{Union{Nothing, Missing}}, x) =
-    throw(MethodError(convert, (Union{Nothing, Missing}, x)))
-# To print more appropriate message than "T not defined"
-convert(::Type{Missing}, x) = throw(MethodError(convert, (Missing, x)))
 
 # Comparison operators
 ==(::Missing, ::Missing) = missing
