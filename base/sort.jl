@@ -935,6 +935,7 @@ See [`sort!`](@ref) for a description of possible
 keyword arguments.
 
 To sort slices of an array, refer to [`sortslices`](@ref).
+`sort!` on an iterator will use the iterator to sort the iterator's underlying data.
 
 # Examples
 ```jldoctest
@@ -991,7 +992,8 @@ end
 Sort the multidimensional array `A` along dimension `dims`.
 See [`sort!`](@ref) for a description of possible keyword arguments.
 
-To sort slices of an array, refer to [`sortslices`](@ref).
+To sort slices of an array, refer to [`sortslices`](@ref). 
+`sort!` on an iterator will use the iterator to sort the iterator's underlying data.
 
 # Examples
 ```jldoctest
@@ -1030,6 +1032,16 @@ function sort!(A::AbstractArray;
         sort!(Av, alg, ordr)
     end
     A
+end
+
+function sort(g::Generator; lt = isless, kwargs...)
+    f = g.f
+    sort(g.iter; lt = (i, j) -> lt(f(i), f(j)), kwargs...)
+end
+
+function sort!(g::Generator; lt = isless, kwargs...)
+    f = g.f
+    sort!(g.iter; lt = (i, j) -> lt(f(i), f(j)), kwargs...)
 end
 
 ## fast clever sorting for floats ##
