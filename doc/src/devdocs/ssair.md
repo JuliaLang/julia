@@ -14,7 +14,7 @@ form representation, but the lack of such a representation ultimately proved pro
 
 ## New IR nodes
 
-With the new IR representation, the compiler learned to handle four new IR nodes, Phi nodes, Pi
+With the new IR representation, the compiler learned to handle four new IR nodes: Phi nodes, Pi
 nodes as well as PhiC nodes and Upsilon nodes (the latter two are only used for exception handling).
 
 ### Phi nodes and Pi nodes
