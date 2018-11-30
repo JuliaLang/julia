@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test
+using Test, Random
 
 """
 Helper to walk the AST and call a function on every node.
@@ -217,3 +217,39 @@ function f_div(x, y)
     return x
 end
 @test length(code_typed(f_div, (Int, Int))[1][1].code) > 1
+
+# Marking of lines_return (inliner cost model)
+function _lines_return_test_(x, n)
+    if x == 1
+        y = rand()
+        error("expected $y, got $x")
+    end
+    s = 0.0
+    for i = 1:n
+        s += i*x
+    end
+    return s
+end
+
+@testset "lines_return" begin
+    ci = code_typed(_lines_return_test_, Tuple{Float64, Int})[1].first
+    ir = Core.Compiler.lines_return(ci.code)
+    i = 1
+    # Find a line related to `rand`
+    while !isa(ci.code[i], Expr) || ci.code[i].head != :invoke || ci.code[i].args[2] != GlobalRef(Random, :dsfmt_fill_array_close1_open2!)
+        i += 1
+    end
+    @test !ir[i]
+    # Find the call to `error`
+    while !isa(ci.code[i], Expr) || ci.code[i].head != :invoke || !isa(ci.code[i].args[2], GlobalRef) || ci.code[i].args[2].name != :error
+        i += 1
+    end
+    @test !ir[i]
+    # Skip past the :unreachable and check that the rest of the lines
+    # are on a returning branch
+    i += 2
+    while i <= length(ci.code)
+        @test ir[i]
+        i += 1
+    end
+end
