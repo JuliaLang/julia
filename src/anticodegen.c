@@ -59,10 +59,10 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
     return decls;
 }
 
-jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs);
+jl_value_t *jl_invoke(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs);
 jl_callptr_t jl_generate_fptr(jl_method_instance_t **pli, jl_llvm_functions_t decls, size_t world)
 {
-    return (jl_callptr_t)&jl_interpret_call;
+    return (jl_callptr_t)&jl_invoke;
 }
 
 JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION(void)
