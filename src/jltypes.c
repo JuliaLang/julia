@@ -30,7 +30,7 @@ jl_datatype_t *jl_ssavalue_type;
 jl_datatype_t *jl_abstractslot_type;
 jl_datatype_t *jl_slotnumber_type;
 jl_datatype_t *jl_typedslot_type;
-jl_datatype_t *jl_simplevector_type;
+jl_datatype_t *jl_simplevector_type=NULL;
 jl_typename_t *jl_tuple_typename;
 jl_datatype_t *jl_anytuple_type;
 jl_datatype_t *jl_emptytuple_type=NULL;
@@ -68,7 +68,7 @@ jl_datatype_t *jl_number_type;
 jl_datatype_t *jl_signed_type;
 
 JL_DLLEXPORT jl_value_t *jl_emptytuple=NULL;
-jl_svec_t *jl_emptysvec;
+jl_svec_t *jl_emptysvec=NULL;
 jl_value_t *jl_nothing;
 
 JL_DLLEXPORT jl_value_t *jl_true;
@@ -76,11 +76,11 @@ JL_DLLEXPORT jl_value_t *jl_false;
 
 jl_unionall_t *jl_typetype_type;
 
-jl_unionall_t *jl_array_type;
-jl_typename_t *jl_array_typename;
-jl_value_t *jl_array_uint8_type;
+jl_unionall_t *jl_array_type=NULL;
+jl_typename_t *jl_array_typename=NULL;
+jl_value_t *jl_array_uint8_type=NULL;
 jl_value_t *jl_array_any_type=NULL;
-jl_value_t *jl_array_symbol_type;
+jl_value_t *jl_array_symbol_type=NULL;
 jl_value_t *jl_array_int32_type;
 jl_datatype_t *jl_weakref_type;
 jl_datatype_t *jl_abstractstring_type;
@@ -102,7 +102,7 @@ jl_datatype_t *jl_typemap_entry_type;
 jl_datatype_t *jl_typemap_level_type;
 jl_datatype_t *jl_method_instance_type;
 jl_datatype_t *jl_code_info_type;
-jl_datatype_t *jl_module_type;
+jl_datatype_t *jl_module_type=NULL;
 jl_datatype_t *jl_errorexception_type=NULL;
 jl_datatype_t *jl_argumenterror_type;
 jl_datatype_t *jl_typeerror_type;
@@ -112,14 +112,14 @@ jl_datatype_t *jl_initerror_type;
 jl_datatype_t *jl_undefvarerror_type;
 jl_datatype_t *jl_lineinfonode_type;
 jl_unionall_t *jl_ref_type;
-jl_unionall_t *jl_pointer_type;
-jl_typename_t *jl_pointer_typename;
-jl_datatype_t *jl_void_type;
-jl_datatype_t *jl_voidpointer_type;
-jl_typename_t *jl_namedtuple_typename;
-jl_unionall_t *jl_namedtuple_type;
+jl_unionall_t *jl_pointer_type=NULL;
+jl_typename_t *jl_pointer_typename=NULL;
+jl_datatype_t *jl_void_type=NULL;
+jl_datatype_t *jl_voidpointer_type=NULL;
+jl_typename_t *jl_namedtuple_typename=NULL;
+jl_unionall_t *jl_namedtuple_type=NULL;
 jl_value_t *jl_an_empty_vec_any=NULL;
-jl_value_t *jl_stackovf_exception;
+jl_value_t *jl_stackovf_exception=NULL;
 #ifdef SEGV_EXCEPTION
 jl_value_t *jl_segv_exception;
 #endif

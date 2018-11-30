@@ -121,7 +121,11 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
 {
     char path[PATHBUF];
     int i;
+#ifdef _OS_WASM_
+    struct stat stbuf;
+#else
     uv_stat_t stbuf;
+#endif
     void *handle;
     int abspath;
     // number of extensions to try — if modname already ends with the

@@ -14,6 +14,12 @@
 #include <map>
 #include <algorithm>
 
+#ifndef _OS_WASM_
+#include "llvm-version.h"
+#include <llvm/ADT/StringRef.h>
+#include <llvm/Support/MathExtras.h>
+#endif
+
 #include "julia_assert.h"
 
 // CPU target string is a list of strings separated by `;` each string starts with a CPU

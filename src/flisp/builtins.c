@@ -312,16 +312,24 @@ static value_t fl_path_cwd(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
         argcount(fl_ctx, "path.cwd", nargs, 1);
     if (nargs == 0) {
         char buf[1024];
+#ifdef __EMSCRIPTEN__
+        buf[0] = '/';
+        buf[1] = '\0';
+        size_t len = 2;
+#else
         size_t len = sizeof(buf);
         err = uv_cwd(buf, &len);
         if (err != 0)
             lerrorf(fl_ctx, fl_ctx->IOError, "path.cwd: could not get cwd: %s", uv_strerror(err));
+#endif
         return string_from_cstrn(fl_ctx, buf, len);
     }
+#ifndef __EMSCRIPTEN__
     char *ptr = tostring(fl_ctx, args[0], "path.cwd");
     err = uv_chdir(ptr);
     if (err != 0)
         lerrorf(fl_ctx, fl_ctx->IOError, "path.cwd: could not cd to %s: %s", ptr, uv_strerror(err));
+#endif
     return fl_ctx->T;
 }
 

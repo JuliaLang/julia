@@ -1671,6 +1671,9 @@ void (jl_longjmp)(jmp_buf _Buf, int _Value);
 #define jl_setjmp_name "jl_setjmp"
 #define jl_setjmp(a,b) jl_setjmp(a)
 #define jl_longjmp(a,b) jl_longjmp(a,b)
+#elif defined(_OS_WASM_)
+#define jl_setjmp(a,b) setjmp(a)
+#define jl_longjmp(a,b) longjmp(a,b)
 #else
 // determine actual entry point name
 #if defined(sigsetjmp)
@@ -1710,6 +1713,14 @@ extern int had_exception;
 
 // I/O system -----------------------------------------------------------------
 
+JL_DLLEXPORT int jl_sizeof_ios_t(void);
+
+JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s);
+
+#ifdef __EMSCRIPTEN__
+#define JL_STREAM ios_t
+#define jl_uv_flush(s) (void)(s);
+#else
 #define JL_STREAM uv_stream_t
 #define JL_STDOUT jl_uv_stdout
 #define JL_STDERR jl_uv_stderr
@@ -1726,16 +1737,13 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle);
 JL_DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, uint32_t host,
                              unsigned int flags);
 
-JL_DLLEXPORT int jl_sizeof_ios_t(void);
-
-JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s);
-
 typedef struct {
     void *data;
     uv_loop_t *loop;
     uv_handle_type type;
     uv_os_fd_t file;
 } jl_uv_file_t;
+#endif
 
 #ifdef __GNUC__
 #define _JL_FORMAT_ATTR(type, str, arg) \
@@ -1744,10 +1752,10 @@ typedef struct {
 #define _JL_FORMAT_ATTR(type, str, arg)
 #endif
 
-JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_uv_puts(JL_STREAM *stream, const char *str, size_t n) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_printf(JL_STREAM *s, const char *format, ...) JL_NOTSAFEPOINT
     _JL_FORMAT_ATTR(printf, 2, 3);
-JL_DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_vprintf(JL_STREAM *s, const char *format, va_list args) JL_NOTSAFEPOINT
     _JL_FORMAT_ATTR(printf, 2, 0);
 JL_DLLEXPORT void jl_safe_printf(const char *str, ...) JL_NOTSAFEPOINT
     _JL_FORMAT_ATTR(printf, 1, 2);

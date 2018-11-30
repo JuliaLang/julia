@@ -4,7 +4,14 @@
 #define JL_IOS_H
 
 #include <stdarg.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include "platform.h"
+#ifndef _OS_WASM_
 #include "uv.h"
+#else
+#define UV_HANDLE_TYPE_MAX 0
+#endif
 #include "analyzer_annotations.h"
 
 #ifdef __cplusplus

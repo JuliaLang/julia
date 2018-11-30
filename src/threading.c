@@ -50,6 +50,38 @@ extern "C" {
 #include "threadgroup.h"
 #include "threading.h"
 
+#ifdef _OS_WASM_
+jl_tls_states_t jl_tls_states;
+jl_ptls_t jl_this_tls_state = &jl_tls_states;
+jl_ptls_t *jl_all_tls_states = &jl_this_tls_state;
+void jl_init_threading() {
+     jl_ptls_t ptls = jl_get_ptls_states();
+ #ifndef _OS_WINDOWS_
+     ptls->system_id = pthread_self();
+ #endif
+     assert(ptls->world_age == 0);
+     ptls->world_age = 1; // OK to run Julia code on this thread
+     ptls->tid = 0;
+     ptls->pgcstack = NULL;
+     ptls->gc_state = 0; // GC unsafe
+     // Conditionally initialize the safepoint address. See comment in
+     // `safepoint.c`
+     ptls->safepoint = (size_t*)(jl_safepoint_pages + jl_page_size);
+     ptls->defer_signal = 0;
+     ptls->current_module = NULL;
+     void *bt_data = malloc(sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
+     memset(bt_data, 0, sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
+     if (bt_data == NULL) {
+         jl_printf(JL_STDERR, "could not allocate backtrace buffer\n");
+         gc_debug_critical_error();
+         abort();
+     }
+     ptls->bt_data = (uintptr_t*)bt_data;
+     jl_init_thread_heap(ptls);
+}
+
+#else
+
 // The tls_states buffer:
 //
 // On platforms that do not use ELF (i.e. where `__thread` is emulated with
@@ -829,6 +861,7 @@ void jl_init_threading(void)
 void jl_start_threads(void) { }
 
 #endif // !JULIA_ENABLE_THREADING
+#endif
 
 // Make gc alignment available for threading
 // see threads.jl alignment

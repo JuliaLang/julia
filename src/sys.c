@@ -75,7 +75,11 @@ JL_DLLEXPORT uint32_t jl_getutf8(ios_t *s)
     return wc;
 }
 
+#if defined(_OS_WASM_)
+JL_DLLEXPORT int jl_sizeof_uv_mutex(void) { return 0; }
+#else
 JL_DLLEXPORT int jl_sizeof_uv_mutex(void) { return sizeof(uv_mutex_t); }
+#endif
 JL_DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
 #ifndef _OS_WINDOWS_
 JL_DLLEXPORT int jl_sizeof_mode_t(void) { return sizeof(mode_t); }
@@ -115,6 +119,7 @@ JL_DLLEXPORT int32_t jl_nb_available(ios_t *s)
     return (int32_t)(s->size - s->bpos);
 }
 
+#ifndef _OS_WASM_
 // --- dir/file stuff ---
 
 JL_DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
@@ -236,6 +241,7 @@ JL_DLLEXPORT double jl_stat_ctime(char *statbuf)
     s = (uv_stat_t*)statbuf;
     return (double)s->st_ctim.tv_sec + (double)s->st_ctim.tv_nsec * 1e-9;
 }
+#endif
 
 // --- buffer manipulation ---
 
@@ -402,7 +408,11 @@ JL_DLLEXPORT int jl_cpu_threads(void)
 // Returns time in nanosec
 JL_DLLEXPORT uint64_t jl_hrtime(void)
 {
+#ifdef _OS_WASM_
+    return 0;
+#else
     return uv_hrtime();
+#endif
 }
 
 // -- iterating the environment --

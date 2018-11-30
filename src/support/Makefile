@@ -20,12 +20,18 @@ ifeq ($(USEMSVC), 1)
 SRCS += dirname
 endif
 
-HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h
+FLAGS := $(HFILEDIRS:%=-I%) -I$(UTF8PROC_INC) -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
+
+ifneq ($(OS),wasm)
+DEP_HEADERS += $(LIBUV_INC)/uv.h
+FLAGS += -I$(LIBUV_INC)
+endif
+
+HEADERS := $(wildcard *.h) $(DEP_HEADERS)
 
 OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
-FLAGS := $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -I$(UTF8PROC_INC) -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fvisibility=hidden -Wpointer-arith -Wundef
 override CFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat

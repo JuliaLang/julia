@@ -15,14 +15,23 @@ SRCS := flisp.c builtins.c string.c equalhash.c table.c iostream.c \
 
 LLTDIR := ../support
 
-HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h $(wildcard $(LLTDIR)/*.h)
+DEP_HEADERS = $(wildcard $(LLTDIR)/*.h)
+ifneq ($(OS),wasm)
+	DEP_HEADERS += $(LIBUV_INC)/uv.h
+endif
+
+HEADERS := $(wildcard *.h) $(DEP_HEADERS)
 
 OBJS := $(SRCS:%.c=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%.c=$(BUILDDIR)/%.dbg.obj)
 LLT_release := $(BUILDDIR)/$(LLTDIR)/libsupport.a
 LLT_debug := $(BUILDDIR)/$(LLTDIR)/libsupport-debug.a
-LIBFILES_release := $(LLT_release) $(LIBUV) $(LIBUTF8PROC)
-LIBFILES_debug := $(LLT_debug) $(LIBUV) $(LIBUTF8PROC)
+LIBFILES_release := $(LLT_release) $(LIBUTF8PROC)
+LIBFILES_debug := $(LLT_debug) $(LIBUTF8PROC)
+ifneq ($(OS),wasm)
+LIBFILES_release +=  $(LIBUV)
+LIBFILES_debug +=  $(LIBUV)
+endif
 LIBS :=
 ifneq ($(OS),WINNT)
 LIBS += -lpthread
