@@ -79,7 +79,7 @@ void jl_init_threading() {
      ptls->bt_data = (uintptr_t*)bt_data;
      jl_init_thread_heap(ptls);
 }
-
+void jl_start_threads(void){}
 #else
 
 // The tls_states buffer:
