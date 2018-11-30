@@ -814,6 +814,7 @@ static int within_typevar(jl_value_t *t, jl_value_t *vlb, jl_value_t *vub)
             (jl_has_free_typevars(vub) || jl_subtype(ub, vub)));
 }
 
+struct _jl_typestack_t;
 typedef struct _jl_typestack_t jl_typestack_t;
 
 static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
@@ -912,10 +913,10 @@ JL_DLLEXPORT jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *v)
     return p;
 }
 
-JL_EXTENSION typedef struct _jl_typestack_t {
+JL_EXTENSION struct _jl_typestack_t {
     jl_datatype_t *tt;
     struct _jl_typestack_t *prev;
-} jl_typestack_t;
+};
 
 static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t *stack, int check);
 static jl_svec_t *inst_all(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *stack, int check);
