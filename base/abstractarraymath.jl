@@ -410,7 +410,8 @@ end
 """
     eachrow(A::AbstractVecOrMat)
 
-Creates a generator that iterates over the first dimension of matrix A, returning the rows as views.
+Creates a generator that iterates over the first dimension of vector or matrix `A`,
+returning the rows as views.
 See also [`eachcol`](@ref) and [`eachslice`](@ref).
 """
 eachrow(A::AbstractVecOrMat) = (view(A, i, :) for i in axes(A, 1))
