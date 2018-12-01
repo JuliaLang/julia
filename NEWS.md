@@ -20,6 +20,14 @@ Language changes
     to the `Core` module ([#29968]).
   * Using the same name for both a local variable and a static parameter is now an error instead
     of a warning ([#29429]).
+  * `findall(in(b), a)` now returns a `CartesianIndex` when `a` is a matrix or a higher-dimensional array,
+    for consistency with other `findall` methods. Use `LinearIndices(a)[findall(in(b), a)]` to get
+    the old behavior, or `CartesianIndices(a)[findall(in(b), a)]` to get the new behavior
+    on previous Julia versions ([#30226]).
+  * `findmin(::BitArray)` and `findmax(::BitArray)` now return a `CartesianIndex` when `a` is a matrix
+    or a higher-dimensional array, for consistency with for other array types.
+    Use `LinearIndices(a)[findmin(a)[2]]` to get the old behavior, or `CartesianIndices(a)[findmin(a)[2]]`
+    to get the new behavior on previous Julia versions ([#30102]).
 
 Command-line option changes
 ---------------------------
