@@ -20,7 +20,7 @@ sleepcmd = `sleep`
 lscmd = `ls`
 havebb = false
 if Sys.iswindows()
-    busybox = joinpath(Sys.BINDIR, "busybox.exe")
+    busybox = download("http://frippery.org/files/busybox/busybox.exe", joinpath(tempdir(), "busybox.exe"))
     havebb = try # use busybox-w32 on windows, if available
         success(`$busybox`)
         true
@@ -617,4 +617,9 @@ open(`$catcmd`, "r+") do f
     end
     @test read(f, Char) == 'δ'
     wait(t)
+end
+
+# clean up busybox download
+if Sys.iswindows()
+    rm(busybox, force=true)
 end

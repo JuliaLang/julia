@@ -937,3 +937,13 @@ end
         @test s === copy!(s, fill(1.0, 2, 2)) == fill(1.0, 2, 2)
     end
 end
+
+@testset "map on Dicts/Sets is forbidden" begin
+    @test_throws ErrorException map(identity, Set([1,2,3]))
+    @test_throws ErrorException map(identity, Dict("a"=>"b"))
+end
+
+@testset "Issue 30145" begin
+    X = [1,2,3]
+    @test isempty(X[Union{}[]])
+end

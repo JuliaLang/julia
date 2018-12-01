@@ -22,7 +22,7 @@ cp_q(src, dest) = isfile(dest) || cp(src, dest)
 
 # make links for stdlib package docs, this is needed until #522 in Documenter.jl is finished
 const STDLIB_DOCS = []
-const STDLIB_DIR = joinpath(@__DIR__, "..", "stdlib")
+const STDLIB_DIR = Sys.STDLIB
 cd(joinpath(@__DIR__, "src")) do
     Base.rm("stdlib"; recursive=true, force=true)
     mkdir("stdlib")

@@ -466,6 +466,15 @@ A = OffsetArray(rand(4,4), (-3,5))
 A = OffsetArray(view(rand(4,4), 1:4, 4:-1:1), (-3,5))
 @test vec(A) == reshape(A, :) == reshape(A, 16) == reshape(A, Val(1)) == A[:] == vec(A.parent)
 
+# broadcast
+a = [1]
+b = OffsetArray(a, (0,))
+@test @inferred(a .+ b) == [2]
+a = OffsetArray([1, -2, 1], (-2,))
+@test a .* a' == OffsetArray([ 1 -2  1;
+                              -2  4 -2;
+                               1 -2  1], (-2,-2))
+
 end # let
 
 # Check that similar throws a MethodError rather than a

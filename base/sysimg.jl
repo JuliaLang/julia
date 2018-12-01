@@ -72,7 +72,7 @@ convert(::Type{T}, arg)  where {T<:VecElement} = T(arg)
 convert(::Type{T}, arg::T) where {T<:VecElement} = arg
 
 # init core docsystem
-import Core: @doc, @__doc__, WrappedException
+import Core: @doc, @__doc__, WrappedException, @int128_str, @uint128_str, @big_str, @cmd
 if isdefined(Core, :Compiler)
     import Core.Compiler.CoreDocs
     Core.atdoc!(CoreDocs.docm)
@@ -362,6 +362,10 @@ using .FastMath
 
 function deepcopy_internal end
 
+# enums
+include("Enums.jl")
+using .Enums
+
 # BigInts and BigFloats
 include("gmp.jl")
 using .GMP
@@ -394,10 +398,6 @@ include("printf.jl")
 # metaprogramming
 include("meta.jl")
 
-# enums
-include("Enums.jl")
-using .Enums
-
 # concurrency and parallelism
 include("channels.jl")
 
@@ -422,11 +422,6 @@ include("loading.jl")
 
 # misc useful functions & macros
 include("util.jl")
-
-creating_sysimg = true
-# set up depot & load paths to be able to find stdlib packages
-init_depot_path()
-init_load_path()
 
 include("asyncmap.jl")
 
@@ -487,6 +482,11 @@ using .Base
 
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
+
+# set up depot & load paths to be able to find stdlib packages
+@eval Base creating_sysimg = true
+Base.init_depot_path()
+Base.init_load_path()
 
 if Base.is_primary_base_module
 # load some stdlib packages but don't put their names in Main

@@ -319,7 +319,13 @@ mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHer
 mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexHerm}) = C .= transpose.(A.parent.diag) .* B
 
 @inline addmul!(C::AbstractMatrix,
+                A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSym},
+                alpha::Number, beta::Number) = addmul!(C, A, B.parent, alpha, beta)
+@inline addmul!(C::AbstractMatrix,
                 A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexHerm},
+                alpha::Number, beta::Number) = addmul!(C, A, B.parent, alpha, beta)
+@inline addmul!(C::AbstractMatrix,
+                A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSym},
                 alpha::Number, beta::Number) = addmul!(C, A, B.parent, alpha, beta)
 @inline addmul!(C::AbstractMatrix,
                 A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexSym},

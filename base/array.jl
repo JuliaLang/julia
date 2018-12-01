@@ -172,7 +172,7 @@ julia> Base.isbitsunion(Union{Float64, String})
 false
 ```
 """
-isbitsunion(u::Union) = ccall(:jl_array_store_unboxed, Cint, (Any,), u) != Cint(0)
+isbitsunion(u::Union) = (@_pure_meta; ccall(:jl_array_store_unboxed, Cint, (Any,), u) != Cint(0))
 isbitsunion(x) = false
 
 """
@@ -305,30 +305,6 @@ original.
 copy
 
 copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
-
-# reshaping to same # of dimensions
-function reshape(a::Array{T,N}, dims::NTuple{N,Int}) where T where N
-    if prod(dims) != length(a)
-        _throw_dmrsa(dims, length(a))
-    end
-    if dims == size(a)
-        return a
-    end
-    ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
-end
-
-# reshaping to different # of dimensions
-function reshape(a::Array{T}, dims::NTuple{N,Int}) where T where N
-    if prod(dims) != length(a)
-        _throw_dmrsa(dims, length(a))
-    end
-    ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
-end
-
-function _throw_dmrsa(dims, len)
-    @_noinline_meta
-    throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $len"))
-end
 
 ## Constructors ##
 

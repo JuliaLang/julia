@@ -263,6 +263,7 @@ to_index(i::Integer) = convert(Int,i)::Int
 to_index(i::Bool) = throw(ArgumentError("invalid index: $i of type $(typeof(i))"))
 to_index(I::AbstractArray{Bool}) = LogicalIndex(I)
 to_index(I::AbstractArray) = I
+to_index(I::AbstractArray{Union{}}) = I
 to_index(I::AbstractArray{<:Union{AbstractArray, Colon}}) =
     throw(ArgumentError("invalid index: $I of type $(typeof(I))"))
 to_index(::Colon) = throw(ArgumentError("colons must be converted by to_indices(...)"))
