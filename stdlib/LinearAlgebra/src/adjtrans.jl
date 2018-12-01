@@ -71,6 +71,37 @@ struct Transpose{T,S} <: AbstractMatrix{T}
     end
 end
 
+"""
+    functor(::AbstractArray) -> adjoint|transpose|identity
+    functor(::Type{<:AbstractArray}) -> adjoint|transpose|identity
+
+Return [`adjoint`](@ref) from an `Adjoint` type or object and
+[`transpose`](@ref) from an `Transpose` type or object.  Otherwise,
+return [`identity`](@ref).  Note that `Adjoint` and `Transpose` have
+to be the outer-most wrapper object for non-`identity` function to be
+returned.
+"""
+functor(::T) where {T <: AbstractArray} = functor(T)
+functor(::Type{<:AbstractArray}) = identity
+functor(::Type{<:Adjoint}) = adjoint
+functor(::Type{<:Transpose}) = transpose
+
+"""
+    inplace(f) -> f!
+
+Return an in-place variant of function `f`.
+
+# Examples
+```jldoctest
+julia> using LinearAlgebra: inplace
+
+julia> inplace(adjoint) === adjoint!
+true
+```
+"""
+inplace(::typeof(adjoint)) = adjoint!
+inplace(::typeof(transpose)) = transpose!
+
 function checkeltype_adjoint(::Type{ResultEltype}, ::Type{ParentEltype}) where {ResultEltype,ParentEltype}
     Expected = Base.promote_op(adjoint, ParentEltype)
     ResultEltype === Expected || error(string(

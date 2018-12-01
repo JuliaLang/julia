@@ -852,17 +852,18 @@ function lmul!(A::UnitLowerTriangular, B::StridedVecOrMat)
     B
 end
 
-function lmul!(adjA::Adjoint{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
+function lmul!(adjA::AdjOrTrans{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
     A = adjA.parent
+    f = functor(adjA)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
     for j = 1:n
         for i = m:-1:1
-            Bij = A.data[i,i]'B[i,j]
+            Bij = f(A.data[i,i]) * B[i,j]
             for k = 1:i - 1
-                Bij += A.data[k,i]'B[k,j]
+                Bij += f(A.data[k,i]) * B[k,j]
             end
             B[i,j] = Bij
         end
@@ -870,78 +871,9 @@ function lmul!(adjA::Adjoint{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
     B
 end
 
-function lmul!(adjA::Adjoint{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMat)
+function lmul!(adjA::AdjOrTrans{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMat)
     A = adjA.parent
-    m, n = size(B, 1), size(B, 2)
-    if m != size(A, 1)
-        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
-    end
-    for j = 1:n
-        for i = m:-1:1
-            Bij = B[i,j]
-            for k = 1:i - 1
-                Bij += A.data[k,i]'B[k,j]
-            end
-            B[i,j] = Bij
-        end
-    end
-    B
-end
-
-function lmul!(adjA::Adjoint{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
-    A = adjA.parent
-    m, n = size(B, 1), size(B, 2)
-    if m != size(A, 1)
-        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
-    end
-    for j = 1:n
-        for i = 1:m
-            Bij = A.data[i,i]'B[i,j]
-            for k = i + 1:m
-                Bij += A.data[k,i]'B[k,j]
-            end
-            B[i,j] = Bij
-        end
-    end
-    B
-end
-function lmul!(adjA::Adjoint{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMat)
-    A = adjA.parent
-    m, n = size(B, 1), size(B, 2)
-    if m != size(A, 1)
-        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
-    end
-    for j = 1:n
-        for i = 1:m
-            Bij = B[i,j]
-            for k = i + 1:m
-                Bij += A.data[k,i]'B[k,j]
-            end
-            B[i,j] = Bij
-        end
-    end
-    B
-end
-
-function lmul!(transA::Transpose{<:Any,<:UpperTriangular}, B::StridedVecOrMat)
-    A = transA.parent
-    m, n = size(B, 1), size(B, 2)
-    if m != size(A, 1)
-        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
-    end
-    for j = 1:n
-        for i = m:-1:1
-            Bij = transpose(A.data[i,i]) * B[i,j]
-            for k = 1:i - 1
-                Bij += transpose(A.data[k,i]) * B[k,j]
-            end
-            B[i,j] = Bij
-        end
-    end
-    B
-end
-function lmul!(transA::Transpose{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMat)
-    A = transA.parent
+    f = functor(adjA)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -950,7 +882,7 @@ function lmul!(transA::Transpose{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMa
         for i = m:-1:1
             Bij = B[i,j]
             for k = 1:i - 1
-                Bij += transpose(A.data[k,i]) * B[k,j]
+                Bij += f(A.data[k,i]) * B[k,j]
             end
             B[i,j] = Bij
         end
@@ -958,25 +890,27 @@ function lmul!(transA::Transpose{<:Any,<:UnitUpperTriangular}, B::StridedVecOrMa
     B
 end
 
-function lmul!(transA::Transpose{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
-    A = transA.parent
+function lmul!(adjA::AdjOrTrans{<:Any,<:LowerTriangular}, B::StridedVecOrMat)
+    A = adjA.parent
+    f = functor(adjA)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
     for j = 1:n
         for i = 1:m
-            Bij = transpose(A.data[i,i]) * B[i,j]
+            Bij = f(A.data[i,i]) * B[i,j]
             for k = i + 1:m
-                Bij += transpose(A.data[k,i]) * B[k,j]
+                Bij += f(A.data[k,i]) * B[k,j]
             end
             B[i,j] = Bij
         end
     end
     B
 end
-function lmul!(transA::Transpose{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMat)
-    A = transA.parent
+function lmul!(adjA::AdjOrTrans{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMat)
+    A = adjA.parent
+    f = functor(adjA)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -985,13 +919,14 @@ function lmul!(transA::Transpose{<:Any,<:UnitLowerTriangular}, B::StridedVecOrMa
         for i = 1:m
             Bij = B[i,j]
             for k = i + 1:m
-                Bij += transpose(A.data[k,i]) * B[k,j]
+                Bij += f(A.data[k,i]) * B[k,j]
             end
             B[i,j] = Bij
         end
     end
     B
 end
+
 
 function rmul!(A::StridedMatrix, B::UpperTriangular)
     m, n = size(A)
@@ -1873,21 +1808,14 @@ for mat in (:AbstractVector, :AbstractMatrix)
             copyto!(BB, B)
             lmul!(convert(AbstractArray{TAB}, A), BB)
         end
-        function *(adjA::Adjoint{<:Any,<:AbstractTriangular}, B::$mat)
+        function *(adjA::AdjOrTrans{<:Any,<:AbstractTriangular}, B::$mat)
             require_one_based_indexing(B)
             A = adjA.parent
+            f = functor(adjA)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
-            lmul!(adjoint(convert(AbstractArray{TAB}, A)), BB)
-        end
-        function *(transA::Transpose{<:Any,<:AbstractTriangular}, B::$mat)
-            require_one_based_indexing(B)
-            A = transA.parent
-            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-            BB = similar(B, TAB, size(B))
-            copyto!(BB, B)
-            lmul!(transpose(convert(AbstractArray{TAB}, A)), BB)
+            lmul!(f(convert(AbstractArray{TAB}, A)), BB)
         end
     end
     ### Left division with triangle to the left hence rhs cannot be transposed. No quotients.
@@ -2004,21 +1932,14 @@ function *(A::AbstractMatrix, B::AbstractTriangular)
     copyto!(AA, A)
     rmul!(AA, convert(AbstractArray{TAB}, B))
 end
-function *(A::AbstractMatrix, adjB::Adjoint{<:Any,<:AbstractTriangular})
+function *(A::AbstractMatrix, adjB::AdjOrTrans{<:Any,<:AbstractTriangular})
     require_one_based_indexing(A)
     B = adjB.parent
+    f = functor(adjB)
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
-    rmul!(AA, adjoint(convert(AbstractArray{TAB}, B)))
-end
-function *(A::AbstractMatrix, transB::Transpose{<:Any,<:AbstractTriangular})
-    require_one_based_indexing(A)
-    B = transB.parent
-    TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
-    AA = similar(A, TAB, size(A))
-    copyto!(AA, A)
-    rmul!(AA, transpose(convert(AbstractArray{TAB}, B)))
+    rmul!(AA, f(convert(AbstractArray{TAB}, B)))
 end
 # ambiguity resolution with definitions in linalg/rowvector.jl
 *(v::AdjointAbsVec, A::AbstractTriangular) = adjoint(adjoint(A) * v.parent)
