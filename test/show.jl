@@ -1343,9 +1343,12 @@ eval(Meta.parse("""function my_fun28173(x)
 end""")) # use parse to control the line numbers
 let src = code_typed(my_fun28173, (Int,))[1][1]
     ir = Core.Compiler.inflate_ir(src)
-    source_slotnames = String["my_fun28173", "x"]
-    irshow = sprint(show, ir, context = :SOURCE_SLOTNAMES=>source_slotnames)
-    @test repr(src) == "CodeInfo(\n" * irshow * ")"
+    fill!(src.codelocs, 0) # IRCode printing is only capable of printing partial line info
+    let source_slotnames = String["my_fun28173", "x"],
+        repr_ir = split(repr(ir, context = :SOURCE_SLOTNAMES=>source_slotnames), '\n'),
+        repr_ir = "CodeInfo(\n" * join((l[4:end] for l in repr_ir), "\n") * ")" # remove line numbers
+        @test repr(src) == repr_ir
+    end
     lines1 = split(repr(ir), '\n')
     @test isempty(pop!(lines1))
     Core.Compiler.insert_node!(ir, 1, Val{1}, QuoteNode(1), false)

@@ -234,6 +234,29 @@ end
     end
 end
 
+@testset "reshape isbitsunion Arrays (issue #28611)" begin
+    v = Union{Float64,Missing}[]
+    for i in 1:10 push!(v, i) end
+    v[5] = missing
+    a = @inferred(reshape(v, 2, 5))
+    for (I, i) in zip(CartesianIndices((2, 5)), 1:10)
+        @test a[I] === v[i]
+    end
+    ac = copy(a)
+    @test ac isa Array{Union{Float64, Missing}, 2}
+    b = @inferred(reshape(ac, 5, 2))
+    for (I, J) in zip(CartesianIndices((2, 5)), CartesianIndices((5, 2)))
+        @test ac[I] === b[J]
+    end
+
+    for T in (Any, Union{Float64,String})
+        a = Array{T}(undef, 4)
+        @test @inferred(reshape(a, (2, 2))) isa Array{T,2}
+        a = Array{T}(undef, 4, 1)
+        @test @inferred(reshape(a, (2, 2))) isa Array{T,2}
+    end
+end
+
 @testset "conversion from ReshapedArray to Array (#18262)" begin
     a = Base.ReshapedArray(1:3, (3, 1), ())
     @test convert(Array, a) == a
@@ -567,6 +590,11 @@ end
     @test isnan(findmax([NaN, NaN, 0.0/0.0])[1])
     @test findmax([NaN, NaN, 0.0/0.0])[2] == 1
 
+    # Check that cartesian indices are returned for matrices
+    @test argmax([10 12; 9 11]) === CartesianIndex(1, 2)
+    @test argmin([10 12; 9 11]) === CartesianIndex(2, 1)
+    @test findmax([10 12; 9 11]) === (12, CartesianIndex(1, 2))
+    @test findmin([10 12; 9 11]) === (9, CartesianIndex(2, 1))
 end
 
 @testset "permutedims" begin

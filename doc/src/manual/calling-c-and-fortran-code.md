@@ -44,6 +44,11 @@ to [`ccall`](@ref) are as follows:
 
    OR
 
+   a `:function` name symbol or `"function"` name string, which is resolved in the
+   current process,
+
+   OR
+
    a function pointer (for example, from `dlsym`).
 
 2. Return type (see below for mapping the declared C type to Julia)
