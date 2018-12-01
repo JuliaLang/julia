@@ -320,18 +320,18 @@ mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Rea
 
 @inline addmul!(C::AbstractMatrix,
                 A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexHerm},
-        alpha::Number, beta::Number) = addmul!(C, A, B.parent, alpha, beta)
+                alpha::Number, beta::Number) = addmul!(C, A, B.parent, alpha, beta)
 @inline addmul!(C::AbstractMatrix,
                 A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexSym},
-        alpha::Number, beta::Number) = addmul!(C, A, B.parent, alpha, beta)
+                alpha::Number, beta::Number) = addmul!(C, A, B.parent, alpha, beta)
 
 @inline addmul!(C::AbstractMatrix,
                 A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexSym},
-        alpha::Number, beta::Number) =
+                alpha::Number, beta::Number) =
     C .= adjoint.(A.parent.diag) .* B .* alpha .+ C .* beta
 @inline addmul!(C::AbstractMatrix,
                 A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexHerm},
-        alpha::Number, beta::Number) =
+                alpha::Number, beta::Number) =
     C .= transpose.(A.parent.diag) .* B .* alpha .+ C .* beta
 
 (/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
