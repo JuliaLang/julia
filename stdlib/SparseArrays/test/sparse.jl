@@ -9,6 +9,7 @@ using Base.Printf: @printf
 using Random
 using Test: guardseed
 using InteractiveUtils: @which
+using Dates
 
 @testset "issparse" begin
     @test issparse(sparse(fill(1,5,5)))
@@ -2348,6 +2349,14 @@ end
     script = joinpath(@__DIR__, "ambiguous_exec.jl")
     cmd = `$(Base.julia_cmd()) --startup-file=no $script`
     @test success(pipeline(cmd; stdout=stdout, stderr=stderr))
+end
+
+@testset "oneunit of sparse matrix" begin
+    A = sparse([Second(0) Second(0); Second(0) Second(0)])
+    @test oneunit(sprand(2, 2, 0.5)) isa SparseMatrixCSC{Float64}
+    @test oneunit(A) isa SparseMatrixCSC{Second}
+    @test one(sprand(2, 2, 0.5)) isa SparseMatrixCSC{Float64}
+    @test one(A) isa SparseMatrixCSC{Int}
 end
 
 end # module
