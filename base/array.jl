@@ -484,7 +484,7 @@ function _one(unit::T, x::AbstractMatrix) where T
     # Matrix{T}(I, m, m)
     I = zeros(T, m, m)
     for i in 1:m
-        I[i,i] = 1
+        I[i,i] = unit
     end
     I
 end

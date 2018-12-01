@@ -6,6 +6,7 @@ using .Main.OffsetArrays
 using SparseArrays
 
 using Random, LinearAlgebra
+using Dates
 
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
@@ -2549,3 +2550,7 @@ Base.view(::T25958, args...) = args
     @test t[end,end,1]   == @view(t[end,end,1])   == @views t[end,end,1]
     @test t[end,end,end] == @view(t[end,end,end]) == @views t[end,end,end]
 end
+
+# Fix oneunit bug for unitful arrays
+@test oneunit([Second(1) Second(2); Second(3) Second(4)]) == [Second(1) Second(0); Second(0) Second(1)]
+
