@@ -1767,7 +1767,7 @@ end
     @test CartesianIndices(CartesianIndex{3}(1,2,3)) == CartesianIndices((1, 2, 3))
     @test Tuple{}(CartesianIndices{0,Tuple{}}(())) == ()
 
-    R = CartesianIndices(map(Base.Slice, (2:5, 3:5)))
+    R = CartesianIndices(map(Base.IdentityUnitRange, (2:5, 3:5)))
     @test eltype(R) <: CartesianIndex{2}
     @test eltype(typeof(R)) <: CartesianIndex{2}
     @test eltype(CartesianIndices{2}) <: CartesianIndex{2}

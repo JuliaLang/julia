@@ -316,7 +316,7 @@ compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{AbstractRange
 # linear indexing always starts with 1.
 compute_offset1(parent, stride1::Integer, I::Tuple) =
     (@_inline_meta; compute_offset1(parent, stride1, find_extended_dims(1, I...), find_extended_inds(I...), I))
-compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Slice}, I::Tuple) =
+compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Union{Slice, IdentityUnitRange}}, I::Tuple) =
     (@_inline_meta; compute_linindex(parent, I) - stride1*first(axes(parent, dims[1])))  # index-preserving case
 compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
     (@_inline_meta; compute_linindex(parent, I) - stride1)  # linear indexing starts with 1
@@ -384,7 +384,7 @@ function parentdims(s::SubArray)
     j = 1
     for i = 1:ndims(s.parent)
         r = s.indices[i]
-        if j <= nd && (isa(r,Union{Slice,AbstractRange}) ? sp[i]*step(r) : sp[i]) == sv[j]
+        if j <= nd && (isa(r,AbstractRange) ? sp[i]*step(r) : sp[i]) == sv[j]
             dimindex[j] = i
             j += 1
         end
