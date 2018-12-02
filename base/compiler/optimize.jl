@@ -329,6 +329,9 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector
             elseif f === Main.Core.arrayref && length(ex.args) >= 3
                 atyp = argextype(ex.args[3], src, spvals, slottypes)
                 return isknowntype(atyp) ? 4 : params.inline_nonleaf_penalty
+            elseif f === Main.Core.arrayset && length(ex.args) >= 4
+                atyp = argextype(ex.args[3], src, spvals, slottypes)
+                return isknowntype(atyp) ? 4 : params.inline_nonleaf_penalty
             end
             fidx = find_tfunc(f)
             if fidx === nothing
@@ -339,14 +342,18 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector
             return T_FFUNC_COST[fidx]
         end
         return params.inline_nonleaf_penalty
-    elseif head === :foreigncall || head === :invoke
-        # Calls whose "return type" is Union{} do not actually return:
-        # they are errors. Since these are not part of the typical
-        # run-time of the function, we omit them from
-        # consideration. This way, non-inlined error branches do not
-        # prevent inlining.
-        extyp = line == -1 ? Any : src.ssavaluetypes[line]
-        return extyp === Union{} ? 0 : 20
+    elseif head === :foreigncall
+        if isa(ex.args[1], QuoteNode)
+            sym = ex.args[1].value
+            for pr in T_CFUNC_COST
+                if sym === pr[1]
+                    return pr[2]
+                end
+            end
+        end
+        return 20
+    elseif head === :invoke
+        return 20
     elseif head === :return
         a = ex.args[1]
         if a isa Expr
