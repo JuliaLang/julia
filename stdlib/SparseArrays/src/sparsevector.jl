@@ -836,7 +836,7 @@ function show(io::IOContext, x::AbstractSparseVector)
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
     xnnz = length(nzind)
-    if length(nzind) == 0
+    if xnnz == 0
         return show(io, MIME("text/plain"), x)
     end
     limit::Bool = get(io, :limit, false)
@@ -845,7 +845,7 @@ function show(io::IOContext, x::AbstractSparseVector)
     if !haskey(io, :compact)
         io = IOContext(io, :compact => true)
     end
-    for k = 1:length(nzind)
+    for k = 1:xnnz
         if k < half_screen_rows || k > xnnz - half_screen_rows
             print(io, "  ", '[', rpad(nzind[k], pad), "]  =  ")
             if isassigned(nzval, Int(k))
