@@ -175,6 +175,13 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
         return nothing
     end
 
+    if isnumeric(sbuff[1])
+        intres = tryparse_internal(UInt8, sbuff, startpos, endpos, base, false)
+        (intres == 1) && return true
+        (intres == 0) && return false
+        raise && throw(ArgumentError("invalid Bool representation: $(repr(sbuff))"))
+    end
+
     orig_start = startpos
     orig_end   = endpos
 
@@ -350,8 +357,8 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     end
     return result
 end
-function tryparse_internal(::Type{T}, s::AbstractString, raise::Bool) where T<:Real
-    result = tryparse(T, s)
+function tryparse_internal(::Type{T}, s::AbstractString, raise::Bool; kwargs...) where T<:Real
+    result = tryparse(T, s; kwargs...)
     if raise && result === nothing
         _parse_failure(T, s)
     end
@@ -363,8 +370,8 @@ end
 tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Integer =
     tryparse_internal(T, s, startpos, endpos, 10, raise)
 
-parse(::Type{T}, s::AbstractString) where T<:Real =
-    convert(T, tryparse_internal(T, s, true))
+parse(::Type{T}, s::AbstractString; kwargs...) where T<:Real =
+    convert(T, tryparse_internal(T, s, true; kwargs...))
 parse(::Type{T}, s::AbstractString) where T<:Complex =
     convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s), true))
 

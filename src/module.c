@@ -534,8 +534,11 @@ JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int flag)
 
 JL_DLLEXPORT int jl_is_binding_deprecated(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t *b = jl_get_binding(m, var);
-    return b && b->deprecated;
+    if (jl_binding_resolved_p(m, var)) {
+        jl_binding_t *b = jl_get_binding(m, var);
+        return b && b->deprecated;
+    }
+    return 0;
 }
 
 extern const char *jl_filename;

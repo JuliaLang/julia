@@ -960,22 +960,6 @@ f21653() = f21653()
 @test code_typed(f21653, Tuple{}, optimize=false)[1] isa Pair{CodeInfo, typeof(Union{})}
 @test which(f21653, ()).specializations.func.rettype === Union{}
 
-# ensure _apply can "see-through" SSAValue to infer precise container types
-let f, m
-    f() = 0
-    m = first(methods(f))
-    m.source = Base.uncompressed_ast(m)::CodeInfo
-    m.source.code = Any[
-        Expr(:call, GlobalRef(Core, :svec), 1, 2, 3),
-        Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(1)),
-        Expr(:return, SSAValue(2))
-    ]
-    nstmts = length(m.source.code)
-    m.source.ssavaluetypes = nstmts
-    m.source.codelocs = fill(Int32(1), nstmts)
-    @test @inferred(f()) == 6
-end
-
 # issue #22290
 f22290() = return 3
 for i in 1:3
@@ -1631,6 +1615,15 @@ g26172(::Val{0}) = ()
 g26172(v) = (nothing, g26172(f26172(v))...)
 @test @inferred(g26172(Val(10))) === ntuple(_ -> nothing, 10)
 
+function conflicting_assignment_conditional()
+    x = iterate([])
+    if x === (x = 4; nothing)
+        return x
+    end
+    return 5
+end
+@test @inferred(conflicting_assignment_conditional()) === 4
+
 # 26826 constant prop through varargs
 
 struct Foo26826{A,B}
@@ -2146,3 +2139,15 @@ let ci = code_typed(bar_inlining_apply, Tuple{})[1].first
     @test length(ci.code) == 2
     @test ci.code[1].head == :foreigncall
 end
+
+# Test that inference can infer .instance of types
+f_instance(::Type{T}) where {T} = T.instance
+@test @inferred(f_instance(Nothing)) === nothing
+
+# test for some limit-cycle caching poisoning
+_false30098 = false
+f30098() = _false30098 ? g30098() : 3
+g30098() = (h30098(:f30098); 4)
+h30098(f) = getfield(@__MODULE__, f)()
+@test @inferred(g30098()) == 4 # make sure that this
+@test @inferred(f30098()) == 3 # doesn't pollute the inference cache of this

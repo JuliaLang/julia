@@ -45,7 +45,7 @@ import Base.MPFR
             @test precision(xs[end]) != prec
             for x in xs
                 @test precision(BigFloat(x)) == prec
-                @test precision(BigFloat(x, prec ÷ 2)) == prec ÷ 2
+                @test precision(BigFloat(x; precision=prec ÷ 2)) == prec ÷ 2
             end
         end
     end
@@ -893,7 +893,7 @@ end
     # PR 17217 -- BigFloat constructors with given precision and rounding mode
     # test constructors and `big` with additional precision and rounding mode:
     for prec in (10, 100, 1000)
-        for val in ("3.1", pi, "-1.3", 3.1)
+        for val in ("3.1", pi, "-1.3", 3.1, 1//10)
             let a = BigFloat(val),
                 b = BigFloat(val, prec),
                 c = BigFloat(val, RoundUp),

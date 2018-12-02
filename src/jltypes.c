@@ -630,9 +630,9 @@ static int dt_compare(const void *ap, const void *bp) JL_NOTSAFEPOINT
     return typekey_compare(b, jl_svec_data(a->parameters), jl_svec_len(a->parameters));
 }
 
-void jl_resort_type_cache(jl_svec_t *c)
+void jl_sort_types(jl_value_t **types, size_t length)
 {
-    qsort(jl_svec_data(c), jl_svec_len(c), sizeof(jl_value_t*), dt_compare);
+    qsort(types, length, sizeof(jl_value_t*), dt_compare);
 }
 
 static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
@@ -810,7 +810,8 @@ static int within_typevar(jl_value_t *t, jl_value_t *vlb, jl_value_t *vub)
     else if (!jl_is_type(t)) {
         return vlb == jl_bottom_type && vub == (jl_value_t*)jl_any_type;
     }
-    return jl_subtype(vlb, lb) && jl_subtype(ub, vub);
+    return ((jl_has_free_typevars(vlb) || jl_subtype(vlb, lb)) &&
+            (jl_has_free_typevars(vub) || jl_subtype(ub, vub)));
 }
 
 typedef struct _jl_typestack_t jl_typestack_t;

@@ -472,6 +472,10 @@ end
         @test_throws MethodError (Dates.Month(1) + Dates.Day(1)) - t1
         @test_throws MethodError (Dates.Hour(1) + Dates.Minute(1)) - t3
     end
+    @testset "TimeZone" begin
+        # best we can get in Dates as there is no other tz functionality
+        @test ((a, b) -> now(typeof(a))).(UTC(), [1,2,3]) isa Vector{DateTime}
+    end
 end
 
 end

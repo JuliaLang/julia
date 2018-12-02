@@ -23,7 +23,7 @@ const ORDERING_BESTAMD = Int32(9) # try COLAMD and AMD; pick best#
 # tried.  If there is a high fill-in with AMD then try METIS(A'A) and take
 # the best of AMD and METIS. METIS is not tried if it isn't installed.
 
-using SparseArrays: SparseMatrixCSC
+using SparseArrays: SparseMatrixCSC, nnz
 using ..SuiteSparse.CHOLMOD
 using ..SuiteSparse.CHOLMOD: change_stype!, free!
 
@@ -130,10 +130,13 @@ Base.axes(F::QRSparse) = map(Base.OneTo, size(F))
 struct QRSparseQ{Tv<:CHOLMOD.VTypes,Ti<:Integer} <: LinearAlgebra.AbstractQ{Tv}
     factors::SparseMatrixCSC{Tv,Ti}
     τ::Vector{Tv}
+    n::Int # Number of columns in original matrix
 end
 
 Base.size(Q::QRSparseQ) = (size(Q.factors, 1), size(Q.factors, 1))
 Base.axes(Q::QRSparseQ) = map(Base.OneTo, size(Q))
+
+Matrix{T}(Q::QRSparseQ) where {T} = lmul!(Q, Matrix{T}(I, size(Q, 1), min(size(Q, 1), Q.n)))
 
 # From SPQR manual p. 6
 _default_tol(A::SparseMatrixCSC) =
@@ -305,7 +308,7 @@ julia> F.pcol
 """
 @inline function Base.getproperty(F::QRSparse, d::Symbol)
     if d == :Q
-        return QRSparseQ(F.factors, F.τ)
+        return QRSparseQ(F.factors, F.τ, size(F, 2))
     elseif d == :prow
         return invperm(F.rpivinv)
     elseif d == :pcol
@@ -342,7 +345,7 @@ end
 _ret_size(F::QRSparse, b::AbstractVector) = (size(F, 2),)
 _ret_size(F::QRSparse, B::AbstractMatrix) = (size(F, 2), size(B, 2))
 
-LinearAlgebra.rank(F::QRSparse) = maximum(F.R.rowval)
+LinearAlgebra.rank(F::QRSparse) = reduce(max, view(F.R.rowval, 1:nnz(F.R)), init = eltype(F.R.rowval)(0))
 
 function (\)(F::QRSparse{T}, B::VecOrMat{Complex{T}}) where T<:LinearAlgebra.BlasReal
 # |z1|z3|  reinterpret  |x1|x2|x3|x4|  transpose  |x1|y1|  reshape  |x1|y1|x3|y3|

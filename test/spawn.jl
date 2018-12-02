@@ -20,7 +20,7 @@ sleepcmd = `sleep`
 lscmd = `ls`
 havebb = false
 if Sys.iswindows()
-    busybox = joinpath(Sys.BINDIR, "busybox.exe")
+    busybox = download("http://frippery.org/files/busybox/busybox.exe", joinpath(tempdir(), "busybox.exe"))
     havebb = try # use busybox-w32 on windows, if available
         success(`$busybox`)
         true
@@ -230,10 +230,14 @@ if valgrind_off
 end
 
 # setup_stdio for AbstractPipe
-let out = Pipe(), proc = run(pipeline(`$echocmd "Hello World"`, stdout=IOContext(out,stdout)), wait=false)
+let out = Pipe(),
+    proc = run(pipeline(`$exename --startup-file=no -e 'println(getpid())'`, stdout=IOContext(out, :foo => :bar)), wait=false)
+    # < don't block here before getpid call >
+    pid = getpid(proc)
     close(out.in)
-    @test read(out, String) == "Hello World\n"
+    @test parse(Int32, read(out, String)) === pid > 1
     @test success(proc)
+    @test_throws Base.IOError getpid(proc)
 end
 
 # issue #5904
@@ -613,4 +617,9 @@ open(`$catcmd`, "r+") do f
     end
     @test read(f, Char) == 'δ'
     wait(t)
+end
+
+# clean up busybox download
+if Sys.iswindows()
+    rm(busybox, force=true)
 end

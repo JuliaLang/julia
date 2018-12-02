@@ -11,7 +11,6 @@ function typeinf(result::InferenceResult, cached::Bool, params::Params)
 end
 
 function typeinf(frame::InferenceState)
-    cached = frame.cached
     typeinf_nocycle(frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
     frames = frame.callers_in_cycle
@@ -28,6 +27,7 @@ function typeinf(frame::InferenceState)
     # empty!(frames)
     min_valid = frame.min_valid
     max_valid = frame.max_valid
+    cached = frame.cached
     if cached || frame.parent !== nothing
         for caller in results
             opt = caller.src
@@ -442,13 +442,22 @@ function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
         uncached |= !frame.cached # ensure we never add an uncached frame to a cycle
         limited |= frame.limited
         if frame.linfo === linfo
-            uncached && return true
+            if uncached
+                # our attempt to speculate into a constant call lead to an undesired self-cycle
+                # that cannot be converged: poison our call-stack (up to the discovered duplicate frame)
+                # with the limited flag and abort (set return type to Any) now
+                poison_callstack(parent, frame, false)
+                return true
+            end
             merge_call_chain!(parent, frame, frame, limited)
             return frame
         end
         for caller in frame.callers_in_cycle
             if caller.linfo === linfo
-                uncached && return true
+                if uncached
+                    poison_callstack(parent, frame, false)
+                    return true
+                end
                 merge_call_chain!(parent, frame, caller, limited)
                 return caller
             end
@@ -529,6 +538,7 @@ end
 
 # compute (and cache) an inferred AST and return type
 function typeinf_ext(linfo::MethodInstance, params::Params)
+    method = linfo.def::Method
     for i = 1:2 # test-and-lock-and-test
         i == 2 && ccall(:jl_typeinf_begin, Cvoid, ())
         if isdefined(linfo, :inferred)
@@ -538,7 +548,6 @@ function typeinf_ext(linfo::MethodInstance, params::Params)
             if min_world(linfo) <= params.world <= max_world(linfo)
                 inf = linfo.inferred
                 if invoke_api(linfo) == 2
-                    method = linfo.def::Method
                     tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
                     tree.code = Any[ Expr(:return, quoted(linfo.inferred_const)) ]
                     tree.method_for_inference_limit_heuristics = nothing
@@ -610,17 +619,22 @@ end
         # method lambda - infer this specialization via the method cache
         return typeinf_ext(linfo, Params(world))
     else
-        # toplevel lambda - infer directly
-        ccall(:jl_typeinf_begin, Cvoid, ())
-        result = InferenceResult(linfo)
-        frame = InferenceState(result, linfo.inferred::CodeInfo,
-                               #=cached=#true, Params(world))
-        typeinf(frame)
-        ccall(:jl_typeinf_end, Cvoid, ())
-        @assert frame.inferred # TODO: deal with this better
-        @assert frame.linfo === linfo
-        linfo.rettype = widenconst(frame.bestguess)
-        return svec(linfo, frame.src)
+        src = linfo.inferred::CodeInfo
+        if !src.inferred
+            # toplevel lambda - infer directly
+            ccall(:jl_typeinf_begin, Cvoid, ())
+            if !src.inferred
+                result = InferenceResult(linfo)
+                frame = InferenceState(result, src, #=cached=#true, Params(world))
+                typeinf(frame)
+                @assert frame.inferred # TODO: deal with this better
+                @assert frame.linfo === linfo
+                linfo.rettype = widenconst(frame.bestguess)
+                src = frame.src
+            end
+            ccall(:jl_typeinf_end, Cvoid, ())
+        end
+        return svec(linfo, src)
     end
 end
 

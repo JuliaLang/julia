@@ -57,13 +57,13 @@ Julia is built and tested regularly on the following platforms:
 | Linux 2.6.18+    | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 |                  | i686 (32-bit)    | ✓  | ✓        | Official      |
 |                  | ARM v7 (32-bit)  |    | ✓        | Official      |
-|                  | ARM v8 (64-bit)  |    | ✓        | Official      |
+|                  | ARM v8 (64-bit)  |    |          | Community     |
 |                  | PowerPC (64-bit) |    |          | Community     |
-|                  | PTX (64-bit)     | [✓](http://ci.maleadt.net:8010/)  |          | [External](https://github.com/JuliaGPU/CUDAnative.jl)     |
+|                  | PTX (64-bit)     | [✓](https://gitlab.com/JuliaGPU/CUDAnative.jl/pipelines)  |          | [External](https://github.com/JuliaGPU/CUDAnative.jl)     |
 | macOS 10.8+      | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 | Windows 7+       | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 |                  | i686 (32-bit)    | ✓  | ✓        | Official      |
-| FreeBSD 11.0+    | x86-64 (64-bit)  | [✓](https://build.julialang.org/#/builders/68)  |          | Community     |
+| FreeBSD 11.0+    | x86-64 (64-bit)  | [✓](https://build.julialang.org/#/builders/68)  | ✓        | Official      |
 
 All systems marked with ✓ for CI are tested using continuous integration for every commit.
 Systems with ✓ for binaries have official binaries available on the [downloads](https://julialang.org/downloads) page and are tested regularly. The PTX backend needs the [CUDAnative.jl](https://github.com/JuliaGPU/CUDAnative.jl) package.
@@ -79,14 +79,14 @@ Then, acquire the source code by cloning the git repository:
     git clone git://github.com/JuliaLang/julia.git
 
 (If you are behind a firewall, you may need to use the `https` protocol instead of the `git` protocol:
-
-    git config --global url."https://".insteadOf git://
-
+```sh
+git config --global url."https://".insteadOf git://
+```
 Be sure to also configure your system to use the appropriate proxy settings, e.g. by setting the `https_proxy` and `http_proxy` variables.)
 
 By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `1.0` series of releases. You can get this version by changing to the Julia directory and running
 
-    git checkout v1.0.1
+    git checkout v1.0.2
 
 Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes. (See [Platform Specific Build Notes](https://github.com/JuliaLang/julia#platform-specific-build-notes) for details.)
 When compiled the first time, it will automatically download and build its [external dependencies](#required-build-tools-and-external-libraries).
@@ -135,10 +135,10 @@ or Windows, take a look at the detailed notes in
 
 If you have previously downloaded `julia` using `git clone`, you can update the
 existing source tree using `git pull` rather than starting anew:
-
-    cd julia
-    git pull && make
-
+```sh
+cd julia
+git pull && make
+```
 Assuming that you had made no changes to the source tree that will conflict
 with upstream updates, these commands will trigger a build to update to the
 latest version.
@@ -387,10 +387,10 @@ As a high-performance numerical language, Julia should be linked to a multi-thre
 ### Intel MKL
 
 For a 64-bit architecture, the environment should be set up as follows:
-
-    # bash
-    source /path/to/intel/bin/compilervars.sh intel64
-
+```sh
+# bash
+source /path/to/intel/bin/compilervars.sh intel64
+```
 Add the following to the `Make.user` file:
 
     USE_INTEL_MKL = 1
@@ -417,9 +417,9 @@ The Julia source code is organized as follows:
 If you would rather not compile the latest Julia from source, platform-specific tarballs with pre-compiled binaries are also [available for download](https://julialang.org/downloads/).
 
 You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the Julia program from anywhere (in the current shell session):
-
-    export PATH="$(pwd)/julia:$PATH"
-
+```sh
+export PATH="$(pwd)/julia:$PATH"
+```
 Now you should be able to run Julia like this:
 
     julia

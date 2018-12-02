@@ -909,6 +909,11 @@ end
         J1, J2 = @inferred(promote(I1, I2))
         @test J1 === J2
     end
+
+    i = CartesianIndex(17,-2)
+    @test CR .+ i === i .+ CR === CartesianIndices((19:21, -1:3))
+    @test CR .- i === CartesianIndices((-15:-13, 3:7))
+    @test collect(i .- CR) == Ref(i) .- collect(CR)
 end
 
 @testset "issue #25770" begin
@@ -931,4 +936,14 @@ end
         @test s === copy!(s, fill(1, 2, 2)) == fill(1, 2, 2)
         @test s === copy!(s, fill(1.0, 2, 2)) == fill(1.0, 2, 2)
     end
+end
+
+@testset "map on Dicts/Sets is forbidden" begin
+    @test_throws ErrorException map(identity, Set([1,2,3]))
+    @test_throws ErrorException map(identity, Dict("a"=>"b"))
+end
+
+@testset "Issue 30145" begin
+    X = [1,2,3]
+    @test isempty(X[Union{}[]])
 end

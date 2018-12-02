@@ -467,9 +467,17 @@ end
             end
         end
     end
+    # Check for short three-byte sequences
+    @test isvalid(String, UInt8[0xe0]) == false
+    for (rng, flg) in ((0x00:0x9f, false), (0xa0:0xbf, true), (0xc0:0xff, false))
+        for cont in rng
+            @test isvalid(String, UInt8[0xe0, cont]) == false
+            @test isvalid(String, UInt8[0xe0, cont, 0x80]) == flg
+        end
+    end
     # Check three-byte sequences
-    for r1 in (0xe0:0xec, 0xee:0xef)
-        for byt = r1
+    for r1 in (0xe1:0xec, 0xee:0xef)
+        for byt in r1
             # Check for short sequence
             @test isvalid(String, UInt8[byt]) == false
             for (rng,flg) in ((0x00:0x7f, false), (0x80:0xbf, true), (0xc0:0xff, false))
@@ -624,6 +632,7 @@ end
         for s in strs
             @test_throws BoundsError thisind(s, -2)
             @test_throws BoundsError thisind(s, -1)
+            @test thisind(s, Int8(0)) == 0
             @test thisind(s, 0) == 0
             @test thisind(s, 1) == 1
             @test thisind(s, 2) == 1
@@ -655,6 +664,7 @@ end
         @test_throws BoundsError prevind(s, 0, 0)
         @test_throws BoundsError prevind(s, 0, 1)
         @test prevind(s, 1) == 0
+        @test prevind(s, Int8(1), Int8(1)) == 0
         @test prevind(s, 1, 1) == 0
         @test prevind(s, 1, 0) == 1
         @test prevind(s, 2) == 1
@@ -686,9 +696,11 @@ end
         @test_throws BoundsError nextind(s, -1, 0)
         @test_throws BoundsError nextind(s, -1, 1)
         @test nextind(s, 0, 2) == 4
+        @test nextind(s, Int8(0), Int8(2)) == 4
         @test nextind(s, 0, 20) == 26
         @test nextind(s, 0, 10) == 15
         @test nextind(s, 1) == 4
+        @test nextind(s, Int8(1)) == 4
         @test nextind(s, 1, 1) == 4
         @test nextind(s, 1, 2) == 6
         @test nextind(s, 1, 9) == 15

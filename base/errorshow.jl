@@ -56,7 +56,9 @@ function showerror(io::IO, ex::TypeError)
     if ex.expected === Bool
         print(io, "non-boolean (", typeof(ex.got), ") used in boolean context")
     else
-        if isa(ex.got, Type)
+        if isvarargtype(ex.got)
+            targs = (ex.got,)
+        elseif isa(ex.got, Type)
             targs = ("Type{", ex.got, "}")
         else
             targs = (typeof(ex.got),)

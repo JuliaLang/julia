@@ -22,7 +22,7 @@ cp_q(src, dest) = isfile(dest) || cp(src, dest)
 
 # make links for stdlib package docs, this is needed until #522 in Documenter.jl is finished
 const STDLIB_DOCS = []
-const STDLIB_DIR = joinpath(@__DIR__, "..", "stdlib")
+const STDLIB_DIR = Sys.STDLIB
 cd(joinpath(@__DIR__, "src")) do
     Base.rm("stdlib"; recursive=true, force=true)
     mkdir("stdlib")
@@ -132,6 +132,8 @@ const PAGES = [
             "devdocs/offset-arrays.md",
             "devdocs/require.md",
             "devdocs/inference.md",
+            "devdocs/ssair.md",
+            "devdocs/gc-sa.md",
         ],
         "Developing/debugging Julia's C code" => [
             "devdocs/backtraces.md",
@@ -173,11 +175,14 @@ makedocs(
 # Only deploy docs from 64bit Linux to avoid committing multiple versions of the same
 # docs from different workers.
 if "deploy" in ARGS && Sys.ARCH === :x86_64 && Sys.KERNEL === :Linux
+# Override TRAVIS_REPO_SLUG since we deploy to a different repo
+withenv("TRAVIS_REPO_SLUG" => "JuliaLang/docs.julialang.org") do
     deploydocs(
-        repo = "github.com/JuliaLang/julia.git",
+        repo = "github.com/JuliaLang/docs.julialang.org.git",
         target = joinpath(buildroot, "doc", "_build", "html", "en"),
         dirname = "en",
         devurl = "v1.1-dev",
         versions = ["v#.#", "v1.1-dev" => "v1.1-dev"]
     )
+end
 end

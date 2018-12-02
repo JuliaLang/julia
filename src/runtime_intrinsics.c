@@ -247,10 +247,8 @@ static int jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *pr
 { \
     c_type a = *(c_type*)pa; \
     c_type b = *(c_type*)pb; \
-    if (CHECK_OP(a, b)) \
-        return 1; \
     *(c_type*)pr = (c_type)OP(a, b); \
-    return 0; \
+    return CHECK_OP(a, b); \
 }
 
 // float inputs
@@ -808,7 +806,7 @@ bi_iintrinsic_fast(LLVMXor, xor_op, xor_int, u)
 bi_iintrinsic_cnvtb_fast(LLVMShl, shl_op, shl_int, u, 1)
 #define lshr_op(a,b) (b >= 8 * sizeof(a)) ? 0 : a >> b
 bi_iintrinsic_cnvtb_fast(LLVMLShr, lshr_op, lshr_int, u, 1)
-#define ashr_op(a,b) ((b < 0 || b >= 8 * sizeof(a)) ? a >> (8*sizeof(a) - 1) : a >> b)
+#define ashr_op(a,b) ((b < 0 || b >= 8 * sizeof(a)) ? a >> (8 * sizeof(a) - 1) : a >> b)
 bi_iintrinsic_cnvtb_fast(LLVMAShr, ashr_op, ashr_int, , 1)
 //#define bswap_op(a) __builtin_bswap(a)
 //un_iintrinsic_fast(LLVMByteSwap, bswap_op, bswap_int, u)
@@ -856,20 +854,41 @@ un_fintrinsic_withtype(fptrunc,fptrunc)
 un_fintrinsic_withtype(fpext,fpext)
 
 // checked arithmetic
+/**
+ * s_typemin =  ((typeof a)~0 << (runtime_nbits - 1))
+ * s_typemax = ~((typeof a)1 << (runtime_nbits - 1))
+ * u_typemin = 0
+ * u_typemax = ((typeof a)1 << runtime_nbits) - 1
+ * where (a - a) == (typeof(a)0
+ **/
+#define sTYPEMIN(a) \
+    (8 * sizeof(a) == runtime_nbits \
+     ? ((a - a + ~0) << (8 * sizeof(a) - 1)) \
+     : ((a - a + ~0) << (runtime_nbits - 1)))
+#define sTYPEMAX(a) \
+    (8 * sizeof(a) == runtime_nbits \
+     ? ~((a - a + ~0) << (8 * sizeof(a) - 1)) \
+     : ~((a - a + ~0) << (runtime_nbits - 1)))
+#define uTYPEMIN(a) (0)
+#define uTYPEMAX(a) \
+    (8 * sizeof(~a) == runtime_nbits \
+     ? (~(a - a)) \
+     : (~((~(a - a)) << runtime_nbits)))
 #define check_sadd_int(a,b) \
-        /* this test is a reduction of (b > 0) ? (a + b > typemax(a)) : (a + b < typemin(a)) ==> overflow \
-         * where (a - a) == (typeof(a))0 */ \
-        (b > 0) ? (a > ~((a - a + 1) << (8 * sizeof(a) - 1)) - b) : (a < ((a - a + 1) << (8 * sizeof(a) - 1)) - b)
+        /* this test checks for (b >= 0) ? (a + b > typemax) : (a + b < typemin) ==> overflow */ \
+        (b >= 0) ? (a > sTYPEMAX(a) - b) : (a < sTYPEMIN(a) - b)
 checked_iintrinsic_fast(LLVMAdd_sov, check_sadd_int, add, checked_sadd_int,  )
 #define check_uadd_int(a,b) \
         /* this test checks for (a + b) > typemax(a) ==> overflow */ \
-        a >= -b
+        a > uTYPEMAX(a) - b
 checked_iintrinsic_fast(LLVMAdd_uov, check_uadd_int, add, checked_uadd_int, u)
-#define check_ssub_int(a,b) check_sadd_int(a,-b)
+#define check_ssub_int(a,b) \
+        /* this test checks for (b >= 0) ? (a - b < typemin) : (a - b > typemax) ==> overflow */ \
+        (b >= 0) ? (a < sTYPEMIN(a) + b) : (a > sTYPEMAX(a) + b)
 checked_iintrinsic_fast(LLVMSub_sov, check_ssub_int, sub, checked_ssub_int,  )
 #define check_usub_int(a,b) \
-        /* this test checks for (a - b) < 0 ==> overflow */ \
-        a < b
+        /* this test checks for (a - b) < typemin ==> overflow */ \
+        a < uTYPEMIN(a) + b
 checked_iintrinsic_fast(LLVMSub_uov, check_usub_int, sub, checked_usub_int, u)
 checked_iintrinsic_slow(LLVMMul_sov, checked_smul_int,  )
 checked_iintrinsic_slow(LLVMMul_uov, checked_umul_int, u)
@@ -883,15 +902,13 @@ checked_iintrinsic_div(LLVMRem_uov, checked_urem_int, u)
 #define flipsign(a, b) \
         (b >= 0) ? a : -a
 bi_iintrinsic_fast(jl_LLVMFlipSign, flipsign, flipsign_int,  )
-#define abs_float(pr, a) *pr = fp_select(a, fabs)
-#define ceil_float(pr, a) *pr = fp_select(a, ceil)
-#define floor_float(pr, a) *pr = fp_select(a, floor)
-#define trunc_float(pr, a) *pr = fp_select(a, trunc)
-#define rint_float(pr, a) *pr = fp_select(a, rint)
-#define sqrt_float(pr, a) \
-        *pr = fp_select(a, sqrt)
-#define copysign_float(a, b) \
-        fp_select2(a, b, copysign)
+#define abs_float(pr, a)      *pr = fp_select(a, fabs)
+#define ceil_float(pr, a)     *pr = fp_select(a, ceil)
+#define floor_float(pr, a)    *pr = fp_select(a, floor)
+#define trunc_float(pr, a)    *pr = fp_select(a, trunc)
+#define rint_float(pr, a)     *pr = fp_select(a, rint)
+#define sqrt_float(pr, a)     *pr = fp_select(a, sqrt)
+#define copysign_float(a, b)  fp_select2(a, b, copysign)
 
 un_fintrinsic(abs_float,abs_float)
 bi_fintrinsic(copysign_float,copysign_float)

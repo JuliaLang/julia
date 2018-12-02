@@ -1108,3 +1108,9 @@ let
     @test v.content[5].loose
     @test !v.content[7].loose
 end
+
+# issue #29995
+let m = Markdown.parse("---"), io = IOBuffer()
+    show(io, "text/latex", m)
+    @test String(take!(io)) == "\\rule{\\textwidth}{1pt}\n"
+end

@@ -872,16 +872,13 @@ end
 @testset "inverse of Adjoint" begin
     A = randn(n, n)
 
-    @test inv(A')*A'                     ≈ I
-    @test inv(transpose(A))*transpose(A) ≈ I
+    @test @inferred(inv(A'))*A'                     ≈ I
+    @test @inferred(inv(transpose(A)))*transpose(A) ≈ I
 
     B = complex.(A, randn(n, n))
-    B = B + transpose(B)
 
-    # The following two cases fail because ldiv!(F::Adjoint/Transpose{BunchKaufman},b)
-    # isn't implemented yet
-    @test_broken inv(B')*B'                     ≈ I
-    @test_broken inv(transpose(B))*transpose(B) ≈ I
+    @test @inferred(inv(B'))*B'                     ≈ I
+    @test @inferred(inv(transpose(B)))*transpose(B) ≈ I
 end
 
 end # module TestDense
