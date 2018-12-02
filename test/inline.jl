@@ -253,3 +253,18 @@ end
         i += 1
     end
 end
+
+# cost assignment for arrayset and arrayref
+@testset "inlining cost for arrayref and arrayset" begin
+    f(a, b) = a[2] = b[1]
+    v = [1.0, 2.0]
+    tt = Tuple{typeof(v), typeof(v)}
+    # Create the objects we need to interact with the compiler
+    spvals, slottypes, params = Core.Compiler.get_params_slottypes(f, tt)
+    ci = code_typed(f, tt)[1][1]
+    # Calculate cost of each statement
+    cost(stmt::Expr) = Core.Compiler.statement_cost(stmt, -1, ci, spvals, slottypes, params)
+    cost(stmt) = 0
+    cst = map(cost, ci.code)
+    @test sum(cst) < 10
+end

@@ -229,6 +229,20 @@ end
 # using a function to ensure we can infer this
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id : (s::TypedSlot).id
 
+#####################
+# sparams/slottypes #
+#####################
+function get_params_slottypes(@nospecialize(f), @nospecialize(argtypes))
+    world = typemax(UInt)
+    params = Params(world)
+    match = _methods(f, argtypes, -1, world)[1]
+    mi = code_for_method(match[3], argtypes, match[2], world)
+    istate = InferenceState(InferenceResult(mi),
+                            retrieve_code_info(mi),
+                            false, params)
+    return istate.sp, istate.slottypes, params
+end
+
 ###########
 # options #
 ###########
