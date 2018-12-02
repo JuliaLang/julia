@@ -490,4 +490,19 @@ end
     end
 end
 
+@testset "broadcast" begin
+    K = 10
+    for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        DM = Diagonal(rand(K))
+        DDM = Matrix(DM)
+        @test exp.(DM) == exp.(DDM)
+        @test abs.(DM) == abs.(DDM)
+        @test sin.(DM) == sin.(DDM)
+        @test floor.(DM) == floor.(DDM)
+        @test isa(floor.(DM), Diagonal)
+        @test isa(abs.(DM), Diagonal)
+        @test isa(exp.(DM), Matrix)
+    end
+end
+
 end # module TestDiagonal
