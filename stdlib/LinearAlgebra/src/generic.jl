@@ -713,7 +713,6 @@ end
 
 """
     rank(A::AbstractArray, atol::Real, rtol::Real)
-    rank(A[, tol::Real]) = rank(A, rtol=tol)
 
 Compute the rank of a matrix by counting how many singular
 values of `A` have magnitude greater than `max(atol, rtol*σ₁)` where `σ₁` is
@@ -726,9 +725,6 @@ julia> rank(Matrix(I, 3, 3))
 3
 
 julia> rank(diagm(0 => [1, 0, 2]))
-2
-
-julia> rank(diagm(0 => [1, 0.001, 2]), 0.1)
 2
 
 julia> rank(diagm(0 => [1, 0.001, 2]), rtol=0.1)
@@ -747,7 +743,6 @@ function rank(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)
     tol = max(atol, rtol*s[1])
     count(x -> x > tol, s)
 end
-rank(A::AbstractMatrix, tol::Real) = rank(A,rtol=tol) # TODO: deprecate tol in 2.0
 rank(x::Number) = x == 0 ? 0 : 1
 
 """
