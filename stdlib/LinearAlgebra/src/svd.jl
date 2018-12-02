@@ -85,6 +85,11 @@ number of singular values.
 
 # Examples
 ```jldoctest
+julia> A = rand(4,3);
+julia> U,S,V = svd(A);
+julia> A ≈ U*Diagonal(S)*V'
+true
+
 julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
 4×5 Array{Float64,2}:
  1.0  0.0  0.0  0.0  2.0
