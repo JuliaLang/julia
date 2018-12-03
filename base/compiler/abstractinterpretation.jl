@@ -149,7 +149,7 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
     length(argtypes) >= nargs || return Any
     haveconst = false
     for a in argtypes
-        a = maybe_widen_conditional(a)
+        a = widenconditional(a)
         if has_nontrivial_const_info(a)
             # have new information from argtypes that wasn't available from the signature
             if !isa(a, Const) || (isa(a.val, Symbol) || isa(a.val, Type) || (!isa(a.val, String) && isimmutable(a.val)))
@@ -181,7 +181,7 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
         if !istopfunction(f, :getproperty) && !istopfunction(f, :setproperty!)
             # in this case, see if all of the arguments are constants
             for a in argtypes
-                a = maybe_widen_conditional(a)
+                a = widenconditional(a)
                 if !isa(a, Const) && !isconstType(a)
                     return Any
                 end
@@ -518,7 +518,7 @@ end
 
 function pure_eval_call(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState)
     for i = 2:length(argtypes)
-        a = maybe_widen_conditional(argtypes[i])
+        a = widenconditional(argtypes[i])
         if !(isa(a, Const) || isconstType(a))
             return false
         end
@@ -537,7 +537,7 @@ function pure_eval_call(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(a
         return false
     end
 
-    args = Any[ (a = maybe_widen_conditional(argtypes[i]); isa(a, Const) ? a.val : a.parameters[1]) for i in 2:length(argtypes) ]
+    args = Any[ (a = widenconditional(argtypes[i]); isa(a, Const) ? a.val : a.parameters[1]) for i in 2:length(argtypes) ]
     try
         value = Core._apply_pure(f, args)
         # TODO: add some sort of edge(s)
@@ -1059,7 +1059,7 @@ function typeinf_local(frame::InferenceState)
                 end
             elseif hd === :return
                 pc´ = n + 1
-                rt = maybe_widen_conditional(abstract_eval(stmt.args[1], s[pc], frame))
+                rt = widenconditional(abstract_eval(stmt.args[1], s[pc], frame))
                 if !isa(rt, Const) && !isa(rt, Type) && (!isa(rt, PartialTuple) || frame.cached)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally
