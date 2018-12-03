@@ -1971,6 +1971,22 @@ end
     @test IndexStyle(selectdim(A, 3, 1)) == IndexStyle(view(A, :, :, 1)) == IndexLinear()
 end
 
+# row/column/slice iterator tests
+using Base: eachrow, eachcol
+@testset "row/column/slice iterators" begin
+    # Simple ones
+    M = [1 2 3; 4 5 6; 7 8 9]
+    @test collect(eachrow(M)) == collect(eachslice(M, dims = 1)) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    @test collect(eachcol(M)) == collect(eachslice(M, dims = 2)) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
+    @test_throws DimensionMismatch eachslice(M, dims = 4)
+
+    # Higher-dimensional case
+    M = reshape([(1:16)...], 2, 2, 2, 2)
+    @test_throws MethodError collect(eachrow(M))
+    @test_throws MethodError collect(eachcol(M))
+    @test collect(eachslice(M, dims = 1))[1][:, :, 1] == [1 5; 3 7]
+end
+
 ###
 ### IndexCartesian workout
 ###
