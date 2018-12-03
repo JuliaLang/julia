@@ -88,6 +88,7 @@ end
 # lock / unlock
 let l = ReentrantLock()
     lock(l)
+    @test islocked(l)
     success = Ref(false)
     @test trylock(l) do
         @test lock(l) do
