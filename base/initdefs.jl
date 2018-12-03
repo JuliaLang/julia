@@ -166,7 +166,6 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
                 file = abspath(path, proj)
                 isfile_casesensitive(file) && return file
             end
-            return path
         end
         isempty(DEPOT_PATH) && return nothing
         return abspath(DEPOT_PATH[1], "environments", name, project_names[end])
