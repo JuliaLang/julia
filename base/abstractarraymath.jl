@@ -413,7 +413,11 @@ end
 
 Create a generator that iterates over the first dimension of vector or matrix `A`,
 returning the rows as views.
+
 See also [`eachcol`](@ref) and [`eachslice`](@ref).
+
+!!! compat "Julia 1.1"
+     This function requires at least Julia 1.1.
 """
 eachrow(A::AbstractVecOrMat) = (view(A, i, :) for i in axes(A, 1))
 
@@ -423,7 +427,11 @@ eachrow(A::AbstractVecOrMat) = (view(A, i, :) for i in axes(A, 1))
 
 Create a generator that iterates over the second dimension of matrix `A`, returning the
 columns as views.
+
 See also [`eachrow`](@ref) and [`eachslice`](@ref).
+
+!!! compat "Julia 1.1"
+     This function requires at least Julia 1.1.
 """
 eachcol(A::AbstractVecOrMat) = (view(A, :, i) for i in axes(A, 2))
 
@@ -435,7 +443,11 @@ the data from the other dimensions in `A`.
 
 Only a single dimension in `dims` is currently supported. Equivalent to `(view(A,:,:,...,i,:,:
 ...)) for i in axes(A, dims))`, where `i` is in position `dims`.
+
 See also [`eachrow`](@ref), [`eachcol`](@ref), and [`selectdim`](@ref).
+
+!!! compat "Julia 1.1"
+     This function requires at least Julia 1.1.
 """
 @inline function eachslice(A::AbstractArray; dims)
     length(dims) == 1 || throw(ArgumentError("only single dimensions are supported"))
