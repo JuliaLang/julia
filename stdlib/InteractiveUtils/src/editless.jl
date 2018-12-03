@@ -46,28 +46,31 @@ Base.run(x::EditorCommand{Function}) = x.parsed_command()
 """
     define_editor(fn,pattern;background=true,priority=0)
 
-Define a new editor matching `pattern` which can be used via `edit`, possibly
-handling line numbers.
+Define a new editor matching `pattern` that can be used to open a file
+(possibly at a given line number) using `fn`.
 
-The function `fn` determines how to open a file with the given editor. It takes
-the arguments `command`, `path` and optionally a third argument `line`, and must
-return either an appropriate `Cmd` object to open a file, or a function (taking
-0 arguments) that will open the file directly (returning a `Cmd` is the
-preferred approach). If `fn` takes a third argument then the resulting command
-or function should open the file at the given line number.
+The `fn` argument is a function that determines how to open a file with the
+given editor.  It should take 2 or 3 arguments, as follows:
 
-The `pattern` argument can be a string, regular expression, or an array of
-strings and regular expressions. For the `fn` to be called one of the patterns
-must match the value of `EDITOR`, `VISUAL` or `JULIA_EDITOR`.  For strings, only
-whole words can match (i.e. "vi" doesn't match "vim -g" but will match
-"/usr/bin/vi -m").
+* `command` - an array of strings representing the editor command. It can be
+  safely interpolated into a command created using backtick notation.
+* `path`  - the path to the source file to open
+* `line` - the optional line number to open to; if specified the returned command
+  must open the file at the given line.
 
-If `fn` is called, but returns nothing, the pattern is considered to have not
-matched and other editors are considered. This allows you to verify the
-environment when `edit` is called, before deciding to return a non-nothing
-value.
+`fn` must return either an appropriate `Cmd` object to open a
+file, a function (taking 0 arguments) that will open the file directly
+(returning a `Cmd` is the preferred approach), or `nothing`. Use `nothing`
+to indicate that this editor is not appropriate for the current environment
+and another editor should be attempted.
 
-If multiple editors match, the one with the highest priority is selected,
+The `pattern` argument is string, regular expression, or an array of strings and
+regular expressions. For the `fn` to be called one of the patterns must match
+the value of `EDITOR`, `VISUAL` or `JULIA_EDITOR`.  For strings, only whole
+words can match (i.e. "vi" doesn't match "vim -g" but will match "/usr/bin/vi
+-m").
+
+If multiple defined editors match, the one with the highest priority is selected,
 and if there is a tie in priority, the first editor added will be used.
 
 By default the editor is opened in the background, but terminal-based editors
@@ -76,8 +79,8 @@ will want to set `background=false`.
 If no editor entry can be found, then a file is opened by running
 `\$command \$path`.
 
-Note that a number of default editors are already defined. All of the following
-commands should already work:
+Note that a number of default editors (all priority 0) are already defined. All
+of the following commands should already work:
 - emacs
 - vim
 - nvim
