@@ -222,13 +222,14 @@ end
 
 # In general, we simply re-index the parent indices by the provided ones
 SlowSubArray{T,N,P,I} = SubArray{T,N,P,I,false}
-function getindex(V::SlowSubArray{T,N}, I::Vararg{Int,N}) where {T,N}
+function getindex(V::SubArray{T,N}, I::Vararg{Int,N}) where {T,N}
     @_inline_meta
     @boundscheck checkbounds(V, I...)
     @inbounds r = V.parent[reindex(V, V.indices, I)...]
     r
 end
 
+# But SubArrays with fast linear indexing pre-compute a stride and offset
 FastSubArray{T,N,P,I} = SubArray{T,N,P,I,true}
 function getindex(V::FastSubArray, i::Int)
     @_inline_meta
@@ -246,8 +247,23 @@ function getindex(V::FastContiguousSubArray, i::Int)
     @inbounds r = V.parent[V.offset1 + i]
     r
 end
+# For vector views with linear indexing, we disambiguate to favor the stride/offset
+# computation as that'll generally be faster than (or just as fast as) re-indexing into a range.
+function getindex(V::FastSubArray{<:Any, 1}, i::Int)
+    @_inline_meta
+    @boundscheck checkbounds(V, i)
+    @inbounds r = V.parent[V.offset1 + V.stride1*i]
+    r
+end
+function getindex(V::FastContiguousSubArray{<:Any, 1}, i::Int)
+    @_inline_meta
+    @boundscheck checkbounds(V, i)
+    @inbounds r = V.parent[V.offset1 + i]
+    r
+end
 
-function setindex!(V::SlowSubArray{T,N}, x, I::Vararg{Int,N}) where {T,N}
+# Indexed assignment follows the same pattern as `getindex` above
+function setindex!(V::SubArray{T,N}, x, I::Vararg{Int,N}) where {T,N}
     @_inline_meta
     @boundscheck checkbounds(V, I...)
     @inbounds V.parent[reindex(V, V.indices, I)...] = x
@@ -260,6 +276,18 @@ function setindex!(V::FastSubArray, x, i::Int)
     V
 end
 function setindex!(V::FastContiguousSubArray, x, i::Int)
+    @_inline_meta
+    @boundscheck checkbounds(V, i)
+    @inbounds V.parent[V.offset1 + i] = x
+    V
+end
+function setindex!(V::FastSubArray{<:Any, 1}, x, i::Int)
+    @_inline_meta
+    @boundscheck checkbounds(V, i)
+    @inbounds V.parent[V.offset1 + V.stride1*i] = x
+    V
+end
+function setindex!(V::FastContiguousSubArray{<:Any, 1}, x, i::Int)
     @_inline_meta
     @boundscheck checkbounds(V, i)
     @inbounds V.parent[V.offset1 + i] = x
