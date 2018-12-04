@@ -23,11 +23,17 @@ cp_q(src, dest) = isfile(dest) || cp(src, dest)
 # make links for stdlib package docs, this is needed until #522 in Documenter.jl is finished
 const STDLIB_DOCS = []
 const STDLIB_DIR = Sys.STDLIB
+const EXT_STDLIB_DOCS = ["Pkg"]
 cd(joinpath(@__DIR__, "src")) do
     Base.rm("stdlib"; recursive=true, force=true)
     mkdir("stdlib")
     for dir in readdir(STDLIB_DIR)
-        sourcefile = joinpath(STDLIB_DIR, dir, "docs", "src", "index.md")
+        sourcefile = joinpath(STDLIB_DIR, dir, "docs", "src")
+        if dir in EXT_STDLIB_DOCS
+            sourcefile = joinpath(sourcefile, "basedocs.md")
+        else
+            sourcefile = joinpath(sourcefile, "index.md")
+        end
         if isfile(sourcefile)
             targetfile = joinpath("stdlib", dir * ".md")
             push!(STDLIB_DOCS, (stdlib = Symbol(dir), targetfile = targetfile))
