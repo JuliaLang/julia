@@ -1454,7 +1454,9 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     else if (bb->concrete || bb->constraintkind == 1) {
         jl_value_t *ub = R ? intersect_aside(a, bb->ub, e, d) : intersect_aside(bb->ub, a, e, d);
         JL_GC_PUSH1(&ub);
-        if (ub == jl_bottom_type || !subtype_in_env(bb->lb, a, e)) {
+        if (ub == jl_bottom_type ||
+            // this fixes issue #30122. TODO: better fix for R flag.
+            (!R && !subtype_in_env(bb->lb, a, e))) {
             JL_GC_POP();
             return jl_bottom_type;
         }
