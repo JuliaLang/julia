@@ -297,7 +297,7 @@ function read_worker_host_port(io::IO)
         end
     finally
         for line in leader
-            println("\tFrom failed worker startup:\t", line)
+            println("\tFrom worker startup:\t", line)
         end
     end
 end
