@@ -106,7 +106,11 @@ let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     @test uuid == eval(Meta.parse(repr(uuid))) # check show method
     @test string(uuid) == uuidstr == sprint(print, uuid)
     @test "check $uuid" == "check $uuidstr"
+    @test UUID(UInt128(uuid)) == uuid
+    @test UUID(convert(NTuple{2, UInt64}, uuid)) == uuid
+    @test UUID(convert(NTuple{4, UInt32}, uuid)) == uuid
 end
+@test_throws ArgumentError UUID("@"^4 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^6)
 
 function subset(v::Vector{T}, m::Int) where T
     T[v[j] for j = 1:length(v) if ((m >>> (j - 1)) & 1) == 1]
