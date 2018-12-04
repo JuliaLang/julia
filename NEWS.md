@@ -63,6 +63,7 @@ Standard library changes
   * `randperm` and `randcycle` now use the type of their argument to determine the element type of
     the returned array ([#29670]).
   * A new method `rand(::Tuple)` implements sampling from the values of a tuple ([#25278]).
+  * `serialize` and `deserialize` now accept a filename argument, like `write` and `read` ([#30151]).
 
 Compiler/Runtime improvements
 -----------------------------
