@@ -66,7 +66,8 @@ end
     @test inet.port == 1024
     io = IOBuffer()
     show(io, inet)
-    @test String(take!(io)) == "Sockets.InetAddr{Sockets.IPv4}(ip\"127.0.0.1\", 1024)"
+    str = "Sockets.InetAddr{$(isdefined(Main, :IPv4) ? "" : "Sockets.")IPv4}(ip\"127.0.0.1\", 1024)"
+    @test String(take!(io)) == str
 end
 @testset "InetAddr invalid port" begin
     @test_throws InexactError Sockets.InetAddr(IPv4(127,0,0,1), -1)

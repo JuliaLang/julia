@@ -310,25 +310,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                 # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
                 return Any, false, nothing
             end
-            infstate = sv
-            topmost = topmost::InferenceState
-            while !(infstate === topmost.parent)
-                if call_result_unused(infstate)
-                    # If we won't propagate the result any further (since it's typically unused),
-                    # it's OK that we keep and cache the "limited" result in the parents
-                    # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
-                    # TODO: we might be able to halt progress much more strongly here,
-                    # since now we know we won't be able to keep anything much that we learned.
-                    # We were mainly only here to compute the calling convention return type,
-                    # but in most situations now, we are unlikely to be able to use that information.
-                    break
-                end
-                infstate.limited = true
-                for infstate_cycle in infstate.callers_in_cycle
-                    infstate_cycle.limited = true
-                end
-                infstate = infstate.parent
-            end
+            poison_callstack(sv, topmost::InferenceState, true)
             sig = newsig
             sparams = svec()
         end
@@ -369,9 +351,22 @@ end
 
 # This is only for use with `Conditional`.
 # In general, usage of this is wrong.
-function ssa_def_expr(@nospecialize(arg), sv::InferenceState)
+function ssa_def_slot(@nospecialize(arg), sv::InferenceState)
+    init = sv.currpc
     while isa(arg, SSAValue)
-        arg = sv.src.code[arg.id]
+        init = arg.id
+        arg = sv.src.code[init]
+    end
+    arg isa SlotNumber || return nothing
+    for i = init:(sv.currpc - 1)
+        # conservatively make sure there isn't potentially another conflicting assignment to
+        # the same slot between the def and usage
+        # we can assume the IR is sorted, since the front-end only creates SSA values in order
+        e = sv.src.code[i]
+        e isa Expr || continue
+        if e.head === :(=) && e.args[1] === arg
+            return nothing
+        end
     end
     return arg
 end
@@ -570,8 +565,8 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
             cnd = argtypes[2]::Conditional
             tx = argtypes[3]
             ty = argtypes[4]
-            a = ssa_def_expr(fargs[3], sv)
-            b = ssa_def_expr(fargs[4], sv)
+            a = ssa_def_slot(fargs[3], sv)
+            b = ssa_def_slot(fargs[4], sv)
             if isa(a, Slot) && slot_id(cnd.var) == slot_id(a)
                 tx = typeintersect(tx, cnd.vtype)
             end
@@ -590,7 +585,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         elseif (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
             # perform very limited back-propagation of type information for `is` and `isa`
             if f === isa
-                a = ssa_def_expr(fargs[2], sv)
+                a = ssa_def_slot(fargs[2], sv)
                 if isa(a, Slot)
                     aty = widenconst(argtypes[2])
                     if rt === Const(false)
@@ -609,8 +604,8 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
                     end
                 end
             elseif f === (===)
-                a = ssa_def_expr(fargs[2], sv)
-                b = ssa_def_expr(fargs[3], sv)
+                a = ssa_def_slot(fargs[2], sv)
+                b = ssa_def_slot(fargs[3], sv)
                 aty = argtypes[2]
                 bty = argtypes[3]
                 # if doing a comparison to a singleton, consider returning a `Conditional` instead

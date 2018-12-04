@@ -6,6 +6,7 @@ using .Main.OffsetArrays
 using SparseArrays
 
 using Random, LinearAlgebra
+using Dates
 
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
@@ -231,6 +232,29 @@ end
         catch err
             @test err.msg == "indexed assignment fails for a reshaped range; consider calling collect"
         end
+    end
+end
+
+@testset "reshape isbitsunion Arrays (issue #28611)" begin
+    v = Union{Float64,Missing}[]
+    for i in 1:10 push!(v, i) end
+    v[5] = missing
+    a = @inferred(reshape(v, 2, 5))
+    for (I, i) in zip(CartesianIndices((2, 5)), 1:10)
+        @test a[I] === v[i]
+    end
+    ac = copy(a)
+    @test ac isa Array{Union{Float64, Missing}, 2}
+    b = @inferred(reshape(ac, 5, 2))
+    for (I, J) in zip(CartesianIndices((2, 5)), CartesianIndices((5, 2)))
+        @test ac[I] === b[J]
+    end
+
+    for T in (Any, Union{Float64,String})
+        a = Array{T}(undef, 4)
+        @test @inferred(reshape(a, (2, 2))) isa Array{T,2}
+        a = Array{T}(undef, 4, 1)
+        @test @inferred(reshape(a, (2, 2))) isa Array{T,2}
     end
 end
 
@@ -567,6 +591,11 @@ end
     @test isnan(findmax([NaN, NaN, 0.0/0.0])[1])
     @test findmax([NaN, NaN, 0.0/0.0])[2] == 1
 
+    # Check that cartesian indices are returned for matrices
+    @test argmax([10 12; 9 11]) === CartesianIndex(1, 2)
+    @test argmin([10 12; 9 11]) === CartesianIndex(2, 1)
+    @test findmax([10 12; 9 11]) === (12, CartesianIndex(1, 2))
+    @test findmin([10 12; 9 11]) === (9, CartesianIndex(2, 1))
 end
 
 @testset "permutedims" begin
@@ -1739,7 +1768,7 @@ end
     @test CartesianIndices(CartesianIndex{3}(1,2,3)) == CartesianIndices((1, 2, 3))
     @test Tuple{}(CartesianIndices{0,Tuple{}}(())) == ()
 
-    R = CartesianIndices(map(Base.Slice, (2:5, 3:5)))
+    R = CartesianIndices(map(Base.IdentityUnitRange, (2:5, 3:5)))
     @test eltype(R) <: CartesianIndex{2}
     @test eltype(typeof(R)) <: CartesianIndex{2}
     @test eltype(CartesianIndices{2}) <: CartesianIndex{2}
@@ -1940,6 +1969,22 @@ end
     @test IndexStyle(selectdim(A, 1, 1)) == IndexStyle(view(A, 1, :, :)) == IndexLinear()
     @test IndexStyle(selectdim(A, 2, 1)) == IndexStyle(view(A, :, 1, :)) == IndexCartesian()
     @test IndexStyle(selectdim(A, 3, 1)) == IndexStyle(view(A, :, :, 1)) == IndexLinear()
+end
+
+# row/column/slice iterator tests
+using Base: eachrow, eachcol
+@testset "row/column/slice iterators" begin
+    # Simple ones
+    M = [1 2 3; 4 5 6; 7 8 9]
+    @test collect(eachrow(M)) == collect(eachslice(M, dims = 1)) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    @test collect(eachcol(M)) == collect(eachslice(M, dims = 2)) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
+    @test_throws DimensionMismatch eachslice(M, dims = 4)
+
+    # Higher-dimensional case
+    M = reshape([(1:16)...], 2, 2, 2, 2)
+    @test_throws MethodError collect(eachrow(M))
+    @test_throws MethodError collect(eachcol(M))
+    @test collect(eachslice(M, dims = 1))[1][:, :, 1] == [1 5; 3 7]
 end
 
 ###
@@ -2549,3 +2594,7 @@ Base.view(::T25958, args...) = args
     @test t[end,end,1]   == @view(t[end,end,1])   == @views t[end,end,1]
     @test t[end,end,end] == @view(t[end,end,end]) == @views t[end,end,end]
 end
+
+# Fix oneunit bug for unitful arrays
+@test oneunit([Second(1) Second(2); Second(3) Second(4)]) == [Second(1) Second(0); Second(0) Second(1)]
+
