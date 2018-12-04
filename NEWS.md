@@ -34,6 +34,7 @@ New library functions
   * `splitpath(p::String)` function, which is the opposite of `joinpath(parts...)`: it splits a filepath into its components ([#28156]).
   * `isnothing(::Any)` function, to check whether something is a `Nothing`, returns a `Bool` ([#29679]).
   * `getpid(::Process)` method ([#24064]).
+  * `eachrow`, `eachcol` and `eachslice` functions provide efficient iterators over slices of arrays ([#29749]).
 
 Standard library changes
 ------------------------
