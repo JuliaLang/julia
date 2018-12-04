@@ -255,9 +255,12 @@ shuffle(a::AbstractArray) = shuffle(GLOBAL_RNG, a)
     randperm([rng=GLOBAL_RNG,] n::Integer)
 
 Construct a random permutation of length `n`. The optional `rng`
-argument specifies a random number generator (see [Random Numbers](@ref)).
-To randomly permute an arbitrary vector, see [`shuffle`](@ref)
-or [`shuffle!`](@ref).
+argument specifies a random number generator (see [Random
+Numbers](@ref)). The element type of the result is the same as the type
+of `n`.
+
+To randomly permute an arbitrary vector, see [`shuffle`](@ref) or
+[`shuffle!`](@ref).
 
 # Examples
 ```jldoctest
@@ -269,7 +272,7 @@ julia> randperm(MersenneTwister(1234), 4)
  3
 ```
 """
-randperm(r::AbstractRNG, n::Integer) = randperm!(r, Vector{Int}(undef, n))
+randperm(r::AbstractRNG, n::T) where {T <: Integer} = randperm!(r, Vector{T}(undef, n))
 randperm(n::Integer) = randperm(GLOBAL_RNG, n)
 
 """
@@ -317,6 +320,7 @@ randperm!(a::Array{<:Integer}) = randperm!(GLOBAL_RNG, a)
 
 Construct a random cyclic permutation of length `n`. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
+The element type of the result is the same as the type of `n`.
 
 # Examples
 ```jldoctest
@@ -330,7 +334,7 @@ julia> randcycle(MersenneTwister(1234), 6)
  2
 ```
 """
-randcycle(r::AbstractRNG, n::Integer) = randcycle!(r, Vector{Int}(undef, n))
+randcycle(r::AbstractRNG, n::T) where {T <: Integer} = randcycle!(r, Vector{T}(undef, n))
 randcycle(n::Integer) = randcycle(GLOBAL_RNG, n)
 
 """

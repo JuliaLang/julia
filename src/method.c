@@ -640,29 +640,6 @@ static jl_method_t *jl_new_method(
 
 void print_func_loc(JL_STREAM *s, jl_method_t *m);
 
-static void jl_check_static_parameter_conflicts(jl_method_t *m, jl_code_info_t *src, jl_svec_t *t)
-{
-    size_t nvars = jl_array_len(src->slotnames);
-
-    size_t i, n = jl_svec_len(t);
-    for (i = 0; i < n; i++) {
-        jl_value_t *tv = jl_svecref(t, i);
-        size_t j;
-        for (j = 0; j < nvars; j++) {
-            if (jl_is_typevar(tv)) {
-                if ((jl_sym_t*)jl_array_ptr_ref(src->slotnames, j) == ((jl_tvar_t*)tv)->name) {
-                    jl_printf(JL_STDERR,
-                              "WARNING: local variable %s conflicts with a static parameter in %s",
-                              jl_symbol_name(((jl_tvar_t*)tv)->name),
-                              jl_symbol_name(m->name));
-                    print_func_loc(JL_STDERR, m);
-                    jl_printf(JL_STDERR, ".\n");
-                }
-            }
-        }
-    }
-}
-
 // empty generic function def
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
                                                  jl_module_t *module,
@@ -818,7 +795,6 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                           m->line);
     }
 
-    jl_check_static_parameter_conflicts(m, f, tvars);
     jl_method_table_insert(mt, m, NULL);
     if (jl_newmeth_tracer)
         jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);

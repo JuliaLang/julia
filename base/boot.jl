@@ -457,6 +457,14 @@ end
 atdoc     = (source, mod, str, expr) -> Expr(:escape, expr)
 atdoc!(λ) = global atdoc = λ
 
+# macros for big integer syntax
+macro int128_str end
+macro uint128_str end
+macro big_str end
+
+# macro for command syntax
+macro cmd end
+
 
 # simple stand-alone print definitions for debugging
 abstract type IO end

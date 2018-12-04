@@ -144,7 +144,6 @@ static uint32_t read_uint32(ios_t *s) JL_NOTSAFEPOINT
 
 // --- Static Compile ---
 
-extern int globalUnique;
 static void *jl_sysimg_handle = NULL;
 static uint64_t sysimage_base = 0;
 static uintptr_t *sysimg_gvars_base = NULL;
@@ -170,7 +169,6 @@ static void jl_load_sysimg_so(void)
         jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_offsets", (void **)&sysimg_gvars_offsets, 1);
         sysimg_gvars_offsets += 1;
         assert(sysimg_fptrs.base);
-        jl_dlsym(jl_sysimg_handle, "jl_globalUnique", (void **)&globalUnique, 1);
 #ifdef JULIA_ENABLE_THREADING
         uintptr_t *tls_getter_slot;
         jl_dlsym(jl_sysimg_handle, "jl_get_ptls_states_slot", (void **)&tls_getter_slot, 1);

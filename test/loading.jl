@@ -571,6 +571,21 @@ end
     end; end
 end
 
+# Base.active_project when version directory exist in depot, but contains no project file
+mktempdir() do dir
+    vdir = Base.DEFAULT_LOAD_PATH[2]
+    vdir = replace(vdir, "#" => VERSION.major, count = 1)
+    vdir = replace(vdir, "#" => VERSION.minor, count = 1)
+    vdir = replace(vdir, "#" => VERSION.patch, count = 1)
+    vdir = vdir[2:end] # remove @
+    vpath = joinpath(dir, "environments", vdir)
+    mkpath(vpath)
+    withenv("JULIA_DEPOT_PATH" => dir) do
+        script = "@assert startswith(Base.active_project(), $(repr(vpath)))"
+        @test success(`$(Base.julia_cmd()) -e $(script)`)
+    end
+end
+
 ## cleanup after tests ##
 
 for env in keys(envs)

@@ -351,9 +351,22 @@ end
 
 # This is only for use with `Conditional`.
 # In general, usage of this is wrong.
-function ssa_def_expr(@nospecialize(arg), sv::InferenceState)
+function ssa_def_slot(@nospecialize(arg), sv::InferenceState)
+    init = sv.currpc
     while isa(arg, SSAValue)
-        arg = sv.src.code[arg.id]
+        init = arg.id
+        arg = sv.src.code[init]
+    end
+    arg isa SlotNumber || return nothing
+    for i = init:(sv.currpc - 1)
+        # conservatively make sure there isn't potentially another conflicting assignment to
+        # the same slot between the def and usage
+        # we can assume the IR is sorted, since the front-end only creates SSA values in order
+        e = sv.src.code[i]
+        e isa Expr || continue
+        if e.head === :(=) && e.args[1] === arg
+            return nothing
+        end
     end
     return arg
 end
@@ -552,8 +565,8 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
             cnd = argtypes[2]::Conditional
             tx = argtypes[3]
             ty = argtypes[4]
-            a = ssa_def_expr(fargs[3], sv)
-            b = ssa_def_expr(fargs[4], sv)
+            a = ssa_def_slot(fargs[3], sv)
+            b = ssa_def_slot(fargs[4], sv)
             if isa(a, Slot) && slot_id(cnd.var) == slot_id(a)
                 tx = typeintersect(tx, cnd.vtype)
             end
@@ -572,7 +585,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         elseif (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
             # perform very limited back-propagation of type information for `is` and `isa`
             if f === isa
-                a = ssa_def_expr(fargs[2], sv)
+                a = ssa_def_slot(fargs[2], sv)
                 if isa(a, Slot)
                     aty = widenconst(argtypes[2])
                     if rt === Const(false)
@@ -591,8 +604,8 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
                     end
                 end
             elseif f === (===)
-                a = ssa_def_expr(fargs[2], sv)
-                b = ssa_def_expr(fargs[3], sv)
+                a = ssa_def_slot(fargs[2], sv)
+                b = ssa_def_slot(fargs[3], sv)
                 aty = argtypes[2]
                 bty = argtypes[3]
                 # if doing a comparison to a singleton, consider returning a `Conditional` instead

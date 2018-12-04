@@ -973,6 +973,11 @@ end
     @test Float32(typemin(UInt128)) == 0.0f0
     @test Float64(typemax(UInt128)) == 2.0^128
     @test Float32(typemax(UInt128)) == 2.0f0^128
+    # leading zeros > 53
+    @test Float64(UInt128(Int64(2)^54)) == 1.8014398509481984e16
+    @test Float64(Int128(Int64(2)^54)) == 1.8014398509481984e16
+    @test Float32(UInt128(Int64(2)^54)) == 1.8014399f16
+    @test Float32(Int128(Int64(2)^54)) == 1.8014399f16
 
     # check for double rounding in conversion
     @test Float64(10633823966279328163822077199654060032) == 1.0633823966279327e37 #0x1p123
