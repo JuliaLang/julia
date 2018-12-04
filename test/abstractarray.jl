@@ -587,8 +587,8 @@ function test_get(::Type{TestAbstractArray})
     A = T24Linear([1:24...])
     B = TSlow([1:24...])
 
-    @test get(A, (), 0) == Int[]
-    @test get(B, (), 0) == TSlow(Int, 0)
+    @test get(A, (), 0) == A[]
+    @test get(B, (), 0) == B[]
 end
 
 function test_cat(::Type{TestAbstractArray})
