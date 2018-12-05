@@ -256,6 +256,9 @@ end
 Construct a dictionary of the names (as symbols) and values of all local
 variables defined as of the call site.
 
+!!! compat "Julia 1.1"
+    This macro requires at least Julia 1.1.
+
 # Examples
 ```jldoctest
 julia> let x = 1, y = 2
@@ -663,6 +666,9 @@ end
     fieldtypes(T::Type)
 
 The declared types of all fields in a composite DataType `T` as a tuple.
+
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
 
 # Examples
 ```jldoctest

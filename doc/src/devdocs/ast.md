@@ -158,6 +158,9 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
     Pop the stack of current exceptions back to the state at the associated `enter` when leaving a
     catch block. `args[1]` contains the token from the associated `enter`.
 
+    !!! compat "Julia 1.1"
+        `pop_exception` is new in Julia 1.1.
+
   * `inbounds`
 
     Controls turning bounds checks on or off. A stack is maintained; if the first argument of this
