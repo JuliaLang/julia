@@ -93,6 +93,7 @@ Standard library changes
     `--project=@.` ([#29108]).
   * Exponentiation operator `^` now supports raising a `Irrational` to an `AbstractMatrix` power ([#29782]).
   * A new method `rand(::Tuple)` implements sampling from the values of a tuple ([#25278]).
+  * `serialize` and `deserialize` now accept a filename argument, like `write` and `read` ([#30151]).
 
 Compiler/Runtime improvements
 -----------------------------
