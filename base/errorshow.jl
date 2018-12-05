@@ -63,8 +63,10 @@ function showerror(io::IO, ex::TypeError)
         else
             targs = (typeof(ex.got),)
         end
-        if isempty(ex.context)
+        if ex.context == ""
             ctx = "in $(ex.func)"
+        elseif ex.func === Symbol("keyword argument")
+            ctx = "in keyword argument $(ex.context)"
         else
             ctx = "in $(ex.func), in $(ex.context)"
         end
