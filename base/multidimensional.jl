@@ -89,6 +89,7 @@ module IteratorsMD
 
     # indexing
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
+    Base.get(A::AbstractArray, I::CartesianIndex, default) = get(A, I.I, default)
     eltype(::Type{T}) where {T<:CartesianIndex} = eltype(fieldtype(T, :I))
 
     # access to index tuple
