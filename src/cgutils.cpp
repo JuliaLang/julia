@@ -1087,7 +1087,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
     }
 
     // intersection with Type needs to be handled specially
-    if (jl_has_intersect_type_not_kind(type)) {
+    if (jl_has_intersect_type_not_kind(type) || jl_has_intersect_type_not_kind(intersected_type)) {
         Value *vx = maybe_decay_untracked(boxed(ctx, x));
         Value *vtyp = maybe_decay_untracked(literal_pointer_val(ctx, type));
         if (msg && *msg == "typeassert") {
@@ -1130,6 +1130,16 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
         }
         return std::make_pair(ctx.builder.CreateICmpEQ(emit_typeof_boxed(ctx, x),
             maybe_decay_untracked(literal_pointer_val(ctx, intersected_type))), false);
+    }
+    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(intersected_type);
+    if (jl_is_datatype(dt) && !dt->abstract && jl_subtype(dt->name->wrapper, type)) {
+        // intersection is a supertype of all instances of its constructor,
+        // so the isa test reduces to a comparison of the typename by pointer
+        return std::make_pair(
+                ctx.builder.CreateICmpEQ(
+                    mark_callee_rooted(emit_datatype_name(ctx, emit_typeof_boxed(ctx, x))),
+                    mark_callee_rooted(literal_pointer_val(ctx, (jl_value_t*)dt->name))),
+                false);
     }
     // everything else can be handled via subtype tests
     return std::make_pair(ctx.builder.CreateICmpNE(
