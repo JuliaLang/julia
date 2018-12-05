@@ -395,6 +395,44 @@ function kron(A::Diagonal{T1}, B::Diagonal{T2}) where {T1<:Number, T2<:Number}
     return Diagonal(valC)
 end
 
+function kron(A::Diagonal{T}, B::AbstractMatrix{S}) where {T<:Number, S<:Number}
+    @assert ! Base.has_offset_axes(B)
+    (mA, nA) = size(A); (mB, nB) = size(B)
+    R = zeros(Base.promote_op(*, T, S), mA * mB, nA * nB)
+    m = 1
+    for j = 1:nA
+        A_jj = A[j,j]
+        for k = 1:nB
+            for l = 1:mB
+                R[m] = A_jj * B[l,k]
+                m += 1
+            end
+            m += (nA - 1) * mB
+        end
+        m += mB
+    end
+    return R
+end
+
+function kron(A::AbstractMatrix{T}, B::Diagonal{S}) where {T<:Number, S<:Number}
+    @assert ! has_offset_axes(A)
+    (mA, nA) = size(A); (mB, nB) = size(B)
+    R = zeros(promote_op(*, T, S), mA * mB, nA * nB)
+    m = 1
+    for j = 1:nA
+        for l = 1:mB
+            Bll = B[l,l]
+            for k = 1:mA
+                R[m] = A[k,j] * Bll
+                m += nB
+            end
+            m += 1
+        end
+        m -= nB
+    end
+    return R
+end
+
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal{<:Number}) = D
 transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
