@@ -69,7 +69,7 @@ USEIFC  ?= 0
 JULIA_THREADS := 1
 
 # Enable the parallel task runtime
-JULIA_PARTR ?= 0
+JULIA_PARTR ?= 1
 ifeq ($(JULIA_THREADS), 0)
 JULIA_PARTR := 0
 endif
