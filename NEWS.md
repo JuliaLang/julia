@@ -41,6 +41,8 @@ New library functions
   * `eachrow`, `eachcol` and `eachslice` functions provide efficient iterators over slices of arrays ([#29749]).
   * `fieldtypes(T::Type)` which return the declared types of the field in type T ([#29600]).
   * `uuid5` has been added to the `UUIDs` standard library ([#28761]).
+  * Predicate functions `Sys.isfreebsd`, `Sys.isopenbsd`, `Sys.isnetbsd`, and `Sys.isdragonfly` for
+    detecting BSD systems have been added ([#30249]).
 
 Standard library changes
 ------------------------
@@ -175,3 +177,4 @@ Deprecated or removed
 [#30035]: https://github.com/JuliaLang/julia/issues/30035
 [#30083]: https://github.com/JuliaLang/julia/issues/30083
 [#30159]: https://github.com/JuliaLang/julia/issues/30159
+[#30249]: https://github.com/JuliaLang/julia/issues/30249
