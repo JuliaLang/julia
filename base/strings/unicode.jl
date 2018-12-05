@@ -152,9 +152,14 @@ utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(String(s), flags)
 
 
 function utf8proc_map(str::String, options::Integer, custom_func, custom_data)
-    func(uc, d)= custom_func(uc, unsafe_pointer_to_objref(d))
+    is_immutable = isimmutable(custom_data)
+    func(uc, d)= custom_func(uc,
+                             let obj = unsafe_pointer_to_objref(d)
+                             is_immutable ? obj[1] : obj
+                             end)
     ccustom_func = @cfunction($func, Cint, (Cint, Ptr{Cvoid}))
-    data_ptr = pointer_from_objref(custom_data)
+    data_ref = is_immutable ? [custom_data] : custom_data
+    data_ptr = pointer_from_objref(data_ref)
 
     nwords = ccall(:utf8proc_decompose_custom, Int,
                    (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Ptr{Cvoid}),
