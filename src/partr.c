@@ -710,6 +710,8 @@ static int run_next(void)
     }
 
     jl_switchto(&task);
+    if (ptls->tid == 0)
+        jl_process_events(jl_global_event_loop());
 
     JL_GC_POP();
     return 1;
