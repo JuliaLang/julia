@@ -20,6 +20,10 @@ Language changes
     to the `Core` module ([#29968]).
   * Using the same name for both a local variable and a static parameter is now an error instead
     of a warning ([#29429]).
+  * Method signatures such as
+    `f(::Type{T}, ::T) where {T <: X}` and
+    `f(::Type{X}, ::Any)`
+    are now considered ambiguous. Previously a bug caused the first one to be considered more specific ([#30160]).
 
 Command-line option changes
 ---------------------------
