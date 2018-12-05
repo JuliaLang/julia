@@ -992,6 +992,9 @@ See [`sort!`](@ref) for a description of possible keyword arguments.
 
 To sort slices of an array, refer to [`sortslices`](@ref).
 
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
+
 # Examples
 ```jldoctest
 julia> A = [4 3; 1 2]

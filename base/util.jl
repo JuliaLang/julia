@@ -399,7 +399,16 @@ printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) 
     with_output_color(print, color, io, msg...; bold=bold)
 printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
     printstyled(stdout, msg...; bold=bold, color=color)
+"""
+    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR::String, julia_exename()))
 
+Return a julia command similar to the one of the running process.
+Propagates the `--cpu-target`, `--sysimage`, --compile `, `--depwarn`
+and `--inline` command line arguments.
+
+!!! compat "Julia 1.1"
+    The `--inline` flag is only propagated in Julia 1.1 and later.
+"""
 function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
     opts = JLOptions()
     cpu_target = unsafe_string(opts.cpu_target)
@@ -641,6 +650,10 @@ a required keyword argument in the resulting type constructor.
 Inner constructors can still be defined, but at least one should accept arguments in the
 same form as the default inner constructor (i.e. one positional argument per field) in
 order to function correctly with the keyword outer constructor.
+
+!!! compat "Julia 1.1"
+    `Base.@kwdef` for parametric structs, and structs with supertypes
+    requires at least Julia 1.1.
 
 # Examples
 ```jldoctest

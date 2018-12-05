@@ -151,6 +151,11 @@ global precision; `convert` will always return `x`.
 convenience since decimal literals are converted to `Float64` when parsed, so
 `BigFloat(2.1)` may not yield what you expect.
 
+!!! compat "Julia 1.1"
+    `precision` as a keyword argument requires at least Julia 1.1.
+    In Julia 1.0 `precision` is the second positional argument (`BigFloat(x, precision)`).
+
+# Examples
 ```jldoctest
 julia> BigFloat(2.1) # 2.1 here is a Float64
 2.100000000000000088817841970012523233890533447265625
