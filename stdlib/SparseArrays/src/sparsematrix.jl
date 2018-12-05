@@ -1478,6 +1478,9 @@ with the specified (independent) probability `p` of any entry being nonzero,
 where nonzero values are sampled from the normal distribution. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
 
+!!! compat "Julia 1.1"
+    Specifying the output element type `Type` requires at least Julia 1.1.
+
 # Examples
 ```jldoctest; setup = :(using Random; Random.seed!(0))
 julia> sprandn(2, 2, 0.75)

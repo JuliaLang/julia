@@ -103,6 +103,9 @@ false.
 Explicitly passing `task` will return the current exception stack on an
 arbitrary task. This is useful for inspecting tasks which have failed due to
 uncaught exceptions.
+
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
 """
 function catch_stack(task=current_task(); include_bt=true)
     raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint), task, include_bt, typemax(Cint))

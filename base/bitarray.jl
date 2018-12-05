@@ -504,6 +504,7 @@ reinterpret(B::BitArray, dims::NTuple{N,Int}) where {N} = reshape(B, dims)
 
 if nameof(@__MODULE__) === :Base  # avoid method overwrite
 (::Type{T})(x::T) where {T<:BitArray} = copy(x)
+BitArray(x::BitArray) = copy(x)
 end
 
 """
@@ -1509,6 +1510,36 @@ function findprev(testf::Function, B::BitArray, start::Integer)
     return nothing # last case: !f0 && !f1
 end
 #findlast(testf::Function, B::BitArray) = findprev(testf, B, 1)  ## defined in array.jl
+
+function findmax(a::BitArray)
+    isempty(a) && throw(ArgumentError("BitArray must be non-empty"))
+    m, mi = false, 1
+    ti = 1
+    ac = a.chunks
+    for i = 1:length(ac)
+        @inbounds k = trailing_zeros(ac[i])
+        ti += k
+        k == 64 || return (true, @inbounds keys(a)[ti])
+    end
+    return m, @inbounds keys(a)[mi]
+end
+
+function findmin(a::BitArray)
+    isempty(a) && throw(ArgumentError("BitArray must be non-empty"))
+    m, mi = true, 1
+    ti = 1
+    ac = a.chunks
+    for i = 1:length(ac)-1
+        @inbounds k = trailing_ones(ac[i])
+        ti += k
+        k == 64 || return (false, @inbounds keys(a)[ti])
+    end
+    l = Base._mod64(length(a)-1) + 1
+    @inbounds k = trailing_ones(ac[end] & Base._msk_end(l))
+    ti += k
+    k == l || return (false, @inbounds keys(a)[ti])
+    return (m, @inbounds keys(a)[mi])
+end
 
 # findall helper functions
 # Generic case (>2 dimensions)
