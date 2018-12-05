@@ -268,6 +268,31 @@ plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 # known return type
 isknowntype(@nospecialize T) = (T == Union{}) || isconcretetype(T)
 
+# return a flag that indicates whether a given line is on a return-path
+# (meaning, is not on a branch that terminates in :unreachable)
+function lines_return(a::Vector{Any})
+    ir = fill(true, length(a))
+    for i = length(a):-1:1
+        ai = a[i]
+        if isa(ai, Expr)
+            if ai.head == :return
+            elseif ai.head == :unreachable
+                ir[i] = false
+            elseif ai.head == :gotoifnot
+                ln = ai.args[2]
+                ir[i] = ir[i+1] | (ln > i && ir[ln])
+            else
+                ir[i] = ir[i+1]
+            end
+        elseif isa(ai, GotoNode)
+            ir[i] = ir[ai.label]
+        else
+            ir[i] = ir[i+1]
+        end
+    end
+    return ir
+end
+
 function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector, slottypes::Vector{Any}, params::Params)
     head = ex.head
     if is_meta_expr_head(head)
@@ -304,6 +329,9 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector
             elseif f === Main.Core.arrayref && length(ex.args) >= 3
                 atyp = argextype(ex.args[3], src, spvals, slottypes)
                 return isknowntype(atyp) ? 4 : params.inline_nonleaf_penalty
+            elseif f === Main.Core.arrayset && length(ex.args) >= 4
+                atyp = argextype(ex.args[3], src, spvals, slottypes)
+                return isknowntype(atyp) ? 4 : params.inline_nonleaf_penalty
             end
             fidx = find_tfunc(f)
             if fidx === nothing
@@ -314,14 +342,18 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector
             return T_FFUNC_COST[fidx]
         end
         return params.inline_nonleaf_penalty
-    elseif head === :foreigncall || head === :invoke
-        # Calls whose "return type" is Union{} do not actually return:
-        # they are errors. Since these are not part of the typical
-        # run-time of the function, we omit them from
-        # consideration. This way, non-inlined error branches do not
-        # prevent inlining.
-        extyp = line == -1 ? Any : src.ssavaluetypes[line]
-        return extyp === Union{} ? 0 : 20
+    elseif head === :foreigncall
+        if isa(ex.args[1], QuoteNode)
+            sym = ex.args[1].value
+            for pr in T_CFUNC_COST
+                if sym === pr[1]
+                    return pr[2]
+                end
+            end
+        end
+        return 20
+    elseif head === :invoke
+        return 20
     elseif head === :return
         a = ex.args[1]
         if a isa Expr
@@ -360,6 +392,7 @@ end
 function inline_worthy(body::Array{Any,1}, src::CodeInfo, spvals::SimpleVector, slottypes::Vector{Any},
                        params::Params, cost_threshold::Integer=params.inline_cost_threshold)
     bodycost::Int = 0
+    lnr = lines_return(body)
     for line = 1:length(body)
         stmt = body[line]
         if stmt isa Expr
@@ -372,6 +405,7 @@ function inline_worthy(body::Array{Any,1}, src::CodeInfo, spvals::SimpleVector, 
         else
             continue
         end
+        lnr[line] || continue  # only count lines that are not on error paths
         bodycost = plus_saturate(bodycost, thiscost)
         bodycost > cost_threshold && return false
     end

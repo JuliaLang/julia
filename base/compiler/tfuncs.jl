@@ -18,6 +18,7 @@ const T_IFUNC_COST = Vector{Int}(undef, N_IFUNC)
 const T_FFUNC_KEY = Vector{Any}()
 const T_FFUNC_VAL = Vector{Tuple{Int, Int, Any}}()
 const T_FFUNC_COST = Vector{Int}()
+const T_CFUNC_COST = Vector{Tuple{Symbol, Int}}()  # for ccalls that get special-cased by the compiler
 function find_tfunc(@nospecialize f)
     for i = 1:length(T_FFUNC_KEY)
         if T_FFUNC_KEY[i] === f
@@ -36,6 +37,14 @@ const DATATYPE_INSTANCE_FIELDINDEX = fieldindex(DataType, :instance)
 const TYPENAME_NAME_FIELDINDEX = fieldindex(Core.TypeName, :name)
 const TYPENAME_MODULE_FIELDINDEX = fieldindex(Core.TypeName, :module)
 const TYPENAME_WRAPPER_FIELDINDEX = fieldindex(Core.TypeName, :wrapper)
+
+##########
+# ccalls #
+##########
+push!(T_CFUNC_COST, (:jl_array_ptr, 2))
+push!(T_CFUNC_COST, (:jl_value_ptr, 2))
+push!(T_CFUNC_COST, (:jl_array_isassigned, 5))
+push!(T_CFUNC_COST, (:jl_string_ptr, 2))
 
 ##########
 # tfuncs #

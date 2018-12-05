@@ -98,12 +98,10 @@ where `f` is your function and `tt` is the Tuple-type of the arguments:
 f = fill
 tt = Tuple{Float64, Tuple{Int,Int}}
 # Create the objects we need to interact with the compiler
-params = Core.Compiler.Params(typemax(UInt))
-mi = Base.method_instances(f, tt)[1]
+spvals, slottypes, params = Core.Compiler.get_params_slottypes(f, tt)
 ci = code_typed(f, tt)[1][1]
-opt = Core.Compiler.OptimizationState(mi, params)
 # Calculate cost of each statement
-cost(stmt::Expr) = Core.Compiler.statement_cost(stmt, -1, ci, opt.sp, opt.slottypes, opt.params)
+cost(stmt::Expr) = Core.Compiler.statement_cost(stmt, -1, ci, spvals, slottypes, params)
 cost(stmt) = 0
 cst = map(cost, ci.code)
 
@@ -120,3 +118,13 @@ cst = map(cost, ci.code)
 The output is a `Vector{Int}` holding the estimated cost of each
 statement in `ci.code`.  Note that `ci` includes the consequences of
 inlining callees, and consequently the costs do too.
+
+It's worth noting that `inline_worthy` does not count branches that do
+not return, which correspond to error-paths in the code.
+To determine which statements return, you can run
+
+```julia
+lnr = Core.Compiler.lines_return(ci.code)
+```
+
+and then `sum(cst .* lnr)` is the aggregate cost of the call used by `inline_worthy`.
