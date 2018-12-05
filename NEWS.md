@@ -1,4 +1,4 @@
-Julia v1.1.0 Release Notes
+Julia v1.1 Release Notes
 ==========================
 
 New language features
@@ -50,37 +50,24 @@ Standard library changes
   * `copy!` support for arrays, dicts, and sets has been moved to Base from the Future package ([#29173]).
   * Channels now convert inserted values (like containers) instead of requiring types to match ([#29092]).
   * `range` can accept the stop value as a positional argument, e.g. `range(1,10,step=2)` ([#28708]).
-  * `edit` can now be called on a module to edit the file that defines it ([#29636]).
   * `diff` now supports arrays of arbitrary dimensionality and can operate over any dimension ([#29827]).
-  * `sprandn` now supports specifying the output element type ([#30083]).
-  * All compiler-reflection tools (i.e. the `code_` class of functions and macros) now print accurate
-    line number and inlining information in a common style, and take an optional parameter (debuginfo=:default)
-    to control the verbosity of the metadata shown ([#29893]).
   * The constructor `BigFloat(::BigFloat)` now respects the global precision setting and always
     returns a `BigFloat` with precision equal to `precision(BigFloat)` ([#29127]). The optional
     `precision` argument to override the global setting is now a keyword instead of positional
     argument ([#29157]).
   * The use of scientific notation when printing `BigFloat` values is now consistent with other floating point
     types ([#29211]).
-  * `Regex` and `TimeZone` now behave like scalars when used in broadcasting ([#29913], [#30159]).
+  * `Regex` now behave like a scalar when used in broadcasting ([#29913]).
   * `Char` now behaves like a read-only 0-dimensional array ([#29819]).
   * `parse` now allows strings representing integer 0 and 1 for type `Bool` ([#29980]).
   * `Base.tail` now works on named tuples ([#29595]).
-  * `randperm` and `randcycle` now use the type of their argument to determine the element type of
-    the returned array ([#29670]).
   * The process id is appended to malloc log files in order to track memory allocations of
     multiple processes ([#29969]).
   * `Base.julia_cmd` now propagates the `--inline=(yes|no)` flag ([#29858]).
-  * New `DateTime(::Date, ::Time)` constructor ([#29754]).
-  * `isdiag` and `isposdef` for `Diagonal` and `UniformScaling` ([#29638]).
-  * `mul!`, `rmul!` and `lmul!` methods for `UniformScaling` ([#29506]).
-  * `Symmetric` and `Hermitian` matrices now preserve the wrapper when scaled with a number ([#29469]).
-  * New `edit(m::Module)` method which opens the main source file for module `m` ([#29636]).
   * `Base.@kwdef` can now be used for parametric structs, and for structs with supertypes ([#29316]).
   * `merge(::NamedTuple, ::NamedTuple...)` can now be used with more than 2 `NamedTuple`s ([#29259]).
   * `Future.copy!` has been moved to `Base` ([#29178]).
   * New `ncodeunits(c::Char)` method as a fast equivalent to `ncodeunits(string(c))` ([#29153]).
-  * `mean` and `var` now handles the empty case ([#29033]).
   * New `sort!(::AbstractArray; dims)` method that can sort the array along the `dims` dimension ([#28902]).
   * `range` now accept `stop` as a positional argument ([#28708]).
   * `parse(Bool, str)` is now supported ([#29997]).
@@ -89,11 +76,33 @@ Standard library changes
   * `current_project()` now searches the parent directories of a Git repository for a `Project.toml` file.
     This also affects the behavior of the `--project` command line option when using the default
     `--project=@.` ([#29108]).
+
+#### Dates
+  * New `DateTime(::Date, ::Time)` constructor ([#29754]).
+  * `TimeZone` now behave like a scalar when used in broadcasting ([#30159]).
+
+#### InteractiveUtils
+  * `edit` can now be called on a module to edit the file that defines it ([#29636]).
+  * All compiler-reflection tools (i.e. the `code_` class of functions and macros) now print accurate
+    line number and inlining information in a common style, and take an optional parameter (debuginfo=:default)
+    to control the verbosity of the metadata shown ([#29893]).
+
+#### LinearAlgebra
+  * `isdiag` and `isposdef` for `Diagonal` and `UniformScaling` ([#29638]).
+  * `mul!`, `rmul!` and `lmul!` methods for `UniformScaling` ([#29506]).
+  * `Symmetric` and `Hermitian` matrices now preserve the wrapper when scaled with a number ([#29469]).
   * Exponentiation operator `^` now supports raising a `Irrational` to an `AbstractMatrix` power ([#29782]).
+
+#### Random
+  * `randperm` and `randcycle` now use the type of their argument to determine the element type of
+    the returned array ([#29670]).
   * A new method `rand(::Tuple)` implements sampling from the values of a tuple ([#25278]).
 
-Compiler/Runtime improvements
------------------------------
+#### SparseArrays
+  * `sprandn` now supports specifying the output element type ([#30083]).
+
+#### Statistics
+  * `mean` and `var` now handles the empty case ([#29033]).
 
 External dependencies
 ---------------------
