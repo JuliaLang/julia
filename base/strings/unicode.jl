@@ -139,7 +139,7 @@ function utf8proc_map(str::String, options::Integer)
     nwords = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
                    str, sizeof(str), C_NULL, 0, options)
     nwords < 0 && utf8proc_error(nwords)
-    buffer = Base.StringVector(nwords*4)
+    buffer = Base.StringVector(nwords*sizeof(Cint))
     nwords = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
                    str, sizeof(str), buffer, nwords, options)
     nwords < 0 && utf8proc_error(nwords)
@@ -165,7 +165,7 @@ function utf8proc_map(str::String, options::Integer, custom_func, custom_data)
                    (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Ptr{Cvoid}),
                    str, sizeof(str), C_NULL, 0, options, ccustom_func, data_ptr)
     nwords < 0 && utf8proc_error(nwords)
-    buffer = Base.StringVector(nwords*4)
+    buffer = Base.StringVector(nwords*sizeof(Cint))
     nwords = ccall(:utf8proc_decompose_custom, Int,
                    (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Ptr{Cvoid}),
                    str, sizeof(str), buffer, nwords, options, ccustom_func, data_ptr)
