@@ -223,17 +223,6 @@ function widen_all_consts!(src::CodeInfo)
     return src
 end
 
-maybe_widen_conditional(@nospecialize vt) = vt
-function maybe_widen_conditional(vt::Conditional)
-    if vt.vtype === Bottom
-        return Const(false)
-    elseif vt.elsetype === Bottom
-        return Const(true)
-    else
-        return Bool
-    end
-end
-
 function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
     head = e.head
     i0 = 1
@@ -256,7 +245,7 @@ end
 function visit_slot_load!(sl::Slot, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
     id = slot_id(sl)
     s = vtypes[id]
-    vt = maybe_widen_conditional(s.typ)
+    vt = widenconditional(s.typ)
     if s.undef
         # find used-undef variables
         undefs[id] = true
@@ -312,7 +301,7 @@ function type_annotate!(sv::InferenceState)
         if gt[j] === NOT_FOUND
             gt[j] = Union{}
         end
-        gt[j] = maybe_widen_conditional(gt[j])
+        gt[j] = widenconditional(gt[j])
     end
 
     # compute the required type for each slot
