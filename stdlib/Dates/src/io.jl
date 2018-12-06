@@ -530,15 +530,19 @@ end
 # show
 
 function Base.show(io::IO, dt::DateTime)
-    y,m,d = yearmonthday(dt)
-    h = hour(dt)
-    mi = minute(dt)
-    s = second(dt)
-    ms = millisecond(dt)
-    if ms == 0
-        print(io, "DateTime($y, $m, $d, $h, $mi, $s)")
+    if get(io, :compact, true)
+        print(io, dt)
     else
-        print(io, "DateTime($y, $m, $d, $h, $mi, $s, $ms)")
+        y,m,d = yearmonthday(dt)
+        h = hour(dt)
+        mi = minute(dt)
+        s = second(dt)
+        ms = millisecond(dt)
+        if ms == 0
+            print(io, "DateTime($y, $m, $d, $h, $mi, $s)")
+        else
+            print(io, "DateTime($y, $m, $d, $h, $mi, $s, $ms)")
+        end
     end
 end
 
@@ -551,8 +555,12 @@ function Base.show(io::IO, ::MIME"text/plain", dt::Date)
 end
 
 function Base.show(io::IO, dt::Date)
-    y,m,d = yearmonthday(dt)
-    print(io, "Date($y, $m, $d)")
+    if get(io, :compact, true)
+        print(io, dt)
+    else
+        y,m,d = yearmonthday(dt)
+        print(io, "Date($y, $m, $d)")
+    end
 end
 
 function Base.print(io::IO, dt::DateTime)
