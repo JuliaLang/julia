@@ -238,27 +238,27 @@ function unique!(f, A::AbstractVector)
     y = f(x)
     seen = Set{typeof(y)}()
     push!(seen, y)
-    return _unique!(f, A, seen, 1, i+1)
+    return _unique!(f, A, seen, i, i+1)
 end
 
-function _unique!(f, A::AbstractVector, seen::Set, count::Integer, i::Integer)
+function _unique!(f, A::AbstractVector, seen::Set, current::Integer, i::Integer)
     while i <= lastindex(A)
         x = @inbounds A[i]
         y = f(x)
         if y ∉ seen
-            count += 1
-            @inbounds A[count] = x
+            current += 1
+            @inbounds A[current] = x
             if y isa eltype(seen)
                 push!(seen, y)
             else
                 seen2 = convert(Set{promote_typejoin(eltype(seen), typeof(y))}, seen)
                 push!(seen2, y)
-                return _unique!(f, A, seen2, count, i+1)
+                return _unique!(f, A, seen2, current, i+1)
             end
         end
         i += 1
     end
-    return resize!(A, count)
+    return resize!(A, current - firstindex(A) + 1)
 end
 
 
