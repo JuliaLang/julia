@@ -647,6 +647,10 @@ If `dst` and `src` are of the same type, `dst == src` should hold after
 the call. If `dst` and `src` are multidimensional arrays, they must have
 equal [`axes`](@ref).
 See also [`copyto!`](@ref).
+
+!!! compat "Julia 1.1"
+    This method requires at least Julia 1.1. In Julia 1.0 this method
+    is available from the `Future` standard library as `Future.copy!`.
 """
 copy!(dst::AbstractVector, src::AbstractVector) = append!(empty!(dst), src)
 

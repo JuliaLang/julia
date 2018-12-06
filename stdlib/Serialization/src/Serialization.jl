@@ -90,7 +90,7 @@ function sertag(@nospecialize(v))
     end
     return Int32(-1)
 end
-desertag(i::Int32) = TAGS[i]
+desertag(i::Int32) = @inbounds(TAGS[i])
 
 # tags >= this just represent themselves, their whole representation is 1 byte
 const VALUE_TAGS = sertag(())
@@ -102,6 +102,7 @@ const EMPTYTUPLE_TAG = sertag(())
 const TUPLE_TAG = sertag(Tuple)
 const SIMPLEVECTOR_TAG = sertag(SimpleVector)
 const SYMBOL_TAG = sertag(Symbol)
+const INT8_TAG = sertag(Int8)
 const ARRAY_TAG = sertag(Array)
 const EXPR_TAG = sertag(Expr)
 const MODULE_TAG = sertag(Module)
@@ -337,7 +338,7 @@ end
 
 function serialize_mod_names(s::AbstractSerializer, m::Module)
     p = parentmodule(m)
-    if p === m
+    if p === m || m === Base
         key = Base.root_module_key(m)
         serialize(s, key.uuid === nothing ? nothing : key.uuid.value)
         serialize(s, Symbol(key.name))
@@ -586,6 +587,13 @@ function serialize(s::AbstractSerializer, n::Int64)
     nothing
 end
 
+for i in 0:13
+    tag = Int32(INT8_TAG + i)
+    ty = TAGS[tag]
+    (ty === Int32 || ty === Int64) && continue
+    @eval serialize(s::AbstractSerializer, n::$ty) = (writetag(s.io, $tag); write(s.io, n); nothing)
+end
+
 serialize(s::AbstractSerializer, ::Type{Bottom}) = write_as_tag(s.io, BOTTOM_TAG)
 
 function serialize(s::AbstractSerializer, u::UnionAll)
@@ -686,6 +694,16 @@ function serialize(s::IO, x)
     serialize(ss, x)
 end
 
+"""
+    serialize(filename::AbstractString, value)
+
+Open a file and serialize the given value to it.
+
+!!! compat "Julia 1.1"
+    This method is available as of Julia 1.1.
+"""
+serialize(filename::AbstractString, x) = open(io->serialize(io, x), filename, "w")
+
 ## deserializing values ##
 
 """
@@ -698,6 +716,16 @@ the data read. Malformed data can result in process termination. The caller has 
 the integrity and correctness of data read from `stream`.
 """
 deserialize(s::IO) = deserialize(Serializer(s))
+
+"""
+    deserialize(filename::AbstractString)
+
+Open a file and deserialize its contents.
+
+!!! compat "Julia 1.1"
+    This method is available as of Julia 1.1.
+"""
+deserialize(filename::AbstractString) = open(deserialize, filename)
 
 function deserialize(s::AbstractSerializer)
     handle_deserialize(s, Int32(read(s.io, UInt8)::UInt8))
@@ -748,6 +776,9 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return unwrap_unionall(tname.wrapper)
     elseif b == OBJECT_TAG
         t = deserialize(s)
+        if t === Missing
+            return missing
+        end
         return deserialize(s, t)
     elseif b == REF_OBJECT_TAG
         slot = s.counter; s.counter += 1
@@ -788,8 +819,36 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
             read(s.io, UInt8)
         end
         return deserialize(s)
+    elseif b == INT8_TAG
+        return read(s.io, Int8)
+    elseif b == INT8_TAG+1
+        return read(s.io, UInt8)
+    elseif b == INT8_TAG+2
+        return read(s.io, Int16)
+    elseif b == INT8_TAG+3
+        return read(s.io, UInt16)
+    elseif b == INT32_TAG
+        return read(s.io, Int32)
+    elseif b == INT8_TAG+5
+        return read(s.io, UInt32)
+    elseif b == INT64_TAG
+        return read(s.io, Int64)
+    elseif b == INT8_TAG+7
+        return read(s.io, UInt64)
+    elseif b == INT8_TAG+8
+        return read(s.io, Int128)
+    elseif b == INT8_TAG+9
+        return read(s.io, UInt128)
+    elseif b == INT8_TAG+10
+        return read(s.io, Float16)
+    elseif b == INT8_TAG+11
+        return read(s.io, Float32)
+    elseif b == INT8_TAG+12
+        return read(s.io, Float64)
+    elseif b == INT8_TAG+13
+        return read(s.io, Char)
     end
-    t = desertag(b)
+    t = desertag(b)::DataType
     if t.mutable && length(t.types) > 0  # manual specialization of fieldcount
         slot = s.counter; s.counter += 1
         push!(s.pending_refs, slot)
@@ -949,6 +1008,11 @@ function deserialize_array(s::AbstractSerializer)
     A = Array{elty, length(dims)}(undef, dims)
     s.table[slot] = A
     sizehint!(s.table, s.counter + div(length(A),4))
+    deserialize_fillarray!(A, s)
+    return A
+end
+
+function deserialize_fillarray!(A::Array{T}, s::AbstractSerializer) where {T}
     for i = eachindex(A)
         tag = Int32(read(s.io, UInt8)::UInt8)
         if tag != UNDEFREF_TAG

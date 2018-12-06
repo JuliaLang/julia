@@ -1394,3 +1394,8 @@ let M = M29955{T,Vector{Float64}} where T
     @test_throws TypeError M{Float32}
     @test_throws TypeError M{Real}
 end
+
+# issue #30122
+@testintersect(Tuple{Pair{Int64,2}, NTuple},
+               Tuple{Pair{F,N},Tuple{Vararg{F,N}}} where N where F,
+               Tuple{Pair{Int64,2}, Tuple{Int64,Int64}})

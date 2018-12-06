@@ -115,7 +115,7 @@ julia> convert(Int, 3.0)
 3
 
 julia> convert(Int, 3.5)
-ERROR: InexactError: Int64(Int64, 3.5)
+ERROR: InexactError: Int64(3.5)
 Stacktrace:
 [...]
 ```
@@ -415,27 +415,6 @@ Stacktrace:
 """
 sizeof(x) = Core.sizeof(x)
 
-function append_any(xs...)
-    # used by apply() and quote
-    # must be a separate function from append(), since apply() needs this
-    # exact function.
-    out = Vector{Any}(undef, 4)
-    l = 4
-    i = 1
-    for x in xs
-        for y in x
-            if i > l
-                _growend!(out, 16)
-                l += 16
-            end
-            arrayset(true, out, y, i)
-            i += 1
-        end
-    end
-    _deleteend!(out, l-i+1)
-    out
-end
-
 # simple Array{Any} operations needed for bootstrap
 @eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)
 
@@ -640,6 +619,72 @@ function isassigned(v::SimpleVector, i::Int)
     @_gc_preserve_end t
     return x != C_NULL
 end
+
+
+# used by ... syntax to access the `iterate` function from inside the Core._apply implementation
+# must be a separate function from append(), since Core._apply needs this exact function
+function append_any(xs...)
+    @nospecialize
+    lx = length(xs)
+    l = 4
+    i = 1
+    out = Vector{Any}(undef, l)
+    for xi in 1:lx
+        x = @inbounds xs[xi]
+        # handle some common cases, where we know the length
+        # and can inline the iterator because the runtime
+        # has an optimized version of the iterator
+        if x isa SimpleVector
+            lx = length(x)
+            if i + lx - 1 > l
+                ladd = lx > 16 ? lx : 16
+                _growend!(out, ladd)
+                l += ladd
+            end
+            for j in 1:lx
+                y = @inbounds x[j]
+                arrayset(true, out, y, i)
+                i += 1
+            end
+        elseif x isa Tuple
+            lx = length(x)
+            if i + lx - 1 > l
+                ladd = lx > 16 ? lx : 16
+                _growend!(out, ladd)
+                l += ladd
+            end
+            for j in 1:lx
+                y = @inbounds x[j]
+                arrayset(true, out, y, i)
+                i += 1
+            end
+        elseif x isa Array
+            lx = length(x)
+            if i + lx - 1 > l
+                ladd = lx > 16 ? lx : 16
+                _growend!(out, ladd)
+                l += ladd
+            end
+            for j in 1:lx
+                y = arrayref(true, x, j)
+                arrayset(true, out, y, i)
+                i += 1
+            end
+        else
+            for y in x
+                if i > l
+                    _growend!(out, 16)
+                    l += 16
+                end
+                arrayset(true, out, y, i)
+                i += 1
+            end
+        end
+    end
+    _deleteend!(out, l - i + 1)
+    return out
+end
+
 
 """
     Colon()

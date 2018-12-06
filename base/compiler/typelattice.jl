@@ -217,6 +217,7 @@ end
 @inline tchanged(@nospecialize(n), @nospecialize(o)) = o === NOT_FOUND || (n !== NOT_FOUND && !(n ⊑ o))
 @inline schanged(@nospecialize(n), @nospecialize(o)) = (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(n, o)))
 
+widenconditional(@nospecialize typ) = typ
 function widenconditional(typ::Conditional)
     if typ.vtype == Union{}
         return Const(false)

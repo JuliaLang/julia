@@ -271,11 +271,8 @@ end
         @test_broken need_to_handle_undef_sparam == Set()
         pop!(need_to_handle_undef_sparam, which(Core.Compiler._cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, first(methods(Core.Compiler.same_names)))
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, (Type{Union{Core.Compiler.Some{T}, Nothing}} where T, Core.Compiler.Some)))
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, (Type{Union{T, Nothing}} where T, Core.Compiler.Some)))
         pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{}}))
         pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{Int8}}))
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, Tuple{Type{Union{Nothing,T}},Union{Nothing,T}} where T))
         @test need_to_handle_undef_sparam == Set()
     end
     let need_to_handle_undef_sparam =

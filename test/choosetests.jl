@@ -51,9 +51,9 @@ function choosetests(choices = [])
         "some", "meta", "stacktraces", "docs",
         "misc", "threads", "stress",
         "enums", "cmdlineargs", "int",
-        "checked", "bitset", "floatfuncs", "precompile", "inline",
+        "checked", "bitset", "floatfuncs", "precompile",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
-        "channels", "iostream", "secretbuffer", "specificity", "codegen",
+        "channels", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
     ]
 
@@ -107,7 +107,8 @@ function choosetests(choices = [])
         prepend!(tests, ["subarray"])
     end
 
-    compilertests = ["compiler/compiler", "compiler/validation", "compiler/ssair", "compiler/irpasses"]
+    compilertests = ["compiler/inference", "compiler/validation", "compiler/ssair", "compiler/irpasses",
+                     "compiler/codegen", "compiler/inline"]
 
     if "compiler" in skip_tests
         filter!(x -> (x != "compiler" && !(x in compilertests)), tests)

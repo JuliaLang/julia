@@ -738,7 +738,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     for (i = jl_svec_len(tvars); i > 0; i--) {
         jl_value_t *tv = jl_svecref(tvars, i - 1);
         if (!jl_is_typevar(tv))
-            jl_type_error_rt("method definition", "type parameter", (jl_value_t*)jl_tvar_type, tv);
+            jl_type_error("method signature", (jl_value_t*)jl_tvar_type, tv);
         argtype = jl_new_struct(jl_unionall_type, tv, argtype);
     }
 

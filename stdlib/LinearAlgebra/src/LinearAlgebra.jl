@@ -392,6 +392,10 @@ If the keyword argument `parallel` is set to `true`, `peakflops` is run in paral
 the worker processors. The flop rate of the entire parallel computer is returned. When
 running in parallel, only 1 BLAS thread is used. The argument `n` still refers to the size
 of the problem that is solved on each processor.
+
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1. In Julia 1.0 it is available from
+    the standard library `InteractiveUtils`.
 """
 function peakflops(n::Integer=2000; parallel::Bool=false)
     a = fill(1.,100,100)
