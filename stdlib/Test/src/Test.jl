@@ -1550,8 +1550,9 @@ Base.keys(a::GenericArray) = keys(a.a)
 Base.axes(a::GenericArray) = axes(a.a)
 Base.length(a::GenericArray) = length(a.a)
 Base.size(a::GenericArray) = size(a.a)
-Base.getindex(a::GenericArray, i...) = a.a[i...]
-Base.setindex!(a::GenericArray, x, i...) = a.a[i...] = x
+Base.IndexStyle(::Type{<:GenericArray}) = IndexLinear()
+Base.getindex(a::GenericArray, i::Int) = a.a[i]
+Base.setindex!(a::GenericArray, x, i::Int) = a.a[i] = x
 
 Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
 
