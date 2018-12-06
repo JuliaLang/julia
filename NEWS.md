@@ -106,6 +106,9 @@ Standard library changes
 
 #### Statistics
   * `mean` and `var` now handles the empty case ([#29033]).
+  
+#### SuiteSparse
+  * Using a non-native index type (e.g. `Int32` on a 64-bit machine) will result in a `MethodError` instead of a `StackOverflowError` for `cholesky` or `ldlt` ([#29462]).
 
 External dependencies
 ---------------------
@@ -155,6 +158,7 @@ Deprecated or removed
 [#29429]: https://github.com/JuliaLang/julia/issues/29429
 [#29440]: https://github.com/JuliaLang/julia/issues/29440
 [#29442]: https://github.com/JuliaLang/julia/issues/29442
+[#29462]: https://github.com/JuliaLang/julia/issues/29462
 [#29469]: https://github.com/JuliaLang/julia/issues/29469
 [#29506]: https://github.com/JuliaLang/julia/issues/29506
 [#29595]: https://github.com/JuliaLang/julia/issues/29595
