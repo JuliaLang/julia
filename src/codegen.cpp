@@ -1625,13 +1625,13 @@ static void visitLine(jl_codectx_t &ctx, std::vector<logdata_block*> &vec, int l
     logdata_block &data = *vec[block];
     if (data[line] == 0)
         data[line] = 1;
-    Value *v = ConstantExpr::getIntToPtr(
+    Value *pv = ConstantExpr::getIntToPtr(
         ConstantInt::get(T_size, (uintptr_t)&data[line]),
         T_pint64);
-    ctx.builder.CreateStore(ctx.builder.CreateAdd(ctx.builder.CreateLoad(v, true, name),
-                                          addend),
-                        v, true); // not atomic, so this might be an underestimate,
-                                  // but it's faster this way
+    Value *v = ctx.builder.CreateLoad(pv, true, name);
+    v = ctx.builder.CreateAdd(v, addend);
+    ctx.builder.CreateStore(v, pv, true); // volatile, not atomic, so this might be an underestimate,
+                                          // but it's faster this way
 }
 
 // Code coverage
@@ -1653,10 +1653,8 @@ static logdata_t mallocData;
 static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
 {
     assert(!imaging_mode);
-    if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0) {
-        jl_gc_sync_total_bytes();
+    if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
-    }
     Value *addend = ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
     visitLine(ctx, mallocData[filename], line, addend, "bytecnt");
 }
@@ -5288,31 +5286,30 @@ static std::unique_ptr<Module> emit_function(
     // step 1b. unpack debug information
     int coverage_mode = jl_options.code_coverage;
     int malloc_log_mode = jl_options.malloc_log;
-    StringRef filename = "<missing>";
+    if (!JL_FEAT_TEST(ctx, code_coverage))
+        coverage_mode = JL_LOG_NONE;
+    if (!JL_FEAT_TEST(ctx, track_allocations))
+        malloc_log_mode = JL_LOG_NONE;
+
+    ctx.file = "<missing>";
     StringRef dbgFuncName = ctx.name;
     int toplineno = -1;
     if (jl_is_method(lam->def.method)) {
         toplineno = lam->def.method->line;
         if (lam->def.method->file != empty_sym)
-            filename = jl_symbol_name(lam->def.method->file);
+            ctx.file = jl_symbol_name(lam->def.method->file);
     }
     else if (jl_array_len(src->linetable) > 0) {
         jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, 0);
-        filename = jl_symbol_name((jl_sym_t*)jl_fieldref_noalloc(locinfo, 2));
+        ctx.file = jl_symbol_name((jl_sym_t*)jl_fieldref_noalloc(locinfo, 2));
         toplineno = jl_unbox_long(jl_fieldref(locinfo, 3));
     }
-    ctx.file = filename;
     // jl_printf(JL_STDERR, "\n*** compiling %s at %s:%d\n\n",
-    //           jl_symbol_name(ctx.name), filename.str().c_str(), toplineno);
+    //           jl_symbol_name(ctx.name), ctx.file.str().c_str(), toplineno);
 
     ctx.debug_enabled = true;
-    if (dbgFuncName.empty()) {
-        // special value: if function name is empty, disable debug info
-        coverage_mode = JL_LOG_NONE;
-        malloc_log_mode = JL_LOG_NONE;
-        //dbgFuncName = filename; // for testing, uncomment this line
-        ctx.debug_enabled = !dbgFuncName.empty();
-    }
+    if (dbgFuncName.empty()) // Should never happen anymore?
+        ctx.debug_enabled = 0;
     if (jl_options.debug_level == 0)
         ctx.debug_enabled = 0;
 
@@ -5481,7 +5478,7 @@ static std::unique_ptr<Module> emit_function(
     DebugLoc noDbg, topdebugloc;
     if (ctx.debug_enabled) {
         // TODO: Fix when moving to new LLVM version
-        topfile = dbuilder.createFile(filename, ".");
+        topfile = dbuilder.createFile(ctx.file, ".");
         DICompileUnit *CU = dbuilder.createCompileUnit(0x01, topfile, "julia", true, "", 0);
         DISubroutineType *subrty;
         if (jl_options.debug_level <= 1) {
@@ -5862,90 +5859,55 @@ static std::unique_ptr<Module> emit_function(
                 !jl_is_submodule(mod, jl_core_module));
     };
     bool mod_is_user_mod = in_user_mod(ctx.module);
-    struct StmtProp {
+    struct DebugLineTable {
         DebugLoc loc;
         StringRef file;
         ssize_t line;
-        bool loc_changed;
-        bool is_poploc;
-        bool in_user_code;
+        bool is_user_code;
+        unsigned inlined_at;
     };
-    std::vector<StmtProp> stmtprops(stmtslen);
-    { // if new style IR
-        std::vector<DebugLoc> linetable;
+    std::vector<DebugLineTable> linetable;
+    {
         size_t nlocs = jl_array_len(src->linetable);
-        if (ctx.debug_enabled) {
-            std::map<std::tuple<StringRef, StringRef>, DISubprogram*> subprograms;
-            linetable.resize(nlocs + 1);
-            linetable[0] = noDbg;
-            for (size_t i = 0; i < nlocs; i++) {
-                // LineInfoNode(mod::Module, method::Symbol, file::Symbol, line::Int, inlined_at::Int)
-                jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, i);
-                int inlined_at, line;
-                jl_sym_t *file;
-                StringRef filename = ctx.file;
-                StringRef fname;
-                assert(jl_typeis(locinfo, jl_lineinfonode_type));
-                {
-                    jl_sym_t *method = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 1);
-                    file = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 2);
-                    line = jl_unbox_long(jl_fieldref(locinfo, 3));
-                    inlined_at = jl_unbox_long(jl_fieldref(locinfo, 4));
-                    assert((size_t)inlined_at <= i);
-                    filename = jl_symbol_name(file);
-                    if (filename.empty())
-                        filename = "<missing>";
-                    fname = jl_symbol_name(method);
-                    if (fname.empty())
-                        fname = "macro expansion";
-                }
-                if (inlined_at == 0 && filename == ctx.file) { // if everything matches, emit a toplevel line number
-                    linetable[i + 1] = DebugLoc::get(line, 0, SP, NULL);
+        std::map<std::tuple<StringRef, StringRef>, DISubprogram*> subprograms;
+        linetable.resize(nlocs + 1);
+        for (size_t i = 0; i < nlocs; i++) {
+            // LineInfoNode(mod::Module, method::Symbol, file::Symbol, line::Int, inlined_at::Int)
+            jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, i);
+            DebugLineTable &info = linetable[i + 1];
+            assert(jl_typeis(locinfo, jl_lineinfonode_type));
+            jl_module_t *module = (jl_module_t*)jl_fieldref_noalloc(locinfo, 0);
+            if (module == ctx.module)
+                info.is_user_code = mod_is_user_mod;
+            else
+                info.is_user_code = in_user_mod(module);
+            jl_sym_t *method = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 1);
+            jl_sym_t *filesym = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 2);
+            info.line = jl_unbox_long(jl_fieldref(locinfo, 3));
+            info.inlined_at = jl_unbox_long(jl_fieldref(locinfo, 4));
+            assert(info.inlined_at <= i);
+            info.file = jl_symbol_name(filesym);
+            if (info.file.empty())
+                info.file = "<missing>";
+            if (ctx.debug_enabled) {
+                StringRef fname = jl_symbol_name(method);
+                if (fname.empty())
+                    fname = "macro expansion";
+                if (info.inlined_at == 0 && info.file == ctx.file) { // if everything matches, emit a toplevel line number
+                    info.loc = DebugLoc::get(info.line, 0, SP, NULL);
                 }
                 else { // otherwise, describe this as an inlining frame
-                    DISubprogram *&inl_SP = subprograms[std::make_tuple(fname, filename)];
+                    DISubprogram *&inl_SP = subprograms[std::make_tuple(fname, info.file)];
                     if (inl_SP == NULL) {
-                        DIFile *difile = dbuilder.createFile(filename, ".");
+                        DIFile *difile = dbuilder.createFile(info.file, ".");
                         inl_SP = dbuilder.createFunction(
                                 difile, std::string(fname) + ";",
                                 fname, difile, 0, jl_di_func_null_sig,
                                 false, true, 0, DIFlagZero, true, nullptr);
                     }
-                    DebugLoc inl_loc = (inlined_at == 0) ? DebugLoc::get(0, 0, SP, NULL) : linetable.at(inlined_at);
-                    linetable[i + 1] = DebugLoc::get(line, 0, inl_SP, inl_loc);
+                    DebugLoc inl_loc = (info.inlined_at == 0) ? DebugLoc::get(0, 0, SP, NULL) : linetable.at(info.inlined_at).loc;
+                    info.loc = DebugLoc::get(info.line, 0, inl_SP, inl_loc);
                 }
-            }
-        }
-        size_t prev_loc = 0;
-        for (i = 0; i < stmtslen; i++) {
-            size_t loc = ((int32_t*)jl_array_data(src->codelocs))[i];
-            StmtProp &cur_prop = stmtprops[i];
-            cur_prop.is_poploc = false;
-            if (loc > 0) {
-                jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, loc - 1);
-                if (ctx.debug_enabled)
-                    cur_prop.loc = linetable.at(loc);
-                else
-                    cur_prop.loc = noDbg;
-                assert(jl_typeis(locinfo, jl_lineinfonode_type));
-                {
-                    jl_module_t *module = (jl_module_t*)jl_fieldref_noalloc(locinfo, 0);
-                    cur_prop.file = jl_symbol_name((jl_sym_t*)jl_fieldref_noalloc(locinfo, 2));
-                    cur_prop.line = jl_unbox_long(jl_fieldref(locinfo, 3));
-                    if (module == ctx.module)
-                        cur_prop.in_user_code = mod_is_user_mod;
-                    else
-                        cur_prop.in_user_code = in_user_mod(module);
-                }
-                cur_prop.loc_changed = (loc != prev_loc); // for code-coverage
-                prev_loc = loc;
-            }
-            else {
-                cur_prop.loc = noDbg;
-                cur_prop.file = "";
-                cur_prop.line = -1;
-                cur_prop.loc_changed = false;
-                cur_prop.in_user_code = false;
             }
         }
     }
@@ -5957,9 +5919,6 @@ static std::unique_ptr<Module> emit_function(
     std::map<int, BasicBlock*> BB;
     std::map<size_t, BasicBlock*> come_from_bb;
     int cursor = 0;
-    // Whether we are doing codegen in statement order.
-    // We need to update debug location if this is false even if
-    // `loc_changed` is false.
     auto find_next_stmt = [&] (int seq_next) {
         // new style ir is always in dominance order, but frontend IR might not be
         // `seq_next` is the next statement we want to emit
@@ -5995,14 +5954,39 @@ static std::unique_ptr<Module> emit_function(
     };
 
     auto do_coverage = [&] (bool in_user_code) {
-        if (!JL_FEAT_TEST(ctx, code_coverage)) return false;
         return (coverage_mode == JL_LOG_ALL ||
                 (coverage_mode == JL_LOG_USER && in_user_code));
     };
     auto do_malloc_log = [&] (bool in_user_code) {
-        if (!JL_FEAT_TEST(ctx, track_allocations)) return false;
         return (malloc_log_mode == JL_LOG_ALL ||
                 (malloc_log_mode == JL_LOG_USER && in_user_code));
+    };
+    std::vector<unsigned> current_lineinfo, new_lineinfo;
+    auto coverageVisitStmt = [&] (size_t dbg) {
+        if (dbg == 0)
+            return;
+        while (dbg) {
+            new_lineinfo.push_back(dbg);
+            dbg = linetable[dbg].inlined_at;
+        }
+        current_lineinfo.resize(new_lineinfo.size(), 0);
+        for (dbg = 0; dbg < new_lineinfo.size(); dbg++) {
+            unsigned newdbg = new_lineinfo[new_lineinfo.size() - dbg - 1];
+            if (newdbg != current_lineinfo[dbg]) {
+                current_lineinfo[dbg] = newdbg;
+                const auto &info = linetable[newdbg];
+                if (do_coverage(info.is_user_code))
+                    coverageVisitLine(ctx, info.file, info.line);
+            }
+        }
+        new_lineinfo.clear();
+    };
+    auto mallocVisitStmt = [&] (unsigned dbg) {
+        if (!do_malloc_log(mod_is_user_mod) || dbg == 0)
+            return;
+        while (linetable[dbg].inlined_at)
+            dbg = linetable[dbg].inlined_at;
+        mallocVisitLine(ctx, ctx.file, linetable[dbg].line);
     };
 
     come_from_bb[0] = ctx.builder.GetInsertBlock();
@@ -6058,19 +6042,20 @@ static std::unique_ptr<Module> emit_function(
         BB[label] = bb;
     }
 
-    if (coverage_mode != JL_LOG_NONE && do_coverage(in_user_mod(ctx.module)))
-        coverageVisitLine(ctx, filename, toplineno);
+    if (do_coverage(mod_is_user_mod))
+        coverageVisitLine(ctx, ctx.file, toplineno);
+    if (do_malloc_log(mod_is_user_mod))
+        mallocVisitLine(ctx, ctx.file, toplineno);
     find_next_stmt(0);
     while (cursor != -1) {
-        auto &props = stmtprops[cursor];
-        if (ctx.debug_enabled)
-            ctx.builder.SetCurrentDebugLocation(props.loc);
+        int32_t debuginfoloc = ((int32_t*)jl_array_data(src->codelocs))[cursor];
+        if (debuginfoloc > 0) {
+            if (ctx.debug_enabled)
+                ctx.builder.SetCurrentDebugLocation(linetable[debuginfoloc].loc);
+            coverageVisitStmt(debuginfoloc);
+        }
         jl_value_t *stmt = jl_array_ptr_ref(stmts, cursor);
         jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
-        // Legacy IR: disables coverage for pop_loc since it doesn't start a new expression
-        if (props.loc_changed && do_coverage(props.in_user_code) && !props.is_poploc) {
-            coverageVisitLine(ctx, props.file, props.line);
-        }
         if (expr && expr->head == unreachable_sym) {
             ctx.builder.CreateUnreachable();
             find_next_stmt(-1);
@@ -6162,8 +6147,7 @@ static std::unique_ptr<Module> emit_function(
                 }
             }
 
-            if (do_malloc_log(props.in_user_code) && props.line != -1)
-                mallocVisitLine(ctx, props.file, props.line);
+            mallocVisitStmt(debuginfoloc);
             if (toplevel)
                 ctx.builder.CreateStore(last_age, ctx.world_age_field);
             assert(type_is_ghost(retty) || returninfo.cc == jl_returninfo_t::SRet ||
@@ -6205,8 +6189,7 @@ static std::unique_ptr<Module> emit_function(
             jl_value_t *cond = args[0];
             int lname = jl_unbox_long(args[1]);
             Value *isfalse = emit_condition(ctx, cond, "if");
-            if (do_malloc_log(props.in_user_code) && props.line != -1)
-                mallocVisitLine(ctx, props.file, props.line);
+            mallocVisitStmt(debuginfoloc);
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
             workstack.push_back(lname - 1);
             BasicBlock *ifnot = BB[lname];
@@ -6244,9 +6227,7 @@ static std::unique_ptr<Module> emit_function(
         }
         else {
             emit_stmtpos(ctx, stmt, cursor);
-            if (do_malloc_log(props.in_user_code) && props.line != -1) {
-                mallocVisitLine(ctx, props.file, props.line);
-            }
+            mallocVisitStmt(debuginfoloc);
         }
         find_next_stmt(cursor + 1);
     }
@@ -6975,15 +6956,14 @@ static void init_julia_llvm_env(Module *m)
 
     std::vector<Type*> te_args(0);
     te_args.push_back(T_pint8);
-    te_args.push_back(T_pint8);
     te_args.push_back(T_prjlvalue);
     te_args.push_back(PointerType::get(T_jlvalue, AddressSpace::CalleeRooted));
     jltypeerror_func =
         Function::Create(FunctionType::get(T_void, te_args, false),
                          Function::ExternalLinkage,
-                         "jl_type_error_rt", m);
+                         "jl_type_error", m);
     jltypeerror_func->setDoesNotReturn();
-    add_named_global(jltypeerror_func, &jl_type_error_rt);
+    add_named_global(jltypeerror_func, &jl_type_error);
 
     std::vector<Type *> args_2ptrs(0);
     args_2ptrs.push_back(T_pjlvalue);

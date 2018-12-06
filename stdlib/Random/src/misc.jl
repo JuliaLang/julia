@@ -262,6 +262,10 @@ of `n`.
 To randomly permute an arbitrary vector, see [`shuffle`](@ref) or
 [`shuffle!`](@ref).
 
+!!! compat "Julia 1.1"
+    In Julia 1.1 `randperm` returns a vector `v` with `eltype(v) == typeof(n)`
+    while in Julia 1.0 `eltype(v) == Int`.
+
 # Examples
 ```jldoctest
 julia> randperm(MersenneTwister(1234), 4)
@@ -321,6 +325,10 @@ randperm!(a::Array{<:Integer}) = randperm!(GLOBAL_RNG, a)
 Construct a random cyclic permutation of length `n`. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
 The element type of the result is the same as the type of `n`.
+
+!!! compat "Julia 1.1"
+    In Julia 1.1 `randcycle` returns a vector `v` with `eltype(v) == typeof(n)`
+    while in Julia 1.0 `eltype(v) == Int`.
 
 # Examples
 ```jldoctest

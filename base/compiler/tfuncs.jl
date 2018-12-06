@@ -226,8 +226,8 @@ end
 add_tfunc(ifelse, 3, 3, ifelse_tfunc, 1)
 
 function egal_tfunc(@nospecialize(x), @nospecialize(y))
-    xx = maybe_widen_conditional(x)
-    yy = maybe_widen_conditional(y)
+    xx = widenconditional(x)
+    yy = widenconditional(y)
     if isa(x, Conditional) && isa(yy, Const)
         yy.val === false && return Conditional(x.var, x.elsetype, x.vtype)
         yy.val === true && return x
@@ -900,7 +900,7 @@ function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
     u = headtype
     for i = 2:length(argtypes)
         isa(u, UnionAll) || return false
-        ai = maybe_widen_conditional(argtypes[i])
+        ai = widenconditional(argtypes[i])
         if ai === TypeVar
             # We don't know anything about the bounds of this typevar, but as
             # long as the UnionAll is not constrained, that's ok.
@@ -981,7 +981,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
     tparams = Any[]
     outervars = Any[]
     for i = 1:largs
-        ai = maybe_widen_conditional(args[i])
+        ai = widenconditional(args[i])
         if isType(ai)
             aip1 = ai.parameters[1]
             canconst &= !has_free_typevars(aip1)
@@ -1069,7 +1069,7 @@ end
 # convert the dispatch tuple type argtype to the real (concrete) type of
 # the tuple of those values
 function tuple_tfunc(atypes::Vector{Any})
-    atypes = anymap(maybe_widen_conditional, atypes)
+    atypes = anymap(widenconditional, atypes)
     all_are_const = true
     for i in 1:length(atypes)
         if !isa(atypes[i], Const)
@@ -1117,7 +1117,7 @@ function array_type_undefable(@nospecialize(a))
         return true
     else
         etype = (a::DataType).parameters[1]
-        return !(isbitstype(etype) || isbitsunion(etype))
+        return !(etype isa Type && (isbitstype(etype) || isbitsunion(etype)))
     end
 end
 

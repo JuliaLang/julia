@@ -289,8 +289,10 @@ Pick a random element or array of random elements from the set of values specifi
   integers (this is not applicable to [`BigInt`](@ref)), and to ``[0, 1)`` for floating
   point numbers;
 
-`S` defaults to [`Float64`](@ref)
-(except when `dims` is a tuple of integers, in which case `S` must be specified).
+`S` defaults to [`Float64`](@ref).
+
+!!! compat "Julia 1.1"
+    Support for `S` as a tuple requires at least Julia 1.1.
 
 # Examples
 ```julia-repl

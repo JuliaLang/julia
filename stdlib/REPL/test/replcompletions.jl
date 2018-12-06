@@ -105,6 +105,8 @@ end
 let s = "using REP"
     c, r = test_complete(s)
     @test count(isequal("REPL"), c) == 1
+    # issue #30234
+    @test !Base.isbindingresolved(Main, :tanh)
 end
 
 let s = "Comp"

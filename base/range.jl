@@ -60,6 +60,9 @@ automatically such that the elements are `step` spaced (a [`StepRange`](@ref)).
 
 `stop` may be specified as either a positional or keyword argument.
 
+!!! compat "Julia 1.1"
+    `stop` as a positional argument requires at least Julia 1.1.
+
 # Examples
 ```jldoctest
 julia> range(1, length=100)
