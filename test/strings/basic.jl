@@ -954,8 +954,9 @@ end
 
 # custom unicode normalize function
 let d = Dict{Cint, Cint}(Cint('a')=>Cint('\u6666'))
-    function mycustom(uc, d)::Cint
+    function mycustom(uc)::Cint
+        @show d
         get(d, uc, Cint('\u2721'))
     end
-    @test Unicode.normalize("abcd",:NFKC, mycustom, d) == "\u6666\u2721\u2721\u2721"
+    @test Unicode.normalize("abcd",:NFKC, mycustom) == "\u6666\u2721\u2721\u2721"
 end

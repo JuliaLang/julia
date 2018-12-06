@@ -51,20 +51,19 @@ julia> Unicode.normalize("JúLiA", stripmark=true)
 "JuLiA"
 ```
 
-You can also passing a `custom_func` and `custom_data` to the `normalize` to do custom normalization
-by calling `Unicode.normalize(s::AbstractString, nf::Symbol, custom_func, custom_data)` or
+You can also passing a `custom_func` to the `normalize` to do custom normalization
+by calling `Unicode.normalize(s::AbstractString, nf::Symbol, custom_func)` or
 `Unicode.normalize(s::AbstractString, custom_func, custom_data)`
-where custom function should be in `custom_func(codepoint, custom_data)::Cint` and return a new
-codepoint. `custom_data` can be Any Julia type.
+where custom function should be in `custom_func(codepoint)::Cint` and return a new codepoint.
 
 """
 function normalize end
 normalize(s::AbstractString, nf::Symbol) = Base.Unicode.normalize(s, nf)
 normalize(s::AbstractString; kwargs...) = Base.Unicode.normalize(s; kwargs...)
-normalize(s::AbstractString, nf::Symbol, custom_func, custom_data) =
-    Base.Unicode.normalize(s, nf, custom_func, custom_data)
-normalize(s::AbstractString, custom_func, custom_data; kwargs...) =
-    Base.Unicode.normalize(s, custom_func, custom_data; kwargs...)
+normalize(s::AbstractString, nf::Symbol, custom_func) =
+    Base.Unicode.normalize(s, nf, custom_func)
+normalize(s::AbstractString, custom_func; kwargs...) =
+    Base.Unicode.normalize(s, custom_func; kwargs...)
 
 
 

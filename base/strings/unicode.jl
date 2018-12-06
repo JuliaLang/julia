@@ -139,7 +139,7 @@ function utf8proc_map(str::String, options::Integer)
     nwords = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
                    str, sizeof(str), C_NULL, 0, options)
     nwords < 0 && utf8proc_error(nwords)
-    buffer = Base.StringVector(nwords*sizeof(Cint))
+    buffer = Base.StringVector(nwords*sizeof(Int32))
     nwords = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
                    str, sizeof(str), buffer, nwords, options)
     nwords < 0 && utf8proc_error(nwords)
@@ -151,24 +151,19 @@ end
 utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(String(s), flags)
 
 
-function utf8proc_map(str::String, options::Integer, custom_func, custom_data)
-    is_immutable = isimmutable(custom_data)
-    func(uc, d)= custom_func(uc,
-                             let obj = unsafe_pointer_to_objref(d)
-                             is_immutable ? obj[1] : obj
-                             end)
-    ccustom_func = @cfunction($func, Cint, (Cint, Ptr{Cvoid}))
-    data_ref = is_immutable ? [custom_data] : custom_data
-    data_ptr = pointer_from_objref(data_ref)
+custom_func_wrapper(codepoint::Int32, custom_func::Any) = Int32(custom_func(codepoint))
+
+function utf8proc_map(str::String, options::Integer, custom_func)
+    ccustom_func = @cfunction(custom_func_wrapper, Int32, (Int32, Any))
 
     nwords = ccall(:utf8proc_decompose_custom, Int,
-                   (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Ptr{Cvoid}),
-                   str, sizeof(str), C_NULL, 0, options, ccustom_func, data_ptr)
+                   (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Any),
+                   str, sizeof(str), C_NULL, 0, options, ccustom_func, custom_func)
     nwords < 0 && utf8proc_error(nwords)
-    buffer = Base.StringVector(nwords*sizeof(Cint))
+    buffer = Base.StringVector(nwords*sizeof(Int32))
     nwords = ccall(:utf8proc_decompose_custom, Int,
-                   (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Ptr{Cvoid}),
-                   str, sizeof(str), buffer, nwords, options, ccustom_func, data_ptr)
+                   (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Any),
+                   str, sizeof(str), buffer, nwords, options, ccustom_func, custom_func)
     nwords < 0 && utf8proc_error(nwords)
     nbytes = ccall(:utf8proc_reencode, Int, (Ptr{UInt8}, Int, Cint), buffer, nwords, options)
     nbytes < 0 && utf8proc_error(nbytes)
@@ -260,8 +255,7 @@ normalize(s::AbstractString, nf::Symbol) = utf8proc_map(s, _compute_options(nf))
 
 function normalize(
     s::AbstractString,
-    custom_func,
-    custom_data;
+    custom_func;
     stable::Bool=false,
     compat::Bool=false,
     compose::Bool=true,
@@ -291,11 +285,11 @@ function normalize(
         lump,
         stripmark,
     )
-    utf8proc_map(s, flags, custom_func, custom_data)
+    utf8proc_map(s, flags, custom_func)
 end
 
-normalize(s::AbstractString, nf::Symbol, custom_func, custom_data) =
-    utf8proc_map(s, _compute_options(nf), custom_func, custom_data)
+normalize(s::AbstractString, nf::Symbol, custom_func) =
+    utf8proc_map(s, _compute_options(nf), custom_func)
 
 ############################################################################
 
