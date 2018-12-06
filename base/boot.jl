@@ -258,7 +258,7 @@ struct DomainError <: Exception
 end
 struct TypeError <: Exception
     func::Symbol
-    context::AbstractString
+    context::Union{AbstractString,Symbol}
     expected::Type
     got
 end
