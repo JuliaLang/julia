@@ -533,7 +533,6 @@ function Base.show(io::IO, dt::DateTime)
     if get(io, :compact, false)
         print(io, dt)
     else
-        print(io, "DateTime($y, $m, $d, $h, $mi, $s, $ms)")
         y,m,d = yearmonthday(dt)
         h = hour(dt)
         mi = minute(dt)
