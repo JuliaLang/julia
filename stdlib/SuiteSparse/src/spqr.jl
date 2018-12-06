@@ -394,7 +394,7 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
     X[rnk + 1:end, :] .= 0
 
     # Solve R*X = B
-    LinearAlgebra.ldiv!(UpperTriangular(view(F.R, Base.OneTo(rnk), Base.OneTo(rnk))),
+    LinearAlgebra.ldiv!(UpperTriangular(F.R[Base.OneTo(rnk), Base.OneTo(rnk)]),
                         view(X0, Base.OneTo(rnk), :))
 
     # Apply right permutation and extract solution from X
