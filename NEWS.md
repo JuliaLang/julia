@@ -63,6 +63,8 @@ Standard library changes
   * `randperm` and `randcycle` now use the type of their argument to determine the element type of
     the returned array ([#29670]).
   * A new method `rand(::Tuple)` implements sampling from the values of a tuple ([#25278]).
+  * `get(A::AbstractArray, (), default)` now returns the result of `A[]` if it can instead of always
+    returning an empty array.
 
 Compiler/Runtime improvements
 -----------------------------
