@@ -1051,11 +1051,9 @@ static void null_pointer_check(jl_codectx_t &ctx, Value *v)
 
 static void emit_type_error(jl_codectx_t &ctx, const jl_cgval_t &x, Value *type, const std::string &msg)
 {
-    Value *fname_val = stringConstPtr(ctx.builder, ctx.funcName);
     Value *msg_val = stringConstPtr(ctx.builder, msg);
     ctx.builder.CreateCall(prepare_call(jltypeerror_func),
-                       { fname_val, msg_val,
-                         maybe_decay_untracked(type), mark_callee_rooted(boxed(ctx, x))});
+                       { msg_val, maybe_decay_untracked(type), mark_callee_rooted(boxed(ctx, x))});
 }
 
 static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *type, const std::string *msg)

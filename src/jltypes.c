@@ -471,7 +471,7 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
     for(i=0; i < n; i++) {
         jl_value_t *pi = ts[i];
         if (!(jl_is_type(pi) || jl_is_typevar(pi)) || jl_is_vararg_type(pi))
-            jl_type_error_rt("Union", "parameter", (jl_value_t*)jl_type_type, pi);
+            jl_type_error("Union", (jl_value_t*)jl_type_type, pi);
     }
     if (n == 1) return ts[0];
 
@@ -518,7 +518,7 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
 JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
 {
     if (!jl_is_type(body) && !jl_is_typevar(body))
-        jl_type_error_rt("UnionAll", "", (jl_value_t*)jl_type_type, body);
+        jl_type_error("UnionAll", (jl_value_t*)jl_type_type, body);
     // normalize `T where T<:S` => S
     if (body == (jl_value_t*)v)
         return v->ub;
@@ -1106,7 +1106,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     if (!istuple) {
         if (jl_is_vararg_type((jl_value_t*)dt) && ntp == 2) {
             if (!jl_is_long(iparams[1]) && !jl_is_typevar(iparams[1])) {
-                jl_type_error_rt("apply_type", "Vararg count", (jl_value_t*)jl_long_type, iparams[1]);
+                jl_type_error_rt("Vararg", "count", (jl_value_t*)jl_long_type, iparams[1]);
             }
         }
         // check parameters against bounds in type definition
