@@ -78,7 +78,7 @@ julia> iA = [4 3; 6 3]
  6  3
 
 julia> lu!(iA)
-ERROR: InexactError: Int64(Int64, 0.6666666666666666)
+ERROR: InexactError: Int64(0.6666666666666666)
 Stacktrace:
 [...]
 ```

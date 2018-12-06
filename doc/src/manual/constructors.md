@@ -300,7 +300,7 @@ julia> Point{Int64}(1, 2) ## explicit T ##
 Point{Int64}(1, 2)
 
 julia> Point{Int64}(1.0,2.5) ## explicit T ##
-ERROR: InexactError: Int64(Int64, 2.5)
+ERROR: InexactError: Int64(2.5)
 Stacktrace:
 [...]
 

@@ -264,10 +264,12 @@ struct TypeError <: Exception
 end
 struct InexactError <: Exception
     func::Symbol
-    T  # Type
     val
-    InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@_noinline_meta; new(f, T, val))
+    T # optional type
+    InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@_noinline_meta; new(f, val, T))
+    InexactError(f::Symbol, @nospecialize(val)) = (@_noinline_meta; new(f, val))
 end
+
 struct OverflowError <: Exception
     msg::AbstractString
 end

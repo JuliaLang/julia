@@ -171,7 +171,7 @@ julia> A = [1 2; 2 50]
  2  50
 
 julia> cholesky!(A)
-ERROR: InexactError: Int64(Int64, 6.782329983125268)
+ERROR: InexactError: Int64(6.782329983125268)
 Stacktrace:
 [...]
 ```

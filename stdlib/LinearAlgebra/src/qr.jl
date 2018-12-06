@@ -277,7 +277,7 @@ julia> a = [1 2; 3 4]
  3  4
 
 julia> qr!(a)
-ERROR: InexactError: Int64(Int64, -3.1622776601683795)
+ERROR: InexactError: Int64(-3.1622776601683795)
 Stacktrace:
 [...]
 ```
