@@ -22,6 +22,22 @@ export File,
        # open,
        futime,
        write,
+       abspath,
+       basename,
+       dirname,
+       expanduser,
+       contractuser,
+       homedir,
+       isabspath,
+       isdirpath,
+       joinpath,
+       normpath,
+       realpath,
+       relpath,
+       splitdir,
+       splitdrive,
+       splitext,
+       splitpath,
        JL_O_WRONLY,
        JL_O_RDONLY,
        JL_O_RDWR,
@@ -48,7 +64,22 @@ if Sys.iswindows()
     import .Base: cwstring
 end
 
-include("path.jl")
+module Windows
+    using ..Filesystem
+    const __WINDOWS__ = true
+    include("path.jl")
+end
+module UNIX
+    using ..Filesystem
+    const __WINDOWS__ = false
+    include("path.jl")
+end
+if Sys.iswindows()
+    using .Windows
+else
+    using .UNIX
+end
+
 include("stat.jl")
 include("file.jl")
 include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)

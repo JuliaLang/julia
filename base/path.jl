@@ -18,7 +18,7 @@ export
     splitext,
     splitpath
 
-if Sys.isunix()
+if !__WINDOWS__
     const path_separator    = "/"
     const path_separator_re = r"/+"
     const path_directory_re = r"(?:^|/)\.{0,2}$"
@@ -26,7 +26,7 @@ if Sys.isunix()
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
     splitdrive(path::String) = ("",path)
-elseif Sys.iswindows()
+else
     const path_separator    = "\\"
     const path_separator_re = r"[/\\]+"
     const path_absolute_re  = r"^(?:[A-Za-z]+:)?[/\\]"
@@ -38,8 +38,6 @@ elseif Sys.iswindows()
         m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$", path)
         String(m.captures[1]), String(m.captures[2])
     end
-else
-    error("path primitives for this OS need to be defined")
 end
 
 
@@ -64,7 +62,7 @@ Return the current user's home directory.
 function homedir()
     path_max = 1024
     buf = Vector{UInt8}(undef, path_max)
-    sz = RefValue{Csize_t}(path_max + 1)
+    sz = Ref{Csize_t}(path_max + 1)
     while true
         rc = ccall(:uv_os_homedir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
         if rc == 0
@@ -79,7 +77,7 @@ function homedir()
 end
 
 
-if Sys.iswindows()
+if __WINDOWS__
     isabspath(path::String) = occursin(path_absolute_re, path)
 else
     isabspath(path::String) = startswith(path, '/')
@@ -360,7 +358,6 @@ function longpath(path::AbstractString)
         x && return transcode(String, buf)
     end
 end
-
 else # !windows
 function realpath(path::AbstractString)
     p = ccall(:realpath, Ptr{UInt8}, (Cstring, Ptr{UInt8}), path, C_NULL)
@@ -380,11 +377,11 @@ Canonicalize a path by expanding symbolic links and removing "." and ".." entrie
 realpath(path::AbstractString)
 
 
-if Sys.iswindows()
+if __WINDOWS__
 # on windows, ~ means "temporary file"
 expanduser(path::AbstractString) = path
 contractuser(path::AbstractString) = path
-else
+else # !windows
 function expanduser(path::AbstractString)
     y = iterate(path)
     y === nothing && return path
@@ -405,7 +402,7 @@ function contractuser(path::AbstractString)
         return path
     end
 end
-end
+end # os-test
 
 
 """
