@@ -610,56 +610,66 @@ julia> hypot(3, 4im)
 5.0
 ```
 """
-hypot(x::Number, y::Number) = hypot(promote(x, y)...)
-hypot(x::Complex, y::Complex) = hypot(abs(x), abs(y))
-hypot(x::T, y::T) where {T<:Real} = hypot(float(x), float(y))
-hypot(x::T, y::T) where {T<:Number} = (z = y/x; abs(x) * sqrt(one(z) + z*z))
-function hypot(x::T, y::T) where T<:AbstractFloat
-    #Return Inf if either or both imputs is Inf (Compliance with IEEE754)
-    if isinf(x) || isinf(y)
-        return T(Inf)
+hypot(x::Number) = abs(float(x))
+hypot(x::Number, xs::Number...) = hypot(promote(x, xs...)...)
+function hypot(x::T, y::T) where T<:Number
+	# preserves unit
+	axu = abs(float(x))
+	ayu = abs(float(y))
+
+	# unitless
+	ax = axu / oneunit(axu)
+	ay = ayu / oneunit(ayu)
+
+
+    #ax = abs(float(x / oneunit(x)))
+    #ay = abs(float(y / oneunit(y)))
+
+    # Return Inf if either or both imputs is Inf (Compliance with IEEE754)
+    if isinf(ax) || isinf(ay)
+    	return oftype(axu, Inf)
     end
 
     # Order the operands
-    ax,ay = abs(x), abs(y)
     if ay > ax
-        ax,ay = ay,ax
+    	axu, ayu = ayu, axu
+        ax, ay = ay, ax
     end
 
     # Widely varying operands
-    if ay <= ax*sqrt(eps(T)/2)  #Note: This also gets ay == 0
-        return ax
+    if ay ≤ ax * sqrt(eps(typeof(ax)) / 2)  # Note: This also gets ay == 0
+        return axu
     end
 
     # Operands do not vary widely
-    scale = eps(sqrt(floatmin(T)))  #Rescaling constant
-    if ax > sqrt(floatmax(T)/2)
-        ax = ax*scale
-        ay = ay*scale
+    scale = eps(sqrt(floatmin(ax)))  # rescaling constant
+    if ax > sqrt(floatmax(ax) / 2)
+        ax = ax * scale
+        ay = ay * scale
         scale = inv(scale)
-    elseif ay < sqrt(floatmin(T))
-        ax = ax/scale
-        ay = ay/scale
+    elseif ay < sqrt(floatmin(ax))
+        ax = ax / scale
+        ay = ay / scale
     else
-        scale = one(scale)
+        scale = oneunit(scale)
     end
-    h = sqrt(muladd(ax,ax,ay*ay))
-    # This branch is correctly rounded but requires a native hardware fma.
-    if Base.Math.FMA_NATIVE
-        hsquared = h*h
-        axsquared = ax*ax
-        h -= (fma(-ay,ay,hsquared-axsquared) + fma(h,h,-hsquared) - fma(ax,ax,-axsquared))/(2*h)
-    # This branch is within one ulp of correctly rounded.
-    else
-        if h <= 2*ay
-            delta = h-ay
-            h -= muladd(delta,delta-2*(ax-ay),ax*(2*delta - ax))/(2*h)
+
+    h = sqrt(muladd(ax, ax, ay * ay))
+
+    if Base.Math.FMA_NATIVE # This branch is correctly rounded but requires a native hardware fma.
+        hsquared = h * h
+        axsquared = ax * ax
+        h -= (fma(-ay, ay, hsquared - axsquared) + fma(h, h, -hsquared) - fma(ax, ax, -axsquared))/(2*h)
+    else # This branch is within one ulp of correctly rounded.
+        if h ≤ 2ay
+            delta = h - ay
+            h -= muladd(delta, delta - 2 * (ax - ay), ax * (2delta - ax)) / (2h)
         else
             delta = h-ax
-            h -= muladd(delta,delta,muladd(ay,(4*delta-ay),2*delta*(ax-2*ay)))/(2*h)
+            h -= muladd(delta, delta, muladd(ay, (4delta - ay), 2delta * (ax - 2ay))) / (2h)
         end
     end
-    return h*scale
+    return h * scale * oneunit(axu)
 end
 
 """
@@ -676,7 +686,28 @@ julia> hypot(3, 4im, 12.0)
 13.0
 ```
 """
-hypot(x::Number...) = sqrt(sum(abs2(y) for y in x))
+function hypot(x1::T, x2::T, x3::T, xs::T...) where {T<:Number}
+    v = float.((x1, x2, x3, xs...))
+    # speculatively try fast naive approach
+    s = sum(abs2, v)
+    if isnan(s)
+        return any(isinf, v) ? oftype(sqrt(s), Inf) : sqrt(s) # IEEE 754
+    elseif isinf(s) || s ≤ oneunit(s) * _floatmin(one(s)) * (length(v) - 1)
+        # if overflow/underflow, try normalization
+        ma = maximum(abs, v)
+	    if iszero(ma) || isinf(ma)
+	        return ma
+	    else
+	        return ma * sqrt(sum(y -> abs2(y / ma), v))
+	    end
+    else
+        return sqrt(s)
+    end
+end
+
+_floatmin(x::AbstractFloat) = _floatmin(typeof(x))
+_floatmin(::Type{T}) where {T<:AbstractFloat} = nextfloat(zero(T)) / eps(T)
+_floatmin(::Type{T}) where {T<:IEEEFloat} = floatmin(T)
 
 atan(y::Real, x::Real) = atan(promote(float(y),float(x))...)
 atan(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan", T)
