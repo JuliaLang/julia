@@ -622,9 +622,7 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 else ifeq ($(ARCH),x86_64)
 	cd $(JULIAHOME)/dist-extras && \
 	$(JLDOWNLOAD) 7z1805-x64.msi http://downloads.sourceforge.net/sevenzip/7z1805-x64.msi && \
-	7z x -y 7z1805-x64.msi _7z.exe _7z.dll && \
-	mv _7z.dll 7z.dll && \
-	mv _7z.exe 7z.exe && \
+	7z x -y 7z1805-x64.msi 7z.exe 7z.dll && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_Leap_42.2 \
 		"mingw64-libexpat1 mingw64-zlib1" && \
 	cp usr/x86_64-w64-mingw32/sys-root/mingw/bin/*.dll .
