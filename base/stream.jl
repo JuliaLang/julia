@@ -261,7 +261,9 @@ and take ownership of the fd handle.
 Call `open(Libc.dup(fd))` to avoid the ownership capture
 of the original handle.
 
-WARNING: do not call this on a handle that's already owned by
+!!! warn
+    Do not call this on a handle that's already owned by some
+    other part of the system.
 some other part of the system.
 """
 function open(h::OS_HANDLE)
