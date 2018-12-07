@@ -6,36 +6,36 @@ import Base.shell_split
 using Base: find_source_file
 
 struct EditorEntry{P,Fn}
-  pattern::P
-  fn::Fn
-  background::Bool
-  takesline::Bool
-  priority::Float64
+    pattern::P
+    fn::Fn
+    wait::Bool
+    takesline::Bool
+    priority::Float64
 end
-const editors = Vector{EditorEntry}(undef,0)
+const editors = Vector{EditorEntry}(undef, 0)
 
 struct EditorCommand{C,E}
     parsed_command::C
     entry::E
 end
-function parse_command(entry::EditorEntry,command,path,line)
+function parse_command(entry::EditorEntry, command, path, line)
     if entry.takesline
-        cmd = entry.fn(command,path,line)
+        cmd = entry.fn(command, path, line)
         if !(cmd isa Nothing)
-            return EditorCommand(cmd,entry), true
+            return EditorCommand(cmd, entry), true
         end
     end
 
-    cmd = entry.fn(command,path)
+    cmd = entry.fn(command, path)
     if !(cmd isa Nothing)
-        return EditorCommand(cmd,entry), false
+        return EditorCommand(cmd, entry), false
     end
 
     nothing, false
 end
 
 function Base.run(x::EditorCommand{Cmd})
-    if x.entry.background
+    if !x.entry.wait
         run(pipeline(x.parsed_command, stderr=stderr), wait=false)
     else
         run(x.parsed_command)
@@ -44,7 +44,7 @@ end
 Base.run(x::EditorCommand{Function}) = x.parsed_command()
 
 """
-    define_editor(fn,pattern;background=true,priority=0)
+    define_editor(fn, pattern;wait=false, priority=0)
 
 Define a new editor matching `pattern` that can be used to open a file
 (possibly at a given line number) using `fn`.
@@ -64,23 +64,26 @@ file, a function (taking 0 arguments) that will open the file directly
 to indicate that this editor is not appropriate for the current environment
 and another editor should be attempted.
 
-The `pattern` argument is string, regular expression, or an array of strings and
-regular expressions. For the `fn` to be called one of the patterns must match
-the value of `EDITOR`, `VISUAL` or `JULIA_EDITOR`.  For strings, only whole
-words can match (i.e. "vi" doesn't match "vim -g" but will match "/usr/bin/vi
--m").
+The `pattern` argument is a string, regular expression, or an array of strings
+and regular expressions. For the `fn` to be called one of the patterns must
+match the value of `EDITOR`, `VISUAL` or `JULIA_EDITOR`.  For strings, only
+whole words can match (i.e. "vi" doesn't match "vim -g" but will match
+"/usr/bin/vi -m").
 
-If multiple defined editors match, the one with the highest priority is selected,
-and if there is a tie in priority, the first editor added will be used.
+If multiple defined editors match, the one with the highest priority is
+selected, and if there is a tie in priority, the first editor added will be
+used.
 
-By default the editor is opened in the background, but terminal-based editors
-will want to set `background=false`.
+By default julia does not wait for the editor to close, running it in the
+background. However, if the editor is terminal based, you will probably want to
+set `wait=true` and julia will wait for the editor to close before resuming.
 
 If no editor entry can be found, then a file is opened by running
 `\$command \$path`.
 
 Note that a number of default editors (all priority 0) are already defined. All
 of the following commands should already work:
+
 - emacs
 - vim
 - nvim
@@ -91,23 +94,24 @@ of the following commands should already work:
 - subl
 - atom
 - notepad++
-- VSCode
+- Visual Studio Code
 - open
 
 # Example:
 The following defines the usage of terminal-based `emacs`:
 
     define_editor(r"\bemacs\b.*(-nw|--no-window-system)",
-                  background=false) do cmd,path,line
+                  wait=true) do cmd, path, line
         `\$cmd +\$line \$path`
     end
 """
 
-function define_editor(fn,pattern;background=true,priority=0)
-    nargs = map(x -> x.nargs - 1,methods(fn).ms)
+function define_editor(fn, pattern; wait=false, priority=0)
+    nargs = map(x -> x.nargs - 1, methods(fn).ms)
     has3args = 3 ∈ nargs
     has2args = 2 ∈ nargs
-    push!(editors,EditorEntry(pattern,fn,background,has3args,Float64(priority)))
+    entry = EditorEntry(pattern, fn, wait, has3args, Float64(priority))
+    push!(editors, entry)
 
     if !(has3args || has2args)
         error("Editor function must take 2 or 3 arguments")
@@ -116,37 +120,37 @@ end
 
 function define_default_editors()
     define_editor(["vim","vi","nvim","mvim","nano"],
-                  background=false) do cmd,path,line
+                  wait=true) do cmd, path, line
         `$cmd +$line $path`
     end
     define_editor(r"\bemacs\b.*(-nw|--no-window-system)",
-                  background=false) do cmd,path,line
+                  wait=true) do cmd, path, line
         `$cmd +$line $path`
     end
     define_editor(r"\bemacsclient\b.*(-nw|-t|-tty)",
-                  background=true) do cmd,path,line
+                  wait=true) do cmd, path, line
         `$cmd +$line $path`
     end
-    define_editor([r"\bemacs","gedit",r"\bgvim"]) do cmd,path,line
+    define_editor([r"\bemacs","gedit",r"\bgvim"]) do cmd, path, line
         `$cmd +$line $path`
     end
-    define_editor(["textmate","mate","kate"]) do cmd,path,line
+    define_editor(["textmate","mate","kate"]) do cmd, path, line
         `$cmd $path -l $line`
     end
-    define_editor([r"\bsubl",r"\batom"]) do cmd,path,line
+    define_editor([r"\bsubl",r"\batom"]) do cmd, path, line
         `$cmd $path:$line`
     end
-    define_editor("code") do cmd,path,line
+    define_editor("code") do cmd, path, line
         `$cmd -g $path:$line`
     end
-    define_editor(r"\bnotepad++") do cmd,paht,line
+    define_editor(r"\bnotepad++") do cmd, paht,line
         `$cmd $path -n$line`
     end
     if Sys.iswindows()
-        define_editor(r"\bCODE\.EXE\b"i) do cmd,path,line
+        define_editor(r"\bCODE\.EXE\b"i) do cmd, path, line
             `$cmd -g $path:$line`
         end
-        define_editor("open") do cmd,path,line
+        define_editor("open") do cmd, path, line
             function()
                 @static if Sys.iswindows() # don't emit this ccall on other platforms
                     result = ccall((:ShellExecuteW, "shell32"), stdcall,
@@ -158,7 +162,7 @@ function define_default_editors()
             end
         end
     elseif Sys.isapple()
-        define_editor("open") do cmd,path
+        define_editor("open") do cmd, path
             `open -t $path`
         end
     end
@@ -180,24 +184,25 @@ function editor()
         default_editor = "emacs"
     end
     # Note: the editor path can include spaces (if escaped) and flags.
-    args = shell_split(get(ENV,"JULIA_EDITOR", get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor))))
+    args = shell_split(get(ENV, "JULIA_EDITOR",
+                           get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor))))
     isempty(args) && error("editor is empty")
     return args
 end
 
-editormatches(pattern::String,command) =
-    occursin(Regex("\\b"*pattern*"\\b"),command)
-editormatches(pattern::Regex,command) =
-    occursin(pattern,command)
-editormatches(pattern::AbstractArray,command) =
-    any(x -> editormatches(x,command),pattern)
+editormatches(pattern::String, command) =
+    occursin(Regex("\\b"*pattern*"\\b"), command)
+editormatches(pattern::Regex, command) =
+    occursin(pattern, command)
+editormatches(pattern::AbstractArray, command) =
+    any(x -> editormatches(x, command), pattern)
 function findeditors(command)
-    command_str = join(command," ")
-    matches = (-Inf,EditorEntry[])
+    command_str = join(command, " ")
+    matches = (-Inf, EditorEntry[])
     for entry in editors
-        if editormatches(entry.pattern,command_str)
+        if editormatches(entry.pattern, command_str)
             if matches[1] < entry.priority
-                matches = (entry.priority,EditorEntry[entry])
+                matches = (entry.priority, EditorEntry[entry])
             elseif matches[1] == entry.priority
                 matches = (matches[1],push!(matches[2],entry))
             end
@@ -212,6 +217,8 @@ end
 Edit a file or directory optionally providing a line number to edit the file at.
 Return to the `julia` prompt when you quit the editor. The editor can be changed
 by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
+To ensure that the file can be opened at the given line, you may need to
+call `define_editor` first.
 """
 function edit(path::AbstractString, line::Integer=0)
     !isempty(editors) || define_default_editors()
@@ -224,7 +231,7 @@ function edit(path::AbstractString, line::Integer=0)
     parsed = nothing
     line_supported = false
     for entry in findeditors(command)
-        parsed, line_supported = parse_command(entry,command,path,line)
+        parsed, line_supported = parse_command(entry, command, path, line)
         parsed isa Nothing || break
     end
     if parsed isa Nothing
@@ -252,8 +259,8 @@ method to edit. For modules, open the main source file. The module needs to be l
 !!! compat "Julia 1.1"
     `edit` on modules requires at least Julia 1.1.
 
-The editor can be changed by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment
-variable.
+To ensure that the file can be opened at the given line, you may need to call
+`define_editor` first.
 """
 edit(f)                   = edit(functionloc(f)...)
 edit(f, @nospecialize t)  = edit(functionloc(f,t)...)
