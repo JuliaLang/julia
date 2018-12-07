@@ -1237,20 +1237,21 @@ factorize(A::Transpose) = transpose(factorize(parent(A)))
 ## Moore-Penrose pseudoinverse
 
 """
-    pinv(M; atol::Real, rtol::Real)
+    pinv(M; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
     pinv(M, rtol::Real) = pinv(M; rtol=rtol) # to be deprecated in Julia 2.0
 
 Computes the Moore-Penrose pseudoinverse.
 
 For matrices `M` with floating point elements, it is convenient to compute
 the pseudoinverse by inverting only singular values greater than
-`max(atol, rtol * maximum(svdvals(M)))`.
+`max(atol, rtol*σ₁)` where `σ₁` is the largest singular value of `M`.
 
-The optimal choice of `rtol` varies both with the value of `M` and the intended application
-of the pseudoinverse. The default value of `rtol` is
-`eps(real(float(one(eltype(M)))))*minimum(size(M))`, which is essentially machine epsilon
-for the real part of a matrix element multiplied by the larger matrix dimension. For
-inverting dense ill-conditioned matrices in a least-squares sense,
+The optimal choice of absolute (`atol`) and relative tolerance (`rtol`) varies
+both with the value of `M` and the intended application of the pseudoinverse.
+The default relative tolerance is `n*ϵ`, where `n` is the size of the smallest
+dimension of `M`, and `ϵ` is the [`eps`](@ref) of the element type of `M`.
+
+For inverting dense ill-conditioned matrices in a least-squares sense,
 `rtol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
 
 For more information, see [^issue8859], [^B96], [^S84], [^KY88].
@@ -1320,14 +1321,16 @@ end
 ## Basis for null space
 
 """
-    nullspace(M; atol::Real, rtol::Real)
+    nullspace(M; atol::Real=0, rtol::Rea=atol>0 ? 0 : n*ϵ)
     nullspace(M, rtol::Real) = nullspace(M; rtol=rtol) # to be deprecated in Julia 2.0
 
 Computes a basis for the nullspace of `M` by including the singular
 vectors of A whose singular have magnitude are greater than `max(atol, rtol*σ₁)`,
-where `σ₁` is `A`'s largest singular value. By default, the value of
-`rtol` is the smallest dimension of `A` multiplied by the [`eps`](@ref)
-of the [`eltype`](@ref) of `A`.
+where `σ₁` is `M`'s largest singularvalue.
+
+By default, the relative tolerance `rtol` is `n*ϵ`, where `n`
+is the size of the smallest dimension of `M`, and `ϵ` is the [`eps`](@ref) of
+the element type of `M`.
 
 # Examples
 ```jldoctest
