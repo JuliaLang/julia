@@ -307,7 +307,7 @@ function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
     topology(msg.topology)
 
     if !msg.enable_threaded_blas
-        disable_threaded_libs()
+        Base.disable_library_threading()
     end
 
     lazy = msg.lazy

@@ -504,6 +504,7 @@ reinterpret(B::BitArray, dims::NTuple{N,Int}) where {N} = reshape(B, dims)
 
 if nameof(@__MODULE__) === :Base  # avoid method overwrite
 (::Type{T})(x::T) where {T<:BitArray} = copy(x)
+BitArray(x::BitArray) = copy(x)
 end
 
 """
@@ -932,6 +933,7 @@ function deleteat!(B::BitVector, inds)
     n = new_l = length(B)
     y = iterate(inds)
     y === nothing && return B
+    n == 0 && throw(BoundsError(B, inds))
 
     Bc = B.chunks
 

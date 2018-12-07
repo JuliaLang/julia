@@ -371,6 +371,8 @@ LinearAlgebra.pinv
 LinearAlgebra.nullspace
 Base.kron
 LinearAlgebra.exp(::StridedMatrix{<:LinearAlgebra.BlasFloat})
+Base.:^(::AbstractMatrix, ::Number)
+Base.:^(::Number, ::AbstractMatrix)
 LinearAlgebra.log(::StridedMatrix)
 LinearAlgebra.sqrt(::StridedMatrix{<:Real})
 LinearAlgebra.cos(::StridedMatrix{<:Real})

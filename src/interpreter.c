@@ -652,7 +652,7 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                     next_ip = jl_unbox_long(jl_exprarg(stmt, 1)) - 1;
                 }
                 else if (cond != jl_true) {
-                    jl_type_error_rt("toplevel", "if", (jl_value_t*)jl_bool_type, cond);
+                    jl_type_error("if", (jl_value_t*)jl_bool_type, cond);
                 }
             }
             else if (head == enter_sym) {

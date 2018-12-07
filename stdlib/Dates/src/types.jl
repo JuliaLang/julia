@@ -318,6 +318,9 @@ Construct a `DateTime` type by `Date` and `Time`.
 Non-zero microseconds or nanoseconds in the `Time` type will result in an
 `InexactError`.
 
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
+
 ```jldoctest
 julia> d = Date(2018, 1, 1)
 2018-01-01

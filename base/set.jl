@@ -178,16 +178,41 @@ function unique(f, C)
     out
 end
 
-# If A is not grouped, then we will need to keep track of all of the elements that we have
-# seen so far.
-function _unique!(A::AbstractVector)
-    seen = Set{eltype(A)}()
+"""
+    unique!(f, A::AbstractVector)
+
+Selects one value from `A` for each unique value produced by `f` applied to
+elements of `A` , then return the modified A.
+
+# Examples
+```jldoctest
+julia> unique!(x -> x^2, [1, -1, 3, -3, 4])
+3-element Array{Int64,1}:
+ 1
+ 3
+ 4
+
+julia> unique!(n -> n%3, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6])
+3-element Array{Int64,1}:
+ 5
+ 1
+ 9
+
+julia> unique!(iseven, [2, 3, 5, 7, 9])
+2-element Array{Int64,1}:
+ 2
+ 3
+```
+"""
+function unique!(f, A::AbstractVector)
+    seen = Set()
     idxs = eachindex(A)
     y = iterate(idxs)
     count = 0
     for x in A
-        if x ∉ seen
-            push!(seen, x)
+        t = f(x)
+        if t ∉ seen
+            push!(seen,t)
             count += 1
             A[y[1]] = x
             y = iterate(idxs, y[2])
@@ -195,6 +220,10 @@ function _unique!(A::AbstractVector)
     end
     resize!(A, count)
 end
+
+# If A is not grouped, then we will need to keep track of all of the elements that we have
+# seen so far.
+_unique!(A::AbstractVector) = unique!(identity, A::AbstractVector)
 
 # If A is grouped, so that each unique element is in a contiguous group, then we only
 # need to keep track of one element at a time. We replace the elements of A with the

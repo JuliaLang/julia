@@ -212,6 +212,15 @@ function isapprox(J::UniformScaling, A::AbstractMatrix;
 end
 isapprox(A::AbstractMatrix, J::UniformScaling; kwargs...) = isapprox(J, A; kwargs...)
 
+"""
+    copyto!(dest::AbstractMatrix, src::UniformScaling)
+
+Copies a [`UniformScaling`](@ref) onto a matrix.
+
+!!! compat "Julia 1.1"
+    In Julia 1.0 this method only supported a square destination matrix. Julia 1.1. added
+    support for a rectangular matrix.
+"""
 function copyto!(A::AbstractMatrix, J::UniformScaling)
     @assert !has_offset_axes(A)
     fill!(A, 0)

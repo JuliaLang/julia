@@ -433,6 +433,20 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     # Otherwise, use Schur decomposition
     return schurpow(A, p)
 end
+
+"""
+    ^(A::AbstractMatrix, p::Number)
+
+Matrix power, equivalent to ``\\exp(p\\log(A))``
+
+# Examples
+```jldoctest
+julia> [1 2; 0 3]^3
+2×2 Array{Int64,2}:
+ 1  26
+ 0  27
+```
+"""
 (^)(A::AbstractMatrix, p::Number) = exp(p*log(A))
 
 # Matrix exponential
@@ -467,6 +481,28 @@ julia> exp(A)
 exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
 exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
 
+"""
+    ^(b::Number, A::AbstractMatrix)
+
+Matrix exponential, equivalent to ``\\exp(\\log(b)A)``.
+
+!!! compat "Julia 1.1"
+    Support for raising `Irrational` numbers (like `ℯ`)
+    to a matrix was added in Julia 1.1.
+
+# Examples
+```jldoctest
+julia> 2^[1 2; 0 3]
+2×2 Array{Float64,2}:
+ 2.0  6.0
+ 0.0  8.0
+
+julia> ℯ^[1 2; 0 3]
+2×2 Array{Float64,2}:
+ 2.71828  17.3673
+ 0.0      20.0855
+```
+"""
 Base.:^(b::Number, A::AbstractMatrix) = exp!(log(b)*A)
 # method for ℯ to explicitly elide the log(b) multiplication
 Base.:^(::Irrational{:ℯ}, A::AbstractMatrix) = exp(A)

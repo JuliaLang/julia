@@ -251,7 +251,7 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
     args[1] = jl_toplevel_eval_flex(m, x, fast, 0);
     args[2] = jl_toplevel_eval_flex(m, f, fast, 0);
     if (jl_is_module(args[1])) {
-        JL_TYPECHK("getfield", symbol, args[2]);
+        JL_TYPECHK(getfield, symbol, args[2]);
         args[0] = jl_eval_global_var((jl_module_t*)args[1], (jl_sym_t*)args[2]);
     }
     else {
