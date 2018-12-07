@@ -313,7 +313,13 @@ endif
 	done
 else
 	# libjulia in Darwin framework has special location and name
-	$(INSTALL_M) $(build_libdir)/libjulia$(JULIA_LIBSUFFIX).$(SOMAJOR).$(SOMINOR).dylib $(DESTDIR)$(prefix)/$(framework_dylib)
+	$(INSTALL_M) $(build_libdir)/libjulia.$(SOMAJOR).$(SOMINOR).dylib $(DESTDIR)$(prefix)/$(framework_dylib)
+ifeq ($(BUNDLE_DEBUG_LIBS),1)
+	# Codesign fails if Julia_debug is at root of framework next to Julia dylib.
+	# Solution: Move Julia_debug inside Frameworks and symlink to it.
+	$(INSTALL_M) $(build_libdir)/libjulia-debug.$(SOMAJOR).$(SOMINOR).dylib $(DESTDIR)$(prefix)/$(framework_frameworks)/$(FRAMEWORK_NAME)_debug
+	-ln -s Frameworks/$(FRAMEWORK_NAME)_debug $(DESTDIR)$(prefix)/$(framework_dylib)_debug
+endif
 endif
 	for suffix in $(JL_PRIVATE_LIBS-0) ; do \
 		for lib in $(build_libdir)/$${suffix}.*$(SHLIB_EXT)*; do \
@@ -385,7 +391,10 @@ ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	$(call stringreplace,$(DESTDIR)$(libdir)/libjulia-debug.$(SHLIB_EXT),sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT))
 endif
 else
-	$(call stringreplace,$(DESTDIR)$(prefix)/$(framework_dylib),sys$(JULIA_LIBSUFFIX).$(SHLIB_EXT)$$,$(private_libdir_rel)/sys$(JULIA_LIBSUFFIX).$(SHLIB_EXT))
+	$(call stringreplace,$(DESTDIR)$(prefix)/$(framework_dylib),sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT))
+ifeq ($(BUNDLE_DEBUG_LIBS),1)
+	$(call stringreplace,$(DESTDIR)$(prefix)/$(framework_dylib)_debug,sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT))
+endif
 endif
 
 endif

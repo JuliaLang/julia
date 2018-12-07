@@ -37,12 +37,20 @@ $(framework_version_symlink): | $(framework_destdirs)
 
 $(DESTDIR)$(prefix)/$(framework_currver)/bin: | $(framework_destdirs)
 	ln -s -f Helpers $@
-$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia$(JULIA_LIBSUFFIX).$(SOMAJOR).$(SOMINOR).dylib: | $(framework_destdirs)
+$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia.$(SOMAJOR).$(SOMINOR).dylib: | $(framework_destdirs)
 	ln -s -f ../$(FRAMEWORK_NAME) $@
-$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia$(JULIA_LIBSUFFIX).$(SOMAJOR).dylib: | $(framework_destdirs)
+$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia.$(SOMAJOR).dylib: | $(framework_destdirs)
 	ln -s -f ../$(FRAMEWORK_NAME) $@
-$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia$(JULIA_LIBSUFFIX).dylib: | $(framework_destdirs)
+$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia.dylib: | $(framework_destdirs)
 	ln -s -f ../$(FRAMEWORK_NAME) $@
+ifeq ($(BUNDLE_DEBUG_LIBS),1)
+$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia-debug.$(SOMAJOR).$(SOMINOR).dylib: | $(framework_destdirs)
+	ln -s -f ../$(FRAMEWORK_NAME)_debug  $@
+$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia-debug.$(SOMAJOR).dylib: | $(framework_destdirs)
+	ln -s -f ../$(FRAMEWORK_NAME)_debug  $@
+$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia-debug.dylib: | $(framework_destdirs)
+	ln -s -f ../$(FRAMEWORK_NAME)_debug $@
+endif
 $(DESTDIR)$(prefix)/$(framework_currver)/libexec: | $(framework_destdirs)
 	ln -s -f Helpers $@
 $(DESTDIR)$(prefix)/$(framework_currver)/share: | $(framework_destdirs)
@@ -54,20 +62,26 @@ $(DESTDIR)$(prefix)/$(framework_currver)/etc: | $(framework_destdirs)
 
 hier_symlinks: \
 	$(DESTDIR)$(prefix)/$(framework_currver)/bin \
-	$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia$(JULIA_LIBSUFFIX).$(SOMAJOR).$(SOMINOR).dylib \
-	$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia$(JULIA_LIBSUFFIX).$(SOMAJOR).dylib \
-	$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia$(JULIA_LIBSUFFIX).dylib \
+	$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia.$(SOMAJOR).$(SOMINOR).dylib \
+	$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia.$(SOMAJOR).dylib \
+	$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia.dylib \
 	$(DESTDIR)$(prefix)/$(framework_currver)/libexec \
 	$(DESTDIR)$(prefix)/$(framework_currver)/share \
 	$(DESTDIR)$(prefix)/$(framework_currver)/include \
 	$(DESTDIR)$(prefix)/$(framework_currver)/etc
+ifeq ($(BUNDLE_DEBUG_LIBS),1)
+hier_symlinks: \
+	$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia-debug.$(SOMAJOR).$(SOMINOR).dylib \
+	$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia-debug.$(SOMAJOR).dylib \
+	$(DESTDIR)$(prefix)/$(framework_currver)/lib/libjulia-debug.dylib
+endif
 
 $(DESTDIR)$(prefix)/$(framework_infoplist): | $(framework_destdirs)
 	/usr/libexec/PlistBuddy -x -c "Clear dict" $@
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundleName string $(FRAMEWORK_NAME)" $@
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundleExecutable string $(FRAMEWORK_NAME)" $@
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundleIdentifier string $(DARWIN_CODESIGN_ID_BASE).lib" $@
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleVersion string $(JULIA_VERSION_OPT_COMMIT)" $@
+	/usr/libexec/PlistBuddy -x -c "Add :CFBundleVersion string $(JULIA_COMMIT)" $@
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundleShortVersionString string $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)" $@
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundleSignature string ???" $@
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundlePackageType string FMWK" $@
@@ -82,25 +96,36 @@ endif
 
 framework: toplevelinstall $(DESTDIR)$(prefix)/$(framework_infoplist) | $(framework_current_symlinks) $(framework_version_symlink) $(framework_destdirs) hier_symlinks
 
-	# retain correct release/debug julia and fix paths
-	mv $(DESTDIR)$(bindir)/$(notdir $(JULIA_EXECUTABLE)) $(DESTDIR)$(bindir)/julia
-	-rm $(DESTDIR)$(bindir)/julia-debug
-	$(INSTALL_NAME_CHANGE_CMD) @rpath/libjulia$(JULIA_LIBSUFFIX).dylib @rpath/$(FRAMEWORK_NAME) $(DESTDIR)$(bindir)/julia
+	$(INSTALL_NAME_CHANGE_CMD) @rpath/libjulia.dylib @rpath/$(FRAMEWORK_NAME) $(DESTDIR)$(bindir)/julia
 	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(bindir)/julia
 	install_name_tool -add_rpath @executable_path/$(libdir_rel) $(DESTDIR)$(bindir)/julia
+ifeq ($(BUNDLE_DEBUG_LIBS),1)
+	$(INSTALL_NAME_CHANGE_CMD) @rpath/libjulia-debug.dylib @rpath/$(FRAMEWORK_NAME)_debug $(DESTDIR)$(bindir)/julia-debug
+	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(bindir)/julia-debug
+	install_name_tool -add_rpath @executable_path/$(private_libdir_rel) $(DESTDIR)$(bindir)/julia-debug
+endif
 
 	# fix libjulia paths
 	$(INSTALL_NAME_CMD)$(framework_dylib) $(DESTDIR)$(prefix)/$(framework_dylib)
 	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_dylib)
 	install_name_tool -add_rpath @loader_path/Frameworks $(DESTDIR)$(prefix)/$(framework_dylib)
+ifeq ($(BUNDLE_DEBUG_LIBS),1)
+	# Julia_debug is inside Frameworks subdirectory.
+	# Install name should be the non-debug variant as above and rpath should drop
+	# the Frameworks component since Julia_debug is already in Frameworks.
+	$(INSTALL_NAME_CMD)$(framework_dylib) $(DESTDIR)$(prefix)/$(framework_dylib)_debug
+	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_frameworks)/$(FRAMEWORK_NAME)_debug
+	install_name_tool -add_rpath @loader_path/ $(DESTDIR)$(prefix)/$(framework_dylib)_debug
+endif
 
-	# retain correct system image and fix path
-	for lib in $(DESTDIR)$(private_libdir)/sys*.dylib; do \
-	  [ "$$lib" = "$(DESTDIR)$(private_libdir)/sys$(JULIA_LIBSUFFIX).dylib" ] || rm "$$lib" ; \
-	done
-	$(INSTALL_NAME_CHANGE_CMD) @rpath/libjulia$(JULIA_LIBSUFFIX).dylib @rpath/$(FRAMEWORK_NAME) $(DESTDIR)$(prefix)/$(framework_frameworks)/sys$(JULIA_LIBSUFFIX).dylib
-	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_frameworks)/sys$(JULIA_LIBSUFFIX).dylib
-	install_name_tool -add_rpath @loader_path/.. $(DESTDIR)$(prefix)/$(framework_frameworks)/sys$(JULIA_LIBSUFFIX).dylib
+	$(INSTALL_NAME_CHANGE_CMD) @rpath/libjulia.dylib @rpath/$(FRAMEWORK_NAME) $(DESTDIR)$(prefix)/$(framework_frameworks)/sys.dylib
+	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_frameworks)/sys.dylib
+	install_name_tool -add_rpath @loader_path/.. $(DESTDIR)$(prefix)/$(framework_frameworks)/sys.dylib
+ifeq ($(BUNDLE_DEBUG_LIBS),1)
+	$(INSTALL_NAME_CHANGE_CMD) @rpath/libjulia-debug.dylib @rpath/$(FRAMEWORK_NAME)_debug $(DESTDIR)$(prefix)/$(framework_frameworks)/sys-debug.dylib
+	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_frameworks)/sys-debug.dylib
+	install_name_tool -add_rpath @loader_path/.. $(DESTDIR)$(prefix)/$(framework_frameworks)/sys-debug.dylib
+endif
 
 	# fix private lib paths
 	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(prefix)/$(framework_frameworks)/*
@@ -112,7 +137,8 @@ framework: toplevelinstall $(DESTDIR)$(prefix)/$(framework_infoplist) | $(framew
 
 	# cleanup unnecessary install outputs
 	rm $(DESTDIR)$(datarootdir)/julia/startup.jl
-	rm -rf $(DESTDIR)$(datarootdir)/julia/site $(DESTDIR)$(datarootdir)/icons $(DESTDIR)$(datarootdir)/applications $(DESTDIR)$(datarootdir)/appdata
+	-rm $(DESTDIR)$(datarootdir)/julia/build_sysimg.jl
+	rm -rf $(DESTDIR)$(datarootdir)/icons $(DESTDIR)$(datarootdir)/applications $(DESTDIR)$(datarootdir)/appdata
 	find $(DESTDIR)$(prefix)/$(framework_directory) \( -name '.DS_Store' -o -name '.gitignore' -o -name Makefile -o -name .travis.yml -o -name .codecov.yml \) -delete
 
 	# Include Julia's license info
@@ -130,6 +156,9 @@ framework: toplevelinstall $(DESTDIR)$(prefix)/$(framework_infoplist) | $(framew
 	# Codesign should look at the embedded Info.plist to get the signing identifier.
 	# See JLDFLAGS in Make.inc for Darwin platform and Info.plist target in ui/Makefile.
 	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(DESTDIR)$(prefix)/$(framework_helpers)/julia
+ifeq ($(BUNDLE_DEBUG_LIBS),1)
+	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(DESTDIR)$(prefix)/$(framework_helpers)/julia-debug
+endif
 
 	# Append the library name to the base codesigning id.
 	for file in $(DESTDIR)$(prefix)/$(framework_frameworks)/*.dylib* ; do \
@@ -142,7 +171,11 @@ framework: toplevelinstall $(DESTDIR)$(prefix)/$(framework_infoplist) | $(framew
 	touch -c $(DESTDIR)$(prefix)/$(framework_directory)
 
 	# Sign the (current version) framework bundle.
+ifeq ($(BUNDLE_DEBUG_LIBS),1)
+	# Don't forget to sign Frameworks/Julia_debug
+	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v -i $(DARWIN_CODESIGN_ID_BASE).lib -f \
+	    $(DESTDIR)$(prefix)/$(framework_frameworks)/$(FRAMEWORK_NAME)_debug
+endif
 	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(DESTDIR)$(prefix)/$(framework_currver)
-
 
 .PHONY: toplevelinstall framework hier_symlinks

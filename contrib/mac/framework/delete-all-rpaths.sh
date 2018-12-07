@@ -23,7 +23,7 @@ for lib in $LIBS ; do
   otool -l "$lib" | grep LC_RPATH -A2 |
   while IFS='' read -r line || [ -n "$line" ]; do
     if [[ $line =~ $rpath_r ]]; then
-      echo $(basename $lib) deleting rpath \""$lib"\"
+      echo $(basename $lib) deleting rpath "${BASH_REMATCH[1]}" \""$lib"\"
       install_name_tool -delete_rpath "${BASH_REMATCH[1]}" "$lib"
     fi
   done
