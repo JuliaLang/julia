@@ -187,14 +187,7 @@ DARWIN_FRAMEWORK ?= 0
 
 # Override in Make.user to customize the framework:
 FRAMEWORK_NAME ?= Julia
-ifeq ($(JULIA_MAJOR_VERSION),0)
-FRAMEWORK_VERSION ?= $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
-else
 FRAMEWORK_VERSION ?= $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION)
-endif
-
-# X.Y.Z or X.Y.Z-hash
-JULIA_VERSION_OPT_COMMIT:=$(shell [ $$(git describe --tags --exact-match 2>/dev/null) ] && echo $(JULIA_VERSION) || echo $(JULIA_VERSION)-$(JULIA_COMMIT))
 
 # Directories and file structure of a Darwin framework:
 framework_directory:=$(FRAMEWORK_NAME).framework

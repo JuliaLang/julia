@@ -17,7 +17,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
 end
 @test length(filter(dlls) do dl
       if Base.DARWIN_FRAMEWORK
-          return occursin(Regex("^$(Base.DARWIN_FRAMEWORK_NAME)\$"), basename(dl))
+          return occursin(Regex("^$(Base.DARWIN_FRAMEWORK_NAME)(?:_debug)?\$"), basename(dl))
       else
           return occursin(Regex("^libjulia(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"), basename(dl))
       end
@@ -33,7 +33,11 @@ cd(@__DIR__) do
 # and then adding on /julia to that directory path to get the private library directory, if we need
 # to (where "need to" is defined as private_libdir/julia/libccalltest.dlext exists
 private_libdir = if Base.DARWIN_FRAMEWORK
-    joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
+    if ccall(:jl_is_debugbuild, Cint, ()) != 0
+        dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
+    else
+        joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
+    end
 elseif ccall(:jl_is_debugbuild, Cint, ()) != 0
     dirname(abspath(Libdl.dlpath("libjulia-debug")))
 else

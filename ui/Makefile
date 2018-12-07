@@ -67,7 +67,7 @@ ifeq ($(OS),Darwin)
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundleName string julia" $@
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundleIdentifier string $(darwin_codesign_id_julia_ui)" $@
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundleInfoDictionaryVersion string 6.0" $@
-	/usr/libexec/PlistBuddy -x -c "Add :CFBundleVersion string $(JULIA_VERSION_OPT_COMMIT)" $@
+	/usr/libexec/PlistBuddy -x -c "Add :CFBundleVersion string $(JULIA_COMMIT)" $@
 else
 	touch $@
 endif
