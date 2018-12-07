@@ -48,6 +48,31 @@ julia> [1 2im 3; 1im 2 3] * I
 """
 const I = UniformScaling(true)
 
+"""
+    (J::UniformScaling)(n::Integer)
+
+Construct a `Diagonal` matrix from a `UniformScaling`.
+
+!!! compat "Julia 1.1"
+     This method is available as of Julia 1.1.
+
+# Examples
+```jldoctest
+julia> I(3)
+3×3 Diagonal{Bool,Array{Bool,1}}:
+  true    ⋅      ⋅
+   ⋅     true    ⋅
+   ⋅      ⋅     true
+
+julia> (0.7*I)(3)
+3×3 Diagonal{Float64,Array{Float64,1}}:
+ 0.7   ⋅    ⋅
+  ⋅   0.7   ⋅
+  ⋅    ⋅   0.7
+```
+"""
+(J::UniformScaling)(n::Integer) = Diagonal(fill(J.λ, n))
+
 eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2
 Base.has_offset_axes(::UniformScaling) = false

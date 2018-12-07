@@ -32,7 +32,12 @@ Standard library changes
 
 #### LinearAlgebra
 
-* Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
+  * Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
+  * `isdiag` and `isposdef` for `Diagonal` and `UniformScaling` ([#29638]).
+  * `mul!`, `rmul!` and `lmul!` methods for `UniformScaling` ([#29506]).
+  * `Symmetric` and `Hermitian` matrices now preserve the wrapper when scaled with a number ([#29469]).
+  * Exponentiation operator `^` now supports raising a `Irrational` to an `AbstractMatrix` power ([#29782]).
+  * `UniformScaling` instances are now callable such that e.g. `I(3)` will produce a `Diagonal` matrix ([#30298]).
 
 #### SparseArrays
 
