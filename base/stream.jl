@@ -264,7 +264,6 @@ of the original handle.
 !!! warn
     Do not call this on a handle that's already owned by some
     other part of the system.
-some other part of the system.
 """
 function open(h::OS_HANDLE)
     t = ccall(:uv_guess_handle, Cint, (OS_HANDLE,), h)
