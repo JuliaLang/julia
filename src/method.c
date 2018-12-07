@@ -410,8 +410,10 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         else {
             func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, linfo->def.method->module);
             if (!jl_is_code_info(func)) {
-                if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym)
-                    jl_interpret_toplevel_expr_in(linfo->def.method->module, (jl_value_t*)func, NULL, NULL);
+                if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym) {
+                    ptls->in_pure_callback = 0;
+                    jl_toplevel_eval(linfo->def.method->module, (jl_value_t*)func);
+                }
                 jl_error("generated function body is not pure. this likely means it contains a closure or comprehension.");
             }
 
