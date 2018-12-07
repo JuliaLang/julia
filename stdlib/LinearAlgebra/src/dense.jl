@@ -1238,7 +1238,7 @@ factorize(A::Transpose) = transpose(factorize(parent(A)))
 
 """
     pinv(M; atol::Real, rtol::Real)
-    pinv(M[, tol::Real]) = pinv(M, rtol=tol)
+    pinv(M, rtol::Real) = pinv(M; rtol=rtol) # to be deprecated in Julia 2.0
 
 Computes the Moore-Penrose pseudoinverse.
 
@@ -1312,7 +1312,6 @@ function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(flo
     Sinv[findall(.!isfinite.(Sinv))] .= zero(Stype)
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
-pinv(A::AbstractMatrix{T}, tol::Real) where T = pinv(A, rtol=tol) # TODO: deprecate tol in 2.0
 function pinv(x::Number)
     xi = inv(x)
     return ifelse(isfinite(xi), xi, zero(xi))
@@ -1322,7 +1321,7 @@ end
 
 """
     nullspace(M; atol::Real, rtol::Real)
-    nullspace(M[, tol::Real]) = nullspace(M, rtol=tol)
+    nullspace(M, rtol::Real) = nullspace(M; rtol=rtol) # to be deprecated in Julia 2.0
 
 Computes a basis for the nullspace of `M` by including the singular
 vectors of A whose singular have magnitude are greater than `max(atol, rtol*σ₁)`,
@@ -1343,12 +1342,6 @@ julia> nullspace(M)
  0.0
  0.0
  1.0
-
-julia> nullspace(M, 2)
-3×3 Array{Float64,2}:
- 0.0  1.0  0.0
- 1.0  0.0  0.0
- 0.0  0.0  1.0
 
 julia> nullspace(M, rtol=3)
 3×3 Array{Float64,2}:
@@ -1371,11 +1364,8 @@ function nullspace(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A
     indstart = sum(s -> s .> tol, SVD.S) + 1
     return copy(SVD.Vt[indstart:end,:]')
 end
-nullspace(A::AbstractMatrix, tol::Real) = nullspace(A, rtol=tol) # TODO: deprecate tol in 2.0
 
 nullspace(A::AbstractVector; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol)) = nullspace(reshape(A, length(A), 1), rtol= rtol, atol= atol)
-
-nullspace(A::AbstractVector, tol::Real) = nullspace(reshape(A, length(A), 1), rtol= tol) # TODO: deprecate tol in 2.0
 
 """
     cond(M, p::Real=2)
