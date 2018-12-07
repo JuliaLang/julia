@@ -343,20 +343,27 @@ end
     @test B == [0 23 1 24 0; 11 12 13 14 15; 0 21 3 22 0; 0 7 7 0 0]
 
     @test isequal(reshape(reshape(1:27, 3, 3, 3), Val(2))[1,:], [1,  4,  7,  10,  13,  16,  19,  22,  25])
-
+end
+@testset "find(in(b), a)" begin
+    # unsorted inputs
     a = [3, 5, -7, 6]
     b = [4, 6, 2, -7, 1]
-    ind = findall(in(b), a)
-    @test ind == [3,4]
+    @test findall(in(b), a) == [3,4]
     @test findall(in(Int[]), a) == Int[]
     @test findall(in(a), Int[]) == Int[]
+    @test findall(in(b), reshape(a, 2, 2)) == [CartesianIndex(1, 2), CartesianIndex(2, 2)]
 
-    a = [1,2,3,4,5]
+    # sorted inputs
+    a = [1,2,3,4,5,10]
     b = [2,3,4,6]
     @test findall(in(b), a) == [2,3,4]
     @test findall(in(a), b) == [1,2,3]
     @test findall(in(Int[]), a) == Int[]
     @test findall(in(a), Int[]) == Int[]
+    @test findall(in(b), reshape(a, 3, 2)) ==
+        [CartesianIndex(2, 1), CartesianIndex(3, 1), CartesianIndex(1, 2)]
+    @test findall(in(a), reshape(b, 2, 2)) ==
+        [CartesianIndex(1, 1), CartesianIndex(2, 1), CartesianIndex(1, 2)]
 
     a = Vector(1:3:15)
     b = Vector(2:4:10)
@@ -374,7 +381,8 @@ end
 
     @test findall(in([1, 2]), 2) == [1]
     @test findall(in([1, 2]), 3) == []
-
+end
+@testset "setindex! return type" begin
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, Vector{UInt8}, Vector{Int}, Int16, UnitRange{Int}})
     @test length(rt) == 1 && rt[1] === Array{Int32, 3}
 end
