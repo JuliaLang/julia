@@ -164,8 +164,8 @@ end
 @testset "potentially aliased copies" begin
     buffer = UInt8[1,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0]
     mid = length(buffer) ÷ 2
-    x1 = reinterpret(Int, @view buffer[1:mid])
-    x2 = reinterpret(Int, @view buffer[mid+1:end])
+    x1 = reinterpret(Int64, @view buffer[1:mid])
+    x2 = reinterpret(Int64, @view buffer[mid+1:end])
     x1 .= x2
     @test x1 == x2 == [2]
     @test x1[] === x2[] === 2
