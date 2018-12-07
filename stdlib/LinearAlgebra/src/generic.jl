@@ -725,7 +725,7 @@ the element type of `A`.
 !!! compat "Julia 1.1"
     The `atol` and `rtol` keyword arguments requires at least Julia 1.1.
     In Julia 1.0 `rtol` is available as a positional argument, but this
-    will be deprecated in a future Julia version.
+    will be deprecated in Julia 2.0.
 
 # Examples
 ```jldoctest
