@@ -475,6 +475,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
 end
 
 function julia_exename()
+    @static Base.DARWIN_FRAMEWORK && return "julia"
     if ccall(:jl_is_debugbuild, Cint, ()) == 0
         return @static Sys.iswindows() ? "julia.exe" : "julia"
     else

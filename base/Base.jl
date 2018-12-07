@@ -235,7 +235,11 @@ using .Libc: getpid, gethostname, time
 
 const DL_LOAD_PATH = String[]
 if Sys.isapple()
-    push!(DL_LOAD_PATH, "@loader_path/julia")
+    if Base.DARWIN_FRAMEWORK
+        push!(DL_LOAD_PATH, "@loader_path/Frameworks")
+    else
+        push!(DL_LOAD_PATH, "@loader_path/julia")
+    end
     push!(DL_LOAD_PATH, "@loader_path")
 end
 
