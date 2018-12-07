@@ -1371,6 +1371,12 @@ end
     @test_throws BoundsError deleteat!(a, Bool[])
     @test_throws BoundsError deleteat!(a, [true])
     @test_throws BoundsError deleteat!(a, falses(11))
+
+    @test_throws BoundsError deleteat!([], 1)
+    @test_throws BoundsError deleteat!([], [1])
+    @test_throws BoundsError deleteat!([], [2])
+    @test deleteat!([], []) == []
+    @test deleteat!([], Bool[]) == []
 end
 
 @testset "comprehensions" begin

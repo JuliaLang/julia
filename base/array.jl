@@ -1213,6 +1213,7 @@ function _deleteat!(a::Vector, inds)
     n = length(a)
     y = iterate(inds)
     y === nothing && return a
+    n == 0 && throw(BoundsError(a, inds))
     (p, s) = y
     q = p+1
     while true
