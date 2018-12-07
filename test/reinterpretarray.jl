@@ -168,6 +168,6 @@ end
     x2 = reinterpret(Int64, @view buffer[mid+1:end])
     x1 .= x2
     @test x1 == x2 == [2]
-    @test x1[] === x2[] === 2
+    @test x1[] === x2[] === Int64(2)
 end
 
