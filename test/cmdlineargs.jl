@@ -483,7 +483,12 @@ end
 
 # Find the path of libjulia (or libjulia-debug, as the case may be)
 # to use as a dummy shlib to open
-libjulia = abspath(Libdl.dlpath((ccall(:jl_is_debugbuild, Cint, ()) != 0) ? "libjulia-debug" : "libjulia"))
+libjulia = if Base.DARWIN_FRAMEWORK
+    abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))
+else
+    abspath(Libdl.dlpath((ccall(:jl_is_debugbuild, Cint, ()) != 0) ? "libjulia-debug" : "libjulia"))
+end
+
 
 # test error handling code paths of running --sysimage
 let exename = Base.julia_cmd()
