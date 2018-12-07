@@ -713,7 +713,7 @@ end
 
 """
     rank(A::AbstractMatrix; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
-    rank(A::AbstractMatrix, rtol::Real) = rank(A; rtol=rtol)  # to be deprecated in Julia 2.0
+    rank(A::AbstractMatrix, rtol::Real)
 
 Compute the rank of a matrix by counting how many singular
 values of `A` have magnitude greater than `max(atol, rtol*σ₁)` where `σ₁` is
@@ -721,6 +721,11 @@ values of `A` have magnitude greater than `max(atol, rtol*σ₁)` where `σ₁` 
 tolerances, respectively. The default relative tolerance is `n*ϵ`, where `n`
 is the size of the smallest dimension of `A`, and `ϵ` is the [`eps`](@ref) of
 the element type of `A`.
+
+!!! compat "Julia 1.1"
+    The `atol` and `rtol` keyword arguments requires at least Julia 1.1.
+    In Julia 1.0 `rtol` is available as a positional argument, but this
+    will be deprecated in a future Julia version.
 
 # Examples
 ```jldoctest
