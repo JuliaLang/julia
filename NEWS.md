@@ -83,6 +83,8 @@ Standard library changes
   * New `ncodeunits(c::Char)` method as a fast equivalent to `ncodeunits(string(c))` ([#29153]).
   * New `sort!(::AbstractArray; dims)` method that can sort the array along the `dims` dimension ([#28902]).
   * `range` now accept `stop` as a positional argument ([#28708]).
+  * `get(A::AbstractArray, (), default)` now returns the result of `A[]` if it can instead of always
+    returning an empty array ([#30270]).
   * `parse(Bool, str)` is now supported ([#29997]).
   * `copyto!(::AbstractMatrix, ::UniformScaling)` supports rectangular matrices now ([#28790]).
   * In `put!(c::Channel{T}, v)`, `v` now gets converted to `T` as `put!` is being called ([#29092]).
