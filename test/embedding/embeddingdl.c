@@ -35,6 +35,7 @@ static jl_sym_t *(*p_jl_symbol)(const char *);
 static jl_module_t **p_jl_main_module;
 static jl_value_t *(*p_jl_get_global)(jl_module_t *, jl_sym_t *);
 static void *(*p_jl_unbox_voidpointer)(jl_value_t *);
+static const char *(*p_jl_string_ptr)(jl_value_t *);
 static jl_value_t *(*p_jl_exception_occurred)(void);
 
 // Helper function to extract function pointers from the dynamically
@@ -106,6 +107,7 @@ static int load_julia_functions()
     p_jl_main_module = load_function(libjulia, "jl_main_module", &success);
     p_jl_get_global = load_function(libjulia, "jl_get_global", &success);
     p_jl_unbox_voidpointer = load_function(libjulia, "jl_unbox_voidpointer", &success);
+    p_jl_string_ptr = load_function(libjulia, "jl_string_ptr", &success);
     p_jl_exception_occurred = load_function(libjulia, "jl_exception_occurred", &success);
 
     return success;
@@ -120,6 +122,7 @@ static int load_julia_functions()
 #define jl_main_module (*p_jl_main_module)
 #define jl_get_global (*p_jl_get_global)
 #define jl_unbox_voidpointer (*p_jl_unbox_voidpointer)
+#define jl_string_ptr (*p_jl_string_ptr)
 #define jl_exception_occurred (*p_jl_exception_occurred)
 
 // Helper function to retrieve pointers to cfunctions on the Julia side.
@@ -145,7 +148,7 @@ static int checked_eval_string(const char *command, const char *error_message)
     jl_eval_string(command);
 
     if (jl_exception_occurred()) {
-        const char *p = jl_unbox_voidpointer(jl_eval_string("pointer(sprint(showerror, ccall(:jl_exception_occurred, Any, ())))"));
+        const char *p = jl_string_ptr(jl_eval_string("sprint(showerror, ccall(:jl_exception_occurred, Any, ()))"));
         fprintf(stderr, "%s%s\n", error_message, p);
         return 0;
     }
