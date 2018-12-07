@@ -14,6 +14,9 @@ of the form `"R±Iim"` as a `Complex(R,I)` of the requested type; `"i"` or `"j"`
 used instead of `"im"`, and `"R"` or `"Iim"` are also permitted.
 If the string does not contain a valid number, an error is raised.
 
+!!! compat "Julia 1.1"
+    `parse(Bool, str)` requires at least Julia 1.1.
+
 # Examples
 ```jldoctest
 julia> parse(Int, "1234")
@@ -173,6 +176,13 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
     if isempty(sbuff)
         raise && throw(ArgumentError("input string is empty"))
         return nothing
+    end
+
+    if isnumeric(sbuff[1])
+        intres = tryparse_internal(UInt8, sbuff, startpos, endpos, base, false)
+        (intres == 1) && return true
+        (intres == 0) && return false
+        raise && throw(ArgumentError("invalid Bool representation: $(repr(sbuff))"))
     end
 
     orig_start = startpos

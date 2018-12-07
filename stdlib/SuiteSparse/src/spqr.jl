@@ -130,10 +130,13 @@ Base.axes(F::QRSparse) = map(Base.OneTo, size(F))
 struct QRSparseQ{Tv<:CHOLMOD.VTypes,Ti<:Integer} <: LinearAlgebra.AbstractQ{Tv}
     factors::SparseMatrixCSC{Tv,Ti}
     τ::Vector{Tv}
+    n::Int # Number of columns in original matrix
 end
 
 Base.size(Q::QRSparseQ) = (size(Q.factors, 1), size(Q.factors, 1))
 Base.axes(Q::QRSparseQ) = map(Base.OneTo, size(Q))
+
+Matrix{T}(Q::QRSparseQ) where {T} = lmul!(Q, Matrix{T}(I, size(Q, 1), min(size(Q, 1), Q.n)))
 
 # From SPQR manual p. 6
 _default_tol(A::SparseMatrixCSC) =
@@ -305,7 +308,7 @@ julia> F.pcol
 """
 @inline function Base.getproperty(F::QRSparse, d::Symbol)
     if d == :Q
-        return QRSparseQ(F.factors, F.τ)
+        return QRSparseQ(F.factors, F.τ, size(F, 2))
     elseif d == :prow
         return invperm(F.rpivinv)
     elseif d == :pcol
@@ -391,7 +394,7 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
     X[rnk + 1:end, :] .= 0
 
     # Solve R*X = B
-    LinearAlgebra.ldiv!(UpperTriangular(view(F.R, Base.OneTo(rnk), Base.OneTo(rnk))),
+    LinearAlgebra.ldiv!(UpperTriangular(F.R[Base.OneTo(rnk), Base.OneTo(rnk)]),
                         view(X0, Base.OneTo(rnk), :))
 
     # Apply right permutation and extract solution from X

@@ -122,7 +122,7 @@ rounding_raw(::Type{BigFloat}) = ROUNDING_MODE[]
 setrounding_raw(::Type{BigFloat}, r::MPFRRoundingMode) = ROUNDING_MODE[]=r
 
 rounding(::Type{BigFloat}) = convert(RoundingMode, rounding_raw(BigFloat))
-setrounding(::Type{BigFloat},r::RoundingMode) = setrounding_raw(BigFloat, convert(MPFRRoundingMode, r))
+setrounding(::Type{BigFloat}, r::RoundingMode) = setrounding_raw(BigFloat, convert(MPFRRoundingMode, r))
 
 
 # overload the definition of unsafe_convert to ensure that `x.d` is assigned
@@ -151,6 +151,11 @@ global precision; `convert` will always return `x`.
 convenience since decimal literals are converted to `Float64` when parsed, so
 `BigFloat(2.1)` may not yield what you expect.
 
+!!! compat "Julia 1.1"
+    `precision` as a keyword argument requires at least Julia 1.1.
+    In Julia 1.0 `precision` is the second positional argument (`BigFloat(x, precision)`).
+
+# Examples
 ```jldoctest
 julia> BigFloat(2.1) # 2.1 here is a Float64
 2.100000000000000088817841970012523233890533447265625
@@ -224,8 +229,13 @@ BigFloat(x::Union{UInt8,UInt16,UInt32}, r::MPFRRoundingMode=ROUNDING_MODE[]; pre
 BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(Float64(x), r; precision=precision)
 
-BigFloat(x::Rational, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
-    BigFloat(numerator(x), r; precision=precision) / BigFloat(denominator(x), r ;precision=precision)
+function BigFloat(x::Rational, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
+    setprecision(BigFloat, precision) do
+        setrounding_raw(BigFloat, r) do
+            BigFloat(numerator(x)) / BigFloat(denominator(x))
+        end
+    end
+end
 
 function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=DEFAULT_PRECISION[], rounding::MPFRRoundingMode=ROUNDING_MODE[])
     !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s), base = base)
@@ -956,8 +966,20 @@ function _prettify_bigfloat(s::String)::String
     if endswith(mantissa, '.')
         mantissa = string(mantissa, '0')
     end
-    if exponent == "+00"
-        mantissa
+    expo = parse(Int, exponent)
+    if -5 < expo < 6
+        expo == 0 && return mantissa
+        int, frac = split(mantissa, '.')
+        if expo > 0
+            expo < length(frac) ?
+                string(int, frac[1:expo], '.', frac[expo+1:end]) :
+                string(int, frac, '0'^(expo-length(frac)), '.', '0')
+        else
+            neg = startswith(int, '-')
+            neg == true && (int = lstrip(int, '-'))
+            @assert length(int) == 1
+            string(neg ? '-' : "", '0', '.', '0'^(-expo-1), int, frac)
+        end
     else
         string(mantissa, 'e', exponent)
     end

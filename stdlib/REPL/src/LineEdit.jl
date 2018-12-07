@@ -162,21 +162,26 @@ function beep(s::PromptState, duration::Real=options(s).beep_duration,
     s.beeping = min(s.beeping + duration, maxduration)
     @async begin
         trylock(s.refresh_lock) || return
-        orig_prefix = s.p.prompt_prefix
-        colors = Base.copymutable(colors)
-        use_current && push!(colors, orig_prefix)
-        i = 0
-        while s.beeping > 0.0
-            prefix = colors[mod1(i+=1, end)]
-            s.p.prompt_prefix = prefix
+        try
+            orig_prefix = s.p.prompt_prefix
+            colors = Base.copymutable(colors)
+            use_current && push!(colors, prompt_string(orig_prefix))
+            i = 0
+            while s.beeping > 0.0
+                prefix = colors[mod1(i+=1, end)]
+                s.p.prompt_prefix = prefix
+                refresh_multi_line(s, beeping=true)
+                sleep(blink)
+                s.beeping -= blink
+            end
+            s.p.prompt_prefix = orig_prefix
             refresh_multi_line(s, beeping=true)
-            sleep(blink)
-            s.beeping -= blink
+            s.beeping = 0.0
+        catch e
+            Base.showerror(stdout, e, catch_backtrace())
+        finally
+            unlock(s.refresh_lock)
         end
-        s.p.prompt_prefix = orig_prefix
-        refresh_multi_line(s, beeping=true)
-        s.beeping = 0.0
-        unlock(s.refresh_lock)
     end
     nothing
 end

@@ -973,6 +973,7 @@ function _copy(f, args...)
     parevalf, passedargstup = capturescalars(f, args)
     return _copy(parevalf, passedargstup...)
 end
+_copy(f) = throw(MethodError(_copy, (f,)))  # avoid method ambiguity
 
 function _shapecheckbc(f, args...)
     _aresameshape(args...) ? _noshapecheck_map(f, args...) : _diffshape_broadcast(f, args...)
@@ -1006,10 +1007,6 @@ end
     _copyto!(parevalf, dest, passedsrcargstup...)
 end
 
-struct CapturedScalars{F, Args, Order}
-    args::Args
-end
-
 # capturescalars takes a function (f) and a tuple of mixed sparse vectors/matrices and
 # broadcast scalar arguments (mixedargs), and returns a function (parevalf, i.e. partially
 # evaluated f) and a reduced argument tuple (passedargstup) containing only the sparse
@@ -1024,9 +1021,13 @@ end
 # Work around losing Type{T}s as DataTypes within the tuple that makeargs creates
 @inline capturescalars(f, mixedargs::Tuple{Ref{Type{T}}, Vararg{Any}}) where {T} =
     capturescalars((args...)->f(T, args...), Base.tail(mixedargs))
+@inline capturescalars(f, mixedargs::Tuple{Ref{Type{T}}, Ref{Type{S}}, Vararg{Any}}) where {T, S} =
+    # This definition is identical to the one above and necessary only for
+    # avoiding method ambiguity.
+    capturescalars((args...)->f(T, args...), Base.tail(mixedargs))
 @inline capturescalars(f, mixedargs::Tuple{SparseVecOrMat, Ref{Type{T}}, Vararg{Any}}) where {T} =
     capturescalars((a1, args...)->f(a1, T, args...), (mixedargs[1], Base.tail(Base.tail(mixedargs))...))
-@inline capturescalars(f, mixedargs::Tuple{Union{Ref,AbstractArray{0}}, Ref{Type{T}}, Vararg{Any}}) where {T} =
+@inline capturescalars(f, mixedargs::Tuple{Union{Ref,AbstractArray{<:Any,0}}, Ref{Type{T}}, Vararg{Any}}) where {T} =
     capturescalars((args...)->f(mixedargs[1], T, args...), Base.tail(Base.tail(mixedargs)))
 
 nonscalararg(::SparseVecOrMat) = true
