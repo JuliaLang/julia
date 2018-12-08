@@ -190,7 +190,9 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test isequal(extrema([NaN]), (NaN, NaN))
 
 @test isnan(maximum([NaN, 2.]))
+@test isnan(maximum([2., NaN]))
 @test isnan(minimum([NaN, 2.]))
+@test isnan(minimum([2., NaN]))
 @test isequal(extrema([NaN, 2.]), (NaN,NaN))
 
 @test isnan(maximum([NaN, 2., 3.]))
