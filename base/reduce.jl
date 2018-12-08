@@ -454,22 +454,23 @@ prod(a) = mapreduce(identity, mul_prod, a)
 ## maximum & minimum
 
 # these propagate NaN correctly only in the second argument
-_max_fast(x, y) = ifelse(x > y, x, y)
-_min_fast(x, y) = ifelse(x < y, x, y)
-
-_fast(::typeof(min)) = _min_fast
-_fast(::typeof(max)) = _max_fast
+_fast(::typeof(max), x, y) = ifelse(x > y, x, y)
+_fast(::typeof(min), x, y) = ifelse(x < y, x, y)
 
 function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
                         A::AbstractArray, first::Int, last::Int)
-    op_fast = _fast(op)
-    @inbounds a1 = A[first]
+    a1 = @inbounds A[first]
     v = mapreduce_first(f, op, a1)
-    for i in (first+1):last
-        # short circuit NaN correctly
-        (v == v) || return v
-        @inbounds ai = A[i]
-        v = op_fast(v, f(ai))
+    chunk_len = 256
+    stop = first
+    while last - stop > 0
+        v == v || return v
+        start = stop + 1
+        stop = min(stop + chunk_len, last)
+        @simd for i in start:stop
+            @inbounds ai = A[i]
+            v = _fast(op, v, f(ai))
+        end
     end
     v
 end

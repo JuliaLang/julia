@@ -185,6 +185,16 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test minimum([4, 3, 5, 2]) == 2
 @test extrema([4, 3, 5, 2]) == (2, 5)
 
+@testset "maximum checks all elements" begin
+    N = 1025
+    for i in 1:N
+        arr = fill(0., N)
+        truth = rand()
+        arr[i] = truth
+        @test maximum(arr) == truth
+    end
+end
+
 @test isnan(maximum([NaN]))
 @test isnan(minimum([NaN]))
 @test isequal(extrema([NaN]), (NaN, NaN))
