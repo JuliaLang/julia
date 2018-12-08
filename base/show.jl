@@ -446,6 +446,9 @@ function isvisible(sym::Symbol, parent::Module, from::Module)
         isdefined(from, sym) # if we're going to return true, force binding resolution
 end
 
+module HasOnlyDefaultImports
+end
+
 function show_type_name(io::IO, tn::Core.TypeName)
     if tn === UnionAll.name
         # by coincidence, `typeof(Type)` is a valid representation of the UnionAll type.
@@ -478,9 +481,9 @@ function show_type_name(io::IO, tn::Core.TypeName)
     elseif globfunc
         print(io, "typeof(")
     end
-    # Print module prefix unless type is visible from module passed to IOContext
-    # If :module is not set, default to Main. nothing can be used to force printing prefix
-    from = get(io, :module, Main)
+    # Print module prefix unless type is visible from module passed to IOContext.
+    # If :module is not set, consider only default imports visible (Core and Base).
+    from = get(io, :module, HasOnlyDefaultImports)
     if isdefined(tn, :module) && (hidden || from === nothing || !isvisible(sym, tn.module, from))
         show(io, tn.module)
         if !hidden
