@@ -628,6 +628,27 @@ end
     end
 end
 
+@testset "optimized union! with max_values" begin
+    # issue #30315
+    T = Union{Nothing, Bool}
+    @test Base.max_values(T) == 3
+    d = Set{T}()
+    union!(d, (nothing, true, false))
+    @test length(d) == 3
+    @test d == Set((nothing, true, false))
+    @test nothing in d
+    @test true    in d
+    @test false   in d
+
+    for X = (Int8, Int16, Int32, Int64)
+        @test Base.max_values(Union{Nothing, X}) == (sizeof(X) < sizeof(Int) ?
+                                                     2^(8*sizeof(X)) + 1 :
+                                                     typemax(Int))
+    end
+    # this does not account for non-empty intersections of the unioned types
+    @test Base.max_values(Union{Int8,Int16}) == 2^8 + 2^16
+end
+
 struct OpenInterval{T}
     lower::T
     upper::T
