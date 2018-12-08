@@ -2419,6 +2419,12 @@ end
     circshift!(O, A, (11,13))
     @test nnz(O) == nnz(A)
     @test O == circshift(A, (11,13))
+    v = sprand(1000, 0.2)
+    @test nnz(v) == nnz(circshift(v,13))
+    @test circshift(v, 13) == circshift(Vector(v), 13)
+    v1 = similar(v)
+    circshift!(v1, v, 100)
+    @test v1 == circshift(v, 100)
 end
 
 end # module

@@ -1975,3 +1975,13 @@ function fill!(A::Union{SparseVector, SparseMatrixCSC}, x)
     end
     return A
 end
+
+
+function circshift!(O::SparseVector, X::SparseVector, (r,)::Base.DimsInteger{1})
+    O .= X
+    shifter!(O.nzind, O.nzval, 1, length(O.nzind), O.n, mod(r, X.n))
+    return O
+end
+
+
+circshift!(O::SparseVector, X::SparseVector, r::Real,) = circshift!(O, X, (Integer(r),))

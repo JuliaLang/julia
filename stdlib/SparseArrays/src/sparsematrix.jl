@@ -3516,14 +3516,31 @@ end
 
 #swaps blocks start:split and split+1:fin in col
 function swap!(col::AbstractVector, start::Integer, fin::Integer, split::Integer)
-    if split == fin
-        return
-    end
+    split == fin && return
     reverse!(col, start, split)
     reverse!(col, split + 1, fin)
     reverse!(col, start, fin)
     return
 end
+
+
+#this helper shifts a column by r
+function shifter!(R::AbstractVector, V::AbstractVector, start::Integer, fin::Integer, m::Integer, r::Integer)
+    split = fin
+    for j = start:fin
+        # shift in the vertical direction...
+        R[j] += r
+        if R[j] <= m
+            split = j
+        else
+            R[j] -= m
+        end
+    end
+    # ...but rowval should be sorted within columns
+    swap!(R, start, fin, split)
+    swap!(V, start, fin, split)
+end
+
 
 function circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, (r,c)::Base.DimsInteger{2})
     O .= similar(X)
@@ -3549,19 +3566,7 @@ function circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, (r,c)::Base.DimsInte
     ##### vertical shift
     r = mod(r, X.m)
     for i=1:O.n
-        split = O.colptr[i+1]-1
-        for j = O.colptr[i]:O.colptr[i+1]-1
-            # shift in the vertical direction...
-            O.rowval[j] += r
-            if O.rowval[j] <= O.m
-                split = j
-            else
-                O.rowval[j] -= O.m
-            end
-        end
-        # ...but rowval should be sorted within columns
-        swap!(O.rowval, O.colptr[i], O.colptr[i+1]-1, split)
-        swap!(O.nzval,  O.colptr[i], O.colptr[i+1]-1, split)
+        shifter!(O.rowval, O.nzval, O.colptr[i], O.colptr[i+1]-1, O.m, r)
     end
     return O
 end
