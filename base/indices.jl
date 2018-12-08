@@ -170,6 +170,26 @@ function throw_setindex_mismatch(X, I)
     end
 end
 
+function truncate(a::Dims, b::Dims)
+    if length(a[1]) < length(b[1])
+        return a
+    else
+        return b
+    end
+end
+
+function truncate(a::AbstractArray, b::AbstractArray)
+    truncate(axes(a), axes(b))
+end
+
+function truncate(a::Indices, b::Indices)
+    if length(a[1]) < length(b[1])
+        return a
+    else
+        return b
+    end
+end
+
 # check for valid sizes in A[I...] = X where X <: AbstractArray
 # we want to allow dimensions that are equal up to permutation, but only
 # for permutations that leave array elements in the same linear order.
