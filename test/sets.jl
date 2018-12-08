@@ -640,3 +640,15 @@ Base.IteratorSize(::Type{<:OpenInterval}) = Base.SizeUnknown()
     @test 3 ∈ i
     @test issubset(3, i)
 end
+
+@testset "set operations on immutable sets with one element" begin
+    # issue #30307
+    k = keys(Dict(1=>2)) # immutable set
+    m = Set(1)
+    @test union(k) == union(k, k) == m
+    @test intersect(k) == intersect(k, k) == m
+    @test setdiff(k) == m
+    @test isempty(setdiff(k, k))
+    @test symdiff(k) == m
+    @test isempty(symdiff(k, k))
+end
