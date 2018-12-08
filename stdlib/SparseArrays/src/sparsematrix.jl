@@ -3511,3 +3511,60 @@ end
 (+)(A::SparseMatrixCSC, J::UniformScaling) = A + sparse(J, size(A)...)
 (-)(A::SparseMatrixCSC, J::UniformScaling) = A - sparse(J, size(A)...)
 (-)(J::UniformScaling, A::SparseMatrixCSC) = sparse(J, size(A)...) - A
+
+## circular shift
+
+#swaps blocks start:split and split+1:fin in col
+function swap!(col::AbstractVector, start::Integer, fin::Integer, split::Integer)
+    if split == fin
+        return
+    end
+    reverse!(col, start, split)
+    reverse!(col, split + 1, fin)
+    reverse!(col, start, fin)
+    return
+end
+
+function circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, (r,c)::Base.DimsInteger{2})
+    O .= similar(X)
+
+    ##### horizontal shift
+    c = mod(c, X.n)
+    nnz = length(X.nzval)
+    nnz == 0 && return O
+    nleft = X.colptr[X.n - c + 1] - 1
+    nright = nnz - nleft
+
+    # exchange left and right blocks
+    for i=c+1:X.n
+        O.colptr[i] = X.colptr[i-c] + nright
+    end
+    for i=1:c
+        O.colptr[i] = X.colptr[X.n - c + i] - nleft
+    end
+    # rotate rowval and nzval by the right number of elements
+    circshift!(O.rowval, X.rowval, nright)
+    circshift!(O.nzval, X.nzval, nright)
+
+    ##### vertical shift
+    r = mod(r, X.m)
+    for i=1:O.n
+        split = O.colptr[i+1]-1
+        for j = O.colptr[i]:O.colptr[i+1]-1
+            # shift in the vertical direction...
+            O.rowval[j] += r
+            if O.rowval[j] <= O.m
+                split = j
+            else
+                O.rowval[j] -= O.m
+            end
+        end
+        # ...but rowval should be sorted within columns
+        swap!(O.rowval, O.colptr[i], O.colptr[i+1]-1, split)
+        swap!(O.nzval,  O.colptr[i], O.colptr[i+1]-1, split)
+    end
+    return O
+end
+
+circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, (r,)::Base.DimsInteger{1}) = circshift!(O, X, (r,0))
+circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, r::Real) = circshift!(O, X, (Integer(r),0))
