@@ -257,11 +257,20 @@ struct DomainError <: Exception
     DomainError(@nospecialize(val), @nospecialize(msg)) = (@_noinline_meta; new(val, msg))
 end
 struct TypeError <: Exception
+    # `func` is the name of the builtin function that encountered a type error,
+    # the name of the type that hit an error in its definition or application, or
+    # some other brief description of where the error happened.
+    # `context` optionally adds extra detail, e.g. the name of the type parameter
+    # that got a bad value.
     func::Symbol
-    context::AbstractString
+    context::Union{AbstractString,Symbol}
     expected::Type
     got
+    TypeError(func, context, @nospecialize(expected::Type), @nospecialize(got)) =
+        new(func, context, expected, got)
 end
+TypeError(where, @nospecialize(expected::Type), @nospecialize(got)) =
+    TypeError(Symbol(where), "", expected, got)
 struct InexactError <: Exception
     func::Symbol
     T  # Type

@@ -1117,7 +1117,7 @@ function array_type_undefable(@nospecialize(a))
         return true
     else
         etype = (a::DataType).parameters[1]
-        return !(isbitstype(etype) || isbitsunion(etype))
+        return !(etype isa Type && (isbitstype(etype) || isbitsunion(etype)))
     end
 end
 

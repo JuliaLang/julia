@@ -20,6 +20,14 @@ Language changes
     to the `Core` module ([#29968]).
   * Using the same name for both a local variable and a static parameter is now an error instead
     of a warning ([#29429]).
+  * `findall(in(b), a)` now returns a `CartesianIndex` when `a` is a matrix or a higher-dimensional array,
+    for consistency with other `findall` methods. Use `LinearIndices(a)[findall(in(b), a)]` to get
+    the old behavior, or `CartesianIndices(a)[findall(in(b), a)]` to get the new behavior
+    on previous Julia versions ([#30226]).
+  * `findmin(::BitArray)` and `findmax(::BitArray)` now return a `CartesianIndex` when `a` is a matrix
+    or a higher-dimensional array, for consistency with for other array types.
+    Use `LinearIndices(a)[findmin(a)[2]]` to get the old behavior, or `CartesianIndices(a)[findmin(a)[2]]`
+    to get the new behavior on previous Julia versions ([#30102]).
   * Method signatures such as
     `f(::Type{T}, ::T) where {T <: X}` and
     `f(::Type{X}, ::Any)`
@@ -43,6 +51,9 @@ New library functions
   * `uuid5` has been added to the `UUIDs` standard library ([#28761]).
   * Predicate functions `Sys.isfreebsd`, `Sys.isopenbsd`, `Sys.isnetbsd`, and `Sys.isdragonfly` for
     detecting BSD systems have been added ([#30249]).
+  * Internal `Base.disable_library_threading` that sets libraries to use one thread.
+    It executes function hooks that have been registered with
+    `Base.at_disable_library_threading` ([#30004]).
 
 Standard library changes
 ------------------------
@@ -72,12 +83,16 @@ Standard library changes
   * New `ncodeunits(c::Char)` method as a fast equivalent to `ncodeunits(string(c))` ([#29153]).
   * New `sort!(::AbstractArray; dims)` method that can sort the array along the `dims` dimension ([#28902]).
   * `range` now accept `stop` as a positional argument ([#28708]).
+  * `get(A::AbstractArray, (), default)` now returns the result of `A[]` if it can instead of always
+    returning an empty array ([#30270]).
   * `parse(Bool, str)` is now supported ([#29997]).
   * `copyto!(::AbstractMatrix, ::UniformScaling)` supports rectangular matrices now ([#28790]).
   * In `put!(c::Channel{T}, v)`, `v` now gets converted to `T` as `put!` is being called ([#29092]).
   * `current_project()` now searches the parent directories of a Git repository for a `Project.toml` file.
     This also affects the behavior of the `--project` command line option when using the default
     `--project=@.` ([#29108]).
+  * The `spawn` API is now more flexible and supports taking IOBuffer directly as a I/O stream,
+    converting to a system pipe as needed ([#30278]).
 
 #### Dates
   * New `DateTime(::Date, ::Time)` constructor ([#29754]).

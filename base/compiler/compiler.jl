@@ -24,7 +24,6 @@ include(mod, x) = Core.include(mod, x)
 
 # essential files and libraries
 include("essentials.jl")
-include("some.jl")
 include("ctypes.jl")
 include("generator.jl")
 include("reflection.jl")

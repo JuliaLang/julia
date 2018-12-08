@@ -584,11 +584,23 @@ function test_setindex!_internals(::Type{TestAbstractArray})
 end
 
 function test_get(::Type{TestAbstractArray})
-    A = T24Linear([1:24...])
-    B = TSlow([1:24...])
+    A = T24Linear(reshape([1:24...], 4, 3, 2))
+    B = TSlow(reshape([1:24...], 4, 3, 2))
 
-    @test get(A, (), 0) == Int[]
-    @test get(B, (), 0) == TSlow(Int, 0)
+    @test get(A, (), 0) == 0
+    @test get(B, (), 0) == 0
+    @test get(A, (1,), 0) == get(A, 1, 0) == A[1] == 1
+    @test get(B, (1,), 0) == get(B, 1, 0) == B[1] == 1
+    @test get(A, (25,), 0) == get(A, 25, 0) == 0
+    @test get(B, (25,), 0) == get(B, 25, 0) == 0
+    @test get(A, (1,1,1), 0) == A[1,1,1] == 1
+    @test get(B, (1,1,1), 0) == B[1,1,1] == 1
+    @test get(A, (1,1,3), 0) == 0
+    @test get(B, (1,1,3), 0) == 0
+
+    @test get(TSlow([]), (), 0) == 0
+    @test get(TSlow([1]), (), 0) == 1
+    @test get(TSlow(fill(1)), (), 0) == 1
 end
 
 function test_cat(::Type{TestAbstractArray})
