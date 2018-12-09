@@ -62,6 +62,21 @@ end
     @test @inferred(median(Float16[1, 2, 3]))   === Float16(2)
     @test @inferred(median(Float32[1, 2, NaN])) === NaN32
     @test @inferred(median(Float32[1, 2, 3]))   === 2.0f0
+
+    struct Student
+        name::String
+        height::Int64
+    end
+    classroom = [
+        Student("Alice",  153), Student("Bob",    172),
+        Student("Claire", 160), Student("Daniel", 155) ]
+    Base.isless(a::Student, b::Student) = isless(a.height, b.height)
+
+    ans = median(classroom, lt=isless, by=x->x.height, middle=(v) -> ((a,b) = v; a), rev=false)
+    @test ans.name == "Daniel"
+
+    ans = median(classroom, lt=isless, by=x->x.height, middle=(v) -> ((a,b) = v; a), rev=true)
+    @test ans.name == "Claire"
 end
 
 @testset "mean" begin
