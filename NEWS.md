@@ -121,6 +121,7 @@ Standard library changes
 
 #### Statistics
   * `mean` and `var` now handles the empty case ([#29033]).
+  * Added Keyword arguments `lt`, `by`, `middle` and `rev` to `median` ([#30329]).
 
 External dependencies
 ---------------------

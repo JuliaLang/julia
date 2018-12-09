@@ -692,6 +692,14 @@ middle(a::AbstractArray) = ((v1, v2) = extrema(a); middle(v1, v2))
 """
     median!(v; lt=isless, by=identity, middle=middle, rev=false)
 
+Compute the median of an array `v`. For an even number of elements no exact
+median element exists, so the result is equivalent to calculating mean of two
+median elements. The `by` keyword lets you provide a function that will be
+applied to each element before comparison. The `lt` keyword allows providing a
+custom "less than" function for sorting prior to taking the median.
+In the case of non-numerical, even length `v`, one can choose either of the two middle
+elements as the median by `rev` keyword.
+
 Like [`median`](@ref), but may overwrite the input vector.
 """
 function median!(v::AbstractVector; lt=isless, by=identity, middle=middle, rev=false)
@@ -706,16 +714,9 @@ end
 median!(v::AbstractArray; lt=isless, by=identity, middle=middle, rev=false) = median!(vec(v), lt=lt, by=by, middle=middle, rev=rev)
 
 """
-    median(v; lt=isless, by=identity, middle=Base.middle, rev=false)
+    median(itr; lt=isless, by=identity, middle=Base.middle, rev=false)
 
-Compute the median of an array `v`. For an even number of elements no exact
-median element exists, so the result is equivalent to calculating mean of two
-median elements. The `by` keyword lets you provide a function that will be
-applied to each element before comparison. The `lt` keyword allows providing a
-custom "less than" function for sorting prior to taking the median.
-In the case of non-numerical, even length `v`, one can choose either of the two middle
-elements as the median by `rev` keyword.
-
+Compute the median of all elements in a collection.
 !!! note
     If `itr` contains `NaN` or [`missing`](@ref) values, the result is also
     `NaN` or `missing` (`missing` takes precedence if `itr` contains both).
