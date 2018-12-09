@@ -219,7 +219,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
     # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
     # The other `CodeInfo`s we inspect will already have this field inflated, so we just
     # access it directly instead (to avoid regeneration).
-    # Note that `typeof(method2) <: Union{Method, Type{IntrinsicFunction}, Nothing}`.
+    # Note that `method_for_inference_heuristics(...)::Union{Method, Type{IntrinsicFunction}, Nothing}`.
     method2 = method_for_inference_heuristics(method, sig, sparams, sv.params.world)
     sv_method2 = method_for_inference_heuristics(sv.src) # limit only if user token match
     while !(infstate === nothing)
@@ -240,7 +240,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                 break
             end
             inf_method2 = method_for_inference_heuristics(infstate.src) # limit only if user token match
-            if topmost === nothing && method2 === inf_method2 # && method2 !== IntrinsicFunction
+            if topmost === nothing && method2 === inf_method2 && method2 !== IntrinsicFunction
                 # inspect the parent of this edge,
                 # to see if they are the same Method as sv
                 # in which case we'll need to ensure it is convergent
@@ -249,7 +249,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                     # check in the cycle list first
                     # all items in here are mutual parents of all others
                     parent_method2 = method_for_inference_heuristics(parent.src) # limit only if user token match
-                    if parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2 # && sv_method2 !== IntrinsicFunction
+                    if parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2 && sv_method2 !== IntrinsicFunction
                         topmost = infstate
                         edgecycle = true
                         break
@@ -260,7 +260,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                     if topmost === nothing && parent !== nothing
                         parent = parent::InferenceState
                         parent_method2 = method_for_inference_heuristics(parent.src) # limit only if user token match
-                        if (parent.cached || parent.limited) && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2 # && sv_method2 !== IntrinsicFunction
+                        if (parent.cached || parent.limited) && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2 && sv_method2 !== IntrinsicFunction
                             topmost = infstate
                             edgecycle = true
                         end
@@ -284,7 +284,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
         msig = unwrap_unionall(method.sig)::DataType
         spec_len = length(msig.parameters) + 1
         ls = length(sigtuple.parameters)
-        if method === sv.linfo.def
+        if method === sv.linfo.def && method2 === sv_method2 && method2 !== IntrinsicFunction
             # Under direct self-recursion, permit much greater use of reducers.
             # here we assume that complexity(specTypes) :>= complexity(sig)
             comparison = sv.linfo.specTypes
