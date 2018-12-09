@@ -10,7 +10,6 @@ struct EditorEntry{P,Fn}
     fn::Fn
     wait::Bool
     takesline::Bool
-    priority::Float64
 end
 const editors = Vector{EditorEntry}(undef, 0)
 
@@ -44,7 +43,7 @@ end
 Base.run(x::EditorCommand{Function}) = x.parsed_command()
 
 """
-    define_editor(fn, pattern;wait=false, priority=0)
+    define_editor(fn, pattern;wait=false)
 
 Define a new editor matching `pattern` that can be used to open a file
 (possibly at a given line number) using `fn`.
@@ -70,8 +69,7 @@ match the value of `EDITOR`, `VISUAL` or `JULIA_EDITOR`.  For strings, only
 whole words can match (i.e. "vi" doesn't match "vim -g" but will match
 "/usr/bin/vi -m").
 
-If multiple defined editors match, the one with the highest priority is
-selected, and if there is a tie in priority, the first editor added will be
+If multiple defined editors match, the one most recently defined will be
 used.
 
 By default julia does not wait for the editor to close, running it in the
@@ -110,8 +108,8 @@ function define_editor(fn, pattern; wait=false, priority=0)
     nargs = map(x -> x.nargs - 1, methods(fn).ms)
     has3args = 3 ∈ nargs
     has2args = 2 ∈ nargs
-    entry = EditorEntry(pattern, fn, wait, has3args, Float64(priority))
-    push!(editors, entry)
+    entry = EditorEntry(pattern, fn, wait, has3args)
+    pushfirst!(editors, entry)
 
     if !(has3args || has2args)
         error("Editor function must take 2 or 3 arguments")
@@ -196,20 +194,8 @@ editormatches(pattern::Regex, command) =
     occursin(pattern, command)
 editormatches(pattern::AbstractArray, command) =
     any(x -> editormatches(x, command), pattern)
-function findeditors(command)
-    command_str = join(command, " ")
-    matches = (-Inf, EditorEntry[])
-    for entry in editors
-        if editormatches(entry.pattern, command_str)
-            if matches[1] < entry.priority
-                matches = (entry.priority, EditorEntry[entry])
-            elseif matches[1] == entry.priority
-                matches = (matches[1],push!(matches[2],entry))
-            end
-        end
-    end
-    matches[2]
-end
+findeditors(command) =
+    filter(e -> editormatches(e.pattern,join(command," ")), editors)
 
 """
     edit(path::AbstractString, line::Integer=0)
