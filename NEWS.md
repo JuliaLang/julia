@@ -95,6 +95,7 @@ Standard library changes
     `--project=@.` ([#29108]).
   * The `spawn` API is now more flexible and supports taking IOBuffer directly as a I/O stream,
     converting to a system pipe as needed ([#30278]).
+  * `join` now accepts a function argument ([#TODO]).
 
 #### Dates
   * New `DateTime(::Date, ::Time)` constructor ([#29754]).

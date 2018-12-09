@@ -156,6 +156,9 @@ end
     @test join(()) == ""
     @test join((), ", ") == ""
     @test join((), ", ", ", and ") == ""
+    @test join(uppercase, ["a", "b", "c"]) == "ABC"
+    @test join(abs2, 1:4, " ") == "1 4 9 16"
+    @test join(x->round(x, digits=3), [π, π, π], ' ', "... ") == "3.142 3.142... 3.142"
 end
 
 # quotes + interpolation (issue #455)

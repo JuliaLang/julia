@@ -230,51 +230,63 @@ IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.stri
 # join is implemented using IO
 
 """
-    join([io::IO,] strings, delim, [last])
+    join([io::IO,] [f::Function,] strings, delim, [last])
 
 Join an array of `strings` into a single string, inserting the given delimiter between
 adjacent strings. If `last` is given, it will be used instead of `delim` between the last
 two strings. If `io` is given, the result is written to `io` rather than returned as
-as a `String`.
+as a `String`. If `f` is given, the function is applied to each string before joining.
+
+!!! compat "Julia 1.1"
+    Providing a function argument requires Julia 1.1 or later.
 
 # Examples
 ```jldoctest
 julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
 "apples, bananas and pineapples"
+
+julia> join(uppercasefirst, ["pears", "rhubarb"], " & ")
+"Pears & Rhubarb"
 ```
 
 `strings` can be any iterable over elements `x` which are convertible to strings
 via `print(io::IOBuffer, x)`. `strings` will be printed to `io`.
 """
-function join(io::IO, strings, delim, last)
+function join(io::IO, f::Function, strings, delim, last)
     first = true
     local prev
     for str in strings
         if @isdefined prev
             first ? (first = false) : print(io, delim)
-            print(io, prev)
+            print(io, f(prev))
         end
         prev = str
     end
     if @isdefined prev
         first || print(io, last)
-        print(io, prev)
+        print(io, f(prev))
     end
     nothing
 end
-function join(io::IO, strings, delim="")
+function join(io::IO, f::Function, strings, delim="")
     # Specialization of the above code when delim==last,
     # which lets us emit (compile) less code
     first = true
     for str in strings
         first ? (first = false) : print(io, delim)
-        print(io, str)
+        print(io, f(str))
     end
 end
+join(io::IO, strings, delim="") = join(io, identity, strings, delim)
+join(io::IO, strings, delim, last) = join(io, identity, strings, delim, last)
 
 join(strings) = sprint(join, strings)
 join(strings, delim) = sprint(join, strings, delim)
 join(strings, delim, last) = sprint(join, strings, delim, last)
+
+join(f::Function, strings) = sprint((io, s)->join(io, f, s), strings)
+join(f::Function, strings, delim) = sprint((io, s)->join(io, f, s, delim), strings)
+join(f::Function, strings, delim, last) = sprint((io, s)->join(io, f, s, delim, last), strings)
 
 ## string escaping & unescaping ##
 
