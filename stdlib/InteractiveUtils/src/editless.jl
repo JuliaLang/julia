@@ -20,13 +20,13 @@ end
 function parse_command(entry::EditorEntry, command, path, line)
     if entry.takesline
         cmd = entry.fn(command, path, line)
-        if !(cmd isa Nothing)
+        if !isnothing(cmd)
             return EditorCommand(cmd, entry), true
         end
     end
 
     cmd = entry.fn(command, path)
-    if !(cmd isa Nothing)
+    if !isnothing(cmd)
         return EditorCommand(cmd, entry), false
     end
 
@@ -218,9 +218,9 @@ function edit(path::AbstractString, line::Integer=0)
     line_supported = false
     for entry in findeditors(command)
         parsed, line_supported = parse_command(entry, command, path, line)
-        parsed isa Nothing || break
+        isnothing(parsed) || break
     end
-    if parsed isa Nothing
+    if isnothing(parsed)
         parsed = `$command $path`
         line_supported = false
     end
