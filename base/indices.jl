@@ -170,6 +170,20 @@ function throw_setindex_mismatch(X, I)
     end
 end
 
+"""
+    truncate(s1, s2)
+
+Check two array shapes for length, and return whichever shape has less dimensions.
+
+# Examples
+```jldoctest
+julia> truncate([1, 2, 3], 1:10)
+(Base.OneTo(3),)
+
+julia> truncate((2, 3, 5, 6), (4, 5, 3))
+(4, 5, 3)
+```
+"""
 function truncate(a::Dims, b::Dims)
     if length(a[1]) < length(b[1])
         return a
