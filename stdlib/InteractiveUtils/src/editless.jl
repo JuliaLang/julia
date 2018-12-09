@@ -121,15 +121,15 @@ function define_default_editors()
                   wait=true) do cmd, path, line
         `$cmd +$line $path`
     end
+    define_editor([r"\bemacs","gedit",r"\bgvim"]) do cmd, path, line
+        `$cmd +$line $path`
+    end
     define_editor(r"\bemacs\b.*(-nw|--no-window-system)",
                   wait=true) do cmd, path, line
         `$cmd +$line $path`
     end
     define_editor(r"\bemacsclient\b.*(-nw|-t|-tty)",
                   wait=true) do cmd, path, line
-        `$cmd +$line $path`
-    end
-    define_editor([r"\bemacs","gedit",r"\bgvim"]) do cmd, path, line
         `$cmd +$line $path`
     end
     define_editor(["textmate","mate","kate"]) do cmd, path, line
