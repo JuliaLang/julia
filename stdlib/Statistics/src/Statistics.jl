@@ -706,15 +706,15 @@ end
 median!(v::AbstractArray; lt=isless, by=identity, middle=middle, rev=false) = median!(vec(v), lt=lt, by=by, middle=middle, rev=rev)
 
 """
-    median(v; lt=isless, by=identity, middle=Base.middle)
+    median(v; lt=isless, by=identity, middle=Base.middle, rev=false)
 
 Compute the median of an array `v`. For an even number of elements no exact
 median element exists, so the result is equivalent to calculating mean of two
 median elements. The `by` keyword lets you provide a function that will be
 applied to each element before comparison. The `lt` keyword allows providing a
 custom "less than" function for sorting prior to taking the median.
-In the case of non-numerical, even length `v`, one can take either of the two middle
-elements by `rev` keyword.
+In the case of non-numerical, even length `v`, one can choose either of the two middle
+elements as the median by `rev` keyword.
 
 !!! note
     If `itr` contains `NaN` or [`missing`](@ref) values, the result is also
@@ -740,7 +740,7 @@ julia> median(skipmissing([1, 2, missing, 4]))
 median(itr; lt=isless, by=identity, middle=middle, rev=false) = median!(collect(itr); lt=lt, by=by, middle=middle, rev=rev)
 
 """
-    median(A::AbstractArray; dims)
+    median(A::AbstractArray; dims, lt=isless, by=identity, middle=middle, rev=false)
 
 Compute the median of an array along the given dimensions.
 
