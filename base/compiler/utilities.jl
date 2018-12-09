@@ -139,13 +139,17 @@ function method_for_inference_heuristics(method::Method, @nospecialize(sig), spa
         if isa(method_instance, MethodInstance)
             cinfo = get_staged(method_instance)
             if isa(cinfo, CodeInfo)
-                method2 = cinfo.method_for_inference_limit_heuristics
-                if method2 isa Method
-                    return method2
-                end
+                method2 = method_for_inference_heuristics(cinfo)
+                method2 !== nothing && return method2
             end
         end
     end
+    return nothing
+end
+
+function method_for_inference_heuristics(src::CodeInfo)
+    method = src.method_for_inference_limit_heuristics
+    (method isa Method || method === IntrinsicFunction) && return method
     return nothing
 end
 
