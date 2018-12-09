@@ -143,7 +143,7 @@ function define_default_editors()
     define_editor("code") do cmd, path, line
         `$cmd -g $path:$line`
     end
-    define_editor(r"\bnotepad++") do cmd, paht,line
+    define_editor(r"\bnotepad++") do cmd, path, line
         `$cmd $path -n$line`
     end
     if Sys.iswindows()
