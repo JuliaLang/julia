@@ -1084,7 +1084,7 @@ ifeq ($(OS), Darwin)
 INSTALL_NAME_CMD := install_name_tool -id $(INSTALL_NAME_ID_DIR)
 INSTALL_NAME_CHANGE_CMD := install_name_tool -change
 SHLIB_EXT := dylib
-OSLIBS += $(LIBUNWIND)
+OSLIBS += -framework CoreFoundation $(LIBUNWIND)
 WHOLE_ARCHIVE := -Xlinker -all_load
 NO_WHOLE_ARCHIVE :=
 # Embed an Info.plist in the julia executable
