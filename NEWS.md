@@ -120,7 +120,7 @@ Standard library changes
   * `sprandn` now supports specifying the output element type ([#30083]).
 
 #### Statistics
-  * `mean` and `var` now handle more kinds of emtpy inputs ([#29033]).
+  * `mean` and `var` now handle more kinds of empty inputs ([#29033]).
 
 External dependencies
 ---------------------
