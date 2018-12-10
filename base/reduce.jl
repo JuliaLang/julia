@@ -452,31 +452,66 @@ julia> prod(1:20)
 prod(a) = mapreduce(identity, mul_prod, a)
 
 ## maximum & minimum
-_fast(::typeof(max), x, y) = ifelse(x == x,
-                                    ifelse(x > y, x, y),
-                                    x)
-_fast(::typeof(min), x, y) = ifelse(x == x,
-                                    ifelse(x < y, x, y),
-                                    x)
 
-function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
+"""
+    max_maximum(x,y)
+
+Compute the bigger of two elements. This function dose the same thing as `max(x,y)`, except that
+* It is slightly faster
+* The order of `-0.0` and `0.0` is undefined.
+
+See also [`max`](@ref), [`min_minimum`](@ref)
+"""
+function max_maximum(x,y)
+    ifelse(isnan(x),
+        x,
+        ifelse(x > y, x, y))
+end
+
+"""
+    min_minimum(x,y)
+
+Variant of [`max_maximum`](@ref) for computing minima.
+"""
+function min_minimum(x,y)
+    ifelse(isnan(x),
+        x,
+        ifelse(x < y, x, y))
+end
+
+function mapreduce_impl(f, op::Union{typeof(max_maximum), typeof(min_minimum)},
                         A::AbstractArray, first::Int, last::Int)
     a1 = @inbounds A[first]
-    v = mapreduce_first(f, op, a1)
+    v1 = mapreduce_first(f, op, a1)
+    v2 = v3 = v4 = v1
     chunk_len = 256
-    for start in (first + 1):chunk_len:last
-        v == v || return v
-        stop = min(start + chunk_len-1, last)
-        @simd for i in start:stop
-            @inbounds ai = A[i]
-            v = _fast(op, v, f(ai))
+    start = first
+    stop  = start + chunk_len - 4
+    while stop <= last
+        isnan(v1) && return v1
+        isnan(v2) && return v2
+        isnan(v3) && return v3
+        isnan(v4) && return v4
+        @inbounds for i in start:4:stop
+            v1 = op(v1, f(A[i+1]))
+            v2 = op(v2, f(A[i+2]))
+            v3 = op(v3, f(A[i+3]))
+            v4 = op(v4, f(A[i+4]))
         end
+        start = stop
+        stop = start + chunk_len - 4
+    end
+    v = op(op(v1,v2),op(v3,v4))
+    start += 1
+    for i in start:last
+        @inbounds ai = A[i]
+        v = op(v, f(A[i]))
     end
     v
 end
 
-maximum(f, a) = mapreduce(f, max, a)
-minimum(f, a) = mapreduce(f, min, a)
+maximum(f, a) = mapreduce(f, max_maximum, a)
+minimum(f, a) = mapreduce(f, min_minimum, a)
 
 """
     maximum(itr)
@@ -492,7 +527,7 @@ julia> maximum([1,2,3])
 3
 ```
 """
-maximum(a) = mapreduce(identity, max, a)
+maximum(a) = mapreduce(identity, max_maximum, a)
 
 """
     minimum(itr)
@@ -508,7 +543,7 @@ julia> minimum([1,2,3])
 1
 ```
 """
-minimum(a) = mapreduce(identity, min, a)
+minimum(a) = mapreduce(identity, min_minimum, a)
 
 ## all & any
 
