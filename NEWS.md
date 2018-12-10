@@ -1,10 +1,12 @@
 Julia v1.1 Release Notes
-==========================
+========================
 
 New language features
 ---------------------
 
-  * An *exception stack* is maintained on each task to make exception handling more robust and enable root cause analysis using `catch_stack` ([#28878]).
+  * An *exception stack* is maintained on each task to make exception handling
+    more robust and enable root cause analysis. The stack may be accessed using
+    the experimental function `Base.catch_stack` ([#28878]).
   * The experimental macro `Base.@locals` returns a dictionary of current local variable names
     and values ([#29733]).
 
@@ -25,13 +27,14 @@ Language changes
     the old behavior, or `CartesianIndices(a)[findall(in(b), a)]` to get the new behavior
     on previous Julia versions ([#30226]).
   * `findmin(::BitArray)` and `findmax(::BitArray)` now return a `CartesianIndex` when `a` is a matrix
-    or a higher-dimensional array, for consistency with for other array types.
+    or a higher-dimensional array, for consistency with other array types.
     Use `LinearIndices(a)[findmin(a)[2]]` to get the old behavior, or `CartesianIndices(a)[findmin(a)[2]]`
     to get the new behavior on previous Julia versions ([#30102]).
   * Method signatures such as
     `f(::Type{T}, ::T) where {T <: X}` and
     `f(::Type{X}, ::Any)`
-    are now considered ambiguous. Previously a bug caused the first one to be considered more specific ([#30160]).
+    are now considered ambiguous. Previously a bug caused the first one to be considered more specific in
+    some cases ([#30160]).
 
 Command-line option changes
 ---------------------------
@@ -43,13 +46,14 @@ Command-line option changes
 New library functions
 ---------------------
 
-  * `splitpath(p::String)` function, which is the opposite of `joinpath(parts...)`: it splits a filepath into its components ([#28156]).
-  * `isnothing(::Any)` function, to check whether something is a `Nothing`, returns a `Bool` ([#29679]).
+  * `splitpath(p::String)` function, which is the opposite of `joinpath(parts...)`: it splits a filepath
+    into its components ([#28156]).
+  * `isnothing(::Any)` predicate, to check whether the argument is `nothing`. ([#29679]).
   * `getpid(::Process)` method ([#24064]).
   * `eachrow`, `eachcol` and `eachslice` functions provide efficient iterators over slices of arrays ([#29749]).
-  * `fieldtypes(T::Type)` which return the declared types of the field in type T ([#29600]).
+  * `fieldtypes(T::Type)` which returns the declared types of the field in type T ([#29600]).
   * `uuid5` has been added to the `UUIDs` standard library ([#28761]).
-  * Predicate functions `Sys.isfreebsd`, `Sys.isopenbsd`, `Sys.isnetbsd`, and `Sys.isdragonfly` for
+  * Predicates `Sys.isfreebsd`, `Sys.isopenbsd`, `Sys.isnetbsd`, and `Sys.isdragonfly` for
     detecting BSD systems have been added ([#30249]).
   * Internal `Base.disable_library_threading` that sets libraries to use one thread.
     It executes function hooks that have been registered with
@@ -70,7 +74,7 @@ Standard library changes
     argument ([#29157]).
   * The use of scientific notation when printing `BigFloat` values is now consistent with other floating point
     types ([#29211]).
-  * `Regex` now behave like a scalar when used in broadcasting ([#29913]).
+  * `Regex` now behaves like a scalar when used in broadcasting ([#29913]).
   * `Char` now behaves like a read-only 0-dimensional array ([#29819]).
   * `parse` now allows strings representing integer 0 and 1 for type `Bool` ([#29980]).
   * `Base.tail` now works on named tuples ([#29595]).
@@ -79,24 +83,21 @@ Standard library changes
   * `Base.julia_cmd` now propagates the `--inline=(yes|no)` flag ([#29858]).
   * `Base.@kwdef` can now be used for parametric structs, and for structs with supertypes ([#29316]).
   * `merge(::NamedTuple, ::NamedTuple...)` can now be used with more than 2 `NamedTuple`s ([#29259]).
-  * `Future.copy!` has been moved to `Base` ([#29178]).
   * New `ncodeunits(c::Char)` method as a fast equivalent to `ncodeunits(string(c))` ([#29153]).
   * New `sort!(::AbstractArray; dims)` method that can sort the array along the `dims` dimension ([#28902]).
-  * `range` now accept `stop` as a positional argument ([#28708]).
-  * `get(A::AbstractArray, (), default)` now returns the result of `A[]` if it can instead of always
-    returning an empty array ([#30270]).
+  * `range` now accepts `stop` as a positional argument ([#28708]).
+  * `get(A::AbstractArray, (), default)` now returns `A[]` instead of an empty array ([#30270]).
   * `parse(Bool, str)` is now supported ([#29997]).
-  * `copyto!(::AbstractMatrix, ::UniformScaling)` supports rectangular matrices now ([#28790]).
-  * In `put!(c::Channel{T}, v)`, `v` now gets converted to `T` as `put!` is being called ([#29092]).
+  * `copyto!(::AbstractMatrix, ::UniformScaling)` now supports rectangular matrices ([#28790]).
   * `current_project()` now searches the parent directories of a Git repository for a `Project.toml` file.
     This also affects the behavior of the `--project` command line option when using the default
     `--project=@.` ([#29108]).
-  * The `spawn` API is now more flexible and supports taking IOBuffer directly as a I/O stream,
+  * The `spawn` API is now more flexible and supports taking IOBuffer directly as an I/O stream,
     converting to a system pipe as needed ([#30278]).
 
 #### Dates
   * New `DateTime(::Date, ::Time)` constructor ([#29754]).
-  * `TimeZone` now behave like a scalar when used in broadcasting ([#30159]).
+  * `TimeZone` now behaves like a scalar when used in broadcasting ([#30159]).
 
 #### InteractiveUtils
   * `edit` can now be called on a module to edit the file that defines it ([#29636]).
@@ -108,7 +109,7 @@ Standard library changes
   * `isdiag` and `isposdef` for `Diagonal` and `UniformScaling` ([#29638]).
   * `mul!`, `rmul!` and `lmul!` methods for `UniformScaling` ([#29506]).
   * `Symmetric` and `Hermitian` matrices now preserve the wrapper when scaled with a number ([#29469]).
-  * Exponentiation operator `^` now supports raising a `Irrational` to an `AbstractMatrix` power ([#29782]).
+  * Exponentiation operator `^` now supports raising an `Irrational` to an `AbstractMatrix` power ([#29782]).
 
 #### Random
   * `randperm` and `randcycle` now use the type of their argument to determine the element type of
@@ -122,6 +123,8 @@ Standard library changes
 #### Statistics
   * `mean` and `var` now handles the empty case ([#29033]).
   * Added Keyword arguments `lt`, `by`, `middle` and `rev` to `median` ([#30329]).
+  * `mean` and `var` now handle more kinds of empty inputs ([#29033]).
+
 
 External dependencies
 ---------------------
@@ -164,7 +167,6 @@ Deprecated or removed
 [#29153]: https://github.com/JuliaLang/julia/issues/29153
 [#29157]: https://github.com/JuliaLang/julia/issues/29157
 [#29173]: https://github.com/JuliaLang/julia/issues/29173
-[#29178]: https://github.com/JuliaLang/julia/issues/29178
 [#29211]: https://github.com/JuliaLang/julia/issues/29211
 [#29259]: https://github.com/JuliaLang/julia/issues/29259
 [#29316]: https://github.com/JuliaLang/julia/issues/29316
@@ -199,8 +201,15 @@ Deprecated or removed
 [#29978]: https://github.com/JuliaLang/julia/issues/29978
 [#29980]: https://github.com/JuliaLang/julia/issues/29980
 [#29997]: https://github.com/JuliaLang/julia/issues/29997
+[#30004]: https://github.com/JuliaLang/julia/issues/30004
 [#30022]: https://github.com/JuliaLang/julia/issues/30022
 [#30035]: https://github.com/JuliaLang/julia/issues/30035
 [#30083]: https://github.com/JuliaLang/julia/issues/30083
+[#30102]: https://github.com/JuliaLang/julia/issues/30102
+[#30151]: https://github.com/JuliaLang/julia/issues/30151
 [#30159]: https://github.com/JuliaLang/julia/issues/30159
+[#30160]: https://github.com/JuliaLang/julia/issues/30160
+[#30226]: https://github.com/JuliaLang/julia/issues/30226
 [#30249]: https://github.com/JuliaLang/julia/issues/30249
+[#30270]: https://github.com/JuliaLang/julia/issues/30270
+[#30278]: https://github.com/JuliaLang/julia/issues/30278

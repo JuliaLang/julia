@@ -810,6 +810,26 @@ f=Future(id_other)
 remote_do(fut->put!(fut, myid()), id_other, f)
 @test fetch(f) == id_other
 
+# Github issue #29932
+rc_unbuffered = RemoteChannel(()->Channel{Vector{Float64}}(0))
+
+@async begin
+    # Trigger direct write (no buffering) of largish array
+    array_sz = Int(Base.SZ_UNBUFFERED_IO/8) + 1
+    largev = zeros(array_sz)
+    for i in 1:10
+        largev[1] = float(i)
+        put!(rc_unbuffered, largev)
+    end
+end
+
+@test remotecall_fetch(rc -> begin
+        for i in 1:10
+            take!(rc)[1] != float(i) && error("Failed")
+        end
+        return :OK
+    end, id_other, rc_unbuffered) == :OK
+
 # github PR #14456
 n = DoFullTest ? 6 : 5
 for i = 1:10^n

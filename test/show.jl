@@ -1416,3 +1416,6 @@ end
 replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color => true),
                                          MIME("text/plain"), x), x)
 @test occursin("\e[", replstrcolor(`curl abc`))
+
+# issue #30303
+@test repr(Symbol("a\$")) == "Symbol(\"a\\\$\")"
