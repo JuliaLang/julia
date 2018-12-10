@@ -322,8 +322,8 @@ endef
 # don't inadvertently link to /lib/libgcc_s.so.1, which is incompatible with
 # libgfortran, and on Windows we copy them in earlier as well.
 ifeq (,$(findstring $(OS),FreeBSD WINNT))
-julia-base: $(build_libdir)/libgfortran.$(SHLIB_EXT)
-$(build_libdir)/libgfortran.$(SHLIB_EXT): | $(build_libdir)
+julia-base: $(build_libdir)/libgfortran*.$(SHLIB_EXT)*
+$(build_libdir)/libgfortran*.$(SHLIB_EXT)*: | $(build_libdir) julia-deps
 	-$(CUSTOM_LD_LIBRARY_PATH) PATH=$(PATH):$(build_depsbindir) $(JULIAHOME)/contrib/fixup-libgfortran.sh --verbose $(build_libdir)
 JL_PRIVATE_LIBS-0 += libgfortran libgcc_s libquadmath
 endif
@@ -340,9 +340,10 @@ ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	$(INSTALL_M) $(build_bindir)/julia-debug $(DESTDIR)$(bindir)/
 endif
 ifeq ($(OS),WINNT)
-	-$(INSTALL_M) $(build_bindir)/*.dll $(DESTDIR)$(bindir)/
+	-$(INSTALL_M) $(filter-out $(build_bindir)/libjulia-debug.dll,$(wildcard $(build_bindir)/*.dll)) $(DESTDIR)$(bindir)/
 	-$(INSTALL_M) $(build_libdir)/libjulia.dll.a $(DESTDIR)$(libdir)/
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
+	-$(INSTALL_M) $(build_bindir)/libjulia-debug.dll $(DESTDIR)$(bindir)/
 	-$(INSTALL_M) $(build_libdir)/libjulia-debug.dll.a $(DESTDIR)$(libdir)/
 endif
 	-$(INSTALL_M) $(build_bindir)/libopenlibm.dll.a $(DESTDIR)$(libdir)/

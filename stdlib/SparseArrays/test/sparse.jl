@@ -2335,7 +2335,6 @@ end
     @test m2.module == SparseArrays
 end
 
-
 @testset "sprandn with type $T" for T in (Float64, Float32, Float16, ComplexF64, ComplexF32, ComplexF16)
     @test sprandn(T, 5, 5, 0.5) isa AbstractSparseMatrix{T}
 end

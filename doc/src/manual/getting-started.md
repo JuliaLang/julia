@@ -125,6 +125,11 @@ julia [switches] -- [programfile] [args...]
 |`--track-allocation={none\|user\|all}` |Count bytes allocated by each source line|
 |`--track-allocation`                   |equivalent to `--track-allocation=user`|
 
+!!! compat "Julia 1.1"
+    In Julia 1.0, the default `--project=@.` option did not search up from the root
+    directory of a Git repository for the `Project.toml` file. From Julia 1.1 forward, it
+    does.
+
 ## Resources
 
 A curated list of useful learning resources to help new users get started can be found on the [learning](https://julialang.org/learning/) page of the main Julia web site.

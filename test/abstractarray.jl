@@ -584,11 +584,23 @@ function test_setindex!_internals(::Type{TestAbstractArray})
 end
 
 function test_get(::Type{TestAbstractArray})
-    A = T24Linear([1:24...])
-    B = TSlow([1:24...])
+    A = T24Linear(reshape([1:24...], 4, 3, 2))
+    B = TSlow(reshape([1:24...], 4, 3, 2))
 
-    @test get(A, (), 0) == Int[]
-    @test get(B, (), 0) == TSlow(Int, 0)
+    @test get(A, (), 0) == 0
+    @test get(B, (), 0) == 0
+    @test get(A, (1,), 0) == get(A, 1, 0) == A[1] == 1
+    @test get(B, (1,), 0) == get(B, 1, 0) == B[1] == 1
+    @test get(A, (25,), 0) == get(A, 25, 0) == 0
+    @test get(B, (25,), 0) == get(B, 25, 0) == 0
+    @test get(A, (1,1,1), 0) == A[1,1,1] == 1
+    @test get(B, (1,1,1), 0) == B[1,1,1] == 1
+    @test get(A, (1,1,3), 0) == 0
+    @test get(B, (1,1,3), 0) == 0
+
+    @test get(TSlow([]), (), 0) == 0
+    @test get(TSlow([1]), (), 0) == 1
+    @test get(TSlow(fill(1)), (), 0) == 1
 end
 
 function test_cat(::Type{TestAbstractArray})
@@ -946,4 +958,12 @@ end
 @testset "Issue 30145" begin
     X = [1,2,3]
     @test isempty(X[Union{}[]])
+end
+
+@testset "Issue 30259" begin
+    A = randn(1,2,3)
+    @test get(A, CartesianIndex(1,2,3), :some_default) === A[1,2,3]
+    @test get(A, CartesianIndex(2,2,3), :some_default) === :some_default
+    @test get(11:15, CartesianIndex(6), nothing) === nothing
+    @test get(11:15, CartesianIndex(5), nothing) === 15
 end

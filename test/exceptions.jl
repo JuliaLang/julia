@@ -1,4 +1,5 @@
 using Test
+using Base: catch_stack
 
 @testset "Basic exception stack handling" begin
     # Exiting the catch block normally pops the exception

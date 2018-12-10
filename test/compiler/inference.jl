@@ -1615,6 +1615,15 @@ g26172(::Val{0}) = ()
 g26172(v) = (nothing, g26172(f26172(v))...)
 @test @inferred(g26172(Val(10))) === ntuple(_ -> nothing, 10)
 
+function conflicting_assignment_conditional()
+    x = iterate([])
+    if x === (x = 4; nothing)
+        return x
+    end
+    return 5
+end
+@test @inferred(conflicting_assignment_conditional()) === 4
+
 # 26826 constant prop through varargs
 
 struct Foo26826{A,B}
