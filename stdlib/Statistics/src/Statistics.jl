@@ -693,12 +693,13 @@ middle(a::AbstractArray) = ((v1, v2) = extrema(a); middle(v1, v2))
     median!(v; lt=isless, by=identity, middle=middle, rev=false)
 
 Compute the median of an array `v`. For an even number of elements no exact
-median element exists, so the result is equivalent to calculating mean of two
+median element exists, so the result is equivalent to calculating the mean of the two
 median elements. The `by` keyword lets you provide a function that will be
 applied to each element before comparison. The `lt` keyword allows providing a
 custom "less than" function for sorting prior to taking the median.
-In the case of non-numerical, even length `v`, one can choose either of the two middle
-elements as the median by `rev` keyword.
+In the case of non-numerical, even length `v`, the first of the two middle elements
+according to the provided ordering is returned as the median. One can choose the
+second of the two middle elements by reversing the sort order with `rev=true`.
 
 Like [`median`](@ref), but may overwrite the input vector.
 """
@@ -754,7 +755,7 @@ julia> median([1 2; 3 4], dims=1)
 """
 median(v::AbstractArray; dims=:, lt=isless, by=identity, middle=middle, rev=false) = _median(v, dims, lt, by, middle, rev)
 
-_median(v::AbstractArray, dims, lt, by, middle, rev) = mapslices(median!, v, dims = dims)
+_median(v::AbstractArray, dims, lt, by, middle, rev) = mapslices(v -> median!(v, lt=lt, by=by, middle=middle, rev=rev), v, dims = dims)
 
 _median(v::AbstractArray{T}, ::Colon, lt, by, middle, rev) where {T} = median!(copyto!(Array{T,1}(undef, length(v)), v), lt=lt, by=by, middle=middle, rev=rev)
 
