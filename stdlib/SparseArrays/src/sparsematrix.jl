@@ -3527,7 +3527,7 @@ end
 #this helper shifts a column by r
 function shifter!(R::AbstractVector, V::AbstractVector, start::Integer, fin::Integer, m::Integer, r::Integer)
     split = fin
-    for j = start:fin
+    @inbounds for j = start:fin
         # shift in the vertical direction...
         R[j] += r
         if R[j] <= m
@@ -3559,10 +3559,10 @@ function circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, (r,c)::Base.DimsInte
     nright = nnz - nleft
 
     # exchange left and right blocks
-    for i=c+1:X.n
+    @inbounds for i=c+1:X.n
         O.colptr[i] = X.colptr[i-c] + nright
     end
-    for i=1:c
+    @inbounds for i=1:c
         O.colptr[i] = X.colptr[X.n - c + i] - nleft
     end
     # rotate rowval and nzval by the right number of elements
@@ -3571,7 +3571,7 @@ function circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, (r,c)::Base.DimsInte
 
     ##### vertical shift
     r = mod(r, X.m)
-    for i=1:O.n
+    @inbounds for i=1:O.n
         shifter!(O.rowval, O.nzval, O.colptr[i], O.colptr[i+1]-1, O.m, r)
     end
     return O
