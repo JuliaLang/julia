@@ -185,7 +185,7 @@ end
 checkbounds(::Type{Bool}, s::AbstractString, i::Integer) =
     1 ≤ i ≤ ncodeunits(s)
 checkbounds(::Type{Bool}, s::AbstractString, i::Real) =
-    1 ≤ i ≤ ncodeunits(s)
+    isinteger(i) && 1 ≤ i ≤ ncodeunits(s)
 checkbounds(::Type{Bool}, s::AbstractString, r::AbstractRange{<:Integer}) =
     isempty(r) || (1 ≤ minimum(r) && maximum(r) ≤ ncodeunits(s))
 checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Real}) =
