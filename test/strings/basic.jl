@@ -177,6 +177,7 @@ end
 
 @testset "issue #7248" begin
     @test_throws BoundsError length("hello", 1, -1)
+    @test_throws BoundsError length("hello", Int8(1), Int8(-1))
     @test_throws BoundsError prevind("hello", 0, 1)
     @test_throws BoundsError length("hellø", 1, -1)
     @test_throws BoundsError prevind("hellø", 0, 1)
@@ -204,6 +205,7 @@ end
     @test checkbounds(Bool, "hello", 1:6) === false
     @test checkbounds(Bool, "hello", 1:5) === true
     @test checkbounds(Bool, "hello", [0:5;]) === false
+    @test checkbounds(Bool, "hello", [0.0:5.0;]) === false
     @test checkbounds(Bool, "hello", [1:6;]) === false
     @test checkbounds(Bool, "hello", [1:5;]) === true
 end
