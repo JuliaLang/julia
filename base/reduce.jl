@@ -452,21 +452,21 @@ julia> prod(1:20)
 prod(a) = mapreduce(identity, mul_prod, a)
 
 ## maximum & minimum
-
-# these propagate NaN correctly only in the second argument
-_fast(::typeof(max), x, y) = ifelse(x > y, x, y)
-_fast(::typeof(min), x, y) = ifelse(x < y, x, y)
+_fast(::typeof(max), x, y) = ifelse(x == x,
+                                    ifelse(x > y, x, y),
+                                    x)
+_fast(::typeof(min), x, y) = ifelse(x == x,
+                                    ifelse(x < y, x, y),
+                                    x)
 
 function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
                         A::AbstractArray, first::Int, last::Int)
     a1 = @inbounds A[first]
     v = mapreduce_first(f, op, a1)
     chunk_len = 256
-    stop = first
-    while last - stop > 0
+    for start in (first + 1):chunk_len:last
         v == v || return v
-        start = stop + 1
-        stop = min(stop + chunk_len, last)
+        stop = min(start + chunk_len-1, last)
         @simd for i in start:stop
             @inbounds ai = A[i]
             v = _fast(op, v, f(ai))
