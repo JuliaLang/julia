@@ -103,7 +103,6 @@ The following defines the usage of terminal-based `emacs`:
         `\$cmd +\$line \$path`
     end
 """
-
 function define_editor(fn, pattern; wait=false, priority=0)
     nargs = map(x -> x.nargs - 1, methods(fn).ms)
     has3args = 3 ∈ nargs
