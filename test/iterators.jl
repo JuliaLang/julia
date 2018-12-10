@@ -362,6 +362,12 @@ end
 @test length(product(1:2,1:10,4:6)) == 60
 @test Base.IteratorSize(product(1:2, countfrom(1))) == Base.IsInfinite()
 
+# truncate
+# --------
+@test Iterators.truncate([1, 2, 3], 1:10) == (Base.OneTo(3),)
+@test Iterators.truncate(1:50, 1:10) == (Base.OneTo(10),)
+@test Iterators.truncate([1, 2, 3, 4], [1, 2, 3]) == (Base.OneTo(3),)
+
 # flatten
 # -------
 @test collect(flatten(Any[1:2, 4:5])) == Any[1,2,4,5]

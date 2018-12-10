@@ -388,6 +388,32 @@ _zip_iterator_eltype(::Type{Tuple{}}) = HasEltype()
 
 reverse(z::Zip) = Zip(map(reverse, z.is))
 
+"""
+    truncate(s1, s2)
+
+Check two array shapes for length, and return whichever shape has less dimensions.
+
+# Examples
+```jldoctest
+julia> truncate([1, 2, 3], 1:10)
+(Base.OneTo(3),)
+
+julia> truncate(1:50, 1:10)
+(Base.OneTo(10),)
+```
+"""
+function truncate(a::AbstractArray, b::AbstractArray)
+    truncate(axes(a), axes(b))
+end
+
+function truncate(a, b)
+    if length(a[1]) < length(b[1])
+       return a
+    else
+       return b
+    end
+end
+
 # filter
 
 struct Filter{F,I}
