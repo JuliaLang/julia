@@ -3566,8 +3566,8 @@ function circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, (r,c)::Base.DimsInte
         O.colptr[i] = X.colptr[X.n - c + i] - nleft
     end
     # rotate rowval and nzval by the right number of elements
-    circshift!(O.rowval, X.rowval, nright)
-    circshift!(O.nzval, X.nzval, nright)
+    circshift!(O.rowval, X.rowval, (nright,))
+    circshift!(O.nzval, X.nzval, (nright,))
 
     ##### vertical shift
     r = mod(r, X.m)
