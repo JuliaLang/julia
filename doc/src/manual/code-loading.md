@@ -214,11 +214,11 @@ This example map includes three different kinds of package locations (the first 
 
 ### Package directories
 
-Package directories provide a simpler environment, but less powerful or controlled, and they exist in two flavors (depending on whether they contain a project file). The set of root packages available is defined simply as the set of files in the directory that "look like" packages. A package `X` is determined to exist if it finds one of the following files:
+Package directories provide a simpler environment, but less powerful or controlled. The set of root packages available is defined simply as the set of files in the directory that "look like" packages. A package `X` is determined to exist if it finds one of the following files:
   - A file `X.jl`
   - A file `X/src/X.jl`
   - A file `X.jl/src/X.jl`
-Additionally, which packages it is able to import as dependencies depends on whether it contains a project file. If it does not, it can import any root package. Otherwise, if it does contain a `Package.toml` file, it can only import those packages which are identified in its `[deps]` sections (by uuid and name).
+Additionally, which packages it is able to import as dependencies depends on whether that package contains a project file. If it does not, it can import any root package. Otherwise (if it does contain a `Package.toml` file), it can only import those packages which are identified in its `[deps]` sections (given by uuid and name).
 
 **The roots map** is determined by enumerating the contents of the package directory to generate a list of all packages that exist.
 Additionally, a UUID will be assigned to each entry as follows: For a given package found inside the folder `X`...
