@@ -1524,7 +1524,8 @@ function spzeros(::Type{Tv}, ::Type{Ti}, sz::Tuple{Integer,Integer}) where {Tv, 
     spzeros(Tv, Ti, sz[1], sz[2])
 end
 
-function one(S::SparseMatrixCSC{T}) where T
+import Base._one
+function Base._one(unit::T, S::SparseMatrixCSC) where T
     S.m == S.n || throw(DimensionMismatch("multiplicative identity only defined for square matrices"))
     return SparseMatrixCSC{T}(I, S.m, S.n)
 end
