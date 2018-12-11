@@ -5,9 +5,16 @@
 # notes: bits are stored in contiguous chunks
 #        unused bits must always be set to 0
 """
-    BitArray{N} <: DenseArray{Bool, N}
+    BitArray{N} <: AbstractArray{Bool, N}
 
-Space-efficient `N`-dimensional boolean array, which stores one bit per boolean value.
+Space-efficient `N`-dimensional boolean array, using just one bit for each boolean value.
+
+`BitArray`s pack up to 64 values into every 8 bytes, resulting in an 8x space efficiency
+over `Array{Bool, N}` and allowing some operations to work on 64 values at once.
+
+By default, Julia returns `BitArrays` from [broadcasting](@ref Broadcasting) operations
+that generate boolean elements (including dotted-comparisons like `.==`) as well as from
+the functions [`trues`](@ref) and [`falses`](@ref).
 """
 mutable struct BitArray{N} <: AbstractArray{Bool, N}
     chunks::Vector{UInt64}
