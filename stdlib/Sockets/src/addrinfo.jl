@@ -253,15 +253,16 @@ function getipaddr()
 end
 
 """
-    getipaddrs() -> IPv4[]
+    getipaddrs() -> Vector{IPv4}
 
 Get the IP addresses of the local machine.
 
 # Examples
 ```julia-repl
 julia> getipaddrs()
-1-element Array{IPv4,1}:
-  ip"192.168.1.28"
+2-element Array{IPv4,1}:
+ ip"10.255.0.183"
+ ip"172.17.0.1"
 ```
 """
 function getipaddrs()
