@@ -125,7 +125,7 @@ function _reducedim_init(f, op, fv, fop, A, region)
 end
 
 # initialization when computing minima and maxima requires a little care
-for (f1, f2, initval) in ((:min_minimum, :max_maximum, :Inf), (:max_maximum, :min_minimum, :(-Inf)))
+for (f1, f2, initval) in ((:min, :max, :Inf), (:max, :min, :(-Inf)))
     @eval function reducedim_init(f, op::typeof($f1), A::AbstractArray, region)
         # First compute the reduce indices. This will throw an ArgumentError
         # if any region is invalid
@@ -642,7 +642,7 @@ julia> any!([1 1], A)
 any!(r, A)
 
 for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod,    :mul_prod),
-                            (:maximum, :_maximum, :max_maximum),     (:minimum, :_minimum, :min_minimum)]
+                            (:maximum, :_maximum, :max),     (:minimum, :_minimum, :min)]
     @eval begin
         # User-facing methods with keyword arguments
         @inline ($fname)(a::AbstractArray; dims=:) = ($_fname)(a, dims)
@@ -662,7 +662,7 @@ all(f::Function, a::AbstractArray; dims=:) = _all(f, a, dims)
 _all(a, ::Colon)                           = _all(identity, a, :)
 
 for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
-                    (:maximum, :max_maximum), (:minimum, :min_minimum),
+                    (:maximum, :max), (:minimum, :min),
                     (:all, :&),       (:any, :|)]
     fname! = Symbol(fname, '!')
     _fname = Symbol('_', fname)

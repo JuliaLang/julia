@@ -452,34 +452,24 @@ julia> prod(1:20)
 prod(a) = mapreduce(identity, mul_prod, a)
 
 ## maximum & minimum
-
-"""
-    max_maximum(x,y)
-
-Compute the bigger of two elements. This function dose the same thing as `max(x,y)`, except that
-* It is slightly faster
-* The order of `-0.0` and `0.0` is undefined.
-
-See also [`max`](@ref), [`min_minimum`](@ref)
-"""
-function max_maximum(x,y)
+function _fast(::typeof(max),x,y)
     ifelse(isnan(x),
         x,
         ifelse(x > y, x, y))
 end
 
-"""
-    min_minimum(x,y)
-
-Variant of [`max_maximum`](@ref) for computing minima.
-"""
-function min_minimum(x,y)
+function _fast(::typeof(min),x,y)
     ifelse(isnan(x),
         x,
         ifelse(x < y, x, y))
 end
 
-function mapreduce_impl(f, op::Union{typeof(max_maximum), typeof(min_minimum)},
+isbadzero(::typeof(max), x) = (x == zero(x)) & signbit(x)
+isbadzero(::typeof(min), x) = (x == zero(x)) & !signbit(x)
+isgoodzero(::typeof(max), x) = isbadzero(min, x)
+isgoodzero(::typeof(min), x) = isbadzero(max, x)
+
+function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
                         A::AbstractArray, first::Int, last::Int)
     a1 = @inbounds A[first]
     v1 = mapreduce_first(f, op, a1)
@@ -493,10 +483,10 @@ function mapreduce_impl(f, op::Union{typeof(max_maximum), typeof(min_minimum)},
         isnan(v3) && return v3
         isnan(v4) && return v4
         @inbounds for i in start:4:stop
-            v1 = op(v1, f(A[i+1]))
-            v2 = op(v2, f(A[i+2]))
-            v3 = op(v3, f(A[i+3]))
-            v4 = op(v4, f(A[i+4]))
+            v1 = _fast(op, v1, f(A[i+1]))
+            v2 = _fast(op, v2, f(A[i+2]))
+            v3 = _fast(op, v3, f(A[i+3]))
+            v4 = _fast(op, v4, f(A[i+4]))
         end
         start = stop
         stop = start + chunk_len - 4
@@ -507,11 +497,21 @@ function mapreduce_impl(f, op::Union{typeof(max_maximum), typeof(min_minimum)},
         @inbounds ai = A[i]
         v = op(v, f(A[i]))
     end
-    v
+
+    # enforce correct order of 0.0 and -0.0
+    # e.g. maximum([0.0, -0.0]) === 0.0
+    # should hold
+    if isbadzero(op, v)
+        for i in first:last
+            x = @inbounds A[i]
+            isgoodzero(op,x) && return x
+        end
+    end
+    return v
 end
 
-maximum(f, a) = mapreduce(f, max_maximum, a)
-minimum(f, a) = mapreduce(f, min_minimum, a)
+maximum(f, a) = mapreduce(f, max, a)
+minimum(f, a) = mapreduce(f, min, a)
 
 """
     maximum(itr)
@@ -527,7 +527,7 @@ julia> maximum([1,2,3])
 3
 ```
 """
-maximum(a) = mapreduce(identity, max_maximum, a)
+maximum(a) = mapreduce(identity, max, a)
 
 """
     minimum(itr)
@@ -543,7 +543,7 @@ julia> minimum([1,2,3])
 1
 ```
 """
-minimum(a) = mapreduce(identity, min_minimum, a)
+minimum(a) = mapreduce(identity, min, a)
 
 ## all & any
 

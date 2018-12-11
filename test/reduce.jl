@@ -185,21 +185,44 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test minimum([4, 3, 5, 2]) == 2
 @test extrema([4, 3, 5, 2]) == (2, 5)
 
+@test maximum([-0.,0.]) === 0.0
+@test maximum([0.,-0.]) === 0.0
+@test maximum([0.,-0.,0.]) === 0.0
+@test minimum([-0.,0.]) === -0.0
+@test minimum([0.,-0.]) === -0.0
+@test minimum([0.,-0.,0.]) === -0.0
+
 @testset "minimum/maximum checks all elements" begin
-    N = 1025
-    for i in 1:N
-        arr = fill(0., N)
-        truth = rand()
-        arr[i] = truth
-        @test maximum(arr) == truth
+    for N in [2:20;150;300]
+        for i in 1:N
+            arr = fill(0., N)
+            truth = rand()
+            arr[i] = truth
+            @test maximum(arr) == truth
 
-        truth = -rand()
-        arr[i] = truth
-        @test minimum(arr) == truth
+            truth = -rand()
+            arr[i] = truth
+            @test minimum(arr) == truth
 
-        arr[i] = NaN
-        @test isnan(maximum(arr))
-        @test isnan(minimum(arr))
+            arr[i] = NaN
+            @test isnan(maximum(arr))
+            @test isnan(minimum(arr))
+
+            arr = zeros(N)
+            @test minimum(arr) === 0.0
+            @test maximum(arr) === 0.0
+
+            arr[i] = -0.0
+            @test minimum(arr) === -0.0
+            @test maximum(arr) ===  0.0
+
+            arr = -zeros(N)
+            @test minimum(arr) === -0.0
+            @test maximum(arr) === -0.0
+            arr[i] = 0.0
+            @test minimum(arr) === -0.0
+            @test maximum(arr) === 0.0
+        end
     end
 end
 
