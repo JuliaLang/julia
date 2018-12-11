@@ -400,8 +400,6 @@ static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const 
     void *pr = alloca(osize);
     unsigned isize_bits = isize * host_char_bit;
     unsigned osize_bits = osize * host_char_bit;
-    if (aty == (jl_value_t*)jl_bool_type)
-       isize_bits = 1;
     op(isize_bits, pa, osize_bits, pr);
     return jl_new_bits(ty, pr);
 }
