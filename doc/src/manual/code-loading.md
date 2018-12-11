@@ -157,14 +157,15 @@ and gets `2d15fe94-a1f7-436c-a4d8-07a9a496e01c`, which indicates that in the con
 
 What happens if `import Zebra` is evaluated in the main `App` code base? Since `Zebra` does not appear in the project file, the import will fail even though `Zebra` *does* appear in the manifest file. Moreover, if `import Zebra` occurs in the public `Priv` package—the one with UUID `2d15fe94-a1f7-436c-a4d8-07a9a496e01c`—then that would also fail since that `Priv` package has no declared dependencies in the manifest file and therefore cannot load any packages. The `Zebra` package can only be loaded by packages for which it appear as an explicit dependency in the manifest file: the  `Pub` package and one of the `Priv` packages.
 
-**The paths map** of a project environment is also determined by the manifest file. If there is no manifest file, then the paths map of the environment is empty. The path of a package `uuid` named `X` is determined by these two rules:
+**The paths map** of a project environment is extracted from the manifest file. The path of a package `uuid` named `X` is determined by these rules (in order):
 
-1. If the directory contains a project file with a matching `uuid` and `X`, then either:
-  - It has a `path` entry, that will be used (interpreted relative to the directory containing the project file).
+1. If the project file in the directory matches `uuid` and name `X`, then either:
+  - It has a toplevel `path` entry, that will be used (interpreted relative to the directory containing the project file).
   - Otherwise, it'll use the Project file directory.
-2. If the there is a project file and matching manifest, and the manifest contains a stanza matching `uuid`
+2. If the project file has a corresponding manifest file, and the manifest contains a stanza matching `uuid`:
   - If it has a `path` entry, use that path (relative to the manifest file).
   - If it has a `git-tree-sha1` entry, compute a deterministic hash function of `uuid` and `git-tree-sha1`—call it `slug`—and look for a directory named `packages/X/$slug` in each directory in the Julia `DEPOT_PATH` global array. Use the first such directory that exists.
+  - Otherwise, ignore this stanza.
 
 If any of these result in success, the path to the source code entry point will be either that result,
 the relative path from that result plus `src/X.jl`, or fail.
