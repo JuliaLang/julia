@@ -110,6 +110,7 @@ Standard library changes
   * `mul!`, `rmul!` and `lmul!` methods for `UniformScaling` ([#29506]).
   * `Symmetric` and `Hermitian` matrices now preserve the wrapper when scaled with a number ([#29469]).
   * Exponentiation operator `^` now supports raising an `Irrational` to an `AbstractMatrix` power ([#29782]).
+  * Added keyword arguments `rtol`, `atol` to `pinv`, `nullspace` and `rank` ([#29998], [#29926]).
 
 #### Random
   * `randperm` and `randcycle` now use the type of their argument to determine the element type of
