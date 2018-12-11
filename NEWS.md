@@ -109,7 +109,7 @@ Standard library changes
   * `isdiag` and `isposdef` for `Diagonal` and `UniformScaling` ([#29638]).
   * `mul!`, `rmul!` and `lmul!` methods for `UniformScaling` ([#29506]).
   * `Symmetric` and `Hermitian` matrices now preserve the wrapper when scaled with a number ([#29469]).
-  * Exponentiation operator `^` now supports raising a `Irrational` to an `AbstractMatrix` power ([#29782]).
+  * Exponentiation operator `^` now supports raising an `Irrational` to an `AbstractMatrix` power ([#29782]).
   * Added keyword arguments `rtol`, `atol` to `pinv`, `nullspace` and `rank` ([#29998], [#29926]).
 
 #### Random
