@@ -132,6 +132,7 @@ External dependencies
   * The source code for Pkg is no longer included in JuliaLang/julia. Pkg is instead
     downloaded during the build process ([#29615]).
   * LLVM has been upgraded to 6.0.1 and support for LLVM < 6.0 has been dropped ([#28745], [#28696]).
+  * Pkg has been upgraded to version 1.1 ([#30342]).
 
 Deprecated or removed
 ---------------------
@@ -210,3 +211,4 @@ Deprecated or removed
 [#30249]: https://github.com/JuliaLang/julia/issues/30249
 [#30270]: https://github.com/JuliaLang/julia/issues/30270
 [#30278]: https://github.com/JuliaLang/julia/issues/30278
+[#30342]: https://github.com/JuliaLang/julia/issues/30342
