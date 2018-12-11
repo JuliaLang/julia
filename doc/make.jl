@@ -8,12 +8,7 @@ Pkg.instantiate()
 
 using Documenter
 
-# Include the `build_sysimg` file.
-
 baremodule GenStdLib end
-@isdefined(build_sysimg) || @eval module BuildSysImg
-    include(joinpath(@__DIR__, "..", "contrib", "build_sysimg.jl"))
-end
 
 # Documenter Setup.
 
