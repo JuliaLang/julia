@@ -2333,7 +2333,7 @@ function filter!(f, a::AbstractVector)
 
     for acurr in a
         if f(acurr)
-            a[i] = acurr
+            @inbounds a[i] = acurr
             y = iterate(idx, state)
             y === nothing && (i += 1; break)
             i, state = y

@@ -306,7 +306,8 @@ function +(A::Bidiagonal, B::Bidiagonal)
     if A.uplo == B.uplo
         Bidiagonal(A.dv+B.dv, A.ev+B.ev, A.uplo)
     else
-        Tridiagonal((A.uplo == 'U' ? (B.ev,A.dv+B.dv,A.ev) : (A.ev,A.dv+B.dv,B.ev))...)
+        newdv = A.dv+B.dv
+        Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(B.ev), newdv, typeof(newdv)(A.ev)) : (typeof(newdv)(A.ev), newdv, typeof(newdv)(B.ev)))...)
     end
 end
 
@@ -314,7 +315,8 @@ function -(A::Bidiagonal, B::Bidiagonal)
     if A.uplo == B.uplo
         Bidiagonal(A.dv-B.dv, A.ev-B.ev, A.uplo)
     else
-        Tridiagonal((A.uplo == 'U' ? (-B.ev,A.dv-B.dv,A.ev) : (A.ev,A.dv-B.dv,-B.ev))...)
+        newdv = A.dv-B.dv
+        Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(-B.ev), newdv, typeof(newdv)(A.ev)) : (typeof(newdv)(A.ev), newdv, typeof(newdv)(-B.ev)))...)
     end
 end
 
@@ -489,9 +491,72 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym)
 end
 
 const SpecialMatrix = Union{Bidiagonal,SymTridiagonal,Tridiagonal}
-# to avoid ambiguity warning, but shouldn't be necessary
-*(A::AbstractTriangular, B::SpecialMatrix) = Array(A) * Array(B)
-*(A::SpecialMatrix, B::SpecialMatrix) = Array(A) * Array(B)
+
+function *(A::AbstractTriangular, B::Union{SymTridiagonal, Tridiagonal})
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(zeros(TS, size(A)...), A, B)
+end
+
+function *(A::UpperTriangular, B::Bidiagonal)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    if B.uplo == 'U'
+        A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
+    else
+        A_mul_B_td!(zeros(TS, size(A)...), A, B)
+    end
+end
+
+function *(A::LowerTriangular, B::Bidiagonal)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    if B.uplo == 'L'
+        A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
+    else
+        A_mul_B_td!(zeros(TS, size(A)...), A, B)
+    end
+end
+
+function *(A::Union{SymTridiagonal, Tridiagonal}, B::AbstractTriangular)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(zeros(TS, size(A)...), A, B)
+end
+
+function *(A::Bidiagonal, B::UpperTriangular)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    if A.uplo == 'U'
+        A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
+    else
+        A_mul_B_td!(zeros(TS, size(A)...), A, B)
+    end
+end
+
+function *(A::Bidiagonal, B::LowerTriangular)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    if A.uplo == 'L'
+        A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
+    else
+        A_mul_B_td!(zeros(TS, size(A)...), A, B)
+    end
+end
+
+function *(A::Bidiagonal, B::Diagonal)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(similar(A, TS), A, B)
+end
+
+function *(A::Diagonal, B::BiTri)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(similar(B, TS), A, B)
+end
+
+function *(A::Diagonal, B::SymTridiagonal)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(Tridiagonal(zeros(TS, size(A, 1)-1), zeros(TS, size(A, 1)), zeros(TS, size(A, 1)-1)), A, B)
+end
+
+function *(A::SymTridiagonal, B::Diagonal)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    A_mul_B_td!(Tridiagonal(zeros(TS, size(A, 1)-1), zeros(TS, size(A, 1)), zeros(TS, size(A, 1)-1)), A, B)
+end
 
 #Generic multiplication
 *(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = *(Array(A), B)
