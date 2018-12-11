@@ -210,24 +210,6 @@ JL_DLLEXPORT int jl_process_events(uv_loop_t *loop)
     else return 0;
 }
 
-#ifndef _OS_WINDOWS_
-#define UV_STREAM_READABLE 0x20   /* The stream is readable */
-#define UV_STREAM_WRITABLE 0x40   /* The stream is writable */
-#endif
-
-JL_DLLEXPORT int jl_pipe_open(uv_pipe_t *pipe, uv_os_fd_t fd, int readable, int writable)
-{
-    int err = uv_pipe_open(pipe, fd);
-#ifndef _OS_WINDOWS_
-    // clear flags set erroneously by libuv:
-    if (!readable)
-        pipe->flags &= ~UV_STREAM_READABLE;
-    if (!writable)
-        pipe->flags &= ~UV_STREAM_WRITABLE;
-#endif
-    return err;
-}
-
 static void jl_proc_exit_cleanup(uv_process_t *process, int64_t exit_status, int term_signal)
 {
     uv_close((uv_handle_t*)process, (uv_close_cb)&free);
@@ -293,11 +275,16 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv,
                           uv_stdio_container_t *stdio, int nstdio,
                           uint32_t flags, char **env, char *cwd, uv_exit_cb cb)
 {
-    uv_process_options_t opts;
+    uv_process_options_t opts = {0};
     opts.stdio = stdio;
     opts.file = name;
     opts.env = env;
     opts.flags = flags;
+    // unused fields:
+    //opts.uid = 0;
+    //opts.gid = 0;
+    //opts.cpumask = NULL;
+    //opts.cpumask_size = 0;
     opts.cwd = cwd;
     opts.args = argv;
     opts.stdio_count = nstdio;

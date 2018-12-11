@@ -37,7 +37,7 @@ configure:
 endif
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
-$(foreach link,base $(JULIAHOME)/test,$(eval $(call symlink_target,$(link),$(build_datarootdir)/julia,$(notdir $(link)))))
+$(foreach link,base $(JULIAHOME)/test,$(eval $(call symlink_target,$(link),$$(build_datarootdir)/julia,$(notdir $(link)))))
 
 julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
@@ -65,6 +65,9 @@ julia-base: julia-deps $(build_sysconfdir)/julia/startup.jl $(build_man1dir)/jul
 julia-libccalltest: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src libccalltest
 
+julia-libllvmcalltest: julia-deps
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src libllvmcalltest
+
 julia-src-release julia-src-debug : julia-src-% : julia-deps julia_flisp.boot.inc.phony
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src libjulia-$*
 
@@ -80,7 +83,7 @@ julia-sysimg-release : julia-stdlib julia-sysimg julia-ui-release
 julia-sysimg-debug : julia-stdlib julia-sysimg julia-ui-debug
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 
-julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest julia-base-cache
+julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest julia-libllvmcalltest julia-base-cache
 
 debug release : % : julia-%
 
@@ -180,10 +183,8 @@ COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 COMPILER_SRCS += $(shell find $(JULIAHOME)/base/compiler -name \*.jl)
 # sort these to remove duplicates
 BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl -and -not -name sysimg.jl) \
-                    $(shell find $(BUILDROOT)/base -name \*.jl  -and -not -name sysimg.jl)) \
-                    $(shell find $(JULIAHOME)/stdlib/Base64/src -name \*.jl)
-STDLIB_SRCS := $(JULIAHOME)/base/sysimg.jl $(shell find $(JULIAHOME)/stdlib/*/src -name \*.jl)
-STDLIB_PKGS := $(shell cd $(JULIAHOME)/stdlib && ls)
+                    $(shell find $(BUILDROOT)/base -name \*.jl  -and -not -name sysimg.jl))
+STDLIB_SRCS := $(JULIAHOME)/base/sysimg.jl $(shell find $(build_datarootdir)/julia/stdlib/$(VERSDIR)/*/src -name \*.jl)
 RELBUILDROOT := $(shell $(JULIAHOME)/contrib/relative_path.sh "$(JULIAHOME)/base" "$(BUILDROOT)/base/")
 
 $(build_private_libdir)/corecompiler.ji: $(COMPILER_SRCS) | $(build_private_libdir)
@@ -230,7 +231,7 @@ JL_TARGETS += julia-debug
 endif
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS-0 := libccalltest
+JL_PRIVATE_LIBS-0 := libccalltest libllvmcalltest
 ifeq ($(USE_GPL_LIBS), 1)
 JL_PRIVATE_LIBS-0 += libsuitesparse_wrapper
 JL_PRIVATE_LIBS-$(USE_SYSTEM_SUITESPARSE) += libamd libcamd libccolamd libcholmod libcolamd libumfpack libspqr libsuitesparseconfig
@@ -321,8 +322,8 @@ endef
 # don't inadvertently link to /lib/libgcc_s.so.1, which is incompatible with
 # libgfortran, and on Windows we copy them in earlier as well.
 ifeq (,$(findstring $(OS),FreeBSD WINNT))
-julia-base: $(build_libdir)/libgfortran.$(SHLIB_EXT)
-$(build_libdir)/libgfortran.$(SHLIB_EXT): | $(build_libdir)
+julia-base: $(build_libdir)/libgfortran*.$(SHLIB_EXT)*
+$(build_libdir)/libgfortran*.$(SHLIB_EXT)*: | $(build_libdir) julia-deps
 	-$(CUSTOM_LD_LIBRARY_PATH) PATH=$(PATH):$(build_depsbindir) $(JULIAHOME)/contrib/fixup-libgfortran.sh --verbose $(build_libdir)
 JL_PRIVATE_LIBS-0 += libgfortran libgcc_s libquadmath
 endif
@@ -339,9 +340,10 @@ ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	$(INSTALL_M) $(build_bindir)/julia-debug $(DESTDIR)$(bindir)/
 endif
 ifeq ($(OS),WINNT)
-	-$(INSTALL_M) $(build_bindir)/*.dll $(DESTDIR)$(bindir)/
+	-$(INSTALL_M) $(filter-out $(build_bindir)/libjulia-debug.dll,$(wildcard $(build_bindir)/*.dll)) $(DESTDIR)$(bindir)/
 	-$(INSTALL_M) $(build_libdir)/libjulia.dll.a $(DESTDIR)$(libdir)/
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
+	-$(INSTALL_M) $(build_bindir)/libjulia-debug.dll $(DESTDIR)$(bindir)/
 	-$(INSTALL_M) $(build_libdir)/libjulia-debug.dll.a $(DESTDIR)$(libdir)/
 endif
 	-$(INSTALL_M) $(build_bindir)/libopenlibm.dll.a $(DESTDIR)$(libdir)/
@@ -394,6 +396,10 @@ endif
 	# Remove various files which should not be installed
 	-rm -f $(DESTDIR)$(datarootdir)/julia/base/version_git.sh
 	-rm -f $(DESTDIR)$(datarootdir)/julia/test/Makefile
+	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/source-extracted
+	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/build-configured
+	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/build-compiled
+	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/build-checked
 	# Copy in beautiful new man page
 	$(INSTALL_F) $(build_man1dir)/julia.1 $(DESTDIR)$(man1dir)/
 	# Copy icon and .desktop file
@@ -444,11 +450,8 @@ endif
 	mkdir -p $(DESTDIR)$(sysconfdir)
 	cp -R $(build_sysconfdir)/julia $(DESTDIR)$(sysconfdir)/
 
-distclean dist-clean:
+distclean:
 	-rm -fr $(BUILDROOT)/julia-*.tar.gz $(BUILDROOT)/julia*.exe $(BUILDROOT)/julia-*.7z $(BUILDROOT)/julia-$(JULIA_COMMIT)
-
-dist:
-	@echo \'dist\' target is deprecated: use \'binary-dist\' instead.
 
 binary-dist: distclean
 ifeq ($(USE_SYSTEM_BLAS),0)
@@ -515,7 +518,7 @@ endif
 	echo "base/version_git.jl" > light-source-dist.tmp
 
 	# Download all stdlibs and include the tarball filenames in light-source-dist.tmp
-	@$(MAKE) -C stdlib getall
+	@$(MAKE) -C stdlib getall NO_GIT=1
 	-ls stdlib/srccache/*.tar.gz >> light-source-dist.tmp
 
 	# Exclude git, github and CI config files
@@ -558,7 +561,7 @@ clean: | $(CLEAN_TARGETS)
 	@-$(MAKE) -C $(BUILDROOT)/src clean
 	@-$(MAKE) -C $(BUILDROOT)/ui clean
 	@-$(MAKE) -C $(BUILDROOT)/test clean
-	@-$(MAKE) -C $(BUILDROOT)/stdlib clean-pkg
+	@-$(MAKE) -C $(BUILDROOT)/stdlib clean
 	-rm -f $(BUILDROOT)/julia
 	-rm -f $(BUILDROOT)/*.tar.gz
 	-rm -f $(build_depsbindir)/stringreplace \
@@ -574,6 +577,7 @@ cleanall: clean
 	-rm -fr $(build_prefix) $(build_staging)
 
 distcleanall: cleanall
+	@-$(MAKE) -C $(BUILDROOT)/stdlib distclean
 	@-$(MAKE) -C $(BUILDROOT)/deps distcleanall
 	@-$(MAKE) -C $(BUILDROOT)/doc cleanall
 

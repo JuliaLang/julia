@@ -277,7 +277,7 @@ julia> a = [1 2; 3 4]
  3  4
 
 julia> qr!(a)
-ERROR: InexactError: Int64(Int64, -3.1622776601683795)
+ERROR: InexactError: Int64(-3.1622776601683795)
 Stacktrace:
 [...]
 ```
@@ -502,23 +502,22 @@ AbstractMatrix{T}(Q::QRPackedQ) where {T} = QRPackedQ{T}(Q)
 QRCompactWYQ{S}(Q::QRCompactWYQ) where {S} = QRCompactWYQ(convert(AbstractMatrix{S}, Q.factors), convert(AbstractMatrix{S}, Q.T))
 AbstractMatrix{S}(Q::QRCompactWYQ{S}) where {S} = Q
 AbstractMatrix{S}(Q::QRCompactWYQ) where {S} = QRCompactWYQ{S}(Q)
-Matrix{T}(A::AbstractQ) where {T} = lmul!(A, Matrix{T}(I, size(A.factors, 1), min(size(A.factors)...)))
-Matrix(A::AbstractQ{T}) where {T} = Matrix{T}(A)
-Array{T}(A::AbstractQ) where {T} = Matrix{T}(A)
-Array(A::AbstractQ) = Matrix(A)
+Matrix{T}(Q::AbstractQ) where {T} = lmul!(Q, Matrix{T}(I, size(Q, 1), min(size(Q.factors)...)))
+Matrix(Q::AbstractQ{T}) where {T} = Matrix{T}(Q)
+Array{T}(Q::AbstractQ) where {T} = Matrix{T}(Q)
+Array(Q::AbstractQ) = Matrix(Q)
 
-size(A::Union{QR,QRCompactWY,QRPivoted}, dim::Integer) = size(getfield(A, :factors), dim)
-size(A::Union{QR,QRCompactWY,QRPivoted}) = size(getfield(A, :factors))
-size(A::AbstractQ, dim::Integer) = 0 < dim ? (dim <= 2 ? size(getfield(A, :factors), 1) : 1) : throw(BoundsError())
-size(A::AbstractQ) = size(A, 1), size(A, 2)
+size(F::Union{QR,QRCompactWY,QRPivoted}, dim::Integer) = size(getfield(F, :factors), dim)
+size(F::Union{QR,QRCompactWY,QRPivoted}) = size(getfield(F, :factors))
+size(Q::AbstractQ, dim::Integer) = size(getfield(Q, :factors), dim == 2 ? 1 : dim)
+size(Q::AbstractQ) = size(Q, 1), size(Q, 2)
 
-
-function getindex(A::AbstractQ, i::Integer, j::Integer)
-    x = zeros(eltype(A), size(A, 1))
+function getindex(Q::AbstractQ, i::Integer, j::Integer)
+    x = zeros(eltype(Q), size(Q, 1))
     x[i] = 1
-    y = zeros(eltype(A), size(A, 2))
+    y = zeros(eltype(Q), size(Q, 2))
     y[j] = 1
-    return dot(x, lmul!(A, y))
+    return dot(x, lmul!(Q, y))
 end
 
 ## Multiplication by Q

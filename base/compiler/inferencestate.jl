@@ -226,6 +226,28 @@ function add_mt_backedge!(mt::Core.MethodTable, @nospecialize(typ), caller::Infe
     nothing
 end
 
+function poison_callstack(infstate::InferenceState, topmost::InferenceState, poison_topmost::Bool)
+    poison_topmost && (topmost = topmost.parent)
+    while !(infstate === topmost)
+        if call_result_unused(infstate)
+            # If we won't propagate the result any further (since it's typically unused),
+            # it's OK that we keep and cache the "limited" result in the parents
+            # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
+            # TODO: we might be able to halt progress much more strongly here,
+            # since now we know we won't be able to keep anything much that we learned.
+            # We were mainly only here to compute the calling convention return type,
+            # but in most situations now, we are unlikely to be able to use that information.
+            break
+        end
+        infstate.limited = true
+        for infstate_cycle in infstate.callers_in_cycle
+            infstate_cycle.limited = true
+        end
+        infstate = infstate.parent
+        infstate === nothing && return
+    end
+end
+
 function is_specializable_vararg_slot(@nospecialize(arg), nargs::Int, vargs::Vector{Any})
     return (isa(arg, Slot) && slot_id(arg) == nargs && !isempty(vargs))
 end

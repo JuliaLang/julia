@@ -647,6 +647,10 @@ If `dst` and `src` are of the same type, `dst == src` should hold after
 the call. If `dst` and `src` are multidimensional arrays, they must have
 equal [`axes`](@ref).
 See also [`copyto!`](@ref).
+
+!!! compat "Julia 1.1"
+    This method requires at least Julia 1.1. In Julia 1.0 this method
+    is available from the `Future` standard library as `Future.copy!`.
 """
 copy!(dst::AbstractVector, src::AbstractVector) = append!(empty!(dst), src)
 
@@ -1162,7 +1166,7 @@ RangeVecIntList{A<:AbstractVector{Int}} = Union{Tuple{Vararg{Union{AbstractRange
     AbstractVector{UnitRange{Int}}, AbstractVector{AbstractRange{Int}}, AbstractVector{A}}
 
 get(A::AbstractArray, i::Integer, default) = checkbounds(Bool, A, i) ? A[i] : default
-get(A::AbstractArray, I::Tuple{}, default) = similar(A, typeof(default), 0)
+get(A::AbstractArray, I::Tuple{}, default) = checkbounds(Bool, A) ? A[] : default
 get(A::AbstractArray, I::Dims, default) = checkbounds(Bool, A, I...) ? A[I...] : default
 
 function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T

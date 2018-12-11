@@ -112,9 +112,10 @@ cd(@__DIR__) do
     local stdin_monitor
     all_tasks = Task[]
     try
-        if isa(stdin, Base.TTY)
+        # Monitor stdin and kill this task on ^C
+        # but don't do this on Windows, because it may deadlock in the kernel
+        if !Sys.iswindows() && isa(stdin, Base.TTY)
             t = current_task()
-            # Monitor stdin and kill this task on ^C
             stdin_monitor = @async begin
                 term = REPL.Terminals.TTYTerminal("xterm", stdin, stdout, stderr)
                 try
@@ -197,7 +198,7 @@ cd(@__DIR__) do
         foreach(task->try; schedule(task, InterruptException(); error=true); catch; end, all_tasks)
         foreach(wait, all_tasks)
     finally
-        if isa(stdin, Base.TTY)
+        if @isdefined stdin_monitor
             schedule(stdin_monitor, InterruptException(); error=true)
         end
     end

@@ -57,16 +57,10 @@ out = read(`$echocmd hello` & `$echocmd world`, String)
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
 Sys.isunix() && run(pipeline(yescmd, `head`, devnull))
 
-let a, p
-    a = Base.Condition()
-    t = @async begin
-        p = run(pipeline(yescmd,devnull), wait=false)
-        Base.notify(a,p)
-        @test !success(p)
-    end
-    p = wait(a)
+let p = run(pipeline(yescmd, devnull), wait=false)
+    t = @async !success(p)
     kill(p)
-    wait(t)
+    @test fetch(t)
 end
 
 if valgrind_off
@@ -332,7 +326,7 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(stdout, " 1\t", r
             @test !isopen(out.out)
             @test !isreadable(out)
         end
-        @test_throws ArgumentError write(out, "now closed error")
+        @test_throws Base.IOError write(out, "now closed error")
         if Sys.iswindows()
             # WINNT kernel appears to not provide a fast mechanism for async propagation
             # of EOF for a blocking stream, so just wait for it to catch up.
@@ -618,6 +612,23 @@ open(`$catcmd`, "r+") do f
     @test read(f, Char) == 'δ'
     wait(t)
 end
+
+let text = "input-test-text"
+    b = PipeBuffer()
+    proc = open(Base.CmdRedirect(Base.CmdRedirect(```$(Base.julia_cmd()) -E '
+                    in14 = Base.open(RawFD(14))
+                    out15 = Base.open(RawFD(15))
+                    write(out15, in14)'```,
+                IOBuffer(text), 14, true),
+            b, 15, false), "r")
+    @test read(proc, String) == string(length(text), '\n')
+    @test success(proc)
+    @test String(take!(b)) == text
+end
+@test repr(Base.CmdRedirect(``, devnull, 0, false)) == "pipeline(``, stdin>Base.DevNull())"
+@test repr(Base.CmdRedirect(``, devnull, 1, true)) == "pipeline(``, stdout<Base.DevNull())"
+@test repr(Base.CmdRedirect(``, devnull, 11, true)) == "pipeline(``, 11<Base.DevNull())"
+
 
 # clean up busybox download
 if Sys.iswindows()

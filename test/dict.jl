@@ -560,6 +560,27 @@ end
     @test_throws DomainError   IdDict((sqrt(p[1]), sqrt(p[2])) for p in zip(-1:2, -1:2))
 end
 
+@testset "issue 30165, get! for IdDict" begin
+    f(x) = x^2
+    d = IdDict(8=>19)
+    @test get!(d, 8, 5) == 19
+    @test get!(d, 19, 2) == 2
+
+    @test get!(d, 42) do  # d is updated with f(2)
+        f(2)
+    end == 4
+
+    @test get!(d, 42) do  # d is not updated
+        f(200)
+    end == 4
+
+    @test get(d, 13) do   # d is not updated
+        f(4)
+    end == 16
+
+    @test d == IdDict(8=>19, 19=>2, 42=>4)
+end
+
 @testset "issue #26833, deletion from IdDict" begin
     d = IdDict()
     i = 1

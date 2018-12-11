@@ -8,17 +8,20 @@ using Random
 @test collect(Iterators.filter(x->x[1], zip([true, false, true, false],"abcd"))) == [(true,'a'),(true,'c')]
 
 let z = zip(1:2)
+    @test size(z) == (2,)
     @test collect(z) == [(1,), (2,)]
     # Issue #13979
     @test eltype(z) == Tuple{Int}
 end
 
 let z = zip(1:2, 3:4)
+    @test size(z) == (2,)
     @test collect(z) == [(1,3), (2,4)]
     @test eltype(z) == Tuple{Int,Int}
 end
 
 let z = zip(1:2, 3:4, 5:6)
+    @test size(z) == (2,)
     @test collect(z) == [(1,3,5), (2,4,6)]
     @test eltype(z) == Tuple{Int,Int,Int}
 end
@@ -75,11 +78,16 @@ end
 
 # countfrom
 # ---------
-let i = 0
+let i = 0, k = 1
     for j = countfrom(0, 2)
         @test j == i*2
         i += 1
         i <= 10 || break
+    end
+    for j = countfrom()
+        @test j == k
+        k += 1
+        k <= 10 || break
     end
 end
 
@@ -519,6 +527,8 @@ end
     end
     let t = (2,3,5,7,11)
         @test Iterators.reverse(Iterators.reverse(t)) === t
+        @test first(Iterators.reverse(t)) === last(t)
+        @test last(Iterators.reverse(t)) === first(t)
     end
 end
 

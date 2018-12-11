@@ -11,7 +11,6 @@ function typeinf(result::InferenceResult, cached::Bool, params::Params)
 end
 
 function typeinf(frame::InferenceState)
-    cached = frame.cached
     typeinf_nocycle(frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
     frames = frame.callers_in_cycle
@@ -28,6 +27,7 @@ function typeinf(frame::InferenceState)
     # empty!(frames)
     min_valid = frame.min_valid
     max_valid = frame.max_valid
+    cached = frame.cached
     if cached || frame.parent !== nothing
         for caller in results
             opt = caller.src
@@ -223,17 +223,6 @@ function widen_all_consts!(src::CodeInfo)
     return src
 end
 
-maybe_widen_conditional(@nospecialize vt) = vt
-function maybe_widen_conditional(vt::Conditional)
-    if vt.vtype === Bottom
-        return Const(false)
-    elseif vt.elsetype === Bottom
-        return Const(true)
-    else
-        return Bool
-    end
-end
-
 function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
     head = e.head
     i0 = 1
@@ -256,7 +245,7 @@ end
 function visit_slot_load!(sl::Slot, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
     id = slot_id(sl)
     s = vtypes[id]
-    vt = maybe_widen_conditional(s.typ)
+    vt = widenconditional(s.typ)
     if s.undef
         # find used-undef variables
         undefs[id] = true
@@ -312,7 +301,7 @@ function type_annotate!(sv::InferenceState)
         if gt[j] === NOT_FOUND
             gt[j] = Union{}
         end
-        gt[j] = maybe_widen_conditional(gt[j])
+        gt[j] = widenconditional(gt[j])
     end
 
     # compute the required type for each slot
@@ -442,13 +431,22 @@ function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
         uncached |= !frame.cached # ensure we never add an uncached frame to a cycle
         limited |= frame.limited
         if frame.linfo === linfo
-            uncached && return true
+            if uncached
+                # our attempt to speculate into a constant call lead to an undesired self-cycle
+                # that cannot be converged: poison our call-stack (up to the discovered duplicate frame)
+                # with the limited flag and abort (set return type to Any) now
+                poison_callstack(parent, frame, false)
+                return true
+            end
             merge_call_chain!(parent, frame, frame, limited)
             return frame
         end
         for caller in frame.callers_in_cycle
             if caller.linfo === linfo
-                uncached && return true
+                if uncached
+                    poison_callstack(parent, frame, false)
+                    return true
+                end
                 merge_call_chain!(parent, frame, caller, limited)
                 return caller
             end

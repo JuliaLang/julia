@@ -656,9 +656,9 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
         jl_cgval_t arg1 = emit_expr(ctx, arg);
         jl_value_t *ptr_ty = arg1.typ;
         if (!jl_is_cpointer_type(ptr_ty)) {
-           const char *errmsg = !strcmp(fname, "ccall") ?
-               "ccall: first argument not a pointer or valid constant expression" :
-               "cglobal: first argument not a pointer or valid constant expression";
+            const char *errmsg = !strcmp(fname, "ccall") ?
+                "ccall: first argument not a pointer or valid constant expression" :
+                "cglobal: first argument not a pointer or valid constant expression";
             emit_cpointercheck(ctx, arg1, errmsg);
         }
         arg1 = update_julia_type(ctx, arg1, (jl_value_t*)jl_voidpointer_type);
@@ -999,7 +999,10 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         jl_value_t *tti = jl_svecref(tt,i);
         bool toboxed;
         Type *t = julia_type_to_llvm(tti, &toboxed);
-        argtypes.push_back(t);
+        if (toboxed)
+            argtypes.push_back(T_prjlvalue);
+        else
+            argtypes.push_back(t);
         if (4 + i > nargs) {
             jl_error("Missing arguments to llvmcall!");
         }
@@ -1014,6 +1017,8 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     Function *f;
     bool retboxed;
     Type *rettype = julia_type_to_llvm(rtt, &retboxed);
+    if (retboxed)
+        rettype = T_prjlvalue;
     if (isString) {
         // Make sure to find a unique name
         std::string ir_name;

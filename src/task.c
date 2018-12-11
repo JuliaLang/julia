@@ -762,7 +762,9 @@ static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
     asm(" mov sp, %0;\n"
         " mov lr, #0;\n" // Clear link register (lr) and frame pointer
         " mov fp, #0;\n" // (fp) to terminate unwinder.
-        " br %1;\n" // call `fn` with fake stack frame
+        " bx %1;\n" // call `fn` with fake stack frame.  While `bx` can change
+                    // the processor mode to thumb, this will never happen
+                    // because all our addresses are word-aligned.
         " udf #0" // abort
         : : "r" (stk), "r"(fn) : "memory" );
 #else

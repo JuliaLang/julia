@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-@testset "isunix/islinux/iswindows" begin
+@testset "Operating system predicates" begin
     @test !Sys.isunix(:Windows)
     @test !Sys.islinux(:Windows)
     @test Sys.islinux(:Linux)
@@ -12,6 +12,16 @@
     @test !Sys.isapple(:Windows)
     @test Sys.isunix(:Darwin)
     @test Sys.isunix(:FreeBSD)
+    for bsd in (:FreeBSD, :OpenBSD, :NetBSD, :DragonFly)
+        f = Symbol("is", lowercase(String(bsd)))
+        q = QuoteNode(bsd)
+        @eval begin
+            @test Sys.$f($q)
+            @test Sys.isbsd($q)
+            @test Sys.isunix($q)
+            @test !Sys.isapple($q)
+        end
+    end
     @test_throws ArgumentError Sys.isunix(:BeOS)
     if !Sys.iswindows()
         @test Sys.windows_version() == v"0.0.0"
