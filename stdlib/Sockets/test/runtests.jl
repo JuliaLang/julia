@@ -437,6 +437,10 @@ end
     end
 end
 
+@testset "getipaddrs" begin
+    @test getipaddr() in getipaddrs()
+end
+
 @static if !Sys.iswindows()
     # Issue #29234
     @testset "TCPSocket stdin" begin
