@@ -345,8 +345,15 @@ int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
 }
 #else
 int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
+// F_DUPFD_CLOEXEC only available since Linux 2.6.24
+#ifdef F_DUPFD_CLOEXEC
     if ((*dupfd = fcntl(fd, F_DUPFD_CLOEXEC, 3)) == -1)
         return -errno;
+#else
+    if ((*dupfd = fcntl(fd, F_DUPFD, 3)) == -1)
+        return -errno;
+    fcntl(fd, F_SETFD, FD_CLOEXEC);
+#endif
     return 0;
 }
 #endif
