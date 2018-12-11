@@ -69,9 +69,11 @@ function union!(s::AbstractSet, sets...)
 end
 
 max_values(::Type) = typemax(Int)
-max_values(T::Type{<:Union{Nothing,BitIntegerSmall}}) = 1 << (8*sizeof(T))
-max_values(T::Union) = max(max_values(T.a), max_values(T.b))
+max_values(T::Union{map(X -> Type{X}, BitIntegerSmall_types)...}) = 1 << (8*sizeof(T))
+# saturated addition to prevent overflow with typemax(Int)
+max_values(T::Union) = max(max_values(T.a), max_values(T.b), max_values(T.a) + max_values(T.b))
 max_values(::Type{Bool}) = 2
+max_values(::Type{Nothing}) = 1
 
 function union!(s::AbstractSet{T}, itr) where T
     haslength(itr) && sizehint!(s, length(s) + length(itr))
