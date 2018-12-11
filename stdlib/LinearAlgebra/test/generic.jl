@@ -195,6 +195,9 @@ end
 
 @test rank(fill(0, 0, 0)) == 0
 @test rank([1.0 0.0; 0.0 0.9],0.95) == 1
+@test rank([1.0 0.0; 0.0 0.9],rtol=0.95) == 1
+@test rank([1.0 0.0; 0.0 0.9],atol=0.95) == 1
+@test rank([1.0 0.0; 0.0 0.9],atol=0.95,rtol=0.95)==1
 @test qr(big.([0 1; 0 0])).R == [0 1; 0 0]
 
 @test norm([2.4e-322, 4.4e-323]) ≈ 2.47e-322
@@ -380,6 +383,10 @@ end
 
 @testset "missing values" begin
     @test ismissing(norm(missing))
+end
+
+@testset "peakflops" begin
+    @test LinearAlgebra.peakflops() > 0
 end
 
 end # module TestGeneric

@@ -1,6 +1,10 @@
 #ifndef JL_GCEXT_H
 #define JL_GCEXT_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // requires including "julia.h" beforehand.
 
 // Callbacks that allow C code to hook into the GC.
@@ -120,5 +124,9 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p);
 // current task, that thread's id will be stored in *tid; otherwise,
 // *tid will be set to -1.
 JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *tid);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // _JULIA_GCEXT_H

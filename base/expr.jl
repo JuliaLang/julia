@@ -59,6 +59,21 @@ function copy_exprs(x::PhiCNode)
 end
 copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(x[i]) for i in 1:length(x)]
 
+# create copies of the CodeInfo definition, and any mutable fields
+function copy(c::CodeInfo)
+    cnew = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), c)
+    cnew.code = copy_exprargs(cnew.code)
+    cnew.slotnames = copy(cnew.slotnames)
+    cnew.slotflags = copy(cnew.slotflags)
+    cnew.codelocs  = copy(cnew.codelocs)
+    cnew.linetable = copy(cnew.linetable)
+    cnew.ssaflags = copy(cnew.ssaflags)
+    ssavaluetypes = cnew.ssavaluetypes
+    ssavaluetypes isa Vector{Any} && (cnew.ssavaluetypes = copy(ssavaluetypes))
+    return cnew
+end
+
+
 ==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
 ==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
 
@@ -352,9 +367,14 @@ function remove_linenums!(ex::Expr)
         end
     end
     for subex in ex.args
-        remove_linenums!(subex)
+        subex isa Expr && remove_linenums!(subex)
     end
     return ex
+end
+function remove_linenums!(src::CodeInfo)
+    src.codelocs .= 0
+    length(src.linetable) > 1 && resize!(src.linetable, 1)
+    return src
 end
 
 macro generated()

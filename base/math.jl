@@ -505,7 +505,7 @@ julia> sqrt(big(81))
 9.0
 
 julia> sqrt(big(-81))
-ERROR: DomainError with -8.1e+01:
+ERROR: DomainError with -81.0:
 NaN result for non-NaN input.
 Stacktrace:
  [1] sqrt(::BigFloat) at ./mpfr.jl:501

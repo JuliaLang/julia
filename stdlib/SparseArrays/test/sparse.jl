@@ -2335,4 +2335,19 @@ end
     @test m2.module == SparseArrays
 end
 
+@testset "sprandn with type $T" for T in (Float64, Float32, Float16, ComplexF64, ComplexF32, ComplexF16)
+    @test sprandn(T, 5, 5, 0.5) isa AbstractSparseMatrix{T}
+end
+@testset "sprandn with invalid type $T" for T in (AbstractFloat, BigFloat, Complex)
+    @test_throws MethodError sprandn(T, 5, 5, 0.5)
+end
+
+@testset "method ambiguity" begin
+    # Ambiguity test is run inside a clean process.
+    # https://github.com/JuliaLang/julia/issues/28804
+    script = joinpath(@__DIR__, "ambiguous_exec.jl")
+    cmd = `$(Base.julia_cmd()) --startup-file=no $script`
+    @test success(pipeline(cmd; stdout=stdout, stderr=stderr))
+end
+
 end # module

@@ -1031,7 +1031,7 @@ function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, pre
             print(io, ":")
             print(io, value)
         else
-            print(io, "Symbol(\"", escape_string(s), "\")")
+            print(io, "Symbol(", repr(s), ")")
         end
     else
         if isa(value,Expr) && value.head === :block
@@ -1562,9 +1562,17 @@ module IRShow
     Base.first(r::Compiler.StmtRange) = Compiler.first(r)
     Base.last(r::Compiler.StmtRange) = Compiler.last(r)
     include("compiler/ssair/show.jl")
+
+    const debuginfo = Dict{Symbol, Any}(
+        # :full => src -> Base.IRShow.DILineInfoPrinter(src.linetable), # and add variable slot information
+        :source => src -> Base.IRShow.DILineInfoPrinter(src.linetable),
+        # :oneliner => src -> Base.IRShow.PartialLineInfoPrinter(src.linetable),
+        :none => src -> Base.IRShow.lineinfo_disabled,
+        )
+    debuginfo[:default] = debuginfo[:none]
 end
 
-function show(io::IO, src::CodeInfo)
+function show(io::IO, src::CodeInfo; debuginfo::Symbol=:default)
     # Fix slot names and types in function body
     print(io, "CodeInfo(")
     lambda_io::IOContext = io
@@ -1575,7 +1583,7 @@ function show(io::IO, src::CodeInfo)
     if isempty(src.linetable) || src.linetable[1] isa LineInfoNode
         println(io)
         # TODO: static parameter values?
-        IRShow.show_ir(lambda_io, src)
+        IRShow.show_ir(lambda_io, src, IRShow.debuginfo[debuginfo](src))
     else
         # this is a CodeInfo that has not been used as a method yet, so its locations are still LineNumberNodes
         body = Expr(:block)
@@ -1823,7 +1831,7 @@ dims2string(d) = isempty(d) ? "0-dimensional" :
 
 inds2string(inds) = join(map(_indsstring,inds), '×')
 _indsstring(i) = string(i)
-_indsstring(i::Slice) = string(i.indices)
+_indsstring(i::Union{IdentityUnitRange, Slice}) = string(i.indices)
 
 # anything array-like gets summarized e.g. 10-element Array{Int64,1}
 summary(io::IO, a::AbstractArray) = summary(io, a, axes(a))
@@ -1898,7 +1906,7 @@ function showarg(io::IO, v::SubArray, toplevel)
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(v))
 end
-showindices(io, ::Slice, inds...) =
+showindices(io, ::Union{Slice,IdentityUnitRange}, inds...) =
     (print(io, ", :"); showindices(io, inds...))
 showindices(io, ind1, inds...) =
     (print(io, ", ", ind1); showindices(io, inds...))

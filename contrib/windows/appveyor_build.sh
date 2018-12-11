@@ -165,12 +165,6 @@ if [ -z "`which make 2>/dev/null`" ]; then
   export PATH=$PWD/bin:$PATH
 fi
 
-if ! [ -e usr/bin/busybox.exe ]; then
-  f=busybox-w32-FRP-875-gc6ec14a.exe
-  echo "Downloading $f"
-  $curlflags -o usr/bin/busybox.exe http://frippery.org/files/busybox/$f
-fi
-chmod -R +x usr/bin usr/tools
 
 for lib in SUITESPARSE ARPACK BLAS LAPACK \
     GMP MPFR PCRE LIBUNWIND; do
@@ -218,6 +212,5 @@ cat Make.user
 make -j3 VERBOSE=1 release
 make -j3 VERBOSE=1 install
 make VERBOSE=1 JULIA=../../usr/bin/julia.exe BIN=. "$(make print-CC)" -C test/embedding release
-cp usr/bin/busybox.exe julia-*/bin
 make build-stats
 ccache -s

@@ -309,11 +309,6 @@ void *jl_winsock_handle;
 
 uv_loop_t *jl_io_loop;
 
-#ifndef _OS_WINDOWS_
-#define UV_STREAM_READABLE 0x20   /* The stream is readable */
-#define UV_STREAM_WRITABLE 0x40   /* The stream is writable */
-#endif
-
 #ifdef _OS_WINDOWS_
 int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     HANDLE current_process;
@@ -368,7 +363,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
     switch(uv_guess_handle(fd)) {
     case UV_TTY:
         handle = malloc(sizeof(uv_tty_t));
-        if ((err = uv_tty_init(jl_io_loop, (uv_tty_t*)handle, fd, readable))) {
+        if ((err = uv_tty_init(jl_io_loop, (uv_tty_t*)handle, fd, 0))) {
             jl_errorf("error initializing %s in uv_tty_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
         ((uv_tty_t*)handle)->data = NULL;
@@ -413,13 +408,6 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         if ((err = uv_pipe_open((uv_pipe_t*)handle, fd))) {
             jl_errorf("error initializing %s in uv_pipe_open: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
-#ifndef _OS_WINDOWS_
-        // remove flags set erroneously by libuv:
-        if (readable)
-            ((uv_pipe_t*)handle)->flags &= ~UV_STREAM_WRITABLE;
-        else
-            ((uv_pipe_t*)handle)->flags &= ~UV_STREAM_READABLE;
-#endif
         ((uv_pipe_t*)handle)->data = NULL;
         break;
     case UV_TCP:

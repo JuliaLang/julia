@@ -285,6 +285,10 @@ Base.Sys.isunix
 Base.Sys.isapple
 Base.Sys.islinux
 Base.Sys.isbsd
+Base.Sys.isfreebsd
+Base.Sys.isopenbsd
+Base.Sys.isnetbsd
+Base.Sys.isdragonfly
 Base.Sys.iswindows
 Base.Sys.windows_version
 Base.@static

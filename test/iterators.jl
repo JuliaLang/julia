@@ -8,17 +8,20 @@ using Random
 @test collect(Iterators.filter(x->x[1], zip([true, false, true, false],"abcd"))) == [(true,'a'),(true,'c')]
 
 let z = zip(1:2)
+    @test size(z) == (2,)
     @test collect(z) == [(1,), (2,)]
     # Issue #13979
     @test eltype(z) == Tuple{Int}
 end
 
 let z = zip(1:2, 3:4)
+    @test size(z) == (2,)
     @test collect(z) == [(1,3), (2,4)]
     @test eltype(z) == Tuple{Int,Int}
 end
 
 let z = zip(1:2, 3:4, 5:6)
+    @test size(z) == (2,)
     @test collect(z) == [(1,3,5), (2,4,6)]
     @test eltype(z) == Tuple{Int,Int,Int}
 end
@@ -75,11 +78,16 @@ end
 
 # countfrom
 # ---------
-let i = 0
+let i = 0, k = 1
     for j = countfrom(0, 2)
         @test j == i*2
         i += 1
         i <= 10 || break
+    end
+    for j = countfrom()
+        @test j == k
+        k += 1
+        k <= 10 || break
     end
 end
 
@@ -519,6 +527,8 @@ end
     end
     let t = (2,3,5,7,11)
         @test Iterators.reverse(Iterators.reverse(t)) === t
+        @test first(Iterators.reverse(t)) === last(t)
+        @test last(Iterators.reverse(t)) === first(t)
     end
 end
 
@@ -542,10 +552,74 @@ end
 	@test isempty(collect(zip(b,a)))
 	@test !isempty(a)
     end
+    let a = Iterators.Stateful("a"), b = "", c = Iterators.Stateful("c")
+        @test isempty(collect(zip(a,b,c)))
+        @test !isempty(a)
+        @test !isempty(c)
+        @test isempty(collect(zip(a,c,b)))
+        @test !isempty(a)
+        @test !isempty(c)
+        @test isempty(collect(zip(b,a,c)))
+        @test !isempty(a)
+        @test !isempty(c)
+        @test isempty(collect(zip(b,c,a)))
+        @test !isempty(a)
+        @test !isempty(c)
+        @test isempty(collect(zip(c,a,b)))
+        @test !isempty(a)
+        @test !isempty(c)
+        @test isempty(collect(zip(c,b,a)))
+        @test !isempty(a)
+        @test !isempty(c)
+    end
+    let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+        @test length(collect(zip(a,b,c))) == 1
+        @test !isempty(a)
+        @test !isempty(c)
+    end
+    let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+        @test length(collect(zip(a,c,b))) == 1
+        @test !isempty(a)
+        @test !isempty(c)
+    end
+    let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+        @test length(collect(zip(b,a,c))) == 1
+        @test !isempty(a)
+        @test !isempty(c)
+    end
+    let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+        @test length(collect(zip(b,c,a))) == 1
+        @test !isempty(a)
+        @test !isempty(c)
+    end
+    let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+        @test length(collect(zip(c,a,b))) == 1
+        @test !isempty(a)
+        @test !isempty(c)
+    end
+    let a = Iterators.Stateful("aa"), b = "b", c = Iterators.Stateful("cc")
+        @test length(collect(zip(c,b,a))) == 1
+        @test !isempty(a)
+        @test !isempty(c)
+    end
+    let z = zip(Iterators.Stateful("ab"), Iterators.Stateful("b"), Iterators.Stateful("c"))
+        v, s = iterate(z)
+        @test Base.isdone(z, s)
+    end
 end
 
 @testset "pair for Svec" begin
     ps = pairs(Core.svec(:a, :b))
     @test ps isa Iterators.Pairs
     @test collect(ps) == [1 => :a, 2 => :b]
+end
+
+@testset "inference for large zip #26765" begin
+    x = zip(1:2, ["a", "b"], (1.0, 2.0), Base.OneTo(2), Iterators.repeated("a"), 1.0:0.2:2.0,
+            (1 for i in 1:2), Iterators.Stateful(["a", "b", "c"]), (1.0 for i in 1:2, j in 1:3))
+    @test @inferred(length(x)) == 2
+    z = Iterators.filter(x -> x[1] >= 1, x)
+    @test @inferred(eltype(z)) <: Tuple{Int,String,Float64,Int,String,Float64,Any,String,Any}
+    @test @inferred(first(z)) == (1, "a", 1.0, 1, "a", 1.0, 1, "a", 1.0)
+    @test @inferred(first(Iterators.drop(z, 1))) == (2, "b", 2.0, 2, "a", 1.2, 1, "c", 1.0)
 end

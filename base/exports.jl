@@ -365,7 +365,10 @@ export
     cumsum!,
     accumulate,
     accumulate!,
+    eachcol,
     eachindex,
+    eachrow,
+    eachslice,
     extrema,
     fill!,
     fill,
@@ -679,7 +682,6 @@ export
 # errors
     backtrace,
     catch_backtrace,
-    catch_stack,
     error,
     rethrow,
     retry,

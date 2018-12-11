@@ -29,7 +29,7 @@ import Base: isless, show, print, parse, bind, convert, isreadable, iswritable, 
 using Base: LibuvStream, LibuvServer, PipeEndpoint, @handle_as, uv_error, associate_julia_struct, uvfinalize,
     notify_error, stream_wait, uv_req_data, uv_req_set_data, preserve_handle, unpreserve_handle, _UVError, IOError,
     eventloop, StatusUninit, StatusInit, StatusConnecting, StatusOpen, StatusClosing, StatusClosed, StatusActive,
-    uv_status_string, check_open, wait_connected,
+    uv_status_string, check_open, wait_connected, OS_HANDLE, RawFD,
     UV_EINVAL, UV_ENOMEM, UV_ENOBUFS, UV_EAGAIN, UV_ECONNABORTED, UV_EADDRINUSE, UV_EACCES, UV_EADDRNOTAVAIL,
     UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
     UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
@@ -85,6 +85,18 @@ function TCPSocket(; delay=true)
     tcp.status = StatusInit
     return tcp
 end
+
+function TCPSocket(fd::OS_HANDLE)
+    tcp = TCPSocket()
+    err = ccall(:uv_tcp_open, Int32, (Ptr{Cvoid}, OS_HANDLE), pipe.handle, fd)
+    uv_error("tcp_open", err)
+    tcp.status = StatusOpen
+    return tcp
+end
+if OS_HANDLE != RawFD
+    TCPSocket(fd::RawFD) = TCPSocket(Libc._get_osfhandle(fd))
+end
+
 
 mutable struct TCPServer <: LibuvServer
     handle::Ptr{Cvoid}
