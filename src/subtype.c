@@ -322,26 +322,6 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
         for(i=0; i < np; i++) {
             jl_value_t *ai = jl_tparam(ad,i);
             jl_value_t *bi = jl_tparam(bd,i);
-            if (!istuple && specificity && jl_has_free_typevars(ai)) {
-                // X{<:SomeDataType} and X{Union{Y,Z,...}} need to be disjoint to
-                // avoid this transitivity problem:
-                // A = Tuple{Type{LinearIndices{N,R}}, LinearIndices{N}} where {N,R}
-                // B = Tuple{Type{T},T} where T<:AbstractArray
-                // C = Tuple{Type{Union{Nothing, T}}, Union{Nothing, T}} where T
-                // A is more specific than B. It would be easy to think B is more specific
-                // than C, but we can't have that since A should not be more specific than C.
-                jl_value_t *aub = jl_is_typevar(ai) ? ((jl_tvar_t*)ai)->ub : ai;
-                jl_value_t *bub = jl_is_typevar(bi) ? ((jl_tvar_t*)bi)->ub : bi;
-                aub = jl_unwrap_unionall(aub);
-                bub = jl_unwrap_unionall(bub);
-                if ((jl_is_typevar(ai) + jl_is_typevar(bi) < 2) &&
-                    aub != (jl_value_t*)jl_any_type && bub != (jl_value_t*)jl_any_type &&
-                    ((jl_is_uniontype(aub) && jl_is_datatype(bub) && !in_union(aub, bub) &&
-                      (jl_is_typevar(bi) || !jl_is_typevar(ai))) ||
-                     (jl_is_uniontype(bub) && jl_is_datatype(aub) && !in_union(bub, aub) &&
-                      (jl_is_typevar(ai) || !jl_is_typevar(bi)))))
-                    return 1;
-            }
             if (jl_is_typevar(ai) || jl_is_typevar(bi))
                 continue;
             if (jl_is_type(ai)) {
@@ -2883,8 +2863,9 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
             if (((jl_tvar_t*)b)->ub == jl_bottom_type)
                 return 0;
             if (jl_has_free_typevars(a)) {
-                if (type_morespecific_(a, ((jl_tvar_t*)b)->ub, 0, env) ||
-                    eq_msp(a, ((jl_tvar_t*)b)->ub, env))
+                if (type_morespecific_(a, ((jl_tvar_t*)b)->ub, 0, env))
+                    return 1;
+                if (eq_msp(a, ((jl_tvar_t*)b)->ub, env))
                     return num_occurs((jl_tvar_t*)b, env) < 2;
                 return 0;
             }
