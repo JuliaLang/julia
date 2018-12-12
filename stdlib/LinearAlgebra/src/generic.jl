@@ -52,6 +52,10 @@ julia> rmul!(A, 2)
 2×2 Array{Int64,2}:
  2  4
  6  8
+
+julia> rmul!([NaN], 0.0)
+1-element Array{Float64,1}:
+ NaN
 ```
 """
 function rmul!(X::AbstractArray, s::Number)
@@ -86,6 +90,10 @@ julia> lmul!(2, B)
 2×2 Array{Int64,2}:
  2  4
  6  8
+
+julia> lmul!(0.0, [Inf])
+1-element Array{Float64,1}:
+ NaN
 ```
 """
 function lmul!(s::Number, X::AbstractArray)
