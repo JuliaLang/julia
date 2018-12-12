@@ -312,5 +312,5 @@ end
 #28133
 @test SharedVector([1; 2; 3]) == [1; 2; 3]
 @test SharedMatrix([0.1 0.2; 0.3 0.4]) == [0.1 0.2; 0.3 0.4]
-@test_throws MethodError SharedVector(rand(4,4))           
+@test_throws MethodError SharedVector(rand(4,4))
 @test_throws MethodError SharedMatrix(rand(4))
