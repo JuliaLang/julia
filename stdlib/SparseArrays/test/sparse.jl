@@ -2408,23 +2408,53 @@ end
     @test oneunit(A) isa SparseMatrixCSC{Second}
     @test one(sprand(2, 2, 0.5)) isa SparseMatrixCSC{Float64}
     @test one(A) isa SparseMatrixCSC{Int}
+end
 
 @testset "circshift" begin
-    A = sprand(40, 30, 0.3)
-    @test nnz(A) == nnz(circshift(A,(1,2)))
-    @test circshift(A, (3,4)) == circshift(Matrix(A), (3,4))
-    @test circshift(A, (7,-4)) == circshift(Matrix(A), (7,-4))
-    @test circshift(A, 14) == circshift(Matrix(A), 14)
-    O = similar(A)
-    circshift!(O, A, (11,13))
-    @test nnz(O) == nnz(A)
-    @test O == circshift(A, (11,13))
-    v = sprand(1000, 0.2)
-    @test nnz(v) == nnz(circshift(v,13))
-    @test circshift(v, 13) == circshift(Vector(v), 13)
-    v1 = similar(v)
-    circshift!(v1, v, 100)
-    @test v1 == circshift(v, 100)
+    for i=1:20
+        m,n = 17,15
+        A = sprand(m, n, rand())
+        shifts = rand(-m:m), rand(-n:n)
+        # using dense circshift to compare
+        B = circshift(Matrix(A), shifts)
+        # sparse circshift
+        C = circshift(A, shifts)
+        @test C == B
+        # sparse circshift should not add structural zeros
+        @test nnz(C) == nnz(A)
+        # test circshift!
+        D = similar(A)
+        circshift!(D, A, shifts)
+        @test D == B
+        @test nnz(D) == nnz(A)
+        # test different in/out types
+        A2 = floor.(100A)
+        E1 = spzeros(Int64, m, n)
+        E2 = spzeros(Int64, m, n)
+        circshift!(E1, A2, shifts)
+        circshift!(E2, Matrix(A2), shifts)
+        @test E1 == E2
+
+        # test sparse vector
+        n = 100
+        shift = rand(-n:n)
+        v = sprand(n, rand())
+        x = circshift(Vector(v), shift)
+        w = circshift(v, shift)
+        @test nnz(v) == nnz(w)
+        @test w == x
+        # test circshift!
+        v1 = similar(v)
+        circshift!(v1, v, shift)
+        @test v1 == x
+        # test different in/out types
+        y1 = spzeros(Int64, n)
+        y2 = spzeros(Int64, n)
+        v2 = floor.(100v)
+        circshift!(y1, v2, shift)
+        circshift!(y2, Vector(v2), shift)
+        @test y1 == y2
+    end
 end
 
 end # module

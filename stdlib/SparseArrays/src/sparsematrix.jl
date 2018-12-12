@@ -3543,12 +3543,18 @@ end
 
 
 function circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, (r,c)::Base.DimsInteger{2})
-    O .= similar(X)
+    nnz = length(X.nzval)
+
+    ##### readjust output
+    resize!(O.colptr, X.n + 1)
+    resize!(O.rowval, nnz)
+    resize!(O.nzval, nnz)
+    O.colptr[X.n + 1] = nnz + 1
+
+    nnz == 0 && return O
 
     ##### horizontal shift
     c = mod(c, X.n)
-    nnz = length(X.nzval)
-    nnz == 0 && return O
     nleft = X.colptr[X.n - c + 1] - 1
     nright = nnz - nleft
 
