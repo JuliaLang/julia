@@ -1425,10 +1425,10 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
         Value *idx, jl_datatype_t *stt, jl_value_t *inbounds)
 {
     size_t nfields = jl_datatype_nfields(stt);
+    bool maybe_null = (unsigned)stt->ninitialized != nfields;
     if (strct.ispointer()) { // boxed or stack
         if (is_datatype_all_pointers(stt)) {
             idx = emit_bounds_check(ctx, strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), inbounds);
-            bool maybe_null = (unsigned)stt->ninitialized != nfields;
             size_t minimum_field_size = std::numeric_limits<size_t>::max();
             size_t minimum_align = JL_HEAP_ALIGNMENT;
             for (size_t i = 0; i < nfields; ++i) {
@@ -1458,7 +1458,7 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
             jl_value_t *jt = jl_field_type(stt, 0);
             idx = emit_bounds_check(ctx, strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), inbounds);
             Value *ptr = maybe_decay_tracked(data_pointer(ctx, strct));
-            if (!stt->mutabl) {
+            if (!stt->mutabl && !(maybe_null && jt == (jl_value_t*)jl_bool_type)) {
                 // just compute the pointer and let user load it when necessary
                 Type *fty = julia_type_to_llvm(jt);
                 Value *addr = ctx.builder.CreateInBoundsGEP(fty, emit_bitcast(ctx, ptr, PointerType::get(fty, 0)), idx);
@@ -1512,6 +1512,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
     if (type_is_ghost(elty))
         return ghostValue(jfty);
     Value *fldv = NULL;
+    bool maybe_null = idx >= (unsigned)jt->ninitialized;
     if (strct.ispointer()) {
         Value *staddr = maybe_decay_tracked(data_pointer(ctx, strct));
         bool isboxed;
@@ -1553,7 +1554,6 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         }
         unsigned align = jl_field_align(jt, idx);
         if (jl_field_isptr(jt, idx)) {
-            bool maybe_null = idx >= (unsigned)jt->ninitialized;
             Instruction *Load = maybe_mark_load_dereferenceable(
                     ctx.builder.CreateLoad(T_prjlvalue, emit_bitcast(ctx, addr, T_pprjlvalue)),
                     maybe_null, jl_field_type(jt, idx));
@@ -1586,7 +1586,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             }
             return mark_julia_slot(addr, jfty, tindex, strct.tbaa);
         }
-        else if (!jt->mutabl) {
+        else if (!jt->mutabl && !(maybe_null && jfty == (jl_value_t*)jl_bool_type)) {
             // just compute the pointer and let user load it when necessary
             return mark_julia_slot(addr, jfty, NULL, strct.tbaa);
         }
