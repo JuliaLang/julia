@@ -3514,8 +3514,8 @@ end
 
 ## circular shift
 
-#swaps blocks start:split and split+1:fin in col
-function swap!(col::AbstractVector, start::Integer, fin::Integer, split::Integer)
+# thius helper in-place swaps blocks start:split and split+1:fin in col
+function _swap!(col::AbstractVector, start::Integer, fin::Integer, split::Integer)
     split == fin && return
     reverse!(col, start, split)
     reverse!(col, split + 1, fin)
@@ -3524,8 +3524,8 @@ function swap!(col::AbstractVector, start::Integer, fin::Integer, split::Integer
 end
 
 
-#this helper shifts a column by r
-function shifter!(R::AbstractVector, V::AbstractVector, start::Integer, fin::Integer, m::Integer, r::Integer)
+# this helper shifts a column by r. Used also by sparsevector.jl
+function subvector_shifter!(R::AbstractVector, V::AbstractVector, start::Integer, fin::Integer, m::Integer, r::Integer)
     split = fin
     @inbounds for j = start:fin
         # shift in the vertical direction...
@@ -3537,8 +3537,8 @@ function shifter!(R::AbstractVector, V::AbstractVector, start::Integer, fin::Int
         end
     end
     # ...but rowval should be sorted within columns
-    swap!(R, start, fin, split)
-    swap!(V, start, fin, split)
+    _swap!(R, start, fin, split)
+    _swap!(V, start, fin, split)
 end
 
 
@@ -3572,7 +3572,7 @@ function circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, (r,c)::Base.DimsInte
     ##### vertical shift
     r = mod(r, X.m)
     @inbounds for i=1:O.n
-        shifter!(O.rowval, O.nzval, O.colptr[i], O.colptr[i+1]-1, O.m, r)
+        subvector_shifter!(O.rowval, O.nzval, O.colptr[i], O.colptr[i+1]-1, O.m, r)
     end
     return O
 end
