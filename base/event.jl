@@ -78,8 +78,6 @@ end
 
 notify_error(c::Condition, err) = notify(c, err, true, true)
 
-n_waiters(c::Condition) = length(c.waitq)
-
 ## scheduler and work queue
 
 global const Workqueue = Task[]
