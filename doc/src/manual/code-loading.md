@@ -23,7 +23,7 @@ Most of the time, a package is uniquely identifiable simply from its name. Howev
 
 Julia supports federated package management, which means that multiple independent parties can maintain both public and private packages and registries of packages, and that projects can depend on a mix of public and private packages from different registries. Packages from various registries are installed and managed using a common set of tools and workflows. The `Pkg` package manager that ships with Julia lets you install and manage your projects' dependencies. It assists in creating and manipulating project files (which describe what other projects that your project depends on), and manifest files (which snapshot exact versions of your project's complete dependency graph).
 
-One consequence of federation is that there cannot be a central authority for package naming. Different entities may use the same name to refer to unrelated packages. This possibility is unavoidable since these entities do not coordinate and may not even know about each other. Because of the lack of a central naming authority, a single project may end up depending on different packages that have the same name. Julia's package loading mechanism does not require package names to be globally unique, even within the dependency graph of a single project. Instead, packages are identified by [universally unique identifiers](https://en.wikipedia.org/wiki/Universally_unique_identifier) (UUIDs), which get assigned when the project is created. Usually you won't have to work directly with these somewhat cumbersome identifiers since `Pkg` will take care of generating and tracking them for you. However, these UUIDs provide the answer to the question of *"what code does `X` refer to?"*
+One consequence of federation is that there cannot be a central authority for package naming. Different entities may use the same name to refer to unrelated packages. This possibility is unavoidable since these entities do not coordinate and may not even know about each other. Because of the lack of a central naming authority, a single project may end up depending on different packages that have the same name. Julia's package loading mechanism does not require package names to be globally unique, even within the dependency graph of a single project. Instead, packages are identified by [universally unique identifiers](https://en.wikipedia.org/wiki/Universally_unique_identifier) (UUIDs), which get assigned when each package is created. Usually you won't have to work directly with these somewhat cumbersome 128-bit identifiers since `Pkg` will take care of generating and tracking them for you. However, these UUIDs provide the definitive answer to the question of *"what package does `X` refer to?"*
 
 Since the decentralized naming problem is somewhat abstract, it may help to walk through a concrete scenario to understand the issue. Suppose you're developing an application called `App`, which uses two packages: `Pub` and  `Priv`. `Priv` is a private package that you created, whereas `Pub` is a public package that you use but don't control. When you created `Priv`, there was no public package by the name `Priv`. Subsequently, however, an unrelated package also named `Priv` has been published and become popular. In fact, the `Pub` package has started to use it. Therefore, when you next upgrade `Pub` to get the latest bug fixes and features, `App` will end up depending on two different packages named `Priv`—through no action of yours other than upgrading. `App` has a direct dependency on your private `Priv` package, and an indirect dependency, through `Pub`, on the new public `Priv` package. Since these two `Priv` packages are different but are both required for `App` to continue working correctly, the expression `import Priv` must refer to different `Priv` packages depending on whether it occurs in `App`'s code or in `Pub`'s code. To handle this, Julia's package loading mechanism distinguishes the two `Priv` packages by their UUID and picks the correct one based on its context (the module that called `import`). How this distinction works is determined by environments, as explained in the following sections.
 
@@ -31,8 +31,8 @@ Since the decentralized naming problem is somewhat abstract, it may help to walk
 
 An *environment* determines what `import X` and `using X` mean in various code contexts and what files these statements cause to be loaded. Julia understands two kinds of environments:
 
-1. **A project environment** is a directory with a project file and an optional manifest file, and forms an **explicit environement**. The project file determines what the names and identities of the direct dependencies of a project are. The manifest file, if present, gives a complete dependency graph, including all direct and indirect dependencies, exact versions of each dependency, and sufficient information to locate and load the correct version.
-2. **A package directory** is a directory containing the source trees of a set of packages as subdirectories, and forms an **implicit environment**. If `X` is a subdirectory of a package directory and `X/src/X.jl` exists, then the package `X` is available in the package directory environment and `X/src/X.jl` is the source file by which it is loaded.
+1. **A project environment** is a directory with a project file and an optional manifest file, and forms an *explicit environement*. The project file determines what the names and identities of the direct dependencies of a project are. The manifest file, if present, gives a complete dependency graph, including all direct and indirect dependencies, exact versions of each dependency, and sufficient information to locate and load the correct version.
+2. **A package directory** is a directory containing the source trees of a set of packages as subdirectories, and forms an *implicit environment*. If `X` is a subdirectory of a package directory and `X/src/X.jl` exists, then the package `X` is available in the package directory environment and `X/src/X.jl` is the source file by which it is loaded.
 
 These can be intermixed to create **a stacked environment**: an ordered set of project environments and package directories, overlaid to make a single composite environment. The precedence and visibility rules then combine to determine which packages are available and where they get loaded from. Julia's load path forms a stacked environment, for example.
 
@@ -160,17 +160,13 @@ What happens if `import Zebra` is evaluated in the main `App` code base? Since `
 **The paths map** of a project environment is extracted from the manifest file. The path of a package `uuid` named `X` is determined by these rules (in order):
 
 1. If the project file in the directory matches `uuid` and name `X`, then either:
-  - It has a toplevel `path` entry, then (`uuid`, `X`) will be mapped to that path, interpreted relative to the directory containing the project file.
-  - Otherwise, (`uuid, `X`) is mapped to  `src/X.jl` relative to the directory containing the project file.
+  - It has a toplevel `path` entry, then `uuid` will be mapped to that path, interpreted relative to the directory containing the project file.
+  - Otherwise, `uuid` is mapped to  `src/X.jl` relative to the directory containing the project file.
 2. If the above is not the case and the project file has a corresponding manifest file and the manifest contains a stanza matching `uuid` then:
   - If it has a `path` entry, use that path (relative to the directory containing the manifest file).
   - If it has a `git-tree-sha1` entry, compute a deterministic hash function of `uuid` and `git-tree-sha1`—call it `slug`—and look for a directory named `packages/X/$slug` in each directory in the Julia `DEPOT_PATH` global array. Use the first such directory that exists.
-  - Otherwise, there is no path mapping for (`uuid`, `X`).
 
-If any of these result in success, the path to the source code entry point will be either that result,
-the relative path from that result plus `src/X.jl`, or fail.
-
-If no source code path is found, the lookup will fail, and the user may be prompted to install the appropriate package version or to take other corrective action (such as declaring the dependency).
+If any of these result in success, the path to the source code entry point will be either that result, the relative path from that result plus `src/X.jl`; otherwise, there is no path mapping for `uuid`. When loading `X`, if no source code path is found, the lookup will fail, and the user may be prompted to install the appropriate package version or to take other corrective action (e.g. declaring `X` as a dependency).
 
 In the example manifest file above, to find the path of the first `Priv` package—the one with UUID `ba13f791-ae1d-465a-978b-69c3ad90f72b`—Julia looks for its stanza in the manifest file, sees that it has a `path` entry, looks at `deps/Priv` relative to the `App` project directory—let's suppose the `App` code lives in `/home/me/projects/App`—sees that `/home/me/projects/App/deps/Priv` exists and therefore loads `Priv` from there.
 
@@ -215,17 +211,18 @@ This example map includes three different kinds of package locations (the first 
 
 ### Package directories
 
-Package directories provide a simpler environment, but less powerful or controlled. The set of root packages available is determined by the set of subdirectories that "look like" packages. A package `X` is determined to exist if one of the following files exists in the package directory:
-  - `X.jl`
-  - `X/src/X.jl`
-  - `X.jl/src/X.jl`
-Additionally, which dependencies a package in a package directory is able to import depends on whether the package contains a project file:
-* If it does not have a project file, it can import any root package—the same packages that can be loaded at the top level from `Main` and in the REPL.
-* If it does have a project file, it can only import those packages which are identified in the `[deps]` section of the project file.
+Package directories provide a simpler kind of environment without the ability to handle name collisions. In a package directory, the set of top-level packages is the set of subdirectories that "look like" packages. A package `X` is exists in a package directory if the directory contains one of the following "entry point" files:
 
-This dependency loading is part of the `graph` map for package directories, explained elsewhere.
+- `X.jl`
+- `X/src/X.jl`
+- `X.jl/src/X.jl`
 
-**The roots map** is determined by enumerating the contents of the package directory to generate a list of all packages that exist.
+Which dependencies a package in a package directory can import depends on whether the package contains a project file:
+
+* If it has a project file, it can only import those packages which are identified in the `[deps]` section of the project file.
+* If it does not have a project file, it can import any top-level package—i.e. the same packages that can be loaded in `Main` or the REPL.
+
+**The roots map** is determined by examining the contents of the package directory to generate a list of all packages that exist.
 Additionally, a UUID will be assigned to each entry as follows: For a given package found inside the folder `X`...
 
 1. If `X/Project.toml` exists and has a `uuid` entry, then `uuid` is that value.
