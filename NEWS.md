@@ -9,6 +9,7 @@ New language features
     the experimental function `Base.catch_stack` ([#28878]).
   * The experimental macro `Base.@locals` returns a dictionary of current local variable names
     and values ([#29733]).
+  * Binary `~` can now be dotted, as in `x .~ y` ([#30341]).
 
 Language changes
 ----------------
