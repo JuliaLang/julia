@@ -9,6 +9,7 @@ using Base.Printf: @printf
 using Random
 using Test: guardseed
 using InteractiveUtils: @which
+using Dates
 
 @testset "issparse" begin
     @test issparse(sparse(fill(1,5,5)))
@@ -388,6 +389,12 @@ dA = Array(sA)
 
     @testset "inverse scaling with mul!" begin
         bi = inv.(b)
+        @test lmul!(Diagonal(bi), copy(dA)) ≈ ldiv!(Diagonal(b), copy(sA))
+        @test lmul!(Diagonal(bi), copy(dA)) ≈ ldiv!(transpose(Diagonal(b)), copy(sA))
+        @test lmul!(Diagonal(conj(bi)), copy(dA)) ≈ ldiv!(adjoint(Diagonal(b)), copy(sA))
+        @test_throws DimensionMismatch ldiv!(Diagonal(fill(1., length(b)+1)), copy(sA))
+        @test_throws LinearAlgebra.SingularException ldiv!(Diagonal(zeros(length(b))), copy(sA))
+
         dAt = copy(transpose(dA))
         sAt = copy(transpose(sA))
         @test rmul!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), Diagonal(b))
@@ -2348,6 +2355,14 @@ end
     script = joinpath(@__DIR__, "ambiguous_exec.jl")
     cmd = `$(Base.julia_cmd()) --startup-file=no $script`
     @test success(pipeline(cmd; stdout=stdout, stderr=stderr))
+end
+
+@testset "oneunit of sparse matrix" begin
+    A = sparse([Second(0) Second(0); Second(0) Second(0)])
+    @test oneunit(sprand(2, 2, 0.5)) isa SparseMatrixCSC{Float64}
+    @test oneunit(A) isa SparseMatrixCSC{Second}
+    @test one(sprand(2, 2, 0.5)) isa SparseMatrixCSC{Float64}
+    @test one(A) isa SparseMatrixCSC{Int}
 end
 
 end # module

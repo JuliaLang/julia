@@ -6,14 +6,9 @@ pushfirst!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
 using Pkg
 Pkg.instantiate()
 
-using Documenter
-
-# Include the `build_sysimg` file.
+using Documenter, DocumenterLaTeX
 
 baremodule GenStdLib end
-@isdefined(build_sysimg) || @eval module BuildSysImg
-    include(joinpath(@__DIR__, "..", "contrib", "build_sysimg.jl"))
-end
 
 # Documenter Setup.
 
@@ -159,22 +154,31 @@ let r = r"buildroot=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
     global const buildroot = i === nothing ? (@__DIR__) : first(match(r, ARGS[i]).captures)
 end
 
+const format = if render_pdf
+    LaTeX(
+        platform = "texplatform=docker" in ARGS ? "docker" : "native"
+    )
+else
+    Documenter.HTML(
+        prettyurls = ("deploy" in ARGS),
+        canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/v1/" : nothing,
+    )
+end
+
 makedocs(
     build     = joinpath(buildroot, "doc", "_build", (render_pdf ? "pdf" : "html"), "en"),
-    modules   = [Base, Core, BuildSysImg, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
+    modules   = [Base, Core, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
     clean     = true,
     doctest   = ("doctest=fix" in ARGS) ? (:fix) : ("doctest=true" in ARGS) ? true : false,
     linkcheck = "linkcheck=true" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
     strict    = true,
     checkdocs = :none,
-    format    = render_pdf ? :latex : :html,
+    format    = format,
     sitename  = "The Julia Language",
     authors   = "The Julia Project",
     analytics = "UA-28835595-6",
     pages     = PAGES,
-    html_prettyurls = ("deploy" in ARGS),
-    html_canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/v1/" : nothing,
     assets = ["assets/julia-manual.css", ]
 )
 

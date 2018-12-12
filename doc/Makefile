@@ -20,7 +20,8 @@ help:
 	@echo "To fix outdated doctests, use 'make <target> doctest=fix'"
 
 
-DOCUMENTER_OPTIONS := linkcheck=$(linkcheck) doctest=$(doctest) buildroot=$(call cygpath_w,$(BUILDROOT))
+DOCUMENTER_OPTIONS := linkcheck=$(linkcheck) doctest=$(doctest) buildroot=$(call cygpath_w,$(BUILDROOT)) \
+    texplatform=$(texplatform)
 
 UnicodeData.txt:
 	$(JLDOWNLOAD) http://www.unicode.org/Public/9.0.0/ucd/UnicodeData.txt

@@ -663,6 +663,27 @@ rdiv!(A::SparseMatrixCSC{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
 rdiv!(A::SparseMatrixCSC{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     (D = transD.parent; rdiv!(A, D))
 
+function ldiv!(D::Diagonal{T}, A::SparseMatrixCSC{T}) where {T}
+    # @assert !has_offset_axes(A)
+    if A.m != length(D.diag)
+        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(A.m) rows"))
+    end
+    nonz = nonzeros(A)
+    Arowval = A.rowval
+    b = D.diag
+    for i=1:length(b)
+        iszero(b[i]) && throw(SingularException(i))
+    end
+    @inbounds for col = 1:A.n, p = A.colptr[col]:(A.colptr[col + 1] - 1)
+        nonz[p] = b[Arowval[p]] \ nonz[p]
+    end
+    A
+end
+ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, A::SparseMatrixCSC{T}) where {T} =
+    (D = adjD.parent; ldiv!(conj(D), A))
+ldiv!(transD::Transpose{<:Any,<:Diagonal{T}}, A::SparseMatrixCSC{T}) where {T} =
+    (D = transD.parent; ldiv!(D, A))
+
 ## triu, tril
 
 function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}

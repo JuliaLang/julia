@@ -9,6 +9,7 @@ New language features
     the experimental function `Base.catch_stack` ([#28878]).
   * The experimental macro `Base.@locals` returns a dictionary of current local variable names
     and values ([#29733]).
+  * Binary `~` can now be dotted, as in `x .~ y` ([#30341]).
 
 Language changes
 ----------------
@@ -111,6 +112,7 @@ Standard library changes
   * `mul!`, `rmul!` and `lmul!` methods for `UniformScaling` ([#29506]).
   * `Symmetric` and `Hermitian` matrices now preserve the wrapper when scaled with a number ([#29469]).
   * Exponentiation operator `^` now supports raising an `Irrational` to an `AbstractMatrix` power ([#29782]).
+  * Added keyword arguments `rtol`, `atol` to `pinv`, `nullspace` and `rank` ([#29998], [#29926]).
 
 #### Random
   * `randperm` and `randcycle` now use the type of their argument to determine the element type of
@@ -133,6 +135,7 @@ External dependencies
   * The source code for Pkg is no longer included in JuliaLang/julia. Pkg is instead
     downloaded during the build process ([#29615]).
   * LLVM has been upgraded to 6.0.1 and support for LLVM < 6.0 has been dropped ([#28745], [#28696]).
+  * Pkg has been upgraded to version 1.1 ([#30342]).
 
 Deprecated or removed
 ---------------------
@@ -211,4 +214,5 @@ Deprecated or removed
 [#30249]: https://github.com/JuliaLang/julia/issues/30249
 [#30270]: https://github.com/JuliaLang/julia/issues/30270
 [#30278]: https://github.com/JuliaLang/julia/issues/30278
+[#30342]: https://github.com/JuliaLang/julia/issues/30342
 [#30349]: https://github.com/JuliaLang/julia/issues/30349
