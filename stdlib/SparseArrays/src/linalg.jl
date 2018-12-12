@@ -147,61 +147,79 @@ end
 *(A::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}, B::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = spmatmul(copy(A), copy(B))
 *(A::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}, B::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = spmatmul(copy(A), copy(B))
 
-function spmatmul(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
-                  sortindices::Symbol = :sortcols) where {Tv,Ti}
-    mA, nA = size(A)
-    mB, nB = size(B)
-    nA==mB || throw(DimensionMismatch())
+# Gustavsen's matrix multiplication algorithm revisited.
+# The result rowval vector is already sorted by construction.
+# The auxiliary Vector{Ti} xb is replaced by a BitArray of same length.
+# Besides SparseMatrixCSC also SparseVector is accepted as B.
+# The optional argument controlling a sorting algorithm is obsolete.
+function spmatmul(A::SparseMatrixCSC{Tv,Ti},
+                  B::Union{<:SparseMatrixCSC{Tv,Ti},<:SparseVector{Tv,Ti}}) where {Tv,Ti,N}
 
-    colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
-    colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
-    # TODO: Need better estimation of result space
-    nnzC = min(mA*nB, length(nzvalA) + length(nzvalB))
-    colptrC = Vector{Ti}(undef, nB+1)
+    mA, nA = size(A)
+    nB = size(B, 2)
+    nA == size(B, 1) || throw(DimensionMismatch())
+
+    rowvalA = rowvals(A); nzvalA = nonzeros(A)
+    rowvalB = rowvals(B); nzvalB = nonzeros(B)
+    nnzC = estimate_mulsize(mA, nnz(A), nA, nnz(B), nB)
+    if B isa SparseMatrixCSC; colptrC = Vector{Ti}(undef, nB+1) end
     rowvalC = Vector{Ti}(undef, nnzC)
     nzvalC = Vector{Tv}(undef, nnzC)
 
     @inbounds begin
         ip = 1
-        xb = zeros(Ti, mA)
-        x  = zeros(Tv, mA)
+        x  = Vector{Tv}(undef, mA)
+        xb = BitArray(undef, mA)
         for i in 1:nB
+            fill!(xb, false)
             if ip + mA - 1 > nnzC
-                resize!(rowvalC, nnzC + max(nnzC,mA))
-                resize!(nzvalC, nnzC + max(nnzC,mA))
-                nnzC = length(nzvalC)
+                nnzC += max(mA, nnzC>>2)
+                resize!(rowvalC, nnzC)
+                resize!(nzvalC, nnzC)
             end
-            colptrC[i] = ip
-            for jp in colptrB[i]:(colptrB[i+1] - 1)
+            if B isa SparseMatrixCSC; colptrC[i] = ip end
+            for jp in nzrange(B, i)
                 nzB = nzvalB[jp]
                 j = rowvalB[jp]
-                for kp in colptrA[j]:(colptrA[j+1] - 1)
+                for kp in nzrange(A, j)
                     nzC = nzvalA[kp] * nzB
                     k = rowvalA[kp]
-                    if xb[k] != i
-                        rowvalC[ip] = k
-                        ip += 1
-                        xb[k] = i
-                        x[k] = nzC
-                    else
+                    if xb[k]
                         x[k] += nzC
+                    else
+                        x[k] = nzC
+                        xb[k] = true
                     end
                 end
             end
-            for vp in colptrC[i]:(ip - 1)
-                nzvalC[vp] = x[rowvalC[vp]]
+            for k in findall(xb)
+                nzvalC[ip] = x[k]
+                rowvalC[ip] = k
+                ip += 1
             end
         end
-        colptrC[nB+1] = ip
+        if B isa SparseMatrixCSC; colptrC[nB+1] = ip end
     end
 
-    deleteat!(rowvalC, colptrC[end]:length(rowvalC))
-    deleteat!(nzvalC, colptrC[end]:length(nzvalC))
+    ip -= 1
+    resize!(rowvalC, ip)
+    resize!(nzvalC, ip)
 
-    # The Gustavson algorithm does not guarantee the product to have sorted row indices.
-    Cunsorted = SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC)
-    C = SparseArrays.sortSparseMatrixCSC!(Cunsorted, sortindices=sortindices)
-    return C
+    # This modification of Gustavson's algorithm has sorted row indices.
+    # The not needed sort makes a major performance improvement and saves space.
+    if B isa SparseMatrixCSC
+        SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC)
+    else
+        SparseVector(mA, rowvalC, nzvalC)
+    end
+end
+
+# For randomly distributed nonzeros of the factors this is a rather good estimation
+# for the number of nonzeros of the product.
+# For heavily structured matrices the value tends to over-estimation.
+function estimate_mulsize(m::Integer, nnzA::Integer, n::Integer, nnzB::Integer, k::Integer)
+    p = (nnzA / (m * n)) * (nnzB / (n * k))
+    isnan(p) ? 0 : Int(ceil(-expm1(log1p(-p) * n) * m * k)) # is (1 - (1 - p)^n) * m * k
 end
 
 # Frobenius dot/inner product: trace(A'B)
