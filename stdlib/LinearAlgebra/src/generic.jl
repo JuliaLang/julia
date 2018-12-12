@@ -33,9 +33,9 @@ mul!(C::AbstractArray, X::AbstractArray, s::Number) = generic_mul!(C, s, X)
 
 Scale an array `A` by a scalar `b` overwriting `A` in-place.  Use
 [`lmul!`](@ref) to multiply scalar from left.  The scaling operation
-respects the semantics of the element-wise multiplication.  In
-particular, `NaN` entries in `A` are not modified (unless the type of
-`b` defines a specific behavior).
+respects the semantics of the multiplication [`*`](@ref) between an
+element of `A` and `b`.  In particular, `NaN` entries in `A` are not
+modified (unless the type of `b` defines a non-standard behavior).
 
 !!! compat "Julia 1.1"
     Prior to Julia 1.1, how `NaN` entries in `A` were treated was
@@ -67,9 +67,9 @@ end
 
 Scale an array `B` by a scalar `a` overwriting `B` in-place.  Use
 [`rmul!`](@ref) to multiply scalar from right.  The scaling operation
-respects the semantics of the element-wise multiplication.  In
-particular, `NaN` entries in `B` are not modified (unless the type of
-`a` defines a specific behavior).
+respects the semantics of the multiplication [`*`](@ref) between `a`
+and an element of `B`.  In particular, `NaN` entries in `B` are not
+modified (unless the type of `a` defines a non-standard behavior).
 
 !!! compat "Julia 1.1"
     Prior to Julia 1.1, how `NaN` entries in `B` were treated was
