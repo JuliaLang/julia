@@ -160,12 +160,12 @@ What happens if `import Zebra` is evaluated in the main `App` code base? Since `
 **The paths map** of a project environment is extracted from the manifest file. The path of a package `uuid` named `X` is determined by these rules (in order):
 
 1. If the project file in the directory matches `uuid` and name `X`, then either:
-  - It has a toplevel `path` entry, that will be used (interpreted relative to the directory containing the project file).
-  - Otherwise, it'll use the Project file directory.
-2. If the project file has a corresponding manifest file, and the manifest contains a stanza matching `uuid`:
-  - If it has a `path` entry, use that path (relative to the manifest file).
+  - It has a toplevel `path` entry, then (`uuid`, `X`) will be mapped to that path, interpreted relative to the directory containing the project file.
+  - Otherwise, (`uuid, `X`) is mapped to  `src/X.jl` relative to the directory containing the project file.
+2. If the above is not the case and the project file has a corresponding manifest file and the manifest contains a stanza matching `uuid` then:
+  - If it has a `path` entry, use that path (relative to the directory containing the manifest file).
   - If it has a `git-tree-sha1` entry, compute a deterministic hash function of `uuid` and `git-tree-sha1`—call it `slug`—and look for a directory named `packages/X/$slug` in each directory in the Julia `DEPOT_PATH` global array. Use the first such directory that exists.
-  - Otherwise, ignore this stanza.
+  - Otherwise, there is no path mapping for (`uuid`, `X`).
 
 If any of these result in success, the path to the source code entry point will be either that result,
 the relative path from that result plus `src/X.jl`, or fail.
@@ -179,7 +179,7 @@ If, on the other hand, Julia was loading the *other* `Priv` package—the one wi
 1. `/home/me/.julia/packages/Priv/HDkrT`
 2. `/usr/local/julia/packages/Priv/HDkrT`
 
-Julia uses the first of these that exists to try to load the public `Priv` package, either from the file `HDkrT`, or the file `HDKrT/src/Priv.jl`.
+Julia uses the first of these that exists to try to load the public `Priv` package from the file `packages/Priv/HDKrT/src/Priv.jl` in the depot where it was found.
 
 Here is a representation of a possible paths map for our example `App` project environment,
 as provided in the Manifest given above for the dependency graph,
@@ -215,11 +215,15 @@ This example map includes three different kinds of package locations (the first 
 
 ### Package directories
 
-Package directories provide a simpler environment, but less powerful or controlled. The set of root packages available is defined simply as the set of files in the directory that "look like" packages. A package `X` is determined to exist if it finds one of the following files:
-  - A file `X.jl`
-  - A file `X/src/X.jl`
-  - A file `X.jl/src/X.jl`
-Additionally, which packages it is able to import as dependencies depends on whether that package contains a project file. If it does not, it can import any root package. Otherwise (if it does contain a `Package.toml` file), it can only import those packages which are identified in its `[deps]` sections (given by uuid and name).
+Package directories provide a simpler environment, but less powerful or controlled. The set of root packages available is determined by the set of subdirectories that "look like" packages. A package `X` is determined to exist if one of the following files exists in the package directory:
+  - `X.jl`
+  - `X/src/X.jl`
+  - `X.jl/src/X.jl`
+Additionally, which dependencies a package in a package directory is able to import depends on whether the package contains a project file:
+* If it does not have a project file, it can import any root package—the same packages that can be loaded at the top level from `Main` and in the REPL.
+* If it does have a project file, it can only import those packages which are identified in the `[deps]` section of the project file.
+
+This dependency loading is part of the `graph` map for package directories, explained elsewhere.
 
 **The roots map** is determined by enumerating the contents of the package directory to generate a list of all packages that exist.
 Additionally, a UUID will be assigned to each entry as follows: For a given package found inside the folder `X`...
