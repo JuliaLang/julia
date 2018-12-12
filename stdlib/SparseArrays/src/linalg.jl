@@ -161,7 +161,7 @@ function spmatmul(A::SparseMatrixCSC{Tv,Ti},
 
     rowvalA = rowvals(A); nzvalA = nonzeros(A)
     rowvalB = rowvals(B); nzvalB = nonzeros(B)
-    nnzC = estimate_mulsize(mA, nnz(A), nA, nnz(B), nB)
+    nnzC = estimate_mulsize(mA, nnz(A), nA, nnz(B), nB) * 11 ÷ 10 # 10% more
     if B isa SparseMatrixCSC; colptrC = Vector{Ti}(undef, nB+1) end
     rowvalC = Vector{Ti}(undef, nnzC)
     nzvalC = Vector{Tv}(undef, nnzC)
