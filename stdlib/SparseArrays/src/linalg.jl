@@ -149,7 +149,7 @@ end
 
 # Gustavsen's matrix multiplication algorithm revisited.
 # The result rowval vector is already sorted by construction.
-# The auxiliary Vector{Ti} xb is replaced by a BitArray of same length.
+# The auxiliary Vector{Ti} xb is replaced by a Vector{Bool} of same length.
 # Besides SparseMatrixCSC also SparseVector is accepted as B.
 # The optional argument controlling a sorting algorithm is obsolete.
 function spmatmul(A::SparseMatrixCSC{Tv,Ti},
@@ -169,7 +169,7 @@ function spmatmul(A::SparseMatrixCSC{Tv,Ti},
     @inbounds begin
         ip = 1
         x  = Vector{Tv}(undef, mA)
-        xb = BitArray(undef, mA)
+        xb = Vector{Bool}(undef, mA)
         for i in 1:nB
             fill!(xb, false)
             if ip + mA - 1 > nnzC
@@ -192,10 +192,12 @@ function spmatmul(A::SparseMatrixCSC{Tv,Ti},
                     end
                 end
             end
-            for k in findall(xb)
-                nzvalC[ip] = x[k]
-                rowvalC[ip] = k
-                ip += 1
+            for k in 1:mA
+                if xb[k]
+                    nzvalC[ip] = x[k]
+                    rowvalC[ip] = k
+                    ip += 1
+                end
             end
         end
         if B isa SparseMatrixCSC; colptrC[nB+1] = ip end
