@@ -58,6 +58,7 @@ New library functions
   * Internal `Base.disable_library_threading` that sets libraries to use one thread.
     It executes function hooks that have been registered with
     `Base.at_disable_library_threading` ([#30004]).
+  * `getipaddrs()` function returns all the IP addresses of the local machine ([#30349])
 
 Standard library changes
 ------------------------
@@ -210,3 +211,4 @@ Deprecated or removed
 [#30249]: https://github.com/JuliaLang/julia/issues/30249
 [#30270]: https://github.com/JuliaLang/julia/issues/30270
 [#30278]: https://github.com/JuliaLang/julia/issues/30278
+[#30349]: https://github.com/JuliaLang/julia/issues/30349
