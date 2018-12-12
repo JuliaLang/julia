@@ -277,7 +277,6 @@ function finalize_refs(S::SharedArray{T,N}) where T where N
     S
 end
 
-
 const SharedVector{T} = SharedArray{T,1}
 const SharedMatrix{T} = SharedArray{T,2}
 
