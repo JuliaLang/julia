@@ -298,4 +298,28 @@ end
     @test isa((@inferred vcat(Float64[], spzeros(1))), SparseVector)
 end
 
+@testset "== for structured matrices" begin
+    diag = rand(10)
+    offdiag = rand(9)
+    D = Diagonal(rand(10))
+    Bup = Bidiagonal(diag, offdiag, 'U')
+    Blo = Bidiagonal(diag, offdiag, 'L')
+    Bupd = Bidiagonal(diag, zeros(9), 'U')
+    Blod = Bidiagonal(diag, zeros(9), 'L')
+    T = Tridiagonal(offdiag, diag, offdiag)
+    Td = Tridiagonal(zeros(9), diag, zeros(9))
+    Tu = Tridiagonal(zeros(9), diag, offdiag)
+    Tl = Tridiagonal(offdiag, diag, zeros(9))
+    S = SymTridiagonal(diag, offdiag)
+    Sd = SymTridiagonal(diag, zeros(9))
+
+    mats = [D, Bup, Blo, Bupd, Blod, T, Td, Tu, Tl, S, Sd]
+
+    for a in mats
+        for b in mats
+            @test (a == b) == (Matrix(a) == Matrix(b)) == (b == a) == (Matrix(b) == Matrix(a))
+        end
+    end
+end
+
 end # module TestSpecial

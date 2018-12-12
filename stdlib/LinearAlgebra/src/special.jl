@@ -312,3 +312,25 @@ function fill!(A::Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}, x)
     throw(ArgumentError("array of type $(typeof(A)) and size $(size(A)) can
     not be filled with $x, since some of its entries are constrained."))
 end
+
+# equals and approx equals methods for structured matrices
+# SymTridiagonal == Tridiagonal is already defined in tridiag.jl
+
+# SymTridiagonal and Bidiagonal have the same field names
+==(A::Diagonal, B::Union{SymTridiagonal, Bidiagonal}) = iszero(B.ev) && A.diag == B.dv
+==(B::Bidiagonal, A::Diagonal) = A == B
+
+==(A::Diagonal, B::Tridiagonal) = iszero(B.dl) && iszero(B.du) && A.diag == B.d
+==(B::Tridiagonal, A::Diagonal) = A == B
+
+function ==(A::Bidiagonal, B::Tridiagonal)
+    if A.uplo == 'U'
+        return iszero(B.dl) && A.dv == B.d && A.ev == B.du
+    else
+        return iszero(B.du) && A.dv == B.d && A.ev == B.dl
+    end
+end
+==(B::Tridiagonal, A::Bidiagonal) = A == B
+
+==(A::Bidiagonal, B::SymTridiagonal) = iszero(B.ev) && iszero(A.ev) && A.dv == B.dv
+==(B::SymTridiagonal, A::Bidiagonal) = A == B
