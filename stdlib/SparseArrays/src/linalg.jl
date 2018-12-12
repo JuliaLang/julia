@@ -652,38 +652,37 @@ mul!(y::StridedVecOrMat, A::SparseMatrixCSCSymmHerm, x::StridedVecOrMat) = mul!(
 function mul!(C::StridedVecOrMat{T}, sA::SparseMatrixCSCSymmHerm, B::StridedVecOrMat,
               α::Number, β::Number) where T
 
-    fadj = sA isa Hermitian ? adjoint : transpose
     fuplo = sA.uplo == 'U' ? nzrangeup : nzrangelo
-    _mul!(fuplo, fadj, C, sA, B, T(α), T(β))
+    _mul!(fuplo, C, sA, B, T(α), T(β))
 end
 
-function _mul!(nzrang::Function, fadj::Function, C, sA, B, α, β)
+function _mul!(nzrang::Function, C::StridedVecOrMat{T}, sA, B, α, β) where T
     A = sA.data
     n = size(A, 2)
     m = size(B, 2)
     n == size(B, 1) == size(C, 1) && m == size(C, 2) || throw(DimensionMismatch())
     rv = rowvals(A)
     nzv = nonzeros(A)
-    z = zero(eltype(C))
-    diagmap = fadj == transpose ? identity : real
-    if β != 1
-        β != 0 ? rmul!(C, β) : fill!(C, z)
-    end
-    for k = 1:m
-        @inbounds for col = 1:n
-            αxj = α * B[col,k]
-            sumcol = z
-            for j = nzrang(A, col)
-                row = rv[j]
-                aarc = nzv[j]
-                if row == col
-                    sumcol += diagmap(aarc) * αxj
-                else
-                    C[row,k] += aarc * αxj
-                    sumcol += fadj(aarc) * B[row,k]
+    let z = T(0), sumcol=z, αxj=z, aarc=z, α = α
+        if β != 1
+            β != 0 ? rmul!(C, β) : fill!(C, z)
+        end
+        @inbounds for k = 1:m
+            for col = 1:n
+                αxj = B[col,k] * α
+                sumcol = z
+                for j = nzrang(A, col)
+                    row = rv[j]
+                    aarc = nzv[j]
+                    if row == col
+                        sumcol += (sA isa Hermitian ? real : identity)(aarc) * B[row,k]
+                    else
+                        C[row,k] += aarc * αxj
+                        sumcol += (sA isa Hermitian ? adjoint : transpose)(aarc) * B[row,k]
+                    end
                 end
+                C[col,k] += α * sumcol
             end
-            C[col,k] += α * sumcol
         end
     end
     C
@@ -692,12 +691,14 @@ end
 # row range up to and including diagonal
 function nzrangeup(A, i)
     r = nzrange(A, i); r1 = r.start; r2 = r.stop
-    r1:searchsortedlast(rowvals(A), i, r1, r2, Base.Order.Forward)
+    rv = rowvals(A)
+    @inbounds r2 < r1 || rv[r2] <= i ? r : r1:searchsortedlast(rv, i, r1, r2, Forward)
 end
 # row range from diagonal (included) to end
 function nzrangelo(A, i)
     r = nzrange(A, i); r1 = r.start; r2 = r.stop
-    searchsortedfirst(rowvals(A), i, r1, r2, Base.Order.Forward):r2
+    rv = rowvals(A)
+    @inbounds r2 < r1 || rv[r1] >= i ? r : searchsortedfirst(rv, i, r1, r2, Forward):r2
 end
 ## end of symmetric/Hermitian
 
