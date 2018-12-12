@@ -464,8 +464,9 @@ function _fast(::typeof(min),x,y)
         ifelse(x < y, x, y))
 end
 
-isbadzero(::typeof(max), x) = (x == zero(x)) & signbit(x)
-isbadzero(::typeof(min), x) = (x == zero(x)) & !signbit(x)
+isbadzero(::typeof(max), x::AbstractFloat) = (x == zero(x)) & signbit(x)
+isbadzero(::typeof(min), x::AbstractFloat) = (x == zero(x)) & !signbit(x)
+isbadzero(op, x) = false
 isgoodzero(::typeof(max), x) = isbadzero(min, x)
 isgoodzero(::typeof(min), x) = isbadzero(max, x)
 
