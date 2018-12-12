@@ -257,6 +257,9 @@ end
 
 Get the IP addresses of the local machine.
 
+!!! compat "Julia 1.2"
+    This function is available as of Julia 1.2.
+
 # Examples
 ```julia-repl
 julia> getipaddrs()
