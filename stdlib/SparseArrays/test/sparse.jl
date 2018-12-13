@@ -365,6 +365,10 @@ end
     @test_throws DimensionMismatch dot(sprand(5,5,0.2),sprand(5,6,0.2))
 end
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
 sA = sprandn(3, 7, 0.5)
 sC = similar(sA)
 dA = Array(sA)
@@ -402,6 +406,26 @@ dA = Array(sA)
         @test rmul!(copy(dAt), Diagonal(conj(bi))) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
         @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(fill(1., length(b)+1)))
         @test_throws LinearAlgebra.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
+    end
+
+    @testset "non-commutative multiplication" begin
+        # non-commutative multiplication
+        Avals = Quaternion.(randn(10), randn(10), randn(10), randn(10))
+        sA = sparse(rand(1:3, 10), rand(1:7, 10), Avals, 3, 7)
+        sC = copy(sA)
+        dA = Array(sA)
+
+        b = Quaternion.(randn(7), randn(7), randn(7), randn(7))
+        D = Diagonal(b)
+        @test Array(sA * D) ≈ dA * D
+        @test rmul!(copy(sA), D) ≈ dA * D
+        @test mul!(sC, copy(sA), D) ≈ dA * D
+
+        b = Quaternion.(randn(3), randn(3), randn(3), randn(3))
+        D = Diagonal(b)
+        @test Array(D * sA) ≈ D * dA
+        @test lmul!(D, copy(sA)) ≈ D * dA
+        @test mul!(sC, D, copy(sA)) ≈ D * dA
     end
 end
 
