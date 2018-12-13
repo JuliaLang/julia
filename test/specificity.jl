@@ -230,8 +230,8 @@ let N = Tuple{Type{Union{Nothing, T}}, Union{Nothing, T}} where T,
     LI = Tuple{Type{LinearIndices{N,R}}, LinearIndices{N}} where {N,R},
     A = Tuple{Type{T},T} where T<:AbstractArray
     @test  args_morespecific(LI, A)
-    @test !args_morespecific(A, N)
-    @test !args_morespecific(LI, N)
+    @test  args_morespecific(A, N)
+    @test  args_morespecific(LI, N)
 end
 
 # issue #29528
@@ -298,3 +298,11 @@ end
 
 @test args_morespecific(Tuple{Type{Missing},Any},
                         Tuple{Type{Union{Nothing, T}},Any} where T)
+
+let A = Tuple{Type{SubString{S}},AbstractString} where S<:AbstractString,
+    B = Tuple{Type{T},AbstractString} where T<:AbstractString,
+    C = Tuple{Type{Union{Missing, Nothing, T}},Union{Missing, Nothing, T}} where T
+    @test  args_morespecific(A, B)
+    @test  args_morespecific(B, C)
+    @test  args_morespecific(A, C)
+end

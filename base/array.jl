@@ -512,10 +512,12 @@ function _collect(::Type{T}, itr, isz::SizeUnknown) where T
 end
 
 # make a collection similar to `c` and appropriate for collecting `itr`
-_similar_for(c::AbstractArray, T, itr, ::SizeUnknown) = similar(c, T, 0)
-_similar_for(c::AbstractArray, T, itr, ::HasLength) = similar(c, T, Int(length(itr)::Integer))
-_similar_for(c::AbstractArray, T, itr, ::HasShape) = similar(c, T, axes(itr))
-_similar_for(c, T, itr, isz) = similar(c, T)
+_similar_for(c::AbstractArray, ::Type{T}, itr, ::SizeUnknown) where {T} = similar(c, T, 0)
+_similar_for(c::AbstractArray, ::Type{T}, itr, ::HasLength) where {T} =
+    similar(c, T, Int(length(itr)::Integer))
+_similar_for(c::AbstractArray, ::Type{T}, itr, ::HasShape) where {T} =
+    similar(c, T, axes(itr))
+_similar_for(c, ::Type{T}, itr, isz) where {T} = similar(c, T)
 
 """
     collect(collection)
@@ -2333,7 +2335,7 @@ function filter!(f, a::AbstractVector)
 
     for acurr in a
         if f(acurr)
-            a[i] = acurr
+            @inbounds a[i] = acurr
             y = iterate(idx, state)
             y === nothing && (i += 1; break)
             i, state = y

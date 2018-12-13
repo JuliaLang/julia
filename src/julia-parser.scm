@@ -8,7 +8,8 @@
 ;; be an operator.
 (define prec-assignment
   (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻= ≔ ⩴ ≕))
-           '(:= ~ $=)))
+           (add-dots '(~))
+           '(:= $=)))
 ;; comma - higher than assignment outside parentheses, lower when inside
 (define prec-pair (add-dots '(=>)))
 (define prec-conditional '(?))
@@ -742,7 +743,7 @@
         ex
         (begin
           (take-token s)
-          (cond ((eq? t '~) ;; ~ is the only non-syntactic assignment-precedence operators
+          (cond ((or (eq? t '~) (eq? t '|.~|)) ;; ~ is the only non-syntactic assignment-precedence operators
                  (if (and space-sensitive (ts:space? s)
                           (not (space-before-next-token? s)))
                      (begin (ts:put-back! s t (ts:space? s))
