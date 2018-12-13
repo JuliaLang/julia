@@ -1202,7 +1202,7 @@ function mul!(C::SparseMatrixCSC, D::Diagonal{T, <:Vector}, A::SparseMatrixCSC) 
     Arowval = A.rowval
     resize!(Cnzval, length(Anzval))
     for col = 1:n, p = A.colptr[col]:(A.colptr[col+1]-1)
-        @inbounds Cnzval[p] = Anzval[p] * b[Arowval[p]]
+        @inbounds Cnzval[p] = b[Arowval[p]] * Anzval[p]
     end
     C
 end
@@ -1238,7 +1238,7 @@ function rmul!(A::SparseMatrixCSC, D::Diagonal)
     (n == size(D, 1)) || throw(DimensionMismatch())
     Anzval = A.nzval
     @inbounds for col = 1:n, p = A.colptr[col]:(A.colptr[col + 1] - 1)
-         Anzval[p] *= D.diag[col]
+         Anzval[p] = Anzval[p] * D.diag[col]
     end
     return A
 end
@@ -1249,7 +1249,7 @@ function lmul!(D::Diagonal, A::SparseMatrixCSC)
     Anzval = A.nzval
     Arowval = A.rowval
     @inbounds for col = 1:n, p = A.colptr[col]:(A.colptr[col + 1] - 1)
-        Anzval[p] *= D.diag[Arowval[p]]
+        Anzval[p] = D.diag[Arowval[p]] * Anzval[p]
     end
     return A
 end
