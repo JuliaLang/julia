@@ -1566,17 +1566,17 @@ module IRShow
     Base.last(r::Compiler.StmtRange) = Compiler.last(r)
     include("compiler/ssair/show.jl")
 
-    const debuginfo = Dict{Symbol, Any}(
+    const __debuginfo = Dict{Symbol, Any}(
         # :full => src -> Base.IRShow.DILineInfoPrinter(src.linetable), # and add variable slot information
         :source => src -> Base.IRShow.DILineInfoPrinter(src.linetable),
         # :oneliner => src -> Base.IRShow.PartialLineInfoPrinter(src.linetable),
         :none => src -> Base.IRShow.lineinfo_disabled,
         )
-    # setting debuginfo[:default] = debuginfo[:none] will disable debuginfo printing globally
-    debuginfo[:default] = debuginfo[:source]
+    const default_debuginfo = Ref{Symbol}(:none)
+    debuginfo(sym) = sym == :default ? default_debuginfo[] : sym
 end
 
-function show(io::IO, src::CodeInfo; debuginfo::Symbol=:default)
+function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     # Fix slot names and types in function body
     print(io, "CodeInfo(")
     lambda_io::IOContext = io
@@ -1587,7 +1587,9 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:default)
     if isempty(src.linetable) || src.linetable[1] isa LineInfoNode
         println(io)
         # TODO: static parameter values?
-        IRShow.show_ir(lambda_io, src, IRShow.debuginfo[debuginfo](src))
+        # only accepts :source or :none, we can't have a fallback for default since
+        # that would break code_typed(, debuginfo=:source) iff IRShow.default_debuginfo[] = :none
+        IRShow.show_ir(lambda_io, src, IRShow.__debuginfo[debuginfo](src))
     else
         # this is a CodeInfo that has not been used as a method yet, so its locations are still LineNumberNodes
         body = Expr(:block)
