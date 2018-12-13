@@ -206,7 +206,7 @@ length(ebo::ExponentialBackOff) = ebo.n
 eltype(::Type{ExponentialBackOff}) = Float64
 
 """
-    retry(f::Function;  delays=ExponentialBackOff(), check=nothing) -> Function
+    retry(f;  delays=ExponentialBackOff(), check=nothing) -> Function
 
 Return an anonymous function that calls function `f`.  If an exception arises,
 `f` is repeatedly called again, each time `check` returns `true`, after waiting the
@@ -222,7 +222,7 @@ retry(http_get, check=(s,e)->e.status == "503")(url)
 retry(read, check=(s,e)->isa(e, IOError))(io, 128; all=false)
 ```
 """
-function retry(f::Function;  delays=ExponentialBackOff(), check=nothing)
+function retry(f;  delays=ExponentialBackOff(), check=nothing)
     (args...; kwargs...) -> begin
         y = iterate(delays)
         while y !== nothing
