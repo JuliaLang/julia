@@ -3506,3 +3506,13 @@ end
 (+)(A::SparseMatrixCSC, J::UniformScaling) = A + sparse(J, size(A)...)
 (-)(A::SparseMatrixCSC, J::UniformScaling) = A - sparse(J, size(A)...)
 (-)(J::UniformScaling, A::SparseMatrixCSC) = sparse(J, size(A)...) - A
+
+## circular shift
+
+function circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, (r,c)::Base.DimsInteger{2})
+    I, J, V = findnz(X)
+    O .= sparse(mod1.(I .+ r, X.m), mod1.(J .+ c, X.n), V, X.m, X.n)
+end
+
+circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, (r,)::Base.DimsInteger{1}) = circshift!(O, X, (r,0))
+circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, r::Real) = circshift!(O, X, (Integer(r),0))

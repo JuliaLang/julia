@@ -2359,4 +2359,16 @@ end
     @test one(A) isa SparseMatrixCSC{Int}
 end
 
+@testset "circshift" begin
+    A = sprand(40, 30, 0.3)
+    @test nnz(A) == nnz(circshift(A,(1,2)))
+    @test circshift(A, (3,4)) == circshift(Matrix(A), (3,4))
+    @test circshift(A, (7,-4)) == circshift(Matrix(A), (7,-4))
+    @test circshift(A, 14) == circshift(Matrix(A), 14)
+    O = similar(A)
+    circshift!(O, A, (11,13))
+    @test nnz(O) == nnz(A)
+    @test O == circshift(A, (11,13))
+end
+
 end # module
