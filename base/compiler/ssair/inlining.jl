@@ -671,7 +671,7 @@ function analyze_method!(idx::Int, @nospecialize(f), @nospecialize(ft), @nospeci
         return ConstantCase(quoted(linfo.inferred_const), method, Any[methsp...], metharg)
     end
 
-    isconst, inferred = find_inferred(linfo, atypes, sv)
+    isconst, inferred = find_inferred(linfo, atypes, sv, stmttyp)
     if isconst
         return ConstantCase(inferred, method, Any[methsp...], metharg)
     end
@@ -1152,7 +1152,7 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
     return urs[]
 end
 
-function find_inferred(linfo::MethodInstance, @nospecialize(atypes), sv::OptimizationState)
+function find_inferred(linfo::MethodInstance, @nospecialize(atypes), sv::OptimizationState, @nospecialize(rettype))
     # see if the method has a InferenceResult in the current cache
     # or an existing inferred code info store in `.inferred`
     haveconst = false
@@ -1163,7 +1163,7 @@ function find_inferred(linfo::MethodInstance, @nospecialize(atypes), sv::Optimiz
             break
         end
     end
-    if haveconst
+    if haveconst || improvable_via_constant_propagation(rettype)
         inf_result = cache_lookup(linfo, atypes, sv.params.cache) # Union{Nothing, InferenceResult}
     else
         inf_result = nothing

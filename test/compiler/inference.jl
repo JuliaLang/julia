@@ -2172,3 +2172,15 @@ f30394(foo::T1, ::Type{T2}) where {T2, T1 <: T2} = foo
 f30394(foo, T2) = f30394(foo.foo_inner, T2)
 
 @test Base.return_types(f30394, (Foo30394_2, Type{Base30394})) == Any[Base30394]
+
+# PR #30385
+
+g30385(args...) = h30385(args...)
+h30385(f, args...) = f(args...)
+f30385(T, y) = g30385(getfield, g30385(tuple, T, y), 1)
+k30385(::Type{AbstractFloat}) = 1
+k30385(x) = "dummy"
+j30385(T, y) = k30385(f30385(T, y))
+
+@test @inferred(j30385(AbstractFloat, 1)) == 1
+@test @inferred(j30385(:dummy, 1)) == "dummy"
