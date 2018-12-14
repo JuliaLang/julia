@@ -2120,3 +2120,56 @@ function g28955(x, y)
 end
 
 @test @inferred(g28955((1,), 1.0)) === Bool
+
+# Test that inlining can look through repeated _applys
+foo_inlining_apply(args...) = ccall(:jl_, Nothing, (Any,), args[1])
+bar_inlining_apply() = Core._apply(Core._apply, (foo_inlining_apply,), ((1,),))
+let ci = code_typed(bar_inlining_apply, Tuple{})[1].first
+    @test length(ci.code) == 2
+    @test ci.code[1].head == :foreigncall
+end
+
+# Test that inference can infer .instance of types
+f_instance(::Type{T}) where {T} = T.instance
+@test @inferred(f_instance(Nothing)) === nothing
+
+# test for some limit-cycle caching poisoning
+_false30098 = false
+f30098() = _false30098 ? g30098() : 3
+g30098() = (h30098(:f30098); 4)
+h30098(f) = getfield(@__MODULE__, f)()
+@test @inferred(g30098()) == 4 # make sure that this
+@test @inferred(f30098()) == 3 # doesn't pollute the inference cache of this
+
+# issue #30394
+mutable struct Base30394
+    a::Int
+end
+
+mutable struct Foo30394
+    foo_inner::Base30394
+    Foo30394() = new(Base30394(1))
+end
+
+mutable struct Foo30394_2
+    foo_inner::Foo30394
+    Foo30394_2() = new(Foo30394())
+end
+
+f30394(foo::T1, ::Type{T2}) where {T2, T1 <: T2} = foo
+
+f30394(foo, T2) = f30394(foo.foo_inner, T2)
+
+@test Base.return_types(f30394, (Foo30394_2, Type{Base30394})) == Any[Base30394]
+
+# PR #30385
+
+g30385(args...) = h30385(args...)
+h30385(f, args...) = f(args...)
+f30385(T, y) = g30385(getfield, g30385(tuple, T, y), 1)
+k30385(::Type{AbstractFloat}) = 1
+k30385(x) = "dummy"
+j30385(T, y) = k30385(f30385(T, y))
+
+@test @inferred(j30385(AbstractFloat, 1)) == 1
+@test @inferred(j30385(:dummy, 1)) == "dummy"
