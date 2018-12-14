@@ -670,14 +670,6 @@ end
     @test BigFloat(1) + x == BigFloat(1) + prevfloat(x)
     @test eps(BigFloat) == eps(BigFloat(1))
 end
-@testset "floatmin/floatmax" begin
-    x = floatmin(BigFloat)
-    @test x > 0 && x*eps(BigFloat) > 0
-    @test prevfloat(x*eps(BigFloat)) == 0
-    x = floatmax(BigFloat)
-    @test !isinf(x)
-    @test isinf(nextfloat(x))
-end
 @testset "factorial" begin
     setprecision(256) do
         x = BigFloat(42)
