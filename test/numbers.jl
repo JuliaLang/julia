@@ -1810,6 +1810,8 @@ end
         @test isfinite(floatmax(T))
         @test isinf(nextfloat(floatmax(T)))
         @test floatmin(T) == nextfloat(zero(T))/eps(T)
+        @test floatmin(T) > 0
+        @test floatmin(T) * eps(T) > 0
         @test iszero(prevfloat(floatmin(T) * eps(T)))
     end
 end
