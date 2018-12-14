@@ -160,3 +160,12 @@ let a = [0.1 0.2; 0.3 0.4], at = reshape([(i,i+1) for i = 1:2:8], 2, 2)
     r = reinterpret(Int, vt)
     @test r == OffsetArray(reshape(1:8, 2, 2, 2), (0, offsetvt...))
 end
+
+# Test 0-dimensional Arrays
+A = zeros(UInt32)
+B = reinterpret(Int32,A)
+@test size(B) == ()
+@test axes(B) == ()
+B[] = Int32(5)
+@test B[] === Int32(5)
+@test A[] === UInt32(5)
