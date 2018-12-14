@@ -104,7 +104,16 @@ function show_method_params(io::IO, tv)
         if length(tv) == 1
             show(io, tv[1])
         else
-            show_delim_array(io, tv, '{', ',', '}', false)
+            print(io, "{")
+            for i = 1:length(tv)
+                if i > 1
+                    print(io, ", ")
+                end
+                x = tv[i]
+                show(io, x)
+                io = IOContext(io, :unionall_env => x)
+            end
+            print(io, "}")
         end
     end
 end
