@@ -180,10 +180,17 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test maximum(5) == 5
 @test minimum(5) == 5
 @test extrema(5) == (5, 5)
+@test extrema(abs2, 5) == (25, 25)
 
-@test maximum([4, 3, 5, 2]) == 5
-@test minimum([4, 3, 5, 2]) == 2
-@test extrema([4, 3, 5, 2]) == (2, 5)
+let x = [4,3,5,2]
+    @test maximum(x) == 5
+    @test minimum(x) == 2
+    @test extrema(x) == (2, 5)
+
+    @test maximum(abs2, x) == 25
+    @test minimum(abs2, x) == 4
+    @test extrema(abs2, x) == (4, 25)
+end
 
 @test isnan(maximum([NaN]))
 @test isnan(minimum([NaN]))
@@ -211,6 +218,7 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 
 @test maximum(abs2, 3:7) == 49
 @test minimum(abs2, 3:7) == 9
+@test extrema(abs2, 3:7) == (9, 49)
 
 @test maximum(Int16[1]) === Int16(1)
 @test maximum(Vector(Int16(1):Int16(100))) === Int16(100)
@@ -227,6 +235,7 @@ A = circshift(reshape(1:24,2,3,4), (0,1,1))
 @test size(extrema(A,dims=1)) == size(maximum(A,dims=1))
 @test size(extrema(A,dims=(1,2))) == size(maximum(A,dims=(1,2)))
 @test size(extrema(A,dims=(1,2,3))) == size(maximum(A,dims=(1,2,3)))
+@test extrema(x->div(x, 2), A, dims=(2,3)) == reshape([(0,11),(1,12)],2,1,1)
 
 # any & all
 
