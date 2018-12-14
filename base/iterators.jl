@@ -274,16 +274,16 @@ Check two array shapes for compatibility, and return whichever shape has less di
 julia> Iterators.truncate([1,2,3], 1:10)
 (Base.OneTo(3),)
 
-julia> Iterators.truncate((2,3,1), (2,3,5,6,4))
+julia> Iterators.truncate([2,3,1], [2,3,5,6,4])
 (Base.OneTo(3),)
 ```
 """
 
-function truncate(a::Union{AbstractArray, <:Tuple}, b::Union{AbstractArray, <:Tuple})
+function truncate(a::AbstractArray, b::AbstractArray)
     truncate(axes(a), axes(b))
 end
 
-function truncate(a::Tuple{Base.OneTo{Int64}}, b::Tuple{Base.OneTo{Int64}})
+function truncate(a::Tuple{Base.OneTo{Int}}, b::Tuple{Base.OneTo{Int}})
     if length(a[1]) < length(b[1])
         return a
     else
