@@ -268,7 +268,7 @@ julia> getipaddrs()
  ip"172.17.0.1"
 ```
 """
-function getipaddrs()
+function getipaddrs(include_lo::Bool=false)
     addresses = IPv4[]
     addr_ref = Ref{Ptr{UInt8}}(C_NULL)
     count_ref = Ref{Int32}(1)
@@ -280,7 +280,9 @@ function getipaddrs()
         current_addr = addr + i*_sizeof_uv_interface_address
         if 1 == ccall(:jl_uv_interface_address_is_internal, Int32, (Ptr{UInt8},), current_addr)
             lo_present = true
-            continue
+            if !include_lo
+                continue
+            end
         end
         sockaddr = ccall(:jl_uv_interface_address_sockaddr, Ptr{Cvoid}, (Ptr{UInt8},), current_addr)
         if ccall(:jl_sockaddr_in_is_ip4, Int32, (Ptr{Cvoid},), sockaddr) == 1
