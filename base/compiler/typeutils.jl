@@ -160,3 +160,12 @@ function unioncomplexity(t::DataType)
 end
 unioncomplexity(u::UnionAll) = max(unioncomplexity(u.body), unioncomplexity(u.var.ub))
 unioncomplexity(@nospecialize(x)) = 0
+
+function improvable_via_constant_propagation(@nospecialize(t))
+    if isconcretetype(t) && t <: Tuple
+        for p in t.parameters
+            p === DataType && return true
+        end
+    end
+    return false
+end
