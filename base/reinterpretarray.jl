@@ -33,8 +33,8 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
         isbitstype(T) || throwbits(S, T, T)
         isbitstype(S) || throwbits(S, T, S)
         (N != 0 || sizeof(T) == sizeof(S)) || throwsize0(S, T)
-        ax1 = axes(a)[1]
         if N != 0 && sizeof(S) != sizeof(T)
+            ax1 = axes(a)[1]
             dim = length(ax1)
             rem(dim*sizeof(S),sizeof(T)) == 0 || thrownonint(S, T, dim)
             first(ax1) == 1 || throwaxes1(S, T, ax1)
@@ -74,6 +74,7 @@ function size(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     size1 = div(psize[1]*sizeof(S), sizeof(T))
     tuple(size1, tail(psize)...)
 end
+size(a::ReinterpretArray{T,0}) where {T} = ()
 
 function axes(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     paxs = axes(a.parent)
@@ -81,6 +82,7 @@ function axes(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     size1 = div(l*sizeof(S), sizeof(T))
     tuple(oftype(paxs[1], f:f+size1-1), tail(paxs)...)
 end
+axes(a::ReinterpretArray{T,0}) where {T} = ()
 
 elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
