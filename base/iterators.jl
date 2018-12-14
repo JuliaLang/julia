@@ -265,6 +265,33 @@ struct Zip{Is<:Tuple}
 end
 
 """
+    truncate(s1, s2)
+
+Check two array shapes for compatibility, and return whichever shape has less dimensions.
+
+# Examples
+```jldoctest
+julia> Iterators.truncate([1,2,3], 1:10)
+(Base.OneTo(3),)
+
+julia> Iterators.truncate((2,3,1), (2,3,5,6,4))
+(Base.OneTo(3),)
+```
+"""
+
+function truncate(a::Union{AbstractArray, <:Tuple}, b::Union{AbstractArray, <:Tuple})
+    truncate(axes(a), axes(b))
+end
+
+function truncate(a::Tuple{Base.OneTo{Int64}}, b::Tuple{Base.OneTo{Int64}})
+    if length(a[1]) < length(b[1])
+        return a
+    else
+        return b
+    end
+end
+
+"""
     zip(iters...)
 
 Run multiple iterators at the same time, until any of them is exhausted. The value type of
@@ -313,7 +340,9 @@ function _zip_min_length(is)
 end
 _zip_min_length(is::Tuple{}) = nothing
 size(z::Zip) = _promote_shape(map(size, z.is)...)
-axes(z::Zip) = _promote_shape(map(axes, z.is)...)
+axes(z::Zip) = truncate(map(axes, z.is)...)
+truncate(p, q...) = truncate(p, truncate(q...))
+truncate(p) = p
 _promote_shape(a, b...) = promote_shape(a, _promote_shape(b...))
 _promote_shape(a) = a
 eltype(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_eltype(Is)

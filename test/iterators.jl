@@ -76,6 +76,15 @@ end
 
 @test_throws MethodError collect(rest(countfrom(1), 5))
 
+# truncate
+# --------
+@test Iterators.truncate([1,2,3], [2,3,4,5]) == (Base.OneTo(3),)
+@test Iterators.truncate(1:10, 1:50) == (Base.OneTo(10),)
+@test Iterators.truncate((1,2,3), 1:10) == (Base.OneTo(3),)
+@test Iterators.truncate((1,2), (2,3,4,5)) == (Base.OneTo(2),)
+@test Iterators.truncate([1,2,3], 1:10) == (Base.OneTo(3),)
+@test Iterators.truncate((Base.OneTo(3),), (Base.OneTo(5),)) == (Base.OneTo(3),)
+
 # countfrom
 # ---------
 let i = 0, k = 1
