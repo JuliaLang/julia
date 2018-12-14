@@ -1804,6 +1804,14 @@ end
     @test 0x1p-1022 == floatmin()
     @test 0x1.fffffffffffffp1023 == floatmax()
     @test isinf(nextfloat(0x1.fffffffffffffp1023))
+
+    # issue #30387
+    for T in (Float16, Float32, Float64, BigFloat)
+        @test isfinite(floatmax(T))
+        @test isinf(nextfloat(floatmax(T)))
+        @test floatmin(T) == nextfloat(zero(T))/eps(T)
+        @test iszero(prevfloat(floatmin(T) * eps(T)))
+    end
 end
 @testset "issue #1308" begin
     @test string(~UInt128(0), base = 16) == "f"^32

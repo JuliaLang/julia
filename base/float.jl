@@ -769,6 +769,10 @@ floatmax(x::T) where {T<:AbstractFloat} = floatmax(T)
 floatmin() = floatmin(Float64)
 floatmax() = floatmax(Float64)
 
+# fallback definitions based on nextfloat/prevfloat/inf
+floatmin(::Type{T}) where {T<:AbstractFloat} = nextfloat(zero(T)) / eps(T)
+floatmax(::Type{T}) where {T<:AbstractFloat} = prevfloat(T(Inf))
+
 """
     eps(::Type{T}) where T<:AbstractFloat
     eps()
