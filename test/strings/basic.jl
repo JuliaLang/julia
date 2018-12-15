@@ -523,7 +523,8 @@ end
     end
     # Check seven-byte sequences, should be invalid
     @test isvalid(String, UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]) == false
-
+    @test isvalid(lstrip("blablabla")) == true
+    @test isvalid(SubString(String(UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]), 1,2)) == false
     # invalid Chars
     @test  isvalid('a')
     @test  isvalid('柒')
