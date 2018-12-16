@@ -359,6 +359,34 @@ the package `ClusterManagers.jl`.
 The number of seconds a newly launched worker waits for connection establishment from the
 master can be specified via variable `JULIA_WORKER_TIMEOUT` in the worker process's
 environment. Relevant only when using TCP/IP as transport.
+
+To launch workers without blocking the REPL, or the containing function
+if launching workers programmatically, execute `addprocs` in its own task.
+
+# Examples
+
+```
+# On busy clusters, call `addprocs` asynchronously
+t = @async addprocs(...)
+```
+
+```
+# Utilize workers as and when they come online
+if nprocs() > 1   # Ensure at least one new worker is available
+   ....   # perform distributed execution
+end
+```
+
+```
+# Retrieve newly launched worker IDs, or any error messages
+if istaskdone(t)   # Check if `addprocs` has completed to ensure `fetch` doesn't block
+    if nworkers() == N
+        new_pids = fetch(t)
+    else
+        fetch(t)
+    end
+  end
+```
 """
 function addprocs(manager::ClusterManager; kwargs...)
     init_multi()
