@@ -109,6 +109,9 @@ end
 
 Compute the mean of an array over the given dimensions.
 
+!!! compat "Julia 1.1"
+    `mean` for empty arrays requires at least Julia 1.1.
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]

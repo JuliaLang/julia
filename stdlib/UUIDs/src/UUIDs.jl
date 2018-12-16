@@ -96,6 +96,9 @@ end
 Generates a version 5 (namespace and domain-based) universally unique identifier (UUID),
 as specified by RFC 4122.
 
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
+
 # Examples
 ```jldoctest
 julia> rng = MersenneTwister(1234);

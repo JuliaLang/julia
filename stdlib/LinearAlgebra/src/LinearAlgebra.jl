@@ -392,6 +392,10 @@ If the keyword argument `parallel` is set to `true`, `peakflops` is run in paral
 the worker processors. The flop rate of the entire parallel computer is returned. When
 running in parallel, only 1 BLAS thread is used. The argument `n` still refers to the size
 of the problem that is solved on each processor.
+
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1. In Julia 1.0 it is available from
+    the standard library `InteractiveUtils`.
 """
 function peakflops(n::Integer=2000; parallel::Bool=false)
     a = fill(1.,100,100)
@@ -433,6 +437,8 @@ function __init__()
         Base.showerror_nostdio(ex,
             "WARNING: Error during initialization of module LinearAlgebra")
     end
+    # register a hook to disable BLAS threading
+    Base.at_disable_library_threading(() -> BLAS.set_num_threads(1))
 end
 
 end # module LinearAlgebra

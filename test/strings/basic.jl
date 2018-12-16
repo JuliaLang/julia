@@ -926,6 +926,10 @@ let v = unsafe_wrap(Vector{UInt8}, "abc")
     @test_throws BoundsError v[1]
     push!(v, UInt8('x'))
     @test s == "abc"
+    s = "abc"
+    v = Vector{UInt8}(s)
+    v[1] = 0x40
+    @test s == "abc"
 end
 
 # PR #25535

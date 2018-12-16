@@ -63,8 +63,10 @@ function showerror(io::IO, ex::TypeError)
         else
             targs = (typeof(ex.got),)
         end
-        if isempty(ex.context)
+        if ex.context == ""
             ctx = "in $(ex.func)"
+        elseif ex.func === Symbol("keyword argument")
+            ctx = "in keyword argument $(ex.context)"
         else
             ctx = "in $(ex.func), in $(ex.context)"
         end
@@ -153,7 +155,9 @@ function showerror(io::IO, ex::UndefVarError)
 end
 
 function showerror(io::IO, ex::InexactError)
-    print(io, "InexactError: ", ex.func, '(', ex.T, ", ", ex.val, ')')
+    print(io, "InexactError: ", ex.func, '(')
+    nameof(ex.T) === ex.func || print(io, ex.T, ", ")
+    print(io, ex.val, ')')
 end
 
 typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}

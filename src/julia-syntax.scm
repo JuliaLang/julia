@@ -499,10 +499,18 @@
                                            (not (any (lambda (s)
                                                        (expr-contains-eq (car s) (caddr v)))
                                                      keyword-sparams)))
-                                      (let ((T (caddr v)))
-                                        `(call (core typeassert)
-                                               ,rval0
-                                               ,T))
+                                      (let ((T    (caddr v))
+                                            (temp (make-ssavalue)))
+                                        `(block (= ,temp ,rval0)
+                                                (if (call (core isa) ,temp ,T)
+                                                    (null)
+                                                    (call (core throw)
+                                                          (new (core TypeError)
+                                                               (inert |keyword argument|)
+                                                               (inert ,k)
+                                                               ,T
+                                                               ,temp)))
+                                                ,temp))
                                       rval0)))
                        `(if (call (top haskey) ,kw (quote ,k))
                             ,rval
