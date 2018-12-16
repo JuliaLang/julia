@@ -430,3 +430,12 @@ end
     @test findnext(isequal(1), (2, 3), 1) === nothing
     @test findprev(isequal(1), (2, 3), 2) === nothing
 end
+
+@testset "Inferable short tuple slicing: issue #30386" begin
+    head2(xs) = xs[1:2]
+    butlast(xs) = xs[1:end-1]
+    @test @inferred(head2((1, 2, 3))) == (1, 2)
+    @test @inferred(head2((1, 2, 3, 4, 5, 6, 7))) == (1, 2)
+    @test @inferred(butlast((1, 2, 3))) == (1, 2)
+    @test @inferred(butlast((1, 2, 3, 4, 5, 6, 7))) == (1, 2, 3, 4, 5, 6)
+end

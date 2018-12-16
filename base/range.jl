@@ -283,7 +283,10 @@ unitrange_last(start::T, stop::T) where {T} =
                           convert(T,start-oneunit(stop-start)))
 
 if isdefined(Main, :Base)
-    function getindex(t::Tuple, r::AbstractUnitRange{<:Real})
+    getindex(t::Tuple, r::AbstractUnitRange{<:Real}) =
+        (o = first(r) - 1; ntuple(n -> t[o + n], length(r)))
+
+    function getindex(t::Any16, r::AbstractUnitRange{<:Real})
         n = length(r)
         n == 0 && return ()
         a = Vector{eltype(t)}(undef, n)
