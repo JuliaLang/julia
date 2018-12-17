@@ -673,7 +673,6 @@ end
 @testset "floatmin/floatmax" begin
     x = floatmin(BigFloat)
     @test x > 0
-    @test prevfloat(x) == 0
     x = floatmax(BigFloat)
     @test !isinf(x)
     @test isinf(nextfloat(x))

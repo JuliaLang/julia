@@ -905,7 +905,7 @@ end
 
 eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
 
-floatmin(::Type{BigFloat}) = nextfloat(zero(BigFloat))
+floatmin(::Type{BigFloat}) = nextfloat(zero(BigFloat))/eps(BigFloat)
 floatmax(::Type{BigFloat}) = prevfloat(BigFloat(Inf))
 
 """
