@@ -322,8 +322,7 @@ end
         a = sprand(10, 5, 0.7)
         b = sprand(5, 15, 0.3)
         @test maximum(abs.(a*b - Array(a)*Array(b))) < 100*eps()
-        @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:sortcols) - Array(a)*Array(b))) < 100*eps()
-        @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:doubletranspose) - Array(a)*Array(b))) < 100*eps()
+        @test maximum(abs.(SparseArrays.spmatmul(a,b) - Array(a)*Array(b))) < 100*eps()
         f = Diagonal(rand(5))
         @test Array(a*f) == Array(a)*f
         @test Array(f*b) == f*Array(b)
