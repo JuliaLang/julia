@@ -253,7 +253,7 @@ function getipaddr()
 end
 
 """
-    getipaddrs() -> Vector{IPv4}
+    getipaddrs(include_lo::Bool=false) -> Vector{IPv4}
 
 Get the IP addresses of the local machine.
 
