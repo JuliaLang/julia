@@ -1717,9 +1717,17 @@ end
 (\)(L::Factor, B::SparseVecOrMat) = sparse(spsolve(CHOLMOD_A, L, Sparse(B, 0)))
 
 \(adjL::Adjoint{<:Any,<:Factor}, B::Dense) = (L = adjL.parent; solve(CHOLMOD_A, L, B))
-\(adjL::Adjoint{<:Any,<:Factor}, B::VecOrMat) = (L = adjL.parent; Matrix(solve(CHOLMOD_A, L, Dense(B))))
 \(adjL::Adjoint{<:Any,<:Factor}, B::Sparse) = (L = adjL.parent; spsolve(CHOLMOD_A, L, B))
 \(adjL::Adjoint{<:Any,<:Factor}, B::SparseVecOrMat) = (L = adjL.parent; \(adjoint(L), Sparse(B)))
+
+function \(adjL::Adjoint{<:Any,<:Factor}, b::StridedVector)
+    L = adjL.parent
+    return Vector(solve(CHOLMOD_A, L, Dense(b)))
+end
+function \(adjL::Adjoint{<:Any,<:Factor}, B::StridedMatrix)
+    L = adjL.parent
+    return Matrix(solve(CHOLMOD_A, L, Dense(B)))
+end
 
 const RealHermSymComplexHermF64SSL = Union{
     Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
