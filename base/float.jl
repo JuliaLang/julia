@@ -727,6 +727,9 @@ end
     typemax(::Type{Float64}) = $(Inf64)
     typemin(x::T) where {T<:Real} = typemin(T)
     typemax(x::T) where {T<:Real} = typemax(T)
+    floatmax(::Type{Float16}) = $(bitcast(Float16, 0x7bff))
+    floatmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
+    floatmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
     for T in (Float16, Float32, Float64)
         @eval floatmin(T) = nextfloat(zero(T))/eps(T)
     end
