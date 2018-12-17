@@ -29,7 +29,7 @@ Standard library changes
 
 #### Dates
 
-* Fixed `repr` such that it displays DateTime as it would be entered in Julia ([ #30200]).
+* Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
 
 
 External dependencies
