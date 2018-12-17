@@ -138,7 +138,7 @@ called `USE_BLAS64` is available as part of the Julia build. When doing
 `make USE_BLAS64=0`, Julia will call BLAS and LAPACK assuming a 32-bit
 API, where all integers are 32-bit wide, even on a 64-bit architecture.
 
-Other libraries that Julia uses, such as ARPACK and SuiteSparse also
+Other libraries that Julia uses, such as SuiteSparse also
 use BLAS and LAPACK internally. The APIs need to be consistent across
 all libraries that depend on BLAS and LAPACK. The Julia build process
 will build all these libraries correctly, but when overriding defaults

@@ -677,10 +677,10 @@ JL_CALLABLE(jl_f_setfield)
         jl_type_error("setfield!", (jl_value_t*)jl_datatype_type, v);
     jl_datatype_t *st = (jl_datatype_t*)vt;
     if (!st->mutabl)
-        jl_errorf("type %s is immutable", jl_symbol_name(st->name->name));
+        jl_errorf("setfield! immutable struct of type %s cannot be changed", jl_symbol_name(st->name->name));
     size_t idx;
     if (jl_is_long(args[1])) {
-        idx = jl_unbox_long(args[1])-1;
+        idx = jl_unbox_long(args[1]) - 1;
         if (idx >= jl_datatype_nfields(st))
             jl_bounds_error(args[0], args[1]);
     }
@@ -879,7 +879,7 @@ JL_CALLABLE(jl_f_invoke)
     jl_value_t *argtypes = args[1];
     JL_GC_PUSH1(&argtypes);
     if (!jl_is_tuple_type(jl_unwrap_unionall(args[1])))
-        jl_type_error_rt(jl_symbol_name(jl_gf_name(args[0])), "invoke", (jl_value_t*)jl_type_type, args[1]);
+        jl_type_error("invoke", (jl_value_t*)jl_anytuple_type_type, args[1]);
     if (!jl_tuple_isa(&args[2], nargs-2, (jl_datatype_t*)argtypes))
         jl_error("invoke: argument type error");
     args[1] = args[0];  // move function directly in front of arguments
@@ -983,7 +983,7 @@ JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_
 JL_CALLABLE(jl_f__typevar)
 {
     JL_NARGS(TypeVar, 3, 3);
-    JL_TYPECHK(arraysize, symbol, args[0]);
+    JL_TYPECHK(TypeVar, symbol, args[0]);
     return (jl_value_t *)jl_new_typevar((jl_sym_t*)args[0], args[1], args[2]);
 }
 

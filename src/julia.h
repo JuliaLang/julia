@@ -31,7 +31,6 @@
 #else
 #  include "win32_ucontext.h"
 #  define jl_jmp_buf jmp_buf
-#  include <malloc.h> //for _resetstkoflw
 #  define MAX_ALIGN 8
 #endif
 
@@ -448,6 +447,7 @@ typedef struct _jl_module_t {
     JL_DATA_TYPE
     jl_sym_t *name;
     struct _jl_module_t *parent;
+    // hidden fields:
     htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
     uint64_t build_id;
@@ -1206,6 +1206,7 @@ JL_DLLEXPORT int jl_get_size(jl_value_t *val, size_t *pnt);
 #define jl_box_long(x)   jl_box_int64(x)
 #define jl_box_ulong(x)  jl_box_uint64(x)
 #define jl_unbox_long(x) jl_unbox_int64(x)
+#define jl_unbox_ulong(x) jl_unbox_uint64(x)
 #define jl_is_long(x)    jl_is_int64(x)
 #define jl_long_type     jl_int64_type
 #define jl_ulong_type    jl_uint64_type
@@ -1213,6 +1214,7 @@ JL_DLLEXPORT int jl_get_size(jl_value_t *val, size_t *pnt);
 #define jl_box_long(x)   jl_box_int32(x)
 #define jl_box_ulong(x)  jl_box_uint32(x)
 #define jl_unbox_long(x) jl_unbox_int32(x)
+#define jl_unbox_ulong(x) jl_unbox_uint32(x)
 #define jl_is_long(x)    jl_is_int32(x)
 #define jl_long_type     jl_int32_type
 #define jl_ulong_type    jl_uint32_type
@@ -1423,6 +1425,15 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_tuple_int(jl_value_t **v,
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_unboxed_int(void *v, jl_value_t *vt, size_t i);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v, size_t *idxs, size_t nidxs);
 JL_DLLEXPORT void JL_NORETURN jl_eof_error(void);
+
+// Return the exception currently being handled, or `jl_nothing`.
+//
+// The catch scope is determined dynamically so this works in functions called
+// from a catch block.  The returned value is gc rooted until we exit the
+// enclosing JL_CATCH.
+// FIXME: Teach the static analyzer about this rather than using
+// JL_GLOBALLY_ROOTED which is far too optimistic.
+JL_DLLEXPORT jl_value_t *jl_current_exception(void) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_value_t *jl_exception_occurred(void);
 JL_DLLEXPORT void jl_exception_clear(void) JL_NOTSAFEPOINT;
 
@@ -1617,6 +1628,8 @@ typedef struct _jl_task_t {
     jl_handler_t *eh;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
+    // saved exception stack
+    jl_excstack_t *excstack;
     // current world age
     size_t world_age;
 
@@ -1634,44 +1647,17 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt);
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
+JL_DLLEXPORT void JL_NORETURN jl_sig_throw(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e);
 
 #include "locks.h"   // requires jl_task_t definition
 
-STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_task_t *current_task = ptls->current_task;
-    // `eh` may not be `ptls->current_task->eh`. See `jl_pop_handler`
-    // This function should **NOT** have any safepoint before the ones at the
-    // end.
-    sig_atomic_t old_defer_signal = ptls->defer_signal;
-    int8_t old_gc_state = ptls->gc_state;
-    current_task->eh = eh->prev;
-    ptls->pgcstack = eh->gcstack;
-#ifdef JULIA_ENABLE_THREADING
-    arraylist_t *locks = &current_task->locks;
-    if (locks->len > eh->locks_len) {
-        for (size_t i = locks->len;i > eh->locks_len;i--)
-            jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
-        locks->len = eh->locks_len;
-    }
-#endif
-    ptls->world_age = eh->world_age;
-    ptls->defer_signal = eh->defer_signal;
-    ptls->gc_state = eh->gc_state;
-    ptls->finalizers_inhibited = eh->finalizers_inhibited;
-    if (old_gc_state && !eh->gc_state) {
-        jl_gc_safepoint_(ptls);
-    }
-    if (old_defer_signal && !eh->defer_signal) {
-        jl_sigint_safepoint(ptls);
-    }
-}
-
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh);
+JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh);
 JL_DLLEXPORT void jl_pop_handler(int n);
+JL_DLLEXPORT size_t jl_excstack_state(void);
+JL_DLLEXPORT void jl_restore_excstack(size_t state);
 
 #if defined(_OS_WINDOWS_)
 #if defined(_COMPILER_MINGW_)
@@ -1711,22 +1697,14 @@ extern int had_exception;
 
 #define JL_TRY                                                    \
     int i__tr, i__ca; jl_handler_t __eh;                          \
+    size_t __excstack_state = jl_excstack_state();                \
     jl_enter_handler(&__eh);                                      \
     if (!jl_setjmp(__eh.eh_ctx,0))                                \
         for (i__tr=1; i__tr; i__tr=0, jl_eh_restore_state(&__eh))
 
-#define JL_EH_POP() jl_eh_restore_state(&__eh)
-
-#ifdef _OS_WINDOWS_
 #define JL_CATCH                                                \
     else                                                        \
-        for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0) \
-            if (((jl_get_ptls_states()->exception_in_transit==jl_stackovf_exception) && _resetstkoflw()) || 1)
-#else
-#define JL_CATCH                                                \
-    else                                                        \
-        for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0)
-#endif
+        for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0, jl_restore_excstack(__excstack_state))
 
 #endif
 
@@ -1929,8 +1907,6 @@ typedef struct {
 
 #define jl_current_task (jl_get_ptls_states()->current_task)
 #define jl_root_task (jl_get_ptls_states()->root_task)
-#define jl_exception_in_transit (jl_get_ptls_states()->exception_in_transit)
-
 
 // codegen interface ----------------------------------------------------------
 

@@ -213,7 +213,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
 
     # -g
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g0`)
+    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), raw=true, dump_module=true)", `$exename -g0`)
         @test code[2]
         code = code[1]
         @test occursin("llvm.module.flags", code)
@@ -221,7 +221,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         @test !occursin("int.jl", code)
         @test !occursin("Int64", code)
     end
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g1`)
+    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), raw=true, dump_module=true)", `$exename -g1`)
         @test code[2]
         code = code[1]
         @test occursin("llvm.module.flags", code)
@@ -229,7 +229,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         @test occursin("int.jl", code)
         @test !occursin("Int64", code)
     end
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g2`)
+    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), raw=true, dump_module=true)", `$exename -g2`)
         @test code[2]
         code = code[1]
         @test occursin("llvm.module.flags", code)
@@ -320,11 +320,12 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
 
     # test passing arguments
     mktempdir() do dir
-        testfile, _ = mktemp(dir)
+        testfile, io = mktemp(dir)
         # write a julia source file that just prints ARGS to stdout
-        write(testfile, """
+        write(io, """
             println(ARGS)
             """)
+        close(io)
         mkpath(joinpath(dir, ".julia", "config"))
         cp(testfile, joinpath(dir, ".julia", "config", "startup.jl"))
 
@@ -558,4 +559,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
             rm(infile)
         end
     end
+end
+
+# Issue #29855
+for yn in ("no", "yes")
+    exename = `$(Base.julia_cmd()) --startup-file=no --inline=$yn`
+    @test occursin("--inline=$yn", first(writereadpipeline("Base.julia_cmd()", exename)))
 end

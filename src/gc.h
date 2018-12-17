@@ -84,19 +84,21 @@ enum {
     GC_MARK_L_obj16,
     GC_MARK_L_obj32,
     GC_MARK_L_stack,
+    GC_MARK_L_excstack,
     GC_MARK_L_module_binding,
     _GC_MARK_L_MAX
 };
 
-/**
- * The `nptr` member of marking data records the number of pointers slots referenced by
- * an object to be used in the full collection heuristics as well as whether the object
- * references young objects.
- * `nptr >> 2` is the number of pointers fields referenced by the object.
- * The lowest bit of `nptr` is set if the object references young object.
- * The 2nd lowest bit of `nptr` is the GC old bits of the object after marking.
- * A `0x3` in the low bits means that the object needs to be in the remset.
- */
+// The following structs (`gc_mark_*_t`) contain iterator state used for the
+// scanning of various object types.
+//
+// The `nptr` member records the number of pointers slots referenced by
+// an object to be used in the full collection heuristics as well as whether the object
+// references young objects.
+// `nptr >> 2` is the number of pointers fields referenced by the object.
+// The lowest bit of `nptr` is set if the object references young object.
+// The 2nd lowest bit of `nptr` is the GC old bits of the object after marking.
+// A `0x3` in the low bits means that the object needs to be in the remset.
 
 // An generic object that's marked and needs to be scanned
 // The metadata might need update too (depend on the PC)
@@ -149,6 +151,13 @@ typedef struct {
     uintptr_t ub;
 } gc_mark_stackframe_t;
 
+// Exception stack data
+typedef struct {
+    jl_excstack_t *s;  // Stack of exceptions
+    size_t itr;        // Iterator into exception stack
+    size_t i;          // Iterator into backtrace data for exception
+} gc_mark_excstack_t;
+
 // Module bindings. This is also the beginning of module scanning.
 // The loop will start marking other references in a module after the bindings are marked
 typedef struct {
@@ -176,6 +185,7 @@ union _jl_gc_mark_data {
     gc_mark_obj16_t obj16;
     gc_mark_obj32_t obj32;
     gc_mark_stackframe_t stackframe;
+    gc_mark_excstack_t excstackframe;
     gc_mark_binding_t binding;
     gc_mark_finlist_t finlist;
 };

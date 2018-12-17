@@ -46,7 +46,7 @@ function _colon(start::T, step, stop::T) where T
 end
 
 """
-    range(start; length, stop, step=1)
+    range(start[, stop]; length, stop, step=1)
 
 Given a starting value, construct a range either by length or from `start` to `stop`,
 optionally with a given step (defaults to 1, a [`UnitRange`](@ref)).
@@ -57,6 +57,11 @@ automatically such that there are `length` linearly spaced elements in the range
 
 If `step` and `stop` are provided and `length` is not, the overall range length will be computed
 automatically such that the elements are `step` spaced (a [`StepRange`](@ref)).
+
+`stop` may be specified as either a positional or keyword argument.
+
+!!! compat "Julia 1.1"
+    `stop` as a positional argument requires at least Julia 1.1.
 
 # Examples
 ```jldoctest
@@ -71,10 +76,24 @@ julia> range(1, step=5, length=100)
 
 julia> range(1, step=5, stop=100)
 1:5:96
+
+julia> range(1, 10, length=101)
+1.0:0.09:10.0
+
+julia> range(1, 100, step=5)
+1:5:96
 ```
 """
 range(start; length::Union{Integer,Nothing}=nothing, stop=nothing, step=nothing) =
     _range(start, step, stop, length)
+
+range(start, stop; length::Union{Integer,Nothing}=nothing, step=nothing) =
+    _range2(start, step, stop, length)
+
+_range2(start, ::Nothing, stop, ::Nothing) =
+    throw(ArgumentError("At least one of `length` or `step` must be specified"))
+
+_range2(start, step, stop, length) = _range(start, step, stop, length)
 
 # Range from start to stop: range(a, [step=s,] stop=b), no length
 _range(start, step,      stop, ::Nothing) = (:)(start, step, stop)
@@ -395,7 +414,7 @@ as if it were `collect(r)`, dependent on the size of the
 terminal, and taking into account whether compact numbers should be shown.
 It figures out the width in characters of each element, and if they
 end up too wide, it shows the first and last elements separated by a
-horizontal elipsis. Typical output will look like `1.0,2.0,3.0,…,4.0,5.0,6.0`.
+horizontal ellipsis. Typical output will look like `1.0,2.0,3.0,…,4.0,5.0,6.0`.
 
 `print_range(io, r, pre, sep, post, hdots)` uses optional
 parameters `pre` and `post` characters for each printed row,
@@ -925,7 +944,13 @@ Array{T,1}(r::AbstractRange{T}) where {T} = vcat(r)
 collect(r::AbstractRange) = vcat(r)
 
 reverse(r::OrdinalRange) = (:)(last(r), -step(r), first(r))
-reverse(r::StepRangeLen) = StepRangeLen(r.ref, -r.step, length(r), length(r)-r.offset+1)
+function reverse(r::StepRangeLen)
+    # If `r` is empty, `length(r) - r.offset + 1 will be nonpositive hence
+    # invalid. As `reverse(r)` is also empty, any offset would work so we keep
+    # `r.offset`
+    offset = isempty(r) ? r.offset : length(r)-r.offset+1
+    StepRangeLen(r.ref, -r.step, length(r), offset)
+end
 reverse(r::LinRange)     = LinRange(r.stop, r.start, length(r))
 
 ## sorting ##

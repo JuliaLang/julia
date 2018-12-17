@@ -1,8 +1,0 @@
-authors = ["Some One <someone@email.com>"]
-name = "SubModule"
-uuid = "0d404dc8-25d6-11e8-300e-11c8e584fb95"
-version = "0.1.0"
-
-[deps]
-RecursiveDep = "f5db5478-804a-11e8-3275-3180cf89cd91"
-Test =  "8dfed614-e22c-5e08-85e1-65c5234f0b40"

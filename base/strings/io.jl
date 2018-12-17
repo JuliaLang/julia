@@ -197,10 +197,10 @@ julia> repr(zeros(3))
 "[0.0, 0.0, 0.0]"
 
 julia> repr(big(1/3))
-"3.33333333333333314829616256247390992939472198486328125e-01"
+"0.333333333333333314829616256247390992939472198486328125"
 
 julia> repr(big(1/3), context=:compact => true)
-"3.33333e-01"
+"0.333333"
 
 ```
 """
@@ -574,6 +574,19 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
         end
     end
     String(take!(buf))
+end
+
+function String(a::AbstractVector{Char})
+    n = 0
+    for v in a
+        n += ncodeunits(v)
+    end
+    out = _string_n(n)
+    offs = 1
+    for v in a
+        offs += __unsafe_string!(out, v, offs)
+    end
+    return out
 end
 
 function String(chars::AbstractVector{<:AbstractChar})

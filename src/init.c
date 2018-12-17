@@ -236,7 +236,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
             }
             JL_CATCH {
                 jl_printf(JL_STDERR, "\natexit hook threw an error: ");
-                jl_static_show(JL_STDERR, ptls->exception_in_transit);
+                jl_static_show(JL_STDERR, jl_current_exception());
             }
         }
     }
@@ -270,7 +270,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
                 assert(item);
                 uv_unref(item->h);
                 jl_printf(JL_STDERR, "error during exit cleanup: close: ");
-                jl_static_show(JL_STDERR, ptls->exception_in_transit);
+                jl_static_show(JL_STDERR, jl_current_exception());
                 item = next_shutdown_queue_item(item);
             }
         }
@@ -285,6 +285,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     // force libuv to spin until everything has finished closing
     loop->stop_flag = 0;
     while (uv_run(loop, UV_RUN_DEFAULT)) { }
+
+    // TODO: Destroy threads
 
     jl_destroy_timing();
 #ifdef ENABLE_TIMINGS
@@ -306,11 +308,6 @@ void *jl_winsock_handle;
 #endif
 
 uv_loop_t *jl_io_loop;
-
-#ifndef _OS_WINDOWS_
-#define UV_STREAM_READABLE 0x20   /* The stream is readable */
-#define UV_STREAM_WRITABLE 0x40   /* The stream is writable */
-#endif
 
 #ifdef _OS_WINDOWS_
 int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
@@ -366,7 +363,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
     switch(uv_guess_handle(fd)) {
     case UV_TTY:
         handle = malloc(sizeof(uv_tty_t));
-        if ((err = uv_tty_init(jl_io_loop, (uv_tty_t*)handle, fd, readable))) {
+        if ((err = uv_tty_init(jl_io_loop, (uv_tty_t*)handle, fd, 0))) {
             jl_errorf("error initializing %s in uv_tty_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
         ((uv_tty_t*)handle)->data = NULL;
@@ -411,13 +408,6 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         if ((err = uv_pipe_open((uv_pipe_t*)handle, fd))) {
             jl_errorf("error initializing %s in uv_pipe_open: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
-#ifndef _OS_WINDOWS_
-        // remove flags set erroneously by libuv:
-        if (readable)
-            ((uv_pipe_t*)handle)->flags &= ~UV_STREAM_WRITABLE;
-        else
-            ((uv_pipe_t*)handle)->flags &= ~UV_STREAM_READABLE;
-#endif
         ((uv_pipe_t*)handle)->data = NULL;
         break;
     case UV_TCP:
@@ -745,7 +735,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         }
         JL_CATCH {
             jl_printf(JL_STDERR, "error during init:\n");
-            jl_static_show(JL_STDERR, ptls->exception_in_transit);
+            jl_static_show(JL_STDERR, jl_current_exception());
             jl_printf(JL_STDERR, "\n");
             jl_exit(1);
         }

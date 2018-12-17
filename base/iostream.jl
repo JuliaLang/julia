@@ -280,7 +280,7 @@ function open(fname::AbstractString;
         append = append,
     )
     s = IOStream(string("<file ",fname,">"))
-    systemerror("opening file $fname",
+    systemerror("opening file $(repr(fname))",
                 ccall(:ios_file, Ptr{Cvoid},
                       (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
                       s.ios, fname, flags.read, flags.write, flags.create, flags.truncate) == C_NULL)

@@ -279,7 +279,7 @@ julia> [(i,j) for i=1:3 for j=1:i if i+j == 4]
 
 ## [Indexing](@id man-array-indexing)
 
-The general syntax for indexing into an n-dimensional array A is:
+The general syntax for indexing into an n-dimensional array `A` is:
 
 ```
 X = A[I_1, I_2, ..., I_n]
@@ -295,8 +295,8 @@ If all the indices are scalars, then the result `X` is a single element from the
 `X` is an array with the same number of dimensions as the sum of the dimensionalities of all the
 indices.
 
-If all indices are vectors, for example, then the shape of `X` would be `(length(I_1), length(I_2), ..., length(I_n))`,
-with location `(i_1, i_2, ..., i_n)` of `X` containing the value `A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]`.
+If all indices `I_k` are vectors, for example, then the shape of `X` would be `(length(I_1), length(I_2), ..., length(I_n))`,
+with location `i_1, i_2, ..., i_n` of `X` containing the value `A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]`.
 
 Example:
 
@@ -364,9 +364,9 @@ julia> A[[1 2; 1 2], 1, 2, 1]
  5  6
 ```
 
-The location `(i_1, i_2, i_3, ..., i_{n+1})` contains the value at `A[I_1[i_1, i_2], I_2[i_3], ..., I_n[i_{n+1}]]`.
-All dimensions indexed with scalars are dropped. For example, the result of `A[2, I, 3]` is an
-array with size `size(I)`. Its `i`th element is populated by `A[2, I[i], 3]`.
+The location `i_1, i_2, i_3, ..., i_{n+1}` contains the value at `A[I_1[i_1, i_2], I_2[i_3], ..., I_n[i_{n+1}]]`.
+All dimensions indexed with scalars are dropped. For example, if `J` is an array of indices, then the result of `A[2, J, 3]` is an
+array with size `size(J)`. Its `j`th element is populated by `A[2, J[j], 3]`.
 
 As a special part of this syntax, the `end` keyword may be used to represent the last index of
 each dimension within the indexing brackets, as determined by the size of the innermost array
@@ -410,7 +410,7 @@ julia> searchsorted(a, 4)
 
 ## Assignment
 
-The general syntax for assigning values in an n-dimensional array A is:
+The general syntax for assigning values in an n-dimensional array `A` is:
 
 ```
 A[I_1, I_2, ..., I_n] = X
@@ -422,10 +422,22 @@ where each `I_k` may be a scalar integer, an array of integers, or any other
 ranges of the form `a:c` or `a:b:c` to select contiguous or strided
 subsections, and arrays of booleans to select elements at their `true` indices.
 
-If `X` is an array, it must have the same number of elements as the product of the lengths of
-the indices: `prod(length(I_1), length(I_2), ..., length(I_n))`. The value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]`
-of `A` is overwritten with the value `X[i_1, i_2, ..., i_n]`. If `X` is not an array, its value
-is written to all referenced locations of `A`.
+If all indices `I_k` are integers, then the value in location `I_1, I_2, ..., I_n` of `A` is
+overwritten with the value of `X`, [`convert`](@ref)ing to the
+[`eltype`](@ref) of `A` if necessary.
+
+
+If any index `I_k` selects more than one location, then the right hand side `X` must be an
+array with the same shape as the result of indexing `A[I_1, I_2, ..., I_n]` or a vector with
+the same number of elements. The value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]` of
+`A` is overwritten with the value `X[I_1, I_2, ..., I_n]`, converting if necessary. The
+element-wise assignment operator `.=` may be used to [broadcast](@ref Broadcasting) `X`
+across the selected locations:
+
+
+```
+A[I_1, I_2, ..., I_n] .= X
+```
 
 Just as in [Indexing](@ref man-array-indexing), the `end` keyword may be used
 to represent the last index of each dimension within the indexing brackets, as
@@ -801,7 +813,7 @@ elements are stored contiguously in column-major order (see additional notes in
 [Performance Tips](@ref man-performance-tips)). The [`Array`](@ref) type is a specific instance
 of `DenseArray`;  [`Vector`](@ref) and [`Matrix`](@ref) are aliases for the 1-d and 2-d cases.
 Very few operations are implemented specifically for `Array` beyond those that are required
-for all `AbstractArrays`s; much of the array library is implemented in a generic
+for all `AbstractArray`s; much of the array library is implemented in a generic
 manner that allows all custom arrays to behave similarly.
 
 `SubArray` is a specialization of `AbstractArray` that performs indexing by

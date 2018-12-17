@@ -365,7 +365,10 @@ export
     cumsum!,
     accumulate,
     accumulate!,
+    eachcol,
     eachindex,
+    eachrow,
+    eachslice,
     extrema,
     fill!,
     fill,
@@ -669,6 +672,7 @@ export
     missing,
     skipmissing,
     something,
+    isnothing,
 
 # time
     sleep,
@@ -694,6 +698,7 @@ export
     fieldname,
     fieldnames,
     fieldcount,
+    fieldtypes,
     propertynames,
     isabstracttype,
     isbitstype,

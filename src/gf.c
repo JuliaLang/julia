@@ -119,7 +119,7 @@ void jl_call_tracer(tracer_cb callback, jl_value_t *tracee)
     JL_CATCH {
         ptls->in_pure_callback = last_in;
         jl_printf(JL_STDERR, "WARNING: tracer callback function threw an error:\n");
-        jl_static_show(JL_STDERR, ptls->exception_in_transit);
+        jl_static_show(JL_STDERR, jl_current_exception());
         jl_printf(JL_STDERR, "\n");
         jlbacktrace();
     }
@@ -272,17 +272,28 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli JL_ROOTS_TEMPORARILY, s
     ptls->world_age = jl_typeinf_world;
     li->inInference = 1;
     in_inference++;
-    jl_svec_t *linfo_src = (jl_svec_t*)jl_apply_with_saved_exception_state(fargs, 3, 0);
+    jl_svec_t *linfo_src;
+    JL_TRY {
+        linfo_src = (jl_svec_t*)jl_apply(fargs, 3);
+    }
+    JL_CATCH {
+        jl_printf(JL_STDERR, "Internal error: encountered unexpected error in runtime:\n");
+        jl_static_show(JL_STDERR, jl_current_exception());
+        jl_printf(JL_STDERR, "\n");
+        jlbacktrace(); // written to STDERR_FILENO
+        linfo_src = NULL;
+    }
     ptls->world_age = last_age;
     in_inference--;
     li->inInference = 0;
 
-    if (linfo_src &&
-            jl_is_svec(linfo_src) && jl_svec_len(linfo_src) == 2 &&
-            jl_is_method_instance(jl_svecref(linfo_src, 0)) &&
-            jl_is_code_info(jl_svecref(linfo_src, 1))) {
-        *pli = (jl_method_instance_t*)jl_svecref(linfo_src, 0);
-        src = (jl_code_info_t*)jl_svecref(linfo_src, 1);
+    if (linfo_src && jl_is_svec(linfo_src) && jl_svec_len(linfo_src) == 2) {
+        jl_value_t *mi = jl_svecref(linfo_src, 0);
+        jl_value_t *ci = jl_svecref(linfo_src, 1);
+        if (jl_is_method_instance(mi) && jl_is_code_info(ci)) {
+            *pli = (jl_method_instance_t*)mi;
+            src = (jl_code_info_t*)ci;
+        }
     }
     JL_GC_POP();
 #endif

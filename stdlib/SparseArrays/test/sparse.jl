@@ -9,6 +9,7 @@ using Base.Printf: @printf
 using Random
 using Test: guardseed
 using InteractiveUtils: @which
+using Dates
 
 @testset "issparse" begin
     @test issparse(sparse(fill(1,5,5)))
@@ -364,6 +365,10 @@ end
     @test_throws DimensionMismatch dot(sprand(5,5,0.2),sprand(5,6,0.2))
 end
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
 sA = sprandn(3, 7, 0.5)
 sC = similar(sA)
 dA = Array(sA)
@@ -388,6 +393,12 @@ dA = Array(sA)
 
     @testset "inverse scaling with mul!" begin
         bi = inv.(b)
+        @test lmul!(Diagonal(bi), copy(dA)) ≈ ldiv!(Diagonal(b), copy(sA))
+        @test lmul!(Diagonal(bi), copy(dA)) ≈ ldiv!(transpose(Diagonal(b)), copy(sA))
+        @test lmul!(Diagonal(conj(bi)), copy(dA)) ≈ ldiv!(adjoint(Diagonal(b)), copy(sA))
+        @test_throws DimensionMismatch ldiv!(Diagonal(fill(1., length(b)+1)), copy(sA))
+        @test_throws LinearAlgebra.SingularException ldiv!(Diagonal(zeros(length(b))), copy(sA))
+
         dAt = copy(transpose(dA))
         sAt = copy(transpose(sA))
         @test rmul!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), Diagonal(b))
@@ -395,6 +406,26 @@ dA = Array(sA)
         @test rmul!(copy(dAt), Diagonal(conj(bi))) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
         @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(fill(1., length(b)+1)))
         @test_throws LinearAlgebra.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
+    end
+
+    @testset "non-commutative multiplication" begin
+        # non-commutative multiplication
+        Avals = Quaternion.(randn(10), randn(10), randn(10), randn(10))
+        sA = sparse(rand(1:3, 10), rand(1:7, 10), Avals, 3, 7)
+        sC = copy(sA)
+        dA = Array(sA)
+
+        b = Quaternion.(randn(7), randn(7), randn(7), randn(7))
+        D = Diagonal(b)
+        @test Array(sA * D) ≈ dA * D
+        @test rmul!(copy(sA), D) ≈ dA * D
+        @test mul!(sC, copy(sA), D) ≈ dA * D
+
+        b = Quaternion.(randn(3), randn(3), randn(3), randn(3))
+        D = Diagonal(b)
+        @test Array(D * sA) ≈ D * dA
+        @test lmul!(D, copy(sA)) ≈ D * dA
+        @test mul!(sC, D, copy(sA)) ≈ D * dA
     end
 end
 
@@ -2333,6 +2364,29 @@ end
     m2 = @which mul!(C,D,A)
     @test m1.module == SparseArrays
     @test m2.module == SparseArrays
+end
+
+@testset "sprandn with type $T" for T in (Float64, Float32, Float16, ComplexF64, ComplexF32, ComplexF16)
+    @test sprandn(T, 5, 5, 0.5) isa AbstractSparseMatrix{T}
+end
+@testset "sprandn with invalid type $T" for T in (AbstractFloat, BigFloat, Complex)
+    @test_throws MethodError sprandn(T, 5, 5, 0.5)
+end
+
+@testset "method ambiguity" begin
+    # Ambiguity test is run inside a clean process.
+    # https://github.com/JuliaLang/julia/issues/28804
+    script = joinpath(@__DIR__, "ambiguous_exec.jl")
+    cmd = `$(Base.julia_cmd()) --startup-file=no $script`
+    @test success(pipeline(cmd; stdout=stdout, stderr=stderr))
+end
+
+@testset "oneunit of sparse matrix" begin
+    A = sparse([Second(0) Second(0); Second(0) Second(0)])
+    @test oneunit(sprand(2, 2, 0.5)) isa SparseMatrixCSC{Float64}
+    @test oneunit(A) isa SparseMatrixCSC{Second}
+    @test one(sprand(2, 2, 0.5)) isa SparseMatrixCSC{Float64}
+    @test one(A) isa SparseMatrixCSC{Int}
 end
 
 end # module

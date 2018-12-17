@@ -176,7 +176,8 @@ end
 convert(T::Type{<:Symmetric}, m::Union{Symmetric,Hermitian}) = m isa T ? m : T(m)
 convert(T::Type{<:Hermitian}, m::Union{Symmetric,Hermitian}) = m isa T ? m : T(m)
 
-const HermOrSym{T,S} = Union{Hermitian{T,S}, Symmetric{T,S}}
+const HermOrSym{T,        S} = Union{Hermitian{T,S}, Symmetric{T,S}}
+const RealHermSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}}
 const RealHermSymComplexHerm{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}
 const RealHermSymComplexSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Symmetric{Complex{T},S}}
 
@@ -329,6 +330,12 @@ transpose(A::Hermitian{<:Real}) = A
 adjoint(A::Symmetric) = Adjoint(A)
 transpose(A::Hermitian) = Transpose(A)
 
+real(A::Symmetric{<:Real}) = A
+real(A::Hermitian{<:Real}) = A
+real(A::Symmetric) = Symmetric(real(A.data), sym_uplo(A.uplo))
+real(A::Hermitian) = Hermitian(real(A.data), sym_uplo(A.uplo))
+imag(A::Symmetric) = Symmetric(imag(A.data), sym_uplo(A.uplo))
+
 Base.copy(A::Adjoint{<:Any,<:Hermitian}) = copy(A.parent)
 Base.copy(A::Transpose{<:Any,<:Symmetric}) = copy(A.parent)
 Base.copy(A::Adjoint{<:Any,<:Symmetric}) =
@@ -393,6 +400,14 @@ end
 (-)(A::Symmetric{Tv,S}) where {Tv,S} = Symmetric{Tv,S}(-A.data, A.uplo)
 (-)(A::Hermitian{Tv,S}) where {Tv,S} = Hermitian{Tv,S}(-A.data, A.uplo)
 
+## Addition/subtraction
+for f in (:+, :-)
+    @eval $f(A::Symmetric, B::Symmetric) = Symmetric($f(A.data, B), sym_uplo(A.uplo))
+    @eval $f(A::Hermitian, B::Hermitian) = Hermitian($f(A.data, B), sym_uplo(A.uplo))
+    @eval $f(A::Hermitian, B::Symmetric{<:Real}) = Hermitian($f(A.data, B), sym_uplo(A.uplo))
+    @eval $f(A::Symmetric{<:Real}, B::Hermitian) = Hermitian($f(A.data, B), sym_uplo(A.uplo))
+end
+
 ## Matvec
 mul!(y::StridedVector{T}, A::Symmetric{T,<:StridedMatrix}, x::StridedVector{T}) where {T<:BlasFloat} =
     BLAS.symv!(A.uplo, one(T), A.data, x, zero(T), y)
@@ -427,11 +442,17 @@ mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix}) 
 *(A::AbstractMatrix, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * adjB.parent
 
 # ambiguities with transposed AbstractMatrix methods in linalg/matmul.jl
+*(transA::Transpose{<:Any,<:RealHermSym}, transB::Transpose{<:Any,<:RealHermSym}) = transA * transB.parent
+*(transA::Transpose{<:Any,<:RealHermSym}, transB::Transpose{<:Any,<:RealHermSymComplexSym}) = transA * transB.parent
 *(transA::Transpose{<:Any,<:RealHermSymComplexSym}, transB::Transpose{<:Any,<:RealHermSymComplexSym}) = transA.parent * transB.parent
+*(transA::Transpose{<:Any,<:RealHermSymComplexSym}, transB::Transpose{<:Any,<:RealHermSym}) = transA.parent * transB
 *(transA::Transpose{<:Any,<:RealHermSymComplexSym}, transB::Transpose{<:Any,<:RealHermSymComplexHerm}) = transA.parent * transB
 *(transA::Transpose{<:Any,<:RealHermSymComplexHerm}, transB::Transpose{<:Any,<:RealHermSymComplexSym}) = transA * transB.parent
+*(adjA::Adjoint{<:Any,<:RealHermSym}, adjB::Adjoint{<:Any,<:RealHermSym}) = adjA * adjB.parent
 *(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = adjA.parent * adjB.parent
+*(adjA::Adjoint{<:Any,<:RealHermSym}, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = adjA * adjB.parent
 *(adjA::Adjoint{<:Any,<:RealHermSymComplexSym}, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = adjA * adjB.parent
+*(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, adjB::Adjoint{<:Any,<:RealHermSym}) = adjA.parent * adjB
 *(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, adjB::Adjoint{<:Any,<:RealHermSymComplexSym}) = adjA.parent * adjB
 
 # ambiguities with AbstractTriangular
@@ -440,12 +461,13 @@ mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix}) 
 *(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::AbstractTriangular) = adjA.parent * B
 *(A::AbstractTriangular, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * adjB.parent
 
-for T in (:Symmetric, :Hermitian), op in (:*, :/)
-    # Deal with an ambiguous case
-    @eval ($op)(A::$T, x::Bool) = ($T)(($op)(A.data, x), sym_uplo(A.uplo))
-    S = T == :Hermitian ? :Real : :Number
-    @eval ($op)(A::$T, x::$S) = ($T)(($op)(A.data, x), sym_uplo(A.uplo))
-end
+# Scaling with Number
+*(A::Symmetric, x::Number) = Symmetric(A.data*x, sym_uplo(A.uplo))
+*(x::Number, A::Symmetric) = Symmetric(x*A.data, sym_uplo(A.uplo))
+*(A::Hermitian, x::Real) = Hermitian(A.data*x, sym_uplo(A.uplo))
+*(x::Real, A::Hermitian) = Hermitian(x*A.data, sym_uplo(A.uplo))
+/(A::Symmetric, x::Number) = Symmetric(A.data/x, sym_uplo(A.uplo))
+/(A::Hermitian, x::Real) = Hermitian(A.data/x, sym_uplo(A.uplo))
 
 function factorize(A::HermOrSym{T}) where T
     TT = typeof(sqrt(oneunit(T)))

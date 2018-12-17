@@ -833,9 +833,9 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
                         commit(rbs, sig)
                     end
                     finish(rbs, sig)
-                catch err
+                catch
                     abort(rbs)
-                    rethrow(err)
+                    rethrow()
                 finally
                     close(rbs)
                 end

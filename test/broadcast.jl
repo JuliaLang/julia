@@ -709,7 +709,7 @@ struct T22053
     t
 end
 Broadcast.BroadcastStyle(::Type{T22053}) = Broadcast.Style{T22053}()
-Broadcast.broadcast_axes(::T22053) = ()
+Broadcast.axes(::T22053) = ()
 Broadcast.broadcastable(t::T22053) = t
 function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{T22053}})
     all(x->isa(x, T22053), bc.args) && return 1
@@ -742,6 +742,11 @@ let
     bc = Broadcasted(+, (Broadcasted(*, (1, Broadcasted(/, (2.0, 2.5)))), Broadcasted(*, (Broadcasted(*, (3, 4)), 5))))
     @test @inferred(Broadcast.cat_nested(bc)) == (1,2.0,2.5,3,4,5)
     @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 60.8
+end
+
+let
+  bc = Broadcasted(+, (Broadcasted(*, ([1, 2, 3], 4)), 5))
+  @test isbits(Broadcast.flatten(bc).f)
 end
 
 # Issue #26127: multiple splats in a fused dot-expression

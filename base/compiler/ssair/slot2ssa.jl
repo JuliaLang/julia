@@ -802,6 +802,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
             end
         elseif isexpr(stmt, :enter)
             new_code[idx] = Expr(:enter, block_for_inst(cfg, stmt.args[1]))
+            ssavalmap[idx] = SSAValue(idx) # Slot to store token for pop_exception
         elseif isexpr(stmt, :leave) || isexpr(stmt, :(=)) || isexpr(stmt, :return) ||
             isexpr(stmt, :meta) || isa(stmt, NewvarNode)
             new_code[idx] = stmt

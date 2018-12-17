@@ -64,6 +64,10 @@ end
     inet = Sockets.InetAddr(IPv4(127,0,0,1), 1024)
     @test inet.host == ip"127.0.0.1"
     @test inet.port == 1024
+    io = IOBuffer()
+    show(io, inet)
+    str = "Sockets.InetAddr{$(isdefined(Main, :IPv4) ? "" : "Sockets.")IPv4}(ip\"127.0.0.1\", 1024)"
+    @test String(take!(io)) == str
 end
 @testset "InetAddr invalid port" begin
     @test_throws InexactError Sockets.InetAddr(IPv4(127,0,0,1), -1)
@@ -430,6 +434,21 @@ end
     s = Sockets.TCPServer(; delay=false)
     if ccall(:jl_has_so_reuseport, Int32, ()) == 1
         @test 0 == ccall(:jl_tcp_reuseport, Int32, (Ptr{Cvoid},), s.handle)
+    end
+end
+
+@static if !Sys.iswindows()
+    # Issue #29234
+    @testset "TCPSocket stdin" begin
+        let addr = Sockets.InetAddr(ip"127.0.0.1", 4455)
+            srv = listen(addr)
+            s = connect(addr)
+
+            @test success(pipeline(`$(Base.julia_cmd()) -e "exit()" -i`, stdin=s))
+
+            close(s)
+            close(srv)
+        end
     end
 end
 

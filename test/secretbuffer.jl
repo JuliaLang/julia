@@ -46,6 +46,18 @@ using Test
         @test Base.unsafe_string(ptr3) == ""
         @test s1 == s2 == s3
 
-        shred!(s1); shred!(s2); shred!(s3)
+        s4 = SecretBuffer(split("setec astronomy", " ")[1]) # initialize from SubString
+        s5 = convert(SecretBuffer, split("setec astronomy", " ")[1]) # initialize from SubString
+        @test s4 == s5
+        shred!(s1); shred!(s2); shred!(s3); shred!(s4), shred!(s5);
+    end
+    @testset "basics" begin
+        s1 = SecretBuffer("setec astronomy")
+        @test sprint(show, s1) == "SecretBuffer(\"*******\")"
+        @test !isempty(s1)
+        shred!(s1)
+        s2 = SecretBuffer!([0x00])
+        @test_throws ArgumentError Base.cconvert(Cstring, s2)
+        shred!(s2)
     end
 end

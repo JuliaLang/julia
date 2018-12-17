@@ -363,8 +363,8 @@ try
         Base.require(Main, :FooBar2)
         error("\"LoadError: break me\" test failed")
     catch exc
-        isa(exc, ErrorException) || rethrow(exc)
-        occursin("ERROR: LoadError: break me", exc.msg) && rethrow(exc)
+        isa(exc, ErrorException) || rethrow()
+        occursin("ERROR: LoadError: break me", exc.msg) && rethrow()
     end
 
     # Test transitive dependency for #21266

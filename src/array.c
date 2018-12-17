@@ -148,6 +148,8 @@ static inline jl_array_t *_new_array(jl_value_t *atype, uint32_t ndims, size_t *
 {
     jl_value_t *eltype = jl_tparam0(atype);
     size_t elsz = 0, al = 0;
+    if (!jl_is_kind(jl_typeof(eltype)))
+        jl_type_error_rt("Array", "element type", (jl_value_t*)jl_type_type, eltype);
     int isunboxed = jl_islayout_inline(eltype, &elsz, &al);
     int isunion = jl_is_uniontype(eltype);
     if (!isunboxed) {
@@ -941,7 +943,7 @@ STATIC_INLINE void jl_array_shrink(jl_array_t *a, size_t dec)
         char *typetagdata;
         char *newtypetagdata;
         if (isbitsunion) {
-            typetagdata = malloc(a->nrows);
+            typetagdata = (char*)malloc(a->nrows);
             memcpy(typetagdata, jl_array_typetagdata(a), a->nrows);
         }
         size_t oldoffsnb = a->offset * elsz;

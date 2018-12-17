@@ -351,9 +351,7 @@ inv(z::Complex{<:Union{Float16,Float32}}) =
     oftype(z, widen(z)*inv(widen(w)))
 
 # robust complex division for double precision
-# the first step is to scale variables if appropriate ,then do calculations
-# in a way that avoids over/underflow (subfuncs 1 and 2), then undo the scaling.
-# scaling variable s and other techniques
+# variables are scaled & unscaled to avoid over/underflow, if necessary
 # based on arxiv.1210.4539
 #             a + i*b
 #  p + i*q = ---------
@@ -363,13 +361,40 @@ function /(z::ComplexF64, w::ComplexF64)
     absa = abs(a); absb = abs(b);  ab = absa >= absb ? absa : absb # equiv. to max(abs(a),abs(b)) but without NaN-handling (faster)
     absc = abs(c); absd = abs(d);  cd = absc >= absd ? absc : absd
 
-    # constants
-    ov = floatmax(Float64)
-    un = floatmin(Float64)
-    ϵ  = eps(Float64)
-    halfov = 0.5*ov
-    twounϵ = un*2.0/ϵ
-    bs = 2.0/(ϵ*ϵ)
+    halfov = 0.5*floatmax(Float64)              # overflow threshold
+    twounϵ = floatmin(Float64)*2.0/eps(Float64) # underflow threshold
+
+    # actual division operations
+    if  ab>=halfov || ab<=twounϵ || cd>=halfov || cd<=twounϵ # over/underflow case
+        p,q = scaling_cdiv(a,b,c,d,ab,cd) # scales a,b,c,d before division (unscales after)
+    else
+        p,q = cdiv(a,b,c,d)
+    end
+
+    return ComplexF64(p,q)
+end
+
+# sub-functionality for /(z::ComplexF64, w::ComplexF64)
+@inline function cdiv(a::Float64, b::Float64, c::Float64, d::Float64)
+    if abs(d)<=abs(c)
+        p,q = robust_cdiv1(a,b,c,d)
+    else
+        p,q = robust_cdiv1(b,a,d,c)
+        q = -q
+    end
+    return p,q
+end
+@noinline function scaling_cdiv(a::Float64, b::Float64, c::Float64, d::Float64, ab::Float64, cd::Float64)
+    # this over/underflow functionality is outlined for performance, cf. #29688
+    a,b,c,d,s = scaleargs_cdiv(a,b,c,d,ab,cd)
+    p,q = cdiv(a,b,c,d)
+    return p*s,q*s
+end
+function scaleargs_cdiv(a::Float64, b::Float64, c::Float64, d::Float64, ab::Float64, cd::Float64)
+    ϵ      = eps(Float64)
+    halfov = 0.5*floatmax(Float64)
+    twounϵ = floatmin(Float64)*2.0/ϵ
+    bs     = 2.0/(ϵ*ϵ)
 
     # scaling
     s = 1.0
@@ -384,11 +409,9 @@ function /(z::ComplexF64, w::ComplexF64)
         c*=bs;  d*=bs;  s*=bs   # scale up c,d
     end
 
-    # division operations
-    abs(d)<=abs(c) ? ((p,q)=robust_cdiv1(a,b,c,d)  ) : ((p,q)=robust_cdiv1(b,a,d,c); q=-q)
-    return ComplexF64(p*s,q*s) # undo scaling
+    return a,b,c,d,s
 end
-function robust_cdiv1(a::Float64, b::Float64, c::Float64, d::Float64)
+@inline function robust_cdiv1(a::Float64, b::Float64, c::Float64, d::Float64)
     r = d/c
     t = 1.0/(c+d*r)
     p = robust_cdiv2(a,b,c,d,r,t)
@@ -991,7 +1014,3 @@ function complex(A::AbstractArray{T}) where T
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)
 end
-
-## promotion to complex ##
-
-_default_type(T::Type{Complex}) = Complex{Int}

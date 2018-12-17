@@ -228,7 +228,7 @@ Multiply `x` and `y`, giving the result as a larger type.
 # Examples
 ```jldoctest
 julia> widemul(Float32(3.), 4.)
-1.2e+01
+12.0
 ```
 """
 widemul(x::Number, y::Number) = widen(x)*widen(y)
@@ -319,8 +319,6 @@ julia> import Dates; oneunit(Dates.Day)
 """
 oneunit(x::T) where {T} = T(one(x))
 oneunit(::Type{T}) where {T} = T(one(T))
-
-_default_type(::Type{Number}) = Int
 
 """
     big(T::Type)

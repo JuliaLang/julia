@@ -344,7 +344,7 @@ julia> isdigit('α')
 false
 ```
 """
-isdigit(c::AbstractChar) = '0' <= c <= '9'
+isdigit(c::AbstractChar) = (c >= '0') & (c <= '9')
 
 """
     isletter(c::AbstractChar) -> Bool
