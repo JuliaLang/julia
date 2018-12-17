@@ -11,6 +11,7 @@
 import .Base.unsafe_trunc
 import .Base.Math.@horner
 import .Base.TwicePrecision
+import .Base.Math.highword
 
 
 # Float64 lookup table.
@@ -410,12 +411,6 @@ end
 # ====================================================
 
 # Constants and utilities
-
-highword(u::UInt32) = u
-highword(u::UInt64) = (u >> 32) % UInt32
-highword(x::Float32) = reinterpret(UInt32, x)
-highword(x::Float64) = highword(reinterpret(UInt64, x))
-
 # Argument reduction
 """
     k, f = _log_range_reduction(x)
@@ -521,8 +516,6 @@ end
     f, k = _log_range_reduction(x)
     _log_kernel(f, k+j, invlnb, invlog2b)
 end
-
-
 
 # Wrapper function for logs
 invln2x(::Type{Float32}) = TwicePrecision(1.4428710938f+00, -1.7605285393f-04)

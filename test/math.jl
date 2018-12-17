@@ -1042,3 +1042,44 @@ using .Main.Furlongs
 @test hypot(Furlong(NaN), Furlong(Inf)) == Furlong(Inf)
 @test hypot(Furlong(Inf), Furlong(NaN)) == Furlong(Inf)
 @test hypot(Furlong(Inf), Furlong(Inf)) == Furlong(Inf)
+
+
+@testset "log2" begin
+    for T in (Float32, Float64)
+        @test log2(zero(T)) === -T(Inf)
+        @test log2(-zero(T)) === -T(Inf)
+        @test log2(one(T)) === zero(T)
+        @test_throws DomainError log2(-one(T))
+        @test_throws DomainError log2(-T(Inf))
+        @test log2(T(Inf)) === T(Inf)
+        @test isnan_type(T, log2(T(NaN)))
+        for x in (pcnfloat(nextfloat(nextfloat(zero(T))))...,
+                  0.45, 0.6, 0.98, pcnfloat(2.0)..., pcnfloat(10.0)...,
+                  (map(k->2^k, 1.0:1.0:1024.0).*sqrt(2))...,
+                  (map(k->2^k, 1.0:1.0:1024.0).*(sqrt(2)/2))...)
+            by = log2(big(T(x)))
+            @test log2(T(x)) ≈ by rtol=eps(T)
+
+        end
+    end
+end
+
+@testset "log10" begin
+    for T in (Float32, Float64)
+        @test log10(zero(T)) === -T(Inf)
+        @test log10(-zero(T)) === -T(Inf)
+        @test log10(one(T)) === zero(T)
+        @test_throws DomainError log10(-one(T))
+        @test_throws DomainError log10(-T(Inf))
+        @test log10(T(Inf)) === T(Inf)
+        @test isnan_type(T, log10(T(NaN)))
+        for x in (pcnfloat(nextfloat(nextfloat(zero(T))))...,
+                  0.45, 0.6, 0.98, pcnfloat(2.0)..., pcnfloat(10.0)...,
+                  (map(k->2^k, 1.0:1.0:1024.0).*sqrt(2))...,
+                  (map(k->2^k, 1.0:1.0:1024.0).*(sqrt(2)/2))...)
+            by = log10(big(T(x)))
+            @test log10(T(x)) ≈ by rtol=eps(T)
+
+        end
+    end
+end

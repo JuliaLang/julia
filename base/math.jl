@@ -1134,6 +1134,7 @@ Return the high word of `x` as a `UInt32`.
 @inline highword(x::Float64) = highword(reinterpret(UInt64, x))
 @inline highword(x::UInt64)  = (x >>> 32) % UInt32
 @inline highword(x::Float32) = reinterpret(UInt32, x)
+@inline highword(u::UInt32) = u
 
 @inline fromhighword(::Type{Float64}, u::UInt32) = reinterpret(Float64, UInt64(u) << 32)
 @inline fromhighword(::Type{Float32}, u::UInt32) = reinterpret(Float32, u)
