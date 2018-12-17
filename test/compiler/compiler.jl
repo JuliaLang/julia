@@ -2068,3 +2068,24 @@ function f29036(s, i)
     val
 end
 @test Base.return_types(f29036, (String, Int)) == Any[Char]
+
+# issue #30394
+mutable struct Base30394
+    a::Int
+end
+
+mutable struct Foo30394
+    foo_inner::Base30394
+    Foo30394() = new(Base30394(1))
+end
+
+mutable struct Foo30394_2
+    foo_inner::Foo30394
+    Foo30394_2() = new(Foo30394())
+end
+
+f30394(foo::T1, ::Type{T2}) where {T2, T1 <: T2} = foo
+
+f30394(foo, T2) = f30394(foo.foo_inner, T2)
+
+@test Base.return_types(f30394, (Foo30394_2, Type{Base30394})) == Any[Base30394]
