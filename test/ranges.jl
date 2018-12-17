@@ -1406,6 +1406,13 @@ end
     @test @inferred(z4 .+ z4) === z4
 end
 
+@testset "Issue #30006" begin
+    @test Base.Slice(Base.OneTo(5))[Int32(1)] == Int32(1)
+    @test Base.Slice(Base.OneTo(3))[Int8(2)] == Int8(2)
+    @test Base.Slice(1:10)[Int32(2)] == Int32(2)
+    @test Base.Slice(1:10)[Int8(2)] == Int8(2)
+end
+
 @testset "allocation of TwicePrecision call" begin
     0:286.493442:360
     0:286:360
