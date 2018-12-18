@@ -33,10 +33,9 @@ Standard library changes
 
 * Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
 
-#### SparseArrays
+#### Dates
 
-* The `similar` methods applied to `SparseMatrixCSC` providing new 2-dimensional dimensions
-  returns now empty storage space and corresponding nonzero-structure.
+* Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
 
 External dependencies
 ---------------------
