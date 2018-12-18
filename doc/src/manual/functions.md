@@ -683,12 +683,12 @@ The next example composes three functions and maps the result over an array of s
 ```jldoctest
 julia> map(first ∘ reverse ∘ uppercase, split("you can compose functions like this"))
 6-element Array{Char,1}:
-'U'
-'N'
-'E'
-'S'
-'E'
-'S'
+ 'U'
+ 'N'
+ 'E'
+ 'S'
+ 'E'
+ 'S'
 ```
 
 Function chaining (sometimes called "piping" or "using a pipe" to send data to a subsequent function) is when you apply a function to the previous function's output:
