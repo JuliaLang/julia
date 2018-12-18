@@ -33,6 +33,10 @@ Standard library changes
 
 * Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
 
+#### SparseArrays
+
+* The `similar` methods applied to `SparseMatrixCSC` providing new 2-dimensional dimensions
+  returns now empty storage space and corresponding nonzero-structure.
 
 External dependencies
 ---------------------
