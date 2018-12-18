@@ -511,7 +511,9 @@ end
 """
     strides(A)
 
-Return a tuple of the memory strides in each dimension.
+Return a tuple of the memory strides in each dimension, for an `AbstractArray` with a
+strided memory layout. For arrays with a non-strided layout (such as sparse arrays), return
+`nothing`.
 
 See also: [`stride`](@ref).
 
@@ -523,7 +525,7 @@ julia> strides(A)
 (1, 3, 12)
 ```
 """
-function strides end
+strides(::AbstractArray) = nothing
 
 """
     stride(A, k::Integer)
@@ -544,9 +546,13 @@ julia> stride(A,3)
 ```
 """
 function stride(A::AbstractArray, k::Integer)
-    st = strides(A)
-    k ≤ ndims(A) && return st[k]
-    return sum(st .* size(A))
+    str = strides(A)
+    if str === nothing
+        return nothing
+    else
+        k ≤ ndims(A) && return st[k]
+        return sum(st .* size(A))
+    end
 end
 
 @inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
