@@ -314,8 +314,8 @@ include("env.jl")
 include("libuv.jl")
 include("event.jl")
 include("task.jl")
-include("lock.jl")
 include("threads.jl")
+include("lock.jl")
 include("weakkeydict.jl")
 
 # Logging

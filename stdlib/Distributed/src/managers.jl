@@ -124,7 +124,7 @@ function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy:
     # Wait for all launches to complete.
     launch_tasks = Vector{Any}(undef, length(manager.machines))
 
-    for (i,(machine, cnt)) in enumerate(manager.machines)
+    for (i, (machine, cnt)) in enumerate(manager.machines)
         let machine=machine, cnt=cnt
             launch_tasks[i] = @async try
                     launch_on_machine(manager, machine, cnt, params, launched, launch_ntfy)
@@ -135,7 +135,7 @@ function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy:
     end
 
     for t in launch_tasks
-        wait(t)
+        wait(t::Task)
     end
 
     notify(launch_ntfy)

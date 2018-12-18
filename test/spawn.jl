@@ -58,9 +58,9 @@ out = read(`$echocmd hello` & `$echocmd world`, String)
 Sys.isunix() && run(pipeline(yescmd, `head`, devnull))
 
 let p = run(pipeline(yescmd, devnull), wait=false)
-    t = @async !success(p)
-    kill(p)
-    @test fetch(t)
+    t = @async kill(p)
+    @test !success(p)
+    wait(t)
 end
 
 if valgrind_off
@@ -164,16 +164,19 @@ let r, t
     t = @async begin
         try
             wait(r)
-        catch
+            @test false
+        catch ex
+            @test isa(ex, InterruptException)
         end
-        p = run(`$sleepcmd 1`, wait=false); wait(p)
+        p = run(`$sleepcmd 1`, wait=false)
+        wait(p)
         @test p.exitcode == 0
         return true
     end
     yield()
     schedule(t, InterruptException(), error=true)
     yield()
-    put!(r,11)
+    put!(r, 11)
     yield()
     @test fetch(t)
 end

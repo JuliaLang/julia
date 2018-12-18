@@ -67,7 +67,7 @@ mutable struct Worker
     manager::ClusterManager
     config::WorkerConfig
     version::Union{VersionNumber, Nothing}   # Julia version of the remote process
-    initialized::Threads.Event
+    initialized::Event
 
     function Worker(id::Int, r_stream::IO, w_stream::IO, manager::ClusterManager;
                              version::Union{VersionNumber, Nothing}=nothing,
@@ -91,7 +91,7 @@ mutable struct Worker
             return map_pid_wrkr[id]
         end
         w=new(id, [], [], false, W_CREATED, Condition(), time(), conn_func)
-        w.initialized = Threads.Event()
+        w.initialized = Event()
         register_worker(w)
         w
     end
