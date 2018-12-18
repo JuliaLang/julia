@@ -340,6 +340,15 @@ end
     @test broadcast(+, Transpose(sparsevec), 1.0, Transpose(sparsevec)) isa Transpose{Float64,SparseVector{Float64,Int}}
 end
 
+@testset "Strides AdjOrTrans Issue#29705" begin
+    @test strides(rand(3,5)') == (1, 5)
+    @test strides([1 2 3; 4 5 6]') == (1, 3)
+    @test strides(transpose(rand(3,4))) == (1, 4)
+    @test strides(transpose([1 2 3; 4 5 6])) == (1, 3)
+    @test stride(rand(3,5)', 1) == 1
+    @test stride(rand(3,5)', 2) == 5
+end
+
 @testset "Adjoint/Transpose-wrapped vector multiplication" begin
     realvec, realmat = [1, 2, 3], [1 2 3; 4 5 6; 7 8 9]
     complexvec, complexmat = [1im, 2, -3im], [1im 2 3; 4 5 -6im; 7im 8 9]

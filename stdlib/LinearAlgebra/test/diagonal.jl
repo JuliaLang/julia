@@ -311,6 +311,14 @@ end
     end
 end
 
+@testset "Strides Diagonal Issue#29705" begin
+    @test strides(Diagonal([1 2 3 4; 5 6 7 8; 1 3 5 7])) == (1, 3)
+    @test strides(Diagonal(rand(5, 10))) == (1, 5)
+    @test strides(Diagonal(rand(5, 10)')) == (1, 5)
+    @test strides(Diagonal(rand(5, 10)), 1) == 1
+    @test strides(Diagonal(rand(5, 10)), 2) == 5
+end
+
 @testset "isposdef" begin
     @test isposdef(Diagonal(1.0 .+ rand(n)))
     @test !isposdef(Diagonal(-1.0 * rand(n)))

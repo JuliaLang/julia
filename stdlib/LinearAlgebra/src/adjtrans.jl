@@ -118,6 +118,9 @@ const AdjOrTransAbsMat{T} = AdjOrTrans{T,<:AbstractMatrix}
 wrapperop(A::Adjoint) = adjoint
 wrapperop(A::Transpose) = transpose
 
+strides(a::AdjOrTrans) = size_to_strides(1, size(a)...)
+stride(a::AdjOrTrans, i::Integer) = strides(a)[i]
+
 # AbstractArray interface, basic definitions
 length(A::AdjOrTrans) = length(A.parent)
 size(v::AdjOrTransAbsVec) = (1, length(v.parent))

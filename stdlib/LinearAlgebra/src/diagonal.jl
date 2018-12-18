@@ -103,6 +103,8 @@ function setindex!(D::Diagonal, v, i::Int, j::Int)
     return v
 end
 
+strides(a::Diagonal) = size_to_strides(1, size(a)...)
+stride(a::Diagonal, i::Integer) = strides(a)[i]
 
 ## structured matrix methods ##
 function Base.replace_in_print_matrix(A::Diagonal,i::Integer,j::Integer,s::AbstractString)
