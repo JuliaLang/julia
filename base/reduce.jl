@@ -452,13 +452,15 @@ julia> prod(1:20)
 prod(a) = mapreduce(identity, mul_prod, a)
 
 ## maximum & minimum
-function _fast(::typeof(max),x,y)
+_fast(::typeof(min),x,y) = min(x,y)
+_fast(::typeof(max),x,y) = max(x,y)
+function _fast(::typeof(max), x::AbstractFloat, y::AbstractFloat)
     ifelse(isnan(x),
         x,
         ifelse(x > y, x, y))
 end
 
-function _fast(::typeof(min),x,y)
+function _fast(::typeof(min),x::AbstractFloat, y::AbstractFloat)
     ifelse(isnan(x),
         x,
         ifelse(x < y, x, y))
@@ -479,10 +481,12 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     start = first
     stop  = start + chunk_len - 4
     while stop <= last
-        isnan(v1) && return v1
-        isnan(v2) && return v2
-        isnan(v3) && return v3
-        isnan(v4) && return v4
+        if v1 isa AbstractFloat
+            isnan(v1) && return v1
+            isnan(v2) && return v2
+            isnan(v3) && return v3
+            isnan(v4) && return v4
+        end
         @inbounds for i in start:4:stop
             v1 = _fast(op, v1, f(A[i+1]))
             v2 = _fast(op, v2, f(A[i+2]))

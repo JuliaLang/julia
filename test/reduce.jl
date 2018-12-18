@@ -233,6 +233,17 @@ end
     end
 end
 
+@testset "maximum works on generic order #30320" begin
+    for n in [1:20;1500]
+        arr = randn(n)
+        @test GenericOrder(maximum(arr)) === maximum(map(GenericOrder, arr))
+        @test GenericOrder(minimum(arr)) === minimum(map(GenericOrder, arr))
+        f = x -> x
+        @test GenericOrder(maximum(f,arr)) === maximum(f,map(GenericOrder, arr))
+        @test GenericOrder(minimum(f,arr)) === minimum(f,map(GenericOrder, arr))
+    end
+end
+
 @test isnan(maximum([NaN]))
 @test isnan(minimum([NaN]))
 @test isequal(extrema([NaN]), (NaN, NaN))
