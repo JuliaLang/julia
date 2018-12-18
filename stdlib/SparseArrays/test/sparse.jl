@@ -2411,10 +2411,10 @@ end
 end
 
 @testset "circshift" begin
-    for i=1:20
-        m,n = 17,15
-        A = sprand(m, n, rand())
-        shifts = rand(-m:m), rand(-n:n)
+    m,n = 17,15
+    A = sprand(m, n, 0.5)
+    for rshift in (-1, 0, 1, 10), cshift in (-1, 0, 1, 10)
+        shifts = (rshift, cshift)
         # using dense circshift to compare
         B = circshift(Matrix(A), shifts)
         # sparse circshift
@@ -2434,26 +2434,6 @@ end
         circshift!(E1, A2, shifts)
         circshift!(E2, Matrix(A2), shifts)
         @test E1 == E2
-
-        # test sparse vector
-        n = 100
-        shift = rand(-n:n)
-        v = sprand(n, rand())
-        x = circshift(Vector(v), shift)
-        w = circshift(v, shift)
-        @test nnz(v) == nnz(w)
-        @test w == x
-        # test circshift!
-        v1 = similar(v)
-        circshift!(v1, v, shift)
-        @test v1 == x
-        # test different in/out types
-        y1 = spzeros(Int64, n)
-        y2 = spzeros(Int64, n)
-        v2 = floor.(100v)
-        circshift!(y1, v2, shift)
-        circshift!(y2, Vector(v2), shift)
-        @test y1 == y2
     end
 end
 
