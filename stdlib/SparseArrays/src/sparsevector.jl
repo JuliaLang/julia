@@ -2007,7 +2007,7 @@ end
 
 
 function circshift!(O::SparseVector, X::SparseVector, (r,)::Base.DimsInteger{1})
-    copy!(O, X)
+    O .= X
     subvector_shifter!(O.nzind, O.nzval, 1, length(O.nzind), O.n, mod(r, X.n))
     return O
 end
