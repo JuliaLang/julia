@@ -595,9 +595,11 @@ function show(io::IO, p::Pair)
     for i = (1, 2)
         io_i = IOContext(iocompact, :typeinfo => typeinfos[i])
         isdelimited(io_i, p[i]) || print(io, "(")
-        if i == 1 && isoperator(Symbol(p[i]))
-           print(io_i, "(", p[i], ")")
-        else
+        if i == 1 && (p[i] isa Symbol || p[i] isa Function)
+            print(io_i, "(")
+            show(io_i, p[i])
+            print(io_i, ")")
+        else 
             show(io_i, p[i])
         end
         isdelimited(io_i, p[i]) || print(io, ")")

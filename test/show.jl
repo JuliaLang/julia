@@ -1004,6 +1004,9 @@ end
     # issue #29536
     d = Dict((+)=>1)
     @test showstr(d) == "Dict((+)=>1)"
+
+    d = Dict("+"=>1)
+    @test showstr(d) == "Dict(\"+\"=>1)"
 end
 
 @testset "alignment for pairs" begin  # (#22899)
