@@ -33,6 +33,9 @@ Standard library changes
 
 * Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
 
+#### SparseArrays
+
+* `spmatmul` no longer has the obsolete optional keyword argument `sortindices` ([#30372]).
 
 External dependencies
 ---------------------

@@ -93,10 +93,6 @@ do33 = fill(1.,3)
     end
 end
 
-@testset "Issue #30006" begin
-    SparseMatrixCSC{Float64,Int32}(spzeros(3,3))[:, 1] == [1, 2, 3]
-end
-
 @testset "concatenation tests" begin
     sp33 = sparse(1.0I, 3, 3)
 
@@ -318,12 +314,23 @@ end
 end
 
 @testset "matrix multiplication" begin
-    for i = 1:5
-        a = sprand(10, 5, 0.7)
-        b = sprand(5, 15, 0.3)
-        @test maximum(abs.(a*b - Array(a)*Array(b))) < 100*eps()
-        @test maximum(abs.(SparseArrays.spmatmul(a,b) - Array(a)*Array(b))) < 100*eps()
-        f = Diagonal(rand(5))
+    for (m, p, n, q, k) in (
+                            (10, 0.7, 5, 0.3, 15),
+                            (100, 0.01, 100, 0.01, 20),
+                            (100, 0.1, 100, 0.2, 100),
+                            (1000, 0.01, 1000, 0.007, 100),
+                           )
+        a = sprand(m, n, p)
+        b = sprand(n, k, q)
+        as = sparse(a')
+        bs = sparse(b')
+        ab = a * b
+        aab = Array(a) * Array(b)
+        @test maximum(abs.(ab - aab)) < 100*eps()
+        @test a*bs' == ab
+        @test as'*b == ab
+        @test as'*bs' == ab
+        f = Diagonal(rand(n))
         @test Array(a*f) == Array(a)*f
         @test Array(f*b) == f*Array(b)
     end
@@ -368,10 +375,6 @@ end
     @test_throws DimensionMismatch dot(sprand(5,5,0.2),sprand(5,6,0.2))
 end
 
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
-using .Main.Quaternions
-
 sA = sprandn(3, 7, 0.5)
 sC = similar(sA)
 dA = Array(sA)
@@ -396,12 +399,6 @@ dA = Array(sA)
 
     @testset "inverse scaling with mul!" begin
         bi = inv.(b)
-        @test lmul!(Diagonal(bi), copy(dA)) ≈ ldiv!(Diagonal(b), copy(sA))
-        @test lmul!(Diagonal(bi), copy(dA)) ≈ ldiv!(transpose(Diagonal(b)), copy(sA))
-        @test lmul!(Diagonal(conj(bi)), copy(dA)) ≈ ldiv!(adjoint(Diagonal(b)), copy(sA))
-        @test_throws DimensionMismatch ldiv!(Diagonal(fill(1., length(b)+1)), copy(sA))
-        @test_throws LinearAlgebra.SingularException ldiv!(Diagonal(zeros(length(b))), copy(sA))
-
         dAt = copy(transpose(dA))
         sAt = copy(transpose(sA))
         @test rmul!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), Diagonal(b))
@@ -409,26 +406,6 @@ dA = Array(sA)
         @test rmul!(copy(dAt), Diagonal(conj(bi))) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
         @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(fill(1., length(b)+1)))
         @test_throws LinearAlgebra.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
-    end
-
-    @testset "non-commutative multiplication" begin
-        # non-commutative multiplication
-        Avals = Quaternion.(randn(10), randn(10), randn(10), randn(10))
-        sA = sparse(rand(1:3, 10), rand(1:7, 10), Avals, 3, 7)
-        sC = copy(sA)
-        dA = Array(sA)
-
-        b = Quaternion.(randn(7), randn(7), randn(7), randn(7))
-        D = Diagonal(b)
-        @test Array(sA * D) ≈ dA * D
-        @test rmul!(copy(sA), D) ≈ dA * D
-        @test mul!(sC, copy(sA), D) ≈ dA * D
-
-        b = Quaternion.(randn(3), randn(3), randn(3), randn(3))
-        D = Diagonal(b)
-        @test Array(D * sA) ≈ D * dA
-        @test lmul!(D, copy(sA)) ≈ D * dA
-        @test mul!(sC, D, copy(sA)) ≈ D * dA
     end
 end
 
