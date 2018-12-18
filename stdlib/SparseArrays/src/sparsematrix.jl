@@ -3514,63 +3514,38 @@ end
 
 ## circular shift
 
-# thius helper in-place swaps blocks start:split and split+1:fin in col
-function _swap!(col::AbstractVector, start::Integer, fin::Integer, split::Integer)
-    split == fin && return
-    reverse!(col, start, split)
-    reverse!(col, split + 1, fin)
-    reverse!(col, start, fin)
-    return
-end
-
-
-# this helper shifts a column by r. Used also by sparsevector.jl
-function subvector_shifter!(R::AbstractVector, V::AbstractVector, start::Integer, fin::Integer, m::Integer, r::Integer)
-    split = fin
-    @inbounds for j = start:fin
-        # shift in the vertical direction...
-        R[j] += r
-        if R[j] <= m
-            split = j
-        else
-            R[j] -= m
-        end
-    end
-    # ...but rowval should be sorted within columns
-    _swap!(R, start, fin, split)
-    _swap!(V, start, fin, split)
-end
-
-
 function circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, (r,c)::Base.DimsInteger{2})
     nnz = length(X.nzval)
 
-    ##### readjust output
-    resize!(O.colptr, X.n + 1)
-    resize!(O.rowval, nnz)
-    resize!(O.nzval, nnz)
-    O.colptr[X.n + 1] = nnz + 1
+    iszero(nnz) && return copy!(O, X)
 
-    nnz == 0 && return O
-
-    ##### horizontal shift
+    ##### column shift
     c = mod(c, X.n)
-    nleft = X.colptr[X.n - c + 1] - 1
-    nright = nnz - nleft
+    if iszero(c)
+        copy!(O, X)
+    else
+        ##### readjust output
+        resize!(O.colptr, X.n + 1)
+        resize!(O.rowval, nnz)
+        resize!(O.nzval, nnz)
+        O.colptr[X.n + 1] = nnz + 1
 
-    # exchange left and right blocks
-    @inbounds for i=c+1:X.n
-        O.colptr[i] = X.colptr[i-c] + nright
+        # exchange left and right blocks
+        nleft = X.colptr[X.n - c + 1] - 1
+        nright = nnz - nleft
+        @inbounds for i=c+1:X.n
+            O.colptr[i] = X.colptr[i-c] + nright
+        end
+        @inbounds for i=1:c
+            O.colptr[i] = X.colptr[X.n - c + i] - nleft
+        end
+        # rotate rowval and nzval by the right number of elements
+        circshift!(O.rowval, X.rowval, (nright,))
+        circshift!(O.nzval, X.nzval, (nright,))
     end
-    @inbounds for i=1:c
-        O.colptr[i] = X.colptr[X.n - c + i] - nleft
-    end
-    # rotate rowval and nzval by the right number of elements
-    circshift!(O.rowval, X.rowval, (nright,))
-    circshift!(O.nzval, X.nzval, (nright,))
-
-    ##### vertical shift
+    ##### row shift
     r = mod(r, X.m)
+    iszero(r) && return O
     @inbounds for i=1:O.n
         subvector_shifter!(O.rowval, O.nzval, O.colptr[i], O.colptr[i+1]-1, O.m, r)
     end
