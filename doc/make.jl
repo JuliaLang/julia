@@ -191,8 +191,8 @@ withenv("TRAVIS_REPO_SLUG" => "JuliaLang/docs.julialang.org") do
         repo = "github.com/JuliaLang/docs.julialang.org.git",
         target = joinpath(buildroot, "doc", "_build", "html", "en"),
         dirname = "en",
-        devurl = "v1.1-dev",
-        versions = ["v#.#", "v1.1-dev" => "v1.1-dev"]
+        devurl = "v1.2-dev",
+        versions = ["v#.#", "v1.2-dev" => "v1.2-dev"]
     )
 end
 end

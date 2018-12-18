@@ -346,6 +346,7 @@ _ret_size(F::QRSparse, b::AbstractVector) = (size(F, 2),)
 _ret_size(F::QRSparse, B::AbstractMatrix) = (size(F, 2), size(B, 2))
 
 LinearAlgebra.rank(F::QRSparse) = reduce(max, view(F.R.rowval, 1:nnz(F.R)), init = eltype(F.R.rowval)(0))
+LinearAlgebra.rank(S::SparseMatrixCSC) = rank(qr(S))
 
 function (\)(F::QRSparse{T}, B::VecOrMat{Complex{T}}) where T<:LinearAlgebra.BlasReal
 # |z1|z3|  reinterpret  |x1|x2|x3|x4|  transpose  |x1|y1|  reshape  |x1|y1|x3|y3|

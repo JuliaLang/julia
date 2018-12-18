@@ -602,6 +602,12 @@ let repr = sprint(show, "text/html", methods(f16580))
     @test occursin("f16580(x, y...; <i>z, w, q...</i>)", repr)
 end
 
+function triangular_methodshow(x::T1, y::T2) where {T2<:Integer, T1<:T2}
+end
+let repr = sprint(show, "text/plain", methods(triangular_methodshow))
+    @test occursin("where {T2<:Integer, T1<:T2}", repr)
+end
+
 if isempty(Base.GIT_VERSION_INFO.commit)
     @test occursin("https://github.com/JuliaLang/julia/tree/v$VERSION/base/special/trig.jl#L", Base.url(which(sin, (Float64,))))
 else
