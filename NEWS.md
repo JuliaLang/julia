@@ -36,6 +36,11 @@ Standard library changes
 #### SparseArrays
 
 * `spmatmul` no longer has the obsolete optional keyword argument `sortindices` ([#30372]).
+* performance improvements for `spmatmul` and hence for sparse matrix-matrix multiplication.
+
+#### Dates
+
+* Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
 
 External dependencies
 ---------------------
