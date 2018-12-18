@@ -387,7 +387,8 @@ show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
 
 function show(io::IO, x::Union)
     print(io, "Union")
-    show_comma_array(io, uniontypes(x), '{', '}')
+    ctx = IOContext(io, :compact => get(io, :compact, false))
+    show_comma_array(ctx, uniontypes(x), '{', '}')
 end
 
 function print_without_params(@nospecialize(x))
