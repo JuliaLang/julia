@@ -1988,7 +1988,7 @@ function _swap!(col::AbstractVector, start::Integer, fin::Integer, split::Intege
 end
 
 
-# in-place shifts a sparse subvector by r. Used also by sparsevector.jl
+# in-place shifts a sparse subvector by r. Used also by sparsematrix.jl
 function subvector_shifter!(R::AbstractVector, V::AbstractVector, start::Integer, fin::Integer, m::Integer, r::Integer)
     split = fin
     @inbounds for j = start:fin
