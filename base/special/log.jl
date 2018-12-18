@@ -415,7 +415,7 @@ end
 """
     k, f = _log_range_reduction(x)
 
-Given `realmin(x) < x < Inf`, compute
+Given `floatmin(x) < x < Inf`, compute
 
     x == 2^k * (1+f)
 
@@ -498,7 +498,7 @@ end
 
 @inline function _log_base(x::T, invlnb, invlog2b) where {T}
     j = 0
-    if x <= realmin(T)
+    if x <= floatmin(T)
         if x <= 0
             if x == 0
                 return -T(Inf) # log(+-0)
