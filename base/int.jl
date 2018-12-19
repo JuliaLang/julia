@@ -137,6 +137,9 @@ abs(x::Signed) = flipsign(x,x)
 
 ~(n::Integer) = -n-1
 
+unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
+unsigned(x::Bool) = convert(Unsigned, x)
+
 """
     unsigned(x) -> Unsigned
 
@@ -157,6 +160,17 @@ julia> signed(unsigned(-2))
 """
 unsigned(x) = convert(Unsigned, x)
 
+signed(x::Unsigned) = reinterpret(typeof(convert(Signed, zero(x))), x)
+
+"""
+    signed(x)
+
+Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as
+signed without checking for overflow.
+"""
+signed(x) = convert(Signed, x)
+
+
 """
     unsigned(T) -> Unsigned equivalent to T
 
@@ -168,25 +182,13 @@ julia> unsigned(Int8)
 UInt8
 ```
 """
-unsigned(::Type{T}) where {T<:BitSigned} = typeof(convert(Unsigned, zero(T)))
-unsigned(x::BitSigned) = reinterpret(unsigned(typeof(x)), x)
-unsigned(x::Bool) = convert(Unsigned, x)
-
-"""
-    signed(x)
-
-Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as
-signed without checking for overflow.
-"""
-signed(x) = convert(Signed, x)
-
+unsigned(::Type{T}) where {T<:BitSigned} = typeof(unsigned(zero(T)))
 """
     signed(T) -> Signed equivalent to T
 
 Get the corresponding signed type for T.
 """
-signed(::Type{T}) where {T<:Unsigned} = typeof(convert(Signed, zero(T)))
-signed(x::Unsigned) = reinterpret(signed(typeof(x)), x)
+signed(::Type{T}) where {T<:Unsigned} = typeof(signed(zero(T)))
 
 
 div(x::BitSigned, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)), y)), x)
