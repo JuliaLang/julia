@@ -137,7 +137,19 @@ abs(x::Signed) = flipsign(x,x)
 
 ~(n::Integer) = -n-1
 
-unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
+"""
+    unsigned(T) -> Unsigned equivalent to T
+
+Get the corresponding unsigned type for T.
+
+# Examples
+```jldoctest
+julia> unsigned(Int8)
+UInt8
+```
+"""
+unsigned(::Type{T}) where {T<:BitSigned} = typeof(convert(Unsigned, zero(T)))
+unsigned(x::BitSigned) = reinterpret(unsigned(typeof(x)), x)
 unsigned(x::Bool) = convert(Unsigned, x)
 
 """
@@ -159,7 +171,14 @@ julia> signed(unsigned(-2))
 ```
 """
 unsigned(x) = convert(Unsigned, x)
-signed(x::Unsigned) = reinterpret(typeof(convert(Signed, zero(x))), x)
+
+"""
+    signed(T) -> Signed equivalent to T
+
+Get the corresponding signed type for T.
+"""
+signed(::Type{T}) where {T<:Unsigned} = typeof(convert(Signed, zero(T)))
+signed(x::Unsigned) = reinterpret(signed(typeof(x)), x)
 
 """
     signed(x)
