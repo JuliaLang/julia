@@ -728,13 +728,12 @@ end
     typemin(x::T) where {T<:Real} = typemin(T)
     typemax(x::T) where {T<:Real} = typemax(T)
 
-    floatmax(::Type{Float16}) = $(bitcast(Float16, 0x7bff))
-    floatmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
-    floatmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
-
     floatmin(::Type{Float16}) = $(bitcast(Float16, 0x0400))
     floatmin(::Type{Float32}) = $(bitcast(Float32, 0x00800000))
     floatmin(::Type{Float64}) = $(bitcast(Float64, 0x0010000000000000))
+    floatmax(::Type{Float16}) = $(bitcast(Float16, 0x7bff))
+    floatmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
+    floatmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
 
     eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= floatmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
     eps(::Type{Float16}) = $(bitcast(Float16, 0x1400))
