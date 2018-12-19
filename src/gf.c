@@ -1244,7 +1244,20 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
     if (!msp || closure->after) {
         // record that this method definition is being partially replaced
         // (either with a real definition, or an ambiguity error)
-        if (closure->shadowed == NULL) {
+        jl_method_t *mambig = oldentry->func.method;
+        int was_already_ambiguous = 0;
+        if (jl_is_array(mambig->ambig)) {
+            for (size_t i = 0; i < jl_array_len(mambig->ambig); i++) {
+                jl_method_t *otherm = (jl_method_t*)jl_array_ptr_ref(mambig->ambig, i);
+                if (otherm != m && jl_subtype((jl_value_t*)isect, (jl_value_t*)otherm->sig)) {
+                    was_already_ambiguous = 1;
+                    break;
+                }
+            }
+        }
+        if (was_already_ambiguous) {
+        }
+        else if (closure->shadowed == NULL) {
             closure->shadowed = oldentry->func.value;
         }
         else if (!jl_is_array(closure->shadowed)) {
@@ -1537,16 +1550,18 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
     JL_UNLOCK(&mt->writelock);
 }
 
+int jl_is_function_call_ambiguous(jl_value_t *types JL_PROPAGATES_ROOT, size_t world);
+
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
 {
     assert(jl_is_method(method));
     assert(jl_is_mtable(mt));
     jl_value_t *type = method->sig;
-    jl_value_t *oldvalue = NULL;
+    jl_value_t *oldvalue = NULL, *isect = NULL;
     struct invalidate_conflicting_env env;
     env.invalidated = 0;
     env.max_world = method->min_world - 1;
-    JL_GC_PUSH1(&oldvalue);
+    JL_GC_PUSH2(&oldvalue, &isect);
     JL_LOCK(&mt->writelock);
     jl_typemap_entry_t *newentry = jl_typemap_insert(&mt->defs, (jl_value_t*)mt,
             (jl_tupletype_t*)type, simpletype, jl_emptysvec, (jl_value_t*)method, 0, &method_defs,
@@ -1562,14 +1577,14 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
         method_overwrite(newentry, (jl_method_t*)oldvalue);
     }
     else {
-        oldvalue = check_ambiguous_matches(mt->defs, newentry, check_ambiguous_visitor);
         if (mt->backedges) {
             jl_value_t **backedges = jl_array_ptr_data(mt->backedges);
             size_t i, na = jl_array_len(mt->backedges);
             size_t ins = 0;
             for (i = 1; i < na; i += 2) {
                 jl_value_t *backedgetyp = backedges[i - 1];
-                if (!jl_has_empty_intersection(backedgetyp, (jl_value_t*)type)) {
+                isect = jl_type_intersection(backedgetyp, (jl_value_t*)type);
+                if (isect != jl_bottom_type && !jl_is_function_call_ambiguous(isect, env.max_world)) {
                     jl_method_instance_t *backedge = (jl_method_instance_t*)backedges[i];
                     invalidate_method_instance(backedge, env.max_world, 0);
                     env.invalidated = 1;
@@ -1584,6 +1599,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
             else
                 jl_array_del_end(mt->backedges, na - ins);
         }
+        oldvalue = check_ambiguous_matches(mt->defs, newentry, check_ambiguous_visitor);
     }
     if (oldvalue) {
         jl_datatype_t *unw = (jl_datatype_t*)jl_unwrap_unionall(type);
@@ -2208,6 +2224,19 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
     JL_GC_PROMISE_ROOTED(mfunc);
     jl_value_t *res = mfunc->invoke(mfunc, args, nargs);
     return verify_type(res);
+}
+
+int jl_is_function_call_ambiguous(jl_value_t *types JL_PROPAGATES_ROOT, size_t world)
+{
+    jl_methtable_t *mt = jl_first_argument_datatype(types)->name->mt;
+    jl_svec_t *env = jl_emptysvec;
+    JL_GC_PUSH1(&env);
+    jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(
+            mt->defs, types, /*env*/&env, /*subtype*/1, /*offs*/0, world, /*max_world_mask*/0);
+    JL_GC_POP();
+    if (!entry)
+        return 0;
+    return jl_is_call_ambiguous(types, entry->func.method);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, size_t world)
