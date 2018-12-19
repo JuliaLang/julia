@@ -599,7 +599,7 @@ function show(io::IO, p::Pair)
             print(io_i, "(")
             show(io_i, p[i])
             print(io_i, ")")
-        else 
+        else
             show(io_i, p[i])
         end
         isdelimited(io_i, p[i]) || print(io, ")")
