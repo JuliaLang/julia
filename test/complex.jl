@@ -963,6 +963,19 @@ end
     @test round(float(Complex(π, ℯ)), digits=3) == Complex(3.142, 2.718)
 end
 
+@testset "For issue #24021" begin
+    for T in (Int16, Int32, Int64, Int128), U in (Float32, Float64)
+        a = round(Complex{T}, Complex{U}(2.9, 1.1))
+        b = round(Complex{U}, Complex{T}(3, 1))
+        @test a.im isa T
+        @test b.im isa U
+        @test a == Complex(3,1)
+        @test b == Complex(3,1)
+        @test round(Complex{U}, T(3)) == Complex(3,0)
+        @test round(Complex{T}, U(2.9)) == Complex(3,0)
+    end
+end
+
 @testset "ComplexF16 arithmetic, PR #10003" begin
     @test Float16(1)+Float16(1)im === ComplexF16(1, 1)
     @test Float16(1)-Float16(1)im === Float16(1)+Float16(-1)im === ComplexF16(1, -1)

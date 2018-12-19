@@ -1043,7 +1043,8 @@ function round(z::Complex, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr; k
     Complex(round(real(z), rr; kwargs...),
             round(imag(z), ri; kwargs...))
 end
-
+round(::Type{Complex{T}}, x::Complex) where {T<:Real} = Complex(round(T, x.re), round(T, x.im))
+round(::Type{Complex{T}}, x::Real) where {T<:Real} = Complex(round(T, x))
 
 float(z::Complex{<:AbstractFloat}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))

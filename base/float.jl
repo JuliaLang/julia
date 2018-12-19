@@ -318,6 +318,8 @@ trunc(::Type{Integer}, x::Float64) = trunc(Int,x)
 floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundDown))
 ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundUp))
 round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundNearest))
+round(::Type{T}, x::Float16) where {T<:Integer} = round(T, Float32(x))
+round(::Type{T}, x::Real) where {T<:Real} = T(round(x))
 
 round(x::Float64, r::RoundingMode{:ToZero})  = trunc_llvm(x)
 round(x::Float32, r::RoundingMode{:ToZero})  = trunc_llvm(x)

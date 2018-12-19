@@ -454,6 +454,7 @@ end
 trunc(::Type{T}, x::Rational) where {T} = round(T, x, RoundToZero)
 floor(::Type{T}, x::Rational) where {T} = round(T, x, RoundDown)
 ceil(::Type{T}, x::Rational) where {T} = round(T, x, RoundUp)
+round(::Type{T}, x::Rational) where {T<:Real} = round(T, x, RoundNearest)
 
 round(x::Rational, r::RoundingMode=RoundNearest) = round(typeof(x), x, r)
 
@@ -464,7 +465,7 @@ function round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {
     convert(T, div(numerator(x), denominator(x), r))
 end
 
-function round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where T
+function round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where {T<:Real}
     if denominator(x) == false && (T <: Integer)
         throw(DivideError())
     end
