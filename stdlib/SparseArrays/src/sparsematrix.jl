@@ -329,8 +329,7 @@ function _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}) where 
 end
 # parent methods for similar that allocates an empty matrix (for when new dims are
 # two-dimensional).
-_sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew},
-                        dims::Dims{2}) where {TvNew,TiNew} =
+_sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
     SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(S.rowval, TiNew, 0), similar(S.nzval, TvNew, 0))
 # parent method for similar that allocates an empty sparse vector (when new dims are single)
 _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) where {TvNew,TiNew} =
