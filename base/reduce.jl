@@ -466,6 +466,8 @@ function _fast(::typeof(min),x::AbstractFloat, y::AbstractFloat)
         ifelse(x < y, x, y))
 end
 
+_isnan(x) = false
+_isnan(x::Real) = isnan(x)
 isbadzero(::typeof(max), x::AbstractFloat) = (x == zero(x)) & signbit(x)
 isbadzero(::typeof(min), x::AbstractFloat) = (x == zero(x)) & !signbit(x)
 isbadzero(op, x) = false
@@ -481,12 +483,10 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     start = first
     stop  = start + chunk_len - 4
     while stop <= last
-        if v1 isa AbstractFloat
-            isnan(v1) && return v1
-            isnan(v2) && return v2
-            isnan(v3) && return v3
-            isnan(v4) && return v4
-        end
+        _isnan(v1) && return v1
+        _isnan(v2) && return v2
+        _isnan(v3) && return v3
+        _isnan(v4) && return v4
         @inbounds for i in start:4:stop
             v1 = _fast(op, v1, f(A[i+1]))
             v2 = _fast(op, v2, f(A[i+2]))
