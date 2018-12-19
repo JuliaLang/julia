@@ -5256,6 +5256,8 @@ static std::unique_ptr<Module> emit_function(
         const jl_cgparams_t *params)
 {
     assert(declarations && "Capturing declarations is always required");
+        jl_static_show(JL_STDERR, (jl_value_t*)lam->specTypes);
+        jl_uv_puts(JL_STDERR, "\n", 1);
 
     // step 1. unpack AST and allocate codegen context for this function
     jl_codectx_t ctx(jl_LLVMContext);

@@ -1102,7 +1102,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
             eval(Meta.parse(code))
         end
         """
-    io = open(pipeline(detach(`$(julia_cmd()) -O0
+    io = open(pipeline(detach(`$(julia_cmd()) --compile=min
                               --output-ji $output --output-incremental=yes
                               --startup-file=no --history-file=no --warn-overwrite=yes
                               --color=$(have_color ? "yes" : "no")

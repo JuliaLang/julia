@@ -104,7 +104,8 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
 end
 
 tostr_sizehint(x) = 8
-tostr_sizehint(x::AbstractString) = lastindex(x)
+tostr_sizehint(x::AbstractString) = invokelatest(lastindex, x)
+tostr_sizehint(x::Union{String,SubString{String}}) = sizeof(x)
 tostr_sizehint(x::Float64) = 20
 tostr_sizehint(x::Float32) = 12
 

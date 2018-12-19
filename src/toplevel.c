@@ -389,7 +389,7 @@ static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_RO
     }
     if (require_func != NULL) {
         size_t last_age = ptls->world_age;
-        ptls->world_age = (build_mode ? jl_base_module->primary_world : jl_world_counter);
+        ptls->world_age = jl_base_module->primary_world;//(build_mode ? jl_base_module->primary_world : jl_world_counter);
         jl_value_t *reqargs[3];
         reqargs[0] = require_func;
         reqargs[1] = (jl_value_t*)mod;

@@ -63,6 +63,7 @@ static inline uint64_t rdtscp(void)
         X(AST_UNCOMPRESS),        \
         X(SYSIMG_LOAD),           \
         X(SYSIMG_DUMP),           \
+        X(CHECK_AMBIGUOUS),       \
         X(NATIVE_DUMP),
 
 enum jl_timing_owners {

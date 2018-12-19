@@ -4202,3 +4202,6 @@ f(x) = yt(x)
   (julia-expand1
    (julia-expand0
     (julia-expand-macroscope ex))))
+
+(for-each profile '(compact-and-renumber linearize closure-convert analyze-variables!
+                                         resolve-scopes expand-forms julia-expand-macroscope))

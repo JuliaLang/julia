@@ -292,6 +292,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 #ifdef ENABLE_TIMINGS
     jl_print_timings();
 #endif
+    fl_show_profile();
 }
 
 void jl_get_builtin_hooks(void);

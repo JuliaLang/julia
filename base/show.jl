@@ -455,14 +455,14 @@ function show_type_name(io::IO, tn::Core.TypeName)
     globname = isdefined(tn, :mt) ? tn.mt.name : nothing
     globfunc = false
     if globname !== nothing
-        globname_str = string(globname)
+        globname_str = string(globname::Symbol)::String
         if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
                 isbindingresolved(tn.module, globname) && isdefined(tn.module, globname) &&
                 isconcretetype(tn.wrapper) && isa(getfield(tn.module, globname), tn.wrapper))
             globfunc = true
         end
     end
-    sym = globfunc ? globname : tn.name
+    sym = (globfunc ? globname : tn.name)::Symbol
     if get(io, :compact, false)
         if globfunc
             return print(io, "typeof(", sym, ")")

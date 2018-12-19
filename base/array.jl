@@ -279,7 +279,7 @@ end
 # occurs, see discussion in #27874
 function _throw_argerror(n)
     @_noinline_meta
-    throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
+    throw(ArgumentError("Number of elements to copy must be nonnegative."))
 end
 
 copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, length(src))
