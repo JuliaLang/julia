@@ -1392,9 +1392,9 @@ static void invalidate_method_instance(jl_method_instance_t *replaced, size_t ma
         if (JL_DEBUG_METHOD_INVALIDATION) {
             int d0 = depth;
             while (d0-- > 0)
-                jl_uv_puts(JL_STDOUT, " ", 1);
-            jl_static_show(JL_STDOUT, (jl_value_t*)replaced);
-            jl_uv_puts(JL_STDOUT, "\n", 1);
+                jl_uv_puts(JL_STDERR, " ", 1);
+            jl_static_show(JL_STDERR, (jl_value_t*)replaced);
+            jl_uv_puts(JL_STDERR, "\n", 1);
         }
         replaced->max_world = max_world;
         update_world_bound(replaced, set_max_world2, max_world);
@@ -1438,6 +1438,10 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
             jl_datatype_t *gf = jl_first_argument_datatype((jl_value_t*)m->sig);
             assert(jl_is_datatype(gf) && gf->name->mt && "method signature invalid?");
             jl_typemap_visitor(gf->name->mt->cache, set_max_world2, (void*)&def);
+            if (JL_DEBUG_METHOD_INVALIDATION) {
+                jl_static_show(JL_STDERR, (jl_value_t*)def.replaced);
+                jl_uv_puts(JL_STDERR, "\n", 1);
+            }
         }
 
         // invalidate backedges
@@ -1447,7 +1451,7 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
             size_t i, l = jl_array_len(backedges);
             jl_method_instance_t **replaced = (jl_method_instance_t**)jl_array_ptr_data(backedges);
             for (i = 0; i < l; i++) {
-                invalidate_method_instance(replaced[i], closure->max_world, 0);
+                invalidate_method_instance(replaced[i], closure->max_world, 1);
             }
         }
         closure->invalidated = 1;
@@ -1514,7 +1518,7 @@ void jl_method_instance_delete(jl_method_instance_t *mi)
 {
     invalidate_method_instance(mi, mi->min_world - 1, 0);
     if (JL_DEBUG_METHOD_INVALIDATION)
-        jl_uv_puts(JL_STDOUT, "<<<\n", 4);
+        jl_uv_puts(JL_STDERR, "<<<\n", 4);
 }
 
 static int typemap_search(jl_typemap_entry_t *entry, void *closure)
@@ -1632,11 +1636,11 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
         }
     }
     if (env.invalidated && JL_DEBUG_METHOD_INVALIDATION) {
-        jl_uv_puts(JL_STDOUT, ">> ", 3);
-        jl_static_show(JL_STDOUT, (jl_value_t*)method);
-        jl_uv_puts(JL_STDOUT, " ", 1);
-        jl_static_show(JL_STDOUT, (jl_value_t*)type);
-        jl_uv_puts(JL_STDOUT, "\n", 1);
+        jl_uv_puts(JL_STDERR, ">> ", 3);
+        jl_static_show(JL_STDERR, (jl_value_t*)method);
+        jl_uv_puts(JL_STDERR, " ", 1);
+        jl_static_show(JL_STDERR, (jl_value_t*)type);
+        jl_uv_puts(JL_STDERR, "\n", 1);
     }
     update_max_args(mt, type);
     JL_UNLOCK(&mt->writelock);
