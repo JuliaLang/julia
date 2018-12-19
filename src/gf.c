@@ -1410,6 +1410,8 @@ static void invalidate_method_instance(jl_method_instance_t *replaced, size_t ma
     JL_UNLOCK_NOGC(&replaced->def.method->writelock);
 }
 
+int jl_is_function_call_ambiguous(jl_value_t *types JL_PROPAGATES_ROOT, size_t world);
+
 // invalidate cached methods that overlap this definition
 struct invalidate_conflicting_env {
     struct typemap_intersection_env match;
@@ -1421,6 +1423,8 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
     struct invalidate_conflicting_env *closure = container_of(closure0, struct invalidate_conflicting_env, match);
     if (oldentry->max_world > closure->max_world) {
         jl_method_instance_t *replaced_linfo = oldentry->func.linfo;
+        if (jl_is_function_call_ambiguous((jl_value_t*)closure->match.ti, closure->max_world))
+            return 1;
         {
             struct set_world def;
             def.replaced = oldentry->func.linfo;
@@ -1549,8 +1553,6 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
     jl_typemap_visitor(methodentry->func.method->specializations, (jl_typemap_visitor_fptr)invalidate_backedges, &env);
     JL_UNLOCK(&mt->writelock);
 }
-
-int jl_is_function_call_ambiguous(jl_value_t *types JL_PROPAGATES_ROOT, size_t world);
 
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
 {
@@ -2236,7 +2238,15 @@ int jl_is_function_call_ambiguous(jl_value_t *types JL_PROPAGATES_ROOT, size_t w
     JL_GC_POP();
     if (!entry)
         return 0;
-    return jl_is_call_ambiguous(types, entry->func.method);
+    jl_method_t *m = entry->func.method;
+    if (m->ambig == jl_nothing)
+        return 0;
+    for (size_t i = 0; i < jl_array_len(m->ambig); i++) {
+        jl_method_t *mambig = (jl_method_t*)jl_array_ptr_ref(m->ambig, i);
+        if (mambig->min_world <= world && world <= mambig->max_world && jl_subtype((jl_value_t*)types, (jl_value_t*)mambig->sig))
+            return 1;
+    }
+    return 0;
 }
 
 JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, size_t world)
