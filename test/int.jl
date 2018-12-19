@@ -55,11 +55,27 @@ using Random
     end
 end
 @testset "signed" begin
-    @test signed(3) == 3
-    @test signed(UInt(3)) == 3
+    @test signed(3) === 3
+    @test signed(UInt(3)) === 3
     @test isa(signed(UInt(3)), Int)
-    @test signed(UInt(0) - 1) == -1
-    @test_throws InexactError signed(UInt(-3))
+    @test signed(UInt(0) - 1) === -1
+    @test_throws InexactError signed(UInt(-3))  # Note that UInt() throws, not signed().
+end
+@testset "unsigned" begin
+    @test unsigned(3) === UInt(3)
+    @test unsigned(UInt(3)) === UInt(3)
+    @test isa(unsigned(3), UInt)
+    @test unsigned(-1) === typemax(UInt)
+    @test_throws InexactError unsigned(Int(typemax(UInt)))  # Int(0xffffffff...) throws
+end
+@testset "[un]signed(::Type{T})" begin
+    @testset for (T,UT) in ((Int8,UInt8), (Int,UInt), (Int128,UInt128))
+        @test unsigned(T) === UT
+        @test unsigned(UT) === UT
+        @test signed(T) === T
+        @test signed(UT) === T
+    end
+    @test unsigned(typeof(3))(3) === unsigned(3)
 end
 @testset "bswap" begin
     @test bswap(Int8(3)) == 3

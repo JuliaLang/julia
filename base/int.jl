@@ -183,12 +183,14 @@ UInt8
 ```
 """
 unsigned(::Type{T}) where {T<:BitSigned} = typeof(unsigned(zero(T)))
+unsigned(::Type{T}) where {T<:Unsigned} = T
 """
     signed(T) -> Signed equivalent to T
 
 Get the corresponding signed type for T.
 """
 signed(::Type{T}) where {T<:Unsigned} = typeof(signed(zero(T)))
+signed(::Type{T}) where {T<:BitSigned} = T
 
 
 div(x::BitSigned, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)), y)), x)
