@@ -163,7 +163,7 @@ static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
     jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*)arg);
 }
 
-void jl_write_coverage_data(void);
+void jl_write_coverage_data(const char*);
 void jl_write_malloc_log(void);
 void jl_write_compiler_output(void);
 
@@ -222,7 +222,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
         jl_write_compiler_output();
     jl_print_gc_stats(JL_STDERR);
     if (jl_options.code_coverage)
-        jl_write_coverage_data();
+        jl_write_coverage_data(jl_options.output_code_coverage);
     if (jl_options.malloc_log)
         jl_write_malloc_log();
     if (jl_base_module) {
@@ -462,7 +462,7 @@ int isabspath(const char *in)
 }
 
 static char *abspath(const char *in, int nprefix)
-{ // compute an absolute path location, so that chdir doesn't change the file reference
+{ // compute an absolute realpath location, so that chdir doesn't change the file reference
   // ignores (copies directly over) nprefix characters at the start of abspath
 #ifndef _OS_WINDOWS_
     char *out = realpath(in + nprefix, NULL);
@@ -495,6 +495,8 @@ static char *abspath(const char *in, int nprefix)
                 jl_error("fatal error: unexpected error while retrieving current working directory");
             }
             out = (char*)malloc(path_size + 1 + sz + nprefix);
+            if (!out)
+                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
             memcpy(out, in, nprefix);
             memcpy(out + nprefix, path, path_size);
             out[nprefix + path_size] = PATHSEPSTRING[0];
@@ -508,12 +510,46 @@ static char *abspath(const char *in, int nprefix)
         jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
     }
     char *out = (char*)malloc(n + nprefix);
+    if (!out)
+        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
     DWORD m = GetFullPathName(in + nprefix, n, out + nprefix, NULL);
     if (n != m + 1) {
         jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
     }
     memcpy(out, in, nprefix);
 #endif
+    return out;
+}
+
+// create an absolute-path copy of the input path format string
+// formed as `joinpath(replace(pwd(), "%" => "%%"), in)`
+// unless `in` starts with `%`
+static const char *absformat(const char *in)
+{
+    if (in[0] == '%' || isabspath(in))
+        return in;
+    // get an escaped copy of cwd
+    size_t path_size = PATH_MAX;
+    char path[PATH_MAX];
+    if (uv_cwd(path, &path_size)) {
+        jl_error("fatal error: unexpected error while retrieving current working directory");
+    }
+    size_t sz = strlen(in) + 1;
+    size_t i, fmt_size = 0;
+    for (i = 0; i < path_size; i++)
+        fmt_size += (path[i] == '%' ? 2 : 1);
+    char *out = (char*)malloc(fmt_size + 1 + sz);
+    if (!out)
+        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+    fmt_size = 0;
+    for (i = 0; i < path_size; i++) { // copy-replace pwd portion
+        char c = path[i];
+        out[fmt_size++] = c;
+        if (c == '%')
+            out[fmt_size++] = '%';
+    }
+    out[fmt_size++] = PATHSEPSTRING[0]; // path sep
+    memcpy(out + fmt_size, in, sz); // copy over format, including nul
     return out;
 }
 
@@ -527,6 +563,8 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     // calling `julia_init()`
     char *free_path = (char*)malloc(PATH_MAX);
     size_t path_size = PATH_MAX;
+    if (!free_path)
+        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
     if (uv_exepath(free_path, &path_size)) {
         jl_error("fatal error: unexpected error while retrieving exepath");
     }
@@ -534,6 +572,8 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_error("fatal error: jl_options.julia_bin path too long");
     }
     jl_options.julia_bin = (char*)malloc(path_size+1);
+    if (!jl_options.julia_bin)
+        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
     memcpy((char*)jl_options.julia_bin, free_path, path_size);
     ((char*)jl_options.julia_bin)[path_size] = '\0';
     if (!jl_options.julia_bindir) {
@@ -550,6 +590,8 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         if (rel == JL_IMAGE_JULIA_HOME && !isabspath(jl_options.image_file)) {
             // build time path, relative to JULIA_BINDIR
             free_path = (char*)malloc(PATH_MAX);
+            if (!free_path)
+                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
             int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
                              jl_options.julia_bindir, jl_options.image_file);
             if (n >= PATH_MAX || n < 0) {
@@ -572,8 +614,13 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.outputbc = abspath(jl_options.outputbc, 0);
     if (jl_options.machine_file)
         jl_options.machine_file = abspath(jl_options.machine_file, 0);
-    if (jl_options.project && strncmp(jl_options.project, "@.", strlen(jl_options.project)) != 0)
+    if (jl_options.project
+            && strcmp(jl_options.project, "@.") != 0
+            && strcmp(jl_options.project, "@") != 0
+            && strcmp(jl_options.project, "") != 0)
         jl_options.project = abspath(jl_options.project, 0);
+    if (jl_options.output_code_coverage)
+        jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
 
     const char **cmdp = jl_options.cmds;
     if (cmdp) {
@@ -600,6 +647,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_get_ptls_states_getter();
 #endif
     jl_ptls_t ptls = jl_get_ptls_states();
+    (void)ptls; assert(ptls); // make sure early that we have initialized ptls
     jl_safepoint_init();
     libsupport_init();
     htable_new(&jl_current_modules, 0);

@@ -39,6 +39,8 @@ Command-line option changes
   * When a script run in interactive mode (`-i`) throws an error, the REPL now starts after
     the error is displayed. Previously the REPL only started if the script completed without
     error ([#21233]).
+  * The code-coverage option now supports output in the LCOV tracefile format and
+    gets propagated to child processes, such as precompile steps and test workers ([#30381]).
 
 New library functions
 ---------------------

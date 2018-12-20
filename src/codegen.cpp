@@ -1696,7 +1696,7 @@ static void write_log_data(logdata_t &logData, const char *extension)
             std::ifstream inf(filename.c_str());
             if (inf.is_open()) {
                 std::string outfile = filename + extension;
-                std::ofstream outf(outfile.c_str(), std::ofstream::trunc | std::ofstream::out);
+                std::ofstream outf(outfile.c_str(), std::ofstream::trunc | std::ofstream::out | std::ofstream::binary);
                 char line[1024];
                 int l = 1;
                 unsigned block = 0;
@@ -1722,7 +1722,7 @@ static void write_log_data(logdata_t &logData, const char *extension)
                     else
                         outf << (value - 1);
                     outf.width(0);
-                    outf << " " << line << std::endl;
+                    outf << " " << line << '\n';
                 }
                 outf.close();
                 inf.close();
@@ -1732,20 +1732,68 @@ static void write_log_data(logdata_t &logData, const char *extension)
 }
 
 extern "C" int jl_getpid();
-extern "C" void jl_write_coverage_data(void)
+
+static void write_lcov_data(logdata_t &logData, const std::string &outfile)
 {
-    std::ostringstream stm;
-    stm << jl_getpid();
-    std::string outf = "." + stm.str() + ".cov";
-    write_log_data(coverageData, outf.c_str());
+    std::ofstream outf(outfile.c_str(), std::ofstream::ate | std::ofstream::out | std::ofstream::binary);
+    //std::string base = std::string(jl_options.julia_bindir);
+    //base = base + "/../share/julia/base/";
+    logdata_t::iterator it = logData.begin();
+    for (; it != logData.end(); it++) {
+        const std::string &filename = it->first();
+        const std::vector<logdata_block*> &values = it->second;
+        if (!values.empty()) {
+            //if (!isabspath(filename.c_str()))
+            //    filename = base + filename;
+            outf << "SF:" << filename << '\n';
+            size_t n_covered = 0;
+            size_t n_instrumented = 0;
+            size_t lno = 0;
+            for (auto &itv : values) {
+                if (itv) {
+                    logdata_block &data = *itv;
+                    for (int i = 0; i < logdata_blocksize; i++) {
+                        auto cov = data[i];
+                        if (cov > 0) {
+                            n_instrumented++;
+                            if (cov > 1)
+                                n_covered++;
+                            outf << "DA:" << lno << ',' << (cov - 1) << '\n';
+                        }
+                        lno++;
+                    }
+                }
+                else {
+                    lno += logdata_blocksize;
+                }
+            }
+            outf << "LH:" << n_covered << '\n';
+            outf << "LF:" << n_instrumented << '\n';
+            outf << "end_of_record\n";
+        }
+    }
+    outf.close();
+}
+
+extern "C" void jl_write_coverage_data(const char *output)
+{
+    if (output) {
+        StringRef output_pattern(output);
+        if (output_pattern.endswith(".info"))
+            write_lcov_data(coverageData, jl_format_filename(output_pattern));
+    }
+    else {
+        std::ostringstream stm;
+        stm << "." << jl_getpid() << ".cov";
+        write_log_data(coverageData, stm.str().c_str());
+    }
 }
 
 extern "C" void jl_write_malloc_log(void)
 {
     std::ostringstream stm;
-    stm << jl_getpid();
-    std::string outf = "." + stm.str() + ".mem";
-    write_log_data(mallocData, outf.c_str());
+    stm << "." << jl_getpid() << ".mem";
+    write_log_data(mallocData, stm.str().c_str());
 }
 
 // --- constant determination ---
@@ -7368,7 +7416,7 @@ extern "C" void *jl_init_llvm(void)
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
 
     jl_page_size = jl_getpagesize();
-    imaging_mode = jl_generating_output();
+    imaging_mode = jl_generating_output() && !jl_options.incremental;
     jl_init_debuginfo();
 
 #ifdef USE_POLLY
