@@ -33,6 +33,10 @@ Standard library changes
 
 * Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
 
+#### SparseArrays
+
+* performance improvements for sparse matrix-matrix multiplication ([#30372]).
+
 #### Dates
 
 * Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
