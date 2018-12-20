@@ -172,9 +172,12 @@ signed(x) = convert(Signed, x)
 
 
 """
-    unsigned(T) -> Unsigned equivalent to T
+    unsigned(T::Type)
 
-Get the corresponding unsigned type for T.
+Return the corresponding unsigned type for type `T`.
+
+!!! compat "Julia 1.2"
+    This method requires Julia 1.2 or later.
 
 # Examples
 ```jldoctest
@@ -185,9 +188,18 @@ UInt8
 unsigned(::Type{T}) where {T<:BitSigned} = typeof(unsigned(zero(T)))
 unsigned(::Type{T}) where {T<:Unsigned} = T
 """
-    signed(T) -> Signed equivalent to T
+    signed(T::Type)
 
-Get the corresponding signed type for T.
+Return the corresponding signed type for type `T`.
+
+!!! compat "Julia 1.2"
+    This method requires Julia 1.2 or later.
+
+#Examples
+```jldoctest
+julia> signed(UInt8)
+Int8
+```    
 """
 signed(::Type{T}) where {T<:Unsigned} = typeof(signed(zero(T)))
 signed(::Type{T}) where {T<:BitSigned} = T
