@@ -89,25 +89,24 @@ indtype(x::SparseVectorView) = indtype(parent(x))
 # parent method for similar that preserves stored-entry structure (for when new and old dims match)
 _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}) where {TvNew,TiNew} =
     SparseVector(length(S), copyto!(similar(nonzeroinds(S), TiNew), nonzeroinds(S)), similar(nonzeros(S), TvNew))
-# parent method for similar that preserves nothing (for when old and new dims differ, and new is 1d)
+# parent method for similar that preserves nothing (for when new dims are 1-d)
 _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) where {TvNew,TiNew} =
     SparseVector(dims..., similar(nonzeroinds(S), TiNew, 0), similar(nonzeros(S), TvNew, 0))
-# parent method for similar that preserves storage space (for old and new dims differ, and new is 2d)
+# parent method for similar that preserves storage space (for when new dims are 2-d)
 _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
-    SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(nonzeroinds(S), TiNew), similar(nonzeros(S), TvNew))
+    SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(nonzeroinds(S), TiNew, 0), similar(nonzeros(S), TvNew, 0))
+
 # The following methods hook into the AbstractArray similar hierarchy. The first method
 # covers similar(A[, Tv]) calls, which preserve stored-entry structure, and the latter
 # methods cover similar(A[, Tv], shape...) calls, which preserve nothing if the dims
-# specify a SparseVector result and storage space if the dims specify a SparseMatrixCSC result.
+# specify a SparseVector or a SparseMatrixCSC result.
 similar(S::SparseVector{<:Any,Ti}, ::Type{TvNew}) where {Ti,TvNew} =
     _sparsesimilar(S, TvNew, Ti)
 similar(S::SparseVector{<:Any,Ti}, ::Type{TvNew}, dims::Union{Dims{1},Dims{2}}) where {Ti,TvNew} =
     _sparsesimilar(S, TvNew, Ti, dims)
 # The following methods cover similar(A, Tv, Ti[, shape...]) calls, which specify the
 # result's index type in addition to its entry type, and aren't covered by the hooks above.
-# The calls without shape again preserve stored-entry structure, whereas those with
-# one-dimensional shape preserve nothing, and those with two-dimensional shape
-# preserve storage space.
+# The calls without shape again preserve stored-entry structure but no storage space.
 similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}) where{TvNew,TiNew} =
     _sparsesimilar(S, TvNew, TiNew)
 similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Union{Dims{1},Dims{2}}) where {TvNew,TiNew} =
