@@ -499,7 +499,7 @@ julia> replace("foobar","bar"=>"baz", "foo"=>"bar")
 ```
 """
 function replace(s::AbstractString, reps::Pair...)
-    foldl((s, rep) -> replace(s, rep, count=count), reps, init=s)
+    foldl((s, rep) -> replace(s, rep), reps, init=s)
 end
 
 # TODO: allow transform as the first argument to replace?
