@@ -489,12 +489,18 @@ replace(s::AbstractString, pat_f::Pair; count=typemax(Int)) =
 perform a successive series of `replace` operations on `s`.
 
 # Examples
-```
+```jldoctest
 julia> replace("Python is a programming language.", 
                "Python" => "Julia",
                "is a" => "is",
                "programming language"=> "awesome")
 "Julia is awesome."
+
+julia> replace("foobar", "foo"=>"bar", "bar"=>"baz")
+"bazbaz"
+
+julia> replace("foobar","bar"=>"baz", "foo"=>"bar")
+"barbaz"
 ```
 """
 function replace(s::AbstractString, reps::Pair...; count::Integer=typemax(Int))
