@@ -484,9 +484,10 @@ replace(s::AbstractString, pat_f::Pair; count=typemax(Int)) =
 
 
 """
-    replace(s::AbstractString, reps::Pair...; count::Integer=typemax(Int))
+    replace(s::AbstractString, reps::Pair...)
 
-perform a successive series of `replace` operations on `s`.
+Perform a successive series of `replace` operations on `s`, evaluating the replacements in `reps...` 
+sequentially from left to right. 
 
 # Examples
 ```jldoctest
@@ -497,7 +498,7 @@ julia> replace("foobar","bar"=>"baz", "foo"=>"bar")
 "barbaz"
 ```
 """
-function replace(s::AbstractString, reps::Pair...; count::Integer=typemax(Int))
+function replace(s::AbstractString, reps::Pair...)
     foldl((s, rep) -> replace(s, rep, count=count), reps, init=s)
 end
 
