@@ -295,6 +295,7 @@ end
 
     @test replace("foobar", "foo"=>"bar", "bar"=>"baz") == "bazbaz"
     @test replace("foobar", "bar"=>"baz", "foo"=>"bar") == "barbaz"
+    @test replace("foobar". "foo"=>"baz", "baz"=>" b a z ") == " b a z bar"
 end
 
 @testset "chomp/chop" begin
