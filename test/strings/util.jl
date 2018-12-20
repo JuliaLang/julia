@@ -292,6 +292,13 @@ end
     @test replace("a", 'a' => typeof) == "Char"
     @test replace("a", in("a") => typeof) == "Char"
     @test replace("a", ['a'] => typeof) == "Char"
+    
+    @test replace("foobar", "foo"=>"bar", "bar"=>"baz") == "bazbaz"
+    @test replace("foobar", "bar"=>"baz", "foo"=>"bar") == "barbaz"
+    @test replace("Python is a programming language.", 
+                  "Python" => "Julia", 
+                  "is a" => "is", 
+                  "programming language"=> "awesome") == "Julia is awesome."
 
 end
 
