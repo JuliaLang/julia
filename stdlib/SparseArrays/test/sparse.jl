@@ -743,6 +743,8 @@ end
 
         @test ss116[:,:] == copy(ss116)
 
+        @test convert(SparseMatrixCSC{Float32,Int32}, sd116)[2:5,:] == convert(SparseMatrixCSC{Float32,Int32}, sd116[2:5,:])
+
         # range indexing
         @test Array(ss116[i,:]) == aa116[i,:]
         @test Array(ss116[:,j]) == aa116[:,j]
