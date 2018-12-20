@@ -35,7 +35,7 @@ Range operator. `a:b` constructs a range from `a` to `b` with a step size of 1 (
 , and `a:s:b` is similar but uses a step size of `s` (a [`StepRange`](@ref)).
 
 `:` is also used in indexing to select whole dimensions
-and to signal [`Symbol`](@ref)s.
+ and for [`Symbol`](@ref) literals, as in e.g. `:hello`.
 """
 (:)(start::T, step, stop::T) where {T} = _colon(start, step, stop)
 (:)(start::T, step, stop::T) where {T<:Real} = _colon(start, step, stop)
