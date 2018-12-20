@@ -909,11 +909,8 @@ end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
 function (/)(A::AbstractVecOrMat, B::AbstractVecOrMat)
-    if (size(A,2) != size(B,2))
-        throw(DimensionMismatch("left hand side has $(size(A,2)) columns, but right hand side has $(size(B,2)) columns"))
-    else
-        return copy(adjoint(adjoint(B) \ adjoint(A)))
-    end
+    size(A,2) != size(B,2) && throw(DimensionMismatch("Both inputs should have the same number of columns"))
+    return copy(adjoint(adjoint(B) \ adjoint(A)))
 end
 # \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
 # /(x::Number,A::StridedMatrix) = x*inv(A)

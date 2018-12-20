@@ -300,11 +300,7 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
 end
 
 @testset "Issue 18742" begin
-    @test_throws DimensionMismatch rand(4, 2)/rand(3, 5)
-    @test_throws DimensionMismatch [1 2 3; 4 5 6]/[2 3 4 5; 1 2 4 6]
     @test_throws DimensionMismatch ones(4,5)/zeros(3,6)
-    @test_throws DimensionMismatch rand(4, 2)\rand(3, 5)
-    @test_throws DimensionMismatch [1 2 3]\[2 3 4 5; 1 2 4 6]
     @test_throws DimensionMismatch ones(4,5)\zeros(3,6)
 end
 @testset "fallback throws properly for AbstractArrays with dimension > 2" begin
