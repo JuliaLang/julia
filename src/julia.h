@@ -1810,6 +1810,7 @@ typedef struct {
     const char *outputjitbc;
     const char *outputo;
     const char *outputji;
+    const char *output_code_coverage;
     int8_t incremental;
     int8_t image_file_specified;
 } jl_options_t;
@@ -1820,6 +1821,7 @@ JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void);
 // Parse an argc/argv pair to extract general julia options, passing back out
 // any arguments that should be passed on to the script.
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp);
+JL_DLLEXPORT char *jl_format_filename(const char *output_pattern);
 
 // Set julia-level ARGS array according to the arguments provided in
 // argc/argv
