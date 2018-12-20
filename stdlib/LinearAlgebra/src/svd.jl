@@ -281,7 +281,7 @@ svd(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} = svd!(copy(A
 
     svd(A, B) -> GeneralizedSVD
 
-The generalized SVD is used in applications such as when one want to compare how much belongs to A
+The generalized SVD is used in applications such as when one wants to compare how much belongs to A
 vs. how much belongs to B, as in human vs yeast genome, or signal vs noise , or between clusters vs within clusters.
 
 It decomposes [A;B] into [UC;VS]H, where [UC;VS] is a natural orthogonal
@@ -322,7 +322,7 @@ julia> [A;B] ≈ [U*C;V*S]*H
 true
 
 julia> F = svd(A,B);
-julia> [A;B] ≈ [F.U*F.D1;F.V*F.D2]*F.R0*F.Q' 
+julia> [A;B] ≈ [F.U*F.D1;F.V*F.D2]*F.R0*F.Q'
 true
 
 julia> Uonly, = svd(A,B);
