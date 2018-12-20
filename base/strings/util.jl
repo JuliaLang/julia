@@ -482,6 +482,25 @@ julia> replace("The quick foxes run quickly.", r"fox(es)?" => s"bus\\1")
 replace(s::AbstractString, pat_f::Pair; count=typemax(Int)) =
     replace(String(s), pat_f, count=count)
 
+
+"""
+    replace(s::AbstractString, reps::Pair...; count::Integer=typemax(Int))
+
+perform a successive series of `replace` operations on `s`.
+
+# Examples
+```
+julia> replace("Python is a programming language.", 
+               "Python" => "Julia",
+               "is a" => "is",
+               "programming language"=> "awesome")
+"Julia is awesome."
+```
+"""
+function replace(s::AbstractString, reps::Pair...; count::Integer=typemax(Int))
+    foldl((s, rep) -> replace(s, rep, count=count), reps, init=s)
+end
+
 # TODO: allow transform as the first argument to replace?
 
 # hex <-> bytes conversion
