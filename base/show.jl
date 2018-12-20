@@ -387,8 +387,7 @@ show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
 
 function show(io::IO, x::Union)
     print(io, "Union")
-    ctx = IOContext(io, :compact => get(io, :compact, false))
-    show_comma_array(ctx, uniontypes(x), '{', '}')
+    show_comma_array(io, uniontypes(x), '{', '}')
 end
 
 function print_without_params(@nospecialize(x))
@@ -650,9 +649,6 @@ function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, de
     print(io, op)
     if !show_circular(io, itr)
         recur_io = IOContext(io, :SHOWN_SET => itr)
-        if !haskey(io, :compact)
-            recur_io = IOContext(recur_io, :compact => true)
-        end
         first = true
         i = i1
         if l >= i1
