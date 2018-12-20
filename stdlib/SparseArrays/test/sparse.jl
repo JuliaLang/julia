@@ -318,12 +318,22 @@ end
 end
 
 @testset "matrix multiplication" begin
-    for i = 1:5
-        a = sprand(10, 5, 0.7)
-        b = sprand(5, 15, 0.3)
-        @test maximum(abs.(a*b - Array(a)*Array(b))) < 100*eps()
-        @test maximum(abs.(SparseArrays.spmatmul(a,b) - Array(a)*Array(b))) < 100*eps()
-        f = Diagonal(rand(5))
+    for (m, p, n, q, k) in (
+                            (10, 0.7, 5, 0.3, 15),
+                            (100, 0.01, 100, 0.01, 20),
+                            (100, 0.1, 100, 0.2, 100),
+                           )
+        a = sprand(m, n, p)
+        b = sprand(n, k, q)
+        as = sparse(a')
+        bs = sparse(b')
+        ab = a * b
+        aab = Array(a) * Array(b)
+        @test maximum(abs.(ab - aab)) < 100*eps()
+        @test a*bs' == ab
+        @test as'*b == ab
+        @test as'*bs' == ab
+        f = Diagonal(rand(n))
         @test Array(a*f) == Array(a)*f
         @test Array(f*b) == f*Array(b)
     end
@@ -742,6 +752,8 @@ end
         ss116 = sparse(aa116)
 
         @test ss116[:,:] == copy(ss116)
+
+        @test convert(SparseMatrixCSC{Float32,Int32}, sd116)[2:5,:] == convert(SparseMatrixCSC{Float32,Int32}, sd116[2:5,:])
 
         # range indexing
         @test Array(ss116[i,:]) == aa116[i,:]
@@ -2025,6 +2037,12 @@ end
     @test nnz(A) == 1
     A[I, J] .= 1
     @test nnz(A) == 1
+end
+
+@testset "setindex with vector eltype (#29034)" begin
+    A = sparse([1], [1], [Vector{Float64}(undef, 3)], 3, 3)
+    A[1,1] = [1.0, 2.0, 3.0]
+    @test A[1,1] == [1.0, 2.0, 3.0]
 end
 
 @testset "show" begin
