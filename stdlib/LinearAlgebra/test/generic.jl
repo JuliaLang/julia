@@ -299,6 +299,10 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
     @test A*(lu(A, Val(true))\b) == b
 end
 
+@testset "Issue 18742" begin
+    @test_throws DimensionMismatch ones(4,5)/zeros(3,6)
+    @test_throws DimensionMismatch ones(4,5)\zeros(3,6)
+end
 @testset "fallback throws properly for AbstractArrays with dimension > 2" begin
     @test_throws ErrorException adjoint(rand(2,2,2,2))
     @test_throws ErrorException transpose(rand(2,2,2,2))

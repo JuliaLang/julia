@@ -908,7 +908,10 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
-(/)(A::AbstractVecOrMat, B::AbstractVecOrMat) = copy(adjoint(adjoint(B) \ adjoint(A)))
+function (/)(A::AbstractVecOrMat, B::AbstractVecOrMat)
+    size(A,2) != size(B,2) && throw(DimensionMismatch("Both inputs should have the same number of columns"))
+    return copy(adjoint(adjoint(B) \ adjoint(A)))
+end
 # \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
 # /(x::Number,A::StridedMatrix) = x*inv(A)
 /(x::Number, v::AbstractVector) = x*pinv(v)
