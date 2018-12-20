@@ -2,6 +2,7 @@
 
 using Test
 using Base.Threads
+using Base.Threads: SpinLock, Mutex
 
 # threading constructs
 
@@ -90,13 +91,13 @@ function threaded_add_locked(::Type{LockT}, x, n) where LockT
 end
 
 @test threaded_add_locked(SpinLock, 0, 10000) == 10000
-@test threaded_add_locked(RecursiveSpinLock, 0, 10000) == 10000
+@test threaded_add_locked(ReentrantLock, 0, 10000) == 10000
 @test threaded_add_locked(Mutex, 0, 10000) == 10000
 
 # Check if the recursive lock can be locked and unlocked correctly.
-let critical = RecursiveSpinLock()
+let critical = ReentrantLock()
     @test !islocked(critical)
-    @test_throws AssertionError unlock(critical)
+    @test_throws ErrorException("unlock count must match lock count") unlock(critical)
     @test lock(critical) === nothing
     @test islocked(critical)
     @test lock(critical) === nothing
@@ -108,12 +109,12 @@ let critical = RecursiveSpinLock()
     @test islocked(critical)
     @test unlock(critical) === nothing
     @test !islocked(critical)
-    @test_throws AssertionError unlock(critical)
+    @test_throws ErrorException("unlock count must match lock count") unlock(critical)
     @test trylock(critical) == true
     @test islocked(critical)
     @test unlock(critical) === nothing
     @test !islocked(critical)
-    @test_throws AssertionError unlock(critical)
+    @test_throws ErrorException("unlock count must match lock count") unlock(critical)
     @test !islocked(critical)
 end
 
@@ -131,7 +132,7 @@ function threaded_gc_locked(::Type{LockT}) where LockT
 end
 
 threaded_gc_locked(SpinLock)
-threaded_gc_locked(Threads.RecursiveSpinLock)
+threaded_gc_locked(Threads.ReentrantLock)
 threaded_gc_locked(Mutex)
 
 # Issue 14726
@@ -504,9 +505,10 @@ function test_thread_too_few_iters()
 end
 test_thread_too_few_iters()
 
-let e = Event()
+let e = Event(), started = Event()
     done = false
-    t = @async (wait(e); done = true)
+    t = @async (notify(started); wait(e); done = true)
+    wait(started)
     sleep(0.1)
     @test done == false
     notify(e)

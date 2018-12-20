@@ -21,7 +21,7 @@ export @testset
 # Legacy approximate testing functions, yet to be included
 export @inferred
 export detect_ambiguities, detect_unbound_args
-export GenericString, GenericSet, GenericDict, GenericArray
+export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
 export TestSetException
 
 import Distributed: myid
@@ -1545,6 +1545,15 @@ end
 
 GenericArray{T}(args...) where {T} = GenericArray(Array{T}(args...))
 GenericArray{T,N}(args...) where {T,N} = GenericArray(Array{T,N}(args...))
+
+"""
+The `GenericOrder` can be used to test APIs for their support
+of generic ordered types.
+"""
+struct GenericOrder{T}
+    val::T
+end
+Base.isless(x::GenericOrder, y::GenericOrder) = isless(x.val,y.val)
 
 Base.keys(a::GenericArray) = keys(a.a)
 Base.axes(a::GenericArray) = axes(a.a)

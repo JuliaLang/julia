@@ -452,19 +452,67 @@ julia> prod(1:20)
 prod(a) = mapreduce(identity, mul_prod, a)
 
 ## maximum & minimum
+_fast(::typeof(min),x,y) = min(x,y)
+_fast(::typeof(max),x,y) = max(x,y)
+function _fast(::typeof(max), x::AbstractFloat, y::AbstractFloat)
+    ifelse(isnan(x),
+        x,
+        ifelse(x > y, x, y))
+end
+
+function _fast(::typeof(min),x::AbstractFloat, y::AbstractFloat)
+    ifelse(isnan(x),
+        x,
+        ifelse(x < y, x, y))
+end
+
+_isnan(x) = false
+_isnan(x::Real) = isnan(x)
+isbadzero(::typeof(max), x::AbstractFloat) = (x == zero(x)) & signbit(x)
+isbadzero(::typeof(min), x::AbstractFloat) = (x == zero(x)) & !signbit(x)
+isbadzero(op, x) = false
+isgoodzero(::typeof(max), x) = isbadzero(min, x)
+isgoodzero(::typeof(min), x) = isbadzero(max, x)
 
 function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
                         A::AbstractArray, first::Int, last::Int)
-    # locate the first non NaN number
-    @inbounds a1 = A[first]
-    v = mapreduce_first(f, op, a1)
-    i = first + 1
-    while (v == v) && (i <= last)
-        @inbounds ai = A[i]
-        v = op(v, f(ai))
-        i += 1
+    a1 = @inbounds A[first]
+    v1 = mapreduce_first(f, op, a1)
+    v2 = v3 = v4 = v1
+    chunk_len = 256
+    start = first
+    stop  = start + chunk_len - 4
+    while stop <= last
+        _isnan(v1) && return v1
+        _isnan(v2) && return v2
+        _isnan(v3) && return v3
+        _isnan(v4) && return v4
+        @inbounds for i in start:4:stop
+            v1 = _fast(op, v1, f(A[i+1]))
+            v2 = _fast(op, v2, f(A[i+2]))
+            v3 = _fast(op, v3, f(A[i+3]))
+            v4 = _fast(op, v4, f(A[i+4]))
+        end
+        start = stop
+        stop = start + chunk_len - 4
     end
-    v
+    v = op(op(v1,v2),op(v3,v4))
+    start += 1
+    for i in start:last
+        @inbounds ai = A[i]
+        v = op(v, f(A[i]))
+    end
+
+    # enforce correct order of 0.0 and -0.0
+    # e.g. maximum([0.0, -0.0]) === 0.0
+    # should hold
+    if isbadzero(op, v)
+        for i in first:last
+            x = @inbounds A[i]
+            isgoodzero(op,x) && return x
+        end
+    end
+    return v
 end
 
 maximum(f, a) = mapreduce(f, max, a)

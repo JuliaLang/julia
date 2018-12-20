@@ -514,6 +514,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                 # jump forward to the end of the inlining chain
                 # avoiding an extra (slow) lookup of `ip` in `lidict`
                 # and an extra chain of them in `down`
+                # note that we may even have this === parent (if we're ignoring this frame ip)
                 this = builder_value[fastkey]
                 let this = this
                     while this !== parent
@@ -532,8 +533,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                 frame = (frames isa Vector ? frames[i] : frames)
                 !C && frame.from_c && continue
                 key = (T === UInt64 ? ip : frame)
-                down = parent.down
-                this = get!(down, key) do
+                this = get!(parent.down, key) do
                     return StackFrameTree{T}()
                 end
                 this.frame = frame

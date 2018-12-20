@@ -1500,40 +1500,53 @@ julia> extrema(A, dims = (1,2))
  (9, 15)
 ```
 """
-extrema(A::AbstractArray; dims = :) = _extrema_dims(A, dims)
+extrema(A::AbstractArray; dims = :) = _extrema_dims(identity, A, dims)
 
-_extrema_dims(A::AbstractArray, ::Colon) = _extrema_itr(A)
+"""
+    extrema(f, A::AbstractArray; dims) -> Array{Tuple}
 
-function _extrema_dims(A::AbstractArray, dims)
+Compute the minimum and maximum of `f` applied to each element in the given dimensions
+of `A`.
+
+!!! compat "Julia 1.2"
+    This method requires Julia 1.2 or later.
+"""
+extrema(f, A::AbstractArray; dims=:) = _extrema_dims(f, A, dims)
+
+_extrema_dims(f, A::AbstractArray, ::Colon) = _extrema_itr(f, A)
+
+function _extrema_dims(f, A::AbstractArray, dims)
     sz = [size(A)...]
     for d in dims
         sz[d] = 1
     end
-    B = Array{Tuple{eltype(A),eltype(A)}}(undef, sz...)
-    return extrema!(B, A)
+    T = promote_op(f, eltype(A))
+    B = Array{Tuple{T,T}}(undef, sz...)
+    return extrema!(f, B, A)
 end
 
-@noinline function extrema!(B, A)
+@noinline function extrema!(f, B, A)
     @assert !has_offset_axes(B, A)
     sA = size(A)
     sB = size(B)
     for I in CartesianIndices(sB)
-        AI = A[I]
-        B[I] = (AI, AI)
+        fAI = f(A[I])
+        B[I] = (fAI, fAI)
     end
     Bmax = CartesianIndex(sB)
     @inbounds @simd for I in CartesianIndices(sA)
         J = min(Bmax,I)
         BJ = B[J]
-        AI = A[I]
-        if AI < BJ[1]
-            B[J] = (AI, BJ[2])
-        elseif AI > BJ[2]
-            B[J] = (BJ[1], AI)
+        fAI = f(A[I])
+        if fAI < BJ[1]
+            B[J] = (fAI, BJ[2])
+        elseif fAI > BJ[2]
+            B[J] = (BJ[1], fAI)
         end
     end
     return B
 end
+extrema!(B, A) = extrema!(identity, B, A)
 
 # Show for pairs() with Cartesian indices. Needs to be here rather than show.jl for bootstrap order
 function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, toplevel) where T <: Union{AbstractVector, Tuple}
