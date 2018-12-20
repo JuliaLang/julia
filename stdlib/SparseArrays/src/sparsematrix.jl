@@ -1974,8 +1974,8 @@ function getindex_cols(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector) where {Tv,T
     return SparseMatrixCSC(m, nJ, colptrS, rowvalS, nzvalS)
 end
 
-getindex_traverse_col(::AbstractUnitRange, lo::Int, hi::Int) = lo:hi
-getindex_traverse_col(I::StepRange, lo::Int, hi::Int) = step(I) > 0 ? (lo:1:hi) : (hi:-1:lo)
+getindex_traverse_col(::AbstractUnitRange, lo::Integer, hi::Integer) = lo:hi
+getindex_traverse_col(I::StepRange, lo::Integer, hi::Integer) = step(I) > 0 ? (lo:1:hi) : (hi:-1:lo)
 
 function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractRange, J::AbstractVector) where {Tv,Ti<:Integer}
     @assert !has_offset_axes(A, I, J)
