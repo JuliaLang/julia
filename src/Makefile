@@ -89,7 +89,17 @@ endif
 PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLIC_HEADERS)) $(UV_HEADERS))
 
 ifeq ($(JULIACODEGEN),LLVM)
+ifneq ($(USE_SYSTEM_LLVM),0)
 LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags --libs --system-libs)
+# HACK: llvm-config doesn't correctly point to shared libs on all platforms
+#       https://github.com/JuliaLang/julia/issues/29981
+else
+ifneq ($(USE_LLVM_SHLIB),1)
+LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS)) $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
+else
+LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM
+endif
+endif
 ifeq ($(USE_LLVM_SHLIB),1)
 FLAGS += -DLLVM_SHLIB
 endif # USE_LLVM_SHLIB == 1
