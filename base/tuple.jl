@@ -215,7 +215,7 @@ end
 # mapafoldl, based on afold in operators.jl
 mapafoldl(F,op,a) = a
 mapafoldl(F,op,a,b) = op(a,F(b))
-mapafoldl(F,op,a,b,c...) = mapafoldl(op, op(a,F(b)), c...)
+mapafoldl(F,op,a,b,c...) = mapafoldl(F, op, op(a,F(b)), c...)
 function mapafoldl(F,op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
     y = op(op(op(op(op(op(op(op(op(op(op(op(op(op(op(a,F(b)),F(c)),F(d)),F(e)),F(f)),F(g)),F(h)),F(i)),F(j)),F(k)),F(l)),F(m)),F(n)),F(o)),F(p))
     for x in qs; y = op(y,F(x)); end
