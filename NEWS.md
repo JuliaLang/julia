@@ -6,6 +6,7 @@ New language features
 
 * The `extrema` function now accepts a function argument in the same manner as `minimum` and
   `maximum` ([#30323]).
+* The `replace` function can now perform multiple replacements on a single string
 
 Multi-threading changes
 -----------------------
