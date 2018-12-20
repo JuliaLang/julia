@@ -486,7 +486,7 @@ replace(s::AbstractString, pat_f::Pair; count=typemax(Int)) =
 """
     replace(s::AbstractString, reps::Pair...)
 
-Perform a successive series of `replace` operations on `s`, evaluating the replacements in `reps...` 
+Perform a successive series of `replace` operations on `s`, evaluating the replacements in `reps...`
 sequentially from left to right.
 
 # Examples
