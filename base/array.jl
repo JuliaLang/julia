@@ -267,7 +267,7 @@ offset `do`. Return `dest`.
 """
 function copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where T
     n == 0 && return dest
-    n > 0 || _throw_argerror(n)
+    n > 0 || _throw_argerror()
     if soffs < 1 || doffs < 1 || soffs+n-1 > length(src) || doffs+n-1 > length(dest)
         throw(BoundsError())
     end
@@ -276,10 +276,11 @@ function copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, 
 end
 
 # Outlining this because otherwise a catastrophic inference slowdown
-# occurs, see discussion in #27874
-function _throw_argerror(n)
+# occurs, see discussion in #27874.
+# It is also mitigated by using a constant string.
+function _throw_argerror()
     @_noinline_meta
-    throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
+    throw(ArgumentError("Number of elements to copy must be nonnegative."))
 end
 
 copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, length(src))
