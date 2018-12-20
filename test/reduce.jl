@@ -244,6 +244,10 @@ end
     end
 end
 
+# 30462
+# test that there is no out of bounds access
+maximum(randn(128,128))
+
 @test isnan(maximum([NaN]))
 @test isnan(minimum([NaN]))
 @test isequal(extrema([NaN]), (NaN, NaN))

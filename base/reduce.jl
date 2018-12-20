@@ -466,8 +466,6 @@ function _fast(::typeof(min),x::AbstractFloat, y::AbstractFloat)
         ifelse(x < y, x, y))
 end
 
-_isnan(x) = false
-_isnan(x::Real) = isnan(x)
 isbadzero(::typeof(max), x::AbstractFloat) = (x == zero(x)) & signbit(x)
 isbadzero(::typeof(min), x::AbstractFloat) = (x == zero(x)) & !signbit(x)
 isbadzero(op, x) = false
@@ -480,27 +478,27 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     v1 = mapreduce_first(f, op, a1)
     v2 = v3 = v4 = v1
     chunk_len = 256
-    start = first
-    stop  = start + chunk_len - 4
-    while stop <= last
-        _isnan(v1) && return v1
-        _isnan(v2) && return v2
-        _isnan(v3) && return v3
-        _isnan(v4) && return v4
-        @inbounds for i in start:4:stop
-            v1 = _fast(op, v1, f(A[i+1]))
-            v2 = _fast(op, v2, f(A[i+2]))
-            v3 = _fast(op, v3, f(A[i+3]))
-            v4 = _fast(op, v4, f(A[i+4]))
+    start = first + 1
+    simdstop  = start + chunk_len - 4
+    while simdstop <= last - 3
+        # short circuit in case of NaN
+        v1 == v1 || return v1
+        v2 == v2 || return v2
+        v3 == v3 || return v3
+        v4 == v4 || return v4
+        @inbounds for i in start:4:simdstop
+            v1 = _fast(op, v1, f(A[i+0]))
+            v2 = _fast(op, v2, f(A[i+1]))
+            v3 = _fast(op, v3, f(A[i+2]))
+            v4 = _fast(op, v4, f(A[i+3]))
         end
-        start = stop
-        stop = start + chunk_len - 4
+        start += chunk_len
+        simdstop += chunk_len
     end
     v = op(op(v1,v2),op(v3,v4))
-    start += 1
     for i in start:last
         @inbounds ai = A[i]
-        v = op(v, f(A[i]))
+        v = op(v, f(ai))
     end
 
     # enforce correct order of 0.0 and -0.0
