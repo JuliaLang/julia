@@ -812,8 +812,8 @@ module M30442
     struct T end
 end
 let repr = sprint(show, Union{String, M30442.T})
-    @test (startswith(repr, "Union{")         && endswith(repr, "M30442.T, String}")) ||
-          (startswith(repr, "Union{String, ") && endswith(repr, "M30442.T}"))
+    @test repr == "Union{$(curmod_prefix)M30442.T, String}" ||
+          repr == "Union{String, $(curmod_prefix)M30442.T}"
 end
 let repr = sprint(dump, Ptr{UInt8}(UInt(1)))
     @test repr == "Ptr{UInt8} @$(Base.repr(UInt(1)))\n"
