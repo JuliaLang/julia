@@ -497,6 +497,9 @@ julia> replace("foobar", "foo"=>"bar", "bar"=>"baz")
 julia> replace("foobar","bar"=>"baz", "foo"=>"bar")
 "barbaz"
 ```
+
+This method is not recommended for performance critical code and regex based approaches are recommended instead
+when perfomrance is needed. 
 """
 function replace(s::AbstractString, reps::Pair...)
     foldl((s, rep) -> replace(s, rep), reps, init=s)
