@@ -809,7 +809,7 @@ let repr = sprint(dump, Union{Integer, Float32})
     @test repr == "Union{Integer, Float32}\n" || repr == "Union{Float32, Integer}\n"
 end
 module M30442
-struct T end
+    struct T end
 end
 let repr = sprint(show, Union{String, M30442.T})
     @test (startswith(repr, "Union{")         && endswith(repr, "M30442.T, String}")) ||
