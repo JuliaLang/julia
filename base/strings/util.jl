@@ -490,7 +490,7 @@ Perform a successive series of `replace` operations on `s`, evaluating the repla
 sequentially from left to right.
 
 This method is not recommended for performance critical code and regex based approaches are recommended instead
-when perfomrance is needed. 
+when perfomrance is needed.
 
 # Examples
 ```jldoctest
