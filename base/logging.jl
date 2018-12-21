@@ -222,17 +222,17 @@ macro error(exs...) logmsg_code((@_sourceinfo)..., :Error, exs...) end
 @eval @doc $_logmsg_docs :(@error)
 
 _log_record_ids = Set{Symbol}()
-# Generate a unique, stable, short, human readable identifier for a logging
-# statement.  The idea here is to have a key against which log records can be
-# filtered and otherwise manipulated. The key should uniquely identify the
-# source location in the originating module, but should be stable across
-# versions of the originating module, provided the log generating statement
-# itself doesn't change.
-function log_record_id(_module, level, message_ex)
+# Generate a unique, stable, short, somewhat human readable identifier for a
+# logging *statement*. The idea here is to have a key against which log events
+# can be filtered and otherwise manipulated. The key should uniquely identify
+# the source location in the originating module, but ideally should be stable
+# across versions of the originating module, provided the log generating
+# statement itself doesn't change.
+function log_record_id(_module, level, message, log_kws)
     modname = _module === nothing ?  "" : join(fullname(_module), "_")
-    # Use (1<<31) to fit well within an (arbitriraly chosen) eight hex digits,
-    # as we increment h to resolve any collisions.
-    h = hash(string(modname, level, message_ex)) % (1<<31)
+    # Use an arbitriraly chosen eight hex digits here. TODO: Figure out how to
+    # make the id exactly the same on 32 and 64 bit systems.
+    h = UInt32(hash(string(modname, level, message, log_kws)) & 0xFFFFFFFF)
     while true
         id = Symbol(modname, '_', string(h, base = 16, pad = 8))
         # _log_record_ids is a registry of log record ids for use during
@@ -249,7 +249,7 @@ end
 
 # Generate code for logging macros
 function logmsg_code(_module, file, line, level, message, exs...)
-    id = nothing
+    id = Expr(:quote, log_record_id(_module, level, message, exs))
     group = nothing
     kwargs = Any[]
     for ex in exs
@@ -289,8 +289,6 @@ function logmsg_code(_module, file, line, level, message, exs...)
         end
     end
 
-    # Note that it may be necessary to set `id` and `group` manually during bootstrap
-    id = something(id, :(log_record_id(_module, level, $exs)))
     if group == nothing
         group = if isdefined(Base, :basename) && isa(file, String)
             # precompute if we can

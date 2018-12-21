@@ -147,14 +147,18 @@ macro irrational(sym, val, def)
     esym = esc(sym)
     qsym = esc(Expr(:quote, sym))
     bigconvert = isa(def,Symbol) ? quote
-        function Base.BigFloat(::Irrational{$qsym})
-            c = BigFloat()
+        function Base.BigFloat(::Irrational{$qsym}, r::MPFR.MPFRRoundingMode=MPFR.ROUNDING_MODE[]; precision=precision(BigFloat))
+            c = BigFloat(;precision=precision)
             ccall(($(string("mpfr_const_", def)), :libmpfr),
-                  Cint, (Ref{BigFloat}, Int32), c, MPFR.ROUNDING_MODE[])
+                  Cint, (Ref{BigFloat}, MPFR.MPFRRoundingMode), c, r)
             return c
         end
     end : quote
-        Base.BigFloat(::Irrational{$qsym}) = $(esc(def))
+        function Base.BigFloat(::Irrational{$qsym}; precision=precision(BigFloat))
+            setprecision(BigFloat, precision) do
+                $(esc(def))
+            end
+        end
     end
     quote
         const $esym = Irrational{$qsym}()

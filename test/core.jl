@@ -27,6 +27,9 @@ f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws TypeError TypeVar(:T) <: Any
 @test_throws TypeError TypeVar(:T) >: Any
 
+# issue #28673
+@test_throws TypeError Array{2}(undef, 1, 2)
+
 # issue #12939
 module Issue12939
 abstract type Abs; end
@@ -142,6 +145,8 @@ end
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}) === Tuple{Vararg{Int}}
 
 @test typejoin(NTuple{3,Tuple}, NTuple{2,T} where T) == Tuple{Any,Any,Vararg{Tuple}}
+@test typejoin(Tuple{Tuple{T, T, Any}} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Vararg{Any}}
+@test typejoin(Tuple{T, T, T} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Any,Any}
 
 # issue #26321
 struct T26321{N,S<:NTuple{N}}
@@ -1069,9 +1074,9 @@ let
     strct = LoadError("yofile", 0, "bad")
     @test nfields(strct) == 3 # sanity test
     @test_throws BoundsError(strct, 10) getfield(strct, 10)
-    @test_throws ErrorException("type LoadError is immutable") setfield!(strct, 0, "")
-    @test_throws ErrorException("type LoadError is immutable") setfield!(strct, 4, "")
-    @test_throws ErrorException("type is immutable") setfield!(strct, :line, 0)
+    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, 0, "")
+    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, 4, "")
+    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, :line, 0)
     @test strct.file == "yofile"
     @test strct.line === 0
     @test strct.error == "bad"
@@ -1080,13 +1085,13 @@ let
     @test getfield(strct, 3) == "bad"
 
     mstrct = TestMutable("melm", 1, nothing)
-    Base.setproperty!(mstrct, :line, 8.0)
+    @test Base.setproperty!(mstrct, :line, 8.0) === 8
     @test mstrct.line === 8
     @test_throws TypeError(:setfield!, "", Int, 8.0) setfield!(mstrct, :line, 8.0)
     @test_throws TypeError(:setfield!, "", Int, 8.0) setfield!(mstrct, 2, 8.0)
-    setfield!(mstrct, 3, "hi")
+    @test setfield!(mstrct, 3, "hi") == "hi"
     @test mstrct.error == "hi"
-    setfield!(mstrct, 1, "yo")
+    @test setfield!(mstrct, 1, "yo") == "yo"
     @test mstrct.file == "yo"
     @test_throws BoundsError(mstrct, 10) getfield(mstrct, 10)
     @test_throws BoundsError(mstrct, 0) setfield!(mstrct, 0, "")
@@ -1098,7 +1103,7 @@ function Base.getproperty(mstrct::TestMutable, p::Symbol)
     return (p, getfield(mstrct, :error))
 end
 function Base.setproperty!(mstrct::TestMutable, p::Symbol, v)
-    setfield!(mstrct, :error, (p, v))
+    return setfield!(mstrct, :error, (p, v))
 end
 
 let
@@ -1116,6 +1121,20 @@ let
     @test mstrct.bar === (:bar, (:line, 8.0))
     @test mstrct.error === (:error, (:line, 8.0))
 end
+
+struct S29761
+    x
+end
+function S29761_world(i)
+    x = S29761(i)
+    @eval function Base.getproperty(x::S29761, sym::Symbol)
+        return sym => getfield(x, sym)
+    end
+    # ensure world updates are handled correctly for simple x.y expressions:
+    return x.x, @eval($x.x), x.x
+end
+@test S29761_world(1) == (1, :x => 1, 1)
+
 
 # allow typevar in Union to match as long as the arguments contain
 # sufficient information
@@ -2264,15 +2283,18 @@ a7652 = A7652(0)
 t_a7652 = A7652
 f7652() = fieldtype(t_a7652, :a) <: Int
 @test f7652() == (fieldtype(A7652, :a) <: Int) == true
+
 g7652() = fieldtype(DataType, :types)
 @test g7652() == fieldtype(DataType, :types) == Core.SimpleVector
 @test fieldtype(t_a7652, 1) == Int
+
 h7652() = setfield!(a7652, 1, 2)
-h7652()
-@test a7652.a == 2
+@test h7652() === 2
+@test a7652.a === 2
+
 i7652() = Base.setproperty!(a7652, :a, 3.0)
-i7652()
-@test a7652.a == 3
+@test i7652() === 3
+@test a7652.a === 3
 
 # issue #7679
 @test map(f->f(), Any[ ()->i for i=1:3 ]) == Any[1,2,3]
@@ -3393,7 +3415,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :apply_type
+        @test err.func == :Vararg
         @test err.expected == Int
         @test err.got == Int
     end
@@ -3403,7 +3425,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :apply_type
+        @test err.func == :Vararg
         @test err.expected == Int
         @test err.got == 0x1
     end
@@ -5722,6 +5744,13 @@ let x5 = UnionField5(nothing, Int8(3))
     @test hash(x5) === hash(x5copy)
 end
 
+struct UnionField6
+    alignment::Int32
+    padding::NTuple{3, UInt8}
+    #= implicit-padding::UInt8 =#
+    maybe_val::Union{UInt16, Nothing} # offset = 8, align = 8, size = 2
+end
+@test UnionField6(1,(1,1,1),2018).maybe_val == 2018
 
 # PR #23367
 struct A23367
@@ -6324,6 +6353,26 @@ let A=[0, missing], B=[missing, 0], C=Vector{Union{Int, Missing}}(undef, 6)
     @test isequal(C, [0, missing, missing, missing, 0, missing])
 end
 
+# issue #29718
+function f29718()
+    nt = NamedTuple{(:a, :b, :c, :d, :e, :f,),
+                    Tuple{Union{Missing, Float64},
+                          Tuple{UInt8},
+                          Union{Missing, Int8},
+                          Int8,
+                          Tuple{UInt8,UInt8},
+                          Union{Missing, Int16}}
+                    }((missing,
+                       (1,),
+                       1,
+                       41,
+                       (1,2),
+                       1915,
+                       ))
+    return Ref{Any}(nt)[].f
+end
+@test f29718() == 1915
+
 end # module UnionOptimizations
 
 # issue #6614, argument destructuring
@@ -6750,3 +6799,20 @@ let a = [1,2,3,4,missing,6,7]
     foo(x) = x > 0 ? x : missing
     @test_throws TypeError foo(missing)
 end
+
+# issue #29152
+function f29152()
+    try
+        g29152()
+    finally
+    end
+end
+g29152() = (_true29152 ? error() : _true29152 ? 0 : false)
+_true29152 = true;
+@test_throws ErrorException f29152()
+
+# issue #29828
+f29828() = 2::String
+g29828() = 2::Any[String][1]
+@test_throws TypeError(:typeassert, String, 2) f29828()
+@test_throws TypeError(:typeassert, String, 2) g29828()

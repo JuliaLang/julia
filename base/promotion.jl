@@ -364,11 +364,6 @@ max(x::Real, y::Real) = max(promote(x,y)...)
 min(x::Real, y::Real) = min(promote(x,y)...)
 minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 
-# "Promotion" that takes a function into account and tries to preserve
-# non-concrete types. These are meant to be used mainly by elementwise
-# operations, so it is advised against overriding them
-_default_type(T::Type) = T
-
 if isdefined(Core, :Compiler)
     const _return_type = Core.Compiler.return_type
 else
@@ -382,28 +377,11 @@ Guess what an appropriate container eltype would be for storing results of
 `f(::argtypes...)`. The guess is in part based on type inference, so can change any time.
 
 !!! warning
-    In pathological cases, the type returned by `promote_op(f, argtypes...)` may not even
-    be a supertype of the return value of `f(::argtypes...)`. Therefore, `promote_op`
-    should _not_ be used e.g. in the preallocation of an output array.
-
-!!! warning
     Due to its fragility, use of `promote_op` should be avoided. It is preferable to base
     the container eltype on the type of the actual elements. Only in the absence of any
     elements (for an empty result container), it may be unavoidable to call `promote_op`.
 """
-promote_op(::Any...) = Any
-function promote_op(f, ::Type{S}) where S
-    TT = Tuple{_default_type(S)}
-    T = _return_type(f, TT)
-    isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any
-    return typejoin(S, T)
-end
-function promote_op(f, ::Type{R}, ::Type{S}) where {R,S}
-    TT = Tuple{_default_type(R), _default_type(S)}
-    T = _return_type(f, TT)
-    isdispatchtuple(Tuple{R}) && isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any
-    return typejoin(R, S, T)
-end
+promote_op(f, S::Type...) = _return_type(f, Tuple{S...})
 
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 

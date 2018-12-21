@@ -364,7 +364,7 @@ void jl_print_gc_stats(JL_STREAM *s);
 void jl_gc_reset_alloc_count(void);
 int jl_assign_type_uid(void);
 jl_value_t *jl_cache_type_(jl_datatype_t *type);
-void jl_resort_type_cache(jl_svec_t *c);
+void jl_sort_types(jl_value_t **types, size_t length);
 int  jl_get_t_uid_ctr(void);
 void jl_set_t_uid_ctr(int i);
 uint32_t jl_get_gs_ctr(void);
@@ -560,7 +560,7 @@ static inline void jl_set_gc_and_wait(void)
 }
 #endif
 
-JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant);
+JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char *asm_variant, const char *debuginfo);
 
 void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(jl_value_t *p) JL_NOTSAFEPOINT;
@@ -630,13 +630,14 @@ typedef unw_cursor_t bt_cursor_t;
 typedef int bt_context_t;
 typedef int bt_cursor_t;
 #endif
+// Special marker in backtrace data for encoding interpreter frames
+#define JL_BT_INTERP_FRAME (((uintptr_t)0)-1)
 size_t rec_backtrace(uintptr_t *data, size_t maxsize) JL_NOTSAFEPOINT;
 size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx) JL_NOTSAFEPOINT;
 #ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 #endif
 JL_DLLEXPORT void jl_get_backtrace(jl_array_t **bt, jl_array_t **bt2);
-JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, uint32_t nargs, int drop_exceptions);
 void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_t *bt_size);
 JL_DLLEXPORT void jl_raise_debugger(void);
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline);
@@ -657,6 +658,49 @@ STATIC_INLINE char *jl_copy_str(char **to, const char *from)
 JL_DLLEXPORT int jl_is_interpreter_frame(uintptr_t ip);
 JL_DLLEXPORT int jl_is_enter_interpreter_frame(uintptr_t ip);
 JL_DLLEXPORT size_t jl_capture_interp_frame(uintptr_t *data, uintptr_t sp, uintptr_t fp, size_t space_remaining);
+
+// Exception stack: a stack of pairs of (exception,raw_backtrace).
+// The stack may be traversed and accessed with the functions below.
+typedef struct _jl_excstack_t {
+    size_t top;
+    size_t reserved_size;
+    // Pack all stack entries into a growable buffer to amortize allocation
+    // across repeated exception handling.
+    // Layout: [bt_data1... bt_size1 exc1  bt_data2... bt_size2 exc2  ..]
+    // uintptr_t data[]; // Access with jl_excstack_raw
+} jl_excstack_t;
+
+STATIC_INLINE uintptr_t *jl_excstack_raw(jl_excstack_t *stack) JL_NOTSAFEPOINT
+{
+    return (uintptr_t*)(stack + 1);
+}
+
+// Exception stack access
+STATIC_INLINE jl_value_t *jl_excstack_exception(jl_excstack_t *stack JL_PROPAGATES_ROOT,
+                                                size_t itr) JL_NOTSAFEPOINT
+{
+    return (jl_value_t*)(jl_excstack_raw(stack)[itr-1]);
+}
+STATIC_INLINE size_t jl_excstack_bt_size(jl_excstack_t *stack, size_t itr) JL_NOTSAFEPOINT
+{
+    return jl_excstack_raw(stack)[itr-2];
+}
+STATIC_INLINE uintptr_t *jl_excstack_bt_data(jl_excstack_t *stack, size_t itr) JL_NOTSAFEPOINT
+{
+    return jl_excstack_raw(stack) + itr-2 - jl_excstack_bt_size(stack, itr);
+}
+// Exception stack iteration (start at itr=stack->top, stop at itr=0)
+STATIC_INLINE size_t jl_excstack_next(jl_excstack_t *stack, size_t itr) JL_NOTSAFEPOINT
+{
+    return itr-2 - jl_excstack_bt_size(stack, itr);
+}
+// Exception stack manipulation
+void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
+                         size_t reserved_size);
+void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
+                      jl_value_t *exception JL_ROOTED_ARGUMENT,
+                      uintptr_t *bt_data, size_t bt_size);
+void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT;
 
 // timers
 // Returns time in nanosec
@@ -947,6 +991,7 @@ extern jl_sym_t *method_sym;  extern jl_sym_t *core_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *error_sym;
 extern jl_sym_t *new_sym;     extern jl_sym_t *using_sym;
+extern jl_sym_t *pop_exception_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *primtype_sym;
 extern jl_sym_t *structtype_sym;   extern jl_sym_t *foreigncall_sym;
@@ -973,38 +1018,6 @@ void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *
                        jl_method_instance_t **linfos, size_t n);
 
 extern arraylist_t partial_inst;
-
-STATIC_INLINE uint64_t jl_load_unaligned_i64(const void *ptr) JL_NOTSAFEPOINT
-{
-    uint64_t val;
-    memcpy(&val, ptr, 8);
-    return val;
-}
-STATIC_INLINE uint32_t jl_load_unaligned_i32(const void *ptr) JL_NOTSAFEPOINT
-{
-    uint32_t val;
-    memcpy(&val, ptr, 4);
-    return val;
-}
-STATIC_INLINE uint16_t jl_load_unaligned_i16(const void *ptr) JL_NOTSAFEPOINT
-{
-    uint16_t val;
-    memcpy(&val, ptr, 2);
-    return val;
-}
-
-STATIC_INLINE void jl_store_unaligned_i64(void *ptr, uint64_t val) JL_NOTSAFEPOINT
-{
-    memcpy(ptr, &val, 8);
-}
-STATIC_INLINE void jl_store_unaligned_i32(void *ptr, uint32_t val) JL_NOTSAFEPOINT
-{
-    memcpy(ptr, &val, 4);
-}
-STATIC_INLINE void jl_store_unaligned_i16(void *ptr, uint16_t val) JL_NOTSAFEPOINT
-{
-    memcpy(ptr, &val, 2);
-}
 
 #if jl_has_builtin(__builtin_assume_aligned) || defined(_COMPILER_GCC_)
 #define jl_assume_aligned(ptr, align) __builtin_assume_aligned(ptr, align)

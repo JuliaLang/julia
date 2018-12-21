@@ -759,7 +759,7 @@ end
 @test :(x`s\`"\x\$\\`) == :(@x_cmd "s`\"\\x\\\$\\")
 
 # Check multiline command literals
-@test :(@cmd "multiline\ncommand\n") == :```
+@test Expr(:macrocall, GlobalRef(Core, Symbol("@cmd")), LineNumberNode(@__LINE__, Symbol(@__FILE__)), "multiline\ncommand\n") == :```
 multiline
 command
 ```
@@ -1328,6 +1328,8 @@ end
 @test Meta.parse("+((1,2))")   == Expr(:call, :+, Expr(:tuple, 1, 2))
 
 @test_throws ParseError("space before \"(\" not allowed in \"+ (\"") Meta.parse("1 -+ (a=1, b=2)")
+# issue #29781
+@test_throws ParseError("space before \"(\" not allowed in \"sin. (\"") Meta.parse("sin. (1)")
 
 @test Meta.parse("1 -+(a=1, b=2)") == Expr(:call, :-, 1,
                                            Expr(:call, :+, Expr(:kw, :a, 1), Expr(:kw, :b, 2)))
@@ -1554,21 +1556,13 @@ end
 end
 @test A27807.@m()(1,1.0) === (1, 0.0)
 
-# issue #27896
-let oldstderr = stderr, newstderr, errtxt
-    try
-        newstderr = redirect_stderr()
-        @eval function foo(a::A, b::B) where {A,B}
-            B = eltype(A)
-            return convert(B, b)
-        end
-        errtxt = @async read(newstderr[1], String)
-    finally
-        redirect_stderr(oldstderr)
-        close(newstderr[2])
+# issue #27896 / #29429
+@test Meta.lower(@__MODULE__, quote
+    function foo(a::A, b::B) where {A,B}
+        B = eltype(A)
+        return convert(B, b)
     end
-    @test occursin("WARNING: local variable B conflicts with a static parameter", fetch(errtxt))
-end
+end) == Expr(:error, "local variable name \"B\" conflicts with a static parameter")
 
 # issue #28044
 code28044(x) = 10x
@@ -1735,3 +1729,38 @@ end
 @test Meta.parse("1..2") == Expr(:call, :.., 1, 2)
 # we don't parse chains of these since the associativity and meaning aren't clear
 @test_throws ParseError Meta.parse("1..2..3")
+
+# issue #30048
+@test Meta.isexpr(Meta.lower(@__MODULE__, :(for a in b
+           c = try
+               try
+                   d() do
+                       if  GC.@preserve c begin
+                           end
+                       end
+                   end
+               finally
+               end
+           finally
+           end
+       end)), :thunk)
+
+# issue #28506
+@test Meta.isexpr(Meta.parse("1,"), :incomplete)
+@test Meta.isexpr(Meta.parse("1, "), :incomplete)
+@test Meta.isexpr(Meta.parse("1,\n"), :incomplete)
+@test Meta.isexpr(Meta.parse("1, \n"), :incomplete)
+@test_throws LoadError include_string(@__MODULE__, "1,")
+@test_throws LoadError include_string(@__MODULE__, "1,\n")
+
+# issue #30062
+let er = Meta.lower(@__MODULE__, quote if false end, b+=2 end)
+    @test Meta.isexpr(er, :error)
+    @test startswith(er.args[1], "invalid multiple assignment location \"if")
+end
+
+# issue #30030
+let x = 0
+    @test (a=1, b=2, c=(x=3)) == (a=1, b=2, c=3)
+    @test x == 3
+end

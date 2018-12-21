@@ -154,6 +154,11 @@ end
             end
         end
 
+        let xr = sprandn(ComplexF64, 1000, 0.9)
+            @test isa(xr, SparseVector{ComplexF64,Int})
+            @test length(xr) == 1000
+        end
+
         let xr = sprand(Bool, 1000, 0.9)
             @test isa(xr, SparseVector{Bool,Int})
             @test length(xr) == 1000

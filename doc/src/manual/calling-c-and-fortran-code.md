@@ -44,6 +44,11 @@ to [`ccall`](@ref) are as follows:
 
    OR
 
+   a `:function` name symbol or `"function"` name string, which is resolved in the
+   current process,
+
+   OR
+
    a function pointer (for example, from `dlsym`).
 
 2. Return type (see below for mapping the declared C type to Julia)
@@ -496,7 +501,7 @@ b_a_2 = B.A[2];
 in Julia:
 ```julia
 struct B
-    A::NTuple{3, CInt}
+    A::NTuple{3, Cint}
 end
 b_a_2 = B.A[3]  # note the difference in indexing (1-based in Julia, 0-based in C)
 ```

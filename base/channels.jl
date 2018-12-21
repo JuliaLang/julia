@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    AbstractChannel{T}
+
+Representation of a channel passing objects of type `T`.
+"""
 abstract type AbstractChannel{T} end
 
 """
@@ -245,9 +250,13 @@ Append an item `v` to the channel `c`. Blocks if the channel is full.
 
 For unbuffered channels, blocks until a [`take!`](@ref) is performed by a different
 task.
+
+!!! compat "Julia 1.1"
+    `v` now gets converted to the channel's type with [`convert`](@ref) as `put!` is called.
 """
-function put!(c::Channel, v)
+function put!(c::Channel{T}, v) where T
     check_channel_state(c)
+    v = convert(T, v)
     isbuffered(c) ? put_buffered(c,v) : put_unbuffered(c,v)
 end
 
@@ -269,9 +278,9 @@ function put_unbuffered(c::Channel, v)
 
         try
             wait()
-        catch ex
+        catch
             filter!(x->x!=current_task(), c.putters)
-            rethrow(ex)
+            rethrow()
         end
     end
     taker = popfirst!(c.takers)
@@ -328,9 +337,9 @@ function take_unbuffered(c::Channel{T}) where T
         else
             return wait()::T
         end
-    catch ex
+    catch
         filter!(x->x!=current_task(), c.takers)
-        rethrow(ex)
+        rethrow()
     end
 end
 
@@ -388,7 +397,7 @@ function iterate(c::Channel, state=nothing)
         if isa(e, InvalidStateException) && e.state==:closed
             return nothing
         else
-            rethrow(e)
+            rethrow()
         end
     end
 end

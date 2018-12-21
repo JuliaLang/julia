@@ -67,6 +67,7 @@ mutable struct Worker
     manager::ClusterManager
     config::WorkerConfig
     version::Union{VersionNumber, Nothing}   # Julia version of the remote process
+    initialized::Event
 
     function Worker(id::Int, r_stream::IO, w_stream::IO, manager::ClusterManager;
                              version::Union{VersionNumber, Nothing}=nothing,
@@ -90,6 +91,7 @@ mutable struct Worker
             return map_pid_wrkr[id]
         end
         w=new(id, [], [], false, W_CREATED, Condition(), time(), conn_func)
+        w.initialized = Event()
         register_worker(w)
         w
     end
@@ -134,7 +136,7 @@ function exec_conn_func(w::Worker)
         f()
     catch e
         w.conn_func = () -> throw(e)
-        rethrow(e)
+        rethrow()
     end
     nothing
 end
@@ -159,12 +161,6 @@ mutable struct LocalProcess
     bind_port::UInt16
     cookie::AbstractString
     LocalProcess() = new(1)
-end
-
-
-import LinearAlgebra
-function disable_threaded_libs()
-    LinearAlgebra.BLAS.set_num_threads(1)
 end
 
 worker_timeout() = parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0"))
@@ -503,9 +499,9 @@ function create_worker(manager, wconfig)
     local r_s, w_s
     try
         (r_s, w_s) = connect(manager, w.id, wconfig)
-    catch e
+    catch
         deregister_worker(w.id)
-        rethrow(e)
+        rethrow()
     end
 
     w = Worker(w.id, r_s, w_s, manager; config=wconfig)
