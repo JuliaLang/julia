@@ -72,6 +72,8 @@ bimg  = randn(n,2)/2
                 @test norm(a[:,1:n1]'a15null,Inf) ≈ zero(eltya) atol=300ε
                 @test norm(a15null'a[:,1:n1],Inf) ≈ zero(eltya) atol=400ε
                 @test size(nullspace(b), 2) == 0
+                @test size(nullspace(b, rtol=0.001), 2) == 0
+                @test size(nullspace(b, atol=100*εb), 2) == 0
                 @test size(nullspace(b, 100*εb), 2) == 0
                 @test nullspace(zeros(eltya,n)) == Matrix(I, 1, 1)
                 @test nullspace(zeros(eltya,n), 0.1) == Matrix(I, 1, 1)
@@ -81,6 +83,12 @@ bimg  = randn(n,2)/2
             end
         end
     end # for eltyb
+
+@testset "Test pinv (rtol, atol)" begin
+    M = [1 0 0; 0 1 0; 0 0 0]
+    @test pinv(M,atol=1)== zeros(3,3)
+    @test pinv(M,rtol=0.5)== M
+end
 
     for (a, a2) in ((copy(ainit), copy(ainit2)), (view(ainit, 1:n, 1:n), view(ainit2, 1:n, 1:n)))
         @testset "Test pinv" begin
@@ -872,16 +880,13 @@ end
 @testset "inverse of Adjoint" begin
     A = randn(n, n)
 
-    @test inv(A')*A'                     ≈ I
-    @test inv(transpose(A))*transpose(A) ≈ I
+    @test @inferred(inv(A'))*A'                     ≈ I
+    @test @inferred(inv(transpose(A)))*transpose(A) ≈ I
 
     B = complex.(A, randn(n, n))
-    B = B + transpose(B)
 
-    # The following two cases fail because ldiv!(F::Adjoint/Transpose{BunchKaufman},b)
-    # isn't implemented yet
-    @test_broken inv(B')*B'                     ≈ I
-    @test_broken inv(transpose(B))*transpose(B) ≈ I
+    @test @inferred(inv(B'))*B'                     ≈ I
+    @test @inferred(inv(transpose(B)))*transpose(B) ≈ I
 end
 
 end # module TestDense

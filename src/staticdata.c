@@ -144,7 +144,6 @@ static uint32_t read_uint32(ios_t *s) JL_NOTSAFEPOINT
 
 // --- Static Compile ---
 
-extern int globalUnique;
 static void *jl_sysimg_handle = NULL;
 static uint64_t sysimage_base = 0;
 static uintptr_t *sysimg_gvars_base = NULL;
@@ -170,7 +169,6 @@ static void jl_load_sysimg_so(void)
         jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_offsets", (void **)&sysimg_gvars_offsets, 1);
         sysimg_gvars_offsets += 1;
         assert(sysimg_fptrs.base);
-        jl_dlsym(jl_sysimg_handle, "jl_globalUnique", (void **)&globalUnique, 1);
 #ifdef JULIA_ENABLE_THREADING
         uintptr_t *tls_getter_slot;
         jl_dlsym(jl_sysimg_handle, "jl_get_ptls_states_slot", (void **)&tls_getter_slot, 1);
@@ -1018,6 +1016,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
     for (i = 0; i < sysimg_fvars_max; i++) {
         uintptr_t val = (uintptr_t)&linfos[i];
         uint32_t offset = load_uint32(&val);
+        linfos[i] = NULL;
         if (offset != 0) {
             int specfunc = 1;
             if (offset & ((uintptr_t)1 << (8 * sizeof(uint32_t) - 1))) {
@@ -1538,7 +1537,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
         jl_gc_wb(tn, tn->cache);
         tn->linearcache = (jl_svec_t*)jl_read_value(&s);
         jl_gc_wb(tn, tn->linearcache);
-        jl_resort_type_cache(tn->cache);
+        jl_sort_types(jl_svec_data(tn->cache), jl_svec_len(tn->cache));
     }
 
     jl_core_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Core"));

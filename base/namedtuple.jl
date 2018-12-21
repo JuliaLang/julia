@@ -223,6 +223,10 @@ contains that field. Fields present in only the rightmost named tuple of a pair 
 A fallback is implemented for when only a single named tuple is supplied,
 with signature `merge(a::NamedTuple)`.
 
+!!! compat "Julia 1.1"
+    Merging 3 or more `NamedTuple` requires at least Julia 1.1.
+
+# Examples
 ```jldoctest
 julia> merge((a=1, b=2, c=3), (b=4, d=5))
 (a = 1, b = 4, c = 3, d = 5)

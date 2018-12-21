@@ -471,6 +471,10 @@ LLVM_INSTALL = \
 ifeq ($(OS), WINNT)
 LLVM_INSTALL += && cp $2$$(build_shlibdir)/LLVM.dll $2$$(build_depsbindir)
 endif
+ifeq ($(OS),Darwin)
+# https://github.com/JuliaLang/julia/issues/29981
+LLVM_INSTALL += && ln -s libLLVM.dylib $2$$(build_shlibdir)/libLLVM-$$(LLVM_VER_SHORT).dylib
+endif
 
 $(eval $(call staged-install,llvm,llvm-$$(LLVM_VER)/build_$$(LLVM_BUILDTYPE), \
 	LLVM_INSTALL,,,))

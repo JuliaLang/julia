@@ -960,22 +960,6 @@ f21653() = f21653()
 @test code_typed(f21653, Tuple{}, optimize=false)[1] isa Pair{CodeInfo, typeof(Union{})}
 @test which(f21653, ()).specializations.func.rettype === Union{}
 
-# ensure _apply can "see-through" SSAValue to infer precise container types
-let f, m
-    f() = 0
-    m = first(methods(f))
-    m.source = Base.uncompressed_ast(m)::CodeInfo
-    m.source.code = Any[
-        Expr(:call, GlobalRef(Core, :svec), 1, 2, 3),
-        Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(1)),
-        Expr(:return, SSAValue(2))
-    ]
-    nstmts = length(m.source.code)
-    m.source.ssavaluetypes = nstmts
-    m.source.codelocs = fill(Int32(1), nstmts)
-    @test @inferred(f()) == 6
-end
-
 # issue #22290
 f22290() = return 3
 for i in 1:3
@@ -1631,6 +1615,15 @@ g26172(::Val{0}) = ()
 g26172(v) = (nothing, g26172(f26172(v))...)
 @test @inferred(g26172(Val(10))) === ntuple(_ -> nothing, 10)
 
+function conflicting_assignment_conditional()
+    x = iterate([])
+    if x === (x = 4; nothing)
+        return x
+    end
+    return 5
+end
+@test @inferred(conflicting_assignment_conditional()) === 4
+
 # 26826 constant prop through varargs
 
 struct Foo26826{A,B}
@@ -2146,3 +2139,48 @@ let ci = code_typed(bar_inlining_apply, Tuple{})[1].first
     @test length(ci.code) == 2
     @test ci.code[1].head == :foreigncall
 end
+
+# Test that inference can infer .instance of types
+f_instance(::Type{T}) where {T} = T.instance
+@test @inferred(f_instance(Nothing)) === nothing
+
+# test for some limit-cycle caching poisoning
+_false30098 = false
+f30098() = _false30098 ? g30098() : 3
+g30098() = (h30098(:f30098); 4)
+h30098(f) = getfield(@__MODULE__, f)()
+@test @inferred(g30098()) == 4 # make sure that this
+@test @inferred(f30098()) == 3 # doesn't pollute the inference cache of this
+
+# issue #30394
+mutable struct Base30394
+    a::Int
+end
+
+mutable struct Foo30394
+    foo_inner::Base30394
+    Foo30394() = new(Base30394(1))
+end
+
+mutable struct Foo30394_2
+    foo_inner::Foo30394
+    Foo30394_2() = new(Foo30394())
+end
+
+f30394(foo::T1, ::Type{T2}) where {T2, T1 <: T2} = foo
+
+f30394(foo, T2) = f30394(foo.foo_inner, T2)
+
+@test Base.return_types(f30394, (Foo30394_2, Type{Base30394})) == Any[Base30394]
+
+# PR #30385
+
+g30385(args...) = h30385(args...)
+h30385(f, args...) = f(args...)
+f30385(T, y) = g30385(getfield, g30385(tuple, T, y), 1)
+k30385(::Type{AbstractFloat}) = 1
+k30385(x) = "dummy"
+j30385(T, y) = k30385(f30385(T, y))
+
+@test @inferred(j30385(AbstractFloat, 1)) == 1
+@test @inferred(j30385(:dummy, 1)) == "dummy"

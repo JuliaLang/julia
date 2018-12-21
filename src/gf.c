@@ -2421,6 +2421,12 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
                 closure->max_valid = ml->max_world;
         }
     }
+    // In some corner cases type intersection is conservative and returns something
+    // for intersect(A, B) even though A is a dispatch tuple and !(A <: B).
+    // For dispatch purposes in such a case we know there's no match. This check
+    // fixes issue #30394.
+    if (jl_is_dispatch_tupletype(closure->match.type) && !closure->match.issubty)
+        return 1;
     // a method is shadowed if type <: S <: m->sig where S is the
     // signature of another applicable method
     /*

@@ -22,7 +22,7 @@ function open_fake_pty()
 
     # slave
     slave = RawFD(fds)
-    master = Base.TTY(RawFD(fdm); readable = true)
+    master = Base.TTY(RawFD(fdm))
     slave, master
 end
 

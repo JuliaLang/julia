@@ -112,6 +112,31 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
     end
 end
 
+# Adding a complex UniformScaling to the diagonal of a Hermitian
+# matrix breaks the hermiticity, if the UniformScaling is non-real.
+# However, to preserve type stability, we do not special-case a
+# UniformScaling{<:Complex} that happens to be real.
+function (+)(A::Hermitian{T,S}, J::UniformScaling{<:Complex}) where {T,S}
+    A_ = copytri!(copy(parent(A)), A.uplo)
+    B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, A_)
+    @inbounds for i in diagind(B)
+        B[i] += J
+    end
+    return B
+end
+
+function (-)(J::UniformScaling{<:Complex}, A::Hermitian{T,S}) where {T,S}
+    A_ = copytri!(copy(parent(A)), A.uplo)
+    B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, A_)
+    @inbounds for i in eachindex(B)
+        B[i] = -B[i]
+    end
+    @inbounds for i in diagind(B)
+        B[i] += J
+    end
+    return B
+end
+
 function (+)(A::AbstractMatrix, J::UniformScaling)
     checksquare(A)
     B = copy_oftype(A, Base._return_type(+, Tuple{eltype(A), typeof(J)}))
@@ -212,6 +237,15 @@ function isapprox(J::UniformScaling, A::AbstractMatrix;
 end
 isapprox(A::AbstractMatrix, J::UniformScaling; kwargs...) = isapprox(J, A; kwargs...)
 
+"""
+    copyto!(dest::AbstractMatrix, src::UniformScaling)
+
+Copies a [`UniformScaling`](@ref) onto a matrix.
+
+!!! compat "Julia 1.1"
+    In Julia 1.0 this method only supported a square destination matrix. Julia 1.1. added
+    support for a rectangular matrix.
+"""
 function copyto!(A::AbstractMatrix, J::UniformScaling)
     @assert !has_offset_axes(A)
     fill!(A, 0)

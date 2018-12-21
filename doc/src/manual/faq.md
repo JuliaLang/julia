@@ -774,8 +774,7 @@ julia> @sync for i in 1:3
 You can lock your writes with a `ReentrantLock` like this:
 
 ```jldoctest
-julia> l = ReentrantLock()
-ReentrantLock(nothing, Condition(Any[]), 0)
+julia> l = ReentrantLock();
 
 julia> @sync for i in 1:3
            @async begin

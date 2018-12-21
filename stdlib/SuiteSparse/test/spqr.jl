@@ -81,6 +81,11 @@ end
     @test A*xs ≈ A*xd
 end
 
+@testset "Issue 26367" begin
+    A = sparse([0.0 1 0 0; 0 0 0 0])
+    @test Matrix(qr(A).Q) == Matrix(qr(Matrix(A)).Q) == Matrix(I, 2, 2)
+end
+
 @testset "Issue 26368" begin
     A = sparse([0.0 1 0 0; 0 0 0 0])
     F = qr(A)
@@ -95,8 +100,11 @@ end
 end
 
 @testset "rank" begin
-    @test rank(qr(sprandn(10, 5, 1.0)*sprandn(5, 10, 1.0))) == 5
+    S = sprandn(10, 5, 1.0)*sprandn(5, 10, 1.0)
+    @test rank(qr(S)) == 5
+    @test rank(S) == 5
     @test all(iszero, (rank(qr(spzeros(10, i))) for i in 1:10))
+    @test all(iszero, (rank(spzeros(10, i)) for i in 1:10))
 end
 
 end

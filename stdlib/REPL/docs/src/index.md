@@ -316,6 +316,21 @@ lastindex  offset  string
 The completion of fields for output from functions uses type inference, and it can only suggest
 fields if the function is type stable.
 
+Dictionary keys can also be tab completed:
+
+```julia-repl
+julia> foo = Dict("qwer1"=>1, "qwer2"=>2, "asdf"=>3)
+Dict{String,Int64} with 3 entries:
+  "qwer2" => 2
+  "asdf"  => 3
+  "qwer1" => 1
+
+julia> foo["q[TAB]
+
+"qwer1" "qwer2"
+julia> foo["qwer
+```
+
 ## Customizing Colors
 
 The colors used by Julia and the REPL can be customized, as well. To change the
