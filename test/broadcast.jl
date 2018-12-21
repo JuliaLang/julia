@@ -365,7 +365,7 @@ end
 let f17314 = x -> x < 0 ? false : x
     @test eltype(broadcast(f17314, 1:3)) === Int
     @test eltype(broadcast(f17314, -1:1)) === Integer
-    @test eltype(broadcast(f17314, Int[])) == Union{Bool,Int}
+    @test eltype(broadcast(f17314, Int[])) === Integer
 end
 let io = IOBuffer()
     broadcast(x->print(io,x), 1:5) # broadcast with side effects
@@ -934,3 +934,23 @@ ret =  @macroexpand @.([Int, Number] <: Real)
 
 ret =  @macroexpand @.([Int, Number] >: Real)
 @test ret == :([Int, Number] .>: Real)
+
+@testset "Issue #28382: inferrability of broadcast with Union eltype" begin
+    @test isequal([1, 2] .+ [3.0, missing], [4.0, missing])
+    @test Core.Compiler.return_type(broadcast, Tuple{typeof(+), Vector{Int},
+                                                     Vector{Union{Float64, Missing}}}) ==
+        Vector{<:Union{Float64, Missing}}
+    @test isequal([1, 2] + [3.0, missing], [4.0, missing])
+    @test Core.Compiler.return_type(+, Tuple{Vector{Int},
+                                             Vector{Union{Float64, Missing}}}) ==
+        Vector{<:Union{Float64, Missing}}
+    # Check that corner cases do not throw an error
+    @test isequal(broadcast(x -> x === 1 ? nothing : x, [1, 2, missing]),
+                  [nothing, 2, missing])
+    @test isequal(broadcast(x -> x === 1 ? nothing : x, Any[1, 2, 3.0, missing]),
+                  [nothing, 2, 3, missing])
+    @test broadcast((x,y)->(x==1 ? 1.0 : x, y), [1 2 3], ["a", "b", "c"]) ==
+        [(1.0, "a") (2, "a") (3, "a")
+         (1.0, "b") (2, "b") (3, "b")
+         (1.0, "c") (2, "c") (3, "c")]
+end

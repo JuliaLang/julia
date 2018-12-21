@@ -691,8 +691,31 @@ eltypes(t::Tuple{Any}) = Tuple{_broadcast_getindex_eltype(t[1])}
 eltypes(t::Tuple{Any,Any}) = Tuple{_broadcast_getindex_eltype(t[1]), _broadcast_getindex_eltype(t[2])}
 eltypes(t::Tuple) = Tuple{_broadcast_getindex_eltype(t[1]), eltypes(tail(t)).types...}
 
+Base.@pure function promote_typejoin_union(::Type{T}) where T
+    if T isa Union
+        promote_typejoin(promote_typejoin_union(T.a), promote_typejoin_union(T.b))
+    elseif T <: Tuple
+        p = T.parameters
+        lr = length(p)::Int
+        if lr == 0
+            return Tuple{}
+        end
+        lf, fixed = Core.Compiler.full_va_len(p)
+        c = Vector{Any}(undef, lf)
+        for i = 1:lf
+            pi = p[i]
+            ci = promote_typejoin_union(Core.Compiler.unwrapva(pi))
+            c[i] = i == lf && Core.Compiler.isvarargtype(pi) ? Vararg{ci} : ci
+        end
+        return Tuple{c...}
+    else
+        T
+    end
+end
+
 # Inferred eltype of result of broadcast(f, args...)
-combine_eltypes(f, args::Tuple) = Base._return_type(f, eltypes(args))
+combine_eltypes(f, args::Tuple) =
+    promote_typejoin_union(Base._return_type(f, eltypes(args)))
 
 ## Broadcasting core
 
@@ -877,7 +900,13 @@ const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
     dest = similar(bc′, typeof(val))
     @inbounds dest[I] = val
     # Now handle the remaining values
-    return copyto_nonleaf!(dest, bc′, iter, state, 1)
+    if dest isa AbstractArray
+        # Give inference a helping hand on the element type and dimensionality
+        # (work-around for #28382)
+        return copyto_nonleaf!(dest, bc′, iter, state, 1)::AbstractArray{<:ElType, ndims(dest)}
+    else
+        return copyto_nonleaf!(dest, bc′, iter, state, 1)
+    end
 end
 
 ## general `copyto!` methods
