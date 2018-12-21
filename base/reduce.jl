@@ -492,6 +492,7 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
             v3 = _fast(op, v3, f(A[i+2]))
             v4 = _fast(op, v4, f(A[i+3]))
         end
+        checkbounds(A, simdstop+3)
         start += chunk_len
         simdstop += chunk_len
     end
