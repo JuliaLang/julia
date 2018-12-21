@@ -447,17 +447,17 @@ true
 function norm(itr, p::Real=2)
     isempty(itr) && return float(norm(zero(eltype(itr))))
     if p == 2
-        return norm2(itr)
+        return norm2(float(itr))
     elseif p == 1
-        return norm1(itr)
+        return norm1(float(itr))
     elseif p == Inf
-        return normInf(itr)
+        return normInf(float(itr))
     elseif p == 0
         return typeof(float(norm(first(itr))))(count(!iszero, itr))
     elseif p == -Inf
-        return normMinusInf(itr)
+        return normMinusInf(float(itr))
     else
-        normp(itr, p)
+        normp(float(itr), p)
     end
 end
 
