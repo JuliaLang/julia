@@ -685,8 +685,7 @@ function grow_to!(dest, itr, st)
     y = iterate(itr, st)
     while y !== nothing
         el, st = y
-        S = typeof(el)
-        if S === T || S <: T
+        if el isa T || typeof(el) === T
             push!(dest, el::T)
         else
             new = sizehint!(empty(dest, promote_typejoin(T, S)), length(dest))
