@@ -68,6 +68,7 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL, // output-jit-bc
                             NULL, // output-o
                             NULL, // output-ji
+                            NULL,    // output-code_coverage
                             0, // incremental
                             0 // image_file_specified
 };
@@ -129,6 +130,9 @@ static const char opts[]  =
     // instrumentation options
     " --code-coverage={none|user|all}, --code-coverage\n"
     "                           Count executions of source lines (omitting setting is equivalent to \"user\")\n"
+    " --code-coverage=tracefile.info\n"
+    "                           Append coverage information to the LCOV tracefile (filename supports format tokens).\n"
+// TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
     " --track-allocation={none|user|all}, --track-allocation\n"
     "                           Count bytes allocated by each source line\n\n"
 
@@ -437,12 +441,18 @@ restart_switch:
             break;
         case opt_code_coverage:
             if (optarg != NULL) {
-                if (!strcmp(optarg,"user"))
+                size_t endof = strlen(optarg);
+                if (!strcmp(optarg, "user"))
                     codecov = JL_LOG_USER;
-                else if (!strcmp(optarg,"all"))
+                else if (!strcmp(optarg, "all"))
                     codecov = JL_LOG_ALL;
-                else if (!strcmp(optarg,"none"))
+                else if (!strcmp(optarg, "none"))
                     codecov = JL_LOG_NONE;
+                else if (endof > 5 && !strcmp(optarg + endof - 5, ".info")) {
+                    if (codecov == JL_LOG_NONE)
+                        codecov = JL_LOG_ALL;
+                    jl_options.output_code_coverage = optarg;
+                }
                 else
                     jl_errorf("julia: invalid argument to --code-coverage (%s)", optarg);
                 break;
