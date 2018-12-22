@@ -24,6 +24,7 @@ Command-line option changes
 New library functions
 ---------------------
 
+* `getipaddrs()` function returns all the IP addresses of the local machine ([#30349])
 
 Standard library changes
 ------------------------
@@ -55,3 +56,4 @@ Deprecated or removed
 [#30061]: https://github.com/JuliaLang/julia/issues/30061
 [#30200]: https://github.com/JuliaLang/julia/issues/30200
 [#30323]: https://github.com/JuliaLang/julia/issues/30323
+[#30349]: https://github.com/JuliaLang/julia/issues/30349

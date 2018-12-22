@@ -251,3 +251,44 @@ function getipaddr()
     ccall(:uv_free_interface_addresses, Cvoid, (Ptr{UInt8}, Int32), addr, count)
     return lo_present ? localhost : error("No networking interface available")
 end
+
+"""
+    getipaddrs(include_lo::Bool=false) -> Vector{IPv4}
+
+Get the IP addresses of the local machine.
+
+!!! compat "Julia 1.2"
+    This function is available as of Julia 1.2.
+
+# Examples
+```julia-repl
+julia> getipaddrs()
+2-element Array{IPv4,1}:
+ ip"10.255.0.183"
+ ip"172.17.0.1"
+```
+"""
+function getipaddrs(include_lo::Bool=false)
+    addresses = IPv4[]
+    addr_ref = Ref{Ptr{UInt8}}(C_NULL)
+    count_ref = Ref{Int32}(1)
+    lo_present = false
+    err = ccall(:jl_uv_interface_addresses, Int32, (Ref{Ptr{UInt8}}, Ref{Int32}), addr_ref, count_ref)
+    uv_error("getlocalip", err)
+    addr, count = addr_ref[], count_ref[]
+    for i = 0:(count-1)
+        current_addr = addr + i*_sizeof_uv_interface_address
+        if 1 == ccall(:jl_uv_interface_address_is_internal, Int32, (Ptr{UInt8},), current_addr)
+            lo_present = true
+            if !include_lo
+                continue
+            end
+        end
+        sockaddr = ccall(:jl_uv_interface_address_sockaddr, Ptr{Cvoid}, (Ptr{UInt8},), current_addr)
+        if ccall(:jl_sockaddr_in_is_ip4, Int32, (Ptr{Cvoid},), sockaddr) == 1
+            push!(addresses, IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Cvoid},), sockaddr))))
+        end
+    end
+    ccall(:uv_free_interface_addresses, Cvoid, (Ptr{UInt8}, Int32), addr, count)
+    return addresses
+end
