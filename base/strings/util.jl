@@ -489,9 +489,6 @@ replace(s::AbstractString, pat_f::Pair; count=typemax(Int)) =
 Perform a successive series of `replace` operations on `s`, evaluating the replacements in `reps...`
 sequentially from left to right.
 
-This method is not recommended for performance critical code and regex based approaches are recommended instead
-when perfomrance is needed.
-
 # Examples
 ```jldoctest
 julia> replace("foobar", "foo"=>"bar", "bar"=>"baz")
@@ -499,6 +496,9 @@ julia> replace("foobar", "foo"=>"bar", "bar"=>"baz")
 
 julia> replace("foobar","bar"=>"baz", "foo"=>"bar")
 "barbaz"
+!!! note
+    This method is not currently recommended for performance critical code; consider a regular
+    expression based approach in such cases instead.
 ```
 """
 function replace(s::AbstractString, reps::Pair...)
