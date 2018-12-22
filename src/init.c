@@ -536,6 +536,7 @@ static char *abspath(const char *in, int nprefix)
 }
 #endif
 
+#ifndef _OS_WASM_
 // create an absolute-path copy of the input path format string
 // formed as `joinpath(replace(pwd(), "%" => "%%"), in)`
 // unless `in` starts with `%`
@@ -567,6 +568,7 @@ static const char *absformat(const char *in)
     memcpy(out + fmt_size, in, sz); // copy over format, including nul
     return out;
 }
+#endif
 
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
 {   // this function resolves the paths in jl_options to absolute file locations as needed
@@ -639,8 +641,10 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
             && strcmp(jl_options.project, "@") != 0
             && strcmp(jl_options.project, "") != 0)
         jl_options.project = abspath(jl_options.project, 0);
+#ifndef _OS_WASM_
     if (jl_options.output_code_coverage)
         jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
+#endif
 
     const char **cmdp = jl_options.cmds;
     if (cmdp) {
@@ -696,13 +700,12 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
     jl_arr_xtralloc_limit = total_mem / 100;  // Extra allocation limited to 1% of total RAM
 #endif
-    jl_find_stack_bottom();
+    jl_prep_sanitizers();
+    void *stack_lo, *stack_hi;
+    jl_init_stack_limits(1, &stack_lo, &stack_hi);
 #ifdef _OS_WASM_
     jl_dl_handle = NULL;
 #else
-    jl_prep_sanitizers();
-     void *stack_lo, *stack_hi;
-    jl_init_stack_limits(1, &stack_lo, &stack_hi);
     jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 1);
 #ifdef _OS_WINDOWS_
     jl_ntdll_handle = jl_dlopen("ntdll.dll", 0); // bypass julia's pathchecking for system dlls

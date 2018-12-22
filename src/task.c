@@ -71,7 +71,7 @@ static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
 static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
 
 #ifdef JL_HAVE_UNW_CONTEXT
-static JL_THREAD unw_cursor_t jl_basecursor;
+static JL_THREAD_LOCAL unw_cursor_t jl_basecursor;
 #endif
 
 #ifdef COPY_STACKS
@@ -768,7 +768,7 @@ static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
         " udf #0" // abort
         : : "r" (stk), "r"(fn) : "memory" );
 #else
-#error JL_HAVE_ASM defined but not implemented for this CPU type
+//#error JL_HAVE_ASM defined but not implemented for this CPU type
 #endif
     __builtin_unreachable();
 }

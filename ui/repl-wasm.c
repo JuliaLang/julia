@@ -37,7 +37,7 @@ static int exec_program(char *program)
     }
     JL_CATCH {
         jl_value_t *errs = jl_stderr_obj();
-        jl_value_t *e = ptls->exception_in_transit;
+        jl_value_t *e = jl_current_exception();
         // Manually save and restore the backtrace so that we print the original
         // one instead of the one caused by `show`.
         // We can't use safe_restore since that will cause any error
@@ -94,7 +94,7 @@ static NOINLINE int true_main(int argc, char *argv[])
             jl_get_ptls_states()->world_age = last_age;
         }
         JL_CATCH {
-            jl_no_exc_handler(jl_exception_in_transit);
+            jl_no_exc_handler(jl_current_exception());
         }
         return 0;
     }
@@ -119,7 +119,7 @@ static NOINLINE int true_main(int argc, char *argv[])
             jl_value_t *val = (jl_value_t*)jl_eval_string(line);
             if (jl_exception_occurred()) {
                 jl_printf(JL_STDERR, "error during run:\n");
-                jl_static_show(JL_STDERR, ptls->exception_in_transit);
+                jl_static_show(JL_STDERR, jl_current_exception());
                 jl_exception_clear();
             }
             else if (val) {
@@ -135,7 +135,7 @@ static NOINLINE int true_main(int argc, char *argv[])
                 line = NULL;
             }
             jl_printf(JL_STDERR, "\nparser error:\n");
-            jl_static_show(JL_STDERR, ptls->exception_in_transit);
+            jl_static_show(JL_STDERR, jl_current_exception());
             jl_printf(JL_STDERR, "\n");
             jlbacktrace();
         }

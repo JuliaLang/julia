@@ -44,13 +44,13 @@ endif
 SRCS := \
 	jltypes gf typemap ast builtins module interpreter symbol \
 	dlload sys init task array dump staticdata toplevel datatype \
-	simplevector APInt-C runtime_intrinsics runtime_ccall precompile \
+	simplevector runtime_intrinsics precompile \
 	threading stackwalk gc gc-debug gc-pages gc-stacks method \
 	jlapi signal-handling safepoint jloptions timing subtype rtutils \
 	crc32c
 
 ifneq ($(OS),wasm)
-SRCS += jl_uv threadgroup processor
+SRCS += jl_uv threadgroup processor APInt-C runtime_ccall
 else
 SRCS += jl_wasm
 endif

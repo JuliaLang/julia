@@ -33,6 +33,8 @@ typedef win32_ucontext_t jl_ucontext_t;
 #define JL_HAVE_UNW_CONTEXT
 #elif defined(_OS_LINUX_)
 #define JL_HAVE_UCONTEXT
+#elif defined(_OS_WASM_)
+#define JL_HAVE_ASM
 #else
 #define JL_HAVE_UNW_CONTEXT
 #endif

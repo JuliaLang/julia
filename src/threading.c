@@ -68,7 +68,6 @@ void jl_init_threading() {
      // `safepoint.c`
      ptls->safepoint = (size_t*)(jl_safepoint_pages + jl_page_size);
      ptls->defer_signal = 0;
-     ptls->current_module = NULL;
      void *bt_data = malloc(sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
      memset(bt_data, 0, sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
      if (bt_data == NULL) {
