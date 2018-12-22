@@ -273,12 +273,12 @@ diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to cons
 # special cases of norm; note that they don't need to handle isempty(x)
 function generic_normMinusInf(x)
     (v, s) = iterate(x)::Tuple
-    minabs = norm(v)
+    minabs = norm(float(v))
     while true
         y = iterate(x, s)
         y === nothing && break
         (v, s) = y
-        vnorm = norm(v)
+        vnorm = norm(float(v))
         minabs = ifelse(isnan(minabs) | (minabs < vnorm), minabs, vnorm)
     end
     return float(minabs)
@@ -286,12 +286,12 @@ end
 
 function generic_normInf(x)
     (v, s) = iterate(x)::Tuple
-    maxabs = norm(v)
+    maxabs = norm(float(v))
     while true
         y = iterate(x, s)
         y === nothing && break
         (v, s) = y
-        vnorm = norm(v)
+        vnorm = norm(float(v))
         maxabs = ifelse(isnan(maxabs) | (maxabs > vnorm), maxabs, vnorm)
     end
     return float(maxabs)
@@ -299,14 +299,14 @@ end
 
 function generic_norm1(x)
     (v, s) = iterate(x)::Tuple
-    av = float(norm(v))
+    av = float(norm(float(v)))
     T = typeof(av)
     sum::promote_type(Float64, T) = av
     while true
         y = iterate(x, s)
         y === nothing && break
         (v, s) = y
-        sum += norm(v)
+        sum += norm(float(v))
     end
     return convert(T, sum)
 end
@@ -331,12 +331,12 @@ function generic_norm2(x)
         end
         return convert(T, sqrt(sum))
     else
-        sum = abs2(norm(v)/maxabs)
+        sum = abs2(norm(float(v))/maxabs)
         while true
             y = iterate(x, s)
             y === nothing && break
             (v, s) = y
-            sum += (norm(v)/maxabs)^2
+            sum += (norm(float(v))/maxabs)^2
         end
         return convert(T, maxabs*sqrt(sum))
     end
@@ -355,21 +355,21 @@ function generic_normp(x, p)
     end
     spp::promote_type(Float64, T) = p
     if -1 <= p <= 1 || (isfinite(length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
-        sum::promote_type(Float64, T) = norm(v)^spp
+        sum::promote_type(Float64, T) = norm(float(v))^spp
         while true
             y = iterate(x, s)
             y === nothing && break
             (v, s) = y
-            sum += norm(v)^spp
+            sum += norm(float(v))^spp
         end
         return convert(T, sum^inv(spp))
     else # rescaling
-        sum = (norm(v)/maxabs)^spp
+        sum = (norm(float(v))/maxabs)^spp
         while true
             y = iterate(x, s)
             y == nothing && break
             (v, s) = y
-            sum += (norm(v)/maxabs)^spp
+            sum += (norm(float(v))/maxabs)^spp
         end
         return convert(T, maxabs*sum^inv(spp))
     end
@@ -447,17 +447,17 @@ true
 function norm(itr, p::Real=2)
     isempty(itr) && return float(norm(zero(eltype(itr))))
     if p == 2
-        return norm2(float(itr))
+        return norm2(itr)
     elseif p == 1
-        return norm1(float(itr))
+        return norm1(itr)
     elseif p == Inf
-        return normInf(float(itr))
+        return normInf(itr)
     elseif p == 0
         return typeof(float(norm(first(itr))))(count(!iszero, itr))
     elseif p == -Inf
-        return normMinusInf(float(itr))
+        return normMinusInf(itr)
     else
-        normp(float(itr), p)
+        normp(itr, p)
     end
 end
 

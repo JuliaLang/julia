@@ -225,6 +225,12 @@ end
     end
 end
 
+@testset "Issue #30466" begin
+    @test norm([typemin(Int), typemin(Int)], Inf) == 9.223372036854776e18
+    @test norm([typemin(Int), typemin(Int)], -Inf) == 9.223372036854776e18
+    @test norm([typemin(Int), typemin(Int)], 1) == 1.8446744073709552e19
+end
+
 @testset "potential overflow in normalize!" begin
     δ = inv(prevfloat(typemax(Float64)))
     v = [δ, -δ]
