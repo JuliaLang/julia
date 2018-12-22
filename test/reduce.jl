@@ -244,9 +244,21 @@ end
     end
 end
 
-# 30462
-# test that there is no out of bounds access
-maximum(randn(128,128))
+@testset "maximum no out of bounds access #30462" begin
+    arr = fill(-Inf, 128,128)
+    @test maximum(arr) == -Inf
+    arr = fill(Inf, 128^2)
+    @test minimum(arr) == Inf
+    for center in [256, 1024, 4096, 128^2]
+        for offset in -10:10
+            len = center + offset
+            x = randn()
+            arr = fill(x, len)
+            @test maximum(arr) === x
+            @test minimum(arr) === x
+        end
+    end
+end
 
 @test isnan(maximum([NaN]))
 @test isnan(minimum([NaN]))
