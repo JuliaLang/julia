@@ -850,11 +850,13 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_add_standard_imports(jl_main_module);
     }
 
+#ifndef _OS_WASM_
     // This needs to be after jl_start_threads
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_default_signal_handlers();
+#endif
 
-    jl_gc_enable(1);
+    //jl_gc_enable(1);
 
     if (jl_options.image_file && (!jl_generating_output() || jl_options.incremental) && jl_module_init_order) {
         jl_array_t *init_order = jl_module_init_order;
@@ -868,8 +870,10 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         JL_GC_POP();
     }
 
+#ifndef _OS_WASM_
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_sigint_handler();
+#endif
 }
 
 static jl_value_t *core(const char *name)

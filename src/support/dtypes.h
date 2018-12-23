@@ -68,7 +68,7 @@
 # endif
 #else
 #define STDCALL
-#define JL_DLLEXPORT __attribute__ ((visibility("default")))
+#define JL_DLLEXPORT __attribute__ ((visibility("default"))) __attribute__((used))
 #endif
 
 #ifdef _OS_LINUX_

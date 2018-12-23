@@ -144,7 +144,7 @@ static NOINLINE int true_main(int argc, char *argv[])
 }
 
 int main(int argc, char *argv[]) {
-    char* argv2[]={"./julia", "-C", "\"native\"", "--output-ji", "corecompiler.ji", "--startup-file=no", "-g0", "-O0", "compiler/compiler.jl", 0}; 
+    char* argv2[]={"./julia", "-C", "\"native\"", "--output-ji", "corecompiler.ji", "--compile=no", "--startup-file=no", "-g0", "-O0", "compiler/compiler.jl", 0}; 
     argc = 9;
     argv = argv2;
     libsupport_init();

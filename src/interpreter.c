@@ -363,6 +363,8 @@ SECT_INTERP static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s)
     s->locals[jl_source_nslots(s->src) + s->ip] = res;
 }
 
+extern jl_value_t *jl_typemax_uint(jl_value_t *);
+extern void jl_set_istopmod(jl_module_t *self, uint8_t isprimary);
 SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 {
     jl_code_info_t *src = s->src;
@@ -499,6 +501,29 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     }
     else if (head == method_sym && nargs == 1) {
         return eval_methoddef(ex, s);
+    }
+    else if (head == foreigncall_sym) {
+        jl_(e);
+        const char *name = jl_symbol_name(jl_quotenode_value(args[0]));
+        if (strcmp(name, "jl_toplevel_eval_in") == 0) {
+            return jl_toplevel_eval_in(eval_value(args[nargs-2], s), eval_value(args[nargs-1], s));
+        } else if (strcmp(name, "jl_type_unionall") == 0) {
+            return jl_type_unionall(eval_value(args[nargs-2], s), eval_value(args[nargs-1], s));
+        } else if (strcmp(name, "jl_string_ptr") == 0) {
+            jl_ptls_t ptls = jl_get_ptls_states();
+            const char *ret = jl_string_ptr(eval_value(args[nargs-1], s));
+            jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+            *(void**)jl_data_ptr(v) = ret;
+            return v;
+        } else if (strcmp(name, "jl_typemax_uint") == 0) {
+            return jl_typemax_uint(eval_value(args[nargs-1], s));
+        } else if (strcmp(name, "jl_symbol_n") == 0) {
+            return jl_symbol_n(jl_unbox_voidpointer(eval_value(args[5], s)),
+                jl_unbox_long(eval_value(args[6], s)));
+        } else if (strcmp(name, "jl_set_istopmod") == 0) {
+            jl_set_istopmod(eval_value(args[5], s), jl_unbox_bool(eval_value(args[6], s)));
+            return jl_nothing;
+        }
     }
     jl_errorf("unsupported or misplaced expression %s", jl_symbol_name(head));
     abort();

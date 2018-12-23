@@ -51,6 +51,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
     }
     else {
         jl_printf(JL_STDERR, "top level expression cannot be compiled in this build of Julia");
+        abort();
     }
     return decls;
 }
