@@ -1218,4 +1218,4 @@ propertynames(x, private) = propertynames(x) # ignore private flag by default
 Returns a boolean indicating whether the object `x` has the specified property as one of
 its own properties.
 """
-hasproperty(x, s::Symbol) = isdefined(x,s)
+hasproperty(x, s::Symbol) = isdefined(x, s)
