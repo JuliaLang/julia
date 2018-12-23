@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base: @propagate_inbounds, _return_type, _default_type, @_inline_meta
+using Base: @propagate_inbounds, @_inline_meta
 import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar
 
 ### basic definitions (types, aliases, constructors, abstractarray interface, sundry similar)
@@ -150,7 +150,7 @@ similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent,
 
 # sundry basic definitions
 parent(A::AdjOrTrans) = A.parent
-vec(v::AdjOrTransAbsVec) = v.parent
+vec(v::TransposeAbsVec) = parent(v)
 
 cmp(A::AdjOrTransAbsVec, B::AdjOrTransAbsVec) = cmp(parent(A), parent(B))
 isless(A::AdjOrTransAbsVec, B::AdjOrTransAbsVec) = isless(parent(A), parent(B))

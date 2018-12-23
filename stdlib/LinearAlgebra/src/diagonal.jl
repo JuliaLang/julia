@@ -116,13 +116,17 @@ ishermitian(D::Diagonal{<:Number}) = isreal(D.diag)
 ishermitian(D::Diagonal) = all(ishermitian, D.diag)
 issymmetric(D::Diagonal{<:Number}) = true
 issymmetric(D::Diagonal) = all(issymmetric, D.diag)
-isposdef(D::Diagonal) = all(x -> x > 0, D.diag)
+isposdef(D::Diagonal) = all(isposdef, D.diag)
 
 factorize(D::Diagonal) = D
 
 real(D::Diagonal) = Diagonal(real(D.diag))
 imag(D::Diagonal) = Diagonal(imag(D.diag))
 
+iszero(D::Diagonal) = all(iszero, D.diag)
+isone(D::Diagonal) = all(isone, D.diag)
+isdiag(D::Diagonal) = all(isdiag, D.diag)
+isdiag(D::Diagonal{<:Number}) = true
 istriu(D::Diagonal) = true
 istril(D::Diagonal) = true
 function triu!(D::Diagonal,k::Integer=0)
@@ -277,9 +281,9 @@ mul!(out::AbstractVector, A::Diagonal, in::AbstractVector) = out .= A.diag .* in
 mul!(out::AbstractVector, A::Adjoint{<:Any,<:Diagonal}, in::AbstractVector) = out .= adjoint.(A.parent.diag) .* in
 mul!(out::AbstractVector, A::Transpose{<:Any,<:Diagonal}, in::AbstractVector) = out .= transpose.(A.parent.diag) .* in
 
-mul!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= A.diag .* in
-mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::AbstractMatrix) = out .= adjoint.(A.parent.diag) .* in
-mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::AbstractMatrix) = out .= transpose.(A.parent.diag) .* in
+mul!(out::AbstractMatrix, A::Diagonal, in::StridedMatrix) = out .= A.diag .* in
+mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::StridedMatrix) = out .= adjoint.(A.parent.diag) .* in
+mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::StridedMatrix) = out .= transpose.(A.parent.diag) .* in
 
 # ambiguities with Symmetric/Hermitian
 # RealHermSymComplex[Sym]/[Herm] only include Number; invariant to [c]transpose
@@ -291,7 +295,9 @@ mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::AbstractMatrix) = 
 *(transD::Transpose{<:Any,<:Diagonal}, transA::Transpose{<:Any,<:RealHermSymComplexSym}) = transD * transA.parent
 *(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, adjD::Adjoint{<:Any,<:Diagonal}) = adjA.parent * adjD
 *(adjD::Adjoint{<:Any,<:Diagonal}, adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}) = adjD * adjA.parent
+mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSym}) = mul!(C, A, B.parent)
 mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexHerm}) = mul!(C, A, B.parent)
+mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSym}) = mul!(C, A, B.parent)
 mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexSym}) = mul!(C, A, B.parent)
 mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexSym}) = C .= adjoint.(A.parent.diag) .* B
 mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexHerm}) = C .= transpose.(A.parent.diag) .* B
@@ -387,6 +393,44 @@ function kron(A::Diagonal{T1}, B::Diagonal{T2}) where {T1<:Number, T2<:Number}
         valC[(i-1)*nB+j] = valA[i] * valB[j]
     end
     return Diagonal(valC)
+end
+
+function kron(A::Diagonal{T}, B::AbstractMatrix{S}) where {T<:Number, S<:Number}
+    @assert ! Base.has_offset_axes(B)
+    (mA, nA) = size(A); (mB, nB) = size(B)
+    R = zeros(Base.promote_op(*, T, S), mA * mB, nA * nB)
+    m = 1
+    for j = 1:nA
+        A_jj = A[j,j]
+        for k = 1:nB
+            for l = 1:mB
+                R[m] = A_jj * B[l,k]
+                m += 1
+            end
+            m += (nA - 1) * mB
+        end
+        m += mB
+    end
+    return R
+end
+
+function kron(A::AbstractMatrix{T}, B::Diagonal{S}) where {T<:Number, S<:Number}
+    @assert ! has_offset_axes(A)
+    (mA, nA) = size(A); (mB, nB) = size(B)
+    R = zeros(promote_op(*, T, S), mA * mB, nA * nB)
+    m = 1
+    for j = 1:nA
+        for l = 1:mB
+            Bll = B[l,l]
+            for k = 1:mA
+                R[m] = A[k,j] * Bll
+                m += nB
+            end
+            m += 1
+        end
+        m -= nB
+    end
+    return R
 end
 
 conj(D::Diagonal) = Diagonal(conj(D.diag))

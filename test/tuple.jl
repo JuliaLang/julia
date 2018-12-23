@@ -86,6 +86,9 @@ end
     end
 
     @test empty((1, 2.0, "c")) === ()
+
+    # issue #28915
+    @test convert(Union{Tuple{}, Tuple{Int}}, (1,)) === (1,)
 end
 
 @testset "size" begin

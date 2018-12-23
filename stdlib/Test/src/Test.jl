@@ -21,7 +21,7 @@ export @testset
 # Legacy approximate testing functions, yet to be included
 export @inferred
 export detect_ambiguities, detect_unbound_args
-export GenericString, GenericSet, GenericDict, GenericArray
+export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
 export TestSetException
 
 import Distributed: myid
@@ -459,7 +459,7 @@ function get_test_result(ex, source)
         try
             $testret
         catch _e
-            _e isa InterruptException && rethrow(_e)
+            _e isa InterruptException && rethrow()
             Threw(_e, catch_backtrace(), $(QuoteNode(source)))
         end
     end
@@ -536,7 +536,7 @@ macro test_throws(extype, ex)
             Returned($(esc(ex)), nothing, $(QuoteNode(__source__)))
         catch _e
             if $(esc(extype)) != InterruptException && _e isa InterruptException
-                rethrow(_e)
+                rethrow()
             end
             Threw(_e, nothing, $(QuoteNode(__source__)))
         end
@@ -1082,7 +1082,7 @@ function testset_beginend(args, tests, source)
             Random.seed!(GLOBAL_RNG.seed)
             $(esc(tests))
         catch err
-            err isa InterruptException && rethrow(err)
+            err isa InterruptException && rethrow()
             # something in the test block threw an error. Count that as an
             # error in this test set
             record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
@@ -1155,7 +1155,7 @@ function testset_forloop(args, testloop, source)
         try
             $(esc(tests))
         catch err
-            err isa InterruptException && rethrow(err)
+            err isa InterruptException && rethrow()
             # Something in the test block threw an error. Count that as an
             # error in this test set
             record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
@@ -1280,10 +1280,10 @@ Int64
 
 julia> @code_warntype f(1, 2, 3)
 Body::UNION{FLOAT64, INT64}
-1 1 ─ %1 = (Base.slt_int)(1, b)::Bool
-  └──      goto #3 if not %1
-  2 ─      return 1
-  3 ─      return 1.0
+1 ─ %1 = (Base.slt_int)(1, b)::Bool
+└──      goto #3 if not %1
+2 ─      return 1
+3 ─      return 1.0
 
 julia> @inferred f(1, 2, 3)
 ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}
@@ -1546,12 +1546,22 @@ end
 GenericArray{T}(args...) where {T} = GenericArray(Array{T}(args...))
 GenericArray{T,N}(args...) where {T,N} = GenericArray(Array{T,N}(args...))
 
+"""
+The `GenericOrder` can be used to test APIs for their support
+of generic ordered types.
+"""
+struct GenericOrder{T}
+    val::T
+end
+Base.isless(x::GenericOrder, y::GenericOrder) = isless(x.val,y.val)
+
 Base.keys(a::GenericArray) = keys(a.a)
 Base.axes(a::GenericArray) = axes(a.a)
 Base.length(a::GenericArray) = length(a.a)
 Base.size(a::GenericArray) = size(a.a)
-Base.getindex(a::GenericArray, i...) = a.a[i...]
-Base.setindex!(a::GenericArray, x, i...) = a.a[i...] = x
+Base.IndexStyle(::Type{<:GenericArray}) = IndexLinear()
+Base.getindex(a::GenericArray, i::Int) = a.a[i]
+Base.setindex!(a::GenericArray, x, i::Int) = a.a[i] = x
 
 Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
 

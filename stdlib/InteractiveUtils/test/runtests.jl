@@ -198,20 +198,23 @@ const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
 # issue #13264
 @test (@which vcat(1...)).name == :vcat
 
-# PR #28122
+# PR #28122, issue #25474
 @test (@which [1][1]).name === :getindex
-@test (@which [1 2]).name == :hcat
-@test (@which [1; 2]).name == :vcat
-@test (@which [1]).name == :vect
+@test (@which [1][1] = 2).name === :setindex!
+@test (@which [1]).name === :vect
+@test (@which [1 2]).name === :hcat
+@test (@which [1; 2]).name === :vcat
+@test (@which Int[1 2]).name === :typed_hcat
+@test (@which Int[1; 2]).name === :typed_vcat
+@test (@which [1 2;3 4]).name === :hvcat
+@test (@which Int[1 2;3 4]).name === :typed_hvcat
 
 # issue #13464
-let t13464 = "hey there sailor"
-    try
-        @which t13464[1,1] = (1.0,true)
-        error("unexpected")
-    catch err13464
-        @test startswith(err13464.msg, "expression is not a function call, or is too complex")
-    end
+try
+    @which x = 1
+    error("unexpected")
+catch err13464
+    @test startswith(err13464.msg, "expression is not a function call, or is too complex")
 end
 
 module MacroTest

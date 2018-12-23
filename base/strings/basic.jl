@@ -142,8 +142,8 @@ eltype(::Type{<:AbstractString}) = Char # some string types may use another Abst
 """
     sizeof(str::AbstractString)
 
-Size, in bytes, of the string `s`. Equal to the number of code units in `s` multiplied by
-the size, in bytes, of one code unit in `s`.
+Size, in bytes, of the string `str`. Equal to the number of code units in `str` multiplied by
+the size, in bytes, of one code unit in `str`.
 
 # Examples
 ```jldoctest
@@ -326,7 +326,7 @@ isless(a::Symbol, b::Symbol) = cmp(a, b) < 0
 
 The number of characters in string `s` from indices `i` through `j`. This is
 computed as the number of code unit indices from `i` to `j` which are valid
-character indices. Without only a single string argument, this computes the
+character indices. With only a single string argument, this computes the
 number of characters in the entire string. With `i` and `j` arguments it
 computes the number of indices between `i` and `j` inclusive that are valid
 indices in the string `s`. In addition to in-bounds values, `i` may take the
@@ -603,7 +603,7 @@ julia> first("∀ϵ≠0: ϵ²>0", 3)
 "∀ϵ≠"
 ```
 """
-first(s::AbstractString, n::Integer) = s[1:min(end, nextind(s, 0, n))]
+first(s::AbstractString, n::Integer) = @inbounds s[1:min(end, nextind(s, 0, n))]
 
 """
     last(s::AbstractString, n::Integer)
@@ -621,7 +621,7 @@ julia> last("∀ϵ≠0: ϵ²>0", 3)
 "²>0"
 ```
 """
-last(s::AbstractString, n::Integer) = s[max(1, prevind(s, ncodeunits(s)+1, n)):end]
+last(s::AbstractString, n::Integer) = @inbounds s[max(1, prevind(s, ncodeunits(s)+1, n)):end]
 
 """
     reverseind(v, i)

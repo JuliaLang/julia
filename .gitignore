@@ -23,6 +23,7 @@
 *.jl.cov
 *.jl.*.cov
 *.jl.mem
+*.jl.*.mem
 *.ji
 
 /perf*

@@ -44,6 +44,9 @@ f (generic function with 1 method)
 
 julia> f(apple)
 "I'm a Fruit with value: 1"
+
+julia> Fruit(1)
+apple::Fruit = 1
 ```
 
 Values can also be specified inside a `begin` block, e.g.
@@ -100,7 +103,7 @@ macro enum(T, syms...)
                length(s.args) == 2 && isa(s.args[1], Symbol)
             i = Core.eval(__module__, s.args[2]) # allow exprs, e.g. uint128"1"
             if !isa(i, Integer)
-                throw(ArgumentError("invalid value for Enum $typename, $s=$i; values must be integers"))
+                throw(ArgumentError("invalid value for Enum $typename, $s; values must be integers"))
             end
             i = convert(basetype, i)
             s = s.args[1]
@@ -151,11 +154,9 @@ macro enum(T, syms...)
             else
                 print(io, x, "::")
                 show(IOContext(io, :compact => true), typeof(x))
-                print(io, " = ", $basetype(x))
+                print(io, " = ")
+                show(io, $basetype(x))
             end
-        end
-        function Base.show(io::IO, t::Type{$(esc(typename))})
-            Base.show_datatype(io, t)
         end
         function Base.show(io::IO, ::MIME"text/plain", t::Type{$(esc(typename))})
             print(io, "Enum ")

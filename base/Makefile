@@ -181,6 +181,8 @@ endif
 $(eval $(call symlink_system_library,libgmp,GMP))
 $(eval $(call symlink_system_library,libmpfr,MPFR))
 $(eval $(call symlink_system_library,libmbedtls,MBEDTLS))
+$(eval $(call symlink_system_library,libmbedcrypto,MBEDTLS))
+$(eval $(call symlink_system_library,libmbedx509,MBEDTLS))
 $(eval $(call symlink_system_library,libssh2,LIBSSH2))
 $(eval $(call symlink_system_library,libcurl,CURL))
 $(eval $(call symlink_system_library,libgit2,LIBGIT2))
@@ -198,8 +200,15 @@ endif
 endif # WINNT
 
 symlink_libLLVM: $(build_private_libdir)/libLLVM.dylib
+ifneq ($(USE_SYSTEM_LLVM),0)
+LLVM_CONFIG_HOST_LIBS := $(shell $(LLVM_CONFIG_HOST) --libfiles)
+# HACK: llvm-config doesn't correctly point to shared libs on all platforms
+#       https://github.com/JuliaLang/julia/issues/29981
+else
+LLVM_CONFIG_HOST_LIBS := $(shell $(LLVM_CONFIG_HOST) --libdir)/libLLVM.$(SHLIB_EXT)
+endif
 $(build_private_libdir)/libLLVM.dylib:
-	REALPATH=`$(LLVM_CONFIG_HOST) --libdir`/libLLVM.$(SHLIB_EXT) && \
+	REALPATH=$(LLVM_CONFIG_HOST_LIBS) && \
 	$(call resolve_path,REALPATH) && \
 	[ -e "$$REALPATH" ] && \
 	([ ! -e "$@" ] || rm "$@") && \

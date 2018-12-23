@@ -14,12 +14,12 @@ See [`Dict`](@ref) for further help.  Note, unlike [`Dict`](@ref),
 """
 mutable struct WeakKeyDict{K,V} <: AbstractDict{K,V}
     ht::Dict{WeakRef,V}
-    lock::Threads.RecursiveSpinLock
+    lock::ReentrantLock
     finalizer::Function
 
     # Constructors mirror Dict's
     function WeakKeyDict{K,V}() where V where K
-        t = new(Dict{Any,V}(), Threads.RecursiveSpinLock(), identity)
+        t = new(Dict{Any,V}(), ReentrantLock(), identity)
         t.finalizer = function (k)
             # when a weak key is finalized, remove from dictionary if it is still there
             if islocked(t)
@@ -60,11 +60,11 @@ WeakKeyDict(ps::Pair...)                            = WeakKeyDict{Any,Any}(ps)
 function WeakKeyDict(kv)
     try
         Base.dict_with_eltype((K, V) -> WeakKeyDict{K, V}, kv, eltype(kv))
-    catch e
+    catch
         if !isiterable(typeof(kv)) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError("WeakKeyDict(kv): kv needs to be an iterator of tuples or pairs"))
         else
-            rethrow(e)
+            rethrow()
         end
     end
 end

@@ -53,6 +53,8 @@ Base.axes(::AbstractArray, ::Any)
 Base.length(::AbstractArray)
 Base.eachindex
 Base.IndexStyle
+Base.IndexLinear
+Base.IndexCartesian
 Base.conj!
 Base.stride
 Base.strides
@@ -74,7 +76,6 @@ Base.@__dot__
 For specializing broadcast on custom types, see
 ```@docs
 Base.BroadcastStyle
-Base.broadcast_axes
 Base.Broadcast.AbstractArrayStyle
 Base.Broadcast.ArrayStyle
 Base.Broadcast.DefaultArrayStyle

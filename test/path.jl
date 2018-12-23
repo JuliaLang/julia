@@ -85,6 +85,42 @@
     end
     @test relpath(S(joinpath("foo","bar")), S("foo")) == "bar"
 
+    @testset "splitpath" begin
+        @test splitpath(joinpath("a","b","c")) == ["a", "b", "c"]
+        @test splitpath("") == [""]
+
+        @test splitpath(joinpath("cats are", "gr8t")) == ["cats are", "gr8t"]
+        @test splitpath(joinpath("  ", " ")) == ["  ", " "]
+
+        # Unix-style paths are understood by all systems.
+        @test splitpath("/a/b") == ["/", "a", "b"]
+        @test splitpath("/") == ["/"]
+        @test splitpath("a/") == ["a"]
+        @test splitpath("a/b/") == ["a", "b"]
+        @test splitpath("a.dir/b.txt") == ["a.dir", "b.txt"]
+        @test splitpath("///") == ["/"]
+        @test splitpath("///a///b///") == ["/", "a", "b"]
+
+        if Sys.iswindows()
+            @test splitpath("C:\\\\a\\b\\c") == ["C:\\", "a", "b", "c"]
+            @test splitpath("C:\\\\") == ["C:\\"]
+            @test splitpath("J:\\") == ["J:\\"]
+            @test splitpath("C:") == ["C:"]
+            @test splitpath("C:a") == ["C:a"]
+            @test splitpath("C:a\\b") == ["C:a", "b"]
+
+            @test splitpath("a\\") == ["a"]
+            @test splitpath("a\\\\b\\\\") == ["a","b"]
+            @test splitpath("a.dir\\b.txt") == ["a.dir", "b.txt"]
+            @test splitpath("\\a\\b\\") == ["\\", "a","b"]
+            @test splitpath("\\\\a\\b") == ["\\\\a\\b"]  # This is actually a valid drive name in windows.
+
+            @test splitpath("/a/b\\c/d\\\\e") == ["/", "a", "b", "c", "d", "e"]
+            @test splitpath("/\\/\\") == ["/"]
+            @test splitpath("\\/\\a/\\//b") == ["\\","a","b"]
+        end
+    end
+
     @testset "splitting" begin
         @test joinpath(splitdir(S(homedir()))...) == homedir()
         @test string(splitdrive(S(homedir()))...) == homedir()

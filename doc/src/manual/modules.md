@@ -232,13 +232,10 @@ For file dependencies, a change is determined by examining whether the modificat
 of each file loaded by `include` or added explicitly by `include_dependency` is unchanged, or equal
 to the modification time truncated to the nearest second (to accommodate systems that can't copy
 mtime with sub-second accuracy). It also takes into account whether the path to the file chosen
-by the search logic in `require` matches the path that had created the precompile file.
-
-It also takes into account the set of dependencies already loaded into the current process and
-won't recompile those modules, even if their files change or disappear, in order to avoid creating
-incompatibilities between the running system and the precompile cache. If you want to have changes
-to the source reflected in the running system, you should call `reload("Module")` on the module
-you changed, and any module that depended on it in which you want to see the change reflected.
+by the search logic in `require` matches the path that had created the precompile file. It also takes
+into account the set of dependencies already loaded into the current process and won't recompile those
+modules, even if their files change or disappear, in order to avoid creating incompatibilities between
+the running system and the precompile cache.
 
 If you know that a module is *not* safe to precompile your module
 (for example, for one of the reasons described below), you should

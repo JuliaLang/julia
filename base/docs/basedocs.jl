@@ -260,7 +260,7 @@ kw"'"
 """
     const
 
-`const` is used to declare global variables which are also constant. In almost all code
+`const` is used to declare global variables whose values will not change. In almost all code
 (and particularly performance sensitive code) global variables should be declared
 constant in this way.
 
@@ -275,15 +275,17 @@ const y, z = 7, 11
 
 Note that `const` only applies to one `=` operation, therefore `const x = y = 1`
 declares `x` to be constant but not `y`. On the other hand, `const x = const y = 1`
-declares both `x` and `y` as constants.
+declares both `x` and `y` constant.
 
-Note that "constant-ness" is not enforced inside containers, so if `x` is an array or
-dictionary (for example) you can still add and remove elements.
+Note that "constant-ness" does not extend into mutable containers; only the
+association between a variable and its value is constant.
+If `x` is an array or dictionary (for example) you can still modify, add, or remove elements.
 
-Technically, you can even redefine `const` variables, although this will generate a
-warning from the compiler. The only strict requirement is that the *type* of the
-variable does not change, which is why `const` variables are much faster than regular
-globals.
+In some cases changing the value of a `const` variable gives a warning instead of
+an error.
+However, this can produce unpredictable behavior or corrupt the state of your program,
+and so should be avoided.
+This feature is intended only for convenience during interactive use.
 """
 kw"const"
 
@@ -616,11 +618,13 @@ kw"||"
 
 """
     ccall((function_name, library), returntype, (argtype1, ...), argvalue1, ...)
+    ccall(function_name, returntype, (argtype1, ...), argvalue1, ...)
     ccall(function_pointer, returntype, (argtype1, ...), argvalue1, ...)
 
 Call a function in a C-exported shared library, specified by the tuple `(function_name, library)`,
-where each component is either a string or symbol. Alternatively, `ccall` may
-also be used to call a function pointer `function_pointer`, such as one returned by `dlsym`.
+where each component is either a string or symbol. Instead of specifying a library,
+one can also use a `function_name` symbol or string, which is resolved in the current process.
+Alternatively, `ccall` may also be used to call a function pointer `function_pointer`, such as one returned by `dlsym`.
 
 Note that the argument type tuple must be a literal tuple, and not a tuple-valued
 variable or expression.
@@ -792,7 +796,7 @@ devnull
 """
     Nothing
 
-A type with no fields that is the type [`nothing`](@ref).
+A type with no fields that is the type of [`nothing`](@ref).
 """
 Nothing
 
@@ -855,7 +859,7 @@ ErrorException
     WrappedException(msg)
 
 Generic type for `Exception`s wrapping another `Exception`, such as `LoadError` and
-`InitError`. Those exceptions contain information about the the root cause of an
+`InitError`. Those exceptions contain information about the root cause of an
 exception. Subtypes define a field `error` containing the causing `Exception`.
 """
 Core.WrappedException
@@ -953,7 +957,7 @@ Cannot exactly convert `val` to type `T` in a method of function `name`.
 # Examples
 ```jldoctest
 julia> convert(Float64, 1+2im)
-ERROR: InexactError: Float64(Float64, 1 + 2im)
+ERROR: InexactError: Float64(1 + 2im)
 Stacktrace:
 [...]
 ```
@@ -1082,6 +1086,8 @@ InterruptException
     applicable(f, args...) -> Bool
 
 Determine whether the given generic function has a method applicable to the given arguments.
+
+See also [`hasmethod`](@ref).
 
 # Examples
 ```jldoctest
@@ -1315,7 +1321,7 @@ julia> a = 1//2
 1//2
 
 julia> setfield!(a, :num, 3);
-ERROR: type Rational is immutable
+ERROR: setfield! immutable struct of type Rational cannot be changed
 ```
 """
 setfield!
@@ -1863,6 +1869,32 @@ typeassert
     getproperty(value, name::Symbol)
 
 The syntax `a.b` calls `getproperty(a, :b)`.
+
+# Examples
+```jldoctest
+julia> struct MyType
+           x
+       end
+
+julia> function Base.getproperty(obj::MyType, sym::Symbol)
+           if sym === :special
+               return obj.x + 1
+           else # fallback to getfield
+               return getfield(obj, sym)
+           end
+       end
+
+julia> obj = MyType(1);
+
+julia> obj.special
+2
+
+julia> obj.x
+1
+```
+
+See also [`propertynames`](@ref Base.propertynames) and
+[`setproperty!`](@ref Base.setproperty!).
 """
 Base.getproperty
 
@@ -1870,6 +1902,9 @@ Base.getproperty
     setproperty!(value, name::Symbol, x)
 
 The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
+
+See also [`propertynames`](@ref Base.propertynames) and
+[`getproperty`](@ref Base.getproperty).
 """
 Base.setproperty!
 

@@ -7,7 +7,7 @@ module Printf
 export @printf, @sprintf
 using Base.Printf: _printf, is_str_expr, fix_dec, DIGITS, DIGITSs, print_fixed, print_fixed_width, decode_dec, decode_hex,
                    ini_hex, ini_HEX, print_exp_a, decode_0ct, decode_HEX, ini_dec, print_exp_e,
-                   decode_oct, _limit
+                   decode_oct, _limit, SmallNumber
 using Unicode: textwidth
 
 """

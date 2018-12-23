@@ -28,7 +28,6 @@ end
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
 function gcd(a::T, b::T) where T<:Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128}
-    @noinline throw1(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
     a == 0 && return abs(b)
     b == 0 && return abs(a)
     za = trailing_zeros(a)
@@ -45,9 +44,10 @@ function gcd(a::T, b::T) where T<:Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int
     end
     r = u << k
     # T(r) would throw InexactError; we want OverflowError instead
-    r > typemax(T) && throw1(a, b)
+    r > typemax(T) && __throw_gcd_overflow(a, b)
     r % T
 end
+@noinline __throw_gcd_overflow(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
 
 """
     lcm(x,y)
@@ -169,7 +169,7 @@ end
 invmod(n::Integer, m::Integer) = invmod(promote(n,m)...)
 
 # ^ for any x supporting *
-to_power_type(x) = convert(promote_op(*, typeof(x), typeof(x)), x)
+to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
 @noinline throw_domerr_powbysq(::Any, p) = throw(DomainError(p,
     string("Cannot raise an integer x to a negative power ", p, '.',
            "\nConvert input to float.")))
@@ -440,19 +440,23 @@ function ndigits0znb(x::Integer, b::Integer)
     return d
 end
 
-ndigits0znb(x::Unsigned, b::Integer) = ndigits0znb(signed(x), b)
+# do first division before conversion with signed here, which can otherwise overflow
+ndigits0znb(x::Unsigned, b::Integer) = ndigits0znb(-signed(fld(x, -b)), b) + (x != 0)
 ndigits0znb(x::Bool, b::Integer) = x % Int
 
 # The suffix "pb" stands for "positive base"
-# TODO: allow b::Integer
-function ndigits0zpb(x::Base.BitUnsigned, b::Int)
+function ndigits0zpb(x::Integer, b::Integer)
     # precondition: b > 1
     x == 0 && return 0
-    b < 0   && return ndigits0znb(signed(x), b)
-    b == 2  && return sizeof(x)<<3 - leading_zeros(x)
-    b == 8  && return (sizeof(x)<<3 - leading_zeros(x) + 2) ÷ 3
-    b == 16 && return sizeof(x)<<1 - leading_zeros(x)>>2
-    b == 10 && return ndigits0z(x)
+    b = Int(b)
+    x = abs(x)
+    if x isa Base.BitInteger
+        x = unsigned(x)
+        b == 2  && return sizeof(x)<<3 - leading_zeros(x)
+        b == 8  && return (sizeof(x)<<3 - leading_zeros(x) + 2) ÷ 3
+        b == 16 && return sizeof(x)<<1 - leading_zeros(x)>>2
+        b == 10 && return ndigits0z(x)
+    end
 
     d = 0
     while x > typemax(Int)
@@ -470,8 +474,6 @@ function ndigits0zpb(x::Base.BitUnsigned, b::Int)
     return d
 end
 
-ndigits0zpb(x::Base.BitSigned, b::Integer) = ndigits0zpb(unsigned(abs(x)), Int(b))
-ndigits0zpb(x::Base.BitUnsigned, b::Integer) = ndigits0zpb(x, Int(b))
 ndigits0zpb(x::Bool, b::Integer) = x % Int
 
 # The suffix "0z" means that the output is 0 on input zero (cf. #16841)
@@ -543,11 +545,11 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
     a = StringVector(i)
     while i > neg
-        a[i] = '0'+(x&0x1)
+        @inbounds a[i] = 48+(x&0x1)
         x >>= 1
         i -= 1
     end
-    if neg; a[1]='-'; end
+    if neg; @inbounds a[1]=0x2d; end
     String(a)
 end
 
@@ -555,11 +557,11 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,div((sizeof(x)<<3)-leading_zeros(x)+2,3))
     a = StringVector(i)
     while i > neg
-        a[i] = '0'+(x&0x7)
+        @inbounds a[i] = 48+(x&0x7)
         x >>= 3
         i -= 1
     end
-    if neg; a[1]='-'; end
+    if neg; @inbounds a[1]=0x2d; end
     String(a)
 end
 
@@ -567,11 +569,11 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
     i = neg + ndigits(x, base=10, pad=pad)
     a = StringVector(i)
     while i > neg
-        a[i] = '0'+rem(x,10)
+        @inbounds a[i] = 48+rem(x,10)
         x = oftype(x,div(x,10))
         i -= 1
     end
-    if neg; a[1]='-'; end
+    if neg; @inbounds a[1]=0x2d; end
     String(a)
 end
 
@@ -580,11 +582,11 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
     a = StringVector(i)
     while i > neg
         d = x & 0xf
-        a[i] = '0'+d+39*(d>9)
+        @inbounds a[i] = 48+d+39*(d>9)
         x >>= 4
         i -= 1
     end
-    if neg; a[1]='-'; end
+    if neg; @inbounds a[1]=0x2d; end
     String(a)
 end
 
@@ -743,17 +745,25 @@ julia> digits!([2,2,2,2,2,2], 10, base = 2)
 ```
 """
 function digits!(a::AbstractVector{T}, n::Integer; base::Integer = 10) where T<:Integer
-    base < 0 && isa(n, Unsigned) && return digits!(a, convert(Signed, n), base = base)
     2 <= abs(base) || throw(ArgumentError("base must be ≥ 2 or ≤ -2, got $base"))
     hastypemax(T) && abs(base) - 1 > typemax(T) &&
         throw(ArgumentError("type $T too small for base $base"))
-    for i in eachindex(a)
-        if base > 0
-            a[i] = rem(n, base)
-            n = div(n, base)
-        else
-            a[i] = mod(n, -base)
-            n = cld(n, base)
+    isempty(a) && return a
+
+    if base > 0
+        for i in eachindex(a)
+            n, d = divrem(n, base)
+            a[i] = d
+        end
+    else
+        # manually peel one loop iteration for type stability
+        n, d = fldmod(n, -base)
+        a[firstindex(a)] = d
+        n = -signed(n)
+        for i in firstindex(a)+1:lastindex(a)
+            n, d = fldmod(n, -base)
+            a[i] = d
+            n = -n
         end
     end
     return a
@@ -819,18 +829,18 @@ end
 """
     binomial(n::Integer, k::Integer)
 
-The _binomial coefficient_ ``\binom{n}{k}``, being the coefficient of the ``k``th term in
+The _binomial coefficient_ ``\\binom{n}{k}``, being the coefficient of the ``k``th term in
 the polynomial expansion of ``(1+x)^n``.
 
 If ``n`` is non-negative, then it is the number of ways to choose `k` out of `n` items:
 ```math
-\binom{n}{k} = \frac{n!}{k! (n-k)!}
+\\binom{n}{k} = \\frac{n!}{k! (n-k)!}
 ```
 where ``n!`` is the [`factorial`](@ref) function.
 
 If ``n`` is negative, then it is defined in terms of the identity
 ```math
-\binom{n}{k} = (-1)^k \binom{k-n-1}{k}
+\\binom{n}{k} = (-1)^k \\binom{k-n-1}{k}
 ```
 
 # Examples

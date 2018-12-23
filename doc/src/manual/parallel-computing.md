@@ -7,22 +7,22 @@ the different levels of parallelism offered by Julia. We can divide them in thre
 2. Multi-Threading
 3. Multi-Core or Distributed Processing
 
-We will first consider Julia [Tasks (aka Coroutines)](@ref man-tasks) and other modules that rely on the Julia runtime library, that allow to suspend and resume computations with full control of inter-`Tasks` communication without having to manually interface with the operative system's scheduler.
-Julia also allows to communicate between `Tasks` through operations like [`wait`](@ref) and [`fetch`](@ref).
-Communication and data synchronization is managed through [`Channel`](@ref)s, which are the conduit
-that allows inter-`Tasks` communication.
+We will first consider Julia [Tasks (aka Coroutines)](@ref man-tasks) and other modules that rely on the Julia runtime library, that allow us to suspend and resume computations with full control of inter-`Tasks` communication without having to manually interface with the operating system's scheduler.
+Julia also supports communication between `Tasks` through operations like [`wait`](@ref) and [`fetch`](@ref).
+Communication and data synchronization is managed through [`Channel`](@ref)s, which are the conduits
+that provide inter-`Tasks` communication.
 
 Julia also supports experimental multi-threading, where execution is forked and an anonymous function is run across all
 threads.
-Described as a fork-join approach, parallel threads are branched off and they all have to join the Julia main thread to make serial execution continue.
+Known as the fork-join approach, parallel threads execute independently, and must ultimately be joined in Julia's main thread to allow serial execution to continue.
 Multi-threading is supported using the `Base.Threads` module that is still considered experimental, as Julia is
-not fully thread-safe yet. In particular segfaults seem to emerge for I\O operations and task switching.
-As an un up-to-date reference, keep an eye on [the issue tracker](https://github.com/JuliaLang/julia/issues?q=is%3Aopen+is%3Aissue+label%3Amultithreading).
+not yet fully thread-safe. In particular segfaults seem to occur during I/O operations and task switching.
+As an up-to-date reference, keep an eye on [the issue tracker](https://github.com/JuliaLang/julia/issues?q=is%3Aopen+is%3Aissue+label%3Amultithreading).
 Multi-Threading should only be used if you take into consideration global variables, locks and
-atomics, so we will explain it later.
+atomics, all of which are explained later.
 
-In the end we will present Julia's way to distributed and parallel computing. With scientific computing
-in mind, Julia natively implements interfaces to distribute a process through multiple cores or machines.
+In the end we will present Julia's approach to distributed and parallel computing. With scientific computing
+in mind, Julia natively implements interfaces to distribute a process across multiple cores or machines.
 Also we will mention useful external packages for distributed programming like `MPI.jl` and `DistributedArrays.jl`.
 
 # Coroutines
@@ -65,7 +65,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
     c1 = Channel(32)
     c2 = Channel(32)
 
-    # and a function `foo` which reads items from from c1, processes the item read
+    # and a function `foo` which reads items from c1, processes the item read
     # and writes a result to c2,
     function foo()
         while true
@@ -77,7 +77,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
 
     # we can schedule `n` instances of `foo` to be active concurrently.
     for _ in 1:n
-        @schedule foo()
+        @async foo()
     end
     ```
 * Channels are created via the `Channel{T}(sz)` constructor. The channel will only hold objects
@@ -158,7 +158,7 @@ julia> data = [i for i in c]
 
 Consider a simple example using channels for inter-task communication. We start 4 tasks to process
 data from a single `jobs` channel. Jobs, identified by an id (`job_id`), are written to the channel.
-Each task in this simulation reads a `job_id`, waits for a random amout of time and writes back
+Each task in this simulation reads a `job_id`, waits for a random amount of time and writes back
 a tuple of `job_id` and the simulated time to the results channel. Finally all the `results` are
 printed out.
 
@@ -184,16 +184,16 @@ julia> function make_jobs(n)
 
 julia> n = 12;
 
-julia> @schedule make_jobs(n); # feed the jobs channel with "n" jobs
+julia> @async make_jobs(n); # feed the jobs channel with "n" jobs
 
 julia> for i in 1:4 # start 4 tasks to process requests in parallel
-           @schedule do_work()
+           @async do_work()
        end
 
 julia> @elapsed while n > 0 # print out results
            job_id, exec_time = take!(results)
-           println("$job_id finished in $(round(exec_time,2)) seconds")
-           n = n - 1
+           println("$job_id finished in $(round(exec_time; digits=2)) seconds")
+           global n = n - 1
        end
 4 finished in 0.22 seconds
 3 finished in 0.45 seconds
@@ -465,7 +465,7 @@ julia> function g_fix(r)
 g_fix (generic function with 1 method)
 
 julia>  r = let m = MersenneTwister(1)
-                [m; accumulate(Future.randjump, m, fill(big(10)^20, nthreads()-1))]
+                [m; accumulate(Future.randjump, fill(big(10)^20, nthreads()-1), init=m)]
             end;
 
 julia> g_fix(r)
@@ -629,7 +629,7 @@ As for v0.7 and beyond, the feeder tasks are able to share state via `nextidx` b
 they all run on the same process.
 Even if `Tasks` are scheduled cooperatively, locking may still be required in some contexts, as in [asynchronous I\O](https://docs.julialang.org/en/stable/manual/faq/#Asynchronous-IO-and-concurrent-synchronous-writes-1).
 This means context switches only occur at well-defined points: in this case,
-when [`remotecall_fetch`](@ref) is called. This is the current state of implementation (dev v0.7) and it may change
+when [`remotecall_fetch`](@ref) is called. This is the current state of implementation and it may change
 for future Julia versions, as it is intended to make it possible to run up to N `Tasks` on M `Process`, aka
 [M:N Threading](https://en.wikipedia.org/wiki/Thread_(computing)#Models). Then a lock acquiring\releasing
 model for `nextidx` will be needed, as it is not safe to let multiple processes read-write a resource at
@@ -869,7 +869,7 @@ julia> let B = B
            remotecall_fetch(()->B, 2)
        end;
 
-julia> @fetchfrom 2 varinfo()
+julia> @fetchfrom 2 InteractiveUtils.varinfo()
 name           size summary
 ––––––––– ––––––––– ––––––––––––––––––––––
 A         800 bytes 10×10 Array{Float64,2}
@@ -1086,7 +1086,7 @@ julia> for p in workers() # start tasks on the workers to process requests in pa
 
 julia> @elapsed while n > 0 # print out results
            job_id, exec_time, where = take!(results)
-           println("$job_id finished in $(round(exec_time,2)) seconds on worker $where")
+           println("$job_id finished in $(round(exec_time; digits=2)) seconds on worker $where")
            n = n - 1
        end
 1 finished in 0.18 seconds on worker 4
@@ -1141,6 +1141,96 @@ fetched [`Future`](@ref)s. Explicitly calling [`finalize`](@ref) results in an i
 sent to the remote node to go ahead and remove its reference to the value.
 
 Once finalized, a reference becomes invalid and cannot be used in any further calls.
+
+
+## Local invocations(@id man-distributed-local-invocations)
+
+Data is necessarily copied over to the remote node for execution. This is the case for both
+remotecalls and when data is stored to a[`RemoteChannel`](@ref) / [`Future`](@ref) on
+a different node. As expected, this results in a copy of the serialized objects
+on the remote node. However, when the destination node is the local node, i.e.
+the calling process id is the same as the remote node id, it is executed
+as a local call. It is usually(not always) executed in a different task - but there is no
+serialization/deserialization of data. Consequently, the call refers to the same object instances
+as passed - no copies are created. This behavior is highlighted below:
+
+```julia-repl
+julia> using Distributed;
+
+julia> rc = RemoteChannel(()->Channel(3));   # RemoteChannel created on local node
+
+julia> v = [0];
+
+julia> for i in 1:3
+           v[1] = i                          # Reusing `v`
+           put!(rc, v)
+       end;
+
+julia> result = [take!(rc) for _ in 1:3];
+
+julia> println(result);
+Array{Int64,1}[[3], [3], [3]]
+
+julia> println("Num Unique objects : ", length(unique(map(objectid, result))));
+Num Unique objects : 1
+
+julia> addprocs(1);
+
+julia> rc = RemoteChannel(()->Channel(3), workers()[1]);   # RemoteChannel created on remote node
+
+julia> v = [0];
+
+julia> for i in 1:3
+           v[1] = i
+           put!(rc, v)
+       end;
+
+julia> result = [take!(rc) for _ in 1:3];
+
+julia> println(result);
+Array{Int64,1}[[1], [2], [3]]
+
+julia> println("Num Unique objects : ", length(unique(map(objectid, result))));
+Num Unique objects : 3
+```
+
+As can be seen, [`put!`](@ref) on a locally owned [`RemoteChannel`](@ref) with the same
+object `v` modifed between calls results in the same single object instance stored. As
+opposed to copies of `v` being created when the node owning `rc` is a different node.
+
+It is to be noted that this is generally not an issue. It is something to be factored in only
+if the object is both being stored locally and modifed post the call. In such cases it may be
+appropriate to store a `deepcopy` of the object.
+
+This is also true for remotecalls on the local node as seen in the following example:
+
+```julia-repl
+julia> using Distributed; addprocs(1);
+
+julia> v = [0];
+
+julia> v2 = remotecall_fetch(x->(x[1] = 1; x), myid(), v);     # Executed on local node
+
+julia> println("v=$v, v2=$v2, ", v === v2);
+v=[1], v2=[1], true
+
+julia> v = [0];
+
+julia> v2 = remotecall_fetch(x->(x[1] = 1; x), workers()[1], v); # Executed on remote node
+
+julia> println("v=$v, v2=$v2, ", v === v2);
+v=[0], v2=[1], false
+```
+
+As can be seen once again, a remote call onto the local node behaves just like a direct invocation.
+The call modifies local objects passed as arguments. In the remote invocation, it operates on
+a copy of the arguments.
+
+To repeat, in general this is not an issue. If the local node is also being used as a compute
+node, and the arguments used post the call, this behavior needs to be factored in and if required
+deep copies of arguments must be passed to the call invoked on the local node. Calls on remote nodes
+will always operate on copies of arguments.
+
 
 ## [Shared Arrays](@id man-shared-arrays)
 
@@ -1595,7 +1685,7 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
     running the Julia REPL (i.e., the master) with the rest of the cluster on the cloud, say on Amazon
     EC2. In this case only port 22 needs to be opened at the remote cluster coupled with SSH client
     authenticated via public key infrastructure (PKI). Authentication credentials can be supplied
-    via `sshflags`, for example ```sshflags=`-e <keyfile>` ```.
+    via `sshflags`, for example ```sshflags=`-i <keyfile>` ```.
 
     In an all-to-all topology (the default), all workers connect to each other via plain TCP sockets.
     The security policy on the cluster nodes must thus ensure free connectivity between workers for
@@ -1649,13 +1739,13 @@ in future releases.
 Outside of Julia parallelism there are plenty of external packages that should be mentioned.
 For example [MPI.jl](https://github.com/JuliaParallel/MPI.jl) is a Julia wrapper for the `MPI` protocol, or
 [DistributedArrays.jl](https://github.com/JuliaParallel/Distributedarrays.jl), as presented in [Shared Arrays](@ref).
-A mention must be done to the Julia's GPU programming ecosystem, which includes :
+A mention must be made of Julia's GPU programming ecosystem, which includes:
 
 1. Low-level (C kernel) based operations [OpenCL.jl](https://github.com/JuliaGPU/OpenCL.jl) and [CUDAdrv.jl](https://github.com/JuliaGPU/CUDAdrv.jl) which are respectively an OpenCL interface and a CUDA wrapper.
 
 2. Low-level (Julia Kernel) interfaces like [CUDAnative.jl](https://github.com/JuliaGPU/CUDAnative.jl) which is a Julia native CUDA implementation.
 
-3. High-level vendor specific abstractions like [CuArrays.jl](https://github.com/JuliaGPU/CuArrays.jl) and [CLArrays.jl](https://github.com/JuliaGPU/CLArrays.jl)
+3. High-level vendor-specific abstractions like [CuArrays.jl](https://github.com/JuliaGPU/CuArrays.jl) and [CLArrays.jl](https://github.com/JuliaGPU/CLArrays.jl)
 
 4. High-level libraries like [ArrayFire.jl](https://github.com/JuliaComputing/ArrayFire.jl) and [GPUArrays.jl](https://github.com/JuliaGPU/GPUArrays.jl)
 
@@ -1727,7 +1817,7 @@ function power_method(M, v)
 end
 ```
 
-`power_method` repeteavely creates a new vector and normalizes it. We have not specified any type signature in
+`power_method` repeatedly creates a new vector and normalizes it. We have not specified any type signature in
 function declaration, let's see if it works with the aforementioned datatypes:
 
 ```julia-repl
@@ -1792,10 +1882,10 @@ mpirun -np 4 ./julia example.jl
 ```
 
 [^1]:
-    in this context, mpi refers to the mpi-1 standard. beginning with mpi-2, the mpi standards committee
-    introduced a new set of communication mechanisms, collectively referred to as remote memory access
-    (rma). the motivation for adding rma to the mpi standard was to facilitate one-sided communication
-    patterns. for additional information on the latest mpi standard, see [http://mpi-forum.org/docs](http://mpi-forum.org/docs/).
+    In this context, MPI refers to the MPI-1 standard. Beginning with MPI-2, the MPI standards committee
+    introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access
+    (RMA). The motivation for adding rma to the MPI standard was to facilitate one-sided communication
+    patterns. For additional information on the latest MPI standard, see [http://mpi-forum.org/docs](http://mpi-forum.org/docs/).
 
 [^2]:
     [Julia GPU man pages](http://juliagpu.github.io/CUDAnative.jl/stable/man/usage.html#Julia-support-1)

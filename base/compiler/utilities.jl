@@ -94,17 +94,6 @@ function get_staged(li::MethodInstance)
     end
 end
 
-# create copies of the CodeInfo definition, and any fields that type-inference might modify
-function copy_code_info(c::CodeInfo)
-    cnew = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), c)
-    cnew.code = copy_exprargs(cnew.code)
-    cnew.slotnames = copy(cnew.slotnames)
-    cnew.slotflags = copy(cnew.slotflags)
-    cnew.codelocs  = copy(cnew.codelocs)
-    cnew.linetable = copy(cnew.linetable)
-    return cnew
-end
-
 function retrieve_code_info(linfo::MethodInstance)
     m = linfo.def::Method
     if isdefined(m, :generator)
@@ -112,17 +101,18 @@ function retrieve_code_info(linfo::MethodInstance)
         return get_staged(linfo)
     else
         # TODO: post-inference see if we can swap back to the original arrays?
-        if isa(m.source, Array{UInt8,1})
-            c = ccall(:jl_uncompress_ast, Any, (Any, Any), m, m.source)
+        src = m.source
+        if isa(src, Array{UInt8,1})
+            c = ccall(:jl_uncompress_ast, Any, (Any, Any), m, src)
         else
-            c = copy_code_info(m.source)
+            c = copy(src::CodeInfo)
         end
     end
     return c::CodeInfo
 end
 
 function code_for_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, world::UInt, preexisting::Bool=false)
-    if world < min_world(method)
+    if world < min_world(method) || world > max_world(method)
         return nothing
     end
     if isdefined(method, :generator) && !isdispatchtuple(atypes)

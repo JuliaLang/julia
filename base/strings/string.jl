@@ -71,6 +71,8 @@ String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 
 (::Type{Vector{UInt8}})(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(undef, length(s)), s)
+(::Type{Vector{UInt8}})(s::String) = Vector{UInt8}(codeunits(s))
+(::Type{Array{UInt8}})(s::String)  = Vector{UInt8}(codeunits(s))
 
 String(s::CodeUnits{UInt8,String}) = s.s
 
@@ -107,10 +109,10 @@ typemin(::String) = typemin(String)
 
 ## thisind, nextind ##
 
-thisind(s::String, i::Int) = _thisind_str(s, i)
+Base.@propagate_inbounds thisind(s::String, i::Int) = _thisind_str(s, i)
 
 # s should be String or SubString{String}
-function _thisind_str(s, i::Int)
+@inline function _thisind_str(s, i::Int)
     i == 0 && return 0
     n = ncodeunits(s)
     i == n + 1 && return i
@@ -128,10 +130,10 @@ function _thisind_str(s, i::Int)
     return i
 end
 
-nextind(s::String, i::Int) = _nextind_str(s, i)
+Base.@propagate_inbounds nextind(s::String, i::Int) = _nextind_str(s, i)
 
 # s should be String or SubString{String}
-function _nextind_str(s, i::Int)
+@inline function _nextind_str(s, i::Int)
     i == 0 && return 1
     n = ncodeunits(s)
     @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
@@ -157,9 +159,7 @@ end
 
 ## checking UTF-8 & ACSII validity ##
 
-byte_string_classify(data::Vector{UInt8}) =
-    ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), data, length(data))
-byte_string_classify(s::String) =
+byte_string_classify(s::Union{String,Vector{UInt8}}) =
     ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), s, sizeof(s))
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
@@ -237,7 +237,7 @@ end
 
 getindex(s::String, r::UnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
 
-function getindex(s::String, r::UnitRange{Int})
+@inline function getindex(s::String, r::UnitRange{Int})
     isempty(r) && return ""
     i, j = first(r), last(r)
     @boundscheck begin
@@ -248,14 +248,11 @@ function getindex(s::String, r::UnitRange{Int})
     j = nextind(s, j) - 1
     n = j - i + 1
     ss = _string_n(n)
-    p = pointer(ss)
-    for k = 1:n
-        unsafe_store!(p, codeunit(s, i + k - 1), k)
-    end
+    unsafe_copyto!(pointer(ss), pointer(s, i), n)
     return ss
 end
 
-function length(s::String, i::Int, j::Int)
+@inline function length(s::String, i::Int, j::Int)
     @boundscheck begin
         0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
         0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
@@ -293,16 +290,9 @@ length(s::String) = length(s, 1, ncodeunits(s), ncodeunits(s))
     end
 end
 
-# TODO: delete or move to char.jl
-first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8
-
 ## overload methods for efficiency ##
 
 isvalid(s::String, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
-
-# UTF-8 encoding length of a character
-# TODO: delete or move to char.jl
-codelen(c::Char) = 4 - (trailing_zeros(0xff000000 | reinterpret(UInt32, c)) >> 3)
 
 """
     repeat(c::AbstractChar, r::Integer) -> String

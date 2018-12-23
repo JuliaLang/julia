@@ -279,7 +279,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
             else
                 def = compact[leaf]
             end
-            if is_tuple_call(compact.ir, def) && isa(field, Int) && 1 <= field < length(def.args)
+            if is_tuple_call(compact, def) && isa(field, Int) && 1 <= field < length(def.args)
                 lifted = def.args[1+field]
                 if isa(leaf, OldSSAValue) && isa(lifted, SSAValue)
                     lifted = OldSSAValue(lifted.id)

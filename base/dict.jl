@@ -127,11 +127,11 @@ Dict(ps::Pair...)                  = Dict(ps)
 function Dict(kv)
     try
         dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
-    catch e
+    catch
         if !isiterable(typeof(kv)) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError("Dict(kv): kv needs to be an iterator of tuples or pairs"))
         else
-            rethrow(e)
+            rethrow()
         end
     end
 end
@@ -571,7 +571,7 @@ function getkey(h::Dict{K,V}, key, default) where V where K
 end
 
 function _pop!(h::Dict, index)
-    val = h.vals[index]
+    @inbounds val = h.vals[index]
     _delete!(h, index)
     return val
 end
@@ -619,10 +619,10 @@ function pop!(h::Dict)
     key => val
 end
 
-function _delete!(h::Dict, index)
-    h.slots[index] = 0x2
-    ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.keys, index-1)
-    ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.vals, index-1)
+function _delete!(h::Dict{K,V}, index) where {K,V}
+    @inbounds h.slots[index] = 0x2
+    isbitstype(K) || isbitsunion(K) || ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.keys, index-1)
+    isbitstype(V) || isbitsunion(V) || ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.vals, index-1)
     h.ndel += 1
     h.count -= 1
     h.age += 1
@@ -760,4 +760,5 @@ isempty(t::ImmutableDict) = !isdefined(t, :parent)
 empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
 
 _similar_for(c::Dict, ::Type{Pair{K,V}}, itr, isz) where {K, V} = empty(c, K, V)
-_similar_for(c::AbstractDict, T, itr, isz) = throw(ArgumentError("for AbstractDicts, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))
+_similar_for(c::AbstractDict, ::Type{T}, itr, isz) where {T} =
+    throw(ArgumentError("for AbstractDicts, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))

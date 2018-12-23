@@ -257,11 +257,20 @@ struct DomainError <: Exception
     DomainError(@nospecialize(val), @nospecialize(msg)) = (@_noinline_meta; new(val, msg))
 end
 struct TypeError <: Exception
+    # `func` is the name of the builtin function that encountered a type error,
+    # the name of the type that hit an error in its definition or application, or
+    # some other brief description of where the error happened.
+    # `context` optionally adds extra detail, e.g. the name of the type parameter
+    # that got a bad value.
     func::Symbol
-    context::AbstractString
+    context::Union{AbstractString,Symbol}
     expected::Type
     got
+    TypeError(func, context, @nospecialize(expected::Type), @nospecialize(got)) =
+        new(func, context, expected, got)
 end
+TypeError(where, @nospecialize(expected::Type), @nospecialize(got)) =
+    TypeError(Symbol(where), "", expected, got)
 struct InexactError <: Exception
     func::Symbol
     T  # Type
@@ -337,12 +346,9 @@ mutable struct WeakRef
                                       (Ptr{Cvoid}, Any), getptls(), v)
 end
 
-TypeVar(n::Symbol) =
-    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, Any)
-TypeVar(n::Symbol, @nospecialize(ub)) =
-    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, ub)
-TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) =
-    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb, ub)
+TypeVar(n::Symbol) = _typevar(n, Union{}, Any)
+TypeVar(n::Symbol, @nospecialize(ub)) = _typevar(n, Union{}, ub)
+TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) = _typevar(n, lb, ub)
 
 UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
@@ -374,7 +380,9 @@ eval(Core, :(LineInfoNode(mod::Module, method::Symbol, file::Symbol, line::Int, 
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
-Task(@nospecialize(f)) = ccall(:jl_new_task, Ref{Task}, (Any, Int), f, 0)
+function Task(@nospecialize(f), reserved_stack::Int=0)
+    return ccall(:jl_new_task, Ref{Task}, (Any, Int), f, reserved_stack)
+end
 
 # simple convert for use by constructors of types in Core
 # note that there is no actual conversion defined here,
@@ -457,6 +465,14 @@ macro __doc__(x)
 end
 atdoc     = (source, mod, str, expr) -> Expr(:escape, expr)
 atdoc!(λ) = global atdoc = λ
+
+# macros for big integer syntax
+macro int128_str end
+macro uint128_str end
+macro big_str end
+
+# macro for command syntax
+macro cmd end
 
 
 # simple stand-alone print definitions for debugging
@@ -608,7 +624,7 @@ toInt8(x::UInt16)     = checked_trunc_sint(Int8, check_top_bit(x))
 toInt8(x::UInt32)     = checked_trunc_sint(Int8, check_top_bit(x))
 toInt8(x::UInt64)     = checked_trunc_sint(Int8, check_top_bit(x))
 toInt8(x::UInt128)    = checked_trunc_sint(Int8, check_top_bit(x))
-toInt8(x::Bool)       = and_int(zext_int(Int8, x), Int8(1))
+toInt8(x::Bool)       = and_int(bitcast(Int8, x), Int8(1))
 toInt16(x::Int8)      = sext_int(Int16, x)
 toInt16(x::Int16)     = x
 toInt16(x::Int32)     = checked_trunc_sint(Int16, x)
@@ -663,7 +679,7 @@ toUInt8(x::UInt16)    = checked_trunc_uint(UInt8, x)
 toUInt8(x::UInt32)    = checked_trunc_uint(UInt8, x)
 toUInt8(x::UInt64)    = checked_trunc_uint(UInt8, x)
 toUInt8(x::UInt128)   = checked_trunc_uint(UInt8, x)
-toUInt8(x::Bool)      = and_int(zext_int(UInt8, x), UInt8(1))
+toUInt8(x::Bool)      = and_int(bitcast(UInt8, x), UInt8(1))
 toUInt16(x::Int8)     = sext_int(UInt16, check_top_bit(x))
 toUInt16(x::Int16)    = bitcast(UInt16, check_top_bit(x))
 toUInt16(x::Int32)    = checked_trunc_uint(UInt16, x)

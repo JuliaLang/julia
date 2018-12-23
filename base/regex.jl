@@ -7,6 +7,16 @@ include("pcre.jl")
 const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.NO_UTF_CHECK | PCRE.ALT_BSUX | PCRE.UCP
 const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 
+"""
+    Regex(pattern[, flags])
+
+A type representing a regular expression. `Regex` objects can be used to match strings
+with [`match`](@ref).
+
+`Regex` objects can be created using the [`@r_str`](@ref) string macro. The
+`Regex(pattern[, flags])` constructor is usually used if the `pattern` string needs
+to be interpolated. See the documentation of the string macro for details on flags.
+"""
 mutable struct Regex
     pattern::String
     compile_options::UInt32
@@ -80,6 +90,8 @@ listed after the ending quote, to change its behaviour:
 - `a` disables `UCP` mode (enables ASCII mode). By default `\\B`, `\\b`, `\\D`, `\\d`, `\\S`,
   `\\s`, `\\W`, `\\w`, etc. match based on Unicode character properties. With this option,
   these sequences only match ASCII characters.
+
+See `Regex` if interpolation is needed.
 
 # Examples
 ```jldoctest

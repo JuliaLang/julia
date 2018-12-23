@@ -2,6 +2,16 @@
 
 using Random
 
+@testset "single-threaded Condition usage" begin
+    a = Condition()
+    t = @async begin
+        Base.notify(a, "success")
+        "finished"
+    end
+    @test wait(a) == "success"
+    @test fetch(t) == "finished"
+end
+
 @testset "various constructors" begin
     c = Channel(1)
     @test eltype(c) == Any
@@ -43,6 +53,15 @@ end
     testcpt(32)
     testcpt(Inf)
 end
+
+@testset "type conversion in put!" begin
+    c = Channel{Int64}(0)
+    @async put!(c, Int32(1))
+    wait(c)
+    @test isa(take!(c), Int64)
+    @test_throws MethodError put!(c, "")
+end
+
 @testset "multiple for loops waiting on the same channel" begin
     # Test multiple "for" loops waiting on the same channel which
     # is closed after adding a few elements.
@@ -208,7 +227,10 @@ using Dates
 end
 
 @testset "yield/wait/event failures" begin
-    @noinline garbage_finalizer(f) = finalizer(f, "gar" * "bage")
+    # garbage_finalizer returns `nothing` rather than the garbage object so
+    # that the interpreter doesn't accidentally root the garbage when
+    # interpreting the calling function.
+    @noinline garbage_finalizer(f) = (finalizer(f, "gar" * "bage"); nothing)
     run = Ref(0)
     GC.enable(false)
     # test for finalizers trying to yield leading to failed attempts to context switch

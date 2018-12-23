@@ -833,9 +833,9 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
                         commit(rbs, sig)
                     end
                     finish(rbs, sig)
-                catch err
+                catch
                     abort(rbs)
-                    rethrow(err)
+                    rethrow()
                 finally
                     close(rbs)
                 end
@@ -978,7 +978,7 @@ end
 
     atexit() do
         # refcount zero, no objects to be finalized
-        if Threads.atomic_sub!(REFCOUNT, 1) >= 1
+        if Threads.atomic_sub!(REFCOUNT, 1) == 1
             ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
         end
     end

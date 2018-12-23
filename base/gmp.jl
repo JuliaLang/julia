@@ -283,31 +283,22 @@ BigInt(x::Float16) = BigInt(Float64(x))
 BigInt(x::Float32) = BigInt(Float64(x))
 
 function BigInt(x::Integer)
-    if x < 0
-        if typemin(Clong) <= x
-            return BigInt(convert(Clong,x))
-        end
-        b = BigInt(0)
-        shift = 0
-        while x < -1
-            b += BigInt(~UInt32(x&0xffffffff))<<shift
-            x >>= 32
-            shift += 32
-        end
-        return -b-1
-    else
-        if x <= typemax(Culong)
-            return BigInt(convert(Culong,x))
-        end
-        b = BigInt(0)
-        shift = 0
-        while x > 0
-            b += BigInt(UInt32(x&0xffffffff))<<shift
-            x >>>= 32
-            shift += 32
-        end
-        return b
+    x == 0 && return BigInt(Culong(0))
+    nd = ndigits(x, base=2)
+    z = MPZ.realloc2(nd)
+    s = sign(x)
+    s == -1 && (x = -x)
+    x = unsigned(x)
+    size = 0
+    limbnbits = sizeof(Limb) << 3
+    while nd > 0
+        size += 1
+        unsafe_store!(z.d, x % Limb, size)
+        x >>>= limbnbits
+        nd -= limbnbits
     end
+    z.size = s*size
+    z
 end
 
 
@@ -487,13 +478,13 @@ count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
 divrem(x::BigInt, y::BigInt) = MPZ.tdiv_qr(x, y)
 
-cmp(x::BigInt, y::BigInt) = MPZ.cmp(x, y)
-cmp(x::BigInt, y::ClongMax) = MPZ.cmp_si(x, y)
-cmp(x::BigInt, y::CulongMax) = MPZ.cmp_ui(x, y)
+cmp(x::BigInt, y::BigInt) = sign(MPZ.cmp(x, y))
+cmp(x::BigInt, y::ClongMax) = sign(MPZ.cmp_si(x, y))
+cmp(x::BigInt, y::CulongMax) = sign(MPZ.cmp_ui(x, y))
 cmp(x::BigInt, y::Integer) = cmp(x, big(y))
 cmp(x::Integer, y::BigInt) = -cmp(y, x)
 
-cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? -1 : MPZ.cmp_d(x, y)
+cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? -1 : sign(MPZ.cmp_d(x, y))
 cmp(x::CdoubleMax, y::BigInt) = -cmp(y, x)
 
 isqrt(x::BigInt) = MPZ.sqrt(x)

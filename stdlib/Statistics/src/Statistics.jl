@@ -54,10 +54,11 @@ julia> mean([√1, √2, √3])
 1.3820881233139908
 ```
 """
-function mean(f::Base.Callable, itr)
+function mean(f, itr)
     y = iterate(itr)
     if y === nothing
-        throw(ArgumentError("mean of empty collection undefined: $(repr(itr))"))
+        return Base.mapreduce_empty_iter(f, Base.add_sum, itr,
+                                         Base.IteratorEltype(itr)) / 0
     end
     count = 1
     value, state = y
@@ -72,7 +73,7 @@ function mean(f::Base.Callable, itr)
     end
     return total/count
 end
-mean(f::Base.Callable, A::AbstractArray) = sum(f, A) / length(A)
+mean(f, A::AbstractArray) = sum(f, A) / length(A)
 
 """
     mean!(r, v)
@@ -108,6 +109,9 @@ end
 
 Compute the mean of an array over the given dimensions.
 
+!!! compat "Julia 1.1"
+    `mean` for empty arrays requires at least Julia 1.1.
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -131,7 +135,7 @@ _mean(A::AbstractArray{T}, region) where {T} = mean!(Base.reducedim_init(t -> t/
 _mean(A::AbstractArray, ::Colon) = sum(A) / length(A)
 
 function mean(r::AbstractRange{<:Real})
-    isempty(r) && throw(ArgumentError("mean of an empty range is undefined"))
+    isempty(r) && return oftype((first(r) + last(r)) / 2, NaN)
     (first(r) + last(r)) / 2
 end
 
@@ -148,7 +152,8 @@ var(iterable; corrected::Bool=true, mean=nothing) = _var(iterable, corrected, me
 function _var(iterable, corrected::Bool, mean)
     y = iterate(iterable)
     if y === nothing
-        throw(ArgumentError("variance of empty collection undefined: $(repr(iterable))"))
+        T = eltype(iterable)
+        return oftype((abs2(zero(T)) + abs2(zero(T)))/2, NaN)
     end
     count = 1
     value, state = y
@@ -248,7 +253,7 @@ end
 Compute the sample variance of a collection `v` with known mean(s) `m`,
 optionally over the given dimensions. `m` may contain means for each dimension of
 `v`. If `corrected` is `true`, then the sum is scaled with `n-1`,
-whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x)`.
+whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(v)`.
 
 !!! note
     If array contains `NaN` or [`missing`](@ref) values, the result is also
@@ -265,7 +270,7 @@ varm(A::AbstractArray, m; corrected::Bool=true) = _varm(A, m, corrected, :)
 
 function _varm(A::AbstractArray{T}, m, corrected::Bool, ::Colon) where T
     n = length(A)
-    n == 0 && return typeof((abs2(zero(T)) + abs2(zero(T)))/2)(NaN)
+    n == 0 && return oftype((abs2(zero(T)) + abs2(zero(T)))/2, NaN)
     return centralize_sumabs2(A, m) / (n - Int(corrected))
 end
 
@@ -278,7 +283,7 @@ The algorithm will return an estimator of the generative distribution's variance
 under the assumption that each entry of `v` is an IID drawn from that generative
 distribution. This computation is equivalent to calculating `sum(abs2, v - mean(v)) /
 (length(v) - 1)`. If `corrected` is `true`, then the sum is scaled with `n-1`,
-whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x)`.
+whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(v)`.
 The mean `mean` over the region may be provided.
 
 !!! note
@@ -345,7 +350,7 @@ deviation under the assumption that each entry of `v` is an IID drawn from that 
 distribution. This computation is equivalent to calculating `sqrt(sum((v - mean(v)).^2) /
 (length(v) - 1))`. A pre-computed `mean` may be provided. If `corrected` is `true`,
 then the sum is scaled with `n-1`, whereas the sum is scaled with `n` if `corrected` is
-`false` where `n = length(x)`.
+`false` where `n = length(v)`.
 
 !!! note
     If array contains `NaN` or [`missing`](@ref) values, the result is also
@@ -376,7 +381,7 @@ std(iterable; corrected::Bool=true, mean=nothing) =
 Compute the sample standard deviation of a vector `v`
 with known mean `m`. If `corrected` is `true`,
 then the sum is scaled with `n-1`, whereas the sum is
-scaled with `n` if `corrected` is `false` where `n = length(x)`.
+scaled with `n` if `corrected` is `false` where `n = length(v)`.
 
 !!! note
     If array contains `NaN` or [`missing`](@ref) values, the result is also
@@ -692,7 +697,7 @@ Like [`median`](@ref), but may overwrite the input vector.
 function median!(v::AbstractVector)
     isempty(v) && throw(ArgumentError("median of an empty array is undefined, $(repr(v))"))
     eltype(v)>:Missing && any(ismissing, v) && return missing
-    (eltype(v)<:AbstractFloat || eltype(v)>:AbstractFloat) && any(isnan, v) && return NaN
+    (eltype(v)<:AbstractFloat || eltype(v)>:AbstractFloat) && any(isnan, v) && return convert(eltype(v), NaN)
     inds = axes(v, 1)
     n = length(inds)
     mid = div(first(inds)+last(inds),2)
@@ -882,7 +887,7 @@ probabilities `p` on the interval [0,1]. The keyword argument `sorted` indicates
 `itr` can be assumed to be sorted.
 
 Quantiles are computed via linear interpolation between the points `((k-1)/(n-1), v[k])`,
-for `k = 1:n` where `n = length(v)`. This corresponds to Definition 7 of Hyndman and Fan
+for `k = 1:n` where `n = length(itr)`. This corresponds to Definition 7 of Hyndman and Fan
 (1996), and is the same as the R default.
 
 !!! note
@@ -906,7 +911,7 @@ julia> quantile(0:20, [0.1, 0.5, 0.9])
 
 julia> quantile(skipmissing([1, 10, missing]), 0.5)
 5.5
- ```
+```
 """
 quantile(itr, p; sorted::Bool=false) = quantile!(collect(itr), p, sorted=sorted)
 

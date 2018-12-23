@@ -70,13 +70,8 @@ private:
 #ifdef JULIA_ENABLE_THREADING
 void LowerPTLS::set_ptls_attrs(CallInst *ptlsStates) const
 {
-#if JL_LLVM_VERSION >= 50000
     ptlsStates->addAttribute(AttributeList::FunctionIndex, Attribute::ReadNone);
     ptlsStates->addAttribute(AttributeList::FunctionIndex, Attribute::NoUnwind);
-#else
-    ptlsStates->addAttribute(AttributeSet::FunctionIndex, Attribute::ReadNone);
-    ptlsStates->addAttribute(AttributeSet::FunctionIndex, Attribute::NoUnwind);
-#endif
 }
 
 Instruction *LowerPTLS::emit_ptls_tp(Value *offset, Instruction *insertBefore) const

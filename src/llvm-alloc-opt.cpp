@@ -37,27 +37,12 @@ namespace {
 
 static void copyMetadata(Instruction *dest, const Instruction *src)
 {
-#if JL_LLVM_VERSION < 40000
-    if (!src->hasMetadata())
-        return;
-    SmallVector<std::pair<unsigned,MDNode*>,4> TheMDs;
-    src->getAllMetadataOtherThanDebugLoc(TheMDs);
-    for (const auto &MD : TheMDs)
-        dest->setMetadata(MD.first, MD.second);
-    dest->setDebugLoc(src->getDebugLoc());
-#else
     dest->copyMetadata(*src);
-#endif
 }
 
 static bool isBundleOperand(CallInst *call, unsigned idx)
 {
-#if JL_LLVM_VERSION < 40000
-    return call->hasOperandBundles() && idx >= call->getBundleOperandsStartIndex() &&
-        idx < call->getBundleOperandsEndIndex();
-#else
     return call->isBundleOperand(idx);
-#endif
 }
 
 static void removeGCPreserve(CallInst *call, Instruction *val)
@@ -329,7 +314,7 @@ private:
     CheckInst::Stack check_stack;
     Lifetime::Stack lifetime_stack;
     ReplaceUses::Stack replace_stack;
-    std::map<BasicBlock*,Instruction*> first_safepoint;
+    std::map<BasicBlock*, llvm::WeakVH> first_safepoint;
 };
 
 void Optimizer::pushInstruction(Instruction *I)
@@ -423,8 +408,11 @@ bool Optimizer::isSafepoint(Instruction *inst)
 Instruction *Optimizer::getFirstSafepoint(BasicBlock *bb)
 {
     auto it = first_safepoint.find(bb);
-    if (it != first_safepoint.end())
-        return it->second;
+    if (it != first_safepoint.end()) {
+        Value *Val = it->second;
+        if (Val)
+            return cast<Instruction>(Val);
+    }
     Instruction *first = nullptr;
     for (auto &I: *bb) {
         if (isSafepoint(&I)) {
@@ -908,15 +896,8 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
     auto newCall = CallInst::Create(newF, args, "", call);
     newCall->setTailCallKind(call->getTailCallKind());
     auto old_attrs = call->getAttributes();
-#if JL_LLVM_VERSION >= 50000
     newCall->setAttributes(AttributeList::get(*pass.ctx, old_attrs.getFnAttributes(),
                                               old_attrs.getRetAttributes(), {}));
-#else
-    AttributeSet attr;
-    attr = attr.addAttributes(*pass.ctx, AttributeSet::ReturnIndex, old_attrs.getRetAttributes())
-        .addAttributes(*pass.ctx, AttributeSet::FunctionIndex, old_attrs.getFnAttributes());
-    newCall->setAttributes(attr);
-#endif
     newCall->setDebugLoc(call->getDebugLoc());
     call->replaceAllUsesWith(newCall);
     call->eraseFromParent();
@@ -1477,13 +1458,8 @@ bool AllocOpt::doInitialization(Module &M)
     T_size = sizeof(void*) == 8 ? T_int64 : T_int32;
     T_pint8 = PointerType::get(T_int8, 0);
 
-#if JL_LLVM_VERSION >= 50000
     lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { T_pint8 });
     lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { T_pint8 });
-#else
-    lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start);
-    lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end);
-#endif
 
     MDNode *tbaa_data;
     MDNode *tbaa_data_scalar;

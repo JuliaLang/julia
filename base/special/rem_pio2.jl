@@ -208,7 +208,7 @@ function paynehanek(x::Float64)
 end
 
 """
-    rem_pio2_kernel(x, xhp)
+    rem_pio2_kernel(x)
 
 Return the remainder of `x` modulo π/2 as a double-double pair, along with a `k`
 such that ``k \\mod 3 == K \\mod 3`` where ``K*π/2 = x - rem``. Note, that it is

@@ -280,7 +280,7 @@ function open(fname::AbstractString;
         append = append,
     )
     s = IOStream(string("<file ",fname,">"))
-    systemerror("opening file $fname",
+    systemerror("opening file $(repr(fname))",
                 ccall(:ios_file, Ptr{Cvoid},
                       (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
                       s.ios, fname, flags.read, flags.write, flags.create, flags.truncate) == C_NULL)
@@ -401,6 +401,10 @@ if ENDIAN_BOM == 0x04030201
 function read(s::IOStream, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64}})
     return ccall(:jl_ios_get_nbyte_int, UInt64, (Ptr{Cvoid}, Csize_t), s.ios, sizeof(T)) % T
 end
+
+read(s::IOStream, ::Type{Float16}) = reinterpret(Float16, read(s, Int16))
+read(s::IOStream, ::Type{Float32}) = reinterpret(Float32, read(s, Int32))
+read(s::IOStream, ::Type{Float64}) = reinterpret(Float64, read(s, Int64))
 end
 
 function unsafe_read(s::IOStream, p::Ptr{UInt8}, nb::UInt)

@@ -28,19 +28,13 @@
 #include <llvm/Transforms/Instrumentation.h>
 #include <llvm/Transforms/Vectorize.h>
 #include <llvm/Transforms/Scalar/GVN.h>
-#if JL_LLVM_VERSION >= 40000
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
-#endif
 
 namespace llvm {
     extern Pass *createLowerSimdLoopPass();
 }
 
-#if JL_LLVM_VERSION >= 40000
-#  include <llvm/Bitcode/BitcodeWriter.h>
-#else
-#  include <llvm/Bitcode/ReaderWriter.h>
-#endif
+#include <llvm/Bitcode/BitcodeWriter.h>
 #include <llvm/Bitcode/BitcodeWriterPass.h>
 
 #include <llvm/IR/LegacyPassManagers.h>
@@ -53,7 +47,6 @@ namespace llvm {
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/IR/DataLayout.h>
 #include <llvm/Support/DynamicLibrary.h>
-
 
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FormattedStream.h>
@@ -118,27 +111,13 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
             PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
             PM->add(createEarlyCSEPass());
         }
-#if JL_LLVM_VERSION < 50000
-        PM->add(createBarrierNoopPass());
-        PM->add(createLowerExcHandlersPass());
-        PM->add(createGCInvariantVerifierPass(false));
-        PM->add(createLateLowerGCFramePass());
-        PM->add(createLowerPTLSPass(dump_native));
-        PM->add(createBarrierNoopPass());
-#endif
         PM->add(createMemCpyOptPass()); // Remove memcpy / form memset
-#if JL_LLVM_VERSION >= 40000
         PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
-#else
-        PM->add(createAlwaysInlinerPass()); // Respect always_inline
-#endif
-#if JL_LLVM_VERSION >= 50000
         PM->add(createBarrierNoopPass());
         PM->add(createLowerExcHandlersPass());
         PM->add(createGCInvariantVerifierPass(false));
         PM->add(createLateLowerGCFramePass());
         PM->add(createLowerPTLSPass(dump_native));
-#endif
         PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
         if (dump_native)
             PM->add(createMultiVersioningPass());
@@ -154,32 +133,14 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createDeadCodeEliminationPass());
     PM->add(createSROAPass()); // Kill useless allocas
 
-    // Due to bugs and missing features LLVM < 5.0, does not properly propagate
-    // our invariants. We need to do GC rooting here. This reduces the
-    // effectiveness of the optimization, but should retain correctness.
-#if JL_LLVM_VERSION < 50000
-    PM->add(createLowerExcHandlersPass());
-    PM->add(createAllocOptPass());
-    PM->add(createLateLowerGCFramePass());
-    // Remove dead use of ptls
-    PM->add(createDeadCodeEliminationPass());
-    PM->add(createLowerPTLSPass(dump_native));
-#endif
-
     PM->add(createMemCpyOptPass());
 
-#if JL_LLVM_VERSION >= 40000
     PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
-#else
-    PM->add(createAlwaysInlinerPass()); // Respect always_inline
-#endif
 
-#if JL_LLVM_VERSION >= 50000
     // Running `memcpyopt` between this and `sroa` seems to give `sroa` a hard time
     // merging the `alloca` for the unboxed data and the `alloca` created by the `alloc_opt`
     // pass.
     PM->add(createAllocOptPass());
-#endif
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     // Now that SROA has cleaned up for front-end mess, a lot of control flow should
     // be more evident - try to clean it up.
@@ -199,11 +160,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
 
     PM->add(createEarlyCSEPass()); //// ****
 
-#if JL_LLVM_VERSION >= 50000
     // Load forwarding above can expose allocations that aren't actually used
     // remove those before optimizing loops.
     PM->add(createAllocOptPass());
-#endif
     PM->add(createLoopIdiomPass()); //// ****
     PM->add(createLoopRotatePass());           // Rotate loops.
 #ifdef USE_POLLY
@@ -226,10 +185,8 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createSimpleLoopUnrollPass());     // Unroll small loops
     //PM->add(createLoopStrengthReducePass());   // (jwb added)
 
-#if JL_LLVM_VERSION >= 50000
     // Run our own SROA on heap objects before LLVM's
     PM->add(createAllocOptPass());
-#endif
     // Re-run SROA after loop-unrolling (useful for small loops that operate,
     // over the structure of an aggregate)
     PM->add(createSROAPass());                 // Break up aggregate allocas
@@ -246,10 +203,8 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createJumpThreadingPass());         // Thread jumps
     PM->add(createDeadStoreEliminationPass());  // Delete dead stores
 
-#if JL_LLVM_VERSION >= 50000
     // More dead allocation (store) deletion before loop optimization
     PM->add(createAllocOptPass());
-#endif
     // see if all of the constant folding has exposed more loops
     // to simplification and deletion
     // this helps significantly with cleaning up iteration
@@ -265,7 +220,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     // LowerPTLS removes an indirect call. As a result, it is likely to trigger
     // LLVM's devirtualization heuristics, which would result in the entire
     // pass pipeline being re-exectuted. Prevent this by inserting a barrier.
-#if JL_LLVM_VERSION >= 50000
     PM->add(createBarrierNoopPass());
     PM->add(createLowerExcHandlersPass());
     PM->add(createGCInvariantVerifierPass(false));
@@ -275,7 +229,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createLowerPTLSPass(dump_native));
     // Clean up write barrier and ptls lowering
     PM->add(createCFGSimplificationPass());
-#endif
     PM->add(createCombineMulAddPass());
 }
 
@@ -283,72 +236,6 @@ extern "C" JL_DLLEXPORT
 void jl_add_optimization_passes(LLVMPassManagerRef PM, int opt_level) {
     addOptimizationPasses(unwrap(PM), opt_level);
 }
-
-// ------------------------ TEMPORARILY COPIED FROM LLVM -----------------
-// This must be kept in sync with gdb/gdb/jit.h .
-extern "C" {
-
-  typedef enum {
-    JIT_NOACTION = 0,
-    JIT_REGISTER_FN,
-    JIT_UNREGISTER_FN
-  } jit_actions_t;
-
-  struct jit_code_entry {
-    struct jit_code_entry *next_entry;
-    struct jit_code_entry *prev_entry;
-    const char *symfile_addr;
-    uint64_t symfile_size;
-  };
-
-  struct jit_descriptor {
-    uint32_t version;
-    // This should be jit_actions_t, but we want to be specific about the
-    // bit-width.
-    uint32_t action_flag;
-    struct jit_code_entry *relevant_entry;
-    struct jit_code_entry *first_entry;
-  };
-
-  // We put information about the JITed function in this global, which the
-  // debugger reads.  Make sure to specify the version statically, because the
-  // debugger checks the version before we can set it during runtime.
-  extern struct jit_descriptor __jit_debug_descriptor;
-
-  LLVM_ATTRIBUTE_NOINLINE extern void __jit_debug_register_code();
-}
-
-namespace {
-
-// Use a local variable to hold the addresses to avoid generating a PLT
-// on the function call.
-// It messes up the GDB lookup logic with dynamically linked LLVM.
-// (Ref https://sourceware.org/bugzilla/show_bug.cgi?id=20633)
-// Use `volatile` to make sure the call always loads this slot.
-void (*volatile jit_debug_register_code)() = __jit_debug_register_code;
-
-using namespace llvm;
-using namespace llvm::object;
-using namespace llvm::orc;
-
-/// Do the registration.
-void NotifyDebugger(jit_code_entry *JITCodeEntry)
-{
-    __jit_debug_descriptor.action_flag = JIT_REGISTER_FN;
-
-    // Insert this entry at the head of the list.
-    JITCodeEntry->prev_entry = nullptr;
-    jit_code_entry *NextEntry = __jit_debug_descriptor.first_entry;
-    JITCodeEntry->next_entry = NextEntry;
-    if (NextEntry) {
-        NextEntry->prev_entry = JITCodeEntry;
-    }
-    __jit_debug_descriptor.first_entry = JITCodeEntry;
-    __jit_debug_descriptor.relevant_entry = JITCodeEntry;
-    jit_debug_register_code();
-}
-}
-// ------------------------ END OF TEMPORARY COPY FROM LLVM -----------------
 
 #if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
 // Resolve non-lock free atomic functions in the libatomic1 library.
@@ -360,14 +247,16 @@ static uint64_t resolve_atomic(const char *name)
 #elif defined(_OS_WINDOWS_)
     static const char *const libatomic = "libatomic-1.dll";
 #endif
-    static void *atomic_hdl = jl_load_dynamic_library_e(libatomic,
-                                                        JL_RTLD_LOCAL);
+    static void *atomic_hdl = jl_load_dynamic_library(libatomic,
+                                                      JL_RTLD_LOCAL, 0);
     static const char *const atomic_prefix = "__atomic_";
     if (!atomic_hdl)
         return 0;
     if (strncmp(name, atomic_prefix, strlen(atomic_prefix)) != 0)
         return 0;
-    return (uintptr_t)jl_dlsym_e(atomic_hdl, name);
+    uintptr_t value;
+    jl_dlsym(atomic_hdl, name, (void **)&value, 0);
+    return value;
 }
 #endif
 
@@ -387,7 +276,7 @@ template <typename ObjT, typename LoadResult>
 void JuliaOJIT::DebugObjectRegistrar::registerObject(RTDyldObjHandleT H, const ObjT &Object,
                                                      const LoadResult &LO)
 {
-    OwningBinary<object::ObjectFile> SavedObject = LO->getObjectForDebug(*Object);
+    object::OwningBinary<object::ObjectFile> SavedObject = LO->getObjectForDebug(*Object);
 
     // If the debug object is unavailable, save (a copy of) the original object
     // for our backtraces
@@ -396,16 +285,15 @@ void JuliaOJIT::DebugObjectRegistrar::registerObject(RTDyldObjHandleT H, const O
         // ownership of the original buffer
         auto NewBuffer = MemoryBuffer::getMemBufferCopy(Object->getData(),
                                                         Object->getFileName());
-        auto NewObj = ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
+        auto NewObj = object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
         assert(NewObj);
-        SavedObject = OwningBinary<object::ObjectFile>(std::move(*NewObj),
+        SavedObject = object::OwningBinary<object::ObjectFile>(std::move(*NewObj),
                                                        std::move(NewBuffer));
     }
     else {
-        NotifyGDB(SavedObject);
+        JIT.NotifyFinalizer(*(SavedObject.getBinary()), *LO);
     }
 
-    JIT.NotifyFinalizer(*Object, *LO);
     SavedObjects.push_back(std::move(SavedObject));
 
     ORCNotifyObjectEmitted(JuliaListener.get(), *Object,
@@ -428,52 +316,18 @@ void JuliaOJIT::DebugObjectRegistrar::registerObject(RTDyldObjHandleT H, const O
         // note: calling getAddress here eagerly finalizes H
         // as an alternative, we could store the JITSymbol instead
         // (which would present a lazy-initializer functor interface instead)
-#if JL_LLVM_VERSION >= 50000
         JIT.LocalSymbolTable[Name] = (void*)(uintptr_t)cantFail(Sym.getAddress());
-#else
-        JIT.LocalSymbolTable[Name] = (void*)(uintptr_t)Sym.getAddress();
-#endif
     }
 }
 
-// TODO: hook up RegisterJITEventListener, instead of hard-coding the GDB and JuliaListener targets
 template <typename ObjSetT, typename LoadResult>
 void JuliaOJIT::DebugObjectRegistrar::operator()(RTDyldObjHandleT H,
                 const ObjSetT &Objects, const LoadResult &LOS)
 {
-#if JL_LLVM_VERSION >= 50000
     registerObject(H, Objects->getBinary(),
                    static_cast<const RuntimeDyld::LoadedObjectInfo*>(&LOS));
-#else
-    auto oit = Objects.begin();
-    auto lit = LOS.begin();
-    for (; oit != Objects.end(); ++oit, ++lit) {
-        const auto &Object = (*oit)->getBinary();
-        auto &LO = *lit;
-
-        registerObject(H, Object, LO);
-    }
-#endif
 }
 
-void JuliaOJIT::DebugObjectRegistrar::NotifyGDB(OwningBinary<object::ObjectFile> &DebugObj)
-{
-    const char *Buffer = DebugObj.getBinary()->getMemoryBufferRef().getBufferStart();
-    size_t      Size = DebugObj.getBinary()->getMemoryBufferRef().getBufferSize();
-
-    assert(Buffer && "Attempt to register a null object with a debugger.");
-    jit_code_entry *JITCodeEntry = new jit_code_entry();
-
-    if (!JITCodeEntry) {
-        jl_printf(JL_STDERR, "WARNING: Allocation failed when registering a JIT entry!\n");
-    }
-    else {
-        JITCodeEntry->symfile_addr = Buffer;
-        JITCodeEntry->symfile_size = Size;
-
-        NotifyDebugger(JITCodeEntry);
-    }
-}
 
 object::OwningBinary<object::ObjectFile> JuliaOJIT::CompilerT::operator()(Module &M)
 {
@@ -503,9 +357,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
     MemMgr(createRTDyldMemoryManager()),
     registrar(*this),
     ObjectLayer(
-#if JL_LLVM_VERSION >= 50000
         [&] { return MemMgr; },
-#endif
         std::ref(registrar)
         ),
     CompileLayer(
@@ -583,14 +435,9 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
                         // Step 0: ObjectLinkingLayer has checked whether it is in the current module
                         // Step 1: See if it's something known to the ExecutionEngine
                         if (auto Sym = findSymbol(Name, true)) {
-#if JL_LLVM_VERSION >= 40000
                             // `findSymbol` already eagerly resolved the address
                             // return it directly.
                             return Sym;
-#else
-                            return RuntimeDyld::SymbolInfo(Sym.getAddress(),
-                                                           Sym.getFlags());
-#endif
                         }
                         // Step 2: Search the program symbols
                         if (uint64_t addr = SectionMemoryManager::getSymbolAddressInProcess(Name))
@@ -604,32 +451,17 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
                       },
                       [](const std::string &S) { return nullptr; }
                     );
-#if JL_LLVM_VERSION >= 50000
     auto modset = cantFail(CompileLayer.addModule(std::move(M), std::move(Resolver)));
-#else
-    SmallVector<std::unique_ptr<Module>,1> Ms;
-    Ms.push_back(std::move(M));
-    auto modset = CompileLayer.addModuleSet(std::move(Ms), MemMgr.get(),
-                                            std::move(Resolver));
-#endif
     // Force LLVM to emit the module so that we can register the symbols
     // in our lookup table.
-#if JL_LLVM_VERSION >= 50000
     auto Err = CompileLayer.emitAndFinalize(modset);
     // Check for errors to prevent LLVM from crashing the program.
     assert(!Err);
-#else
-    CompileLayer.emitAndFinalize(modset);
-#endif
 }
 
 void JuliaOJIT::removeModule(ModuleHandleT H)
 {
-#if JL_LLVM_VERSION >= 50000
     (void)CompileLayer.removeModule(H);
-#else
-    (void)CompileLayer.removeModuleSet(H);
-#endif
 }
 
 JL_JITSymbol JuliaOJIT::findSymbol(const std::string &Name, bool ExportedSymbolsOnly)
@@ -652,22 +484,14 @@ JL_JITSymbol JuliaOJIT::findUnmangledSymbol(const std::string Name)
 
 uint64_t JuliaOJIT::getGlobalValueAddress(const std::string &Name)
 {
-#if JL_LLVM_VERSION >= 50000
     auto addr = findSymbol(getMangledName(Name), false).getAddress();
     return addr ? addr.get() : 0;
-#else
-    return findSymbol(getMangledName(Name), false).getAddress();
-#endif
 }
 
 uint64_t JuliaOJIT::getFunctionAddress(const std::string &Name)
 {
-#if JL_LLVM_VERSION >= 50000
     auto addr = findSymbol(getMangledName(Name), false).getAddress();
     return addr ? addr.get() : 0;
-#else
-    return findSymbol(getMangledName(Name), false).getAddress();
-#endif
 }
 
 Function *JuliaOJIT::FindFunctionNamed(const std::string &Name)
@@ -1054,39 +878,15 @@ static void emit_result(std::vector<NewArchiveMember> &Archive, SmallVectorImpl<
 
 static object::Archive::Kind getDefaultForHost(Triple &triple) {
       if (triple.isOSDarwin())
-#if JL_LLVM_VERSION >= 50000
           return object::Archive::K_DARWIN;
-#else
-          return object::Archive::K_BSD;
-#endif
       return object::Archive::K_GNU;
 }
 
-#if JL_LLVM_VERSION >= 60000
 typedef Error ArchiveWriterError;
-#else
-typedef std::pair<StringRef, std::error_code> ArchiveWriterError;
-template<typename HandlerT>
-static void handleAllErrors(ArchiveWriterError E, HandlerT Handler) {
-    if (E.second)
-        Handler(E);
-}
-#endif
-#if JL_LLVM_VERSION >= 60000
 static void reportWriterError(const ErrorInfoBase &E) {
     std::string err = E.message();
     jl_safe_printf("ERROR: failed to emit output file %s\n", err.c_str());
 }
-#else
-static void reportWriterError(ArchiveWriterError E) {
-    std::string ContextStr = E.first.str();
-    std::string err;
-    if (!ContextStr.empty())
-        err += ContextStr + ": ";
-    err += E.second.message();
-    jl_safe_printf("ERROR: failed to emit output file %s\n", err.c_str());
-}
-#endif
 
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
@@ -1153,13 +953,9 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
 
     // Reset the target triple to make sure it matches the new target machine
     shadow_output->setTargetTriple(TM->getTargetTriple().str());
-#if JL_LLVM_VERSION >= 40000
     DataLayout DL = TM->createDataLayout();
     DL.reset(DL.getStringRepresentation() + "-ni:10:11:12:13");
     shadow_output->setDataLayout(DL);
-#else
-    shadow_output->setDataLayout(TM->createDataLayout());
-#endif
 
     // add metadata information
     if (imaging_mode) {

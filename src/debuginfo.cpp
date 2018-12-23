@@ -16,20 +16,14 @@
 #include <llvm/IR/DataLayout.h>
 #include <llvm/IR/Mangler.h>
 #include <llvm/ExecutionEngine/RuntimeDyld.h>
-#if JL_LLVM_VERSION >= 50000
 #include <llvm/BinaryFormat/Magic.h>
-#endif
 #include <llvm/Object/MachO.h>
 #include <llvm/Object/COFF.h>
 #include <llvm/Object/ELFObjectFile.h>
 
 using namespace llvm;
 
-#if JL_LLVM_VERSION >= 50000
 using llvm_file_magic = file_magic;
-#else
-using llvm_file_magic = sys::fs::file_magic;
-#endif
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -404,11 +398,7 @@ public:
                 ObjectInfo tmp = {&debugObj,
                     (size_t)SectionSize,
                     (ptrdiff_t)(SectionAddr - SectionLoadAddr),
-#if JL_LLVM_VERSION >= 60000
                     DWARFContext::create(debugObj, &L).release(),
-#else
-                    new DWARFContextInMemory(debugObj, &L),
-#endif
                     };
                 objectmap[SectionLoadAddr] = tmp;
                 first = false;
@@ -948,11 +938,7 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname)
             slide = -(int64_t)fbase;
         }
 
-#if JL_LLVM_VERSION >= 60000
         auto context = DWARFContext::create(*debugobj).release();
-#else
-        auto context = new DWARFContextInMemory(*debugobj);
-#endif
         auto binary = errorobj->takeBinary();
         binary.first.release();
         binary.second.release();
@@ -1101,7 +1087,8 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
         for (size_t i = 0; i < sysimg_fptrs.nclones; i++) {
             if (diff == sysimg_fptrs.clone_offsets[i]) {
                 uint32_t idx = sysimg_fptrs.clone_idxs[i] & jl_sysimg_val_mask;
-                frame0->linfo = sysimg_fvars_linfo[idx];
+                if (idx < sysimg_fvars_n) // items after this were cloned but not referenced directly by a method (such as our ccall PLT thunks)
+                    frame0->linfo = sysimg_fvars_linfo[idx];
                 break;
             }
         }

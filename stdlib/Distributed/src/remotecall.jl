@@ -388,6 +388,20 @@ Any remote exceptions are captured in a
 [`RemoteException`](@ref) and thrown.
 
 See also [`fetch`](@ref) and [`remotecall`](@ref).
+
+# Examples
+```julia-repl
+\$ julia -p 2
+
+julia> remotecall_fetch(sqrt, 2, 4)
+2.0
+
+julia> remotecall_fetch(sqrt, 2, -4)
+ERROR: On worker 2:
+DomainError with -4.0:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+...
+```
 """
 remotecall_fetch(f, id::Integer, args...; kwargs...) =
     remotecall_fetch(f, worker_from_id(id), args...; kwargs...)
@@ -466,10 +480,10 @@ function call_on_owner(f, rr::AbstractRemoteRef, args...)
     end
 end
 
-function wait_ref(rid, callee, args...)
+function wait_ref(rid, caller, args...)
     v = fetch_ref(rid, args...)
     if isa(v, RemoteException)
-        if myid() == callee
+        if myid() == caller
             throw(v)
         else
             return v
@@ -481,14 +495,14 @@ end
 """
     wait(r::Future)
 
-Wait for a value to become available for the specified future.
+Wait for a value to become available for the specified [`Future`](@ref).
 """
 wait(r::Future) = (r.v !== nothing && return r; call_on_owner(wait_ref, r, myid()); r)
 
 """
     wait(r::RemoteChannel, args...)
 
-Wait for a value to become available on the specified remote channel.
+Wait for a value to become available on the specified [`RemoteChannel`](@ref).
 """
 wait(r::RemoteChannel, args...) = (call_on_owner(wait_ref, r, myid(), args...); r)
 
@@ -535,18 +549,27 @@ function put!(rr::Future, v)
     rr.v = Some(v)
     rr
 end
-function put_future(rid, v, callee)
+function put_future(rid, v, caller)
     rv = lookup_ref(rid)
     isready(rv) && error("Future can be set only once")
     put!(rv, v)
-    # The callee has the value and hence can be removed from the remote store.
-    del_client(rid, callee)
+    # The caller has the value and hence can be removed from the remote store.
+    del_client(rid, caller)
     nothing
 end
 
 
 put!(rv::RemoteValue, args...) = put!(rv.c, args...)
-put_ref(rid, args...) = (put!(lookup_ref(rid), args...); nothing)
+function put_ref(rid, caller, args...)
+    rv = lookup_ref(rid)
+    put!(rv, args...)
+    if myid() == caller && rv.synctake !== nothing
+        # Wait till a "taken" value is serialized out - github issue #29932
+        lock(rv.synctake)
+        unlock(rv.synctake)
+    end
+    nothing
+end
 
 """
     put!(rr::RemoteChannel, args...)
@@ -555,15 +578,29 @@ Store a set of values to the [`RemoteChannel`](@ref).
 If the channel is full, blocks until space is available.
 Return the first argument.
 """
-put!(rr::RemoteChannel, args...) = (call_on_owner(put_ref, rr, args...); rr)
+put!(rr::RemoteChannel, args...) = (call_on_owner(put_ref, rr, myid(), args...); rr)
 
 # take! is not supported on Future
 
 take!(rv::RemoteValue, args...) = take!(rv.c, args...)
-function take_ref(rid, callee, args...)
-    v=take!(lookup_ref(rid), args...)
-    isa(v, RemoteException) && (myid() == callee) && throw(v)
-    v
+function take_ref(rid, caller, args...)
+    rv = lookup_ref(rid)
+    synctake = false
+    if myid() != caller && rv.synctake !== nothing
+        # special handling for local put! / remote take! on unbuffered channel
+        # github issue #29932
+        synctake = true
+        lock(rv.synctake)
+    end
+
+    v=take!(rv, args...)
+    isa(v, RemoteException) && (myid() == caller) && throw(v)
+
+    if synctake
+        return SyncTake(v, rv)
+    else
+        return v
+    end
 end
 
 """

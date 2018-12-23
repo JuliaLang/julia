@@ -344,7 +344,7 @@ must be convertible to `Int`:
 
 ```jldoctest footype
 julia> Foo((), 23.5, 1)
-ERROR: InexactError: Int64(Int64, 23.5)
+ERROR: InexactError: Int64(23.5)
 Stacktrace:
 [...]
 ```
@@ -1123,9 +1123,9 @@ Of course, this depends on what `Int` is aliased to -- but that is predefined to
 type -- either [`Int32`](@ref) or [`Int64`](@ref).
 
 (Note that unlike `Int`, `Float` does not exist as a type alias for a specific sized
-[`AbstractFloat`](@ref). Unlike with integer registers, the floating point register sizes
-are specified by the IEEE-754 standard. Whereas the size of `Int` reflects the size of a
-native pointer on that machine.)
+[`AbstractFloat`](@ref). Unlike with integer registers, where the size of `Int`
+reflects the size of a native pointer on that machine, the floating point register sizes
+are specified by the IEEE-754 standard.)
 
 ## Operations on Types
 
@@ -1150,9 +1150,6 @@ what their types are:
 
 ```jldoctest
 julia> typeof(Rational{Int})
-DataType
-
-julia> typeof(Union{Real,Float64,Rational})
 DataType
 
 julia> typeof(Union{Real,String})

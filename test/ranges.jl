@@ -256,6 +256,8 @@ end
         @test length(1:0) == 0
         @test length(0.0:-0.5) == 0
         @test length(1:2:0) == 0
+        @test length(Char(0):Char(0x001fffff)) == 2097152
+        @test length(typemax(UInt64)//one(UInt64):1:typemax(UInt64)//one(UInt64)) == 1
     end
     @testset "findall(::Base.Fix2{typeof(in)}, ::Array)" begin
         @test findall(in(3:20), [5.2, 3.3]) == findall(in(Vector(3:20)), [5.2, 3.3])
@@ -715,7 +717,7 @@ end
 @testset "comparing and hashing ranges" begin
     Rs = AbstractRange[1:1, 1:1:1, 1:2, 1:1:2,
                        map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 1:-1:0, 17:-3:0,
-                       0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),
+                       0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),map(Float32,LinRange(0.0, 1.0, 11)),
                        1.0:eps():1.0 .+ 10eps(), 9007199254740990.:1.0:9007199254740994,
                        range(0, stop=1, length=20), map(Float32, range(0, stop=1, length=20))]
     for r in Rs
@@ -1370,4 +1372,83 @@ end # module NonStandardIntegerRangeTest
             end
         end
     end
+end
+
+@testset "constant-valued ranges (issues #10391 and #29052)" begin
+    for r in ((1:4), (1:1:4), (1.0:4.0))
+        if eltype(r) === Int
+            @test_broken @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0]
+            @test_broken @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0]
+            @test_broken @inferred(r + (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+            @test_broken @inferred(r .+ (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+        else
+            @test @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0]
+            @test @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0]
+            @test @inferred(r + (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+            @test @inferred(r .+ (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+        end
+        @test @inferred(r .+ (4.0:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+        @test @inferred(0.0 * r) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(0.0 .* r) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(r / Inf) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(r ./ Inf) == [0.0, 0.0, 0.0, 0.0]
+    end
+
+    @test_broken @inferred(range(0, step=0, length=4)) == [0, 0, 0, 0]
+    @test @inferred(range(0, stop=0, length=4)) == [0, 0, 0, 0]
+    @test @inferred(range(0.0, step=0.0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0.0, stop=0.0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0, step=0.0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0.0, step=0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0, stop=0.0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0.0, stop=0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+
+    z4 = 0.0 * (1:4)
+    @test @inferred(z4 .+ (1:4)) === 1.0:1.0:4.0
+    @test @inferred(z4 .+ z4) === z4
+end
+
+@testset "getindex" begin
+    @test getindex((typemax(UInt64)//one(UInt64):typemax(UInt64)//one(UInt64)), 1) == typemax(UInt64)//one(UInt64)
+end
+
+@testset "Issue #30006" begin
+    @test Base.Slice(Base.OneTo(5))[Int32(1)] == Int32(1)
+    @test Base.Slice(Base.OneTo(3))[Int8(2)] == Int8(2)
+    @test Base.Slice(1:10)[Int32(2)] == Int32(2)
+    @test Base.Slice(1:10)[Int8(2)] == Int8(2)
+end
+
+@testset "allocation of TwicePrecision call" begin
+    0:286.493442:360
+    0:286:360
+    @test @allocated(0:286.493442:360) == 0
+    @test @allocated(0:286:360) == 0
+end
+
+@testset "range with start and stop" begin
+    for starts in [-1, 0, 1, 10]
+        for stops in [-2, 0, 2, 100]
+            for lengths in [2, 10, 100]
+                if stops >= starts
+                    @test range(starts, stops, length=lengths) == range(starts, stop=stops, length=lengths)
+                end
+            end
+            for steps in [0.01, 1, 2]
+                @test range(starts, stops, step=steps) == range(starts, stop=stops, step=steps)
+            end
+        end
+    end
+    # require a keyword arg
+    @test_throws ArgumentError range(1, 100)
+end
+
+@testset "Reverse empty ranges" begin
+    @test reverse(1:0) === 0:-1:1
+    @test reverse(Base.OneTo(0)) === 0:-1:1
+    # Almost `1.0:-1.0:2.0`, only different is the step which is
+    # `Base.TwicePrecision(-1.0, 0.0)`
+    @test reverse(1.0:0.0) === StepRangeLen(Base.TwicePrecision(1.0, 0.0),
+                                            Base.TwicePrecision(-1.0, -0.0), 0)
+    @test reverse(reverse(1.0:0.0)) === 1.0:0.0
 end

@@ -847,10 +847,14 @@ function test_intersection()
     @testintersect(Ref{@UnionAll T @UnionAll S Tuple{T,S}},
                    Ref{@UnionAll T Tuple{T,T}}, Bottom)
 
+    # both of these answers seem acceptable
+    #@testintersect(Tuple{T,T} where T<:Union{UpperTriangular, UnitUpperTriangular},
+    #               Tuple{AbstractArray{T,N}, AbstractArray{T,N}} where N where T,
+    #               Union{Tuple{T,T} where T<:UpperTriangular,
+    #                     Tuple{T,T} where T<:UnitUpperTriangular})
     @testintersect(Tuple{T,T} where T<:Union{UpperTriangular, UnitUpperTriangular},
                    Tuple{AbstractArray{T,N}, AbstractArray{T,N}} where N where T,
-                   Union{Tuple{T,T} where T<:UpperTriangular,
-                         Tuple{T,T} where T<:UnitUpperTriangular})
+                   Tuple{T,T} where T<:Union{UpperTriangular, UnitUpperTriangular})
 
     @testintersect(DataType, Type, DataType)
     @testintersect(DataType, Type{T} where T<:Integer, Type{T} where T<:Integer)
@@ -955,6 +959,16 @@ function test_intersection()
     @testintersect(Tuple{Ref{Ref{T}} where T, Ref},
                    Tuple{Ref{T}, Ref{T}} where T,
                    Tuple{Ref{Ref{T}}, Ref{Ref{T}}} where T)
+    # issue #29208
+    @testintersect(Tuple{Ref{Ref{T}} where T, Ref{Ref{Int}}},
+                   Tuple{Ref{T}, Ref{T}} where T,
+                   Tuple{Ref{Ref{Int}}, Ref{Ref{Int}}})
+    @testintersect(Tuple{Vector{Pair{K,V}}, Vector{Pair{K,V}}} where K where V,
+                   Tuple{(Array{Pair{Ref{_2},_1},1} where _2 where _1),
+                         Array{Pair{Ref{Int64},Rational{Int64}},1}},
+                   Tuple{Vector{Pair{Ref{Int64},Rational{Int64}}},
+                         Vector{Pair{Ref{Int64},Rational{Int64}}}})
+    @testintersect(Vector{>:Missing}, Vector{Int}, Union{})
 
     # issue #23685
     @testintersect(Pair{Type{Z},Z} where Z,
@@ -1333,3 +1347,76 @@ struct A28256{names, T<:NamedTuple{names, <:Tuple}}
     x::T
 end
 @test A28256{(:a,), NamedTuple{(:a,),Tuple{Int}}}((a=1,)) isa A28256
+
+# issue #29468
+@testintersect(Tuple{Vararg{Val{N}, N}} where N,
+               Tuple{Val{2}, Vararg{Val{2}}},
+               Tuple{Val{2}, Val{2}})
+@testintersect(Tuple{Vararg{Val{N}, N}} where N,
+               Tuple{Val{3}, Vararg{Val{3}}},
+               Tuple{Val{3}, Val{3}, Val{3}})
+@testintersect(Tuple{Vararg{Val{N}, N}} where N,
+               Tuple{Val{1}, Vararg{Val{2}}},
+               Tuple{Val{1}})
+@testintersect(Tuple{Vararg{Val{N}, N}} where N,
+               Tuple{Val{2}, Vararg{Val{3}}},
+               Union{})
+
+# issue #25752
+@testintersect(Base.RefValue, Ref{Union{Int,T}} where T,
+               Base.RefValue{Union{Int,T}} where T)
+# issue #29269
+@testintersect((Tuple{Int, Array{T}} where T),
+               (Tuple{Any, Vector{Union{Missing,T}}} where T),
+               (Tuple{Int, Vector{Union{Missing,T}}} where T))
+@testintersect((Tuple{Int, Array{T}} where T),
+               (Tuple{Any, Vector{Union{Missing,Nothing,T}}} where T),
+               (Tuple{Int, Vector{Union{Missing,Nothing,T}}} where T))
+
+# issue #29955
+struct M29955{T, TV<:AbstractVector{T}}
+end
+@testintersect(M29955,
+               M29955{<:Any,TV} where TV>:Vector{Float64},
+               M29955{Float64,TV} where Array{Float64,1}<:TV<:AbstractArray{Float64,1})
+
+struct A29955{T, TV<:AbstractVector{T}, TModel<:M29955{T,TV}}
+end
+@testintersect(Tuple{Type{A29955{Float64,Array{Float64,1},_1}} where _1,
+                     Any},
+               Tuple{Type{A29955{T,TV,TM}},
+                     TM} where {T,TV<:AbstractVector{T},TM<:M29955{T,TV}},
+               Tuple{Type{A29955{Float64,Array{Float64,1},TM}},
+                     TM} where TM<:M29955{Float64,Array{Float64,1}})
+let M = M29955{T,Vector{Float64}} where T
+    @test M == (M29955{T,Vector{Float64}} where T)
+    @test M{Float64} == M29955{Float64,Vector{Float64}}
+    @test_throws TypeError M{Float32}
+    @test_throws TypeError M{Real}
+end
+
+# issue #30122
+@testintersect(Tuple{Pair{Int64,2}, NTuple},
+               Tuple{Pair{F,N},Tuple{Vararg{F,N}}} where N where F,
+               Tuple{Pair{Int64,2}, Tuple{Int64,Int64}})
+
+# issue #30335
+@testintersect(Tuple{Any,Rational{Int},Int},
+               Tuple{LT,R,I} where LT<:Union{I, R} where R<:Rational{I} where I<:Integer,
+               Tuple{LT,Rational{Int},Int} where LT<:Union{Rational{Int},Int})
+
+#@testintersect(Tuple{Any,Tuple{Int},Int},
+#               Tuple{LT,R,I} where LT<:Union{I, R} where R<:Tuple{I} where I<:Integer,
+#               Tuple{LT,Tuple{Int},Int} where LT<:Union{Tuple{Int},Int})
+# fails due to this:
+let U = Tuple{Union{LT, LT1},Union{R, R1},Int} where LT1<:R1 where R1<:Tuple{Int} where LT<:Int where R<:Tuple{Int},
+    U2 = Union{Tuple{LT,R,Int} where LT<:Int where R<:Tuple{Int}, Tuple{LT,R,Int} where LT<:R where R<:Tuple{Int}},
+    V = Tuple{Union{Tuple{Int},Int},Tuple{Int},Int},
+    V2 = Tuple{L,Tuple{Int},Int} where L<:Union{Tuple{Int},Int}
+    @test U == U2
+    @test U == V
+    @test U == V2
+    @test V == V2
+    @test U2 == V
+    @test_broken U2 == V2
+end

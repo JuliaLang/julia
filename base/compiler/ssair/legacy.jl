@@ -5,7 +5,7 @@ inflate_ir(ci::CodeInfo) = inflate_ir(ci, Core.svec(), Any[ Any for i = 1:length
 function inflate_ir(ci::CodeInfo, linfo::MethodInstance)
     spvals = spvals_from_meth_instance(linfo)
     if ci.inferred
-        argtypes, _ = get_argtypes(linfo)
+        argtypes, _ = matching_cache_argtypes(linfo, nothing)
     else
         argtypes = Any[ Any for i = 1:length(ci.slotnames) ]
     end
@@ -44,7 +44,7 @@ function inflate_ir(ci::CodeInfo, spvals::SimpleVector, argtypes::Vector{Any})
             code[i] = stmt
         end
     end
-    ssavaluetypes = ci.ssavaluetypes isa Vector{Any} ? copy(ci.ssavaluetypes) : Any[ Any for i = 1:ci.ssavaluetypes ]
+    ssavaluetypes = ci.ssavaluetypes isa Vector{Any} ? copy(ci.ssavaluetypes) : Any[ Any for i = 1:(ci.ssavaluetypes::Int) ]
     ir = IRCode(code, ssavaluetypes, copy(ci.codelocs), copy(ci.ssaflags), cfg, collect(LineInfoNode, ci.linetable),
                 argtypes, Any[], spvals)
     return ir

@@ -354,7 +354,7 @@ function isassigned(a::AbstractArray, i::Integer...)
         if isa(e, BoundsError) || isa(e, UndefRefError)
             return false
         else
-            rethrow(e)
+            rethrow()
         end
     end
 end
@@ -637,6 +637,28 @@ empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
 # like empty, but should return a mutable collection, a Vector by default
 emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
 emptymutable(itr, ::Type{U}) where {U} = Vector{U}()
+
+"""
+    copy!(dst, src) -> dst
+
+In-place [`copy`](@ref) of `src` into `dst`, discarding any pre-existing
+elements in `dst`.
+If `dst` and `src` are of the same type, `dst == src` should hold after
+the call. If `dst` and `src` are multidimensional arrays, they must have
+equal [`axes`](@ref).
+See also [`copyto!`](@ref).
+
+!!! compat "Julia 1.1"
+    This method requires at least Julia 1.1. In Julia 1.0 this method
+    is available from the `Future` standard library as `Future.copy!`.
+"""
+copy!(dst::AbstractVector, src::AbstractVector) = append!(empty!(dst), src)
+
+function copy!(dst::AbstractArray, src::AbstractArray)
+    axes(dst) == axes(src) || throw(ArgumentError(
+        "arrays must have the same axes for copy! (consider using `copyto!`)"))
+    copyto!(dst, src)
+end
 
 ## from general iterable to any array
 
@@ -1110,7 +1132,7 @@ Perform a conservative test to check if arrays `A` and `B` might share the same 
 By default, this simply checks if either of the arrays reference the same memory
 regions, as identified by their [`Base.dataids`](@ref).
 """
-mightalias(A::AbstractArray, B::AbstractArray) = !_isdisjoint(dataids(A), dataids(B))
+mightalias(A::AbstractArray, B::AbstractArray) = !isbits(A) && !isbits(B) && !_isdisjoint(dataids(A), dataids(B))
 mightalias(x, y) = false
 
 _isdisjoint(as::Tuple{}, bs::Tuple{}) = true
@@ -1144,7 +1166,7 @@ RangeVecIntList{A<:AbstractVector{Int}} = Union{Tuple{Vararg{Union{AbstractRange
     AbstractVector{UnitRange{Int}}, AbstractVector{AbstractRange{Int}}, AbstractVector{A}}
 
 get(A::AbstractArray, i::Integer, default) = checkbounds(Bool, A, i) ? A[i] : default
-get(A::AbstractArray, I::Tuple{}, default) = similar(A, typeof(default), 0)
+get(A::AbstractArray, I::Tuple{}, default) = checkbounds(Bool, A) ? A[] : default
 get(A::AbstractArray, I::Dims, default) = checkbounds(Bool, A, I...) ? A[I...] : default
 
 function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
@@ -1345,8 +1367,17 @@ end
 _cs(d, a, b) = (a == b ? a : throw(DimensionMismatch(
     "mismatch in dimension $d (expected $a got $b)")))
 
-dims2cat(::Val{n}) where {n} = ntuple(i -> (i == n), Val(n))
-dims2cat(dims) = ntuple(in(dims), maximum(dims))
+function dims2cat(::Val{n}) where {n}
+    n <= 0 && throw(ArgumentError("cat dimension must be a positive integer, but got $n"))
+    ntuple(i -> (i == n), Val(n))
+end
+
+function dims2cat(dims)
+    if any(dims .<= 0)
+        throw(ArgumentError("All cat dimensions must be positive integers, but got $dims"))
+    end
+    ntuple(in(dims), maximum(dims))
+end
 
 _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
 
@@ -2043,11 +2074,11 @@ collection. `destination` must be at least as large as the first collection.
 
 # Examples
 ```jldoctest
-julia> x = zeros(3);
+julia> a = zeros(3);
 
-julia> map!(x -> x * 2, x, [1, 2, 3]);
+julia> map!(x -> x * 2, a, [1, 2, 3]);
 
-julia> x
+julia> a
 3-element Array{Float64,1}:
  2.0
  4.0

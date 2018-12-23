@@ -96,7 +96,7 @@ string(hash::SHA1) = bytes2hex(hash.bytes)
 print(io::IO, hash::SHA1) = bytes2hex(io, hash.bytes)
 show(io::IO, hash::SHA1) = print(io, "SHA1(\"", hash, "\")")
 
-isless(a::SHA1, b::SHA1) = lexless(a.bytes, b.bytes)
+isless(a::SHA1, b::SHA1) = isless(a.bytes, b.bytes)
 hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
 ==(a::SHA1, b::SHA1) = a.bytes == b.bytes
 
@@ -254,6 +254,9 @@ locate_package(::Nothing) = nothing
 
 Return the path of `m.jl` file that was used to `import` module `m`,
 or `nothing` if `m` was not imported from a package.
+
+Use [`dirname`](@ref) to get the directory part and [`basename`](@ref)
+to get the file name part of the path.
 """
 function pathof(m::Module)
     pkgid = get(Base.module_keys, m, nothing)
@@ -612,6 +615,9 @@ end
 # and it reconnects the Base.Docs.META
 function _include_from_serialized(path::String, depmods::Vector{Any})
     sv = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
+    if isa(sv, Exception)
+        return sv
+    end
     restored = sv[1]
     if !isa(restored, Exception)
         for M in restored::Vector{Any}
@@ -789,7 +795,7 @@ const full_warning_showed = Ref(false)
 const modules_warned_for = Set{PkgId}()
 
 """
-    require(module::Symbol)
+    require(into::Module, module::Symbol)
 
 This function is part of the implementation of `using` / `import`, if a module is not
 already defined in `Main`. It can also be called directly to force reloading a module,
@@ -816,7 +822,7 @@ function require(into::Module, mod::Symbol)
         if where.uuid === nothing
             throw(ArgumentError("""
                 Package $mod not found in current path:
-                - Run `Pkg.add($(repr(String(mod))))` to install the $mod package.
+                - Run `import Pkg; Pkg.add($(repr(String(mod))))` to install the $mod package.
                 """))
         else
             s = """
@@ -1007,22 +1013,16 @@ include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
     include_string(m, String(txt), String(fname))
 
 function source_path(default::Union{AbstractString,Nothing}="")
-    t = current_task()
-    while true
-        s = t.storage
-        if s !== nothing && haskey(s, :SOURCE_PATH)
-            return s[:SOURCE_PATH]
-        end
-        if t === t.parent
-            return default
-        end
-        t = t.parent
+    s = current_task().storage
+    if s !== nothing && haskey(s, :SOURCE_PATH)
+        return s[:SOURCE_PATH]
     end
+    return default
 end
 
 function source_dir()
     p = source_path(nothing)
-    p === nothing ? pwd() : dirname(p)
+    return p === nothing ? pwd() : dirname(p)
 end
 
 include_relative(mod::Module, path::AbstractString) = include_relative(mod, String(path))
@@ -1135,7 +1135,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
             try
                 Base.include(Base.__toplevel__, $(repr(abspath(input))))
             catch ex
-                Base.precompilableerror(ex) || Base.rethrow(ex)
+                Base.precompilableerror(ex) || Base.rethrow()
                 Base.@debug "Aborting `createexprcache'" exception=(Base.ErrorException("Declaration of __precompile__(false) not allowed"), Base.catch_backtrace())
                 Base.exit(125) # we define status = 125 means PrecompileableError
             end\0""")
@@ -1145,10 +1145,10 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
         end
         write(in, "ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, (0, 0))\0")
         close(in)
-    catch ex
+    catch
         close(in)
         process_running(io) && Timer(t -> kill(io), 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
-        rethrow(ex)
+        rethrow()
     end
     return io
 end

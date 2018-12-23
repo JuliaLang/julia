@@ -715,10 +715,23 @@ static uint32_t sysimg_init_cb(const void *id)
     // We translate `generic` to `pentium4` or `x86-64` before sending it to LLVM
     // (see `get_llvm_target_noext`) which will be serialized into the sysimg target data.
     // Translate them back so we can actually match them.
+    // We also track to see if the sysimg allows -cx16, however if the user does
+    // something silly like add +cx16 on a 32bit target, we want to disable this
+    // check, hence the pointer size check.
+    bool sysimg_allows_no_cx16 = sizeof(void *) == 4;;
     for (auto &t: sysimg) {
         if (auto nname = normalize_cpu_name(t.name)) {
             t.name = nname;
         }
+
+        // Take note to see if the sysimg explicitly allows an architecture without cx16
+        sysimg_allows_no_cx16 |= !test_nbit(t.en.features, Feature::cx16);
+    }
+    if (!sysimg_allows_no_cx16 && !test_nbit(target.en.features, Feature::cx16)) {
+        jl_error("Your CPU does not support the CX16 instruction, which is required "
+                 "by this version of Julia!  This is often due to running inside of a "
+                 "virtualized environment.  Please read "
+                 "https://docs.julialang.org/en/stable/devdocs/sysimg/ for more.");
     }
     auto match = match_sysimg_targets(sysimg, target, max_vector_size);
     // Now we've decided on which sysimg version to use.
@@ -820,17 +833,6 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
     features.push_back("+sse2");
     features.push_back("+mmx");
     features.push_back("+fxsr");
-#if JL_LLVM_VERSION < 50000
-#  ifdef _CPU_X86_
-    // LLVM has bug on < 5.0 when using avx in 32bit mode.
-    features.push_back("-avx");
-#  endif
-    // Scatter-gatter can't handle address space on < 5.0
-    // This is a base requirement for AVX512 so we have to turn all AVX512 features off
-    // Gatter is available in AVX2 too but fortunately LLVM doesn't use them.
-    features.push_back("-avx512f");
-    features.push_back("-avx512dq");
-#endif
     return std::make_pair(std::move(name), std::move(features));
 }
 

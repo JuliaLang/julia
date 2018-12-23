@@ -11,7 +11,7 @@ of values `xs` if there is one, otherwise call [`show`](@ref).
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 
-Printing `nothing` is deprecated and will throw an error in the future.
+Printing `nothing` is not allowed and throws an error.
 
 # Examples
 ```jldoctest
@@ -81,7 +81,7 @@ of the buffer (in bytes).
 
 The optional keyword argument `context` can be set to `:key=>value` pair
 or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
-stream passed to `f`.  The optional `sizehint` is a suggersted (in bytes)
+stream passed to `f`.  The optional `sizehint` is a suggested size (in bytes)
 to allocate for the buffer used to write the string.
 
 # Examples
@@ -103,36 +103,48 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     String(resize!(s.data, s.size))
 end
 
-tostr_sizehint(x) = 0
+tostr_sizehint(x) = 8
 tostr_sizehint(x::AbstractString) = lastindex(x)
 tostr_sizehint(x::Float64) = 20
 tostr_sizehint(x::Float32) = 12
 
-function print_to_string(xs...; env=nothing)
+function print_to_string(xs...)
     if isempty(xs)
         return ""
     end
+    siz = 0
+    for x in xs
+        siz += tostr_sizehint(x)
+    end
     # specialized for performance reasons
-    s = IOBuffer(sizehint=tostr_sizehint(xs[1]))
-    if env !== nothing
-        env_io = IOContext(s, env)
-        for x in xs
-            print(env_io, x)
-        end
-    else
-        for x in xs
-            print(s, x)
-        end
+    s = IOBuffer(sizehint=siz)
+    for x in xs
+        print(s, x)
     end
     String(resize!(s.data, s.size))
 end
 
-string_with_env(env, xs...) = print_to_string(xs...; env=env)
+function string_with_env(env, xs...)
+    if isempty(xs)
+        return ""
+    end
+    siz = 0
+    for x in xs
+        siz += tostr_sizehint(x)
+    end
+    # specialized for performance reasons
+    s = IOBuffer(sizehint=siz)
+    env_io = IOContext(s, env)
+    for x in xs
+        print(env_io, x)
+    end
+    String(resize!(s.data, s.size))
+end
 
 """
     string(xs...)
 
-Create a string from any values using the [`print`](@ref) function.
+Create a string from any values, except `nothing`, using the [`print`](@ref) function.
 
 # Examples
 ```jldoctest
@@ -185,10 +197,10 @@ julia> repr(zeros(3))
 "[0.0, 0.0, 0.0]"
 
 julia> repr(big(1/3))
-"3.33333333333333314829616256247390992939472198486328125e-01"
+"0.333333333333333314829616256247390992939472198486328125"
 
 julia> repr(big(1/3), context=:compact => true)
-"3.33333e-01"
+"0.333333"
 
 ```
 """
@@ -223,7 +235,7 @@ IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.stri
 Join an array of `strings` into a single string, inserting the given delimiter between
 adjacent strings. If `last` is given, it will be used instead of `delim` between the last
 two strings. If `io` is given, the result is written to `io` rather than returned as
-as a `String`.  For example,
+as a `String`.
 
 # Examples
 ```jldoctest
@@ -562,6 +574,19 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
         end
     end
     String(take!(buf))
+end
+
+function String(a::AbstractVector{Char})
+    n = 0
+    for v in a
+        n += ncodeunits(v)
+    end
+    out = _string_n(n)
+    offs = 1
+    for v in a
+        offs += __unsafe_string!(out, v, offs)
+    end
+    return out
 end
 
 function String(chars::AbstractVector{<:AbstractChar})

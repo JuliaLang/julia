@@ -24,7 +24,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
             throw(ArgumentError("""
                 cannot reinterpret an `$(S)` array to `$(T)` whose first dimension has size `$(dim)`.
                 The resulting array would have non-integral first dimension.
-            """))
+                """))
         end
         function throwaxes1(::Type{S}, ::Type{T}, ax1)
             @_noinline_meta
@@ -33,8 +33,8 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
         isbitstype(T) || throwbits(S, T, T)
         isbitstype(S) || throwbits(S, T, S)
         (N != 0 || sizeof(T) == sizeof(S)) || throwsize0(S, T)
-        ax1 = axes(a)[1]
         if N != 0 && sizeof(S) != sizeof(T)
+            ax1 = axes(a)[1]
             dim = length(ax1)
             rem(dim*sizeof(S),sizeof(T)) == 0 || thrownonint(S, T, dim)
             first(ax1) == 1 || throwaxes1(S, T, ax1)
@@ -74,6 +74,7 @@ function size(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     size1 = div(psize[1]*sizeof(S), sizeof(T))
     tuple(size1, tail(psize)...)
 end
+size(a::ReinterpretArray{T,0}) where {T} = ()
 
 function axes(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     paxs = axes(a.parent)
@@ -81,6 +82,7 @@ function axes(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     size1 = div(l*sizeof(S), sizeof(T))
     tuple(oftype(paxs[1], f:f+size1-1), tail(paxs)...)
 end
+axes(a::ReinterpretArray{T,0}) where {T} = ()
 
 elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
@@ -104,6 +106,8 @@ end
     _getindex_ra(a, inds[1], tail(inds))
 end
 
+@inline _memcpy!(dst, src, n) = ccall(:memcpy, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), dst, src, n)
+
 @inline @propagate_inbounds function _getindex_ra(a::ReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
@@ -123,11 +127,9 @@ end
             # once it knows the data layout
             while nbytes_copied < sizeof(T)
                 s[] = a.parent[ind_start + i, tailinds...]
-                while nbytes_copied < sizeof(T) && sidx < sizeof(S)
-                    unsafe_store!(tptr, unsafe_load(sptr, sidx + 1), nbytes_copied + 1)
-                    sidx += 1
-                    nbytes_copied += 1
-                end
+                nb = min(sizeof(S) - sidx, sizeof(T)-nbytes_copied)
+                _memcpy!(tptr + nbytes_copied, sptr + sidx, nb)
+                nbytes_copied += nb
                 sidx = 0
                 i += 1
             end
@@ -173,34 +175,26 @@ end
             # element from the original array and overwrite the relevant parts
             if sidx != 0
                 s[] = a.parent[ind_start + i, tailinds...]
-                while nbytes_copied < sizeof(T) && sidx < sizeof(S)
-                    unsafe_store!(sptr, unsafe_load(tptr, nbytes_copied + 1), sidx + 1)
-                    sidx += 1
-                    nbytes_copied += 1
-                end
+                nb = min(sizeof(S) - sidx, sizeof(T))
+                _memcpy!(sptr + sidx, tptr, nb)
+                nbytes_copied += nb
                 a.parent[ind_start + i, tailinds...] = s[]
                 i += 1
                 sidx = 0
             end
             # Deal with the main body of elements
             while nbytes_copied < sizeof(T) && (sizeof(T) - nbytes_copied) > sizeof(S)
-                while nbytes_copied < sizeof(T) && sidx < sizeof(S)
-                    unsafe_store!(sptr, unsafe_load(tptr, nbytes_copied + 1), sidx + 1)
-                    sidx += 1
-                    nbytes_copied += 1
-                end
+                nb = min(sizeof(S), sizeof(T) - nbytes_copied)
+                _memcpy!(sptr, tptr + nbytes_copied, nb)
+                nbytes_copied += nb
                 a.parent[ind_start + i, tailinds...] = s[]
                 i += 1
-                sidx = 0
             end
             # Deal with trailing partial elements
             if nbytes_copied < sizeof(T)
                 s[] = a.parent[ind_start + i, tailinds...]
-                while nbytes_copied < sizeof(T) && sidx < sizeof(S)
-                    unsafe_store!(sptr, unsafe_load(tptr, nbytes_copied + 1), sidx + 1)
-                    sidx += 1
-                    nbytes_copied += 1
-                end
+                nb = min(sizeof(S), sizeof(T) - nbytes_copied)
+                _memcpy!(sptr, tptr + nbytes_copied, nb)
                 a.parent[ind_start + i, tailinds...] = s[]
             end
         end

@@ -210,25 +210,25 @@ same function may also be used to create various other kinds of servers:
 
 ```julia-repl
 julia> listen(2000) # Listens on localhost:2000 (IPv4)
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen(ip"127.0.0.1",2000) # Equivalent to the first
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen(ip"::1",2000) # Listens on localhost:2000 (IPv6)
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen(IPv4(0),2001) # Listens on port 2001 on all IPv4 interfaces
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen(IPv6(0),2001) # Listens on port 2001 on all IPv6 interfaces
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen("testsocket") # Listens on a UNIX domain socket
-Base.PipeServer(active)
+Sockets.PipeServer(active)
 
 julia> listen("\\\\.\\pipe\\testsocket") # Listens on a Windows named pipe
-Base.PipeServer(active)
+Sockets.PipeServer(active)
 ```
 
 Note that the return type of the last invocation is different. This is because this server does not

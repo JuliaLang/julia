@@ -2,22 +2,6 @@
 
 ## linalg.jl: Some generic Linear Algebra definitions
 
-# For better performance when input and output are the same array
-# See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
-function generic_rmul!(X::AbstractArray, s::Number)
-    @simd for I in eachindex(X)
-        @inbounds X[I] *= s
-    end
-    X
-end
-
-function generic_lmul!(s::Number, X::AbstractArray)
-    @simd for I in eachindex(X)
-        @inbounds X[I] = s*X[I]
-    end
-    X
-end
-
 function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
@@ -42,10 +26,20 @@ end
 mul!(C::AbstractArray, s::Number, X::AbstractArray) = generic_mul!(C, X, s)
 mul!(C::AbstractArray, X::AbstractArray, s::Number) = generic_mul!(C, s, X)
 
+# For better performance when input and output are the same array
+# See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
 """
     rmul!(A::AbstractArray, b::Number)
 
-Scale an array `A` by a scalar `b` overwriting `A` in-place.
+Scale an array `A` by a scalar `b` overwriting `A` in-place.  Use
+[`lmul!`](@ref) to multiply scalar from left.  The scaling operation
+respects the semantics of the multiplication [`*`](@ref) between an
+element of `A` and `b`.  In particular, this also applies to
+multiplication involving non-finite numbers such as `NaN` and `±Inf`.
+
+!!! compat "Julia 1.1"
+    Prior to Julia 1.1, `NaN` and `±Inf` entries in `A` were treated
+    inconsistently.
 
 # Examples
 ```jldoctest
@@ -58,14 +52,32 @@ julia> rmul!(A, 2)
 2×2 Array{Int64,2}:
  2  4
  6  8
+
+julia> rmul!([NaN], 0.0)
+1-element Array{Float64,1}:
+ NaN
 ```
 """
-rmul!(A::AbstractArray, b::Number) = generic_rmul!(A, b)
+function rmul!(X::AbstractArray, s::Number)
+    @simd for I in eachindex(X)
+        @inbounds X[I] *= s
+    end
+    X
+end
+
 
 """
     lmul!(a::Number, B::AbstractArray)
 
-Scale an array `B` by a scalar `a` overwriting `B` in-place.
+Scale an array `B` by a scalar `a` overwriting `B` in-place.  Use
+[`rmul!`](@ref) to multiply scalar from right.  The scaling operation
+respects the semantics of the multiplication [`*`](@ref) between `a`
+and an element of `B`.  In particular, this also applies to
+multiplication involving non-finite numbers such as `NaN` and `±Inf`.
+
+!!! compat "Julia 1.1"
+    Prior to Julia 1.1, `NaN` and `±Inf` entries in `B` were treated
+    inconsistently.
 
 # Examples
 ```jldoctest
@@ -78,9 +90,18 @@ julia> lmul!(2, B)
 2×2 Array{Int64,2}:
  2  4
  6  8
+
+julia> lmul!(0.0, [Inf])
+1-element Array{Float64,1}:
+ NaN
 ```
 """
-lmul!(a::Number, B::AbstractArray) = generic_lmul!(a, B)
+function lmul!(s::Number, X::AbstractArray)
+    @simd for I in eachindex(X)
+        @inbounds X[I] = s*X[I]
+    end
+    X
+end
 
 """
     cross(x, y)
@@ -715,13 +736,20 @@ end
 ###########################################################################################
 
 """
-    rank(A[, tol::Real])
+    rank(A::AbstractMatrix; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
+    rank(A::AbstractMatrix, rtol::Real)
 
 Compute the rank of a matrix by counting how many singular
-values of `A` have magnitude greater than `tol*σ₁` where `σ₁` is
-`A`'s largest singular values. By default, the value of `tol` is the smallest
-dimension of `A` multiplied by the [`eps`](@ref)
-of the [`eltype`](@ref) of `A`.
+values of `A` have magnitude greater than `max(atol, rtol*σ₁)` where `σ₁` is
+`A`'s largest singular value. `atol` and `rtol` are the absolute and relative
+tolerances, respectively. The default relative tolerance is `n*ϵ`, where `n`
+is the size of the smallest dimension of `A`, and `ϵ` is the [`eps`](@ref) of
+the element type of `A`.
+
+!!! compat "Julia 1.1"
+    The `atol` and `rtol` keyword arguments requires at least Julia 1.1.
+    In Julia 1.0 `rtol` is available as a positional argument, but this
+    will be deprecated in Julia 2.0.
 
 # Examples
 ```jldoctest
@@ -731,16 +759,21 @@ julia> rank(Matrix(I, 3, 3))
 julia> rank(diagm(0 => [1, 0, 2]))
 2
 
-julia> rank(diagm(0 => [1, 0.001, 2]), 0.1)
+julia> rank(diagm(0 => [1, 0.001, 2]), rtol=0.1)
 2
 
-julia> rank(diagm(0 => [1, 0.001, 2]), 0.00001)
+julia> rank(diagm(0 => [1, 0.001, 2]), rtol=0.00001)
 3
+
+julia> rank(diagm(0 => [1, 0.001, 2]), atol=1.5)
+1
 ```
 """
-function rank(A::AbstractMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
+function rank(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol))
+    isempty(A) && return 0 # 0-dimensional case
     s = svdvals(A)
-    count(x -> x > tol*s[1], s)
+    tol = max(atol, rtol*s[1])
+    count(x -> x > tol, s)
 end
 rank(x::Number) = x == 0 ? 0 : 1
 
@@ -802,6 +835,8 @@ function inv(A::AbstractMatrix{T}) where T
     dest = Matrix{S0}(I, n, n)
     ldiv!(factorize(convert(AbstractMatrix{S}, A)), dest)
 end
+inv(A::Adjoint) = adjoint(inv(parent(A)))
+inv(A::Transpose) = transpose(inv(parent(A)))
 
 pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T<:Real} = _vectorpinv(transpose, v, tol)
 pinv(v::AbstractVector{T}, tol::Real = real(zero(T))) where {T<:Complex} = _vectorpinv(adjoint, v, tol)
@@ -873,7 +908,10 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
-(/)(A::AbstractVecOrMat, B::AbstractVecOrMat) = copy(adjoint(adjoint(B) \ adjoint(A)))
+function (/)(A::AbstractVecOrMat, B::AbstractVecOrMat)
+    size(A,2) != size(B,2) && throw(DimensionMismatch("Both inputs should have the same number of columns"))
+    return copy(adjoint(adjoint(B) \ adjoint(A)))
+end
 # \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
 # /(x::Number,A::StridedMatrix) = x*inv(A)
 /(x::Number, v::AbstractVector) = x*pinv(v)
@@ -1177,7 +1215,7 @@ end
         for i = 2:n
             normu += abs2(x[i])
         end
-        if normu == zero(normu)
+        if iszero(normu)
             return zero(ξ1/normu)
         end
         normu = sqrt(normu)
@@ -1274,7 +1312,7 @@ julia> logabsdet(B)
 (0.6931471805599453, 1.0)
 ```
 """
-logabsdet(A::AbstractMatrix) = logabsdet(lu(A))
+logabsdet(A::AbstractMatrix) = logabsdet(lu(A, check=false))
 
 """
     logdet(M)
@@ -1324,8 +1362,8 @@ julia> promote_leaf_eltypes(a)
 Complex{Float64}
 ```
 """
-promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) where {T<:Number} = T
-promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) where {T<:NumberArray} = eltype(T)
+promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{T,Vararg{T}}}) where {T<:Number} = T
+promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{T,Vararg{T}}}) where {T<:NumberArray} = eltype(T)
 promote_leaf_eltypes(x::T) where {T} = T
 promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_eltypes, promote_type, x; init=Bool)
 

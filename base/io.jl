@@ -974,7 +974,7 @@ function skipchars(predicate, io::IO; linecomment=nothing)
         if c === linecomment
             readline(io)
         elseif !predicate(c)
-            skip(io, -codelen(c))
+            skip(io, -ncodeunits(c))
             break
         end
     end

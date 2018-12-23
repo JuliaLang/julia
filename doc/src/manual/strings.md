@@ -404,7 +404,7 @@ further discussion of UTF-8 encoding issues, see the section below on [byte arra
 The [`transcode`](@ref) function is provided to convert data between the various UTF-xx encodings,
 primarily for working with external data and libraries.
 
-## Concatenation
+## [Concatenation](@id man-concatenation)
 
 One of the most common and useful string operations is concatenation:
 
@@ -617,20 +617,21 @@ julia> "1 + 2 = 3" == "1 + 2 = $(1 + 2)"
 true
 ```
 
-You can search for the index of a particular character using the [`findfirst`](@ref) function:
+You can search for the index of a particular character using the
+[`findfirst`](@ref) and [`findlast`](@ref) functions:
 
 ```jldoctest
-julia> findfirst(isequal('x'), "xylophone")
-1
+julia> findfirst(isequal('o'), "xylophone")
+4
 
-julia> findfirst(isequal('p'), "xylophone")
-5
+julia> findlast(isequal('o'), "xylophone")
+7
 
 julia> findfirst(isequal('z'), "xylophone")
 ```
 
-You can start the search for a character at a given offset by using [`findnext`](@ref)
-with a third argument:
+You can start the search for a character at a given offset by using
+the functions [`findnext`](@ref) and [`findprev`](@ref):
 
 ```jldoctest
 julia> findnext(isequal('o'), "xylophone", 1)
@@ -638,6 +639,9 @@ julia> findnext(isequal('o'), "xylophone", 1)
 
 julia> findnext(isequal('o'), "xylophone", 5)
 7
+
+julia> findprev(isequal('o'), "xylophone", 5)
+4
 
 julia> findnext(isequal('o'), "xylophone", 8)
 ```
@@ -850,7 +854,7 @@ julia> m[2]
 Captures can be referenced in a substitution string when using [`replace`](@ref) by using `\n`
 to refer to the nth capture group and prefixing the substitution string with `s`. Capture group
 0 refers to the entire match object. Named capture groups can be referenced in the substitution
-with `g<groupname>`. For example:
+with `\g<groupname>`. For example:
 
 ```jldoctest
 julia> replace("first second", r"(\w+) (?<agroup>\w+)" => s"\g<agroup> \1")
@@ -931,6 +935,33 @@ ERROR: syntax: invalid escape sequence
 
 Triple-quoted regex strings, of the form `r"""..."""`, are also supported (and may be convenient
 for regular expressions containing quotation marks or newlines).
+
+The `Regex()` constructor may be used to create a valid regex string programmatically.  This permits using the contents of string variables and other string operations when constructing the regex string. Any of the regex codes above can be used within the single string argument to `Regex()`. Here are some examples:
+
+```jldoctest
+julia> using Dates
+
+julia> d = Date(1962,7,10)
+1962-07-10
+
+julia> regex_d = Regex("Day " * string(day(d)))
+r"Day 10"
+
+julia> match(regex_d, "It happened on Day 10")
+RegexMatch("Day 10")
+
+julia> name = "Jon"
+"Jon"
+
+julia> regex_name = Regex("[\"( ]$name[\") ]")  # interpolate value of name
+r"[\"( ]Jon[\") ]"
+
+julia> match(regex_name," Jon ")
+RegexMatch(" Jon ")
+
+julia> match(regex_name,"[Jon]") === nothing
+true
+```
 
 ## [Byte Array Literals](@id man-byte-array-literals)
 

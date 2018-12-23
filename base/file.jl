@@ -206,13 +206,13 @@ julia> readdir("test")
 function mkpath(path::AbstractString; mode::Integer = 0o777)
     isdirpath(path) && (path = dirname(path))
     dir = dirname(path)
-    (path == dir || isdir(path)) && return
+    (path == dir || isdir(path)) && return path
     mkpath(dir, mode = checkmode(mode))
     try
         mkdir(path, mode = mode)
-    # If there is a problem with making the directory, but the directory
-    # does in fact exist, then ignore the error. Else re-throw it.
     catch err
+        # If there is a problem with making the directory, but the directory
+        # does in fact exist, then ignore the error. Else re-throw it.
         if !isa(err, SystemError) || !isdir(path)
             rethrow()
         end
@@ -317,7 +317,7 @@ end
 """
     cp(src::AbstractString, dst::AbstractString; force::Bool=false, follow_symlinks::Bool=false)
 
-Copy the file, link, or directory from `src` to `dest`.
+Copy the file, link, or directory from `src` to `dst`.
 `force=true` will first remove an existing `dst`.
 
 If `follow_symlinks=false`, and `src` is a symbolic link, `dst` will be created as a
@@ -403,8 +403,13 @@ We can see the [`mtime`](@ref) has been modified by `touch`.
 function touch(path::AbstractString)
     f = open(path, JL_O_WRONLY | JL_O_CREAT, 0o0666)
     try
-        t = time()
-        futime(f,t,t)
+        if Sys.isunix()
+            ret = ccall(:futimes, Cint, (Cint, Ptr{Cvoid}), fd(f), C_NULL)
+            systemerror(:futimes, ret != 0, extrainfo=path)
+        else
+            t = time()
+            futime(f,t,t)
+        end
     finally
         close(f)
     end

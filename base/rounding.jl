@@ -172,6 +172,15 @@ function setrounding(f::Function, ::Type{T}, rounding::RoundingMode) where T
         setrounding_raw(T,old_rounding_raw)
     end
 end
+function setrounding_raw(f::Function, ::Type{T}, rounding) where T
+    old_rounding_raw = rounding_raw(T)
+    setrounding_raw(T,rounding)
+    try
+        return f()
+    finally
+        setrounding_raw(T,old_rounding_raw)
+    end
+end
 
 
 # Should be equivalent to:

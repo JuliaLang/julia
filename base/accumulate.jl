@@ -191,7 +191,7 @@ cumprod(x::AbstractVector) = cumprod(x, dims=1)
     accumulate(op, A; dims::Integer, [init])
 
 Cumulative operation `op` along the dimension `dims` of `A` (providing `dims` is optional
-for vectors). An inital value `init` may optionally be privided by a keyword argument. See
+for vectors). An initial value `init` may optionally be provided by a keyword argument. See
 also [`accumulate!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow). For common operations
 there are specialized variants of `accumulate`, see: [`cumsum`](@ref), [`cumprod`](@ref)

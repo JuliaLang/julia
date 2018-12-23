@@ -412,6 +412,9 @@ function tuplemerge(a::DataType, b::DataType)
         for loop_b = (false, true)
             for i = (lt + 1):(loop_b ? lbr : lar)
                 ti = unwrapva(loop_b ? bp[i] : ap[i])
+                while ti isa TypeVar
+                    ti = ti.ub
+                end
                 # compare (ti <-> tail), (wrapper ti <-> tail), (ti <-> wrapper tail), then (wrapper ti <-> wrapper tail)
                 # until we find the first element that contains the other in the pair
                 # TODO: this result would be more stable (and more associative and more commutative)

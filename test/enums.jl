@@ -77,8 +77,8 @@ end
 @test Int(_neg4) === -4
 @test Int(_neg3) === -3
 
-@test_throws ArgumentError("invalid value for Enum Test1, _zerofp = 0.0=0.0; values must be integers") @macrocall(@enum Test1 _zerofp=0.0)
-@test_throws ArgumentError("invalid value for Enum Test11, _zerofp2 = 0.5=0.5; values must be integers") @macrocall(@enum Test11 _zerofp2=0.5)
+@test_throws ArgumentError("invalid value for Enum Test1, _zerofp = 0.0; values must be integers") @macrocall(@enum Test1 _zerofp=0.0)
+@test_throws ArgumentError("invalid value for Enum Test11, _zerofp2 = 0.5; values must be integers") @macrocall(@enum Test11 _zerofp2=0.5)
 @enum Test111 _zerobi=BigInt(1)
 @test Integer(_zerobi) == 1
 
@@ -107,9 +107,9 @@ end
 @test typeof(Integer(_one_Test6)) == UInt128
 
 # enum values must be integers
-@test_throws ArgumentError("invalid value for Enum Test7, _zero = \"zero\"=zero; values must be integers") @macrocall(@enum Test7 _zero="zero")
-@test_throws ArgumentError("invalid value for Enum Test8, _zero = '0'=0; values must be integers") @macrocall(@enum Test8 _zero='0')
-@test_throws ArgumentError("invalid value for Enum Test9, _zero = 0.5=0.5; values must be integers") @macrocall(@enum Test9 _zero=0.5)
+@test_throws ArgumentError("invalid value for Enum Test7, _zero = \"zero\"; values must be integers") @macrocall(@enum Test7 _zero="zero")
+@test_throws ArgumentError("invalid value for Enum Test8, _zero = '0'; values must be integers") @macrocall(@enum Test8 _zero='0')
+@test_throws ArgumentError("invalid value for Enum Test9, _zero = 0.5; values must be integers") @macrocall(@enum Test9 _zero=0.5)
 
 # test macro handles keyword arguments
 @enum(Test11, _zero_Test11=2,
@@ -149,8 +149,12 @@ let b = IOBuffer()
     @test deserialize(b) === apple
 end
 
-@enum UI8::UInt8 ten=0x0A thr=0x03 sevn=0x07
-@test repr("text/plain", UI8) == "Enum $(string(UI8)):\nten = 0x0a\nthr = 0x03\nsevn = 0x07"
+@enum UI8::UInt8 ten=0x0A thr=0x03 sevn=0x07 fiftn=0xF0
+@test repr("text/plain", UI8)   == "Enum $(string(UI8)):\nten = 0x0a\nthr = 0x03\nsevn = 0x07\nfiftn = 0xf0"
+@test repr("text/plain", ten)   == "$(string(ten))::UI8 = 0x0a"
+@test repr("text/plain", thr)   == "$(string(thr))::UI8 = 0x03"
+@test repr("text/plain", sevn)  == "$(string(sevn))::UI8 = 0x07"
+@test repr("text/plain", fiftn) == "$(string(fiftn))::UI8 = 0xf0"
 
 # test block form
 @enum BritishFood begin

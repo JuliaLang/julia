@@ -55,13 +55,13 @@ sin(x::Real) = sin(float(x))
 # Coefficients in 13th order polynomial approximation on [0; π/4]
 #     sin(x) ≈ x + S1*x³ + S2*x⁵ + S3*x⁷ + S4*x⁹ + S5*x¹¹ + S6*x¹³
 # D for double, S for sin, number is the order of x-1
-
 const DS1 = -1.66666666666666324348e-01
 const DS2 = 8.33333333332248946124e-03
 const DS3 = -1.98412698298579493134e-04
 const DS4 = 2.75573137070700676789e-06
 const DS5 = -2.50507602534068634195e-08
 const DS6 = 1.58969099521155010221e-10
+
 """
     sin_kernel(yhi, ylo)
 

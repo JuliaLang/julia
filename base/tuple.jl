@@ -20,9 +20,9 @@ length(@nospecialize t::Tuple) = nfields(t)
 firstindex(@nospecialize t::Tuple) = 1
 lastindex(@nospecialize t::Tuple) = length(t)
 size(@nospecialize(t::Tuple), d) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
-axes(@nospecialize t::Tuple) = OneTo(length(t))
-@eval getindex(t::Tuple, i::Int) = getfield(t, i, $(Expr(:boundscheck)))
-@eval getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
+axes(@nospecialize t::Tuple) = (OneTo(length(t)),)
+@eval getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, $(Expr(:boundscheck)))
+@eval getindex(@nospecialize(t::Tuple), i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...,)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
 getindex(t::Tuple, c::Colon) = t
@@ -38,7 +38,10 @@ _setindex(v, i::Integer) = ()
 
 ## iterating ##
 
-iterate(t::Tuple, i::Int=1) = length(t) < i ? nothing : (t[i], i+1)
+function iterate(@nospecialize(t::Tuple), i::Int=1)
+    @_inline_meta
+    return (1 <= i <= length(t)) ? (@inbounds t[i], i + 1) : nothing
+end
 
 keys(@nospecialize t::Tuple) = OneTo(length(t))
 
@@ -57,7 +60,7 @@ end
 
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
 # while reducing to plain next() for arbitrary iterables.
-indexed_iterate(t::Tuple, i::Int, state=1) = (@_inline_meta; (t[i], i+1))
+indexed_iterate(t::Tuple, i::Int, state=1) = (@_inline_meta; (getfield(t, i), i+1))
 indexed_iterate(a::Array, i::Int, state=1) = (@_inline_meta; (a[i], i+1))
 function indexed_iterate(I, i)
     x = iterate(I)

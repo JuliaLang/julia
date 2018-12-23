@@ -10,6 +10,10 @@
 ## variable declarations. The spaces between the variable value and the
 ## comment will be included in the value.
 
+# Julia precompilation options
+# Set to zero to turn off extra precompile (e.g. for the REPL)
+JULIA_PRECOMPILE ?= 1
+
 # OPENBLAS build options
 OPENBLAS_TARGET_ARCH:=
 OPENBLAS_SYMBOLSUFFIX:=
@@ -165,13 +169,13 @@ SOMINOR := $(JULIA_MINOR_VERSION)
 endif
 
 ifneq ($(NO_GIT), 1)
-JULIA_COMMIT := $(shell git rev-parse --short=10 HEAD)
+JULIA_COMMIT := $(shell git -C $(JULIAHOME) rev-parse --short=10 HEAD)
 else
 JULIA_COMMIT := $(JULIA_VERSION)
 endif
 
 # Override `JULIA_COMMIT` to `JULIA_VERSION` if we're on a tagged commit
-ifeq ($(shell git describe --tags --exact-match > /dev/null 2>&1 && echo true),true)
+ifeq ($(shell git -C $(JULIAHOME) describe --tags --exact-match > /dev/null 2>&1 && echo true),true)
 JULIA_COMMIT := $(JULIA_VERSION)
 endif
 
@@ -972,7 +976,7 @@ ifeq ($(OS), FreeBSD)
   RPATH += -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)'
 endif
   RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
-  RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin
+  RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin -Wl,-rpath-link,$(build_shlibdir)
   RPATH_LIB := -Wl,-rpath,'$$ORIGIN/julia' -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
 endif
 
@@ -1038,13 +1042,13 @@ ifeq ($(OS), WINNT)
 ifneq ($(USEMSVC), 1)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv
+	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32
 JLDFLAGS := -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
 else #USEMSVC
-OSLIBS += kernel32.lib ws2_32.lib psapi.lib advapi32.lib iphlpapi.lib shell32.lib winmm.lib userenv.lib
+OSLIBS += kernel32.lib ws2_32.lib psapi.lib advapi32.lib iphlpapi.lib shell32.lib winmm.lib userenv.lib secur32.lib
 JLDFLAGS := -stack:8388608
 endif
 JCPPFLAGS += -D_WIN32_WINNT=0x0502
@@ -1177,22 +1181,24 @@ $(subst /,\\,$(subst $(shell $(2) pwd),$(shell $(2) cmd //C cd),$(abspath $(1)))
 endef
 endif
 
-define symlink_target
-CLEAN_TARGETS += clean-$(2)/$(3)
+define symlink_target # (from, to-dir, to-name)
+CLEAN_TARGETS += clean-$$(abspath $(2)/$(3))
 clean-$$(abspath $(2)/$(3)):
 ifeq ($(BUILD_OS), WINNT)
-	@-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&)
+	-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&)
 else
-	@-rm $$(abspath $(2)/$(3))
+	-rm -r $$(abspath $(2)/$(3))
 endif
 $$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(3))): $$(abspath $(2)/$(3))
 $$(abspath $(2)/$(3)): | $$(abspath $(2))
-ifeq ($(BUILD_OS), WINNT)
+ifeq ($$(BUILD_OS), WINNT)
 	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&) $$(call mingw_to_dos,$(1),)
-else ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+else ifneq (,$$(findstring CYGWIN,$$(BUILD_OS)))
 	@cmd /C mklink /J $$(call cygpath_w,$(2)/$(3)) $$(call cygpath_w,$(1))
 else ifdef JULIA_VAGRANT_BUILD
-	@cp -R $$(abspath $(1)) $$@
+	@rm -r $$@
+	@cp -R $$(abspath $(1)) $$@.tmp
+	@mv $$@.tmp $$@
 else
 	@ln -sf $$(abspath $(1)) $$@
 endif

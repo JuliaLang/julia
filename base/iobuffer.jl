@@ -89,7 +89,7 @@ function IOBuffer(
         maxsize::Integer=typemax(Int),
         sizehint::Union{Integer,Nothing}=nothing)
     if maxsize < 0
-        throw(ArgumentError("negative maxsize: $(maxsize)"))
+        throw(ArgumentError("negative maxsize"))
     end
     if sizehint !== nothing
         sizehint!(data, sizehint)
@@ -165,6 +165,21 @@ function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
         throw(EOFError())
     end
     nothing
+end
+
+function read(from::GenericIOBuffer, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
+    from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
+    avail = bytesavailable(from)
+    nb = sizeof(T)
+    if nb > avail
+        throw(EOFError())
+    end
+    GC.@preserve from begin
+        ptr::Ptr{T} = pointer(from.data, from.ptr)
+        x = unsafe_load(ptr)
+    end
+    from.ptr += nb
+    return x
 end
 
 function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
@@ -274,11 +289,9 @@ function compact(io::GenericIOBuffer)
     return io
 end
 
-@inline ensureroom(io::GenericIOBuffer, nshort::Int) = ensureroom(io, UInt(nshort))
-@inline function ensureroom(io::GenericIOBuffer, nshort::UInt)
+@noinline function ensureroom_slowpath(io::GenericIOBuffer, nshort::UInt)
     io.writable || throw(ArgumentError("ensureroom failed, IOBuffer is not writeable"))
     if !io.seekable
-        nshort >= 0 || throw(ArgumentError("ensureroom failed, requested number of bytes must be ≥ 0, got $nshort"))
         if !ismarked(io) && io.ptr > 1 && io.size <= io.ptr - 1
             io.ptr = 1
             io.size = 0
@@ -293,9 +306,18 @@ end
             end
         end
     end
-    n = min(nshort + (io.append ? io.size : io.ptr-1), io.maxsize)
-    if n > length(io.data)
-        resize!(io.data, n)
+    return
+end
+
+@inline ensureroom(io::GenericIOBuffer, nshort::Int) = ensureroom(io, UInt(nshort))
+@inline function ensureroom(io::GenericIOBuffer, nshort::UInt)
+    if !io.writable || (!io.seekable && io.ptr > 1)
+        ensureroom_slowpath(io, nshort)
+    end
+    n = min((nshort % Int) + (io.append ? io.size : io.ptr-1), io.maxsize)
+    l = length(io.data)
+    if n > l
+        _growend!(io.data, (n - l) % UInt)
     end
     return io
 end

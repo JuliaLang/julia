@@ -79,7 +79,7 @@ end
     @specialize
 
 Reset the specialization hint for an argument back to the default.
-For details, see [`@specialize`](@ref).
+For details, see [`@nospecialize`](@ref).
 """
 macro specialize(vars...)
     if nfields(vars) === 1
@@ -115,7 +115,7 @@ julia> convert(Int, 3.0)
 3
 
 julia> convert(Int, 3.5)
-ERROR: InexactError: Int64(Int64, 3.5)
+ERROR: InexactError: Int64(3.5)
 Stacktrace:
 [...]
 ```
@@ -264,10 +264,21 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-convert(::Type{T}, x::T) where {T<:Tuple{Any, Vararg{Any}}} = x
-convert(::Type{Tuple{}}, x::Tuple{Any, Vararg{Any}}) = throw(MethodError(convert, (Tuple{}, x)))
-convert(::Type{T}, x::Tuple{Any, Vararg{Any}}) where {T<:Tuple} =
+const AtLeast1 = Tuple{Any, Vararg{Any}}
+
+# converting to empty tuple type
+convert(::Type{Tuple{}}, ::Tuple{}) = ()
+convert(::Type{Tuple{}}, x::AtLeast1) = throw(MethodError(convert, (Tuple{}, x)))
+
+# converting to tuple types with at least one element
+convert(::Type{T}, x::T) where {T<:AtLeast1} = x
+convert(::Type{T}, x::AtLeast1) where {T<:AtLeast1} =
     (convert(tuple_type_head(T), x[1]), convert(tuple_type_tail(T), tail(x))...)
+
+# converting to Vararg tuple types
+convert(::Type{Tuple{Vararg{V}}}, x::Tuple{Vararg{V}}) where {V} = x
+convert(T::Type{Tuple{Vararg{V}}}, x::Tuple) where {V} =
+    (convert(tuple_type_head(T), x[1]), convert(T, tail(x))...)
 
 # TODO: the following definitions are equivalent (behaviorally) to the above method
 # I think they may be faster / more efficient for inference,
@@ -403,27 +414,6 @@ Stacktrace:
 ```
 """
 sizeof(x) = Core.sizeof(x)
-
-function append_any(xs...)
-    # used by apply() and quote
-    # must be a separate function from append(), since apply() needs this
-    # exact function.
-    out = Vector{Any}(undef, 4)
-    l = 4
-    i = 1
-    for x in xs
-        for y in x
-            if i > l
-                _growend!(out, 16)
-                l += 16
-            end
-            arrayset(true, out, y, i)
-            i += 1
-        end
-    end
-    _deleteend!(out, l-i+1)
-    out
-end
 
 # simple Array{Any} operations needed for bootstrap
 @eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)
@@ -630,6 +620,72 @@ function isassigned(v::SimpleVector, i::Int)
     return x != C_NULL
 end
 
+
+# used by ... syntax to access the `iterate` function from inside the Core._apply implementation
+# must be a separate function from append(), since Core._apply needs this exact function
+function append_any(xs...)
+    @nospecialize
+    lx = length(xs)
+    l = 4
+    i = 1
+    out = Vector{Any}(undef, l)
+    for xi in 1:lx
+        x = @inbounds xs[xi]
+        # handle some common cases, where we know the length
+        # and can inline the iterator because the runtime
+        # has an optimized version of the iterator
+        if x isa SimpleVector
+            lx = length(x)
+            if i + lx - 1 > l
+                ladd = lx > 16 ? lx : 16
+                _growend!(out, ladd)
+                l += ladd
+            end
+            for j in 1:lx
+                y = @inbounds x[j]
+                arrayset(true, out, y, i)
+                i += 1
+            end
+        elseif x isa Tuple
+            lx = length(x)
+            if i + lx - 1 > l
+                ladd = lx > 16 ? lx : 16
+                _growend!(out, ladd)
+                l += ladd
+            end
+            for j in 1:lx
+                y = @inbounds x[j]
+                arrayset(true, out, y, i)
+                i += 1
+            end
+        elseif x isa Array
+            lx = length(x)
+            if i + lx - 1 > l
+                ladd = lx > 16 ? lx : 16
+                _growend!(out, ladd)
+                l += ladd
+            end
+            for j in 1:lx
+                y = arrayref(true, x, j)
+                arrayset(true, out, y, i)
+                i += 1
+            end
+        else
+            for y in x
+                if i > l
+                    _growend!(out, 16)
+                    l += 16
+                end
+                arrayset(true, out, y, i)
+                i += 1
+            end
+        end
+    end
+    _deleteend!(out, l - i + 1)
+    return out
+end
+
+
 """
     Colon()
 
@@ -795,7 +851,7 @@ isdone(itr, state...) = missing
     iterate(iter [, state]) -> Union{Nothing, Tuple{Any, Any}}
 
 Advance the iterator to obtain the next element. If no elements
-remain, nothing should be returned. Otherwise, a 2-tuple of the
+remain, `nothing` should be returned. Otherwise, a 2-tuple of the
 next element and the new iteration state should be returned.
 """
 function iterate end

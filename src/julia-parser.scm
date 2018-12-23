@@ -8,7 +8,8 @@
 ;; be an operator.
 (define prec-assignment
   (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻= ≔ ⩴ ≕))
-           '(:= ~ $=)))
+           (add-dots '(~))
+           '(:= $=)))
 ;; comma - higher than assignment outside parentheses, lower when inside
 (define prec-pair (add-dots '(=>)))
 (define prec-conditional '(?))
@@ -154,7 +155,7 @@
 
 (define initial-reserved-word? (Set initial-reserved-words))
 
-(define reserved-words (append initial-reserved-words '(end else catch finally true false))) ;; todo: make this more complete
+(define reserved-words (append initial-reserved-words '(end else elseif catch finally true false))) ;; todo: make this more complete
 
 (define reserved-word? (Set reserved-words))
 
@@ -408,10 +409,10 @@
             ((eq? pred char-bin?) (fix-uint-neg neg (sized-uint-literal n s 1)))
             (is-float32-literal   (numchk n s) (float n))
             (n (if (and (integer? n) (> n 9223372036854775807))
-                   `(macrocall @int128_str (null) ,s)
+                   `(macrocall (core @int128_str) (null) ,s)
                    n))
-            ((within-int128? s) `(macrocall @int128_str (null) ,s))
-            (else `(macrocall @big_str (null) ,s))))))
+            ((within-int128? s) `(macrocall (core @int128_str) (null) ,s))
+            (else `(macrocall (core @big_str) (null) ,s))))))
 
 (define (fix-uint-neg neg n)
   (if neg
@@ -427,7 +428,7 @@
           ((<= l 16)  (numchk n s) (uint16 n))
           ((<= l 32)  (numchk n s) (uint32 n))
           ((<= l 64)  (numchk n s) (uint64 n))
-          ((<= l 128) `(macrocall @uint128_str (null) ,s))
+          ((<= l 128) `(macrocall (core @uint128_str) (null) ,s))
           (else       (error "Hex or binary literal too large for UInt128")))))
 
 (define (sized-uint-oct-literal n s)
@@ -440,7 +441,7 @@
                 (else             (uint64 n)))
           (begin (if (equal? s "0o") (numchk n s))
                  (if (oct-within-uint128? s)
-                     `(macrocall @uint128_str (null) ,s)
+                     `(macrocall (core @uint128_str) (null) ,s)
                      (error "Octal literal too large for UInt128"))))))
 
 (define (strip-leading-0s s)
@@ -471,9 +472,9 @@
       (>= 0 (compare-num-strings s "170141183460469231731687303715884105727"))))
 
 (define (large-number? t)
-  (and (pair? t)
-       (eq? (car t) 'macrocall)
-       (memq (cadr t) '(@int128_str @uint128_str @big_str))))
+  (and (pair? t) (eq? (car t) 'macrocall)
+       (pair? (cadr t)) (eq? (car (cadr t)) 'core)
+       (memq (cadadr t) '(@int128_str @uint128_str @big_str))))
 
 ;; skip to end of comment, starting at #:  either #...<eol> or #= .... =#.
 (define (skip-comment port)
@@ -518,6 +519,9 @@
       (and (char>=? c #\u200c) (char<=? c #\u200f))
       (memv c '(#\u00ad #\u2061 #\u115f))))
 
+(define (scolno port) (string " near column " (input-port-column port)))
+(define (scolno+1 port) (string " near column " (+ 1 (input-port-column port))))
+
 (define (next-token port s)
   (aset! s 2 (eq? (skip-ws port whitespace-newline) #t))
   (let ((c (peek-char port)))
@@ -542,7 +546,7 @@
                         ((opchar? nextc)
                          (let ((op (read-operator port c)))
                            (if (and (eq? op '..) (opchar? (peek-char port)))
-                               (error (string "invalid operator \"" op (peek-char port) "\"")))
+                               (error (string "invalid operator \"" op (peek-char port) "\"" (scolno port))))
                            op))
                         (else '|.|)))))
 
@@ -551,8 +555,8 @@
           (else
            (read-char port)
            (if (default-ignorable-char? c)
-               (error (string "invisible character \\u" (number->string (fixnum c) 16)))
-               (error (string "invalid character \"" c "\"")))))))
+               (error (string "invisible character \\u" (number->string (fixnum c) 16) (scolno+1 port)))
+               (error (string "invalid character \"" c "\"" (scolno+1 port))))))))
 
 ;; --- token stream ---
 
@@ -739,7 +743,7 @@
         ex
         (begin
           (take-token s)
-          (cond ((eq? t '~) ;; ~ is the only non-syntactic assignment-precedence operators
+          (cond ((or (eq? t '~) (eq? t '|.~|)) ;; ~ is the only non-syntactic assignment-precedence operators
                  (if (and space-sensitive (ts:space? s)
                           (not (space-before-next-token? s)))
                      (begin (ts:put-back! s t (ts:space? s))
@@ -767,7 +771,7 @@
             ;; (ex1) => ex1
             (car ex))
         (begin (take-token s)
-               (if (or (eof-object? (peek-token s)) (eq? (peek-token s) '=))
+               (if (eq? (peek-token s) '=) ;; allow x, = ...
                    (loop ex #f (peek-token s))
                    (loop (cons (parse-pair s) ex) #f (peek-token s)))))))
 
@@ -779,7 +783,7 @@
            (begin (if (not (ts:space? s))
                       (error "space required before \"?\" operator"))
                   (take-token s) ; take the ?
-                  (let ((t (with-whitespace-newline (without-range-colon (peek-token s)))))
+                  (let ((t (with-whitespace-newline (without-range-colon (require-token s)))))
                     (if (not (ts:space? s))
                         (error "space required after \"?\" operator")))
                   (let ((then (without-range-colon (parse-eq* s))))
@@ -788,7 +792,7 @@
                     (if (not (ts:space? s))
                         (error "space required before colon in \"?\" expression"))
                     (take-token s) ; take the :
-                    (let ((t (with-whitespace-newline (peek-token s))))
+                    (let ((t (with-whitespace-newline (require-token s))))
                       (if (not (ts:space? s))
                           (error "space required after colon in \"?\" expression")))
                     (list 'if ex then (parse-eq* s)))))
@@ -830,7 +834,7 @@
              (first? #t))
     (let* ((t   (peek-token s))
            (spc (ts:space? s)))
-      (cond ((and first? (eq? t '|..|))
+      (cond ((and first? (is-prec-colon? t) (not (eq? t ':)))
              (take-token s)
              `(call ,t ,ex ,(parse-expr s)))
             ((and range-colon-enabled (eq? t ':))
@@ -993,10 +997,10 @@
   (if (eq? op '-)
       (if (large-number? num)
           (if (eqv? (cadddr num) "-170141183460469231731687303715884105728")
-              `(macrocall @big_str (null) "170141183460469231731687303715884105728")
+              `(macrocall (core @big_str) (null) "170141183460469231731687303715884105728")
               `(,(car num) ,(cadr num) ,(caddr num) ,(string.tail (cadddr num) 1)))
           (if (= num -9223372036854775808)
-              `(macrocall @int128_str (null) "9223372036854775808")
+              `(macrocall (core @int128_str) (null) "9223372036854775808")
               (- num)))
       num))
 
@@ -1198,6 +1202,9 @@
              (loop
               (cond ((eqv? (peek-token s) #\()
                      (begin
+                       (if (ts:space? s)
+                           (error (string "space before \"(\" not allowed in \""
+                                          (deparse ex) ". (\"")))
                        (take-token s)
                        `(|.| ,ex (tuple ,@(parse-call-arglist s #\) )))))
                     ((eqv? (peek-token s) ':)
@@ -2372,7 +2379,7 @@
           ;; command syntax
           ((eqv? t #\`)
            (take-token s)
-           `(macrocall @cmd ,(line-number-node s) ,(parse-raw-literal s #\`)))
+           `(macrocall (core @cmd) ,(line-number-node s) ,(parse-raw-literal s #\`)))
 
           ((or (string? t) (number? t) (large-number? t)) (take-token s))
 

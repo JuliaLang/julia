@@ -5,9 +5,10 @@
 #####################
 
 function rewrap(@nospecialize(t), @nospecialize(u))
-    isa(t, Const) && return t
-    isa(t, Conditional) && return t
-    return rewrap_unionall(t, u)
+    if isa(t, TypeVar) || isa(t, Type)
+        return rewrap_unionall(t, u)
+    end
+    return t
 end
 
 isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
@@ -29,6 +30,11 @@ function issingletontype(@nospecialize t)
         return _all(issingletontype, t.parameters)
     end
     return false
+end
+
+function has_nontrivial_const_info(@nospecialize t)
+    isa(t, PartialTuple) && return true
+    return isa(t, Const) && !isdefined(typeof(t.val), :instance) && !(isa(t.val, Type) && issingletontype(t.val))
 end
 
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
@@ -154,3 +160,12 @@ function unioncomplexity(t::DataType)
 end
 unioncomplexity(u::UnionAll) = max(unioncomplexity(u.body), unioncomplexity(u.var.ub))
 unioncomplexity(@nospecialize(x)) = 0
+
+function improvable_via_constant_propagation(@nospecialize(t))
+    if isconcretetype(t) && t <: Tuple
+        for p in t.parameters
+            p === DataType && return true
+        end
+    end
+    return false
+end

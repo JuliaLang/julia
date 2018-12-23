@@ -179,20 +179,16 @@ module ObjLoadTest
 end
 
 # Test for proper parenting
-if Base.libllvm_version >= v"3.6" # llvm 3.6 changed the syntax for a gep, so just ignore this test on older versions
-    local foo
-    function foo()
-        # this IR snippet triggers an optimization relying
-        # on the llvmcall function having a parent module
-        Base.llvmcall(
-         """%1 = getelementptr i64, i64* null, i64 1
-            ret void""",
-        Cvoid, Tuple{})
-    end
-    code_llvm(devnull, foo, ())
-else
-    @info "Skipping gep parentage test on llvm < 3.6"
+local foo
+function foo()
+    # this IR snippet triggers an optimization relying
+    # on the llvmcall function having a parent module
+    Base.llvmcall(
+     """%1 = getelementptr i64, i64* null, i64 1
+        ret void""",
+    Cvoid, Tuple{})
 end
+code_llvm(devnull, foo, ())
 
 module CcallableRetTypeTest
     using Base: llvmcall, @ccallable
@@ -209,4 +205,27 @@ module CcallableRetTypeTest
         """),Float64,Tuple{})
     end
     @test do_the_call() === 42.0
+end
+
+# If this test breaks, you've probably broken Cxx.jl - please check
+module LLVMCallFunctionTest
+    using Base: llvmcall
+    using Test
+
+    function julia_to_llvm(@nospecialize x)
+        isboxed = Ref{UInt8}()
+        ccall(:julia_type_to_llvm,Ptr{Cvoid},(Any,Ref{UInt8}),x,isboxed)
+    end
+    const AnyTy = julia_to_llvm(Any)
+
+    const libllvmcalltest = "libllvmcalltest"
+    const the_f = ccall((:MakeIdentityFunction, libllvmcalltest), Ptr{Cvoid}, (Ptr{Cvoid},), AnyTy)
+
+    @eval really_complicated_identity(x) = llvmcall($(the_f), Any, Tuple{Any}, x)
+
+    mutable struct boxed_struct
+    end
+    let x = boxed_struct()
+        @test really_complicated_identity(x) === x
+    end
 end

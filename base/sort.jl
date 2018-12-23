@@ -19,7 +19,6 @@ import .Base:
     sort!,
     issorted,
     sortperm,
-    Slice,
     to_indices
 
 export # also exported by Base
@@ -370,6 +369,20 @@ struct InsertionSortAlg <: Algorithm end
 struct QuickSortAlg     <: Algorithm end
 struct MergeSortAlg     <: Algorithm end
 
+"""
+    PartialQuickSort{T <: Union{Int,OrdinalRange}}
+
+Indicate that a sorting function should use the partial quick sort
+algorithm. Partial quick sort returns the smallest `k` elements sorted from smallest
+to largest, finding them and sorting them using [`QuickSort`](@ref).
+
+Characteristics:
+  * *not stable*: does not preserve the ordering of elements which
+    compare equal (e.g. "a" and "A" in a sort of letters which
+    ignores case).
+  * *in-place* in memory.
+  * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
+"""
 struct PartialQuickSort{T <: Union{Int,OrdinalRange}} <: Algorithm
     k::T
 end
@@ -379,8 +392,54 @@ Base.last(a::PartialQuickSort{Int}) = a.k
 Base.first(a::PartialQuickSort) = first(a.k)
 Base.last(a::PartialQuickSort) = last(a.k)
 
+"""
+    InsertionSort
+
+Indicate that a sorting function should use the insertion sort
+algorithm. Insertion sort traverses the collection one element
+at a time, inserting each element into its correct, sorted position in
+the output list.
+
+Characteristics:
+  * *stable*: preserves the ordering of elements which
+    compare equal (e.g. "a" and "A" in a sort of letters
+    which ignores case).
+  * *in-place* in memory.
+  * *quadratic performance* in the number of elements to be sorted:
+    it is well-suited to small collections but should not be used for large ones.
+"""
 const InsertionSort = InsertionSortAlg()
+"""
+    QuickSort
+
+Indicate that a sorting function should use the quick sort
+algorithm, which is *not* stable.
+
+Characteristics:
+  * *not stable*: does not preserve the ordering of elements which
+    compare equal (e.g. "a" and "A" in a sort of letters which
+    ignores case).
+  * *in-place* in memory.
+  * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
+  * *good performance* for large collections.
+"""
 const QuickSort     = QuickSortAlg()
+"""
+    MergeSort
+
+Indicate that a sorting function should use the merge sort
+algorithm. Merge sort divides the collection into
+subcollections and repeatedly merges them, sorting each
+subcollection at each step, until the entire
+collection has been recombined in sorted form.
+
+Characteristics:
+  * *stable*: preserves the ordering of elements which compare
+    equal (e.g. "a" and "A" in a sort of letters which ignores
+    case).
+  * *not in-place* in memory.
+  * *divide-and-conquer* sort strategy.
+"""
 const MergeSort     = MergeSortAlg()
 
 const DEFAULT_UNSTABLE = QuickSort
@@ -417,26 +476,22 @@ end
     @inbounds begin
         mi = (lo+hi)>>>1
 
-        # sort the values in v[lo], v[mi], v[hi]
-
-        if lt(o, v[mi], v[lo])
+        # sort v[mi] <= v[lo] <= v[hi] such that the pivot is immediately in place
+        if lt(o, v[lo], v[mi])
             v[mi], v[lo] = v[lo], v[mi]
         end
-        if lt(o, v[hi], v[mi])
-            if lt(o, v[hi], v[lo])
-                v[lo], v[mi], v[hi] = v[hi], v[lo], v[mi]
+
+        if lt(o, v[hi], v[lo])
+            if lt(o, v[hi], v[mi])
+                v[hi], v[lo], v[mi] = v[lo], v[mi], v[hi]
             else
-                v[hi], v[mi] = v[mi], v[hi]
+                v[hi], v[lo] = v[lo], v[hi]
             end
         end
 
-        # move v[mi] to v[lo] and use it as the pivot
-        v[lo], v[mi] = v[mi], v[lo]
-        pivot = v[lo]
+        # return the pivot
+        return v[lo]
     end
-
-    # return the pivot
-    return pivot
 end
 
 # partition!
@@ -878,6 +933,8 @@ Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
 keyword arguments.
 
+To sort slices of an array, refer to [`sortslices`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [4 3; 1 2]
@@ -925,6 +982,56 @@ end
         sort!(Av, s, s+n-1, alg, order)
     end
     Av
+end
+
+"""
+    sort!(A; dims::Integer, alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+
+Sort the multidimensional array `A` along dimension `dims`.
+See [`sort!`](@ref) for a description of possible keyword arguments.
+
+To sort slices of an array, refer to [`sortslices`](@ref).
+
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
+
+# Examples
+```jldoctest
+julia> A = [4 3; 1 2]
+2×2 Array{Int64,2}:
+ 4  3
+ 1  2
+
+julia> sort!(A, dims = 1); A
+2×2 Array{Int64,2}:
+ 1  2
+ 4  3
+
+julia> sort!(A, dims = 2); A
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+```
+"""
+function sort!(A::AbstractArray;
+               dims::Integer,
+               alg::Algorithm=defalg(A),
+               lt=isless,
+               by=identity,
+               rev::Union{Bool,Nothing}=nothing,
+               order::Ordering=Forward)
+    ordr = ord(lt, by, rev, order)
+    nd = ndims(A)
+    k = dims
+
+    1 <= k <= nd || throw(ArgumentError("dimension out of range"))
+
+    remdims = ntuple(i -> i == k ? 1 : size(A, i), nd)
+    for idx in CartesianIndices(remdims)
+        Av = view(A, ntuple(i -> i == k ? Colon() : idx[i], nd)...)
+        sort!(Av, alg, ordr)
+    end
+    A
 end
 
 ## fast clever sorting for floats ##

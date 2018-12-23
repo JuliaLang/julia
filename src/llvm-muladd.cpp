@@ -49,37 +49,11 @@ static bool checkCombine(Module *m, Instruction *addOp, Value *maybeMul, Value *
         return false;
     if (!mulOp->hasOneUse())
         return false;
-#if JL_LLVM_VERSION >= 50000
     // On 5.0+ we only need to mark the mulOp as contract and the backend will do the work for us.
     auto fmf = mulOp->getFastMathFlags();
     fmf.setAllowContract(true);
     mulOp->copyFastMathFlags(fmf);
     return false;
-#else
-    IRBuilder<> builder(m->getContext());
-    builder.SetInsertPoint(addOp);
-    auto mul1 = mulOp->getOperand(0);
-    auto mul2 = mulOp->getOperand(1);
-    Value *muladdf = Intrinsic::getDeclaration(m, Intrinsic::fmuladd, addOp->getType());
-    if (negadd) {
-        auto newaddend = builder.CreateFNeg(addend);
-        // Might be a const
-        if (auto neginst = dyn_cast<Instruction>(newaddend))
-            neginst->setHasUnsafeAlgebra(true);
-        addend = newaddend;
-    }
-    Instruction *newv = builder.CreateCall(muladdf, {mul1, mul2, addend});
-    newv->setHasUnsafeAlgebra(true);
-    if (negres) {
-        // Shouldn't be a constant
-        newv = cast<Instruction>(builder.CreateFNeg(newv));
-        newv->setHasUnsafeAlgebra(true);
-    }
-    addOp->replaceAllUsesWith(newv);
-    addOp->eraseFromParent();
-    mulOp->eraseFromParent();
-    return true;
-#endif
 }
 
 bool CombineMulAdd::runOnFunction(Function &F)
@@ -91,22 +65,14 @@ bool CombineMulAdd::runOnFunction(Function &F)
             it++;
             switch (I.getOpcode()) {
             case Instruction::FAdd: {
-#if JL_LLVM_VERSION >= 60000
                 if (!I.isFast())
-#else
-                if (!I.hasUnsafeAlgebra())
-#endif
                     continue;
                 checkCombine(m, &I, I.getOperand(0), I.getOperand(1), false, false) ||
                     checkCombine(m, &I, I.getOperand(1), I.getOperand(0), false, false);
                 break;
             }
             case Instruction::FSub: {
-#if JL_LLVM_VERSION >= 60000
                 if (!I.isFast())
-#else
-                if (!I.hasUnsafeAlgebra())
-#endif
                     continue;
                 checkCombine(m, &I, I.getOperand(0), I.getOperand(1), true, false) ||
                     checkCombine(m, &I, I.getOperand(1), I.getOperand(0), true, true);

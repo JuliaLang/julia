@@ -19,11 +19,13 @@ signbit(x::Float16) = signbit(bitcast(Int16, x))
 """
     maxintfloat(T=Float64)
 
-The largest consecutive integer that is exactly represented in the given floating-point type `T`
-(which defaults to `Float64`).
+The largest consecutive integer-valued floating-point number that is exactly represented in
+the given floating-point type `T` (which defaults to `Float64`).
 
-That is, `maxintfloat` returns the smallest positive integer `n` such that `n+1`
-is *not* exactly representable in the type `T`.
+That is, `maxintfloat` returns the smallest positive integer-valued floating-point number
+`n` such that `n+1` is *not* exactly representable in the type `T`.
+
+When an `Integer`-type value is needed, use `Integer(maxintfloat(T))`.
 """
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = Float32(16777216.)
@@ -212,9 +214,8 @@ function round(x::AbstractFloat, ::RoundingMode{:NearestTiesAway})
     ifelse(x==y,y,trunc(2*x-y))
 end
 # Java-style round
-function round(x::AbstractFloat, ::RoundingMode{:NearestTiesUp})
-    y = floor(x)
-    ifelse(x==y,y,copysign(floor(2*x-y),x))
+function round(x::T, ::RoundingMode{:NearestTiesUp}) where {T <: AbstractFloat}
+    copysign(floor((x + (T(0.25) - eps(T(0.5)))) + (T(0.25) + eps(T(0.5)))), x)
 end
 
 # isapprox: approximate equality of numbers
