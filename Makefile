@@ -184,7 +184,7 @@ COMPILER_SRCS += $(shell find $(JULIAHOME)/base/compiler -name \*.jl)
 # sort these to remove duplicates
 BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl -and -not -name sysimg.jl) \
                     $(shell find $(BUILDROOT)/base -name \*.jl  -and -not -name sysimg.jl))
-STDLIB_SRCS := $(JULIAHOME)/base/sysimg.jl $(shell find $(build_datarootdir)/julia/stdlib/$(VERSDIR)/*/src -name \*.jl)
+STDLIB_SRCS := $(JULIAHOME)/base/sysimg.jl $(shell find $(JULIAHOME)/stdlib/*/src -name \*.jl)
 RELBUILDROOT := $(shell $(JULIAHOME)/contrib/relative_path.sh "$(JULIAHOME)/base" "$(BUILDROOT)/base/")
 
 $(build_private_libdir)/corecompiler.ji: $(COMPILER_SRCS) | $(build_private_libdir)
