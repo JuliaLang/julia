@@ -6,7 +6,7 @@ import re, sys
 # a method `platform_key_abi()` to parse uname-like output into something standarized.
 
 if len(sys.argv) < 2:
-    print("Usage: %s <host triplet>")
+    print("Usage: %s <host triplet> [<gcc version>]")
     sys.exit(1)
 
 arch_mapping = {
@@ -99,6 +99,20 @@ def p(x):
             x = x.replace(k, os_remapping[k])
         return '-' + x
     return x
+
+# If the user passes in a GCC version (like 8.2.0) use that to force a
+# "-gcc8" tag at the end of the triplet, but only if it has otherwise
+# not been specified
+if gcc_version == "blank_gcc":
+    if len(sys.argv) == 3:
+        gcc_version = {
+            "4": "gcc4",
+            "5": "gcc4",
+            "6": "gcc4",
+            "7": "gcc7",
+            "8": "gcc8",
+        }[sys.argv[2][0]]
+
 
 print(arch+p(platform)+p(libc)+r(call_abi)+p(gcc_version)+p(cxx_abi))
 
