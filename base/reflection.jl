@@ -177,12 +177,12 @@ fieldnames(::Core.TypeofBottom) =
 fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 
 """
-    hasfield(x, name::Symbol)
+    hasfield(x, s::Symbol)
 
 Returns a boolean indicating whether the object 'x' has the specified field as one of
 its own fields.
 """
-hasfield(x, s::Symbol) = hasproperty(x, s)
+hasfield(x, s::Symbol) = s in fieldnames(typeof(x))
 
 """
     nameof(t::DataType) -> Symbol
@@ -1218,4 +1218,4 @@ propertynames(x, private) = propertynames(x) # ignore private flag by default
 Returns a boolean indicating whether the object `x` has the specified property as one of
 its own properties.
 """
-hasproperty(x, s::Symbol) = s in propertynames(x)
+hasproperty(x, s::Symbol) = hasfield(x, s)
