@@ -137,6 +137,7 @@ macro enum(T, syms...)
         Enums.basetype(::Type{$(esc(typename))}) = $(esc(basetype))
         Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)
         Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($hi)
+        Base.hash(x::$(esc(typename)), h::UInt64) = hash($(hash(typename)), hash(Integer(x), h))
         Base.isless(x::$(esc(typename)), y::$(esc(typename))) = isless($basetype(x), $basetype(y))
         let insts = ntuple(i->$(esc(typename))($values[i]), $(length(vals)))
             Base.instances(::Type{$(esc(typename))}) = insts

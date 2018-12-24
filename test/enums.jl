@@ -163,3 +163,7 @@ end
     haggis       = 4
 end
 @test Int(haggis) == 4
+
+@enum HashEnum1 Enum1_a=1
+@enum HashEnum2 Enum2_a=1
+@test hash(Enum1_a) != hash(Enum2_a)
