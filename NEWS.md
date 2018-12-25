@@ -22,6 +22,8 @@ New library functions
 Standard library changes
 ------------------------
 
+* Added `Base.hasproperty` and `Base.hasfield` ([#28850]).
+
 
 #### LinearAlgebra
 
