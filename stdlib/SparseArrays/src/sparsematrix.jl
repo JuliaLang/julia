@@ -327,6 +327,11 @@ function _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}) where 
     newrowval = copyto!(similar(S.rowval, TiNew), S.rowval)
     return SparseMatrixCSC(S.m, S.n, newcolptr, newrowval, similar(S.nzval, TvNew))
 end
+# parent methods for similar that allocates an empty matrix (for when new dims are
+# two-dimensional).
+_sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
+    SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(S.rowval, TiNew, 0), similar(S.nzval, TvNew, 0))
+#=
 # parent methods for similar that as far as possible preserves stored-entry structure
 # (for when new dims are two-dimensional).
 function _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew}
@@ -361,6 +366,7 @@ function _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::
     ynz = min(max(nz, length(S.nzval)), n * m)
     return SparseMatrixCSC(m, n, newcolptr, newrowval, similar(S.nzval, TvNew, ynz))
 end
+=#
 # parent method for similar that allocates an empty sparse vector (when new dims are single)
 _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) where {TvNew,TiNew} =
     SparseVector(dims..., similar(S.rowval, TiNew, 0), similar(S.nzval, TvNew, 0))
