@@ -1392,10 +1392,10 @@ function _sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat,
     colptr = Vector{Int}(undef, n + 1)
     @inbounds for col = 1:n+1
         colptr[col] = j
-        while j <= nnz && rowval[j] <= colm + m
-            rowval[j] -= colm
+        while j <= nnz && (rowval[j] -= colm) <= m
             j += 1
         end
+        j <= nnz && (rowval[j] += colm)
         colm += m
     end
     return SparseMatrixCSC(m, n, colptr, rowval, rfn(nnz))
