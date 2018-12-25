@@ -46,6 +46,12 @@
     @test_throws ArgumentError match(r"test", GenericString("this is a test"))
     @test_throws ArgumentError findfirst(r"test", GenericString("this is a test"))
 
+    # Issue 27125
+    msg = "#Hello# from Julia"
+    re = r"#(.+)# from (?<name>\w+)"
+    subst = s"FROM: \g<name>\n MESSAGE: \1"
+    @test replace(msg, re => subst) == "FROM: Julia\n MESSAGE: Hello"
+
     # Named subpatterns
     let m = match(r"(?<a>.)(.)(?<b>.)", "xyz")
         @test (m[:a], m[2], m["b"]) == ("x", "y", "z")
