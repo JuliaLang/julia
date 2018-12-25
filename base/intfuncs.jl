@@ -75,7 +75,6 @@ end
 gcd(a::Integer) = a
 lcm(a::Integer) = a
 gcd(a::Integer, b::Integer) = gcd(promote(a,b)...)
-lcm(a::Integer, b::Integer) = lcm(promote(a,b)...)
 gcd(a::Integer, b::Integer...) = gcd(a, gcd(b...))
 lcm(a::Integer, b::Integer...) = lcm(a, lcm(b...))
 
