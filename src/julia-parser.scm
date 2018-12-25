@@ -737,8 +737,8 @@
       ex))
 
 (define (parse-assignment s down)
-  (let loop ((ex (down s))
-             (t  (peek-token s)))
+  (let* ((ex (down s))
+         (t  (peek-token s)))
     (if (not (is-prec-assignment? t))
         ex
         (begin
