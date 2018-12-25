@@ -76,30 +76,30 @@ default C functions do not appear in the stack trace), and an integer representa
 returned by [`backtrace`](@ref):
 
 ```julia-repl
-julia> frame = stacktrace()[3]
-eval(::Module, ::Expr) at REPL.jl:5
+julia> frame = stacktrace()[2]
+eval(::Module, ::Any) at boot.jl:319
 
 julia> frame.func
 :eval
 
 julia> frame.file
-Symbol("~/julia/usr/share/julia/stdlib/v0.7/REPL/src/REPL.jl")
+Symbol("./boot.jl")
 
 julia> frame.line
-5
+319
 
-julia> top_frame.linfo
-MethodInstance for eval(::Module, ::Expr)
+julia> frame.linfo
+MethodInstance for eval(::Module, ::Any)
 
-julia> top_frame.inlined
+julia> frame.inlined
 false
 
-julia> top_frame.from_c
+julia> frame.from_c
 false
 ```
 
 ```julia-repl
-julia> top_frame.pointer
+julia> frame.pointer
 0x00007f92d6293171
 ```
 
@@ -312,4 +312,3 @@ julia> frame = StackTraces.lookup(pointer)
 julia> println("The top frame is from $(frame[1].func)!")
 The top frame is from jl_apply_generic!
 ```
-
