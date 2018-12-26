@@ -342,6 +342,7 @@ end
 @testset "Issue #30502" begin
     @test sprand(UInt8(16), UInt8(16), 1.0) != spzeros(UInt8(16), UInt8(16))
     @test sprand(Int8(16), Int8(16), 1.0) != spzeros(Int8(16), Int8(16))
+    @test sprand(UInt8(16), UInt8(16), 1.0, ones) != spzeros(UInt8(16), UInt8(16))
 end
 
 @testset "kronecker product" begin
