@@ -679,6 +679,12 @@ function sort!(v::AbstractVector;
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward)
+    if by != identity
+        key = broadcast( by, v )
+        key_perm = sortperm( key, alg, lt, identity, rev, order )
+        v = v[ key_perm ]
+        return v
+    end
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
         n = length(v)
@@ -790,6 +796,10 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
                           rev::Union{Bool,Nothing}=nothing,
                           order::Ordering=Forward,
                           initialized::Bool=false)
+    if by != identity
+        key = broadcast( by, v )
+        return partialsortperm!( ix, key, k, lt, identity, rev, order, initialized )
+    end
     if !initialized
         @inbounds for i = axes(ix,1)
             ix[i] = i
@@ -837,6 +847,10 @@ function sortperm(v::AbstractVector;
                   by=identity,
                   rev::Union{Bool,Nothing}=nothing,
                   order::Ordering=Forward)
+    if by != identity
+        key = broadcast( by, v )
+        return sortperm( key, alg, lt, identity, rev, order )
+    end
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
         n = length(v)
@@ -887,6 +901,10 @@ function sortperm!(x::AbstractVector{<:Integer}, v::AbstractVector;
                    rev::Union{Bool,Nothing}=nothing,
                    order::Ordering=Forward,
                    initialized::Bool=false)
+    if by != identity
+        key = broadcast( by, v )
+        return sortperm!( x, key, alg, lt, identity, rev, order, initialized )
+    end
     if axes(x,1) != axes(v,1)
         throw(ArgumentError("index vector must have the same indices as the source vector, $(axes(x,1)) != $(axes(v,1))"))
     end
