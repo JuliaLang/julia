@@ -58,6 +58,11 @@ function nonzeroinds(x::SparseColumnView)
     return y
 end
 
+indtype(x::SparseColumnView) = indtype(parent(x))
+function nnz(x::SparseColumnView)
+    rowidx, colidx = parentindices(x)
+    return length(nzrange(parent(x), colidx))
+end
 
 ## similar
 #
