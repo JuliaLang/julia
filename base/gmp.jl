@@ -21,8 +21,8 @@ else
 end
 const CdoubleMax = Union{Float16, Float32, Float64}
 
-version() = VersionNumber(unsafe_string(unsafe_load(cglobal((:__gmp_version, :libgmp), Ptr{Cchar}))))
-bits_per_limb() = Int(unsafe_load(cglobal((:__gmp_bits_per_limb, :libgmp), Cint)))
+version() = VersionNumber(0)
+bits_per_limb() = Int(32)
 
 const VERSION = version()
 const BITS_PER_LIMB = bits_per_limb()
@@ -55,7 +55,7 @@ mutable struct BigInt <: Signed
     function BigInt()
         b = new(zero(Cint), zero(Cint), C_NULL)
         MPZ.init!(b)
-        finalizer(cglobal((:__gmpz_clear, :libgmp)), b)
+        #finalizer(cglobal((:__gmpz_clear, :libgmp)), b)
         return b
     end
 end
@@ -90,11 +90,13 @@ function __init__()
                 "Please rebuild Julia.")
         end
 
+#=
         ccall((:__gmp_set_memory_functions, :libgmp), Cvoid,
               (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}),
               cglobal(:jl_gc_counted_malloc),
               cglobal(:jl_gc_counted_realloc_with_old_size),
               cglobal(:jl_gc_counted_free_with_size))
+=#
 
         ZERO.alloc, ZERO.size, ZERO.d = 0, 0, C_NULL
         ONE.alloc, ONE.size, ONE.d = 1, 1, pointer(_ONE)

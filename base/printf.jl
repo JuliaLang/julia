@@ -2,7 +2,9 @@
 
 module Printf
 using .Base.Grisu
+if isdefined(Base, :GMP)
 using .Base.GMP
+end
 
 ### printf formatter generation ###
 const SmallFloatingPoint = Union{Float64,Float32,Float16}
@@ -916,6 +918,7 @@ const HEX_symbols = b"0123456789ABCDEF"
 decode_hex(x::Integer, digits) = decode_hex(x,hex_symbols,digits)
 decode_HEX(x::Integer, digits) = decode_hex(x,HEX_symbols,digits)
 
+if isdefined(Base, :BigInt)
 function decode(b::Int, x::BigInt, digits)
     neg = x.size < 0
     pt = Base.ndigits(x, base=abs(b))
@@ -943,6 +946,7 @@ function decode_0ct(x::BigInt, digits)
     GMP.MPZ.get_str!(p, 8, x)
     neg && (x.size = -x.size)
     return neg, Int32(pt), Int32(pt)
+end
 end
 
 ### decoding functions directly used by printf generated code ###
@@ -1049,6 +1053,7 @@ function ini_dec(x::SmallFloatingPoint, n::Int, digits)
     return Int32(len), Int32(pt), neg
 end
 
+if isdefined(Base, :BigInt)
 function ini_dec(x::BigInt, n::Int, digits)
     if x.size == 0
         ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), digits, '0', n)
@@ -1064,7 +1069,7 @@ function ini_dec(x::BigInt, n::Int, digits)
     end
     return (n, d, decode_dec(round(BigInt,x/big(10)^(d-n)))[3])
 end
-
+end
 
 ini_hex(x::Real, n::Int, digits) = ini_hex(x,n,hex_symbols,digits)
 ini_HEX(x::Real, n::Int, digits) = ini_hex(x,n,HEX_symbols,digits)
@@ -1136,6 +1141,7 @@ end
 ini_hex(x::Integer,ndigits::Int,digits) = throw(MethodError(ini_hex,(x,ndigits,digits)))
 
 #BigFloat
+if isdefined(Base, :BigFloat)
 fix_dec(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
 ini_dec(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
 ini_hex(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
@@ -1175,6 +1181,7 @@ function bigfloat_printf(out, d::BigFloat, flags::String, width::Int, precision:
     lng > 0 || error("invalid printf formatting for BigFloat")
     unsafe_write(out, pointer(digits), min(lng, bufsiz-1))
     return (false, ())
+end
 end
 
 ### external printf interface ###

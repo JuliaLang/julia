@@ -25,8 +25,6 @@ function __init__()
         ccall((:pcre2_jit_stack_assign_8, PCRE_LIB), Cvoid,
               (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), MATCH_CONTEXT[], C_NULL, JIT_STACK[])
     catch ex
-        Base.showerror_nostdio(ex,
-            "WARNING: Error during initialization of module PCRE")
     end
 end
 

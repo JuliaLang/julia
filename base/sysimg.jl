@@ -251,7 +251,13 @@ include("intfuncs.jl")
 include("strings/strings.jl")
 include("parse.jl")
 include("shell.jl")
+if !DISABLE_PCRE
 include("regex.jl")
+else
+macro r_str(args...)
+:(error("Regular expressions are not supported in this version of julia."))
+end
+end
 include("show.jl")
 include("arrayshow.jl")
 
@@ -327,22 +333,34 @@ function rand end
 function randn end
 
 # I/O
-include("stream.jl")
-include("filesystem.jl")
-using .Filesystem
-include("process.jl")
-include("grisu/grisu.jl")
-include("methodshow.jl")
-include("secretbuffer.jl")
+if !Sys.isjsvm()
+    include("stream.jl")
+    include("filesystem.jl")
+    using .Filesystem
+    include("process.jl")
+    include("methodshow.jl")
+    include("secretbuffer.jl")
+else
+    macro cmd(args...)
+        :(error("Commands are disabled in this version of julia"))
+    end
+    macro __DIR__()
+        "/"
+    end
+    homedir() = "/"
+end
 
 # core math functions
+include("grisu/grisu.jl")
 include("floatfuncs.jl")
 include("math.jl")
 using .Math
 const (√)=sqrt
 const (∛)=cbrt
 
-INCLUDE_STATE = 2 # include = _include (from lines above)
+if !Sys.isjsvm()
+    INCLUDE_STATE = 2 # include = _include (from lines above)
+end
 
 # reduction along dims
 include("reducedim.jl")  # macros in this file relies on string.jl
@@ -375,11 +393,13 @@ for T in [Signed, Integer, BigInt, Float32, Float64, Real, Complex, Rational]
     @eval copysign(x::$T, ::Unsigned) = +x
 end
 
+if !Sys.isjsvm()
 include("mpfr.jl")
 using .MPFR
 big(n::Integer) = convert(BigInt,n)
 big(x::AbstractFloat) = convert(BigFloat,x)
 big(q::Rational) = big(numerator(q))//big(denominator(q))
+end
 
 include("combinatorics.jl")
 
@@ -387,9 +407,11 @@ include("combinatorics.jl")
 include("hashing2.jl")
 
 # irrational mathematical constants
+if !Sys.isjsvm()
 include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
+end
 
 # (s)printf macros
 include("printf.jl")
@@ -403,9 +425,12 @@ include("channels.jl")
 
 # utilities
 include("deepcopy.jl")
-include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
+
+if !Sys.isjsvm()
+    include("download.jl")
+end
 
 # Stack frames and traces
 include("stacktraces.jl")
@@ -416,31 +441,37 @@ include("initdefs.jl")
 # worker threads
 include("threadcall.jl")
 
+# misc useful functions & macros
+include("util.jl")
+
+if !DISABLE_PCRE
 # code loading
 include("uuid.jl")
 include("loading.jl")
 
-# misc useful functions & macros
-include("util.jl")
-
 include("asyncmap.jl")
+
+# deprecated functions
+include("deprecated.jl")
+end
 
 include("multimedia.jl")
 using .Multimedia
 
-# deprecated functions
-include("deprecated.jl")
-
 # Some basic documentation
+if !Sys.isjsvm()
 include("docs/basedocs.jl")
+end
 
 include("client.jl")
 
+if !DISABLE_PCRE
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")
 using .Docs
 if isdefined(Core, :Compiler) && is_primary_base_module
     Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
+end
 end
 
 end_base_include = time_ns()
@@ -463,15 +494,19 @@ function __init__()
     # for the few uses of Libc.rand in Base:
     Libc.srand()
     # Base library init
-    reinit_stdio()
+    if !Sys.isjsvm()
+        reinit_stdio()
+    end
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
     # initialize loading
-    init_depot_path()
-    init_load_path()
+    if !Sys.isjsvm()    
+        init_depot_path()
+        init_load_path()
+    end
     nothing
 end
 
-INCLUDE_STATE = 3 # include = include_relative
+#INCLUDE_STATE = 3 # include = include_relative
 end
 
 const tot_time_stdlib = RefValue(0.0)
@@ -481,14 +516,18 @@ end # baremodule Base
 using .Base
 
 # Ensure this file is also tracked
-pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
+if !Sys.isjsvm()
+    pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
+end
 
 # set up depot & load paths to be able to find stdlib packages
 @eval Base creating_sysimg = true
-Base.init_depot_path()
-Base.init_load_path()
+if !Sys.isjsvm()
+    Base.init_depot_path()
+    Base.init_load_path()
+end
 
-if Base.is_primary_base_module
+if Base.is_primary_base_module && !Base.Sys.isjsvm()
 # load some stdlib packages but don't put their names in Main
 let
     # Stdlibs manually sorted in top down order
@@ -552,6 +591,7 @@ empty!(LOAD_PATH)
 @eval Base creating_sysimg = false
 Base.init_load_path() # want to be able to find external packages in userimg.jl
 
+if !Sys.isjsvm()
 let
 tot_time_userimg = @elapsed (Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
 
@@ -565,6 +605,7 @@ print("Base: ─────── "); Base.time_print(tot_time_base          * 
 print("Stdlibs: ──── "); Base.time_print(Base.tot_time_stdlib[] * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (Base.tot_time_stdlib[] / tot_time) * 100); println("%")
 if isfile("userimg.jl")
 print("Userimg: ──── "); Base.time_print(tot_time_userimg       * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_userimg       / tot_time) * 100); println("%")
+end
 end
 end
 

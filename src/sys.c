@@ -626,7 +626,7 @@ JL_DLLEXPORT void jl_raise_debugger(void)
 
 JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void)
 {
-    return jl_symbol(JL_BUILD_UNAME);
+    return jl_symbol("wasm");
 }
 
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void)

@@ -1759,6 +1759,8 @@ alignment(io::IO, x::Number) = (length(sprint(show, x, context=io, sizehint=0)),
 "`alignment(42)` yields (2,0)"
 alignment(io::IO, x::Integer) = (length(sprint(show, x, context=io, sizehint=0)), 0)
 "`alignment(4.23)` yields (1,3) for `4` and `.23`"
+
+if !DISABLE_PCRE
 function alignment(io::IO, x::Real)
     m = match(r"^(.*?)((?:[\.eE].*)?)$", sprint(show, x, context=io, sizehint=0))
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
@@ -1774,6 +1776,7 @@ function alignment(io::IO, x::Rational)
     m = match(r"^(.*?/)(/.*)$", sprint(show, x, context=io, sizehint=0))
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
+end
 end
 
 function alignment(io::IO, x::Pair)

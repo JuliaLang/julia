@@ -29,6 +29,7 @@ export BINDIR,
        isopenbsd,
        isunix,
        iswindows,
+       isjsvm,
        isexecutable,
        which
 
@@ -111,8 +112,10 @@ function __init__()
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
-    vers = "v$(VERSION.major).$(VERSION.minor)"
-    global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
+    if !isjsvm()
+        vers = "v$(VERSION.major).$(VERSION.minor)"
+        global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
+    end
     nothing
 end
 
@@ -279,6 +282,8 @@ function isunix(os::Symbol)
         return false
     elseif islinux(os) || isbsd(os)
         return true
+    elseif isjsvm(os)
+        return false
     else
         throw(ArgumentError("unknown operating system \"$os\""))
     end
@@ -377,7 +382,18 @@ See documentation in [Handling Operating System Variation](@ref).
 """
 isapple(os::Symbol) = (os === :Apple || os === :Darwin)
 
-for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly)
+"""
+    Sys.isjsvm([os])
+
+Predicate for testing if julia is running on a Javascript VM (including e.g.
+WASM in a Browser/JS embedding)
+
+!!! compat "Julia 1.2"
+    This function requires at least Julia 1.2.
+"""
+isjsvm(os::Symbol) = (os === :wasm)
+
+for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
     @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
 end
 

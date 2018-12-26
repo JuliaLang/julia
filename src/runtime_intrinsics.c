@@ -77,6 +77,7 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
 
 JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 {
+    jl_(v); jl_(ty);
     JL_TYPECHK(cglobal, type, ty);
     JL_GC_PUSH1(&v);
     jl_value_t *rt =

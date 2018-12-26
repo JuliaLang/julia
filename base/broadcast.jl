@@ -609,7 +609,9 @@ broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,R
 broadcastable(x::Ptr) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,Ref,Tuple,Broadcasted}) = x
+if !Base.DISABLE_PCRE
 broadcastable(r::Regex) = Ref(r)
+end
 # Default to collecting iterables — which will error for non-iterables
 broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))

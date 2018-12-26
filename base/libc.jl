@@ -112,7 +112,7 @@ flush_cstdio() = ccall(:jl_flush_cstdio, Cvoid, ())
 ## time-related functions ##
 
 # TODO: check for usleep errors?
-if Sys.isunix()
+if Sys.isunix() || Sys.isjsvm()
     systemsleep(s::Real) = ccall(:usleep, Int32, (UInt32,), round(UInt32, s*1e6))
 elseif Sys.iswindows()
     function systemsleep(s::Real)

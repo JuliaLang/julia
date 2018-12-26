@@ -400,6 +400,7 @@ printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) 
 printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
     printstyled(stdout, msg...; bold=bold, color=color)
 
+if !Sys.isjsvm()
 """
     Base.julia_cmd(juliapath=joinpath(Sys.BINDIR::String, julia_exename()))
 
@@ -481,6 +482,7 @@ function julia_exename()
         return @static Sys.iswindows() ? "julia-debug.exe" : "julia-debug"
     end
 end
+end
 
 """
     securezero!(o)
@@ -529,6 +531,8 @@ function getpass(input::TTY, output::IO, prompt::AbstractString)
     end
     return seekstart(s)
 end
+elseif Sys.isjsvm()
+    getpass(input, output, prompt) = error("Unimplemented")
 else
 function getpass(input::TTY, output::IO, prompt::AbstractString)
     (input === stdin && output === stdout) || throw(ArgumentError("getpass only works for stdin"))
@@ -672,8 +676,8 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
 end
 _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
-_crc32c(uuid::UUID, crc::UInt32=0x00000000) =
-    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
+#_crc32c(uuid::UUID, crc::UInt32=0x00000000) =
+#    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
 
 """
     @kwdef typedef

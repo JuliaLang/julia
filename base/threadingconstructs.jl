@@ -16,7 +16,13 @@ threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 Get the number of threads available to the Julia process. This is the inclusive upper bound
 on `threadid()`.
 """
+function nthreads end
+
+if Sys.isjsvm()
+nthreads() = 1
+else
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
+end
 
 # Only read/written by the main thread
 const in_threaded_loop = Ref(false)

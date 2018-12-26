@@ -18,7 +18,8 @@ export
     splitext,
     splitpath
 
-if Sys.isunix()
+if Base.DISABLE_PCRE
+elseif Sys.isunix()
     const path_separator    = "/"
     const path_separator_re = r"/+"
     const path_directory_re = r"(?:^|/)\.{0,2}$"

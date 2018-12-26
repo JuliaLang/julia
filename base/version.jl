@@ -85,6 +85,7 @@ show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
 
 Broadcast.broadcastable(v::VersionNumber) = Ref(v)
 
+if !DISABLE_PCRE
 const VERSION_REGEX = r"^
     v?                                      # prefix        (optional)
     (\d+)                                   # major         (required)
@@ -96,6 +97,7 @@ const VERSION_REGEX = r"^
     (?:\+((?:[0-9a-z-]+\.)*[0-9a-z-]+))?    # build         (optional)
     ))
 $"ix
+end
 
 function split_idents(s::AbstractString)
     idents = split(s, '.')
@@ -107,6 +109,7 @@ end
 
 function VersionNumber(v::AbstractString)
     v == "∞" && return typemax(VersionNumber)
+    return VersionNumber(0)
     m = match(VERSION_REGEX, v)
     m === nothing && throw(ArgumentError("invalid version string: $v"))
     major, minor, patch, minus, prerl, plus, build = m.captures
@@ -137,7 +140,7 @@ v"2.0.1-rc1"
 """
 macro v_str(v); VersionNumber(v); end
 
-typemin(::Type{VersionNumber}) = v"0-"
+typemin(::Type{VersionNumber}) = VersionNumber(0,0,0,(),())
 
 function typemax(::Type{VersionNumber})
     ∞ = typemax(VInt)
