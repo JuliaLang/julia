@@ -339,6 +339,11 @@ end
     end
 end
 
+@testset "Issue #30502" begin
+    @test sprand(UInt8(16), UInt8(16), 1.0) != spzeros(UInt8(16), UInt8(16))
+    @test sprand(Int8(16), Int8(16), 1.0) != spzeros(Int8(16), Int8(16))
+end
+
 @testset "kronecker product" begin
     for (m,n) in ((5,10), (13,8), (14,10))
         a = sprand(m, 5, 0.4); a_d = Matrix(a)
