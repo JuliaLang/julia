@@ -186,6 +186,10 @@ end
     end
 end
 
+@testset "Issue #28963" begin
+    @test_throws DimensionMismatch (spzeros(10,10)[:, :] = sprand(10,20,0.5))
+end
+
 @testset "matrix-vector multiplication (non-square)" begin
     for i = 1:5
         a = sprand(10, 5, 0.5)
