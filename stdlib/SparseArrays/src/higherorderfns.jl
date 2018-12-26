@@ -831,7 +831,7 @@ function _outer(trans::Tf, x, y) where Tf
     nnzw = length(nzvalsw)
 
     nnzC = nnzx * nnzw
-    Tv = typeof(one(eltype(x)) * one(eltype(w)))
+    Tv = typeof(oneunit(eltype(x)) * oneunit(eltype(w)))
     Ti = promote_type(indtype(x), indtype(w))
     colptrC = zeros(Ti, nw + 1)
     rowvalC = Vector{Ti}(undef, nnzC)
