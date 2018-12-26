@@ -2,23 +2,24 @@
 
 // Processor feature detection
 
+#include "julia.h"
+#include "julia_internal.h"
+
+#ifdef _OS_WASM_
+#include "processor_wasm.cpp"
+#else
 #include "llvm-version.h"
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/MathExtras.h>
 
 #include "processor.h"
 
-#include "julia.h"
-#include "julia_internal.h"
-
 #include <map>
 #include <algorithm>
 
-#ifndef _OS_WASM_
 #include "llvm-version.h"
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/MathExtras.h>
-#endif
 
 #include "julia_assert.h"
 
@@ -853,4 +854,5 @@ static inline void dump_cpu_spec(uint32_t cpu, const FeatureList<n> &features,
 
 #include "processor_fallback.cpp"
 
+#endif
 #endif

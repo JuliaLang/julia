@@ -294,6 +294,13 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     jl_print_timings();
 #endif
 }
+#else
+JL_DLLEXPORT void jl_atexit_hook(int exitcode)
+{
+    ios_flush(JL_STDOUT);
+    ios_flush(JL_STDERR);
+    jl_flush_cstdio();
+}
 #endif
 
 void jl_get_builtin_hooks(void);

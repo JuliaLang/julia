@@ -47,10 +47,10 @@ SRCS := \
 	simplevector runtime_intrinsics precompile \
 	threading stackwalk gc gc-debug gc-pages gc-stacks method \
 	jlapi signal-handling safepoint jloptions timing subtype rtutils \
-	crc32c
+	crc32c APInt-C processor
 
 ifneq ($(OS),wasm)
-SRCS += jl_uv threadgroup processor APInt-C runtime_ccall
+SRCS += jl_uv threadgroup runtime_ccall
 else
 SRCS += jl_wasm
 endif

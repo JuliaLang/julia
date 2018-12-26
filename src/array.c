@@ -523,6 +523,8 @@ JL_DLLEXPORT jl_value_t *jl_ptrarrayref(jl_array_t *a JL_PROPAGATES_ROOT, size_t
     assert(a->flags.ptrarray);
     jl_value_t *elt = ((jl_value_t**)a->data)[i];
     if (elt == NULL) {
+        jl_(a);
+        jl_printf(JL_STDERR, "Index: %d", i);
         jl_throw(jl_undefref_exception);
     }
     return elt;

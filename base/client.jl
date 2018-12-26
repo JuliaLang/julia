@@ -329,6 +329,8 @@ const REPL_MODULE_REF = Ref{Module}()
 
 # run the requested sort of evaluation loop on stdio
 function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
+    print("HELLO WORLD!")
+
     global active_repl
     # load interactive-only libraries
     if !isdefined(Main, :InteractiveUtils)
