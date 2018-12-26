@@ -67,7 +67,7 @@ omitted it will default to [`Float64`](@ref).
 | [`rand(T, dims...)`](@ref)                     | an `Array` with random, iid [^1] and uniformly distributed values in the half-open interval ``[0, 1)``                                                                                                                                       |
 | [`randn(T, dims...)`](@ref)                    | an `Array` with random, iid and standard normally distributed values                                                                                                                                                                         |
 | [`Matrix{T}(I, m, n)`](@ref)                   | `m`-by-`n` identity matrix                                                                                                                                                                                                                   |
-| [`range(start, length, stop, step=1)`](@ref)    | linearly spaced elements from `start` to `stop` or `length/step`, pick only one of `length` and `stop`, `step` is defaulting to `1`                                                                                                                                                                                 |
+| [`range(start; length, stop, step=1)`](@ref)    | linearly spaced elements from `start` to `stop` or `length/step`, pick only one of `length` and `stop`, `step` is defaulting to `1`                                                                                                                                                                                 |
 | [`fill!(A, x)`](@ref)                          | fill the array `A` with the value `x`                                                                                                                                                                                                        |
 | [`fill(x, dims...)`](@ref)                     | an `Array` filled with the value `x`                                                                                                                                                                                                         |
 
@@ -182,7 +182,7 @@ The result is an N-d dense array with dimensions that are the concatenation of t
 of the variable ranges `rx`, `ry`, etc. and each `F(x,y,...)` evaluation returns a scalar.
 
 The following example computes a weighted average of the current element and its left and right
-neighbor along a 1-d grid. :
+neighbor along a 1-d grid:
 
 ```julia-repl
 julia> x = rand(8)
