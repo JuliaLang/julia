@@ -141,3 +141,4 @@ def_count_conn()
 
 # Cannot add more workers with a different `lazy` value
 @test_throws ArgumentError addprocs_with_testenv(1; lazy=true)
+rmprocs(workers())

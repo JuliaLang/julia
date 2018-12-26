@@ -88,6 +88,7 @@ include("process_messages.jl")  # process incoming messages
 include("remotecall.jl")  # the remotecall* api
 include("macros.jl")      # @spawn and friends
 include("workerpool.jl")
+include("queuepool.jl")   # QueuePool
 include("pmap.jl")
 include("managers.jl")    # LocalManager and SSHManager
 include("precompile.jl")

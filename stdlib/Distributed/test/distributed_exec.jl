@@ -1559,3 +1559,4 @@ end
 # cluster at any time only supports a single topology.
 rmprocs(workers())
 include("topology.jl")
+include("queuepool.jl")
