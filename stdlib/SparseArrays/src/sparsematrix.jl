@@ -1384,6 +1384,7 @@ end
 
 
 function _sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat, rfn)
+    m, n = Int(m), Int(n)
     (m < 0 || n < 0) && throw(ArgumentError("invalid Array dimensions"))
     0 <= density <= 1 || throw(ArgumentError("$density not in [0,1]"))
     j, colm  = 1, 0
