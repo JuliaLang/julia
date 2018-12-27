@@ -439,7 +439,11 @@ function show_vector(io::IO, v, opn='[', cls=']')
         print(io, "  …  ")
         show_delim_array(io, v, "", ",", cls, false, inds[end-9], inds[end])
     else
-        show_delim_array(io, v, opn, ",", cls, false)
+        if hasmethod(isless, Tuple{eltype(v), eltype(v)})
+            show_delim_array(io, sort(collect(v)), opn, ",", cls, false)
+        else
+            show_delim_array(io, v, opn, ",", cls, false)
+        end
     end
 end
 
