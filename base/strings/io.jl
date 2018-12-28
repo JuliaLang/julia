@@ -440,7 +440,8 @@ function unescape_string(io, s::AbstractString, keep::AbstractArray{<:AbstractCh
         end
     end
 end
-unescape_string(s::AbstractString, keep_esc::AbstractArray{<:AbstractChar}=Char[]) = sprint(unescape_string, s, keep_esc; sizehint=lastindex(s))
+unescape_string(s::AbstractString, keep_esc::AbstractArray{<:AbstractChar}=Char[]) =
+    sprint(unescape_string, s, keep_esc; sizehint=lastindex(s))
 
 macro b_str(s)
     v = codeunits(unescape_string(s))
