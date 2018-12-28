@@ -383,7 +383,7 @@ julia> unescape_string("\\\\101") # octal
 ## See also
 [`escape_string`](@ref).
 """
-function unescape_string(io, s::AbstractString, keep::AbstractArray{<:AbstractChar} = nothing)
+function unescape_string(io, s::AbstractString, keep = ())
     a = Iterators.Stateful(s)
     for c in a
         if !isempty(a) && c == '\\'
@@ -440,8 +440,8 @@ function unescape_string(io, s::AbstractString, keep::AbstractArray{<:AbstractCh
         end
     end
 end
-unescape_string(s::AbstractString, keep_esc::AbstractArray{<:AbstractChar}=Char[]) =
-    sprint(unescape_string, s, keep_esc; sizehint=lastindex(s))
+unescape_string(s::AbstractString, keep = ())=
+    sprint(unescape_string, s, keep; sizehint=lastindex(s))
 
 macro b_str(s)
     v = codeunits(unescape_string(s))
