@@ -565,7 +565,7 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
                     print(io, bb_guard_rail)
                     ssa_guard = " "^(maxlength_idx + 4 + (i - 1))
                     entry_label = "$(ssa_guard)$(method_name(entry)) at $(entry.file):$(entry[:line]) "
-                    hline = string("─"^(start_column-length(entry_label)-length(bb_guard_rail)+max_depth-i), "┐")
+                    hline = string("─"^max(0,(start_column-length(entry_label)-length(bb_guard_rail)+max_depth-i)), "┐")
                     printstyled(io, string(entry_label, hline), "\n"; color=:light_black)
                     bb_guard_rail = bb_guard_rail_cont
                 end
