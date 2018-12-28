@@ -143,6 +143,37 @@ static NOINLINE int true_main(int argc, char *argv[])
     return 0;
 }
 
+void JL_DLLEXPORT jl_initialize() {
+    char* argv2[]={"./julia", "-C", "\"native\"", "--compile=no", "--startup-file=no", "-J", "sys.ji", 0};
+    int argc = 9;
+    char *argv = argv2;
+    libsupport_init();
+    jl_parse_opts(&argc, (char***)&argv);
+    julia_init(jl_options.image_file_specified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
+}
+
+void JL_DLLEXPORT jl_eval_and_print(const char *line)
+{
+    JL_TRY {
+        jl_value_t *val = (jl_value_t*)jl_eval_string(line);
+        if (jl_exception_occurred()) {
+            jl_printf(JL_STDERR, "error during run:\n");
+            jl_static_show(JL_STDERR, jl_current_exception());
+            jl_exception_clear();
+        }
+        else if (val) {
+            jl_static_show(JL_STDOUT, val);
+        }
+        jl_printf(JL_STDOUT, "\n");
+    }
+    JL_CATCH {
+        jl_printf(JL_STDERR, "\nparser error:\n");
+        jl_static_show(JL_STDERR, jl_current_exception());
+        jl_printf(JL_STDERR, "\n");
+        jlbacktrace();
+    }
+}
+
 int main(int argc, char *argv[]) {
     char* argv2[]={"./julia", "-C", "\"native\"", "--compile=no", "--startup-file=no", "-J", "sys.ji", 0};
     argc = 9;

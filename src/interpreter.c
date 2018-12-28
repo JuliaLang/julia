@@ -809,6 +809,18 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             return jl_get_spec_lambda(
                 eval_value(args[5], s),
                 jl_unbox_uint32(eval_value(args[6], s)));
+        } else if (strcmp(name, "jl_is_debugbuild") == 0) {
+            return jl_box_bool(jl_is_debugbuild());
+        } else if (strcmp(name, "jl_symbol_name") == 0) {
+            jl_ptls_t ptls = jl_get_ptls_states();
+            const char *name = jl_symbol_name(eval_value(args[5], s));
+            jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+            *(void**)jl_data_ptr(v) = name;
+            return v;
+        } else if (strcmp(name, "strlen") == 0) {
+            return jl_box_uint32(strlen(
+                jl_unbox_voidpointer(eval_value(args[5], s))
+            ));
         } else {
             jl_printf(JL_STDOUT, "Encountered foreigncall not mapped in interpreter. For now, you may add it to the list. (Or write a proper solution)\n");
             jl_(e);
