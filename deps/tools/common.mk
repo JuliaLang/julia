@@ -104,6 +104,7 @@ endif
 
 
 ## PATHS ##
+
 # sort is used to remove potential duplicates
 DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_includedir) $(build_sysconfdir) $(build_datarootdir) $(build_staging) $(build_prefix)/manifest)
 
@@ -171,8 +172,8 @@ $$(build_staging)/$2.tgz: $$(BUILDDIR)/$2/build-compiled
 	rm -rf $$(build_staging)/$2
 	mv $$@.tmp $$@
 
-$$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tgz | $(build_prefix)/manifest
-	mkdir -p $$(build_prefix)
+$$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tgz
+	mkdir -p $$(build_prefix)/manifest
 	$(UNTAR) $$< -C $$(build_prefix)
 	$6
 	echo $2 > $$@

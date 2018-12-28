@@ -124,9 +124,11 @@ endif
 
 # we include twice to pickup user definitions better
 # include from JULIAHOME first so that BUILDROOT can override
+MAYBE_HOST :=
 ifneq ($(BUILDING_HOST_TOOLS),1)
 MAKE_USER_FNAME = Make.user
 else
+MAYBE_HOST := /host
 MAKE_USER_FNAME = Make.host.user
 endif
 
@@ -201,8 +203,12 @@ includedir := $(prefix)/include
 sysconfdir := $(prefix)/etc
 
 # Directories where things get built into
-build_prefix := $(BUILDROOT)/usr
+build_prefix := $(BUILDROOT)/usr$(MAYBE_HOST)
+ifeq ($(BUILDING_HOST_TOOLS), 1)
+build_staging := $(BUILDROOT)/usr-host-staging
+else
 build_staging := $(build_prefix)-staging
+endif
 build_bindir := $(build_prefix)/bin
 build_depsbindir := $(build_prefix)/tools
 build_libdir := $(build_prefix)/lib
@@ -995,7 +1001,7 @@ else ifneq ($(USEMSVC), 1)
 endif
 
 ifeq ($(OS), Linux)
-OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -Wl,--export-dynamic,--as-needed,--no-whole-archive $(LIBUNWIND)
+OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -Wl,--export-dynamic,--as-needed,--no-whole-archive
 # Detect if ifunc is supported
 IFUNC_DETECT_SRC := 'void (*f0(void))(void) { return (void(*)(void))0L; }; void f(void) __attribute__((ifunc("f0")));'
 ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /dev/null > /dev/null 2>&1 && echo supported))
