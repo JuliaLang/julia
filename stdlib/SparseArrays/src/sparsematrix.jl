@@ -1443,6 +1443,7 @@ julia> sprand(Float64, 3, 0.75)
 """
 function sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat,
                 rfn::Function, ::Type{T}=eltype(rfn(r,1))) where T
+    m,n = Int(m), Int(n)
     N = m*n
     N == 0 && return spzeros(T,m,n)
     N == 1 && return rand(r) <= density ? sparse([1], [1], rfn(r,1)) : spzeros(T,1,1)
@@ -1453,6 +1454,7 @@ end
 
 function sprand(m::Integer, n::Integer, density::AbstractFloat,
                 rfn::Function, ::Type{T}=eltype(rfn(1))) where T
+    m,n = Int(m), Int(n)
     N = m*n
     N == 0 && return spzeros(T,m,n)
     N == 1 && return rand() <= density ? sparse([1], [1], rfn(1)) : spzeros(T,1,1)
@@ -2575,6 +2577,7 @@ function setindex!(A::SparseMatrixCSC{Tv,Ti}, V::AbstractVecOrMat, Ix::Union{Int
     @assert !has_offset_axes(A, V, Ix, Jx)
     (I, J) = Base.ensure_indexable(to_indices(A, (Ix, Jx)))
     checkbounds(A, I, J)
+    Base._setindex!(IndexStyle(A), A, V, to_indices(A, (Ix, Jx))...)
     B = _to_same_csc(A, V, I, J)
 
     issortedI = issorted(I)

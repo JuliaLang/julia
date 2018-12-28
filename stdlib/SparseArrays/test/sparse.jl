@@ -186,6 +186,10 @@ end
     end
 end
 
+@testset "Issue #28963" begin
+    @test_throws DimensionMismatch (spzeros(10,10)[:, :] = sprand(10,20,0.5))
+end
+
 @testset "matrix-vector multiplication (non-square)" begin
     for i = 1:5
         a = sprand(10, 5, 0.5)
@@ -337,6 +341,11 @@ end
         @test Array(a*f) == Array(a)*f
         @test Array(f*b) == f*Array(b)
     end
+end
+
+@testset "Issue #30502" begin
+    @test nnz(sprand(UInt8(16), UInt8(16), 1.0)) == 256
+    @test nnz(sprand(UInt8(16), UInt8(16), 1.0, ones)) == 256
 end
 
 @testset "kronecker product" begin
