@@ -22,6 +22,7 @@ New library functions
 Standard library changes
 ------------------------
 
+* Added argument `keep` to `unescape_string` ([#27125]).
 
 #### LinearAlgebra
 

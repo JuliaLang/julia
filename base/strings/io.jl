@@ -354,10 +354,11 @@ end
 # TODO: handle unescaping invalid UTF-8 sequences
 """
     unescape_string(str::AbstractString)::AbstractString
-    unescape_string(io, str::AbstractString)::Nothing
+    unescape_string(io, str::AbstractString, keep::AbstractArray{<:AbstractChar} = nothing)::Nothing
 
 General unescaping of traditional C and Unicode escape sequences. The first form returns
 the escaped string, the second prints the result to `io`.
+The argument `keep` specifies an array of characters which are to be kept as it is.
 
 The following escape sequences are recognised:
  - Escaped backslash (`\\\\`)
@@ -382,12 +383,12 @@ julia> unescape_string("\\\\101") # octal
 ## See also
 [`escape_string`](@ref).
 """
-function unescape_string(io, s::AbstractString, keep_esc::AbstractArray{<:AbstractChar}=Char[])
+function unescape_string(io, s::AbstractString, keep::AbstractArray{<:AbstractChar} = nothing)
     a = Iterators.Stateful(s)
     for c in a
         if !isempty(a) && c == '\\'
             c = popfirst!(a)
-            if c in keep_esc
+            if c in keep
                print(io, '\\', c)
             elseif c == 'x' || c == 'u' || c == 'U'
                 n = k = 0

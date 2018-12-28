@@ -303,13 +303,13 @@ function _write_capture(io, re, group)
     io.size = max(io.size, io.ptr - 1)
 end
 
+const SUB_CHAR = '\\'
+const GROUP_CHAR = 'g'
+const keep_esc = [SUB_CHAR, GROUP_CHAR, collect('0':'9')...]
+
 function _replace(io, repl_s::SubstitutionString, str, r, re)
-    SUB_CHAR = '\\'
-    GROUP_CHAR = 'g'
     LBRACKET = '<'
     RBRACKET = '>'
-    repl = repl_s.string
-    keep_esc = [SUB_CHAR, GROUP_CHAR, collect('0':'9')...]
     repl = unescape_string(repl_s.string, keep_esc)
     i = firstindex(repl)
     e = lastindex(repl)
