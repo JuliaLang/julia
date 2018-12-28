@@ -121,8 +121,13 @@ SHIPFLAGS += $(FLAGS)
 SHIPFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.$(SHLIB_EXT)\""
 DEBUGFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys-debug.$(SHLIB_EXT)\""
 
-FLISP_EXECUTABLE_debug := $(BUILDDIR)/flisp/flisp-debug$(EXE)
-FLISP_EXECUTABLE_release := $(BUILDDIR)/flisp/flisp$(EXE)
+ifeq ($(USE_CROSS_FLISP), 1)
+FLISPDIR := $(BUILDDIR)/flisp/host
+else
+FLISPDIR := $(BUILDDIR)/flisp
+endif
+FLISP_EXECUTABLE_debug := $(FLISPDIR)/flisp-debug$(EXE)
+FLISP_EXECUTABLE_release := $(FLISPDIR)/flisp$(EXE)
 ifeq ($(OS),WINNT)
 FLISP_EXECUTABLE := $(FLISP_EXECUTABLE_release)
 else
@@ -232,10 +237,14 @@ $(BUILDDIR)/support/libsupport-debug.a: $(addprefix $(SRCDIR)/support/,*.h *.c *
 	$(MAKE) -C $(SRCDIR)/support debug BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
 $(FLISP_EXECUTABLE_release): $(BUILDDIR)/flisp/libflisp.a
+	$(MAKE) -C $(BUILDDIR)/flisp $(subst $(abspath $(BUILDDIR)/flisp)/,,$(abspath $(FLISP_EXECUTABLE_release)))
+
+$(FLISP_EXECUTABLE_debug): $(BUILDDIR)/flisp/libflisp-debug.a
+	$(MAKE) -C $(BUILDDIR)/flisp $(subst $(abspath $(BUILDDIR)/flisp)/,,$(abspath $(FLISP_EXECUTABLE_debug)))
+
 $(BUILDDIR)/flisp/libflisp.a: $(addprefix $(SRCDIR)/flisp/,*.h *.c) $(BUILDDIR)/support/libsupport.a
 	$(MAKE) -C $(SRCDIR)/flisp BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 
-$(FLISP_EXECUTABLE_debug): $(BUILDDIR)/flisp/libflisp-debug.a
 $(BUILDDIR)/flisp/libflisp-debug.a: $(addprefix $(SRCDIR)/,flisp/*.h flisp/*.c) $(BUILDDIR)/support/libsupport-debug.a
 	$(MAKE) -C $(SRCDIR)/flisp debug BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 

@@ -126,11 +126,17 @@ endif
 
 # we include twice to pickup user definitions better
 # include from JULIAHOME first so that BUILDROOT can override
-ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
-include $(JULIAHOME)/Make.user
+ifneq ($(BUILDING_HOST_TOOLS),1)
+MAKE_USER_FNAME = Make.user
+else
+MAKE_USER_FNAME = Make.host.user
 endif
-ifeq (exists, $(shell [ -e $(BUILDROOT)/Make.user ] && echo exists ))
-include $(BUILDROOT)/Make.user
+
+ifeq (exists, $(shell [ -e $(JULIAHOME)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(JULIAHOME)/$(MAKE_USER_FNAME)
+endif
+ifeq (exists, $(shell [ -e $(BUILDROOT)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(BUILDROOT)/$(MAKE_USER_FNAME)
 endif
 
 # disable automatic Makefile rules
@@ -571,11 +577,11 @@ else
 LOCALBASE ?= /usr
 endif
 
-ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
-include $(JULIAHOME)/Make.user
+ifeq (exists, $(shell [ -e $(JULIAHOME)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(JULIAHOME)/$(MAKE_USER_FNAME)
 endif
-ifeq (exists, $(shell [ -e $(BUILDROOT)/Make.user ] && echo exists ))
-include $(BUILDROOT)/Make.user
+ifeq (exists, $(shell [ -e $(BUILDROOT)/$(MAKE_USER_FNAME) ] && echo exists ))
+include $(BUILDROOT)/$(MAKE_USER_FNAME)
 endif
 
 # A bit of a kludge to work around libraries linking to FreeBSD's outdated system libgcc_s
