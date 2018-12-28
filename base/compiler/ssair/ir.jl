@@ -1067,6 +1067,9 @@ function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.
 end
 
 function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=(compact.idx, 1))
+    # Create label to dodge recursion so that we don't stack overflow
+    @label restart
+
     old_result_idx = compact.result_idx
     if idx > length(compact.ir.stmts) && (compact.new_nodes_idx > length(compact.perm))
         return nothing
@@ -1130,7 +1133,10 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         active_bb += 1
     end
     compact.idx = idx + 1
-    (old_result_idx == compact.result_idx) && return iterate(compact, (idx + 1, active_bb))
+    if (old_result_idx == compact.result_idx)
+        idx = idx + 1
+        @goto restart
+    end
     if !isassigned(compact.result, old_result_idx)
         @assert false
     end
