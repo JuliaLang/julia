@@ -1197,7 +1197,7 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
         msp = 1;
     }
     else if (closure->after) {
-        assert(!jl_subtype((jl_value_t*)sig, (jl_value_t*)type));
+        //assert(!jl_subtype((jl_value_t*)sig, (jl_value_t*)type));
         msp = jl_type_morespecific_no_subtype((jl_value_t*)type, (jl_value_t*)sig);
     }
     else {
