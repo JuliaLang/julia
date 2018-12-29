@@ -420,6 +420,14 @@ end
     end
 end
 
+@testset "getipaddrs" begin
+    @test getipaddr() in getipaddrs()
+
+    @testset "include lo" begin
+        @test getipaddrs(true) >= getipaddrs()
+    end
+end
+
 @static if !Sys.iswindows()
     # Issue #29234
     @testset "TCPSocket stdin" begin

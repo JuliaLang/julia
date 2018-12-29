@@ -50,25 +50,41 @@ New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang
 
 ## Currently Supported Platforms
 
-Julia is built and tested regularly on the following platforms:
-
 | Operating System | Architecture     | CI | Binaries | Support Level |
 |:----------------:|:----------------:|:--:|:--------:|:-------------:|
-| Linux 2.6.18+    | x86-64 (64-bit)  | ✓  | ✓        | Official      |
-|                  | i686 (32-bit)    | ✓  | ✓        | Official      |
-|                  | ARM v7 (32-bit)  |    | ✓        | Official      |
-|                  | ARM v8 (64-bit)  |    |          | Community     |
-|                  | PowerPC (64-bit) |    |          | Community     |
+| macOS 10.8+      | x86-64 (64-bit)  | ✓  | ✓        | Tier 1        |
+| Windows 7+       | x86-64 (64-bit)  | ✓  | ✓        | Tier 1        |
+|                  | i686 (32-bit)    | ✓  | ✓        | Tier 1        |
+| FreeBSD 11.0+    | x86-64 (64-bit)  | [✓](https://build.julialang.org/#/builders/68)  | ✓        | Tier 1        |
+| Linux 2.6.18+    | x86-64 (64-bit)  | ✓  | ✓        | Tier 1        |
+|                  | i686 (32-bit)    | ✓  | ✓        | Tier 1        |
+|                  | ARM v7 (32-bit)  |    | ✓        | Tier 2        |
+|                  | ARM v8 (64-bit)  |    |          | Tier 3        |
+|                  | x86-64 musl libc |    |          | Tier 3        |
+|                  | PowerPC (64-bit) |    |          | Tier 4        |
 |                  | PTX (64-bit)     | [✓](https://gitlab.com/JuliaGPU/CUDAnative.jl/pipelines)  |          | [External](https://github.com/JuliaGPU/CUDAnative.jl)     |
-| macOS 10.8+      | x86-64 (64-bit)  | ✓  | ✓        | Official      |
-| Windows 7+       | x86-64 (64-bit)  | ✓  | ✓        | Official      |
-|                  | i686 (32-bit)    | ✓  | ✓        | Official      |
-| FreeBSD 11.0+    | x86-64 (64-bit)  | [✓](https://build.julialang.org/#/builders/68)  | ✓        | Official      |
 
 All systems marked with ✓ for CI are tested using continuous integration for every commit.
-Systems with ✓ for binaries have official binaries available on the [downloads](https://julialang.org/downloads) page and are tested regularly. The PTX backend needs the [CUDAnative.jl](https://github.com/JuliaGPU/CUDAnative.jl) package.
-The systems listed here with neither CI nor official binaries are known to build and work, but ongoing support for those platforms is dependent on community efforts.
-It is possible that Julia will build and work on other platforms too, and we're always looking to improve our platform coverage.
+Systems with ✓ for binaries have official binaries available on the
+[downloads](https://julialang.org/downloads) page and are tested regularly.
+The PTX backend is supported by the [JuliaGPU](https://github.com/JuliaGPU) organization and
+requires the [CUDAnative.jl](https://github.com/JuliaGPU/CUDAnative.jl) package.
+
+### Support Tiers
+
+* Tier 1: Julia is guaranteed to build from source and pass all tests on these platforms
+  when built with default options. Official binaries are available for releases and CI is
+  run on every commit.
+
+* Tier 2: Julia is guaranteed to build from source using default build options, but may
+  or may not pass all tests. Official binaries are available on a case-by-case basis.
+
+* Tier 3: Julia may or may not build. If it does, it is unlikely to pass tests.
+
+* Tier 4: Julia is known not to build.
+
+It is possible that Julia will build and work on other platforms too, and we're always
+looking to improve our platform coverage.
 If you're using Julia on a platform not listed here, let us know!
 
 ## Source Download and Compilation
@@ -86,7 +102,7 @@ Be sure to also configure your system to use the appropriate proxy settings, e.g
 
 By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `1.0` series of releases. You can get this version by changing to the Julia directory and running
 
-    git checkout v1.0.2
+    git checkout v1.0.3
 
 Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes. (See [Platform Specific Build Notes](https://github.com/JuliaLang/julia#platform-specific-build-notes) for details.)
 When compiled the first time, it will automatically download and build its [external dependencies](#required-build-tools-and-external-libraries).

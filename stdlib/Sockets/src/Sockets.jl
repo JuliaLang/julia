@@ -10,6 +10,7 @@ export
     getalladdrinfo,
     getnameinfo,
     getipaddr,
+    getipaddrs,
     getpeername,
     getsockname,
     listen,

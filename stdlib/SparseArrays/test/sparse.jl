@@ -186,6 +186,10 @@ end
     end
 end
 
+@testset "Issue #28963" begin
+    @test_throws DimensionMismatch (spzeros(10,10)[:, :] = sprand(10,20,0.5))
+end
+
 @testset "matrix-vector multiplication (non-square)" begin
     for i = 1:5
         a = sprand(10, 5, 0.5)
@@ -318,15 +322,30 @@ end
 end
 
 @testset "matrix multiplication" begin
-    for i = 1:5
-        a = sprand(10, 5, 0.7)
-        b = sprand(5, 15, 0.3)
-        @test maximum(abs.(a*b - Array(a)*Array(b))) < 100*eps()
-        @test maximum(abs.(SparseArrays.spmatmul(a,b) - Array(a)*Array(b))) < 100*eps()
-        f = Diagonal(rand(5))
+    for (m, p, n, q, k) in (
+                            (10, 0.7, 5, 0.3, 15),
+                            (100, 0.01, 100, 0.01, 20),
+                            (100, 0.1, 100, 0.2, 100),
+                           )
+        a = sprand(m, n, p)
+        b = sprand(n, k, q)
+        as = sparse(a')
+        bs = sparse(b')
+        ab = a * b
+        aab = Array(a) * Array(b)
+        @test maximum(abs.(ab - aab)) < 100*eps()
+        @test a*bs' == ab
+        @test as'*b == ab
+        @test as'*bs' == ab
+        f = Diagonal(rand(n))
         @test Array(a*f) == Array(a)*f
         @test Array(f*b) == f*Array(b)
     end
+end
+
+@testset "Issue #30502" begin
+    @test nnz(sprand(UInt8(16), UInt8(16), 1.0)) == 256
+    @test nnz(sprand(UInt8(16), UInt8(16), 1.0, ones)) == 256
 end
 
 @testset "kronecker product" begin
@@ -2398,6 +2417,33 @@ end
     @test oneunit(A) isa SparseMatrixCSC{Second}
     @test one(sprand(2, 2, 0.5)) isa SparseMatrixCSC{Float64}
     @test one(A) isa SparseMatrixCSC{Int}
+end
+
+@testset "circshift" begin
+    m,n = 17,15
+    A = sprand(m, n, 0.5)
+    for rshift in (-1, 0, 1, 10), cshift in (-1, 0, 1, 10)
+        shifts = (rshift, cshift)
+        # using dense circshift to compare
+        B = circshift(Matrix(A), shifts)
+        # sparse circshift
+        C = circshift(A, shifts)
+        @test C == B
+        # sparse circshift should not add structural zeros
+        @test nnz(C) == nnz(A)
+        # test circshift!
+        D = similar(A)
+        circshift!(D, A, shifts)
+        @test D == B
+        @test nnz(D) == nnz(A)
+        # test different in/out types
+        A2 = floor.(100A)
+        E1 = spzeros(Int64, m, n)
+        E2 = spzeros(Int64, m, n)
+        circshift!(E1, A2, shifts)
+        circshift!(E2, Matrix(A2), shifts)
+        @test E1 == E2
+    end
 end
 
 end # module
