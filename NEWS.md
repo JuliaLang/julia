@@ -6,6 +6,7 @@ New language features
 
 * The `extrema` function now accepts a function argument in the same manner as `minimum` and
   `maximum` ([#30323]).
+* Added argument `keep` to `unescape_string` ([#27125]).
 
 Language changes
 ----------------
@@ -22,7 +23,6 @@ New library functions
 Standard library changes
 ------------------------
 
-* Added argument `keep` to `unescape_string` ([#27125]).
 
 #### LinearAlgebra
 
