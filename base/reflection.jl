@@ -182,7 +182,10 @@ fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 Returns a boolean indicating whether DataType has the specified field as one of
 its own fields.
 """
-hasfield(T::DataType, name::Symbol) = fieldindex(T, name, false) > 0
+function hasfield(::Type{T}, name::Symbol) where T
+    @_pure_meta
+    return fieldindex(T, name, false) > 0
+end
 
 """
     nameof(t::DataType) -> Symbol
