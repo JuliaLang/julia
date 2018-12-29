@@ -354,7 +354,7 @@ end
 # TODO: handle unescaping invalid UTF-8 sequences
 """
     unescape_string(str::AbstractString)::AbstractString
-    unescape_string(io, s::AbstractString, keep::Union{AbstractArray{<:AbstractChar} , Nothing} = nothing)::Nothing
+    unescape_string(io, s::AbstractString, keep = ())::Nothing
 
 General unescaping of traditional C and Unicode escape sequences. The first form returns
 the escaped string, the second prints the result to `io`.
@@ -387,7 +387,7 @@ julia> unescape_string("aaa \\g \\n", ['g']) # using `keep` argument
 ## See also
 [`escape_string`](@ref).
 """
-function unescape_string(io::IO, s::AbstractString, keep::Union{AbstractArray{<:AbstractChar} , Nothing} = nothing)
+function unescape_string(io::IO, s::AbstractString, keep = ())
     a = Iterators.Stateful(s)
     for c in a
         if !isempty(a) && c == '\\'
@@ -444,7 +444,7 @@ function unescape_string(io::IO, s::AbstractString, keep::Union{AbstractArray{<:
         end
     end
 end
-unescape_string(s::AbstractString, keep::Union{AbstractArray{<:AbstractChar} , Nothing} = nothing)=
+unescape_string(s::AbstractString, keep = ()) =
     sprint(unescape_string, s, keep; sizehint=lastindex(s))
 
 macro b_str(s)
