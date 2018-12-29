@@ -1265,4 +1265,26 @@ end
     end
 end
 
+@testset "SparseVector circshift" begin
+    n = 100
+    v = sprand(n, 0.5)
+    for shift in (0,-1,1,5,-7,n+10)
+        x = circshift(Vector(v), shift)
+        w = circshift(v, shift)
+        @test nnz(v) == nnz(w)
+        @test w == x
+        # test circshift!
+        v1 = similar(v)
+        circshift!(v1, v, shift)
+        @test v1 == x
+        # test different in/out types
+        y1 = spzeros(Int64, n)
+        y2 = spzeros(Int64, n)
+        v2 = floor.(100v)
+        circshift!(y1, v2, shift)
+        circshift!(y2, Vector(v2), shift)
+        @test y1 == y2
+    end
+end
+
 end # module

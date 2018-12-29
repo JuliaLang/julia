@@ -104,7 +104,16 @@ function show_method_params(io::IO, tv)
         if length(tv) == 1
             show(io, tv[1])
         else
-            show_delim_array(io, tv, '{', ',', '}', false)
+            print(io, "{")
+            for i = 1:length(tv)
+                if i > 1
+                    print(io, ", ")
+                end
+                x = tv[i]
+                show(io, x)
+                io = IOContext(io, :unionall_env => x)
+            end
+            print(io, "}")
         end
     end
 end
@@ -264,11 +273,6 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Union{DataType, Noth
     else
         print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
     end
-    if !isempty(tv)
-        print(io,"<i>")
-        show_delim_array(io, tv, '{', ',', '}', false)
-        print(io,"</i>")
-    end
     print(io, "(")
     join(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
                       for d in decls[2:end]], ", ", ", ")
@@ -281,6 +285,11 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Union{DataType, Noth
         end
     end
     print(io, ")")
+    if !isempty(tv)
+        print(io,"<i>")
+        show_method_params(io, tv)
+        print(io,"</i>")
+    end
     print(io, " in ", m.module)
     if line > 0
         u = url(m)

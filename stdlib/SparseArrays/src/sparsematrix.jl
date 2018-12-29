@@ -1443,6 +1443,7 @@ julia> sprand(Float64, 3, 0.75)
 """
 function sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat,
                 rfn::Function, ::Type{T}=eltype(rfn(r,1))) where T
+    m,n = Int(m), Int(n)
     N = m*n
     N == 0 && return spzeros(T,m,n)
     N == 1 && return rand(r) <= density ? sparse([1], [1], rfn(r,1)) : spzeros(T,1,1)
@@ -1453,6 +1454,7 @@ end
 
 function sprand(m::Integer, n::Integer, density::AbstractFloat,
                 rfn::Function, ::Type{T}=eltype(rfn(1))) where T
+    m,n = Int(m), Int(n)
     N = m*n
     N == 0 && return spzeros(T,m,n)
     N == 1 && return rand() <= density ? sparse([1], [1], rfn(1)) : spzeros(T,1,1)
@@ -1974,8 +1976,8 @@ function getindex_cols(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector) where {Tv,T
     return SparseMatrixCSC(m, nJ, colptrS, rowvalS, nzvalS)
 end
 
-getindex_traverse_col(::AbstractUnitRange, lo::Int, hi::Int) = lo:hi
-getindex_traverse_col(I::StepRange, lo::Int, hi::Int) = step(I) > 0 ? (lo:1:hi) : (hi:-1:lo)
+getindex_traverse_col(::AbstractUnitRange, lo::Integer, hi::Integer) = lo:hi
+getindex_traverse_col(I::StepRange, lo::Integer, hi::Integer) = step(I) > 0 ? (lo:1:hi) : (hi:-1:lo)
 
 function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractRange, J::AbstractVector) where {Tv,Ti<:Integer}
     @assert !has_offset_axes(A, I, J)
@@ -2370,7 +2372,11 @@ getindex(A::SparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{Boo
 getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = A[findall(I),J]
 
 ## setindex!
-function setindex!(A::SparseMatrixCSC{Tv,Ti}, _v, _i::Integer, _j::Integer) where {Tv,Ti<:Integer}
+
+# dispatch helper for #29034
+setindex!(A::SparseMatrixCSC, _v, _i::Integer, _j::Integer) = _setindex_scalar!(A, _v, _i, _j)
+
+function _setindex_scalar!(A::SparseMatrixCSC{Tv,Ti}, _v, _i::Integer, _j::Integer) where {Tv,Ti<:Integer}
     v = convert(Tv, _v)
     i = convert(Ti, _i)
     j = convert(Ti, _j)
@@ -2565,11 +2571,13 @@ end
 _to_same_csc(::SparseMatrixCSC{Tv, Ti}, V::AbstractMatrix, I...) where {Tv,Ti} = convert(SparseMatrixCSC{Tv,Ti}, V)
 _to_same_csc(::SparseMatrixCSC{Tv, Ti}, V::AbstractVector, I...) where {Tv,Ti} = convert(SparseMatrixCSC{Tv,Ti}, reshape(V, map(length, I)))
 
-setindex!(A::SparseMatrixCSC{Tv}, B::AbstractVecOrMat, I::Integer, J::Integer) where {Tv} = setindex!(A, convert(Tv, B), I, J)
+setindex!(A::SparseMatrixCSC{Tv}, B::AbstractVecOrMat, I::Integer, J::Integer) where {Tv} = _setindex_scalar!(A, B, I, J)
+
 function setindex!(A::SparseMatrixCSC{Tv,Ti}, V::AbstractVecOrMat, Ix::Union{Integer, AbstractVector{<:Integer}, Colon}, Jx::Union{Integer, AbstractVector{<:Integer}, Colon}) where {Tv,Ti<:Integer}
     @assert !has_offset_axes(A, V, Ix, Jx)
     (I, J) = Base.ensure_indexable(to_indices(A, (Ix, Jx)))
     checkbounds(A, I, J)
+    Base._setindex!(IndexStyle(A), A, V, to_indices(A, (Ix, Jx))...)
     B = _to_same_csc(A, V, I, J)
 
     issortedI = issorted(I)
@@ -3506,3 +3514,46 @@ end
 (+)(A::SparseMatrixCSC, J::UniformScaling) = A + sparse(J, size(A)...)
 (-)(A::SparseMatrixCSC, J::UniformScaling) = A - sparse(J, size(A)...)
 (-)(J::UniformScaling, A::SparseMatrixCSC) = sparse(J, size(A)...) - A
+
+## circular shift
+
+function circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, (r,c)::Base.DimsInteger{2})
+    nnz = length(X.nzval)
+
+    iszero(nnz) && return copy!(O, X)
+
+    ##### column shift
+    c = mod(c, X.n)
+    if iszero(c)
+        copy!(O, X)
+    else
+        ##### readjust output
+        resize!(O.colptr, X.n + 1)
+        resize!(O.rowval, nnz)
+        resize!(O.nzval, nnz)
+        O.colptr[X.n + 1] = nnz + 1
+
+        # exchange left and right blocks
+        nleft = X.colptr[X.n - c + 1] - 1
+        nright = nnz - nleft
+        @inbounds for i=c+1:X.n
+            O.colptr[i] = X.colptr[i-c] + nright
+        end
+        @inbounds for i=1:c
+            O.colptr[i] = X.colptr[X.n - c + i] - nleft
+        end
+        # rotate rowval and nzval by the right number of elements
+        circshift!(O.rowval, X.rowval, (nright,))
+        circshift!(O.nzval, X.nzval, (nright,))
+    end
+    ##### row shift
+    r = mod(r, X.m)
+    iszero(r) && return O
+    @inbounds for i=1:O.n
+        subvector_shifter!(O.rowval, O.nzval, O.colptr[i], O.colptr[i+1]-1, O.m, r)
+    end
+    return O
+end
+
+circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, (r,)::Base.DimsInteger{1}) = circshift!(O, X, (r,0))
+circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, r::Real) = circshift!(O, X, (Integer(r),0))

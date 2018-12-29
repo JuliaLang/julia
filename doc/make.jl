@@ -15,7 +15,7 @@ baremodule GenStdLib end
 symlink_q(tgt, link) = isfile(link) || symlink(tgt, link)
 cp_q(src, dest) = isfile(dest) || cp(src, dest)
 
-# make links for stdlib package docs, this is needed until #522 in Documenter.jl is finished
+# make links for stdlib package docs, this is needed until #552 in Documenter.jl is finished
 const STDLIB_DOCS = []
 const STDLIB_DIR = Sys.STDLIB
 const EXT_STDLIB_DOCS = ["Pkg"]
@@ -191,8 +191,8 @@ withenv("TRAVIS_REPO_SLUG" => "JuliaLang/docs.julialang.org") do
         repo = "github.com/JuliaLang/docs.julialang.org.git",
         target = joinpath(buildroot, "doc", "_build", "html", "en"),
         dirname = "en",
-        devurl = "v1.1-dev",
-        versions = ["v#.#", "v1.1-dev" => "v1.1-dev"]
+        devurl = "v1.2-dev",
+        versions = ["v#.#", "v1.2-dev" => "v1.2-dev"]
     )
 end
 end

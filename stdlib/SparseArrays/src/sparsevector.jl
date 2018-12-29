@@ -1975,3 +1975,42 @@ function fill!(A::Union{SparseVector, SparseMatrixCSC}, x)
     end
     return A
 end
+
+
+
+# in-place swaps (dense) blocks start:split and split+1:fin in col
+function _swap!(col::AbstractVector, start::Integer, fin::Integer, split::Integer)
+    split == fin && return
+    reverse!(col, start, split)
+    reverse!(col, split + 1, fin)
+    reverse!(col, start, fin)
+    return
+end
+
+
+# in-place shifts a sparse subvector by r. Used also by sparsematrix.jl
+function subvector_shifter!(R::AbstractVector, V::AbstractVector, start::Integer, fin::Integer, m::Integer, r::Integer)
+    split = fin
+    @inbounds for j = start:fin
+        # shift positions ...
+        R[j] += r
+        if R[j] <= m
+            split = j
+        else
+            R[j] -= m
+        end
+    end
+    # ...but rowval should be sorted within columns
+    _swap!(R, start, fin, split)
+    _swap!(V, start, fin, split)
+end
+
+
+function circshift!(O::SparseVector, X::SparseVector, (r,)::Base.DimsInteger{1})
+    O .= X
+    subvector_shifter!(O.nzind, O.nzval, 1, length(O.nzind), O.n, mod(r, X.n))
+    return O
+end
+
+
+circshift!(O::SparseVector, X::SparseVector, r::Real,) = circshift!(O, X, (Integer(r),))
