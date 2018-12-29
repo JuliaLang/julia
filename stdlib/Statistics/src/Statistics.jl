@@ -694,12 +694,11 @@ middle(a::AbstractArray) = ((v1, v2) = extrema(a); middle(v1, v2))
 
 Compute the median of an array `v`. For an even number of elements no exact
 median element exists, so the result is equivalent to calculating the mean of the two
-median elements. The `by` keyword lets you provide a function that will be
-applied to each element before comparison. The `lt` keyword allows providing a
-custom "less than" function for sorting prior to taking the median.
-In the case of non-numerical, even length `v`, the first of the two middle elements
-according to the provided ordering is returned as the median. One can choose the
-second of the two middle elements by reversing the sort order with `rev=true`.
+median elements. The `lt` keyword allows providing a custom "less than" function for sorting
+prior to taking the median. The `by` keyword lets you provide a function that will be
+applied to each element before comparison. In the case of non-numerical, even length `v`,
+the first of the two middle elements according to the provided ordering is returned as the median.
+One can choose the second of the two middle elements by reversing the sort order with `rev=true`.
 
 Like [`median`](@ref), but may overwrite the input vector.
 """
@@ -712,10 +711,11 @@ function median!(v::AbstractVector; lt=isless, by=identity, middle=middle, rev=f
     mid = div(first(inds)+last(inds),2)
     middle(partialsort!(v, isodd(n) ? mid : (mid:mid+1), lt=lt, by=by, rev=rev))
 end
-median!(v::AbstractArray; lt=isless, by=identity, middle=middle, rev=false) = median!(vec(v), lt=lt, by=by, middle=middle, rev=rev)
+median!(v::AbstractArray; lt=isless, by=identity, middle=middle, rev=false) =
+    median!(vec(v), lt=lt, by=by, middle=middle, rev=rev)
 
 """
-    median(itr; lt=isless, by=identity, middle=Base.middle, rev=false)
+    median(itr; lt=isless, by=identity, middle=middle, rev=false)
 
 Compute the median of all elements in a collection.
 !!! note
