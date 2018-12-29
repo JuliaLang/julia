@@ -43,7 +43,6 @@ Standard library changes
 
   * `mean` and `var` now handles the empty case ([#29033]).
   * Added Keyword arguments `lt`, `by`, `middle` and `rev` to `median` ([#30329]).
-  * `mean` and `var` now handle more kinds of empty inputs ([#29033]).
 
 #### Dates
 
