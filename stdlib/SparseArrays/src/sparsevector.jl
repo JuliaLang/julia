@@ -2,7 +2,7 @@
 
 ### Common definitions
 
-import Base: sort, findall
+import Base: sort, findall, copy!
 import LinearAlgebra: promote_to_array_type, promote_to_arrays_
 
 ### The SparseVector
@@ -1935,6 +1935,16 @@ julia> dropzeros(A)
 """
 dropzeros(x::SparseVector; trim::Bool = true) = dropzeros!(copy(x), trim = trim)
 
+function copy!(dst::SparseVector, src::SparseVector)
+    dst.n == src.n || throw(ArgumentError("Vector should have the same length for copy!"))
+    copy!(dst.nzval, src.nzval)
+    copy!(dst.nzind, src.nzind)
+    return dst
+end
+
+function copy!(dst::SparseVector, src::AbstractVector)
+    copy!(dst, sparse(src))
+end
 
 function _fillnonzero!(arr::SparseMatrixCSC{Tv, Ti}, val) where {Tv,Ti}
     m, n = size(arr)
@@ -2007,7 +2017,7 @@ end
 
 
 function circshift!(O::SparseVector, X::SparseVector, (r,)::Base.DimsInteger{1})
-    O .= X
+    copy!(O, X)
     subvector_shifter!(O.nzind, O.nzval, 1, length(O.nzind), O.n, mod(r, X.n))
     return O
 end
