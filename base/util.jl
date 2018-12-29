@@ -296,40 +296,50 @@ end
 
 ## printing with color ##
 
-const text_colors = AnyDict(
-    # :black         => "\033[30m", # 0
-    # :red           => "\033[31m", # 1
-    # :green         => "\033[32m", # 2
-    # :yellow        => "\033[33m", # 3
-    # :blue          => "\033[34m", # 4
-    # :magenta       => "\033[35m", # 5
-    # :cyan          => "\033[36m", # 6
-    # :white         => "\033[37m", # 7
-    # :light_black   => "\033[90m", # 8+0 gray
-    # :light_red     => "\033[91m", # 8+1
-    # :light_green   => "\033[92m", # 8+2
-    # :light_yellow  => "\033[93m", # 8+3
-    # :light_blue    => "\033[94m", # 8+4
-    # :light_magenta => "\033[95m", # 8+5
-    # :light_cyan    => "\033[96m", # 8+6
-    # :light_white   => "\033[97m", # 8+7
+# Note:
+# Unreadable on light background:
+#     :yellow
+#     :white
+#     :light_white
+#     :light_yellow
+# Unreadable on dark background:
+#     :blue
+#     :black
 
-    :light_white   => "\033[30m", # 0
-    :light_cyan    => "\033[31m", # 1
-    :light_magenta => "\033[32m", # 2
-    :light_blue    => "\033[33m", # 3
-    :light_yellow  => "\033[34m", # 4
-    :light_green   => "\033[35m", # 5
-    :light_red     => "\033[36m", # 6
-    :light_black   => "\033[37m", # 7
-    :white         => "\033[90m", # 8+0 gray
-    :cyan          => "\033[91m", # 8+1
-    :magenta       => "\033[92m", # 8+2
-    :blue          => "\033[93m", # 8+3
-    :yellow        => "\033[94m", # 8+4
-    :green         => "\033[95m", # 8+5
-    :red           => "\033[96m", # 8+6
-    :black         => "\033[97m", # 8+7
+const original_text_colors = AnyDict(
+    :black         => "\033[30m", # 0
+    :red           => "\033[31m", # 1
+    :green         => "\033[32m", # 2
+    :yellow        => "\033[33m", # 3
+    :blue          => "\033[34m", # 4
+    :magenta       => "\033[35m", # 5
+    :cyan          => "\033[36m", # 6
+    :white         => "\033[37m", # 7
+    :light_black   => "\033[90m", # 8+0 gray
+    :light_red     => "\033[91m", # 8+1
+    :light_green   => "\033[92m", # 8+2
+    :light_yellow  => "\033[93m", # 8+3
+    :light_blue    => "\033[94m", # 8+4
+    :light_magenta => "\033[95m", # 8+5
+    :light_cyan    => "\033[96m", # 8+6
+    :light_white   => "\033[97m", # 8+7
+
+    # :black         => "\033[30m",
+    # :red           => "\033[31m",
+    # :green         => "\033[32m",
+    # :yellow        => "\033[34m", # blue
+    # :blue          => "\033[34m",
+    # :magenta       => "\033[35m",
+    # :cyan          => "\033[36m",
+    # :white         => "\033[34m", # blue
+    # :light_black   => "\033[90m",
+    # :light_red     => "\033[91m",
+    # :light_green   => "\033[92m",
+    # :light_yellow  => "\033[94m", # light blue
+    # :light_blue    => "\033[94m",
+    # :light_magenta => "\033[95m",
+    # :light_cyan    => "\033[96m",
+    # :light_white   => "\033[94m", # light blue
 
     :normal        => "\033[0m",
     :default       => "\033[39m",
@@ -341,9 +351,24 @@ const text_colors = AnyDict(
     :nothing       => "",
 )
 
+const color_translation_table = AnyDict(
+    :yellow       => :blue,
+    :white        => :blue,
+    :light_white  => :blue,
+    :light_yellow => :blue,
+)
+
+const text_colors = AnyDict()
+for k in keys(original_text_colors)
+    text_colors[k] = original_text_colors[get(color_translation_table, k, k)]
+end
+
 for i in 0:255
-    # text_colors[i] = "\033[38;5;$(i)m"
-    text_colors[i] = "\033[38;5;$(255 - i)m"
+    text_colors[i] = "\033[38;5;$(i)m"
+    # j = i
+    # (j % 16 == 3 || j % 16 == 7) && j = j - j % 16 + 4
+    # (j % 16 == 8+3 || j % 16 == 8+7) && j = j - j % 16 + 8+4
+    # text_colors[i] = "\033[38;5;$(j)m"
 end
 
 const disable_text_style = AnyDict(
