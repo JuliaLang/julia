@@ -345,7 +345,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [GMP]:          http://gmplib.org
 [MPFR]:         http://www.mpfr.org
 [libuv]:        https://github.com/JuliaLang/libuv
-[libgit2]:      https://libgit2.github.com/
+[libgit2]:      https://libgit2.org/
 [utf8proc]:     https://julialang.org/utf8proc/
 [libosxunwind]: https://github.com/JuliaLang/libosxunwind
 [libunwind]:    http://www.nongnu.org/libunwind

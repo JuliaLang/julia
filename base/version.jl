@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## semantic version numbers (http://semver.org)
+## semantic version numbers (https://semver.org/)
 
 const VInt = UInt32
 """
     VersionNumber
 
 Version number type which follow the specifications of
-[semantic versioning](http://semver.org), composed of major, minor
+[semantic versioning](https://semver.org/), composed of major, minor
 and patch numeric values, followed by pre-release and build
 alpha-numeric annotations. See also [`@v_str`](@ref).
 
