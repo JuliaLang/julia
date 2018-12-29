@@ -739,7 +739,8 @@ julia> median(skipmissing([1, 2, missing, 4]))
 2.0
 ```
 """
-median(itr; lt=isless, by=identity, middle=middle, rev=false) = median!(collect(itr); lt=lt, by=by, middle=middle, rev=rev)
+median(itr; lt=isless, by=identity, middle=middle, rev=false) =
+    median!(collect(itr); lt=lt, by=by, middle=middle, rev=rev)
 
 """
     median(A::AbstractArray; dims, lt=isless, by=identity, middle=middle, rev=false)
@@ -753,11 +754,14 @@ julia> median([1 2; 3 4], dims=1)
  2.0  3.0
 ```
 """
-median(v::AbstractArray; dims=:, lt=isless, by=identity, middle=middle, rev=false) = _median(v, dims, lt, by, middle, rev)
+median(v::AbstractArray; dims=:, lt=isless, by=identity, middle=middle, rev=false) =
+    _median(v, dims, lt, by, middle, rev)
 
-_median(v::AbstractArray, dims, lt, by, middle, rev) = mapslices(v -> median!(v, lt=lt, by=by, middle=middle, rev=rev), v, dims = dims)
+_median(v::AbstractArray, dims, lt, by, middle, rev) =
+    mapslices(v -> median!(v, lt=lt, by=by, middle=middle, rev=rev), v, dims = dims)
 
-_median(v::AbstractArray{T}, ::Colon, lt, by, middle, rev) where {T} = median!(copyto!(Array{T,1}(undef, length(v)), v), lt=lt, by=by, middle=middle, rev=rev)
+_median(v::AbstractArray{T}, ::Colon, lt, by, middle, rev) where {T} =
+    median!(copyto!(Array{T,1}(undef, length(v)), v), lt=lt, by=by, middle=middle, rev=rev)
 
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7
