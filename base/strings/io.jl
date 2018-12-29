@@ -358,7 +358,7 @@ end
 
 General unescaping of traditional C and Unicode escape sequences. The first form returns
 the escaped string, the second prints the result to `io`.
-The argument `keep` specifies a collection of characters which (along with backlashes) are 
+The argument `keep` specifies a collection of characters which (along with backlashes) are
 to be kept as they are.
 
 The following escape sequences are recognised:
@@ -379,6 +379,9 @@ julia> unescape_string("\\\\u03c0") # unicode
 
 julia> unescape_string("\\\\101") # octal
 "A"
+
+julia> unescape_string("aaa \\g \\n", ['g']) # using `keep` argument
+"aaa \\g \n"
 ```
 
 ## See also
