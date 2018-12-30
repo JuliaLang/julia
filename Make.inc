@@ -304,6 +304,7 @@ STD_LIB_PATH := $(shell echo '$(STD_LIB_PATH)' | sed -e "s!/lib/!/bin/!g")
 endif
 else ifneq (,$(findstring emscripten,$(XC_HOST)))
 override OS := emscripten
+override CROSS_COMPILE:=
 else
 $(error "unknown XC_HOST variable set")
 endif
@@ -430,8 +431,15 @@ ifneq ($(OS), WINNT)
 # Do not enable on windows to avoid warnings from libuv.
 JCXXFLAGS += -pedantic
 endif
-DEBUGFLAGS := -O0 -ggdb2 -DJL_DEBUG_BUILD -fstack-protector-all
-SHIPFLAGS := -O3 -ggdb2 -falign-functions
+DEBUGFLAGS := -O0 -DJL_DEBUG_BUILD -fstack-protector-all
+SHIPFLAGS := -O3 -falign-functions
+ifeq ($(OS), emscripten)
+DEBUGFLAGS += -g4
+SHIPFLAGS += -g3
+else
+DEBUGFLAGS += -ggdb2
+SHIPFLAGS += -ggdb2
+endif
 endif
 
 ifeq ($(USECLANG),1)
@@ -943,6 +951,7 @@ else
   LIBUV := $(build_libdir)/libuv.a
   LIBUV_INC := $(build_includedir)
 endif
+else
 LIBUV :=
 LIBUV_INC :=
 endif
