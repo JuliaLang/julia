@@ -61,6 +61,15 @@ DOBJS += julia_res.o
 endif
 endif
 
+ifeq ($(OS), emscripten)
+julia-release: $(build_bindir)/julia.js
+julia-debug: $(build_bindir)/julia-debug.js
+
+$(build_bindir)/julia.js: wasm-support.c
+	@$(call PRINT_LINK, $(CC) $(CPPFLAGS) $(CXXFLAGS) $(CXXLDFLAGS) $(LINK_FLAGS) $(SHIPFLAGS) wasm-support.c -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia -lLLVMSupport $(JLDFLAGS) $(CXXLDFLAGS))
+$(build_bindir)/julia-debug.js: wasm-support.c
+	@$(call PRINT_LINK, $(CC) $(CPPFLAGS) $(CXXFLAGS) $(CXXLDFLAGS) $(LINK_FLAGS) $(SHIPFLAGS) wasm-support.c -o $@ -L(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia-debug -lLLVMSupport $(JLDFLAGS) $(CXXLDFLAGS))
+else
 julia-release: $(build_bindir)/julia$(EXE)
 julia-debug: $(build_bindir)/julia-debug$(EXE)
 
@@ -89,7 +98,8 @@ endif
 $(build_bindir)/julia$(EXE): $(OBJS)
 	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(LINK_FLAGS) $(SHIPFLAGS) $(OBJS) -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia $(JLDFLAGS) $(CXXLDFLAGS))
 $(build_bindir)/julia-debug$(EXE): $(DOBJS)
-	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(LINK_FLAGS) $(DEBUGFLAGS) $(DOBJS) -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia-debug $(JLDFLAGS) $(CXXLDFLAGS))
+	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia-debug $(JLDFLAGS) $(CXXLDFLAGS))
+endif
 
 clean: | $(CLEAN_TARGETS)
 	rm -f *.o *.dbg.obj
