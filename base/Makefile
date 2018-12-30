@@ -119,7 +119,7 @@ else
 endif
 endif
 
-ifneq ($(OS), WINNT)
+ifeq (,$(findstring $(OS), WINNT emscripten))
 # For any USE_SYSTEM_* libraries that will be dynamically loaded by libjulia,
 # put a symlink in the private libdir.
 # System package managers may want to install these links manually,
