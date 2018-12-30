@@ -12,7 +12,6 @@ include $(SRCDIR)/Versions.make
 include $(JULIAHOME)/Make.inc
 include $(SRCDIR)/tools/common.mk
 include $(SRCDIR)/tools/git-external.mk
-include $(SRCDIR)/tools/bb-install.mk
 
 BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 
