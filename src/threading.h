@@ -8,7 +8,9 @@
 extern "C" {
 #endif
 
+#ifdef JULIA_ENABLE_THREADING
 #include "threadgroup.h"
+#endif
 #include "julia.h"
 
 #define PROFILE_JL_THREADING            0
@@ -23,12 +25,14 @@ enum {
     TI_THREAD_WORK
 };
 
+#ifdef JULIA_ENABLE_THREADING
 // passed to thread function
 typedef struct {
     int16_t volatile state;
     int16_t          tid;
     ti_threadgroup_t *tg;
 } ti_threadarg_t;
+#endif
 
 // commands to thread function
 enum {

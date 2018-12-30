@@ -42,13 +42,19 @@ int main(int argc, char *argv[])
     fl_init(fl_ctx, 512*1024);
 
     fname_buf[0] = '\0';
-    value_t str = symbol_value(symbol(fl_ctx, "*install-dir*"));
-    char *exedir = (char*)(str == UNBOUND ? NULL : cvalue_data(str));
-    if (exedir != NULL) {
-        strcat(fname_buf, exedir);
-        strcat(fname_buf, PATHSEPSTRING);
+    if (argc >= 3 && strcmp(argv[1], "--boot") == 0) {
+        strncpy(fname_buf, argv[2], sizeof(fname_buf));
+        fname_buf[sizeof(fname_buf)-1] = '\0';
+        argc -= 2; argv[2] = argv[0]; argv += 2;
+    } else {
+        value_t str = symbol_value(symbol(fl_ctx, "*install-dir*"));
+        char *exedir = (char*)(str == UNBOUND ? NULL : cvalue_data(str));
+        if (exedir != NULL) {
+            strcat(fname_buf, exedir);
+            strcat(fname_buf, PATHSEPSTRING);
+        }
+        strcat(fname_buf, "flisp.boot");
     }
-    strcat(fname_buf, "flisp.boot");
 
     value_t args[2];
     fl_gc_handle(fl_ctx, &args[0]);

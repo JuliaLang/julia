@@ -4,6 +4,8 @@ if !isempty(ARGS)
     ARGS[1] == "0" && exit(0)
 end
 
+if !Base.DISABLE_LIBUV
+
 # Prevent this from being put into the Main namespace
 let
 M = Module()
@@ -185,3 +187,4 @@ generate_precompile_statements()
 
 end # @eval
 end # let
+end

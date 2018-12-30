@@ -300,7 +300,7 @@ include("version.jl")
 # system & environment
 include("sysinfo.jl")
 include("libc.jl")
-using .Libc: getpid, gethostname, time
+using .Libc: getpid, gethostname, time, RawFD
 
 const DL_LOAD_PATH = String[]
 if Sys.isapple()
@@ -311,12 +311,19 @@ end
 include("env.jl")
 
 # Scheduling
-include("libuv.jl")
 include("event.jl")
+if !DISABLE_LIBUV
+include("libuv.jl")
+include("uvevent.jl")
+else
+const OS_HANDLE = RawFD
+end
 include("task.jl")
 include("threads.jl")
+if !DISABLE_THREADS
 include("lock.jl")
 include("weakkeydict.jl")
+end
 
 # Logging
 include("logging.jl")
@@ -327,10 +334,13 @@ function rand end
 function randn end
 
 # I/O
-include("stream.jl")
 include("filesystem.jl")
 using .Filesystem
+include("cmd.jl")
+if !DISABLE_LIBUV
+include("stream.jl")
 include("process.jl")
+end
 include("grisu/grisu.jl")
 include("methodshow.jl")
 include("secretbuffer.jl")
@@ -403,7 +413,9 @@ include("channels.jl")
 
 # utilities
 include("deepcopy.jl")
+if !DISABLE_LIBUV
 include("download.jl")
+end
 include("summarysize.jl")
 include("errorshow.jl")
 
@@ -414,7 +426,9 @@ using .StackTraces
 include("initdefs.jl")
 
 # worker threads
+if !DISABLE_LIBUV
 include("threadcall.jl")
+end
 
 # code loading
 include("uuid.jl")
@@ -463,7 +477,13 @@ function __init__()
     # for the few uses of Libc.rand in Base:
     Libc.srand()
     # Base library init
-    reinit_stdio()
+    if !Base.DISABLE_LIBUV
+        reinit_stdio()
+    else
+        global stdin = fdio(cconvert(Cint, 0))
+        global stdout = fdio(cconvert(Cint, 1))
+        global stderr = fdio(cconvert(Cint, 2))
+    end
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
     # initialize loading
     init_depot_path()
@@ -497,32 +517,33 @@ let
             :Base64,
             :CRC32c,
             :SHA,
-            :FileWatching,
+            Base.DISABLE_LIBUV ? nothing : :FileWatching,
             :Unicode,
             :Mmap,
-            :Serialization,
+            Base.DISABLE_LIBUV ? nothing : :Serialization,
             :Libdl,
             :Markdown,
-            :LibGit2,
+            Base.DISABLE_LIBUV ? nothing : :LibGit2,
             :Logging,
-            :Sockets,
+            Base.DISABLE_LIBUV ? nothing : :Sockets,
             :Printf,
             :Profile,
             :Dates,
             :DelimitedFiles,
-            :Random,
-            :UUIDs,
-            :Future,
-            :LinearAlgebra,
-            :SparseArrays,
-            :SuiteSparse,
-            :Distributed,
-            :SharedArrays,
-            :Pkg,
-            :Test,
-            :REPL,
-            :Statistics,
+            Base.DISABLE_LIBUV ? nothing : :Random,
+            Base.DISABLE_LIBUV ? nothing : :UUIDs,
+            Base.DISABLE_LIBUV ? nothing : :Future,
+            Base.DISABLE_LIBUV ? nothing : :LinearAlgebra,
+            Base.DISABLE_LIBUV ? nothing : :SparseArrays,
+            Base.DISABLE_LIBUV ? nothing : :SuiteSparse,
+            Base.DISABLE_LIBUV ? nothing : :Distributed,
+            Base.DISABLE_LIBUV ? nothing : :SharedArrays,
+            Base.DISABLE_LIBUV ? nothing : :Pkg,
+            Base.DISABLE_LIBUV ? nothing : :Test,
+            Base.DISABLE_LIBUV ? nothing : :REPL,
+            Base.DISABLE_LIBUV ? nothing : :Statistics,
         ]
+    filter!(x -> x !== nothing, stdlibs)
 
     maxlen = maximum(textwidth.(string.(stdlibs)))
 

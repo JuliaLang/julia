@@ -47,7 +47,6 @@ TODO:
 extern "C" {
 #endif
 
-#include "threadgroup.h"
 #include "threading.h"
 
 // The tls_states buffer:

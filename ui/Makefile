@@ -12,7 +12,11 @@ override CPPFLAGS += $(JCPPFLAGS)
 SRCS := repl
 
 HEADERS := $(addprefix $(JULIAHOME)/src/,julia.h julia_assert.h julia_threads.h julia_internal.h options.h) \
-	$(BUILDDIR)/../src/julia_version.h $(wildcard $(JULIAHOME)/src/support/*.h) $(LIBUV_INC)/uv.h
+	$(BUILDDIR)/../src/julia_version.h $(wildcard $(JULIAHOME)/src/support/*.h)
+
+ifeq ($(DISABLE_LIBUV), 0)
+HEADERS += $(LIBUV_INC)/uv.h
+endif
 
 FLAGS := -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir)
 ifneq ($(USEMSVC), 1)

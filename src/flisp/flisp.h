@@ -6,7 +6,9 @@
 
 #include "platform.h"
 #include "libsupport.h"
+#ifndef JL_DISABLE_LIBUV
 #include "uv.h"
+#endif
 
 //#define MEMDEBUG
 //#define MEMDEBUG2

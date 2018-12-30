@@ -49,7 +49,9 @@ DEP_LIBS += suitesparse-wrapper
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 0)
+ifeq ($(DISABLE_LIBUV), 0)
 DEP_LIBS += libuv
+endif
 endif
 
 ifeq ($(DISABLE_LIBUNWIND), 0)

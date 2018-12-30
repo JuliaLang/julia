@@ -38,7 +38,7 @@ static void jl_clear_force_sigint(void)
 static int jl_check_force_sigint(void)
 {
     static double accum_weight = 0;
-    uint64_t cur_time = uv_hrtime();
+    uint64_t cur_time = jl_hrtime();
     uint64_t dt = cur_time - jl_last_sigint_trigger;
     uint64_t last_t = jl_last_sigint_trigger;
     jl_last_sigint_trigger = cur_time;
@@ -84,7 +84,7 @@ static int jl_ignore_sigint(void)
     // Ignore sigint for a short time after that to avoid rethrowing sigint too
     // quickly again. (Code that has this issue is inherently racy but this is
     // an interactive feature anyway.)
-    return jl_disable_sigint_time && jl_disable_sigint_time > uv_hrtime();
+    return jl_disable_sigint_time && jl_disable_sigint_time > jl_hrtime();
 }
 
 static int exit_on_sigint = 0;

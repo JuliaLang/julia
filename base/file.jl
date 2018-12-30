@@ -47,10 +47,13 @@ julia> pwd()
 "/home/JuliaUser/Projects/julia"
 ```
 """
+function pwd end
+
 function pwd()
     b = Vector{UInt8}(undef, 1024)
     len = RefValue{Csize_t}(length(b))
-    uv_error(:getcwd, ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), b, len))
+    err = ccall(:jl_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), b, len)
+    Base.DISABLE_LIBUV ? systemerror(:getcwd, err != 0) : uv_error(:getcwd, err)
     String(b[1:len[]])
 end
 
@@ -72,8 +75,16 @@ julia> pwd()
 "/home/JuliaUser"
 ```
 """
-function cd(dir::AbstractString)
-    uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Cstring,), dir))
+function cd end
+
+if Base.DISABLE_LIBUV
+    function cd(dir::AbstractString)
+        systemerror("chdir $dir", ccall(:chdir, Cint, (Cstring,), dir) != 0)
+    end
+else
+    function cd(dir::AbstractString)
+        uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Cstring,), dir))
+    end
 end
 cd() = cd(homedir())
 

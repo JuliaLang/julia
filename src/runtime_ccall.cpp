@@ -131,24 +131,35 @@ std::string jl_format_filename(StringRef output_pattern)
     llvm::raw_string_ostream outfile(buf);
     bool special = false;
     char hostname[MAXHOSTNAMELEN + 1];
+#ifndef JL_DISABLE_LIBUV
     uv_passwd_t pwd;
     bool got_pwd = false;
+#endif
     for (auto c : output_pattern) {
         if (special) {
-            if (!got_pwd && (c == 'i' || c == 'd' || c == 'u')) {
-                uv_os_get_passwd(&pwd);
-                got_pwd = true;
+            if (c == 'i' || c == 'd' || c == 'u') {
+#ifndef JL_DISABLE_LIBUV
+                if (!got_pwd) {
+                    uv_os_get_passwd(&pwd);
+                    got_pwd = true;
+                }
+#endif
             }
             switch (c) {
             case 'p':
                 outfile << jl_getpid();
                 break;
+#ifndef JL_DISABLE_LIBUV
             case 'd':
                 outfile << pwd.homedir;
                 break;
             case 'i':
                 outfile << pwd.uid;
                 break;
+             case 'u':
+                outfile << pwd.username;
+                break;
+#endif
             case 'l':
             case 'L':
                 if (gethostname(hostname, sizeof(hostname)) == 0) {
@@ -162,11 +173,8 @@ std::string jl_format_filename(StringRef output_pattern)
                 }
 #endif
                 break;
-            case 'u':
-                outfile << pwd.username;
-                break;
             default:
-                outfile << c;
+                outfile << '%' << c;
                 break;
             }
             special = false;
@@ -178,8 +186,10 @@ std::string jl_format_filename(StringRef output_pattern)
             outfile << c;
         }
     }
+#ifndef JL_DISABLE_LIBUV
     if (got_pwd)
         uv_os_free_passwd(&pwd);
+#endif
     return outfile.str();
 }
 
