@@ -44,8 +44,10 @@ unexport CONFIG_SITE
 
 DEP_LIBS :=
 
+ifneq ($(OS),emscripten) # For now
 ifeq ($(USE_GPL_LIBS), 1)
 DEP_LIBS += suitesparse-wrapper
+endif
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 0)
@@ -109,6 +111,7 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 DEP_LIBS += gmp
 endif
 
+ifneq ($(OS), emscripten)
 ifeq ($(USE_SYSTEM_LIBGIT2), 0)
 ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 DEP_LIBS += mbedtls
@@ -126,14 +129,19 @@ endif
 
 DEP_LIBS += libgit2
 endif # USE_SYSTEM_LIBGIT2
+endif # emscripten
 
+ifneq ($(OS), emscripten)
 ifeq ($(USE_SYSTEM_MPFR), 0)
 DEP_LIBS += mpfr
 endif
+endif
 
+ifneq ($(OS), emscripten)
 ifeq ($(USE_GPL_LIBS), 1)
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 DEP_LIBS += suitesparse
+endif
 endif
 endif
 
@@ -151,8 +159,10 @@ DEP_LIBS += lapack
 endif
 endif
 
+ifneq ($(OS), emscripten)
 ifneq ($(OS), WINNT)
 DEP_LIBS += libwhich
+endif
 endif
 
 DEP_LIBS_STAGED := $(filter-out suitesparse suitesparse-wrapper osxunwind,$(DEP_LIBS)) # unlist targets that have not been converted to use the staged-install

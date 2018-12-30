@@ -15,10 +15,15 @@ $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted: $(SRCCACHE)/pcre2-$(PCRE_VER).ta
 	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/configure # old target
 	echo $1 > $@
 
+PCRE_OPTS :=
+ifneq ($(OS), emscripten)
+PCRE_OPTS += --enable-jit
+endif
+
 $(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(dir $<)/configure $(CONFIGURE_COMMON) --enable-jit --includedir=$(build_includedir) CFLAGS="$(CFLAGS) $(PCRE_CFLAGS)" LDFLAGS="$(LDFLAGS) $(PCRE_LDFLAGS)"
+	$(dir $<)/configure $(CONFIGURE_COMMON) $(PCRE_OPTS) --includedir=$(build_includedir) CFLAGS="$(CFLAGS) $(PCRE_CFLAGS)" LDFLAGS="$(LDFLAGS) $(PCRE_LDFLAGS)"
 	echo 1 > $@
 
 $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured
