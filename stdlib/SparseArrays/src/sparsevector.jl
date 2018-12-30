@@ -1936,7 +1936,7 @@ julia> dropzeros(A)
 dropzeros(x::SparseVector; trim::Bool = true) = dropzeros!(copy(x), trim = trim)
 
 function copy!(dst::SparseVector, src::SparseVector)
-    dst.n == src.n || throw(ArgumentError("Vector should have the same length for copy!"))
+    dst.n == src.n || throw(ArgumentError("Sparse vectors should have the same length for copy!"))
     copy!(dst.nzval, src.nzval)
     copy!(dst.nzind, src.nzind)
     return dst
