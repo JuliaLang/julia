@@ -10,6 +10,8 @@ endif
 
 ifneq ($(USE_BINARYBUILDER_GMP),1)
 
+GMP_CONFIGURE_OPTS += CC_FOR_BUILD="$(HOSTCC)"
+
 $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://gmplib.org/download/gmp/$(notdir $@)
 
