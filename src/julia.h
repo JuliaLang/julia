@@ -9,6 +9,7 @@
 #define STORE_ARRAY_LEN
 //** End Configuration options **//
 
+#include <unistd.h>
 #include "libsupport.h"
 #include <stdint.h>
 #include <string.h>
@@ -1778,11 +1779,16 @@ extern int had_exception;
 
 // I/O system -----------------------------------------------------------------
 
+#ifdef JL_DISABLE_LIBUV
+#define JL_STREAM ios_t
+#else
 #define JL_STREAM uv_stream_t
+#endif
 #define JL_STDOUT jl_uv_stdout
 #define JL_STDERR jl_uv_stderr
 #define JL_STDIN  jl_uv_stdin
 
+#ifndef JL_DISABLE_LIBUV
 JL_DLLEXPORT void jl_run_event_loop(uv_loop_t *loop);
 JL_DLLEXPORT int jl_run_once(uv_loop_t *loop);
 JL_DLLEXPORT int jl_process_events(uv_loop_t *loop);
@@ -1791,7 +1797,8 @@ JL_DLLEXPORT uv_loop_t *jl_global_event_loop(void);
 
 JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle);
 
-JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s);
+JL_DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, uint32_t host,
+                             unsigned int flags);
 
 typedef struct {
     void *data;
@@ -1800,6 +1807,14 @@ typedef struct {
     uv_os_fd_t file;
 } jl_uv_file_t;
 
+#endif
+
+JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s);
+
+JL_DLLEXPORT int jl_sizeof_ios_t(void);
+
+JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s);
+
 #ifdef __GNUC__
 #define _JL_FORMAT_ATTR(type, str, arg) \
     __attribute__((format(type, str, arg)))
@@ -1807,10 +1822,10 @@ typedef struct {
 #define _JL_FORMAT_ATTR(type, str, arg)
 #endif
 
-JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n);
-JL_DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...)
+JL_DLLEXPORT void jl_uv_puts(JL_STREAM *stream, const char *str, size_t n);
+JL_DLLEXPORT int jl_printf(JL_STREAM *s, const char *format, ...)
     _JL_FORMAT_ATTR(printf, 2, 3);
-JL_DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
+JL_DLLEXPORT int jl_vprintf(JL_STREAM *s, const char *format, va_list args)
     _JL_FORMAT_ATTR(printf, 2, 0);
 JL_DLLEXPORT void jl_safe_printf(const char *str, ...) JL_NOTSAFEPOINT
     _JL_FORMAT_ATTR(printf, 1, 2);

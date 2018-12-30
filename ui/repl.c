@@ -131,7 +131,9 @@ static NOINLINE int true_main(int argc, char *argv[])
             jl_printf(JL_STDOUT, "\n");
             free(line);
             line = NULL;
+#ifndef JL_DISABLE_LIBUV
             uv_run(jl_global_event_loop(),UV_RUN_NOWAIT);
+#endif
         }
         JL_CATCH {
             if (line) {
@@ -150,7 +152,9 @@ static NOINLINE int true_main(int argc, char *argv[])
 #ifndef _OS_WINDOWS_
 int main(int argc, char *argv[])
 {
+#ifndef JL_DISABLE_LIBUV
     uv_setup_args(argc, argv); // no-op on Windows
+#endif
 #else
 
 static void lock_low32() {

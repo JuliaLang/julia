@@ -155,7 +155,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             end
         end
     end
-    isa(stdin, TTY) && println()
+    (!isdefined(@__MODULE__, :TTY) || isa(stdin, TTY)) && println()
     nothing
 end
 
@@ -302,7 +302,7 @@ function exec_options(opts)
     end
     repl |= is_interactive
     if repl
-        interactiveinput = isa(stdin, TTY)
+        interactiveinput = !isdefined(@__MODULE__, :TTY) || isa(stdin, TTY)
         if interactiveinput
             global is_interactive = true
             banner = (opts.banner != 0) # --banner!=no
@@ -396,7 +396,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
         end
         banner && Base.banner()
         let input = stdin
-            if isa(input, File) || isa(input, IOStream)
+            if isa(input, File) || (isa(input, IOStream) && !Base.DISABLE_LIBUV)
                 # for files, we can slurp in the whole thing at once
                 ex = parse_input_line(read(input, String))
                 if Meta.isexpr(ex, :toplevel)

@@ -61,6 +61,13 @@ Return the current user's home directory.
     (for example on how to specify the home directory via environment variables), see the
     [`uv_os_homedir` documentation](http://docs.libuv.org/en/v1.x/misc.html#c.uv_os_homedir).
 """
+function homedir end
+
+if Base.DISABLE_LIBUV
+function homedir()
+    haskey(ENV, "HOME") ? ENV["HOME"] : error("unable to retrieve home directory")
+end    
+else
 function homedir()
     buf = Base.StringVector(AVG_PATH - 1) # space for null-terminator implied by StringVector
     sz = RefValue{Csize_t}(length(buf) + 1) # total buffer size including null
@@ -76,7 +83,7 @@ function homedir()
         end
     end
 end
-
+end
 
 if Sys.iswindows()
     isabspath(path::String) = occursin(path_absolute_re, path)

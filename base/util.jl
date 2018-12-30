@@ -508,6 +508,7 @@ graphical interface.
 """
 function getpass end
 
+if isdefined(@__MODULE__, :TTY)
 if Sys.iswindows()
 function getpass(input::TTY, output::IO, prompt::AbstractString)
     input === stdin || throw(ArgumentError("getpass only works for stdin"))
@@ -534,6 +535,7 @@ function getpass(input::TTY, output::IO, prompt::AbstractString)
     (input === stdin && output === stdout) || throw(ArgumentError("getpass only works for stdin"))
     msg = string(prompt, ": ")
     unsafe_SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), msg))
+end
 end
 end
 

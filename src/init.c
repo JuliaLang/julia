@@ -152,6 +152,7 @@ static void jl_prep_sanitizers(void)
 #endif
 }
 
+#ifndef JL_DISABLE_LIBUV
 struct uv_shutdown_queue_item { uv_handle_t *h; struct uv_shutdown_queue_item *next; };
 struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutdown_queue_item *last; };
 
@@ -172,20 +173,12 @@ static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
     jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*)arg);
 }
 
-void jl_write_coverage_data(const char*);
-void jl_write_malloc_log(void);
-void jl_write_compiler_output(void);
-
 static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdown_queue_item *item)
 {
     struct uv_shutdown_queue_item *rv = item->next;
     free(item);
     return rv;
 }
-
-void jl_init_timing(void);
-void jl_destroy_timing(void);
-void jl_uv_call_close_callback(jl_value_t *val);
 
 static void jl_close_item_atexit(uv_handle_t *handle)
 {
@@ -222,6 +215,15 @@ static void jl_close_item_atexit(uv_handle_t *handle)
         assert(0 && "not a valid libuv handle");
     }
 }
+#endif
+
+void jl_write_coverage_data(const char*);
+void jl_write_malloc_log(void);
+void jl_write_compiler_output(void);
+
+void jl_init_timing(void);
+void jl_destroy_timing(void);
+void jl_uv_call_close_callback(jl_value_t *val);
 
 JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 {
@@ -255,11 +257,12 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 
     // replace standard output streams with something that we can still print to
     // after the finalizers from base/stream.jl close the TTY
-    JL_STDOUT = (uv_stream_t*) STDOUT_FILENO;
-    JL_STDERR = (uv_stream_t*) STDERR_FILENO;
+    JL_STDOUT = (JL_STREAM*) STDOUT_FILENO;
+    JL_STDERR = (JL_STREAM*) STDERR_FILENO;
 
     jl_gc_run_all_finalizers(ptls);
 
+#ifndef JL_DISABLE_LIBUV
     uv_loop_t *loop = jl_global_event_loop();
 
     if (loop == NULL) {
@@ -299,6 +302,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     loop->stop_flag = 0;
     while (uv_run(loop, UV_RUN_DEFAULT)) { }
     JL_UV_UNLOCK();
+#endif
 
     // TODO: Destroy threads
 
@@ -320,7 +324,9 @@ void *jl_crtdll_handle;
 void *jl_winsock_handle;
 #endif
 
+#ifndef JL_DISABLE_LIBUV
 uv_loop_t *jl_io_loop;
+#endif
 
 #ifdef _OS_WINDOWS_
 int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
@@ -356,7 +362,7 @@ int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
 
     return 0;
 }
-#else
+#elif !defined(JL_DISABLE_LIBUV)
 int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     if ((*dupfd = fcntl(fd, F_DUPFD_CLOEXEC, 3)) == -1)
         return -errno;
@@ -364,6 +370,7 @@ int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
 }
 #endif
 
+#ifndef JL_DISABLE_LIBUV
 static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
 {
     void *handle;
@@ -445,6 +452,11 @@ void init_stdio(void)
     JL_STDERR = (uv_stream_t*)init_stdio_handle("stderr", UV_STDERR_FD, 0);
     jl_flush_cstdio();
 }
+#else
+void init_stdio(void)
+{
+}
+#endif
 
 #ifdef JL_USE_INTEL_JITEVENTS
 char jl_using_intel_jitevents; // Non-zero if running under Intel VTune Amplifier
@@ -505,7 +517,7 @@ static char *abspath(const char *in, int nprefix)
             char *path = (char*)malloc(PATH_MAX);
             if (!path)
                 jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
-            if (uv_cwd(path, &path_size)) {
+            if (jl_cwd(path, &path_size)) {
                 jl_error("fatal error: unexpected error while retrieving current working directory");
             }
             out = (char*)malloc(path_size + 1 + sz + nprefix);
@@ -545,7 +557,7 @@ static const char *absformat(const char *in)
     // get an escaped copy of cwd
     size_t path_size = PATH_MAX;
     char path[PATH_MAX];
-    if (uv_cwd(path, &path_size)) {
+    if (jl_cwd(path, &path_size)) {
         jl_error("fatal error: unexpected error while retrieving current working directory");
     }
     size_t sz = strlen(in) + 1;
@@ -579,9 +591,13 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     size_t path_size = PATH_MAX;
     if (!free_path)
         jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+#ifdef JL_DISABLE_LIBUV
+    strcpy(free_path, "/julia"); path_size=6;
+#else
     if (uv_exepath(free_path, &path_size)) {
         jl_error("fatal error: unexpected error while retrieving exepath");
     }
+#endif
     if (path_size >= PATH_MAX) {
         jl_error("fatal error: jl_options.julia_bin path too long");
     }
@@ -661,17 +677,23 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     libsupport_init();
     htable_new(&jl_current_modules, 0);
     ios_set_io_wait_func = jl_set_io_wait;
+#ifndef JL_DISABLE_LIBUV
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
     jl_init_uv();
     init_stdio();
+#endif
+    jl_init_signal_async();
     restore_signals();
 
     jl_page_size = jl_getpagesize();
-    uint64_t total_mem = uv_get_total_memory();
+    uint64_t total_mem = (size_t)-1;
+#ifndef JL_DISABLE_LIBUV
+    uv_get_total_memory();
     if (total_mem >= (size_t)-1) {
         total_mem = (size_t)-1;
     }
+#endif
     jl_arr_xtralloc_limit = total_mem / 100;  // Extra allocation limited to 1% of total RAM
     jl_prep_sanitizers();
     void *stack_lo, *stack_hi;
@@ -836,6 +858,15 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 static jl_value_t *core(const char *name)
 {
     return jl_get_global(jl_core_module, jl_symbol(name));
+}
+
+JL_DLLEXPORT int jl_getpid(void)
+{
+#ifdef _OS_WINDOWS_
+    return GetCurrentProcessId();
+#else
+    return getpid();
+#endif
 }
 
 // fetch references to things defined in boot.jl

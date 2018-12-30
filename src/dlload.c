@@ -121,7 +121,6 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
 {
     char path[PATHBUF];
     int i;
-    uv_stat_t stbuf;
     void *handle;
     int abspath;
     // number of extensions to try — if modname already ends with the
@@ -174,7 +173,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
                     if (handle)
                         goto done;
                     // bail out and show the error if file actually exists
-                    if (jl_stat(path, (char*)&stbuf) == 0)
+                    if (!jl_is_file(path))
                         goto notfound;
                 }
             }
