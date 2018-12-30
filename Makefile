@@ -147,7 +147,7 @@ $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(buil
 	@$(call PRINT_CC, $(HOSTCC) -o $(build_depsbindir)/stringreplace $(JULIAHOME)/contrib/stringreplace.c)
 
 julia-base-cache: julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_datarootdir)/julia
-	@$(call spawn,$(JULIA_EXECUTABLE) --startup-file=no $(call cygpath_w,$(JULIAHOME)/etc/write_base_cache.jl) \
+	@$(call spawn,JULIA_BINDIR=$(build_bindir) $(JULIA_EXECUTABLE) --startup-file=no $(call cygpath_w,$(JULIAHOME)/etc/write_base_cache.jl) \
 		$(call cygpath_w,$(build_datarootdir)/julia/base.cache))
 
 # public libraries, that are installed in $(prefix)/lib

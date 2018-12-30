@@ -5,7 +5,9 @@
 
 #include "options.h"
 #include "locks.h"
+#ifndef JL_DISABLE_LIBUV
 #include <uv.h>
+#endif
 #if !defined(_MSC_VER) && !defined(__MINGW32__)
 #include <unistd.h>
 #include <sched.h>
@@ -405,8 +407,10 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls);
 
 jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b);
 
+#ifndef JL_DISABLE_LIBUV
 extern uv_loop_t *jl_io_loop;
-void jl_uv_flush(uv_stream_t *stream);
+#endif
+void jl_uv_flush(JL_STREAM *stream);
 
 typedef struct jl_typeenv_t {
     jl_tvar_t *var;
@@ -770,6 +774,8 @@ const char *jl_dlfind_win32(const char *name);
 
 // libuv wrappers:
 JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
+JL_DLLEXPORT int jl_cwd(char *buffer, size_t *size);
+JL_DLLEXPORT int jl_is_file(char *fname);
 
 #ifdef SEGV_EXCEPTION
 extern JL_DLLEXPORT jl_value_t *jl_segv_exception;

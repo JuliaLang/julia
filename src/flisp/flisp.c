@@ -2403,11 +2403,13 @@ static void lisp_init(fl_context_t *fl_ctx, size_t initial_heapsize)
 
     cvalues_init(fl_ctx);
 
+#ifndef JL_DISABLE_LIBUV
     char exename[1024];
     size_t exe_size = sizeof(exename) / sizeof(exename[0]);
     if ( uv_exepath(exename, &exe_size) == 0 ) {
         setc(symbol(fl_ctx, "*install-dir*"), cvalue_static_cstring(fl_ctx, strdup(dirname(exename))));
     }
+#endif
 
     fl_ctx->memory_exception_value = fl_list2(fl_ctx, fl_ctx->OutOfMemoryError,
                                               cvalue_static_cstring(fl_ctx, "out of memory"));

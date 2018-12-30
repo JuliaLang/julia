@@ -16,7 +16,10 @@ SRCS := flisp.c builtins.c string.c equalhash.c table.c iostream.c \
 
 LLTDIR := ../support
 
-HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h $(wildcard $(LLTDIR)/*.h)
+HEADERS := $(wildcard *.h) $(wildcard $(LLTDIR)/*.h)
+ifeq ($(DISABLE_LIBUV), 0)
+HEADERS += $(LIBUV_INC)/uv.h
+endif
 
 OBJS := $(SRCS:%.c=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%.c=$(BUILDDIR)/%.dbg.obj)

@@ -7,10 +7,14 @@ module Threads
 
 global Condition # we'll define this later, make sure we don't import Base.Condition
 
-include("threadingconstructs.jl")
-include("atomics.jl")
-include("locks-mt.jl")
-
+if Base.DISABLE_THREADS
+    threadid() = 1
+    nthreads() = 1
+else
+    include("threadingconstructs.jl")
+    include("atomics.jl")
+    include("locks-mt.jl")
+end
 
 """
     resize_nthreads!(A, copyvalue=A[1])

@@ -17,7 +17,9 @@
 #endif
 #include "julia.h"
 #include "julia_internal.h"
+#ifndef JL_DISABLE_LIBUV
 #include "uv.h"
+#endif
 #include "julia_assert.h"
 #include "intrinsics.h"
 #include "builtin_proto.h"
@@ -871,8 +873,7 @@ JL_DLLEXPORT jl_value_t *jl_load(jl_module_t *module, const char *fname)
         jl_uv_flush(JL_STDOUT);
 #endif
     }
-    uv_stat_t stbuf;
-    if (jl_stat(fname, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
+    if (!jl_is_file(fname)) {
         jl_errorf("could not open file %s", fname);
     }
     return jl_parse_eval_all(fname, NULL, 0, module);
@@ -889,7 +890,7 @@ JL_DLLEXPORT jl_value_t *jl_prepend_cwd(jl_value_t *str)
 {
     size_t sz = 1024;
     char path[1024];
-    int c = uv_cwd(path, &sz);
+    int c = jl_cwd(path, &sz);
     if (c < 0) {
         jl_errorf("could not get current directory");
     }

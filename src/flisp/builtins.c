@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <unistd.h>
 
 #include "flisp.h"
 
@@ -305,6 +306,7 @@ static value_t fl_time_now(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return mk_double(fl_ctx, jl_clock_now());
 }
 
+
 static value_t fl_path_cwd(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     int err;
@@ -313,15 +315,26 @@ static value_t fl_path_cwd(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     if (nargs == 0) {
         char buf[1024];
         size_t len = sizeof(buf);
+#ifdef JL_DISABLE_LIBUV
+        if (getcwd(buf, len) == NULL)
+            lerrorf(fl_ctx, fl_ctx->IOError, "path.cwd: could not get cwd: %s", strerror(errno));
+#else
         err = uv_cwd(buf, &len);
         if (err != 0)
             lerrorf(fl_ctx, fl_ctx->IOError, "path.cwd: could not get cwd: %s", uv_strerror(err));
+#endif
         return string_from_cstrn(fl_ctx, buf, len);
     }
     char *ptr = tostring(fl_ctx, args[0], "path.cwd");
+#ifdef JL_DISABLE_LIBUV
+    err = chdir(ptr);
+    if (err != 0)
+        lerrorf(fl_ctx, fl_ctx->IOError, "path.cwd: could not cd to %s: %s", ptr, strerror(errno));
+#else
     err = uv_chdir(ptr);
     if (err != 0)
         lerrorf(fl_ctx, fl_ctx->IOError, "path.cwd: could not cd to %s: %s", ptr, uv_strerror(err));
+#endif
     return fl_ctx->T;
 }
 

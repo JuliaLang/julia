@@ -45,18 +45,20 @@ julia> pwd()
 "/home/JuliaUser/Projects/julia"
 ```
 """
+function pwd end
+
 function pwd()
     buf = Base.StringVector(AVG_PATH - 1) # space for null-terminator implied by StringVector
     sz = RefValue{Csize_t}(length(buf) + 1) # total buffer size including null
     while true
-        rc = ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
+        rc = ccall(:jl_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
         if rc == 0
             resize!(buf, sz[])
             return String(buf)
-        elseif rc == Base.UV_ENOBUFS
+        elseif !Base.DISABLE_LIBUV && rc == Base.UV_ENOBUFS
             resize!(buf, sz[] - 1) # space for null-terminator implied by StringVector
         else
-            uv_error(:cwd, rc)
+            Base.DISABLE_LIBUV ? systemerror(:getcwd, err != 0) : uv_error(:getcwd, err)
         end
     end
 end
@@ -80,8 +82,16 @@ julia> pwd()
 "/home/JuliaUser"
 ```
 """
-function cd(dir::AbstractString)
-    uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Cstring,), dir))
+function cd end
+
+if Base.DISABLE_LIBUV
+    function cd(dir::AbstractString)
+        systemerror("chdir $dir", ccall(:chdir, Cint, (Cstring,), dir) != 0)
+    end
+else
+    function cd(dir::AbstractString)
+        uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Cstring,), dir))
+    end
 end
 cd() = cd(homedir())
 
