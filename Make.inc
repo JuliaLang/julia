@@ -302,6 +302,8 @@ STD_LIB_PATH := $(STD_LIB_PATH):$(shell LANG=C $(CROSS_COMPILE)gcc -print-search
 ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # the cygwin-mingw32 compiler lies about it search directory paths
 STD_LIB_PATH := $(shell echo '$(STD_LIB_PATH)' | sed -e "s!/lib/!/bin/!g")
 endif
+else ifneq (,$(findstring emscripten,$(XC_HOST)))
+override OS := emscripten
 else
 $(error "unknown XC_HOST variable set")
 endif
