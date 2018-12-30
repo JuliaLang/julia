@@ -198,7 +198,9 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     sigset_t sset;
+#ifndef JL_DISABLE_LIBUV
     uv_tty_reset_mode();
+#endif
     if (sig == SIGILL)
         jl_show_sigill(context);
     jl_critical_error(sig, jl_to_bt_context(context),
@@ -327,7 +329,9 @@ static void jl_try_deliver_sigint(void)
 {
     jl_ptls_t ptls2 = jl_all_tls_states[0];
     jl_safepoint_enable_sigint();
+#ifndef JL_DISABLE_LIBUV
     jl_wake_libuv();
+#endif
     jl_atomic_store_release(&ptls2->signal_request, 2);
     // This also makes sure `sleep` is aborted.
     pthread_kill(ptls2->system_id, SIGUSR2);

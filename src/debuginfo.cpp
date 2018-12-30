@@ -53,12 +53,16 @@ typedef object::SymbolRef SymRef;
 // while holding this lock.
 // Certain functions in this file might be called from an unmanaged thread
 // and cannot have any interaction with the julia runtime
+#ifdef JL_ENABLE_THREADING
 static uv_rwlock_t threadsafe;
 
 extern "C" void jl_init_debuginfo()
 {
     uv_rwlock_init(&threadsafe);
 }
+#else
+extern "C" void jl_init_debuginfo() {}
+#endif
 
 // --- storing and accessing source location metadata ---
 
@@ -366,7 +370,9 @@ public:
                 codeinst = linfo_it->second;
                 ncode_in_flight.erase(linfo_it);
             }
+#ifdef JL_ENABLE_THREADING
             uv_rwlock_wrlock(&threadsafe);
+#endif
             if (codeinst)
                 linfomap[Addr] = std::make_pair(Size, codeinst->def);
             if (first) {
@@ -377,9 +383,11 @@ public:
                     };
                 objectmap[SectionLoadAddr] = tmp;
                 first = false;
-            }
-            uv_rwlock_wrunlock(&threadsafe);
-        }
+           }
+#ifdef JL_ENABLE_THREADING
+           uv_rwlock_wrunlock(&threadsafe);
+#endif
+       }
         jl_gc_safe_leave(ptls, gc_state);
     }
 
@@ -389,7 +397,9 @@ public:
 
     std::map<size_t, ObjectInfo, revcomp>& getObjectMap()
     {
+#ifdef JL_ENABLE_THREADING
         uv_rwlock_rdlock(&threadsafe);
+#endif
         return objectmap;
     }
 };
@@ -1159,7 +1169,9 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int64_t *se
         }
         found = 1;
     }
+#ifdef JL_ENABLE_THREADING
     uv_rwlock_rdunlock(&threadsafe);
+#endif
     return found;
 }
 
@@ -1206,7 +1218,9 @@ JL_DLLEXPORT uint64_t jl_get_section_start(uint64_t fptr)
            ret = objit->first;
        }
     }
+#ifdef JL_ENABLE_THREADING
     uv_rwlock_rdunlock(&threadsafe);
+#endif
     jl_gc_safe_leave(ptls, gc_state);
     return ret;
 }
@@ -1657,6 +1671,8 @@ uint64_t jl_getUnwindInfo(uint64_t dwAddr)
     if (it != objmap.end() && dwAddr < it->first + it->second.SectionSize) {
         ipstart = (uint64_t)(uintptr_t)(*it).first;
     }
+#ifdef JL_ENABLE_THREADING
     uv_rwlock_rdunlock(&threadsafe);
+#endif
     return ipstart;
 }

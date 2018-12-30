@@ -12,7 +12,12 @@ else
 CPP_STDOUT := $(CPP) -E
 endif
 
-all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony file_constants.jl uv_constants.jl version_git.jl.phony)
+GENERATED_FILES = pcre_h.jl errno_h.jl build_h.jl.phony file_constants.jl version_git.jl.phony
+ifeq ($(DISABLE_LIBUV),0)
+GENERATED_FILED += uv_constants.jl
+endif
+
+all: $(addprefix $(BUILDDIR)/,$(GENERATED_FILES))
 
 PCRE_CONST := 0x[0-9a-fA-F]+|[0-9]+|\([\-0-9]+\)
 ifeq ($(USE_SYSTEM_PCRE), 1)
@@ -52,6 +57,16 @@ ifeq ($(USE_GPL_LIBS), 1)
 	@echo "const USE_GPL_LIBS = true" >> $@
 else
 	@echo "const USE_GPL_LIBS = false" >> $@
+endif
+ifneq ($(DISABLE_LIBUV), 0)
+	@echo "const DISABLE_LIBUV = true" >> $@
+else
+	@echo "const DISABLE_LIBUV = false" >> $@
+endif
+ifeq ($(JULIA_THREADS), 0)
+	@echo "const DISABLE_THREADS = true" >> $@
+else
+	@echo "const DISABLE_THREADS = false" >> $@
 endif
 	@echo "const libllvm_version_string = \"$$($(LLVM_CONFIG_HOST) --version)\"" >> $@
 	@echo "const VERSION_STRING = \"$(JULIA_VERSION)\"" >> $@

@@ -200,7 +200,7 @@ include("version.jl")
 # system & environment
 include("sysinfo.jl")
 include("libc.jl")
-using .Libc: getpid, gethostname, time
+using .Libc: getpid, gethostname, time, RawFD
 
 const DL_LOAD_PATH = String[]
 if Sys.isapple()
@@ -231,14 +231,17 @@ function rand end
 function randn end
 
 # I/O
-include("libuv.jl")
 include("asyncevent.jl")
 include("iostream.jl")
-include("stream.jl")
 include("filesystem.jl")
 using .Filesystem
 include("cmd.jl")
+if !DISABLE_LIBUV
+include("uvevent.jl")
+include("libuv.jl")
+include("stream.jl")
 include("process.jl")
+end
 include("grisu/grisu.jl")
 include("secretbuffer.jl")
 
@@ -328,7 +331,9 @@ using .StackTraces
 include("initdefs.jl")
 
 # worker threads
+if !DISABLE_LIBUV
 include("threadcall.jl")
+end
 
 # code loading
 include("uuid.jl")

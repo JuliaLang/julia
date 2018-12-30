@@ -4,7 +4,11 @@
 #define JL_IOS_H
 
 #include <stdarg.h>
+#ifdef JL_DISABLE_LIBUV
+#define UV_HANDLE_TYPE_MAX 0
+#else
 #include "uv.h"
+#endif
 #include "analyzer_annotations.h"
 
 #ifdef __cplusplus

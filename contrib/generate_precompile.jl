@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 if isempty(ARGS) || ARGS[1] !== "0"
+if !Base.DISABLE_LIBUV
+
 # Prevent this from being put into the Main namespace
 @eval Module() begin
 if !isdefined(Base, :uv_eventloop)

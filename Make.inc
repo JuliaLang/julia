@@ -46,6 +46,7 @@ USE_SYSTEM_GMP:=0
 USE_SYSTEM_MPFR:=0
 USE_SYSTEM_SUITESPARSE:=0
 USE_SYSTEM_LIBUV:=0
+DISABLE_LIBUV:=0
 USE_SYSTEM_UTF8PROC:=0
 USE_SYSTEM_MBEDTLS:=0
 USE_SYSTEM_LIBSSH2:=0
@@ -994,12 +995,16 @@ LIBM := -lopenlibm
 LIBMNAME := libopenlibm
 endif
 
+ifeq ($(DISABLE_LIBUV), 0)
 ifeq ($(USE_SYSTEM_LIBUV), 1)
   LIBUV := $(LOCALBASE)/lib/libuv-julia.a
   LIBUV_INC := $(LOCALBASE)/include
 else
   LIBUV := $(build_libdir)/libuv.a
   LIBUV_INC := $(build_includedir)
+endif
+LIBUV :=
+LIBUV_INC :=
 endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 1)
@@ -1177,6 +1182,10 @@ endif
 
 ifeq ($(DISABLE_LIBUNWIND), 1)
 JCPPFLAGS += -DJL_DISABLE_LIBUNWIND
+endif
+
+ifneq ($(DISABLE_LIBUV),0)
+JCPPFLAGS += -DJL_DISABLE_LIBUV
 endif
 
 # perf

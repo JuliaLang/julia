@@ -3078,7 +3078,7 @@ void jl_gc_init(void)
     last_long_collect_interval = default_collect_interval;
     gc_num.allocd = 0;
 
-#ifdef _P64
+#ifdef _P64 && !defined(JL_DISABLE_LIBUV)
     // on a big memory machine, set max_collect_interval to totalmem / ncores / 2
     size_t maxmem = uv_get_total_memory() / jl_cpu_threads() / 2;
     if (maxmem > max_collect_interval)
