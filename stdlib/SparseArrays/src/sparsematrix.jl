@@ -517,7 +517,7 @@ supplied, `combine` defaults to `+` unless the elements of `V` are Booleans in w
 elements of `J` must satisfy `1 <= J[k] <= n`. Numerical zeros in (`I`, `J`, `V`) are
 retained as structural nonzeros; to drop numerical zeros, use [`dropzeros!`](@ref).
 
-For additional documentation and an expert driver, see `Base.SparseArrays.sparse!`.
+For additional documentation and an expert driver, see `SparseArrays.sparse!`.
 
 # Examples
 ```jldoctest
@@ -903,7 +903,7 @@ to generate intermediate result `(AQ)^T` (`transpose(A[:,q])`) in `C`. (2) Colum
 
 The first step is a call to `halfperm!`, and the second is a variant on `halfperm!` that
 avoids an unnecessary length-`nnz(A)` array-sweep and associated recomputation of column
-pointers. See [`halfperm!`](:func:Base.SparseArrays.halfperm!) for additional algorithmic
+pointers. See [`halfperm!`](:func:SparseArrays.halfperm!) for additional algorithmic
 information.
 
 See also: `unchecked_aliasing_permute!`
@@ -1215,7 +1215,7 @@ julia> A = sparse(Diagonal([1, 2, 3, 4]))
   [3, 3]  =  3
   [4, 4]  =  4
 
-julia> Base.SparseArrays.fkeep!(A, (i, j, v) -> isodd(v))
+julia> SparseArrays.fkeep!(A, (i, j, v) -> isodd(v))
 4×4 SparseMatrixCSC{Int64,Int64} with 2 stored entries:
   [1, 1]  =  1
   [3, 3]  =  3
@@ -1524,7 +1524,8 @@ function spzeros(::Type{Tv}, ::Type{Ti}, sz::Tuple{Integer,Integer}) where {Tv, 
     spzeros(Tv, Ti, sz[1], sz[2])
 end
 
-function one(S::SparseMatrixCSC{T}) where T
+import Base._one
+function Base._one(unit::T, S::SparseMatrixCSC) where T
     S.m == S.n || throw(DimensionMismatch("multiplicative identity only defined for square matrices"))
     return SparseMatrixCSC{T}(I, S.m, S.n)
 end
@@ -1973,8 +1974,8 @@ function getindex_cols(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector) where {Tv,T
     return SparseMatrixCSC(m, nJ, colptrS, rowvalS, nzvalS)
 end
 
-getindex_traverse_col(::AbstractUnitRange, lo::Int, hi::Int) = lo:hi
-getindex_traverse_col(I::StepRange, lo::Int, hi::Int) = step(I) > 0 ? (lo:1:hi) : (hi:-1:lo)
+getindex_traverse_col(::AbstractUnitRange, lo::Integer, hi::Integer) = lo:hi
+getindex_traverse_col(I::StepRange, lo::Integer, hi::Integer) = step(I) > 0 ? (lo:1:hi) : (hi:-1:lo)
 
 function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractRange, J::AbstractVector) where {Tv,Ti<:Integer}
     @assert !has_offset_axes(A, I, J)
@@ -2923,7 +2924,7 @@ julia> A = sparse([1 2; 0 0])
   [1, 1]  =  1
   [1, 2]  =  2
 
-julia> Base.SparseArrays.dropstored!(A, 1, 2); A
+julia> SparseArrays.dropstored!(A, 1, 2); A
 2×2 SparseMatrixCSC{Int64,Int64} with 1 stored entry:
   [1, 1]  =  1
 ```
@@ -2963,7 +2964,7 @@ julia> A = sparse(Diagonal([1, 2, 3, 4]))
   [3, 3]  =  3
   [4, 4]  =  4
 
-julia> Base.SparseArrays.dropstored!(A, [1, 2], [1, 1])
+julia> SparseArrays.dropstored!(A, [1, 2], [1, 1])
 4×4 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
   [2, 2]  =  2
   [3, 3]  =  3

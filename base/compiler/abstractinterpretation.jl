@@ -104,7 +104,7 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
         # if there's a possibility we could constant-propagate a better result
         # (hopefully without doing too much work), try to do that now
         # TODO: it feels like this could be better integrated into abstract_call_method / typeinf_edge
-        const_rettype = abstract_call_method_with_const_args(f, argtypes, applicable[nonbot]::SimpleVector, sv)
+        const_rettype = abstract_call_method_with_const_args(rettype, f, argtypes, applicable[nonbot]::SimpleVector, sv)
         if const_rettype ⊑ rettype
             # use the better result, if it's a refinement of rettype
             rettype = const_rettype
@@ -142,7 +142,7 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
     return rettype
 end
 
-function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector{Any}, match::SimpleVector, sv::InferenceState)
+function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecialize(f), argtypes::Vector{Any}, match::SimpleVector, sv::InferenceState)
     method = match[3]::Method
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
@@ -159,7 +159,7 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
             end
         end
     end
-    haveconst || return Any
+    haveconst || improvable_via_constant_propagation(rettype) || return Any
     sig = match[1]
     sparams = match[2]::SimpleVector
     code = code_for_method(method, sig, sparams, sv.params.world)
@@ -1060,7 +1060,7 @@ function typeinf_local(frame::InferenceState)
             elseif hd === :return
                 pc´ = n + 1
                 rt = widenconditional(abstract_eval(stmt.args[1], s[pc], frame))
-                if !isa(rt, Const) && !isa(rt, Type) && (!isa(rt, PartialTuple) || frame.cached)
+                if !isa(rt, Const) && !isa(rt, Type) && !isa(rt, PartialTuple)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally
                     rt = widenconst(rt)

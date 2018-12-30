@@ -34,7 +34,7 @@ empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 # by default, a Set is returned
 emptymutable(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 
-_similar_for(c::AbstractSet, T, itr, isz) = empty(c, T)
+_similar_for(c::AbstractSet, ::Type{T}, itr, isz) where {T} = empty(c, T)
 
 function show(io::IO, s::Set)
     print(io, "Set(")
@@ -167,15 +167,39 @@ julia> unique(x -> x^2, [1, -1, 3, -3, 4])
 """
 function unique(f, C)
     out = Vector{eltype(C)}()
-    seen = Set()
-    for x in C
-        y = f(x)
-        if !in(y, seen)
-            push!(seen, y)
-            push!(out, x)
-        end
+
+    s = iterate(C)
+    if s === nothing
+        return out
     end
-    out
+    (x, i) = s
+    y = f(x)
+    seen = Set{typeof(y)}()
+    push!(seen, y)
+    push!(out, x)
+
+    return _unique!(f, out, C, seen, i)
+end
+
+function _unique!(f, out::AbstractVector, C, seen::Set, i)
+    s = iterate(C, i)
+    while s !== nothing
+        (x, i) = s
+        y = f(x)
+        if y ∉ seen
+            push!(out, x)
+            if y isa eltype(seen)
+                push!(seen, y)
+            else
+                seen2 = convert(Set{promote_typejoin(eltype(seen), typeof(y))}, seen)
+                push!(seen2, y)
+                return _unique!(f, out, C, seen2, i)
+            end
+        end
+        s = iterate(C, i)
+    end
+
+    return out
 end
 
 """
@@ -183,6 +207,9 @@ end
 
 Selects one value from `A` for each unique value produced by `f` applied to
 elements of `A` , then return the modified A.
+
+!!! compat "Julia 1.1"
+    This method is available as of Julia 1.1.
 
 # Examples
 ```jldoctest
@@ -205,21 +232,38 @@ julia> unique!(iseven, [2, 3, 5, 7, 9])
 ```
 """
 function unique!(f, A::AbstractVector)
-    seen = Set()
-    idxs = eachindex(A)
-    y = iterate(idxs)
-    count = 0
-    for x in A
-        t = f(x)
-        if t ∉ seen
-            push!(seen,t)
-            count += 1
-            A[y[1]] = x
-            y = iterate(idxs, y[2])
-        end
+    if length(A) <= 1
+        return A
     end
-    resize!(A, count)
+
+    i = firstindex(A)
+    x = @inbounds A[i]
+    y = f(x)
+    seen = Set{typeof(y)}()
+    push!(seen, y)
+    return _unique!(f, A, seen, i, i+1)
 end
+
+function _unique!(f, A::AbstractVector, seen::Set, current::Integer, i::Integer)
+    while i <= lastindex(A)
+        x = @inbounds A[i]
+        y = f(x)
+        if y ∉ seen
+            current += 1
+            @inbounds A[current] = x
+            if y isa eltype(seen)
+                push!(seen, y)
+            else
+                seen2 = convert(Set{promote_typejoin(eltype(seen), typeof(y))}, seen)
+                push!(seen2, y)
+                return _unique!(f, A, seen2, current, i+1)
+            end
+        end
+        i += 1
+    end
+    return resize!(A, current - firstindex(A) + 1)
+end
+
 
 # If A is not grouped, then we will need to keep track of all of the elements that we have
 # seen so far.

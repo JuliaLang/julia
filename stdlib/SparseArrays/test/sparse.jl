@@ -9,6 +9,7 @@ using Base.Printf: @printf
 using Random
 using Test: guardseed
 using InteractiveUtils: @which
+using Dates
 
 @testset "issparse" begin
     @test issparse(sparse(fill(1,5,5)))
@@ -90,6 +91,10 @@ do33 = fill(1.,3)
         @test_throws DimensionMismatch map(|, sqrboolmat, colboolmat)
         @test_throws DimensionMismatch map(xor, sqrboolmat, colboolmat)
     end
+end
+
+@testset "Issue #30006" begin
+    SparseMatrixCSC{Float64,Int32}(spzeros(3,3))[:, 1] == [1, 2, 3]
 end
 
 @testset "concatenation tests" begin
@@ -317,8 +322,7 @@ end
         a = sprand(10, 5, 0.7)
         b = sprand(5, 15, 0.3)
         @test maximum(abs.(a*b - Array(a)*Array(b))) < 100*eps()
-        @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:sortcols) - Array(a)*Array(b))) < 100*eps()
-        @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:doubletranspose) - Array(a)*Array(b))) < 100*eps()
+        @test maximum(abs.(SparseArrays.spmatmul(a,b) - Array(a)*Array(b))) < 100*eps()
         f = Diagonal(rand(5))
         @test Array(a*f) == Array(a)*f
         @test Array(f*b) == f*Array(b)
@@ -708,6 +712,8 @@ end
         ss116 = sparse(aa116)
 
         @test ss116[:,:] == copy(ss116)
+
+        @test convert(SparseMatrixCSC{Float32,Int32}, sd116)[2:5,:] == convert(SparseMatrixCSC{Float32,Int32}, sd116[2:5,:])
 
         # range indexing
         @test Array(ss116[i,:]) == aa116[i,:]
@@ -2348,6 +2354,14 @@ end
     script = joinpath(@__DIR__, "ambiguous_exec.jl")
     cmd = `$(Base.julia_cmd()) --startup-file=no $script`
     @test success(pipeline(cmd; stdout=stdout, stderr=stderr))
+end
+
+@testset "oneunit of sparse matrix" begin
+    A = sparse([Second(0) Second(0); Second(0) Second(0)])
+    @test oneunit(sprand(2, 2, 0.5)) isa SparseMatrixCSC{Float64}
+    @test oneunit(A) isa SparseMatrixCSC{Second}
+    @test one(sprand(2, 2, 0.5)) isa SparseMatrixCSC{Float64}
+    @test one(A) isa SparseMatrixCSC{Int}
 end
 
 end # module

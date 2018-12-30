@@ -389,4 +389,16 @@ end
     @test LinearAlgebra.peakflops() > 0
 end
 
+@testset "NaN handling: Issue 28972" begin
+    @test all(isnan, rmul!([NaN], 0.0))
+    @test all(isnan, rmul!(Any[NaN], 0.0))
+    @test all(isnan, lmul!(0.0, [NaN]))
+    @test all(isnan, lmul!(0.0, Any[NaN]))
+
+    @test all(!isnan, rmul!([NaN], false))
+    @test all(!isnan, rmul!(Any[NaN], false))
+    @test all(!isnan, lmul!(false, [NaN]))
+    @test all(!isnan, lmul!(false, Any[NaN]))
+end
+
 end # module TestGeneric
