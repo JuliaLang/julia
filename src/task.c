@@ -816,6 +816,9 @@ static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
         " bctr; \n"          // branch to counter (lr update disabled)
         " trap; \n"
         : : "r"(stk), "r"(fn) : "memory");
+#elif defined(_CPU_WASM_)
+    // Not implemented, but let's just crash for now here.
+    abort();
 #else
 #error JL_HAVE_ASM defined but not implemented for this CPU type
 #endif
