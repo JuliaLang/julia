@@ -1432,3 +1432,6 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
 
 # issue #30303
 @test repr(Symbol("a\$")) == "Symbol(\"a\\\$\")"
+
+# issue #30505
+@test repr(Union{Tuple{Char}, Tuple{Char, Char}}[('a','b')]) == "Union{Tuple{Char}, Tuple{Char,Char}}[('a', 'b')]"
