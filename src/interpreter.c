@@ -392,6 +392,13 @@ extern jl_method_instance_t* jl_set_method_inferred(
 extern jl_value_t *jl_specializations_lookup(jl_method_t *m, jl_value_t *type, size_t world);
 extern void jl_array_del_at(jl_array_t *a, ssize_t idx, size_t dec);
 extern jl_value_t *jl_get_spec_lambda(jl_tupletype_t *types, size_t world);
+void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_function_t *f);
+extern jl_sym_t *jl_module_name(jl_value_t *);
+extern jl_uuid_t jl_module_uuid(jl_value_t *);
+extern void jl_gc_add_ptr_finalizer(void *, jl_value_t *, void*);
+int32_t jl_sizeof_stat();
+
+#ifdef _OS_EMSCRIPTEN_
 extern void *pcre2_jit_stack_create_8(int32_t, int32_t, void*);
 extern void *pcre2_match_context_create_8(void*);
 extern void pcre2_jit_stack_assign_8(void*,void*,void*);
@@ -403,14 +410,10 @@ extern void *pcre2_get_ovector_pointer_8(void *);
 extern uint32_t pcre2_get_ovector_count_8(void *);
 extern int32_t pcre2_match_8(void *, void*, uint32_t, uint32_t, uint32_t, void *, void *);
 extern void __gmp_set_memory_functions(void *, void *, void*);
-void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_function_t *f);
-extern jl_sym_t *jl_module_name(jl_value_t *);
-extern jl_uuid_t jl_module_uuid(jl_value_t *);
 extern void __gmpz_init(void *);
 extern void __gmpz_realloc2(void *, uint32_t);
-extern void jl_gc_add_ptr_finalizer(void *, jl_value_t *, void*);
 extern void __gmpz_tdiv_q(void *, void *, void *);
-int32_t jl_sizeof_stat();
+#endif
 SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 {
     jl_code_info_t *src = s->src;
@@ -873,6 +876,80 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             return jl_box_uint32(strlen(
                 jl_unbox_voidpointer(eval_value(args[5], s))
             ));
+        } else if (strcmp(name, "jl_module_name") == 0) {
+            return jl_module_name(eval_value(args[5], s));
+        } else if (strcmp(name, "jl_module_uuid") == 0) {
+            jl_ptls_t ptls = jl_get_ptls_states();
+            jl_uuid_t uuid = jl_module_uuid(eval_value(args[5], s));
+            jl_value_t *v = jl_gc_alloc(ptls, sizeof(jl_uuid_t), eval_value(args[1], s));
+            memcpy((void**)jl_data_ptr(v), &uuid, sizeof(jl_uuid_t));
+            return v;
+        } else if (strcmp(name, "memcmp") == 0) {
+            return jl_box_int32(memcmp(
+                jl_unbox_voidpointer(eval_value(args[5], s)),
+                jl_unbox_voidpointer(eval_value(args[6], s)),
+                jl_unbox_uint32(eval_value(args[7], s))
+            ));
+        } else if (strcmp(name, "jl_get_ptls_states") == 0) {
+            return jl_box_voidpointer(jl_get_ptls_states());
+        } else if (strcmp(name, "jl_gc_add_finalizer_th") == 0) {
+            jl_gc_add_finalizer_th(
+                jl_unbox_voidpointer(eval_value(args[5], s)),
+                eval_value(args[6], s),
+                eval_value(args[7], s)
+            );
+            return jl_nothing;
+        } else if (strcmp(name, "ios_fd") == 0) {
+            return jl_box_voidpointer(ios_fd(
+                jl_unbox_voidpointer(eval_value(args[5], s)),
+                jl_unbox_int32(eval_value(args[6], s)),
+                jl_unbox_int32(eval_value(args[7], s)),
+                jl_unbox_int32(eval_value(args[8], s))
+            ));
+        } else if (strcmp(name, "jl_gc_add_ptr_finalizer") == 0) {
+            jl_gc_add_ptr_finalizer(
+                jl_unbox_voidpointer(eval_value(args[5], s)),
+                eval_value(args[6], s),
+                jl_unbox_voidpointer(eval_value(args[7], s))
+            );
+            return jl_nothing;
+        } else if (strcmp(name, "jl_object_id") == 0) {
+            return jl_box_uint32(jl_object_id(eval_value(args[5], s)));
+        } else if (strcmp(name, "memhash32_seed") == 0) {
+            return jl_box_uint32(memhash32_seed(
+                jl_unbox_voidpointer(eval_value(args[5], s)),
+                jl_unbox_int32(eval_value(args[6], s)),
+                jl_unbox_int32(eval_value(args[7], s))
+            ));
+        } else if (strcmp(name, "jl_arrayunset") == 0) {
+            jl_arrayunset(
+                eval_value(args[5], s),
+                jl_unbox_uint32(eval_value(args[6], s))
+            );
+            return jl_nothing;
+        } else if (strcmp(name, "jl_sizeof_stat") == 0) {
+            return jl_box_int32(jl_sizeof_stat());
+        } else if (strcmp(name, "ios_get_writable") == 0) {
+            return jl_box_int32(ios_get_writable(jl_unbox_voidpointer(eval_value(args[5], s))));
+        } else if (strcmp(name, "ios_write") == 0) {
+            return jl_box_uint32(ios_write(
+                jl_unbox_voidpointer(eval_value(args[5], s)),
+                jl_unbox_voidpointer(eval_value(args[6], s)),
+                jl_unbox_uint32(eval_value(args[7], s))
+            ));
+        } else if (strcmp(name, "ios_putc") == 0) {
+            return jl_box_uint32(ios_putc(
+                jl_unbox_int32(eval_value(args[5], s)),
+                jl_unbox_voidpointer(eval_value(args[6], s))
+            ));
+        } else if (strcmp(name, "jl_environ") == 0) {
+            return jl_environ(jl_unbox_int32(eval_value(args[5], s)));
+        } else if (strcmp(name, "jl_pchar_to_string") == 0) {
+            return jl_pchar_to_string(
+                jl_unbox_voidpointer(eval_value(args[5], s)),
+                jl_unbox_int32(eval_value(args[6], s))
+            );
+#ifdef _OS_EMSCRIPTEN_
         } else if (strcmp(name, "pcre2_jit_stack_create_8") == 0) {
             jl_ptls_t ptls = jl_get_ptls_states();
             void *data = pcre2_jit_stack_create_8(
@@ -960,45 +1037,8 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
                 jl_unbox_voidpointer(eval_value(args[7], s))
             );
             return jl_nothing;
-        } else if (strcmp(name, "jl_get_ptls_states") == 0) {
-            return jl_box_voidpointer(jl_get_ptls_states());
-        } else if (strcmp(name, "jl_gc_add_finalizer_th") == 0) {
-            jl_gc_add_finalizer_th(
-                jl_unbox_voidpointer(eval_value(args[5], s)),
-                eval_value(args[6], s),
-                eval_value(args[7], s)
-            );
-            return jl_nothing;
-        } else if (strcmp(name, "ios_fd") == 0) {
-            return jl_box_voidpointer(ios_fd(
-                jl_unbox_voidpointer(eval_value(args[5], s)),
-                jl_unbox_int32(eval_value(args[6], s)),
-                jl_unbox_int32(eval_value(args[7], s)),
-                jl_unbox_int32(eval_value(args[8], s))
-            ));
-        } else if (strcmp(name, "jl_module_name") == 0) {
-            return jl_module_name(eval_value(args[5], s));
-        } else if (strcmp(name, "jl_module_uuid") == 0) {
-            jl_ptls_t ptls = jl_get_ptls_states();
-            jl_uuid_t uuid = jl_module_uuid(eval_value(args[5], s));
-            jl_value_t *v = jl_gc_alloc(ptls, sizeof(jl_uuid_t), eval_value(args[1], s));
-            memcpy((void**)jl_data_ptr(v), &uuid, sizeof(jl_uuid_t));
-            return v;
-        } else if (strcmp(name, "memcmp") == 0) {
-            return jl_box_int32(memcmp(
-                jl_unbox_voidpointer(eval_value(args[5], s)),
-                jl_unbox_voidpointer(eval_value(args[6], s)),
-                jl_unbox_uint32(eval_value(args[7], s))
-            ));
         } else if (strcmp(name, "__gmpz_init") == 0) {
             __gmpz_init(jl_unbox_voidpointer(eval_value(args[5], s)));
-            return jl_nothing;
-        } else if (strcmp(name, "jl_gc_add_ptr_finalizer") == 0) {
-            jl_gc_add_ptr_finalizer(
-                jl_unbox_voidpointer(eval_value(args[5], s)),
-                eval_value(args[6], s),
-                jl_unbox_voidpointer(eval_value(args[7], s))
-            );
             return jl_nothing;
         } else if (strcmp(name, "__gmpz_realloc2") == 0) {
             __gmpz_realloc2(
@@ -1012,42 +1052,7 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
                 jl_unbox_voidpointer(eval_value(args[7], s))
             );
             return jl_nothing;
-        } else if (strcmp(name, "jl_object_id") == 0) {
-            return jl_box_uint32(jl_object_id(eval_value(args[5], s)));
-        } else if (strcmp(name, "memhash32_seed") == 0) {
-            return jl_box_uint32(memhash32_seed(
-                jl_unbox_voidpointer(eval_value(args[5], s)),
-                jl_unbox_int32(eval_value(args[6], s)),
-                jl_unbox_int32(eval_value(args[7], s))
-            ));
-        } else if (strcmp(name, "jl_arrayunset") == 0) {
-            jl_arrayunset(
-                eval_value(args[5], s),
-                jl_unbox_uint32(eval_value(args[6], s))
-            );
-            return jl_nothing;
-        } else if (strcmp(name, "jl_sizeof_stat") == 0) {
-            return jl_box_int32(jl_sizeof_stat());
-        } else if (strcmp(name, "ios_get_writable") == 0) {
-            return jl_box_int32(ios_get_writable(jl_unbox_voidpointer(eval_value(args[5], s))));
-        } else if (strcmp(name, "ios_write") == 0) {
-            return jl_box_uint32(ios_write(
-                jl_unbox_voidpointer(eval_value(args[5], s)),
-                jl_unbox_voidpointer(eval_value(args[6], s)),
-                jl_unbox_uint32(eval_value(args[7], s))
-            ));
-        } else if (strcmp(name, "ios_putc") == 0) {
-            return jl_box_uint32(ios_putc(
-                jl_unbox_int32(eval_value(args[5], s)),
-                jl_unbox_voidpointer(eval_value(args[6], s))
-            ));
-        } else if (strcmp(name, "jl_environ") == 0) {
-            return jl_environ(jl_unbox_int32(eval_value(args[5], s)));
-        } else if (strcmp(name, "jl_pchar_to_string") == 0) {
-            return jl_pchar_to_string(
-                jl_unbox_voidpointer(eval_value(args[5], s)),
-                jl_unbox_int32(eval_value(args[6], s))
-            );
+#endif
         } else {
             jl_printf(JL_STDOUT, "Encountered foreigncall not mapped in interpreter. For now, you may add it to the list. (Or write a proper solution)\n");
             jl_(e);
