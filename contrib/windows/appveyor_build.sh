@@ -45,6 +45,7 @@ if [ "$ARCH" = x86_64 ]; then
   echo 'USE_BLAS64 = 1' >> Make.user
   echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas64_' >> Make.user
   echo 'LIBBLASNAME = libopenblas64_' >> Make.user
+  echo 'BINARYBUILDER_TRIPLET = x86_64-w64-mingw32' >> Make.user
 else
   bits=32
   archsuffix=86
@@ -52,6 +53,7 @@ else
   echo "override MARCH = pentium4" >> Make.user
   echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas' >> Make.user
   echo 'LIBBLASNAME = libopenblas' >> Make.user
+  echo 'BINARYBUILDER_TRIPLET = i686-w64-mingw32' >> Make.user
 fi
 echo "override JULIA_CPU_TARGET=generic;native" >> Make.user
 
