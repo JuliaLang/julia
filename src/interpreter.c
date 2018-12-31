@@ -402,6 +402,7 @@ extern void *pcre2_match_data_create_from_pattern_8(void *, void*);
 extern void *pcre2_get_ovector_pointer_8(void *);
 extern uint32_t pcre2_get_ovector_count_8(void *);
 extern int32_t pcre2_match_8(void *, void*, uint32_t, uint32_t, uint32_t, void *, void *);
+extern void __gmp_set_memory_functions(void *, void *, void*);
 SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 {
     jl_code_info_t *src = s->src;
@@ -938,6 +939,13 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
                 jl_unbox_uint32(eval_value(args[9], s)),
                 jl_unbox_voidpointer(eval_value(args[10], s)),
                 jl_unbox_voidpointer(eval_value(args[11], s))));
+        } else if (strcmp(name, "__gmp_set_memory_functions") == 0) {
+            __gmp_set_memory_functions(
+                jl_unbox_voidpointer(eval_value(args[5], s)),
+                jl_unbox_voidpointer(eval_value(args[6], s)),
+                jl_unbox_voidpointer(eval_value(args[7], s))
+            );
+            return jl_nothing;
         } else {
             jl_printf(JL_STDOUT, "Encountered foreigncall not mapped in interpreter. For now, you may add it to the list. (Or write a proper solution)\n");
             jl_(e);
