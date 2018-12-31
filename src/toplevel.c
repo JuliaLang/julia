@@ -347,6 +347,9 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
 
 int jl_code_requires_compiler(jl_code_info_t *src)
 {
+#ifdef _OS_EMSCRIPTEN_
+    return 0;
+#endif
     jl_array_t *body = src->code;
     assert(jl_typeis(body, jl_array_any_type));
     size_t i;
