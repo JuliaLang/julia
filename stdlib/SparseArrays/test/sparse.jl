@@ -2446,4 +2446,12 @@ end
     end
 end
 
+@testset "wrappers of sparse" begin
+    m, n = 10, 10
+    A = sprand(m, n, 0.5)
+    B = Matrix(A)
+    @test sparse(UpperTriangular(A')) == UpperTriangular(B')
+    @test sparse(Adjoint(UpperTriangular(A'))) == Adjoint(UpperTriangular(B'))
+end
+
 end # module
