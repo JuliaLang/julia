@@ -1945,8 +1945,9 @@ function copy!(dst::SparseVector, src::SparseVector)
 end
 
 function copy!(dst::SparseVector, src::AbstractVector)
-    dst.n == length(src) || throw(ArgumentError("Sparse vectors should have the same length as source for copy!"))
+    dst.n == length(src) || throw(ArgumentError("Sparse vector should have the same length as source for copy!"))
     _dense2indval!(dst.nzind, dst.nzval, src)
+    return dst
 end
 
 function _fillnonzero!(arr::SparseMatrixCSC{Tv, Ti}, val) where {Tv,Ti}
