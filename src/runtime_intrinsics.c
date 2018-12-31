@@ -77,12 +77,33 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
 
 JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 {
+    jl_(v); jl_(ty);
     JL_TYPECHK(cglobal, type, ty);
     JL_GC_PUSH1(&v);
     jl_value_t *rt =
         ty == (jl_value_t*)jl_void_type ? (jl_value_t*)jl_voidpointer_type : // a common case
             (jl_value_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, ty);
     JL_GC_PROMISE_ROOTED(rt); // (JL_ALWAYS_LEAFTYPE)
+
+    if (jl_is_symbol(v)) {
+        const char *name = jl_symbol_name(v);
+        if (strcmp(name, "jl_options") == 0) {
+            jl_ptls_t ptls = jl_get_ptls_states();
+            jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
+            *(void**)jl_data_ptr(v) = &jl_options;
+            return v;
+        } else if (strcmp(name, "jl_uv_stdout") == 0) {
+            jl_ptls_t ptls = jl_get_ptls_states();
+            jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
+            *(void**)jl_data_ptr(v) = &JL_STDOUT;
+            return v;
+        } else if (strcmp(name, "jl_uv_stderr") == 0) {
+            jl_ptls_t ptls = jl_get_ptls_states();
+            jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
+            *(void**)jl_data_ptr(v) = &JL_STDERR;
+            return v;
+        }
+    }
 
     if (!jl_is_concrete_type(rt))
         jl_error("cglobal: type argument not concrete");
