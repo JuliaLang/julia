@@ -662,8 +662,10 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_init_uv();
     init_stdio();
 #endif
+#ifndef _OS_EMSCRIPTEN_
     jl_init_signal_async();
     restore_signals();
+#endif
 
     jl_page_size = jl_getpagesize();
     uint64_t total_mem = (size_t)-1;
@@ -820,9 +822,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
     jl_start_threads();
 
+#ifndef _OS_EMSCRIPTEN_
     // This needs to be after jl_start_threads
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_default_signal_handlers();
+#endif
 
     jl_gc_enable(1);
 
