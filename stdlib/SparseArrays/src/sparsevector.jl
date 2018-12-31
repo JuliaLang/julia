@@ -381,6 +381,7 @@ sparse(a::AbstractVector) = sparsevec(a)
 function _dense2indval!(nzind::Vector{Ti}, nzval::Vector{Tv}, s::AbstractArray{Tv}) where {Tv,Ti}
     @assert !has_offset_axes(s)
     cap = length(nzind);
+    @assert cap == length(nzval)
     n = length(s)
     c = 0
     @inbounds for i = 1:n
@@ -400,7 +401,7 @@ function _dense2indval!(nzind::Vector{Ti}, nzval::Vector{Tv}, s::AbstractArray{T
         resize!(nzind, c)
         resize!(nzval, c)
     end
-    nzind, nzval
+    return (nzind, nzval)
 end
 
 function _dense2sparsevec(s::AbstractArray{Tv}, initcap::Ti) where {Tv,Ti}
