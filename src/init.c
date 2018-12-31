@@ -672,8 +672,10 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
 #endif
+#ifndef _OS_EMSCRIPTEN_
     jl_init_signal_async();
     restore_signals();
+#endif
 
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
@@ -694,7 +696,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_prep_sanitizers();
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(1, &stack_lo, &stack_hi);
+#ifdef _OS_EMSCRIPTEN_
+    jl_dl_handle = NULL;
+#else
     jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 1);
+#endif
 #ifdef _OS_WINDOWS_
     jl_ntdll_handle = jl_dlopen("ntdll.dll", 0); // bypass julia's pathchecking for system dlls
     jl_kernel32_handle = jl_dlopen("kernel32.dll", 0);
@@ -714,7 +720,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     if (jl_dbghelp)
         jl_dlsym(jl_dbghelp, "SymRefreshModuleList", (void **)&hSymRefreshModuleList, 1);
 #else
+#ifdef _OS_EMSCRIPTEN_
+    jl_exe_handle = NULL;
+#else
     jl_exe_handle = jl_dlopen(NULL, JL_RTLD_NOW);
+#endif
 #ifdef RTLD_DEFAULT
     jl_RTLD_DEFAULT_handle = RTLD_DEFAULT;
 #else
@@ -837,9 +847,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_add_standard_imports(jl_main_module);
     }
 
+#ifndef _OS_EMSCRIPTEN_
     // This needs to be after jl_start_threads
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_default_signal_handlers();
+#endif
 
     jl_gc_enable(1);
 
