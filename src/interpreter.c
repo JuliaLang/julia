@@ -392,6 +392,16 @@ extern jl_method_instance_t* jl_set_method_inferred(
 extern jl_value_t *jl_specializations_lookup(jl_method_t *m, jl_value_t *type, size_t world);
 extern void jl_array_del_at(jl_array_t *a, ssize_t idx, size_t dec);
 extern jl_value_t *jl_get_spec_lambda(jl_tupletype_t *types, size_t world);
+extern void *pcre2_jit_stack_create_8(int32_t, int32_t, void*);
+extern void *pcre2_match_context_create_8(void*);
+extern void pcre2_jit_stack_assign_8(void*,void*,void*);
+extern void *pcre2_compile_8(void *, uint32_t, uint32_t, int32_t*, int32_t*, void*);
+extern int32_t pcre2_jit_compile_8(void *, uint32_t);
+extern void pcre2_get_error_message_8(int32_t, void*, uint32_t);
+extern void *pcre2_match_data_create_from_pattern_8(void *, void*);
+extern void *pcre2_get_ovector_pointer_8(void *);
+extern uint32_t pcre2_get_ovector_count_8(void *);
+extern int32_t pcre2_match_8(void *, void*, uint32_t, uint32_t, uint32_t, void *, void *);
 SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 {
     jl_code_info_t *src = s->src;
@@ -541,7 +551,11 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return eval_methoddef(ex, s);
     }
     else if (head == foreigncall_sym) {
-        const char *name = jl_symbol_name(jl_quotenode_value(args[0]));
+        jl_value_t *target = args[0];
+        if (jl_is_expr(args[0])) {
+            target = jl_exprarg(args[0], 1);
+        }
+        const char *name = jl_symbol_name(jl_quotenode_value(target));
         if (strcmp(name, "jl_toplevel_eval_in") == 0) {
             return jl_toplevel_eval_in(eval_value(args[nargs-2], s), eval_value(args[nargs-1], s));
         } else if (strcmp(name, "jl_type_unionall") == 0) {
@@ -677,6 +691,13 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             return jl_alloc_array_1d(
                 eval_value(args[5], s),
                 jl_unbox_uint32(eval_value(args[6], s))
+            );
+        } else if (strcmp(name, "jl_ptr_to_array_1d") == 0) {
+            return jl_ptr_to_array_1d(
+                eval_value(args[5], s),
+                jl_unbox_voidpointer(eval_value(args[6], s)),
+                jl_unbox_uint32(eval_value(args[7], s)),
+                jl_unbox_uint32(eval_value(args[8], s))
             );
         } else if (strcmp(name, "jl_parse_input_line") == 0) {
             return jl_parse_input_line(
@@ -837,6 +858,86 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             return jl_box_uint32(strlen(
                 jl_unbox_voidpointer(eval_value(args[5], s))
             ));
+        } else if (strcmp(name, "pcre2_jit_stack_create_8") == 0) {
+            jl_ptls_t ptls = jl_get_ptls_states();
+            void *data = pcre2_jit_stack_create_8(
+                jl_unbox_uint32(eval_value(args[5], s)),
+                jl_unbox_uint32(eval_value(args[6], s)),
+                jl_unbox_voidpointer(eval_value(args[7], s))
+            );
+            jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+            *(void**)jl_data_ptr(v) = data;
+            return v;
+        } else if (strcmp(name, "pcre2_match_context_create_8") == 0) {
+            jl_ptls_t ptls = jl_get_ptls_states();
+            void *data = pcre2_match_context_create_8(
+                jl_unbox_voidpointer(eval_value(args[5], s))
+            );
+            jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+            *(void**)jl_data_ptr(v) = data;
+            return v;
+        } else if (strcmp(name, "pcre2_jit_stack_assign_8") == 0) {
+            jl_ptls_t ptls = jl_get_ptls_states();
+            pcre2_jit_stack_assign_8(
+                jl_unbox_voidpointer(eval_value(args[5], s)),
+                jl_unbox_voidpointer(eval_value(args[6], s)),
+                jl_unbox_voidpointer(eval_value(args[7], s))
+            );
+            return jl_nothing;
+        } else if (strcmp(name, "pcre2_compile_8") == 0) {
+            jl_ptls_t ptls = jl_get_ptls_states();
+            void *data = pcre2_compile_8(
+                jl_unbox_voidpointer(eval_value(args[5], s)),
+                jl_unbox_uint32(eval_value(args[6], s)),
+                jl_unbox_uint32(eval_value(args[7], s)),
+                jl_unbox_voidpointer(eval_value(args[8], s)),
+                jl_unbox_voidpointer(eval_value(args[9], s)),
+                jl_unbox_voidpointer(eval_value(args[10], s)));
+            jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+            *(void**)jl_data_ptr(v) = data;
+            return v;
+        } else if (strcmp(name, "pcre2_jit_compile_8") == 0) {
+            return jl_box_int32(pcre2_jit_compile_8(
+                jl_unbox_voidpointer(eval_value(args[5], s)),
+                jl_unbox_uint32(eval_value(args[6], s))
+            ));
+        } else if (strcmp(name, "pcre2_get_error_message_8") == 0) {
+            pcre2_get_error_message_8(
+                jl_unbox_int32(eval_value(args[5], s)),
+                jl_unbox_voidpointer(eval_value(args[6], s)),
+                jl_unbox_uint32(eval_value(args[7], s))
+            );
+            return jl_nothing;
+        } else if (strcmp(name, "pcre2_match_data_create_from_pattern_8") == 0) {
+            jl_ptls_t ptls = jl_get_ptls_states();
+            void *data = pcre2_match_data_create_from_pattern_8(
+                jl_unbox_voidpointer(eval_value(args[5], s)),
+                jl_unbox_voidpointer(eval_value(args[6], s))
+            );
+            jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+            *(void**)jl_data_ptr(v) = data;
+            return v;
+        } else if (strcmp(name, "pcre2_get_ovector_pointer_8") == 0) {
+            jl_ptls_t ptls = jl_get_ptls_states();
+            void *data = pcre2_get_ovector_pointer_8(
+                jl_unbox_voidpointer(eval_value(args[5], s))
+            );
+            jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+            *(void**)jl_data_ptr(v) = data;
+            return v;
+        } else if (strcmp(name, "pcre2_get_ovector_count_8") == 0) {
+            return jl_box_uint32(
+                pcre2_get_ovector_count_8(
+                    jl_unbox_voidpointer(eval_value(args[5], s))));
+        } else if (strcmp(name, "pcre2_match_8") == 0) {
+            return jl_box_int32(pcre2_match_8(
+                jl_unbox_voidpointer(eval_value(args[5], s)),
+                jl_unbox_voidpointer(eval_value(args[6], s)),
+                jl_unbox_uint32(eval_value(args[7], s)),
+                jl_unbox_uint32(eval_value(args[8], s)),
+                jl_unbox_uint32(eval_value(args[9], s)),
+                jl_unbox_voidpointer(eval_value(args[10], s)),
+                jl_unbox_voidpointer(eval_value(args[11], s))));
         } else {
             jl_printf(JL_STDOUT, "Encountered foreigncall not mapped in interpreter. For now, you may add it to the list. (Or write a proper solution)\n");
             jl_(e);
