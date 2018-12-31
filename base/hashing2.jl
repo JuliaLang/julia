@@ -129,6 +129,7 @@ function decompose(x::Float64)::Tuple{Int64, Int, Int}
     s, e - 1075 + (e == 0), d
 end
 
+if isdefined(@__MODULE__, :BigFloat)
 function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
     isnan(x) && return 0, 0, 0
     isinf(x) && return x.sign, 0, 0
@@ -139,6 +140,7 @@ function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
     ccall((:__gmpz_realloc2, :libgmp), Cvoid, (Ref{BigInt}, Culong), s, 8b) # bits
     ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), s.d, x.d, b) # bytes
     s, x.exp - 8b, x.sign
+end
 end
 
 ## streamlined hashing for smallish rational types ##

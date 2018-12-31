@@ -400,9 +400,11 @@ include("combinatorics.jl")
 include("hashing2.jl")
 
 # irrational mathematical constants
+if isdefined(@__MODULE__, :BigFloat)
 include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
+end
 
 # (s)printf macros
 include("printf.jl")
@@ -545,6 +547,7 @@ let
             Base.DISABLE_LIBUV ? nothing : :Test,
             Base.DISABLE_LIBUV ? nothing : :REPL,
             Base.DISABLE_LIBUV ? nothing : :Statistics,
+            :InteractiveUtils
         ]
     filter!(x -> x !== nothing, stdlibs)
 
