@@ -283,7 +283,9 @@ void jl_init_threadtls(int16_t tid)
     ptls->needs_resetstkoflw = 0;
 #endif
     jl_init_thread_heap(ptls);
+#ifndef _OS_EMSCRIPTEN_
     jl_install_thread_signal_handler(ptls);
+#endif
 
     jl_all_tls_states[tid] = ptls;
 }
