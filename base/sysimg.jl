@@ -385,10 +385,13 @@ for T in [Signed, Integer, BigInt, Float32, Float64, Real, Complex, Rational]
     @eval copysign(x::$T, ::Unsigned) = +x
 end
 
+if !Sys.isjsvm()
 include("mpfr.jl")
 using .MPFR
-big(n::Integer) = convert(BigInt,n)
 big(x::AbstractFloat) = convert(BigFloat,x)
+end
+
+big(n::Integer) = convert(BigInt,n)
 big(q::Rational) = big(numerator(q))//big(denominator(q))
 
 include("combinatorics.jl")

@@ -75,8 +75,10 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
     return p;
 }
 
+#ifdef _OS_EMSCRIPTEN_
 extern uint32_t __gmp_version;
 extern int32_t __gmp_bits_per_limb;
+#endif
 extern void *jl_gc_counted_malloc(size_t sz);
 extern void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz);
 extern void jl_gc_counted_free_with_size(void *p, size_t sz);
@@ -120,8 +122,10 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
             *(void**)jl_data_ptr(v) = &JL_STDERR;
             return v;
         } 
+#ifdef _OS_EMSCRIPTEN_
         WRAP(__gmp_version)
         WRAP(__gmp_bits_per_limb)
+#endif
         WRAP(jl_gc_counted_malloc)        
         WRAP(jl_gc_counted_realloc_with_old_size)
         WRAP(jl_gc_counted_free_with_size)
