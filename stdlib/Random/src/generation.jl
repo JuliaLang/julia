@@ -430,3 +430,54 @@ function rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractString,<:Sampler})::
         isvalid_unsafe(str, pos) && return str[pos]
     end
 end
+
+
+## random elements from tuples
+
+### 1
+
+Sampler(::Type{<:AbstractRNG}, t::Tuple{A}, ::Repetition) where {A} =
+    SamplerTrivial(t)
+
+rand(rng::AbstractRNG, sp::SamplerTrivial{Tuple{A}}) where {A} =
+    @inbounds return sp[][1]
+
+### 2
+
+Sampler(RNG::Type{<:AbstractRNG}, t::Tuple{A,B}, n::Repetition) where {A,B} =
+    SamplerSimple(t, Sampler(RNG, Bool, n))
+
+rand(rng::AbstractRNG, sp::SamplerSimple{Tuple{A,B}}) where {A,B} =
+    @inbounds return sp[][1 + rand(rng, sp.data)]
+
+### 3
+
+Sampler(RNG::Type{<:AbstractRNG}, t::Tuple{A,B,C}, n::Repetition) where {A,B,C} =
+    SamplerSimple(t, Sampler(RNG, UInt52(), n))
+
+function rand(rng::AbstractRNG, sp::SamplerSimple{Tuple{A,B,C}}) where {A,B,C}
+    local r
+    while true
+        r = rand(rng, sp.data)
+        r != 0x000fffffffffffff && break # _very_ likely
+    end
+    @inbounds return sp[][1 + r ÷ 0x0005555555555555]
+end
+
+### 4
+
+Sampler(RNG::Type{<:AbstractRNG}, t::Tuple{A,B,C,D}, n::Repetition) where {A,B,C,D} =
+    SamplerSimple(t, Sampler(RNG, UInt52Raw(Int), n))
+
+function rand(rng::AbstractRNG, sp::SamplerSimple{Tuple{A,B,C,D}}) where {A,B,C,D}
+    r = rand(rng, sp.data) & 3
+    @inbounds return sp[][1 + r]
+end
+
+### n
+
+Sampler(RNG::Type{<:AbstractRNG}, t::Tuple, n::Repetition) =
+    SamplerSimple(t, Sampler(RNG, Base.OneTo(length(t)), n))
+
+rand(rng::AbstractRNG, sp::SamplerSimple{<:Tuple}) =
+    @inbounds return sp[][rand(rng, sp.data)]

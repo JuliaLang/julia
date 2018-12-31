@@ -75,7 +75,7 @@ in CPU cycles) to each of Julia's intrinsic functions. These costs are
 based on
 [standard ranges for common architectures](http://ithare.com/wp-content/uploads/part101_infographics_v08.png)
 (see
-[Agner Fog's analysis](http://www.agner.org/optimize/instruction_tables.pdf)
+[Agner Fog's analysis](https://www.agner.org/optimize/instruction_tables.pdf)
 for more detail).
 
 We supplement this low-level lookup table with a number of special

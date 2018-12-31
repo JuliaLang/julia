@@ -316,9 +316,9 @@ export peakflops
 [`gemm!`](@ref LinearAlgebra.BLAS.gemm!). For more information see
 [`LinearAlgebra.peakflops`](@ref).
 
-!!! note
-    This function will move to the `LinearAlgebra` standard library in the
-    future, and is already available as `LinearAlgebra.peakflops`.
+!!! compat "Julia 1.1"
+    This function will be moved from `InteractiveUtils` to `LinearAlgebra` in the
+    future. In Julia 1.1 and later it is available as `LinearAlgebra.peakflops`.
 """
 function peakflops(n::Integer=2000; parallel::Bool=false)
     # Base.depwarn("`peakflop`s have moved to the LinearAlgebra module, " *

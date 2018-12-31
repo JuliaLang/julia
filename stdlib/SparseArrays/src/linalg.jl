@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import LinearAlgebra: checksquare
+using Random: rand!
 
 ## sparse matrix multiplication
 
@@ -146,62 +147,103 @@ end
 *(A::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}, B::Adjoint{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = spmatmul(copy(A), copy(B))
 *(A::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}, B::Transpose{<:Any,<:SparseMatrixCSC{Tv,Ti}}) where {Tv,Ti} = spmatmul(copy(A), copy(B))
 
-function spmatmul(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
-                  sortindices::Symbol = :sortcols) where {Tv,Ti}
+# Gustavsen's matrix multiplication algorithm revisited.
+# The result rowval vector is already sorted by construction.
+# The auxiliary Vector{Ti} xb is replaced by a Vector{Bool} of same length.
+# The optional argument controlling a sorting algorithm is obsolete.
+# depending on expected execution speed the sorting of the result column is
+# done by a quicksort of the row indices or by a full scan of the dense result vector.
+# The last is faster, if more than ≈ 1/32 of the result column is nonzero.
+# TODO: extend to SparseMatrixCSCUnion to allow for SubArrays (view(X, :, r)).
+function spmatmul(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     mA, nA = size(A)
-    mB, nB = size(B)
-    nA==mB || throw(DimensionMismatch())
+    nB = size(B, 2)
+    nA == size(B, 1) || throw(DimensionMismatch())
 
-    colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
-    colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
-    # TODO: Need better estimation of result space
-    nnzC = min(mA*nB, length(nzvalA) + length(nzvalB))
+    rowvalA = rowvals(A); nzvalA = nonzeros(A)
+    rowvalB = rowvals(B); nzvalB = nonzeros(B)
+    nnzC = max(estimate_mulsize(mA, nnz(A), nA, nnz(B), nB) * 11 ÷ 10, mA)
     colptrC = Vector{Ti}(undef, nB+1)
     rowvalC = Vector{Ti}(undef, nnzC)
     nzvalC = Vector{Tv}(undef, nnzC)
+    nzpercol = nnzC ÷ max(nB, 1)
 
     @inbounds begin
         ip = 1
-        xb = zeros(Ti, mA)
-        x  = zeros(Tv, mA)
+        xb = fill(false, mA)
         for i in 1:nB
             if ip + mA - 1 > nnzC
-                resize!(rowvalC, nnzC + max(nnzC,mA))
-                resize!(nzvalC, nnzC + max(nnzC,mA))
-                nnzC = length(nzvalC)
+                nnzC += max(mA, nnzC>>2)
+                resize!(rowvalC, nnzC)
+                resize!(nzvalC, nnzC)
             end
-            colptrC[i] = ip
-            for jp in colptrB[i]:(colptrB[i+1] - 1)
+            colptrC[i] = ip0 = ip
+            k0 = ip - 1
+            for jp in nzrange(B, i)
                 nzB = nzvalB[jp]
                 j = rowvalB[jp]
-                for kp in colptrA[j]:(colptrA[j+1] - 1)
+                for kp in nzrange(A, j)
                     nzC = nzvalA[kp] * nzB
                     k = rowvalA[kp]
-                    if xb[k] != i
+                    if xb[k]
+                        nzvalC[k+k0] += nzC
+                    else
+                        nzvalC[k+k0] = nzC
+                        xb[k] = true
                         rowvalC[ip] = k
                         ip += 1
-                        xb[k] = i
-                        x[k] = nzC
-                    else
-                        x[k] += nzC
                     end
                 end
             end
-            for vp in colptrC[i]:(ip - 1)
-                nzvalC[vp] = x[rowvalC[vp]]
+            if ip > ip0
+                if prefer_sort(ip-k0, mA)
+                    # in-place sort of indices. Effort: O(nnz*ln(nnz)).
+                    sort!(rowvalC, ip0, ip-1, QuickSort, Base.Order.Forward)
+                    for vp = ip0:ip-1
+                        k = rowvalC[vp]
+                        xb[k] = false
+                        nzvalC[vp] = nzvalC[k+k0]
+                    end
+                else
+                    # scan result vector (effort O(mA))
+                    for k = 1:mA
+                        if xb[k]
+                            xb[k] = false
+                            rowvalC[ip0] = k
+                            nzvalC[ip0] = nzvalC[k+k0]
+                            ip0 += 1
+                        end
+                    end
+                end
             end
         end
         colptrC[nB+1] = ip
     end
 
-    deleteat!(rowvalC, colptrC[end]:length(rowvalC))
-    deleteat!(nzvalC, colptrC[end]:length(nzvalC))
+    resize!(rowvalC, ip - 1)
+    resize!(nzvalC, ip - 1)
 
-    # The Gustavson algorithm does not guarantee the product to have sorted row indices.
-    Cunsorted = SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC)
-    C = SparseArrays.sortSparseMatrixCSC!(Cunsorted, sortindices=sortindices)
+    # This modification of Gustavson algorithm has sorted row indices
+    C = SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC)
     return C
 end
+
+# estimated number of non-zeros in matrix product
+# it is assumed, that the non-zero indices are distributed independently and uniformly
+# in both matrices. Over-estimation is possible if that is not the case.
+function estimate_mulsize(m::Integer, nnzA::Integer, n::Integer, nnzB::Integer, k::Integer)
+    p = (nnzA / (m * n)) * (nnzB / (n * k))
+    p >= 1 ? m*k : p > 0 ? Int(ceil(-expm1(log1p(-p) * n)*m*k)) : 0 # (1-(1-p)^n)*m*k
+end
+
+# determine if sort! shall be used or the whole column be scanned
+# based on empirical data on i7-3610QM CPU
+# measuring runtimes of the scanning and sorting loops of the algorithm.
+# The parameters 6 and 3 might be modified for different architectures.
+prefer_sort(nz::Integer, m::Integer) = m > 6 && 3 * ilog2(nz) * nz < m
+
+# minimal number of bits required to represent integer; ilog2(n) >= log2(n)
+ilog2(n::Integer) = sizeof(n)<<3 - leading_zeros(n)
 
 # Frobenius dot/inner product: trace(A'B)
 function dot(A::SparseMatrixCSC{T1,S1},B::SparseMatrixCSC{T2,S2}) where {T1,T2,S1,S2}
@@ -662,6 +704,27 @@ rdiv!(A::SparseMatrixCSC{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
 rdiv!(A::SparseMatrixCSC{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     (D = transD.parent; rdiv!(A, D))
 
+function ldiv!(D::Diagonal{T}, A::SparseMatrixCSC{T}) where {T}
+    # @assert !has_offset_axes(A)
+    if A.m != length(D.diag)
+        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(A.m) rows"))
+    end
+    nonz = nonzeros(A)
+    Arowval = A.rowval
+    b = D.diag
+    for i=1:length(b)
+        iszero(b[i]) && throw(SingularException(i))
+    end
+    @inbounds for col = 1:A.n, p = A.colptr[col]:(A.colptr[col + 1] - 1)
+        nonz[p] = b[Arowval[p]] \ nonz[p]
+    end
+    A
+end
+ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, A::SparseMatrixCSC{T}) where {T} =
+    (D = adjD.parent; ldiv!(conj(D), A))
+ldiv!(transD::Transpose{<:Any,<:Diagonal{T}}, A::SparseMatrixCSC{T}) where {T} =
+    (D = transD.parent; ldiv!(D, A))
+
 ## triu, tril
 
 function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
@@ -929,12 +992,6 @@ function opnormestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))
 
     S = zeros(T <: Real ? Int : Ti, n, t)
 
-    function _rand_pm1!(v)
-        for i in eachindex(v)
-            v[i] = rand()<0.5 ? 1 : -1
-        end
-    end
-
     function _any_abs_eq(v,n::Int)
         for vv in v
             if abs(vv)==n
@@ -949,7 +1006,7 @@ function opnormestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))
     X[1:n,1] .= 1
     for j = 2:t
         while true
-            _rand_pm1!(view(X,1:n,j))
+            rand!(view(X,1:n,j), (-1, 1))
             yaux = X[1:n,j]' * X[1:n,1:j-1]
             if !_any_abs_eq(yaux,n)
                 break
@@ -1010,7 +1067,7 @@ function opnormestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))
                         end
                     end
                     if repeated
-                        _rand_pm1!(view(S,1:n,j))
+                        rand!(view(S,1:n,j), (-1, 1))
                     else
                         break
                     end
@@ -1186,7 +1243,7 @@ function mul!(C::SparseMatrixCSC, D::Diagonal{T, <:Vector}, A::SparseMatrixCSC) 
     Arowval = A.rowval
     resize!(Cnzval, length(Anzval))
     for col = 1:n, p = A.colptr[col]:(A.colptr[col+1]-1)
-        @inbounds Cnzval[p] = Anzval[p] * b[Arowval[p]]
+        @inbounds Cnzval[p] = b[Arowval[p]] * Anzval[p]
     end
     C
 end
@@ -1222,7 +1279,7 @@ function rmul!(A::SparseMatrixCSC, D::Diagonal)
     (n == size(D, 1)) || throw(DimensionMismatch())
     Anzval = A.nzval
     @inbounds for col = 1:n, p = A.colptr[col]:(A.colptr[col + 1] - 1)
-         Anzval[p] *= D.diag[col]
+         Anzval[p] = Anzval[p] * D.diag[col]
     end
     return A
 end
@@ -1233,7 +1290,7 @@ function lmul!(D::Diagonal, A::SparseMatrixCSC)
     Anzval = A.nzval
     Arowval = A.rowval
     @inbounds for col = 1:n, p = A.colptr[col]:(A.colptr[col + 1] - 1)
-        Anzval[p] *= D.diag[Arowval[p]]
+        Anzval[p] = D.diag[Arowval[p]] * Anzval[p]
     end
     return A
 end

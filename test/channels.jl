@@ -2,6 +2,16 @@
 
 using Random
 
+@testset "single-threaded Condition usage" begin
+    a = Condition()
+    t = @async begin
+        Base.notify(a, "success")
+        "finished"
+    end
+    @test wait(a) == "success"
+    @test fetch(t) == "finished"
+end
+
 @testset "various constructors" begin
     c = Channel(1)
     @test eltype(c) == Any

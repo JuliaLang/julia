@@ -11,6 +11,7 @@ Sockets.listen(::Any)
 Sockets.listen(::AbstractString)
 Sockets.getaddrinfo
 Sockets.getipaddr
+Sockets.getipaddrs
 Sockets.getalladdrinfo
 Sockets.getnameinfo
 Sockets.getsockname

@@ -79,14 +79,21 @@ function kwarg_decl(m::Method, kwtype::DataType)
     kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, max_world(m))
     if kwli !== nothing
         kwli = kwli::Method
-        src = uncompressed_ast(kwli)
-        kws = filter(x -> !('#' in string(x)), src.slotnames[(kwli.nargs + 1):end])
-        # ensure the kwarg... is always printed last. The order of the arguments are not
-        # necessarily the same as defined in the function
-        i = findfirst(x -> endswith(string(x), "..."), kws)
-        i === nothing && return kws
-        push!(kws, kws[i])
-        return deleteat!(kws, i)
+        if isdefined(kwli, :source)
+            src = kwli.source
+            nslots = ccall(:jl_ast_nslots, Int, (Any,), src)
+            slotnames = Vector{Any}(undef, nslots)
+            ccall(:jl_fill_argnames, Cvoid, (Any, Any), src, slotnames)
+            kws = filter(x -> !('#' in string(x)), slotnames[(kwli.nargs + 1):end])
+            # ensure the kwarg... is always printed last. The order of the arguments are not
+            # necessarily the same as defined in the function
+            i = findfirst(x -> endswith(string(x), "..."), kws)
+            if i !== nothing
+                push!(kws, kws[i])
+                deleteat!(kws, i)
+            end
+            return kws
+        end
     end
     return ()
 end
@@ -97,7 +104,16 @@ function show_method_params(io::IO, tv)
         if length(tv) == 1
             show(io, tv[1])
         else
-            show_delim_array(io, tv, '{', ',', '}', false)
+            print(io, "{")
+            for i = 1:length(tv)
+                if i > 1
+                    print(io, ", ")
+                end
+                x = tv[i]
+                show(io, x)
+                io = IOContext(io, :unionall_env => x)
+            end
+            print(io, "}")
         end
     end
 end
@@ -257,11 +273,6 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Union{DataType, Noth
     else
         print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
     end
-    if !isempty(tv)
-        print(io,"<i>")
-        show_delim_array(io, tv, '{', ',', '}', false)
-        print(io,"</i>")
-    end
     print(io, "(")
     join(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
                       for d in decls[2:end]], ", ", ", ")
@@ -274,6 +285,11 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Union{DataType, Noth
         end
     end
     print(io, ")")
+    if !isempty(tv)
+        print(io,"<i>")
+        show_method_params(io, tv)
+        print(io,"</i>")
+    end
     print(io, " in ", m.module)
     if line > 0
         u = url(m)

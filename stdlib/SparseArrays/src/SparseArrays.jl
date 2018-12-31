@@ -27,7 +27,7 @@ import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     vcat, hcat, hvcat, cat, imag, argmax, kron, length, log, log1p, max, min,
     maximum, minimum, one, promote_eltype, real, reshape, rot180,
     rotl90, rotr90, round, setindex!, similar, size, transpose,
-    vec, permute!, map, map!, Array, diff
+    vec, permute!, map, map!, Array, diff, circshift!, circshift
 
 using Random: GLOBAL_RNG, AbstractRNG, randsubseq, randsubseq!
 
@@ -50,5 +50,12 @@ similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spze
 similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
+
+matprod(x, y) = x*y + x*y
+const BiTriSym = Union{Bidiagonal,SymTridiagonal,Tridiagonal}
+function *(A::BiTriSym, B::BiTriSym)
+    TS = promote_op(matprod, eltype(A), eltype(B))
+    mul!(similar(A, TS, size(A)...), A, B)
+end
 
 end
