@@ -447,6 +447,7 @@ void JL_NORETURN throw_internal(jl_value_t *exception JL_MAYBE_UNROOTED)
 // record backtrace and raise an error
 JL_DLLEXPORT void jl_throw(jl_value_t *e JL_MAYBE_UNROOTED)
 {
+    jl_(e);
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(e != NULL);
     if (ptls->safe_restore)
