@@ -35,7 +35,6 @@ clone_depth: 50
 init:
 # Carriage returns are bad
   - git config --global core.autocrlf input
-  - ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
 
 #cache:
 ## Cache large downloads to avoid network unreliability
@@ -66,3 +65,6 @@ test_script:
       .\bin\julia.exe --check-bounds=yes share\julia\test\runtests.jl LibGit2/online Pkg/pkg download
   - cd ..
   - usr\bin\julia usr\share\julia\test\embedding\embedding-test.jl test\embedding\embedding.exe
+
+on_finish:
+  - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
