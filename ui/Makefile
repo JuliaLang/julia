@@ -65,10 +65,10 @@ ifeq ($(OS), emscripten)
 julia-release: $(build_bindir)/julia.js
 julia-debug: $(build_bindir)/julia-debug.js
 
-$(build_bindir)/julia.js: wasm-support.c
-	@$(call PRINT_LINK, $(CC) $(CPPFLAGS) $(CXXFLAGS) $(CXXLDFLAGS) $(LINK_FLAGS) $(SHIPFLAGS) wasm-support.c -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia -lLLVMSupport $(JLDFLAGS) $(CXXLDFLAGS))
-$(build_bindir)/julia-debug.js: wasm-support.c
-	@$(call PRINT_LINK, $(CC) $(CPPFLAGS) $(CXXFLAGS) $(CXXLDFLAGS) $(LINK_FLAGS) $(SHIPFLAGS) wasm-support.c -o $@ -L(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia-debug -lLLVMSupport $(JLDFLAGS) $(CXXLDFLAGS))
+$(build_bindir)/julia.js: $(SRCDIR)/wasm-support.c
+	@$(call PRINT_LINK, $(CC) $(CPPFLAGS) $(CXXFLAGS) $(CXXLDFLAGS) $(LINK_FLAGS) $(SHIPFLAGS) $(SRCDIR)/wasm-support.c -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia -lLLVMSupport $(JLDFLAGS) $(CXXLDFLAGS))
+$(build_bindir)/julia-debug.js: $(SRCDIR)/wasm-support.c
+	@$(call PRINT_LINK, $(CC) $(CPPFLAGS) $(CXXFLAGS) $(CXXLDFLAGS) $(LINK_FLAGS) $(SHIPFLAGS) $(SRCDIR)/wasm-support.c -o $@ -L(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia-debug -lLLVMSupport $(JLDFLAGS) $(CXXLDFLAGS))
 else
 julia-release: $(build_bindir)/julia$(EXE)
 julia-debug: $(build_bindir)/julia-debug$(EXE)
