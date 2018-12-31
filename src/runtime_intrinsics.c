@@ -78,13 +78,13 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
 #ifdef _OS_EMSCRIPTEN_
 extern uint32_t __gmp_version;
 extern int32_t __gmp_bits_per_limb;
+extern void __gmpz_clear(void*);
 #endif
 extern void *jl_gc_counted_malloc(size_t sz);
 extern void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz);
 extern void jl_gc_counted_free_with_size(void *p, size_t sz);
 JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 {
-    jl_(v); jl_(ty);
     JL_TYPECHK(cglobal, type, ty);
     JL_GC_PUSH1(&v);
     jl_value_t *rt =
@@ -125,10 +125,17 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 #ifdef _OS_EMSCRIPTEN_
         WRAP(__gmp_version)
         WRAP(__gmp_bits_per_limb)
+        WRAP(__gmpz_clear)
 #endif
         WRAP(jl_gc_counted_malloc)        
         WRAP(jl_gc_counted_realloc_with_old_size)
         WRAP(jl_gc_counted_free_with_size)
+#ifdef _OS_EMSCRIPTEN_
+        else {
+            jl_(v);
+            jl_error("Encountered cglobal not mapped in runtime_intrinsics. For now, you may add it to the list. (Or write a proper solution)\n");
+        }
+#endif
     }
 
     if (!jl_is_concrete_type(rt))

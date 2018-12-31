@@ -67,7 +67,7 @@ end
 # Use a max size of 1M profile samples, and fire timer every 1ms
 if Sys.iswindows()
     __init__() = init(1_000_000, 0.01)
-else
+elseif !Sys.isjsvm()
     __init__() = init(1_000_000, 0.001)
 end
 
