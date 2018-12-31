@@ -75,6 +75,11 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
     return p;
 }
 
+extern uint32_t __gmp_version;
+extern int32_t __gmp_bits_per_limb;
+extern void *jl_gc_counted_malloc(size_t sz);
+extern void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz);
+extern void jl_gc_counted_free_with_size(void *p, size_t sz);
 JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 {
     jl_(v); jl_(ty);
@@ -85,8 +90,20 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
             (jl_value_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, ty);
     JL_GC_PROMISE_ROOTED(rt); // (JL_ALWAYS_LEAFTYPE)
 
-    if (jl_is_symbol(v)) {
-        const char *name = jl_symbol_name(v);
+    if (jl_is_symbol(v) || jl_is_tuple(v)) {
+        jl_value_t *sym = v;
+        if (jl_is_tuple(sym))
+            sym = jl_fieldref(sym, 0);
+        const char *name = jl_symbol_name(sym);
+        
+        # define WRAP(symname) \
+        else if (strcmp(name, #symname) == 0) {                     \
+            jl_ptls_t ptls = jl_get_ptls_states();                  \
+            jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);   \
+            *(void**)jl_data_ptr(v) = &symname;                     \
+            return v;                                               \
+        }
+        
         if (strcmp(name, "jl_options") == 0) {
             jl_ptls_t ptls = jl_get_ptls_states();
             jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
@@ -102,7 +119,12 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
             jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
             *(void**)jl_data_ptr(v) = &JL_STDERR;
             return v;
-        }
+        } 
+        WRAP(__gmp_version)
+        WRAP(__gmp_bits_per_limb)
+        WRAP(jl_gc_counted_malloc)        
+        WRAP(jl_gc_counted_realloc_with_old_size)
+        WRAP(jl_gc_counted_free_with_size)
     }
 
     if (!jl_is_concrete_type(rt))

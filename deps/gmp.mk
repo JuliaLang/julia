@@ -8,6 +8,12 @@ ifeq ($(BUILD_OS),WINNT)
 GMP_CONFIGURE_OPTS += --srcdir="$(subst \,/,$(call mingw_to_dos,$(SRCCACHE)/gmp-$(GMP_VER)))"
 endif
 
+ifeq ($(OS), emscripten)
+GMP_CONFIGURE_OPTS += --enable-static
+else
+GMP_CONFIGURE_OPTS += --disable-static
+endif
+
 ifneq ($(USE_BINARYBUILDER_GMP),1)
 
 GMP_CONFIGURE_OPTS += CC_FOR_BUILD="$(HOSTCC)"
@@ -36,7 +42,7 @@ $(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-conf
 $(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(dir $<)/configure $(CONFIGURE_COMMON) F77= --enable-shared --disable-static $(GMP_CONFIGURE_OPTS)
+	$(dir $<)/configure $(CONFIGURE_COMMON) F77= --enable-shared $(GMP_CONFIGURE_OPTS)
 	echo 1 > $@
 
 $(BUILDDIR)/gmp-$(GMP_VER)/build-compiled: $(BUILDDIR)/gmp-$(GMP_VER)/build-configured
@@ -55,6 +61,9 @@ ifeq ($(BUILD_OS),WINNT)
 	-mv $1/.libs/gmp.dll $1/.libs/libgmp.dll
 endif
 	$(INSTALL_M) $1/.libs/libgmp.*$(SHLIB_EXT)* $2/$(build_shlibdir)
+ifeq ($(OS),emscripten)
+	$(INSTALL_M) $1/.libs/libgmp.a $2/$(build_shlibdir)
+endif
 	$(INSTALL_F) $1/gmp.h $2/$(build_includedir)
 endef
 $(eval $(call staged-install, \
