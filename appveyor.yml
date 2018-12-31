@@ -36,12 +36,12 @@ init:
 # Carriage returns are bad
   - git config --global core.autocrlf input
 
-cache:
-# Cache large downloads to avoid network unreliability
-  - C:\cygdownloads
-  - llvm-3.9.1-i686-w64-mingw32-juliadeps-r07.7z
-  - llvm-3.9.1-x86_64-w64-mingw32-juliadeps-r07.7z
-  - C:\ccache
+#cache:
+## Cache large downloads to avoid network unreliability
+#  - C:\cygdownloads
+#  - llvm-3.9.1-i686-w64-mingw32-juliadeps-r07.7z
+#  - llvm-3.9.1-x86_64-w64-mingw32-juliadeps-r07.7z
+#  - C:\ccache
 
 build_script:
 # If there's a newer build queued for the same PR, cancel this one
