@@ -355,10 +355,8 @@ _atreplinit(repl) = invokelatest(__atreplinit, repl)
 # The REPL stdlib hooks into Base using this Ref
 const REPL_MODULE_REF = Ref{Module}()
 
-# run the requested sort of evaluation loop on stdio
-function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
-    global active_repl
-    # load interactive-only libraries
+# load interactive-only libraries
+function load_InteractiveUtils()
     if !isdefined(Main, :InteractiveUtils)
         try
             let InteractiveUtils = require(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
@@ -369,6 +367,12 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
             @warn "Failed to import InteractiveUtils into module Main" exception=(ex, catch_backtrace())
         end
     end
+end
+
+# run the requested sort of evaluation loop on stdio
+function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
+    global active_repl
+    load_InteractiveUtils()
 
     if interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL

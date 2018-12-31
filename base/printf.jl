@@ -1136,6 +1136,7 @@ end
 ini_hex(x::Integer,ndigits::Int,digits) = throw(MethodError(ini_hex,(x,ndigits,digits)))
 
 #BigFloat
+if isdefined(@__MODULE__, :BigFloat)
 fix_dec(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
 ini_dec(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
 ini_hex(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
@@ -1175,6 +1176,7 @@ function bigfloat_printf(out, d::BigFloat, flags::String, width::Int, precision:
     lng > 0 || error("invalid printf formatting for BigFloat")
     unsafe_write(out, pointer(digits), min(lng, bufsiz-1))
     return (false, ())
+end
 end
 
 ### external printf interface ###

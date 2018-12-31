@@ -77,24 +77,26 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
         end
     end
 
-    if verbose
-        cpuio = IOBuffer() # print cpu_summary with correct alignment
-        Sys.cpu_summary(cpuio)
-        for (i, line) in enumerate(split(String(take!(cpuio)), "\n"))
-            prefix = i == 1 ? "  CPU: " : "       "
-            println(io, prefix, line)
+    if !Sys.isjsvm()
+        if verbose
+            cpuio = IOBuffer() # print cpu_summary with correct alignment
+            Sys.cpu_summary(cpuio)
+            for (i, line) in enumerate(split(String(take!(cpuio)), "\n"))
+                prefix = i == 1 ? "  CPU: " : "       "
+                println(io, prefix, line)
+            end
+        else
+            cpu = Sys.cpu_info()
+            println(io, "  CPU: ", cpu[1].model)
         end
-    else
-        cpu = Sys.cpu_info()
-        println(io, "  CPU: ", cpu[1].model)
-    end
 
-    if verbose
-        println(io, "  Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
-        try println(io, "  Uptime: $(Sys.uptime()) sec"); catch; end
-        print(io, "  Load Avg: ")
-        Base.print_matrix(io, Sys.loadavg()')
-        println(io)
+        if verbose
+            println(io, "  Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
+            try println(io, "  Uptime: $(Sys.uptime()) sec"); catch; end
+            print(io, "  Load Avg: ")
+            Base.print_matrix(io, Sys.loadavg()')
+            println(io)
+        end
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     println(io, "  LIBM: ",Base.libm_name)

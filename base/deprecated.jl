@@ -182,9 +182,11 @@ function promote_eltype_op end
 one(::CartesianIndex{N}) where {N} = one(CartesianIndex{N})
 one(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val(N)))
 
+if isdefined(@__MODULE__, :BigFloat)
 MPFR.BigFloat(x, prec::Int) = BigFloat(x; precision=prec)
 MPFR.BigFloat(x, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
 MPFR.BigFloat(x::Real, prec::Int) = BigFloat(x; precision=prec)
 MPFR.BigFloat(x::Real, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
+end
 
 # END 1.0 deprecations
