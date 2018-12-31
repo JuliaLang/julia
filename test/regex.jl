@@ -65,4 +65,7 @@
 
     # Regex behaves like a scalar in broadcasting
     @test occursin.(r"Hello", ["Hello", "World"]) == [true, false]
+
+    # Test that PCRE throws the correct kind of error
+    @test_throws ErrorException Base.PCRE.info(C_NULL, Base.PCRE.INFO_NAMECOUNT, UInt32)
 end
