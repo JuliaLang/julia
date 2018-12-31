@@ -31,8 +31,14 @@ endif
 JCFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 endif
 
+ifneq ($(BUILD_ARCH_OVERRIDE),)
+FLAGS += -DJL_BUILD_ARCH='"$(BUILD_ARCH_OVERRIDE)"'
+else
 FLAGS += -DJL_BUILD_ARCH='"$(ARCH)"'
-ifeq ($(OS),WINNT)
+endif
+ifneq ($(UNAME_OVERRIDE),)
+FLAGS += -DJL_BUILD_UNAME='"$(UNAME_OVERRIDE)"'
+else ifeq ($(OS),WINNT)
 FLAGS += -DJL_BUILD_UNAME='"NT"'
 else
 FLAGS += -DJL_BUILD_UNAME='"$(OS)"'
