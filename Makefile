@@ -207,14 +207,28 @@ $(eval $(call std_so,libquadmath))
 endif # FreeBSD
 
 ifeq ($(OS),WINNT)
+# find the standard .dll folders
+ifeq ($(XC_HOST),)
+STD_LIB_PATH ?= $(PATH)
+else
+STD_LIB_PATH := $(shell LANG=C $(CC) -print-search-dirs | grep programs | sed -e "s/^programs: =//")
+STD_LIB_PATH += :$(shell LANG=C $(CC) -print-search-dirs | grep libraries | sed -e "s/^libraries: =//")
+ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # the cygwin-mingw32 compiler lies about it search directory paths
+STD_LIB_PATH := $(shell echo '$(STD_LIB_PATH)' | sed -e "s!/lib/!/bin/!g")
+endif
+endif
+
+pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
+
 define std_dll
-julia-deps: | $$(build_bindir)/lib$(1).dll $$(build_depsbindir)/lib$(1).dll
+julia-deps-libs: | $$(build_bindir)/lib$(1).dll $$(build_depsbindir)/lib$(1).dll
 $$(build_bindir)/lib$(1).dll: | $$(build_bindir)
-	cp $$(call pathsearch,lib$(1).dll,$$(STD_LIB_PATH)) $$(build_bindir)
+	cp $$(or $$(call pathsearch,lib$(1).dll,$$(STD_LIB_PATH)),$$(error can't find lib$1.dll)) $$(build_bindir)
 $$(build_depsbindir)/lib$(1).dll: | $$(build_depsbindir)
-	cp $$(call pathsearch,lib$(1).dll,$$(STD_LIB_PATH)) $$(build_depsbindir)
+	cp $$(or $$(call pathsearch,lib$(1).dll,$$(STD_LIB_PATH)),$$(error can't find lib$1.dll)) $$(build_depsbindir)
 JL_TARGETS += $(1)
 endef
+julia-deps: julia-deps-libs
 
 # Given a list of space-separated libraries, return the first library name that is
 # correctly found through `pathsearch`.
