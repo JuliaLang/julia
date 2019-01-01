@@ -420,7 +420,7 @@ end
         Sockets.connect!(s, addr)
         @test iswritable(s)
         r = @async close(s)
-        fetch(r)
+        close(s)
         @test !iswritable(s)
     end
 end
