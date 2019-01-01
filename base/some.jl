@@ -81,3 +81,141 @@ something() = throw(ArgumentError("No value arguments present"))
 something(x::Nothing, y...) = something(y...)
 something(x::Some, y...) = x.value
 something(x::Any, y...) = x
+
+"""
+    skipnothing(itr)
+Return an iterator over the elements in `itr` skipping [`nothing`](@ref) values.
+Use [`collect`](@ref) to obtain an `Array` containing the non-`nothing` values in
+`itr`. Note that even if `itr` is a multidimensional array, the result will always
+be a `Vector` since it is not possible to remove nothings while preserving dimensions
+of the input.
+# Examples
+```jldoctest
+julia> sum(skipnothing([1, nothing, 2]))
+3
+julia> collect(skipnothing([1, nothing, 2]))
+2-element Array{Int64,1}:
+ 1
+ 2
+julia> collect(skipnothing([1 nothing; 2 nothing]))
+2-element Array{Int64,1}:
+ 1
+ 2
+```
+"""
+skipnothing(itr) = SkipNothing(itr)
+
+struct SkipNothing{T}
+    x::T
+end
+IteratorSize(::Type{<:SkipNothing}) = SizeUnknown()
+IteratorEltype(::Type{SkipNothing{T}}) where {T} = IteratorEltype(T)
+eltype(::Type{SkipNothing{T}}) where {T} = nonnothingtype(eltype(T))
+
+function iterate(itr::SkipNothing, state...)
+    y = iterate(itr.x, state...)
+    y === nothing && return nothing
+    item, state = y
+    while item === nothing
+        y = iterate(itr.x, state)
+        y === nothing && return nothing
+        item, state = y
+    end
+    item, state
+end
+
+# Optimized mapreduce implementation
+# The generic method is faster when !(eltype(A) >: Nothing) since it does not need
+# additional loops to identify the two first non-nothing values of each block
+mapreduce(f, op, itr::SkipNothing{<:AbstractArray}) =
+    _mapreduce(f, op, IndexStyle(itr.x), eltype(itr.x) >: Nothing ? itr : itr.x)
+
+function _mapreduce(f, op, ::IndexLinear, itr::SkipNothing{<:AbstractArray})
+    A = itr.x
+    local ai
+    inds = LinearIndices(A)
+    i = first(inds)
+    ilast = last(inds)
+    while i <= ilast
+        @inbounds ai = A[i]
+        ai === nothing || break
+        i += 1
+    end
+    i > ilast && return mapreduce_empty(f, op, eltype(itr))
+    a1 = ai
+    i += 1
+    while i <= ilast
+        @inbounds ai = A[i]
+        ai === nothing || break
+        i += 1
+    end
+    i > ilast && return mapreduce_first(f, op, a1)
+    # We know A contains at least two non-nothing entries: the result cannot be nothing
+    mapreduce_impl(f, op, itr, first(inds), last(inds))
+end
+
+_mapreduce(f, op, ::IndexCartesian, itr::SkipNothing) = mapfoldl(f, op, itr)
+
+mapreduce_impl(f, op, A::SkipNothing, ifirst::Integer, ilast::Integer) =
+    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
+
+# Returns nothing when the input contains only nothing values
+@noinline function mapreduce_impl(f, op, itr::SkipNothing{<:AbstractArray},
+                                  ifirst::Integer, ilast::Integer, blksize::Int)
+    A = itr.x
+    if ifirst == ilast
+        @inbounds a1 = A[ifirst]
+        if a1 === nothing
+            return nothing
+        else
+            return mapreduce_first(f, op, a1)
+        end
+    elseif ifirst + blksize > ilast
+        # sequential portion
+        local ai
+        i = ifirst
+        while i <= ilast
+            @inbounds ai = A[i]
+            ai === nothing || break
+            i += 1
+        end
+        i > ilast && return nothing
+        a1 = ai::eltype(itr)
+        i += 1
+        while i <= ilast
+            @inbounds ai = A[i]
+            ai === nothing || break
+            i += 1
+        end
+        i > ilast && return mapreduce_first(f, op, a1)
+        a2 = ai::eltype(itr)
+        i += 1
+        v = op(f(a1), f(a2))
+        @simd for i = i:ilast
+            @inbounds ai = A[i]
+            if ai !== nothing
+                v = op(v, f(ai))
+            end
+        end
+        return v
+    else
+        # pairwise portion
+        imid = (ifirst + ilast) >> 1
+        v1 = mapreduce_impl(f, op, itr, ifirst, imid, blksize)
+        v2 = mapreduce_impl(f, op, itr, imid+1, ilast, blksize)
+        if v1 === nothing && v2 === nothing
+            return nothing
+        elseif v1 === nothing
+            return v2
+        elseif v2 === nothing
+            return v1
+        else
+            return op(v1, v2)
+        end
+    end
+end
+
+nonnothingtype(::Type{Union{T, Nothing}}) where {T} = T
+nonnothingtype(::Type{Nothing}) = Union{}
+nonnothingtype(::Type{T}) where {T} = T
+nonnothingtype(::Type{Any}) = Any

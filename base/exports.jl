@@ -674,6 +674,7 @@ export
     skipmissing,
     something,
     isnothing,
+    skipnothing,
 
 # time
     sleep,

@@ -210,6 +210,7 @@ Base.Val
 Core.Vararg
 Core.Nothing
 Base.isnothing
+Base.skipnothing
 Base.Some
 Base.something
 Base.Enums.Enum

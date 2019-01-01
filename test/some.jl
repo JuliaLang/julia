@@ -98,3 +98,87 @@ using Base: notnothing
 # isnothing()
 @test !isnothing(1)
 @test isnothing(nothing)
+
+# skipnothing()
+@testset "skipnothing" begin
+    x = skipnothing([1, 2, nothing, 4])
+    @test eltype(x) === Int
+    @test collect(x) == [1, 2, 4]
+    @test collect(x) isa Vector{Int}
+
+    x = skipnothing([1  2; nothing 4])
+    @test eltype(x) === Int
+    @test collect(x) == [1, 2, 4]
+    @test collect(x) isa Vector{Int}
+
+    x = collect(skipnothing([nothing]))
+    @test eltype(x) === Union{}
+    @test isempty(collect(x))
+    @test collect(x) isa Vector{Union{}}
+
+    x = collect(skipnothing(Union{Int, Nothing}[]))
+    @test eltype(x) === Int
+    @test isempty(collect(x))
+    @test collect(x) isa Vector{Int}
+
+    x = skipnothing([nothing, nothing, 1, 2, nothing, 4, nothing, nothing])
+    @test eltype(x) === Int
+    @test collect(x) == [1, 2, 4]
+    @test collect(x) isa Vector{Int}
+
+    x = skipnothing(v for v in [nothing, 1, nothing, 2, 4])
+    @test eltype(x) === Any
+    @test collect(x) == [1, 2, 4]
+    @test collect(x) isa Vector{Int}
+
+    @testset "mapreduce" begin
+        # Vary size to test splitting blocks with several configurations of nothing values
+        for T in (Int, Float64),
+            A in (rand(T, 10), rand(T, 1000), rand(T, 10000))
+            if T === Int
+                @test sum(A) === sum(skipnothing(A)) ===
+                    reduce(+, skipnothing(A)) === mapreduce(identity, +, skipnothing(A))
+            else
+                @test sum(A) ≈ sum(skipnothing(A)) ===
+                    reduce(+, skipnothing(A)) === mapreduce(identity, +, skipnothing(A))
+            end
+            @test mapreduce(cos, *, A) ≈ mapreduce(cos, *, skipnothing(A))
+
+            B = Vector{Union{T,Nothing}}(A)
+            replace!(x -> rand(Bool) ? x : nothing, B)
+            if T === Int
+                @test sum(collect(skipnothing(B))) === sum(skipnothing(B)) ===
+                    reduce(+, skipnothing(B)) === mapreduce(identity, +, skipnothing(B))
+            else
+                @test sum(collect(skipnothing(B))) ≈ sum(skipnothing(B)) ===
+                    reduce(+, skipnothing(B)) === mapreduce(identity, +, skipnothing(B))
+            end
+            @test mapreduce(cos, *, collect(skipnothing(A))) ≈ mapreduce(cos, *, skipnothing(A))
+
+            # Test block full of nothing values
+            B[1:length(B)÷2] .= nothing
+            if T === Int
+                @test sum(collect(skipnothing(B))) == sum(skipnothing(B)) ==
+                    reduce(+, skipnothing(B)) == mapreduce(identity, +, skipnothing(B))
+            else
+                @test sum(collect(skipnothing(B))) ≈ sum(skipnothing(B)) ==
+                    reduce(+, skipnothing(B)) == mapreduce(identity, +, skipnothing(B))
+            end
+
+            @test mapreduce(cos, *, collect(skipnothing(A))) ≈ mapreduce(cos, *, skipnothing(A))
+        end
+
+        # Patterns that exercize code paths for inputs with 1 or 2 non-nothing values
+        @test sum(skipnothing([1, nothing, nothing, nothing])) === 1
+        @test sum(skipnothing([nothing, nothing, nothing, 1])) === 1
+        @test sum(skipnothing([1, nothing, nothing, nothing, 2])) === 3
+        @test sum(skipnothing([nothing, nothing, nothing, 1, 2])) === 3
+
+        for n in 0:3
+            itr = skipnothing(Vector{Union{Int,Nothing}}(fill(nothing, n)))
+            @test sum(itr) == reduce(+, itr) == mapreduce(identity, +, itr) === 0
+            @test_throws ArgumentError reduce(x -> x/2, itr)
+            @test_throws ArgumentError mapreduce(x -> x/2, +, itr)
+        end
+    end
+end
