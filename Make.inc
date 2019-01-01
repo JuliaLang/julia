@@ -1277,7 +1277,13 @@ PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
 
 endif
 
+define newline # a literal \n
+
+
+endef
+
 # Makefile debugging trick:
 # call print-VARIABLE to see the runtime value of any variable
+# (hardened against any special characters appearing in the output)
 print-%:
-	@echo '$*=$($*)'
+	@echo '$*=$(subst ','\'',$(subst $(newline),\n,$($*)))'
