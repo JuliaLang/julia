@@ -519,9 +519,9 @@ distcleanall: cleanall
 	@-$(MAKE) -C $(BUILDROOT)/doc cleanall
 
 .PHONY: default debug release check-whitespace release-candidate \
-	julia-debug julia-release julia-deps \
+	julia-debug julia-release julia-stdlib julia-deps julia-deps-libs \
 	julia-ui-release julia-ui-debug julia-src-release julia-src-debug \
-	julia-symlink julia-base julia-sysimg julia-sysimg-release julia-sysimg-debug \
+	julia-symlink julia-base julia-sysimg julia-sysimg-ji julia-sysimg-release julia-sysimg-debug \
 	test testall testall1 test clean distcleanall cleanall clean-* \
 	run-julia run-julia-debug run-julia-release run \
 	install binary-dist light-source-dist.tmp light-source-dist \
