@@ -331,49 +331,14 @@ end
 # two-dimensional).
 _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
     SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(S.rowval, TiNew, 0), similar(S.nzval, TvNew, 0))
-#=
-# parent methods for similar that as far as possible preserves stored-entry structure
-# (for when new dims are two-dimensional).
-function _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew}
 
-    m, n = dims
-    mx = S.colptr[S.n+1]
-    newcolptr = copyto!(similar(S.colptr, TiNew, n+1), 1, S.colptr, 1, min(n,S.n)+1)
-    for i = S.n+2:n+1
-        newcolptr[i] = mx
-    end
-    nz = mx - 1
-    newrowval = copyto!(similar(S.rowval, TiNew, nz), 1, S.rowval, 1, nz)
-    if m < S.m
-        offset = 0
-        start = newcolptr[1]
-        for k = 1:n
-            for j = start:newcolptr[k+1]-1
-                if newrowval[j] > m
-                    offset += 1
-                end
-            end
-            start = newcolptr[k+1]
-            newcolptr[k+1] -= offset
-        end
-        deleteat!(newrowval, findall(x->x>m, view(newrowval,1:nz)))
-        nz -= offset
-    end
-    xnz = min(max(nz, length(S.rowval)), n * m)
-    if length(newrowval) != xnz
-        resize!(newrowval, xnz)
-    end
-    ynz = min(max(nz, length(S.nzval)), n * m)
-    return SparseMatrixCSC(m, n, newcolptr, newrowval, similar(S.nzval, TvNew, ynz))
-end
-=#
 # parent method for similar that allocates an empty sparse vector (when new dims are single)
 _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) where {TvNew,TiNew} =
     SparseVector(dims..., similar(S.rowval, TiNew, 0), similar(S.nzval, TvNew, 0))
 #
 # The following methods hook into the AbstractArray similar hierarchy. The first method
 # covers similar(A[, Tv]) calls, which preserve stored-entry structure, and the latter
-# methods cover similar(A[, Tv], shape...) calls, whith partially presevrved structure
+# methods cover similar(A[, Tv], shape...) calls, with partially preserved structure
 # when the shape calls for a two-dimensional result.
 similar(S::SparseMatrixCSC{<:Any,Ti}, ::Type{TvNew}) where {Ti,TvNew} = _sparsesimilar(S, TvNew, Ti)
 similar(S::SparseMatrixCSC{<:Any,Ti}, ::Type{TvNew}, dims::Union{Dims{1},Dims{2}}) where {Ti,TvNew} =
