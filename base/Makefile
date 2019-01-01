@@ -194,12 +194,11 @@ $(eval $(call symlink_system_library,libcolamd,SUITESPARSE))
 $(eval $(call symlink_system_library,libumfpack,SUITESPARSE))
 $(eval $(call symlink_system_library,libspqr,SUITESPARSE))
 $(eval $(call symlink_system_library,libsuitesparseconfig,SUITESPARSE))
-ifneq ($(DISABLE_LIBUNWIND),0)
-$(eval $(call symlink_system_library,libunwind,LIBUNWIND))
-endif
+# EXCLUDED LIBRARIES (installed/used, but not vendored for use with dlopen):
+# libunwind
 endif # WINNT
 
-symlink_libLLVM: $(build_private_libdir)/libLLVM.dylib
+symlink_libLLVM: $(build_private_libdir)/libLLVM.$(SHLIB_EXT)
 ifneq ($(USE_SYSTEM_LLVM),0)
 LLVM_CONFIG_HOST_LIBS := $(shell $(LLVM_CONFIG_HOST) --libfiles)
 # HACK: llvm-config doesn't correctly point to shared libs on all platforms
@@ -207,7 +206,7 @@ LLVM_CONFIG_HOST_LIBS := $(shell $(LLVM_CONFIG_HOST) --libfiles)
 else
 LLVM_CONFIG_HOST_LIBS := $(shell $(LLVM_CONFIG_HOST) --libdir)/libLLVM.$(SHLIB_EXT)
 endif
-$(build_private_libdir)/libLLVM.dylib:
+$(build_private_libdir)/libLLVM.$(SHLIB_EXT):
 	REALPATH=$(LLVM_CONFIG_HOST_LIBS) && \
 	$(call resolve_path,REALPATH) && \
 	[ -e "$$REALPATH" ] && \
