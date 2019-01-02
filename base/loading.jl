@@ -960,7 +960,7 @@ function _require(pkg::PkgId)
                 cachefile = compilecache(pkg, path)
                 if isa(cachefile, Exception)
                     if precompilableerror(cachefile)
-                         verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                        verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
                         @logmsg verbosity "Skipping precompilation since __precompile__(false). Importing $pkg."
                     else
                         @warn "The call to compilecache failed to create a usable precompiled cache file for $pkg" exception=m
