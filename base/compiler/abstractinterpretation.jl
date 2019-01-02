@@ -390,6 +390,12 @@ function precise_container_type(@nospecialize(typ), vtypes::VarTable, sv::Infere
 
     tti0 = widenconst(typ)
     tti = unwrap_unionall(tti0)
+    if isa(tti, DataType) && tti.name === NamedTuple_typename
+        tti0 = tti.parameters[2]
+        while isa(tti0, TypeVar)
+            tti0 = tti0.ub
+        end
+    end
     if isa(tti, Union)
         utis = uniontypes(tti)
         if _any(t -> !isa(t, DataType) || !(t <: Tuple) || !isknownlength(t), utis)
