@@ -340,6 +340,13 @@ end
         f = Diagonal(rand(n))
         @test Array(a*f) == Array(a)*f
         @test Array(f*b) == f*Array(b)
+        A = rand(2n, 2n)
+        sA = view(A, 1:2:2n, 1:2:2n)
+        @test Array(sA*b) ≈ Array(sA)*Array(b)
+        @test Array(a*sA) ≈ Array(a)*Array(sA)
+        c = sprandn(ComplexF32, n, n, q)
+        @test Array(sA*c') ≈ Array(sA)*Array(c)'
+        @test Array(c'*sA) ≈ Array(c)'*Array(sA)
     end
 end
 
