@@ -199,7 +199,7 @@ Return the corresponding signed type for type `T`.
 ```jldoctest
 julia> signed(UInt8)
 Int8
-```    
+```
 """
 signed(::Type{T}) where {T<:Unsigned} = typeof(signed(zero(T)))
 signed(::Type{T}) where {T<:BitSigned} = T
