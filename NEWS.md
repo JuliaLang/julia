@@ -88,7 +88,6 @@ Standard library changes
   * `merge(::NamedTuple, ::NamedTuple...)` can now be used with more than 2 `NamedTuple`s ([#29259]).
   * New `ncodeunits(c::Char)` method as a fast equivalent to `ncodeunits(string(c))` ([#29153]).
   * New `sort!(::AbstractArray; dims)` method that can sort the array along the `dims` dimension ([#28902]).
-  * `range` now accepts `stop` as a positional argument ([#28708]).
   * `get(A::AbstractArray, (), default)` now returns `A[]` instead of an empty array ([#30270]).
   * `parse(Bool, str)` is now supported ([#29997]).
   * `copyto!(::AbstractMatrix, ::UniformScaling)` now supports rectangular matrices ([#28790]).
