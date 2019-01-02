@@ -80,6 +80,7 @@ Standard library changes
   * `Regex` now behaves like a scalar when used in broadcasting ([#29913]).
   * `Char` now behaves like a read-only 0-dimensional array ([#29819]).
   * `parse` now allows strings representing integer 0 and 1 for type `Bool` ([#29980]).
+  * `parse(Bool, str)` is now supported ([#29997]).
   * `Base.tail` now works on named tuples ([#29595]).
   * The process id is appended to malloc log files in order to track memory allocations of
     multiple processes ([#29969]).
@@ -88,9 +89,7 @@ Standard library changes
   * `merge(::NamedTuple, ::NamedTuple...)` can now be used with more than 2 `NamedTuple`s ([#29259]).
   * New `ncodeunits(c::Char)` method as a fast equivalent to `ncodeunits(string(c))` ([#29153]).
   * New `sort!(::AbstractArray; dims)` method that can sort the array along the `dims` dimension ([#28902]).
-  * `range` now accepts `stop` as a positional argument ([#28708]).
   * `get(A::AbstractArray, (), default)` now returns `A[]` instead of an empty array ([#30270]).
-  * `parse(Bool, str)` is now supported ([#29997]).
   * `copyto!(::AbstractMatrix, ::UniformScaling)` now supports rectangular matrices ([#28790]).
   * `current_project()` now searches the parent directories of a Git repository for a `Project.toml` file.
     This also affects the behavior of the `--project` command line option when using the default
