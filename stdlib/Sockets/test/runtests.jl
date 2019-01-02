@@ -413,6 +413,17 @@ end
     end
 end
 
+@testset "iswritable" begin
+    let addr = Sockets.InetAddr(ip"127.0.0.1", 4445)
+        srv = listen(addr)
+        s = Sockets.TCPSocket()
+        Sockets.connect!(s, addr)
+        @test iswritable(s)
+        close(s)
+        @test !iswritable(s)
+    end
+end
+
 @testset "TCPServer constructor" begin
     s = Sockets.TCPServer(; delay=false)
     if ccall(:jl_has_so_reuseport, Int32, ()) == 1
