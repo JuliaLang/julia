@@ -926,13 +926,12 @@ function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
         y === nothing && break
         I, state = y
         @inbounds val = bc[I]
-        S = typeof(val)
-        if S <: T
+        if val isa T || typeof(val) === T
             @inbounds dest[I] = val
         else
             # This element type doesn't fit in dest. Allocate a new dest with wider eltype,
             # copy over old values, and continue
-            newdest = Base.similar(dest, promote_typejoin(T, S))
+            newdest = Base.similar(dest, promote_typejoin(T, typeof(val)))
             for II in Iterators.take(iter, count)
                 newdest[II] = dest[II]
             end
