@@ -424,7 +424,7 @@ end
     @test getipaddr() in getipaddrs()
 
     @testset "include lo" begin
-        @test getipaddrs(true) >= getipaddrs()
+        @test issubset(getipaddrs(), getipaddrs(true))
     end
 end
 
