@@ -692,7 +692,9 @@ eltypes(t::Tuple{Any,Any}) = Tuple{_broadcast_getindex_eltype(t[1]), _broadcast_
 eltypes(t::Tuple) = Tuple{_broadcast_getindex_eltype(t[1]), eltypes(tail(t)).types...}
 
 Base.@pure function promote_typejoin_union(::Type{T}) where T
-    if T isa Union
+    if T === Union{}
+        return Union{}
+    elseif T isa Union
         promote_typejoin(promote_typejoin_union(T.a), promote_typejoin_union(T.b))
     elseif T <: Tuple
         p = T.parameters
