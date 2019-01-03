@@ -709,11 +709,11 @@ function to_tuple_type(@nospecialize(t))
     if isa(t,Type) && t<:Tuple
         for p in unwrap_unionall(t).parameters
             if !(isa(p,Type) || isa(p,TypeVar))
-                error("argument tuple type must contain only types")
+                throw(ArgumentError("argument tuple type must contain only types"))
             end
         end
     else
-        error("expected tuple type")
+        throw(ArgumentError("expected tuple type"))
     end
     t
 end
