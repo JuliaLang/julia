@@ -462,6 +462,9 @@ JL_CALLABLE(jl_f__apply)
                 return (jl_value_t*)t;
             }
         }
+        else if (f == jl_builtin_tuple && jl_is_tuple(args[1])) {
+            return args[1];
+        }
     }
     size_t n=0, i, j;
     for(i=1; i < nargs; i++) {
