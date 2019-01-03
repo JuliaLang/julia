@@ -518,3 +518,85 @@ let e = Event(), started = Event()
     wait(@async (wait(e); blocked = false))
     @test !blocked
 end
+
+
+@testset "InvasiveLinkedList" begin
+    @test eltype(Base.InvasiveLinkedList{Integer}) == Integer
+    @test eltype(Base.LinkedList{Integer}) == Integer
+    @test eltype(Base.InvasiveLinkedList{<:Integer}) == Any
+    @test eltype(Base.LinkedList{<:Integer}) == Any
+    @test eltype(Base.InvasiveLinkedList{<:Base.LinkedListItem{Integer}}) == Any
+
+    t = Base.LinkedList{Integer}()
+    @test eltype(t) == Integer
+    @test isempty(t)
+    @test length(t) == 0
+    @test isempty(collect(t)::Vector{Integer})
+    @test pushfirst!(t, 2) === t
+    @test !isempty(t)
+    @test length(t) == 1
+    @test pushfirst!(t, 1) === t
+    @test !isempty(t)
+    @test length(t) == 2
+    @test collect(t) == [1, 2]
+    @test pop!(t) == 2
+    @test !isempty(t)
+    @test length(t) == 1
+    @test collect(t) == [1]
+    @test pop!(t) == 1
+    @test isempty(t)
+    @test length(t) == 0
+    @test collect(t) == []
+
+    @test push!(t, 1) === t
+    @test !isempty(t)
+    @test length(t) == 1
+    @test push!(t, 2) === t
+    @test !isempty(t)
+    @test length(t) == 2
+    @test collect(t) == [1, 2]
+    @test popfirst!(t) == 1
+    @test popfirst!(t) == 2
+    @test isempty(collect(t)::Vector{Integer})
+
+    @test push!(t, 5) === t
+    @test push!(t, 6) === t
+    @test push!(t, 7) === t
+    @test length(t) === 3
+    @test Base.list_deletefirst!(t, 1) === t
+    @test length(t) === 3
+    @test Base.list_deletefirst!(t, 6) === t
+    @test length(t) === 2
+    @test collect(t) == [5, 7]
+    @test Base.list_deletefirst!(t, 6) === t
+    @test length(t) === 2
+    @test Base.list_deletefirst!(t, 7) === t
+    @test length(t) === 1
+    @test collect(t) == [5]
+    @test Base.list_deletefirst!(t, 5) === t
+    @test length(t) === 0
+    @test collect(t) == []
+    @test isempty(t)
+
+    t2 = Base.LinkedList{Integer}()
+    @test push!(t, 5) === t
+    @test push!(t, 6) === t
+    @test push!(t, 7) === t
+    @test push!(t2, 2) === t2
+    @test push!(t2, 3) === t2
+    @test push!(t2, 4) === t2
+    @test Base.list_append!!(t, t2) === t
+    @test isempty(t2)
+    @test isempty(collect(t2)::Vector{Integer})
+    @test collect(t) == [5, 6, 7, 2, 3, 4]
+    @test Base.list_append!!(t, t2) === t
+    @test collect(t) == [5, 6, 7, 2, 3, 4]
+    @test Base.list_append!!(t2, t) === t2
+    @test isempty(t)
+    @test collect(t2) == [5, 6, 7, 2, 3, 4]
+    @test push!(t, 1) === t
+    @test collect(t) == [1]
+    @test Base.list_append!!(t2, t) === t2
+    @test isempty(t)
+    @test collect(t2) == [5, 6, 7, 2, 3, 4, 1]
+end

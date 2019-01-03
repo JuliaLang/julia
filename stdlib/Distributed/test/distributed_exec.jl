@@ -752,16 +752,20 @@ end
 # issue #13168
 function f13168(n)
     val = 0
-    for i=1:n val+=sum(rand(n,n)^2) end
-    val
+    for i = 1:n
+        val += sum(rand(n, n)^2)
+    end
+    return val
 end
 let t = schedule(@task f13168(100))
-    @test t.state == :queued
+    @test t.state == :runnable
+    @test t.queue !== nothing
     @test_throws ErrorException schedule(t)
     yield()
     @test t.state == :done
+    @test t.queue === nothing
     @test_throws ErrorException schedule(t)
-    @test isa(fetch(t),Float64)
+    @test isa(fetch(t), Float64)
 end
 
 # issue #13122

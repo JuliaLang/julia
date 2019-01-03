@@ -850,26 +850,16 @@ static jl_value_t *core(const char *name)
 // fetch references to things defined in boot.jl
 void jl_get_builtin_hooks(void)
 {
-    int t;
-    for (t = 0; t < jl_n_threads; t++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[t];
-        ptls2->root_task->tls = jl_nothing;
-        ptls2->root_task->donenotify = jl_nothing;
-        ptls2->root_task->exception = jl_nothing;
-        ptls2->root_task->result = jl_nothing;
-    }
-
     jl_char_type    = (jl_datatype_t*)core("Char");
     jl_int8_type    = (jl_datatype_t*)core("Int8");
     jl_int16_type   = (jl_datatype_t*)core("Int16");
     jl_uint16_type  = (jl_datatype_t*)core("UInt16");
-
     jl_float16_type = (jl_datatype_t*)core("Float16");
     jl_float32_type = (jl_datatype_t*)core("Float32");
     jl_float64_type = (jl_datatype_t*)core("Float64");
     jl_floatingpoint_type = (jl_datatype_t*)core("AbstractFloat");
-    jl_number_type = (jl_datatype_t*)core("Number");
-    jl_signed_type = (jl_datatype_t*)core("Signed");
+    jl_number_type  = (jl_datatype_t*)core("Number");
+    jl_signed_type  = (jl_datatype_t*)core("Signed");
     jl_datatype_t *jl_unsigned_type = (jl_datatype_t*)core("Unsigned");
     jl_datatype_t *jl_integer_type = (jl_datatype_t*)core("Integer");
     jl_bool_type->super = jl_integer_type;
@@ -888,19 +878,17 @@ void jl_get_builtin_hooks(void)
     jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");
     jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
     jl_readonlymemory_exception = jl_new_struct_uninit((jl_datatype_t*)core("ReadOnlyMemoryError"));
-    jl_typeerror_type = (jl_datatype_t*)core("TypeError");
-
+    jl_typeerror_type      = (jl_datatype_t*)core("TypeError");
 #ifdef SEGV_EXCEPTION
     jl_segv_exception      = jl_new_struct_uninit((jl_datatype_t*)core("SegmentationFault"));
 #endif
+    jl_argumenterror_type  = (jl_datatype_t*)core("ArgumentError");
+    jl_methoderror_type    = (jl_datatype_t*)core("MethodError");
+    jl_loaderror_type      = (jl_datatype_t*)core("LoadError");
+    jl_initerror_type      = (jl_datatype_t*)core("InitError");
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
-
-    jl_argumenterror_type = (jl_datatype_t*)core("ArgumentError");
-    jl_methoderror_type = (jl_datatype_t*)core("MethodError");
-    jl_loaderror_type = (jl_datatype_t*)core("LoadError");
-    jl_initerror_type = (jl_datatype_t*)core("InitError");
 }
 
 void jl_get_builtins(void)

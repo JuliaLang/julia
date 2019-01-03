@@ -142,7 +142,7 @@ function get_task_tls(t::Task)
     if t.storage === nothing
         t.storage = IdDict()
     end
-    (t.storage)::IdDict{Any,Any}
+    return (t.storage)::IdDict{Any,Any}
 end
 
 """
@@ -168,12 +168,13 @@ for emulating dynamic scoping.
 """
 function task_local_storage(body::Function, key, val)
     tls = task_local_storage()
-    hadkey = haskey(tls,key)
-    old = get(tls,key,nothing)
+    hadkey = haskey(tls, key)
+    old = get(tls, key, nothing)
     tls[key] = val
-    try body()
+    try
+        return body()
     finally
-        hadkey ? (tls[key] = old) : delete!(tls,key)
+        hadkey ? (tls[key] = old) : delete!(tls, key)
     end
 end
 
@@ -200,7 +201,7 @@ exception, the exception is propagated (re-thrown in the task that called fetch)
 """
 function fetch(t::Task)
     wait(t)
-    task_result(t)
+    return task_result(t)
 end
 
 
@@ -264,6 +265,7 @@ macro async(expr)
             push!($var, task)
         end
         schedule(task)
+        task
     end
 end
 
@@ -358,13 +360,12 @@ end
 
 ## scheduler and work queue
 
-global const Workqueue = Task[]
+global const Workqueue = InvasiveLinkedList{Task}()
 
 function enq_work(t::Task)
-    t.state == :runnable || error("schedule: Task not runnable")
+    (t.state == :runnable && t.queue === nothing) || error("schedule: Task not runnable")
     ccall(:uv_stop, Cvoid, (Ptr{Cvoid},), eventloop())
     push!(Workqueue, t)
-    t.state = :queued
     return t
 end
 
@@ -400,25 +401,28 @@ julia> istaskdone(b)
 true
 ```
 """
-function schedule(t::Task, arg; error=false)
+function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
+    t.state == :runnable || error("schedule: Task not runnable")
     if error
+        t.queue === nothing || Base.list_deletefirst!(t.queue, t)
         t.exception = arg
     else
+        t.queue === nothing || error("schedule: Task not runnable")
         t.result = arg
     end
-    return enq_work(t)
+    enq_work(t)
+    return t
 end
 
 # fast version of `schedule(t, arg); wait()`
-function schedule_and_wait(t::Task, arg=nothing)
-    t.state == :runnable || error("schedule: Task not runnable")
+function schedule_and_wait(t::Task, @nospecialize(arg)=nothing)
+    (t.state == :runnable && t.queue === nothing) || error("schedule: Task not runnable")
     if isempty(Workqueue)
         return yieldto(t, arg)
     else
         t.result = arg
         push!(Workqueue, t)
-        t.state = :queued
     end
     return wait()
 end
@@ -438,8 +442,7 @@ yield() = (enq_work(current_task()); wait())
 A fast, unfair-scheduling version of `schedule(t, arg); yield()` which
 immediately yields to `t` before calling the scheduler.
 """
-function yield(t::Task, @nospecialize x = nothing)
-    t.state == :runnable || error("schedule: Task not runnable")
+function yield(t::Task, @nospecialize(x=nothing))
     t.result = x
     enq_work(current_task())
     return try_yieldto(ensure_rescheduled, Ref(t))
@@ -453,7 +456,7 @@ called with no arguments. On subsequent switches, `arg` is returned from the tas
 call to `yieldto`. This is a low-level call that only switches tasks, not considering states
 or scheduling in any way. Its use is discouraged.
 """
-function yieldto(t::Task, @nospecialize x = nothing)
+function yieldto(t::Task, @nospecialize(x=nothing))
     t.result = x
     return try_yieldto(identity, Ref(t))
 end
@@ -488,15 +491,12 @@ function ensure_rescheduled(othertask::Task)
         # we failed to yield to othertask
         # return it to the head of the queue to be scheduled later
         pushfirst!(Workqueue, othertask)
-        othertask.state = :queued
     end
-    if ct.state == :queued
+    if ct.queue === Workqueue
         # if the current task was queued,
         # also need to return it to the runnable state
         # before throwing an error
-        i = findfirst(t->t===ct, Workqueue)
-        i === nothing || deleteat!(Workqueue, i)
-        ct.state = :runnable
+        list_deletefirst!(Workqueue, ct)
     end
     nothing
 end
@@ -504,16 +504,15 @@ end
 function trypoptask()
     isempty(Workqueue) && return
     t = popfirst!(Workqueue)
-    if t.state != :queued
+    if t.state != :runnable
         # assume this somehow got queued twice,
         # probably broken now, but try discarding this switch and keep going
         # can't throw here, because it's probably not the fault of the caller to wait
         # and don't want to use print() here, because that may try to incur a task switch
         ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
-            "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :queued\n")
+            "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n")
         return
     end
-    t.state = :runnable
     return t
 end
 

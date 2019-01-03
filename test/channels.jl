@@ -274,7 +274,7 @@ end
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :queued\n"
+    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n"
 end
 
 @testset "schedule_and_wait" begin

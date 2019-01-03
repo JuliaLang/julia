@@ -475,6 +475,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
         if (t->stkbuf == NULL)
             jl_throw(jl_memory_exception);
     }
+    t->next = jl_nothing;
+    t->queue = jl_nothing;
     t->tls = jl_nothing;
     t->state = runnable_sym;
     t->start = start;
@@ -524,7 +526,9 @@ void jl_init_tasks(void) JL_GC_DISABLED
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(8,
+                        jl_perm_symsvec(10,
+                                        "next",
+                                        "queue",
                                         "storage",
                                         "state",
                                         "donenotify",
@@ -533,7 +537,9 @@ void jl_init_tasks(void) JL_GC_DISABLED
                                         "backtrace",
                                         "logstate",
                                         "code"),
-                        jl_svec(8,
+                        jl_svec(10,
+                                jl_any_type,
+                                jl_any_type,
                                 jl_any_type,
                                 jl_sym_type,
                                 jl_any_type,
@@ -542,7 +548,9 @@ void jl_init_tasks(void) JL_GC_DISABLED
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type),
-                        0, 1, 7);
+                        0, 1, 9);
+    jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_void_type);
+    jl_svecset(jl_task_type->types, 0, listt);
     done_sym = jl_symbol("done");
     failed_sym = jl_symbol("failed");
     runnable_sym = jl_symbol("runnable");
@@ -923,6 +931,8 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->stkbuf = stack;
     ptls->current_task->bufsz = ssize;
     ptls->current_task->started = 1;
+    ptls->current_task->next = jl_nothing;
+    ptls->current_task->queue = jl_nothing;
     ptls->current_task->tls = jl_nothing;
     ptls->current_task->state = runnable_sym;
     ptls->current_task->start = NULL;
