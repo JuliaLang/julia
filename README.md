@@ -28,15 +28,11 @@ This is the GitHub repository of Julia source code, including instructions for c
 
 - **Homepage:** <https://julialang.org>
 - **Binaries:** <https://julialang.org/downloads/>
-- **Documentation:** <https://docs.julialang.org/>
-- **Packages:** <https://pkg.julialang.org/>
 - **Source code:** <https://github.com/JuliaLang/julia>
-- **Git clone URL:** <git://github.com/JuliaLang/julia.git>
+- **Documentation:** <https://docs.julialang.org/>
+- **Packages:** <https://juliaobserver.com/>
 - **Discussion forum:** <https://discourse.julialang.org>
-- **Mailing lists:** <https://julialang.org/community/>
 - **Slack:** <https://julialang.slack.com> (get an invite from <https://slackinvite.julialang.org>)
-- **Gitter:** <https://gitter.im/JuliaLang/julia>
-- **IRC:** <https://webchat.freenode.net/?channels=julia>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the Julia codebase.
