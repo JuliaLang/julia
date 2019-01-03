@@ -429,11 +429,7 @@ function serialize(s::AbstractSerializer, t::Task)
     if istaskstarted(t) && !istaskdone(t)
         error("cannot serialize a running Task")
     end
-    state = [t.code,
-        t.storage,
-        t.state == :queued || t.state == :runnable ? (:runnable) : t.state,
-        t.result,
-        t.exception]
+    state = [t.code, t.storage, t.state, t.result, t.exception]
     writetag(s.io, TASK_TAG)
     for fld in state
         serialize(s, fld)
