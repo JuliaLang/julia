@@ -711,8 +711,7 @@ nzrangelo(A, i) = nzrangelo(A, nzrange(A, i), i)
 function nzrangeup(A, r::AbstractUnitRange, i)
     r1 = r.start; r2 = r.stop
     rv = rowvals(A)
-    r1:searchsortedlast(rowvals(A), i, r1, r2, Forward)
-    # @inbounds r2 < r1 || rv[r2] <= i ? r : r1:searchsortedlast(rv, i, r1, r2, Forward)
+    @inbounds r2 < r1 || rv[r2] <= i ? r : r1:searchsortedlast(rv, i, r1, r2, Forward)
 end
 function nzrangeup(A, r::AbstractVector{<:Integer}, i)
     view(r, 1:searchsortedlast(view(rowvals(A), r), i))
@@ -720,7 +719,6 @@ end
 function nzrangelo(A, r::AbstractUnitRange, i)
     r1 = r.start; r2 = r.stop
     rv = rowvals(A)
-    # searchsortedfirst(rv, i, r1, r2, Forward):r2
     @inbounds r2 < r1 || rv[r1] >= i ? r : searchsortedfirst(rv, i, r1, r2, Forward):r2
 end
 function nzrangelo(A, r::AbstractVector{<:Integer}, i)
