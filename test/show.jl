@@ -1432,3 +1432,8 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
 
 # issue #30303
 @test repr(Symbol("a\$")) == "Symbol(\"a\\\$\")"
+
+# printing of bools and bool arrays
+@test repr(true) == "true"
+@test repr(Number[true, false]) == "Number[true, false]"
+@test repr([true, false]) == "Bool[1, 0]"
