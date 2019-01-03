@@ -78,6 +78,10 @@ call_abi = get_field(m, call_abi_mapping)
 gcc_version = get_field(m, gcc_version_mapping)
 cxx_abi = get_field(m, cxx_abi_mapping)
 
+# The default libc on Linux is glibc
+if platform == "linux" and libc == "blank_libc":
+    libc = "gnu"
+
 def r(x):
     x = x.replace("blank_call_abi", "")
     x = x.replace("blank_gcc", "")
