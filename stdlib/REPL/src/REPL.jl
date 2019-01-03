@@ -674,11 +674,7 @@ LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
 function return_callback(s)
     ast = Base.parse_input_line(String(take!(copy(LineEdit.buffer(s)))), depwarn=false)
-    if  !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
-        return true
-    else
-        return false
-    end
+    return !(isa(ast, Expr) && ast.head === :incomplete)
 end
 
 find_hist_file() = get(ENV, "JULIA_HISTORY",
@@ -945,7 +941,7 @@ function setup_interface(
                     end
                 end
                 ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
-                if (isa(ast, Expr) && (ast.head == :error || ast.head == :continue || ast.head == :incomplete)) ||
+                if (isa(ast, Expr) && (ast.head == :error || ast.head == :incomplete)) ||
                         (pos > ncodeunits(input) && !endswith(input, '\n'))
                     # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
                     # Insert all the remaining text as one line (might be empty)
