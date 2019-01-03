@@ -1012,7 +1012,7 @@ Return the module in which the binding for the variable referenced by `symbol` i
 """
 function which(m::Module, s::Symbol)
     if !isdefined(m, s)
-        error("\"$s\" is not defined in module $m")
+        throw(ArgumentError("\"$s\" is not defined in module $m"))
     end
     return binding_module(m, s)
 end
