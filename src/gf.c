@@ -300,6 +300,16 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli JL_ROOTS_TEMPORARILY, s
     return src;
 }
 
+JL_DLLEXPORT jl_value_t *jl_call_in_typeinf_world(jl_value_t **args, int nargs)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    size_t last_age = ptls->world_age;
+    ptls->world_age = jl_typeinf_world;
+    jl_value_t *ret = jl_apply(args, nargs);
+    ptls->world_age = last_age;
+    return ret;
+}
+
 int jl_is_rettype_inferred(jl_method_instance_t *li) JL_NOTSAFEPOINT
 {
     if (!li->inferred)
