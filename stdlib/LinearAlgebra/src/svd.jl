@@ -283,6 +283,7 @@ svd(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} = svd!(copy(A
 
 The generalized SVD is used in applications such as when one wants to compare how much belongs to A
 vs. how much belongs to B, as in human vs yeast genome, or signal vs noise , or between clusters vs within clusters.
+(See Edelman and Wang for discussion: https://arxiv.org/abs/1901.00485 )
 
 It decomposes [A;B] into [UC;VS]H, where [UC;VS] is a natural orthogonal
 basis for the column space of [A;B], and H=RQ' is a natural non-orthogonal basis for the rowspace of [A;B],
