@@ -1822,6 +1822,15 @@ function g15276()
 end
 @test g15276() isa Vector{Int}
 
+function inbounds_30563()
+    local y
+    @inbounds for i in 1:10
+        y = (m->2i)(0)
+    end
+    return y
+end
+@test Base.return_types(inbounds_30563, ()) == Any[Int]
+
 # issue #27316 - inference shouldn't hang on these
 f27316(::Vector) = nothing
 f27316(::Any) = f27316(Any[][1]), f27316(Any[][1])
