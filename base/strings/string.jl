@@ -98,7 +98,7 @@ end
 
 function ==(a::String, b::String)
     pointer_from_objref(a) == pointer_from_objref(b) && return true
-    
+
     al=sizeof(a)
     return al == sizeof(b) && 0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, al)
 end
