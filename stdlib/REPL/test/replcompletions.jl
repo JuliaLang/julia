@@ -960,6 +960,11 @@ let s = "type_test.xx.y"
     @test s[r] == "y"
 end
 
+let s = ":(function foo(::Int) end).args[1].args[2]."
+    c, r = test_complete_context(s)
+    @test c == Any[]
+end
+
 let s = "Base.return_types(getin"
     c, r = test_complete_context(s)
     @test "getindex" in c

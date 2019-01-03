@@ -353,7 +353,7 @@ get_value(sym, fn) = (sym, true)
 function get_value_getfield(ex::Expr, fn)
     # Example :((top(getfield))(Base,:max))
     val, found = get_value_getfield(ex.args[2],fn) #Look up Base in Main and returns the module
-    found || return (nothing, false)
+    (found && length(ex.args) >= 3) || return (nothing, false)
     return get_value_getfield(ex.args[3], val) #Look up max in Base and returns the function if found.
 end
 get_value_getfield(sym, fn) = get_value(sym, fn)
