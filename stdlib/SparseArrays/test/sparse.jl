@@ -2396,6 +2396,21 @@ end
     @test m2.module == SparseArrays
 end
 
+@testset "sprand" begin
+    p=0.3; m=1000; n=2000;
+    for s in 1:10
+        # build a (dense) random matrix with randsubset + rand
+        Random.seed!(s);
+        v = randsubseq(1:m*n,p);
+        x = zeros(m,n);
+        x[v] .= rand(length(v));
+        # redo the same with sprand
+        Random.seed!(s);
+        a = sprand(m,n,p);
+        @test x == a
+    end
+end
+
 @testset "sprandn with type $T" for T in (Float64, Float32, Float16, ComplexF64, ComplexF32, ComplexF16)
     @test sprandn(T, 5, 5, 0.5) isa AbstractSparseMatrix{T}
 end
