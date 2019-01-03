@@ -178,7 +178,7 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
     end
 
     @testset "deserialization" begin
-        A  = sprandn(10, 10, 0.4)
+        A  = 10*I + sprandn(10, 10, 0.4)
         F1 = lu(A)
         b  = IOBuffer()
         serialize(b, F1)
