@@ -1051,13 +1051,13 @@ function functionloc(@nospecialize(f))
     mt = methods(f)
     if isempty(mt)
         if isa(f, Function)
-            error("function has no definitions")
+            throw(ArgumentError("function has no definitions"))
         else
-            error("object is not callable")
+            throw(ArgumentError("object is not callable"))
         end
     end
     if length(mt) > 1
-        error("function has multiple methods; please specify a type signature")
+        throw(ArgumentError("function has multiple methods; please specify a type signature"))
     end
     return functionloc(first(mt))
 end
