@@ -1078,7 +1078,7 @@ Determine the module containing a given definition of a generic function.
 function parentmodule(@nospecialize(f), @nospecialize(types))
     m = methods(f, types)
     if isempty(m)
-        error("no matching methods")
+        throw(ArgumentError("no matching methods"))
     end
     return first(m).module
 end
