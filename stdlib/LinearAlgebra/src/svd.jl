@@ -203,15 +203,7 @@ svd(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} = svd!(copy(A
 
     svd(A, B) -> GeneralizedSVD
 
-The generalized SVD is used in applications such as when one wants to compare how much belongs to `A`
-vs. how much belongs to `B`, as in human vs yeast genome, or signal vs noise , or between clusters vs within clusters.
-(See Edelman and Wang for discussion: https://arxiv.org/abs/1901.00485)
-
-It decomposes `[A; B]` into `[UC; VS]H`, where `[UC; VS]` is a natural orthogonal
-basis for the column space of `[A; B]`, and `H = RQ'` is a natural non-orthogonal basis for the rowspace of `[A;B]`, where the top rows are most closely attributed to the `A` matrix, and the bottom to the `B` matrix.
-The multi-cosine/sine matrices `C` and `S` provide a multi-measure of how much `A` vs how much `B`, and `U` and `V` provide directions in which these are measured.
-
-`svd(A, B)` computes the generalized SVD of `A` and `B`, returning a `GeneralizedSVD` factorization
+Compute the generalized SVD of `A` and `B`, returning a `GeneralizedSVD` factorization
 object `F` such that `[A;B] = [F.U * F.D1; F.V * F.D2] * F.R0 * F.Q'`
 
 - `U` is a M-by-M orthogonal matrix,
@@ -226,24 +218,22 @@ object `F` such that `[A;B] = [F.U * F.D1; F.V * F.D2] * F.R0 * F.Q'`
 
 Iterating the decomposition produces the components `U`, `V`, `Q`, `D1`, `D2`, and `R0`.
 
-The entries of `F.D1` and `F.D2` are related, as explained in the LAPACK
-documentation for the
-[generalized SVD](http://www.netlib.org/lapack/lug/node36.html) and the
-[xGGSVD3](http://www.netlib.org/lapack/explore-html/d6/db3/dggsvd3_8f.html)
-routine which is called underneath (in LAPACK 3.6.0 and newer).
+The generalized SVD is used in applications such as when one wants to compare how much belongs to `A` vs. how much belongs to `B`, as in human vs yeast genome, or signal vs noise, or between clusters vs within clusters. (See Edelman and Wang for discussion: https://arxiv.org/abs/1901.00485)
+
+It decomposes `[A; B]` into `[UC; VS]H`, where `[UC; VS]` is a natural orthogonal basis for the column space of `[A; B]`, and `H = RQ'` is a natural non-orthogonal basis for the rowspace of `[A;B]`, where the top rows are most closely attributed to the `A` matrix, and the bottom to the `B` matrix. The multi-cosine/sine matrices `C` and `S` provide a multi-measure of how much `A` vs how much `B`, and `U` and `V` provide directions in which these are measured.
 
 # Examples
 ```jldoctest
 julia> A = randn(3,2); B=randn(4,2);
 
-julia> U,V,Q,C,S,R = svd(A, B);
+julia> F = svd(A, B);
+
+julia> U,V,Q,C,S,R = F;
 
 julia> H = R*Q';
 
 julia> [A; B] ≈ [U*C; V*S]*H
 true
-
-julia> F = svd(A,B);
 
 julia> [A; B] ≈ [F.U*F.D1; F.V*F.D2]*F.R0*F.Q'
 true
