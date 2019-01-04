@@ -27,32 +27,7 @@ Base.iterate(S::SVD, ::Val{:done}) = nothing
     svd!(A; full::Bool = false) -> SVD
 
 `svd!` is the same as [`svd`](@ref), but saves space by
-overwriting the input `A`, instead of creating a copy.
-
-# Examples
-```jldoctest
-julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
-4×5 Array{Float64,2}:
- 1.0  0.0  0.0  0.0  2.0
- 0.0  0.0  3.0  0.0  0.0
- 0.0  0.0  0.0  0.0  0.0
- 0.0  2.0  0.0  0.0  0.0
-
-julia> F = svd!(A);
-
-julia> F.U * Diagonal(F.S) * F.Vt
-4×5 Array{Float64,2}:
- 1.0  0.0  0.0  0.0  2.0
- 0.0  0.0  3.0  0.0  0.0
- 0.0  0.0  0.0  0.0  0.0
- 0.0  2.0  0.0  0.0  0.0
-
-julia> A
-4×5 Array{Float64,2}:
- -2.23607   0.0   0.0  0.0  0.618034
-  0.0      -3.0   1.0  0.0  0.0
-  0.0       0.0   0.0  0.0  0.0
-  0.0       0.0  -2.0  0.0  0.0
+overwriting the input `A`, instead of creating a copy. See documentation of [`svd`](@ref) for details.
 ```
 """
 function svd!(A::StridedMatrix{T}; full::Bool = false) where T<:BlasFloat
@@ -137,29 +112,6 @@ Base.propertynames(F::SVD, private::Bool=false) =
 
 Return the singular values of `A`, saving space by overwriting the input.
 See also [`svdvals`](@ref) and [`svd`](@ref).
-
-# Examples
-```jldoctest
-julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
-4×5 Array{Float64,2}:
- 1.0  0.0  0.0  0.0  2.0
- 0.0  0.0  3.0  0.0  0.0
- 0.0  0.0  0.0  0.0  0.0
- 0.0  2.0  0.0  0.0  0.0
-
-julia> svdvals!(A)
-4-element Array{Float64,1}:
- 3.0
- 2.23606797749979
- 2.0
- 0.0
-
-julia> A
-4×5 Array{Float64,2}:
- -2.23607   0.0   0.0  0.0  0.618034
-  0.0      -3.0   1.0  0.0  0.0
-  0.0       0.0   0.0  0.0  0.0
-  0.0       0.0  -2.0  0.0  0.0
 ```
 """
 svdvals!(A::StridedMatrix{T}) where {T<:BlasFloat} = isempty(A) ? zeros(real(T), 0) : LAPACK.gesdd!('N', A)[2]
@@ -233,41 +185,7 @@ Base.iterate(S::GeneralizedSVD, ::Val{:done}) = nothing
     svd!(A, B) -> GeneralizedSVD
 
 `svd!` is the same as [`svd`](@ref), but modifies the arguments
-`A` and `B` in-place, instead of making copies.
-
-# Examples
-```jldoctest
-julia> A = [1. 0.; 0. -1.]
-2×2 Array{Float64,2}:
- 1.0   0.0
- 0.0  -1.0
-
-julia> B = [0. 1.; 1. 0.]
-2×2 Array{Float64,2}:
- 0.0  1.0
- 1.0  0.0
-
-julia> F = svd!(A, B);
-
-julia> F.U*F.D1*F.R0*F.Q'
-2×2 Array{Float64,2}:
- 1.0   0.0
- 0.0  -1.0
-
-julia> F.V*F.D2*F.R0*F.Q'
-2×2 Array{Float64,2}:
- 0.0  1.0
- 1.0  0.0
-
-julia> A
-2×2 Array{Float64,2}:
- 1.41421   0.0
- 0.0      -1.41421
-
-julia> B
-2×2 Array{Float64,2}:
- 1.0  -0.0
- 0.0  -1.0
+`A` and `B` in-place, instead of making copies. See documentation of [`svd`](@ref) for details.
 ```
 """
 function svd!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
@@ -394,33 +312,6 @@ Base.propertynames(F::GeneralizedSVD) =
 Return the generalized singular values from the generalized singular value
 decomposition of `A` and `B`, saving space by overwriting `A` and `B`.
 See also [`svd`](@ref) and [`svdvals`](@ref).
-
-# Examples
-```jldoctest
-julia> A = [1. 0.; 0. -1.]
-2×2 Array{Float64,2}:
- 1.0   0.0
- 0.0  -1.0
-
-julia> B = [0. 1.; 1. 0.]
-2×2 Array{Float64,2}:
- 0.0  1.0
- 1.0  0.0
-
-julia> svdvals!(A, B)
-2-element Array{Float64,1}:
- 1.0
- 1.0
-
-julia> A
-2×2 Array{Float64,2}:
- 1.41421   0.0
- 0.0      -1.41421
-
-julia> B
-2×2 Array{Float64,2}:
- 1.0  -0.0
- 0.0  -1.0
 ```
 """
 function svdvals!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
