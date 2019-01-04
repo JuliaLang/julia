@@ -201,7 +201,7 @@ else # USE_BINARYBUILDER_OPENBLAS
 
 
 OPENBLAS_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/OpenBLAS-v$(OPENBLAS_VER)-$(OPENBLAS_BB_REL)
-OPENBLAS_BB_NAME := OpenBLAS.v$(OPENBLAS_VER)-$(OPENBLAS_BB_REL)
+OPENBLAS_BB_NAME := OpenBLAS.v$(OPENBLAS_VER)
 
 $(eval $(call bb-install,openblas,OPENBLAS,true))
 get-lapack: get-openblas
