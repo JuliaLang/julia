@@ -159,6 +159,7 @@ Base.hash(x::CustomHashReal, h::UInt) = hash(x.x, h)
 Base.:(==)(x::CustomHashReal, y::Number) = x.x == y
 Base.:(==)(x::Number, y::CustomHashReal) = x == y.x
 Base.zero(::Type{CustomHashReal}) = CustomHashReal(0.0)
+Base.zero(x::CustomHashReal) = zero(CustomHashReal)
 
 let a = sparse([CustomHashReal(0), CustomHashReal(3), CustomHashReal(3)])
     @test hash(a) == hash(Array(a))
