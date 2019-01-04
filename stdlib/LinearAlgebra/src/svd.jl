@@ -86,16 +86,20 @@ number of singular values.
 # Examples
 ```jldoctest
 julia> A = rand(4,3);
+
 julia> U,S,V = svd(A);
+
 julia> A ≈ U * Diagonal(S) * V'
 true
 
 julia> F = svd(A); # Store the Factorization Object
+
 julia> A ≈ F.U * Diagonal(F.S) * F.Vt
 true
 ```
 
-julia> Uonly , = svd(A); # Store U only
+julia> Uonly, = svd(A); # Store U only
+
 julia> Uonly == U
 true
 """
@@ -281,19 +285,16 @@ svd(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} = svd!(copy(A
 
     svd(A, B) -> GeneralizedSVD
 
-The generalized SVD is used in applications such as when one wants to compare how much belongs to A
-vs. how much belongs to B, as in human vs yeast genome, or signal vs noise , or between clusters vs within clusters.
-(See Edelman and Wang for discussion: https://arxiv.org/abs/1901.00485 )
+The generalized SVD is used in applications such as when one wants to compare how much belongs to `A`
+vs. how much belongs to `B`, as in human vs yeast genome, or signal vs noise , or between clusters vs within clusters.
+(See Edelman and Wang for discussion: https://arxiv.org/abs/1901.00485)
 
-It decomposes [A;B] into [UC;VS]H, where [UC;VS] is a natural orthogonal
-basis for the column space of [A;B], and H=RQ' is a natural non-orthogonal basis for the rowspace of [A;B],
-where the top rows are most closely attributed to the A matrix, and the bottom to the B matrix.
-The multi-cosine/sine matrices C and S provide a multi-measure of how much A vs how much B, and U and V provide
-directions in which these are measured.
+It decomposes `[A; B]` into `[UC; VS]H`, where `[UC; VS]` is a natural orthogonal
+basis for the column space of `[A; B]`, and `H = RQ'` is a natural non-orthogonal basis for the rowspace of `[A;B]`, where the top rows are most closely attributed to the `A` matrix, and the bottom to the `B` matrix.
+The multi-cosine/sine matrices `C` and `S` provide a multi-measure of how much `A` vs how much `B`, and `U` and `V` provide directions in which these are measured.
 
-svd(A,B) computes the generalized SVD of `A` and `B`, returning a `GeneralizedSVD` factorization
-object `F`  such that `[A;B] = [F.U * F.D1; F.V * F.D2] * F.R0 * F.Q'`
-
+`svd(A, B)` computes the generalized SVD of `A` and `B`, returning a `GeneralizedSVD` factorization
+object `F` such that `[A;B] = [F.U * F.D1; F.V * F.D2] * F.R0 * F.Q'`
 
 - `U` is a M-by-M orthogonal matrix,
 - `V` is a P-by-P orthogonal matrix,
@@ -315,21 +316,24 @@ routine which is called underneath (in LAPACK 3.6.0 and newer).
 
 # Examples
 ```jldoctest
-
 julia> A = randn(3,2); B=randn(4,2);
+
 julia> U,V,Q,C,S,R = svd(A, B);
+
 julia> H = R*Q';
-julia> [A;B] ≈ [U*C;V*S]*H
+
+julia> [A; B] ≈ [U*C; V*S]*H
 true
 
 julia> F = svd(A,B);
-julia> [A;B] ≈ [F.U*F.D1;F.V*F.D2]*F.R0*F.Q'
+
+julia> [A; B] ≈ [F.U*F.D1; F.V*F.D2]*F.R0*F.Q'
 true
 
 julia> Uonly, = svd(A,B);
+
 julia> U == Uonly
 true
-
 ```
 """
 function svd(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
