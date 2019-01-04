@@ -152,7 +152,7 @@ function Base.show(io::IO, ::MIME"text/plain", S::SparseMatrixCSC)
               xnnz == 1 ? "entry" : "entries")
     if xnnz != 0
         print(io, ":")
-        show(io, S)
+        show(IOContext(io, :typeinfo => eltype(S)), S)
     end
 end
 

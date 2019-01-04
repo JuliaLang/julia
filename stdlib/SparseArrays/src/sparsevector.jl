@@ -834,7 +834,7 @@ function show(io::IO, ::MIME"text/plain", x::AbstractSparseVector)
            " stored ", xnnz == 1 ? "entry" : "entries")
     if xnnz != 0
         println(io, ":")
-        show(io, x)
+        show(IOContext(io, :typeinfo => eltype(x)), x)
     end
 end
 
