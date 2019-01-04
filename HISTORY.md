@@ -43,6 +43,8 @@ Command-line option changes
   * When a script run in interactive mode (`-i`) throws an error, the REPL now starts after
     the error is displayed. Previously the REPL only started if the script completed without
     error ([#21233]).
+  * The code-coverage option now supports output in the LCOV tracefile format and
+    gets propagated to child processes, such as precompile steps and test workers ([#30381]).
 
 New library functions
 ---------------------
@@ -86,7 +88,6 @@ Standard library changes
   * `merge(::NamedTuple, ::NamedTuple...)` can now be used with more than 2 `NamedTuple`s ([#29259]).
   * New `ncodeunits(c::Char)` method as a fast equivalent to `ncodeunits(string(c))` ([#29153]).
   * New `sort!(::AbstractArray; dims)` method that can sort the array along the `dims` dimension ([#28902]).
-  * `range` now accepts `stop` as a positional argument ([#28708]).
   * `get(A::AbstractArray, (), default)` now returns `A[]` instead of an empty array ([#30270]).
   * `parse(Bool, str)` is now supported ([#29997]).
   * `copyto!(::AbstractMatrix, ::UniformScaling)` now supports rectangular matrices ([#28790]).
@@ -103,7 +104,7 @@ Standard library changes
 #### InteractiveUtils
   * `edit` can now be called on a module to edit the file that defines it ([#29636]).
   * All compiler-reflection tools (i.e. the `code_` class of functions and macros) now print accurate
-    line number and inlining information in a common style, and take an optional parameter (debuginfo=:default)
+    line number and inlining information in a common style, and take an optional parameter (`debuginfo=:default`)
     to control the verbosity of the metadata shown ([#29893]).
 
 #### LinearAlgebra
@@ -111,7 +112,7 @@ Standard library changes
   * `mul!`, `rmul!` and `lmul!` methods for `UniformScaling` ([#29506]).
   * `Symmetric` and `Hermitian` matrices now preserve the wrapper when scaled with a number ([#29469]).
   * Exponentiation operator `^` now supports raising an `Irrational` to an `AbstractMatrix` power ([#29782]).
-  * Added keyword arguments `rtol`, `atol` to `rank` ([#29926]).
+  * Added keyword arguments `rtol`, `atol` to `pinv`, `nullspace` and `rank` ([#29998], [#29926]).
 
 #### Random
   * `randperm` and `randcycle` now use the type of their argument to determine the element type of
