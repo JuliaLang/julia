@@ -837,6 +837,12 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             # Independent of whether we can inline, the above analysis allows us to rewrite
             # this apply call to a regular call
             ft = atypes[2]
+            if length(atypes) == 3 && ft isa Const && ft.val === Core.tuple && atypes[3] ⊑ Tuple
+                # rewrite `((t::Tuple)...,)` to `t`
+                ir.stmts[idx] = stmt.args[3]
+                ok = false
+                break
+            end
             stmt.args, atypes = rewrite_apply_exprargs!(ir, idx, stmt.args, atypes, sv)
             ok = !has_free_typevars(ft)
             ok || break

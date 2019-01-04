@@ -739,7 +739,7 @@ f19957(::Int) = Int8(1)            # issue #19957, inference failure when splatt
 f19957(::Int...) = Int16(1)
 f19957(::Any...) = "no"
 g19957(x) = f19957(x...)
-@test all(t -> t<:Union{Int8,Int16}, Base.return_types(g19957, (Int,))) # with a full fix, this should just be Int8
+@test Base.return_types(g19957, (Int,)) == Any[Int8]
 
 # Inference for some type-level computation
 fUnionAll(::Type{T}) where {T} = Type{S} where S <: T
@@ -1831,6 +1831,15 @@ function g15276()
     sol
 end
 @test g15276() isa Vector{Int}
+
+function inbounds_30563()
+    local y
+    @inbounds for i in 1:10
+        y = (m->2i)(0)
+    end
+    return y
+end
+@test Base.return_types(inbounds_30563, ()) == Any[Int]
 
 # issue #27316 - inference shouldn't hang on these
 f27316(::Vector) = nothing

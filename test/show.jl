@@ -1440,3 +1440,7 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
     @test repr([true, false]) == "Bool[1, 0]" == repr(BitVector([true, false]))
     @test_repr "Bool[1, 0]"
 end
+                            
+# issue #30505
+@test repr(Union{Tuple{Char}, Tuple{Char, Char}}[('a','b')]) == "Union{Tuple{Char}, Tuple{Char,Char}}[('a', 'b')]"
+
