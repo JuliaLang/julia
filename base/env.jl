@@ -85,6 +85,16 @@ push!(::EnvDict, kv::Pair{<:AbstractString}) = setindex!(ENV, kv.second, kv.firs
 
 if Sys.iswindows()
     GESW() = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
+    function winuppercase(s::AbstractString)
+        isempty(s) && return s
+        LOCALE_INVARIANT = 0x0000007f
+        LCMAP_UPPERCASE  = 0x00000200
+        ws = transcode(UInt16, String(s))
+        result = ccall(:LCMapStringW, stdcall, Cint, (UInt32, UInt32, Ptr{UInt16}, Cint, Ptr{UInt16}, Cint),
+                       LOCALE_INVARIANT, LCMAP_UPPERCASE, ws, length(ws), ws, length(ws))
+        iszero(result) && error("unexpected LCMapStringW error")
+        return transcode(String, ws)
+    end
     function iterate(hash::EnvDict, block::Tuple{Ptr{UInt16},Ptr{UInt16}} = GESW())
         if unsafe_load(block[1]) == 0
             ccall(:FreeEnvironmentStringsW, stdcall, Int32, (Ptr{UInt16},), block[2])
@@ -100,7 +110,7 @@ if Sys.iswindows()
         if m === nothing
             error("malformed environment entry: $env")
         end
-        return (Pair{String,String}(uppercase(m.captures[1]), m.captures[2]), (pos+(len+1)*2, blk))
+        return (Pair{String,String}(winuppercase(m.captures[1]), m.captures[2]), (pos+(len+1)*2, blk))
     end
 else # !windows
     function iterate(::EnvDict, i=0)
