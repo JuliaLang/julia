@@ -739,7 +739,7 @@ f19957(::Int) = Int8(1)            # issue #19957, inference failure when splatt
 f19957(::Int...) = Int16(1)
 f19957(::Any...) = "no"
 g19957(x) = f19957(x...)
-@test all(t -> t<:Union{Int8,Int16}, Base.return_types(g19957, (Int,))) # with a full fix, this should just be Int8
+@test Base.return_types(g19957, (Int,)) == Any[Int8]
 
 # Inference for some type-level computation
 fUnionAll(::Type{T}) where {T} = Type{S} where S <: T
