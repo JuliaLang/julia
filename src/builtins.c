@@ -699,12 +699,12 @@ JL_CALLABLE(jl_f_setfield)
     return args[2];
 }
 
-static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
+static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
 {
     if (jl_is_unionall(t)) {
         jl_value_t *u = t;
         JL_GC_PUSH1(&u);
-        u = get_fieldtype(((jl_unionall_t*)t)->body, f);
+        u = get_fieldtype(((jl_unionall_t*)t)->body, f, dothrow);
         u = jl_type_unionall(((jl_unionall_t*)t)->var, u);
         JL_GC_POP();
         return u;
@@ -713,8 +713,13 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
         jl_value_t **u;
         jl_value_t *r;
         JL_GC_PUSHARGS(u, 2);
-        u[0] = get_fieldtype(((jl_uniontype_t*)t)->a, f);
-        u[1] = get_fieldtype(((jl_uniontype_t*)t)->b, f);
+        u[0] = get_fieldtype(((jl_uniontype_t*)t)->a, f, 0);
+        u[1] = get_fieldtype(((jl_uniontype_t*)t)->b, f, 0);
+        if (u[0] == jl_bottom_type && u[1] == jl_bottom_type && dothrow) {
+            // error if all types in the union might have
+            get_fieldtype(((jl_uniontype_t*)t)->a, f, 1);
+            get_fieldtype(((jl_uniontype_t*)t)->b, f, 1);
+        }
         r = jl_type_union(u, 2);
         JL_GC_POP();
         return r;
@@ -729,15 +734,19 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
             jl_value_t *nm = jl_tparam0(st);
             if (jl_is_tuple(nm)) {
                 int nf = jl_nfields(nm);
-                if (field_index < 0 || field_index >= nf)
-                    jl_bounds_error(t, f);
+                if (field_index < 0 || field_index >= nf) {
+                    if (dothrow)
+                        jl_bounds_error(t, f);
+                    else
+                        return jl_bottom_type;
+                }
             }
             jl_value_t *tt = jl_tparam1(st);
             while (jl_is_typevar(tt))
                 tt = ((jl_tvar_t*)tt)->ub;
             if (tt == (jl_value_t*)jl_any_type)
                 return (jl_value_t*)jl_any_type;
-            return get_fieldtype(tt, f);
+            return get_fieldtype(tt, f, dothrow);
         }
         int nf = jl_field_count(st);
         if (nf > 0 && field_index >= nf-1 && st->name == jl_tuple_typename) {
@@ -745,12 +754,18 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
             if (jl_is_vararg_type(ft))
                 return jl_unwrap_vararg(ft);
         }
-        if (field_index < 0 || field_index >= nf)
-            jl_bounds_error(t, f);
+        if (field_index < 0 || field_index >= nf) {
+            if (dothrow)
+                jl_bounds_error(t, f);
+            else
+                return jl_bottom_type;
+        }
     }
     else {
         JL_TYPECHK(fieldtype, symbol, f);
-        field_index = jl_field_index(st, (jl_sym_t*)f, 1);
+        field_index = jl_field_index(st, (jl_sym_t*)f, dothrow);
+        if (field_index == -1)
+            return jl_bottom_type;
     }
     return jl_field_type(st, field_index);
 }
@@ -765,7 +780,7 @@ JL_CALLABLE(jl_f_fieldtype)
     jl_datatype_t *st = (jl_datatype_t*)args[0];
     if (st == jl_module_type)
         jl_error("cannot assign variables in other modules");
-    return get_fieldtype(args[0], args[1]);
+    return get_fieldtype(args[0], args[1], 1);
 }
 
 JL_CALLABLE(jl_f_nfields)
