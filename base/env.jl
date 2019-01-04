@@ -100,7 +100,7 @@ if Sys.iswindows()
         if m === nothing
             error("malformed environment entry: $env")
         end
-        return (Pair{String,String}(m.captures[1], m.captures[2]), (pos+(len+1)*2, blk))
+        return (Pair{String,String}(uppercase(m.captures[1]), m.captures[2]), (pos+(len+1)*2, blk))
     end
 else # !windows
     function iterate(::EnvDict, i=0)

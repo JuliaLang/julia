@@ -81,3 +81,19 @@ end
     @test ENV["testing_envdict"] == "tested"
     delete!(ENV, "testing_envdict")
 end
+
+if Sys.iswindows()
+    @testset "windows case-insensitivity" begin
+        push!(ENV, "testing_envdict" => "tested")
+        @test haskey(ENV, "TESTING_ENVDICT")
+        @test ENV["TESTING_ENVDICT"] == "tested"
+        @test "TESTING_ENVDICT" in keys(ENV)
+        @test "TESTING_ENVDICT" in collect(keys(ENV))
+        @test "testing_envdict" ∉ collect(keys(ENV))
+        env = copy(ENV)
+        @test haskey(env, "TESTING_ENVDICT")
+        @test !haskey(env, "testing_envdict")
+        delete!(ENV, "testing_envdict")
+        @test !haskey(ENV, "TESTING_ENVDICT")
+    end
+end
