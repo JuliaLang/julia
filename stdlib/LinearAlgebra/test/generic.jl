@@ -226,8 +226,8 @@ end
 end
 
 @testset "Issue #30466" begin
-    @test norm([typemin(Int), typemin(Int)], Inf) == float(typemax(Int))
-    @test norm([typemin(Int), typemin(Int)], 1) == 2float(typemax(Int))
+    @test norm([typemin(Int), typemin(Int)], Inf) == -float(typemin(Int))
+    @test norm([typemin(Int), typemin(Int)], 1) == -2float(typemin(Int))
 end
 
 @testset "potential overflow in normalize!" begin
