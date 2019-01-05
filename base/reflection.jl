@@ -177,7 +177,7 @@ fieldnames(::Core.TypeofBottom) =
 fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 
 """
-    hasfield(T::DataType, name::Symbol)
+    hasfield(T::Type, name::Symbol)
 
 Returns a boolean indicating whether DataType has the specified field as one of
 its own fields.
