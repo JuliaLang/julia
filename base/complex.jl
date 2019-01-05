@@ -1014,3 +1014,29 @@ function complex(A::AbstractArray{T}) where T
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)
 end
+
+# Matrix representation of a complex number
+"""
+    Matrix(z::Complex)
+    Matrix{T}(z::Complex)
+
+Construct a 2×2 matrix containing the
+[matrix representation](https://en.wikipedia.org/wiki/Complex_number#Matrix_representation_of_complex_numbers)
+of the complex number `z`.
+If a type parameter `T` is included, the result is converted to have element type `T`.
+
+# Examples
+```jldoctest
+julia> Matrix(1 + 2im)
+2×2 Array{Int64,2}:
+ 1  -2
+ 2   1
+
+julia> Matrix{Float64}(1 + 2im)
+2×2 Array{Float64,2}:
+ 1.0  -2.0
+ 2.0   1.0
+```
+"""
+Matrix(z::Complex{T}) where {T<:Real} = ((a, b) = reim(z); T[a -b; b a])
+Matrix{S}(z::Complex) where {S<:Real} = ((a, b) = reim(z); S[a -b; b a])

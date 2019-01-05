@@ -1065,3 +1065,14 @@ end
 
     @test @inferred(2.0^(3.0+0im)) === @inferred((2.0+0im)^(3.0+0im)) === @inferred((2.0+0im)^3.0) === 8.0+0.0im
 end
+
+@testset "Matrix representation" begin
+    @test @inferred(Matrix(1.0f0 + 2.0f0im)) == Float32[1 -2; 2 1]
+    @test isequal(@inferred(Matrix(NaN + 0.0im)), [NaN -0.0; 0.0 NaN])
+    @test Matrix((1 + 2im) * (2 + 3im)) == Matrix(-4 + 7im) == [-4 -7; 7 -4]
+    # Converting to the given eltype
+    @test @inferred(Matrix{Int}(im)) == [0 -1; 1 0]
+    for T = [Int8, Int16, Int32, Int64, Int128, Float32, Float64]
+        @test @inferred(Matrix{T}((1 + 2im) * (2 + 3im))) == Matrix{T}(-4 + 7im) == T[-4 -7; 7 -4]
+    end
+end

@@ -6,6 +6,8 @@ New language features
 
 * The `extrema` function now accepts a function argument in the same manner as `minimum` and
   `maximum` ([#30323]).
+* Complex numbers can now be converted to their matrix representation using the `Matrix`
+  constructor ([#30602]).
 
 Multi-threading changes
 -----------------------
