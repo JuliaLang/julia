@@ -1443,4 +1443,3 @@ end
                             
 # issue #30505
 @test repr(Union{Tuple{Char}, Tuple{Char, Char}}[('a','b')]) == "Union{Tuple{Char}, Tuple{Char,Char}}[('a', 'b')]"
-
