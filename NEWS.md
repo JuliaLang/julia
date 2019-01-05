@@ -46,6 +46,7 @@ Standard library changes
 External dependencies
 ---------------------
 
+* libgit2 has been updated to v0.27.7 ([#30584]).
 
 Deprecated or removed
 ---------------------
