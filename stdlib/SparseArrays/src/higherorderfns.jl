@@ -1128,7 +1128,7 @@ function copy(bc::Broadcasted{PromoteToSparse})
     if can_skip_sparsification(bcf.f, bcf.args...)
         return _copy(bcf.f, bcf.args...)
     elseif is_supported_sparse_broadcast(bcf.args...)
-        return broadcast(bcf.f, map(_sparsifystructured, bcf.args)...)
+        return _copy(bcf.f, map(_sparsifystructured, bcf.args)...)
     else
         return copy(convert(Broadcasted{Broadcast.DefaultArrayStyle{length(axes(bc))}}, bc))
     end
