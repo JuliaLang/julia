@@ -130,7 +130,7 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
                 return defssa
             end
             if isa(def.val, SSAValue)
-                if isa(defssa, OldSSAValue) && !already_inserted(compact, defssa)
+                if is_old(compact, defssa)
                     defssa = OldSSAValue(def.val.id)
                 else
                     defssa = def.val
@@ -281,7 +281,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
             end
             if is_tuple_call(compact, def) && isa(field, Int) && 1 <= field < length(def.args)
                 lifted = def.args[1+field]
-                if isa(leaf, OldSSAValue) && isa(lifted, SSAValue)
+                if is_old(compact, leaf) && isa(lifted, SSAValue)
                     lifted = OldSSAValue(lifted.id)
                 end
                 if isa(lifted, GlobalRef) || isa(lifted, Expr)
@@ -320,7 +320,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                     compact[leaf] = def
                 end
                 lifted = def.args[1+field]
-                if isa(leaf, OldSSAValue) && isa(lifted, SSAValue)
+                if is_old(compact, leaf) && isa(lifted, SSAValue)
                     lifted = OldSSAValue(lifted.id)
                 end
                 if isa(lifted, GlobalRef) || isa(lifted, Expr)
@@ -339,7 +339,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                     # N.B.: This can be a bit dangerous because it can lead to
                     # infinite loops if we accidentally insert a node just ahead
                     # of where we are
-                    if isa(leaf, OldSSAValue) && (isa(field, Int) || isa(field, Symbol))
+                    if is_old(compact, leaf) && (isa(field, Int) || isa(field, Symbol))
                         (isa(typ, DataType) && (!typ.abstract)) || return nothing
                         @assert !typ.mutable
                         # If there's the potential for an undefref error on access, we cannot insert a getfield
