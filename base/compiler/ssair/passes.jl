@@ -688,10 +688,14 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
         compact[idx] = val === nothing ? nothing : val.x
     end
 
-    # Copy the use count, `finish` may modify it and for our predicate
-    # below we need it consistent with the state of the IR here.
+
+    non_dce_finish!(compact)
+    # Copy the use count, `simple_dce!` may modify it and for our predicate
+    # below we need it consistent with the state of the IR here (after tracking
+    # phi node arguments, but before dce).
     used_ssas = copy(compact.used_ssas)
-    ir = finish(compact)
+    simple_dce!(compact)
+    ir = complete(compact)
     # Now go through any mutable structs and see which ones we can eliminate
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
