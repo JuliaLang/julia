@@ -340,7 +340,7 @@ function realpath(path::AbstractString)
         n = ccall((:GetFullPathNameW, "kernel32"), stdcall,
             UInt32, (Ptr{UInt16}, UInt32, Ptr{UInt16}, Ptr{Cvoid}),
             p, length(buf), buf, C_NULL)
-        systemerror(:realpath, n == 0)
+        windowserror(:realpath, n == 0)
         x = n < length(buf) # is the buffer big enough?
         resize!(buf, n) # shrink if x, grow if !x
         x && return transcode(String, buf)
@@ -354,7 +354,7 @@ function longpath(path::AbstractString)
         n = ccall((:GetLongPathNameW, "kernel32"), stdcall,
             UInt32, (Ptr{UInt16}, Ptr{UInt16}, UInt32),
             p, buf, length(buf))
-        systemerror(:longpath, n == 0)
+        windowserror(:longpath, n == 0)
         x = n < length(buf) # is the buffer big enough?
         resize!(buf, n) # shrink if x, grow if !x
         x && return transcode(String, buf)

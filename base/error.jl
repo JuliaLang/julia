@@ -133,6 +133,17 @@ Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `ift
 """
 systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), extrainfo)) : nothing
 
+
+# like systemerror, but for Windows API calls that use GetLastError instead of errno
+if Sys.iswindows()
+    struct WindowsError <: Exception
+        errnum::UInt32
+        extrainfo
+    end
+    windowserror(p, b::PBool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), WindowsError(Libc.GetLastError(), extrainfo))) : nothing
+end
+
+
 ## assertion macro ##
 
 
