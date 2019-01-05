@@ -92,7 +92,7 @@ if Sys.iswindows()
         ws = transcode(UInt16, String(s))
         result = ccall(:LCMapStringW, stdcall, Cint, (UInt32, UInt32, Ptr{UInt16}, Cint, Ptr{UInt16}, Cint),
                        LOCALE_INVARIANT, LCMAP_UPPERCASE, ws, length(ws), ws, length(ws))
-        iszero(result) && error("unexpected LCMapStringW error")
+        systemerror("LCMapStringW", iszero(result))
         return transcode(String, ws)
     end
     function iterate(hash::EnvDict, block::Tuple{Ptr{UInt16},Ptr{UInt16}} = GESW())
