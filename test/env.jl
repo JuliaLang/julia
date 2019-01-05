@@ -36,7 +36,7 @@ end
 end
 @testset "#17956" begin
     @test length(ENV) > 1
-    k1, k2 = "__test__", "__test1__"
+    k1, k2 = "__TEST__", "__TEST1__"
     withenv(k1=>k1, k2=>k2) do
         b_k1, b_k2 = false, false
         for (k, v) in ENV
