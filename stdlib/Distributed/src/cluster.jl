@@ -512,6 +512,8 @@ end
 
 default_addprocs_params() = Dict{Symbol,Any}(
     :topology => :all_to_all,
+    :ssh      => "ssh",
+    :shell    => :posix,
     :dir      => pwd(),
     :exename  => joinpath(Sys.BINDIR, julia_exename()),
     :exeflags => ``,

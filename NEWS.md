@@ -101,6 +101,11 @@ Standard library changes
 
 #### Statistics
 
+#### Distributed
+
+* Added keyword argument `shell` to `addprocs`; use `shell=:wincmd` to invoke Windows workers via ssh connections to `cmd.exe`.
+
+* Added keyword argument `ssh` to `addprocs` to specify the ssh client path.
 
 #### Sockets
 

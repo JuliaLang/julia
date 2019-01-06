@@ -71,10 +71,19 @@ Keyword arguments:
 * `tunnel`: if `true` then SSH tunneling will be used to connect to the worker from the
   master process. Default is `false`.
 
+* `ssh`: the name or path of the SSH client executable used to start the workers.
+  Default is `"ssh"`.
+
 * `sshflags`: specifies additional ssh options, e.g. ```sshflags=\`-i /home/foo/bar.pem\````
 
 * `max_parallel`: specifies the maximum number of workers connected to in parallel at a
   host. Defaults to 10.
+
+* `shell`: specifies the type of shell to which ssh connects on the workers.
+
+    + `shell=:posix`: a POSIX-compatible Unix/Linux shell (bash, sh, etc.). The default.
+
+    + `shell=:wincmd`: Microsoft Windows `cmd.exe`.
 
 * `dir`: specifies the working directory on the workers. Defaults to the host's current
   directory (as found by `pwd()`)
@@ -104,8 +113,10 @@ Keyword arguments:
   are setup lazily, i.e. they are setup at the first instance of a remote call between
   workers. Default is true.
 
+!!! compat "Julia 1.2"
+    The `ssh` and `shell` keyword arguments were added in Julia 1.2.
 
-Environment variables :
+Environment variables:
 
 If the master process fails to establish a connection with a newly launched worker within
 60.0 seconds, the worker treats it as a fatal situation and terminates.
@@ -146,6 +157,7 @@ show(io::IO, manager::SSHManager) = println(io, "SSHManager(machines=", manager.
 
 
 function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, launch_ntfy::Condition)
+    shell = params[:shell]
     dir = params[:dir]
     exename = params[:exename]
     exeflags = params[:exeflags]
@@ -159,7 +171,6 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     if length(machine_bind) > 1
         exeflags = `--bind-to $(machine_bind[2]) $exeflags`
     end
-    exeflags = `$exeflags --worker`
 
     machine_def = split(machine_bind[1], ':')
     # if this machine def has a port number, add the port information to the ssh flags
@@ -184,13 +195,45 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     tval = get(ENV, "JULIA_WORKER_TIMEOUT", "")
 
     # Julia process with passed in command line flag arguments
-    cmds = """
-        cd -- $(shell_escape_posixly(dir))
-        $(isempty(tval) ? "" : "export JULIA_WORKER_TIMEOUT=$(shell_escape_posixly(tval))")
-        $(shell_escape_posixly(exename)) $(shell_escape_posixly(exeflags))"""
+    if shell == :posix
+        # ssh connects to a POSIX shell
 
-    # shell login (-l) with string command (-c) to launch julia process
-    cmd = `sh -l -c $cmds`
+        cmdline_cookie = false
+        exeflags = `$exeflags --worker`
+        cmds = """
+            cd -- $(shell_escape_posixly(dir))
+            $(isempty(tval) ? "" : "export JULIA_WORKER_TIMEOUT=$(shell_escape_posixly(tval))")
+            $(shell_escape_posixly(exename)) $(shell_escape_posixly(exeflags))"""
+
+        # shell login (-l) with string command (-c) to launch julia process
+        remotecmd = shell_escape_posixly(`sh -l -c $cmds`)
+
+    elseif params[:shell] == :wincmd
+        # ssh connects to Windows cmd.exe
+
+        # Passing the cookie via ssh stdin currently hangs with
+        # Microsoft's Windows port of OpenSSH, so we do it via
+        # --worker on the command line for now, although that may
+        # cause the cookie to become visible to other users (e.g.
+        # using Process Explorer or WMIC).
+        cmdline_cookie = true
+        exeflags = `$exeflags --worker=$(cluster_cookie())`
+
+        any(c -> c == '"', exename) && throw(ArgumentError("invalid exename"))
+
+        remotecmd = shell_escape_windows(exename, exeflags...)
+        if dir !== nothing && dir != ""
+            any(c -> c == '"', dir) && throw(ArgumentError("invalid dir"))
+            remotecmd = "pushd \"$(dir)\" && $remotecmd"
+        end
+        if tval !== nothing && tval != ""
+            all(isdigit, tval) || throw(ArgumentError("invalid JULIA_WORKER_TIMEOUT"))
+            remotecmd = "set JULIA_WORKER_TIMEOUT=$tval && $remotecmd"
+        end
+
+    else
+        throw(ArgumentError("invalid shell"))
+    end
 
     # remote launch with ssh with given ssh flags / host / port information
     # -T → disable pseudo-terminal allocation
@@ -198,7 +241,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     # -x → disable X11 forwarding
     # -o ClearAllForwardings → option if forwarding connections and
     #                          forwarded connections are causing collisions
-    cmd = `ssh -T -a -x -o ClearAllForwardings=yes $sshflags $host $(shell_escape_posixly(cmd))`
+    cmd = `$(params[:ssh]) -T -a -x -o ClearAllForwardings=yes $sshflags $host $remotecmd`
 
     # launch the remote Julia process
 
@@ -206,7 +249,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     # the initial julia process (Ctrl-C and teardown methods are handled through messages)
     # for the launched processes.
     io = open(detach(cmd), "r+")
-    write_cookie(io)
+    cmdline_cookie || write_cookie(io)
 
     wconfig = WorkerConfig()
     wconfig.io = io.out
@@ -223,6 +266,68 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     push!(launched, wconfig)
     notify(launch_ntfy)
 end
+
+
+function print_shell_escaped_windows(io, args::AbstractString...)::Nothing
+    first = true
+    for arg in args
+        first || write(io, ' ')
+        first = false
+        function isword(c::AbstractChar)
+            return 'a' <= c <= 'z' || 'A' <= c <= 'Z' || '0' <= c <= '9' ||
+                c == '\\' || c == '.' || c == '_' || c == '-' || c == ':' ||
+                c == '/' || c == '=' || c == '"'
+        end
+        quotes = !all(isword, arg) || arg == ""
+        quotes && write(io, '"')
+        backslashes = 0
+        for c in arg
+            if c == '\\'
+                backslashes += 1
+            else
+                if c == '"'
+                    backslashes = backslashes * 2 + 1
+                end
+                for j=1:backslashes
+                    write(io, '\\')
+                end
+                backslashes = 0
+                write(io, c)
+            end
+        end
+        if quotes; backslashes *= 2; end
+        for j=1:backslashes
+            write(io, '\\')
+        end
+        quotes && write(io, '"')
+    end
+end
+
+"""
+    shell_escape_windows(args::AbstractString...)::String
+
+Convert the collection of strings `args` into a Windows command line.
+
+Windows `cmd.exe` passes the entire command line as a single string to
+the application (unlike on POSIX systems, where the shell splits the
+command line into a list of arguments). Many Windows API applications
+(including julia.exe), use the conventions of the [Microsoft C
+runtime](https://docs.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments)
+to split that command line into a list of strings. This function
+implements the inverse of that command-line parser. It joins
+command-line arguments to be passed to a Windows C/C++/Julia
+application into a command line, escaping or quoting meta characters
+such as space, double quotes and backslash where needed.
+
+# Example
+```jldoctest
+julia> println(Distributed.shell_escape_windows("a b", "\\"", "\\\\\\"", "\\\\", "\\\\ \\\\", "c"))
+\"a b\" \\\" \\\\\\\" \\ \"\\ \\\\\" c
+
+```
+"""
+shell_escape_windows(args::AbstractString...) = sprint(print_shell_escaped_windows, args...,
+                                                       sizehint = (sum(length.(args)) + 3*length(args)))
 
 
 function manage(manager::SSHManager, id::Integer, config::WorkerConfig, op::Symbol)
