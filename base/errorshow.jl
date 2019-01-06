@@ -115,7 +115,7 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
 end
 
 function showerror(io::IO, ex::SystemError)
-    if @static(Sys.iswindows() ? ex.extrainfo isa WindowsError : false)
+    if @static(Sys.iswindows() ? ex.extrainfo isa WindowsErrorInfo : false)
         errstring = Libc.FormatMessage(ex.extrainfo.errnum)
         extrainfo = ex.extrainfo.extrainfo
     else

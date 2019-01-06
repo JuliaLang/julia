@@ -135,13 +135,11 @@ systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(str
 
 
 # like systemerror, but for Windows API calls that use GetLastError instead of errno
-if Sys.iswindows()
-    struct WindowsError <: Exception
-        errnum::UInt32
-        extrainfo
-    end
-    windowserror(p, b::PBool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), WindowsError(Libc.GetLastError(), extrainfo))) : nothing
+struct WindowsErrorInfo
+    errnum::UInt32
+    extrainfo
 end
+windowserror(p, b::PBool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), WindowsErrorInfo(Libc.GetLastError(), extrainfo))) : nothing
 
 
 ## assertion macro ##
