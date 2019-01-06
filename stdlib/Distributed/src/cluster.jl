@@ -15,7 +15,7 @@ abstract type ClusterManager end
 Type used by [`ClusterManager`](@ref)s to control workers added to their clusters. Some fields
 are used by all cluster managers to access a host:
   * `io` -- the connection used to access the worker (a subtype of `IO` or `Nothing`)
-  * `host` -- the host address (either an `AbstractString` or `Nothing`)
+  * `host` -- the host address (either a `String` or `Nothing`)
   * `port` -- the port on the host used to connect to the worker (either an `Int` or `Nothing`)
 
 Some are used by the cluster manager to add workers to an already-initialized host:
@@ -515,6 +515,10 @@ end
 
 default_addprocs_params() = Dict{Symbol,Any}(
     :topology => :all_to_all,
+    :ssh      => "ssh",
+    :shell    => :posix,
+    :cmdline_cookie => false,
+    :env      => [],
     :dir      => pwd(),
     :exename  => joinpath(Sys.BINDIR::String, julia_exename()),
     :exeflags => ``,
