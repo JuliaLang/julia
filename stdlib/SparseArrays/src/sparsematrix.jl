@@ -374,9 +374,9 @@ SparseMatrixCSC{Tv}(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(
 function SparseMatrixCSC{Tv,Ti}(M::AbstractMatrix) where {Tv,Ti}
     require_one_based_indexing(M)
     C = findall(v->v != 0, M)
-    @inbounds I = convert(Vector{Ti},LinearIndices(M)[C])
-    @inbounds V = convert(Vector{Tv},M[C])
-    @inbounds sparse_sorted_unique!(I, V, size(M)...)
+    I = convert(Vector{Ti},LinearIndices(M)[C])
+    V = convert(Vector{Tv},M[C])
+    sparse_sorted_unique!(I, V, size(M)...)
 end
 
 function SparseMatrixCSC{Tv,Ti}(M::StridedMatrix) where {Tv,Ti}
