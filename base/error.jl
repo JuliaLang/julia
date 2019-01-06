@@ -139,7 +139,7 @@ struct WindowsErrorInfo
     errnum::UInt32
     extrainfo
 end
-windowserror(p, b::PBool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), WindowsErrorInfo(Libc.GetLastError(), extrainfo))) : nothing
+windowserror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), WindowsErrorInfo(Libc.GetLastError(), extrainfo))) : nothing
 
 
 ## assertion macro ##
