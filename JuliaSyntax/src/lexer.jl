@@ -926,20 +926,23 @@ function lex_dot(l::Lexer)
 end
 
 # A ` has been consumed
-# N.B.: cmds do not currently have special parser interpolation support
 function lex_cmd(l::Lexer, doemit=true)
-    kind = Tokens.CMD
-    if accept(l, '`') # ``
-        if accept(l, '`') # ```
-            kind = Tokens.TRIPLE_CMD
+    if accept(l, '`') # 
+        if accept(l, '`') # """
+            if read_string(l, Tokens.TRIPLE_CMD)
+                return doemit ? emit(l, Tokens.TRIPLE_CMD) : EMPTY_TOKEN(token_type(l))
+            else
+                return doemit ? emit_error(l, Tokens.EOF_CMD) : EMPTY_TOKEN(token_type(l))
+            end
         else # empty cmd
             return doemit ? emit(l, Tokens.CMD) : EMPTY_TOKEN(token_type(l))
         end
-    end
-    while true
-        c = readchar(l)
-        eof(c) && return (doemit ? emit_error(l, Tokens.EOF_CMD) : EMPTY_TOKEN(token_type(l)))
-        string_terminated(l, c, kind) && return (doemit ? emit(l, kind) : EMPTY_TOKEN(token_type(l)))
+    else 
+        if read_string(l, Tokens.CMD)
+            return doemit ? emit(l, Tokens.CMD) : EMPTY_TOKEN(token_type(l))
+        else
+            return doemit ? emit_error(l, Tokens.EOF_CMD) : EMPTY_TOKEN(token_type(l))
+        end
     end
 end
 
