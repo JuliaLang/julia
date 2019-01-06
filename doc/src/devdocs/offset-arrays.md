@@ -27,7 +27,7 @@ As an overview, the steps are:
 
   * replace many uses of `size` with `axes`
   * replace `1:length(A)` with `eachindex(A)`, or in some cases `LinearIndices(A)`
-  * replace explicit allocations like `Array{Int}(size(B))` with `similar(Array{Int}, axes(B))`
+  * replace explicit allocations like `Array{Int}(undef, size(B))` with `similar(Array{Int}, axes(B))`
 
 These are described in more detail below.
 
