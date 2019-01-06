@@ -1370,7 +1370,6 @@ julia> sprand(Float64, 3, 0.75)
   [3]  =  0.298614
 ```
 """
-
 function sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat, rfn::Function, ::Type{T} = eltype(rfn(r, 1))) where T
     m, n = Int(m), Int(n)
     (m < 0 || n < 0) && throw(ArgumentError("invalid Array dimensions"))
