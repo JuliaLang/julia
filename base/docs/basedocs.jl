@@ -1257,7 +1257,7 @@ the string representations of the arguments passed to it.
 """
 """
     Symbol(x...)
-    
+
 The constructor.
 
 Create a `Symbol` by concatenating the string representations of the arguments together.
