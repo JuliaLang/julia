@@ -191,7 +191,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                 collect(Iterators.filter(1:length(def.edges)) do n
                     isassigned(def.values, n) || return false
                     val = def.values[n]
-                    if isa(defssa, OldSSAValue) && isa(val, SSAValue)
+                    if is_old(compact, defssa) && isa(val, SSAValue)
                         val = OldSSAValue(val.id)
                     end
                     edge_typ = widenconst(compact_exprtype(compact, val))
@@ -201,7 +201,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
             for n in possible_predecessors
                 pred = def.edges[n]
                 val = def.values[n]
-                if isa(defssa, OldSSAValue) && isa(val, SSAValue)
+                if is_old(compact, defssa) && isa(val, SSAValue)
                     val = OldSSAValue(val.id)
                 end
                 if isa(val, AnySSAValue)
@@ -425,6 +425,12 @@ struct LiftedPhi
     need_argupdate::Bool
 end
 
+function is_old(compact, @nospecialize(old_node_ssa))
+    isa(old_node_ssa, OldSSAValue) &&
+        !is_pending(compact, old_node_ssa) &&
+        !already_inserted(compact, old_node_ssa)
+end
+
 function perform_lifting!(compact::IncrementalCompact,
         visited_phinodes::Vector{Any}, @nospecialize(cache_key),
         lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
@@ -455,7 +461,7 @@ function perform_lifting!(compact::IncrementalCompact,
             isassigned(old_node.values, i) || continue
             val = old_node.values[i]
             orig_val = val
-            if isa(old_node_ssa, OldSSAValue) && !is_pending(compact, old_node_ssa) && !already_inserted(compact, old_node_ssa) && isa(val, SSAValue)
+            if is_old(compact, old_node_ssa) && isa(val, SSAValue)
                 val = OldSSAValue(val.id)
             end
             if isa(val, Union{NewSSAValue, SSAValue, OldSSAValue})
