@@ -1255,6 +1255,8 @@ Created when the Symbol(x...) constructor is used to concatenate
 the string representations of the arguments passed to it.
 
 """
+Symbol
+
 """
     Symbol(x...)
 
@@ -1271,7 +1273,7 @@ julia> Symbol("day", 4)
 :day4
 ```
 """
-Symbol
+Symbol(x...)
 
 """
     tuple(xs...)
