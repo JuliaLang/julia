@@ -314,7 +314,10 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
         return;
     }
     else if (head == foreigncall_sym) {
-        *has_intrinsics = 1;
+        jl_sym_t *fname = NULL, *libname = NULL;
+        jl_foreigncall_get_syms(jl_exprarg(e, 0), &fname, &libname);
+        if (fname == NULL || !jl_foreigncall_interpretable(fname, libname))
+            *has_intrinsics = 1;
         return;
     }
     else if (head == call_sym && jl_expr_nargs(e) > 0) {
@@ -343,6 +346,13 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
         if (jl_is_expr(a))
             expr_attributes(a, has_intrinsics, has_defs);
     }
+}
+
+// This is a hook that can be replaced at link time if an interpreter version
+// if foreigncall is available.
+JL_DLLEXPORT __attribute__((weak)) int jl_foreigncall_interpretable(jl_sym_t *fname, jl_sym_t *libname)
+{
+    return 0;
 }
 
 int jl_code_requires_compiler(jl_code_info_t *src)

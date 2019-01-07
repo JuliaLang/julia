@@ -49,12 +49,17 @@ FLAGS += -I$(LOCALBASE)/include
 endif
 
 RUNTIME_C_SRCS := \
-	jltypes gf typemap ast builtins module interpreter-foreigncall interpreter symbol \
+	jltypes gf typemap ast builtins module interpreter symbol \
 	dlload sys init task array dump staticdata toplevel datatype \
 	simplevector runtime_intrinsics precompile \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks method \
 	jlapi signal-handling safepoint jloptions timing subtype \
 	crc32c
+
+ifeq ($(OS), emscripten)
+RUNTIME_C_SRCS += interpreter-foreigncall
+endif
+
 RUNTIME_SRCS := APInt-C runtime_ccall processor rtutils $(RUNTIME_C_SRCS)
 SRCS := $(RUNTIME_SRCS)
 
