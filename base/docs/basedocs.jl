@@ -1251,7 +1251,7 @@ end
 """
     Symbol::DataType
 
-Created when the Symbol(x...) constructor is used to concatenate 
+Created when the Symbol(x...) constructor is used to concatenate
 the string representations of the arguments passed to it.
 
 """
