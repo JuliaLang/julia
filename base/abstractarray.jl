@@ -2009,7 +2009,8 @@ concatenate_setindex!(R, X::AbstractArray, I...) = (R[I...] = X)
 
 function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
     for (i,j) in zip(eachindex(dest),eachindex(A))
-        @inbounds dest[i] = f(A[j])
+        val = f(@inbounds A[j])
+        @inbounds dest[i] = val
     end
     return dest
 end
@@ -2049,7 +2050,9 @@ map(f, ::AbstractSet) = error("map is not defined on sets")
 ## 2 argument
 function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F
     for (i, j, k) in zip(eachindex(dest), eachindex(A), eachindex(B))
-        dest[i] = f(A[j], B[k])
+        @inbounds a, b = A[j], B[k]
+        val = f(a, b)
+        @inbounds dest[i] = val
     end
     return dest
 end
@@ -2063,12 +2066,12 @@ function ith_all(i, as)
 end
 
 function map_n!(f::F, dest::AbstractArray, As) where F
-    #FIXME: adding `@_propagate_inbounds_meta` will destroy the performance of `map!`
-    #@_propagate_inbounds_meta
     idxs1 = LinearIndices(As[1])
-    @boundscheck LinearIndices(dest) == idxs1 && all(x -> x == idxs1, map(LinearIndices, As))
-    @inbounds for i = idxs1
-        dest[i] = f(ith_all(i, As)...)
+    @boundscheck LinearIndices(dest) == idxs1 && all(x -> LinearIndices(x) == idxs1, As)
+    for i = idxs1
+        @inbounds I = ith_all(i, As)
+        val = f(I...)
+        @inbounds dest[i] = val
     end
     return dest
 end
