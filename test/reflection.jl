@@ -234,6 +234,9 @@ tlayout = TLayout(5,7,11)
 @test fieldtype(Tuple{Vararg{Int8}}, 1) === Int8
 @test fieldtype(Tuple{Vararg{Int8}}, 10) === Int8
 @test_throws BoundsError fieldtype(Tuple{Vararg{Int8}}, 0)
+# issue #30505
+@test fieldtype(Union{Tuple{Char},Tuple{Char,Char}},2) === Char
+@test_throws BoundsError fieldtype(Union{Tuple{Char},Tuple{Char,Char}},3)
 
 @test fieldnames(NTuple{3, Int}) == ntuple(i -> fieldname(NTuple{3, Int}, i), 3) == (1, 2, 3)
 @test_throws ArgumentError fieldnames(Union{})

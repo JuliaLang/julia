@@ -469,25 +469,25 @@ For numbers, return ``\\left( |x|^p \\right)^{1/p}``.
 # Examples
 ```jldoctest
 julia> norm(2, 1)
-2
+2.0
 
 julia> norm(-2, 1)
-2
+2.0
 
 julia> norm(2, 2)
-2
+2.0
 
 julia> norm(-2, 2)
-2
+2.0
 
 julia> norm(2, Inf)
-2
+2.0
 
 julia> norm(-2, Inf)
-2
+2.0
 ```
 """
-@inline norm(x::Number, p::Real=2) = p == 0 ? (x==0 ? zero(abs(x)) : oneunit(abs(x))) : abs(x)
+@inline norm(x::Number, p::Real=2) = p == 0 ? (x==0 ? zero(abs(float(x))) : oneunit(abs(float(x)))) : abs(float(x))
 norm(::Missing, p::Real=2) = missing
 
 # special cases of opnorm

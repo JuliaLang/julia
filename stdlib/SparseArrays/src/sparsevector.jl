@@ -2,7 +2,7 @@
 
 ### Common definitions
 
-import Base: sort, findall
+import Base: sort, findall, copy!
 import LinearAlgebra: promote_to_array_type, promote_to_arrays_
 
 ### The SparseVector
@@ -34,6 +34,7 @@ SparseVector(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti} =
 # union of such a view and a SparseVector so we define an alias for such a union as well
 const SparseColumnView{T}  = SubArray{T,1,<:SparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int}},Int},false}
 const SparseVectorUnion{T} = Union{SparseVector{T}, SparseColumnView{T}}
+const AdjOrTransSparseVectorUnion{T} = LinearAlgebra.AdjOrTrans{T, <:SparseVectorUnion{T}}
 
 ### Basic properties
 
@@ -58,6 +59,11 @@ function nonzeroinds(x::SparseColumnView)
     return y
 end
 
+indtype(x::SparseColumnView) = indtype(parent(x))
+function nnz(x::SparseColumnView)
+    rowidx, colidx = parentindices(x)
+    return length(nzrange(parent(x), colidx))
+end
 
 ## similar
 #
@@ -378,13 +384,11 @@ sparsevec(a::AbstractSparseArray) = vec(a)
 sparsevec(a::AbstractSparseVector) = vec(a)
 sparse(a::AbstractVector) = sparsevec(a)
 
-function _dense2sparsevec(s::AbstractArray{Tv}, initcap::Ti) where {Tv,Ti}
+function _dense2indval!(nzind::Vector{Ti}, nzval::Vector{Tv}, s::AbstractArray{Tv}) where {Tv,Ti}
     @assert !has_offset_axes(s)
-    # pre-condition: initcap > 0; the initcap determines the index type
+    cap = length(nzind);
+    @assert cap == length(nzval)
     n = length(s)
-    cap = initcap
-    nzind = Vector{Ti}(undef, cap)
-    nzval = Vector{Tv}(undef, cap)
     c = 0
     @inbounds for i = 1:n
         v = s[i]
@@ -403,7 +407,12 @@ function _dense2sparsevec(s::AbstractArray{Tv}, initcap::Ti) where {Tv,Ti}
         resize!(nzind, c)
         resize!(nzval, c)
     end
-    SparseVector(n, nzind, nzval)
+    return (nzind, nzval)
+end
+
+function _dense2sparsevec(s::AbstractArray{Tv}, initcap::Ti) where {Tv,Ti}
+    nzind, nzval = _dense2indval!(Vector{Ti}(undef, initcap), Vector{Tv}(undef, initcap), s)
+    SparseVector(length(s), nzind, nzval)
 end
 
 SparseVector{Tv,Ti}(s::AbstractVector{Tv}) where {Tv,Ti} =
@@ -1935,6 +1944,18 @@ julia> dropzeros(A)
 """
 dropzeros(x::SparseVector; trim::Bool = true) = dropzeros!(copy(x), trim = trim)
 
+function copy!(dst::SparseVector, src::SparseVector)
+    dst.n == src.n || throw(ArgumentError("Sparse vectors should have the same length for copy!"))
+    copy!(dst.nzval, src.nzval)
+    copy!(dst.nzind, src.nzind)
+    return dst
+end
+
+function copy!(dst::SparseVector, src::AbstractVector)
+    dst.n == length(src) || throw(ArgumentError("Sparse vector should have the same length as source for copy!"))
+    _dense2indval!(dst.nzind, dst.nzval, src)
+    return dst
+end
 
 function _fillnonzero!(arr::SparseMatrixCSC{Tv, Ti}, val) where {Tv,Ti}
     m, n = size(arr)
@@ -2007,7 +2028,7 @@ end
 
 
 function circshift!(O::SparseVector, X::SparseVector, (r,)::Base.DimsInteger{1})
-    O .= X
+    copy!(O, X)
     subvector_shifter!(O.nzind, O.nzval, 1, length(O.nzind), O.n, mod(r, X.n))
     return O
 end

@@ -1382,41 +1382,24 @@ function _sparse_findprevnz(m::SparseMatrixCSC, i::Integer)
     return LinearIndices(m)[m.rowval[prevhi-1], prevcol]
 end
 
-function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat)
-    ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
+
+function _sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat, rfn)
+    m, n = Int(m), Int(n)
+    (m < 0 || n < 0) && throw(ArgumentError("invalid Array dimensions"))
     0 <= density <= 1 || throw(ArgumentError("$density not in [0,1]"))
-    N = n*m
-
-    I, J = Vector{Int}(), Vector{Int}() # indices of nonzero elements
-    sizehint!(I, round(Int,N*density))
-    sizehint!(J, round(Int,N*density))
-
-    # density of nonzero columns:
-    L = log1p(-density)
-    coldensity = -expm1(m*L) # = 1 - (1-density)^m
-    colsparsity = exp(m*L) # = 1 - coldensity
-    iL = 1/L
-
-    rows = Vector{Int}()
-    for j in randsubseq(r, 1:n, coldensity)
-        # To get the right statistics, we *must* have a nonempty column j
-        # even if p*m << 1.   To do this, we use an approach similar to
-        # the one in randsubseq to compute the expected first nonzero row k,
-        # except given that at least one is nonzero (via Bayes' rule);
-        # carefully rearranged to avoid excessive roundoff errors.
-        k = ceil(log(colsparsity + rand(r)*coldensity) * iL)
-        ik = k < 1 ? 1 : k > m ? m : Int(k) # roundoff-error/underflow paranoia
-        randsubseq!(r, rows, 1:m-ik, density)
-        push!(rows, m-ik+1)
-        append!(I, rows)
-        nrows = length(rows)
-        Jlen = length(J)
-        resize!(J, Jlen+nrows)
-        @inbounds for i = Jlen+1:length(J)
-            J[i] = j
+    j, colm  = 1, 0
+    rowval = randsubseq(r, 1:(m*n), density)
+    nnz = length(rowval)
+    colptr = Vector{Int}(undef, n + 1)
+    @inbounds for col = 1:n+1
+        colptr[col] = j
+        while j <= nnz && (rowval[j] -= colm) <= m
+            j += 1
         end
+        j <= nnz && (rowval[j] += colm)
+        colm += m
     end
-    I, J
+    return SparseMatrixCSC(m, n, colptr, rowval, rfn(nnz))
 end
 
 """
@@ -1432,9 +1415,8 @@ argument specifies a random number generator, see [Random Numbers](@ref).
 # Examples
 ```jldoctest; setup = :(using Random; Random.seed!(1234))
 julia> sprand(Bool, 2, 2, 0.5)
-2×2 SparseMatrixCSC{Bool,Int64} with 2 stored entries:
-  [1, 1]  =  true
-  [2, 1]  =  true
+2×2 SparseMatrixCSC{Bool,Int64} with 1 stored entry:
+  [2, 2]  =  true
 
 julia> sprand(Float64, 3, 0.75)
 3-element SparseVector{Float64,Int64} with 1 stored entry:
@@ -1447,9 +1429,7 @@ function sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat,
     N = m*n
     N == 0 && return spzeros(T,m,n)
     N == 1 && return rand(r) <= density ? sparse([1], [1], rfn(r,1)) : spzeros(T,1,1)
-
-    I,J = sprand_IJ(r, m, n, density)
-    sparse_IJ_sorted!(I, J, rfn(r,length(I)), m, n, +)  # it will never need to combine
+    _sprand(r,m,n,density,i->rfn(r,i))
 end
 
 function sprand(m::Integer, n::Integer, density::AbstractFloat,
@@ -1458,9 +1438,7 @@ function sprand(m::Integer, n::Integer, density::AbstractFloat,
     N = m*n
     N == 0 && return spzeros(T,m,n)
     N == 1 && return rand() <= density ? sparse([1], [1], rfn(1)) : spzeros(T,1,1)
-
-    I,J = sprand_IJ(GLOBAL_RNG, m, n, density)
-    sparse_IJ_sorted!(I, J, rfn(length(I)), m, n, +)  # it will never need to combine
+    _sprand(GLOBAL_RNG,m,n,density,rfn)
 end
 
 truebools(r::AbstractRNG, n::Integer) = fill(true, n)
@@ -1487,8 +1465,8 @@ argument specifies a random number generator, see [Random Numbers](@ref).
 ```jldoctest; setup = :(using Random; Random.seed!(0))
 julia> sprandn(2, 2, 0.75)
 2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:
-  [1, 1]  =  0.586617
-  [1, 2]  =  0.297336
+  [1, 2]  =  0.586617
+  [2, 2]  =  0.297336
 ```
 """
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
