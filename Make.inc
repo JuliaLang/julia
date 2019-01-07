@@ -1086,6 +1086,11 @@ ifneq (,$(filter $(OS),WINNT emscripten))
   RPATH_ORIGIN :=
   RPATH_ESCAPED_ORIGIN :=
   RPATH_LIB :=
+else ifeq ($(OS), emscripten)
+  RPATH :=
+  RPATH_ORIGIN :=
+  RPATH_ESCAPED_ORIGIN :=
+  RPATH_LIB :=
 else ifeq ($(OS), Darwin)
   RPATH := -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
   RPATH_ORIGIN := -Wl,-rpath,'@loader_path/'
