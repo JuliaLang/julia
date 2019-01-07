@@ -131,10 +131,8 @@ DEP_LIBS += libgit2
 endif # USE_SYSTEM_LIBGIT2
 endif # emscripten
 
-ifneq ($(OS), emscripten)
 ifeq ($(USE_SYSTEM_MPFR), 0)
 DEP_LIBS += mpfr
-endif
 endif
 
 ifneq ($(OS), emscripten)
