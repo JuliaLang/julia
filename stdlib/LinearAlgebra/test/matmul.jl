@@ -302,10 +302,24 @@ end
 @test_throws ArgumentError LinearAlgebra.copytri!(Matrix{Float64}(undef,10,10),'Z')
 
 @testset "Issue 30055" begin
-    A = UpperTriangular([1+im 2+im 3+im; 4+im 5+im 6+im; 7+im 9+im 0])'
-    @test copy(A) == A # copy uses copytri!
-    A = LowerTriangular([1+im 2+im 3+im; 4+im 5+im 6+im; 7+im 9+im 0])'
-    @test copy(A) == A # copy uses copytri!
+    B = [1+im 2+im 3+im; 4+im 5+im 6+im; 7+im 9+im im]
+    A = UpperTriangular(B)
+    @test copy(transpose(A)) == transpose(A)
+    @test copy(A') == A'
+    A = LowerTriangular(B)
+    @test copy(transpose(A)) == transpose(A)
+    @test copy(A') == A'
+    B = Matrix{Matrix{Complex{Int}}}(undef, 2, 2)
+    B[1,1] = [1+im 2+im; 3+im 4+im]
+    B[2,1] = [1+2im 1+3im;1+3im 1+4im]
+    B[1,2] = [7+im 8+2im; 9+3im 4im]
+    B[2,2] = [9+im 8+im; 7+im 6+im]
+    A = UpperTriangular(B)
+    @test copy(transpose(A)) == transpose(A)
+    @test copy(A') == A'
+    A = LowerTriangular(B)
+    @test copy(transpose(A)) == transpose(A)
+    @test copy(A') == A'
 end
 
 @testset "gemv! and gemm_wrapper for $elty" for elty in [Float32,Float64,ComplexF64,ComplexF32]

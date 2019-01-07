@@ -327,23 +327,23 @@ function mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, transB
 end
 # Supporting functions for matrix multiplication
 
-function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false)
+# copy transposed(adjoint) of upper(lower) side-digonals. Optionally include diagonal.
+function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false, diag::Bool=false)
+    copytri!(A, Val(uplo), Val(conjugate), Val(diag))
+end
+function copytri!(A::AbstractMatrix, ::Val{uplo}, ::Val{conjugate}, ::Val{diag}) where {uplo, conjugate, diag}
     n = checksquare(A)
+    off = diag ? 0 : 1
     if uplo == 'U'
-        for i = 1:(n-1), j = (i+1):n
+        for i = 1:n, j = (i+off):n
             A[j,i] = conjugate ? adjoint(A[i,j]) : transpose(A[i,j])
         end
     elseif uplo == 'L'
-        for i = 1:(n-1), j = (i+1):n
+        for i = 1:n, j = (i+off):n
             A[i,j] = conjugate ? adjoint(A[j,i]) : transpose(A[j,i])
         end
     else
         throw(ArgumentError("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
-    end
-    if conjugate
-        for i = 1:n
-            A[i,i] = adjoint(A[i,i])
-        end
     end
     A
 end
