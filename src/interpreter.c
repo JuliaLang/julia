@@ -399,6 +399,12 @@ void jl_foreigncall_get_syms(jl_value_t *target, jl_sym_t **fname, jl_sym_t **li
         *fname = get_sym_or_global_if_const(arg0);
         *libname = get_sym_or_global_if_const(arg1);
         return;
+    } else if (jl_is_tuple(target)) {
+        jl_sym_t *arg0 = (jl_sym_t *)jl_fieldref_noalloc(target, 0);
+        jl_sym_t *arg1 = (jl_sym_t *)jl_fieldref_noalloc(target, 1);
+        assert(jl_is_symbol(arg0) && jl_is_symbol(arg1));
+        *fname = arg0;
+        *libname = arg1;
     } else {
         *fname = get_sym_or_global_if_const(target);
     }
