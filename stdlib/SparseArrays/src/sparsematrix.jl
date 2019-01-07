@@ -373,10 +373,17 @@ SparseMatrixCSC(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 SparseMatrixCSC{Tv}(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 function SparseMatrixCSC{Tv,Ti}(M::AbstractMatrix) where {Tv,Ti}
     require_one_based_indexing(M)
-    C = findall(v->v != 0, M)
-    @inbounds I = convert(Vector{Ti},LinearIndices(M)[C])
-    @inbounds V = convert(Vector{Tv},M[C])
-    sparse_sorted_unique!(I, V, size(M)...)
+    I = Ti[]
+    V = Tv[]
+    i = 0
+    for v in M
+        i += 1
+        if !iszero(v)
+            push!(I, i)
+            push!(V, v)
+        end
+    end
+    sparse_increasing!(I, V, size(M)...)
 end
 
 function SparseMatrixCSC{Tv,Ti}(M::StridedMatrix) where {Tv,Ti}
@@ -1333,7 +1340,7 @@ function _sparse_findprevnz(m::SparseMatrixCSC, i::Integer)
 end
 
 
-function sparse_sorted_unique!(I::Vector{Ti}, V::Vector, m::Int, n::Int) where Ti
+function sparse_increasing!(I::Vector{Ti}, V::Vector, m::Int, n::Int) where Ti
     length(I) == length(V) || throw(ArgumentError("I and V should have the same length"))
     nnz = length(V)
     colptr = Vector{Ti}(undef, n + 1)
@@ -1375,7 +1382,7 @@ function sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat, 
     (m < 0 || n < 0) && throw(ArgumentError("invalid Array dimensions"))
     0 <= density <= 1 || throw(ArgumentError("$density not in [0,1]"))
     I = randsubseq(r, 1:(m*n), density)
-    sparse_sorted_unique!(I, rfn(r,length(I)), m, n)
+    sparse_increasing!(I, convert(Vector{T}, rfn(r,length(I))), m, n)
 end
 
 sprand(m::Integer, n::Integer, density::AbstractFloat, rfn::Function, ::Type{T} = eltype(rfn(1))) where T = sprand(GLOBAL_RNG,m,n,density,(r, i) -> rfn(i))
