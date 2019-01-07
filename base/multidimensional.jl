@@ -738,7 +738,7 @@ julia> diff(vec(a))
 ```
 """
 function diff(a::AbstractArray{T,N}; dims::Integer) where {T,N}
-    has_offset_axes(a) && throw(ArgumentError("offset axes unsupported"))
+    ensure_non_offset_axes(a)
     1 <= dims <= N || throw(ArgumentError("dimension $dims out of range (1:$N)"))
 
     r = axes(a)
@@ -1526,7 +1526,7 @@ function _extrema_dims(f, A::AbstractArray, dims)
 end
 
 @noinline function extrema!(f, B, A)
-    @assert !has_offset_axes(B, A)
+    ensure_non_offset_axes(B, A)
     sA = size(A)
     sB = size(B)
     for I in CartesianIndices(sB)
