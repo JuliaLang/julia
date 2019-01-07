@@ -27,7 +27,7 @@ typedef struct {
 
 #include "interpreter-stacktrace.c"
 
-static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s);
+jl_value_t *eval_value(jl_value_t *e, interpreter_state *s);
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel);
 
 int jl_is_toplevel_only_expr(jl_value_t *e);
@@ -363,7 +363,50 @@ SECT_INTERP static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s)
     s->locals[jl_source_nslots(s->src) + s->ip] = res;
 }
 
-SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
+void jl_foreigncall_get_syms(jl_value_t *target, jl_sym_t **fname, jl_sym_t **libname)
+{
+    const char *name;
+
+    if (jl_is_globalref(target)) {
+        jl_module_t *mod = jl_globalref_mod(target);
+        jl_sym_t *sym = jl_globalref_name(target);
+        if (jl_is_const(mod, sym)) {
+            jl_value_t *val = jl_get_global(mod, sym);
+            if (jl_is_symbol(val)) {
+                *fname = (jl_sym_t *)val;
+            }
+            return;
+        }
+        return;
+    } else if (jl_is_expr(target)) {
+        if (jl_expr_nargs(target) != 2)
+            return;
+        jl_value_t *arg0 = jl_exprarg(target, 0);
+        jl_value_t *arg1 = jl_exprarg(target, 1);
+        if (!jl_is_quotenode(arg0) || !jl_is_quotenode(arg1))
+            return;
+        if (!jl_is_symbol(jl_quotenode_value(arg0)) ||
+            !jl_is_symbol(jl_quotenode_value(arg1)))
+            return;
+        *fname = (jl_value_t*)jl_quotenode_value(arg0);
+        *libname = (jl_value_t*)jl_quotenode_value(arg1);
+        return;
+    } else if (jl_is_quotenode(target)) {
+        if (!jl_is_symbol(jl_quotenode_value(target)))
+            return;
+        *fname = (jl_value_t*)jl_quotenode_value(target);
+        return;
+    }
+}
+
+// This is a hook that can be replaced at link time if an interpreter version
+// if foreigncall is available.
+SECT_INTERP __attribute__((weak)) jl_value_t *eval_foreigncall(jl_sym_t *fname, jl_sym_t *libname, interpreter_state *s, jl_value_t **args, size_t nargs)
+{
+    return NULL;
+}
+
+SECT_INTERP jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 {
     jl_code_info_t *src = s->src;
     if (jl_is_ssavalue(e)) {
@@ -499,6 +542,19 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     }
     else if (head == method_sym && nargs == 1) {
         return eval_methoddef(ex, s);
+    }
+    else if (head == foreigncall_sym) {
+        jl_value_t *target = args[0];
+
+        jl_sym_t *fname = NULL, *libname = NULL;
+        jl_foreigncall_get_syms(args[0], &fname, &libname);
+
+        jl_value_t *result = eval_foreigncall(fname, libname, s, args, nargs);
+        if (!result) {
+            jl_static_show(JL_STDERR, e);
+            jl_error("Encountered unsupported foreigncall in interpreter (this should not happen on supported platforms).");
+        }
+        return result;
     }
     jl_errorf("unsupported or misplaced expression %s", jl_symbol_name(head));
     abort();
