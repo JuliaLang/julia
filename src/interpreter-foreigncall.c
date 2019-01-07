@@ -387,6 +387,8 @@ extern jl_value_t * jl_gc_big_alloc(jl_ptls_t, size_t);
 extern int jl_alignment(size_t);
 extern void * jl_gc_counted_malloc(size_t);
 extern int jl_compile_hint(jl_tupletype_t *);
+extern void jl_foreigncall_get_syms(jl_value_t *, jl_sym_t **, jl_sym_t **);
+extern int jl_foreigncall_interpretable(jl_sym_t *, jl_sym_t *);
 extern jl_code_info_t * jl_new_code_info_uninit(void);
 extern jl_value_t * jl_apply_2va(jl_value_t *, jl_value_t **, uint32_t);
 extern void jl_typeassert(jl_value_t *, jl_value_t *);
@@ -658,6 +660,8 @@ extern jl_value_t * jl_gf_invoke_lookup(jl_value_t *, size_t);
 extern jl_value_t * jl_get_invoke_lambda(jl_methtable_t *, jl_typemap_entry_t *, jl_value_t *, size_t);
 extern void jl_typeinf_begin(void);
 extern void jl_typeinf_end(void);
+extern jl_value_t * jl_get_current_task(void);
+extern int jl_is_task_started(jl_task_t *);
 extern int pcre2_config_8(uint32_t, void *);
 struct pcre2_real_general_context_8;
 typedef struct pcre2_real_general_context_8 pcre2_general_context_8;
@@ -3926,11 +3930,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_function_t *) eval_value(args[5], s),
 			(size_t) jl_unbox_uint32(eval_value(args[6], s))
 		);
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_switchto") == 0) {
 	jl_switchto(
 			(jl_task_t **) jl_unbox_voidpointer(eval_value(args[5], s))
@@ -4146,6 +4146,19 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_compile_hint") == 0) {
 	int result = jl_compile_hint(
 			(jl_tupletype_t *) jl_unbox_voidpointer(eval_value(args[5], s))
+		);
+	return jl_box_int32(result);
+} else if (strcmp(target, "jl_foreigncall_get_syms") == 0) {
+	jl_foreigncall_get_syms(
+			(jl_value_t *) eval_value(args[5], s),
+			(jl_sym_t **) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(jl_sym_t **) jl_unbox_voidpointer(eval_value(args[7], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "jl_foreigncall_interpretable") == 0) {
+	int result = jl_foreigncall_interpretable(
+			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
 		);
 	return jl_box_int32(result);
 } else if (strcmp(target, "jl_new_code_info_uninit") == 0) {
@@ -5446,7 +5459,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return result;
 } else if (strcmp(target, "jl_task_stack_buffer") == 0) {
 	void * result = jl_task_stack_buffer(
-			(jl_task_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_task_t *) eval_value(args[5], s),
 			(size_t *) jl_unbox_voidpointer(eval_value(args[6], s)),
 			(int *) jl_unbox_voidpointer(eval_value(args[7], s))
 		);
@@ -5838,6 +5851,14 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_typeinf_end") == 0) {
 	jl_typeinf_end();
 	return jl_nothing;
+} else if (strcmp(target, "jl_get_current_task") == 0) {
+	jl_value_t * result = jl_get_current_task();
+	return result;
+} else if (strcmp(target, "jl_is_task_started") == 0) {
+	int result = jl_is_task_started(
+			(jl_task_t *) eval_value(args[5], s)
+		);
+	return jl_box_int32(result);
 } else if (strcmp(target, "pcre2_config_8") == 0) {
 	int result = pcre2_config_8(
 			(uint32_t) jl_unbox_uint32(eval_value(args[5], s)),
