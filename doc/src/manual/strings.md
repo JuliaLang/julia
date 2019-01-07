@@ -397,7 +397,7 @@ character because `|` is not a valid continuation to it. Finally the string `s2`
 one too high code point.
 
 Julia uses the UTF-8 encoding by default, and support for new encodings can be added by packages.
-For example, the [LegacyStrings.jl](https://github.com/JuliaArchive/LegacyStrings.jl) package
+For example, the [LegacyStrings.jl](https://github.com/JuliaStrings/LegacyStrings.jl) package
 implements `UTF16String` and `UTF32String` types. Additional discussion of other encodings and
 how to implement support for them is beyond the scope of this document for the time being. For
 further discussion of UTF-8 encoding issues, see the section below on [byte array literals](@ref man-byte-array-literals).
@@ -854,7 +854,7 @@ julia> m[2]
 Captures can be referenced in a substitution string when using [`replace`](@ref) by using `\n`
 to refer to the nth capture group and prefixing the substitution string with `s`. Capture group
 0 refers to the entire match object. Named capture groups can be referenced in the substitution
-with `g<groupname>`. For example:
+with `\g<groupname>`. For example:
 
 ```jldoctest
 julia> replace("first second", r"(\w+) (?<agroup>\w+)" => s"\g<agroup> \1")
@@ -935,6 +935,33 @@ ERROR: syntax: invalid escape sequence
 
 Triple-quoted regex strings, of the form `r"""..."""`, are also supported (and may be convenient
 for regular expressions containing quotation marks or newlines).
+
+The `Regex()` constructor may be used to create a valid regex string programmatically.  This permits using the contents of string variables and other string operations when constructing the regex string. Any of the regex codes above can be used within the single string argument to `Regex()`. Here are some examples:
+
+```jldoctest
+julia> using Dates
+
+julia> d = Date(1962,7,10)
+1962-07-10
+
+julia> regex_d = Regex("Day " * string(day(d)))
+r"Day 10"
+
+julia> match(regex_d, "It happened on Day 10")
+RegexMatch("Day 10")
+
+julia> name = "Jon"
+"Jon"
+
+julia> regex_name = Regex("[\"( ]$name[\") ]")  # interpolate value of name
+r"[\"( ]Jon[\") ]"
+
+julia> match(regex_name," Jon ")
+RegexMatch(" Jon ")
+
+julia> match(regex_name,"[Jon]") === nothing
+true
+```
 
 ## [Byte Array Literals](@id man-byte-array-literals)
 
@@ -1032,7 +1059,7 @@ some confusion regarding the matter.
 
 Version numbers can easily be expressed with non-standard string literals of the form [`v"..."`](@ref @v_str).
 Version number literals create [`VersionNumber`](@ref) objects which follow the
-specifications of [semantic versioning](http://semver.org),
+specifications of [semantic versioning](https://semver.org/),
 and therefore are composed of major, minor and patch numeric values, followed by pre-release and
 build alpha-numeric annotations. For example, `v"0.2.1-rc1+win64"` is broken into major version
 `0`, minor version `2`, patch version `1`, pre-release `rc1` and build `win64`. When entering

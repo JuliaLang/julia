@@ -517,7 +517,7 @@ supplied, `combine` defaults to `+` unless the elements of `V` are Booleans in w
 elements of `J` must satisfy `1 <= J[k] <= n`. Numerical zeros in (`I`, `J`, `V`) are
 retained as structural nonzeros; to drop numerical zeros, use [`dropzeros!`](@ref).
 
-For additional documentation and an expert driver, see `Base.SparseArrays.sparse!`.
+For additional documentation and an expert driver, see `SparseArrays.sparse!`.
 
 # Examples
 ```jldoctest
@@ -903,7 +903,7 @@ to generate intermediate result `(AQ)^T` (`transpose(A[:,q])`) in `C`. (2) Colum
 
 The first step is a call to `halfperm!`, and the second is a variant on `halfperm!` that
 avoids an unnecessary length-`nnz(A)` array-sweep and associated recomputation of column
-pointers. See [`halfperm!`](:func:Base.SparseArrays.halfperm!) for additional algorithmic
+pointers. See [`halfperm!`](:func:SparseArrays.halfperm!) for additional algorithmic
 information.
 
 See also: `unchecked_aliasing_permute!`
@@ -1215,7 +1215,7 @@ julia> A = sparse(Diagonal([1, 2, 3, 4]))
   [3, 3]  =  3
   [4, 4]  =  4
 
-julia> Base.SparseArrays.fkeep!(A, (i, j, v) -> isodd(v))
+julia> SparseArrays.fkeep!(A, (i, j, v) -> isodd(v))
 4×4 SparseMatrixCSC{Int64,Int64} with 2 stored entries:
   [1, 1]  =  1
   [3, 3]  =  3
@@ -1382,41 +1382,24 @@ function _sparse_findprevnz(m::SparseMatrixCSC, i::Integer)
     return LinearIndices(m)[m.rowval[prevhi-1], prevcol]
 end
 
-function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat)
-    ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
+
+function _sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat, rfn)
+    m, n = Int(m), Int(n)
+    (m < 0 || n < 0) && throw(ArgumentError("invalid Array dimensions"))
     0 <= density <= 1 || throw(ArgumentError("$density not in [0,1]"))
-    N = n*m
-
-    I, J = Vector{Int}(), Vector{Int}() # indices of nonzero elements
-    sizehint!(I, round(Int,N*density))
-    sizehint!(J, round(Int,N*density))
-
-    # density of nonzero columns:
-    L = log1p(-density)
-    coldensity = -expm1(m*L) # = 1 - (1-density)^m
-    colsparsity = exp(m*L) # = 1 - coldensity
-    iL = 1/L
-
-    rows = Vector{Int}()
-    for j in randsubseq(r, 1:n, coldensity)
-        # To get the right statistics, we *must* have a nonempty column j
-        # even if p*m << 1.   To do this, we use an approach similar to
-        # the one in randsubseq to compute the expected first nonzero row k,
-        # except given that at least one is nonzero (via Bayes' rule);
-        # carefully rearranged to avoid excessive roundoff errors.
-        k = ceil(log(colsparsity + rand(r)*coldensity) * iL)
-        ik = k < 1 ? 1 : k > m ? m : Int(k) # roundoff-error/underflow paranoia
-        randsubseq!(r, rows, 1:m-ik, density)
-        push!(rows, m-ik+1)
-        append!(I, rows)
-        nrows = length(rows)
-        Jlen = length(J)
-        resize!(J, Jlen+nrows)
-        @inbounds for i = Jlen+1:length(J)
-            J[i] = j
+    j, colm  = 1, 0
+    rowval = randsubseq(r, 1:(m*n), density)
+    nnz = length(rowval)
+    colptr = Vector{Int}(undef, n + 1)
+    @inbounds for col = 1:n+1
+        colptr[col] = j
+        while j <= nnz && (rowval[j] -= colm) <= m
+            j += 1
         end
+        j <= nnz && (rowval[j] += colm)
+        colm += m
     end
-    I, J
+    return SparseMatrixCSC(m, n, colptr, rowval, rfn(nnz))
 end
 
 """
@@ -1432,9 +1415,8 @@ argument specifies a random number generator, see [Random Numbers](@ref).
 # Examples
 ```jldoctest; setup = :(using Random; Random.seed!(1234))
 julia> sprand(Bool, 2, 2, 0.5)
-2×2 SparseMatrixCSC{Bool,Int64} with 2 stored entries:
-  [1, 1]  =  true
-  [2, 1]  =  true
+2×2 SparseMatrixCSC{Bool,Int64} with 1 stored entry:
+  [2, 2]  =  true
 
 julia> sprand(Float64, 3, 0.75)
 3-element SparseVector{Float64,Int64} with 1 stored entry:
@@ -1443,22 +1425,20 @@ julia> sprand(Float64, 3, 0.75)
 """
 function sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat,
                 rfn::Function, ::Type{T}=eltype(rfn(r,1))) where T
+    m,n = Int(m), Int(n)
     N = m*n
     N == 0 && return spzeros(T,m,n)
     N == 1 && return rand(r) <= density ? sparse([1], [1], rfn(r,1)) : spzeros(T,1,1)
-
-    I,J = sprand_IJ(r, m, n, density)
-    sparse_IJ_sorted!(I, J, rfn(r,length(I)), m, n, +)  # it will never need to combine
+    _sprand(r,m,n,density,i->rfn(r,i))
 end
 
 function sprand(m::Integer, n::Integer, density::AbstractFloat,
                 rfn::Function, ::Type{T}=eltype(rfn(1))) where T
+    m,n = Int(m), Int(n)
     N = m*n
     N == 0 && return spzeros(T,m,n)
     N == 1 && return rand() <= density ? sparse([1], [1], rfn(1)) : spzeros(T,1,1)
-
-    I,J = sprand_IJ(GLOBAL_RNG, m, n, density)
-    sparse_IJ_sorted!(I, J, rfn(length(I)), m, n, +)  # it will never need to combine
+    _sprand(GLOBAL_RNG,m,n,density,rfn)
 end
 
 truebools(r::AbstractRNG, n::Integer) = fill(true, n)
@@ -1471,23 +1451,28 @@ sprand(r::AbstractRNG, ::Type{Bool}, m::Integer, n::Integer, density::AbstractFl
 sprand(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where {T} = sprand(GLOBAL_RNG, T, m, n, density)
 
 """
-    sprandn([rng], m[,n],p::AbstractFloat)
+    sprandn([rng][,Type],m[,n],p::AbstractFloat)
 
 Create a random sparse vector of length `m` or sparse matrix of size `m` by `n`
 with the specified (independent) probability `p` of any entry being nonzero,
 where nonzero values are sampled from the normal distribution. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
 
+!!! compat "Julia 1.1"
+    Specifying the output element type `Type` requires at least Julia 1.1.
+
 # Examples
 ```jldoctest; setup = :(using Random; Random.seed!(0))
 julia> sprandn(2, 2, 0.75)
 2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:
-  [1, 1]  =  0.586617
-  [1, 2]  =  0.297336
+  [1, 2]  =  0.586617
+  [2, 2]  =  0.297336
 ```
 """
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
 sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n,density)
+sprandn(r::AbstractRNG, ::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where T = sprand(r,m,n,density,(r,i) -> randn(r,T,i), T)
+sprandn(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where T = sprandn(GLOBAL_RNG,T,m,n,density)
 
 LinearAlgebra.fillstored!(S::SparseMatrixCSC, x) = (fill!(nzvalview(S), x); S)
 
@@ -1519,7 +1504,8 @@ function spzeros(::Type{Tv}, ::Type{Ti}, sz::Tuple{Integer,Integer}) where {Tv, 
     spzeros(Tv, Ti, sz[1], sz[2])
 end
 
-function one(S::SparseMatrixCSC{T}) where T
+import Base._one
+function Base._one(unit::T, S::SparseMatrixCSC) where T
     S.m == S.n || throw(DimensionMismatch("multiplicative identity only defined for square matrices"))
     return SparseMatrixCSC{T}(I, S.m, S.n)
 end
@@ -1968,8 +1954,8 @@ function getindex_cols(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector) where {Tv,T
     return SparseMatrixCSC(m, nJ, colptrS, rowvalS, nzvalS)
 end
 
-getindex_traverse_col(::AbstractUnitRange, lo::Int, hi::Int) = lo:hi
-getindex_traverse_col(I::StepRange, lo::Int, hi::Int) = step(I) > 0 ? (lo:1:hi) : (hi:-1:lo)
+getindex_traverse_col(::AbstractUnitRange, lo::Integer, hi::Integer) = lo:hi
+getindex_traverse_col(I::StepRange, lo::Integer, hi::Integer) = step(I) > 0 ? (lo:1:hi) : (hi:-1:lo)
 
 function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractRange, J::AbstractVector) where {Tv,Ti<:Integer}
     @assert !has_offset_axes(A, I, J)
@@ -2364,7 +2350,11 @@ getindex(A::SparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{Boo
 getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = A[findall(I),J]
 
 ## setindex!
-function setindex!(A::SparseMatrixCSC{Tv,Ti}, _v, _i::Integer, _j::Integer) where {Tv,Ti<:Integer}
+
+# dispatch helper for #29034
+setindex!(A::SparseMatrixCSC, _v, _i::Integer, _j::Integer) = _setindex_scalar!(A, _v, _i, _j)
+
+function _setindex_scalar!(A::SparseMatrixCSC{Tv,Ti}, _v, _i::Integer, _j::Integer) where {Tv,Ti<:Integer}
     v = convert(Tv, _v)
     i = convert(Ti, _i)
     j = convert(Ti, _j)
@@ -2559,11 +2549,13 @@ end
 _to_same_csc(::SparseMatrixCSC{Tv, Ti}, V::AbstractMatrix, I...) where {Tv,Ti} = convert(SparseMatrixCSC{Tv,Ti}, V)
 _to_same_csc(::SparseMatrixCSC{Tv, Ti}, V::AbstractVector, I...) where {Tv,Ti} = convert(SparseMatrixCSC{Tv,Ti}, reshape(V, map(length, I)))
 
-setindex!(A::SparseMatrixCSC{Tv}, B::AbstractVecOrMat, I::Integer, J::Integer) where {Tv} = setindex!(A, convert(Tv, B), I, J)
+setindex!(A::SparseMatrixCSC{Tv}, B::AbstractVecOrMat, I::Integer, J::Integer) where {Tv} = _setindex_scalar!(A, B, I, J)
+
 function setindex!(A::SparseMatrixCSC{Tv,Ti}, V::AbstractVecOrMat, Ix::Union{Integer, AbstractVector{<:Integer}, Colon}, Jx::Union{Integer, AbstractVector{<:Integer}, Colon}) where {Tv,Ti<:Integer}
     @assert !has_offset_axes(A, V, Ix, Jx)
     (I, J) = Base.ensure_indexable(to_indices(A, (Ix, Jx)))
     checkbounds(A, I, J)
+    Base._setindex!(IndexStyle(A), A, V, to_indices(A, (Ix, Jx))...)
     B = _to_same_csc(A, V, I, J)
 
     issortedI = issorted(I)
@@ -2918,7 +2910,7 @@ julia> A = sparse([1 2; 0 0])
   [1, 1]  =  1
   [1, 2]  =  2
 
-julia> Base.SparseArrays.dropstored!(A, 1, 2); A
+julia> SparseArrays.dropstored!(A, 1, 2); A
 2×2 SparseMatrixCSC{Int64,Int64} with 1 stored entry:
   [1, 1]  =  1
 ```
@@ -2958,7 +2950,7 @@ julia> A = sparse(Diagonal([1, 2, 3, 4]))
   [3, 3]  =  3
   [4, 4]  =  4
 
-julia> Base.SparseArrays.dropstored!(A, [1, 2], [1, 1])
+julia> SparseArrays.dropstored!(A, [1, 2], [1, 1])
 4×4 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
   [2, 2]  =  2
   [3, 3]  =  3
@@ -3500,3 +3492,46 @@ end
 (+)(A::SparseMatrixCSC, J::UniformScaling) = A + sparse(J, size(A)...)
 (-)(A::SparseMatrixCSC, J::UniformScaling) = A - sparse(J, size(A)...)
 (-)(J::UniformScaling, A::SparseMatrixCSC) = sparse(J, size(A)...) - A
+
+## circular shift
+
+function circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, (r,c)::Base.DimsInteger{2})
+    nnz = length(X.nzval)
+
+    iszero(nnz) && return copy!(O, X)
+
+    ##### column shift
+    c = mod(c, X.n)
+    if iszero(c)
+        copy!(O, X)
+    else
+        ##### readjust output
+        resize!(O.colptr, X.n + 1)
+        resize!(O.rowval, nnz)
+        resize!(O.nzval, nnz)
+        O.colptr[X.n + 1] = nnz + 1
+
+        # exchange left and right blocks
+        nleft = X.colptr[X.n - c + 1] - 1
+        nright = nnz - nleft
+        @inbounds for i=c+1:X.n
+            O.colptr[i] = X.colptr[i-c] + nright
+        end
+        @inbounds for i=1:c
+            O.colptr[i] = X.colptr[X.n - c + i] - nleft
+        end
+        # rotate rowval and nzval by the right number of elements
+        circshift!(O.rowval, X.rowval, (nright,))
+        circshift!(O.nzval, X.nzval, (nright,))
+    end
+    ##### row shift
+    r = mod(r, X.m)
+    iszero(r) && return O
+    @inbounds for i=1:O.n
+        subvector_shifter!(O.rowval, O.nzval, O.colptr[i], O.colptr[i+1]-1, O.m, r)
+    end
+    return O
+end
+
+circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, (r,)::Base.DimsInteger{1}) = circshift!(O, X, (r,0))
+circshift!(O::SparseMatrixCSC, X::SparseMatrixCSC, r::Real) = circshift!(O, X, (Integer(r),0))

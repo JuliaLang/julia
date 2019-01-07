@@ -16,28 +16,8 @@ This operation is useful for multiple reasons.  A user may:
   * Include a `userimg.jl` file that includes packages into the system image, thereby creating a system
     image that has packages embedded into the startup environment.
 
-Julia now ships with a script that automates the tasks of building the system image, wittingly
-named `build_sysimg.jl` that lives in `DATAROOTDIR/julia/`.  That is, to include it into a current
-Julia session, type:
-
-```julia
-include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "build_sysimg.jl"))
-```
-
-This will include a `build_sysimg` function:
-
-```@docs
-BuildSysImg.build_sysimg
-```
-
-Note that this file can also be run as a script itself, with command line arguments taking the
-place of arguments passed to the `build_sysimg` function.  For example, to build a system image
-in `/tmp/sys.{so,dll,dylib}`, with the `core2` CPU instruction set, a user image of `~/userimg.jl`
-and `force` set to `true`, one would execute:
-
-```
-julia build_sysimg.jl /tmp/sys core2 ~/userimg.jl --force
-```
+The [`PackageCompiler.jl` package](https://github.com/JuliaLang/PackageCompiler.jl) contains convenient
+wrapper functions to automate this process.
 
 ## System image optimized for multiple microarchitectures
 

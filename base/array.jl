@@ -172,7 +172,7 @@ julia> Base.isbitsunion(Union{Float64, String})
 false
 ```
 """
-isbitsunion(u::Union) = ccall(:jl_array_store_unboxed, Cint, (Any,), u) != Cint(0)
+isbitsunion(u::Union) = (@_pure_meta; ccall(:jl_array_store_unboxed, Cint, (Any,), u) != Cint(0))
 isbitsunion(x) = false
 
 """
@@ -192,7 +192,8 @@ julia> Base.bitsunionsize(Union{Float64, UInt8, Int128})
 function bitsunionsize(u::Union)
     sz = Ref{Csize_t}(0)
     algn = Ref{Csize_t}(0)
-    @assert ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), u, sz, algn) != Cint(0)
+    isunboxed = ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), u, sz, algn)
+    @assert isunboxed != Cint(0)
     return sz[]
 end
 
@@ -305,30 +306,6 @@ original.
 copy
 
 copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
-
-# reshaping to same # of dimensions
-function reshape(a::Array{T,N}, dims::NTuple{N,Int}) where T where N
-    if prod(dims) != length(a)
-        _throw_dmrsa(dims, length(a))
-    end
-    if dims == size(a)
-        return a
-    end
-    ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
-end
-
-# reshaping to different # of dimensions
-function reshape(a::Array{T}, dims::NTuple{N,Int}) where T where N
-    if prod(dims) != length(a)
-        _throw_dmrsa(dims, length(a))
-    end
-    ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
-end
-
-function _throw_dmrsa(dims, len)
-    @_noinline_meta
-    throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $len"))
-end
 
 ## Constructors ##
 
@@ -484,7 +461,7 @@ function _one(unit::T, x::AbstractMatrix) where T
     # Matrix{T}(I, m, m)
     I = zeros(T, m, m)
     for i in 1:m
-        I[i,i] = 1
+        I[i,i] = unit
     end
     I
 end
@@ -536,10 +513,12 @@ function _collect(::Type{T}, itr, isz::SizeUnknown) where T
 end
 
 # make a collection similar to `c` and appropriate for collecting `itr`
-_similar_for(c::AbstractArray, T, itr, ::SizeUnknown) = similar(c, T, 0)
-_similar_for(c::AbstractArray, T, itr, ::HasLength) = similar(c, T, Int(length(itr)::Integer))
-_similar_for(c::AbstractArray, T, itr, ::HasShape) = similar(c, T, axes(itr))
-_similar_for(c, T, itr, isz) = similar(c, T)
+_similar_for(c::AbstractArray, ::Type{T}, itr, ::SizeUnknown) where {T} = similar(c, T, 0)
+_similar_for(c::AbstractArray, ::Type{T}, itr, ::HasLength) where {T} =
+    similar(c, T, Int(length(itr)::Integer))
+_similar_for(c::AbstractArray, ::Type{T}, itr, ::HasShape) where {T} =
+    similar(c, T, axes(itr))
+_similar_for(c, ::Type{T}, itr, isz) where {T} = similar(c, T)
 
 """
     collect(collection)
@@ -656,6 +635,14 @@ function collect_to_with_first!(dest, v1, itr, st)
     return grow_to!(dest, itr, st)
 end
 
+function setindex_widen_up_to(dest::AbstractArray{T}, el, i) where T
+    @_inline_meta
+    new = similar(dest, promote_typejoin(T, typeof(el)))
+    copyto!(new, firstindex(new), dest, firstindex(dest), i-1)
+    @inbounds new[i] = el
+    return new
+end
+
 function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
     # collect to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
@@ -668,10 +655,7 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
             @inbounds dest[i] = el::T
             i += 1
         else
-            R = promote_typejoin(T, typeof(el))
-            new = similar(dest, R)
-            copyto!(new,1, dest,1, i-1)
-            @inbounds new[i] = el
+            new = setindex_widen_up_to(dest, el, i)
             return collect_to!(new, itr, i+1, st)
         end
     end
@@ -686,23 +670,28 @@ function grow_to!(dest, itr)
     grow_to!(dest2, itr, y[2])
 end
 
+function push_widen(dest, el)
+    @_inline_meta
+    new = sizehint!(empty(dest, promote_typejoin(eltype(dest), typeof(el))), length(dest))
+    if new isa AbstractSet
+        # TODO: merge back these two branches when copy! is re-enabled for sets/vectors
+        union!(new, dest)
+    else
+        append!(new, dest)
+    end
+    push!(new, el)
+    return new
+end
+
 function grow_to!(dest, itr, st)
     T = eltype(dest)
     y = iterate(itr, st)
     while y !== nothing
         el, st = y
-        S = typeof(el)
-        if S === T || S <: T
+        if el isa T || typeof(el) === T
             push!(dest, el::T)
         else
-            new = sizehint!(empty(dest, promote_typejoin(T, S)), length(dest))
-            if new isa AbstractSet
-                # TODO: merge back these two branches when copy! is re-enabled for sets/vectors
-                union!(new, dest)
-            else
-                append!(new, dest)
-            end
-            push!(new, el)
+            new = push_widen(dest, el)
             return grow_to!(new, itr, st)
         end
         y = iterate(itr, st)
@@ -1226,6 +1215,7 @@ function _deleteat!(a::Vector, inds)
     n = length(a)
     y = iterate(inds)
     y === nothing && return a
+    n == 0 && throw(BoundsError(a, inds))
     (p, s) = y
     q = p+1
     while true
@@ -2208,10 +2198,10 @@ function indexin(a, b::AbstractArray)
     ]
 end
 
-function _findin(a, b)
-    ind  = Int[]
+function _findin(a::Union{AbstractArray, Tuple}, b)
+    ind  = Vector{eltype(keys(a))}()
     bset = Set(b)
-    @inbounds for (i,ai) in enumerate(a)
+    @inbounds for (i,ai) in pairs(a)
         ai in bset && push!(ind, i)
     end
     ind
@@ -2220,8 +2210,8 @@ end
 # If two collections are already sorted, _findin can be computed with
 # a single traversal of the two collections. This is much faster than
 # using a hash table (although it has the same complexity).
-function _sortedfindin(v, w)
-    viter, witer = eachindex(v), eachindex(w)
+function _sortedfindin(v::Union{AbstractArray, Tuple}, w)
+    viter, witer = keys(v), eachindex(w)
     out  = eltype(viter)[]
     vy, wy = iterate(viter), iterate(witer)
     if vy === nothing || wy === nothing
@@ -2345,7 +2335,7 @@ function filter!(f, a::AbstractVector)
 
     for acurr in a
         if f(acurr)
-            a[i] = acurr
+            @inbounds a[i] = acurr
             y = iterate(idx, state)
             y === nothing && (i += 1; break)
             i, state = y

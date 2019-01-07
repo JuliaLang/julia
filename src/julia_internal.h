@@ -364,7 +364,7 @@ void jl_print_gc_stats(JL_STREAM *s);
 void jl_gc_reset_alloc_count(void);
 int jl_assign_type_uid(void);
 jl_value_t *jl_cache_type_(jl_datatype_t *type);
-void jl_resort_type_cache(jl_svec_t *c);
+void jl_sort_types(jl_value_t **types, size_t length);
 int  jl_get_t_uid_ctr(void);
 void jl_set_t_uid_ctr(int i);
 uint32_t jl_get_gs_ctr(void);
@@ -560,7 +560,7 @@ static inline void jl_set_gc_and_wait(void)
 }
 #endif
 
-JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant);
+JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char *asm_variant, const char *debuginfo);
 
 void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(jl_value_t *p) JL_NOTSAFEPOINT;
@@ -1018,38 +1018,6 @@ void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *
                        jl_method_instance_t **linfos, size_t n);
 
 extern arraylist_t partial_inst;
-
-STATIC_INLINE uint64_t jl_load_unaligned_i64(const void *ptr) JL_NOTSAFEPOINT
-{
-    uint64_t val;
-    memcpy(&val, ptr, 8);
-    return val;
-}
-STATIC_INLINE uint32_t jl_load_unaligned_i32(const void *ptr) JL_NOTSAFEPOINT
-{
-    uint32_t val;
-    memcpy(&val, ptr, 4);
-    return val;
-}
-STATIC_INLINE uint16_t jl_load_unaligned_i16(const void *ptr) JL_NOTSAFEPOINT
-{
-    uint16_t val;
-    memcpy(&val, ptr, 2);
-    return val;
-}
-
-STATIC_INLINE void jl_store_unaligned_i64(void *ptr, uint64_t val) JL_NOTSAFEPOINT
-{
-    memcpy(ptr, &val, 8);
-}
-STATIC_INLINE void jl_store_unaligned_i32(void *ptr, uint32_t val) JL_NOTSAFEPOINT
-{
-    memcpy(ptr, &val, 4);
-}
-STATIC_INLINE void jl_store_unaligned_i16(void *ptr, uint16_t val) JL_NOTSAFEPOINT
-{
-    memcpy(ptr, &val, 2);
-}
 
 #if jl_has_builtin(__builtin_assume_aligned) || defined(_COMPILER_GCC_)
 #define jl_assume_aligned(ptr, align) __builtin_assume_aligned(ptr, align)

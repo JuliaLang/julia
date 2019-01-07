@@ -471,7 +471,7 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
     for(i=0; i < n; i++) {
         jl_value_t *pi = ts[i];
         if (!(jl_is_type(pi) || jl_is_typevar(pi)) || jl_is_vararg_type(pi))
-            jl_type_error_rt("Union", "parameter", (jl_value_t*)jl_type_type, pi);
+            jl_type_error("Union", (jl_value_t*)jl_type_type, pi);
     }
     if (n == 1) return ts[0];
 
@@ -518,7 +518,7 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
 JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
 {
     if (!jl_is_type(body) && !jl_is_typevar(body))
-        jl_type_error_rt("UnionAll", "", (jl_value_t*)jl_type_type, body);
+        jl_type_error("UnionAll", (jl_value_t*)jl_type_type, body);
     // normalize `T where T<:S` => S
     if (body == (jl_value_t*)v)
         return v->ub;
@@ -630,9 +630,9 @@ static int dt_compare(const void *ap, const void *bp) JL_NOTSAFEPOINT
     return typekey_compare(b, jl_svec_data(a->parameters), jl_svec_len(a->parameters));
 }
 
-void jl_resort_type_cache(jl_svec_t *c)
+void jl_sort_types(jl_value_t **types, size_t length)
 {
-    qsort(jl_svec_data(c), jl_svec_len(c), sizeof(jl_value_t*), dt_compare);
+    qsort(types, length, sizeof(jl_value_t*), dt_compare);
 }
 
 static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
@@ -814,6 +814,7 @@ static int within_typevar(jl_value_t *t, jl_value_t *vlb, jl_value_t *vub)
             (jl_has_free_typevars(vub) || jl_subtype(ub, vub)));
 }
 
+struct _jl_typestack_t;
 typedef struct _jl_typestack_t jl_typestack_t;
 
 static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
@@ -912,10 +913,10 @@ JL_DLLEXPORT jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *v)
     return p;
 }
 
-JL_EXTENSION typedef struct _jl_typestack_t {
+JL_EXTENSION struct _jl_typestack_t {
     jl_datatype_t *tt;
     struct _jl_typestack_t *prev;
-} jl_typestack_t;
+};
 
 static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t *stack, int check);
 static jl_svec_t *inst_all(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *stack, int check);
@@ -1105,7 +1106,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     if (!istuple) {
         if (jl_is_vararg_type((jl_value_t*)dt) && ntp == 2) {
             if (!jl_is_long(iparams[1]) && !jl_is_typevar(iparams[1])) {
-                jl_type_error_rt("apply_type", "Vararg count", (jl_value_t*)jl_long_type, iparams[1]);
+                jl_type_error_rt("Vararg", "count", (jl_value_t*)jl_long_type, iparams[1]);
             }
         }
         // check parameters against bounds in type definition

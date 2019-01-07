@@ -671,7 +671,7 @@ function analyze_method!(idx::Int, @nospecialize(f), @nospecialize(ft), @nospeci
         return ConstantCase(quoted(linfo.inferred_const), method, Any[methsp...], metharg)
     end
 
-    isconst, inferred = find_inferred(linfo, atypes, sv)
+    isconst, inferred = find_inferred(linfo, atypes, sv, stmttyp)
     if isconst
         return ConstantCase(inferred, method, Any[methsp...], metharg)
     end
@@ -837,6 +837,12 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             # Independent of whether we can inline, the above analysis allows us to rewrite
             # this apply call to a regular call
             ft = atypes[2]
+            if length(atypes) == 3 && ft isa Const && ft.val === Core.tuple && atypes[3] ⊑ Tuple
+                # rewrite `((t::Tuple)...,)` to `t`
+                ir.stmts[idx] = stmt.args[3]
+                ok = false
+                break
+            end
             stmt.args, atypes = rewrite_apply_exprargs!(ir, idx, stmt.args, atypes, sv)
             ok = !has_free_typevars(ft)
             ok || break
@@ -1152,7 +1158,7 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
     return urs[]
 end
 
-function find_inferred(linfo::MethodInstance, @nospecialize(atypes), sv::OptimizationState)
+function find_inferred(linfo::MethodInstance, @nospecialize(atypes), sv::OptimizationState, @nospecialize(rettype))
     # see if the method has a InferenceResult in the current cache
     # or an existing inferred code info store in `.inferred`
     haveconst = false
@@ -1163,7 +1169,7 @@ function find_inferred(linfo::MethodInstance, @nospecialize(atypes), sv::Optimiz
             break
         end
     end
-    if haveconst
+    if haveconst || improvable_via_constant_propagation(rettype)
         inf_result = cache_lookup(linfo, atypes, sv.params.cache) # Union{Nothing, InferenceResult}
     else
         inf_result = nothing

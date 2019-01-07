@@ -433,6 +433,20 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     # Otherwise, use Schur decomposition
     return schurpow(A, p)
 end
+
+"""
+    ^(A::AbstractMatrix, p::Number)
+
+Matrix power, equivalent to ``\\exp(p\\log(A))``
+
+# Examples
+```jldoctest
+julia> [1 2; 0 3]^3
+2×2 Array{Int64,2}:
+ 1  26
+ 0  27
+```
+"""
 (^)(A::AbstractMatrix, p::Number) = exp(p*log(A))
 
 # Matrix exponential
@@ -467,6 +481,28 @@ julia> exp(A)
 exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
 exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
 
+"""
+    ^(b::Number, A::AbstractMatrix)
+
+Matrix exponential, equivalent to ``\\exp(\\log(b)A)``.
+
+!!! compat "Julia 1.1"
+    Support for raising `Irrational` numbers (like `ℯ`)
+    to a matrix was added in Julia 1.1.
+
+# Examples
+```jldoctest
+julia> 2^[1 2; 0 3]
+2×2 Array{Float64,2}:
+ 2.0  6.0
+ 0.0  8.0
+
+julia> ℯ^[1 2; 0 3]
+2×2 Array{Float64,2}:
+ 2.71828  17.3673
+ 0.0      20.0855
+```
+"""
 Base.:^(b::Number, A::AbstractMatrix) = exp!(log(b)*A)
 # method for ℯ to explicitly elide the log(b) multiplication
 Base.:^(::Irrational{:ℯ}, A::AbstractMatrix) = exp(A)
@@ -1201,19 +1237,21 @@ factorize(A::Transpose) = transpose(factorize(parent(A)))
 ## Moore-Penrose pseudoinverse
 
 """
-    pinv(M[, rtol::Real])
+    pinv(M; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
+    pinv(M, rtol::Real) = pinv(M; rtol=rtol) # to be deprecated in Julia 2.0
 
 Computes the Moore-Penrose pseudoinverse.
 
 For matrices `M` with floating point elements, it is convenient to compute
 the pseudoinverse by inverting only singular values greater than
-`rtol * maximum(svdvals(M))`.
+`max(atol, rtol*σ₁)` where `σ₁` is the largest singular value of `M`.
 
-The optimal choice of `rtol` varies both with the value of `M` and the intended application
-of the pseudoinverse. The default value of `rtol` is
-`eps(real(float(one(eltype(M)))))*minimum(size(M))`, which is essentially machine epsilon
-for the real part of a matrix element multiplied by the larger matrix dimension. For
-inverting dense ill-conditioned matrices in a least-squares sense,
+The optimal choice of absolute (`atol`) and relative tolerance (`rtol`) varies
+both with the value of `M` and the intended application of the pseudoinverse.
+The default relative tolerance is `n*ϵ`, where `n` is the size of the smallest
+dimension of `M`, and `ϵ` is the [`eps`](@ref) of the element type of `M`.
+
+For inverting dense ill-conditioned matrices in a least-squares sense,
 `rtol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
 
 For more information, see [^issue8859], [^B96], [^S84], [^KY88].
@@ -1244,7 +1282,7 @@ julia> M * N
 
 [^KY88]: Konstantinos Konstantinides and Kung Yao, "Statistical analysis of effective singular values in matrix rank determination", IEEE Transactions on Acoustics, Speech and Signal Processing, 36(5), 1988, 757-763. [doi:10.1109/29.1585](https://doi.org/10.1109/29.1585)
 """
-function pinv(A::AbstractMatrix{T}, rtol::Real) where T
+function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(float(one(T))))*min(size(A)...))*iszero(atol)) where T
     m, n = size(A)
     Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
     if m == 0 || n == 0
@@ -1253,9 +1291,10 @@ function pinv(A::AbstractMatrix{T}, rtol::Real) where T
     if istril(A)
         if istriu(A)
             maxabsA = maximum(abs.(diag(A)))
+            tol = max(rtol*maxabsA, atol)
             B = zeros(Tout, n, m)
             for i = 1:min(m, n)
-                if abs(A[i,i]) > rtol*maxabsA
+                if abs(A[i,i]) > tol
                     Aii = inv(A[i,i])
                     if isfinite(Aii)
                         B[i,i] = Aii
@@ -1266,16 +1305,13 @@ function pinv(A::AbstractMatrix{T}, rtol::Real) where T
         end
     end
     SVD         = svd(A, full = false)
+    tol         = max(rtol*maximum(SVD.S), atol)
     Stype       = eltype(SVD.S)
     Sinv        = zeros(Stype, length(SVD.S))
-    index       = SVD.S .> rtol*maximum(SVD.S)
+    index       = SVD.S .> tol
     Sinv[index] = one(Stype) ./ SVD.S[index]
     Sinv[findall(.!isfinite.(Sinv))] .= zero(Stype)
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
-end
-function pinv(A::AbstractMatrix{T}) where T
-    rtol = eps(real(float(one(T))))*min(size(A)...)
-    return pinv(A, rtol)
 end
 function pinv(x::Number)
     xi = inv(x)
@@ -1285,13 +1321,16 @@ end
 ## Basis for null space
 
 """
-    nullspace(M[, rtol::Real])
+    nullspace(M; atol::Real=0, rtol::Rea=atol>0 ? 0 : n*ϵ)
+    nullspace(M, rtol::Real) = nullspace(M; rtol=rtol) # to be deprecated in Julia 2.0
 
 Computes a basis for the nullspace of `M` by including the singular
-vectors of A whose singular have magnitude are greater than `rtol*σ₁`,
-where `σ₁` is `A`'s largest singular values. By default, the value of
-`rtol` is the smallest dimension of `A` multiplied by the [`eps`](@ref)
-of the [`eltype`](@ref) of `A`.
+vectors of A whose singular have magnitude are greater than `max(atol, rtol*σ₁)`,
+where `σ₁` is `M`'s largest singularvalue.
+
+By default, the relative tolerance `rtol` is `n*ϵ`, where `n`
+is the size of the smallest dimension of `M`, and `ϵ` is the [`eps`](@ref) of
+the element type of `M`.
 
 # Examples
 ```jldoctest
@@ -1307,21 +1346,29 @@ julia> nullspace(M)
  0.0
  1.0
 
-julia> nullspace(M, 2)
+julia> nullspace(M, rtol=3)
 3×3 Array{Float64,2}:
  0.0  1.0  0.0
  1.0  0.0  0.0
  0.0  0.0  1.0
+
+julia> nullspace(M, atol=0.95)
+3×1 Array{Float64,2}:
+ 0.0
+ 0.0
+ 1.0
 ```
 """
-function nullspace(A::AbstractMatrix, rtol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
+function nullspace(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol))
     m, n = size(A)
     (m == 0 || n == 0) && return Matrix{eltype(A)}(I, n, n)
     SVD = svd(A, full=true)
-    indstart = sum(s -> s .> SVD.S[1]*rtol, SVD.S) + 1
+    tol = max(atol, SVD.S[1]*rtol)
+    indstart = sum(s -> s .> tol, SVD.S) + 1
     return copy(SVD.Vt[indstart:end,:]')
 end
-nullspace(a::AbstractVector, rtol::Real = min(size(a)...)*eps(real(float(one(eltype(a)))))) = nullspace(reshape(a, length(a), 1), rtol)
+
+nullspace(A::AbstractVector; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol)) = nullspace(reshape(A, length(A), 1), rtol= rtol, atol= atol)
 
 """
     cond(M, p::Real=2)

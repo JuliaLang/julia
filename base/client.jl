@@ -263,7 +263,14 @@ function exec_options(opts)
         if !is_interactive
             ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
         end
-        include(Main, PROGRAM_FILE)
+        try
+            include(Main, PROGRAM_FILE)
+        catch err
+            invokelatest(display_error, err, catch_backtrace())
+            if !is_interactive
+                exit(1)
+            end
+        end
     end
     repl |= is_interactive
     if repl
@@ -380,7 +387,11 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
                         print("julia> ")
                         flush(stdout)
                     end
-                    eval_user_input(parse_input_line(input), true)
+                    try
+                        eval_user_input(parse_input_line(input), true)
+                    catch err
+                        isa(err, InterruptException) ? print("\n\n") : rethrow()
+                    end
                 end
             end
         end

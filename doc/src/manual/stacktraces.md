@@ -187,14 +187,17 @@ ERROR: Whoops!
 [...]
 ```
 
-## Exception stacks and [`catch_stack`](@ref)
+## Exception stacks and `catch_stack`
+
+!!! compat "Julia 1.1"
+    Exception stacks requires at least Julia 1.1.
 
 While handling an exception further exceptions may be thrown. It can be useful to inspect all these exceptions to
 identify the root cause of a problem. The julia runtime supports this by pushing each exception onto an internal
 *exception stack* as it occurs. When the code exits a `catch` normally, any exceptions which were pushed onto the stack
 in the associated `try` are considered to be successfully handled and are removed from the stack.
 
-The stack of current exceptions can be accessed using the [`catch_stack`](@ref) function. For example,
+The stack of current exceptions can be accessed using the experimental [`Base.catch_stack`](@ref) function. For example,
 
 ```julia-repl
 julia> try
@@ -203,7 +206,7 @@ julia> try
            try
                error("(B) An exception while handling the exception")
            catch
-               for (exc, bt) in catch_stack()
+               for (exc, bt) in Base.catch_stack()
                    showerror(stdout, exc, bt)
                    println()
                end
