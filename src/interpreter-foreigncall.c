@@ -1834,8 +1834,9 @@ extern int mpfr_custom_get_kind(mpfr_srcptr);
 struct interpreter_state;
 typedef struct interpreter_state interpreter_state;
 extern jl_value_t *eval_value(jl_value_t *e, interpreter_state *s);
-jl_value_t *eval_foreigncall(const char *target, interpreter_state *s, jl_value_t **args, size_t nargs)
+jl_value_t *eval_foreigncall(jl_sym_t *fname, jl_sym_t *libname, interpreter_state *s, jl_value_t **args, size_t nargs)
 {
+const char *target = jl_symbol_name(fname);
 // jl_value_ptr is special
 if (strcmp(target, "jl_value_ptr") == 0) {
     if (eval_value(args[1], s) == (jl_value_t*)jl_any_type) {
