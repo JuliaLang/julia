@@ -188,7 +188,7 @@ function take!(qp::QueuePool; timeout::Number = Inf)
     )
 
     if ret == :error
-        throw("Timeout within take!()")
+        error("Timeout within take!()")
     end
 
     if isempty(qp.results_buffer)
