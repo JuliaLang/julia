@@ -2009,7 +2009,7 @@ concatenate_setindex!(R, X::AbstractArray, I...) = (R[I...] = X)
 
 function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
     for (i,j) in zip(eachindex(dest),eachindex(A))
-        dest[i] = f(A[j])
+        @inbounds dest[i] = f(A[j])
     end
     return dest
 end
@@ -2057,10 +2057,17 @@ end
 ## N argument
 
 @inline ith_all(i, ::Tuple{}) = ()
-@inline ith_all(i, as) = (as[1][i], ith_all(i, tail(as))...)
+function ith_all(i, as)
+    @_propagate_inbounds_meta
+    return (as[1][i], ith_all(i, tail(as))...)
+end
 
 function map_n!(f::F, dest::AbstractArray, As) where F
-    for i = LinearIndices(As[1])
+    #FIXME: adding `@_propagate_inbounds_meta` will destroy the performance of `map!`
+    #@_propagate_inbounds_meta
+    idxs1 = LinearIndices(As[1])
+    @boundscheck LinearIndices(dest) == idxs1 && all(x -> x == idxs1, map(LinearIndices, As))
+    @inbounds for i = idxs1
         dest[i] = f(ith_all(i, As)...)
     end
     return dest
