@@ -432,7 +432,14 @@ function complete_methods(ex_org::Expr, context_module=Main)::Vector{Completion}
     args_ex = Any[]
     func, found = get_value(ex_org.args[1], context_module)
     !found && return Completion[]
-    for ex in ex_org.args[2:end]
+
+    funargs = ex_org.args[2:end]
+    # handle broadcasting
+    if ex_org.head === :. && ex_org.args[2] isa Expr
+        funargs = ex_org.args[2].args
+    end
+
+    for ex in funargs
         val, found = get_type(ex, context_module)
         push!(args_ex, val)
     end
@@ -610,12 +617,16 @@ function completions(string, pos, context_module=Main)::Completions
 
     # Make sure that only bslash_completions is working on strings
     inc_tag==:string && return String[], 0:-1, false
-
     if inc_tag == :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
         ex = Meta.parse(partial[frange] * ")", raise=false, depwarn=false)
-        if isa(ex, Expr) && ex.head==:call
-            return complete_methods(ex, context_module), first(frange):method_name_end, false
+
+        if isa(ex, Expr)
+            if ex.head==:call
+                return complete_methods(ex, context_module), first(frange):method_name_end, false
+            elseif ex.head==:. && ex.args[2] isa Expr && ex.args[2].head==:tuple
+                return complete_methods(ex, context_module), first(frange):(method_name_end - 1), false
+            end
         end
     elseif inc_tag == :comment
         return Completion[], 0:-1, false

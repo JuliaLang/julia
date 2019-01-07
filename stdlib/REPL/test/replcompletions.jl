@@ -991,6 +991,15 @@ let s = "test(1,1, "
     @test s[r] == "test"
 end
 
+let s = "test.(1,1, "
+    c, r, res = test_complete_context(s)
+    @test !res
+    @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Int, Int})))
+    @test length(c) == 3
+    @test r == 1:4
+    @test s[r] == "test"
+end
+
 let s = "prevind(\"θ\",1,"
     c, r, res = test_complete_context(s)
     @test c[1] == string(first(methods(prevind, Tuple{String, Int})))
