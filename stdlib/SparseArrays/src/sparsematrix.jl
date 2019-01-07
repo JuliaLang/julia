@@ -383,7 +383,7 @@ function SparseMatrixCSC{Tv,Ti}(M::AbstractMatrix) where {Tv,Ti}
             push!(V, v)
         end
     end
-    sparse_increasing!(I, V, size(M)...)
+    return sparse_sortedlinearindices!(I, V, size(M)...)
 end
 
 function SparseMatrixCSC{Tv,Ti}(M::StridedMatrix) where {Tv,Ti}
@@ -1340,7 +1340,7 @@ function _sparse_findprevnz(m::SparseMatrixCSC, i::Integer)
 end
 
 
-function sparse_increasing!(I::Vector{Ti}, V::Vector, m::Int, n::Int) where Ti
+function sparse_sortedlinearindices!(I::Vector{Ti}, V::Vector, m::Int, n::Int) where Ti
     length(I) == length(V) || throw(ArgumentError("I and V should have the same length"))
     nnz = length(V)
     colptr = Vector{Ti}(undef, n + 1)
@@ -1353,7 +1353,7 @@ function sparse_increasing!(I::Vector{Ti}, V::Vector, m::Int, n::Int) where Ti
         j <= nnz && (I[j] += colm)
         colm += m
     end
-    SparseMatrixCSC(m, n, colptr, I, V)
+    return SparseMatrixCSC(m, n, colptr, I, V)
 end
 
 """
@@ -1382,7 +1382,7 @@ function sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat, 
     (m < 0 || n < 0) && throw(ArgumentError("invalid Array dimensions"))
     0 <= density <= 1 || throw(ArgumentError("$density not in [0,1]"))
     I = randsubseq(r, 1:(m*n), density)
-    sparse_increasing!(I, convert(Vector{T}, rfn(r,length(I))), m, n)
+    return sparse_sortedlinearindices!(I, convert(Vector{T}, rfn(r,length(I))), m, n)
 end
 
 sprand(m::Integer, n::Integer, density::AbstractFloat, rfn::Function, ::Type{T} = eltype(rfn(1))) where T = sprand(GLOBAL_RNG,m,n,density,(r, i) -> rfn(i))
