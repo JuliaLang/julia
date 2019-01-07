@@ -1,15 +1,15 @@
-export QueuePool, close, push_job!, fetch_result
-import Base: close
+export QueuePool, close, push!, take!
+import Base: close, push!, take!
 
 """
     QueuePool
 
 A pool of workers that asynchronously execute jobs passed to them, with
-facilities for both in-order and out-of-order result fetching.  This construct
-is intended to act like an asynchronous `pmap()`, allowing streaming parallel
-operations to dynamically add jobs to a work queue and fetch results with a
-minimum of fuss. To use, construct a `QueuePool`, submit work items with
-`push_job!()`, and get output through `fetch_result()`.  Example usage:
+facilities for both in-order and out-of-order taking of results.  This
+construct is intended to act like an asynchronous `pmap()`, allowing streaming
+parallel operations to dynamically add jobs to a work queue and take results
+with a minimum of fuss. To use, construct a `QueuePool`, submit work items with
+`push!()`, and get output through `take!()`.  Example usage:
 
 ```julia
 using Distributed
@@ -29,28 +29,28 @@ qp = QueuePool(workers, do_work; setup=:(using Statistics))
 
 # Queue many jobs (they will immediately start processing)
 for idx in 1:10000
-    push_job!(qp, randn(10, 10), randn(10))
+    push!(qp, randn(10, 10), randn(10))
 end
 
 # pull results out, first asking for specific job IDs.  Note that if we were to
 # request a job ID too far into the future, this would pause interminably, as
 # the worker threads would run up against the default `queue_size` limit of 128,
-# refusing to calculate further results until an earlier result is fetched, so
-# if fetching specific results is important, be sure to that the `queue_size` is
-# set large enough to guarantee that all results will be fetchable.
-fetch_result(qp, 1)
-fetch_result(qp, 10)
-fetch_result(qp, 100)
+# refusing to calculate further results until an earlier result is taken, so
+# if taking specific results is important, be sure to that the `queue_size` is
+# set large enough to guarantee that all results will be takeable.
+take!(qp, 1)
+take!(qp, 10)
+take!(qp, 100)
 
 # Next, just pull out whatever results are available quickest:
-[fetch_result(qp) for idx in 1:222]
+[take!(qp) for idx in 1:222]
 
-# Finally, fetch a result from far in the future, but timing out if it doesn't
+# Finally, take a result from far in the future, but timing out if it doesn't
 # show up within 10 seconds:
 try
-    fetch_result(qp, 9999; timeout=10.0)
+    take!(qp, 9999; timeout=10.0)
 catch
-    println("Could not fetch jod_id 9999!")
+    println("Could not take jod_id 9999!")
 end
 ```
 """
@@ -77,14 +77,14 @@ end
     QueuePool(workers, proc_func; setup = nothing, queue_size=128)
 
 Construct a QueuePool that wraps the `workers` worker processes, each executing
-`proc_func()` on items submitted to the `QueuePool` via the `push_job!()`
+`proc_func()` on items submitted to the `QueuePool` via the `push!()`
 method. If the quoted expression `setup` is given, it will be executed once on
 each worker before `proc_func` is ever called.  Queued jobs can be added
 without limit, however the workers will process results only up to the given
 `queue_size` limit; if more than `queue_size` results are waiting to be
-fetched, further result calculation will be blocked.
+taken, further result calculation will be blocked.
 """
-function QueuePool(workers::Vector{Int}, proc_func::Function; setup::Expr=quote nothing end, queue_size::Int=128)
+function QueuePool(workers::Vector, proc_func::Function; setup::Expr=quote nothing end, queue_size::Int=128)
     # Create our QueuePool
     qp = QueuePool(
         workers,
@@ -102,46 +102,34 @@ function QueuePool(workers::Vector{Int}, proc_func::Function; setup::Expr=quote 
         remote_do(worker_task, id, qp, proc_func)
     end
 
+    # Set a finalizer to put the kill switch onto workers if `qp` gets GC'd
+    finalizer(close, qp)
+
     # Return the queuepool
     return qp
 end
 
-"""
-    QueuePool(num_workers, proc_func, setup = nothing, queue_size=128)
-
-A variant of the `QueuePool` constructor that takes the number of workers to be
-created rather than already-created worker IDs.
-"""
-function QueuePool(num_workers::Int, args...; kwargs...)
-    # Auto-create the workers
-    workers = addprocs(num_workers)
-
-    return QueuePool(workers, args...; kwargs...)
-end
 
 """
     close(qp::QueuePool)
 
-Close the given `QueuePool`, destroying all queue workers
+Close the given `QueuePool`, breaking all workers out of their `worker_task`.
 """
 function close(qp::QueuePool)
-    # Tell the worker processes to die
+    # Tell the worker processes to quit out
     put!(qp.kill_switch, true)
-
-    # Wait for the workers to descend into the long, dark sleep
-    rmprocs(qp.workers...; waitfor=10)
+    return nothing
 end
 
 function worker_task(qp::QueuePool, proc_func)
-    # Tell the workers to include this file and whatever other setup they need,
-    # so that they can communicate with us and complete their tasks.
-    #include(@__FILE__)
+    # Run the setup on this worker
     Core.eval(Main, qp.setup)
 
     # Loop unless we're burning this whole queue pool down
     while !isready(qp.kill_switch)
+        local job_id, args, y
+
         # Grab the next queued job from the master
-        local job_id, args
         try
             job_id, args = take!(qp.queued_jobs)
         catch e
@@ -152,7 +140,6 @@ function worker_task(qp::QueuePool, proc_func)
             rethrow(e)
         end
 
-        local y
         try
             # Push x through proc_func to get y
             y = proc_func(args...)
@@ -169,49 +156,14 @@ function worker_task(qp::QueuePool, proc_func)
     end
 end
 
-
 """
-    try_buffer_result!(qp::QueuePool)
-
-Does a nonblocking read of the next result from the QueuePool into our result
-buffer.  If no result is available, returns `nothing` immediately.
-"""
-function try_buffer_result!(qp::QueuePool)
-    if isready(qp.results)
-        job_id, result = take!(qp.results)
-        qp.results_buffer[job_id] = result
-        return job_id
-    end
-    return
-end
-
-# Check to see if it's `nothing` and `yield()` if it is.
-function try_buffer_result!(qp::QueuePool, t_start::Number, timeout::Nothing)
-    if try_buffer_result!(qp) == nothing
-        # No new results available, so just yield
-        yield()
-    end
-end
-
-# Check to see if we've broken through our timeout
-function try_buffer_result!(qp::QueuePool, t_start::Number, timeout::Number)
-    try_buffer_result!(qp, t_start, nothing)
-
-    if (time() - t_start) > timeout
-        error("timeout within fetch_result")
-    end
-end
-
-
-
-"""
-    push_job!(qp::QueuePool, args...)
+    push!(qp::QueuePool, args...)
 
 Push a new job onto the QueuePool, returning the associated job id with this
-job, for future usage with `fetch_result(qp, job_id)`.  `args...` will be passed
+job, for future usage with `take!(qp, job_id)`.  `args...` will be passed
 to the `proc_func` within `qp`.
 """
-function push_job!(qp::QueuePool, args...)
+function push!(qp::QueuePool, args...)
     job_id = qp.next_job
     qp.next_job += 1
 
@@ -220,33 +172,57 @@ function push_job!(qp::QueuePool, args...)
 end
 
 """
-    fetch_result(qp::QueuePool; timeout = nothing)
+    take!(qp::QueuePool; timeout = Inf)
 
 Return a result from the QueuePool, regardless of order.  By default, will wait
 for forever; set `timeout` to a value in seconds to time out and throw an error
 if a value does not arrive.
 """
-function fetch_result(qp::QueuePool; timeout = nothing)
-    # If we don't have any results buffered, then pull one in
-    t_start = time()
-    while isempty(qp.results_buffer)
-        try_buffer_result!(qp, t_start, timeout)
+function take!(qp::QueuePool; timeout::Number = Inf)
+    # Wait until we either have a result within results_buffer,
+    # are ready to pull something out of qp.results, or we timeout.
+    ret = timedwait(
+        () -> !isempty(qp.results_buffer) || isready(qp.results),
+        Float64(timeout);
+        pollint=0.1,
+    )
+
+    if ret == :error
+        throw("Timeout within take!()")
     end
+
+    if isempty(qp.results_buffer)
+        # Don't even bother sticking it onto the results_buffer,
+        # just return it immediately.
+        job_id, result = take!(qp.results)
+        return result
+    end
+
+    # Take the first thing off of the results_buffer
     return pop!(qp.results_buffer).second
 end
 
 """
-    fetch_result(qp::QueuePool, job_id::Int; timeout = nothing)
+    take!(qp::QueuePool, job_id::Int; timeout = Inf)
 
 Return a result from the QueuePool, in specific order.  By default, will wait
 for forever; set `timeout` to a value in seconds to time out and throw an error
 if a value does not arrive.
 """
-function fetch_result(qp::QueuePool, job_id::Int; timeout=nothing)
-    # Keep accumulating results until we get the job_id we're interested in.
-    t_start = time()
+function take!(qp::QueuePool, job_id::Int; timeout::Number = Inf)
+    t_horizon = time() + Float64(timeout)
     while !haskey(qp.results_buffer, job_id)
-        try_buffer_result!(qp, t_start, timeout)
+        # Wait until a new result is available
+        ret = timedwait(() -> isready(qp.results), t_horizon - time(); pollint=0.1)
+        if ret == :timed_out
+            error("Timeout within take!()")
+        end
+
+        # Push it onto results_buffer
+        new_job_id, result = take!(qp.results)
+        qp.results_buffer[new_job_id] = result
     end
+
+    # Return the relevant entry from the results_buffer
     return pop!(qp.results_buffer, job_id)
 end
