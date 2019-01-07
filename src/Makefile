@@ -48,7 +48,7 @@ FLAGS += -I$(LOCALBASE)/include
 endif
 
 SRCS := \
-	jltypes gf typemap ast builtins module interpreter-foreigncall interpreter symbol \
+	jltypes gf typemap ast builtins module interpreter symbol \
 	dlload sys init task array dump staticdata toplevel datatype \
 	simplevector APInt-C runtime_intrinsics runtime_ccall precompile \
 	threading stackwalk gc gc-debug gc-pages gc-stacks method \
@@ -57,6 +57,10 @@ SRCS := \
 
 ifeq ($(USEMSVC), 1)
 SRCS += getopt
+endif
+
+ifeq ($(OS), emscripten)
+SRCS += interpreter-foreigncall
 endif
 
 ifeq ($(DISABLE_LIBUV),0)
