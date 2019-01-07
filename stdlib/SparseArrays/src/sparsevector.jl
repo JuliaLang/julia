@@ -492,31 +492,24 @@ copyto!(A::SparseMatrixCSC, B::SparseVector{TvB,TiB}) where {TvB,TiB} =
 
 
 ### Rand Construction
-sprand(n::Integer, p::AbstractFloat, rfn::Function, ::Type{T}) where {T} = sprand(GLOBAL_RNG, n, p, rfn, T)
-function sprand(r::AbstractRNG, n::Integer, p::AbstractFloat, rfn::Function, ::Type{T}) where T
-    I = randsubseq(r, 1:convert(Int, n), p)
-    V = rfn(r, T, length(I))
-    SparseVector(n, I, V)
-end
-
 sprand(n::Integer, p::AbstractFloat, rfn::Function) = sprand(GLOBAL_RNG, n, p, rfn)
 function sprand(r::AbstractRNG, n::Integer, p::AbstractFloat, rfn::Function)
     I = randsubseq(r, 1:convert(Int, n), p)
-    V = rfn(r, length(I))
+    V = rfn(length(I))
     SparseVector(n, I, V)
 end
 
 sprand(n::Integer, p::AbstractFloat) = sprand(GLOBAL_RNG, n, p, rand)
 
-sprand(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, rand)
-sprand(r::AbstractRNG, ::Type{T}, n::Integer, p::AbstractFloat) where {T} = sprand(r, n, p, (r, i) -> rand(r, T, i))
-sprand(r::AbstractRNG, ::Type{Bool}, n::Integer, p::AbstractFloat) = sprand(r, n, p, truebools)
+sprand(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, i->rand(r,i))
+sprand(r::AbstractRNG, ::Type{Bool}, n::Integer, p::AbstractFloat) = sprand(r, n, p, i->fill(true,i))
 sprand(::Type{T}, n::Integer, p::AbstractFloat) where {T} = sprand(GLOBAL_RNG, T, n, p)
+sprand(r::AbstractRNG, ::Type{T}, n::Integer, p::AbstractFloat) where T = sprand(r, n, p, i->rand(r, T, i))
 
 sprandn(n::Integer, p::AbstractFloat) = sprand(GLOBAL_RNG, n, p, randn)
-sprandn(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, randn)
-sprandn(::Type{T}, n::Integer, p::AbstractFloat) where T = sprand(GLOBAL_RNG, n, p, (r, i) -> randn(r, T, i))
-sprandn(r::AbstractRNG, ::Type{T}, n::Integer, p::AbstractFloat) where T = sprand(r, n, p, (r, i) -> randn(r, T, i))
+sprandn(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, i->randn(r,i))
+sprandn(::Type{T}, n::Integer, p::AbstractFloat) where T = sprand(GLOBAL_RNG, n, p, i->randn(T, i))
+sprandn(r::AbstractRNG, ::Type{T}, n::Integer, p::AbstractFloat) where T = sprand(r, n, p, i->randn(r, T, i))
 
 ## Indexing into Matrices can return SparseVectors
 

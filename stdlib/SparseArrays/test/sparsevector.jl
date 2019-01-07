@@ -179,7 +179,7 @@ end
                 @test all(nonzeros(xr) .> 0.0)
             end
         end
-        let xr = sprand(1000, 0.9, rand, Float32)
+        let xr = sprand(1000, 0.9, i->rand(Float32,i))
             @test isa(xr, SparseVector{Float32,Int})
             @test length(xr) == 1000
             if !isempty(nonzeros(xr))

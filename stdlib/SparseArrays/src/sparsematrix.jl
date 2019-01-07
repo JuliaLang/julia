@@ -1383,7 +1383,33 @@ function _sparse_findprevnz(m::SparseMatrixCSC, i::Integer)
 end
 
 
-function _sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat, rfn)
+"""
+    sprand([rng],[type],m,[n],p::AbstractFloat,[rfn])
+
+Create a random length `m` sparse vector or `m` by `n` sparse matrix, in
+which the probability of any element being nonzero is independently given by
+`p` (and hence the mean density of nonzeros is also exactly `p`). The
+optional `rng` argument specifies a random number generator that defaults
+to the global one, see [Random Numbers](@ref).
+
+Nonzero values are taken from the function `rfn`. `rfn(i)` should
+return a vector of `i` values. In case `rfn` is not specified,
+it defaults to `rnf(i)=rand(rng, i)` (uniform distribution in ``[0,1)``) or, If
+the parameter `type` is specified, to `rng(i)=rand(rng, type, i)`.
+The special case of `type==Bool` corresponds to `rfn(i)=fill(true, i)`
+
+# Examples
+```jldoctest; setup = :(using Random; Random.seed!(1234))
+julia> sprand(Bool, 2, 2, 0.5)
+2×2 SparseMatrixCSC{Bool,Int64} with 1 stored entry:
+  [2, 2]  =  true
+
+julia> sprand(Float64, 3, 0.75)
+3-element SparseVector{Float64,Int64} with 1 stored entry:
+  [3]  =  0.298614
+```
+"""
+function sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat, rfn::Function = i->rand(r,i))
     m, n = Int(m), Int(n)
     (m < 0 || n < 0) && throw(ArgumentError("invalid Array dimensions"))
     0 <= density <= 1 || throw(ArgumentError("$density not in [0,1]"))
@@ -1402,52 +1428,10 @@ function _sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat,
     return SparseMatrixCSC(m, n, colptr, rowval, rfn(nnz))
 end
 
-"""
-    sprand([rng],[type],m,[n],p::AbstractFloat,[rfn])
+sprand(m::Integer, n::Integer, density::AbstractFloat, rfn::Function = rand) = sprand(GLOBAL_RNG,m,n,density,rfn)
 
-Create a random length `m` sparse vector or `m` by `n` sparse matrix, in
-which the probability of any element being nonzero is independently given by
-`p` (and hence the mean density of nonzeros is also exactly `p`). Nonzero
-values are sampled from the distribution specified by `rfn` and have the type `type`. The uniform
-distribution is used in case `rfn` is not specified. The optional `rng`
-argument specifies a random number generator, see [Random Numbers](@ref).
-
-# Examples
-```jldoctest; setup = :(using Random; Random.seed!(1234))
-julia> sprand(Bool, 2, 2, 0.5)
-2×2 SparseMatrixCSC{Bool,Int64} with 1 stored entry:
-  [2, 2]  =  true
-
-julia> sprand(Float64, 3, 0.75)
-3-element SparseVector{Float64,Int64} with 1 stored entry:
-  [3]  =  0.298614
-```
-"""
-function sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat,
-                rfn::Function, ::Type{T}=eltype(rfn(r,1))) where T
-    m,n = Int(m), Int(n)
-    N = m*n
-    N == 0 && return spzeros(T,m,n)
-    N == 1 && return rand(r) <= density ? sparse([1], [1], rfn(r,1)) : spzeros(T,1,1)
-    _sprand(r,m,n,density,i->rfn(r,i))
-end
-
-function sprand(m::Integer, n::Integer, density::AbstractFloat,
-                rfn::Function, ::Type{T}=eltype(rfn(1))) where T
-    m,n = Int(m), Int(n)
-    N = m*n
-    N == 0 && return spzeros(T,m,n)
-    N == 1 && return rand() <= density ? sparse([1], [1], rfn(1)) : spzeros(T,1,1)
-    _sprand(GLOBAL_RNG,m,n,density,rfn)
-end
-
-truebools(r::AbstractRNG, n::Integer) = fill(true, n)
-
-sprand(m::Integer, n::Integer, density::AbstractFloat) = sprand(GLOBAL_RNG,m,n,density)
-
-sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,rand,Float64)
-sprand(r::AbstractRNG, ::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where {T} = sprand(r,m,n,density,(r, i) -> rand(r, T, i), T)
-sprand(r::AbstractRNG, ::Type{Bool}, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density, truebools, Bool)
+sprand(r::AbstractRNG, ::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where {T} = sprand(r,m,n,density, i->rand(r,T,i))
+sprand(r::AbstractRNG, ::Type{Bool}, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density, i->fill(true,i))
 sprand(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where {T} = sprand(GLOBAL_RNG, T, m, n, density)
 
 """
@@ -1469,9 +1453,9 @@ julia> sprandn(2, 2, 0.75)
   [2, 2]  =  0.297336
 ```
 """
-sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
+sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,i->randn(r,i))
+sprandn(r::AbstractRNG, ::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where T = sprand(r,m,n,density,i->randn(r,T,i))
 sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n,density)
-sprandn(r::AbstractRNG, ::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where T = sprand(r,m,n,density,(r,i) -> randn(r,T,i), T)
 sprandn(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where T = sprandn(GLOBAL_RNG,T,m,n,density)
 
 LinearAlgebra.fillstored!(S::SparseMatrixCSC, x) = (fill!(nzvalview(S), x); S)
