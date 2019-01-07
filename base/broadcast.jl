@@ -384,13 +384,45 @@ end
 
 ## logic for deciding the BroadcastStyle
 
-# combine_styles operates on values (arbitrarily many)
+"""
+    combine_styles(cs...) -> BroadcastStyle
+
+Decides which `BroadcastStyle` to use for any number of value arguments.
+Uses [`BroadcastStyle`](@ref) to get the style for each argument, and uses
+[`result_style`](@ref) to combine styles.
+
+# Examples
+
+```jldoctest
+julia> Broadcast.combine_styles([1], [1 2; 3 4])
+Base.Broadcast.DefaultArrayStyle{2}()
+```
+"""
+function combine_styles end
+
 combine_styles() = DefaultArrayStyle{0}()
 combine_styles(c) = result_style(BroadcastStyle(typeof(c)))
 combine_styles(c1, c2) = result_style(combine_styles(c1), combine_styles(c2))
 @inline combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
 
-# result_style works on types (singletons and pairs), and leverages `BroadcastStyle`
+"""
+    result_style(s1::BroadcastStyle[, s2::BroadcastStyle]) -> BroadcastStyle
+
+Takes one or two `BroadcastStyle`s and combines them using [`BroadcastStyle`](@ref) to
+determine a common `BroadcastStyle`.
+
+# Examples
+
+```jldoctest
+julia> Broadcast.result_style(Broadcast.DefaultArrayStyle{0}(), Broadcast.DefaultArrayStyle{3}())
+Base.Broadcast.DefaultArrayStyle{3}()
+
+julia> Broadcast.result_style(Broadcast.Unknown(), Broadcast.DefaultArrayStyle{1}())
+Base.Broadcast.DefaultArrayStyle{1}()
+```
+"""
+function result_style end
+
 result_style(s::BroadcastStyle) = s
 result_style(s1::S, s2::S) where S<:BroadcastStyle = S()
 # Test both orders so users typically only have to declare one order
@@ -418,6 +450,20 @@ One of these should be undefined (and thus return Broadcast.Unknown).""")
 end
 
 # Indices utilities
+
+"""
+    combine_axes(As...) -> Tuple
+
+Determine the result axes for broadcasting across all values in `As`.
+
+```jldoctest
+julia> Broadcast.combine_axes([1], [1 2; 3 4; 5 6])
+(Base.OneTo(3), Base.OneTo(2))
+
+julia> Broadcast.combine_axes(1, 1, 1)
+()
+```
+"""
 @inline combine_axes(A, B...) = broadcast_shape(axes(A), combine_axes(B...))
 combine_axes(A) = axes(A)
 
