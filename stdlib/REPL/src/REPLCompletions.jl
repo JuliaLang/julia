@@ -407,7 +407,7 @@ function try_get_type(sym::Expr, fn::Module)
     elseif sym.head === :ref
         # some simple cases of `expand`
         return try_get_type(Expr(:call, GlobalRef(Base, :getindex), sym.args...), fn)
-    elseif sym.head === :.
+    elseif sym.head === :.  && sym.args[2] isa QuoteNode # second check catches broadcasting
         return try_get_type(Expr(:call, GlobalRef(Core, :getfield), sym.args...), fn)
     end
     return (Any, false)

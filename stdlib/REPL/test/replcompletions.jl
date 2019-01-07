@@ -965,6 +965,11 @@ let s = ":(function foo(::Int) end).args[1].args[2]."
     @test c == Any[]
 end
 
+let s = "log(log.(x),"
+    c, r = test_complete_context(s)
+    @test !isempty(c)
+end
+
 let s = "Base.return_types(getin"
     c, r = test_complete_context(s)
     @test "getindex" in c
