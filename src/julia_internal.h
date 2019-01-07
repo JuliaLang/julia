@@ -723,7 +723,7 @@ JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     jl_value_t *fobj, jl_datatype_t *result, htable_t *cache, jl_svec_t *fill,
     void *(*init_trampoline)(void *tramp, void **nval),
     jl_unionall_t *env, jl_value_t **vals);
-
+JL_DLLEXPORT jl_value_t *jl_get_JIT(void);
 
 // Windows only
 #define JL_EXE_LIBNAME ((const char*)1)
