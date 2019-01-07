@@ -1249,7 +1249,16 @@ for bit in (8, 16, 32, 64, 128)
 end
 
 """
-    Symbol(x...) -> Symbol
+    Symbol::DataType
+
+Created when the Symbol(x...) constructor is used to concatenate 
+the string representations of the arguments passed to it.
+
+"""
+"""
+    Symbol(x...)
+    
+The constructor.
 
 Create a `Symbol` by concatenating the string representations of the arguments together.
 
