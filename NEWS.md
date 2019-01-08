@@ -29,7 +29,6 @@ New library functions
 Standard library changes
 ------------------------
 
-
 #### LinearAlgebra
 
 * Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
@@ -42,6 +41,10 @@ Standard library changes
 
 * Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
 
+#### Miscellaneous
+
+* Since environment variables on Windows are case-insensitive, `ENV` now converts its keys
+  to uppercase for display, iteration, and copying ([#30593]).
 
 External dependencies
 ---------------------
