@@ -590,7 +590,7 @@ if Sys.iswindows()
         succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), Bool,
             (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
              CRED_PACK_GENERIC_CREDENTIALS, default_username, "", credbuf, credbufsize)
-        @assert succeeded
+        succeeded || throw(SystemError("Cannot convert a user name and password into an authentication buffer."))
 
         # Step 2: Create the actual dialog
         #      2.1: Set up the window
