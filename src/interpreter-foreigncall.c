@@ -250,8 +250,8 @@ extern void jl_module_export(jl_module_t *, jl_sym_t *);
 extern int jl_is_imported(jl_module_t *, jl_sym_t *);
 extern int jl_module_exports_p(jl_module_t *, jl_sym_t *);
 extern void jl_add_standard_imports(jl_module_t *);
-extern jl_array_t * jl_eqtable_put(jl_array_t *, void *, void *, int *);
-extern jl_value_t * jl_eqtable_get(jl_array_t *, void *, jl_value_t *);
+extern jl_array_t * jl_eqtable_put(jl_array_t *, jl_value_t *, jl_value_t *, int *);
+extern jl_value_t * jl_eqtable_get(jl_array_t *, jl_value_t *, jl_value_t *);
 extern int jl_errno(void);
 extern void jl_set_errno(int);
 extern int32_t jl_stat(const char *, char *);
@@ -555,7 +555,7 @@ extern jl_value_t * jl_get_julia_bindir(void);
 extern jl_value_t * jl_get_julia_bin(void);
 extern jl_value_t * jl_get_image_file(void);
 extern void jl_get_fenv_consts(int *);
-extern jl_value_t * jl_eqtable_pop(jl_array_t *, void *, jl_value_t *, int *);
+extern jl_value_t * jl_eqtable_pop(jl_array_t *, jl_value_t *, jl_value_t *, int *);
 extern size_t jl_eqtable_nextind(jl_array_t *, size_t);
 extern jl_value_t * jl_get_keyword_sorter(jl_value_t *);
 extern int jl_array_store_unboxed(jl_value_t *);
@@ -3410,15 +3410,15 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_eqtable_put") == 0) {
 	jl_array_t * result = jl_eqtable_put(
 			(jl_array_t *) eval_value(args[5], s),
-			(void *) jl_unbox_voidpointer(eval_value(args[6], s)),
-			(void *) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(jl_value_t *) eval_value(args[6], s),
+			(jl_value_t *) eval_value(args[7], s),
 			(int *) jl_unbox_voidpointer(eval_value(args[8], s))
 		);
 	return result;
 } else if (strcmp(target, "jl_eqtable_get") == 0) {
 	jl_value_t * result = jl_eqtable_get(
 			(jl_array_t *) eval_value(args[5], s),
-			(void *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(jl_value_t *) eval_value(args[6], s),
 			(jl_value_t *) eval_value(args[7], s)
 		);
 	return result;
@@ -5204,7 +5204,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_eqtable_pop") == 0) {
 	jl_value_t * result = jl_eqtable_pop(
 			(jl_array_t *) eval_value(args[5], s),
-			(void *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(jl_value_t *) eval_value(args[6], s),
 			(jl_value_t *) eval_value(args[7], s),
 			(int *) jl_unbox_voidpointer(eval_value(args[8], s))
 		);
