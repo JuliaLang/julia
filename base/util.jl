@@ -587,7 +587,7 @@ if Sys.iswindows()
         #         the default username (in theory could also provide a default password)
         credbuf = Vector{UInt8}(undef, 1024)
         credbufsize = Ref{UInt32}(sizeof(credbuf))
-        succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), Bool,
+        succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
             (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
              CRED_PACK_GENERIC_CREDENTIALS, default_username, "", credbuf, credbufsize)
         succeeded || throw(SystemError("Cannot convert a user name and password into an authentication buffer."))
