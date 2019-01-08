@@ -401,6 +401,19 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         }
         break;
     case UV_NAMED_PIPE:
+#ifndef _OS_WINDOWS_
+	// a unix pipe is detected as UV_NAMED_PIPE, but handling it using uv_pipe_t
+	// leads to massive slowdowns, due to not buffering and putting epolls between each write. 
+	// treating it as a file instead removes the slowdown completely.
+        handle = malloc(sizeof(jl_uv_file_t));
+        {
+            jl_uv_file_t *file = (jl_uv_file_t*)handle;
+            file->loop = jl_io_loop;
+            file->type = UV_FILE;
+            file->file = fd;
+            file->data = NULL;
+        }
+#else
         handle = malloc(sizeof(uv_pipe_t));
         if ((err = uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle, 0))) {
             jl_errorf("error initializing %s in uv_pipe_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
@@ -409,6 +422,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
             jl_errorf("error initializing %s in uv_pipe_open: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
         ((uv_pipe_t*)handle)->data = NULL;
+#endif
         break;
     case UV_TCP:
         handle = malloc(sizeof(uv_tcp_t));
