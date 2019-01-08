@@ -29,72 +29,19 @@
            '(error "malformed expression"))))
    thk))
 
-;; assigned variables except those marked local or inside inner functions
-(define (find-possible-globals- e tab)
-  (cond ((atom? e)   tab)
-        ((quoted? e) tab)
-        (else (case (car e)
-                ((=)            (if (not (ssavalue? (cadr e)))
-                                    (put! tab (decl-var (cadr e)) #t))
-                                (find-possible-globals- (caddr e) tab))
-                ((method)       (let ((n (method-expr-name e)))
-                                  (if (symbol? n)
-                                      (put! tab n #t)
-                                      tab)))
-                ((lambda)       tab)
-                ((local)        tab)
-                ((scope-block)
-                 ;; TODO: when deprecation for implicit global assignment inside loops
-                 ;; is removed, remove this code and just return `tab` in this case
-                 (let ((tab2 (table)))
-                   (find-possible-globals- (cadr e) tab2)
-                   (for-each (lambda (v) (if (has? tab2 v) (del! tab2 v)))
-                             (append (find-local-decls (cadr e)) (find-local-def-decls (cadr e))))
-                   (for-each (lambda (v) (put! tab v #t))
-                             (table.keys tab2))))
-                ((break-block)  (find-possible-globals- (caddr e) tab))
-                ((module toplevel) '())
-                (else
-                 (for-each (lambda (x) (find-possible-globals- x tab))
-                           (cdr e))))
-              tab)))
-
-;; find variables that should be forced to be global in a toplevel expr
-(define (find-possible-globals e)
-  (table.keys (find-possible-globals- e (table))))
-
-;; this is overwritten when we run in actual julia
-(define (defined-julia-global v) #f)
-
-(define (some-gensym? x)
-  (or (gensym? x) (memq x *gensyms*)))
-
 
 ;; return a lambda expression representing a thunk for a top-level expression
 ;; note: expansion of stuff inside module is delayed, so the contents obey
 ;; toplevel expansion order (don't expand until stuff before is evaluated).
 (define (expand-toplevel-expr-- e file line)
   (let ((ex0 (julia-expand-macroscope e)))
-    (if (and (pair? ex0) (eq? (car ex0) 'toplevel))
+    (if (toplevel-only-expr? ex0)
         ex0
         (let* ((ex (julia-expand0 ex0))
-               (lv (find-decls 'local ex))
-               (gv (diff (delete-duplicates
-                           (append (find-decls 'const ex) ;; convert vars declared const outside any scope block to outer-globals
-                                   (find-decls 'global ex) ;; convert vars declared global outside any scope block to outer-globals
-                                   ;; vars assigned at the outer level
-                                   (filter (lambda (x) (not (some-gensym? x)))
-                                           (find-assigned-vars ex '()))))
-                         lv))
-               ;; vars assigned anywhere, if they have not been explicitly defined
-               (existing-gv (filter (lambda (x) (and (not (or (memq x lv) (memq x gv))) (defined-julia-global x)))
-                                    (find-possible-globals ex)))
                (th (julia-expand1
                     `(lambda () ()
                              (scope-block
-                              (block ,@(map (lambda (v) `(implicit-global ,v)) existing-gv)
-                                     ,@(map (lambda (v) `(implicit-global ,v)) gv)
-                                     ,ex)))
+                              ,(blockify ex)))
                     file line)))
           (if (and (null? (cdadr (caddr th)))
                    (and (length= (lam:body th) 2)
