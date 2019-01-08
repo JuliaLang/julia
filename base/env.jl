@@ -70,6 +70,10 @@ struct EnvDict <: AbstractDict{String,String}; end
 
 Reference to the singleton `EnvDict`, providing a dictionary interface to system environment
 variables.
+
+(On Windows, system environment variables are case-insensitive, and `ENV` correspondingly converts
+all keys to uppercase for display, iteration, and copying.  Portable code should not rely on the
+existence of lower-case environment variables or on the ability to distinguish variables by case.)
 """
 const ENV = EnvDict()
 
