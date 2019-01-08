@@ -208,6 +208,18 @@ function isassigned(a::Array, i::Int...)
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
 end
 
+## getproperty ##
+
+struct GetProperty{name} <: Function
+end
+
+(::GetProperty{name})(x) where {name} = getproperty(x, name::Symbol)
+
+# Arrays behave as native "tables"
+if getproperty !== getfield
+    getproperty(a::Array, name::Symbol) = map(GetProperty{name}(), a)
+end
+
 ## copy ##
 
 """
