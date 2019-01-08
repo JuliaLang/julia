@@ -292,7 +292,7 @@ transcode(T, src::String) = transcode(T, codeunits(src))
 transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
 function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
-    ensure_non_offset_axes(src)
+    require_one_based_indexing(src)
     dst = UInt16[]
     i, n = 1, length(src)
     n > 0 || return dst
@@ -343,7 +343,7 @@ function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
 end
 
 function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
-    ensure_non_offset_axes(src)
+    require_one_based_indexing(src)
     n = length(src)
     n == 0 && return UInt8[]
 
