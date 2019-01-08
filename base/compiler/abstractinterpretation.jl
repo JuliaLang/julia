@@ -405,12 +405,27 @@ function precise_container_type(@nospecialize(typ), vtypes::VarTable, sv::Infere
             end
         end
         return result
-    elseif isa(tti0, DataType) && tti0 <: Tuple
-        if isvatuple(tti0) && length(tti0.parameters) == 1
-            return Any[Vararg{unwrapva(tti0.parameters[1])}]
+    elseif tti0 <: Tuple
+        if isa(tti0, DataType)
+            if isvatuple(tti0) && length(tti0.parameters) == 1
+                return Any[Vararg{unwrapva(tti0.parameters[1])}]
+            else
+                return Any[ p for p in tti0.parameters ]
+            end
+        elseif !isa(tti, DataType)
+            return Any[Vararg{Any}]
         else
-            return Any[ p for p in tti0.parameters ]
+            len = length(tti.parameters)
+            last = tti.parameters[len]
+            va = isvarargtype(last)
+            elts = Any[ fieldtype(tti0, i) for i = 1:len ]
+            if va
+                elts[len] = Vararg{elts[len]}
+            end
+            return elts
         end
+    elseif tti0 === SimpleVector || tti0 === Any
+        return Any[Vararg{Any}]
     elseif tti0 <: Array
         return Any[Vararg{eltype(tti0)}]
     else

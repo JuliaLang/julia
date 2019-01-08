@@ -397,7 +397,7 @@ character because `|` is not a valid continuation to it. Finally the string `s2`
 one too high code point.
 
 Julia uses the UTF-8 encoding by default, and support for new encodings can be added by packages.
-For example, the [LegacyStrings.jl](https://github.com/JuliaArchive/LegacyStrings.jl) package
+For example, the [LegacyStrings.jl](https://github.com/JuliaStrings/LegacyStrings.jl) package
 implements `UTF16String` and `UTF32String` types. Additional discussion of other encodings and
 how to implement support for them is beyond the scope of this document for the time being. For
 further discussion of UTF-8 encoding issues, see the section below on [byte array literals](@ref man-byte-array-literals).
@@ -1059,7 +1059,7 @@ some confusion regarding the matter.
 
 Version numbers can easily be expressed with non-standard string literals of the form [`v"..."`](@ref @v_str).
 Version number literals create [`VersionNumber`](@ref) objects which follow the
-specifications of [semantic versioning](http://semver.org),
+specifications of [semantic versioning](https://semver.org/),
 and therefore are composed of major, minor and patch numeric values, followed by pre-release and
 build alpha-numeric annotations. For example, `v"0.2.1-rc1+win64"` is broken into major version
 `0`, minor version `2`, patch version `1`, pre-release `rc1` and build `win64`. When entering

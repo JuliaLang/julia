@@ -1149,7 +1149,7 @@ for (addp_testf, expected_errstr, env) in testruns
     old_stdout = stdout
     stdout_out, stdout_in = redirect_stdout()
     stdout_txt = @async filter!(readlines(stdout_out)) do s
-            return !startswith(s, "\tFrom failed worker startup:\t")
+            return !startswith(s, "\tFrom worker startup:\t")
         end
     try
         withenv(env...) do

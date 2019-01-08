@@ -192,7 +192,8 @@ julia> Base.bitsunionsize(Union{Float64, UInt8, Int128})
 function bitsunionsize(u::Union)
     sz = Ref{Csize_t}(0)
     algn = Ref{Csize_t}(0)
-    @assert ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), u, sz, algn) != Cint(0)
+    isunboxed = ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), u, sz, algn)
+    @assert isunboxed != Cint(0)
     return sz[]
 end
 
@@ -454,7 +455,7 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
 end
 
 function _one(unit::T, x::AbstractMatrix) where T
-    @assert !has_offset_axes(x)
+    require_one_based_indexing(x)
     m,n = size(x)
     m==n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
     # Matrix{T}(I, m, m)
@@ -687,8 +688,7 @@ function grow_to!(dest, itr, st)
     y = iterate(itr, st)
     while y !== nothing
         el, st = y
-        S = typeof(el)
-        if S === T || S <: T
+        if el isa T || typeof(el) === T
             push!(dest, el::T)
         else
             new = push_widen(dest, el)
@@ -771,7 +771,7 @@ function setindex! end
 function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
     @_propagate_inbounds_meta
     @boundscheck setindex_shape_check(X, length(I))
-    @assert !has_offset_axes(X)
+    require_one_based_indexing(X)
     X′ = unalias(A, X)
     I′ = unalias(A, I)
     count = 1
@@ -900,7 +900,7 @@ append!(a::Vector, iter) = _append!(a, IteratorSize(iter), iter)
 push!(a::Vector, iter...) = append!(a, iter)
 
 function _append!(a, ::Union{HasLength,HasShape}, iter)
-    @assert !has_offset_axes(a)
+    require_one_based_indexing(a)
     n = length(a)
     resize!(a, n+length(iter))
     @inbounds for (i,item) in zip(n+1:length(a), iter)
@@ -948,7 +948,7 @@ prepend!(a::Vector, iter) = _prepend!(a, IteratorSize(iter), iter)
 pushfirst!(a::Vector, iter...) = prepend!(a, iter)
 
 function _prepend!(a, ::Union{HasLength,HasShape}, iter)
-    @assert !has_offset_axes(a)
+    require_one_based_indexing(a)
     n = length(iter)
     _growbeg!(a, n)
     i = 0

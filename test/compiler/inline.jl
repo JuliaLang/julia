@@ -217,3 +217,6 @@ function f_div(x, y)
     return x
 end
 @test length(code_typed(f_div, (Int, Int))[1][1].code) > 1
+
+f_identity_splat(t) = (t...,)
+@test length(code_typed(f_identity_splat, (Tuple{Int,Int},))[1][1].code) == 1

@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #ifndef JL_GCEXT_H
 #define JL_GCEXT_H
 

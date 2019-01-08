@@ -46,6 +46,9 @@ Standard library changes
 External dependencies
 ---------------------
 
+* libgit2 has been updated to v0.27.7 ([#30584]).
+* OpenBLAS has been updated to v0.3.5 ([#30583]).
+* MbedTLS has been updated to v2.16.0 ([#30618]).
 
 Deprecated or removed
 ---------------------
