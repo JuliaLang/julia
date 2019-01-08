@@ -763,33 +763,54 @@ if Core.sizeof(Int) == 4
         return (lolo & 0xffffffffffffffff) + UInt128(w1) << 64
     end
 
+    function _setbit(x::UInt128, i)
+        # faster version of `return x | (UInt128(1) << i)`
+        j = i >> 5
+        y = UInt128(one(UInt32) << (i & 0x1f))
+        if j == 0
+            return x | y
+        elseif j == 1
+            return x | (y << 32)
+        elseif j == 2
+            return x | (y << 64)
+        elseif j == 3
+            return x | (y << 96)
+        end
+        return x
+    end
+
     function divrem(x::UInt128, y::UInt128)
         iszero(y) && throw(DivideError())
+        if (x >> 64) % UInt64 == 0
+            if (y >> 64) % UInt64 == 0
+                # fast path: upper 64 bits are zero, so we can fallback to UInt64 division
+                q64, x64 = divrem(x % UInt64, y % UInt64)
+                return UInt128(q64), UInt128(x64)
+            else
+                # this implies y>x, so
+                return zero(UInt128), x
+            end
+        end
         n = leading_zeros(y) - leading_zeros(x)
         q = zero(UInt128)
         ys = y << n
-        for s in (96, 64, 32, 0)
-            q32 = zero(UInt32)
-            while n >= s
-                if ys <= x
-                    x -= ys
-                    q32 |= one(UInt32) << unsigned(n - s)
-                    if (x >> 64) % UInt64 == 0
-                        break
+        while n >= 0
+            # ys == y * 2^n
+            if ys <= x
+                x -= ys
+                q = _setbit(q, n)
+                if (x >> 64) % UInt64 == 0
+                    # exit early, similar to above fast path
+                    if (y >> 64) % UInt64 == 0
+                        q64, x64 = divrem(x % UInt64, y % UInt64)
+                        q |= q64
+                        x = UInt128(x64)
                     end
+                    return q, x
                 end
-                ys >>>= 1
-                n -= 1
             end
-            q |= UInt128(q32) << s
-            if (x >> 64) % UInt64 == 0
-                if (y >> 64) % UInt64 == 0
-                    q64, x64 = divrem(x % UInt64, y % UInt64)
-                    q |= q64
-                    x = UInt128(x64)
-                end
-                return q, x
-            end
+            ys >>>= 1
+            n -= 1
         end
         return q, x
     end
@@ -806,24 +827,31 @@ if Core.sizeof(Int) == 4
 
     function rem(x::UInt128, y::UInt128)
         iszero(y) && throw(DivideError())
+        if (x >> 64) % UInt64 == 0
+            if (y >> 64) % UInt64 == 0
+                # fast path: upper 64 bits are zero, so we can fallback to UInt64 division
+                return UInt128(rem(x % UInt64, y % UInt64))
+            else
+                # this implies y>x, so
+                return x
+            end
+        end
         n = leading_zeros(y) - leading_zeros(x)
         ys = y << n
         while n >= 0
+            # ys == y * 2^n
             if ys <= x
                 x -= ys
                 if (x >> 64) % UInt64 == 0
-                    break
+                    # exit early, similar to above fast path
+                    if (y >> 64) % UInt64 == 0
+                        x = UInt128(rem(x % UInt64, y % UInt64))
+                    end
+                    return x
                 end
             end
             ys >>>= 1
             n -= 1
-        end
-        if (x >> 64) % UInt64 == 0
-            if (y >> 64) % UInt64 == 0
-                x64 = rem(x % UInt64, y % UInt64)
-                x = UInt128(x64)
-            end
-            return x
         end
         return x
     end
