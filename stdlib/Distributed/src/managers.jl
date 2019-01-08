@@ -208,7 +208,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
         # shell login (-l) with string command (-c) to launch julia process
         remotecmd = shell_escape_posixly(`sh -l -c $cmds`)
 
-    elseif params[:shell] == :wincmd
+    elseif shell == :wincmd
         # ssh connects to Windows cmd.exe
 
         # Passing the cookie via ssh stdin currently hangs with
@@ -270,16 +270,17 @@ end
 
 function print_shell_escaped_windows(io, args::AbstractString...)::Nothing
     first = true
+    quoted = false
     for arg in args
         first || write(io, ' ')
         first = false
         function isword(c::AbstractChar)
             return 'a' <= c <= 'z' || 'A' <= c <= 'Z' || '0' <= c <= '9' ||
                 c == '\\' || c == '.' || c == '_' || c == '-' || c == ':' ||
-                c == '/' || c == '=' || c == '"'
+                c == '/' || c == '=' || c == '"' || c == '%'
         end
         quotes = !all(isword, arg) || arg == ""
-        quotes && write(io, '"')
+        if quotes; write(io, '"'); quoted = !quoted; end
         backslashes = 0
         for c in arg
             if c == '\\'
@@ -287,11 +288,13 @@ function print_shell_escaped_windows(io, args::AbstractString...)::Nothing
             else
                 if c == '"'
                     backslashes = backslashes * 2 + 1
+                    quoted = !quoted
                 end
                 for j=1:backslashes
                     write(io, '\\')
                 end
                 backslashes = 0
+                isword(c) || quoted || write(io, '^')   # for cmd.exe
                 write(io, c)
             end
         end
@@ -299,7 +302,7 @@ function print_shell_escaped_windows(io, args::AbstractString...)::Nothing
         for j=1:backslashes
             write(io, '\\')
         end
-        quotes && write(io, '"')
+        if quotes; write(io, '"'); quoted = !quoted; end
     end
 end
 
@@ -308,16 +311,27 @@ end
 
 Convert the collection of strings `args` into a Windows command line.
 
-Windows `cmd.exe` passes the entire command line as a single string to
-the application (unlike on POSIX systems, where the shell splits the
-command line into a list of arguments). Many Windows API applications
+Windows passes the entire command line as a single string to the
+application (unlike POSIX systems, where the shell splits the command
+line into a list of arguments). Many Windows API applications
 (including julia.exe), use the conventions of the [Microsoft C
 runtime](https://docs.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments)
-to split that command line into a list of strings. This function
-implements the inverse of that command-line parser. It joins
-command-line arguments to be passed to a Windows C/C++/Julia
-application into a command line, escaping or quoting meta characters
-such as space, double quotes and backslash where needed.
+to split that command line into a list of strings.
+
+This function implements the inverse of such a C runtime command-line
+parser. It joins command-line arguments to be passed to a Windows
+C/C++/Julia application into a command line, escaping or quoting meta
+characters such as space, double quotes and backslash where needed.
+
+In addition, this function also escapes meta characters processed by
+`cmd.exe`: it places a ^ in front of any potential metacharacter that
+follows an even number of quotation marks on the command line.
+
+The percent sign (`%`) is not escaped such that shell variable
+references (like `%USER%`) can still be substituted by `cmd.exe`.
+
+Input strings should avoid ASCII control characters, as many of these
+cannot be escaped (e.g., NUL, CR, LF).
 
 # Example
 ```jldoctest
