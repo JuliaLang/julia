@@ -328,10 +328,7 @@ end
 # Supporting functions for matrix multiplication
 
 # copy transposed(adjoint) of upper(lower) side-digonals. Optionally include diagonal.
-function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false, diag::Bool=false)
-    copytri!(A, Val(uplo), Val(conjugate), Val(diag))
-end
-function copytri!(A::AbstractMatrix, ::Val{uplo}, ::Val{conjugate}, ::Val{diag}) where {uplo, conjugate, diag}
+@inline function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false, diag::Bool=false)
     n = checksquare(A)
     off = diag ? 0 : 1
     if uplo == 'U'
