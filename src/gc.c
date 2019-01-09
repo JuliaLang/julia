@@ -2331,7 +2331,9 @@ mark: {
             gc_scrub_record_task(ta);
             void *stkbuf = ta->stkbuf;
             int16_t tid = ta->tid;
-            jl_ptls_t ptls2 = jl_all_tls_states[tid];
+            jl_ptls_t ptls2 = NULL;
+            if (tid != -1)
+                ptls2 = jl_all_tls_states[tid];
             if (gc_cblist_task_scanner) {
                 export_gc_state(ptls, &sp);
                 gc_invoke_callbacks(jl_gc_cb_task_scanner_t,
@@ -2347,7 +2349,7 @@ mark: {
             uintptr_t offset = 0;
             uintptr_t lb = 0;
             uintptr_t ub = (uintptr_t)-1;
-            if (ta == ptls2->current_task) {
+            if (ptls2 && ta == ptls2->current_task) {
                 s = ptls2->pgcstack;
             }
             else if (stkbuf) {
