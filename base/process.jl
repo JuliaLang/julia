@@ -113,6 +113,7 @@ function show(io::IO, cmd::Cmd)
     print_env && (print(io, ","); show(io, cmd.env))
     print_dir && (print(io, "; dir="); show(io, cmd.dir))
     (print_dir || print_env) && print(io, ")")
+    nothing
 end
 
 function show(io::IO, cmds::Union{OrCmds,ErrOrCmds})

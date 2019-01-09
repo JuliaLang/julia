@@ -942,7 +942,10 @@ generic function and type signature. The keyword argument `optimize` controls wh
 additional optimizations, such as inlining, are also applied.
 The keyword debuginfo controls the amount of code metadata present in the output.
 """
-function code_typed(@nospecialize(f), @nospecialize(types=Tuple); optimize=true, debuginfo::Symbol=:default)
+function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
+                    optimize=true, debuginfo::Symbol=:default,
+                    world = ccall(:jl_get_world_counter, UInt, ()),
+                    params = Core.Compiler.Params(world))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -954,8 +957,6 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple); optimize=true,
     end
     types = to_tuple_type(types)
     asts = []
-    world = ccall(:jl_get_world_counter, UInt, ())
-    params = Core.Compiler.Params(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
         (code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, params)

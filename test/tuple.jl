@@ -237,6 +237,15 @@ end
     end
 end
 
+@testset "mapfoldl" begin
+    @test (((1=>2)=>3)=>4) == foldl(=>, (1,2,3,4)) ==
+          mapfoldl(identity, =>, (1,2,3,4)) == mapfoldl(abs, =>, (-1,-2,-3,-4))
+    @test mapfoldl(abs, =>, (-1,-2,-3,-4), init=-10) == ((((-10=>1)=>2)=>3)=>4)
+    @test mapfoldl(abs, =>, (), init=-10) == -10
+    @test mapfoldl(abs, Pair{Any,Any}, (-30:-1...,)) == mapfoldl(abs, Pair{Any,Any}, [-30:-1...,])
+    @test_throws ArgumentError mapfoldl(abs, =>, ())
+end
+
 @testset "comparison and hash" begin
     @test isequal((), ())
     @test isequal((1,2,3), (1,2,3))

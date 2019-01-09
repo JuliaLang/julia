@@ -535,6 +535,11 @@ end
     @test occursin("g28442", output[3])
     @test output[4][1:4] == " [2]"
     @test occursin("f28442", output[4])
-    @test occursin("the last 2 lines are repeated 5000 more times", output[5])
-    @test output[6][1:8] == " [10003]"
+    # Issue #30233
+    # Note that we can't use @test_broken on FreeBSD here, because the tests actually do
+    # pass with some compilation options, e.g. with assertions enabled
+    if !Sys.isfreebsd()
+        @test occursin("the last 2 lines are repeated 5000 more times", output[5])
+        @test output[6][1:8] == " [10003]"
+    end
 end

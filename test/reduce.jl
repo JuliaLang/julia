@@ -192,12 +192,82 @@ let x = [4,3,5,2]
     @test extrema(abs2, x) == (4, 25)
 end
 
+@test maximum([-0.,0.]) === 0.0
+@test maximum([0.,-0.]) === 0.0
+@test maximum([0.,-0.,0.]) === 0.0
+@test minimum([-0.,0.]) === -0.0
+@test minimum([0.,-0.]) === -0.0
+@test minimum([0.,-0.,0.]) === -0.0
+
+@testset "minimum/maximum checks all elements" begin
+    for N in [2:20;150;300]
+        for i in 1:N
+            arr = fill(0., N)
+            truth = rand()
+            arr[i] = truth
+            @test maximum(arr) == truth
+
+            truth = -rand()
+            arr[i] = truth
+            @test minimum(arr) == truth
+
+            arr[i] = NaN
+            @test isnan(maximum(arr))
+            @test isnan(minimum(arr))
+
+            arr = zeros(N)
+            @test minimum(arr) === 0.0
+            @test maximum(arr) === 0.0
+
+            arr[i] = -0.0
+            @test minimum(arr) === -0.0
+            @test maximum(arr) ===  0.0
+
+            arr = -zeros(N)
+            @test minimum(arr) === -0.0
+            @test maximum(arr) === -0.0
+            arr[i] = 0.0
+            @test minimum(arr) === -0.0
+            @test maximum(arr) === 0.0
+        end
+    end
+end
+
+@testset "maximum works on generic order #30320" begin
+    for n in [1:20;1500]
+        arr = randn(n)
+        @test GenericOrder(maximum(arr)) === maximum(map(GenericOrder, arr))
+        @test GenericOrder(minimum(arr)) === minimum(map(GenericOrder, arr))
+        f = x -> x
+        @test GenericOrder(maximum(f,arr)) === maximum(f,map(GenericOrder, arr))
+        @test GenericOrder(minimum(f,arr)) === minimum(f,map(GenericOrder, arr))
+    end
+end
+
+@testset "maximum no out of bounds access #30462" begin
+    arr = fill(-Inf, 128,128)
+    @test maximum(arr) == -Inf
+    arr = fill(Inf, 128^2)
+    @test minimum(arr) == Inf
+    for center in [256, 1024, 4096, 128^2]
+        for offset in -10:10
+            len = center + offset
+            x = randn()
+            arr = fill(x, len)
+            @test maximum(arr) === x
+            @test minimum(arr) === x
+        end
+    end
+end
+
 @test isnan(maximum([NaN]))
 @test isnan(minimum([NaN]))
 @test isequal(extrema([NaN]), (NaN, NaN))
 
 @test isnan(maximum([NaN, 2.]))
+@test isnan(maximum([2., NaN]))
 @test isnan(minimum([NaN, 2.]))
+@test isnan(minimum([2., NaN]))
 @test isequal(extrema([NaN, 2.]), (NaN,NaN))
 
 @test isnan(maximum([NaN, 2., 3.]))
