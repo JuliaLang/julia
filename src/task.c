@@ -452,7 +452,7 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
     throw_internal(NULL);
 }
 
-JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
+JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion_future, size_t ssize)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *t = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), jl_task_type);
@@ -481,18 +481,18 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->state = runnable_sym;
     t->start = start;
     t->result = jl_nothing;
-    t->donenotify = jl_nothing;
+    t->donenotify = completion_future;
     t->exception = jl_nothing;
     t->backtrace = jl_nothing;
     // Inherit logger state from parent task
     t->logstate = ptls->current_task->logstate;
     // there is no active exception handler available on this stack yet
     t->eh = NULL;
-    t->tid = 0;
+    // TODO: allow non-sticky tasks
+    t->tid = ptls->tid;
     t->gcstack = NULL;
     t->excstack = NULL;
     t->stkbuf = NULL;
-    t->tid = 0;
     t->started = 0;
 #ifdef ENABLE_TIMINGS
     t->timing_stack = NULL;
@@ -958,6 +958,12 @@ JL_DLLEXPORT int jl_is_task_started(jl_task_t *t)
 {
     return t->started;
 }
+
+JL_DLLEXPORT int16_t jl_get_task_tid(jl_task_t *t)
+{
+    return t->tid;
+}
+
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_)

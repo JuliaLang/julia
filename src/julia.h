@@ -1651,7 +1651,7 @@ typedef struct _jl_task_t {
     jl_timing_block_t *timing_stack;
 } jl_task_t;
 
-JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
+JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t*, jl_value_t*, size_t);
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt);
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);

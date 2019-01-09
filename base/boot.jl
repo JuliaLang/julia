@@ -380,8 +380,8 @@ eval(Core, :(LineInfoNode(mod::Module, method::Symbol, file::Symbol, line::Int, 
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
-function Task(@nospecialize(f), reserved_stack::Int=0)
-    return ccall(:jl_new_task, Ref{Task}, (Any, Int), f, reserved_stack)
+function Task(@nospecialize(f), reserved_stack::Int, completion_future)
+    return ccall(:jl_new_task, Ref{Task}, (Any, Any, Int), f, completion_future, reserved_stack)
 end
 
 # simple convert for use by constructors of types in Core

@@ -761,8 +761,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     jl_init_codegen();
 
-    jl_start_threads();
-
     jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0);
     jl_init_serializer();
     jl_init_intrinsic_properties();
@@ -818,7 +816,16 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     // it does "using Base" if Base is available.
     if (jl_base_module != NULL) {
         jl_add_standard_imports(jl_main_module);
+        // Do initialization needed before starting child threads
+        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("__preinit_threads__"));
+        if (f) {
+            size_t last_age = ptls->world_age;
+            ptls->world_age = jl_get_world_counter();
+            jl_apply(&f, 1);
+            ptls->world_age = last_age;
+        }
     }
+    jl_start_threads();
 
     // This needs to be after jl_start_threads
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
