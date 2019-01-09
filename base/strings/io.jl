@@ -380,8 +380,8 @@ julia> unescape_string("\\\\u03c0") # unicode
 julia> unescape_string("\\\\101") # octal
 "A"
 
-julia> unescape_string("aaa \\g \\n", ['g']) # using `keep` argument
-"aaa \\g \n"
+julia> unescape_string("aaa \\\\g \\\\n", ['g']) # using `keep` argument
+"aaa \\\\g \\n"
 ```
 
 ## See also
