@@ -207,6 +207,10 @@ Symbol(s::AbstractString) = Symbol(String(s))
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
 convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
 
+convert(::Type{String}, s::Symbol) = String(s)
+convert(::Type{Symbol}, s::AbstractString) = Symbol(s)
+convert(::Type{T}, s::Symbol) where T<:AbstractString = T(String(s))
+
 ## string & character concatenation ##
 
 """

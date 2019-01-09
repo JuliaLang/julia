@@ -155,6 +155,8 @@ end
 
 @testset "Symbol and gensym" begin
     @test Symbol("asdf") === :asdf
+    @test convert(Symbol, "asdf") === :asdf
+    @test convert(String, :asdf) == "asdf"
     @test Symbol(:abc,"def",'g',"hi",0) === :abcdefghi0
     @test :a < :b
     @test startswith(string(gensym("asdf")),"##asdf#")
@@ -320,6 +322,8 @@ end
     @test nextind("fóobar", 0, 3) == 4
 
     @test Symbol(gstr) == Symbol("12")
+    @test convert(Symbol, gstr) == Symbol("12")
+    @test GenericString("foo") == convert(GenericString, :foo)
 
     @test sizeof(gstr) == 2
     @test ncodeunits(gstr) == 2
