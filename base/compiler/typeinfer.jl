@@ -495,15 +495,19 @@ function typeinf_edge(method::Method, @nospecialize(atypes), sparams::SimpleVect
             frame.parent = caller
         end
         typeinf(frame)
-        return frame.bestguess, frame.inferred ? frame.linfo : nothing
+        return widenconst_bestguess(frame.bestguess), frame.inferred ? frame.linfo : nothing
     elseif frame === true
         # unresolvable cycle
         return Any, nothing
     end
     frame = frame::InferenceState
-    return frame.bestguess, nothing
+    return widenconst_bestguess(frame.bestguess), nothing
 end
 
+function widenconst_bestguess(bestguess)
+    !isa(bestguess, Const) && !isa(bestguess, Type) && return widenconst(bestguess)
+    return bestguess
+end
 
 #### entry points for inferring a MethodInstance given a type signature ####
 
@@ -629,7 +633,12 @@ end
 
 
 function return_type(@nospecialize(f), @nospecialize(t))
-    params = Params(ccall(:jl_get_tls_world_age, UInt, ()))
+    world = ccall(:jl_get_tls_world_age, UInt, ())
+    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), Any[_return_type, f, t, world], 4)
+end
+
+function _return_type(@nospecialize(f), @nospecialize(t), world)
+    params = Params(world)
     rt = Union{}
     if isa(f, Builtin)
         rt = builtin_tfunction(f, Any[t.parameters...], nothing, params)

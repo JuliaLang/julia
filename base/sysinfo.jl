@@ -29,6 +29,7 @@ export BINDIR,
        isopenbsd,
        isunix,
        iswindows,
+       isjsvm,
        isexecutable,
        which
 
@@ -279,6 +280,12 @@ function isunix(os::Symbol)
         return false
     elseif islinux(os) || isbsd(os)
         return true
+    elseif os === :Emscripten
+        # Emscripten implements the POSIX ABI and provides traditional
+        # Unix-style operating system functions such as file system support.
+        # Therefor, we consider it a unix, even though this need not be
+        # generally true for a jsvm embedding.
+        return true
     else
         throw(ArgumentError("unknown operating system \"$os\""))
     end
@@ -377,7 +384,18 @@ See documentation in [Handling Operating System Variation](@ref).
 """
 isapple(os::Symbol) = (os === :Apple || os === :Darwin)
 
-for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly)
+"""
+    Sys.isjsvm([os])
+
+Predicate for testing if Julia is running in a JavaScript VM (JSVM),
+including e.g. a WebAssembly JavaScript embedding in a web browser.
+
+!!! compat "Julia 1.2"
+    This function requires at least Julia 1.2.
+"""
+isjsvm(os::Symbol) = (os === :Emscripten)
+
+for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
     @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
 end
 

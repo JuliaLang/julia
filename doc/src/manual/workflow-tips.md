@@ -8,75 +8,59 @@ As already elaborated in [The Julia REPL](@ref), Julia's REPL provides rich func
 that facilitates an efficient interactive workflow. Here are some tips that might further enhance
 your experience at the command line.
 
-## Command-line-based basic editor/REPL workflow
+### A basic editor/REPL workflow
 
 The most basic Julia workflows involve using a text editor in conjunction with the `julia` command
 line. A common pattern includes the following elements:
 
-  * **Generate a new project**
+  * **Put code under development in a temporary module.** Create a file, say `Tmp.jl`, and include
+    within it
 
-  ```
-  $ julia -e 'using Pkg;Pkg.generate("Tmp")'
-Generating project Tmp:
-    Tmp/Project.toml
-    Tmp/src/Tmp.jl
-  $ ls -R Tmp
-Tmp:
-Project.toml  src
+    ```julia
+    module Tmp
+    export say_hello
 
-Tmp/src:
-Tmp.jl
-  $ cat -n Tmp/src/Tmp.jl
-     1	module Tmp
-     2
-     3	greet() = print("Hello World!")
-     4
-     5	end # module
-  ```
+    say_hello() = println("Hello!")
 
-  * **Create a test folder**
-  ```
-  $ mkdir Tmp/test
-  ```
-  * **Put your test code in `test/runtests.jl` file.**
+    # your other definitions here
 
+    end
     ```
-    $ cat -n Tmp/test/runtests.jl
-     1	using Tmp
-     2	Tmp.greet()
+  * **Put your test code in another file.** Create another file, say `tst.jl`, which looks like
+
+    ```julia
+    include("Tmp.jl")
+    import .Tmp
+    # using .Tmp # we can use `using` to bring the exported symbols in `Tmp` into our namespace
+
+    Tmp.say_hello()
+    # say_hello()
+
+    # your other test code here
     ```
 
-  * **Run test**
-  ```
-  $ julia  -e 'using Pkg;Pkg.activate("Tmp");Pkg.test()'
-  Updating registry at `~/.julia/registries/General`
-  Updating git-repo `https://github.com/JuliaRegistries/General.git`
- Resolving package versions...
-  Updating `~/Tmp/Project.toml`
- [no changes]
-   Testing Tmp
- Resolving package versions...
-Hello World!   Testing Tmp tests passed
-  ```
-  * **Lather. Rinse. Repeat.** Explore ideas at the `julia` command prompt. Save good ideas in `Tmp.jl` and test with `runtests.jl`.
+    and includes tests for the contents of `Tmp`.
+    Alternatively, you can wrap the contents of your test file in a module, as
 
-## Simplify initialization
+    ```julia
+    module Tst
+        include("Tmp.jl")
+        import .Tmp
+        #using .Tmp
 
-To simplify restarting the REPL, put project-specific initialization code in a file, say `_init.jl`,
-which you can run on startup by issuing the command:
+        Tmp.say_hello()
+        # say_hello()
 
-```
-julia -L _init.jl
-```
+        # your other test code here
+    end
+    ```
 
-If you further add the following to your `~/.julia/config/startup.jl` file
+    The advantage is that your testing code is now contained in a module and does not use the global scope in `Main` for
+    definitions, which is a bit more tidy.
 
-```julia
-isfile("_init.jl") && include(joinpath(pwd(), "_init.jl"))
-```
+  * `include` the `tst.jl` file in the Julia REPL with `include("tst.jl")`.
 
-then calling `julia` from that directory will run the initialization code without the additional
-command line argument.
+  * **Lather. Rinse. Repeat.** Explore ideas at the `julia` command prompt. Save good ideas in `tst.jl`. To execute `tst.jl` after it has been changed, just `include` it again.
 
 ## Browser-based workflow
 

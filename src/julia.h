@@ -1381,8 +1381,8 @@ STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT;
 
 // eq hash tables
-JL_DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val, int *inserted);
-JL_DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, void *key,
+JL_DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, jl_value_t *key, jl_value_t *val, int *inserted);
+JL_DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, jl_value_t *key,
                                         jl_value_t *deflt);
 
 // system information
@@ -1810,6 +1810,7 @@ typedef struct {
     const char *outputjitbc;
     const char *outputo;
     const char *outputji;
+    const char *output_code_coverage;
     int8_t incremental;
     int8_t image_file_specified;
 } jl_options_t;
@@ -1820,6 +1821,7 @@ JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void);
 // Parse an argc/argv pair to extract general julia options, passing back out
 // any arguments that should be passed on to the script.
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp);
+JL_DLLEXPORT char *jl_format_filename(const char *output_pattern);
 
 // Set julia-level ARGS array according to the arguments provided in
 // argc/argv

@@ -93,6 +93,10 @@ do33 = fill(1.,3)
     end
 end
 
+@testset "Issue #30006" begin
+    SparseMatrixCSC{Float64,Int32}(spzeros(3,3))[:, 1] == [1, 2, 3]
+end
+
 @testset "concatenation tests" begin
     sp33 = sparse(1.0I, 3, 3)
 
@@ -180,6 +184,10 @@ end
         @test ndims(av) == 1
         @test all(av' .== am)
     end
+end
+
+@testset "Issue #28963" begin
+    @test_throws DimensionMismatch (spzeros(10,10)[:, :] = sprand(10,20,0.5))
 end
 
 @testset "matrix-vector multiplication (non-square)" begin
@@ -314,22 +322,37 @@ end
 end
 
 @testset "matrix multiplication" begin
-    for i = 1:5
-        a = sprand(10, 5, 0.7)
-        b = sprand(5, 15, 0.3)
-        @test maximum(abs.(a*b - Array(a)*Array(b))) < 100*eps()
-        @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:sortcols) - Array(a)*Array(b))) < 100*eps()
-        @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:doubletranspose) - Array(a)*Array(b))) < 100*eps()
-        f = Diagonal(rand(5))
+    for (m, p, n, q, k) in (
+                            (10, 0.7, 5, 0.3, 15),
+                            (100, 0.01, 100, 0.01, 20),
+                            (100, 0.1, 100, 0.2, 100),
+                           )
+        a = sprand(m, n, p)
+        b = sprand(n, k, q)
+        as = sparse(a')
+        bs = sparse(b')
+        ab = a * b
+        aab = Array(a) * Array(b)
+        @test maximum(abs.(ab - aab)) < 100*eps()
+        @test a*bs' == ab
+        @test as'*b == ab
+        @test as'*bs' == ab
+        f = Diagonal(rand(n))
         @test Array(a*f) == Array(a)*f
         @test Array(f*b) == f*Array(b)
     end
+end
+
+@testset "Issue #30502" begin
+    @test nnz(sprand(UInt8(16), UInt8(16), 1.0)) == 256
+    @test nnz(sprand(UInt8(16), UInt8(16), 1.0, ones)) == 256
 end
 
 @testset "kronecker product" begin
     for (m,n) in ((5,10), (13,8), (14,10))
         a = sprand(m, 5, 0.4); a_d = Matrix(a)
         b = sprand(n, 6, 0.3); b_d = Matrix(b)
+        v = view(a, :, 1); v_d = Vector(v)
         x = sprand(m, 0.4); x_d = Vector(x)
         y = sprand(n, 0.3); y_d = Vector(y)
         # mat ⊗ mat
@@ -348,6 +371,11 @@ end
         @test Array(kron(x, b)) == kron(x_d, b_d)
         @test Array(kron(x_d, b)) == kron(x_d, b_d)
         @test Array(kron(x, b_d)) == kron(x_d, b_d)
+        # vec ⊗ vec'
+        @test issparse(kron(v, y'))
+        @test issparse(kron(x, y'))
+        @test Array(kron(v, y')) == kron(v_d, y_d')
+        @test Array(kron(x, y')) == kron(x_d, y_d')
         # test different types
         z = convert(SparseVector{Float16, Int8}, y); z_d = Vector(z)
         @test Vector(kron(x, z)) == kron(x_d, z_d)
@@ -364,6 +392,10 @@ end
     end
     @test_throws DimensionMismatch dot(sprand(5,5,0.2),sprand(5,6,0.2))
 end
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
 
 sA = sprandn(3, 7, 0.5)
 sC = similar(sA)
@@ -389,6 +421,12 @@ dA = Array(sA)
 
     @testset "inverse scaling with mul!" begin
         bi = inv.(b)
+        @test lmul!(Diagonal(bi), copy(dA)) ≈ ldiv!(Diagonal(b), copy(sA))
+        @test lmul!(Diagonal(bi), copy(dA)) ≈ ldiv!(transpose(Diagonal(b)), copy(sA))
+        @test lmul!(Diagonal(conj(bi)), copy(dA)) ≈ ldiv!(adjoint(Diagonal(b)), copy(sA))
+        @test_throws DimensionMismatch ldiv!(Diagonal(fill(1., length(b)+1)), copy(sA))
+        @test_throws LinearAlgebra.SingularException ldiv!(Diagonal(zeros(length(b))), copy(sA))
+
         dAt = copy(transpose(dA))
         sAt = copy(transpose(sA))
         @test rmul!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), Diagonal(b))
@@ -396,6 +434,26 @@ dA = Array(sA)
         @test rmul!(copy(dAt), Diagonal(conj(bi))) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
         @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(fill(1., length(b)+1)))
         @test_throws LinearAlgebra.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
+    end
+
+    @testset "non-commutative multiplication" begin
+        # non-commutative multiplication
+        Avals = Quaternion.(randn(10), randn(10), randn(10), randn(10))
+        sA = sparse(rand(1:3, 10), rand(1:7, 10), Avals, 3, 7)
+        sC = copy(sA)
+        dA = Array(sA)
+
+        b = Quaternion.(randn(7), randn(7), randn(7), randn(7))
+        D = Diagonal(b)
+        @test Array(sA * D) ≈ dA * D
+        @test rmul!(copy(sA), D) ≈ dA * D
+        @test mul!(sC, copy(sA), D) ≈ dA * D
+
+        b = Quaternion.(randn(3), randn(3), randn(3), randn(3))
+        D = Diagonal(b)
+        @test Array(D * sA) ≈ D * dA
+        @test lmul!(D, copy(sA)) ≈ D * dA
+        @test mul!(sC, D, copy(sA)) ≈ D * dA
     end
 end
 
@@ -709,6 +767,8 @@ end
         ss116 = sparse(aa116)
 
         @test ss116[:,:] == copy(ss116)
+
+        @test convert(SparseMatrixCSC{Float32,Int32}, sd116)[2:5,:] == convert(SparseMatrixCSC{Float32,Int32}, sd116[2:5,:])
 
         # range indexing
         @test Array(ss116[i,:]) == aa116[i,:]
@@ -1447,7 +1507,7 @@ end
     local A = guardseed(1234321) do
         triu(sprand(10, 10, 0.2))
     end
-    @test SparseArrays.droptol!(A, 0.01).colptr == [1,1,1,2,2,3,4,6,6,7,9]
+    @test SparseArrays.droptol!(A, 0.01).colptr ==  [1, 2, 2, 3, 4, 5, 5, 6, 8, 10, 13]
     @test isequal(SparseArrays.droptol!(sparse([1], [1], [1]), 1), SparseMatrixCSC(1, 1, Int[1, 1], Int[], Int[]))
 end
 
@@ -1994,6 +2054,12 @@ end
     @test nnz(A) == 1
 end
 
+@testset "setindex with vector eltype (#29034)" begin
+    A = sparse([1], [1], [Vector{Float64}(undef, 3)], 3, 3)
+    A[1,1] = [1.0, 2.0, 3.0]
+    @test A[1,1] == [1.0, 2.0, 3.0]
+end
+
 @testset "show" begin
     io = IOBuffer()
     show(io, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
@@ -2336,7 +2402,7 @@ end
     @test m2.module == SparseArrays
 end
 
-begin
+@testset "Symmetric of sparse matrix mul! dense vector" begin
     rng = Random.MersenneTwister(1)
     n = 1000
     p = 0.02
@@ -2349,11 +2415,11 @@ begin
         Asym = S(A, U)
         As = sparse(Asym) # takes most time
         @test which(mul!, (typeof(B), typeof(Asym), typeof(B))).module == SparseArrays
-        @test norm(Asym * B - As * B, Inf) <= eps() * n * p * 2
+        @test norm(Asym * B - As * B, Inf) <= eps() * n * p * 10
     end
 end
 
-begin
+@testset "Symmetric of view of sparse matrix mul! dense vector" begin
     rng = Random.MersenneTwister(1)
     n = 1000
     p = 0.02
@@ -2366,7 +2432,22 @@ begin
         Asym = S(A, U)
         As = sparse(Asym) # takes most time
         @test which(mul!, (typeof(B), typeof(Asym), typeof(B))).module == SparseArrays
-        @test norm(Asym * B - As * B, Inf) <= eps() * n * p * 2
+        @test norm(Asym * B - As * B, Inf) <= eps() * n * p * 10
+    end
+end
+
+@testset "sprand" begin
+    p=0.3; m=1000; n=2000;
+    for s in 1:10
+        # build a (dense) random matrix with randsubset + rand
+        Random.seed!(s);
+        v = randsubseq(1:m*n,p);
+        x = zeros(m,n);
+        x[v] .= rand(length(v));
+        # redo the same with sprand
+        Random.seed!(s);
+        a = sprand(m,n,p);
+        @test x == a
     end
 end
 
@@ -2391,6 +2472,33 @@ end
     @test oneunit(A) isa SparseMatrixCSC{Second}
     @test one(sprand(2, 2, 0.5)) isa SparseMatrixCSC{Float64}
     @test one(A) isa SparseMatrixCSC{Int}
+end
+
+@testset "circshift" begin
+    m,n = 17,15
+    A = sprand(m, n, 0.5)
+    for rshift in (-1, 0, 1, 10), cshift in (-1, 0, 1, 10)
+        shifts = (rshift, cshift)
+        # using dense circshift to compare
+        B = circshift(Matrix(A), shifts)
+        # sparse circshift
+        C = circshift(A, shifts)
+        @test C == B
+        # sparse circshift should not add structural zeros
+        @test nnz(C) == nnz(A)
+        # test circshift!
+        D = similar(A)
+        circshift!(D, A, shifts)
+        @test D == B
+        @test nnz(D) == nnz(A)
+        # test different in/out types
+        A2 = floor.(100A)
+        E1 = spzeros(Int64, m, n)
+        E2 = spzeros(Int64, m, n)
+        circshift!(E1, A2, shifts)
+        circshift!(E2, Matrix(A2), shifts)
+        @test E1 == E2
+    end
 end
 
 end # module

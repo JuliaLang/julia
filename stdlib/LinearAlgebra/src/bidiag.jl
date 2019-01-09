@@ -324,7 +324,14 @@ end
 *(A::Bidiagonal, B::Number) = Bidiagonal(A.dv*B, A.ev*B, A.uplo)
 *(B::Number, A::Bidiagonal) = A*B
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.uplo)
-==(A::Bidiagonal, B::Bidiagonal) = (A.uplo==B.uplo) && (A.dv==B.dv) && (A.ev==B.ev)
+
+function ==(A::Bidiagonal, B::Bidiagonal)
+    if A.uplo == B.uplo
+        return A.dv == B.dv && A.ev == B.ev
+    else
+        return iszero(A.ev) && iszero(B.ev) && A.dv == B.dv
+    end
+end
 
 const BiTriSym = Union{Bidiagonal,Tridiagonal,SymTridiagonal}
 const BiTri = Union{Bidiagonal,Tridiagonal}
