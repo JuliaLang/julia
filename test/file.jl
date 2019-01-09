@@ -1051,7 +1051,7 @@ mktempdir() do dir
             @test basename(realpath(uppercase(path))) == path
         end
         rm(path)
-        @test_throws Exception realpath(path)
+        @test_throws SystemError realpath(path)
     end
 end
 
