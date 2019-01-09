@@ -106,7 +106,7 @@ function basic_blocks_starts(stmts::Vector{Any})
     end
     # and add add one more basic block start after the last statement
     for i = length(stmts):-1:1
-        if stmts[i] != nothing
+        if stmts[i] !== nothing
             push!(jump_dests, i+1)
             break
         end

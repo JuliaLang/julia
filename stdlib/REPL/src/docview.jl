@@ -317,7 +317,7 @@ function _repl(x)
                     kwarg
                 end
             elseif isexpr(arg, :kw)
-                if kwargs == nothing
+                if kwargs === nothing
                     kwargs = Any[]
                 end
                 lhs = arg.args[1]
@@ -339,7 +339,7 @@ function _repl(x)
                 push!(pargs, arg)
             end
         end
-        if kwargs == nothing
+        if kwargs === nothing
             x.args = Any[x.args[1], pargs...]
         else
             x.args = Any[x.args[1], Expr(:parameters, kwargs...), pargs...]

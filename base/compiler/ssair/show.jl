@@ -280,7 +280,7 @@ function compute_ir_line_annotations(code::Union{IRCode, CodeInfo})
                 if min(depth, last_depth) > last_printed_depth
                     printing_depth = min(depth, last_printed_depth + 1)
                     last_printed_depth = printing_depth
-                elseif length(stack) > length(last_stack) || first_mismatch != nothing
+                elseif length(stack) > length(last_stack) || first_mismatch !== nothing
                     printing_depth = min(depth, last_depth + 1)
                     last_printed_depth = printing_depth
                 else
