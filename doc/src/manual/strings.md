@@ -376,10 +376,10 @@ julia> foreach(display, s)
 
 julia> isvalid.(collect(s))
 4-element BitArray{1}:
- false
- false
- false
-  true
+ 0
+ 0
+ 0
+ 1
 
 julia> s2 = "\xf7\xbf\xbf\xbf"
 "\U1fffff"
