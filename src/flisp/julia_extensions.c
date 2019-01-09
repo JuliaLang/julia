@@ -171,7 +171,18 @@ static int never_id_char(uint32_t wc)
           (wc < 0xff &&
            cat >= UTF8PROC_CATEGORY_PD && cat <= UTF8PROC_CATEGORY_PO) ||
 
-          wc == '`');
+          wc == '`' ||
+
+          // mathematical brackets
+          (wc >= 0x27e6 && wc <= 0x27ef) ||
+          // angle, corner, and lenticular brackets
+          (wc >= 0x3008 && wc <= 0x3011) ||
+          // tortoise shell, square, and more lenticular brackets
+          (wc >= 0x3014 && wc <= 0x301b) ||
+          // fullwidth parens
+          (wc == 0xff08 || wc == 0xff09) ||
+          // fullwidth square brackets
+          (wc == 0xff3b || wc == 0xff3d));
 }
 
 value_t fl_julia_identifier_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)

@@ -65,4 +65,8 @@
 
     # Regex behaves like a scalar in broadcasting
     @test occursin.(r"Hello", ["Hello", "World"]) == [true, false]
+
+    # Test that PCRE throws the correct kind of error
+    # TODO: Uncomment this once the corresponding change has propagated to CI
+    #@test_throws ErrorException Base.PCRE.info(C_NULL, Base.PCRE.INFO_NAMECOUNT, UInt32)
 end

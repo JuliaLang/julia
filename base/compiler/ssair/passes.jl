@@ -130,7 +130,7 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
                 return defssa
             end
             if isa(def.val, SSAValue)
-                if isa(defssa, OldSSAValue) && !already_inserted(compact, defssa)
+                if is_old(compact, defssa)
                     defssa = OldSSAValue(def.val.id)
                 else
                     defssa = def.val
@@ -191,7 +191,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                 collect(Iterators.filter(1:length(def.edges)) do n
                     isassigned(def.values, n) || return false
                     val = def.values[n]
-                    if isa(defssa, OldSSAValue) && isa(val, SSAValue)
+                    if is_old(compact, defssa) && isa(val, SSAValue)
                         val = OldSSAValue(val.id)
                     end
                     edge_typ = widenconst(compact_exprtype(compact, val))
@@ -201,7 +201,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
             for n in possible_predecessors
                 pred = def.edges[n]
                 val = def.values[n]
-                if isa(defssa, OldSSAValue) && isa(val, SSAValue)
+                if is_old(compact, defssa) && isa(val, SSAValue)
                     val = OldSSAValue(val.id)
                 end
                 if isa(val, AnySSAValue)
@@ -281,7 +281,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
             end
             if is_tuple_call(compact, def) && isa(field, Int) && 1 <= field < length(def.args)
                 lifted = def.args[1+field]
-                if isa(leaf, OldSSAValue) && isa(lifted, SSAValue)
+                if is_old(compact, leaf) && isa(lifted, SSAValue)
                     lifted = OldSSAValue(lifted.id)
                 end
                 if isa(lifted, GlobalRef) || isa(lifted, Expr)
@@ -320,7 +320,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                     compact[leaf] = def
                 end
                 lifted = def.args[1+field]
-                if isa(leaf, OldSSAValue) && isa(lifted, SSAValue)
+                if is_old(compact, leaf) && isa(lifted, SSAValue)
                     lifted = OldSSAValue(lifted.id)
                 end
                 if isa(lifted, GlobalRef) || isa(lifted, Expr)
@@ -339,7 +339,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                     # N.B.: This can be a bit dangerous because it can lead to
                     # infinite loops if we accidentally insert a node just ahead
                     # of where we are
-                    if isa(leaf, OldSSAValue) && (isa(field, Int) || isa(field, Symbol))
+                    if is_old(compact, leaf) && (isa(field, Int) || isa(field, Symbol))
                         (isa(typ, DataType) && (!typ.abstract)) || return nothing
                         @assert !typ.mutable
                         # If there's the potential for an undefref error on access, we cannot insert a getfield
@@ -425,6 +425,12 @@ struct LiftedPhi
     need_argupdate::Bool
 end
 
+function is_old(compact, @nospecialize(old_node_ssa))
+    isa(old_node_ssa, OldSSAValue) &&
+        !is_pending(compact, old_node_ssa) &&
+        !already_inserted(compact, old_node_ssa)
+end
+
 function perform_lifting!(compact::IncrementalCompact,
         visited_phinodes::Vector{Any}, @nospecialize(cache_key),
         lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
@@ -455,7 +461,7 @@ function perform_lifting!(compact::IncrementalCompact,
             isassigned(old_node.values, i) || continue
             val = old_node.values[i]
             orig_val = val
-            if isa(old_node_ssa, OldSSAValue) && !is_pending(compact, old_node_ssa) && !already_inserted(compact, old_node_ssa) && isa(val, SSAValue)
+            if is_old(compact, old_node_ssa) && isa(val, SSAValue)
                 val = OldSSAValue(val.id)
             end
             if isa(val, Union{NewSSAValue, SSAValue, OldSSAValue})
@@ -688,10 +694,14 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
         compact[idx] = val === nothing ? nothing : val.x
     end
 
-    # Copy the use count, `finish` may modify it and for our predicate
-    # below we need it consistent with the state of the IR here.
+
+    non_dce_finish!(compact)
+    # Copy the use count, `simple_dce!` may modify it and for our predicate
+    # below we need it consistent with the state of the IR here (after tracking
+    # phi node arguments, but before dce).
     used_ssas = copy(compact.used_ssas)
-    ir = finish(compact)
+    simple_dce!(compact)
+    ir = complete(compact)
     # Now go through any mutable structs and see which ones we can eliminate
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)

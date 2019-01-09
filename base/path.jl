@@ -337,14 +337,14 @@ if Sys.iswindows()
 function realpath(path::AbstractString)
     h = ccall(:CreateFileW, stdcall, Int, (Cwstring, UInt32, UInt32, Ptr{Cvoid}, UInt32, UInt32, Int),
                 path, 0, 0x03, C_NULL, 3, 0x02000000, 0)
-    h == -1 && error(Libc.FormatMessage())
+    windowserror(:realpath, h == -1)
     try
         buf = Array{UInt16}(undef, 256)
         oldlen = len = length(buf)
         while len >= oldlen
             len = ccall(:GetFinalPathNameByHandleW, stdcall, UInt32, (Int, Ptr{UInt16}, UInt32, UInt32),
                             h, buf, (oldlen=len)-1, 0x0)
-            iszero(len) && error(Libc.FormatMessage())
+            windowserror(:realpath, iszero(len))
             resize!(buf, len) # strips NUL terminator on last call
         end
         if 4 < len < 264 && 0x005c == buf[1] == buf[2] == buf[4] && 0x003f == buf[3]
@@ -352,7 +352,7 @@ function realpath(path::AbstractString)
         end
         return transcode(String, buf)
     finally
-        ccall(:CloseHandle, stdcall, Cint, (Int,), h)
+        windowserror(:realpath, iszero(ccall(:CloseHandle, stdcall, Cint, (Int,), h)))
     end
 end
 
@@ -363,7 +363,7 @@ function longpath(path::AbstractString)
         n = ccall((:GetLongPathNameW, "kernel32"), stdcall,
             UInt32, (Ptr{UInt16}, Ptr{UInt16}, UInt32),
             p, buf, length(buf))
-        systemerror(:longpath, n == 0)
+        windowserror(:longpath, n == 0)
         x = n < length(buf) # is the buffer big enough?
         resize!(buf, n) # shrink if x, grow if !x
         x && return transcode(String, buf)

@@ -34,6 +34,7 @@ SparseVector(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti} =
 # union of such a view and a SparseVector so we define an alias for such a union as well
 const SparseColumnView{T}  = SubArray{T,1,<:SparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int}},Int},false}
 const SparseVectorUnion{T} = Union{SparseVector{T}, SparseColumnView{T}}
+const AdjOrTransSparseVectorUnion{T} = LinearAlgebra.AdjOrTrans{T, <:SparseVectorUnion{T}}
 
 ### Basic properties
 
@@ -58,6 +59,11 @@ function nonzeroinds(x::SparseColumnView)
     return y
 end
 
+indtype(x::SparseColumnView) = indtype(parent(x))
+function nnz(x::SparseColumnView)
+    rowidx, colidx = parentindices(x)
+    return length(nzrange(parent(x), colidx))
+end
 
 ## similar
 #

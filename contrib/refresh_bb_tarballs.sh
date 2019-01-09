@@ -12,7 +12,6 @@ BB_GCC_EXPANDED_PROJECTS="openblas"
 # Get "contrib/" directory path
 CONTRIB_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
-set -x
 # For each triplet and each project, download the BB tarball and save its hash:
 for triplet in ${TRIPLETS}; do
 	for proj in ${BB_PROJECTS}; do

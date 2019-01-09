@@ -27,7 +27,7 @@ As an overview, the steps are:
 
   * replace many uses of `size` with `axes`
   * replace `1:length(A)` with `eachindex(A)`, or in some cases `LinearIndices(A)`
-  * replace explicit allocations like `Array{Int}(size(B))` with `similar(Array{Int}, axes(B))`
+  * replace explicit allocations like `Array{Int}(undef, size(B))` with `similar(Array{Int}, axes(B))`
 
 These are described in more detail below.
 
@@ -101,7 +101,7 @@ underlying "conventional" behavior you'd like, e.g., `Array{Int}` or `BitArray` 
 a convenient way of producing an all-zeros array that matches the indices of A is simply `zeros(A)`.
 
 Let's walk through a couple of explicit examples. First, if `A` has conventional indices, then
-`similar(Array{Int}, axes(A))` would end up calling `Array{Int}(size(A))`, and thus return
+`similar(Array{Int}, axes(A))` would end up calling `Array{Int}(undef, size(A))`, and thus return
 an array.  If `A` is an `AbstractArray` type with unconventional indexing, then `similar(Array{Int}, axes(A))`
 should return something that "behaves like" an `Array{Int}` but with a shape (including indices)
 that matches `A`.  (The most obvious implementation is to allocate an `Array{Int}(undef, size(A))` and
