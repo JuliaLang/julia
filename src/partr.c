@@ -14,15 +14,13 @@
 extern "C" {
 #endif
 
+#define JULIA_ENABLE_PARTR
+
 #ifdef JULIA_ENABLE_THREADING
-#ifdef JULIA_ENABLE_PARTR
 
 // GC functions used
 extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
                                          jl_gc_mark_sp_t *sp, jl_value_t *obj);
-
-// thread sleep threshold
-extern uint64_t jl_thread_sleep_threshold;
 
 // multiq
 // ---
@@ -49,8 +47,8 @@ static int16_t heap_p;
 static uint64_t cong_unbias;
 
 /* for thread sleeping */
-static uv_mutex_t sleep_lock;
-static uv_cond_t  sleep_alarm;
+uv_mutex_t sleep_lock;
+uv_cond_t  sleep_alarm;
 
 
 /*  multiq_init()
@@ -61,7 +59,7 @@ static inline void multiq_init(void)
     heaps = (taskheap_t *)calloc(heap_p, sizeof(taskheap_t));
     for (int16_t i = 0; i < heap_p; ++i) {
         jl_mutex_init(&heaps[i].lock);
-        heaps[i].tasks = (jl_task_t **)calloc(tasks_per_heap, sizeof(jl_task_t *));
+        heaps[i].tasks = (jl_task_t **)calloc(tasks_per_heap, sizeof(jl_task_t*));
         heaps[i].ntasks = 0;
         heaps[i].prio = INT16_MAX;
     }
@@ -182,42 +180,19 @@ static inline jl_task_t *multiq_deletemin(void)
 // parallel task runtime
 // ---
 
-// sticky task queues need to be visible to all threads
-jl_taskq_t *sticky_taskqs;
-
-
 // initialize the threading infrastructure
 void jl_init_threadinginfra(void)
 {
     /* initialize the synchronization trees pool and the multiqueue */
     multiq_init();
 
-    /* allocate sticky task queues */
-    sticky_taskqs = (jl_taskq_t *)jl_malloc_aligned(jl_n_threads * sizeof(jl_taskq_t), 64);
-
     /* initialize the sleep mechanism */
     uv_mutex_init(&sleep_lock);
     uv_cond_init(&sleep_alarm);
-
-    // master thread final initialization
-    init_started_thread();
 }
 
 
-// helper for final thread initialization
-static void init_started_thread(void)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-
-    /* allocate this thread's sticky task queue pointer and initialize the lock */
-    ptls->sticky_taskq = &sticky_taskqs[ptls->tid];
-    ptls->sticky_taskq->head = NULL;
-    JL_MUTEX_INIT(&ptls->sticky_taskq->lock);
-}
-
-
-static int run_next(void);
-
+void JL_NORETURN jl_finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE_UNROOTED);
 
 // thread function: used by all except the main thread
 void jl_threadfun(void *arg)
@@ -228,13 +203,8 @@ void jl_threadfun(void *arg)
     jl_init_threadtls(targ->tid);
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(0, &stack_lo, &stack_hi);
-    init_started_thread();
     jl_init_root_task(stack_lo, stack_hi);
 
-    // Assuming the functions called below don't contain unprotected GC
-    // critical region. In general, the following part of this function
-    // shouldn't call any managed code without calling `jl_gc_unsafe_enter`
-    // first.
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_gc_state_set(ptls, JL_GC_STATE_SAFE, 0);
     uv_barrier_wait(targ->barrier);
@@ -242,129 +212,93 @@ void jl_threadfun(void *arg)
     // free the thread argument here
     free(targ);
 
-    jl_current_task->state = done_sym;
-    run_next();
+    (void)jl_gc_unsafe_enter(ptls);
+    jl_current_task->exception = jl_nothing;
+    jl_finish_task(jl_current_task, jl_nothing); // noreturn
+}
 
-    // shouldn't get here
-    gc_debug_critical_error();
-    abort();
+JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    /* ensure thread tid is awake if necessary */
+    if (ptls->tid != tid && !_threadedregion && tid != -1) {
+        uv_mutex_lock(&sleep_lock);
+        uv_cond_broadcast(&sleep_alarm); // TODO: make this uv_cond_signal / just wake up correct thread
+        uv_mutex_unlock(&sleep_lock);
+    }
+    /* stop the event loop too, if on thread 1 and alerting thread 1 */
+    if (ptls->tid == 0 && (tid == 0 || tid == -1))
+        uv_stop(jl_global_event_loop());
 }
 
 
 // enqueue the specified task for execution
-static void enqueue_task(jl_task_t *task)
+JL_DLLEXPORT void jl_enqueue_task(jl_task_t *task)
 {
-    /* sticky tasks go to the thread's sticky queue */
-    if (task->sticky_tid != -1) {
-        jl_taskq_t *taskq = &sticky_taskqs[task->sticky_tid];
-        JL_LOCK(&taskq->lock);
-        if (!taskq->head)
-            taskq->head = task;
-        else {
-            jl_task_t *pt = taskq->head;
-            while (pt->next)
-                pt = pt->next;
-            pt->next = task;
-        }
-        JL_UNLOCK(&taskq->lock);
-    }
-
-    /* all others go back into the multiq */
-    else
-        multiq_insert(task, task->prio);
-
-    /* stop the event loop */
-    uv_stop(jl_global_event_loop());
-
-    /* wake up threads */
-    if (jl_thread_sleep_threshold) {
-        uv_mutex_lock(&sleep_lock);
-        uv_cond_broadcast(&sleep_alarm);
-        uv_mutex_unlock(&sleep_lock);
-    }
+    multiq_insert(task, task->prio);
 }
 
 
-// get the next runnable task
-static jl_task_t *get_next_task(void)
+// get the next runnable task from the multiq
+static jl_task_t *get_next_task(jl_value_t *getsticky)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_task_t *task = NULL;
-    JL_GC_PUSH1(&task);
-
-    /* first check for sticky tasks */
-    JL_LOCK(&ptls->sticky_taskq->lock);
-    task = ptls->sticky_taskq->head;
-    if (task) {
-        ptls->sticky_taskq->head = task->next;
-        task->next = NULL;
-    }
-    JL_UNLOCK(&ptls->sticky_taskq->lock);
-
-    /* no sticky tasks, go to the multiq */
-    if (!task) task = multiq_deletemin();
-
-    JL_GC_POP();
-    return task;
+    jl_task_t *task = (jl_task_t*)jl_apply(&getsticky, 1);
+    if (jl_typeis(task, jl_task_type))
+        return task;
+    return multiq_deletemin();
 }
 
 
-// run the next available task
-// TODO: deal with the case where another thread gets the task from which a thread is
-// still trying to switch away
-static int run_next(void)
+JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *getsticky)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_task_t *task = NULL;
-    JL_GC_PUSH1(&task);
+    jl_task_t *task;
 
-    uint64_t spin_ns, spin_start = 0;
-    while (!task) {
-        if (jl_thread_sleep_threshold) {
-            if (spin_start == 0) {
-                spin_start = uv_hrtime();
-                continue;
-            }
-        }
+    while (1) {
+        jl_gc_safepoint();
+        task = get_next_task(getsticky);
+        if (task)
+            return task;
 
-        task = get_next_task();
-
-        if (!task) {
-            if (ptls->tid == 0)
-                jl_process_events(jl_global_event_loop());
-            else
-                jl_cpu_pause();
-
-            if (jl_thread_sleep_threshold) {
-                spin_ns = uv_hrtime() - spin_start;
-                if (spin_ns > jl_thread_sleep_threshold) {
-                    uv_mutex_lock(&sleep_lock);
-                    task = get_next_task();
-                    if (!task) {
-                        // thread 0 makes a blocking call to the event loop
-                        if (ptls->tid == 0) {
-                            uv_mutex_unlock(&sleep_lock);
-                            jl_run_once(jl_global_event_loop());
-                        }
-                        // other threads just sleep
-                        else {
-                            uv_cond_wait(&sleep_alarm, &sleep_lock);
-                            uv_mutex_unlock(&sleep_lock);
-                        }
-                    }
-                    else uv_mutex_unlock(&sleep_lock);
-                    spin_start = 0;
+        if (ptls->tid == 0) {
+            if (!_threadedregion) {
+                if (jl_run_once(jl_global_event_loop()) == 0) {
+                    task = get_next_task(getsticky);
+                    if (task)
+                        return task;
+#ifdef _OS_WINDOWS_
+                    Sleep(INFINITE);
+#else
+                    pause();
+#endif
                 }
             }
+            else {
+                jl_process_events(jl_global_event_loop());
+            }
+        }
+        else {
+            int sleepnow = 0;
+            if (!_threadedregion) {
+                uv_mutex_lock(&sleep_lock);
+                if (!_threadedregion) {
+                    sleepnow = 1;
+                }
+                else {
+                    uv_mutex_unlock(&sleep_lock);
+                }
+            }
+            else {
+                jl_cpu_pause();
+            }
+            if (sleepnow) {
+                int8_t gc_state = jl_gc_safe_enter(ptls);
+                uv_cond_wait(&sleep_alarm, &sleep_lock);
+                uv_mutex_unlock(&sleep_lock);
+                jl_gc_safe_leave(ptls, gc_state);
+            }
         }
     }
-
-    jl_switchto(&task);
-    if (ptls->tid == 0)
-        jl_process_events(jl_global_event_loop());
-
-    JL_GC_POP();
-    return 1;
 }
 
 
@@ -373,20 +307,8 @@ void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp
     for (int16_t i = 0; i < heap_p; ++i)
         for (int16_t j = 0; j < heaps[i].ntasks; ++j)
             jl_gc_mark_queue_obj_explicit(gc_cache, sp, (jl_value_t *)heaps[i].tasks[j]);
-    for (int16_t i = 0; i < jl_n_threads; ++i) {
-        jl_task_t *t = sticky_taskqs[i].head;
-        while (t) {
-            jl_gc_mark_queue_obj_explicit(gc_cache, sp, (jl_value_t *)t);
-            t = t->next;
-        }
-    }
 }
 
-#else
-void jl_init_threadinginfra(void) { }
-void jl_threadfun(void *arg) { abort(); }
-void jl_task_done_hook_partr(jl_task_t *task) { }
-#endif
 #endif // JULIA_ENABLE_THREADING
 
 #ifdef __cplusplus

@@ -14,6 +14,10 @@ extern "C" {
 
 extern jl_ptls_t *jl_all_tls_states;    /* thread local storage */
 extern JL_DLLEXPORT int jl_n_threads;   /* # threads we're actually using */
+extern volatile unsigned _threadedregion; // HACK: prevent tasks from sleeping in threaded regions
+
+extern uv_mutex_t sleep_lock;
+extern uv_cond_t  sleep_alarm;
 
 typedef struct _jl_threadarg_t {
     int16_t tid;
