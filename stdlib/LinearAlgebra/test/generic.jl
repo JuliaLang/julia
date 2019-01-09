@@ -225,6 +225,11 @@ end
     end
 end
 
+@testset "Issue #30466" begin
+    @test norm([typemin(Int), typemin(Int)], Inf) == -float(typemin(Int))
+    @test norm([typemin(Int), typemin(Int)], 1) == -2float(typemin(Int))
+end
+
 @testset "potential overflow in normalize!" begin
     δ = inv(prevfloat(typemax(Float64)))
     v = [δ, -δ]
@@ -299,6 +304,10 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
     @test A*(lu(A, Val(true))\b) == b
 end
 
+@testset "Issue 18742" begin
+    @test_throws DimensionMismatch ones(4,5)/zeros(3,6)
+    @test_throws DimensionMismatch ones(4,5)\zeros(3,6)
+end
 @testset "fallback throws properly for AbstractArrays with dimension > 2" begin
     @test_throws ErrorException adjoint(rand(2,2,2,2))
     @test_throws ErrorException transpose(rand(2,2,2,2))

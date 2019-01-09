@@ -144,7 +144,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     For example:
 
       * Functions pertaining to probability distributions are provided by the [Distributions package](https://github.com/JuliaStats/Distributions.jl).
-      * The [DataFrames package](https://github.com/JuliaStats/DataFrames.jl) provides data frames.
+      * The [DataFrames package](https://github.com/JuliaData/DataFrames.jl) provides data frames.
       * Generalized linear models are provided by the [GLM package](https://github.com/JuliaStats/GLM.jl).
   * Julia provides tuples and real hash tables, but not R-style lists. When returning multiple items,
     you should typically use a tuple or a named tuple: instead of `list(a = 1, b = 2)`, use `(1, 2)`

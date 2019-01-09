@@ -854,7 +854,7 @@ function (\)(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat
     @assert !has_offset_axes(B)
     S = promote_type(TA,TB)
     m, n = size(A)
-    m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
+    m == size(B,1) || throw(DimensionMismatch("Both inputs should have the same number of rows"))
 
     AA = Factorization{S}(A)
 

@@ -234,7 +234,7 @@ Sockets.PipeServer(active)
 Note that the return type of the last invocation is different. This is because this server does not
 listen on TCP, but rather on a named pipe (Windows) or UNIX domain socket. Also note that Windows
 named pipe format has to be a specific pattern such that the name prefix (`\\.\pipe\`) uniquely
-identifies the [file type](https://msdn.microsoft.com/en-us/library/windows/desktop/aa365783(v=vs.85).aspx).
+identifies the [file type](https://docs.microsoft.com/windows/desktop/ipc/pipe-names).
 The difference between TCP and named pipes or
 UNIX domain sockets is subtle and has to do with the [`accept`](@ref) and [`connect`](@ref)
 methods. The [`accept`](@ref) method retrieves a connection to the client that is connecting on

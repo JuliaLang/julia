@@ -399,42 +399,79 @@ printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) 
     with_output_color(print, color, io, msg...; bold=bold)
 printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
     printstyled(stdout, msg...; bold=bold, color=color)
+
 """
     Base.julia_cmd(juliapath=joinpath(Sys.BINDIR::String, julia_exename()))
 
 Return a julia command similar to the one of the running process.
-Propagates the `--cpu-target`, `--sysimage`, --compile `, `--depwarn`
-and `--inline` command line arguments.
+Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
+`--compiled-modules`, `--inline`, `--check-bounds`, `--optimize`, `-g`,
+`--code-coverage`, and `--depwarn`
+command line arguments that are not at their default values.
+
+Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notably not propagated currently.
 
 !!! compat "Julia 1.1"
-    The `--inline` flag is only propagated in Julia 1.1 and later.
+    Only the `--cpu-target`, `--sysimage`, `--depwarn`, `--compile` and `--check-bounds` flags were propagated before Julia 1.1.
 """
 function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
     opts = JLOptions()
     cpu_target = unsafe_string(opts.cpu_target)
     image_file = unsafe_string(opts.image_file)
-    compile = if opts.compile_enabled == 0
-                  "no"
-              elseif opts.compile_enabled == 2
-                  "all"
-              elseif opts.compile_enabled == 3
-                  "min"
-              else
-                  "yes"
-              end
-    depwarn = if opts.depwarn == 0
-                  "no"
-              elseif opts.depwarn == 2
-                  "error"
-              else
-                  "yes"
-              end
-    inline  = if opts.can_inline == 0
-                  "no"
-              else
-                  "yes"
-              end
-    `$julia -C$cpu_target -J$image_file --compile=$compile --depwarn=$depwarn --inline=$inline`
+    addflags = String[]
+    let compile = if opts.compile_enabled == 0
+                      "no"
+                  elseif opts.compile_enabled == 2
+                      "all"
+                  elseif opts.compile_enabled == 3
+                      "min"
+                  else
+                      "" # default = "yes"
+                  end
+        isempty(compile) || push!(addflags, "--compile=$compile")
+    end
+    let depwarn = if opts.depwarn == 0
+                      "no"
+                  elseif opts.depwarn == 2
+                      "error"
+                  else
+                      "" # default = "yes"
+                  end
+        isempty(depwarn) || push!(addflags, "--depwarn=$depwarn")
+    end
+    let check_bounds = if opts.check_bounds == 1
+                      "yes" # on
+                  elseif opts.check_bounds == 2
+                      "no" # off
+                  else
+                      "" # "default"
+                  end
+        isempty(check_bounds) || push!(addflags, "--check-bounds=$check_bounds")
+    end
+    opts.can_inline == 0 && push!(addflags, "--inline=no")
+    opts.use_compiled_modules == 0 && push!(addflags, "--compiled-modules=no")
+    opts.opt_level == 2 || push!(addflags, "-O$(opts.opt_level)")
+    push!(addflags, "-g$(opts.debug_level)")
+    if opts.code_coverage != 0
+        # Forward the code-coverage flag only if applicable (if the filename is pid-dependent)
+        coverage_file = (opts.output_code_coverage != C_NULL) ?  unsafe_string(opts.output_code_coverage) : ""
+        if isempty(coverage_file) || occursin("%p", coverage_file)
+            if opts.code_coverage == 1
+                push!(addflags, "--code-coverage=user")
+            elseif opts.code_coverage == 2
+                push!(addflags, "--code-coverage=all")
+            end
+            isempty(coverage_file) || push!(addflags, "--code-coverage=$coverage_file")
+        end
+    end
+    if opts.malloc_log != 0
+        if opts.malloc_log == 1
+            push!(addflags, "--track-allocation=user")
+        elseif opts.malloc_log == 2
+            push!(addflags, "--track-allocation=all")
+        end
+    end
+    return `$julia -C$cpu_target -J$image_file $addflags`
 end
 
 function julia_exename()
