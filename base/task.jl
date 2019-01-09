@@ -354,3 +354,192 @@ function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     end
     ret
 end
+
+
+## scheduler and work queue
+
+global const Workqueue = Task[]
+
+function enq_work(t::Task)
+    t.state == :runnable || error("schedule: Task not runnable")
+    ccall(:uv_stop, Cvoid, (Ptr{Cvoid},), eventloop())
+    push!(Workqueue, t)
+    t.state = :queued
+    return t
+end
+
+schedule(t::Task) = enq_work(t)
+
+"""
+    schedule(t::Task, [val]; error=false)
+
+Add a [`Task`](@ref) to the scheduler's queue. This causes the task to run constantly when the system
+is otherwise idle, unless the task performs a blocking operation such as [`wait`](@ref).
+
+If a second argument `val` is provided, it will be passed to the task (via the return value of
+[`yieldto`](@ref)) when it runs again. If `error` is `true`, the value is raised as an exception in
+the woken task.
+
+# Examples
+```jldoctest
+julia> a5() = sum(i for i in 1:1000);
+
+julia> b = Task(a5);
+
+julia> istaskstarted(b)
+false
+
+julia> schedule(b);
+
+julia> yield();
+
+julia> istaskstarted(b)
+true
+
+julia> istaskdone(b)
+true
+```
+"""
+function schedule(t::Task, arg; error=false)
+    # schedule a task to be (re)started with the given value or exception
+    if error
+        t.exception = arg
+    else
+        t.result = arg
+    end
+    return enq_work(t)
+end
+
+# fast version of `schedule(t, arg); wait()`
+function schedule_and_wait(t::Task, arg=nothing)
+    t.state == :runnable || error("schedule: Task not runnable")
+    if isempty(Workqueue)
+        return yieldto(t, arg)
+    else
+        t.result = arg
+        push!(Workqueue, t)
+        t.state = :queued
+    end
+    return wait()
+end
+
+"""
+    yield()
+
+Switch to the scheduler to allow another scheduled task to run. A task that calls this
+function is still runnable, and will be restarted immediately if there are no other runnable
+tasks.
+"""
+yield() = (enq_work(current_task()); wait())
+
+"""
+    yield(t::Task, arg = nothing)
+
+A fast, unfair-scheduling version of `schedule(t, arg); yield()` which
+immediately yields to `t` before calling the scheduler.
+"""
+function yield(t::Task, @nospecialize x = nothing)
+    t.state == :runnable || error("schedule: Task not runnable")
+    t.result = x
+    enq_work(current_task())
+    return try_yieldto(ensure_rescheduled, Ref(t))
+end
+
+"""
+    yieldto(t::Task, arg = nothing)
+
+Switch to the given task. The first time a task is switched to, the task's function is
+called with no arguments. On subsequent switches, `arg` is returned from the task's last
+call to `yieldto`. This is a low-level call that only switches tasks, not considering states
+or scheduling in any way. Its use is discouraged.
+"""
+function yieldto(t::Task, @nospecialize x = nothing)
+    t.result = x
+    return try_yieldto(identity, Ref(t))
+end
+
+function try_yieldto(undo, reftask::Ref{Task})
+    try
+        ccall(:jl_switchto, Cvoid, (Any,), reftask)
+    catch
+        undo(reftask[])
+        rethrow()
+    end
+    ct = current_task()
+    exc = ct.exception
+    if exc !== nothing
+        ct.exception = nothing
+        throw(exc)
+    end
+    result = ct.result
+    ct.result = nothing
+    return result
+end
+
+# yield to a task, throwing an exception in it
+function throwto(t::Task, @nospecialize exc)
+    t.exception = exc
+    return yieldto(t)
+end
+
+function ensure_rescheduled(othertask::Task)
+    ct = current_task()
+    if ct !== othertask && othertask.state == :runnable
+        # we failed to yield to othertask
+        # return it to the head of the queue to be scheduled later
+        pushfirst!(Workqueue, othertask)
+        othertask.state = :queued
+    end
+    if ct.state == :queued
+        # if the current task was queued,
+        # also need to return it to the runnable state
+        # before throwing an error
+        i = findfirst(t->t===ct, Workqueue)
+        i === nothing || deleteat!(Workqueue, i)
+        ct.state = :runnable
+    end
+    nothing
+end
+
+@noinline function poptask()
+    t = popfirst!(Workqueue)
+    if t.state != :queued
+        # assume this somehow got queued twice,
+        # probably broken now, but try discarding this switch and keep going
+        # can't throw here, because it's probably not the fault of the caller to wait
+        # and don't want to use print() here, because that may try to incur a task switch
+        ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
+            "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :queued\n")
+        return
+    end
+    t.state = :runnable
+    return Ref(t)
+end
+
+function wait()
+    while true
+        if isempty(Workqueue)
+            c = process_events(true)
+            if c == 0 && eventloop() != C_NULL && isempty(Workqueue)
+                # if there are no active handles and no runnable tasks, just
+                # wait for signals.
+                pause()
+            end
+        else
+            reftask = poptask()
+            if reftask !== nothing
+                result = try_yieldto(ensure_rescheduled, reftask)
+                process_events(false)
+                # return when we come out of the queue
+                return result
+            end
+        end
+    end
+    # unreachable
+end
+
+if Sys.iswindows()
+    pause() = ccall(:Sleep, stdcall, Cvoid, (UInt32,), 0xffffffff)
+else
+    pause() = ccall(:pause, Cvoid, ())
+end

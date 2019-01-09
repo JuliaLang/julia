@@ -241,9 +241,9 @@ include("env.jl")
 # Scheduling
 include("libuv.jl")
 include("event.jl")
-include("task.jl")
 include("threads.jl")
 include("lock.jl")
+include("task.jl")
 include("weakkeydict.jl")
 
 # Logging
