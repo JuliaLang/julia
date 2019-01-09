@@ -163,3 +163,6 @@ end
     haggis       = 4
 end
 @test Int(haggis) == 4
+
+# test scalar behavior in broadcast
+@test (@enum Fruit apple; v = Vector{Fruit}(undef, 3); v .= apple; v) == [apple, apple, apple]
