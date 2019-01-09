@@ -70,8 +70,9 @@ Reference to the singleton `EnvDict`, providing a dictionary interface to system
 variables.
 
 (On Windows, system environment variables are case-insensitive, and `ENV` correspondingly converts
-all keys to uppercase for display, iteration, and copying.  Portable code should not rely on the
-existence of lower-case environment variables or on the ability to distinguish variables by case.)
+all keys to uppercase for display, iteration, and copying. Portable code should not rely on the
+ability to distinguish variables by case, and should beware that setting an ostensibly lowercase
+variable may result in an uppercase `ENV` key.)
 """
 const ENV = EnvDict()
 
