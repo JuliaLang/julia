@@ -495,6 +495,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->excstack = NULL;
     t->stkbuf = NULL;
     t->started = 0;
+    t->prio = -1;
 #ifdef ENABLE_TIMINGS
     t->timing_stack = NULL;
 #endif
