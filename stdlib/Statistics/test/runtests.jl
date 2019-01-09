@@ -371,8 +371,8 @@ Y = [6.0  2.0;
         @inferred cov(X, Y, dims=vd, corrected=cr)
     end
 
-    # case for large number, floating point accurcy issue
-    let A = [4.0, 7.0, 13.0, 16.0]
+    @testset "floating point accurcy in large number" begin
+      A = [4.0, 7.0, 13.0, 16.0]
       C = A .+ 1.0e10
       @test cov(A, A) ≈ cov(C, C)
     end
