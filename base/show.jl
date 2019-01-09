@@ -576,6 +576,7 @@ has_tight_type(p::Pair) =
     typeof(p.second) == typeof(p).parameters[2]
 
 isdelimited(io::IO, x) = true
+isdelimited(io::IO, x::Function) = !isoperator(Symbol(x))
 
 # !isdelimited means that the Pair is printed with "=>" (like in "1 => 2"),
 # without its explicit type (like in "Pair{Integer,Integer}(1, 2)")
