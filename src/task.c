@@ -488,14 +488,13 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->logstate = ptls->current_task->logstate;
     // there is no active exception handler available on this stack yet
     t->eh = NULL;
-    // TODO: allow non-sticky tasks
-    t->tid = ptls->tid;
     t->sticky = 1;
     t->gcstack = NULL;
     t->excstack = NULL;
     t->stkbuf = NULL;
     t->started = 0;
     t->prio = -1;
+    t->tid = 0;
 #ifdef ENABLE_TIMINGS
     t->timing_stack = NULL;
 #endif

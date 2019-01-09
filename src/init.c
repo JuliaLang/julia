@@ -825,6 +825,10 @@ void _julia_init(JL_IMAGE_SEARCH rel)
             ptls->world_age = last_age;
         }
     }
+    else {
+        // nthreads > 1 requires code in Base
+        jl_n_threads = 1;
+    }
     jl_start_threads();
 
     // This needs to be after jl_start_threads
