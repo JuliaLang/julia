@@ -2,28 +2,29 @@
 
 # Factorials
 
-const _fact_table64 = Vector{Int64}(undef, 20)
-_fact_table64[1] = 1
-for n in 2:20
-    _fact_table64[n] = _fact_table64[n-1] * n
-end
+const _fact_table64 = [1; cumprod(1:20)]  # tables shifted by 1 so factorial(0) can be looked up; maybe OffsetArray better?
 
-const _fact_table128 = Vector{UInt128}(undef, 34)
-_fact_table128[1] = 1
-for n in 2:34
-    _fact_table128[n] = _fact_table128[n-1] * n
-end
+const _fact_table128 = [1; cumprod(1:UInt128(34))]
 
-function factorial_lookup(n::Integer, table, lim)
+@noinline function factorial_lookup_helper(n::Integer, table, lim)  # non-fast-path, almost identical to the old code
     n < 0 && throw(DomainError(n, "`n` must not be negative."))
     n > lim && throw(OverflowError(string(n, " is too large to look up in the table")))
-    n == 0 && return one(n)
-    @inbounds f = table[n]
+    # no longer needed because of shift in table:   n == 0 && return one(n)
+    @inbounds f = table[n+1]
     return oftype(n, f)
 end
 
-factorial(n::Int128) = factorial_lookup(n, _fact_table128, 33)
-factorial(n::UInt128) = factorial_lookup(n, _fact_table128, 34)
+@inline function factorial_lookup(n::Integer, table, lim)
+    if !(0 <= n < 16)
+        return factorial_lookup_helper(n, table, lim)
+    else
+        @inbounds f = table[n+1]
+        return oftype(n, f)
+    end
+end
+
+factorial(n::Int128) = factorial_lookup_helper(n, _fact_table128, 33)
+factorial(n::UInt128) = factorial_lookup_helper(n, _fact_table128, 34)
 factorial(n::Union{Int64,UInt64}) = factorial_lookup(n, _fact_table64, 20)
 
 if Int === Int32
