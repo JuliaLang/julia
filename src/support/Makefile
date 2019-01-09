@@ -2,9 +2,10 @@ JULIAHOME := $(abspath ../..)
 BUILDDIR := .
 include $(JULIAHOME)/Make.inc
 
-override CFLAGS += $(JCFLAGS)
-override CXXFLAGS += $(JCXXFLAGS)
-override CPPFLAGS += $(JCPPFLAGS)
+JCFLAGS += $(CFLAGS)
+JCXXFLAGS += $(CXXFLAGS)
+JCPPFLAGS += $(CPPFLAGS)
+JLDFLAGS += $(LDFLAGS)
 
 SRCS := hashing timefuncs ptrhash operators utf8 ios htable bitvector \
 	int2str libsupportinit arraylist strtod
@@ -28,7 +29,7 @@ DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 FLAGS := $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -I$(UTF8PROC_INC) -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fvisibility=hidden -Wpointer-arith -Wundef
-override CFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
+JCFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 endif
 
 DEBUGFLAGS += $(FLAGS)
@@ -40,21 +41,21 @@ $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
 
 $(BUILDDIR)/%.o: %.c $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: %.c $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 ifneq ($(USEMSVC), 1)
 $(BUILDDIR)/%.o: %.S | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(SHIPFLAGS) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: %.S | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 else
 $(BUILDDIR)/%.o: %.S | $(BUILDDIR)
-	@$(call PRINT_CC, $(CPP) -P $(CPPFLAGS) $(SHIPFLAGS) $<)
-	@$(call PRINT_CC, $(AS) $(CPPFLAGS) $(SHIPFLAGS) -Fo $@ -c $*.i)
+	@$(call PRINT_CC, $(CPP) -P $(JCPPFLAGS) $(SHIPFLAGS) $<)
+	@$(call PRINT_CC, $(AS) $(JCPPFLAGS) $(SHIPFLAGS) -Fo $@ -c $*.i)
 $(BUILDDIR)/%.dbg.obj: %.S | $(BUILDDIR)
-	@$(call PRINT_CC, $(CPP) -P $(CPPFLAGS) $(DEBUGFLAGS) $<)
-	@$(call PRINT_CC, $(AS) $(CPPFLAGS) $(DEBUGFLAGS) -Fo $@ -c $*.i)
+	@$(call PRINT_CC, $(CPP) -P $(JCPPFLAGS) $(DEBUGFLAGS) $<)
+	@$(call PRINT_CC, $(AS) $(JCPPFLAGS) $(DEBUGFLAGS) -Fo $@ -c $*.i)
 endif
 
 release: $(BUILDDIR)/libsupport.a
