@@ -92,11 +92,17 @@ unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} =
 
 @inline @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, inds::Vararg{Int, N}) where {T,N,S}
     check_readable(a)
+    if check_applicable_homogeneous_struct(T,S)
+        return homogeneous_struct_getindex(T,a.parent,inds...)
+    end
     _getindex_ra(a, inds[1], tail(inds))
 end
 
 @inline @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, i::Int) where {T,N,S}
     check_readable(a)
+    if check_applicable_homogeneous_struct(T,S)
+        return homogeneous_struct_getindex(T,a.parent,i)
+    end
     if isa(IndexStyle(a), IndexLinear)
         return _getindex_ra(a, i, ())
     end
@@ -144,11 +150,17 @@ end
 
 @inline @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, inds::Vararg{Int, N}) where {T,N,S}
     check_writable(a)
+    if check_applicable_homogeneous_struct(T,S)
+        return homogeneous_struct_setindex!(a.parent,T,v,inds...)
+    end
     _setindex_ra!(a, v, inds[1], tail(inds))
 end
 
 @inline @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, i::Int) where {T,N,S}
     check_writable(a)
+    if check_applicable_homogeneous_struct(T,S)
+        return homogeneous_struct_setindex!(a.parent,T,v,i)
+    end
     if isa(IndexStyle(a), IndexLinear)
         return _setindex_ra!(a, v, i, ())
     end
@@ -294,4 +306,99 @@ using .Iterators: Stateful
         checked_size = pad.offset + pad.size
     end
     return true
+end
+
+@pure is_ntuple_wrapper(::Type{ST}) where ST = fieldcount(ST) == 1 && fieldtype(ST, 1) <: NTuple
+@pure myfieldcount(::Type{ST}) where {ST} = is_ntuple_wrapper(ST) ? fieldcount(fieldtype(ST, 1)) : fieldcount(ST)
+
+@generated function check_applicable_homogeneous_struct(::Type{ST}, ::Type{T}) where {ST, T}
+    # Check whether ST is a homogeneous struct of T's
+    fieldcount(ST) == 0 && return false # not a struct
+    TT = is_ntuple_wrapper(ST) ? fieldtype(ST,1) : ST
+    NF = fieldcount(TT)
+    t = fieldtype(TT,1)
+    t === T || return false # struct element and type don't match
+    return all(x -> x === t, [fieldtype(TT,i) for i in 1:NF]) # check if struct is homogeneous. 
+end
+
+@generated function homogeneous_struct_getindex(::Type{ST}, data::AbstractArray{T,N},i::Int) where {ST,T,N}
+    NF = myfieldcount(ST)
+    ex = Expr(:block)
+    exarg = ex.args
+    push!(exarg,Expr(:meta,:inline))
+    push!(exarg,:(I=$NF*i))
+    push!(exarg,:(@boundscheck checkbounds(data,I)))
+    element = ST <: NTuple ? Expr(:tuple) : Expr(:call,ST)
+    for j in 1:(NF-1)
+        push!(element.args,:(@inbounds data[I-$(NF-j)]))
+    end
+    push!(element.args,:(@inbounds data[I]))
+ 
+    push!(exarg, element)
+    return ex
+end
+
+@generated function homogeneous_struct_getindex(::Type{ST}, data::AbstractArray{T,N},i::Vararg{Int,N}) where {ST,T,N}
+    NF = myfieldcount(ST)
+    ex = Expr(:block)
+    exarg = ex.args
+    push!(exarg,Expr(:meta,:inline))
+    push!(exarg,:(I=$NF*i[1]))
+    rest_of_indices = Vector{Any}()
+    for j = 2:N
+        push!(rest_of_indices,:(i[$j]))
+    end
+    push!(exarg,:(@boundscheck $(Expr(:call,:checkbounds,:data,:I,rest_of_indices...))))
+    element = ST <: NTuple ? Expr(:tuple) : Expr(:call,ST)
+    for j in 1:(NF-1)
+        push!(element.args,:(@inbounds $(Expr(:call, :getindex, :data, :(I-$(NF-j)), rest_of_indices...))))
+    end
+    push!(element.args,:(@inbounds $(Expr(:call, :getindex, :data, :I, rest_of_indices...))))
+ 
+    push!(exarg, element)
+    return ex
+end
+
+@generated function homogeneous_struct_setindex!(data::AbstractArray{T,N},::Type{ST},val,i::Int) where {ST,T,N}
+    NF = myfieldcount(ST)
+    ex = quote
+        $(Expr(:meta,:inline))
+        I=$NF*i
+        @boundscheck checkbounds(data,I)
+    end
+    exarg = ex.args
+
+    push!(exarg, is_ntuple_wrapper(ST) ? :(val2 = getfield(convert($ST,val),1)) : :(val2 = convert($ST,val)))
+
+    for j in 1:(NF-1)
+        push!(exarg,:(@inbounds $(Expr(:call,:setindex!, :data, :(getfield(val2,$j)), :(I-$(NF-j))))))
+    end
+    push!(exarg,:(@inbounds $(Expr(:call,:setindex!, :data, :(getfield(val2,$NF)), :I))))
+ 
+    return ex
+end
+
+@generated function homogeneous_struct_setindex!(data::AbstractArray{T,N},::Type{ST},val,i::Vararg{Int,N}) where {ST,T,N}
+    NF = myfieldcount(ST)
+    rest_of_indices = Vector{Any}()
+
+    for j = 2:N
+        push!(rest_of_indices,:(i[$j]))
+    end
+
+    ex = quote
+        $(Expr(:meta,:inline))
+        I=$NF*i[1]
+        @boundscheck $(Expr(:call,:checkbounds,:data,:I,rest_of_indices...))
+    end
+    exarg = ex.args
+
+    push!(exarg, is_ntuple_wrapper(ST) ? :(val2 = getfield(convert($ST,val),1)) : :(val2 = convert($ST,val)))
+
+    for j in 1:(NF-1)
+        push!(exarg,:(@inbounds $(Expr(:call,:setindex!, :data, :(getfield(val2,$j)), :(I-$(NF-j)),rest_of_indices...))))
+    end
+    push!(exarg,:(@inbounds $(Expr(:call,:setindex!, :data, :(getfield(val2,$NF)), :I,rest_of_indices...))))
+ 
+    return ex
 end
