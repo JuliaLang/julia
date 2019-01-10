@@ -65,6 +65,7 @@ wait for it to become available.
 Each `lock` must be matched by an [`unlock`](@ref).
 """
 function lock(rl::ReentrantLock)
+    @static Sys.isjsvm() && return
     t = current_task()
     lock(rl.cond_wait)
     while true
@@ -96,6 +97,7 @@ If this is a recursive lock which has been acquired before, decrement an
 internal counter and return immediately.
 """
 function unlock(rl::ReentrantLock)
+    @static Sys.isjsvm() && return
     t = current_task()
     rl.reentrancy_cnt == 0 && error("unlock count must match lock count")
     rl.locked_by === t || error("unlock from wrong thread")

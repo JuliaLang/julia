@@ -10,6 +10,7 @@ global Condition # we'll define this later, make sure we don't import Base.Condi
 if Base.DISABLE_THREADS
     threadid() = 1
     nthreads() = 1
+    include("anti_threadding.jl")
 else
     include("threadingconstructs.jl")
     include("atomics.jl")
