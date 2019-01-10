@@ -84,6 +84,13 @@ rowvals(x::SparseVectorUnion) = nonzeroinds(x)
 indtype(x::SparseColumnView) = indtype(parent(x))
 indtype(x::SparseVectorView) = indtype(parent(x))
 
+
+function Base.sizehint!(v::SparseVector, newlen::Integer)
+    sizehint!(nonzeroinds(v), newlen)
+    sizehint!(nonzeros(v), newlen)
+    return v
+end
+
 ## similar
 #
 # parent method for similar that preserves stored-entry structure (for when new and old dims match)
@@ -92,10 +99,11 @@ _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}) where {TvNew,TiNew
 # parent method for similar that preserves nothing (for when new dims are 1-d)
 _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) where {TvNew,TiNew} =
     SparseVector(dims..., similar(nonzeroinds(S), TiNew, 0), similar(nonzeros(S), TvNew, 0))
-# parent method for similar that preserves storage space (for when new dims are 2-d)
-_sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
-    SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(nonzeroinds(S), TiNew, 0), similar(nonzeros(S), TvNew, 0))
-
+# parent method for similar that preserves storage space (for old and new dims differ, and new is 2d)
+function _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew}
+    S1 = SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(nonzeroinds(S), TiNew, 0), similar(nonzeros(S), TvNew, 0))
+    return sizehint!(S1, min(widelength(S1), length(nonzeroinds(S))))
+end
 # The following methods hook into the AbstractArray similar hierarchy. The first method
 # covers similar(A[, Tv]) calls, which preserve stored-entry structure, and the latter
 # methods cover similar(A[, Tv], shape...) calls, which preserve nothing if the dims
