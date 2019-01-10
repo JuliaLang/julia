@@ -2,7 +2,7 @@
 
 # Factorials
 
-const _fact_table64 = [1; cumprod(1:20)]  # tables shifted by 1 so factorial(0) can be looked up; maybe OffsetArray better?
+const _fact_table64 = [1; cumprod(1:Int64(20))]  # tables shifted by 1 so factorial(0) can be looked up; maybe OffsetArray better?
 
 const _fact_table128 = [1; cumprod(1:UInt128(34))]
 
