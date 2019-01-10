@@ -5,7 +5,7 @@ module TestBLAS
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasReal, BlasComplex
 
-srand(100)
+Random.seed!(100)
 ## BLAS tests - testing the interface code to BLAS routines
 @testset for elty in [Float32, Float64, ComplexF32, ComplexF64]
     @testset "syr2k!" begin
@@ -124,7 +124,7 @@ srand(100)
             A = triu(rand(elty,n,n))
             @testset "Vector and SubVector" for x in (rand(elty, n), view(rand(elty,2n),1:2:2n))
                 @test A\x ≈ BLAS.trsv('U','N','N',A,x)
-                @test_throws DimensionMismatch BLAS.trsv('U','N','N',A,Vector{elty}(uninitialized,n+1))
+                @test_throws DimensionMismatch BLAS.trsv('U','N','N',A,Vector{elty}(undef,n+1))
             end
         end
         @testset "ger, her, syr" for x in (rand(elty, n), view(rand(elty,2n), 1:2:2n)),
@@ -134,20 +134,20 @@ srand(100)
             α = rand(elty)
 
             @test BLAS.ger!(α,x,y,copy(A)) ≈ A + α*x*y'
-            @test_throws DimensionMismatch BLAS.ger!(α,Vector{elty}(uninitialized,n+1),y,copy(A))
+            @test_throws DimensionMismatch BLAS.ger!(α,Vector{elty}(undef,n+1),y,copy(A))
 
             A = rand(elty,n,n)
             A = A + transpose(A)
             @test issymmetric(A)
             @test triu(BLAS.syr!('U',α,x,copy(A))) ≈ triu(A + α*x*transpose(x))
-            @test_throws DimensionMismatch BLAS.syr!('U',α,Vector{elty}(uninitialized,n+1),copy(A))
+            @test_throws DimensionMismatch BLAS.syr!('U',α,Vector{elty}(undef,n+1),copy(A))
 
             if elty <: Complex
                 A = rand(elty,n,n)
                 A = A + A'
                 α = real(α)
                 @test triu(BLAS.her!('U',α,x,copy(A))) ≈ triu(A + α*x*x')
-                @test_throws DimensionMismatch BLAS.her!('U',α,Vector{elty}(uninitialized,n+1),copy(A))
+                @test_throws DimensionMismatch BLAS.her!('U',α,Vector{elty}(undef,n+1),copy(A))
             end
         end
         @testset "copy" begin
@@ -170,7 +170,7 @@ srand(100)
             Asymm = A + transpose(A)
             @testset "symv and hemv" begin
                 @test BLAS.symv('U',Asymm,x) ≈ Asymm*x
-                offsizevec, offsizemat = Array{elty}.(uninitialized,(n+1, (n,n+1)))
+                offsizevec, offsizemat = Array{elty}.(undef,(n+1, (n,n+1)))
                 @test_throws DimensionMismatch BLAS.symv!('U',one(elty),Asymm,x,one(elty),offsizevec)
                 @test_throws DimensionMismatch BLAS.symv('U',offsizemat,x)
                 if elty <: BlasComplex
@@ -181,7 +181,7 @@ srand(100)
             end
 
             @testset "symm error throwing" begin
-                Cnn, Cnm, Cmn = Matrix{elty}.(uninitialized,((n,n), (n,n-1), (n-1,n)))
+                Cnn, Cnm, Cmn = Matrix{elty}.(undef,((n,n), (n,n-1), (n-1,n)))
                 @test_throws DimensionMismatch BLAS.symm('L','U',Cnm,Cnn)
                 @test_throws DimensionMismatch BLAS.symm('R','U',Cmn,Cnn)
                 @test_throws DimensionMismatch BLAS.symm!('L','U',one(elty),Asymm,Cnn,one(elty),Cmn)
@@ -195,7 +195,7 @@ srand(100)
             end
         end
         @testset "trmm error throwing" begin
-            Cnn, Cmn, Cnm = Matrix{elty}.(uninitialized,((n,n), (n+1,n), (n,n+1)))
+            Cnn, Cmn, Cnm = Matrix{elty}.(undef,((n,n), (n+1,n), (n,n+1)))
             @test_throws DimensionMismatch BLAS.trmm('L','U','N','N',one(elty),triu(Cnn),Cmn)
             @test_throws DimensionMismatch BLAS.trmm('R','U','N','N',one(elty),triu(Cnn),Cnm)
         end
@@ -343,9 +343,6 @@ Base.getindex(A::WrappedArray{T, N}, I::Vararg{Int, N}) where {T, N} = A.A[I...]
 Base.setindex!(A::WrappedArray, v, i::Int) = setindex!(A.A, v, i)
 Base.setindex!(A::WrappedArray{T, N}, v, I::Vararg{Int, N}) where {T, N} = setindex!(A.A, v, I...)
 Base.unsafe_convert(::Type{Ptr{T}}, A::WrappedArray{T}) where T = Base.unsafe_convert(Ptr{T}, A.A)
-
-@test_deprecated strides(WrappedArray(rand(5)))
-@test_deprecated stride(WrappedArray(rand(5)), 1)
 
 Base.stride(A::WrappedArray, i::Int) = stride(A.A, i)
 

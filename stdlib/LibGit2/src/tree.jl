@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    treewalk(f::Function, tree::GitTree, payload=Any[], post::Bool=false)
+    treewalk(f, tree::GitTree, post::Bool=false)
 
 Traverse the entries in `tree` and its subtrees in post or pre order. Preorder
 means beginning at the root and then traversing the leftmost subtree (and
@@ -12,18 +12,26 @@ subtree, traversing upwards through it, then traversing the next right subtree
 
 The function parameter `f` should have following signature:
 
-    (Cstring, Ptr{Cvoid}, Ptr{Cvoid}) -> Cint
+    (String, GitTreeEntry) -> Cint
 
 A negative value returned from `f` stops the tree walk. A positive value means
 that the entry will be skipped if `post` is `false`.
 """
-function treewalk(f::Function, tree::GitTree, payload=Any[], post::Bool = false)
-    cbf = cfunction(f, Cint, Tuple{Cstring, Ptr{Cvoid}, Ptr{Cvoid}})
-    cbf_payload = Ref{typeof(payload)}(payload)
+function treewalk(f, tree::GitTree, post::Bool = false)
+    ensure_initialized()
     # NOTE: don't use @check/GitError directly, because the code can be arbitrary
+    payload = Any[ tree, f ]
+    cbf = @cfunction(function treewalk_callback(root_cstr::Cstring, entry_ptr::Ptr{Cvoid}, payload::Vector{Any})::Cint
+            # decode arguments
+            root = unsafe_string(root_cstr)
+            tree = payload[1]::GitTree
+            f = payload[2]
+            entry = GitTreeEntry(tree, entry_ptr, false)
+            return f(root, entry)
+        end, Cint, (Cstring, Ptr{Cvoid}, Ref{Vector{Any}}))
     err = ccall((:git_tree_walk, :libgit2), Cint,
-                (Ptr{Cvoid}, Cint, Ptr{Cvoid}, Ptr{Cvoid}),
-                tree.ptr, post, cbf, cbf_payload)
+                (Ptr{Cvoid}, Cint, Ptr{Cvoid}, Any),
+                tree.ptr, post, cbf, payload)
     if err < 0
         err_class, _ = Error.last_error()
         if err_class != Error.Callback
@@ -31,8 +39,7 @@ function treewalk(f::Function, tree::GitTree, payload=Any[], post::Bool = false)
             throw(GitError(err))
         end
     end
-
-    return cbf_payload
+    nothing
 end
 
 repository(tree::GitTree) = tree.owner
@@ -44,6 +51,7 @@ repository(te::GitTreeEntry) = repository(te.owner)
 Return the filename of the object on disk to which `te` refers.
 """
 function filename(te::GitTreeEntry)
+    ensure_initialized()
     str = ccall((:git_tree_entry_name, :libgit2), Cstring, (Ptr{Cvoid},), te.ptr)
     str != C_NULL && return unsafe_string(str)
     return nothing
@@ -55,6 +63,7 @@ end
 Return the UNIX filemode of the object on disk to which `te` refers as an integer.
 """
 function filemode(te::GitTreeEntry)
+    ensure_initialized()
     return ccall((:git_tree_entry_filemode, :libgit2), Cint, (Ptr{Cvoid},), te.ptr)
 end
 
@@ -65,6 +74,7 @@ Return the type of the object to which `te` refers. The result will be
 one of the types which [`objtype`](@ref) returns, e.g. a `GitTree` or `GitBlob`.
 """
 function entrytype(te::GitTreeEntry)
+    ensure_initialized()
     otype = ccall((:git_tree_entry_type, :libgit2), Cint, (Ptr{Cvoid},), te.ptr)
     return objtype(Consts.OBJECT(otype))
 end
@@ -75,6 +85,7 @@ end
 Return the [`GitHash`](@ref) of the object to which `te` refers.
 """
 function entryid(te::GitTreeEntry)
+    ensure_initialized()
     GC.@preserve te begin
         oid_ptr = ccall((:git_tree_entry_id, :libgit2), Ptr{UInt8}, (Ptr{Cvoid},), te.ptr)
         oid = GitHash(oid_ptr)
@@ -82,7 +93,8 @@ function entryid(te::GitTreeEntry)
     return oid
 end
 
-function Base.count(tree::GitTree)
+function count(tree::GitTree)
+    ensure_initialized()
     return ccall((:git_tree_entrycount, :libgit2), Csize_t, (Ptr{Cvoid},), tree.ptr)
 end
 
@@ -90,6 +102,7 @@ function Base.getindex(tree::GitTree, i::Integer)
     if i < 1 || i > count(tree)
         throw(BoundsError(tree, i))
     end
+    ensure_initialized()
     te_ptr = ccall((:git_tree_entry_byindex, :libgit2),
                    Ptr{Cvoid},
                    (Ptr{Cvoid}, Csize_t), tree.ptr, i-1)
@@ -111,6 +124,7 @@ blob = LibGit2.GitBlob(tree_entry)
 """
 function GitObject(e::GitTreeEntry) end
 function (::Type{T})(te::GitTreeEntry) where T<:GitObject
+    ensure_initialized()
     repo = repository(te)
     obj_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_tree_entry_to_object, :libgit2), Cint,
@@ -141,7 +155,7 @@ the case of a file, or another [`GitTree`](@ref) if looking up a directory).
 # Examples
 ```julia
 tree = LibGit2.GitTree(repo, "HEAD^{tree}")
-readme = tree["README.md]
+readme = tree["README.md"]
 subtree = tree["test"]
 runtests = subtree["runtests.jl"]
 ```
@@ -155,31 +169,25 @@ function Base.getindex(tree::GitTree, target::AbstractString)
         return tree
     end
 
-    payload = Any[tree, target, nothing]
-    treewalk(_getindex_callback, tree, payload)
-    oid = payload[3]
-    if oid === nothing
-        throw(KeyError(target))
+    local oid = nothing
+    function _getindex_callback(root::String, entry::GitTreeEntry)::Cint
+        path = joinpath(root, filename(entry))
+        if path == target
+            # we found the target, save the oid and stop the walk
+            oid = entryid(entry)
+            # workaround for issue: https://github.com/libgit2/libgit2/issues/4693
+            ensure_initialized()
+            ccall((:giterr_set_str, :libgit2), Cvoid,
+                  (Cint, Cstring), Cint(Error.Callback),
+                  "git_tree_walk callback returned -1")
+            return -1
+        elseif entrytype(entry) == GitTree && !startswith(target, path)
+            # this subtree isn't relevant, so skip it
+            return 1
+        end
+        return 0
     end
+    treewalk(_getindex_callback, tree)
+    oid === nothing && throw(KeyError(target))
     return GitObject(repository(tree), oid)
-end
-
-function _getindex_callback(root_cstr, entry_ptr, payload_ptr)
-    # decode arguments
-    root = unsafe_string(root_cstr)
-    payload = Base.unsafe_pointer_to_objref(payload_ptr)
-    tree = payload[1]
-    target = payload[2]
-    entry = GitTreeEntry(tree, entry_ptr, false)
-
-    path = joinpath(root, filename(entry))
-    if path == target
-        # we found the target, save the oid and stop the walk
-        payload[3] = entryid(entry)
-        return Cint(-1)
-    elseif entrytype(entry) == GitTree && !startswith(target, path)
-        # this subtree isn't relevant, so skip it
-        return Cint(1)
-    end
-    return Cint(0)
 end

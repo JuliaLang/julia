@@ -1,9 +1,25 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## semantic version numbers (http://semver.org)
+## semantic version numbers (https://semver.org/)
 
 const VInt = UInt32
+"""
+    VersionNumber
 
+Version number type which follow the specifications of
+[semantic versioning](https://semver.org/), composed of major, minor
+and patch numeric values, followed by pre-release and build
+alpha-numeric annotations. See also [`@v_str`](@ref).
+
+# Examples
+```jldoctest
+julia> VersionNumber("1.2.3")
+v"1.2.3"
+
+julia> VersionNumber("2.0.1-rc1")
+v"2.0.1-rc1"
+```
+"""
 struct VersionNumber
     major::VInt
     minor::VInt
@@ -21,7 +37,7 @@ struct VersionNumber
             if ident isa Integer
                 ident >= 0 || throw(ArgumentError("invalid negative pre-release identifier: $ident"))
             else
-                if !contains(ident, r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i) ||
+                if !occursin(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
                     isempty(ident) && !(length(pre)==1 && isempty(bld))
                     throw(ArgumentError("invalid pre-release identifier: $(repr(ident))"))
                 end
@@ -31,7 +47,7 @@ struct VersionNumber
             if ident isa Integer
                 ident >= 0 || throw(ArgumentError("invalid negative build identifier: $ident"))
             else
-                if !contains(ident, r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i) ||
+                if !occursin(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
                     isempty(ident) && length(bld)!=1
                     throw(ArgumentError("invalid build identifier: $(repr(ident))"))
                 end
@@ -67,6 +83,8 @@ function print(io::IO, v::VersionNumber)
 end
 show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
 
+Broadcast.broadcastable(v::VersionNumber) = Ref(v)
+
 const VERSION_REGEX = r"^
     v?                                      # prefix        (optional)
     (\d+)                                   # major         (required)
@@ -83,7 +101,7 @@ function split_idents(s::AbstractString)
     idents = split(s, '.')
     ntuple(length(idents)) do i
         ident = idents[i]
-        contains(ident, r"^\d+$") ? parse(UInt64, ident) : String(ident)
+        occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident)
     end
 end
 
@@ -103,6 +121,20 @@ function VersionNumber(v::AbstractString)
     return VersionNumber(major, minor, patch, prerl, build)
 end
 
+"""
+    @v_str
+
+String macro used to parse a string to a [`VersionNumber`](@ref).
+
+# Examples
+```jldoctest
+julia> v"1.2.3"
+v"1.2.3"
+
+julia> v"2.0.1-rc1"
+v"2.0.1-rc1"
+```
+"""
 macro v_str(v); VersionNumber(v); end
 
 typemin(::Type{VersionNumber}) = v"0-"
@@ -121,16 +153,12 @@ function ident_cmp(
     A::Tuple{Vararg{Union{Integer,String}}},
     B::Tuple{Vararg{Union{Integer,String}}},
 )
-    i = start(A)
-    j = start(B)
-    while !done(A,i) && !done(B,i)
-       a,i = next(A,i)
-       b,j = next(B,j)
+    for (a, b) in zip(A, B)
        c = ident_cmp(a,b)
        (c != 0) && return c
     end
-    done(A,i) && !done(B,j) ? -1 :
-    !done(A,i) && done(B,j) ? +1 : 0
+    length(A) < length(B) ? -1 :
+    length(B) < length(A) ? +1 : 0
 end
 
 function ==(a::VersionNumber, b::VersionNumber)
@@ -184,22 +212,23 @@ nextminor(v::VersionNumber) = v < thisminor(v) ? thisminor(v) : VersionNumber(v.
 nextmajor(v::VersionNumber) = v < thismajor(v) ? thismajor(v) : VersionNumber(v.major+1, 0, 0)
 
 function check_new_version(existing::Vector{VersionNumber}, ver::VersionNumber)
-    @assert issorted(existing)
     if isempty(existing)
-        for v in [v"0", v"0.0.1", v"0.1", v"1"]
+        for v in [v"0.0.1", v"0.1", v"1"]
             lowerbound(v) <= ver <= v && return
         end
-        error("$ver is not a valid initial version (try 0.0.0, 0.0.1, 0.1 or 1.0)")
+        error("version $ver is invalid initial version (try 0.0.1, 0.1, 1.0)")
     end
+    issorted(existing) || (existing = sort(existing))
     idx = searchsortedlast(existing, ver)
+    idx > 0 || error("version $ver less than least existing version $(existing[1])")
     prv = existing[idx]
     ver == prv && error("version $ver already exists")
     nxt = thismajor(ver) != thismajor(prv) ? nextmajor(prv) :
           thisminor(ver) != thisminor(prv) ? nextminor(prv) : nextpatch(prv)
-    ver <= nxt || error("$ver skips over $nxt")
+    ver <= nxt || error("version $ver skips over $nxt")
     thispatch(ver) <= ver && return # regular or build release
     idx < length(existing) && thispatch(existing[idx+1]) <= nxt &&
-        error("$ver is a pre-release of existing version $(existing[idx+1])")
+        error("version $ver is pre-release of existing version $(existing[idx+1])")
     return # acceptable new version
 end
 
@@ -250,7 +279,8 @@ function banner(io::IO = stdout)
             commit_string = "$(branch)/$(commit) (fork: $(distance) commits, $(days) $(unit))"
         end
     end
-    commit_date = !isempty(GIT_VERSION_INFO.date_string) ? " ($(GIT_VERSION_INFO.date_string))" : ""
+
+    commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
 
     if get(io, :color, false)
         c = text_colors
@@ -262,25 +292,25 @@ function banner(io::IO = stdout)
         d4 = c[:bold] * c[:magenta] # fourth dot
 
         print(io,"""               $(d3)_$(tx)
-           $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
-          $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: https://docs.julialang.org
-           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?help\" for help.
+           $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
+          $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
+           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
           $(jl)| | | | | | |/ _` |$(tx)  |
           $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
          $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
-        $(jl)|__/$(tx)                   |  $(Sys.MACHINE)
+        $(jl)|__/$(tx)                   |
 
         """)
     else
         print(io,"""
                        _
-           _       _ _(_)_     |  A fresh approach to technical computing
-          (_)     | (_) (_)    |  Documentation: https://docs.julialang.org
-           _ _   _| |_  __ _   |  Type \"?help\" for help.
+           _       _ _(_)_     |  Documentation: https://docs.julialang.org
+          (_)     | (_) (_)    |
+           _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
           | | | | | | |/ _` |  |
           | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
          _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
-        |__/                   |  $(Sys.MACHINE)
+        |__/                   |
 
         """)
     end

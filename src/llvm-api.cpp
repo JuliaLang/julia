@@ -15,8 +15,10 @@
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/CallSite.h>
+#include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/GlobalValue.h>
+#include <llvm/IR/Instruction.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/TargetSelect.h>
@@ -235,6 +237,38 @@ extern "C" JL_DLLEXPORT void LLVMExtraAddInternalizePassWithExportList(
         return false;
     };
     unwrap(PM)->add(createInternalizePass(PreserveFobj));
+}
+
+
+// Awaiting D46627
+
+extern "C" JL_DLLEXPORT int LLVMExtraGetSourceLocation(LLVMValueRef V, int index,
+                                                        const char** Name,
+                                                        const char** Filename,
+                                                        unsigned int* Line,
+                                                        unsigned int* Column)
+{
+    if (auto I = dyn_cast<Instruction>(unwrap(V))) {
+        const DILocation* DIL = I->getDebugLoc();
+        if (!DIL)
+            return 0;
+
+        for (int i = index; i > 0; i--) {
+            DIL = DIL->getInlinedAt();
+            if (!DIL)
+                return 0;
+        }
+
+        *Name = DIL->getScope()->getName().data();
+        *Filename = DIL->getScope()->getFilename().data();
+        *Line = DIL->getLine();
+        *Column = DIL->getColumn();
+
+        return 1;
+
+    } else {
+        jl_exceptionf(jl_argumenterror_type, "Can only get source location information of instructions");
+    }
 }
 
 } // namespace llvm

@@ -121,7 +121,7 @@ the matrix. Differs from `LinearAlgebra`'s [`transpose`](@ref) in that the
 operation is not recursive.
 
 # Examples
-```jldoctest
+```jldoctest; setup = :(using LinearAlgebra)
 julia> a = [1 2; 3 4];
 
 julia> b = [5 6; 7 8];
@@ -141,7 +141,7 @@ julia> permutedims(X)
  [5 6; 7 8]  [13 14; 15 16]
 
 julia> transpose(X)
-2×2 LinearAlgebra.Transpose{LinearAlgebra.Transpose{Int64,Array{Int64,2}},Array{Array{Int64,2},2}}:
+2×2 Transpose{Transpose{Int64,Array{Int64,2}},Array{Array{Int64,2},2}}:
  [1 3; 2 4]  [9 11; 10 12]
  [5 7; 6 8]  [13 15; 14 16]
 ```
@@ -156,7 +156,7 @@ Differs from `LinearAlgebra`'s [`transpose`](@ref) in that
 the operation is not recursive.
 
 # Examples
-```jldoctest
+```jldoctest; setup = :(using LinearAlgebra)
 julia> permutedims([1, 2, 3, 4])
 1×4 Array{Int64,2}:
  1  2  3  4
@@ -171,7 +171,7 @@ julia> permutedims(V)
  [1 2; 3 4]  [5 6; 7 8]
 
 julia> transpose(V)
-1×2 LinearAlgebra.Transpose{LinearAlgebra.Transpose{Int64,Array{Int64,2}},Array{Array{Int64,2},1}}:
+1×2 Transpose{Transpose{Int64,Array{Int64,2}},Array{Array{Int64,2},1}}:
  [1 3; 2 4]  [5 7; 6 8]
 ```
 """
@@ -212,7 +212,7 @@ function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
         copyto!(parent(P), src) # it's not permuted
     else
         R1 = CartesianIndices(axes(src)[1:d])
-        d1 = findfirst(equalto(d+1), perm)::Int  # first permuted dim of dest
+        d1 = findfirst(isequal(d+1), perm)::Int  # first permuted dim of dest
         R2 = CartesianIndices(axes(src)[d+2:d1-1])
         R3 = CartesianIndices(axes(src)[d1+1:end])
         _permutedims!(P, src, R1, R2, R3, d+1, d1)

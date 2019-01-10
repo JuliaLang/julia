@@ -154,7 +154,7 @@ end
     @test_throws ArgumentError Dates.DateTime(2013, 13, 1)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 0)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 32)
-    @test_throws ArgumentError Dates.DateTime(2013, 1, 1, 24)
+    @test_throws ArgumentError Dates.DateTime(2013, 1, 1, 25)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 1, -1)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 1, 0, -1)
     @test_throws ArgumentError Dates.DateTime(2013, 1, 1, 0, 60)
@@ -194,6 +194,10 @@ c = Dates.Time(0)
     @test isfinite(Dates.Date)
     @test isfinite(Dates.DateTime)
     @test isfinite(Dates.Time)
+    @test c == c
+    @test c == (c + Dates.Hour(24))
+    @test hash(c) == hash(c + Dates.Hour(24))
+    @test hash(c + Dates.Nanosecond(10)) == hash(c + Dates.Hour(24) + Dates.Nanosecond(10))
 end
 @testset "Date-DateTime conversion/promotion" begin
     global a, b, c, d

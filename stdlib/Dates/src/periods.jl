@@ -1,6 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #Period types
+"""
+    Dates.value(x::Period) -> Int64
+
+For a given period, return the value associated with that period.  For example,
+`value(Millisecond(10))` returns 10 as an integer.
+"""
 value(x::Period) = x.value
 
 # The default constructors for Periods work well in almost all cases
@@ -85,18 +91,6 @@ end
 
 (*)(x::P, y::Real) where {P<:Period} = P(value(x) * Int64(y))
 (*)(y::Real, x::Period) = x * y
-for (op, Ty, Tz) in ((:*, Real, :P),
-                   (:/, :P, Float64), (:/, Real, :P))
-    @eval begin
-        function ($op)(X::StridedArray{P}, y::$Ty) where P<:Period
-            Z = similar(X, $Tz)
-            for (Idst, Isrc) in zip(eachindex(Z), eachindex(X))
-                @inbounds Z[Idst] = ($op)(X[Isrc], y)
-            end
-            return Z
-        end
-    end
-end
 
 # intfuncs
 Base.gcdx(a::T, b::T) where {T<:Period} = ((g, x, y) = gcdx(value(a), value(b)); return T(g), x, y)
@@ -355,14 +349,6 @@ Base.show(io::IO,x::CompoundPeriod) = print(io, string(x))
 
 GeneralPeriod = Union{Period, CompoundPeriod}
 (+)(x::GeneralPeriod) = x
-(+)(x::StridedArray{<:GeneralPeriod}) = x
-
-for op in (:+, :-)
-    @eval begin
-        ($op)(X::StridedArray{<:GeneralPeriod}, Y::StridedArray{<:GeneralPeriod}) =
-            reshape(CompoundPeriod[($op)(x, y) for (x, y) in zip(X, Y)], promote_shape(size(X), size(Y)))
-    end
-end
 
 (==)(x::CompoundPeriod, y::Period) = x == CompoundPeriod(y)
 (==)(x::Period, y::CompoundPeriod) = y == x
@@ -370,7 +356,7 @@ end
 
 Base.isequal(x::CompoundPeriod, y::Period) = isequal(x, CompoundPeriod(y))
 Base.isequal(x::Period, y::CompoundPeriod) = isequal(y, x)
-Base.isequal(x::CompoundPeriod, y::CompoundPeriod) = x.periods == y.periods
+Base.isequal(x::CompoundPeriod, y::CompoundPeriod) = isequal(x.periods, y.periods)
 
 # Capture TimeType+-Period methods
 (+)(a::TimeType, b::Period, c::Period) = (+)(a, b + c)
@@ -442,9 +428,9 @@ end
 Base.convert(::Type{Year}, x::Month) = Year(divexact(value(x), 12))
 Base.promote_rule(::Type{Year}, ::Type{Month}) = Month
 
-# disallow comparing fixed to other periods
-(==)(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(==, (x, y)))
-(==)(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(==, (x, y)))
+# fixed is not comparable to other periods, as per discussion in issue #21378
+(==)(x::FixedPeriod, y::OtherPeriod) = false
+(==)(x::OtherPeriod, y::FixedPeriod) = false
 
 const fixedperiod_seed = UInt === UInt64 ? 0x5b7fc751bba97516 : 0xeae0fdcb
 const otherperiod_seed = UInt === UInt64 ? 0xe1837356ff2d2ac9 : 0x170d1b00

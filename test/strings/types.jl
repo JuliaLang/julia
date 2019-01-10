@@ -95,8 +95,8 @@ let str = "aa\u2200\u2222bb"
     @test String(take!(b)) == "\u2200\u2222"
 
     @test_throws StringIndexError SubString(str, 4, 5)
-    @test_throws BoundsError next(u, 0)
-    @test_throws BoundsError next(u, 7)
+    @test_throws BoundsError iterate(u, 0)
+    @test_throws BoundsError iterate(u, 8)
     @test_throws BoundsError getindex(u, 0)
     @test_throws BoundsError getindex(u, 7)
     @test_throws BoundsError getindex(u, 0:1)
@@ -118,8 +118,8 @@ end
 # search and SubString (issue #5679)
 let str = "Hello, world!"
     u = SubString(str, 1, 5)
-    @test findlast("World", u) == 0:-1
-    @test findlast(equalto('z'), u) == nothing
+    @test findlast("World", u) == nothing
+    @test findlast(isequal('z'), u) == nothing
     @test findlast("ll", u) == 3:4
 end
 
@@ -154,8 +154,8 @@ end
 @test parse(Float32, SubString("10",1,1)) === 1.0f0
 
 # issue #5870
-@test !contains(SubString("",1,0), Regex("aa"))
-@test contains(SubString("",1,0), Regex(""))
+@test !occursin(Regex("aa"), SubString("",1,0))
+@test occursin(Regex(""), SubString("",1,0))
 
 # isvalid, length, prevind, nextind for SubString{String}
 let s = "lorem ipsum", sdict = Dict(
@@ -193,10 +193,10 @@ let rng = MersenneTwister(1), strs = ["∀∃∀"*String(rand(rng, UInt8, 40))*"
                                       String(rand(rng, UInt8, 50))]
     for s in strs
         a = 0
-        while !done(s, a)
+        while a <= ncodeunits(s)
             a = nextind(s, a)
             b = a - 1
-            while !done(s, b)
+            while b <= ncodeunits(s)
                 ss = SubString(s, a:b)
                 s2 = s[a:b]
                 @test ncodeunits(ss) == ncodeunits(s2)
@@ -274,14 +274,14 @@ end
             for c in ('X', 'δ', '\U0001d6a5')
                 s = convert(T, string(prefix, c, suffix))
                 r = reverse(s)
-                ri = findfirst(equalto(c), r)
+                ri = findfirst(isequal(c), r)
                 @test c == s[reverseind(s, ri)] == r[ri]
                 s = convert(T, string(prefix, prefix, c, suffix, suffix))
                 pre = convert(T, prefix)
                 sb = SubString(s, nextind(pre, lastindex(pre)),
                                lastindex(convert(T, string(prefix, prefix, c, suffix))))
                 r = reverse(sb)
-                ri = findfirst(equalto(c), r)
+                ri = findfirst(isequal(c), r)
                 @test c == sb[reverseind(sb, ri)] == r[ri]
             end
         end

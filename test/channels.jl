@@ -2,6 +2,16 @@
 
 using Random
 
+@testset "single-threaded Condition usage" begin
+    a = Condition()
+    t = @async begin
+        Base.notify(a, "success")
+        "finished"
+    end
+    @test wait(a) == "success"
+    @test fetch(t) == "finished"
+end
+
 @testset "various constructors" begin
     c = Channel(1)
     @test eltype(c) == Any
@@ -21,8 +31,7 @@ using Random
     tvals = Int[take!(c) for i in 1:10^6]
     @test pvals == tvals
 
-    # Uncomment line below once deprecation support has been removed.
-    # @test_throws MethodError Channel()
+    @test_throws MethodError Channel()
     @test_throws ArgumentError Channel(-1)
     @test_throws InexactError Channel(1.5)
 end
@@ -44,6 +53,16 @@ end
     testcpt(32)
     testcpt(Inf)
 end
+
+@testset "type conversion in put!" begin
+    c = Channel{Int64}(0)
+    @async put!(c, Int32(1))
+    wait(c)
+    @test isa(take!(c), Int64)
+    @test_throws MethodError put!(c, "")
+    @assert !islocked(c.cond_take)
+end
+
 @testset "multiple for loops waiting on the same channel" begin
     # Test multiple "for" loops waiting on the same channel which
     # is closed after adding a few elements.
@@ -64,36 +83,18 @@ end
     @test sum(results) == 15
 end
 
-@testset "channel iterator with done()" begin
-# Test channel iterator with done() being called multiple times
-# This needs to be explicitly tested since `take!` is called
-# in `done()` and not `next()`
-    c = Channel(32)
-    foreach(i -> put!(c, i), 1:10)
-    close(c)
-    s = start(c)
-    @test done(c, s) == false
-    res = Int[]
-    while !done(c, s)
-        local v
-        @test done(c,s) == false
-        v, s = next(c, s)
-        push!(res, v)
-    end
-    @test res == Int[1:10...]
-end
-
+# Tests for channels bound to tasks.
 using Distributed
 @testset "channels bound to tasks" for N in [0, 10]
     # Normal exit of task
-    c=Channel(N)
-    bind(c, @schedule (yield();nothing))
+    c = Channel(N)
+    bind(c, @async (yield(); nothing))
     @test_throws InvalidStateException take!(c)
     @test !isopen(c)
 
     # Error exception in task
-    c=Channel(N)
-    bind(c, @schedule (yield();error("foo")))
+    c = Channel(N)
+    bind(c, @async (yield(); error("foo")))
     @test_throws ErrorException take!(c)
     @test !isopen(c)
 
@@ -101,22 +102,24 @@ using Distributed
     cs = [Channel(N) for i in 1:5]
     tf2 = () -> begin
         if N > 0
-            foreach(c->(@assert take!(c)==2), cs)
+            foreach(c -> (@assert take!(c) === 2), cs)
         end
         yield()
         error("foo")
     end
     task = Task(tf2)
-    foreach(c->bind(c, task), cs)
+    foreach(c -> bind(c, task), cs)
     schedule(task)
 
     if N > 0
         for i in 1:5
-            @test put!(cs[i], 2) == 2
+            @test put!(cs[i], 2) === 2
         end
     end
     for i in 1:5
-        while (isopen(cs[i])); yield(); end
+        while isopen(cs[i])
+            yield()
+        end
         @test_throws ErrorException wait(cs[i])
         @test_throws ErrorException take!(cs[i])
         @test_throws ErrorException put!(cs[i], 1)
@@ -137,39 +140,41 @@ using Distributed
 
     tasks = [Task(()->tf3(i)) for i in 1:5]
     c = Channel(N)
-    foreach(t->bind(c,t), tasks)
+    foreach(t -> bind(c, t), tasks)
     foreach(schedule, tasks)
     @test_throws InvalidStateException wait(c)
     @test !isopen(c)
     @test ref[] == nth
+    @assert !islocked(c.cond_take)
 
     # channeled_tasks
     for T in [Any, Int]
-        chnls, tasks = Base.channeled_tasks(2, (c1,c2)->(@assert take!(c1)==1; put!(c2,2)); ctypes=[T,T], csizes=[N,N])
+        tf_chnls1 = (c1, c2) -> (@assert take!(c1) == 1; put!(c2, 2))
+        chnls, tasks = Base.channeled_tasks(2, tf_chnls1; ctypes=[T,T], csizes=[N,N])
         put!(chnls[1], 1)
-        @test take!(chnls[2]) == 2
+        @test take!(chnls[2]) === 2
         @test_throws InvalidStateException wait(chnls[1])
         @test_throws InvalidStateException wait(chnls[2])
         @test istaskdone(tasks[1])
         @test !isopen(chnls[1])
         @test !isopen(chnls[2])
 
-        f=Future()
-        tf4 = (c1,c2) -> begin
-            @assert take!(c1)==1
+        f = Future()
+        tf4 = (c1, c2) -> begin
+            @assert take!(c1) === 1
             wait(f)
         end
 
-        tf5 = (c1,c2) -> begin
-            put!(c2,2)
+        tf5 = (c1, c2) -> begin
+            put!(c2, 2)
             wait(f)
         end
 
         chnls, tasks = Base.channeled_tasks(2, tf4, tf5; ctypes=[T,T], csizes=[N,N])
         put!(chnls[1], 1)
-        @test take!(chnls[2]) == 2
+        @test take!(chnls[2]) === 2
         yield()
-        put!(f, 1)
+        put!(f, 1) # allow tf4 and tf5 to exit after now, eventually closing the channel
 
         @test_throws InvalidStateException wait(chnls[1])
         @test_throws InvalidStateException wait(chnls[2])
@@ -181,7 +186,7 @@ using Distributed
 
     # channel
     tf6 = c -> begin
-        @assert take!(c)==2
+        @assert take!(c) === 2
         error("foo")
     end
 
@@ -227,7 +232,10 @@ using Dates
 end
 
 @testset "yield/wait/event failures" begin
-    @noinline garbage_finalizer(f) = finalizer(f, "gar" * "bage")
+    # garbage_finalizer returns `nothing` rather than the garbage object so
+    # that the interpreter doesn't accidentally root the garbage when
+    # interpreting the calling function.
+    @noinline garbage_finalizer(f) = (finalizer(f, "gar" * "bage"); nothing)
     run = Ref(0)
     GC.enable(false)
     # test for finalizers trying to yield leading to failed attempts to context switch
@@ -248,7 +256,7 @@ end
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    Base._wait(t)
+    Base.wait(t)
     @test run[] == 3
     @test fetch(errstream) == """
         error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
@@ -256,7 +264,7 @@ end
         error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
         """
     # test for invalid state in Workqueue during yield
-    t = @schedule nothing
+    t = @async nothing
     t.state = :invalid
     try
         newstderr = redirect_stderr()
@@ -270,7 +278,7 @@ end
 end
 
 @testset "schedule_and_wait" begin
-    t = @schedule(nothing)
+    t = @async(nothing)
     ct = current_task()
     testobject = "testobject"
     # note: there is a low probability this test could fail, due to receiving network traffic simultaneously
@@ -286,7 +294,7 @@ end
     testerr = ErrorException("expected")
     @async Base.throwto(t, testerr)
     @test try
-        Base._wait(t)
+        Base.wait(t)
         false
     catch ex
         ex

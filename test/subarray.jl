@@ -24,16 +24,18 @@ function Agen_slice(A::AbstractArray, I...)
             push!(sd, i)
         end
     end
-    squeeze(B, sd)
+    dropdims(B, dims=sd)
 end
 
 _Agen(A, i1) = [A[j1] for j1 in i1]
 _Agen(A, i1, i2) = [A[j1,j2] for j1 in i1, j2 in i2]
 _Agen(A, i1, i2, i3) = [A[j1,j2,j3] for j1 in i1, j2 in i2, j3 in i3]
 _Agen(A, i1, i2, i3, i4) = [A[j1,j2,j3,j4] for j1 in i1, j2 in i2, j3 in i3, j4 in i4]
+_Agen(A, i1, i2, i3, i4, i5) = [A[j1,j2,j3,j4,j5] for j1 in i1, j2 in i2, j3 in i3, j4 in i4, j5 in i5]
+_Agen(A, i1, i2, i3, i4, i5, i6) = [A[j1,j2,j3,j4,j5,j6] for j1 in i1, j2 in i2, j3 in i3, j4 in i4, j5 in i5, j6 in i6]
 
 function replace_colon(A::AbstractArray, I)
-    Iout = Vector{Any}(uninitialized, length(I))
+    Iout = Vector{Any}(undef, length(I))
     I == (:,) && return (1:length(A),)
     for d = 1:length(I)
         Iout[d] = isa(I[d], Colon) ? (1:size(A,d)) : I[d]
@@ -52,7 +54,7 @@ tup2val(::NTuple{N}) where {N} = Val(N)
 # it's good to copy the contents to an Array. This version protects against
 # `similar` ever changing its meaning.
 function copy_to_array(A::AbstractArray)
-    Ac = Array{eltype(A)}(uninitialized, size(A))
+    Ac = Array{eltype(A)}(undef, size(A))
     copyto!(Ac, A)
 end
 
@@ -161,17 +163,16 @@ function test_bounds(@nospecialize(A))
     @test_throws BoundsError A[end+1, 1, 1, trailing3...]
     @test_throws BoundsError A[1, 0, 1, trailing3...]
     @test_throws BoundsError A[1, end+1, 1, trailing3...]
-    # TODO: PLI (re-enable after 0.7)
-    # @test_throws BoundsError A[1, 0]
-    # @test_throws BoundsError A[1, end+1]
-    # @test_throws BoundsError A[1, 1, 0]
-    # @test_throws BoundsError A[1, 1, end+1]
-    # @test_throws BoundsError A[0, 1]
-    # @test_throws BoundsError A[end+1, 1]
-    # @test_throws BoundsError A[0, 1, 1]
-    # @test_throws BoundsError A[end+1, 1, 1]
-    # @test_throws BoundsError A[1, 0, 1]
-    # @test_throws BoundsError A[1, end+1, 1]
+    @test_throws BoundsError A[1, 0]
+    @test_throws BoundsError A[1, end+1]
+    @test_throws BoundsError A[1, 1, 0]
+    @test_throws BoundsError A[1, 1, end+1]
+    @test_throws BoundsError A[0, 1]
+    @test_throws BoundsError A[end+1, 1]
+    @test_throws BoundsError A[0, 1, 1]
+    @test_throws BoundsError A[end+1, 1, 1]
+    @test_throws BoundsError A[1, 0, 1]
+    @test_throws BoundsError A[1, end+1, 1]
 end
 
 function dim_break_linindex(I)
@@ -223,11 +224,11 @@ function runsubarraytests(@nospecialize(A), I...)
     local S
     try
         S = view(A, I...)
-    catch err
+    catch
         @show typeof(A)
         @show A.indices
         @show I
-        rethrow(err)
+        rethrow()
     end
     test_linear(S, C)
     test_cartesian(S, C)
@@ -354,7 +355,7 @@ sA = view(A, 2:2, 1:5, :)
 @test size(sA) == (1, 5, 8)
 @test axes(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(8))
 @test sA[1, 2, 1:8][:] == [5:15:120;]
-sA[2:5:end] = -1
+sA[2:5:end] .= -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
 @test @inferred(strides(sA)) == (1,3,15)
@@ -363,10 +364,12 @@ sA[2:5:end] = -1
 test_bounds(sA)
 sA = view(A, 1:3, 1:5, 5)
 @test Base.parentdims(sA) == [1:2;]
-sA[1:3,1:5] = -2
+sA[1:3,1:5] .= -2
 @test all(A[:,:,5] .== -2)
-sA[:] = -3
+fill!(sA, -3)
 @test all(A[:,:,5] .== -3)
+sA[:] .= 4
+@test all(A[:,:,5] .== 4)
 @test @inferred(strides(sA)) == (1,3)
 test_bounds(sA)
 sA = view(A, 1:3, 3:3, 2:5)
@@ -413,7 +416,7 @@ sA = view(A, 2, :, 1:8)
 @test sA[2, 1:8][:] == [5:15:120;]
 @test sA[:,1] == [2:3:14;]
 @test sA[2:5:end] == [5:15:110;]
-sA[2:5:end] = -1
+sA[2:5:end] .= -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
 test_bounds(sA)
@@ -441,7 +444,7 @@ A = rand(2, 2, 3)
 msk = fill(true, 2, 2)
 msk[2,1] = false
 sA = view(A, :, :, 1)
-sA[msk] = 1.0
+sA[msk] .= 1.0
 @test sA[msk] == fill(1, count(msk))
 
 # bounds checking upon construction; see #4044, #10296
@@ -492,7 +495,7 @@ end
 
 # the following segfaults with LLVM 3.8 on Windows, ref #15417
 @test Array(view(view(reshape(1:13^3, 13, 13, 13), 3:7, 6:6, :), 1:2:5, :, 1:2:5)) ==
-    cat(3,[68,70,72],[406,408,410],[744,746,748])
+    cat([68,70,72],[406,408,410],[744,746,748]; dims=3)
 
 # tests @view (and replace_ref_end!)
 X = reshape(1:24,2,3,4)
@@ -524,14 +527,14 @@ let foo = [X]
 end
 
 # test @views macro
-@views let f!(x) = (x[1:end-1] .+= x[2:end].^2; nothing)
+@views let f!(x) = x[1:end-1] .+= x[2:end].^2
     x = [1,2,3,4]
     f!(x)
     @test x == [5,11,19,4]
     @test x[1:3] isa SubArray
     @test x[2] === 11
     @test Dict((1:3) => 4)[1:3] === 4
-    x[1:2] = 0
+    x[1:2] .= 0
     @test x == [0,0,19,4]
     x[1:2] .= 5:6
     @test x == [5,6,19,4]
@@ -577,20 +580,45 @@ let
 end
 
 # ref issue #17351
-@test @inferred(flipdim(view([1 2; 3 4], :, 1), 1)) == [3, 1]
+@test @inferred(reverse(view([1 2; 3 4], :, 1), dims=1)) == [3, 1]
 
 let
     s = view(reshape(1:6, 2, 3), 1:2, 1:2)
     @test @inferred(s[2,2,1]) === 4
 end
 
+# issue #18581: slices with OneTo axes can be linear
+let
+    A18581 = rand(5, 5)
+    B18581 = view(A18581, :, axes(A18581,2))
+    @test IndexStyle(B18581) === IndexLinear()
+end
+
 @test sizeof(view(zeros(UInt8, 10), 1:4)) == 4
 @test sizeof(view(zeros(UInt8, 10), 1:3)) == 3
 @test sizeof(view(zeros(Float64, 10, 10), 1:3, 2:6)) == 120
-
 
 # PR #25321
 # checks that issue in type inference is resolved
 A = rand(5,5,5,5)
 V = view(A, 1:1 ,:, 1:3, :)
 @test @inferred(strides(V)) == (1, 5, 25, 125)
+
+# Issue #26263 — ensure that unaliascopy properly trims the array
+A = rand(5,5,5,5)
+V = view(A, 2:5, :, 2:5, 1:2:5)
+@test @inferred(Base.unaliascopy(V)) == V == A[2:5, :, 2:5, 1:2:5]
+@test @inferred(sum(Base.unaliascopy(V))) ≈ sum(V) ≈ sum(A[2:5, :, 2:5, 1:2:5])
+
+# issue #27632
+function _test_27632(A)
+    for J in CartesianIndices(size(A)[2:end])
+        A[1, J]
+    end
+    nothing
+end
+# check that this doesn't crash
+_test_27632(view(ones(Int64, (1, 1, 1)), 1, 1, 1))
+
+# issue #29608 - views of single values can be considered contiguous
+@test Base.iscontiguous(view(ones(1), 1))

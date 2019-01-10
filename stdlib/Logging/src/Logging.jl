@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 module Logging
 
 # For now, simply import most names from Base - we don't want to fully
@@ -51,5 +49,9 @@ include("ConsoleLogger.jl")
 #
 # 2. AbstractLogger message related functions:
 #  handle_message, shouldlog, min_enabled_level, catch_exceptions,
+
+function __init__()
+    global_logger(ConsoleLogger(stderr))
+end
 
 end

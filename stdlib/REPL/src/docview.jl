@@ -211,7 +211,8 @@ function summarize(io::IO, m::Module, binding)
     println(io, "No docstring found for module `", m, "`.\n")
 end
 
-function summarize(io::IO, ::T, binding) where T
+function summarize(io::IO, @nospecialize(T), binding)
+    T = typeof(T)
     println(io, "`", binding, "` is of type `", T, "`.\n")
     summarize(io, T, binding)
 end
@@ -293,8 +294,56 @@ repl(io::IO, other) = esc(:(@doc $other))
 repl(x) = repl(stdout, x)
 
 function _repl(x)
-    if (isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args))
-        x.args[2:end] = [:(::typeof($arg)) for arg in x.args[2:end]]
+    if isexpr(x, :call)
+        # determine the types of the values
+        kwargs = nothing
+        pargs = Any[]
+        for arg in x.args[2:end]
+            if isexpr(arg, :parameters)
+                kwargs = map(arg.args) do kwarg
+                    if kwarg isa Symbol
+                        kwarg = :($kwarg::Any)
+                    elseif isexpr(kwarg, :kw)
+                        lhs = kwarg.args[1]
+                        rhs = kwarg.args[2]
+                        if lhs isa Symbol
+                            if rhs isa Symbol
+                                kwarg.args[1] = :($lhs::(@isdefined($rhs) ? typeof($rhs) : Any))
+                            else
+                                kwarg.args[1] = :($lhs::typeof($rhs))
+                            end
+                        end
+                    end
+                    kwarg
+                end
+            elseif isexpr(arg, :kw)
+                if kwargs == nothing
+                    kwargs = Any[]
+                end
+                lhs = arg.args[1]
+                rhs = arg.args[2]
+                if lhs isa Symbol
+                    if rhs isa Symbol
+                        arg.args[1] = :($lhs::(@isdefined($rhs) ? typeof($rhs) : Any))
+                    else
+                        arg.args[1] = :($lhs::typeof($rhs))
+                    end
+                end
+                push!(kwargs, arg)
+            else
+                if arg isa Symbol
+                    arg = :($arg::(@isdefined($arg) ? typeof($arg) : Any))
+                elseif !isexpr(arg, :(::))
+                    arg = :(::typeof($arg))
+                end
+                push!(pargs, arg)
+            end
+        end
+        if kwargs == nothing
+            x.args = Any[x.args[1], pargs...]
+        else
+            x.args = Any[x.args[1], Expr(:parameters, kwargs...), pargs...]
+        end
     end
     #docs = lookup_doc(x) # TODO
     docs = esc(:(@doc $x))
@@ -353,7 +402,7 @@ function matchinds(needle, haystack; acronym = false)
         isempty(chars) && break
         while chars[1] == ' ' popfirst!(chars) end # skip spaces
         if lowercase(char) == lowercase(chars[1]) &&
-           (!acronym || !isalpha(lastc))
+           (!acronym || !isletter(lastc))
             push!(is, i)
             popfirst!(chars)
         end
@@ -378,7 +427,7 @@ function fuzzyscore(needle, haystack)
     score += (acro ? 2 : 1)*length(is) # Matched characters
     score -= 2(length(needle)-length(is)) # Missing characters
     !acro && (score -= avgdistance(is)/10) # Contiguous
-    !isempty(is) && (score -= mean(is)/100) # Closer to beginning
+    !isempty(is) && (score -= sum(is)/length(is)/100) # Closer to beginning
     return score
 end
 
@@ -393,7 +442,7 @@ function levenshtein(s1, s2)
     a, b = collect(s1), collect(s2)
     m = length(a)
     n = length(b)
-    d = Matrix{Int}(uninitialized, m+1, n+1)
+    d = Matrix{Int}(undef, m+1, n+1)
 
     d[1:m+1, 1] = 0:m
     d[1, 1:n+1] = 0:n
@@ -479,7 +528,7 @@ const builtins = ["abstract type", "baremodule", "begin", "break",
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
-filtervalid(names) = filter(x->!contains(x, r"#"), map(string, names))
+filtervalid(names) = filter(x->!occursin(r"#", x), map(string, names))
 
 accessible(mod::Module) =
     [filter!(s -> !Base.isdeprecated(mod, s), names(mod, all = true, imported = true));
@@ -493,7 +542,7 @@ doc_completions(name::Symbol) = doc_completions(string(name))
 # Searching and apropos
 
 # Docsearch simply returns true or false if an object contains the given needle
-docsearch(haystack::AbstractString, needle) = !isempty(findfirst(needle, haystack))
+docsearch(haystack::AbstractString, needle) = findfirst(needle, haystack) !== nothing
 docsearch(haystack::Symbol, needle) = docsearch(string(haystack), needle)
 docsearch(::Nothing, needle) = false
 function docsearch(haystack::Array, needle)

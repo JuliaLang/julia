@@ -20,7 +20,7 @@ function membershiptest(expr, values)
     if length(values) == hi - lo + 1
         :($lo <= $expr <= $hi)
     elseif length(values) < 20
-        foldl((x1,x2)->:($x1 || ($expr == $x2)), :($expr == $(values[1])), values[2:end])
+        foldl((x1,x2)->:($x1 || ($expr == $x2)), values[2:end]; init=:($expr == $(values[1])))
     else
         :($expr in $(Set(values)))
     end
@@ -36,7 +36,7 @@ Create an `Enum{BaseType}` subtype with name `EnumName` and enum member values o
 `EnumName` can be used just like other types and enum member values as regular values, such as
 
 # Examples
-```jldoctest
+```jldoctest fruitenum
 julia> @enum Fruit apple=1 orange=2 kiwi=3
 
 julia> f(x::Fruit) = "I'm a Fruit with value: \$(Int(x))"
@@ -44,6 +44,9 @@ f (generic function with 1 method)
 
 julia> f(apple)
 "I'm a Fruit with value: 1"
+
+julia> Fruit(1)
+apple::Fruit = 1
 ```
 
 Values can also be specified inside a `begin` block, e.g.
@@ -58,6 +61,13 @@ end
 `BaseType`, which defaults to [`Int32`](@ref), must be a primitive subtype of `Integer`.
 Member values can be converted between the enum type and `BaseType`. `read` and `write`
 perform these conversions automatically.
+
+To list all the instances of an enum use `instances`, e.g.
+
+```jldoctest fruitenum
+julia> instances(Fruit)
+(apple::Fruit = 1, orange::Fruit = 2, kiwi::Fruit = 3)
+```
 """
 macro enum(T, syms...)
     if isempty(syms)
@@ -67,8 +77,8 @@ macro enum(T, syms...)
     typename = T
     if isa(T, Expr) && T.head == :(::) && length(T.args) == 2 && isa(T.args[1], Symbol)
         typename = T.args[1]
-        basetype = eval(__module__, T.args[2])
-        if !isa(basetype, DataType) || !(basetype <: Integer) || !isbits(basetype)
+        basetype = Core.eval(__module__, T.args[2])
+        if !isa(basetype, DataType) || !(basetype <: Integer) || !isbitstype(basetype)
             throw(ArgumentError("invalid base type for Enum $typename, $T=::$basetype; base type must be an integer primitive type"))
         end
     elseif !isa(T, Symbol)
@@ -91,9 +101,9 @@ macro enum(T, syms...)
         elseif isa(s, Expr) &&
                (s.head == :(=) || s.head == :kw) &&
                length(s.args) == 2 && isa(s.args[1], Symbol)
-            i = eval(__module__, s.args[2]) # allow exprs, e.g. uint128"1"
+            i = Core.eval(__module__, s.args[2]) # allow exprs, e.g. uint128"1"
             if !isa(i, Integer)
-                throw(ArgumentError("invalid value for Enum $typename, $s=$i; values must be integers"))
+                throw(ArgumentError("invalid value for Enum $typename, $s; values must be integers"))
             end
             i = convert(basetype, i)
             s = s.args[1]
@@ -143,19 +153,18 @@ macro enum(T, syms...)
                 print(io, x)
             else
                 print(io, x, "::")
-                showcompact(io, typeof(x))
-                print(io, " = ", $basetype(x))
+                show(IOContext(io, :compact => true), typeof(x))
+                print(io, " = ")
+                show(io, $basetype(x))
             end
-        end
-        function Base.show(io::IO, t::Type{$(esc(typename))})
-            Base.show_datatype(io, t)
         end
         function Base.show(io::IO, ::MIME"text/plain", t::Type{$(esc(typename))})
             print(io, "Enum ")
             Base.show_datatype(io, t)
             print(io, ":")
             for (sym, i) in $vals
-                print(io, "\n", sym, " = ", i)
+                print(io, "\n", sym, " = ")
+                show(io, i)
             end
         end
     end

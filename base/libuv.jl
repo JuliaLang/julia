@@ -48,25 +48,41 @@ disassociate_julia_struct(handle::Ptr{Cvoid}) =
 # A dict of all libuv handles that are being waited on somewhere in the system
 # and should thus not be garbage collected
 const uvhandles = IdDict()
-preserve_handle(x) = uvhandles[x] = get(uvhandles,x,0)::Int+1
-unpreserve_handle(x) = (v = uvhandles[x]::Int; v == 1 ? pop!(uvhandles,x) : (uvhandles[x] = v-1); nothing)
+function preserve_handle(x)
+    v = get(uvhandles, x, 0)::Int
+    uvhandles[x] = v + 1
+    nothing
+end
+function unpreserve_handle(x)
+    v = uvhandles[x]::Int
+    if v == 1
+        pop!(uvhandles, x)
+    else
+        uvhandles[x] = v - 1
+    end
+    nothing
+end
 
 ## Libuv error handling ##
 
-struct UVError <: Exception
-    prefix::AbstractString
+struct IOError <: Exception
+    msg::AbstractString
     code::Int32
-    UVError(p::AbstractString, code::Integer) = new(p,code)
+    IOError(msg::AbstractString, code::Integer) = new(msg, code)
+end
+
+showerror(io::IO, e::IOError) = print(io, "IOError: ", e.msg)
+
+function _UVError(pfx::AbstractString, code::Integer)
+    code = Int32(code)
+    IOError(string(pfx, ": ", struverror(code), " (", uverrorname(code), ")"), code)
 end
 
 struverror(err::Int32) = unsafe_string(ccall(:uv_strerror,Cstring,(Int32,),err))
-struverror(err::UVError) = struverror(err.code)
 uverrorname(err::Int32) = unsafe_string(ccall(:uv_err_name,Cstring,(Int32,),err))
-uverrorname(err::UVError) = uverrorname(err.code)
 
 uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix),c)
-uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(UVError(prefix,c)) : nothing
-show(io::IO, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrorname(e)*")")
+uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(_UVError(prefix,c)) : nothing
 
 ## event loop ##
 
@@ -85,27 +101,25 @@ function process_events(block::Bool)
     end
 end
 
+function uv_alloc_buf end
+function uv_readcb end
+function uv_writecb_task end
+function uv_return_spawn end
+function uv_asynccb end
+function uv_timercb end
+
 function reinit_stdio()
-    global uv_jl_alloc_buf     = cfunction(uv_alloc_buf, Cvoid, Tuple{Ptr{Cvoid}, Csize_t, Ptr{Cvoid}})
-    global uv_jl_readcb        = cfunction(uv_readcb, Cvoid, Tuple{Ptr{Cvoid}, Cssize_t, Ptr{Cvoid}})
-    global uv_jl_connectioncb  = cfunction(uv_connectioncb, Cvoid, Tuple{Ptr{Cvoid}, Cint})
-    global uv_jl_connectcb     = cfunction(uv_connectcb, Cvoid, Tuple{Ptr{Cvoid}, Cint})
-    global uv_jl_writecb_task  = cfunction(uv_writecb_task, Cvoid, Tuple{Ptr{Cvoid}, Cint})
-    global uv_jl_getaddrinfocb = cfunction(uv_getaddrinfocb, Cvoid, Tuple{Ptr{Cvoid}, Cint, Ptr{Cvoid}})
-    global uv_jl_getnameinfocb = cfunction(uv_getnameinfocb, Cvoid, Tuple{Ptr{Cvoid}, Cint, Cstring, Cstring})
-    global uv_jl_recvcb        = cfunction(uv_recvcb, Cvoid, Tuple{Ptr{Cvoid}, Cssize_t, Ptr{Cvoid}, Ptr{Cvoid}, Cuint})
-    global uv_jl_sendcb        = cfunction(uv_sendcb, Cvoid, Tuple{Ptr{Cvoid}, Cint})
-    global uv_jl_return_spawn  = cfunction(uv_return_spawn, Cvoid, Tuple{Ptr{Cvoid}, Int64, Int32})
-    global uv_jl_asynccb       = cfunction(uv_asynccb, Cvoid, Tuple{Ptr{Cvoid}})
-    global uv_jl_timercb       = cfunction(uv_timercb, Cvoid, Tuple{Ptr{Cvoid}})
+    global uv_jl_alloc_buf     = @cfunction(uv_alloc_buf, Cvoid, (Ptr{Cvoid}, Csize_t, Ptr{Cvoid}))
+    global uv_jl_readcb        = @cfunction(uv_readcb, Cvoid, (Ptr{Cvoid}, Cssize_t, Ptr{Cvoid}))
+    global uv_jl_writecb_task  = @cfunction(uv_writecb_task, Cvoid, (Ptr{Cvoid}, Cint))
+    global uv_jl_return_spawn  = @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32))
+    global uv_jl_asynccb       = @cfunction(uv_asynccb, Cvoid, (Ptr{Cvoid},))
+    global uv_jl_timercb       = @cfunction(uv_timercb, Cvoid, (Ptr{Cvoid},))
 
     global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Cvoid}, ())
     global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))
     global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))
     global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))
-    global STDIN = stdin
-    global STDOUT = stdout
-    global STDERR = stderr
 end
 
 """

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # THE SIX LOGICAL FUNCTIONS
 #
 # Bit shifting and rotation (used by the six SHA-XYZ logical functions:

@@ -5,7 +5,7 @@ module Libc
 Interface to libc, the C standard library.
 """ Libc
 
-import Base: transcode
+import Base: transcode, windowserror
 import Core.Intrinsics: bitcast
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
@@ -19,6 +19,15 @@ include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "errno_h.jl"))  # inc
 ## RawFD ##
 
 # Wrapper for an OS file descriptor (on both Unix and Windows)
+"""
+    RawFD
+
+Primitive type which wraps the native OS file descriptor.
+`RawFD`s can be passed to methods like [`stat`](@ref) to
+discover information about the underlying file, and can
+also be used to open streams, with the `RawFD` describing
+the OS file backing the stream.
+"""
 primitive type RawFD 32 end
 RawFD(fd::Integer) = bitcast(RawFD, Cint(fd))
 RawFD(fd::RawFD) = fd
@@ -45,7 +54,7 @@ if Sys.iswindows()
         status = ccall(:DuplicateHandle, stdcall, Int32,
             (Ptr{Cvoid}, WindowsRawSocket, Ptr{Cvoid}, Ptr{WindowsRawSocket}, UInt32, Int32, UInt32),
             my_process, src, my_process, new_handle, 0, false, DUPLICATE_SAME_ACCESS)
-        status == 0 && error("dup failed: $(FormatMessage())")
+        windowserror("dup failed", status == 0)
         return new_handle[]
     end
     function dup(src::WindowsRawSocket, target::RawFD)
@@ -170,12 +179,13 @@ library.
 """
 strftime(t) = strftime("%c", t)
 strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
+# Use wcsftime instead of strftime to support different locales
 function strftime(fmt::AbstractString, tm::TmStruct)
-    timestr = Base.StringVector(128)
-    n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Cstring, Ref{TmStruct}),
-              timestr, length(timestr), fmt, tm)
+    wctimestr = Vector{Cwchar_t}(undef, 128)
+    n = ccall(:wcsftime, Csize_t, (Ptr{Cwchar_t}, Csize_t, Cwstring, Ref{TmStruct}),
+              wctimestr, length(wctimestr), fmt, tm)
     n == 0 && return ""
-    return String(resize!(timestr,n))
+    return transcode(String, resize!(wctimestr, n))
 end
 
 """
@@ -203,7 +213,7 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
     @static if Sys.isapple()
         # if we didn't explicitly parse the weekday or year day, use mktime
         # to fill them in automatically.
-        if !contains(fmt, r"([^%]|^)%(a|A|j|w|Ow)")
+        if !occursin(r"([^%]|^)%(a|A|j|w|Ow)", fmt)
             ccall(:mktime, Int, (Ref{TmStruct},), tm)
         end
     end
@@ -243,7 +253,7 @@ getpid() = ccall(:jl_getpid, Int32, ())
 Get the local machine's host name.
 """
 function gethostname()
-    hn = Vector{UInt8}(uninitialized, 256)
+    hn = Vector{UInt8}(undef, 256)
     err = @static if Sys.iswindows()
         ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
     else
@@ -305,7 +315,7 @@ if Sys.iswindows()
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
         p = lpMsgBuf[]
         len == 0 && return ""
-        buf = Vector{UInt16}(uninitialized, len)
+        buf = Vector{UInt16}(undef, len)
         GC.@preserve buf unsafe_copyto!(pointer(buf), p, len)
         ccall(:LocalFree, stdcall, Ptr{Cvoid}, (Ptr{Cvoid},), p)
         return transcode(String, buf)
@@ -350,5 +360,27 @@ calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Cvoid}, (Csize_t, Csize
 
 free(p::Cstring) = free(convert(Ptr{UInt8}, p))
 free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
+
+## Random numbers ##
+
+# To limit dependency on rand functionality implemented in the Random module,
+# Libc.rand is used in file.jl, and could be used in error.jl (but it breaks a test)
+"""
+    rand([T::Type])
+
+Interface to the C `rand()` function. If `T` is provided, generate a value of type `T`
+by composing two calls to `rand()`. `T` can be `UInt32` or `Float64`.
+"""
+rand() = ccall(:rand, Cint, ())
+# RAND_MAX at least 2^15-1 in theory, but we assume 2^16-1 (in practice, it's 2^31-1)
+rand(::Type{UInt32}) = ((rand() % UInt32) << 16) ⊻ (rand() % UInt32)
+rand(::Type{Float64}) = rand(UInt32) / 2^32
+
+"""
+    srand([seed])
+
+Interface to the C `srand(seed)` function.
+"""
+srand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
 
 end # module

@@ -4,7 +4,7 @@
 # Cross Platform tests for spawn. #
 ###################################
 
-using Random
+using Random, Sockets
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
@@ -20,7 +20,7 @@ sleepcmd = `sleep`
 lscmd = `ls`
 havebb = false
 if Sys.iswindows()
-    busybox = joinpath(Sys.BINDIR, "busybox.exe")
+    busybox = download("http://frippery.org/files/busybox/busybox.exe", joinpath(tempdir(), "busybox.exe"))
     havebb = try # use busybox-w32 on windows, if available
         success(`$busybox`)
         true
@@ -45,11 +45,11 @@ end
 
 @test read(`$echocmd hello \| sort`, String) == "hello | sort\n"
 @test read(pipeline(`$echocmd hello`, sortcmd), String) == "hello\n"
-@test length(spawn(pipeline(`$echocmd hello`, sortcmd)).processes) == 2
+@test length(run(pipeline(`$echocmd hello`, sortcmd), wait=false).processes) == 2
 
 out = read(`$echocmd hello` & `$echocmd world`, String)
-@test contains(out,"world")
-@test contains(out,"hello")
+@test occursin("world", out)
+@test occursin("hello", out)
 @test read(pipeline(`$echocmd hello` & `$echocmd world`, sortcmd), String) == "hello\nworld\n"
 
 @test (run(`$printfcmd "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
@@ -57,21 +57,16 @@ out = read(`$echocmd hello` & `$echocmd world`, String)
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
 Sys.isunix() && run(pipeline(yescmd, `head`, devnull))
 
-let a, p
-    a = Base.Condition()
-    @schedule begin
-        p = spawn(pipeline(yescmd,devnull))
-        Base.notify(a,p)
-        @test !success(p)
-    end
-    p = wait(a)
-    kill(p)
+let p = run(pipeline(yescmd, devnull), wait=false)
+    t = @async kill(p)
+    @test !success(p)
+    wait(t)
 end
 
 if valgrind_off
     # If --trace-children=yes is passed to valgrind, valgrind will
-    # exit here with an error code, and no UVError will be raised.
-    @test_throws Base.UVError run(`foo_is_not_a_valid_command`)
+    # exit here with an error code, and no IOError will be raised.
+    @test_throws Base.IOError run(`foo_is_not_a_valid_command`)
 end
 
 if Sys.isunix()
@@ -144,11 +139,15 @@ let str = "", proc, str2, file
     end
 
     # Here we test that if we close a stream with pending writes, we don't lose the writes.
-    proc = open(`$catcmd -`, "r+")
-    write(proc, str)
-    close(proc.in)
-    str2 = read(proc, String)
-    @test str2 == str
+    @sync begin
+        proc = open(`$catcmd -`, "r+")
+        @async begin
+            write(proc, str) # TODO: use Base.uv_write_async to restore the intended functionality of this test
+            close(proc.in)
+        end
+        str2 = read(proc, String)
+        @test str2 == str
+    end
 
     # This test hangs if the end-of-run-walk-across-uv-streams calls shutdown on a stream that is shutting down.
     file = tempname()
@@ -165,15 +164,19 @@ let r, t
     t = @async begin
         try
             wait(r)
+            @test false
+        catch ex
+            @test isa(ex, InterruptException)
         end
-        p = spawn(`$sleepcmd 1`); wait(p)
+        p = run(`$sleepcmd 1`, wait=false)
+        wait(p)
         @test p.exitcode == 0
         return true
     end
     yield()
     schedule(t, InterruptException(), error=true)
     yield()
-    put!(r,11)
+    put!(r, 11)
     yield()
     @test fetch(t)
 end
@@ -217,21 +220,25 @@ if valgrind_off
     # valgrind banner here, not "Hello World\n".
     @test read(pipeline(`$exename --startup-file=no -e 'println(stderr,"Hello World")'`, stderr=catcmd), String) == "Hello World\n"
     out = Pipe()
-    proc = spawn(pipeline(`$exename --startup-file=no -e 'println(stderr,"Hello World")'`, stderr = out))
+    proc = run(pipeline(`$exename --startup-file=no -e 'println(stderr,"Hello World")'`, stderr = out), wait=false)
     close(out.in)
     @test read(out, String) == "Hello World\n"
     @test success(proc)
 end
 
 # setup_stdio for AbstractPipe
-let out = Pipe(), proc = spawn(pipeline(`$echocmd "Hello World"`, stdout=IOContext(out,stdout)))
+let out = Pipe(),
+    proc = run(pipeline(`$exename --startup-file=no -e 'println(getpid())'`, stdout=IOContext(out, :foo => :bar)), wait=false)
+    # < don't block here before getpid call >
+    pid = getpid(proc)
     close(out.in)
-    @test read(out, String) == "Hello World\n"
+    @test parse(Int32, read(out, String)) === pid > 1
     @test success(proc)
+    @test_throws Base.IOError getpid(proc)
 end
 
 # issue #5904
-@test run(pipeline(ignorestatus(falsecmd), truecmd)) === nothing
+@test run(pipeline(ignorestatus(falsecmd), truecmd)) isa Base.AbstractPipe
 
 @testset "redirect_*" begin
     let OLD_STDOUT = stdout,
@@ -267,7 +274,7 @@ let fname = tempname(), p
     oldhandle = OLD_STDERR.handle
     OLD_STDERR.status = Base.StatusClosing
     OLD_STDERR.handle = C_NULL
-    ccall(:uv_close, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), oldhandle, cfunction(thrash, Cvoid, Tuple{Ptr{Cvoid}}))
+    ccall(:uv_close, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), oldhandle, @cfunction(thrash, Cvoid, (Ptr{Cvoid},)))
     sleep(1)
     import Base.zzzInvalidIdentifier
     """
@@ -322,7 +329,7 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(stdout, " 1\t", r
             @test !isopen(out.out)
             @test !isreadable(out)
         end
-        @test_throws ArgumentError write(out, "now closed error")
+        @test_throws Base.IOError write(out, "now closed error")
         if Sys.iswindows()
             # WINNT kernel appears to not provide a fast mechanism for async propagation
             # of EOF for a blocking stream, so just wait for it to catch up.
@@ -357,7 +364,7 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(stdout, " 1\t", r
     @test isempty(read(out))
     @test eof(out)
     @test desc == "Pipe($infd open => $outfd active, 0 bytes waiting)"
-    Base._wait(t)
+    Base.wait(t)
 end
 
 # issue #8529
@@ -396,13 +403,13 @@ end
 
 # Test shell_escape printing quoting
 # Backticks should automatically quote where necessary
-let cmd = ["foo bar", "baz", "a'b", "a\"b", "a\"b\"c", "-L/usr/+", "a=b", "``", "\$", "&&", "z"]
+let cmd = ["foo bar", "baz", "a'b", "a\"b", "a\"b\"c", "-L/usr/+", "a=b", "``", "\$", "&&", "", "z"]
     @test string(`$cmd`) ==
-        """`'foo bar' baz "a'b" 'a"b' 'a"b"c' -L/usr/+ a=b \\`\\` '\$' '&&' z`"""
+        """`'foo bar' baz "a'b" 'a"b' 'a"b"c' -L/usr/+ a=b \\`\\` '\$' '&&' '' z`"""
     @test Base.shell_escape(`$cmd`) ==
-        """'foo bar' baz "a'b" 'a"b' 'a"b"c' -L/usr/+ a=b `` '\$' && z"""
+        """'foo bar' baz "a'b" 'a"b' 'a"b"c' -L/usr/+ a=b `` '\$' && '' z"""
     @test Base.shell_escape_posixly(`$cmd`) ==
-        """'foo bar' baz a\\'b a\\"b 'a"b"c' -L/usr/+ a=b '``' '\$' '&&' z"""
+        """'foo bar' baz a\\'b a\\"b 'a"b"c' -L/usr/+ a=b '``' '\$' '&&' '' z"""
 end
 let cmd = ["foo=bar", "baz"]
     @test string(`$cmd`) == "`foo=bar baz`"
@@ -414,11 +421,15 @@ end
 @test Base.shell_split("\"\\\\\"") == ["\\"]
 
 # issue #13616
-@test_throws ErrorException collect(eachline(pipeline(`$catcmd _doesnt_exist__111_`, stderr=devnull)))
+pcatcmd = `$catcmd _doesnt_exist__111_`
+let p = eachline(pipeline(`$catcmd _doesnt_exist__111_`, stderr=devnull))
+    @test_throws(ErrorException("failed process: Process($pcatcmd, ProcessExited(1)) [1]"),
+                 collect(p))
+end
 
 # make sure windows_verbatim strips quotes
 if Sys.iswindows()
-    read(`cmd.exe /c dir /b spawn.jl`, String) == read(Cmd(`cmd.exe /c dir /b "\"spawn.jl\""`, windows_verbatim=true), String)
+    @test read(`cmd.exe /c dir /b spawn.jl`, String) == read(Cmd(`cmd.exe /c dir /b "\"spawn.jl\""`, windows_verbatim=true), String)
 end
 
 # make sure Cmd is nestable
@@ -445,51 +456,23 @@ end
 @test_throws ArgumentError run(Base.AndCmds(``, `$truecmd`))
 @test_throws ArgumentError run(Base.AndCmds(`$truecmd`, ``))
 
-@test_throws ArgumentError spawn(Base.Cmd(``))
-@test_throws ArgumentError spawn(Base.AndCmds(``, ``))
-@test_throws ArgumentError spawn(Base.AndCmds(``, `$echocmd test`))
-@test_throws ArgumentError spawn(Base.AndCmds(`$echocmd test`, ``))
-
 # tests for reducing over collection of Cmd
 @test_throws ArgumentError reduce(&, Base.AbstractCmd[])
 @test_throws ArgumentError reduce(&, Base.Cmd[])
 @test reduce(&, [`$echocmd abc`, `$echocmd def`, `$echocmd hij`]) == `$echocmd abc` & `$echocmd def` & `$echocmd hij`
 
-# test for proper handling of FD exhaustion
-if Sys.isunix()
-    let ps = Pipe[]
-        ulimit_n = tryparse(Int, readchomp(`sh -c 'ulimit -n'`))
-        try
-            for i = 1 : 100 * coalesce(ulimit_n, 1000)
-                p = Pipe()
-                Base.link_pipe!(p)
-                push!(ps, p)
-            end
-            if ulimit_n === nothing
-                @warn "`ulimit -n` is set to unlimited, fd exhaustion cannot be tested"
-                @test_broken false
-            else
-                @test false
-            end
-        catch ex
-            isa(ex, Base.UVError) || rethrow(ex)
-            @test ex.code in (Base.UV_EMFILE, Base.UV_ENFILE)
-        finally
-            foreach(close, ps)
-        end
-    end
-end
-
 # readlines(::Cmd), accidentally broken in #20203
 @test sort(readlines(`$lscmd -A`)) == sort(readdir())
 
 # issue #19864 (PR #20497)
-@test readchomp(pipeline(ignorestatus(
+let c19864 = readchomp(pipeline(ignorestatus(
         `$exename --startup-file=no -e '
             struct Error19864 <: Exception; end
             Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
             throw(Error19864())'`),
-    stderr=catcmd)) == "ERROR: correct19864"
+    stderr=catcmd))
+    @test occursin("ERROR: correct19864", c19864)
+end
 
 # accessing the command elements as an array or iterator:
 let c = `ls -l "foo bar"`
@@ -503,25 +486,26 @@ let c = `ls -l "foo bar"`
 end
 
 ## Deadlock in spawning a cmd (#22832)
-# FIXME?
-#let out = Pipe(), inpt = Pipe()
-#    Base.link_pipe!(out, reader_supports_async=true)
-#    Base.link_pipe!(inpt, writer_supports_async=true)
-#    p = spawn(pipeline(catcmd, stdin=inpt, stdout=out, stderr=devnull))
-#    @async begin # feed cat with 2 MB of data (zeros)
-#        write(inpt, zeros(UInt8, 1048576 * 2))
-#        close(inpt)
-#    end
-#    sleep(0.5) # give cat a chance to fill the write buffer for stdout
-#    close(out.in) # make sure we can still close the write end
-#    @test sizeof(readstring(out)) == 1048576 * 2 # make sure we get all the data
-#    @test success(p)
-#end
+let out = Pipe(), inpt = Pipe()
+    Base.link_pipe!(out, reader_supports_async=true)
+    Base.link_pipe!(inpt, writer_supports_async=true)
+    p = run(pipeline(catcmd, stdin=inpt, stdout=out, stderr=devnull), wait=false)
+    t = @async begin # feed cat with 2 MB of data (zeros)
+        write(inpt, zeros(UInt8, 1048576 * 2))
+        close(inpt)
+    end
+    sleep(1) # give cat a chance to fill the write buffer for stdout
+    close(inpt.out)
+    close(out.in) # make sure we can still close the write end
+    @test sizeof(read(out)) == 1048576 * 2 # make sure we get all the data
+    @test success(p)
+    wait(t)
+end
 
 # `kill` error conditions
-let p = spawn(`$sleepcmd 100`)
+let p = run(`$sleepcmd 100`, wait=false)
     # Should throw on invalid signals
-    @test_throws Base.UVError kill(p, typemax(Cint))
+    @test_throws Base.IOError kill(p, typemax(Cint))
     kill(p)
     wait(p)
     # Should not throw if already dead
@@ -531,4 +515,121 @@ end
 # Second argument of shell_parse
 let s = "   \$abc   "
     @test s[Base.shell_parse(s)[2]] == "abc"
+end
+
+# Logging macros should not output to finalized streams (#26687)
+let
+    cmd = `$(Base.julia_cmd()) -e 'finalizer(x->@info(x), "Hello")'`
+    output = readchomp(pipeline(cmd, stderr=catcmd))
+    @test occursin("Info: Hello", output)
+end
+
+# Sys.which() testing
+psep = if Sys.iswindows() ";" else ":" end
+withenv("PATH" => "$(Sys.BINDIR)$(psep)$(ENV["PATH"])") do
+    julia_exe = joinpath(Sys.BINDIR, Base.julia_exename())
+    @test Sys.which("julia") == realpath(julia_exe)
+    @test Sys.which(julia_exe) == realpath(julia_exe)
+end
+
+mktempdir() do dir
+    withenv("PATH" => "$(dir)$(psep)$(ENV["PATH"])") do
+        # Test that files lacking executable permissions fail Sys.which
+        # but only on non-Windows systems, as Windows doesn't care...
+        foo_path = joinpath(dir, "foo")
+        touch(foo_path)
+        chmod(foo_path, 0o777)
+        if !Sys.iswindows()
+            @test Sys.which("foo") == realpath(foo_path)
+            @test Sys.which(foo_path) == realpath(foo_path)
+
+            chmod(foo_path, 0o666)
+            @test Sys.which("foo") === nothing
+            @test Sys.which(foo_path) === nothing
+        end
+
+        # Test that completely missing files also return nothing
+        @test Sys.which("this_is_not_a_command") === nothing
+    end
+end
+
+mktempdir() do dir
+    withenv("PATH" => "$(joinpath(dir, "bin1"))$(psep)$(joinpath(dir, "bin2"))$(psep)$(ENV["PATH"])") do
+        # Test that we have proper priorities
+        mkpath(joinpath(dir, "bin1"))
+        mkpath(joinpath(dir, "bin2"))
+        foo1_path = joinpath(dir, "bin1", "foo")
+        foo2_path = joinpath(dir, "bin2", "foo")
+
+        # On windows, we find things with ".exe" and ".com"
+        if Sys.iswindows()
+            foo1_path *= ".exe"
+            foo2_path *= ".com"
+        end
+
+        touch(foo1_path)
+        touch(foo2_path)
+        chmod(foo1_path, 0o777)
+        chmod(foo2_path, 0o777)
+        @test Sys.which("foo") == realpath(foo1_path)
+
+        # chmod() doesn't change which() on Windows, so don't bother to test that
+        if !Sys.iswindows()
+            chmod(foo1_path, 0o666)
+            @test Sys.which("foo") == realpath(foo2_path)
+            chmod(foo1_path, 0o777)
+        end
+
+        if Sys.iswindows()
+            # On windows, check that pwd() takes precedence, except when we provide a path
+            cd(joinpath(dir, "bin2")) do
+                @test Sys.which("foo") == realpath(foo2_path)
+                @test Sys.which(foo1_path) == realpath(foo1_path)
+            end
+        end
+
+        # Check that "bin1/bar" will actually run "bin1/bar"
+        bar_path = joinpath(dir, "bin1", "bar")
+        if Sys.iswindows()
+            bar_path *= ".exe"
+        end
+
+        touch(bar_path)
+        chmod(bar_path, 0o777)
+        cd(dir) do
+            @test Sys.which(joinpath("bin1", "bar")) == realpath(bar_path)
+        end
+    end
+end
+
+# Issue #27550: make sure `peek` works when slurping a Char from an AbstractPipe
+open(`$catcmd`, "r+") do f
+    t = @async begin
+        write(f, "δ")
+        close(f.in)
+    end
+    @test read(f, Char) == 'δ'
+    wait(t)
+end
+
+let text = "input-test-text"
+    b = PipeBuffer()
+    proc = open(Base.CmdRedirect(Base.CmdRedirect(```$(Base.julia_cmd()) -E '
+                    in14 = Base.open(RawFD(14))
+                    out15 = Base.open(RawFD(15))
+                    write(out15, in14)'```,
+                IOBuffer(text), 14, true),
+            b, 15, false), "r")
+    @test read(proc, String) == string(length(text), '\n')
+    @test success(proc)
+    @test String(take!(b)) == text
+end
+@test repr(Base.CmdRedirect(``, devnull, 0, false)) == "pipeline(``, stdin>Base.DevNull())"
+@test repr(Base.CmdRedirect(``, devnull, 1, true)) == "pipeline(``, stdout<Base.DevNull())"
+@test repr(Base.CmdRedirect(``, devnull, 11, true)) == "pipeline(``, 11<Base.DevNull())"
+
+
+# clean up busybox download
+if Sys.iswindows()
+    rm(busybox, force=true)
 end

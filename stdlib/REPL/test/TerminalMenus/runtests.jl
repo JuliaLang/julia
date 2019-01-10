@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 import REPL
 using REPL.TerminalMenus
 using Test
@@ -31,7 +33,7 @@ include("multiselect_menu.jl")
 # scroll must only accept symbols
 @test_throws TypeError TerminalMenus.config(scroll=true)
 # :foo is not a valid scroll option
-@test_throws ErrorException TerminalMenus.config(scroll=:foo)
+@test_throws ArgumentError TerminalMenus.config(scroll=:foo)
 # Test scroll wrap
 TerminalMenus.config(scroll=:wrap)
 @test TerminalMenus.CONFIG[:scroll_wrap] == true

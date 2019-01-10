@@ -1,7 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, Random, Serialization
+using Test, Distributed, Random, Serialization, Sockets
 import Distributed: launch, manage
+
+@test cluster_cookie() isa String
 
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 
@@ -17,6 +19,26 @@ include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 
 addprocs_with_testenv(4)
 @test nprocs() == 5
+
+# distributed loading of packages
+
+# setup
+@everywhere begin
+    old_act_proj = Base.ACTIVE_PROJECT[]
+    pushfirst!(Base.LOAD_PATH, "@")
+    Base.ACTIVE_PROJECT[] = joinpath(Sys.BINDIR, "..", "share", "julia", "test", "TestPkg")
+end
+
+# cause precompilation of TestPkg to avoid race condition
+Base.compilecache(Base.identify_package("TestPkg"))
+
+@everywhere using TestPkg
+@everywhere using TestPkg
+
+@everywhere begin
+    Base.ACTIVE_PROJECT[] = old_act_proj
+    popfirst!(Base.LOAD_PATH)
+end
 
 @everywhere using Test, Random, LinearAlgebra
 
@@ -196,7 +218,7 @@ remotecall_fetch(f25847, id_other, f)
 
 finalize(f)
 yield() # flush gc msgs
-@test false == remotecall_fetch(chk_rrid->haskey(Distributed.PGRP.refs, chk_rrid), id_other, rrid)
+@test false == remotecall_fetch(chk_rrid->(yield(); haskey(Distributed.PGRP.refs, chk_rrid)), id_other, rrid)
 
 
 # Distributed GC tests for RemoteChannels
@@ -304,7 +326,7 @@ workloads = Int[sum(ids .== i) for i in 2:nprocs()]
 @test_throws ArgumentError timedwait(()->false, 0.1, pollint=-0.5)
 
 # specify pids for pmap
-@test sort(workers()[1:2]) == sort(unique(pmap(WorkerPool(workers()[1:2]), x->(sleep(0.1);myid()), 1:10)))
+@test sort(workers()[1:2]) == sort(unique(pmap(x->(sleep(0.1);myid()), WorkerPool(workers()[1:2]), 1:10)))
 
 # Testing buffered  and unbuffered reads
 # This large array should write directly to the socket
@@ -342,11 +364,13 @@ end
 @test [fetch(rr) for rr in rr_list] == [:OK for x in 1:ntasks]
 
 function test_channel(c)
+    @test isopen(c) == true
     put!(c, 1)
     put!(c, "Hello")
     put!(c, 5.0)
 
     @test isready(c) == true
+    @test isopen(c) == true
     @test fetch(c) == 1
     @test fetch(c) == 1   # Should not have been popped previously
     @test take!(c) == 1
@@ -354,7 +378,9 @@ function test_channel(c)
     @test fetch(c) == 5.0
     @test take!(c) == 5.0
     @test isready(c) == false
+    @test isopen(c) == true
     close(c)
+    @test isopen(c) == false
 end
 
 test_channel(Channel(10))
@@ -365,17 +391,17 @@ c=Channel{Int}(1)
 
 # test channel iterations
 function test_iteration(in_c, out_c)
-    t=@schedule for v in in_c
+    t=@async for v in in_c
         put!(out_c, v)
     end
 
-    isa(in_c, Channel) && @test isopen(in_c) == true
+    @test isopen(in_c) == true
     put!(in_c, 1)
     @test take!(out_c) == 1
     put!(in_c, "Hello")
     close(in_c)
     @test take!(out_c) == "Hello"
-    isa(in_c, Channel) && @test isopen(in_c) == false
+    @test isopen(in_c) == false
     @test_throws InvalidStateException put!(in_c, :foo)
     yield()
     @test istaskdone(t) == true
@@ -466,7 +492,7 @@ end
 pmap_args = [
                 (:distributed, [:default, false]),
                 (:batch_size, [:default,2]),
-                (:on_error, [:default, e -> (e.msg == "foobar" ? true : rethrow(e))]),
+                (:on_error, [:default, e -> (e.msg == "foobar" ? true : rethrow())]),
                 (:retry_delays, [:default, fill(0.001, 1000)]),
                 (:retry_check, [:default, (s,e) -> (s,endswith(e.msg,"foobar"))]),
             ]
@@ -526,9 +552,9 @@ function walk_args(i)
 
         try
             results_test(pmap(mapf, data; kwargs...))
-        catch e
+        catch
             println("pmap executing with args : ", kwargs)
-            rethrow(e)
+            rethrow()
         end
 
         return
@@ -546,7 +572,7 @@ walk_args(1)
 
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "generic_map_tests.jl"))
 empty_pool = WorkerPool([myid()])
-pmap_fallback = (f, c...) -> pmap(empty_pool, f, c...)
+pmap_fallback = (f, c...) -> pmap(f, empty_pool, c...)
 generic_map_tests(pmap_fallback)
 
 # pmap with various types. Test for equivalence with map
@@ -572,8 +598,8 @@ end
 n = 10
 as = [rand(4,4) for i in 1:n]
 bs = deepcopy(as)
-cs = collect(Distributed.pgenerate(x->(sleep(rand()*0.1); svdfact(x)), bs))
-svdas = map(svdfact, as)
+cs = collect(Distributed.pgenerate(x->(sleep(rand()*0.1); svd(x)), bs))
+svdas = map(svd, as)
 for i in 1:n
     @test cs[i].U ≈ svdas[i].U
     @test cs[i].S ≈ svdas[i].S
@@ -589,13 +615,13 @@ pmap(_->myid(), 1:nworkers())  # priming run
 
 # Same tests with custom worker pools.
 wp = WorkerPool(workers())
-@test nworkers() == length(unique(pmap(wp, _->myid(), 1:100)))
-@test nworkers() == length(unique(remotecall_fetch(wp->pmap(wp, _->myid(), 1:100), id_other, wp)))
+@test nworkers() == length(unique(pmap(_->myid(), wp, 1:100)))
+@test nworkers() == length(unique(remotecall_fetch(wp->pmap(_->myid(), wp, 1:100), id_other, wp)))
 
 
 # CachingPool tests
 wp = CachingPool(workers())
-@test [1:100...] == pmap(wp, x->x, 1:100)
+@test [1:100...] == pmap(x->x, wp, 1:100)
 
 clear!(wp)
 @test length(wp.map_obj2ref) == 0
@@ -636,12 +662,12 @@ if Sys.isunix() # aka have ssh
             w_in_remote = sort(remotecall_fetch(workers, p))
             try
                 @test intersect(new_pids, w_in_remote) == new_pids
-            catch e
+            catch
                 print("p       :     $p\n")
                 print("newpids :     $new_pids\n")
                 print("w_in_remote : $w_in_remote\n")
                 print("intersect   : $(intersect(new_pids, w_in_remote))\n\n\n")
-                rethrow(e)
+                rethrow()
             end
         end
 
@@ -671,7 +697,7 @@ if Sys.isunix() # aka have ssh
 
     print("\nMixed ssh addprocs with :auto\n")
     new_pids = addprocs_with_testenv(["localhost", ("127.0.0.1", :auto), "localhost"]; sshflags=sshflags)
-    @test length(new_pids) == (2 + Sys.CPU_CORES)
+    @test length(new_pids) == (2 + Sys.CPU_THREADS)
     test_n_remove_pids(new_pids)
 
     print("\nMixed ssh addprocs with numeric counts\n")
@@ -712,7 +738,7 @@ end # full-test
 
 let t = @task 42
     schedule(t, ErrorException(""), error=true)
-    @test_throws ErrorException Base._wait(t)
+    @test_throws ErrorException Base.wait(t)
 end
 
 # issue #8207
@@ -783,6 +809,26 @@ remote_do(fut->put!(fut, myid()), id_me, f)
 f=Future(id_other)
 remote_do(fut->put!(fut, myid()), id_other, f)
 @test fetch(f) == id_other
+
+# Github issue #29932
+rc_unbuffered = RemoteChannel(()->Channel{Vector{Float64}}(0))
+
+@async begin
+    # Trigger direct write (no buffering) of largish array
+    array_sz = Int(Base.SZ_UNBUFFERED_IO/8) + 1
+    largev = zeros(array_sz)
+    for i in 1:10
+        largev[1] = float(i)
+        put!(rc_unbuffered, largev)
+    end
+end
+
+@test remotecall_fetch(rc -> begin
+        for i in 1:10
+            take!(rc)[1] != float(i) && error("Failed")
+        end
+        return :OK
+    end, id_other, rc_unbuffered) == :OK
 
 # github PR #14456
 n = DoFullTest ? 6 : 5
@@ -948,8 +994,9 @@ const get_num_threads = function() # anonymous so it will be serialized when cal
 
         # OSX BLAS looks at an environment variable
         if Sys.isapple()
-            return ENV["VECLIB_MAXIMUM_THREADS"]
+            return tryparse(Cint, get(ENV, "VECLIB_MAXIMUM_THREADS", "1"))
         end
+    catch
     end
 
     return nothing
@@ -969,11 +1016,12 @@ function test_blas_config(pid, expected)
 end
 
 function test_add_procs_threaded_blas()
-    if get_num_threads() === nothing
+    master_blas_thread_count = get_num_threads()
+    if master_blas_thread_count === nothing
         @warn "Skipping blas num threads tests due to unsupported blas version"
         return
     end
-    master_blas_thread_count = get_num_threads()
+    @test master_blas_thread_count <= 8 # check that Base set the environment variable in __init__ before LinearAlgebra dlopen'd it
 
     # Test with default enable_threaded_blas false
     processes_added = addprocs_with_testenv(2)
@@ -1023,7 +1071,7 @@ for i in 1:5
     p = addprocs_with_testenv(1)[1]
     np = nprocs()
     @spawnat p sleep(5)
-    Base._wait(rmprocs(p; waitfor=0))
+    Base.wait(rmprocs(p; waitfor=0))
     for pid in procs()
         @test pid == remotecall_fetch(myid, pid)
     end
@@ -1035,7 +1083,7 @@ if DoFullTest
     pids=addprocs_with_testenv(4);
     @test_throws ErrorException rmprocs(pids; waitfor=0.001);
     # wait for workers to be removed
-    while any(occursin(procs()), pids)
+    while any(in(procs()), pids)
         sleep(0.1)
     end
 end
@@ -1100,8 +1148,8 @@ append!(testruns, [
 for (addp_testf, expected_errstr, env) in testruns
     old_stdout = stdout
     stdout_out, stdout_in = redirect_stdout()
-    stdout_txt = @schedule filter!(readlines(stdout_out)) do s
-            return !startswith(s, "\tFrom failed worker startup:\t")
+    stdout_txt = @async filter!(readlines(stdout_out)) do s
+            return !startswith(s, "\tFrom worker startup:\t")
         end
     try
         withenv(env...) do
@@ -1300,7 +1348,7 @@ let thrown = false
         thrown = true
         local b = IOBuffer()
         showerror(b, e)
-        @test contains(String(take!(b)), "sqrt will only return")
+        @test occursin("sqrt will only return", String(take!(b)))
     end
     @test thrown
 end
@@ -1374,7 +1422,7 @@ try
     error("unexpected")
 catch ex
     @test isa(ex.captured.ex.exceptions[1].ex, ErrorException)
-    @test contains(ex.captured.ex.exceptions[1].ex.msg, "BoundsError")
+    @test occursin("BoundsError", ex.captured.ex.exceptions[1].ex.msg)
     @test ex.captured.ex.exceptions[2].ex == UndefVarError(:DontExistOn1)
 end
 
@@ -1394,7 +1442,7 @@ let
         @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "testfile2"))"),
                      include("testfile2"))
         @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "2", "testfile"))"),
-                     include(joinpath("2", "testfile")))
+                     include("2/testfile"))
         @test include(tmp_file) == 58.32
         @test remotecall_fetch(include, proc[1], joinpath("2", "testfile")) == 55.32 + proc[1] * 3
     finally
@@ -1402,10 +1450,10 @@ let
         rm(tmp_file, force=true)
         rm(tmp_file2, force=true)
         rm(tmp_dir2, force=true)
-        rm(tmp_dir, force=true)
+        #rm(tmp_dir, force=true)
     end
 end
-# cookie and comand line option `--worker` tests. remove workers, set cookie and test
+# cookie and command line option `--worker` tests. remove workers, set cookie and test
 struct WorkerArgTester <: ClusterManager
     worker_opt
     write_cookie
@@ -1460,7 +1508,7 @@ function reuseport_tests()
             ports_higher = []       # ports of pids higher than myid()
             for w in Distributed.PGRP.workers
                 w.id == myid() && continue
-                port = Base._sockname(w.r_stream, true)[2]
+                port = Sockets._sockname(w.r_stream, true)[2]
                 if (w.id == 1)
                     # master connects to workers
                     push!(ports_higher, port)
@@ -1482,7 +1530,7 @@ function reuseport_tests()
     end
 
     # Ensure that the code has indeed been successfully executed everywhere
-    @test all(occursin(results), procs())
+    @test all(in(results), procs())
 end
 
 # Test that the client port is reused. SO_REUSEPORT may not be supported on
@@ -1493,6 +1541,18 @@ if ccall(:jl_has_so_reuseport, Int32, ()) == 1
     reuseport_tests()
 else
     @info "SO_REUSEPORT is unsupported, skipping reuseport tests"
+end
+
+# issue #27933
+a27933 = :_not_defined_27933
+@test remotecall_fetch(()->a27933, first(workers())) === a27933
+
+# PR #28651
+for T in (UInt8, Int8, UInt16, Int16, UInt32, Int32, UInt64)
+    n = @distributed (+) for i in Base.OneTo(T(10))
+        i
+    end
+    @test n == 55
 end
 
 # Run topology tests last after removing all workers, since a given

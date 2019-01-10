@@ -206,8 +206,8 @@ end
             "Puerto Rico", "Olga Tanon", "Puerto Rico", "Olga Tañón",
             "Rep. of China", "Hsu Chi", "臺灣", "舒淇",
             "Rep. of China", "Ang Lee", "臺灣", "李安",
-            "Rep. of Korea", "AHN Sung-Gi", "한민국", "안성기",
-            "Rep. of Korea", "SHIM Eun-Ha", "한민국", "심은하",
+            "Rep. of Korea", "AHN Sung-Gi", "대한민국", "안성기",
+            "Rep. of Korea", "SHIM Eun-Ha", "대한민국", "심은하",
             "Russia", "Mikhail Gorbachev", "Россия", "Михаил Горбачёв",
             "Russia", "Boris Grebenshchikov", "Россия", "Борис Гребенщиков",
             "Slovenia", "\"Frane \"\"Jezek\"\" Milcinski", "Slovenija", "Frane Milčinski - Ježek",
@@ -236,7 +236,7 @@ end
     for data in ["A B C", "A B C\n"]
         data,hdr = readdlm(IOBuffer(data), header=true)
         @test hdr == AbstractString["A" "B" "C"]
-        @test data == Matrix{Float64}(uninitialized, 0, 3)
+        @test data == Matrix{Float64}(undef, 0, 3)
     end
 end
 

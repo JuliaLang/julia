@@ -19,7 +19,7 @@ bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
     @test eof(io)
     seek(io, 0)
     @test read(io,UInt8) == convert(UInt8, 'a')
-    a = Vector{UInt8}(uninitialized, 2)
+    a = Vector{UInt8}(undef, 2)
     @test read!(io, a) == a
     @test a == UInt8['b','c']
     @test bufcontents(io) == "abc"
@@ -169,7 +169,7 @@ end
 
 @testset "issue 5453" begin
     io = IOBuffer("abcdef")
-    a = Vector{UInt8}(uninitialized, 1024)
+    a = Vector{UInt8}(undef, 1024)
     @test_throws EOFError read!(io,a)
     @test eof(io)
 end
@@ -200,7 +200,7 @@ end
     @test read(io, Char) == 'α'
     @test_throws ArgumentError write(io,"!")
     @test_throws ArgumentError write(io,'β')
-    a = Vector{UInt8}(uninitialized, 10)
+    a = Vector{UInt8}(undef, 10)
     @test read!(io, a) === a
     @test String(a) == "helloworld"
     @test read(io, Char) == 'ω'
@@ -283,7 +283,7 @@ end
 
     for char in ['@','߷','࿊','𐋺']
         io = IOBuffer("alphabeticalstuff$char")
-        @test !eof(skipchars(isalpha, io))
+        @test !eof(skipchars(isletter, io))
         @test read(io, Char) == char
     end
 end

@@ -31,7 +31,7 @@ function warntype_hastag(f, types, tag)
     iob = IOBuffer()
     code_warntype(iob, f, types)
     str = String(take!(iob))
-    return contains(str, tag)
+    return occursin(tag, str)
 end
 
 pos_stable(x) = x > 0 ? x : zero(x)
@@ -60,18 +60,20 @@ tag = "ANY"
 iob = IOBuffer()
 show(iob, Meta.lower(Main, :(x -> x^2)))
 str = String(take!(iob))
-@test !contains(str, tag)
+@test !occursin(tag, str)
 
 # Make sure non used variables are not emphasized
 has_unused() = (a = rand(5))
 @test !warntype_hastag(has_unused, Tuple{}, tag)
-@test warntype_hastag(has_unused, Tuple{}, "<optimized out>")
+# No variable information with the new optimizer. Eventually might be able to recover
+# some of this info with debug info.
+#@test warntype_hastag(has_unused, Tuple{}, "<optimized out>")
 
 # Make sure that "expected" unions are highlighted with warning color instead of error color
 iob = IOBuffer()
 code_warntype(IOContext(iob, :color => true), x -> (x > 1 ? "foo" : nothing), Tuple{Int64})
 str = String(take!(iob))
-@test contains(str, Base.text_colors[Base.warn_color()])
+@test occursin(Base.text_colors[Base.warn_color()], str)
 
 # Make sure getproperty and setproperty! works with @code_... macros
 struct T1234321
@@ -150,7 +152,7 @@ end
 |:---- | ----:|:------- |
 """
 let v = repr(varinfo(_test_varinfo_))
-    @test contains(v, "| x              |   8 bytes | Float64 |")
+    @test occursin("| x              |   8 bytes | Float64 |", v)
 end
 
 # Issue 14173
@@ -173,18 +175,18 @@ end
 # PR #23075
 @testset "versioninfo" begin
     # check that versioninfo(io; verbose=true) doesn't error, produces some output
-    # and doesn't invoke Pkg.status which will error if JULIA_PKGDIR is set
     mktempdir() do dir
-        withenv("JULIA_PKGDIR" => dir) do
-            buf = PipeBuffer()
-            versioninfo(buf, verbose=true)
-            ver = read(buf, String)
-            @test startswith(ver, "Julia Version $VERSION")
-            @test contains(ver, "Environment:")
-            @test contains(ver, "Package Status:")
-            @test contains(ver, "no packages installed")
-            @test isempty(readdir(dir))
-        end
+        buf = PipeBuffer()
+        versioninfo(buf, verbose=true)
+        ver = read(buf, String)
+        @test startswith(ver, "Julia Version $VERSION")
+        @test occursin("Environment:", ver)
+    end
+    let exename = `$(Base.julia_cmd()) --startup-file=no`
+        @test !occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
+                                                    String[]), String))
+        @test  occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
+                                                    String["JULIA_CPU_THREADS=1"]), String))
     end
 end
 
@@ -194,16 +196,25 @@ const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
 
 @test_throws ErrorException("\"this_is_not_defined\" is not defined in module $curmod_str") @which this_is_not_defined
 # issue #13264
-@test isa((@which vcat(1...)), Method)
+@test (@which vcat(1...)).name == :vcat
+
+# PR #28122, issue #25474
+@test (@which [1][1]).name === :getindex
+@test (@which [1][1] = 2).name === :setindex!
+@test (@which [1]).name === :vect
+@test (@which [1 2]).name === :hcat
+@test (@which [1; 2]).name === :vcat
+@test (@which Int[1 2]).name === :typed_hcat
+@test (@which Int[1; 2]).name === :typed_vcat
+@test (@which [1 2;3 4]).name === :hvcat
+@test (@which Int[1 2;3 4]).name === :typed_hvcat
 
 # issue #13464
-let t13464 = "hey there sailor"
-    try
-        @which t13464[1,1] = (1.0,true)
-        error("unexpected")
-    catch err13464
-        @test startswith(err13464.msg, "expression is not a function call, or is too complex")
-    end
+try
+    @which x = 1
+    error("unexpected")
+catch err13464
+    @test startswith(err13464.msg, "expression is not a function call, or is too complex")
 end
 
 module MacroTest
@@ -271,8 +282,8 @@ function test_code_reflection(freflect, f, types, tester)
 end
 
 function test_code_reflections(tester, freflect)
-    test_code_reflection(freflect, contains,
-                         Tuple{AbstractString, Regex}, tester) # abstract type
+    test_code_reflection(freflect, occursin,
+                         Tuple{Regex, AbstractString}, tester) # abstract type
     test_code_reflection(freflect, +, Tuple{Int, Int}, tester) # leaftype signature
     test_code_reflection(freflect, +,
                          Tuple{Array{Float32}, Array{Float32}}, tester) # incomplete types
@@ -296,7 +307,7 @@ end # module ReflectionTest
 
 ix86 = r"i[356]86"
 
-if Sys.ARCH === :x86_64 || contains(string(Sys.ARCH), ix86)
+if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
     function linear_foo()
         x = 4
         y = 5
@@ -309,18 +320,25 @@ if Sys.ARCH === :x86_64 || contains(string(Sys.ARCH), ix86)
     code_native(buf,linear_foo,(), syntax = :att)
     output=String(take!(buf))
 
-    @test contains(output,rgx)
+    @test occursin(rgx, output)
 
     #test that the code output is intel syntax by checking it has no occurrences of '%'
     code_native(buf,linear_foo,(), syntax = :intel)
     output=String(take!(buf))
 
-    @test !contains(output,rgx)
+    @test !occursin(rgx, output)
 
     code_native(buf,linear_foo,())
     output=String(take!(buf))
 
-    @test contains(output,rgx)
+    @test occursin(rgx, output)
+end
+
+@testset "error message" begin
+    err = ErrorException("expression is not a function call or symbol")
+    @test_throws err @code_lowered ""
+    @test_throws err @code_lowered 1
+    @test_throws err @code_lowered 1.0
 end
 
 using InteractiveUtils: editor
@@ -362,4 +380,12 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
 
     ENV["JULIA_EDITOR"] = "\"/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl\" -w"
     @test editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
+end
+
+# clipboard functionality
+if Sys.iswindows() || Sys.isapple()
+    for str in ("Hello, world.", "∀ x ∃ y", "")
+        clipboard(str)
+        @test clipboard() == str
+    end
 end

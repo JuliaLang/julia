@@ -1,6 +1,7 @@
 # Iteration utilities
 
 ```@docs
+Base.Iterators.Stateful
 Base.Iterators.zip
 Base.Iterators.enumerate
 Base.Iterators.rest

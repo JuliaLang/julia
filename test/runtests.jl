@@ -41,24 +41,27 @@ end
 const node1_tests = String[]
 function move_to_node1(t)
     if t in tests
-        splice!(tests, findfirst(equalto(t), tests))
+        splice!(tests, findfirst(isequal(t), tests))
         push!(node1_tests, t)
     end
+    nothing
 end
 
-# Base.compile only works from node 1, so compile test is handled specially
-move_to_node1("compile")
+# Base.compilecache only works from node 1, so precompile test is handled specially
+move_to_node1("precompile")
 move_to_node1("SharedArrays")
+# Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
+move_to_node1("stress")
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
 import LinearAlgebra
-cd(dirname(@__FILE__)) do
+cd(@__DIR__) do
     n = 1
     if net_on
-        n = min(Sys.CPU_CORES, length(tests))
+        n = min(Sys.CPU_THREADS, length(tests))
         n > 1 && addprocs_with_testenv(n)
         LinearAlgebra.BLAS.set_num_threads(1)
     end
@@ -109,9 +112,10 @@ cd(dirname(@__FILE__)) do
     local stdin_monitor
     all_tasks = Task[]
     try
-        if isa(stdin, Base.TTY)
+        # Monitor stdin and kill this task on ^C
+        # but don't do this on Windows, because it may deadlock in the kernel
+        if !Sys.iswindows() && isa(stdin, Base.TTY)
             t = current_task()
-            # Monitor stdin and kill this task on ^C
             stdin_monitor = @async begin
                 term = REPL.Terminals.TTYTerminal("xterm", stdin, stdout, stderr)
                 try
@@ -123,7 +127,7 @@ cd(dirname(@__FILE__)) do
                         end
                     end
                 catch e
-                    isa(e, InterruptException) || rethrow(e)
+                    isa(e, InterruptException) || rethrow()
                 finally
                     REPL.Terminals.raw!(term, false)
                 end
@@ -188,13 +192,13 @@ cd(dirname(@__FILE__)) do
             push!(results, (t, resp))
         end
     catch e
-        isa(e, InterruptException) || rethrow(e)
+        isa(e, InterruptException) || rethrow()
         # If the test suite was merely interrupted, still print the
         # summary, which can be useful to diagnose what's going on
-        foreach(task->try; schedule(task, InterruptException(); error=true); end, all_tasks)
+        foreach(task->try; schedule(task, InterruptException(); error=true); catch; end, all_tasks)
         foreach(wait, all_tasks)
     finally
-        if isa(stdin, Base.TTY)
+        if @isdefined stdin_monitor
             schedule(stdin_monitor, InterruptException(); error=true)
         end
     end
@@ -287,7 +291,7 @@ cd(dirname(@__FILE__)) do
         println("    \033[31;1mFAILURE\033[0m\n")
         skipped > 0 &&
             println("$skipped test", skipped > 1 ? "s were" : " was", " skipped due to failure.")
-        println("The global RNG seed was 0x$(hex(seed)).\n")
+        println("The global RNG seed was 0x$(string(seed, base = 16)).\n")
         Test.print_test_errors(o_ts)
         throw(Test.FallbackTestSetException("Test run finished with errors"))
     end

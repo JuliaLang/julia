@@ -21,7 +21,7 @@ end
 
 # map over Bottom[] should return Bottom[]
 # issue #6719
-@test isequal(typeof(map(x -> x, Vector{Union{}}(uninitialized, 0))), Vector{Union{}})
+@test isequal(typeof(map(x -> x, Vector{Union{}}(undef, 0))), Vector{Union{}})
 
 # maps of tuples (formerly in test/core.jl) -- tuple.jl
 @test map((x,y)->x+y,(1,2,3),(4,5,6)) == (5,7,9)
@@ -83,10 +83,10 @@ end
 let gens_dims = [((i for i = 1:5),                    1),
                  ((i for i = 1:5, j = 1:5),           2),
                  ((i for i = 1:5, j = 1:5, k = 1:5),  3),
-                 ((i for i = Array{Int,0}(uninitialized)),           0),
-                 ((i for i = Vector{Int}(uninitialized, 1)),          1),
-                 ((i for i = Matrix{Int}(uninitialized, 1, 2)),       2),
-                 ((i for i = Array{Int}(uninitialized, 1, 2, 3)),    3)]
+                 ((i for i = Array{Int,0}(undef)),           0),
+                 ((i for i = Vector{Int}(undef, 1)),          1),
+                 ((i for i = Matrix{Int}(undef, 1, 2)),       2),
+                 ((i for i = Array{Int}(undef, 1, 2, 3)),    3)]
     for (gen, dim) in gens_dims
         @test ndims(gen) == ndims(collect(gen)) == dim
     end
@@ -107,7 +107,7 @@ end
 # generators and guards
 let gen = (x for x in 1:10)
     @test gen.iter == 1:10
-    @test gen.f(first(1:10)) == next(gen, start(gen))[1]
+    @test gen.f(first(1:10)) == iterate(gen)[1]
     for (a,b) in zip(1:10,gen)
         @test a == b
     end
@@ -144,6 +144,30 @@ end
 
 @test [(i,j) for i=1:3 for j=1:i if j>1] == [(2,2), (3,2), (3,3)]
 
+# issue #330
+@test [(t=(i,j); i=nothing; t) for i = 1:3 for j = 1:i] ==
+    [(1, 1), (2, 1), (2, 2), (3, 1), (3, 2), (3, 3)]
+
+@test map(collect, (((t=(i,j); i=nothing; t) for j = 1:i) for i = 1:3)) ==
+    [[(1, 1)],
+     [(2, 1), (nothing, 2)],
+     [(3, 1), (nothing, 2), (nothing, 3)]]
+
+let a = []
+    for x = 1:3, y = 1:3
+        push!(a, x)
+        x = 0
+    end
+    @test a == [1,1,1,2,2,2,3,3,3]
+end
+
+let i, j
+    for outer i = 1:2, j = 1:0
+    end
+    @test i == 2
+    @test !@isdefined(j)
+end
+
 # issue #18707
 @test [(q,d,n,p) for q = 0:25:100
                  for d = 0:10:100-q
@@ -176,4 +200,22 @@ end
     @test res isa Vector{Union{Bool, T}}
     res = map(f, y)
     @test res isa Vector{Union{Bool, T}}
+end
+
+@testset "inference of collect with unstable eltype" begin
+    @test Core.Compiler.return_type(collect, Tuple{typeof(2x for x in Real[])}) <: Vector
+    @test Core.Compiler.return_type(collect, Tuple{typeof(x+y for x in Real[] for y in Real[])}) <: Vector
+    @test Core.Compiler.return_type(collect, Tuple{typeof(x+y for x in Real[], y in Real[])}) <: Matrix
+    @test Core.Compiler.return_type(collect, Tuple{typeof(x for x in Union{Bool,String}[])}) <: Array
+end
+
+let x = rand(2,2)
+    (:)(a,b) = x
+    @test Float64[ i for i = 1:2 ] == x
+    @test Float64[ i+j for i = 1:2, j = 1:2 ] == cat(cat(x[1].+x, x[2].+x; dims=3),
+                                                     cat(x[3].+x, x[4].+x; dims=3); dims=4)
+end
+
+let (:)(a,b) = (i for i in Base.:(:)(1,10) if i%2==0)
+    @test Int8[ i for i = 1:2 ] == [2,4,6,8,10]
 end

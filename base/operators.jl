@@ -8,6 +8,7 @@
 Subtype operator: returns `true` if and only if all values of type `T1` are
 also of type `T2`.
 
+# Examples
 ```jldoctest
 julia> Float64 <: AbstractFloat
 true
@@ -33,6 +34,7 @@ const (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 
 Return the supertype of DataType `T`.
 
+# Examples
 ```jldoctest
 julia> supertype(Int32)
 Signed
@@ -73,6 +75,10 @@ Use [`isequal`](@ref) or [`===`](@ref) to always get a `Bool` result.
 # Implementation
 New numeric types should implement this function for two arguments of the new type, and
 handle comparison to other types via promotion rules where possible.
+
+[`isequal`](@ref) falls back to `==`, so new methods of `==` will be used by the
+[`Dict`](@ref) type to compare keys. If your type will be used as a dictionary key, it
+should therefore also implement [`hash`](@ref).
 """
 ==(x, y) = x === y
 
@@ -146,7 +152,7 @@ isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x
 
 function ==(T::Type, S::Type)
     @_pure_meta
-    typeseq(T, S)
+    T<:S && S<:T
 end
 function !=(T::Type, S::Type)
     @_pure_meta
@@ -223,7 +229,7 @@ julia> a ≢ a
 false
 ```
 """
-!==(x, y) = !(x === y)
+!==(@nospecialize(x), @nospecialize(y)) = !(x === y)
 const ≢ = !==
 
 """
@@ -238,6 +244,7 @@ New numeric types with a canonical partial order should implement this function 
 two arguments of the new type.
 Types with a canonical total order should implement [`isless`](@ref) instead.
 (x < y) | (x == y)
+
 # Examples
 ```jldoctest
 julia> 'a' < 'b'
@@ -344,7 +351,7 @@ julia> ifelse(1 > 2, 1, 2)
 2
 ```
 """
-ifelse(c::Bool, x, y) = select_value(c, x, y)
+ifelse
 
 """
     cmp(x,y)
@@ -362,7 +369,6 @@ julia> cmp(2, 1)
 
 julia> cmp(2+im, 3-im)
 ERROR: MethodError: no method matching isless(::Complex{Int64}, ::Complex{Int64})
-Stacktrace:
 [...]
 ```
 """
@@ -419,6 +425,58 @@ julia> minmax('c','b')
 ```
 """
 minmax(x,y) = isless(y, x) ? (y, x) : (x, y)
+
+"""
+    extrema(itr) -> Tuple
+
+Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
+
+# Examples
+```jldoctest
+julia> extrema(2:10)
+(2, 10)
+
+julia> extrema([9,pi,4.5])
+(3.141592653589793, 9.0)
+```
+"""
+extrema(itr) = _extrema_itr(identity, itr)
+
+"""
+    extrema(f, itr) -> Tuple
+
+Compute both the minimum and maximum of `f` applied to each element in `itr` and return
+them as a 2-tuple. Only one pass is made over `itr`.
+
+!!! compat "Julia 1.2"
+    This method requires Julia 1.2 or later.
+
+# Examples
+```jldoctest
+julia> extrema(sin, 0:π)
+(0.0, 0.9092974268256817)
+```
+"""
+extrema(f, itr) = _extrema_itr(f, itr)
+
+function _extrema_itr(f, itr)
+    y = iterate(itr)
+    y === nothing && throw(ArgumentError("collection must be non-empty"))
+    (v, s) = y
+    vmin = vmax = f(v)
+    while true
+        y = iterate(itr, s)
+        y === nothing && break
+        (x, s) = y
+        fx = f(x)
+        vmax = max(fx, vmax)
+        vmin = min(fx, vmin)
+    end
+    return (vmin, vmax)
+end
+
+extrema(x::Real) = (x, x)
+extrema(f, x::Real) = (y = f(x); (y, y))
 
 ## definitions providing basic traits of arithmetic operators ##
 
@@ -481,17 +539,17 @@ julia> 3 \\ 6
 julia> inv(3) * 6
 2.0
 
-julia> A = [1 2; 3 4]; x = [5, 6];
+julia> A = [4 3; 2 1]; x = [5, 6];
 
 julia> A \\ x
 2-element Array{Float64,1}:
- -4.0
-  4.5
+  6.5
+ -7.0
 
 julia> inv(A) * x
 2-element Array{Float64,1}:
- -4.0
-  4.5
+  6.5
+ -7.0
 ```
 """
 \(x,y) = adjoint(adjoint(y)/adjoint(x))
@@ -733,8 +791,6 @@ See also: [`fld1`](@ref), [`mod1`](@ref).
 """
 fldmod1(x, y) = (fld1(x, y), mod1(x, y))
 
-conj(x) = x
-
 
 """
     widen(x)
@@ -742,6 +798,9 @@ conj(x) = x
 If `x` is a type, return a "larger" type, defined so that arithmetic operations
 `+` and `-` are guaranteed not to overflow nor lose precision for any combination
 of values that type `x` can hold.
+
+For fixed-size integer types less than 128 bits, `widen` will return a type with
+twice the number of bits.
 
 If `x` is a value, it is converted to `widen(typeof(x))`.
 
@@ -782,14 +841,11 @@ entered in the Julia REPL (and most editors, appropriately configured) by typing
 
 # Examples
 ```jldoctest
-julia> map(uppercase∘hex, 250:255)
-6-element Array{String,1}:
- "FA"
- "FB"
- "FC"
- "FD"
- "FE"
- "FF"
+julia> map(uppercase∘first, ["apple", "banana", "carrot"])
+3-element Array{Char,1}:
+ 'A'
+ 'B'
+ 'C'
 ```
 """
 ∘(f, g) = (x...)->f(g(x...))
@@ -806,52 +862,70 @@ function which computes the boolean negation of `f`.
 julia> str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 
-julia> filter(isalpha, str)
+julia> filter(isletter, str)
 "εδxyδfxfyε"
 
-julia> filter(!isalpha, str)
+julia> filter(!isletter, str)
 "∀  > 0, ∃  > 0: |-| <  ⇒ |()-()| < "
 ```
 """
 !(f::Function) = (x...)->!f(x...)
 
-struct EqualTo{T} <: Function
+"""
+    Fix1(f, x)
+
+A type representing a partially-applied version of the two-argument function
+`f`, with the first argument fixed to the value "x". In other words,
+`Fix1(f, x)` behaves similarly to `y->f(x, y)`.
+"""
+struct Fix1{F,T} <: Function
+    f::F
     x::T
 
-    EqualTo(x::T) where {T} = new{T}(x)
+    Fix1(f::F, x::T) where {F,T} = new{F,T}(f, x)
+    Fix1(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
 end
 
-(f::EqualTo)(y) = isequal(f.x, y)
+(f::Fix1)(y) = f.f(f.x, y)
 
 """
-    equalto(x)
+    Fix2(f, x)
 
-Create a function that compares its argument to `x` using [`isequal`](@ref); i.e. returns
-`y->isequal(x,y)`.
-
-The returned function is of type `Base.EqualTo`. This allows dispatching to
-specialized methods by using e.g. `f::Base.EqualTo` in a method signature.
+A type representing a partially-applied version of the two-argument function
+`f`, with the second argument fixed to the value "x". In other words,
+`Fix2(f, x)` behaves similarly to `y->f(y, x)`.
 """
-const equalto = EqualTo
-
-struct OccursIn{T} <: Function
+struct Fix2{F,T} <: Function
+    f::F
     x::T
 
-    OccursIn(x::T) where {T} = new{T}(x)
+    Fix2(f::F, x::T) where {F,T} = new{F,T}(f, x)
+    Fix2(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
 end
 
-(f::OccursIn)(y) = y in f.x
+(f::Fix2)(y) = f.f(y, f.x)
 
 """
-    occursin(x)
+    isequal(x)
 
-Create a function that checks whether its argument is [`in`](@ref) `x`; i.e. returns
-`y -> y in x`.
+Create a function that compares its argument to `x` using [`isequal`](@ref), i.e.
+a function equivalent to `y -> isequal(y, x)`.
 
-The returned function is of type `Base.OccursIn`. This allows dispatching to
-specialized methods by using e.g. `f::Base.OccursIn` in a method signature.
+The returned function is of type `Base.Fix2{typeof(isequal)}`, which can be
+used to implement specialized methods.
 """
-const occursin = OccursIn
+isequal(x) = Fix2(isequal, x)
+
+"""
+    ==(x)
+
+Create a function that compares its argument to `x` using [`==`](@ref), i.e.
+a function equivalent to `y -> y == x`.
+
+The returned function is of type `Base.Fix2{typeof(==)}`, which can be
+used to implement specialized methods.
+"""
+==(x) = Fix2(==, x)
 
 """
     splat(f)
@@ -875,3 +949,96 @@ julia> map(splat(+), zip(1:3,4:6))
 ```
 """
 splat(f) = args->f(args...)
+
+## in & contains
+
+"""
+    in(x)
+
+Create a function that checks whether its argument is [`in`](@ref) `x`, i.e.
+a function equivalent to `y -> y in x`.
+
+The returned function is of type `Base.Fix2{typeof(in)}`, which can be
+used to implement specialized methods.
+"""
+in(x) = Fix2(in, x)
+
+function in(x, itr)
+    anymissing = false
+    for y in itr
+        v = (y == x)
+        if ismissing(v)
+            anymissing = true
+        elseif v
+            return true
+        end
+    end
+    return anymissing ? missing : false
+end
+
+const ∈ = in
+∋(itr, x) = ∈(x, itr)
+∉(x, itr) = !∈(x, itr)
+∌(itr, x) = !∋(itr, x)
+
+"""
+    in(item, collection) -> Bool
+    ∈(item, collection) -> Bool
+    ∋(collection, item) -> Bool
+
+Determine whether an item is in the given collection, in the sense that it is
+[`==`](@ref) to one of the values generated by iterating over the collection.
+Returns a `Bool` value, except if `item` is [`missing`](@ref) or `collection`
+contains `missing` but not `item`, in which case `missing` is returned
+([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
+matching the behavior of [`any`](@ref) and [`==`](@ref)).
+
+Some collections follow a slightly different definition. For example,
+[`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements.
+[`Dict`](@ref)s look for `key=>value` pairs, and the key is compared using
+[`isequal`](@ref). To test for the presence of a key in a dictionary,
+use [`haskey`](@ref) or `k in keys(dict)`. For these collections, the result
+is always a `Bool` and never `missing`.
+
+# Examples
+```jldoctest
+julia> a = 1:3:20
+1:3:19
+
+julia> 4 in a
+true
+
+julia> 5 in a
+false
+
+julia> missing in [1, 2]
+missing
+
+julia> 1 in [2, missing]
+missing
+
+julia> 1 in [1, missing]
+true
+
+julia> missing in Set([1, 2])
+false
+```
+"""
+in, ∋
+
+"""
+    ∉(item, collection) -> Bool
+    ∌(collection, item) -> Bool
+
+Negation of `∈` and `∋`, i.e. checks that `item` is not in `collection`.
+
+# Examples
+```jldoctest
+julia> 1 ∉ 2:4
+true
+
+julia> 1 ∉ 1:3
+false
+```
+"""
+∉, ∌

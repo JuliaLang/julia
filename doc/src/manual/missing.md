@@ -35,7 +35,7 @@ which propagate them (like standard operators). Packages should consider
 whether it makes sense to propagate missing values when defining new functions,
 and define methods appropriately if that is the case. Passing a `missing` value
 to a function for which no method accepting arguments of type `Missing` is defined
-throws a `MethodError`, just like for any other type.
+throws a [`MethodError`](@ref), just like for any other type.
 
 ## Equality and Comparison Operators
 
@@ -191,7 +191,7 @@ Control flow operators including [`if`](@ref), [`while`](@ref) and the
 [ternary operator](@ref man-conditional-evaluation) `x ? y : z`
 do not allow for missing values. This is because of the uncertainty about whether
 the actual value would be `true` or `false` if we could observe it,
-which implies that we do not know how the program should behave. A `TypeError`
+which implies that we do not know how the program should behave. A [`TypeError`](@ref)
 is thrown as soon as a `missing` value is encountered in this context
 ```jldoctest
 julia> if missing
@@ -276,10 +276,6 @@ julia> y = Union{Missing, String}[missing, "b"]
 
 julia> convert(Array{String}, y)
 ERROR: MethodError: Cannot `convert` an object of type Missing to an object of type String
-This may have arisen from a call to the constructor String(...),
-since type constructors fall back to convert methods.
-Stacktrace:
-[...
 ```
 ## Skipping Missing Values
 
@@ -298,7 +294,7 @@ julia> sum(skipmissing([1, missing]))
 
 This convenience function returns an iterator which filters out `missing` values
 efficiently. It can therefore be used with any function which supports iterators
-```jldoctest
+```jldoctest; setup = :(using Statistics)
 julia> maximum(skipmissing([3, missing, 2, 1]))
 3
 

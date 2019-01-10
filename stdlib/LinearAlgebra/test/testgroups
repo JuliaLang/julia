@@ -20,3 +20,6 @@ lq
 hessenberg
 blas
 adjtrans
+pinv
+givens
+structuredbroadcast

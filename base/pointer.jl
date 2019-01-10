@@ -143,14 +143,15 @@ function pointer_from_objref(@nospecialize(x))
     ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
 end
 
-eltype(::Type{Ptr{T}}) where {T} = T
-
 ## limited pointer arithmetic & comparison ##
 
-==(x::Ptr, y::Ptr) = UInt(x) == UInt(y)
-isless(x::Ptr, y::Ptr) = isless(UInt(x), UInt(y))
--(x::Ptr, y::Ptr) = UInt(x) - UInt(y)
+isequal(x::Ptr, y::Ptr) = (x === y)
+isless(x::Ptr{T}, y::Ptr{T}) where {T} = x < y
 
-+(x::Ptr, y::Integer) = oftype(x, Intrinsics.add_ptr(UInt(x), (y % UInt) % UInt))
--(x::Ptr, y::Integer) = oftype(x, Intrinsics.sub_ptr(UInt(x), (y % UInt) % UInt))
+==(x::Ptr, y::Ptr) = UInt(x) == UInt(y)
+<(x::Ptr,  y::Ptr) = UInt(x) < UInt(y)
+-(x::Ptr,  y::Ptr) = UInt(x) - UInt(y)
+
++(x::Ptr, y::Integer) = oftype(x, add_ptr(UInt(x), (y % UInt) % UInt))
+-(x::Ptr, y::Integer) = oftype(x, sub_ptr(UInt(x), (y % UInt) % UInt))
 +(x::Integer, y::Ptr) = y + x

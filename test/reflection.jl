@@ -27,8 +27,8 @@ function test_code_reflection(freflect, f, types, tester)
 end
 
 function test_code_reflections(tester, freflect)
-    test_code_reflection(freflect, contains,
-                         Tuple{AbstractString, Regex}, tester) # abstract type
+    test_code_reflection(freflect, occursin,
+                         Tuple{Regex, AbstractString}, tester) # abstract type
     test_code_reflection(freflect, +, Tuple{Int, Int}, tester) # leaftype signature
     test_code_reflection(freflect, +,
                          Tuple{Array{Float32}, Array{Float32}}, tester) # incomplete types
@@ -42,17 +42,21 @@ test_code_reflections(test_ast_reflection, code_typed)
 
 end # module ReflectionTest
 
-# isbits
+# isbits, isbitstype
 
-@test !isbits(Array{Int})
-@test isbits(Float32)
-@test isbits(Int)
-@test !isbits(AbstractString)
-@test isbits(Tuple{Int, Vararg{Int, 2}})
-@test !isbits(Tuple{Int, Vararg{Int}})
-@test !isbits(Tuple{Integer, Vararg{Int, 2}})
-@test isbits(Tuple{Int, Vararg{Any, 0}})
-@test isbits(Tuple{Vararg{Any, 0}})
+@test !isbitstype(Array{Int})
+@test isbitstype(Float32)
+@test isbitstype(Int)
+@test !isbitstype(AbstractString)
+@test isbitstype(Tuple{Int, Vararg{Int, 2}})
+@test !isbitstype(Tuple{Int, Vararg{Int}})
+@test !isbitstype(Tuple{Integer, Vararg{Int, 2}})
+@test isbitstype(Tuple{Int, Vararg{Any, 0}})
+@test isbitstype(Tuple{Vararg{Any, 0}})
+@test isbits(1)
+@test isbits((1,2))
+@test !isbits([1])
+@test isbits(nothing)
 
 # issue #16670
 @test isconcretetype(Int)
@@ -205,8 +209,6 @@ end
 # PR 13825
 let ex = :(a + b)
     @test string(ex) == "a + b"
-    ex.typ = Integer
-    @test string(ex) == "(a + b)::Integer"
 end
 foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} = nothing
 @test startswith(string(first(methods(foo13825))),
@@ -221,6 +223,7 @@ tlayout = TLayout(5,7,11)
 @test fieldnames(TLayout) == (:x, :y, :z) == Base.propertynames(tlayout)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
     [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
+@test fieldnames(Complex) === (:re, :im)
 @test_throws BoundsError fieldtype(TLayout, 0)
 @test_throws ArgumentError fieldname(TLayout, 0)
 @test_throws BoundsError fieldoffset(TLayout, 0)
@@ -231,16 +234,46 @@ tlayout = TLayout(5,7,11)
 @test fieldtype(Tuple{Vararg{Int8}}, 1) === Int8
 @test fieldtype(Tuple{Vararg{Int8}}, 10) === Int8
 @test_throws BoundsError fieldtype(Tuple{Vararg{Int8}}, 0)
+# issue #30505
+@test fieldtype(Union{Tuple{Char},Tuple{Char,Char}},2) === Char
+@test_throws BoundsError fieldtype(Union{Tuple{Char},Tuple{Char,Char}},3)
 
 @test fieldnames(NTuple{3, Int}) == ntuple(i -> fieldname(NTuple{3, Int}, i), 3) == (1, 2, 3)
+@test_throws ArgumentError fieldnames(Union{})
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 4)
+
+@test fieldnames(NamedTuple{(:z,:a)}) === (:z,:a)
+@test fieldname(NamedTuple{(:z,:a)}, 1) === :z
+@test fieldname(NamedTuple{(:z,:a)}, 2) === :a
+@test_throws ArgumentError fieldname(NamedTuple{(:z,:a)}, 3)
+@test_throws ArgumentError fieldnames(NamedTuple)
+@test_throws ArgumentError fieldnames(NamedTuple{T,Tuple{Int,Int}} where T)
+@test_throws ArgumentError fieldnames(Real)
+@test_throws ArgumentError fieldnames(AbstractArray)
+
+@test fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 1) === Int
+@test fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 2) === String
+@test_throws BoundsError fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 3)
+
+@test fieldtype(NamedTuple, 42) === Any
+@test_throws BoundsError fieldtype(NamedTuple, 0)
+@test_throws BoundsError fieldtype(NamedTuple, -1)
+
+@test fieldtype(NamedTuple{(:a,:b)}, 1) === Any
+@test fieldtype(NamedTuple{(:a,:b)}, 2) === Any
+@test fieldtype((NamedTuple{(:a,:b),T} where T<:Tuple{Vararg{Integer}}), 2) === Integer
+@test_throws BoundsError fieldtype(NamedTuple{(:a,:b)}, 3)
+
+@test fieldtypes(NamedTuple{(:a,:b)}) == (Any, Any)
+@test fieldtypes((NamedTuple{T,Tuple{Int,String}} where T)) === (Int, String)
+@test fieldtypes(TLayout) === (Int8, Int16, Int32)
 
 import Base: datatype_alignment, return_types
 @test datatype_alignment(UInt16) == 2
 @test datatype_alignment(TLayout) == 4
 let rts = return_types(TLayout)
-    @test length(rts) >= 3 # general constructor, specific constructor, and call-to-convert adapter(s)
+    @test length(rts) == 2 # general constructor and specific constructor
     @test all(rts .== TLayout)
 end
 
@@ -274,9 +307,12 @@ for (f, t) in Any[(definitely_not_in_sysimg, Tuple{}),
     world = typemax(UInt)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, tt, env, world)
     params = Base.CodegenParams()
-    llvmf = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
-    @test llvmf != C_NULL
-    @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf) != C_NULL
+    llvmf1 = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
+    @test llvmf1 != C_NULL
+    llvmf2 = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, false, params)
+    @test llvmf2 != C_NULL
+    @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf1) != C_NULL
+    @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf2) != C_NULL
 end
 
 # issue #15714
@@ -331,20 +367,18 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     for str in (sprint(code_warntype, f, types),
                 repr("text/plain", src))
         for var in must_used_vars
-            @test contains(str, string(var))
+            @test occursin(string(var), str)
         end
-        @test !contains(str, "Any")
-        @test !contains(str, "ANY")
         # Check that we are not printing the bare slot numbers
         for i in 1:length(src.slotnames)
             name = src.slotnames[i]
             if name in dupnames
-                if name in must_used_vars && contains(str, Regex("_$i\\b"))
+                if name in must_used_vars && occursin(Regex("_$i\\b"), str)
                     must_used_checked[name] = true
                     global used_dup_var_tested15714 = true
                 end
             else
-                @test !contains(str, Regex("_$i\\b"))
+                @test !occursin(Regex("_$i\\b"), str)
                 if name in must_used_vars
                     global used_unique_var_tested15714 = true
                 end
@@ -363,7 +397,7 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     # Use the variable names that we know should be present in the optimized AST
     for i in 2:length(src.slotnames)
         name = src.slotnames[i]
-        if name in must_used_vars && contains(str, Regex("_$i\\b"))
+        if name in must_used_vars && occursin(Regex("_$i\\b"), str)
             must_used_checked[name] = true
         end
     end
@@ -374,8 +408,10 @@ end
 test_typed_ast_printing(f15714, Tuple{Vector{Float32}},
                         [:array_var15714])
 test_typed_ast_printing(g15714, Tuple{Vector{Float32}},
-                        [:array_var15714, :index_var15714])
-@test used_dup_var_tested15714
+                        [:array_var15714])
+#This test doesn't work with the new optimizer because we drop slotnames
+#We may want to test it against debug info eventually
+#@test used_dup_var_tested15715
 @test used_unique_var_tested15714
 
 let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
@@ -393,7 +429,9 @@ end
 tracefoo(x, y) = x+y
 didtrace = false
 tracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Core.MethodInstance); global didtrace = true; nothing)
-ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), cfunction(tracer, Cvoid, Tuple{Ptr{Cvoid}}))
+let ctracer = @cfunction(tracer, Cvoid, (Ptr{Cvoid},))
+    ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), ctracer)
+end
 meth = which(tracefoo,Tuple{Any,Any})
 ccall(:jl_trace_method, Cvoid, (Any,), meth)
 @test tracefoo(1, 2) == 3
@@ -406,7 +444,9 @@ ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), C_NULL)
 
 # Method Tracing test
 methtracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)
-ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), cfunction(methtracer, Cvoid, Tuple{Ptr{Cvoid}}))
+let cmethtracer = @cfunction(methtracer, Cvoid, (Ptr{Cvoid},))
+    ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), cmethtracer)
+end
 tracefoo2(x, y) = x*y
 @test didtrace
 didtrace = false
@@ -484,7 +524,7 @@ else
     @test h16850 === nothing
 end
 
-# PR #18888: code_typed shouldn't cache if not optimizing
+# PR #18888: code_typed shouldn't cache, return_types should
 let
     world = typemax(UInt)
     f18888() = return nothing
@@ -498,6 +538,10 @@ let
     @test !isdefined(code, :inferred)
 
     code_typed(f18888, Tuple{}; optimize=true)
+    code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
+    @test !isdefined(code, :inferred)
+
+    Base.return_types(f18888, Tuple{})
     code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
     @test isdefined(code, :inferred)
 end
@@ -571,21 +615,22 @@ end
 @test_throws ErrorException sizeof(Vector{Int})
 @test_throws ErrorException sizeof(Symbol)
 @test_throws ErrorException sizeof(Core.SimpleVector)
+@test_throws ErrorException sizeof(Union{})
 
 @test nfields((1,2)) == 2
 @test nfields(()) == 0
 @test nfields(nothing) == fieldcount(Nothing) == 0
 @test nfields(1) == 0
-@test fieldcount(Union{}) == 0
+@test_throws ArgumentError fieldcount(Union{})
 @test fieldcount(Tuple{Any,Any,T} where T) == 3
 @test fieldcount(Complex) == fieldcount(ComplexF32) == 2
 @test fieldcount(Union{ComplexF32,ComplexF64}) == 2
 @test fieldcount(Int) == 0
-@test_throws(ErrorException("type does not have a definite number of fields"),
+@test_throws(ArgumentError("type does not have a definite number of fields"),
              fieldcount(Union{Complex,Pair}))
-@test_throws ErrorException fieldcount(Real)
-@test_throws ErrorException fieldcount(AbstractArray)
-@test_throws ErrorException fieldcount(Tuple{Any,Vararg{Any}})
+@test_throws ArgumentError fieldcount(Real)
+@test_throws ArgumentError fieldcount(AbstractArray)
+@test_throws ArgumentError fieldcount(Tuple{Any,Vararg{Any}})
 
 # PR #22979
 
@@ -737,4 +782,70 @@ typeparam(::Type{T}, a::AbstractArray{T}) where T = 2
 @test typeparam(Float64, rand(2))  == 1
 @test typeparam(Int, rand(Int, 2)) == 2
 
+# prior ambiguities (issue #28899)
+uambig(::Union{Int,Nothing}) = 1
+uambig(::Union{Float64,Nothing}) = 2
+@test uambig(1) == 1
+@test uambig(1.0) == 2
+@test_throws MethodError uambig(nothing)
+m = which(uambig, Tuple{Int})
+Base.delete_method(m)
+@test_throws MethodError uambig(1)
+@test uambig(1.0) == 2
+@test uambig(nothing) == 2
+
 end
+
+# issue #26267
+module M26267
+import Test
+foo(x) = x
+end
+@test !(:Test in names(M26267, all=true, imported=false))
+@test :Test in names(M26267, all=true, imported=true)
+@test :Test in names(M26267, all=false, imported=true)
+
+# issue #20872
+f20872(::Val{N}, ::Val{N}) where {N} = true
+f20872(::Val, ::Val) = false
+@test which(f20872, Tuple{Val{N},Val{N}} where N).sig == Tuple{typeof(f20872), Val{N}, Val{N}} where N
+@test which(f20872, Tuple{Val,Val}).sig == Tuple{typeof(f20872), Val, Val}
+@test which(f20872, Tuple{Val,Val{N}} where N).sig == Tuple{typeof(f20872), Val, Val}
+@test_throws ErrorException which(f20872, Tuple{Any,Val{N}} where N)
+
+module M29962 end
+# make sure checking if a binding is deprecated does not resolve it
+@test !Base.isdeprecated(M29962, :sin) && !Base.isbindingresolved(M29962, :sin)
+
+# @locals
+using Base: @locals
+let
+    local x, y
+    global z
+    @test isempty(keys(@locals))
+    x = 1
+    @test @locals() == Dict{Symbol,Any}(:x=>1)
+    y = ""
+    @test @locals() == Dict{Symbol,Any}(:x=>1,:y=>"")
+    for i = 8:8
+        @test @locals() == Dict{Symbol,Any}(:x=>1,:y=>"",:i=>8)
+    end
+    for i = 42:42
+        local x
+        @test @locals() == Dict{Symbol,Any}(:y=>"",:i=>42)
+    end
+    @test @locals() == Dict{Symbol,Any}(:x=>1,:y=>"")
+    x = (y,)
+    @test @locals() == Dict{Symbol,Any}(:x=>("",),:y=>"")
+end
+
+function _test_at_locals1(::Any, ::Any)
+    x = 1
+    @test @locals() == Dict{Symbol,Any}(:x=>1)
+end
+_test_at_locals1(1,1)
+function _test_at_locals2(a::Any, ::Any)
+    x = 2
+    @test @locals() == Dict{Symbol,Any}(:x=>2,:a=>a)
+end
+_test_at_locals2(1,1)

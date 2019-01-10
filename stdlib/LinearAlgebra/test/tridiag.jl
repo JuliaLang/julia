@@ -22,9 +22,9 @@ end
 
 @testset for elty in (Float32, Float64, ComplexF32, ComplexF64, Int)
     n = 12 #Size of matrix problem to test
-    srand(123)
+    Random.seed!(123)
     if elty == Int
-        srand(61516384)
+        Random.seed!(61516384)
         d = rand(1:100, n)
         dl = -rand(0:10, n-1)
         du = -rand(0:10, n-1)
@@ -72,11 +72,31 @@ end
             @test TT.d  === x
             @test TT.du === y
         end
-        # enable when deprecations for 0.7 are dropped
-        # @test_throws MethodError SymTridiagonal(dv, GenericArray(ev))
-        # @test_throws MethodError SymTridiagonal(GenericArray(dv), ev)
-        # @test_throws MethodError Tridiagonal(GenericArray(ev), dv, GenericArray(ev))
-        # @test_throws MethodError Tridiagonal(ev, GenericArray(dv), ev)
+        ST = SymTridiagonal{elty}([1,2,3,4], [1,2,3])
+        @test eltype(ST) == elty
+        TT = Tridiagonal{elty}([1,2,3], [1,2,3,4], [1,2,3])
+        @test eltype(TT) == elty
+        ST = SymTridiagonal{elty,Vector{elty}}(d, GenericArray(dl))
+        @test isa(ST, SymTridiagonal{elty,Vector{elty}})
+        TT = Tridiagonal{elty,Vector{elty}}(GenericArray(dl), d, GenericArray(dl))
+        @test isa(TT, Tridiagonal{elty,Vector{elty}})
+        @test_throws MethodError SymTridiagonal(d, GenericArray(dl))
+        @test_throws MethodError SymTridiagonal(GenericArray(d), dl)
+        @test_throws MethodError Tridiagonal(GenericArray(dl), d, GenericArray(dl))
+        @test_throws MethodError Tridiagonal(dl, GenericArray(d), dl)
+        @test_throws MethodError SymTridiagonal{elty}(d, GenericArray(dl))
+        @test_throws MethodError Tridiagonal{elty}(GenericArray(dl), d,GenericArray(dl))
+        STI = SymTridiagonal([1,2,3,4], [1,2,3])
+        TTI = Tridiagonal([1,2,3], [1,2,3,4], [1,2,3])
+        TTI2 = Tridiagonal([1,2,3], [1,2,3,4], [1,2,3], [1,2])
+        @test SymTridiagonal(STI) === STI
+        @test Tridiagonal(TTI)    === TTI
+        @test Tridiagonal(TTI2)   === TTI2
+        @test isa(SymTridiagonal{elty}(STI), SymTridiagonal{elty})
+        @test isa(Tridiagonal{elty}(TTI), Tridiagonal{elty})
+        TTI2y = Tridiagonal{elty}(TTI2)
+        @test isa(TTI2y, Tridiagonal{elty})
+        @test TTI2y.du2 == convert(Vector{elty}, [1,2])
     end
     @testset "interconversion of Tridiagonal and SymTridiagonal" begin
         @test Tridiagonal(dl, d, dl) == SymTridiagonal(d, dl)
@@ -120,6 +140,32 @@ end
         @test !istriu(SymTridiagonal(d,dl))
         @test istriu(Tridiagonal(zerosdl,d,du))
         @test istril(Tridiagonal(dl,d,zerosdu))
+    end
+
+    @testset "iszero and isone" begin
+        Tzero = Tridiagonal(zeros(elty, 9), zeros(elty, 10), zeros(elty, 9))
+        Tone = Tridiagonal(zeros(elty, 9), ones(elty, 10), zeros(elty, 9))
+        Tmix = Tridiagonal(zeros(elty, 9), zeros(elty, 10), zeros(elty, 9))
+        Tmix[end, end] = one(elty)
+
+        Szero = SymTridiagonal(zeros(elty, 10), zeros(elty, 9))
+        Sone = SymTridiagonal(ones(elty, 10), zeros(elty, 9))
+        Smix = SymTridiagonal(zeros(elty, 10), zeros(elty, 9))
+        Smix[end, end] = one(elty)
+
+        @test iszero(Tzero)
+        @test !isone(Tzero)
+        @test !iszero(Tone)
+        @test isone(Tone)
+        @test !iszero(Tmix)
+        @test !isone(Tmix)
+
+        @test iszero(Szero)
+        @test !isone(Szero)
+        @test !iszero(Sone)
+        @test isone(Sone)
+        @test !iszero(Smix)
+        @test !isone(Smix)
     end
 
     @testset for mat_type in (Tridiagonal, SymTridiagonal)
@@ -221,7 +267,7 @@ end
                 @test A*LowerTriangular(Matrix(1.0I, n, n)) ≈ fA
             end
             @testset "mul! errors" begin
-                Cnn, Cnm, Cmn = Matrix{elty}.(uninitialized, ((n,n), (n,n+1), (n+1,n)))
+                Cnn, Cnm, Cmn = Matrix{elty}.(undef, ((n,n), (n,n+1), (n+1,n)))
                 @test_throws DimensionMismatch LinearAlgebra.mul!(Cnn,A,Cnm)
                 @test_throws DimensionMismatch LinearAlgebra.mul!(Cnn,A,Cmn)
                 @test_throws DimensionMismatch LinearAlgebra.mul!(Cnn,B,Cmn)
@@ -243,7 +289,7 @@ end
                         w, iblock, isplit = LAPACK.stebz!('V', 'B', -infinity, infinity, 0, 0, zero, b, a)
                         evecs = LAPACK.stein!(b, a, w)
 
-                        (e, v) = eig(SymTridiagonal(b, a))
+                        (e, v) = eigen(SymTridiagonal(b, a))
                         @test e ≈ w
                         test_approx_eq_vecs(v, evecs)
                     end
@@ -253,23 +299,23 @@ end
                         test_approx_eq_vecs(v, evecs)
                     end
                     @testset "stegr! call with index range" begin
-                        F = eigfact(SymTridiagonal(b, a),1:2)
-                        fF = eigfact(Symmetric(Array(SymTridiagonal(b, a))),1:2)
+                        F = eigen(SymTridiagonal(b, a),1:2)
+                        fF = eigen(Symmetric(Array(SymTridiagonal(b, a))),1:2)
                         test_approx_eq_modphase(F.vectors, fF.vectors)
                         @test F.values ≈ fF.values
                     end
                     @testset "stegr! call with value range" begin
-                        F = eigfact(SymTridiagonal(b, a),0.0,1.0)
-                        fF = eigfact(Symmetric(Array(SymTridiagonal(b, a))),0.0,1.0)
+                        F = eigen(SymTridiagonal(b, a),0.0,1.0)
+                        fF = eigen(Symmetric(Array(SymTridiagonal(b, a))),0.0,1.0)
                         test_approx_eq_modphase(F.vectors, fF.vectors)
                         @test F.values ≈ fF.values
                     end
                     @testset "eigenvalues/eigenvectors of symmetric tridiagonal" begin
                         if elty === Float32 || elty === Float64
-                            DT, VT = @inferred eig(A)
-                            @inferred eig(A, 2:4)
-                            @inferred eig(A, 1.0, 2.0)
-                            D, Vecs = eig(fA)
+                            DT, VT = @inferred eigen(A)
+                            @inferred eigen(A, 2:4)
+                            @inferred eigen(A, 1.0, 2.0)
+                            D, Vecs = eigen(fA)
                             @test DT ≈ D
                             @test abs.(VT'Vecs) ≈ Matrix(elty(1)I, n, n)
                             test_approx_eq_modphase(eigvecs(A), eigvecs(fA))
@@ -291,8 +337,12 @@ end
                     @test_throws DimensionMismatch Tldlt\rand(elty,n+1)
                     @test size(Tldlt) == size(Ts)
                     if elty <: AbstractFloat
+                        @test LinearAlgebra.LDLt{elty,SymTridiagonal{elty,Vector{elty}}}(Tldlt) === Tldlt
+                        @test LinearAlgebra.LDLt{elty}(Tldlt) === Tldlt
+                        @test typeof(convert(LinearAlgebra.LDLt{Float32,Matrix{Float32}},Tldlt)) ==
+                            LinearAlgebra.LDLt{Float32,Matrix{Float32}}
                         @test typeof(convert(LinearAlgebra.LDLt{Float32},Tldlt)) ==
-                            LinearAlgebra.LDLt{Float32,SymTridiagonal{elty,Vector{elty}}}
+                            LinearAlgebra.LDLt{Float32,SymTridiagonal{Float32,Vector{Float32}}}
                     end
                     for vv in (copy(v), view(v, 1:n))
                         invFsv = Fs\vv
@@ -351,6 +401,40 @@ end
 @testset "constructors with range and other abstract vectors" begin
     @test SymTridiagonal(1:3, 1:2) == [1 1 0; 1 2 2; 0 2 3]
     @test Tridiagonal(4:5, 1:3, 1:2) == [1 1 0; 4 2 2; 0 5 3]
+end
+
+@testset "Issue #26994 (and the empty case)" begin
+    T = SymTridiagonal([1.0],[3.0])
+    x = ones(1)
+    @test T*x == ones(1)
+    @test SymTridiagonal(ones(0), ones(0)) * ones(0, 2) == ones(0, 2)
+end
+
+@testset "issue #29644" begin
+    F = lu(Tridiagonal(sparse(1.0I, 3, 3)))
+    @test F.L == Matrix(I, 3, 3)
+    @test startswith(sprint(show, MIME("text/plain"), F),
+          "LinearAlgebra.LU{Float64,LinearAlgebra.Tridiagonal{Float64,SparseArrays.SparseVector")
+end
+
+@testset "Issue 29630" begin
+    function central_difference_discretization(N; dfunc = x -> 12x^2 - 2N^2,
+                                               dufunc = x -> N^2 + 4N*x,
+                                               dlfunc = x -> N^2 - 4N*x,
+                                               bfunc = x -> 114ℯ^-x * (1 + 3x),
+                                               b0 = 0, bf = 57/ℯ,
+                                               x0 = 0, xf = 1)
+        h = 1/N
+        d, du, dl, b = map(dfunc, (x0+h):h:(xf-h)), map(dufunc, (x0+h):h:(xf-2h)),
+                       map(dlfunc, (x0+2h):h:(xf-h)), map(bfunc, (x0+h):h:(xf-h))
+        b[1] -= dlfunc(x0)*b0     # subtract the boundary term
+        b[end] -= dufunc(xf)*bf   # subtract the boundary term
+        Tridiagonal(dl, d, du), b
+    end
+
+    A90, b90 = central_difference_discretization(90)
+
+    @test A90\b90 ≈ inv(A90)*b90
 end
 
 end # module TestTridiagonal

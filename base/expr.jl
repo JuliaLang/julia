@@ -32,15 +32,47 @@ end
 
 ## expressions ##
 
-copy(e::Expr) = (n = Expr(e.head);
-                 n.args = copy_exprargs(e.args);
-                 n.typ = e.typ;
-                 n)
+function copy(e::Expr)
+    n = Expr(e.head)
+    n.args = copy_exprargs(e.args)
+    return n
+end
 
 # copy parts of an AST that the compiler mutates
-copy_exprs(x::Expr) = copy(x)
 copy_exprs(@nospecialize(x)) = x
-copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(a) for a in x]
+copy_exprs(x::Expr) = copy(x)
+function copy_exprs(x::PhiNode)
+    new_values = Vector{Any}(undef, length(x.values))
+    for i = 1:length(x.values)
+        isassigned(x.values, i) || continue
+        new_values[i] = copy_exprs(x.values[i])
+    end
+    return PhiNode(copy(x.edges), new_values)
+end
+function copy_exprs(x::PhiCNode)
+    new_values = Vector{Any}(undef, length(x.values))
+    for i = 1:length(x.values)
+        isassigned(x.values, i) || continue
+        new_values[i] = copy_exprs(x.values[i])
+    end
+    return PhiCNode(new_values)
+end
+copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(x[i]) for i in 1:length(x)]
+
+# create copies of the CodeInfo definition, and any mutable fields
+function copy(c::CodeInfo)
+    cnew = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), c)
+    cnew.code = copy_exprargs(cnew.code)
+    cnew.slotnames = copy(cnew.slotnames)
+    cnew.slotflags = copy(cnew.slotflags)
+    cnew.codelocs  = copy(cnew.codelocs)
+    cnew.linetable = copy(cnew.linetable)
+    cnew.ssaflags = copy(cnew.ssaflags)
+    ssavaluetypes = cnew.ssavaluetypes
+    ssavaluetypes isa Vector{Any} && (cnew.ssavaluetypes = copy(ssavaluetypes))
+    return cnew
+end
+
 
 ==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
 ==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
@@ -133,11 +165,9 @@ end
 ## misc syntax ##
 
 """
-    eval([m::Module], expr::Expr)
+    Core.eval(m::Module, expr)
 
-Evaluate an expression in the given module and return the result. Every `Module` (except
-those defined with `baremodule`) has its own 1-argument definition of `eval`, which
-evaluates expressions in that module.
+Evaluate an expression in the given module and return the result.
 """
 Core.eval
 
@@ -184,6 +214,20 @@ macro noinline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)
 end
 
+"""
+    @pure ex
+    @pure(ex)
+
+`@pure` gives the compiler a hint for the definition of a pure function,
+helping for type inference.
+
+A pure function can only depend on immutable information.
+This also means a `@pure` function cannot use any global mutable state, including
+generic functions. Calls to generic functions depend on method tables which are
+mutable global state.
+Use with caution, incorrect `@pure` annotation of a function may introduce
+hard to identify bugs. Double check for calls to generic functions.
+"""
 macro pure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
 end
@@ -314,7 +358,7 @@ end
 
 remove_linenums!(ex) = ex
 function remove_linenums!(ex::Expr)
-    if ex.head === :body || ex.head === :block || ex.head === :quote
+    if ex.head === :block || ex.head === :quote
         # remove line number expressions from metadata (not argument literal or inert) position
         filter!(ex.args) do x
             isa(x, Expr) && x.head === :line && return false
@@ -323,15 +367,49 @@ function remove_linenums!(ex::Expr)
         end
     end
     for subex in ex.args
-        remove_linenums!(subex)
+        subex isa Expr && remove_linenums!(subex)
     end
     return ex
+end
+function remove_linenums!(src::CodeInfo)
+    src.codelocs .= 0
+    length(src.linetable) > 1 && resize!(src.linetable, 1)
+    return src
 end
 
 macro generated()
     return Expr(:generated)
 end
 
+"""
+    @generated f
+    @generated(f)
+`@generated` is used to annotate a function which will be generated.
+In the body of the generated function, only types of arguments can be read
+(not the values). The function returns a quoted expression evaluated when the
+function is called. The `@generated` macro should not be used on functions mutating
+the global scope or depending on mutable elements.
+
+See [Metaprogramming](@ref) for further details.
+
+## Example:
+```julia
+julia> @generated function bar(x)
+           if x <: Integer
+               return :(x ^ 2)
+           else
+               return :(x)
+           end
+       end
+bar (generic function with 1 method)
+
+julia> bar(4)
+16
+
+julia> bar("baz")
+"baz"
+```
+"""
 macro generated(f)
     if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
         body = f.args[2]

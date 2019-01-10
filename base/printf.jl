@@ -10,10 +10,11 @@ const SmallNumber = Union{SmallFloatingPoint,Base.BitInteger}
 
 function gen(s::AbstractString)
     args = []
-    blk = Expr(:block, :(local neg, pt, len, exp, do_out, args))
+    blk = Expr(:block, :(local neg, pt, len, exp, do_out, args, buf))
+    gotbuf = false
     for x in parse(s)
         if isa(x,AbstractString)
-            push!(blk.args, :(write(out, $(length(x)==1 ? x[1] : x))))
+            push!(blk.args, :(print(out, $(length(x)==1 ? x[1] : x))))
         else
             c = lowercase(x[end])
             f = c=='f' ? gen_f :
@@ -24,6 +25,10 @@ function gen(s::AbstractString)
                 c=='s' ? gen_s :
                 c=='p' ? gen_p :
                          gen_d
+            if !gotbuf && c != 'c' && c != 's' && c != 'p'
+                push!(blk.args, :(buf = $Grisu.getbuf()))
+                gotbuf = true
+            end
             arg, ex = f(x...)
             push!(args, arg)
             push!(blk.args, ex)
@@ -146,19 +151,19 @@ function special_handler(flags::String, width::Int)
          $x < 0   ? $(pad("-Inf", width)) :
                     $(pad("$(pos)Inf", width))
     end
-    ex = :(isfinite($x) ? $blk : write(out, $abn))
+    ex = :(isfinite($x) ? $blk : print(out, $abn))
     x, ex, blk
 end
 
 function pad(m::Int, n, c::Char)
     if m <= 1
-        :($n > 0 && write(out,$c))
+        :($n > 0 && print(out,$c))
     else
         @gensym i
         quote
             $i = $n
             while $i > 0
-                write(out,$c)
+                print(out,$c)
                 $i -= 1
             end
         end
@@ -169,26 +174,58 @@ function dynamic_pad(m, val, c::Char)
     @gensym i
     quote
         if $m <= 1
-            $val > 0 && write(out,$c)
+            $val > 0 && print(out,$c)
         else
             $i = $val
             while $i > 0
-                write(out,$c)
+                print(out,$c)
                 $i -= 1
             end
         end
     end
 end
 
-function print_fixed(out, precision, pt, ndigits, trailingzeros=true)
-    pdigits = pointer(DIGITS)
+# returns the number of (ASCII) chars output by print_fixed
+function print_fixed_width(precision, pt, ndigits, trailingzeros=true)
+    count = 0
     if pt <= 0
         # 0.0dddd0
-        write(out, '0')
-        write(out, '.')
+        count += 2
+        precision += pt
+        if pt < 0
+            count -= pt
+        end
+        count += ndigits
+        precision -= ndigits
+    elseif ndigits <= pt
+        # dddd000.000000
+        count += ndigits
+        if ndigits < pt
+            count += pt - ndigits
+        end
+        count += trailingzeros
+    else # 0 < pt < ndigits
+        # dd.dd0000
+        ndigits -= pt
+        count += pt + 1 + ndigits
+        precision -= ndigits
+    end
+    if trailingzeros && precision > 0
+        count += precision
+    end
+    return count
+end
+
+# note: if print_fixed is changed, print_fixed_width should be changed accordingly
+function print_fixed(out, precision, pt, ndigits, trailingzeros=true, buf = Grisu.getbuf())
+    pdigits = pointer(buf)
+    if pt <= 0
+        # 0.0dddd0
+        print(out, '0')
+        print(out, '.')
         precision += pt
         while pt < 0
-            write(out, '0')
+            print(out, '0')
             pt += 1
         end
         unsafe_write(out, pdigits, ndigits)
@@ -197,30 +234,30 @@ function print_fixed(out, precision, pt, ndigits, trailingzeros=true)
         # dddd000.000000
         unsafe_write(out, pdigits, ndigits)
         while ndigits < pt
-            write(out, '0')
+            print(out, '0')
             ndigits += 1
         end
         if trailingzeros
-            write(out, '.')
+            print(out, '.')
         end
     else # 0 < pt < ndigits
         # dd.dd0000
         ndigits -= pt
         unsafe_write(out, pdigits, pt)
-        write(out, '.')
+        print(out, '.')
         unsafe_write(out, pdigits+pt, ndigits)
         precision -= ndigits
     end
     if trailingzeros
         while precision > 0
-            write(out, '0')
+            print(out, '0')
             precision -= 1
         end
     end
 end
 
 function print_exp_e(out, exp::Integer)
-    write(out, exp < 0 ? '-' : '+')
+    print(out, exp < 0 ? '-' : '+')
     exp = abs(exp)
     d = div(exp,100)
     if d > 0
@@ -228,15 +265,15 @@ function print_exp_e(out, exp::Integer)
             print(out, exp)
             return
         end
-        write(out, Char('0'+d))
+        print(out, Char('0'+d))
     end
     exp = rem(exp,100)
-    write(out, Char('0'+div(exp,10)))
-    write(out, Char('0'+rem(exp,10)))
+    print(out, Char('0'+div(exp,10)))
+    print(out, Char('0'+rem(exp,10)))
 end
 
 function print_exp_a(out, exp::Integer)
-    write(out, exp < 0 ? '-' : '+')
+    print(out, exp < 0 ? '-' : '+')
     exp = abs(exp)
     print(out, exp)
 end
@@ -270,7 +307,7 @@ function gen_d(flags::String, width::Int, precision::Int, c::Char)
     else
         fn = :decode_dec
     end
-    push!(blk.args, :((do_out, args) = $fn(out, $x, $flags, $width, $precision, $c)))
+    push!(blk.args, :((do_out, args) = $fn(out, $x, $flags, $width, $precision, $c, buf)))
     ifblk = Expr(:if, :do_out, Expr(:block))
     push!(blk.args, ifblk)
     blk = ifblk.args[2]
@@ -299,12 +336,12 @@ function gen_d(flags::String, width::Int, precision::Int, c::Char)
         push!(blk.args, pad(width-precision, padding, ' '))
     end
     # print sign
-    '+' in flags ? push!(blk.args, :(write(out, neg ? '-' : '+'))) :
-    ' ' in flags ? push!(blk.args, :(write(out, neg ? '-' : ' '))) :
-                   push!(blk.args, :(neg && write(out, '-')))
+    '+' in flags ? push!(blk.args, :(print(out, neg ? '-' : '+'))) :
+    ' ' in flags ? push!(blk.args, :(print(out, neg ? '-' : ' '))) :
+                   push!(blk.args, :(neg && print(out, '-')))
     # print prefix
     for ch in prefix
-        push!(blk.args, :(write(out, $ch)))
+        push!(blk.args, :(print(out, $ch)))
     end
     # print zero padding & leading zeros
     if space_pad && precision > 1
@@ -314,7 +351,7 @@ function gen_d(flags::String, width::Int, precision::Int, c::Char)
         push!(blk.args, pad(width-1, zeros, '0'))
     end
     # print integer
-    push!(blk.args, :(unsafe_write(out, pointer(DIGITS), pt)))
+    push!(blk.args, :(unsafe_write(out, pointer(buf), pt)))
     # print padding
     if padding !== nothing && '-' in flags
         push!(blk.args, pad(width-precision, padding, ' '))
@@ -337,7 +374,7 @@ function gen_f(flags::String, width::Int, precision::Int, c::Char)
     x, ex, blk = special_handler(flags,width)
     # interpret the number
     if precision < 0; precision = 6; end
-    push!(blk.args, :((do_out, args) = fix_dec(out, $x, $flags, $width, $precision, $c)))
+    push!(blk.args, :((do_out, args) = fix_dec(out, $x, $flags, $width, $precision, $c, buf)))
     ifblk = Expr(:if, :do_out, Expr(:block))
     push!(blk.args, ifblk)
     blk = ifblk.args[2]
@@ -362,20 +399,20 @@ function gen_f(flags::String, width::Int, precision::Int, c::Char)
         push!(blk.args, pad(width-1, padding, ' '))
     end
     # print sign
-    '+' in flags ? push!(blk.args, :(write(out, neg ? '-' : '+'))) :
-    ' ' in flags ? push!(blk.args, :(write(out, neg ? '-' : ' '))) :
-                   push!(blk.args, :(neg && write(out, '-')))
+    '+' in flags ? push!(blk.args, :(print(out, neg ? '-' : '+'))) :
+    ' ' in flags ? push!(blk.args, :(print(out, neg ? '-' : ' '))) :
+                   push!(blk.args, :(neg && print(out, '-')))
     # print zero padding
     if padding !== nothing && !('-' in flags) && '0' in flags
         push!(blk.args, pad(width-1, padding, '0'))
     end
     # print digits
     if precision > 0
-        push!(blk.args, :(print_fixed(out,$precision,pt,len)))
+        push!(blk.args, :(print_fixed(out,$precision,pt,len,true,buf)))
     else
-        push!(blk.args, :(unsafe_write(out, pointer(DIGITS), len)))
-        push!(blk.args, :(while pt >= (len+=1) write(out,'0') end))
-        '#' in flags && push!(blk.args, :(write(out, '.')))
+        push!(blk.args, :(unsafe_write(out, pointer(buf), len)))
+        push!(blk.args, :(while pt >= (len+=1) print(out,'0') end))
+        '#' in flags && push!(blk.args, :(print(out, '.')))
     end
     # print space padding
     if padding !== nothing && '-' in flags
@@ -406,14 +443,15 @@ function gen_e(flags::String, width::Int, precision::Int, c::Char, inside_g::Boo
     end
     # interpret the number
     if precision < 0; precision = 6; end
-    ndigits = min(precision+1,length(DIGITS)-1)
-    push!(blk.args, :((do_out, args) = ini_dec(out,$x,$ndigits, $flags, $width, $precision, $c)))
+    ndigits = min(precision+1,length(Grisu.getbuf())-1)
+    push!(blk.args, :((do_out, args) = ini_dec(out,$x,$ndigits, $flags, $width, $precision, $c, buf)))
+    push!(blk.args, :(digits = buf))
     ifblk = Expr(:if, :do_out, Expr(:block))
     push!(blk.args, ifblk)
     blk = ifblk.args[2]
     push!(blk.args, :((len, pt, neg) = args))
     push!(blk.args, :(exp = pt-1))
-    expmark = isupper(c) ? "E" : "e"
+    expmark = isuppercase(c) ? "E" : "e"
     if precision==0 && '#' in flags
         expmark = string(".",expmark)
     end
@@ -456,29 +494,29 @@ function gen_e(flags::String, width::Int, precision::Int, c::Char, inside_g::Boo
         push!(blk.args, pad(width, padding, ' '))
     end
     # print sign
-    '+' in flags ? push!(blk.args, :(write(out, neg ? '-' : '+'))) :
-    ' ' in flags ? push!(blk.args, :(write(out, neg ? '-' : ' '))) :
-                   push!(blk.args, :(neg && write(out, '-')))
+    '+' in flags ? push!(blk.args, :(print(out, neg ? '-' : '+'))) :
+    ' ' in flags ? push!(blk.args, :(print(out, neg ? '-' : ' '))) :
+                   push!(blk.args, :(neg && print(out, '-')))
     # print zero padding
     if padding !== nothing && !('-' in flags) && '0' in flags
         push!(blk.args, pad(width, padding, '0'))
     end
     # print digits
-    push!(blk.args, :(write(out, DIGITS[1])))
+    push!(blk.args, :(write(out, digits[1])))
     if precision > 0
         if inside_g && !('#' in flags)
             push!(blk.args, :(endidx = $ndigits;
-                              while endidx > 1 && DIGITS[endidx] == UInt8('0')
+                              while endidx > 1 && digits[endidx] == UInt8('0')
                                   endidx -= 1
                               end;
                               if endidx > 1
-                                  write(out, '.')
-                                  unsafe_write(out, pointer(DIGITS)+1, endidx-1)
+                                  print(out, '.')
+                                  unsafe_write(out, pointer(digits)+1, endidx-1)
                               end
                               ))
         else
-            push!(blk.args, :(write(out, '.')))
-            push!(blk.args, :(unsafe_write(out, pointer(DIGITS)+1, $(ndigits-1))))
+            push!(blk.args, :(print(out, '.')))
+            push!(blk.args, :(unsafe_write(out, pointer(digits)+1, $(ndigits-1))))
             if ndigits < precision+1
                 n = precision+1-ndigits
                 push!(blk.args, pad(n, n, '0'))
@@ -486,7 +524,7 @@ function gen_e(flags::String, width::Int, precision::Int, c::Char, inside_g::Boo
         end
     end
     for ch in expmark
-        push!(blk.args, :(write(out, $ch)))
+        push!(blk.args, :(print(out, $ch)))
     end
     push!(blk.args, :(print_exp_e(out, exp)))
     # print space padding
@@ -519,11 +557,12 @@ function gen_a(flags::String, width::Int, precision::Int, c::Char)
     end
     # if no precision, print max non-zero
     if precision < 0
-        push!(blk.args, :((do_out, args) = $fn(out,$x, $flags, $width, $precision, $c)))
+        push!(blk.args, :((do_out, args) = $fn(out,$x, $flags, $width, $precision, $c, buf)))
     else
-        ndigits = min(precision+1,length(DIGITS)-1)
-        push!(blk.args, :((do_out, args) = $fn(out,$x,$ndigits, $flags, $width, $precision, $c)))
+        ndigits = min(precision+1,length(Grisu.getbuf())-1)
+        push!(blk.args, :((do_out, args) = $fn(out,$x,$ndigits, $flags, $width, $precision, $c, buf)))
     end
+    push!(blk.args, :(digits = buf))
     ifblk = Expr(:if, :do_out, Expr(:block))
     push!(blk.args, ifblk)
     blk = ifblk.args[2]
@@ -562,22 +601,22 @@ function gen_a(flags::String, width::Int, precision::Int, c::Char)
         push!(blk.args, pad(width, padding, ' '))
     end
     # print sign
-    '+' in flags ? push!(blk.args, :(write(out, neg ? '-' : '+'))) :
-    ' ' in flags ? push!(blk.args, :(write(out, neg ? '-' : ' '))) :
-                    push!(blk.args, :(neg && write(out, '-')))
+    '+' in flags ? push!(blk.args, :(print(out, neg ? '-' : '+'))) :
+    ' ' in flags ? push!(blk.args, :(print(out, neg ? '-' : ' '))) :
+                    push!(blk.args, :(neg && print(out, '-')))
     # hex prefix
     for ch in hexmark
-        push!(blk.args, :(write(out, $ch)))
+        push!(blk.args, :(print(out, $ch)))
     end
     # print zero padding
     if padding !== nothing && !('-' in flags) && '0' in flags
         push!(blk.args, pad(width, padding, '0'))
     end
-    # print digits
-    push!(blk.args, :(write(out, DIGITS[1])))
+    # print digits: assumes ASCII/UTF8 encoding of digits is okay for `out`
+    push!(blk.args, :(write(out, digits[1])))
     if precision > 0
-        push!(blk.args, :(write(out, '.')))
-        push!(blk.args, :(unsafe_write(out, pointer(DIGITS)+1, $(ndigits-1))))
+        push!(blk.args, :(print(out, '.')))
+        push!(blk.args, :(unsafe_write(out, pointer(digits)+1, $(ndigits-1))))
         if ndigits < precision+1
             n = precision+1-ndigits
             push!(blk.args, pad(n, n, '0'))
@@ -586,15 +625,15 @@ function gen_a(flags::String, width::Int, precision::Int, c::Char)
         ifvpblk = Expr(:if, :(len > 1), Expr(:block))
         vpblk = ifvpblk.args[2]
         if '#' in flags
-            push!(blk.args, :(write(out, '.')))
+            push!(blk.args, :(print(out, '.')))
         else
-            push!(vpblk.args, :(write(out, '.')))
+            push!(vpblk.args, :(print(out, '.')))
         end
-        push!(vpblk.args, :(unsafe_write(out, pointer(DIGITS)+1, len-1)))
+        push!(vpblk.args, :(unsafe_write(out, pointer(digits)+1, len-1)))
         push!(blk.args, ifvpblk)
     end
     for ch in expmark
-        push!(blk.args, :(write(out, $ch)))
+        push!(blk.args, :(print(out, $ch)))
     end
     push!(blk.args, :(print_exp_a(out, exp)))
     # print space padding
@@ -619,7 +658,7 @@ function gen_c(flags::String, width::Int, precision::Int, c::Char)
         p = '0' in flags ? '0' : ' '
         push!(blk.args, pad(width-1, :($width-textwidth($x)), p))
     end
-    push!(blk.args, :(write(out, $x)))
+    push!(blk.args, :(print(out, $x)))
     if width > 1 && '-' in flags
         push!(blk.args, pad(width-1, :($width-textwidth($x)), ' '))
     end
@@ -655,7 +694,7 @@ function gen_s(flags::String, width::Int, precision::Int, c::Char)
         if !('-' in flags)
             push!(blk.args, pad(width, :($width-textwidth($x)), ' '))
         end
-        push!(blk.args, :(write(out, $x)))
+        push!(blk.args, :(print(out, $x)))
         if '-' in flags
             push!(blk.args, pad(width, :($width-textwidth($x)), ' '))
         end
@@ -671,7 +710,7 @@ function gen_s(flags::String, width::Int, precision::Int, c::Char)
             push!(blk.args, :(show(io, $x)))
         end
         if precision!=-1
-            push!(blk.args, :(write(out, _limit(String(take!(io)), $precision))))
+            push!(blk.args, :(print(out, _limit(String(take!(io)), $precision))))
         end
     end
     :(($x)::Any), blk
@@ -693,9 +732,9 @@ function gen_p(flags::String, width::Int, precision::Int, c::Char)
     if width > 0 && !('-' in flags)
         push!(blk.args, pad(width, width, ' '))
     end
-    push!(blk.args, :(write(out, '0')))
-    push!(blk.args, :(write(out, 'x')))
-    push!(blk.args, :(write(out, String(hex(unsigned($x), $ptrwidth)))))
+    push!(blk.args, :(print(out, '0')))
+    push!(blk.args, :(print(out, 'x')))
+    push!(blk.args, :(print(out, String(string(unsigned($x), pad = $ptrwidth, base = 16)))))
     if width > 0 && '-' in flags
         push!(blk.args, pad(width, width, ' '))
     end
@@ -716,9 +755,9 @@ function gen_g(flags::String, width::Int, precision::Int, c::Char)
     #
     x, ex, blk = special_handler(flags,width)
     if precision < 0; precision = 6; end
-    ndigits = min(precision+1,length(DIGITS)-1)
+    ndigits = min(precision+1,length(Grisu.getbuf())-1)
     # See if anyone else wants to handle it
-    push!(blk.args, :((do_out, args) = ini_dec(out,$x,$ndigits, $flags, $width, $precision, $c)))
+    push!(blk.args, :((do_out, args) = ini_dec(out,$x,$ndigits, $flags, $width, $precision, $c, buf)))
     ifblk = Expr(:if, :do_out, Expr(:block))
     push!(blk.args, ifblk)
     blk = ifblk.args[2]
@@ -734,18 +773,15 @@ function gen_g(flags::String, width::Int, precision::Int, c::Char)
     # Follow the same logic as gen_f() but more work has to be deferred until runtime
     # because precision is unknown until then.
     push!(fblk.args, :(fprec = $precision - (exp+1)))
-    push!(fblk.args, :((do_out, args) = fix_dec(out, $x, $flags, $width, fprec, $c - 1)))
+    push!(fblk.args, :((do_out, args) = fix_dec(out, $x, $flags, $width, fprec, $c - 1, buf)))
     fifblk = Expr(:if, :do_out, Expr(:block))
     push!(fblk.args, fifblk)
     blk = fifblk.args[2]
     push!(blk.args, :((len, pt, neg) = args))
-    push!(blk.args, :(padding = nothing))
+    push!(blk.args, :(padding = 0))
     push!(blk.args, :(width = $width))
     # need to compute value before left-padding since trailing zeros are elided
-    push!(blk.args, :(tmpout = IOBuffer()))
-    push!(blk.args, :(print_fixed(tmpout,fprec,pt,len,$('#' in flags))))
-    push!(blk.args, :(tmpstr = String(take!(tmpout))))
-    push!(blk.args, :(width -= length(tmpstr)))
+    push!(blk.args, :(width -= print_fixed_width(fprec,pt,len,$('#' in flags))))
     if '+' in flags || ' ' in flags
         push!(blk.args, :(width -= 1))
     else
@@ -755,25 +791,25 @@ function gen_g(flags::String, width::Int, precision::Int, c::Char)
     # print space padding
     if !('-' in flags) && !('0' in flags)
         padexpr = dynamic_pad(:width, :padding, ' ')
-        push!(blk.args, :(if padding !== nothing
+        push!(blk.args, :(if padding > 0
                           $padexpr; end))
     end
     # print sign
-    '+' in flags ? push!(blk.args, :(write(out, neg ? '-' : '+'))) :
-    ' ' in flags ? push!(blk.args, :(write(out, neg ? '-' : ' '))) :
-                   push!(blk.args, :(neg && write(out, '-')))
+    '+' in flags ? push!(blk.args, :(print(out, neg ? '-' : '+'))) :
+    ' ' in flags ? push!(blk.args, :(print(out, neg ? '-' : ' '))) :
+                   push!(blk.args, :(neg && print(out, '-')))
     # print zero padding
     if !('-' in flags) && '0' in flags
         padexpr = dynamic_pad(:width, :padding, '0')
-        push!(blk.args, :(if padding !== nothing
+        push!(blk.args, :(if padding > 0
                           $padexpr; end))
     end
     # finally print value
-    push!(blk.args, :(write(out,tmpstr)))
+    push!(blk.args, :(print_fixed(out,fprec,pt,len,$('#' in flags),buf)))
     # print space padding
     if '-' in flags
         padexpr = dynamic_pad(:width, :padding, ' ')
-        push!(blk.args, :(if padding !== nothing
+        push!(blk.args, :(if padding > 0
                           $padexpr; end))
     end
 
@@ -788,34 +824,34 @@ end
 
 ### core unsigned integer decoding functions ###
 
-macro handle_zero(ex)
+macro handle_zero(ex, digits)
     quote
         if $(esc(ex)) == 0
-            DIGITS[1] = '0'
+            $(esc(digits))[1] = '0'
             return Int32(1), Int32(1), $(esc(:neg))
         end
     end
 end
 
-decode_oct(out, d, flags::String, width::Int, precision::Int, c::Char) = (true, decode_oct(d))
-decode_0ct(out, d, flags::String, width::Int, precision::Int, c::Char) = (true, decode_0ct(d))
-decode_dec(out, d, flags::String, width::Int, precision::Int, c::Char) = (true, decode_dec(d))
-decode_hex(out, d, flags::String, width::Int, precision::Int, c::Char) = (true, decode_hex(d))
-decode_HEX(out, d, flags::String, width::Int, precision::Int, c::Char) = (true, decode_HEX(d))
-fix_dec(out, d, flags::String, width::Int, precision::Int, c::Char) = (true, fix_dec(d, precision))
-ini_dec(out, d, ndigits::Int, flags::String, width::Int, precision::Int, c::Char) = (true, ini_dec(d, ndigits))
-ini_hex(out, d, ndigits::Int, flags::String, width::Int, precision::Int, c::Char) = (true, ini_hex(d, ndigits))
-ini_HEX(out, d, ndigits::Int, flags::String, width::Int, precision::Int, c::Char) = (true, ini_HEX(d, ndigits))
-ini_hex(out, d, flags::String, width::Int, precision::Int, c::Char) = (true, ini_hex(d))
-ini_HEX(out, d, flags::String, width::Int, precision::Int, c::Char) = (true, ini_HEX(d))
+decode_oct(out, d, flags::String, width::Int, precision::Int, c::Char, digits) = (true, decode_oct(d, digits))
+decode_0ct(out, d, flags::String, width::Int, precision::Int, c::Char, digits) = (true, decode_0ct(d, digits))
+decode_dec(out, d, flags::String, width::Int, precision::Int, c::Char, digits) = (true, decode_dec(d, digits))
+decode_hex(out, d, flags::String, width::Int, precision::Int, c::Char, digits) = (true, decode_hex(d, digits))
+decode_HEX(out, d, flags::String, width::Int, precision::Int, c::Char, digits) = (true, decode_HEX(d, digits))
+fix_dec(out, d, flags::String, width::Int, precision::Int, c::Char, digits) = (true, fix_dec(d, precision, digits))
+ini_dec(out, d, ndigits::Int, flags::String, width::Int, precision::Int, c::Char, digits) = (true, ini_dec(d, ndigits, digits))
+ini_hex(out, d, ndigits::Int, flags::String, width::Int, precision::Int, c::Char, digits) = (true, ini_hex(d, ndigits, digits))
+ini_HEX(out, d, ndigits::Int, flags::String, width::Int, precision::Int, c::Char, digits) = (true, ini_HEX(d, ndigits, digits))
+ini_hex(out, d, flags::String, width::Int, precision::Int, c::Char, digits) = (true, ini_hex(d, digits))
+ini_HEX(out, d, flags::String, width::Int, precision::Int, c::Char, digits) = (true, ini_HEX(d, digits))
 
 
 # fallbacks for Real types without explicit decode_* implementation
-decode_oct(d::Real) = decode_oct(Integer(d))
-decode_0ct(d::Real) = decode_0ct(Integer(d))
-decode_dec(d::Real) = decode_dec(Integer(d))
-decode_hex(d::Real) = decode_hex(Integer(d))
-decode_HEX(d::Real) = decode_HEX(Integer(d))
+decode_oct(d::Real, digits) = decode_oct(Integer(d), digits)
+decode_0ct(d::Real, digits) = decode_0ct(Integer(d), digits)
+decode_dec(d::Real, digits) = decode_dec(Integer(d), digits)
+decode_hex(d::Real, digits) = decode_hex(Integer(d), digits)
+decode_HEX(d::Real, digits) = decode_HEX(Integer(d), digits)
 
 handlenegative(d::Unsigned) = (false, d)
 function handlenegative(d::Integer)
@@ -826,48 +862,48 @@ function handlenegative(d::Integer)
     end
 end
 
-function decode_oct(d::Integer)
+function decode_oct(d::Integer, digits)
     neg, x = handlenegative(d)
-    @handle_zero x
+    @handle_zero x digits
     pt = i = div((sizeof(x)<<3)-leading_zeros(x)+2,3)
     while i > 0
-        DIGITS[i] = '0'+(x&0x7)
+        digits[i] = 48+(x&0x7)
         x >>= 3
         i -= 1
     end
     return Int32(pt), Int32(pt), neg
 end
 
-function decode_0ct(d::Integer)
+function decode_0ct(d::Integer, digits)
     neg, x = handlenegative(d)
     # doesn't need special handling for zero
     pt = i = div((sizeof(x)<<3)-leading_zeros(x)+5,3)
     while i > 0
-        DIGITS[i] = '0'+(x&0x7)
+        digits[i] = 48+(x&0x7)
         x >>= 3
         i -= 1
     end
     return Int32(pt), Int32(pt), neg
 end
 
-function decode_dec(d::Integer)
+function decode_dec(d::Integer, digits)
     neg, x = handlenegative(d)
-    @handle_zero x
+    @handle_zero x digits
     pt = i = Base.ndigits0z(x)
     while i > 0
-        DIGITS[i] = '0'+rem(x,10)
+        digits[i] = 48+rem(x,10)
         x = div(x,10)
         i -= 1
     end
     return Int32(pt), Int32(pt), neg
 end
 
-function decode_hex(d::Integer, symbols::AbstractArray{UInt8,1})
+function decode_hex(d::Integer, symbols::AbstractArray{UInt8,1}, digits)
     neg, x = handlenegative(d)
-    @handle_zero x
+    @handle_zero x digits
     pt = i = (sizeof(x)<<1)-(leading_zeros(x)>>2)
     while i > 0
-        DIGITS[i] = symbols[(x&0xf)+1]
+        digits[i] = symbols[(x&0xf)+1]
         x >>= 4
         i -= 1
     end
@@ -877,33 +913,33 @@ end
 const hex_symbols = b"0123456789abcdef"
 const HEX_symbols = b"0123456789ABCDEF"
 
-decode_hex(x::Integer) = decode_hex(x,hex_symbols)
-decode_HEX(x::Integer) = decode_hex(x,HEX_symbols)
+decode_hex(x::Integer, digits) = decode_hex(x,hex_symbols,digits)
+decode_HEX(x::Integer, digits) = decode_hex(x,HEX_symbols,digits)
 
-function decode(b::Int, x::BigInt)
+function decode(b::Int, x::BigInt, digits)
     neg = x.size < 0
-    pt = Base.ndigits(x, abs(b))
-    length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
+    pt = Base.ndigits(x, base=abs(b))
+    length(digits) < pt+1 && resize!(digits, pt+1)
     neg && (x.size = -x.size)
-    GMP.MPZ.get_str!(DIGITS, b, x)
+    GMP.MPZ.get_str!(digits, b, x)
     neg && (x.size = -x.size)
     return Int32(pt), Int32(pt), neg
 end
-decode_oct(x::BigInt) = decode(8, x)
-decode_dec(x::BigInt) = decode(10, x)
-decode_hex(x::BigInt) = decode(16, x)
-decode_HEX(x::BigInt) = decode(-16, x)
+decode_oct(x::BigInt, digits) = decode(8, x, digits)
+decode_dec(x::BigInt, digits) = decode(10, x, digits)
+decode_hex(x::BigInt, digits) = decode(16, x, digits)
+decode_HEX(x::BigInt, digits) = decode(-16, x, digits)
 
-function decode_0ct(x::BigInt)
+function decode_0ct(x::BigInt, digits)
     neg = x.size < 0
-    DIGITS[1] = '0'
+    digits[1] = '0'
     if x.size == 0
         return Int32(1), Int32(1), neg
     end
     pt = Base.ndigits0z(x, 8) + 1
-    length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
+    length(digits) < pt+1 && resize!(digits, pt+1)
     neg && (x.size = -x.size)
-    p = convert(Ptr{UInt8}, DIGITS) + 1
+    p = convert(Ptr{UInt8}, digits) + 1
     GMP.MPZ.get_str!(p, 8, x)
     neg && (x.size = -x.size)
     return neg, Int32(pt), Int32(pt)
@@ -923,18 +959,18 @@ end
 # - implies len = point
 #
 
-function decode_dec(x::SmallFloatingPoint)
+function decode_dec(x::SmallFloatingPoint, digits)
     if x == 0.0
-        DIGITS[1] = '0'
+        digits[1] = '0'
         return (Int32(1), Int32(1), false)
     end
-    len,pt,neg = grisu(x,Grisu.FIXED,0)
+    len,pt,neg = grisu(x,Grisu.FIXED,0,digits)
     if len == 0
-        DIGITS[1] = '0'
+        digits[1] = '0'
         return (Int32(1), Int32(1), false)
     else
         for i = len+1:pt
-            DIGITS[i] = '0'
+            digits[i] = '0'
         end
     end
     return Int32(len), Int32(pt), neg
@@ -948,15 +984,15 @@ end
 #
 
 # fallback for Real types without explicit fix_dec implementation
-fix_dec(x::Real, n::Int) = fix_dec(float(x),n)
+fix_dec(x::Real, n::Int, digits) = fix_dec(float(x),n,digits)
 
-fix_dec(x::Integer, n::Int) = decode_dec(x)
+fix_dec(x::Integer, n::Int, digits) = decode_dec(x, digits)
 
-function fix_dec(x::SmallFloatingPoint, n::Int)
-    if n > length(DIGITS)-1; n = length(DIGITS)-1; end
-    len,pt,neg = grisu(x,Grisu.FIXED,n)
+function fix_dec(x::SmallFloatingPoint, n::Int, digits)
+    if n > length(digits)-1; n = length(digits)-1; end
+    len,pt,neg = grisu(x,Grisu.FIXED,n,digits)
     if len == 0
-        DIGITS[1] = '0'
+        digits[1] = '0'
         return (Int32(1), Int32(1), neg)
     end
     return Int32(len), Int32(pt), neg
@@ -969,19 +1005,19 @@ end
 #
 
 # fallback for Real types without explicit fix_dec implementation
-ini_dec(x::Real, n::Int) = ini_dec(float(x),n)
+ini_dec(x::Real, n::Int, digits) = ini_dec(float(x),n,digits)
 
-function ini_dec(d::Integer, n::Int)
+function ini_dec(d::Integer, n::Int, digits)
     neg, x = handlenegative(d)
     k = ndigits(x)
     if k <= n
         pt = k
         for i = k:-1:1
-            DIGITS[i] = '0'+rem(x,10)
+            digits[i] = '0'+rem(x,10)
             x = div(x,10)
         end
         for i = k+1:n
-            DIGITS[i] = '0'
+            digits[i] = '0'
         end
     else
         p = Base.powers_of_ten[k-n+1]
@@ -996,33 +1032,33 @@ function ini_dec(d::Integer, n::Int)
         pt = k
         x = div(x,p)
         for i = n:-1:1
-            DIGITS[i] = '0'+rem(x,10)
+            digits[i] = '0'+rem(x,10)
             x = div(x,10)
         end
     end
     return n, pt, neg
 end
 
-function ini_dec(x::SmallFloatingPoint, n::Int)
+function ini_dec(x::SmallFloatingPoint, n::Int, digits)
     if x == 0.0
-        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', n)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), digits, '0', n)
         return Int32(1), Int32(1), signbit(x)
     else
-        len,pt,neg = grisu(x,Grisu.PRECISION,n)
+        len,pt,neg = grisu(x,Grisu.PRECISION,n,digits)
     end
     return Int32(len), Int32(pt), neg
 end
 
-function ini_dec(x::BigInt, n::Int)
+function ini_dec(x::BigInt, n::Int, digits)
     if x.size == 0
-        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', n)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), digits, '0', n)
         return Int32(1), Int32(1), false
     end
     d = Base.ndigits0z(x)
     if d <= n
         info = decode_dec(x)
         d == n && return info
-        p = convert(Ptr{Cvoid}, DIGITS) + info[2]
+        p = convert(Ptr{Cvoid}, digits) + info[2]
         ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), p, '0', n - info[2])
         return info
     end
@@ -1030,19 +1066,19 @@ function ini_dec(x::BigInt, n::Int)
 end
 
 
-ini_hex(x::Real, n::Int) = ini_hex(x,n,hex_symbols)
-ini_HEX(x::Real, n::Int) = ini_hex(x,n,HEX_symbols)
+ini_hex(x::Real, n::Int, digits) = ini_hex(x,n,hex_symbols,digits)
+ini_HEX(x::Real, n::Int, digits) = ini_hex(x,n,HEX_symbols,digits)
 
-ini_hex(x::Real) = ini_hex(x,hex_symbols)
-ini_HEX(x::Real) = ini_hex(x,HEX_symbols)
+ini_hex(x::Real, digits) = ini_hex(x,hex_symbols,digits)
+ini_HEX(x::Real, digits) = ini_hex(x,HEX_symbols,digits)
 
-ini_hex(x::Real, n::Int, symbols::AbstractArray{UInt8,1}) = ini_hex(float(x), n, symbols)
-ini_hex(x::Real, symbols::AbstractArray{UInt8,1}) = ini_hex(float(x), symbols)
+ini_hex(x::Real, n::Int, symbols::AbstractArray{UInt8,1}, digits) = ini_hex(float(x), n, symbols, digits)
+ini_hex(x::Real, symbols::AbstractArray{UInt8,1}, digits) = ini_hex(float(x), symbols, digits)
 
-function ini_hex(x::SmallFloatingPoint, n::Int, symbols::AbstractArray{UInt8,1})
+function ini_hex(x::SmallFloatingPoint, n::Int, symbols::AbstractArray{UInt8,1}, digits)
     x = Float64(x)
     if x == 0.0
-        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', n)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), digits, '0', n)
         return Int32(1), Int32(0), signbit(x)
     else
         s, p = frexp(x)
@@ -1051,11 +1087,11 @@ function ini_hex(x::SmallFloatingPoint, n::Int, symbols::AbstractArray{UInt8,1})
         # ensure last 2 exponent bits either 01 or 10
         u = (reinterpret(UInt64,s) & 0x003f_ffff_ffff_ffff) >> (52-sigbits)
         if n > 14
-            ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', n)
+            ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), digits, '0', n)
         end
         i = (sizeof(u)<<1)-(leading_zeros(u)>>2)
         while i > 0
-            DIGITS[i] = symbols[(u&0xf)+1]
+            digits[i] = symbols[(u&0xf)+1]
             u >>= 4
             i -= 1
         end
@@ -1064,10 +1100,10 @@ function ini_hex(x::SmallFloatingPoint, n::Int, symbols::AbstractArray{UInt8,1})
     end
 end
 
-function ini_hex(x::SmallFloatingPoint, symbols::AbstractArray{UInt8,1})
+function ini_hex(x::SmallFloatingPoint, symbols::AbstractArray{UInt8,1}, digits)
     x = Float64(x)
     if x == 0.0
-        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), DIGITS, '0', 1)
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), digits, '0', 1)
         return Int32(1), Int32(0), signbit(x)
     else
         s, p = frexp(x)
@@ -1077,7 +1113,7 @@ function ini_hex(x::SmallFloatingPoint, symbols::AbstractArray{UInt8,1})
         u >>= (t<<2)
         n = 14-t
         for i = n:-1:1
-            DIGITS[i] = symbols[(u&0xf)+1]
+            digits[i] = symbols[(u&0xf)+1]
             u >>= 4
         end
         # pt is the binary exponent
@@ -1085,28 +1121,28 @@ function ini_hex(x::SmallFloatingPoint, symbols::AbstractArray{UInt8,1})
     end
 end
 
-function ini_hex(x::Integer)
-    len,pt,neg = decode_hex(x)
+function ini_hex(x::Integer, digits)
+    len,pt,neg = decode_hex(x, digits)
     pt = (len-1)<<2
     len,pt,neg
 end
-function ini_HEX(x::Integer)
-    len,pt,neg = decode_HEX(x)
+function ini_HEX(x::Integer, digits)
+    len,pt,neg = decode_HEX(x, digits)
     pt = (len-1)<<2
     len,pt,neg
 end
 
 # not implemented
-ini_hex(x::Integer,ndigits::Int) = throw(MethodError(ini_hex,(x,ndigits)))
+ini_hex(x::Integer,ndigits::Int,digits) = throw(MethodError(ini_hex,(x,ndigits,digits)))
 
 #BigFloat
-fix_dec(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
-ini_dec(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
-ini_hex(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
-ini_HEX(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
-ini_hex(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
-ini_HEX(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
-function bigfloat_printf(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char)
+fix_dec(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
+ini_dec(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
+ini_hex(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
+ini_HEX(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
+ini_hex(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
+ini_HEX(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
+function bigfloat_printf(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char, digits)
     fmt_len = sizeof(flags)+4
     if width > 0
         fmt_len += ndigits(width)
@@ -1115,29 +1151,29 @@ function bigfloat_printf(out, d::BigFloat, flags::String, width::Int, precision:
         fmt_len += ndigits(precision)+1
     end
     fmt = IOBuffer(maxsize=fmt_len)
-    write(fmt, '%')
-    write(fmt, flags)
+    print(fmt, '%')
+    print(fmt, flags)
     if width > 0
         print(fmt, width)
     end
     if precision == 0
-        write(fmt, '.')
-        write(fmt, '0')
+        print(fmt, '.')
+        print(fmt, '0')
     elseif precision > 0
-        write(fmt, '.')
+        print(fmt, '.')
         print(fmt, precision)
     end
-    write(fmt, 'R')
-    write(fmt, c)
+    print(fmt, 'R')
+    print(fmt, c)
     write(fmt, UInt8(0))
     printf_fmt = take!(fmt)
     @assert length(printf_fmt) == fmt_len
-    bufsiz = length(DIGITS)
+    bufsiz = length(digits)
     lng = ccall((:mpfr_snprintf,:libmpfr), Int32,
                 (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}...),
-                DIGITS, bufsiz, printf_fmt, d)
+                digits, bufsiz, printf_fmt, d)
     lng > 0 || error("invalid printf formatting for BigFloat")
-    unsafe_write(out, pointer(DIGITS), min(lng, bufsiz-1))
+    unsafe_write(out, pointer(digits), min(lng, bufsiz-1))
     return (false, ())
 end
 

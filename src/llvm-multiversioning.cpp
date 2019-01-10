@@ -814,6 +814,7 @@ void CloneCtx::fix_inst_uses()
                     std::tie(id, slot) = get_reloc_slot(orig_f);
                     Instruction *ptr = new LoadInst(T_pvoidfunc, slot, "", false, insert_before);
                     ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+                    ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ctx, None));
                     ptr = new BitCastInst(ptr, F->getType(), "", insert_before);
                     use_i->setOperand(info.use->getOperandNo(),
                                       rewrite_inst_use(uses.get_stack(), ptr,
@@ -1025,6 +1026,9 @@ bool MultiVersioning::runOnModule(Module &M)
     //     * Cloned function -> Original function (add as we clone functions)
     //     * Original function -> Base function (target specific and updated by LLVM)
     //     * ID -> relocation slots (const).
+    if (M.getName() == "sysimage")
+        return false;
+
     CloneCtx clone(this, M);
 
     // Collect a list of original functions and clone base functions

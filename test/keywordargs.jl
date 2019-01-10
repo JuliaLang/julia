@@ -320,3 +320,14 @@ end
     @test_throws UndefKeywordError g(1)
     @test_throws UndefKeywordError g(1, z=2)
 end
+
+@testset "issue #26916 - anonymous function with 1 keyword arg and 1 optional arg" begin
+    f = (x=1;y=2)->(x,y)
+    @test f() == (1,2)
+    @test f(10) == (10,2)
+    @test f(y=20) == (1,20)
+    @test f(20, y=30) == (20,30)
+    g = (x=1;)->(x,x)
+    @test g() == (1,1)
+    @test g(2) == (2,2)
+end

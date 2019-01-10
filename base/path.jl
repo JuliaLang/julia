@@ -5,6 +5,7 @@ export
     basename,
     dirname,
     expanduser,
+    contractuser,
     homedir,
     isabspath,
     isdirpath,
@@ -14,7 +15,8 @@ export
     relpath,
     splitdir,
     splitdrive,
-    splitext
+    splitext,
+    splitpath
 
 if Sys.isunix()
     const path_separator    = "/"
@@ -27,7 +29,7 @@ if Sys.isunix()
 elseif Sys.iswindows()
     const path_separator    = "\\"
     const path_separator_re = r"[/\\]+"
-    const path_absolute_re  = r"^(?:\w+:)?[/\\]"
+    const path_absolute_re  = r"^(?:[A-Za-z]+:)?[/\\]"
     const path_directory_re = r"(?:^|[/\\])\.{0,2}$"
     const path_dir_splitter = r"^(.*?)([/\\]+)([^/\\]*)$"
     const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
@@ -61,7 +63,7 @@ Return the current user's home directory.
 """
 function homedir()
     path_max = 1024
-    buf = Vector{UInt8}(uninitialized, path_max)
+    buf = Vector{UInt8}(undef, path_max)
     sz = RefValue{Csize_t}(path_max + 1)
     while true
         rc = ccall(:uv_os_homedir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
@@ -78,7 +80,7 @@ end
 
 
 if Sys.iswindows()
-    isabspath(path::String) = contains(path, path_absolute_re)
+    isabspath(path::String) = occursin(path_absolute_re, path)
 else
     isabspath(path::String) = startswith(path, '/')
 end
@@ -86,7 +88,7 @@ end
 """
     isabspath(path::AbstractString) -> Bool
 
-Determines whether a path is absolute (begins at the root directory).
+Determine whether a path is absolute (begins at the root directory).
 
 # Examples
 ```jldoctest
@@ -102,7 +104,7 @@ isabspath(path::AbstractString)
 """
     isdirpath(path::AbstractString) -> Bool
 
-Determines whether a path refers to a directory (for example, ends with a path separator).
+Determine whether a path refers to a directory (for example, ends with a path separator).
 
 # Examples
 ```jldoctest
@@ -113,7 +115,7 @@ julia> isdirpath("/home/")
 true
 ```
 """
-isdirpath(path::String) = contains(splitdrive(path)[2], path_directory_re)
+isdirpath(path::String) = occursin(path_directory_re, splitdrive(path)[2])
 
 """
     splitdir(path::AbstractString) -> (AbstractString, AbstractString)
@@ -128,6 +130,12 @@ julia> splitdir("/home/myuser")
 """
 function splitdir(path::String)
     a, b = splitdrive(path)
+    _splitdir_nodrive(a,b)
+end
+
+# Common splitdir functionality without splitdrive, needed for splitpath.
+_splitdir_nodrive(path::String) = _splitdir_nodrive("", path)
+function _splitdir_nodrive(a::String, b::String)
     m = match(path_dir_splitter,b)
     m === nothing && return (a,b)
     a = string(a, isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1])
@@ -155,7 +163,7 @@ See also: [`basename`](@ref)
 Get the file name part of a path.
 
 # Examples
- ```jldoctest
+```jldoctest
 julia> basename("/home/myuser/example.jl")
 "example.jl"
 ```
@@ -195,6 +203,44 @@ function pathsep(paths::AbstractString...)
     return path_separator
 end
 
+"""
+    splitpath(path::AbstractString) -> Vector{String}
+
+Split a file path into all its path components. This is the opposite of
+`joinpath`. Returns an array of substrings, one for each directory or file in
+the path, including the root directory if present.
+
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
+
+# Examples
+```jldoctest
+julia> splitpath("/home/myuser/example.jl")
+4-element Array{String,1}:
+ "/"
+ "home"
+ "myuser"
+ "example.jl"
+```
+"""
+function splitpath(p::String)
+    drive, p = splitdrive(p)
+    out = String[]
+    isempty(p) && (pushfirst!(out,p))  # "" means the current directory.
+    while !isempty(p)
+        dir, base = _splitdir_nodrive(p)
+        dir == p && (pushfirst!(out, dir); break)  # Reached root node.
+        if !isempty(base)  # Skip trailing '/' in basename
+            pushfirst!(out, base)
+        end
+        p = dir
+    end
+    if !isempty(drive)  # Tack the drive back on to the first element.
+        out[1] = drive*out[1]  # Note that length(out) is always >= 1.
+    end
+    return out
+end
+
 joinpath(a::AbstractString) = a
 
 """
@@ -219,7 +265,7 @@ function joinpath(a::String, b::String)
     !isempty(B) && A != B && return string(B,b)
     C = isempty(B) ? A : B
     isempty(a)                              ? string(C,b) :
-    contains(a[end:end], path_separator_re) ? string(C,a,b) :
+    occursin(path_separator_re, a[end:end]) ? string(C,a,b) :
                                               string(C,a,pathsep(a,b),b)
 end
 joinpath(a::AbstractString, b::AbstractString) = joinpath(String(a), String(b))
@@ -274,6 +320,7 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
     abspath(path::AbstractString) -> AbstractString
 
 Convert a path to an absolute path by adding the current directory if necessary.
+Also normalizes the path as in [`normpath`](@ref).
 """
 abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
 
@@ -293,7 +340,7 @@ function realpath(path::AbstractString)
         n = ccall((:GetFullPathNameW, "kernel32"), stdcall,
             UInt32, (Ptr{UInt16}, UInt32, Ptr{UInt16}, Ptr{Cvoid}),
             p, length(buf), buf, C_NULL)
-        systemerror(:realpath, n == 0)
+        windowserror(:realpath, n == 0)
         x = n < length(buf) # is the buffer big enough?
         resize!(buf, n) # shrink if x, grow if !x
         x && return transcode(String, buf)
@@ -307,7 +354,7 @@ function longpath(path::AbstractString)
         n = ccall((:GetLongPathNameW, "kernel32"), stdcall,
             UInt32, (Ptr{UInt16}, Ptr{UInt16}, UInt32),
             p, buf, length(buf))
-        systemerror(:longpath, n == 0)
+        windowserror(:longpath, n == 0)
         x = n < length(buf) # is the buffer big enough?
         resize!(buf, n) # shrink if x, grow if !x
         x && return transcode(String, buf)
@@ -334,17 +381,29 @@ realpath(path::AbstractString)
 
 
 if Sys.iswindows()
-expanduser(path::AbstractString) = path # on windows, ~ means "temporary file"
+# on windows, ~ means "temporary file"
+expanduser(path::AbstractString) = path
+contractuser(path::AbstractString) = path
 else
 function expanduser(path::AbstractString)
-    i = start(path)
-    if done(path,i) return path end
-    c, i = next(path,i)
-    if c != '~' return path end
-    if done(path,i) return homedir() end
-    c, j = next(path,i)
-    if c == '/' return homedir()*path[i:end] end
+    y = iterate(path)
+    y === nothing && return path
+    c, i = y
+    c != '~' && return path
+    y = iterate(path, i)
+    y === nothing && return homedir()
+    y[1] == '/' && return homedir() * path[i:end]
     throw(ArgumentError("~user tilde expansion not yet implemented"))
+end
+function contractuser(path::AbstractString)
+    home = homedir()
+    if path == home
+        return "~"
+    elseif startswith(path, home)
+        return joinpath("~", relpath(path, home))
+    else
+        return path
+    end
 end
 end
 
@@ -355,6 +414,13 @@ end
 On Unix systems, replace a tilde character at the start of a path with the current user's home directory.
 """
 expanduser(path::AbstractString)
+
+"""
+    contractuser(path::AbstractString) -> AbstractString
+
+On Unix systems, if the path starts with `homedir()`, replace it with a tilde character.
+"""
+contractuser(path::AbstractString)
 
 
 """
@@ -380,8 +446,8 @@ function relpath(path::String, startpath::String = ".")
             break
         end
     end
-    pathpart = join(path_arr[i+1:coalesce(findlast(x -> !isempty(x), path_arr), 0)], path_separator)
-    prefix_num = coalesce(findlast(x -> !isempty(x), start_arr), 0) - i - 1
+    pathpart = join(path_arr[i+1:something(findlast(x -> !isempty(x), path_arr), 0)], path_separator)
+    prefix_num = something(findlast(x -> !isempty(x), start_arr), 0) - i - 1
     if prefix_num >= 0
         prefix = pardir * path_separator
         relpath_ = isempty(pathpart)     ?

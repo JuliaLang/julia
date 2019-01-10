@@ -2,10 +2,14 @@
 
 module BaseDocs
 
+@nospecialize # don't specialize on any arguments of the methods declared herein
+
 struct Keyword
-    name :: Symbol
+    name::Symbol
 end
-macro kw_str(text) Keyword(Symbol(text)) end
+macro kw_str(text)
+    return Keyword(Symbol(text))
+end
 
 """
 **Welcome to Julia $(string(VERSION)).** The full manual is available at
@@ -18,6 +22,7 @@ as well as many great tutorials and learning resources:
 
 For help on a specific function or macro, type `?` followed
 by its name, e.g. `?cos`, or `?@time`, and press enter.
+Type `;` to enter shell mode, `]` to enter package mode.
 """
 kw"help", kw"?", kw"julia", kw""
 
@@ -70,7 +75,7 @@ kw"abstract type"
 """
     module
 
-`module` declares a Module, which is a separate global variable workspace. Within a
+`module` declares a `Module`, which is a separate global variable workspace. Within a
 module, you can control which names from other modules are visible (via importing), and
 specify which of your names are intended to be public (via exporting).
 Modules allow you to create top-level definitions without worrying about name conflicts
@@ -146,6 +151,7 @@ kw"macro"
     local
 
 `local` introduces a new local variable.
+See the [manual section on variable scoping](@ref scope-of-variables) for more information.
 
 # Examples
 ```jldoctest
@@ -170,6 +176,7 @@ kw"local"
 
 `global x` makes `x` in the current scope and its inner scopes refer to the global
 variable of that name.
+See the [manual section on variable scoping](@ref scope-of-variables) for more information.
 
 # Examples
 ```jldoctest
@@ -251,29 +258,9 @@ julia> A'
 kw"'"
 
 """
-    .'
-
-The transposition operator, see [`transpose`](@ref).
-
-# Examples
-```jldoctest
-julia> A = [1.0 -2.0im; 4.0im 2.0]
-2×2 Array{Complex{Float64},2}:
- 1.0+0.0im  -0.0-2.0im
- 0.0+4.0im   2.0+0.0im
-
-julia> A.'
-2×2 Array{Complex{Float64},2}:
-  1.0+0.0im  0.0+4.0im
- -0.0-2.0im  2.0+0.0im
-```
-"""
-kw".'"
-
-"""
     const
 
-`const` is used to declare global variables which are also constant. In almost all code
+`const` is used to declare global variables whose values will not change. In almost all code
 (and particularly performance sensitive code) global variables should be declared
 constant in this way.
 
@@ -288,15 +275,17 @@ const y, z = 7, 11
 
 Note that `const` only applies to one `=` operation, therefore `const x = y = 1`
 declares `x` to be constant but not `y`. On the other hand, `const x = const y = 1`
-declares both `x` and `y` as constants.
+declares both `x` and `y` constant.
 
-Note that "constant-ness" is not enforced inside containers, so if `x` is an array or
-dictionary (for example) you can still add and remove elements.
+Note that "constant-ness" does not extend into mutable containers; only the
+association between a variable and its value is constant.
+If `x` is an array or dictionary (for example) you can still modify, add, or remove elements.
 
-Technically, you can even redefine `const` variables, although this will generate a
-warning from the compiler. The only strict requirement is that the *type* of the
-variable does not change, which is why `const` variables are much faster than regular
-globals.
+In some cases changing the value of a `const` variable gives a warning instead of
+an error.
+However, this can produce unpredictable behavior or corrupt the state of your program,
+and so should be avoided.
+This feature is intended only for convenience during interactive use.
 """
 kw"const"
 
@@ -416,7 +405,7 @@ julia> i = 1
 
 julia> while i < 5
            println(i)
-           i += 1
+           global i += 1
        end
 1
 2
@@ -430,7 +419,8 @@ kw"while"
     end
 
 `end` marks the conclusion of a block of expressions, for example
-`module`, `struct`, `mutable struct`, `begin`, `let`, `for` etc.
+[`module`](@ref), [`struct`](@ref), [`mutable struct`](@ref),
+[`begin`](@ref), [`let`](@ref), [`for`](@ref) etc.
 `end` may also be used when indexing into an array to represent
 the last index of a dimension.
 
@@ -466,8 +456,7 @@ end
 
 `try`/`catch` statements also allow the `Exception` to be saved in a variable, e.g. `catch y`.
 
-The `catch` clause is not strictly necessary; when omitted, the default return value is
-`nothing`. The power of the `try`/`catch` construct lies in the ability to unwind a deeply
+The power of the `try`/`catch` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling functions.
 """
 kw"try", kw"catch"
@@ -507,7 +496,7 @@ julia> i = 0
 0
 
 julia> while true
-           i += 1
+           global i += 1
            i > 5 && break
            println(i)
        end
@@ -523,7 +512,7 @@ kw"break"
 """
     continue
 
-Skip the rest of the current loop, then carries on looping.
+Skip the rest of the current loop iteration.
 
 # Examples
 ```jldoctest
@@ -629,20 +618,22 @@ kw"||"
 
 """
     ccall((function_name, library), returntype, (argtype1, ...), argvalue1, ...)
+    ccall(function_name, returntype, (argtype1, ...), argvalue1, ...)
     ccall(function_pointer, returntype, (argtype1, ...), argvalue1, ...)
 
 Call a function in a C-exported shared library, specified by the tuple `(function_name, library)`,
-where each component is either a string or symbol. Alternatively, `ccall` may
-also be used to call a function pointer `function_pointer`, such as one returned by `dlsym`.
+where each component is either a string or symbol. Instead of specifying a library,
+one can also use a `function_name` symbol or string, which is resolved in the current process.
+Alternatively, `ccall` may also be used to call a function pointer `function_pointer`, such as one returned by `dlsym`.
 
 Note that the argument type tuple must be a literal tuple, and not a tuple-valued
 variable or expression.
 
 Each `argvalue` to the `ccall` will be converted to the corresponding
 `argtype`, by automatic insertion of calls to `unsafe_convert(argtype,
-cconvert(argtype, argvalue))`. (See also the documentation for each of these
-functions for further details.) In most cases, this simply results in a call to
-`convert(argtype, argvalue)`.
+cconvert(argtype, argvalue))`. (See also the documentation for
+[`unsafe_convert`](@ref Base.unsafe_convert) and [`cconvert`](@ref Base.cconvert) for further details.)
+In most cases, this simply results in a call to `convert(argtype, argvalue)`.
 """
 kw"ccall"
 
@@ -662,9 +653,9 @@ variable or expression.
 
 Each `ArgumentValue` to `llvmcall` will be converted to the corresponding
 `ArgumentType`, by automatic insertion of calls to `unsafe_convert(ArgumentType,
-cconvert(ArgumentType, ArgumentValue))`. (see also the documentation for each of these
-functions for further details). In most cases, this simply results in a call to
-`convert(ArgumentType, ArgumentValue)`.
+cconvert(ArgumentType, ArgumentValue))`. (See also the documentation for
+[`unsafe_convert`](@ref Base.unsafe_convert) and [`cconvert`](@ref Base.cconvert) for further details.)
+In most cases, this simply results in a call to `convert(ArgumentType, ArgumentValue)`.
 
 See `test/llvmcall.jl` for usage examples.
 """
@@ -682,7 +673,7 @@ begin
 end
 ```
 
-Usually `begin` will not be necessary, since keywords such as `function` and `let`
+Usually `begin` will not be necessary, since keywords such as [`function`](@ref) and [`let`](@ref)
 implicitly begin blocks of code. See also [`;`](@ref).
 """
 kw"begin"
@@ -719,7 +710,7 @@ end
 ```
 
 `struct`s are immutable by default; an instance of one of these types cannot
-be modified after construction. Use `mutable struct` instead to declare a
+be modified after construction. Use [`mutable struct`](@ref) instead to declare a
 type whose instances can be modified.
 
 See the manual section on [Composite Types](@ref) for more details,
@@ -749,7 +740,7 @@ kw"new"
     where
 
 The `where` keyword creates a type that is an iterated union of other types, over all
-values of some variable. For example `Vector{T} where T<:Real` includes all `Vector`s
+values of some variable. For example `Vector{T} where T<:Real` includes all [`Vector`](@ref)s
 where the element type is some kind of `Real` number.
 
 The variable bound defaults to `Any` if it is omitted:
@@ -805,14 +796,14 @@ devnull
 """
     Nothing
 
-A type with no fields that is the type [`nothing`](@ref).
+A type with no fields that is the type of [`nothing`](@ref).
 """
 Nothing
 
 """
     nothing
 
-The singleton instance of type `Nothing`, used by convention when there is no value to return
+The singleton instance of type [`Nothing`](@ref), used by convention when there is no value to return
 (as in a C `void` function) or when a variable or field holds no value.
 """
 nothing
@@ -853,6 +844,14 @@ ReadOnlyMemoryError
     ErrorException(msg)
 
 Generic error type. The error message, in the `.msg` field, may provide more specific details.
+
+# Example
+```jldoctest
+julia> ex = ErrorException("I've done a bad thing");
+
+julia> ex.msg
+"I've done a bad thing"
+```
 """
 ErrorException
 
@@ -860,7 +859,7 @@ ErrorException
     WrappedException(msg)
 
 Generic type for `Exception`s wrapping another `Exception`, such as `LoadError` and
-`InitError`. Those exceptions contain information about the the root cause of an
+`InitError`. Those exceptions contain information about the root cause of an
 exception. Subtypes define a field `error` containing the causing `Exception`.
 """
 Core.WrappedException
@@ -924,25 +923,28 @@ OutOfMemoryError
 An indexing operation into an array, `a`, tried to access an out-of-bounds element at index `i`.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> A = fill(1.0, 7);
 
 julia> A[8]
 ERROR: BoundsError: attempt to access 7-element Array{Float64,1} at index [8]
 Stacktrace:
- [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:758
+ [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:660
+ [2] top-level scope
 
 julia> B = fill(1.0, (2,3));
 
 julia> B[2, 4]
 ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [2, 4]
 Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:759
+ [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:661
+ [2] top-level scope
 
 julia> B[9]
 ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [9]
 Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:758
+ [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:660
+ [2] top-level scope
 ```
 """
 BoundsError
@@ -955,9 +957,9 @@ Cannot exactly convert `val` to type `T` in a method of function `name`.
 # Examples
 ```jldoctest
 julia> convert(Float64, 1+2im)
-ERROR: InexactError: convert(Float64, 1 + 2im)
+ERROR: InexactError: Float64(1 + 2im)
 Stacktrace:
- [1] convert(::Type{Float64}, ::Complex{Int64}) at ./complex.jl:37
+[...]
 ```
 """
 InexactError
@@ -1008,6 +1010,29 @@ StackOverflowError
     nfields(x) -> Int
 
 Get the number of fields in the given object.
+
+# Examples
+```jldoctest
+julia> a = 1//2;
+
+julia> nfields(a)
+2
+
+julia> b = 1
+1
+
+julia> nfields(b)
+0
+
+julia> ex = ErrorException("I've done a bad thing");
+
+julia> nfields(ex)
+1
+```
+
+In these examples, `a` is a [`Rational`](@ref), which has two fields.
+`b` is an `Int`, which is a primitive bitstype with no fields at all.
+`ex` is an [`ErrorException`](@ref), which has one field.
 """
 nfields
 
@@ -1015,6 +1040,17 @@ nfields
     UndefVarError(var::Symbol)
 
 A symbol in the current scope is not defined.
+
+# Examples
+```jldoctest
+julia> a
+ERROR: UndefVarError: a not defined
+
+julia> a = 1;
+
+julia> a
+1
+```
 """
 UndefVarError
 
@@ -1050,6 +1086,8 @@ InterruptException
     applicable(f, args...) -> Bool
 
 Determine whether the given generic function has a method applicable to the given arguments.
+
+See also [`hasmethod`](@ref).
 
 # Examples
 ```jldoctest
@@ -1283,7 +1321,7 @@ julia> a = 1//2
 1//2
 
 julia> setfield!(a, :num, 3);
-ERROR: type Rational is immutable
+ERROR: setfield! immutable struct of type Rational cannot be changed
 ```
 """
 setfield!
@@ -1292,6 +1330,19 @@ setfield!
     typeof(x)
 
 Get the concrete type of `x`.
+
+# Examples
+```jldoctest
+julia> a = 1//2;
+
+julia> typeof(a)
+Rational{Int64}
+
+julia> M = [1 2; 3.5 4];
+
+julia> typeof(M)
+Array{Float64,2}
+```
 """
 typeof
 
@@ -1302,25 +1353,48 @@ typeof
 
 Tests whether an assignable location is defined. The arguments can be a module and a symbol
 or a composite object and field name (as a symbol) or index.
+
+# Examples
+```jldoctest
+julia> isdefined(Base, :sum)
+true
+
+julia> isdefined(Base, :NonExistentMethod)
+false
+
+julia> a = 1//2;
+
+julia> isdefined(a, 2)
+true
+
+julia> isdefined(a, 3)
+false
+
+julia> isdefined(a, :num)
+true
+
+julia> isdefined(a, :numerator)
+false
+```
 """
 isdefined
 
 
 """
-    Vector{T}(uninitialized, n)
+    Vector{T}(undef, n)
 
-Construct an uninitialized [`Vector{T}`](@ref) of length `n`. See [`uninitialized`](@ref).
+Construct an uninitialized [`Vector{T}`](@ref) of length `n`. See [`undef`](@ref).
 
 # Examples
 ```julia-repl
-julia> Vector{Float64}(uninitialized, 3)
+julia> Vector{Float64}(undef, 3)
 3-element Array{Float64,1}:
  6.90966e-310
  6.90966e-310
  6.90966e-310
 ```
 """
-Vector{T}(::Uninitialized, n)
+Vector{T}(::UndefInitializer, n)
 
 """
     Vector{T}(nothing, m)
@@ -1357,19 +1431,19 @@ julia> Vector{Union{Missing, String}}(missing, 2)
 Vector{T}(::Missing, n)
 
 """
-    Matrix{T}(uninitialized, m, n)
+    Matrix{T}(undef, m, n)
 
-Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`. See [`uninitialized`](@ref).
+Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`. See [`undef`](@ref).
 
 # Examples
 ```julia-repl
-julia> Matrix{Float64}(uninitialized, 2, 3)
+julia> Matrix{Float64}(undef, 2, 3)
 2×3 Array{Float64,2}:
  6.93517e-310  6.93517e-310  6.93517e-310
  6.93517e-310  6.93517e-310  1.29396e-320
 ```
 """
-Matrix{T}(::Uninitialized, m, n)
+Matrix{T}(::UndefInitializer, m, n)
 
 """
     Matrix{T}(nothing, m, n)
@@ -1406,30 +1480,30 @@ julia> Matrix{Union{Missing, String}}(missing, 2, 3)
 Matrix{T}(::Missing, m, n)
 
 """
-    Array{T}(uninitialized, dims)
-    Array{T,N}(uninitialized, dims)
+    Array{T}(undef, dims)
+    Array{T,N}(undef, dims)
 
 Construct an uninitialized `N`-dimensional [`Array`](@ref)
 containing elements of type `T`. `N` can either be supplied explicitly,
-as in `Array{T,N}(uninitialized, dims)`, or be determined by the length or number of `dims`.
+as in `Array{T,N}(undef, dims)`, or be determined by the length or number of `dims`.
 `dims` may be a tuple or a series of integer arguments corresponding to the lengths
 in each dimension. If the rank `N` is supplied explicitly, then it must
-match the length or number of `dims`. See [`uninitialized`](@ref).
+match the length or number of `dims`. See [`undef`](@ref).
 
 # Examples
 ```julia-repl
-julia> A = Array{Float64,2}(uninitialized, 2, 3) # N given explicitly
+julia> A = Array{Float64,2}(undef, 2, 3) # N given explicitly
 2×3 Array{Float64,2}:
  6.90198e-310  6.90198e-310  6.90198e-310
  6.90198e-310  6.90198e-310  0.0
 
-julia> B = Array{Float64}(uninitialized, 2) # N determined by the input
+julia> B = Array{Float64}(undef, 2) # N determined by the input
 2-element Array{Float64,1}:
  1.87103e-320
  0.0
 ```
 """
-Array{T,N}(::Uninitialized, dims)
+Array{T,N}(::UndefInitializer, dims)
 
 """
     Array{T}(nothing, dims)
@@ -1479,40 +1553,40 @@ julia> Array{Union{Missing, Int}}(missing, 2, 3)
 Array{T,N}(::Missing, dims)
 
 """
-    Uninitialized
+    UndefInitializer
 
 Singleton type used in array initialization, indicating the array-constructor-caller
-would like an uninitialized array. See also [`uninitialized`](@ref),
-an alias for `Uninitialized()`.
+would like an uninitialized array. See also [`undef`](@ref),
+an alias for `UndefInitializer()`.
 
 # Examples
 ```julia-repl
-julia> Array{Float64,1}(Uninitialized(), 3)
+julia> Array{Float64,1}(UndefInitializer(), 3)
 3-element Array{Float64,1}:
  2.2752528595e-314
  2.202942107e-314
  2.275252907e-314
 ```
 """
-Uninitialized
+UndefInitializer
 
 """
-    uninitialized
+    undef
 
-Alias for `Uninitialized()`, which constructs an instance of the singleton type
-[`Uninitialized`](@ref), used in array initialization to indicate the
+Alias for `UndefInitializer()`, which constructs an instance of the singleton type
+[`UndefInitializer`](@ref), used in array initialization to indicate the
 array-constructor-caller would like an uninitialized array.
 
 # Examples
 ```julia-repl
-julia> Array{Float64,1}(uninitialized, 3)
+julia> Array{Float64,1}(undef, 3)
 3-element Array{Float64,1}:
  2.2752528595e-314
  2.202942107e-314
  2.275252907e-314
 ```
 """
-uninitialized
+undef
 
 """
     +(x, y...)
@@ -1624,13 +1698,21 @@ MethodError
 
 The asserted condition did not evaluate to `true`.
 Optional argument `msg` is a descriptive error string.
+
+# Examples
+```jldoctest
+julia> @assert false "this is not true"
+ERROR: AssertionError: this is not true
+```
+
+`AssertionError` is usually thrown from [`@assert`](@ref).
 """
 AssertionError
 
 """
     LoadError(file::AbstractString, line::Int, error)
 
-An error occurred while `include`ing, `require`ing, or `using` a file. The error specifics
+An error occurred while `include`ing, `require`ing, or [`using`](@ref) a file. The error specifics
 should be available in the `.error` field.
 """
 LoadError
@@ -1787,6 +1869,32 @@ typeassert
     getproperty(value, name::Symbol)
 
 The syntax `a.b` calls `getproperty(a, :b)`.
+
+# Examples
+```jldoctest
+julia> struct MyType
+           x
+       end
+
+julia> function Base.getproperty(obj::MyType, sym::Symbol)
+           if sym === :special
+               return obj.x + 1
+           else # fallback to getfield
+               return getfield(obj, sym)
+           end
+       end
+
+julia> obj = MyType(1);
+
+julia> obj.special
+2
+
+julia> obj.x
+1
+```
+
+See also [`propertynames`](@ref Base.propertynames) and
+[`setproperty!`](@ref Base.setproperty!).
 """
 Base.getproperty
 
@@ -1794,7 +1902,45 @@ Base.getproperty
     setproperty!(value, name::Symbol, x)
 
 The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
+
+See also [`propertynames`](@ref Base.propertynames) and
+[`getproperty`](@ref Base.getproperty).
 """
 Base.setproperty!
+
+"""
+    StridedArray{T, N}
+
+An `N` dimensional *strided* array with elements of type `T`. These arrays follow
+the [strided array interface](@ref man-interface-strided-arrays). If `A` is a
+`StridedArray`, then its elements are stored in memory with offsets, which may
+vary between dimensions but are constant within a dimension. For example, `A` could
+have stride 2 in dimension 1, and stride 3 in dimension 2. Incrementing `A` along
+dimension `d` jumps in memory by [`strides(A, d)`] slots. Strided arrays are
+particularly important and useful because they can sometimes be passed directly
+as pointers to foreign language libraries like BLAS.
+"""
+StridedArray
+
+"""
+    StridedVector{T}
+
+One dimensional [`StridedArray`](@ref) with elements of type `T`.
+"""
+StridedVector
+
+"""
+    StridedMatrix{T}
+
+Two dimensional [`StridedArray`](@ref) with elements of type `T`.
+"""
+StridedMatrix
+
+"""
+    StridedVecOrMat{T}
+
+Union type of [`StridedVector`](@ref) and [`StridedMatrix`](@ref) with elements of type `T`.
+"""
+StridedVecOrMat
 
 end

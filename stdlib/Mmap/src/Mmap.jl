@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
 Low level module for mmap (memory mapping of files).
 """
@@ -109,7 +107,7 @@ const FILE_MAP_EXECUTE       = DWORD(0x20)
 
 function gethandle(io::IO)
     handle = Libc._get_osfhandle(RawFD(fd(io)))
-    systemerror("could not get handle for file to map: $(Libc.FormatMessage())", handle == INVALID_OS_HANDLE)
+    Base.windowserror(:mmap, handle == INVALID_OS_HANDLE)
     return handle
 end
 
@@ -124,7 +122,7 @@ end # os-test
 
 """
     Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
-           Mmap.mmap(type::Type{Array{T,N}}, dims)
+    Mmap.mmap(type::Type{Array{T,N}}, dims)
 
 Create an `Array` whose values are linked to a file, using memory-mapping. This provides a
 convenient way of working with data too large to fit in the computer's memory.
@@ -186,11 +184,11 @@ function mmap(io::IO,
               offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T,N}
     # check inputs
     isopen(io) || throw(ArgumentError("$io must be open to mmap"))
-    isbits(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbits(T) == true"))
+    isbitstype(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbitstype(T) == true"))
 
     len = prod(dims) * sizeof(T)
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
-    len == 0 && return Array{T}(uninitialized, ntuple(x->0,Val(N)))
+    len == 0 && return Array{T}(undef, ntuple(x->0,Val(N)))
     len < typemax(Int) - PAGESIZE || throw(ArgumentError("requested size must be < $(typemax(Int)-PAGESIZE), got $len"))
 
     offset >= 0 || throw(ArgumentError("requested offset must be ≥ 0, got $offset"))
@@ -217,10 +215,10 @@ function mmap(io::IO,
                                 file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name) :
                           ccall(:OpenFileMappingW, stdcall, Ptr{Cvoid}, (DWORD, Cint, Cwstring),
                                 readonly ? FILE_MAP_READ : FILE_MAP_WRITE, true, name)
-        handle == C_NULL && error("could not create file mapping: $(Libc.FormatMessage())")
+        Base.windowserror(:mmap, handle == C_NULL)
         ptr = ccall(:MapViewOfFile, stdcall, Ptr{Cvoid}, (Ptr{Cvoid}, DWORD, DWORD, DWORD, Csize_t),
                     handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), (offset - offset_page) + len)
-        ptr == C_NULL && error("could not create mapping view: $(Libc.FormatMessage())")
+        Base.windowserror(:mmap, ptr == C_NULL)
     end # os-test
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
     A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
@@ -230,7 +228,7 @@ function mmap(io::IO,
         else
             status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Cvoid},), ptr)!=0
             status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Cvoid},), handle)!=0
-            status || error("could not unmap view: $(Libc.FormatMessage())")
+            Base.windowserror(:UnmapViewOfFile, status == 0)
         end
     end
     return A
@@ -299,7 +297,7 @@ function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
             throw(ArgumentError("the given file does not contain a valid BitArray of size $(join(dims, 'x')) (open with \"r+\" mode to override)"))
         end
     end
-    B = BitArray{N}(uninitialized, ntuple(i->0,Val(N))...)
+    B = BitArray{N}(undef, ntuple(i->0,Val(N))...)
     B.chunks = chunks
     B.len = n
     if N != 1
@@ -339,8 +337,8 @@ function sync!(m::Array{T}, flags::Integer=MS_SYNC) where T
         systemerror("msync",
                     ccall(:msync, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, length(m) * sizeof(T), flags) != 0)
     else
-        systemerror("could not FlushViewOfFile: $(Libc.FormatMessage())",
-                    ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Cvoid}, Csize_t), ptr, length(m)) == 0)
+        Base.windowserror(:FlushViewOfFile,
+            ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Cvoid}, Csize_t), ptr, length(m)) == 0)
     end
 end
 sync!(B::BitArray, flags::Integer=MS_SYNC) = sync!(B.chunks, flags)

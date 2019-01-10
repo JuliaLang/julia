@@ -178,7 +178,7 @@ of the binary data item is the minimal needed size, if the leading digit of the 
 `0`. In the case of leading zeros, the size is determined by the minimal needed size for a
 literal, which has the same length but leading digit `1`. That allows the user to control
 the size.
-Values, which cannot be stored in `UInt128` cannot be written as such literals.
+Values which cannot be stored in `UInt128` cannot be written as such literals.
 
 Binary, octal, and hexadecimal literals may be signed by a `-` immediately preceding the
 unsigned literal. They produce an unsigned integer of the same size as the unsigned literal
@@ -215,7 +215,7 @@ UInt128: [0,340282366920938463463374607431768211455]
 ```
 
 The values returned by [`typemin`](@ref) and [`typemax`](@ref) are always of the given argument
-type. (The above expression uses several features we have yet to introduce, including [for loops](@ref man-loops),
+type. (The above expression uses several features that have yet to be introduced, including [for loops](@ref man-loops),
 [Strings](@ref man-strings), and [Interpolation](@ref), but should be easy enough to understand for users
 with some existing programming experience.)
 
@@ -338,7 +338,7 @@ julia> 10_000, 0.000_000_005, 0xdead_beef, 0b1011_0010
 
 Floating-point numbers have [two zeros](https://en.wikipedia.org/wiki/Signed_zero), positive zero
 and negative zero. They are equal to each other but have different binary representations, as
-can be seen using the `bits` function:
+can be seen using the [`bitstring`](@ref) function:
 
 ```jldoctest
 julia> 0.0 == -0.0
@@ -491,30 +491,13 @@ also have adjacent binary integer representations.
 
 ### Rounding modes
 
-If a number doesn't have an exact floating-point representation, it must be rounded to an appropriate
-representable value, however, if wanted, the manner in which this rounding is done can be changed
-according to the rounding modes presented in the [IEEE 754 standard](https://en.wikipedia.org/wiki/IEEE_754-2008).
-
-```jldoctest
-julia> x = 1.1; y = 0.1;
-
-julia> x + y
-1.2000000000000002
-
-julia> setrounding(Float64,RoundDown) do
-           x + y
-       end
-1.2
-```
+If a number doesn't have an exact floating-point representation, it must be rounded to an
+appropriate representable value. However, the manner in which this rounding is done can be
+changed if required according to the rounding modes presented in the [IEEE 754
+standard](https://en.wikipedia.org/wiki/IEEE_754-2008).
 
 The default mode used is always [`RoundNearest`](@ref), which rounds to the nearest representable
 value, with ties rounded towards the nearest value with an even least significant bit.
-
-!!! warning
-    Rounding is generally only correct for basic arithmetic functions ([`+`](@ref), [`-`](@ref),
-    [`*`](@ref), [`/`](@ref) and [`sqrt`](@ref)) and type conversion operations. Many other
-    functions assume the default [`RoundNearest`](@ref) mode is set, and can give erroneous results
-    when operating under other rounding modes.
 
 ### Background and References
 
@@ -522,7 +505,7 @@ Floating-point arithmetic entails many subtleties which can be surprising to use
 with the low-level implementation details. However, these subtleties are described in detail in
 most books on scientific computation, and also in the following references:
 
-  * The definitive guide to floating point arithmetic is the [IEEE 754-2008 Standard](http://standards.ieee.org/findstds/standard/754-2008.html);
+  * The definitive guide to floating point arithmetic is the [IEEE 754-2008 Standard](https://standards.ieee.org/standard/754-2008.html);
     however, it is not available for free online.
   * For a brief but lucid presentation of how floating-point numbers are represented, see John D.
     Cook's [article](https://www.johndcook.com/blog/2009/04/06/anatomy-of-a-floating-point-number/)
@@ -540,7 +523,7 @@ most books on scientific computation, and also in the following references:
 ## Arbitrary Precision Arithmetic
 
 To allow computations with arbitrary-precision integers and floating point numbers, Julia wraps
-the [GNU Multiple Precision Arithmetic Library (GMP)](https://gmplib.org) and the [GNU MPFR Library](http://www.mpfr.org),
+the [GNU Multiple Precision Arithmetic Library (GMP)](https://gmplib.org) and the [GNU MPFR Library](https://www.mpfr.org),
 respectively. The [`BigInt`](@ref) and [`BigFloat`](@ref) types are available in Julia for arbitrary
 precision integer and floating point numbers respectively.
 
@@ -613,7 +596,7 @@ julia> setprecision(40) do
 
 ## [Numeric Literal Coefficients](@id man-numeric-literal-coefficients)
 
-To make common numeric formulas and expressions clearer, Julia allows variables to be immediately
+To make common numeric formulae and expressions clearer, Julia allows variables to be immediately
 preceded by a numeric literal, implying multiplication. This makes writing polynomial expressions
 much cleaner:
 
@@ -635,8 +618,12 @@ julia> 2^2x
 64
 ```
 
-The precedence of numeric literal coefficients is the same as that of unary operators such as
-negation. So `2^3x` is parsed as `2^(3x)`, and `2x^3` is parsed as `2*(x^3)`.
+The precedence of numeric literal coefficients is slightly lower than that of
+unary operators such as negation.
+So `-2x` is parsed as `(-2) * x` and `√2x` is parsed as `(√2) * x`.
+However, numeric literal coefficients parse similarly to unary operators when
+combined with exponentiation.
+For example `2^3x` is parsed as `2^(3x)`, and `2x^3` is parsed as `2*(x^3)`.
 
 Numeric literals also work as coefficients to parenthesized expressions:
 
@@ -688,11 +675,19 @@ where syntactic conflicts arise:
     `0` multiplied by the variable `xff`.
   * The floating-point literal expression `1e10` could be interpreted as the numeric literal `1` multiplied
     by the variable `e10`, and similarly with the equivalent `E` form.
+  * The 32-bit floating-point literal expression `1.5f22` could be interpreted as the numeric literal
+    `1.5` multiplied by the variable `f22`.
 
-In both cases, we resolve the ambiguity in favor of interpretation as a numeric literals:
+In all cases the ambiguity is resolved in favor of interpretation as numeric literals:
 
   * Expressions starting with `0x` are always hexadecimal literals.
   * Expressions starting with a numeric literal followed by `e` or `E` are always floating-point literals.
+  * Expressions starting with a numeric literal followed by `f` are always 32-bit floating-point literals.
+
+Unlike `E`, which is equivalent to `e` in numeric literals for historical reasons, `F` is just another
+letter and does not behave like `f` in numeric literals. Hence, expressions starting with a numeric literal
+followed by `F` are interpreted as the numerical literal multiplied by a variable, which means that, for
+example, `1.5F22` is equal to `1.5 * F22`.
 
 ## Literal zero and one
 

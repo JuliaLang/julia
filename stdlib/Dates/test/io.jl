@@ -7,7 +7,7 @@ using Dates
 
 @testset "string/show representation of Date" begin
     @test string(Dates.Date(1, 1, 1)) == "0001-01-01" # January 1st, 1 AD/CE
-    @test sprint(show, Dates.Date(1, 1, 1)) == "0001-01-01"
+    @test sprint(show, Dates.Date(1, 1, 1)) == "Date(1, 1, 1)"
     @test string(Dates.Date(0, 12, 31)) == "0000-12-31" # December 31, 1 BC/BCE
     @test Dates.Date(1, 1, 1) - Dates.Date(0, 12, 31) == Dates.Day(1)
     @test Dates.Date(Dates.UTD(-306)) == Dates.Date(0, 2, 29)
@@ -16,7 +16,7 @@ using Dates
     @test string(Dates.Date(-1000000, 1, 1)) == "-1000000-01-01"
     @test string(Dates.Date(1000000, 1, 1)) == "1000000-01-01"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 1)) == "2000-01-01T00:00:00.001"
-    @test sprint(show, Dates.DateTime(2000, 1, 1, 0, 0, 0, 1)) == "2000-01-01T00:00:00.001"
+    @test sprint(show, Dates.DateTime(2000, 1, 1, 0, 0, 0, 1)) == "DateTime(2000, 1, 1, 0, 0, 0, 1)"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 2)) == "2000-01-01T00:00:00.002"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 500)) == "2000-01-01T00:00:00.5"
     @test string(Dates.DateTime(2000, 1, 1, 0, 0, 0, 998)) == "2000-01-01T00:00:00.998"
@@ -35,10 +35,10 @@ end
     # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
     # Allow parsing of strings which are not representable as a TimeType
-    str = "02/15/1996 24:00"
+    str = "02/15/1996 25:00"
     df = Dates.DateFormat("mm/dd/yyyy HH:MM")
     parsed = Any[
-        Dates.Month(2), Dates.Day(15), Dates.Year(1996), Dates.Hour(24), Dates.Minute(0)
+        Dates.Month(2), Dates.Day(15), Dates.Year(1996), Dates.Hour(25), Dates.Minute(0)
     ]
     @test Dates.parse_components(str, df) == parsed
     @test_throws ArgumentError Dates.parse(DateTime, str, df)
@@ -80,7 +80,7 @@ end
     b2 = "96/Feb/1"
     @test Dates.DateTime(b2, f) + Dates.Year(1900) + Dates.Day(14) == dt + Dates.Month(1)
     @test Dates.format(dt + Dates.Month(1) - Dates.Day(14), "yy/uuu/d") == b2
-    # Here we've specifed a text month name, but given a number
+    # Here we've specified a text month name, but given a number
     b3 = "96/2/15"
     @test_throws ArgumentError Dates.DateTime(b3, f)
     try
@@ -390,7 +390,7 @@ end
     Zulu = String
 
     function Dates.tryparsenext(d::Dates.DatePart{'Z'}, str, i, len)
-        Dates.tryparsenext_word(str, i, len, Dates.min_width(d), Dates.max_width(d))
+        return Dates.tryparsenext_word(str, i, len, Dates.min_width(d), Dates.max_width(d))
     end
 
     str = "2015-07-24T05:38:19.591Z"
@@ -491,6 +491,15 @@ end
         @test_throws ArgumentError Dates.Time("20:03:20", DateFormat("HH:MM"))  # too much precision
         @test_throws ArgumentError Dates.Time("10:33:51", DateFormat("YYYY-MM-DD HH:MM:SS"))  # Time can't hold year/month/day
     end
+end
+
+@testset "midnight" begin
+    # issue #28203: 24:00 is a valid ISO 8601 time
+    @test DateTime("2018-01-01 24:00","yyyy-mm-dd HH:MM") == DateTime("2018-01-02T00:00:00") ==
+          DateTime(2018, 1, 1, 24) == DateTime(2018, 1, 2)
+    @test_throws ArgumentError DateTime("2018-01-01 24:01","yyyy-mm-dd HH:MM")
+    @test_throws ArgumentError DateTime(2018, 1, 1, 24, 0, 1)
+    @test_throws ArgumentError DateTime(2018, 1, 1, 24, 0, 0, 1)
 end
 
 end

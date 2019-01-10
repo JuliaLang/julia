@@ -1,33 +1,34 @@
 # Install dependencies needed to build the documentation.
-ENV["JULIA_PKGDIR"] = joinpath(@__DIR__, "deps")
+empty!(LOAD_PATH)
+push!(LOAD_PATH, @__DIR__, "@stdlib")
+empty!(DEPOT_PATH)
+pushfirst!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
 using Pkg
-Pkg.init()
-cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); force = true)
-Pkg.update()
-Pkg.resolve()
+Pkg.instantiate()
 
-using Documenter
-
-# Include the `build_sysimg` file.
+using Documenter, DocumenterLaTeX
 
 baremodule GenStdLib end
-@isdefined(build_sysimg) || @eval module BuildSysImg
-    include(joinpath(@__DIR__, "..", "contrib", "build_sysimg.jl"))
-end
 
 # Documenter Setup.
 
 symlink_q(tgt, link) = isfile(link) || symlink(tgt, link)
 cp_q(src, dest) = isfile(dest) || cp(src, dest)
 
-# make links for stdlib package docs, this is needed until #522 in Documenter.jl is finished
+# make links for stdlib package docs, this is needed until #552 in Documenter.jl is finished
 const STDLIB_DOCS = []
-const STDLIB_DIR = joinpath(@__DIR__, "..", "stdlib")
+const STDLIB_DIR = Sys.STDLIB
+const EXT_STDLIB_DOCS = ["Pkg"]
 cd(joinpath(@__DIR__, "src")) do
     Base.rm("stdlib"; recursive=true, force=true)
     mkdir("stdlib")
     for dir in readdir(STDLIB_DIR)
-        sourcefile = joinpath(STDLIB_DIR, dir, "docs", "src", "index.md")
+        sourcefile = joinpath(STDLIB_DIR, dir, "docs", "src")
+        if dir in EXT_STDLIB_DOCS
+            sourcefile = joinpath(sourcefile, "basedocs.md")
+        else
+            sourcefile = joinpath(sourcefile, "index.md")
+        end
         if isfile(sourcefile)
             targetfile = joinpath("stdlib", dir * ".md")
             push!(STDLIB_DOCS, (stdlib = Symbol(dir), targetfile = targetfile))
@@ -51,7 +52,6 @@ const PAGES = [
     "Home" => "index.md",
     hide("NEWS.md"),
     "Manual" => [
-        "manual/introduction.md",
         "manual/getting-started.md",
         "manual/variables.md",
         "manual/integers-and-floating-point-numbers.md",
@@ -78,7 +78,7 @@ const PAGES = [
         "manual/handling-operating-system-variation.md",
         "manual/environment-variables.md",
         "manual/embedding.md",
-        "manual/packages.md",
+        "manual/code-loading.md",
         "manual/profile.md",
         "manual/stacktraces.md",
         "manual/performance-tips.md",
@@ -124,6 +124,7 @@ const PAGES = [
             "devdocs/cartesian.md",
             "devdocs/meta.md",
             "devdocs/subarrays.md",
+            "devdocs/isbitsunionarrays.md",
             "devdocs/sysimg.md",
             "devdocs/llvm.md",
             "devdocs/stdio.md",
@@ -132,6 +133,8 @@ const PAGES = [
             "devdocs/offset-arrays.md",
             "devdocs/require.md",
             "devdocs/inference.md",
+            "devdocs/ssair.md",
+            "devdocs/gc-sa.md",
         ],
         "Developing/debugging Julia's C code" => [
             "devdocs/backtraces.md",
@@ -146,38 +149,50 @@ for stdlib in STDLIB_DOCS
     @eval using $(stdlib.stdlib)
 end
 
+const render_pdf = "pdf" in ARGS
+let r = r"buildroot=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
+    global const buildroot = i === nothing ? (@__DIR__) : first(match(r, ARGS[i]).captures)
+end
+
+const format = if render_pdf
+    LaTeX(
+        platform = "texplatform=docker" in ARGS ? "docker" : "native"
+    )
+else
+    Documenter.HTML(
+        prettyurls = ("deploy" in ARGS),
+        canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/v1/" : nothing,
+    )
+end
+
 makedocs(
-    build     = joinpath(pwd(), "_build/html/en"),
-    modules   = [Base, Core, BuildSysImg, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
+    build     = joinpath(buildroot, "doc", "_build", (render_pdf ? "pdf" : "html"), "en"),
+    modules   = [Base, Core, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
     clean     = true,
-    doctest   = "doctest" in ARGS,
-    linkcheck = "linkcheck" in ARGS,
+    doctest   = ("doctest=fix" in ARGS) ? (:fix) : ("doctest=true" in ARGS) ? true : false,
+    linkcheck = "linkcheck=true" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
-    strict    = false,
+    strict    = true,
     checkdocs = :none,
-    format    = "pdf" in ARGS ? :latex : :html,
+    format    = format,
     sitename  = "The Julia Language",
     authors   = "The Julia Project",
     analytics = "UA-28835595-6",
     pages     = PAGES,
-    html_prettyurls = ("deploy" in ARGS),
-    html_canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/stable/" : nothing,
+    assets = ["assets/julia-manual.css", ]
 )
 
-if "deploy" in ARGS
-    # Only deploy docs from 64bit Linux to avoid committing multiple versions of the same
-    # docs from different workers.
-    (Sys.ARCH === :x86_64 && Sys.KERNEL === :Linux) || return
-
-    # Since the `.travis.yml` config specifies `language: cpp` and not `language: julia` we
-    # need to manually set the version of Julia that we are deploying the docs from.
-    ENV["TRAVIS_JULIA_VERSION"] = "nightly"
-
+# Only deploy docs from 64bit Linux to avoid committing multiple versions of the same
+# docs from different workers.
+if "deploy" in ARGS && Sys.ARCH === :x86_64 && Sys.KERNEL === :Linux
+# Override TRAVIS_REPO_SLUG since we deploy to a different repo
+withenv("TRAVIS_REPO_SLUG" => "JuliaLang/docs.julialang.org") do
     deploydocs(
-        repo = "github.com/JuliaLang/julia.git",
-        target = "_build/html/en",
+        repo = "github.com/JuliaLang/docs.julialang.org.git",
+        target = joinpath(buildroot, "doc", "_build", "html", "en"),
         dirname = "en",
-        deps = nothing,
-        make = nothing,
+        devurl = "v1.2-dev",
+        versions = ["v#.#", "v1.2-dev" => "v1.2-dev"]
     )
+end
 end

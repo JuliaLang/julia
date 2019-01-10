@@ -14,30 +14,29 @@ typejoin(@nospecialize(t)) = (@_pure_meta; t)
 typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
 function typejoin(@nospecialize(a), @nospecialize(b))
     @_pure_meta
-    if a <: b
+    if isa(a, TypeVar)
+        return typejoin(a.ub, b)
+    elseif isa(b, TypeVar)
+        return typejoin(a, b.ub)
+    elseif a <: b
         return b
     elseif b <: a
         return a
-    elseif isa(a,UnionAll)
+    elseif isa(a, UnionAll)
         return UnionAll(a.var, typejoin(a.body, b))
-    elseif isa(b,UnionAll)
+    elseif isa(b, UnionAll)
         return UnionAll(b.var, typejoin(a, b.body))
-    elseif isa(a,TypeVar)
-        return typejoin(a.ub, b)
-    elseif isa(b,TypeVar)
-        return typejoin(a, b.ub)
-    elseif isa(a,Union)
-        a′ = typejoin(a.a, a.b)
-        return a′ === a ? typejoin(a, b) : typejoin(a′, b)
-    elseif isa(b,Union)
-        b′ = typejoin(b.a, b.b)
-        return b′ === b ? typejoin(a, b) : typejoin(a, b′)
+    elseif isa(a, Union)
+        return typejoin(typejoin(a.a, a.b), b)
+    elseif isa(b, Union)
+        return typejoin(a, typejoin(b.a, b.b))
     elseif a <: Tuple
         if !(b <: Tuple)
             return Any
         end
         ap, bp = a.parameters, b.parameters
-        lar = length(ap)::Int; lbr = length(bp)::Int
+        lar = length(ap)::Int
+        lbr = length(bp)::Int
         if lar == 0
             return Tuple{Vararg{tailjoin(bp, 1)}}
         end
@@ -48,26 +47,26 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         lbf, bfixed = full_va_len(bp)
         if laf < lbf
             if isvarargtype(ap[lar]) && !afixed
-                c = Vector{Any}(uninitialized, laf)
+                c = Vector{Any}(undef, laf)
                 c[laf] = Vararg{typejoin(unwrapva(ap[lar]), tailjoin(bp, laf))}
                 n = laf-1
             else
-                c = Vector{Any}(uninitialized, laf+1)
+                c = Vector{Any}(undef, laf+1)
                 c[laf+1] = Vararg{tailjoin(bp, laf+1)}
                 n = laf
             end
         elseif lbf < laf
             if isvarargtype(bp[lbr]) && !bfixed
-                c = Vector{Any}(uninitialized, lbf)
+                c = Vector{Any}(undef, lbf)
                 c[lbf] = Vararg{typejoin(unwrapva(bp[lbr]), tailjoin(ap, lbf))}
                 n = lbf-1
             else
-                c = Vector{Any}(uninitialized, lbf+1)
+                c = Vector{Any}(undef, lbf+1)
                 c[lbf+1] = Vararg{tailjoin(ap, lbf+1)}
                 n = lbf
             end
         else
-            c = Vector{Any}(uninitialized, laf)
+            c = Vector{Any}(undef, laf)
             n = laf
         end
         for i = 1:n
@@ -84,22 +83,35 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             while a.name !== b.name
                 a = supertype(a)
             end
-            aprimary = unwrap_unionall(a.name.wrapper)
+            if a.name === Type.body.name
+                ap = a.parameters[1]
+                bp = b.parameters[1]
+                if ((isa(ap,TypeVar) && ap.lb === Bottom && ap.ub === Any) ||
+                    (isa(bp,TypeVar) && bp.lb === Bottom && bp.ub === Any))
+                    # handle special Type{T} supertype
+                    return Type
+                end
+            end
+            aprimary = a.name.wrapper
             # join on parameters
             n = length(a.parameters)
             if n == 0
                 return aprimary
             end
-            p = Vector{Any}(uninitialized, n)
+            vars = []
             for i = 1:n
                 ai, bi = a.parameters[i], b.parameters[i]
-                if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
-                    p[i] = ai
+                if ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai)
+                    aprimary = aprimary{ai}
                 else
-                    p[i] = aprimary.parameters[i]
+                    pushfirst!(vars, aprimary.var)
+                    aprimary = aprimary.body
                 end
             end
-            return rewrap_unionall(a.name.wrapper{p...}, a.name.wrapper)
+            for v in vars
+                aprimary = UnionAll(v, aprimary)
+            end
+            return aprimary
         end
         b = supertype(b)
     end
@@ -113,19 +125,20 @@ Compute a type that contains both `T` and `S`, which could be
 either a parent of both types, or a `Union` if appropriate.
 Falls back to [`typejoin`](@ref).
 """
-promote_typejoin(@nospecialize(a), @nospecialize(b)) = typejoin(a, b)
-promote_typejoin(::Type{Nothing}, ::Type{T}) where {T} =
+promote_typejoin(@nospecialize(a), @nospecialize(b)) = _promote_typejoin(a, b)::Type
+_promote_typejoin(@nospecialize(a), @nospecialize(b)) = typejoin(a, b)
+_promote_typejoin(::Type{Nothing}, ::Type{T}) where {T} =
     isconcretetype(T) || T === Union{} ? Union{T, Nothing} : Any
-promote_typejoin(::Type{T}, ::Type{Nothing}) where {T} =
+_promote_typejoin(::Type{T}, ::Type{Nothing}) where {T} =
     isconcretetype(T) || T === Union{} ? Union{T, Nothing} : Any
-promote_typejoin(::Type{Missing}, ::Type{T}) where {T} =
+_promote_typejoin(::Type{Missing}, ::Type{T}) where {T} =
     isconcretetype(T) || T === Union{} ? Union{T, Missing} : Any
-promote_typejoin(::Type{T}, ::Type{Missing}) where {T} =
+_promote_typejoin(::Type{T}, ::Type{Missing}) where {T} =
     isconcretetype(T) || T === Union{} ? Union{T, Missing} : Any
-promote_typejoin(::Type{Nothing}, ::Type{Missing}) = Union{Nothing, Missing}
-promote_typejoin(::Type{Missing}, ::Type{Nothing}) = Union{Nothing, Missing}
-promote_typejoin(::Type{Nothing}, ::Type{Nothing}) = Nothing
-promote_typejoin(::Type{Missing}, ::Type{Missing}) = Missing
+_promote_typejoin(::Type{Nothing}, ::Type{Missing}) = Union{Nothing, Missing}
+_promote_typejoin(::Type{Missing}, ::Type{Nothing}) = Union{Nothing, Missing}
+_promote_typejoin(::Type{Nothing}, ::Type{Nothing}) = Nothing
+_promote_typejoin(::Type{Missing}, ::Type{Missing}) = Missing
 
 # Returns length, isfixed
 function full_va_len(p)
@@ -263,25 +276,6 @@ end
 
 ## promotions in arithmetic, etc. ##
 
-# Because of the promoting fallback definitions for Number, we need
-# a special case for undefined promote_rule on numeric types.
-# Otherwise, typejoin(T,S) is called (returning Number) so no conversion
-# happens, and +(promote(x,y)...) is called again, causing a stack
-# overflow.
-function promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T<:Number,S<:Number}
-    @_inline_meta
-    promote_to_supertype(T, S, typejoin(T,S))
-end
-
-# promote numeric types T and S to typejoin(T,S) if T<:S or S<:T
-# for example this makes promote_type(Integer,Real) == Real without
-# promoting arbitrary pairs of numeric types to Number.
-promote_to_supertype(::Type{T}, ::Type{T}, ::Type{T}) where {T<:Number}           = (@_inline_meta; T)
-promote_to_supertype(::Type{T}, ::Type{S}, ::Type{T}) where {T<:Number,S<:Number} = (@_inline_meta; T)
-promote_to_supertype(::Type{T}, ::Type{S}, ::Type{S}) where {T<:Number,S<:Number} = (@_inline_meta; S)
-promote_to_supertype(::Type{T}, ::Type{S}, ::Type) where {T<:Number,S<:Number} =
-    error("no promotion exists for ", T, " and ", S)
-
 promote() = ()
 promote(x) = (x,)
 
@@ -370,11 +364,6 @@ max(x::Real, y::Real) = max(promote(x,y)...)
 min(x::Real, y::Real) = min(promote(x,y)...)
 minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 
-# "Promotion" that takes a function into account and tries to preserve
-# non-concrete types. These are meant to be used mainly by elementwise
-# operations, so it is advised against overriding them
-_default_type(T::Type) = (@_inline_meta; T)
-
 if isdefined(Core, :Compiler)
     const _return_type = Core.Compiler.return_type
 else
@@ -388,30 +377,11 @@ Guess what an appropriate container eltype would be for storing results of
 `f(::argtypes...)`. The guess is in part based on type inference, so can change any time.
 
 !!! warning
-    In pathological cases, the type returned by `promote_op(f, argtypes...)` may not even
-    be a supertype of the return value of `f(::argtypes...)`. Therefore, `promote_op`
-    should _not_ be used e.g. in the preallocation of an output array.
-
-!!! warning
     Due to its fragility, use of `promote_op` should be avoided. It is preferable to base
     the container eltype on the type of the actual elements. Only in the absence of any
     elements (for an empty result container), it may be unavoidable to call `promote_op`.
 """
-promote_op(::Any...) = (@_inline_meta; Any)
-function promote_op(f, ::Type{S}) where S
-    @_inline_meta
-    TT = Tuple{_default_type(S)}
-    T = _return_type(f, TT)
-    isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any
-    return typejoin(S, T)
-end
-function promote_op(f, ::Type{R}, ::Type{S}) where {R,S}
-    @_inline_meta
-    TT = Tuple{_default_type(R), _default_type(S)}
-    T = _return_type(f, TT)
-    isdispatchtuple(Tuple{R}) && isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any
-    return typejoin(R, S, T)
-end
+promote_op(f, S::Type...) = _return_type(f, Tuple{S...})
 
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 
@@ -441,8 +411,8 @@ min(x::Real) = x
 max(x::Real) = x
 minmax(x::Real) = (x, x)
 
-max(x::T, y::T) where {T<:Real} = select_value(y < x, x, y)
-min(x::T, y::T) where {T<:Real} = select_value(y < x, y, x)
+max(x::T, y::T) where {T<:Real} = ifelse(y < x, x, y)
+min(x::T, y::T) where {T<:Real} = ifelse(y < x, y, x)
 minmax(x::T, y::T) where {T<:Real} = y < x ? (y, x) : (x, y)
 
 flipsign(x::T, y::T) where {T<:Signed} = no_op_err("flipsign", T)

@@ -16,6 +16,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
 
     function GenericIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
                                 maxsize::Integer) where T<:AbstractVector{UInt8}
+        require_one_based_indexing(data)
         new(data,readable,writable,seekable,append,length(data),maxsize,1,-1)
     end
 end
@@ -88,7 +89,7 @@ function IOBuffer(
         maxsize::Integer=typemax(Int),
         sizehint::Union{Integer,Nothing}=nothing)
     if maxsize < 0
-        throw(ArgumentError("negative maxsize: $(maxsize)"))
+        throw(ArgumentError("negative maxsize"))
     end
     if sizehint !== nothing
         sizehint!(data, sizehint)
@@ -117,7 +118,7 @@ function IOBuffer(;
         append=flags.append,
         truncate=flags.truncate,
         maxsize=maxsize)
-    buf.data[:] = 0
+    fill!(buf.data, 0)
     return buf
 end
 
@@ -166,12 +167,28 @@ function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     nothing
 end
 
+function read(from::GenericIOBuffer, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
+    from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
+    avail = bytesavailable(from)
+    nb = sizeof(T)
+    if nb > avail
+        throw(EOFError())
+    end
+    GC.@preserve from begin
+        ptr::Ptr{T} = pointer(from.data, from.ptr)
+        x = unsafe_load(ptr)
+    end
+    from.ptr += nb
+    return x
+end
+
 function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
+    require_one_based_indexing(a)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    if isbits(T) && isa(a,Array)
+    if isbitstype(T) && isa(a,Array)
         nb = UInt(nel * sizeof(T))
         GC.@preserve a unsafe_read(from, pointer(a, offs), nb)
     else
@@ -246,7 +263,7 @@ function truncate(io::GenericIOBuffer, n::Integer)
     if n > length(io.data)
         resize!(io.data, n)
     end
-    io.data[io.size+1:n] = 0
+    io.data[io.size+1:n] .= 0
     io.size = n
     io.ptr = min(io.ptr, n+1)
     ismarked(io) && io.mark > n && unmark(io)
@@ -272,11 +289,9 @@ function compact(io::GenericIOBuffer)
     return io
 end
 
-@inline ensureroom(io::GenericIOBuffer, nshort::Int) = ensureroom(io, UInt(nshort))
-@inline function ensureroom(io::GenericIOBuffer, nshort::UInt)
+@noinline function ensureroom_slowpath(io::GenericIOBuffer, nshort::UInt)
     io.writable || throw(ArgumentError("ensureroom failed, IOBuffer is not writeable"))
     if !io.seekable
-        nshort >= 0 || throw(ArgumentError("ensureroom failed, requested number of bytes must be ≥ 0, got $nshort"))
         if !ismarked(io) && io.ptr > 1 && io.size <= io.ptr - 1
             io.ptr = 1
             io.size = 0
@@ -291,9 +306,18 @@ end
             end
         end
     end
-    n = min(nshort + (io.append ? io.size : io.ptr-1), io.maxsize)
-    if n > length(io.data)
-        resize!(io.data, n)
+    return
+end
+
+@inline ensureroom(io::GenericIOBuffer, nshort::Int) = ensureroom(io, UInt(nshort))
+@inline function ensureroom(io::GenericIOBuffer, nshort::UInt)
+    if !io.writable || (!io.seekable && io.ptr > 1)
+        ensureroom_slowpath(io, nshort)
+    end
+    n = min((nshort % Int) + (io.append ? io.size : io.ptr-1), io.maxsize)
+    l = length(io.data)
+    if n > l
+        _growend!(io.data, (n - l) % UInt)
     end
     return io
 end
@@ -401,6 +425,7 @@ function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
 end
 
 function write_sub(to::GenericIOBuffer, a::AbstractArray{UInt8}, offs, nel)
+    require_one_based_indexing(a)
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
@@ -435,22 +460,19 @@ read(io::GenericIOBuffer) = read!(io,StringVector(bytesavailable(io)))
 readavailable(io::GenericIOBuffer) = read(io)
 read(io::GenericIOBuffer, nb::Integer) = read!(io,StringVector(min(nb, bytesavailable(io))))
 
-function findfirst(delim::EqualTo{UInt8}, buf::IOBuffer)
+function occursin(delim::UInt8, buf::IOBuffer)
     p = pointer(buf.data, buf.ptr)
-    q = GC.@preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim.x,bytesavailable(buf))
-    q == C_NULL && return nothing
-    return Int(q-p+1)
+    q = GC.@preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim,bytesavailable(buf))
+    return q != C_NULL
 end
 
-function findfirst(delim::EqualTo{UInt8}, buf::GenericIOBuffer)
+function occursin(delim::UInt8, buf::GenericIOBuffer)
     data = buf.data
-    for i = buf.ptr : buf.size
+    for i = buf.ptr:buf.size
         @inbounds b = data[i]
-        if b == delim.x
-            return i - buf.ptr + 1
-        end
+        b == delim && return true
     end
-    return nothing
+    return false
 end
 
 function readuntil(io::GenericIOBuffer, delim::UInt8; keep::Bool=false)

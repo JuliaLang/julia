@@ -92,7 +92,7 @@ int main()
 
         checked_eval_string("my_func(x) = 2 * x");
 
-        jl_function_t *func = jl_get_function(jl_current_module, "my_func");
+        jl_function_t *func = jl_get_function(jl_main_module, "my_func");
         jl_value_t* arg = jl_box_float64(5.0);
         double ret = jl_unbox_float64(jl_call1(func, arg));
 
@@ -146,7 +146,7 @@ int main()
         );
 
         typedef void (*Func_VOID__VOID)(void);
-        jl_value_t *pbar = jl_eval_string("cfunction(bar_from_c, Cvoid, Tuple{})");
+        jl_value_t *pbar = jl_eval_string("@cfunction(bar_from_c, Cvoid, ())");
         Func_VOID__VOID bar = (Func_VOID__VOID)jl_unbox_voidpointer(pbar);
         bar();
         checked_eval_string("bar() = println(\"calling new bar\")");

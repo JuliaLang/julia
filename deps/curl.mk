@@ -30,7 +30,7 @@ $(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/sour
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) --includedir=$(build_includedir) \
 		--without-ssl --without-gnutls --without-gssapi --without-zlib \
-		--without-libidn --without-libmetalink --without-librtmp \
+		--without-libidn --without-libidn2 --without-libmetalink --without-librtmp \
 		--without-nghttp2 --without-nss --without-polarssl \
 		--without-spnego --without-libpsl --disable-ares \
 		--disable-ldap --disable-ldaps --without-zsh-functions-dir \

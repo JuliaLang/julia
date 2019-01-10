@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
 Linear algebra module. Provides array arithmetic,
 matrix factorizations and other linear algebra related
@@ -12,15 +10,14 @@ module LinearAlgebra
 import Base: \, /, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
     asin, asinh, atan, atanh, axes, big, broadcast, ceil, conj, convert, copy, copyto!, cos,
-    cosh, cot, coth, csc, csch, eltype, exp, findmax, findmin, fill!, floor, getindex, hcat,
-    getproperty, imag, inv, isapprox, isone, IndexStyle, kron, length, log, map, ndims,
+    cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
+    getproperty, imag, inv, isapprox, isone, iszero, IndexStyle, kron, length, log, map, ndims,
     oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
     setindex!, show, similar, sin, sincos, sinh, size, size_to_strides, sqrt, StridedReinterpretArray,
     StridedReshapedArray, strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
-using Base: hvcat_fill, iszero, IndexLinear, _length, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat
-# We use `_length` because of non-1 indices; releases after julia 0.5
-# can go back to `length`. `_length(A)` is equivalent to `length(linearindices(A))`.
+using Base: hvcat_fill, IndexLinear, promote_op, promote_typeof,
+    @propagate_inbounds, @pure, reduce, typed_vcat, has_offset_axes
+using Base.Broadcast: Broadcasted
 
 export
 # Modules
@@ -61,11 +58,10 @@ export
 # Functions
     axpy!,
     axpby!,
-    bkfact,
-    bkfact!,
-    chol,
-    cholfact,
-    cholfact!,
+    bunchkaufman,
+    bunchkaufman!,
+    cholesky,
+    cholesky!,
     cond,
     condskeel,
     copyto!,
@@ -77,11 +73,9 @@ export
     diag,
     diagind,
     diagm,
-    diff,
     dot,
-    eig,
-    eigfact,
-    eigfact!,
+    eigen,
+    eigen!,
     eigmax,
     eigmin,
     eigvals,
@@ -89,8 +83,8 @@ export
     eigvecs,
     factorize,
     givens,
-    hessfact,
-    hessfact!,
+    hessenberg,
+    hessenberg!,
     isdiag,
     ishermitian,
     isposdef,
@@ -101,9 +95,8 @@ export
     istriu,
     kron,
     ldiv!,
-    ldltfact!,
-    ldltfact,
-    linreg,
+    ldlt!,
+    ldlt,
     logabsdet,
     logdet,
     lowrankdowndate,
@@ -111,8 +104,7 @@ export
     lowrankupdate,
     lowrankupdate!,
     lu,
-    lufact,
-    lufact!,
+    lu!,
     lyap,
     mul!,
     lmul!,
@@ -125,32 +117,26 @@ export
     ordschur,
     pinv,
     qr,
-    qrfact!,
-    qrfact,
+    qr!,
     lq,
-    lqfact!,
-    lqfact,
+    lq!,
+    opnorm,
     rank,
     rdiv!,
     schur,
-    schurfact!,
-    schurfact,
+    schur!,
     svd,
-    svdfact!,
-    svdfact,
+    svd!,
     svdvals!,
     svdvals,
     sylvester,
-    trace,
+    tr,
     transpose,
     transpose!,
-    transpose_type,
     tril,
     triu,
     tril!,
     triu!,
-    vecdot,
-    vecnorm,
 
 # Operators
     \,
@@ -240,13 +226,27 @@ end
 
 function char_uplo(uplo::Symbol)
     if uplo == :U
-        'U'
+        return 'U'
     elseif uplo == :L
-        'L'
+        return 'L'
     else
-        throw(ArgumentError("uplo argument must be either :U (upper) or :L (lower)"))
+        throw_uplo()
     end
 end
+
+function sym_uplo(uplo::Char)
+    if uplo == 'U'
+        return :U
+    elseif uplo == 'L'
+        return :L
+    else
+        throw_uplo()
+    end
+end
+
+
+@noinline throw_uplo() = throw(ArgumentError("uplo argument must be either :U (upper) or :L (lower)"))
+
 
 """
     ldiv!(Y, A, B) -> Y
@@ -254,11 +254,34 @@ end
 Compute `A \\ B` in-place and store the result in `Y`, returning the result.
 
 The argument `A` should *not* be a matrix.  Rather, instead of matrices it should be a
-factorization object (e.g. produced by [`factorize`](@ref) or [`cholfact`](@ref)).
+factorization object (e.g. produced by [`factorize`](@ref) or [`cholesky`](@ref)).
 The reason for this is that factorization itself is both expensive and typically allocates memory
-(although it can also be done in-place via, e.g., [`lufact!`](@ref)),
+(although it can also be done in-place via, e.g., [`lu!`](@ref)),
 and performance-critical situations requiring `ldiv!` usually also require fine-grained
 control over the factorization of `A`.
+
+# Examples
+```jldoctest
+julia> A = [1 2.2 4; 3.1 0.2 3; 4 1 2];
+
+julia> X = [1; 2.5; 3];
+
+julia> Y = zero(X);
+
+julia> ldiv!(Y, qr(A), X);
+
+julia> Y
+3-element Array{Float64,1}:
+  0.7128099173553719
+ -0.051652892561983674
+  0.10020661157024757
+
+julia> A\\X
+3-element Array{Float64,1}:
+  0.7128099173553719
+ -0.05165289256198333
+  0.10020661157024785
+```
 """
 ldiv!(Y, A, B)
 
@@ -268,11 +291,34 @@ ldiv!(Y, A, B)
 Compute `A \\ B` in-place and overwriting `B` to store the result.
 
 The argument `A` should *not* be a matrix.  Rather, instead of matrices it should be a
-factorization object (e.g. produced by [`factorize`](@ref) or [`cholfact`](@ref)).
+factorization object (e.g. produced by [`factorize`](@ref) or [`cholesky`](@ref)).
 The reason for this is that factorization itself is both expensive and typically allocates memory
-(although it can also be done in-place via, e.g., [`lufact!`](@ref)),
+(although it can also be done in-place via, e.g., [`lu!`](@ref)),
 and performance-critical situations requiring `ldiv!` usually also require fine-grained
 control over the factorization of `A`.
+
+# Examples
+```jldoctest
+julia> A = [1 2.2 4; 3.1 0.2 3; 4 1 2];
+
+julia> X = [1; 2.5; 3];
+
+julia> Y = copy(X);
+
+julia> ldiv!(qr(A), X);
+
+julia> X
+3-element Array{Float64,1}:
+  0.7128099173553719
+ -0.051652892561983674
+  0.10020661157024757
+
+julia> A\\Y
+3-element Array{Float64,1}:
+  0.7128099173553719
+ -0.05165289256198333
+  0.10020661157024785
+```
 """
 ldiv!(A, B)
 
@@ -283,9 +329,9 @@ ldiv!(A, B)
 Compute `A / B` in-place and overwriting `A` to store the result.
 
 The argument `B` should *not* be a matrix.  Rather, instead of matrices it should be a
-factorization object (e.g. produced by [`factorize`](@ref) or [`cholfact`](@ref)).
+factorization object (e.g. produced by [`factorize`](@ref) or [`cholesky`](@ref)).
 The reason for this is that factorization itself is both expensive and typically allocates memory
-(although it can also be done in-place via, e.g., [`lufact!`](@ref)),
+(although it can also be done in-place via, e.g., [`lu!`](@ref)),
 and performance-critical situations requiring `rdiv!` usually also require fine-grained
 control over the factorization of `B`.
 """
@@ -296,8 +342,6 @@ copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractAr
 
 include("adjtrans.jl")
 include("transpose.jl")
-include("conjarray.jl")
-include("rowvector.jl")
 
 include("exceptions.jl")
 include("generic.jl")
@@ -328,11 +372,46 @@ include("special.jl")
 include("bitarray.jl")
 include("ldlt.jl")
 include("schur.jl")
+include("structuredbroadcast.jl")
 include("deprecated.jl")
 
 const ⋅ = dot
 const × = cross
 export ⋅, ×
+
+"""
+    LinearAlgebra.peakflops(n::Integer=2000; parallel::Bool=false)
+
+`peakflops` computes the peak flop rate of the computer by using double precision
+[`gemm!`](@ref LinearAlgebra.BLAS.gemm!). By default, if no arguments are specified, it
+multiplies a matrix of size `n x n`, where `n = 2000`. If the underlying BLAS is using
+multiple threads, higher flop rates are realized. The number of BLAS threads can be set with
+[`BLAS.set_num_threads(n)`](@ref).
+
+If the keyword argument `parallel` is set to `true`, `peakflops` is run in parallel on all
+the worker processors. The flop rate of the entire parallel computer is returned. When
+running in parallel, only 1 BLAS thread is used. The argument `n` still refers to the size
+of the problem that is solved on each processor.
+
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1. In Julia 1.0 it is available from
+    the standard library `InteractiveUtils`.
+"""
+function peakflops(n::Integer=2000; parallel::Bool=false)
+    a = fill(1.,100,100)
+    t = @elapsed a2 = a*a
+    a = fill(1.,n,n)
+    t = @elapsed a2 = a*a
+    @assert a2[1,1] == n
+    if parallel
+        let Distributed = Base.require(Base.PkgId(
+                Base.UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
+            return sum(Distributed.pmap(peakflops, fill(n, Distributed.nworkers())))
+        end
+    else
+        return 2*Float64(n)^3 / t
+    end
+end
 
 
 function versioninfo(io::IO=stdout)
@@ -351,10 +430,15 @@ function __init__()
         if BLAS.vendor() == :mkl
             ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Cvoid, (Cint,), USE_BLAS64 ? 1 : 0)
         end
+        Threads.resize_nthreads!(Abuf)
+        Threads.resize_nthreads!(Bbuf)
+        Threads.resize_nthreads!(Cbuf)
     catch ex
         Base.showerror_nostdio(ex,
             "WARNING: Error during initialization of module LinearAlgebra")
     end
+    # register a hook to disable BLAS threading
+    Base.at_disable_library_threading(() -> BLAS.set_num_threads(1))
 end
 
 end # module LinearAlgebra

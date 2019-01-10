@@ -6,6 +6,7 @@
 
 A compact way of representing the type for a tuple of length `N` where all elements are of type `T`.
 
+# Examples
 ```jldoctest
 julia> isa((1, 2, 3, 4, 5, 6), NTuple{6, Int})
 true
@@ -15,14 +16,16 @@ NTuple
 
 ## indexing ##
 
-length(t::Tuple) = nfields(t)
-firstindex(t::Tuple) = 1
-lastindex(t::Tuple) = length(t)
-size(t::Tuple, d) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
-@eval getindex(t::Tuple, i::Int) = getfield(t, i, $(Expr(:boundscheck)))
-@eval getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
+length(@nospecialize t::Tuple) = nfields(t)
+firstindex(@nospecialize t::Tuple) = 1
+lastindex(@nospecialize t::Tuple) = length(t)
+size(@nospecialize(t::Tuple), d) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
+axes(@nospecialize t::Tuple) = (OneTo(length(t)),)
+@eval getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, $(Expr(:boundscheck)))
+@eval getindex(@nospecialize(t::Tuple), i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...,)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
+getindex(t::Tuple, c::Colon) = t
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
 setindex(x::Tuple, v, i::Integer) = (@_inline_meta; _setindex(v, i, x...))
@@ -35,18 +38,19 @@ _setindex(v, i::Integer) = ()
 
 ## iterating ##
 
-start(t::Tuple) = 1
-done(t::Tuple, i::Int) = (length(t) < i)
-next(t::Tuple, i::Int) = (t[i], i+1)
+function iterate(@nospecialize(t::Tuple), i::Int=1)
+    @_inline_meta
+    return (1 <= i <= length(t)) ? (@inbounds t[i], i + 1) : nothing
+end
 
-keys(t::Tuple) = 1:length(t)
+keys(@nospecialize t::Tuple) = OneTo(length(t))
 
-prevind(t::Tuple, i::Integer) = Int(i)-1
-nextind(t::Tuple, i::Integer) = Int(i)+1
+prevind(@nospecialize(t::Tuple), i::Integer) = Int(i)-1
+nextind(@nospecialize(t::Tuple), i::Integer) = Int(i)+1
 
 function keys(t::Tuple, t2::Tuple...)
     @_inline_meta
-    1:_maxlength(t, t2...)
+    OneTo(_maxlength(t, t2...))
 end
 _maxlength(t::Tuple) = length(t)
 function _maxlength(t::Tuple, t2::Tuple, t3::Tuple...)
@@ -56,9 +60,18 @@ end
 
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
 # while reducing to plain next() for arbitrary iterables.
-indexed_next(t::Tuple, i::Int, state) = (t[i], i+1)
-indexed_next(a::Array, i::Int, state) = (a[i], i+1)
-indexed_next(I, i, state) = done(I,state) ? throw(BoundsError(I, i)) : next(I, state)
+indexed_iterate(t::Tuple, i::Int, state=1) = (@_inline_meta; (getfield(t, i), i+1))
+indexed_iterate(a::Array, i::Int, state=1) = (@_inline_meta; (a[i], i+1))
+function indexed_iterate(I, i)
+    x = iterate(I)
+    x === nothing && throw(BoundsError(I, i))
+    x
+end
+function indexed_iterate(I, i, state)
+    x = iterate(I, state)
+    x === nothing && throw(BoundsError(I, i))
+    x
+end
 
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
@@ -113,6 +126,7 @@ end
 Create a tuple of length `n`, computing each element as `f(i)`,
 where `i` is the index of the element.
 
+# Examples
 ```jldoctest
 julia> ntuple(i -> 2*i, 4)
 (2, 4, 6, 8)
@@ -159,7 +173,7 @@ const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
                          T,T,T,T,T,T,T,T,Vararg{T,N}}
 function map(f, t::Any16)
     n = length(t)
-    A = Vector{Any}(uninitialized, n)
+    A = Vector{Any}(undef, n)
     for i=1:n
         A[i] = f(t[i])
     end
@@ -175,7 +189,7 @@ function map(f, t::Tuple, s::Tuple)
 end
 function map(f, t::Any16, s::Any16)
     n = length(t)
-    A = Vector{Any}(uninitialized, n)
+    A = Vector{Any}(undef, n)
     for i = 1:n
         A[i] = f(t[i], s[i])
     end
@@ -191,13 +205,25 @@ function map(f, t1::Tuple, t2::Tuple, ts::Tuple...)
 end
 function map(f, t1::Any16, t2::Any16, ts::Any16...)
     n = length(t1)
-    A = Vector{Any}(uninitialized, n)
+    A = Vector{Any}(undef, n)
     for i = 1:n
         A[i] = f(t1[i], t2[i], map(t -> t[i], ts)...)
     end
     (A...,)
 end
 
+# mapafoldl, based on afold in operators.jl
+mapafoldl(F,op,a) = a
+mapafoldl(F,op,a,b) = op(a,F(b))
+mapafoldl(F,op,a,b,c...) = mapafoldl(F, op, op(a,F(b)), c...)
+function mapafoldl(F,op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
+    y = op(op(op(op(op(op(op(op(op(op(op(op(op(op(op(a,F(b)),F(c)),F(d)),F(e)),F(f)),F(g)),F(h)),F(i)),F(j)),F(k)),F(l)),F(m)),F(n)),F(o)),F(p))
+    for x in qs; y = op(y,F(x)); end
+    y
+end
+mapfoldl_impl(f, op, nt::NamedTuple{(:init,)}, t::Tuple) = mapafoldl(f, op, nt.init, t...)
+mapfoldl_impl(f, op, nt::NamedTuple{()}, t::Tuple) = mapafoldl(f, op, f(t[1]), tail(t)...)
+mapfoldl_impl(f, op, nt::NamedTuple{()}, t::Tuple{}) = mapreduce_empty_iter(f, op, t, IteratorEltype(t))
 
 # type-stable padding
 fill_to_length(t::NTuple{N,Any}, val, ::Val{N}) where {N} = t
@@ -229,25 +255,25 @@ function (T::All16{E,N})(itr) where {E,N}
     (elts...,)
 end
 
-(::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr, start(itr))
+(::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr)
 
-_totuple(::Type{Tuple{}}, itr, s) = ()
+_totuple(::Type{Tuple{}}, itr, s...) = ()
 
 function _totuple_err(@nospecialize T)
     @_noinline_meta
     throw(ArgumentError("too few elements for tuple type $T"))
 end
 
-function _totuple(T, itr, s)
+function _totuple(T, itr, s...)
     @_inline_meta
-    done(itr, s) && _totuple_err(T)
-    v, s = next(itr, s)
-    (convert(tuple_type_head(T), v), _totuple(tuple_type_tail(T), itr, s)...)
+    y = iterate(itr, s...)
+    y === nothing && _totuple_err(T)
+    (convert(tuple_type_head(T), y[1]), _totuple(tuple_type_tail(T), itr, y[2])...)
 end
 
-_totuple(::Type{Tuple{Vararg{E}}}, itr, s) where {E} = (collect(E, Iterators.rest(itr,s))...,)
+_totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = (collect(E, Iterators.rest(itr,s...))...,)
 
-_totuple(::Type{Tuple}, itr, s) = (collect(Iterators.rest(itr,s))...,)
+_totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
 
 end
 
@@ -266,17 +292,29 @@ function _isequal(t1::Any16, t2::Any16)
     return true
 end
 
-==(t1::Tuple, t2::Tuple) = (length(t1) == length(t2)) && _eq(t1, t2, false)
-_eq(t1::Tuple{}, t2::Tuple{}, anymissing) = anymissing ? missing : true
-function _eq(t1::Tuple, t2::Tuple, anymissing)
+==(t1::Tuple, t2::Tuple) = (length(t1) == length(t2)) && _eq(t1, t2)
+_eq(t1::Tuple{}, t2::Tuple{}) = true
+_eq_missing(t1::Tuple{}, t2::Tuple{}) = missing
+function _eq(t1::Tuple, t2::Tuple)
+    eq = t1[1] == t2[1]
+    if eq === false
+        return false
+    elseif ismissing(eq)
+        return _eq_missing(tail(t1), tail(t2))
+    else
+        return _eq(tail(t1), tail(t2))
+    end
+end
+function _eq_missing(t1::Tuple, t2::Tuple)
     eq = t1[1] == t2[1]
     if eq === false
         return false
     else
-        return _eq(tail(t1), tail(t2), anymissing | ismissing(eq))
+        return _eq_missing(tail(t1), tail(t2))
     end
 end
-function _eq(t1::Any16, t2::Any16, anymissing)
+function _eq(t1::Any16, t2::Any16)
+    anymissing = false
     for i = 1:length(t1)
         eq = (t1[i] == t2[i])
         if ismissing(eq)
@@ -353,7 +391,7 @@ end
 ## functions ##
 
 isempty(x::Tuple{}) = true
-isempty(x::Tuple) = false
+isempty(@nospecialize x::Tuple) = false
 
 revargs() = ()
 revargs(x, r...) = (revargs(r...)..., x)
@@ -385,9 +423,17 @@ any(x::Tuple{Bool}) = x[1]
 any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 
+# equivalent to any(f, t), to be used only in bootstrap
+_tuple_any(f::Function, t::Tuple) = _tuple_any(f, false, t...)
+function _tuple_any(f::Function, tf::Bool, a, b...)
+    @_inline_meta
+    _tuple_any(f, tf | f(a), b...)
+end
+_tuple_any(f::Function, tf::Bool) = tf
+
 """
     empty(x::Tuple)
 
 Returns an empty tuple, `()`.
 """
-empty(x::Tuple) = ()
+empty(@nospecialize x::Tuple) = ()

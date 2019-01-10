@@ -31,6 +31,7 @@ include("options.jl")
 
 # core operations & types
 function return_type end # promotion.jl expects this to exist
+is_return_type(@Core.nospecialize(f)) = f === return_type
 include("promotion.jl")
 include("tuple.jl")
 include("pair.jl")
@@ -64,12 +65,6 @@ include("indices.jl")
 include("array.jl")
 include("abstractarray.jl")
 
-# map-reduce operators
-macro simd(forloop)
-    esc(forloop)
-end
-include("reduce.jl")
-
 # core structures
 include("bitarray.jl")
 include("bitset.jl")
@@ -77,15 +72,11 @@ include("abstractdict.jl")
 include("abstractset.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate
-using .Iterators: Flatten, product  # for generators
+using .Iterators: Flatten, Filter, product  # for generators
 include("namedtuple.jl")
 
 # core docsystem
 include("docs/core.jl")
-
-# SubArray
-include("subarray.jl")
-macro views(x); esc(x); end
 
 # sorting
 function sort end
@@ -100,9 +91,6 @@ using .Sort
 ############
 # compiler #
 ############
-
-inlining_enabled() = (JLOptions().can_inline == 1)
-coverage_enabled() = (JLOptions().code_coverage != 0)
 
 include("compiler/utilities.jl")
 include("compiler/validation.jl")

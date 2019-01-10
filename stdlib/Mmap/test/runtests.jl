@@ -11,12 +11,12 @@ GC.gc(); GC.gc()
 GC.gc(); GC.gc()
 @test Mmap.mmap(file, Array{UInt8,3}, (1,1,11)) == reshape(t,(1,1,11))
 GC.gc(); GC.gc()
-@test Mmap.mmap(file, Array{UInt8,3}, (11,0,1)) == Array{UInt8}(uninitialized, (0,0,0))
+@test Mmap.mmap(file, Array{UInt8,3}, (11,0,1)) == Array{UInt8}(undef, (0,0,0))
 @test Mmap.mmap(file, Vector{UInt8}, (11,)) == t
 GC.gc(); GC.gc()
 @test Mmap.mmap(file, Array{UInt8,2}, (1,11)) == t'
 GC.gc(); GC.gc()
-@test Mmap.mmap(file, Array{UInt8,2}, (0,12)) == Array{UInt8}(uninitialized, (0,0))
+@test Mmap.mmap(file, Array{UInt8,2}, (0,12)) == Array{UInt8}(undef, (0,0))
 m = Mmap.mmap(file, Array{UInt8,3}, (1,2,1))
 @test m == reshape(b"He",(1,2,1))
 finalize(m); m=nothing; GC.gc()
@@ -59,7 +59,7 @@ close(s); finalize(m); m=nothing; GC.gc()
 
 s = open(file, "r")
 close(s)
-@test_throws Base.UVError Mmap.mmap(s) # closed IOStream
+@test_throws Base.IOError Mmap.mmap(s) # closed IOStream
 @test_throws ArgumentError Mmap.mmap(s,Vector{UInt8},12,0) # closed IOStream
 @test_throws SystemError Mmap.mmap("")
 

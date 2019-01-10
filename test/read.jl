@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using DelimitedFiles
-using Random
+using DelimitedFiles, Random, Sockets
 
 mktempdir() do dir
 
@@ -55,9 +54,9 @@ function run_test_server(srv, text)
             try
                 write(sock, text)
             catch e
-                if !(isa(e, Base.UVError) && e.code == Base.UV_EPIPE)
-                    if !(isa(e, Base.UVError) && e.code == Base.UV_ECONNRESET)
-                        rethrow(e)
+                if !(isa(e, Base.IOError) && e.code == Base.UV_EPIPE)
+                    if !(isa(e, Base.IOError) && e.code == Base.UV_ECONNRESET)
+                        rethrow()
                     end
                 end
             finally
@@ -128,11 +127,11 @@ end
 open_streams = []
 function cleanup()
     for s_ in open_streams
-        try close(s_) end
+        try close(s_); catch; end
     end
     empty!(open_streams)
     for tsk in tasks
-        Base._wait(tsk)
+        Base.wait(tsk)
     end
     empty!(tasks)
 end
@@ -191,11 +190,11 @@ for (name, f) in l
     @test read(io(), Int) == read(filename,Int)
     s1 = io()
     s2 = IOBuffer(text)
-    @test read!(s1, Vector{UInt32}(uninitialized, 2)) == read!(s2, Vector{UInt32}(uninitialized, 2))
+    @test read!(s1, Vector{UInt32}(undef, 2)) == read!(s2, Vector{UInt32}(undef, 2))
     @test !eof(s1)
-    @test read!(s1, Vector{UInt8}(uninitialized, 5)) == read!(s2, Vector{UInt8}(uninitialized, 5))
+    @test read!(s1, Vector{UInt8}(undef, 5)) == read!(s2, Vector{UInt8}(undef, 5))
     @test !eof(s1)
-    @test read!(s1, Vector{UInt8}(uninitialized, 1)) == read!(s2, Vector{UInt8}(uninitialized, 1))
+    @test read!(s1, Vector{UInt8}(undef, 1)) == read!(s2, Vector{UInt8}(undef, 1))
     @test eof(s1)
     @test_throws EOFError read(s1, UInt8)
     @test eof(s1)
@@ -204,16 +203,16 @@ for (name, f) in l
 
     verbose && println("$name eof...")
     n = length(text) - 1
-    @test read!(io(), Vector{UInt8}(uninitialized, n)) ==
-          read!(IOBuffer(text), Vector{UInt8}(uninitialized, n))
-    @test (s = io(); read!(s, Vector{UInt8}(uninitialized, n)); !eof(s))
+    @test read!(io(), Vector{UInt8}(undef, n)) ==
+          read!(IOBuffer(text), Vector{UInt8}(undef, n))
+    @test (s = io(); read!(s, Vector{UInt8}(undef, n)); !eof(s))
     n = length(text)
-    @test read!(io(), Vector{UInt8}(uninitialized, n)) ==
-          read!(IOBuffer(text), Vector{UInt8}(uninitialized, n))
-    @test (s = io(); read!(s, Vector{UInt8}(uninitialized, n)); eof(s))
+    @test read!(io(), Vector{UInt8}(undef, n)) ==
+          read!(IOBuffer(text), Vector{UInt8}(undef, n))
+    @test (s = io(); read!(s, Vector{UInt8}(undef, n)); eof(s))
     n = length(text) + 1
-    @test_throws EOFError read!(io(), Vector{UInt8}(uninitialized, n))
-    @test_throws EOFError read!(io(), Vector{UInt8}(uninitialized, n))
+    @test_throws EOFError read!(io(), Vector{UInt8}(undef, n))
+    @test_throws EOFError read!(io(), Vector{UInt8}(undef, n))
 
     old_text = text
     cleanup()
@@ -245,8 +244,8 @@ for (name, f) in l
         verbose && println("$name readbytes!...")
         l = length(text)
         for n = [1, 2, l-2, l-1, l, l+1, l+2]
-            a1 = Vector{UInt8}(uninitialized, n)
-            a2 = Vector{UInt8}(uninitialized, n)
+            a1 = Vector{UInt8}(undef, n)
+            a2 = Vector{UInt8}(undef, n)
             s1 = io()
             s2 = IOBuffer(text)
             n1 = readbytes!(s1, a1)
@@ -263,14 +262,14 @@ for (name, f) in l
         verbose && println("$name read!...")
         l = length(text)
         for n = [1, 2, l-2, l-1, l]
-            @test read!(io(), Vector{UInt8}(uninitialized, n)) ==
-                  read!(IOBuffer(text), Vector{UInt8}(uninitialized, n))
-            @test read!(io(), Vector{UInt8}(uninitialized, n)) ==
-                  read!(filename, Vector{UInt8}(uninitialized, n))
+            @test read!(io(), Vector{UInt8}(undef, n)) ==
+                  read!(IOBuffer(text), Vector{UInt8}(undef, n))
+            @test read!(io(), Vector{UInt8}(undef, n)) ==
+                  read!(filename, Vector{UInt8}(undef, n))
 
             cleanup()
         end
-        @test_throws EOFError read!(io(), Vector{UInt8}(uninitialized, length(text)+1))
+        @test_throws EOFError read!(io(), Vector{UInt8}(undef, length(text)+1))
 
 
         verbose && println("$name readuntil...")
@@ -316,7 +315,7 @@ for (name, f) in l
 
     if !(typeof(io()) in [Base.PipeEndpoint, Pipe, TCPSocket])
         verbose && println("$name position...")
-        @test (s = io(); read!(s, Vector{UInt8}(uninitialized, 4)); position(s))  == 4
+        @test (s = io(); read!(s, Vector{UInt8}(undef, 4)); position(s))  == 4
 
         verbose && println("$name seek...")
         for n = 0:length(text)-1
@@ -464,7 +463,7 @@ if !Sys.iswindows() && get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") !=
     # msvcrt _wchmod documentation states that all files are readable,
     # so we don't test that it correctly set the umask on windows
     @test_throws SystemError open(f)
-    @test_throws Base.UVError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
+    @test_throws Base.IOError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
 else
     Sys.iswindows() || @warn "File permissions tests skipped due to running tests as root (not recommended)"
     close(open(f))
@@ -505,14 +504,14 @@ end
 @test eof(f1)
 @test eof(f2)
 @test_throws ArgumentError write(f1, '*')
-@test_throws Base.UVError write(f2, '*')
+@test_throws Base.IOError write(f2, '*')
 close(f1)
 close(f2)
 @test eof(f1)
-@test_throws Base.UVError eof(f2)
+@test_throws Base.IOError eof(f2)
 if get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
     @test_throws SystemError open(f, "r+")
-    @test_throws Base.UVError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
+    @test_throws Base.IOError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
 else
     @warn "File permissions tests skipped due to running tests as root (not recommended)"
 end
@@ -557,15 +556,21 @@ end
 
 let p = Pipe()
     Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
-    t = @schedule read(p)
+    t = @async read(p)
     @sync begin
         @async write(p, zeros(UInt16, 660_000))
+        yield() # TODO: need to add an Event to the previous line
+        order::UInt16 = 0
         for i = 1:typemax(UInt16)
-            @async write(p, UInt16(i))
+            @async (order += 1; write(p, order); nothing)
         end
+        yield() # TODO: need to add an Event to the previous line
         @async close(p.in)
     end
     s = reinterpret(UInt16, fetch(t))
     @test length(s) == 660_000 + typemax(UInt16)
     @test s[(end - typemax(UInt16)):end] == UInt16.(0:typemax(UInt16))
 end
+
+# issue #26419
+@test Base.return_types(read, (String, Type{String})) == Any[String]

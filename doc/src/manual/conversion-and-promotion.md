@@ -88,7 +88,8 @@ doesn't know how to perform the requested conversion:
 
 ```jldoctest
 julia> convert(AbstractFloat, "foo")
-ERROR: MethodError: Cannot `convert` an object of type String to an object of type AbstractFloat.
+ERROR: MethodError: Cannot `convert` an object of type String to an object of type AbstractFloat
+[...]
 ```
 
 Some languages consider parsing strings as numbers or formatting numbers as strings to be conversions
@@ -299,7 +300,7 @@ be promoted to 64-bit floating-point. The promotion type does not need to be one
 types, however; the following promotion rules both occur in Julia Base:
 
 ```julia
-promote_rule(::Type{UInt8}, ::Type{Int8}) = Int
+promote_rule(::Type{BigInt}, ::Type{Float64}) = BigFloat
 promote_rule(::Type{BigInt}, ::Type{Int8}) = BigInt
 ```
 

@@ -39,10 +39,10 @@ export File,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
 import .Base:
-    UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
+    IOError, _UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
     bytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
-    rawhandle, OS_HANDLE, INVALID_OS_HANDLE
+    rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror
 
 if Sys.iswindows()
     import .Base: cwstring
@@ -170,6 +170,7 @@ function read(f::File, ::Type{Char})
     end
     return reinterpret(Char, c)
 end
+read(f::File, ::Type{T}) where {T<:AbstractChar} = T(read(f, Char)) # fallback
 
 function unsafe_read(f::File, p::Ptr{UInt8}, nel::UInt)
     check_open(f)

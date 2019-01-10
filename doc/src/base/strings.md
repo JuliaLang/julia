@@ -1,13 +1,16 @@
 # [Strings](@id lib-strings)
 
 ```@docs
+Core.AbstractChar
+Core.Char
+Base.codepoint
 Base.length(::AbstractString)
 Base.sizeof(::AbstractString)
-Base.:*(::Union{Char, AbstractString}, ::Union{Char, AbstractString}...)
+Base.:*(::Union{AbstractChar, AbstractString}, ::Union{AbstractChar, AbstractString}...)
 Base.:^(::AbstractString, ::Integer)
 Base.string
 Base.repeat(::AbstractString, ::Integer)
-Base.repeat(::Char, ::Integer)
+Base.repeat(::AbstractChar, ::Integer)
 Base.repr(::Any)
 Core.String(::AbstractString)
 Base.SubString
@@ -18,6 +21,8 @@ Base.codeunit
 Base.codeunits
 Base.ascii
 Base.@r_str
+Base.SubstitutionString
+Base.@s_str
 Base.@raw_str
 Base.Docs.@html_str
 Base.Docs.@text_str
@@ -35,7 +40,7 @@ Base.findfirst(::AbstractString, ::AbstractString)
 Base.findnext(::AbstractString, ::AbstractString, ::Integer)
 Base.findlast(::AbstractString, ::AbstractString)
 Base.findprev(::AbstractString, ::AbstractString, ::Integer)
-Base.contains
+Base.occursin
 Base.reverse(::Union{String,SubString{String}})
 Base.replace(s::AbstractString, ::Pair)
 Base.split
@@ -50,8 +55,8 @@ Base.last(::AbstractString, ::Integer)
 Base.uppercase
 Base.lowercase
 Base.titlecase
-Base.ucfirst
-Base.lcfirst
+Base.uppercasefirst
+Base.lowercasefirst
 Base.join
 Base.chop
 Base.chomp
@@ -59,16 +64,16 @@ Base.thisind
 Base.nextind
 Base.prevind
 Base.textwidth
-Base.isalpha
 Base.isascii
 Base.iscntrl
 Base.isdigit
-Base.islower
+Base.isletter
+Base.islowercase
 Base.isnumeric
 Base.isprint
 Base.ispunct
 Base.isspace
-Base.isupper
+Base.isuppercase
 Base.isxdigit
 Core.Symbol
 Base.escape_string

@@ -70,7 +70,6 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
              ((wc >= 0x2140 && wc <= 0x2144) || // ⅀, ⅁, ⅂, ⅃, ⅄
               wc == 0x223f || wc == 0x22be || wc == 0x22bf || // ∿, ⊾, ⊿
               wc == 0x22a4 || wc == 0x22a5 ||   // ⊤ ⊥
-              (wc >= 0x22ee && wc <= 0x22f1) || // ⋮, ⋯, ⋰, ⋱
 
               (wc >= 0x2202 && wc <= 0x2233 &&
                (wc == 0x2202 || wc == 0x2205 || wc == 0x2206 || // ∂, ∅, ∆
@@ -133,9 +132,7 @@ JL_DLLEXPORT int jl_id_char(uint32_t wc)
         cat == UTF8PROC_CATEGORY_SK || cat == UTF8PROC_CATEGORY_ME ||
         cat == UTF8PROC_CATEGORY_NO ||
         // primes (single, double, triple, their reverses, and quadruple)
-        (wc >= 0x2032 && wc <= 0x2037) || (wc == 0x2057) ||
-        // Other_ID_Continue
-        wc == 0x0387 || wc == 0x19da || (wc >= 0x1369 && wc <= 0x1371))
+        (wc >= 0x2032 && wc <= 0x2037) || (wc == 0x2057))
         return 1;
     return 0;
 }
@@ -174,7 +171,18 @@ static int never_id_char(uint32_t wc)
           (wc < 0xff &&
            cat >= UTF8PROC_CATEGORY_PD && cat <= UTF8PROC_CATEGORY_PO) ||
 
-          wc == '`');
+          wc == '`' ||
+
+          // mathematical brackets
+          (wc >= 0x27e6 && wc <= 0x27ef) ||
+          // angle, corner, and lenticular brackets
+          (wc >= 0x3008 && wc <= 0x3011) ||
+          // tortoise shell, square, and more lenticular brackets
+          (wc >= 0x3014 && wc <= 0x301b) ||
+          // fullwidth parens
+          (wc == 0xff08 || wc == 0xff09) ||
+          // fullwidth square brackets
+          (wc == 0xff3b || wc == 0xff3d));
 }
 
 value_t fl_julia_identifier_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)

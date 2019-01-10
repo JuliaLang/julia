@@ -22,7 +22,8 @@ show(io::IO, x::Irrational{sym}) where {sym} = print(io, "$sym = $(string(float(
 promote_rule(::Type{<:AbstractIrrational}, ::Type{Float16}) = Float16
 promote_rule(::Type{<:AbstractIrrational}, ::Type{Float32}) = Float32
 promote_rule(::Type{<:AbstractIrrational}, ::Type{<:AbstractIrrational}) = Float64
-promote_rule(::Type{<:AbstractIrrational}, ::Type{T}) where {T<:Number} = promote_type(Float64, T)
+promote_rule(::Type{<:AbstractIrrational}, ::Type{T}) where {T<:Real} = promote_type(Float64, T)
+promote_rule(::Type{S}, ::Type{T}) where {S<:AbstractIrrational,T<:Number} = promote_type(promote_type(S, real(T)), T)
 
 AbstractFloat(x::AbstractIrrational) = Float64(x)
 Float16(x::AbstractIrrational) = Float16(Float32(x))
@@ -54,6 +55,15 @@ float(::Type{<:AbstractIrrational}) = Float64
 
 ==(::Irrational{s}, ::Irrational{s}) where {s} = true
 ==(::AbstractIrrational, ::AbstractIrrational) = false
+
+<(::Irrational{s}, ::Irrational{s}) where {s} = false
+function <(x::AbstractIrrational, y::AbstractIrrational)
+    Float64(x) != Float64(y) || throw(MethodError(<, (x, y)))
+    return Float64(x) < Float64(y)
+end
+
+<=(::Irrational{s}, ::Irrational{s}) where {s} = true
+<=(x::AbstractIrrational, y::AbstractIrrational) = x==y || x<y
 
 # Irrationals, by definition, can't have a finite representation equal them exactly
 ==(x::AbstractIrrational, y::Real) = false
@@ -124,18 +134,31 @@ for op in Symbol[:+, :-, :*, :/, :^]
 end
 *(x::Bool, y::AbstractIrrational) = ifelse(x, Float64(y), 0.0)
 
+round(x::Irrational, r::RoundingMode) = round(float(x), r)
+
+"""
+	@irrational sym val def
+	@irrational(sym, val, def)
+
+Define a new `Irrational` value, `sym`, with pre-computed `Float64` value `val`,
+and arbitrary-precision definition in terms of `BigFloat`s given be the expression `def`.
+"""
 macro irrational(sym, val, def)
     esym = esc(sym)
     qsym = esc(Expr(:quote, sym))
     bigconvert = isa(def,Symbol) ? quote
-        function Base.BigFloat(::Irrational{$qsym})
-            c = BigFloat()
+        function Base.BigFloat(::Irrational{$qsym}, r::MPFR.MPFRRoundingMode=MPFR.ROUNDING_MODE[]; precision=precision(BigFloat))
+            c = BigFloat(;precision=precision)
             ccall(($(string("mpfr_const_", def)), :libmpfr),
-                  Cint, (Ref{BigFloat}, Int32), c, MPFR.ROUNDING_MODE[])
+                  Cint, (Ref{BigFloat}, MPFR.MPFRRoundingMode), c, r)
             return c
         end
     end : quote
-        Base.BigFloat(::Irrational{$qsym}) = $(esc(def))
+        function Base.BigFloat(::Irrational{$qsym}; precision=precision(BigFloat))
+            setprecision(BigFloat, precision) do
+                $(esc(def))
+            end
+        end
     end
     quote
         const $esym = Irrational{$qsym}()
@@ -153,7 +176,8 @@ big(::Type{<:AbstractIrrational}) = BigFloat
 
 # align along = for nice Array printing
 function alignment(io::IO, x::AbstractIrrational)
-    m = match(r"^(.*?)(=.*)$", sprint(showcompact, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(showcompact, x, context=io, sizehint=0)), 0) :
+    ctx = IOContext(io, :compact=>true)
+    m = match(r"^(.*?)(=.*)$", sprint(show, x, context=ctx, sizehint=0))
+    m === nothing ? (length(sprint(show, x, context=ctx, sizehint=0)), 0) :
     (length(m.captures[1]), length(m.captures[2]))
 end

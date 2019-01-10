@@ -115,6 +115,19 @@ function resolve(g::GlobalRef; force::Bool=false)
     return g
 end
 
+const NamedTuple_typename = NamedTuple.body.body.name
+
+function _fieldnames(@nospecialize t)
+    if t.name === NamedTuple_typename
+        if t.parameters[1] isa Tuple
+            return t.parameters[1]
+        else
+            throw(ArgumentError("type does not have definite field names"))
+        end
+    end
+    isdefined(t, :names) ? t.names : t.name.names
+end
+
 """
     fieldname(x::DataType, i::Integer)
 
@@ -130,7 +143,10 @@ julia> fieldname(Rational, 2)
 ```
 """
 function fieldname(t::DataType, i::Integer)
-    names = isdefined(t, :names) ? t.names : t.name.names
+    if t.abstract
+        throw(ArgumentError("type does not have definite field names"))
+    end
+    names = _fieldnames(t)
     n_fields = length(names)
     field_label = n_fields == 1 ? "field" : "fields"
     i > n_fields && throw(ArgumentError("Cannot access field $i since type $t only has $n_fields $field_label."))
@@ -153,8 +169,11 @@ julia> fieldnames(Rational)
 (:num, :den)
 ```
 """
-fieldnames(t::DataType) = ntuple(i -> fieldname(t, i), fieldcount(t))
+fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
+                           (_fieldnames(t)...,))
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
+fieldnames(::Core.TypeofBottom) =
+    throw(ArgumentError("The empty type does not have field names since it does not have instances."))
 fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 
 """
@@ -229,6 +248,45 @@ true
 """
 macro isdefined(s::Symbol)
     return Expr(:isdefined, esc(s))
+end
+
+"""
+    @locals()
+
+Construct a dictionary of the names (as symbols) and values of all local
+variables defined as of the call site.
+
+!!! compat "Julia 1.1"
+    This macro requires at least Julia 1.1.
+
+# Examples
+```jldoctest
+julia> let x = 1, y = 2
+           Base.@locals
+       end
+Dict{Symbol,Any} with 2 entries:
+  :y => 2
+  :x => 1
+
+julia> function f(x)
+           local y
+           show(Base.@locals); println()
+           for i = 1:1
+               show(Base.@locals); println()
+           end
+           y = 2
+           show(Base.@locals); println()
+           nothing
+       end;
+
+julia> f(42)
+Dict{Symbol,Any}(:x=>42)
+Dict{Symbol,Any}(:i=>1,:x=>42)
+Dict{Symbol,Any}(:y=>2,:x=>42)
+```
+"""
+macro locals()
+    return Expr(:locals)
 end
 
 """
@@ -352,11 +410,11 @@ function isprimitivetype(@nospecialize(t::Type))
 end
 
 """
-    isbits(T)
+    isbitstype(T)
 
 Return `true` if type `T` is a "plain data" type,
 meaning it is immutable and contains no references to other values,
-only `primitive` types and other `isbits` types.
+only `primitive` types and other `isbitstype` types.
 Typical examples are numeric types such as [`UInt8`](@ref),
 [`Float64`](@ref), and [`Complex{Float64}`](@ref).
 This category of types is significant since they are valid as type parameters,
@@ -365,14 +423,20 @@ and have a defined layout that is compatible with C.
 
 # Examples
 ```jldoctest
-julia> isbits(Complex{Float64})
+julia> isbitstype(Complex{Float64})
 true
 
-julia> isbits(Complex)
+julia> isbitstype(Complex)
 false
 ```
 """
-isbits(@nospecialize(t::Type)) = (@_pure_meta; isa(t, DataType) && t.isbitstype)
+isbitstype(@nospecialize(t::Type)) = (@_pure_meta; isa(t, DataType) && t.isbitstype)
+
+"""
+    isbits(x)
+
+Return `true` if `x` is an instance of an `isbitstype` type.
+"""
 isbits(@nospecialize x) = (@_pure_meta; typeof(x).isbitstype)
 
 """
@@ -383,6 +447,18 @@ meaning it could appear as a type signature in dispatch
 and has no subtypes (or supertypes) which could appear in a call.
 """
 isdispatchtuple(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isdispatchtuple)
+
+iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
+isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
+has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0
+
+# equivalent to isa(v, Type) && isdispatchtuple(Tuple{v}) || v === Union{}
+# and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
+const _TYPE_NAME = Type.body.name
+function isdispatchelem(@nospecialize v)
+    return (v === Bottom) || (v === typeof(Bottom)) || isconcretedispatch(v) ||
+        (isa(v, DataType) && v.name === _TYPE_NAME && !has_free_typevars(v)) # isType(v)
+end
 
 """
     isconcretetype(T)
@@ -467,7 +543,6 @@ Compute a type that contains the intersection of `T` and `S`. Usually this will 
 smallest such type or one close to it.
 """
 typeintersect(@nospecialize(a),@nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
-typeseq(@nospecialize(a),@nospecialize(b)) = (@_pure_meta; a<:b && b<:a)
 
 """
     fieldoffset(type, i)
@@ -543,6 +618,13 @@ function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
 end
 
+argument_datatype(@nospecialize t) = ccall(:jl_argument_datatype, Any, (Any,), t)
+function argument_mt(@nospecialize t)
+    dt = argument_datatype(t)
+    (dt === nothing || !isdefined(dt.name, :mt)) && return nothing
+    dt.name.mt
+end
+
 """
     fieldcount(t::Type)
 
@@ -551,18 +633,18 @@ An error is thrown if the type is too abstract to determine this.
 """
 function fieldcount(@nospecialize t)
     if t isa UnionAll || t isa Union
-        t = ccall(:jl_argument_datatype, Any, (Any,), t)
+        t = argument_datatype(t)
         if t === nothing
-            error("type does not have a definite number of fields")
+            throw(ArgumentError("type does not have a definite number of fields"))
         end
         t = t::DataType
     elseif t == Union{}
-        return 0
+        throw(ArgumentError("The empty type does not have a well-defined number of fields since it does not have instances."))
     end
     if !(t isa DataType)
-        throw(TypeError(:fieldcount, "", Type, t))
+        throw(TypeError(:fieldcount, DataType, t))
     end
-    if t.name === NamedTuple.body.body.name
+    if t.name === NamedTuple_typename
         names, types = t.parameters
         if names isa Tuple
             return length(names)
@@ -575,10 +657,31 @@ function fieldcount(@nospecialize t)
         abstr = t.abstract || (t.name === Tuple.name && isvatuple(t))
     end
     if abstr
-        error("type does not have a definite number of fields")
+        throw(ArgumentError("type does not have a definite number of fields"))
     end
     return length(t.types)
 end
+
+"""
+    fieldtypes(T::Type)
+
+The declared types of all fields in a composite DataType `T` as a tuple.
+
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
+
+# Examples
+```jldoctest
+julia> struct Foo
+           x::Int64
+           y::String
+       end
+
+julia> fieldtypes(Foo)
+(Int64, String)
+```
+"""
+fieldtypes(T::Type) = ntuple(i -> fieldtype(T, i), fieldcount(T))
 
 # return all instances, for types that can be enumerated
 
@@ -604,8 +707,10 @@ function to_tuple_type(@nospecialize(t))
         t = Tuple{t...}
     end
     if isa(t,Type) && t<:Tuple
-        if !all(p->(isa(p,Type)||isa(p,TypeVar)), t.parameters)
-            error("argument tuple type must contain only types")
+        for p in unwrap_unionall(t).parameters
+            if !(isa(p,Type) || isa(p,TypeVar))
+                error("argument tuple type must contain only types")
+            end
         end
     else
         error("expected tuple type")
@@ -615,12 +720,16 @@ end
 
 function signature_type(@nospecialize(f), @nospecialize(args))
     f_type = isa(f, Type) ? Type{f} : typeof(f)
-    arg_types = isa(args, Type) ? args.parameters : args
-    return Tuple{f_type, arg_types...}
+    if isa(args, Type)
+        u = unwrap_unionall(args)
+        return rewrap_unionall(Tuple{f_type, u.parameters...}, args)
+    else
+        return Tuple{f_type, args...}
+    end
 end
 
 """
-    code_lowered(f, types; generated = true)
+    code_lowered(f, types; generated=true, debuginfo=:default)
 
 Return an array of the lowered forms (IR) for the methods matching the given generic function
 and type signature.
@@ -630,10 +739,17 @@ implementations. An error is thrown if no fallback implementation exists.
 If `generated` is `true`, these `CodeInfo` instances will correspond to the method bodies
 yielded by expanding the generators.
 
+The keyword debuginfo controls the amount of code metadata present in the output.
+
 Note that an error will be thrown if `types` are not leaf types when `generated` is
-`true` and the corresponding method is a `@generated` method.
+`true` and any of the corresponding methods are an `@generated` method.
 """
-function code_lowered(@nospecialize(f), @nospecialize(t = Tuple); generated::Bool = true)
+function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=true, debuginfo::Symbol=:default)
+    if debuginfo == :default
+        debuginfo = :source
+    elseif debuginfo != :source && debuginfo != :none
+        throw(ArgumentError("'debuginfo' must be either :source or :none"))
+    end
     return map(method_instances(f, t)) do m
         if generated && isgenerated(m)
             if isa(m, Core.MethodInstance)
@@ -644,7 +760,9 @@ function code_lowered(@nospecialize(f), @nospecialize(t = Tuple); generated::Boo
                       "not leaf types, but the `generated` argument is `true`.")
             end
         end
-        return uncompressed_ast(m)
+        code = uncompressed_ast(m)
+        debuginfo == :none && remove_linenums!(code)
+        return code
     end
 end
 
@@ -682,9 +800,8 @@ end
 
 length(m::MethodList) = length(m.ms)
 isempty(m::MethodList) = isempty(m.ms)
-start(m::MethodList) = start(m.ms)
-done(m::MethodList, s) = done(m.ms, s)
-next(m::MethodList, s) = next(m.ms, s)
+iterate(m::MethodList, s...) = iterate(m.ms, s...)
+eltype(::Type{MethodList}) = Method
 
 function MethodList(mt::Core.MethodTable)
     ms = Method[]
@@ -763,10 +880,10 @@ function length(mt::Core.MethodTable)
 end
 isempty(mt::Core.MethodTable) = (mt.defs === nothing)
 
-uncompressed_ast(m::Method) = isdefined(m,:source) ? uncompressed_ast(m, m.source) :
-                              isdefined(m,:generator) ? error("Method is @generated; try `code_lowered` instead.") :
+uncompressed_ast(m::Method) = isdefined(m, :source) ? uncompressed_ast(m, m.source) :
+                              isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
                               error("Code for this Method is not available.")
-uncompressed_ast(m::Method, s::CodeInfo) = s
+uncompressed_ast(m::Method, s::CodeInfo) = copy(s)
 uncompressed_ast(m::Method, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Any), m, s)::CodeInfo
 uncompressed_ast(m::Core.MethodInstance) = uncompressed_ast(m.def)
 
@@ -793,15 +910,19 @@ struct CodegenParams
     module_setup::Any
     module_activation::Any
     raise_exception::Any
+    emit_function::Any
+    emitted_function::Any
 
     CodegenParams(;cached::Bool=true,
                    track_allocations::Bool=true, code_coverage::Bool=true,
                    static_alloc::Bool=true, prefer_specsig::Bool=false,
-                   module_setup=nothing, module_activation=nothing, raise_exception=nothing) =
+                   module_setup=nothing, module_activation=nothing, raise_exception=nothing,
+                   emit_function=nothing, emitted_function=nothing) =
         new(Cint(cached),
             Cint(track_allocations), Cint(code_coverage),
             Cint(static_alloc), Cint(prefer_specsig),
-            module_setup, module_activation, raise_exception)
+            module_setup, module_activation, raise_exception,
+            emit_function, emitted_function)
 end
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
@@ -814,26 +935,34 @@ function func_for_method_checked(m::Method, @nospecialize types)
 end
 
 """
-    code_typed(f, types; optimize=true)
+    code_typed(f, types; optimize=true, debuginfo=:default)
 
 Returns an array of type-inferred lowered form (IR) for the methods matching the given
 generic function and type signature. The keyword argument `optimize` controls whether
 additional optimizations, such as inlining, are also applied.
+The keyword debuginfo controls the amount of code metadata present in the output.
 """
-function code_typed(@nospecialize(f), @nospecialize(types=Tuple); optimize=true)
+function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
+                    optimize=true, debuginfo::Symbol=:default,
+                    world = ccall(:jl_get_world_counter, UInt, ()),
+                    params = Core.Compiler.Params(world))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
+    if debuginfo == :default
+        debuginfo = :source
+    elseif debuginfo != :source && debuginfo != :none
+        throw(ArgumentError("'debuginfo' must be either :source or :none"))
+    end
     types = to_tuple_type(types)
     asts = []
-    world = ccall(:jl_get_world_counter, UInt, ())
-    params = Core.Compiler.Params(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
-        (_, code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, optimize, params)
+        (code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, params)
         code === nothing && error("inference not successful") # inference disabled?
-        push!(asts, uncompressed_ast(meth, code) => ty)
+        debuginfo == :none && remove_linenums!(code)
+        push!(asts, code => ty)
     end
     return asts
 end
@@ -849,7 +978,7 @@ function return_types(@nospecialize(f), @nospecialize(types=Tuple))
     params = Core.Compiler.Params(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
-        ty = Core.Compiler.typeinf_type(meth, x[1], x[2], true, params)
+        ty = Core.Compiler.typeinf_type(meth, x[1], x[2], params)
         ty === nothing && error("inference not successful") # inference disabled?
         push!(rt, ty)
     end
@@ -960,6 +1089,8 @@ end
 Determine whether the given generic function has a method matching the given
 `Tuple` of argument types with the upper bound of world age given by `world`.
 
+See also [`applicable`](@ref).
+
 # Examples
 ```jldoctest
 julia> hasmethod(length, Tuple{Array})
@@ -1053,7 +1184,7 @@ has_bottom_parameter(t::TypeVar) = t.ub == Bottom || has_bottom_parameter(t.ub)
 has_bottom_parameter(::Any) = false
 
 min_world(m::Method) = reinterpret(UInt, m.min_world)
-max_world(m::Method) = typemax(UInt)
+max_world(m::Method) = reinterpret(UInt, m.max_world)
 min_world(m::Core.MethodInstance) = reinterpret(UInt, m.min_world)
 max_world(m::Core.MethodInstance) = reinterpret(UInt, m.max_world)
 

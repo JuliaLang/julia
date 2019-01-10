@@ -40,11 +40,10 @@ enum {
 typedef struct {
     uint8_t command;
     jl_method_instance_t *mfunc;
-    jl_generic_fptr_t fptr;
+    jl_callptr_t fptr;
     jl_value_t **args;
     uint32_t nargs;
     jl_value_t *ret;
-    jl_module_t *current_module;
     size_t world_age;
 } ti_threadwork_t;
 

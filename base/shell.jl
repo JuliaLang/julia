@@ -9,7 +9,7 @@ function rstrip_shell(s::AbstractString)
     c_old = nothing
     for (i, c) in Iterators.reverse(pairs(s))
         ((c == '\\') && c_old == ' ') && return SubString(s, 1, i+1)
-        c in _default_delims || return SubString(s, 1, i)
+        isspace(c) || return SubString(s, 1, i)
         c_old = c
     end
     SubString(s, 1, 0)
@@ -46,7 +46,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     end
     function consume_upto(j)
         update_arg(s[i:prevind(s, j)])
-        i = coalesce(peek(st), (lastindex(s)+1,'\0'))[1]
+        i = something(peek(st), (lastindex(s)+1,'\0'))[1]
     end
     function append_arg()
         if isempty(arg); arg = Any["",]; end
@@ -60,7 +60,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             append_arg()
             while !isempty(st)
                 # We've made sure above that we don't end in whitespace,
-                # so updateing `i` here is ok
+                # so updating `i` here is ok
                 (i, c) = peek(st)
                 isspace(c) || break
                 popfirst!(st)
@@ -128,9 +128,6 @@ function shell_split(s::AbstractString)
 end
 
 function print_shell_word(io::IO, word::AbstractString, special::AbstractString = "")
-    if isempty(word)
-        print(io, "''")
-    end
     has_single = false
     has_special = false
     for c in word
@@ -141,7 +138,9 @@ function print_shell_word(io::IO, word::AbstractString, special::AbstractString 
             end
         end
     end
-    if !has_special
+    if isempty(word)
+        print(io, "''")
+    elseif !has_special
         print(io, word)
     elseif !has_single
         print(io, '\'', word, '\'')
@@ -155,6 +154,7 @@ function print_shell_word(io::IO, word::AbstractString, special::AbstractString 
         end
         print(io, '"')
     end
+    nothing
 end
 
 function print_shell_escaped(io::IO, cmd::AbstractString, args::AbstractString...;
@@ -186,7 +186,7 @@ julia> Base.shell_escape("echo", "this", "&&", "that")
 ```
 """
 shell_escape(args::AbstractString...; special::AbstractString="") =
-    sprint(io->print_shell_escaped(io, args..., special=special))
+    sprint((io, args...) -> print_shell_escaped(io, args..., special=special), args...)
 
 
 function print_shell_escaped_posixly(io::IO, args::AbstractString...)
@@ -197,7 +197,7 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
         # that any (reasonable) shell will definitely never consider them to be special
         have_single = false
         have_double = false
-        function isword(c::Char)
+        function isword(c::AbstractChar)
             if '0' <= c <= '9' || 'a' <= c <= 'z' || 'A' <= c <= 'Z'
                 # word characters
             elseif c == '_' || c == '/' || c == '+' || c == '-'
@@ -215,7 +215,9 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
             end
             return true
         end
-        if all(isword, arg)
+        if isempty(arg)
+            print(io, "''")
+        elseif all(isword, arg)
             have_single && (arg = replace(arg, '\'' => "\\'"))
             have_double && (arg = replace(arg, '"' => "\\\""))
             print(io, arg)
@@ -243,4 +245,4 @@ julia> Base.shell_escape_posixly("echo", "this", "&&", "that")
 ```
 """
 shell_escape_posixly(args::AbstractString...) =
-    sprint(io->print_shell_escaped_posixly(io, args...))
+    sprint(print_shell_escaped_posixly, args...)

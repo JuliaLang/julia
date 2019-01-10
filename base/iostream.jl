@@ -48,7 +48,7 @@ iswritable(s::IOStream) = ccall(:ios_get_writable, Cint, (Ptr{Cvoid},), s.ios)!=
 isreadable(s::IOStream) = ccall(:ios_get_readable, Cint, (Ptr{Cvoid},), s.ios)!=0
 
 """
-    truncate(file,n)
+    truncate(file, n)
 
 Resize the file or buffer given by the first argument to exactly `n` bytes, filling
 previously unallocated space with '\\0' if the file or buffer is grown.
@@ -73,7 +73,7 @@ julia> write(io, "JuliaLang is a GitHub organization.");
 julia> truncate(io, 40);
 
 julia> String(take!(io))
-"JuliaLang is a GitHub organization.\0\0\0\0\0"
+"JuliaLang is a GitHub organization.\\0\\0\\0\\0\\0"
 ```
 """
 function truncate(s::IOStream, n::Integer)
@@ -254,7 +254,7 @@ end
 
 Open a file in a mode specified by five boolean keyword arguments:
 
-| Keyword    | Desciption             | Default                                 |
+| Keyword    | Description             | Default                                 |
 |:-----------|:-----------------------|:----------------------------------------|
 | `read`     | open for reading       | `!write`                                |
 | `write`    | open for writing       | `truncate \\| append`                   |
@@ -280,7 +280,7 @@ function open(fname::AbstractString;
         append = append,
     )
     s = IOStream(string("<file ",fname,">"))
-    systemerror("opening file $fname",
+    systemerror("opening file $(repr(fname))",
                 ccall(:ios_file, Ptr{Cvoid},
                       (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
                       s.ios, fname, flags.read, flags.write, flags.create, flags.truncate) == C_NULL)
@@ -354,8 +354,8 @@ descriptor upon completion.
 # Examples
 ```jldoctest
 julia> open("myfile.txt", "w") do io
-           write(io, "Hello world!");
-       end
+           write(io, "Hello world!")
+       end;
 
 julia> open(f->read(f, String), "myfile.txt")
 "Hello world!"
@@ -387,7 +387,7 @@ end
 # num bytes available without blocking
 bytesavailable(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
 
-readavailable(s::IOStream) = read!(s, Vector{UInt8}(uninitialized, bytesavailable(s)))
+readavailable(s::IOStream) = read!(s, Vector{UInt8}(undef, bytesavailable(s)))
 
 function read(s::IOStream, ::Type{UInt8})
     b = ccall(:ios_getc, Cint, (Ptr{Cvoid},), s.ios)
@@ -401,6 +401,10 @@ if ENDIAN_BOM == 0x04030201
 function read(s::IOStream, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64}})
     return ccall(:jl_ios_get_nbyte_int, UInt64, (Ptr{Cvoid}, Csize_t), s.ios, sizeof(T)) % T
 end
+
+read(s::IOStream, ::Type{Float16}) = reinterpret(Float16, read(s, Int16))
+read(s::IOStream, ::Type{Float32}) = reinterpret(Float32, read(s, Int32))
+read(s::IOStream, ::Type{Float64}) = reinterpret(Float64, read(s, Int64))
 end
 
 function unsafe_read(s::IOStream, p::Ptr{UInt8}, nb::UInt)
@@ -425,11 +429,7 @@ function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
     ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, !keep)
 end
 
-function readline(s::IOStream; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
-    end
+function readline(s::IOStream; keep::Bool=false)
     ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
 end
 
@@ -485,6 +485,7 @@ function read(s::IOStream)
         if pos > 0
             sz -= pos
         end
+    catch
     end
     b = StringVector(sz<=0 ? 1024 : sz)
     nr = readbytes_all!(s, b, typemax(Int))
@@ -502,20 +503,12 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 all stream types support the `all` option.
 """
 function read(s::IOStream, nb::Integer; all::Bool=true)
-    b = Vector{UInt8}(uninitialized, nb)
+    b = Vector{UInt8}(undef, nb)
     nr = readbytes!(s, b, nb, all=all)
     resize!(b, nr)
 end
 
-## Character streams ##
-
-function peekchar(s::IOStream)
-    chref = Ref{UInt32}()
-    if ccall(:ios_peekutf8, Cint, (Ptr{Cvoid}, Ptr{UInt32}), s, chref) < 0
-        return typemax(Char)
-    end
-    return Char(chref[])
-end
+## peek ##
 
 function peek(s::IOStream)
     ccall(:ios_peekc, Cint, (Ptr{Cvoid},), s)

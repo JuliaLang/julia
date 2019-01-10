@@ -33,7 +33,7 @@ buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = x
 """
     isopen(object) -> Bool
 
-Determine whether an object - such as a stream, timer, or [`mmap`](@ref Mmap.mmap)
+Determine whether an object - such as a stream or timer
 -- is not yet closed. Once an object is closed, it will never produce a new event.
 However, since a closed stream may still have data to read in its buffer,
 use [`eof`](@ref) to check for the ability to read data.
@@ -83,7 +83,7 @@ Return `true` if the specified IO object is readable (if that can be determined)
 # Examples
 ```jldoctest
 julia> open("myfile.txt", "w") do io
-           write(io, "Hello world!");
+           print(io, "Hello world!");
            isreadable(io)
        end
 false
@@ -106,7 +106,7 @@ Return `true` if the specified IO object is writable (if that can be determined)
 # Examples
 ```jldoctest
 julia> open("myfile.txt", "w") do io
-           write(io, "Hello world!");
+           print(io, "Hello world!");
            iswritable(io)
        end
 true
@@ -152,7 +152,8 @@ read(stream, t)
     write(filename::AbstractString, x)
 
 Write the canonical binary representation of a value to the given I/O stream or file.
-Return the number of bytes written into the stream.
+Return the number of bytes written into the stream.   See also [`print`](@ref) to
+write a text representation (with an encoding that may depend upon `io`).
 
 You can write multiple values with the same `write` call. i.e. the following are equivalent:
 
@@ -229,14 +230,19 @@ read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io), byte)
 unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io), p, nb)
 read(io::AbstractPipe) = read(pipe_reader(io))
 readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil(io::AbstractPipe, arg::Char; kw...) = readuntil(pipe_reader(io), arg; kw...)
+readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io), target, keep, out)
 
-readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
+for f in (
+        # peek/mark interface
+        :peek, :mark, :unmark, :reset, :ismarked,
+        # Simple reader functions
+        :readavailable, :isreadable)
+    @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io))
+end
 
-isreadable(io::AbstractPipe) = isreadable(pipe_reader(io))
 iswritable(io::AbstractPipe) = iswritable(pipe_writer(io))
 isopen(io::AbstractPipe) = isopen(pipe_writer(io)) || isopen(pipe_reader(io))
 close(io::AbstractPipe) = (close(pipe_writer(io)); close(pipe_reader(io)))
@@ -288,6 +294,8 @@ Read the entire contents of a file as a string.
 """
 read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
 
+read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), filename)
+
 """
     read!(stream::IO, array::Union{Array, BitArray})
     read!(filename::AbstractString, array::Union{Array, BitArray})
@@ -303,7 +311,7 @@ read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
     readuntil(filename::AbstractString, delim; keep::Bool = false)
 
 Read a string from an I/O stream or a file, up to the given delimiter.
-The delimiter can be a `UInt8`, `Char`, string, or vector.
+The delimiter can be a `UInt8`, `AbstractChar`, string, or vector.
 Keyword argument `keep` controls whether the delimiter is included in the result.
 The text is assumed to be encoded in UTF-8.
 
@@ -315,9 +323,9 @@ julia> open("my_file.txt", "w") do io
 57
 
 julia> readuntil("my_file.txt", 'L')
-"JuliaL"
+"Julia"
 
-julia> readuntil("my_file.txt", '.')
+julia> readuntil("my_file.txt", '.', keep = true)
 "JuliaLang is a GitHub organization."
 
 julia> rm("my_file.txt")
@@ -352,21 +360,13 @@ julia> readline("my_file.txt", keep=true)
 julia> rm("my_file.txt")
 ```
 """
-function readline(filename::AbstractString; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
-    end
+function readline(filename::AbstractString; keep::Bool=false)
     open(filename) do f
         readline(f, keep=keep)
     end
 end
 
-function readline(s::IO=stdin; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
-    end
+function readline(s::IO=stdin; keep::Bool=false)
     line = readuntil(s, 0x0a, keep=true)
     i = length(line)
     if keep || i == 0 || line[i] != 0x0a
@@ -447,28 +447,28 @@ ENDIAN_BOM
 """
     ntoh(x)
 
-Converts the endianness of a value from Network byte order (big-endian) to that used by the Host.
+Convert the endianness of a value from Network byte order (big-endian) to that used by the Host.
 """
 ntoh(x)
 
 """
     hton(x)
 
-Converts the endianness of a value from that used by the Host to Network byte order (big-endian).
+Convert the endianness of a value from that used by the Host to Network byte order (big-endian).
 """
 hton(x)
 
 """
     ltoh(x)
 
-Converts the endianness of a value from Little-endian to that used by the Host.
+Convert the endianness of a value from Little-endian to that used by the Host.
 """
 ltoh(x)
 
 """
     htol(x)
 
-Converts the endianness of a value from that used by the Host to Little-endian.
+Convert the endianness of a value from that used by the Host to Little-endian.
 """
 htol(x)
 
@@ -517,8 +517,8 @@ write(s::IO, x::Bool) = write(s, UInt8(x))
 write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
 function write(s::IO, A::AbstractArray)
-    if !isbits(eltype(A))
-        depwarn("Calling `write` on non-isbits arrays is deprecated. Use a loop or `serialize` instead.", :write)
+    if !isbitstype(eltype(A))
+        error("`write` is not supported on non-isbits arrays")
     end
     nb = 0
     for a in A
@@ -528,20 +528,15 @@ function write(s::IO, A::AbstractArray)
 end
 
 function write(s::IO, a::Array)
-    if isbits(eltype(a))
+    if isbitstype(eltype(a))
         return GC.@preserve a unsafe_write(s, pointer(a), sizeof(a))
     else
-        depwarn("Calling `write` on non-isbits arrays is deprecated. Use a loop or `serialize` instead.", :write)
-        nb = 0
-        for b in a
-            nb += write(s, b)
-        end
-        return nb
+        error("`write` is not supported on non-isbits arrays")
     end
 end
 
 function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
-    if !isbits(T)
+    if !isbitstype(T) || !isa(a, StridedArray)
         return invoke(write, Tuple{IO, AbstractArray}, s, a)
     end
     elsz = sizeof(T)
@@ -570,6 +565,8 @@ function write(io::IO, c::Char)
         n += 1
     end
 end
+# write(io, ::AbstractChar) is not defined: implementations
+# must provide their own encoding-specific method.
 
 function write(io::IO, s::Symbol)
     pname = unsafe_convert(Ptr{UInt8}, s)
@@ -602,7 +599,7 @@ function read!(s::IO, a::Array{UInt8})
 end
 
 function read!(s::IO, a::Array{T}) where T
-    if isbits(T)
+    if isbitstype(T)
         GC.@preserve a unsafe_read(s, pointer(a), sizeof(a))
     else
         for i in eachindex(a)
@@ -627,12 +624,14 @@ function read(io::IO, ::Type{Char})
     end
     return reinterpret(Char, c)
 end
+# read(io, T) is not defined for other AbstractChar: implementations
+# must provide their own encoding-specific method.
 
 # readuntil_string is useful below since it has
 # an optimized method for s::IOStream
 readuntil_string(s::IO, delim::UInt8, keep::Bool) = String(readuntil(s, delim, keep=keep))
 
-function readuntil(s::IO, delim::Char; keep::Bool=false)
+function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
     if delim ≤ '\x7f'
         return readuntil_string(s, delim % UInt8, keep)
     end
@@ -799,6 +798,7 @@ The size of `b` will be increased if needed (i.e. if `nb` is greater than `lengt
 and enough bytes could be read), but it will never be decreased.
 """
 function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
+    require_one_based_indexing(b)
     olb = lb = length(b)
     nr = 0
     while nr < nb && !eof(s)
@@ -824,7 +824,7 @@ Read at most `nb` bytes from `s`, returning a `Vector{UInt8}` of the bytes read.
 function read(s::IO, nb::Integer = typemax(Int))
     # Let readbytes! grow the array progressively by default
     # instead of taking of risk of over-allocating
-    b = Vector{UInt8}(uninitialized, nb == typemax(Int) ? 1024 : nb)
+    b = Vector{UInt8}(undef, nb == typemax(Int) ? 1024 : nb)
     nr = readbytes!(s, b, nb)
     return resize!(b, nr)
 end
@@ -834,13 +834,12 @@ read(s::IO, T::Type) = error("The IO stream does not support reading objects of 
 
 ## high-level iterator interfaces ##
 
-struct EachLine
-    stream::IO
+struct EachLine{IOT <: IO}
+    stream::IOT
     ondone::Function
     keep::Bool
-
     EachLine(stream::IO=stdin; ondone::Function=()->nothing, keep::Bool=false) =
-        new(stream, ondone, keep)
+        new{typeof(stream)}(stream, ondone, keep)
 end
 
 """
@@ -868,34 +867,23 @@ JuliaLang is a GitHub organization. It has many members.
 julia> rm("my_file.txt");
 ```
 """
-function eachline(stream::IO=stdin; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
-    end
+function eachline(stream::IO=stdin; keep::Bool=false)
     EachLine(stream, keep=keep)::EachLine
 end
 
-function eachline(filename::AbstractString; chomp=nothing, keep::Bool=false)
-    if chomp !== nothing
-        keep = !chomp
-        depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
-    end
+function eachline(filename::AbstractString; keep::Bool=false)
     s = open(filename)
     EachLine(s, ondone=()->close(s), keep=keep)::EachLine
 end
 
-start(itr::EachLine) = nothing
-function done(itr::EachLine, ::Nothing)
-    eof(itr.stream) || return false
-    itr.ondone()
-    true
+function iterate(itr::EachLine, state=nothing)
+    eof(itr.stream) && return (itr.ondone(); nothing)
+    (readline(itr.stream, keep=itr.keep), nothing)
 end
-next(itr::EachLine, ::Nothing) = (readline(itr.stream, keep=itr.keep), nothing)
 
-eltype(::Type{EachLine}) = String
+eltype(::Type{<:EachLine}) = String
 
-IteratorSize(::Type{EachLine}) = SizeUnknown()
+IteratorSize(::Type{<:EachLine}) = SizeUnknown()
 
 # IOStream Marking
 # Note that these functions expect that io.mark exists for
@@ -986,7 +974,7 @@ function skipchars(predicate, io::IO; linecomment=nothing)
         if c === linecomment
             readline(io)
         elseif !predicate(c)
-            skip(io, -codelen(c))
+            skip(io, -ncodeunits(c))
             break
         end
     end
@@ -994,7 +982,7 @@ function skipchars(predicate, io::IO; linecomment=nothing)
 end
 
 """
-    countlines(io::IO; eol::Char = '\\n')
+    countlines(io::IO; eol::AbstractChar = '\\n')
 
 Read `io` until the end of the stream/file and count the number of lines. To specify a file
 pass the filename as the first argument. EOL markers other than `'\\n'` are supported by
@@ -1003,7 +991,7 @@ end with the EOL, matching the length returned by [`eachline`](@ref) and [`readl
 
 # Examples
 ```jldoctest
-julia> io = IOBuffer("JuliaLang is a GitHub organization.\n");
+julia> io = IOBuffer("JuliaLang is a GitHub organization.\\n");
 
 julia> countlines(io)
 1
@@ -1014,13 +1002,13 @@ julia> countlines(io)
 1
 
 julia> countlines(io, eol = '.')
-1
+0
 ```
 """
-function countlines(io::IO; eol::Char='\n')
+function countlines(io::IO; eol::AbstractChar='\n')
     isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     aeol = UInt8(eol)
-    a = Vector{UInt8}(uninitialized, 8192)
+    a = Vector{UInt8}(undef, 8192)
     nl = nb = 0
     while !eof(io)
         nb = readbytes!(io, a)
@@ -1034,4 +1022,4 @@ function countlines(io::IO; eol::Char='\n')
     nl
 end
 
-countlines(f::AbstractString; eol::Char = '\n') = open(io->countlines(io, eol = eol), f)::Int
+countlines(f::AbstractString; eol::AbstractChar = '\n') = open(io->countlines(io, eol = eol), f)::Int

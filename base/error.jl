@@ -91,6 +91,34 @@ function catch_backtrace()
     return _reformat_bt(bt[], bt2[])
 end
 
+"""
+    catch_stack(task=current_task(); [inclue_bt=true])
+
+Get the stack of exceptions currently being handled. For nested catch blocks
+there may be more than one current exception in which case the most recently
+thrown exception is last in the stack. The stack is returned as a Vector of
+`(exception,backtrace)` pairs, or a Vector of exceptions if `include_bt` is
+false.
+
+Explicitly passing `task` will return the current exception stack on an
+arbitrary task. This is useful for inspecting tasks which have failed due to
+uncaught exceptions.
+
+!!! compat "Julia 1.1"
+    This function is experimental in Julia 1.1 and will likely be renamed in a
+    future release (see https://github.com/JuliaLang/julia/pull/29901).
+"""
+function catch_stack(task=current_task(); include_bt=true)
+    raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint), task, include_bt, typemax(Cint))
+    formatted = Any[]
+    stride = include_bt ? 3 : 1
+    for i = reverse(1:stride:length(raw))
+        e = raw[i]
+        push!(formatted, include_bt ? (e,Base._reformat_bt(raw[i+1],raw[i+2])) : e)
+    end
+    formatted
+end
+
 ## keyword arg lowering generates calls to this ##
 function kwerr(kw, args::Vararg{Any,N}) where {N}
     @_noinline_meta
@@ -104,6 +132,21 @@ end
 Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `iftrue` is `true`
 """
 systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), extrainfo)) : nothing
+
+
+## system errors from Windows API functions
+struct WindowsErrorInfo
+    errnum::UInt32
+    extrainfo
+end
+"""
+    windowserror(sysfunc, iftrue)
+
+Like [`systemerror`](@ref), but for Windows API functions that use [`GetLastError`](@ref) instead
+of setting [`errno`](@ref).
+"""
+windowserror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), WindowsErrorInfo(Libc.GetLastError(), extrainfo))) : nothing
+
 
 ## assertion macro ##
 
@@ -167,15 +210,15 @@ rate in the interval `factor` * (1 ± `jitter`).  The first element is
 """
 ExponentialBackOff(; n=1, first_delay=0.05, max_delay=10.0, factor=5.0, jitter=0.1) =
     ExponentialBackOff(n, first_delay, max_delay, factor, jitter)
-start(ebo::ExponentialBackOff) = (ebo.n, min(ebo.first_delay, ebo.max_delay))
-function next(ebo::ExponentialBackOff, state)
+function iterate(ebo::ExponentialBackOff, state= (ebo.n, min(ebo.first_delay, ebo.max_delay)))
+    state[1] < 1 && return nothing
     next_n = state[1]-1
     curr_delay = state[2]
     next_delay = min(ebo.max_delay, state[2] * ebo.factor * (1.0 - ebo.jitter + (rand(Float64) * 2.0 * ebo.jitter)))
     (curr_delay, (next_n, next_delay))
 end
-done(ebo::ExponentialBackOff, state) = state[1]<1
 length(ebo::ExponentialBackOff) = ebo.n
+eltype(::Type{ExponentialBackOff}) = Float64
 
 """
     retry(f::Function;  delays=ExponentialBackOff(), check=nothing) -> Function
@@ -191,25 +234,28 @@ retry(f, delays=fill(5.0, 3))
 retry(f, delays=rand(5:10, 2))
 retry(f, delays=Base.ExponentialBackOff(n=3, first_delay=5, max_delay=1000))
 retry(http_get, check=(s,e)->e.status == "503")(url)
-retry(read, check=(s,e)->isa(e, UVError))(io, 128; all=false)
+retry(read, check=(s,e)->isa(e, IOError))(io, 128; all=false)
 ```
 """
 function retry(f::Function;  delays=ExponentialBackOff(), check=nothing)
     (args...; kwargs...) -> begin
-        state = start(delays)
-        while true
+        y = iterate(delays)
+        while y !== nothing
+            (delay, state) = y
             try
                 return f(args...; kwargs...)
             catch e
-                done(delays, state) && rethrow(e)
+                y === nothing && rethrow()
                 if check !== nothing
                     result = check(state, e)
                     state, retry_or_not = length(result) == 2 ? result : (state, result)
-                    retry_or_not || rethrow(e)
+                    retry_or_not || rethrow()
                 end
             end
-            (delay, state) = next(delays, state)
             sleep(delay)
+            y = iterate(delays, state)
         end
+        # When delays is out, just run the function without try/catch
+        return f(args...; kwargs...)
     end
 end

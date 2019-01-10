@@ -3,6 +3,7 @@
 module SPQR
 
 import Base: \
+using Base: has_offset_axes
 using LinearAlgebra
 
 # ordering options */
@@ -22,7 +23,7 @@ const ORDERING_BESTAMD = Int32(9) # try COLAMD and AMD; pick best#
 # tried.  If there is a high fill-in with AMD then try METIS(A'A) and take
 # the best of AMD and METIS. METIS is not tried if it isn't installed.
 
-using SparseArrays: SparseMatrixCSC
+using SparseArrays: SparseMatrixCSC, nnz
 using ..SuiteSparse.CHOLMOD
 using ..SuiteSparse.CHOLMOD: change_stype!, free!
 
@@ -71,7 +72,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
     if e == C_NULL
         _E = Vector{CHOLMOD.SuiteSparse_long}()
     else
-        _E = Vector{CHOLMOD.SuiteSparse_long}(uninitialized, n)
+        _E = Vector{CHOLMOD.SuiteSparse_long}(undef, n)
         for i in 1:n
             @inbounds _E[i] = unsafe_load(e, i) + 1
         end
@@ -86,7 +87,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
     if hpinv == C_NULL
         _HPinv = Vector{CHOLMOD.SuiteSparse_long}()
     else
-        _HPinv = Vector{CHOLMOD.SuiteSparse_long}(uninitialized, m)
+        _HPinv = Vector{CHOLMOD.SuiteSparse_long}(undef, m)
         for i in 1:m
             @inbounds _HPinv[i] = unsafe_load(hpinv, i) + 1
         end
@@ -124,19 +125,24 @@ function Base.size(F::QRSparse, i::Integer)
         throw(ArgumentError("second argument must be positive"))
     end
 end
+Base.axes(F::QRSparse) = map(Base.OneTo, size(F))
 
 struct QRSparseQ{Tv<:CHOLMOD.VTypes,Ti<:Integer} <: LinearAlgebra.AbstractQ{Tv}
     factors::SparseMatrixCSC{Tv,Ti}
     τ::Vector{Tv}
+    n::Int # Number of columns in original matrix
 end
 
 Base.size(Q::QRSparseQ) = (size(Q.factors, 1), size(Q.factors, 1))
+Base.axes(Q::QRSparseQ) = map(Base.OneTo, size(Q))
+
+Matrix{T}(Q::QRSparseQ) where {T} = lmul!(Q, Matrix{T}(I, size(Q, 1), min(size(Q, 1), Q.n)))
 
 # From SPQR manual p. 6
 _default_tol(A::SparseMatrixCSC) =
-    20*sum(size(A))*eps(real(eltype(A)))*maximum(norm(view(A, :, i))^2 for i in 1:size(A, 2))
+    20*sum(size(A))*eps(real(eltype(A)))*maximum(norm(view(A, :, i)) for i in 1:size(A, 2))
 
-function LinearAlgebra.qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {Tv <: CHOLMOD.VTypes}
+function LinearAlgebra.qr(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {Tv <: CHOLMOD.VTypes}
     R     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
     E     = Ref{Ptr{CHOLMOD.SuiteSparse_long}}()
     H     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
@@ -148,14 +154,15 @@ function LinearAlgebra.qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) whe
         C_NULL, C_NULL, C_NULL, C_NULL,
         R, E, H, HPinv, HTau)
 
+    R_ = SparseMatrixCSC(Sparse(R[]))
     return QRSparse(SparseMatrixCSC(Sparse(H[])),
                     vec(Array(CHOLMOD.Dense(HTau[]))),
-                    SparseMatrixCSC(Sparse(R[])),
+                    SparseMatrixCSC(min(size(A)...), R_.n, R_.colptr, R_.rowval, R_.nzval),
                     p, hpinv)
 end
 
 """
-    qrfact(A) -> QRSparse
+    qr(A) -> QRSparse
 
 Compute the `QR` factorization of a sparse matrix `A`. Fill-reducing row and column permutations
 are used such that `F.R = F.Q'*A[F.prow,F.pcol]`. The main application of this type is to
@@ -170,7 +177,7 @@ julia> A = sparse([1,2,3,4], [1,1,2,2], [1.0,1.0,1.0,1.0])
   [3, 2]  =  1.0
   [4, 2]  =  1.0
 
-julia> qrfact(A)
+julia> qr(A)
 Base.SparseArrays.SPQR.QRSparse{Float64,Int64}
 Q factor:
 4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:
@@ -194,8 +201,6 @@ Column permutation:
  2
 ```
 """
-LinearAlgebra.qrfact(A::SparseMatrixCSC; tol = _default_tol(A)) = qrfact(A, Val{true}, tol = tol)
-
 LinearAlgebra.qr(A::SparseMatrixCSC; tol = _default_tol(A)) = qr(A, Val{true}, tol = tol)
 
 function LinearAlgebra.lmul!(Q::QRSparseQ, A::StridedVecOrMat)
@@ -269,7 +274,7 @@ Extract factors of a QRSparse factorization. Possible values of `d` are
 
 # Examples
 ```jldoctest
-julia> F = qrfact(sparse([1,3,2,3,4], [1,1,2,3,4], [1.0,2.0,3.0,4.0,5.0]));
+julia> F = qr(sparse([1,3,2,3,4], [1,1,2,3,4], [1.0,2.0,3.0,4.0,5.0]));
 
 julia> F.Q
 4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:
@@ -303,7 +308,7 @@ julia> F.pcol
 """
 @inline function Base.getproperty(F::QRSparse, d::Symbol)
     if d == :Q
-        return QRSparseQ(F.factors, F.τ)
+        return QRSparseQ(F.factors, F.τ, size(F, 2))
     elseif d == :prow
         return invperm(F.rpivinv)
     elseif d == :pcol
@@ -313,8 +318,13 @@ julia> F.pcol
     end
 end
 
+function Base.propertynames(F::QRSparse, private::Bool=false)
+    public = (:R, :Q, :prow, :pcol)
+    private ? ((public ∪ fieldnames(typeof(F)))...,) : public
+end
+
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, F::QRSparse)
-    println(io, summary(F))
+    summary(io, F); println(io)
     println(io, "Q factor:")
     show(io, mime, F.Q)
     println(io, "\nR factor:")
@@ -335,19 +345,23 @@ end
 _ret_size(F::QRSparse, b::AbstractVector) = (size(F, 2),)
 _ret_size(F::QRSparse, B::AbstractMatrix) = (size(F, 2), size(B, 2))
 
-function (\)(F::QRSparse{Float64}, B::VecOrMat{Complex{Float64}})
+LinearAlgebra.rank(F::QRSparse) = reduce(max, view(F.R.rowval, 1:nnz(F.R)), init = eltype(F.R.rowval)(0))
+LinearAlgebra.rank(S::SparseMatrixCSC) = rank(qr(S))
+
+function (\)(F::QRSparse{T}, B::VecOrMat{Complex{T}}) where T<:LinearAlgebra.BlasReal
 # |z1|z3|  reinterpret  |x1|x2|x3|x4|  transpose  |x1|y1|  reshape  |x1|y1|x3|y3|
 # |z2|z4|      ->       |y1|y2|y3|y4|     ->      |x2|y2|     ->    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
-    c2r = reshape(copy(transpose(reinterpret(Float64, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
+    @assert !has_offset_axes(F, B)
+    c2r = reshape(copy(transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = F\c2r
 
 # |z1|z3|  reinterpret  |x1|x2|x3|x4|  transpose  |x1|y1|  reshape  |x1|y1|x3|y3|
 # |z2|z4|      <-       |y1|y2|y3|y4|     <-      |x2|y2|     <-    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
-    return collect(reshape(reinterpret(Complex{Float64}, copy(transpose(reshape(x, (length(x) >> 1), 2)))), _ret_size(F, B)))
+    return collect(reshape(reinterpret(Complex{T}, copy(transpose(reshape(x, (length(x) >> 1), 2)))), _ret_size(F, B)))
 end
 
 function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
@@ -355,8 +369,8 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
         throw(DimensionMismatch("size(F) = $(size(F)) but size(B) = $(size(B))"))
     end
 
-    # The rank of F equal to the number of rows in R
-    rnk = size(F.R, 1)
+    # The rank of F equal might be reduced
+    rnk = rank(F)
 
     # allocate an array for the return value large enough to hold B and X
     # For overdetermined problem, B is larger than X and vice versa
@@ -378,10 +392,11 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
     LinearAlgebra.lmul!(adjoint(F.Q), X0)
 
     # Zero out to get basic solution
-    X[rnk + 1:end, :] = 0
+    X[rnk + 1:end, :] .= 0
 
     # Solve R*X = B
-    LinearAlgebra.ldiv!(UpperTriangular(view(F.R, :, Base.OneTo(rnk))), view(X0, Base.OneTo(rnk), :))
+    LinearAlgebra.ldiv!(UpperTriangular(F.R[Base.OneTo(rnk), Base.OneTo(rnk)]),
+                        view(X0, Base.OneTo(rnk), :))
 
     # Apply right permutation and extract solution from X
     return getindex(X, ntuple(i -> i == 1 ? invperm(F.cpiv) : :, Val(ndims(B)))...)
@@ -403,7 +418,7 @@ julia> A = sparse([1,2,4], [1,1,1], [1.0,1.0,1.0], 4, 2)
   [2, 1]  =  1.0
   [4, 1]  =  1.0
 
-julia> qrfact(A)\\fill(1.0, 4)
+julia> qr(A)\\fill(1.0, 4)
 2-element Array{Float64,1}:
  1.0
  0.0

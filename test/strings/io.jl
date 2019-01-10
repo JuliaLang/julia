@@ -18,6 +18,7 @@
         0x0000001c      '\x1c'      "\\x1c"
         0x0000001f      '\x1f'      "\\x1f"
         0x00000020      ' '         " "
+        0x00000022      '"'         "\\\""
         0x0000002f      '/'         "/"
         0x00000030      '0'         "0"
         0x00000039      '9'         "9"
@@ -26,6 +27,7 @@
         0x00000041      'A'         "A"
         0x0000005a      'Z'         "Z"
         0x0000005b      '['         "["
+        0x0000005c      '\\'         "\\\\"
         0x00000060      '`'         "`"
         0x00000061      'a'         "a"
         0x0000007a      'z'         "z"
@@ -73,22 +75,22 @@
             local str = string(ch, cx[j,2])
             @test str == unescape_string(escape_string(str))
         end
-        @test repr(ch) == "'$(isprint(ch) ? ch : st)'"
+        @test repr(ch) == "'$(isprint(ch) && ch != '\\' ? ch : st)'"
     end
 
     for i = 0:0x7f, p = ["","\0","x","xxx","\x7f","\uFF","\uFFF",
                          "\uFFFF","\U10000","\U10FFF","\U10FFFF"]
         c = Char(i)
         cp = string(c,p)
-        op = string(Char(div(i,8)), oct(i%8), p)
-        hp = string(Char(div(i,16)), hex(i%16), p)
-        @test string(unescape_string(string("\\",oct(i,1),p))) == cp
-        @test string(unescape_string(string("\\",oct(i,2),p))) == cp
-        @test string(unescape_string(string("\\",oct(i,3),p))) == cp
-        @test string(unescape_string(string("\\",oct(i,4),p))) == op
-        @test string(unescape_string(string("\\x",hex(i,1),p))) == cp
-        @test string(unescape_string(string("\\x",hex(i,2),p))) == cp
-        @test string(unescape_string(string("\\x",hex(i,3),p))) == hp
+        op = string(Char(div(i,8)), string(i%8, base = 8), p)
+        hp = string(Char(div(i,16)), string(i%16, base = 16), p)
+        @test string(unescape_string(string("\\",string(i,base=8,pad=1),p))) == cp
+        @test string(unescape_string(string("\\",string(i,base=8,pad=2),p))) == cp
+        @test string(unescape_string(string("\\",string(i,base=8,pad=3),p))) == cp
+        @test string(unescape_string(string("\\",string(i,base=8,pad=4),p))) == op
+        @test string(unescape_string(string("\\x",string(i,base=16,pad=1),p))) == cp
+        @test string(unescape_string(string("\\x",string(i,base=16,pad=2),p))) == cp
+        @test string(unescape_string(string("\\x",string(i,base=16,pad=3),p))) == hp
     end
 
     @testset "unescape_string" begin
@@ -144,23 +146,17 @@
     end
 end
 @testset "join()" begin
-    @test join([]) == ""
+    @test join([]) == join([],",") == ""
+    @test join(()) == join((),",") == ""
     @test join(["a"],"?") == "a"
     @test join("HELLO",'-') == "H-E-L-L-O"
     @test join(1:5, ", ", " and ") == "1, 2, 3, 4 and 5"
     @test join(["apples", "bananas", "pineapples"], ", ", " and ") == "apples, bananas and pineapples"
     @test_throws MethodError join(1, 2, 3, 4)
+    @test join(()) == ""
+    @test join((), ", ") == ""
+    @test join((), ", ", ", and ") == ""
 end
-
-# issue #9178 `join` calls `done()` twice on the iterables
-mutable struct i9178
-    nnext::Int64
-    ndone::Int64
-end
-Base.start(jt::i9178) = (jt.nnext=0 ; jt.ndone=0 ; 0)
-Base.done(jt::i9178, n) = (jt.ndone += 1 ; n > 3)
-Base.next(jt::i9178, n) = (jt.nnext += 1 ; ("$(jt.nnext),$(jt.ndone)", n+1))
-@test join(i9178(0,0), ";") == "1,1;2,2;3,3;4,4"
 
 # quotes + interpolation (issue #455)
 @test "$("string")" == "string"
@@ -175,6 +171,9 @@ join(myio, "", "", 1)
 @testset "unescape_string ArgumentErrors" begin
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"xZ"))
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"777"))
+    @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"U110000"))
+    @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"N"))
+    @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"m"))
 end
 @testset "#11659" begin
     # The indentation code was not correctly counting tab stops

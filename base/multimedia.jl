@@ -43,8 +43,8 @@ julia> showable("img/png", rand(5))
 false
 ```
 """
-showable(::MIME{mime}, x) where {mime} = hasmethod(show, Tuple{IO, MIME{mime}, typeof(x)})
-showable(m::AbstractString, x) = showable(MIME(m), x)
+showable(::MIME{mime}, @nospecialize x) where {mime} = hasmethod(show, Tuple{IO, MIME{mime}, typeof(x)})
+showable(m::AbstractString, @nospecialize x) = showable(MIME(m), x)
 
 """
     show(io, mime, x)
@@ -175,8 +175,8 @@ end
 abstract type AbstractDisplay end
 
 # it is convenient to accept strings instead of ::MIME
-display(d::AbstractDisplay, mime::AbstractString, x) = display(d, MIME(mime), x)
-display(mime::AbstractString, x) = display(MIME(mime), x)
+display(d::AbstractDisplay, mime::AbstractString, @nospecialize x) = display(d, MIME(mime), x)
+display(mime::AbstractString, @nospecialize x) = display(MIME(mime), x)
 
 """
     displayable(mime) -> Bool
@@ -201,12 +201,12 @@ objects are printed in the Julia REPL.)
 struct TextDisplay <: AbstractDisplay
     io::IO
 end
-display(d::TextDisplay, M::MIME"text/plain", x) = show(d.io, M, x)
-display(d::TextDisplay, x) = display(d, MIME"text/plain"(), x)
+display(d::TextDisplay, M::MIME"text/plain", @nospecialize x) = show(d.io, M, x)
+display(d::TextDisplay, @nospecialize x) = display(d, MIME"text/plain"(), x)
 
 # if you explicitly call display("text/foo", x), it should work on a TextDisplay:
 displayable(d::TextDisplay, M::MIME) = istextmime(M)
-function display(d::TextDisplay, M::MIME, x)
+function display(d::TextDisplay, M::MIME, @nospecialize x)
     displayable(d, M) || throw(MethodError(display, (d, M, x)))
     show(d.io, M, x)
 end
@@ -254,7 +254,7 @@ function reinit_displays()
     pushdisplay(TextDisplay(stdout))
 end
 
-xdisplayable(D::AbstractDisplay, args...) = applicable(display, D, args...)
+xdisplayable(D::AbstractDisplay, @nospecialize args...) = applicable(display, D, args...)
 
 """
     display(x)
@@ -280,7 +280,7 @@ variants, one can also supply the "raw" data in the requested MIME type by passi
 `x::AbstractString` (for MIME types with text-based storage, such as text/html or
 application/postscript) or `x::Vector{UInt8}` (for binary MIME types).
 """
-function display(x)
+function display(@nospecialize x)
     for i = length(displays):-1:1
         if xdisplayable(displays[i], x)
             try
@@ -294,7 +294,7 @@ function display(x)
     throw(MethodError(display, (x,)))
 end
 
-function display(m::MIME, x)
+function display(m::MIME, @nospecialize x)
     for i = length(displays):-1:1
         if xdisplayable(displays[i], m, x)
             try
@@ -339,7 +339,7 @@ Using `redisplay` is also a hint to the backend that `x` may be redisplayed
 several times, and the backend may choose to defer the display until
 (for example) the next interactive prompt.
 """
-function redisplay(x)
+function redisplay(@nospecialize x)
     for i = length(displays):-1:1
         if xdisplayable(displays[i], x)
             try
@@ -353,7 +353,7 @@ function redisplay(x)
     throw(MethodError(redisplay, (x,)))
 end
 
-function redisplay(m::Union{MIME,AbstractString}, x)
+function redisplay(m::Union{MIME,AbstractString}, @nospecialize x)
     for i = length(displays):-1:1
         if xdisplayable(displays[i], m, x)
             try
@@ -368,8 +368,8 @@ function redisplay(m::Union{MIME,AbstractString}, x)
 end
 
 # default redisplay is simply to call display
-redisplay(d::AbstractDisplay, x) = display(d, x)
-redisplay(d::AbstractDisplay, m::Union{MIME,AbstractString}, x) = display(d, m, x)
+redisplay(d::AbstractDisplay, @nospecialize x) = display(d, x)
+redisplay(d::AbstractDisplay, m::Union{MIME,AbstractString}, @nospecialize x) = display(d, m, x)
 
 ###########################################################################
 

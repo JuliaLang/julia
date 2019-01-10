@@ -159,7 +159,7 @@ function serialize_global_from_main(s::ClusterSerializer, sym)
             if isa(ex, ErrorException)
                 record_v = false
             else
-                rethrow(ex)
+                rethrow()
             end
         end
     end
@@ -173,10 +173,11 @@ function deserialize_global_from_main(s::ClusterSerializer, sym)
     sym_isconst = deserialize(s)
     v = deserialize(s)
     if sym_isconst
-        @eval Main const $sym = $v
+        ccall(:jl_set_const, Cvoid, (Any, Any, Any), Main, sym, v)
     else
-        @eval Main $sym = $v
+        ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, sym, v)
     end
+    return nothing
 end
 
 function delete_global_tracker(s::ClusterSerializer, v)
@@ -212,6 +213,7 @@ function original_ex(s::ClusterSerializer, ex_str, remote_stktrace)
     local pid_str = ""
     try
         pid_str = string(" from worker ", worker_id_from_socket(s.io))
+    catch
     end
 
     stk_str = remote_stktrace ? "Remote" : "Local"

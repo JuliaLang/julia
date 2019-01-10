@@ -80,7 +80,6 @@ Expr
     1: Symbol +
     2: Int64 1
     3: Int64 1
-  typ: Any
 ```
 
 `Expr` objects may also be nested:
@@ -90,7 +89,7 @@ julia> ex3 = Meta.parse("(4 + 4) / 2")
 :((4 + 4) / 2)
 ```
 
-Another way to view expressions is with Meta.show_sexpr, which displays the [S-expression](https://en.wikipedia.org/wiki/S-expression)
+Another way to view expressions is with `Meta.show_sexpr`, which displays the [S-expression](https://en.wikipedia.org/wiki/S-expression)
 form of a given `Expr`, which may look very familiar to users of Lisp. Here's an example illustrating
 the display on a nested `Expr`:
 
@@ -216,7 +215,7 @@ Interpolating into an unquoted expression is not supported and will cause a comp
 
 ```jldoctest interp1
 julia> $a + b
-ERROR: unsupported or misplaced expression $
+ERROR: syntax: "$" expression outside quote
 ```
 
 In this example, the tuple `(1,2,3)` is interpolated as an expression into a conditional test:
@@ -324,8 +323,6 @@ Expr
         1: Symbol +
         2: Int64 1
         3: Int64 2
-      typ: Any
-  typ: Any
 ```
 
 As we have seen, such expressions support interpolation with `$`.
@@ -407,10 +404,10 @@ julia> eval(ex)
 The value of `a` is used to construct the expression `ex` which applies the `+` function to the
 value 1 and the variable `b`. Note the important distinction between the way `a` and `b` are used:
 
-  * The value of the *variable*`a` at expression construction time is used as an immediate value in
+  * The value of the *variable* `a` at expression construction time is used as an immediate value in
     the expression. Thus, the value of `a` when the expression is evaluated no longer matters: the
     value in the expression is already `1`, independent of whatever the value of `a` might be.
-  * On the other hand, the *symbol*`:b` is used in the expression construction, so the value of the
+  * On the other hand, the *symbol* `:b` is used in the expression construction, so the value of the
     variable `b` at that time is irrelevant -- `:b` is just a symbol and the variable `b` need not
     even be defined. At expression evaluation time, however, the value of the symbol `:b` is resolved
     by looking up the value of the variable `b`.
@@ -734,7 +731,6 @@ Expr
     3: String ") should equal b ("
     4: Symbol b
     5: String ")!"
-  typ: Any
 ```
 
 So now instead of getting a plain string in `msg_body`, the macro is receiving a full expression
@@ -911,15 +907,40 @@ When a significant amount of repetitive boilerplate code is required, it is comm
 it programmatically to avoid redundancy. In most languages, this requires an extra build step,
 and a separate program to generate the repetitive code. In Julia, expression interpolation and
 [`eval`](@ref) allow such code generation to take place in the normal course of program execution.
-For example, the following code defines a series of operators on three arguments in terms of their
-2-argument forms:
+For example, consider the following custom type
 
-```julia
-for op = (:+, :*, :&, :|, :$)
+```jldoctest mynumber-codegen
+struct MyNumber
+    x::Float64
+end
+# output
+
+```
+
+for which we want to add a number of methods to. We can do this programmatically in the
+following loop:
+
+```jldoctest mynumber-codegen
+for op = (:sin, :cos, :tan, :log, :exp)
     eval(quote
-        ($op)(a,b,c) = ($op)(($op)(a,b),c)
+        Base.$op(a::MyNumber) = MyNumber($op(a.x))
     end)
 end
+# output
+
+```
+
+and we can now use those functions with our custom type:
+
+```jldoctest mynumber-codegen
+julia> x = MyNumber(π)
+MyNumber(3.141592653589793)
+
+julia> sin(x)
+MyNumber(1.2246467991473532e-16)
+
+julia> cos(x)
+MyNumber(-1.0)
 ```
 
 In this manner, Julia acts as its own [preprocessor](https://en.wikipedia.org/wiki/Preprocessor),
@@ -927,8 +948,8 @@ and allows code generation from inside the language. The above code could be wri
 more tersely using the `:` prefix quoting form:
 
 ```julia
-for op = (:+, :*, :&, :|, :$)
-    eval(:(($op)(a,b,c) = ($op)(($op)(a,b),c)))
+for op = (:sin, :cos, :tan, :log, :exp)
+    eval(:(Base.$op(a::MyNumber) = MyNumber($op(a.x))))
 end
 ```
 
@@ -936,8 +957,8 @@ This sort of in-language code generation, however, using the `eval(quote(...))` 
 enough that Julia comes with a macro to abbreviate this pattern:
 
 ```julia
-for op = (:+, :*, :&, :|, :$)
-    @eval ($op)(a,b,c) = ($op)(($op)(a,b),c)
+for op = (:sin, :cos, :tan, :log, :exp)
+    @eval Base.$op(a::MyNumber) = MyNumber($op(a.x))
 end
 ```
 
@@ -1049,7 +1070,7 @@ syntax tree.
 
 ## Generated functions
 
-A very special macro is `@generated`, which allows you to define so-called *generated functions*.
+A very special macro is [`@generated`](@ref), which allows you to define so-called *generated functions*.
 These have the capability to generate specialized code depending on the types of their arguments
 with more flexibility and/or less code than what can be achieved with multiple dispatch. While
 macros work with expressions at parse time and cannot access the types of their inputs, a generated
@@ -1248,7 +1269,7 @@ run during inference, it must respect all of the limitations of that code.
 Some operations that should not be attempted include:
 
 1. Caching of native pointers.
-2. Interacting with the contents or methods of Core.Compiler in any way.
+2. Interacting with the contents or methods of `Core.Compiler` in any way.
 3. Observing any mutable state.
 
      * Inference on the generated function may be run at *any* time, including while your code is attempting

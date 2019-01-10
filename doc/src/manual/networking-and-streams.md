@@ -100,19 +100,23 @@ Note that `a` is written to [`stdout`](@ref) by the [`write`](@ref) function and
 value is `1` (since `0x61` is one byte).
 
 For text I/O, use the [`print`](@ref) or [`show`](@ref) methods, depending on your needs (see
-the Julia Base reference for a detailed discussion of the difference between the two):
+the documentation for these two methods for a detailed discussion of the difference between them):
 
 ```jldoctest
 julia> print(stdout, 0x61)
 97
 ```
 
+See [Custom pretty-printing](@ref man-custom-pretty-printing) for more information on how to
+implement display methods for custom types.
+
 ## IO Output Contextual Properties
 
 Sometimes IO output can benefit from the ability to pass contextual information into show methods.
 The [`IOContext`](@ref) object provides this framework for associating arbitrary metadata with an IO object.
-For example, [`showcompact`](@ref) adds a hinting parameter to the IO object that the invoked show method
-should print a shorter output (if applicable).
+For example, `:compact => true` adds a hinting parameter to the IO object that the invoked show method
+should print a shorter output (if applicable). See the [`IOContext`](@ref) documentation for a list
+of common properties.
 
 ## Working with Files
 
@@ -182,9 +186,13 @@ julia> open("hello.txt") do f
 
 ## A simple TCP example
 
-Let's jump right in with a simple example involving TCP sockets. Let's first create a simple server:
+Let's jump right in with a simple example involving TCP sockets.
+This functionality is in a standard library package called `Sockets`.
+Let's first create a simple server:
 
 ```julia-repl
+julia> using Sockets
+
 julia> @async begin
            server = listen(2000)
            while true
@@ -202,31 +210,31 @@ same function may also be used to create various other kinds of servers:
 
 ```julia-repl
 julia> listen(2000) # Listens on localhost:2000 (IPv4)
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen(ip"127.0.0.1",2000) # Equivalent to the first
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen(ip"::1",2000) # Listens on localhost:2000 (IPv6)
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen(IPv4(0),2001) # Listens on port 2001 on all IPv4 interfaces
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen(IPv6(0),2001) # Listens on port 2001 on all IPv6 interfaces
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen("testsocket") # Listens on a UNIX domain socket
-Base.PipeServer(active)
+Sockets.PipeServer(active)
 
 julia> listen("\\\\.\\pipe\\testsocket") # Listens on a Windows named pipe
-Base.PipeServer(active)
+Sockets.PipeServer(active)
 ```
 
 Note that the return type of the last invocation is different. This is because this server does not
 listen on TCP, but rather on a named pipe (Windows) or UNIX domain socket. Also note that Windows
 named pipe format has to be a specific pattern such that the name prefix (`\\.\pipe\`) uniquely
-identifies the [file type](https://msdn.microsoft.com/en-us/library/windows/desktop/aa365783(v=vs.85).aspx).
+identifies the [file type](https://docs.microsoft.com/windows/desktop/ipc/pipe-names).
 The difference between TCP and named pipes or
 UNIX domain sockets is subtle and has to do with the [`accept`](@ref) and [`connect`](@ref)
 methods. The [`accept`](@ref) method retrieves a connection to the client that is connecting on
@@ -262,7 +270,7 @@ julia> @async begin
            while true
                sock = accept(server)
                @async while isopen(sock)
-                   write(sock,readline(sock))
+                   write(sock, readline(sock, keep=true))
                end
            end
        end
@@ -271,8 +279,8 @@ Task (runnable) @0x00007fd31dc12e60
 julia> clientside = connect(2001)
 TCPSocket(RawFD(28) open, 0 bytes waiting)
 
-julia> @async while true
-           write(stdout,readline(clientside))
+julia> @async while isopen(clientside)
+           write(stdout, readline(clientside, keep=true))
        end
 Task (runnable) @0x00007fd31dc11870
 

@@ -131,8 +131,9 @@ since this is needed in the vast majority of cases.
 
 ### Default top-level definitions and bare modules
 
-In addition to `using Base`, modules also automatically contain a definition of the `eval` function,
-which evaluates expressions within the context of that module.
+In addition to `using Base`, modules also automatically contain
+definitions of the `eval` and `include` functions,
+which evaluate expressions/files within the global scope of that module.
 
 If these default definitions are not wanted, modules can be defined using the keyword `baremodule`
 instead (note: `Core` is still imported, as per above). In terms of `baremodule`, a standard
@@ -144,7 +145,7 @@ baremodule Mod
 using Base
 
 eval(x) = Core.eval(Mod, x)
-eval(m,x) = Core.eval(m, x)
+include(p) = Base.include(Mod, p)
 
 ...
 
@@ -216,14 +217,14 @@ This prevents name conflicts for globals initialized after load time.
 ### Module initialization and precompilation
 
 Large modules can take several seconds to load because executing all of the statements in a module
-often involves compiling a large amount of code. Julia provides the ability to create precompiled
-versions of modules to reduce this time.
+often involves compiling a large amount of code.
+Julia creates precompiled caches of the module to reduce this time.
 
-To create an incremental precompiled module file, add `__precompile__()` at the top of your module
-file (before the `module` starts). This will cause it to be automatically compiled the first time
+The incremental precompiled module file are created and used automatically when using `import`
+or `using` to load a module.  This will cause it to be automatically compiled the first time
 it is imported. Alternatively, you can manually call `Base.compilecache(modulename)`. The resulting
 cache files will be stored in `DEPOT_PATH[1]/compiled/`. Subsequently, the module is automatically
-recompiled upon `import` whenever any of its dependencies change; dependencies are modules it
+recompiled upon `using` or `import` whenever any of its dependencies change; dependencies are modules it
 imports, the Julia build, files it includes, or explicit dependencies declared by `include_dependency(path)`
 in the module file(s).
 
@@ -231,28 +232,27 @@ For file dependencies, a change is determined by examining whether the modificat
 of each file loaded by `include` or added explicitly by `include_dependency` is unchanged, or equal
 to the modification time truncated to the nearest second (to accommodate systems that can't copy
 mtime with sub-second accuracy). It also takes into account whether the path to the file chosen
-by the search logic in `require` matches the path that had created the precompile file.
+by the search logic in `require` matches the path that had created the precompile file. It also takes
+into account the set of dependencies already loaded into the current process and won't recompile those
+modules, even if their files change or disappear, in order to avoid creating incompatibilities between
+the running system and the precompile cache.
 
-It also takes into account the set of dependencies already loaded into the current process and
-won't recompile those modules, even if their files change or disappear, in order to avoid creating
-incompatibilities between the running system and the precompile cache. If you want to have changes
-to the source reflected in the running system, you should call `reload("Module")` on the module
-you changed, and any module that depended on it in which you want to see the change reflected.
+If you know that a module is *not* safe to precompile your module
+(for example, for one of the reasons described below), you should
+put `__precompile__(false)` in the module file (typically placed at the top).
+This will cause `Base.compilecache` to throw an error, and will cause `using` / `import` to load it
+directly into the current process and skip the precompile and caching.
+This also thereby prevents the module from being imported by any other precompiled module.
 
-Precompiling a module also recursively precompiles any modules that are imported therein. If you
-know that it is *not* safe to precompile your module (for the reasons described below), you should
-put `__precompile__(false)` in the module file to cause `Base.compilecache` to throw an error
-(and thereby prevent the module from being imported by any other precompiled module).
-
-`__precompile__()` should *not* be used in a module unless all of its dependencies are also using
-`__precompile__()`. Failure to do so can result in a runtime error when loading the module.
-
-In order to make your module work with precompilation, however, you may need to change your module
-to explicitly separate any initialization steps that must occur at *runtime* from steps that can
-occur at *compile time*.  For this purpose, Julia allows you to define an `__init__()` function
-in your module that executes any initialization steps that must occur at runtime. This function
-will not be called during compilation (`--output-*` or `__precompile__()`). You may, of course,
-call it manually if necessary, but the default is to assume this function deals with computing
+You may need to be aware of certain behaviors inherent in the creation of incremental shared libraries
+which may require care when writing your module. For example, external state is not preserved.
+To accommodate this, explicitly separate any initialization steps that must occur at *runtime*
+from steps that can occur at *compile time*.
+For this purpose, Julia allows you to define an `__init__()` function in your module that executes
+any initialization steps that must occur at runtime.
+This function will not be called during compilation (`--output-*`).
+Effectively, you can assume it will be run exactly once in the lifetime of the code.
+You may, of course, call it manually if necessary, but the default is to assume this function deals with computing
 state for the local machine, which does not need to be – or even should not be – captured
 in the compiled image. It will be called after the module is loaded into a process, including
 if it is being loaded into an incremental compile (`--output-incremental=yes`), but not if it
@@ -362,7 +362,7 @@ code to help the user avoid other wrong-behavior situations:
 A few other points to be aware of:
 
 1. No code reload / cache invalidation is performed after changes are made to the source files themselves,
-   (including by [`Pkg.update`](@ref)), and no cleanup is done after [`Pkg.rm`](@ref)
+   (including by [`Pkg.update`], and no cleanup is done after [`Pkg.rm`]
 2. The memory sharing behavior of a reshaped array is disregarded by precompilation (each view gets
    its own copy)
 3. Expecting the filesystem to be unchanged between compile-time and runtime e.g. [`@__FILE__`](@ref)/`source_path()`
@@ -381,6 +381,5 @@ It is sometimes helpful during module development to turn off incremental precom
 command line flag `--compiled-modules={yes|no}` enables you to toggle module precompilation on and
 off. When Julia is started with `--compiled-modules=no` the serialized modules in the compile cache
 are ignored when loading modules and module dependencies. `Base.compilecache` can still be called
-manually and it will respect `__precompile__()` directives for the module. The state of this command
-line flag is passed to [`Pkg.build`](@ref) to disable automatic precompilation triggering when installing,
-updating, and explicitly building packages.
+manually. The state of this command line flag is passed to `Pkg.build` to disable automatic
+precompilation triggering when installing, updating, and explicitly building packages.

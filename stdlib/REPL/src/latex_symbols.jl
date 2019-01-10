@@ -25,7 +25,7 @@ for c in child_nodes(root(xdoc))
             id = attribute(ce, "id")
             U = string(map(s -> Char(parse(Int, s, base = 16)),
                            split(id[2:end], "-"))...)
-            if contains(L, r"^\\[A-Za-z]+$") && !isa(U,String)
+            if occursin(r"^\\[A-Za-z]+$", L) && !isa(U,String)
                 if L in Ls
                     println("# duplicated symbol $L ($id)")
                 else
@@ -2575,6 +2575,8 @@ const latex_symbols = Dict(
     "\\leftmoon" => "☾",  # last quarter moon
     "\\smalltriangleright" => "▹",  # right triangle, open
     "\\smalltriangleleft" => "◃",  # left triangle, open
+
+    "\\tricolon" => "⁝",  # tricolon
 
     # fractions
     "\\1/4" => "¼", # vulgar fraction one quarter

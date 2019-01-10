@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 module Unicode
 
 export graphemes
@@ -74,13 +72,6 @@ true
 isassigned(c) = Base.Unicode.isassigned(c)
 
 """
-    iscased(c::Char) -> Bool
-
-Tests whether a character is cased, i.e. is lower-, upper- or title-cased.
-"""
-iscased(c::Char) = Base.Unicode.iscased(c)
-
-"""
     graphemes(s::AbstractString) -> GraphemeIterator
 
 Returns an iterator over substrings of `s` that correspond to the extended graphemes in the
@@ -89,13 +80,5 @@ single characters, even though they may contain more than one codepoint; for exa
 letter combined with an accent mark is a single grapheme.)
 """
 graphemes(s::AbstractString) = Base.Unicode.GraphemeIterator{typeof(s)}(s)
-
-# BEGIN 0.7 deprecations
-
-@deprecate is_assigned_char(c::Char) Unicode.isassigned(c)
-@deprecate normalize_string(s::AbstractString, nf::Symbol; kwargs...) Unicode.normalize(s, nf; kwargs...)
-@deprecate normalize_string(s::AbstractString; kwargs...) Unicode.normalize(s; kwargs...)
-
-# END 0.7 deprecations
 
 end
