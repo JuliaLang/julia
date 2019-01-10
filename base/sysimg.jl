@@ -320,10 +320,10 @@ const OS_HANDLE = RawFD
 end
 include("task.jl")
 include("threads.jl")
-if !DISABLE_THREADS
+# if !DISABLE_THREADS
 include("lock.jl")
 include("weakkeydict.jl")
-end
+# end
 
 # Logging
 include("logging.jl")
