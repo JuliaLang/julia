@@ -39,14 +39,7 @@ function sorteig!(λ, X, sortby=eigsortby)
     end
     return λ, X
 end
-sorteigvals!(λ, sortby=eigsortby) = sortby === nothing ? λ : sort!(λ, by=sortby)
-function sorteigvecs!(λ, X, sortby=eigsortby) # doesn't modify λ
-    if sortby !== nothing && !issorted(λ, by=sortby)
-        p = sortperm(λ; alg=QuickSort, by=sortby)
-        Base.permutecols!!(X, p)
-    end
-    return X
-end
+sorteig!(λ, sortby=eigsortby) = sortby === nothing ? λ : sort!(λ, by=sortby)
 
 """
     eigen!(A, [B]; permute, scale, sortby)
@@ -200,11 +193,11 @@ julia> A
 function eigvals!(A::StridedMatrix{<:BlasReal}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby)
     issymmetric(A) && return eigvals!(Symmetric(A))
     _, valsre, valsim, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)
-    return sorteigvals!(iszero(valsim) ? valsre : complex.(valsre, valsim), sortby)
+    return sorteig!(iszero(valsim) ? valsre : complex.(valsre, valsim), sortby)
 end
 function eigvals!(A::StridedMatrix{<:BlasComplex}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby)
     ishermitian(A) && return eigvals(Hermitian(A))
-    return sorteigvals!(LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)[2], sortby)
+    return sorteig!(LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)[2], sortby)
 end
 
 # promotion type to use for eigenvalues of a Matrix{T}
@@ -455,12 +448,12 @@ julia> B
 function eigvals!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasReal
     issymmetric(A) && isposdef(B) && return eigvals!(Symmetric(A), Symmetric(B))
     alphar, alphai, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
-    return sorteigvals!((iszero(alphai) ? alphar : complex.(alphar, alphai))./beta, sortby)
+    return sorteig!((iszero(alphai) ? alphar : complex.(alphar, alphai))./beta, sortby)
 end
 function eigvals!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasComplex
     ishermitian(A) && isposdef(B) && return eigvals!(Hermitian(A), Hermitian(B))
     alpha, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
-    return sorteigvals!(alpha./beta, sortby)
+    return sorteig!(alpha./beta, sortby)
 end
 
 """
