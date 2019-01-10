@@ -354,8 +354,9 @@ y
 If you need to obtain valid indices for a string, you can use the [`nextind`](@ref) and
 [`prevind`](@ref) functions to increment/decrement to the next/previous valid index, as mentioned above.
 You can also use the [`eachindex`](@ref) function to iterate over the valid character indices:
+
 ```jldoctest unicodestring
-julia> collect(eachindex("∀ x ∃ y"))
+julia> collect(eachindex(s))
 7-element Array{Int64,1}:
   1
   4
