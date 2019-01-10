@@ -171,9 +171,9 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
     end
 
     ioc = IOContext(io, :compact => true)
+    pad = ndigits(max(S.m, S.n))
 
-    function _format_line(ioc, r, col)
-        pad = ndigits(max(S.m, S.n))
+    function _format_line(r, col)
         print(ioc, "\n  [", rpad(S.rowval[r], pad), ", ", lpad(col, pad), "]  =  ")
         if isassigned(S.nzval, Int(r))
             show(ioc, S.nzval[r])
@@ -191,7 +191,7 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
     count = 0
     for col = 1:S.n, r = nzrange(S, col)
         count += 1
-        _format_line(ioc, r, col)
+        _format_line(r, col)
         count == print_count && break
     end
 
@@ -200,11 +200,11 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
         # find the column to start printing in for the last print_count elements
         nextcol = searchsortedfirst(S.colptr, nnz(S) - print_count + 1)
         for r = (nnz(S) - print_count + 1) : (S.colptr[nextcol] - 1)
-            _format_line(ioc, r, nextcol - 1)
+            _format_line(r, nextcol - 1)
         end
         # print all of the remaining columns
         for col = nextcol:S.n, r = nzrange(S, col)
-            _format_line(ioc, r, col)
+            _format_line(r, col)
         end
     end
 end
