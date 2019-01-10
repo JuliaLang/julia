@@ -305,12 +305,12 @@ end
 
 const SUB_CHAR = '\\'
 const GROUP_CHAR = 'g'
-const keep_esc = [SUB_CHAR, GROUP_CHAR, collect('0':'9')...]
+const KEEP_ESC = [SUB_CHAR, GROUP_CHAR, '0':'9'...]
 
 function _replace(io, repl_s::SubstitutionString, str, r, re)
     LBRACKET = '<'
     RBRACKET = '>'
-    repl = unescape_string(repl_s.string, keep_esc)
+    repl = unescape_string(repl_s.string, KEEP_ESC)
     i = firstindex(repl)
     e = lastindex(repl)
     while i <= e
