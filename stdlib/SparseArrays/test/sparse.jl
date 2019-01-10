@@ -2108,7 +2108,6 @@ end
 
     # issue #30589
     @test repr("text/plain", sparse([true true])) == "1×2 SparseMatrixCSC{Bool,$Int} with 2 stored entries:\n  [1, 1]  =  1\n  [1, 2]  =  1"
-    @test
 end
 
 @testset "check buffers" for n in 1:3
