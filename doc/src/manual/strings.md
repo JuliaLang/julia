@@ -180,12 +180,12 @@ julia> str[end]
 ```
 
 Many Julia objects, including strings, can be indexed with integers. The index of the first
-element is returned by [`firstindex(str)`](@ref), and the index of the last element
+element (the first character of a string) is returned by [`firstindex(str)`](@ref), and the index of the last element (character)
 with [`lastindex(str)`](@ref). The keyword `end` can be used inside an indexing
 operation as shorthand for the last index along the given dimension.
-Most indexing in Julia is 1-based: the first element of many integer-indexed objects is found at
-index 1. (As we will see below, this does not necessarily mean that the last element is found
-at index `n`, where `n` is the length of the string.)
+String indexing, like most indexing in Julia, is 1-based: `firstindex` always returns `1` for any `AbstractString`.
+As we will see below, however, `lastindex(str)` is *not* in general the same as `length(str)` for a string,
+because some Unicode characters can occupy multiple "code units".
 
 You can perform arithmetic and other operations with [`end`](@ref), just like
 a normal value:
@@ -265,10 +265,13 @@ julia> s = "\u2200 x \u2203 y"
 Whether these Unicode characters are displayed as escapes or shown as special characters depends
 on your terminal's locale settings and its support for Unicode. String literals are encoded using
 the UTF-8 encoding. UTF-8 is a variable-width encoding, meaning that not all characters are encoded
-in the same number of bytes. In UTF-8, ASCII characters -- i.e. those with code points less than
+in the same number of bytes ("code units"). In UTF-8, ASCII characters — i.e. those with code points less than
 0x80 (128) -- are encoded as they are in ASCII, using a single byte, while code points 0x80 and
-above are encoded using multiple bytes -- up to four per character. This means that not every
-byte index into a UTF-8 string is necessarily a valid index for a character. If you index into
+above are encoded using multiple bytes — up to four per character.
+
+String indices in Julia refer to code units (= bytes for UTF-8), the fixed-width building blocks that
+are used to encode arbitrary characters (code points). This means that not every
+index into a `String` is necessarily a valid index for a character. If you index into
 a string at such an invalid byte index, an error is thrown:
 
 ```jldoctest unicodestring
@@ -348,6 +351,26 @@ x
 y
 ```
 
+If you need to obtain valid indices for a string, you can use the [`nextind`](@ref) and
+[`prevind`](@ref) functions to increment/decrement to the next/previous valid index, as mentioned above.
+You can also use the [`eachindex`](@ref) function to iterate over the valid character indices:
+
+```jldoctest unicodestring
+julia> collect(eachindex(s))
+7-element Array{Int64,1}:
+  1
+  4
+  5
+  6
+  7
+ 10
+ 11
+```
+
+To access the raw code units (bytes for UTF-8) of the encoding, you can use the [`codeunit(s,i)`](@ref)
+function, where the index `i` runs consecutively from `1` to [`ncodeunits(s)`](@ref).  The [`codeunits(s)`](@ref)
+function returns an `AbstractVector{UInt8}` wrapper that lets you access these raw codeunits (bytes) as an array.
+
 Strings in Julia can contain invalid UTF-8 code unit sequences. This convention allows to
 treat any byte sequence as a `String`. In such situations a rule is that when parsing
 a sequence of code units from left to right characters are formed by the longest sequence of
@@ -361,8 +384,9 @@ a sequence of code units from left to right characters are formed by the longest
 * `10xxxxxx`;
 * `11111xxx`.
 
-In particular this implies that overlong and too high code unit sequences are accepted.
-This rule is best explained by an example:
+In particular this means that overlong and too-high code unit sequences and prefixes thereof are treated
+as a single invalid character rather than multiple invalid characters.
+This rule may be best explained with an example:
 
 ```julia-repl
 julia> s = "\xc0\xa0\xe2\x88\xe2|"
