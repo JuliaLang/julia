@@ -328,12 +328,18 @@ end
     push!(exarg,Expr(:meta,:inline))
     push!(exarg,:(I=$NF*i))
     push!(exarg,:(@boundscheck checkbounds(data,I)))
-    element = ST <: NTuple ? Expr(:tuple) : Expr(:call,ST)
-    for j in 1:(NF-1)
-        push!(element.args,:(@inbounds data[I-$(NF-j)]))
+    element = Expr(:new,ST)
+    if is_ntuple_wrapper(ST)
+        push!(element.args,Expr(:tuple))
+        struct_args = element.args[2].args
+    else
+        struct_args = element.args
     end
-    push!(element.args,:(@inbounds data[I]))
-
+    for j in 1:(NF-1)
+        push!(struct_args,:(@inbounds data[I-$(NF-j)]))
+    end
+    push!(struct_args,:(@inbounds data[I]))
+ 
     push!(exarg, element)
     return ex
 end
@@ -349,12 +355,18 @@ end
         push!(rest_of_indices,:(i[$j]))
     end
     push!(exarg,:(@boundscheck $(Expr(:call,:checkbounds,:data,:I,rest_of_indices...))))
-    element = ST <: NTuple ? Expr(:tuple) : Expr(:call,ST)
-    for j in 1:(NF-1)
-        push!(element.args,:(@inbounds $(Expr(:call, :getindex, :data, :(I-$(NF-j)), rest_of_indices...))))
+    element = Expr(:new,ST)
+    if is_ntuple_wrapper(ST)
+        push!(element.args,Expr(:tuple))
+        struct_args = element.args[2].args
+    else
+        struct_args = element.args
     end
-    push!(element.args,:(@inbounds $(Expr(:call, :getindex, :data, :I, rest_of_indices...))))
-
+    for j in 1:(NF-1)
+        push!(struct_args,:(@inbounds $(Expr(:call, :getindex, :data, :(I-$(NF-j)), rest_of_indices...))))
+    end
+    push!(struct_args,:(@inbounds $(Expr(:call, :getindex, :data, :I, rest_of_indices...))))
+ 
     push!(exarg, element)
     return ex
 end
