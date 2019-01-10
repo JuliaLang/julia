@@ -183,7 +183,7 @@ Many Julia objects, including strings, can be indexed with integers. The index o
 element (the first character of a string) is returned by [`firstindex(str)`](@ref), and the index of the last element (character)
 with [`lastindex(str)`](@ref). The keyword `end` can be used inside an indexing
 operation as shorthand for the last index along the given dimension.
-String indexing, like most indexing in Julia, is 1-based: `firstindex` always returns `1` for any `AbstractString`. 
+String indexing, like most indexing in Julia, is 1-based: `firstindex` always returns `1` for any `AbstractString`.
 As we will see below, however, `lastindex(str)` is *not* in general the same as `length(str)` for a string,
 because some Unicode characters can occupy multiple "code units".
 
@@ -365,7 +365,7 @@ julia> collect(eachindex("∀ x ∃ y"))
  10
  11
  ```
- 
+
 To access the raw code units (bytes for UTF-8) of the encoding, you can use the [`codeunit(s,i)`](@ref)
 function, where the index `i` runs consecutively from `1` to [`ncodeunits(s)`](@ref).  The [`codeunits(s)`](@ref)
 function returns an `AbstractVector{UInt8}` wrapper that lets you access these raw codeunits (bytes) as an array.
