@@ -35,7 +35,7 @@ let
             :Profile,
             :Dates,
             :DelimitedFiles,
-            Base.DISABLE_LIBUV ? nothing : :Random,
+            :Random,
             Base.DISABLE_LIBUV ? nothing : :UUIDs,
             Base.DISABLE_LIBUV ? nothing : :Future,
             Base.DISABLE_LIBUV ? nothing : :LinearAlgebra,
