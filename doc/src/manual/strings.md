@@ -384,8 +384,9 @@ a sequence of code units from left to right characters are formed by the longest
 * `10xxxxxx`;
 * `11111xxx`.
 
-In particular this implies that overlong and too high code unit sequences are accepted.
-This rule is best explained by an example:
+In particular this means that overlong and too-high code unit sequences and prefixes thereof are treated
+as a single invalid character rather than multiple invalid characters.
+This rule may be best explained with an example:
 
 ```julia-repl
 julia> s = "\xc0\xa0\xe2\x88\xe2|"
