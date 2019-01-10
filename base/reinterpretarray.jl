@@ -339,7 +339,6 @@ end
         push!(struct_args,:(@inbounds data[I-$(NF-j)]))
     end
     push!(struct_args,:(@inbounds data[I]))
- 
     push!(exarg, element)
     return ex
 end
@@ -366,7 +365,6 @@ end
         push!(struct_args,:(@inbounds $(Expr(:call, :getindex, :data, :(I-$(NF-j)), rest_of_indices...))))
     end
     push!(struct_args,:(@inbounds $(Expr(:call, :getindex, :data, :I, rest_of_indices...))))
- 
     push!(exarg, element)
     return ex
 end
