@@ -63,6 +63,35 @@ isperm(p::Tuple{}) = true
 isperm(p::Tuple{Int}) = p[1] == 1
 isperm(p::Tuple{Int,Int}) = ((p[1] == 1) & (p[2] == 2)) | ((p[1] == 2) & (p[2] == 1))
 
+# swap columns i and j of a, in-place
+function swapcols!(a::AbstractMatrix, i, j)
+    i == j && return
+    cols = indices(a,2)
+    (i in cols && j in cols) || throw(BoundsError())
+    for k in indices(a,1)
+        @inbounds a[k,i],a[k,j] = a[k,j],a[k,i]
+    end
+end
+# like permute!! applied to each row of a, in-place in a (overwriting p).
+function permutecols!!(a::AbstractMatrix, p::AbstractVector{<:Integer})
+    count = 0
+    start = 0
+    while count < length(p)
+        ptr = start = findnext(p, start+1)
+        next = p[start]
+        count += 1
+        while next != start
+            swapcols!(a, ptr, next)
+            p[ptr] = 0
+            ptr = next
+            next = p[next]
+            count += 1
+        end
+        p[ptr] = 0
+    end
+    a
+end
+
 function permute!!(a, p::AbstractVector{<:Integer})
     require_one_based_indexing(a, p)
     count = 0

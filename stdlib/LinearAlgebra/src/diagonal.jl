@@ -524,15 +524,16 @@ function pinv(D::Diagonal{T}, tol::Real) where T
 end
 
 #Eigensystem
-eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = D.diag
-eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true) =
-    [eigvals(x) for x in D.diag] #For block matrices, etc.
-eigvecs(D::Diagonal) = Matrix{eltype(D)}(I, size(D))
-function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true)
+eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) = sortby === nothing ? D.diag : sort(D.diag, by=sortby)
+eigvals_(D::Diagonal) = [eigvals(x) for x in D.diag] # non-sorted copy, for block matrices etc.
+eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) =
+    sorteigvals!(eigvals_(D), sortby)
+eigvecs(D::Diagonal; sortby::Union{Function,Nothing}=eigsortby) = sorteigvecs!(D.diag, Matrix{eltype(D)}(I, size(D)), sortby)
+function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby)
     if any(!isfinite, D.diag)
         throw(ArgumentError("matrix contains Infs or NaNs"))
     end
-    Eigen(eigvals(D), eigvecs(D))
+    Eigen(sorteig!(eigvals_(D), Matrix{eltype(D)}(I, size(D)))...)
 end
 
 #Singular system
