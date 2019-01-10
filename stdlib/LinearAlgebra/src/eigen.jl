@@ -103,7 +103,9 @@ make rows and columns more equal in norm. The default is `true` for both options
 
 By default, the eigenvalues and vectors are sorted lexicographically by `(real(λ),imag(λ))`.
 A different comparison function `by(λ)` can be passed to `sortby`, or you can pass
-`sortby=nothing` to leave the eigenvalues in an arbitrary order.
+`sortby=nothing` to leave the eigenvalues in an arbitrary order.   Some special matrix types
+(e.g. `Diagonal` or `SymTridiagonal`) may implement their own sorting convention and not
+accept a `sortby` keyword.
 
 # Examples
 ```jldoctest
@@ -372,7 +374,8 @@ Iterating the decomposition produces the components `F.values` and `F.vectors`.
 
 By default, the eigenvalues and vectors are sorted lexicographically by `(real(λ),imag(λ))`.
 A different comparison function `by(λ)` can be passed to `sortby`, or you can pass
-`sortby=nothing` to leave the eigenvalues in an arbitrary order.
+`sortby=nothing` to leave the eigenvalues in an arbitrary order.   Some special matrix types
+may implement their own sorting convention and not accept a `sortby` keyword.
 
 # Examples
 ```jldoctest
