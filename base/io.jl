@@ -176,7 +176,7 @@ julia> write(io, "Sometimes those members") + write(io, " write documentation.")
 julia> String(take!(io))
 "Sometimes those members write documentation."
 ```
-Note that in general the value needs to be wrapped in a `Ref`, but for several basic types this can be skipped as above. 
+Note that in general the value needs to be wrapped in a `Ref`, but for several basic types this can be skipped as above.
 ```jldoctest
 julia> struct MyStruct; x::Float64; end
 
