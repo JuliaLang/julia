@@ -1035,7 +1035,7 @@ Returns a tuple `(filename,line)` giving the location of a `Method` definition.
 function functionloc(m::Method)
     ln = m.line
     if ln <= 0
-        throw(ArgumentError("could not determine location of method definition"))
+        error("could not determine location of method definition")
     end
     return (find_source_file(string(m.file)), ln)
 end
