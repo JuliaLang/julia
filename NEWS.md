@@ -16,6 +16,7 @@ Multi-threading changes
 Language changes
 ----------------
 
+* `Enum` now behaves like a scalar when used in broadcasting ([#30670]).
 
 Command-line option changes
 ---------------------------
