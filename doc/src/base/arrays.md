@@ -80,6 +80,9 @@ Base.Broadcast.AbstractArrayStyle
 Base.Broadcast.ArrayStyle
 Base.Broadcast.DefaultArrayStyle
 Base.Broadcast.broadcastable
+Base.Broadcast.combine_axes
+Base.Broadcast.combine_styles
+Base.Broadcast.result_style
 ```
 
 ## Indexing and assignment
