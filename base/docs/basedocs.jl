@@ -129,10 +129,13 @@ kw"primitive type"
 """
     macro
 
-`macro` defines a method to include generated code in the final body of a program. A
-macro maps a tuple of arguments to a returned expression, and the resulting expression
-is compiled directly rather than requiring a runtime `eval` call. Macro arguments may
-include expressions, literal values, and symbols. For example:
+`macro` defines a method for inserting generated code into a program.
+A macro maps a sequence of argument expressions to a returned expression, and the
+resulting expression is substituted directly into the program at the point where
+the macro is invoked.
+Macros are a way to run generated code without calling `eval`, since the generated
+code instead simply becomes part of the surrounding program.
+Macro arguments may include expressions, literal values, and symbols.
 
 # Examples
 ```jldoctest
@@ -236,6 +239,34 @@ to the expression tree, which must be considered when directly manipulating the 
 For other purposes, `:( ... )` and `quote .. end` blocks are treated identically.
 """
 kw"quote"
+
+"""
+    Expr(head::Symbol, args...)
+
+A type representing compound expressions in parsed julia code (ASTs).
+Each expression consists of a `head` Symbol identifying which kind of
+expression it is (e.g. a call, for loop, conditional statement, etc.),
+and subexpressions (e.g. the arguments of a call).
+The subexpressions are stored in a `Vector{Any}` field called `args`.
+
+See the manual chapter on [Metaprogramming](@ref) and the development
+documentation [Julia ASTs](@ref).
+
+# Examples
+```jldoctest
+julia> Expr(:call, :+, 1, 2)
+:(1 + 2)
+
+julia> dump(:(a ? b : c))
+Expr
+  head: Symbol if
+  args: Array{Any}((3,))
+    1: Symbol a
+    2: Symbol b
+    3: Symbol c
+```
+"""
+Expr
 
 """
     '
@@ -1351,8 +1382,10 @@ typeof
     isdefined(object, s::Symbol)
     isdefined(object, index::Int)
 
-Tests whether an assignable location is defined. The arguments can be a module and a symbol
+Tests whether a global variable or object field is defined. The arguments can be a module and a symbol
 or a composite object and field name (as a symbol) or index.
+
+To test whether an array element is defined, use [`isassigned`](@ref) instead.
 
 # Examples
 ```jldoctest
