@@ -632,20 +632,22 @@ Get the number of fields that an instance of the given type would have.
 An error is thrown if the type is too abstract to determine this.
 """
 function fieldcount(@nospecialize t)
+    @_pure_meta
+    @_noinline_meta
     if t isa UnionAll || t isa Union
         t = argument_datatype(t)
         if t === nothing
             throw(ArgumentError("type does not have a definite number of fields"))
         end
         t = t::DataType
-    elseif t == Union{}
+    elseif t === Union{}
         throw(ArgumentError("The empty type does not have a well-defined number of fields since it does not have instances."))
     end
     if !(t isa DataType)
         throw(TypeError(:fieldcount, DataType, t))
     end
     if t.name === NamedTuple_typename
-        names, types = t.parameters
+        names, types = t.parameters::SimpleVector
         if names isa Tuple
             return length(names)
         end
@@ -659,7 +661,7 @@ function fieldcount(@nospecialize t)
     if abstr
         throw(ArgumentError("type does not have a definite number of fields"))
     end
-    return length(t.types)
+    return length(t.types::SimpleVector)
 end
 
 """

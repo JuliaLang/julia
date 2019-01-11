@@ -2193,3 +2193,7 @@ j30385(T, y) = k30385(f30385(T, y))
 
 @test @inferred(j30385(AbstractFloat, 1)) == 1
 @test @inferred(j30385(:dummy, 1)) == "dummy"
+
+valfieldcount(t) = Val(fieldcount(t))
+@test Base.return_types(valfieldcount, (Type{Tuple{Int}},)) == Any[Val{1}]
+@test Base.return_types(valfieldcount, (Type{Tuple{Int,Int}},)) == Any[Val{2}]
