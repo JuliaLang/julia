@@ -372,9 +372,9 @@ Y = [6.0  2.0;
     end
 
     @testset "floating point accuracy for `cov` of large numbers" begin
-      A = [4.0, 7.0, 13.0, 16.0]
-      C = A .+ 1.0e10
-      @test cov(A, A) ≈ cov(C, C)
+        A = [4.0, 7.0, 13.0, 16.0]
+        C = A .+ 1.0e10
+        @test cov(A, A) ≈ cov(C, C)
     end
 end
 
