@@ -1007,6 +1007,13 @@ end
     # issue #28327
     d = Dict(Pair{Integer,Integer}(1,2)=>Pair{Integer,Integer}(1,2))
     @test showstr(d) == "Dict((1=>2)=>(1=>2))" # correct parenthesis
+
+    # issue #29536
+    d = Dict((+)=>1)
+    @test showstr(d) == "Dict((+)=>1)"
+
+    d = Dict("+"=>1)
+    @test showstr(d) == "Dict(\"+\"=>1)"
 end
 
 @testset "alignment for pairs" begin  # (#22899)
@@ -1432,6 +1439,14 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
 
 # issue #30303
 @test repr(Symbol("a\$")) == "Symbol(\"a\\\$\")"
+
+# printing of bools and bool arrays
+@testset "Bool" begin
+    @test repr(true) == "true"
+    @test repr(Number[true, false]) == "Number[true, false]"
+    @test repr([true, false]) == "Bool[1, 0]" == repr(BitVector([true, false]))
+    @test_repr "Bool[1, 0]"
+end
 
 # issue #30505
 @test repr(Union{Tuple{Char}, Tuple{Char, Char}}[('a','b')]) == "Union{Tuple{Char}, Tuple{Char,Char}}[('a', 'b')]"

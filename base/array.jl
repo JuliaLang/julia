@@ -1583,10 +1583,10 @@ and [`pairs(A)`](@ref).
 ```jldoctest
 julia> A = [false, false, true, false]
 4-element Array{Bool,1}:
- false
- false
-  true
- false
+ 0
+ 0
+ 1
+ 0
 
 julia> findnext(A, 1)
 3
@@ -1595,8 +1595,8 @@ julia> findnext(A, 4) # returns nothing, but not printed in the REPL
 
 julia> A = [false false; true false]
 2×2 Array{Bool,2}:
- false  false
-  true  false
+ 0  0
+ 1  0
 
 julia> findnext(A, CartesianIndex(1, 1))
 CartesianIndex(2, 1)
@@ -1628,10 +1628,10 @@ and [`pairs(A)`](@ref).
 ```jldoctest
 julia> A = [false, false, true, false]
 4-element Array{Bool,1}:
- false
- false
-  true
- false
+ 0
+ 0
+ 1
+ 0
 
 julia> findfirst(A)
 3
@@ -1640,8 +1640,8 @@ julia> findfirst(falses(3)) # returns nothing, but not printed in the REPL
 
 julia> A = [false false; true false]
 2×2 Array{Bool,2}:
- false  false
-  true  false
+ 0  0
+ 1  0
 
 julia> findfirst(A)
 CartesianIndex(2, 1)
@@ -1754,10 +1754,10 @@ and [`pairs(A)`](@ref).
 ```jldoctest
 julia> A = [false, false, true, true]
 4-element Array{Bool,1}:
- false
- false
-  true
-  true
+ 0
+ 0
+ 1
+ 1
 
 julia> findprev(A, 3)
 3
@@ -1766,8 +1766,8 @@ julia> findprev(A, 1) # returns nothing, but not printed in the REPL
 
 julia> A = [false false; true true]
 2×2 Array{Bool,2}:
- false  false
-  true   true
+ 0  0
+ 1  1
 
 julia> findprev(A, CartesianIndex(2, 1))
 CartesianIndex(2, 1)
@@ -1795,10 +1795,10 @@ and [`pairs(A)`](@ref).
 ```jldoctest
 julia> A = [true, false, true, false]
 4-element Array{Bool,1}:
-  true
- false
-  true
- false
+ 1
+ 0
+ 1
+ 0
 
 julia> findlast(A)
 3
@@ -1809,8 +1809,8 @@ julia> findlast(A) # returns nothing, but not printed in the REPL
 
 julia> A = [true false; true false]
 2×2 Array{Bool,2}:
- true  false
- true  false
+ 1  0
+ 1  0
 
 julia> findlast(A)
 CartesianIndex(2, 1)
@@ -1979,10 +1979,10 @@ and [`pairs(A)`](@ref).
 ```jldoctest
 julia> A = [true, false, false, true]
 4-element Array{Bool,1}:
-  true
- false
- false
-  true
+ 1
+ 0
+ 0
+ 1
 
 julia> findall(A)
 2-element Array{Int64,1}:
@@ -1991,8 +1991,8 @@ julia> findall(A)
 
 julia> A = [true false; false true]
 2×2 Array{Bool,2}:
-  true  false
- false   true
+ 1  0
+ 0  1
 
 julia> findall(A)
 2-element Array{CartesianIndex{2},1}:

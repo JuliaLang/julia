@@ -115,12 +115,20 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
 end
 
 function showerror(io::IO, ex::SystemError)
-    if ex.extrainfo === nothing
-        print(io, "SystemError: $(ex.prefix): $(Libc.strerror(ex.errnum))")
+    if @static(Sys.iswindows() ? ex.extrainfo isa WindowsErrorInfo : false)
+        errstring = Libc.FormatMessage(ex.extrainfo.errnum)
+        extrainfo = ex.extrainfo.extrainfo
     else
-        print(io, "SystemError (with $(ex.extrainfo)): $(ex.prefix): $(Libc.strerror(ex.errnum))")
+        errstring = Libc.strerror(ex.errnum)
+        extrainfo = ex.extrainfo
+    end
+    if extrainfo === nothing
+        print(io, "SystemError: $(ex.prefix): $errstring")
+    else
+        print(io, "SystemError (with $extrainfo): $(ex.prefix): $errstring")
     end
 end
+
 showerror(io::IO, ::DivideError) = print(io, "DivideError: integer division error")
 showerror(io::IO, ::StackOverflowError) = print(io, "StackOverflowError:")
 showerror(io::IO, ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")

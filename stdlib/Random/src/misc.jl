@@ -21,16 +21,16 @@ julia> rng = MersenneTwister(1234);
 
 julia> bitrand(rng, 10)
 10-element BitArray{1}:
- false
-  true
-  true
-  true
-  true
- false
-  true
- false
- false
-  true
+ 0
+ 1
+ 1
+ 1
+ 1
+ 0
+ 1
+ 0
+ 0
+ 1
 ```
 """
 bitrand(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(undef, dims))

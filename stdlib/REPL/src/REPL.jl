@@ -84,7 +84,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
                 backend.in_eval = true
                 value = Core.eval(Main, ast)
                 backend.in_eval = false
-                # note: value wrapped carefully here to ensure it doesn't get passed through expand
+                # note: use jl_set_global to make sure value isn't passed through `expand`
                 ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :ans, value)
                 put!(backend.response_channel, (value, nothing))
             end
@@ -747,7 +747,7 @@ function mode_keymap(julia_prompt::Prompt)
     end)
 end
 
-repl_filename(repl, hp::REPLHistoryProvider) = "REPL[$(length(hp.history)-hp.start_idx)]"
+repl_filename(repl, hp::REPLHistoryProvider) = "REPL[$(max(length(hp.history)-hp.start_idx, 1))]"
 repl_filename(repl, hp) = "REPL"
 
 const JL_PROMPT_PASTE = Ref(true)

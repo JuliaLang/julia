@@ -555,8 +555,8 @@ elements since `BitArray`s are both mutable and can support 1-dimensional arrays
 ```julia-repl
 julia> similar(trues(10,10), 2)
 2-element BitArray{1}:
- false
- false
+ 0
+ 0
 ```
 
 Since `BitArray`s can only store elements of type [`Bool`](@ref), however, if you request a
