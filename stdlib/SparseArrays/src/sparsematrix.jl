@@ -367,8 +367,9 @@ similar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, m::Integer, n::Integer
     _sparsesimilar(S, TvNew, TiNew, (m, n))
 
 function sizehint!(S::SparseMatrixCSC, n::Integer)
-    sizehint!(S.rowval, min(n, length(S)))
-    sizehint!(S.nzval, min(n, length(S)))
+    nhint = min(n, length(S))
+    sizehint!(S.rowval, nhint)
+    sizehint!(S.nzval,  nhint)
     return S
 end
 
