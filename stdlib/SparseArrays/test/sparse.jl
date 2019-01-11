@@ -2107,7 +2107,7 @@ end
         "  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0\n  [6, 3]  =  6.0")
 
     # issue #30589
-    @test repr("text/plain", sparse([true true])) == "1×2 SparseMatrixCSC{Bool,$Int} with 2 stored entries:\n  [1, 1]  =  1\n  [1, 2]  =  1"
+    @test repr("text/plain", sparse([true true])) == "1×2 SparseArrays.SparseMatrixCSC{Bool,$Int} with 2 stored entries:\n  [1, 1]  =  1\n  [1, 2]  =  1"
 end
 
 @testset "check buffers" for n in 1:3
