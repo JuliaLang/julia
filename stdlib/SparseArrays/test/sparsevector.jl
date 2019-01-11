@@ -1243,27 +1243,27 @@ end
     # test entry points to similar with entry type, index type, and non-Dims shape specification
     @test similar(A, Float32, Int8, 6, 6) == similar(A, Float32, Int8, (6, 6))
     @test similar(A, Float32, Int8, 6) == similar(A, Float32, Int8, (6,))
-    # test similar with Dims{2} specification (preserves storage space only, not stored-entry structure)
+    # test similar with Dims{2} specification (preserves allocated storage space only, not stored-entry structure)
     simA = similar(A, (6,6))
     @test typeof(simA) == SparseMatrixCSC{eltype(A.nzval),eltype(A.nzind)}
     @test size(simA) == (6,6)
     @test simA.colptr == fill(1, 6+1)
-    @test length(simA.rowval) == length(A.nzind)
-    @test length(simA.nzval) == length(A.nzval)
-    # test similar with entry type and Dims{2} specification (preserves storage space only)
+    @test length(simA.rowval) == 0
+    @test length(simA.nzval) == 0
+    # test similar with entry type and Dims{2} specification (preserves allocated storage space only)
     simA = similar(A, Float32, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32,eltype(A.nzind)}
     @test size(simA) == (6,6)
     @test simA.colptr == fill(1, 6+1)
-    @test length(simA.rowval) == length(A.nzind)
-    @test length(simA.nzval) == length(A.nzval)
-    # test similar with entry type, index type, and Dims{2} specification (preserves storage space only)
+    @test length(simA.rowval) == 0
+    @test length(simA.nzval) == 0
+    # test similar with entry type, index type, and Dims{2} specification (preserves allocated storage space only)
     simA = similar(A, Float32, Int8, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32, Int8}
     @test size(simA) == (6,6)
     @test simA.colptr == fill(1, 6+1)
-    @test length(simA.rowval) == length(A.nzind)
-    @test length(simA.nzval) == length(A.nzval)
+    @test length(simA.rowval) == 0
+    @test length(simA.nzval) == 0
 end
 
 @testset "Fast operations on full column views" begin

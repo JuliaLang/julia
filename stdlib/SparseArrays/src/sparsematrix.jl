@@ -340,12 +340,8 @@ function _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}) where 
     return SparseMatrixCSC(S.m, S.n, newcolptr, newrowval, similar(S.nzval, TvNew))
 end
 # parent methods for similar that preserves only storage space allocation (for when new and old dims differ)
-function _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew}
-    S1=spzeros(TvNew, TiNew, dims...)
-    sizehint!(S1.rowval, min(length(S.rowval), length(S1)))
-    sizehint!(S1.nzval, min(length(S.nzval), length(S1)))
-    return S1
-end
+_sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
+    sizehint!(spzeros(TvNew, TiNew, dims...), length(S.nzval))
 # parent method for similar that allocates an empty sparse vector (when new dims are single)
 _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) where {TvNew,TiNew} =
     SparseVector(dims..., similar(S.rowval, TiNew, 0), similar(S.nzval, TvNew, 0))
@@ -370,6 +366,11 @@ similar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, m::Integer) where {TvN
 similar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, m::Integer, n::Integer) where {TvNew,TiNew} =
     _sparsesimilar(S, TvNew, TiNew, (m, n))
 
+function sizehint!(S::SparseMatrixCSC, n::Integer)
+    sizehint!(S.rowval, min(n, length(S)))
+    sizehint!(S.nzval, min(n, length(S)))
+    return S
+end
 
 # converting between SparseMatrixCSC types
 SparseMatrixCSC(S::SparseMatrixCSC) = copy(S)
