@@ -10,6 +10,7 @@
 
 Matrix type for storing sparse matrices in the
 [Compressed Sparse Column](@ref man-csc) format.
+See also [`spzeros`](@ref) and [`sparse`](@ref).
 """
 struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
