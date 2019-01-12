@@ -123,9 +123,9 @@ function showerror(io::IO, ex::SystemError)
         extrainfo = ex.extrainfo
     end
     if extrainfo === nothing
-        print(io, "SystemError: $(ex.prefix): $errstring")
+        print(io, "SystemError: $(ex.prefix): ", errstring)
     else
-        print(io, "SystemError (with $extrainfo): $(ex.prefix): $errstring")
+        print(io, "SystemError (with $extrainfo): $(ex.prefix): ", errstring)
     end
 end
 
@@ -144,9 +144,9 @@ showerror(io::IO, ex::KeyError) = (print(io, "KeyError: key ");
                                    show(io, ex.key);
                                    print(io, " not found"))
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
-showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
-showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: $(ex.msg)")
-showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: $(ex.msg)")
+showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: ", ex.msg)
+showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: ", ex.msg)
+showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: ", ex.msg)
 
 showerror(io::IO, ex::UndefKeywordError) =
     print(io, "UndefKeywordError: keyword argument $(ex.var) not assigned")
