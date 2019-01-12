@@ -61,6 +61,7 @@ Standard library changes
 * Sparse vector outer products are more performant and maintain sparsity in products of the
   form `kron(u, v')`, `u * v'`, and `u .* v'` where `u` and `v` are sparse vectors or column
   views. ([#24980])
+* new `sizehint!(::SparseMatrixCSC, ::Integer)` method ([#30676]).
 
 #### Dates
 
