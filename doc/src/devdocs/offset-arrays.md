@@ -15,7 +15,7 @@ the exported interfaces of Julia.
 If you find it more convenient to just force your users to supply traditional arrays where indexing starts at one, you can add
 
 ```julia
-@assert !Base.has_offset_axes(arrays...)
+Base.require_one_based_indexing(arrays...)
 ```
 
 where `arrays...` is a list of the array objects that you wish to check for anything that
