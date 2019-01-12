@@ -513,37 +513,12 @@ ifeq ($(USE_POLLY),1)
 endif
 endif
 else # USE_BINARYBUILDER_LLVM
-LLVM_BB_URL_BASE := https://github.com/staticfloat/LLVMBuilder/releases/download
+LLVM_BB_URL_BASE := https://github.com/staticfloat/LLVMBuilder/releases/download/v$(LLVM_VER)-$(LLVM_BB_REL)
 ifneq ($(BINARYBUILDER_LLVM_ASSERTS), 1)
-LLVM_BB_NAME := LLVM
+LLVM_BB_NAME := LLVM.v$(LLVM_VER)
 else
-LLVM_BB_NAME := LLVM.asserts
+LLVM_BB_NAME := LLVM.asserts.v$(LLVM_VER)
 endif
-LLVM_BB_NAME := $(LLVM_BB_NAME).v$(LLVM_VER)
-LLVM_BB_URL := $(LLVM_BB_URL_BASE)/v$(LLVM_VER)-$(LLVM_BB_REL)/$(LLVM_BB_NAME).$(BINARYBUILDER_TRIPLET).tar.gz
 
-
-$(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL):
-	mkdir -p $@
-
-$(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/LLVM.$(BINARYBUILDER_TRIPLET).tar.gz: | $(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)
-	$(JLDOWNLOAD) $@ $(LLVM_BB_URL)
-
-$(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/build-compiled: | $(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/LLVM.$(BINARYBUILDER_TRIPLET).tar.gz
-	echo 1 > $@
-
-$(eval $(call staged-install,llvm,llvm-$$(LLVM_VER)-$$(LLVM_BB_REL),,,,))
-
-#Override provision of stage tarball
-$(build_staging)/llvm-$(LLVM_VER)-$(LLVM_BB_REL).tgz: $(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/LLVM.$(BINARYBUILDER_TRIPLET).tar.gz | $(build_staging)
-	cp $< $@
-
-clean-llvm:
-distclean-llvm:
-get-llvm:  $(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/LLVM.$(BINARYBUILDER_TRIPLET).tar.gz
-extract-llvm:
-configure-llvm:
-compile-llvm:
-fastcheck-llvm:
-check-llvm:
+$(eval $(call bb-install,llvm,LLVM,false))
 endif # USE_BINARYBUILDER_LLVM
