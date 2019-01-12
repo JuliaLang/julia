@@ -249,7 +249,7 @@ expression it is (e.g. a call, for loop, conditional statement, etc.),
 and subexpressions (e.g. the arguments of a call).
 The subexpressions are stored in a `Vector{Any}` field called `args`.
 
-See the manual chapter on [Metaprogramming](@ref) and the development
+See the manual chapter on [Metaprogramming](@ref) and the developer
 documentation [Julia ASTs](@ref).
 
 # Examples
