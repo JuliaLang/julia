@@ -71,7 +71,7 @@ println(io::IO, xs...) = print(io, xs..., '\n')
 ## conversion of general objects to strings ##
 
 """
-    sprint(f::Function, args...; context=nothing, sizehint=0)
+    sprint(f::Function, args...; context=nothing, sizehint=0, kwargs=NamedTuple())
 
 Call the given function with an I/O stream and the supplied extra arguments.
 Everything written to this I/O stream is returned as a string.
@@ -82,7 +82,8 @@ of the buffer (in bytes).
 The optional keyword argument `context` can be set to `:key=>value` pair
 or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
 stream passed to `f`.  The optional `sizehint` is a suggested size (in bytes)
-to allocate for the buffer used to write the string.
+to allocate for the buffer used to write the string. The optional
+`kwargs` takes a named tuple and passes it on to `f` as keyword arguments.
 
 # Examples
 ```jldoctest
@@ -93,12 +94,13 @@ julia> sprint(showerror, BoundsError([1], 100))
 "BoundsError: attempt to access 1-element Array{Int64,1} at index [100]"
 ```
 """
-function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
+function sprint(f::Function, args...; context=nothing, sizehint::Integer=0,
+                kwargs::NamedTuple=NamedTuple())
     s = IOBuffer(sizehint=sizehint)
     if context !== nothing
-        f(IOContext(s, context), args...)
+        f(IOContext(s, context), args...; kwargs...)
     else
-        f(s, args...)
+        f(s, args...; kwargs...)
     end
     String(resize!(s.data, s.size))
 end
