@@ -2,16 +2,15 @@
 
 # Factorials
 
-const _shifted_fact_table64 = [1; cumprod(1:Int64(20))]  # tables shifted by 1 so factorial(0) can be looked up; maybe OffsetArray better?
+const _shifted_fact_table64 = [1; cumprod(1:Int64(20))]  # tables shifted by 1 so factorial(0) can be looked up
 
 const _shifted_fact_table128 = [1; cumprod(1:UInt128(34))]
 
-const _fact_table64 = [cumprod(1:Int64(20))]  # kept just for gamma function (Base._fact_table64) in SpecialFunctions.jl, notused here
+const _fact_table64 = [cumprod(1:Int64(20))]  # kept just for gamma function (Base._fact_table64) in SpecialFunctions.jl, not used here
 
 @noinline function factorial_lookup_helper(n::Integer, table, lim)  # non-fast-path, almost identical to the old code
     n < 0 && throw(DomainError(n, "`n` must not be negative."))
     n > lim && throw(OverflowError(string(n, " is too large to look up in the table")))
-    # no longer needed because of shift in table:   n == 0 && return one(n)
     @inbounds f = table[n+1]
     return oftype(n, f)
 end
