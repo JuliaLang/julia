@@ -314,7 +314,7 @@ const TriangularSparse{T} = Union{
 
 ## triangular multipliers
 function lmul!(A::TriangularSparse{T}, B::StridedVecOrMat{T}) where T
-    @assert !has_offset_axes(A, B)
+    require_one_based_indexing(A, B)
     nrowB, ncolB  = size(B, 1), size(B, 2)
     ncol = LinearAlgebra.checksquare(A)
     if nrowB != ncol
@@ -487,7 +487,7 @@ end
 
 ## triangular solvers
 function ldiv!(A::TriangularSparse{T}, B::StridedVecOrMat{T}) where T
-    @assert !has_offset_axes(A, B)
+    require_one_based_indexing(A, B)
     nrowB, ncolB  = size(B, 1), size(B, 2)
     ncol = LinearAlgebra.checksquare(A)
     if nrowB != ncol
@@ -705,7 +705,7 @@ rdiv!(A::SparseMatrixCSC{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     (D = transD.parent; rdiv!(A, D))
 
 function ldiv!(D::Diagonal{T}, A::SparseMatrixCSC{T}) where {T}
-    # @assert !has_offset_axes(A)
+    # require_one_based_indexing(A)
     if A.m != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(A.m) rows"))
     end
@@ -1299,7 +1299,7 @@ function lmul!(D::Diagonal, A::SparseMatrixCSC)
 end
 
 function \(A::SparseMatrixCSC, B::AbstractVecOrMat)
-    @assert !has_offset_axes(A, B)
+    require_one_based_indexing(A, B)
     m, n = size(A)
     if m == n
         if istril(A)
@@ -1323,7 +1323,7 @@ for (xformtype, xformop) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
     @eval begin
         function \(xformA::($xformtype){<:Any,<:SparseMatrixCSC}, B::AbstractVecOrMat)
             A = xformA.parent
-            @assert !has_offset_axes(A, B)
+            require_one_based_indexing(A, B)
             m, n = size(A)
             if m == n
                 if istril(A)

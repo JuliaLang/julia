@@ -8,7 +8,7 @@ using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
 
-using Base: BitInteger, BitInteger_types, BitUnsigned, has_offset_axes
+using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
 
 import Base: copymutable, copy, copy!, ==, hash, convert
 using Serialization
