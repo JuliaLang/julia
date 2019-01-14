@@ -327,7 +327,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         @test !success(`$exename -E "$code" --depwarn=error`)
 
         @test readchomperrors(`$exename -E "$code" --depwarn=yes`) ==
-            (true, "true", "WARNING: Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near no file:5")
+            (true, "true", "WARNING: Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near none:8")
 
         @test readchomperrors(`$exename -E "$code" --depwarn=no`) ==
             (true, "true", "")

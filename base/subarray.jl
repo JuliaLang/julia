@@ -42,7 +42,7 @@ check_parent_index_match(parent, ::NTuple{N, Bool}) where {N} =
 # are inlined
 @inline Base.throw_boundserror(A::SubArray, I) =
     __subarray_throw_boundserror(typeof(A), A.parent, A.indices, A.offset1, A.stride1, I)
-@noinline __subarray_throw_boundserror(T, parent, indices, offset1, stride1, I) =
+@noinline __subarray_throw_boundserror(::Type{T}, parent, indices, offset1, stride1, I) where {T} =
     throw(BoundsError(T(parent, indices, offset1, stride1), I))
 
 # This computes the linear indexing compatibility for a given tuple of indices

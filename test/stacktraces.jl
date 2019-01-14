@@ -157,3 +157,14 @@ catch
 end
 @test bt[1].line == topline+4
 end
+
+# issue #28990
+let bt
+try
+    eval(Expr(:toplevel, LineNumberNode(42, :foo), :(error("blah"))))
+catch
+    bt = stacktrace(catch_backtrace())
+end
+@test bt[2].line == 42
+@test bt[2].file === :foo
+end

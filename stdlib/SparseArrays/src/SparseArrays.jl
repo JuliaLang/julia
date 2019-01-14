@@ -6,7 +6,7 @@ Support for sparse arrays. Provides `AbstractSparseArray` and subtypes.
 module SparseArrays
 
 using Base: ReshapedArray, promote_op, setindex_shape_check, to_shape, tail,
-    has_offset_axes
+    require_one_based_indexing
 using Base.Sort: Forward
 using LinearAlgebra
 

@@ -15,9 +15,7 @@ if Sys.iswindows()
         end
         val = zeros(UInt16,len)
         ret = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,val,len)
-        if (ret == 0 && len != 1) || ret != len-1 || val[end] != 0
-            error(string("getenv: ", str, ' ', len, "-1 != ", ret, ": ", Libc.FormatMessage()))
-        end
+        windowserror(:getenv, (ret == 0 && len != 1) || ret != len-1 || val[end] != 0)
         pop!(val) # NUL
         return transcode(String, val)
     end
@@ -27,14 +25,14 @@ if Sys.iswindows()
         val = cwstring(sval)
         if overwrite || !_hasenv(var)
             ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,val)
-            systemerror(:setenv, ret == 0)
+            windowserror(:setenv, ret == 0)
         end
     end
 
     function _unsetenv(svar::AbstractString)
         var = cwstring(svar)
         ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,C_NULL)
-        systemerror(:setenv, ret == 0)
+        windowserror(:setenv, ret == 0)
     end
 else # !windows
     _getenv(var::AbstractString) = ccall(:getenv, Cstring, (Cstring,), var)
@@ -72,8 +70,9 @@ Reference to the singleton `EnvDict`, providing a dictionary interface to system
 variables.
 
 (On Windows, system environment variables are case-insensitive, and `ENV` correspondingly converts
-all keys to uppercase for display, iteration, and copying.  Portable code should not rely on the
-existence of lower-case environment variables or on the ability to distinguish variables by case.)
+all keys to uppercase for display, iteration, and copying. Portable code should not rely on the
+ability to distinguish variables by case, and should beware that setting an ostensibly lowercase
+variable may result in an uppercase `ENV` key.)
 """
 const ENV = EnvDict()
 

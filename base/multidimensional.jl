@@ -1371,33 +1371,33 @@ Return unique regions of `A` along dimension `dims`.
 julia> A = map(isodd, reshape(Vector(1:8), (2,2,2)))
 2×2×2 Array{Bool,3}:
 [:, :, 1] =
-  true   true
- false  false
+ 1  1
+ 0  0
 
 [:, :, 2] =
-  true   true
- false  false
+ 1  1
+ 0  0
 
 julia> unique(A)
 2-element Array{Bool,1}:
-  true
- false
+ 1
+ 0
 
 julia> unique(A, dims=2)
 2×1×2 Array{Bool,3}:
 [:, :, 1] =
-  true
- false
+ 1
+ 0
 
 [:, :, 2] =
-  true
- false
+ 1
+ 0
 
 julia> unique(A, dims=3)
 2×2×1 Array{Bool,3}:
 [:, :, 1] =
-  true   true
- false  false
+ 1  1
+ 0  0
 ```
 """
 unique(A::AbstractArray; dims::Union{Colon,Integer} = :) = _unique_dims(A, dims)
