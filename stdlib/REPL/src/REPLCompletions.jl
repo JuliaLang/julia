@@ -434,15 +434,19 @@ function complete_methods(ex_org::Expr, context_module=Main)::Vector{Completion}
     !found && return Completion[]
 
     funargs = ex_org.args[2:end]
-    # handle broadcasting
+    # handle broadcasting, but only handle number of arguments instead of
+    # argument types
     if ex_org.head === :. && ex_org.args[2] isa Expr
-        funargs = ex_org.args[2].args
+        for _ in ex_org.args[2].args
+            push!(args_ex, Any)
+        end
+    else
+        for ex in funargs
+            val, found = get_type(ex, context_module)
+            push!(args_ex, val)
+        end
     end
 
-    for ex in funargs
-        val, found = get_type(ex, context_module)
-        push!(args_ex, val)
-    end
     out = Completion[]
     t_in = Tuple{Core.Typeof(func), args_ex...} # Input types
     na = length(args_ex)+1
