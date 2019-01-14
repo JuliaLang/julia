@@ -7,6 +7,11 @@ export Enum, @enum
 
 function basetype end
 
+"""
+    Enum
+
+The abstract supertype of all enumerated types defined with [`@enum`](@ref).
+"""
 abstract type Enum{T<:Integer} end
 
 (::Type{T})(x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(bitcast(T2, x))::T
