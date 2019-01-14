@@ -8,7 +8,7 @@ export Enum, @enum
 function basetype end
 
 """
-    Enum
+    Enum{T<:Integer}
 
 The abstract supertype of all enumerated types defined with [`@enum`](@ref).
 """
