@@ -2365,11 +2365,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	jl_weakref_t * result = jl_gc_new_weakref(
 			(jl_value_t *) eval_value(args[5], s)
 		);
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_gc_alloc_0w") == 0) {
 	jl_value_t * result = jl_gc_alloc_0w();
 	return result;
@@ -5493,11 +5489,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_ptls_t) jl_unbox_voidpointer(eval_value(args[5], s)),
 			(jl_value_t *) eval_value(args[6], s)
 		);
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_gc_num") == 0) {
 	jl_gc_num_t result = jl_gc_num();
 	jl_ptls_t ptls = jl_get_ptls_states();
