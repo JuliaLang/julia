@@ -116,10 +116,22 @@ let fails = @testset NoThrowTestSet begin
         @test !(2 + 3 == 1 + 4)
         # Fail - chained negation
         @test !(2 + 3 == 1 + 4 == 5)
+        # Fail - isempty
+        nonempty = [1, 2, 3]
+        @test isempty(nonempty)
+        str1 = "Hello"
+        str2 = "World"
+        # Fail - occursin
+        @test occursin(str1, str2)
+        # Fail - startswith
+        @test startswith(str1, str2)
+        # Fail - endswith
+        @test endswith(str1, str2)
         # Error - unexpected pass
         @test_broken true
         # Error - converting a call into a comparison
         @test ==(1, 1:2...)
+
     end
     for i in 1:length(fails) - 2
         @test isa(fails[i], Test.Fail)
@@ -206,11 +218,31 @@ let fails = @testset NoThrowTestSet begin
     end
 
     let str = sprint(show, fails[17])
+        @test occursin("Expression: isempty(nonempty)", str)
+        @test occursin("Evaluated: isempty([1, 2, 3])", str)
+    end
+
+    let str = sprint(show, fails[18])
+        @test occursin("Expression: occursin(str1, str2)", str)
+        @test occursin("Evaluated: occursin(\"Hello\", \"World\")", str)
+    end
+
+    let str = sprint(show, fails[19])
+        @test occursin("Expression: startswith(str1, str2)", str)
+        @test occursin("Evaluated: startswith(\"Hello\", \"World\")", str)
+    end
+
+    let str = sprint(show, fails[20])
+        @test occursin("Expression: endswith(str1, str2)", str)
+        @test occursin("Evaluated: endswith(\"Hello\", \"World\")", str)
+    end
+
+    let str = sprint(show, fails[21])
         @test occursin("Unexpected Pass", str)
         @test occursin("Expression: true", str)
     end
 
-    let str = sprint(show, fails[18])
+    let str = sprint(show, fails[22])
         @test occursin("Expression: ==(1, 1:2...)", str)
         @test occursin("MethodError: no method matching ==(::$Int, ::$Int, ::$Int)", str)
     end
