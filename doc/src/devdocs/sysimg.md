@@ -60,7 +60,7 @@ Additionally, a few special features are supported to control the function cloni
 
 3. `opt_size`
 
-    This cause the function for the targe to be optimize for size when there isn't a significant
+    This causes the function for the target to be optimized for size when there isn't a significant
     runtime performance impact. This corresponds to `-Os` GCC and Clang option.
 
 4. `min_size`

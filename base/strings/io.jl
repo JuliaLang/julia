@@ -207,6 +207,8 @@ julia> repr(big(1/3), context=:compact => true)
 """
 repr(x; context=nothing) = sprint(show, x; context=context)
 
+limitrepr(x) = repr(x, context = :limit=>true)
+
 # IOBuffer views of a (byte)string:
 
 """
