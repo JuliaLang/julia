@@ -308,8 +308,8 @@ using .Iterators: Stateful
     return true
 end
 
-@pure is_ntuple_wrapper(::Type{ST}) where ST = fieldcount(ST) == 1 && fieldtype(ST, 1) <: NTuple
-@pure myfieldcount(::Type{ST}) where {ST} = is_ntuple_wrapper(ST) ? fieldcount(fieldtype(ST, 1)) : fieldcount(ST)
+is_ntuple_wrapper(::Type{ST}) where ST = fieldcount(ST) == 1 && fieldtype(ST, 1) <: NTuple
+myfieldcount(::Type{ST}) where {ST} = is_ntuple_wrapper(ST) ? fieldcount(fieldtype(ST, 1)) : fieldcount(ST)
 
 @generated function check_applicable_homogeneous_struct(::Type{ST}, ::Type{T}) where {ST, T}
     # Check whether ST is a homogeneous struct of T's
