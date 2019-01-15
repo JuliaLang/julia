@@ -335,7 +335,7 @@ function getindex(G::Givens, i::Integer, j::Integer)
 end
 
 @inline function lmul!(G::Givens, A::AbstractVecOrMat)
-    @assert !has_offset_axes(A)
+    require_one_based_indexing(A)
     m, n = size(A, 1), size(A, 2)
     if G.i2 > m
         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
@@ -348,7 +348,7 @@ end
     return A
 end
 @inline function rmul!(A::AbstractMatrix, G::Givens)
-    @assert !has_offset_axes(A)
+    require_one_based_indexing(A)
     m, n = size(A, 1), size(A, 2)
     if G.i2 > n
         throw(DimensionMismatch("column indices for rotation are outside the matrix"))

@@ -26,6 +26,9 @@ function membershiptest(expr, values)
     end
 end
 
+# give Enum types scalar behavior in broadcasting
+Base.broadcastable(x::Enum) = Ref(x)
+
 @noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for Enum $(typename): $x")))
 
 """

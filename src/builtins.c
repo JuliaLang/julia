@@ -471,7 +471,7 @@ JL_CALLABLE(jl_f__apply)
         if (jl_is_svec(args[i])) {
             n += jl_svec_len(args[i]);
         }
-        else if (jl_is_tuple(args[i])) {
+        else if (jl_is_tuple(args[i]) || jl_is_namedtuple(args[i])) {
             n += jl_nfields(args[i]);
         }
         else if (jl_is_array(args[i])) {
@@ -524,7 +524,7 @@ JL_CALLABLE(jl_f__apply)
             for(j=0; j < al; j++)
                 newargs[n++] = jl_svecref(t, j);
         }
-        else if (jl_is_tuple(ai)) {
+        else if (jl_is_tuple(ai) || jl_is_namedtuple(ai)) {
             size_t al = jl_nfields(ai);
             for(j=0; j < al; j++) {
                 // jl_fieldref may allocate.

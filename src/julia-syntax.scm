@@ -3229,7 +3229,7 @@ f(x) = yt(x)
                        (else
                         (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '())))
                                (top-stmts (cdr exprs))
-                               (newlam    (compact-and-renumber (linearize (car exprs)))))
+                               (newlam    (compact-and-renumber (linearize (car exprs)) 'none 0)))
                           `(toplevel-butfirst
                             (block ,@sp-inits
                                    (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
@@ -4068,21 +4068,21 @@ f(x) = yt(x)
              (list ,@(cadr vi)) ,(caddr vi) (list ,@(cadddr vi)))
        ,@(cdddr lam))))
 
-(define (compact-ir body)
+(define (compact-ir body file line)
   (let ((code         '(block))
         (locs         '(list))
         (linetable    '(list))
         (labltable    (table))
         (ssavtable    (table))
         (current-loc  0)
-        (current-file 'none)
-        (current-line 0)
+        (current-file file)
+        (current-line line)
         (locstack     '())
         (i            1))
     (define (emit e)
       (if (and (null? (cdr linetable))
                (not (and (pair? e) (eq? (car e) 'meta))))
-          (begin (set! linetable (cons '(line 0 none) linetable))
+          (begin (set! linetable (cons `(line ,line ,file) linetable))
                  (set! current-loc 1)))
       (set! code (cons e code))
       (set! i (+ i 1))
@@ -4134,8 +4134,8 @@ f(x) = yt(x)
                  (loop (cdr xs) (+ i 1)))))
     tbl))
 
-(define (renumber-lambda lam)
-  (let* ((stuff (compact-ir (lam:body lam)))
+(define (renumber-lambda lam file line)
+  (let* ((stuff (compact-ir (lam:body lam) file line))
          (code (aref stuff 0))
          (locs (aref stuff 1))
          (linetab (aref stuff 2))
@@ -4170,7 +4170,7 @@ f(x) = yt(x)
             ((eq? (car e) 'gotoifnot)
              `(gotoifnot ,(renumber-stuff (cadr e)) ,(get label-table (caddr e))))
             ((eq? (car e) 'lambda)
-             (renumber-lambda e))
+             (renumber-lambda e 'none 0))
             (else (cons (car e)
                         (map renumber-stuff (cdr e))))))
     (let ((body (renumber-stuff (lam:body lam)))
@@ -4182,25 +4182,28 @@ f(x) = yt(x)
           ,locs
           ,linetab)))))
 
-(define (compact-and-renumber ex)
+(define (compact-and-renumber ex file line)
   (if (atom? ex) ex
       (if (eq? (car ex) 'lambda)
-          (renumber-lambda ex)
+          (renumber-lambda ex
+                           (if (null? (cadr ex)) file 'none)
+                           (if (null? (cadr ex)) line 0))
           (cons (car ex)
-                (map compact-and-renumber (cdr ex))))))
+                (map (lambda (e) (compact-and-renumber e file line))
+                     (cdr ex))))))
 
 ;; expander entry point
 
-(define (julia-expand1 ex)
+(define (julia-expand1 ex file line)
   (compact-and-renumber
    (linearize
     (closure-convert
      (analyze-variables!
-      (resolve-scopes ex))))))
+      (resolve-scopes ex)))) file line))
 
 (define julia-expand0 expand-forms)
 
-(define (julia-expand ex)
+(define (julia-expand ex (file 'none) (line 0))
   (julia-expand1
    (julia-expand0
-    (julia-expand-macroscope ex))))
+    (julia-expand-macroscope ex)) file line))

@@ -2193,3 +2193,6 @@ j30385(T, y) = k30385(f30385(T, y))
 
 @test @inferred(j30385(AbstractFloat, 1)) == 1
 @test @inferred(j30385(:dummy, 1)) == "dummy"
+
+@test Base.return_types(Tuple, (NamedTuple{<:Any,Tuple{Any,Int}},)) == Any[Tuple{Any,Int}]
+@test Base.return_types(Base.splat(tuple), (typeof((a=1,)),)) == Any[Tuple{Int}]
