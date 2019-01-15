@@ -424,7 +424,9 @@ function get_test_result(ex, source)
             $(QuoteNode(source)),
             $negate,
         ))
-    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox, :≈)
+    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in
+            (:isequal, :isapprox, :≈, :occursin, :startswith, :endswith, :isempty)
+
         escaped_func = esc(ex.args[1])
         quoted_func = QuoteNode(ex.args[1])
 
