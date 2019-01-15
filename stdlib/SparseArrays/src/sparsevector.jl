@@ -182,9 +182,9 @@ julia> sparsevec(II, V, 8, -)
 
 julia> sparsevec([1, 3, 1, 2, 2], [true, true, false, false, false])
 3-element SparseVector{Bool,Int64} with 3 stored entries:
-  [1]  =  true
-  [2]  =  false
-  [3]  =  true
+  [1]  =  1
+  [2]  =  0
+  [3]  =  1
 ```
 """
 function sparsevec(I::AbstractVector{<:Integer}, V::AbstractVector, combine::Function)
@@ -834,7 +834,7 @@ function show(io::IO, ::MIME"text/plain", x::AbstractSparseVector)
            " stored ", xnnz == 1 ? "entry" : "entries")
     if xnnz != 0
         println(io, ":")
-        show(io, x)
+        show(IOContext(io, :typeinfo => eltype(x)), x)
     end
 end
 

@@ -154,7 +154,7 @@ function Base.show(io::IO, ::MIME"text/plain", S::SparseMatrixCSC)
               xnnz == 1 ? "entry" : "entries")
     if xnnz != 0
         print(io, ":")
-        show(io, S)
+        show(IOContext(io, :typeinfo => eltype(S)), S)
     end
 end
 
@@ -172,18 +172,16 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
         return
     end
 
-    iob = IOBuffer()
-    ioc = IOContext(iob, :compact => true)
+    ioc = IOContext(io, :compact => true)
+    pad = ndigits(max(S.m, S.n))
 
     function _format_line(r, col)
-        pad = ndigits(max(S.m, S.n))
-        print(ioc, "  [", rpad(S.rowval[r], pad), ", ", lpad(col, pad), "]  =  ")
+        print(ioc, "\n  [", rpad(S.rowval[r], pad), ", ", lpad(col, pad), "]  =  ")
         if isassigned(S.nzval, Int(r))
             show(ioc, S.nzval[r])
         else
             print(ioc, Base.undef_ref_str)
         end
-        return String(take!(iob))
     end
 
     if will_fit
@@ -195,7 +193,7 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
     count = 0
     for col = 1:S.n, r = nzrange(S, col)
         count += 1
-        print(io, "\n", _format_line(r, col))
+        _format_line(r, col)
         count == print_count && break
     end
 
@@ -204,11 +202,11 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
         # find the column to start printing in for the last print_count elements
         nextcol = searchsortedfirst(S.colptr, nnz(S) - print_count + 1)
         for r = (nnz(S) - print_count + 1) : (S.colptr[nextcol] - 1)
-            print(io, "\n", _format_line(r, nextcol - 1))
+            _format_line(r, nextcol - 1)
         end
         # print all of the remaining columns
         for col = nextcol:S.n, r = nzrange(S, col)
-            print(io, "\n", _format_line(r, col))
+            _format_line(r, col)
         end
     end
 end
@@ -1418,7 +1416,7 @@ argument specifies a random number generator, see [Random Numbers](@ref).
 ```jldoctest; setup = :(using Random; Random.seed!(1234))
 julia> sprand(Bool, 2, 2, 0.5)
 2×2 SparseMatrixCSC{Bool,Int64} with 1 stored entry:
-  [2, 2]  =  true
+  [2, 2]  =  1
 
 julia> sprand(Float64, 3, 0.75)
 3-element SparseVector{Float64,Int64} with 1 stored entry:
