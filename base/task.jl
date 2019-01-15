@@ -501,7 +501,8 @@ function ensure_rescheduled(othertask::Task)
     nothing
 end
 
-@noinline function poptask()
+function trypoptask()
+    isempty(Workqueue) && return
     t = popfirst!(Workqueue)
     if t.state != :queued
         # assume this somehow got queued twice,
@@ -513,29 +514,32 @@ end
         return
     end
     t.state = :runnable
-    return Ref(t)
+    return t
 end
 
-function wait()
+@noinline function poptaskref()
+    local task
     while true
-        if isempty(Workqueue)
-            c = process_events(true)
-            if c == 0 && eventloop() != C_NULL && isempty(Workqueue)
-                # if there are no active handles and no runnable tasks, just
-                # wait for signals.
-                pause()
-            end
-        else
-            reftask = poptask()
-            if reftask !== nothing
-                result = try_yieldto(ensure_rescheduled, reftask)
-                process_events(false)
-                # return when we come out of the queue
-                return result
-            end
+        task = trypoptask()
+        task === nothing || break
+        if process_events(true) == 0
+            task = trypoptask()
+            task === nothing || break
+            # if there are no active handles and no runnable tasks, just
+            # wait for signals.
+            pause()
         end
     end
-    # unreachable
+    return Ref(task)
+end
+
+
+function wait()
+    reftask = poptaskref()
+    result = try_yieldto(ensure_rescheduled, reftask)
+    process_events(false)
+    # return when we come out of the queue
+    return result
 end
 
 if Sys.iswindows()
