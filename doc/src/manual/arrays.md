@@ -634,10 +634,10 @@ julia> x[[false, true, true, false], :]
 
 julia> mask = map(ispow2, x)
 4×4 Array{Bool,2}:
-  true  false  false  false
-  true  false  false  false
- false  false  false  false
-  true   true  false   true
+ 1  0  0  0
+ 1  0  0  0
+ 0  0  0  0
+ 1  1  0  1
 
 julia> x[mask]
 5-element Array{Int64,1}:

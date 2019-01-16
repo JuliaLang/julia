@@ -1039,8 +1039,21 @@ mktempdir() do dir
     @test isdir(namepath)
 end
 
-
-
+# issue #30588
+@test realpath(".") == realpath(pwd())
+mktempdir() do dir
+    cd(dir) do
+        path = touch("FooBar.txt")
+        @test ispath(realpath(path))
+        if ispath(uppercase(path)) # case-insensitive filesystem
+            @test realpath(path) == realpath(uppercase(path)) == realpath(lowercase(path)) ==
+                  realpath(uppercase(realpath(path))) == realpath(lowercase(realpath(path)))
+            @test basename(realpath(uppercase(path))) == path
+        end
+        rm(path)
+        @test_throws SystemError realpath(path)
+    end
+end
 
 # issue #9687
 let n = tempname()

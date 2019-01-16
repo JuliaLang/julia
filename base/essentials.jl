@@ -643,19 +643,31 @@ function append_any(xs...)
             end
             for j in 1:lx
                 y = @inbounds x[j]
-                arrayset(true, out, y, i)
+                arrayset(false, out, y, i)
                 i += 1
             end
         elseif x isa Tuple
-            lx = length(x)
+            lx = nfields(x)
             if i + lx - 1 > l
                 ladd = lx > 16 ? lx : 16
                 _growend!(out, ladd)
                 l += ladd
             end
             for j in 1:lx
-                y = @inbounds x[j]
-                arrayset(true, out, y, i)
+                y = getfield(x, j, false)
+                arrayset(false, out, y, i)
+                i += 1
+            end
+        elseif x isa NamedTuple
+            lx = nfields(x)
+            if i + lx - 1 > l
+                ladd = lx > 16 ? lx : 16
+                _growend!(out, ladd)
+                l += ladd
+            end
+            for j in 1:lx
+                y = getfield(x, j, false)
+                arrayset(false, out, y, i)
                 i += 1
             end
         elseif x isa Array
@@ -666,8 +678,8 @@ function append_any(xs...)
                 l += ladd
             end
             for j in 1:lx
-                y = arrayref(true, x, j)
-                arrayset(true, out, y, i)
+                y = arrayref(false, x, j)
+                arrayset(false, out, y, i)
                 i += 1
             end
         else
@@ -676,7 +688,7 @@ function append_any(xs...)
                     _growend!(out, 16)
                     l += 16
                 end
-                arrayset(true, out, y, i)
+                arrayset(false, out, y, i)
                 i += 1
             end
         end

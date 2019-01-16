@@ -16,6 +16,7 @@ Multi-threading changes
 Language changes
 ----------------
 
+* `Enum` now behaves like a scalar when used in broadcasting ([#30670]).
 
 Command-line option changes
 ---------------------------
@@ -29,7 +30,6 @@ New library functions
 Standard library changes
 ------------------------
 
-
 #### LinearAlgebra
 
 * Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
@@ -42,10 +42,17 @@ Standard library changes
 
 * Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
 
+#### Miscellaneous
+
+* Since environment variables on Windows are case-insensitive, `ENV` now converts its keys
+  to uppercase for display, iteration, and copying ([#30593]).
 
 External dependencies
 ---------------------
 
+* libgit2 has been updated to v0.27.7 ([#30584]).
+* OpenBLAS has been updated to v0.3.5 ([#30583]).
+* MbedTLS has been updated to v2.16.0 ([#30618]).
 
 Deprecated or removed
 ---------------------

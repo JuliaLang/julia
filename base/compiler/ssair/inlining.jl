@@ -592,7 +592,11 @@ function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, at
                     push!(def_atypes, Const(p))
                 end
             else
-                for p in widenconst(def_type).parameters
+                ti = widenconst(def_type)
+                if ti.name === NamedTuple_typename
+                    ti = ti.parameters[2]
+                end
+                for p in ti.parameters
                     if isa(p, DataType) && isdefined(p, :instance)
                         # replace singleton types with their equivalent Const object
                         p = Const(p.instance)
@@ -827,6 +831,12 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
                 typ = atypes[i]
                 typ = widenconst(typ)
                 # TODO: We could basically run the iteration protocol here
+                if isa(typ, DataType) && typ.name === NamedTuple_typename
+                    typ = typ.parameters[2]
+                    while isa(typ, TypeVar)
+                        typ = typ.ub
+                    end
+                end
                 if !isa(typ, DataType) || typ.name !== Tuple.name ||
                     isvatuple(typ) || length(typ.parameters) > sv.params.MAX_TUPLE_SPLAT
                     ok = false
@@ -837,6 +847,12 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             # Independent of whether we can inline, the above analysis allows us to rewrite
             # this apply call to a regular call
             ft = atypes[2]
+            if length(atypes) == 3 && ft isa Const && ft.val === Core.tuple && atypes[3] ⊑ Tuple
+                # rewrite `((t::Tuple)...,)` to `t`
+                ir.stmts[idx] = stmt.args[3]
+                ok = false
+                break
+            end
             stmt.args, atypes = rewrite_apply_exprargs!(ir, idx, stmt.args, atypes, sv)
             ok = !has_free_typevars(ft)
             ok || break

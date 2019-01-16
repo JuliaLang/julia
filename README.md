@@ -28,15 +28,11 @@ This is the GitHub repository of Julia source code, including instructions for c
 
 - **Homepage:** <https://julialang.org>
 - **Binaries:** <https://julialang.org/downloads/>
-- **Documentation:** <https://docs.julialang.org/>
-- **Packages:** <https://pkg.julialang.org/>
 - **Source code:** <https://github.com/JuliaLang/julia>
-- **Git clone URL:** <git://github.com/JuliaLang/julia.git>
+- **Documentation:** <https://docs.julialang.org/>
+- **Packages:** <https://juliaobserver.com/>
 - **Discussion forum:** <https://discourse.julialang.org>
-- **Mailing lists:** <https://julialang.org/community/>
 - **Slack:** <https://julialang.slack.com> (get an invite from <https://slackinvite.julialang.org>)
-- **Gitter:** <https://gitter.im/JuliaLang/julia>
-- **IRC:** <https://webchat.freenode.net/?channels=julia>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the Julia codebase.
@@ -102,7 +98,7 @@ Be sure to also configure your system to use the appropriate proxy settings, e.g
 
 By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `1.0` series of releases. You can get this version by changing to the Julia directory and running
 
-    git checkout v1.0.2
+    git checkout v1.0.3
 
 Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes. (See [Platform Specific Build Notes](https://github.com/JuliaLang/julia#platform-specific-build-notes) for details.)
 When compiled the first time, it will automatically download and build its [external dependencies](#required-build-tools-and-external-libraries).
@@ -361,7 +357,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [GMP]:          http://gmplib.org
 [MPFR]:         http://www.mpfr.org
 [libuv]:        https://github.com/JuliaLang/libuv
-[libgit2]:      https://libgit2.github.com/
+[libgit2]:      https://libgit2.org/
 [utf8proc]:     https://julialang.org/utf8proc/
 [libosxunwind]: https://github.com/JuliaLang/libosxunwind
 [libunwind]:    http://www.nongnu.org/libunwind

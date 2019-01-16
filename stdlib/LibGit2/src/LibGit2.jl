@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Interface to [libgit2](https://libgit2.github.com/).
+Interface to [libgit2](https://libgit2.org/).
 """
 module LibGit2
 
