@@ -428,13 +428,13 @@ for testrun in (failing_pipeline, pipeline(failing_pipeline, failing_pipeline))
         run(testrun)
     catch err
         @test err isa ProcessExitedException
-        errmsg = sprint(show, err)
+        errmsg = sprint(showerror, err)
         @test occursin(string(failing_cmd), errmsg)
     end
 end
 
 let
-    errmsg = sprint(show, ProcessExitedException())
+    errmsg = sprint(showerror, ProcessExitedException())
     @test occursin("exited" , errmsg)
 end
 

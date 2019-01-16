@@ -796,14 +796,14 @@ Usages include:
  - In a [Distributed Computing](@ref) workflow, this is thrown
  when work is sent to a worker julia process that has exited.
 """
-struct ProcessExitedException
+struct ProcessExitedException <: Exception
     procs::Union{Vector{Process},Nothing}
     # ProcessExitedException(nothing) is allowed for Distributed stdlib compat
 end
 ProcessExitedException() = ProcessExitedException(nothing)
 ProcessExitedException(proc::Process) = ProcessExitedException([proc])
 
-function show(io::IO, err::ProcessExitedException)
+function showerror(io::IO, err::ProcessExitedException)
     if err.procs === nothing
         println(io, "The process has exited.")
     elseif length(err.procs) == 1
