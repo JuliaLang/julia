@@ -1030,20 +1030,20 @@ function _rmprocs(pids, waitfor)
 end
 
 
-struct ProcessExitedException <: Exception end
-
 """
-    ProcessExitedException()
+    ProcessExitedException(pid::Int)
 
 After a client Julia process has exited, further attempts to reference the dead child will
 throw this exception.
 """
-ProcessExitedException()
+struct ProcessExitedException <: Exception
+    pid::Int
+end
 
 worker_from_id(i) = worker_from_id(PGRP, i)
 function worker_from_id(pg::ProcessGroup, i)
     if !isempty(map_del_wrkr) && in(i, map_del_wrkr)
-        throw(ProcessExitedException())
+        throw(ProcessExitedException(i))
     end
     w = get(map_pid_wrkr, i, nothing)
     if w === nothing
@@ -1137,7 +1137,7 @@ function deregister_worker(pg, pid)
 
         # throw exception to tasks waiting for this pid
         for (id, rv) in tonotify
-            close(rv.c, ProcessExitedException())
+            close(rv.c, ProcessExitedException(id))
             delete!(pg.refs, id)
         end
     end
