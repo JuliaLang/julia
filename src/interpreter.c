@@ -410,6 +410,16 @@ void jl_foreigncall_get_syms(jl_value_t *target, jl_sym_t **fname, jl_sym_t **li
     }
 }
 
+SECT_INTERP jl_value_t *instantiate_foreigncall_rt(jl_value_t *rt, interpreter_state *s) {
+    jl_unionall_t *unionall_env = (s->mi && jl_is_method(s->mi->def.method) && jl_is_unionall(s->mi->def.method->sig))
+        ? (jl_unionall_t*)s->mi->def.method->sig
+        : NULL;
+    if (!unionall_env)
+        return rt;
+    return jl_instantiate_type_in_env(rt, unionall_env, jl_svec_data(s->sparam_vals));
+}
+
+
 // This is a hook that can be replaced at link time if an interpreter version
 // if foreigncall is available.
 SECT_INTERP __attribute__((weak)) jl_value_t *eval_foreigncall(jl_sym_t *fname, jl_sym_t *libname, interpreter_state *s, jl_value_t **args, size_t nargs)
