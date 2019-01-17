@@ -2838,17 +2838,23 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	int8_t result = jl_unbox_bool(
 			(jl_value_t *) eval_value(args[5], s)
 		);
-	return jl_box_uint8(result);
+	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
+
 } else if (strcmp(target, "jl_unbox_int8") == 0) {
 	int8_t result = jl_unbox_int8(
 			(jl_value_t *) eval_value(args[5], s)
 		);
-	return jl_box_uint8(result);
+	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
+
 } else if (strcmp(target, "jl_unbox_uint8") == 0) {
 	uint8_t result = jl_unbox_uint8(
 			(jl_value_t *) eval_value(args[5], s)
 		);
-	return jl_box_uint8(result);
+	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
+
 } else if (strcmp(target, "jl_unbox_int16") == 0) {
 	int16_t result = jl_unbox_int16(
 			(jl_value_t *) eval_value(args[5], s)
@@ -3721,17 +3727,23 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	uint8_t result = jl_ast_flag_inferred(
 			(jl_array_t *) eval_value(args[5], s)
 		);
-	return jl_box_uint8(result);
+	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
+
 } else if (strcmp(target, "jl_ast_flag_inlineable") == 0) {
 	uint8_t result = jl_ast_flag_inlineable(
 			(jl_array_t *) eval_value(args[5], s)
 		);
-	return jl_box_uint8(result);
+	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
+
 } else if (strcmp(target, "jl_ast_flag_pure") == 0) {
 	uint8_t result = jl_ast_flag_pure(
 			(jl_array_t *) eval_value(args[5], s)
 		);
-	return jl_box_uint8(result);
+	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
+
 } else if (strcmp(target, "jl_fill_argnames") == 0) {
 	jl_fill_argnames(
 			(jl_array_t *) eval_value(args[5], s),
@@ -5066,7 +5078,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return jl_box_uint32(result);
 } else if (strcmp(target, "jl_is_memdebug") == 0) {
 	int8_t result = jl_is_memdebug();
-	return jl_box_uint8(result);
+	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
+
 } else if (strcmp(target, "jl_get_julia_bindir") == 0) {
 	jl_value_t * result = jl_get_julia_bindir();
 	return result;
@@ -5154,7 +5168,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	uint8_t result = jl_istopmod(
 			(jl_module_t *) eval_value(args[5], s)
 		);
-	return jl_box_uint8(result);
+	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
+
 } else if (strcmp(target, "jl_get_module_of_binding") == 0) {
 	jl_module_t * result = jl_get_module_of_binding(
 			(jl_module_t *) eval_value(args[5], s),
@@ -5631,7 +5647,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return jl_box_uint32(result);
 } else if (strcmp(target, "jl_is_in_pure_context") == 0) {
 	int8_t result = jl_is_in_pure_context();
-	return jl_box_uint8(result);
+	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
+
 } else if (strcmp(target, "jl_specializations_lookup") == 0) {
 	jl_value_t * result = jl_specializations_lookup(
 			(jl_method_t *) eval_value(args[5], s),
