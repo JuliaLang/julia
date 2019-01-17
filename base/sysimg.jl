@@ -516,37 +516,37 @@ if Base.is_primary_base_module
 let
     # Stdlibs manually sorted in top down order
     stdlibs = [
-            # No deps
-            :Base64,
-            :CRC32c,
-            :SHA,
-            Base.DISABLE_LIBUV ? nothing : :FileWatching,
-            :Unicode,
-            :Mmap,
-            Base.DISABLE_LIBUV ? nothing : :Serialization,
-            :Libdl,
-            :Markdown,
-            Base.DISABLE_LIBUV ? nothing : :LibGit2,
-            :Logging,
-            Base.DISABLE_LIBUV ? nothing : :Sockets,
-            :Printf,
-            :Profile,
-            :Dates,
-            :DelimitedFiles,
-            :Random,
-            Base.DISABLE_LIBUV ? nothing : :UUIDs,
-            Base.DISABLE_LIBUV ? nothing : :Future,
-            Base.DISABLE_LIBUV ? nothing : :LinearAlgebra,
-            Base.DISABLE_LIBUV ? nothing : :SparseArrays,
-            Base.DISABLE_LIBUV ? nothing : :SuiteSparse,
-            Base.DISABLE_LIBUV ? nothing : :Distributed,
-            Base.DISABLE_LIBUV ? nothing : :SharedArrays,
-            Base.DISABLE_LIBUV ? nothing : :Pkg,
-            Base.DISABLE_LIBUV ? nothing : :Test,
-            Base.DISABLE_LIBUV ? nothing : :REPL,
-            Base.DISABLE_LIBUV ? nothing : :Statistics,
-            :InteractiveUtils
-        ]
+        # No deps
+        :Base64,
+        :CRC32c,
+        :SHA,
+        Base.DISABLE_LIBUV ? nothing : :FileWatching,
+        :Unicode,
+        :Mmap,
+        Base.DISABLE_LIBUV ? nothing : :Serialization,
+        :Libdl,
+        :Markdown,
+        Base.DISABLE_LIBUV ? nothing : :LibGit2,
+        :Logging,
+        Base.DISABLE_LIBUV ? nothing : :Sockets,
+        :Printf,
+        :Profile,
+        :Dates,
+        :DelimitedFiles,
+        :Random,
+        :UUIDs,
+        Base.DISABLE_LIBUV ? nothing : :Future,
+        Base.DISABLE_LIBUV ? nothing : :LinearAlgebra,
+        Base.DISABLE_LIBUV ? nothing : :SparseArrays,
+        Base.DISABLE_LIBUV ? nothing : :SuiteSparse,
+        Base.DISABLE_LIBUV ? nothing : :Distributed,
+        Base.DISABLE_LIBUV ? nothing : :SharedArrays,
+        Base.DISABLE_LIBUV ? nothing : :Pkg,
+        Base.DISABLE_LIBUV ? nothing : :Test,
+        Base.DISABLE_LIBUV ? nothing : :REPL,
+        Base.DISABLE_LIBUV ? nothing : :Statistics,
+        :InteractiveUtils
+    ]
     filter!(x -> x !== nothing, stdlibs)
 
     maxlen = maximum(textwidth.(string.(stdlibs)))
