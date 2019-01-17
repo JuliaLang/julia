@@ -1335,11 +1335,11 @@ function return_type_tfunc(argtypes::Vector{Any}, vtypes::VarTable, sv::Inferenc
                     end
                     astype = argtypes_to_type(argtypes_vec)
                     if isa(aft, Const)
-                        rt = abstract_call(aft.val, (), argtypes_vec, vtypes, sv)
+                        rt = abstract_call(aft.val, (), argtypes_vec, vtypes, sv, -1)
                     elseif isconstType(aft)
-                        rt = abstract_call(aft.parameters[1], (), argtypes_vec, vtypes, sv)
+                        rt = abstract_call(aft.parameters[1], (), argtypes_vec, vtypes, sv, -1)
                     else
-                        rt = abstract_call_gf_by_type(nothing, argtypes_vec, astype, sv)
+                        rt = abstract_call_gf_by_type(nothing, argtypes_vec, astype, sv, -1)
                     end
                     if isa(rt, Const)
                         # output was computed to be constant

@@ -2196,3 +2196,13 @@ j30385(T, y) = k30385(f30385(T, y))
 
 @test Base.return_types(Tuple, (NamedTuple{<:Any,Tuple{Any,Int}},)) == Any[Tuple{Any,Int}]
 @test Base.return_types(Base.splat(tuple), (typeof((a=1,)),)) == Any[Tuple{Int}]
+
+# test that return_type_tfunc isn't affected by max_methods differently than return_type
+_rttf_test(::Int8) = 0
+_rttf_test(::Int16) = 0
+_rttf_test(::Int32) = 0
+_rttf_test(::Int64) = 0
+_rttf_test(::Int128) = 0
+_call_rttf_test() = Core.Compiler.return_type(_rttf_test, Tuple{Any})
+@test Core.Compiler.return_type(_rttf_test, Tuple{Any}) === Int
+@test _call_rttf_test() === Int
