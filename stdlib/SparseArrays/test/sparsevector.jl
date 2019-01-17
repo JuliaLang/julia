@@ -44,6 +44,9 @@ end
     @test occursin("1.25", string(spv_x1))
     @test occursin("-0.75", string(spv_x1))
     @test occursin("3.5", string(spv_x1))
+
+    # issue #30589
+    @test repr("text/plain", sparse([true])) == "1-element SparseArrays.SparseVector{Bool,$Int} with 1 stored entry:\n  [1]  =  1"
 end
 
 ### Comparison helper to ensure exact equality with internal structure

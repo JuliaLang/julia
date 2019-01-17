@@ -345,7 +345,9 @@ kw"function"
 """
     return
 
-`return` can be used in function bodies to exit early and return a given value, e.g.
+`return x` causes the enclosing function to exit early, passing the given value `x`
+back to its caller. `return` by itself with no value is equivalent to `return nothing`
+(see [`nothing`](@ref)).
 
 ```julia
 function compare(a, b)
@@ -371,12 +373,15 @@ function test2(xs)
     end
 end
 ```
-In the first example, the return breaks out of its enclosing function as soon as it hits
+In the first example, the return breaks out of `test1` as soon as it hits
 an even number, so `test1([5,6,7])` returns `12`.
 
 You might expect the second example to behave the same way, but in fact the `return`
 there only breaks out of the *inner* function (inside the `do` block) and gives a value
 back to `map`. `test2([5,6,7])` then returns `[5,12,7]`.
+
+When used in a top-level expression (i.e. outside any function), `return` causes
+the entire current top-level expression to terminate early.
 """
 kw"return"
 
@@ -407,7 +412,7 @@ kw"if", kw"elseif", kw"else"
 """
     for
 
-`for` loops repeatedly evaluate the body of the loop by
+`for` loops repeatedly evaluate a block of statements while
 iterating over a sequence of values.
 
 # Examples
@@ -425,8 +430,8 @@ kw"for"
 """
     while
 
-`while` loops repeatedly evaluate a conditional expression, and continues evaluating the
-body of the while loop so long as the expression remains `true`. If the condition
+`while` loops repeatedly evaluate a conditional expression, and continue evaluating the
+body of the while loop as long as the expression remains true. If the condition
 expression is false when the while loop is first reached, the body is never evaluated.
 
 # Examples
@@ -473,19 +478,23 @@ kw"end"
 """
     try/catch
 
-A `try`/`catch` statement allows for `Exception`s to be tested for. For example, a
-customized square root function can be written to automatically call either the real or
-complex square root method on demand using `Exception`s:
+A `try`/`catch` statement allows intercepting errors (exceptions) thrown
+by [`throw`](@ref) so that program execution can continue.
+For example, the following code attempts to write a file, but warns the user
+and proceeds instead of terminating execution if the file cannot be written:
 
 ```julia
-f(x) = try
-    sqrt(x)
+try
+    open("/danger", "w") do f
+        println(f, "Hello")
+    end
 catch
-    sqrt(complex(x, 0))
+    @warn "Could not write file."
 end
 ```
 
-`try`/`catch` statements also allow the `Exception` to be saved in a variable, e.g. `catch y`.
+The syntax `catch e` (where `e` is any variable) assigns the thrown
+exception object to the given variable within the `catch` block.
 
 The power of the `try`/`catch` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling functions.
@@ -561,7 +570,9 @@ kw"continue"
 """
     do
 
-Create an anonymous function. For example:
+Create an anonymous function and pass it as the first argument to
+a function call.
+For example:
 
 ```julia
 map(1:10) do x
@@ -842,7 +853,7 @@ nothing
 """
     Core.TypeofBottom
 
-The singleton type containing only the value `Union{}`.
+The singleton type containing only the value `Union{}` (which represents the empty type).
 """
 Core.TypeofBottom
 
@@ -1246,7 +1257,7 @@ Unsigned
 """
     Bool <: Integer
 
-Boolean type.
+Boolean type, containing the values `true` and `false`.
 """
 Bool
 
