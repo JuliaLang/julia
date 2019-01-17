@@ -731,7 +731,7 @@ julia> A[19] # Linear indexing
 
 When omitting _all_ indices with `A[]`, this semantic provides a simple idiom
 to retrieve the only element in an array and simultaneously ensure that there
-only was only one element with.
+was only one element.
 
 Similarly, more than `N` indices may be provided if all the indices beyond the
 dimensionality of the array are `1` (or more generally are the first and only
