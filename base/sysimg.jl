@@ -395,11 +395,6 @@ using .Enums
 include("gmp.jl")
 using .GMP
 
-for T in [Signed, Integer, BigInt, Float32, Float64, Real, Complex, Rational]
-    @eval flipsign(x::$T, ::Unsigned) = +x
-    @eval copysign(x::$T, ::Unsigned) = +x
-end
-
 include("mpfr.jl")
 using .MPFR
 big(n::Integer) = convert(BigInt,n)
