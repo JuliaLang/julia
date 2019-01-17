@@ -149,6 +149,8 @@ mapreduce_impl(f, op, A::SkipOfType, ifirst::Integer, ilast::Integer) =
     end
 end
 
-union_poptype(::Type{T}, ::Type{Union{T,S}}) where {T, S} = S
-union_poptype(::Type{T}, ::Type{S}) where {T, S} = S
-union_poptype(::Type{T}, ::Type{T}) where {T} = Union{}
+_union_poptype(::Type{T}, ::Type{Union{T,S}}) where {T, S} = S
+_union_poptype(::Type{T}, ::Type{T}) where {T} = Union{}
+
+# Necessary for cases like _union_poptype(Union{A,B}, Union{A,C})
+union_poptype(::Type{T}, ::Type{S}) where {T, S} = _union_poptype(T, Union{T,S})
