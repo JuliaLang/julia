@@ -60,9 +60,9 @@ Construct a `Diagonal` matrix from a `UniformScaling`.
 ```jldoctest
 julia> I(3)
 3×3 Diagonal{Bool,Array{Bool,1}}:
-  true    ⋅      ⋅
-   ⋅     true    ⋅
-   ⋅      ⋅     true
+ 1  ⋅  ⋅
+ ⋅  1  ⋅
+ ⋅  ⋅  1
 
 julia> (0.7*I)(3)
 3×3 Diagonal{Float64,Array{Float64,1}}:
