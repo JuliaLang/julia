@@ -11707,7 +11707,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(mpfr_srcptr) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	return jl_box_int32(result);
-} 
+}
 
 return NULL;
 } 
