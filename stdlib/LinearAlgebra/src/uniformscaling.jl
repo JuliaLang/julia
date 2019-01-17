@@ -49,12 +49,12 @@ julia> [1 2im 3; 1im 2 3] * I
 const I = UniformScaling(true)
 
 """
-    (J::UniformScaling)(n::Integer)
+    (I::UniformScaling)(n::Integer)
 
 Construct a `Diagonal` matrix from a `UniformScaling`.
 
-!!! compat "Julia 1.1"
-     This method is available as of Julia 1.1.
+!!! compat "Julia 1.2"
+     This method is available as of Julia 1.2.
 
 # Examples
 ```jldoctest
@@ -71,7 +71,7 @@ julia> (0.7*I)(3)
   ⋅    ⋅   0.7
 ```
 """
-(J::UniformScaling)(n::Integer) = Diagonal(fill(J.λ, n))
+(I::UniformScaling)(n::Integer) = Diagonal(fill(I.λ, n))
 
 eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2
