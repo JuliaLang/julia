@@ -368,7 +368,7 @@ extern jl_value_t * jl_stderr_obj(void);
 extern size_t jl_static_show(ios_t *, jl_value_t *);
 extern size_t jl_static_show_func_sig(ios_t *, jl_value_t *);
 extern void jlbacktrace(void);
-extern void jl_(void *);
+extern void jl_(jl_value_t *);
 typedef long ssize_t;
 extern ssize_t jl_sizeof_jl_options(void);
 extern void jl_parse_opts(int *, char ***);
@@ -2618,7 +2618,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	jl_datatype_t * result = jl_new_datatype(
 			(jl_sym_t *) eval_value(args[5], s),
 			(jl_module_t *) eval_value(args[6], s),
-			(jl_datatype_t *) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(jl_datatype_t *) eval_value(args[7], s),
 			(jl_svec_t *) jl_unbox_voidpointer(eval_value(args[8], s)),
 			(jl_svec_t *) jl_unbox_voidpointer(eval_value(args[9], s)),
 			(jl_svec_t *) jl_unbox_voidpointer(eval_value(args[10], s)),
@@ -2626,24 +2626,16 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(int) jl_unbox_int32(eval_value(args[12], s)),
 			(int) jl_unbox_int32(eval_value(args[13], s))
 		);
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_new_primitivetype") == 0) {
 	jl_datatype_t * result = jl_new_primitivetype(
 			(jl_value_t *) eval_value(args[5], s),
 			(jl_module_t *) eval_value(args[6], s),
-			(jl_datatype_t *) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(jl_datatype_t *) eval_value(args[7], s),
 			(jl_svec_t *) jl_unbox_voidpointer(eval_value(args[8], s)),
 			(size_t) jl_unbox_uint32(eval_value(args[9], s))
 		);
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_new_bits") == 0) {
 	jl_value_t * result = jl_new_bits(
 			(jl_value_t *) eval_value(args[5], s),
@@ -2652,19 +2644,19 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return result;
 } else if (strcmp(target, "jl_new_struct") == 0) {
 	jl_value_t * result = jl_new_struct(
-			(jl_datatype_t *) jl_unbox_voidpointer(eval_value(args[5], s))
+			(jl_datatype_t *) eval_value(args[5], s)
 		);
 	return result;
 } else if (strcmp(target, "jl_new_structv") == 0) {
 	jl_value_t * result = jl_new_structv(
-			(jl_datatype_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_datatype_t *) eval_value(args[5], s),
 			(jl_value_t **) jl_unbox_voidpointer(eval_value(args[6], s)),
 			(uint32_t) jl_unbox_uint32(eval_value(args[7], s))
 		);
 	return result;
 } else if (strcmp(target, "jl_new_struct_uninit") == 0) {
 	jl_value_t * result = jl_new_struct_uninit(
-			(jl_datatype_t *) jl_unbox_voidpointer(eval_value(args[5], s))
+			(jl_datatype_t *) eval_value(args[5], s)
 		);
 	return result;
 } else if (strcmp(target, "jl_new_method_instance_uninit") == 0) {
@@ -2962,7 +2954,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return jl_box_int32(result);
 } else if (strcmp(target, "jl_field_index") == 0) {
 	int result = jl_field_index(
-			(jl_datatype_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_datatype_t *) eval_value(args[5], s),
 			(jl_sym_t *) eval_value(args[6], s),
 			(int) jl_unbox_int32(eval_value(args[7], s))
 		);
@@ -3435,7 +3427,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return jl_nothing;
 } else if (strcmp(target, "jl_exceptionf") == 0) {
 	jl_exceptionf(
-			(jl_datatype_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_datatype_t *) eval_value(args[5], s),
 			(const char *) jl_unbox_voidpointer(eval_value(args[6], s))
 		);
 	return jl_nothing;
@@ -4009,7 +4001,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return jl_nothing;
 } else if (strcmp(target, "jl_") == 0) {
 	jl_(
-			(void *) jl_unbox_voidpointer(eval_value(args[5], s))
+			(jl_value_t *) eval_value(args[5], s)
 		);
 	return jl_nothing;
 } else if (strcmp(target, "jl_sizeof_jl_options") == 0) {
@@ -4185,11 +4177,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	jl_datatype_t * result = jl_first_argument_datatype(
 			(jl_value_t *) eval_value(args[5], s)
 		);
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_argument_datatype") == 0) {
 	jl_value_t * result = jl_argument_datatype(
 			(jl_value_t *) eval_value(args[5], s)
@@ -4302,7 +4290,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_get_cfunction_trampoline") == 0) {
 	jl_value_t * result = jl_get_cfunction_trampoline(
 			(jl_value_t *) eval_value(args[5], s),
-			(jl_datatype_t *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(jl_datatype_t *) eval_value(args[6], s),
 			(htable_t *) jl_unbox_voidpointer(eval_value(args[7], s)),
 			(jl_svec_t *) jl_unbox_voidpointer(eval_value(args[8], s)),
 			(void *(*)(void *, void **)) jl_unbox_voidpointer(eval_value(args[9], s)),
@@ -5346,17 +5334,13 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	jl_datatype_t * result = jl_new_foreign_type(
 			(jl_sym_t *) eval_value(args[5], s),
 			(jl_module_t *) eval_value(args[6], s),
-			(jl_datatype_t *) jl_unbox_voidpointer(eval_value(args[7], s)),
+			(jl_datatype_t *) eval_value(args[7], s),
 			(jl_markfunc_t) jl_unbox_voidpointer(eval_value(args[8], s)),
 			(jl_sweepfunc_t) jl_unbox_voidpointer(eval_value(args[9], s)),
 			(int) jl_unbox_int32(eval_value(args[10], s)),
 			(int) jl_unbox_int32(eval_value(args[11], s))
 		);
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_gc_max_internal_obj_size") == 0) {
 	size_t result = jl_gc_max_internal_obj_size();
 	return jl_box_uint32(result);

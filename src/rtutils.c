@@ -1092,7 +1092,7 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_N
     return n;
 }
 
-JL_DLLEXPORT void jl_(void *jl_value)
+JL_DLLEXPORT void jl_(jl_value_t *jl_value)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_jmp_buf *old_buf = ptls->safe_restore;
