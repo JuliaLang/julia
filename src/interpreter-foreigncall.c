@@ -1833,11 +1833,54 @@ extern mpfr_exp_t mpfr_custom_get_exp(mpfr_srcptr);
 extern void mpfr_custom_move(mpfr_ptr, void *);
 extern void mpfr_custom_init_set(mpfr_ptr, int, mpfr_exp_t, mpfr_prec_t, void *);
 extern int mpfr_custom_get_kind(mpfr_srcptr);
+struct DSFMT_T;
+typedef struct DSFMT_T dsfmt_t;
+extern void dsfmt_gen_rand_all(dsfmt_t *);
+typedef long ptrdiff_t;
+extern void dsfmt_fill_array_open_close(dsfmt_t *, double *, ptrdiff_t);
+extern void dsfmt_fill_array_close_open(dsfmt_t *, double *, ptrdiff_t);
+extern void dsfmt_fill_array_open_open(dsfmt_t *, double *, ptrdiff_t);
+extern void dsfmt_fill_array_close1_open2(dsfmt_t *, double *, ptrdiff_t);
+extern void dsfmt_chk_init_gen_rand(dsfmt_t *, uint32_t, int);
+extern void dsfmt_chk_init_by_array(dsfmt_t *, uint32_t *, int, int);
+extern const char * dsfmt_get_idstring(void);
+extern int dsfmt_get_min_array_size(void);
+extern uint32_t dsfmt_genrand_uint32(dsfmt_t *);
+extern double dsfmt_genrand_close1_open2(dsfmt_t *);
+extern double dsfmt_genrand_close_open(dsfmt_t *);
+extern double dsfmt_genrand_open_close(dsfmt_t *);
+extern double dsfmt_genrand_open_open(dsfmt_t *);
+extern uint32_t dsfmt_gv_genrand_uint32(void);
+extern double dsfmt_gv_genrand_close1_open2(void);
+extern double dsfmt_gv_genrand_close_open(void);
+extern double dsfmt_gv_genrand_open_close(void);
+extern double dsfmt_gv_genrand_open_open(void);
+extern void dsfmt_gv_fill_array_open_close(double *, ptrdiff_t);
+extern void dsfmt_gv_fill_array_close_open(double *, ptrdiff_t);
+extern void dsfmt_gv_fill_array_open_open(double *, ptrdiff_t);
+extern void dsfmt_gv_fill_array_close1_open2(double *, ptrdiff_t);
+extern void dsfmt_gv_init_gen_rand(uint32_t);
+extern void dsfmt_gv_init_by_array(uint32_t *, int);
+extern void dsfmt_init_gen_rand(dsfmt_t *, uint32_t);
+extern void dsfmt_init_by_array(dsfmt_t *, uint32_t *, int);
+extern const char * get_idstring(void);
+extern int get_min_array_size(void);
+extern void init_gen_rand(uint32_t);
+extern void init_by_array(uint32_t *, int);
+extern double genrand_close1_open2(void);
+extern double genrand_close_open(void);
+extern double genrand_open_close(void);
+extern double genrand_open_open(void);
+extern void fill_array_open_close(double *, ptrdiff_t);
+extern void fill_array_close_open(double *, ptrdiff_t);
+extern void fill_array_open_open(double *, ptrdiff_t);
+extern void fill_array_close1_open2(double *, ptrdiff_t);
 
 
 struct interpreter_state;
 typedef struct interpreter_state interpreter_state;
 extern jl_value_t *eval_value(jl_value_t *e, interpreter_state *s);
+extern jl_value_t *instantiate_foreigncall_rt(jl_value_t *, interpreter_state *s);
 jl_value_t *eval_foreigncall(jl_sym_t *fname, jl_sym_t *libname, interpreter_state *s, jl_value_t **args, size_t nargs)
 {
 const char *target = jl_symbol_name(fname);
@@ -1870,7 +1913,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(const char *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -1888,7 +1933,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(unsigned long) jl_unbox_uint32(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -1899,7 +1946,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(unsigned long) jl_unbox_uint32(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -1910,7 +1959,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(unsigned long) jl_unbox_uint32(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -1928,7 +1979,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(unsigned long) jl_unbox_uint32(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -1945,7 +1998,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(uint32_t) jl_unbox_uint32(eval_value(args[8], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -2052,7 +2107,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(size_t *) jl_unbox_voidpointer(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -2127,7 +2184,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(int) jl_unbox_int32(eval_value(args[10], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -2137,7 +2196,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(char *) jl_unbox_voidpointer(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -2147,7 +2208,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(size_t) jl_unbox_uint32(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -2159,7 +2222,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(int) jl_unbox_int32(eval_value(args[8], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -2192,7 +2257,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(ios_t *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -2272,7 +2339,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(int) jl_unbox_int32(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -2284,7 +2353,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(int) jl_unbox_int32(eval_value(args[8], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -2389,7 +2460,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(struct _jl_task_t *) jl_unbox_voidpointer(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -2417,7 +2490,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(size_t) jl_unbox_uint32(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -2430,7 +2505,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_value_t *) eval_value(args[9], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -2439,7 +2516,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_array_t *) eval_value(args[5], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -2537,7 +2616,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_value_t *) eval_value(args[5], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -2546,7 +2627,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_value_t *) eval_value(args[5], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -2839,6 +2922,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_value_t *) eval_value(args[5], s)
 		);
 	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+rt = instantiate_foreigncall_rt(rt, s);
 	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
 
 } else if (strcmp(target, "jl_unbox_int8") == 0) {
@@ -2846,6 +2930,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_value_t *) eval_value(args[5], s)
 		);
 	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+rt = instantiate_foreigncall_rt(rt, s);
 	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
 
 } else if (strcmp(target, "jl_unbox_uint8") == 0) {
@@ -2853,6 +2938,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_value_t *) eval_value(args[5], s)
 		);
 	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+rt = instantiate_foreigncall_rt(rt, s);
 	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
 
 } else if (strcmp(target, "jl_unbox_int16") == 0) {
@@ -2900,7 +2986,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_value_t *) eval_value(args[5], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -3132,7 +3220,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_array_t *) eval_value(args[5], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -3141,7 +3231,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_value_t *) eval_value(args[5], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -3161,7 +3253,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_value_t *) eval_value(args[5], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -3182,7 +3276,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_sym_t *) eval_value(args[6], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -3192,7 +3288,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_sym_t *) eval_value(args[6], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -3209,7 +3307,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(int) jl_unbox_int32(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -3219,7 +3319,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_sym_t *) eval_value(args[6], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -3490,7 +3592,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_get_default_sysimg_path") == 0) {
 	const char * result = jl_get_default_sysimg_path();
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -3512,7 +3616,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(void *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -3534,7 +3640,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_create_system_image") == 0) {
 	ios_t * result = jl_create_system_image();
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -3621,7 +3729,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(int) jl_unbox_int32(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -3631,7 +3741,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(unsigned int) jl_unbox_uint32(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -3728,6 +3840,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_array_t *) eval_value(args[5], s)
 		);
 	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+rt = instantiate_foreigncall_rt(rt, s);
 	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
 
 } else if (strcmp(target, "jl_ast_flag_inlineable") == 0) {
@@ -3735,6 +3848,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_array_t *) eval_value(args[5], s)
 		);
 	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+rt = instantiate_foreigncall_rt(rt, s);
 	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
 
 } else if (strcmp(target, "jl_ast_flag_pure") == 0) {
@@ -3742,6 +3856,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_array_t *) eval_value(args[5], s)
 		);
 	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+rt = instantiate_foreigncall_rt(rt, s);
 	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
 
 } else if (strcmp(target, "jl_fill_argnames") == 0) {
@@ -3917,21 +4032,27 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_stdout_stream") == 0) {
 	ios_t * result = jl_stdout_stream();
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
 } else if (strcmp(target, "jl_stdin_stream") == 0) {
 	ios_t * result = jl_stdin_stream();
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
 } else if (strcmp(target, "jl_stderr_stream") == 0) {
 	ios_t * result = jl_stderr_stream();
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -3978,7 +4099,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(const char *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -4006,21 +4129,27 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_ver_string") == 0) {
 	const char * result = jl_ver_string();
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
 } else if (strcmp(target, "jl_git_branch") == 0) {
 	const char * result = jl_git_branch();
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
 } else if (strcmp(target, "jl_git_commit") == 0) {
 	const char * result = jl_git_commit();
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -4047,7 +4176,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(size_t) jl_unbox_uint32(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -4235,7 +4366,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(void **) jl_unbox_voidpointer(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -4275,7 +4408,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(int) jl_unbox_int32(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -4733,7 +4868,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_value_t *) eval_value(args[7], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -4745,7 +4882,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(const char *) jl_unbox_voidpointer(eval_value(args[8], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -4757,7 +4896,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(const char *) jl_unbox_voidpointer(eval_value(args[8], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -4770,7 +4911,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(void *) jl_unbox_voidpointer(eval_value(args[9], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -4829,7 +4972,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(int64_t) jl_unbox_long(eval_value(args[10], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5079,6 +5224,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_is_memdebug") == 0) {
 	int8_t result = jl_is_memdebug();
 	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+rt = instantiate_foreigncall_rt(rt, s);
 	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
 
 } else if (strcmp(target, "jl_get_julia_bindir") == 0) {
@@ -5169,6 +5315,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_module_t *) eval_value(args[5], s)
 		);
 	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+rt = instantiate_foreigncall_rt(rt, s);
 	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
 
 } else if (strcmp(target, "jl_get_module_of_binding") == 0) {
@@ -5189,7 +5336,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_sym_t *) eval_value(args[6], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5238,7 +5387,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(jl_module_t *) eval_value(args[5], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(jl_uuid_t), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(jl_uuid_t), rt);
 	memcpy(jl_data_ptr(v), &result, sizeof(jl_uuid_t));
 	return v;
 
@@ -5310,7 +5461,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(void *) jl_unbox_voidpointer(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5352,7 +5505,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(int *) jl_unbox_voidpointer(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5385,7 +5540,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_gc_num") == 0) {
 	jl_gc_num_t result = jl_gc_num();
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(jl_gc_num_t), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(jl_gc_num_t), rt);
 	memcpy(jl_data_ptr(v), &result, sizeof(jl_gc_num_t));
 	return v;
 
@@ -5395,7 +5552,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(size_t) jl_unbox_uint32(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5418,7 +5577,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(size_t) jl_unbox_uint32(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5427,7 +5588,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(size_t) jl_unbox_uint32(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5437,7 +5600,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(size_t) jl_unbox_uint32(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5452,7 +5617,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(size_t) jl_unbox_uint32(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5479,7 +5646,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_profile_get_data") == 0) {
 	uint8_t * result = jl_profile_get_data();
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5505,7 +5674,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(size_t) jl_unbox_uint32(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(jl_nullable_float64_t), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(jl_nullable_float64_t), rt);
 	memcpy(jl_data_ptr(v), &result, sizeof(jl_nullable_float64_t));
 	return v;
 
@@ -5524,7 +5695,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(size_t) jl_unbox_uint32(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(jl_nullable_float32_t), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(jl_nullable_float32_t), rt);
 	memcpy(jl_data_ptr(v), &result, sizeof(jl_nullable_float32_t));
 	return v;
 
@@ -5648,6 +5821,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_is_in_pure_context") == 0) {
 	int8_t result = jl_is_in_pure_context();
 	jl_datatype_t *rt = (jl_datatype_t*)eval_value(args[1], s);
+rt = instantiate_foreigncall_rt(rt, s);
 	return (rt == jl_bool_type) ? jl_box_bool(result) : jl_box_uint8(result);
 
 } else if (strcmp(target, "jl_specializations_lookup") == 0) {
@@ -5748,7 +5922,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_8 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5759,7 +5935,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(void *) jl_unbox_voidpointer(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5773,7 +5951,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_compile_context_8 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5782,7 +5962,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_8 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5839,7 +6021,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_convert_context_8 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5848,7 +6032,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_8 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5889,7 +6075,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_match_context_8 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5898,7 +6086,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_8 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5955,7 +6145,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_compile_context_8 *) jl_unbox_voidpointer(eval_value(args[10], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5969,7 +6161,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(const pcre2_code_8 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5978,7 +6172,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(const pcre2_code_8 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -5995,7 +6191,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_8 *) jl_unbox_voidpointer(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6005,7 +6203,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_8 *) jl_unbox_voidpointer(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6043,7 +6243,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_match_data_8 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6057,7 +6259,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_match_data_8 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6214,7 +6418,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_8 *) jl_unbox_voidpointer(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6242,7 +6448,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_8 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6257,7 +6465,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_16 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6268,7 +6478,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(void *) jl_unbox_voidpointer(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6282,7 +6494,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_compile_context_16 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6291,7 +6505,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_16 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6348,7 +6564,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_convert_context_16 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6357,7 +6575,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_16 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6398,7 +6618,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_match_context_16 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6407,7 +6629,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_16 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6464,7 +6688,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_compile_context_16 *) jl_unbox_voidpointer(eval_value(args[10], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6478,7 +6704,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(const pcre2_code_16 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6487,7 +6715,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(const pcre2_code_16 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6504,7 +6734,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_16 *) jl_unbox_voidpointer(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6514,7 +6746,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_16 *) jl_unbox_voidpointer(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6552,7 +6786,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_match_data_16 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6566,7 +6802,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_match_data_16 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6723,7 +6961,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_16 *) jl_unbox_voidpointer(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6751,7 +6991,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_16 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6766,7 +7008,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_32 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6777,7 +7021,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(void *) jl_unbox_voidpointer(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6791,7 +7037,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_compile_context_32 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6800,7 +7048,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_32 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6857,7 +7107,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_convert_context_32 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6866,7 +7118,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_32 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6907,7 +7161,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_match_context_32 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6916,7 +7172,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_32 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6973,7 +7231,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_compile_context_32 *) jl_unbox_voidpointer(eval_value(args[10], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6987,7 +7247,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(const pcre2_code_32 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -6996,7 +7258,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(const pcre2_code_32 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -7013,7 +7277,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_32 *) jl_unbox_voidpointer(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -7023,7 +7289,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_32 *) jl_unbox_voidpointer(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -7061,7 +7329,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_match_data_32 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -7075,7 +7345,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_match_data_32 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -7232,7 +7504,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_32 *) jl_unbox_voidpointer(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -7260,14 +7534,18 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(pcre2_general_context_32 *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
 } else if (strcmp(target, "utf8proc_version") == 0) {
 	const char * result = utf8proc_version();
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -7276,7 +7554,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(utf8proc_ssize_t) jl_unbox_long(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -7303,7 +7583,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(utf8proc_int32_t) jl_unbox_int32(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -7393,7 +7675,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(utf8proc_int32_t) jl_unbox_int32(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -7420,7 +7704,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(const utf8proc_uint8_t *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -7429,7 +7715,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(const utf8proc_uint8_t *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -7438,7 +7726,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(const utf8proc_uint8_t *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -7447,7 +7737,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(const utf8proc_uint8_t *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -7456,7 +7748,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(const utf8proc_uint8_t *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -7580,7 +7874,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(mp_size_t) jl_unbox_long(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -7849,7 +8145,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(mpz_srcptr) jl_unbox_voidpointer(eval_value(args[11], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -8031,7 +8329,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(mpz_srcptr) jl_unbox_voidpointer(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -8562,7 +8862,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(mpz_srcptr) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -8572,7 +8874,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(mp_size_t) jl_unbox_long(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -8582,7 +8886,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(mp_size_t) jl_unbox_long(eval_value(args[6], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -8599,7 +8905,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(mp_size_t) jl_unbox_long(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -8701,7 +9009,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(mpq_srcptr) jl_unbox_voidpointer(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -8979,7 +9289,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(mpf_srcptr) jl_unbox_voidpointer(eval_value(args[9], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -9809,14 +10121,18 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "mpfr_get_version") == 0) {
 	const char * result = mpfr_get_version();
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
 } else if (strcmp(target, "mpfr_get_patches") == 0) {
 	const char * result = mpfr_get_patches();
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -9838,7 +10154,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "mpfr_buildopt_tune_case") == 0) {
 	const char * result = mpfr_buildopt_tune_case();
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -9883,7 +10201,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(mpfr_rnd_t) jl_unbox_int32(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -10357,7 +10677,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(mpfr_rnd_t) jl_unbox_int32(eval_value(args[10], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -11678,7 +12000,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(mpfr_srcptr) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
 	*(void**)jl_data_ptr(v) = (void*)result;
 	return v;
 
@@ -11707,7 +12031,214 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 			(mpfr_srcptr) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
 	return jl_box_int32(result);
-}
+} else if (strcmp(target, "dsfmt_gen_rand_all") == 0) {
+	dsfmt_gen_rand_all(
+			(dsfmt_t *) jl_unbox_voidpointer(eval_value(args[5], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "dsfmt_fill_array_open_close") == 0) {
+	dsfmt_fill_array_open_close(
+			(dsfmt_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(double *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(ptrdiff_t) jl_unbox_long(eval_value(args[7], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "dsfmt_fill_array_close_open") == 0) {
+	dsfmt_fill_array_close_open(
+			(dsfmt_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(double *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(ptrdiff_t) jl_unbox_long(eval_value(args[7], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "dsfmt_fill_array_open_open") == 0) {
+	dsfmt_fill_array_open_open(
+			(dsfmt_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(double *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(ptrdiff_t) jl_unbox_long(eval_value(args[7], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "dsfmt_fill_array_close1_open2") == 0) {
+	dsfmt_fill_array_close1_open2(
+			(dsfmt_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(double *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(ptrdiff_t) jl_unbox_long(eval_value(args[7], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "dsfmt_chk_init_gen_rand") == 0) {
+	dsfmt_chk_init_gen_rand(
+			(dsfmt_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(uint32_t) jl_unbox_uint32(eval_value(args[6], s)),
+			(int) jl_unbox_int32(eval_value(args[7], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "dsfmt_chk_init_by_array") == 0) {
+	dsfmt_chk_init_by_array(
+			(dsfmt_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(uint32_t *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(int) jl_unbox_int32(eval_value(args[7], s)),
+			(int) jl_unbox_int32(eval_value(args[8], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "dsfmt_get_idstring") == 0) {
+	const char * result = dsfmt_get_idstring();
+	jl_ptls_t ptls = jl_get_ptls_states();
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
+	*(void**)jl_data_ptr(v) = (void*)result;
+	return v;
+
+} else if (strcmp(target, "dsfmt_get_min_array_size") == 0) {
+	int result = dsfmt_get_min_array_size();
+	return jl_box_int32(result);
+} else if (strcmp(target, "dsfmt_genrand_uint32") == 0) {
+	uint32_t result = dsfmt_genrand_uint32(
+			(dsfmt_t *) jl_unbox_voidpointer(eval_value(args[5], s))
+		);
+	return jl_box_uint32(result);
+} else if (strcmp(target, "dsfmt_genrand_close1_open2") == 0) {
+	double result = dsfmt_genrand_close1_open2(
+			(dsfmt_t *) jl_unbox_voidpointer(eval_value(args[5], s))
+		);
+	return jl_box_float64(result);
+} else if (strcmp(target, "dsfmt_genrand_close_open") == 0) {
+	double result = dsfmt_genrand_close_open(
+			(dsfmt_t *) jl_unbox_voidpointer(eval_value(args[5], s))
+		);
+	return jl_box_float64(result);
+} else if (strcmp(target, "dsfmt_genrand_open_close") == 0) {
+	double result = dsfmt_genrand_open_close(
+			(dsfmt_t *) jl_unbox_voidpointer(eval_value(args[5], s))
+		);
+	return jl_box_float64(result);
+} else if (strcmp(target, "dsfmt_genrand_open_open") == 0) {
+	double result = dsfmt_genrand_open_open(
+			(dsfmt_t *) jl_unbox_voidpointer(eval_value(args[5], s))
+		);
+	return jl_box_float64(result);
+} else if (strcmp(target, "dsfmt_gv_genrand_uint32") == 0) {
+	uint32_t result = dsfmt_gv_genrand_uint32();
+	return jl_box_uint32(result);
+} else if (strcmp(target, "dsfmt_gv_genrand_close1_open2") == 0) {
+	double result = dsfmt_gv_genrand_close1_open2();
+	return jl_box_float64(result);
+} else if (strcmp(target, "dsfmt_gv_genrand_close_open") == 0) {
+	double result = dsfmt_gv_genrand_close_open();
+	return jl_box_float64(result);
+} else if (strcmp(target, "dsfmt_gv_genrand_open_close") == 0) {
+	double result = dsfmt_gv_genrand_open_close();
+	return jl_box_float64(result);
+} else if (strcmp(target, "dsfmt_gv_genrand_open_open") == 0) {
+	double result = dsfmt_gv_genrand_open_open();
+	return jl_box_float64(result);
+} else if (strcmp(target, "dsfmt_gv_fill_array_open_close") == 0) {
+	dsfmt_gv_fill_array_open_close(
+			(double *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(ptrdiff_t) jl_unbox_long(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "dsfmt_gv_fill_array_close_open") == 0) {
+	dsfmt_gv_fill_array_close_open(
+			(double *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(ptrdiff_t) jl_unbox_long(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "dsfmt_gv_fill_array_open_open") == 0) {
+	dsfmt_gv_fill_array_open_open(
+			(double *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(ptrdiff_t) jl_unbox_long(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "dsfmt_gv_fill_array_close1_open2") == 0) {
+	dsfmt_gv_fill_array_close1_open2(
+			(double *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(ptrdiff_t) jl_unbox_long(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "dsfmt_gv_init_gen_rand") == 0) {
+	dsfmt_gv_init_gen_rand(
+			(uint32_t) jl_unbox_uint32(eval_value(args[5], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "dsfmt_gv_init_by_array") == 0) {
+	dsfmt_gv_init_by_array(
+			(uint32_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(int) jl_unbox_int32(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "dsfmt_init_gen_rand") == 0) {
+	dsfmt_init_gen_rand(
+			(dsfmt_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(uint32_t) jl_unbox_uint32(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "dsfmt_init_by_array") == 0) {
+	dsfmt_init_by_array(
+			(dsfmt_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(uint32_t *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(int) jl_unbox_int32(eval_value(args[7], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "get_idstring") == 0) {
+	const char * result = get_idstring();
+	jl_ptls_t ptls = jl_get_ptls_states();
+	jl_datatype_t *rt = eval_value(args[1], s);
+	rt = instantiate_foreigncall_rt(rt, s);
+	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), rt);
+	*(void**)jl_data_ptr(v) = (void*)result;
+	return v;
+
+} else if (strcmp(target, "get_min_array_size") == 0) {
+	int result = get_min_array_size();
+	return jl_box_int32(result);
+} else if (strcmp(target, "init_gen_rand") == 0) {
+	init_gen_rand(
+			(uint32_t) jl_unbox_uint32(eval_value(args[5], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "init_by_array") == 0) {
+	init_by_array(
+			(uint32_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(int) jl_unbox_int32(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "genrand_close1_open2") == 0) {
+	double result = genrand_close1_open2();
+	return jl_box_float64(result);
+} else if (strcmp(target, "genrand_close_open") == 0) {
+	double result = genrand_close_open();
+	return jl_box_float64(result);
+} else if (strcmp(target, "genrand_open_close") == 0) {
+	double result = genrand_open_close();
+	return jl_box_float64(result);
+} else if (strcmp(target, "genrand_open_open") == 0) {
+	double result = genrand_open_open();
+	return jl_box_float64(result);
+} else if (strcmp(target, "fill_array_open_close") == 0) {
+	fill_array_open_close(
+			(double *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(ptrdiff_t) jl_unbox_long(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "fill_array_close_open") == 0) {
+	fill_array_close_open(
+			(double *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(ptrdiff_t) jl_unbox_long(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "fill_array_open_open") == 0) {
+	fill_array_open_open(
+			(double *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(ptrdiff_t) jl_unbox_long(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} else if (strcmp(target, "fill_array_close1_open2") == 0) {
+	fill_array_close1_open2(
+			(double *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(ptrdiff_t) jl_unbox_long(eval_value(args[6], s))
+		);
+	return jl_nothing;
+} 
 
 return NULL;
 } 
