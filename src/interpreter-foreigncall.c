@@ -2558,7 +2558,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return jl_box_int32(result);
 } else if (strcmp(target, "jl_new_typename_in") == 0) {
 	jl_typename_t * result = jl_new_typename_in(
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_sym_t *) eval_value(args[5], s),
 			(jl_module_t *) eval_value(args[6], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
@@ -2568,7 +2568,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 
 } else if (strcmp(target, "jl_new_typevar") == 0) {
 	jl_tvar_t * result = jl_new_typevar(
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_sym_t *) eval_value(args[5], s),
 			(jl_value_t *) eval_value(args[6], s),
 			(jl_value_t *) eval_value(args[7], s)
 		);
@@ -2607,24 +2607,16 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	jl_tupletype_t * result = jl_apply_tuple_type(
 			(jl_svec_t *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_apply_tuple_type_v") == 0) {
 	jl_tupletype_t * result = jl_apply_tuple_type_v(
 			(jl_value_t **) jl_unbox_voidpointer(eval_value(args[5], s)),
 			(size_t) jl_unbox_uint32(eval_value(args[6], s))
 		);
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_new_datatype") == 0) {
 	jl_datatype_t * result = jl_new_datatype(
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_sym_t *) eval_value(args[5], s),
 			(jl_module_t *) eval_value(args[6], s),
 			(jl_datatype_t *) jl_unbox_voidpointer(eval_value(args[7], s)),
 			(jl_svec_t *) jl_unbox_voidpointer(eval_value(args[8], s)),
@@ -2757,57 +2749,33 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	jl_sym_t * result = jl_symbol(
 			(const char *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_symbol_lookup") == 0) {
 	jl_sym_t * result = jl_symbol_lookup(
 			(const char *) jl_unbox_voidpointer(eval_value(args[5], s))
 		);
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_symbol_n") == 0) {
 	jl_sym_t * result = jl_symbol_n(
 			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
 			(size_t) jl_unbox_uint32(eval_value(args[6], s))
 		);
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_gensym") == 0) {
 	jl_sym_t * result = jl_gensym();
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_tagged_gensym") == 0) {
 	jl_sym_t * result = jl_tagged_gensym(
 			(const char *) jl_unbox_voidpointer(eval_value(args[5], s)),
 			(int32_t) jl_unbox_int32(eval_value(args[6], s))
 		);
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_get_root_symbol") == 0) {
 	jl_sym_t * result = jl_get_root_symbol();
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_generic_function_def") == 0) {
 	jl_value_t * result = jl_generic_function_def(
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_sym_t *) eval_value(args[5], s),
 			(jl_module_t *) eval_value(args[6], s),
 			(jl_value_t **) jl_unbox_voidpointer(eval_value(args[7], s)),
 			(jl_value_t *) eval_value(args[8], s),
@@ -2995,7 +2963,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_field_index") == 0) {
 	int result = jl_field_index(
 			(jl_datatype_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(jl_sym_t *) eval_value(args[6], s),
 			(int) jl_unbox_int32(eval_value(args[7], s))
 		);
 	return jl_box_int32(result);
@@ -3249,7 +3217,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 
 } else if (strcmp(target, "jl_new_module") == 0) {
 	jl_module_t * result = jl_new_module(
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[5], s))
+			(jl_sym_t *) eval_value(args[5], s)
 		);
 	return result;
 } else if (strcmp(target, "jl_set_module_nospecialize") == 0) {
@@ -3261,7 +3229,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_get_binding") == 0) {
 	jl_binding_t * result = jl_get_binding(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
+			(jl_sym_t *) eval_value(args[6], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
 	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
@@ -3271,7 +3239,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_get_binding_or_error") == 0) {
 	jl_binding_t * result = jl_get_binding_or_error(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
+			(jl_sym_t *) eval_value(args[6], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
 	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
@@ -3281,13 +3249,13 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_module_globalref") == 0) {
 	jl_value_t * result = jl_module_globalref(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
+			(jl_sym_t *) eval_value(args[6], s)
 		);
 	return result;
 } else if (strcmp(target, "jl_get_binding_wr") == 0) {
 	jl_binding_t * result = jl_get_binding_wr(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(jl_sym_t *) eval_value(args[6], s),
 			(int) jl_unbox_int32(eval_value(args[7], s))
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
@@ -3298,7 +3266,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_get_binding_for_method_def") == 0) {
 	jl_binding_t * result = jl_get_binding_for_method_def(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
+			(jl_sym_t *) eval_value(args[6], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
 	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
@@ -3308,44 +3276,44 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_boundp") == 0) {
 	int result = jl_boundp(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
+			(jl_sym_t *) eval_value(args[6], s)
 		);
 	return jl_box_int32(result);
 } else if (strcmp(target, "jl_defines_or_exports_p") == 0) {
 	int result = jl_defines_or_exports_p(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
+			(jl_sym_t *) eval_value(args[6], s)
 		);
 	return jl_box_int32(result);
 } else if (strcmp(target, "jl_binding_resolved_p") == 0) {
 	int result = jl_binding_resolved_p(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
+			(jl_sym_t *) eval_value(args[6], s)
 		);
 	return jl_box_int32(result);
 } else if (strcmp(target, "jl_is_const") == 0) {
 	int result = jl_is_const(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
+			(jl_sym_t *) eval_value(args[6], s)
 		);
 	return jl_box_int32(result);
 } else if (strcmp(target, "jl_get_global") == 0) {
 	jl_value_t * result = jl_get_global(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
+			(jl_sym_t *) eval_value(args[6], s)
 		);
 	return result;
 } else if (strcmp(target, "jl_set_global") == 0) {
 	jl_set_global(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(jl_sym_t *) eval_value(args[6], s),
 			(jl_value_t *) eval_value(args[7], s)
 		);
 	return jl_nothing;
 } else if (strcmp(target, "jl_set_const") == 0) {
 	jl_set_const(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(jl_sym_t *) eval_value(args[6], s),
 			(jl_value_t *) eval_value(args[7], s)
 		);
 	return jl_nothing;
@@ -3370,32 +3338,32 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	jl_module_use(
 			(jl_module_t *) eval_value(args[5], s),
 			(jl_module_t *) eval_value(args[6], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[7], s))
+			(jl_sym_t *) eval_value(args[7], s)
 		);
 	return jl_nothing;
 } else if (strcmp(target, "jl_module_import") == 0) {
 	jl_module_import(
 			(jl_module_t *) eval_value(args[5], s),
 			(jl_module_t *) eval_value(args[6], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[7], s))
+			(jl_sym_t *) eval_value(args[7], s)
 		);
 	return jl_nothing;
 } else if (strcmp(target, "jl_module_export") == 0) {
 	jl_module_export(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
+			(jl_sym_t *) eval_value(args[6], s)
 		);
 	return jl_nothing;
 } else if (strcmp(target, "jl_is_imported") == 0) {
 	int result = jl_is_imported(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
+			(jl_sym_t *) eval_value(args[6], s)
 		);
 	return jl_box_int32(result);
 } else if (strcmp(target, "jl_module_exports_p") == 0) {
 	int result = jl_module_exports_p(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
+			(jl_sym_t *) eval_value(args[6], s)
 		);
 	return jl_box_int32(result);
 } else if (strcmp(target, "jl_add_standard_imports") == 0) {
@@ -3446,18 +3414,10 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return jl_box_int32(result);
 } else if (strcmp(target, "jl_get_UNAME") == 0) {
 	jl_sym_t * result = jl_get_UNAME();
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_get_ARCH") == 0) {
 	jl_sym_t * result = jl_get_ARCH();
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_environ") == 0) {
 	jl_value_t * result = jl_environ(
 			(int) jl_unbox_int32(eval_value(args[5], s))
@@ -3508,7 +3468,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return jl_nothing;
 } else if (strcmp(target, "jl_undefined_var_error") == 0) {
 	jl_undefined_var_error(
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[5], s))
+			(jl_sym_t *) eval_value(args[5], s)
 		);
 	return jl_nothing;
 } else if (strcmp(target, "jl_bounds_error") == 0) {
@@ -4141,7 +4101,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 
 } else if (strcmp(target, "jl_compile_hint") == 0) {
 	int result = jl_compile_hint(
-			(jl_tupletype_t *) jl_unbox_voidpointer(eval_value(args[5], s))
+			(jl_tupletype_t *) eval_value(args[5], s)
 		);
 	return jl_box_int32(result);
 } else if (strcmp(target, "jl_foreigncall_get_syms") == 0) {
@@ -4153,8 +4113,8 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return jl_nothing;
 } else if (strcmp(target, "jl_foreigncall_interpretable") == 0) {
 	int result = jl_foreigncall_interpretable(
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
+			(jl_sym_t *) eval_value(args[5], s),
+			(jl_sym_t *) eval_value(args[6], s)
 		);
 	return jl_box_int32(result);
 } else if (strcmp(target, "jl_new_code_info_uninit") == 0) {
@@ -4193,9 +4153,9 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return result;
 } else if (strcmp(target, "jl_method_table_insert") == 0) {
 	jl_method_table_insert(
-			(jl_methtable_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_methtable_t *) eval_value(args[5], s),
 			(jl_method_t *) jl_unbox_voidpointer(eval_value(args[6], s)),
-			(jl_tupletype_t *) jl_unbox_voidpointer(eval_value(args[7], s))
+			(jl_tupletype_t *) eval_value(args[7], s)
 		);
 	return jl_nothing;
 } else if (strcmp(target, "jl_type_morespecific_no_subtype") == 0) {
@@ -4213,7 +4173,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return result;
 } else if (strcmp(target, "jl_matching_methods") == 0) {
 	jl_value_t * result = jl_matching_methods(
-			(jl_tupletype_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_tupletype_t *) eval_value(args[5], s),
 			(int) jl_unbox_int32(eval_value(args[6], s)),
 			(int) jl_unbox_int32(eval_value(args[7], s)),
 			(size_t) jl_unbox_uint32(eval_value(args[8], s)),
@@ -4251,14 +4211,10 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return result;
 } else if (strcmp(target, "jl_new_method_table") == 0) {
 	jl_methtable_t * result = jl_new_method_table(
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_sym_t *) eval_value(args[5], s),
 			(jl_module_t *) eval_value(args[6], s)
 		);
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_has_call_ambiguities") == 0) {
 	int result = jl_has_call_ambiguities(
 			(jl_value_t *) eval_value(args[5], s),
@@ -4267,7 +4223,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return jl_box_int32(result);
 } else if (strcmp(target, "jl_methtable_lookup") == 0) {
 	jl_value_t * result = jl_methtable_lookup(
-			(jl_methtable_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_methtable_t *) eval_value(args[5], s),
 			(jl_value_t *) eval_value(args[6], s),
 			(size_t) jl_unbox_uint32(eval_value(args[7], s))
 		);
@@ -4292,7 +4248,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return jl_nothing;
 } else if (strcmp(target, "jl_method_table_add_backedge") == 0) {
 	jl_method_table_add_backedge(
-			(jl_methtable_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_methtable_t *) eval_value(args[5], s),
 			(jl_value_t *) eval_value(args[6], s),
 			(jl_value_t *) eval_value(args[7], s)
 		);
@@ -5256,7 +5212,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return jl_nothing;
 } else if (strcmp(target, "jl_f_new_module") == 0) {
 	jl_value_t * result = jl_f_new_module(
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_sym_t *) eval_value(args[5], s),
 			(uint8_t) jl_unbox_uint8(eval_value(args[6], s))
 		);
 	return result;
@@ -5274,19 +5230,19 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_get_module_of_binding") == 0) {
 	jl_module_t * result = jl_get_module_of_binding(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
+			(jl_sym_t *) eval_value(args[6], s)
 		);
 	return result;
 } else if (strcmp(target, "jl_binding_owner") == 0) {
 	jl_value_t * result = jl_binding_owner(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
+			(jl_sym_t *) eval_value(args[6], s)
 		);
 	return result;
 } else if (strcmp(target, "jl_get_module_binding") == 0) {
 	jl_binding_t * result = jl_get_module_binding(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
+			(jl_sym_t *) eval_value(args[6], s)
 		);
 	jl_ptls_t ptls = jl_get_ptls_states();
 	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
@@ -5296,14 +5252,14 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 } else if (strcmp(target, "jl_deprecate_binding") == 0) {
 	jl_deprecate_binding(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(jl_sym_t *) eval_value(args[6], s),
 			(int) jl_unbox_int32(eval_value(args[7], s))
 		);
 	return jl_nothing;
 } else if (strcmp(target, "jl_is_binding_deprecated") == 0) {
 	int result = jl_is_binding_deprecated(
 			(jl_module_t *) eval_value(args[5], s),
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[6], s))
+			(jl_sym_t *) eval_value(args[6], s)
 		);
 	return jl_box_int32(result);
 } else if (strcmp(target, "jl_module_usings") == 0) {
@@ -5322,11 +5278,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	jl_sym_t * result = jl_module_name(
 			(jl_module_t *) eval_value(args[5], s)
 		);
-	jl_ptls_t ptls = jl_get_ptls_states();
-	jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), eval_value(args[1], s));
-	*(void**)jl_data_ptr(v) = (void*)result;
-	return v;
-
+	return result;
 } else if (strcmp(target, "jl_module_parent") == 0) {
 	jl_module_t * result = jl_module_parent(
 			(jl_module_t *) eval_value(args[5], s)
@@ -5392,7 +5344,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return jl_nothing;
 } else if (strcmp(target, "jl_new_foreign_type") == 0) {
 	jl_datatype_t * result = jl_new_foreign_type(
-			(jl_sym_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_sym_t *) eval_value(args[5], s),
 			(jl_module_t *) eval_value(args[6], s),
 			(jl_datatype_t *) jl_unbox_voidpointer(eval_value(args[7], s)),
 			(jl_markfunc_t) jl_unbox_voidpointer(eval_value(args[8], s)),
@@ -5794,26 +5746,26 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return jl_nothing;
 } else if (strcmp(target, "jl_isa_compileable_sig") == 0) {
 	int result = jl_isa_compileable_sig(
-			(jl_tupletype_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_tupletype_t *) eval_value(args[5], s),
 			(jl_method_t *) jl_unbox_voidpointer(eval_value(args[6], s))
 		);
 	return jl_box_int32(result);
 } else if (strcmp(target, "jl_method_table_disable") == 0) {
 	jl_method_table_disable(
-			(jl_methtable_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_methtable_t *) eval_value(args[5], s),
 			(jl_method_t *) jl_unbox_voidpointer(eval_value(args[6], s))
 		);
 	return jl_nothing;
 } else if (strcmp(target, "jl_method_exists") == 0) {
 	int result = jl_method_exists(
-			(jl_methtable_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
-			(jl_tupletype_t *) jl_unbox_voidpointer(eval_value(args[6], s)),
+			(jl_methtable_t *) eval_value(args[5], s),
+			(jl_tupletype_t *) eval_value(args[6], s),
 			(size_t) jl_unbox_uint32(eval_value(args[7], s))
 		);
 	return jl_box_int32(result);
 } else if (strcmp(target, "jl_get_spec_lambda") == 0) {
 	jl_value_t * result = jl_get_spec_lambda(
-			(jl_tupletype_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_tupletype_t *) eval_value(args[5], s),
 			(size_t) jl_unbox_uint32(eval_value(args[6], s))
 		);
 	return result;
@@ -5831,7 +5783,7 @@ if (strcmp(target, "jl_value_ptr") == 0) {
 	return result;
 } else if (strcmp(target, "jl_get_invoke_lambda") == 0) {
 	jl_value_t * result = jl_get_invoke_lambda(
-			(jl_methtable_t *) jl_unbox_voidpointer(eval_value(args[5], s)),
+			(jl_methtable_t *) eval_value(args[5], s),
 			(jl_typemap_entry_t *) jl_unbox_voidpointer(eval_value(args[6], s)),
 			(jl_value_t *) eval_value(args[7], s),
 			(size_t) jl_unbox_uint32(eval_value(args[8], s))
