@@ -739,9 +739,10 @@ function edit_insert_newline(s::PromptState, align::Int = 0 - options(s).auto_in
         align = min(something(findnext(_notspace, buf.data[beg+1:buf.size], 1), 0) - 1,
                     position(buf) - beg) # indentation must not increase
         align < 0 && (align = buf.size-beg)
-    else
-        align = 0
+    #else
+    #    align = 0
     end
+	align < 0 && (align = 0)
     edit_insert(buf, '\n' * ' '^align)
     refresh_line(s)
     # updating s.last_newline should happen after refresh_line(s) which can take
