@@ -1291,9 +1291,40 @@ for bit in (8, 16, 32, 64, 128)
 end
 
 """
+    Symbol
+
+The type of object used to represent identifiers in parsed julia code (ASTs).
+Also often used as a name or label to identify an entity (e.g. as a dictionary key).
+`Symbol`s can be entered using the `:` quote operator:
+```jldoctest
+julia> :name
+:name
+
+julia> typeof(:name)
+Symbol
+
+julia> x = 42
+42
+
+julia> eval(:x)
+42
+```
+`Symbol`s can also be constructed from strings or other values by calling the
+constructor `Symbol(x...)`.
+
+`Symbol`s are immutable and should be compared using `===`.
+The implementation re-uses the same object for all `Symbol`s with the same name,
+so comparison tends to be efficient (it can just compare pointers).
+
+Unlike strings, `Symbol`s are "atomic" or "scalar" entities that do not support
+iteration over characters.
+"""
+Symbol
+
+"""
     Symbol(x...) -> Symbol
 
-Create a `Symbol` by concatenating the string representations of the arguments together.
+Create a [`Symbol`](@ref) by concatenating the string representations of the arguments together.
 
 # Examples
 ```jldoctest
@@ -1304,7 +1335,7 @@ julia> Symbol("day", 4)
 :day4
 ```
 """
-Symbol
+Symbol(x...)
 
 """
     tuple(xs...)
