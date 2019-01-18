@@ -180,7 +180,7 @@ end
     repr(x; context=nothing)
 
 Create a representation of `x` similar to how `x` would be defined in Julia code.
-In general `eval(Mata.parse(repr(x)))` should be equal to `x`,
+In general `eval(Meta.parse(repr(x)))` should be equal to `x`,
 where this is not possible `repr(x)` should not `parse`.
 
 See also [`repr(MIME("text/plain"), x)`](@ref) to instead
