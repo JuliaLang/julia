@@ -149,6 +149,9 @@ function float(A::AbstractArray{Union{T, Missing}}) where {T}
 end
 float(A::AbstractArray{Missing}) = A
 
+iterate(x::Missing) = (x, nothing)
+iterate(x::Missing, ::Any) = nothing
+
 """
     skipmissing(itr)
 
