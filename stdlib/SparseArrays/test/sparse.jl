@@ -2412,6 +2412,40 @@ end
     @test m2.module == SparseArrays
 end
 
+@testset "Symmetric of sparse matrix mul! dense vector" begin
+    rng = Random.MersenneTwister(1)
+    n = 1000
+    p = 0.02
+    q = 1 - sqrt(1-p)
+    Areal = sprandn(rng, n, n, p)
+    Breal = randn(rng, n)
+    Acomplex = sprandn(rng, n, n, q) + sprandn(rng, n, n, q) * im
+    Bcomplex = Breal + randn(rng, n) * im
+    @testset "symmetric/Hermitian sparse multiply with $S($U)" for S in (Symmetric, Hermitian), U in (:U, :L), (A, B) in ((Areal,Breal), (Acomplex,Bcomplex))
+        Asym = S(A, U)
+        As = sparse(Asym) # takes most time
+        @test which(mul!, (typeof(B), typeof(Asym), typeof(B))).module == SparseArrays
+        @test norm(Asym * B - As * B, Inf) <= eps() * n * p * 10
+    end
+end
+
+@testset "Symmetric of view of sparse matrix mul! dense vector" begin
+    rng = Random.MersenneTwister(1)
+    n = 1000
+    p = 0.02
+    q = 1 - sqrt(1-p)
+    Areal = view(sprandn(rng, n, n+10, p), :, 6:n+5)
+    Breal = randn(rng, n)
+    Acomplex = view(sprandn(rng, n, n+10, q) + sprandn(rng, n, n+10, q) * im, :, 6:n+5)
+    Bcomplex = Breal + randn(rng, n) * im
+    @testset "symmetric/Hermitian sparseview multiply with $S($U)" for S in (Symmetric, Hermitian), U in (:U, :L), (A, B) in ((Areal,Breal), (Acomplex,Bcomplex))
+        Asym = S(A, U)
+        As = sparse(Asym) # takes most time
+        @test which(mul!, (typeof(B), typeof(Asym), typeof(B))).module == SparseArrays
+        @test norm(Asym * B - As * B, Inf) <= eps() * n * p * 10
+    end
+end
+
 @testset "sprand" begin
     p=0.3; m=1000; n=2000;
     for s in 1:10
