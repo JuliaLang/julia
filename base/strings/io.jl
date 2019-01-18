@@ -179,15 +179,17 @@ end
 """
     repr(x; context=nothing)
 
-Create a string from any value using the [`show`](@ref) function.
+Create a representation of `x` similar to how `x` would be defined in Julia code.
+In general `eval(Mata.parse(repr(x)))` should be equal to `x`,
+where this is not possible `repr(x)` should not `parse`.
 
-The optional keyword argument `context` can be set to an `IO` or [`IOContext`](@ref)
-object whose attributes are used for the I/O stream passed to `show`.
-
-Note that `repr(x)` is usually similar to how the value of `x` would
-be entered in Julia.  See also [`repr(MIME("text/plain"), x)`](@ref) to instead
+See also [`repr(MIME("text/plain"), x)`](@ref) to instead
 return a "pretty-printed" version of `x` designed more for human consumption,
 equivalent to the REPL display of `x`.
+
+By default `repr` falls back to the [`show`](@ref) function.
+The optional keyword argument `context` can be set to an `IO` or [`IOContext`](@ref)
+object whose attributes are used for the I/O stream passed to `show`.
 
 # Examples
 ```jldoctest
