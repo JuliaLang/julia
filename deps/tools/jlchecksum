@@ -102,6 +102,10 @@ find_checksum "$CHECKSUM_TYPE"
 # Calculate actual checksum
 CURR_CHECKSUM=$(eval $CHECKSUM_PROG)
 
+# Trim linefeeds
+TRUE_CHECKSUM=$(eval "echo $TRUE_CHECKSUM | tr -d '[:space:]'")
+CURR_CHECKSUM=$(eval "echo $CURR_CHECKSUM | tr -d '[:space:]'")
+
 # Make sure they're the same.  If not, error out!
 if [ "$TRUE_CHECKSUM" != "$CURR_CHECKSUM" ]; then
     checksum_error
