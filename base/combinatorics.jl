@@ -16,7 +16,7 @@ const _fact_table64 = [cumprod(1:Int64(20))]  # kept just for gamma function (Ba
 end
 
 @inline function factorial_lookup(n::Integer, table, lim)
-    if !(0 <= n < 16)
+    if !(0 <= n <= 20)
         return factorial_lookup_helper(n, table, lim)
     else
         @inbounds f = table[n+1]
