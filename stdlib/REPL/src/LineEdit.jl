@@ -680,22 +680,29 @@ end
 edit_splice!(s, ins::AbstractString) = edit_splice!(s, region(s), ins)
 
 function edit_insert(s::PromptState, c)
-    if time() - s.last_newline < options(s).auto_indent_time_threshold
-        # the first inserted character since last newline was inserted very fast,
-        # so it must have been inserted automatically (e.g. "paste" which is not
-        # recognized as so)
-        buf = buffer(s)
-        pos = position(buf)
-        nl = findprev(c -> c == _newline, buf.data, pos)::Int
-        seek(buf, nl)
-        # delete auto-inserted spaces
-        edit_splice!(buf, nl => pos)
-        s.last_newline = -Inf
-        refresh_line(s) # necessary, as the code below doesn't do it necessarily
-    end
-
     push_undo(s)
     buf = s.input_buffer
+
+    if ! options(s).auto_indent_bracketed_paste
+        pos=position(buf)
+        if pos > 0
+            if buf.data[pos] != _space && string(c) != " "
+                options(s).auto_indent_tmp_off = false
+            end
+            if buf.data[pos] == _space
+                #tabulators are already expanded to space
+                #this expansion may take longer than auto_indent_time_threshold which breaks the timing
+                s.last_newline = time()
+            else
+                #if characters after new line are coming in very fast
+                #its probably copy&paste => switch auto-indent off for the next coming new line
+                if ! options(s).auto_indent_tmp_off && time() - s.last_newline < options(s).auto_indent_time_threshold
+                    options(s).auto_indent_tmp_off = true
+                end
+            end
+        end
+    end
+
     str = string(c)
     edit_insert(buf, str)
     offset = s.ias.curs_row == 1 || s.indent < 0 ?
@@ -727,17 +734,21 @@ function edit_insert_newline(s::PromptState, align::Int = 0 - options(s).auto_in
     push_undo(s)
     buf = buffer(s)
     autoindent = align < 0
-    if autoindent
+    if autoindent && ! options(s).auto_indent_tmp_off
         beg = beginofline(buf)
         align = min(something(findnext(_notspace, buf.data[beg+1:buf.size], 1), 0) - 1,
                     position(buf) - beg) # indentation must not increase
         align < 0 && (align = buf.size-beg)
+    else
+        align = 0
     end
     edit_insert(buf, '\n' * ' '^align)
     refresh_line(s)
     # updating s.last_newline should happen after refresh_line(s) which can take
     # an unpredictable amount of time and makes "paste detection" unreliable
-    autoindent && align > 0 && (s.last_newline = time())
+    if ! options(s).auto_indent_bracketed_paste
+        s.last_newline = time()
+    end
 end
 
 # align: delete up to 4 spaces to align to a multiple of 4 chars
@@ -1937,6 +1948,7 @@ function commit_line(s)
 end
 
 function bracketed_paste(s; tabwidth=options(s).tabwidth)
+    options(s).auto_indent_bracketed_paste = true
     ps = state(s, mode(s))
     input = readuntil(ps.terminal, "\e[201~")
     input = replace(input, '\r' => '\n')
