@@ -16,17 +16,18 @@ const _fact_table64 = [cumprod(1:Int64(20))]  # kept just for gamma function (Ba
 end
 
 @inline function factorial_lookup(n::Integer, table, lim)
-    if !(0 <= n <= 20)
+    if !(0 <= n <= 20) # if not on the fast path
         return factorial_lookup_helper(n, table, lim)
     else
-        @inbounds f = table[n+1]
-        return oftype(n, f)
+        @inbounds f = _shifted_fact_table64[(n % Int) + 1]
+        return typeof(n) <: UInt ? oftype(n, f % UInt) : oftype(n, f)
     end
 end
 
-factorial(n::Int128) = factorial_lookup_helper(n, _shifted_fact_table128, 33)
-factorial(n::UInt128) = factorial_lookup_helper(n, _shifted_fact_table128, 34)
 factorial(n::Union{Int64,UInt64}) = factorial_lookup(n, _shifted_fact_table64, 20)
+factorial(n::Int128) = factorial_lookup(n, _shifted_fact_table128, 33)
+
+factorial(n::UInt128) = factorial_lookup_helper(n, _shifted_fact_table128, 34)  # TODO: use factorial_lookup
 
 if Int === Int32
     factorial(n::Union{Int8,UInt8,Int16,UInt16}) = factorial(Int32(n))
