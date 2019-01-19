@@ -446,6 +446,7 @@ export
     findprev,
     match,
     occursin,
+    regex,
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
