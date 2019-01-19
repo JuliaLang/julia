@@ -13,11 +13,12 @@ LIBTARGET := lib$(NAME)
 SRCS := flisp.c builtins.c string.c equalhash.c table.c iostream.c \
         julia_extensions.c
 
-HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h
+LLTDIR := ../support
+
+HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h $(wildcard $(LLTDIR)/*.h)
 
 OBJS := $(SRCS:%.c=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%.c=$(BUILDDIR)/%.dbg.obj)
-LLTDIR := ../support
 LLT_release := $(BUILDDIR)/$(LLTDIR)/libsupport.a
 LLT_debug := $(BUILDDIR)/$(LLTDIR)/libsupport-debug.a
 LIBFILES_release := $(LLT_release) $(LIBUV) $(LIBUTF8PROC)

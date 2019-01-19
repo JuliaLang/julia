@@ -41,7 +41,7 @@ A useful bug report filed as a GitHub issue provides information about how to re
   - Try some simple debugging techniques to help isolate the problem.
     - Try running the code with the debug build of Julia with `make debug`, which produces the `usr/bin/julia-debug`.
     - Consider running `julia-debug` with a debugger such as `gdb` or `lldb`. Obtaining even a simple [backtrace](http://www.unknownroad.com/rtfm/gdbtut/gdbsegfault.html) is very useful.
-    - If Julia segfaults, try following [these debugging tips](https://docs.julialang.org/en/latest/devdocs/backtraces.html#Reporting-and-analyzing-crashes-(segfaults)-1) to help track down the specific origin of the bug.
+    - If Julia segfaults, try following [these debugging tips](https://docs.julialang.org/en/latest/devdocs/backtraces#Reporting-and-analyzing-crashes-(segfaults)-1) to help track down the specific origin of the bug.
 
 2. If the problem is caused by a Julia package rather than core Julia, file a bug report with the relevant package author rather than here.
 
@@ -84,7 +84,7 @@ There are never enough tests. Track [code coverage at Coveralls](https://coveral
 
 2. Browse through the source files and find some untested functionality (highlighted in red) that you think you might be able to write a test for.
 
-3. Write a test that exercises this functionality---you can add your test to one of the existing files, or start a new one, whichever seems most appropriate to you. If you're adding a new test file, make sure you include it in the list of tests in `test/choosetests.jl`. https://docs.julialang.org/en/latest/stdlib/test may be helpful in explaining how the testing infrastructure works.
+3. Write a test that exercises this functionality---you can add your test to one of the existing files, or start a new one, whichever seems most appropriate to you. If you're adding a new test file, make sure you include it in the list of tests in `test/choosetests.jl`. https://docs.julialang.org/en/latest/stdlib/Test/ may be helpful in explaining how the testing infrastructure works.
 
 4. Run `make test-all` to rebuild Julia and run your new test(s). If you had to fix a bug or add functionality in `base`, this will ensure that your test passes and that you have not introduced extraneous whitespace.
 
@@ -141,10 +141,6 @@ All docstrings are written inline above the methods or types they are associated
 4. check the output in `doc/_build/html/` to make sure the changes are correct;
 5. commit your changes and open a pull request.
 
-> **Note**
->
-> Currently there are a large number of docstrings found in `base/docs/helpdb/Base.jl`. When any of these docstrings are modified please move them out of this file and place them above the most appropriate definition in one of the `base/` source files.
-
 #### Adding a new docstring to `base/`
 
 The steps required to add a new docstring are listed below:
@@ -182,11 +178,26 @@ Examples written within docstrings can be used as testcases known as "doctests" 
     "DOCSTRING TEST"
     ```
 
-A doctest needs to match an interactive REPL including the `julia>` prompt. To run doctests you need to run `make -C doc check` from the root directory. It is recommended to add the header `# Examples` above the doctests.
+A doctest needs to match an interactive REPL including the `julia>` prompt. To run doctests you need to run `make -C doc doctest=true` from the root directory. It is recommended to add the header `# Examples` above the doctests.
 
 #### News-worthy changes
 
-For new functionality and other substantial changes, add a brief summary to `NEWS.md`. The news item should cross reference the pull request (PR) parenthetically, in the form `([#pr])`; after adding this, run `./julia doc/NEWS-update.jl` from the `julia` directory to update the cross-reference links. To add the PR reference number, first create the PR, then push an additional commit updating `NEWS.md` with the PR reference number.
+For new functionality and other substantial changes, add a brief summary to `NEWS.md`. The news item should cross reference the pull request (PR) parenthetically, in the form `([#pr])`. To add the PR reference number, first create the PR, then push an additional commit updating `NEWS.md` with the PR reference number.  We periodically run `./julia doc/NEWS-update.jl` from the julia directory to update the cross-reference links, but this should not be done in a typical PR in order to avoid conflicting commits.
+
+#### Annotations for new features, deprecations and behavior changes
+
+API additions and deprecations, and minor behavior changes are allowed in minor version releases.
+For documented features that are part of the public API, a compatibility note should be added into
+the manual or the docstring. It should state the Julia minor version that made changed the behavior
+and have a brief message describing the change.
+
+At the moment, this should always be done with the following `compat` admonition
+(so that it would be possible to programmatically find the annotations in the future):
+
+  ```
+  !!! compat "Julia 1.X"
+      This method was added in Julia 1.X.
+  ```
 
 ### Contributing to core functionality or base libraries
 
@@ -196,7 +207,7 @@ The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issu
 
 Note: These instructions are for adding to or improving functionality in the base library. Before getting started, it can be helpful to discuss the proposed changes or additions on the [Julia Discourse forum](https://discourse.julialang.org) or in a GitHub issue---it's possible your proposed change belongs in a package rather than the core language. Also, keep in mind that changing stuff in the base can potentially break a lot of things. Finally, because of the time required to build Julia, note that it's usually faster to develop your code in stand-alone files, get it working, and then migrate it into the base libraries.
 
-Add new code to Julia's base libraries as follows:
+Add new code to Julia's base libraries as follows (this is the "basic" approach; see a more efficient approach in the next section):
 
  1. Edit the appropriate file in the `base/` directory, or add new files if necessary. Create tests for your functionality and add them to files in the `test/` directory. If you're editing C or Scheme code, most likely it lives in `src/` or one of its subdirectories, although some aspects of Julia's REPL initialization live in `ui/`.
 
@@ -217,6 +228,39 @@ or with the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `test/math.
     ./usr/bin/julia test/runtests.jl bitarray math
 
 Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a [`Good to merge` message](http://blog.travis-ci.com/2012-09-04-pull-requests-just-got-even-more-awesome).
+
+#### Modifying base more efficiently with Revise.jl
+
+[Revise](https://github.com/timholy/Revise.jl) is a package that
+tracks changes in source files and automatically updates function
+definitions in your running Julia session. Using it, you can make
+extensive changes to Base without needing to rebuild in order to test
+your changes.
+
+Here is the standard procedure:
+
+1. If you are planning changes to any types or macros, make those
+   changes and build julia using `make`. (This is
+   necessary because `Revise` cannot handle changes to type
+   definitions or macros.) Unless it's
+   required to get Julia to build, you do not have to add any
+   functionality based on the new types, just the type definitions
+   themselves.
+
+2. Start a Julia REPL session. Then issue the following commands:
+
+```julia
+using Revise    # if you aren't launching it in your `.julia/config/startup.jl`
+Revise.track(Base)
+```
+
+3. Edit files in `base/`, save your edits, and test the
+   functionality.
+
+If you need to restart your Julia session, just start at step 2 above.
+`Revise.track(Base)` will note any changes from when Julia was last
+built and incorporate them automatically. You only need to rebuild
+Julia if you made code-changes that Revise cannot handle.
 
 ### Code Formatting Guidelines
 

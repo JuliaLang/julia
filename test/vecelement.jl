@@ -36,14 +36,13 @@ struct Bunch{N,T}
 end
 
 unpeel(x) = x.elts[1].value
-
 @test unpeel(Bunch{2,Float64}((Base.VecElement(5.0),
                                Base.VecElement(4.0)))) === 5.0
 
-rewrap(x) = VecElement(x.elts[1].value+0)
-b = Bunch((VecElement(1.0), VecElement(2.0)))
-
-@test rewrap(b)===VecElement(1.0)
+rewrap(x) = VecElement(x.elts[1].value + 0)
+let b = Bunch((VecElement(1.0), VecElement(2.0)))
+    @test rewrap(b) === VecElement(1.0)
+end
 
 struct Herd{N,T}
     elts::NTuple{N,Base.VecElement{T}}
@@ -66,10 +65,11 @@ struct Gr{N, T}
     w::T
 end
 
-a = Vector{Gr{2,Float64}}(2)
-a[2] = Gr(1.0, Bunch((VecElement(2.0), VecElement(3.0))), 4.0)
-a[1] = Gr(5.0, Bunch((VecElement(6.0), VecElement(7.0))), 8.0)
-@test a[2] == Gr(1.0, Bunch((VecElement(2.0), VecElement(3.0))), 4.0)
+let a = Vector{Gr{2,Float64}}(undef, 2)
+    a[2] = Gr(1.0, Bunch((VecElement(2.0), VecElement(3.0))), 4.0)
+    a[1] = Gr(5.0, Bunch((VecElement(6.0), VecElement(7.0))), 8.0)
+    @test a[2] == Gr(1.0, Bunch((VecElement(2.0), VecElement(3.0))), 4.0)
+end
 
 @test isa(VecElement((1,2)), VecElement{Tuple{Int,Int}})
 
@@ -90,7 +90,7 @@ const _llvmtypes = Dict{DataType, String}(
     """
     return quote
         Base.@_inline_meta
-        Base.llvmcall($exp, Vec{$N, $T}, Tuple{Vec{$N, $T}, Vec{$N, $T}}, x, y)
+        Core.getfield(Base, :llvmcall)($exp, Vec{$N, $T}, Tuple{Vec{$N, $T}, Vec{$N, $T}}, x, y)
     end
 end
 

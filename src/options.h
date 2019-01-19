@@ -52,7 +52,7 @@
 #ifdef GC_DEBUG_ENV
 #define GC_VERIFY
 #else
-// It is recommanded to use the WITH_GC_VERIFY make option to turn on this
+// It is recommended to use the WITH_GC_VERIFY make option to turn on this
 // option. Keep the document here before a better build system is ready.
 // #define GC_VERIFY
 #endif
@@ -89,7 +89,6 @@
 
 // print all signatures type inference is invoked on
 //#define TRACE_INFERENCE
-//#define TRACE_COMPILE
 
 // print all generic method dispatches (excludes inlined and specialized call
 // sites). this generally prints too much output to be useful.
@@ -101,12 +100,18 @@
 
 // task options ---------------------------------------------------------------
 
-// select an implementation of stack switching.
-// currently only COPY_STACKS is recommended.
-#ifndef COPY_STACKS
+// select whether to allow the COPY_STACKS stack switching implementation
 #define COPY_STACKS
-#endif
+// select whether to use COPY_STACKS for new Tasks by default
+//#define ALWAYS_COPY_STACKS
 
+// When not using COPY_STACKS the task-system is less memory efficient so
+// you probably want to choose a smaller default stack size (factor of 8-10)
+#ifdef _P64
+#define JL_STACK_SIZE (4*1024*1024)
+#else
+#define JL_STACK_SIZE (2*1024*1024)
+#endif
 
 // threading options ----------------------------------------------------------
 

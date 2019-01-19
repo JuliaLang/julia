@@ -9,8 +9,8 @@ session (technically, in module `Main`), it is always present.
 
 If memory usage is your concern, you can always replace objects with ones that consume less memory.
  For example, if `A` is a gigabyte-sized array that you no longer need, you can free the memory
-with `A = 0`.  The memory will be released the next time the garbage collector runs; you can force
-this to happen with [`gc()`](@ref).
+with `A = nothing`.  The memory will be released the next time the garbage collector runs; you can force
+this to happen with [`gc()`](@ref Base.GC.gc). Moreover, an attempt to use `A` will likely result in an error, because most methods are not defined on type `Nothing`.
 
 ### How can I modify the declaration of a type in my session?
 
@@ -40,6 +40,49 @@ obj2 = MyModule.somefunction(obj1)   # this time it worked!
 obj3 = MyModule.someotherfunction(obj2, c)
 ...
 ```
+
+## [Scripting](@id man-scripting)
+
+### How do I check if the current file is being run as the main script?
+
+When a file is run as the main script using `julia file.jl` one might want to activate extra
+functionality like command line argument handling. A way to determine that a file is run in
+this fashion is to check if `abspath(PROGRAM_FILE) == @__FILE__` is `true`.
+
+### How do I catch CTRL-C in a script?
+
+Running a Julia script using `julia file.jl` does not throw
+[`InterruptException`](@ref) when you try to terminate it with CTRL-C
+(SIGINT).  To run a certain code before terminating a Julia script,
+which may or may not be caused by CTRL-C, use [`atexit`](@ref).
+Alternatively, you can use `julia -e 'include(popfirst!(ARGS))'
+file.jl` to execute a script while being able to catch
+`InterruptException` in the [`try`](@ref) block.
+
+### How do I pass options to `julia` using `#!/usr/bin/env`?
+
+Passing options to `julia` in so-called shebang by, e.g.,
+`#!/usr/bin/env julia --startup-file=no` may not work in some
+platforms such as Linux.  This is because argument parsing in shebang
+is platform-dependent and not well-specified.  In a Unix-like
+environment, a reliable way to pass options to `julia` in an
+executable script would be to start the script as a `bash` script and
+use `exec` to replace the process to `julia`:
+
+```julia
+#!/bin/bash
+#=
+exec julia --color=yes --startup-file=no -e 'include(popfirst!(ARGS))' \
+    "${BASH_SOURCE[0]}" "$@"
+=#
+
+@show ARGS  # put any Julia code here
+```
+
+In the example above, the code between `#=` and `=#` is run as a `bash`
+script.  Julia ignores this part since it is a multi-line comment for
+Julia.  The Julia code after `=#` is ignored by `bash` since it stops
+parsing the file once it reaches to the `exec` statement.
 
 ## Functions
 
@@ -94,10 +137,10 @@ julia> x
  3
 ```
 
-Here we created a function `change_array!()`, that assigns `5` to the first element of the passed
+Here we created a function `change_array!`, that assigns `5` to the first element of the passed
 array (bound to `x` at the call site, and bound to `A` within the function). Notice that, after
 the function call, `x` is still bound to the same array, but the content of that array changed:
-the variables `A` and `x` were distinct bindings refering to the same mutable `Array` object.
+the variables `A` and `x` were distinct bindings referring to the same mutable `Array` object.
 
 ### Can I use `using` or `import` inside a function?
 
@@ -147,18 +190,18 @@ argument is called slurping:
 
 ```jldoctest
 julia> function printargs(args...)
-           @printf("%s\n", typeof(args))
+           println(typeof(args))
            for (i, arg) in enumerate(args)
-               @printf("Arg %d = %s\n", i, arg)
+               println("Arg #$i = $arg")
            end
        end
 printargs (generic function with 1 method)
 
 julia> printargs(1, 2, 3)
 Tuple{Int64,Int64,Int64}
-Arg 1 = 1
-Arg 2 = 2
-Arg 3 = 3
+Arg #1 = 1
+Arg #2 = 2
+Arg #3 = 3
 ```
 
 If Julia were a language that made more liberal use of ASCII characters, the slurping operator
@@ -173,19 +216,19 @@ call. This use of `...` is called splatting:
 
 ```jldoctest
 julia> function threeargs(a, b, c)
-           @printf("a = %s::%s\n", a, typeof(a))
-           @printf("b = %s::%s\n", b, typeof(b))
-           @printf("c = %s::%s\n", c, typeof(c))
+           println("a = $a::$(typeof(a))")
+           println("b = $b::$(typeof(b))")
+           println("c = $c::$(typeof(c))")
        end
 threeargs (generic function with 1 method)
 
-julia> vec = [1, 2, 3]
+julia> x = [1, 2, 3]
 3-element Array{Int64,1}:
  1
  2
  3
 
-julia> threeargs(vec...)
+julia> threeargs(x...)
 a = 1::Int64
 b = 2::Int64
 c = 3::Int64
@@ -193,6 +236,52 @@ c = 3::Int64
 
 If Julia were a language that made more liberal use of ASCII characters, the splatting operator
 might have been written as `...->` instead of `...`.
+
+### What is the return value of an assignment?
+
+The operator `=` always returns the right-hand side, therefore:
+
+```jldoctest
+julia> function threeint()
+           x::Int = 3.0
+           x # returns variable x
+       end
+threeint (generic function with 1 method)
+
+julia> function threefloat()
+           x::Int = 3.0 # returns 3.0
+       end
+threefloat (generic function with 1 method)
+
+julia> threeint()
+3
+
+julia> threefloat()
+3.0
+```
+
+and similarly:
+
+```jldoctest
+julia> function threetup()
+           x, y = [3, 3]
+           x, y # returns a tuple
+       end
+threetup (generic function with 1 method)
+
+julia> function threearr()
+           x, y = [3, 3] # returns an array
+       end
+threearr (generic function with 1 method)
+
+julia> threetup()
+(3, 3)
+
+julia> threearr()
+2-element Array{Int64,1}:
+ 3
+ 3
+```
 
 ## Types, type declarations, and constructors
 
@@ -227,26 +316,15 @@ julia> sqrt(-2.0)
 ERROR: DomainError with -2.0:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
- [2] sqrt(::Float64) at ./math.jl:462
-
-julia> 2^-5
-ERROR: DomainError with -5:
-Cannot raise an integer x to a negative power -5.
-Make x a float by adding a zero decimal (e.g., 2.0^-5 instead of 2^-5), or write 1/x^5, float(x)^-5, or (x//1)^-5
-Stacktrace:
- [1] throw_domerr_powbysq(::Int64) at ./intfuncs.jl:163
- [2] power_by_squaring at ./intfuncs.jl:178 [inlined]
- [3] ^ at ./intfuncs.jl:202 [inlined]
- [4] literal_pow(::Base.#^, ::Int64, ::Val{-5}) at ./intfuncs.jl:213
+[...]
 ```
 
 This behavior is an inconvenient consequence of the requirement for type-stability.  In the case
-of [`sqrt()`](@ref), most users want `sqrt(2.0)` to give a real number, and would be unhappy if
-it produced the complex number `1.4142135623730951 + 0.0im`.  One could write the [`sqrt()`](@ref)
+of [`sqrt`](@ref), most users want `sqrt(2.0)` to give a real number, and would be unhappy if
+it produced the complex number `1.4142135623730951 + 0.0im`.  One could write the [`sqrt`](@ref)
 function to switch to a complex-valued output only when passed a negative number (which is what
-[`sqrt()`](@ref) does in some other languages), but then the result would not be [type-stable](@ref man-type-stability)
-and the [`sqrt()`](@ref) function would have poor performance.
+[`sqrt`](@ref) does in some other languages), but then the result would not be [type-stable](@ref man-type-stability)
+and the [`sqrt`](@ref) function would have poor performance.
 
 In these and other cases, you can get the result you want by choosing an *input type* that conveys
 your willingness to accept an *output type* in which the result can be represented:
@@ -254,9 +332,6 @@ your willingness to accept an *output type* in which the result can be represent
 ```jldoctest
 julia> sqrt(-2.0+0im)
 0.0 + 1.4142135623730951im
-
-julia> 2.0^-5
-0.03125
 ```
 
 ### Why does Julia use native machine integer arithmetic?
@@ -496,6 +571,7 @@ julia> module Foo
 julia> Foo.foo()
 ERROR: On worker 2:
 UndefVarError: Foo not defined
+Stacktrace:
 [...]
 ```
 
@@ -516,6 +592,7 @@ julia> @everywhere module Foo
 julia> Foo.foo()
 ERROR: On worker 2:
 UndefVarError: gvar not defined
+Stacktrace:
 [...]
 ```
 
@@ -532,15 +609,16 @@ julia> gvar_self = "Node1"
 julia> remotecall_fetch(()->gvar_self, 2)
 "Node1"
 
-julia> remotecall_fetch(whos, 2)
-	From worker 2:	                          Base  41762 KB     Module
-	From worker 2:	                          Core  27337 KB     Module
-	From worker 2:	                           Foo   2477 bytes  Module
-	From worker 2:	                          Main  46191 KB     Module
-	From worker 2:	                     gvar_self     13 bytes  String
+julia> remotecall_fetch(varinfo, 2)
+name          size summary
+––––––––– –––––––– –––––––
+Base               Module
+Core               Module
+Main               Module
+gvar_self 13 bytes String
 ```
 
-This does not apply to `function` or `type` declarations. However, anonymous functions bound to global
+This does not apply to `function` or `struct` declarations. However, anonymous functions bound to global
 variables are serialized as can be seen below.
 
 ```julia-repl
@@ -559,50 +637,67 @@ julia> remotecall_fetch(anon_bar, 2)
 1
 ```
 
+### Why does Julia use `*` for string concatenation? Why not `+` or something else?
+
+The [main argument](@ref man-concatenation) against `+` is that string concatenation is not
+commutative, while `+` is generally used as a commutative operator. While the Julia community
+recognizes that other languages use different operators and `*` may be unfamiliar for some
+users, it communicates certain algebraic properties.
+
+Note that you can also use `string(...)` to concatenate strings (and other values converted
+to strings); similarly, `repeat` can be used instead of `^` to repeat strings. The
+[interpolation syntax](@ref string-interpolation) is also useful for constructing strings.
+
 ## Packages and Modules
 
-### What is the difference between "using" and "importall"?
+### What is the difference between "using" and "import"?
 
 There is only one difference, and on the surface (syntax-wise) it may seem very minor. The difference
-between `using` and `importall` is that with `using` you need to say `function Foo.bar(..` to
-extend module Foo's function bar with a new method, but with `importall` or `import Foo.bar`,
+between `using` and `import` is that with `using` you need to say `function Foo.bar(..` to
+extend module Foo's function bar with a new method, but with `import Foo.bar`,
 you only need to say `function bar(...` and it automatically extends module Foo's function bar.
-
-If you use `importall`, then `function Foo.bar(...` and `function bar(...` become equivalent.
-If you use `using`, then they are different.
 
 The reason this is important enough to have been given separate syntax is that you don't want
 to accidentally extend a function that you didn't know existed, because that could easily cause
 a bug. This is most likely to happen with a method that takes a common type like a string or integer,
 because both you and the other module could define a method to handle such a common type. If you
-use `importall`, then you'll replace the other module's implementation of `bar(s::AbstractString)`
+use `import`, then you'll replace the other module's implementation of `bar(s::AbstractString)`
 with your new implementation, which could easily do something completely different (and break
 all/many future usages of the other functions in module Foo that depend on calling bar).
 
 ## Nothingness and missing values
 
-### How does "null" or "nothingness" work in Julia?
+### [How does "null", "nothingness" or "missingness" work in Julia?](@id faq-nothing)
 
-Unlike many languages (for example, C and Java), Julia does not have a "null" value. When a reference
-(variable, object field, or array element) is uninitialized, accessing it will immediately throw
-an error. This situation can be detected using the `isdefined` function.
+Unlike many languages (for example, C and Java), Julia objects cannot be "null" by default.
+When a reference (variable, object field, or array element) is uninitialized, accessing it
+will immediately throw an error. This situation can be detected using the
+[`isdefined`](@ref) or [`isassigned`](@ref Base.isassigned) functions.
 
 Some functions are used only for their side effects, and do not need to return a value. In these
 cases, the convention is to return the value `nothing`, which is just a singleton object of type
-`Void`. This is an ordinary type with no fields; there is nothing special about it except for
+`Nothing`. This is an ordinary type with no fields; there is nothing special about it except for
 this convention, and that the REPL does not print anything for it. Some language constructs that
 would not otherwise have a value also yield `nothing`, for example `if false; end`.
 
-For situations where a value exists only sometimes (for example, missing statistical data), it
-is best to use the `Nullable{T}` type, which allows specifying the type of a missing value.
+For situations where a value `x` of type `T` exists only sometimes, the `Union{T, Nothing}`
+type can be used for function arguments, object fields and array element types
+as the equivalent of [`Nullable`, `Option` or `Maybe`](https://en.wikipedia.org/wiki/Nullable_type)
+in other languages. If the value itself can be `nothing` (notably, when `T` is `Any`),
+the `Union{Some{T}, Nothing}` type is more appropriate since `x == nothing` then indicates
+the absence of a value, and `x == Some(nothing)` indicates the presence of a value equal
+to `nothing`. The [`something`](@ref) function allows unwrapping `Some` objects and
+using a default value instead of `nothing` arguments. Note that the compiler is able to
+generate efficient code when working with `Union{T, Nothing}` arguments or fields.
+
+To represent missing data in the statistical sense (`NA` in R or `NULL` in SQL), use the
+[`missing`](@ref) object. See the [`Missing Values`](@ref missing) section for more details.
 
 The empty tuple (`()`) is another form of nothingness. But, it should not really be thought of
 as nothing but rather a tuple of zero values.
 
-In code written for Julia prior to version 0.4 you may occasionally see `None`, which is quite
-different. It is the empty (or "bottom") type, a type with no values and no subtypes (except itself).
-This is now written as `Union{}` (an empty union type). You will generally not need to use this
-type.
+The empty (or "bottom") type, written as `Union{}` (an empty union type), is a type with
+no values and no subtypes (except itself). You will generally not need to use this type.
 
 ## Memory
 
@@ -646,7 +741,7 @@ Because supporting generic programming is deemed more important than potential p
 that can be achieved by other means (e.g., using explicit loops), operators like `+=` and `*=`
 work by rebinding new values.
 
-## Asynchronous IO and concurrent synchronous writes
+## [Asynchronous IO and concurrent synchronous writes](@id faq-async-io)
 
 ### Why do concurrent writes to the same stream result in inter-mixed output?
 
@@ -656,7 +751,7 @@ Consider the printed output from the following:
 
 ```jldoctest
 julia> @sync for i in 1:3
-           @async write(STDOUT, string(i), " Foo ", " Bar ")
+           @async write(stdout, string(i), " Foo ", " Bar ")
        end
 123 Foo  Foo  Foo  Bar  Bar  Bar
 ```
@@ -669,7 +764,7 @@ in the above example results in:
 
 ```jldoctest
 julia> @sync for i in 1:3
-           @async println(STDOUT, string(i), " Foo ", " Bar ")
+           @async println(stdout, string(i), " Foo ", " Bar ")
        end
 1 Foo  Bar
 2 Foo  Bar
@@ -679,14 +774,13 @@ julia> @sync for i in 1:3
 You can lock your writes with a `ReentrantLock` like this:
 
 ```jldoctest
-julia> l = ReentrantLock()
-ReentrantLock(Nullable{Task}(), Condition(Any[]), 0)
+julia> l = ReentrantLock();
 
 julia> @sync for i in 1:3
            @async begin
                lock(l)
                try
-                   write(STDOUT, string(i), " Foo ", " Bar ")
+                   write(stdout, string(i), " Foo ", " Bar ")
                finally
                    unlock(l)
                end
@@ -694,6 +788,50 @@ julia> @sync for i in 1:3
        end
 1 Foo  Bar 2 Foo  Bar 3 Foo  Bar
 ```
+
+## Arrays
+
+### What are the differences between zero-dimensional arrays and scalars?
+
+Zero-dimensional arrays are arrays of the form `Array{T,0}`. They behave similar
+to scalars, but there are important differences. They deserve a special mention
+because they are a special case which makes logical sense given the generic
+definition of arrays, but might be a bit unintuitive at first. The following
+line defines a zero-dimensional array:
+
+```
+julia> A = zeros()
+0-dimensional Array{Float64,0}:
+0.0
+```
+
+In this example, `A` is a mutable container that contains one element, which can
+be set by `A[] = 1.0` and retrieved with `A[]`. All zero-dimensional arrays have
+the same size (`size(A) == ()`), and length (`length(A) == 1`). In particular,
+zero-dimensional arrays are not empty. If you find this unintuitive, here are
+some ideas that might help to understand Julia's definition.
+
+* Zero-dimensional arrays are the "point" to vector's "line" and matrix's
+  "plane". Just as a line has no area (but still represents a set of things), a
+  point has no length or any dimensions at all (but still represents a thing).
+* We define `prod(())` to be 1, and the total number of elements in an array is
+  the product of the size. The size of a zero-dimensional array is `()`, and
+  therefore its length is `1`.
+* Zero-dimensional arrays don't natively have any dimensions into which you
+  index -- they’re just `A[]`. We can apply the same "trailing one" rule for them
+  as for all other array dimensionalities, so you can indeed index them as
+  `A[1]`, `A[1,1]`, etc.
+
+It is also important to understand the differences to ordinary scalars. Scalars
+are not mutable containers (even though they are iterable and define things
+like `length`, `getindex`, *e.g.* `1[] == 1`). In particular, if `x = 0.0` is
+defined as a scalar, it is an error to attempt to change its value via
+`x[] = 1.0`. A scalar `x` can be converted into a zero-dimensional array
+containing it via `fill(x)`, and conversely, a zero-dimensional array `a` can
+be converted to the contained scalar via `a[]`. Another difference is that
+a scalar can participate in linear algebra operations such as `2 * rand(2,2)`,
+but the analogous operation with a zero-dimensional array
+`fill(2) * rand(2,2)` is an error.
 
 ## Julia Releases
 

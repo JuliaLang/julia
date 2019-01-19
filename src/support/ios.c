@@ -27,6 +27,7 @@
 
 #include "utils.h"
 #include "utf8.h"
+#include "utf8proc.h"
 #include "ios.h"
 #include "timefuncs.h"
 
@@ -566,7 +567,7 @@ int ios_trunc(ios_t *s, size_t size)
 #if !defined(_OS_WINDOWS_)
         if (ftruncate(s->fd, size) == 0)
 #else
-        if (_chsize(s->fd, size) == 0)
+        if (_chsize_s(s->fd, size) == 0)
 #endif
             return 0;
     }
@@ -803,7 +804,7 @@ size_t ios_copyall(ios_t *to, ios_t *from)
 
 #define LINE_CHUNK_SIZE 160
 
-size_t ios_copyuntil(ios_t *to, ios_t *from, char delim, uint8_t chomp)
+size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
 {
     size_t total = 0, avail = (size_t)(from->size - from->bpos);
     while (!ios_eof(from)) {
@@ -822,11 +823,7 @@ size_t ios_copyuntil(ios_t *to, ios_t *from, char delim, uint8_t chomp)
         }
         else {
             size_t ntowrite = pd - (from->buf+from->bpos) + 1;
-            size_t nchomp = 0;
-            if (chomp) {
-                nchomp = ios_nchomp(from, ntowrite);
-            }
-            written = ios_write(to, from->buf+from->bpos, ntowrite - nchomp);
+            written = ios_write(to, from->buf+from->bpos, ntowrite);
             from->bpos += ntowrite;
             total += written;
             return total;
@@ -862,6 +859,7 @@ static void _ios_init(ios_t *s)
     s->ndirty = 0;
     s->fpos = -1;
     s->lineno = 1;
+    s->u_colno = 0;
     s->fd = -1;
     s->ownbuf = 1;
     s->ownfd = 0;
@@ -1111,6 +1109,10 @@ int ios_getutf8(ios_t *s, uint32_t *pwc)
     c0 = (char)c;
     if ((unsigned char)c0 < 0x80) {
         *pwc = (uint32_t)(unsigned char)c0;
+        if (c == '\n')
+            s->u_colno = 0;
+        else
+            s->u_colno += utf8proc_charwidth(*pwc);
         return 1;
     }
     sz = u8_seqlen(&c0);
@@ -1121,6 +1123,7 @@ int ios_getutf8(ios_t *s, uint32_t *pwc)
         return IOS_EOF;
     size_t i = s->bpos;
     *pwc = u8_nextchar(s->buf, &i);
+    s->u_colno += utf8proc_charwidth(*pwc);
     ios_read(s, buf, sz);
     return 1;
 }
@@ -1167,7 +1170,7 @@ char *ios_readline(ios_t *s)
 {
     ios_t dest;
     ios_mem(&dest, 0);
-    ios_copyuntil(&dest, s, '\n', 0);
+    ios_copyuntil(&dest, s, '\n');
     size_t n;
     return ios_take_buffer(&dest, &n);
 }

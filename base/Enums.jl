@@ -7,10 +7,15 @@ export Enum, @enum
 
 function basetype end
 
+"""
+    Enum{T<:Integer}
+
+The abstract supertype of all enumerated types defined with [`@enum`](@ref).
+"""
 abstract type Enum{T<:Integer} end
 
-Base.convert(::Type{Integer}, x::Enum{T}) where {T<:Integer} = bitcast(T, x)
-Base.convert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = convert(T, bitcast(T2, x))
+(::Type{T})(x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(bitcast(T2, x))::T
+Base.cconvert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(x)
 Base.write(io::IO, x::Enum{T}) where {T<:Integer} = write(io, T(x))
 Base.read(io::IO, ::Type{T}) where {T<:Enum} = T(read(io, Enums.basetype(T)))
 
@@ -20,23 +25,26 @@ function membershiptest(expr, values)
     if length(values) == hi - lo + 1
         :($lo <= $expr <= $hi)
     elseif length(values) < 20
-        foldl((x1,x2)->:($x1 || ($expr == $x2)), :($expr == $(values[1])), values[2:end])
+        foldl((x1,x2)->:($x1 || ($expr == $x2)), values[2:end]; init=:($expr == $(values[1])))
     else
         :($expr in $(Set(values)))
     end
 end
 
+# give Enum types scalar behavior in broadcasting
+Base.broadcastable(x::Enum) = Ref(x)
+
 @noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for Enum $(typename): $x")))
 
 """
-    @enum EnumName[::BaseType] EnumValue1[=x] EnumValue2[=y]
+    @enum EnumName[::BaseType] value1[=x] value2[=y]
 
 Create an `Enum{BaseType}` subtype with name `EnumName` and enum member values of
-`EnumValue1` and `EnumValue2` with optional assigned values of `x` and `y`, respectively.
+`value1` and `value2` with optional assigned values of `x` and `y`, respectively.
 `EnumName` can be used just like other types and enum member values as regular values, such as
 
 # Examples
-```jldoctest
+```jldoctest fruitenum
 julia> @enum Fruit apple=1 orange=2 kiwi=3
 
 julia> f(x::Fruit) = "I'm a Fruit with value: \$(Int(x))"
@@ -44,11 +52,30 @@ f (generic function with 1 method)
 
 julia> f(apple)
 "I'm a Fruit with value: 1"
+
+julia> Fruit(1)
+apple::Fruit = 1
+```
+
+Values can also be specified inside a `begin` block, e.g.
+
+```julia
+@enum EnumName begin
+    value1
+    value2
+end
 ```
 
 `BaseType`, which defaults to [`Int32`](@ref), must be a primitive subtype of `Integer`.
 Member values can be converted between the enum type and `BaseType`. `read` and `write`
 perform these conversions automatically.
+
+To list all the instances of an enum use `instances`, e.g.
+
+```jldoctest fruitenum
+julia> instances(Fruit)
+(apple::Fruit = 1, orange::Fruit = 2, kiwi::Fruit = 3)
+```
 """
 macro enum(T, syms...)
     if isempty(syms)
@@ -58,18 +85,23 @@ macro enum(T, syms...)
     typename = T
     if isa(T, Expr) && T.head == :(::) && length(T.args) == 2 && isa(T.args[1], Symbol)
         typename = T.args[1]
-        basetype = eval(__module__, T.args[2])
-        if !isa(basetype, DataType) || !(basetype <: Integer) || !isbits(basetype)
+        basetype = Core.eval(__module__, T.args[2])
+        if !isa(basetype, DataType) || !(basetype <: Integer) || !isbitstype(basetype)
             throw(ArgumentError("invalid base type for Enum $typename, $T=::$basetype; base type must be an integer primitive type"))
         end
     elseif !isa(T, Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
-    vals = Vector{Tuple{Symbol,Integer}}(0)
+    vals = Vector{Tuple{Symbol,Integer}}()
     lo = hi = 0
     i = zero(basetype)
     hasexpr = false
+
+    if length(syms) == 1 && syms[1] isa Expr && syms[1].head == :block
+        syms = syms[1].args
+    end
     for s in syms
+        s isa LineNumberNode && continue
         if isa(s, Symbol)
             if i == typemin(basetype) && !isempty(vals)
                 throw(ArgumentError("overflow in value \"$s\" of Enum $typename"))
@@ -77,9 +109,9 @@ macro enum(T, syms...)
         elseif isa(s, Expr) &&
                (s.head == :(=) || s.head == :kw) &&
                length(s.args) == 2 && isa(s.args[1], Symbol)
-            i = eval(__module__, s.args[2]) # allow exprs, e.g. uint128"1"
+            i = Core.eval(__module__, s.args[2]) # allow exprs, e.g. uint128"1"
             if !isa(i, Integer)
-                throw(ArgumentError("invalid value for Enum $typename, $s=$i; values must be integers"))
+                throw(ArgumentError("invalid value for Enum $typename, $s; values must be integers"))
             end
             i = convert(basetype, i)
             s = s.args[1]
@@ -106,7 +138,7 @@ macro enum(T, syms...)
     blk = quote
         # enum definition
         Base.@__doc__(primitive type $(esc(typename)) <: Enum{$(basetype)} $(sizeof(basetype) * 8) end)
-        function Base.convert(::Type{$(esc(typename))}, x::Integer)
+        function $(esc(typename))(x::Integer)
             $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
             return bitcast($(esc(typename)), convert($(basetype), x))
         end
@@ -129,19 +161,18 @@ macro enum(T, syms...)
                 print(io, x)
             else
                 print(io, x, "::")
-                showcompact(io, typeof(x))
-                print(io, " = ", $basetype(x))
+                show(IOContext(io, :compact => true), typeof(x))
+                print(io, " = ")
+                show(io, $basetype(x))
             end
-        end
-        function Base.show(io::IO, t::Type{$(esc(typename))})
-            Base.show_datatype(io, t)
         end
         function Base.show(io::IO, ::MIME"text/plain", t::Type{$(esc(typename))})
             print(io, "Enum ")
             Base.show_datatype(io, t)
             print(io, ":")
             for (sym, i) in $vals
-                print(io, "\n", sym, " = ", i)
+                print(io, "\n", sym, " = ")
+                show(io, i)
             end
         end
     end

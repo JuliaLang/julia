@@ -78,12 +78,12 @@ the expression. Macro expansion involves a handoff from [`eval()`](@ref) (in Jul
 function `jl_macroexpand()` (written in `flisp`) to the Julia macro itself (written in - what
 else - Julia) via `fl_invoke_julia_macro()`, and back.
 
-Typically, macro expansion is invoked as a first step during a call to [`expand()`](@ref)/`jl_expand()`,
+Typically, macro expansion is invoked as a first step during a call to [`Meta.lower()`](@ref)/`jl_expand()`,
 although it can also be invoked directly by a call to [`macroexpand()`](@ref)/`jl_macroexpand()`.
 
 ## [Type Inference](@id dev-type-inference)
 
-Type inference is implemented in Julia by [`typeinf()` in `inference.jl`](https://github.com/JuliaLang/julia/blob/master/base/inference.jl).
+Type inference is implemented in Julia by [`typeinf()` in `compiler/typeinfer.jl`](https://github.com/JuliaLang/julia/blob/master/base/compiler/typeinfer.jl).
 Type inference is the process of examining a Julia function and determining bounds for the types
 of each of its variables, as well as bounds on the type of the return value from the function.
 This enables many future optimizations, such as unboxing of known immutable values, and compile-time

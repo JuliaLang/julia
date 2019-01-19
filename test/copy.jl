@@ -1,69 +1,74 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 mainres = ([4, 5, 3],
            [1, 5, 3])
 bitres = ([true, true, false],
           [false, true, false])
 
 chnlprod(x) = Channel(c->for i in x; put!(c,i); end)
+@testset "copyto!" begin
+    for (dest, src, bigsrc, emptysrc, res) in [
+        ([1, 2, 3], () -> [4, 5], () -> [1, 2, 3, 4, 5], () -> Int[], mainres),
+        ([1, 2, 3], () -> 4:5, () -> 1:5, () -> 1:0, mainres),
+        ([1, 2, 3], () -> chnlprod(4:5), () -> chnlprod(1:5), () -> chnlprod(1:0), mainres),
+        (falses(3), () -> trues(2), () -> trues(5), () -> trues(0), bitres)]
 
-for (dest, src, bigsrc, emptysrc, res) in [
-    ([1, 2, 3], () -> [4, 5], () -> [1, 2, 3, 4, 5], () -> Int[], mainres),
-    ([1, 2, 3], () -> 4:5, () -> 1:5, () -> 1:0, mainres),
-    ([1, 2, 3], () -> chnlprod(4:5), () -> chnlprod(1:5), () -> chnlprod(1:0), mainres),
-    (falses(3), () -> trues(2), () -> trues(5), () -> trues(0), bitres)]
+        @test copyto!(copy(dest), src()) == res[1]
+        @test copyto!(copy(dest), 1, src()) == res[1]
+        @test copyto!(copy(dest), 2, src(), 2) == res[2]
+        @test copyto!(copy(dest), 2, src(), 2, 1) == res[2]
 
-    @test copy!(copy(dest), src()) == res[1]
-    @test copy!(copy(dest), 1, src()) == res[1]
-    @test copy!(copy(dest), 2, src(), 2) == res[2]
-    @test copy!(copy(dest), 2, src(), 2, 1) == res[2]
+        @test copyto!(copy(dest), 99, src(), 99, 0) == dest
 
-    @test copy!(copy(dest), 99, src(), 99, 0) == dest
-
-    @test copy!(copy(dest), 1, emptysrc()) == dest
-    x = emptysrc()
-    exc = isa(x, AbstractArray) ? BoundsError : ArgumentError
-    @test_throws exc copy!(dest, 1, emptysrc(), 1)
-
-    for idx in (0, 4)
-        @test_throws BoundsError copy!(dest, idx, src())
-        @test_throws BoundsError copy!(dest, idx, src(), 1)
-        @test_throws BoundsError copy!(dest, idx, src(), 1, 1)
-        x = src()
+        @test copyto!(copy(dest), 1, emptysrc()) == dest
+        x = emptysrc()
         exc = isa(x, AbstractArray) ? BoundsError : ArgumentError
-        @test_throws exc copy!(dest, 1, x, idx)
-        x = src()
-        exc = isa(x, AbstractArray) ? BoundsError : ArgumentError
-        @test_throws exc copy!(dest, 1, x, idx, 1)
+        @test_throws exc copyto!(dest, 1, emptysrc(), 1)
+
+        for idx in (0, 4)
+            @test_throws BoundsError copyto!(dest, idx, src())
+            @test_throws BoundsError copyto!(dest, idx, src(), 1)
+            @test_throws BoundsError copyto!(dest, idx, src(), 1, 1)
+            x = src()
+            exc = isa(x, AbstractArray) ? BoundsError : ArgumentError
+            @test_throws exc copyto!(dest, 1, x, idx)
+            x = src()
+            exc = isa(x, AbstractArray) ? BoundsError : ArgumentError
+            @test_throws exc copyto!(dest, 1, x, idx, 1)
+        end
+
+        @test_throws ArgumentError copyto!(dest, 1, src(), 1, -1)
+
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, bigsrc())
+
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 3, src())
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 3, src(), 1)
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 3, src(), 1, 2)
+
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 1, src(), 2, 2)
     end
-
-    @test_throws ArgumentError copy!(dest, 1, src(), 1, -1)
-
-    @test_throws BoundsError copy!(dest, bigsrc())
-
-    @test_throws BoundsError copy!(dest, 3, src())
-    @test_throws BoundsError copy!(dest, 3, src(), 1)
-    @test_throws BoundsError copy!(dest, 3, src(), 1, 2)
-
-    @test_throws BoundsError copy!(dest, 1, src(), 2, 2)
 end
 
-let A = reshape(1:6, 3, 2), B = similar(A)
-    RA = CartesianRange(indices(A))
-    copy!(B, RA, A, RA)
-    @test B == A
-end
-let A = reshape(1:6, 3, 2), B = zeros(8,8)
-    RA = CartesianRange(indices(A))
-    copy!(B, CartesianRange((5:7,2:3)), A, RA)
-    @test B[5:7,2:3] == A
-    B[5:7,2:3] = 0
-    @test all(x->x==0, B)
+@testset "with CartesianIndices" begin
+    let A = reshape(1:6, 3, 2), B = similar(A)
+        RA = CartesianIndices(axes(A))
+        copyto!(B, RA, A, RA)
+        @test B == A
+    end
+    let A = reshape(1:6, 3, 2), B = zeros(8,8)
+        RA = CartesianIndices(axes(A))
+        copyto!(B, CartesianIndices((5:7,2:3)), A, RA)
+        @test B[5:7,2:3] == A
+        B[5:7,2:3] .= 0
+        @test all(x->x==0, B)
+    end
 end
 
-
-# test behavior of shallow and deep copying
-let a = Any[[1]], q = QuoteNode([1])
+@testset "shallow and deep copying" begin
+    a = Any[[1]]
+    q = QuoteNode([1])
     ca = copy(a); dca = @inferred(deepcopy(a))
     @test ca !== a
     @test ca[1] === a[1]
@@ -72,19 +77,26 @@ let a = Any[[1]], q = QuoteNode([1])
     @test deepcopy(q).value !== q.value
 end
 
-# issue #13124
-let a = rand(3, 5)
+@testset "issue #13124" begin
+    a = rand(3, 5)
     b = (a,a)
     c = deepcopy(b)
     @test c[1] === c[2]
 end
 
 # issue #14027
-@test isnull(deepcopy(Nullable{Array}()))
+struct Nullable14027{T}
+    hasvalue::Bool
+    value::T
 
-# issue #15250
-let a1 = Core.svec(1, 2, 3, []), a2 = Core.svec(1, 2, 3)
-    a3 = Core.svec(a1,a1)
+    Nullable14027{T}() where {T} = new(false)
+end
+@test !deepcopy(Nullable14027{Array}()).hasvalue
+
+@testset "issue #15250" begin
+    a1 = Core.svec(1, 2, 3, [])
+    a2 = Core.svec(1, 2, 3)
+    a3 = Core.svec(a1, a1)
     b1 = deepcopy(a1)
     @test a1 == b1
     @test a1 !== b1
@@ -97,33 +109,33 @@ let a1 = Core.svec(1, 2, 3, []), a2 = Core.svec(1, 2, 3)
     @test a3[1] === a3[2]
 end
 
-# issue #16667
-let x = BigInt[1:1000;], y = deepcopy(x), v
-    # Finalize the original values to make sure the deep copy is indeed
-    # independent
-    for v in x
-        finalize(v)
+@testset "issue #16667" begin
+    let x = BigInt[1:1000;], y = deepcopy(x), v
+        # Finalize the original values to make sure the deep copy is indeed
+        # independent
+        for v in x
+            finalize(v)
+        end
+        # Allocate some memory to make it more likely to trigger an error
+        # if `deepcopy` went wrong
+        x = BigInt[1:1000;]
+        @test y == x
     end
-    # Allocate some memory to make it more likely to trigger an error
-    # if `deepcopy` went wrong
-    x = BigInt[1:1000;]
-    @test y == x
-end
-let x = BigFloat[1:1000;], y, z, v
-    y, z = setprecision(2) do
-        deepcopy(x), BigFloat[1:1000;]
+    let x = BigFloat[1:1000;], y, z, v
+        y, z = setprecision(2) do
+            deepcopy(x), BigFloat[1:1000;]
+        end
+        for v in x
+            finalize(v)
+        end
+        x = BigFloat[1:1000;]
+        # Make sure the difference in precision doesn't affect deep copy
+        @test y == x
+        # Check that the setprecision indeed does something
+        @test z != x
     end
-    for v in x
-        finalize(v)
-    end
-    x = BigFloat[1:1000;]
-    # Make sure the difference in precision doesn't affect deep copy
-    @test y == x
-    # Check that the setprecision indeed does something
-    @test z != x
 end
 
-# issue #19921
 mutable struct Foo19921
     a::String
 end
@@ -140,5 +152,15 @@ end
         bar2 = deepcopy(bar)
         @test bar2.foo ∈ keys(bar2.fooDict)
         @test bar2.fooDict[bar2.foo] != nothing
+    end
+
+    let d = IdDict(rand(2) => rand(2) for i = 1:100)
+        d2 = deepcopy(d)
+        for k in keys(d2)
+            @test haskey(d2, k)
+        end
+        for k in keys(d)
+            @test haskey(d, k)
+        end
     end
 end

@@ -9,7 +9,7 @@ struct Binding
     function Binding(m::Module, v::Symbol)
         # Normalise the binding module for module symbols so that:
         #   Binding(Base, :Base) === Binding(Main, :Base)
-        m = module_name(m) === v ? module_parent(m) : m
+        m = nameof(m) === v ? parentmodule(m) : m
         new(Base.binding_module(m, v), v)
     end
 end
@@ -42,5 +42,5 @@ end
 aliasof(b::Binding)     = defined(b) ? (a = aliasof(resolve(b), b); defined(a) ? a : b) : b
 aliasof(d::DataType, b) = Binding(d.name.module, d.name.name)
 aliasof(λ::Function, b) = (m = typeof(λ).name.mt; Binding(m.module, m.name))
-aliasof(m::Module,   b) = Binding(m, module_name(m))
+aliasof(m::Module,   b) = Binding(m, nameof(m))
 aliasof(other,       b) = b
