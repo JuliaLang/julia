@@ -335,6 +335,11 @@ end
     @test float([missing]) isa Vector{Missing}
 end
 
+@testset "iterate" begin
+    @test isequal(iterate(missing), (missing, nothing))
+    @test isequal(iterate(missing, 1), nothing)
+end
+
 @testset "skipmissing" begin
     x = skipmissing([1, 2, missing, 4])
     @test eltype(x) === Int
