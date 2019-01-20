@@ -1494,7 +1494,8 @@ end
 function (*)(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
     require_one_based_indexing(A, x)
     m, n = size(A)
-    length(x) == n || throw(DimensionMismatch())
+    length(x) == n || throw(DimensionMismatch(
+        "Matrix A has $n columns, but vector x has a length $(length(x))"))
     Ty = promote_type(Ta, Tx)
     y = Vector{Ty}(undef, m)
     mul!(y, A, x)
@@ -1506,7 +1507,10 @@ mul!(y::AbstractVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where
 function mul!(y::AbstractVector, A::StridedMatrix, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, A, x)
     m, n = size(A)
-    length(x) == n && length(y) == m || throw(DimensionMismatch())
+    length(x) == n || throw(DimensionMismatch(
+        "Matrix A has $n columns, but vector x has a length $(length(x))"))
+    length(y) == m || throw(DimensionMismatch(
+        "Matrix A has $m rows, but vector y has a length $(length(y))"))
     m == 0 && return y
     if β != one(β)
         β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
@@ -1534,7 +1538,8 @@ function *(transA::Transpose{<:Any,<:StridedMatrix{Ta}}, x::AbstractSparseVector
     require_one_based_indexing(transA, x)
     A = transA.parent
     m, n = size(A)
-    length(x) == m || throw(DimensionMismatch())
+    length(x) == m || throw(DimensionMismatch(
+        "Matrix A has $m rows, but vector x has a length $(length(x))"))
     Ty = promote_type(Ta, Tx)
     y = Vector{Ty}(undef, n)
     mul!(y, transpose(A), x)
@@ -1547,7 +1552,10 @@ function mul!(y::AbstractVector, transA::Transpose{<:Any,<:StridedMatrix}, x::Ab
     A = transA.parent
     require_one_based_indexing(y, A, x)
     m, n = size(A)
-    length(x) == m && length(y) == n || throw(DimensionMismatch())
+    length(x) == n || throw(DimensionMismatch(
+        "Matrix A has $n columns, but vector x has a length $(length(x))"))
+    length(y) == m || throw(DimensionMismatch(
+        "Matrix A has $m rows, but vector y has a length $(length(y))"))
     n == 0 && return y
     if β != one(β)
         β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
@@ -1577,14 +1585,17 @@ function densemv(A::SparseMatrixCSC, x::AbstractSparseVector; trans::AbstractCha
     local xlen::Int, ylen::Int
     require_one_based_indexing(A, x)
     m, n = size(A)
+    xaxis = "columns"
     if trans == 'N' || trans == 'n'
         xlen = n; ylen = m
     elseif trans == 'T' || trans == 't' || trans == 'C' || trans == 'c'
         xlen = m; ylen = n
+        xaxis = "rows"
     else
         throw(ArgumentError("Invalid trans character $trans"))
     end
-    xlen == length(x) || throw(DimensionMismatch())
+    xlen == length(x) || throw(DimensionMismatch(
+        "Matrix A has $xlen $xaxis, but vector x has a length $(length(x))"))
     T = promote_type(eltype(A), eltype(x))
     y = Vector{T}(undef, ylen)
     if trans == 'N' || trans == 'N'
@@ -1607,7 +1618,10 @@ mul!(y::AbstractVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) whe
 function mul!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, A, x)
     m, n = size(A)
-    length(x) == n && length(y) == m || throw(DimensionMismatch())
+    length(x) == n || throw(DimensionMismatch(
+        "Matrix A has $n columns, but vector x has a length $(length(x))"))
+    length(y) == m || throw(DimensionMismatch(
+        "Matrix A has $m rows, but vector y has a length $(length(y))"))
     m == 0 && return y
     if β != one(β)
         β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
@@ -1652,7 +1666,10 @@ function _At_or_Ac_mul_B!(tfun::Function,
                           α::Number, β::Number)
     require_one_based_indexing(y, A, x)
     m, n = size(A)
-    length(x) == m && length(y) == n || throw(DimensionMismatch())
+    length(x) == m || throw(DimensionMismatch(
+        "Matrix A has $n rows, but vector x has a length $(length(x))"))
+    length(y) == n || throw(DimensionMismatch(
+        "Matrix A has $m columns, but vector y has a length $(length(y))"))
     n == 0 && return y
     if β != one(β)
         β == zero(β) ? fill!(y, zero(eltype(y))) : rmul!(y, β)
@@ -1694,7 +1711,8 @@ end
 function _At_or_Ac_mul_B(tfun::Function, A::SparseMatrixCSC{TvA,TiA}, x::AbstractSparseVector{TvX,TiX}) where {TvA,TiA,TvX,TiX}
     require_one_based_indexing(A, x)
     m, n = size(A)
-    length(x) == m || throw(DimensionMismatch())
+    length(x) == m || throw(DimensionMismatch(
+        "Matrix A has $m rows, but vector x has a length $(length(x))"))
     Tv = promote_type(TvA, TvX)
     Ti = promote_type(TiA, TiX)
 
