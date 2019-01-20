@@ -7,7 +7,7 @@ New language features
 * The `extrema` function now accepts a function argument in the same manner as `minimum` and
   `maximum` ([#30323]).
 
-* Added `@big` macro that converts all numeric literals in an expression to arbitrary precision
+* Added `@big` macro that converts all numeric literals in an expression to arbitrary precision ([#30779])
 
 Multi-threading changes
 -----------------------
