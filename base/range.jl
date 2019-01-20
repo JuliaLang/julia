@@ -996,6 +996,13 @@ in(x::AbstractChar, r::AbstractRange{<:AbstractChar}) =
     !isempty(r) && x >= minimum(r) && x <= maximum(r) &&
         (mod(Int(x) - Int(first(r)), step(r)) == 0)
 
+function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
+    first(r) <= p.x <= last(r) || return nothing
+    d = convert(S, p.x - first(r))
+    iszero(d % step(r)) || return nothing
+    return d ÷ step(r) + 1
+end
+
 # Addition/subtraction of ranges
 
 function _define_range_op(@nospecialize f)
