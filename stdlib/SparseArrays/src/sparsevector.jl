@@ -1157,7 +1157,8 @@ function _binarymap(f::Function,
     0 <= mode <= 2 || throw(ArgumentError("Incorrect mode $mode."))
     R = typeof(f(zero(Tx), zero(Ty)))
     n = length(x)
-    length(y) == n || throw(DimensionMismatch())
+    length(y) == n || throw(DimensionMismatch(
+        "Vector x has a length $n but y has a length $(length(y))"))
 
     xnzind = nonzeroinds(x)
     xnzval = nonzeros(x)
@@ -1353,7 +1354,8 @@ adjoint(sv::SparseVector) = Adjoint(sv)
 
 function LinearAlgebra.axpy!(a::Number, x::SparseVectorUnion, y::AbstractVector)
     require_one_based_indexing(x, y)
-    length(x) == length(y) || throw(DimensionMismatch())
+    length(x) == length(y) || throw(DimensionMismatch(
+        "Vector x has a length $(length(x)) but y has a length $(length(y))"))
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
     m = length(nzind)
@@ -1408,7 +1410,8 @@ end
 function dot(x::AbstractVector{Tx}, y::SparseVectorUnion{Ty}) where {Tx<:Number,Ty<:Number}
     require_one_based_indexing(x, y)
     n = length(x)
-    length(y) == n || throw(DimensionMismatch())
+    length(y) == n || throw(DimensionMismatch(
+        "Vector x has a length $n but y has a length $(length(y))"))
     nzind = nonzeroinds(y)
     nzval = nonzeros(y)
     s = dot(zero(Tx), zero(Ty))
@@ -1421,7 +1424,8 @@ end
 function dot(x::SparseVectorUnion{Tx}, y::AbstractVector{Ty}) where {Tx<:Number,Ty<:Number}
     require_one_based_indexing(x, y)
     n = length(y)
-    length(x) == n || throw(DimensionMismatch())
+    length(x) == n || throw(DimensionMismatch(
+        "Vector x has a length $(length(x)) but y has a length $n"))
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
     s = dot(zero(Tx), zero(Ty))
@@ -1455,7 +1459,8 @@ end
 function dot(x::SparseVectorUnion{<:Number}, y::SparseVectorUnion{<:Number})
     x === y && return sum(abs2, x)
     n = length(x)
-    length(y) == n || throw(DimensionMismatch())
+    length(y) == n || throw(DimensionMismatch(
+        "Vector x has a length $n but y has a length $(length(y))"))
 
     xnzind = nonzeroinds(x)
     ynzind = nonzeroinds(y)
