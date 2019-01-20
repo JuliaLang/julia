@@ -293,15 +293,13 @@ macro timed(ex)
     end
 end
 
-
-
 walk(x, inner, outer) = outer(x)
 walk(x::Expr, inner, outer) = outer(Expr(x.head, map(inner, x.args)...))
 postwalk(f, x) = walk(x, x -> postwalk(f, x), f)
 
 """
     @big
-A macro that converts all enclosed numeric literals to their `big` versions, allowing 
+A macro that converts all enclosed numeric literals to their `big` versions, allowing
 for arbitrary precision arithmetic without converting each numeric literal by hand.
 See also [`big`](@ref), [`BigInt`](@ref), [`BigFloat`](@ref)
 ```julia-repl
@@ -318,7 +316,6 @@ julia> @big factorial(100)/factorial(99)
 macro big(ex)
     postwalk(x -> x isa Number ? big(x) : x, ex)
 end
-
 
 ## printing with color ##
 
