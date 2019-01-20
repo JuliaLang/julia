@@ -37,6 +37,9 @@ Standard library changes
 #### SparseArrays
 
 * performance improvements for sparse matrix-matrix multiplication ([#30372]).
+* Sparse vector outer products are more performant and maintain sparsity in products of the
+  form `kron(u, v')`, `u * v'`, and `u .* v'` where `u` and `v` are sparse vectors or column
+  views. ([#24980])
 
 #### Dates
 

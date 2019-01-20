@@ -345,12 +345,11 @@ julia> kron(A, B)
 function kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
     require_one_based_indexing(a, b)
     R = Matrix{promote_op(*,T,S)}(undef, size(a,1)*size(b,1), size(a,2)*size(b,2))
-    m = 1
-    for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
+    m = 0
+    @inbounds for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
         aij = a[i,j]
         for k = 1:size(b,1)
-            R[m] = aij*b[k,l]
-            m += 1
+            R[m += 1] = aij*b[k,l]
         end
     end
     R
