@@ -4,7 +4,8 @@ module MPFR
 
 export
     BigFloat,
-    setprecision
+    setprecision,
+    @big
 
 import
     .Base: *, +, -, /, <, <=, ==, >, >=, ^, ceil, cmp, convert, copysign, div,
@@ -1029,6 +1030,31 @@ end
 function Base.lerpi(j::Integer, d::Integer, a::BigFloat, b::BigFloat)
     t = BigFloat(j)/d
     fma(t, b, fma(-t, a, a))
+end
+
+
+walk(x, inner, outer) = outer(x)
+walk(x::Expr, inner, outer) = outer(Expr(x.head, map(inner, x.args)...))
+postwalk(f, x) = walk(x, x -> postwalk(f, x), f)
+
+"""
+    @big
+A macro that converts all enclosed numeric literals to their `big` versions, allowing
+for arbitrary precision arithmetic without converting each numeric literal by hand.
+See also [`big`](@ref), [`BigInt`](@ref), [`BigFloat`](@ref)
+```julia-repl
+julia> factorial(100)/factorial(99)
+ERROR: OverflowError: 100 is too large to look up in the table
+Stacktrace:
+ [1] factorial_lookup(::Int64, ::Array{Int64,1}, ::Int64) at ./combinatorics.jl:19
+ [2] factorial(::Int64) at ./combinatorics.jl:27
+ [3] top-level scope at none:0
+
+julia> @big factorial(100)/factorial(99)
+100.0
+"""
+macro big(ex)
+    postwalk(x -> x isa Number ? big(x) : x, ex)
 end
 
 end #module
