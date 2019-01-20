@@ -470,7 +470,7 @@ function copyto!(A::SparseVector, B::SparseVector)
     return A
 end
 
-copyto!(A::SparseVector, B::AbstractArray) = copyto!(A, sparse(B))
+copyto!(A::SparseVector, B::AbstractArray) = copyto!(A, sparsevec(B))
 
 function copyto!(A::SparseVector, B::SparseMatrixCSC)
     prep_sparsevec_copy_dest!(A, length(B), nnz(B))
