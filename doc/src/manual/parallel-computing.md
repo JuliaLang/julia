@@ -627,7 +627,8 @@ block, at which point it surrenders control and waits for all the local tasks to
 returning from the function.
 As for v0.7 and beyond, the feeder tasks are able to share state via `nextidx` because
 they all run on the same process.
-Even if `Tasks` are scheduled cooperatively, locking may still be required in some contexts, as in [asynchronous I\O](https://docs.julialang.org/en/stable/manual/faq/#Asynchronous-IO-and-concurrent-synchronous-writes-1).
+Even if `Tasks` are scheduled cooperatively, locking may still be required in some contexts, as in
+[asynchronous I/O](@ref faq-async-io).
 This means context switches only occur at well-defined points: in this case,
 when [`remotecall_fetch`](@ref) is called. This is the current state of implementation and it may change
 for future Julia versions, as it is intended to make it possible to run up to N `Tasks` on M `Process`, aka
@@ -1025,7 +1026,7 @@ on a [`RemoteChannel`](@ref) are proxied onto the backing store on the remote pr
 
 [`RemoteChannel`](@ref) can thus be used to refer to user implemented `AbstractChannel` objects.
 A simple example of this is provided in `dictchannel.jl` in the
-[Examples repository](https://github.com/JuliaArchive/Examples), which uses a dictionary as its
+[Examples repository](https://github.com/JuliaAttic/Examples), which uses a dictionary as its
 remote store.
 
 
@@ -1635,7 +1636,7 @@ transport and Julia's in-built parallel infrastructure.
 A `BufferStream` is an in-memory [`IOBuffer`](@ref) which behaves like an `IO`--it is a stream which can
 be handled asynchronously.
 
-The folder `clustermanager/0mq` in the [Examples repository](https://github.com/JuliaArchive/Examples)
+The folder `clustermanager/0mq` in the [Examples repository](https://github.com/JuliaAttic/Examples)
 contains an example of using ZeroMQ to connect Julia workers
 in a star topology with a 0MQ broker in the middle. Note: The Julia processes are still all *logically*
 connected to each other--any worker can message any other worker directly without any awareness
@@ -1885,7 +1886,7 @@ mpirun -np 4 ./julia example.jl
     In this context, MPI refers to the MPI-1 standard. Beginning with MPI-2, the MPI standards committee
     introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access
     (RMA). The motivation for adding rma to the MPI standard was to facilitate one-sided communication
-    patterns. For additional information on the latest MPI standard, see [http://mpi-forum.org/docs](http://mpi-forum.org/docs/).
+    patterns. For additional information on the latest MPI standard, see <https://mpi-forum.org/docs>.
 
 [^2]:
     [Julia GPU man pages](http://juliagpu.github.io/CUDAnative.jl/stable/man/usage.html#Julia-support-1)

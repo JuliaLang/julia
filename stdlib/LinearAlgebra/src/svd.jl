@@ -6,7 +6,7 @@ struct SVD{T,Tr,M<:AbstractArray{T}} <: Factorization{T}
     S::Vector{Tr}
     Vt::M
     function SVD{T,Tr,M}(U, S, Vt) where {T,Tr,M<:AbstractArray{T}}
-        @assert !has_offset_axes(U, S, Vt)
+        require_one_based_indexing(U, S, Vt)
         new{T,Tr,M}(U, S, Vt)
     end
 end
