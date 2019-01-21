@@ -16,7 +16,8 @@ const _REF_NAME = Ref.body.name
 call_result_unused(frame::InferenceState, pc::LineNum=frame.currpc) =
     isexpr(frame.src.code[frame.currpc], :call) && isempty(frame.ssavalue_uses[pc])
 
-function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState)
+function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState,
+                                  max_methods = sv.params.MAX_METHODS)
     atype_params = unwrap_unionall(atype).parameters
     ft = unwrap_unionall(atype_params[1]) # TODO: ccall jl_first_argument_datatype here
     isa(ft, DataType) || return Any # the function being called is unknown. can't properly handle this backedge right now
@@ -41,12 +42,12 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
         splitsigs = switchtupleunion(atype)
         applicable = Any[]
         for sig_n in splitsigs
-            xapplicable = _methods_by_ftype(sig_n, sv.params.MAX_METHODS, sv.params.world, min_valid, max_valid)
+            xapplicable = _methods_by_ftype(sig_n, max_methods, sv.params.world, min_valid, max_valid)
             xapplicable === false && return Any
             append!(applicable, xapplicable)
         end
     else
-        applicable = _methods_by_ftype(atype, sv.params.MAX_METHODS, sv.params.world, min_valid, max_valid)
+        applicable = _methods_by_ftype(atype, max_methods, sv.params.world, min_valid, max_valid)
         if applicable === false
             # this means too many methods matched
             # (assume this will always be true, so we don't compute / update valid age in this case)
@@ -489,7 +490,8 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
 end
 
 # do apply(af, fargs...), where af is a function value
-function abstract_apply(@nospecialize(aft), aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
+function abstract_apply(@nospecialize(aft), aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState,
+                        max_methods = sv.params.MAX_METHODS)
     if !isa(aft, Const) && (!isType(aft) || has_free_typevars(aft))
         if !isconcretetype(aft) || (aft <: Builtin)
             # non-constant function of unknown type: bail now,
@@ -522,12 +524,12 @@ function abstract_apply(@nospecialize(aft), aargtypes::Vector{Any}, vtypes::VarT
     end
     for ct in ctypes
         if isa(aft, Const)
-            rt = abstract_call(aft.val, (), ct, vtypes, sv)
+            rt = abstract_call(aft.val, (), ct, vtypes, sv, max_methods)
         elseif isconstType(aft)
-            rt = abstract_call(aft.parameters[1], (), ct, vtypes, sv)
+            rt = abstract_call(aft.parameters[1], (), ct, vtypes, sv, max_methods)
         else
             astype = argtypes_to_type(ct)
-            rt = abstract_call_gf_by_type(nothing, ct, astype, sv)
+            rt = abstract_call_gf_by_type(nothing, ct, astype, sv, max_methods)
         end
         res = tmerge(res, rt)
         if res === Any
@@ -568,9 +570,9 @@ function pure_eval_call(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(a
     end
 end
 
-function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
+function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState, max_methods = sv.params.MAX_METHODS)
     if f === _apply
-        return abstract_apply(argtypes[2], argtypes[3:end], vtypes, sv)
+        return abstract_apply(argtypes[2], argtypes[3:end], vtypes, sv, max_methods)
     end
 
     la = length(argtypes)
@@ -779,7 +781,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         return Type # don't try to infer these function edges directly -- it won't actually come up with anything useful
     end
 
-    return abstract_call_gf_by_type(f, argtypes, atype, sv)
+    return abstract_call_gf_by_type(f, argtypes, atype, sv, max_methods)
 end
 
 # wrapper around `abstract_call` for first computing if `f` is available
