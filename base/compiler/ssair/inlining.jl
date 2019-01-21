@@ -583,7 +583,8 @@ function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, at
     for i in 3:length(argexprs)
         def = argexprs[i]
         def_type = atypes[i]
-        if def_type isa PartialTuple
+        if def_type isa PartialStruct
+            # def_type.typ <: Tuple is assumed
             def_atypes = def_type.fields
         else
             def_atypes = Any[]
