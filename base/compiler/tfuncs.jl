@@ -95,28 +95,14 @@ math_tfunc(@nospecialize(x), @nospecialize(y)) = widenconst(x)
 math_tfunc(@nospecialize(x), @nospecialize(y), @nospecialize(z)) = widenconst(x)
 fptoui_tfunc(@nospecialize(t), @nospecialize(x)) = bitcast_tfunc(t, x)
 fptosi_tfunc(@nospecialize(t), @nospecialize(x)) = bitcast_tfunc(t, x)
-function fptoui_tfunc(@nospecialize(x))
-    T = widenconst(x)
-    T === Float64 && return UInt64
-    T === Float32 && return UInt32
-    T === Float16 && return UInt16
-    return Any
-end
-function fptosi_tfunc(@nospecialize(x))
-    T = widenconst(x)
-    T === Float64 && return Int64
-    T === Float32 && return Int32
-    T === Float16 && return Int16
-    return Any
-end
 
     ## conversion ##
 add_tfunc(bitcast, 2, 2, bitcast_tfunc, 1)
 add_tfunc(sext_int, 2, 2, bitcast_tfunc, 1)
 add_tfunc(zext_int, 2, 2, bitcast_tfunc, 1)
 add_tfunc(trunc_int, 2, 2, bitcast_tfunc, 1)
-add_tfunc(fptoui, 1, 2, fptoui_tfunc, 1)
-add_tfunc(fptosi, 1, 2, fptosi_tfunc, 1)
+add_tfunc(fptoui, 2, 2, fptoui_tfunc, 1)
+add_tfunc(fptosi, 2, 2, fptosi_tfunc, 1)
 add_tfunc(uitofp, 2, 2, bitcast_tfunc, 1)
 add_tfunc(sitofp, 2, 2, bitcast_tfunc, 1)
 add_tfunc(fptrunc, 2, 2, bitcast_tfunc, 1)
