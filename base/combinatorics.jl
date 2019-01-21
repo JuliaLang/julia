@@ -20,14 +20,14 @@ end
         return factorial_lookup_helper(n, table, lim)
     else
         @inbounds f = _shifted_fact_table64[(n % Int) + 1]
-        return typeof(n) <: UInt ? oftype(n, f % UInt) : oftype(n, f)
+        return typeof(n) <: Unsigned ? oftype(n, f % UInt) : oftype(n, f)
     end
 end
 
 factorial(n::Union{Int64,UInt64}) = factorial_lookup(n, _shifted_fact_table64, 20)
 factorial(n::Int128) = factorial_lookup(n, _shifted_fact_table128, 33)
 
-factorial(n::UInt128) = factorial_lookup_helper(n, _shifted_fact_table128, 34)  # TODO: use factorial_lookup
+factorial(n::UInt128) = factorial_lookup(n, _shifted_fact_table128, 34)
 
 if Int === Int32
     factorial(n::Union{Int8,UInt8,Int16,UInt16}) = factorial(Int32(n))
