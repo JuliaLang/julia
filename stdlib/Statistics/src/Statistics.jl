@@ -699,6 +699,8 @@ prior to taking the median. The `by` keyword lets you provide a function that wi
 applied to each element before comparison. In the case of non-numerical, even length `v`,
 the first of the two middle elements according to the provided ordering is returned as the median.
 One can choose the second of the two middle elements by reversing the sort order with `rev=true`.
+A custom `middle` function has to be provided when `middle` isn't defined for the input type, otherwise
+an error is thrown.
 
 Like [`median`](@ref), but may overwrite the input vector.
 """
