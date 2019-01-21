@@ -592,6 +592,17 @@ end
     # test x = Inf
     @test isinf(copysign(1/0,1))
     @test isinf(copysign(1/0,-1))
+
+    # with Unsigned argument
+    @test copysign(Float16(-1), 0x01) === Float16(1)
+    @test copysign(Float16(1), 0x01) === Float16(1)
+    @test copysign(-1.0f0, 0x01) === 1.0f0
+    @test copysign(1.0f0, 0x01) === 1.0f0
+    @test copysign(-1.0, 0x01) === 1.0
+    @test copysign(-1, 0x02) === 1
+    @test copysign(big(-1), 0x02) == 1
+    @test copysign(big(-1.0), 0x02) == 1.0
+    @test copysign(-1//2, 0x01) == 1//2
 end
 
 @testset "isnan/isinf/isfinite" begin
