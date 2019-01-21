@@ -1928,7 +1928,7 @@ end
 
 @testset "issue #16073" begin
     @inferred sprand(1, 1, 1.0)
-    @inferred sprand(1, 1, 1.0, rand, Float64)
+    @inferred sprand(1, 1, 1.0, rand)
     @inferred sprand(1, 1, 1.0, x -> round.(Int, rand(x) * 100))
 end
 
