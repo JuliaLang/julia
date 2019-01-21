@@ -1162,6 +1162,9 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
     elseif f === isa
         length(argtypes) == 2 || return false
         return argtypes[2] ⊑ Type
+    elseif f === (<:)
+        length(argtypes) == 2 || return false
+        return argtypes[1] ⊑ Type && argtypes[2] ⊑ Type
     elseif f === UnionAll
         return length(argtypes) == 2 &&
             (argtypes[1] ⊑ TypeVar && argtypes[2] ⊑ Type)
