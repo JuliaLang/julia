@@ -186,7 +186,32 @@ include("abstractarraymath.jl")
 include("arraymath.jl")
 
 # define MIME"foo/bar" early so that we can overload 3-arg show
+"""
+    MIME
+
+A type representing a standard internet data format. "MIME" stands for
+"Multipurpose Internet Mail Extensions", since the standard was originally
+used to describe multimedia attachments to email messages.
+
+A `MIME` object can be passed as the second argument to [`show`](@ref) to
+request output in that format.
+
+# Examples
+```jldoctest
+julia> show(stdout, MIME("text/plain"), "hi")
+"hi"
+```
+"""
 struct MIME{mime} end
+
+"""
+    @MIME_str
+
+A convenience macro for writing [`MIME`](@ref) types, typically used when
+adding methods to `show`.
+For example the syntax `show(io::IO, ::MIME"text/html", x::MyType) = ...`
+could be used to define how to write an HTML representation of `MyType`.
+"""
 macro MIME_str(s)
     :(MIME{$(Expr(:quote, Symbol(s)))})
 end
@@ -369,11 +394,6 @@ using .Enums
 # BigInts and BigFloats
 include("gmp.jl")
 using .GMP
-
-for T in [Signed, Integer, BigInt, Float32, Float64, Real, Complex, Rational]
-    @eval flipsign(x::$T, ::Unsigned) = +x
-    @eval copysign(x::$T, ::Unsigned) = +x
-end
 
 include("mpfr.jl")
 using .MPFR

@@ -44,6 +44,9 @@ end
     @test occursin("1.25", string(spv_x1))
     @test occursin("-0.75", string(spv_x1))
     @test occursin("3.5", string(spv_x1))
+
+    # issue #30589
+    @test repr("text/plain", sparse([true])) == "1-element SparseArrays.SparseVector{Bool,$Int} with 1 stored entry:\n  [1]  =  1"
 end
 
 ### Comparison helper to ensure exact equality with internal structure
@@ -169,6 +172,22 @@ end
             @test sprand(r1, 100, .9) == sprand(r2, 100, .9)
             @test sprandn(r1, 100, .9) == sprandn(r2, 100, .9)
             @test sprand(r1, Bool, 100, .9) == sprand(r2,  Bool, 100, .9)
+        end
+
+        # test sprand with function inputs
+        let xr = sprand(1000, 0.9, rand)
+            @test isa(xr, SparseVector{Float64,Int})
+            @test length(xr) == 1000
+            if !isempty(nonzeros(xr))
+                @test all(nonzeros(xr) .> 0.0)
+            end
+        end
+        let xr = sprand(1000, 0.9, rand, Float32)
+            @test isa(xr, SparseVector{Float32,Int})
+            @test length(xr) == 1000
+            if !isempty(nonzeros(xr))
+                @test all(nonzeros(xr) .> 0.0)
+            end
         end
     end
 end

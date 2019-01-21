@@ -972,6 +972,12 @@ for (line, expr) in Pair[
     @test Base.eval(REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
 end
 
+# PR 30754, Issues #22013, #24871, #26933, #29282, #29361, #30348
+for line in ["′", "abstract", "type", "|=", ".="]
+    @test occursin("No documentation found.",
+        sprint(show, Base.eval(REPL._helpmode(IOBuffer(), line))::Union{Markdown.MD,Nothing}))
+end
+
 # PR #27562
 fake_repl() do stdin_write, stdout_read, repl
     repltask = @async begin

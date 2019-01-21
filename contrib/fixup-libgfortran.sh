@@ -2,6 +2,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Run as: fixup-libgfortran.sh [--verbose] <$private_libdir>
+FC=${FC:-gfortran}
 
 # If we're invoked with "--verbose", create a `debug` function that prints stuff out
 if [ "$1" = "--verbose" ] || [ "$1" = "-v" ]; then
@@ -22,7 +23,7 @@ if [ "$UNAME" = "Linux" ]; then
 elif [ "$UNAME" = "Darwin" ]; then
     SHLIB_EXT="dylib"
 else
-    echo "WARNING: Could not autodetect platform type ('uname -s' == $UNAME); assuming Linux" >&2
+    echo "WARNING: Could not autodetect platform type ('uname -s' = $UNAME); assuming Linux" >&2
     UNAME="Linux"
     SHLIB_EXT="so"
 fi
@@ -34,10 +35,24 @@ find_shlib()
     lib_path="$1"
     if [ -f "$lib_path" ]; then
         if [ "$UNAME" = "Linux" ]; then
-            ldd "$lib_path" | grep $2 | cut -d' ' -f3 | xargs
+            ldd "$lib_path" | grep $2 | grep -v "not found" | cut -d' ' -f3 | xargs
         else # $UNAME is "Darwin", we only have two options, see above
             otool -L "$lib_path" | grep $2 | cut -d' ' -f1 | xargs
         fi
+    fi
+}
+
+find_shlib_dir()
+{
+    # Usually, on platforms like OSX we get full paths when linking.  However,
+    # if we are inspecting, say, BinaryBuilder-built OpenBLAS libraries, we will
+    # only get something like `@rpath/libgfortran.5.dylib` when inspecting the
+    # libraries.  We can, as a last resort, ask `$FC` directly what the full
+    # filepath for this library is, but only if we don't have a direct path to it:
+    if [ $(dirname "$1") = "@rpath" ]; then
+        dirname "$($FC -print-file-name="$(basename "$1")" 2>/dev/null)"
+    else
+        dirname "$1" 2>/dev/null
     fi
 }
 
@@ -51,10 +66,11 @@ for lib in lapack blas openblas; do
         LIBQUADMATH_PATH=$(find_shlib "$private_libname" libquadmath)
 
         # Take the directories, add them onto LIBGFORTRAN_DIRS, which we use to
-        # search for these libraries in the future.
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBGFORTRAN_PATH 2>/dev/null)"
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBGCC_PATH 2>/dev/null)"
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBQUADMATH_PATH 2>/dev/null)"
+        # search for these libraries in the future.  If there is no directory, try
+        # asking `$FC` where such a file could be found.
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(find_shlib_dir $LIBGFORTRAN_PATH)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(find_shlib_dir $LIBGCC_PATH)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(find_shlib_dir $LIBQUADMATH_PATH)"
 
         # Save the SONAMES
         LIBGFORTRAN_SONAMES="$LIBGFORTRAN_SONAMES $(basename "$LIBGFORTRAN_PATH")"

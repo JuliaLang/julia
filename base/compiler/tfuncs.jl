@@ -789,6 +789,11 @@ function fieldtype_nothrow(@nospecialize(s0), @nospecialize(name))
         return false
     end
 
+    su = unwrap_unionall(s0)
+    if isa(su, Union)
+        return fieldtype_nothrow(rewrap_unionall(su.a, s0), name) && fieldtype_nothrow(rewrap_unionall(su.b, s0), name)
+    end
+
     s = instanceof_tfunc(s0)[1]
     u = unwrap_unionall(s)
     return _fieldtype_nothrow(u, name)
@@ -796,7 +801,7 @@ end
 
 function _fieldtype_nothrow(@nospecialize(u), name::Const)
     if isa(u, Union)
-        return _fieldtype_nothrow(u.a, name) && _fieldtype_nothrow(u.b, name)
+        return _fieldtype_nothrow(u.a, name) || _fieldtype_nothrow(u.b, name)
     end
     fld = name.val
     if isa(fld, Symbol)
@@ -1330,11 +1335,11 @@ function return_type_tfunc(argtypes::Vector{Any}, vtypes::VarTable, sv::Inferenc
                     end
                     astype = argtypes_to_type(argtypes_vec)
                     if isa(aft, Const)
-                        rt = abstract_call(aft.val, (), argtypes_vec, vtypes, sv)
+                        rt = abstract_call(aft.val, (), argtypes_vec, vtypes, sv, -1)
                     elseif isconstType(aft)
-                        rt = abstract_call(aft.parameters[1], (), argtypes_vec, vtypes, sv)
+                        rt = abstract_call(aft.parameters[1], (), argtypes_vec, vtypes, sv, -1)
                     else
-                        rt = abstract_call_gf_by_type(nothing, argtypes_vec, astype, sv)
+                        rt = abstract_call_gf_by_type(nothing, argtypes_vec, astype, sv, -1)
                     end
                     if isa(rt, Const)
                         # output was computed to be constant

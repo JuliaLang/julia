@@ -739,7 +739,7 @@ f19957(::Int) = Int8(1)            # issue #19957, inference failure when splatt
 f19957(::Int...) = Int16(1)
 f19957(::Any...) = "no"
 g19957(x) = f19957(x...)
-@test all(t -> t<:Union{Int8,Int16}, Base.return_types(g19957, (Int,))) # with a full fix, this should just be Int8
+@test Base.return_types(g19957, (Int,)) == Any[Int8]
 
 # Inference for some type-level computation
 fUnionAll(::Type{T}) where {T} = Type{S} where S <: T
@@ -1832,6 +1832,15 @@ function g15276()
 end
 @test g15276() isa Vector{Int}
 
+function inbounds_30563()
+    local y
+    @inbounds for i in 1:10
+        y = (m->2i)(0)
+    end
+    return y
+end
+@test Base.return_types(inbounds_30563, ()) == Any[Int]
+
 # issue #27316 - inference shouldn't hang on these
 f27316(::Vector) = nothing
 f27316(::Any) = f27316(Any[][1]), f27316(Any[][1])
@@ -2184,3 +2193,16 @@ j30385(T, y) = k30385(f30385(T, y))
 
 @test @inferred(j30385(AbstractFloat, 1)) == 1
 @test @inferred(j30385(:dummy, 1)) == "dummy"
+
+@test Base.return_types(Tuple, (NamedTuple{<:Any,Tuple{Any,Int}},)) == Any[Tuple{Any,Int}]
+@test Base.return_types(Base.splat(tuple), (typeof((a=1,)),)) == Any[Tuple{Int}]
+
+# test that return_type_tfunc isn't affected by max_methods differently than return_type
+_rttf_test(::Int8) = 0
+_rttf_test(::Int16) = 0
+_rttf_test(::Int32) = 0
+_rttf_test(::Int64) = 0
+_rttf_test(::Int128) = 0
+_call_rttf_test() = Core.Compiler.return_type(_rttf_test, Tuple{Any})
+@test Core.Compiler.return_type(_rttf_test, Tuple{Any}) === Int
+@test _call_rttf_test() === Int

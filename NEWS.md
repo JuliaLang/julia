@@ -16,6 +16,7 @@ Multi-threading changes
 Language changes
 ----------------
 
+* `Enum` now behaves like a scalar when used in broadcasting ([#30670]).
 
 Command-line option changes
 ---------------------------
@@ -29,29 +30,36 @@ New library functions
 Standard library changes
 ------------------------
 
-
 #### LinearAlgebra
 
 * Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
 
 #### SparseArrays
 
-  * `sprandn` now supports specifying the output element type ([#30083]).
-  * performance improvements for sparse matrix-matrix multiplication ([#30372]).
+* performance improvements for sparse matrix-matrix multiplication ([#30372]).
+* Sparse vector outer products are more performant and maintain sparsity in products of the
+  form `kron(u, v')`, `u * v'`, and `u .* v'` where `u` and `v` are sparse vectors or column
+  views. ([#24980])
 
 #### Statistics
 
-  * `mean` and `var` now handles the empty case ([#29033]).
-  * Added Keyword arguments `lt`, `by`, `middle` and `rev` to `median` ([#30329]).
+* Added Keyword arguments `lt`, `by`, `middle` and `rev` to `median` ([#30329]).
 
 #### Dates
 
 * Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
 
+#### Miscellaneous
+
+* Since environment variables on Windows are case-insensitive, `ENV` now converts its keys
+  to uppercase for display, iteration, and copying ([#30593]).
 
 External dependencies
 ---------------------
 
+* libgit2 has been updated to v0.27.7 ([#30584]).
+* OpenBLAS has been updated to v0.3.5 ([#30583]).
+* MbedTLS has been updated to v2.16.0 ([#30618]).
 
 Deprecated or removed
 ---------------------

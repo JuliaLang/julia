@@ -101,7 +101,7 @@ typedef struct _jl_ast_context_t {
     jl_ast_context_list_t list;
     int ref;
     jl_task_t *task; // the current owner (user) of this jl_ast_context_t
-    jl_module_t *module; // context module for "defined-julia-global" and "current-julia-module-counter"
+    jl_module_t *module; // context module for `current-julia-module-counter`
 } jl_ast_context_t;
 
 static jl_ast_context_t jl_ast_main_ctx;
@@ -128,25 +128,6 @@ struct macroctx_stack {
 static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
 static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v);
 static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, struct macroctx_stack *macroctx, int onelevel);
-
-value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
-{
-    jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
-    // tells whether a var is defined in and *by* the current module
-    argcount(fl_ctx, "defined-julia-global", nargs, 1);
-    jl_module_t *mod = ctx->module;
-    jl_sym_t *sym = (jl_sym_t*)scm_to_julia(fl_ctx, args[0], mod);
-    if (jl_is_globalref(sym)) {
-        mod = jl_globalref_mod(sym);
-        sym = jl_globalref_name(sym);
-    }
-    if (!jl_is_symbol(sym))
-        type_error(fl_ctx, "defined-julia-global", "symbol", args[0]);
-    if (!mod)
-        return fl_ctx->F;
-    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&mod->bindings, sym);
-    return (b != HT_NOTFOUND && b->owner == mod) ? fl_ctx->T : fl_ctx->F;
-}
 
 value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
@@ -214,7 +195,6 @@ value_t fl_julia_logmsg(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 }
 
 static const builtinspec_t julia_flisp_ast_ext[] = {
-    { "defined-julia-global", fl_defined_julia_global },
     { "current-julia-module-counter", fl_current_module_counter },
     { "julia-scalar?", fl_julia_scalar },
     { "julia-logmsg", fl_julia_logmsg },
@@ -763,18 +743,24 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
     return julia_to_scm_noalloc2(fl_ctx, v);
 }
 
-// this is used to parse a line of repl input
-JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len, const char *filename, size_t filename_len)
+// parse an entire string like a file, reading multiple expressions
+JL_DLLEXPORT jl_value_t *jl_parse_all(const char *str, size_t len, const char *filename, size_t filename_len)
 {
     JL_TIMING(PARSING);
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
     value_t s = cvalue_static_cstrn(fl_ctx, str, len);
     value_t files = cvalue_static_cstrn(fl_ctx, filename, filename_len);
-    value_t e = fl_applyn(fl_ctx, 2, symbol_value(symbol(fl_ctx, "jl-parse-string")), s, files);
+    value_t e = fl_applyn(fl_ctx, 2, symbol_value(symbol(fl_ctx, "jl-parse-all")), s, files);
     jl_value_t *res = e == fl_ctx->FL_EOF ? jl_nothing : scm_to_julia(fl_ctx, e, NULL);
     jl_ast_ctx_leave(ctx);
     return res;
+}
+
+// for backwards compat
+JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len, const char *filename, size_t filename_len)
+{
+    return jl_parse_all(str, len, filename, filename_len);
 }
 
 // this is for parsing one expression out of a string, keeping track of
@@ -792,7 +778,7 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
     value_t s = cvalue_static_cstrn(fl_ctx, str, len);
-    value_t p = fl_applyn(fl_ctx, 3, symbol_value(symbol(fl_ctx, "jl-parse-one-string")),
+    value_t p = fl_applyn(fl_ctx, 3, symbol_value(symbol(fl_ctx, "jl-parse-one")),
                           s, fixnum(pos0), greedy?fl_ctx->T:fl_ctx->F);
     jl_value_t *expr=NULL, *pos1=NULL;
     JL_GC_PUSH2(&expr, &pos1);
@@ -828,7 +814,7 @@ jl_value_t *jl_parse_eval_all(const char *fname,
         JL_TIMING(PARSING);
         value_t t = cvalue_static_cstrn(fl_ctx, content, contentlen);
         fl_gc_handle(fl_ctx, &t);
-        ast = fl_applyn(fl_ctx, 2, symbol_value(symbol(fl_ctx, "jl-parse-string-stream")), t, f);
+        ast = fl_applyn(fl_ctx, 2, symbol_value(symbol(fl_ctx, "jl-parse-all")), t, f);
         fl_free_gc_handles(fl_ctx, 1);
     }
     else {
@@ -869,9 +855,9 @@ jl_value_t *jl_parse_eval_all(const char *fname,
                 }
                 // expand non-final expressions in statement position (value unused)
                 expression =
-                    fl_applyn(fl_ctx, 1,
+                    fl_applyn(fl_ctx, 3,
                               symbol_value(symbol(fl_ctx, iscons(cdr_(ast)) ? "jl-expand-to-thunk-stmt" : "jl-expand-to-thunk")),
-                              expression);
+                              expression, symbol(fl_ctx, jl_filename), fixnum(jl_lineno));
             }
             jl_get_ptls_states()->world_age = jl_world_counter;
             form = scm_to_julia(fl_ctx, expression, inmodule);
@@ -923,6 +909,21 @@ jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module
     JL_AST_PRESERVE_PUSH(ctx, old_roots, inmodule);
     value_t arg = julia_to_scm(fl_ctx, expr);
     value_t e = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, funcname)), arg);
+    jl_value_t *result = scm_to_julia(fl_ctx, e, inmodule);
+    JL_AST_PRESERVE_POP(ctx, old_roots);
+    jl_ast_ctx_leave(ctx);
+    return result;
+}
+
+jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *expr, jl_module_t *inmodule,
+                                       const char *file, int line)
+{
+    jl_ast_context_t *ctx = jl_ast_ctx_enter();
+    fl_context_t *fl_ctx = &ctx->fl;
+    JL_AST_PRESERVE_PUSH(ctx, old_roots, inmodule);
+    value_t arg = julia_to_scm(fl_ctx, expr);
+    value_t e = fl_applyn(fl_ctx, 3, symbol_value(symbol(fl_ctx, funcname)), arg,
+                          symbol(fl_ctx, file), fixnum(line));
     jl_value_t *result = scm_to_julia(fl_ctx, e, inmodule);
     JL_AST_PRESERVE_POP(ctx, old_roots);
     jl_ast_ctx_leave(ctx);
@@ -1165,29 +1166,40 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule
     return expr;
 }
 
-JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule)
+JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmodule,
+                                            const char *file, int line)
 {
     JL_TIMING(LOWERING);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
     expr = jl_expand_macros(expr, inmodule, NULL, 0);
-    expr = jl_call_scm_on_ast("jl-expand-to-thunk", expr, inmodule);
+    expr = jl_call_scm_on_ast_and_loc("jl-expand-to-thunk", expr, inmodule, file, line);
     JL_GC_POP();
     return expr;
+}
+
+JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule)
+{
+    return jl_expand_with_loc(expr, inmodule, "none", 0);
 }
 
 // expand in a context where the expression value is unused
-JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule)
+JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *inmodule,
+                                                 const char *file, int line)
 {
     JL_TIMING(LOWERING);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
     expr = jl_expand_macros(expr, inmodule, NULL, 0);
-    expr = jl_call_scm_on_ast("jl-expand-to-thunk-stmt", expr, inmodule);
+    expr = jl_call_scm_on_ast_and_loc("jl-expand-to-thunk-stmt", expr, inmodule, file, line);
     JL_GC_POP();
     return expr;
 }
 
+JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule)
+{
+    return jl_expand_stmt_with_loc(expr, inmodule, "none", 0);
+}
 
 #ifdef __cplusplus
 }

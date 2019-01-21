@@ -340,6 +340,13 @@ end
         f = Diagonal(rand(n))
         @test Array(a*f) == Array(a)*f
         @test Array(f*b) == f*Array(b)
+        A = rand(2n, 2n)
+        sA = view(A, 1:2:2n, 1:2:2n)
+        @test Array(sA*b) ≈ Array(sA)*Array(b)
+        @test Array(a*sA) ≈ Array(a)*Array(sA)
+        c = sprandn(ComplexF32, n, n, q)
+        @test Array(sA*c') ≈ Array(sA)*Array(c)'
+        @test Array(c'*sA) ≈ Array(c)'*Array(sA)
     end
 end
 
@@ -352,6 +359,7 @@ end
     for (m,n) in ((5,10), (13,8), (14,10))
         a = sprand(m, 5, 0.4); a_d = Matrix(a)
         b = sprand(n, 6, 0.3); b_d = Matrix(b)
+        v = view(a, :, 1); v_d = Vector(v)
         x = sprand(m, 0.4); x_d = Vector(x)
         y = sprand(n, 0.3); y_d = Vector(y)
         # mat ⊗ mat
@@ -370,6 +378,11 @@ end
         @test Array(kron(x, b)) == kron(x_d, b_d)
         @test Array(kron(x_d, b)) == kron(x_d, b_d)
         @test Array(kron(x, b_d)) == kron(x_d, b_d)
+        # vec ⊗ vec'
+        @test issparse(kron(v, y'))
+        @test issparse(kron(x, y'))
+        @test Array(kron(v, y')) == kron(v_d, y_d')
+        @test Array(kron(x, y')) == kron(x_d, y_d')
         # test different types
         z = convert(SparseVector{Float16, Int8}, y); z_d = Vector(z)
         @test Vector(kron(x, z)) == kron(x_d, z_d)
@@ -1501,7 +1514,7 @@ end
     local A = guardseed(1234321) do
         triu(sprand(10, 10, 0.2))
     end
-    @test SparseArrays.droptol!(A, 0.01).colptr == [1,1,1,2,2,3,4,6,6,7,9]
+    @test SparseArrays.droptol!(A, 0.01).colptr ==  [1, 2, 2, 3, 4, 5, 5, 6, 8, 10, 13]
     @test isequal(SparseArrays.droptol!(sparse([1], [1], [1]), 1), SparseMatrixCSC(1, 1, Int[1, 1], Int[], Int[]))
 end
 
@@ -2099,6 +2112,9 @@ end
     show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5,6], Int64[1,1,2,2,3,3], [1.0,2.0,3.0,4.0,5.0,6.0]))
     @test String(take!(io)) ==  string("6×3 SparseArrays.SparseMatrixCSC{Float64,Int64} with 6 stored entries:\n  [1, 1]  =  1.0\n",
         "  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0\n  [6, 3]  =  6.0")
+
+    # issue #30589
+    @test repr("text/plain", sparse([true true])) == "1×2 SparseArrays.SparseMatrixCSC{Bool,$Int} with 2 stored entries:\n  [1, 1]  =  1\n  [1, 2]  =  1"
 end
 
 @testset "check buffers" for n in 1:3
@@ -2394,6 +2410,55 @@ end
     m2 = @which mul!(C,D,A)
     @test m1.module == SparseArrays
     @test m2.module == SparseArrays
+end
+
+@testset "Symmetric of sparse matrix mul! dense vector" begin
+    rng = Random.MersenneTwister(1)
+    n = 1000
+    p = 0.02
+    q = 1 - sqrt(1-p)
+    Areal = sprandn(rng, n, n, p)
+    Breal = randn(rng, n)
+    Acomplex = sprandn(rng, n, n, q) + sprandn(rng, n, n, q) * im
+    Bcomplex = Breal + randn(rng, n) * im
+    @testset "symmetric/Hermitian sparse multiply with $S($U)" for S in (Symmetric, Hermitian), U in (:U, :L), (A, B) in ((Areal,Breal), (Acomplex,Bcomplex))
+        Asym = S(A, U)
+        As = sparse(Asym) # takes most time
+        @test which(mul!, (typeof(B), typeof(Asym), typeof(B))).module == SparseArrays
+        @test norm(Asym * B - As * B, Inf) <= eps() * n * p * 10
+    end
+end
+
+@testset "Symmetric of view of sparse matrix mul! dense vector" begin
+    rng = Random.MersenneTwister(1)
+    n = 1000
+    p = 0.02
+    q = 1 - sqrt(1-p)
+    Areal = view(sprandn(rng, n, n+10, p), :, 6:n+5)
+    Breal = randn(rng, n)
+    Acomplex = view(sprandn(rng, n, n+10, q) + sprandn(rng, n, n+10, q) * im, :, 6:n+5)
+    Bcomplex = Breal + randn(rng, n) * im
+    @testset "symmetric/Hermitian sparseview multiply with $S($U)" for S in (Symmetric, Hermitian), U in (:U, :L), (A, B) in ((Areal,Breal), (Acomplex,Bcomplex))
+        Asym = S(A, U)
+        As = sparse(Asym) # takes most time
+        @test which(mul!, (typeof(B), typeof(Asym), typeof(B))).module == SparseArrays
+        @test norm(Asym * B - As * B, Inf) <= eps() * n * p * 10
+    end
+end
+
+@testset "sprand" begin
+    p=0.3; m=1000; n=2000;
+    for s in 1:10
+        # build a (dense) random matrix with randsubset + rand
+        Random.seed!(s);
+        v = randsubseq(1:m*n,p);
+        x = zeros(m,n);
+        x[v] .= rand(length(v));
+        # redo the same with sprand
+        Random.seed!(s);
+        a = sprand(m,n,p);
+        @test x == a
+    end
 end
 
 @testset "sprandn with type $T" for T in (Float64, Float32, Float16, ComplexF64, ComplexF32, ComplexF16)

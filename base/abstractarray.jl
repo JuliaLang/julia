@@ -86,6 +86,8 @@ has_offset_axes(A)    = _tuple_any(x->first(x)!=1, axes(A))
 has_offset_axes(A...) = _tuple_any(has_offset_axes, A)
 has_offset_axes(::Colon) = false
 
+require_one_based_indexing(A...) = !has_offset_axes(A...) || throw(ArgumentError("offset arrays are not supported but got an array with index other than 1"))
+
 # Performance optimization: get rid of a branch on `d` in `axes(A, d)`
 # for d=1. 1d arrays are heavily used, and the first dimension comes up
 # in other applications.
@@ -553,8 +555,8 @@ elements since `BitArray`s are both mutable and can support 1-dimensional arrays
 ```julia-repl
 julia> similar(trues(10,10), 2)
 2-element BitArray{1}:
- false
- false
+ 0
+ 0
 ```
 
 Since `BitArray`s can only store elements of type [`Bool`](@ref), however, if you request a

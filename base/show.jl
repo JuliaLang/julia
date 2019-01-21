@@ -455,14 +455,14 @@ function show_type_name(io::IO, tn::Core.TypeName)
     globname = isdefined(tn, :mt) ? tn.mt.name : nothing
     globfunc = false
     if globname !== nothing
-        globname_str = string(globname)
+        globname_str = string(globname::Symbol)
         if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
                 isbindingresolved(tn.module, globname) && isdefined(tn.module, globname) &&
                 isconcretetype(tn.wrapper) && isa(getfield(tn.module, globname), tn.wrapper))
             globfunc = true
         end
     end
-    sym = globfunc ? globname : tn.name
+    sym = (globfunc ? globname : tn.name)::Symbol
     if get(io, :compact, false)
         if globfunc
             return print(io, "typeof(", sym, ")")
@@ -564,7 +564,7 @@ end
 
 show(io::IO, ::Nothing) = print(io, "nothing")
 print(io::IO, ::Nothing) = throw(ArgumentError("`nothing` should not be printed; use `show`, `repr`, or custom output instead."))
-show(io::IO, b::Bool) = print(io, b ? "true" : "false")
+show(io::IO, b::Bool) = print(io, get(io, :typeinfo, Any) === Bool ? (b ? "1" : "0") : (b ? "true" : "false"))
 show(io::IO, n::Signed) = (write(io, string(n)); nothing)
 show(io::IO, n::Unsigned) = print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
 print(io::IO, n::Unsigned) = print(io, string(n))
@@ -576,6 +576,7 @@ has_tight_type(p::Pair) =
     typeof(p.second) == typeof(p).parameters[2]
 
 isdelimited(io::IO, x) = true
+isdelimited(io::IO, x::Function) = !isoperator(Symbol(x))
 
 # !isdelimited means that the Pair is printed with "=>" (like in "1 => 2"),
 # without its explicit type (like in "Pair{Integer,Integer}(1, 2)")
