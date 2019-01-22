@@ -529,6 +529,27 @@ end
 
 # show
 
+for T in (
+    :Year, :Month, :Week, :Day,
+    :Hour, :Minute, :Second, :Millisecond, :Microsecond, :Nanosecond
+)
+    @eval function Base.show(io::IO, p::$T)
+        if get(io, :compact, false)
+            print(io, p)
+        else
+            print(io, $(string(T)), '(', p.value, ')')
+        end
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", p::Period)
+    print(io, p)
+end
+
+function Base.print(io::IO, p::Period)
+    print(io, string(p))
+end
+
 function Base.show(io::IO, dt::DateTime)
     if get(io, :compact, false)
         print(io, dt)

@@ -5,6 +5,58 @@ module IOTests
 using Test
 using Dates
 
+@testset "string/show representation of Period" begin
+    @test string(Dates.Year(2018)) == "2018 years"
+    @test sprint(show, Dates.Year(2018)) == "Year(2018)"
+    @test sprint(print, Dates.Year(2018)) == "2018 years"
+    @test repr(Dates.Year(2018)) == "Year(2018)"
+
+    @test string(Dates.Month(12)) == "12 months"
+    @test sprint(show, Dates.Month(12)) == "Month(12)"
+    @test sprint(print, Dates.Month(12)) == "12 months"
+    @test repr(Dates.Month(12)) == "Month(12)"
+
+    @test string(Dates.Week(4)) == "4 weeks"
+    @test sprint(show, Dates.Week(4)) == "Week(4)"
+    @test sprint(print, Dates.Week(4)) == "4 weeks"
+    @test repr(Dates.Week(4)) == "Week(4)"
+
+    @test string(Dates.Day(12)) == "12 days"
+    @test sprint(show, Dates.Day(12)) == "Day(12)"
+    @test sprint(print,Dates.Day(12)) == "12 days"
+    @test repr(Dates.Day(12)) == "Day(12)"
+
+    @test string(Dates.Hour(12)) == "12 hours"
+    @test sprint(show, Dates.Hour(12)) == "Hour(12)"
+    @test sprint(print,Dates.Hour(12)) == "12 hours"
+    @test repr(Dates.Hour(12)) == "Hour(12)"
+
+    @test string(Dates.Minute(12)) == "12 minutes"
+    @test sprint(show, Dates.Minute(12)) == "Minute(12)"
+    @test sprint(print,Dates.Minute(12)) == "12 minutes"
+    @test repr(Dates.Minute(12)) == "Minute(12)"
+
+    @test string(Dates.Second(12)) == "12 seconds"
+    @test sprint(show, Dates.Second(12)) == "Second(12)"
+    @test sprint(print,Dates.Second(12)) == "12 seconds"
+    @test repr(Dates.Second(12)) == "Second(12)"
+
+    @test string(Dates.Millisecond(12)) == "12 milliseconds"
+    @test sprint(show, Dates.Millisecond(12)) == "Millisecond(12)"
+    @test sprint(print,Dates.Millisecond(12)) == "12 milliseconds"
+    @test repr(Dates.Millisecond(12)) == "Millisecond(12)"
+
+    @test string(Dates.Microsecond(12)) == "12 microseconds"
+    @test sprint(show, Dates.Microsecond(12)) == "Microsecond(12)"
+    @test sprint(print,Dates.Microsecond(12)) == "12 microseconds"
+    @test repr(Dates.Microsecond(12)) == "Microsecond(12)"
+
+    @test string(Dates.Nanosecond(12)) == "12 nanoseconds"
+    @test sprint(show, Dates.Nanosecond(12)) == "Nanosecond(12)"
+    @test sprint(print,Dates.Nanosecond(12)) == "12 nanoseconds"
+    @test repr(Dates.Nanosecond(12)) == "Nanosecond(12)"
+end
+
 @testset "string/show representation of Date" begin
     @test string(Dates.Date(1, 1, 1)) == "0001-01-01" # January 1st, 1 AD/CE
     @test sprint(show, Dates.Date(1, 1, 1)) == "Date(1, 1, 1)"
