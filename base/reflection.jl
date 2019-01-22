@@ -122,7 +122,7 @@ function _fieldnames(@nospecialize t)
         if t.parameters[1] isa Tuple
             return t.parameters[1]
         else
-            throw(ArgumentError("type does not have definite field names"))
+            throw(ArgumentError("type $t does not have definite field names"))
         end
     end
     isdefined(t, :names) ? t.names : t.name.names
@@ -144,7 +144,7 @@ julia> fieldname(Rational, 2)
 """
 function fieldname(t::DataType, i::Integer)
     if t.abstract
-        throw(ArgumentError("type does not have definite field names"))
+        throw(ArgumentError("type $t does not have definite field names"))
     end
     names = _fieldnames(t)
     n_fields = length(names)
@@ -635,7 +635,7 @@ function fieldcount(@nospecialize t)
     if t isa UnionAll || t isa Union
         t = argument_datatype(t)
         if t === nothing
-            throw(ArgumentError("type does not have a definite number of fields"))
+            throw(ArgumentError("type $t does not have a definite number of fields"))
         end
         t = t::DataType
     elseif t == Union{}
@@ -657,7 +657,7 @@ function fieldcount(@nospecialize t)
         abstr = t.abstract || (t.name === Tuple.name && isvatuple(t))
     end
     if abstr
-        throw(ArgumentError("type does not have a definite number of fields"))
+        throw(ArgumentError("type $t does not have a definite number of fields"))
     end
     return length(t.types)
 end
@@ -820,7 +820,7 @@ If `types` is specified, returns an array of methods whose types match.
 """
 function methods(@nospecialize(f), @nospecialize(t))
     if isa(f, Core.Builtin)
-        throw(ArgumentError("argument is not a generic function"))
+        throw(ArgumentError("$f is not a generic function"))
     end
     t = to_tuple_type(t)
     world = typemax(UInt)
@@ -948,7 +948,7 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
                     params = Core.Compiler.Params(world))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
-        throw(ArgumentError("argument is not a generic function"))
+        throw(ArgumentError("$f is not a generic function"))
     end
     if debuginfo == :default
         debuginfo = :source
@@ -970,7 +970,7 @@ end
 function return_types(@nospecialize(f), @nospecialize(types=Tuple))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
-        throw(ArgumentError("argument is not a generic function"))
+        throw(ArgumentError("$f is not a generic function"))
     end
     types = to_tuple_type(types)
     rt = []
@@ -994,7 +994,7 @@ If `types` is an abstract type, then the method that would be called by `invoke`
 """
 function which(@nospecialize(f), @nospecialize(t))
     if isa(f, Core.Builtin)
-        throw(ArgumentError("argument is not a generic function"))
+        throw(ArgumentError("$f is not a generic function"))
     end
     t = to_tuple_type(t)
     tt = signature_type(f, t)
