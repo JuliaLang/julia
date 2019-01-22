@@ -18,36 +18,39 @@ if Base.is_primary_base_module
 let
     # Stdlibs manually sorted in top down order
     stdlibs = [
-            # No deps
-            :Base64,
-            :CRC32c,
-            :SHA,
-            Base.DISABLE_LIBUV ? nothing : :FileWatching,
-            :Unicode,
-            :Mmap,
-            Base.DISABLE_LIBUV ? nothing : :Serialization,
-            :Libdl,
-            :Markdown,
-            Base.DISABLE_LIBUV ? nothing : :LibGit2,
-            :Logging,
-            Base.DISABLE_LIBUV ? nothing : :Sockets,
-            :Printf,
-            :Profile,
-            :Dates,
-            :DelimitedFiles,
-            :Random,
-            Base.DISABLE_LIBUV ? nothing : :UUIDs,
-            Base.DISABLE_LIBUV ? nothing : :Future,
-            Base.DISABLE_LIBUV ? nothing : :LinearAlgebra,
-            Base.DISABLE_LIBUV ? nothing : :SparseArrays,
-            Base.DISABLE_LIBUV ? nothing : :SuiteSparse,
-            Base.DISABLE_LIBUV ? nothing : :Distributed,
-            Base.DISABLE_LIBUV ? nothing : :SharedArrays,
-            Base.DISABLE_LIBUV ? nothing : :Pkg,
-            Base.DISABLE_LIBUV ? nothing : :Test,
-            Base.DISABLE_LIBUV ? nothing : :REPL,
-            Base.DISABLE_LIBUV ? nothing : :Statistics,
-        ]
+        # No deps
+        :Base64,
+        :CRC32c,
+        :SHA,
+        Base.DISABLE_LIBUV ? nothing : :FileWatching,
+        :Unicode,
+        :Mmap,
+        Base.DISABLE_LIBUV ? nothing : :Serialization,
+        :Libdl,
+        :Markdown,
+        Base.DISABLE_LIBUV ? nothing : :LibGit2,
+        :Logging,
+        Base.DISABLE_LIBUV ? nothing : :Sockets,
+        :Printf,
+        :Profile,
+        :Dates,
+        :DelimitedFiles,
+        :Random,
+        :UUIDs,
+        Base.DISABLE_LIBUV ? nothing : :Future,
+        Base.DISABLE_LIBUV ? nothing : :LinearAlgebra,
+        Base.DISABLE_LIBUV ? nothing : :SparseArrays,
+        Base.DISABLE_LIBUV ? nothing : :SuiteSparse,
+        Base.DISABLE_LIBUV ? nothing : :Distributed,
+        Base.DISABLE_LIBUV ? nothing : :SharedArrays,
+        Base.DISABLE_LIBUV ? nothing : :Pkg,
+        Base.DISABLE_LIBUV ? nothing : :Test,
+        Base.DISABLE_LIBUV ? nothing : :REPL,
+        Base.DISABLE_LIBUV ? nothing : :Statistics,
+        :InteractiveUtils,
+        :JSON,
+        :PlotlyBase
+    ]
     filter!(x -> x !== nothing, stdlibs)
 
     maxlen = maximum(textwidth.(string.(stdlibs)))
@@ -56,6 +59,7 @@ let
     print_time(Base, (Base.end_base_include - Base.start_base_include) * 10^(-9))
 
     Base._track_dependencies[] = true
+    println(Base.load_path())
     Base.tot_time_stdlib[] = @elapsed for stdlib in stdlibs
         tt = @elapsed Base.require(Base, stdlib)
         print_time(stdlib, tt)
@@ -80,6 +84,7 @@ Base.init_load_path() # want to be able to find external packages in userimg.jl
 
 let
 tot_time_userimg = @elapsed (Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
+using JSON, PlotlyBase
 
 
 tot_time_base = (Base.end_base_include - Base.start_base_include) * 10.0^(-9)
