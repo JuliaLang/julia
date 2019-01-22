@@ -196,22 +196,41 @@ function identify_package(where::Module, name::String)::Union{Nothing,PkgId}
     identify_package(PkgId(where), name)
 end
 
+function identify_loaded_package(name::String)
+    for (key, mod) in loaded_modules
+        if nameof(mod) == Symbol(name)
+            return key
+        end
+    end
+    return nothing
+end
+
 function identify_package(where::PkgId, name::String)::Union{Nothing,PkgId}
     where.name === name && return where
     where.uuid === nothing && return identify_package(name)
-    for env in load_path()
-        found_or_uuid = manifest_deps_get(env, where, name)
-        found_or_uuid isa UUID && return PkgId(found_or_uuid, name)
-        found_or_uuid && return nothing
+    lp = load_path()
+    if isempty(lp)
+        return identify_loaded_package(name)
+    else
+        for env in load_path()
+            found_or_uuid = manifest_deps_get(env, where, name)
+            found_or_uuid isa UUID && return PkgId(found_or_uuid, name)
+            found_or_uuid && return nothing
+        end
     end
     return nothing
 end
 
 function identify_package(name::String)::Union{Nothing,PkgId}
-    for env in load_path()
-        found_or_uuid = project_deps_get(env, name)
-        found_or_uuid isa UUID && return PkgId(found_or_uuid, name)
-        found_or_uuid && return PkgId(name)
+    lp = load_path()
+    if isempty(lp)
+        return identify_loaded_package(name)
+    else
+        for env in load_path()
+            found_or_uuid = project_deps_get(env, name)
+            found_or_uuid isa UUID && return PkgId(found_or_uuid, name)
+            found_or_uuid && return PkgId(name)
+        end
     end
     return nothing
 end

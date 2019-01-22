@@ -490,7 +490,9 @@ function __init__()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
     # initialize loading
     init_depot_path()
-    init_load_path()
+    if !Sys.isjsvm()
+        init_load_path()
+    end
     nothing
 end
 
