@@ -199,16 +199,31 @@ end
 
 identify_package(where::Module, name::String) = identify_package(PkgId(where), name)
 
+
+function identify_loaded_package(name::String)
+     for (key, mod) in loaded_modules
+         if nameof(mod) == Symbol(name)
+             return key
+         end
+     end
+     return nothing
+ end
+
 # identify_package computes the PkgId for `name` from the context of `where`
 # or return `nothing` if no mapping exists for it
 function identify_package(where::PkgId, name::String)::Union{Nothing,PkgId}
     where.name === name && return where
     where.uuid === nothing && return identify_package(name) # ignore `where`
-    for env in load_path()
-        uuid = manifest_deps_get(env, where, name)
-        uuid === nothing && continue # not found--keep looking
-        uuid.uuid === nothing || return uuid # found in explicit environment--use it
-        return nothing # found in implicit environment--return "not found"
+    lp = load_path()
+    if isempty(lp)
+        return identify_loaded_package(name)
+    else
+        for env in load_path()
+            uuid = manifest_deps_get(env, where, name)
+            uuid === nothing && continue # not found--keep looking
+            uuid.uuid === nothing || return uuid # found in explicit environment--use it
+            return nothing # found in implicit environment--return "not found"
+        end
     end
     return nothing
 end
@@ -216,9 +231,14 @@ end
 # identify_package computes the PkgId for `name` from toplevel context
 # by looking through the Project.toml files and directories
 function identify_package(name::String)::Union{Nothing,PkgId}
-    for env in load_path()
-        uuid = project_deps_get(env, name)
-        uuid === nothing || return uuid # found--return it
+    lp = load_path()
+    if isempty(lp)
+        return identify_loaded_package(name)
+    else
+        for env in load_path()
+            uuid = project_deps_get(env, name)
+            uuid === nothing || return uuid # found--return it
+        end
     end
     return nothing
 end
