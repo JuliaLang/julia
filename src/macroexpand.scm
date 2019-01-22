@@ -550,13 +550,32 @@
 (define (rename-symbolic-labels e)
   (rename-symbolic-labels- e (table) '()))
 
+(define (escape-identifiers- e escaped)
+  (cond ((or (eq? e 'true) (eq? e 'false)) e)
+	((symbol? e)
+	 (cond ((underscore-symbol? e) e)
+	       (escaped `(escape ,e))
+	       (else e)))
+	((or (not (pair? e)) (quoted? e)) e)
+	((eq? (car e) 'global) e)
+	((eq? (car e) 'module) e)
+	((eq? (car e) 'escape)
+	 (escape-identifiers- (cadr e) #t))
+	(else
+	 (cons (car e)
+	       (map (lambda (x) (escape-identifiers- x escaped))
+		    (cdr e))))))
+
+(define (escape-identifiers e) (escape-identifiers- e #f))
+
 ;; macro expander entry point
 
 ;; TODO: delete this file and fold this operation into resolve-scopes
 (define (julia-expand-macroscope e)
   (julia-expand-macroscopes-
    (rename-symbolic-labels
-    (julia-expand-quotes e))))
+    (escape-identifiers
+     (julia-expand-quotes e)))))
 
 (define (contains-macrocall e)
   (and (pair? e)

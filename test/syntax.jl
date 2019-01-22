@@ -1713,6 +1713,20 @@ let g = @foo28900 f28900(kwarg = x->2x)
     @test g(10) == 20
 end
 
+# `esc` should not hide syntax from hygiene pass
+macro m_1q08Ze5()
+    sig = :(f_1q08Ze5(x))
+    quote
+        $(Expr(:function, esc(sig), quote
+            v_1q08Ze5 = x + 1
+            v_1q08Ze5
+        end))
+    end
+end
+@m_1q08Ze5()
+@test f_1q08Ze5(2) == 3
+@test !isdefined(@__MODULE__, :v_1q08Ze5)
+
 # issue #26037
 x26037() = 10
 function test_26037()
