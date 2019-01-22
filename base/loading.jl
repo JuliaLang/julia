@@ -117,7 +117,7 @@ end
 
 const ns_dummy_uuid = UUID("fe0723d6-3a44-4c41-8065-ee0f42c8ceab")
 
-dummy_uuid(project_file::String) = uuid5(ns_dummy_uuid, realpath(project_file))
+dummy_uuid(project_file::String) = uuid5(ns_dummy_uuid, Sys.isjsvm() ? project_file : realpath(project_file))
 
 ## package path slugs: turning UUID + SHA1 into a pair of 4-byte "slugs" ##
 
@@ -484,11 +484,9 @@ function entry_point_and_project_file(dir::String, name::String)::Union{Tuple{No
     isfile_casesensitive(path) && return path, nothing
     dir = joinpath(dir, name)
     path, project_file = entry_point_and_project_file_inside(dir, name)
-    Sys.isjsvm() && (project_file = nothing)
     path === nothing || return path, project_file
     dir = dir * ".jl"
     path, project_file = entry_point_and_project_file_inside(dir, name)
-    Sys.isjsvm() && (project_file = nothing)
     path === nothing || return path, project_file
     return nothing, nothing
 end
