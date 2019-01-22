@@ -1780,3 +1780,15 @@ end
 f30656(T) = (t, _)::Pair -> t >= T
 f30656(10)(11=>1)
 @test !isdefined(@__MODULE__, :_)
+
+# issue #30772
+function f30772(a::T) where T
+    function ()
+        function (b::T)
+        end
+    end
+end
+let f = f30772(1.0), g = f()
+    @test g(1.0) === nothing
+    @test_throws MethodError g(1)
+end

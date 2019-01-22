@@ -2594,7 +2594,7 @@
 (define (free-vars e)
   (table.keys (free-vars- e (table))))
 
-(define (analyze-vars-lambda e env captvars sp new-sp)
+(define (analyze-vars-lambda e env captvars sp new-sp (methsig #f))
   (let* ((args (lam:args e))
          (locl (caddr e))
          (allv (nconc (map arg-name args) locl))
@@ -2605,13 +2605,15 @@
                                                 (if vi (free-vars (vinfo:type vi)) '())))
                                             fv))))
                  (append (diff dv fv) fv)))
+         (sig-fv (if methsig (free-vars methsig) '()))
          (glo  (find-global-decls (lam:body e)))
          ;; make var-info records for vars introduced by this lambda
          (vi   (nconc
                 (map (lambda (decl) (make-var-info (decl-var decl)))
                      args)
                 (map make-var-info locl)))
-         (capt-sp (filter (lambda (v) (and (memq v fv) (not (memq v glo)) (not (memq v new-sp))))
+         (capt-sp (filter (lambda (v) (or (and (memq v fv) (not (memq v glo)) (not (memq v new-sp)))
+                                          (memq v sig-fv)))
                           sp))
          ;; captured vars: vars from the environment that occur
          ;; in our set of free variables (fv).
@@ -2694,7 +2696,8 @@
              (begin (analyze-vars (caddr e) env captvars sp)
                     (assert (eq? (car (cadddr e)) 'lambda))
                     (analyze-vars-lambda (cadddr e) env captvars sp
-                                         (method-expr-static-parameters e)))))
+                                         (method-expr-static-parameters e)
+                                         (caddr e)))))
         ((module toplevel) e)
         (else (for-each (lambda (x) (analyze-vars x env captvars sp))
                         (cdr e))))))
