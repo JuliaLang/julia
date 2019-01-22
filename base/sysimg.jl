@@ -47,6 +47,9 @@ let
             Base.DISABLE_LIBUV ? nothing : :Test,
             Base.DISABLE_LIBUV ? nothing : :REPL,
             Base.DISABLE_LIBUV ? nothing : :Statistics,
+            :InteractiveUtils,
+            :JSON,
+            :PlotlyBase
         ]
     filter!(x -> x !== nothing, stdlibs)
 
@@ -56,6 +59,7 @@ let
     print_time(Base, (Base.end_base_include - Base.start_base_include) * 10^(-9))
 
     Base._track_dependencies[] = true
+    println(Base.load_path())
     Base.tot_time_stdlib[] = @elapsed for stdlib in stdlibs
         tt = @elapsed Base.require(Base, stdlib)
         print_time(stdlib, tt)
@@ -80,6 +84,7 @@ Base.init_load_path() # want to be able to find external packages in userimg.jl
 
 let
 tot_time_userimg = @elapsed (Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
+using JSON, PlotlyBase
 
 
 tot_time_base = (Base.end_base_include - Base.start_base_include) * 10.0^(-9)
