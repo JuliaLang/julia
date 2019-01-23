@@ -33,6 +33,7 @@ Standard library changes
 #### LinearAlgebra
 
 * Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
+* `UniformScaling` instances are now callable such that e.g. `I(3)` will produce a `Diagonal` matrix ([#30298]).
 
 #### SparseArrays
 
