@@ -314,7 +314,7 @@ julia> oneunit(3.7)
 1.0
 
 julia> import Dates; oneunit(Dates.Day)
-1 day
+Dates.Day(1)
 ```
 """
 oneunit(x::T) where {T} = T(one(x))

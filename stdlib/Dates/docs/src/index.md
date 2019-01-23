@@ -172,10 +172,10 @@ julia> dt / dt2
 ERROR: MethodError: no method matching /(::Date, ::Date)
 
 julia> dt - dt2
-4411 days
+Day(4411)
 
 julia> dt2 - dt
--4411 days
+Day(-4411)
 
 julia> dt = DateTime(2012,2,29)
 2012-02-29T00:00:00
@@ -184,7 +184,7 @@ julia> dt2 = DateTime(2000,2,1)
 2000-02-01T00:00:00
 
 julia> dt - dt2
-381110400000 milliseconds
+Millisecond(381110400000)
 ```
 
 ## Accessor Functions
@@ -214,10 +214,10 @@ While propercase return the same value in the corresponding [`Period`](@ref) typ
 
 ```jldoctest tdate
 julia> Dates.Year(t)
-2014 years
+Year(2014)
 
 julia> Dates.Day(t)
-31 days
+Day(31)
 ```
 
 Compound methods are provided, as they provide a measure of efficiency if multiple fields are
@@ -244,7 +244,7 @@ Date
       value: Int64 735264
 
 julia> t.instant
-Dates.UTInstant{Day}(735264 days)
+Dates.UTInstant{Day}(Day(735264))
 
 julia> Dates.value(t)
 735264
@@ -400,7 +400,7 @@ As a bonus, all period arithmetic objects work directly with ranges:
 
 ```jldoctest
 julia> dr = Date(2014,1,29):Day(1):Date(2014,2,3)
-Date(2014, 1, 29):1 day:Date(2014, 2, 3)
+Date(2014, 1, 29):Day(1):Date(2014, 2, 3)
 
 julia> collect(dr)
 6-element Array{Date,1}:
@@ -412,7 +412,7 @@ julia> collect(dr)
  Date(2014, 2, 3)
 
 julia> dr = Date(2014,1,29):Dates.Month(1):Date(2014,07,29)
-Date(2014, 1, 29):1 month:Date(2014, 7, 29)
+Date(2014, 1, 29):Month(1):Date(2014, 7, 29)
 
 julia> collect(dr)
 7-element Array{Date,1}:
@@ -517,28 +517,28 @@ limited `Period-Real` arithmetic is available.  You can extract the underlying i
 
 ```jldoctest
 julia> y1 = Dates.Year(1)
-1 year
+Year(1)
 
 julia> y2 = Dates.Year(2)
-2 years
+Year(2)
 
 julia> y3 = Dates.Year(10)
-10 years
+Year(10)
 
 julia> y1 + y2
-3 years
+Year(3)
 
 julia> div(y3,y2)
 5
 
 julia> y3 - y2
-8 years
+Year(8)
 
 julia> y3 % y2
-0 years
+Year(0)
 
 julia> div(y3,3) # mirrors integer division
-3 years
+Year(3)
 
 julia> Dates.value(Dates.Millisecond(10))
 10
