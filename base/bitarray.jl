@@ -5,9 +5,16 @@
 # notes: bits are stored in contiguous chunks
 #        unused bits must always be set to 0
 """
-    BitArray{N} <: DenseArray{Bool, N}
+    BitArray{N} <: AbstractArray{Bool, N}
 
-Space-efficient `N`-dimensional boolean array, which stores one bit per boolean value.
+Space-efficient `N`-dimensional boolean array, using just one bit for each boolean value.
+
+`BitArray`s pack up to 64 values into every 8 bytes, resulting in an 8x space efficiency
+over `Array{Bool, N}` and allowing some operations to work on 64 values at once.
+
+By default, Julia returns `BitArrays` from [broadcasting](@ref Broadcasting) operations
+that generate boolean elements (including dotted-comparisons like `.==`) as well as from
+the functions [`trues`](@ref) and [`falses`](@ref).
 """
 mutable struct BitArray{N} <: AbstractArray{Bool, N}
     chunks::Vector{UInt64}
@@ -70,7 +77,7 @@ length(B::BitArray) = B.len
 size(B::BitVector) = (B.len,)
 size(B::BitArray) = B.dims
 
-@inline function size(B::BitVector, d)
+@inline function size(B::BitVector, d::Integer)
     d < 1 && throw_boundserror(size(B), d)
     ifelse(d == 1, B.len, 1)
 end
@@ -362,8 +369,8 @@ Create a `BitArray` with all values set to `false`.
 ```jldoctest
 julia> falses(2,3)
 2×3 BitArray{2}:
- false  false  false
- false  false  false
+ 0  0  0
+ 0  0  0
 ```
 """
 falses(dims::DimOrInd...) = falses(dims)
@@ -380,8 +387,8 @@ Create a `BitArray` with all values set to `true`.
 ```jldoctest
 julia> trues(2,3)
 2×3 BitArray{2}:
- true  true  true
- true  true  true
+ 1  1  1
+ 1  1  1
 ```
 """
 trues(dims::DimOrInd...) = trues(dims)
@@ -504,6 +511,7 @@ reinterpret(B::BitArray, dims::NTuple{N,Int}) where {N} = reshape(B, dims)
 
 if nameof(@__MODULE__) === :Base  # avoid method overwrite
 (::Type{T})(x::T) where {T<:BitArray} = copy(x)
+BitArray(x::BitArray) = copy(x)
 end
 
 """
@@ -516,22 +524,22 @@ The shape is inferred from the `itr` object.
 ```jldoctest
 julia> BitArray([1 0; 0 1])
 2×2 BitArray{2}:
-  true  false
- false   true
+ 1  0
+ 0  1
 
 julia> BitArray(x+y == 3 for x = 1:2, y = 1:3)
 2×3 BitArray{2}:
- false   true  false
-  true  false  false
+ 0  1  0
+ 1  0  0
 
 julia> BitArray(x+y == 3 for x = 1:2 for y = 1:3)
 6-element BitArray{1}:
- false
-  true
- false
-  true
- false
- false
+ 0
+ 1
+ 0
+ 1
+ 0
+ 0
 ```
 """
 BitArray(itr) = gen_bitarray(IteratorSize(itr), itr)
@@ -932,6 +940,7 @@ function deleteat!(B::BitVector, inds)
     n = new_l = length(B)
     y = iterate(inds)
     y === nothing && return B
+    n == 0 && throw(BoundsError(B, inds))
 
     Bc = B.chunks
 
@@ -1251,27 +1260,27 @@ values. If `n < 0`, elements are shifted backwards. Equivalent to
 ```jldoctest
 julia> B = BitVector([true, false, true, false, false])
 5-element BitArray{1}:
-  true
- false
-  true
- false
- false
+ 1
+ 0
+ 1
+ 0
+ 0
 
 julia> B >> 1
 5-element BitArray{1}:
- false
-  true
- false
-  true
- false
+ 0
+ 1
+ 0
+ 1
+ 0
 
 julia> B >> -1
 5-element BitArray{1}:
- false
-  true
- false
- false
- false
+ 0
+ 1
+ 0
+ 0
+ 0
 ```
 """
 (>>)(B::BitVector, i::Union{Int, UInt}) = B >>> i
@@ -1289,27 +1298,27 @@ values. If `n < 0`, elements are shifted forwards. Equivalent to
 ```jldoctest
 julia> B = BitVector([true, false, true, false, false])
 5-element BitArray{1}:
-  true
- false
-  true
- false
- false
+ 1
+ 0
+ 1
+ 0
+ 0
 
 julia> B << 1
 5-element BitArray{1}:
- false
-  true
- false
- false
- false
+ 0
+ 1
+ 0
+ 0
+ 0
 
 julia> B << -1
 5-element BitArray{1}:
- false
-  true
- false
-  true
- false
+ 0
+ 1
+ 0
+ 1
+ 0
 ```
 """
 (<<)(B::BitVector, i::Int) = (i >=0 ? B << unsigned(i) : B >> unsigned(-i))
@@ -1509,6 +1518,36 @@ function findprev(testf::Function, B::BitArray, start::Integer)
     return nothing # last case: !f0 && !f1
 end
 #findlast(testf::Function, B::BitArray) = findprev(testf, B, 1)  ## defined in array.jl
+
+function findmax(a::BitArray)
+    isempty(a) && throw(ArgumentError("BitArray must be non-empty"))
+    m, mi = false, 1
+    ti = 1
+    ac = a.chunks
+    for i = 1:length(ac)
+        @inbounds k = trailing_zeros(ac[i])
+        ti += k
+        k == 64 || return (true, @inbounds keys(a)[ti])
+    end
+    return m, @inbounds keys(a)[mi]
+end
+
+function findmin(a::BitArray)
+    isempty(a) && throw(ArgumentError("BitArray must be non-empty"))
+    m, mi = true, 1
+    ti = 1
+    ac = a.chunks
+    for i = 1:length(ac)-1
+        @inbounds k = trailing_ones(ac[i])
+        ti += k
+        k == 64 || return (false, @inbounds keys(a)[ti])
+    end
+    l = Base._mod64(length(a)-1) + 1
+    @inbounds k = trailing_ones(ac[end] & Base._msk_end(l))
+    ti += k
+    k == l || return (false, @inbounds keys(a)[ti])
+    return (m, @inbounds keys(a)[mi])
+end
 
 # findall helper functions
 # Generic case (>2 dimensions)

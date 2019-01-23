@@ -72,7 +72,7 @@ convert(::Type{T}, arg)  where {T<:VecElement} = T(arg)
 convert(::Type{T}, arg::T) where {T<:VecElement} = arg
 
 # init core docsystem
-import Core: @doc, @__doc__, WrappedException
+import Core: @doc, @__doc__, WrappedException, @int128_str, @uint128_str, @big_str, @cmd
 if isdefined(Core, :Compiler)
     import Core.Compiler.CoreDocs
     Core.atdoc!(CoreDocs.docm)
@@ -186,7 +186,32 @@ include("abstractarraymath.jl")
 include("arraymath.jl")
 
 # define MIME"foo/bar" early so that we can overload 3-arg show
+"""
+    MIME
+
+A type representing a standard internet data format. "MIME" stands for
+"Multipurpose Internet Mail Extensions", since the standard was originally
+used to describe multimedia attachments to email messages.
+
+A `MIME` object can be passed as the second argument to [`show`](@ref) to
+request output in that format.
+
+# Examples
+```jldoctest
+julia> show(stdout, MIME("text/plain"), "hi")
+"hi"
+```
+"""
 struct MIME{mime} end
+
+"""
+    @MIME_str
+
+A convenience macro for writing [`MIME`](@ref) types, typically used when
+adding methods to `show`.
+For example the syntax `show(io::IO, ::MIME"text/html", x::MyType) = ...`
+could be used to define how to write an HTML representation of `MyType`.
+"""
 macro MIME_str(s)
     :(MIME{$(Expr(:quote, Symbol(s)))})
 end
@@ -314,8 +339,8 @@ include("env.jl")
 include("libuv.jl")
 include("event.jl")
 include("task.jl")
-include("lock.jl")
 include("threads.jl")
+include("lock.jl")
 include("weakkeydict.jl")
 
 # Logging
@@ -362,14 +387,13 @@ using .FastMath
 
 function deepcopy_internal end
 
+# enums
+include("Enums.jl")
+using .Enums
+
 # BigInts and BigFloats
 include("gmp.jl")
 using .GMP
-
-for T in [Signed, Integer, BigInt, Float32, Float64, Real, Complex, Rational]
-    @eval flipsign(x::$T, ::Unsigned) = +x
-    @eval copysign(x::$T, ::Unsigned) = +x
-end
 
 include("mpfr.jl")
 using .MPFR
@@ -393,10 +417,6 @@ include("printf.jl")
 
 # metaprogramming
 include("meta.jl")
-
-# enums
-include("Enums.jl")
-using .Enums
 
 # concurrency and parallelism
 include("channels.jl")
@@ -422,11 +442,6 @@ include("loading.jl")
 
 # misc useful functions & macros
 include("util.jl")
-
-creating_sysimg = true
-# set up depot & load paths to be able to find stdlib packages
-init_depot_path()
-init_load_path()
 
 include("asyncmap.jl")
 
@@ -487,6 +502,11 @@ using .Base
 
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
+
+# set up depot & load paths to be able to find stdlib packages
+@eval Base creating_sysimg = true
+Base.init_depot_path()
+Base.init_load_path()
 
 if Base.is_primary_base_module
 # load some stdlib packages but don't put their names in Main

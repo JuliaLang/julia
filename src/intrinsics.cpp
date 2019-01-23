@@ -634,7 +634,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         return emit_runtime_pointerset(ctx, argv);
     if (!jl_is_datatype(ety))
         ety = (jl_value_t*)jl_any_type;
-    emit_typecheck(ctx, x, ety, "pointerset: type mismatch in assign");
+    emit_typecheck(ctx, x, ety, "pointerset");
 
     Value *idx = emit_unbox(ctx, T_size, i, (jl_value_t*)jl_long_type);
     Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(T_size, 1));

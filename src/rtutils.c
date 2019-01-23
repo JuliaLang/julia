@@ -107,17 +107,18 @@ JL_DLLEXPORT void JL_NORETURN jl_too_many_args(const char *fname, int max)
     jl_exceptionf(jl_argumenterror_type, "%s: too many arguments (expected %d)", fname, max);
 }
 
+// with function name / location description, plus extra context
 JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname, const char *context,
-                                               jl_value_t *ty, jl_value_t *got)
+                                               jl_value_t *expected, jl_value_t *got)
 {
     jl_value_t *ctxt=NULL;
     JL_GC_PUSH2(&ctxt, &got);
     ctxt = jl_pchar_to_string((char*)context, strlen(context));
-    jl_value_t *ex = jl_new_struct(jl_typeerror_type, jl_symbol(fname),
-                                   ctxt, ty, got);
+    jl_value_t *ex = jl_new_struct(jl_typeerror_type, jl_symbol(fname), ctxt, expected, got);
     jl_throw(ex);
 }
 
+// with function name or description only
 JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname, jl_value_t *expected,
                                             jl_value_t *got)
 {

@@ -56,13 +56,17 @@ function showerror(io::IO, ex::TypeError)
     if ex.expected === Bool
         print(io, "non-boolean (", typeof(ex.got), ") used in boolean context")
     else
-        if isa(ex.got, Type)
+        if isvarargtype(ex.got)
+            targs = (ex.got,)
+        elseif isa(ex.got, Type)
             targs = ("Type{", ex.got, "}")
         else
             targs = (typeof(ex.got),)
         end
-        if isempty(ex.context)
+        if ex.context == ""
             ctx = "in $(ex.func)"
+        elseif ex.func === Symbol("keyword argument")
+            ctx = "in keyword argument $(ex.context)"
         else
             ctx = "in $(ex.func), in $(ex.context)"
         end
@@ -111,12 +115,20 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
 end
 
 function showerror(io::IO, ex::SystemError)
-    if ex.extrainfo === nothing
-        print(io, "SystemError: $(ex.prefix): $(Libc.strerror(ex.errnum))")
+    if @static(Sys.iswindows() ? ex.extrainfo isa WindowsErrorInfo : false)
+        errstring = Libc.FormatMessage(ex.extrainfo.errnum)
+        extrainfo = ex.extrainfo.extrainfo
     else
-        print(io, "SystemError (with $(ex.extrainfo)): $(ex.prefix): $(Libc.strerror(ex.errnum))")
+        errstring = Libc.strerror(ex.errnum)
+        extrainfo = ex.extrainfo
+    end
+    if extrainfo === nothing
+        print(io, "SystemError: $(ex.prefix): ", errstring)
+    else
+        print(io, "SystemError (with $extrainfo): $(ex.prefix): ", errstring)
     end
 end
+
 showerror(io::IO, ::DivideError) = print(io, "DivideError: integer division error")
 showerror(io::IO, ::StackOverflowError) = print(io, "StackOverflowError:")
 showerror(io::IO, ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")
@@ -132,9 +144,9 @@ showerror(io::IO, ex::KeyError) = (print(io, "KeyError: key ");
                                    show(io, ex.key);
                                    print(io, " not found"))
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
-showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
-showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: $(ex.msg)")
-showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: $(ex.msg)")
+showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: ", ex.msg)
+showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: ", ex.msg)
+showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: ", ex.msg)
 
 showerror(io::IO, ex::UndefKeywordError) =
     print(io, "UndefKeywordError: keyword argument $(ex.var) not assigned")
@@ -151,7 +163,9 @@ function showerror(io::IO, ex::UndefVarError)
 end
 
 function showerror(io::IO, ex::InexactError)
-    print(io, "InexactError: ", ex.func, '(', ex.T, ", ", ex.val, ')')
+    print(io, "InexactError: ", ex.func, '(')
+    nameof(ex.T) === ex.func || print(io, ex.T, ", ")
+    print(io, ex.val, ')')
 end
 
 typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}

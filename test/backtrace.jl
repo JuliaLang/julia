@@ -177,3 +177,15 @@ let bt, found = false
     end
     @test found
 end
+
+# issue 28618
+let bt, found = false
+    @info ""
+    bt = backtrace()
+    for frame in map(StackTraces.lookup, bt)
+        if frame[1].line == @__LINE__() - 2 && frame[1].file == Symbol(@__FILE__)
+            found = true; break
+        end
+    end
+    @test found
+end

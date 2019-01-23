@@ -137,7 +137,7 @@ BroadcastStyle(a::AbstractArrayStyle, ::Style{Tuple})    = a
 BroadcastStyle(::A, ::A) where A<:ArrayStyle             = A()
 BroadcastStyle(::ArrayStyle, ::ArrayStyle)               = Unknown()
 BroadcastStyle(::A, ::A) where A<:AbstractArrayStyle     = A()
-function BroadcastStyle(a::A, b::B) where {A<:AbstractArrayStyle{M},B<:AbstractArrayStyle{N}} where {M,N}
+Base.@pure function BroadcastStyle(a::A, b::B) where {A<:AbstractArrayStyle{M},B<:AbstractArrayStyle{N}} where {M,N}
     if Base.typename(A) === Base.typename(B)
         return A(Val(max(M, N)))
     end
@@ -384,13 +384,45 @@ end
 
 ## logic for deciding the BroadcastStyle
 
-# combine_styles operates on values (arbitrarily many)
+"""
+    combine_styles(cs...) -> BroadcastStyle
+
+Decides which `BroadcastStyle` to use for any number of value arguments.
+Uses [`BroadcastStyle`](@ref) to get the style for each argument, and uses
+[`result_style`](@ref) to combine styles.
+
+# Examples
+
+```jldoctest
+julia> Broadcast.combine_styles([1], [1 2; 3 4])
+Base.Broadcast.DefaultArrayStyle{2}()
+```
+"""
+function combine_styles end
+
 combine_styles() = DefaultArrayStyle{0}()
 combine_styles(c) = result_style(BroadcastStyle(typeof(c)))
 combine_styles(c1, c2) = result_style(combine_styles(c1), combine_styles(c2))
 @inline combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
 
-# result_style works on types (singletons and pairs), and leverages `BroadcastStyle`
+"""
+    result_style(s1::BroadcastStyle[, s2::BroadcastStyle]) -> BroadcastStyle
+
+Takes one or two `BroadcastStyle`s and combines them using [`BroadcastStyle`](@ref) to
+determine a common `BroadcastStyle`.
+
+# Examples
+
+```jldoctest
+julia> Broadcast.result_style(Broadcast.DefaultArrayStyle{0}(), Broadcast.DefaultArrayStyle{3}())
+Base.Broadcast.DefaultArrayStyle{3}()
+
+julia> Broadcast.result_style(Broadcast.Unknown(), Broadcast.DefaultArrayStyle{1}())
+Base.Broadcast.DefaultArrayStyle{1}()
+```
+"""
+function result_style end
+
 result_style(s::BroadcastStyle) = s
 result_style(s1::S, s2::S) where S<:BroadcastStyle = S()
 # Test both orders so users typically only have to declare one order
@@ -418,6 +450,20 @@ One of these should be undefined (and thus return Broadcast.Unknown).""")
 end
 
 # Indices utilities
+
+"""
+    combine_axes(As...) -> Tuple
+
+Determine the result axes for broadcasting across all values in `As`.
+
+```jldoctest
+julia> Broadcast.combine_axes([1], [1 2; 3 4; 5 6])
+(Base.OneTo(3), Base.OneTo(2))
+
+julia> Broadcast.combine_axes(1, 1, 1)
+()
+```
+"""
 @inline combine_axes(A, B...) = broadcast_shape(axes(A), combine_axes(B...))
 combine_axes(A) = axes(A)
 
@@ -435,11 +481,16 @@ end
 _bcs1(a::Integer, b::Integer) = a == 1 ? b : (b == 1 ? a : (a == b ? a : throw(DimensionMismatch("arrays could not be broadcast to a common size"))))
 _bcs1(a::Integer, b) = a == 1 ? b : (first(b) == 1 && last(b) == a ? b : throw(DimensionMismatch("arrays could not be broadcast to a common size")))
 _bcs1(a, b::Integer) = _bcs1(b, a)
-_bcs1(a, b) = _bcsm(b, a) ? b : (_bcsm(a, b) ? a : throw(DimensionMismatch("arrays could not be broadcast to a common size")))
+_bcs1(a, b) = _bcsm(b, a) ? axistype(b, a) : (_bcsm(a, b) ? axistype(a, b) : throw(DimensionMismatch("arrays could not be broadcast to a common size")))
 # _bcsm tests whether the second index is consistent with the first
 _bcsm(a, b) = a == b || length(b) == 1
 _bcsm(a, b::Number) = b == 1
 _bcsm(a::Number, b::Number) = a == b || b == 1
+# Ensure inferrability when dealing with axes of different AbstractUnitRange types
+# (We may not want to define general promotion rules between, say, OneTo and Slice, but if
+#  we get here we know the axes are at least consistent for the purposes of broadcasting)
+axistype(a::T, b::T) where T = a
+axistype(a, b) = UnitRange{Int}(a)
 
 ## Check that all arguments are broadcast compatible with shape
 # comparing one input against a shape
@@ -600,11 +651,9 @@ julia> Broadcast.broadcastable("hello") # Strings break convention of matching i
 Base.RefValue{String}("hello")
 ```
 """
-broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val}) = Ref(x)
-broadcastable(x::Ptr) = Ref(x)
+broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,Regex}) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,Ref,Tuple,Broadcasted}) = x
-broadcastable(r::Regex) = Ref(r)
 # Default to collecting iterables — which will error for non-iterables
 broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
@@ -921,13 +970,12 @@ function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
         y === nothing && break
         I, state = y
         @inbounds val = bc[I]
-        S = typeof(val)
-        if S <: T
+        if val isa T || typeof(val) === T
             @inbounds dest[I] = val
         else
             # This element type doesn't fit in dest. Allocate a new dest with wider eltype,
             # copy over old values, and continue
-            newdest = Base.similar(dest, promote_typejoin(T, S))
+            newdest = Base.similar(dest, promote_typejoin(T, typeof(val)))
             for II in Iterators.take(iter, count)
                 newdest[II] = dest[II]
             end
@@ -1005,6 +1053,18 @@ broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::UnitRange) = big(r.start):
 broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::StepRange) = big(r.start):big(r.step):big(last(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::StepRangeLen) = StepRangeLen(big(r.ref), big(r.step), length(r), r.offset)
 broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::LinRange) = LinRange(big(r.start), big(r.stop), length(r))
+
+## CartesianIndices
+broadcasted(::typeof(+), I::CartesianIndices{N}, j::CartesianIndex{N}) where N =
+    CartesianIndices(map((rng, offset)->rng .+ offset, I.indices, Tuple(j)))
+broadcasted(::typeof(+), j::CartesianIndex{N}, I::CartesianIndices{N}) where N =
+    I .+ j
+broadcasted(::typeof(-), I::CartesianIndices{N}, j::CartesianIndex{N}) where N =
+    CartesianIndices(map((rng, offset)->rng .- offset, I.indices, Tuple(j)))
+function broadcasted(::typeof(-), j::CartesianIndex{N}, I::CartesianIndices{N}) where N
+    diffrange(offset, rng) = range(offset-last(rng), length=length(rng))
+    Iterators.reverse(CartesianIndices(map(diffrange, Tuple(j), I.indices)))
+end
 
 ## In specific instances, we can broadcast masked BitArrays whole chunks at a time
 # Very intentionally do not support much functionality here: scalar indexing would be O(n)

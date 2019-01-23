@@ -173,6 +173,11 @@ Random.seed!(1)
         @test D/D2 ≈ Diagonal(D.diag./D2.diag)
         @test D\D2 ≈ Diagonal(D2.diag./D.diag)
 
+        # QR \ Diagonal
+        A = rand(elty, n, n)
+        qrA = qr(A)
+        @test qrA \ D ≈ A \ D
+
         # Performance specialisations for A*_mul_B!
         vvv = similar(vv)
         @test (r = Matrix(D) * vv   ; mul!(vvv, D, vv)  ≈ r ≈ vvv)
@@ -199,7 +204,10 @@ Random.seed!(1)
         # kron
         D3 = Diagonal(convert(Vector{elty}, rand(n÷2)))
         DM3= Matrix(D3)
-        Matrix(kron(D, D3)) ≈ kron(DM, DM3)
+        @test Matrix(kron(D, D3)) ≈ kron(DM, DM3)
+        M4 = rand(elty, n÷2, n÷2)
+        @test kron(D3, M4) ≈ kron(DM3, M4)
+        @test kron(M4, D3) ≈ kron(M4, DM3)
     end
     @testset "iszero, isone, triu, tril" begin
         Dzero = Diagonal(zeros(elty, 10))

@@ -2,6 +2,10 @@ Enables MbedTLS support
 
 Upstream: https://github.com/libgit2/libgit2/pull/4173
 
+NOTE: libgit2 has switched its CI to Azure Pipelines. The aforementioned PR makes modifications
+to the Travis YAML file, which has since been removed, causing patch conflicts. That part of
+the diff has thus been removed here.
+
 git diff ca3b2234dc7f1bd0d0f81488d3e29980b47a85b4^..cb2da47e56159faaaf143943c74ffb8f60a988b1 > libgit2-mbedtls.patch
 
 mbedtls: initial support
@@ -20,27 +24,6 @@ cmake: make our preferred backend ordering consistent
 travis: just grab what we need from mbedtls
 travis: pass -fPIC when configuring mbedtls
 
-diff --git a/.travis.yml b/.travis.yml
-index a4c8e91df..b5f1c6ff6 100644
---- a/.travis.yml
-+++ b/.travis.yml
-@@ -55,6 +55,16 @@ matrix:
-          OPTIONS="-DBUILD_CLAR=ON -DBUILD_EXAMPLES=OFF -DDEBUG_POOL=ON -DCMAKE_BUILD_TYPE=Debug"
-      os: linux
-      dist: trusty
-+   - compiler: gcc
-+     env:
-+         MBEDTLS=1
-+         OPTIONS="-DTHREADSAFE=ON -DCMAKE_BUILD_TYPE=Release -DUSE_HTTPS=mbedTLS -DMBEDTLS_ROOT_DIR=../deps/mbedtls"
-+     os: linux
-+   - compiler: gcc
-+     env:
-+         MBEDTLS=1
-+         OPTIONS="-DTHREADSAFE=OFF -DBUILD_EXAMPLES=ON -DUSE_HTTPS=mbedTLS -DMBEDTLS_ROOT_DIR=../deps/mbedtls"
-+     os: linux
-  allow_failures:
-    - env: COVERITY=1
- 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
 index 2ca5354a7..9176eee04 100644
 --- a/CMakeLists.txt

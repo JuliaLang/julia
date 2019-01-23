@@ -13,7 +13,7 @@ struct BunchKaufman{T,S<:AbstractMatrix} <: Factorization{T}
     info::BlasInt
 
     function BunchKaufman{T,S}(LD, ipiv, uplo, symmetric, rook, info) where {T,S<:AbstractMatrix}
-        @assert !has_offset_axes(LD)
+        require_one_based_indexing(LD)
         new(LD, ipiv, uplo, symmetric, rook, info)
     end
 end
@@ -126,7 +126,7 @@ issymmetric(B::BunchKaufman) = B.symmetric
 ishermitian(B::BunchKaufman) = !B.symmetric
 
 function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::AbstractChar) where T
-    @assert !has_offset_axes(v)
+    require_one_based_indexing(v)
     p = T[1:maxi;]
     uploL = uplo == 'L'
     i = uploL ? 1 : maxi

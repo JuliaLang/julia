@@ -387,7 +387,7 @@ show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
 
 function show(io::IO, x::Union)
     print(io, "Union")
-    show_comma_array(io, uniontypes(x), '{', '}')
+    show_delim_array(io, uniontypes(x), '{', ',', '}', false)
 end
 
 function print_without_params(@nospecialize(x))
@@ -455,14 +455,14 @@ function show_type_name(io::IO, tn::Core.TypeName)
     globname = isdefined(tn, :mt) ? tn.mt.name : nothing
     globfunc = false
     if globname !== nothing
-        globname_str = string(globname)
+        globname_str = string(globname::Symbol)
         if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
                 isbindingresolved(tn.module, globname) && isdefined(tn.module, globname) &&
                 isconcretetype(tn.wrapper) && isa(getfield(tn.module, globname), tn.wrapper))
             globfunc = true
         end
     end
-    sym = globfunc ? globname : tn.name
+    sym = (globfunc ? globname : tn.name)::Symbol
     if get(io, :compact, false)
         if globfunc
             return print(io, "typeof(", sym, ")")
@@ -564,7 +564,7 @@ end
 
 show(io::IO, ::Nothing) = print(io, "nothing")
 print(io::IO, ::Nothing) = throw(ArgumentError("`nothing` should not be printed; use `show`, `repr`, or custom output instead."))
-show(io::IO, b::Bool) = print(io, b ? "true" : "false")
+show(io::IO, b::Bool) = print(io, get(io, :typeinfo, Any) === Bool ? (b ? "1" : "0") : (b ? "true" : "false"))
 show(io::IO, n::Signed) = (write(io, string(n)); nothing)
 show(io::IO, n::Unsigned) = print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
 print(io::IO, n::Unsigned) = print(io, string(n))
@@ -576,6 +576,7 @@ has_tight_type(p::Pair) =
     typeof(p.second) == typeof(p).parameters[2]
 
 isdelimited(io::IO, x) = true
+isdelimited(io::IO, x::Function) = !isoperator(Symbol(x))
 
 # !isdelimited means that the Pair is printed with "=>" (like in "1 => 2"),
 # without its explicit type (like in "Pair{Integer,Integer}(1, 2)")
@@ -649,9 +650,6 @@ function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, de
     print(io, op)
     if !show_circular(io, itr)
         recur_io = IOContext(io, :SHOWN_SET => itr)
-        if !haskey(io, :compact)
-            recur_io = IOContext(recur_io, :compact => true)
-        end
         first = true
         i = i1
         if l >= i1
@@ -710,7 +708,6 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax
     print(io, cl)
 end
 
-show_comma_array(io::IO, itr, o, c) = show_delim_array(io, itr, o, ',', c, false)
 show(io::IO, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
 show(io::IO, v::SimpleVector) = show_delim_array(io, v, "svec(", ',', ')', false)
 
@@ -1031,7 +1028,7 @@ function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, pre
             print(io, ":")
             print(io, value)
         else
-            print(io, "Symbol(\"", escape_string(s), "\")")
+            print(io, "Symbol(", repr(s), ")")
         end
     else
         if isa(value,Expr) && value.head === :block
@@ -1562,9 +1559,17 @@ module IRShow
     Base.first(r::Compiler.StmtRange) = Compiler.first(r)
     Base.last(r::Compiler.StmtRange) = Compiler.last(r)
     include("compiler/ssair/show.jl")
+
+    const debuginfo = Dict{Symbol, Any}(
+        # :full => src -> Base.IRShow.DILineInfoPrinter(src.linetable), # and add variable slot information
+        :source => src -> Base.IRShow.DILineInfoPrinter(src.linetable),
+        # :oneliner => src -> Base.IRShow.PartialLineInfoPrinter(src.linetable),
+        :none => src -> Base.IRShow.lineinfo_disabled,
+        )
+    debuginfo[:default] = debuginfo[:none]
 end
 
-function show(io::IO, src::CodeInfo)
+function show(io::IO, src::CodeInfo; debuginfo::Symbol=:default)
     # Fix slot names and types in function body
     print(io, "CodeInfo(")
     lambda_io::IOContext = io
@@ -1575,7 +1580,7 @@ function show(io::IO, src::CodeInfo)
     if isempty(src.linetable) || src.linetable[1] isa LineInfoNode
         println(io)
         # TODO: static parameter values?
-        IRShow.show_ir(lambda_io, src)
+        IRShow.show_ir(lambda_io, src, IRShow.debuginfo[debuginfo](src))
     else
         # this is a CodeInfo that has not been used as a method yet, so its locations are still LineNumberNodes
         body = Expr(:block)
@@ -1823,7 +1828,7 @@ dims2string(d) = isempty(d) ? "0-dimensional" :
 
 inds2string(inds) = join(map(_indsstring,inds), '×')
 _indsstring(i) = string(i)
-_indsstring(i::Slice) = string(i.indices)
+_indsstring(i::Union{IdentityUnitRange, Slice}) = string(i.indices)
 
 # anything array-like gets summarized e.g. 10-element Array{Int64,1}
 summary(io::IO, a::AbstractArray) = summary(io, a, axes(a))
@@ -1898,7 +1903,7 @@ function showarg(io::IO, v::SubArray, toplevel)
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(v))
 end
-showindices(io, ::Slice, inds...) =
+showindices(io, ::Union{Slice,IdentityUnitRange}, inds...) =
     (print(io, ", :"); showindices(io, inds...))
 showindices(io, ind1, inds...) =
     (print(io, ", ", ind1); showindices(io, inds...))

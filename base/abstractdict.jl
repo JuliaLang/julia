@@ -578,7 +578,7 @@ function sizehint!(d::IdDict, newsz)
 end
 
 function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
-    !isa(key, K) && throw(ArgumentError("$key is not a valid key for type $K"))
+    !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
     val = convert(V, val)
     if d.ndel >= ((3*length(d.ht))>>2)
         rehash!(d, max(length(d.ht)>>1, 32))
@@ -644,6 +644,23 @@ length(d::IdDict) = d.count
 copy(d::IdDict) = typeof(d)(d)
 
 get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V} = (d[key] = get(d, key, default))::V
+
+function get(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
+    val = get(d, key, secret_table_token)
+    if val === secret_table_token
+        val = default()
+    end
+    return val
+end
+
+function get!(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
+    val = get(d, key, secret_table_token)
+    if val === secret_table_token
+        val = default()
+        setindex!(d, val, key)
+    end
+    return val
+end
 
 in(@nospecialize(k), v::KeySet{<:Any,<:IdDict}) = get(v.dict, k, secret_table_token) !== secret_table_token
 

@@ -28,7 +28,7 @@ extern "C" {
 // current line number in a file
 JL_DLLEXPORT int jl_lineno = 0; // need to update jl_critical_error if this is TLS
 // current file name
-JL_DLLEXPORT const char *jl_filename = "no file"; // need to update jl_critical_error if this is TLS
+JL_DLLEXPORT const char *jl_filename = "none"; // need to update jl_critical_error if this is TLS
 
 htable_t jl_current_modules;
 
@@ -63,6 +63,7 @@ static jl_function_t *jl_module_get_initializer(jl_module_t *m JL_PROPAGATES_ROO
 
 void jl_module_run_initializer(jl_module_t *m)
 {
+    JL_TIMING(INIT_MODULE);
     jl_function_t *f = jl_module_get_initializer(m);
     if (f == NULL)
         return;
@@ -174,7 +175,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     for (int i = 0; i < jl_array_len(exprs); i++) {
         // process toplevel form
         ptls->world_age = jl_world_counter;
-        form = jl_expand_stmt(jl_array_ptr_ref(exprs, i), newm);
+        form = jl_expand_stmt_with_loc(jl_array_ptr_ref(exprs, i), newm, jl_filename, jl_lineno);
         ptls->world_age = jl_world_counter;
         (void)jl_toplevel_eval_flex(newm, form, 1, 1);
     }
@@ -251,7 +252,7 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
     args[1] = jl_toplevel_eval_flex(m, x, fast, 0);
     args[2] = jl_toplevel_eval_flex(m, f, fast, 0);
     if (jl_is_module(args[1])) {
-        JL_TYPECHK("getfield", symbol, args[2]);
+        JL_TYPECHK(getfield, symbol, args[2]);
         args[0] = jl_eval_global_var((jl_module_t*)args[1], (jl_sym_t*)args[2]);
     }
     else {
@@ -570,6 +571,11 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     if (!jl_is_expr(e)) {
         if (jl_is_linenode(e)) {
             jl_lineno = jl_linenode_line(e);
+            jl_value_t *file = jl_linenode_file(e);
+            if (file != jl_nothing) {
+                assert(jl_is_symbol(file));
+                jl_filename = jl_symbol_name((jl_sym_t*)file);
+            }
             return jl_nothing;
         }
         if (jl_is_symbol(e)) {
@@ -605,7 +611,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     size_t last_age = ptls->world_age;
     if (!expanded && jl_needs_lowering(e)) {
         ptls->world_age = jl_world_counter;
-        ex = (jl_expr_t*)jl_expand(e, m);
+        ex = (jl_expr_t*)jl_expand_with_loc(e, m, jl_filename, jl_lineno);
         ptls->world_age = last_age;
     }
     jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;

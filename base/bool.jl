@@ -27,7 +27,7 @@ missing
 
 julia> .![true false true]
 1×3 BitArray{2}:
- false  true  false
+ 0  1  0
 ```
 """
 function !(x::Bool)
@@ -67,9 +67,9 @@ false
 
 julia> [true; true; false] .⊻ [true; false; false]
 3-element BitArray{1}:
- false
-  true
- false
+ 0
+ 1
+ 0
 ```
 """
 xor(x::Bool, y::Bool) = (x != y)

@@ -89,6 +89,7 @@ module IteratorsMD
 
     # indexing
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
+    Base.get(A::AbstractArray, I::CartesianIndex, default) = get(A, I.I, default)
     eltype(::Type{T}) where {T<:CartesianIndex} = eltype(fieldtype(T, :I))
 
     # access to index tuple
@@ -211,6 +212,28 @@ module IteratorsMD
     CartesianIndex(1, 2)
     ```
 
+    ## Broadcasting
+
+    `CartesianIndices` support broadcasting arithmetic (+ and -) with a `CartesianIndex`.
+
+    !!! compat "Julia 1.1"
+        Broadcasting of CartesianIndices requires at least Julia 1.1.
+
+    ```jldoctest
+    julia> CIs = CartesianIndices((2:3, 5:6))
+    2×2 CartesianIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}}:
+     CartesianIndex(2, 5)  CartesianIndex(2, 6)
+     CartesianIndex(3, 5)  CartesianIndex(3, 6)
+
+    julia> CI = CartesianIndex(3, 4)
+    CartesianIndex(3, 4)
+
+    julia> CIs .+ CI
+    2×2 CartesianIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}}:
+     CartesianIndex(5, 9)  CartesianIndex(5, 10)
+     CartesianIndex(6, 9)  CartesianIndex(6, 10)
+    ```
+
     For cartesian to linear index conversion, see [`LinearIndices`](@ref).
     """
     struct CartesianIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{CartesianIndex{N},N}
@@ -228,6 +251,26 @@ module IteratorsMD
 
     CartesianIndices(A::AbstractArray) = CartesianIndices(axes(A))
 
+    """
+        (:)(I::CartesianIndex, J::CartesianIndex)
+
+    Construct [`CartesianIndices`](@ref) from two `CartesianIndex`.
+
+    !!! compat "Julia 1.1"
+        This method requires at least Julia 1.1.
+
+    # Examples
+    ```jldoctest
+    julia> I = CartesianIndex(2,1);
+
+    julia> J = CartesianIndex(3,3);
+
+    julia> I:J
+    2×3 CartesianIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}}:
+     CartesianIndex(2, 1)  CartesianIndex(2, 2)  CartesianIndex(2, 3)
+     CartesianIndex(3, 1)  CartesianIndex(3, 2)  CartesianIndex(3, 3)
+    ```
+    """
     (:)(I::CartesianIndex{N}, J::CartesianIndex{N}) where N =
         CartesianIndices(map((i,j) -> i:j, Tuple(I), Tuple(J)))
 
@@ -472,7 +515,6 @@ index_dimsum() = ()
 index_lengths() = ()
 @inline index_lengths(::Real, rest...) = (1, index_lengths(rest...)...)
 @inline index_lengths(A::AbstractArray, rest...) = (length(A), index_lengths(rest...)...)
-@inline index_lengths(A::Slice, rest...) = (length(axes1(A)), index_lengths(rest...)...)
 
 # shape of array to create for getindex() with indices I, dropping scalars
 # returns a Tuple{Vararg{AbstractUnitRange}} of indices
@@ -673,6 +715,9 @@ Finite difference operator on a vector or a multidimensional array `A`. In the
 latter case the dimension to operate on needs to be specified with the `dims`
 keyword argument.
 
+!!! compat "Julia 1.1"
+    `diff` for arrays with dimension higher than 2 requires at least Julia 1.1.
+
 # Examples
 ```jldoctest
 julia> a = [2 4; 6 16]
@@ -693,7 +738,7 @@ julia> diff(vec(a))
 ```
 """
 function diff(a::AbstractArray{T,N}; dims::Integer) where {T,N}
-    has_offset_axes(a) && throw(ArgumentError("offset axes unsupported"))
+    require_one_based_indexing(a)
     1 <= dims <= N || throw(ArgumentError("dimension $dims out of range (1:$N)"))
 
     r = axes(a)
@@ -1326,33 +1371,33 @@ Return unique regions of `A` along dimension `dims`.
 julia> A = map(isodd, reshape(Vector(1:8), (2,2,2)))
 2×2×2 Array{Bool,3}:
 [:, :, 1] =
-  true   true
- false  false
+ 1  1
+ 0  0
 
 [:, :, 2] =
-  true   true
- false  false
+ 1  1
+ 0  0
 
 julia> unique(A)
 2-element Array{Bool,1}:
-  true
- false
+ 1
+ 0
 
 julia> unique(A, dims=2)
 2×1×2 Array{Bool,3}:
 [:, :, 1] =
-  true
- false
+ 1
+ 0
 
 [:, :, 2] =
-  true
- false
+ 1
+ 0
 
 julia> unique(A, dims=3)
 2×2×1 Array{Bool,3}:
 [:, :, 1] =
-  true   true
- false  false
+ 1  1
+ 0  0
 ```
 """
 unique(A::AbstractArray; dims::Union{Colon,Integer} = :) = _unique_dims(A, dims)
@@ -1455,40 +1500,53 @@ julia> extrema(A, dims = (1,2))
  (9, 15)
 ```
 """
-extrema(A::AbstractArray; dims = :) = _extrema_dims(A, dims)
+extrema(A::AbstractArray; dims = :) = _extrema_dims(identity, A, dims)
 
-_extrema_dims(A::AbstractArray, ::Colon) = _extrema_itr(A)
+"""
+    extrema(f, A::AbstractArray; dims) -> Array{Tuple}
 
-function _extrema_dims(A::AbstractArray, dims)
+Compute the minimum and maximum of `f` applied to each element in the given dimensions
+of `A`.
+
+!!! compat "Julia 1.2"
+    This method requires Julia 1.2 or later.
+"""
+extrema(f, A::AbstractArray; dims=:) = _extrema_dims(f, A, dims)
+
+_extrema_dims(f, A::AbstractArray, ::Colon) = _extrema_itr(f, A)
+
+function _extrema_dims(f, A::AbstractArray, dims)
     sz = [size(A)...]
     for d in dims
         sz[d] = 1
     end
-    B = Array{Tuple{eltype(A),eltype(A)}}(undef, sz...)
-    return extrema!(B, A)
+    T = promote_op(f, eltype(A))
+    B = Array{Tuple{T,T}}(undef, sz...)
+    return extrema!(f, B, A)
 end
 
-@noinline function extrema!(B, A)
-    @assert !has_offset_axes(B, A)
+@noinline function extrema!(f, B, A)
+    require_one_based_indexing(B, A)
     sA = size(A)
     sB = size(B)
     for I in CartesianIndices(sB)
-        AI = A[I]
-        B[I] = (AI, AI)
+        fAI = f(A[I])
+        B[I] = (fAI, fAI)
     end
     Bmax = CartesianIndex(sB)
     @inbounds @simd for I in CartesianIndices(sA)
         J = min(Bmax,I)
         BJ = B[J]
-        AI = A[I]
-        if AI < BJ[1]
-            B[J] = (AI, BJ[2])
-        elseif AI > BJ[2]
-            B[J] = (BJ[1], AI)
+        fAI = f(A[I])
+        if fAI < BJ[1]
+            B[J] = (fAI, BJ[2])
+        elseif fAI > BJ[2]
+            B[J] = (BJ[1], fAI)
         end
     end
     return B
 end
+extrema!(B, A) = extrema!(identity, B, A)
 
 # Show for pairs() with Cartesian indices. Needs to be here rather than show.jl for bootstrap order
 function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, toplevel) where T <: Union{AbstractVector, Tuple}

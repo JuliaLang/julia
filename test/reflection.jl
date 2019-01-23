@@ -234,6 +234,9 @@ tlayout = TLayout(5,7,11)
 @test fieldtype(Tuple{Vararg{Int8}}, 1) === Int8
 @test fieldtype(Tuple{Vararg{Int8}}, 10) === Int8
 @test_throws BoundsError fieldtype(Tuple{Vararg{Int8}}, 0)
+# issue #30505
+@test fieldtype(Union{Tuple{Char},Tuple{Char,Char}},2) === Char
+@test_throws BoundsError fieldtype(Union{Tuple{Char},Tuple{Char,Char}},3)
 
 @test fieldnames(NTuple{3, Int}) == ntuple(i -> fieldname(NTuple{3, Int}, i), 3) == (1, 2, 3)
 @test_throws ArgumentError fieldnames(Union{})
@@ -813,3 +816,36 @@ f20872(::Val, ::Val) = false
 module M29962 end
 # make sure checking if a binding is deprecated does not resolve it
 @test !Base.isdeprecated(M29962, :sin) && !Base.isbindingresolved(M29962, :sin)
+
+# @locals
+using Base: @locals
+let
+    local x, y
+    global z
+    @test isempty(keys(@locals))
+    x = 1
+    @test @locals() == Dict{Symbol,Any}(:x=>1)
+    y = ""
+    @test @locals() == Dict{Symbol,Any}(:x=>1,:y=>"")
+    for i = 8:8
+        @test @locals() == Dict{Symbol,Any}(:x=>1,:y=>"",:i=>8)
+    end
+    for i = 42:42
+        local x
+        @test @locals() == Dict{Symbol,Any}(:y=>"",:i=>42)
+    end
+    @test @locals() == Dict{Symbol,Any}(:x=>1,:y=>"")
+    x = (y,)
+    @test @locals() == Dict{Symbol,Any}(:x=>("",),:y=>"")
+end
+
+function _test_at_locals1(::Any, ::Any)
+    x = 1
+    @test @locals() == Dict{Symbol,Any}(:x=>1)
+end
+_test_at_locals1(1,1)
+function _test_at_locals2(a::Any, ::Any)
+    x = 2
+    @test @locals() == Dict{Symbol,Any}(:x=>2,:a=>a)
+end
+_test_at_locals2(1,1)

@@ -11,6 +11,10 @@
 // range goes from 0 to 2^k-1 (region tables), we simply convert
 // to uintptr_t and compare those.
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static inline int cmp_ptr(void *p, void *q)
 {
     uintptr_t paddr = (uintptr_t)p;
@@ -662,3 +666,7 @@ int main()
             "  include(\"LocalTest.jl\")\n"
             "end");
 }
+
+#ifdef __cplusplus
+}
+#endif

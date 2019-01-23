@@ -2,6 +2,16 @@
 
 using Random
 
+@testset "single-threaded Condition usage" begin
+    a = Condition()
+    t = @async begin
+        Base.notify(a, "success")
+        "finished"
+    end
+    @test wait(a) == "success"
+    @test fetch(t) == "finished"
+end
+
 @testset "various constructors" begin
     c = Channel(1)
     @test eltype(c) == Any
@@ -50,6 +60,7 @@ end
     wait(c)
     @test isa(take!(c), Int64)
     @test_throws MethodError put!(c, "")
+    @assert !islocked(c.cond_take)
 end
 
 @testset "multiple for loops waiting on the same channel" begin
@@ -76,14 +87,14 @@ end
 using Distributed
 @testset "channels bound to tasks" for N in [0, 10]
     # Normal exit of task
-    c=Channel(N)
-    bind(c, @async (yield();nothing))
+    c = Channel(N)
+    bind(c, @async (yield(); nothing))
     @test_throws InvalidStateException take!(c)
     @test !isopen(c)
 
     # Error exception in task
-    c=Channel(N)
-    bind(c, @async (yield();error("foo")))
+    c = Channel(N)
+    bind(c, @async (yield(); error("foo")))
     @test_throws ErrorException take!(c)
     @test !isopen(c)
 
@@ -91,22 +102,24 @@ using Distributed
     cs = [Channel(N) for i in 1:5]
     tf2 = () -> begin
         if N > 0
-            foreach(c->(@assert take!(c)==2), cs)
+            foreach(c -> (@assert take!(c) === 2), cs)
         end
         yield()
         error("foo")
     end
     task = Task(tf2)
-    foreach(c->bind(c, task), cs)
+    foreach(c -> bind(c, task), cs)
     schedule(task)
 
     if N > 0
         for i in 1:5
-            @test put!(cs[i], 2) == 2
+            @test put!(cs[i], 2) === 2
         end
     end
     for i in 1:5
-        while (isopen(cs[i])); yield(); end
+        while isopen(cs[i])
+            yield()
+        end
         @test_throws ErrorException wait(cs[i])
         @test_throws ErrorException take!(cs[i])
         @test_throws ErrorException put!(cs[i], 1)
@@ -127,39 +140,41 @@ using Distributed
 
     tasks = [Task(()->tf3(i)) for i in 1:5]
     c = Channel(N)
-    foreach(t->bind(c,t), tasks)
+    foreach(t -> bind(c, t), tasks)
     foreach(schedule, tasks)
     @test_throws InvalidStateException wait(c)
     @test !isopen(c)
     @test ref[] == nth
+    @assert !islocked(c.cond_take)
 
     # channeled_tasks
     for T in [Any, Int]
-        chnls, tasks = Base.channeled_tasks(2, (c1,c2)->(@assert take!(c1)==1; put!(c2,2)); ctypes=[T,T], csizes=[N,N])
+        tf_chnls1 = (c1, c2) -> (@assert take!(c1) == 1; put!(c2, 2))
+        chnls, tasks = Base.channeled_tasks(2, tf_chnls1; ctypes=[T,T], csizes=[N,N])
         put!(chnls[1], 1)
-        @test take!(chnls[2]) == 2
+        @test take!(chnls[2]) === 2
         @test_throws InvalidStateException wait(chnls[1])
         @test_throws InvalidStateException wait(chnls[2])
         @test istaskdone(tasks[1])
         @test !isopen(chnls[1])
         @test !isopen(chnls[2])
 
-        f=Future()
-        tf4 = (c1,c2) -> begin
-            @assert take!(c1)==1
+        f = Future()
+        tf4 = (c1, c2) -> begin
+            @assert take!(c1) === 1
             wait(f)
         end
 
-        tf5 = (c1,c2) -> begin
-            put!(c2,2)
+        tf5 = (c1, c2) -> begin
+            put!(c2, 2)
             wait(f)
         end
 
         chnls, tasks = Base.channeled_tasks(2, tf4, tf5; ctypes=[T,T], csizes=[N,N])
         put!(chnls[1], 1)
-        @test take!(chnls[2]) == 2
+        @test take!(chnls[2]) === 2
         yield()
-        put!(f, 1)
+        put!(f, 1) # allow tf4 and tf5 to exit after now, eventually closing the channel
 
         @test_throws InvalidStateException wait(chnls[1])
         @test_throws InvalidStateException wait(chnls[2])
@@ -171,7 +186,7 @@ using Distributed
 
     # channel
     tf6 = c -> begin
-        @assert take!(c)==2
+        @assert take!(c) === 2
         error("foo")
     end
 
