@@ -1027,7 +1027,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
             #        ai = ai.body
             #    end
             else
-                tvname = varnamectr <= length(_tvarnames) ? _tvarnames[varnamectr] : :_1
+                tvname = varnamectr <= length(_tvarnames) ? _tvarnames[varnamectr] : :_Z
                 varnamectr += 1
                 v = TypeVar(tvname)
                 push!(tparams, v)
