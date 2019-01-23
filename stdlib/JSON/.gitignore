@@ -1,0 +1,3 @@
+*.cov
+*.mem
+data/*.json

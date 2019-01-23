@@ -1,0 +1,18 @@
+name = "JSON"
+uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+
+[deps]
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
+Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
+Unicode = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
+
+[extras]
+DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
+FixedPointNumbers = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
+OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["DataStructures", "FixedPointNumbers", "OffsetArrays", "Test"]
