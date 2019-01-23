@@ -529,21 +529,12 @@ end
 
 # show
 
-for T in (
-    :Year, :Month, :Week, :Day,
-    :Hour, :Minute, :Second, :Millisecond, :Microsecond, :Nanosecond
-)
-    @eval function Base.show(io::IO, p::$T)
-        if get(io, :compact, false)
-            print(io, p)
-        else
-            print(io, $(string(T)), '(', p.value, ')')
-        end
+function Base.show(io::IO, p::P) where P <: BitPeriod
+    if get(io, :compact, false)
+        print(io, p)
+    else
+        print(io, P, '(', p.value, ')')
     end
-end
-
-function Base.show(io::IO, ::MIME"text/plain", p::Period)
-    print(io, p)
 end
 
 function Base.print(io::IO, p::Period)
@@ -560,9 +551,9 @@ function Base.show(io::IO, dt::DateTime)
         s = second(dt)
         ms = millisecond(dt)
         if ms == 0
-            print(io, "DateTime($y, $m, $d, $h, $mi, $s)")
+            print(io, DateTime, "($y, $m, $d, $h, $mi, $s)")
         else
-            print(io, "DateTime($y, $m, $d, $h, $mi, $s, $ms)")
+            print(io, DateTime, "($y, $m, $d, $h, $mi, $s, $ms)")
         end
     end
 end
@@ -580,7 +571,7 @@ function Base.show(io::IO, dt::Date)
         print(io, dt)
     else
         y,m,d = yearmonthday(dt)
-        print(io, "Date($y, $m, $d)")
+        print(io, Date, "($y, $m, $d)")
     end
 end
 

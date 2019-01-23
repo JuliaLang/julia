@@ -34,6 +34,10 @@ for T in (:Hour, :Minute, :Second, :Millisecond, :Microsecond, :Nanosecond)
     end
 end
 
+const BitPeriod = Union{
+    Year, Month, Week, Day, Hour, Minute, Second, Millisecond, Microsecond, Nanosecond
+}
+
 """
     Year(v)
     Month(v)
