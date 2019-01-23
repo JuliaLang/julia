@@ -35,7 +35,7 @@ julia> size(A, 2)
 3
 ```
 """
-size(t::AbstractArray{T,N}, d) where {T,N} = d <= N ? size(t)[d] : 1
+size(t::AbstractArray{T,N}, d) where {T,N} = d::Integer <= N ? size(t)[d] : 1
 
 """
     axes(A, d)
@@ -54,7 +54,7 @@ Base.OneTo(6)
 """
 function axes(A::AbstractArray{T,N}, d) where {T,N}
     @_inline_meta
-    d <= N ? axes(A)[d] : OneTo(1)
+    d::Integer <= N ? axes(A)[d] : OneTo(1)
 end
 
 """
