@@ -28,7 +28,7 @@ extern "C" {
 // current line number in a file
 JL_DLLEXPORT int jl_lineno = 0; // need to update jl_critical_error if this is TLS
 // current file name
-JL_DLLEXPORT const char *jl_filename = "no file"; // need to update jl_critical_error if this is TLS
+JL_DLLEXPORT const char *jl_filename = "none"; // need to update jl_critical_error if this is TLS
 
 htable_t jl_current_modules;
 
@@ -63,6 +63,7 @@ static jl_function_t *jl_module_get_initializer(jl_module_t *m JL_PROPAGATES_ROO
 
 void jl_module_run_initializer(jl_module_t *m)
 {
+    JL_TIMING(INIT_MODULE);
     jl_function_t *f = jl_module_get_initializer(m);
     if (f == NULL)
         return;
@@ -174,7 +175,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     for (int i = 0; i < jl_array_len(exprs); i++) {
         // process toplevel form
         ptls->world_age = jl_world_counter;
-        form = jl_expand_stmt(jl_array_ptr_ref(exprs, i), newm);
+        form = jl_expand_stmt_with_loc(jl_array_ptr_ref(exprs, i), newm, jl_filename, jl_lineno);
         ptls->world_age = jl_world_counter;
         (void)jl_toplevel_eval_flex(newm, form, 1, 1);
     }
@@ -409,6 +410,8 @@ static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_RO
 static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from JL_PROPAGATES_ROOT,
                                      jl_array_t *args, jl_sym_t **name, const char *keyword) JL_GLOBALLY_ROOTED
 {
+    if (jl_array_len(args) == 0)
+        jl_errorf("malformed \"%s\" statement", keyword);
     jl_sym_t *var = (jl_sym_t*)jl_array_ptr_ref(args, 0);
     size_t i = 1;
     jl_module_t *m = NULL;
@@ -549,7 +552,7 @@ static jl_module_t *eval_import_from(jl_module_t *m JL_PROPAGATES_ROOT, jl_expr_
                 jl_expr_t *path = (jl_expr_t*)jl_exprarg(fr, 0);
                 if (((jl_expr_t*)path)->head == dot_sym) {
                     jl_sym_t *name = NULL;
-                    jl_module_t *from = eval_import_path(m, NULL, path->args, &name, "import");
+                    jl_module_t *from = eval_import_path(m, NULL, path->args, &name, keyword);
                     if (name != NULL) {
                         from = (jl_module_t*)jl_eval_global_var(from, name);
                         if (!jl_is_module(from))
@@ -558,7 +561,7 @@ static jl_module_t *eval_import_from(jl_module_t *m JL_PROPAGATES_ROOT, jl_expr_
                     return from;
                 }
             }
-            jl_errorf("malformed \"%s:\" expression", keyword);
+            jl_errorf("malformed \"%s:\" statement", keyword);
         }
     }
     return NULL;
@@ -570,6 +573,11 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     if (!jl_is_expr(e)) {
         if (jl_is_linenode(e)) {
             jl_lineno = jl_linenode_line(e);
+            jl_value_t *file = jl_linenode_file(e);
+            if (file != jl_nothing) {
+                assert(jl_is_symbol(file));
+                jl_filename = jl_symbol_name((jl_sym_t*)file);
+            }
             return jl_nothing;
         }
         if (jl_is_symbol(e)) {
@@ -605,7 +613,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     size_t last_age = ptls->world_age;
     if (!expanded && jl_needs_lowering(e)) {
         ptls->world_age = jl_world_counter;
-        ex = (jl_expr_t*)jl_expand(e, m);
+        ex = (jl_expr_t*)jl_expand_with_loc(e, m, jl_filename, jl_lineno);
         ptls->world_age = last_age;
     }
     jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
@@ -647,6 +655,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                     }
                 }
             }
+            else {
+                jl_error("syntax: malformed \"using\" statement");
+            }
         }
         JL_GC_POP();
         return jl_nothing;
@@ -670,6 +681,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                 else {
                     jl_module_import(m, import, name);
                 }
+            }
+            else {
+                jl_error("syntax: malformed \"import\" statement");
             }
         }
         JL_GC_POP();

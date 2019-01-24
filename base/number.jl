@@ -60,9 +60,9 @@ true
 isone(x) = x == one(x) # fallback method
 
 size(x::Number) = ()
-size(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : 1
+size(x::Number, d::Integer) = d < 1 ? throw(BoundsError()) : 1
 axes(x::Number) = ()
-axes(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : OneTo(1)
+axes(x::Number, d::Integer) = d < 1 ? throw(BoundsError()) : OneTo(1)
 eltype(::Type{T}) where {T<:Number} = T
 ndims(x::Number) = 0
 ndims(::Type{<:Number}) = 0

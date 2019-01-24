@@ -22,6 +22,8 @@ from the circularly symmetric complex normal distribution.
 
 # Examples
 ```jldoctest
+julia> using Random
+
 julia> rng = MersenneTwister(1234);
 
 julia> randn(rng, ComplexF64)

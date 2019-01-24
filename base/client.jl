@@ -146,15 +146,30 @@ function eval_user_input(@nospecialize(ast), show_value::Bool)
     nothing
 end
 
+function _parse_input_line_core(s::String, filename::String)
+    ex = ccall(:jl_parse_all, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+               s, sizeof(s), filename, sizeof(filename))
+    if ex isa Expr && ex.head === :toplevel
+        if isempty(ex.args)
+            return nothing
+        end
+        last = ex.args[end]
+        if last isa Expr && (last.head === :error || last.head === :incomplete)
+            # if a parse error happens in the middle of a multi-line input
+            # return only the error, so that none of the input is evaluated.
+            return last
+        end
+    end
+    return ex
+end
+
 function parse_input_line(s::String; filename::String="none", depwarn=true)
     # For now, assume all parser warnings are depwarns
     ex = if depwarn
-        ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
-              s, sizeof(s), filename, sizeof(filename))
+        _parse_input_line_core(s, filename)
     else
         with_logger(NullLogger()) do
-            ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
-                  s, sizeof(s), filename, sizeof(filename))
+            _parse_input_line_core(s, filename)
         end
     end
     return ex

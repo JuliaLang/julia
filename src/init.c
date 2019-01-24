@@ -17,6 +17,10 @@
 #include <getopt.h>
 #endif
 
+#if defined(_OS_FREEBSD_)
+#include <pthread_np.h>
+#endif
+
 #include "julia.h"
 #include "julia_internal.h"
 #define DEFINE_BUILTIN_GLOBALS

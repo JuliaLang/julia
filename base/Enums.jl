@@ -7,6 +7,11 @@ export Enum, @enum
 
 function basetype end
 
+"""
+    Enum{T<:Integer}
+
+The abstract supertype of all enumerated types defined with [`@enum`](@ref).
+"""
 abstract type Enum{T<:Integer} end
 
 (::Type{T})(x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(bitcast(T2, x))::T
@@ -25,6 +30,9 @@ function membershiptest(expr, values)
         :($expr in $(Set(values)))
     end
 end
+
+# give Enum types scalar behavior in broadcasting
+Base.broadcastable(x::Enum) = Ref(x)
 
 @noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for Enum $(typename): $x")))
 

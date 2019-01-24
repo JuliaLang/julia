@@ -565,10 +565,10 @@ values are `false` (or equivalently, if the input contains no `true` value), fol
 ```jldoctest
 julia> a = [true,false,false,true]
 4-element Array{Bool,1}:
-  true
- false
- false
-  true
+ 1
+ 0
+ 0
+ 1
 
 julia> any(a)
 true
@@ -600,10 +600,10 @@ values are `true` (or equivalently, if the input contains no `false` value), fol
 ```jldoctest
 julia> a = [true,false,false,true]
 4-element Array{Bool,1}:
-  true
- false
- false
-  true
+ 1
+ 0
+ 0
+ 1
 
 julia> all(a)
 false

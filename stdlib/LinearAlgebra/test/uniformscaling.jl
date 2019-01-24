@@ -309,4 +309,10 @@ end
     @test rmul!(copyto!(C, A), J) == target
 end
 
+@testset "Construct Diagonal from UniformScaling" begin
+    @test size(I(3)) === (3,3)
+    @test I(3) isa Diagonal
+    @test I(3) == [1 0 0; 0 1 0; 0 0 1]
+end
+
 end # module TestUniformscaling

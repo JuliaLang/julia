@@ -4,6 +4,12 @@
 
 const sizeof_ios_t = Int(ccall(:jl_sizeof_ios_t, Cint, ()))
 
+"""
+    IOStream
+
+A buffered IO stream wrapping an OS file descriptor.
+Mostly used to represent files returned by [`open`](@ref).
+"""
 mutable struct IOStream <: IO
     handle::Ptr{Cvoid}
     ios::Array{UInt8,1}

@@ -94,8 +94,12 @@ OPENBLAS_BUILD_OPTS += MAKE_NB_JOBS=0
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS), 1)
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
-	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $(dir $<)/Makefile.system
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-skylakexdgemm.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-skylakexdgemm.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-skylakexdgemm.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured
@@ -201,7 +205,7 @@ else # USE_BINARYBUILDER_OPENBLAS
 
 
 OPENBLAS_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/OpenBLAS-v$(OPENBLAS_VER)-$(OPENBLAS_BB_REL)
-OPENBLAS_BB_NAME := OpenBLAS.v$(OPENBLAS_VER)-$(OPENBLAS_BB_REL)
+OPENBLAS_BB_NAME := OpenBLAS.v$(OPENBLAS_VER)
 
 $(eval $(call bb-install,openblas,OPENBLAS,true))
 get-lapack: get-openblas

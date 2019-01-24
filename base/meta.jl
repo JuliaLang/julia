@@ -128,10 +128,6 @@ function parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool
     if raise && isa(ex,Expr) && ex.head === :error
         throw(ParseError(ex.args[1]))
     end
-    if ex === ()
-        raise && throw(ParseError("end of input"))
-        ex = Expr(:error, "end of input")
-    end
     return ex, pos+1 # C is zero-based, Julia is 1-based
 end
 
