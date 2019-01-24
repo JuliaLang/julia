@@ -529,16 +529,12 @@ end
 
 # show
 
-function Base.show(io::IO, p::P) where P <: BitPeriod
+function Base.show(io::IO, p::P) where P <: Period
     if get(io, :compact, false)
         print(io, p)
     else
         print(io, P, '(', p.value, ')')
     end
-end
-
-function Base.print(io::IO, p::Period)
-    print(io, string(p))
 end
 
 function Base.show(io::IO, dt::DateTime)

@@ -172,10 +172,10 @@ julia> dt / dt2
 ERROR: MethodError: no method matching /(::Date, ::Date)
 
 julia> dt - dt2
-Day(4411)
+4411 days
 
 julia> dt2 - dt
-Day(-4411)
+-4411 days
 
 julia> dt = DateTime(2012,2,29)
 2012-02-29T00:00:00
@@ -184,7 +184,7 @@ julia> dt2 = DateTime(2000,2,1)
 2000-02-01T00:00:00
 
 julia> dt - dt2
-Millisecond(381110400000)
+381110400000 milliseconds
 ```
 
 ## Accessor Functions
@@ -214,10 +214,10 @@ While propercase return the same value in the corresponding [`Period`](@ref) typ
 
 ```jldoctest tdate
 julia> Dates.Year(t)
-Year(2014)
+2014 years
 
 julia> Dates.Day(t)
-Day(31)
+31 days
 ```
 
 Compound methods are provided, as they provide a measure of efficiency if multiple fields are
@@ -517,28 +517,28 @@ limited `Period-Real` arithmetic is available.  You can extract the underlying i
 
 ```jldoctest
 julia> y1 = Dates.Year(1)
-Year(1)
+1 year
 
 julia> y2 = Dates.Year(2)
-Year(2)
+2 years
 
 julia> y3 = Dates.Year(10)
-Year(10)
+10 years
 
 julia> y1 + y2
-Year(3)
+3 years
 
 julia> div(y3,y2)
 5
 
 julia> y3 - y2
-Year(8)
+8 years
 
 julia> y3 % y2
-Year(0)
+0 years
 
 julia> div(y3,3) # mirrors integer division
-Year(3)
+3 years
 
 julia> Dates.value(Dates.Millisecond(10))
 10

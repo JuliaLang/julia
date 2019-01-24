@@ -90,13 +90,13 @@ shortcut for `floor(x, Dates.Hour(1))`.
 
 ```jldoctest
 julia> floor(Dates.Day(16), Dates.Week)
-Week(2)
+2 weeks
 
 julia> floor(Dates.Minute(44), Dates.Minute(15))
-Minute(30)
+30 minutes
 
 julia> floor(Dates.Hour(36), Dates.Day)
-Day(1)
+1 day
 ```
 
 Rounding to a `precision` of `Month`s or `Year`s is not supported, as these `Period`s are of
@@ -164,13 +164,13 @@ shortcut for `ceil(x, Dates.Hour(1))`.
 
 ```jldoctest
 julia> ceil(Dates.Day(16), Dates.Week)
-Week(3)
+3 weeks
 
 julia> ceil(Dates.Minute(44), Dates.Minute(15))
-Minute(45)
+45 minutes
 
 julia> ceil(Dates.Hour(36), Dates.Day)
-Day(2)
+2 days
 ```
 
 Rounding to a `precision` of `Month`s or `Year`s is not supported, as these `Period`s are of
@@ -244,13 +244,13 @@ shortcut for `round(x, Dates.Hour(1))`.
 
 ```jldoctest
 julia> round(Dates.Day(16), Dates.Week)
-Week(2)
+2 weeks
 
 julia> round(Dates.Minute(44), Dates.Minute(15))
-Minute(45)
+45 minutes
 
 julia> round(Dates.Hour(36), Dates.Day)
-Day(2)
+2 days
 ```
 
 Valid rounding modes for `round(::Period, ::T, ::RoundingMode)` are `RoundNearestTiesUp`
