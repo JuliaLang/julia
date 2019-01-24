@@ -66,9 +66,10 @@ isperm(p::Tuple{Int,Int}) = ((p[1] == 1) & (p[2] == 2)) | ((p[1] == 2) & (p[2] =
 # swap columns i and j of a, in-place
 function swapcols!(a::AbstractMatrix, i, j)
     i == j && return
-    cols = indices(a,2)
-    (i in cols && j in cols) || throw(BoundsError())
-    for k in indices(a,1)
+    cols = axes(a,2)
+    @boundscheck i in cols || throw(BoundsError(a, (:,i)))
+    @boundscheck j in cols || throw(BoundsError(a, (:,j)))
+    for k in axes(a,1)
         @inbounds a[k,i],a[k,j] = a[k,j],a[k,i]
     end
 end
@@ -77,7 +78,7 @@ function permutecols!!(a::AbstractMatrix, p::AbstractVector{<:Integer})
     count = 0
     start = 0
     while count < length(p)
-        ptr = start = findnext(p, start+1)
+        ptr = start = findnext(!iszero, p, start+1)::Int
         next = p[start]
         count += 1
         while next != start
