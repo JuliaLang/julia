@@ -410,6 +410,8 @@ static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_RO
 static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from JL_PROPAGATES_ROOT,
                                      jl_array_t *args, jl_sym_t **name, const char *keyword) JL_GLOBALLY_ROOTED
 {
+    if (jl_array_len(args) == 0)
+        jl_errorf("malformed \"%s\" statement", keyword);
     jl_sym_t *var = (jl_sym_t*)jl_array_ptr_ref(args, 0);
     size_t i = 1;
     jl_module_t *m = NULL;
@@ -550,7 +552,7 @@ static jl_module_t *eval_import_from(jl_module_t *m JL_PROPAGATES_ROOT, jl_expr_
                 jl_expr_t *path = (jl_expr_t*)jl_exprarg(fr, 0);
                 if (((jl_expr_t*)path)->head == dot_sym) {
                     jl_sym_t *name = NULL;
-                    jl_module_t *from = eval_import_path(m, NULL, path->args, &name, "import");
+                    jl_module_t *from = eval_import_path(m, NULL, path->args, &name, keyword);
                     if (name != NULL) {
                         from = (jl_module_t*)jl_eval_global_var(from, name);
                         if (!jl_is_module(from))
@@ -559,7 +561,7 @@ static jl_module_t *eval_import_from(jl_module_t *m JL_PROPAGATES_ROOT, jl_expr_
                     return from;
                 }
             }
-            jl_errorf("malformed \"%s:\" expression", keyword);
+            jl_errorf("malformed \"%s:\" statement", keyword);
         }
     }
     return NULL;
@@ -653,6 +655,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                     }
                 }
             }
+            else {
+                jl_error("syntax: malformed \"using\" statement");
+            }
         }
         JL_GC_POP();
         return jl_nothing;
@@ -676,6 +681,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                 else {
                     jl_module_import(m, import, name);
                 }
+            }
+            else {
+                jl_error("syntax: malformed \"import\" statement");
             }
         }
         JL_GC_POP();

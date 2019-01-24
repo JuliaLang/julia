@@ -1063,6 +1063,10 @@ function show_generator(io, ex, indent)
     end
 end
 
+function valid_import_path(@nospecialize ex)
+    return Meta.isexpr(ex, :(.)) && length(ex.args) > 0 && all(a->isa(a,Symbol), ex.args)
+end
+
 function show_import_path(io::IO, ex)
     if !isa(ex, Expr)
         print(io, ex)
@@ -1093,8 +1097,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     head, args, nargs = ex.head, ex.args, length(ex.args)
     unhandled = false
     # dot (i.e. "x.y"), but not compact broadcast exps
-    if head === :(.) && (length(args) != 2 || !is_expr(args[2], :tuple))
-        if length(args) == 2 && is_quoted(args[2])
+    if head === :(.) && (nargs != 2 || !is_expr(args[2], :tuple))
+        if nargs == 2 && is_quoted(args[2])
             item = args[1]
             # field
             field = unquoted(args[2])
@@ -1213,23 +1217,23 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_call(io, head, args[1], funcargslike, indent)
 
     # comprehensions
-    elseif head === :typed_comprehension && length(args) == 2
+    elseif head === :typed_comprehension && nargs == 2
         show_unquoted(io, args[1], indent)
         print(io, '[')
         show_generator(io, args[2], indent)
         print(io, ']')
 
-    elseif head === :comprehension && length(args) == 1
+    elseif head === :comprehension && nargs == 1
         print(io, '[')
         show_generator(io, args[1], indent)
         print(io, ']')
 
-    elseif (head === :generator && length(args) >= 2) || (head === :flatten && length(args) == 1)
+    elseif (head === :generator && nargs >= 2) || (head === :flatten && nargs == 1)
         print(io, '(')
         show_generator(io, ex, indent)
         print(io, ')')
 
-    elseif head === :filter && length(args) == 2
+    elseif head === :filter && nargs == 2
         show_unquoted(io, args[2], indent)
         print(io, " if ")
         show_unquoted(io, args[1], indent)
@@ -1329,7 +1333,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         if prec >= 0
             show_call(io, :call, args[1], args[3:end], indent)
         else
-            show_args = Vector{Any}(undef, length(args) - 1)
+            show_args = Vector{Any}(undef, nargs - 1)
             show_args[1] = args[1]
             show_args[2:end] = args[3:end]
             show_list(io, show_args, ' ', indent)
@@ -1389,7 +1393,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         print(io, '"')
 
-    elseif (head === :&#= || head === :$=#) && length(args) == 1
+    elseif (head === :&#= || head === :$=#) && nargs == 1
         print(io, head)
         a1 = args[1]
         parens = (isa(a1,Expr) && a1.head !== :tuple) || (isa(a1,Symbol) && isoperator(a1))
@@ -1398,7 +1402,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         parens && print(io, ")")
 
     # transpose
-    elseif head === Symbol('\'') && length(args) == 1
+    elseif head === Symbol('\'') && nargs == 1
         if isa(args[1], Symbol)
             show_unquoted(io, args[1])
         else
@@ -1409,7 +1413,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, head)
 
     # `where` syntax
-    elseif head === :where && length(args) > 1
+    elseif head === :where && nargs > 1
         parens = 1 <= prec
         parens && print(io, "(")
         show_unquoted(io, args[1], indent, operator_precedence(:(::)))
@@ -1423,7 +1427,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         parens && print(io, ")")
 
-    elseif head === :import || head === :using
+    elseif (head === :import || head === :using) && nargs == 1 &&
+            (valid_import_path(args[1]) ||
+             (Meta.isexpr(args[1], :(:)) && length(args[1].args) > 1 && all(valid_import_path, args[1].args)))
         print(io, head)
         print(io, ' ')
         first = true
@@ -1434,11 +1440,11 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             first = false
             show_import_path(io, a)
         end
-    elseif head === :meta && length(args) >= 2 && args[1] === :push_loc
+    elseif head === :meta && nargs >= 2 && args[1] === :push_loc
         print(io, "# meta: location ", join(args[2:end], " "))
-    elseif head === :meta && length(args) == 1 && args[1] === :pop_loc
+    elseif head === :meta && nargs == 1 && args[1] === :pop_loc
         print(io, "# meta: pop location")
-    elseif head === :meta && length(args) == 2 && args[1] === :pop_loc
+    elseif head === :meta && nargs == 2 && args[1] === :pop_loc
         print(io, "# meta: pop locations ($(args[2]))")
     # print anything else as "Expr(head, args...)"
     else

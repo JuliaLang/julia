@@ -1792,3 +1792,6 @@ let f = f30772(1.0), g = f()
     @test g(1.0) === nothing
     @test_throws MethodError g(1)
 end
+
+@test_throws ErrorException("syntax: malformed \"using\" statement")  eval(Expr(:using, :X))
+@test_throws ErrorException("syntax: malformed \"import\" statement") eval(Expr(:import, :X))
