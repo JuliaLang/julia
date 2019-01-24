@@ -105,6 +105,7 @@ end
 
 tostr_sizehint(x) = 8
 tostr_sizehint(x::AbstractString) = lastindex(x)
+tostr_sizehint(x::Union{String,SubString{String}}) = sizeof(x)
 tostr_sizehint(x::Float64) = 20
 tostr_sizehint(x::Float32) = 12
 
@@ -205,6 +206,8 @@ julia> repr(big(1/3), context=:compact => true)
 ```
 """
 repr(x; context=nothing) = sprint(show, x; context=context)
+
+limitrepr(x) = repr(x, context = :limit=>true)
 
 # IOBuffer views of a (byte)string:
 
@@ -439,7 +442,24 @@ function unescape_string(io, s::AbstractString)
 end
 unescape_string(s::AbstractString) = sprint(unescape_string, s, sizehint=lastindex(s))
 
+"""
+    @b_str
 
+Create an immutable byte (`UInt8`) vector using string syntax.
+
+# Examples
+```jldoctest
+julia> v = b"12\\x01\\x02"
+4-element Base.CodeUnits{UInt8,String}:
+ 0x31
+ 0x32
+ 0x01
+ 0x02
+
+julia> v[2]
+0x32
+```
+"""
 macro b_str(s)
     v = codeunits(unescape_string(s))
     QuoteNode(v)

@@ -9,7 +9,8 @@ const VERBOSE = false
 lorem = "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
 so_many_as_array = repeat([0x61], 1000000)
 so_many_as_tuple = ntuple((i) -> 0x61, 1000000)
-file = ".sha"  # Subject to change
+tempdir = mktempdir()
+file = joinpath(tempdir, ".sha")
 fIO = open(file, "w")
 write(fIO, '\0')
 close(fIO)
@@ -274,16 +275,24 @@ end
 # test error if eltype of input is not UInt8
 for f in sha_funcs
     global nerrors
+    data = UInt32[0x23467, 0x324775]
     try
-        f(UInt32[0x23467, 0x324775])
-        warn("Non-UInt8 Arrays should fail")
-        nerrors += 1
-    catch
+        f(data)
+    catch ex
+        if ex isa MethodError &&
+            ex.f === f &&
+            ex.args === (data,)
+            continue
+        end
+        rethrow()
     end
+    warn("Non-UInt8 Arrays should fail")
+    nerrors += 1
 end
 
 # Clean up the I/O mess
 rm(file)
+rm(tempdir)
 
 if nerrors == 0
     VERBOSE && println("ALL OK")

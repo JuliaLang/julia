@@ -8,7 +8,7 @@ using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
 
-using Base: BitInteger, BitInteger_types, BitUnsigned, has_offset_axes
+using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
 
 import Base: copymutable, copy, copy!, ==, hash, convert
 using Serialization
@@ -300,6 +300,8 @@ julia> rand(Int, 2)
 2-element Array{Int64,1}:
  1339893410598768192
  1575814717733606317
+
+julia> using Random
 
 julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
 1=>2

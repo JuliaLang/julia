@@ -214,27 +214,27 @@ julia> circshift(b, (-1,0))
 
 julia> a = BitArray([true, true, false, false, true])
 5-element BitArray{1}:
-  true
-  true
- false
- false
-  true
+ 1
+ 1
+ 0
+ 0
+ 1
 
 julia> circshift(a, 1)
 5-element BitArray{1}:
-  true
-  true
-  true
- false
- false
+ 1
+ 1
+ 1
+ 0
+ 0
 
 julia> circshift(a, -1)
 5-element BitArray{1}:
-  true
- false
- false
-  true
-  true
+ 1
+ 0
+ 0
+ 1
+ 1
 ```
 
 See also [`circshift!`](@ref).

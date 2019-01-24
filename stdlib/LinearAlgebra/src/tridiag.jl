@@ -7,7 +7,7 @@ struct SymTridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     dv::V                        # diagonal
     ev::V                        # subdiagonal
     function SymTridiagonal{T,V}(dv, ev) where {T,V<:AbstractVector{T}}
-        @assert !has_offset_axes(dv, ev)
+        require_one_based_indexing(dv, ev)
         if !(length(dv) - 1 <= length(ev) <= length(dv))
             throw(DimensionMismatch("subdiagonal has wrong length. Has length $(length(ev)), but should be either $(length(dv) - 1) or $(length(dv))."))
         end
@@ -331,7 +331,7 @@ end
 #    Linear Algebra and its Applications 212-213 (1994), pp.413-414
 #    doi:10.1016/0024-3795(94)90414-6
 function det_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
-    @assert !has_offset_axes(a, b, c)
+    require_one_based_indexing(a, b, c)
     n = length(b)
     θa = one(T)
     if n == 0
@@ -378,7 +378,7 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     du::V    # sup-diagonal
     du2::V   # supsup-diagonal for pivoting in LU
     function Tridiagonal{T,V}(dl, d, du) where {T,V<:AbstractVector{T}}
-        @assert !has_offset_axes(dl, d, du)
+        require_one_based_indexing(dl, d, du)
         n = length(d)
         if (length(dl) != n-1 || length(du) != n-1)
             throw(ArgumentError(string("cannot construct Tridiagonal from incompatible ",
@@ -389,7 +389,7 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     end
     # constructor used in lu!
     function Tridiagonal{T,V}(dl, d, du, du2) where {T,V<:AbstractVector{T}}
-        @assert !has_offset_axes(dl, d, du, du2)
+        require_one_based_indexing(dl, d, du, du2)
         # length checks?
         new{T,V}(dl, d, du, du2)
     end

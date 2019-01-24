@@ -21,16 +21,16 @@ julia> rng = MersenneTwister(1234);
 
 julia> bitrand(rng, 10)
 10-element BitArray{1}:
- false
-  true
-  true
-  true
-  true
- false
-  true
- false
- false
-  true
+ 0
+ 1
+ 1
+ 1
+ 1
+ 0
+ 1
+ 0
+ 0
+ 1
 ```
 """
 bitrand(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(undef, dims))
@@ -85,7 +85,7 @@ end
 # (Note that this is different from the problem of finding a random
 #  size-m subset of A where m is fixed!)
 function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real)
-    @assert !has_offset_axes(S, A)
+    require_one_based_indexing(S, A)
     0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
     n = length(A)
     p == 1 && return copyto!(resize!(S, n), A)
@@ -204,7 +204,7 @@ julia> shuffle!(rng, Vector(1:16))
 ```
 """
 function shuffle!(r::AbstractRNG, a::AbstractArray)
-    @assert !has_offset_axes(a)
+    require_one_based_indexing(a)
     n = length(a)
     n <= 1 && return a # nextpow below won't work with n == 0
     @assert n <= Int64(2)^52
