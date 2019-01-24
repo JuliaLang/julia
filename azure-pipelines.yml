@@ -1,14 +1,13 @@
 trigger:
 - master
 
-pool:
-  vmImage: 'Ubuntu-16.04'
-
 variables: 
   BUILDOPTS: "FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1"
 
 jobs:
 - job: dependencies
+  pool:
+    vmImage: 'Ubuntu-16.04'
   steps:
   - bash: |
       make check-whitespace
@@ -29,6 +28,8 @@ jobs:
 
 - job: release
   dependsOn: dependencies
+  pool:
+    vmImage: 'Ubuntu-16.04'
   steps:
   - task: DownloadPipelineArtifact@0
     inputs:
