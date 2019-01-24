@@ -1,0 +1,30 @@
+commit 812db527538f30ac77a19d755e24109a6db7e569
+Author: Keno Fischer <keno@juliacomputing.com>
+Date:   Wed Jan 23 16:46:59 2019 -0500
+
+    [CMake][PowerPC] Recognize LLVM_NATIVE_TARGET="ppc64le" as PowerPC
+    
+    Summary:
+    This value is derived from the host triple, which on the machine
+    I'm currently using is `ppc64le-linux-redhat`. This change makes
+    LLVM compile.
+    
+    Reviewers: hfinkel
+    
+    Subscribers: nemanjai, mgorny, jsji, llvm-commits
+    
+    Differential Revision: https://reviews.llvm.org/D57118
+
+diff --git a/cmake/config-ix.cmake b/cmake/config-ix.cmake
+index 900c35ee4f0..b9c9757a4f6 100644
+--- a/cmake/config-ix.cmake
++++ b/cmake/config-ix.cmake
+@@ -386,6 +386,8 @@ elseif (LLVM_NATIVE_ARCH MATCHES "sparc")
+   set(LLVM_NATIVE_ARCH Sparc)
+ elseif (LLVM_NATIVE_ARCH MATCHES "powerpc")
+   set(LLVM_NATIVE_ARCH PowerPC)
++elseif (LLVM_NATIVE_ARCH MATCHES "ppc64le")
++  set(LLVM_NATIVE_ARCH PowerPC)
+ elseif (LLVM_NATIVE_ARCH MATCHES "aarch64")
+   set(LLVM_NATIVE_ARCH AArch64)
+ elseif (LLVM_NATIVE_ARCH MATCHES "arm64")
