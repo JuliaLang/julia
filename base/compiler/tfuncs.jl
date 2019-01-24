@@ -914,6 +914,9 @@ function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
     return true
 end
 
+const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K, :_L, :_M,
+                          :_N, :_O, :_P, :_Q, :_R, :_S, :_T, :_U, :_V, :_W, :_X, :_Y, :_Z]
+
 # TODO: handle e.g. apply_type(T, R::Union{Type{Int32},Type{Float64}})
 function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
     if isa(headtypetype, Const)
@@ -971,6 +974,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
     canconst = true
     tparams = Any[]
     outervars = Any[]
+    varnamectr = 1
     for i = 1:largs
         ai = widenconditional(args[i])
         if isType(ai)
@@ -1009,7 +1013,9 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
             #        ai = ai.body
             #    end
             else
-                v = TypeVar(:_)
+                tvname = varnamectr <= length(_tvarnames) ? _tvarnames[varnamectr] : :_Z
+                varnamectr += 1
+                v = TypeVar(tvname)
                 push!(tparams, v)
                 push!(outervars, v)
             end
