@@ -913,9 +913,11 @@ end
 reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))
 
 """
-    partition(collection, n)
+    partition(collection, n; step = n, flush = true)
 
-Iterate over a collection `n` elements at a time.
+Iterate over a collection `n` elements at a time for each `step`.  If
+`flush` is `true` (default), elements fewer than `n` may be returned
+at the end of the iteration.
 
 # Examples
 ```jldoctest
@@ -924,20 +926,44 @@ julia> collect(Iterators.partition([1,2,3,4,5], 2))
  [1, 2]
  [3, 4]
  [5]
+
+julia> collect(Iterators.partition([1,2,3,4,5], 2; flush=false))
+2-element Array{Array{Int64,1},1}:
+ [1, 2]
+ [3, 4]
+
+julia> collect(Iterators.partition([1,2,3,4,5], 2; step=1))
+4-element Array{Array{Int64,1},1}:
+ [1, 2]
+ [2, 3]
+ [3, 4]
+ [4, 5]
 ```
 """
-partition(c::T, n::Integer) where {T} = PartitionIterator{T}(c, Int(n))
-
-
-struct PartitionIterator{T}
-    c::T
-    n::Int
+function partition(c::T, n::Integer;
+                   step::Integer = n, flush::Bool = true) where {T}
+    n < 1 && throw(ArgumentError("n (= $n) must be larger than 1"))
+    step < 1 && throw(ArgumentError("step (= $step) must be larger than 1"))
+    if T <: AbstractVector
+        return PartitionIterator{T,Nothing}(c, Int(n), Int(step), flush)
+    elseif step >= n
+        return PartitionIterator{T,:GE}(c, Int(n), Int(step), flush)
+    else
+        return PartitionIterator{T,:LESS}(c, Int(n), Int(step), flush)
+    end
 end
 
-eltype(::Type{PartitionIterator{T}}) where {T} = Vector{eltype(T)}
+struct PartitionIterator{T,STEP}
+    c::T
+    n::Int
+    step::Int
+    flush::Bool
+end
+
+eltype(::Type{<:PartitionIterator{T}}) where {T} = Vector{eltype(T)}
 partition_iteratorsize(::HasShape) = HasLength()
 partition_iteratorsize(isz) = isz
-function IteratorSize(::Type{PartitionIterator{T}}) where {T}
+function IteratorSize(::Type{<:PartitionIterator{T}}) where {T}
     partition_iteratorsize(IteratorSize(T))
 end
 
@@ -945,26 +971,72 @@ IteratorEltype(::Type{<:PartitionIterator{T}}) where {T} = IteratorEltype(T)
 
 function length(itr::PartitionIterator)
     l = length(itr.c)
-    return div(l, itr.n) + ((mod(l, itr.n) > 0) ? 1 : 0)
+    # It's easier if we can assume `l > n` below.  So let's treat the
+    # edge case first:
+    if l <= itr.n
+        return l > 0 && (itr.n == l || itr.flush) ? 1 : 0
+    end
+    # One possible cause of the termination is that the last item of
+    # the partition goes beyond the limit `l`.  If `m` partitions are
+    # produced, it means that `(m - 1) * step + n` is equal to or
+    # larger than `l`.  Thus, we need the smallest positive integer
+    # `m` such that `(m - 1) * step + n > l - 1`.
+    m = div(l - 1 - itr.n, itr.step) + 2
+    # Another possible cause of the termination is that the beginning
+    # of the last partition goes beyond the limit `l`.  If `k`
+    # partitions are produced, it means that the next step is out of
+    # range, i.e., `k * step` is equal to or larger than `l`.  For
+    # this, we need the smallest integer k such that `k * step > l - 1`.
+    k = div(l - 1, itr.step) + 1
+    if !itr.flush && m <= k
+        # If the last item of the last partition is strictly beyond
+        # the limit (see `mod` below), and all the partitions have to
+        # be of the same length (i.e., `flush == false`), we have to
+        # throw away the last partition:
+        return m - (mod(l - itr.n, itr.step) > 0 ? 1 : 0)
+    else
+        # Otherwise, the first occurrence of one of the two events
+        # takes effect:
+        return min(m, k)
+    end
 end
 
-function iterate(itr::PartitionIterator{<:Vector}, state=1)
+function iterate(itr::PartitionIterator{<:AbstractVector}, state=1)
     state > length(itr.c) && return nothing
-    r = min(state + itr.n - 1, length(itr.c))
-    return view(itr.c, state:r), r + 1
+    h = state
+    t = state + itr.n - 1
+    if t > length(itr.c)
+        itr.flush || return nothing
+        # If the last `iterate` already produced the `view` including
+        # `itr.c[end]`, we are done:
+        state > 1 && t - itr.step == length(itr.c) && return nothing
+        # Otherwise, yield the remaining partition up to the end of
+        # the vector:
+        t = length(itr.c)
+        # Finally, make sure that next `iterate` finishes.  If
+        # `itr.step < itr.n`, it is possible that we still have `state
+        # + itr.step <= length(itr.c)`:
+        state = length(itr.c)
+    end
+    return view(itr.c, (firstindex(itr.c) - 1) .+ (h:t)), state + itr.step
 end
 
 struct IterationCutShort; end
 
-function iterate(itr::PartitionIterator, state...)
+function iterate(itr::PartitionIterator{<:Any,:GE})
     v = Vector{eltype(itr.c)}(undef, itr.n)
-    # This is necessary to remember whether we cut the
-    # last element short. In such cases, we do return that
-    # element, but not the next one
+    return iterate(itr, (v, ()))
+end
+
+function iterate(itr::PartitionIterator{<:Any,:GE}, (v, state))
     state === (IterationCutShort(),) && return nothing
-    i = 0
     y = iterate(itr.c, state...)
-    while y !== nothing
+    i = 0
+    while true
+        if y === nothing
+            itr.flush || return nothing
+            break
+        end
         i += 1
         v[i] = y[1]
         if i >= itr.n
@@ -973,7 +1045,62 @@ function iterate(itr::PartitionIterator, state...)
         y = iterate(itr.c, y[2])
     end
     i === 0 && return nothing
-    return resize!(v, i), y === nothing ? IterationCutShort() : y[2]
+    for _ in 1:itr.step - itr.n
+        y === nothing && break
+        y = iterate(itr.c, y[2])
+    end
+    # TODO: remove `copy`:
+    return copy(resize!(v, i)), (v, (y === nothing ? IterationCutShort() : y[2],))
+end
+
+function iterate(itr::PartitionIterator{<:Any,:LESS})
+    v = Vector{eltype(itr.c)}(undef, itr.n * 2 - 1)
+    return iterate(itr, (v, 1, nothing))
+end
+
+function iterate(itr::PartitionIterator{<:Any,:LESS}, (v, h, state))
+    state === IterationCutShort() && return nothing
+    if state === nothing
+        y = iterate(itr.c)
+        i = 0
+        while true
+            if y === nothing
+                itr.flush || return nothing
+                break
+            end
+            i += 1
+            v[i] = y[1]
+            if i >= itr.n
+                break
+            end
+            y = iterate(itr.c, y[2])
+        end
+        i === 0 && return nothing
+        t = i
+    else
+        # The "head" index `h` must always be smaller than or equal to
+        # `itr.n - itr.step`.  The last "half" of the buffer `v` is
+        # copied to the first "half" when `h` is about to exceed this
+        # bound (i.e., we are wrapping around).
+        if h + itr.step > itr.n
+            copyto!(v, 1, v, h + 1, itr.n - 1)
+            h = 0
+        end
+        y = iterate(itr.c, state)
+        y === nothing && return nothing
+        t = h + itr.n - 1
+        h += itr.step
+        v[t += 1] = y[1]
+        for i in 2:itr.step
+            y = iterate(itr.c, y[2])
+            if y === nothing
+                itr.flush || return nothing
+                break
+            end
+            v[t += 1] = y[1]
+        end
+    end
+    return view(v, h:t), (v, h, y === nothing ? IterationCutShort() : y[2])
 end
 
 """

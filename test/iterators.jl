@@ -399,6 +399,49 @@ let v = collect(partition([1,2,3,4,5], 2))
     @test v[3] == [5]
 end
 
+let v = collect(partition([1,2,3,4,5], 2; flush=false))
+    @test v[1] == [1,2]
+    @test v[2] == [3,4]
+    @test length(v) == 2
+end
+
+let v = collect(partition([1,2,3,4,5], 2, step=1))
+    @test v[1] == [1,2]
+    @test v[2] == [2,3]
+    @test v[3] == [3,4]
+    @test v[4] == [4,5]
+    @test length(v) == 4
+end
+
+let v = collect(partition(1:10, 3, step=5))
+    @test v[1] == [1,2,3]
+    @test v[2] == [6,7,8]
+    @test length(v) == 2
+end
+
+let v = collect(partition(1:8, 4, step=3))
+    @test v[1] == [1, 2, 3, 4]
+    @test v[2] == [4, 5, 6, 7]
+    @test v[3] == [7, 8]
+    @test length(v) == 3
+end
+
+let v = collect(partition(1:8, 4, step=3, flush=false))
+    @test v[1] == [1, 2, 3, 4]
+    @test v[2] == [4, 5, 6, 7]
+    @test length(v) == 2
+end
+
+@testset for l in 1:10
+    @testset for n in 1:10
+        @testset for step in 1:10, flush in [false, true]
+            v1 = map(copy, partition(collect(1:l), n, step=step, flush=flush))
+            v2 = map(copy, partition(Base.Generator(identity, 1:l), n, step=step, flush=flush))
+            @test v1 == v2
+        end
+    end
+end
+
 let v = collect(partition(enumerate([1,2,3,4,5]), 3))
     @test v[1] == [(1,1),(2,2),(3,3)]
     @test v[2] == [(4,4),(5,5)]
