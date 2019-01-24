@@ -1457,6 +1457,10 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
             jl_datatype_t *gf = jl_first_argument_datatype((jl_value_t*)m->sig);
             assert(jl_is_datatype(gf) && gf->name->mt && "method signature invalid?");
             jl_typemap_visitor(gf->name->mt->cache, set_max_world2, (void*)&def);
+            if (JL_DEBUG_METHOD_INVALIDATION) {
+                jl_static_show(JL_STDOUT, (jl_value_t*)def.replaced);
+                jl_uv_puts(JL_STDOUT, "\n", 1);
+            }
         }
 
         // invalidate backedges
@@ -1466,7 +1470,7 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
             size_t i, l = jl_array_len(backedges);
             jl_method_instance_t **replaced = (jl_method_instance_t**)jl_array_ptr_data(backedges);
             for (i = 0; i < l; i++) {
-                invalidate_method_instance(replaced[i], closure->max_world, 0);
+                invalidate_method_instance(replaced[i], closure->max_world, 1);
             }
         }
         closure->invalidated = 1;
