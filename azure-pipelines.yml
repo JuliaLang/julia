@@ -4,29 +4,38 @@ trigger:
 pool:
   vmImage: 'Ubuntu-16.04'
 
-steps:
-# First set BUILDOPTS as a environment wide variable
-- script: "echo \"##vso[task.setvariable variable=BUILDOPTS]-j$(nproc) VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1\""
-- script: make check-whitespace
-- bash: |
-    contrib/travis_fastfail.sh || exit 1;
-    sudo apt-get update
-    sudo apt-get install -y ccache gfortran
-    contrib/download_cmake.sh
-  displayName: setup
-- script: |
-    make $BUILDOPTS -C base version_git.jl.phony
-    make $BUILDOPTS NO_GIT=1 -C deps
-  displayName: dependencies
-  env:
-    BUILDOPTS: $(BUILDOPTS)
-- script: |
-    make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia release
-  displayName: release
-  env:
-    BUILDOPTS: $(BUILDOPTS)
-- script: |
-    make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia debug
-  displayName: debug
-  env:
-    BUILDOPTS: $(BUILDOPTS)
+variables: 
+  BUILDOPTS: "FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1"
+
+jobs:
+- job: dependencies
+  steps:
+  - bash: |
+      make check-whitespace
+      contrib/travis_fastfail.sh || exit 1;
+      sudo apt-get update
+      sudo apt-get install -y gfortran
+      contrib/download_cmake.sh
+    displayName: setup
+  - bash: |
+      make -j $BUILDOPTS NO_GIT=1 -C deps
+    displayName: dependencies
+    env:
+      BUILDOPTS: $(BUILDOPTS)
+  - task: PublishPipelineArtifact@0
+    inputs:
+      artifactName: 'dependencies'
+      targetPath: 'usr'
+
+- job: release
+  dependsOn: dependencies
+  steps:
+  - task: DownloadPipelineArtifact@0
+    inputs:
+      targetPath: $(System.DefaultWorkingDirectory)
+  - bash: |
+      make $BUILDOPTS -C base version_git.jl.phony
+      make -j $BUILDOPTS NO_GIT=1 prefix=/tmp/julia release
+    env:
+      BUILDOPTS: $(BUILDOPTS)
+
