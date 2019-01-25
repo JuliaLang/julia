@@ -890,16 +890,16 @@ end
 
 # Bindings.
 
-import Base.Docs: @var, Binding, defined
+import Base.Docs: @var, binding, defined
 
-let x = Binding(Base, Symbol("@time"))
+let x = binding(Base, Symbol("@time"))
     @test defined(x) == true
     @test @var(@time) == x
     @test @var(Base.@time) == x
     @test @var(Base.Iterators.@time) == x
 end
 
-let x = Binding(Iterators, :enumerate)
+let x = binding(Iterators, :enumerate)
     @test defined(x) == true
     @test @var(enumerate) == x
     @test @var(Base.enumerate) == x
@@ -907,47 +907,49 @@ let x = Binding(Iterators, :enumerate)
     @test @var(Base.Iterators.enumerate) == x
 end
 
-let x = Binding(Core, :Int)
+let x = binding(Core, :Int)
     @test defined(x) == true
     @test @var(Int) == x
     @test @var(Base.Int) == x
     @test @var(Core.Int) == x
 end
 
-let x = Binding(Base, :Iterators)
+let x = binding(Base, :Iterators)
     @test defined(x) == true
     @test @var(Iterators) == x
     @test @var(Base.Iterators) == x
     @test @var(Main.Iterators) == x
 end
 
-let x = Binding(Base, :VERSION)
+let x = binding(Base, :VERSION)
     @test defined(x) == true
     @test @var(VERSION) == x
     @test @var(Base.VERSION) == x
 end
 
-let x = Binding(Base, :bindingdoesnotexist)
+let x = binding(Base, :bindingdoesnotexist)
     @test defined(x) == false
     @test @var(Base.bindingdoesnotexist) == x
 end
 
-let x = Binding(curmod, :bindingdoesnotexist)
+let x = binding(curmod, :bindingdoesnotexist)
     @test defined(x) == false
     @test @var(bindingdoesnotexist) == x
 end
 
-let x = Binding(Main, :+)
+let x = binding(Main, :+)
     @test Meta.parse(string(x)) == :(Base.:+)
 end
 
-let x = Binding(Meta, :parse)
+let x = binding(Meta, :parse)
     @test Meta.parse(string(x)) == :(Base.Meta.parse)
 end
 
-let x = Binding(Main, :⊕)
+let x = binding(Main, :⊕)
     @test Meta.parse(string(x)) == :(⊕)
 end
+
+@test binding(Some(123), :value) == 123
 
 doc_util_path = Symbol(joinpath("docs", "utils.jl"))
 
@@ -1072,7 +1074,7 @@ let foo_docs = meta(I22105)[@var(I22105.foo)].docs
     @test docstr.data[:linenumber] == I22105.lineno + 1
     @test docstr.data[:module] === I22105
     @test docstr.data[:typesig] === Union{}
-    @test docstr.data[:binding] == Binding(I22105, :foo)
+    @test docstr.data[:binding] == binding(I22105, :foo)
 end
 
 # issue #23011

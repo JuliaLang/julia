@@ -14,7 +14,9 @@ struct Binding
     end
 end
 
-bindingexpr(x) = Expr(:call, Binding, splitexpr(x)...)
+binding(m::Module, v::Symbol) = Binding(m, v)
+binding(x, v::Union{AbstractString,Symbol}) = getproperty(x, v)
+bindingexpr(x) = Expr(:call, binding, splitexpr(x)...)
 
 defined(b::Binding) = isdefined(b.mod, b.var)
 resolve(b::Binding) = getfield(b.mod, b.var)
