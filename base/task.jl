@@ -2,7 +2,8 @@
 
 ## basic task functions and TLS
 
-Core.Task(@nospecialize(f), reserved_stack::Int=0) = Task(f, reserved_stack, GenericCondition{Threads.SpinLock}())
+const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
+Core.Task(@nospecialize(f), reserved_stack::Int=0) = Task(f, reserved_stack, ThreadSynchronizer())
 
 # Container for a captured exception and its backtrace. Can be serialized.
 struct CapturedException <: Exception
@@ -293,7 +294,7 @@ function task_done_hook(t::Task)
     end
 
     donenotify = t.donenotify
-    if isa(donenotify, GenericCondition{Threads.SpinLock})
+    if isa(donenotify, ThreadSynchronizer)
         lock(donenotify)
         try
             if !isempty(donenotify.waitq)
@@ -441,12 +442,12 @@ end
 
 function enq_work(t::Task)
     (t.state == :runnable && t.queue === nothing) || error("schedule: Task not runnable")
-    tid = Threads.threadid(t)
+    tid = (t.sticky ? Threads.threadid(t) : 0)
     if tid == 0
         tid = Threads.threadid()
     end
     push!(Workqueues[tid], t)
-    tid == Threads.threadid() || ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
+    tid == 1 && ccall(:uv_stop, Cvoid, (Ptr{Cvoid},), eventloop())
     return t
 end
 
@@ -604,12 +605,20 @@ end
     while true
         task = trypoptask(W)
         task === nothing || break
-        if process_events(true) == 0
-            task = trypoptask(W)
-            task === nothing || break
-            # if there are no active handles and no runnable tasks, just
-            # wait for signals.
-            pause()
+        if !Threads.in_threaded_loop[] && Threads.threadid() == 1
+            if process_events(true) == 0
+                task = trypoptask(W)
+                task === nothing || break
+                # if there are no active handles and no runnable tasks, just
+                # wait for signals.
+                pause()
+            end
+        else
+            if Threads.threadid() == 1
+                process_events(false)
+            end
+            ccall(:jl_gc_safepoint, Cvoid, ())
+            ccall(:jl_cpu_pause, Cvoid, ())
         end
     end
     return Ref(task)
