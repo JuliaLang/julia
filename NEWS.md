@@ -6,6 +6,7 @@ New language features
 
 * The `extrema` function now accepts a function argument in the same manner as `minimum` and
   `maximum` ([#30323]).
+* `hasmethod` can now check for matching keyword argument names ([#30712]).
 
 Multi-threading changes
 -----------------------
