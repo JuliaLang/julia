@@ -298,7 +298,6 @@ end
     @test isa((@inferred vcat(Float64[], spzeros(1))), SparseVector)
 end
 
-<<<<<<< HEAD
 
 # for testing types with a dimension
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
@@ -378,7 +377,6 @@ using .Main.Furlongs
         @test zero(A) == zero(Matrix(A))
         @test one(A) == one(Matrix(A))
         @test eltype(one(A)) == typeof(one(eltype(A)))
-=======
 @testset "== for structured matrices" begin
     diag = rand(10)
     offdiag = rand(9)
@@ -400,7 +398,6 @@ using .Main.Furlongs
         for b in mats
             @test (a == b) == (Matrix(a) == Matrix(b)) == (b == a) == (Matrix(b) == Matrix(a))
         end
->>>>>>> master
     end
 end
 
