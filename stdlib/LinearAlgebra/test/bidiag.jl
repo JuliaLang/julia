@@ -18,7 +18,7 @@ Random.seed!(1)
             dv += im*convert(Vector{elty}, randn(n))
             ev += im*convert(Vector{elty}, randn(n-1))
         end
-    elseif relty <: Integer
+    else # relty <: Integer
         dv = convert(Vector{elty}, rand(1:10, n))
         ev = convert(Vector{elty}, rand(1:10, n-1))
         if (elty <: Complex)
@@ -176,7 +176,7 @@ Random.seed!(1)
                 if (elty <: Complex)
                     b += im*convert(Matrix{elty}, randn(n, 2))
                 end
-            elseif relty <: Integer
+            else # relty <: Integer
                 c = convert(Matrix{elty}, rand(1:10, n, n))
                 b = convert(Matrix{elty}, rand(1:10, n, 2))
                 if (elty <: Complex)

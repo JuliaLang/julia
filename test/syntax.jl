@@ -1606,14 +1606,6 @@ end
 # #24452
 @test Meta.parse("(a...)") == Expr(Symbol("..."), :a)
 
-# #19324
-@test_throws UndefVarError(:x) eval(:(module M19324
-                 x=1
-                 for i=1:10
-                     x += i
-                 end
-             end))
-
 # #22314
 function f22314()
     i = 0
@@ -1732,6 +1724,7 @@ end
 
 # issue #30048
 @test Meta.isexpr(Meta.lower(@__MODULE__, :(for a in b
+           local c
            c = try
                try
                    d() do
@@ -1795,3 +1788,80 @@ end
 
 @test_throws ErrorException("syntax: malformed \"using\" statement")  eval(Expr(:using, :X))
 @test_throws ErrorException("syntax: malformed \"import\" statement") eval(Expr(:import, :X))
+
+# flow-based toplevel scope
+module DWIMScope
+using Test
+
+for i = 1:2
+    x = 0
+end
+@test !isdefined(@__MODULE__, :x)
+
+x = 1
+for i = 1:2
+    x += i
+end
+@test x == 4
+
+out1 = []
+x = 3
+for i = 1:3
+    if i < 3
+        push!(out1, (i, x))
+        x = 42
+    end
+end
+@test out1 == [(1,3), (2,42)]
+@test x == 42
+
+out2 = []
+x = 3
+for i = 1:3
+    if i < 3
+        push!(out2, (i, x))
+    end
+end
+@test out2 == [(1,3), (2,3)]
+
+out3 = []
+for i = 1:1
+    y = i
+    push!(out3, y)
+end
+@test out3 == [1]
+@test !isdefined(@__MODULE__, :y)
+@test !isdefined(@__MODULE__, :i)
+
+@test Meta.lower(@__MODULE__,
+                 :(for i = 1:2
+                       if foo
+                           x
+                       end
+                       x = 2
+                   end)) ==
+    Expr(:error, "Scope of variable \"x\" is ambiguous. Please explicitly declare it global or local.")
+
+@test Meta.lower(@__MODULE__,
+                 :(for i = 1:2
+                       if foo
+                           z = 1
+                       else
+                           z
+                       end
+                   end)) ==
+    Expr(:error, "Scope of variable \"z\" is ambiguous. Please explicitly declare it global or local.")
+
+out4 = []
+for i = 1:2
+    if i == 1
+        z = 3
+    else
+        z = 6
+    end
+    push!(out4, z)
+end
+@test out4 == [3, 6]
+@test !isdefined(@__MODULE__, :z)
+
+end

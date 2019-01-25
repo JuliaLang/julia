@@ -126,6 +126,7 @@ for idx in 1:length(data)
     for sha_idx in 1:length(sha_funcs)
         sha_func = sha_funcs[sha_idx]
 
+        local hash
         if idx == 4
             open(data[idx]) do f
                 hash = bytes2hex(sha_func(f))

@@ -3250,6 +3250,7 @@ end
 # issue #25724
 a25724 = Any[]
 for i = 1:3
+    local X
     needX = false
     try
         X = X
