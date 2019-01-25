@@ -77,7 +77,7 @@ table may be searched for methods accepting a given type using [`methodswith`](@
 ## Expansion and lowering
 
 As discussed in the [Metaprogramming](@ref) section, the [`macroexpand`](@ref) function gives
-the unquoted and interpolated expression (`Expr`) form for a given macro. To use `macroexpand`,
+the unquoted and interpolated expression ([`Expr`](@ref)) form for a given macro. To use `macroexpand`,
 `quote` the expression block itself (otherwise, the macro will be evaluated and the result will
 be passed instead!). For example:
 
