@@ -146,10 +146,13 @@ end
 
 # unioncomplexity estimates the number of calls to `tmerge` to obtain the given type by
 # counting the Union instances, taking also into account those hidden in a Tuple or UnionAll
-unioncomplexity(u::Union) = 1 + unioncomplexity(u.a) + unioncomplexity(u.b)
+function unioncomplexity(u::Union)
+    inner = max(unioncomplexity(u.a), unioncomplexity(u.b))
+    return inner == 0 ? 0 : 1 + inner
+end
 function unioncomplexity(t::DataType)
     t.name === Tuple.name || return 0
-    c = 0
+    c = 1
     for ti in t.parameters
         ci = unioncomplexity(ti)
         if ci > c
