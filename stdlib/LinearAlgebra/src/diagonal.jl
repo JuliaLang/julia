@@ -548,15 +548,12 @@ function svd(D::Diagonal{<:Number})
     return SVD(Up, S[piv], copy(Vp'))
 end
 
-_opnorm1(A::Diagonal) = maximum(norm(x) for x in A.diag)
-_opnormInf(A::Diagonal) = maximum(norm(x) for x in A.diag)
+_opnorm1Inf(A::Diagonal) = maximum(norm(x) for x in A.diag)
 function opnorm(A::Diagonal, p::Real=2)
     if p == 2
         return opnorm2(A)
-    elseif p == 1
-        return _opnorm1(A)
-    elseif p == Inf
-        return _opnormInf(A)
+    elseif p == 1 || p == Inf
+        return _opnorm1Inf(A)
     else
         throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
     end
