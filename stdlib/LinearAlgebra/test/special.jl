@@ -377,6 +377,9 @@ using .Main.Furlongs
         @test zero(A) == zero(Matrix(A))
         @test one(A) == one(Matrix(A))
         @test eltype(one(A)) == typeof(one(eltype(A)))
+    end
+end
+
 @testset "== for structured matrices" begin
     diag = rand(10)
     offdiag = rand(9)
