@@ -547,3 +547,10 @@ end
 # issue #30633
 @test_throws ArgumentError("invalid index: \"foo\" of type String") [1]["foo"]
 @test_throws ArgumentError("invalid index: nothing of type Nothing") [1][nothing]
+
+# test showing MethodError with type argument
+struct NoMethodsDefinedHere; end
+let buf = IOBuffer()
+    Base.show_method_candidates(buf, Base.MethodError(sin, Tuple{NoMethodsDefinedHere}))
+    @test length(take!(buf)) !== 0
+end

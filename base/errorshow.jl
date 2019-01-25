@@ -398,7 +398,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 end
             end
 
-            if right_matches > 0 || length(ex.args) < 2
+            if right_matches > 0 || length(arg_types_param) < 2
                 if length(t_i) < length(sig)
                     # If the methods args is longer than input then the method
                     # arguments is printed as not a match
