@@ -13,24 +13,26 @@ else
 end
 
 """
-    Base.add_sum(x,y)
+    Base.add_sum(x, y)
 
 The reduction operator used in `sum`. The main difference from [`+`](@ref) is that small
 integers are promoted to `Int`/`UInt`.
 """
-add_sum(x,y) = x + y
-add_sum(x::SmallSigned,y::SmallSigned) = Int(x) + Int(y)
-add_sum(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) + UInt(y)
+add_sum(x, y) = x + y
+add_sum(x::SmallSigned, y::SmallSigned) = Int(x) + Int(y)
+add_sum(x::SmallUnsigned, y::SmallUnsigned) = UInt(x) + UInt(y)
+add_sum(x::Real, y::Real)::Real = x + y
 
 """
-    Base.mul_prod(x,y)
+    Base.mul_prod(x, y)
 
 The reduction operator used in `prod`. The main difference from [`*`](@ref) is that small
 integers are promoted to `Int`/`UInt`.
 """
-mul_prod(x,y) = x * y
-mul_prod(x::SmallSigned,y::SmallSigned) = Int(x) * Int(y)
-mul_prod(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
+mul_prod(x, y) = x * y
+mul_prod(x::SmallSigned, y::SmallSigned) = Int(x) * Int(y)
+mul_prod(x::SmallUnsigned, y::SmallUnsigned) = UInt(x) * UInt(y)
+mul_prod(x::Real, y::Real)::Real = x * y
 
 ## foldl && mapfoldl
 
@@ -56,7 +58,7 @@ function mapfoldl_impl(f, op, nt::NamedTuple{()}, itr)
     end
     (x, i) = y
     init = mapreduce_first(f, op, x)
-    mapfoldl_impl(f, op, (init=init,), itr, i)
+    return mapfoldl_impl(f, op, (init=init,), itr, i)
 end
 
 
@@ -450,19 +452,66 @@ julia> prod(1:20)
 prod(a) = mapreduce(identity, mul_prod, a)
 
 ## maximum & minimum
+_fast(::typeof(min),x,y) = min(x,y)
+_fast(::typeof(max),x,y) = max(x,y)
+function _fast(::typeof(max), x::AbstractFloat, y::AbstractFloat)
+    ifelse(isnan(x),
+        x,
+        ifelse(x > y, x, y))
+end
+
+function _fast(::typeof(min),x::AbstractFloat, y::AbstractFloat)
+    ifelse(isnan(x),
+        x,
+        ifelse(x < y, x, y))
+end
+
+isbadzero(::typeof(max), x::AbstractFloat) = (x == zero(x)) & signbit(x)
+isbadzero(::typeof(min), x::AbstractFloat) = (x == zero(x)) & !signbit(x)
+isbadzero(op, x) = false
+isgoodzero(::typeof(max), x) = isbadzero(min, x)
+isgoodzero(::typeof(min), x) = isbadzero(max, x)
 
 function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
                         A::AbstractArray, first::Int, last::Int)
-    # locate the first non NaN number
-    @inbounds a1 = A[first]
-    v = mapreduce_first(f, op, a1)
-    i = first + 1
-    while (v == v) && (i <= last)
+    a1 = @inbounds A[first]
+    v1 = mapreduce_first(f, op, a1)
+    v2 = v3 = v4 = v1
+    chunk_len = 256
+    start = first + 1
+    simdstop  = start + chunk_len - 4
+    while simdstop <= last - 3
+        # short circuit in case of NaN
+        v1 == v1 || return v1
+        v2 == v2 || return v2
+        v3 == v3 || return v3
+        v4 == v4 || return v4
+        @inbounds for i in start:4:simdstop
+            v1 = _fast(op, v1, f(A[i+0]))
+            v2 = _fast(op, v2, f(A[i+1]))
+            v3 = _fast(op, v3, f(A[i+2]))
+            v4 = _fast(op, v4, f(A[i+3]))
+        end
+        checkbounds(A, simdstop+3)
+        start += chunk_len
+        simdstop += chunk_len
+    end
+    v = op(op(v1,v2),op(v3,v4))
+    for i in start:last
         @inbounds ai = A[i]
         v = op(v, f(ai))
-        i += 1
     end
-    v
+
+    # enforce correct order of 0.0 and -0.0
+    # e.g. maximum([0.0, -0.0]) === 0.0
+    # should hold
+    if isbadzero(op, v)
+        for i in first:last
+            x = @inbounds A[i]
+            isgoodzero(op,x) && return x
+        end
+    end
+    return v
 end
 
 maximum(f, a) = mapreduce(f, max, a)
@@ -516,10 +565,10 @@ values are `false` (or equivalently, if the input contains no `true` value), fol
 ```jldoctest
 julia> a = [true,false,false,true]
 4-element Array{Bool,1}:
-  true
- false
- false
-  true
+ 1
+ 0
+ 0
+ 1
 
 julia> any(a)
 true
@@ -551,10 +600,10 @@ values are `true` (or equivalently, if the input contains no `false` value), fol
 ```jldoctest
 julia> a = [true,false,false,true]
 4-element Array{Bool,1}:
-  true
- false
- false
-  true
+ 1
+ 0
+ 0
+ 1
 
 julia> all(a)
 false

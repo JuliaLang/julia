@@ -34,7 +34,7 @@ function showerror(io::IO, ex::BoundsError)
     if isdefined(ex, :a)
         print(io, ": attempt to access ")
         if isa(ex.a, AbstractArray)
-            print(io, summary(ex.a))
+            summary(io, ex.a)
         else
             show(io, MIME"text/plain"(), ex.a)
         end
@@ -54,19 +54,23 @@ end
 function showerror(io::IO, ex::TypeError)
     print(io, "TypeError: ")
     if ex.expected === Bool
-        print(io, "non-boolean ($(typeof(ex.got))) used in boolean context")
+        print(io, "non-boolean (", typeof(ex.got), ") used in boolean context")
     else
-        if isa(ex.got, Type)
-            tstr = "Type{$(ex.got)}"
+        if isvarargtype(ex.got)
+            targs = (ex.got,)
+        elseif isa(ex.got, Type)
+            targs = ("Type{", ex.got, "}")
         else
-            tstr = string(typeof(ex.got))
+            targs = (typeof(ex.got),)
         end
-        if isempty(ex.context)
+        if ex.context == ""
             ctx = "in $(ex.func)"
+        elseif ex.func === Symbol("keyword argument")
+            ctx = "in keyword argument $(ex.context)"
         else
             ctx = "in $(ex.func), in $(ex.context)"
         end
-        print(io, ctx, ", expected $(ex.expected), got ", tstr)
+        print(io, ctx, ", expected ", ex.expected, ", got ", targs...)
     end
 end
 
@@ -90,7 +94,7 @@ showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 function showerror(io::IO, ex::InitError, bt; backtrace=true)
     print(io, "InitError: ")
     showerror(io, ex.error, bt, backtrace=backtrace)
-    print(io, "\nduring initialization of module $(ex.mod)")
+    print(io, "\nduring initialization of module ", ex.mod)
 end
 showerror(io::IO, ex::InitError) = showerror(io, ex, [])
 
@@ -111,12 +115,20 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
 end
 
 function showerror(io::IO, ex::SystemError)
-    if ex.extrainfo === nothing
-        print(io, "SystemError: $(ex.prefix): $(Libc.strerror(ex.errnum))")
+    if @static(Sys.iswindows() ? ex.extrainfo isa WindowsErrorInfo : false)
+        errstring = Libc.FormatMessage(ex.extrainfo.errnum)
+        extrainfo = ex.extrainfo.extrainfo
     else
-        print(io, "SystemError (with $(ex.extrainfo)): $(ex.prefix): $(Libc.strerror(ex.errnum))")
+        errstring = Libc.strerror(ex.errnum)
+        extrainfo = ex.extrainfo
+    end
+    if extrainfo === nothing
+        print(io, "SystemError: $(ex.prefix): ", errstring)
+    else
+        print(io, "SystemError (with $extrainfo): $(ex.prefix): ", errstring)
     end
 end
+
 showerror(io::IO, ::DivideError) = print(io, "DivideError: integer division error")
 showerror(io::IO, ::StackOverflowError) = print(io, "StackOverflowError:")
 showerror(io::IO, ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")
@@ -128,11 +140,13 @@ function showerror(io::IO, ex::ErrorException)
         print(io, "Use `codeunits(str)` instead.")
     end
 end
-showerror(io::IO, ex::KeyError) = print(io, "KeyError: key $(repr(ex.key)) not found")
+showerror(io::IO, ex::KeyError) = (print(io, "KeyError: key ");
+                                   show(io, ex.key);
+                                   print(io, " not found"))
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
-showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
-showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: $(ex.msg)")
-showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: $(ex.msg)")
+showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: ", ex.msg)
+showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: ", ex.msg)
+showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: ", ex.msg)
 
 showerror(io::IO, ex::UndefKeywordError) =
     print(io, "UndefKeywordError: keyword argument $(ex.var) not assigned")
@@ -149,7 +163,9 @@ function showerror(io::IO, ex::UndefVarError)
 end
 
 function showerror(io::IO, ex::InexactError)
-    print(io, "InexactError: ", ex.func, '(', ex.T, ", ", ex.val, ')')
+    print(io, "InexactError: ", ex.func, '(')
+    nameof(ex.T) === ex.func || print(io, ex.T, ", ")
+    print(io, ex.val, ')')
 end
 
 typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
@@ -188,9 +204,9 @@ function showerror(io::IO, ex::MethodError)
             print(io, "Cannot `convert` an object of type ", arg_types_param[2], " to an object of type ", T)
         end
     elseif isempty(methods(f)) && isa(f, DataType) && f.abstract
-        print(io, "no constructors have been defined for $f")
+        print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
-        print(io, "objects of type $ft are not callable")
+        print(io, "objects of type ", ft, " are not callable")
     else
         if ft <: Function && isempty(ft.parameters) &&
                 isdefined(ft.name.module, name) &&
@@ -204,7 +220,7 @@ function showerror(io::IO, ex::MethodError)
         end
         print(io, "(")
         for (i, typ) in enumerate(arg_types_param)
-            print(io, "::$typ")
+            print(io, "::", typ)
             i == length(arg_types_param) || print(io, ", ")
         end
         if !isempty(kwargs)
@@ -341,10 +357,10 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # If isvarargtype then it checks whether the rest of the input arguments matches
                 # the varargtype
                 if Base.isvarargtype(sig[i])
-                    sigstr = string(unwrap_unionall(sig[i]).parameters[1], "...")
+                    sigstr = (unwrap_unionall(sig[i]).parameters[1], "...")
                     j = length(t_i)
                 else
-                    sigstr = string(sig[i])
+                    sigstr = (sig[i],)
                     j = i
                 end
                 # Checks if the type of arg 1:i of the input intersects with the current method
@@ -356,10 +372,10 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 if t_in === Union{}
                     if get(io, :color, false)
                         Base.with_output_color(Base.error_color(), iob) do iob
-                            print(iob, "::$sigstr")
+                            print(iob, "::", sigstr...)
                         end
                     else
-                        print(iob, "!Matched::$sigstr")
+                        print(iob, "!Matched::", sigstr...)
                     end
                     # If there is no typeintersect then the type signature from the method is
                     # inserted in t_i this ensures if the type at the next i matches the type
@@ -367,7 +383,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     t_i[i] = sig[i]
                 else
                     right_matches += j==i ? 1 : 0
-                    print(iob, "::$sigstr")
+                    print(iob, "::", sigstr...)
                 end
             end
             special && right_matches == 0 && continue
@@ -389,19 +405,19 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
                         sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
                         if Base.isvarargtype(sigtype)
-                            sigstr = string(sigtype.parameters[1], "...")
+                            sigstr = (sigtype.parameters[1], "...")
                         else
-                            sigstr = string(sigtype)
+                            sigstr = (sigtype,)
                         end
                         if !((min(length(t_i), length(sig)) == 0) && k==1)
                             print(iob, ", ")
                         end
                         if get(io, :color, false)
                             Base.with_output_color(Base.error_color(), iob) do iob
-                                print(iob, "::$sigstr")
+                                print(iob, "::", sigstr...)
                             end
                         else
-                            print(iob, "!Matched::$sigstr")
+                            print(iob, "!Matched::", sigstr...)
                         end
                     end
                 end

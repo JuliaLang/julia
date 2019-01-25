@@ -109,6 +109,52 @@ end
             @test Matrix(convert(Spectype,A) - D) ≈ Matrix(A - D)
         end
     end
+
+    UpTri = UpperTriangular(rand(20,20))
+    LoTri = LowerTriangular(rand(20,20))
+    Diag = Diagonal(rand(20,20))
+    Tridiag = Tridiagonal(rand(20, 20))
+    UpBi = Bidiagonal(rand(20,20), :U)
+    LoBi = Bidiagonal(rand(20,20), :L)
+    Sym = SymTridiagonal(rand(20), rand(19))
+    Dense = rand(20, 20)
+    mats = [UpTri, LoTri, Diag, Tridiag, UpBi, LoBi, Sym, Dense]
+
+    for op in (+,-,*)
+        for A in mats
+            for B in mats
+                @test (op)(A, B) ≈ (op)(Matrix(A), Matrix(B)) ≈ Matrix((op)(A, B))
+            end
+        end
+    end
+end
+
+@testset "+ and - among structured matrices with different container types" begin
+    diag = 1:5
+    offdiag = 1:4
+    uniformscalingmats = [UniformScaling(3), UniformScaling(1.0), UniformScaling(3//5), UniformScaling(Complex{Float64}(1.3, 3.5))]
+    mats = [Diagonal(diag), Bidiagonal(diag, offdiag, 'U'), Bidiagonal(diag, offdiag, 'L'), Tridiagonal(offdiag, diag, offdiag), SymTridiagonal(diag, offdiag)]
+    for T in [ComplexF64, Int64, Rational{Int64}, Float64]
+        push!(mats, Diagonal(Vector{T}(diag)))
+        push!(mats, Bidiagonal(Vector{T}(diag), Vector{T}(offdiag), 'U'))
+        push!(mats, Bidiagonal(Vector{T}(diag), Vector{T}(offdiag), 'L'))
+        push!(mats, Tridiagonal(Vector{T}(offdiag), Vector{T}(diag), Vector{T}(offdiag)))
+        push!(mats, SymTridiagonal(Vector{T}(diag), Vector{T}(offdiag)))
+    end
+
+    for op in (+,*) # to do: fix when operation is - and the matrix has a range as the underlying representation and we get a step size of 0.
+        for A in mats
+            for B in mats
+                @test (op)(A, B) ≈ (op)(Matrix(A), Matrix(B)) ≈ Matrix((op)(A, B))
+            end
+        end
+
+        for A in mats
+            for B in uniformscalingmats
+                @test (op)(A, B) ≈ (op)(Matrix(A), B) ≈ Matrix((op)(A, B))
+            end
+        end
+    end
 end
 
 @testset "Triangular Types and QR" begin
@@ -252,6 +298,7 @@ end
     @test isa((@inferred vcat(Float64[], spzeros(1))), SparseVector)
 end
 
+<<<<<<< HEAD
 
 # for testing types with a dimension
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
@@ -331,6 +378,29 @@ using .Main.Furlongs
         @test zero(A) == zero(Matrix(A))
         @test one(A) == one(Matrix(A))
         @test eltype(one(A)) == typeof(one(eltype(A)))
+=======
+@testset "== for structured matrices" begin
+    diag = rand(10)
+    offdiag = rand(9)
+    D = Diagonal(rand(10))
+    Bup = Bidiagonal(diag, offdiag, 'U')
+    Blo = Bidiagonal(diag, offdiag, 'L')
+    Bupd = Bidiagonal(diag, zeros(9), 'U')
+    Blod = Bidiagonal(diag, zeros(9), 'L')
+    T = Tridiagonal(offdiag, diag, offdiag)
+    Td = Tridiagonal(zeros(9), diag, zeros(9))
+    Tu = Tridiagonal(zeros(9), diag, offdiag)
+    Tl = Tridiagonal(offdiag, diag, zeros(9))
+    S = SymTridiagonal(diag, offdiag)
+    Sd = SymTridiagonal(diag, zeros(9))
+
+    mats = [D, Bup, Blo, Bupd, Blod, T, Td, Tu, Tl, S, Sd]
+
+    for a in mats
+        for b in mats
+            @test (a == b) == (Matrix(a) == Matrix(b)) == (b == a) == (Matrix(b) == Matrix(a))
+        end
+>>>>>>> master
     end
 end
 

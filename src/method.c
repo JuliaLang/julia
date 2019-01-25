@@ -60,7 +60,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_exception_in_transit, jl_errorexception_type))
+                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate cfunction return type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -72,7 +72,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_exception_in_transit, jl_errorexception_type))
+                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate cfunction argument type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -96,7 +96,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_exception_in_transit, jl_errorexception_type))
+                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate ccall return type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -108,7 +108,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_exception_in_transit, jl_errorexception_type))
+                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate ccall argument type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -410,8 +410,10 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         else {
             func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, linfo->def.method->module);
             if (!jl_is_code_info(func)) {
-                if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym)
-                    jl_interpret_toplevel_expr_in(linfo->def.method->module, (jl_value_t*)func, NULL, NULL);
+                if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym) {
+                    ptls->in_pure_callback = 0;
+                    jl_toplevel_eval(linfo->def.method->module, (jl_value_t*)func);
+                }
                 jl_error("generated function body is not pure. this likely means it contains a closure or comprehension.");
             }
 
@@ -640,29 +642,6 @@ static jl_method_t *jl_new_method(
 
 void print_func_loc(JL_STREAM *s, jl_method_t *m);
 
-static void jl_check_static_parameter_conflicts(jl_method_t *m, jl_code_info_t *src, jl_svec_t *t)
-{
-    size_t nvars = jl_array_len(src->slotnames);
-
-    size_t i, n = jl_svec_len(t);
-    for (i = 0; i < n; i++) {
-        jl_value_t *tv = jl_svecref(t, i);
-        size_t j;
-        for (j = 0; j < nvars; j++) {
-            if (jl_is_typevar(tv)) {
-                if ((jl_sym_t*)jl_array_ptr_ref(src->slotnames, j) == ((jl_tvar_t*)tv)->name) {
-                    jl_printf(JL_STDERR,
-                              "WARNING: local variable %s conflicts with a static parameter in %s",
-                              jl_symbol_name(((jl_tvar_t*)tv)->name),
-                              jl_symbol_name(m->name));
-                    print_func_loc(JL_STDERR, m);
-                    jl_printf(JL_STDERR, ".\n");
-                }
-            }
-        }
-    }
-}
-
 // empty generic function def
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
                                                  jl_module_t *module,
@@ -761,7 +740,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     for (i = jl_svec_len(tvars); i > 0; i--) {
         jl_value_t *tv = jl_svecref(tvars, i - 1);
         if (!jl_is_typevar(tv))
-            jl_type_error_rt("method definition", "type parameter", (jl_value_t*)jl_tvar_type, tv);
+            jl_type_error("method signature", (jl_value_t*)jl_tvar_type, tv);
         argtype = jl_new_struct(jl_unionall_type, tv, argtype);
     }
 
@@ -818,7 +797,6 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                           m->line);
     }
 
-    jl_check_static_parameter_conflicts(m, f, tvars);
     jl_method_table_insert(mt, m, NULL);
     if (jl_newmeth_tracer)
         jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);

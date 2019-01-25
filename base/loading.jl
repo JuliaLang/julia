@@ -96,7 +96,7 @@ string(hash::SHA1) = bytes2hex(hash.bytes)
 print(io::IO, hash::SHA1) = bytes2hex(io, hash.bytes)
 show(io::IO, hash::SHA1) = print(io, "SHA1(\"", hash, "\")")
 
-isless(a::SHA1, b::SHA1) = lexless(a.bytes, b.bytes)
+isless(a::SHA1, b::SHA1) = isless(a.bytes, b.bytes)
 hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
 ==(a::SHA1, b::SHA1) = a.bytes == b.bytes
 
@@ -795,7 +795,7 @@ const full_warning_showed = Ref(false)
 const modules_warned_for = Set{PkgId}()
 
 """
-    require(module::Symbol)
+    require(into::Module, module::Symbol)
 
 This function is part of the implementation of `using` / `import`, if a module is not
 already defined in `Main`. It can also be called directly to force reloading a module,
@@ -959,7 +959,10 @@ function _require(pkg::PkgId)
                 # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
                 cachefile = compilecache(pkg, path)
                 if isa(cachefile, Exception)
-                    if !precompilableerror(cachefile)
+                    if precompilableerror(cachefile)
+                        verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                        @logmsg verbosity "Skipping precompilation since __precompile__(false). Importing $pkg."
+                    else
                         @warn "The call to compilecache failed to create a usable precompiled cache file for $pkg" exception=m
                     end
                     # fall-through to loading the file locally
@@ -1135,7 +1138,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
             try
                 Base.include(Base.__toplevel__, $(repr(abspath(input))))
             catch ex
-                Base.precompilableerror(ex) || Base.rethrow(ex)
+                Base.precompilableerror(ex) || Base.rethrow()
                 Base.@debug "Aborting `createexprcache'" exception=(Base.ErrorException("Declaration of __precompile__(false) not allowed"), Base.catch_backtrace())
                 Base.exit(125) # we define status = 125 means PrecompileableError
             end\0""")
@@ -1145,10 +1148,10 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
         end
         write(in, "ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, (0, 0))\0")
         close(in)
-    catch ex
+    catch
         close(in)
         process_running(io) && Timer(t -> kill(io), 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
-        rethrow(ex)
+        rethrow()
     end
     return io
 end

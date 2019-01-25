@@ -365,7 +365,10 @@ export
     cumsum!,
     accumulate,
     accumulate!,
+    eachcol,
     eachindex,
+    eachrow,
+    eachslice,
     extrema,
     fill!,
     fill,
@@ -638,6 +641,7 @@ export
 
 # tasks and conditions
     Condition,
+    Event,
     current_task,
     islocked,
     istaskdone,
@@ -695,6 +699,7 @@ export
     fieldname,
     fieldnames,
     fieldcount,
+    fieldtypes,
     propertynames,
     isabstracttype,
     isbitstype,

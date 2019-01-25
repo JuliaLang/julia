@@ -251,6 +251,45 @@ macro isdefined(s::Symbol)
 end
 
 """
+    @locals()
+
+Construct a dictionary of the names (as symbols) and values of all local
+variables defined as of the call site.
+
+!!! compat "Julia 1.1"
+    This macro requires at least Julia 1.1.
+
+# Examples
+```jldoctest
+julia> let x = 1, y = 2
+           Base.@locals
+       end
+Dict{Symbol,Any} with 2 entries:
+  :y => 2
+  :x => 1
+
+julia> function f(x)
+           local y
+           show(Base.@locals); println()
+           for i = 1:1
+               show(Base.@locals); println()
+           end
+           y = 2
+           show(Base.@locals); println()
+           nothing
+       end;
+
+julia> f(42)
+Dict{Symbol,Any}(:x=>42)
+Dict{Symbol,Any}(:i=>1,:x=>42)
+Dict{Symbol,Any}(:y=>2,:x=>42)
+```
+"""
+macro locals()
+    return Expr(:locals)
+end
+
+"""
     objectid(x)
 
 Get a hash value for `x` based on object identity. `objectid(x)==objectid(y)` if `x === y`.
@@ -603,7 +642,7 @@ function fieldcount(@nospecialize t)
         throw(ArgumentError("The empty type does not have a well-defined number of fields since it does not have instances."))
     end
     if !(t isa DataType)
-        throw(TypeError(:fieldcount, "", Type, t))
+        throw(TypeError(:fieldcount, DataType, t))
     end
     if t.name === NamedTuple_typename
         names, types = t.parameters
@@ -622,6 +661,27 @@ function fieldcount(@nospecialize t)
     end
     return length(t.types)
 end
+
+"""
+    fieldtypes(T::Type)
+
+The declared types of all fields in a composite DataType `T` as a tuple.
+
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
+
+# Examples
+```jldoctest
+julia> struct Foo
+           x::Int64
+           y::String
+       end
+
+julia> fieldtypes(Foo)
+(Int64, String)
+```
+"""
+fieldtypes(T::Type) = ntuple(i -> fieldtype(T, i), fieldcount(T))
 
 # return all instances, for types that can be enumerated
 
@@ -669,7 +729,7 @@ function signature_type(@nospecialize(f), @nospecialize(args))
 end
 
 """
-    code_lowered(f, types; generated = true)
+    code_lowered(f, types; generated=true, debuginfo=:default)
 
 Return an array of the lowered forms (IR) for the methods matching the given generic function
 and type signature.
@@ -679,10 +739,17 @@ implementations. An error is thrown if no fallback implementation exists.
 If `generated` is `true`, these `CodeInfo` instances will correspond to the method bodies
 yielded by expanding the generators.
 
+The keyword debuginfo controls the amount of code metadata present in the output.
+
 Note that an error will be thrown if `types` are not leaf types when `generated` is
-`true` and the corresponding method is a `@generated` method.
+`true` and any of the corresponding methods are an `@generated` method.
 """
-function code_lowered(@nospecialize(f), @nospecialize(t = Tuple); generated::Bool = true)
+function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=true, debuginfo::Symbol=:default)
+    if debuginfo == :default
+        debuginfo = :source
+    elseif debuginfo != :source && debuginfo != :none
+        throw(ArgumentError("'debuginfo' must be either :source or :none"))
+    end
     return map(method_instances(f, t)) do m
         if generated && isgenerated(m)
             if isa(m, Core.MethodInstance)
@@ -693,7 +760,9 @@ function code_lowered(@nospecialize(f), @nospecialize(t = Tuple); generated::Boo
                       "not leaf types, but the `generated` argument is `true`.")
             end
         end
-        return uncompressed_ast(m)
+        code = uncompressed_ast(m)
+        debuginfo == :none && remove_linenums!(code)
+        return code
     end
 end
 
@@ -811,10 +880,10 @@ function length(mt::Core.MethodTable)
 end
 isempty(mt::Core.MethodTable) = (mt.defs === nothing)
 
-uncompressed_ast(m::Method) = isdefined(m,:source) ? uncompressed_ast(m, m.source) :
-                              isdefined(m,:generator) ? error("Method is @generated; try `code_lowered` instead.") :
+uncompressed_ast(m::Method) = isdefined(m, :source) ? uncompressed_ast(m, m.source) :
+                              isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
                               error("Code for this Method is not available.")
-uncompressed_ast(m::Method, s::CodeInfo) = s
+uncompressed_ast(m::Method, s::CodeInfo) = copy(s)
 uncompressed_ast(m::Method, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Any), m, s)::CodeInfo
 uncompressed_ast(m::Core.MethodInstance) = uncompressed_ast(m.def)
 
@@ -866,25 +935,33 @@ function func_for_method_checked(m::Method, @nospecialize types)
 end
 
 """
-    code_typed(f, types; optimize=true)
+    code_typed(f, types; optimize=true, debuginfo=:default)
 
 Returns an array of type-inferred lowered form (IR) for the methods matching the given
 generic function and type signature. The keyword argument `optimize` controls whether
 additional optimizations, such as inlining, are also applied.
+The keyword debuginfo controls the amount of code metadata present in the output.
 """
-function code_typed(@nospecialize(f), @nospecialize(types=Tuple); optimize=true)
+function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
+                    optimize=true, debuginfo::Symbol=:default,
+                    world = ccall(:jl_get_world_counter, UInt, ()),
+                    params = Core.Compiler.Params(world))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
+    if debuginfo == :default
+        debuginfo = :source
+    elseif debuginfo != :source && debuginfo != :none
+        throw(ArgumentError("'debuginfo' must be either :source or :none"))
+    end
     types = to_tuple_type(types)
     asts = []
-    world = ccall(:jl_get_world_counter, UInt, ())
-    params = Core.Compiler.Params(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
         (code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, params)
         code === nothing && error("inference not successful") # inference disabled?
+        debuginfo == :none && remove_linenums!(code)
         push!(asts, code => ty)
     end
     return asts

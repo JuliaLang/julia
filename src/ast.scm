@@ -256,6 +256,9 @@
 (define (reset-gensyms)
   (set! *current-gensyms* *gensyms*))
 
+(define (some-gensym? x)
+  (or (gensym? x) (memq x *gensyms*)))
+
 (define make-ssavalue
   (let ((ssavalue-counter 0))
     (lambda ()

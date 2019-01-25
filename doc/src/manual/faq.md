@@ -741,7 +741,7 @@ Because supporting generic programming is deemed more important than potential p
 that can be achieved by other means (e.g., using explicit loops), operators like `+=` and `*=`
 work by rebinding new values.
 
-## Asynchronous IO and concurrent synchronous writes
+## [Asynchronous IO and concurrent synchronous writes](@id faq-async-io)
 
 ### Why do concurrent writes to the same stream result in inter-mixed output?
 
@@ -774,8 +774,7 @@ julia> @sync for i in 1:3
 You can lock your writes with a `ReentrantLock` like this:
 
 ```jldoctest
-julia> l = ReentrantLock()
-ReentrantLock(nothing, Condition(Any[]), 0)
+julia> l = ReentrantLock();
 
 julia> @sync for i in 1:3
            @async begin

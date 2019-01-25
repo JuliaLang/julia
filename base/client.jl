@@ -122,9 +122,9 @@ function eval_user_input(@nospecialize(ast), show_value::Bool)
                     end
                     try
                         invokelatest(display, value)
-                    catch err
+                    catch
                         println(stderr, "Evaluation succeeded, but an error occurred while showing value of type ", typeof(value), ":")
-                        rethrow(err)
+                        rethrow()
                     end
                     println()
                 end
@@ -146,15 +146,30 @@ function eval_user_input(@nospecialize(ast), show_value::Bool)
     nothing
 end
 
+function _parse_input_line_core(s::String, filename::String)
+    ex = ccall(:jl_parse_all, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+               s, sizeof(s), filename, sizeof(filename))
+    if ex isa Expr && ex.head === :toplevel
+        if isempty(ex.args)
+            return nothing
+        end
+        last = ex.args[end]
+        if last isa Expr && (last.head === :error || last.head === :incomplete)
+            # if a parse error happens in the middle of a multi-line input
+            # return only the error, so that none of the input is evaluated.
+            return last
+        end
+    end
+    return ex
+end
+
 function parse_input_line(s::String; filename::String="none", depwarn=true)
     # For now, assume all parser warnings are depwarns
     ex = if depwarn
-        ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
-              s, sizeof(s), filename, sizeof(filename))
+        _parse_input_line_core(s, filename)
     else
         with_logger(NullLogger()) do
-            ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
-                  s, sizeof(s), filename, sizeof(filename))
+            _parse_input_line_core(s, filename)
         end
     end
     return ex
@@ -226,7 +241,11 @@ function exec_options(opts)
     # Load Distributed module only if any of the Distributed options have been specified.
     distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
-        Core.eval(Main, :(using Distributed))
+        let Distributed = require(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
+            Core.eval(Main, :(const Distributed = $Distributed))
+            Core.eval(Main, :(using .Distributed))
+        end
+
         invokelatest(Main.Distributed.process_opts, opts)
     end
 
@@ -259,7 +278,14 @@ function exec_options(opts)
         if !is_interactive
             ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
         end
-        include(Main, PROGRAM_FILE)
+        try
+            include(Main, PROGRAM_FILE)
+        catch err
+            invokelatest(display_error, err, catch_backtrace())
+            if !is_interactive
+                exit(1)
+            end
+        end
     end
     repl |= is_interactive
     if repl
@@ -376,7 +402,11 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
                         print("julia> ")
                         flush(stdout)
                     end
-                    eval_user_input(parse_input_line(input), true)
+                    try
+                        eval_user_input(parse_input_line(input), true)
+                    catch err
+                        isa(err, InterruptException) ? print("\n\n") : rethrow()
+                    end
                 end
             end
         end

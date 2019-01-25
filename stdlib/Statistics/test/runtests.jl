@@ -57,6 +57,11 @@ end
     @test median!([1 2; 3 4]) == 2.5
 
     @test invoke(median, Tuple{AbstractVector}, 1:10) == median(1:10) == 5.5
+
+    @test @inferred(median(Float16[1, 2, NaN])) === Float16(NaN)
+    @test @inferred(median(Float16[1, 2, 3]))   === Float16(2)
+    @test @inferred(median(Float32[1, 2, NaN])) === NaN32
+    @test @inferred(median(Float32[1, 2, 3]))   === 2.0f0
 end
 
 @testset "mean" begin
@@ -364,6 +369,12 @@ Y = [6.0  2.0;
         @test size(C) == (k, k)
         @test C ≈ Cxy
         @inferred cov(X, Y, dims=vd, corrected=cr)
+    end
+
+    @testset "floating point accuracy for `cov` of large numbers" begin
+        A = [4.0, 7.0, 13.0, 16.0]
+        C = A .+ 1.0e10
+        @test cov(A, A) ≈ cov(C, C)
     end
 end
 

@@ -151,9 +151,9 @@ void jl_uv_flush(uv_stream_t *stream)
         return;
     while (uv_is_writable(stream) && stream->write_queue_size != 0) {
         int fired = 0;
-	uv_buf_t buf;
-	buf.base = (char*)(&buf + 1);
-	buf.len = 0;
+        uv_buf_t buf;
+        buf.base = (char*)(&buf + 1);
+        buf.len = 0;
         uv_write_t *write_req = (uv_write_t*)malloc(sizeof(uv_write_t));
         write_req->data = (void*)&fired;
         if (uv_write(write_req, stream, &buf, 1, uv_flush_callback) != 0)
@@ -165,6 +165,7 @@ void jl_uv_flush(uv_stream_t *stream)
 }
 
 // getters and setters
+JL_DLLEXPORT int jl_uv_process_pid(uv_process_t *p) { return p->pid; }
 JL_DLLEXPORT void *jl_uv_process_data(uv_process_t *p) { return p->data; }
 JL_DLLEXPORT void *jl_uv_buf_base(const uv_buf_t *buf) { return buf->base; }
 JL_DLLEXPORT size_t jl_uv_buf_len(const uv_buf_t *buf) { return buf->len; }
@@ -207,24 +208,6 @@ JL_DLLEXPORT int jl_process_events(uv_loop_t *loop)
         return uv_run(loop,UV_RUN_NOWAIT);
     }
     else return 0;
-}
-
-#ifndef _OS_WINDOWS_
-#define UV_STREAM_READABLE 0x20   /* The stream is readable */
-#define UV_STREAM_WRITABLE 0x40   /* The stream is writable */
-#endif
-
-JL_DLLEXPORT int jl_pipe_open(uv_pipe_t *pipe, uv_os_fd_t fd, int readable, int writable)
-{
-    int err = uv_pipe_open(pipe, fd);
-#ifndef _OS_WINDOWS_
-    // clear flags set erroneously by libuv:
-    if (!readable)
-        pipe->flags &= ~UV_STREAM_READABLE;
-    if (!writable)
-        pipe->flags &= ~UV_STREAM_WRITABLE;
-#endif
-    return err;
 }
 
 static void jl_proc_exit_cleanup(uv_process_t *process, int64_t exit_status, int term_signal)
@@ -292,11 +275,16 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv,
                           uv_stdio_container_t *stdio, int nstdio,
                           uint32_t flags, char **env, char *cwd, uv_exit_cb cb)
 {
-    uv_process_options_t opts;
+    uv_process_options_t opts = {0};
     opts.stdio = stdio;
     opts.file = name;
     opts.env = env;
     opts.flags = flags;
+    // unused fields:
+    //opts.uid = 0;
+    //opts.gid = 0;
+    //opts.cpumask = NULL;
+    //opts.cpumask_size = 0;
     opts.cwd = cwd;
     opts.args = argv;
     opts.stdio_count = nstdio;

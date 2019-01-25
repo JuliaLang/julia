@@ -246,7 +246,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false)::Completion
                     continue
                 else
                     # We only handle SystemErrors here
-                    rethrow(e)
+                    rethrow()
                 end
             end
 
@@ -665,7 +665,7 @@ function completions(string, pos, context_module=Main)::Completions
                 end
             end
         end
-        ffunc = (mod,x)->(isdefined(mod, x) && isa(getfield(mod, x), Module))
+        ffunc = (mod,x)->(Base.isbindingresolved(mod, x) && isdefined(mod, x) && isa(getfield(mod, x), Module))
         comp_keywords = false
     end
     startpos == 0 && (pos = -1)

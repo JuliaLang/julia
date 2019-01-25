@@ -67,6 +67,7 @@ mutable struct Worker
     manager::ClusterManager
     config::WorkerConfig
     version::Union{VersionNumber, Nothing}   # Julia version of the remote process
+    initialized::Event
 
     function Worker(id::Int, r_stream::IO, w_stream::IO, manager::ClusterManager;
                              version::Union{VersionNumber, Nothing}=nothing,
@@ -90,6 +91,7 @@ mutable struct Worker
             return map_pid_wrkr[id]
         end
         w=new(id, [], [], false, W_CREATED, Condition(), time(), conn_func)
+        w.initialized = Event()
         register_worker(w)
         w
     end
@@ -134,7 +136,7 @@ function exec_conn_func(w::Worker)
         f()
     catch e
         w.conn_func = () -> throw(e)
-        rethrow(e)
+        rethrow()
     end
     nothing
 end
@@ -159,12 +161,6 @@ mutable struct LocalProcess
     bind_port::UInt16
     cookie::AbstractString
     LocalProcess() = new(1)
-end
-
-
-import LinearAlgebra
-function disable_threaded_libs()
-    LinearAlgebra.BLAS.set_num_threads(1)
 end
 
 worker_timeout() = parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0"))
@@ -245,6 +241,11 @@ function redirect_worker_output(ident, stream)
     end
 end
 
+struct LaunchWorkerError <: Exception
+    msg::String
+end
+
+Base.showerror(io::IO, e::LaunchWorkerError) = print(io, e.msg)
 
 # The default TCP transport relies on the worker listening on a free
 # port available and printing its bind address and port.
@@ -276,7 +277,7 @@ function read_worker_host_port(io::IO)
 
             conninfo = fetch(readtask)
             if isempty(conninfo) && !isopen(io)
-                error("Unable to read host:port string from worker. Launch command exited with error?")
+                throw(LaunchWorkerError("Unable to read host:port string from worker. Launch command exited with error?"))
             end
 
             ntries -= 1
@@ -290,13 +291,13 @@ function read_worker_host_port(io::IO)
         end
         close(io)
         if ntries > 0
-            error("Timed out waiting to read host:port string from worker.")
+            throw(LaunchWorkerError("Timed out waiting to read host:port string from worker."))
         else
-            error("Unexpected output from worker launch command. Host:port string not found.")
+            throw(LaunchWorkerError("Unexpected output from worker launch command. Host:port string not found."))
         end
     finally
         for line in leader
-            println("\tFrom failed worker startup:\t", line)
+            println("\tFrom worker startup:\t", line)
         end
     end
 end
@@ -358,6 +359,34 @@ the package `ClusterManagers.jl`.
 The number of seconds a newly launched worker waits for connection establishment from the
 master can be specified via variable `JULIA_WORKER_TIMEOUT` in the worker process's
 environment. Relevant only when using TCP/IP as transport.
+
+To launch workers without blocking the REPL, or the containing function
+if launching workers programmatically, execute `addprocs` in its own task.
+
+# Examples
+
+```
+# On busy clusters, call `addprocs` asynchronously
+t = @async addprocs(...)
+```
+
+```
+# Utilize workers as and when they come online
+if nprocs() > 1   # Ensure at least one new worker is available
+   ....   # perform distributed execution
+end
+```
+
+```
+# Retrieve newly launched worker IDs, or any error messages
+if istaskdone(t)   # Check if `addprocs` has completed to ensure `fetch` doesn't block
+    if nworkers() == N
+        new_pids = fetch(t)
+    else
+        fetch(t)
+    end
+  end
+```
 """
 function addprocs(manager::ClusterManager; kwargs...)
     init_multi()
@@ -503,9 +532,13 @@ function create_worker(manager, wconfig)
     local r_s, w_s
     try
         (r_s, w_s) = connect(manager, w.id, wconfig)
-    catch e
-        deregister_worker(w.id)
-        rethrow(e)
+    catch ex
+        try
+            deregister_worker(w.id)
+            kill(manager, w.id, wconfig)
+        finally
+            rethrow(ex)
+        end
     end
 
     w = Worker(w.id, r_s, w_s, manager; config=wconfig)
@@ -1050,12 +1083,12 @@ function deregister_worker(pg, pid)
     ids = []
     tonotify = []
     lock(client_refs) do
-        for (id,rv) in pg.refs
-            if in(pid,rv.clientset)
+        for (id, rv) in pg.refs
+            if in(pid, rv.clientset)
                 push!(ids, id)
             end
             if rv.waitingfor == pid
-                push!(tonotify, (id,rv))
+                push!(tonotify, (id, rv))
             end
         end
         for id in ids
@@ -1063,11 +1096,12 @@ function deregister_worker(pg, pid)
         end
 
         # throw exception to tasks waiting for this pid
-        for (id,rv) in tonotify
-            notify_error(rv.c, ProcessExitedException())
+        for (id, rv) in tonotify
+            close(rv.c, ProcessExitedException())
             delete!(pg.refs, id)
         end
     end
+    return
 end
 
 
@@ -1077,6 +1111,7 @@ function interrupt(pid::Integer)
     if isa(w, Worker)
         manage(w.manager, w.id, w.config, :interrupt)
     end
+    return
 end
 
 """

@@ -174,7 +174,7 @@ static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE
             jl_apply(args, 2);
         }
         JL_CATCH {
-            jl_no_exc_handler(jl_exception_in_transit);
+            jl_no_exc_handler(jl_current_exception());
         }
     }
     gc_debug_critical_error();
@@ -211,12 +211,11 @@ JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *tid)
     return (void *)((char *)task->stkbuf + off);
 }
 
-static void record_backtrace(void) JL_NOTSAFEPOINT
+static void record_backtrace(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    // storing bt_size in ptls ensures roots in bt_data will be found
     ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE);
 }
-
 
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
@@ -235,8 +234,6 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
     if (blk)
         jl_timing_block_stop(blk);
 #endif
-    // backtraces don't survive task switches, see e.g. issue #12485
-    ptls->bt_size = 0;
 #ifdef JULIA_ENABLE_THREADING
     // If the current task is not holding any locks, free the locks list
     // so that it can be GC'd without leaking memory
@@ -375,15 +372,24 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e) JL_NOTSAFEPOINT
 jl_timing_block_t *jl_pop_timing_block(jl_timing_block_t *cur_block);
 
 // yield to exception handler
-void JL_NORETURN throw_internal(jl_value_t *e JL_MAYBE_UNROOTED)
+void JL_NORETURN throw_internal(jl_value_t *exception JL_MAYBE_UNROOTED)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     ptls->io_wait = 0;
     if (ptls->safe_restore)
         jl_longjmp(*ptls->safe_restore, 1);
-    assert(e != NULL);
-    ptls->exception_in_transit = e;
+    JL_GC_PUSH1(&exception);
     jl_gc_unsafe_enter(ptls);
+    if (exception) {
+        // The temporary ptls->bt_data is rooted by special purpose code in the
+        // GC. This exists only for the purpose of preserving bt_data until we
+        // set ptls->bt_size=0 below.
+        assert(ptls->current_task);
+        jl_push_excstack(&ptls->current_task->excstack, exception,
+                          ptls->bt_data, ptls->bt_size);
+        ptls->bt_size = 0;
+    }
+    assert(ptls->current_task->excstack && ptls->current_task->excstack->top);
     jl_handler_t *eh = ptls->current_task->eh;
     if (eh != NULL) {
 #ifdef ENABLE_TIMINGS
@@ -396,30 +402,54 @@ void JL_NORETURN throw_internal(jl_value_t *e JL_MAYBE_UNROOTED)
         jl_longjmp(eh->eh_ctx, 1);
     }
     else {
-        jl_no_exc_handler(e);
+        jl_no_exc_handler(exception);
     }
     assert(0);
 }
 
 // record backtrace and raise an error
-JL_DLLEXPORT void jl_throw(jl_value_t *e)
+JL_DLLEXPORT void jl_throw(jl_value_t *e JL_MAYBE_UNROOTED)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(e != NULL);
-    if (!ptls->safe_restore)
-        record_backtrace();
+    if (ptls->safe_restore)
+        throw_internal(NULL);
+    record_backtrace(ptls);
     throw_internal(e);
 }
 
+// rethrow with current excstack state
 JL_DLLEXPORT void jl_rethrow(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    throw_internal(ptls->exception_in_transit);
+    jl_excstack_t *excstack = jl_get_ptls_states()->current_task->excstack;
+    if (!excstack || excstack->top == 0)
+        jl_error("rethrow() not allowed outside a catch block");
+    throw_internal(NULL);
 }
 
-JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e)
+// Special case throw for errors detected inside signal handlers.  This is not
+// (cannot be) called directly in the signal handler itself, but is returned to
+// after the signal handler exits.
+JL_DLLEXPORT void jl_sig_throw(void)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_value_t *e = ptls->sig_exception;
+    assert(e && ptls->bt_size != 0);
+    ptls->sig_exception = NULL;
     throw_internal(e);
+}
+
+JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
+{
+    // TODO: Should uses of `rethrow(exc)` be replaced with a normal throw, now
+    // that exception stacks allow root cause analysis?
+    jl_excstack_t *excstack = jl_get_ptls_states()->current_task->excstack;
+    if (!excstack || excstack->top == 0)
+        jl_error("rethrow(exc) not allowed outside a catch block");
+    // overwrite exception on top of stack. see jl_excstack_exception
+    jl_excstack_raw(excstack)[excstack->top-1] = (uintptr_t)e;
+    JL_GC_PROMISE_ROOTED(e);
+    throw_internal(NULL);
 }
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
@@ -458,6 +488,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->eh = NULL;
     t->tid = 0;
     t->gcstack = NULL;
+    t->excstack = NULL;
     t->stkbuf = NULL;
     t->tid = 0;
     t->started = 0;
@@ -525,7 +556,9 @@ static void NOINLINE JL_NORETURN start_task(void)
     jl_value_t *res;
     t->started = 1;
     if (t->exception != jl_nothing) {
-        record_backtrace();
+        record_backtrace(ptls);
+        jl_push_excstack(&t->excstack, t->exception,
+                          ptls->bt_data, ptls->bt_size);
         res = t->exception;
     }
     else {
@@ -539,10 +572,12 @@ static void NOINLINE JL_NORETURN start_task(void)
             res = jl_apply(&t->start, 1);
         }
         JL_CATCH {
-            res = jl_exception_in_transit;
+            res = jl_current_exception();
             t->exception = res;
             jl_gc_wb(t, res);
+            goto skip_pop_exception;
         }
+skip_pop_exception:;
     }
     finish_task(t, res);
     gc_debug_critical_error();
@@ -727,9 +762,34 @@ static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
     asm(" mov sp, %0;\n"
         " mov lr, #0;\n" // Clear link register (lr) and frame pointer
         " mov fp, #0;\n" // (fp) to terminate unwinder.
-        " br %1;\n" // call `fn` with fake stack frame
+        " bx %1;\n" // call `fn` with fake stack frame.  While `bx` can change
+                    // the processor mode to thumb, this will never happen
+                    // because all our addresses are word-aligned.
         " udf #0" // abort
         : : "r" (stk), "r"(fn) : "memory" );
+#elif defined(_CPU_PPC64_)
+    // N.B.: There is two iterations of the PPC64 ABI.
+    // v2 is current and used here. Make sure you have the
+    // correct version of the ABI reference when working on this code.
+    asm volatile(
+        // Move stack (-0x30 for initial stack frame) to stack pointer
+        " addi 1, %0, -0x30;\n"
+        // Build stack frame
+        // Skip local variable save area
+        " std 2, 0x28(1);\n" // Save TOC
+        // Clear link editor/compiler words
+        " std 0, 0x20(1);\n"
+        " std 0, 0x18(1);\n"
+        // Clear LR/CR save area
+        " std 0, 0x10(1);\n"
+        " std 0, 0x8(1);\n"
+        " std 0, 0x0(1); \n" // Clear back link to terminate unwinder
+        " mtlr 0; \n"        // Clear link register
+        " mr 12, %1; \n"     // Set up target global entry point
+        " mtctr 12; \n"      // Move jump target to counter register
+        " bctr; \n"          // branch to counter (lr update disabled)
+        " trap; \n"
+        : : "r"(stk), "r"(fn) : "memory");
 #else
 #error JL_HAVE_ASM defined but not implemented for this CPU type
 #endif
@@ -873,12 +933,12 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->logstate = jl_nothing;
     ptls->current_task->eh = NULL;
     ptls->current_task->gcstack = NULL;
+    ptls->current_task->excstack = NULL;
     ptls->current_task->tid = ptls->tid;
 #ifdef JULIA_ENABLE_THREADING
     arraylist_new(&ptls->current_task->locks, 0);
 #endif
 
-    ptls->exception_in_transit = (jl_value_t*)jl_nothing;
     ptls->root_task = ptls->current_task;
 
     jl_init_basefiber(JL_STACK_SIZE);
