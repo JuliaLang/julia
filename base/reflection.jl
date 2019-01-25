@@ -5,7 +5,7 @@
 """
     nameof(m::Module) -> Symbol
 
-Get the name of a `Module` as a `Symbol`.
+Get the name of a `Module` as a [`Symbol`](@ref).
 
 # Examples
 ```jldoctest

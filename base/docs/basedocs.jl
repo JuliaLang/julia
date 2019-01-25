@@ -309,8 +309,8 @@ kw"let"
 """
     quote
 
-`quote` creates multiple expression objects in a block without using the explicit `Expr`
-constructor. For example:
+`quote` creates multiple expression objects in a block without using the explicit
+[`Expr`](@ref) constructor. For example:
 
 ```julia
 ex = quote

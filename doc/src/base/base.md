@@ -84,6 +84,7 @@ primitive type
 where
 ...
 ;
+=
 ```
 
 ## Base Modules
@@ -203,7 +204,11 @@ Core.Nothing
 Base.isnothing
 Base.Some
 Base.something
+Base.Enums.Enum
 Base.Enums.@enum
+Core.Expr
+Core.Symbol
+Core.Symbol(x...)
 ```
 
 ## Generic Functions
