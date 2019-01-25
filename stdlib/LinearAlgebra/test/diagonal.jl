@@ -1458,6 +1458,11 @@ end
     @test opnorm(D, 1) == opnorm(Matrix(D), 1)
     @test opnorm(D, 2) ≈ opnorm(Matrix(D), 2)
     @test opnorm(D, Inf) == opnorm(Matrix(D), Inf)
+
+    D = Diagonal([-11])
+    @test opnorm(D, 1) == opnorm(Matrix(D), 1)
+    @test opnorm(D, 2) ≈ opnorm(Matrix(D), 2)
+    @test opnorm(D, Inf) == opnorm(Matrix(D), Inf)
 end
 
 end # module TestDiagonal

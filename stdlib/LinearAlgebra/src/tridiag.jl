@@ -1102,51 +1102,25 @@ function show(io::IO, S::SymTridiagonal)
 
 # Tridiagonal
 
-function _opnorm1(A::Tridiagonal{T}) where T
-    n = size(A, 1)
-    Tnorm = typeof(float(real(zero(T))))
-    Tsum = promote_type(Float64, Tnorm)
-
-    #first col
-    nrm::Tsum = norm(A.d[1]) + norm(A.dl[1])
-    @inbounds begin
-        for i = 2:n-1
-            nrmj::Tsum = norm(A.d[i]) + norm(A.dl[i]) + norm(A.du[i-1])
-            nrm = max(nrm,nrmj)
-        end
-    end
-
-    # last col
-    @inbounds nrm = max(nrm, norm(A.d[n])+norm(A.du[n-1]))
-    return convert(Tnorm, nrm)
-end
-
-function _opnormInf(A::Tridiagonal{T}) where T
-    n = size(A, 1)
-    Tnorm = typeof(float(real(zero(T))))
-    Tsum = promote_type(Float64, Tnorm)
-
-    #first row
-    nrm::Tsum = norm(A.d[1]) + norm(A.du[1])
-    @inbounds begin
-        for i = 2:n-1
-            nrmj::Tsum = norm(A.d[i]) + norm(A.du[i]) + norm(A.dl[i-1])
-            nrm = max(nrm,nrmj)
-        end
-    end
-
-    # last row
-    @inbounds nrm = max(nrm, norm(A.d[n])+norm(A.dl[n-1]))
-    return convert(Tnorm, nrm)
+function _opnorm1Inf(A::Tridiagonal, p)
+    size(A, 1) == 1 && return norm(first(A.d))
+    case = p == Inf
+    lowerrange, upperrange = case ? (1:length(A.dl)-1, 2:length(A.dl)) : (2:length(A.dl), 1:length(A.dl)-1)
+    normfirst, normend = case ? (norm(first(A.d))+norm(first(A.du)), norm(last(A.dl))+norm(last(A.d))) : (norm(first(A.d))+norm(first(A.dl)), norm(last(A.du))+norm(last(A.d)))
+    
+    return max(
+                mapreduce(t -> sum(norm, t),
+                    max,
+                    zip(view(A.d, (2:length(A.d)-1)), view(A.dl, lowerrange), view(A.du, upperrange))
+                ),
+                normfirst, normend)
 end
 
 function opnorm(A::Tridiagonal, p::Real=2)
     if p == 2
         return opnorm2(A)
-    elseif p == 1
-        return _opnorm1(A)
-    elseif p == Inf
-        return _opnormInf(A)
+    elseif p == 1 || p == Inf
+        _opnorm1Inf(A, p)
     else
         throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
     end
@@ -1154,30 +1128,24 @@ end
 
 # SymTridiagonal
 
-function _opnormInf1(A::SymTridiagonal{T}) where T
-    n = size(A, 1)
-    Tnorm = typeof(float(real(zero(T))))
-    Tsum = promote_type(Float64, Tnorm)
+function _opnorm1Inf(A::SymTridiagonal)
+    size(A, 1) == 1 && return norm(first(A.dv))
+    lowerrange, upperrange = 1:length(A.ev)-1, 2:length(A.ev)
+    normfirst, normend = norm(first(A.dv))+norm(first(A.ev)), norm(last(A.ev))+norm(last(A.dv))
 
-    #first col/row
-    nrm::Tsum = norm(A.dv[1]) + norm(A.ev[1])
-    @inbounds begin
-        for i = 2:n-1
-            nrmj::Tsum = norm(A.dv[i]) + norm(A.ev[i-1]) + norm(A.ev[i])
-            nrm = max(nrm,nrmj)
-        end
-    end
-
-    # last col/row
-    @inbounds nrm = max(nrm, norm(A.dv[n])+norm(A.ev[n-1]))
-    return convert(Tnorm, nrm)
+    return max(
+                mapreduce(t -> sum(norm, t),
+                    max,
+                    zip(view(A.dv, (2:length(A.dv)-1)), view(A.ev, lowerrange), view(A.ev, upperrange))
+                ),
+                normfirst, normend)
 end
 
 function opnorm(A::SymTridiagonal, p::Real=2)
     if p == 2
         return opnorm2(A)
     elseif p == 1 || p == Inf # these are the same for symmetric matrices
-        return _opnormInf1(A)
+        return _opnorm1Inf(A)
     else
         throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
     end

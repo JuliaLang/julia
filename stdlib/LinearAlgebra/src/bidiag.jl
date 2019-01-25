@@ -249,69 +249,11 @@ function svd(M::Bidiagonal; kw...)
 end
 
 ###################
-#     opnorms     #
+#     opnorm      #
 ###################
 
-# helpers for upper and lower bidiagonal matrices
-
-# function _upopnorm1(A::Bidiagonal{T}) where T
-#     n = size(A, 1)
-#     Tnorm = typeof(float(real(zero(T))))
-#     Tsum = promote_type(Float64, Tnorm)
-#     nrm::Tsum = A.dv[1]
-#     @inbounds begin
-#         for i = 2:n
-#             nrmj::Tsum = norm(A.dv[i]) + norm(A.ev[i-1])
-#             nrm = max(nrm,nrmj)
-#         end
-#     end
-#     return convert(Tnorm, nrm)
-# end
-
-# function _loopnorm1(A::Bidiagonal{T}) where T
-#     n = size(A, 1)
-#     Tnorm = typeof(float(real(zero(T))))
-#     Tsum = promote_type(Float64, Tnorm)
-#     nrm::Tsum = A.dv[end]
-#     @inbounds begin
-#         for i = 1:n-1
-#             nrmj::Tsum = norm(A.dv[i]) + norm(A.ev[i])
-#             nrm = max(nrm,nrmj)
-#         end
-#     end
-#     return convert(Tnorm, nrm)
-# end
-
-# function _upopnormInf(A::Bidiagonal{T}) where T
-#     n = size(A, 1)
-#     Tnorm = typeof(float(real(zero(T))))
-#     Tsum = promote_type(Float64, Tnorm)
-#     nrm::Tsum = A.dv[end]
-#     @inbounds begin
-#         for i = 1:n-1
-#             nrmj::Tsum = norm(A.dv[i]) + norm(A.ev[i])
-#             nrm = max(nrm,nrmj)
-#         end
-#     end
-#     return convert(Tnorm, nrm)
-# end
-
-# function _loopnormInf(A::Bidiagonal{T}) where T
-#     n = size(A, 1)
-#     Tnorm = typeof(float(real(zero(T))))
-#     Tsum = promote_type(Float64, Tnorm)
-#     nrm::Tsum = A.dv[1]
-#     @inbounds begin
-#         for i = 2:n
-#             nrmj::Tsum = norm(A.dv[i]) + norm(A.ev[i-1])
-#             nrm = max(nrm,nrmj)
-#         end
-#     end
-#     return convert(Tnorm, nrm)
-# end
-
 function _opnorm1Inf(B::Bidiagonal, p)
-    size(B, 1) == 1 || return max(B)
+    size(B, 1) == 1 && return norm(first(B.dv))
     case = xor(p == 1, istriu(B))
     normd1, normdend = norm(first(B.dv)), norm(last(B.dv))
     normd1, normdend = case ? (zero(normd1), normdend) : (normd1, zero(normdend))

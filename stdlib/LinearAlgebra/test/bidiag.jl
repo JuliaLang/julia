@@ -1150,6 +1150,18 @@ end
     @test opnorm(B, 1) == opnorm(Matrix(B), 1)
     @test opnorm(B, 2) ≈ opnorm(Matrix(B), 2)
     @test opnorm(B, Inf) == opnorm(Matrix(B), Inf)
+
+    B = Bidiagonal([2], Int[], 'L')
+
+    @test opnorm(B, 1) == opnorm(Matrix(B), 1)
+    @test opnorm(B, 2) ≈ opnorm(Matrix(B), 2)
+    @test opnorm(B, Inf) == opnorm(Matrix(B), Inf)
+
+    B = Bidiagonal([2], Int[], 'U')
+
+    @test opnorm(B, 1) == opnorm(Matrix(B), 1)
+    @test opnorm(B, 2) ≈ opnorm(Matrix(B), 2)
+    @test opnorm(B, Inf) == opnorm(Matrix(B), Inf)
 end
 
 

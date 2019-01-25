@@ -1087,6 +1087,16 @@ end
     @test opnorm(S, 1) == opnorm(Matrix(S), 1)
     @test_skip opnorm(S, 2) ≈ opnorm(Matrix(S), 2) # currently missing
     @test opnorm(S, Inf) == opnorm(Matrix(S), Inf)
+
+    T = Tridiagonal(Int[], [-5], Int[])
+    @test opnorm(T, 1) == opnorm(Matrix(T), 1)
+    @test_skip opnorm(T, 2) ≈ opnorm(Matrix(T), 2) # currently missing
+    @test opnorm(T, Inf) == opnorm(Matrix(T), Inf)
+
+    S = SymTridiagonal(T)
+    @test opnorm(S, 1) == opnorm(Matrix(S), 1)
+    @test_skip opnorm(S, 2) ≈ opnorm(Matrix(S), 2) # currently missing
+    @test opnorm(S, Inf) == opnorm(Matrix(S), Inf)
 end
 
 end # module TestTridiagonal
