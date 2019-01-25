@@ -1107,7 +1107,7 @@ function _opnorm1Inf(A::Tridiagonal, p)
     case = p == Inf
     lowerrange, upperrange = case ? (1:length(A.dl)-1, 2:length(A.dl)) : (2:length(A.dl), 1:length(A.dl)-1)
     normfirst, normend = case ? (norm(first(A.d))+norm(first(A.du)), norm(last(A.dl))+norm(last(A.d))) : (norm(first(A.d))+norm(first(A.dl)), norm(last(A.du))+norm(last(A.d)))
-    
+
     return max(
                 mapreduce(t -> sum(norm, t),
                     max,
