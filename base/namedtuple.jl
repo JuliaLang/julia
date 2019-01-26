@@ -5,7 +5,7 @@
 
 `NamedTuple`s are, as their name suggests, named [`Tuple`](@ref)s. That is, they're a
 tuple-like collection of values, where each entry has a unique name, represented as a
-`Symbol`. Like `Tuple`s, `NamedTuple`s are immutable; neither the names nor the values
+[`Symbol`](@ref). Like `Tuple`s, `NamedTuple`s are immutable; neither the names nor the values
 can be modified in place after construction.
 
 Accessing the value associated with a name in a named tuple can be done using field

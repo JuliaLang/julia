@@ -12,7 +12,7 @@ First we will focus on the AST, since it is needed to write macros.
 
 ## Surface syntax AST
 
-Front end ASTs consist almost entirely of `Expr`s and atoms (e.g. symbols, numbers).
+Front end ASTs consist almost entirely of [`Expr`](@ref)s and atoms (e.g. symbols, numbers).
 There is generally a different expression head for each visually distinct syntactic form.
 Examples will be given in s-expression syntax.
 Each parenthesized list corresponds to an Expr, where the first element is the head.
@@ -287,9 +287,9 @@ The following data types exist in lowered form:
     Marks a point where a variable (slot) is created. This has the effect of resetting a variable to undefined.
 
 
-### Expr types
+### `Expr` types
 
-These symbols appear in the `head` field of `Expr`s in lowered form.
+These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
   * `call`
 
