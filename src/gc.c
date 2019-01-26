@@ -150,7 +150,7 @@ static int support_conservative_marking = 0;
  * the GC should either be running unmanaged code (or code section that does
  * not have a GC critical region mainly including storing to the stack or
  * another object) or paused at a safepoint and wait for the GC to finish.
- * If a thread want to switch from running unmanaged code to running managed
+ * If a thread wants to switch from running unmanaged code to running managed
  * code, it has to perform a GC safepoint check after setting the `gc_state`
  * flag (see `jl_gc_state_save_and_set()`. it is possible that the thread might
  * have `gc_state == 0` in the middle of the GC transition back before entering
