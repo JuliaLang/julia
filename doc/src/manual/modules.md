@@ -81,10 +81,10 @@ functions into the current workspace:
 | Import Command                  | What is brought into scope                                                      | Available for method extension              |
 |:------------------------------- |:------------------------------------------------------------------------------- |:------------------------------------------- |
 | `using MyModule`                | All `export`ed names (`x` and `y`), `MyModule.x`, `MyModule.y` and `MyModule.p` | `MyModule.x`, `MyModule.y` and `MyModule.p` |
-| `using MyModule: x, p`          | `x` and `p`                                                                     |                                             |
+| `using MyModule: x, p`          | `x`, `p`, `MyModule.x` and `MyModule.p`                                         |                                             |
 | `import MyModule`               | `MyModule.x`, `MyModule.y` and `MyModule.p`                                     | `MyModule.x`, `MyModule.y` and `MyModule.p` |
-| `import MyModule.x, MyModule.p` | `x` and `p`                                                                     | `x` and `p`                                 |
-| `import MyModule: x, p`         | `x` and `p`                                                                     | `x` and `p`                                 |
+| `import MyModule.x, MyModule.p` | `x`, `p`, `MyModule.x` and `MyModule.p`                                         | `x` and `p`                                 |
+| `import MyModule: x, p`         | `x`, `p`, `MyModule.x` and `MyModule.p`                                         | `x` and `p`                                 |
 
 ### Modules and files
 
