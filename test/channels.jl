@@ -58,7 +58,7 @@ end
     @test c.sz_max == 0
     @test istaskstarted(taskref[])
     @test !istaskdone(taskref[])
-    take!(c); yield()
+    take!(c); wait(taskref[])
     @test istaskdone(taskref[])
 end
 
