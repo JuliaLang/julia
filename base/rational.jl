@@ -101,6 +101,8 @@ end
 Rational(x::Float64) = Rational{Int64}(x)
 Rational(x::Float32) = Rational{Int}(x)
 
+big(q::Rational) = big(numerator(q))//big(denominator(q))
+
 big(z::Complex{<:Rational{<:Integer}}) = Complex{Rational{BigInt}}(z)
 
 promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}

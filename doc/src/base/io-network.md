@@ -7,6 +7,7 @@ Base.stdout
 Base.stderr
 Base.stdin
 Base.open
+Base.IOStream
 Base.IOBuffer
 Base.take!(::Base.GenericIOBuffer)
 Base.fdio
@@ -94,6 +95,8 @@ Base.Multimedia.displayable
 Base.show(::Any, ::Any, ::Any)
 Base.Multimedia.showable
 Base.repr(::MIME, ::Any)
+Base.MIME
+Base.@MIME_str
 ```
 
 As mentioned above, one can also define new display backends. For example, a module that can display

@@ -796,6 +796,27 @@ Base.delete_method(m)
 
 end
 
+module HasmethodKwargs
+using Test
+f(x::Int; y=3) = x + y
+@test hasmethod(f, Tuple{Int})
+@test hasmethod(f, Tuple{Int}, ())
+@test hasmethod(f, Tuple{Int}, (:y,))
+@test !hasmethod(f, Tuple{Int}, (:jeff,))
+@test !hasmethod(f, Tuple{Int}, (:y,), world=typemin(UInt))
+g(; b, c, a) = a + b + c
+h(; kwargs...) = 4
+for gh = (g, h)
+    @test hasmethod(gh, Tuple{})
+    @test hasmethod(gh, Tuple{}, ())
+    @test hasmethod(gh, Tuple{}, (:a,))
+    @test hasmethod(gh, Tuple{}, (:a, :b))
+    @test hasmethod(gh, Tuple{}, (:a, :b, :c))
+end
+@test !hasmethod(g, Tuple{}, (:a, :b, :c, :d))
+@test hasmethod(h, Tuple{}, (:a, :b, :c, :d))
+end
+
 # issue #26267
 module M26267
 import Test

@@ -394,6 +394,8 @@
          (vararg (let ((l (if (null? pargl) '() (last pargl))))
                    (if (or (vararg? l) (varargexpr? l))
                        (list l) '())))
+         ;; positional args with vararg
+         (pargl-all pargl)
          ;; positional args without vararg
          (pargl (if (null? vararg) pargl (butlast pargl)))
          ;; positional args with everything required; for use by the core function
@@ -422,13 +424,7 @@
                            (filter nospecialize-meta? kargl)))
          ;; body statements
          (stmts (cdr body))
-         (positional-sparams
-          (filter (lambda (s)
-                    (let ((name (car s)))
-                      (or (expr-contains-eq name (cons 'list pargl))
-                          (and (pair? vararg) (expr-contains-eq name (car vararg)))
-                          (not (expr-contains-eq name (cons 'list kargl))))))
-                  sparams))
+         (positional-sparams (filter-sparams (cons 'list pargl-all) sparams))
          (keyword-sparams
           (filter (lambda (s)
                     (not (any (lambda (p) (eq? (car p) (car s)))
@@ -460,7 +456,7 @@
 
         ;; call with no keyword args
         ,(method-def-expr-
-          name positional-sparams (append pargl vararg)
+          name positional-sparams pargl-all
           `(block
             ,@(without-generated prologue)
             ,(let (;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
@@ -476,9 +472,7 @@
 
         ;; call with unsorted keyword args. this sorts and re-dispatches.
         ,(method-def-expr-
-          name
-          ;; remove sparams that don't occur, to avoid printing the warning twice
-          (filter-sparams (cons 'list argl) positional-sparams)
+          name positional-sparams
           `((|::|
              ;; if there are optional positional args, we need to be able to reference the function name
              ,(if (any kwarg? pargl) (gensy) UNUSED)
@@ -2594,7 +2588,7 @@
 (define (free-vars e)
   (table.keys (free-vars- e (table))))
 
-(define (analyze-vars-lambda e env captvars sp new-sp)
+(define (analyze-vars-lambda e env captvars sp new-sp (methsig #f))
   (let* ((args (lam:args e))
          (locl (caddr e))
          (allv (nconc (map arg-name args) locl))
@@ -2605,13 +2599,15 @@
                                                 (if vi (free-vars (vinfo:type vi)) '())))
                                             fv))))
                  (append (diff dv fv) fv)))
+         (sig-fv (if methsig (free-vars methsig) '()))
          (glo  (find-global-decls (lam:body e)))
          ;; make var-info records for vars introduced by this lambda
          (vi   (nconc
                 (map (lambda (decl) (make-var-info (decl-var decl)))
                      args)
                 (map make-var-info locl)))
-         (capt-sp (filter (lambda (v) (and (memq v fv) (not (memq v glo)) (not (memq v new-sp))))
+         (capt-sp (filter (lambda (v) (or (and (memq v fv) (not (memq v glo)) (not (memq v new-sp)))
+                                          (memq v sig-fv)))
                           sp))
          ;; captured vars: vars from the environment that occur
          ;; in our set of free variables (fv).
@@ -2694,7 +2690,8 @@
              (begin (analyze-vars (caddr e) env captvars sp)
                     (assert (eq? (car (cadddr e)) 'lambda))
                     (analyze-vars-lambda (cadddr e) env captvars sp
-                                         (method-expr-static-parameters e)))))
+                                         (method-expr-static-parameters e)
+                                         (caddr e)))))
         ((module toplevel) e)
         (else (for-each (lambda (x) (analyze-vars x env captvars sp))
                         (cdr e))))))

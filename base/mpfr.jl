@@ -355,6 +355,8 @@ promote_rule(::Type{BigFloat}, ::Type{<:AbstractFloat}) = BigFloat
 
 big(::Type{<:AbstractFloat}) = BigFloat
 
+big(x::AbstractFloat) = convert(BigFloat, x)
+
 function (::Type{Rational{BigInt}})(x::AbstractFloat)
     isnan(x) && return zero(BigInt) // zero(BigInt)
     isinf(x) && return copysign(one(BigInt),x) // zero(BigInt)

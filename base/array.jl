@@ -151,7 +151,7 @@ function vect(X...)
     return copyto!(Vector{T}(undef, length(X)), X)
 end
 
-size(a::Array, d) = arraysize(a, d)
+size(a::Array, d::Integer) = arraysize(a, convert(Int, d))
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
 size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val(N)))
@@ -1740,6 +1740,13 @@ end
 # Needed for bootstrap, and allows defining only an optimized findnext method
 findfirst(testf::Function, A::Union{AbstractArray, AbstractString}) =
     findnext(testf, A, first(keys(A)))
+
+function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
+    first(r) <= p.x <= last(r) || return nothing
+    d = convert(S, p.x - first(r))
+    iszero(d % step(r)) || return nothing
+    return d ÷ step(r) + 1
+end
 
 """
     findprev(A, i)

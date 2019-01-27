@@ -434,7 +434,7 @@ end
 """
     esc(e)
 
-Only valid in the context of an `Expr` returned from a macro. Prevents the macro hygiene
+Only valid in the context of an [`Expr`](@ref) returned from a macro. Prevents the macro hygiene
 pass from turning embedded variables into gensym variables. See the [Macros](@ref man-macros)
 section of the Metaprogramming chapter of the manual for more details and examples.
 """
@@ -570,7 +570,7 @@ eltype(::Type{SimpleVector}) = Any
 keys(v::SimpleVector) = OneTo(length(v))
 isempty(v::SimpleVector) = (length(v) == 0)
 axes(v::SimpleVector) = (OneTo(length(v)),)
-axes(v::SimpleVector, d) = d <= 1 ? axes(v)[d] : OneTo(1)
+axes(v::SimpleVector, d::Integer) = d <= 1 ? axes(v)[d] : OneTo(1)
 
 function ==(v1::SimpleVector, v2::SimpleVector)
     length(v1)==length(v2) || return false
