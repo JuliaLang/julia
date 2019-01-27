@@ -95,6 +95,22 @@ Hello
 julia> istaskdone(taskref[])
 true
 ```
+
+Other constructors:
+* `Channel{T}(func::Function, sz=0)`
+* `Channel{T}(func::Function; csize=0, taskref=nothing)`
+
+```jldoctest
+julia> chnl = Channel{Char}(1) do ch
+           for c in "hello world"
+               put!(ch, c)
+           end
+       end
+>> Channel{Char}(sz_max:1,sz_curr:1)
+
+julia> String(collect(chnl))
+>> "hello world"
+```
 """
 function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
     chnl = Channel{ctype}(csize)
@@ -104,6 +120,12 @@ function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
 
     isa(taskref, Ref{Task}) && (taskref[] = task)
     return chnl
+end
+function Channel{T}(f::Function, sz=0) where T
+    return Channel(f, csize=sz, ctype=T)
+end
+function Channel{T}(f::Function; csize=0, taskref=nothing) where T
+    return Channel(f, csize=csize, ctype=T, taskref=taskref)
 end
 
 
