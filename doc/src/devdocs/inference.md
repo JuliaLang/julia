@@ -103,7 +103,7 @@ mi = Base.method_instances(f, tt)[1]
 ci = code_typed(f, tt)[1][1]
 opt = Core.Compiler.OptimizationState(mi, params)
 # Calculate cost of each statement
-cost(stmt::Expr) = Core.Compiler.statement_cost(stmt, -1, ci, opt.sp, opt.slottypes, opt.params)
+cost(stmt::Expr) = Core.Compiler.statement_cost(stmt, -1, ci, opt.sptypes, opt.slottypes, opt.params)
 cost(stmt) = 0
 cst = map(cost, ci.code)
 

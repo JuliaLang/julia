@@ -213,7 +213,7 @@ struct IRCode
     lines::Vector{Int32}
     flags::Vector{UInt8}
     argtypes::Vector{Any}
-    spvals::SimpleVector
+    sptypes::Vector{Any}
     linetable::Vector{LineInfoNode}
     cfg::CFG
     new_nodes::Vector{NewNode}
@@ -221,12 +221,12 @@ struct IRCode
 
     function IRCode(stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int32}, flags::Vector{UInt8},
             cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Any},
-            spvals::SimpleVector)
-        return new(stmts, types, lines, flags, argtypes, spvals, linetable, cfg, NewNode[], meta)
+            sptypes::Vector{Any})
+        return new(stmts, types, lines, flags, argtypes, sptypes, linetable, cfg, NewNode[], meta)
     end
     function IRCode(ir::IRCode, stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int32}, flags::Vector{UInt8},
             cfg::CFG, new_nodes::Vector{NewNode})
-        return new(stmts, types, lines, flags, ir.argtypes, ir.spvals, ir.linetable, cfg, new_nodes, ir.meta)
+        return new(stmts, types, lines, flags, ir.argtypes, ir.sptypes, ir.linetable, cfg, new_nodes, ir.meta)
     end
 end
 copy(code::IRCode) = IRCode(code, copy(code.stmts), copy(code.types),
@@ -1143,7 +1143,7 @@ function maybe_erase_unused!(extra_worklist, compact, idx, callback = x->nothing
     if compact_exprtype(compact, SSAValue(idx)) === Bottom
         effect_free = false
     else
-        effect_free = stmt_effect_free(stmt, compact.result_types[idx], compact, compact.ir.spvals)
+        effect_free = stmt_effect_free(stmt, compact.result_types[idx], compact, compact.ir.sptypes)
     end
     if effect_free
         for ops in userefs(stmt)
