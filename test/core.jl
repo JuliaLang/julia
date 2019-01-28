@@ -6816,3 +6816,9 @@ f29828() = 2::String
 g29828() = 2::Any[String][1]
 @test_throws TypeError(:typeassert, String, 2) f29828()
 @test_throws TypeError(:typeassert, String, 2) g29828()
+
+module CoreBinding end
+ccall(:jl_declare_constant_ref, Cvoid, (Any, Any), CoreBinding, :x)
+Core.eval(CoreBinding, :(x = 2))
+@test CoreBinding.x == 2
+@test isconst(CoreBinding, :x)

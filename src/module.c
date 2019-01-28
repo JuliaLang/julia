@@ -655,6 +655,12 @@ JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b)
     b->constp = 1;
 }
 
+JL_DLLEXPORT void jl_declare_constant_ref(jl_module_t *m, jl_sym_t *var)
+{
+    jl_binding_t *b = jl_get_binding_wr(m, var, 1);
+    jl_declare_constant(b);
+}
+
 JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_any_type, 0);
