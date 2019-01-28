@@ -1843,7 +1843,7 @@ function summary(io::IO, a, inds::Tuple{Vararg{OneTo}})
     showarg(io, a, true)
 end
 function summary(io::IO, a, inds)
-    print(io, dims2string(length.(inds)), " ")   
+    print(io, dims2string(length.(inds)), " ")
     showarg(io, a, true)
     print(io, " with indices ", inds2string(inds))
 end
