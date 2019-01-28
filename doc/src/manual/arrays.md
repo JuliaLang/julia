@@ -669,8 +669,9 @@ julia> vec(A)[5]
 ```
 
 A linear index into the array `A` can be converted to a `CartesianIndex` for cartesian
-indexing with [`CartesianIndices(A)[i]`](@ref), and a set of `N` cartesian indices can be
-converted to a linear index with [`LinearIndices(A)[i_1, i_2, ..., i_N]`](@ref).
+indexing with `CartesianIndices(A)[i]` (see [`CartesianIndices`](@ref)), and a set of
+`N` cartesian indices can be converted to a linear index with
+`LinearIndices(A)[i_1, i_2, ..., i_N]` (see [`LinearIndices`](@ref)).
 
 ```jldoctest linindexing
 julia> CartesianIndices(A)[5]
