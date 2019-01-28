@@ -408,7 +408,7 @@ If `DataType` `T` does not have a specific size, an error is thrown.
 
 ```jldoctest
 julia> sizeof(AbstractArray)
-ERROR: argument is an abstract type; size is indeterminate
+ERROR: Argument abstract type AbstractArray does not have a fixed size
 Stacktrace:
 [...]
 ```

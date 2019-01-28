@@ -604,7 +604,7 @@ end
 @test sizeof(TypeWithIrrelevantParameter{Int8}) == sizeof(Int32)
 @test sizeof(:abc) == 3
 @test sizeof(Symbol("")) == 0
-@test_throws(ErrorException("argument is an abstract type; size is indeterminate"),
+@test_throws(ErrorException("Argument abstract type Real does not have a fixed size"),
              sizeof(Real))
 @test sizeof(Union{ComplexF32,ComplexF64}) == 16
 @test sizeof(Union{Int8,UInt8}) == 1
