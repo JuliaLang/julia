@@ -7,6 +7,7 @@ New language features
 * The `extrema` function now accepts a function argument in the same manner as `minimum` and
   `maximum` ([#30323]).
 * `hasmethod` can now check for matching keyword argument names ([#30712]).
+* `mktempdir` now accepts a `cd` keyword that changes directory to the new temp dir ([#30883]).
 
 Multi-threading changes
 -----------------------

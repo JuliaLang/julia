@@ -566,18 +566,25 @@ function mktemp(fn::Function, parent=tempdir())
 end
 
 """
-    mktempdir(f::Function, parent=tempdir())
+    mktempdir(f::Function, parent=tempdir(); cd=false)
 
 Apply the function `f` to the result of [`mktempdir(parent)`](@ref) and remove the
-temporary directory upon completion.
+temporary directory upon completion. If `cd` is `true`, change the current directory
+to the created temporary directory for the duration of `f`.
+
+!!! compat "Julia 1.2"
+    The `cd` keyword argument requires Julia 1.2 or later.
 """
-function mktempdir(fn::Function, parent=tempdir())
+function mktempdir(fn::Function, parent=tempdir(); cd::Bool=false)
     tmpdir = mktempdir(parent)
+    wd = pwd()
     try
+        cd && Base.cd(tmpdir)
         fn(tmpdir)
     finally
         # TODO: should we call GC.gc() first on error, to make it much more likely that `rm` succeeds?
         try
+            cd && Base.cd(wd)
             rm(tmpdir, recursive=true)
         catch ex
             @error "mktempdir cleanup" _group=:file exception=(ex, catch_backtrace())

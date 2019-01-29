@@ -892,8 +892,7 @@ end
 #     walkdir     #
 ###################
 
-dirwalk = mktempdir()
-cd(dirwalk) do
+mktempdir(cd=true) do dirwalk
     for i=1:2
         mkdir("sub_dir$i")
         open("file$i", "w") do f end
@@ -986,7 +985,6 @@ cd(dirwalk) do
     @test dirs == []
     @test files == ["file_dir2"]
 end
-rm(dirwalk, recursive=true)
 
 ############
 # Clean up #
@@ -1041,18 +1039,16 @@ end
 
 # issue #30588
 @test realpath(".") == realpath(pwd())
-mktempdir() do dir
-    cd(dir) do
-        path = touch("FooBar.txt")
-        @test ispath(realpath(path))
-        if ispath(uppercase(path)) # case-insensitive filesystem
-            @test realpath(path) == realpath(uppercase(path)) == realpath(lowercase(path)) ==
-                  realpath(uppercase(realpath(path))) == realpath(lowercase(realpath(path)))
-            @test basename(realpath(uppercase(path))) == path
-        end
-        rm(path)
-        @test_throws SystemError realpath(path)
+mktempdir(cd=true) do dir
+    path = touch("FooBar.txt")
+    @test ispath(realpath(path))
+    if ispath(uppercase(path)) # case-insensitive filesystem
+        @test realpath(path) == realpath(uppercase(path)) == realpath(lowercase(path)) ==
+              realpath(uppercase(realpath(path))) == realpath(lowercase(realpath(path)))
+        @test basename(realpath(uppercase(path))) == path
     end
+    rm(path)
+    @test_throws SystemError realpath(path)
 end
 
 # issue #9687
@@ -1069,3 +1065,10 @@ let n = tempname()
 end
 
 @test_throws ArgumentError mkpath("fakepath", mode = -1)
+
+let wd = pwd()
+    mktempdir(cd=true) do dir
+        @test pwd() == dir
+    end
+    @test pwd() == wd
+end

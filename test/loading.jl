@@ -55,27 +55,25 @@ let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`,
 end
 
 # Issue #5789 and PR #13542:
-mktempdir() do dir
-    cd(dir) do
-        let true_filename = "cAsEtEsT.jl", lowered_filename="casetest.jl"
-            touch(true_filename)
-            @test Base.isfile_casesensitive(true_filename)
-            @test !Base.isfile_casesensitive(lowered_filename)
+mktempdir(cd=true) do dir
+    let true_filename = "cAsEtEsT.jl", lowered_filename="casetest.jl"
+        touch(true_filename)
+        @test Base.isfile_casesensitive(true_filename)
+        @test !Base.isfile_casesensitive(lowered_filename)
 
-            # check that case-sensitivity only applies to basename of a path:
-            if isfile(lowered_filename) # case-insensitive filesystem
-                mkdir("cAsEtEsT")
-                touch(joinpath("cAsEtEsT", true_filename))
-                @test Base.isfile_casesensitive(joinpath("casetest", true_filename))
-                @test !Base.isfile_casesensitive(joinpath("casetest", lowered_filename))
-            end
+        # check that case-sensitivity only applies to basename of a path:
+        if isfile(lowered_filename) # case-insensitive filesystem
+            mkdir("cAsEtEsT")
+            touch(joinpath("cAsEtEsT", true_filename))
+            @test Base.isfile_casesensitive(joinpath("casetest", true_filename))
+            @test !Base.isfile_casesensitive(joinpath("casetest", lowered_filename))
         end
+    end
 
-        # Test Unicode normalization; pertinent for OS X
-        let nfc_name = "\U00F4.jl"
-            touch(nfc_name)
-            @test Base.isfile_casesensitive(nfc_name)
-        end
+    # Test Unicode normalization; pertinent for OS X
+    let nfc_name = "\U00F4.jl"
+        touch(nfc_name)
+        @test Base.isfile_casesensitive(nfc_name)
     end
 end
 
@@ -560,7 +558,7 @@ finally
 end
 
 @testset "--project and JULIA_PROJECT paths should be absolutified" begin
-    mktempdir() do dir; cd(dir) do
+    mktempdir(cd=true) do dir
         mkdir("foo")
         script = """
         using Test
@@ -572,7 +570,7 @@ end
         withenv("JULIA_PROJECT" => "foo") do
             @test success(`$(Base.julia_cmd()) -e $(script)`)
         end
-    end; end
+    end
 end
 
 # Base.active_project when version directory exist in depot, but contains no project file
