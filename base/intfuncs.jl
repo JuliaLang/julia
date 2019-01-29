@@ -537,11 +537,11 @@ julia> ndigits(123, pad=5)
 5
 ```
 """
-ndigits(x::Integer; base::Integer=10, pad::Int=1) = max(pad, ndigits0z(x, base))
+ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, base))
 
 ## integer to string functions ##
 
-function bin(x::Unsigned, pad::Int, neg::Bool)
+function bin(x::Unsigned, pad::Integer, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
     a = StringVector(i)
     while i > neg
@@ -553,7 +553,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
     String(a)
 end
 
-function oct(x::Unsigned, pad::Int, neg::Bool)
+function oct(x::Unsigned, pad::Integer, neg::Bool)
     i = neg + max(pad,div((sizeof(x)<<3)-leading_zeros(x)+2,3))
     a = StringVector(i)
     while i > neg
@@ -565,7 +565,7 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
     String(a)
 end
 
-function dec(x::Unsigned, pad::Int, neg::Bool)
+function dec(x::Unsigned, pad::Integer, neg::Bool)
     i = neg + ndigits(x, base=10, pad=pad)
     a = StringVector(i)
     while i > neg
@@ -577,7 +577,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
     String(a)
 end
 
-function hex(x::Unsigned, pad::Int, neg::Bool)
+function hex(x::Unsigned, pad::Integer, neg::Bool)
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
     a = StringVector(i)
     while i > neg
@@ -593,7 +593,7 @@ end
 const base36digits = ['0':'9';'a':'z']
 const base62digits = ['0':'9';'A':'Z';'a':'z']
 
-function _base(b::Int, x::Integer, pad::Int, neg::Bool)
+function _base(b::Integer, x::Integer, pad::Integer, neg::Bool)
     (x >= 0) | (b < 0) || throw(DomainError(x, "For negative `x`, `b` must be negative."))
     2 <= abs(b) <= 62 || throw(ArgumentError("base must satisfy 2 ≤ abs(base) ≤ 62, got $b"))
     digits = abs(b) <= 36 ? base36digits : base62digits
@@ -644,7 +644,7 @@ function string(n::Integer; base::Integer = 10, pad::Integer = 1)
         (n_positive, neg) = split_sign(n)
         hex(n_positive, pad, neg)
     else
-        _base(Int(base), base > 0 ? unsigned(abs(n)) : convert(Signed, n), Int(pad), (base>0) & (n<0))
+        _base(base, base > 0 ? unsigned(abs(n)) : convert(Signed, n), pad, (base>0) & (n<0))
     end
 end
 
