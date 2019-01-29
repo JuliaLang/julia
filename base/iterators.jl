@@ -462,6 +462,7 @@ julia> collect(Iterators.rest([1,2,3,4], 2))
 ```
 """
 rest(itr,state) = Rest(itr,state)
+rest(itr::Rest,state) = Rest(itr.itr,state)
 rest(itr) = itr
 
 """
