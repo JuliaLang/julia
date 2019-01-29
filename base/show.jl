@@ -1837,12 +1837,13 @@ _indsstring(i) = string(i)
 _indsstring(i::Union{IdentityUnitRange, Slice}) = string(i.indices)
 
 # anything array-like gets summarized e.g. 10-element Array{Int64,1}
-summary(io::IO, a::AbstractArray) = summary(io, a, axes(a))
-function summary(io::IO, a, inds::Tuple{Vararg{OneTo}})
+summary(io::IO, a::AbstractArray) = array_summary(io, a, axes(a))
+function array_summary(io::IO, a, inds::Tuple{Vararg{OneTo}})
     print(io, dims2string(length.(inds)), " ")
     showarg(io, a, true)
 end
-function summary(io::IO, a, inds)
+function array_summary(io::IO, a, inds)
+    print(io, dims2string(length.(inds)), " ")
     showarg(io, a, true)
     print(io, " with indices ", inds2string(inds))
 end
