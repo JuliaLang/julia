@@ -5509,6 +5509,11 @@ f_isdefined_tv(::T) where {T} = @isdefined T
 f_isdefined_va(::T...) where {T} = @isdefined T
 @test !f_isdefined_va()
 @test f_isdefined_va(1, 2, 3)
+function f_unused_undefined_sp(::T...) where T
+    T
+    return 0
+end
+@test_throws UndefVarError(:T) f_unused_undefined_sp()
 
 # note: the constant `5` here should be > DataType.ninitialized.
 # This tests that there's no crash due to accessing Type.body.layout.
