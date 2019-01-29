@@ -479,6 +479,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT
          ((jl_expr_t*)e)->head == export_sym ||
          ((jl_expr_t*)e)->head == thunk_sym ||
          ((jl_expr_t*)e)->head == global_sym ||
+         ((jl_expr_t*)e)->head == const_sym ||
          ((jl_expr_t*)e)->head == toplevel_sym ||
          ((jl_expr_t*)e)->head == error_sym ||
          ((jl_expr_t*)e)->head == jl_incomplete_sym);
@@ -495,7 +496,7 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
         head == error_sym || head == jl_incomplete_sym || head == method_sym) {
         return 0;
     }
-    if (head == global_sym) {
+    if (head == global_sym || head == const_sym) {
         size_t i, l = jl_array_len(ex->args);
         for (i = 0; i < l; i++) {
             jl_value_t *a = jl_exprarg(ex, i);
@@ -717,6 +718,24 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
             }
             jl_get_binding_wr(gm, gs, 0);
         }
+        JL_GC_POP();
+        return jl_nothing;
+    }
+    else if (head == const_sym) {
+        jl_sym_t *arg = (jl_sym_t*)jl_exprarg(ex, 0);
+        jl_module_t *gm;
+        jl_sym_t *gs;
+        if (jl_is_globalref(arg)) {
+            gm = jl_globalref_mod(arg);
+            gs = jl_globalref_name(arg);
+        }
+        else {
+            assert(jl_is_symbol(arg));
+            gm = m;
+            gs = (jl_sym_t*)arg;
+        }
+        jl_binding_t *b = jl_get_binding_wr(gm, gs, 1);
+        jl_declare_constant(b);
         JL_GC_POP();
         return jl_nothing;
     }
