@@ -419,6 +419,10 @@ endif
 	mkdir -p $(DESTDIR)$(sysconfdir)
 	cp -R $(build_sysconfdir)/julia $(DESTDIR)$(sysconfdir)/
 
+ifeq ($(DARWIN_FRAMEWORK),1)
+	$(MAKE) -C $(JULIAHOME)/contrib/mac/framework frameworknoinstall
+endif
+
 distclean:
 	-rm -fr $(BUILDROOT)/julia-*.tar.gz $(BUILDROOT)/julia*.exe $(BUILDROOT)/julia-*.7z $(BUILDROOT)/julia-$(JULIA_COMMIT)
 

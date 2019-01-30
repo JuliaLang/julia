@@ -20,7 +20,7 @@ darwin_codesign_id_julia_ui := $(DARWIN_CODESIGN_ID_BASE).ui
 darwin_codesign_id_julia_deps := $(DARWIN_CODESIGN_ID_BASE).deps
 
 # framework directory structure targets
-framework_destdirs := $(sort $(bindir) $(libdir) $(private_libdir) $(datarootdir) $(docdir) $(mandir) $(man1dir) $(includedir) $(sysconfdir) $(addprefix $(DESTDIR)$(prefix)/,$(framework_currver) $(framework_headers) $(framework_headers)/julia $(framework_documentation) $(framework_resources) $(framework_frameworks) $(framework_modules) $(framework_helpers) $(framework_currver)/lib))
+framework_destdirs := $(sort $(addprefix $(DESTDIR)$(prefix)/,$(framework_currver) $(framework_headers) $(framework_headers)/julia $(framework_documentation) $(framework_resources) $(framework_frameworks) $(framework_modules) $(framework_helpers) $(framework_currver)/lib))
 
 # symlink targets
 framework_current_symlinks := $(addprefix $(DESTDIR)$(prefix)/$(framework_directory)/,$(FRAMEWORK_NAME) Headers Documentation Resources Frameworks Modules Helpers)
@@ -94,7 +94,8 @@ ifneq ($(DARWIN_FRAMEWORK),1)
 endif
 	$(MAKE) -C $(BUILDROOT) install
 
-framework: toplevelinstall $(DESTDIR)$(prefix)/$(framework_infoplist) | $(framework_current_symlinks) $(framework_version_symlink) $(framework_destdirs) hier_symlinks
+# frameworknoinstall assumes `make install` was already completed.
+frameworknoinstall: $(DESTDIR)$(prefix)/$(framework_infoplist) | $(framework_current_symlinks) $(framework_version_symlink) $(framework_destdirs) hier_symlinks
 
 	$(INSTALL_NAME_CHANGE_CMD) @rpath/libjulia.dylib @rpath/$(FRAMEWORK_NAME) $(DESTDIR)$(bindir)/julia
 	$(JULIAHOME)/contrib/mac/framework/delete-all-rpaths.sh $(DESTDIR)$(bindir)/julia
@@ -178,4 +179,6 @@ ifeq ($(BUNDLE_DEBUG_LIBS),1)
 endif
 	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(DESTDIR)$(prefix)/$(framework_currver)
 
-.PHONY: toplevelinstall framework hier_symlinks
+framework: toplevelinstall
+
+.PHONY: toplevelinstall framework frameworknoinstall hier_symlinks
