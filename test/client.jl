@@ -25,3 +25,11 @@ nested_error_pattern = r"""
     end
     @test occursin(nested_error_pattern, err_str)
 end
+
+@testset "Fallback REPL" begin
+    # Fallback REPL should show errors with display_error
+    errio = IOBuffer()
+    Base.eval_user_input(errio, nested_error_expr, true)
+    err_str = String(take!(errio))
+    @test occursin(nested_error_pattern, err_str)
+end
