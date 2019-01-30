@@ -56,6 +56,23 @@ StridedVector{T} = Union{DenseArray{T,1}, StridedSubArray{T,1}, StridedReshapedA
 StridedMatrix{T} = Union{DenseArray{T,2}, StridedSubArray{T,2}, StridedReshapedArray{T,2}, StridedReinterpretArray{T,2}}
 StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 
+# the definition of strides for Array{T,N} is tuple() if N = 0, otherwise it is
+# a tuple containing 1 and a cumulative product of the first N-1 sizes
+# this definition is also used for StridedReshapedArray and StridedReinterpretedArray
+# which have the same memory storage as Array
+function stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int)
+    if i > ndims(a)
+        return length(a)
+    end
+    s = 1
+    for n = 1:(i-1)
+        s *= size(a, n)
+    end
+    return s
+end
+
+strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
+
 function check_readable(a::ReinterpretArray{T, N, S} where N) where {T,S}
     # See comment in check_writable
     if !a.readable && !array_subpadding(T, S)
