@@ -86,7 +86,7 @@ $(DESTDIR)$(prefix)/$(framework_infoplist): | $(framework_destdirs)
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundleSignature string ???" $@
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundlePackageType string FMWK" $@
 	/usr/libexec/PlistBuddy -x -c "Add :CFBundleInfoDictionaryVersion string 6.0" $@
-	/usr/libexec/PlistBuddy -x -c "Add :NSHumanReadableCopyright string \"Copyright © 2009-2018 Julia project contributors (https://github.com/JuliaLang/julia/contributors). See LICENSE.md.\"" $@
+	/usr/libexec/PlistBuddy -x -c "Add :NSHumanReadableCopyright string \"Copyright © 2009-2019 Julia project contributors (https://github.com/JuliaLang/julia/contributors). See LICENSE.md.\"" $@
 
 toplevelinstall:
 ifneq ($(DARWIN_FRAMEWORK),1)
