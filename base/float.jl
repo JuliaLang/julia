@@ -841,9 +841,7 @@ eps(::AbstractFloat)
 
 
 ## byte order swaps for arbitrary-endianness serialization/deserialization ##
-bswap(x::Float16) = bswap_int(x)
-bswap(x::Float32) = bswap_int(x)
-bswap(x::Float64) = bswap_int(x)
+bswap(x::IEEEFloat) = bswap_int(x)
 
 # bit patterns
 reinterpret(::Type{Unsigned}, x::Float64) = reinterpret(UInt64, x)
