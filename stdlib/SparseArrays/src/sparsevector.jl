@@ -65,6 +65,13 @@ function nnz(x::SparseColumnView)
     return length(nzrange(parent(x), colidx))
 end
 
+
+function Base.sizehint!(v::SparseVector, newlen::Integer)
+    sizehint!(v.nzind, newlen)
+    sizehint!(v.nzval, newlen)
+    return v
+end
+
 ## similar
 #
 # parent method for similar that preserves stored-entry structure (for when new and old dims match)

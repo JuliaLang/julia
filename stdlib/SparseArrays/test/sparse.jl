@@ -25,7 +25,7 @@ end
     S = sparse(I, 3, 3)
     fill!(S, 0)
     @test iszero(S)  # test success with stored zeros via fill!
-    @test iszero(SparseMatrixCSC(2, 2, [1,2,3], [1,2], [0,0,1])) # test success with nonzeros beyond data range
+    @test_throws ArgumentError iszero(SparseMatrixCSC(2, 2, [1,2,3], [1,2], [0,0,1])) # test failure with nonzeros beyond data range
 end
 @testset "isone specialization for SparseMatrixCSC" begin
     @test isone(sparse(I, 3, 3))    # test success
@@ -2117,19 +2117,6 @@ end
     @test repr("text/plain", sparse([true true])) == "1×2 SparseArrays.SparseMatrixCSC{Bool,$Int} with 2 stored entries:\n  [1, 1]  =  1\n  [1, 2]  =  1"
 end
 
-@testset "check buffers" for n in 1:3
-    local A
-    rowval = [1,2,3]
-    nzval1  = Int[]
-    nzval2  = [1,1,1]
-    A = SparseMatrixCSC(n, n, [1:n+1;], rowval, nzval1)
-    @test nnz(A) == n
-    @test_throws BoundsError A[n,n]
-    A = SparseMatrixCSC(n, n, [1:n+1;], rowval, nzval2)
-    @test nnz(A) == n
-    @test A      == Matrix(I, n, n)
-end
-
 @testset "reverse search direction if step < 0 #21986" begin
     local A, B
     A = guardseed(1234) do
@@ -2231,8 +2218,6 @@ end
     # count should throw for sparse arrays for which zero(eltype) does not exist
     @test_throws MethodError count(SparseMatrixCSC(2, 2, Int[1, 2, 3], Int[1, 2], Any[true, true]))
     @test_throws MethodError count(SparseVector(2, Int[1], Any[true]))
-    # count should run only over S.nzval[1:nnz(S)], not S.nzval in full
-    @test count(SparseMatrixCSC(2, 2, Int[1, 2, 3], Int[1, 2], Bool[true, true, true])) == 2
 end
 
 @testset "sparse findprev/findnext operations" begin
@@ -2278,15 +2263,6 @@ end
 @testset "operations on Integer subtypes" begin
     s = sparse(UInt8[1, 2, 3], UInt8[1, 2, 3], UInt8[1, 2, 3])
     @test sum(s, dims=2) == reshape([1, 2, 3], 3, 1)
-end
-
-@testset "mapreduce of sparse matrices with trailing elements in nzval #26534" begin
-    B = SparseMatrixCSC{Int,Int}(2, 3,
-        [1, 3, 4, 5],
-        [1, 2, 1, 2, 999, 999, 999, 999],
-        [1, 2, 3, 6, 999, 999, 999, 999]
-    )
-    @test maximum(B) == 6
 end
 
 _length_or_count_or_five(::Colon) = 5
