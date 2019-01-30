@@ -1023,6 +1023,17 @@ function sizehint!(a::Vector, sz::Integer)
 end
 
 """
+    capacity(s)
+
+Returns the allocated buffer capacity of s.
+"""
+function capacity end
+
+function capacity(a::Vector)
+    return ccall(:jl_array_capacity, Csize_t, (Any,), a)
+end
+
+"""
     pop!(collection) -> item
 
 Remove an item in `collection` and return it. If `collection` is an
