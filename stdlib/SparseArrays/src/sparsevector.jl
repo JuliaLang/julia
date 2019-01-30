@@ -700,7 +700,7 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
     SparseVector(n, rowvalB, nzvalB)
 end
 
-Base.copy(a::SubArray{<:Any,<:Any,<:SparseVecOrMat}) = a.parent[a.indices...]
+Base.copy(a::SubArray{<:Any,<:Any,<:Union{SparseVector, SparseMatrixCSC}}) = a.parent[a.indices...]
 
 function findall(x::SparseVector)
     return findall(identity, x)
