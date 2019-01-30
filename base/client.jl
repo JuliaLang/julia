@@ -99,6 +99,29 @@ function display_error(io::IO, er, bt)
     showerror(IOContext(io, :limit => true), er, bt)
     println(io)
 end
+function display_error(io::IO, stack::Vector)
+    nexc = length(stack)
+    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
+    # Display exception stack with the top of the stack first.  This ordering
+    # means that the user doesn't have to scroll up in the REPL to discover the
+    # root cause.
+    for i = nexc:-1:1
+        if nexc != i
+            printstyled(io, "caused by [exception ", i, "]\n", color=:light_black)
+        end
+        exc,bt = stack[i]
+        if bt != nothing
+            # remove REPL-related (or other) frames
+            eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
+            if eval_ind !== nothing
+                bt = bt[1:eval_ind-1]
+            end
+            showerror(io, exc, bt, backtrace=bt!==nothing)
+            println(io)
+        end
+    end
+end
+display_error(stack::Vector) = display_error(stderr, stack)
 display_error(er, bt) = display_error(stderr, er, bt)
 display_error(er) = display_error(er, [])
 
