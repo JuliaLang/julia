@@ -1120,6 +1120,11 @@ JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz)
     }
 }
 
+JL_DLLEXPORT size_t jl_array_capacity(jl_array_t *a)
+{
+    return a->maxsize;
+}
+
 JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary)
 {
     size_t elsz = ary->elsize;

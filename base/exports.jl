@@ -477,6 +477,7 @@ export
     any!,
     any,
     firstindex,
+    capacity,
     collect,
     count,
     delete!,
