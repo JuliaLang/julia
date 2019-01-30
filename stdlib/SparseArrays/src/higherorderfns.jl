@@ -1134,8 +1134,6 @@ function copy(bc::Broadcasted{PromoteToSparse})
     end
 end
 
-Base.copy(a::SubArray{<:Any,<:Any,<:SparseVecOrMat}) = a.parent[a.indices...]
-
 @inline function copyto!(dest::SparseVecOrMat, bc::Broadcasted{PromoteToSparse})
     bcf = flatten(bc)
     broadcast!(bcf.f, dest, map(_sparsifystructured, bcf.args)...)
