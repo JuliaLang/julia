@@ -151,7 +151,7 @@ end
 
 
 throw_overflowerr_binaryop(op, x, y) = (@_noinline_meta;
-    throw(OverflowError(Base.invokelatest(string, x, " ", op, "y", " overflowed for type ", typeof(x)))))
+    throw(OverflowError(Base.invokelatest(string, x, " ", op, " ", y, " overflowed for type ", typeof(x)))))
 
 """
     Base.checked_add(x, y)
