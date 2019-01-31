@@ -583,11 +583,13 @@ end
         repo = "Repo"
         github_regex_test("git@github.com/$user/$repo.git", user, repo)
         github_regex_test("https://github.com/$user/$repo.git", user, repo)
+        github_regex_test("https://username@github.com/$user/$repo.git", user, repo)
         github_regex_test("ssh://git@github.com/$user/$repo.git", user, repo)
         github_regex_test("git@github.com/$user/$repo", user, repo)
         github_regex_test("https://github.com/$user/$repo", user, repo)
+        github_regex_test("https://username@github.com/$user/$repo", user, repo)
         github_regex_test("ssh://git@github.com/$user/$repo", user, repo)
-        @test match(LibGit2.GITHUB_REGEX, "git@notgithub.com/$user/$repo.git") == nothing
+        @test !occursin(LibGit2.GITHUB_REGEX, "git@notgithub.com/$user/$repo.git")
     end
 end
 
