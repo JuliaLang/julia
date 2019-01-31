@@ -139,7 +139,7 @@ if they complete without error, you should be in good shape to start using Julia
 
 You can read about [getting started](https://docs.julialang.org/en/stable/manual/getting-started/) in the manual.
 
-If you are building a Julia package for distribution on Linux, MacOS,
+If you are building a Julia package for distribution on Linux, macOS,
 or Windows, take a look at the detailed notes in
 [DISTRIBUTING.md](https://github.com/JuliaLang/julia/blob/master/DISTRIBUTING.md).
 
@@ -183,7 +183,7 @@ latest version.
    b. To delete existing binaries of `julia` and all its dependencies,
       delete the `./usr` directory _in the source tree_.
 
-3. If you've updated MacOS recently, be sure to run `xcode-select --install` to update the command line tools.
+3. If you've updated macOS recently, be sure to run `xcode-select --install` to update the command line tools.
    Otherwise, you could run into errors for missing headers and libraries, such as
    ```ld: library not found for -lcrt1.10.6.o```.
 
@@ -232,10 +232,10 @@ You can also set `MARCH=native` for a maximum-performance build customized for t
  OpenBLAS build failure | Set one of the following build options in `Make.user` and build again: <ul><li> `OPENBLAS_TARGET_ARCH=BARCELONA` (AMD CPUs) or `OPENBLAS_TARGET_ARCH=NEHALEM` (Intel CPUs)<ul>Set `OPENBLAS_DYNAMIC_ARCH = 0` to disable compiling multiple architectures in a single binary.</ul></li><li> `OPENBLAS_NO_AVX2 = 1` disables AVX2 instructions, allowing OpenBLAS to compile with `OPENBLAS_DYNAMIC_ARCH = 1` using old versions of binutils </li><li> `USE_SYSTEM_BLAS=1` uses the system provided `libblas` <ul><li>Set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` to force the use of the system provided OpenBLAS when multiple BLAS versions are installed. </li></ul></li></ul><p> If you get an error that looks like ```../kernel/x86_64/dgemm_kernel_4x4_haswell.S:1709: Error: no such instruction: `vpermpd $ 0xb1,%ymm0,%ymm0'```, then you need to set `OPENBLAS_DYNAMIC_ARCH = 0` or `OPENBLAS_NO_AVX2 = 1`, or you need a newer version of `binutils` (2.18 or newer). ([Issue #7653](https://github.com/JuliaLang/julia/issues/7653))
 Illegal Instruction error | Check if your CPU supports AVX while your OS does not (e.g. through virtualization, as described in [this issue](https://github.com/JuliaLang/julia/issues/3263)).
 
-### MacOS
+### macOS
 
 You need to have the current Xcode command line utilities installed: run `xcode-select --install` in the terminal.
-You will need to rerun this terminal command after each MacOS update, otherwise you may run into errors involving missing libraries or headers.
+You will need to rerun this terminal command after each macOS update, otherwise you may run into errors involving missing libraries or headers.
 You will also need a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 (and newer) compilers in Homebrew work for building Julia.
 
 If you have set `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` in your `.bashrc` or equivalent, Julia may be unable to find various libraries that come bundled with it. These environment variables need to be unset for Julia to work.
@@ -273,7 +273,7 @@ Julia can be developed in an isolated Vagrant environment. See [the Vagrant READ
 Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
-- **[gcc & g++][gcc]** (>= 4.7) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on MacOS) — compiling and linking C, C++.
+- **[gcc & g++][gcc]** (>= 4.7) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on macOS) — compiling and linking C, C++.
 - **[libatomic][gcc]**          — provided by **[gcc]** and needed to support atomic operations.
 - **[python]** (>=2.7)          — needed to build LLVM.
 - **[gfortran]**                — compiling and linking Fortran libraries.
