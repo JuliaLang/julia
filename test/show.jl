@@ -144,6 +144,9 @@ end
 @test_repr "import A.B.C: a, x, y.z"
 @test_repr "import ..A: a, x, y.z"
 
+@test repr(Expr(:using, :Foo)) == ":(\$(Expr(:using, :Foo)))"
+@test repr(Expr(:using, Expr(:(.), ))) == ":(\$(Expr(:using, :(\$(Expr(:.))))))"
+
 # range syntax
 @test_repr "1:2"
 @test_repr "3:4:5"
@@ -602,6 +605,12 @@ let repr = sprint(show, "text/html", methods(f16580))
     @test occursin("f16580(x, y...; <i>z, w, q...</i>)", repr)
 end
 
+function triangular_methodshow(x::T1, y::T2) where {T2<:Integer, T1<:T2}
+end
+let repr = sprint(show, "text/plain", methods(triangular_methodshow))
+    @test occursin("where {T2<:Integer, T1<:T2}", repr)
+end
+
 if isempty(Base.GIT_VERSION_INFO.commit)
     @test occursin("https://github.com/JuliaLang/julia/tree/v$VERSION/base/special/trig.jl#L", Base.url(which(sin, (Float64,))))
 else
@@ -802,6 +811,13 @@ end
 let repr = sprint(dump, Union{Integer, Float32})
     @test repr == "Union{Integer, Float32}\n" || repr == "Union{Float32, Integer}\n"
 end
+module M30442
+    struct T end
+end
+let repr = sprint(show, Union{String, M30442.T})
+    @test repr == "Union{$(curmod_prefix)M30442.T, String}" ||
+          repr == "Union{String, $(curmod_prefix)M30442.T}"
+end
 let repr = sprint(dump, Ptr{UInt8}(UInt(1)))
     @test repr == "Ptr{UInt8} @$(Base.repr(UInt(1)))\n"
 end
@@ -994,6 +1010,13 @@ end
     # issue #28327
     d = Dict(Pair{Integer,Integer}(1,2)=>Pair{Integer,Integer}(1,2))
     @test showstr(d) == "Dict((1=>2)=>(1=>2))" # correct parenthesis
+
+    # issue #29536
+    d = Dict((+)=>1)
+    @test showstr(d) == "Dict((+)=>1)"
+
+    d = Dict("+"=>1)
+    @test showstr(d) == "Dict(\"+\"=>1)"
 end
 
 @testset "alignment for pairs" begin  # (#22899)
@@ -1408,7 +1431,7 @@ function Base.show(io::IO, x::X28004)
 end
 
 @testset """printing "Any" is not skipped with nested arrays""" begin
-    @test replstr(Union{X28004,Vector}[X28004(Any[X28004(1)])]) ==
+    @test replstr(Union{X28004,Vector}[X28004(Any[X28004(1)])], :compact => true) ==
         "1-element Array{Union{X28004, Array{T,1} where T},1}:\n X(Any[X(1)])"
 end
 
@@ -1416,3 +1439,17 @@ end
 replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color => true),
                                          MIME("text/plain"), x), x)
 @test occursin("\e[", replstrcolor(`curl abc`))
+
+# issue #30303
+@test repr(Symbol("a\$")) == "Symbol(\"a\\\$\")"
+
+# printing of bools and bool arrays
+@testset "Bool" begin
+    @test repr(true) == "true"
+    @test repr(Number[true, false]) == "Number[true, false]"
+    @test repr([true, false]) == "Bool[1, 0]" == repr(BitVector([true, false]))
+    @test_repr "Bool[1, 0]"
+end
+
+# issue #30505
+@test repr(Union{Tuple{Char}, Tuple{Char, Char}}[('a','b')]) == "Union{Tuple{Char}, Tuple{Char,Char}}[('a', 'b')]"

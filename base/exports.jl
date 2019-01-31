@@ -641,6 +641,7 @@ export
 
 # tasks and conditions
     Condition,
+    Event,
     current_task,
     islocked,
     istaskdone,
@@ -682,7 +683,6 @@ export
 # errors
     backtrace,
     catch_backtrace,
-    catch_stack,
     error,
     rethrow,
     retry,

@@ -372,7 +372,7 @@ end
 function setindex!(h::Dict{K,V}, v0, key0) where V where K
     key = convert(K, key0)
     if !isequal(key, key0)
-        throw(ArgumentError("$key0 is not a valid key for type $K"))
+        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
     end
     setindex!(h, v0, key)
 end
@@ -439,7 +439,7 @@ get!(f::Function, collection, key)
 function get!(default::Callable, h::Dict{K,V}, key0) where V where K
     key = convert(K, key0)
     if !isequal(key, key0)
-        throw(ArgumentError("$key0 is not a valid key for type $K"))
+        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
     end
     return get!(default, h, key)
 end
@@ -760,4 +760,5 @@ isempty(t::ImmutableDict) = !isdefined(t, :parent)
 empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
 
 _similar_for(c::Dict, ::Type{Pair{K,V}}, itr, isz) where {K, V} = empty(c, K, V)
-_similar_for(c::AbstractDict, T, itr, isz) = throw(ArgumentError("for AbstractDicts, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))
+_similar_for(c::AbstractDict, ::Type{T}, itr, isz) where {T} =
+    throw(ArgumentError("for AbstractDicts, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))

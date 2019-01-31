@@ -523,7 +523,8 @@ end
     end
     # Check seven-byte sequences, should be invalid
     @test isvalid(String, UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]) == false
-
+    @test isvalid(lstrip("blablabla")) == true
+    @test isvalid(SubString(String(UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]), 1,2)) == false
     # invalid Chars
     @test  isvalid('a')
     @test  isvalid('柒')
@@ -925,6 +926,10 @@ let v = unsafe_wrap(Vector{UInt8}, "abc")
     s = String(v)
     @test_throws BoundsError v[1]
     push!(v, UInt8('x'))
+    @test s == "abc"
+    s = "abc"
+    v = Vector{UInt8}(s)
+    v[1] = 0x40
     @test s == "abc"
 end
 

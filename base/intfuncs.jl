@@ -445,15 +445,18 @@ ndigits0znb(x::Unsigned, b::Integer) = ndigits0znb(-signed(fld(x, -b)), b) + (x 
 ndigits0znb(x::Bool, b::Integer) = x % Int
 
 # The suffix "pb" stands for "positive base"
-# TODO: allow b::Integer
-function ndigits0zpb(x::Base.BitUnsigned, b::Int)
+function ndigits0zpb(x::Integer, b::Integer)
     # precondition: b > 1
     x == 0 && return 0
-    b < 0   && return ndigits0znb(signed(x), b)
-    b == 2  && return sizeof(x)<<3 - leading_zeros(x)
-    b == 8  && return (sizeof(x)<<3 - leading_zeros(x) + 2) ÷ 3
-    b == 16 && return sizeof(x)<<1 - leading_zeros(x)>>2
-    b == 10 && return ndigits0z(x)
+    b = Int(b)
+    x = abs(x)
+    if x isa Base.BitInteger
+        x = unsigned(x)
+        b == 2  && return sizeof(x)<<3 - leading_zeros(x)
+        b == 8  && return (sizeof(x)<<3 - leading_zeros(x) + 2) ÷ 3
+        b == 16 && return sizeof(x)<<1 - leading_zeros(x)>>2
+        b == 10 && return ndigits0z(x)
+    end
 
     d = 0
     while x > typemax(Int)
@@ -471,8 +474,6 @@ function ndigits0zpb(x::Base.BitUnsigned, b::Int)
     return d
 end
 
-ndigits0zpb(x::Base.BitSigned, b::Integer) = ndigits0zpb(unsigned(abs(x)), Int(b))
-ndigits0zpb(x::Base.BitUnsigned, b::Integer) = ndigits0zpb(x, Int(b))
 ndigits0zpb(x::Bool, b::Integer) = x % Int
 
 # The suffix "0z" means that the output is 0 on input zero (cf. #16841)
@@ -536,11 +537,11 @@ julia> ndigits(123, pad=5)
 5
 ```
 """
-ndigits(x::Integer; base::Integer=10, pad::Int=1) = max(pad, ndigits0z(x, base))
+ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, base))
 
 ## integer to string functions ##
 
-function bin(x::Unsigned, pad::Int, neg::Bool)
+function bin(x::Unsigned, pad::Integer, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
     a = StringVector(i)
     while i > neg
@@ -552,7 +553,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
     String(a)
 end
 
-function oct(x::Unsigned, pad::Int, neg::Bool)
+function oct(x::Unsigned, pad::Integer, neg::Bool)
     i = neg + max(pad,div((sizeof(x)<<3)-leading_zeros(x)+2,3))
     a = StringVector(i)
     while i > neg
@@ -564,7 +565,7 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
     String(a)
 end
 
-function dec(x::Unsigned, pad::Int, neg::Bool)
+function dec(x::Unsigned, pad::Integer, neg::Bool)
     i = neg + ndigits(x, base=10, pad=pad)
     a = StringVector(i)
     while i > neg
@@ -576,7 +577,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
     String(a)
 end
 
-function hex(x::Unsigned, pad::Int, neg::Bool)
+function hex(x::Unsigned, pad::Integer, neg::Bool)
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
     a = StringVector(i)
     while i > neg
@@ -592,7 +593,7 @@ end
 const base36digits = ['0':'9';'a':'z']
 const base62digits = ['0':'9';'A':'Z';'a':'z']
 
-function _base(b::Int, x::Integer, pad::Int, neg::Bool)
+function _base(b::Integer, x::Integer, pad::Integer, neg::Bool)
     (x >= 0) | (b < 0) || throw(DomainError(x, "For negative `x`, `b` must be negative."))
     2 <= abs(b) <= 62 || throw(ArgumentError("base must satisfy 2 ≤ abs(base) ≤ 62, got $b"))
     digits = abs(b) <= 36 ? base36digits : base62digits
@@ -643,7 +644,7 @@ function string(n::Integer; base::Integer = 10, pad::Integer = 1)
         (n_positive, neg) = split_sign(n)
         hex(n_positive, pad, neg)
     else
-        _base(Int(base), base > 0 ? unsigned(abs(n)) : convert(Signed, n), Int(pad), (base>0) & (n<0))
+        _base(base, base > 0 ? unsigned(abs(n)) : convert(Signed, n), pad, (base>0) & (n<0))
     end
 end
 

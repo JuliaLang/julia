@@ -64,7 +64,7 @@ isperm(p::Tuple{Int}) = p[1] == 1
 isperm(p::Tuple{Int,Int}) = ((p[1] == 1) & (p[2] == 2)) | ((p[1] == 2) & (p[2] == 1))
 
 function permute!!(a, p::AbstractVector{<:Integer})
-    @assert !has_offset_axes(a, p)
+    require_one_based_indexing(a, p)
     count = 0
     start = 0
     while count < length(a)
@@ -115,7 +115,7 @@ julia> A
 permute!(a, p::AbstractVector) = permute!!(a, copymutable(p))
 
 function invpermute!!(a, p::AbstractVector{<:Integer})
-    @assert !has_offset_axes(a, p)
+    require_one_based_indexing(a, p)
     count = 0
     start = 0
     while count < length(a)
@@ -196,7 +196,7 @@ julia> B[invperm(v)]
 ```
 """
 function invperm(a::AbstractVector)
-    @assert !has_offset_axes(a)
+    require_one_based_indexing(a)
     b = zero(a) # similar vector of zeros
     n = length(a)
     @inbounds for (i, j) in enumerate(a)

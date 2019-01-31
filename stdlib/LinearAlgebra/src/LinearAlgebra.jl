@@ -16,7 +16,7 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     setindex!, show, similar, sin, sincos, sinh, size, size_to_strides, sqrt, StridedReinterpretArray,
     StridedReshapedArray, strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
 using Base: hvcat_fill, IndexLinear, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat, has_offset_axes
+    @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing
 using Base.Broadcast: Broadcasted
 
 export
@@ -437,6 +437,8 @@ function __init__()
         Base.showerror_nostdio(ex,
             "WARNING: Error during initialization of module LinearAlgebra")
     end
+    # register a hook to disable BLAS threading
+    Base.at_disable_library_threading(() -> BLAS.set_num_threads(1))
 end
 
 end # module LinearAlgebra

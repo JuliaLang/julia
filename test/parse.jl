@@ -332,3 +332,9 @@ end
     @test_throws ArgumentError parse(Bool, "2")
     @test_throws ArgumentError parse(Bool, "02")
 end
+
+@testset "issue #30341" begin
+    @test Meta.parse("x .~ y") == Expr(:call, :.~, :x, :y)
+    # Ensure dotting binary doesn't break dotting unary
+    @test Meta.parse(".~[1,2]") == Expr(:call, :.~, Expr(:vect, 1, 2))
+end

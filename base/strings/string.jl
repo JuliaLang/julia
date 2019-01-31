@@ -71,6 +71,8 @@ String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 
 (::Type{Vector{UInt8}})(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(undef, length(s)), s)
+(::Type{Vector{UInt8}})(s::String) = Vector{UInt8}(codeunits(s))
+(::Type{Array{UInt8}})(s::String)  = Vector{UInt8}(codeunits(s))
 
 String(s::CodeUnits{UInt8,String}) = s.s
 
@@ -98,8 +100,9 @@ function cmp(a::String, b::String)
 end
 
 function ==(a::String, b::String)
+    pointer_from_objref(a) == pointer_from_objref(b) && return true
     al = sizeof(a)
-    al == sizeof(b) && 0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, al)
+    return al == sizeof(b) && 0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, al)
 end
 
 typemin(::Type{String}) = ""
@@ -157,9 +160,7 @@ end
 
 ## checking UTF-8 & ACSII validity ##
 
-byte_string_classify(data::Vector{UInt8}) =
-    ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), data, length(data))
-byte_string_classify(s::String) =
+byte_string_classify(s::Union{String,Vector{UInt8}}) =
     ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), s, sizeof(s))
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII

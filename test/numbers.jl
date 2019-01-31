@@ -592,6 +592,17 @@ end
     # test x = Inf
     @test isinf(copysign(1/0,1))
     @test isinf(copysign(1/0,-1))
+
+    # with Unsigned argument
+    @test copysign(Float16(-1), 0x01) === Float16(1)
+    @test copysign(Float16(1), 0x01) === Float16(1)
+    @test copysign(-1.0f0, 0x01) === 1.0f0
+    @test copysign(1.0f0, 0x01) === 1.0f0
+    @test copysign(-1.0, 0x01) === 1.0
+    @test copysign(-1, 0x02) === 1
+    @test copysign(big(-1), 0x02) == 1
+    @test copysign(big(-1.0), 0x02) == 1.0
+    @test copysign(-1//2, 0x01) == 1//2
 end
 
 @testset "isnan/isinf/isfinite" begin
@@ -992,6 +1003,16 @@ end
     @test Int128(-2.0^127) == typemin(Int128)
     @test Float64(UInt128(3.7e19)) == 3.7e19
     @test Float64(UInt128(3.7e30)) == 3.7e30
+end
+@testset "Float16 vs Int comparisons" begin
+    @test Inf16 != typemax(Int16)
+    @test Inf16 != typemax(Int32)
+    @test Inf16 != typemax(Int64)
+    @test Inf16 != typemax(Int128)
+    @test Inf16 != typemax(UInt16)
+    @test Inf16 != typemax(UInt32)
+    @test Inf16 != typemax(UInt64)
+    @test Inf16 != typemax(UInt128)
 end
 @testset "NaN comparisons" begin
     @test !(NaN <= 1)
@@ -1530,6 +1551,18 @@ end
     @test signed(cld(typemax(UInt),typemin(Int)+1))      == -2
     @test signed(cld(typemax(UInt),typemin(Int)>>1))     == -3
     @test signed(cld(typemax(UInt),(typemin(Int)>>1)+1)) == -4
+
+    @testset "UInt128 div/rem" begin
+        uints = [0xadc0db298a7401251f4fa96ba429cb24, 0xd11ef418102afb1f7959b6df48d08044]
+        for x in uints, y in uints, sx in 0:128, sy in 0:127
+            xs = x >> sx
+            ys = y >> sy
+            q, r = @inferred(divrem(xs, ys))::Tuple{UInt128,UInt128}
+            @test xs == q*ys + r && r < ys
+            @test q == @inferred(div(xs, ys))::UInt128
+            @test r == @inferred(rem(xs, ys))::UInt128
+        end
+    end
 
     @testset "exceptions and special cases" begin
         for T in (Int8,Int16,Int32,Int64,Int128, UInt8,UInt16,UInt32,UInt64,UInt128)

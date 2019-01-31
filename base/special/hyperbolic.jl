@@ -13,9 +13,6 @@
 # software is freely granted, provided that this notice
 # is preserved.
 # ====================================================
-_ldexp_exp(x::Float64, i::Int32) = ccall(("__ldexp_exp", libm), Float64, (Float64, Int32), x, i)
-_ldexp_exp(x::Float32, i::Int32) = ccall(("__ldexp_expf",libm), Float32, (Float32, Int32), x, i)
-_ldexp_exp(x::Real, i::Int32) = _ldexp_exp(float(x), i)
 
 # Hyperbolic functions
 # sinh methods

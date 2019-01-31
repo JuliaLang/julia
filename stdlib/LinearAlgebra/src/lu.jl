@@ -9,7 +9,7 @@ struct LU{T,S<:AbstractMatrix{T}} <: Factorization{T}
     info::BlasInt
 
     function LU{T,S}(factors, ipiv, info) where {T,S<:AbstractMatrix{T}}
-        @assert !has_offset_axes(factors)
+        require_one_based_indexing(factors)
         new{T,S}(factors, ipiv, info)
     end
 end
@@ -273,7 +273,7 @@ size(A::LU)    = size(getfield(A, :factors))
 size(A::LU, i) = size(getfield(A, :factors), i)
 
 function ipiv2perm(v::AbstractVector{T}, maxi::Integer) where T
-    @assert !has_offset_axes(v)
+    require_one_based_indexing(v)
     p = T[1:maxi;]
     @inbounds for i in 1:length(v)
         p[i], p[v[i]] = p[v[i]], p[i]
@@ -520,7 +520,7 @@ end
 
 # See dgtts2.f
 function ldiv!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}
-    @assert !has_offset_axes(B)
+    require_one_based_indexing(B)
     n = size(A,1)
     if n != size(B,1)
         throw(DimensionMismatch("matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
@@ -552,7 +552,7 @@ function ldiv!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}
 end
 
 function ldiv!(transA::Transpose{<:Any,<:LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat) where {T,V}
-    @assert !has_offset_axes(B)
+    require_one_based_indexing(B)
     A = transA.parent
     n = size(A,1)
     if n != size(B,1)
@@ -589,7 +589,7 @@ end
 
 # Ac_ldiv_B!(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat) where {T<:Real} = At_ldiv_B!(A,B)
 function ldiv!(adjA::Adjoint{<:Any,LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat) where {T,V}
-    @assert !has_offset_axes(B)
+    require_one_based_indexing(B)
     A = adjA.parent
     n = size(A,1)
     if n != size(B,1)

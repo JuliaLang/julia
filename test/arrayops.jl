@@ -343,20 +343,27 @@ end
     @test B == [0 23 1 24 0; 11 12 13 14 15; 0 21 3 22 0; 0 7 7 0 0]
 
     @test isequal(reshape(reshape(1:27, 3, 3, 3), Val(2))[1,:], [1,  4,  7,  10,  13,  16,  19,  22,  25])
-
+end
+@testset "find(in(b), a)" begin
+    # unsorted inputs
     a = [3, 5, -7, 6]
     b = [4, 6, 2, -7, 1]
-    ind = findall(in(b), a)
-    @test ind == [3,4]
+    @test findall(in(b), a) == [3,4]
     @test findall(in(Int[]), a) == Int[]
     @test findall(in(a), Int[]) == Int[]
+    @test findall(in(b), reshape(a, 2, 2)) == [CartesianIndex(1, 2), CartesianIndex(2, 2)]
 
-    a = [1,2,3,4,5]
+    # sorted inputs
+    a = [1,2,3,4,5,10]
     b = [2,3,4,6]
     @test findall(in(b), a) == [2,3,4]
     @test findall(in(a), b) == [1,2,3]
     @test findall(in(Int[]), a) == Int[]
     @test findall(in(a), Int[]) == Int[]
+    @test findall(in(b), reshape(a, 3, 2)) ==
+        [CartesianIndex(2, 1), CartesianIndex(3, 1), CartesianIndex(1, 2)]
+    @test findall(in(a), reshape(b, 2, 2)) ==
+        [CartesianIndex(1, 1), CartesianIndex(2, 1), CartesianIndex(1, 2)]
 
     a = Vector(1:3:15)
     b = Vector(2:4:10)
@@ -374,7 +381,8 @@ end
 
     @test findall(in([1, 2]), 2) == [1]
     @test findall(in([1, 2]), 3) == []
-
+end
+@testset "setindex! return type" begin
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, Vector{UInt8}, Vector{Int}, Int16, UnitRange{Int}})
     @test length(rt) == 1 && rt[1] === Array{Int32, 3}
 end
@@ -727,6 +735,10 @@ end
     # issue 20564
     @test_throws MethodError repeat(1, 2, 3)
     @test repeat([1, 2], 1, 2, 3) == repeat([1, 2], outer = (1, 2, 3))
+
+    # issue 29020
+    @test repeat(collect(5), outer=(2, 2)) == [5 5;5 5]
+    @test repeat(ones(Int64), inner=(1,2), outer=(2,2)) == [1 1 1 1;1 1 1 1]
 
     # issue 29614
     @test repeat(ones(2, 2), 1, 1, 1) == ones(2, 2, 1)
@@ -1295,6 +1307,12 @@ end
     fill!(A, [1, 2])
     @test A[1] == [1, 2]
     @test A[1] === A[2]
+    # byte arrays
+    @test_throws InexactError fill!(UInt8[0], -1)
+    @test_throws InexactError fill!(UInt8[0], 300)
+    @test_throws InexactError fill!(Int8[0], 200)
+    @test fill!(UInt8[0,0], 200) == [200,200]
+    @test fill!(Int8[0,0], -2) == [-2,-2]
 end
 
 @testset "splice!" begin
@@ -1363,6 +1381,12 @@ end
     @test_throws BoundsError deleteat!(a, Bool[])
     @test_throws BoundsError deleteat!(a, [true])
     @test_throws BoundsError deleteat!(a, falses(11))
+
+    @test_throws BoundsError deleteat!([], 1)
+    @test_throws BoundsError deleteat!([], [1])
+    @test_throws BoundsError deleteat!([], [2])
+    @test deleteat!([], []) == []
+    @test deleteat!([], Bool[]) == []
 end
 
 @testset "comprehensions" begin

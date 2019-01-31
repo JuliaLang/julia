@@ -64,10 +64,8 @@ end
     inet = Sockets.InetAddr(IPv4(127,0,0,1), 1024)
     @test inet.host == ip"127.0.0.1"
     @test inet.port == 1024
-    io = IOBuffer()
-    show(io, inet)
     str = "Sockets.InetAddr{$(isdefined(Main, :IPv4) ? "" : "Sockets.")IPv4}(ip\"127.0.0.1\", 1024)"
-    @test String(take!(io)) == str
+    @test sprint(show, inet) == str
 end
 @testset "InetAddr invalid port" begin
     @test_throws InexactError Sockets.InetAddr(IPv4(127,0,0,1), -1)
@@ -134,23 +132,20 @@ defaultport = rand(2000:4000)
                 @test read(client, String) == "Hello World\n" * ("a1\n"^100)
             end
         end
-        Base.wait(tsk)
+        wait(tsk)
     end
 
     mktempdir() do tmpdir
         socketname = Sys.iswindows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
-        c = Condition()
+        s = listen(socketname)
         tsk = @async begin
-            s = listen(socketname)
-            notify(c)
             sock = accept(s)
-            write(sock,"Hello World\n")
+            write(sock, "Hello World\n")
             close(s)
             close(sock)
         end
-        wait(c)
         @test read(connect(socketname), String) == "Hello World\n"
-        Base.wait(tsk)
+        wait(tsk)
     end
 end
 
@@ -210,7 +205,7 @@ end
     end
     @test fetch(r) === :start
     close(server)
-    Base.wait(tsk)
+    wait(tsk)
 end
 
 # test connecting to a named port
@@ -231,42 +226,34 @@ end
 
 @testset "UDPSocket" begin
     # test show() function for UDPSocket()
-    @test endswith(repr(UDPSocket()), "UDPSocket(init)")
-    a = UDPSocket()
-    b = UDPSocket()
-    bind(a, ip"127.0.0.1", randport)
-    bind(b, ip"127.0.0.1", randport + 1)
+    @test repr(UDPSocket()) ∈ ("Sockets.UDPSocket(init)", "UDPSocket(init)")
 
-    c = Condition()
-    tsk = @async begin
-        @test String(recv(a)) == "Hello World"
-        # Issue 6505
-        tsk2 = @async begin
-            @test String(recv(a)) == "Hello World"
-            notify(c)
-        end
-        send(b, ip"127.0.0.1", randport, "Hello World")
-        Base.wait(tsk2)
-    end
-    send(b, ip"127.0.0.1", randport, "Hello World")
-    wait(c)
-    Base.wait(tsk)
+    let
+        a = UDPSocket()
+        b = UDPSocket()
+        bind(a, ip"127.0.0.1", randport)
+        bind(b, ip"127.0.0.1", randport + 1)
 
-    tsk = @async begin
-        @test begin
-            (addr,data) = recvfrom(a)
-            addr == ip"127.0.0.1" && String(data) == "Hello World"
+        @sync begin
+            # FIXME: check that we received all messages
+            for i = 1:3
+                @async send(b, ip"127.0.0.1", randport, "Hello World")
+                @async String(recv(a)) == "Hello World"
+            end
         end
+
+        tsk = @async send(b, ip"127.0.0.1", randport, "Hello World")
+        (addr, data) = recvfrom(a)
+        @test addr == ip"127.0.0.1" && String(data) == "Hello World"
+        wait(tsk)
+        close(a)
+        close(b)
     end
-    send(b, ip"127.0.0.1", randport, "Hello World")
-    Base.wait(tsk)
 
     @test_throws MethodError bind(UDPSocket(), randport)
 
-    close(a)
-    close(b)
-
     if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+    let
         a = UDPSocket()
         b = UDPSocket()
         bind(a, ip"::1", UInt16(randport))
@@ -279,9 +266,10 @@ end
             end
         end
         send(b, ip"::1", randport, "Hello World")
-        Base.wait(tsk)
+        wait(tsk)
         send(b, ip"::1", randport, "Hello World")
-        Base.wait(tsk)
+        wait(tsk)
+    end
     end
 end
 
@@ -339,7 +327,7 @@ end
                 sleep(0.05)
             end
             length(recvs_check) > 0 && error("timeout")
-            map(Base.wait, recvs)
+            map(wait, recvs)
         end
 
         a, b, c = [create_socket() for i = 1:3]
@@ -385,12 +373,12 @@ end
     # on windows, the kernel fails to do even that
     # causing the `write` call to freeze
     # so we end up forced to do a slightly weaker test here
-    Sys.iswindows() || Base.wait(t)
+    Sys.iswindows() || wait(t)
     @test isopen(P) # without an active uv_reader, P shouldn't be closed yet
     @test !eof(P) # should already know this,
     @test isopen(P) #  so it still shouldn't have an active uv_reader
     @test readuntil(P, 'w') == "llo"
-    Sys.iswindows() && Base.wait(t)
+    Sys.iswindows() && wait(t)
     @test eof(P)
     @test !isopen(P) # eof test should have closed this by now
     close(P) # should be a no-op, just make sure
@@ -402,15 +390,10 @@ end
     # test the method matching connect!(::TCPSocket, ::Sockets.InetAddr{T<:Base.IPAddr})
     let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
         srv = listen(addr)
-        c = Condition()
-        r = @async try; close(accept(srv)); finally; notify(c); end
-        try
-            close(connect(addr))
-            fetch(c)
-        finally
-            close(srv)
-        end
+        r = @async close(accept(srv))
+        close(connect(addr))
         fetch(r)
+        close(srv)
     end
 
     let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
@@ -430,10 +413,29 @@ end
     end
 end
 
+@testset "iswritable" begin
+    let addr = Sockets.InetAddr(ip"127.0.0.1", 4445)
+        srv = listen(addr)
+        s = Sockets.TCPSocket()
+        Sockets.connect!(s, addr)
+        @test iswritable(s)
+        close(s)
+        @test !iswritable(s)
+    end
+end
+
 @testset "TCPServer constructor" begin
     s = Sockets.TCPServer(; delay=false)
     if ccall(:jl_has_so_reuseport, Int32, ()) == 1
         @test 0 == ccall(:jl_tcp_reuseport, Int32, (Ptr{Cvoid},), s.handle)
+    end
+end
+
+@testset "getipaddrs" begin
+    @test getipaddr() in getipaddrs()
+
+    @testset "include lo" begin
+        @test issubset(getipaddrs(), getipaddrs(true))
     end
 end
 

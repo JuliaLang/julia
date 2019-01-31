@@ -1016,6 +1016,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
     for (i = 0; i < sysimg_fvars_max; i++) {
         uintptr_t val = (uintptr_t)&linfos[i];
         uint32_t offset = load_uint32(&val);
+        linfos[i] = NULL;
         if (offset != 0) {
             int specfunc = 1;
             if (offset & ((uintptr_t)1 << (8 * sizeof(uint32_t) - 1))) {

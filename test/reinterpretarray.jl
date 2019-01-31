@@ -171,3 +171,11 @@ end
     @test x1[] === x2[] === Int64(2)
 end
 
+# Test 0-dimensional Arrays
+A = zeros(UInt32)
+B = reinterpret(Int32,A)
+@test size(B) == ()
+@test axes(B) == ()
+B[] = Int32(5)
+@test B[] === Int32(5)
+@test A[] === UInt32(5)

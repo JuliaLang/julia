@@ -145,6 +145,8 @@ end
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}) === Tuple{Vararg{Int}}
 
 @test typejoin(NTuple{3,Tuple}, NTuple{2,T} where T) == Tuple{Any,Any,Vararg{Tuple}}
+@test typejoin(Tuple{Tuple{T, T, Any}} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Vararg{Any}}
+@test typejoin(Tuple{T, T, T} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Any,Any}
 
 # issue #26321
 struct T26321{N,S<:NTuple{N}}
@@ -5507,6 +5509,11 @@ f_isdefined_tv(::T) where {T} = @isdefined T
 f_isdefined_va(::T...) where {T} = @isdefined T
 @test !f_isdefined_va()
 @test f_isdefined_va(1, 2, 3)
+function f_unused_undefined_sp(::T...) where T
+    T
+    return 0
+end
+@test_throws UndefVarError(:T) f_unused_undefined_sp()
 
 # note: the constant `5` here should be > DataType.ninitialized.
 # This tests that there's no crash due to accessing Type.body.layout.
@@ -6428,8 +6435,8 @@ end
 
 # issue #21004
 const PTuple_21004{N,T} = NTuple{N,VecElement{T}}
-@test_throws ArgumentError PTuple_21004(1)
-@test_throws UndefVarError PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
+@test_throws ArgumentError("too few elements for tuple type $PTuple_21004") PTuple_21004(1)
+@test_throws UndefVarError(:T) PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
 
 #issue #22792
 foo_22792(::Type{<:Union{Int8,Int,UInt}}) = 1;
