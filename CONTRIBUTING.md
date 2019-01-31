@@ -12,7 +12,7 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 
 - Contributing code? Be sure to review the [contributor checklist](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#contributor-checklist) for helpful tips on the tools we use to build Julia.
 
-- Library feature requests are generally not accepted on this issue tracker. New libraries should be developed as [packages](https://julialang.github.io/Pkg.jl/latest/creating-packages/). Discuss ideas for libraries at the [Julia Discourse forum](https://discourse.julialang.org). Doing so will often lead to pointers to existing projects and bring together collaborators with common interests.
+- Library feature requests are generally not accepted on this issue tracker. New libraries should be developed as [packages](https://julialang.github.io/Pkg.jl/v1/creating-packages/). Discuss ideas for libraries at the [Julia Discourse forum](https://discourse.julialang.org). Doing so will often lead to pointers to existing projects and bring together collaborators with common interests.
 
 ## Contributor Checklist
 
@@ -56,7 +56,7 @@ A useful bug report filed as a GitHub issue provides information about how to re
 
 ### Contributing a Julia package
 
-Julia has a built-in [package manager](https://docs.julialang.org/en/latest/stdlib/Pkg/) based on `git`. A number of [packages](http://pkg.julialang.org) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The manual provides instructions on [creating Julia packages](https://julialang.github.io/Pkg.jl/v1/creating-packages/).
+Julia has a built-in [package manager](https://julialang.github.io/Pkg.jl/v1/) based on `git`. A number of [packages](http://pkg.julialang.org) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The manual provides instructions on [creating Julia packages](https://julialang.github.io/Pkg.jl/v1/creating-packages/).
 
 For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
 
