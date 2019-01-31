@@ -557,25 +557,25 @@ endif
 endif
 ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z1805.exe && \
+	$(JLDOWNLOAD) https://downloads.sourceforge.net/sevenzip/7z1805.exe && \  #wget was unable to make an SSL connection despite https change
 	7z x -y 7z1805.exe 7z.exe 7z.dll && \
-	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_Leap_42.2 \
+	../contrib/windows/winrpm.sh https://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_Leap_42.2 \  #wget was unable to make an SSL connection despite https change
 		"mingw32-libexpat1 mingw32-zlib1" && \
 	cp usr/i686-w64-mingw32/sys-root/mingw/bin/*.dll .
 else ifeq ($(ARCH),x86_64)
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) 7z1805-x64.msi http://downloads.sourceforge.net/sevenzip/7z1805-x64.msi && \
+	$(JLDOWNLOAD) 7z1805-x64.msi https://downloads.sourceforge.net/sevenzip/7z1805-x64.msi && \  #wget was unable to make an SSL connection despite https change
 	7z x -y 7z1805-x64.msi _7z.exe _7z.dll && \
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
-	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_Leap_42.2 \
+	../contrib/windows/winrpm.sh https://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_Leap_42.2 \  #wget was unable to make an SSL connection despite https change
 		"mingw64-libexpat1 mingw64-zlib1" && \
 	cp usr/x86_64-w64-mingw32/sys-root/mingw/bin/*.dll .
 else
 	$(error no win-extras target for ARCH=$(ARCH))
 endif
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z1805-extra.7z && \
+	$(JLDOWNLOAD) https://downloads.sourceforge.net/sevenzip/7z1805-extra.7z && \  #wget was unable to make an SSL connection despite https change
 	$(JLDOWNLOAD) https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/unsis/nsis-2.46.5-Unicode-setup.exe && \
 	chmod a+x 7z.exe && \
 	chmod a+x 7z.dll && \
