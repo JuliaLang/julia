@@ -59,7 +59,7 @@
   (and (pair? e)
        (or (memq (car e) '(toplevel line module import using export
                                     error incomplete))
-           (and (eq? (car e) 'global) (every symbol? (cdr e))
+           (and (memq (car e) '(global const)) (every symbol? (cdr e))
                 (every (lambda (x) (not (memq x '(true false)))) (cdr e))))))
 
 (define (expand-toplevel-expr e file line)

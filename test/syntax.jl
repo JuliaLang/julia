@@ -1795,3 +1795,8 @@ end
 
 @test_throws ErrorException("syntax: malformed \"using\" statement")  eval(Expr(:using, :X))
 @test_throws ErrorException("syntax: malformed \"import\" statement") eval(Expr(:import, :X))
+
+# eval'ing :const exprs
+eval(Expr(:const, :_var_30877))
+@test !isdefined(@__MODULE__, :_var_30877)
+@test isconst(@__MODULE__, :_var_30877)
