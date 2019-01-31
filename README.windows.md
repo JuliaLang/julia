@@ -185,7 +185,7 @@ $script = <<SCRIPT
 export XC_HOST=x86_64-w64-mingw32
 # Change the following to 32 for 32 bit Julia:
 export BITS=64
-zypper addrepo http://download.opensuse.org/repositories/windows:mingw:win$BITS/openSUSE_Leap_42.2/windows:mingw:win$BITS.repo
+zypper addrepo https://download.opensuse.org/repositories/windows:mingw:win$BITS/openSUSE_Leap_42.2/windows:mingw:win$BITS.repo  #this link no longer works
 zypper --gpg-auto-import-keys refresh
 zypper -n install --no-recommends git make cmake tar wine which curl \
     python python-xml patch gcc-c++ m4 p7zip.i586 libxml2-tools winbind
