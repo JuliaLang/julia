@@ -1896,12 +1896,7 @@
                 ,.(if (eq? aa a)   '() `((= ,aa ,(expand-forms a))))
                 ,.(if (eq? bb b)   '() `((= ,bb ,(expand-forms b))))
                 ,.(if (eq? rr rhs) '() `((= ,rr ,(expand-forms rhs))))
-                (call (top setproperty!) ,aa ,bb
-                      (if (call (top ===) (top setproperty!) (core setfield!))
-                          (call (top convert)
-                                (call (core fieldtype) (call (core typeof) ,aa) ,bb)
-                                ,rr)
-                          ,rr))
+                (call (top setproperty!) ,aa ,bb ,rr)
                 (unnecessary ,rr)))))
          ((tuple)
           ;; multiple assignment
