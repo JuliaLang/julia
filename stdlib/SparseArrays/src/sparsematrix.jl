@@ -23,7 +23,7 @@ struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     function SparseMatrixCSC{Tv,Ti}(m::Integer, n::Integer, colptr::Vector{Ti}, rowval::Vector{Ti},
                                     nzval::Vector{Tv}) where {Tv,Ti<:Integer}
         sparse_check_Ti(m, n, Ti)
-        _goodbuffers(Int(n), colptr, rowval, nzval) || throw(ArgumentError("Illegal buffers for SparseMatrixCSC construction $n $colptr $rowval $nzval"))
+        _goodbuffers(Int(m), Int(n), colptr, rowval, nzval) || throw(ArgumentError("Illegal buffers for SparseMatrixCSC construction $n $colptr $rowval $nzval"))
         new(Int(m), Int(n), colptr, rowval, nzval)
     end
 end
@@ -34,20 +34,24 @@ function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector,
 end
 
 function sparse_check_Ti(m::Integer, n::Integer, Ti::Type)
-        @noinline throwsz(str, lbl, k) =
-            throw(ArgumentError("number of $str ($lbl) must be ≥ 0, got $k"))
-        @noinline throwTi(str, lbl, k) =
-            throw(ArgumentError("$str ($lbl = $k) does not fit in Ti = $(Ti)"))
-        m < 0 && throwsz("rows", 'm', m)
-        n < 0 && throwsz("columns", 'n', n)
-        !isbitstype(Ti) || m ≤ typemax(Ti) || throwTi("number of rows", "m", m)
-        !isbitstype(Ti) || n ≤ typemax(Ti) || throwTi("number of columns", "n", n)
-        !isbitstype(Ti) || n*m+1 ≤ typemax(Ti) || throwTi("maximal nnz+1", "m*n+1", n*m+1)
+    @noinline throwsz(str, lbl, k) =
+        throw(ArgumentError("number of $str ($lbl) must be ≥ 0, got $k"))
+    @noinline throwTi(str, lbl, k) =
+        throw(ArgumentError("$str ($lbl = $k) does not fit in Ti = $(Ti)"))
+    m < 0 && throwsz("rows", 'm', m)
+    n < 0 && throwsz("columns", 'n', n)
+    !isbitstype(Ti) || m ≤ typemax(Ti) || throwTi("number of rows", "m", m)
+    !isbitstype(Ti) || n ≤ typemax(Ti) || throwTi("number of columns", "n", n)
+    !isbitstype(Ti) || n*m+1 ≤ typemax(Ti) || throwTi("maximal nnz+1", "m*n+1", n*m+1)
 end
 
+function _goodbuffers(m, n, colptr, rowval, nzval)
+    (length(colptr) == n + 1 && colptr[end] - 1 == length(rowval) == length(nzval))
+    # stronger check for debugging purposes
+    # && all(issorted(@view rowval[colptr[i]:colptr[i+1]-1]) for i=1:n)
+end
 
-_goodbuffers(n, colptr, rowval, nzval) = length(colptr) == n + 1 && colptr[end] - 1 == length(rowval) == length(nzval)
-_goodbuffers(S::SparseMatrixCSC) = _goodbuffers(S.n, S.colptr, S.rowval, S.nzval)
+_goodbuffers(S::SparseMatrixCSC) = _goodbuffers(S.m, S.n, S.colptr, S.rowval, S.nzval)
 _checkbuffers(S::SparseMatrixCSC) = (@assert _goodbuffers(S); S)
 
 
@@ -3360,73 +3364,6 @@ function tr(A::SparseMatrixCSC{Tv}) where Tv
     return s
 end
 
-
-# Sort all the indices in each column of a CSC sparse matrix
-# sortSparseMatrixCSC!(A, sortindices = :sortcols)        # Sort each column with sort()
-# sortSparseMatrixCSC!(A, sortindices = :doubletranspose) # Sort with a double transpose
-function sortSparseMatrixCSC!(A::SparseMatrixCSC{Tv,Ti}; sortindices::Symbol = :sortcols) where {Tv,Ti}
-    if sortindices == :doubletranspose
-        nB, mB = size(A)
-        B = SparseMatrixCSC(mB, nB, Vector{Ti}(undef, nB+1), similar(A.rowval), similar(A.nzval))
-        transpose!(B, A)
-        transpose!(A, B)
-        return A
-    end
-
-    m, n = size(A)
-    colptr = A.colptr; rowval = A.rowval; nzval = A.nzval
-
-    index = zeros(Ti, m)
-    row = zeros(Ti, m)
-    val = zeros(Tv, m)
-
-    perm = Base.Perm(Base.ord(isless, identity, false, Base.Order.Forward), row)
-
-    @inbounds for i = 1:n
-        nzr = nzrange(A, i)
-        numrows = length(nzr)
-        if numrows <= 1
-            continue
-        elseif numrows == 2
-            f = first(nzr)
-            s = f+1
-            if rowval[f] > rowval[s]
-                rowval[f], rowval[s] = rowval[s], rowval[f]
-                nzval[f],  nzval[s]  = nzval[s],  nzval[f]
-            end
-            continue
-        end
-        resize!(row, numrows)
-        resize!(index, numrows)
-
-        jj = 1
-        @simd for j = nzr
-            row[jj] = rowval[j]
-            val[jj] = nzval[j]
-            jj += 1
-        end
-
-        if numrows <= 16
-            alg = Base.Sort.InsertionSort
-        else
-            alg = Base.Sort.QuickSort
-        end
-
-        # Reset permutation
-        index .= 1:numrows
-
-        sort!(index, alg, perm)
-
-        jj = 1
-        @simd for j = nzr
-            rowval[j] = row[index[jj]]
-            nzval[j] = val[index[jj]]
-            jj += 1
-        end
-    end
-
-    return A
-end
 
 ## rotations
 
