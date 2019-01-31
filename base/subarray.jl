@@ -68,6 +68,8 @@ similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 
 sizeof(V::SubArray) = length(V) * sizeof(eltype(V))
 
+copy(V::SubArray) = V.parent[V.indices...]
+
 parent(V::SubArray) = V.parent
 parentindices(V::SubArray) = V.indices
 
