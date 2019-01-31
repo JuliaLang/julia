@@ -26,7 +26,8 @@ jhbuild bootstrap --skip=libiconv --ignore-system
 jhbuild build
 
 cd ~/gtk/source
-curl -O http://ftp.gnome.org/pub/gnome/sources/gtk-mac-bundler/0.6/gtk-mac-bundler-0.6.1.tar.bz2
+#the link below has been changed from http to https. Despite that, wget failed to establish an SSL connection. The change might have been innefective
+curl -O https://ftp.gnome.org/pub/gnome/sources/gtk-mac-bundler/0.6/gtk-mac-bundler-0.6.1.tar.bz2 
 tar jxvf gtk-mac-bundler-0.6.1.tar.bz2
 cd gtk-mac-bundler-0.6.1
 make install
