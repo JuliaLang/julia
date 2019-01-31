@@ -809,16 +809,15 @@ function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     end
     rowval = Vector{Ti}(undef, nnz)
     nzval = Vector{Tv}(undef, nnz)
-    A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = max(k+1,1) : n
         c1 = S.colptr[col]
-        for c2 = A.colptr[col] : A.colptr[col+1]-1
-            A.rowval[c2] = S.rowval[c1]
-            A.nzval[c2] = S.nzval[c1]
+        for c2 = colptr[col] : colptr[col+1]-1
+            rowval[c2] = S.rowval[c1]
+            nzval[c2] = S.nzval[c1]
             c1 += 1
         end
     end
-    A
+    SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
 function tril(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
@@ -839,17 +838,16 @@ function tril(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     end
     rowval = Vector{Ti}(undef, nnz)
     nzval = Vector{Tv}(undef, nnz)
-    A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = 1 : min(n, m+k)
         c1 = S.colptr[col+1]-1
-        l2 = A.colptr[col+1]-1
-        for c2 = 0 : l2 - A.colptr[col]
-            A.rowval[l2 - c2] = S.rowval[c1]
-            A.nzval[l2 - c2] = S.nzval[c1]
+        l2 = colptr[col+1]-1
+        for c2 = 0 : l2 - colptr[col]
+            rowval[l2 - c2] = S.rowval[c1]
+            nzval[l2 - c2] = S.nzval[c1]
             c1 -= 1
         end
     end
-    A
+    SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
 ## diff
