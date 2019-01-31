@@ -1015,7 +1015,6 @@ function Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}(A::Sparse{Tv}) where
     ishermitian(A) || throw(ArgumentError("matrix is not symmetric"))
     args = _extract_args(s)
     if s.sorted == 0
-        @assert false
         sortBuffers!(args...)
         return _trim_nz_builder!(args...)
     end
