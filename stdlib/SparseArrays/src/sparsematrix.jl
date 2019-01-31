@@ -376,12 +376,19 @@ SparseMatrixCSC(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 SparseMatrixCSC{Tv}(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 function SparseMatrixCSC{Tv,Ti}(M::AbstractMatrix) where {Tv,Ti}
     require_one_based_indexing(M)
-    I = findall(x -> x != 0, M)
-    eltypeTiI = Ti[i[1] for i in I]
-    eltypeTiJ = Ti[i[2] for i in I]
-    eltypeTvV = Tv[M[i] for i in I]
-    return sparse_IJ_sorted!(eltypeTiI, eltypeTiJ, eltypeTvV, size(M)...)
+    I = Ti[]
+    V = Tv[]
+    i = 0
+    for v in M
+        i += 1
+        if !iszero(v)
+            push!(I, i)
+            push!(V, v)
+        end
+    end
+    return sparse_sortedlinearindices!(I, V, size(M)...)
 end
+
 function SparseMatrixCSC{Tv,Ti}(M::StridedMatrix) where {Tv,Ti}
     nz = count(t -> t != 0, M)
     colptr = zeros(Ti, size(M, 2) + 1)
@@ -458,56 +465,6 @@ julia> sparse(A)
 sparse(A::AbstractMatrix{Tv}) where {Tv} = convert(SparseMatrixCSC{Tv,Int}, A)
 
 sparse(S::SparseMatrixCSC) = copy(S)
-
-sparse_IJ_sorted!(I,J,V,m,n) = sparse_IJ_sorted!(I,J,V,m,n,+)
-
-sparse_IJ_sorted!(I,J,V::AbstractVector{Bool},m,n) = sparse_IJ_sorted!(I,J,V,m,n,|)
-
-function sparse_IJ_sorted!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
-                           V::AbstractVector,
-                           m::Integer, n::Integer, combine::Function) where Ti<:Integer
-    require_one_based_indexing(I, J, V)
-    m = m < 0 ? 0 : m
-    n = n < 0 ? 0 : n
-    if isempty(V); return spzeros(eltype(V),Ti,m,n); end
-
-    cols = zeros(Ti, n+1)
-    cols[1] = 1  # For cumsum purposes
-    cols[J[1] + 1] = 1
-
-    lastdup = 1
-    ndups = 0
-    I_lastdup = I[1]
-    J_lastdup = J[1]
-    L = length(I)
-
-    @inbounds for k=2:L
-        if I[k] == I_lastdup && J[k] == J_lastdup
-            V[lastdup] = combine(V[lastdup], V[k])
-            ndups += 1
-        else
-            cols[J[k] + 1] += 1
-            lastdup = k-ndups
-            I_lastdup = I[k]
-            J_lastdup = J[k]
-            if ndups != 0
-                I[lastdup] = I_lastdup
-                V[lastdup] = V[k]
-            end
-        end
-    end
-
-    colptr = cumsum!(similar(cols), cols)
-
-    # Allow up to 20% slack
-    if ndups > 0.2*L
-        numnz = L-ndups
-        deleteat!(I, (numnz+1):L)
-        deleteat!(V, (numnz+1):length(V))
-    end
-
-    return SparseMatrixCSC(m, n, colptr, I, V)
-end
 
 """
     sparse(I, J, V,[ m, n, combine])
@@ -1386,23 +1343,20 @@ function _sparse_findprevnz(m::SparseMatrixCSC, i::Integer)
 end
 
 
-function _sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat, rfn)
-    m, n = Int(m), Int(n)
-    (m < 0 || n < 0) && throw(ArgumentError("invalid Array dimensions"))
-    0 <= density <= 1 || throw(ArgumentError("$density not in [0,1]"))
-    j, colm  = 1, 0
-    rowval = randsubseq(r, 1:(m*n), density)
-    nnz = length(rowval)
-    colptr = Vector{Int}(undef, n + 1)
+function sparse_sortedlinearindices!(I::Vector{Ti}, V::Vector, m::Int, n::Int) where Ti
+    length(I) == length(V) || throw(ArgumentError("I and V should have the same length"))
+    nnz = length(V)
+    colptr = Vector{Ti}(undef, n + 1)
+    j, colm = 1, 0
     @inbounds for col = 1:n+1
         colptr[col] = j
-        while j <= nnz && (rowval[j] -= colm) <= m
+        while j <= nnz && (I[j] -= colm) <= m
             j += 1
         end
-        j <= nnz && (rowval[j] += colm)
+        j <= nnz && (I[j] += colm)
         colm += m
     end
-    return SparseMatrixCSC(m, n, colptr, rowval, rfn(nnz))
+    return SparseMatrixCSC(m, n, colptr, I, V)
 end
 
 """
@@ -1426,23 +1380,15 @@ julia> sprand(Float64, 3, 0.75)
   [3]  =  0.298614
 ```
 """
-function sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat,
-                rfn::Function, ::Type{T}=eltype(rfn(r,1))) where T
-    m,n = Int(m), Int(n)
-    N = m*n
-    N == 0 && return spzeros(T,m,n)
-    N == 1 && return rand(r) <= density ? sparse([1], [1], rfn(r,1)) : spzeros(T,1,1)
-    _sprand(r,m,n,density,i->rfn(r,i))
+function sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat, rfn::Function, ::Type{T} = eltype(rfn(r, 1))) where T
+    m, n = Int(m), Int(n)
+    (m < 0 || n < 0) && throw(ArgumentError("invalid Array dimensions"))
+    0 <= density <= 1 || throw(ArgumentError("$density not in [0,1]"))
+    I = randsubseq(r, 1:(m*n), density)
+    return sparse_sortedlinearindices!(I, convert(Vector{T}, rfn(r,length(I))), m, n)
 end
 
-function sprand(m::Integer, n::Integer, density::AbstractFloat,
-                rfn::Function, ::Type{T}=eltype(rfn(1))) where T
-    m,n = Int(m), Int(n)
-    N = m*n
-    N == 0 && return spzeros(T,m,n)
-    N == 1 && return rand() <= density ? sparse([1], [1], rfn(1)) : spzeros(T,1,1)
-    _sprand(GLOBAL_RNG,m,n,density,rfn)
-end
+sprand(m::Integer, n::Integer, density::AbstractFloat, rfn::Function, ::Type{T} = eltype(rfn(1))) where T = sprand(GLOBAL_RNG,m,n,density,(r, i) -> rfn(i))
 
 truebools(r::AbstractRNG, n::Integer) = fill(true, n)
 

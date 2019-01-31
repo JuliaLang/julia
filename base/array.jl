@@ -151,7 +151,7 @@ function vect(X...)
     return copyto!(Vector{T}(undef, length(X)), X)
 end
 
-size(a::Array, d) = arraysize(a, d)
+size(a::Array, d::Integer) = arraysize(a, convert(Int, d))
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
 size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val(N)))
@@ -291,7 +291,7 @@ copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, leng
 function fill!(dest::Array{T}, x) where T
     @_noinline_meta
     xT = convert(T, x)
-    for i in 1:length(dest)
+    for i in eachindex(dest)
         @inbounds dest[i] = xT
     end
     return dest
@@ -363,16 +363,7 @@ end
 getindex(::Type{Any}) = Vector{Any}()
 
 function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
-    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), a, x, length(a))
-    return a
-end
-
-function fill!(a::Array{T}, x) where T<:Union{Integer,AbstractFloat}
-    @_noinline_meta
-    xT = convert(T, x)
-    for i in eachindex(a)
-        @inbounds a[i] = xT
-    end
+    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), a, convert(eltype(a), x), length(a))
     return a
 end
 
@@ -401,8 +392,8 @@ dims)` will return an array filled with the result of evaluating `Foo()` once.
 """
 fill(v, dims::DimOrInd...) = fill(v, dims)
 fill(v, dims::NTuple{N, Union{Integer, OneTo}}) where {N} = fill(v, map(to_dim, dims))
-fill(v, dims::NTuple{N, Integer}) where {N} = fill!(Array{typeof(v),N}(undef, dims), v)
-fill(v, dims::Tuple{}) = fill!(Array{typeof(v),0}(undef, dims), v)
+fill(v, dims::NTuple{N, Integer}) where {N} = (a=Array{typeof(v),N}(undef, dims); fill!(a, v); a)
+fill(v, dims::Tuple{}) = (a=Array{typeof(v),0}(undef, dims); fill!(a, v); a)
 
 """
     zeros([T=Float64,] dims...)
@@ -450,8 +441,16 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
         $fname(::Type{T}, dims::DimOrInd...) where {T} = $fname(T, dims)
         $fname(dims::Tuple{Vararg{DimOrInd}}) = $fname(Float64, dims)
         $fname(::Type{T}, dims::NTuple{N, Union{Integer, OneTo}}) where {T,N} = $fname(T, map(to_dim, dims))
-        $fname(::Type{T}, dims::NTuple{N, Integer}) where {T,N} = fill!(Array{T,N}(undef, map(to_dim, dims)), $felt(T))
-        $fname(::Type{T}, dims::Tuple{}) where {T} = fill!(Array{T}(undef), $felt(T))
+        function $fname(::Type{T}, dims::NTuple{N, Integer}) where {T,N}
+            a = Array{T,N}(undef, dims)
+            fill!(a, $felt(T))
+            return a
+        end
+        function $fname(::Type{T}, dims::Tuple{}) where {T}
+            a = Array{T}(undef)
+            fill!(a, $felt(T))
+            return a
+        end
     end
 end
 
@@ -1740,6 +1739,13 @@ end
 # Needed for bootstrap, and allows defining only an optimized findnext method
 findfirst(testf::Function, A::Union{AbstractArray, AbstractString}) =
     findnext(testf, A, first(keys(A)))
+
+function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
+    first(r) <= p.x <= last(r) || return nothing
+    d = convert(S, p.x - first(r))
+    iszero(d % step(r)) || return nothing
+    return d ÷ step(r) + 1
+end
 
 """
     findprev(A, i)

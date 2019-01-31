@@ -301,6 +301,8 @@ julia> rand(Int, 2)
  1339893410598768192
  1575814717733606317
 
+julia> using Random
+
 julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
 1=>2
 ```

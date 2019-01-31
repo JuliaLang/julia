@@ -6,6 +6,7 @@ New language features
 
 * The `extrema` function now accepts a function argument in the same manner as `minimum` and
   `maximum` ([#30323]).
+* `hasmethod` can now check for matching keyword argument names ([#30712]).
 
 Multi-threading changes
 -----------------------
@@ -33,6 +34,7 @@ Standard library changes
 #### LinearAlgebra
 
 * Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
+* `UniformScaling` instances are now callable such that e.g. `I(3)` will produce a `Diagonal` matrix ([#30298]).
 
 #### SparseArrays
 
@@ -56,6 +58,7 @@ External dependencies
 * libgit2 has been updated to v0.27.7 ([#30584]).
 * OpenBLAS has been updated to v0.3.5 ([#30583]).
 * MbedTLS has been updated to v2.16.0 ([#30618]).
+* libunwind has been updated to v1.3.1 ([#30724]).
 
 Deprecated or removed
 ---------------------

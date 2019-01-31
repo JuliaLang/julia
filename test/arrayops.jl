@@ -1307,6 +1307,12 @@ end
     fill!(A, [1, 2])
     @test A[1] == [1, 2]
     @test A[1] === A[2]
+    # byte arrays
+    @test_throws InexactError fill!(UInt8[0], -1)
+    @test_throws InexactError fill!(UInt8[0], 300)
+    @test_throws InexactError fill!(Int8[0], 200)
+    @test fill!(UInt8[0,0], 200) == [200,200]
+    @test fill!(Int8[0,0], -2) == [-2,-2]
 end
 
 @testset "splice!" begin

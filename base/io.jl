@@ -176,6 +176,19 @@ julia> write(io, "Sometimes those members") + write(io, " write documentation.")
 julia> String(take!(io))
 "Sometimes those members write documentation."
 ```
+User-defined plain-data types without `write` methods can be written when wrapped in a `Ref`:
+```jldoctest
+julia> struct MyStruct; x::Float64; end
+
+julia> io = IOBuffer()
+IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=Inf, ptr=1, mark=-1)
+
+julia> write(io, Ref(MyStruct(42.0)))
+8
+
+julia> seekstart(io); read!(io, Ref(MyStruct(NaN)))
+Base.RefValue{MyStruct}(MyStruct(42.0))
+```
 """
 function write end
 

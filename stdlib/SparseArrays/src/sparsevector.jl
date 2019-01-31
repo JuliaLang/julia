@@ -470,6 +470,8 @@ function copyto!(A::SparseVector, B::SparseVector)
     return A
 end
 
+copyto!(A::SparseVector, B::AbstractVector) = copyto!(A, sparsevec(B))
+
 function copyto!(A::SparseVector, B::SparseMatrixCSC)
     prep_sparsevec_copy_dest!(A, length(B), nnz(B))
 
@@ -697,6 +699,8 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
     end
     SparseVector(n, rowvalB, nzvalB)
 end
+
+Base.copy(a::SubArray{<:Any,<:Any,<:Union{SparseVector, SparseMatrixCSC}}) = a.parent[a.indices...]
 
 function findall(x::SparseVector)
     return findall(identity, x)
