@@ -428,4 +428,9 @@ end
     end
 end
 
+@testset "#30832" begin
+    @test Dates.toms(Dates.Second(1) + Dates.Nanosecond(1)) == 1e6
+    @test Dates.tons(Dates.Second(1) + Dates.Nanosecond(1)) == 1e9 + 1
+end
+
 end
