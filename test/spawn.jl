@@ -20,7 +20,11 @@ sleepcmd = `sleep`
 lscmd = `ls`
 havebb = false
 if Sys.iswindows()
-    busybox = download("http://frippery.org/files/busybox/busybox.exe", joinpath(tempdir(), "busybox.exe"))
+    busybox = download("https://frippery.org/files/busybox/busybox-w32-FRP-2910-ge92596d0b.exe", joinpath(tempdir(), "busybox.exe"))
+    correct_hash = "945bc09e08efe6df1c5e7a51ff450fc7e53edac4d8c2288e16a49e7a5ef394bc"
+    if !(bytes2hex(sha256("busybox")) == correct_hash)
+        error("The hash values for busybox did not match (suspicious program)")
+    end
     havebb = try # use busybox-w32 on windows, if available
         success(`$busybox`)
         true
