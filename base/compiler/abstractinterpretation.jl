@@ -446,7 +446,7 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
         return Any[Vararg{Any}]
     end
     iteratef = getfield(Main.Base, :iterate)
-    stateordonet = abstract_call(iteratef, (), Any[Const(iteratef), itertype], vtypes, sv)
+    stateordonet = abstract_call(iteratef, nothing, Any[Const(iteratef), itertype], vtypes, sv)
     # Return Bottom if this is not an iterator.
     # WARNING: Changes to the iteration protocol must be reflected here,
     # this is not just an optimization.
@@ -465,7 +465,7 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
         valtype = stateordonet.parameters[1]
         statetype = stateordonet.parameters[2]
         push!(ret, valtype)
-        stateordonet = abstract_call(iteratef, (), Any[Const(iteratef), itertype, statetype], vtypes, sv)
+        stateordonet = abstract_call(iteratef, nothing, Any[Const(iteratef), itertype, statetype], vtypes, sv)
         stateordonet = widenconst(stateordonet)
     end
     if stateordonet === Nothing
@@ -482,7 +482,7 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
         end
         valtype = tmerge(valtype, nounion.parameters[1])
         statetype = tmerge(statetype, nounion.parameters[2])
-        stateordonet = abstract_call(iteratef, (), Any[Const(iteratef), itertype, statetype], vtypes, sv)
+        stateordonet = abstract_call(iteratef, nothing, Any[Const(iteratef), itertype, statetype], vtypes, sv)
         stateordonet = widenconst(stateordonet)
     end
     push!(ret, Vararg{valtype})
@@ -524,9 +524,9 @@ function abstract_apply(@nospecialize(aft), aargtypes::Vector{Any}, vtypes::VarT
     end
     for ct in ctypes
         if isa(aft, Const)
-            rt = abstract_call(aft.val, (), ct, vtypes, sv, max_methods)
+            rt = abstract_call(aft.val, nothing, ct, vtypes, sv, max_methods)
         elseif isconstType(aft)
-            rt = abstract_call(aft.parameters[1], (), ct, vtypes, sv, max_methods)
+            rt = abstract_call(aft.parameters[1], nothing, ct, vtypes, sv, max_methods)
         else
             astype = argtypes_to_type(ct)
             rt = abstract_call_gf_by_type(nothing, ct, astype, sv, max_methods)
@@ -570,7 +570,7 @@ function pure_eval_call(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(a
     end
 end
 
-function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState, max_methods = sv.params.MAX_METHODS)
+function abstract_call(@nospecialize(f), fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState, max_methods = sv.params.MAX_METHODS)
     if f === _apply
         return abstract_apply(argtypes[2], argtypes[3:end], vtypes, sv, max_methods)
     end
@@ -728,7 +728,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         return Any
     elseif is_return_type(f)
         rt_rt = return_type_tfunc(argtypes, vtypes, sv)
-        if rt_rt !== NOT_FOUND
+        if rt_rt !== nothing
             return rt_rt
         end
     elseif length(argtypes) == 2 && istopfunction(f, :!)
@@ -753,7 +753,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         if length(fargs) == 3
             fargs = Any[<:, fargs[3], fargs[2]]
         else
-            fargs = ()
+            fargs = nothing
         end
         argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
         rty = abstract_call(<:, fargs, argtypes, vtypes, sv)
@@ -785,7 +785,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
 end
 
 # wrapper around `abstract_call` for first computing if `f` is available
-function abstract_eval_call(fargs::Union{Tuple{},Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
+function abstract_eval_call(fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
     #print("call ", e.args[1], argtypes, "\n\n")
     for x in argtypes
         x === Bottom && return Bottom
@@ -859,7 +859,7 @@ function abstract_eval_cfunction(e::Expr, vtypes::VarTable, sv::InferenceState)
     # this may be the wrong world for the call,
     # but some of the result is likely to be valid anyways
     # and that may help generate better codegen
-    abstract_eval_call((), at, vtypes, sv)
+    abstract_eval_call(nothing, at, vtypes, sv)
     nothing
 end
 
@@ -1035,7 +1035,7 @@ function typeinf_local(frame::InferenceState)
             delete!(W, pc)
             frame.currpc = pc
             frame.cur_hand = frame.handler_at[pc]
-            frame.stmt_edges[pc] === () || empty!(frame.stmt_edges[pc])
+            frame.stmt_edges[pc] === nothing || empty!(frame.stmt_edges[pc])
             stmt = frame.src.code[pc]
             changes = s[pc]::VarTable
             t = nothing
@@ -1105,9 +1105,8 @@ function typeinf_local(frame::InferenceState)
                 end
             elseif hd === :enter
                 l = stmt.args[1]::Int
-                frame.cur_hand = (l, frame.cur_hand)
+                frame.cur_hand = Pair{Any,Any}(l, frame.cur_hand)
                 # propagate type info to exception handler
-                l = frame.cur_hand[1]
                 old = s[l]
                 new = s[pc]::Array{Any,1}
                 newstate_catch = stupdate!(old, new)
@@ -1122,7 +1121,7 @@ function typeinf_local(frame::InferenceState)
                 frame.handler_at[l] = frame.cur_hand
             elseif hd === :leave
                 for i = 1:((stmt.args[1])::Int)
-                    frame.cur_hand = frame.cur_hand[2]
+                    frame.cur_hand = (frame.cur_hand::Pair{Any,Any}).second
                 end
             else
                 if hd === :(=)
@@ -1148,11 +1147,11 @@ function typeinf_local(frame::InferenceState)
                         frame.src.ssavaluetypes[pc] = t
                     end
                 end
-                if frame.cur_hand !== () && isa(changes, StateUpdate)
+                if frame.cur_hand !== nothing && isa(changes, StateUpdate)
                     # propagate new type info to exception handler
                     # the handling for Expr(:enter) propagates all changes from before the try/catch
                     # so this only needs to propagate any changes
-                    l = frame.cur_hand[1]
+                    l = frame.cur_hand.first::Int
                     if stupdate1!(s[l]::VarTable, changes::StateUpdate) !== false
                         if l < frame.pc´´
                             frame.pc´´ = l

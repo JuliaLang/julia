@@ -18,7 +18,7 @@ mutable struct OptimizationState
     const_api::Bool
     function OptimizationState(frame::InferenceState)
         s_edges = frame.stmt_edges[1]
-        if s_edges === ()
+        if s_edges === nothing
             s_edges = []
             frame.stmt_edges[1] = s_edges
         end
