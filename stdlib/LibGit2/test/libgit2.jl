@@ -574,7 +574,7 @@ end
     @testset "GITHUB_REGEX" begin
         github_regex_test = function(url, user, repo)
             m = match(LibGit2.GITHUB_REGEX, url)
-            @test m != nothing
+            @test m !== nothing
             @test m[1] == "$user/$repo"
             @test m[2] == user
             @test m[3] == repo
