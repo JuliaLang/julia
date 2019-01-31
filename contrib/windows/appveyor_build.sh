@@ -156,7 +156,7 @@ if [ -z "`which make 2>/dev/null`" ]; then
   f="/make/make-3.81-2/make-3.81-2-msys-1.0.11-bin.tar"
   if ! [ -e `basename $f.lzma` ]; then
     echo "Downloading `basename $f`"
-    $curlflags -O http://sourceforge.net/projects/mingw/files/MSYS/Base$f.lzma
+    $curlflags -O https://sourceforge.net/projects/mingw/files/MSYS/Base$f.lzma
   fi
   $SEVENZIP x -y `basename $f.lzma` >> get-deps.log
   tar -xf `basename $f`
