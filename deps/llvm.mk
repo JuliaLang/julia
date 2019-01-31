@@ -2,7 +2,7 @@
 include $(SRCDIR)/llvm-ver.make
 
 ifneq ($(USE_BINARYBUILDER_LLVM), 1)
-LLVM_GIT_URL_BASE ?= http://llvm.org/git
+LLVM_GIT_URL_BASE ?= https://llvm.org/git
 LLVM_GIT_URL_LLVM ?= $(LLVM_GIT_URL_BASE)/llvm.git
 LLVM_GIT_URL_CLANG ?= $(LLVM_GIT_URL_BASE)/clang.git
 LLVM_GIT_URL_COMPILER_RT ?= $(LLVM_GIT_URL_BASE)/compiler-rt.git
@@ -164,7 +164,7 @@ ifeq ($(BUILD_LLDB),0)
 LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
 endif
 
-LLVM_SRC_URL := http://releases.llvm.org/$(LLVM_VER)
+LLVM_SRC_URL := https://releases.llvm.org/$(LLVM_VER)
 
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR): | $(SRCCACHE)
