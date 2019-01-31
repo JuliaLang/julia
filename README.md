@@ -42,7 +42,7 @@ New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Youtube**](https://www.youtube.com/channel/UC9IuUwwE2xdjQUT_LMLONoA)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
-- [**Meetup**](http://julia.meetup.com/)
+- [**Meetup**](https://julia.meetup.com/)
 
 ## Currently Supported Platforms
 
