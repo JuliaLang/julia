@@ -1812,3 +1812,23 @@ end
 eval(Expr(:const, :_var_30877))
 @test !isdefined(@__MODULE__, :_var_30877)
 @test isconst(@__MODULE__, :_var_30877)
+
+# anonymous kw function in value position at top level
+f30926 = function (;k=0)
+    k
+end
+@test f30926(k=2) == 2
+
+if false
+elseif false
+    g30926(x) = 1
+end
+@test !isdefined(@__MODULE__, :g30926)
+
+@testset "closure conversion in testsets" begin
+    p = (2, 3, 4)
+    @test p == (2, 3, 4)
+    identity(p)
+    allocs = @allocated identity(p)
+    @test allocs == 0
+end
