@@ -9,8 +9,7 @@ import Base: map, map!, broadcast, copy, copyto!
 using Base: front, tail, to_shape
 using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseVector,
                       AbstractSparseMatrix, AbstractSparseArray, indtype, nnz, nzrange,
-                      SparseVectorUnion, AdjOrTransSparseVectorUnion, nonzeroinds, nonzeros,
-                      spzeros
+                      SparseVectorUnion, AdjOrTransSparseVectorUnion, nonzeroinds, nonzeros
 using Base.Broadcast: BroadcastStyle, Broadcasted, flatten
 using LinearAlgebra
 
@@ -128,29 +127,25 @@ const SpBroadcasted2{Style<:SPVM,Axes,F,Args<:Tuple{SparseVecOrMat,SparseVecOrMa
 @inline setcolptr!(A::SparseVector, j, val) = val
 @inline setcolptr!(A::SparseMatrixCSC, j, val) = A.colptr[j] = val
 
-function expandstorage!(A::SparseVecOrMat, maxstored)
-    if _capacity(A) < maxstored
-        sizehint!(storedinds(A), maxstored)
-        sizehint!(storedvals(A), maxstored)
-    end
+function trimstorage!(A::SparseVecOrMat, maxstored)
+    resize!(storedinds(A), maxstored)
+    resize!(storedvals(A), maxstored)
     return maxstored
 end
 
-function _reset!(C::SparseVector)
-    empty!(C.nzind)
-    empty!(C.nzval)
-end
-
-function _reset!(C::SparseMatrixCSC)
-    fill!(C.colptr, 1)
-    empty!(C.rowval)
-    empty!(C.nzval)
+function expandstorage!(A::SparseVecOrMat, maxstored = capacity(storedinds(A)))
+    if length(storedinds(A)) < maxstored
+        resize!(storedinds(A), maxstored)
+        resize!(storedvals(A), maxstored)
+    end
+    return maxstored
 end
 
 _checkbuffers(S::SparseMatrixCSC) = (@assert length(S.colptr) == S.n + 1 && S.colptr[end] - 1 == length(S.rowval) == length(S.nzval); S)
 _checkbuffers(S::SparseVector) = (@assert length(S.nzval) == length(S.nzind); S)
 
 _capacity(A::SparseVecOrMat) = capacity(storedinds(A))
+
 
 # (2) map[!] entry points
 map(f::Tf, A::SparseVector) where {Tf} = _noshapecheck_map(f, A)
@@ -183,11 +178,12 @@ end
 copy(bc::SpBroadcasted1) = _noshapecheck_map(bc.f, bc.args[1])
 
 @inline function copyto!(C::SparseVecOrMat, bc::Broadcasted0{Nothing})
-    isempty(C) && return _checkbuffers(C)
+    isempty(C) && return _finishempty!(C)
     f = bc.f
     fofnoargs = f()
     if _iszero(fofnoargs) # f() is zero, so empty C
-        _reset!(C)
+        trimstorage!(C, 0)
+        _finishempty!(C)
     else # f() is nonzero, so densify C and fill with independent calls to f()
         _densestructure!(C)
         storedvals(C)[1] = fofnoargs
@@ -241,8 +237,7 @@ _maxnnzfrom(shape::NTuple{2}, A::SparseMatrixCSC) = nnz(A) * div(shape[1], A.m) 
 # (4) _map_zeropres!/_map_notzeropres! specialized for a single sparse vector/matrix
 "Stores only the nonzero entries of `map(f, Array(A))` in `C`."
 function _map_zeropres!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat) where Tf
-    _reset!(C)
-    spaceC::Int = _capacity(C)
+    spaceC::Int = expandstorage!(C)
     Ck = 1
     @inbounds for j in columns(C)
         setcolptr!(C, j, Ck)
@@ -250,13 +245,14 @@ function _map_zeropres!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat) where Tf
             Cx = f(storedvals(A)[Ak])
             if !_iszero(Cx)
                 Ck > spaceC && (spaceC = expandstorage!(C, Ck + nnz(A) - (Ak - 1)))
-                push!(storedinds(C), storedinds(A)[Ak])
-                push!(storedvals(C), Cx)
+                storedinds(C)[Ck] = storedinds(A)[Ak]
+                storedvals(C)[Ck] = Cx
                 Ck += 1
             end
         end
     end
     @inbounds setcolptr!(C, numcols(C) + 1, Ck)
+    trimstorage!(C, Ck - 1)
     return _checkbuffers(C)
 end
 """
@@ -282,15 +278,13 @@ end
 @inline _densecoloffsets(A::SparseVector) = 0
 @inline _densecoloffsets(A::SparseMatrixCSC) = 0:A.m:(A.m*(A.n - 1))
 function _densestructure!(A::SparseVector)
-    resize!(A.nzval, A.n)
-    resize!(A.nzind, A.n)
+    expandstorage!(A, A.n)
     copyto!(A.nzind, 1:A.n)
     return A
 end
 function _densestructure!(A::SparseMatrixCSC)
     nnzA = A.m * A.n
-    resize!(A.rowval, nnzA)
-    resize!(A.nzval, nnzA)
+    expandstorage!(A, nnzA)
     copyto!(A.colptr, 1:A.m:(nnzA + 1))
     for k in _densecoloffsets(A)
         copyto!(A.rowval, k + 1, 1:A.m)
@@ -301,8 +295,7 @@ end
 
 # (5) _map_zeropres!/_map_notzeropres! specialized for a pair of sparse vectors/matrices
 function _map_zeropres!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B::SparseVecOrMat) where Tf
-    _reset!(C)
-    spaceC::Int = _capacity(C)
+    spaceC::Int = expandstorage!(C)
     rowsentinelA = convert(indtype(A), numrows(C) + 1)
     rowsentinelB = convert(indtype(B), numrows(C) + 1)
     Ck = 1
@@ -333,13 +326,14 @@ function _map_zeropres!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B::SparseVe
             # corresponding broadcast code (below).
             if !_iszero(Cx)
                 Ck > spaceC && (spaceC = expandstorage!(C, Ck + (nnz(A) - (Ak - 1)) + (nnz(B) - (Bk - 1))))
-                push!(storedinds(C), Ci)
-                push!(storedvals(C), Cx)
+                storedinds(C)[Ck] = Ci
+                storedvals(C)[Ck] = Cx
                 Ck += 1
             end
         end
     end
     @inbounds setcolptr!(C, numcols(C) + 1, Ck)
+    trimstorage!(C, Ck - 1)
     return _checkbuffers(C)
 end
 function _map_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseVecOrMat, B::SparseVecOrMat) where Tf
@@ -378,8 +372,7 @@ end
 
 # (6) _map_zeropres!/_map_notzeropres! for more than two sparse matrices / vectors
 function _map_zeropres!(f::Tf, C::SparseVecOrMat, As::Vararg{SparseVecOrMat,N}) where {Tf,N}
-    _reset!(C)
-    spaceC::Int = _capacity(C)
+    spaceC::Int = expandstorage!(C)
     rowsentinel = numrows(C) + 1
     Ck = 1
     stopks = _colstartind_all(1, As)
@@ -394,14 +387,15 @@ function _map_zeropres!(f::Tf, C::SparseVecOrMat, As::Vararg{SparseVecOrMat,N}) 
             Cx = f(vals...)
             if !_iszero(Cx)
                 Ck > spaceC && (spaceC = expandstorage!(C, Ck + min(length(C), _sumnnzs(As...)) - (sum(ks) - N)))
-                push!(storedinds(C), activerow)
-                push!(storedvals(C), Cx)
+                storedinds(C)[Ck] = activerow
+                storedvals(C)[Ck] = Cx
                 Ck += 1
             end
             activerow = min(rows...)
         end
     end
     @inbounds setcolptr!(C, numcols(C) + 1, Ck)
+    trimstorage!(C, Ck - 1)
     return _checkbuffers(C)
 end
 function _map_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, As::Vararg{SparseVecOrMat,N}) where {Tf,N}
@@ -465,9 +459,8 @@ end
 
 # (7) _broadcast_zeropres!/_broadcast_notzeropres! specialized for a single (input) sparse vector/matrix
 function _broadcast_zeropres!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat) where Tf
-    isempty(C) && return _checkbuffers(C)
-    _reset!(C)
-    spaceC::Int = _capacity(C)
+    isempty(C) && return _finishempty!(C)
+    spaceC::Int = expandstorage!(C)
     # C and A cannot have the same shape, as we directed that case to map in broadcast's
     # entry point; here we need efficiently handle only heterogeneous C-A combinations where
     # one or both of C and A has at least one singleton dimension.
@@ -485,8 +478,8 @@ function _broadcast_zeropres!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat) where
                 Cx = f(storedvals(A)[Ak])
                 if !_iszero(Cx)
                     Ck > spaceC && (spaceC = expandstorage!(C, _unchecked_maxnnzbcres(size(C), A)))
-                    push!(storedinds(C), storedinds(A)[Ak])
-                    push!(storedvals(C), Cx)
+                    storedinds(C)[Ck] = storedinds(A)[Ak]
+                    storedvals(C)[Ck] = Cx
                     Ck += 1
                 end
             end
@@ -505,14 +498,15 @@ function _broadcast_zeropres!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat) where
             if !_iszero(fofAx)
                 for Ci::indtype(C) in 1:numrows(C)
                     Ck > spaceC && (spaceC = expandstorage!(C, _unchecked_maxnnzbcres(size(C), A)))
-                    push!(storedinds(C), Ci)
-                    push!(storedvals(C), fofAx)
+                    storedinds(C)[Ck] = Ci
+                    storedvals(C)[Ck] = fofAx
                     Ck += 1
                 end
             end
         end
     end
     @inbounds setcolptr!(C, numcols(C) + 1, Ck)
+    trimstorage!(C, Ck - 1)
     return _checkbuffers(C)
 end
 function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseVecOrMat) where Tf
@@ -550,9 +544,8 @@ end
 
 # (8) _broadcast_zeropres!/_broadcast_notzeropres! specialized for a pair of (input) sparse vectors/matrices
 function _broadcast_zeropres!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B::SparseVecOrMat) where Tf
-    isempty(C) && return _checkbuffers(C)
-    _reset!(C)
-    spaceC::Int = _capacity(C)
+    isempty(C) && return _finishempty!(C)
+    spaceC::Int = expandstorage!(C)
     rowsentinelA = convert(indtype(A), numrows(C) + 1)
     rowsentinelB = convert(indtype(B), numrows(C) + 1)
     # C, A, and B cannot all have the same shape, as we directed that case to map in broadcast's
@@ -607,8 +600,8 @@ function _broadcast_zeropres!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B::Sp
                 # chain above differs from that in the corresponding map code.
                 if !_iszero(Cx)
                     Ck > spaceC && (spaceC = expandstorage!(C, _unchecked_maxnnzbcres(size(C), A, B)))
-                    push!(storedinds(C), Ci)
-                    push!(storedvals(C), Cx)
+                    storedinds(C)[Ck] = Ci
+                    storedvals(C)[Ck] = Cx
                     Ck += 1
                 end
             end
@@ -625,8 +618,8 @@ function _broadcast_zeropres!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B::Sp
             if !_iszero(Cx)
                 for Ci::indtype(C) in 1:numrows(C)
                     Ck > spaceC && (spaceC = expandstorage!(C, _unchecked_maxnnzbcres(size(C), A, B)))
-                    push!(storedinds(C), Ci)
-                    push!(storedvals(C), Cx)
+                    storedinds(C)[Ck] = Ci
+                    storedvals(C)[Ck] = Cx
                     Ck += 1
                 end
             end
@@ -646,8 +639,8 @@ function _broadcast_zeropres!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B::Sp
                     Cx = f(Ax, storedvals(B)[Bk])
                     if !_iszero(Cx)
                         Ck > spaceC && (spaceC = expandstorage!(C, _unchecked_maxnnzbcres(size(C), A, B)))
-                        push!(storedinds(C), storedinds(B)[Bk])
-                        push!(storedvals(C), Cx)
+                        storedinds(C)[Ck] = storedinds(B)[Bk]
+                        storedvals(C)[Ck] = Cx
                         Ck += 1
                     end
                     Bk += oneunit(Bk)
@@ -665,8 +658,8 @@ function _broadcast_zeropres!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B::Sp
                     end
                     if !_iszero(Cx)
                         Ck > spaceC && (spaceC = expandstorage!(C, _unchecked_maxnnzbcres(size(C), A, B)))
-                        push!(storedinds(C), Ci)
-                        push!(storedvals(C), Cx)
+                        storedinds(C)[Ck] = Ci
+                        storedvals(C)[Ck] = Cx
                         Ck += 1
                     end
                 end
@@ -687,8 +680,8 @@ function _broadcast_zeropres!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B::Sp
                     Cx = f(storedvals(A)[Ak], Bx)
                     if !_iszero(Cx)
                         Ck > spaceC && (spaceC = expandstorage!(C, _unchecked_maxnnzbcres(size(C), A, B)))
-                        push!(storedinds(C), storedinds(A)[Ak])
-                        push!(storedvals(C), Cx)
+                        storedinds(C)[Ck] = storedinds(A)[Ak]
+                        storedvals(C)[Ck] = Cx
                         Ck += 1
                     end
                     Ak += oneunit(Ak)
@@ -706,8 +699,8 @@ function _broadcast_zeropres!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B::Sp
                     end
                     if !_iszero(Cx)
                         Ck > spaceC && (spaceC = expandstorage!(C, _unchecked_maxnnzbcres(size(C), A, B)))
-                        push!(storedinds(C), Ci)
-                        push!(storedvals(C), Cx)
+                        storedinds(C)[Ck] = Ci
+                        storedvals(C)[Ck] = Cx
                         Ck += 1
                     end
                 end
@@ -715,6 +708,7 @@ function _broadcast_zeropres!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B::Sp
         end
     end
     @inbounds setcolptr!(C, numcols(C) + 1, Ck)
+    trimstorage!(C, Ck - 1)
     return _checkbuffers(C)
 end
 function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseVecOrMat, B::SparseVecOrMat) where Tf
@@ -816,6 +810,8 @@ function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseV
     end
     return _checkbuffers(C)
 end
+_finishempty!(C::SparseVector) = C
+_finishempty!(C::SparseMatrixCSC) = (fill!(C.colptr, 1); C)
 
 # special case - vector outer product
 _copy(f::typeof(*), x::SparseVectorUnion, y::AdjOrTransSparseVectorUnion) = _outer(x, y)
@@ -856,16 +852,14 @@ function _outer(trans::Tf, x, y) where Tf
         end
     end
     cumsum!(colptrC, colptrC)
-    resize!(rowvalC, idx)
-    resize!(nzvalsC, idx)
+
     return SparseMatrixCSC(nx, ny, colptrC, rowvalC, nzvalsC)
 end
 
 # (9) _broadcast_zeropres!/_broadcast_notzeropres! for more than two (input) sparse vectors/matrices
 function _broadcast_zeropres!(f::Tf, C::SparseVecOrMat, As::Vararg{SparseVecOrMat,N}) where {Tf,N}
-    isempty(C) && return _checkbuffers(C)
-    _reset!(C)
-    spaceC::Int = _capacity(C)
+    isempty(C) && return _finishempty!(C)
+    spaceC::Int = expandstorage!(C)
     expandsverts = _expandsvert_all(C, As)
     expandshorzs = _expandshorz_all(C, As)
     rowsentinel = numrows(C) + 1
@@ -887,8 +881,8 @@ function _broadcast_zeropres!(f::Tf, C::SparseVecOrMat, As::Vararg{SparseVecOrMa
                 Cx = f(args...)
                 if !_iszero(Cx)
                     Ck > spaceC && (spaceC = expandstorage!(C, _unchecked_maxnnzbcres(size(C), As)))
-                    push!(storedinds(C), activerow)
-                    push!(storedvals(C), Cx)
+                    storedinds(C)[Ck] = activerow
+                    storedvals(C)[Ck] = Cx
                     Ck += 1
                 end
                 activerow = min(rows...)
@@ -904,18 +898,19 @@ function _broadcast_zeropres!(f::Tf, C::SparseVecOrMat, As::Vararg{SparseVecOrMa
                 end
                 if !_iszero(Cx)
                     Ck > spaceC && (spaceC = expandstorage!(C, _unchecked_maxnnzbcres(size(C), As)))
-                    push!(storedinds(C), Ci)
-                    push!(storedvals(C), Cx)
+                    storedinds(C)[Ck] = Ci
+                    storedvals(C)[Ck] = Cx
                     Ck += 1
                 end
             end
         end
     end
     @inbounds setcolptr!(C, numcols(C) + 1, Ck)
+    trimstorage!(C, Ck - 1)
     return _checkbuffers(C)
 end
 function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, As::Vararg{SparseVecOrMat,N}) where {Tf,N}
-    isempty(C) && return _checkbuffers(C)
+    isempty(C) && return _finishempty!(C)
     # Build dense matrix structure in C, expanding storage if necessary
     _densestructure!(C)
     # Populate values
