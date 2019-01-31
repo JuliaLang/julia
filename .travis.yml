@@ -94,7 +94,7 @@ before_install:
         export JULIA_TEST_MAXRSS_MB=600;
         TESTSTORUN="all --skip linalg/triangular subarray"; fi # TODO: re enable these if possible without timing out
     - echo "override JULIA_CPU_TARGET=generic;native" >> Make.user
-    - wget http://http.debian.net/debian/pool/main/m/moreutils/moreutils_0.62.orig.tar.xz
+    - wget https://http.debian.net/debian/pool/main/m/moreutils/moreutils_0.62.orig.tar.xz #wget failed to establish an SSL connection despite change to https
     - tar -xJvf moreutils_0.62.orig.tar.xz && mv moreutils-0.62 moreutils
 script:
     - echo BUILDOPTS=$BUILDOPTS
