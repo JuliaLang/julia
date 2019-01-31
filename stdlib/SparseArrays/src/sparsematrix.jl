@@ -847,14 +847,6 @@ function ftranspose!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, f::Fu
     elseif X.m != A.n
         throw(DimensionMismatch(string("destination argument `X`'s row count,
             `X.m (= $(X.m))`, must match source argument `A`'s column count, `A.n (= $(A.n))`")))
-    elseif length(X.rowval) < nnz(A)
-        throw(ArgumentError(string("the length of destination argument `X`'s `rowval` ",
-            "array, `length(X.rowval) (= $(length(X.rowval)))`, must be greater than or ",
-            "equal to source argument `A`'s allocated entry count, `nnz(A) (= $(nnz(A)))`")))
-    elseif length(X.nzval) < nnz(A)
-        throw(ArgumentError(string("the length of destination argument `X`'s `nzval` ",
-            "array, `length(X.nzval) (= $(length(X.nzval)))`, must be greater than or ",
-            "equal to source argument `A`'s allocated entry count, `nnz(A) (= $(nnz(A)))`")))
     end
     halfperm!(X, A, 1:A.n, f)
 end
