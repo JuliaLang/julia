@@ -1453,3 +1453,7 @@ end
 
 # issue #30505
 @test repr(Union{Tuple{Char}, Tuple{Char, Char}}[('a','b')]) == "Union{Tuple{Char}, Tuple{Char,Char}}[('a', 'b')]"
+
+# issue #30927
+Z = Array{Float64}(undef,0,0)
+@test eval(Meta.parse(repr(Z))) == Z
