@@ -136,7 +136,7 @@ true
 function eigen(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where T
     AA = copy_oftype(A, eigtype(T))
     isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
-    return eigen!(AA; kws...)
+    return eigen!(AA; permute=permute, scale=scale, sortby=sortby)
 end
 eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
