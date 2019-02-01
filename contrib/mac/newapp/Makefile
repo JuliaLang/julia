@@ -78,7 +78,7 @@ $(BUILDROOT)/framework-component.plist: $(JULIAHOME)/contrib/mac/newapp/framewor
 #
 # tree Julia.frameo
 #
-# 1. The component's identifer is versioned to match the bundled framework.  
+# 1. The component's identifer is versioned to match the bundled framework.
 $(BUILDROOT)/$(FRAMEWORK_NAME)-framework.pkg: $(JULIA_FRAMEWORK_LIB) $(BUILDROOT)/framework-component.plist
 	pkgbuild \
 		--install-location /Library/Frameworks \
