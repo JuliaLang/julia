@@ -214,9 +214,8 @@ function round(x::AbstractFloat, ::RoundingMode{:NearestTiesAway})
     ifelse(x==y,y,trunc(2*x-y))
 end
 # Java-style round
-function round(x::AbstractFloat, ::RoundingMode{:NearestTiesUp})
-    y = floor(x)
-    ifelse(x==y,y,copysign(floor(2*x-y),x))
+function round(x::T, ::RoundingMode{:NearestTiesUp}) where {T <: AbstractFloat}
+    copysign(floor((x + (T(0.25) - eps(T(0.5)))) + (T(0.25) + eps(T(0.5)))), x)
 end
 
 # isapprox: approximate equality of numbers
@@ -232,7 +231,8 @@ the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger 
 This corresponds to requiring equality of about half of the significand digits. Otherwise,
 e.g. for integer arguments or if an `atol > 0` is supplied, `rtol` defaults to zero.
 
-`x` and `y` may also be arrays of numbers, in which case `norm` defaults to `vecnorm` but
+`x` and `y` may also be arrays of numbers, in which case `norm` defaults to the usual
+`norm` function in LinearAlgebra, but
 may be changed by passing a `norm::Function` keyword argument. (For numbers, `norm` is the
 same thing as `abs`.) When `x` and `y` are arrays, if `norm(x-y)` is not finite (i.e. `±Inf`
 or `NaN`), the comparison falls back to checking whether all elements of `x` and `y` are

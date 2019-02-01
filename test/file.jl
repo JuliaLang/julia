@@ -233,6 +233,17 @@ close(s)
 # This section tests temporary file and directory creation.           #
 #######################################################################
 
+@testset "quoting filenames" begin
+    @test try
+        open("this file is not expected to exist")
+        false
+    catch e
+        isa(e, SystemError) || rethrow()
+        @test sprint(showerror, e) == "SystemError: opening file \"this file is not expected to exist\": No such file or directory"
+        true
+    end
+end
+
 my_tempdir = tempdir()
 @test isdir(my_tempdir) == true
 
@@ -1004,17 +1015,45 @@ rm(dir)
 mktempdir() do dir
     name1 = joinpath(dir, "apples")
     name2 = joinpath(dir, "bannanas")
-    @test touch(name1)==name1
+    @test !ispath(name1)
+    @test touch(name1) == name1
+    @test isfile(name1)
+    @test touch(name1) == name1
+    @test isfile(name1)
+    @test !ispath(name2)
     @test mv(name1, name2) == name2
+    @test !ispath(name1)
+    @test isfile(name2)
     @test cp(name2, name1) == name1
+    @test isfile(name1)
+    @test isfile(name2)
     namedir = joinpath(dir, "chalk")
     namepath = joinpath(dir, "chalk","cheese","fresh")
+    @test !ispath(namedir)
     @test mkdir(namedir) == namedir
+    @test isdir(namedir)
+    @test !ispath(namepath)
     @test mkpath(namepath) == namepath
+    @test isdir(namepath)
+    @test mkpath(namepath) == namepath
+    @test isdir(namepath)
 end
 
-
-
+# issue #30588
+@test realpath(".") == realpath(pwd())
+mktempdir() do dir
+    cd(dir) do
+        path = touch("FooBar.txt")
+        @test ispath(realpath(path))
+        if ispath(uppercase(path)) # case-insensitive filesystem
+            @test realpath(path) == realpath(uppercase(path)) == realpath(lowercase(path)) ==
+                  realpath(uppercase(realpath(path))) == realpath(lowercase(realpath(path)))
+            @test basename(realpath(uppercase(path))) == path
+        end
+        rm(path)
+        @test_throws SystemError realpath(path)
+    end
+end
 
 # issue #9687
 let n = tempname()

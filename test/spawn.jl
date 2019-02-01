@@ -20,7 +20,7 @@ sleepcmd = `sleep`
 lscmd = `ls`
 havebb = false
 if Sys.iswindows()
-    busybox = joinpath(Sys.BINDIR, "busybox.exe")
+    busybox = download("http://frippery.org/files/busybox/busybox.exe", joinpath(tempdir(), "busybox.exe"))
     havebb = try # use busybox-w32 on windows, if available
         success(`$busybox`)
         true
@@ -57,15 +57,9 @@ out = read(`$echocmd hello` & `$echocmd world`, String)
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
 Sys.isunix() && run(pipeline(yescmd, `head`, devnull))
 
-let a, p
-    a = Base.Condition()
-    t = @async begin
-        p = run(pipeline(yescmd,devnull), wait=false)
-        Base.notify(a,p)
-        @test !success(p)
-    end
-    p = wait(a)
-    kill(p)
+let p = run(pipeline(yescmd, devnull), wait=false)
+    t = @async kill(p)
+    @test !success(p)
     wait(t)
 end
 
@@ -170,16 +164,19 @@ let r, t
     t = @async begin
         try
             wait(r)
-        catch
+            @test false
+        catch ex
+            @test isa(ex, InterruptException)
         end
-        p = run(`$sleepcmd 1`, wait=false); wait(p)
+        p = run(`$sleepcmd 1`, wait=false)
+        wait(p)
         @test p.exitcode == 0
         return true
     end
     yield()
     schedule(t, InterruptException(), error=true)
     yield()
-    put!(r,11)
+    put!(r, 11)
     yield()
     @test fetch(t)
 end
@@ -230,10 +227,14 @@ if valgrind_off
 end
 
 # setup_stdio for AbstractPipe
-let out = Pipe(), proc = run(pipeline(`$echocmd "Hello World"`, stdout=IOContext(out,stdout)), wait=false)
+let out = Pipe(),
+    proc = run(pipeline(`$exename --startup-file=no -e 'println(getpid())'`, stdout=IOContext(out, :foo => :bar)), wait=false)
+    # < don't block here before getpid call >
+    pid = getpid(proc)
     close(out.in)
-    @test read(out, String) == "Hello World\n"
+    @test parse(Int32, read(out, String)) === pid > 1
     @test success(proc)
+    @test_throws Base.IOError getpid(proc)
 end
 
 # issue #5904
@@ -328,7 +329,7 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(stdout, " 1\t", r
             @test !isopen(out.out)
             @test !isreadable(out)
         end
-        @test_throws ArgumentError write(out, "now closed error")
+        @test_throws Base.IOError write(out, "now closed error")
         if Sys.iswindows()
             # WINNT kernel appears to not provide a fast mechanism for async propagation
             # of EOF for a blocking stream, so just wait for it to catch up.
@@ -402,13 +403,13 @@ end
 
 # Test shell_escape printing quoting
 # Backticks should automatically quote where necessary
-let cmd = ["foo bar", "baz", "a'b", "a\"b", "a\"b\"c", "-L/usr/+", "a=b", "``", "\$", "&&", "z"]
+let cmd = ["foo bar", "baz", "a'b", "a\"b", "a\"b\"c", "-L/usr/+", "a=b", "``", "\$", "&&", "", "z"]
     @test string(`$cmd`) ==
-        """`'foo bar' baz "a'b" 'a"b' 'a"b"c' -L/usr/+ a=b \\`\\` '\$' '&&' z`"""
+        """`'foo bar' baz "a'b" 'a"b' 'a"b"c' -L/usr/+ a=b \\`\\` '\$' '&&' '' z`"""
     @test Base.shell_escape(`$cmd`) ==
-        """'foo bar' baz "a'b" 'a"b' 'a"b"c' -L/usr/+ a=b `` '\$' && z"""
+        """'foo bar' baz "a'b" 'a"b' 'a"b"c' -L/usr/+ a=b `` '\$' && '' z"""
     @test Base.shell_escape_posixly(`$cmd`) ==
-        """'foo bar' baz a\\'b a\\"b 'a"b"c' -L/usr/+ a=b '``' '\$' '&&' z"""
+        """'foo bar' baz a\\'b a\\"b 'a"b"c' -L/usr/+ a=b '``' '\$' '&&' '' z"""
 end
 let cmd = ["foo=bar", "baz"]
     @test string(`$cmd`) == "`foo=bar baz`"
@@ -526,11 +527,7 @@ end
 # Sys.which() testing
 psep = if Sys.iswindows() ";" else ":" end
 withenv("PATH" => "$(Sys.BINDIR)$(psep)$(ENV["PATH"])") do
-    julia_exe = joinpath(Sys.BINDIR, "julia")
-    if Sys.iswindows()
-        julia_exe *= ".exe"
-    end
-
+    julia_exe = joinpath(Sys.BINDIR, Base.julia_exename())
     @test Sys.which("julia") == realpath(julia_exe)
     @test Sys.which(julia_exe) == realpath(julia_exe)
 end
@@ -613,4 +610,26 @@ open(`$catcmd`, "r+") do f
     end
     @test read(f, Char) == 'δ'
     wait(t)
+end
+
+let text = "input-test-text"
+    b = PipeBuffer()
+    proc = open(Base.CmdRedirect(Base.CmdRedirect(```$(Base.julia_cmd()) -E '
+                    in14 = Base.open(RawFD(14))
+                    out15 = Base.open(RawFD(15))
+                    write(out15, in14)'```,
+                IOBuffer(text), 14, true),
+            b, 15, false), "r")
+    @test read(proc, String) == string(length(text), '\n')
+    @test success(proc)
+    @test String(take!(b)) == text
+end
+@test repr(Base.CmdRedirect(``, devnull, 0, false)) == "pipeline(``, stdin>Base.DevNull())"
+@test repr(Base.CmdRedirect(``, devnull, 1, true)) == "pipeline(``, stdout<Base.DevNull())"
+@test repr(Base.CmdRedirect(``, devnull, 11, true)) == "pipeline(``, 11<Base.DevNull())"
+
+
+# clean up busybox download
+if Sys.iswindows()
+    rm(busybox, force=true)
 end

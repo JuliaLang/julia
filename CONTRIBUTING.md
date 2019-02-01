@@ -12,7 +12,7 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 
 - Contributing code? Be sure to review the [contributor checklist](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#contributor-checklist) for helpful tips on the tools we use to build Julia.
 
-- Library feature requests are generally not accepted on this issue tracker. New libraries should be developed as [packages](https://docs.julialang.org/en/latest/manual/packages#Package-Development-1). Discuss ideas for libraries at the [Julia Discourse forum](https://discourse.julialang.org). Doing so will often lead to pointers to existing projects and bring together collaborators with common interests.
+- Library feature requests are generally not accepted on this issue tracker. New libraries should be developed as [packages](https://julialang.github.io/Pkg.jl/v1/creating-packages/). Discuss ideas for libraries at the [Julia Discourse forum](https://discourse.julialang.org). Doing so will often lead to pointers to existing projects and bring together collaborators with common interests.
 
 ## Contributor Checklist
 
@@ -56,7 +56,7 @@ A useful bug report filed as a GitHub issue provides information about how to re
 
 ### Contributing a Julia package
 
-Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl) based on `git`. A number of [packages](http://pkg.julialang.org) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The Julia manual provides instructions on [creating Julia packages](https://docs.julialang.org/en/latest/manual/packages).
+Julia has a built-in [package manager](https://julialang.github.io/Pkg.jl/v1/) based on `git`. A number of [packages](http://pkg.julialang.org) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The manual provides instructions on [creating Julia packages](https://julialang.github.io/Pkg.jl/v1/creating-packages/).
 
 For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
 
@@ -182,7 +182,22 @@ A doctest needs to match an interactive REPL including the `julia>` prompt. To r
 
 #### News-worthy changes
 
-For new functionality and other substantial changes, add a brief summary to `NEWS.md`. The news item should cross reference the pull request (PR) parenthetically, in the form `([#pr])`; after adding this, run `./julia doc/NEWS-update.jl` from the `julia` directory to update the cross-reference links. To add the PR reference number, first create the PR, then push an additional commit updating `NEWS.md` with the PR reference number.
+For new functionality and other substantial changes, add a brief summary to `NEWS.md`. The news item should cross reference the pull request (PR) parenthetically, in the form `([#pr])`. To add the PR reference number, first create the PR, then push an additional commit updating `NEWS.md` with the PR reference number.  We periodically run `./julia doc/NEWS-update.jl` from the julia directory to update the cross-reference links, but this should not be done in a typical PR in order to avoid conflicting commits.
+
+#### Annotations for new features, deprecations and behavior changes
+
+API additions and deprecations, and minor behavior changes are allowed in minor version releases.
+For documented features that are part of the public API, a compatibility note should be added into
+the manual or the docstring. It should state the Julia minor version that made changed the behavior
+and have a brief message describing the change.
+
+At the moment, this should always be done with the following `compat` admonition
+(so that it would be possible to programmatically find the annotations in the future):
+
+  ```
+  !!! compat "Julia 1.X"
+      This method was added in Julia 1.X.
+  ```
 
 ### Contributing to core functionality or base libraries
 

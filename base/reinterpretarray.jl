@@ -24,7 +24,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
             throw(ArgumentError("""
                 cannot reinterpret an `$(S)` array to `$(T)` whose first dimension has size `$(dim)`.
                 The resulting array would have non-integral first dimension.
-            """))
+                """))
         end
         function throwaxes1(::Type{S}, ::Type{T}, ax1)
             @_noinline_meta
@@ -33,8 +33,8 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
         isbitstype(T) || throwbits(S, T, T)
         isbitstype(S) || throwbits(S, T, S)
         (N != 0 || sizeof(T) == sizeof(S)) || throwsize0(S, T)
-        ax1 = axes(a)[1]
         if N != 0 && sizeof(S) != sizeof(T)
+            ax1 = axes(a)[1]
             dim = length(ax1)
             rem(dim*sizeof(S),sizeof(T)) == 0 || thrownonint(S, T, dim)
             first(ax1) == 1 || throwaxes1(S, T, ax1)
@@ -44,6 +44,17 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
         new{T, N, S, A}(a, readable, writable)
     end
 end
+
+# Definition of StridedArray
+StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
+StridedReinterpretArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray}} = ReinterpretArray{T,N,S,A} where S
+StridedReshapedArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray,StridedReinterpretArray}} = ReshapedArray{T,N,A}
+StridedSubArray{T,N,A<:Union{DenseArray,StridedReshapedArray,StridedReinterpretArray},
+    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = SubArray{T,N,A,I}
+StridedArray{T,N} = Union{DenseArray{T,N}, StridedSubArray{T,N}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N}}
+StridedVector{T} = Union{DenseArray{T,1}, StridedSubArray{T,1}, StridedReshapedArray{T,1}, StridedReinterpretArray{T,1}}
+StridedMatrix{T} = Union{DenseArray{T,2}, StridedSubArray{T,2}, StridedReshapedArray{T,2}, StridedReinterpretArray{T,2}}
+StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 
 function check_readable(a::ReinterpretArray{T, N, S} where N) where {T,S}
     # See comment in check_writable
@@ -74,6 +85,7 @@ function size(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     size1 = div(psize[1]*sizeof(S), sizeof(T))
     tuple(size1, tail(psize)...)
 end
+size(a::ReinterpretArray{T,0}) where {T} = ()
 
 function axes(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     paxs = axes(a.parent)
@@ -81,6 +93,7 @@ function axes(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     size1 = div(l*sizeof(S), sizeof(T))
     tuple(oftype(paxs[1], f:f+size1-1), tail(paxs)...)
 end
+axes(a::ReinterpretArray{T,0}) where {T} = ()
 
 elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))

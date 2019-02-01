@@ -203,6 +203,7 @@ string(s::AbstractString) = s
 (::Type{Vector{T}})(s::AbstractString) where {T<:AbstractChar} = collect(T, s)
 
 Symbol(s::AbstractString) = Symbol(String(s))
+Symbol(x...) = Symbol(string(x...))
 
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
 convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
@@ -603,7 +604,7 @@ julia> first("∀ϵ≠0: ϵ²>0", 3)
 "∀ϵ≠"
 ```
 """
-first(s::AbstractString, n::Integer) = s[1:min(end, nextind(s, 0, n))]
+first(s::AbstractString, n::Integer) = @inbounds s[1:min(end, nextind(s, 0, n))]
 
 """
     last(s::AbstractString, n::Integer)
@@ -621,7 +622,7 @@ julia> last("∀ϵ≠0: ϵ²>0", 3)
 "²>0"
 ```
 """
-last(s::AbstractString, n::Integer) = s[max(1, prevind(s, ncodeunits(s)+1, n)):end]
+last(s::AbstractString, n::Integer) = @inbounds s[max(1, prevind(s, ncodeunits(s)+1, n)):end]
 
 """
     reverseind(v, i)

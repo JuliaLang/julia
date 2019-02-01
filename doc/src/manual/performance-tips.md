@@ -481,26 +481,6 @@ c = (b + 1.0f0)::Complex{T}
 does not hinder performance (but does not help either) since the compiler can determine the type of `c`
 at the time `k` is compiled.
 
-### Declare types of keyword arguments
-
-Keyword arguments can have declared types:
-
-```julia
-function with_keyword(x; name::Int = 1)
-    ...
-end
-```
-
-Functions are specialized on the types of keyword arguments, so these declarations will not affect
-performance of code inside the function. However, they will reduce the overhead of calls to the
-function that include keyword arguments.
-
-Functions with keyword arguments have near-zero overhead for call sites that pass only positional
-arguments.
-
-Passing dynamic lists of keyword arguments, as in `f(x; keywords...)`, can be slow and should
-be avoided in performance-sensitive code.
-
 ## Break functions into multiple definitions
 
 Writing a function as many small definitions allows the compiler to directly call the most applicable
@@ -727,7 +707,7 @@ type-domain.
 
 ## The dangers of abusing multiple dispatch (aka, more on types with values-as-parameters)
 
-Once one learns to appreciate multiple dispatch, there's an understandable tendency to go crazy
+Once one learns to appreciate multiple dispatch, there's an understandable tendency to go overboard
 and try to use it for everything. For example, you might imagine using it to store information,
 e.g.
 
@@ -1149,7 +1129,7 @@ Sometimes you can enable better optimization by promising certain program proper
 
 The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,
 and may cause a segmentation fault if bounds checking is turned off. Use `LinearIndices(x)` or `eachindex(x)`
-instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays)).
+instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays/)).
 
 !!! note
     While `@simd` needs to be placed directly in front of an innermost `for` loop, both `@inbounds` and `@fastmath`

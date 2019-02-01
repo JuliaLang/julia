@@ -394,6 +394,8 @@ function big end
 big(::Type{<:Integer})  = BigInt
 big(::Type{<:Rational}) = Rational{BigInt}
 
+big(n::Integer) = convert(BigInt, n)
+
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
                  (:fld, :fdiv_q), (:div, :tdiv_q), (:mod, :fdiv_r), (:rem, :tdiv_r),

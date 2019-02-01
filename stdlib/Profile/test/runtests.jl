@@ -46,6 +46,8 @@ let iobuf = IOBuffer()
     @test isempty(Profile.fetch())
     @test Profile.callers("\\") !== nothing
     @test Profile.callers(\) !== nothing
+    # linerange with no filename provided should fail
+    @test_throws ArgumentError Profile.callers(\; linerange=10:50)
 end
 
 # issue #13229
@@ -59,4 +61,16 @@ global z = 0
     global z = f(i)
 end
 @test z == 10
+end
+
+@testset "setting sample count and delay in init" begin
+    n_, delay_ = Profile.init()
+    @test n_ == 1_000_000
+    def_delay = Sys.iswindows() ? 0.01 : 0.001
+    @test delay_ == def_delay
+    Profile.init(n=1_000_001, delay=0.0005)
+    n_, delay_ = Profile.init()
+    @test n_ == 1_000_001
+    @test delay_ == 0.0005
+    Profile.init(n=1_000_000, delay=def_delay)
 end

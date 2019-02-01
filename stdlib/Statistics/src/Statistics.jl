@@ -9,7 +9,7 @@ module Statistics
 
 using LinearAlgebra, SparseArrays
 
-using Base: has_offset_axes
+using Base: has_offset_axes, require_one_based_indexing
 
 export cor, cov, std, stdm, var, varm, mean!, mean,
     median!, median, middle, quantile!, quantile
@@ -54,10 +54,11 @@ julia> mean([√1, √2, √3])
 1.3820881233139908
 ```
 """
-function mean(f::Base.Callable, itr)
+function mean(f, itr)
     y = iterate(itr)
     if y === nothing
-        throw(ArgumentError("mean of empty collection undefined: $(repr(itr))"))
+        return Base.mapreduce_empty_iter(f, Base.add_sum, itr,
+                                         Base.IteratorEltype(itr)) / 0
     end
     count = 1
     value, state = y
@@ -72,7 +73,7 @@ function mean(f::Base.Callable, itr)
     end
     return total/count
 end
-mean(f::Base.Callable, A::AbstractArray) = sum(f, A) / length(A)
+mean(f, A::AbstractArray) = sum(f, A) / length(A)
 
 """
     mean!(r, v)
@@ -108,6 +109,9 @@ end
 
 Compute the mean of an array over the given dimensions.
 
+!!! compat "Julia 1.1"
+    `mean` for empty arrays requires at least Julia 1.1.
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -131,7 +135,7 @@ _mean(A::AbstractArray{T}, region) where {T} = mean!(Base.reducedim_init(t -> t/
 _mean(A::AbstractArray, ::Colon) = sum(A) / length(A)
 
 function mean(r::AbstractRange{<:Real})
-    isempty(r) && throw(ArgumentError("mean of an empty range is undefined"))
+    isempty(r) && return oftype((first(r) + last(r)) / 2, NaN)
     (first(r) + last(r)) / 2
 end
 
@@ -148,7 +152,8 @@ var(iterable; corrected::Bool=true, mean=nothing) = _var(iterable, corrected, me
 function _var(iterable, corrected::Bool, mean)
     y = iterate(iterable)
     if y === nothing
-        throw(ArgumentError("variance of empty collection undefined: $(repr(iterable))"))
+        T = eltype(iterable)
+        return oftype((abs2(zero(T)) + abs2(zero(T)))/2, NaN)
     end
     count = 1
     value, state = y
@@ -265,7 +270,7 @@ varm(A::AbstractArray, m; corrected::Bool=true) = _varm(A, m, corrected, :)
 
 function _varm(A::AbstractArray{T}, m, corrected::Bool, ::Colon) where T
     n = length(A)
-    n == 0 && return typeof((abs2(zero(T)) + abs2(zero(T)))/2)(NaN)
+    n == 0 && return oftype((abs2(zero(T)) + abs2(zero(T)))/2, NaN)
     return centralize_sumabs2(A, m) / (n - Int(corrected))
 end
 
@@ -508,7 +513,7 @@ clampcor(x) = x
 # cov2cor!
 
 function cov2cor!(C::AbstractMatrix{T}, xsd::AbstractArray) where T
-    @assert !has_offset_axes(C, xsd)
+    require_one_based_indexing(C, xsd)
     nx = length(xsd)
     size(C) == (nx, nx) || throw(DimensionMismatch("inconsistent dimensions"))
     for j = 1:nx
@@ -523,7 +528,7 @@ function cov2cor!(C::AbstractMatrix{T}, xsd::AbstractArray) where T
     return C
 end
 function cov2cor!(C::AbstractMatrix, xsd, ysd::AbstractArray)
-    @assert !has_offset_axes(C, ysd)
+    require_one_based_indexing(C, ysd)
     nx, ny = size(C)
     length(ysd) == ny || throw(DimensionMismatch("inconsistent dimensions"))
     for (j, y) in enumerate(ysd)   # fixme (iter): here and in all `cov2cor!` we assume that `C` is efficiently indexed by integers
@@ -534,7 +539,7 @@ function cov2cor!(C::AbstractMatrix, xsd, ysd::AbstractArray)
     return C
 end
 function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd)
-    @assert !has_offset_axes(C, xsd)
+    require_one_based_indexing(C, xsd)
     nx, ny = size(C)
     length(xsd) == nx || throw(DimensionMismatch("inconsistent dimensions"))
     for j in 1:ny
@@ -545,7 +550,7 @@ function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd)
     return C
 end
 function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::AbstractArray)
-    @assert !has_offset_axes(C, xsd, ysd)
+    require_one_based_indexing(C, xsd, ysd)
     nx, ny = size(C)
     (length(xsd) == nx && length(ysd) == ny) ||
         throw(DimensionMismatch("inconsistent dimensions"))
@@ -576,7 +581,7 @@ corzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int=1) =
 corm(x::AbstractVector{T}, xmean) where {T} = one(real(T))
 corm(x::AbstractMatrix, xmean, vardim::Int=1) = corzm(x .- xmean, vardim)
 function corm(x::AbstractVector, mx, y::AbstractVector, my)
-    @assert !has_offset_axes(x, y)
+    require_one_based_indexing(x, y)
     n = length(x)
     length(y) == n || throw(DimensionMismatch("inconsistent lengths"))
     n > 0 || throw(ArgumentError("correlation only defined for non-empty vectors"))
@@ -692,7 +697,7 @@ Like [`median`](@ref), but may overwrite the input vector.
 function median!(v::AbstractVector)
     isempty(v) && throw(ArgumentError("median of an empty array is undefined, $(repr(v))"))
     eltype(v)>:Missing && any(ismissing, v) && return missing
-    (eltype(v)<:AbstractFloat || eltype(v)>:AbstractFloat) && any(isnan, v) && return NaN
+    (eltype(v)<:AbstractFloat || eltype(v)>:AbstractFloat) && any(isnan, v) && return convert(eltype(v), NaN)
     inds = axes(v, 1)
     n = length(inds)
     mid = div(first(inds)+last(inds),2)
@@ -801,7 +806,7 @@ julia> y
 """
 function quantile!(q::AbstractArray, v::AbstractVector, p::AbstractArray;
                    sorted::Bool=false)
-    @assert !has_offset_axes(q, v, p)
+    require_one_based_indexing(q, v, p)
     if size(p) != size(q)
         throw(DimensionMismatch("size of p, $(size(p)), must equal size of q, $(size(q))"))
     end
@@ -832,7 +837,7 @@ end
 # Function to perform partial sort of v for quantiles in given range
 function _quantilesort!(v::AbstractArray, sorted::Bool, minp::Real, maxp::Real)
     isempty(v) && throw(ArgumentError("empty data vector"))
-    @assert !has_offset_axes(v)
+    require_one_based_indexing(v)
 
     if !sorted
         lv = length(v)
@@ -850,7 +855,7 @@ end
 # Core quantile lookup function: assumes `v` sorted
 @inline function _quantile(v::AbstractVector, p::Real)
     0 <= p <= 1 || throw(ArgumentError("input probability out of [0,1] range"))
-    @assert !has_offset_axes(v)
+    require_one_based_indexing(v)
 
     lv = length(v)
     f0 = (lv - 1)*p # 0-based interpolated index
@@ -906,7 +911,7 @@ julia> quantile(0:20, [0.1, 0.5, 0.9])
 
 julia> quantile(skipmissing([1, 10, missing]), 0.5)
 5.5
- ```
+```
 """
 quantile(itr, p; sorted::Bool=false) = quantile!(collect(itr), p, sorted=sorted)
 
@@ -942,7 +947,7 @@ end
 
 # This is the function that does the reduction underlying var/std
 function centralize_sumabs2!(R::AbstractArray{S}, A::SparseMatrixCSC{Tv,Ti}, means::AbstractArray) where {S,Tv,Ti}
-    @assert !has_offset_axes(R, A, means)
+    require_one_based_indexing(R, A, means)
     lsiz = Base.check_reducedims(R,A)
     size(means) == size(R) || error("size of means must match size of R")
     isempty(R) || fill!(R, zero(S))

@@ -93,7 +93,7 @@ pmap(f, c; retry_delays = zeros(3))
 Example: Retry `f` only if the exception is not of type `InexactError`, with exponentially increasing
 delays up to 3 times. Return a `NaN` in place for all `InexactError` occurrences.
 ```julia
-pmap(f, c; on_error = e->(isa(e, InexactError) ? NaN : rethrow(e)), retry_delays = ExponentialBackOff(n = 3))
+pmap(f, c; on_error = e->(isa(e, InexactError) ? NaN : rethrow()), retry_delays = ExponentialBackOff(n = 3))
 ```
 """
 function pmap(f, p::AbstractWorkerPool, c; distributed=true, batch_size=1, on_error=nothing,
@@ -189,7 +189,7 @@ function wrap_batch(f, p, handle_errors)
             if handle_errors
                 return Any[BatchProcessingError(b, e) for b in batch]
             else
-                rethrow(e)
+                rethrow()
             end
         end
     end
