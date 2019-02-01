@@ -74,12 +74,16 @@ $(BUILDROOT)/framework-component.plist: $(JULIAHOME)/contrib/mac/newapp/framewor
 	sed -e 's/FRAMEWORK_VERSION/$(FRAMEWORK_VERSION)/g' -e 's/FRAMEWORK_NAME/$(FRAMEWORK_NAME)/g' $< > $@
 
 # This target makes a component package for the framework. It has some
-# important and properties.  The properties allow one "Julia.framework" to
-# exist at a location with multiple versions of Julia within.
-#
-# tree Julia.frameo
+# important properties.  Together, the properties allow one "Julia.framework"
+# to exist at a location with multiple versions of Julia within.
 #
 # 1. The component's identifer is versioned to match the bundled framework.
+# This allows multiple versions of the component to be installed with the
+# Julia.framework/Versions directory.
+# 2. The component-plist identifies the Versions/x.y directory as an upgradable
+# bundle instead of the parent directory Julia.framework.  We want the
+# installer to treat each version as an atomic unit/bundle and not the overall
+# framework.
 $(BUILDROOT)/$(FRAMEWORK_NAME)-framework.pkg: $(JULIA_FRAMEWORK_LIB) $(BUILDROOT)/framework-component.plist
 	pkgbuild \
 		--install-location /Library/Frameworks \
@@ -109,7 +113,7 @@ $(PRODUCTARCHIVE): $(BUILDROOT)/launcher.pkg $(BUILDROOT)/$(FRAMEWORK_NAME)-fram
 productarchive: $(PRODUCTARCHIVE)
 
 signedproductarchive: $(PRODUCTARCHIVE)
-	productsign --sign $(DARWIN_CODESIGN_PRODUCT_ARCHIVE_KEYCHAIN_IDENTITY) $< $<.signed
+	productsign --sign "$(DARWIN_CODESIGN_PRODUCT_ARCHIVE_KEYCHAIN_IDENTITY)" $< $<.signed
 	mv $<.signed $<
 
 clean:
