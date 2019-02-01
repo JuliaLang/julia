@@ -75,6 +75,7 @@ function swapcols!(a::AbstractMatrix, i, j)
 end
 # like permute!! applied to each row of a, in-place in a (overwriting p).
 function permutecols!!(a::AbstractMatrix, p::AbstractVector{<:Integer})
+    require_one_based_indexing(a, p)
     count = 0
     start = 0
     while count < length(p)
