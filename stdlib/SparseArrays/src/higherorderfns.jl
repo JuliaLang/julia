@@ -9,7 +9,8 @@ import Base: map, map!, broadcast, copy, copyto!
 using Base: front, tail, to_shape
 using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseVector,
                       AbstractSparseMatrix, AbstractSparseArray, indtype, nnz, nzrange,
-                      SparseVectorUnion, AdjOrTransSparseVectorUnion, nonzeroinds, nonzeros
+                      SparseVectorUnion, AdjOrTransSparseVectorUnion, nonzeroinds, nonzeros,
+                      spzeros
 using Base.Broadcast: BroadcastStyle, Broadcasted, flatten
 using LinearAlgebra
 
