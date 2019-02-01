@@ -177,9 +177,13 @@ end
 """
     startswith(s::AbstractString, prefix::Regex)
 
-Return `true` if `s` starts with the regex pattern, `prefix`.  Note:
-the regex version of `occursin` is recommended over `startswith` in
-performance critical situations.
+Return `true` if `s` starts with the regex pattern, `prefix`.
+
+!!! note
+    `startswith` does not compile the anchoring into the regular
+    expression, but instead passes the anchoring as
+    `match_option` to PCRE. If compile time is amortized,
+    `occursin(r"^...", s)` is faster than `startswith(s, r"...")`.
 
 See also [`occursin`](@ref) and [`endswith`](@ref).
 
@@ -204,9 +208,13 @@ end
 """
     endswith(s::AbstractString, suffix::Regex)
 
-Return `true` if `s` ends with the regex pattern, `suffix`.  Note: the
-regex version of `occursin` is recommended over `endswith` in
-performance critical situations.
+Return `true` if `s` ends with the regex pattern, `suffix`.
+
+!!! note
+    `endswith` does not compile the anchoring into the regular
+    expression, but instead passes the anchoring as
+    `match_option` to PCRE. If compile time is amortized,
+    `occursin(r"...$", s)` is faster than `endswith(s, r"...")`.
 
 See also [`occursin`](@ref) and [`startswith`](@ref).
 
