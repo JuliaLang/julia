@@ -50,7 +50,7 @@ Same as [`eigen`](@ref), but saves space by overwriting the input `A` (and
 function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where T<:BlasReal
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
-    issymmetric(A) && return eigen!(Symmetric(A))
+    issymmetric(A) && return eigen!(Symmetric(A), sortby=sortby)
     A, WR, WI, VL, VR, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)
     iszero(WI) && return Eigen(sorteig!(WR, VR, sortby)...)
     evec = zeros(Complex{T}, n, n)
@@ -73,7 +73,7 @@ end
 function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where T<:BlasComplex
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
-    ishermitian(A) && return eigen!(Hermitian(A))
+    ishermitian(A) && return eigen!(Hermitian(A), sortby=sortby)
     eval, evec = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)[[2,4]]
     return Eigen(sorteig!(eval, evec, sortby)...)
 end
@@ -191,12 +191,12 @@ julia> A
 ```
 """
 function eigvals!(A::StridedMatrix{<:BlasReal}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby)
-    issymmetric(A) && return eigvals!(Symmetric(A))
+    issymmetric(A) && return sorteig!(eigvals!(Symmetric(A)), sortby)
     _, valsre, valsim, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)
     return sorteig!(iszero(valsim) ? valsre : complex.(valsre, valsim), sortby)
 end
 function eigvals!(A::StridedMatrix{<:BlasComplex}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby)
-    ishermitian(A) && return eigvals(Hermitian(A))
+    ishermitian(A) && return sorteig!(eigvals(Hermitian(A)), sortby)
     return sorteig!(LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)[2], sortby)
 end
 
@@ -327,7 +327,7 @@ det(A::Eigen) = prod(A.values)
 
 # Generalized eigenproblem
 function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasReal
-    issymmetric(A) && isposdef(B) && return eigen!(Symmetric(A), Symmetric(B))
+    issymmetric(A) && isposdef(B) && return eigen!(Symmetric(A), Symmetric(B), sortby=sortby)
     n = size(A, 1)
     alphar, alphai, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
     iszero(alphai) && return GeneralizedEigen(sorteig!(alphar ./ beta, vr, sortby)...)
@@ -350,7 +350,7 @@ function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function
 end
 
 function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasComplex
-    ishermitian(A) && isposdef(B) && return eigen!(Hermitian(A), Hermitian(B))
+    ishermitian(A) && isposdef(B) && return eigen!(Hermitian(A), Hermitian(B), sortby=sortby)
     alpha, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
     return GeneralizedEigen(sorteig!(alpha./beta, vr, sortby)...)
 end
@@ -444,12 +444,12 @@ julia> B
 ```
 """
 function eigvals!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasReal
-    issymmetric(A) && isposdef(B) && return eigvals!(Symmetric(A), Symmetric(B))
+    issymmetric(A) && isposdef(B) && return sorteig!(eigvals!(Symmetric(A), Symmetric(B)), sortby)
     alphar, alphai, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
     return sorteig!((iszero(alphai) ? alphar : complex.(alphar, alphai))./beta, sortby)
 end
 function eigvals!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasComplex
-    ishermitian(A) && isposdef(B) && return eigvals!(Hermitian(A), Hermitian(B))
+    ishermitian(A) && isposdef(B) && return sorteig!(eigvals!(Hermitian(A), Hermitian(B)), sortby)
     alpha, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
     return sorteig!(alpha./beta, sortby)
 end
