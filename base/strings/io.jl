@@ -6,12 +6,18 @@
     print([io::IO], xs...)
 
 Write to `io` (or to the default output stream [`stdout`](@ref)
-if `io` is not given) a canonical (un-decorated) text representation
-of values `xs` if there is one, otherwise call [`show`](@ref).
+if `io` is not given) a canonical (un-decorated) text representation.
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 
 Printing `nothing` is not allowed and throws an error.
+
+`print` falls back to calling `show`, so most types should just define
+`show`. Define `print` if your type has a separate "plain" representation.
+For example, `show` displays strings with quotes, and `print` displays strings
+without quotes.
+
+[`string`](@ref) returns the output of `print` as a string.
 
 # Examples
 ```jldoctest
@@ -146,6 +152,12 @@ end
 
 Create a string from any values, except `nothing`, using the [`print`](@ref) function.
 
+`string` should usually not be defined directly. Instead, define a method
+`print(io::IO, x::MyType)`. If `string(x)` for a certain type needs to be
+highly efficient, then it may make sense to add a method to `string` and
+define `print(io::IO, x::MyType) = print(io, string(x))` to ensure the
+functions are consistent.
+
 # Examples
 ```jldoctest
 julia> string("a", 1, true)
@@ -179,6 +191,7 @@ end
     repr(x; context=nothing)
 
 Create a string from any value using the [`show`](@ref) function.
+You should not add methods to `repr`; define a `show` method instead.
 
 The optional keyword argument `context` can be set to an `IO` or [`IOContext`](@ref)
 object whose attributes are used for the I/O stream passed to `show`.

@@ -483,7 +483,7 @@ julia> "$greet, $whom.\n"
 ```
 
 This is more readable and convenient and equivalent to the above string concatenation -- the system
-rewrites this apparent single string literal into a concatenation of string literals with variables.
+rewrites this apparent single string literal into the call `string(greet, ", ", whom, ".\n")`.
 
 The shortest complete expression after the `$` is taken as the expression whose value is to be
 interpolated into the string. Thus, you can interpolate any expression into a string using parentheses:
@@ -494,7 +494,10 @@ julia> "1 + 2 = $(1 + 2)"
 ```
 
 Both concatenation and string interpolation call [`string`](@ref) to convert objects into string
-form. Most non-`AbstractString` objects are converted to strings closely corresponding to how
+form. However, `string` actually just returns the output of [`print`](@ref), so new types
+should add methods to [`print`](@ref) or [`show`](@ref) instead of `string`.
+
+Most non-`AbstractString` objects are converted to strings closely corresponding to how
 they are entered as literal expressions:
 
 ```jldoctest
