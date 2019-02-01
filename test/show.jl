@@ -1465,3 +1465,34 @@ Z = Array{Float64}(undef,0,0)
 
 # issue #31065, do not print parentheses for nested dot expressions
 @test sprint(Base.show_unquoted, :(foo.x.x)) == "foo.x.x"
+
+@testset "push/popdisplay" begin
+    mutable struct LogDisplay <: AbstractDisplay
+        log
+    end
+    function Base.display(d::LogDisplay, x)
+        d.log *= string(x)
+    end
+    Base.display(d::LogDisplay, mime, x) = display(d, x)
+    Base.displayable(d::LogDisplay, mime) = true
+    disp0 = LogDisplay("")
+    disp1 = LogDisplay("")
+    disp2 = LogDisplay("")
+    disp2′ = LogDisplay("")
+    pushdisplay(disp0)
+    display("hi")
+    @test disp0.log == "hi"
+    pushdisplay(disp2; priority=2)
+    pushdisplay(disp2′; priority=2)
+    display("prio top")
+    popdisplay(disp2′)
+    display("prio2")
+    pushdisplay(disp1; priority=1)
+    display("prio")
+    popdisplay()
+    display("prio1")
+    popdisplay(disp1)
+    @test disp2.log == "prio2prio"
+    @test disp2′.log == "prio top"
+    @test disp1.log == "prio1"
+end
