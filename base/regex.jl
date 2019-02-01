@@ -214,7 +214,7 @@ Return `true` if `s` ends with the regex pattern, `suffix`.
     `endswith` does not compile the anchoring into the regular
     expression, but instead passes the anchoring as
     `match_option` to PCRE. If compile time is amortized,
-    `occursin(r"...$", s)` is faster than `endswith(s, r"...")`.
+    `occursin(r"...\$", s)` is faster than `endswith(s, r"...")`.
 
 See also [`occursin`](@ref) and [`startswith`](@ref).
 
