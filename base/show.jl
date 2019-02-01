@@ -307,8 +307,20 @@ end
     show(x)
 
 Write an informative text representation of a value to the current output stream. New types
-should overload `show(io, x)` where the first argument is a stream. The representation used
+should overload `show(io::IO, x)` where the first argument is a stream. The representation used
 by `show` generally includes Julia-specific formatting and type information.
+
+[`repr`](@ref) returns the output of `show` as a string.
+
+See also [`print`](@ref), which writes un-decorated representations.
+
+# Examples
+```jldoctest
+julia> show("Hello World!")
+"Hello World!"
+julia> print("Hello World!")
+Hello World!
+```
 """
 show(x) = show(stdout::IO, x)
 
