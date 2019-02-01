@@ -72,110 +72,124 @@ function generate_precompile_statements()
         empty!(DEPOT_PATH)
     end
 
-    print("Generating precompile statements...")
-    sysimg = Base.unsafe_string(Base.JLOptions().image_file)
-    mktemp() do precompile_file, _
-        # Run a repl process and replay our script
-        repl_output_buffer = IOBuffer()
-        @static if Sys.iswindows()
-            # Fake being cygwin
-            pipename = """\\\\?\\pipe\\cygwin-$("0"^16)-pty10-abcdef"""
-            server = listen(pipename)
-            pty_slave = connect(pipename)
-            @assert ccall(:jl_ispty, Cint, (Ptr{Cvoid},), pty_slave.handle) == 1
-            pty_master = accept(server)
-        else
-            pty_slave, pty_master = open_fake_pty()
-        end
-        done = false
-        blackhole = Sys.isunix() ? "/dev/null" : "nul"
-        withenv("JULIA_HISTORY" => blackhole, "JULIA_PROJECT" => nothing,
-                "TERM" => "") do
-            if have_repl
-                p = run(`$(julia_cmd()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
-                        --compile=all --startup-file=no --color=yes
-                        -e 'import REPL; REPL.Terminals.is_precompiling[] = true'
-                        -i`,
-                        pty_slave, pty_slave, pty_slave; wait=false)
-                readuntil(pty_master, "julia>", keep=true)
-                t = @async begin
+    fname, io = mktemp()
+    try
+        print("Generating precompile statements (debug logging in $(fname))...")
+        sysimg = Base.unsafe_string(Base.JLOptions().image_file)
+        mktemp() do precompile_file, _
+            # Run a repl process and replay our script
+            repl_output_buffer = IOBuffer()
+            @static if Sys.iswindows()
+                # Fake being cygwin
+                pipename = """\\\\?\\pipe\\cygwin-$("0"^16)-pty10-abcdef"""
+                server = listen(pipename)
+                pty_slave = connect(pipename)
+                @assert ccall(:jl_ispty, Cint, (Ptr{Cvoid},), pty_slave.handle) == 1
+                pty_master = accept(server)
+            else
+                pty_slave, pty_master = open_fake_pty()
+            end
+            done = false
+            blackhole = Sys.isunix() ? "/dev/null" : "nul"
+            withenv("JULIA_HISTORY" => blackhole, "JULIA_PROJECT" => nothing,
+                    "TERM" => "") do
+                if have_repl
+                    p = run(`$(julia_cmd()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
+                            --compile=all --startup-file=no --color=yes
+                            -e 'import REPL; REPL.Terminals.is_precompiling[] = true'
+                            -i`,
+                            pty_slave, pty_slave, pty_slave; wait=false)
+                    watcher = @async begin
+                        readuntil(pty_master, "julia>", keep=true)
+                        t = @async begin
+                            while true
+                                sleep(0.5)
+                                s = String(readavailable(pty_master))
+                                write(io, s)
+                                write(repl_output_buffer, s)
+                                if occursin("__PRECOMPILE_END__", s)
+                                    break
+                                end
+                            end
+                        end
+
+                        if have_repl
+                            for l in split(precompile_script, '\n'; keepempty=false)
+                                write(pty_master, l, '\n')
+                            end
+                        end
+                        write(pty_master, "print(\"__PRECOMPILE\", \"_END__\")", '\n')
+                        wait(t)
+
+                        if Sys.iswindows()
+                            print(pty_master, "ccall(:_exit, Cvoid, (Cint,), 0)\n")
+                        else
+                            write(pty_master, "exit()\n")
+                            readuntil(pty_master, "exit()\r\e[13C\r\n")
+                            # @assert bytesavailable(master) == 0
+                        end
+                        wait(p)
+                    end
+
                     while true
-                        sleep(0.5)
-                        s = String(readavailable(pty_master))
-                        write(repl_output_buffer, s)
-                        if occursin("__PRECOMPILE_END__", s)
+                        if istaskdone(watcher)
+                            break
+                        elseif process_exited(p)
+                            println("REPL process exited with ", p.exitcode)
                             break
                         end
+                        sleep(0.5)
                     end
-                end
-                if have_repl
-                    for l in split(precompile_script, '\n'; keepempty=false)
-                        write(pty_master, l, '\n')
-                    end
-                end
-                write(pty_master, "print(\"__PRECOMPILE\", \"_END__\")", '\n')
-                wait(t)
-
-                # TODO Figure out why exit() on Windows doesn't exit the process
-                if Sys.iswindows()
-                    print(pty_master, "ccall(:_exit, Cvoid, (Cint,), 0)\n")
                 else
-                    write(pty_master, "exit()\n")
-                    readuntil(pty_master, "exit()\r\e[13C\r\n")
-                    # @assert bytesavailable(master) == 0
+                    # Is this even needed or is this already recorded just from starting this process?
+                    p = run(`$(julia_cmd()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
+                            --compile=all --startup-file=no
+                            -e0`)
                 end
-                wait(p)
-            else
-                # Is this even needed or is this already recorded just from starting this process?
-                p = run(`$(julia_cmd()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
-                        --compile=all --startup-file=no
-                        -e0`)
             end
-        end
-        close(pty_master)
+            close(pty_master)
 
-        # Check what the REPL displayed
-        # repl_output = String(take!(repl_output_buffer))
-        # println(repl_output)
-
-        # Extract the precompile statements from stderr
-        statements = Set{String}()
-        for statement in split(read(precompile_file, String), '\n')
-            occursin("Main.", statement) && continue
-            push!(statements, statement)
-        end
-
-        if have_repl
-            # Seems like a reasonable number right now, adjust as needed
-            # comment out if debugging script
-            @assert length(statements) > 700
-        end
-
-        # Create a staging area where all the loaded packages are available
-        PrecompileStagingArea = Module()
-        for (_pkgid, _mod) in Base.loaded_modules
-            if !(_pkgid.name in ("Main", "Core", "Base"))
-                eval(PrecompileStagingArea, :($(Symbol(_mod)) = $_mod))
+            # Extract the precompile statements from stderr
+            statements = Set{String}()
+            for statement in split(read(precompile_file, String), '\n')
+                occursin("Main.", statement) && continue
+                push!(statements, statement)
             end
-        end
 
-        # Execute the collected precompile statements
-        include_time = @elapsed for statement in sort(collect(statements))
-            # println(statement)
-            # Work around #28808
-            occursin("\"YYYY-mm-dd\\THH:MM:SS\"", statement) && continue
-            statement == "precompile(Tuple{typeof(Base.show), Base.IOContext{Base.TTY}, Type{Vararg{Any, N} where N}})" && continue
-            try
-                Base.include_string(PrecompileStagingArea, statement)
-            catch
-                @error "Failed to precompile $statement"
-                rethrow()
+            if have_repl
+                # Seems like a reasonable number right now, adjust as needed
+                # comment out if debugging script
+                @assert length(statements) > 700
             end
+
+            # Create a staging area where all the loaded packages are available
+            PrecompileStagingArea = Module()
+            for (_pkgid, _mod) in Base.loaded_modules
+                if !(_pkgid.name in ("Main", "Core", "Base"))
+                    eval(PrecompileStagingArea, :($(Symbol(_mod)) = $_mod))
+                end
+            end
+
+            # Execute the collected precompile statements
+            include_time = @elapsed for statement in sort(collect(statements))
+                # println(statement)
+                # Work around #28808
+                occursin("\"YYYY-mm-dd\\THH:MM:SS\"", statement) && continue
+                statement == "precompile(Tuple{typeof(Base.show), Base.IOContext{Base.TTY}, Type{Vararg{Any, N} where N}})" && continue
+                try
+                    Base.include_string(PrecompileStagingArea, statement)
+                catch
+                    @error "Failed to precompile $statement"
+                    rethrow()
+                end
+            end
+            print(" $(length(statements)) generated in ")
+            tot_time = time() - start_time
+            Base.time_print(tot_time * 10^9)
+            print(" (overhead "); Base.time_print((tot_time - include_time) * 10^9); println(")")
         end
-        print(" $(length(statements)) generated in ")
-        tot_time = time() - start_time
-        Base.time_print(tot_time * 10^9)
-        print(" (overhead "); Base.time_print((tot_time - include_time) * 10^9); println(")")
+    finally
+        close(io)
     end
 
     return
