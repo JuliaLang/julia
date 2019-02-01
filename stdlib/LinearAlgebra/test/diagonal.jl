@@ -173,6 +173,11 @@ Random.seed!(1)
         @test D/D2 ≈ Diagonal(D.diag./D2.diag)
         @test D\D2 ≈ Diagonal(D2.diag./D.diag)
 
+        # QR \ Diagonal
+        A = rand(elty, n, n)
+        qrA = qr(A)
+        @test qrA \ D ≈ A \ D
+
         # Performance specialisations for A*_mul_B!
         vvv = similar(vv)
         @test (r = Matrix(D) * vv   ; mul!(vvv, D, vv)  ≈ r ≈ vvv)
@@ -432,6 +437,9 @@ end
     @test exp(D) == Diagonal([exp([1 2; 3 4]), exp([1 2; 3 4])])
     @test log(D) == Diagonal([log([1 2; 3 4]), log([1 2; 3 4])])
     @test sqrt(D) == Diagonal([sqrt([1 2; 3 4]), sqrt([1 2; 3 4])])
+
+    @test tr(D) == 10
+    @test det(D) == 4
 end
 
 @testset "multiplication with Symmetric/Hermitian" begin

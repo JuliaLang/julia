@@ -343,7 +343,7 @@ endif
 	mkdir -p $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
 	$(INSTALL_F) $(JULIAHOME)/contrib/julia.svg $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
 	-touch -c $(DESTDIR)$(datarootdir)/icons/hicolor/
-	-gtk-update-icon-cache $(DESTDIR)$(datarootdir)/icons/hicolor/
+	-gtk-update-icon-cache --ignore-theme-index $(DESTDIR)$(datarootdir)/icons/hicolor/
 	mkdir -p $(DESTDIR)$(datarootdir)/applications/
 	$(INSTALL_F) $(JULIAHOME)/contrib/julia.desktop $(DESTDIR)$(datarootdir)/applications/
 	# Install appdata file
@@ -434,6 +434,8 @@ ifeq ($(OS), WINNT)
 	# compress nsis installer and combine with 7zip self-extracting header
 	cd $(BUILDROOT) && $(JULIAHOME)/dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
 	cd $(BUILDROOT) && cat $(JULIAHOME)/contrib/windows/7zS.sfx $(JULIAHOME)/contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "$(JULIA_BINARYDIST_FILENAME).exe"
+	chmod a+x "$(BUILDROOT)/$(JULIA_BINARYDIST_FILENAME).exe"
+	-rm -f $(BUILDROOT)/julia-install-$(JULIA_COMMIT)-$(ARCH).7z
 	-rm -f $(BUILDROOT)/julia-installer.exe
 else
 	cd $(BUILDROOT) && $(TAR) zcvf $(JULIA_BINARYDIST_FILENAME).tar.gz julia-$(JULIA_COMMIT)

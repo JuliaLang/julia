@@ -144,6 +144,9 @@ end
 @test_repr "import A.B.C: a, x, y.z"
 @test_repr "import ..A: a, x, y.z"
 
+@test repr(Expr(:using, :Foo)) == ":(\$(Expr(:using, :Foo)))"
+@test repr(Expr(:using, Expr(:(.), ))) == ":(\$(Expr(:using, :(\$(Expr(:.))))))"
+
 # range syntax
 @test_repr "1:2"
 @test_repr "3:4:5"
@@ -1450,3 +1453,7 @@ end
 
 # issue #30505
 @test repr(Union{Tuple{Char}, Tuple{Char, Char}}[('a','b')]) == "Union{Tuple{Char}, Tuple{Char,Char}}[('a', 'b')]"
+
+# issue #30927
+Z = Array{Float64}(undef,0,0)
+@test eval(Meta.parse(repr(Z))) == Z

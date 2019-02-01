@@ -72,6 +72,7 @@ let s = "hello"
     c = collect(rest(s, st))
     @test c == ['e','l','l','o']
     @test c isa Vector{Char}
+    @test rest(s, st) == rest(rest(s,4),st)
 end
 
 @test_throws MethodError collect(rest(countfrom(1), 5))

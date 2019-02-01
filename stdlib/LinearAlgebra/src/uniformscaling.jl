@@ -48,6 +48,31 @@ julia> [1 2im 3; 1im 2 3] * I
 """
 const I = UniformScaling(true)
 
+"""
+    (I::UniformScaling)(n::Integer)
+
+Construct a `Diagonal` matrix from a `UniformScaling`.
+
+!!! compat "Julia 1.2"
+     This method is available as of Julia 1.2.
+
+# Examples
+```jldoctest
+julia> I(3)
+3×3 Diagonal{Bool,Array{Bool,1}}:
+ 1  ⋅  ⋅
+ ⋅  1  ⋅
+ ⋅  ⋅  1
+
+julia> (0.7*I)(3)
+3×3 Diagonal{Float64,Array{Float64,1}}:
+ 0.7   ⋅    ⋅
+  ⋅   0.7   ⋅
+  ⋅    ⋅   0.7
+```
+"""
+(I::UniformScaling)(n::Integer) = Diagonal(fill(I.λ, n))
+
 eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2
 Base.has_offset_axes(::UniformScaling) = false
@@ -205,7 +230,7 @@ Broadcast.broadcasted(::typeof(/), J::UniformScaling,x::Number) = UniformScaling
 ## equality comparison with UniformScaling
 ==(J::UniformScaling, A::AbstractMatrix) = A == J
 function ==(A::AbstractMatrix, J::UniformScaling)
-    @assert !has_offset_axes(A)
+    require_one_based_indexing(A)
     size(A, 1) == size(A, 2) || return false
     iszero(J.λ) && return iszero(A)
     isone(J.λ) && return isone(A)
@@ -247,7 +272,7 @@ Copies a [`UniformScaling`](@ref) onto a matrix.
     support for a rectangular matrix.
 """
 function copyto!(A::AbstractMatrix, J::UniformScaling)
-    @assert !has_offset_axes(A)
+    require_one_based_indexing(A)
     fill!(A, 0)
     λ = J.λ
     for i = 1:min(size(A,1),size(A,2))
@@ -283,7 +308,7 @@ for (f,dim,name) in ((:hcat,1,"rows"), (:vcat,2,"cols"))
             n = -1
             for a in A
                 if !isa(a, UniformScaling)
-                    @assert !has_offset_axes(a)
+                    require_one_based_indexing(a)
                     na = size(a,$dim)
                     n >= 0 && n != na &&
                         throw(DimensionMismatch(string("number of ", $name,
@@ -299,7 +324,7 @@ end
 
 
 function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScaling}...)
-    @assert !has_offset_axes(A...)
+    require_one_based_indexing(A...)
     nr = length(rows)
     sum(rows) == length(A) || throw(ArgumentError("mismatch between row sizes and number of arguments"))
     n = fill(-1, length(A))

@@ -2649,6 +2649,7 @@ JL_DLLEXPORT void jl_fill_argnames(jl_array_t *data, jl_array_t *names)
 
 JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 {
+    JL_TIMING(SAVE_MODULE);
     char *tmpfname = strcat(strcpy((char *) alloca(strlen(fname)+8), fname), ".XXXXXX");
     ios_t f;
     jl_array_t *mod_array = NULL, *udeps = NULL;
@@ -3045,6 +3046,7 @@ static int trace_method(jl_typemap_entry_t *entry, void *closure)
 
 static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
 {
+    JL_TIMING(LOAD_MODULE);
     jl_ptls_t ptls = jl_get_ptls_states();
     if (ios_eof(f) || !jl_read_verify_header(f)) {
         ios_close(f);

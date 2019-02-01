@@ -100,7 +100,6 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-skylakexdgemm.patch-applied: $(BUILDDIR
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-skylakexdgemm.patch-applied
-	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $(dir $<)/Makefile.system
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured

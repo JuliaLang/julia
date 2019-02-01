@@ -5,6 +5,7 @@
 #########################
 
 const MAX_TYPEUNION_COMPLEXITY = 3
+const MAX_TYPEUNION_LENGTH = 3
 const MAX_INLINE_CONST_SIZE = 256
 
 #########################
@@ -373,7 +374,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         end
     end
     u = Union{types...}
-    if unioncomplexity(u) <= MAX_TYPEUNION_COMPLEXITY
+    if unionlen(u) <= MAX_TYPEUNION_LENGTH && unioncomplexity(u) <= MAX_TYPEUNION_COMPLEXITY
         # don't let type unions get too big, if the above didn't reduce it enough
         return u
     end
@@ -400,7 +401,7 @@ function tuplemerge(a::DataType, b::DataType)
     p = Vector{Any}(undef, lt + vt)
     for i = 1:lt
         ui = Union{ap[i], bp[i]}
-        if unioncomplexity(ui) < MAX_TYPEUNION_COMPLEXITY
+        if unionlen(ui) <= MAX_TYPEUNION_LENGTH && unioncomplexity(ui) <= MAX_TYPEUNION_COMPLEXITY
             p[i] = ui
         else
             p[i] = Any
