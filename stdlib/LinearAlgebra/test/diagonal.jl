@@ -493,4 +493,13 @@ end
     end
 end
 
+@testset "eigenvalue sorting" begin
+    D = Diagonal([0.4, 0.2, -1.3])
+    @test eigvals(D) == eigen(D).values == [0.4, 0.2, -1.3] # not sorted by default
+    @test eigvals(Matrix(D)) == eigen(Matrix(D)).values == [-1.3, 0.2, 0.4] # sorted even if diagonal special case is detected
+    E = eigen(D, sortby=abs) # sortby keyword supported for eigen(::Diagonal)
+    @test E.values == [0.2, 0.4, -1.3]
+    @test E.vectors == [0 1 0; 1 0 0; 0 0 1]
+end
+
 end # module TestDiagonal

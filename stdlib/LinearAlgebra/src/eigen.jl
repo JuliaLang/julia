@@ -31,7 +31,7 @@ isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0,
 # as is the LAPACK default (for complex λ — LAPACK sorts by λ for the Hermitian/Symmetric case)
 eigsortby(λ::Real) = λ
 eigsortby(λ::Complex) = (real(λ),imag(λ))
-function sorteig!(λ, X, sortby=eigsortby)
+function sorteig!(λ::AbstractVector, X::AbstractMatrix, sortby::Union{Function,Nothing}=eigsortby)
     if sortby !== nothing && !issorted(λ, by=sortby)
         p = sortperm(λ; alg=QuickSort, by=sortby)
         permute!(λ, p)
@@ -39,7 +39,7 @@ function sorteig!(λ, X, sortby=eigsortby)
     end
     return λ, X
 end
-sorteig!(λ, sortby=eigsortby) = sortby === nothing ? λ : sort!(λ, by=sortby)
+sorteig!(λ::AbstractVector, sortby::Union{Function,Nothing}=eigsortby) = sortby === nothing ? λ : sort!(λ, by=sortby)
 
 """
     eigen!(A, [B]; permute, scale, sortby)
@@ -52,7 +52,7 @@ function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortb
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
     issymmetric(A) && return eigen!(Symmetric(A))
     A, WR, WI, VL, VR, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)
-    iszero(WI) && return Eigen(WR, VR)
+    iszero(WI) && return Eigen(sorteig!(WR, VR, sortby)...)
     evec = zeros(Complex{T}, n, n)
     j = 1
     while j <= n
@@ -133,9 +133,9 @@ julia> vals == F.values && vecs == F.vectors
 true
 ```
 """
-function eigen(A::StridedMatrix{T}; kws...) where T
+function eigen(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where T
     AA = copy_oftype(A, eigtype(T))
-    isdiag(AA) && return eigen(Diagonal(AA); kws...)
+    isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
     return eigen!(AA; kws...)
 end
 eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
@@ -330,7 +330,7 @@ function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function
     issymmetric(A) && isposdef(B) && return eigen!(Symmetric(A), Symmetric(B))
     n = size(A, 1)
     alphar, alphai, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
-    iszero(alphai) && return GeneralizedEigen(alphar ./ beta, vr)
+    iszero(alphai) && return GeneralizedEigen(sorteig!(alphar ./ beta, vr, sortby)...)
 
     vecs = zeros(Complex{T}, n, n)
     j = 1

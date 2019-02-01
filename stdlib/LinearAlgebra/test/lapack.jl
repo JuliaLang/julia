@@ -563,19 +563,19 @@ end
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         T = triu(rand(elty,10,10))
         i = sortperm(diag(T), by=LinearAlgebra.eigsortby)[1]
-        S = copy(T)
+        v = eigvecs(Matrix(T))[:,1]
+        kmax = sortperm(v, by=abs)[end]
         select = zeros(LinearAlgebra.BlasInt,10)
         select[i] = 1
         select,Vr = LAPACK.trevc!('R','S',select,copy(T))
-        @test Vr ≈ eigvecs(S)[:,1]
+        @test Vr ≈ v * Vr[kmax] / v[kmax]
         select = zeros(LinearAlgebra.BlasInt,10)
         select[i] = 1
         select,Vl = LAPACK.trevc!('L','S',select,copy(T))
         select = zeros(LinearAlgebra.BlasInt,10)
         select[i] = 1
         select,Vln,Vrn = LAPACK.trevc!('B','S',select,copy(T))
-        v = eigvecs(S)[:,1]
-        @test Vrn ≈ v * Vrn[i] / v[i]
+        @test Vrn ≈ v * Vrn[kmax] / v[kmax]
         @test Vln ≈ Vl
         @test_throws ArgumentError LAPACK.trevc!('V','S',select,copy(T))
         @test_throws DimensionMismatch LAPACK.trrfs!('U','N','N',T,rand(elty,10,10),rand(elty,10,11))
