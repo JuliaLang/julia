@@ -437,6 +437,9 @@ end
     @test exp(D) == Diagonal([exp([1 2; 3 4]), exp([1 2; 3 4])])
     @test log(D) == Diagonal([log([1 2; 3 4]), log([1 2; 3 4])])
     @test sqrt(D) == Diagonal([sqrt([1 2; 3 4]), sqrt([1 2; 3 4])])
+
+    @test tr(D) == 10
+    @test det(D) == 4
 end
 
 @testset "multiplication with Symmetric/Hermitian" begin
@@ -497,5 +500,6 @@ end
         @test (D \ L)::LowerTriangular{elty} == LowerTriangular(Matrix(D) \ Matrix(L))
     end
 end
+
 
 end # module TestDiagonal
