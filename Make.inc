@@ -189,6 +189,13 @@ DARWIN_FRAMEWORK ?= 0
 FRAMEWORK_NAME ?= Julia
 FRAMEWORK_VERSION ?= $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION)
 
+# The prefix for all code sign identifiers.
+DARWIN_CODESIGN_ID_BASE ?= org.julialang.julia
+# The codesign id for the ui/repl (also embedded in Info.plist).
+darwin_codesign_id_julia_ui := $(DARWIN_CODESIGN_ID_BASE).ui
+# The prefix for all deps.
+darwin_codesign_id_julia_deps := $(DARWIN_CODESIGN_ID_BASE).deps
+
 # Directories and file structure of a Darwin framework:
 framework_directory:=$(FRAMEWORK_NAME).framework
 framework_versions:=$(framework_directory)/Versions

@@ -11,14 +11,6 @@ default: framework
 # The default "-" makes an ad-hoc signature.
 DARWIN_CODESIGN_KEYCHAIN_IDENTITY ?= -
 
-# The prefix for all code sign identifiers.
-DARWIN_CODESIGN_ID_BASE ?= org.julialang.julia
-
-# The codesign id for the ui/repl (also embedded in Info.plist).
-darwin_codesign_id_julia_ui := $(DARWIN_CODESIGN_ID_BASE).ui
-# The prefix for all deps.
-darwin_codesign_id_julia_deps := $(DARWIN_CODESIGN_ID_BASE).deps
-
 # framework directory structure targets
 framework_destdirs := $(sort $(addprefix $(DESTDIR)$(prefix)/,$(framework_currver) $(framework_headers) $(framework_headers)/julia $(framework_documentation) $(framework_resources) $(framework_frameworks) $(framework_modules) $(framework_helpers) $(framework_currver)/lib))
 
