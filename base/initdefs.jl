@@ -76,7 +76,7 @@ const DEFAULT_LOAD_PATH = ["@", "@v#.#", "@stdlib"]
     LOAD_PATH
 
 An array of paths for `using` and `import` statements to consider as project
-environments or package directories when loading code. See Code Loading.
+environments or package directories when loading code. See [Code Loading](@ref Code-Loading).
 """
 const LOAD_PATH = copy(DEFAULT_LOAD_PATH)
 const HOME_PROJECT = Ref{Union{String,Nothing}}(nothing)
@@ -100,7 +100,7 @@ end
 function current_project()
     dir = try pwd()
     catch err
-        err isa IOError || rethrow(err)
+        err isa IOError || rethrow()
         return nothing
     end
     return current_project(dir)
@@ -166,7 +166,6 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
                 file = abspath(path, proj)
                 isfile_casesensitive(file) && return file
             end
-            return path
         end
         isempty(DEPOT_PATH) && return nothing
         return abspath(DEPOT_PATH[1], "environments", name, project_names[end])
@@ -236,4 +235,31 @@ function _atexit()
             println(stderr)
         end
     end
+end
+
+## hook for disabling threaded libraries ##
+
+library_threading_enabled = true
+const disable_library_threading_hooks = []
+
+function at_disable_library_threading(f)
+    push!(disable_library_threading_hooks, f)
+    if !library_threading_enabled
+        disable_library_threading()
+    end
+    return
+end
+
+function disable_library_threading()
+    global library_threading_enabled = false
+    while !isempty(disable_library_threading_hooks)
+        f = pop!(disable_library_threading_hooks)
+        try
+            f()
+        catch err
+            @warn("a hook from a library to disable threading failed:",
+                  exception = (err, catch_backtrace()))
+        end
+    end
+    return
 end

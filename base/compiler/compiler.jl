@@ -24,7 +24,6 @@ include(mod, x) = Core.include(mod, x)
 
 # essential files and libraries
 include("essentials.jl")
-include("some.jl")
 include("ctypes.jl")
 include("generator.jl")
 include("reflection.jl")
@@ -73,7 +72,7 @@ include("abstractdict.jl")
 include("abstractset.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate
-using .Iterators: Flatten, product  # for generators
+using .Iterators: Flatten, Filter, product  # for generators
 include("namedtuple.jl")
 
 # core docsystem

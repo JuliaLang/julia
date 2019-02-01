@@ -31,28 +31,18 @@ extern "C" {
 
 static int exec_program(char *program)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
         jl_load(jl_main_module, program);
     }
     JL_CATCH {
         jl_value_t *errs = jl_stderr_obj();
-        jl_value_t *e = ptls->exception_in_transit;
-        // Manually save and restore the backtrace so that we print the original
-        // one instead of the one caused by `show`.
-        // We can't use safe_restore since that will cause any error
-        // (including the ones that would have been caught) to abort.
-        uintptr_t *volatile bt_data = NULL;
-        size_t bt_size = ptls->bt_size;
         volatile int shown_err = 0;
         jl_printf(JL_STDERR, "error during bootstrap:\n");
         JL_TRY {
             if (errs) {
-                bt_data = (uintptr_t*)malloc(bt_size * sizeof(void*));
-                memcpy(bt_data, ptls->bt_data, bt_size * sizeof(void*));
                 jl_value_t *showf = jl_get_function(jl_base_module, "show");
                 if (showf != NULL) {
-                    jl_call2(showf, errs, e);
+                    jl_call2(showf, errs, jl_current_exception());
                     jl_printf(JL_STDERR, "\n");
                     shown_err = 1;
                 }
@@ -60,13 +50,8 @@ static int exec_program(char *program)
         }
         JL_CATCH {
         }
-        if (bt_data) {
-            ptls->bt_size = bt_size;
-            memcpy(ptls->bt_data, bt_data, bt_size * sizeof(void*));
-            free(bt_data);
-        }
         if (!shown_err) {
-            jl_static_show(JL_STDERR, e);
+            jl_static_show(JL_STDERR, jl_current_exception());
             jl_printf(JL_STDERR, "\n");
         }
         jlbacktrace();
@@ -99,7 +84,6 @@ static void print_profile(void)
 
 static NOINLINE int true_main(int argc, char *argv[])
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     jl_set_ARGS(argc, argv);
 
     jl_function_t *start_client = jl_base_module ?
@@ -113,7 +97,7 @@ static NOINLINE int true_main(int argc, char *argv[])
             jl_get_ptls_states()->world_age = last_age;
         }
         JL_CATCH {
-            jl_no_exc_handler(jl_exception_in_transit);
+            jl_no_exc_handler(jl_current_exception());
         }
         return 0;
     }
@@ -138,7 +122,7 @@ static NOINLINE int true_main(int argc, char *argv[])
             jl_value_t *val = (jl_value_t*)jl_eval_string(line);
             if (jl_exception_occurred()) {
                 jl_printf(JL_STDERR, "error during run:\n");
-                jl_static_show(JL_STDERR, ptls->exception_in_transit);
+                jl_static_show(JL_STDERR, jl_exception_occurred());
                 jl_exception_clear();
             }
             else if (val) {
@@ -155,7 +139,7 @@ static NOINLINE int true_main(int argc, char *argv[])
                 line = NULL;
             }
             jl_printf(JL_STDERR, "\nparser error:\n");
-            jl_static_show(JL_STDERR, ptls->exception_in_transit);
+            jl_static_show(JL_STDERR, jl_current_exception());
             jl_printf(JL_STDERR, "\n");
             jlbacktrace();
         }

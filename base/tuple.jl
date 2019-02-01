@@ -19,8 +19,8 @@ NTuple
 length(@nospecialize t::Tuple) = nfields(t)
 firstindex(@nospecialize t::Tuple) = 1
 lastindex(@nospecialize t::Tuple) = length(t)
-size(@nospecialize(t::Tuple), d) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
-axes(@nospecialize t::Tuple) = OneTo(length(t))
+size(@nospecialize(t::Tuple), d::Integer) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
+axes(@nospecialize t::Tuple) = (OneTo(length(t)),)
 @eval getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, $(Expr(:boundscheck)))
 @eval getindex(@nospecialize(t::Tuple), i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...,)
@@ -120,46 +120,6 @@ end
 
 ## mapping ##
 
-"""
-    ntuple(f::Function, n::Integer)
-
-Create a tuple of length `n`, computing each element as `f(i)`,
-where `i` is the index of the element.
-
-# Examples
-```jldoctest
-julia> ntuple(i -> 2*i, 4)
-(2, 4, 6, 8)
-```
-"""
-function ntuple(f::F, n::Integer) where F
-    t = n == 0  ? () :
-        n == 1  ? (f(1),) :
-        n == 2  ? (f(1), f(2)) :
-        n == 3  ? (f(1), f(2), f(3)) :
-        n == 4  ? (f(1), f(2), f(3), f(4)) :
-        n == 5  ? (f(1), f(2), f(3), f(4), f(5)) :
-        n == 6  ? (f(1), f(2), f(3), f(4), f(5), f(6)) :
-        n == 7  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7)) :
-        n == 8  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8)) :
-        n == 9  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9)) :
-        n == 10 ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10)) :
-        _ntuple(f, n)
-    return t
-end
-
-function _ntuple(f, n)
-    @_noinline_meta
-    (n >= 0) || throw(ArgumentError(string("tuple length should be ≥0, got ", n)))
-    ([f(i) for i = 1:n]...,)
-end
-
-# inferrable ntuple (enough for bootstrapping)
-ntuple(f, ::Val{0}) = ()
-ntuple(f, ::Val{1}) = (@_inline_meta; (f(1),))
-ntuple(f, ::Val{2}) = (@_inline_meta; (f(1), f(2)))
-ntuple(f, ::Val{3}) = (@_inline_meta; (f(1), f(2), f(3)))
-
 # 1 argument function
 map(f, t::Tuple{})              = ()
 map(f, t::Tuple{Any,})          = (f(t[1]),)
@@ -212,6 +172,18 @@ function map(f, t1::Any16, t2::Any16, ts::Any16...)
     (A...,)
 end
 
+# mapafoldl, based on afold in operators.jl
+mapafoldl(F,op,a) = a
+mapafoldl(F,op,a,b) = op(a,F(b))
+mapafoldl(F,op,a,b,c...) = mapafoldl(F, op, op(a,F(b)), c...)
+function mapafoldl(F,op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
+    y = op(op(op(op(op(op(op(op(op(op(op(op(op(op(op(a,F(b)),F(c)),F(d)),F(e)),F(f)),F(g)),F(h)),F(i)),F(j)),F(k)),F(l)),F(m)),F(n)),F(o)),F(p))
+    for x in qs; y = op(y,F(x)); end
+    y
+end
+mapfoldl_impl(f, op, nt::NamedTuple{(:init,)}, t::Tuple) = mapafoldl(f, op, nt.init, t...)
+mapfoldl_impl(f, op, nt::NamedTuple{()}, t::Tuple) = mapafoldl(f, op, f(t[1]), tail(t)...)
+mapfoldl_impl(f, op, nt::NamedTuple{()}, t::Tuple{}) = mapreduce_empty_iter(f, op, t, IteratorEltype(t))
 
 # type-stable padding
 fill_to_length(t::NTuple{N,Any}, val, ::Val{N}) where {N} = t

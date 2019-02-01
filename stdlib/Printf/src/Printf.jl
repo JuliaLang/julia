@@ -7,7 +7,7 @@ module Printf
 export @printf, @sprintf
 using Base.Printf: _printf, is_str_expr, fix_dec, DIGITS, DIGITSs, print_fixed, print_fixed_width, decode_dec, decode_hex,
                    ini_hex, ini_HEX, print_exp_a, decode_0ct, decode_HEX, ini_dec, print_exp_e,
-                   decode_oct, _limit
+                   decode_oct, _limit, SmallNumber
 using Unicode: textwidth
 
 """
@@ -19,7 +19,7 @@ Print `args` using C `printf` style format specification string, with some cavea
 equally close to the numeric values of two possible output strings, the output
 string further away from zero is chosen.
 
-Optionally, an `IOStream`
+Optionally, an [`IOStream`](@ref)
 may be passed as the first argument to redirect output.
 
 # Examples

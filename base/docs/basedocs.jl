@@ -129,10 +129,13 @@ kw"primitive type"
 """
     macro
 
-`macro` defines a method to include generated code in the final body of a program. A
-macro maps a tuple of arguments to a returned expression, and the resulting expression
-is compiled directly rather than requiring a runtime `eval` call. Macro arguments may
-include expressions, literal values, and symbols. For example:
+`macro` defines a method for inserting generated code into a program.
+A macro maps a sequence of argument expressions to a returned expression, and the
+resulting expression is substituted directly into the program at the point where
+the macro is invoked.
+Macros are a way to run generated code without calling `eval`, since the generated
+code instead simply becomes part of the surrounding program.
+Macro arguments may include expressions, literal values, and symbols.
 
 # Examples
 ```jldoctest
@@ -198,6 +201,91 @@ julia> z
 kw"global"
 
 """
+    =
+
+`=` is the assignment operator.
+* For variable `a` and expression `b`, `a = b` makes `a` refer to the value of `b`.
+* For functions `f(x)`, `f(x) = x` defines a new function constant `f`, or adds a new method to `f` if `f` is already defined; this usage is equivalent to `function f(x); x; end`.
+* `a[i] = v` calls [`setindex!`](@ref)`(a,v,i)`.
+* `a.b = c` calls [`setproperty!`](@ref)`(a,:b,c)`.
+* Inside a function call, `f(a=b)` passes `b` as the value of keyword argument `a`.
+* Inside parentheses with commas, `(a=1,)` constructs a [`NamedTuple`](@ref).
+
+# Examples
+Assigning `a` to `b` does not create a copy of `b`; instead use [`copy`](@ref) or [`deepcopy`](@ref).
+
+```jldoctest
+julia> b = [1]; a = b; b[1] = 2; a
+1-element Array{Int64,1}:
+ 2
+
+julia> b = [1]; a = copy(b); b[1] = 2; a
+1-element Array{Int64,1}:
+ 1
+
+```
+Collections passed to functions are also not copied. Functions can modify (mutate) the contents of the objects their arguments refer to. (The names of functions which do this are conventionally suffixed with '!'.)
+```jldoctest
+julia> function f!(x); x[:] .+= 1; end
+f! (generic function with 1 method)
+
+julia> a = [1]; f!(a); a
+1-element Array{Int64,1}:
+ 2
+
+```
+Assignment can operate on multiple variables in parallel, taking values from an iterable:
+```jldoctest
+julia> a, b = 4, 5
+(4, 5)
+
+julia> a, b = 1:3
+1:3
+
+julia> a, b
+(1, 2)
+
+```
+Assignment can operate on multiple variables in series, and will return the value of the right-hand-most expression:
+```jldoctest
+julia> a = [1]; b = [2]; c = [3]; a = b = c
+1-element Array{Int64,1}:
+ 3
+
+julia> b[1] = 2; a, b, c
+([2], [2], [2])
+
+```
+Assignment at out-of-bounds indices does not grow a collection. If the collection is a [`Vector`](@ref) it can instead be grown with [`push!`](@ref) or [`append!`](@ref).
+```jldoctest
+julia> a = [1, 1]; a[3] = 2
+ERROR: BoundsError: attempt to access 2-element Array{Int64,1} at index [3]
+[...]
+
+julia> push!(a, 2, 3)
+4-element Array{Int64,1}:
+ 1
+ 1
+ 2
+ 3
+
+```
+Assigning `[]` does not eliminate elements from a collection; instead use `filter!`.
+```jldoctest
+julia> a = collect(1:3); a[a .<= 1] = []
+ERROR: DimensionMismatch("tried to assign 0 elements to 1 destinations")
+[...]
+
+julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1]
+2-element Array{Int64,1}:
+ 2
+ 3
+
+```
+"""
+kw"="
+
+"""
     let
 
 `let` statements allocate new variable bindings each time they run. Whereas an
@@ -221,8 +309,8 @@ kw"let"
 """
     quote
 
-`quote` creates multiple expression objects in a block without using the explicit `Expr`
-constructor. For example:
+`quote` creates multiple expression objects in a block without using the explicit
+[`Expr`](@ref) constructor. For example:
 
 ```julia
 ex = quote
@@ -236,6 +324,34 @@ to the expression tree, which must be considered when directly manipulating the 
 For other purposes, `:( ... )` and `quote .. end` blocks are treated identically.
 """
 kw"quote"
+
+"""
+    Expr(head::Symbol, args...)
+
+A type representing compound expressions in parsed julia code (ASTs).
+Each expression consists of a `head` Symbol identifying which kind of
+expression it is (e.g. a call, for loop, conditional statement, etc.),
+and subexpressions (e.g. the arguments of a call).
+The subexpressions are stored in a `Vector{Any}` field called `args`.
+
+See the manual chapter on [Metaprogramming](@ref) and the developer
+documentation [Julia ASTs](@ref).
+
+# Examples
+```jldoctest
+julia> Expr(:call, :+, 1, 2)
+:(1 + 2)
+
+julia> dump(:(a ? b : c))
+Expr
+  head: Symbol if
+  args: Array{Any}((3,))
+    1: Symbol a
+    2: Symbol b
+    3: Symbol c
+```
+"""
+Expr
 
 """
     '
@@ -314,7 +430,9 @@ kw"function"
 """
     return
 
-`return` can be used in function bodies to exit early and return a given value, e.g.
+`return x` causes the enclosing function to exit early, passing the given value `x`
+back to its caller. `return` by itself with no value is equivalent to `return nothing`
+(see [`nothing`](@ref)).
 
 ```julia
 function compare(a, b)
@@ -340,12 +458,15 @@ function test2(xs)
     end
 end
 ```
-In the first example, the return breaks out of its enclosing function as soon as it hits
+In the first example, the return breaks out of `test1` as soon as it hits
 an even number, so `test1([5,6,7])` returns `12`.
 
 You might expect the second example to behave the same way, but in fact the `return`
 there only breaks out of the *inner* function (inside the `do` block) and gives a value
 back to `map`. `test2([5,6,7])` then returns `[5,12,7]`.
+
+When used in a top-level expression (i.e. outside any function), `return` causes
+the entire current top-level expression to terminate early.
 """
 kw"return"
 
@@ -376,7 +497,7 @@ kw"if", kw"elseif", kw"else"
 """
     for
 
-`for` loops repeatedly evaluate the body of the loop by
+`for` loops repeatedly evaluate a block of statements while
 iterating over a sequence of values.
 
 # Examples
@@ -394,8 +515,8 @@ kw"for"
 """
     while
 
-`while` loops repeatedly evaluate a conditional expression, and continues evaluating the
-body of the while loop so long as the expression remains `true`. If the condition
+`while` loops repeatedly evaluate a conditional expression, and continue evaluating the
+body of the while loop as long as the expression remains true. If the condition
 expression is false when the while loop is first reached, the body is never evaluated.
 
 # Examples
@@ -442,19 +563,23 @@ kw"end"
 """
     try/catch
 
-A `try`/`catch` statement allows for `Exception`s to be tested for. For example, a
-customized square root function can be written to automatically call either the real or
-complex square root method on demand using `Exception`s:
+A `try`/`catch` statement allows intercepting errors (exceptions) thrown
+by [`throw`](@ref) so that program execution can continue.
+For example, the following code attempts to write a file, but warns the user
+and proceeds instead of terminating execution if the file cannot be written:
 
 ```julia
-f(x) = try
-    sqrt(x)
+try
+    open("/danger", "w") do f
+        println(f, "Hello")
+    end
 catch
-    sqrt(complex(x, 0))
+    @warn "Could not write file."
 end
 ```
 
-`try`/`catch` statements also allow the `Exception` to be saved in a variable, e.g. `catch y`.
+The syntax `catch e` (where `e` is any variable) assigns the thrown
+exception object to the given variable within the `catch` block.
 
 The power of the `try`/`catch` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling functions.
@@ -530,7 +655,9 @@ kw"continue"
 """
     do
 
-Create an anonymous function. For example:
+Create an anonymous function and pass it as the first argument to
+a function call.
+For example:
 
 ```julia
 map(1:10) do x
@@ -618,11 +745,13 @@ kw"||"
 
 """
     ccall((function_name, library), returntype, (argtype1, ...), argvalue1, ...)
+    ccall(function_name, returntype, (argtype1, ...), argvalue1, ...)
     ccall(function_pointer, returntype, (argtype1, ...), argvalue1, ...)
 
 Call a function in a C-exported shared library, specified by the tuple `(function_name, library)`,
-where each component is either a string or symbol. Alternatively, `ccall` may
-also be used to call a function pointer `function_pointer`, such as one returned by `dlsym`.
+where each component is either a string or symbol. Instead of specifying a library,
+one can also use a `function_name` symbol or string, which is resolved in the current process.
+Alternatively, `ccall` may also be used to call a function pointer `function_pointer`, such as one returned by `dlsym`.
 
 Note that the argument type tuple must be a literal tuple, and not a tuple-valued
 variable or expression.
@@ -809,7 +938,7 @@ nothing
 """
     Core.TypeofBottom
 
-The singleton type containing only the value `Union{}`.
+The singleton type containing only the value `Union{}` (which represents the empty type).
 """
 Core.TypeofBottom
 
@@ -955,7 +1084,7 @@ Cannot exactly convert `val` to type `T` in a method of function `name`.
 # Examples
 ```jldoctest
 julia> convert(Float64, 1+2im)
-ERROR: InexactError: Float64(Float64, 1 + 2im)
+ERROR: InexactError: Float64(1 + 2im)
 Stacktrace:
 [...]
 ```
@@ -1213,7 +1342,7 @@ Unsigned
 """
     Bool <: Integer
 
-Boolean type.
+Boolean type, containing the values `true` and `false`.
 """
 Bool
 
@@ -1247,9 +1376,40 @@ for bit in (8, 16, 32, 64, 128)
 end
 
 """
+    Symbol
+
+The type of object used to represent identifiers in parsed julia code (ASTs).
+Also often used as a name or label to identify an entity (e.g. as a dictionary key).
+`Symbol`s can be entered using the `:` quote operator:
+```jldoctest
+julia> :name
+:name
+
+julia> typeof(:name)
+Symbol
+
+julia> x = 42
+42
+
+julia> eval(:x)
+42
+```
+`Symbol`s can also be constructed from strings or other values by calling the
+constructor `Symbol(x...)`.
+
+`Symbol`s are immutable and should be compared using `===`.
+The implementation re-uses the same object for all `Symbol`s with the same name,
+so comparison tends to be efficient (it can just compare pointers).
+
+Unlike strings, `Symbol`s are "atomic" or "scalar" entities that do not support
+iteration over characters.
+"""
+Symbol
+
+"""
     Symbol(x...) -> Symbol
 
-Create a `Symbol` by concatenating the string representations of the arguments together.
+Create a [`Symbol`](@ref) by concatenating the string representations of the arguments together.
 
 # Examples
 ```jldoctest
@@ -1260,7 +1420,7 @@ julia> Symbol("day", 4)
 :day4
 ```
 """
-Symbol
+Symbol(x...)
 
 """
     tuple(xs...)
@@ -1319,7 +1479,7 @@ julia> a = 1//2
 1//2
 
 julia> setfield!(a, :num, 3);
-ERROR: type Rational is immutable
+ERROR: setfield! immutable struct of type Rational cannot be changed
 ```
 """
 setfield!
@@ -1349,8 +1509,10 @@ typeof
     isdefined(object, s::Symbol)
     isdefined(object, index::Int)
 
-Tests whether an assignable location is defined. The arguments can be a module and a symbol
+Tests whether a global variable or object field is defined. The arguments can be a module and a symbol
 or a composite object and field name (as a symbol) or index.
+
+To test whether an array element is defined, use [`isassigned`](@ref) instead.
 
 # Examples
 ```jldoctest
@@ -1867,6 +2029,32 @@ typeassert
     getproperty(value, name::Symbol)
 
 The syntax `a.b` calls `getproperty(a, :b)`.
+
+# Examples
+```jldoctest
+julia> struct MyType
+           x
+       end
+
+julia> function Base.getproperty(obj::MyType, sym::Symbol)
+           if sym === :special
+               return obj.x + 1
+           else # fallback to getfield
+               return getfield(obj, sym)
+           end
+       end
+
+julia> obj = MyType(1);
+
+julia> obj.special
+2
+
+julia> obj.x
+1
+```
+
+See also [`propertynames`](@ref Base.propertynames) and
+[`setproperty!`](@ref Base.setproperty!).
 """
 Base.getproperty
 
@@ -1874,6 +2062,9 @@ Base.getproperty
     setproperty!(value, name::Symbol, x)
 
 The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
+
+See also [`propertynames`](@ref Base.propertynames) and
+[`getproperty`](@ref Base.getproperty).
 """
 Base.setproperty!
 

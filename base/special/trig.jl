@@ -245,7 +245,7 @@ tan(x::Real) = tan(float(x))
     #       Callers may do the optimization tan(y) ~ y for tiny y.
     #    3. tan(y) is approximated by a odd polynomial of degree 27 on
     #       [0,0.67434]
-    #                       3             27
+    #                            3             27
     #           tan(y) ~ y + T1*y + ... + T13*y ≡ P(y)
     #       where
     #

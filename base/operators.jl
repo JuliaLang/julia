@@ -440,24 +440,43 @@ julia> extrema([9,pi,4.5])
 (3.141592653589793, 9.0)
 ```
 """
-extrema(itr) = _extrema_itr(itr)
+extrema(itr) = _extrema_itr(identity, itr)
 
-function _extrema_itr(itr)
+"""
+    extrema(f, itr) -> Tuple
+
+Compute both the minimum and maximum of `f` applied to each element in `itr` and return
+them as a 2-tuple. Only one pass is made over `itr`.
+
+!!! compat "Julia 1.2"
+    This method requires Julia 1.2 or later.
+
+# Examples
+```jldoctest
+julia> extrema(sin, 0:π)
+(0.0, 0.9092974268256817)
+```
+"""
+extrema(f, itr) = _extrema_itr(f, itr)
+
+function _extrema_itr(f, itr)
     y = iterate(itr)
     y === nothing && throw(ArgumentError("collection must be non-empty"))
     (v, s) = y
-    vmin = vmax = v
+    vmin = vmax = f(v)
     while true
         y = iterate(itr, s)
         y === nothing && break
         (x, s) = y
-        vmax = max(x, vmax)
-        vmin = min(x, vmin)
+        fx = f(x)
+        vmax = max(fx, vmax)
+        vmin = min(fx, vmin)
     end
     return (vmin, vmax)
 end
 
 extrema(x::Real) = (x, x)
+extrema(f, x::Real) = (y = f(x); (y, y))
 
 ## definitions providing basic traits of arithmetic operators ##
 
@@ -520,17 +539,17 @@ julia> 3 \\ 6
 julia> inv(3) * 6
 2.0
 
-julia> A = [1 2; 3 4]; x = [5, 6];
+julia> A = [4 3; 2 1]; x = [5, 6];
 
 julia> A \\ x
 2-element Array{Float64,1}:
- -4.0
-  4.5
+  6.5
+ -7.0
 
 julia> inv(A) * x
 2-element Array{Float64,1}:
- -4.0
-  4.5
+  6.5
+ -7.0
 ```
 """
 \(x,y) = adjoint(adjoint(y)/adjoint(x))

@@ -2337,7 +2337,6 @@ static void jl_finalize_serializer(jl_serializer_state *s)
 void jl_typemap_rehash(jl_typemap_t *ml, int8_t offs);
 static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
         switch (how) {
             case 1: { // rehash IdDict
@@ -2390,7 +2389,7 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
         jl_printf(JL_STDERR, "WARNING: error while reinitializing value ");
         jl_static_show(JL_STDERR, v);
         jl_printf(JL_STDERR, ":\n");
-        jl_static_show(JL_STDERR, ptls->exception_in_transit);
+        jl_static_show(JL_STDERR, jl_current_exception());
         jl_printf(JL_STDERR, "\n");
     }
 }
@@ -2608,6 +2607,19 @@ JL_DLLEXPORT uint8_t jl_ast_flag_pure(jl_array_t *data)
     return !!(flags & (1 << 0));
 }
 
+JL_DLLEXPORT ssize_t jl_ast_nslots(jl_array_t *data)
+{
+    if (jl_is_code_info(data)) {
+        jl_code_info_t *func = (jl_code_info_t*)data;
+        return jl_array_len(func->slotnames);
+    }
+    else {
+        assert(jl_typeis(data, jl_array_uint8_type));
+        int nslots = jl_load_unaligned_i32((char*)data->data + 1);
+        return nslots;
+    }
+}
+
 JL_DLLEXPORT void jl_fill_argnames(jl_array_t *data, jl_array_t *names)
 {
     size_t i, nargs = jl_array_len(names);
@@ -2620,16 +2632,12 @@ JL_DLLEXPORT void jl_fill_argnames(jl_array_t *data, jl_array_t *names)
         }
     }
     else {
-        uint8_t *d = (uint8_t*)data->data;
         assert(jl_typeis(data, jl_array_uint8_type));
-        int b3 = d[1];
-        int b2 = d[2];
-        int b1 = d[3];
-        int b0 = d[4];
-        int nslots = b0 | (b1<<8) | (b2<<16) | (b3<<24);
+        char *d = (char*)data->data;
+        int nslots = jl_load_unaligned_i32(d + 1);
         assert(nslots >= nargs);
         (void)nslots;
-        char *namestr = (char*)d + 5;
+        char *namestr = d + 5;
         for (i = 0; i < nargs; i++) {
             size_t namelen = strlen(namestr);
             jl_sym_t *name = jl_symbol_n(namestr, namelen);
@@ -2641,6 +2649,7 @@ JL_DLLEXPORT void jl_fill_argnames(jl_array_t *data, jl_array_t *names)
 
 JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 {
+    JL_TIMING(SAVE_MODULE);
     char *tmpfname = strcat(strcpy((char *) alloca(strlen(fname)+8), fname), ".XXXXXX");
     ios_t f;
     jl_array_t *mod_array = NULL, *udeps = NULL;
@@ -3037,6 +3046,7 @@ static int trace_method(jl_typemap_entry_t *entry, void *closure)
 
 static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
 {
+    JL_TIMING(LOAD_MODULE);
     jl_ptls_t ptls = jl_get_ptls_states();
     if (ios_eof(f) || !jl_read_verify_header(f)) {
         ios_close(f);

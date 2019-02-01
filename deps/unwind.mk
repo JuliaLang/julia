@@ -4,7 +4,7 @@ LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC)
 LIBUNWIND_CPPFLAGS :=
 
 $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://julialang-s3.julialang.org/src/libunwind-$(UNWIND_VER).tar.gz
+	$(JLDOWNLOAD) $@ https://github.com/libunwind/libunwind/releases/download/v$(UNWIND_VER)/libunwind-$(UNWIND_VER).tar.gz
 
 $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted: $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz
 	$(JLCHECKSUM) $<
@@ -12,31 +12,11 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted: $(SRCCACHE)/libunwind-$(UN
 	touch -c $(SRCCACHE)/libunwind-$(UNWIND_VER)/configure # old target
 	echo 1 > $@
 
-$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-arm-dyn.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted
-	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f < $(SRCDIR)/patches/libunwind-arm-dyn.patch
-	echo 1 > $@
-
-$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-dwarf-ver.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-arm-dyn.patch-applied
-	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f < $(SRCDIR)/patches/libunwind-dwarf-ver.patch
-	echo 1 > $@
-
-$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-prefer-extbl.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-dwarf-ver.patch-applied
+$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-prefer-extbl.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted
 	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f < $(SRCDIR)/patches/libunwind-prefer-extbl.patch
 	echo 1 > $@
 
-$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-arm-pc-offset.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-prefer-extbl.patch-applied
-	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f < $(SRCDIR)/patches/libunwind-arm-pc-offset.patch
-	echo 1 > $@
-
-$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-freebsd-mapper.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-arm-pc-offset.patch-applied
-	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p0 -f < $(SRCDIR)/patches/libunwind-freebsd-mapper.patch
-	echo 1 > $@
-
-$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-dwarf-Fix-incorrect-cfi-execution.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-freebsd-mapper.patch-applied
-	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f < $(SRCDIR)/patches/libunwind-dwarf-Fix-incorrect-cfi-execution.patch
-	echo 1 > $@
-
-$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-dwarf-Fix-incorrect-cfi-execution.patch-applied
+$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-prefer-extbl.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --disable-shared --disable-minidebuginfo

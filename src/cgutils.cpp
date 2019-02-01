@@ -596,16 +596,9 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
                 jlasttype = ty;
                 bool isptr;
                 size_t fsz = 0, al = 0;
-                if (jst->layout) {
-                    isptr = jl_field_isptr(jst, i);
-                    fsz = jl_field_size(jst, i);
-                    al = jl_field_align(jst, i);
-                }
-                else { // compute what jl_compute_field_offsets would say
-                    isptr = !jl_islayout_inline(ty, &fsz, &al);
-                    if (!isptr && jl_is_uniontype(jst))
-                        fsz += 1;
-                }
+                isptr = !jl_islayout_inline(ty, &fsz, &al);
+                if (!isptr && jl_is_uniontype(ty))
+                    fsz += 1;
                 Type *lty;
                 if (isptr) {
                     lty = T_pjlvalue;
@@ -1058,11 +1051,9 @@ static void null_pointer_check(jl_codectx_t &ctx, Value *v)
 
 static void emit_type_error(jl_codectx_t &ctx, const jl_cgval_t &x, Value *type, const std::string &msg)
 {
-    Value *fname_val = stringConstPtr(ctx.builder, ctx.funcName);
     Value *msg_val = stringConstPtr(ctx.builder, msg);
     ctx.builder.CreateCall(prepare_call(jltypeerror_func),
-                       { fname_val, msg_val,
-                         maybe_decay_untracked(type), mark_callee_rooted(boxed(ctx, x))});
+                       { msg_val, maybe_decay_untracked(type), mark_callee_rooted(boxed(ctx, x))});
 }
 
 static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *type, const std::string *msg)
@@ -1094,7 +1085,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
     }
 
     // intersection with Type needs to be handled specially
-    if (jl_has_intersect_type_not_kind(type)) {
+    if (jl_has_intersect_type_not_kind(type) || jl_has_intersect_type_not_kind(intersected_type)) {
         Value *vx = maybe_decay_untracked(boxed(ctx, x));
         Value *vtyp = maybe_decay_untracked(literal_pointer_val(ctx, type));
         if (msg && *msg == "typeassert") {
@@ -1137,6 +1128,16 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
         }
         return std::make_pair(ctx.builder.CreateICmpEQ(emit_typeof_boxed(ctx, x),
             maybe_decay_untracked(literal_pointer_val(ctx, intersected_type))), false);
+    }
+    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(intersected_type);
+    if (jl_is_datatype(dt) && !dt->abstract && jl_subtype(dt->name->wrapper, type)) {
+        // intersection is a supertype of all instances of its constructor,
+        // so the isa test reduces to a comparison of the typename by pointer
+        return std::make_pair(
+                ctx.builder.CreateICmpEQ(
+                    mark_callee_rooted(emit_datatype_name(ctx, emit_typeof_boxed(ctx, x))),
+                    mark_callee_rooted(literal_pointer_val(ctx, (jl_value_t*)dt->name))),
+                false);
     }
     // everything else can be handled via subtype tests
     return std::make_pair(ctx.builder.CreateICmpNE(
@@ -1424,10 +1425,10 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
         Value *idx, jl_datatype_t *stt, jl_value_t *inbounds)
 {
     size_t nfields = jl_datatype_nfields(stt);
+    bool maybe_null = (unsigned)stt->ninitialized != nfields;
     if (strct.ispointer()) { // boxed or stack
         if (is_datatype_all_pointers(stt)) {
             idx = emit_bounds_check(ctx, strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), inbounds);
-            bool maybe_null = (unsigned)stt->ninitialized != nfields;
             size_t minimum_field_size = std::numeric_limits<size_t>::max();
             size_t minimum_align = JL_HEAP_ALIGNMENT;
             for (size_t i = 0; i < nfields; ++i) {
@@ -1457,7 +1458,7 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
             jl_value_t *jt = jl_field_type(stt, 0);
             idx = emit_bounds_check(ctx, strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), inbounds);
             Value *ptr = maybe_decay_tracked(data_pointer(ctx, strct));
-            if (!stt->mutabl) {
+            if (!stt->mutabl && !(maybe_null && jt == (jl_value_t*)jl_bool_type)) {
                 // just compute the pointer and let user load it when necessary
                 Type *fty = julia_type_to_llvm(jt);
                 Value *addr = ctx.builder.CreateInBoundsGEP(fty, emit_bitcast(ctx, ptr, PointerType::get(fty, 0)), idx);
@@ -1511,6 +1512,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
     if (type_is_ghost(elty))
         return ghostValue(jfty);
     Value *fldv = NULL;
+    bool maybe_null = idx >= (unsigned)jt->ninitialized;
     if (strct.ispointer()) {
         Value *staddr = maybe_decay_tracked(data_pointer(ctx, strct));
         bool isboxed;
@@ -1552,7 +1554,6 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         }
         unsigned align = jl_field_align(jt, idx);
         if (jl_field_isptr(jt, idx)) {
-            bool maybe_null = idx >= (unsigned)jt->ninitialized;
             Instruction *Load = maybe_mark_load_dereferenceable(
                     ctx.builder.CreateLoad(T_prjlvalue, emit_bitcast(ctx, addr, T_pprjlvalue)),
                     maybe_null, jl_field_type(jt, idx));
@@ -1585,7 +1586,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             }
             return mark_julia_slot(addr, jfty, tindex, strct.tbaa);
         }
-        else if (!jt->mutabl) {
+        else if (!jt->mutabl && !(maybe_null && jfty == (jl_value_t*)jl_bool_type)) {
             // just compute the pointer and let user load it when necessary
             return mark_julia_slot(addr, jfty, NULL, strct.tbaa);
         }
@@ -2428,8 +2429,10 @@ static void emit_setfield(jl_codectx_t &ctx,
         }
     }
     else {
-        // TODO: better error
-        emit_error(ctx, "type is immutable");
+        std::string msg = "setfield! immutable struct of type "
+            + std::string(jl_symbol_name(sty->name->name))
+            + " cannot be changed";
+        emit_error(ctx, msg);
     }
 }
 
@@ -2566,14 +2569,6 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         assert(!isboxed);
         return mark_julia_type(ctx, UndefValue::get(lt), false, ty);
     }
-}
-
-static Value *emit_exc_in_transit(jl_codectx_t &ctx)
-{
-    Value *pexc_in_transit = emit_bitcast(ctx, ctx.ptlsStates, T_pprjlvalue);
-    Constant *offset = ConstantInt::getSigned(T_int32,
-        offsetof(jl_tls_states_t, exception_in_transit) / sizeof(void*));
-    return ctx.builder.CreateInBoundsGEP(pexc_in_transit, ArrayRef<Value*>(offset), "jl_exception_in_transit");
 }
 
 static void emit_signal_fence(jl_codectx_t &ctx)

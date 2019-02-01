@@ -206,13 +206,13 @@ julia> readdir("test")
 function mkpath(path::AbstractString; mode::Integer = 0o777)
     isdirpath(path) && (path = dirname(path))
     dir = dirname(path)
-    (path == dir || isdir(path)) && return
+    (path == dir || isdir(path)) && return path
     mkpath(dir, mode = checkmode(mode))
     try
         mkdir(path, mode = mode)
-    # If there is a problem with making the directory, but the directory
-    # does in fact exist, then ignore the error. Else re-throw it.
     catch err
+        # If there is a problem with making the directory, but the directory
+        # does in fact exist, then ignore the error. Else re-throw it.
         if !isa(err, SystemError) || !isdir(path)
             rethrow()
         end
@@ -421,9 +421,7 @@ if Sys.iswindows()
 function tempdir()
     temppath = Vector{UInt16}(undef, 32767)
     lentemppath = ccall(:GetTempPathW,stdcall,UInt32,(UInt32,Ptr{UInt16}),length(temppath),temppath)
-    if lentemppath >= length(temppath) || lentemppath == 0
-        error("GetTempPath failed: $(Libc.FormatMessage())")
-    end
+    windowserror("GetTempPath", lentemppath >= length(temppath) || lentemppath == 0)
     resize!(temppath,lentemppath)
     return transcode(String, temppath)
 end
@@ -434,9 +432,7 @@ function _win_tempname(temppath::AbstractString, uunique::UInt32)
     tname = Vector{UInt16}(undef, 32767)
     uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32,Ptr{UInt16}), tempp,temp_prefix,uunique,tname)
     lentname = something(findfirst(iszero,tname), 0)-1
-    if uunique == 0 || lentname <= 0
-        error("GetTempFileName failed: $(Libc.FormatMessage())")
-    end
+    windowserror("GetTempFileName", uunique == 0 || lentname <= 0)
     resize!(tname,lentname)
     return transcode(String, tname)
 end

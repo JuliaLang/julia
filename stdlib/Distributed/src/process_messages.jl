@@ -10,10 +10,33 @@ mutable struct RemoteValue
 
     waitingfor::Int   # processor we need to hear from to fill this, or 0
 
-    RemoteValue(c) = new(c, BitSet(), 0)
+    synctake::Union{ReentrantLock, Nothing}  # A lock used to synchronize the
+                      # specific case of a local put! / remote take! on an
+                      # unbuffered store. github issue #29932
+
+    function RemoteValue(c)
+        c_is_buffered = false
+        try
+            c_is_buffered = isbuffered(c)
+        catch
+        end
+
+        if c_is_buffered
+            return new(c, BitSet(), 0, nothing)
+        else
+            return new(c, BitSet(), 0, ReentrantLock())
+        end
+    end
 end
 
 wait(rv::RemoteValue) = wait(rv.c)
+
+# A wrapper type to handle issue #29932 which requires locking / unlocking of
+# RemoteValue.synctake outside of lexical scope.
+struct SyncTake
+    v::Any
+    rv::RemoteValue
+end
 
 ## core messages: do, call, fetch, wait, ref, put! ##
 struct RemoteException <: Exception
@@ -227,7 +250,7 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
         if (myid() == 1) && (wpid > 1)
             if oldstate != W_TERMINATING
                 println(stderr, "Worker $wpid terminated.")
-                rethrow(e)
+                rethrow()
             end
         end
 
@@ -267,7 +290,15 @@ end
 function handle_msg(msg::CallMsg{:call_fetch}, header, r_stream, w_stream, version)
     @async begin
         v = run_work_thunk(()->msg.f(msg.args...; msg.kwargs...), false)
-        deliver_result(w_stream, :call_fetch, header.notify_oid, v)
+        if isa(v, SyncTake)
+            try
+                deliver_result(w_stream, :call_fetch, header.notify_oid, v.v)
+            finally
+                unlock(v.rv.synctake)
+            end
+        else
+            deliver_result(w_stream, :call_fetch, header.notify_oid, v)
+        end
     end
 end
 
@@ -288,9 +319,10 @@ end
 
 function handle_msg(msg::IdentifySocketMsg, header, r_stream, w_stream, version)
     # register a new peer worker connection
-    w=Worker(msg.from_pid, r_stream, w_stream, cluster_manager; version=version)
+    w = Worker(msg.from_pid, r_stream, w_stream, cluster_manager; version=version)
     send_connection_hdr(w, false)
     send_msg_now(w, MsgHeader(), IdentifySocketAckMsg())
+    notify(w.initialized)
 end
 
 function handle_msg(msg::IdentifySocketAckMsg, header, r_stream, w_stream, version)
@@ -301,11 +333,12 @@ end
 function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
     LPROC.id = msg.self_pid
     controller = Worker(1, r_stream, w_stream, cluster_manager; version=version)
+    notify(controller.initialized)
     register_worker(LPROC)
     topology(msg.topology)
 
     if !msg.enable_threaded_blas
-        disable_threaded_libs()
+        Base.disable_library_threading()
     end
 
     lazy = msg.lazy
@@ -340,6 +373,7 @@ function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConf
         process_messages(w.r_stream, w.w_stream, false)
         send_connection_hdr(w, true)
         send_msg_now(w, MsgHeader(), IdentifySocketMsg(myid()))
+        notify(w.initialized)
     catch e
         @error "Error on $(myid()) while connecting to peer $rpid, exiting" exception=e,catch_backtrace()
         exit(1)

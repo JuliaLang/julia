@@ -4,6 +4,12 @@
 
 const sizeof_ios_t = Int(ccall(:jl_sizeof_ios_t, Cint, ()))
 
+"""
+    IOStream
+
+A buffered IO stream wrapping an OS file descriptor.
+Mostly used to represent files returned by [`open`](@ref).
+"""
 mutable struct IOStream <: IO
     handle::Ptr{Cvoid}
     ios::Array{UInt8,1}
@@ -199,7 +205,7 @@ eof(s::IOStream) = ccall(:ios_eof_blocking, Cint, (Ptr{Cvoid},), s.ios)!=0
 """
     fdio([name::AbstractString, ]fd::Integer[, own::Bool=false]) -> IOStream
 
-Create an `IOStream` object from an integer file descriptor. If `own` is `true`, closing
+Create an [`IOStream`](@ref) object from an integer file descriptor. If `own` is `true`, closing
 this object will close the underlying descriptor. By default, an `IOStream` is closed when
 it is garbage collected. `name` allows you to associate the descriptor with a named file.
 """
@@ -280,7 +286,7 @@ function open(fname::AbstractString;
         append = append,
     )
     s = IOStream(string("<file ",fname,">"))
-    systemerror("opening file $fname",
+    systemerror("opening file $(repr(fname))",
                 ccall(:ios_file, Ptr{Cvoid},
                       (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
                       s.ios, fname, flags.read, flags.write, flags.create, flags.truncate) == C_NULL)

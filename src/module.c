@@ -114,7 +114,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var, int 
                 b->owner = m;
             }
             else if (error) {
-                jl_errorf("cannot assign variable %s.%s from module %s",
+                jl_errorf("cannot assign a value to variable %s.%s from module %s",
                           jl_symbol_name(b->owner->name), jl_symbol_name(var), jl_symbol_name(m->name));
             }
         }
@@ -534,8 +534,11 @@ JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int flag)
 
 JL_DLLEXPORT int jl_is_binding_deprecated(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t *b = jl_get_binding(m, var);
-    return b && b->deprecated;
+    if (jl_binding_resolved_p(m, var)) {
+        jl_binding_t *b = jl_get_binding(m, var);
+        return b && b->deprecated;
+    }
+    return 0;
 }
 
 extern const char *jl_filename;

@@ -25,7 +25,7 @@ mutable struct InferenceState
     pc´´::LineNum
     nstmts::Int
     # current exception handler info
-    cur_hand #::Tuple{LineNum, Tuple{LineNum, ...}}
+    cur_hand #::Union{Nothing, Pair{LineNum, prev_handler}}
     handler_at::Vector{Any}
     n_handlers::Int
     # ssavalue sparsity and restart info
@@ -54,8 +54,8 @@ mutable struct InferenceState
         src.ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
 
         n = length(code)
-        s_edges = Any[ () for i = 1:n ]
-        s_types = Any[ () for i = 1:n ]
+        s_edges = Any[ nothing for i = 1:n ]
+        s_types = Any[ nothing for i = 1:n ]
 
         # initial types
         nslots = length(src.slotnames)
@@ -73,8 +73,8 @@ mutable struct InferenceState
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
 
         # exception handlers
-        cur_hand = ()
-        handler_at = Any[ () for i=1:n ]
+        cur_hand = nothing
+        handler_at = Any[ nothing for i=1:n ]
         n_handlers = 0
 
         W = BitSet()
@@ -186,7 +186,7 @@ function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceStat
         W = frame.ip
         s = frame.stmt_types
         for r in frame.ssavalue_uses[ssa_id]
-            if s[r] !== () # s[r] === () => unreached statement
+            if s[r] !== nothing # s[r] === nothing => unreached statement
                 if r < frame.pc´´
                     frame.pc´´ = r
                 end
@@ -207,7 +207,7 @@ end
 # temporarily accumulate our edges to later add as backedges in the callee
 function add_backedge!(li::MethodInstance, caller::InferenceState)
     isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
-    if caller.stmt_edges[caller.currpc] === ()
+    if caller.stmt_edges[caller.currpc] === nothing
         caller.stmt_edges[caller.currpc] = []
     end
     push!(caller.stmt_edges[caller.currpc], li)
@@ -218,12 +218,34 @@ end
 # used to temporarily accumulate our no method errors to later add as backedges in the callee method table
 function add_mt_backedge!(mt::Core.MethodTable, @nospecialize(typ), caller::InferenceState)
     isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
-    if caller.stmt_edges[caller.currpc] === ()
+    if caller.stmt_edges[caller.currpc] === nothing
         caller.stmt_edges[caller.currpc] = []
     end
     push!(caller.stmt_edges[caller.currpc], mt)
     push!(caller.stmt_edges[caller.currpc], typ)
     nothing
+end
+
+function poison_callstack(infstate::InferenceState, topmost::InferenceState, poison_topmost::Bool)
+    poison_topmost && (topmost = topmost.parent)
+    while !(infstate === topmost)
+        if call_result_unused(infstate)
+            # If we won't propagate the result any further (since it's typically unused),
+            # it's OK that we keep and cache the "limited" result in the parents
+            # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
+            # TODO: we might be able to halt progress much more strongly here,
+            # since now we know we won't be able to keep anything much that we learned.
+            # We were mainly only here to compute the calling convention return type,
+            # but in most situations now, we are unlikely to be able to use that information.
+            break
+        end
+        infstate.limited = true
+        for infstate_cycle in infstate.callers_in_cycle
+            infstate_cycle.limited = true
+        end
+        infstate = infstate.parent
+        infstate === nothing && return
+    end
 end
 
 function is_specializable_vararg_slot(@nospecialize(arg), nargs::Int, vargs::Vector{Any})

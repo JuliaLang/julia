@@ -341,5 +341,5 @@ There are many more interesting things that you can measure about your program, 
 please read the [Linux perf examples page](http://www.brendangregg.com/perf.html).
 
 Remember that perf saves for each execution a `perf.data` file that, even for small programs, can get
-quite large. Also the perf LLVM module saves temporarly debug objects in `~/.debug/jit`, remember
+quite large. Also the perf LLVM module saves temporarily debug objects in `~/.debug/jit`, remember
 to clean that folder frequently.
