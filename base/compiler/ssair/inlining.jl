@@ -787,7 +787,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         isempty(eargs) && continue
         arg1 = eargs[1]
 
-        ft = argextype(arg1, ir, sv.sp)
+        ft = argextype(arg1, ir, sv.sptypes)
         has_free_typevars(ft) && continue
         f = singleton_type(ft)
         f === Core.Intrinsics.llvmcall && continue
@@ -797,7 +797,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         atypes[1] = ft
         ok = true
         for i = 2:length(stmt.args)
-            a = argextype(stmt.args[i], ir, sv.sp)
+            a = argextype(stmt.args[i], ir, sv.sptypes)
             (a === Bottom || isvarargtype(a)) && (ok = false; break)
             atypes[i] = a
         end

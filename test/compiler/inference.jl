@@ -2204,3 +2204,6 @@ _rttf_test(::Int128) = 0
 _call_rttf_test() = Core.Compiler.return_type(_rttf_test, Tuple{Any})
 @test Core.Compiler.return_type(_rttf_test, Tuple{Any}) === Int
 @test _call_rttf_test() === Int
+
+f_with_Type_arg(::Type{T}) where {T} = T
+@test Base.return_types(f_with_Type_arg, (Any,)) == Any[Type]

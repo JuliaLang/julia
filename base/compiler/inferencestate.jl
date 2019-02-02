@@ -5,8 +5,8 @@ const LineNum = Int
 mutable struct InferenceState
     params::Params # describes how to compute the result
     result::InferenceResult # remember where to put the result
-    linfo::MethodInstance # used here for the tuple (specTypes, env, Method) and world-age validity
-    sp::SimpleVector     # static parameters
+    linfo::MethodInstance   # used here for the tuple (specTypes, env, Method) and world-age validity
+    sptypes::Vector{Any}    # types of static parameter
     slottypes::Vector{Any}
     mod::Module
     currpc::LineNum
@@ -48,7 +48,7 @@ mutable struct InferenceState
         code = src.code::Array{Any,1}
         toplevel = !isa(linfo.def, Method)
 
-        sp = spvals_from_meth_instance(linfo::MethodInstance)
+        sp = sptypes_from_meth_instance(linfo::MethodInstance)
 
         nssavalues = src.ssavaluetypes::Int
         src.ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
@@ -120,7 +120,7 @@ function InferenceState(result::InferenceResult, cached::Bool, params::Params)
     return InferenceState(result, src, cached, params)
 end
 
-function spvals_from_meth_instance(linfo::MethodInstance)
+function sptypes_from_meth_instance(linfo::MethodInstance)
     toplevel = !isa(linfo.def, Method)
     if !toplevel && isempty(linfo.sparam_vals) && !isempty(linfo.def.sparam_syms)
         # linfo is unspecialized
@@ -130,35 +130,54 @@ function spvals_from_meth_instance(linfo::MethodInstance)
             push!(sp, sig.var)
             sig = sig.body
         end
-        sp = svec(sp...)
     else
-        sp = linfo.sparam_vals
-        if _any(t->isa(t,TypeVar), sp)
-            sp = collect(Any, sp)
-        end
+        sp = collect(Any, linfo.sparam_vals)
     end
-    if !isa(sp, SimpleVector)
-        for i = 1:length(sp)
-            v = sp[i]
-            if v isa TypeVar
-                ub = v.ub
-                while ub isa TypeVar
-                    ub = ub.ub
-                end
-                if has_free_typevars(ub)
-                    ub = Any
-                end
-                lb = v.lb
-                while lb isa TypeVar
-                    lb = lb.lb
-                end
-                if has_free_typevars(lb)
-                    lb = Bottom
-                end
-                sp[i] = TypeVar(v.name, lb, ub)
+    for i = 1:length(sp)
+        v = sp[i]
+        if v isa TypeVar
+            ub = v.ub
+            while ub isa TypeVar
+                ub = ub.ub
             end
+            if has_free_typevars(ub)
+                ub = Any
+            end
+            lb = v.lb
+            while lb isa TypeVar
+                lb = lb.lb
+            end
+            if has_free_typevars(lb)
+                lb = Bottom
+            end
+            if Any <: ub && lb <: Bottom
+                ty = Any
+                # if this parameter came from arg::Type{T}, we know that T::Type
+                sig = linfo.def.sig
+                temp = sig
+                for j = 1:i-1
+                    temp = temp.body
+                end
+                Pi = temp.var
+                while temp isa UnionAll
+                    temp = temp.body
+                end
+                sigtypes = temp.parameters
+                for j = 1:length(sigtypes)
+                    tj = sigtypes[j]
+                    if isType(tj) && tj.parameters[1] === Pi
+                        ty = Type
+                        break
+                    end
+                end
+            else
+                tv = TypeVar(v.name, lb, ub)
+                ty = UnionAll(tv, Type{tv})
+            end
+        else
+            ty = Const(v)
         end
-        sp = svec(sp...)
+        sp[i] = ty
     end
     return sp
 end

@@ -13,7 +13,7 @@ mutable struct OptimizationState
     min_valid::UInt
     max_valid::UInt
     params::Params
-    sp::SimpleVector # static parameters
+    sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
     const_api::Bool
     function OptimizationState(frame::InferenceState)
@@ -27,7 +27,7 @@ mutable struct OptimizationState
                    s_edges::Vector{Any},
                    src, frame.mod, frame.nargs,
                    frame.min_valid, frame.max_valid,
-                   frame.params, frame.sp, frame.slottypes, false)
+                   frame.params, frame.sptypes, frame.slottypes, false)
     end
     function OptimizationState(linfo::MethodInstance, src::CodeInfo,
                                params::Params)
@@ -54,7 +54,7 @@ mutable struct OptimizationState
                    s_edges::Vector{Any},
                    src, inmodule, nargs,
                    min_world(linfo), max_world(linfo),
-                   params, spvals_from_meth_instance(linfo), slottypes, false)
+                   params, sptypes_from_meth_instance(linfo), slottypes, false)
         end
 end
 
@@ -135,7 +135,7 @@ function isinlineable(m::Method, me::OptimizationState, bonus::Int=0)
         end
     end
     if !inlineable
-        inlineable = inline_worthy(me.src.code, me.src, me.sp, me.slottypes, me.params, cost_threshold + bonus)
+        inlineable = inline_worthy(me.src.code, me.src, me.sptypes, me.slottypes, me.params, cost_threshold + bonus)
     end
     return inlineable
 end
@@ -148,7 +148,7 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
         return false
     end
     if isa(stmt, GotoIfNot)
-        t = argextype(stmt.cond, ir, ir.spvals)
+        t = argextype(stmt.cond, ir, ir.sptypes)
         return !(t ⊑ Bool)
     end
     if isa(stmt, Expr)
@@ -175,7 +175,7 @@ function optimize(opt::OptimizationState, @nospecialize(result))
             proven_pure = true
             for i in 1:length(ir.stmts)
                 stmt = ir.stmts[i]
-                if stmt_affects_purity(stmt, ir) && !stmt_effect_free(stmt, ir.types[i], ir, ir.spvals)
+                if stmt_affects_purity(stmt, ir) && !stmt_effect_free(stmt, ir.types[i], ir, ir.sptypes)
                     proven_pure = false
                     break
                 end
@@ -268,19 +268,19 @@ plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 # known return type
 isknowntype(@nospecialize T) = (T == Union{}) || isconcretetype(T)
 
-function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector, slottypes::Vector{Any}, params::Params)
+function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any}, params::Params)
     head = ex.head
     if is_meta_expr_head(head)
         return 0
     elseif head === :call
         farg = ex.args[1]
-        ftyp = argextype(farg, src, spvals, slottypes)
+        ftyp = argextype(farg, src, sptypes, slottypes)
         if ftyp === IntrinsicFunction && farg isa SSAValue
             # if this comes from code that was already inlined into another function,
             # Consts have been widened. try to recover in simple cases.
             farg = src.code[farg.id]
             if isa(farg, GlobalRef) || isa(farg, QuoteNode) || isa(farg, IntrinsicFunction) || isexpr(farg, :static_parameter)
-                ftyp = argextype(farg, src, spvals, slottypes)
+                ftyp = argextype(farg, src, sptypes, slottypes)
             end
         end
         f = singleton_type(ftyp)
@@ -302,7 +302,7 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
             elseif f === Main.Core.arrayref && length(ex.args) >= 3
-                atyp = argextype(ex.args[3], src, spvals, slottypes)
+                atyp = argextype(ex.args[3], src, sptypes, slottypes)
                 return isknowntype(atyp) ? 4 : params.inline_nonleaf_penalty
             end
             fidx = find_tfunc(f)
@@ -325,7 +325,7 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector
     elseif head === :return
         a = ex.args[1]
         if a isa Expr
-            return statement_cost(a, -1, src, spvals, slottypes, params)
+            return statement_cost(a, -1, src, sptypes, slottypes, params)
         end
         return 0
     elseif head === :(=)
@@ -336,7 +336,7 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector
         end
         a = ex.args[2]
         if a isa Expr
-            cost = plus_saturate(cost, statement_cost(a, -1, src, spvals, slottypes, params))
+            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, slottypes, params))
         end
         return cost
     elseif head === :copyast
@@ -357,13 +357,13 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector
     return 0
 end
 
-function inline_worthy(body::Array{Any,1}, src::CodeInfo, spvals::SimpleVector, slottypes::Vector{Any},
+function inline_worthy(body::Array{Any,1}, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any},
                        params::Params, cost_threshold::Integer=params.inline_cost_threshold)
     bodycost::Int = 0
     for line = 1:length(body)
         stmt = body[line]
         if stmt isa Expr
-            thiscost = statement_cost(stmt, line, src, spvals, slottypes, params)::Int
+            thiscost = statement_cost(stmt, line, src, sptypes, slottypes, params)::Int
         elseif stmt isa GotoNode
             # loops are generally always expensive
             # but assume that forward jumps are already counted for from
@@ -378,11 +378,11 @@ function inline_worthy(body::Array{Any,1}, src::CodeInfo, spvals::SimpleVector, 
     return true
 end
 
-function is_known_call(e::Expr, @nospecialize(func), src, spvals::SimpleVector, slottypes::Vector{Any} = empty_slottypes)
+function is_known_call(e::Expr, @nospecialize(func), src, sptypes::Vector{Any}, slottypes::Vector{Any} = empty_slottypes)
     if e.head !== :call
         return false
     end
-    f = argextype(e.args[1], src, spvals, slottypes)
+    f = argextype(e.args[1], src, sptypes, slottypes)
     return isa(f, Const) && f.val === func
 end
 
