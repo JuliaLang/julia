@@ -670,6 +670,30 @@ ways of doing so:
 * Iterating over the `CartesianIndices` of the `axes(::Broadcasted)` and using
   indexing with the resulting `CartesianIndex` object to compute the result.
 
+#### Example: Preventing materialization for reductions
+
+An instructive example is to permit reductions on broadcasted objects, without
+materializing the intermediate results. We can prevent materialization by
+```julia
+struct lazy end
+struct Lazy{T}
+  arg::T
+end
+Base.Broadcast.materialize(ell::Lazy) = ell.arg
+Base.Broadcast.broadcasted(::Type{lazy}, arg) = Lazy(arg)
+```
+Now, we can write e.g.
+```julia
+v = rand(10_000)
+w = rand(10_000)
+lazyprod = lazy.(v .* w)
+dotproduct = sum(lazyprod)
+```
+This works because `Broadcasted` objects behave like an `Array` in many ways: They are
+iterable, have a shape, and appropriate `getindex` to compute elements on demand. However,
+they do not have an `eltype`, even if they are correctly inferred, which makes it somewhat
+awkward to write type-stable reductions, and is part of the reason that they are not `<:AbstractArray`.
+
 ### [Writing binary broadcasting rules](@id writing-binary-broadcasting-rules)
 
 The precedence rules are defined by binary `BroadcastStyle` calls:
