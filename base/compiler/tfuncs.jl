@@ -329,17 +329,17 @@ function sizeof_tfunc(@nospecialize(x),)
     return Int
 end
 add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 0)
-add_tfunc(nfields, 1, 1,
-    function (@nospecialize(x),)
-        isa(x, Const) && return Const(nfields(x.val))
-        isa(x, Conditional) && return Const(0)
-        if isa(x, DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x))
-            if !(x.name === _NAMEDTUPLE_NAME && !isconcretetype(x))
-                return Const(length(x.types))
-            end
+function nfields_tfunc(@nospecialize(x))
+    isa(x, Const) && return Const(nfields(x.val))
+    isa(x, Conditional) && return Const(0)
+    if isa(x, DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x))
+        if !(x.name === _NAMEDTUPLE_NAME && !isconcretetype(x))
+            return Const(length(x.types))
         end
-        return Int
-    end, 0)
+    end
+    return Int
+end
+add_tfunc(nfields, 1, 1, nfields_tfunc, 0)
 add_tfunc(Core._expr, 1, INT_INF, (@nospecialize args...)->Expr, 100)
 function typevar_tfunc(@nospecialize(n), @nospecialize(lb_arg), @nospecialize(ub_arg))
     lb = Union{}

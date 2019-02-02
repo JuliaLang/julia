@@ -782,6 +782,31 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
     todo = Any[]
     for idx in 1:length(ir.stmts)
         stmt = ir.stmts[idx]
+
+        if isexpr(stmt, :splatnew)
+            ty = ir.types[idx]
+            nf = nfields_tfunc(ty)
+            if nf isa Const
+                eargs = stmt.args
+                tup = eargs[2]
+                tt = argextype(tup, ir, sv.sptypes)
+                tnf = nfields_tfunc(tt)
+                if tnf isa Const && tnf.val <= nf.val
+                    n = tnf.val
+                    new_argexprs = Any[eargs[1]]
+                    for j = 1:n
+                        atype = getfield_tfunc(tt, Const(j))
+                        new_call = Expr(:call, Core.getfield, tup, j)
+                        new_argexpr = insert_node!(ir, idx, atype, new_call)
+                        push!(new_argexprs, new_argexpr)
+                    end
+                    stmt.head = :new
+                    stmt.args = new_argexprs
+                end
+            end
+            continue
+        end
+
         isexpr(stmt, :call) || continue
         eargs = stmt.args
         isempty(eargs) && continue

@@ -1223,8 +1223,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
     # new expr
-    elseif head === :new
-        show_enclosed_list(io, "%new(", args, ", ", ")", indent)
+    elseif head === :new || head === :splatnew
+        show_enclosed_list(io, "%$head(", args, ", ", ")", indent)
 
     # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
     elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)

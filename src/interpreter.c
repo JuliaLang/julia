@@ -467,6 +467,16 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         JL_GC_POP();
         return v;
     }
+    else if (head == splatnew_sym) {
+        jl_value_t **argv;
+        JL_GC_PUSHARGS(argv, 2);
+        argv[0] = eval_value(args[0], s);
+        argv[1] = eval_value(args[1], s);
+        assert(jl_is_structtype(argv[0]));
+        jl_value_t *v = jl_new_structt((jl_datatype_t*)argv[0], argv[1]);
+        JL_GC_POP();
+        return v;
+    }
     else if (head == static_parameter_sym) {
         ssize_t n = jl_unbox_long(args[0]);
         assert(n > 0);
