@@ -261,7 +261,7 @@ const displays = AbstractDisplay[]
 const display_stack = IdDict{Int, Vector{AbstractDisplay}}()
 
 """
-    pushdisplay(d::AbstractDisplay; priority=0)
+    pushdisplay(d::AbstractDisplay, priority=0)
 
 Inserts a new display `d` into the global display-backend stack. Calling `display(x)` or
 `display(mime, x)` will display `x` on the backend with the highest priority (i.e.,
@@ -274,7 +274,7 @@ is expected to use a slightly higher priority. If a display needs to catch all
 `display` calls, use `priority=typemax(Int)` -- this is helpful for IDE-like
 functionality.
 """
-function pushdisplay(d::AbstractDisplay; priority::Int=0)
+function pushdisplay(d::AbstractDisplay, priority::Int=0)
     local _displays
     if haskey(display_stack, priority)
         _displays = display_stack[priority]
@@ -289,9 +289,12 @@ end
 """
     popdisplay()
     popdisplay(d::AbstractDisplay)
+    popdisplay(priority::Int)
+    popdisplay(d::AbstractDisplay, priority::Int)
 
 Pop the topmost backend off of the display-backend stack, or the topmost copy of `d` in the
-second variant.
+second variant. `popdisplay` will only search through displays with priority `priority`
+if that argument is specified.
 """
 function popdisplay()
     nonempties = filter(x -> !isempty(display_stack[x]), sort(collect(keys(display_stack)), rev=true))
@@ -299,6 +302,7 @@ function popdisplay()
     _displays = display_stack[first(nonempties)]
     pop!(_displays)
 end
+popdisplay(priority::Int) = pop!(get(display_stack, priority, []))
 function popdisplay(d::AbstractDisplay)
     for priority in sort(collect(keys(display_stack)), rev=true)
         _displays = display_stack[priority]
@@ -310,11 +314,20 @@ function popdisplay(d::AbstractDisplay)
     end
     throw(KeyError(d))
 end
+function popdisplay(d::AbstractDisplay, priority::Int)
+    _displays = get(display_stack, priority, [])
+    for i = length(_displays):-1:1
+        if d == _displays[i]
+            return splice!(_displays, i)
+        end
+    end
+    throw(KeyError(d))
+end
 function reinit_displays()
     global display_stack, displays
     empty!(displays)
     empty!(display_stack)
-    pushdisplay(TextDisplay(stdout), priority=0)
+    pushdisplay(TextDisplay(stdout), 0)
 end
 
 xdisplayable(D::AbstractDisplay, @nospecialize args...) = applicable(display, D, args...)
