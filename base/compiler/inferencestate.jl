@@ -152,6 +152,24 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
             end
             if Any <: ub && lb <: Bottom
                 ty = Any
+                # if this parameter came from arg::Type{T}, we know that T::Type
+                sig = linfo.def.sig
+                temp = sig
+                for j = 1:i-1
+                    temp = temp.body
+                end
+                Pi = temp.var
+                while temp isa UnionAll
+                    temp = temp.body
+                end
+                sigtypes = temp.parameters
+                for j = 1:length(sigtypes)
+                    tj = sigtypes[j]
+                    if isType(tj) && tj.parameters[1] === Pi
+                        ty = Type
+                        break
+                    end
+                end
             else
                 tv = TypeVar(v.name, lb, ub)
                 ty = UnionAll(tv, Type{tv})
