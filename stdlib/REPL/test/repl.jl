@@ -759,7 +759,8 @@ mutable struct Error19864 <: Exception; end
 function test19864()
     @eval Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
-    REPL.print_response(buf, Error19864(), [], false, false, nothing)
+    fake_response = (Any[(Error19864(),[])],true)
+    REPL.print_response(buf, fake_response, false, false, nothing)
     return String(take!(buf))
 end
 @test occursin("correct19864", test19864())

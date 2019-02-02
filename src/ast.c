@@ -888,8 +888,8 @@ finally:
         if (jl_loaderror_type == NULL)
             jl_rethrow();
         else
-            jl_rethrow_other(jl_new_struct(jl_loaderror_type, form, result,
-                                           jl_current_exception()));
+            jl_throw(jl_new_struct(jl_loaderror_type, form, result,
+                                   jl_current_exception()));
     }
     JL_GC_POP();
     return result;
@@ -1046,8 +1046,8 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
             else
                 margs[0] = jl_cstr_to_string("<macrocall>");
             margs[1] = jl_fieldref(lno, 0); // extract and allocate line number
-            jl_rethrow_other(jl_new_struct(jl_loaderror_type, margs[0], margs[1],
-                                           jl_current_exception()));
+            jl_throw(jl_new_struct(jl_loaderror_type, margs[0], margs[1],
+                                   jl_current_exception()));
         }
     }
     ptls->world_age = last_age;
