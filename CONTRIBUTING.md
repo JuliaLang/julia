@@ -2,6 +2,8 @@
 
 Hi! If you are new to the Julia community: welcome, and thanks for trying Julia. Please be sure to respect our [community standards](https://julialang.org/community/standards) in all interactions.
 
+If you are already familiar with Julia itself, this blog post by Katharine Hyatt on [Making your first Julia pull request](http://kshyatt.github.io/post/firstjuliapr/) is a great way to get started.
+
 ## Learning Julia
 
 [The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike. [This tutorial video](https://www.youtube.com/watch?v=vWkgEddb4-A) is one recommended starting point, as is the "[Invitation to Julia](https://www.youtube.com/watch?v=gQ1y5NUD_RI)" workshop video from JuliaCon 2015  ([slide materials here](https://github.com/dpsanders/invitation_to_julia)). The [Julia documentation](https://docs.julialang.org/en/latest) covers the language and core library features, and is searchable.
