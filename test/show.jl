@@ -1309,7 +1309,7 @@ end
 
 # Tests for code_typed linetable annotations
 function compute_annotations(f, types)
-    src = code_typed(f, types)[1][1]
+    src = code_typed(f, types, debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     la, lb, ll = Base.IRShow.compute_ir_line_annotations(ir)
     max_loc_method = maximum(length(s) for s in la)
@@ -1364,7 +1364,7 @@ eval(Meta.parse("""function my_fun28173(x)
         end
     return y
 end""")) # use parse to control the line numbers
-let src = code_typed(my_fun28173, (Int,))[1][1]
+let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     fill!(src.codelocs, 0) # IRCode printing is only capable of printing partial line info
     let source_slotnames = String["my_fun28173", "x"],
@@ -1402,7 +1402,7 @@ end
 # Verify that extra instructions at the end of the IR
 # don't throw errors in the printing, but instead print
 # with as unnamed "!" BB.
-let src = code_typed(gcd, (Int, Int))[1][1]
+let src = code_typed(gcd, (Int, Int), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     push!(ir.stmts, Core.Compiler.ReturnNode())
     lines = split(sprint(show, ir), '\n')
