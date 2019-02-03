@@ -311,7 +311,7 @@ Julia if you made code-changes that Revise cannot handle.
   - **IRC:** <http://webchat.freenode.net/?channels=Julia>
   - **Source code:** <https://github.com/JuliaLang/julia>
   - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
-  - **Documentation:** <https://julialang.org/manual/>
+  - **Documentation:** <https://docs.julialang.org/>
   - **Status:** <http://status.julialang.org/>
   - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
@@ -324,4 +324,4 @@ Julia if you made code-changes that Revise cannot handle.
   - [Using Julia with GitHub (video)](http://www.youtube.com/watch?v=wnFYV3ZKtOg&feature=youtu.be)
   - [Using Julia on GitHub (notes for video)](https://gist.github.com/2712118#file_Julia_git_pull_request.md)
   - [General GitHub documentation](http://help.github.com)
-  - [GitHub pull request documentation](http://help.github.com/send-pull-requests)
+  - [GitHub pull request documentation](https://help.github.com/articles/creating-a-pull-request/)
