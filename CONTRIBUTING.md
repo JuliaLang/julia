@@ -316,7 +316,7 @@ Julia if you made code-changes that Revise cannot handle.
 
 * Design of Julia
   - [Julia: A Fresh Approach to Numerical Computing](https://julialang.org/research/julia-fresh-approach-BEKS.pdf)
-  - [Julia: A Fast Dynamic Language for Technical Computing](https://arxiv.org/abs/1411.1607)
+  - [Julia: Dynamism and Performance Reconciled by Design](http://janvitek.org/pubs/oopsla18b.pdf)
   - [All Julia Publications](https://julialang.org/research)
 
 * Using GitHub
