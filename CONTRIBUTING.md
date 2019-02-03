@@ -308,17 +308,14 @@ Julia if you made code-changes that Revise cannot handle.
 * Julia
   - **Homepage:** <https://julialang.org>
   - **Community:** <https://julialang.org/community/>
-  - **IRC:** <http://webchat.freenode.net/?channels=Julia>
   - **Source code:** <https://github.com/JuliaLang/julia>
-  - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
   - **Documentation:** <https://docs.julialang.org/>
-  - **Status:** <http://status.julialang.org/>
   - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 * Design of Julia
-  - [Julia: A Fresh Approach to Numerical Computing](http://arxiv.org/pdf/1411.1607v3.pdf)
-  - [Julia: A Fast Dynamic Language for Technical Computing](https://julialang.org/images/julia-dynamic-2012-tr.pdf)
-  - [All Julia Publications](https://julialang.org/publications)
+  - [Julia: A Fresh Approach to Numerical Computing](https://julialang.org/research/julia-fresh-approach-BEKS.pdf)
+  - [Julia: A Fast Dynamic Language for Technical Computing](https://arxiv.org/abs/1411.1607)
+  - [All Julia Publications](https://julialang.org/research)
 
 * Using GitHub
   - [Using Julia with GitHub (video)](http://www.youtube.com/watch?v=wnFYV3ZKtOg&feature=youtu.be)
