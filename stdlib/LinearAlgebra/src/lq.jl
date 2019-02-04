@@ -104,8 +104,9 @@ Base.propertynames(F::LQ, private::Bool=false) =
 getindex(A::LQPackedQ, i::Integer, j::Integer) =
     lmul!(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]
 
-function show(io::IO, C::LQ)
+function show(io::IO, ::MIME"text/plain", C::LQ)
     println(io, typeof(C), " with factors L and Q:")
+    io = IOContext(io, :compact => true)
     show(io, C.L)
     println(io)
     show(io, C.Q)
