@@ -1309,6 +1309,13 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
         return den_val !== -1 || (isa(argtypes[1], Const) &&
             argtypes[1].val !== typemin(typeof(den_val)))
     end
+    if f === Intrinsics.pointerref
+        # Nothrow as long as the types are ok. N.B.: dereferencability is not
+        # modeled here, but can cause errors (e.g. ReadOnlyMemoryError). We follow LLVM here
+        # in that it is legal to remove unused non-volatile loads.
+        length(argtypes) == 3 || return false
+        return argtypes[1] ⊑ Ptr && argtypes[2] ⊑ Int && argtypes[3] ⊑ Int
+    end
     return true
 end
 
