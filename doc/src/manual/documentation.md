@@ -549,7 +549,8 @@ Macro authors should take note that only macros that generate a single expressio
 support docstrings. If a macro returns a block containing multiple subexpressions then the subexpression
 that should be documented must be marked using the [`@__doc__`](@ref Core.@__doc__) macro.
 
-The `@enum` macro makes use of `@__doc__` to allow for documenting `Enum`s. Examining its definition
+The [`@enum`](@ref) macro makes use of `@__doc__` to allow for documenting [`Enum`](@ref)s.
+Examining its definition
 should serve as an example of how to use `@__doc__` correctly.
 
 ```@docs

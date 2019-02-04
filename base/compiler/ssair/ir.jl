@@ -1195,7 +1195,6 @@ function fixup_node(compact::IncrementalCompact, @nospecialize(stmt))
         return compact.ssa_rename[stmt.id]
     else
         urs = userefs(stmt)
-        urs === () && return stmt
         for ur in urs
             val = ur[]
             if isa(val, NewSSAValue)

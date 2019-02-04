@@ -134,7 +134,7 @@ systems, not Julia).
 
 `dims` is a tuple or single [`Integer`](@ref) specifying the size or length of the array.
 
-The file is passed via the stream argument, either as an open `IOStream` or filename string.
+The file is passed via the stream argument, either as an open [`IOStream`](@ref) or filename string.
 When you initialize the stream, use `"r"` for a "read-only" array, and `"w+"` to create a
 new array used to write values to disk.
 

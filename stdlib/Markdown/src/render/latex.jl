@@ -154,7 +154,9 @@ function latexinline(io::IO, md::Link)
 end
 
 const _latexescape_chars = Dict{Char, AbstractString}(
-   '~'=>"{\\sim}", '^'=>"\\^{}", '\\'=>"{\\textbackslash}")
+    '~'=>"{\\textasciitilde}",
+    '^'=>"\\^{}",
+    '\\'=>"{\\textbackslash}")
 for ch in "&%\$#_{}"
     _latexescape_chars[ch] = "\\$ch"
 end

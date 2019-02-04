@@ -37,6 +37,7 @@ const COMPILE_MASK      =
       CASELESS          |
       DOLLAR_ENDONLY    |
       DOTALL            |
+      ENDANCHORED       |
       EXTENDED          |
       FIRSTLINE         |
       MULTILINE         |

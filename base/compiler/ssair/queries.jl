@@ -14,7 +14,7 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src, spvals::S
         if head === :static_parameter
             etyp = sparam_type(spvals[e.args[1]])
             # if we aren't certain enough about the type, it might be an UndefVarError at runtime
-            return isa(etyp, Const) || issingletontype(widenconst(etyp))
+            return isa(etyp, Const)
         end
         ea = e.args
         if head === :call

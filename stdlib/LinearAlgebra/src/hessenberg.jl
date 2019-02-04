@@ -5,7 +5,7 @@ struct Hessenberg{T,S<:AbstractMatrix{T}} <: Factorization{T}
     τ::Vector{T}
 
     function Hessenberg{T,S}(factors, τ) where {T,S<:AbstractMatrix{T}}
-        @assert !has_offset_axes(factors, τ)
+        require_one_based_indexing(factors, τ)
         new{T,S}(factors, τ)
     end
 end
@@ -71,7 +71,7 @@ struct HessenbergQ{T,S<:AbstractMatrix} <: AbstractQ{T}
     factors::S
     τ::Vector{T}
     function HessenbergQ{T,S}(factors, τ) where {T,S<:AbstractMatrix}
-        @assert !has_offset_axes(factors)
+        require_one_based_indexing(factors)
         new(factors, τ)
     end
 end

@@ -2,7 +2,7 @@
 
 module Base64
 
-using Base: has_offset_axes
+using Base: require_one_based_indexing
 
 export
     Base64EncodePipe,

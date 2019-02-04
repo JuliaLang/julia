@@ -163,3 +163,5 @@ end
     haggis       = 4
 end
 @test Int(haggis) == 4
+
+@test (Vector{Fruit}(undef, 3) .= apple) == [apple, apple, apple]

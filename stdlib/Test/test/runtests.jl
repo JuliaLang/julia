@@ -110,6 +110,12 @@ let fails = @testset NoThrowTestSet begin
         # Fail - function keyword splatting
         k = [(:atol, 0), (:nans, true)]
         @test isapprox(1, 2; k...)
+        # Fail - call negation
+        @test !isequal(1, 2 - 1)
+        # Fail - comparison negation
+        @test !(2 + 3 == 1 + 4)
+        # Fail - chained negation
+        @test !(2 + 3 == 1 + 4 == 5)
         # Error - unexpected pass
         @test_broken true
         # Error - converting a call into a comparison
@@ -185,11 +191,26 @@ let fails = @testset NoThrowTestSet begin
     end
 
     let str = sprint(show, fails[14])
+        @test occursin("Expression: !(isequal(1, 2 - 1))", str)
+        @test occursin("Evaluated: !(isequal(1, 1))", str)
+    end
+
+    let str = sprint(show, fails[15])
+        @test occursin("Expression: !(2 + 3 == 1 + 4)", str)
+        @test occursin("Evaluated: !(5 == 5)", str)
+    end
+
+    let str = sprint(show, fails[16])
+        @test occursin("Expression: !(2 + 3 == 1 + 4 == 5)", str)
+        @test occursin("Evaluated: !(5 == 5 == 5)", str)
+    end
+
+    let str = sprint(show, fails[17])
         @test occursin("Unexpected Pass", str)
         @test occursin("Expression: true", str)
     end
 
-    let str = sprint(show, fails[15])
+    let str = sprint(show, fails[18])
         @test occursin("Expression: ==(1, 1:2...)", str)
         @test occursin("MethodError: no method matching ==(::$Int, ::$Int, ::$Int)", str)
     end

@@ -216,7 +216,7 @@ struct Threw <: ExecutionResult
     source::LineNumberNode
 end
 
-function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
+function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate::Bool=false)
     res = true
     i = 1
     evaled_args = evaluated.args
@@ -264,6 +264,12 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
     else
         throw(ArgumentError("Unhandled expression type: $(evaluated.head)"))
     end
+
+    if negate
+        res = !res
+        quoted = Expr(:call, :!, quoted)
+    end
+
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
              res ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted)),
@@ -394,6 +400,13 @@ end
 # evaluate each term in the comparison individually so the results
 # can be displayed nicely.
 function get_test_result(ex, source)
+    negate = QuoteNode(false)
+    orig_ex = ex
+    # Evaluate `not` wrapped functions separately for pretty-printing failures
+    if isa(ex, Expr) && ex.head == :call && length(ex.args) == 2 && ex.args[1] === :!
+        negate = QuoteNode(true)
+        ex = ex.args[2]
+    end
     # Normalize non-dot comparison operator calls to :comparison expressions
     is_splat = x -> isa(x, Expr) && x.head == :...
     if isa(ex, Expr) && ex.head == :call && length(ex.args) == 3 &&
@@ -409,6 +422,7 @@ function get_test_result(ex, source)
             Expr(:comparison, $(escaped_terms...)),
             Expr(:comparison, $(quoted_terms...)),
             $(QuoteNode(source)),
+            $negate,
         ))
     elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox, :≈)
         escaped_func = esc(ex.args[1])
@@ -452,9 +466,10 @@ function get_test_result(ex, source)
             Expr(:call, $escaped_func, Expr(:parameters, $(escaped_kwargs...)), $(escaped_args...)),
             Expr(:call, $quoted_func),
             $(QuoteNode(source)),
+            $negate,
         ))
     else
-        testret = :(Returned($(esc(ex)), nothing, $(QuoteNode(source))))
+        testret = :(Returned($(esc(orig_ex)), nothing, $(QuoteNode(source))))
     end
     result = quote
         try
