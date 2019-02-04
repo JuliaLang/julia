@@ -1430,7 +1430,7 @@ Construct a tuple of the given objects.
 # Examples
 ```jldoctest
 julia> tuple(1, 'a', pi)
-(1, 'a', π = 3.1415926535897...)
+(1, 'a', π)
 ```
 """
 tuple
