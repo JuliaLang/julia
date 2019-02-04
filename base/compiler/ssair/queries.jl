@@ -23,7 +23,7 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src, sptypes::
             f === nothing && return false
             is_return_type(f) && return true
             if isa(f, IntrinsicFunction)
-                is_pure_intrinsic_infer(f) || return false
+                intrinsic_effect_free_if_nothrow(f) || return false
                 return intrinsic_nothrow(f) ||
                     intrinsic_nothrow(f,
                         Any[argextype(ea[i], src, sptypes) for i = 2:length(ea)])
