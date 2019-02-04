@@ -43,7 +43,7 @@ julia> eigvals(A)
 
 julia> eigvecs(A)
 2×2 Array{Complex{Float64},2}:
-  0.945905+0.0im        0.945905-0.0im
+  0.945905-0.0im        0.945905+0.0im
  -0.166924+0.278207im  -0.166924-0.278207im
 ```
 
