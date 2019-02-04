@@ -240,8 +240,11 @@ end
 # We can't assume an ordered field so we first try without pivoting
 function lu(A::AbstractMatrix{T}; check::Bool = true) where T
     S = lutype(T)
+    onex = one(S)
     AA = similar(A, S)
     copyto!(AA, A)
+    isfloat = try; applicable(float, onex) && float(onex) === onex; catch; false; end
+    isfloat && return lu!(AA, Val(true); check = check)
     F = lu!(AA, Val(false); check = false)
     if issuccess(F)
         return F
