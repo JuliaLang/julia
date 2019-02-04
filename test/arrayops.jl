@@ -1792,7 +1792,8 @@ end
     @test CartesianIndices(CartesianIndex{3}(1,2,3)) == CartesianIndices((1, 2, 3))
     @test Tuple{}(CartesianIndices{0,Tuple{}}(())) == ()
 
-    R = CartesianIndices(map(Base.IdentityUnitRange, (2:5, 3:5)))
+    RR = map(Base.IdentityUnitRange, (2:5, 3:5))
+    R = CartesianIndices(RR)
     @test eltype(R) <: CartesianIndex{2}
     @test eltype(typeof(R)) <: CartesianIndex{2}
     @test eltype(CartesianIndices{2}) <: CartesianIndex{2}
@@ -1814,8 +1815,8 @@ end
     @test !in(CartesianIndex((3,6)), R)
     @test !in(CartesianIndex((6,5)), R)
 
-    @test @inferred(convert(NTuple{2,UnitRange}, R)) === (2:5, 3:5)
-    @test @inferred(convert(Tuple{Vararg{UnitRange}}, R)) === (2:5, 3:5)
+    @test @inferred(convert(NTuple{2,AbstractUnitRange}, R)) === RR
+    @test @inferred(convert(Tuple{Vararg{AbstractUnitRange}}, R)) === RR
 
     I = CartesianIndex(2,3)
     J = CartesianIndex(5,4)

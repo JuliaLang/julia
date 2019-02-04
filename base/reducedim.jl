@@ -4,7 +4,8 @@
 
 # for reductions that expand 0 dims to 1
 reduced_index(i::OneTo) = OneTo(1)
-reduced_index(i::Union{Slice, IdentityUnitRange}) = first(i):first(i)
+reduced_index(i::Slice) = Slice(first(i):first(i))
+reduced_index(i::IdentityUnitRange) = IdentityUnitRange(first(i):first(i))
 reduced_index(i::AbstractUnitRange) =
     throw(ArgumentError(
 """
@@ -43,33 +44,24 @@ function reduced_indices0(inds::Indices{N}, d::Int) where N
     end
 end
 
-function reduced_indices(inds::Indices{N}, region) where N
-    rinds = [inds...]
+function check_reduced_region(region, N)
     for i in region
         isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        d = Int(i)
-        if d < 1
-            throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
-        elseif d <= N
-            rinds[d] = reduced_index(rinds[d])
+        if i < 1
+            throw(ArgumentError("region dimension(s) must be ≥ 1, got $i"))
         end
     end
-    tuple(rinds...)::typeof(inds)
+    return nothing
+end
+
+function reduced_indices(inds::Indices{N}, region) where N
+    check_reduced_region(region, N)
+    ntuple(i->in(i, region) ? reduced_index(inds[i]) : inds[i], Val(N))::typeof(inds)
 end
 
 function reduced_indices0(inds::Indices{N}, region) where N
-    rinds = [inds...]
-    for i in region
-        isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        d = Int(i)
-        if d < 1
-            throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
-        elseif d <= N
-            rind = rinds[d]
-            rinds[d] = isempty(rind) ? rind : reduced_index(rind)
-        end
-    end
-    tuple(rinds...)::typeof(inds)
+    check_reduced_region(region, N)
+    ntuple(i->in(i, region) ? (r = inds[i]; isempty(r) ? r : reduced_index(r)) : inds[i], Val(N))::typeof(inds)
 end
 
 ###### Generic reduction functions #####

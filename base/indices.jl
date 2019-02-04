@@ -316,6 +316,7 @@ struct Slice{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
     indices::T
 end
 Slice(S::Slice) = S
+AxesStartStyle(::Type{<:Slice}) = AxesStartAny()
 axes(S::Slice) = (IdentityUnitRange(S.indices),)
 unsafe_indices(S::Slice) = (IdentityUnitRange(S.indices),)
 axes1(S::Slice) = IdentityUnitRange(S.indices)
@@ -333,6 +334,13 @@ getindex(S::Slice, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundsche
 getindex(S::Slice, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::Slice) = print(io, "Base.Slice(", r.indices, ")")
 iterate(S::Slice, s...) = iterate(S.indices, s...)
+_convert(::AxesStart1, ::AxesStartAny, ::Type{T}, S::Slice) where {T<:AbstractRange} =
+    (require_one_based_indexing(S); T(S))
+function _convert(::AxesStartAny, ::AxesStart1, ::Type{T}, r::AbstractUnitRange) where {T<:Slice}
+    throwerr(r) = (@_noinline_meta; throw(ArgumentError("`convert($T, r)` requires a range with first element 1, got $(first(r))")))
+    first(r) == 1 || throwerr(r)
+    return T(r)
+end
 
 
 """
@@ -346,6 +354,7 @@ struct IdentityUnitRange{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
     indices::T
 end
 IdentityUnitRange(S::IdentityUnitRange) = S
+AxesStartStyle(::Type{<:IdentityUnitRange}) = AxesStartAny()
 # IdentityUnitRanges are offset and thus have offset axes, so they are their own axes... but
 # we need to strip the wholedim marker because we don't know how they'll be used
 axes(S::IdentityUnitRange) = (S,)
@@ -365,6 +374,13 @@ getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer}) = (@_inline_meta
 getindex(S::IdentityUnitRange, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indices, ")")
 iterate(S::IdentityUnitRange, s...) = iterate(S.indices, s...)
+_convert(::AxesStart1, ::AxesStartAny, ::Type{T}, S::IdentityUnitRange) where {T<:AbstractRange} =
+    (require_one_based_indexing(S); T(S))
+function _convert(::AxesStartAny, ::AxesStart1, ::Type{T}, r::AbstractUnitRange) where {T<:IdentityUnitRange}
+    throwerr(r) = (@_noinline_meta; throw(ArgumentError("`convert($T, r)` requires a range with first element 1, got $(first(r))")))
+    first(r) == 1 || throwerr(r)
+    return T(r)
+end
 
 """
     LinearIndices(A::AbstractArray)

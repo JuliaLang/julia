@@ -14,14 +14,14 @@ let
 v0 = rand(4)
 v = OffsetArray(v0, (-3,))
 h = OffsetArray([-1,1,-2,2,0], (-3,))
-@test axes(v) == (-2:1,)
+@test axes(v) == (Base.IdentityUnitRange(-2:1),)
 @test size(v) == (4,)
 @test size(v, 1) == 4
 
 A0 = [1 3; 2 4]
 A = OffsetArray(A0, (-1,2))                   # IndexLinear
 S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # IndexCartesian
-@test axes(A) == axes(S) == (0:1, 3:4)
+@test axes(A) == axes(S) == map(Base.IdentityUnitRange, (0:1, 3:4))
 @test size(A) == (2,2)
 @test size(A, 1) == 2
 

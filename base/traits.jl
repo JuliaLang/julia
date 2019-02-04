@@ -57,3 +57,18 @@ struct RangeStepRegular   <: RangeStepStyle end # range with regular step
 struct RangeStepIrregular <: RangeStepStyle end # range with rounding error
 
 RangeStepStyle(instance) = RangeStepStyle(typeof(instance))
+
+# trait that allows skipping of axes-checking on abstract range types (risks overflow on `length`)
+"""
+    AxesStartStyle(instance)
+    AxesStartStyle(T::Type)
+
+Indicate the value that `axes(instance)` starts with. Containers that return `AxesStart1()`
+must have `axes(instance)` start with 1 (e.g., `Base.OneTo` axes). Such containers may
+bypass axes checks for certain operations (e.g., range comparisons to avoid risk of overflow).
+`AxesStartAny()` indicates that one cannot count on the axes starting with 1, and that
+an explicit check is required.
+"""
+abstract type AxesStartStyle end
+struct AxesStart1   <: AxesStartStyle end
+struct AxesStartAny <: AxesStartStyle end
