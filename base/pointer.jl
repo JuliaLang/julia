@@ -8,6 +8,13 @@ memory is actually valid, or that it actually represents data of the specified t
 """
 Ptr
 
+"""
+    Ptr{T}()
+
+Creates a null pointer to type `T`.
+"""
+Ptr{T}() where {T} = Ptr{T}(C_NULL)
+
 ## converting pointers to an appropriate unsigned ##
 
 """
