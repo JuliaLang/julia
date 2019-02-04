@@ -1133,8 +1133,8 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         active_bb += 1
     end
     compact.idx = idx + 1
-    if (old_result_idx == compact.result_idx)
-        idx = idx + 1
+    if old_result_idx == compact.result_idx
+        idx += 1
         @goto restart
     end
     if !isassigned(compact.result, old_result_idx)
