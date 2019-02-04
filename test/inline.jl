@@ -228,3 +228,19 @@ let code = code_typed(f_subtype, Tuple{})[1][1].code
     @test length(code) == 1
     @test code[1] == Expr(:return, false)
 end
+
+# check that pointerref gets deleted if unused
+f_pointerref(T::Type{S}) where S = Val(length(T.parameters))
+let code = code_typed(f_pointerref, Tuple{Type{Int}})[1][1].code
+    any_ptrref = false
+    for i = 1:length(code)
+        stmt = code[i]
+        isa(stmt, Expr) || continue
+        stmt.head === :call || continue
+        arg1 = stmt.args[1]
+        if arg1 === Base.pointerref || (isa(arg1, GlobalRef) && arg1.name === :pointerref)
+            any_ptrref = true
+        end
+    end
+    @test !any_ptrref
+end
