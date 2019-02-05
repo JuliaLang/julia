@@ -822,9 +822,11 @@ function quantile!(q::AbstractArray, v::AbstractVector, p::AbstractArray;
 end
 
 function quantile!(v::AbstractVector, p::AbstractArray; sorted::Bool=false)
-    T = Core.Compiler.typesubtract(eltype(v), Missing)
-    S = T <: AbstractFloat ? T : promote_type(T, Float64)
-    quantile!(similar(p, S), v, p; sorted=sorted)
+    if !isempty(p)
+        minp, maxp = extrema(p)
+        _quantilesort!(v, sorted, minp, maxp)
+    end
+    return map(x->_quantile(v, x), p)
 end
 
 quantile!(v::AbstractVector, p::Real; sorted::Bool=false) =
