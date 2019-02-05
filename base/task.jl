@@ -192,6 +192,8 @@ function wait(t::Task)
     end
 end
 
+fetch(@nospecialize x) = x
+
 """
     fetch(t::Task)
 
