@@ -198,6 +198,10 @@ end
         @test ismissing(f(Union{Int, Missing}, missing))
         @test f(Union{Int, Missing}, 1.0) === 1
         @test_throws MissingException f(Int, missing)
+        @test ismissing.(f.([1.0, missing])) == [false, true]
+        @test ismissing.(f.([1.0, missing], digits=1)) == [false, true]
+        @test ismissing.(f.([1.0, missing], digits=1, base=1)) == [false, true]
+        @test ismissing.(f.(Union{Int, Missing}, [1.0, missing])) == [false, true]
     end
 end
 
