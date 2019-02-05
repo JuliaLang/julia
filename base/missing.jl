@@ -109,7 +109,7 @@ max(::Any,     ::Missing) = missing
 # Rounding and related functions
 for f in (:(ceil), :(floor), :(round), :(trunc))
     @eval begin
-        ($f)(::Missing, digits::Integer=0, base::Integer=0) = missing
+        ($f)(::Missing; digits::Integer=0, base=0) = missing
         ($f)(::Type{>:Missing}, ::Missing) = missing
         ($f)(::Type{T}, ::Missing) where {T} =
             throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
