@@ -196,8 +196,8 @@ Putting this statement in the file `~/.julia/config/startup.jl` will extend [`LO
 every Julia startup. Alternatively, the module load path can be extended by defining the environment
 variable `JULIA_LOAD_PATH`.
 
-Sometimes a module can be defined in the local scope, for example in the REPL, or from a file brought 
-into scope using `include()`. A module defined in this way can be loaded using the same syntax as 
+Sometimes a module can be defined in the local scope, for example in the REPL, or from a file brought
+into scope using `include()`. A module defined in this way can be loaded using the same syntax as
 loading a submodule from a relative path:
 
 ```julia
