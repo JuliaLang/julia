@@ -969,7 +969,8 @@ end
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
     if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
-            (isa(func, Expr) && (func.head == :. || func.head == :curly))
+            (isa(func, Expr) && (func.head == :. || func.head == :curly)) ||
+            isa(func, GlobalRef)
         show_unquoted(io, func, indent)
     else
         print(io, '(')
@@ -999,7 +1000,7 @@ show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex
 function show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)
     print(io, ex.mod)
     print(io, '.')
-    quoted = !isidentifier(ex.name)
+    quoted = !isidentifier(ex.name) && !startswith(string(ex.name), "@")
     parens = quoted && (!isoperator(ex.name) || (ex.name in quoted_syms))
     quoted && print(io, ':')
     parens && print(io, '(')

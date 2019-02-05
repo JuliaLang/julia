@@ -83,7 +83,7 @@ be passed instead!). For example:
 
 ```jldoctest; setup = :(using InteractiveUtils)
 julia> macroexpand(@__MODULE__, :(@edit println("")) )
-:((InteractiveUtils.edit)(println, (Base.typesof)("")))
+:(InteractiveUtils.edit(println, (Base.typesof)("")))
 ```
 
 The functions `Base.Meta.show_sexpr` and [`dump`](@ref) are used to display S-expr style views
@@ -99,7 +99,7 @@ julia> Meta.lower(@__MODULE__, :( [1+2, sin(0.5)] ))
     @ none within `top-level scope'
 1 ─ %1 = 1 + 2
 │   %2 = sin(0.5)
-│   %3 = (Base.vect)(%1, %2)
+│   %3 = Base.vect(%1, %2)
 └──      return %3
 ))))
 ```
@@ -142,7 +142,7 @@ debug information printed.
 julia> @code_typed debuginfo=:source +(1,1)
 CodeInfo(
     @ int.jl:53 within `+'
-1 ─ %1 = (Base.add_int)(x, y)::Int64
+1 ─ %1 = Base.add_int(x, y)::Int64
 └──      return %1
 ) => Int64
 ```

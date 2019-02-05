@@ -1300,7 +1300,7 @@ Int64
 
 julia> @code_warntype f(2)
 Body::UNION{FLOAT64, INT64}
-1 ─ %1 = (Base.slt_int)(1, a)::Bool
+1 ─ %1 = Base.slt_int(1, a)::Bool
 └──      goto #3 if not %1
 2 ─      return 1
 3 ─      return 1.0
