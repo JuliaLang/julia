@@ -193,8 +193,8 @@ end
     # All rounding functions return missing when evaluating missing as first argument
     for f in rounding_functions
         @test ismissing(f(missing))
-        @test ismissing(f(missing, 1))
-        @test ismissing(f(missing, 1, 1))
+        @test ismissing(f(missing, digits=1))
+        @test ismissing(f(missing, digits=1, base=1))
         @test ismissing(f(Union{Int, Missing}, missing))
         @test f(Union{Int, Missing}, 1.0) === 1
         @test_throws MissingException f(Int, missing)
