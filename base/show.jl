@@ -390,6 +390,8 @@ function show(io::IO, f::Function)
     end
 end
 
+print(io::IO, f::Function) = print(io, nameof(f))
+
 function show(io::IO, x::Core.IntrinsicFunction)
     name = ccall(:jl_intrinsic_name, Cstring, (Core.IntrinsicFunction,), x)
     print(io, unsafe_string(name))
