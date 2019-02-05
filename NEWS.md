@@ -31,6 +31,8 @@ New library functions
 Standard library changes
 ------------------------
 
+* Added `Base.hasproperty` and `Base.hasfield` ([#28850]).
+
 #### LinearAlgebra
 
 * Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).

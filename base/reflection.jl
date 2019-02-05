@@ -177,6 +177,17 @@ fieldnames(::Core.TypeofBottom) =
 fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 
 """
+    hasfield(T::Type, name::Symbol)
+
+Returns a boolean indicating whether DataType has the specified field as one of
+its own fields.
+"""
+function hasfield(::Type{T}, name::Symbol) where T
+    @_pure_meta
+    return fieldindex(T, name, false) > 0
+end
+
+"""
     nameof(t::DataType) -> Symbol
 
 Get the name of a (potentially `UnionAll`-wrapped) `DataType` (without its parent module)
@@ -1243,3 +1254,11 @@ REPL tab completion on `x.` shows only the `private=false` properties.
 propertynames(x) = fieldnames(typeof(x))
 propertynames(m::Module) = names(m)
 propertynames(x, private) = propertynames(x) # ignore private flag by default
+
+"""
+    hasproperty(x, s::Symbol)
+
+Returns a boolean indicating whether the object `x` has the specified property as one of
+its own properties.
+"""
+hasproperty(x, s::Symbol) = s in propertynames(x)
