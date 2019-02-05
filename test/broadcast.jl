@@ -944,6 +944,10 @@ ret =  @macroexpand @.([Int, Number] >: Real)
     @test Core.Compiler.return_type(+, Tuple{Vector{Int},
                                              Vector{Union{Float64, Missing}}}) ==
         Vector{<:Union{Float64, Missing}}
+    @test isequal(tuple.([1, 2], [3.0, missing]), [(1, 3.0), (2, missing)])
+    @test Core.Compiler.return_type(broadcast, Tuple{typeof(tuple), Vector{Int},
+                                                     Vector{Union{Float64, Missing}}}) ==
+        Vector{<:Tuple{Int, Any}}
     # Check that corner cases do not throw an error
     @test isequal(broadcast(x -> x === 1 ? nothing : x, [1, 2, missing]),
                   [nothing, 2, missing])

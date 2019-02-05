@@ -8,7 +8,7 @@ Module containing the broadcasting implementation.
 module Broadcast
 
 using .Base.Cartesian
-using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin,
+using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin, @pure,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
 import .Base: copy, copyto!, axes
 export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, broadcast_preserving_zero_d
@@ -137,7 +137,7 @@ BroadcastStyle(a::AbstractArrayStyle, ::Style{Tuple})    = a
 BroadcastStyle(::A, ::A) where A<:ArrayStyle             = A()
 BroadcastStyle(::ArrayStyle, ::ArrayStyle)               = Unknown()
 BroadcastStyle(::A, ::A) where A<:AbstractArrayStyle     = A()
-Base.@pure function BroadcastStyle(a::A, b::B) where {A<:AbstractArrayStyle{M},B<:AbstractArrayStyle{N}} where {M,N}
+@pure function BroadcastStyle(a::A, b::B) where {A<:AbstractArrayStyle{M},B<:AbstractArrayStyle{N}} where {M,N}
     if Base.typename(A) === Base.typename(B)
         return A(Val(max(M, N)))
     end
@@ -697,22 +697,33 @@ function promote_typejoin_union(::Type{T}) where T
     elseif T isa Union
         promote_typejoin(promote_typejoin_union(T.a), promote_typejoin_union(T.b))
     elseif T <: Tuple
-        p = T.parameters
-        lr = length(p)::Int
-        if lr == 0
-            return Tuple{}
-        end
-        lf, fixed = Core.Compiler.full_va_len(p)
-        c = Vector{Any}(undef, lf)
-        for i = 1:lf
-            pi = p[i]
-            ci = promote_typejoin_union(Core.Compiler.unwrapva(pi))
-            c[i] = i == lf && Core.Compiler.isvarargtype(pi) ? Vararg{ci} : ci
-        end
-        return Tuple{c...}
+        typejoin_union_tuple(T)
     else
         T
     end
+end
+
+@pure function typejoin_union_tuple(::Type{T}) where {T}
+    p = T.parameters
+    lr = length(p)::Int
+    if lr == 0
+        return Tuple{}
+    end
+    lf, fixed = Core.Compiler.full_va_len(p)
+    c = Vector{Any}(undef, lf)
+    for i = 1:lf
+        pi = p[i]
+        U = Core.Compiler.unwrapva(pi)
+        if U === Union{}
+            ci = Union{}
+        elseif U isa Union
+            ci = typejoin(U.a, U.b)
+        else
+            ci = U
+        end
+        c[i] = i == lf && Core.Compiler.isvarargtype(pi) ? Vararg{ci} : ci
+    end
+    return Tuple{c...}
 end
 
 # Inferred eltype of result of broadcast(f, args...)
