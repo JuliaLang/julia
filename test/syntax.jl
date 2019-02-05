@@ -1776,6 +1776,18 @@ function captured_and_shadowed_sp(x::T) where T
 end
 @test captured_and_shadowed_sp(1) === (Int, 0)
 
+function capture_with_conditional_label()
+    @goto foo
+    x = 1
+    if false
+        @label foo
+    end
+    return y->x
+end
+let f = capture_with_conditional_label()  # should not throw
+    @test_throws UndefVarError(:x) f(0)
+end
+
 # `_` should not create a global (or local)
 f30656(T) = (t, _)::Pair -> t >= T
 f30656(10)(11=>1)
