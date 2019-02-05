@@ -49,7 +49,7 @@ Standard library changes
 
 #### Statistics
 
-* `quantile` now accepts in all cases collections whose `eltype` is not a subtype of `Number` ([#XXXXX]).
+* `quantile` now accepts in all cases collections whose `eltype` is not a subtype of `Number` ([#30938]).
 
 #### Miscellaneous
 
