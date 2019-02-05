@@ -821,7 +821,8 @@ function quantile!(q::AbstractArray, v::AbstractVector, p::AbstractArray;
     return q
 end
 
-function quantile!(v::AbstractVector, p::AbstractArray; sorted::Bool=false)
+function quantile!(v::AbstractVector, p::Union{AbstractArray, Tuple{Vararg{Real}}};
+                   sorted::Bool=false)
     if !isempty(p)
         minp, maxp = extrema(p)
         _quantilesort!(v, sorted, minp, maxp)
@@ -831,13 +832,6 @@ end
 
 quantile!(v::AbstractVector, p::Real; sorted::Bool=false) =
     _quantile(_quantilesort!(v, sorted, p, p), p)
-
-function quantile!(v::AbstractVector, p::Tuple{Vararg{Real}}; sorted::Bool=false)
-    isempty(p) && return ()
-    minp, maxp = extrema(p)
-    _quantilesort!(v, sorted, minp, maxp)
-    return map(x->_quantile(v, x), p)
-end
 
 # Function to perform partial sort of v for quantiles in given range
 function _quantilesort!(v::AbstractArray, sorted::Bool, minp::Real, maxp::Real)
