@@ -502,6 +502,16 @@ end
     @test_throws ArgumentError quantile([1, missing], 0.5)
     @test_throws ArgumentError quantile([1, NaN], 0.5)
     @test quantile(skipmissing([1, missing, 2]), 0.5) === 1.5
+
+    # make sure that type inference works correctly in normal cases
+    for T in [Int, BigInt, Float64, Float16, BigFloat, Rational{Int}, Rational{BigInt}]
+        for S in [Float64, Float16, BigFloat, Rational{Int}, Rational{BigInt}]
+            @inferred quantile(T[1, 2, 3], S(0.5))
+            @inferred quantile(T[1, 2, 3], S(0.6))
+            @inferred quantile(T[1, 2, 3], S[0.5, 0.6])
+            @inferred quantile(T[1, 2, 3], (S(0.5), S(0.6)))
+        end
+    end
 end
 
 # StatsBase issue 164
