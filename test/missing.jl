@@ -199,13 +199,14 @@ end
     rounding_functions = [ceil, floor, round, trunc]
     for f in rounding_functions
         @test ismissing(f(missing))
-        @test ismissing(f(missing, sigdigits=1, digits=1, base=1))
+        @test ismissing(f(missing, digits=0, base=2))
+        @test ismissing(f(missing, sigdigits=1, base=2))
         @test ismissing(f(Union{Int, Missing}, missing))
         @test f(Union{Int, Missing}, 1.0) === 1
         @test_throws MissingException f(Int, missing)
         @test isequal(f.([1.0, missing]), [1, missing])
-        @test isequal(f.([1.0, missing], digits=1), [1, missing])
-        @test isequal(f.([1.0, missing], digits=1, base=1), [1, missing])
+        @test isequal(f.([1.0, missing], digits=0, base=10), [1, missing])
+        @test isequal(f.([1.0, missing], sigdigits=1, base=10), [1, missing])
         @test isequal(f.(Union{Int, Missing}, [1.0, missing]), [1, missing])
     end
 end
