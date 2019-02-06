@@ -581,10 +581,16 @@ See also [`>>`](@ref), [`>>>`](@ref).
 function <<(x::Integer, c::Integer)
     @_inline_meta
     typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
-    (x >= 0 || c >= 0) && return zero(x)
+    (x >= 0 || c >= 0) && return zero(x) << 0  # for type stability
     oftype(x, -1)
 end
-<<(x::Integer, c::Unsigned) = c <= typemax(UInt) ? x << (c % UInt) : zero(x)
+function <<(x::Integer, c::Unsigned)
+    @_inline_meta
+    if c isa UInt
+        throw(MethodError(<<, (x, c)))
+    end
+    c <= typemax(UInt) ? x << (c % UInt) : zero(x) << UInt(0)
+end
 <<(x::Integer, c::Int) = c >= 0 ? x << unsigned(c) : x >> unsigned(-c)
 
 """
@@ -619,11 +625,13 @@ See also [`>>>`](@ref), [`<<`](@ref).
 """
 function >>(x::Integer, c::Integer)
     @_inline_meta
+    if c isa UInt
+        throw(MethodError(>>, (x, c)))
+    end
     typemin(Int) <= c <= typemax(Int) && return x >> (c % Int)
-    (x >= 0 || c < 0) && return zero(x)
+    (x >= 0 || c < 0) && return zero(x) >> 0
     oftype(x, -1)
 end
->>(x::Integer, c::Unsigned) = c <= typemax(UInt) ? x >> (c % UInt) : zero(x)
 >>(x::Integer, c::Int) = c >= 0 ? x >> unsigned(c) : x << unsigned(-c)
 
 """
@@ -655,9 +663,15 @@ See also [`>>`](@ref), [`<<`](@ref).
 """
 function >>>(x::Integer, c::Integer)
     @_inline_meta
-    typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x)
+    typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x) >>> 0
 end
->>>(x::Integer, c::Unsigned) = c <= typemax(UInt) ? x >>> (c % UInt) : zero(x)
+function >>>(x::Integer, c::Unsigned)
+    @_inline_meta
+    if c isa UInt
+        throw(MethodError(>>>, (x, c)))
+    end
+    c <= typemax(UInt) ? x >>> (c % UInt) : zero(x) >>> 0
+end
 >>>(x::Integer, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
 
 # fallback div, fld, and cld implementations
