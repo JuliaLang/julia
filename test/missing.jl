@@ -191,6 +191,8 @@ end
     # All rounding functions return missing when evaluating missing as first argument
     @test ismissing(round(missing, RoundToZero))
     @test ismissing(round(Union{Int, Missing}, missing, RoundToZero))
+    @test round(Union{Int, Missing}, 0.9) == round(Int, 0.9)
+    @test round(Union{Int, Missing}, 0.9, RoundToZero) == round(Int, 0.9, RoundToZero)
     @test ismissing.(round.([1.0, missing], RoundToZero)) == [false, true]
     @test ismissing.(round.(Union{Int, Missing}, [1.0, missing], RoundToZero)) == [false, true]
 
