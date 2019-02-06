@@ -191,10 +191,10 @@ end
     # All rounding functions return missing when evaluating missing as first argument
     @test ismissing(round(missing, RoundToZero))
     @test ismissing(round(Union{Int, Missing}, missing, RoundToZero))
-    @test round(Union{Int, Missing}, 0.9) == round(Int, 0.9)
-    @test round(Union{Int, Missing}, 0.9, RoundToZero) == round(Int, 0.9, RoundToZero)
-    @test ismissing.(round.([1.0, missing], RoundToZero)) == [false, true]
-    @test ismissing.(round.(Union{Int, Missing}, [1.0, missing], RoundToZero)) == [false, true]
+    @test round(Union{Int, Missing}, 0.9) === round(Int, 0.9)
+    @test round(Union{Int, Missing}, 0.9, RoundToZero) === round(Int, 0.9, RoundToZero)
+    @test isequal(round.([1.0, missing], RoundToZero)), [1, missing])
+    @test isequal(round.(Union{Int, Missing}, [1.0, missing], RoundToZero), [1, missing])
 
     rounding_functions = [ceil, floor, round, trunc]
     for f in rounding_functions
@@ -203,10 +203,10 @@ end
         @test ismissing(f(Union{Int, Missing}, missing))
         @test f(Union{Int, Missing}, 1.0) === 1
         @test_throws MissingException f(Int, missing)
-        @test ismissing.(f.([1.0, missing])) == [false, true]
-        @test ismissing.(f.([1.0, missing], digits=1)) == [false, true]
-        @test ismissing.(f.([1.0, missing], digits=1, base=1)) == [false, true]
-        @test ismissing.(f.(Union{Int, Missing}, [1.0, missing])) == [false, true]
+        @test isequal(f.([1.0, missing]), [1, missing])
+        @test isequal(f.([1.0, missing], digits=1), [1, missing])
+        @test isequal(f.([1.0, missing], digits=1, base=1), [1, missing])
+        @test isequal(f.(Union{Int, Missing}, [1.0, missing]), [1, missing])
     end
 end
 
