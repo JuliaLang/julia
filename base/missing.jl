@@ -111,10 +111,10 @@ round(::Missing, ::RoundingMode=RoundNearest; sigdigits::Integer=0, digits::Inte
 round(::Type{>:Missing}, ::Missing, ::RoundingMode=RoundNearest) = missing
 round(::Type{T}, ::Missing, ::RoundingMode=RoundNearest) where {T} =
     throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
-round(::Type{T}, x::Any, ::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype(T), x)
+round(::Type{T}, x::Any, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype(T), x, r)
 # to fix ambiguities
-round(::Type{T}, x::Rational, ::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype(T), x)
-round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype(T), x)
+round(::Type{T}, x::Rational, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype(T), x, r)
+round(::Type{T}, x::Rational{Bool}, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype(T), x, r)
 
 # Handle ceil, floor, and trunc separately as they have no RoundingMode argument
 for f in (:(ceil), :(floor), :(trunc))
