@@ -179,8 +179,10 @@ fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 """
     hasfield(T::Type, name::Symbol)
 
-Returns a boolean indicating whether DataType has the specified field as one of
-its own fields.
+Return a boolean indicating whether `T` has `name` as one of its own fields.
+
+!!! compat "Julia 1.2"
+     This function requires at least Julia 1.2.
 """
 function hasfield(::Type{T}, name::Symbol) where T
     @_pure_meta
@@ -1258,7 +1260,9 @@ propertynames(x, private) = propertynames(x) # ignore private flag by default
 """
     hasproperty(x, s::Symbol)
 
-Returns a boolean indicating whether the object `x` has the specified property as one of
-its own properties.
+Return a boolean indicating whether the object `x` has `s` as one of its own properties.
+
+!!! compat "Julia 1.2"
+     This function requires at least Julia 1.2.
 """
 hasproperty(x, s::Symbol) = s in propertynames(x)
