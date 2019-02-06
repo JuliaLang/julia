@@ -790,6 +790,17 @@ let
     @test Dict(c .=> d) == Dict("foo" => 1, "bar" => 2)
 end
 
+@testset "large fusions vectorize and don't allocate (#28126)" begin
+    u, k1, k2, k3, k4, k5, k6, k7 = (ones(1000) for i in 1:8)
+    function goo(u, k1, k2, k3, k4, k5, k6, k7)
+        @. u = 0.1*(0.1*k1 + 0.2*k2 + 0.3*k3 + 0.4*k4 + 0.5*k5 + 0.6*k6 + 0.7*k7)
+        nothing
+    end
+    @allocated goo(u, k1, k2, k3, k4, k5, k6, k7)
+    @test @allocated(goo(u, k1, k2, k3, k4, k5, k6, k7)) == 0
+    @test occursin("vector.body", sprint(code_llvm, goo, NTuple{8, Vector{Float32}}))
+end
+
 # Broadcasted iterable/indexable APIs
 let
     bc = Broadcast.instantiate(Broadcast.broadcasted(+, zeros(5), 5))
