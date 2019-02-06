@@ -187,6 +187,9 @@ Return `true` if `s` starts with the regex pattern, `prefix`.
 
 See also [`occursin`](@ref) and [`endswith`](@ref).
 
+!!! compat "Julia 1.2"
+     This method requires at least Julia 1.2.
+
 # Examples
 ```jldoctest
 julia> startswith("JuliaLang", r"Julia|Romeo")
@@ -217,6 +220,9 @@ Return `true` if `s` ends with the regex pattern, `suffix`.
     `occursin(r"...\$", s)` is faster than `endswith(s, r"...")`.
 
 See also [`occursin`](@ref) and [`startswith`](@ref).
+
+!!! compat "Julia 1.2"
+     This method requires at least Julia 1.2.
 
 # Examples
 ```jldoctest
