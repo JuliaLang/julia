@@ -480,6 +480,14 @@ end
                    [0.1, 0.2, 0.4, 0.9]) == [2.0, 3.0, 5.0, 11.0]
     @test quantile(Any[4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
                    [0.1, 0.2, 0.4, 0.9]) == [2.0, 3.0, 5.0, 11.0]
+    @test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   Any[0.1, 0.2, 0.4, 0.9]) == [2.0, 3.0, 5.0, 11.0]
+    @test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   Any[0.1, 0.2, 0.4, 0.9]) isa Vector{Float64}
+    @test quantile(Any[4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   Any[0.1, 0.2, 0.4, 0.9]) == [2, 3, 5, 11]
+    @test quantile(Any[4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11],
+                   Any[0.1, 0.2, 0.4, 0.9]) isa Vector{Int}
     @test quantile([1, 2, 3, 4], ()) == ()
     @test isempty(quantile([1, 2, 3, 4], Float64[]))
     @test quantile([1, 2, 3, 4], Float64[]) isa Vector{Float64}
