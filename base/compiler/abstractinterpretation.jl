@@ -62,10 +62,16 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
     edges = Any[]
     nonbot = 0  # the index of the only non-Bottom inference result if > 0
     seen = 0    # number of signatures actually inferred
+    istoplevel = sv.linfo.def isa Module
     for i in 1:napplicable
         match = applicable[i]::SimpleVector
         method = match[3]::Method
         sig = match[1]
+        if istoplevel && !isdispatchtuple(sig)
+            # only infer concrete call sites in top-level expressions
+            rettype = Any
+            break
+        end
         sigtuple = unwrap_unionall(sig)::DataType
         splitunions = false
         this_rt = Bottom
