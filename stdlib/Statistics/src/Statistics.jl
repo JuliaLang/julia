@@ -862,18 +862,12 @@ end
     h  = f0 - t0
     i  = trunc(Int,t0) + 1
 
-    T  = promote_type(eltype(v), typeof(v[1]*h))
-
-    if h == 0
-        return convert(T, v[i])
+    a = v[i]
+    b = v[i + (h > 0)]
+    if isfinite(a) && isfinite(b)
+        return a + h*(b-a)
     else
-        a = v[i]
-        b = v[i+1]
-        if isfinite(a) && isfinite(b)
-            return convert(T, a + h*(b-a))
-        else
-            return convert(T, (1-h)*a + h*b)
-        end
+        return (1-h)*a + h*b
     end
 end
 

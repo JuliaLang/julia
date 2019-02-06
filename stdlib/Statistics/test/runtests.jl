@@ -493,6 +493,12 @@ end
     @test quantile([1, 2, 3, 4], Float64[]) isa Vector{Float64}
     @test quantile([1, 2, 3, 4], []) isa Vector{Any}
 
+    @test quantile(Any[1, 2, 3], 0.5) isa Float64
+    @test quantile(Any[1, big(2), 3], 0.5) isa BigFloat
+    @test quantile(Any[1, 2, 3], Float16(0.5)) isa Float16
+    @test quantile(Any[1, Float16(2), 3], Float16(0.5)) isa Float16
+    @test quantile(Any[1, big(2), 3], Float16(0.5)) isa BigFloat
+
     @test_throws ArgumentError quantile([1, missing], 0.5)
     @test_throws ArgumentError quantile([1, NaN], 0.5)
     @test quantile(skipmissing([1, missing, 2]), 0.5) === 1.5
