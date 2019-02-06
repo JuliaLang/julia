@@ -118,8 +118,8 @@ round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where {T>:Missi
 
 for f in (:(ceil), :(floor), :(trunc))
     @eval begin
-        $(f)(::Missing; kwargs...) = round(missing; kwargs...)
-        $(f)(::Type{T}, ::Missing) where {T} = round(T, missing)
+        ($f)(::Missing; kwargs...) = round(missing; kwargs...)
+        ($f)(::Type{T}, ::Missing) where {T} = round(T, missing)
     end
 end
 
