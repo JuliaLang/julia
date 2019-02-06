@@ -120,9 +120,9 @@ trunc(::Missing; kwargs...) = round(missing, RoundToZero; kwargs...)
 floor(::Missing; kwargs...) = round(missing, RoundDown; kwargs...)
  ceil(::Missing; kwargs...) = round(missing, RoundUp; kwargs...)
 
-trunc(::Type{T}, ::Missing; kwargs...) where {T} = round(T, missing, RoundToZero; kwargs...)
-floor(::Type{T}, ::Missing; kwargs...) where {T} = round(T, missing, RoundDown; kwargs...)
- ceil(::Type{T}, ::Missing; kwargs...) where {T} = round(T, missing, RoundUp; kwargs...)
+trunc(::Type{T}, ::Missing) where {T} = round(T, missing, RoundToZero)
+floor(::Type{T}, ::Missing) where {T} = round(T, missing, RoundDown)
+ ceil(::Type{T}, ::Missing) where {T} = round(T, missing, RoundUp)
 
 # to avoid ambiguity warnings
 (^)(::Missing, ::Integer) = missing
