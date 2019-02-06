@@ -864,13 +864,14 @@ broadcast_unalias(::Nothing, src) = src
 
 # Preprocessing a `Broadcasted` does two things:
 # * unaliases any arguments from `dest`
-# * "extrudes" the arguments where it is advantageous to pre-compute the broadcasted indices
-@inline preprocess(dest, bc::Broadcasted{Style}) where {Style} = Broadcasted{Style}(bc.f, preprocess_args(dest, bc.args), bc.axes)
-preprocess(dest, x) = extrude(broadcast_unalias(dest, x))
+# * calls `f` on the arguments (typically `extrude`, which pre-computes the broadcasted indices where advantageous)
+@inline preprocess(dest, bc) = preprocess(extrude, dest, bc)
+@inline preprocess(f, dest, bc::Broadcasted{Style}) where {Style} = Broadcasted{Style}(bc.f, preprocess_args(f, dest, bc.args), bc.axes)
+preprocess(f, dest, x) = f(broadcast_unalias(dest, x))
 
-@inline preprocess_args(dest, args::Tuple) = (preprocess(dest, args[1]), preprocess_args(dest, tail(args))...)
-preprocess_args(dest, args::Tuple{Any}) = (preprocess(dest, args[1]),)
-preprocess_args(dest, args::Tuple{}) = ()
+@inline preprocess_args(f, dest, args::Tuple) = (preprocess(f, dest, args[1]), preprocess_args(f, dest, tail(args))...)
+preprocess_args(f, dest, args::Tuple{Any}) = (preprocess(f, dest, args[1]),)
+preprocess_args(f, dest, args::Tuple{}) = ()
 
 # Specialize this method if all you want to do is specialize on typeof(dest)
 @inline function copyto!(dest::AbstractArray, bc::Broadcasted{Nothing})
@@ -882,12 +883,44 @@ preprocess_args(dest, args::Tuple{}) = ()
             return copyto!(dest, A)
         end
     end
-    bc′ = preprocess(dest, bc)
-    @simd for I in eachindex(bc′)
-        @inbounds dest[I] = bc′[I]
+    # Ugly performance hack around issue #28126: determine if all arguments to the
+    # broadcast are sized such that the broadcasting core can statically determine
+    # whether a given dimension is "extruded" or not. If so, we don't need to check
+    # any array sizes within the inner loop. Ideally this really should be something
+    # that Julia and/or LLVM could figure out and eliminate... and indeed they can
+    # for limited numbers of arguments.
+    if _is_static_broadcast_28126(dest, bc)
+        bcs′ = preprocess(_nonextrude_28126, dest, bc)
+        @simd for I in eachindex(bcs′)
+            @inbounds dest[I] = bcs′[I]
+        end
+    else
+        bc′ = preprocess(extrude, dest, bc)
+        @simd for I in eachindex(bc′)
+            @inbounds dest[I] = bc′[I]
+        end
     end
     return dest
 end
+
+@inline _is_static_broadcast_28126(dest, bc::Broadcasted{Style}) where {Style} = _is_static_broadcast_28126_args(dest, bc.args)
+_is_static_broadcast_28126(dest, x) = false
+_is_static_broadcast_28126(dest, x::Union{Ref, Tuple, Type, Number, AbstractArray{<:Any,0}}) = true
+_is_static_broadcast_28126(dest::AbstractArray, x::AbstractArray{<:Any,0}) = true
+_is_static_broadcast_28126(dest::AbstractArray, x::AbstractArray{<:Any,1}) = axes(dest, 1) == axes(x, 1)
+_is_static_broadcast_28126(dest::AbstractArray, x::AbstractArray) = axes(dest) == axes(x) # This can be better with other missing dimensions
+
+@inline _is_static_broadcast_28126_args(dest, args::Tuple) = _is_static_broadcast_28126(dest, args[1]) && _is_static_broadcast_28126_args(dest, tail(args))
+_is_static_broadcast_28126_args(dest, args::Tuple{Any}) = _is_static_broadcast_28126(dest, args[1])
+_is_static_broadcast_28126_args(dest, args::Tuple{}) = true
+
+struct _NonExtruded28126{T}
+    x::T
+end
+@inline axes(b::_NonExtruded28126) = axes(b.x)
+Base.@propagate_inbounds _broadcast_getindex(b::_NonExtruded28126, i) = b.x[i]
+_nonextrude_28126(x::AbstractArray) = _NonExtruded28126(x)
+_nonextrude_28126(x) = x
 
 # Performance optimization: for BitArray outputs, we cache the result
 # in a "small" Vector{Bool}, and then copy in chunks into the output
