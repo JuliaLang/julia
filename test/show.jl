@@ -885,6 +885,7 @@ test_repr("a.:(begin
 test_repr("a.:(=)")
 test_repr("a.:(:)")
 test_repr("(:).a")
+@test eval(eval(Meta.parse(repr(:`ls x y`)))) == `ls x y`
 @test repr(Expr(:., :a, :b, :c)) == ":(\$(Expr(:., :a, :b, :c)))"
 @test repr(Expr(:., :a, :b)) == ":(\$(Expr(:., :a, :b)))"
 @test repr(Expr(:., :a)) == ":(\$(Expr(:., :a)))"

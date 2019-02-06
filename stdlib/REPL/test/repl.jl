@@ -986,11 +986,11 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     write(stdin_write, "Expr(:call, GlobalRef(Base.Math, :float), Core.SlotNumber(1))\n")
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0m:((Base.Math.float)(_1))"
+    @test readline(stdout_read) == "\e[0m:(Base.Math.float(_1))"
     write(stdin_write, "ans\n")
     readline(stdout_read)
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0m:((Base.Math.float)(_1))"
+    @test readline(stdout_read) == "\e[0m:(Base.Math.float(_1))"
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
