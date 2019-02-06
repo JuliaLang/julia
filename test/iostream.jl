@@ -83,3 +83,20 @@ end
 end
 
 @test Base.open_flags(read=false, write=true, append=false) == (read=false, write=true, create=true, truncate=true, append=false)
+
+@testset "issue #30978" begin
+    path, io = mktemp()
+    x = rand(UInt8, 100)
+    write(path, x)
+    # Should not throw OutOfMemoryError
+    y = open(x -> read(x, typemax(Int)), path)
+    @test x == y
+
+    # Should resize y to right length
+    y = zeros(UInt8, 99)
+    open(x -> readbytes!(x, y, 101, all=true), path)
+    @test x == y
+    y = zeros(UInt8, 99)
+    open(x -> readbytes!(x, y, 101, all=false), path)
+    @test x == y
+end
