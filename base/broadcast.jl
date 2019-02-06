@@ -918,7 +918,10 @@ struct _NonExtruded28126{T}
     x::T
 end
 @inline axes(b::_NonExtruded28126) = axes(b.x)
-Base.@propagate_inbounds _broadcast_getindex(b::_NonExtruded28126, i) = b.x[i]
+Base.@propagate_inbounds _broadcast_getindex(b::_NonExtruded28126, i) = _broadcast_getindex(b, i)
+Base.@propagate_inbounds _broadcast_getindex(b::_NonExtruded28126{<:AbstractArray{<:Any,0}}, i) = b.x[]
+Base.@propagate_inbounds _broadcast_getindex(b::_NonExtruded28126{<:AbstractVector}, i) = b.x[i[1]]
+Base.@propagate_inbounds _broadcast_getindex(b::_NonExtruded28126{<:AbstractArray}, i) = b.x[i]
 _nonextrude_28126(x::AbstractArray) = _NonExtruded28126(x)
 _nonextrude_28126(x) = x
 
