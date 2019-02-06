@@ -121,9 +121,19 @@ Suppose the value of `$JULIA_PKGRESOLVE_ACCURACY` is `n`. Then
 
 ### `JULIA_DEPOT_PATH`
 
-A stack of depot locations where the package manager, as well as Julia's code loading mechanisms, look for registries, installed packages, named environments, repo clones, cached compiled package images, and configuration files. 
+A stack of depot locations where the package manager, as well as Julia's code loading
+mechanisms, look for package registries, installed packages, named environments,
+repo clones, cached compiled package images, and configuration files. 
 
-The depot path is controlled by Julia's `DEPOT_PATH` global variable which is populated at startup based on the value of the `JULIA_DEPOT_PATH` environment variable. The first entry is the “user depot” and should be writable by and owned by the current user. The user depot is where: registries are cloned, new package versions are installed, named environments are created and updated, package repos are cloned, newly compiled package image files are saved, log files are written, development packages are checked out by default, and global configuration data is saved. Later entries in the depot path are treated as read-only and are appropriate for registries, packages, etc. installed and managed by system administrators.
+The depot path is controlled by Julia's `DEPOT_PATH` global variable which is populated at
+startup based on the value of the `JULIA_DEPOT_PATH` environment variable. The first entry
+is the “user depot” and should be writable by and owned by the current user. The user depot
+is where: registries are cloned, new package versions are installed, named environments are
+created and updated, package repos are cloned, newly compiled package image files are
+saved, log files are written, development packages are checked out by default, and global
+configuration data is saved. Later entries in the depot path are treated as read-only and
+are appropriate for registries, packages, etc. installed and managed by system
+administrators.
 
 
 ## External applications
