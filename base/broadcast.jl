@@ -870,7 +870,7 @@ broadcast_unalias(::Nothing, src) = src
 preprocess(f, dest, x) = f(broadcast_unalias(dest, x))
 
 @inline preprocess_args(f, dest, args::Tuple) = (preprocess(f, dest, args[1]), preprocess_args(f, dest, tail(args))...)
-preprocess_args(f, dest, args::Tuple{Any}) = (preprocess(f, dest, args[1]),)
+@inline preprocess_args(f, dest, args::Tuple{Any}) = (preprocess(f, dest, args[1]),)
 preprocess_args(f, dest, args::Tuple{}) = ()
 
 # Specialize this method if all you want to do is specialize on typeof(dest)
