@@ -188,13 +188,16 @@ Base.one(::Type{Unit}) = 1
 end
 
 @testset "rounding functions" begin
-    rounding_functions = [ceil, floor, round, trunc]
-
     # All rounding functions return missing when evaluating missing as first argument
+    @test ismissing(round(missing, RoundToZero))
+    @test ismissing(round(Union{Int, Missing}, missing, RoundToZero))
+    @test ismissing.(round.([1.0, missing], RoundToZero)) == [false, true]
+    @test ismissing.(round.(Union{Int, Missing}, [1.0, missing], RoundToZero)) == [false, true]
+
+    rounding_functions = [ceil, floor, round, trunc]
     for f in rounding_functions
         @test ismissing(f(missing))
-        @test ismissing(f(missing, digits=1))
-        @test ismissing(f(missing, digits=1, base=1))
+        @test ismissing(f(missing, sigdigits=1, digits=1, base=1))
         @test ismissing(f(Union{Int, Missing}, missing))
         @test f(Union{Int, Missing}, 1.0) === 1
         @test_throws MissingException f(Int, missing)
