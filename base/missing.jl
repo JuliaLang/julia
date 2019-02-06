@@ -116,13 +116,12 @@ round(::Type{T}, x::Any, ::RoundingMode=RoundNearest) where {T>:Missing} = round
 round(::Type{T}, x::Rational, ::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype(T), x)
 round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype(T), x)
 
-trunc(::Missing; kwargs...) = round(missing, RoundToZero; kwargs...)
-floor(::Missing; kwargs...) = round(missing, RoundDown; kwargs...)
- ceil(::Missing; kwargs...) = round(missing, RoundUp; kwargs...)
-
-trunc(::Type{T}, ::Missing) where {T} = round(T, missing, RoundToZero)
-floor(::Type{T}, ::Missing) where {T} = round(T, missing, RoundDown)
- ceil(::Type{T}, ::Missing) where {T} = round(T, missing, RoundUp)
+for f in (:(ceil), :(floor), :(trunc))
+    @eval begin
+        $(f)(::Missing; kwargs...) = round(T, missing; kwargs...)
+        $(f)(::Type{T}, ::Missing) where {T} = round(T, missing)
+    end
+end
 
 # to avoid ambiguity warnings
 (^)(::Missing, ::Integer) = missing
