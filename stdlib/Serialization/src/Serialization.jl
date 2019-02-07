@@ -512,7 +512,7 @@ function should_send_whole_type(s, t::DataType)
     return false
 end
 
-function serialize_type_data(s, t::DataType)
+function serialize_type_data(s, @nospecialize(t::DataType))
     whole = should_send_whole_type(s, t)
     iswrapper = (t === unwrap_unionall(t.name.wrapper))
     if whole && iswrapper
@@ -557,7 +557,7 @@ function serialize(s::AbstractSerializer, t::DataType)
     serialize_type_data(s, t)
 end
 
-function serialize_type(s::AbstractSerializer, t::DataType, ref::Bool = false)
+function serialize_type(s::AbstractSerializer, @nospecialize(t::DataType), ref::Bool = false)
     tag = sertag(t)
     tag > 0 && return writetag(s.io, tag)
     writetag(s.io, ref ? REF_OBJECT_TAG : OBJECT_TAG)
@@ -974,15 +974,15 @@ function deserialize_array(s::AbstractSerializer)
     else
         elty = UInt8
     end
-    if isa(d1, Integer)
+    if isa(d1, Int)
         if elty !== Bool && isbitstype(elty)
             a = Vector{elty}(undef, d1)
             s.table[slot] = a
             return read!(s.io, a)
         end
-        dims = (Int(d1),)
+        dims = (d1,)
     else
-        dims = convert(Dims, d1)::Dims
+        dims = d1::Dims
     end
     if isbitstype(elty)
         n = prod(dims)::Int

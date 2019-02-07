@@ -208,7 +208,7 @@ julia> nameof(Foo.S{T} where T)
 ```
 """
 nameof(t::DataType) = t.name.name
-nameof(t::UnionAll) = nameof(unwrap_unionall(t))
+nameof(t::UnionAll) = nameof(unwrap_unionall(t))::Symbol
 
 """
     parentmodule(t::DataType) -> Module
@@ -1043,7 +1043,7 @@ end
 
 Get the name of a generic `Function` as a symbol, or `:anonymous`.
 """
-nameof(f::Function) = typeof(f).name.mt.name
+nameof(f::Function) = (typeof(f).name.mt::Core.MethodTable).name
 
 functionloc(m::Core.MethodInstance) = functionloc(m.def)
 

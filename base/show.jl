@@ -399,11 +399,6 @@ end
 
 show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
 
-function show(io::IO, x::Union)
-    print(io, "Union")
-    show_delim_array(io, uniontypes(x), '{', ',', '}', false)
-end
-
 function print_without_params(@nospecialize(x))
     if isa(x,UnionAll)
         b = unwrap_unionall(x)
@@ -424,7 +419,17 @@ function io_has_tvar_name(io::IOContext, name::Symbol, @nospecialize(x))
 end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
-function show(io::IO, x::UnionAll)
+function show(io::IO, @nospecialize(x::Type))
+    if x isa DataType
+        show_datatype(io, x)
+        return
+    elseif x isa Union
+        print(io, "Union")
+        show_delim_array(io, uniontypes(x), '{', ',', '}', false)
+        return
+    end
+    x::UnionAll
+
     if print_without_params(x)
         return show(io, unwrap_unionall(x).name)
     end
@@ -446,8 +451,6 @@ function show(io::IO, x::UnionAll)
     print(io, " where ")
     show(io, x.var)
 end
-
-show(io::IO, x::DataType) = show_datatype(io, x)
 
 # Check whether 'sym' (defined in module 'parent') is visible from module 'from'
 # If an object with this name exists in 'from', we need to check that it's the same binding
