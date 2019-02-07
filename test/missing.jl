@@ -189,25 +189,25 @@ end
 
 @testset "rounding functions" begin
     # All rounding functions return missing when evaluating missing as first argument
-    @test ismissing(round(missing, RoundToZero))
-    @test ismissing(round(Union{Int, Missing}, missing, RoundToZero))
+
+    # Check that the RoundingMode argument is passed on correctly
     @test round(Union{Int, Missing}, 0.9) === round(Int, 0.9)
     @test round(Union{Int, Missing}, 0.9, RoundToZero) === round(Int, 0.9, RoundToZero)
-    @test isequal(round.([1.0, missing], RoundToZero), [1, missing])
-    @test isequal(round.(Union{Int, Missing}, [1.0, missing], RoundToZero), [1, missing])
+
+    # Test elementwise on mixed arrays to ensure signature of Missing methods matches that of Float methods
+    test_array = [1.0, missing]
+    rounded_array = [1, missing]
+
+    @test isequal(round.(test_array, RoundNearest), rounded_array)
+    @test isequal(round.(Union{Int, Missing}, test_array, RoundNearest), rounded_array)
 
     rounding_functions = [ceil, floor, round, trunc]
     for f in rounding_functions
-        @test ismissing(f(missing))
-        @test ismissing(f(missing, digits=0, base=2))
-        @test ismissing(f(missing, sigdigits=1, base=2))
-        @test ismissing(f(Union{Int, Missing}, missing))
-        @test f(Union{Int, Missing}, 1.0) === 1
         @test_throws MissingException f(Int, missing)
-        @test isequal(f.([1.0, missing]), [1, missing])
-        @test isequal(f.([1.0, missing], digits=0, base=10), [1, missing])
-        @test isequal(f.([1.0, missing], sigdigits=1, base=10), [1, missing])
-        @test isequal(f.(Union{Int, Missing}, [1.0, missing]), [1, missing])
+        @test isequal(f.(test_array), rounded_array)
+        @test isequal(f.(test_array, digits=0, base=10), rounded_array)
+        @test isequal(f.(test_array, sigdigits=1, base=10), rounded_array)
+        @test isequal(f.(Union{Int, Missing}, test_array), rounded_array)
     end
 end
 
