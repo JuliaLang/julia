@@ -43,7 +43,7 @@ Standard library changes
 * Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
 * `UniformScaling` instances are now callable such that e.g. `I(3)` will produce a `Diagonal` matrix ([#30298]).
 * Eigenvalues λ of general matrices are now sorted lexicographically by (Re λ, Im λ) ([#21598]).
-* `one` for structured matrices (`Diagonal`, `Bidiagonal`, `Tridiagonal`, `Symtridiagonal`) now preserves 
+* `one` for structured matrices (`Diagonal`, `Bidiagonal`, `Tridiagonal`, `Symtridiagonal`) now preserves
   structure and type. ([#29777])
 
 #### SparseArrays
