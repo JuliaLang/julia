@@ -206,7 +206,7 @@ void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr
     m->isva = 1;
     m->nargs = 2;
     m->sig = (jl_value_t*)jl_anytuple_type;
-    m->sparam_syms = jl_emptysvec;
+    m->slot_syms = jl_an_empty_string;
 
     jl_methtable_t *mt = dt->name->mt;
     jl_typemap_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type,

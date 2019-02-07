@@ -3315,8 +3315,12 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
     Value *sp = tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(bp));
     Value *isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp),
             maybe_decay_untracked(literal_pointer_val(ctx, (jl_value_t*)jl_tvar_type)));
-    jl_sym_t *name = (jl_sym_t*)jl_svecref(ctx.linfo->def.method->sparam_syms, i);
-    undef_var_error_ifnot(ctx, isnull, name);
+    jl_unionall_t *sparam = (jl_unionall_t*)ctx.linfo->def.method->sig;
+    for (size_t j = 0; j < i; j++) {
+        sparam = (jl_unionall_t*)sparam->body;
+        assert(jl_is_unionall(sparam));
+    }
+    undef_var_error_ifnot(ctx, isnull, sparam->var->name);
     return mark_julia_type(ctx, sp, true, jl_any_type);
 }
 
@@ -5375,7 +5379,7 @@ static std::unique_ptr<Module> emit_function(
 
     // step 2. process var-info lists to see what vars need boxing
     int n_ssavalues = jl_is_long(src->ssavaluetypes) ? jl_unbox_long(src->ssavaluetypes) : jl_array_len(src->ssavaluetypes);
-    size_t vinfoslen = jl_array_dim0(src->slotnames);
+    size_t vinfoslen = jl_array_dim0(src->slotflags);
     ctx.slots.resize(vinfoslen);
     size_t nreq = ctx.nargs;
     int va = 0;
@@ -5397,7 +5401,7 @@ static std::unique_ptr<Module> emit_function(
 
     bool needsparams = false;
     if (jl_is_method(lam->def.method)) {
-        if (jl_svec_len(lam->def.method->sparam_syms) != jl_svec_len(lam->sparam_vals))
+        if ((size_t)jl_subtype_env_size(lam->def.method->sig) != jl_svec_len(lam->sparam_vals))
             needsparams = true;
         for (size_t i = 0; i < jl_svec_len(lam->sparam_vals); ++i) {
             if (jl_is_typevar(jl_svecref(lam->sparam_vals, i)))
@@ -5597,7 +5601,7 @@ static std::unique_ptr<Module> emit_function(
             for (i = 0; i < vinfoslen; i++) {
                 jl_sym_t *s = (jl_sym_t*)jl_array_ptr_ref(src->slotnames, i);
                 jl_varinfo_t &varinfo = ctx.slots[i];
-                if (varinfo.isArgument || s == compiler_temp_sym || s == unused_sym)
+                if (varinfo.isArgument || s == empty_sym || s == unused_sym)
                     continue;
                 // LLVM 4.0: Assume the variable has default alignment
                 varinfo.dinfo = dbuilder.createAutoVariable(
@@ -6027,14 +6031,14 @@ static std::unique_ptr<Module> emit_function(
             return;
         while (dbg) {
             new_lineinfo.push_back(dbg);
-            dbg = linetable[dbg].inlined_at;
+            dbg = linetable.at(dbg).inlined_at;
         }
         current_lineinfo.resize(new_lineinfo.size(), 0);
         for (dbg = 0; dbg < new_lineinfo.size(); dbg++) {
             unsigned newdbg = new_lineinfo[new_lineinfo.size() - dbg - 1];
             if (newdbg != current_lineinfo[dbg]) {
                 current_lineinfo[dbg] = newdbg;
-                const auto &info = linetable[newdbg];
+                const auto &info = linetable.at(newdbg);
                 if (do_coverage(info.is_user_code))
                     coverageVisitLine(ctx, info.file, info.line);
             }
@@ -6044,9 +6048,9 @@ static std::unique_ptr<Module> emit_function(
     auto mallocVisitStmt = [&] (unsigned dbg) {
         if (!do_malloc_log(mod_is_user_mod) || dbg == 0)
             return;
-        while (linetable[dbg].inlined_at)
-            dbg = linetable[dbg].inlined_at;
-        mallocVisitLine(ctx, ctx.file, linetable[dbg].line);
+        while (linetable.at(dbg).inlined_at)
+            dbg = linetable.at(dbg).inlined_at;
+        mallocVisitLine(ctx, ctx.file, linetable.at(dbg).line);
     };
 
     come_from_bb[0] = ctx.builder.GetInsertBlock();
@@ -6111,7 +6115,7 @@ static std::unique_ptr<Module> emit_function(
         int32_t debuginfoloc = ((int32_t*)jl_array_data(src->codelocs))[cursor];
         if (debuginfoloc > 0) {
             if (ctx.debug_enabled)
-                ctx.builder.SetCurrentDebugLocation(linetable[debuginfoloc].loc);
+                ctx.builder.SetCurrentDebugLocation(linetable.at(debuginfoloc).loc);
             coverageVisitStmt(debuginfoloc);
         }
         jl_value_t *stmt = jl_array_ptr_ref(stmts, cursor);

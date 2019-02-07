@@ -43,12 +43,9 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
 end
 
 function method_argnames(m::Method)
-    if !isdefined(m, :source) && isdefined(m, :generator)
-        return m.generator.argnames
-    end
-    argnames = Vector{Any}(undef, m.nargs)
-    ccall(:jl_fill_argnames, Cvoid, (Any, Any), m.source, argnames)
-    return argnames
+    argnames = ccall(:jl_uncompress_argnames, Vector{Any}, (Any,), m.slot_syms)
+    isempty(argnames) && return argnames
+    return argnames[1:m.nargs]
 end
 
 function arg_decl_parts(m::Method)
@@ -60,8 +57,8 @@ function arg_decl_parts(m::Method)
     end
     file = m.file
     line = m.line
-    if isdefined(m, :source) || isdefined(m, :generator)
-        argnames = method_argnames(m)
+    argnames = method_argnames(m)
+    if length(argnames) >= m.nargs
         show_env = ImmutableDict{Symbol, Any}()
         for t in tv
             show_env = ImmutableDict(show_env, :unionall_env => t)
@@ -74,26 +71,23 @@ function arg_decl_parts(m::Method)
     return tv, decls, file, line
 end
 
+const empty_sym = Symbol("")
+
 function kwarg_decl(m::Method, kwtype::DataType)
     sig = rewrap_unionall(Tuple{kwtype, Any, unwrap_unionall(m.sig).parameters...}, m.sig)
     kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, max_world(m))
     if kwli !== nothing
         kwli = kwli::Method
-        if isdefined(kwli, :source)
-            src = kwli.source
-            nslots = ccall(:jl_ast_nslots, Int, (Any,), src)
-            slotnames = Vector{Any}(undef, nslots)
-            ccall(:jl_fill_argnames, Cvoid, (Any, Any), src, slotnames)
-            kws = filter(x -> !('#' in string(x)), slotnames[(kwli.nargs + 1):end])
-            # ensure the kwarg... is always printed last. The order of the arguments are not
-            # necessarily the same as defined in the function
-            i = findfirst(x -> endswith(string(x), "..."), kws)
-            if i !== nothing
-                push!(kws, kws[i])
-                deleteat!(kws, i)
-            end
-            return kws
+        slotnames = ccall(:jl_uncompress_argnames, Vector{Any}, (Any,), kwli.slot_syms)
+        kws = filter(x -> !(x === empty_sym || '#' in string(x)), slotnames[(kwli.nargs + 1):end])
+        # ensure the kwarg... is always printed last. The order of the arguments are not
+        # necessarily the same as defined in the function
+        i = findfirst(x -> endswith(string(x), "..."), kws)
+        if i !== nothing
+            push!(kws, kws[i])
+            deleteat!(kws, i)
         end
+        return kws
     end
     return ()
 end

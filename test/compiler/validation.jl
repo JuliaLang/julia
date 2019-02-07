@@ -83,7 +83,7 @@ end
 
 @testset "SLOTFLAGS_MISMATCH" begin
     c = copy(c0)
-    push!(c.slotnames, :dummy)
+    push!(c.slotflags, 0x00)
     errors = Core.Compiler.validate_code(c)
     @test length(errors) == 1
     @test errors[1].kind === Core.Compiler.SLOTFLAGS_MISMATCH

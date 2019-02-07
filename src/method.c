@@ -243,7 +243,6 @@ static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
                 jl_array_del_end(meta, na - ins);
         }
     }
-    li->method_for_inference_limit_heuristics = jl_nothing;
     jl_array_t *vinfo = (jl_array_t*)jl_exprarg(ast, 1);
     jl_array_t *vis = (jl_array_t*)jl_array_ptr_ref(vinfo, 0);
     size_t nslots = jl_array_len(vis);
@@ -273,7 +272,7 @@ static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
                 if (nxt)
                     name = jl_symbol(nxt+1);
                 else if (str[1] == 's')  // compiler-generated temporaries, #sXXX
-                    name = compiler_temp_sym;
+                    name = empty_sym;
             }
         }
         jl_array_ptr_set(li->slotnames, i, name);
@@ -312,17 +311,22 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
         (jl_code_info_t*)jl_gc_alloc(ptls, sizeof(jl_code_info_t),
                                        jl_code_info_type);
     src->code = NULL;
-    src->method_for_inference_limit_heuristics = NULL;
-    src->slotnames = NULL;
-    src->slotflags = NULL;
-    src->ssavaluetypes = NULL;
     src->codelocs = jl_nothing;
-    src->linetable = jl_nothing;
+    src->ssavaluetypes = NULL;
     src->ssaflags = NULL;
+    src->method_for_inference_limit_heuristics = jl_nothing;
+    src->linetable = jl_nothing;
+    src->slotflags = NULL;
+    src->slotnames = NULL;
+    src->slottypes = jl_nothing;
+    src->parent = (jl_method_instance_t*)jl_nothing;
+    src->rettype = (jl_value_t*)jl_any_type;
+    src->min_world = 0;
+    src->max_world = 0;
     src->inferred = 0;
-    src->pure = 0;
     src->inlineable = 0;
     src->propagate_inbounds = 0;
+    src->pure = 0;
     return src;
 }
 
@@ -449,7 +453,7 @@ JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src)
 // return a new lambda-info that has some extra static parameters merged in
 jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_svec_t *sp)
 {
-    assert(jl_svec_len(m->sparam_syms) == jl_svec_len(sp) || sp == jl_emptysvec);
+    assert((size_t)jl_subtype_env_size(m->sig) == jl_svec_len(sp) || sp == jl_emptysvec);
     jl_method_instance_t *new_linfo = jl_new_method_instance_uninit();
     new_linfo->def.method = m;
     new_linfo->specTypes = types;
@@ -558,6 +562,8 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     src = jl_copy_code_info(src);
     src->code = copy;
     jl_gc_wb(src, copy);
+    m->slot_syms = jl_compress_argnames(src->slotnames);
+    jl_gc_wb(m, m->slot_syms);
     if (gen_only)
         m->source = NULL;
     else
@@ -573,7 +579,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
         (jl_method_t*)jl_gc_alloc(ptls, sizeof(jl_method_t), jl_method_type);
     m->specializations = jl_nothing;
     m->sig = NULL;
-    m->sparam_syms = NULL;
+    m->slot_syms = NULL;
     m->ambig = jl_nothing;
     m->roots = NULL;
     m->module = module;
@@ -602,22 +608,11 @@ static jl_method_t *jl_new_method(
         jl_module_t *inmodule,
         jl_tupletype_t *sig,
         size_t nargs,
-        int isva,
-        jl_svec_t *tvars)
+        int isva)
 {
-    size_t i, l = jl_svec_len(tvars);
-    jl_svec_t *sparam_syms = jl_alloc_svec_uninit(l);
-    for (i = 0; i < l; i++) {
-        jl_svecset(sparam_syms, i, ((jl_tvar_t*)jl_svecref(tvars, i))->name);
-    }
-    jl_value_t *root = (jl_value_t*)sparam_syms;
-    jl_method_t *m = NULL;
-    JL_GC_PUSH1(&root);
-
-    m = jl_new_method_uninit(inmodule);
-    root = (jl_value_t*)m;
+    jl_method_t *m = jl_new_method_uninit(inmodule);
+    JL_GC_PUSH1(&m);
     m->sig = (jl_value_t*)sig;
-    m->sparam_syms = sparam_syms;
     m->name = name;
     m->isva = isva;
     m->nargs = nargs;
@@ -761,7 +756,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
         // the result is that the closure variables get interpolated directly into the AST
         f = jl_new_code_info_from_ast((jl_expr_t*)f);
     }
-    m = jl_new_method(f, name, module, (jl_tupletype_t*)argtype, nargs, isva, tvars);
+    m = jl_new_method(f, name, module, (jl_tupletype_t*)argtype, nargs, isva);
 
     if (jl_has_free_typevars(argtype)) {
         jl_exceptionf(jl_argumenterror_type,
