@@ -1750,3 +1750,15 @@ let x = 0
     @test (a=1, b=2, c=(x=3)) == (a=1, b=2, c=3)
     @test x == 3
 end
+
+function capture_with_conditional_label()
+    @goto foo
+    x = 1
+    if false
+        @label foo
+    end
+    return y->x
+end
+let f = capture_with_conditional_label()  # should not throw
+    @test_throws UndefVarError(:x) f(0)
+end
