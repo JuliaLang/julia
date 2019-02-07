@@ -222,7 +222,7 @@ _eachindex(t::Tuple) = CartesianIndices(t)
 Base.ndims(::Broadcasted{<:Any,<:NTuple{N,Any}}) where {N} = N
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
 
-Base.length(bc::Broadcasted) = prod(map(length, axes(bc)))
+Base.length(bc::Broadcasted) = prod(_inlined_map(length, axes(bc)))
 
 function Base.iterate(bc::Broadcasted)
     iter = eachindex(bc)
@@ -449,6 +449,12 @@ conflicting broadcast rules defined
 One of these should be undefined (and thus return Broadcast.Unknown).""")
 end
 
+@inline _inlined_map(f, t::Tuple{})              = ()
+@inline _inlined_map(f, t::Tuple{Any,})          = (f(t[1]),)
+@inline _inlined_map(f, t::Tuple{Any, Any})      = (f(t[1]), f(t[2]))
+@inline _inlined_map(f, t::Tuple{Any, Any, Any}) = (f(t[1]), f(t[2]), f(t[3]))
+@inline _inlined_map(f, t::Tuple)                = (f(t[1]), _inlined_map(f, tail(t))...)
+
 # Indices utilities
 
 """
@@ -464,7 +470,8 @@ julia> Broadcast.combine_axes(1, 1, 1)
 ()
 ```
 """
-@inline combine_axes(A, B...) = broadcast_shape(axes(A), combine_axes(B...))
+@inline combine_axes(A, B, C...) = broadcast_shape(axes(A), combine_axes(B, C...))
+@inline combine_axes(A, B) = broadcast_shape(axes(A), axes(B))
 combine_axes(A) = axes(A)
 
 # shape (i.e., tuple-of-indices) inputs
@@ -502,7 +509,7 @@ function check_broadcast_shape(shp, Ashp::Tuple)
     _bcsm(shp[1], Ashp[1]) || throw(DimensionMismatch("array could not be broadcast to match destination"))
     check_broadcast_shape(tail(shp), tail(Ashp))
 end
-check_broadcast_axes(shp, A) = check_broadcast_shape(shp, axes(A))
+@inline check_broadcast_axes(shp, A) = check_broadcast_shape(shp, axes(A))
 # comparing many inputs
 @inline function check_broadcast_axes(shp, A, As...)
     check_broadcast_axes(shp, A)
@@ -911,7 +918,7 @@ _is_static_broadcast_28126(dest::AbstractArray, x::AbstractArray{<:Any,1}) = axe
 _is_static_broadcast_28126(dest::AbstractArray, x::AbstractArray) = axes(dest) == axes(x) # This can be better with other missing dimensions
 
 @inline _is_static_broadcast_28126_args(dest, args::Tuple) = _is_static_broadcast_28126(dest, args[1]) && _is_static_broadcast_28126_args(dest, tail(args))
-_is_static_broadcast_28126_args(dest, args::Tuple{Any}) = _is_static_broadcast_28126(dest, args[1])
+@inline _is_static_broadcast_28126_args(dest, args::Tuple{Any}) = _is_static_broadcast_28126(dest, args[1])
 _is_static_broadcast_28126_args(dest, args::Tuple{}) = true
 
 struct _NonExtruded28126{T}
@@ -1227,7 +1234,7 @@ end
 
 @inline broadcasted_kwsyntax(f, args...; kwargs...) = broadcasted((args...)->f(args...; kwargs...), args...)
 @inline function broadcasted(f, args...)
-    args′ = map(broadcastable, args)
+    args′ = _inlined_map(broadcastable, args)
     broadcasted(combine_styles(args′...), f, args′...)
 end
 # Due to the current Type{T}/DataType specialization heuristics within Tuples,
@@ -1236,13 +1243,13 @@ end
 # arguments ensure we preserve Type{T}s in the first or second argument position.
 @inline function broadcasted(f, arg1, args...)
     arg1′ = broadcastable(arg1)
-    args′ = map(broadcastable, args)
+    args′ = _inlined_map(broadcastable, args)
     broadcasted(combine_styles(arg1′, args′...), f, arg1′, args′...)
 end
 @inline function broadcasted(f, arg1, arg2, args...)
     arg1′ = broadcastable(arg1)
     arg2′ = broadcastable(arg2)
-    args′ = map(broadcastable, args)
+    args′ = _inlined_map(broadcastable, args)
     broadcasted(combine_styles(arg1′, arg2′, args′...), f, arg1′, arg2′, args′...)
 end
 @inline broadcasted(::S, f, args...) where S<:BroadcastStyle = Broadcasted{S}(f, args)
