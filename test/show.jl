@@ -796,6 +796,9 @@ end
 let repr = sprint(dump, Tuple)
     @test repr == "Tuple <: Any\n"
 end
+let repr = sprint(dump, NamedTuple)
+    @test repr == "NamedTuple <: Any\n"
+end
 let repr = sprint(dump, Int64)
     @test repr == "Int64 <: Signed\n"
 end
