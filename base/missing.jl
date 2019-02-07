@@ -113,8 +113,14 @@ round(::Type{T}, ::Missing, ::RoundingMode=RoundNearest) where {T} =
     throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
 round(::Type{T}, x::Any, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype(T), x, r)
 # to fix ambiguities
-round(::Type{T}, x::Rational, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype(T), x, r)
-round(::Type{T}, x::Rational{Bool}, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype(T), x, r)
+round(::Type{T}, x::Rational) where {T>:Missing} = round(nonmissingtype(T), x)
+round(::Type{T}, x::Rational, ::RoundingMode{:Nearest}) where {T>:Missing} = round(nonmissingtype(T), x, RoundNearest)
+round(::Type{T}, x::Rational, ::RoundingMode{:NearestTiesAway}) where {T>:Missing} = round(nonmissingtype(T), x, RoundNearestTiesAway)
+round(::Type{T}, x::Rational, ::RoundingMode{:NearestTiesUp}) where {T>:Missing} = round(nonmissingtype(T), x, RoundNearestTiesUp)
+round(::Type{T}, x::Rational{Bool}) where {T>:Missing} = round(nonmissingtype(T), x)
+round(::Type{T}, x::Rational{Bool}, ::RoundingMode{:Nearest}) where {T>:Missing} = round(nonmissingtype(T), x, RoundNearest)
+round(::Type{T}, x::Rational{Bool}, ::RoundingMode{:NearestTiesAway}) where {T>:Missing} = round(nonmissingtype(T), x, RoundNearestTiesAway)
+round(::Type{T}, x::Rational{Bool}, ::RoundingMode{:NearestTiesUp}) where {T>:Missing} = round(nonmissingtype(T), x, RoundNearestTiesUp)
 
 # Handle ceil, floor, and trunc separately as they have no RoundingMode argument
 for f in (:(ceil), :(floor), :(trunc))
