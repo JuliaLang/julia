@@ -4,10 +4,8 @@ Julia v1.2 Release Notes
 New language features
 ---------------------
 
-* The `extrema` function now accepts a function argument in the same manner as `minimum` and
-  `maximum` ([#30323]).
-* `hasmethod` can now check for matching keyword argument names ([#30712]).
-* `startswith` and `endswith` now accept a `Regex` for the second argument ([#29790]).
+  * Argument splatting (`x...`) can now be used in calls to the `new` pseudo-function in
+    constructors ([#30577]).
 
 Multi-threading changes
 -----------------------
@@ -34,6 +32,11 @@ New library functions
 
 Standard library changes
 ------------------------
+
+  * The `extrema` function now accepts a function argument in the same manner as `minimum` and
+    `maximum` ([#30323]).
+  * `hasmethod` can now check for matching keyword argument names ([#30712]).
+  * `startswith` and `endswith` now accept a `Regex` for the second argument ([#29790]).
 
 #### LinearAlgebra
 

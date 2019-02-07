@@ -359,6 +359,11 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
     to this, and the type is always inserted by the compiler.  This is very much an internal-only
     feature, and does no checking. Evaluating arbitrary `new` expressions can easily segfault.
 
+  * `splatnew`
+
+    Similar to `new`, except field values are passed as a single tuple. Works similarly to
+    `Base.splat(new)` if `new` were a first-class function, hence the name.
+
   * `return`
 
     Returns its argument as the value of the enclosing function.
