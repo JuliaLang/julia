@@ -5355,19 +5355,19 @@ static std::unique_ptr<Module> emit_function(
     if (!JL_FEAT_TEST(ctx, track_allocations))
         malloc_log_mode = JL_LOG_NONE;
 
-    ctx.file = "<missing>";
     StringRef dbgFuncName = ctx.name;
     int toplineno = -1;
     if (jl_is_method(lam->def.method)) {
         toplineno = lam->def.method->line;
-        if (lam->def.method->file != empty_sym)
-            ctx.file = jl_symbol_name(lam->def.method->file);
+        ctx.file = jl_symbol_name(lam->def.method->file);
     }
     else if (jl_array_len(src->linetable) > 0) {
         jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, 0);
-        ctx.file = jl_symbol_name((jl_sym_t*)jl_fieldref_noalloc(locinfo, 2));
-        toplineno = jl_unbox_long(jl_fieldref(locinfo, 3));
+        ctx.file = jl_symbol_name((jl_sym_t*)jl_fieldref_noalloc(locinfo, 1));
+        toplineno = jl_unbox_long(jl_fieldref(locinfo, 2));
     }
+    if (ctx.file.empty())
+        ctx.file = "<missing>";
     // jl_printf(JL_STDERR, "\n*** compiling %s at %s:%d\n\n",
     //           jl_symbol_name(ctx.name), ctx.file.str().c_str(), toplineno);
 
@@ -5936,25 +5936,36 @@ static std::unique_ptr<Module> emit_function(
         std::map<std::tuple<StringRef, StringRef>, DISubprogram*> subprograms;
         linetable.resize(nlocs + 1);
         for (size_t i = 0; i < nlocs; i++) {
-            // LineInfoNode(mod::Module, method::Symbol, file::Symbol, line::Int, inlined_at::Int)
+            // LineInfoNode(mod::Module, method::Any, file::Symbol, line::Int, inlined_at::Int)
             jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, i);
             DebugLineTable &info = linetable[i + 1];
             assert(jl_typeis(locinfo, jl_lineinfonode_type));
-            jl_module_t *module = (jl_module_t*)jl_fieldref_noalloc(locinfo, 0);
-            if (module == ctx.module)
-                info.is_user_code = mod_is_user_mod;
-            else
-                info.is_user_code = in_user_mod(module);
-            jl_sym_t *method = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 1);
-            jl_sym_t *filesym = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 2);
-            info.line = jl_unbox_long(jl_fieldref(locinfo, 3));
-            info.inlined_at = jl_unbox_long(jl_fieldref(locinfo, 4));
+            jl_value_t *method = jl_fieldref_noalloc(locinfo, 0);
+            if (jl_is_method_instance(method))
+                method = ((jl_method_instance_t*)method)->def.value;
+            jl_sym_t *filesym = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 1);
+            info.line = jl_unbox_long(jl_fieldref(locinfo, 2));
+            info.inlined_at = jl_unbox_long(jl_fieldref(locinfo, 3));
             assert(info.inlined_at <= i);
+            if (jl_is_method(method)) {
+                jl_module_t *module = ((jl_method_t*)method)->module;
+                if (module == ctx.module)
+                    info.is_user_code = mod_is_user_mod;
+                else
+                    info.is_user_code = in_user_mod(module);
+            }
+            else {
+                info.is_user_code = (info.inlined_at == 0) ? mod_is_user_mod : linetable.at(info.inlined_at).is_user_code;
+            }
             info.file = jl_symbol_name(filesym);
             if (info.file.empty())
                 info.file = "<missing>";
             if (ctx.debug_enabled) {
-                StringRef fname = jl_symbol_name(method);
+                StringRef fname;
+                if (jl_is_method(method))
+                    method = (jl_value_t*)((jl_method_t*)method)->name;
+                if (jl_is_symbol(method))
+                    fname = jl_symbol_name((jl_sym_t*)method);
                 if (fname.empty())
                     fname = "macro expansion";
                 if (info.inlined_at == 0 && info.file == ctx.file) { // if everything matches, emit a toplevel line number

@@ -65,7 +65,7 @@ const TAGS = Any[
     :sub_int, :mul_int, :add_float, :sub_float, :new, :mul_float, :bitcast, :start, :done, :next,
     :indexed_iterate, :getfield, :meta, :eq_int, :slt_int, :sle_int, :ne_int, :push_loc, :pop_loc,
     :pop, :arrayset, :arrayref, :apply_type, :inbounds, :getindex, :setindex!, :Core, :!, :+,
-    :Base, :static_parameter, :convert, :colon, Symbol("#self#"), Symbol("#temp#"), :tuple,
+    :Base, :static_parameter, :convert, :colon, Symbol("#self#"), Symbol(""), :tuple,
 
     fill(:_reserved_, n_reserved_slots)...,
 

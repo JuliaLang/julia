@@ -340,21 +340,21 @@ jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast)
     return src;
 }
 
-void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_module_t *mod, jl_sym_t *name)
+void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
 {
     jl_array_t *li = (jl_array_t*)ci->linetable;
     size_t i, n = jl_array_len(li);
     jl_value_t *rt = NULL;
     JL_GC_PUSH1(&rt);
-    for (i=0; i < n; i++) {
+    for (i = 0; i < n; i++) {
         jl_value_t *ln = jl_array_ptr_ref(li, i);
         if (jl_is_linenode(ln)) {
             rt = jl_box_long(jl_linenode_line(ln));
-            rt = jl_new_struct(jl_lineinfonode_type, mod, name, jl_linenode_file(ln), rt, jl_box_long(0));
+            rt = jl_new_struct(jl_lineinfonode_type, name, jl_linenode_file(ln), rt, jl_box_long(0));
             jl_array_ptr_set(li, i, rt);
         }
         else if (jl_is_expr(ln) && ((jl_expr_t*)ln)->head == line_sym && jl_expr_nargs(ln) == 3) {
-            rt = jl_new_struct(jl_lineinfonode_type, mod, jl_symbol("macro expansion"),
+            rt = jl_new_struct(jl_lineinfonode_type, jl_symbol("macro expansion"),
                                jl_exprarg(ln, 1), jl_exprarg(ln, 0), jl_exprarg(ln, 2));
             jl_array_ptr_set(li, i, rt);
         }
@@ -407,29 +407,29 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 
         // invoke code generator
         jl_tupletype_t *ttdt = (jl_tupletype_t*)jl_unwrap_unionall(tt);
-        ex = jl_call_staged(linfo->def.method, generator, linfo->sparam_vals, jl_svec_data(ttdt->parameters), jl_nparams(ttdt));
+        ex = jl_call_staged(def, generator, linfo->sparam_vals, jl_svec_data(ttdt->parameters), jl_nparams(ttdt));
 
         if (jl_is_code_info(ex)) {
             func = (jl_code_info_t*)ex;
         }
         else {
-            func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, linfo->def.method->module);
+            func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, def->module);
             if (!jl_is_code_info(func)) {
                 if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym) {
                     ptls->in_pure_callback = 0;
-                    jl_toplevel_eval(linfo->def.method->module, (jl_value_t*)func);
+                    jl_toplevel_eval(def->module, (jl_value_t*)func);
                 }
                 jl_error("generated function body is not pure. this likely means it contains a closure or comprehension.");
             }
 
             jl_array_t *stmts = (jl_array_t*)func->code;
-            jl_resolve_globals_in_ir(stmts, linfo->def.method->module, linfo->sparam_vals, 1);
+            jl_resolve_globals_in_ir(stmts, def->module, linfo->sparam_vals, 1);
         }
 
         ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
         ptls->world_age = last_age;
-        jl_linenumber_to_lineinfo(func, def->module, def->name);
+        jl_linenumber_to_lineinfo(func, (jl_value_t*)def->name);
     }
     JL_CATCH {
         ptls->in_pure_callback = last_in;
@@ -484,7 +484,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     }
     m->called = called;
     m->pure = src->pure;
-    jl_linenumber_to_lineinfo(src, m->module, m->name);
+    jl_linenumber_to_lineinfo(src, (jl_value_t*)m->name);
 
     jl_array_t *copy = NULL;
     jl_svec_t *sparam_vars = jl_outer_unionall_vars(m->sig);
@@ -496,8 +496,8 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     // set location from first LineInfoNode
     if (jl_array_len(src->linetable) > 0) {
         jl_value_t *ln = jl_array_ptr_ref(src->linetable, 0);
-        m->file = (jl_sym_t*)jl_fieldref(ln, 2);
-        m->line = jl_unbox_long(jl_fieldref(ln, 3));
+        m->file = (jl_sym_t*)jl_fieldref(ln, 1);
+        m->line = jl_unbox_long(jl_fieldref(ln, 2));
     }
     for (i = 0; i < n; i++) {
         jl_value_t *st = jl_array_ptr_ref(stmts, i);

@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const COMPILER_TEMP_SYM = Symbol("#temp#")
-
 # build (and start inferring) the inference frame for the linfo
 function typeinf(result::InferenceResult, cached::Bool, params::Params)
     frame = InferenceState(result, cached, params)
@@ -123,6 +121,9 @@ function cache_result(result::InferenceResult, min_valid::UInt, max_valid::UInt)
                      ccall(:jl_isa_compileable_sig, Int32, (Any, Any), result.linfo.specTypes, def) != 0)
                 if cache_the_tree
                     # compress code for non-toplevel thunks
+                    nslots = length(inferred_result.slotflags)
+                    resize!(inferred_result.slottypes, nslots)
+                    resize!(inferred_result.slotnames, nslots)
                     inferred_result = ccall(:jl_compress_ast, Any, (Any, Any), def, inferred_result)
                 else
                     inferred_result = nothing
@@ -553,15 +554,15 @@ function typeinf_ext(linfo::MethodInstance, params::Params)
                     tree.slotflags = fill(0x00, nargs)
                     tree.ssavaluetypes = 1
                     tree.codelocs = Int32[1]
-                    tree.linetable = [LineInfoNode(method.module, method.name, method.file, Int(method.line), 0)]
+                    tree.linetable = [LineInfoNode(method, method.file, Int(method.line), 0)]
                     tree.inferred = true
                     tree.ssaflags = UInt8[0]
                     tree.pure = true
                     tree.inlineable = true
                     tree.parent = linfo
                     tree.rettype = typeof(linfo.inferred_const)
-                    tree.min_world = li.min_world
-                    tree.max_world = li.max_world
+                    tree.min_world = linfo.min_world
+                    tree.max_world = linfo.max_world
                     i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                     return svec(linfo, tree)
                 elseif isa(inf, CodeInfo)

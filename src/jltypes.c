@@ -1981,8 +1981,8 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_lineinfonode_type =
         jl_new_datatype(jl_symbol("LineInfoNode"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(5, "mod", "method", "file", "line", "inlined_at"),
-                        jl_svec(5, jl_module_type, jl_sym_type, jl_sym_type, jl_long_type, jl_long_type), 0, 0, 5);
+                        jl_perm_symsvec(4, "method", "file", "line", "inlined_at"),
+                        jl_svec(4, jl_any_type, jl_sym_type, jl_long_type, jl_long_type), 0, 0, 4);
 
     jl_gotonode_type =
         jl_new_datatype(jl_symbol("GotoNode"), core, jl_any_type, jl_emptysvec,
