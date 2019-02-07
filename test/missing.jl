@@ -196,18 +196,17 @@ end
 
     # Test elementwise on mixed arrays to ensure signature of Missing methods matches that of Float methods
     test_array = [1.0, missing]
-    rounded_array = [1, missing]
 
-    @test isequal(round.(test_array, RoundNearest), rounded_array)
-    @test isequal(round.(Union{Int, Missing}, test_array, RoundNearest), rounded_array)
+    @test isequal(round.(test_array, RoundNearest), test_array)
+    @test isequal(round.(Union{Int, Missing}, test_array, RoundNearest), test_array)
 
     rounding_functions = [ceil, floor, round, trunc]
     for f in rounding_functions
         @test_throws MissingException f(Int, missing)
-        @test isequal(f.(test_array), rounded_array)
-        @test isequal(f.(test_array, digits=0, base=10), rounded_array)
-        @test isequal(f.(test_array, sigdigits=1, base=10), rounded_array)
-        @test isequal(f.(Union{Int, Missing}, test_array), rounded_array)
+        @test isequal(f.(test_array), test_array)
+        @test isequal(f.(test_array, digits=0, base=10), test_array)
+        @test isequal(f.(test_array, sigdigits=1, base=10), test_array)
+        @test isequal(f.(Union{Int, Missing}, test_array), test_array)
     end
 end
 
