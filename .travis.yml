@@ -75,7 +75,7 @@ before_install:
         contrib/travis_fastfail.sh || exit 1;
         brew rm --force gcc gmp fftw mpfr libgit2 mbedtls cmake pcre2;
         brew install -v gcc gmp mpfr pcre2 cmake;
-        BUILDOPTS="-j3 USECLANG=1 USECCACHE=1 USE_BINARYBUILDER_LLVM=1 USE_BINARYBUILDER_OPENBLAS=1 BINARYBUILDER_LLVM_ASSERTS=1";
+        BUILDOPTS="-j3 USECLANG=1 USECCACHE=1 USE_BINARYBUILDER_LLVM=1 USE_BINARYBUILDER_OPENBLAS=1 USE_BINARYBUILDER_SUITESPARSE=1 BINARYBUILDER_LLVM_ASSERTS=1";
         BUILDOPTS="$BUILDOPTS LLVM_CONFIG=$TRAVIS_BUILD_DIR/usr/tools/llvm-config LLVM_SIZE=$TRAVIS_BUILD_DIR/usr/tools/llvm-size";
         BUILDOPTS="$BUILDOPTS VERBOSE=1 USE_BLAS64=0 FORCE_ASSERTIONS=1";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
