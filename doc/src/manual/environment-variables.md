@@ -123,7 +123,7 @@ Suppose the value of `$JULIA_PKGRESOLVE_ACCURACY` is `n`. Then
 
 A stack of depot locations where the package manager, as well as Julia's code loading
 mechanisms, look for package registries, installed packages, named environments,
-repo clones, cached compiled package images, and configuration files. 
+repo clones, cached compiled package images, and configuration files.
 
 The depot path is controlled by Julia's `DEPOT_PATH` global variable which is populated at
 startup based on the value of the `JULIA_DEPOT_PATH` environment variable. The first entry
