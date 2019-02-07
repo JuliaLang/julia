@@ -34,6 +34,10 @@ struct Params
     # contains more than this many elements
     MAX_TUPLE_SPLAT::Int
 
+    # Whether to trace when inference decides to truncate inference
+    trace_inference_limits::Bool
+    trace_buffer::Vector{Any}
+
     # reasonable defaults
     global function CustomParams(world::UInt,
                     ;
@@ -47,13 +51,14 @@ struct Params
                     tupletype_depth::Int = DEFAULT_PARAMS.TUPLE_COMPLEXITY_LIMIT_DEPTH,
                     tuple_splat::Int = DEFAULT_PARAMS.MAX_TUPLE_SPLAT,
                     union_splitting::Int = DEFAULT_PARAMS.MAX_UNION_SPLITTING,
-                    apply_union_enum::Int = DEFAULT_PARAMS.MAX_APPLY_UNION_ENUM)
+                    apply_union_enum::Int = DEFAULT_PARAMS.MAX_APPLY_UNION_ENUM,
+                    trace_inference_limits::Bool = false)
         return new(Vector{InferenceResult}(),
                    world, false,
                    inlining, ipo_constant_propagation, aggressive_constant_propagation,
                    inline_cost_threshold, inline_nonleaf_penalty, inline_tupleret_bonus,
                    max_methods, union_splitting, apply_union_enum, tupletype_depth,
-                   tuple_splat)
+                   tuple_splat, trace_inference_limits, Any[])
     end
     function Params(world::UInt)
         inlining = inlining_enabled()
@@ -64,7 +69,7 @@ struct Params
                    #=inline_tupleret_bonus, max_methods, union_splitting, apply_union_enum=#
                    400, 4, 4, 8,
                    #=tupletype_depth, tuple_splat=#
-                   3, 32)
+                   3, 32, false, Any[])
     end
 end
 const DEFAULT_PARAMS = Params(UInt(0))

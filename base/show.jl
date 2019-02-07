@@ -1614,6 +1614,15 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     print(io, ")")
 end
 
+# Show for inference limit trace objects
+function show(io::IO, ecl::Core.Compiler.EdgeCycleLimited)
+    print(io, "Signature ")
+    show_tuple_as_call(io, Symbol("<unknown>"), ecl.sig)
+    print(io, " was narrowed to ")
+    show_tuple_as_call(io, Symbol("<unknown>"), ecl.newsig)
+    println(io, " due to recursion [EdgeCycleLimited]")
+end
+
 
 function dump(io::IOContext, x::SimpleVector, n::Int, indent)
     if isempty(x)

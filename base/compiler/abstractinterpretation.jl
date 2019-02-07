@@ -204,6 +204,11 @@ function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecial
     return result
 end
 
+struct EdgeCycleLimited
+    newsig
+    sig
+end
+
 function abstract_call_method(method::Method, @nospecialize(sig), sparams::SimpleVector, sv::InferenceState)
     if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
         return Any, false, nothing
@@ -301,6 +306,10 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
         newsig = limit_type_size(sig, comparison, sv.linfo.specTypes, sv.params.TUPLE_COMPLEXITY_LIMIT_DEPTH, spec_len)
 
         if newsig !== sig
+            if edgecycle && sv.params.trace_inference_limits
+                push!(sv.params.trace_buffer, EdgeCycleLimited(newsig, sig))
+            end
+
             # continue inference, but note that we've limited parameter complexity
             # on this call (to ensure convergence), so that we don't cache this result
             if call_result_unused(sv)

@@ -962,7 +962,8 @@ possible options are `:source` or `:none`.
 function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
                     optimize=true, debuginfo::Symbol=:default,
                     world = ccall(:jl_get_world_counter, UInt, ()),
-                    params = Core.Compiler.Params(world))
+                    trace = false,
+                    params = Core.Compiler.CustomParams(world; trace_inference_limits=trace))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -983,6 +984,11 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
         code === nothing && error("inference not successful") # inference disabled?
         debuginfo == :none && remove_linenums!(code)
         push!(asts, code => ty)
+    end
+    if trace && !isempty(params.trace_buffer)
+        for entry in params.trace_buffer
+            @info entry
+        end
     end
     return asts
 end
