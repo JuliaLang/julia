@@ -1831,6 +1831,15 @@ function inbounds_30563()
 end
 @test Base.return_types(inbounds_30563, ()) == Any[Int]
 
+function ifs_around_var_capture()
+    if false end
+    x = 1
+    if false end
+    f = y->x
+    f(0)
+end
+@test Base.return_types(ifs_around_var_capture, ()) == Any[Int]
+
 # issue #27316 - inference shouldn't hang on these
 f27316(::Vector) = nothing
 f27316(::Any) = f27316(Any[][1]), f27316(Any[][1])
