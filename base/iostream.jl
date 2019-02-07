@@ -452,7 +452,7 @@ function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
         eof(s) && break
     end
     if lb > olb && lb > nr
-        resize!(b, nr) # shrink to just contain input data if was resized
+        resize!(b, max(olb, nr)) # shrink to just contain input data if was resized
     end
     return nr
 end
@@ -466,7 +466,7 @@ function readbytes_some!(s::IOStream, b::Array{UInt8}, nb)
                                   s.ios, pointer(b), nb))
     lb = length(b)
     if lb > olb && lb > nr
-        resize!(b, nr) # shrink to just contain input data if was resized
+        resize!(b, max(olb, nr)) # shrink to just contain input data if was resized
     end
     return nr
 end
