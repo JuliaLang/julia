@@ -7,7 +7,7 @@ TRIPLETS="i686-linux-gnu x86_64-linux-gnu aarch64-linux-gnu arm-linux-gnueabihf 
 
 # These are the projects currently using BinaryBuilder; both GCC-expanded and non-GCC-expanded:
 BB_PROJECTS="llvm"
-BB_GCC_EXPANDED_PROJECTS="openblas"
+BB_GCC_EXPANDED_PROJECTS="openblas suitesparse"
 
 # Get "contrib/" directory path
 CONTRIB_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

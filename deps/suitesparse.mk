@@ -11,6 +11,9 @@ SPQR_CONFIG += -DSUN64
 endif
 endif
 
+
+ifneq ($(USE_BINARYBUILDER_SUITESPARSE), 1)
+
 SUITE_SPARSE_LIB := -lm
 ifneq ($(OS), Darwin)
 ifneq ($(OS), WINNT)
@@ -125,3 +128,21 @@ compile-suitesparse-wrapper:
 fastcheck-suitesparse-wrapper: #none
 check-suitesparse-wrapper:
 install-suitesparse-wrapper: $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EXT)
+
+else # USE_BINARYBUILDER_SUITESPARSE
+
+SUITESPARSE_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/SuiteSparse-v$(SUITESPARSE_VER)-$(SUITESPARSE_BB_REL)
+SUITESPARSE_BB_NAME := SuiteSparse.v$(SUITESPARSE_VER)
+
+$(eval $(call bb-install,suitesparse,SUITESPARSE,true))
+get-suitesparse-wrapper: get-suitesparse
+extract-suitesparse-wrapper: extract-suitesparse
+configure-suitesparse-wrapper: configure-suitesparse
+compile-suitesparse-wrapper: compile-suitesparse
+fastcheck-suitesparse-wrapper: fastcheck-suitesparse
+check-suitesparse-wrapper: check-suitesparse
+clean-suitesparse-wrapper: clean-suitesparse
+distclean-suitesparse-wrapper: distclean-suitesparse
+install-suitesparse-wrapper: install-suitesparse
+endif
+
