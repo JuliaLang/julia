@@ -43,14 +43,30 @@ isinteractive() = (is_interactive::Bool)
 
 const DEPOT_PATH = String[]
 
+function append_default_depot_path!(DEPOT_PATH)
+    path = joinpath(homedir(), ".julia")
+    path in DEPOT_PATH || push!(DEPOT_PATH, path)
+    path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
+    path in DEPOT_PATH || push!(DEPOT_PATH, path)
+    path = abspath(Sys.BINDIR, "..", "share", "julia")
+    path in DEPOT_PATH || push!(DEPOT_PATH, path)
+end
+
 function init_depot_path()
+    empty!(DEPOT_PATH)
     if haskey(ENV, "JULIA_DEPOT_PATH")
-        depots = split(ENV["JULIA_DEPOT_PATH"], Sys.iswindows() ? ';' : ':')
-        append!(empty!(DEPOT_PATH), map(expanduser, depots))
+        str = ENV["JULIA_DEPOT_PATH"]
+        isempty(str) && return
+        for path in split(str, Sys.iswindows() ? ';' : ':')
+            if isempty(path)
+                append_default_depot_path!(DEPOT_PATH)
+            else
+                path = expanduser(path)
+                path in DEPOT_PATH || push!(DEPOT_PATH, path)
+            end
+        end
     else
-        push!(empty!(DEPOT_PATH), joinpath(homedir(), ".julia"))
-        push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "local", "share", "julia"))
-        push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "share", "julia"))
+        append_default_depot_path!(DEPOT_PATH)
     end
 end
 
@@ -148,6 +164,7 @@ function parse_load_path(str::String)
                 env = current_project()
                 env === nothing && continue
             end
+            env = expanduser(env)
             env in envs || push!(envs, env)
         end
     end
