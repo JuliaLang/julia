@@ -309,7 +309,7 @@ function cptree(src::AbstractString, dst::AbstractString; force::Bool=false,
             cptree(srcname, joinpath(dst, name); force=force,
                                                  follow_symlinks=follow_symlinks)
         else
-            sendfile(srcname, joinpath(dst, name))
+            copyfile(srcname, joinpath(dst, name))
         end
     end
 end
@@ -333,7 +333,7 @@ function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
     elseif isdir(src)
         cptree(src, dst; force=force, follow_symlinks=follow_symlinks)
     else
-        sendfile(src, dst)
+        copyfile(src, dst)
     end
     dst
 end
@@ -737,25 +737,7 @@ function rename(src::AbstractString, dst::AbstractString)
 end
 
 function sendfile(src::AbstractString, dst::AbstractString)
-    src_open = false
-    dst_open = false
-    local src_file, dst_file
-    try
-        src_file = open(src, JL_O_RDONLY)
-        src_open = true
-        dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY, filemode(src_file))
-        dst_open = true
-
-        bytes = filesize(stat(src_file))
-        sendfile(dst_file, src_file, Int64(0), Int(bytes))
-    finally
-        if src_open && isopen(src_file)
-            close(src_file)
-        end
-        if dst_open && isopen(dst_file)
-            close(dst_file)
-        end
-    end
+    copyfile(src, dst)
 end
 
 if Sys.iswindows()

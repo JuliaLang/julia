@@ -118,6 +118,12 @@ function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
     nothing
 end
 
+function copyfile(src::AbstractString, dst::AbstractString)
+    err = ccall(:jl_fs_copyfile, Cint, (Cstring, Cstring), src, dst)
+    uv_error("copyfile", err)
+    nothing
+end
+
 function unsafe_write(f::File, buf::Ptr{UInt8}, len::UInt, offset::Int64=Int64(-1))
     check_open(f)
     err = ccall(:jl_fs_write, Int32, (OS_HANDLE, Ptr{UInt8}, Csize_t, Int64),
