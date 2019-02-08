@@ -218,9 +218,11 @@ function iterate(itr::SkipMissing, state...)
 end
 
 IndexStyle(::Type{<:SkipMissing{T}}) where {T} = IndexStyle(T)
-eachindex(itr::SkipMissing) = (i for i in eachindex(itr.x) if itr.x[i] !== missing)
-keys(itr::SkipMissing) = (i for i in keys(itr.x) if itr.x[i] !== missing)
-@inline function getindex(itr::SkipMissing, I...)
+eachindex(itr::SkipMissing) =
+    Iterators.filter(i -> @inbounds(itr.x[i]) !== missing, eachindex(itr.x))
+keys(itr::SkipMissing) =
+    Iterators.filter(i -> @inbounds(itr.x[i]) !== missing, keys(itr.x))
+@propagate_inbounds function getindex(itr::SkipMissing, I...)
     v = itr.x[I...]
     v === missing && throw(MissingException("index $I points to a missing value"))
     v
