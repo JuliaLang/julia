@@ -736,8 +736,8 @@ end
     end
 end
 
-f1_ci = code_typed(f1, (Int,))[1][1]
-f2_ci = code_typed(f2, (Int,))[1][1]
+f1_ci = code_typed(f1, (Int,), debuginfo=:source)[1][1]
+f2_ci = code_typed(f2, (Int,), debuginfo=:source)[1][1]
 
 f1_exprs = get_expr_list(f1_ci)
 f2_exprs = get_expr_list(f2_ci)
@@ -1763,4 +1763,72 @@ end
 let x = 0
     @test (a=1, b=2, c=(x=3)) == (a=1, b=2, c=3)
     @test x == 3
+end
+
+function captured_and_shadowed_sp(x::T) where T
+    function g()
+        (T,
+         let T = 0
+             T
+         end)
+    end
+    g()
+end
+@test captured_and_shadowed_sp(1) === (Int, 0)
+
+function capture_with_conditional_label()
+    @goto foo
+    x = 1
+    if false
+        @label foo
+    end
+    return y->x
+end
+let f = capture_with_conditional_label()  # should not throw
+    @test_throws UndefVarError(:x) f(0)
+end
+
+# `_` should not create a global (or local)
+f30656(T) = (t, _)::Pair -> t >= T
+f30656(10)(11=>1)
+@test !isdefined(@__MODULE__, :_)
+
+# issue #30772
+function f30772(a::T) where T
+    function ()
+        function (b::T)
+        end
+    end
+end
+let f = f30772(1.0), g = f()
+    @test g(1.0) === nothing
+    @test_throws MethodError g(1)
+end
+
+@test_throws ErrorException("syntax: malformed \"using\" statement")  eval(Expr(:using, :X))
+@test_throws ErrorException("syntax: malformed \"import\" statement") eval(Expr(:import, :X))
+
+# eval'ing :const exprs
+eval(Expr(:const, :_var_30877))
+@test !isdefined(@__MODULE__, :_var_30877)
+@test isconst(@__MODULE__, :_var_30877)
+
+# anonymous kw function in value position at top level
+f30926 = function (;k=0)
+    k
+end
+@test f30926(k=2) == 2
+
+if false
+elseif false
+    g30926(x) = 1
+end
+@test !isdefined(@__MODULE__, :g30926)
+
+@testset "closure conversion in testsets" begin
+    p = (2, 3, 4)
+    @test p == (2, 3, 4)
+    identity(p)
+    allocs = @allocated identity(p)
+    @test allocs == 0
 end

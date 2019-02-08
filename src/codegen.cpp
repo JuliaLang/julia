@@ -264,6 +264,7 @@ static Function *jltls_states_func;
 
 // important functions
 static Function *jlnew_func;
+static Function *jlsplatnew_func;
 static Function *jlthrow_func;
 static Function *jlerror_func;
 static Function *jltypeerror_func;
@@ -4069,6 +4070,15 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         // it to the inferred type.
         return mark_julia_type(ctx, val, true, (jl_value_t*)jl_any_type);
     }
+    else if (head == splatnew_sym) {
+        jl_cgval_t argv[2];
+        argv[0] = emit_expr(ctx, args[0]);
+        argv[1] = emit_expr(ctx, args[1]);
+        Value *typ = boxed(ctx, argv[0]);
+        Value *tup = boxed(ctx, argv[1]);
+        Value *val = ctx.builder.CreateCall(prepare_call(jlsplatnew_func), { typ, tup });
+        return mark_julia_type(ctx, val, true, (jl_value_t*)jl_any_type);
+    }
     else if (head == exc_sym) {
         return mark_julia_type(ctx,
                 ctx.builder.CreateCall(prepare_call(jl_current_exception_func)),
@@ -6980,6 +6990,17 @@ static void init_julia_llvm_env(Module *m)
     add_return_attr(jlnew_func, Attribute::NonNull);
     jlnew_func->addFnAttr(Thunk);
     add_named_global(jlnew_func, &jl_new_structv);
+
+    std::vector<Type *> args_2rptrs_(0);
+    args_2rptrs_.push_back(T_prjlvalue);
+    args_2rptrs_.push_back(T_prjlvalue);
+    jlsplatnew_func =
+        Function::Create(FunctionType::get(T_prjlvalue, args_2rptrs_, false),
+                         Function::ExternalLinkage,
+                         "jl_new_structt", m);
+    add_return_attr(jlsplatnew_func, Attribute::NonNull);
+    jlsplatnew_func->addFnAttr(Thunk);
+    add_named_global(jlsplatnew_func, &jl_new_structt);
 
     std::vector<Type*> args2(0);
     args2.push_back(T_pint8);

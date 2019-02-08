@@ -221,6 +221,10 @@ mutable struct TLayout
 end
 tlayout = TLayout(5,7,11)
 @test fieldnames(TLayout) == (:x, :y, :z) == Base.propertynames(tlayout)
+@test hasfield(TLayout, :y)
+@test !hasfield(TLayout, :a)
+@test hasproperty(tlayout, :x)
+@test !hasproperty(tlayout, :p)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
     [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
 @test fieldnames(Complex) === (:re, :im)
@@ -604,7 +608,7 @@ end
 @test sizeof(TypeWithIrrelevantParameter{Int8}) == sizeof(Int32)
 @test sizeof(:abc) == 3
 @test sizeof(Symbol("")) == 0
-@test_throws(ErrorException("argument is an abstract type; size is indeterminate"),
+@test_throws(ErrorException("Abstract type Real does not have a definite size."),
              sizeof(Real))
 @test sizeof(Union{ComplexF32,ComplexF64}) == 16
 @test sizeof(Union{Int8,UInt8}) == 1
@@ -794,6 +798,27 @@ Base.delete_method(m)
 @test uambig(1.0) == 2
 @test uambig(nothing) == 2
 
+end
+
+module HasmethodKwargs
+using Test
+f(x::Int; y=3) = x + y
+@test hasmethod(f, Tuple{Int})
+@test hasmethod(f, Tuple{Int}, ())
+@test hasmethod(f, Tuple{Int}, (:y,))
+@test !hasmethod(f, Tuple{Int}, (:jeff,))
+@test !hasmethod(f, Tuple{Int}, (:y,), world=typemin(UInt))
+g(; b, c, a) = a + b + c
+h(; kwargs...) = 4
+for gh = (g, h)
+    @test hasmethod(gh, Tuple{})
+    @test hasmethod(gh, Tuple{}, ())
+    @test hasmethod(gh, Tuple{}, (:a,))
+    @test hasmethod(gh, Tuple{}, (:a, :b))
+    @test hasmethod(gh, Tuple{}, (:a, :b, :c))
+end
+@test !hasmethod(g, Tuple{}, (:a, :b, :c, :d))
+@test hasmethod(h, Tuple{}, (:a, :b, :c, :d))
 end
 
 # issue #26267

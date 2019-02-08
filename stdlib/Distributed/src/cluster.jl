@@ -6,7 +6,7 @@ mutable struct WorkerConfig
     # Common fields relevant to all cluster managers
     io::Union{IO, Nothing}
     host::Union{AbstractString, Nothing}
-    port::Union{Integer, Nothing}
+    port::Union{Int, Nothing}
 
     # Used when launching additional workers at a host
     count::Union{Int, Symbol, Nothing}
@@ -21,13 +21,13 @@ mutable struct WorkerConfig
     tunnel::Union{Bool, Nothing}
     bind_addr::Union{AbstractString, Nothing}
     sshflags::Union{Cmd, Nothing}
-    max_parallel::Union{Integer, Nothing}
+    max_parallel::Union{Int, Nothing}
 
     # Used by Local/SSH managers
     connect_at::Any
 
     process::Union{Process, Nothing}
-    ospid::Union{Integer, Nothing}
+    ospid::Union{Int, Nothing}
 
     # Private dictionary used to store temporary information by Local/SSH managers.
     environ::Union{Dict, Nothing}

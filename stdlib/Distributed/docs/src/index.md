@@ -18,7 +18,8 @@ Distributed.pmap
 Distributed.RemoteException
 Distributed.Future
 Distributed.RemoteChannel
-Distributed.fetch(::Any)
+Distributed.fetch(::Future)
+Distributed.fetch(::RemoteChannel)
 Distributed.remotecall(::Any, ::Integer, ::Any...)
 Distributed.remotecall_wait(::Any, ::Integer, ::Any...)
 Distributed.remotecall_fetch(::Any, ::Integer, ::Any...)
