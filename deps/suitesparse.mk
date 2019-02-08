@@ -144,5 +144,8 @@ check-suitesparse-wrapper: check-suitesparse
 clean-suitesparse-wrapper: clean-suitesparse
 distclean-suitesparse-wrapper: distclean-suitesparse
 install-suitesparse-wrapper: install-suitesparse
+
+# suitesparse depends on OpenBLAS
+compile-suitesparse: | $(build_prefix)/manifest/openblas
 endif
 
