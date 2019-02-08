@@ -2,11 +2,11 @@
 
 ifeq ($(USE_BLAS64), 1)
 UMFPACK_CONFIG := -DLONGBLAS='long long'
-CHOLMOD_CONFIG := -DLONGBLAS='long long'
+CHOLMOD_CONFIG := -DLONGBLAS='long long' -DNPARTITION
 SPQR_CONFIG := -DLONGBLAS='long long'
 ifeq ($(OPENBLAS_SYMBOLSUFFIX), 64_)
 UMFPACK_CONFIG += -DSUN64
-CHOLMOD_CONFIG += -DSUN64
+CHOLMOD_CONFIG += -DSUN64 -DNPARTITION
 SPQR_CONFIG += -DSUN64
 endif
 endif
@@ -44,11 +44,16 @@ else ifeq ($(USE_SYSTEM_LAPACK), 0)
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/lapack
 endif
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-winclang.patch-applied
-	$(MAKE) -C $(dir $<) library $(SUITESPARSE_MFLAGS)
+	$(MAKE) -C $(dir $<)/SuiteSparse_config library config $(SUITESPARSE_MFLAGS)
+	for proj in AMD BTF CAMD CCOLAMD COLAMD CHOLMOD LDL KLU UMFPACK RBio SPQR; do \
+		$(MAKE) -C $(dir $<)/$${proj} library $(SUITESPARSE_MFLAGS); \
+	done
 	echo 1 > $@
 
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-checked: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled
-	$(MAKE) -C $(dir $@) default $(SUITESPARSE_MFLAGS)
+	for proj in AMD BTF CAMD CCOLAMD COLAMD CHOLMOD LDL KLU UMFPACK RBio SPQR; do \
+		$(MAKE) -C $(dir $<)/$${proj} default $(SUITESPARSE_MFLAGS); \
+	done
 	echo 1 > $@
 
 $(build_prefix)/manifest/suitesparse: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled | $(build_prefix)/manifest
