@@ -635,7 +635,7 @@ function sourceinfo_slotnames(src::CodeInfo)
     for i in eachindex(slotnames)
         name = string(slotnames[i])
         idx = get!(names, name, i)
-        if idx != i
+        if idx != i || isempty(name)
             printname = "$name@_$i"
             idx > 0 && (printnames[idx] = "$name@_$idx")
             names[name] = 0

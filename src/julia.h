@@ -309,7 +309,7 @@ typedef struct _jl_method_t {
 } jl_method_t;
 
 // This type caches the data for a specType signature specialization of a Method
-typedef struct _jl_method_instance_t {
+struct _jl_method_instance_t {
     JL_DATA_TYPE
     union {
         jl_value_t *value; // generic accessor
@@ -332,7 +332,7 @@ typedef struct _jl_method_instance_t {
     // names of declarations in the JIT,
     // suitable for referencing in LLVM IR
     jl_llvm_functions_t functionObjectsDecls;
-} jl_method_instance_t;
+};
 
 // all values are callable as Functions
 typedef jl_value_t jl_function_t;
