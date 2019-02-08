@@ -6,6 +6,7 @@ end
 
 @testset "nonmissingtype" begin
     @test Base.nonmissingtype(Union{Int, Missing}) == Int
+    @test Base.nonmissingtype(Union{Rational, Missing}) == Rational
     @test Base.nonmissingtype(Any) == Any
     @test Base.nonmissingtype(Missing) == Union{}
 end
