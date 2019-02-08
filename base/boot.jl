@@ -173,7 +173,7 @@ export
     # constants
     nothing, Main
 
-const getproperty = getfield
+const getprop = getfield
 const setproperty! = setfield!
 
 abstract type Number end

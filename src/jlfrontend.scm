@@ -94,7 +94,11 @@
        (= (call include ,x)
           (block
            ,@loc
-           (call (top include) ,name ,x)))))
+           (call (top include) ,name ,x)))
+       (= (call getprop x s)
+          (block
+           ,@loc
+           (call (top getproperty) x s)))))
    'none 0))
 
 ;; parse one expression (if greedy) or atom, returning end position

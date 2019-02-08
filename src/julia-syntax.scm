@@ -1659,7 +1659,7 @@
     (if (and (pair? e) (eq? (car e) '|.|))
         (let ((f (cadr e)) (x (caddr e)))
           (cond ((or (atom? x) (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
-                 `(call (top getproperty) ,f ,x))
+                 `(call (top getprop) ,f ,x))
                 ((eq? (car x) 'tuple)
                  (if (and (eq? f '^) (length= x 3) (integer? (caddr x)))
                   (make-fuse (expand-forms '(top literal_pow))

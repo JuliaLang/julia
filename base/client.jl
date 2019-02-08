@@ -440,6 +440,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
 end
 
 baremodule MainInclude
+const getprop = getfield
 include(fname::AbstractString) = Main.Base.include(Main, fname)
 eval(x) = Core.eval(Main, x)
 end
