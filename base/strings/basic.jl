@@ -571,8 +571,7 @@ function map(f, s::AbstractString)
     for c in s
         c′ = f(c)
         isa(c′, AbstractChar) || throw(ArgumentError(
-            "map(f, s::AbstractString) requires f to return AbstractChar; " *
-            "try map(f, collect(s)) or a comprehension instead"))
+            "map(f, s::AbstractString) requires f to return AbstractChar; try map(f, collect(s)) or a comprehension instead"))
         write(out, c′::AbstractChar)
     end
     String(take!(out))

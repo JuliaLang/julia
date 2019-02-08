@@ -2331,11 +2331,7 @@
          (= ,szunk (call (core isa) ,isz (top SizeUnknown)))
          (if ,szunk
              (= ,result (call (curly (core Array) ,ty 1) (core undef) 0))
-             (if (call (core isa) ,isz (top HasShape))
-                 (= ,result (call (top similar) (curly (core Array) ,ty) (call (top axes) ,overall-itr)))
-                 (= ,result (call (curly (core Array) ,ty 1) (core undef) (call (core Int)
-                                                                                (|::| (call (top length) ,overall-itr)
-                                                                                 (core Integer)))))))
+             (= ,result (call (top _array_for) ,ty ,overall-itr ,isz)))
          (= ,idx (call (top first) (call (top LinearIndices) ,result)))
          ,(construct-loops (reverse itrs) (reverse iv))
          ,result)))))

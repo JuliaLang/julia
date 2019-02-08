@@ -379,7 +379,7 @@ function readline(filename::AbstractString; keep::Bool=false)
     end
 end
 
-function readline(s::IO=stdin; keep::Bool=false)
+function readline(s::IO=stdin; keep::Bool=false)::String
     line = readuntil(s, 0x0a, keep=true)
     i = length(line)
     if keep || i == 0 || line[i] != 0x0a

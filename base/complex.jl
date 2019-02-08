@@ -35,7 +35,7 @@ const ComplexF16  = Complex{Float16}
 Complex{T}(x::Real) where {T<:Real} = Complex{T}(x,0)
 Complex{T}(z::Complex) where {T<:Real} = Complex{T}(real(z),imag(z))
 (::Type{T})(z::Complex) where {T<:Real} =
-    isreal(z) ? T(real(z))::T : throw(InexactError(Symbol(string(T)), T, z))
+    isreal(z) ? T(real(z))::T : throw(InexactError(nameof(T), T, z))
 
 Complex(z::Complex) = z
 

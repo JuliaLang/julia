@@ -105,9 +105,9 @@ function make_fastmath(expr::Expr)
         elseif isa(var, Expr) && var.head === :ref
             # array reference
             arr = var.args[1]
-            inds = tuple(var.args[2:end]...)
+            inds = var.args[2:end]
             arrvar = gensym()
-            indvars = tuple([gensym() for i in inds]...)
+            indvars = Any[gensym() for i in inds]
             expr = quote
                 $(Expr(:(=), arrvar, arr))
                 $(Expr(:(=), Expr(:tuple, indvars...), Expr(:tuple, inds...)))

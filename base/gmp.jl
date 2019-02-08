@@ -321,7 +321,7 @@ function (::Type{T})(x::BigInt) where T<:Base.BitUnsigned
     if sizeof(T) < sizeof(Limb)
         convert(T, convert(Limb,x))
     else
-        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(Symbol(string(T)), T, x))
+        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(nameof(T), T, x))
         x % T
     end
 end
@@ -332,9 +332,9 @@ function (::Type{T})(x::BigInt) where T<:Base.BitSigned
         SLimb = typeof(Signed(one(Limb)))
         convert(T, convert(SLimb, x))
     else
-        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(Symbol(string(T)), T, x))
+        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(nameof(T), T, x))
         y = x % T
-        ispos(x) ⊻ (y > 0) && throw(InexactError(Symbol(string(T)), T, x)) # catch overflow
+        ispos(x) ⊻ (y > 0) && throw(InexactError(nameof(T), T, x)) # catch overflow
         y
     end
 end
