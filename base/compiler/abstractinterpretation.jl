@@ -605,9 +605,17 @@ function pure_eval_call(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(a
         return false
     end
     meth = meth[1]::SimpleVector
+    sig = meth[1]::DataType
+    sparams = meth[2]::SimpleVector
     method = meth[3]::Method
-    # TODO: check pure on the inferred thunk
-    if isdefined(method, :generator) || !method.pure
+
+    if isdefined(method, :generator)
+        method.generator.expand_early || return false
+        mi = specialize_method(method, sig, sparams, false)
+        isa(mi, MethodInstance) || return false
+        staged = get_staged(mi)
+        (staged isa CodeInfo && (staged::CodeInfo).pure) || return false
+    elseif !method.pure
         return false
     end
 
