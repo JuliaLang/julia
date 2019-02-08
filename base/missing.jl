@@ -153,6 +153,9 @@ float(A::AbstractArray{Missing}) = A
     skipmissing(itr)
 
 Return an iterator over the elements in `itr` skipping [`missing`](@ref) values.
+The returned object can be indexed using indices of `itr` if the latter is indexable.
+Indices corresponding to missing values are not valid: they are skipped by [`keys`](@ref)
+and [`eachindex`](@ref), and a `MissingException` is thrown when trying to use them.
 
 Use [`collect`](@ref) to obtain an `Array` containing the non-`missing` values in
 `itr`. Note that even if `itr` is a multidimensional array, the result will always
@@ -161,8 +164,26 @@ of the input.
 
 # Examples
 ```jldoctest
-julia> sum(skipmissing([1, missing, 2]))
+julia> x = skipmissing([1, missing, 2])
+Base.SkipMissing{Array{Union{Missing, Int64},1}}(Union{Missing, Int64}[1, missing, 2])
+
+julia> sum(x)
 3
+
+julia> x[1]
+1
+
+julia> x[2]
+ERROR: MissingException: index (2,) points to a missing value
+[...]
+
+julia> argmax(x)
+3
+
+julia> collect(keys(x))
+2-element Array{Int64,1}:
+ 1
+ 3
 
 julia> collect(skipmissing([1, missing, 2]))
 2-element Array{Int64,1}:
