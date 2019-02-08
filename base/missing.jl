@@ -196,6 +196,15 @@ function iterate(itr::SkipMissing, state...)
     item, state
 end
 
+IndexStyle(::Type{<:SkipMissing{T}}) where {T} = IndexStyle(T)
+eachindex(itr::SkipMissing) = (i for i in eachindex(itr.x) if itr.x[i] !== missing)
+keys(itr::SkipMissing) = (i for i in keys(itr.x) if itr.x[i] !== missing)
+@inline function getindex(itr::SkipMissing, I...)
+    v = itr.x[I...]
+    v === missing && throw(MissingException("index $I points to a missing value"))
+    v
+end
+
 # Optimized mapreduce implementation
 # The generic method is faster when !(eltype(A) >: Missing) since it does not need
 # additional loops to identify the two first non-missing values of each block
