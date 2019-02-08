@@ -112,6 +112,9 @@ round(::Type{>:Missing}, ::Missing, ::RoundingMode=RoundNearest) = missing
 round(::Type{T}, ::Missing, ::RoundingMode=RoundNearest) where {T} =
     throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
 round(::Type{T}, x::Any, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype(T), x, r)
+# to fix ambiguities
+round(::Type{T}, x::Rational, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype(T), x, r)
+round(::Type{T}, x::Rational{Bool}, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype(T), x, r)
 
 # Handle ceil, floor, and trunc separately as they have no RoundingMode argument
 for f in (:(ceil), :(floor), :(trunc))
@@ -121,6 +124,8 @@ for f in (:(ceil), :(floor), :(trunc))
         ($f)(::Type{T}, ::Missing) where {T} =
             throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
         ($f)(::Type{T}, x::Any) where {T>:Missing} = $f(nonmissingtype(T), x)
+        # to fix ambiguities
+        ($f)(::Type{T}, x::Rational) where {T>:Missing} = $f(nonmissingtype(T), x)
     end
 end
 
