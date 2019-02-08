@@ -32,12 +32,31 @@ mutable struct Lexer{IO_t <: IO, T <: AbstractToken}
 
     last_token::Tokens.Kind
     charstore::IOBuffer
-    current_char::Char
+    chars::Tuple{Char,Char,Char}
+    charspos::Tuple{Int,Int,Int}
     doread::Bool
     dotop::Bool
 end
 
-Lexer(io::IO_t, T::Type{TT} = Token) where {IO_t,TT <: AbstractToken} = Lexer{IO_t,T}(io, position(io), 1, 1, position(io), 1, 1, position(io), Tokens.ERROR, IOBuffer(), ' ', false, false)
+function Lexer(io::IO_t, T::Type{TT} = Token) where {IO_t,TT <: AbstractToken}
+    c1 = ' '
+    p1 = position(io)
+    if eof(io)
+        c2, p2 = EOF_CHAR, p1
+        c3, p3 = EOF_CHAR, p1
+    else
+        c2 = read(io, Char)
+        p2 = position(io)
+        if eof(io)
+            c3, p3 = EOF_CHAR, p1
+        else
+            c3 = read(io, Char)
+            p3 = position(io)
+        end
+        
+    end
+    Lexer{IO_t,T}(io, position(io), 1, 1, position(io), 1, 1, position(io), Tokens.ERROR, IOBuffer(), (c1,c2,c3), (p1,p2,p3), false, false)
+end
 Lexer(str::AbstractString, T::Type{TT} = Token) where TT <: AbstractToken = Lexer(IOBuffer(str), T)
 
 @inline token_type(l::Lexer{IO_t, TT}) where {IO_t, TT} = TT
@@ -110,27 +129,27 @@ seek2startpos!(l::Lexer) = seek(l, startpos(l))
 
 Returns the next character without changing the lexer's state.
 """
-peekchar(l::Lexer) = peekchar(l.io)
+peekchar(l::Lexer) = l.chars[2]
 
 """
 dpeekchar(l::Lexer)
 
 Returns the next two characters without changing the lexer's state.
 """
-dpeekchar(l::Lexer) = dpeekchar(l.io)
+dpeekchar(l::Lexer) = l.chars[2], l.chars[3]
 
 """
     position(l::Lexer)
 
 Returns the current position.
 """
-Base.position(l::Lexer) = Base.position(l.io)
+Base.position(l::Lexer) = l.charspos[1]
 
 """
     eof(l::Lexer)
 
 Determine whether the end of the lexer's underlying buffer has been reached.
-"""
+"""# Base.position(l::Lexer) = Base.position(l.io)
 eof(l::Lexer) = eof(l.io)
 
 Base.seek(l::Lexer, pos) = seek(l.io, pos)
@@ -142,7 +161,7 @@ Updates the lexer's state such that the next  `Token` will start at the current
 position.
 """
 function start_token!(l::Lexer)
-    l.token_startpos = position(l)
+    l.token_startpos = l.charspos[1]
     l.token_start_row = l.current_row
     l.token_start_col = l.current_col
 end
@@ -155,33 +174,35 @@ Returns the next character and increments the current position.
 function readchar end
 
 function readchar(l::Lexer{I}) where {I <: IO}
-    l.current_char = readchar(l.io)
+    c = readchar(l.io)
+    l.chars = (l.chars[2], l.chars[3], c)
+    l.charspos = (l.charspos[2], l.charspos[3], position(l.io))
     if l.doread
-        write(l.charstore, l.current_char)
+        write(l.charstore, l.chars[1])
     end
-    if l.current_char == '\n'
+    if l.chars[1] == '\n'
         l.current_row += 1
         l.current_col = 1
-    elseif !eof(l.current_char)
+    elseif !eof(l.chars[1])
         l.current_col += 1
     end
-    return l.current_char
+    return l.chars[1]
 end
 
-readon(l::Lexer{I,RawToken}) where {I <: IO} = l.current_char
+readon(l::Lexer{I,RawToken}) where {I <: IO} = l.chars[1]
 function readon(l::Lexer{I,Token}) where {I <: IO}
     if l.charstore.size != 0
         take!(l.charstore)
     end
-    write(l.charstore, l.current_char)
+    write(l.charstore, l.chars[1])
     l.doread = true
-    return l.current_char
+    return l.chars[1]
 end
 
-readoff(l::Lexer{I,RawToken}) where {I <: IO} = l.current_char
+readoff(l::Lexer{I,RawToken}) where {I <: IO} = l.chars[1]
 function readoff(l::Lexer{I,Token})  where {I <: IO}
     l.doread = false
-    return l.current_char
+    return l.chars[1]
 end
 
 """
@@ -226,7 +247,7 @@ function emit(l::Lexer{IO_t,Token}, kind::Kind, err::TokenError = Tokens.NO_ERR)
     if (kind == Tokens.IDENTIFIER || isliteral(kind) || kind == Tokens.COMMENT || kind == Tokens.WHITESPACE)
         str = String(take!(l.charstore))
     elseif kind == Tokens.ERROR
-        str = String(l.io.data[(l.token_startpos + 1):position(l.io)])
+        str = String(l.io.data[(l.token_startpos + 1):position(l)])
     elseif optakessuffix(kind)
         str = ""
         while isopsuffix(peekchar(l))
@@ -652,7 +673,7 @@ function lex_digit(l::Lexer, kind)
         else
             return emit_error(l)
         end
-    elseif position(l) - startpos(l) == 1 && l.current_char == '0'
+    elseif position(l) - startpos(l) == 1 && l.chars[1] == '0'
         kind == Tokens.INTEGER
         if pc == 'x'
             kind = Tokens.HEX_INT
@@ -750,23 +771,19 @@ function lex_quote(l::Lexer, doemit=true)
     end
 end
 
-function string_terminated(l, c, kind::Tokens.Kind)
-    if (kind == Tokens.STRING || kind == Tokens.TRIPLE_STRING) && c == '"'
-        if kind == Tokens.STRING
-            return true
-        else
-            if accept(l, "\"") && accept(l, "\"")
-                return true
-            end
-        end
-    elseif (kind == Tokens.CMD || kind == Tokens.TRIPLE_CMD) && c == '`'
-        if kind == Tokens.CMD
-            return true
-        else
-            if accept(l, "\`") && accept(l, "\`")
-                return true
-            end
-        end
+function string_terminated(l, kind::Tokens.Kind)
+    if kind == Tokens.STRING && l.chars[1] == '"'
+        return true
+    elseif kind == Tokens.TRIPLE_STRING && l.chars[1] == l.chars[2] == l.chars[3] == '"'
+        readchar(l)
+        readchar(l)
+        return true
+    elseif kind == Tokens.CMD && l.chars[1] == '`'
+        return true
+    elseif kind == Tokens.TRIPLE_CMD && l.chars[1] == l.chars[2] == l.chars[3] == '`'
+        readchar(l)
+        readchar(l)
+        return true
     end
     return false
 end
@@ -779,14 +796,14 @@ function read_string(l::Lexer, kind::Tokens.Kind)
             eof(readchar(l)) && return false
             continue
         end
-        if string_terminated(l, c, kind)
+        if string_terminated(l, kind)
             return true
         elseif eof(c)
             return false
         end
         if c == '$'
             c = readchar(l)
-            if string_terminated(l, c, kind)
+            if string_terminated(l, kind)
                 return true
             elseif eof(c)
                 return false
