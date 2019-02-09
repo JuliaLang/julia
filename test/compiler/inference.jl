@@ -1338,6 +1338,13 @@ let egal_tfunc
     @test egal_tfunc(Union{Int64, Float64}, AbstractArray) === Const(false)
 end
 
+using Core.Compiler: PartialTuple, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
+let PT = PartialTuple(Tuple{Int64,UInt64}, Any[Const(10, false), UInt64])
+    @test sizeof_tfunc(PT) === Const(16, false)
+    @test nfields_tfunc(PT) === Const(2, false)
+    @test sizeof_nothrow(PT) === true
+end
+
 function f23024(::Type{T}, ::Int) where T
     1 + 1
 end

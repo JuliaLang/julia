@@ -299,6 +299,8 @@ function sizeof_nothrow(@nospecialize(x))
         x = x.val
     elseif isa(x, Conditional)
         return true
+    else
+        x = widenconst(x)
     end
     isconstType(x) && (x = x.parameters[1])
     if isa(x, Union)
@@ -325,6 +327,7 @@ function sizeof_tfunc(@nospecialize(x),)
     isa(x, Const) && return _const_sizeof(x.val)
     isa(x, Conditional) && return _const_sizeof(Bool)
     isconstType(x) && return _const_sizeof(x.parameters[1])
+    x = widenconst(x)
     x !== DataType && isconcretetype(x) && return _const_sizeof(x)
     return Int
 end
@@ -332,6 +335,7 @@ add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 0)
 function nfields_tfunc(@nospecialize(x))
     isa(x, Const) && return Const(nfields(x.val))
     isa(x, Conditional) && return Const(0)
+    x = widenconst(x)
     if isa(x, DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x))
         if !(x.name === _NAMEDTUPLE_NAME && !isconcretetype(x))
             return Const(length(x.types))
@@ -470,12 +474,14 @@ function isa_tfunc(@nospecialize(v), @nospecialize(tt))
             if isexact && isnotbrokensubtype(v, t)
                 return Const(true)
             end
-        elseif isa(v, Const) || isa(v, Conditional) || isdispatchelem(v)
-            # this tests for knowledge of a leaftype appearing on the LHS
-            # (ensuring the isa is precise)
-            return Const(false)
         else
+            if isa(v, Const) || isa(v, Conditional)
+                # this and the `isdispatchelem` below test for knowledge of a
+                # leaftype appearing on the LHS (ensuring the isa is precise)
+                return Const(false)
+            end
             v = widenconst(v)
+            isdispatchelem(v) && return Const(false)
             if typeintersect(v, t) === Bottom
                 # similar to `isnotbrokensubtype` check above, `typeintersect(v, t)`
                 # can't be trusted for kind types so we do an extra check here
