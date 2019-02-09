@@ -2216,3 +2216,4 @@ _call_rttf_test() = Core.Compiler.return_type(_rttf_test, Tuple{Any})
 
 f_with_Type_arg(::Type{T}) where {T} = T
 @test Base.return_types(f_with_Type_arg, (Any,)) == Any[Type]
+@test Base.return_types(f_with_Type_arg, (Type{Vector{T}} where T,)) == Any[Type{Vector{T}} where T]
