@@ -329,17 +329,17 @@ function sizeof_tfunc(@nospecialize(x),)
     return Int
 end
 add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 0)
-add_tfunc(nfields, 1, 1,
-    function (@nospecialize(x),)
-        isa(x, Const) && return Const(nfields(x.val))
-        isa(x, Conditional) && return Const(0)
-        if isa(x, DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x))
-            if !(x.name === _NAMEDTUPLE_NAME && !isconcretetype(x))
-                return Const(length(x.types))
-            end
+function nfields_tfunc(@nospecialize(x))
+    isa(x, Const) && return Const(nfields(x.val))
+    isa(x, Conditional) && return Const(0)
+    if isa(x, DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x))
+        if !(x.name === _NAMEDTUPLE_NAME && !isconcretetype(x))
+            return Const(length(x.types))
         end
-        return Int
-    end, 0)
+    end
+    return Int
+end
+add_tfunc(nfields, 1, 1, nfields_tfunc, 0)
 add_tfunc(Core._expr, 1, INT_INF, (@nospecialize args...)->Expr, 100)
 function typevar_tfunc(@nospecialize(n), @nospecialize(lb_arg), @nospecialize(ub_arg))
     lb = Union{}
@@ -1330,9 +1330,9 @@ function return_type_tfunc(argtypes::Vector{Any}, vtypes::VarTable, sv::Inferenc
                     end
                     astype = argtypes_to_type(argtypes_vec)
                     if isa(aft, Const)
-                        rt = abstract_call(aft.val, (), argtypes_vec, vtypes, sv, -1)
+                        rt = abstract_call(aft.val, nothing, argtypes_vec, vtypes, sv, -1)
                     elseif isconstType(aft)
-                        rt = abstract_call(aft.parameters[1], (), argtypes_vec, vtypes, sv, -1)
+                        rt = abstract_call(aft.parameters[1], nothing, argtypes_vec, vtypes, sv, -1)
                     else
                         rt = abstract_call_gf_by_type(nothing, argtypes_vec, astype, sv, -1)
                     end
@@ -1356,7 +1356,7 @@ function return_type_tfunc(argtypes::Vector{Any}, vtypes::VarTable, sv::Inferenc
             end
         end
     end
-    return NOT_FOUND
+    return nothing
 end
 
 # N.B.: typename maps type equivalence classes to a single value

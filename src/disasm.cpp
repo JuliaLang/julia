@@ -859,6 +859,7 @@ static void jl_dump_asm_internal(
         DILineInfoTable::iterator di_lineIter = di_lineinfo.begin();
         DILineInfoTable::iterator di_lineEnd = di_lineinfo.end();
         DILineInfoPrinter dbgctx{"; ", true};
+        dbgctx.SetVerbosity(debuginfo);
         if (pass != 0) {
             if (di_ctx && di_lineIter != di_lineEnd) {
                 // Set up the line info

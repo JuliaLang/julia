@@ -247,6 +247,10 @@ end
     end == ErrorException("expected")
     @test length(catch_stack(t)) == 1
     @test length(catch_stack(t)[1][2]) > 0 # backtrace is nonempty
+    # Exception stacks should not be accessed on concurrently running tasks
+    t = @task ()->nothing
+    @test_throws ErrorException("Inspecting the exception stack of a task which might "*
+                                "be running concurrently isn't allowed.") catch_stack(t)
 end
 
 @testset "rethrow" begin

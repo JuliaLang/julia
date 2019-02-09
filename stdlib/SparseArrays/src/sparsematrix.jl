@@ -2504,7 +2504,7 @@ function setindex!(A::SparseMatrixCSC{Tv,Ti}, V::AbstractVecOrMat, Ix::Union{Int
     require_one_based_indexing(A, V, Ix, Jx)
     (I, J) = Base.ensure_indexable(to_indices(A, (Ix, Jx)))
     checkbounds(A, I, J)
-    Base._setindex!(IndexStyle(A), A, V, to_indices(A, (Ix, Jx))...)
+    Base.setindex_shape_check(V, length(I), length(J))
     B = _to_same_csc(A, V, I, J)
 
     issortedI = issorted(I)

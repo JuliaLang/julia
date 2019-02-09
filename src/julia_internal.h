@@ -991,6 +991,7 @@ extern jl_sym_t *method_sym;  extern jl_sym_t *core_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *error_sym;
 extern jl_sym_t *new_sym;     extern jl_sym_t *using_sym;
+extern jl_sym_t *splatnew_sym;
 extern jl_sym_t *pop_exception_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *primtype_sym;
@@ -1011,6 +1012,7 @@ extern jl_sym_t *macrocall_sym;  extern jl_sym_t *colon_sym;
 extern jl_sym_t *hygienicscope_sym; extern jl_sym_t *escape_sym;
 extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
 extern jl_sym_t *throw_undef_if_not_sym; extern jl_sym_t *getfield_undefref_sym;
+extern jl_sym_t *failed_sym; extern jl_sym_t *done_sym; extern jl_sym_t *runnable_sym;
 
 struct _jl_sysimg_fptrs_t;
 

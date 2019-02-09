@@ -12,7 +12,7 @@ using Base.Printf: @printf
 export with, GitRepo, GitConfig
 
 const GITHUB_REGEX =
-    r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
+    r"^(?:(?:ssh://)?git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
 const REFCOUNT = Threads.Atomic{Int}(0)
 

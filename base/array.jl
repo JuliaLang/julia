@@ -888,7 +888,7 @@ Use [`push!`](@ref) to add individual items to `collection` which are not alread
 themselves in another collection. The result of the preceding example is equivalent to
 `push!([1, 2, 3], 4, 5, 6)`.
 """
-function append!(a::Array{<:Any,1}, items::AbstractVector)
+function append!(a::Vector, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
     _growend!(a, n)
@@ -932,7 +932,7 @@ julia> prepend!([3],[1,2])
 """
 function prepend! end
 
-function prepend!(a::Array{<:Any,1}, items::AbstractVector)
+function prepend!(a::Vector, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
     _growbeg!(a, n)

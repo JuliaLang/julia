@@ -373,18 +373,22 @@ JL_CALLABLE(jl_f_sizeof)
         if (isinline)
             return jl_box_long(elsize);
         if (!jl_is_datatype(x))
-            jl_error("argument is an abstract type; size is indeterminate");
+            jl_error("Argument is an abstract type and does not have a definite size.");
     }
     if (jl_is_datatype(x)) {
         jl_datatype_t *dx = (jl_datatype_t*)x;
-        if (dx->layout == NULL)
-            jl_error("argument is an abstract type; size is indeterminate");
+        if (dx->layout == NULL) {
+            if (dx->abstract)
+                jl_errorf("Abstract type %s does not have a definite size.", jl_symbol_name(dx->name->name));
+            else
+                jl_errorf("Argument is an incomplete %s type and does not have a definite size.", jl_symbol_name(dx->name->name));
+        }
         if (jl_is_layout_opaque(dx->layout))
-            jl_error("type does not have a fixed size");
+            jl_errorf("Type %s does not have a definite size.", jl_symbol_name(dx->name->name));
         return jl_box_long(jl_datatype_size(x));
     }
     if (x == jl_bottom_type)
-        jl_error("The empty type does not have a well-defined size since it does not have instances.");
+        jl_error("The empty type does not have a definite size since it does not have instances.");
     if (jl_is_array(x)) {
         return jl_box_long(jl_array_len(x) * ((jl_array_t*)x)->elsize);
     }

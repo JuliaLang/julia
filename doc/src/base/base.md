@@ -122,6 +122,7 @@ Base.deepcopy
 Base.getproperty
 Base.setproperty!
 Base.propertynames
+Base.hasproperty
 Core.getfield
 Core.setfield!
 Core.isdefined
@@ -158,6 +159,7 @@ Base.isstructtype
 Base.nameof(::DataType)
 Base.fieldnames
 Base.fieldname
+Base.hasfield
 ```
 
 ### Memory layout

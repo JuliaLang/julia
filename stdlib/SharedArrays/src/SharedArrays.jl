@@ -281,9 +281,7 @@ const SharedMatrix{T} = SharedArray{T,2}
 SharedVector(A::Vector) = SharedArray(A)
 SharedMatrix(A::Matrix) = SharedArray(A)
 
-length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
-ndims(S::SharedArray) = length(S.dims)
 IndexStyle(::Type{<:SharedArray}) = IndexLinear()
 
 function reshape(a::SharedArray{T}, dims::NTuple{N,Int}) where {T,N}

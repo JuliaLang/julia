@@ -307,8 +307,20 @@ end
     show(x)
 
 Write an informative text representation of a value to the current output stream. New types
-should overload `show(io, x)` where the first argument is a stream. The representation used
+should overload `show(io::IO, x)` where the first argument is a stream. The representation used
 by `show` generally includes Julia-specific formatting and type information.
+
+[`repr`](@ref) returns the output of `show` as a string.
+
+See also [`print`](@ref), which writes un-decorated representations.
+
+# Examples
+```jldoctest
+julia> show("Hello World!")
+"Hello World!"
+julia> print("Hello World!")
+Hello World!
+```
 """
 show(x) = show(stdout::IO, x)
 
@@ -378,17 +390,14 @@ function show(io::IO, f::Function)
     end
 end
 
+print(io::IO, f::Function) = print(io, nameof(f))
+
 function show(io::IO, x::Core.IntrinsicFunction)
     name = ccall(:jl_intrinsic_name, Cstring, (Core.IntrinsicFunction,), x)
     print(io, unsafe_string(name))
 end
 
 show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
-
-function show(io::IO, x::Union)
-    print(io, "Union")
-    show_delim_array(io, uniontypes(x), '{', ',', '}', false)
-end
 
 function print_without_params(@nospecialize(x))
     if isa(x,UnionAll)
@@ -410,7 +419,17 @@ function io_has_tvar_name(io::IOContext, name::Symbol, @nospecialize(x))
 end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
-function show(io::IO, x::UnionAll)
+function show(io::IO, @nospecialize(x::Type))
+    if x isa DataType
+        show_datatype(io, x)
+        return
+    elseif x isa Union
+        print(io, "Union")
+        show_delim_array(io, uniontypes(x), '{', ',', '}', false)
+        return
+    end
+    x::UnionAll
+
     if print_without_params(x)
         return show(io, unwrap_unionall(x).name)
     end
@@ -432,8 +451,6 @@ function show(io::IO, x::UnionAll)
     print(io, " where ")
     show(io, x.var)
 end
-
-show(io::IO, x::DataType) = show_datatype(io, x)
 
 # Check whether 'sym' (defined in module 'parent') is visible from module 'from'
 # If an object with this name exists in 'from', we need to check that it's the same binding
@@ -957,7 +974,8 @@ end
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
     if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
-            (isa(func, Expr) && (func.head == :. || func.head == :curly))
+            (isa(func, Expr) && (func.head == :. || func.head == :curly)) ||
+            isa(func, GlobalRef)
         show_unquoted(io, func, indent)
     else
         print(io, '(')
@@ -987,7 +1005,7 @@ show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex
 function show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)
     print(io, ex.mod)
     print(io, '.')
-    quoted = !isidentifier(ex.name)
+    quoted = !isidentifier(ex.name) && !startswith(string(ex.name), "@")
     parens = quoted && (!isoperator(ex.name) || (ex.name in quoted_syms))
     quoted && print(io, ':')
     parens && print(io, '(')
@@ -1208,8 +1226,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
     # new expr
-    elseif head === :new
-        show_enclosed_list(io, "%new(", args, ", ", ")", indent)
+    elseif head === :new || head === :splatnew
+        show_enclosed_list(io, "%$head(", args, ", ", ")", indent)
 
     # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
     elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
@@ -1566,16 +1584,17 @@ module IRShow
     Base.last(r::Compiler.StmtRange) = Compiler.last(r)
     include("compiler/ssair/show.jl")
 
-    const debuginfo = Dict{Symbol, Any}(
+    const __debuginfo = Dict{Symbol, Any}(
         # :full => src -> Base.IRShow.DILineInfoPrinter(src.linetable), # and add variable slot information
         :source => src -> Base.IRShow.DILineInfoPrinter(src.linetable),
         # :oneliner => src -> Base.IRShow.PartialLineInfoPrinter(src.linetable),
         :none => src -> Base.IRShow.lineinfo_disabled,
         )
-    debuginfo[:default] = debuginfo[:none]
+    const default_debuginfo = Ref{Symbol}(:none)
+    debuginfo(sym) = sym == :default ? default_debuginfo[] : sym
 end
 
-function show(io::IO, src::CodeInfo; debuginfo::Symbol=:default)
+function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     # Fix slot names and types in function body
     print(io, "CodeInfo(")
     lambda_io::IOContext = io
@@ -1586,7 +1605,9 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:default)
     if isempty(src.linetable) || src.linetable[1] isa LineInfoNode
         println(io)
         # TODO: static parameter values?
-        IRShow.show_ir(lambda_io, src, IRShow.debuginfo[debuginfo](src))
+        # only accepts :source or :none, we can't have a fallback for default since
+        # that would break code_typed(, debuginfo=:source) iff IRShow.default_debuginfo[] = :none
+        IRShow.show_ir(lambda_io, src, IRShow.__debuginfo[debuginfo](src))
     else
         # this is a CodeInfo that has not been used as a method yet, so its locations are still LineNumberNodes
         body = Expr(:block)

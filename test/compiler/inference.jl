@@ -71,10 +71,8 @@ tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Complex}})
 @test Core.Compiler.tmerge(Tuple{}, Union{Int16, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Int16, Nothing, Tuple{Vararg{ComplexF32}}}
-@test Core.Compiler.tmerge(Int32, Union{Int16, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
-    Union{Int16, Int32, Nothing, Tuple{ComplexF32, ComplexF32}}
-@test Core.Compiler.tmerge(Union{Int32, Nothing, Tuple{ComplexF32}}, Union{Int16, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
-    Union{Int16, Int32, Nothing, Tuple{Vararg{ComplexF32}}}
+@test Core.Compiler.tmerge(Union{Int32, Nothing, Tuple{ComplexF32}}, Union{Int32, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Int32, Nothing, Tuple{Vararg{ComplexF32}}}
 
 # issue 9770
 @noinline x9770() = false
@@ -1841,6 +1839,15 @@ function inbounds_30563()
 end
 @test Base.return_types(inbounds_30563, ()) == Any[Int]
 
+function ifs_around_var_capture()
+    if false end
+    x = 1
+    if false end
+    f = y->x
+    f(0)
+end
+@test Base.return_types(ifs_around_var_capture, ()) == Any[Int]
+
 # issue #27316 - inference shouldn't hang on these
 f27316(::Vector) = nothing
 f27316(::Any) = f27316(Any[][1]), f27316(Any[][1])
@@ -2206,3 +2213,6 @@ _rttf_test(::Int128) = 0
 _call_rttf_test() = Core.Compiler.return_type(_rttf_test, Tuple{Any})
 @test Core.Compiler.return_type(_rttf_test, Tuple{Any}) === Int
 @test _call_rttf_test() === Int
+
+f_with_Type_arg(::Type{T}) where {T} = T
+@test Base.return_types(f_with_Type_arg, (Any,)) == Any[Type]

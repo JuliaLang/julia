@@ -467,6 +467,16 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         JL_GC_POP();
         return v;
     }
+    else if (head == splatnew_sym) {
+        jl_value_t **argv;
+        JL_GC_PUSHARGS(argv, 2);
+        argv[0] = eval_value(args[0], s);
+        argv[1] = eval_value(args[1], s);
+        assert(jl_is_structtype(argv[0]));
+        jl_value_t *v = jl_new_structt((jl_datatype_t*)argv[0], argv[1]);
+        JL_GC_POP();
+        return v;
+    }
     else if (head == static_parameter_sym) {
         ssize_t n = jl_unbox_long(args[0]);
         assert(n > 0);
@@ -715,17 +725,6 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
             else if (head == pop_exception_sym) {
                 size_t prev_state = jl_unbox_ulong(eval_value(jl_exprarg(stmt, 0), s));
                 jl_restore_excstack(prev_state);
-            }
-            else if (head == const_sym) {
-                jl_sym_t *sym = (jl_sym_t*)jl_exprarg(stmt, 0);
-                jl_module_t *modu = s->module;
-                if (jl_is_globalref(sym)) {
-                    modu = jl_globalref_mod(sym);
-                    sym = jl_globalref_name(sym);
-                }
-                assert(jl_is_symbol(sym));
-                jl_binding_t *b = jl_get_binding_wr(modu, sym, 1);
-                jl_declare_constant(b);
             }
             else if (toplevel) {
                 if (head == method_sym && jl_expr_nargs(stmt) > 1) {

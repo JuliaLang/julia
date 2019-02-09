@@ -41,6 +41,7 @@ jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *pop_exception_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
+jl_sym_t *splatnew_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
 jl_sym_t *abstracttype_sym; jl_sym_t *primtype_sym;
 jl_sym_t *structtype_sym;   jl_sym_t *foreigncall_sym;
@@ -325,6 +326,7 @@ void jl_init_frontend(void)
     leave_sym = jl_symbol("leave");
     pop_exception_sym = jl_symbol("pop_exception");
     new_sym = jl_symbol("new");
+    splatnew_sym = jl_symbol("splatnew");
     const_sym = jl_symbol("const");
     global_sym = jl_symbol("global");
     thunk_sym = jl_symbol("thunk");
@@ -888,8 +890,8 @@ finally:
         if (jl_loaderror_type == NULL)
             jl_rethrow();
         else
-            jl_rethrow_other(jl_new_struct(jl_loaderror_type, form, result,
-                                           jl_current_exception()));
+            jl_throw(jl_new_struct(jl_loaderror_type, form, result,
+                                   jl_current_exception()));
     }
     JL_GC_POP();
     return result;
@@ -1046,8 +1048,8 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
             else
                 margs[0] = jl_cstr_to_string("<macrocall>");
             margs[1] = jl_fieldref(lno, 0); // extract and allocate line number
-            jl_rethrow_other(jl_new_struct(jl_loaderror_type, margs[0], margs[1],
-                                           jl_current_exception()));
+            jl_throw(jl_new_struct(jl_loaderror_type, margs[0], margs[1],
+                                   jl_current_exception()));
         }
     }
     ptls->world_age = last_age;

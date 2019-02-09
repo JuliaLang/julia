@@ -177,6 +177,19 @@ fieldnames(::Core.TypeofBottom) =
 fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 
 """
+    hasfield(T::Type, name::Symbol)
+
+Return a boolean indicating whether `T` has `name` as one of its own fields.
+
+!!! compat "Julia 1.2"
+     This function requires at least Julia 1.2.
+"""
+function hasfield(::Type{T}, name::Symbol) where T
+    @_pure_meta
+    return fieldindex(T, name, false) > 0
+end
+
+"""
     nameof(t::DataType) -> Symbol
 
 Get the name of a (potentially `UnionAll`-wrapped) `DataType` (without its parent module)
@@ -195,7 +208,7 @@ julia> nameof(Foo.S{T} where T)
 ```
 """
 nameof(t::DataType) = t.name.name
-nameof(t::UnionAll) = nameof(unwrap_unionall(t))
+nameof(t::UnionAll) = nameof(unwrap_unionall(t))::Symbol
 
 """
     parentmodule(t::DataType) -> Module
@@ -745,9 +758,12 @@ Note that an error will be thrown if `types` are not leaf types when `generated`
 `true` and any of the corresponding methods are an `@generated` method.
 """
 function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=true, debuginfo::Symbol=:default)
-    if debuginfo == :default
+    if @isdefined(IRShow)
+        debuginfo = IRShow.debuginfo(debuginfo)
+    elseif debuginfo == :default
         debuginfo = :source
-    elseif debuginfo != :source && debuginfo != :none
+    end
+    if debuginfo != :source && debuginfo != :none
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     return map(method_instances(f, t)) do m
@@ -940,7 +956,8 @@ end
 Returns an array of type-inferred lowered form (IR) for the methods matching the given
 generic function and type signature. The keyword argument `optimize` controls whether
 additional optimizations, such as inlining, are also applied.
-The keyword debuginfo controls the amount of code metadata present in the output.
+The keyword `debuginfo` controls the amount of code metadata present in the output,
+possible options are `:source` or `:none`.
 """
 function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
                     optimize=true, debuginfo::Symbol=:default,
@@ -950,9 +967,12 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
-    if debuginfo == :default
+    if @isdefined(IRShow)
+        debuginfo = IRShow.debuginfo(debuginfo)
+    elseif debuginfo == :default
         debuginfo = :source
-    elseif debuginfo != :source && debuginfo != :none
+    end
+    if debuginfo != :source && debuginfo != :none
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     types = to_tuple_type(types)
@@ -1023,7 +1043,7 @@ end
 
 Get the name of a generic `Function` as a symbol, or `:anonymous`.
 """
-nameof(f::Function) = typeof(f).name.mt.name
+nameof(f::Function) = (typeof(f).name.mt::Core.MethodTable).name
 
 functionloc(m::Core.MethodInstance) = functionloc(m.def)
 
@@ -1236,3 +1256,13 @@ REPL tab completion on `x.` shows only the `private=false` properties.
 propertynames(x) = fieldnames(typeof(x))
 propertynames(m::Module) = names(m)
 propertynames(x, private) = propertynames(x) # ignore private flag by default
+
+"""
+    hasproperty(x, s::Symbol)
+
+Return a boolean indicating whether the object `x` has `s` as one of its own properties.
+
+!!! compat "Julia 1.2"
+     This function requires at least Julia 1.2.
+"""
+hasproperty(x, s::Symbol) = s in propertynames(x)

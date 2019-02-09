@@ -228,7 +228,7 @@ function widenconditional(typ::Conditional)
     end
 end
 
-function stupdate!(state::Tuple{}, changes::StateUpdate)
+function stupdate!(state::Nothing, changes::StateUpdate)
     newst = copy(changes.state)
     if isa(changes.var, Slot)
         changeid = slot_id(changes.var::Slot)
@@ -288,9 +288,9 @@ function stupdate!(state::VarTable, changes::VarTable)
     return newstate
 end
 
-stupdate!(state::Tuple{}, changes::VarTable) = copy(changes)
+stupdate!(state::Nothing, changes::VarTable) = copy(changes)
 
-stupdate!(state::Tuple{}, changes::Tuple{}) = false
+stupdate!(state::Nothing, changes::Nothing) = false
 
 function stupdate1!(state::VarTable, change::StateUpdate)
     if !isa(change.var, Slot)
