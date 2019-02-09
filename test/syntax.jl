@@ -1832,3 +1832,8 @@ end
     allocs = @allocated identity(p)
     @test allocs == 0
 end
+
+@test Meta.parse("@: a b c") == Expr(:macrocall,
+                                     Symbol("@:"),
+				     LineNumberNode(1, :none),
+				     :a, :b, :c)

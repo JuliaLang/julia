@@ -2330,9 +2330,10 @@
                  (disallowed-space '@ nxt)))
            (with-space-sensitive
             (let ((startloc  (line-number-node s))
-                  (head (if (eq? (peek-token s) '|.|)
-                            (begin (take-token s) '__dot__)
-                            (parse-atom s #f))))
+                  (head (case (peek-token s)
+			  ((|.|) (begin (take-token s)  '__dot__))
+			  ((:) (take-token s))
+			  (else (parse-atom s #f)))))
               (peek-token s)
               (if (ts:space? s)
                   (maybe-docstring
