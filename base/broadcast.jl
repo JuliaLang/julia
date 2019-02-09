@@ -166,7 +166,7 @@ BroadcastStyle(a::AbstractArrayStyle{M}, ::DefaultArrayStyle{N}) where {M,N} =
 # methods that instead specialize on `BroadcastStyle`,
 #    copyto!(dest::AbstractArray, bc::Broadcasted{MyStyle})
 
-struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, Axes, F, Args<:Tuple}
+struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, Axes, F, Args<:Tuple} <: Base.AbstractBroadcasted
     f::F
     args::Args
     axes::Axes          # the axes of the resulting object (may be bigger than implied by `args` if this is nested inside a larger `Broadcasted`)
@@ -218,6 +218,18 @@ argtype(bc::Broadcasted) = argtype(typeof(bc))
 @inline Base.eachindex(bc::Broadcasted) = _eachindex(axes(bc))
 _eachindex(t::Tuple{Any}) = t[1]
 _eachindex(t::Tuple) = CartesianIndices(t)
+
+_combined_indexstyle(::Type{Tuple{A}}) where A = IndexStyle(A)
+_combined_indexstyle(::Type{TT}) where TT =
+    IndexStyle(IndexStyle(Base.tuple_type_head(TT)),
+               _combined_indexstyle(Base.tuple_type_tail(TT)))
+
+Base.IndexStyle(bc::Broadcasted) = IndexStyle(typeof(bc))
+Base.IndexStyle(::Type{<:Broadcasted{<:Any,Nothing,<:Any,Args}}) where {Args <: Tuple} =
+    _combined_indexstyle(Args)
+Base.IndexStyle(::Type{<:Broadcasted{<:Any}}) = IndexCartesian()
+
+Base.LinearIndices(bc::Broadcasted) = LinearIndices(eachindex(bc))
 
 Base.ndims(::Broadcasted{<:Any,<:NTuple{N,Any}}) where {N} = N
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
