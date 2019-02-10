@@ -316,7 +316,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
     Adds a method to a generic function and assigns the result if necessary.
 
-    Has a 1-argument form and a 4-argument form. The 1-argument form arises from the syntax `function foo end`.
+    Has a 1-argument form and a 3-argument form. The 1-argument form arises from the syntax `function foo end`.
     In the 1-argument form, the argument is a symbol. If this symbol already names a function in the
     current scope, nothing happens. If the symbol is undefined, a new function is created and assigned
     to the identifier specified by the symbol. If the symbol is defined but names a non-function,
@@ -325,7 +325,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
     type uniquely identifies the type to add the method to. When the type has fields, it wouldn't
     be clear whether the method was being added to the instance or its type.
 
-    The 4-argument form has the following arguments:
+    The 3-argument form has the following arguments:
 
       * `args[1]`
 
@@ -344,10 +344,6 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
         A `CodeInfo` of the method itself. For "out of scope" method definitions (adding a
         method to a function that also has methods defined in different scopes) this is an
         expression that evaluates to a `:lambda` expression.
-
-      * `args[4]`
-
-        `true` or `false`, identifying whether the method is staged (`@generated function`).
 
   * `const`
 
