@@ -293,10 +293,10 @@ end
 add_tfunc(isdefined, 1, 2, isdefined_tfunc, 1)
 function sizeof_nothrow(@nospecialize(x))
     if isa(x, Const)
-        if !isa(x, Type)
+        x = x.val
+        if !isa(x, Type) || x === DataType
             return true
         end
-        x = x.val
     elseif isa(x, Conditional)
         return true
     else
