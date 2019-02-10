@@ -918,6 +918,7 @@ quantile(itr, p; sorted::Bool=false) = quantile!(collect(itr), p, sorted=sorted)
 quantile(v::AbstractVector, p; sorted::Bool=false) =
     quantile!(sorted ? v : Base.copymutable(v), p; sorted=sorted)
 
+quantile(v::AbstractArray, p; sorted::Bool=false) = quantile(vec(v), p; sorted=sorted)
 
 ##### SparseArrays optimizations #####
 
