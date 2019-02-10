@@ -1093,7 +1093,7 @@ function get_linfo(@nospecialize(f), @nospecialize(t))
     tt = Tuple{ft, t.parameters...}
     precompile(tt)
     (ti, env) = ccall(:jl_type_intersection_with_env, Ref{Core.SimpleVector}, (Any, Any), tt, meth.sig)
-    meth = Base.func_for_method_checked(meth, tt)
+    meth = Base.func_for_method_checked(meth, tt, env)
     return ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
                  (Any, Any, Any, UInt), meth, tt, env, world)
 end
@@ -2225,3 +2225,24 @@ _call_rttf_test() = Core.Compiler.return_type(_rttf_test, Tuple{Any})
 f_with_Type_arg(::Type{T}) where {T} = T
 @test Base.return_types(f_with_Type_arg, (Any,)) == Any[Type]
 @test Base.return_types(f_with_Type_arg, (Type{Vector{T}} where T,)) == Any[Type{Vector{T}} where T]
+
+# Generated functions that only reference some of their arguments
+@inline function my_ntuple(f::F, ::Val{N}) where {F,N}
+    N::Int
+    (N >= 0) || throw(ArgumentError(string("tuple length should be ≥0, got ", N)))
+    if @generated
+        quote
+            @Base.nexprs $N i -> t_i = f(i)
+            @Base.ncall $N tuple t
+        end
+    else
+        Tuple(f(i) for i = 1:N)
+    end
+end
+call_ntuple(a, b) = my_ntuple(i->(a+b; i), Val(4))
+@test Base.return_types(call_ntuple, Tuple{Any,Any}) == [NTuple{4, Int}]
+@test length(code_typed(my_ntuple, Tuple{Any, Val{4}})) == 1
+@test_throws ErrorException code_typed(my_ntuple, Tuple{Any, Val})
+
+@generated unionall_sig_generated(::Vector{T}, b::Vector{S}) where {T, S} = :($b)
+@test length(code_typed(unionall_sig_generated, Tuple{Any, Vector{Int}})) == 1
