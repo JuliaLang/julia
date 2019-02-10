@@ -249,7 +249,7 @@ julia> a, b
 Assignment can operate on multiple variables in series, and will return the value of the right-hand-most expression:
 ```jldoctest
 julia> a = [1]; b = [2]; c = [3]; a = b = c
-1-element Array{Int64,1}
+1-element Array{Int64,1}:
  3
 
 julia> b[1] = 2; a, b, c
@@ -309,8 +309,8 @@ kw"let"
 """
     quote
 
-`quote` creates multiple expression objects in a block without using the explicit `Expr`
-constructor. For example:
+`quote` creates multiple expression objects in a block without using the explicit
+[`Expr`](@ref) constructor. For example:
 
 ```julia
 ex = quote
@@ -1430,7 +1430,7 @@ Construct a tuple of the given objects.
 # Examples
 ```jldoctest
 julia> tuple(1, 'a', pi)
-(1, 'a', π = 3.1415926535897...)
+(1, 'a', π)
 ```
 """
 tuple

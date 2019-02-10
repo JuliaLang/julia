@@ -154,17 +154,23 @@ end
     @test string(UInt32('3'), pad = 7, base = 2) == "0110011"
     @test string(3, base = 2) == "11"
     @test string(3, pad = 2, base = 2) == "11"
+    @test string(3, pad = Int32(2), base = Int32(2)) == "11"
     @test string(3, pad = 3, base = 2) == "011"
     @test string(-3, base = 2) == "-11"
     @test string(-3, pad = 3, base = 2) == "-011"
 
     @test string(9, base = 8) == "11"
     @test string(-9, base = 8) == "-11"
+    @test string(-9, base = 8, pad = 5) == "-00011"
+    @test string(-9, base = 8, pad = Int32(5)) == "-00011"
 
     @test string(121, base = 10) == "121"
+    @test string(121, base = 10, pad = 5) == "00121"
+    @test string(121, base = 10, pad = 5) == "00121"
 
     @test string(12, base = 16) == "c"
     @test string(-12, pad = 3, base = 16) == "-00c"
+    @test string(-12, pad = Int32(3), base = Int32(16)) == "-00c"
 
     @test string(5, pad = 7, base = 2) == "0000101"
 
@@ -177,6 +183,9 @@ end
 @testset "digits/base" begin
     @test digits(4, base = 2) == [0, 0, 1]
     @test digits(5, base = 3) == [2, 1]
+    @test digits(5, base = Int32(2), pad=Int32(3)) == [1, 0, 1]
+    @test digits(5, pad = 3) == [5, 0, 0]
+    @test digits(5, pad = Int32(3)) == [5, 0, 0]
 
     @testset "digits/base with negative bases" begin
         @testset "digits(n::$T, base = b)" for T in (Int, UInt, BigInt, Int32, UInt32)

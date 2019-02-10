@@ -118,7 +118,7 @@ end
     sz34 = spzeros(3, 4)
     se77 = sparse(1.0I, 7, 7)
     @testset "h+v concatenation" begin
-        @test all([se44 sz42 sz41; sz34 se33] == se77)
+        @test [se44 sz42 sz41; sz34 se33] == se77
         @test length(([sp33 0I; 1I 0I]).nzval) == 6
     end
 
@@ -131,20 +131,20 @@ end
     @testset "concatenation promotion" begin
         sz41_f32 = spzeros(Float32, 4, 1)
         se33_i32 = sparse(Int32(1)I, 3, 3)
-        @test all([se44 sz42 sz41_f32; sz34 se33_i32] == se77)
+        @test [se44 sz42 sz41_f32; sz34 se33_i32] == se77
     end
 
     @testset "mixed sparse-dense concatenation" begin
         sz33 = spzeros(3, 3)
         de33 = Matrix(1.0I, 3, 3)
-        @test  all([se33 de33; sz33 se33] == Array([se33 se33; sz33 se33 ]))
+        @test [se33 de33; sz33 se33] == Array([se33 se33; sz33 se33 ])
     end
 
     # check splicing + concatenation on random instances, with nested vcat and also side-checks sparse ref
     @testset "splicing + concatenation on random instances" begin
         for i = 1 : 10
             a = sprand(5, 4, 0.5)
-            @test all([a[1:2,1:2] a[1:2,3:4]; a[3:5,1] [a[3:4,2:4]; a[5:5,2:4]]] == a)
+            @test [a[1:2,1:2] a[1:2,3:4]; a[3:5,1] [a[3:4,2:4]; a[5:5,2:4]]] == a
         end
     end
 end
@@ -677,12 +677,12 @@ end
 
 @testset "issue #5853, sparse diff" begin
     for i=1:2, a=Any[[1 2 3], reshape([1, 2, 3],(3,1)), Matrix(1.0I, 3, 3)]
-        @test all(diff(sparse(a),dims=i) == diff(a,dims=i))
+        @test diff(sparse(a),dims=i) == diff(a,dims=i)
     end
 end
 
 @testset "access to undefined error types that initially allocate elements as #undef" begin
-    @test all(sparse(1:2, 1:2, Number[1,2])^2 == sparse(1:2, 1:2, [1,4]))
+    @test sparse(1:2, 1:2, Number[1,2])^2 == sparse(1:2, 1:2, [1,4])
     sd1 = diff(sparse([1,1,1], [1,2,3], Number[1,2,3]), dims=1)
 end
 
@@ -2119,14 +2119,13 @@ end
 
 @testset "check buffers" for n in 1:3
     local A
-    colptr = [1,2,3,4]
     rowval = [1,2,3]
     nzval1  = Int[]
     nzval2  = [1,1,1]
-    A = SparseMatrixCSC(n, n, colptr, rowval, nzval1)
+    A = SparseMatrixCSC(n, n, [1:n+1;], rowval, nzval1)
     @test nnz(A) == n
     @test_throws BoundsError A[n,n]
-    A = SparseMatrixCSC(n, n, colptr, rowval, nzval2)
+    A = SparseMatrixCSC(n, n, [1:n+1;], rowval, nzval2)
     @test nnz(A) == n
     @test A      == Matrix(I, n, n)
 end

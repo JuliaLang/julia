@@ -304,8 +304,7 @@ end
 @testset "svdvals and eigvals (#11120/#11247)" begin
     D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
     @test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
-    @test [eigvals(D)...;] ≈ eigvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
-
+    @test sort([eigvals(D)...;], by=LinearAlgebra.eigsortby) ≈ eigvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
 end
 
 @testset "eigmin (#27847)" begin
@@ -437,6 +436,9 @@ end
     @test exp(D) == Diagonal([exp([1 2; 3 4]), exp([1 2; 3 4])])
     @test log(D) == Diagonal([log([1 2; 3 4]), log([1 2; 3 4])])
     @test sqrt(D) == Diagonal([sqrt([1 2; 3 4]), sqrt([1 2; 3 4])])
+
+    @test tr(D) == 10
+    @test det(D) == 4
 end
 
 @testset "multiplication with Symmetric/Hermitian" begin
@@ -509,6 +511,15 @@ end
     @test opnorm(D, 1) == opnorm(Matrix(D), 1)
     @test opnorm(D, 2) ≈ opnorm(Matrix(D), 2)
     @test opnorm(D, Inf) == opnorm(Matrix(D), Inf)
+end
+
+@testset "eigenvalue sorting" begin
+    D = Diagonal([0.4, 0.2, -1.3])
+    @test eigvals(D) == eigen(D).values == [0.4, 0.2, -1.3] # not sorted by default
+    @test eigvals(Matrix(D)) == eigen(Matrix(D)).values == [-1.3, 0.2, 0.4] # sorted even if diagonal special case is detected
+    E = eigen(D, sortby=abs) # sortby keyword supported for eigen(::Diagonal)
+    @test E.values == [0.2, 0.4, -1.3]
+    @test E.vectors == [0 1 0; 1 0 0; 0 0 1]
 end
 
 end # module TestDiagonal

@@ -331,7 +331,7 @@ function BigInt(x::BigFloat)
 end
 
 function (::Type{T})(x::BigFloat) where T<:Integer
-    isinteger(x) || throw(InexactError(Symbol(string(T)), T, x))
+    isinteger(x) || throw(InexactError(nameof(T), T, x))
     trunc(T,x)
 end
 

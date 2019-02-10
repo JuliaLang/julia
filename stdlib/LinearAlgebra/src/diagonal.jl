@@ -451,8 +451,8 @@ function diag(D::Diagonal, k::Integer=0)
             "and at most $(size(D, 2)) for an $(size(D, 1))-by-$(size(D, 2)) matrix")))
     end
 end
-tr(D::Diagonal) = sum(D.diag)
-det(D::Diagonal) = prod(D.diag)
+tr(D::Diagonal) = sum(tr, D.diag)
+det(D::Diagonal) = prod(det, D.diag)
 logdet(D::Diagonal{<:Real}) = sum(log, D.diag)
 function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
     z = sum(log, D.diag)
@@ -528,11 +528,11 @@ eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = D.diag
 eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true) =
     [eigvals(x) for x in D.diag] #For block matrices, etc.
 eigvecs(D::Diagonal) = Matrix{eltype(D)}(I, size(D))
-function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true)
+function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=nothing)
     if any(!isfinite, D.diag)
         throw(ArgumentError("matrix contains Infs or NaNs"))
     end
-    Eigen(eigvals(D), eigvecs(D))
+    Eigen(sorteig!(eigvals(D), eigvecs(D), sortby)...)
 end
 
 #Singular system

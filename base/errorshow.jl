@@ -85,18 +85,11 @@ function showerror(io::IO, ex, bt; backtrace=true)
 end
 
 function showerror(io::IO, ex::LoadError, bt; backtrace=true)
-    print(io, "LoadError: ")
-    showerror(io, ex.error, bt, backtrace=backtrace)
-    print(io, "\nin expression starting at $(ex.file):$(ex.line)")
+    print(io, "Error while loading expression starting at ", ex.file, ":", ex.line)
 end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
-function showerror(io::IO, ex::InitError, bt; backtrace=true)
-    print(io, "InitError: ")
-    showerror(io, ex.error, bt, backtrace=backtrace)
-    print(io, "\nduring initialization of module ", ex.mod)
-end
-showerror(io::IO, ex::InitError) = showerror(io, ex, [])
+showerror(io::IO, ex::InitError) = print(io, "InitError during initialization of module ", ex.mod)
 
 function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     if isa(ex.val, AbstractArray)
@@ -398,7 +391,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 end
             end
 
-            if right_matches > 0 || length(ex.args) < 2
+            if right_matches > 0 || length(arg_types_param) < 2
                 if length(t_i) < length(sig)
                     # If the methods args is longer than input then the method
                     # arguments is printed as not a match

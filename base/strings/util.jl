@@ -602,7 +602,7 @@ function ascii(s::String)
     end
     return s
 end
-@noinline __throw_invalid_ascii(s, i) = throw(ArgumentError("invalid ASCII at index $i in $(repr(s))"))
+@noinline __throw_invalid_ascii(s::String, i::Int) = throw(ArgumentError("invalid ASCII at index $i in $(repr(s))"))
 
 """
     ascii(s::AbstractString)

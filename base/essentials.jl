@@ -280,6 +280,13 @@ convert(::Type{Tuple{Vararg{V}}}, x::Tuple{Vararg{V}}) where {V} = x
 convert(T::Type{Tuple{Vararg{V}}}, x::Tuple) where {V} =
     (convert(tuple_type_head(T), x[1]), convert(T, tail(x))...)
 
+# used for splatting in `new`
+convert_prefix(::Type{Tuple{}}, x::Tuple) = x
+convert_prefix(::Type{<:AtLeast1}, x::Tuple{}) = x
+convert_prefix(::Type{T}, x::T) where {T<:AtLeast1} = x
+convert_prefix(::Type{T}, x::AtLeast1) where {T<:AtLeast1} =
+    (convert(tuple_type_head(T), x[1]), convert_prefix(tuple_type_tail(T), tail(x))...)
+
 # TODO: the following definitions are equivalent (behaviorally) to the above method
 # I think they may be faster / more efficient for inference,
 # if we could enable them, but are they?
@@ -408,7 +415,7 @@ If `DataType` `T` does not have a specific size, an error is thrown.
 
 ```jldoctest
 julia> sizeof(AbstractArray)
-ERROR: argument is an abstract type; size is indeterminate
+ERROR: Abstract type AbstractArray does not have a definite size.
 Stacktrace:
 [...]
 ```
@@ -434,7 +441,7 @@ end
 """
     esc(e)
 
-Only valid in the context of an `Expr` returned from a macro. Prevents the macro hygiene
+Only valid in the context of an [`Expr`](@ref) returned from a macro. Prevents the macro hygiene
 pass from turning embedded variables into gensym variables. See the [Macros](@ref man-macros)
 section of the Metaprogramming chapter of the manual for more details and examples.
 """

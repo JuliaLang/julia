@@ -190,6 +190,7 @@ function store_backedges(frame::InferenceState)
     if !toplevel && (frame.cached || frame.parent !== nothing)
         caller = frame.result.linfo
         for edges in frame.stmt_edges
+            edges === nothing && continue
             i = 1
             while i <= length(edges)
                 to = edges[i]
@@ -314,7 +315,7 @@ function type_annotate!(sv::InferenceState)
     src = sv.src
     states = sv.stmt_types
     nargs = sv.nargs
-    nslots = length(states[1])
+    nslots = length(states[1]::Array{Any,1})
     undefs = fill(false, nslots)
     body = src.code::Array{Any,1}
     nexpr = length(body)
@@ -339,7 +340,7 @@ function type_annotate!(sv::InferenceState)
         st_i = states[i]
         expr = body[i]
         if isa(st_i, VarTable)
-            # st_i === ()  =>  unreached statement  (see issue #7836)
+            # st_i === nothing  =>  unreached statement  (see issue #7836)
             if isa(expr, Expr)
                 annotate_slot_load!(expr, st_i, sv, undefs)
             elseif isa(expr, Slot)

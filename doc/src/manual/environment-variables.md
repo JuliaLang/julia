@@ -75,27 +75,40 @@ and a global configuration search path of
 
 ### `JULIA_PROJECT`
 
-A directory path that points to the current Julia project. Setting this
-environment variable has the same effect as specifying the `--project` start-up
-option, but `--project` has higher precedence.  If the variable is set to `@.` then
-Julia tries to find a project directory that contains `Project.toml` or
-`JuliaProject.toml` file from the current directory and its parents.  See also
+A directory path that indicates which project should be the initial active project.
+Setting this environment variable has the same effect as specifying the `--project`
+start-up option, but `--project` has higher precedence. If the variable is set to `@.`
+then Julia tries to find a project directory that contains `Project.toml` or
+`JuliaProject.toml` file from the current directory and its parents. See also
 the chapter on [Code Loading](@ref).
 
 !!! note
 
-    `JULIA_PROJECT` must be defined before starting julia; defining it in `startup.jl` is too late in the startup process.
+    `JULIA_PROJECT` must be defined before starting julia; defining it in `startup.jl`
+    is too late in the startup process.
 
 ### `JULIA_LOAD_PATH`
 
-A separated list of absolute paths that are to be appended to the variable
-[`LOAD_PATH`](@ref). (In Unix-like systems, `:` is the path separator; in
-Windows systems, `;` is the path separator.) The `LOAD_PATH` variable is where
-[`Base.require`](@ref) and `Base.load_in_path()` look for code; it defaults to
-the absolute path
-`$JULIA_HOME/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)` so that,
-e.g., version 0.7 of Julia on a Linux system with a Julia executable at
-`/bin/julia` will have a default `LOAD_PATH` of `/share/julia/stdlib/v0.7`.
+The `JULIA_LOAD_PATH` environment variable is used to populate the global Julia
+[`LOAD_PATH`](@ref) variable, which determines which packages can be loaded via
+`import` and `using` (see [Code Loading](@ref)). Unlike the shell `PATH` variable,
+empty entries in `JULIA_LOAD_PATH` are expanded to the default value of `LOAD_PATH`,
+`["@", "@v#.#", "@stdlib"]` when populating `LOAD_PATH`. This allows easy appending,
+prepending, etc. of the load path value in shell scripts regardless of whether
+`JULIA_LOAD_PATH` is already set or not. For example, to prepend the directory
+`/foo/bar` to `LOAD_PATH` just do
+```sh
+export JULIA_LOAD_PATH="/foo/bar:$JULIA_LOAD_PATH"
+```
+If the `JULIA_LOAD_PATH` environment variable is already set, its old value will be
+prepended with `/foo/bar`. On the other hand, if `JULIA_LOAD_PATH` is not set, then
+it will be set to `/foo/bar:` which will expand to a `LOAD_PATH` value of
+`["/foo/bar", "@", "@v#.#", "@stdlib"]`. If `JULIA_LOAD_PATH` is set to the empty
+string, it expands to an empty `LOAD_PATH` array. In other words, the empty string
+is interpreted as a zero-element array, not a one-element array of the empty string.
+This behavior was chosen so that it would be possible to set an empty load path via
+the environment variable. If you want the default load path, either unset the
+environment variable or if it must have a value, set it to the string `:`.
 
 ### `JULIA_HISTORY`
 
@@ -118,6 +131,23 @@ Suppose the value of `$JULIA_PKGRESOLVE_ACCURACY` is `n`. Then
 *   the number of pre-decimation iterations is `20*n`,
 *   the number of iterations between decimation steps is `10*n`, and
 *   at decimation steps, at most one in every `20*n` packages is decimated.
+
+### `JULIA_DEPOT_PATH`
+
+A stack of depot locations where the package manager, as well as Julia's code loading
+mechanisms, look for package registries, installed packages, named environments,
+repo clones, cached compiled package images, and configuration files.
+
+The depot path is controlled by Julia's `DEPOT_PATH` global variable which is populated at
+startup based on the value of the `JULIA_DEPOT_PATH` environment variable. The first entry
+is the “user depot” and should be writable by and owned by the current user. The user depot
+is where: registries are cloned, new package versions are installed, named environments are
+created and updated, package repos are cloned, newly compiled package image files are
+saved, log files are written, development packages are checked out by default, and global
+configuration data is saved. Later entries in the depot path are treated as read-only and
+are appropriate for registries, packages, etc. installed and managed by system
+administrators.
+
 
 ## External applications
 
