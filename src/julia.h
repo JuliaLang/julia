@@ -1548,6 +1548,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_array_t *data)
 JL_DLLEXPORT uint8_t jl_ast_flag_inferred(jl_array_t *data);
 JL_DLLEXPORT uint8_t jl_ast_flag_inlineable(jl_array_t *data);
 JL_DLLEXPORT uint8_t jl_ast_flag_pure(jl_array_t *data);
+JL_DLLEXPORT uint8_t jl_ast_slotflag(jl_array_t *data, size_t i);
 JL_DLLEXPORT void jl_fill_argnames(jl_array_t *data, jl_array_t *names);
 
 JL_DLLEXPORT int jl_is_operator(char *sym);
