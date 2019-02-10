@@ -1344,6 +1344,7 @@ let PT = PartialTuple(Tuple{Int64,UInt64}, Any[Const(10, false), UInt64])
     @test nfields_tfunc(PT) === Const(2, false)
     @test sizeof_nothrow(PT) === true
 end
+@test sizeof_nothrow(Const(Tuple)) === false
 
 function f23024(::Type{T}, ::Int) where T
     1 + 1
