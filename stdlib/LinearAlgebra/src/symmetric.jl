@@ -6,7 +6,7 @@ struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     uplo::Char
 
     function Symmetric{T,S}(data, uplo) where {T,S<:AbstractMatrix{<:T}}
-        @assert !has_offset_axes(data)
+        require_one_based_indexing(data)
         new{T,S}(data, uplo)
     end
 end
@@ -81,7 +81,7 @@ struct Hermitian{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     uplo::Char
 
     function Hermitian{T,S}(data, uplo) where {T,S<:AbstractMatrix{<:T}}
-        @assert !has_offset_axes(data)
+        require_one_based_indexing(data)
         new{T,S}(data, uplo)
     end
 end
@@ -237,14 +237,14 @@ similar(A::Union{Symmetric,Hermitian}, ::Type{T}, dims::Dims{N}) where {T,N} = s
 function Matrix(A::Symmetric)
     B = copytri!(convert(Matrix, copy(A.data)), A.uplo)
     for i = 1:size(A, 1)
-        B[i,i] = symmetric(B[i,i], sym_uplo(A.uplo))::symmetric_type(eltype(A.data))
+        B[i,i] = symmetric(A[i,i], sym_uplo(A.uplo))::symmetric_type(eltype(A.data))
     end
     return B
 end
 function Matrix(A::Hermitian)
     B = copytri!(convert(Matrix, copy(A.data)), A.uplo, true)
     for i = 1:size(A, 1)
-        B[i,i] = hermitian(B[i,i], sym_uplo(A.uplo))::hermitian_type(eltype(A.data))
+        B[i,i] = hermitian(A[i,i], sym_uplo(A.uplo))::hermitian_type(eltype(A.data))
     end
     return B
 end
@@ -506,12 +506,12 @@ end
 inv(A::Hermitian{<:Any,<:StridedMatrix}) = Hermitian(_inv(A), sym_uplo(A.uplo))
 inv(A::Symmetric{<:Any,<:StridedMatrix}) = Symmetric(_inv(A), sym_uplo(A.uplo))
 
-eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)...)
+eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) = Eigen(sorteig!(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)..., sortby)...)
 
-function eigen(A::RealHermSymComplexHerm)
+function eigen(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothing)
     T = eltype(A)
     S = eigtype(T)
-    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A))
+    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), sortby=sortby)
 end
 
 eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) = Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
@@ -656,13 +656,13 @@ end
 eigmax(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, size(A, 1):size(A, 1))[1]
 eigmin(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, 1:1)[1]
 
-function eigen!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatrix}
+function eigen!(A::HermOrSym{T,S}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal,S<:StridedMatrix}
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))
-    GeneralizedEigen(vals, vecs)
+    GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
-function eigen!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedMatrix}
+function eigen!(A::Hermitian{T,S}, B::Hermitian{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasComplex,S<:StridedMatrix}
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))
-    GeneralizedEigen(vals, vecs)
+    GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
 eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatrix} =

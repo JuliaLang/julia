@@ -656,4 +656,19 @@ using SparseArrays.HigherOrderFns: SparseVecStyle
     @test occursin("no method matching _copy(::typeof(rand))", sprint(showerror, err))
 end
 
+@testset "Sparse outer product, for type $T and vector $op" for
+         op in (transpose, adjoint),
+         T in (Float64, ComplexF64)
+    m, n, p = 100, 250, 0.1
+    A = sprand(T, m, n, p)
+    a, b = view(A, :, 1), sprand(T, m, p)
+    av, bv = Vector(a), Vector(b)
+    v = @inferred a .* op(b)
+    w = @inferred b .* op(a)
+    @test issparse(v)
+    @test issparse(w)
+    @test v == av .* op(bv)
+    @test w == bv .* op(av)
+end
+
 end # module

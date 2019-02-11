@@ -8,7 +8,7 @@ import Distributed: launch, manage
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 
 @test Distributed.extract_imports(:(begin; import Foo, Bar; let; using Baz; end; end)) ==
-      [:Foo, :Bar, :Baz]
+      Any[:(import Foo, Bar), :(using Baz)]
 
 # Test a few "remote" invocations when no workers are present
 @test remote(myid)() == 1
@@ -1149,7 +1149,7 @@ for (addp_testf, expected_errstr, env) in testruns
     old_stdout = stdout
     stdout_out, stdout_in = redirect_stdout()
     stdout_txt = @async filter!(readlines(stdout_out)) do s
-            return !startswith(s, "\tFrom failed worker startup:\t")
+            return !startswith(s, "\tFrom worker startup:\t")
         end
     try
         withenv(env...) do

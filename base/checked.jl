@@ -87,7 +87,7 @@ function checked_neg(x::T) where T<:Integer
     checked_sub(T(0), x)
 end
 throw_overflowerr_negation(x) = (@_noinline_meta;
-    throw(OverflowError("checked arithmetic: cannot compute -x for x = $x::$(typeof(x))")))
+    throw(OverflowError(Base.invokelatest(string, "checked arithmetic: cannot compute -x for x = ", x, "::", typeof(x)))))
 if BrokenSignedInt != Union{}
 function checked_neg(x::BrokenSignedInt)
     r = -x
@@ -151,7 +151,7 @@ end
 
 
 throw_overflowerr_binaryop(op, x, y) = (@_noinline_meta;
-    throw(OverflowError("$x $op $y overflowed for type $(typeof(x))")))
+    throw(OverflowError(Base.invokelatest(string, x, " ", op, " ", y, " overflowed for type ", typeof(x)))))
 
 """
     Base.checked_add(x, y)

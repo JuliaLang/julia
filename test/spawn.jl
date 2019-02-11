@@ -20,7 +20,7 @@ sleepcmd = `sleep`
 lscmd = `ls`
 havebb = false
 if Sys.iswindows()
-    busybox = download("http://frippery.org/files/busybox/busybox.exe", joinpath(tempdir(), "busybox.exe"))
+    busybox = download("https://frippery.org/files/busybox/busybox.exe", joinpath(tempdir(), "busybox.exe"))
     havebb = try # use busybox-w32 on windows, if available
         success(`$busybox`)
         true
@@ -403,13 +403,13 @@ end
 
 # Test shell_escape printing quoting
 # Backticks should automatically quote where necessary
-let cmd = ["foo bar", "baz", "a'b", "a\"b", "a\"b\"c", "-L/usr/+", "a=b", "``", "\$", "&&", "z"]
+let cmd = ["foo bar", "baz", "a'b", "a\"b", "a\"b\"c", "-L/usr/+", "a=b", "``", "\$", "&&", "", "z"]
     @test string(`$cmd`) ==
-        """`'foo bar' baz "a'b" 'a"b' 'a"b"c' -L/usr/+ a=b \\`\\` '\$' '&&' z`"""
+        """`'foo bar' baz "a'b" 'a"b' 'a"b"c' -L/usr/+ a=b \\`\\` '\$' '&&' '' z`"""
     @test Base.shell_escape(`$cmd`) ==
-        """'foo bar' baz "a'b" 'a"b' 'a"b"c' -L/usr/+ a=b `` '\$' && z"""
+        """'foo bar' baz "a'b" 'a"b' 'a"b"c' -L/usr/+ a=b `` '\$' && '' z"""
     @test Base.shell_escape_posixly(`$cmd`) ==
-        """'foo bar' baz a\\'b a\\"b 'a"b"c' -L/usr/+ a=b '``' '\$' '&&' z"""
+        """'foo bar' baz a\\'b a\\"b 'a"b"c' -L/usr/+ a=b '``' '\$' '&&' '' z"""
 end
 let cmd = ["foo=bar", "baz"]
     @test string(`$cmd`) == "`foo=bar baz`"

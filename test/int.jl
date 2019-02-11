@@ -297,3 +297,8 @@ struct MyInt26779 <: Integer
 end
 @test promote_type(MyInt26779, Int) == Integer
 @test_throws ErrorException MyInt26779(1) + 1
+let i = MyInt26779(1)
+    @test_throws MethodError i >> 1
+    @test_throws MethodError i << 1
+    @test_throws MethodError i >>> 1
+end

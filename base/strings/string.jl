@@ -100,8 +100,9 @@ function cmp(a::String, b::String)
 end
 
 function ==(a::String, b::String)
+    pointer_from_objref(a) == pointer_from_objref(b) && return true
     al = sizeof(a)
-    al == sizeof(b) && 0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, al)
+    return al == sizeof(b) && 0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, al)
 end
 
 typemin(::Type{String}) = ""
@@ -177,10 +178,10 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
     b = codeunit(s, i)
     u = UInt32(b) << 24
     between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
-    return next_continued(s, i, u)
+    return iterate_continued(s, i, u)
 end
 
-function next_continued(s::String, i::Int, u::UInt32)
+function iterate_continued(s::String, i::Int, u::UInt32)
     u < 0xc0000000 && (i += 1; @goto ret)
     n = ncodeunits(s)
     # first continuation byte
@@ -252,6 +253,8 @@ getindex(s::String, r::UnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
     return ss
 end
 
+length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
+
 @inline function length(s::String, i::Int, j::Int)
     @boundscheck begin
         0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
@@ -260,12 +263,10 @@ end
     j < i && return 0
     @inbounds i, k = thisind(s, i), i
     c = j - i + (i == k)
-    length(s, i, j, c)
+    length_continued(s, i, j, c)
 end
 
-length(s::String) = length(s, 1, ncodeunits(s), ncodeunits(s))
-
-@inline function length(s::String, i::Int, n::Int, c::Int)
+@inline function length_continued(s::String, i::Int, n::Int, c::Int)
     i < n || return c
     @inbounds b = codeunit(s, i)
     @inbounds while true

@@ -65,4 +65,20 @@
 
     # Regex behaves like a scalar in broadcasting
     @test occursin.(r"Hello", ["Hello", "World"]) == [true, false]
+
+    @test startswith("abc", r"a")
+    @test endswith("abc", r"c")
+    @test !startswith("abc", r"b")
+    @test !startswith("abc", r"c")
+    @test !endswith("abc", r"a")
+    @test !endswith("abc", r"b")
+
+    @test !startswith("abc", r"A")
+    @test startswith("abc", r"A"i)
+    @test !endswith("abc", r"C")
+    @test endswith("abc", r"C"i)
+
+    # Test that PCRE throws the correct kind of error
+    # TODO: Uncomment this once the corresponding change has propagated to CI
+    #@test_throws ErrorException Base.PCRE.info(C_NULL, Base.PCRE.INFO_NAMECOUNT, UInt32)
 end

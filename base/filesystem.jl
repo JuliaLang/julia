@@ -42,7 +42,7 @@ import .Base:
     IOError, _UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
     bytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
-    rawhandle, OS_HANDLE, INVALID_OS_HANDLE
+    rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror
 
 if Sys.iswindows()
     import .Base: cwstring
@@ -102,13 +102,19 @@ function close(f::File)
     return nothing
 end
 
-# sendfile is the most efficient way to copy a file (or any file descriptor)
+# sendfile is the most efficient way to copy from a file descriptor
 function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
     check_open(dst)
     check_open(src)
-    err = ccall(:jl_fs_sendfile, Int32, (OS_HANDLE, OS_HANDLE, Int64, Csize_t),
-                src.handle, dst.handle, src_offset, bytes)
-    uv_error("sendfile", err)
+    while true
+        result = ccall(:jl_fs_sendfile, Int32, (OS_HANDLE, OS_HANDLE, Int64, Csize_t),
+                       src.handle, dst.handle, src_offset, bytes)
+        uv_error("sendfile", result)
+        nsent = result
+        bytes -= nsent
+        src_offset += nsent
+        bytes <= 0 && break
+    end
     nothing
 end
 

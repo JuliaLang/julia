@@ -176,6 +176,19 @@ julia> write(io, "Sometimes those members") + write(io, " write documentation.")
 julia> String(take!(io))
 "Sometimes those members write documentation."
 ```
+User-defined plain-data types without `write` methods can be written when wrapped in a `Ref`:
+```jldoctest
+julia> struct MyStruct; x::Float64; end
+
+julia> io = IOBuffer()
+IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=Inf, ptr=1, mark=-1)
+
+julia> write(io, Ref(MyStruct(42.0)))
+8
+
+julia> seekstart(io); read!(io, Ref(MyStruct(NaN)))
+Base.RefValue{MyStruct}(MyStruct(42.0))
+```
 """
 function write end
 
@@ -366,7 +379,7 @@ function readline(filename::AbstractString; keep::Bool=false)
     end
 end
 
-function readline(s::IO=stdin; keep::Bool=false)
+function readline(s::IO=stdin; keep::Bool=false)::String
     line = readuntil(s, 0x0a, keep=true)
     i = length(line)
     if keep || i == 0 || line[i] != 0x0a
@@ -798,7 +811,7 @@ The size of `b` will be increased if needed (i.e. if `nb` is greater than `lengt
 and enough bytes could be read), but it will never be decreased.
 """
 function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
-    @assert !has_offset_axes(b)
+    require_one_based_indexing(b)
     olb = lb = length(b)
     nr = 0
     while nr < nb && !eof(s)
@@ -923,7 +936,7 @@ previously marked position. Throw an error if the stream is not marked.
 See also [`mark`](@ref), [`unmark`](@ref), [`ismarked`](@ref).
 """
 function reset(io::T) where T<:IO
-    ismarked(io) || throw(ArgumentError("$(T) not marked"))
+    ismarked(io) || throw(ArgumentError("$T not marked"))
     m = io.mark
     seek(io, m)
     io.mark = -1 # must be after seek, or seek may fail

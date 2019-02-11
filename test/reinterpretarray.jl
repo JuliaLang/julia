@@ -52,6 +52,27 @@ let A = collect(reshape(1:20, 5, 4))
     @test reshape(R, :) isa StridedArray
 end
 
+@testset "strides" begin
+    a = rand(10)
+    b = view(a,2:2:10)
+    A = rand(10,10)
+    B = view(A, 2:2:10, 2:2:10)
+
+    @test strides(a) == (1,)
+    @test strides(b) == (2,)
+    @test strides(A) == (1,10)
+    @test strides(B) == (2,20)
+
+    for M in (a, b, A, B)
+        @inferred strides(M)
+        strides_M = strides(M)
+
+        for (i, _stride) in enumerate(collect(strides_M))
+            @test _stride == stride(M, i)
+        end
+    end
+end
+
 # IndexStyle
 let a = fill(1.0, 5, 3)
     r = reinterpret(Int64, a)

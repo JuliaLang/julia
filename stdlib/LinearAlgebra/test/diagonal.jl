@@ -173,6 +173,11 @@ Random.seed!(1)
         @test D/D2 ≈ Diagonal(D.diag./D2.diag)
         @test D\D2 ≈ Diagonal(D2.diag./D.diag)
 
+        # QR \ Diagonal
+        A = rand(elty, n, n)
+        qrA = qr(A)
+        @test qrA \ D ≈ A \ D
+
         # Performance specialisations for A*_mul_B!
         vvv = similar(vv)
         @test (r = Matrix(D) * vv   ; mul!(vvv, D, vv)  ≈ r ≈ vvv)
@@ -299,8 +304,7 @@ end
 @testset "svdvals and eigvals (#11120/#11247)" begin
     D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
     @test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
-    @test [eigvals(D)...;] ≈ eigvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
-
+    @test sort([eigvals(D)...;], by=LinearAlgebra.eigsortby) ≈ eigvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
 end
 
 @testset "eigmin (#27847)" begin
@@ -432,6 +436,9 @@ end
     @test exp(D) == Diagonal([exp([1 2; 3 4]), exp([1 2; 3 4])])
     @test log(D) == Diagonal([log([1 2; 3 4]), log([1 2; 3 4])])
     @test sqrt(D) == Diagonal([sqrt([1 2; 3 4]), sqrt([1 2; 3 4])])
+
+    @test tr(D) == 10
+    @test det(D) == 4
 end
 
 @testset "multiplication with Symmetric/Hermitian" begin
@@ -491,6 +498,15 @@ end
         @test (D \ U)::UpperTriangular{elty} == UpperTriangular(Matrix(D) \ Matrix(U))
         @test (D \ L)::LowerTriangular{elty} == LowerTriangular(Matrix(D) \ Matrix(L))
     end
+end
+
+@testset "eigenvalue sorting" begin
+    D = Diagonal([0.4, 0.2, -1.3])
+    @test eigvals(D) == eigen(D).values == [0.4, 0.2, -1.3] # not sorted by default
+    @test eigvals(Matrix(D)) == eigen(Matrix(D)).values == [-1.3, 0.2, 0.4] # sorted even if diagonal special case is detected
+    E = eigen(D, sortby=abs) # sortby keyword supported for eigen(::Diagonal)
+    @test E.values == [0.2, 0.4, -1.3]
+    @test E.vectors == [0 1 0; 1 0 0; 0 0 1]
 end
 
 end # module TestDiagonal

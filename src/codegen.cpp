@@ -264,6 +264,7 @@ static Function *jltls_states_func;
 
 // important functions
 static Function *jlnew_func;
+static Function *jlsplatnew_func;
 static Function *jlthrow_func;
 static Function *jlerror_func;
 static Function *jltypeerror_func;
@@ -3243,7 +3244,7 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         assert(b != NULL);
         if (b->owner != m) {
             char *msg;
-            (void)asprintf(&msg, "cannot assign variable %s.%s from module %s",
+            (void)asprintf(&msg, "cannot assign a value to variable %s.%s from module %s",
                     jl_symbol_name(b->owner->name), jl_symbol_name(s), jl_symbol_name(m->name));
             emit_error(ctx, msg);
             free(msg);
@@ -4065,7 +4066,18 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         }
         Value *typ = boxed(ctx, argv[0]);
         Value *val = emit_jlcall(ctx, jlnew_func, typ, &argv[1], nargs - 1);
-        return mark_julia_type(ctx, val, true, ty);
+        // temporarily mark as `Any`, expecting `emit_ssaval_assign` to update
+        // it to the inferred type.
+        return mark_julia_type(ctx, val, true, (jl_value_t*)jl_any_type);
+    }
+    else if (head == splatnew_sym) {
+        jl_cgval_t argv[2];
+        argv[0] = emit_expr(ctx, args[0]);
+        argv[1] = emit_expr(ctx, args[1]);
+        Value *typ = boxed(ctx, argv[0]);
+        Value *tup = boxed(ctx, argv[1]);
+        Value *val = ctx.builder.CreateCall(prepare_call(jlsplatnew_func), { typ, tup });
+        return mark_julia_type(ctx, val, true, (jl_value_t*)jl_any_type);
     }
     else if (head == exc_sym) {
         return mark_julia_type(ctx,
@@ -4267,7 +4279,7 @@ static void emit_cfunc_invalidate(
     case jl_returninfo_t::Union: {
         Type *retty = gf_thunk->getReturnType();
         Value *gf_retval = UndefValue::get(retty);
-        Value *tindex = compute_box_tindex(ctx, gf_ret, (jl_value_t*)jl_any_type, astrt);
+        Value *tindex = compute_box_tindex(ctx, emit_typeof_boxed(ctx, gf_retbox), (jl_value_t*)jl_any_type, astrt);
         tindex = ctx.builder.CreateOr(tindex, ConstantInt::get(T_int8, 0x80));
         gf_retval = ctx.builder.CreateInsertValue(gf_retval, gf_ret, 0);
         gf_retval = ctx.builder.CreateInsertValue(gf_retval, tindex, 1);
@@ -6978,6 +6990,17 @@ static void init_julia_llvm_env(Module *m)
     add_return_attr(jlnew_func, Attribute::NonNull);
     jlnew_func->addFnAttr(Thunk);
     add_named_global(jlnew_func, &jl_new_structv);
+
+    std::vector<Type *> args_2rptrs_(0);
+    args_2rptrs_.push_back(T_prjlvalue);
+    args_2rptrs_.push_back(T_prjlvalue);
+    jlsplatnew_func =
+        Function::Create(FunctionType::get(T_prjlvalue, args_2rptrs_, false),
+                         Function::ExternalLinkage,
+                         "jl_new_structt", m);
+    add_return_attr(jlsplatnew_func, Attribute::NonNull);
+    jlsplatnew_func->addFnAttr(Thunk);
+    add_named_global(jlsplatnew_func, &jl_new_structt);
 
     std::vector<Type*> args2(0);
     args2.push_back(T_pint8);

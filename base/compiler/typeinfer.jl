@@ -190,6 +190,7 @@ function store_backedges(frame::InferenceState)
     if !toplevel && (frame.cached || frame.parent !== nothing)
         caller = frame.result.linfo
         for edges in frame.stmt_edges
+            edges === nothing && continue
             i = 1
             while i <= length(edges)
                 to = edges[i]
@@ -314,7 +315,7 @@ function type_annotate!(sv::InferenceState)
     src = sv.src
     states = sv.stmt_types
     nargs = sv.nargs
-    nslots = length(states[1])
+    nslots = length(states[1]::Array{Any,1})
     undefs = fill(false, nslots)
     body = src.code::Array{Any,1}
     nexpr = length(body)
@@ -339,7 +340,7 @@ function type_annotate!(sv::InferenceState)
         st_i = states[i]
         expr = body[i]
         if isa(st_i, VarTable)
-            # st_i === ()  =>  unreached statement  (see issue #7836)
+            # st_i === nothing  =>  unreached statement  (see issue #7836)
             if isa(expr, Expr)
                 annotate_slot_load!(expr, st_i, sv, undefs)
             elseif isa(expr, Slot)
@@ -633,7 +634,12 @@ end
 
 
 function return_type(@nospecialize(f), @nospecialize(t))
-    params = Params(ccall(:jl_get_tls_world_age, UInt, ()))
+    world = ccall(:jl_get_tls_world_age, UInt, ())
+    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), Any[_return_type, f, t, world], 4)
+end
+
+function _return_type(@nospecialize(f), @nospecialize(t), world)
+    params = Params(world)
     rt = Union{}
     if isa(f, Builtin)
         rt = builtin_tfunction(f, Any[t.parameters...], nothing, params)

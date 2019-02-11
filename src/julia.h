@@ -944,6 +944,7 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 // basic predicates -----------------------------------------------------------
 #define jl_is_nothing(v)     (((jl_value_t*)(v)) == ((jl_value_t*)jl_nothing))
 #define jl_is_tuple(v)       (((jl_datatype_t*)jl_typeof(v))->name == jl_tuple_typename)
+#define jl_is_namedtuple(v)  (((jl_datatype_t*)jl_typeof(v))->name == jl_namedtuple_typename)
 #define jl_is_svec(v)        jl_typeis(v,jl_simplevector_type)
 #define jl_is_simplevector(v) jl_is_svec(v)
 #define jl_is_datatype(v)    jl_typeis(v,jl_datatype_type)
@@ -1145,8 +1146,8 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module,
 // constructors
 JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *bt, void *data);
 JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...);
-JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
-                                        uint32_t na);
+JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na);
+JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup);
 JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
 JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void);
 JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...) JL_MAYBE_UNROOTED;
@@ -1381,8 +1382,8 @@ STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT;
 
 // eq hash tables
-JL_DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val, int *inserted);
-JL_DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, void *key,
+JL_DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, jl_value_t *key, jl_value_t *val, int *inserted);
+JL_DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, jl_value_t *key,
                                         jl_value_t *deflt);
 
 // system information
@@ -1487,6 +1488,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *d
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz, jl_array_t *depmods);
 
 // front end interface
+JL_DLLEXPORT jl_value_t *jl_parse_all(const char *str, size_t len, const char *filename, size_t filename_len);
 JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len,
                                              const char *filename, size_t filename_len);
 JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
@@ -1494,7 +1496,11 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
 JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
                                              char *filename, jl_module_t *inmodule);
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule);
+JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmodule,
+                                            const char *file, int line);
 JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule);
+JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *inmodule,
+                                                 const char *file, int line);
 JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str);
 
 // external libraries

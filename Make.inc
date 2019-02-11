@@ -232,11 +232,10 @@ INSTALL_F := $(JULIAHOME)/contrib/install.sh 644
 INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
 
 # BinaryBuilder options
-# TODO: Autodiscover triplet
+USE_BINARYBUILDER_OPENBLAS := 0
 USE_BINARYBUILDER_LLVM := 0
 # Use the Assertions build
 BINARYBUILDER_LLVM_ASSERTS := 0
-BINARYBUILDER_TRIPLET :=
 
 # LLVM Options
 LLVMROOT := $(build_prefix)
@@ -285,16 +284,10 @@ OPENBLAS_DYNAMIC_ARCH := 1
 override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
-STD_LIB_PATH := $(shell LANG=C $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed -e "s/^programs: =//")
-STD_LIB_PATH := $(STD_LIB_PATH):$(shell LANG=C $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed -e "s/^libraries: =//")
-ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # the cygwin-mingw32 compiler lies about it search directory paths
-STD_LIB_PATH := $(shell echo '$(STD_LIB_PATH)' | sed -e "s!/lib/!/bin/!g")
-endif
 else
 $(error "unknown XC_HOST variable set")
 endif
 endif
-STD_LIB_PATH ?= $(PATH)
 
 JLDOWNLOAD := $(JULIAHOME)/deps/tools/jldownload
 JLCHECKSUM := $(JULIAHOME)/deps/tools/jlchecksum
@@ -1003,7 +996,7 @@ OSLIBS += -Wl,--version-script=$(JULIAHOME)/src/julia.expmap
 endif
 endif
 endif
-JLDFLAGS := -Wl,-Bdynamic
+JLDFLAGS := -Wl,-Bdynamic -Wl,-no-undefined
 ifeq (-Bsymbolic-functions, $(shell $(LD) --help | grep -o -e "-Bsymbolic-functions"))
 JLIBLDFLAGS := -Wl,-Bsymbolic-functions
 else
@@ -1015,7 +1008,7 @@ endif
 
 ifeq ($(OS), FreeBSD)
 JLDFLAGS := -Wl,-Bdynamic
-OSLIBS += -lelf -lkvm -lrt
+OSLIBS += -lelf -lkvm -lrt -lpthread
 
 # Tweak order of libgcc_s in DT_NEEDED,
 # make it loaded first to
@@ -1170,7 +1163,6 @@ endif
 # Make tricks
 
 define dir_target
-$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(1))): $$(abspath $(1))
 $$(abspath $(1)):
 	@mkdir -p $$@
 endef
@@ -1189,7 +1181,6 @@ ifeq ($(BUILD_OS), WINNT)
 else
 	-rm -r $$(abspath $(2)/$(3))
 endif
-$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(3))): $$(abspath $(2)/$(3))
 $$(abspath $(2)/$(3)): | $$(abspath $(2))
 ifeq ($$(BUILD_OS), WINNT)
 	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&) $$(call mingw_to_dos,$(1),)
@@ -1222,8 +1213,6 @@ endif
 endif
 
 exec = $(shell $(call spawn,$(1)))
-
-pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
 
 JULIA_BUILD_MODE := release
 JULIA_LIBSUFFIX:=
@@ -1278,7 +1267,13 @@ PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
 
 endif
 
+define newline # a literal \n
+
+
+endef
+
 # Makefile debugging trick:
 # call print-VARIABLE to see the runtime value of any variable
+# (hardened against any special characters appearing in the output)
 print-%:
-	@echo '$*=$($*)'
+	@echo '$*=$(subst ','\'',$(subst $(newline),\n,$($*)))'

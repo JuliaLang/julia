@@ -163,11 +163,15 @@ end
         @test issymmetric(a)
         @test ishermitian(one(elty))
         @test det(a) == a
+        @test norm(a) == abs(a)
+        @test norm(a, 0) == 1
     end
 
     @test !issymmetric(NaN16)
     @test !issymmetric(NaN32)
     @test !issymmetric(NaN)
+    @test norm(NaN)    === NaN
+    @test norm(NaN, 0) === NaN
 end
 
 @test rank(fill(0, 0, 0)) == 0
@@ -223,6 +227,11 @@ end
             @test isempty(normalize!(T[]))
         end
     end
+end
+
+@testset "Issue #30466" begin
+    @test norm([typemin(Int), typemin(Int)], Inf) == -float(typemin(Int))
+    @test norm([typemin(Int), typemin(Int)], 1) == -2float(typemin(Int))
 end
 
 @testset "potential overflow in normalize!" begin

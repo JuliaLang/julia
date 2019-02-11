@@ -27,7 +27,8 @@ typedef win32_ucontext_t jl_ucontext_t;
     !defined(JL_HAVE_ASM) && \
     !defined(JL_HAVE_UNW_CONTEXT) && \
     !defined(JL_HAVE_SIGALTSTACK)
-#if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) || defined(_CPU_ARM_))
+#if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) ||  \
+     defined(_CPU_ARM_) || defined(_CPU_PPC64_))
 #define JL_HAVE_ASM
 #elif defined(_OS_DARWIN_)
 #define JL_HAVE_UNW_CONTEXT

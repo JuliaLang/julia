@@ -59,9 +59,9 @@ volatile int jl_in_stackwalk = 0;
 
 #define ROOT_TASK_STACK_ADJUSTMENT 3000000
 
-static jl_sym_t *done_sym;
-static jl_sym_t *failed_sym;
-static jl_sym_t *runnable_sym;
+jl_sym_t *done_sym;
+jl_sym_t *failed_sym;
+jl_sym_t *runnable_sym;
 
 extern size_t jl_page_size;
 jl_datatype_t *jl_task_type;
@@ -767,6 +767,29 @@ static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
                     // because all our addresses are word-aligned.
         " udf #0" // abort
         : : "r" (stk), "r"(fn) : "memory" );
+#elif defined(_CPU_PPC64_)
+    // N.B.: There is two iterations of the PPC64 ABI.
+    // v2 is current and used here. Make sure you have the
+    // correct version of the ABI reference when working on this code.
+    asm volatile(
+        // Move stack (-0x30 for initial stack frame) to stack pointer
+        " addi 1, %0, -0x30;\n"
+        // Build stack frame
+        // Skip local variable save area
+        " std 2, 0x28(1);\n" // Save TOC
+        // Clear link editor/compiler words
+        " std 0, 0x20(1);\n"
+        " std 0, 0x18(1);\n"
+        // Clear LR/CR save area
+        " std 0, 0x10(1);\n"
+        " std 0, 0x8(1);\n"
+        " std 0, 0x0(1); \n" // Clear back link to terminate unwinder
+        " mtlr 0; \n"        // Clear link register
+        " mr 12, %1; \n"     // Set up target global entry point
+        " mtctr 12; \n"      // Move jump target to counter register
+        " bctr; \n"          // branch to counter (lr update disabled)
+        " trap; \n"
+        : : "r"(stk), "r"(fn) : "memory");
 #else
 #error JL_HAVE_ASM defined but not implemented for this CPU type
 #endif

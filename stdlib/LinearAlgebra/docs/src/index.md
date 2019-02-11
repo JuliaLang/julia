@@ -38,13 +38,13 @@ julia> A = [-4. -17.; 2. 2.]
 
 julia> eigvals(A)
 2-element Array{Complex{Float64},1}:
- -1.0 + 5.0im
  -1.0 - 5.0im
+ -1.0 + 5.0im
 
 julia> eigvecs(A)
 2×2 Array{Complex{Float64},2}:
-  0.945905+0.0im        0.945905-0.0im
- -0.166924-0.278207im  -0.166924+0.278207im
+  0.945905-0.0im        0.945905+0.0im
+ -0.166924+0.278207im  -0.166924-0.278207im
 ```
 
 In addition, Julia provides many [factorizations](@ref man-linalg-factorizations) which can be used to

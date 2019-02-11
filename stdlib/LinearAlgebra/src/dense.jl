@@ -92,22 +92,6 @@ isposdef(A::AbstractMatrix) =
     ishermitian(A) && isposdef(cholesky(Hermitian(A); check = false))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
-# the definition of strides for Array{T,N} is tuple() if N = 0, otherwise it is
-# a tuple containing 1 and a cumulative product of the first N-1 sizes
-# this definition is also used for StridedReshapedArray and StridedReinterpretedArray
-# which have the same memory storage as Array
-function stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int)
-    if i > ndims(a)
-        return length(a)
-    end
-    s = 1
-    for n = 1:(i-1)
-        s *= size(a, n)
-    end
-    return s
-end
-strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
-
 function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
@@ -147,7 +131,7 @@ julia> triu!(M, 1)
 ```
 """
 function triu!(M::AbstractMatrix, k::Integer)
-    @assert !has_offset_axes(M)
+    require_one_based_indexing(M)
     m, n = size(M)
     for j in 1:min(n, m + k)
         for i in max(1, j - k + 1):m
@@ -185,7 +169,7 @@ julia> tril!(M, 2)
 ```
 """
 function tril!(M::AbstractMatrix, k::Integer)
-    @assert !has_offset_axes(M)
+    require_one_based_indexing(M)
     m, n = size(M)
     for j in max(1, k + 1):n
         @inbounds for i in 1:min(j - k - 1, m)
@@ -202,7 +186,7 @@ tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 Fill the band between diagonals `l` and `u` with the value `x`.
 """
 function fillband!(A::AbstractMatrix{T}, x, l, u) where T
-    @assert !has_offset_axes(A)
+    require_one_based_indexing(A)
     m, n = size(A)
     xT = convert(T, x)
     for j in 1:n
@@ -234,7 +218,7 @@ julia> diagind(A,-1)
 ```
 """
 function diagind(A::AbstractMatrix, k::Integer=0)
-    @assert !has_offset_axes(A)
+    require_one_based_indexing(A)
     diagind(size(A,1), size(A,2), k)
 end
 
@@ -343,14 +327,13 @@ julia> kron(A, B)
 ```
 """
 function kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
-    @assert !has_offset_axes(a, b)
+    require_one_based_indexing(a, b)
     R = Matrix{promote_op(*,T,S)}(undef, size(a,1)*size(b,1), size(a,2)*size(b,2))
-    m = 1
-    for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
+    m = 0
+    @inbounds for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
         aij = a[i,j]
         for k = 1:size(b,1)
-            R[m] = aij*b[k,l]
-            m += 1
+            R[m += 1] = aij*b[k,l]
         end
     end
     R

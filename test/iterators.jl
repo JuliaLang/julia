@@ -72,6 +72,7 @@ let s = "hello"
     c = collect(rest(s, st))
     @test c == ['e','l','l','o']
     @test c isa Vector{Char}
+    @test rest(s, st) == rest(rest(s,4),st)
 end
 
 @test_throws MethodError collect(rest(countfrom(1), 5))
@@ -622,4 +623,27 @@ end
     @test @inferred(eltype(z)) <: Tuple{Int,String,Float64,Int,String,Float64,Any,String,Any}
     @test @inferred(first(z)) == (1, "a", 1.0, 1, "a", 1.0, 1, "a", 1.0)
     @test @inferred(first(Iterators.drop(z, 1))) == (2, "b", 2.0, 2, "a", 1.2, 1, "c", 1.0)
+end
+
+@testset "Stateful fix #30643" begin
+    @test Base.IteratorSize(1:10) isa Base.HasShape
+    a = Iterators.Stateful(1:10)
+    @test Base.IteratorSize(a) isa Base.HasLength
+    @test length(a) == 10
+    @test length(collect(a)) == 10
+    @test length(a) == 0
+    b = Iterators.Stateful(Iterators.take(1:10,3))
+    @test Base.IteratorSize(b) isa Base.HasLength
+    @test length(b) == 3
+    @test length(collect(b)) == 3
+    @test length(b) == 0
+    c = Iterators.Stateful(Iterators.countfrom(1))
+    @test Base.IteratorSize(c) isa Base.IsInfinite
+    @test length(Iterators.take(c,3)) == 3
+    @test length(collect(Iterators.take(c,3))) == 3
+    d = Iterators.Stateful(Iterators.filter(isodd,1:10))
+    @test Base.IteratorSize(d) isa Base.SizeUnknown
+    @test length(collect(Iterators.take(d,3))) == 3
+    @test length(collect(d)) == 2
+    @test length(collect(d)) == 0
 end
