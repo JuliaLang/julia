@@ -2246,3 +2246,10 @@ call_ntuple(a, b) = my_ntuple(i->(a+b; i), Val(4))
 
 @generated unionall_sig_generated(::Vector{T}, b::Vector{S}) where {T, S} = :($b)
 @test length(code_typed(unionall_sig_generated, Tuple{Any, Vector{Int}})) == 1
+
+# Test that we don't limit recursions on the number of arguments, even if the
+# arguments themselves are getting more complex
+f_incr(x::Tuple, y::Tuple, args...) = f_incr((x, y), args...)
+f_incr(x::Tuple) = x
+@test @inferred(f_incr((), (), (), (), (), (), (), ())) ==
+    ((((((((), ()), ()), ()), ()), ()), ()), ())
