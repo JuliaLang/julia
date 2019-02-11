@@ -1346,6 +1346,14 @@ let PT = PartialTuple(Tuple{Int64,UInt64}, Any[Const(10, false), UInt64])
 end
 @test sizeof_nothrow(Const(Tuple)) === false
 
+using Core.Compiler: typeof_tfunc
+@test typeof_tfunc(Tuple{Vararg{Int}}) == Type{Tuple{Vararg{Int,N}}} where N
+@test typeof_tfunc(Tuple{Any}) == Type{<:Tuple{Any}}
+@test typeof_tfunc(Type{Array}) === DataType
+@test typeof_tfunc(Type{<:Array}) === DataType
+@test typeof_tfunc(Array{Int}) == Type{Array{Int,N}} where N
+@test typeof_tfunc(AbstractArray{Int}) == Type{<:AbstractArray{Int,N}} where N
+
 function f23024(::Type{T}, ::Int) where T
     1 + 1
 end
