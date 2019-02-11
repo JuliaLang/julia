@@ -1,7 +1,7 @@
 define bb-install
 # If the user has signified that this is a GCC-multiversioned tarball, then generate the proper tarball
 ifeq ($(3),true)
-$(2)_BB_TRIPLET := $(shell python $(call cygpath_w,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(lastword $(shell $(FC) --version | head -1))")
+$(2)_BB_TRIPLET := $(shell python $(call cygpath_w,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(shell $(FC) --version | head -1)")
 else
 $(2)_BB_TRIPLET := $(shell python $(call cygpath_w,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)))
 endif
