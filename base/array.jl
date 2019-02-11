@@ -1003,7 +1003,7 @@ function resize!(a::Vector, nl::Integer)
         _growend!(a, nl-l)
     elseif nl != l
         if nl < 0
-            throw(ArgumentError("new length must be ≥ 0"))
+            throw(ArgumentError("new length must be ≥ 0, got $nl"))
         end
         _deleteend!(a, l-nl)
     end
