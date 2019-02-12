@@ -1,0 +1,54 @@
+From 12e1ad011ac67f2beb12f22b189f5c69a11c47d6 Mon Sep 17 00:00:00 2001
+From: Valentin Churavy <v.churavy@gmail.com>
+Date: Sat, 22 Dec 2018 11:51:21 -0500
+Subject: [PATCH] improve indvars to canonicalize to 0 for tapir
+
+Authored-by: TB Schardl
+---
+ lib/Transforms/Scalar/IndVarSimplify.cpp | 24 +++++++++++++++++++++++-
+ 1 file changed, 23 insertions(+), 1 deletion(-)
+
+diff --git a/lib/Transforms/Scalar/IndVarSimplify.cpp b/lib/Transforms/Scalar/IndVarSimplify.cpp
+index d8647ea3670..81477db4657 100644
+--- a/lib/Transforms/Scalar/IndVarSimplify.cpp
++++ b/lib/Transforms/Scalar/IndVarSimplify.cpp
+@@ -1965,7 +1965,18 @@ static bool needsLFTR(Loop *L, DominatorTree *DT, TaskInfo *TI) {
+
+   // Do LFTR if the exit condition's IV is *not* a simple counter.
+   Value *IncV = Phi->getIncomingValue(Idx);
+-  return Phi != getLoopPhiForCounter(IncV, L, DT);
++  if (Phi != getLoopPhiForCounter(IncV, L, DT))
++    return true;
++
++  // Tapir loops are particularly picky about having canonical induction
++  // variables that start at 0, so check if LFTR needs to create one.
++  if (getTaskIfTapirLoop(L, TI))
++    if (BasicBlock *Preheader = L->getLoopPreheader())
++      if (Constant *Start =
++          dyn_cast<Constant>(Phi->getIncomingValueForBlock(Preheader)))
++        return !(Start->isZeroValue());
++
++  return false;
+ }
+
+ /// Recursive helper for hasConcreteDef(). Unfortunately, this currently boils
+@@ -2234,6 +2245,17 @@ linearFunctionTestReplace(Loop *L,
+     CmpIndVar = IndVar->getIncomingValueForBlock(L->getLoopLatch());
+   }
+
++  // See if we need to create a canonical IV that starts at 0.  Right now we
++  // only check for a Tapir loop, but this check might be generalized.
++  const SCEVAddRecExpr *AR = cast<SCEVAddRecExpr>(SE->getSCEV(IndVar));
++  if (getTaskIfTapirLoop(L, TI) && !AR->getStart()->isZero()) {
++    // Rewriter is not in canonical mode, which we need.  Get an new
++    // SCEVExpander that is in canonical mode.
++    SCEVExpander ARRewriter(*SE, DL, "indvars");
++    CmpIndVar = ARRewriter.expandCodeFor(AR, AR->getType(),
++                                         &L->getHeader()->front());
++  }
++
+   Value *ExitCnt = genLoopLimit(IndVar, IVCount, L, Rewriter, SE, TI);
+   assert(ExitCnt->getType()->isPointerTy() ==
+              IndVar->getType()->isPointerTy() &&
+--
+2.20.1

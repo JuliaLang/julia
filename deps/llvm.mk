@@ -453,6 +453,9 @@ $(eval $(call LLVM_PATCH,llvm-windows-race))
 endif
 $(eval $(call LLVM_PATCH,llvm-D51842-win64-byval-cc))
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
+ifeq ($(USE_TAPIR),1)
+$(eval $(call LLVM_PATCH,llvm-tapir-indvars))
+endif
 endif # LLVM_VER
 
 # Independent to the llvm version add a JL prefix to the version map
