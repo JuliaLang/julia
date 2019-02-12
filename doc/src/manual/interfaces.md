@@ -463,13 +463,18 @@ The [`Base.broadcastable`](@ref) function is called on each argument to broadcas
 it to return something different that supports `axes` and indexing. By
 default, this is the identity function for all `AbstractArray`s and `Number`s — they already
 support `axes` and indexing. For a handful of other types (including but not limited to
-types themselves, functions, special singletons like [`missing`](@ref) and [`nothing`](@ref), and dates),
+the following),
 `Base.broadcastable` returns the argument wrapped in a `Ref` to act as a 0-dimensional
-"scalar" for the purposes of broadcasting. Custom types can similarly specialize
-`Base.broadcastable` to define their shape, but they should follow the convention that
-`collect(Base.broadcastable(x)) == collect(x)`. A notable exception is `AbstractString`;
-strings are special-cased to behave as scalars for the purposes of broadcast even though
-they are iterable collections of their characters (see [Strings](@ref) for more).
+"scalar" for the purposes of broadcasting:
+```julia
+Base.broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,Regex}) = Ref(x)
+Base.broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
+Base.broadcastable(x) = collect(x)
+```
+Custom types can similarly specialize `Base.broadcastable` to define their shape, but iterables
+should follow the convention that `collect(Base.broadcastable(x)) == collect(x)`. A notable
+exception is `AbstractString`; strings are special-cased to behave as scalars for the purposes
+of broadcast even though they are iterable collections of their characters (see [Strings](@ref) for more).
 
 The next two steps (selecting the output array and implementation) are dependent upon
 determining a single answer for a given set of arguments. Broadcast must take all the varied
