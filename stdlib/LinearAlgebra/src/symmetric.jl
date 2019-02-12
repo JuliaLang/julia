@@ -162,9 +162,12 @@ for (S, H) in ((:Symmetric, :Hermitian), (:Hermitian, :Symmetric))
                 throw(ArgumentError("Cannot construct $($S); uplo doesn't match"))
             end
         end
-        $S(A::$H) = $S(A.data, sym_uplo(A.uplo))
+        $S(A::$H) = $S(A, sym_uplo(A.uplo))
         function $S(A::$H, uplo::Symbol)
             if A.uplo == char_uplo(uplo)
+                if $H == Hermitian && !isreal(diag(A.data))
+                    throw(ArgumentError("Cannot construct $($S)($($H))); requires real diagonal"))
+                end
                 return $S(A.data, sym_uplo(A.uplo))
             else
                 throw(ArgumentError("Cannot construct $($S); uplo doesn't match"))
