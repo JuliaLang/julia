@@ -11,6 +11,11 @@ SPQR_CONFIG += -DSUN64
 endif
 endif
 
+# Disable trying to link against libmetis
+CHOLMOD_CONFIG += -DNPARTITION
+
+ifneq ($(USE_BINARYBUILDER_SUITESPARSE), 1)
+
 SUITE_SPARSE_LIB := -lm
 ifneq ($(OS), Darwin)
 ifneq ($(OS), WINNT)
@@ -20,7 +25,8 @@ endif
 SUITE_SPARSE_LIB += $(RPATH_ESCAPED_ORIGIN)
 SUITESPARSE_MFLAGS := CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
 	  INSTALL_LIB="$(build_libdir)" INSTALL_INCLUDE="$(build_includedir)" LIB="$(SUITE_SPARSE_LIB)" \
-	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" SPQR_CONFIG="$(SPQR_CONFIG)"
+	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" SPQR_CONFIG="$(SPQR_CONFIG)" \
+	  CFOPENMP=""
 
 $(SRCCACHE)/SuiteSparse-$(SUITESPARSE_VER).tar.gz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ http://faculty.cse.tamu.edu/davis/SuiteSparse/$(notdir $@)
@@ -41,11 +47,16 @@ else ifeq ($(USE_SYSTEM_LAPACK), 0)
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/lapack
 endif
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-winclang.patch-applied
-	$(MAKE) -C $(dir $<) library $(SUITESPARSE_MFLAGS)
+	$(MAKE) -C $(dir $<)/SuiteSparse_config library config $(SUITESPARSE_MFLAGS)
+	for proj in AMD BTF CAMD CCOLAMD COLAMD CHOLMOD LDL KLU UMFPACK RBio SPQR; do \
+		$(MAKE) -C $(dir $<)/$${proj} library $(SUITESPARSE_MFLAGS); \
+	done
 	echo 1 > $@
 
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-checked: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled
-	$(MAKE) -C $(dir $@) default $(SUITESPARSE_MFLAGS)
+	for proj in AMD BTF CAMD CCOLAMD COLAMD CHOLMOD LDL KLU UMFPACK RBio SPQR; do \
+		$(MAKE) -C $(dir $<)/$${proj} default $(SUITESPARSE_MFLAGS); \
+	done
 	echo 1 > $@
 
 $(build_prefix)/manifest/suitesparse: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled | $(build_prefix)/manifest
@@ -125,3 +136,24 @@ compile-suitesparse-wrapper:
 fastcheck-suitesparse-wrapper: #none
 check-suitesparse-wrapper:
 install-suitesparse-wrapper: $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EXT)
+
+else # USE_BINARYBUILDER_SUITESPARSE
+
+SUITESPARSE_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/SuiteSparse-v$(SUITESPARSE_VER)-$(SUITESPARSE_BB_REL)
+SUITESPARSE_BB_NAME := SuiteSparse.v$(SUITESPARSE_VER)
+
+$(eval $(call bb-install,suitesparse,SUITESPARSE,true))
+get-suitesparse-wrapper: get-suitesparse
+extract-suitesparse-wrapper: extract-suitesparse
+configure-suitesparse-wrapper: configure-suitesparse
+compile-suitesparse-wrapper: compile-suitesparse
+fastcheck-suitesparse-wrapper: fastcheck-suitesparse
+check-suitesparse-wrapper: check-suitesparse
+clean-suitesparse-wrapper: clean-suitesparse
+distclean-suitesparse-wrapper: distclean-suitesparse
+install-suitesparse-wrapper: install-suitesparse
+
+# suitesparse depends on OpenBLAS
+compile-suitesparse: | $(build_prefix)/manifest/openblas
+endif
+
