@@ -35,7 +35,7 @@ function ldflags()
     fl = "-L$(shell_escape(libDir()))"
     if Sys.iswindows()
         fl = fl * " -Wl,--stack,8388608"
-    elseif Sys.islinux()
+    elseif !Sys.isapple()
         fl = fl * " -Wl,--export-dynamic"
     end
     return fl
