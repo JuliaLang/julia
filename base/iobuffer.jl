@@ -505,7 +505,7 @@ end
 
 # copy-free crc32c of IOBuffer:
 function _crc32c(io::IOBuffer, nb::Integer, crc::UInt32=0x00000000)
-    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
+    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0, got $nb"))
     io.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     n = min(nb, bytesavailable(io))
     n == 0 && return crc
