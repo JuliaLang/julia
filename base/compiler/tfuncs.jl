@@ -293,12 +293,14 @@ end
 add_tfunc(isdefined, 1, 2, isdefined_tfunc, 1)
 function sizeof_nothrow(@nospecialize(x))
     if isa(x, Const)
-        if !isa(x, Type)
+        x = x.val
+        if !isa(x, Type) || x === DataType
             return true
         end
-        x = x.val
     elseif isa(x, Conditional)
         return true
+    else
+        x = widenconst(x)
     end
     isconstType(x) && (x = x.parameters[1])
     if isa(x, Union)
@@ -325,6 +327,7 @@ function sizeof_tfunc(@nospecialize(x),)
     isa(x, Const) && return _const_sizeof(x.val)
     isa(x, Conditional) && return _const_sizeof(Bool)
     isconstType(x) && return _const_sizeof(x.parameters[1])
+    x = widenconst(x)
     x !== DataType && isconcretetype(x) && return _const_sizeof(x)
     return Int
 end
@@ -332,6 +335,7 @@ add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 0)
 function nfields_tfunc(@nospecialize(x))
     isa(x, Const) && return Const(nfields(x.val))
     isa(x, Conditional) && return Const(0)
+    x = widenconst(x)
     if isa(x, DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x))
         if !(x.name === _NAMEDTUPLE_NAME && !isconcretetype(x))
             return Const(length(x.types))
@@ -470,12 +474,14 @@ function isa_tfunc(@nospecialize(v), @nospecialize(tt))
             if isexact && isnotbrokensubtype(v, t)
                 return Const(true)
             end
-        elseif isa(v, Const) || isa(v, Conditional) || isdispatchelem(v)
-            # this tests for knowledge of a leaftype appearing on the LHS
-            # (ensuring the isa is precise)
-            return Const(false)
         else
+            if isa(v, Const) || isa(v, Conditional)
+                # this and the `isdispatchelem` below test for knowledge of a
+                # leaftype appearing on the LHS (ensuring the isa is precise)
+                return Const(false)
+            end
             v = widenconst(v)
+            isdispatchelem(v) && return Const(false)
             if typeintersect(v, t) === Bottom
                 # similar to `isnotbrokensubtype` check above, `typeintersect(v, t)`
                 # can't be trusted for kind types so we do an extra check here
@@ -1308,6 +1314,13 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
         # Nothrow as long as we additionally don't do typemin(T)/-1
         return den_val !== -1 || (isa(argtypes[1], Const) &&
             argtypes[1].val !== typemin(typeof(den_val)))
+    end
+    if f === Intrinsics.pointerref
+        # Nothrow as long as the types are ok. N.B.: dereferencability is not
+        # modeled here, but can cause errors (e.g. ReadOnlyMemoryError). We follow LLVM here
+        # in that it is legal to remove unused non-volatile loads.
+        length(argtypes) == 3 || return false
+        return argtypes[1] ⊑ Ptr && argtypes[2] ⊑ Int && argtypes[3] ⊑ Int
     end
     return true
 end

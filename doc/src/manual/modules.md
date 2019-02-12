@@ -183,19 +183,6 @@ look for `Utils` in `Parent`'s enclosing module rather than in `Parent` itself.
 
 Note that relative-import qualifiers are only valid in `using` and `import` statements.
 
-### Module file paths
-
-The global variable [`LOAD_PATH`](@ref) contains the directories Julia searches for modules when calling
-`require`. It can be extended using [`push!`](@ref):
-
-```julia
-push!(LOAD_PATH, "/Path/To/My/Module/")
-```
-
-Putting this statement in the file `~/.julia/config/startup.jl` will extend [`LOAD_PATH`](@ref) on
-every Julia startup. Alternatively, the module load path can be extended by defining the environment
-variable `JULIA_LOAD_PATH`.
-
 ### Namespace miscellanea
 
 If a name is qualified (e.g. `Base.sin`), then it can be accessed even if it is not exported.

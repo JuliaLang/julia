@@ -260,6 +260,9 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
              f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
 end
 
+# whether `f` is effect free if nothrow
+intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref || is_pure_intrinsic_infer(f)
+
 ## Computing the cost of a function body
 
 # saturating sum (inputs are nonnegative), prevents overflow with typemax(Int) below
