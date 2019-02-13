@@ -165,8 +165,8 @@ for (S, H) in ((:Symmetric, :Hermitian), (:Hermitian, :Symmetric))
         $S(A::$H) = $S(A, sym_uplo(A.uplo))
         function $S(A::$H, uplo::Symbol)
             if A.uplo == char_uplo(uplo)
-                if $H == Hermitian && !isreal(diag(A.data))
-                    throw(ArgumentError("Cannot construct $($S)($($H))); requires real diagonal"))
+                if $H === Hermitian && any(!isreal, A.data[i] for i in diagind(A.data))
+                    throw(ArgumentError("Cannot construct $($S)($($H))); diagonal contains complex values"))
                 end
                 return $S(A.data, sym_uplo(A.uplo))
             else
