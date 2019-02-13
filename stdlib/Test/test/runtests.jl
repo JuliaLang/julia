@@ -526,8 +526,8 @@ uninferrable_small_union(i) = (1, nothing)[i]
 @test @isinferred(identity(1))
 @test @isinferred(Nothing, uninferrable_small_union(1))
 @test @isinferred(Nothing, uninferrable_small_union(2))
-@test @isinferred(Missing, uninferrable_small_union(1))
-@test @isinferred(Missing, uninferrable_small_union(2))
+@test !@isinferred(Missing, uninferrable_small_union(1))
+@test !@isinferred(Missing, uninferrable_small_union(2))
 @test_throws ArgumentError @isinferred(nothing, uninferrable_small_union(1))
 
 

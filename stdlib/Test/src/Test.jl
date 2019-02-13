@@ -1350,7 +1350,6 @@ function _inferred(ex, mod, allow = :(Union{}))
             allow = $(esc(allow))
             allow isa Type || throw(ArgumentError("@inferred requires a type as second argument"))
             let (rettype, inftypes, result) = $inference
-                rettype == inftypes[1] || error("return type $rettype does not match inferred return type $(inftypes[1])")
                 rettype <: allow || rettype == typesubtract(inftypes[1], allow) || error("return type $rettype does not match inferred return type $(inftypes[1])")
                 result
             end
@@ -1409,13 +1408,13 @@ macro isinferred(allow, ex)
 end
 function _isinferred(ex, mod, allow = :(Union{}))
     # @isinferred performs the same checks as @inferred
-    inference = _inferred_impl(ex, __module__)
+    inference = _inferred_impl(ex, mod)
     quote
         let
             allow = $(esc(allow))
             allow isa Type || throw(ArgumentError("@inferred requires a type as second argument"))
             let (rettype, inftypes, result) = $inference
-                rettype == inftypes[1] && rettype <: allow
+                rettype <: allow || rettype == typesubtract(inftypes[1], allow)
             end
         end
     end
