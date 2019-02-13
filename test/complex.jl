@@ -1065,3 +1065,7 @@ end
 
     @test @inferred(2.0^(3.0+0im)) === @inferred((2.0+0im)^(3.0+0im)) === @inferred((2.0+0im)^3.0) === 8.0+0.0im
 end
+
+@testset "issue #31054" begin
+    @test tanh(atanh(-1.0+1.0im)) == -1.0+1.0im
+end
