@@ -45,6 +45,7 @@ Standard library changes
 * The BLAS submodule no longer exports `dot`, which conflicts with that in LinearAlgebra ([#31838]).
 * `diagm` and `spdiagm` now accept optional `m,n` initial arguments to specify a size ([#31654]).
 * `Hessenberg` factorizations `H` now support efficient shifted solves `(H+µI) \ b` and determinants, and use a specialized tridiagonal factorization for Hermitian matrices. There is also a new `UpperHessenberg` matrix type ([#31853]).
+* Added keyword argument `alg` to `svd` and `svd!` that allows one to switch between different SVD algorithms ([#31057]).
 
 #### SparseArrays
 
