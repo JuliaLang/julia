@@ -36,7 +36,7 @@ Passing arguments to functions is better style. It leads to more reusable code a
 
 !!! note
     All code in the REPL is evaluated in global scope, so a variable defined and assigned
-    at toplevel will be a **global** variable. Variables defined in at top level scope inside
+    at top level will be a **global** variable. Variables defined at top level scope inside
     modules are also global.
 
 In the following REPL session:
