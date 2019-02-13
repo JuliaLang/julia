@@ -1,4 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
+
 // This LLVM pass verifies invariants required for correct GC root placement.
 // See the devdocs for a description of these invariants.
 
@@ -64,6 +65,8 @@ void GCInvariantVerifier::visitAddrSpaceCastInst(AddrSpaceCastInst &I) {
     unsigned ToAS = cast<PointerType>(I.getDestTy())->getAddressSpace();
     if (FromAS == 0)
         return;
+    Check(ToAS != AddressSpace::Loaded && FromAS != AddressSpace::Loaded,
+          "Illegal address space cast involving loaded ptr", &I);
     Check(FromAS != AddressSpace::Tracked ||
           ToAS   == AddressSpace::CalleeRooted ||
           ToAS   == AddressSpace::Derived,

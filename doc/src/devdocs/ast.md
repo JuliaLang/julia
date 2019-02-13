@@ -1,17 +1,243 @@
 # Julia ASTs
 
 Julia has two representations of code. First there is a surface syntax AST returned by the parser
-(e.g. the [`parse()`](@ref) function), and manipulated by macros. It is a structured representation
+(e.g. the [`Meta.parse`](@ref) function), and manipulated by macros. It is a structured representation
 of code as it is written, constructed by `julia-parser.scm` from a character stream. Next there
 is a lowered form, or IR (intermediate representation), which is used by type inference and code
 generation. In the lowered form there are fewer types of nodes, all macros are expanded, and all
 control flow is converted to explicit branches and sequences of statements. The lowered form is
 constructed by `julia-syntax.scm`.
 
-First we will focus on the lowered form, since it is more important to the compiler. It is also
-less obvious to the human, since it results from a significant rearrangement of the input syntax.
+First we will focus on the AST, since it is needed to write macros.
+
+## Surface syntax AST
+
+Front end ASTs consist almost entirely of [`Expr`](@ref)s and atoms (e.g. symbols, numbers).
+There is generally a different expression head for each visually distinct syntactic form.
+Examples will be given in s-expression syntax.
+Each parenthesized list corresponds to an Expr, where the first element is the head.
+For example `(call f x)` corresponds to `Expr(:call, :f, :x)` in Julia.
+
+### Calls
+
+| Input            | AST                                |
+|:---------------- |:---------------------------------- |
+| `f(x)`           | `(call f x)`                       |
+| `f(x, y=1, z=2)` | `(call f x (kw y 1) (kw z 2))`     |
+| `f(x; y=1)`      | `(call f (parameters (kw y 1)) x)` |
+| `f(x...)`        | `(call f (... x))`                 |
+
+`do` syntax:
+
+```julia
+f(x) do a,b
+    body
+end
+```
+
+parses as `(do (call f x) (-> (tuple a b) (block body)))`.
+
+### Operators
+
+Most uses of operators are just function calls, so they are parsed with the head `call`. However
+some operators are special forms (not necessarily function calls), and in those cases the operator
+itself is the expression head. In julia-parser.scm these are referred to as "syntactic operators".
+Some operators (`+` and `*`) use N-ary parsing; chained calls are parsed as a single N-argument
+call. Finally, chains of comparisons have their own special expression structure.
+
+| Input       | AST                       |
+|:----------- |:------------------------- |
+| `x+y`       | `(call + x y)`            |
+| `a+b+c+d`   | `(call + a b c d)`        |
+| `2x`        | `(call * 2 x)`            |
+| `a&&b`      | `(&& a b)`                |
+| `x += 1`    | `(+= x 1)`                |
+| `a ? 1 : 2` | `(if a 1 2)`              |
+| `a:b`       | `(: a b)`                 |
+| `a:b:c`     | `(: a b c)`               |
+| `a,b`       | `(tuple a b)`             |
+| `a==b`      | `(call == a b)`           |
+| `1<i<=n`    | `(comparison 1 < i <= n)` |
+| `a.b`       | `(. a (quote b))`         |
+| `a.(b)`     | `(. a b)`                 |
+
+### Bracketed forms
+
+| Input                    | AST                                  |
+|:------------------------ |:------------------------------------ |
+| `a[i]`                   | `(ref a i)`                          |
+| `t[i;j]`                 | `(typed_vcat t i j)`                 |
+| `t[i j]`                 | `(typed_hcat t i j)`                 |
+| `t[a b; c d]`            | `(typed_vcat t (row a b) (row c d))` |
+| `a{b}`                   | `(curly a b)`                        |
+| `a{b;c}`                 | `(curly a (parameters c) b)`         |
+| `[x]`                    | `(vect x)`                           |
+| `[x,y]`                  | `(vect x y)`                         |
+| `[x;y]`                  | `(vcat x y)`                         |
+| `[x y]`                  | `(hcat x y)`                         |
+| `[x y; z t]`             | `(vcat (row x y) (row z t))`         |
+| `[x for y in z, a in b]` | `(comprehension x (= y z) (= a b))`  |
+| `T[x for y in z]`        | `(typed_comprehension T x (= y z))`  |
+| `(a, b, c)`              | `(tuple a b c)`                      |
+| `(a; b; c)`              | `(block a (block b c))`              |
+
+### Macros
+
+| Input         | AST                                          |
+|:------------- |:-------------------------------------------- |
+| `@m x y`      | `(macrocall @m (line) x y)`                  |
+| `Base.@m x y` | `(macrocall (. Base (quote @m)) (line) x y)` |
+| `@Base.m x y` | `(macrocall (. Base (quote @m)) (line) x y)` |
+
+### Strings
+
+| Input           | AST                                 |
+|:--------------- |:----------------------------------- |
+| `"a"`           | `"a"`                               |
+| `x"y"`          | `(macrocall @x_str (line) "y")`     |
+| `x"y"z`         | `(macrocall @x_str (line) "y" "z")` |
+| `"x = $x"`      | `(string "x = " x)`                 |
+| ``` `a b c` ``` | `(macrocall @cmd (line) "a b c")`   |
+
+Doc string syntax:
+
+```julia
+"some docs"
+f(x) = x
+```
+
+parses as `(macrocall (|.| Core '@doc) (line) "some docs" (= (call f x) (block x)))`.
+
+### Imports and such
+
+| Input               | AST                                          |
+|:------------------- |:-------------------------------------------- |
+| `import a`          | `(import (. a))`                             |
+| `import a.b.c`      | `(import (. a b c))`                         |
+| `import ...a`       | `(import (. . . . a))`                       |
+| `import a.b, c.d`   | `(import (. a b) (. c d))`                   |
+| `import Base: x`    | `(import (: (. Base) (. x)))`                |
+| `import Base: x, y` | `(import (: (. Base) (. x) (. y)))`          |
+| `export a, b`       | `(export a b)`                               |
+
+`using` has the same representation as `import`, but with expression head `:using`
+instead of `:import`.
+
+### Numbers
+
+Julia supports more number types than many scheme implementations, so not all numbers are represented
+directly as scheme numbers in the AST.
+
+| Input                   | AST                                                     |
+|:----------------------- |:------------------------------------------------------- |
+| `11111111111111111111`  | `(macrocall @int128_str (null) "11111111111111111111")` |
+| `0xfffffffffffffffff`   | `(macrocall @uint128_str (null) "0xfffffffffffffffff")` |
+| `1111...many digits...` | `(macrocall @big_str (null) "1111....")`                |
+
+### Block forms
+
+A block of statements is parsed as `(block stmt1 stmt2 ...)`.
+
+If statement:
+
+```julia
+if a
+    b
+elseif c
+    d
+else
+    e
+end
+```
+
+parses as:
+
+```
+(if a (block (line 2) b)
+    (elseif (block (line 3) c) (block (line 4) d)
+            (block (line 5 e))))
+```
+
+A `while` loop parses as `(while condition body)`.
+
+A `for` loop parses as `(for (= var iter) body)`. If there is more than one iteration specification,
+they are parsed as a block: `(for (block (= v1 iter1) (= v2 iter2)) body)`.
+
+`break` and `continue` are parsed as 0-argument expressions `(break)` and `(continue)`.
+
+`let` is parsed as `(let (= var val) body)` or `(let (block (= var1 val1) (= var2 val2) ...) body)`,
+like `for` loops.
+
+A basic function definition is parsed as `(function (call f x) body)`. A more complex example:
+
+```julia
+function f(x::T; k = 1) where T
+    return x+1
+end
+```
+
+parses as:
+
+```
+(function (where (call f (parameters (kw k 1))
+                       (:: x T))
+                 T)
+          (block (line 2) (return (call + x 1))))
+```
+
+Type definition:
+
+```julia
+mutable struct Foo{T<:S}
+    x::T
+end
+```
+
+parses as:
+
+```
+(struct true (curly Foo (<: T S))
+        (block (line 2) (:: x T)))
+```
+
+The first argument is a boolean telling whether the type is mutable.
+
+`try` blocks parse as `(try try_block var catch_block finally_block)`. If no variable is present
+after `catch`, `var` is `#f`. If there is no `finally` clause, then the last argument is not present.
+
+### Quote expressions
+
+Julia source syntax forms for code quoting (`quote` and `:( )`) support interpolation with `$`.
+In Lisp terminology, this means they are actually "backquote" or "quasiquote" forms.
+Internally, there is also a need for code quoting without interpolation.
+In Julia's scheme code, non-interpolating quote is represented with the expression head `inert`.
+
+`inert` expressions are converted to Julia `QuoteNode` objects.
+These objects wrap a single value of any type, and when evaluated simply return that value.
+
+A `quote` expression whose argument is an atom also gets converted to a `QuoteNode`.
+
+### Line numbers
+
+Source location information is represented as `(line line_num file_name)` where the third
+component is optional (and omitted when the current line number, but not file name,
+changes).
+
+These expressions are represented as `LineNumberNode`s in Julia.
+
+### Macros
+
+Macro hygiene is represented through the expression head pair `escape` and `hygienic-scope`.
+The result of a macro expansion is automatically wrapped in `(hygienic-scope block module)`,
+to represent the result of the new scope. The user can insert `(escape block)` inside
+to interpolate code from the caller.
+
 
 ## Lowered form
+
+Lowered form (IR) is more important to the compiler, since it is used for type inference,
+optimizations like inlining, and and code generation. It is also less obvious to the human,
+since it results from a significant rearrangement of the input syntax.
 
 The following data types exist in lowered form:
 
@@ -19,6 +245,8 @@ The following data types exist in lowered form:
 
     Has a node type indicated by the `head` field, and an `args` field which is a `Vector{Any}` of
     subexpressions.
+    While almost every part of a surface AST is represented by an `Expr`, the IR uses only a
+    limited number of `Expr`s, mostly for calls, conditional branches (`gotoifnot`), and returns.
 
   * `Slot`
 
@@ -31,19 +259,12 @@ The following data types exist in lowered form:
 
   * `CodeInfo`
 
-    Wraps the IR of a method.
-
-  * `LineNumberNode`
-
-    Contains a single number, specifying the line number the next statement came from.
-
-  * `LabelNode`
-
-    Branch target, a consecutively-numbered integer starting at 0.
+    Wraps the IR of a method. Its `code` field is an array of expressions to execute.
 
   * `GotoNode`
 
-    Unconditional branch.
+    Unconditional branch. The argument is the branch target, represented as an index in
+    the code array to jump to.
 
   * `QuoteNode`
 
@@ -57,17 +278,18 @@ The following data types exist in lowered form:
 
   * `SSAValue`
 
-    Refers to a consecutively-numbered (starting at 0) static single assignment (SSA) variable inserted
-    by the compiler.
+    Refers to a consecutively-numbered (starting at 1) static single assignment (SSA) variable inserted
+    by the compiler. The number (`id`) of an `SSAValue` is the code array index of the expression whose
+    value it represents.
 
   * `NewvarNode`
 
-    Marks a point where a variable is created. This has the effect of resetting a variable to undefined.
+    Marks a point where a variable (slot) is created. This has the effect of resetting a variable to undefined.
 
 
-### Expr types
+### `Expr` types
 
-These symbols appear in the `head` field of `Expr`s in lowered form.
+These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
   * `call`
 
@@ -82,17 +304,13 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
     Reference a static parameter by index.
 
-  * `line`
-
-    Line number and file name metadata. Unlike a `LineNumberNode`, can also contain a file name.
-
   * `gotoifnot`
 
-    Conditional branch. If `args[1]` is false, goes to label identified in `args[2]`.
+    Conditional branch. If `args[1]` is false, goes to the index identified in `args[2]`.
 
   * `=`
 
-    Assignment.
+    Assignment. In the IR, the first argument is always a Slot or a GlobalRef.
 
   * `method`
 
@@ -134,13 +352,10 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
   * `const`
 
     Declares a (global) variable as constant.
-  * `null`
-
-    Has no arguments; simply yields the value `nothing`.
 
   * `new`
 
-    Allocates a new struct-like object. First argument is the type. The `new` pseudo-function is lowered
+    Allocates a new struct-like object. First argument is the type. The [`new`](@ref) pseudo-function is lowered
     to this, and the type is always inserted by the compiler.  This is very much an internal-only
     feature, and does no checking. Evaluating arbitrary `new` expressions can easily segfault.
 
@@ -150,17 +365,24 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
   * `the_exception`
 
-    Yields the caught exception inside a `catch` block. This is the value of the run time system variable
-    `jl_exception_in_transit`.
+    Yields the caught exception inside a `catch` block, as returned by `jl_current_exception()`.
 
   * `enter`
 
     Enters an exception handler (`setjmp`). `args[1]` is the label of the catch block to jump to on
-    error.
+    error.  Yields a token which is consumed by `pop_exception`.
 
   * `leave`
 
     Pop exception handlers. `args[1]` is the number of handlers to pop.
+
+  * `pop_exception`
+
+    Pop the stack of current exceptions back to the state at the associated `enter` when leaving a
+    catch block. `args[1]` contains the token from the associated `enter`.
+
+    !!! compat "Julia 1.1"
+        `pop_exception` is new in Julia 1.1.
 
   * `inbounds`
 
@@ -170,8 +392,8 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
   * `boundscheck`
 
-    Indicates the beginning or end of a section of code that performs a bounds check. Like `inbounds`,
-    a stack is maintained, and the second argument can be one of: `true`, `false`, or `:pop`.
+    Has the value `false` if inlined into a section of code marked with `@inbounds`,
+    otherwise has the value `true`.
 
   * `copyast`
 
@@ -184,14 +406,6 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
     arguments are free-form. The following kinds of metadata are commonly used:
 
       * `:inline` and `:noinline`: Inlining hints.
-
-      * `:push_loc`: enters a sequence of statements from a specified source location.
-
-          * `args[2]` specifies a filename, as a symbol.
-          * `args[3]` optionally specifies the name of an (inlined) function that originally contained the
-            code.
-
-      * `:pop_loc`: returns to the source location before the matching `:push_loc`.
 
 
 ### Method
@@ -314,6 +528,15 @@ A temporary container for holding lowered source code.
     If an `Int`, it gives the number of compiler-inserted temporary locations in the
     function. If an array, specifies a type for each location.
 
+  * `linetable`
+
+    An array of source location objects
+
+  * `codelocs`
+
+    An array of integer indices into the `linetable`, giving the location associated
+    with each statement.
+
 Boolean properties:
 
   * `inferred`
@@ -333,195 +556,3 @@ Boolean properties:
 
     Whether this is known to be a pure function of its arguments, without respect to the
     state of the method caches or other mutable global state.
-
-
-## Surface syntax AST
-
-Front end ASTs consist entirely of `Expr`s and atoms (e.g. symbols, numbers). There is generally
-a different expression head for each visually distinct syntactic form. Examples will be given
-in s-expression syntax. Each parenthesized list corresponds to an Expr, where the first element
-is the head. For example `(call f x)` corresponds to `Expr(:call, :f, :x)` in Julia.
-
-### Calls
-
-| Input            | AST                                |
-|:---------------- |:---------------------------------- |
-| `f(x)`           | `(call f x)`                       |
-| `f(x, y=1, z=2)` | `(call f x (kw y 1) (kw z 2))`     |
-| `f(x; y=1)`      | `(call f (parameters (kw y 1)) x)` |
-| `f(x...)`        | `(call f (... x))`                 |
-
-`do` syntax:
-
-```julia
-f(x) do a,b
-    body
-end
-```
-
-parses as `(call f (-> (tuple a b) (block body)) x)`.
-
-### Operators
-
-Most uses of operators are just function calls, so they are parsed with the head `call`. However
-some operators are special forms (not necessarily function calls), and in those cases the operator
-itself is the expression head. In julia-parser.scm these are referred to as "syntactic operators".
-Some operators (`+` and `*`) use N-ary parsing; chained calls are parsed as a single N-argument
-call. Finally, chains of comparisons have their own special expression structure.
-
-| Input       | AST                       |
-|:----------- |:------------------------- |
-| `x+y`       | `(call + x y)`            |
-| `a+b+c+d`   | `(call + a b c d)`        |
-| `2x`        | `(call * 2 x)`            |
-| `a&&b`      | `(&& a b)`                |
-| `x += 1`    | `(+= x 1)`                |
-| `a ? 1 : 2` | `(if a 1 2)`              |
-| `a:b`       | `(: a b)`                 |
-| `a:b:c`     | `(: a b c)`               |
-| `a,b`       | `(tuple a b)`             |
-| `a==b`      | `(call == a b)`           |
-| `1<i<=n`    | `(comparison 1 < i <= n)` |
-| `a.b`       | `(. a (quote b))`         |
-| `a.(b)`     | `(. a b)`                 |
-
-### Bracketed forms
-
-| Input                    | AST                                  |
-|:------------------------ |:------------------------------------ |
-| `a[i]`                   | `(ref a i)`                          |
-| `t[i;j]`                 | `(typed_vcat t i j)`                 |
-| `t[i j]`                 | `(typed_hcat t i j)`                 |
-| `t[a b; c d]`            | `(typed_vcat t (row a b) (row c d))` |
-| `a{b}`                   | `(curly a b)`                        |
-| `a{b;c}`                 | `(curly a (parameters c) b)`         |
-| `[x]`                    | `(vect x)`                           |
-| `[x,y]`                  | `(vect x y)`                         |
-| `[x;y]`                  | `(vcat x y)`                         |
-| `[x y]`                  | `(hcat x y)`                         |
-| `[x y; z t]`             | `(vcat (row x y) (row z t))`         |
-| `[x for y in z, a in b]` | `(comprehension x (= y z) (= a b))`  |
-| `T[x for y in z]`        | `(typed_comprehension T x (= y z))`  |
-| `(a, b, c)`              | `(tuple a b c)`                      |
-| `(a; b; c)`              | `(block a (block b c))`              |
-
-### Macros
-
-| Input         | AST                                          |
-|:------------- |:-------------------------------------------- |
-| `@m x y`      | `(macrocall @m (line) x y)`                  |
-| `Base.@m x y` | `(macrocall (. Base (quote @m)) (line) x y)` |
-| `@Base.m x y` | `(macrocall (. Base (quote @m)) (line) x y)` |
-
-### Strings
-
-| Input           | AST                                 |
-|:--------------- |:----------------------------------- |
-| `"a"`           | `"a"`                               |
-| `x"y"`          | `(macrocall @x_str (line) "y")`     |
-| `x"y"z`         | `(macrocall @x_str (line) "y" "z")` |
-| `"x = $x"`      | `(string "x = " x)`                 |
-| ``` `a b c` ``` | `(macrocall @cmd (line) "a b c")`   |
-
-Doc string syntax:
-
-```julia
-"some docs"
-f(x) = x
-```
-
-parses as `(macrocall (|.| Core '@doc) (line) "some docs" (= (call f x) (block x)))`.
-
-### Imports and such
-
-| Input               | AST                                          |
-|:------------------- |:-------------------------------------------- |
-| `import a`          | `(import a)`                                 |
-| `import a.b.c`      | `(import a b c)`                             |
-| `import ...a`       | `(import . . . a)`                           |
-| `import a.b, c.d`   | `(toplevel (import a b) (import c d))`       |
-| `import Base: x`    | `(import Base x)`                            |
-| `import Base: x, y` | `(toplevel (import Base x) (import Base y))` |
-| `export a, b`       | `(export a b)`                               |
-
-### Numbers
-
-Julia supports more number types than many scheme implementations, so not all numbers are represented
-directly as scheme numbers in the AST.
-
-| Input                   | AST                                                     |
-|:----------------------- |:------------------------------------------------------- |
-| `11111111111111111111`  | `(macrocall @int128_str (null) "11111111111111111111")` |
-| `0xfffffffffffffffff`   | `(macrocall @uint128_str (null) "0xfffffffffffffffff")` |
-| `1111...many digits...` | `(macrocall @big_str (null) "1111....")`                |
-
-### Block forms
-
-A block of statements is parsed as `(block stmt1 stmt2 ...)`.
-
-If statement:
-
-```julia
-if a
-    b
-elseif c
-    d
-else
-    e
-end
-```
-
-parses as:
-
-```
-(if a (block (line 2) b)
-    (elseif (block (line 3) c) (block (line 4) d)
-            (block (line 5 e))))
-```
-
-A `while` loop parses as `(while condition body)`.
-
-A `for` loop parses as `(for (= var iter) body)`. If there is more than one iteration specification,
-they are parsed as a block: `(for (block (= v1 iter1) (= v2 iter2)) body)`.
-
-`break` and `continue` are parsed as 0-argument expressions `(break)` and `(continue)`.
-
-`let` is parsed as `(let body (= var1 val1) (= var2 val2) ...)`.
-
-A basic function definition is parsed as `(function (call f x) body)`. A more complex example:
-
-```julia
-function f(x::T; k = 1) where T
-    return x+1
-end
-```
-
-parses as:
-
-```
-(function (where (call f (parameters (kw k 1))
-                       (:: x T))
-                 T)
-          (block (line 2) (return (call + x 1))))
-```
-
-Type definition:
-
-```julia
-mutable struct Foo{T<:S}
-    x::T
-end
-```
-
-parses as:
-
-```
-(struct true (curly Foo (<: T S))
-        (block (line 2) (:: x T)))
-```
-
-The first argument is a boolean telling whether the type is mutable.
-
-`try` blocks parse as `(try try_block var catch_block finally_block)`. If no variable is present
-after `catch`, `var` is `#f`. If there is no `finally` clause, then the last argument is not present.
-

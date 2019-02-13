@@ -44,11 +44,11 @@ curl -L -o julia-$version-linux-arm.tar.gz \
   $julianightlies/linux/arm/$majmin/julia-$majminpatch-$shashort-linuxarm.tar.gz
 cp julia-$version-linux-arm.tar.gz julia-$majmin-latest-linux-arm.tar.gz
 curl -L -o julia-$version-linux-ppc64le.tar.gz \
-  $julianightlies/linux/ppc64le/$majmin/julia-$majminpatch-$shashort-linuxppc64.tar.gz
+  $julianightlies/linux/ppc64le/$majmin/julia-$majminpatch-$shashort-linuxppc64le.tar.gz
 cp julia-$version-linux-ppc64le.tar.gz julia-$majmin-latest-linux-ppc64le.tar.gz
-curl -L -o "julia-$version-osx10.7 .dmg" \
-  $julianightlies/osx/x64/$majmin/julia-$majminpatch-$shashort-osx.dmg
-cp "julia-$version-osx10.7 .dmg" "julia-$majmin-latest-osx10.7 .dmg"
+curl -L -o "julia-$version-mac64.dmg" \
+  $julianightlies/mac/x64/$majmin/julia-$majminpatch-$shashort-mac64.dmg
+cp "julia-$version-mac64.dmg" "julia-$majmin-latest-mac64.dmg"
 curl -L -o julia-$version-win64.exe \
   $julianightlies/winnt/x64/$majmin/julia-$majminpatch-$shashort-win64.exe
 cp julia-$version-win64.exe julia-$majmin-latest-win64.exe
@@ -85,12 +85,11 @@ for plat in x86_64 i686 arm ppc64le; do
     s3://julialang/bin/linux/$platshort/$majmin/
   curl -X PURGE -L "https://julialang-s3.julialang.org/bin/linux/$platshort/$majmin/julia-$majmin-latest-linux-$plat.tar.gz"
 done
-aws s3 cp --acl public-read "julia-$version-osx10.7 .dmg" \
-  s3://julialang/bin/osx/x64/$majmin/
-aws s3 cp --acl public-read "julia-$majmin-latest-osx10.7 .dmg" \
-  s3://julialang/bin/osx/x64/$majmin/
-curl -X PURGE -L "https://julialang-s3.julialang.org/bin/osx/x64/$majmin/julia-$majmin-latest-osx10.7 .dmg"
-curl -X PURGE -L "https://julialang-s3.julialang.org/bin/osx/x64/$majmin/julia-$majmin-latest-osx10.7+.dmg"
+aws s3 cp --acl public-read "julia-$version-mac64 .dmg" \
+  s3://julialang/bin/mac/x64/$majmin/
+aws s3 cp --acl public-read "julia-$majmin-latest-mac64.dmg" \
+  s3://julialang/bin/mac/x64/$majmin/
+curl -X PURGE -L "https://julialang-s3.julialang.org/bin/mac/x64/$majmin/julia-$majmin-latest-mac64.dmg"
 aws s3 cp --acl public-read "julia-$version-win64.exe" \
   s3://julialang/bin/winnt/x64/$majmin/
 aws s3 cp --acl public-read "julia-$majmin-latest-win64.exe" \

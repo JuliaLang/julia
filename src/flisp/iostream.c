@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <sys/types.h>
 #include "flisp.h"
+#include "utf8proc.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -167,6 +168,7 @@ value_t fl_ioungetc(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     if (wc >= 0x80) {
         lerror(fl_ctx, fl_ctx->ArgError, "io_ungetc: unicode not yet supported");
     }
+    s->u_colno -= utf8proc_charwidth(wc);
     return fixnum(ios_ungetc((int)wc,s));
 }
 
@@ -207,6 +209,13 @@ value_t fl_iolineno(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     argcount(fl_ctx, "input-port-line", nargs, 1);
     ios_t *s = toiostream(fl_ctx, args[0], "input-port-line");
     return size_wrap(fl_ctx, s->lineno);
+}
+
+value_t fl_iocolno(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "input-port-column", nargs, 1);
+    ios_t *s = toiostream(fl_ctx, args[0], "input-port-column");
+    return size_wrap(fl_ctx, s->u_colno);
 }
 
 value_t fl_ioseek(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
@@ -333,7 +342,7 @@ value_t fl_ioreaduntil(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     ios_setbuf(&dest, data, 80, 0);
     char delim = get_delim_arg(fl_ctx, args[1], "io.readuntil");
     ios_t *src = toiostream(fl_ctx, args[0], "io.readuntil");
-    size_t n = ios_copyuntil(&dest, src, delim, 0);
+    size_t n = ios_copyuntil(&dest, src, delim);
     cv->len = n;
     if (dest.buf != data) {
         // outgrew initial space
@@ -352,7 +361,7 @@ value_t fl_iocopyuntil(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     ios_t *dest = toiostream(fl_ctx, args[0], "io.copyuntil");
     ios_t *src = toiostream(fl_ctx, args[1], "io.copyuntil");
     char delim = get_delim_arg(fl_ctx, args[2], "io.copyuntil");
-    return size_wrap(fl_ctx, ios_copyuntil(dest, src, delim, 0));
+    return size_wrap(fl_ctx, ios_copyuntil(dest, src, delim));
 }
 
 value_t fl_iocopy(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
@@ -423,6 +432,7 @@ static const builtinspec_t iostreamfunc_info[] = {
     { "io.copyuntil", fl_iocopyuntil },
     { "io.tostring!", fl_iotostring },
     { "input-port-line", fl_iolineno },
+    { "input-port-column", fl_iocolno },
 
     { NULL, NULL }
 };

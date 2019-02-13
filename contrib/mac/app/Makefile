@@ -12,7 +12,7 @@ JULIA_VERSION_OPT_COMMIT:=$(shell [ $$(git describe --tags --exact-match 2>/dev/
 JULIA_VERSION_MAJOR_MINOR:=$(shell echo $(JULIA_VERSION) | grep -o '^[0-9]\+.[0-9]\+')
 JULIA_VERSION_MAJOR_MINOR_PATCH:=$(shell echo $(JULIA_VERSION) | grep -o '^[0-9]\+.[0-9]\+.[0-9]\+')
 
-DMG_NAME:=Julia-$(JULIA_VERSION_OPT_COMMIT).dmg
+DMG_NAME:=$(JULIA_BINARYDIST_FILENAME).dmg
 APP_NAME:=Julia-$(JULIA_VERSION_MAJOR_MINOR).app
 VOL_NAME:=Julia-$(JULIA_VERSION_OPT_COMMIT)
 
@@ -23,7 +23,7 @@ APP_COPYRIGHT:=© 2016 The Julia Project
 all: clean $(DMG_NAME)
 
 $(DMG_NAME): dmg/$(APP_NAME) dmg/.VolumeIcon.icns dmg/Applications
-	hdiutil create $@ -size 500m -ov -volname "$(VOL_NAME)" -imagekey zlib-level=9 -srcfolder dmg
+	hdiutil create $@ -size 1t -ov -volname "$(VOL_NAME)" -imagekey zlib-level=9 -srcfolder dmg
 
 dmg/.VolumeIcon.icns: julia.icns
 	-mkdir -p dmg
@@ -48,7 +48,7 @@ dmg/$(APP_NAME): startup.applescript julia.icns
 	plutil -insert  NSHumanReadableCopyright   -string "$(APP_COPYRIGHT)" $@/Contents/Info.plist
 	-mkdir -p $@/Contents/Resources/julia
 	make -C $(JULIAHOME) binary-dist
-	tar zxf $(JULIAHOME)/julia-*.tar.gz -C $@/Contents/Resources/julia --strip-components 1
+	tar zxf $(JULIAHOME)/$(JULIA_BINARYDIST_FILENAME).tar.gz -C $@/Contents/Resources/julia --strip-components 1
 	-codesign -s "AFB379C0B4CBD9DB9A762797FC2AB5460A2B0DBE" --deep $@
 
 ROOTFILES := $(shell ls -ld dmg/*.app *.dmg 2> /dev/null | awk '{print $$3}')
