@@ -14,7 +14,7 @@ and summarize them at the end of the test set with `@testset`.
 module Test
 
 export @test, @test_throws, @test_broken, @test_skip,
-    @test_warn, @test_nowarn,
+    @test_warn, @test_nowarn, @test_io,
     @test_logs, @test_deprecated
 
 export @testset
@@ -642,6 +642,59 @@ macro test_nowarn(expr)
         @test_warn r"^(?!.)"s $(esc(expr))
     end
 end
+
+"""
+    @test_io ex expected_output
+
+Tests whether the printing of expression `ex` is the same with expected output.
+
+## Example
+
+```julia
+julia> @test_io (1, 2) "(1, 2)"
+Test Passed
+```
+"""
+macro test_io(ex, expect)
+    :(@test test_io($(esc(ex)), $(esc(expect))))
+end
+
+"""
+    @test_io mime ex expected_output
+
+Tests whether the output to MIME type `mime` is the same as expected.
+
+You can implement specific checking methods by overloading [`test_io`](@ref) with
+different mime types.
+"""
+macro test_io(mime, ex, expect)
+    :(@test test_io($(esc(ex)), $(esc(mime)), $(esc(expect))))
+end
+
+macro test_io(mime::String, ex, expect)
+    :(@test test_io($(esc(ex)), MIME($(esc(mime))), $(esc(expect))))
+end
+
+"""
+    test_io(x, mime, expect)
+
+IO testing method, by default, this compares the output in `MIME"text/plain"`.
+"""
+function test_io end
+
+test_io(x, expect::String) = test_io(x, MIME("text/plain"), expect)
+test_io(x, expect::Regex) = test_io(x, MIME("text/plain"), expect)
+
+function test_io(x, ::MIME"text/plain", expect::String)
+    x isa Nothing && expect == "" && return true
+    x isa Nothing && return false
+
+    string(x) == expect && return true
+    return false
+end
+
+test_io(x, ::MIME"text/plain", expect::Regex) = occursin(expect, string(x))
+
 
 #-----------------------------------------------------------------------
 

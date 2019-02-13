@@ -61,6 +61,12 @@ end
         @test a === 1
     end
 end
+@testset "@test_io" begin
+    @test_io (1, 2) "(1, 2)"
+    @test_io (1, 2) r"([0-9], [0-9])"
+    @test_io "text/plain" (1, 2) "(1, 2)"
+end
+
 @testset "@test and elements of an array" begin
     a = Array{Float64, 5}(undef, 2, 2, 2, 2, 2)
     a[1, 1, 1, 1, 1] = 10
