@@ -793,6 +793,7 @@ end
 # Broadcasted iterable/indexable APIs
 let
     bc = Broadcast.instantiate(Broadcast.broadcasted(+, zeros(5), 5))
+    @test IndexStyle(bc) == IndexLinear()
     @test eachindex(bc) === Base.OneTo(5)
     @test length(bc) === 5
     @test ndims(bc) === 1
@@ -803,6 +804,7 @@ let
     @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
 
     bc = Broadcast.instantiate(Broadcast.broadcasted(+, zeros(5), 5*ones(1, 4)))
+    @test IndexStyle(bc) == IndexCartesian()
     @test eachindex(bc) === CartesianIndices((Base.OneTo(5), Base.OneTo(4)))
     @test length(bc) === 20
     @test ndims(bc) === 2

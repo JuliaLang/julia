@@ -219,14 +219,8 @@ argtype(bc::Broadcasted) = argtype(typeof(bc))
 _eachindex(t::Tuple{Any}) = t[1]
 _eachindex(t::Tuple) = CartesianIndices(t)
 
-_combined_indexstyle(::Type{Tuple{A}}) where A = IndexStyle(A)
-_combined_indexstyle(::Type{TT}) where TT =
-    IndexStyle(IndexStyle(Base.tuple_type_head(TT)),
-               _combined_indexstyle(Base.tuple_type_tail(TT)))
-
 Base.IndexStyle(bc::Broadcasted) = IndexStyle(typeof(bc))
-Base.IndexStyle(::Type{<:Broadcasted{<:Any,Nothing,<:Any,Args}}) where {Args <: Tuple} =
-    _combined_indexstyle(Args)
+Base.IndexStyle(::Type{<:Broadcasted{<:Any,Tuple{Axis}}}) where {Axis} = IndexStyle(Axis)
 Base.IndexStyle(::Type{<:Broadcasted{<:Any}}) = IndexCartesian()
 
 Base.LinearIndices(bc::Broadcasted) = LinearIndices(eachindex(bc))
