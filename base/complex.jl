@@ -958,7 +958,7 @@ function atanh(z::Complex{T}) where T<:AbstractFloat
             η = zero(y)
         else
             ym = ay+ρ
-            ξ = log(sqrt(sqrt(4+y*y))/sqrt(ym))
+            ξ = copysign(log(sqrt(sqrt(4+y*y))/sqrt(ym)),x)
             η = copysign(oftype(y,pi)/2 + atan(ym/2), y)/2
         end
     else #Normal case
