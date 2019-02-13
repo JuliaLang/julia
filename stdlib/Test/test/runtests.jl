@@ -521,8 +521,17 @@ uninferrable_small_union(i) = (1, nothing)[i]
 @test_throws ErrorException @inferred(Missing, uninferrable_small_union(1))
 @test_throws ErrorException @inferred(Missing, uninferrable_small_union(2))
 @test_throws ArgumentError @inferred(nothing, uninferrable_small_union(1))
+# test @isinferred w/ same tests as above
+@test !@isinferred(uninferrable_function(1))
+@test @isinferred(identity(1))
+@test @isinferred(Nothing, uninferrable_small_union(1))
+@test @isinferred(Nothing, uninferrable_small_union(2))
+@test @isinferred(Missing, uninferrable_small_union(1))
+@test @isinferred(Missing, uninferrable_small_union(2))
+@test_throws ArgumentError @isinferred(nothing, uninferrable_small_union(1))
 
-# Ensure @inferred only evaluates the arguments once
+
+# Ensure @inferred and @isinferred only evaluate the arguments once
 inferred_test_global = 0
 function inferred_test_function()
     global inferred_test_global
@@ -531,26 +540,34 @@ function inferred_test_function()
 end
 @test @inferred inferred_test_function()
 @test inferred_test_global == 1
+@test @isinferred inferred_test_function()
+@test inferred_test_global == 2
 
 struct SillyArray <: AbstractArray{Float64,1} end
 Base.getindex(a::SillyArray, i) = rand() > 0.5 ? 0 : false
 @testset "@inferred works with A[i] expressions" begin
     @test (@inferred (1:3)[2]) == 2
+    @test @isinferred((1:3)[2])
     test_result = @test_throws ErrorException (@inferred SillyArray()[2])
     @test occursin("Bool", test_result.value.msg)
+    @test !@isinferred(SillyArray()[2])
 end
 # Issue #14928
 # Make sure abstract error type works.
 @test_throws Exception error("")
 
 # Issue #17105
-# @inferred with kwargs
+# @inferred and @isinferred with kwargs
 inferrable_kwtest(x; y=1) = 2x
 uninferrable_kwtest(x; y=1) = 2x+y
 @test (@inferred inferrable_kwtest(1)) == 2
 @test (@inferred inferrable_kwtest(1; y=1)) == 2
 @test (@inferred uninferrable_kwtest(1)) == 3
 @test (@inferred uninferrable_kwtest(1; y=2)) == 4
+@test @isinferred(inferrable_kwtest(1))
+@test @isinferred(inferrable_kwtest(1; y=1))
+@test @isinferred(uninferrable_kwtest(1))
+@test !@isinferred(uninferrable_kwtest(1; y=2))
 
 @test_throws ErrorException @testset "$(error())" for i in 1:10
 end
