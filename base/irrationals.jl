@@ -188,5 +188,3 @@ end
 
 # inv
 inv(x::AbstractIrrational) = 1/x
-@test inv(π) ≈ 0.3183098861837907
-@inferred inv(π)
