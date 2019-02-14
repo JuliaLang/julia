@@ -952,13 +952,17 @@ function atanh(z::Complex{T}) where T<:AbstractFloat
             return Complex(copysign(zero(x),x), copysign(oftype(y,pi)/2, y))
         end
         return Complex(real(1/z), copysign(oftype(y,pi)/2, y))
-    elseif ax==1
+    end
+    β = copysign(1, x)
+    z *= β
+    x, y = reim(z)
+    if x == 1
         if y == 0
-            ξ = copysign(oftype(x,Inf),x)
+            ξ = oftype(x, Inf)
             η = y
         else
             ym = ay+ρ
-            ξ = copysign(log(sqrt(sqrt(4+y*y))/sqrt(ym)), x)
+            ξ = log(sqrt(sqrt(4+y*y))/sqrt(ym))
             η = copysign(oftype(y,pi)/2 + atan(ym/2), y)/2
         end
     else #Normal case
@@ -970,7 +974,7 @@ function atanh(z::Complex{T}) where T<:AbstractFloat
         end
         η = angle(Complex((1-x)*(1+x)-ysq, 2y))/2
     end
-    Complex(ξ, η)
+    β * Complex(ξ, η)
 end
 atanh(z::Complex) = atanh(float(z))
 
