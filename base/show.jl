@@ -1120,7 +1120,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             item = args[1]
             # field
             field = unquoted(args[2])
-            parens = !is_quoted(item) && !(item isa Symbol && isidentifier(item))
+            parens = !is_quoted(item) && !(item isa Symbol && isidentifier(item)) && item.head !== :(.)
             parens && print(io, '(')
             show_unquoted(io, item, indent)
             parens && print(io, ')')
