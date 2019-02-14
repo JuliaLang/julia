@@ -197,8 +197,9 @@ else
   # Use BinaryBuilder
   echo 'USE_BINARYBUILDER_LLVM = 1' >> Make.user
   echo 'USE_BINARYBUILDER_OPENBLAS = 1' >> Make.user
+  echo 'USE_BINARYBUILDER_SUITESPARSE = 1' >> Make.user
   echo 'BINARYBUILDER_LLVM_ASSERTS = 1' >> Make.user
-  echo 'override DEP_LIBS += llvm openlibm openblas' >> Make.user
+  echo 'override DEP_LIBS += llvm openlibm openblas suitesparse' >> Make.user
   export CCACHE_DIR=/cygdrive/c/ccache
   echo 'USECCACHE=1' >> Make.user
   make check-whitespace

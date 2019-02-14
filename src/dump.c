@@ -257,7 +257,7 @@ static int type_parameter_recursively_external(jl_value_t *p0) JL_NOTSAFEPOINT
         return 0;
     if (module_in_worklist(p->name->module))
         return 0;
-    if (p->name->wrapper != (jl_value_t*)p0) {
+    if (jl_unwrap_unionall(p->name->wrapper) != (jl_value_t*)p) {
         if (!type_recursively_external(p))
             return 0;
     }
@@ -745,7 +745,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
     else if (jl_is_unionall(v)) {
         write_uint8(s->s, TAG_UNIONALL);
         jl_datatype_t *d = (jl_datatype_t*)jl_unwrap_unionall(v);
-        if (jl_is_datatype(d) && d->name->wrapper == v &&
+        if (jl_is_datatype(d) && jl_unwrap_unionall(d->name->wrapper) == (jl_value_t*)d &&
             !module_in_worklist(d->name->module)) {
             write_uint8(s->s, 1);
             jl_serialize_value(s, d->name->module);
@@ -1212,7 +1212,7 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
 }
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 7;
+static const int JI_FORMAT_VERSION = 8;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 static void write_header(ios_t *s)
@@ -2459,6 +2459,13 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
     size_t nsyms = jl_array_len(code->slotnames);
     assert(nsyms >= m->nargs && nsyms < INT32_MAX); // required by generated functions
     write_int32(s.s, nsyms);
+    assert(nsyms == jl_array_len(code->slotflags));
+    ios_write(s.s, (char*)jl_array_data(code->slotflags), nsyms);
+
+    // N.B.: The layout of everything before this point is explicitly referenced
+    // by the various jl_ast_ accessors. Make sure to adjust those if you change
+    // the data layout.
+
     for (i = 0; i < nsyms; i++) {
         jl_sym_t *name = (jl_sym_t*)jl_array_ptr_ref(code->slotnames, i);
         assert(jl_is_symbol(name));
@@ -2468,7 +2475,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
     }
 
     size_t nf = jl_datatype_nfields(jl_code_info_type);
-    for (i = 0; i < nf - 5; i++) {
+    for (i = 0; i < nf - 6; i++) {
         if (i == 1)  // skip codelocs
             continue;
         int copy = (i != 2); // don't copy contents of method_for_inference_limit_heuristics field
@@ -2536,6 +2543,9 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_array_t *data)
     code->pure = !!(flags & (1 << 0));
 
     size_t nslots = read_int32(&src);
+    code->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
+    ios_read(s.s, (char*)jl_array_data(code->slotflags), nslots);
+
     jl_array_t *syms = jl_alloc_vec_any(nslots);
     code->slotnames = syms;
     for (i = 0; i < nslots; i++) {
@@ -2547,7 +2557,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_array_t *data)
     }
 
     size_t nf = jl_datatype_nfields(jl_code_info_type);
-    for (i = 0; i < nf - 5; i++) {
+    for (i = 0; i < nf - 6; i++) {
         if (i == 1)
             continue;
         assert(jl_field_isptr(jl_code_info_type, i));
@@ -2620,6 +2630,14 @@ JL_DLLEXPORT ssize_t jl_ast_nslots(jl_array_t *data)
     }
 }
 
+JL_DLLEXPORT uint8_t jl_ast_slotflag(jl_array_t *data, size_t i)
+{
+    assert(i < jl_ast_nslots(data));
+    if (jl_is_code_info(data))
+        return ((uint8_t*)((jl_code_info_t*)data)->slotflags->data)[i];
+    return ((uint8_t*)data->data)[1 + sizeof(int32_t) + i];
+}
+
 JL_DLLEXPORT void jl_fill_argnames(jl_array_t *data, jl_array_t *names)
 {
     size_t i, nargs = jl_array_len(names);
@@ -2637,7 +2655,7 @@ JL_DLLEXPORT void jl_fill_argnames(jl_array_t *data, jl_array_t *names)
         int nslots = jl_load_unaligned_i32(d + 1);
         assert(nslots >= nargs);
         (void)nslots;
-        char *namestr = d + 5;
+        char *namestr = d + 5 + nslots;
         for (i = 0; i < nargs; i++) {
             size_t namelen = strlen(namestr);
             jl_sym_t *name = jl_symbol_n(namestr, namelen);

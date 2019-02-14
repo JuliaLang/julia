@@ -115,10 +115,7 @@ function code_for_method(method::Method, @nospecialize(atypes), sparams::SimpleV
     if world < min_world(method) || world > max_world(method)
         return nothing
     end
-    if isdefined(method, :generator) && !isdispatchtuple(atypes)
-        # don't call staged functions on abstract types.
-        # (see issues #8504, #10230)
-        # we can't guarantee that their type behavior is monotonic.
+    if isdefined(method, :generator) && !may_invoke_generator(method, atypes, sparams)
         return nothing
     end
     if preexisting

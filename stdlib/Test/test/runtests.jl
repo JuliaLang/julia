@@ -84,45 +84,52 @@ end
 Test.record(ts::NoThrowTestSet, t::Test.Result) = (push!(ts.results, t); t)
 Test.finish(ts::NoThrowTestSet) = ts.results
 let fails = @testset NoThrowTestSet begin
-        # Fail - wrong exception
+        # 1 - Fail - wrong exception
         @test_throws OverflowError error()
-        # Fail - no exception
+        # 2 - Fail - no exception
         @test_throws OverflowError 1 + 1
-        # Fail - comparison
+        # 3 - Fail - comparison
         @test 1+1 == 2+2
-        # Fail - approximate comparison
+        # 4 - Fail - approximate comparison
         @test 1/1 ≈ 2/1
-        # Fail - chained comparison
+        # 5 - Fail - chained comparison
         @test 1+0 == 2+0 == 3+0
-        # Fail - comparison call
+        # 6 - Fail - comparison call
         @test ==(1 - 2, 2 - 1)
-        # Fail - splatting
+        # 7 - Fail - splatting
         @test ==(1:2...)
-        # Fail - isequal
+        # 8 - Fail - isequal
         @test isequal(0 / 0, 1 / 0)
-        # Fail - function splatting
+        # 9 - Fail - function splatting
         @test isequal(1:2...)
-        # Fail - isapprox
+        # 10 - Fail - isapprox
         @test isapprox(0 / 1, -1 / 0)
-        # Fail - function with keyword
+        # 11 & 12 - Fail - function with keyword
         @test isapprox(1 / 2, 2 / 1, atol=1 / 1)
         @test isapprox(1 - 2, 2 - 1; atol=1 - 1)
-        # Fail - function keyword splatting
+        # 13 - Fail - function keyword splatting
         k = [(:atol, 0), (:nans, true)]
         @test isapprox(1, 2; k...)
-        # Fail - call negation
+        # 14 - Fail - call negation
         @test !isequal(1, 2 - 1)
-        # Fail - comparison negation
+        # 15 - Fail - comparison negation
         @test !(2 + 3 == 1 + 4)
-        # Fail - chained negation
+        # 16 - Fail - chained negation
         @test !(2 + 3 == 1 + 4 == 5)
-        # Error - unexpected pass
-        @test_broken true
-        # Error - converting a call into a comparison
-        @test ==(1, 1:2...)
+        # 17 - Fail - isempty
+        nonempty = [1, 2, 3]
+        @test isempty(nonempty)
+        str1 = "Hello"
+        str2 = "World"
+        # 18 - Fail - occursin
+        @test occursin(str1, str2)
+        # 19 - Fail - startswith
+        @test startswith(str1, str2)
+        # 20 - Fail - endswith
+        @test endswith(str1, str2)
     end
-    for i in 1:length(fails) - 2
-        @test isa(fails[i], Test.Fail)
+    for fail in fails
+        @test fail isa Test.Fail
     end
 
     let str = sprint(show, fails[1])
@@ -206,11 +213,43 @@ let fails = @testset NoThrowTestSet begin
     end
 
     let str = sprint(show, fails[17])
+        @test occursin("Expression: isempty(nonempty)", str)
+        @test occursin("Evaluated: isempty([1, 2, 3])", str)
+    end
+
+    let str = sprint(show, fails[18])
+        @test occursin("Expression: occursin(str1, str2)", str)
+        @test occursin("Evaluated: occursin(\"Hello\", \"World\")", str)
+    end
+
+    let str = sprint(show, fails[19])
+        @test occursin("Expression: startswith(str1, str2)", str)
+        @test occursin("Evaluated: startswith(\"Hello\", \"World\")", str)
+    end
+
+    let str = sprint(show, fails[20])
+        @test occursin("Expression: endswith(str1, str2)", str)
+        @test occursin("Evaluated: endswith(\"Hello\", \"World\")", str)
+    end
+end
+
+let errors = @testset NoThrowTestSet begin
+        # 1 - Error - unexpected pass
+        @test_broken true
+        # 2 - Error - converting a call into a comparison
+        @test ==(1, 1:2...)
+    end
+
+    for err in errors
+        @test err isa Test.Error
+    end
+
+    let str = sprint(show, errors[1])
         @test occursin("Unexpected Pass", str)
         @test occursin("Expression: true", str)
     end
 
-    let str = sprint(show, fails[18])
+    let str = sprint(show, errors[2])
         @test occursin("Expression: ==(1, 1:2...)", str)
         @test occursin("MethodError: no method matching ==(::$Int, ::$Int, ::$Int)", str)
     end
