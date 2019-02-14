@@ -31,6 +31,16 @@ using Random: AbstractRNG, GLOBAL_RNG
 using InteractiveUtils: gen_call_with_extracted_types
 using Core.Compiler: typesubtract
 
+const DISPLAY_FAILED = (
+    :isequal,
+    :isapprox,
+    :≈,
+    :occursin,
+    :startswith,
+    :endswith,
+    :isempty,
+)
+
 #-----------------------------------------------------------------------
 
 # Backtrace utility functions
@@ -424,7 +434,7 @@ function get_test_result(ex, source)
             $(QuoteNode(source)),
             $negate,
         ))
-    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox, :≈)
+    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in DISPLAY_FAILED
         escaped_func = esc(ex.args[1])
         quoted_func = QuoteNode(ex.args[1])
 

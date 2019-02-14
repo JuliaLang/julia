@@ -259,7 +259,7 @@ static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
     li->ssaflags = jl_alloc_array_1d(jl_array_uint8_type, 0);
 
     // Flags that need to be copied to slotflags
-    const uint8_t vinfo_mask = 16 | 32 | 64;
+    const uint8_t vinfo_mask = 8 | 16 | 32 | 64;
     int i;
     for (i = 0; i < nslots; i++) {
         jl_value_t *vi = jl_array_ptr_ref(vis, i);
@@ -383,7 +383,7 @@ STATIC_INLINE jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 {
     JL_TIMING(STAGED_FUNCTION);
-    jl_tupletype_t *tt = (jl_tupletype_t*)linfo->specTypes;
+    jl_value_t *tt = linfo->specTypes;
     jl_method_t *def = linfo->def.method;
     jl_value_t *generator = def->generator;
     assert(generator != NULL);
@@ -402,7 +402,8 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         ptls->world_age = def->min_world;
 
         // invoke code generator
-        ex = jl_call_staged(linfo->def.method, generator, linfo->sparam_vals, jl_svec_data(tt->parameters), jl_nparams(tt));
+        jl_tupletype_t *ttdt = (jl_tupletype_t*)jl_unwrap_unionall(tt);
+        ex = jl_call_staged(linfo->def.method, generator, linfo->sparam_vals, jl_svec_data(ttdt->parameters), jl_nparams(ttdt));
 
         if (jl_is_code_info(ex)) {
             func = (jl_code_info_t*)ex;

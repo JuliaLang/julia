@@ -2641,7 +2641,12 @@
 ;; where var-info-lst is a list of var-info records
 (define (analyze-vars e env captvars sp)
   (if (or (atom? e) (quoted? e))
-      e
+      (begin
+        (if (symbol? e)
+            (let ((vi (var-info-for e env)))
+              (if vi
+                  (vinfo:set-read! vi #t))))
+        e)
       (case (car e)
         ((local-def) ;; a local that we know has an assignment that dominates all usages
          (let ((vi (var-info-for (cadr e) env)))
