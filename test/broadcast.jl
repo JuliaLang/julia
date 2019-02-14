@@ -828,6 +828,12 @@ end
     @test IndexStyle(bc) == IndexCartesian()
     @test sum(bc) == mapreduce(Base.splat(*), +, zip(xs, ys))
 
+    xs = 1:5:3*5
+    ys = 1:4:3*4
+    bc = Broadcast.instantiate(
+        Broadcast.broadcasted(iseven, Broadcast.broadcasted(-, xs, ys)))
+    @test count(bc) == count(iseven, map(-, xs, ys))
+
     # Let's test that `Broadcasted` actually hits the efficient
     # `mapreduce` method as intended.  We are going to invoke `reduce`
     # with this *NON-ASSOCIATIVE* binary operator to see what
