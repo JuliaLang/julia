@@ -1038,6 +1038,10 @@ end
     end
 end
 
+@testset "Irrational Inverses, Issue #30882" begin
+    @test @inferred(inv(π)) ≈ 0.3183098861837907
+end
+
 @testset "Irrationals compared with Rationals and Floats" begin
     @test Float64(pi,RoundDown) < pi
     @test Float64(pi,RoundUp) > pi
