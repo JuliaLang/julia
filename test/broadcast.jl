@@ -827,4 +827,33 @@ end
     bc = Broadcast.instantiate(Broadcast.broadcasted(*, xs2, ys2))
     @test IndexStyle(bc) == IndexCartesian()
     @test sum(bc) == mapreduce(Base.splat(*), +, zip(xs, ys))
+
+    # Let's test that `Broadcasted` actually hits the efficient
+    # `mapreduce` method as intended.  We are going to invoke `reduce`
+    # with this *NON-ASSOCIATIVE* binary operator to see what
+    # associativity is chosen by the implementation:
+    paren = (x, y) -> "($x,$y)"
+    # Next, we construct data `xs` such that `length(xs)` is greater
+    # than short array cutoff of `_mapreduce`:
+    alphabets = 'a':'z'
+    blksize = Base.pairwise_blocksize(identity, paren) ÷ length(alphabets)
+    xs = repeat(alphabets, 2 * blksize)
+    @test length(xs) > blksize
+    # So far we constructed the data `xs` and reducing function
+    # `paren` such that `reduce` and `foldl` results are different.
+    # That is to say, this `reduce` does not hit the fall-back `foldl`
+    # branch:
+    @test foldl(paren, xs) != reduce(paren, xs)
+
+    # Now let's try it with `Broadcasted`:
+    bcraw = Broadcast.broadcasted(identity, xs)
+    bc = Broadcast.instantiate(bcraw)
+    # If `Broadcasted` has `IndexLinear` style, it should hit the
+    # `reduce` branch:
+    @test IndexStyle(bc) == IndexLinear()
+    @test reduce(paren, bc) == reduce(paren, xs)
+    # If `Broadcasted` does not have `IndexLinear` style, it should
+    # hit the `foldl` branch:
+    @test IndexStyle(bcraw) == IndexCartesian()
+    @test reduce(paren, bcraw) == foldl(paren, xs)
 end
