@@ -80,6 +80,7 @@ Deprecated or removed
 [#21598]: https://github.com/JuliaLang/julia/issues/21598
 [#24980]: https://github.com/JuliaLang/julia/issues/24980
 [#28850]: https://github.com/JuliaLang/julia/issues/28850
+[#29777]: https://github.com/JuliaLang/julia/issues/29777
 [#29790]: https://github.com/JuliaLang/julia/issues/29790
 [#29998]: https://github.com/JuliaLang/julia/issues/29998
 [#30061]: https://github.com/JuliaLang/julia/issues/30061
@@ -89,6 +90,7 @@ Deprecated or removed
 [#30349]: https://github.com/JuliaLang/julia/issues/30349
 [#30372]: https://github.com/JuliaLang/julia/issues/30372
 [#30382]: https://github.com/JuliaLang/julia/issues/30382
+[#30577]: https://github.com/JuliaLang/julia/issues/30577
 [#30583]: https://github.com/JuliaLang/julia/issues/30583
 [#30584]: https://github.com/JuliaLang/julia/issues/30584
 [#30593]: https://github.com/JuliaLang/julia/issues/30593
@@ -97,3 +99,4 @@ Deprecated or removed
 [#30712]: https://github.com/JuliaLang/julia/issues/30712
 [#30724]: https://github.com/JuliaLang/julia/issues/30724
 [#30915]: https://github.com/JuliaLang/julia/issues/30915
+[#30919]: https://github.com/JuliaLang/julia/issues/30919
