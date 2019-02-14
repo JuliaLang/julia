@@ -220,7 +220,7 @@ _eachindex(t::Tuple{Any}) = t[1]
 _eachindex(t::Tuple) = CartesianIndices(t)
 
 Base.IndexStyle(bc::Broadcasted) = IndexStyle(typeof(bc))
-Base.IndexStyle(::Type{<:Broadcasted{<:Any,Tuple{Any}}}) = IndexLinear()
+Base.IndexStyle(::Type{<:Broadcasted{<:Any,<:Tuple{Any}}}) = IndexLinear()
 Base.IndexStyle(::Type{<:Broadcasted{<:Any}}) = IndexCartesian()
 
 Base.LinearIndices(bc::Broadcasted{<:Any,Tuple{Any}}) = axes(bc)[1]
