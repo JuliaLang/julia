@@ -647,3 +647,18 @@ end
     @test length(collect(d)) == 2
     @test length(collect(d)) == 0
 end
+
+@testset "Unzip" begin
+    @test isequal(
+        test(Generator(f, [1, missing])),
+        (Union{Missing, Int64}[1, missing], Union{Missing, Float64}[1.0, missing])
+    )
+    @test_throws ErrorException test(Generator(x -> error(), 1:1))
+    @test (@inferred test(zip([1], [1.0]))) == ([1], [1.0])
+    @test (@inferred test([(1, 1.0)])) == ([1], [1.0])
+    @test isequal(
+         test(Generator(f, Filter(x -> true, [1, missing]))),
+         ([1, missing], Union{Missing, Float64}[1.0, missing])
+    )
+    @test_throws ArgumentError zip([1], [1, 2])
+end
