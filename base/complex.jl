@@ -955,7 +955,7 @@ function atanh(z::Complex{T}) where T<:AbstractFloat
     elseif ax==1
         if y == 0
             ξ = copysign(oftype(x,Inf),x)
-            η = zero(y)
+            η = y
         else
             ym = ay+ρ
             ξ = copysign(log(sqrt(sqrt(4+y*y))/sqrt(ym)), x)
