@@ -251,5 +251,13 @@ if bc_opt == bc_default || bc_opt == bc_off
     @test occursin("vector.body", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
 end
 
+# Ensure broadcasting can vectorize when bounds checks are off
+if bc_opt != bc_on
+    function goo28126(u, uprev, k1, k2, k3, k4, k5, k6, k7)
+        @. u = uprev + 0.1*(0.1*k1 + 0.2*k2 + 0.3*k3 + 0.4*k4 + 0.5*k5 + 0.6*k6 + 0.7*k7)
+        nothing
+    end
+    @test occursin("vector.body", sprint(code_llvm, goo28126, NTuple{9, Vector{Float32}}))
+end
 
 end
