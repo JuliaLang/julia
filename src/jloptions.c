@@ -133,7 +133,9 @@ static const char opts[]  =
     "                           Append coverage information to the LCOV tracefile (filename supports format tokens).\n"
 // TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
     " --track-allocation={none|user|all}, --track-allocation\n"
-    "                           Count bytes allocated by each source line (omitting setting is equivalent to \"user\")\n\n"
+    "                           Count bytes allocated by each source line (omitting setting is equivalent to \"user\")\n"
+    " --trace-compile={stdout,stderr}\n"
+    "                           Print precompile statements for methods compiled during execution.\n\n"
 ;
 
 static const char opts_hidden[]  =
