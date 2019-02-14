@@ -33,6 +33,7 @@ Standard library changes
   (environment, flags, working directory, etc) if `x` is the first interpolant and errors
   otherwise ([#24353]).
 * `IPAddr` subtypes now behave like scalars when used in broadcasting ([#32133]).
+* `clamp` can now handle missing values ([#31066]).
 
 #### Libdl
 

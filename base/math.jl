@@ -1083,5 +1083,6 @@ for f in (:(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
           :(log2), :(exponent), :(sqrt))
     @eval $(f)(::Missing) = missing
 end
+clamp(::Missing, lo, hi) = missing
 
 end # module
