@@ -814,3 +814,17 @@ let
     @test eltype(copy(bc)) == eltype([v for v in bc]) == eltype(collect(bc))
     @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
 end
+
+@testset "broadcasted mapreduce" begin
+    xs = 1:10
+    ys = 1:2:20
+    bc = Broadcast.instantiate(Broadcast.broadcasted(*, xs, ys))
+    @test IndexStyle(bc) == IndexLinear()
+    @test sum(bc) == mapreduce(Base.splat(*), +, zip(xs, ys))
+
+    xs2 = reshape(xs, 1, :)
+    ys2 = reshape(ys, 1, :)
+    bc = Broadcast.instantiate(Broadcast.broadcasted(*, xs2, ys2))
+    @test IndexStyle(bc) == IndexCartesian()
+    @test sum(bc) == mapreduce(Base.splat(*), +, zip(xs, ys))
+end
