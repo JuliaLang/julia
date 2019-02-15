@@ -315,10 +315,12 @@ main_ex = quote
         seekstart(s)
         ds = Serializer(s)
         local g2 = deserialize(ds)
-        $Test.@test g2 !== g
-        $Test.@test g2() == :magic_token_anon_fun_test
-        $Test.@test g2() == :magic_token_anon_fun_test
-        $Test.@test deserialize(ds) === g2
+        Base.invokelatest() do
+            $Test.@test g2 !== g
+            $Test.@test g2() == :magic_token_anon_fun_test
+            $Test.@test g2() == :magic_token_anon_fun_test
+            $Test.@test deserialize(ds) === g2
+        end
 
         # issue #21793
         y = x -> (() -> x)
@@ -326,8 +328,10 @@ main_ex = quote
         serialize(s, y)
         seekstart(s)
         y2 = deserialize(s)
-        x2 = y2(2)
-        $Test.@test x2() == 2
+        Base.invokelatest() do
+            x2 = y2(2)
+            $Test.@test x2() == 2
+        end
     end
 end
 # This needs to be run on `Main` since the serializer treats it differently.

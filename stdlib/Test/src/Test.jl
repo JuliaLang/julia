@@ -1411,12 +1411,12 @@ function detect_ambiguities(mods...;
                             imported::Bool = false,
                             recursive::Bool = false,
                             ambiguous_bottom::Bool = false)
-    function sortdefs(m1, m2)
+    function sortdefs(m1::Method, m2::Method)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)
             ord12 = m1.line < m2.line
         end
-        ord12 ? (m1, m2) : (m2, m1)
+        return ord12 ? (m1, m2) : (m2, m1)
     end
     ambs = Set{Tuple{Method,Method}}()
     for mod in mods
@@ -1436,8 +1436,8 @@ function detect_ambiguities(mods...;
                 for m in mt
                     if m.ambig !== nothing
                         for m2 in m.ambig
-                            if Base.isambiguous(m, m2, ambiguous_bottom=ambiguous_bottom)
-                                push!(ambs, sortdefs(m, m2))
+                            if Base.isambiguous(m, m2.func, ambiguous_bottom=ambiguous_bottom)
+                                push!(ambs, sortdefs(m, m2.func))
                             end
                         end
                     end

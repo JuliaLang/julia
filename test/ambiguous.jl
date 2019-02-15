@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-world_counter() = ccall(:jl_get_world_counter, UInt, ())
+using Base: get_world_counter
 
 # DO NOT ALTER ORDER OR SPACING OF METHODS BELOW
 const lineoffset = @__LINE__
@@ -16,19 +16,17 @@ using LinearAlgebra, SparseArrays
 # For curmod_*
 include("testenv.jl")
 
-ambigs = Any[[], [3], [2,5], [], [3]]
-
-mt = methods(ambig)
-
+getline(m::Core.TypeMapEntry) = getline(m.func::Method)
 getline(m::Method) = m.line - lineoffset
 
-for m in mt
+ambigs = Any[[], [3], [2, 5], [], [3]]
+for m in methods(ambig)
     ln = getline(m)
     atarget = ambigs[ln]
     if isempty(atarget)
         @test m.ambig === nothing
     else
-        aln = Int[getline(a) for a in m.ambig]
+        aln = Int[getline(a::Core.TypeMapEntry) for a in m.ambig]
         @test sort(aln) == atarget
     end
 end
@@ -81,7 +79,7 @@ end
 let io = IOBuffer()
     @test precompile(ambig, (UInt8, Int)) == false
     cf = @eval @cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
-    @test_throws(MethodError(ambig, (UInt8(1), Int(2)), world_counter()),
+    @test_throws(MethodError(ambig, (UInt8(1), Int(2)), get_world_counter()),
                  ccall(cf, Int, (UInt8, Int), 1, 2))
     @test_throws(ErrorException("no unique matching method found for the specified argument types"),
                  which(ambig, (UInt8, Int)))

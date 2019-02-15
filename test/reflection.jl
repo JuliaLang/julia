@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+using Test
 
 # code_native / code_llvm (issue #8239)
 # It's hard to really test these, but just running them should be
@@ -308,7 +309,7 @@ for (f, t) in Any[(definitely_not_in_sysimg, Tuple{}),
     tt = Tuple{typeof(f), t.parameters...}
     (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), tt, meth.sig)::Core.SimpleVector
     @test ti === tt # intersection should be a subtype
-    world = typemax(UInt)
+    world = Core.Compiler.get_world_counter()
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, tt, env, world)
     params = Base.CodegenParams()
     llvmf1 = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
@@ -430,27 +431,13 @@ end
 
 
 # Linfo Tracing test
-tracefoo(x, y) = x+y
-didtrace = false
-tracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Core.MethodInstance); global didtrace = true; nothing)
-let ctracer = @cfunction(tracer, Cvoid, (Ptr{Cvoid},))
-    ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), ctracer)
-end
-meth = which(tracefoo,Tuple{Any,Any})
-ccall(:jl_trace_method, Cvoid, (Any,), meth)
-@test tracefoo(1, 2) == 3
-ccall(:jl_untrace_method, Cvoid, (Any,), meth)
-@test didtrace
-didtrace = false
-@test tracefoo(1.0, 2.0) == 3.0
-@test !didtrace
-ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), C_NULL)
-
+function tracefoo end
 # Method Tracing test
 methtracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)
 let cmethtracer = @cfunction(methtracer, Cvoid, (Ptr{Cvoid},))
     ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), cmethtracer)
 end
+didtrace = false
 tracefoo2(x, y) = x*y
 @test didtrace
 didtrace = false
@@ -529,25 +516,26 @@ else
 end
 
 # PR #18888: code_typed shouldn't cache, return_types should
+f18888() = nothing
 let
-    world = typemax(UInt)
-    f18888() = return nothing
+    world = Core.Compiler.get_world_counter()
     m = first(methods(f18888, Tuple{}))
     @test m.specializations === nothing
     ft = typeof(f18888)
 
     code_typed(f18888, Tuple{}; optimize=false)
-    @test m.specializations !== nothing  # uncached, but creates the specializations entry
-    code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
-    @test !isdefined(code, :inferred)
+    @test m.specializations isa Core.TypeMapEntry  # uncached, but creates the specializations entry
+    mi = Core.Compiler.specialize_method(m, Tuple{ft}, Core.svec())
+    @test Core.Compiler.inf_for_methodinstance(mi, world) === nothing
+    @test !isdefined(mi, :cache)
 
     code_typed(f18888, Tuple{}; optimize=true)
-    code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
-    @test !isdefined(code, :inferred)
+    @test !isdefined(mi, :cache)
 
     Base.return_types(f18888, Tuple{})
-    code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
-    @test isdefined(code, :inferred)
+    @test Core.Compiler.inf_for_methodinstance(mi, world) === mi.cache
+    @test mi.cache isa Core.CodeInstance
+    @test !isdefined(mi.cache, :next)
 end
 
 # New reflection methods in 0.6
@@ -645,22 +633,24 @@ function test_similar_codeinfo(a, b)
 end
 
 @generated f22979(x...) = (y = 1; :(x[1] + x[2]))
-x22979 = (1, 2.0, 3.0 + im)
-T22979 = Tuple{typeof(f22979),typeof.(x22979)...}
-world = typemax(UInt)
-mtypes, msp, m = Base._methods_by_ftype(T22979, -1, world)[]
-instance = Core.Compiler.code_for_method(m, mtypes, msp, world, false)
-cinfo_generated = Core.Compiler.get_staged(instance)
-@test_throws ErrorException Base.uncompressed_ast(m)
+let
+    x22979 = (1, 2.0, 3.0 + im)
+    T22979 = Tuple{typeof(f22979), typeof.(x22979)...}
+    world = Core.Compiler.get_world_counter()
+    mtypes, msp, m = Base._methods_by_ftype(T22979, -1, world)[1]
+    instance = Core.Compiler.specialize_method(m, mtypes, msp)
+    cinfo_generated = Core.Compiler.get_staged(instance)
+    @test_throws ErrorException Base.uncompressed_ast(m)
 
-test_similar_codeinfo(code_lowered(f22979, typeof(x22979))[1], cinfo_generated)
+    test_similar_codeinfo(code_lowered(f22979, typeof(x22979))[1], cinfo_generated)
 
-cinfos = code_lowered(f22979, typeof.(x22979), generated = true)
-@test length(cinfos) == 1
-cinfo = cinfos[]
-test_similar_codeinfo(cinfo, cinfo_generated)
+    cinfos = code_lowered(f22979, typeof.(x22979), generated=true)
+    @test length(cinfos) == 1
+    cinfo = cinfos[1]
+    test_similar_codeinfo(cinfo, cinfo_generated)
+    @test_throws ErrorException code_lowered(f22979, typeof.(x22979), generated=false)
+end
 
-@test_throws ErrorException code_lowered(f22979, typeof.(x22979), generated = false)
 
 module MethodDeletion
 using Test, Random
