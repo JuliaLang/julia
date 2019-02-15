@@ -185,3 +185,6 @@ function alignment(io::IO, x::AbstractIrrational)
     m === nothing ? (length(sprint(show, x, context=ctx, sizehint=0)), 0) :
     (length(m.captures[1]), length(m.captures[2]))
 end
+
+# inv
+inv(x::AbstractIrrational) = 1/x
