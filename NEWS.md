@@ -15,7 +15,7 @@ Multi-threading changes
 
 Language changes
 ----------------
-
+* Empty entries in `JULIA_DEPOT_PATH` are now expanded to default depot entries ([#31009]).
 * `Enum` now behaves like a scalar when used in broadcasting ([#30670]).
 
 Command-line option changes
