@@ -93,8 +93,7 @@ macro enum(T, syms...)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
     vals = Vector{Tuple{Symbol,Integer}}()
-    lo = hi = 0
-    i = zero(basetype)
+    lo = hi = i = zero(basetype)
     hasexpr = false
 
     if length(syms) == 1 && syms[1] isa Expr && syms[1].head == :block
@@ -126,7 +125,6 @@ macro enum(T, syms...)
         if length(vals) == 1
             lo = hi = i
         else
-            lo = min(lo, i)
             hi = max(hi, i)
         end
         i += oneunit(i)
