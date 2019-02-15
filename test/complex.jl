@@ -1067,5 +1067,8 @@ end
 end
 
 @testset "issue #31054" begin
-    @test tanh(atanh(-1.0+1.0im)) == -1.0+1.0im
+    @test tanh(atanh(complex(1.0,1.0))) == complex(1.0,1.0)
+    @test tanh(atanh(complex(1.0,-1.0))) == complex(1.0,-1.0)
+    @test tanh(atanh(complex(-1.0,1.0))) == complex(-1.0,1.0)
+    @test tanh(atanh(complex(-1.0,-1.0))) == complex(-1.0,-1.0)
 end
