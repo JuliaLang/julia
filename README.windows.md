@@ -51,9 +51,9 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 
 ## Binary distribution
 
-Julia runs on Windows 7 and later.
-Both the 32-bit and 64-bit versions are supported.
-The 32-bit (i686) binary will run on either a 32-bit and 64-bit operating system.
+Julia runs on Windows 7 and later. Both the [32-](https://en.wikipedia.org/wiki/32-bit)
+and [64-bit](https://en.wikipedia.org/wiki/64-bit_computing) versions are supported.
+The 32-bit (i686) binary will run on either a 32- and 64-bit operating system.
 The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise refuse to launch.
 
  1. [Download](https://julialang.org/downloads) the latest version of Julia.
@@ -70,9 +70,9 @@ The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise re
 
 ### Supported build platforms
 
- -  Windows 10: supported (32 and 64 bits)
- -  Windows 8: supported (32 and 64 bits)
- -  Windows 7: supported (32 and 64 bits)
+ -  Windows 10: supported (32- and 64-bit)
+ -  Windows 8: supported (32- and 64-bit)
+ -  Windows 7: supported (32- and 64-bit)
 
 ### Cygwin-to-MinGW cross-compiling
 
@@ -80,12 +80,12 @@ The recommended way of compiling Julia from source on Windows is by cross
 compiling from [Cygwin](http://www.cygwin.com), using versions of the
 MinGW-w64 compilers available through Cygwin's package manager.
 
- 1. Download and run Cygwin setup for [32 bit](https://cygwin.com/setup-x86.exe)
-    or [64 bit](https://cygwin.com/setup-x86_64.exe). Note, that you can compile
-    either 32 or 64 bit Julia from either 32 or 64 bit Cygwin. 64 bit Cygwin
+ 1. Download and run Cygwin setup for [32-](https://cygwin.com/setup-x86.exe)
+    or [64-bit](https://cygwin.com/setup-x86_64.exe). Note, that you can compile
+    either 32- or 64-bit Julia from either 32- or 64-bit Cygwin. 64-bit Cygwin
     has a slightly smaller but often more up-to-date selection of packages.
 
-    Advanced: you may skip steps 2-4 by running:
+    Advanced: you may skip steps 2–4 by running:
 
         setup-x86_64.exe -s <url> -q -P cmake,gcc-g++,git,make,patch,curl,m4,python,p7zip,mingw64-i686-gcc-g++,mingw64-i686-gcc-fortran,mingw64-x86_64-gcc-g++,mingw64-x86_64-gcc-fortran
         :: replace <url> with a site from https://cygwin.com/mirrors.html
@@ -99,9 +99,9 @@ MinGW-w64 compilers available through Cygwin's package manager.
     2.  From the *Net* category: `curl`
     3.  From *Interpreters* (or *Python*) category: `m4`, `python`
     4.  From the *Archive* category: `p7zip`
-    5.  For 32 bit Julia, and also from the *Devel* category:
+    5.  For 32-bit Julia, and also from the *Devel* category:
         `mingw64-i686-gcc-g++` and `mingw64-i686-gcc-fortran`
-    6.  For 64 bit Julia, and also from the *Devel* category:
+    6.  For 64-bit Julia, and also from the *Devel* category:
         `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran`
 
  4. At the *'Resolving Dependencies'* step, be sure to leave *'Select required
@@ -124,9 +124,9 @@ MinGW-w64 compilers available through Cygwin's package manager.
     2. Set the `XC_HOST` variable in `Make.user` to indicate MinGW-w64 cross
        compilation
        ```sh
-       echo 'XC_HOST = i686-w64-mingw32' > Make.user     # for 32 bit Julia
+       echo 'XC_HOST = i686-w64-mingw32' > Make.user     # for 32-bit Julia
        # or
-       echo 'XC_HOST = x86_64-w64-mingw32' > Make.user   # for 64 bit Julia
+       echo 'XC_HOST = x86_64-w64-mingw32' > Make.user   # for 64-bit Julia
        ```
 
     3. Start the build
@@ -181,9 +181,9 @@ of Julia.  If you use a different Linux distribution or OS X, install
 # Vagrantfile for MinGW-w64 cross-compilation of Julia
 
 $script = <<SCRIPT
-# Change the following to i686-w64-mingw32 for 32 bit Julia:
+# Change the following to i686-w64-mingw32 for 32-bit Julia:
 export XC_HOST=x86_64-w64-mingw32
-# Change the following to 32 for 32 bit Julia:
+# Change the following to 32 for 32-bit Julia:
 export BITS=64
 zypper addrepo http://download.opensuse.org/repositories/windows:mingw:win$BITS/openSUSE_Leap_42.2/windows:mingw:win$BITS.repo
 zypper --gpg-auto-import-keys refresh
@@ -227,7 +227,7 @@ apt-get install wine subversion cvs gcc wget p7zip-full winbind mingw-w64
 ```
 
 **On Mac**: Install XCode, XCode command line tools, X11 (now [XQuartz](
-http://xquartz.macosforge.org/)), and [MacPorts](http://www.macports.org/install.php)
+https://xquartz.macosforge.org/)), and [MacPorts](https://www.macports.org/install.php)
 or [Homebrew](https://brew.sh/).  Then run `port install wine wget mingw-w64`,
 or `brew install wine wget mingw-w64`, as appropriate.
 
@@ -301,7 +301,7 @@ running the resulting installer.
 
  - Disable the Windows [Superfetch](https://en.wikipedia.org/wiki/Windows_Vista_I/O_technologies#SuperFetch)
    and [Program Compatibility Assistant](
-   http://blogs.msdn.com/b/cjacks/archive/2011/11/22/managing-the-windows-7-program-compatibility-assistant-pca.aspx)
+   https://blogs.msdn.com/b/cjacks/archive/2011/11/22/managing-the-windows-7-program-compatibility-assistant-pca.aspx)
    services, as they are known to have [spurious interactions](
    https://cygwin.com/ml/cygwin/2011-12/msg00058.html) with MinGW/Cygwin.
 
@@ -311,7 +311,7 @@ running the resulting installer.
    one-by-one until a culprit is found.
 
  - Beware of [BLODA](https://cygwin.com/faq/faq.html#faq.using.bloda).
-   The [vmmap](http://technet.microsoft.com/en-us/sysinternals/dd535533.aspx)
+   The [vmmap](https://technet.microsoft.com/en-us/sysinternals/dd535533.aspx)
    tool is indispensable for identifying such software conflicts. Use vmmap to
    inspect the list of loaded DLLs for bash, mintty, or another persistent
    process used to drive the build. Essentially *any* DLL outside of the Windows
