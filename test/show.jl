@@ -1464,8 +1464,4 @@ Z = Array{Float64}(undef,0,0)
 @test eval(Meta.parse(repr(Z))) == Z
 
 # issue #31065, do not print parentheses for nested dot expressions
-let
-    struct I31065 x::Union{I31065,Nothing} end
-    foo = I31065(I31065(nothing))
-    @test sprint(Base.show_unquoted, :(foo.x.x)) == "foo.x.x"
-end
+@test sprint(Base.show_unquoted, :(foo.x.x)) == "foo.x.x"
