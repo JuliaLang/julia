@@ -238,7 +238,7 @@ function abs(x::Rational{T}) where T<:BitSigned
     x.den === typemin(T) && throw(OverflowError("rational denominator is typemin(T)"))
     abs(x.num) // x.den
 end
-    
+
 typemin(::Type{Rational{T}}) where {T<:Integer} = -one(T)//zero(T)
 typemax(::Type{Rational{T}}) where {T<:Integer} = one(T)//zero(T)
 
