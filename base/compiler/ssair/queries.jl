@@ -9,6 +9,9 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src, sptypes::
     isa(stmt, ReturnNode) && return false
     isa(stmt, GotoNode) && return false
     isa(stmt, GotoIfNot) && return false
+    isa(stmt, DetachNode) && return false
+    isa(stmt, ReattachNode) && return false
+    isa(stmt, SyncNode) && return false
     isa(stmt, Slot) && return false # Slots shouldn't occur in the IR at this point, but let's be defensive here
     isa(stmt, GlobalRef) && return isdefined(stmt.mod, stmt.name)
     if isa(stmt, Expr)

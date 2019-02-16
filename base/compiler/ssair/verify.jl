@@ -109,6 +109,11 @@ function verify_ir(ir::IRCode)
                 @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
                 error()
             end
+        elseif isa(terminator, DetachNode)
+            if length(block.succs) != 2 || (block.succs != [terminator.label, terminator.reattach] && block.succs != [terminator.reattach, terminator.label])
+                @verify_error "Block $idx successors ($(block.succs)), does not match DetachNode terminator"
+                error()
+            end
         else
             if length(block.succs) != 1 || block.succs[1] != idx + 1
                 # As a special case, we allow extra statements in the BB of an :enter

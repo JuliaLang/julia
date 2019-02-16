@@ -62,6 +62,8 @@ jl_sym_t *throw_undef_if_not_sym; jl_sym_t *getfield_undefref_sym;
 jl_sym_t *gc_preserve_begin_sym; jl_sym_t *gc_preserve_end_sym;
 jl_sym_t *escape_sym;
 jl_sym_t *aliasscope_sym; jl_sym_t *popaliasscope_sym;
+jl_sym_t *detach_sym; jl_sym_t *reattach_sym;
+jl_sym_t *sync_sym; jl_sym_t *syncregion_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -367,6 +369,10 @@ void jl_init_frontend(void)
     do_sym = jl_symbol("do");
     aliasscope_sym = jl_symbol("aliasscope");
     popaliasscope_sym = jl_symbol("popaliasscope");
+    detach_sym = jl_symbol("detach");
+    reattach_sym = jl_symbol("reattach");
+    sync_sym = jl_symbol("sync");
+    syncregion_sym = jl_symbol("syncregion");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -526,6 +532,27 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
         if (sym == goto_sym) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
             temp = jl_new_struct(jl_gotonode_type, ex);
+        }
+        else if (sym == detach_sym) {
+            jl_value_t* label;
+            jl_value_t* reattach;
+            JL_GC_PUSH2(&label, &reattach);
+            ex = scm_to_julia_(fl_ctx, car_(e), mod);
+            label = scm_to_julia_(fl_ctx, car_(cdr_(e)), mod);
+            reattach = scm_to_julia_(fl_ctx, car_(cdr_(cdr_(e))), mod);
+            temp = jl_new_struct(jl_detachnode_type, ex, label, reattach);
+            JL_GC_POP();
+        }
+        else if (sym == reattach_sym) {
+            ex = scm_to_julia_(fl_ctx, car_(e), mod);
+            jl_value_t* label = scm_to_julia_(fl_ctx, car_(cdr_(e)), mod);
+            JL_GC_PUSH1(&label);
+            temp = jl_new_struct(jl_reattachnode_type, ex, label);
+            JL_GC_POP();
+        }
+        else if (sym == sync_sym) {
+            ex = scm_to_julia_(fl_ctx, car_(e), mod);
+            temp = jl_new_struct(jl_syncnode_type, ex);
         }
         else if (sym == newvar_sym) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
@@ -726,6 +753,12 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
     }
     if (jl_typeis(v, jl_gotonode_type))
         return julia_to_list2_noalloc(fl_ctx, (jl_value_t*)goto_sym, jl_fieldref(v,0));
+    if (jl_typeis(v, jl_detachnode_type))
+        return julia_to_list2_noalloc(fl_ctx, (jl_value_t*)detach_sym, jl_fieldref(v,0));
+    if (jl_typeis(v, jl_reattachnode_type))
+        return julia_to_list2_noalloc(fl_ctx, (jl_value_t*)reattach_sym, jl_fieldref(v,0));
+    if (jl_typeis(v, jl_syncnode_type))
+        return julia_to_list2_noalloc(fl_ctx, (jl_value_t*)sync_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_quotenode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)inert_sym, jl_fieldref_noalloc(v,0));
     if (jl_typeis(v, jl_newvarnode_type))

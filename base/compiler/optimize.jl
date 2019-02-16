@@ -149,7 +149,8 @@ end
 # if there is no usage within the function), but don't affect the purity
 # of the function as a whole.
 function stmt_affects_purity(@nospecialize(stmt), ir)
-    if isa(stmt, GotoNode) || isa(stmt, ReturnNode)
+    if isa(stmt, GotoNode) || isa(stmt, ReturnNode) ||
+        isa(stmt, DetachNode) || isa(stmt, ReattachNode) || isa(stmt, SyncNode)
         return false
     end
     if isa(stmt, GotoIfNot)
@@ -413,6 +414,27 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
         el = body[i]
         if isa(el, GotoNode)
             body[i] = GotoNode(el.label + labelchangemap[el.label])
+        elseif isa(el, DetachNode)
+            syncregion = el.syncregion
+            if isa(syncregion, SSAValue)
+                    syncregion = SSAValue(syncregion.id + ssachangemap[syncregion.id])
+            end
+            label = el.label + labelchangemap[el.label]
+            reattach = el.reattach + labelchangemap[el.label]
+            body[i] = DetachNode(syncregion, label, reattach)
+        elseif isa(el, ReattachNode)
+            syncregion = el.syncregion
+            if isa(syncregion, SSAValue)
+                    syncregion = SSAValue(syncregion.id + ssachangemap[syncregion.id])
+            end
+            label = el.label + labelchangemap[el.label]
+            body[i] = ReattachNode(syncregion, label)
+        elseif isa(el, SyncNode)
+            syncregion = el.syncregion
+            if isa(syncregion, SSAValue)
+                    syncregion = SSAValue(syncregion.id + ssachangemap[syncregion.id])
+            end
+            body[i] = SyncNode(syncregion)
         elseif isa(el, SSAValue)
             body[i] = SSAValue(el.id + ssachangemap[el.id])
         elseif isa(el, Expr)
