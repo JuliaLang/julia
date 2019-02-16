@@ -11,7 +11,7 @@ using .Base.Cartesian
 using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
 import .Base: copy, copyto!, axes
-export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__
+export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, @:
 
 ## Computing the result's axes: deprecated name
 const broadcast_axes = axes
@@ -1210,5 +1210,30 @@ end
     broadcasted(combine_styles(arg1′, arg2′, args′...), f, arg1′, arg2′, args′...)
 end
 @inline broadcasted(::S, f, args...) where S<:BroadcastStyle = Broadcasted{S}(f, args)
+
+function _lazy end  # only used in `@:` macro; does not have to be callable
+# wrap the Broadcasted object in a tuple to avoid materializing
+@inline broadcasted(::typeof(_lazy), x) = (x,)
+
+"""
+    @: broadcasting_expression
+
+Construct a non-materialized broadcasted object from a `broadcasting_expression`
+and [`instantiate`](@ref) it.
+
+# Examples
+```jldoctest
+julia> bc = @: (1:3).^2;
+
+julia> bc isa Broadcast.Broadcasted  # it's not an `Array`
+true
+
+julia> sum(bc)  # summation without allocating an array
+14
+```
+"""
+macro (:)(ex)
+    return esc(:($instantiate(($_lazy.($ex))[1])))
+end
 
 end # module
