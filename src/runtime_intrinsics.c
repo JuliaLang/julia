@@ -69,7 +69,7 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
         size_t nb = LLT_ALIGN(elsz, jl_datatype_align(ety));
         char *pp = (char*)jl_unbox_long(p) + (jl_unbox_long(i)-1)*nb;
         if (jl_typeof(x) != ety)
-            jl_error("pointerset: type mismatch in assign");
+            jl_type_error("pointerset", ety, x);
         memcpy(pp, x, elsz);
     }
     return p;
@@ -400,8 +400,6 @@ static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const 
     void *pr = alloca(osize);
     unsigned isize_bits = isize * host_char_bit;
     unsigned osize_bits = osize * host_char_bit;
-    if (aty == (jl_value_t*)jl_bool_type)
-       isize_bits = 1;
     op(isize_bits, pa, osize_bits, pr);
     return jl_new_bits(ty, pr);
 }

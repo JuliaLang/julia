@@ -156,15 +156,16 @@ end
 macro except_strbt(expr, err_type)
     errmsg = "expected failure, but no exception thrown for $expr"
     return quote
-        let err = nothing
+        let err = nothing, bt = nothing
             try
                 $(esc(expr))
             catch err
+                bt = catch_backtrace()
             end
             err === nothing && error($errmsg)
             @test typeof(err) === $(esc(err_type))
             buf = IOBuffer()
-            showerror(buf, err, catch_backtrace())
+            showerror(buf, err, bt)
             String(take!(buf))
         end
     end
@@ -260,6 +261,8 @@ let undefvar
     @test err_str == "TypeError: in Type, in parameter, expected Type, got String"
     err_str = @except_str TypeWithIntParam{Any} TypeError
     @test err_str == "TypeError: in TypeWithIntParam, in T, expected T<:Integer, got Type{Any}"
+    err_str = @except_str Type{Vararg} TypeError
+    @test err_str == "TypeError: in Type, in parameter, expected Type, got Vararg"
 
     err_str = @except_str mod(1,0) DivideError
     @test err_str == "DivideError: integer division error"
@@ -533,6 +536,31 @@ end
     @test occursin("g28442", output[3])
     @test output[4][1:4] == " [2]"
     @test occursin("f28442", output[4])
-    @test occursin("the last 2 lines are repeated 5000 more times", output[5])
-    @test output[6][1:8] == " [10003]"
+    # Issue #30233
+    # Note that we can't use @test_broken on FreeBSD here, because the tests actually do
+    # pass with some compilation options, e.g. with assertions enabled
+    if !Sys.isfreebsd()
+        @test occursin("the last 2 lines are repeated 5000 more times", output[5])
+        @test output[6][1:8] == " [10003]"
+    end
+end
+
+# issue #30633
+@test_throws ArgumentError("invalid index: \"foo\" of type String") [1]["foo"]
+@test_throws ArgumentError("invalid index: nothing of type Nothing") [1][nothing]
+
+# test showing MethodError with type argument
+struct NoMethodsDefinedHere; end
+let buf = IOBuffer()
+    Base.show_method_candidates(buf, Base.MethodError(sin, Tuple{NoMethodsDefinedHere}))
+    @test length(take!(buf)) !== 0
+end
+
+@testset "Nested errors" begin
+    # LoadError and InitError used to print the nested exception.
+    # This is now dealt with via the exception stack so these print very simply:
+    @test sprint(Base.showerror, LoadError("somefile.jl", 10, ErrorException("retained for backward compat"))) ==
+          "Error while loading expression starting at somefile.jl:10"
+    @test sprint(Base.showerror, InitError(:some_module, ErrorException("retained for backward compat"))) ==
+          "InitError during initialization of module some_module"
 end

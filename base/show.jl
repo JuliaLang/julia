@@ -307,8 +307,20 @@ end
     show(x)
 
 Write an informative text representation of a value to the current output stream. New types
-should overload `show(io, x)` where the first argument is a stream. The representation used
+should overload `show(io::IO, x)` where the first argument is a stream. The representation used
 by `show` generally includes Julia-specific formatting and type information.
+
+[`repr`](@ref) returns the output of `show` as a string.
+
+See also [`print`](@ref), which writes un-decorated representations.
+
+# Examples
+```jldoctest
+julia> show("Hello World!")
+"Hello World!"
+julia> print("Hello World!")
+Hello World!
+```
 """
 show(x) = show(stdout::IO, x)
 
@@ -378,17 +390,15 @@ function show(io::IO, f::Function)
     end
 end
 
+print(io::IO, f::Function) = print(io, nameof(f))
+
 function show(io::IO, x::Core.IntrinsicFunction)
     name = ccall(:jl_intrinsic_name, Cstring, (Core.IntrinsicFunction,), x)
     print(io, unsafe_string(name))
 end
 
 show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
-
-function show(io::IO, x::Union)
-    print(io, "Union")
-    show_comma_array(io, uniontypes(x), '{', '}')
-end
+show(io::IO, ::MIME"text/plain", ::Core.TypeofBottom) = print(io, "Union{}")
 
 function print_without_params(@nospecialize(x))
     if isa(x,UnionAll)
@@ -410,7 +420,17 @@ function io_has_tvar_name(io::IOContext, name::Symbol, @nospecialize(x))
 end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
-function show(io::IO, x::UnionAll)
+function show(io::IO, @nospecialize(x::Type))
+    if x isa DataType
+        show_datatype(io, x)
+        return
+    elseif x isa Union
+        print(io, "Union")
+        show_delim_array(io, uniontypes(x), '{', ',', '}', false)
+        return
+    end
+    x::UnionAll
+
     if print_without_params(x)
         return show(io, unwrap_unionall(x).name)
     end
@@ -433,8 +453,6 @@ function show(io::IO, x::UnionAll)
     show(io, x.var)
 end
 
-show(io::IO, x::DataType) = show_datatype(io, x)
-
 # Check whether 'sym' (defined in module 'parent') is visible from module 'from'
 # If an object with this name exists in 'from', we need to check that it's the same binding
 # and that it's not deprecated.
@@ -455,14 +473,14 @@ function show_type_name(io::IO, tn::Core.TypeName)
     globname = isdefined(tn, :mt) ? tn.mt.name : nothing
     globfunc = false
     if globname !== nothing
-        globname_str = string(globname)
+        globname_str = string(globname::Symbol)
         if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
                 isbindingresolved(tn.module, globname) && isdefined(tn.module, globname) &&
                 isconcretetype(tn.wrapper) && isa(getfield(tn.module, globname), tn.wrapper))
             globfunc = true
         end
     end
-    sym = globfunc ? globname : tn.name
+    sym = (globfunc ? globname : tn.name)::Symbol
     if get(io, :compact, false)
         if globfunc
             return print(io, "typeof(", sym, ")")
@@ -564,7 +582,7 @@ end
 
 show(io::IO, ::Nothing) = print(io, "nothing")
 print(io::IO, ::Nothing) = throw(ArgumentError("`nothing` should not be printed; use `show`, `repr`, or custom output instead."))
-show(io::IO, b::Bool) = print(io, b ? "true" : "false")
+show(io::IO, b::Bool) = print(io, get(io, :typeinfo, Any) === Bool ? (b ? "1" : "0") : (b ? "true" : "false"))
 show(io::IO, n::Signed) = (write(io, string(n)); nothing)
 show(io::IO, n::Unsigned) = print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
 print(io::IO, n::Unsigned) = print(io, string(n))
@@ -576,6 +594,7 @@ has_tight_type(p::Pair) =
     typeof(p.second) == typeof(p).parameters[2]
 
 isdelimited(io::IO, x) = true
+isdelimited(io::IO, x::Function) = !isoperator(Symbol(x))
 
 # !isdelimited means that the Pair is printed with "=>" (like in "1 => 2"),
 # without its explicit type (like in "Pair{Integer,Integer}(1, 2)")
@@ -617,7 +636,7 @@ function sourceinfo_slotnames(src::CodeInfo)
     for i in eachindex(slotnames)
         name = string(slotnames[i])
         idx = get!(names, name, i)
-        if idx != i
+        if idx != i || isempty(name)
             printname = "$name@_$i"
             idx > 0 && (printnames[idx] = "$name@_$idx")
             names[name] = 0
@@ -649,9 +668,6 @@ function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, de
     print(io, op)
     if !show_circular(io, itr)
         recur_io = IOContext(io, :SHOWN_SET => itr)
-        if !haskey(io, :compact)
-            recur_io = IOContext(recur_io, :compact => true)
-        end
         first = true
         i = i1
         if l >= i1
@@ -710,7 +726,6 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax
     print(io, cl)
 end
 
-show_comma_array(io::IO, itr, o, c) = show_delim_array(io, itr, o, ',', c, false)
 show(io::IO, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
 show(io::IO, v::SimpleVector) = show_delim_array(io, v, "svec(", ',', ')', false)
 
@@ -960,7 +975,8 @@ end
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
     if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
-            (isa(func, Expr) && (func.head == :. || func.head == :curly))
+            (isa(func, Expr) && (func.head == :. || func.head == :curly)) ||
+            isa(func, GlobalRef)
         show_unquoted(io, func, indent)
     else
         print(io, '(')
@@ -990,7 +1006,7 @@ show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex
 function show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)
     print(io, ex.mod)
     print(io, '.')
-    quoted = !isidentifier(ex.name)
+    quoted = !isidentifier(ex.name) && !startswith(string(ex.name), "@")
     parens = quoted && (!isoperator(ex.name) || (ex.name in quoted_syms))
     quoted && print(io, ':')
     parens && print(io, '(')
@@ -1031,7 +1047,7 @@ function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, pre
             print(io, ":")
             print(io, value)
         else
-            print(io, "Symbol(\"", escape_string(s), "\")")
+            print(io, "Symbol(", repr(s), ")")
         end
     else
         if isa(value,Expr) && value.head === :block
@@ -1066,6 +1082,10 @@ function show_generator(io, ex, indent)
     end
 end
 
+function valid_import_path(@nospecialize ex)
+    return Meta.isexpr(ex, :(.)) && length(ex.args) > 0 && all(a->isa(a,Symbol), ex.args)
+end
+
 function show_import_path(io::IO, ex)
     if !isa(ex, Expr)
         print(io, ex)
@@ -1096,8 +1116,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     head, args, nargs = ex.head, ex.args, length(ex.args)
     unhandled = false
     # dot (i.e. "x.y"), but not compact broadcast exps
-    if head === :(.) && (length(args) != 2 || !is_expr(args[2], :tuple))
-        if length(args) == 2 && is_quoted(args[2])
+    if head === :(.) && (nargs != 2 || !is_expr(args[2], :tuple))
+        if nargs == 2 && is_quoted(args[2])
             item = args[1]
             # field
             field = unquoted(args[2])
@@ -1207,8 +1227,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
     # new expr
-    elseif head === :new
-        show_enclosed_list(io, "%new(", args, ", ", ")", indent)
+    elseif head === :new || head === :splatnew
+        show_enclosed_list(io, "%$head(", args, ", ", ")", indent)
 
     # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
     elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
@@ -1216,23 +1236,23 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_call(io, head, args[1], funcargslike, indent)
 
     # comprehensions
-    elseif head === :typed_comprehension && length(args) == 2
+    elseif head === :typed_comprehension && nargs == 2
         show_unquoted(io, args[1], indent)
         print(io, '[')
         show_generator(io, args[2], indent)
         print(io, ']')
 
-    elseif head === :comprehension && length(args) == 1
+    elseif head === :comprehension && nargs == 1
         print(io, '[')
         show_generator(io, args[1], indent)
         print(io, ']')
 
-    elseif (head === :generator && length(args) >= 2) || (head === :flatten && length(args) == 1)
+    elseif (head === :generator && nargs >= 2) || (head === :flatten && nargs == 1)
         print(io, '(')
         show_generator(io, ex, indent)
         print(io, ')')
 
-    elseif head === :filter && length(args) == 2
+    elseif head === :filter && nargs == 2
         show_unquoted(io, args[2], indent)
         print(io, " if ")
         show_unquoted(io, args[1], indent)
@@ -1332,7 +1352,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         if prec >= 0
             show_call(io, :call, args[1], args[3:end], indent)
         else
-            show_args = Vector{Any}(undef, length(args) - 1)
+            show_args = Vector{Any}(undef, nargs - 1)
             show_args[1] = args[1]
             show_args[2:end] = args[3:end]
             show_list(io, show_args, ' ', indent)
@@ -1392,7 +1412,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         print(io, '"')
 
-    elseif (head === :&#= || head === :$=#) && length(args) == 1
+    elseif (head === :&#= || head === :$=#) && nargs == 1
         print(io, head)
         a1 = args[1]
         parens = (isa(a1,Expr) && a1.head !== :tuple) || (isa(a1,Symbol) && isoperator(a1))
@@ -1401,7 +1421,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         parens && print(io, ")")
 
     # transpose
-    elseif head === Symbol('\'') && length(args) == 1
+    elseif head === Symbol('\'') && nargs == 1
         if isa(args[1], Symbol)
             show_unquoted(io, args[1])
         else
@@ -1412,7 +1432,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, head)
 
     # `where` syntax
-    elseif head === :where && length(args) > 1
+    elseif head === :where && nargs > 1
         parens = 1 <= prec
         parens && print(io, "(")
         show_unquoted(io, args[1], indent, operator_precedence(:(::)))
@@ -1426,7 +1446,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         parens && print(io, ")")
 
-    elseif head === :import || head === :using
+    elseif (head === :import || head === :using) && nargs == 1 &&
+            (valid_import_path(args[1]) ||
+             (Meta.isexpr(args[1], :(:)) && length(args[1].args) > 1 && all(valid_import_path, args[1].args)))
         print(io, head)
         print(io, ' ')
         first = true
@@ -1437,11 +1459,11 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             first = false
             show_import_path(io, a)
         end
-    elseif head === :meta && length(args) >= 2 && args[1] === :push_loc
+    elseif head === :meta && nargs >= 2 && args[1] === :push_loc
         print(io, "# meta: location ", join(args[2:end], " "))
-    elseif head === :meta && length(args) == 1 && args[1] === :pop_loc
+    elseif head === :meta && nargs == 1 && args[1] === :pop_loc
         print(io, "# meta: pop location")
-    elseif head === :meta && length(args) == 2 && args[1] === :pop_loc
+    elseif head === :meta && nargs == 2 && args[1] === :pop_loc
         print(io, "# meta: pop locations ($(args[2]))")
     # print anything else as "Expr(head, args...)"
     else
@@ -1562,9 +1584,18 @@ module IRShow
     Base.first(r::Compiler.StmtRange) = Compiler.first(r)
     Base.last(r::Compiler.StmtRange) = Compiler.last(r)
     include("compiler/ssair/show.jl")
+
+    const __debuginfo = Dict{Symbol, Any}(
+        # :full => src -> Base.IRShow.DILineInfoPrinter(src.linetable), # and add variable slot information
+        :source => src -> Base.IRShow.DILineInfoPrinter(src.linetable),
+        # :oneliner => src -> Base.IRShow.PartialLineInfoPrinter(src.linetable),
+        :none => src -> Base.IRShow.lineinfo_disabled,
+        )
+    const default_debuginfo = Ref{Symbol}(:none)
+    debuginfo(sym) = sym == :default ? default_debuginfo[] : sym
 end
 
-function show(io::IO, src::CodeInfo)
+function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     # Fix slot names and types in function body
     print(io, "CodeInfo(")
     lambda_io::IOContext = io
@@ -1575,7 +1606,9 @@ function show(io::IO, src::CodeInfo)
     if isempty(src.linetable) || src.linetable[1] isa LineInfoNode
         println(io)
         # TODO: static parameter values?
-        IRShow.show_ir(lambda_io, src)
+        # only accepts :source or :none, we can't have a fallback for default since
+        # that would break code_typed(, debuginfo=:source) iff IRShow.default_debuginfo[] = :none
+        IRShow.show_ir(lambda_io, src, IRShow.__debuginfo[debuginfo](src))
     else
         # this is a CodeInfo that has not been used as a method yet, so its locations are still LineNumberNodes
         body = Expr(:block)
@@ -1823,15 +1856,16 @@ dims2string(d) = isempty(d) ? "0-dimensional" :
 
 inds2string(inds) = join(map(_indsstring,inds), '×')
 _indsstring(i) = string(i)
-_indsstring(i::Slice) = string(i.indices)
+_indsstring(i::Union{IdentityUnitRange, Slice}) = string(i.indices)
 
 # anything array-like gets summarized e.g. 10-element Array{Int64,1}
-summary(io::IO, a::AbstractArray) = summary(io, a, axes(a))
-function summary(io::IO, a, inds::Tuple{Vararg{OneTo}})
+summary(io::IO, a::AbstractArray) = array_summary(io, a, axes(a))
+function array_summary(io::IO, a, inds::Tuple{Vararg{OneTo}})
     print(io, dims2string(length.(inds)), " ")
     showarg(io, a, true)
 end
-function summary(io::IO, a, inds)
+function array_summary(io::IO, a, inds)
+    print(io, dims2string(length.(inds)), " ")
     showarg(io, a, true)
     print(io, " with indices ", inds2string(inds))
 end
@@ -1898,7 +1932,7 @@ function showarg(io::IO, v::SubArray, toplevel)
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(v))
 end
-showindices(io, ::Slice, inds...) =
+showindices(io, ::Union{Slice,IdentityUnitRange}, inds...) =
     (print(io, ", :"); showindices(io, inds...))
 showindices(io, ind1, inds...) =
     (print(io, ", ", ind1); showindices(io, inds...))

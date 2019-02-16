@@ -9,6 +9,7 @@
 @test_throws ErrorException NamedTuple{(:a,:a),Tuple{Int,Int}}
 @test_throws ErrorException NamedTuple{(:a,:a)}((1,2))
 @test_throws ErrorException NamedTuple{(:a, :b, :a), NTuple{3, Int}}((1, 2, 3))
+@test_throws ArgumentError NamedTuple{(:a, :b, :c), NTuple{3, Int}}((1, 2))
 
 @test fieldcount(NamedTuple{(:a,:b,:c)}) == 3
 @test fieldcount(NamedTuple{<:Any,Tuple{Int,Int}}) == 2
@@ -27,6 +28,16 @@
 @test length(NamedTuple()) == 0
 @test length((a=1,)) == 1
 @test length((a=1, b=0)) == 2
+
+@test firstindex((a=1, b=0)) == 1
+@test firstindex((a=1,)) == 1
+@test firstindex(NamedTuple()) == 1
+@test lastindex((a=1, b=0)) == 2
+@test lastindex((a=1,)) == 1
+@test lastindex(NamedTuple()) == 0
+
+@test isempty(NamedTuple())
+@test !isempty((a=1,))
 
 @test (a=1,b=2) === (a=1,b=2)
 @test (a=1,b=2) !== (b=1,a=2)

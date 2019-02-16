@@ -269,6 +269,12 @@ end
             @test findall(in(span), r) == 1:6
         end
     end
+    @testset "findfirst" begin
+        @test findfirst(isequal(7), 1:2:10) == 4
+        @test findfirst(==(7), 1:2:10) == 4
+        @test findfirst(==(10), 1:2:10) == nothing
+        @test findfirst(==(11), 1:2:10) == nothing
+    end
     @testset "reverse" begin
         @test reverse(reverse(1:10)) == 1:10
         @test reverse(reverse(typemin(Int):typemax(Int))) == typemin(Int):typemax(Int)
@@ -1412,6 +1418,13 @@ end
     @test getindex((typemax(UInt64)//one(UInt64):typemax(UInt64)//one(UInt64)), 1) == typemax(UInt64)//one(UInt64)
 end
 
+@testset "Issue #30006" begin
+    @test Base.Slice(Base.OneTo(5))[Int32(1)] == Int32(1)
+    @test Base.Slice(Base.OneTo(3))[Int8(2)] == Int8(2)
+    @test Base.Slice(1:10)[Int32(2)] == Int32(2)
+    @test Base.Slice(1:10)[Int8(2)] == Int8(2)
+end
+
 @testset "allocation of TwicePrecision call" begin
     0:286.493442:360
     0:286:360
@@ -1434,4 +1447,14 @@ end
     end
     # require a keyword arg
     @test_throws ArgumentError range(1, 100)
+end
+
+@testset "Reverse empty ranges" begin
+    @test reverse(1:0) === 0:-1:1
+    @test reverse(Base.OneTo(0)) === 0:-1:1
+    # Almost `1.0:-1.0:2.0`, only different is the step which is
+    # `Base.TwicePrecision(-1.0, 0.0)`
+    @test reverse(1.0:0.0) === StepRangeLen(Base.TwicePrecision(1.0, 0.0),
+                                            Base.TwicePrecision(-1.0, -0.0), 0)
+    @test reverse(reverse(1.0:0.0)) === 1.0:0.0
 end

@@ -116,20 +116,25 @@ function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
     return thecall
 end
 
-for fname in [:which, :less, :edit, :functionloc, :code_warntype, :code_native]
+for fname in [:which, :less, :edit, :functionloc]
     @eval begin
         macro ($fname)(ex0)
             gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0)
         end
     end
 end
+
 macro which(ex0::Symbol)
     ex0 = QuoteNode(ex0)
     return :(which($__module__, $ex0))
 end
 
-macro code_llvm(ex0...)
-    gen_call_with_extracted_types_and_kwargs(__module__, :code_llvm, ex0)
+for fname in [:code_warntype, :code_llvm, :code_native]
+    @eval begin
+        macro ($fname)(ex0...)
+            gen_call_with_extracted_types_and_kwargs(__module__, $(Expr(:quote, fname)), ex0)
+        end
+    end
 end
 
 macro code_typed(ex0...)
@@ -140,8 +145,8 @@ macro code_typed(ex0...)
     end
 end
 
-macro code_lowered(ex0)
-    thecall = gen_call_with_extracted_types(__module__, :code_lowered, ex0)
+macro code_lowered(ex0...)
+    thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_lowered, ex0)
     quote
         results = $thecall
         length(results) == 1 ? results[1] : results
@@ -216,15 +221,16 @@ Evaluates the arguments to the function or macro call, determines their types, a
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
 [`code_llvm`](@ref) on the resulting expression.
-Set the optional keyword arguments `raw`, `dump_module` and `optimize` by putting them and
-their value before the function call, like this:
+Set the optional keyword arguments `raw`, `dump_module`, `debuginfo`, `optimize`
+by putting them and their value before the function call, like this:
 
-    @code_llvm raw=true dump_module=true f(x)
+    @code_llvm raw=true dump_module=true debuginfo=:default f(x)
     @code_llvm optimize=false f(x)
 
 `optimize` controls whether additional optimizations, such as inlining, are also applied.
 `raw` makes all metadata and dbg.* calls visible.
-`dump_module` prints the entire module that encapsulates the function, with debug info and metadata.
+`debuginfo` may be one of `:source` (default) or `:none`,  to specify the verbosity of code comments.
+`dump_module` prints the entire module that encapsulates the function.
 """
 :@code_llvm
 
@@ -233,5 +239,11 @@ their value before the function call, like this:
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
 [`code_native`](@ref) on the resulting expression.
+
+Set the optional keyword argument `debuginfo` by putting it before the function call, like this:
+
+    @code_native debuginfo=:default f(x)
+
+`debuginfo` may be one of `:source` (default) or `:none`, to specify the verbosity of code comments.
 """
 :@code_native

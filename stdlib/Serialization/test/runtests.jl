@@ -532,3 +532,10 @@ let io = IOBuffer()
     f2 = deserialize(io)
     @test f2(1) === 1f0
 end
+
+# using a filename; #30151
+let f = tempname(), x = [rand(2,2), :x, "hello"]
+    serialize(f, x)
+    @test deserialize(f) == x
+    rm(f)
+end

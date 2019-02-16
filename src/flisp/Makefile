@@ -2,9 +2,10 @@ JULIAHOME := $(abspath ../..)
 BUILDDIR := .
 include $(JULIAHOME)/Make.inc
 
-override CFLAGS += $(JCFLAGS)
-override CXXFLAGS += $(JCXXFLAGS)
-override CPPFLAGS += $(JCPPFLAGS)
+JCFLAGS += $(CFLAGS)
+JCXXFLAGS += $(CXXFLAGS)
+JCPPFLAGS += $(CPPFLAGS)
+JLDFLAGS += $(LDFLAGS)
 
 NAME := flisp
 EXENAME := $(NAME)
@@ -28,7 +29,7 @@ ifneq ($(OS),WINNT)
 LIBS += -lpthread
 endif
 
-FLAGS := -I$(LLTDIR) $(CFLAGS) $(HFILEDIRS:%=-I%) \
+FLAGS := -I$(LLTDIR) $(JCFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(UTF8PROC_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
         -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
 ifneq ($(USEMSVC), 1)
@@ -49,9 +50,9 @@ $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
 
 $(BUILDDIR)/%.o: %.c $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: %.c $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 $(BUILDDIR)/flisp.o:   flisp.c cvalues.c types.c flisp.h print.c read.c equal.c
 $(BUILDDIR)/flisp.dbg.obj:  flisp.c cvalues.c types.c flisp.h print.c read.c equal.c
@@ -78,10 +79,10 @@ CCLD := $(LD)
 endif
 
 $(BUILDDIR)/$(EXENAME)-debug: $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj | $(BUILDDIR)/flisp.boot
-	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(LDFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS))
+	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(JLDFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS))
 
 $(BUILDDIR)/$(EXENAME): $(OBJS) $(LIBFILES_release) $(BUILDDIR)/$(LIBTARGET).a $(BUILDDIR)/flmain.o | $(BUILDDIR)/flisp.boot
-	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(LDFLAGS) $(OBJS) $(BUILDDIR)/flmain.o -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_release) $(LIBS) $(OSLIBS))
+	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(JLDFLAGS) $(OBJS) $(BUILDDIR)/flmain.o -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_release) $(LIBS) $(OSLIBS))
 
 ifneq ($(BUILDDIR),.)
 $(BUILDDIR)/flisp.boot: flisp.boot | $(BUILDDIR)

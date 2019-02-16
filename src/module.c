@@ -114,7 +114,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var, int 
                 b->owner = m;
             }
             else if (error) {
-                jl_errorf("cannot assign variable %s.%s from module %s",
+                jl_errorf("cannot assign a value to variable %s.%s from module %s",
                           jl_symbol_name(b->owner->name), jl_symbol_name(var), jl_symbol_name(m->name));
             }
         }

@@ -1,54 +1,98 @@
-Julia v1.1.0 Release Notes
-==========================
+Julia v1.2 Release Notes
+========================
 
 New language features
 ---------------------
 
-  * An *exception stack* is maintained on each task to make exception handling more robust and enable root cause analysis using `catch_stack` ([#28878]).
+  * Argument splatting (`x...`) can now be used in calls to the `new` pseudo-function in
+    constructors ([#30577]).
 
+Multi-threading changes
+-----------------------
+
+  * The `Condition` type now has a thread-safe replacement, accessed as `Threads.Condition`.
+    With that addition, task scheduling primitives such as `ReentrantLock` are now thread-safe ([#30061]).
 
 Language changes
 ----------------
+* Empty entries in `JULIA_DEPOT_PATH` are now expanded to default depot entries ([#31009]).
+* `Enum` now behaves like a scalar when used in broadcasting ([#30670]).
 
-  * the constructor `BigFloat(::BigFloat)` now respects the global precision setting and always
-    returns a `BigFloat` with precision equal to `precision(BigFloat)` ([#29127]). The optional
-    `precision` argument to override the global setting is now a keyword instead of positional
-    argument ([#29157]).
-  * Parser inputs ending with a comma are now consistently treated as incomplete.
-    Previously they were sometimes parsed as tuples, depending on whitespace ([#28506]).
-  * `Regex` and `TimeZone` now behave like scalars when used in broadcasting ([#29913], [#30159]).
-  * `Char` now behaves like a read-only 0-dimensional array ([#29819]).
+Command-line option changes
+---------------------------
+
 
 New library functions
 ---------------------
 
-  * `splitpath(p::String)` function, which is the opposite of `joinpath(parts...)`: it splits a filepath into its components ([#28156]).
-  * `isnothing(::Any)` function, to check whether something is a `Nothing`, returns a `Bool` ([#29679]).
-  * `getpid(::Process)` method ([#24064]).
-
+* `getipaddrs()` function returns all the IP addresses of the local machine ([#30349])
+* Added `Base.hasproperty` and `Base.hasfield` ([#28850]).
+* One argument `!=(x)`, `>(x)`, `>=(x)`, `<(x)`, `<=(x)` has been added for currying,
+  similar to the existing `==(x)` and `isequal(x)` methods ([#30915]).
 
 Standard library changes
 ------------------------
 
-  * `CartesianIndices` can now be constructed from two `CartesianIndex`es `I` and `J` with `I:J` ([#29440]).
-  * `CartesianIndices` support broadcasting arithmetic (+ and -) with a `CartesianIndex` ([#29890]).
-  * `copy!` support for arrays, dicts, and sets has been moved to Base from the Future package ([#29173]).
-  * Channels now convert inserted values (like containers) instead of requiring types to match ([#29092]).
-  * `range` can accept the stop value as a positional argument, e.g. `range(1,10,step=2)` ([#28708]).
-  * `edit` can now be called on a module to edit the file that defines it ([#29636]).
-  * `diff` now supports arrays of arbitrary dimensionality and can operate over any dimension ([#29827]).
-  * `sprandn` now supports result types like `ComplexF64` or `Float32` ([#30083]).
+* The `extrema` function now accepts a function argument in the same manner as `minimum` and
+  `maximum` ([#30323]).
+* `hasmethod` can now check for matching keyword argument names ([#30712]).
+* `startswith` and `endswith` now accept a `Regex` for the second argument ([#29790]).
+* `retry` supports arbitrary callable objects ([#30382]).
 
-Compiler/Runtime improvements
------------------------------
+#### LinearAlgebra
 
+* Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
+* `UniformScaling` instances are now callable such that e.g. `I(3)` will produce a `Diagonal` matrix ([#30298]).
+* Eigenvalues λ of general matrices are now sorted lexicographically by (Re λ, Im λ) ([#21598]).
+* `one` for structured matrices (`Diagonal`, `Bidiagonal`, `Tridiagonal`, `Symtridiagonal`) now preserves
+  structure and type. ([#29777])
+
+#### SparseArrays
+
+* performance improvements for sparse matrix-matrix multiplication ([#30372]).
+* Sparse vector outer products are more performant and maintain sparsity in products of the
+  form `kron(u, v')`, `u * v'`, and `u .* v'` where `u` and `v` are sparse vectors or column
+  views. ([#24980])
+
+#### Dates
+
+* Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
+
+#### Miscellaneous
+
+* Since environment variables on Windows are case-insensitive, `ENV` now converts its keys
+  to uppercase for display, iteration, and copying ([#30593]).
+
+External dependencies
+---------------------
+
+* libgit2 has been updated to v0.27.7 ([#30584]).
+* OpenBLAS has been updated to v0.3.5 ([#30583]).
+* MbedTLS has been updated to v2.16.0 ([#30618]).
+* libunwind has been updated to v1.3.1 ([#30724]).
 
 Deprecated or removed
 ---------------------
-  * `one(i::CartesianIndex)` should be replaced with `oneunit(i::CartesianIndex)` ([#29442]).
+
 
 <!--- generated by NEWS-update.jl: -->
-[#28156]: https://github.com/JuliaLang/julia/issues/28156
-[#28878]: https://github.com/JuliaLang/julia/issues/28878
-[#29440]: https://github.com/JuliaLang/julia/issues/29440
-[#29442]: https://github.com/JuliaLang/julia/issues/29442
+[#21598]: https://github.com/JuliaLang/julia/issues/21598
+[#24980]: https://github.com/JuliaLang/julia/issues/24980
+[#28850]: https://github.com/JuliaLang/julia/issues/28850
+[#29790]: https://github.com/JuliaLang/julia/issues/29790
+[#29998]: https://github.com/JuliaLang/julia/issues/29998
+[#30061]: https://github.com/JuliaLang/julia/issues/30061
+[#30200]: https://github.com/JuliaLang/julia/issues/30200
+[#30298]: https://github.com/JuliaLang/julia/issues/30298
+[#30323]: https://github.com/JuliaLang/julia/issues/30323
+[#30349]: https://github.com/JuliaLang/julia/issues/30349
+[#30372]: https://github.com/JuliaLang/julia/issues/30372
+[#30382]: https://github.com/JuliaLang/julia/issues/30382
+[#30583]: https://github.com/JuliaLang/julia/issues/30583
+[#30584]: https://github.com/JuliaLang/julia/issues/30584
+[#30593]: https://github.com/JuliaLang/julia/issues/30593
+[#30618]: https://github.com/JuliaLang/julia/issues/30618
+[#30670]: https://github.com/JuliaLang/julia/issues/30670
+[#30712]: https://github.com/JuliaLang/julia/issues/30712
+[#30724]: https://github.com/JuliaLang/julia/issues/30724
+[#30915]: https://github.com/JuliaLang/julia/issues/30915

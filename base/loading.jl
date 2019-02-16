@@ -795,7 +795,7 @@ const full_warning_showed = Ref(false)
 const modules_warned_for = Set{PkgId}()
 
 """
-    require(module::Symbol)
+    require(into::Module, module::Symbol)
 
 This function is part of the implementation of `using` / `import`, if a module is not
 already defined in `Main`. It can also be called directly to force reloading a module,
@@ -959,7 +959,10 @@ function _require(pkg::PkgId)
                 # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
                 cachefile = compilecache(pkg, path)
                 if isa(cachefile, Exception)
-                    if !precompilableerror(cachefile)
+                    if precompilableerror(cachefile)
+                        verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                        @logmsg verbosity "Skipping precompilation since __precompile__(false). Importing $pkg."
+                    else
                         @warn "The call to compilecache failed to create a usable precompiled cache file for $pkg" exception=m
                     end
                     # fall-through to loading the file locally

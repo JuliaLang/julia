@@ -441,7 +441,7 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_svec_t *sparam_vals);
 int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT;
 jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module_t *inmodule);
-void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_module_t *mod, jl_sym_t *name);
+void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_value_t *name);
 
 jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt JL_PROPAGATES_ROOT,
     jl_value_t **args, size_t nargs, int cache, size_t world);
@@ -560,7 +560,7 @@ static inline void jl_set_gc_and_wait(void)
 }
 #endif
 
-JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant);
+JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char *asm_variant, const char *debuginfo);
 
 void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(jl_value_t *p) JL_NOTSAFEPOINT;
@@ -991,6 +991,7 @@ extern jl_sym_t *method_sym;  extern jl_sym_t *core_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *error_sym;
 extern jl_sym_t *new_sym;     extern jl_sym_t *using_sym;
+extern jl_sym_t *splatnew_sym;
 extern jl_sym_t *pop_exception_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *primtype_sym;
@@ -1000,17 +1001,18 @@ extern jl_sym_t *dot_sym;    extern jl_sym_t *newvar_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *inbounds_sym;
 extern jl_sym_t *copyast_sym; extern jl_sym_t *cfunction_sym;
 extern jl_sym_t *pure_sym; extern jl_sym_t *simdloop_sym;
-extern jl_sym_t *meta_sym; extern jl_sym_t *compiler_temp_sym;
-extern jl_sym_t *inert_sym;  extern jl_sym_t *polly_sym;
-extern jl_sym_t *unused_sym; extern jl_sym_t *static_parameter_sym;
-extern jl_sym_t *inline_sym; extern jl_sym_t *noinline_sym;
-extern jl_sym_t *generated_sym; extern jl_sym_t *generated_only_sym;
-extern jl_sym_t *isdefined_sym; extern jl_sym_t *propagate_inbounds_sym;
-extern jl_sym_t *specialize_sym; extern jl_sym_t *nospecialize_sym;
-extern jl_sym_t *macrocall_sym;  extern jl_sym_t *colon_sym;
-extern jl_sym_t *hygienicscope_sym; extern jl_sym_t *escape_sym;
-extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
+extern jl_sym_t *meta_sym; extern jl_sym_t *inert_sym;
+extern jl_sym_t *polly_sym; extern jl_sym_t *unused_sym;
+extern jl_sym_t *static_parameter_sym; extern jl_sym_t *inline_sym;
+extern jl_sym_t *noinline_sym; extern jl_sym_t *generated_sym;
+extern jl_sym_t *generated_only_sym; extern jl_sym_t *isdefined_sym;
+extern jl_sym_t *propagate_inbounds_sym; extern jl_sym_t *specialize_sym;
+extern jl_sym_t *nospecialize_sym; extern jl_sym_t *macrocall_sym;
+extern jl_sym_t *colon_sym; extern jl_sym_t *hygienicscope_sym;
 extern jl_sym_t *throw_undef_if_not_sym; extern jl_sym_t *getfield_undefref_sym;
+extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
+extern jl_sym_t *failed_sym; extern jl_sym_t *done_sym; extern jl_sym_t *runnable_sym;
+extern jl_sym_t *escape_sym;
 
 struct _jl_sysimg_fptrs_t;
 
@@ -1018,38 +1020,6 @@ void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *
                        jl_method_instance_t **linfos, size_t n);
 
 extern arraylist_t partial_inst;
-
-STATIC_INLINE uint64_t jl_load_unaligned_i64(const void *ptr) JL_NOTSAFEPOINT
-{
-    uint64_t val;
-    memcpy(&val, ptr, 8);
-    return val;
-}
-STATIC_INLINE uint32_t jl_load_unaligned_i32(const void *ptr) JL_NOTSAFEPOINT
-{
-    uint32_t val;
-    memcpy(&val, ptr, 4);
-    return val;
-}
-STATIC_INLINE uint16_t jl_load_unaligned_i16(const void *ptr) JL_NOTSAFEPOINT
-{
-    uint16_t val;
-    memcpy(&val, ptr, 2);
-    return val;
-}
-
-STATIC_INLINE void jl_store_unaligned_i64(void *ptr, uint64_t val) JL_NOTSAFEPOINT
-{
-    memcpy(ptr, &val, 8);
-}
-STATIC_INLINE void jl_store_unaligned_i32(void *ptr, uint32_t val) JL_NOTSAFEPOINT
-{
-    memcpy(ptr, &val, 4);
-}
-STATIC_INLINE void jl_store_unaligned_i16(void *ptr, uint16_t val) JL_NOTSAFEPOINT
-{
-    memcpy(ptr, &val, 2);
-}
 
 #if jl_has_builtin(__builtin_assume_aligned) || defined(_COMPILER_GCC_)
 #define jl_assume_aligned(ptr, align) __builtin_assume_aligned(ptr, align)

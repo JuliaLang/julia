@@ -90,8 +90,7 @@
 #end
 
 #struct LineInfoNode
-#    mod::Module
-#    method::Symbol
+#    method::Any
 #    file::Symbol
 #    line::Int
 #    inlined_at::Int
@@ -257,11 +256,20 @@ struct DomainError <: Exception
     DomainError(@nospecialize(val), @nospecialize(msg)) = (@_noinline_meta; new(val, msg))
 end
 struct TypeError <: Exception
+    # `func` is the name of the builtin function that encountered a type error,
+    # the name of the type that hit an error in its definition or application, or
+    # some other brief description of where the error happened.
+    # `context` optionally adds extra detail, e.g. the name of the type parameter
+    # that got a bad value.
     func::Symbol
-    context::AbstractString
+    context::Union{AbstractString,Symbol}
     expected::Type
     got
+    TypeError(func, context, @nospecialize(expected::Type), @nospecialize(got)) =
+        new(func, context, expected, got)
 end
+TypeError(where, @nospecialize(expected::Type), @nospecialize(got)) =
+    TypeError(Symbol(where), "", expected, got)
 struct InexactError <: Exception
     func::Symbol
     T  # Type
@@ -366,8 +374,8 @@ eval(Core, :(PiNode(val, typ) = $(Expr(:new, :PiNode, :val, :typ))))
 eval(Core, :(PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))))
 eval(Core, :(UpsilonNode(val) = $(Expr(:new, :UpsilonNode, :val))))
 eval(Core, :(UpsilonNode() = $(Expr(:new, :UpsilonNode))))
-eval(Core, :(LineInfoNode(mod::Module, method::Symbol, file::Symbol, line::Int, inlined_at::Int) =
-             $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))))
+eval(Core, :(LineInfoNode(@nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
+             $(Expr(:new, :LineInfoNode, :method, :file, :line, :inlined_at))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
@@ -457,6 +465,14 @@ end
 atdoc     = (source, mod, str, expr) -> Expr(:escape, expr)
 atdoc!(λ) = global atdoc = λ
 
+# macros for big integer syntax
+macro int128_str end
+macro uint128_str end
+macro big_str end
+
+# macro for command syntax
+macro cmd end
+
 
 # simple stand-alone print definitions for debugging
 abstract type IO end
@@ -531,33 +547,8 @@ NamedTuple{names}(args::Tuple) where {names} = NamedTuple{names,typeof(args)}(ar
 
 using .Intrinsics: sle_int, add_int
 
-macro generated()
-    return Expr(:generated)
-end
-
-function NamedTuple{names,T}(args::T) where {names, T <: Tuple}
-    if @generated
-        N = nfields(names)
-        flds = Array{Any,1}(undef, N)
-        i = 1
-        while sle_int(i, N)
-            arrayset(false, flds, :(getfield(args, $i)), i)
-            i = add_int(i, 1)
-        end
-        Expr(:new, :(NamedTuple{names,T}), flds...)
-    else
-        N = nfields(names)
-        NT = NamedTuple{names,T}
-        flds = Array{Any,1}(undef, N)
-        i = 1
-        while sle_int(i, N)
-            arrayset(false, flds, getfield(args, i), i)
-            i = add_int(i, 1)
-        end
-        ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), NT,
-              ccall(:jl_array_ptr, Ptr{Cvoid}, (Any,), flds), toUInt32(N))::NT
-    end
-end
+eval(Core, :(NamedTuple{names,T}(args::T) where {names, T <: Tuple} =
+             $(Expr(:splatnew, :(NamedTuple{names,T}), :args))))
 
 # constructors for built-in types
 
@@ -607,7 +598,7 @@ toInt8(x::UInt16)     = checked_trunc_sint(Int8, check_top_bit(x))
 toInt8(x::UInt32)     = checked_trunc_sint(Int8, check_top_bit(x))
 toInt8(x::UInt64)     = checked_trunc_sint(Int8, check_top_bit(x))
 toInt8(x::UInt128)    = checked_trunc_sint(Int8, check_top_bit(x))
-toInt8(x::Bool)       = and_int(zext_int(Int8, x), Int8(1))
+toInt8(x::Bool)       = and_int(bitcast(Int8, x), Int8(1))
 toInt16(x::Int8)      = sext_int(Int16, x)
 toInt16(x::Int16)     = x
 toInt16(x::Int32)     = checked_trunc_sint(Int16, x)
@@ -662,7 +653,7 @@ toUInt8(x::UInt16)    = checked_trunc_uint(UInt8, x)
 toUInt8(x::UInt32)    = checked_trunc_uint(UInt8, x)
 toUInt8(x::UInt64)    = checked_trunc_uint(UInt8, x)
 toUInt8(x::UInt128)   = checked_trunc_uint(UInt8, x)
-toUInt8(x::Bool)      = and_int(zext_int(UInt8, x), UInt8(1))
+toUInt8(x::Bool)      = and_int(bitcast(UInt8, x), UInt8(1))
 toUInt16(x::Int8)     = sext_int(UInt16, check_top_bit(x))
 toUInt16(x::Int16)    = bitcast(UInt16, check_top_bit(x))
 toUInt16(x::Int32)    = checked_trunc_uint(UInt16, x)

@@ -1087,7 +1087,8 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
         for (size_t i = 0; i < sysimg_fptrs.nclones; i++) {
             if (diff == sysimg_fptrs.clone_offsets[i]) {
                 uint32_t idx = sysimg_fptrs.clone_idxs[i] & jl_sysimg_val_mask;
-                frame0->linfo = sysimg_fvars_linfo[idx];
+                if (idx < sysimg_fvars_n) // items after this were cloned but not referenced directly by a method (such as our ccall PLT thunks)
+                    frame0->linfo = sysimg_fvars_linfo[idx];
                 break;
             }
         }

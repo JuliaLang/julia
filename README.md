@@ -28,15 +28,11 @@ This is the GitHub repository of Julia source code, including instructions for c
 
 - **Homepage:** <https://julialang.org>
 - **Binaries:** <https://julialang.org/downloads/>
-- **Documentation:** <https://docs.julialang.org/>
-- **Packages:** <https://pkg.julialang.org/>
 - **Source code:** <https://github.com/JuliaLang/julia>
-- **Git clone URL:** <git://github.com/JuliaLang/julia.git>
+- **Documentation:** <https://docs.julialang.org/>
+- **Packages:** <https://juliaobserver.com/>
 - **Discussion forum:** <https://discourse.julialang.org>
-- **Mailing lists:** <https://julialang.org/community/>
 - **Slack:** <https://julialang.slack.com> (get an invite from <https://slackinvite.julialang.org>)
-- **Gitter:** <https://gitter.im/JuliaLang/julia>
-- **IRC:** <https://webchat.freenode.net/?channels=julia>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the Julia codebase.
@@ -50,25 +46,41 @@ New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang
 
 ## Currently Supported Platforms
 
-Julia is built and tested regularly on the following platforms:
-
 | Operating System | Architecture     | CI | Binaries | Support Level |
 |:----------------:|:----------------:|:--:|:--------:|:-------------:|
-| Linux 2.6.18+    | x86-64 (64-bit)  | ✓  | ✓        | Official      |
-|                  | i686 (32-bit)    | ✓  | ✓        | Official      |
-|                  | ARM v7 (32-bit)  |    | ✓        | Official      |
-|                  | ARM v8 (64-bit)  |    |          | Community     |
-|                  | PowerPC (64-bit) |    |          | Community     |
+| macOS 10.8+      | x86-64 (64-bit)  | ✓  | ✓        | Tier 1        |
+| Windows 7+       | x86-64 (64-bit)  | ✓  | ✓        | Tier 1        |
+|                  | i686 (32-bit)    | ✓  | ✓        | Tier 1        |
+| FreeBSD 11.0+    | x86-64 (64-bit)  | [✓](https://build.julialang.org/#/builders/68)  | ✓        | Tier 1        |
+| Linux 2.6.18+    | x86-64 (64-bit)  | ✓  | ✓        | Tier 1        |
+|                  | i686 (32-bit)    | ✓  | ✓        | Tier 1        |
+|                  | ARM v7 (32-bit)  |    | ✓        | Tier 2        |
+|                  | ARM v8 (64-bit)  |    |          | Tier 3        |
+|                  | x86-64 musl libc |    |          | Tier 3        |
+|                  | PowerPC (64-bit) |    |          | Tier 4        |
 |                  | PTX (64-bit)     | [✓](https://gitlab.com/JuliaGPU/CUDAnative.jl/pipelines)  |          | [External](https://github.com/JuliaGPU/CUDAnative.jl)     |
-| macOS 10.8+      | x86-64 (64-bit)  | ✓  | ✓        | Official      |
-| Windows 7+       | x86-64 (64-bit)  | ✓  | ✓        | Official      |
-|                  | i686 (32-bit)    | ✓  | ✓        | Official      |
-| FreeBSD 11.0+    | x86-64 (64-bit)  | [✓](https://build.julialang.org/#/builders/68)  | ✓        | Official      |
 
 All systems marked with ✓ for CI are tested using continuous integration for every commit.
-Systems with ✓ for binaries have official binaries available on the [downloads](https://julialang.org/downloads) page and are tested regularly. The PTX backend needs the [CUDAnative.jl](https://github.com/JuliaGPU/CUDAnative.jl) package.
-The systems listed here with neither CI nor official binaries are known to build and work, but ongoing support for those platforms is dependent on community efforts.
-It is possible that Julia will build and work on other platforms too, and we're always looking to improve our platform coverage.
+Systems with ✓ for binaries have official binaries available on the
+[downloads](https://julialang.org/downloads) page and are tested regularly.
+The PTX backend is supported by the [JuliaGPU](https://github.com/JuliaGPU) organization and
+requires the [CUDAnative.jl](https://github.com/JuliaGPU/CUDAnative.jl) package.
+
+### Support Tiers
+
+* Tier 1: Julia is guaranteed to build from source and pass all tests on these platforms
+  when built with default options. Official binaries are available for releases and CI is
+  run on every commit.
+
+* Tier 2: Julia is guaranteed to build from source using default build options, but may
+  or may not pass all tests. Official binaries are available on a case-by-case basis.
+
+* Tier 3: Julia may or may not build. If it does, it is unlikely to pass tests.
+
+* Tier 4: Julia is known not to build.
+
+It is possible that Julia will build and work on other platforms too, and we're always
+looking to improve our platform coverage.
 If you're using Julia on a platform not listed here, let us know!
 
 ## Source Download and Compilation
@@ -86,7 +98,7 @@ Be sure to also configure your system to use the appropriate proxy settings, e.g
 
 By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `1.0` series of releases. You can get this version by changing to the Julia directory and running
 
-    git checkout v1.0.2
+    git checkout v1.0.3
 
 Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes. (See [Platform Specific Build Notes](https://github.com/JuliaLang/julia#platform-specific-build-notes) for details.)
 When compiled the first time, it will automatically download and build its [external dependencies](#required-build-tools-and-external-libraries).
@@ -127,7 +139,7 @@ if they complete without error, you should be in good shape to start using Julia
 
 You can read about [getting started](https://docs.julialang.org/en/stable/manual/getting-started/) in the manual.
 
-If you are building a Julia package for distribution on Linux, OS X,
+If you are building a Julia package for distribution on Linux, macOS,
 or Windows, take a look at the detailed notes in
 [DISTRIBUTING.md](https://github.com/JuliaLang/julia/blob/master/DISTRIBUTING.md).
 
@@ -171,7 +183,7 @@ latest version.
    b. To delete existing binaries of `julia` and all its dependencies,
       delete the `./usr` directory _in the source tree_.
 
-3. If you've updated OS X recently, be sure to run `xcode-select --install` to update the command line tools.
+3. If you've updated macOS recently, be sure to run `xcode-select --install` to update the command line tools.
    Otherwise, you could run into errors for missing headers and libraries, such as
    ```ld: library not found for -lcrt1.10.6.o```.
 
@@ -199,8 +211,6 @@ Julia does not install anything outside the directory it was cloned into. Julia 
 
 ### Linux
 
-#### General
-
 * GCC version 4.7 or later is required to build Julia.
 * To use external shared libraries not in the system library search path, set `USE_SYSTEM_XXX=1` and `LDFLAGS=-Wl,-rpath,/path/to/dir/contains/libXXX.so` in `Make.user`.
   * Instead of setting `LDFLAGS`, putting the library directory into the environment variable `LD_LIBRARY_PATH` (at both compile and run time) also works.
@@ -215,18 +225,6 @@ For example, to build for Pentium 4, set `MARCH=pentium4` and install the necess
 
 You can also set `MARCH=native` for a maximum-performance build customized for the current machine CPU.
 
-
-#### Ubuntu
-
-The [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/) contains updated packages for Julia dependencies if you want to use system libraries instead of having them downloaded and built during the build process.  See [System Provided Libraries](#system-provided-libraries).
-
-#### RHEL/CentOS 6
-
-On RHEL/CentOS 6 systems, the default compiler (`gcc` 4.4) is too old to build Julia.
-
-Install or contact your systems administrator to install a more recent version of `gcc`. The [Scientific Linux Developer Toolset](http://linux.web.cern.ch/linux/devtoolset/) works well.
-
-
 #### Linux Build Troubleshooting
 
  Problem              | Possible Solution
@@ -234,20 +232,13 @@ Install or contact your systems administrator to install a more recent version o
  OpenBLAS build failure | Set one of the following build options in `Make.user` and build again: <ul><li> `OPENBLAS_TARGET_ARCH=BARCELONA` (AMD CPUs) or `OPENBLAS_TARGET_ARCH=NEHALEM` (Intel CPUs)<ul>Set `OPENBLAS_DYNAMIC_ARCH = 0` to disable compiling multiple architectures in a single binary.</ul></li><li> `OPENBLAS_NO_AVX2 = 1` disables AVX2 instructions, allowing OpenBLAS to compile with `OPENBLAS_DYNAMIC_ARCH = 1` using old versions of binutils </li><li> `USE_SYSTEM_BLAS=1` uses the system provided `libblas` <ul><li>Set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` to force the use of the system provided OpenBLAS when multiple BLAS versions are installed. </li></ul></li></ul><p> If you get an error that looks like ```../kernel/x86_64/dgemm_kernel_4x4_haswell.S:1709: Error: no such instruction: `vpermpd $ 0xb1,%ymm0,%ymm0'```, then you need to set `OPENBLAS_DYNAMIC_ARCH = 0` or `OPENBLAS_NO_AVX2 = 1`, or you need a newer version of `binutils` (2.18 or newer). ([Issue #7653](https://github.com/JuliaLang/julia/issues/7653))
 Illegal Instruction error | Check if your CPU supports AVX while your OS does not (e.g. through virtualization, as described in [this issue](https://github.com/JuliaLang/julia/issues/3263)).
 
-### OS X
+### macOS
 
 You need to have the current Xcode command line utilities installed: run `xcode-select --install` in the terminal.
-You will need to rerun this terminal command after each OS X update, otherwise you may run into errors involving missing libraries or headers.
-You will also need a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 (and newer) compilers in Brew, Fink, and MacPorts work for building Julia.
-
-Clang is now used by default to build Julia on OS X 10.7 and above. On OS X 10.6, the Julia build will automatically use `gcc`.
-On current systems, we recommend that you install the command line tools as described above. Older systems do not have a separate command line tools package from Apple, and will require a full Xcode install.  On these, you will need at least Xcode 4.3.3.  In Xcode prior to v5.0, you can alternatively go to Preferences -> Downloads and select the Command Line Utilities. These steps will ensure that clang v3.1 is installed, which is the minimum version of `clang` required to build Julia.
+You will need to rerun this terminal command after each macOS update, otherwise you may run into errors involving missing libraries or headers.
+You will also need a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 (and newer) compilers in Homebrew work for building Julia.
 
 If you have set `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` in your `.bashrc` or equivalent, Julia may be unable to find various libraries that come bundled with it. These environment variables need to be unset for Julia to work.
-
-If you see build failures in OpenBLAS or if you prefer to experiment, you can use the Apple provided BLAS in vecLib by building with `USE_SYSTEM_BLAS=1`. Julia does not use the Apple provided LAPACK, as it is too old.
-
-When building Julia, or its dependencies, libraries installed by third party package managers can redirect the compiler to use an incompatible version of the software it is looking for. One example of this happening is when a piece of software called the "linker" gives an error involving "Undefined symbols." If that happens, you can usually figure out what software package is causing the error from the names in the error text. This sort of error can be bypassed by, temporarily, uninstalling the offending package. If the offending package cannot be uninstalled by itself, it may be possible to just uninstall the development headers (for example: a package ending in "-dev" in Fink).
 
 ### FreeBSD
 
@@ -282,7 +273,7 @@ Julia can be developed in an isolated Vagrant environment. See [the Vagrant READ
 Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
-- **[gcc & g++][gcc]** (>= 4.7) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on OS X) — compiling and linking C, C++.
+- **[gcc & g++][gcc]** (>= 4.7) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on macOS) — compiling and linking C, C++.
 - **[libatomic][gcc]**          — provided by **[gcc]** and needed to support atomic operations.
 - **[python]** (>=2.7)          — needed to build LLVM.
 - **[gfortran]**                — compiling and linking Fortran libraries.
@@ -345,7 +336,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [GMP]:          http://gmplib.org
 [MPFR]:         http://www.mpfr.org
 [libuv]:        https://github.com/JuliaLang/libuv
-[libgit2]:      https://libgit2.github.com/
+[libgit2]:      https://libgit2.org/
 [utf8proc]:     https://julialang.org/utf8proc/
 [libosxunwind]: https://github.com/JuliaLang/libosxunwind
 [libunwind]:    http://www.nongnu.org/libunwind

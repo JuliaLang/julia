@@ -88,6 +88,7 @@ end
 # lock / unlock
 let l = ReentrantLock()
     lock(l)
+    @test islocked(l)
     success = Ref(false)
     @test trylock(l) do
         @test lock(l) do
@@ -721,6 +722,13 @@ end
            @test isdefined(mod, v)
        end
    end
+end
+
+@testset "ordering UUIDs" begin
+    a = Base.UUID("dbd321ed-e87e-4f33-9511-65b7d01cdd55")
+    b = Base.UUID("2832b20a-2ad5-46e9-abb1-2d20c8c31dd3")
+    @test isless(b, a)
+    @test sort([a, b]) == [b, a]
 end
 
 # Test `./base/util.jl`: prettyprint_getunits() with *mem_units*

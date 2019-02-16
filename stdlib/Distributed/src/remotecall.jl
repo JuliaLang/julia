@@ -480,10 +480,10 @@ function call_on_owner(f, rr::AbstractRemoteRef, args...)
     end
 end
 
-function wait_ref(rid, callee, args...)
+function wait_ref(rid, caller, args...)
     v = fetch_ref(rid, args...)
     if isa(v, RemoteException)
-        if myid() == callee
+        if myid() == caller
             throw(v)
         else
             return v
@@ -506,6 +506,13 @@ Wait for a value to become available on the specified [`RemoteChannel`](@ref).
 """
 wait(r::RemoteChannel, args...) = (call_on_owner(wait_ref, r, myid(), args...); r)
 
+"""
+    fetch(x::Future)
+
+Wait for and get the value of a [`Future`](@ref). The fetched value is cached locally.
+Further calls to `fetch` on the same reference return the cached value. If the remote value
+is an exception, throws a [`RemoteException`](@ref) which captures the remote exception and backtrace.
+"""
 function fetch(r::Future)
     r.v !== nothing && return something(r.v)
     v = call_on_owner(fetch_ref, r)
@@ -515,22 +522,14 @@ function fetch(r::Future)
 end
 
 fetch_ref(rid, args...) = fetch(lookup_ref(rid).c, args...)
+
+"""
+    fetch(c::RemoteChannel)
+
+Wait for and get a value from a [`RemoteChannel`](@ref). Exceptions raised are the
+same as for a `Future`. Does not remove the item fetched.
+"""
 fetch(r::RemoteChannel, args...) = call_on_owner(fetch_ref, r, args...)
-
-"""
-    fetch(x)
-
-Waits and fetches a value from `x` depending on the type of `x`:
-
-* [`Future`](@ref): Wait for and get the value of a `Future`. The fetched value is cached locally.
-  Further calls to `fetch` on the same reference return the cached value. If the remote value
-  is an exception, throws a [`RemoteException`](@ref) which captures the remote exception and backtrace.
-* [`RemoteChannel`](@ref): Wait for and get the value of a remote reference. Exceptions raised are
-  same as for a `Future` .
-
-Does not remove the item fetched.
-"""
-fetch(@nospecialize x) = x
 
 isready(rv::RemoteValue, args...) = isready(rv.c, args...)
 
@@ -549,18 +548,27 @@ function put!(rr::Future, v)
     rr.v = Some(v)
     rr
 end
-function put_future(rid, v, callee)
+function put_future(rid, v, caller)
     rv = lookup_ref(rid)
     isready(rv) && error("Future can be set only once")
     put!(rv, v)
-    # The callee has the value and hence can be removed from the remote store.
-    del_client(rid, callee)
+    # The caller has the value and hence can be removed from the remote store.
+    del_client(rid, caller)
     nothing
 end
 
 
 put!(rv::RemoteValue, args...) = put!(rv.c, args...)
-put_ref(rid, args...) = (put!(lookup_ref(rid), args...); nothing)
+function put_ref(rid, caller, args...)
+    rv = lookup_ref(rid)
+    put!(rv, args...)
+    if myid() == caller && rv.synctake !== nothing
+        # Wait till a "taken" value is serialized out - github issue #29932
+        lock(rv.synctake)
+        unlock(rv.synctake)
+    end
+    nothing
+end
 
 """
     put!(rr::RemoteChannel, args...)
@@ -569,15 +577,29 @@ Store a set of values to the [`RemoteChannel`](@ref).
 If the channel is full, blocks until space is available.
 Return the first argument.
 """
-put!(rr::RemoteChannel, args...) = (call_on_owner(put_ref, rr, args...); rr)
+put!(rr::RemoteChannel, args...) = (call_on_owner(put_ref, rr, myid(), args...); rr)
 
 # take! is not supported on Future
 
 take!(rv::RemoteValue, args...) = take!(rv.c, args...)
-function take_ref(rid, callee, args...)
-    v=take!(lookup_ref(rid), args...)
-    isa(v, RemoteException) && (myid() == callee) && throw(v)
-    v
+function take_ref(rid, caller, args...)
+    rv = lookup_ref(rid)
+    synctake = false
+    if myid() != caller && rv.synctake !== nothing
+        # special handling for local put! / remote take! on unbuffered channel
+        # github issue #29932
+        synctake = true
+        lock(rv.synctake)
+    end
+
+    v=take!(rv, args...)
+    isa(v, RemoteException) && (myid() == caller) && throw(v)
+
+    if synctake
+        return SyncTake(v, rv)
+    else
+        return v
+    end
 end
 
 """

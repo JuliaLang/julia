@@ -16,7 +16,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
 
     function GenericIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
                                 maxsize::Integer) where T<:AbstractVector{UInt8}
-        @assert !has_offset_axes(data)
+        require_one_based_indexing(data)
         new(data,readable,writable,seekable,append,length(data),maxsize,1,-1)
     end
 end
@@ -183,7 +183,7 @@ function read(from::GenericIOBuffer, T::Union{Type{Int16},Type{UInt16},Type{Int3
 end
 
 function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
-    @assert !has_offset_axes(a)
+    require_one_based_indexing(a)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
@@ -425,7 +425,7 @@ function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
 end
 
 function write_sub(to::GenericIOBuffer, a::AbstractArray{UInt8}, offs, nel)
-    @assert !has_offset_axes(a)
+    require_one_based_indexing(a)
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
@@ -505,7 +505,7 @@ end
 
 # copy-free crc32c of IOBuffer:
 function _crc32c(io::IOBuffer, nb::Integer, crc::UInt32=0x00000000)
-    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
+    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0, got $nb"))
     io.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     n = min(nb, bytesavailable(io))
     n == 0 && return crc

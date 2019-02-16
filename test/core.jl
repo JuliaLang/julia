@@ -27,6 +27,9 @@ f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws TypeError TypeVar(:T) <: Any
 @test_throws TypeError TypeVar(:T) >: Any
 
+# issue #28673
+@test_throws TypeError Array{2}(undef, 1, 2)
+
 # issue #12939
 module Issue12939
 abstract type Abs; end
@@ -142,6 +145,8 @@ end
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}) === Tuple{Vararg{Int}}
 
 @test typejoin(NTuple{3,Tuple}, NTuple{2,T} where T) == Tuple{Any,Any,Vararg{Tuple}}
+@test typejoin(Tuple{Tuple{T, T, Any}} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Vararg{Any}}
+@test typejoin(Tuple{T, T, T} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Any,Any}
 
 # issue #26321
 struct T26321{N,S<:NTuple{N}}
@@ -2432,6 +2437,20 @@ const T24460 = Tuple{T,T} where T
 g24460() = invoke(f24460, T24460, 1, 2)
 @test @inferred(g24460()) === 2.0
 
+# issue #30679
+@noinline function f30679(::DataType)
+    b = IOBuffer()
+    write(b, 0x00)
+    2
+end
+@noinline function f30679(t::Type{Int})
+    x = invoke(f30679, Tuple{DataType}, t)
+    b = IOBuffer()
+    write(b, 0x00)
+    return x + 40
+end
+@test f30679(Int) == 42
+
 call_lambda1() = (()->x)(1)
 call_lambda2() = ((x)->x)()
 call_lambda3() = ((x)->x)(1,2)
@@ -3410,7 +3429,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :apply_type
+        @test err.func == :Vararg
         @test err.expected == Int
         @test err.got == Int
     end
@@ -3420,7 +3439,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :apply_type
+        @test err.func == :Vararg
         @test err.expected == Int
         @test err.got == 0x1
     end
@@ -5504,6 +5523,11 @@ f_isdefined_tv(::T) where {T} = @isdefined T
 f_isdefined_va(::T...) where {T} = @isdefined T
 @test !f_isdefined_va()
 @test f_isdefined_va(1, 2, 3)
+function f_unused_undefined_sp(::T...) where T
+    T
+    return 0
+end
+@test_throws UndefVarError(:T) f_unused_undefined_sp()
 
 # note: the constant `5` here should be > DataType.ninitialized.
 # This tests that there's no crash due to accessing Type.body.layout.
@@ -6425,8 +6449,8 @@ end
 
 # issue #21004
 const PTuple_21004{N,T} = NTuple{N,VecElement{T}}
-@test_throws ArgumentError PTuple_21004(1)
-@test_throws UndefVarError PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
+@test_throws ArgumentError("too few elements for tuple type $PTuple_21004") PTuple_21004(1)
+@test_throws UndefVarError(:T) PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
 
 #issue #22792
 foo_22792(::Type{<:Union{Int8,Int,UInt}}) = 1;
@@ -6794,3 +6818,50 @@ let a = [1,2,3,4,missing,6,7]
     foo(x) = x > 0 ? x : missing
     @test_throws TypeError foo(missing)
 end
+
+# issue #29152
+function f29152()
+    try
+        g29152()
+    finally
+    end
+end
+g29152() = (_true29152 ? error() : _true29152 ? 0 : false)
+_true29152 = true;
+@test_throws ErrorException f29152()
+
+# issue #29828
+f29828() = 2::String
+g29828() = 2::Any[String][1]
+@test_throws TypeError(:typeassert, String, 2) f29828()
+@test_throws TypeError(:typeassert, String, 2) g29828()
+
+# splatting in `new`
+struct SplatNew{T}
+    x::Int8
+    y::T
+    SplatNew{T}(args...) where {T} = new(0,args...,1)
+    SplatNew(args...) = new{Float32}(args...)
+    SplatNew{Any}(args...) = new(args...)
+    SplatNew{Tuple{Int16}}(args...) = new([2]..., args...)
+    SplatNew{Int8}() = new(1,2,3)
+end
+let x = SplatNew{Int16}()
+    @test x.x === Int8(0)
+    @test x.y === Int16(1)
+end
+@test_throws ArgumentError SplatNew{Int16}(1)
+let x = SplatNew(3,2)
+    @test x.x === Int8(3)
+    @test x.y === 2.0f0
+end
+@test_throws ArgumentError SplatNew(1,2,3)
+let x = SplatNew{Any}(1)
+    @test x.x === Int8(1)
+    @test !isdefined(x, :y)
+end
+let x = SplatNew{Tuple{Int16}}((1,))
+    @test x.x === Int8(2)
+    @test x.y === (Int16(1),)
+end
+@test_throws ArgumentError SplatNew{Int8}()

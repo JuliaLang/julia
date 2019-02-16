@@ -178,6 +178,16 @@ let
                 @test @inferred(J - T) == J - Array(T)
                 @test @inferred(T\I) == inv(T)
 
+                if isa(A, Array)
+                    T = Hermitian(randn(3,3))
+                else
+                    T = Hermitian(view(randn(3,3), 1:3, 1:3))
+                end
+                @test @inferred(T + J) == Array(T) + J
+                @test @inferred(J + T) == J + Array(T)
+                @test @inferred(T - J) == Array(T) - J
+                @test @inferred(J - T) == J - Array(T)
+
                 @test @inferred(I\A) == A
                 @test @inferred(A\I) == inv(A)
                 @test @inferred(λ\I) === UniformScaling(1/λ)
@@ -297,6 +307,12 @@ end
     @test mul!(C, A, J) == target
     @test lmul!(J, copyto!(C, A)) == target
     @test rmul!(copyto!(C, A), J) == target
+end
+
+@testset "Construct Diagonal from UniformScaling" begin
+    @test size(I(3)) === (3,3)
+    @test I(3) isa Diagonal
+    @test I(3) == [1 0 0; 0 1 0; 0 0 1]
 end
 
 end # module TestUniformscaling

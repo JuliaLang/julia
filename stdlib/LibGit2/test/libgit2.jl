@@ -462,6 +462,45 @@ end
         Base.shred!(expected_cred)
     end
 
+    @testset "extra newline" begin
+        # The "Git for Windows" installer will also install the "Git Credential Manager for
+        # Windows" (https://github.com/Microsoft/Git-Credential-Manager-for-Windows) (also
+        # known as "manager" in the .gitconfig files). This credential manager returns an
+        # additional newline when returning the results.
+        str = """
+            protocol=https
+            host=example.com
+            path=
+            username=bob
+            password=*****
+
+            """
+        expected_cred = LibGit2.GitCredential("https", "example.com", "", "bob", "*****")
+
+        cred = read!(IOBuffer(str), LibGit2.GitCredential())
+        @test cred == expected_cred
+        @test sprint(write, cred) * "\n" == str
+        Base.shred!(cred)
+        Base.shred!(expected_cred)
+    end
+
+    @testset "unknown attribute" begin
+        str = """
+            protocol=https
+            host=example.com
+            attribute=value
+            username=bob
+            password=*****
+            """
+        expected_cred = LibGit2.GitCredential("https", "example.com", nothing, "bob", "*****")
+        expected_log = (:warn, "Unknown git credential attribute found: \"attribute\"")
+
+        cred = @test_logs expected_log read!(IOBuffer(str), LibGit2.GitCredential())
+        @test cred == expected_cred
+        Base.shred!(cred)
+        Base.shred!(expected_cred)
+    end
+
     @testset "use http path" begin
         cred = LibGit2.GitCredential("https", "example.com", "dir/file", "alice", "*****")
         expected = """
@@ -530,6 +569,27 @@ end
         cred = LibGit2.GitCredential("https", "github.com", nothing, nothing)
         @test !LibGit2.ismatch("https://@github.com", cred)
         Base.shred!(cred)
+    end
+
+    @testset "GITHUB_REGEX" begin
+        github_regex_test = function(url, user, repo)
+            m = match(LibGit2.GITHUB_REGEX, url)
+            @test m !== nothing
+            @test m[1] == "$user/$repo"
+            @test m[2] == user
+            @test m[3] == repo
+        end
+        user = "User"
+        repo = "Repo"
+        github_regex_test("git@github.com/$user/$repo.git", user, repo)
+        github_regex_test("https://github.com/$user/$repo.git", user, repo)
+        github_regex_test("https://username@github.com/$user/$repo.git", user, repo)
+        github_regex_test("ssh://git@github.com/$user/$repo.git", user, repo)
+        github_regex_test("git@github.com/$user/$repo", user, repo)
+        github_regex_test("https://github.com/$user/$repo", user, repo)
+        github_regex_test("https://username@github.com/$user/$repo", user, repo)
+        github_regex_test("ssh://git@github.com/$user/$repo", user, repo)
+        @test !occursin(LibGit2.GITHUB_REGEX, "git@notgithub.com/$user/$repo.git")
     end
 end
 

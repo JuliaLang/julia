@@ -647,9 +647,16 @@ timesofar("indexing")
         @test bitcheck(b1)
     end
     @test length(b1) == 0
+
     b1 = bitrand(v1)
     @test_throws ArgumentError deleteat!(b1, [1, 1, 2])
     @test_throws BoundsError deleteat!(b1, [1, length(b1)+1])
+
+    @test_throws BoundsError deleteat!(BitVector(), 1)
+    @test_throws BoundsError deleteat!(BitVector(), [1])
+    @test_throws BoundsError deleteat!(BitVector(), [2])
+    @test deleteat!(BitVector(), []) == BitVector()
+    @test deleteat!(BitVector(), Bool[]) == BitVector()
 
     b1 = bitrand(v1)
     i1 = Array(b1)

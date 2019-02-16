@@ -1394,3 +1394,29 @@ let M = M29955{T,Vector{Float64}} where T
     @test_throws TypeError M{Float32}
     @test_throws TypeError M{Real}
 end
+
+# issue #30122
+@testintersect(Tuple{Pair{Int64,2}, NTuple},
+               Tuple{Pair{F,N},Tuple{Vararg{F,N}}} where N where F,
+               Tuple{Pair{Int64,2}, Tuple{Int64,Int64}})
+
+# issue #30335
+@testintersect(Tuple{Any,Rational{Int},Int},
+               Tuple{LT,R,I} where LT<:Union{I, R} where R<:Rational{I} where I<:Integer,
+               Tuple{LT,Rational{Int},Int} where LT<:Union{Rational{Int},Int})
+
+#@testintersect(Tuple{Any,Tuple{Int},Int},
+#               Tuple{LT,R,I} where LT<:Union{I, R} where R<:Tuple{I} where I<:Integer,
+#               Tuple{LT,Tuple{Int},Int} where LT<:Union{Tuple{Int},Int})
+# fails due to this:
+let U = Tuple{Union{LT, LT1},Union{R, R1},Int} where LT1<:R1 where R1<:Tuple{Int} where LT<:Int where R<:Tuple{Int},
+    U2 = Union{Tuple{LT,R,Int} where LT<:Int where R<:Tuple{Int}, Tuple{LT,R,Int} where LT<:R where R<:Tuple{Int}},
+    V = Tuple{Union{Tuple{Int},Int},Tuple{Int},Int},
+    V2 = Tuple{L,Tuple{Int},Int} where L<:Union{Tuple{Int},Int}
+    @test U == U2
+    @test U == V
+    @test U == V2
+    @test V == V2
+    @test U2 == V
+    @test_broken U2 == V2
+end

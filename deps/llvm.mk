@@ -66,7 +66,7 @@ LLVM_CXXFLAGS += $(CXXFLAGS)
 LLVM_CPPFLAGS += $(CPPFLAGS)
 LLVM_LDFLAGS += $(LDFLAGS)
 LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="$(LLVM_EXPERIMENTAL_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
-LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBXML2=OFF
+LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_HOST_TRIPLE="$(or $(XC_HOST),$(BUILD_MACHINE))"
 ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
 endif
@@ -429,6 +429,7 @@ ifeq ($(LLVM_VER_PATCH), 0)
 $(eval $(call LLVM_PATCH,llvm-windows-race))
 endif
 $(eval $(call LLVM_PATCH,llvm-D51842-win64-byval-cc))
+$(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
 endif # LLVM_VER
 
 # Independent to the llvm version add a JL prefix to the version map
@@ -513,37 +514,12 @@ ifeq ($(USE_POLLY),1)
 endif
 endif
 else # USE_BINARYBUILDER_LLVM
-LLVM_BB_URL_BASE := https://github.com/staticfloat/LLVMBuilder/releases/download
+LLVM_BB_URL_BASE := https://github.com/staticfloat/LLVMBuilder/releases/download/v$(LLVM_VER)-$(LLVM_BB_REL)
 ifneq ($(BINARYBUILDER_LLVM_ASSERTS), 1)
-LLVM_BB_NAME := LLVM
+LLVM_BB_NAME := LLVM.v$(LLVM_VER)
 else
-LLVM_BB_NAME := LLVM.asserts
+LLVM_BB_NAME := LLVM.asserts.v$(LLVM_VER)
 endif
-LLVM_BB_NAME := $(LLVM_BB_NAME).v$(LLVM_VER)
-LLVM_BB_URL := $(LLVM_BB_URL_BASE)/v$(LLVM_VER)-$(LLVM_BB_REL)/$(LLVM_BB_NAME).$(BINARYBUILDER_TRIPLET).tar.gz
 
-
-$(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL):
-	mkdir -p $@
-
-$(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/LLVM.$(BINARYBUILDER_TRIPLET).tar.gz: | $(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)
-	$(JLDOWNLOAD) $@ $(LLVM_BB_URL)
-
-$(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/build-compiled: | $(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/LLVM.$(BINARYBUILDER_TRIPLET).tar.gz
-	echo 1 > $@
-
-$(eval $(call staged-install,llvm,llvm-$$(LLVM_VER)-$$(LLVM_BB_REL),,,,))
-
-#Override provision of stage tarball
-$(build_staging)/llvm-$(LLVM_VER)-$(LLVM_BB_REL).tgz: $(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/LLVM.$(BINARYBUILDER_TRIPLET).tar.gz | $(build_staging)
-	cp $< $@
-
-clean-llvm:
-distclean-llvm:
-get-llvm:  $(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL)/LLVM.$(BINARYBUILDER_TRIPLET).tar.gz
-extract-llvm:
-configure-llvm:
-compile-llvm:
-fastcheck-llvm:
-check-llvm:
+$(eval $(call bb-install,llvm,LLVM,false))
 endif # USE_BINARYBUILDER_LLVM

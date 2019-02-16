@@ -10,7 +10,7 @@ using .Base: copymutable, LinearIndices, length, (:),
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
-    length, resize!, fill, Missing, has_offset_axes
+    length, resize!, fill, Missing, require_one_based_indexing
 
 using .Base: >>>, !==
 
@@ -19,7 +19,6 @@ import .Base:
     sort!,
     issorted,
     sortperm,
-    Slice,
     to_indices
 
 export # also exported by Base
@@ -223,7 +222,7 @@ function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
 end
 
 function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -233,7 +232,7 @@ function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
 end
 
 function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if step(a) == 0
         lt(o, first(a), x) ? length(a) + 1 : 1
     else
@@ -243,7 +242,7 @@ function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -252,7 +251,7 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if step(a) == 0
         lt(o, first(a), x) ? length(a)+1 : 1
     else
@@ -261,7 +260,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if lt(o, first(a), x)
         if step(a) == 0
             length(a) + 1
@@ -274,7 +273,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOr
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
-    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
+    require_one_based_indexing(a)
     if lt(o, x, first(a))
         0
     elseif step(a) == 0
@@ -992,6 +991,9 @@ Sort the multidimensional array `A` along dimension `dims`.
 See [`sort!`](@ref) for a description of possible keyword arguments.
 
 To sort slices of an array, refer to [`sortslices`](@ref).
+
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
 
 # Examples
 ```jldoctest

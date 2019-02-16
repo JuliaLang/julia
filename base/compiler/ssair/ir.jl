@@ -213,7 +213,7 @@ struct IRCode
     lines::Vector{Int32}
     flags::Vector{UInt8}
     argtypes::Vector{Any}
-    spvals::SimpleVector
+    sptypes::Vector{Any}
     linetable::Vector{LineInfoNode}
     cfg::CFG
     new_nodes::Vector{NewNode}
@@ -221,12 +221,12 @@ struct IRCode
 
     function IRCode(stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int32}, flags::Vector{UInt8},
             cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Any},
-            spvals::SimpleVector)
-        return new(stmts, types, lines, flags, argtypes, spvals, linetable, cfg, NewNode[], meta)
+            sptypes::Vector{Any})
+        return new(stmts, types, lines, flags, argtypes, sptypes, linetable, cfg, NewNode[], meta)
     end
     function IRCode(ir::IRCode, stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int32}, flags::Vector{UInt8},
             cfg::CFG, new_nodes::Vector{NewNode})
-        return new(stmts, types, lines, flags, ir.argtypes, ir.spvals, ir.linetable, cfg, new_nodes, ir.meta)
+        return new(stmts, types, lines, flags, ir.argtypes, ir.sptypes, ir.linetable, cfg, new_nodes, ir.meta)
     end
 end
 copy(code::IRCode) = IRCode(code, copy(code.stmts), copy(code.types),
@@ -325,7 +325,7 @@ function getindex(x::UseRef)
 end
 
 function is_relevant_expr(e::Expr)
-    return e.head in (:call, :invoke, :new, :(=), :(&),
+    return e.head in (:call, :invoke, :new, :splatnew, :(=), :(&),
                       :gc_preserve_begin, :gc_preserve_end,
                       :foreigncall, :isdefined, :copyast,
                       :undefcheck, :throw_undef_if_not,
@@ -1067,6 +1067,9 @@ function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.
 end
 
 function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=(compact.idx, 1))
+    # Create label to dodge recursion so that we don't stack overflow
+    @label restart
+
     old_result_idx = compact.result_idx
     if idx > length(compact.ir.stmts) && (compact.new_nodes_idx > length(compact.perm))
         return nothing
@@ -1130,7 +1133,10 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         active_bb += 1
     end
     compact.idx = idx + 1
-    (old_result_idx == compact.result_idx) && return iterate(compact, (idx + 1, active_bb))
+    if old_result_idx == compact.result_idx
+        idx += 1
+        @goto restart
+    end
     if !isassigned(compact.result, old_result_idx)
         @assert false
     end
@@ -1143,7 +1149,7 @@ function maybe_erase_unused!(extra_worklist, compact, idx, callback = x->nothing
     if compact_exprtype(compact, SSAValue(idx)) === Bottom
         effect_free = false
     else
-        effect_free = stmt_effect_free(stmt, compact.result_types[idx], compact, compact.ir.spvals)
+        effect_free = stmt_effect_free(stmt, compact.result_types[idx], compact, compact.ir.sptypes)
     end
     if effect_free
         for ops in userefs(stmt)
@@ -1195,7 +1201,6 @@ function fixup_node(compact::IncrementalCompact, @nospecialize(stmt))
         return compact.ssa_rename[stmt.id]
     else
         urs = userefs(stmt)
-        urs === () && return stmt
         for ur in urs
             val = ur[]
             if isa(val, NewSSAValue)
