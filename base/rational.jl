@@ -18,7 +18,7 @@ struct Rational{T<:Integer} <: Real
 end
 @noinline __throw_rational_argerror(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
 @noinline __throw_rational_ovferror(T) = throw(OverflowError("num[den] is typemin(T) and den[num] is negative"))
-        
+
 Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n,d)
 Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 Rational(n::Integer) = Rational(n,one(n))
