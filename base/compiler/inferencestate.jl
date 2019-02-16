@@ -58,7 +58,7 @@ mutable struct InferenceState
         s_types = Any[ nothing for i = 1:n ]
 
         # initial types
-        nslots = length(src.slotnames)
+        nslots = length(src.slotflags)
         argtypes = result.argtypes
         nargs = length(argtypes)
         s_argtypes = VarTable(undef, nslots)
@@ -122,7 +122,7 @@ end
 
 function sptypes_from_meth_instance(linfo::MethodInstance)
     toplevel = !isa(linfo.def, Method)
-    if !toplevel && isempty(linfo.sparam_vals) && !isempty(linfo.def.sparam_syms)
+    if !toplevel && isempty(linfo.sparam_vals) && isa(linfo.def.sig, UnionAll)
         # linfo is unspecialized
         sp = Any[]
         sig = linfo.def.sig

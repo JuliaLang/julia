@@ -233,21 +233,32 @@ typedef struct _jl_llvm_functions_t {
     const char *specFunctionObject;     // specialized llvm Function name (on sig+rettype)
 } jl_llvm_functions_t;
 
+typedef struct _jl_method_instance_t jl_method_instance_t;
+
 // This type describes a single function body
 typedef struct _jl_code_info_t {
+    // ssavalue-indexed arrays of properties:
     jl_array_t *code;  // Any array of statements
     jl_value_t *codelocs; // Int32 array of indicies into the line table
-    jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
-    jl_value_t *ssavaluetypes;  // types of ssa values (or count of them)
-    jl_value_t *linetable; // Table of locations
+    jl_value_t *ssavaluetypes; // types of ssa values (or count of them)
     jl_array_t *ssaflags; // flags associated with each statement:
         // 0 = inbounds
         // 1,2 = <reserved> inlinehint,always-inline,noinline
         // 3 = <reserved> strict-ieee (strictfp)
         // 4-6 = <unused>
         // 7 = has out-of-band info
-    jl_array_t *slotflags;  // local var bit flags
+    // miscellaneous data:
+    jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
+    jl_value_t *linetable; // Table of locations [TODO: make this volatile like slotnames]
     jl_array_t *slotnames; // names of local variables
+    jl_array_t *slotflags;  // local var bit flags
+    // the following are optional transient properties (not preserved by compression--as they typically get stored elsewhere):
+    jl_value_t *slottypes; // inferred types of slots
+    jl_value_t *rettype;
+    jl_method_instance_t *parent; // context (optionally, if available, otherwise nothing)
+    size_t min_world;
+    size_t max_world;
+    // various boolean properties:
     uint8_t inferred;
     uint8_t inlineable;
     uint8_t propagate_inbounds;
@@ -274,7 +285,7 @@ typedef struct _jl_method_t {
     // table of all argument types for which we've inferred or compiled this code
     jl_typemap_t *specializations;
 
-    jl_svec_t *sparam_syms;  // symbols giving static parameter names
+    jl_value_t *slot_syms; // compacted list of slot names (String)
     jl_value_t *source;  // original code template (jl_code_info_t, but may be compressed), null for builtins
     struct _jl_method_instance_t *unspecialized;  // unspecialized executable method instance, or null
     jl_value_t *generator;  // executable code-generating function if available
@@ -298,7 +309,7 @@ typedef struct _jl_method_t {
 } jl_method_t;
 
 // This type caches the data for a specType signature specialization of a Method
-typedef struct _jl_method_instance_t {
+struct _jl_method_instance_t {
     JL_DATA_TYPE
     union {
         jl_value_t *value; // generic accessor
@@ -307,7 +318,7 @@ typedef struct _jl_method_instance_t {
     } def; // context for this lambda definition
     jl_value_t *specTypes;  // argument types this was specialized for
     jl_value_t *rettype; // return type for fptr
-    jl_svec_t *sparam_vals; // static parameter values, indexed by def.method->sparam_syms
+    jl_svec_t *sparam_vals; // static parameter values, indexed by def.method->sig UnionAll tvars
     jl_array_t *backedges;
     jl_value_t *inferred;  // inferred jl_code_info_t, or jl_nothing, or null
     jl_value_t *inferred_const; // inferred constant return value, or null
@@ -321,7 +332,7 @@ typedef struct _jl_method_instance_t {
     // names of declarations in the JIT,
     // suitable for referencing in LLVM IR
     jl_llvm_functions_t functionObjectsDecls;
-} jl_method_instance_t;
+};
 
 // all values are callable as Functions
 typedef jl_value_t jl_function_t;
@@ -573,6 +584,7 @@ extern JL_DLLEXPORT jl_value_t *jl_undefref_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_value_t *jl_interrupt_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_boundserror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_value_t *jl_an_empty_vec_any JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_value_t *jl_an_empty_string JL_GLOBALLY_ROOTED;
 
 extern JL_DLLEXPORT jl_datatype_t *jl_bool_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_char_type JL_GLOBALLY_ROOTED;
@@ -1548,8 +1560,11 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_array_t *data)
 JL_DLLEXPORT uint8_t jl_ast_flag_inferred(jl_array_t *data);
 JL_DLLEXPORT uint8_t jl_ast_flag_inlineable(jl_array_t *data);
 JL_DLLEXPORT uint8_t jl_ast_flag_pure(jl_array_t *data);
+JL_DLLEXPORT ssize_t jl_ast_nslots(jl_array_t *data);
 JL_DLLEXPORT uint8_t jl_ast_slotflag(jl_array_t *data, size_t i);
-JL_DLLEXPORT void jl_fill_argnames(jl_array_t *data, jl_array_t *names);
+JL_DLLEXPORT jl_value_t *jl_compress_argnames(jl_array_t *syms);
+JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms);
+JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
 
 JL_DLLEXPORT int jl_is_operator(char *sym);
 JL_DLLEXPORT int jl_is_unary_operator(char *sym);

@@ -50,17 +50,17 @@ jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *inbounds_sym;
 jl_sym_t *copyast_sym; jl_sym_t *cfunction_sym;
 jl_sym_t *pure_sym; jl_sym_t *simdloop_sym;
-jl_sym_t *meta_sym; jl_sym_t *compiler_temp_sym;
-jl_sym_t *inert_sym;  jl_sym_t *polly_sym;
-jl_sym_t *unused_sym; jl_sym_t *static_parameter_sym;
-jl_sym_t *inline_sym; jl_sym_t *noinline_sym;
-jl_sym_t *generated_sym; jl_sym_t *generated_only_sym;
-jl_sym_t *isdefined_sym; jl_sym_t *propagate_inbounds_sym;
-jl_sym_t *specialize_sym; jl_sym_t *nospecialize_sym;
-jl_sym_t *macrocall_sym;  jl_sym_t *colon_sym;
-jl_sym_t *hygienicscope_sym; jl_sym_t *escape_sym;
-jl_sym_t *gc_preserve_begin_sym; jl_sym_t *gc_preserve_end_sym;
+jl_sym_t *meta_sym; jl_sym_t *inert_sym;
+jl_sym_t *polly_sym; jl_sym_t *unused_sym;
+jl_sym_t *static_parameter_sym; jl_sym_t *inline_sym;
+jl_sym_t *noinline_sym; jl_sym_t *generated_sym;
+jl_sym_t *generated_only_sym; jl_sym_t *isdefined_sym;
+jl_sym_t *propagate_inbounds_sym; jl_sym_t *specialize_sym;
+jl_sym_t *nospecialize_sym; jl_sym_t *macrocall_sym;
+jl_sym_t *colon_sym; jl_sym_t *hygienicscope_sym;
 jl_sym_t *throw_undef_if_not_sym; jl_sym_t *getfield_undefref_sym;
+jl_sym_t *gc_preserve_begin_sym; jl_sym_t *gc_preserve_end_sym;
+jl_sym_t *escape_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -347,7 +347,6 @@ void jl_init_frontend(void)
     unused_sym = jl_symbol("#unused#");
     slot_sym = jl_symbol("slot");
     static_parameter_sym = jl_symbol("static_parameter");
-    compiler_temp_sym = jl_symbol("#temp#");
     inline_sym = jl_symbol("inline");
     noinline_sym = jl_symbol("noinline");
     polly_sym = jl_symbol("polly");
@@ -555,7 +554,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
         else if (sym == thunk_sym) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
             assert(jl_is_code_info(ex));
-            jl_linenumber_to_lineinfo((jl_code_info_t*)ex, mod, jl_symbol("top-level scope"));
+            jl_linenumber_to_lineinfo((jl_code_info_t*)ex, (jl_value_t*)jl_symbol("top-level scope"));
             temp = (jl_value_t*)jl_exprn(sym, 1);
             jl_exprargset(temp, 0, ex);
         }
