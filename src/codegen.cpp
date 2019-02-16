@@ -4175,6 +4175,16 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         I->setMetadata("julia.loopinfo", MD);
         return jl_cgval_t();
     }
+    else if (head == syncregion_sym) {
+#ifdef USE_TAPIR
+        Value *syncrintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::syncregion_start);
+        Value *token = ctx.builder.CreateCall(syncrintr);
+#else
+        Value *token = nullptr;
+#endif
+        jl_cgval_t tok(token, NULL, false, (jl_value_t*)jl_void_type, NULL);
+        return tok;
+    }
     else if (head == goto_ifnot_sym) {
         jl_error("Expr(:goto_ifnot) in value position");
     }
@@ -6427,6 +6437,79 @@ static std::unique_ptr<Module> emit_function(
             find_next_stmt(cursor + 1);
             continue;
         }
+#ifdef USE_TAPIR
+        if (jl_is_detachnode(stmt)) {
+            jl_value_t* ex = jl_syncregion(stmt);
+            jl_cgval_t syncregion;
+            if (jl_is_ssavalue(ex)) {
+                syncregion = emit_expr(ctx, ex);
+            } else {
+                assert(0);
+            }
+            assert(syncregion.V->getType()->isTokenTy());
+            int lname = jl_detachnode_label(stmt);
+            int lreattach = jl_detachnode_reattach(stmt);
+            // The CFG should gurantuee that we will go to lreattach
+            // through the reattach that this detach dominates
+            // Add it to the worklist anyway in case detach BB has a ret, or exception
+            // TODO: add validation
+            workstack.push_back(lreattach - 1);
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
+            ctx.builder.CreateDetach(BB[lname], BB[lreattach], syncregion.V);
+            find_next_stmt(lname - 1);
+            continue;
+        }
+        if (jl_is_reattachnode(stmt)) {
+            jl_value_t* ex = jl_syncregion(stmt);
+            jl_cgval_t syncregion;
+            if (jl_is_ssavalue(ex)) {
+                syncregion = emit_expr(ctx, ex);
+            } else {
+                assert(0);
+            }
+            assert(syncregion.V->getType()->isTokenTy());
+            int lname = jl_reattachnode_label(stmt);
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
+            ctx.builder.CreateReattach(BB[lname], syncregion.V);
+            find_next_stmt(lname - 1);
+            continue;
+        }
+        if (jl_is_syncnode(stmt)) {
+            // TODO: represent this BB in higher-level IR?
+            jl_value_t* ex = jl_syncregion(stmt);
+            jl_cgval_t syncregion;
+            if (jl_is_ssavalue(ex)) {
+                syncregion = emit_expr(ctx, ex);
+            } else {
+                assert(0);
+            }
+            assert(syncregion.V->getType()->isTokenTy());
+            BasicBlock *continueBlock = BasicBlock::Create(jl_LLVMContext, "sync.continue", ctx.f);
+            ctx.builder.CreateSync(continueBlock, syncregion.V);
+            ctx.builder.SetInsertPoint(continueBlock);
+            find_next_stmt(cursor + 1);
+            continue;
+        }
+#else
+        if (jl_is_detachnode(stmt) {
+            int lname = jl_detachnode_label(stmt);
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
+            ctx.builder.CreateBr(BB[lname]);
+            find_next_stmt(lname - 1);
+            continue;
+        }
+        if (jl_is_reattachnode(stmt) {
+            int lname = jl_reattachnode_label(stmt);
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
+            ctx.builder.CreateBr(BB[lname]);
+            find_next_stmt(lname - 1);
+            continue;
+        }
+        if jl_is_syncnode(stmt)) {
+            find_next_stmt(cursor + 1);
+            continue;
+        }
+#endif
         if (expr && expr->head == goto_ifnot_sym) {
             jl_value_t **args = (jl_value_t**)jl_array_data(expr->args);
             jl_value_t *cond = args[0];
