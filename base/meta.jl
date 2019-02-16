@@ -219,6 +219,12 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
     if isa(x, Core.GotoNode)
         return Core.GotoNode(x.label + statement_offset)
     end
+    if isa(x, Core.DetachNode)
+        return Core.DetachNode(x.syncregion, x.label + statement_offset, x.reattach + statement_offset)
+    end
+    if isa(x, Core.ReattachNode)
+        return Core.ReattachNode(x.syncregion, x.label + statement_offset)
+    end
     if isa(x, Core.SlotNumber)
         id = x.id
         if 1 <= id <= length(slot_replacements)
@@ -293,6 +299,9 @@ end
 
 _instantiate_type_in_env(x, spsig, spvals) = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), x, spsig, spvals)
 
-is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :simdloop)
+is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck ||
+                                   head === :meta || head === :simdloop ||
+                                   head === :detach || head === :reattach || head === :sync ||
+                                   head === :syncregion)
 
 end # module

@@ -37,6 +37,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         if (jl_is_toplevel_only_expr(expr) || e->head == const_sym || e->head == copyast_sym ||
             e->head == quote_sym || e->head == inert_sym ||
             e->head == meta_sym || e->head == inbounds_sym ||
+            e->head == detach_sym || e->head == reattach_sym || e->head == sync_sym ||
             e->head == boundscheck_sym || e->head == simdloop_sym) {
             // ignore these
         }

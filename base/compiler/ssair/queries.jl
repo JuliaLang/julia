@@ -6,6 +6,7 @@ Determine whether a statement is side-effect-free, i.e. may be removed if it has
 function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src, sptypes::Vector{Any})
     isa(stmt, Union{PiNode, PhiNode}) && return true
     isa(stmt, Union{ReturnNode, GotoNode, GotoIfNot}) && return false
+    isa(stmt, Union{DetachNode, ReattachNode, SyncNode}) && return false
     isa(stmt, GlobalRef) && return isdefined(stmt.mod, stmt.name)
     isa(stmt, Slot) && return false # Slots shouldn't occur in the IR at this point, but let's be defensive here
     if isa(stmt, Expr)

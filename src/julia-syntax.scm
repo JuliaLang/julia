@@ -1807,6 +1807,10 @@
    'struct         expand-struct-def
    'try            expand-try
 
+   'spawn
+   (lambda (e)
+     `(spawn-block ,(cadr e) ,(map expand-forms (caddr e))))
+
    'lambda
    (lambda (e)
      `(lambda ,(map expand-forms (cadr e))
@@ -2951,7 +2955,7 @@ f(x) = yt(x)
 
 (define lambda-opt-ignored-exprs
   (Set '(quote top core line inert local local-def unnecessary copyast
-         meta inbounds boundscheck simdloop decl
+         meta inbounds boundscheck simdloop decl sync syncregion
          struct_type abstract_type primitive_type thunk with-static-parameters
          implicit-global global globalref outerref const-if-global
          const null ssavalue isdefined toplevel module lambda error
@@ -3014,7 +3018,7 @@ f(x) = yt(x)
              #f)
             ((eq? (car e) 'scope-block)
              (visit (cadr e)))
-            ((memq (car e) '(block call new splatnew _do_while))
+            ((memq (car e) '(block call new splatnew _do_while spawn-block))
              (eager-any visit (cdr e)))
             ((eq? (car e) 'break-block)
              (visit (caddr e)))
@@ -3447,7 +3451,7 @@ f(x) = yt(x)
   (or (ssavalue? lhs)
       (valid-ir-argument? e)
       (and (symbol? lhs) (pair? e)
-           (memq (car e) '(new splatnew the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin copyast)))))
+           (memq (car e) '(new splatnew the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin copyast syncregion)))))
 
 (define (valid-ir-return? e)
   ;; returning lambda directly is needed for @generated
@@ -3770,6 +3774,16 @@ f(x) = yt(x)
                (emit `(goto ,topl))
                (mark-label endl))
              (if value (compile '(null) break-labels value tail)))
+            ((spawn-block)
+             (let* ((endl (make-label))
+                    (topl (make-label))
+                    (syncnode (cadr e)))
+               (emit `(detach ,syncnode ,topl ,endl))
+               (mark-label topl)
+               (compile (caddr e) break-labels #f #f)
+               (emit `(reattach ,syncnode ,endl))
+               (mark-label endl))
+             (if value (compile '(null) break-labels value tail)))
             ((break-block)
              (let ((endl (make-label)))
                (compile (caddr e)
@@ -3970,8 +3984,13 @@ f(x) = yt(x)
                (emit `(= ,s ,(cons (car e) args)))
                s))
 
+            ((syncregion)
+             (let ((s (make-ssavalue)))
+               (emit `(= ,s ,(cons (car e) ())))
+               s))
+
             ;; metadata expressions
-            ((line meta inbounds simdloop gc_preserve_end)
+            ((line meta inbounds simdloop gc_preserve_end sync)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (cond ((eq? (car e) 'line)
                       (set! current-loc e)
@@ -4188,6 +4207,10 @@ f(x) = yt(x)
              (list* (car e) (get label-table (cadr e)) (cddr e)))
             ((eq? (car e) 'gotoifnot)
              `(gotoifnot ,(renumber-stuff (cadr e)) ,(get label-table (caddr e))))
+            ((eq? (car e) 'detach)
+             `(detach ,(renumber-stuff (cadr e)) ,(get label-table (caddr e)) ,(get label-table (cadddr e))))
+            ((eq? (car e) 'reattach)
+             `(reattach ,(renumber-stuff (cadr e)) ,(get label-table (caddr e))))
             ((eq? (car e) 'lambda)
              (renumber-lambda e 'none 0))
             (else (cons (car e)
