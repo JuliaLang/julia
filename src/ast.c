@@ -49,7 +49,7 @@ jl_sym_t *global_sym; jl_sym_t *list_sym;
 jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *inbounds_sym;
 jl_sym_t *copyast_sym; jl_sym_t *cfunction_sym;
-jl_sym_t *pure_sym; jl_sym_t *simdloop_sym;
+jl_sym_t *pure_sym; jl_sym_t *loopinfo_sym;
 jl_sym_t *meta_sym; jl_sym_t *compiler_temp_sym;
 jl_sym_t *inert_sym;  jl_sym_t *polly_sym;
 jl_sym_t *unused_sym; jl_sym_t *static_parameter_sym;
@@ -342,7 +342,7 @@ void jl_init_frontend(void)
     inbounds_sym = jl_symbol("inbounds");
     newvar_sym = jl_symbol("newvar");
     copyast_sym = jl_symbol("copyast");
-    simdloop_sym = jl_symbol("simdloop");
+    loopinfo_sym = jl_symbol("loopinfo");
     pure_sym = jl_symbol("pure");
     meta_sym = jl_symbol("meta");
     list_sym = jl_symbol("list");

@@ -1000,7 +1000,7 @@ extern jl_sym_t *global_sym; extern jl_sym_t *list_sym;
 extern jl_sym_t *dot_sym;    extern jl_sym_t *newvar_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *inbounds_sym;
 extern jl_sym_t *copyast_sym; extern jl_sym_t *cfunction_sym;
-extern jl_sym_t *pure_sym; extern jl_sym_t *simdloop_sym;
+extern jl_sym_t *pure_sym; extern jl_sym_t *loopinfo_sym;
 extern jl_sym_t *meta_sym; extern jl_sym_t *compiler_temp_sym;
 extern jl_sym_t *inert_sym;  extern jl_sym_t *polly_sym;
 extern jl_sym_t *unused_sym; extern jl_sym_t *static_parameter_sym;

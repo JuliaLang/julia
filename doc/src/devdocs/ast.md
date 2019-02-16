@@ -452,7 +452,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
     Has the value `false` if inlined into a section of code marked with `@inbounds`,
     otherwise has the value `true`.
 
-  * `simdloop`
+  * `loopinfo`
 
     Marks the end of the inner loop of a `@simd` expression.
 

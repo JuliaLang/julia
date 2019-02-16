@@ -60,7 +60,7 @@ end
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
 is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck ||
-                                   head === :meta || head === :simdloop ||
+                                   head === :meta || head === :loopinfo ||
                                    head === :detach || head === :reattach ||
                                    head === :sync)
 

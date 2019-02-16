@@ -121,7 +121,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
         PM->add(createGCInvariantVerifierPass(false));
         PM->add(createLateLowerGCFramePass());
         PM->add(createLowerPTLSPass(dump_native));
-        PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
+        PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native)
             PM->add(createMultiVersioningPass());
         return;
@@ -178,7 +178,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(polly::createCodegenCleanupPass());
 #endif
     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
-    PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
+    PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "loopinfo" as LLVM parallel loop
     PM->add(createLICMPass());                 // Hoist loop invariants
     PM->add(createLoopUnswitchPass());         // Unswitch loops.
     // Subsequent passes not stripping metadata from terminator
