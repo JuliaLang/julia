@@ -97,6 +97,17 @@ function vecadd(out, A, B)
     return out
 end
 
+# Used to crash the optimizer due to DetachNode pointing to dead BB
+function vecadd_err(out, A, B)
+    @assert length(out) == length(A) == length(B)
+    @inbounds begin
+        @par for i in 1:length(out)
+            out[i] = A[i] + B[i]
+            error()
+        end
+    end
+    return out
+end
 
 function fib(N)
     if N <= 1
