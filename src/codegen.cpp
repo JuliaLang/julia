@@ -4287,6 +4287,11 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         I->setMetadata("julia.loopinfo", MD);
         return jl_cgval_t();
     }
+    else if (head == syncregion_sym) {
+        Value *token = nullptr;
+        jl_cgval_t tok(token, NULL, false, (jl_value_t*)jl_void_type, NULL);
+        return tok;
+    }
     else if (head == goto_ifnot_sym) {
         jl_error("Expr(:goto_ifnot) in value position");
     }
@@ -6453,6 +6458,10 @@ static std::unique_ptr<Module> emit_function(
                 branch_targets.insert(dest);
                 if (i + 2 <= stmtslen)
                     branch_targets.insert(i + 2);
+            } else if (jl_is_syncnode(stmt)) {
+                // sync node act as terminator, implicit fall-through
+                if (i + 2 <= stmtslen)
+                    branch_targets.insert(i + 2);
             } else if (jl_is_phinode(stmt)) {
                 jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(stmt, 0);
                 for (size_t j = 0; j < jl_array_len(edges); ++j) {
@@ -6619,6 +6628,26 @@ static std::unique_ptr<Module> emit_function(
                                  ConstantInt::get(T_int8, 0x01),
                     vi.pTIndex, true);
             }
+            find_next_stmt(cursor + 1);
+            continue;
+        }
+        if (jl_is_detachnode(stmt)) {
+            int lname = jl_detachnode_label(stmt);
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
+            ctx.builder.CreateBr(BB[lname]);
+            find_next_stmt(lname - 1);
+            continue;
+        }
+        if (jl_is_reattachnode(stmt)) {
+            int lname = jl_reattachnode_label(stmt);
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
+            ctx.builder.CreateBr(BB[lname]);
+            find_next_stmt(lname - 1);
+            continue;
+        }
+        if (jl_is_syncnode(stmt)) {
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
+            ctx.builder.CreateBr(BB[cursor+2]); // fallthrough
             find_next_stmt(cursor + 1);
             continue;
         }
