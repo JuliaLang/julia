@@ -608,11 +608,10 @@ function gettypeinfos(io::IO, p::Pair)
 end
 
 function show(io::IO, p::Pair)
-    iocompact = IOContext(io, :compact => get(io, :compact, true))
-    isdelimited(io, p) && return show_default(iocompact, p)
+    isdelimited(io, p) && return show_default(io, p)
     typeinfos = gettypeinfos(io, p)
     for i = (1, 2)
-        io_i = IOContext(iocompact, :typeinfo => typeinfos[i])
+        io_i = IOContext(io, :typeinfo => typeinfos[i])
         isdelimited(io_i, p[i]) || print(io, "(")
         show(io_i, p[i])
         isdelimited(io_i, p[i]) || print(io, ")")
@@ -1808,10 +1807,9 @@ end
 function alignment(io::IO, x::Pair)
     s = sprint(show, x, context=io, sizehint=0)
     if !isdelimited(io, x) # i.e. use "=>" for display
-        iocompact = IOContext(io, :compact => get(io, :compact, true),
-                                  :typeinfo => gettypeinfos(io, x)[1])
-        left = length(sprint(show, x.first, context=iocompact, sizehint=0))
-        left += 2 * !isdelimited(iocompact, x.first) # for parens around p.first
+        ctx = IOContext(io, :typeinfo => gettypeinfos(io, x)[1])
+        left = length(sprint(show, x.first, context=ctx, sizehint=0))
+        left += 2 * !isdelimited(ctx, x.first) # for parens around p.first
         left += !get(io, :compact, false) # spaces are added around "=>"
         (left+1, length(s)-left-1) # +1 for the "=" part of "=>"
     else
