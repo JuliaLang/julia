@@ -101,7 +101,7 @@ function fib(N)
         x1[]  = fib(N-1)
     end
     x2 = fib(N-2)
-    @sync token
+    @sync_end token
     return x1[] + x2
 end
 
