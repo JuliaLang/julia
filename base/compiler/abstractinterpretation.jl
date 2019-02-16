@@ -1154,7 +1154,7 @@ function typeinf_local(frame::InferenceState)
                     if isa(fname, Slot)
                         changes = StateUpdate(fname, VarState(Any, false), changes)
                     end
-                elseif hd === :inbounds || hd === :meta || hd === :simdloop
+                elseif hd === :inbounds || hd === :meta || hd === :loopinfo
                 else
                     t = abstract_eval(stmt, changes, frame)
                     t === Bottom && break

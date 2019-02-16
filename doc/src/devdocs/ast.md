@@ -452,9 +452,10 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
     Has the value `false` if inlined into a section of code marked with `@inbounds`,
     otherwise has the value `true`.
 
-  * `simdloop`
+  * `loopinfo`
 
-    Marks the end of the inner loop of a `@simd` expression.
+    Marks the end of the a loop. Contains metadata that is passed to `LowerSimdLoop` to either mark
+    the inner loop of `@simd` expression, or to propagate information to LLVM loop passes.
 
   * `copyast`
 
