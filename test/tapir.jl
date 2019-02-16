@@ -1,6 +1,16 @@
 using Libdl
 dlopen("libcilkrts", Libdl.RTLD_GLOBAL)
 
+nworkers() = ccall(:__cilkrts_get_nworkers, Cint, ())
+
+"""
+Call `end_cilk()` before you set the number of workers
+"""
+set_nworkers(N) = ccall(:__cilkrts_set_param, Cint, (Cstring, Cstring), "nworkers", string(N)) == 0
+
+end_cilk() = ccall(:__cilkrts_end_cilk, Cvoid, ())
+init_cilk() = ccall(:__cilkrts_init, Cvoid, ())
+
 macro syncregion()
     Expr(:syncregion)
 end
