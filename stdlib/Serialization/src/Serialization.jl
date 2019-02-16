@@ -1085,6 +1085,9 @@ function deserialize_typename(s::AbstractSerializer, number)
         maxa = deserialize(s)::Int
         if makenew
             tn.mt = ccall(:jl_new_method_table, Any, (Any, Any), name, tn.module)
+            if !isempty(parameters)
+                tn.mt.offs = 0
+            end
             tn.mt.name = mtname
             tn.mt.max_args = maxa
             for def in defs
