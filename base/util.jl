@@ -68,13 +68,12 @@ gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 const _mem_units = ["byte", "KiB", "MiB", "GiB", "TiB", "PiB"]
 const _cnt_units = ["", " k", " M", " G", " T", " P"]
 function prettyprint_getunits(value, numunits, factor)
-    if value == 0 || value == 1
-        return (value, 1)
+    unit = 1
+    while value >= factor && unit < numunits
+        value /= factor
+        unit += 1
     end
-    unit = ceil(Int, log(value) / log(factor))
-    unit = min(numunits, unit)
-    number = value/factor^(unit-1)
-    return number, unit
+    return value, unit
 end
 
 function padded_nonzero_print(value,str)
