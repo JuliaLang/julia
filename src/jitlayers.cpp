@@ -29,6 +29,9 @@
 #include <llvm/Transforms/Vectorize.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
+#ifdef USE_TAPIR
+#include <llvm/Transforms/Tapir.h>
+#endif
 
 namespace llvm {
     extern Pass *createLowerSimdLoopPass();
@@ -215,6 +218,12 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createSLPVectorizerPass());         // Vectorize straight-line code
     PM->add(createAggressiveDCEPass());         // Delete dead instructions
     PM->add(createInstructionCombiningPass());  // Clean up after SLP loop vectorizer
+#ifdef USE_TAPIR
+    PM->add(createLoopSpawningTIPass());
+    PM->add(createCFGSimplificationPass());
+    PM->add(createInstructionCombiningPass());
+    PM->add(createLoopDeletionPass());
+#endif
     PM->add(createLoopVectorizePass());         // Vectorize loops
     PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
     // LowerPTLS removes an indirect call. As a result, it is likely to trigger
@@ -230,6 +239,11 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     // Clean up write barrier and ptls lowering
     PM->add(createCFGSimplificationPass());
     PM->add(createCombineMulAddPass());
+#ifdef USE_TAPIR
+    PM->add(createLowerTapirToTargetPass());
+    PM->add(createDeadCodeEliminationPass());
+    PM->add(createCFGSimplificationPass());
+#endif
 }
 
 extern "C" JL_DLLEXPORT
