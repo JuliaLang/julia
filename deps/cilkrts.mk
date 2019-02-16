@@ -1,49 +1,37 @@
-## cilkrts ##
-$(SRCCACHE)/cilkrts-$(CILKRTS_VER).tar.gz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://www.cilkplus.org/sites/default/files/runtime_source/cilkplus-rtl-$(CILKRTS_VER).tgz
+CILKRTS_GIT_URL := git://github.com/CilkHub/cilkrts
+CILKRTS_TAR_URL = https://api.github.com/repos/CilkHub/cilkrts/tarball/$1
+$(eval $(call git-external,cilkrts,CILKRTS,CMakeLists.txt,,$(SRCCACHE)))
 
-$(SRCCACHE)/cilkrts-$(CILKRTS_VER)/source-extracted: $(SRCCACHE)/cilkrts-$(CILKRTS_VER).tar.gz
-	$(JLCHECKSUM) $<
-	mkdir -p $(dir $@) && \
-	$(TAR) -C $(dir $@) --strip-components 1 -xf $<
-	touch -c $(SRCCACHE)/cilkrts-$(CILKRTS_VER)/configure # old target
-	echo 1 > $@
 
-$(BUILDDIR)/cilkrts-$(CILKRTS_VER)/build-configured: $(SRCCACHE)/cilkrts-$(CILKRTS_VER)/source-extracted
+CILKRTS_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release
+# LDFLAGS="$(CXXLDFLAGS)" CPPFLAGS="$(CPPFLAGS)"
+$(BUILDDIR)/$(CILKRTS_SRC_DIR)/build-configured: $(SRCCACHE)/$(CILKRTS_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
-	cd $(dir $<) && \
-	libtoolize && aclocal && automake --add-missing && autoconf
 	cd $(dir $@) && \
-	$(dir $<)/configure $(CONFIGURE_COMMON) LDFLAGS="$(CXXLDFLAGS)" CPPFLAGS="$(CPPFLAGS)"
+	$(CMAKE) $(dir $<) $(CILKRTS_OPTS)
 	echo 1 > $@
 
-$(BUILDDIR)/cilkrts-$(CILKRTS_VER)/build-compiled: $(BUILDDIR)/cilkrts-$(CILKRTS_VER)/build-configured
+$(BUILDDIR)/$(CILKRTS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(CILKRTS_SRC_DIR)/build-configured
 	$(MAKE) -C $(dir $<)
 	echo 1 > $@
 
-$(BUILDDIR)/cilkrts-$(CILKRTS_VER)/build-checked: $(BUILDDIR)/cilkrts-$(CILKRTS_VER)/build-compiled
+$(BUILDDIR)/$(CILKRTS_SRC_DIR)/build-checked: $(BUILDDIR)/$(CILKRTS_SRC_DIR)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
 	#$(MAKE) -C $(dir $@) check
 endif
 	echo 1 > $@
 
 $(eval $(call staged-install, \
-	cilkrts,cilkrts-$(CILKRTS_VER), \
+	cilkrts,$(CILKRTS_SRC_DIR), \
 	MAKE_INSTALL,$$(LIBTOOL_CCLD),,))
 
 clean-cilkrts:
-	-rm $(BUILDDIR)/cilkrts-$(CILKRTS_VER)/build-configured \
-		$(BUILDDIR)/cilkrts-$(CILKRTS_VER)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/cilkrts-$(CILKRTS_VER) clean
+	-rm $(BUILDDIR)/$(CILKRTS_SRC_DIR)/build-configured \
+		$(BUILDDIR)/$(CILKRTS_SRC_DIR)/build-compiled
+	-$(MAKE) -C $(BUILDDIR)/$(CILKRTS_SRC_DIR) clean
 
-distclean-cilkrts:
-	-rm -rf $(SRCCACHE)/cilkrts-$(CILKRTS_VER).tar.gz \
-		$(SRCCACHE)/cilkrts-$(CILKRTS_VER) \
-		$(BUILDDIR)/cilkrts-$(CILKRTS_VER)
-
-
-get-cilkrts: $(SRCCACHE)/cilkrts-$(CILKRTS_VER).tar.gz
-extract-cilkrts: $(SRCCACHE)/cilkrts-$(CILKRTS_VER)/source-extracted
-configure-cilkrts: $(BUILDDIR)/cilkrts-$(CILKRTS_VER)/build-configured
-compile-cilkrts: $(BUILDDIR)/cilkrts-$(CILKRTS_VER)/build-compiled
-check-cilkrts: $(BUILDDIR)/cilkrts-$(CILKRTS_VER)/build-checked
+get-cilkrts: $(CILKRTS_SRC_FILE)
+extract-cilkrts: $(BUILDDIR)/$(CILKRTS_SRC_DIR)/source-extracted
+configure-cilkrts: $(BUILDDIR)/$(CILKRTS_SRC_DIR)/build-configured
+compile-cilkrts: $(BUILDDIR)/$(CILKRTS_SRC_DIR)/build-compiled
+check-cilkrts: $(BUILDDIR)/$(CILKRTS_SRC_DIR)/build-checked
