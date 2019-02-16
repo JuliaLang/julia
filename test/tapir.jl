@@ -13,6 +13,10 @@ macro sync_end(token)
     Expr(:sync, esc(token))
 end
 
+macro loopinfo(args...)
+    Expr(:loopinfo, args...)
+end
+
 const tokenname = gensym(:token)
 macro sync(block)
     var = esc(tokenname)
@@ -35,12 +39,15 @@ end
 macro par(expr)
     @assert expr.head === :for
     token = gensym(:token)
-    body = Expr(:spawn, token, expr.args[2])
-    expr.args[2] = body
-
+    body = expr.args[2]
+    lhs = expr.args[1].args[1]
+    range = expr.args[1].args[2]
     quote
         let $token = @syncregion()
-            $(esc(expr))
+            for $(esc(lhs)) = $(esc(range))
+                @spawn $token $(esc(body))
+                $(Expr(:loopinfo, (Symbol("tapir.loop.spawn.strategy"), 1)))
+            end
             @sync_end $token
         end
     end
