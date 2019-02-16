@@ -231,7 +231,7 @@ function setindex_shape_check(X::AbstractArray{<:Any,2}, i::Integer, j::Integer)
     end
 end
 
-setindex_shape_check(::Any...) = 
+setindex_shape_check(::Any...) =
     throw(ArgumentError("Scalar assignment to a vector is not supported: maybe you wanted to use `.=`?"))
 
 # convert to a supported index type (array or Int)
