@@ -1107,6 +1107,10 @@ function typeinf_local(frame::InferenceState)
                 changes[sn] = VarState(Bottom, true)
             elseif isa(stmt, GotoNode)
                 pc´ = (stmt::GotoNode).label
+            elseif isa(stmt, DetachNode)
+                pc´ = (stmt::DetachNode).label
+            elseif isa(stmt, ReattachNode)
+                pc´ = (stmt::ReattachNode).label
             elseif hd === :gotoifnot
                 condt = abstract_eval(stmt.args[1], s[pc], frame)
                 if condt === Bottom
@@ -1197,7 +1201,8 @@ function typeinf_local(frame::InferenceState)
                     if isa(fname, Slot)
                         changes = StateUpdate(fname, VarState(Any, false), changes)
                     end
-                elseif hd === :inbounds || hd === :meta || hd === :loopinfo
+                elseif hd === :inbounds || hd === :meta || hd === :loopinfo ||
+                       (stmt isa SyncNode)
                 else
                     t = abstract_eval(stmt, changes, frame)
                     t === Bottom && break
@@ -1229,7 +1234,8 @@ function typeinf_local(frame::InferenceState)
             pc´ > n && break # can't proceed with the fast-path fall-through
             frame.handler_at[pc´] = frame.cur_hand
             newstate = stupdate!(s[pc´], changes)
-            if isa(stmt, GotoNode) && frame.pc´´ < pc´
+            if (isa(stmt, GotoNode) || isa(stmt, DetachNode) || isa(stmt, ReattachNode) ) &&
+                frame.pc´´ < pc´
                 # if we are processing a goto node anyways,
                 # (such as a terminator for a loop, if-else, or try block),
                 # consider whether we should jump to an older backedge first,

@@ -764,7 +764,8 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
 
 const ExprNode = Union{Expr, QuoteNode, Slot, LineNumberNode, SSAValue,
                        GotoNode, GlobalRef, PhiNode, PhiCNode, UpsilonNode,
-                       Core.Compiler.GotoIfNot, Core.Compiler.ReturnNode}
+                       Core.Compiler.GotoIfNot, Core.Compiler.ReturnNode,
+                       DetachNode, ReattachNode, SyncNode}
 # Operators have precedence levels from 1-N, and show_unquoted defaults to a
 # precedence level of 0 (the fourth argument). The top-level print and show
 # methods use a precedence of -1 to specially allow space-separated macro syntax
@@ -1010,6 +1011,9 @@ show_unquoted(io::IO, val::SSAValue, ::Int, ::Int)      = print(io, "%", val.id)
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = print(io, sym)
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex.label)
+show_unquoted(io::IO, ex::DetachNode, ::Int, ::Int)     = print(io, "detach within ", ex.syncregion, " %", ex.label, " %", ex.reattach)
+show_unquoted(io::IO, ex::ReattachNode, ::Int, ::Int)   = print(io, "reattach within ", ex.syncregion, " %", ex.label)
+show_unquoted(io::IO, ex::SyncNode, ::Int, ::Int)       = print(io, "sync within ", ex.syncregion)
 function show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)
     print(io, ex.mod)
     print(io, '.')

@@ -1347,6 +1347,9 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("PhiNode", (jl_value_t*)jl_phinode_type);
     add_builtin("PhiCNode", (jl_value_t*)jl_phicnode_type);
     add_builtin("UpsilonNode", (jl_value_t*)jl_upsilonnode_type);
+    add_builtin("DetachNode", (jl_value_t*)jl_detachnode_type);
+    add_builtin("ReattachNode", (jl_value_t*)jl_reattachnode_type);
+    add_builtin("SyncNode", (jl_value_t*)jl_syncnode_type);
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);

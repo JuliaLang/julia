@@ -130,6 +130,21 @@
 #    name::Symbol
 #end
 
+#struct DetachNode
+#    syncregion
+#    label::Int
+#    reattach::Int
+#end
+
+#struct ReattachNode
+#    syncregion
+#    label::Int
+#end
+
+#struct SyncNode
+#    syncregion
+#end
+
 #mutable struct Task
 #    parent::Task
 #    storage::Any
@@ -379,6 +394,9 @@ eval(Core, :(UpsilonNode(val) = $(Expr(:new, :UpsilonNode, :val))))
 eval(Core, :(UpsilonNode() = $(Expr(:new, :UpsilonNode))))
 eval(Core, :(LineInfoNode(@nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
              $(Expr(:new, :LineInfoNode, :method, :file, :line, :inlined_at))))
+eval(Core, :(SyncNode(token) = $(Expr(:new, :SyncNode, :token))))
+eval(Core, :(DetachNode(token, bb::Int, reattach::Int) = $(Expr(:new, :DetachNode, :token, :bb, :reattach))))
+eval(Core, :(ReattachNode(token, bb::Int) = $(Expr(:new, :ReattachNode, :token, :bb))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
@@ -447,11 +465,13 @@ Symbol(s::Symbol) = s
 module IR
 export CodeInfo, MethodInstance, CodeInstance, GotoNode,
     NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
-    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
+    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
+    DetachNode, ReattachNode, SyncNode
 
 import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode,
     NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
-    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
+    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
+    DetachNode, ReattachNode, SyncNode
 
 end
 

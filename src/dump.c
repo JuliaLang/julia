@@ -478,6 +478,7 @@ static int is_ast_node(jl_value_t *v)
         jl_is_svec(v) || jl_is_tuple(v) || ((jl_datatype_t*)jl_typeof(v))->instance ||
         jl_is_int32(v) || jl_is_int64(v) || jl_is_bool(v) || jl_is_uint8(v) ||
         jl_is_quotenode(v) || jl_is_gotonode(v) || jl_is_linenode(v) || jl_is_globalref(v) ||
+        jl_is_detachnode(v) || jl_is_reattachnode(v) || jl_is_syncnode(v) ||
         jl_is_phinode(v) || jl_is_phicnode(v) || jl_is_upsilonnode(v) || jl_is_pinode(v) ||
         jl_typeis(v, jl_lineinfonode_type);
 }

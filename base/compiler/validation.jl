@@ -27,6 +27,10 @@ const VALID_EXPR_HEADS = IdDict{Any,Any}(
     :cfunction => 5:5,
     :isdefined => 1:1,
     :loopinfo => 0:typemax(Int),
+    :detach => 2:2,
+    :reattach => 2:2,
+    :sync => 1:1,
+    :syncregion => 0:0,
     :gc_preserve_begin => 0:typemax(Int),
     :gc_preserve_end => 0:typemax(Int),
     :thunk => 1:1,
@@ -144,7 +148,8 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                 head === :const || head === :enter || head === :leave || head == :pop_exception ||
                 head === :method || head === :global || head === :static_parameter ||
                 head === :new || head === :splatnew || head === :thunk || head === :loopinfo ||
-                head === :throw_undef_if_not || head === :unreachable
+                head === :throw_undef_if_not || head === :unreachable || head === :detach ||
+                head === :reattach || head === :sync || head === :syncregion
                 validate_val!(x)
             else
                 # TODO: nothing is actually in statement position anymore
@@ -152,6 +157,9 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
             end
         elseif isa(x, NewvarNode)
         elseif isa(x, GotoNode)
+        elseif isa(x, DetachNode)
+        elseif isa(x, ReattachNode)
+        elseif isa(x, SyncNode)
         elseif x === nothing
         elseif isa(x, SlotNumber)
         elseif isa(x, GlobalRef)
@@ -220,12 +228,13 @@ function is_valid_argument(@nospecialize(x))
     end
     # TODO: consider being stricter about what needs to be wrapped with QuoteNode
     return !(isa(x,Expr) || isa(x,Symbol) || isa(x,GotoNode) ||
-             isa(x,LineNumberNode) || isa(x,NewvarNode))
+             isa(x,LineNumberNode) || isa(x,NewvarNode)) ||
+             isa(x,DetachNode) || isa(x,ReattachNode) || isa(x,DetachNode)
 end
 
 function is_valid_rvalue(@nospecialize(x))
     is_valid_argument(x) && return true
-    if isa(x, Expr) && x.head in (:new, :splatnew, :the_exception, :isdefined, :call, :invoke, :foreigncall, :cfunction, :gc_preserve_begin, :copyast)
+    if isa(x, Expr) && x.head in (:new, :splatnew, :the_exception, :isdefined, :call, :invoke, :foreigncall, :cfunction, :gc_preserve_begin, :copyast, :syncregion)
         return true
     end
     return false
