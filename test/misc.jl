@@ -722,3 +722,28 @@ end
        end
    end
 end
+
+# Test `./base/util.jl`: prettyprint_getunits() with *mem_units*
+@testset "issue#19039: 1024 bytes should be 1 KiB" begin
+    const _num_units = length(Base._mem_units)
+    pp_bytes(bytes) = Base.prettyprint_getunits(bytes, _num_units, Int64(1024))
+    
+    @test pp_bytes(0) == (0, 1)         # 0 bytes
+    @test pp_bytes(1) == (1, 1)         # 1 bytes
+    @test pp_bytes(1023) == (1023, 1)   # 1023 bytes
+    @test pp_bytes(1024) == (1.0, 2)    # 1024 bytes = 1.0 KiB
+    @test pp_bytes(1025)[2] == 2        # 1023 bytes = 1.* KiB
+    
+    @test pp_bytes(1024^2) == (1.0, 3)  # 1024^2 bytes = 1.0 MiB
+    @test pp_bytes(1024^3) == (1.0, 4)  # 1024^4 bytes = 1.0 GiB
+    @test pp_bytes(1024^4) == (1.0, 5)  # 1024^5 bytes = 1.0 TiB
+    @test pp_bytes(1024^5) == (1.0, 6)  # 1024^6 bytes = 1.0 PiB
+    @test pp_bytes(1024^6)[2] == 6      # 1024^7 bytes = *.* PiB
+    
+    @test pp_bytes(1024^5 - 1)[2] == 5  # < 1024^6 bytes = *.* TiB
+    @test pp_bytes(1024^5) == (1, 6)    # = 1024^6 bytes = 1.0 PiB
+    @test pp_bytes(1024^5 + 1)[2] == 6  # > 1024^6 bytes = *.* PiB
+    
+    # Limit to _mem_units[5] = "TiB"
+    @test Base.prettyprint_getunits(1024^5, 5, 1024) == (1024, 5)
+end
