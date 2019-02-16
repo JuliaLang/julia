@@ -753,17 +753,17 @@ end
     const _time_units = length(Base._cnt_units)
     pp_time(times) = Base.prettyprint_getunits(times, _time_units, Int64(1000))
     
-    @test pp_time(0) == (0, 1)         # 0
-    @test pp_time(1) == (1, 1)         # 1
-    @test pp_time(999) == (999, 1)     # 999
-    @test pp_time(1000) == (1.0, 2)    # 1000 = 1 k
-    @test pp_time(1001)[2] == 2        # 1001 > 1 k
+    @test pp_time(0) == (0, 1)      # 0
+    @test pp_time(1) == (1, 1)      # 1
+    @test pp_time(999) == (999, 1)  # 999
+    @test pp_time(1000) == (1.0, 2) # 1000 = 1 k
+    @test pp_time(1001)[2] == 2     # 1001 > 1 k
     
-    @test pp_time(1e5) == (1.0, 3)  # 10^5 = 1 M
-    @test pp_time(1e6) == (1.0, 4)  # 10^6 = 1 G
-    @test pp_time(1e7) == (1.0, 5)  # 10^7 = 1 T
-    @test pp_time(1e8) == (1.0, 6)  # 10^8 = 1 P
-    @test pp_time(1e9) == (1000.0, 6)   # 10^9 = 10^3 P
+    @test pp_time(1e6) == (1.0, 3)  # 10^6 = 1 M
+    @test pp_time(1e9) == (1.0, 4)  # 10^9 = 1 G
+    @test pp_time(1e12) == (1.0, 5) # 10^12 = 1 T
+    @test pp_time(1e15) == (1.0, 6) # 10^15 = 1 P
+    @test pp_time(1e18) == (1000.0, 6)  # 10^18 = 10^3 P
     
     # Limit to _cnt_units[4] = "G"
     @test Base.prettyprint_getunits(1000^4, 4, 1000) == (1000.0, 4)
