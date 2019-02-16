@@ -504,6 +504,7 @@ typedef struct _jl_methtable_t {
     jl_module_t *module; // used for incremental serialization to locate original binding
     jl_array_t *backedges;
     jl_mutex_t writelock;
+    uint8_t offs;  // 0, or 1 to skip splitting typemap on first (function) argument
 } jl_methtable_t;
 
 typedef struct {
