@@ -735,23 +735,23 @@ end
 @testset "issue#19039: 1024 bytes should be 1 KiB" begin
     const _num_units = length(Base._mem_units)
     pp_bytes(bytes) = Base.prettyprint_getunits(bytes, _num_units, Int64(1024))
-    
+
     @test pp_bytes(0) == (0, 1)         # 0 bytes
     @test pp_bytes(1) == (1, 1)         # 1 bytes
     @test pp_bytes(1023) == (1023, 1)   # 1023 bytes
     @test pp_bytes(1024) == (1.0, 2)    # 1024 bytes = 1.0 KiB
     @test pp_bytes(1025)[2] == 2        # 1023 bytes = 1.* KiB
-    
+
     @test pp_bytes(1024^2) == (1.0, 3)  # 1024^2 bytes = 1.0 MiB
     @test pp_bytes(1024^3) == (1.0, 4)  # 1024^4 bytes = 1.0 GiB
     @test pp_bytes(1024^4) == (1.0, 5)  # 1024^5 bytes = 1.0 TiB
     @test pp_bytes(1024^5) == (1.0, 6)  # 1024^6 bytes = 1.0 PiB
     @test pp_bytes(1024^6)[2] == 6      # 1024^7 bytes = *.* PiB
-    
+
     @test pp_bytes(1024^5 - 1)[2] == 5  # < 1024^6 bytes = *.* TiB
     @test pp_bytes(1024^5) == (1, 6)    # = 1024^6 bytes = 1.0 PiB
     @test pp_bytes(1024^5 + 1)[2] == 6  # > 1024^6 bytes = *.* PiB
-    
+
     # Limit to _mem_units[5] = "TiB"
     @test Base.prettyprint_getunits(1024^5, 5, 1024) == (1024, 5)
 end
@@ -760,19 +760,19 @@ end
 @testset "Test prettyprint_getunits() with cnt_units" begin
     const _time_units = length(Base._cnt_units)
     pp_time(times) = Base.prettyprint_getunits(times, _time_units, Int64(1000))
-    
+
     @test pp_time(0) == (0, 1)      # 0
     @test pp_time(1) == (1, 1)      # 1
     @test pp_time(999) == (999, 1)  # 999
     @test pp_time(1000) == (1.0, 2) # 1000 = 1 k
     @test pp_time(1001)[2] == 2     # 1001 > 1 k
-    
+
     @test pp_time(1e6) == (1.0, 3)  # 10^6 = 1 M
     @test pp_time(1e9) == (1.0, 4)  # 10^9 = 1 G
     @test pp_time(1e12) == (1.0, 5) # 10^12 = 1 T
     @test pp_time(1e15) == (1.0, 6) # 10^15 = 1 P
     @test pp_time(1e18) == (1000.0, 6)  # 10^18 = 10^3 P
-    
+
     # Limit to _cnt_units[4] = "G"
     @test Base.prettyprint_getunits(1000^4, 4, 1000) == (1000.0, 4)
 end
