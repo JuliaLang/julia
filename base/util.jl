@@ -69,6 +69,7 @@ const _mem_units = ["byte", "KiB", "MiB", "GiB", "TiB", "PiB"]
 const _cnt_units = ["", " k", " M", " G", " T", " P"]
 function prettyprint_getunits(value, numunits, factor)
     unit = 1
+    value /= one(factor)
     while value >= factor && unit < numunits
         value /= factor
         unit += 1
