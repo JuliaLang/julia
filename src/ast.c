@@ -101,7 +101,7 @@ typedef struct _jl_ast_context_t {
     jl_ast_context_list_t list;
     int ref;
     jl_task_t *task; // the current owner (user) of this jl_ast_context_t
-    jl_module_t *module; // context module for "defined-julia-global" and "current-julia-module-counter"
+    jl_module_t *module; // context module for `current-julia-module-counter`
 } jl_ast_context_t;
 
 static jl_ast_context_t jl_ast_main_ctx;
@@ -128,25 +128,6 @@ struct macroctx_stack {
 static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
 static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v);
 static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, struct macroctx_stack *macroctx, int onelevel);
-
-value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
-{
-    jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
-    // tells whether a var is defined in and *by* the current module
-    argcount(fl_ctx, "defined-julia-global", nargs, 1);
-    jl_module_t *mod = ctx->module;
-    jl_sym_t *sym = (jl_sym_t*)scm_to_julia(fl_ctx, args[0], mod);
-    if (jl_is_globalref(sym)) {
-        mod = jl_globalref_mod(sym);
-        sym = jl_globalref_name(sym);
-    }
-    if (!jl_is_symbol(sym))
-        type_error(fl_ctx, "defined-julia-global", "symbol", args[0]);
-    if (!mod)
-        return fl_ctx->F;
-    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&mod->bindings, sym);
-    return (b != HT_NOTFOUND && b->owner == mod) ? fl_ctx->T : fl_ctx->F;
-}
 
 value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
@@ -214,7 +195,6 @@ value_t fl_julia_logmsg(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 }
 
 static const builtinspec_t julia_flisp_ast_ext[] = {
-    { "defined-julia-global", fl_defined_julia_global },
     { "current-julia-module-counter", fl_current_module_counter },
     { "julia-scalar?", fl_julia_scalar },
     { "julia-logmsg", fl_julia_logmsg },
