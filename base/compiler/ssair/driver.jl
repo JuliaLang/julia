@@ -57,7 +57,31 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, sv::Opt
     changemap = fill(0, length(code))
     while idx <= length(code)
         if code[idx] isa Expr && ci.ssavaluetypes[idx] === Union{}
-            if !(idx < length(code) && isexpr(code[idx+1], :unreachable))
+            idx′ = idx
+            term = nothing
+            # TODO: We need to establish whether we are in a parallel region.
+            #       this means that we are dominated by a DetachNode and dominate
+            #       a ReattachNode with the same syncregion token.
+            # TODO: Unsure how to handle this with nested parallel regions
+            # TODO: this ignores the CFG
+            # TODO: Makes this more efficient
+            while idx′ <= length(code)
+                if isa(code[idx′], Union{ReturnNode, DetachNode, ReattachNode})
+                    term = code[idx′]
+                    break
+                end
+                idx′ += 1
+            end
+
+            if isa(term, ReattachNode)
+                # if the parallel region has an error, we can't place
+                # a unreachable (return of Union{}), since that would
+                # break the CFG, potentially we could say that a task
+                # throws an error could be removed entirely, but we
+                # would need to prove that nobody waits upon this task,
+                # e.g. that for the token there is no sync or the sync
+                # is dead.
+            elseif !(idx < length(code) && isexpr(code[idx+1], :unreachable))
                 insert!(code, idx + 1, ReturnNode())
                 insert!(ci.codelocs, idx + 1, ci.codelocs[idx])
                 insert!(ci.ssavaluetypes, idx + 1, Union{})

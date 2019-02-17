@@ -348,6 +348,8 @@ function type_annotate!(sv::InferenceState)
         else
             if isa(expr, Expr) && is_meta_expr_head(expr.head)
                 # keep any lexically scoped expressions
+            elseif isa(expr, DetachNode) || isa(expr, ReattachNode) || isa(expr, SyncNode)
+                # keep parallel IR constructs
             elseif run_optimizer
                 deleteat!(body, i)
                 deleteat!(states, i)
