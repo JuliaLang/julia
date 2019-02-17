@@ -320,20 +320,12 @@ function type_annotate!(sv::InferenceState)
     nexpr = length(body)
 
     # replace gotoifnot with its condition if the branch target is unreachable
-    # use serial projection to turn DetachNode into branch
     for i = 1:nexpr
         expr = body[i]
         if isa(expr, Expr) && expr.head === :gotoifnot
             tgt = expr.args[2]::Int
             if !isa(states[tgt], VarTable)
                 body[i] = expr.args[1]
-            end
-        elseif isa(expr, DetachNode)
-            # Unecessary for ReattachNode since if that points to a dead BB
-            # if will get automatically removed.
-            tgt = expr.reattach
-            if !isa(states[tgt], VarTable)
-                body[i] = GotoNode(expr.label)
             end
         end
     end
