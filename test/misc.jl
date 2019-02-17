@@ -731,6 +731,9 @@ end
     @test sort([a, b]) == [b, a]
 end
 
+# Pointer 0-arg constructor
+@test Ptr{Cvoid}() == C_NULL
+
 # Test `./base/util.jl`: prettyprint_getunits() with *mem_units*
 @testset "issue#19039: 1024 bytes should be 1 KiB" begin
     const _num_units = length(Base._mem_units)

@@ -23,8 +23,7 @@ end
 
 function show(io::IO, t::AbstractDict{K,V}) where V where K
     recur_io = IOContext(io, :SHOWN_SET => t,
-                             :typeinfo => eltype(t),
-                             :compact => get(io, :compact, true))
+                             :typeinfo => eltype(t))
 
     limit::Bool = get(io, :limit, false)
     # show in a Julia-syntax-like form: Dict(k=>v, ...)

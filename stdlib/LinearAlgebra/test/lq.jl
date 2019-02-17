@@ -57,9 +57,9 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
                     @test l*q ≈ a
                     @test Array(lqa) ≈ a
                     @test Array(copy(lqa)) ≈ a
-                    lstring = sprint(show,l)
-                    qstring = sprint(show,q)
-                    @test sprint(show,lqa) == "$(typeof(lqa)) with factors L and Q:\n$lstring\n$qstring"
+                    lstring = sprint(show, l, context = :compact=>true)
+                    qstring = sprint(show, q, context = :compact=>true)
+                    @test sprint(show,MIME"text/plain"(),lqa) == "$(typeof(lqa)) with factors L and Q:\n$lstring\n$qstring"
                 end
                 @testset "Binary ops" begin
                     @test a*(lqa\b) ≈ b atol=3000ε
