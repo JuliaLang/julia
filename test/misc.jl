@@ -736,7 +736,7 @@ end
 
 # Test `./base/util.jl`: prettyprint_getunits() with *mem_units*
 @testset "issue#19039: 1024 bytes should be 1 KiB" begin
-    const _num_units = length(Base._mem_units)
+    _num_units = length(Base._mem_units)
     pp_bytes(bytes) = Base.prettyprint_getunits(bytes, _num_units, Int64(1024))
 
     @test pp_bytes(0) == (0, 1)         # 0 bytes
@@ -761,7 +761,7 @@ end
 
 # Test `./base/util.jl`: prettyprint_getunits() with *cnt_units*
 @testset "Test prettyprint_getunits() with cnt_units" begin
-    const _time_units = length(Base._cnt_units)
+    _time_units = length(Base._cnt_units)
     pp_time(times) = Base.prettyprint_getunits(times, _time_units, Int64(1000))
 
     @test pp_time(0) == (0, 1)      # 0
