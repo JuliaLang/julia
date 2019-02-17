@@ -17,7 +17,7 @@ struct Rational{T<:Integer} <: Real
 
     function Rational{T}(num::Integer, den::Integer) where T<:BitSigned
         num == den == zero(T) && __throw_rational_argerror(T)
-        if num < 0 && den < 0 && (num === typemin(T) || den === typemin(T)) && __throw_rational_ovferror(num, den)
+        num < 0 && den < 0 && (num === typemin(T) || den === typemin(T)) && __throw_rational_ovferror(num, den)
         num2, den2 = (sign(den) < 0) ? divgcd(-num, -den) : divgcd(num, den)
         new(num2, den2)
     end
