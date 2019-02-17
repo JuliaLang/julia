@@ -1108,6 +1108,17 @@ function typeinf_local(frame::InferenceState)
             elseif isa(stmt, GotoNode)
                 pc´ = (stmt::GotoNode).label
             elseif isa(stmt, DetachNode)
+                # A detach node has two edges we need to add
+                # the reattach edge to the work queue
+                l = (stmt::DetachNode).reattach
+                newstate_reattach = stupdate!(s[l], changes)
+                if newstate_reattach !== false
+                    if l < frame.pc´´
+                        frame.pc´´ = l
+                    end
+                    push!(W, l)
+                    s[l] = newstate_reattach
+                end
                 pc´ = (stmt::DetachNode).label
             elseif isa(stmt, ReattachNode)
                 pc´ = (stmt::ReattachNode).label
