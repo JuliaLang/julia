@@ -684,6 +684,15 @@ let n = 1
     @test ceil.(Int, 1 ./ (1,)) == (1,)
 end
 
+# Issue #29266
+@testset "deprecated scalar-fill .=" begin
+    a = fill(1, 10)
+    @test_throws ArgumentError a[1:5] = 0
+
+    x = randn(10)
+    @test_throws ArgumentError x[x .> 0.0] = 0.0
+end
+
 
 # lots of splatting!
 let x = [[1, 4], [2, 5], [3, 6]]
