@@ -165,7 +165,9 @@ for (S, H) in ((:Symmetric, :Hermitian), (:Hermitian, :Symmetric))
         $S(A::$H) = $S(A, sym_uplo(A.uplo))
         function $S(A::$H, uplo::Symbol)
             if A.uplo == char_uplo(uplo)
-                if $H === Hermitian && any(!isreal, A.data[i] for i in diagind(A.data))
+                if $H === Hermitian && !(eltype(A) <: Real) &&
+                    any(!isreal, A.data[i] for i in diagind(A.data))
+
                     throw(ArgumentError("Cannot construct $($S)($($H))); diagonal contains complex values"))
                 end
                 return $S(A.data, sym_uplo(A.uplo))
