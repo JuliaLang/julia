@@ -254,22 +254,13 @@ julia> Array{Union{Missing, String}}(missing, 2, 3)
  missing  missing  missing
 ```
 
-For `T` that is bits type (`isbitstype(T)` returns `true`),
-`Array{Union{Missing, T}}(undef, dims)` creates an array filled with
-missing values. Also calling `similar` to create an unitialized array that has
-element type of the form `Union{Missing, T}` creates an array filled with `missing`
-if `T` is bits type:
-```jldoctest
-julia> similar([1, missing])
-2-element Array{Union{Missing, Int64},1}:
- missing
- missing
-
-julia> similar([1, 2], Union{Missing, Float64})
-2-element Array{Union{Missing, Float64},1}:
- missing
- missing
- ```
+!!! note
+    Currently for `T` that is bits type (`isbitstype(T)` returns `true`),
+    `Array{Union{Missing, T}}(undef, dims)` creates an array filled with
+    missing values. Also calling `similar` to create an unitialized array that
+    has element type of the form `Union{Missing, T}` creates an array filled with
+    `missing` if `T` is bits type. This behavior is an implementation detail
+    that may change in the future and should not be relied upon.
 
 An array allowing for `missing` values but which does not contain any such value
 can be converted back to an array which does not allow for missing values using
