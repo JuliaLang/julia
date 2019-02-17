@@ -32,9 +32,8 @@ macro sync(block)
     var = esc(tokenname)
     quote
         let $var = @syncregion()
-            v = $(esc(block))
+            $(esc(block))
             @sync_end($var)
-            v
         end
     end
 end
@@ -107,18 +106,6 @@ function vecadd(out, A, B)
     return out
 end
 
-# Used to crash the optimizer due to DetachNode pointing to dead BB
-function vecadd_err(out, A, B)
-    @assert length(out) == length(A) == length(B)
-    @inbounds begin
-        @par for i in 1:length(out)
-            out[i] = A[i] + B[i]
-            error()
-        end
-    end
-    return out
-end
-
 function fib(N)
     if N <= 1
         return N
@@ -131,6 +118,38 @@ function fib(N)
     x2 = fib(N-2)
     @sync_end token
     return x1[] + x2
+end
+
+###
+# Interesting corner cases and broken IR
+###
+
+##
+# Parallel regions with errors are tricky
+# #1  detach within %sr, #2, #3
+# #2  ...
+#     unreachable()
+#     reattach within %sr, #3
+# #3  sync within %sr
+#
+# Normally a unreachable get's turned into a ReturnNode(),
+# but that breaks the CFG. So we need to detect that we are
+# in a parallel region.
+#
+# Question:
+#   - Can we elimante a parallel region that throws?
+#     Probably if the sync is dead as well. We could always
+#     use the serial projection and serially execute the region.
+
+function vecadd_err(out, A, B)
+    @assert length(out) == length(A) == length(B)
+    @inbounds begin
+        @par for i in 1:length(out)
+            out[i] = A[i] + B[i]
+            error()
+        end
+    end
+    return out
 end
 
 # This function is broken due to the PhiNode
