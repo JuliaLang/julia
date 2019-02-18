@@ -1346,6 +1346,14 @@ let PT = PartialTuple(Tuple{Int64,UInt64}, Any[Const(10, false), UInt64])
 end
 @test sizeof_nothrow(Const(Tuple)) === false
 
+using Core.Compiler: typeof_tfunc
+@test typeof_tfunc(Tuple{Vararg{Int}}) == Type{Tuple{Vararg{Int,N}}} where N
+@test typeof_tfunc(Tuple{Any}) == Type{<:Tuple{Any}}
+@test typeof_tfunc(Type{Array}) === DataType
+@test typeof_tfunc(Type{<:Array}) === DataType
+@test typeof_tfunc(Array{Int}) == Type{Array{Int,N}} where N
+@test typeof_tfunc(AbstractArray{Int}) == Type{<:AbstractArray{Int,N}} where N
+
 function f23024(::Type{T}, ::Int) where T
     1 + 1
 end
@@ -1384,7 +1392,7 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.Params(world))
     # make sure the state of the properties look reasonable
     @test opt.src !== linfo.def.source
-    @test length(opt.src.slotflags) == length(opt.src.slotnames)
+    @test length(opt.src.slotflags) == linfo.def.nargs <= length(opt.src.slotnames)
     @test opt.src.ssavaluetypes isa Vector{Any}
     @test !opt.src.inferred
     @test opt.mod === Base

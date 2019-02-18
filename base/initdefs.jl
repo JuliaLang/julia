@@ -41,16 +41,63 @@ isinteractive() = (is_interactive::Bool)
 
 ## package depots (registries, packages, environments) ##
 
+"""
+    DEPOT_PATH
+
+A stack of "depot" locations where the package manager, as well as Julia's code
+loading mechanisms, look for package registries, installed packages, named
+environments, repo clones, cached compiled package images, and configuration
+files. By default it includes:
+
+1. `~/.julia` where `~` is the user home as appropriate on the system;
+2. an architecture-specific shared system directory, e.g. `/usr/local/share/julia`;
+3. an architecture-independent shared system directory, e.g. `/usr/share/julia`.
+
+So `DEPOT_PATH` might be:
+```julia
+[joinpath(homedir(), ".julia"), "/usr/local/share/julia", "/usr/share/julia"]
+```
+The first entry is the "user depot" and should be writable by and owned by the
+current user. The user depot is where: registries are cloned, new package versions
+are installed, named environments are created and updated, package repos are cloned,
+newly compiled package image files are saved, log files are written, development
+packages are checked out by default, and global configuration data is saved. Later
+entries in the depot path are treated as read-only and are appropriate for
+registries, packages, etc. installed and managed by system administrators.
+
+`DEPOT_PATH` is populated based on the [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH)
+environment variable if set.
+
+See also:
+[`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
+[Code Loading](@ref Code-Loading).
+"""
 const DEPOT_PATH = String[]
 
+function append_default_depot_path!(DEPOT_PATH)
+    path = joinpath(homedir(), ".julia")
+    path in DEPOT_PATH || push!(DEPOT_PATH, path)
+    path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
+    path in DEPOT_PATH || push!(DEPOT_PATH, path)
+    path = abspath(Sys.BINDIR, "..", "share", "julia")
+    path in DEPOT_PATH || push!(DEPOT_PATH, path)
+end
+
 function init_depot_path()
+    empty!(DEPOT_PATH)
     if haskey(ENV, "JULIA_DEPOT_PATH")
-        depots = split(ENV["JULIA_DEPOT_PATH"], Sys.iswindows() ? ';' : ':')
-        append!(empty!(DEPOT_PATH), map(expanduser, depots))
+        str = ENV["JULIA_DEPOT_PATH"]
+        isempty(str) && return
+        for path in split(str, Sys.iswindows() ? ';' : ':')
+            if isempty(path)
+                append_default_depot_path!(DEPOT_PATH)
+            else
+                path = expanduser(path)
+                path in DEPOT_PATH || push!(DEPOT_PATH, path)
+            end
+        end
     else
-        push!(empty!(DEPOT_PATH), joinpath(homedir(), ".julia"))
-        push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "local", "share", "julia"))
-        push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "share", "julia"))
+        append_default_depot_path!(DEPOT_PATH)
     end
 end
 
@@ -148,6 +195,7 @@ function parse_load_path(str::String)
                 env = current_project()
                 env === nothing && continue
             end
+            env = expanduser(env)
             env in envs || push!(envs, env)
         end
     end

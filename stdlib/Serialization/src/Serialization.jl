@@ -65,7 +65,7 @@ const TAGS = Any[
     :sub_int, :mul_int, :add_float, :sub_float, :new, :mul_float, :bitcast, :start, :done, :next,
     :indexed_iterate, :getfield, :meta, :eq_int, :slt_int, :sle_int, :ne_int, :push_loc, :pop_loc,
     :pop, :arrayset, :arrayref, :apply_type, :inbounds, :getindex, :setindex!, :Core, :!, :+,
-    :Base, :static_parameter, :convert, :colon, Symbol("#self#"), Symbol("#temp#"), :tuple,
+    :Base, :static_parameter, :convert, :colon, Symbol("#self#"), Symbol(""), :tuple,
 
     fill(:_reserved_, n_reserved_slots)...,
 
@@ -390,7 +390,7 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.file)
     serialize(s, meth.line)
     serialize(s, meth.sig)
-    serialize(s, meth.sparam_syms)
+    serialize(s, meth.slot_syms)
     serialize(s, meth.ambig)
     serialize(s, meth.nargs)
     serialize(s, meth.isva)
@@ -913,7 +913,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     file = deserialize(s)::Symbol
     line = deserialize(s)::Int32
     sig = deserialize(s)::Type
-    sparam_syms = deserialize(s)::SimpleVector
+    slot_syms = deserialize(s)::String
     ambig = deserialize(s)::Union{Array{Any,1}, Nothing}
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
@@ -925,7 +925,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.file = file
         meth.line = line
         meth.sig = sig
-        meth.sparam_syms = sparam_syms
+        meth.slot_syms = slot_syms
         meth.ambig = ambig
         meth.nargs = nargs
         meth.isva = isva
@@ -1085,6 +1085,9 @@ function deserialize_typename(s::AbstractSerializer, number)
         maxa = deserialize(s)::Int
         if makenew
             tn.mt = ccall(:jl_new_method_table, Any, (Any, Any), name, tn.module)
+            if !isempty(parameters)
+                tn.mt.offs = 0
+            end
             tn.mt.name = mtname
             tn.mt.max_args = maxa
             for def in defs

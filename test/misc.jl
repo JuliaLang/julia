@@ -730,3 +730,6 @@ end
     @test isless(b, a)
     @test sort([a, b]) == [b, a]
 end
+
+# Pointer 0-arg constructor
+@test Ptr{Cvoid}() == C_NULL

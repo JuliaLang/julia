@@ -398,6 +398,7 @@ function show(io::IO, x::Core.IntrinsicFunction)
 end
 
 show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
+show(io::IO, ::MIME"text/plain", ::Core.TypeofBottom) = print(io, "Union{}")
 
 function print_without_params(@nospecialize(x))
     if isa(x,UnionAll)
@@ -607,11 +608,10 @@ function gettypeinfos(io::IO, p::Pair)
 end
 
 function show(io::IO, p::Pair)
-    iocompact = IOContext(io, :compact => get(io, :compact, true))
-    isdelimited(io, p) && return show_default(iocompact, p)
+    isdelimited(io, p) && return show_default(io, p)
     typeinfos = gettypeinfos(io, p)
     for i = (1, 2)
-        io_i = IOContext(iocompact, :typeinfo => typeinfos[i])
+        io_i = IOContext(io, :typeinfo => typeinfos[i])
         isdelimited(io_i, p[i]) || print(io, "(")
         show(io_i, p[i])
         isdelimited(io_i, p[i]) || print(io, ")")
@@ -635,7 +635,7 @@ function sourceinfo_slotnames(src::CodeInfo)
     for i in eachindex(slotnames)
         name = string(slotnames[i])
         idx = get!(names, name, i)
-        if idx != i
+        if idx != i || isempty(name)
             printname = "$name@_$i"
             idx > 0 && (printnames[idx] = "$name@_$idx")
             names[name] = 0
@@ -1120,7 +1120,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             item = args[1]
             # field
             field = unquoted(args[2])
-            parens = !is_quoted(item) && !(item isa Symbol && isidentifier(item))
+            parens = !is_quoted(item) && !(item isa Symbol && isidentifier(item)) && !Meta.isexpr(item, :(.))
             parens && print(io, '(')
             show_unquoted(io, item, indent)
             parens && print(io, ')')
@@ -1807,10 +1807,9 @@ end
 function alignment(io::IO, x::Pair)
     s = sprint(show, x, context=io, sizehint=0)
     if !isdelimited(io, x) # i.e. use "=>" for display
-        iocompact = IOContext(io, :compact => get(io, :compact, true),
-                                  :typeinfo => gettypeinfos(io, x)[1])
-        left = length(sprint(show, x.first, context=iocompact, sizehint=0))
-        left += 2 * !isdelimited(iocompact, x.first) # for parens around p.first
+        ctx = IOContext(io, :typeinfo => gettypeinfos(io, x)[1])
+        left = length(sprint(show, x.first, context=ctx, sizehint=0))
+        left += 2 * !isdelimited(ctx, x.first) # for parens around p.first
         left += !get(io, :compact, false) # spaces are added around "=>"
         (left+1, length(s)-left-1) # +1 for the "=" part of "=>"
     else

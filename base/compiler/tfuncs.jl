@@ -409,6 +409,23 @@ add_tfunc(pointerref, 3, 3,
           end, 4)
 add_tfunc(pointerset, 4, 4, (@nospecialize(a), @nospecialize(v), @nospecialize(i), @nospecialize(align)) -> a, 5)
 
+# more accurate typeof_tfunc for vararg tuples abstract only in length
+function typeof_concrete_vararg(@nospecialize(t))
+    np = length(t.parameters)
+    for i = 1:np
+        p = t.parameters[i]
+        if i == np && isvarargtype(p)
+            pp = unwrap_unionall(p)
+            if isconcretetype(pp.parameters[1]) && pp.parameters[2] isa TypeVar
+                return rewrap_unionall(Type{Tuple{t.parameters[1:np-1]..., pp}}, p)
+            end
+        elseif !isconcretetype(p)
+            break
+        end
+    end
+    return nothing
+end
+
 function typeof_tfunc(@nospecialize(t))
     isa(t, Const) && return Const(typeof(t.val))
     t = widenconst(t)
@@ -416,15 +433,17 @@ function typeof_tfunc(@nospecialize(t))
         tp = t.parameters[1]
         if issingletontype(tp)
             return Const(typeof(tp))
-        else
-            return Type
         end
     elseif isa(t, DataType)
-        if isconcretetype(t) || isvarargtype(t)
+        if isconcretetype(t)
             return Const(t)
         elseif t === Any
             return DataType
         else
+            if t.name === Tuple.name
+                tt = typeof_concrete_vararg(t)
+                tt === nothing || return tt
+            end
             return Type{<:t}
         end
     elseif isa(t, Union)
@@ -434,10 +453,20 @@ function typeof_tfunc(@nospecialize(t))
     elseif isa(t, TypeVar) && !(Any <: t.ub)
         return typeof_tfunc(t.ub)
     elseif isa(t, UnionAll)
-        return rewrap_unionall(widenconst(typeof_tfunc(unwrap_unionall(t))), t)
-    else
-        return DataType # typeof(anything)::DataType
+        u = unwrap_unionall(t)
+        if isa(u, DataType) && !u.abstract
+            if u.name === Tuple.name
+                uu = typeof_concrete_vararg(u)
+                if uu !== nothing
+                    return rewrap_unionall(uu, t)
+                end
+            else
+                return rewrap_unionall(Type{u}, t)
+            end
+        end
+        return rewrap_unionall(widenconst(typeof_tfunc(u)), t)
     end
+    return DataType # typeof(anything)::DataType
 end
 add_tfunc(typeof, 1, 1, typeof_tfunc, 0)
 

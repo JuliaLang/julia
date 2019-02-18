@@ -56,7 +56,7 @@ end
 function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
     # Go through the function, performing simple ininlingin (e.g. replacing call by constants
     # and analyzing legality of inlining).
-    @timeit "analysis" todo = assemble_inline_todo!(ir, linetable, sv)
+    @timeit "analysis" todo = assemble_inline_todo!(ir, sv)
     isempty(todo) && return ir
     # Do the actual inlining for every call we identified
     @timeit "execution" ir = batch_inline!(todo, ir, linetable, sv)
@@ -289,7 +289,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     # Append the linetable of the inlined function to our line table
     inlined_at = Int(compact.result_lines[idx])
     for entry in item.linetable
-        push!(linetable, LineInfoNode(entry.mod, entry.method, entry.file, entry.line,
+        push!(linetable, LineInfoNode(entry.method, entry.file, entry.line,
             (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset : inlined_at)))
     end
     if item.isva
@@ -702,7 +702,16 @@ function analyze_method!(idx::Int, @nospecialize(f), @nospecialize(ft), @nospeci
     end
 
     @timeit "inline IR inflation" begin
-        ir2, inline_linetable = inflate_ir(src, linfo), src.linetable
+        ir2 = inflate_ir(src, linfo)
+        # prepare inlining linetable with method instance information
+        inline_linetable = Vector{LineInfoNode}(undef, length(src.linetable))
+        for i = 1:length(src.linetable)
+            entry = src.linetable[i]
+            if entry.inlined_at === 0 && entry.method === method
+                entry = LineInfoNode(linfo, entry.file, entry.line, entry.inlined_at)
+            end
+            inline_linetable[i] = entry
+        end
     end
     #verify_ir(ir2)
 
@@ -777,7 +786,7 @@ function handle_single_case!(ir::IRCode, stmt::Expr, idx::Int, @nospecialize(cas
     nothing
 end
 
-function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
+function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
     # todo = (inline_idx, (isva, isinvoke, na), method, spvals, inline_linetable, inline_ir, lie)
     todo = Any[]
     for idx in 1:length(ir.stmts)

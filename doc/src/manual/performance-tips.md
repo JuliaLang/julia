@@ -1362,29 +1362,21 @@ julia> @noinline pos(x) = x < 0 ? 0 : x;
 
 julia> function f(x)
            y = pos(x)
-           sin(y*x + 1)
+           return sin(y*x + 1)
        end;
 
 julia> @code_warntype f(3.2)
+Variables
+  #self#::Core.Compiler.Const(f, false)
+  x::Float64
+  y::Union{Float64, Int64}
+
 Body::Float64
-2 1 ─ %1  = invoke Main.pos(%%x::Float64)::UNION{FLOAT64, INT64}
-3 │   %2  = isa(%1, Float64)::Bool
-  └──       goto 3 if not %2
-  2 ─ %4  = π (%1, Float64)
-  │   %5  = Base.mul_float(%4, %%x)::Float64
-  └──       goto 6
-  3 ─ %7  = isa(%1, Int64)::Bool
-  └──       goto 5 if not %7
-  4 ─ %9  = π (%1, Int64)
-  │   %10 = Base.sitofp(Float64, %9)::Float64
-  │   %11 = Base.mul_float(%10, %%x)::Float64
-  └──       goto 6
-  5 ─       Base.error("fatal error in type inference (type bound)")
-  └──       unreachable
-  6 ┄ %15 = φ (2 => %5, 4 => %11)::Float64
-  │   %16 = Base.add_float(%15, 1.0)::Float64
-  │   %17 = invoke Main.sin(%16::Float64)::Float64
-  └──       return %17
+1 ─      (y = Main.pos(x))
+│   %2 = (y * x)::Float64
+│   %3 = (%2 + 1)::Float64
+│   %4 = Main.sin(%3)::Float64
+└──      return %4
 ```
 
 Interpreting the output of [`@code_warntype`](@ref), like that of its cousins [`@code_lowered`](@ref),
