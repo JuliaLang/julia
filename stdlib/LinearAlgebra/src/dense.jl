@@ -926,7 +926,7 @@ this function, see [^AH16_1].
 ```jldoctest
 julia> acos(cos([0.5 0.1; -0.2 0.3]))
 2×2 Array{Complex{Float64},2}:
-  0.5-8.32667e-17im  0.1+0.0im        
+  0.5-8.32667e-17im  0.1+0.0im
  -0.2+2.63678e-16im  0.3-3.46945e-16im
 ```
 """
