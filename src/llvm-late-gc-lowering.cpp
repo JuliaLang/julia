@@ -821,9 +821,9 @@ void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses
     else if (isSpecialPtrVec(V->getType())) {
         std::vector<int> Nums = NumberVector(S, V);
         for (int Num : Nums) {
-            MaybeResize(BBS, Num);
             if (Num < 0)
                 continue;
+            MaybeResize(BBS, Num);
             Uses[Num] = 1;
         }
     }
