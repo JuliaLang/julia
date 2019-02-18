@@ -953,7 +953,7 @@ function atanh(z::Complex{T}) where T<:AbstractFloat
         end
         return Complex(real(1/z), copysign(oftype(y,pi)/2, y))
     end
-    β = copysign(1, x)
+    β = copysign(one(T), x)
     z *= β
     x, y = reim(z)
     if x == 1
