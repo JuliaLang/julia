@@ -338,3 +338,16 @@ end
 
 ==(A::Bidiagonal, B::SymTridiagonal) = iszero(B.ev) && iszero(A.ev) && A.dv == B.dv
 ==(B::SymTridiagonal, A::Bidiagonal) = A == B
+
+# op norm for structured matrices other than diagonal
+# the _opnorm1Inf methods are housed in the structured type's respective files
+
+function opnorm(A::Union{Bidiagonal,Tridiagonal,SymTridiagonal}, p::Real=2)
+    if p == 2
+        return opnorm2(A)
+    elseif p == 1 || p == Inf
+        return _opnorm1Inf(A, p)
+    else
+        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
+    end
+end
