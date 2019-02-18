@@ -1116,19 +1116,9 @@ function _opnorm1Inf(A::Tridiagonal, p)
                 normfirst, normend)
 end
 
-function opnorm(A::Tridiagonal, p::Real=2)
-    if p == 2
-        return opnorm2(A)
-    elseif p == 1 || p == Inf
-        _opnorm1Inf(A, p)
-    else
-        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
-    end
-end
-
 # SymTridiagonal
 
-function _opnorm1Inf(A::SymTridiagonal)
+function _opnorm1Inf(A::SymTridiagonal, p::Real)
     size(A, 1) == 1 && return norm(first(A.dv))
     lowerrange, upperrange = 1:length(A.ev)-1, 2:length(A.ev)
     normfirst, normend = norm(first(A.dv))+norm(first(A.ev)), norm(last(A.ev))+norm(last(A.dv))
@@ -1139,14 +1129,4 @@ function _opnorm1Inf(A::SymTridiagonal)
                     zip(view(A.dv, (2:length(A.dv)-1)), view(A.ev, lowerrange), view(A.ev, upperrange))
                 ),
                 normfirst, normend)
-end
-
-function opnorm(A::SymTridiagonal, p::Real=2)
-    if p == 2
-        return opnorm2(A)
-    elseif p == 1 || p == Inf # these are the same for symmetric matrices
-        return _opnorm1Inf(A)
-    else
-        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
-    end
 end

@@ -260,16 +260,6 @@ function _opnorm1Inf(B::Bidiagonal, p)
     return max(mapreduce(t -> sum(norm, t), max, zip(view(B.dv, (1:length(B.ev)) .+ !case), B.ev)), normdend)
 end
 
-function opnorm(B::Bidiagonal, p::Real=2)
-    if p == 2
-        return opnorm2(B)
-    elseif p == 1 || p == Inf
-        return _opnorm1Inf(B, p)
-    else
-        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
-    end
-end
-
 ####################
 # Generic routines #
 ####################
