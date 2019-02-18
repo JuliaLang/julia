@@ -96,11 +96,12 @@ end
 
 function retrieve_code_info(linfo::MethodInstance)
     m = linfo.def::Method
+    c = nothing
     if isdefined(m, :generator)
         # user code might throw errors – ignore them
-        return get_staged(linfo)
-    else
-        # TODO: post-inference see if we can swap back to the original arrays?
+        c = get_staged(linfo)
+    end
+    if c === nothing && isdefined(m, :source)
         src = m.source
         if isa(src, Array{UInt8,1})
             c = ccall(:jl_uncompress_ast, Any, (Any, Any), m, src)
@@ -108,17 +109,17 @@ function retrieve_code_info(linfo::MethodInstance)
             c = copy(src::CodeInfo)
         end
     end
-    return c::CodeInfo
+    if c isa CodeInfo
+        c.parent = linfo
+        return c
+    end
 end
 
 function code_for_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, world::UInt, preexisting::Bool=false)
     if world < min_world(method) || world > max_world(method)
         return nothing
     end
-    if isdefined(method, :generator) && !isdispatchtuple(atypes)
-        # don't call staged functions on abstract types.
-        # (see issues #8504, #10230)
-        # we can't guarantee that their type behavior is monotonic.
+    if isdefined(method, :generator) && !may_invoke_generator(method, atypes, sparams)
         return nothing
     end
     if preexisting

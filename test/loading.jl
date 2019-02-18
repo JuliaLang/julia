@@ -590,6 +590,43 @@ mktempdir() do dir
     end
 end
 
+@testset "expansion of JULIA_LOAD_PATH" begin
+    s = Sys.iswindows() ? ';' : ':'
+    tmp = "/foo/bar"
+    cases = Dict{Any,Vector{String}}(
+        nothing => Base.DEFAULT_LOAD_PATH,
+        "" => [],
+        "$s" => Base.DEFAULT_LOAD_PATH,
+        "$tmp$s" => [tmp; Base.DEFAULT_LOAD_PATH],
+        "$s$tmp" => [Base.DEFAULT_LOAD_PATH; tmp],
+        )
+    for (env, result) in pairs(cases)
+        withenv("JULIA_LOAD_PATH" => env) do
+            script = "LOAD_PATH == $(repr(result)) || error()"
+            @test success(`$(Base.julia_cmd()) -e $script`)
+        end
+    end
+end
+
+@testset "expansion of JULIA_DEPOT_PATH" begin
+    s = Sys.iswindows() ? ';' : ':'
+    tmp = "/foo/bar"
+    DEFAULT = Base.append_default_depot_path!(String[])
+    cases = Dict{Any,Vector{String}}(
+        nothing => DEFAULT,
+        "" => [],
+        "$s" => DEFAULT,
+        "$tmp$s" => [tmp; DEFAULT],
+        "$s$tmp" => [DEFAULT; tmp],
+        )
+    for (env, result) in pairs(cases)
+        withenv("JULIA_DEPOT_PATH" => env) do
+            script = "DEPOT_PATH == $(repr(result)) || error()"
+            @test success(`$(Base.julia_cmd()) -e $script`)
+        end
+    end
+end
+
 ## cleanup after tests ##
 
 for env in keys(envs)

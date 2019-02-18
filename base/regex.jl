@@ -474,7 +474,7 @@ function iterate(itr::RegexMatchIterator, (offset,prevempty)=(1,false))
 end
 
 """
-    eachmatch(r::Regex, s::AbstractString; overlap::Bool=false])
+    eachmatch(r::Regex, s::AbstractString; overlap::Bool=false)
 
 Search for all matches of a the regular expression `r` in `s` and return a iterator over the
 matches. If overlap is `true`, the matching sequences are allowed to overlap indices in the

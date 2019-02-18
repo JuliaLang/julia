@@ -1,13 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-inflate_ir(ci::CodeInfo) = inflate_ir(ci, Any[], Any[ Any for i = 1:length(ci.slotnames) ])
-
 function inflate_ir(ci::CodeInfo, linfo::MethodInstance)
     sptypes = sptypes_from_meth_instance(linfo)
     if ci.inferred
         argtypes, _ = matching_cache_argtypes(linfo, nothing)
     else
-        argtypes = Any[ Any for i = 1:length(ci.slotnames) ]
+        argtypes = Any[ Any for i = 1:length(ci.slotflags) ]
     end
     return inflate_ir(ci, sptypes, argtypes)
 end
@@ -53,7 +51,6 @@ end
 function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
     @assert isempty(ir.new_nodes)
     # All but the first `nargs` slots will now be unused
-    resize!(ci.slotnames, nargs+1)
     resize!(ci.slotflags, nargs+1)
     ci.code = ir.stmts
     ci.codelocs = ir.lines
@@ -92,3 +89,6 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
         end
     end
 end
+
+# used by some tests
+inflate_ir(ci::CodeInfo) = inflate_ir(ci, Any[], Any[ Any for i = 1:length(ci.slotflags) ])

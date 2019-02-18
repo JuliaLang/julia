@@ -45,7 +45,7 @@ end
 
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id : (s::TypedSlot).id
 function scan_slot_def_use(nargs::Int, ci::CodeInfo, code::Vector{Any})
-    nslots = length(ci.slotnames)
+    nslots = length(ci.slotflags)
     result = SlotInfo[SlotInfo() for i = 1:nslots]
     # Set defs for arguments
     for var in result[1:(1+nargs)]
@@ -654,7 +654,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
             undef_token
         else
             SSAValue(-1)
-        end for x in 1:length(ci.slotnames)
+        end for x in 1:length(ci.slotflags)
     ]
     worklist = Tuple{Int, Int, Vector{Any}}[(1, 0, initial_incoming_vals)]
     visited = BitSet()

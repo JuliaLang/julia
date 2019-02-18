@@ -452,20 +452,21 @@ function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
         eof(s) && break
     end
     if lb > olb && lb > nr
-        resize!(b, nr) # shrink to just contain input data if was resized
+        resize!(b, max(olb, nr)) # shrink to just contain input data if was resized
     end
     return nr
 end
 
 function readbytes_some!(s::IOStream, b::Array{UInt8}, nb)
-    olb = lb = length(b)
-    if nb > lb
+    olb = length(b)
+    if nb > olb
         resize!(b, nb)
     end
     nr = GC.@preserve b Int(ccall(:ios_read, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
                                   s.ios, pointer(b), nb))
+    lb = length(b)
     if lb > olb && lb > nr
-        resize!(b, nr)
+        resize!(b, max(olb, nr)) # shrink to just contain input data if was resized
     end
     return nr
 end
@@ -477,7 +478,10 @@ Read at most `nb` bytes from `stream` into `b`, returning the number of bytes re
 The size of `b` will be increased if needed (i.e. if `nb` is greater than `length(b)`
 and enough bytes could be read), but it will never be decreased.
 
-See [`read`](@ref) for a description of the `all` option.
+If `all` is `true` (the default), this function will block repeatedly trying to read all
+requested bytes, until an error or end-of-file occurs. If `all` is `false`, at most one
+`read` call is performed, and the amount of data returned is device-dependent. Note that not
+all stream types support the `all` option.
 """
 function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b); all::Bool=true)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
@@ -509,7 +513,9 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 all stream types support the `all` option.
 """
 function read(s::IOStream, nb::Integer; all::Bool=true)
-    b = Vector{UInt8}(undef, nb)
+    # When all=false we have to allocate a buffer of the requested size upfront
+    # since a single call will be made
+    b = Vector{UInt8}(undef, all && nb == typemax(Int) ? 1024 : nb)
     nr = readbytes!(s, b, nb, all=all)
     resize!(b, nr)
 end

@@ -31,6 +31,16 @@ using Random: AbstractRNG, GLOBAL_RNG
 using InteractiveUtils: gen_call_with_extracted_types
 using Core.Compiler: typesubtract
 
+const DISPLAY_FAILED = (
+    :isequal,
+    :isapprox,
+    :≈,
+    :occursin,
+    :startswith,
+    :endswith,
+    :isempty,
+)
+
 #-----------------------------------------------------------------------
 
 # Backtrace utility functions
@@ -424,7 +434,7 @@ function get_test_result(ex, source)
             $(QuoteNode(source)),
             $negate,
         ))
-    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox, :≈)
+    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in DISPLAY_FAILED
         escaped_func = esc(ex.args[1])
         quoted_func = QuoteNode(ex.args[1])
 
@@ -1277,6 +1287,7 @@ end
 
 _args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
 _materialize_broadcasted(f, args...) = Broadcast.materialize(Broadcast.broadcasted(f, args...))
+
 """
     @inferred [AllowedType] f(x)
 
@@ -1299,8 +1310,12 @@ julia> typeof(f(2))
 Int64
 
 julia> @code_warntype f(2)
+Variables
+  #self#::Core.Compiler.Const(f, false)
+  a::Int64
+
 Body::UNION{FLOAT64, INT64}
-1 ─ %1 = Base.slt_int(1, a)::Bool
+1 ─ %1 = (a > 1)::Bool
 └──      goto #3 if not %1
 2 ─      return 1
 3 ─      return 1.0

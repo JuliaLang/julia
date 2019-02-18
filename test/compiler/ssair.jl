@@ -22,7 +22,8 @@ const Compiler = Core.Compiler
 #        false, false, false, false
 #    ))
 #
-#    Compiler.run_passes(ci, 1, Compiler.LineInfoNode[Compiler.NullLineInfo])
+#    NullLineInfo = Core.LineInfoNode(Symbol(""), Symbol(""), 0, 0)
+#    Compiler.run_passes(ci, 1, [NullLineInfo])
 #    # XXX: missing @test
 #end
 

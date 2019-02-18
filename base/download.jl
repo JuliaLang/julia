@@ -23,7 +23,9 @@ if Sys.iswindows()
     end
 else
     function download(url::AbstractString, filename::AbstractString)
-        if Sys.which("curl") !== nothing
+        if Sys.isapple() && Sys.isexecutable("/usr/bin/curl")
+            run(`/usr/bin/curl -g -L -f -o $filename $url`) # issue #30956
+        elseif Sys.which("curl") !== nothing
             run(`curl -g -L -f -o $filename $url`)
         elseif Sys.which("wget") !== nothing
             try

@@ -115,7 +115,7 @@ if gcc_version == "blank_gcc":
             "6": "gcc4",
             "7": "gcc7",
             "8": "gcc8",
-        }[sys.argv[2][0]]
+        }[list(filter(lambda x: re.match("\d+\.\d+\.\d+", x), sys.argv[2].split()))[-1][0]]
 
 
 print(arch+p(platform)+p(libc)+r(call_abi)+p(gcc_version)+p(cxx_abi))

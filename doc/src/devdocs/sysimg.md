@@ -65,7 +65,7 @@ Additionally, a few special features are supported to control the function cloni
 
 4. `min_size`
 
-    This cause the function for the targe to be optimize for size that might have
+    This causes the function for the target to be optimized for size that might have
     a significant runtime performance impact. This corresponds to `-Oz` Clang option.
 
 As an example, at the time of this writing, the following string is used in the creation of

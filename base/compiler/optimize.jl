@@ -37,8 +37,11 @@ mutable struct OptimizationState
         if nssavalues isa Int
             src.ssavaluetypes = Any[ Any for i = 1:nssavalues ]
         end
-        nslots = length(src.slotnames)
-        slottypes = Any[ Any for i = 1:nslots ]
+        nslots = length(src.slotflags)
+        slottypes = src.slottypes
+        if slottypes === nothing
+            slottypes = Any[ Any for i = 1:nslots ]
+        end
         s_edges = []
         # cache some useful state computations
         toplevel = !isa(linfo.def, Method)
@@ -73,7 +76,7 @@ end
 # This is implied by `SLOT_USEDUNDEF`.
 # If this is not set, all the uses are (statically) dominated by the defs.
 # In particular, if a slot has `AssignedOnce && !StaticUndef`, it is an SSA.
-const SLOT_STATICUNDEF  = 1
+const SLOT_STATICUNDEF  = 1 # slot might be used before it is defined (structurally)
 const SLOT_ASSIGNEDONCE = 16 # slot is assigned to only once
 const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 # const SLOT_CALLED      = 64
@@ -259,6 +262,9 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
              f === Intrinsics.sqrt_llvm ||  # this one may differ at runtime (by a few ulps)
              f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
 end
+
+# whether `f` is effect free if nothrow
+intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref || is_pure_intrinsic_infer(f)
 
 ## Computing the cost of a function body
 
