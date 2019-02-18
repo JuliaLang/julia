@@ -78,7 +78,7 @@ ndims(J::UniformScaling) = 2
 Base.has_offset_axes(::UniformScaling) = false
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
-function show(io::IO, J::UniformScaling)
+function show(io::IO, ::MIME"text/plain", J::UniformScaling)
     s = "$(J.λ)"
     if occursin(r"\w+\s*[\+\-]\s*\w+", s)
         s = "($s)"

@@ -117,8 +117,7 @@ const struct jl_typemap_info tfunc_cache = {
 
 static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 {
-    // TODO: consider reverting this when we can split on Type{...} better
-    return 1; //(mt == jl_type_type_mt) ? 0 : 1;
+    return mt->offs;
 }
 
 /// ----- Insertion logic for special entries ----- ///
@@ -206,7 +205,7 @@ void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr
     m->isva = 1;
     m->nargs = 2;
     m->sig = (jl_value_t*)jl_anytuple_type;
-    m->sparam_syms = jl_emptysvec;
+    m->slot_syms = jl_an_empty_string;
 
     jl_methtable_t *mt = dt->name->mt;
     jl_typemap_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type,

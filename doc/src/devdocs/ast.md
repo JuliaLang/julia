@@ -239,7 +239,8 @@ Lowered form (IR) is more important to the compiler, since it is used for type i
 optimizations like inlining, and and code generation. It is also less obvious to the human,
 since it results from a significant rearrangement of the input syntax.
 
-The following data types exist in lowered form:
+In addition to `Symbol`s and some number types, the following data
+types exist in lowered form:
 
   * `Expr`
 
@@ -316,7 +317,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
     Adds a method to a generic function and assigns the result if necessary.
 
-    Has a 1-argument form and a 4-argument form. The 1-argument form arises from the syntax `function foo end`.
+    Has a 1-argument form and a 3-argument form. The 1-argument form arises from the syntax `function foo end`.
     In the 1-argument form, the argument is a symbol. If this symbol already names a function in the
     current scope, nothing happens. If the symbol is undefined, a new function is created and assigned
     to the identifier specified by the symbol. If the symbol is defined but names a non-function,
@@ -325,7 +326,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
     type uniquely identifies the type to add the method to. When the type has fields, it wouldn't
     be clear whether the method was being added to the instance or its type.
 
-    The 4-argument form has the following arguments:
+    The 3-argument form has the following arguments:
 
       * `args[1]`
 
@@ -345,9 +346,55 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
         method to a function that also has methods defined in different scopes) this is an
         expression that evaluates to a `:lambda` expression.
 
+  * `struct_type`
+
+    A 7-argument expression that defines a new `struct`:
+
+      * `args[1]`
+
+        The name of the `struct`
+
+      * `args[2]`
+
+        A `call` expression that creates `SimpleVector` specifying its parameters
+
+      * `args[3]`
+
+        A `call` expression that creates `SimpleVector` specifying its fieldnames
+
       * `args[4]`
 
-        `true` or `false`, identifying whether the method is staged (`@generated function`).
+        A `Symbol` or `GlobalRef` specifying the supertype (e.g., `:Integer` or
+        `GlobalRef(Core, :Any)`)
+
+      * `args[5]`
+
+        A `call` expression that creates `SimpleVector` specifying its fieldtypes
+
+      * `args[6]`
+
+        A Bool, true if `mutable`
+
+      * `args[7]`
+
+        The number of arguments to initialize. This will be the number
+        of fields, or the minimum number of fields called by an inner
+        constructor's `new` statement.
+
+  * `abstract_type`
+
+    A 3-argument expression that defines a new abstract type. The
+    arguments are the same as the first three arguments of
+    `struct_type` expressions.
+
+  * `primitive_type`
+
+    A 4-argument expression that defines a new primitive type. Arguments 1, 2, and 4
+    are the same as `struct_type`. Argument 3 is the number of bits.
+
+  * `global`
+
+    Declares a global binding.
 
   * `const`
 
@@ -367,6 +414,11 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `return`
 
     Returns its argument as the value of the enclosing function.
+
+  * `isdefined`
+
+    `Expr(:isdefined, :x)` returns a Bool indicating whether `x` has
+    already been defined in the current scope.
 
   * `the_exception`
 
@@ -399,6 +451,10 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
     Has the value `false` if inlined into a section of code marked with `@inbounds`,
     otherwise has the value `true`.
+
+  * `simdloop`
+
+    Marks the end of the inner loop of a `@simd` expression.
 
   * `copyast`
 
