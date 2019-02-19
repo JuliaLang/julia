@@ -88,7 +88,7 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, sv::Opt
     pregionmap = mark_parallel_regions(code)
     while idx <= length(code)
         if code[idx] isa Expr && ci.ssavaluetypes[idx] === Union{}
-            if pregionmap[oldix] > -1
+            if pregionmap[oldidx] > -1
                 # We are in a parallel region and can't place a return statement.
                 # Potentially we could say that a task that throws an error
                 # could be removed entirely, but we would need to prove that
