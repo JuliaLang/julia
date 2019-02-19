@@ -223,7 +223,7 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     h.count = count
     h.ndel = 0
     h.maxprobe = maxprobe
-    @assert h.age == age0
+    h.age == age0 || error("versions of the dict do not match")
 
     return h
 end
