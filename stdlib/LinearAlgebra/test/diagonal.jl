@@ -1468,7 +1468,7 @@ end
     D = Diagonal([[1 2; 3 4], [5 6; 7 8]])
     A = [1 2 0 0; 3 4 0 0; 0 0 5 6; 0 0 7 8] # full matrix of D
     @test opnorm(D, 1) == opnorm(A, 1)
-    @test opnorm(D, 2) == opnorm(A, 2)
+    @test opnorm(D, 2) ≈ opnorm(A, 2)
     @test opnorm(D, Inf) == opnorm(A, Inf)
 end
 
