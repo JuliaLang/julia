@@ -214,52 +214,9 @@ bool FinalLowerGC::doInitialization(Module &M) {
     initAll(M);
 
     // Initialize platform-specific references.
-    if (!(queueRootFunc = M.getFunction("jl_gc_queue_root"))) {
-        queueRootFunc = Function::Create(
-            FunctionType::get(
-                Type::getVoidTy(M.getContext()),
-                { T_prjlvalue },
-                false),
-            Function::ExternalLinkage,
-            "jl_gc_queue_root",
-            &M);
-        queueRootFunc->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
-    }
-    poolAllocFunc = nullptr;
-    bigAllocFunc = nullptr;
-    if (alloc_obj_func) {
-        if (!(poolAllocFunc = M.getFunction("jl_gc_pool_alloc"))) {
-            std::vector<Type*> args(0);
-            args.push_back(T_pint8);
-            args.push_back(T_int32);
-            args.push_back(T_int32);
-            poolAllocFunc = Function::Create(
-                FunctionType::get(T_prjlvalue, args, false),
-                Function::ExternalLinkage,
-                "jl_gc_pool_alloc",
-                &M);
-            poolAllocFunc->setAttributes(
-                AttributeList::get(M.getContext(),
-                alloc_obj_func->getAttributes().getFnAttributes(),
-                alloc_obj_func->getAttributes().getRetAttributes(),
-                None));
-        }
-        if (!(bigAllocFunc = M.getFunction("jl_gc_big_alloc"))) {
-            std::vector<Type*> args(0);
-            args.push_back(T_pint8);
-            args.push_back(T_size);
-            bigAllocFunc = Function::Create(
-                FunctionType::get(T_prjlvalue, args, false),
-                Function::ExternalLinkage,
-                "jl_gc_big_alloc",
-                &M);
-            bigAllocFunc->setAttributes(
-                AttributeList::get(M.getContext(),
-                alloc_obj_func->getAttributes().getFnAttributes(),
-                alloc_obj_func->getAttributes().getRetAttributes(),
-                None));
-        }
-    }
+    queueRootFunc = getOrDefine(jl_well_known::GCQueueRoot);
+    poolAllocFunc = getOrDefine(jl_well_known::GCPoolAlloc);
+    bigAllocFunc = getOrDefine(jl_well_known::GCBigAlloc);
 
     GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc};
     unsigned j = 0;

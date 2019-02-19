@@ -12,7 +12,7 @@
 
 struct JuliaPassContext;
 
-// A namespace for Julia intrinsic definitions.
+// A namespace for Julia intrinsic descriptions.
 namespace jl_intrinsics {
     // A description of an intrinsic that can be used to find existing
     // intrinsics and materialize new intrinsics if necessary.
@@ -41,17 +41,25 @@ namespace jl_intrinsics {
 struct JuliaPassContext {
     llvm::Module *module;
 
-    llvm::Type *T_prjlvalue;
-    llvm::Type *T_ppjlvalue;
+    // Standard types.
     llvm::Type *T_size;
     llvm::Type *T_int8;
     llvm::Type *T_int32;
-    llvm::Type *T_pint8;
-    llvm::Type *T_pjlvalue;
-    llvm::Type *T_pjlvalue_der;
-    llvm::Type *T_ppjlvalue_der;
+    llvm::PointerType *T_pint8;
+
+    // Types derived from 'jl_value_t'.
+    llvm::Type *T_jlvalue;
+    llvm::PointerType *T_prjlvalue;
+    llvm::PointerType *T_ppjlvalue;
+    llvm::PointerType *T_pjlvalue;
+    llvm::PointerType *T_pjlvalue_der;
+    llvm::PointerType *T_ppjlvalue_der;
+
+    // TBAA metadata nodes.
     llvm::MDNode *tbaa_gcframe;
     llvm::MDNode *tbaa_tag;
+
+    // Intrinsics.
     llvm::Function *ptls_getter;
     llvm::Function *gc_flush_func;
     llvm::Function *gc_preserve_begin_func;
@@ -78,14 +86,15 @@ struct JuliaPassContext {
     // Otherwise, `nullptr` is returned.
     llvm::CallInst *getPtls(llvm::Function &F) const;
 
-    // Gets the intrinsic that conforms to the given description
-    // if it exists in the module. If not, `nullptr` is returned.
+    // Gets the intrinsic or well-known function that conforms to
+    // the given description if it exists in the module. If not,
+    // `nullptr` is returned.
     llvm::Function *getOrNull(
         const jl_intrinsics::IntrinsicDescription &desc) const;
 
-    // Gets the intrinsic that conforms to the given description
-    // if it exists in the module. If not, creates the intrinsic
-    // and adds it to the module.
+    // Gets the intrinsic or well-known function that conforms to
+    // the given description if it exists in the module. If not,
+    // creates the intrinsic and adds it to the module.
     llvm::Function *getOrDefine(
         const jl_intrinsics::IntrinsicDescription &desc) const;
 };
@@ -114,6 +123,26 @@ namespace jl_intrinsics {
 
     // `julia.queue_gc_root`: an intrinsic that queues a GC root.
     extern const IntrinsicDescription queueGCRoot;
+}
+
+// A namespace for well-known Julia runtime function descriptions.
+namespace jl_well_known {
+    // A description of a well-known function that can be used to
+    // find existing declarations of that function and create new
+    // declarations if necessary.
+    //
+    // Aliased to `jl_intrinsics::IntrinsicDescription` because
+    // intrinsic descriptions are essentially the same thing.
+    typedef jl_intrinsics::IntrinsicDescription WellKnownFunctionDescription;
+
+    // `jl_gc_big_alloc`: allocates bytes.
+    extern const WellKnownFunctionDescription GCBigAlloc;
+
+    // `jl_gc_pool_alloc`: allocates bytes.
+    extern const WellKnownFunctionDescription GCPoolAlloc;
+
+    // `jl_gc_queue_root`: queues a GC root.
+    extern const WellKnownFunctionDescription GCQueueRoot;
 }
 
 #endif

@@ -21,12 +21,13 @@ using namespace llvm;
 extern std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false);
 
 JuliaPassContext::JuliaPassContext()
-    : module(nullptr), T_prjlvalue(nullptr), T_ppjlvalue(nullptr), T_size(nullptr),
-        T_int8(nullptr), T_int32(nullptr), T_pint8(nullptr), T_pjlvalue(nullptr),
-        T_pjlvalue_der(nullptr), T_ppjlvalue_der(nullptr), ptls_getter(nullptr),
-        gc_flush_func(nullptr), gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
-        pointer_from_objref_func(nullptr), alloc_obj_func(nullptr), typeof_func(nullptr),
-        write_barrier_func(nullptr)
+    : module(nullptr), T_size(nullptr), T_int8(nullptr), T_int32(nullptr),
+        T_pint8(nullptr), T_jlvalue(nullptr), T_prjlvalue(nullptr),
+        T_ppjlvalue(nullptr), T_pjlvalue(nullptr), T_pjlvalue_der(nullptr),
+        T_ppjlvalue_der(nullptr), ptls_getter(nullptr), gc_flush_func(nullptr),
+        gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
+        pointer_from_objref_func(nullptr), alloc_obj_func(nullptr),
+        typeof_func(nullptr), write_barrier_func(nullptr)
 {
     tbaa_gcframe = tbaa_make_child("jtbaa_gcframe").first;
     MDNode *tbaa_data;
@@ -60,33 +61,30 @@ void JuliaPassContext::initAll(Module &M)
     T_int8 = Type::getInt8Ty(ctx);
     T_pint8 = PointerType::get(T_int8, 0);
     T_int32 = Type::getInt32Ty(ctx);
-    if (write_barrier_func) {
-        T_prjlvalue = write_barrier_func->getFunctionType()->getParamType(0);
+
+    // Find 'jl_value_t' by searching through the module's
+    // identified struct types. This is a much more robust way
+    // to find 'jl_value_t' than an ad-hoc search through
+    // intrinsics that may or may not be defined in the module.
+    T_jlvalue = nullptr;
+    for (auto type : M.getIdentifiedStructTypes()) {
+        if (type->hasName() && type->getName() == "jl_value_t") {
+            T_jlvalue = type;
+            break;
+        }
     }
-    if (alloc_obj_func) {
-        T_prjlvalue = alloc_obj_func->getReturnType();
-        auto T_jlvalue = cast<PointerType>(T_prjlvalue)->getElementType();
-        T_pjlvalue = PointerType::get(T_jlvalue, 0);
-        T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
-        T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
-        T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
+
+    // If 'jl_value_t' doesn't exist yet then we'll just define it.
+    if (!T_jlvalue) {
+        T_jlvalue = StructType::create(ctx, "jl_value_t");
     }
-    else if (ptls_getter) {
-        auto functype = ptls_getter->getFunctionType();
-        T_ppjlvalue = cast<PointerType>(functype->getReturnType())->getElementType();
-        T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
-        auto T_jlvalue = cast<PointerType>(T_pjlvalue)->getElementType();
-        T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
-        T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
-        T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
-    }
-    else {
-        T_ppjlvalue = nullptr;
-        T_prjlvalue = nullptr;
-        T_pjlvalue = nullptr;
-        T_pjlvalue_der = nullptr;
-        T_ppjlvalue_der = nullptr;
-    }
+
+    // Construct derived types.
+    T_pjlvalue = PointerType::get(T_jlvalue, 0);
+    T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
+    T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
+    T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
+    T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
 }
 
 llvm::CallInst *JuliaPassContext::getPtls(llvm::Function &F) const
@@ -202,7 +200,7 @@ namespace jl_intrinsics {
     const IntrinsicDescription queueGCRoot(
         QUEUE_GC_ROOT_NAME,
         [](llvm::Module &M, const JuliaPassContext &context) {
-            return Function::Create(
+            auto intrinsic = Function::Create(
                 FunctionType::get(
                     Type::getVoidTy(M.getContext()),
                     { context.T_prjlvalue },
@@ -210,5 +208,74 @@ namespace jl_intrinsics {
                 Function::ExternalLinkage,
                 QUEUE_GC_ROOT_NAME,
                 &M);
+            intrinsic->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
+            return intrinsic;
+        });
+}
+
+namespace jl_well_known {
+    static const char *GC_BIG_ALLOC_NAME = "jl_gc_big_alloc";
+    static const char *GC_POOL_ALLOC_NAME = "jl_gc_pool_alloc";
+    static const char *GC_QUEUE_ROOT_NAME = "jl_gc_queue_root";
+
+    const WellKnownFunctionDescription GCBigAlloc(
+        GC_BIG_ALLOC_NAME,
+        [](llvm::Module &M, const JuliaPassContext &context) {
+            // Get or define `julia.gc_alloc_bytes` so we can copy its attributes.
+            auto allocBytes = context.getOrDefine(jl_intrinsics::GCAllocBytes);
+
+            auto bigAllocFunc = Function::Create(
+                FunctionType::get(
+                    context.T_prjlvalue,
+                    { context.T_pint8, context.T_size },
+                    false),
+                Function::ExternalLinkage,
+                GC_BIG_ALLOC_NAME,
+                &M);
+            bigAllocFunc->setAttributes(
+                AttributeList::get(
+                    M.getContext(),
+                    allocBytes->getAttributes().getFnAttributes(),
+                    allocBytes->getAttributes().getRetAttributes(),
+                    None));
+            return bigAllocFunc;
+        });
+
+    const WellKnownFunctionDescription GCPoolAlloc(
+        GC_POOL_ALLOC_NAME,
+        [](llvm::Module &M, const JuliaPassContext &context) {
+            // Get or define `julia.gc_alloc_bytes` so we can copy its attributes.
+            auto allocBytes = context.getOrDefine(jl_intrinsics::GCAllocBytes);
+
+            auto poolAllocFunc = Function::Create(
+                FunctionType::get(
+                    context.T_prjlvalue,
+                    { context.T_pint8, context.T_int32, context.T_int32 },
+                    false),
+                Function::ExternalLinkage,
+                GC_POOL_ALLOC_NAME,
+                &M);
+            poolAllocFunc->setAttributes(
+                AttributeList::get(
+                    M.getContext(),
+                    allocBytes->getAttributes().getFnAttributes(),
+                    allocBytes->getAttributes().getRetAttributes(),
+                    None));
+            return poolAllocFunc;
+        });
+
+    const WellKnownFunctionDescription GCQueueRoot(
+        GC_QUEUE_ROOT_NAME,
+        [](llvm::Module &M, const JuliaPassContext &context) {
+            auto func = Function::Create(
+                FunctionType::get(
+                    Type::getVoidTy(M.getContext()),
+                    { context.T_prjlvalue },
+                    false),
+                Function::ExternalLinkage,
+                GC_QUEUE_ROOT_NAME,
+                &M);
+            func->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
+            return func;
         });
 }
