@@ -44,10 +44,10 @@ check_body!(x) = true
 simd_outer_range(r) = 0:0
 
 # Get trip count for inner loop.
-@inline simd_inner_length(r,j::Int) = Base.length(r)
+@inline simd_inner_length(r, j) = Base.length(r)
 
 # Construct user-level element from original range, outer loop index j, and inner loop index i.
-@inline simd_index(r,j::Int,i) = (@inbounds ret = r[i+firstindex(r)]; ret)
+@inline simd_index(r, j, i) = (@inbounds ret = r[i+firstindex(r)]; ret)
 
 # Compile Expr x in context of @simd.
 function compile(x, ivdep)
@@ -119,6 +119,10 @@ either case, your inner loop should have the following properties to allow vecto
 
 * There exists no loop-carried memory dependencies
 * No iteration ever waits on a previous iteration to make forward progress.
+
+!!! note Custom iterators that do not support random access cannot support vectorization. In order to be compatible with
+    `@simd` annotated loops, they should override `simd_inner_length(v::MyIter, j) = 1`, `simd_outer_range(v::MyIter) = v`,
+    and `simd_index(v::MyIter, j, i) = j`.
 """
 macro simd(forloop)
     esc(compile(forloop, false))
