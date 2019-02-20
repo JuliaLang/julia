@@ -578,7 +578,7 @@ function sizehint!(d::IdDict, newsz)
 end
 
 function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
-    !isa(key, K) && throw(ArgumentError("$key is not a valid key for type $K"))
+    !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
     val = convert(V, val)
     if d.ndel >= ((3*length(d.ht))>>2)
         rehash!(d, max(length(d.ht)>>1, 32))

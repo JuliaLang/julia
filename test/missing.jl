@@ -188,16 +188,25 @@ Base.one(::Type{Unit}) = 1
 end
 
 @testset "rounding functions" begin
-    rounding_functions = [ceil, floor, round, trunc]
-
     # All rounding functions return missing when evaluating missing as first argument
+
+    # Check that the RoundingMode argument is passed on correctly
+    @test round(Union{Int, Missing}, 0.9) === round(Int, 0.9)
+    @test round(Union{Int, Missing}, 0.9, RoundToZero) === round(Int, 0.9, RoundToZero)
+
+    # Test elementwise on mixed arrays to ensure signature of Missing methods matches that of Float methods
+    test_array = [1.0, missing]
+
+    @test isequal(round.(test_array, RoundNearest), test_array)
+    @test isequal(round.(Union{Int, Missing}, test_array, RoundNearest), test_array)
+
+    rounding_functions = [ceil, floor, round, trunc]
     for f in rounding_functions
-        @test ismissing(f(missing))
-        @test ismissing(f(missing, 1))
-        @test ismissing(f(missing, 1, 1))
-        @test ismissing(f(Union{Int, Missing}, missing))
-        @test f(Union{Int, Missing}, 1.0) === 1
         @test_throws MissingException f(Int, missing)
+        @test isequal(f.(test_array), test_array)
+        @test isequal(f.(test_array, digits=0, base=10), test_array)
+        @test isequal(f.(test_array, sigdigits=1, base=10), test_array)
+        @test isequal(f.(Union{Int, Missing}, test_array), test_array)
     end
 end
 

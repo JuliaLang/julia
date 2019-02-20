@@ -294,11 +294,11 @@ julia> a = reshape(Vector(1:16), (4,4))
 
 julia> mapreduce(isodd, *, a, dims=1)
 1×4 Array{Bool,2}:
- false  false  false  false
+ 0  0  0  0
 
 julia> mapreduce(isodd, |, a, dims=1)
 1×4 Array{Bool,2}:
- true  true  true  true
+ 1  1  1  1
 ```
 """
 mapreduce(f, op, A::AbstractArray; dims=:, kw...) = _mapreduce_dim(f, op, kw.data, A, dims)
@@ -553,17 +553,17 @@ Test whether all values along the given dimensions of an array are `true`.
 ```jldoctest
 julia> A = [true false; true true]
 2×2 Array{Bool,2}:
- true  false
- true   true
+ 1  0
+ 1  1
 
 julia> all(A, dims=1)
 1×2 Array{Bool,2}:
- true  false
+ 1  0
 
 julia> all(A, dims=2)
 2×1 Array{Bool,2}:
- false
-  true
+ 0
+ 1
 ```
 """
 all(A::AbstractArray; dims)
@@ -577,8 +577,8 @@ Test whether all values in `A` along the singleton dimensions of `r` are `true`,
 ```jldoctest
 julia> A = [true false; true false]
 2×2 Array{Bool,2}:
- true  false
- true  false
+ 1  0
+ 1  0
 
 julia> all!([1; 1], A)
 2-element Array{Int64,1}:
@@ -601,17 +601,17 @@ Test whether any values along the given dimensions of an array are `true`.
 ```jldoctest
 julia> A = [true false; true false]
 2×2 Array{Bool,2}:
- true  false
- true  false
+ 1  0
+ 1  0
 
 julia> any(A, dims=1)
 1×2 Array{Bool,2}:
- true  false
+ 1  0
 
 julia> any(A, dims=2)
 2×1 Array{Bool,2}:
- true
- true
+ 1
+ 1
 ```
 """
 any(::AbstractArray; dims)
@@ -626,8 +626,8 @@ results to `r`.
 ```jldoctest
 julia> A = [true false; true false]
 2×2 Array{Bool,2}:
- true  false
- true  false
+ 1  0
+ 1  0
 
 julia> any!([1; 1], A)
 2-element Array{Int64,1}:

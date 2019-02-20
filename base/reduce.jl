@@ -81,10 +81,10 @@ argument `init` will be used exactly once. In general, it will be necessary to p
 # Examples
 ```jldoctest
 julia> foldl(=>, 1:4)
-((1=>2)=>3) => 4
+((1 => 2) => 3) => 4
 
 julia> foldl(=>, 1:4; init=0)
-(((0=>1)=>2)=>3) => 4
+(((0 => 1) => 2) => 3) => 4
 ```
 """
 foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
@@ -135,10 +135,10 @@ argument `init` will be used exactly once. In general, it will be necessary to p
 # Examples
 ```jldoctest
 julia> foldr(=>, 1:4)
-1 => (2=>(3=>4))
+1 => (2 => (3 => 4))
 
 julia> foldr(=>, 1:4; init=0)
-1 => (2=>(3=>(4=>0)))
+1 => (2 => (3 => (4 => 0)))
 ```
 """
 foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
@@ -565,10 +565,10 @@ values are `false` (or equivalently, if the input contains no `true` value), fol
 ```jldoctest
 julia> a = [true,false,false,true]
 4-element Array{Bool,1}:
-  true
- false
- false
-  true
+ 1
+ 0
+ 0
+ 1
 
 julia> any(a)
 true
@@ -600,10 +600,10 @@ values are `true` (or equivalently, if the input contains no `false` value), fol
 ```jldoctest
 julia> a = [true,false,false,true]
 4-element Array{Bool,1}:
-  true
- false
- false
-  true
+ 1
+ 0
+ 0
+ 1
 
 julia> all(a)
 false

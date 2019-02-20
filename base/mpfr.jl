@@ -331,7 +331,7 @@ function BigInt(x::BigFloat)
 end
 
 function (::Type{T})(x::BigFloat) where T<:Integer
-    isinteger(x) || throw(InexactError(Symbol(string(T)), T, x))
+    isinteger(x) || throw(InexactError(nameof(T), T, x))
     trunc(T,x)
 end
 
@@ -354,6 +354,8 @@ promote_rule(::Type{BigInt}, ::Type{<:AbstractFloat}) = BigFloat
 promote_rule(::Type{BigFloat}, ::Type{<:AbstractFloat}) = BigFloat
 
 big(::Type{<:AbstractFloat}) = BigFloat
+
+big(x::AbstractFloat) = convert(BigFloat, x)
 
 function (::Type{Rational{BigInt}})(x::AbstractFloat)
     isnan(x) && return zero(BigInt) // zero(BigInt)

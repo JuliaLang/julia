@@ -280,6 +280,13 @@ convert(::Type{Tuple{Vararg{V}}}, x::Tuple{Vararg{V}}) where {V} = x
 convert(T::Type{Tuple{Vararg{V}}}, x::Tuple) where {V} =
     (convert(tuple_type_head(T), x[1]), convert(T, tail(x))...)
 
+# used for splatting in `new`
+convert_prefix(::Type{Tuple{}}, x::Tuple) = x
+convert_prefix(::Type{<:AtLeast1}, x::Tuple{}) = x
+convert_prefix(::Type{T}, x::T) where {T<:AtLeast1} = x
+convert_prefix(::Type{T}, x::AtLeast1) where {T<:AtLeast1} =
+    (convert(tuple_type_head(T), x[1]), convert_prefix(tuple_type_tail(T), tail(x))...)
+
 # TODO: the following definitions are equivalent (behaviorally) to the above method
 # I think they may be faster / more efficient for inference,
 # if we could enable them, but are they?
@@ -408,7 +415,7 @@ If `DataType` `T` does not have a specific size, an error is thrown.
 
 ```jldoctest
 julia> sizeof(AbstractArray)
-ERROR: argument is an abstract type; size is indeterminate
+ERROR: Abstract type AbstractArray does not have a definite size.
 Stacktrace:
 [...]
 ```
@@ -434,7 +441,7 @@ end
 """
     esc(e)
 
-Only valid in the context of an `Expr` returned from a macro. Prevents the macro hygiene
+Only valid in the context of an [`Expr`](@ref) returned from a macro. Prevents the macro hygiene
 pass from turning embedded variables into gensym variables. See the [Macros](@ref man-macros)
 section of the Metaprogramming chapter of the manual for more details and examples.
 """
@@ -570,7 +577,7 @@ eltype(::Type{SimpleVector}) = Any
 keys(v::SimpleVector) = OneTo(length(v))
 isempty(v::SimpleVector) = (length(v) == 0)
 axes(v::SimpleVector) = (OneTo(length(v)),)
-axes(v::SimpleVector, d) = d <= 1 ? axes(v)[d] : OneTo(1)
+axes(v::SimpleVector, d::Integer) = d <= 1 ? axes(v)[d] : OneTo(1)
 
 function ==(v1::SimpleVector, v2::SimpleVector)
     length(v1)==length(v2) || return false
@@ -643,19 +650,31 @@ function append_any(xs...)
             end
             for j in 1:lx
                 y = @inbounds x[j]
-                arrayset(true, out, y, i)
+                arrayset(false, out, y, i)
                 i += 1
             end
         elseif x isa Tuple
-            lx = length(x)
+            lx = nfields(x)
             if i + lx - 1 > l
                 ladd = lx > 16 ? lx : 16
                 _growend!(out, ladd)
                 l += ladd
             end
             for j in 1:lx
-                y = @inbounds x[j]
-                arrayset(true, out, y, i)
+                y = getfield(x, j, false)
+                arrayset(false, out, y, i)
+                i += 1
+            end
+        elseif x isa NamedTuple
+            lx = nfields(x)
+            if i + lx - 1 > l
+                ladd = lx > 16 ? lx : 16
+                _growend!(out, ladd)
+                l += ladd
+            end
+            for j in 1:lx
+                y = getfield(x, j, false)
+                arrayset(false, out, y, i)
                 i += 1
             end
         elseif x isa Array
@@ -666,8 +685,8 @@ function append_any(xs...)
                 l += ladd
             end
             for j in 1:lx
-                y = arrayref(true, x, j)
-                arrayset(true, out, y, i)
+                y = arrayref(false, x, j)
+                arrayset(false, out, y, i)
                 i += 1
             end
         else
@@ -676,7 +695,7 @@ function append_any(xs...)
                     _growend!(out, 16)
                     l += 16
                 end
-                arrayset(true, out, y, i)
+                arrayset(false, out, y, i)
                 i += 1
             end
         end

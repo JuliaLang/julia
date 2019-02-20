@@ -23,8 +23,7 @@ end
 
 function show(io::IO, t::AbstractDict{K,V}) where V where K
     recur_io = IOContext(io, :SHOWN_SET => t,
-                             :typeinfo => eltype(t),
-                             :compact => get(io, :compact, true))
+                             :typeinfo => eltype(t))
 
     limit::Bool = get(io, :limit, false)
     # show in a Julia-syntax-like form: Dict(k=>v, ...)
@@ -372,7 +371,7 @@ end
 function setindex!(h::Dict{K,V}, v0, key0) where V where K
     key = convert(K, key0)
     if !isequal(key, key0)
-        throw(ArgumentError("$key0 is not a valid key for type $K"))
+        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
     end
     setindex!(h, v0, key)
 end
@@ -439,7 +438,7 @@ get!(f::Function, collection, key)
 function get!(default::Callable, h::Dict{K,V}, key0) where V where K
     key = convert(K, key0)
     if !isequal(key, key0)
-        throw(ArgumentError("$key0 is not a valid key for type $K"))
+        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
     end
     return get!(default, h, key)
 end

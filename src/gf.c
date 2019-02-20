@@ -35,28 +35,6 @@ JL_DLLEXPORT size_t jl_get_tls_world_age(void)
     return jl_get_ptls_states()->world_age;
 }
 
-JL_DLLEXPORT jl_value_t *jl_invoke(jl_method_instance_t *meth, jl_value_t **args, uint32_t nargs)
-{
-    jl_callptr_t fptr = meth->invoke;
-    if (fptr != jl_fptr_trampoline) {
-        return fptr(meth, args, nargs);
-    }
-    else {
-        // if this hasn't been inferred (compiled) yet,
-        // inferring it might not be able to handle the world range
-        // so we just do a generic apply here
-        // because that might actually be faster
-        // since it can go through the unrolled caches for this world
-        // and if inference is successful, this meth would get updated anyways,
-        // and we'll get the fast path here next time
-
-        // TODO: if `meth` came from an `invoke` call, we should make sure
-        // meth->def is called instead of doing normal dispatch.
-
-        return jl_apply(args, nargs);
-    }
-}
-
 /// ----- Handling for Julia callbacks ----- ///
 
 JL_DLLEXPORT int8_t jl_is_in_pure_context(void)
@@ -139,8 +117,7 @@ const struct jl_typemap_info tfunc_cache = {
 
 static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 {
-    // TODO: consider reverting this when we can split on Type{...} better
-    return 1; //(mt == jl_type_type_mt) ? 0 : 1;
+    return mt->offs;
 }
 
 /// ----- Insertion logic for special entries ----- ///
@@ -228,7 +205,7 @@ void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr
     m->isva = 1;
     m->nargs = 2;
     m->sig = (jl_value_t*)jl_anytuple_type;
-    m->sparam_syms = jl_emptysvec;
+    m->slot_syms = jl_an_empty_string;
 
     jl_methtable_t *mt = dt->name->mt;
     jl_typemap_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type,
@@ -479,7 +456,7 @@ static void foreach_mtable_in_module(
 {
     size_t i;
     void **table = m->bindings.table;
-    jl_eqtable_put(visited, m, jl_true, NULL);
+    jl_eqtable_put(visited, (jl_value_t*)m, jl_true, NULL);
     for (i = 1; i < m->bindings.size; i += 2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
@@ -1479,6 +1456,10 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
             jl_datatype_t *gf = jl_first_argument_datatype((jl_value_t*)m->sig);
             assert(jl_is_datatype(gf) && gf->name->mt && "method signature invalid?");
             jl_typemap_visitor(gf->name->mt->cache, set_max_world2, (void*)&def);
+            if (JL_DEBUG_METHOD_INVALIDATION) {
+                jl_static_show(JL_STDOUT, (jl_value_t*)def.replaced);
+                jl_uv_puts(JL_STDOUT, "\n", 1);
+            }
         }
 
         // invalidate backedges
@@ -1488,7 +1469,7 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
             size_t i, l = jl_array_len(backedges);
             jl_method_instance_t **replaced = (jl_method_instance_t**)jl_array_ptr_data(backedges);
             for (i = 0; i < l; i++) {
-                invalidate_method_instance(replaced[i], closure->max_world, 0);
+                invalidate_method_instance(replaced[i], closure->max_world, 1);
             }
         }
         closure->invalidated = 1;
@@ -1597,6 +1578,7 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
 
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
 {
+    JL_TIMING(ADD_METHOD);
     assert(jl_is_method(method));
     assert(jl_is_mtable(mt));
     jl_value_t *type = method->sig;
@@ -1801,6 +1783,7 @@ jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, si
 JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int include_ambiguous,
                                              size_t world, size_t *min_valid, size_t *max_valid)
 {
+    JL_TIMING(METHOD_MATCH);
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)types);
     if (jl_is_tuple_type(unw) && jl_tparam0(unw) == jl_bottom_type)
         return (jl_value_t*)jl_alloc_vec_any(0);
@@ -2283,6 +2266,8 @@ JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROO
     return (jl_value_t*)entry;
 }
 
+jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t **args, size_t nargs);
+
 // invoke()
 // this does method dispatch with a set of types to match other than the
 // types of the actual arguments. this means it sometimes does NOT call the
@@ -2295,13 +2280,10 @@ JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROO
 jl_value_t *jl_gf_invoke(jl_value_t *types0, jl_value_t **args, size_t nargs)
 {
     size_t world = jl_get_ptls_states()->world_age;
-    jl_svec_t *tpenv = jl_emptysvec;
-    jl_tupletype_t *tt = NULL;
     jl_value_t *types = NULL;
-    JL_GC_PUSH3(&types, &tpenv, &tt);
+    JL_GC_PUSH1(&types);
     jl_value_t *gf = args[0];
     types = jl_argtype_with_function(gf, types0);
-    jl_methtable_t *mt = jl_gf_mtable(gf);
     jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_gf_invoke_lookup(types, world);
 
     if ((jl_value_t*)entry == jl_nothing) {
@@ -2311,10 +2293,19 @@ jl_value_t *jl_gf_invoke(jl_value_t *types0, jl_value_t **args, size_t nargs)
 
     // now we have found the matching definition.
     // next look for or create a specialization of this definition.
+    JL_GC_POP();
+    return jl_gf_invoke_by_method(entry->func.method, args, nargs);
+}
 
-    jl_method_t *method = entry->func.method;
+jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t **args, size_t nargs)
+{
+    size_t world = jl_get_ptls_states()->world_age;
     jl_method_instance_t *mfunc = NULL;
     jl_typemap_entry_t *tm = NULL;
+    jl_methtable_t *mt = jl_gf_mtable(args[0]);
+    jl_svec_t *tpenv = jl_emptysvec;
+    jl_tupletype_t *tt = NULL;
+    JL_GC_PUSH2(&tpenv, &tt);
     if (method->invokes != NULL)
         tm = jl_typemap_assoc_exact(method->invokes, args, nargs, jl_cachearg_offset(mt), world);
     if (tm) {
@@ -2331,7 +2322,7 @@ jl_value_t *jl_gf_invoke(jl_value_t *types0, jl_value_t **args, size_t nargs)
         if (method->invokes == NULL)
             method->invokes = jl_nothing;
 
-        mfunc = cache_method(mt, &method->invokes, entry->func.value, tt, method, world, tpenv, 1);
+        mfunc = cache_method(mt, &method->invokes, (jl_value_t*)method, tt, method, world, tpenv, 1);
         JL_UNLOCK(&method->writelock);
     }
     JL_GC_POP();
@@ -2385,6 +2376,33 @@ JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_methtable_t *mt,
     JL_GC_POP();
     JL_UNLOCK(&method->writelock);
     return (jl_value_t*)mfunc;
+}
+
+JL_DLLEXPORT jl_value_t *jl_invoke(jl_method_instance_t *meth, jl_value_t **args, uint32_t nargs)
+{
+    jl_callptr_t fptr = meth->invoke;
+    if (fptr != jl_fptr_trampoline) {
+        return fptr(meth, args, nargs);
+    }
+    else {
+        // if this hasn't been inferred (compiled) yet,
+        // inferring it might not be able to handle the world range
+        // so we just do a generic apply here
+        // because that might actually be faster
+        // since it can go through the unrolled caches for this world
+        // and if inference is successful, this meth would get updated anyways,
+        // and we'll get the fast path here next time
+
+        jl_method_instance_t *mfunc = jl_lookup_generic_(args, nargs,
+                                                         jl_int32hash_fast(jl_return_address()),
+                                                         jl_get_ptls_states()->world_age);
+        // check whether `jl_apply_generic` would call the right method
+        if (mfunc->def.method == meth->def.method)
+            return mfunc->invoke(mfunc, args, nargs);
+
+        // no; came from an `invoke` call
+        return jl_gf_invoke_by_method(meth->def.method, args, nargs);
+    }
 }
 
 // Return value is rooted globally

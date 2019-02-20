@@ -14,7 +14,7 @@ endif
 
 all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony file_constants.jl uv_constants.jl version_git.jl.phony)
 
-PCRE_CONST := 0x[0-9a-fA-F]+|[0-9]+
+PCRE_CONST := 0x[0-9a-fA-F]+|[0-9]+|\([\-0-9]+\)
 ifeq ($(USE_SYSTEM_PCRE), 1)
   PCRE_INCL_PATH := $(shell $(PCRE_CONFIG) --prefix)/include/pcre2.h
 else
@@ -22,7 +22,7 @@ else
 endif
 
 $(BUILDDIR)/pcre_h.jl: $(PCRE_INCL_PATH)
-	@$(call PRINT_PERL, $(CPP) -D PCRE2_CODE_UNIT_WIDTH=8 -dM $< | perl -nle '/^\s*#define\s+PCRE2_(\w*)\s*\(?($(PCRE_CONST))\)?u?\s*$$/ and print "const $$1 = UInt32($$2)"' | LC_ALL=C sort > $@)
+	@$(call PRINT_PERL, $(CPP) -D PCRE2_CODE_UNIT_WIDTH=8 -dM $< | perl -nle '/^\s*#define\s+PCRE2_(\w*)\s*\(?($(PCRE_CONST))\)?u?\s*$$/ and print "const $$1 = $$2 % UInt32"' | LC_ALL=C sort > $@)
 
 $(BUILDDIR)/errno_h.jl:
 	@$(call PRINT_PERL, echo '#include <errno.h>' | $(CPP) -dM - | perl -nle 'print "const $$1 = Int32($$2)" if /^#define\s+(E\w+)\s+(\d+)\s*$$/' | LC_ALL=C sort > $@)

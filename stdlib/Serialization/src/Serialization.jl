@@ -9,7 +9,7 @@ module Serialization
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
 import Core: svec, SimpleVector
-using Base: unaliascopy, unwrap_unionall, has_offset_axes
+using Base: unaliascopy, unwrap_unionall, require_one_based_indexing
 using Core.IR
 
 export serialize, deserialize, AbstractSerializer, Serializer
@@ -65,7 +65,7 @@ const TAGS = Any[
     :sub_int, :mul_int, :add_float, :sub_float, :new, :mul_float, :bitcast, :start, :done, :next,
     :indexed_iterate, :getfield, :meta, :eq_int, :slt_int, :sle_int, :ne_int, :push_loc, :pop_loc,
     :pop, :arrayset, :arrayref, :apply_type, :inbounds, :getindex, :setindex!, :Core, :!, :+,
-    :Base, :static_parameter, :convert, :colon, Symbol("#self#"), Symbol("#temp#"), :tuple,
+    :Base, :static_parameter, :convert, :colon, Symbol("#self#"), Symbol(""), :tuple,
 
     fill(:_reserved_, n_reserved_slots)...,
 
@@ -227,7 +227,7 @@ function serialize(s::AbstractSerializer, x::Symbol)
 end
 
 function serialize_array_data(s::IO, a)
-    @assert !has_offset_axes(a)
+    require_one_based_indexing(a)
     isempty(a) && return 0
     if eltype(a) === Bool
         last = a[1]
@@ -390,7 +390,7 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.file)
     serialize(s, meth.line)
     serialize(s, meth.sig)
-    serialize(s, meth.sparam_syms)
+    serialize(s, meth.slot_syms)
     serialize(s, meth.ambig)
     serialize(s, meth.nargs)
     serialize(s, meth.isva)
@@ -512,7 +512,7 @@ function should_send_whole_type(s, t::DataType)
     return false
 end
 
-function serialize_type_data(s, t::DataType)
+function serialize_type_data(s, @nospecialize(t::DataType))
     whole = should_send_whole_type(s, t)
     iswrapper = (t === unwrap_unionall(t.name.wrapper))
     if whole && iswrapper
@@ -557,7 +557,7 @@ function serialize(s::AbstractSerializer, t::DataType)
     serialize_type_data(s, t)
 end
 
-function serialize_type(s::AbstractSerializer, t::DataType, ref::Bool = false)
+function serialize_type(s::AbstractSerializer, @nospecialize(t::DataType), ref::Bool = false)
     tag = sertag(t)
     tag > 0 && return writetag(s.io, tag)
     writetag(s.io, ref ? REF_OBJECT_TAG : OBJECT_TAG)
@@ -913,7 +913,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     file = deserialize(s)::Symbol
     line = deserialize(s)::Int32
     sig = deserialize(s)::Type
-    sparam_syms = deserialize(s)::SimpleVector
+    slot_syms = deserialize(s)::String
     ambig = deserialize(s)::Union{Array{Any,1}, Nothing}
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
@@ -925,7 +925,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.file = file
         meth.line = line
         meth.sig = sig
-        meth.sparam_syms = sparam_syms
+        meth.slot_syms = slot_syms
         meth.ambig = ambig
         meth.nargs = nargs
         meth.isva = isva
@@ -974,15 +974,15 @@ function deserialize_array(s::AbstractSerializer)
     else
         elty = UInt8
     end
-    if isa(d1, Integer)
+    if isa(d1, Int)
         if elty !== Bool && isbitstype(elty)
             a = Vector{elty}(undef, d1)
             s.table[slot] = a
             return read!(s.io, a)
         end
-        dims = (Int(d1),)
+        dims = (d1,)
     else
-        dims = convert(Dims, d1)::Dims
+        dims = d1::Dims
     end
     if isbitstype(elty)
         n = prod(dims)::Int
@@ -1085,6 +1085,9 @@ function deserialize_typename(s::AbstractSerializer, number)
         maxa = deserialize(s)::Int
         if makenew
             tn.mt = ccall(:jl_new_method_table, Any, (Any, Any), name, tn.module)
+            if !isempty(parameters)
+                tn.mt.offs = 0
+            end
             tn.mt.name = mtname
             tn.mt.max_args = maxa
             for def in defs

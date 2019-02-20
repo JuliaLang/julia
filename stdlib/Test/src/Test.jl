@@ -31,6 +31,16 @@ using Random: AbstractRNG, GLOBAL_RNG
 using InteractiveUtils: gen_call_with_extracted_types
 using Core.Compiler: typesubtract
 
+const DISPLAY_FAILED = (
+    :isequal,
+    :isapprox,
+    :≈,
+    :occursin,
+    :startswith,
+    :endswith,
+    :isempty,
+)
+
 #-----------------------------------------------------------------------
 
 # Backtrace utility functions
@@ -216,7 +226,7 @@ struct Threw <: ExecutionResult
     source::LineNumberNode
 end
 
-function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
+function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate::Bool=false)
     res = true
     i = 1
     evaled_args = evaluated.args
@@ -264,6 +274,12 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
     else
         throw(ArgumentError("Unhandled expression type: $(evaluated.head)"))
     end
+
+    if negate
+        res = !res
+        quoted = Expr(:call, :!, quoted)
+    end
+
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
              res ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted)),
@@ -394,6 +410,13 @@ end
 # evaluate each term in the comparison individually so the results
 # can be displayed nicely.
 function get_test_result(ex, source)
+    negate = QuoteNode(false)
+    orig_ex = ex
+    # Evaluate `not` wrapped functions separately for pretty-printing failures
+    if isa(ex, Expr) && ex.head == :call && length(ex.args) == 2 && ex.args[1] === :!
+        negate = QuoteNode(true)
+        ex = ex.args[2]
+    end
     # Normalize non-dot comparison operator calls to :comparison expressions
     is_splat = x -> isa(x, Expr) && x.head == :...
     if isa(ex, Expr) && ex.head == :call && length(ex.args) == 3 &&
@@ -409,8 +432,9 @@ function get_test_result(ex, source)
             Expr(:comparison, $(escaped_terms...)),
             Expr(:comparison, $(quoted_terms...)),
             $(QuoteNode(source)),
+            $negate,
         ))
-    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox, :≈)
+    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in DISPLAY_FAILED
         escaped_func = esc(ex.args[1])
         quoted_func = QuoteNode(ex.args[1])
 
@@ -452,9 +476,10 @@ function get_test_result(ex, source)
             Expr(:call, $escaped_func, Expr(:parameters, $(escaped_kwargs...)), $(escaped_args...)),
             Expr(:call, $quoted_func),
             $(QuoteNode(source)),
+            $negate,
         ))
     else
-        testret = :(Returned($(esc(ex)), nothing, $(QuoteNode(source))))
+        testret = :(Returned($(esc(orig_ex)), nothing, $(QuoteNode(source))))
     end
     result = quote
         try
@@ -1262,6 +1287,7 @@ end
 
 _args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
 _materialize_broadcasted(f, args...) = Broadcast.materialize(Broadcast.broadcasted(f, args...))
+
 """
     @inferred [AllowedType] f(x)
 
@@ -1284,8 +1310,12 @@ julia> typeof(f(2))
 Int64
 
 julia> @code_warntype f(2)
+Variables
+  #self#::Core.Compiler.Const(f, false)
+  a::Int64
+
 Body::UNION{FLOAT64, INT64}
-1 ─ %1 = (Base.slt_int)(1, a)::Bool
+1 ─ %1 = (a > 1)::Bool
 └──      goto #3 if not %1
 2 ─      return 1
 3 ─      return 1.0

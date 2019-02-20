@@ -84,6 +84,7 @@ primitive type
 where
 ...
 ;
+=
 ```
 
 ## Base Modules
@@ -121,6 +122,7 @@ Base.deepcopy
 Base.getproperty
 Base.setproperty!
 Base.propertynames
+Base.hasproperty
 Core.getfield
 Core.setfield!
 Core.isdefined
@@ -157,6 +159,7 @@ Base.isstructtype
 Base.nameof(::DataType)
 Base.fieldnames
 Base.fieldname
+Base.hasfield
 ```
 
 ### Memory layout
@@ -203,7 +206,11 @@ Core.Nothing
 Base.isnothing
 Base.Some
 Base.something
+Base.Enums.Enum
 Base.Enums.@enum
+Core.Expr
+Core.Symbol
+Core.Symbol(x...)
 ```
 
 ## Generic Functions

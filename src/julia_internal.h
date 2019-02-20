@@ -441,7 +441,7 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_svec_t *sparam_vals);
 int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT;
 jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module_t *inmodule);
-void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_module_t *mod, jl_sym_t *name);
+void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_value_t *name);
 
 jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt JL_PROPAGATES_ROOT,
     jl_value_t **args, size_t nargs, int cache, size_t world);
@@ -991,6 +991,7 @@ extern jl_sym_t *method_sym;  extern jl_sym_t *core_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *error_sym;
 extern jl_sym_t *new_sym;     extern jl_sym_t *using_sym;
+extern jl_sym_t *splatnew_sym;
 extern jl_sym_t *pop_exception_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *primtype_sym;
@@ -1000,17 +1001,18 @@ extern jl_sym_t *dot_sym;    extern jl_sym_t *newvar_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *inbounds_sym;
 extern jl_sym_t *copyast_sym; extern jl_sym_t *cfunction_sym;
 extern jl_sym_t *pure_sym; extern jl_sym_t *simdloop_sym;
-extern jl_sym_t *meta_sym; extern jl_sym_t *compiler_temp_sym;
-extern jl_sym_t *inert_sym;  extern jl_sym_t *polly_sym;
-extern jl_sym_t *unused_sym; extern jl_sym_t *static_parameter_sym;
-extern jl_sym_t *inline_sym; extern jl_sym_t *noinline_sym;
-extern jl_sym_t *generated_sym; extern jl_sym_t *generated_only_sym;
-extern jl_sym_t *isdefined_sym; extern jl_sym_t *propagate_inbounds_sym;
-extern jl_sym_t *specialize_sym; extern jl_sym_t *nospecialize_sym;
-extern jl_sym_t *macrocall_sym;  extern jl_sym_t *colon_sym;
-extern jl_sym_t *hygienicscope_sym; extern jl_sym_t *escape_sym;
-extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
+extern jl_sym_t *meta_sym; extern jl_sym_t *inert_sym;
+extern jl_sym_t *polly_sym; extern jl_sym_t *unused_sym;
+extern jl_sym_t *static_parameter_sym; extern jl_sym_t *inline_sym;
+extern jl_sym_t *noinline_sym; extern jl_sym_t *generated_sym;
+extern jl_sym_t *generated_only_sym; extern jl_sym_t *isdefined_sym;
+extern jl_sym_t *propagate_inbounds_sym; extern jl_sym_t *specialize_sym;
+extern jl_sym_t *nospecialize_sym; extern jl_sym_t *macrocall_sym;
+extern jl_sym_t *colon_sym; extern jl_sym_t *hygienicscope_sym;
 extern jl_sym_t *throw_undef_if_not_sym; extern jl_sym_t *getfield_undefref_sym;
+extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
+extern jl_sym_t *failed_sym; extern jl_sym_t *done_sym; extern jl_sym_t *runnable_sym;
+extern jl_sym_t *escape_sym;
 
 struct _jl_sysimg_fptrs_t;
 

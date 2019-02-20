@@ -144,6 +144,9 @@ end
 @test_repr "import A.B.C: a, x, y.z"
 @test_repr "import ..A: a, x, y.z"
 
+@test repr(Expr(:using, :Foo)) == ":(\$(Expr(:using, :Foo)))"
+@test repr(Expr(:using, Expr(:(.), ))) == ":(\$(Expr(:using, :(\$(Expr(:.))))))"
+
 # range syntax
 @test_repr "1:2"
 @test_repr "3:4:5"
@@ -736,8 +739,8 @@ let x = [], y = [], z = Base.ImmutableDict(x => y)
     push!(x, y)
     push!(y, x)
     push!(y, z)
-    @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict([Any[#= circular reference @-3 =#]]=>[#= circular reference @-2 =#])]"
-    @test repr(z) == "Base.ImmutableDict([Any[Any[#= circular reference @-2 =#], Base.ImmutableDict(#= circular reference @-3 =#)]]=>[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict(#= circular reference @-2 =#)])"
+    @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict([Any[#= circular reference @-3 =#]] => [#= circular reference @-2 =#])]"
+    @test repr(z) == "Base.ImmutableDict([Any[Any[#= circular reference @-2 =#], Base.ImmutableDict(#= circular reference @-3 =#)]] => [Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict(#= circular reference @-2 =#)])"
     @test sprint(dump, x) == """
         Array{Any}((1,))
           1: Array{Any}((2,))
@@ -882,6 +885,7 @@ test_repr("a.:(begin
 test_repr("a.:(=)")
 test_repr("a.:(:)")
 test_repr("(:).a")
+@test eval(eval(Meta.parse(repr(:`ls x y`)))) == `ls x y`
 @test repr(Expr(:., :a, :b, :c)) == ":(\$(Expr(:., :a, :b, :c)))"
 @test repr(Expr(:., :a, :b)) == ":(\$(Expr(:., :a, :b)))"
 @test repr(Expr(:., :a)) == ":(\$(Expr(:., :a)))"
@@ -990,11 +994,11 @@ end
 
 @testset "printing of Pair's" begin
     for (p, s) in (Pair(1.0,2.0)                          => "1.0 => 2.0",
-                   Pair(Pair(1,2), Pair(3,4))             => "(1=>2) => (3=>4)",
+                   Pair(Pair(1,2), Pair(3,4))             => "(1 => 2) => (3 => 4)",
                    Pair{Integer,Int64}(1, 2)              => "Pair{Integer,Int64}(1, 2)",
                    (Pair{Integer,Int64}(1, 2) => 3)       => "Pair{Integer,Int64}(1, 2) => 3",
-                   ((1+2im) => (3+4im))                   => "1+2im => 3+4im",
-                   (1 => 2 => Pair{Real,Int64}(3, 4))     => "1 => (2=>Pair{Real,Int64}(3, 4))")
+                   ((1+2im) => (3+4im))                   => "1 + 2im => 3 + 4im",
+                   (1 => 2 => Pair{Real,Int64}(3, 4))     => "1 => (2 => Pair{Real,Int64}(3, 4))")
         local s
         @test sprint(show, p) == s
     end
@@ -1006,16 +1010,23 @@ end
 
     # issue #28327
     d = Dict(Pair{Integer,Integer}(1,2)=>Pair{Integer,Integer}(1,2))
-    @test showstr(d) == "Dict((1=>2)=>(1=>2))" # correct parenthesis
+    @test showstr(d) == "Dict((1 => 2) => (1 => 2))" # correct parenthesis
+
+    # issue #29536
+    d = Dict((+)=>1)
+    @test showstr(d) == "Dict((+) => 1)"
+
+    d = Dict("+"=>1)
+    @test showstr(d) == "Dict(\"+\" => 1)"
 end
 
 @testset "alignment for pairs" begin  # (#22899)
     @test replstr([1=>22,33=>4]) == "2-element Array{Pair{$Int,$Int},1}:\n  1 => 22\n 33 => 4 "
     # first field may have "=>" in its representation
     @test replstr(Pair[(1=>2)=>3, 4=>5]) ==
-        "2-element Array{Pair,1}:\n (1=>2) => 3\n      4 => 5"
+        "2-element Array{Pair,1}:\n (1 => 2) => 3\n        4 => 5"
     @test replstr(Any[Dict(1=>2)=> (3=>4), 1=>2]) ==
-        "2-element Array{Any,1}:\n Dict(1=>2) => (3=>4)\n          1 => 2     "
+        "2-element Array{Any,1}:\n Dict(1 => 2) => (3 => 4)\n            1 => 2       "
     # left-alignment when not using the "=>" symbol
     @test replstr(Any[Pair{Integer,Int64}(1, 2), Pair{Integer,Int64}(33, 4)]) ==
         "2-element Array{Any,1}:\n Pair{Integer,Int64}(1, 2) \n Pair{Integer,Int64}(33, 4)"
@@ -1048,11 +1059,11 @@ end
 @testset "arrays printing follows the :compact property when specified" begin
     x = 3.141592653589793
     @test showstr(x) == "3.141592653589793"
-    @test showstr([x, x]) == showstr([x, x], :compact => true) == "[3.14159, 3.14159]"
+    @test showstr([x, x], :compact => true) == showstr([x, x], :compact => true) == "[3.14159, 3.14159]"
     @test showstr([x, x], :compact => false) == "[3.141592653589793, 3.141592653589793]"
-    @test showstr([x x; x x]) == showstr([x x; x x], :compact => true) ==
+    @test showstr([x x; x x], :compact => true) ==
         "[3.14159 3.14159; 3.14159 3.14159]"
-    @test showstr([x x; x x], :compact => false) ==
+    @test showstr([x x; x x]) == showstr([x x; x x], :compact => false) ==
         "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
     @test replstr([x, x]) == replstr([x, x], :compact => false) ==
         "2-element Array{Float64,1}:\n 3.141592653589793\n 3.141592653589793"
@@ -1226,8 +1237,8 @@ end
     @test replstr([keys(Dict('a' => 'b'))]) == "1-element Array{Base.KeySet{Char,Dict{Char,Char}},1}:\n ['a']"
 
     @test showstr(Pair{Integer,Integer}(1, 2), :typeinfo => Pair{Integer,Integer}) == "1 => 2"
-    @test showstr([Pair{Integer,Integer}(1, 2)]) == "Pair{Integer,Integer}[1=>2]"
-    @test showstr(Dict{Integer,Integer}(1 => 2)) == "Dict{Integer,Integer}(1=>2)"
+    @test showstr([Pair{Integer,Integer}(1, 2)]) == "Pair{Integer,Integer}[1 => 2]"
+    @test showstr(Dict{Integer,Integer}(1 => 2)) == "Dict{Integer,Integer}(1 => 2)"
 
     # issue #27979 (dislaying arrays of pairs containing arrays as first member)
     @test replstr([[1.0]=>1.0]) == "1-element Array{Pair{Array{Float64,1},Float64},1}:\n [1.0] => 1.0"
@@ -1237,7 +1248,7 @@ end
 
     @test replstr(Vector[Any[1]]) == "1-element Array{Array{T,1} where T,1}:\n Any[1]"
     @test replstr(AbstractDict{Integer,Integer}[Dict{Integer,Integer}(1=>2)]) ==
-        "1-element Array{AbstractDict{Integer,Integer},1}:\n Dict(1=>2)"
+        "1-element Array{AbstractDict{Integer,Integer},1}:\n Dict(1 => 2)"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
@@ -1299,7 +1310,7 @@ end
 
 # Tests for code_typed linetable annotations
 function compute_annotations(f, types)
-    src = code_typed(f, types)[1][1]
+    src = code_typed(f, types, debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     la, lb, ll = Base.IRShow.compute_ir_line_annotations(ir)
     max_loc_method = maximum(length(s) for s in la)
@@ -1354,7 +1365,7 @@ eval(Meta.parse("""function my_fun28173(x)
         end
     return y
 end""")) # use parse to control the line numbers
-let src = code_typed(my_fun28173, (Int,))[1][1]
+let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     fill!(src.codelocs, 0) # IRCode printing is only capable of printing partial line info
     let source_slotnames = String["my_fun28173", "x"],
@@ -1392,7 +1403,7 @@ end
 # Verify that extra instructions at the end of the IR
 # don't throw errors in the printing, but instead print
 # with as unnamed "!" BB.
-let src = code_typed(gcd, (Int, Int))[1][1]
+let src = code_typed(gcd, (Int, Int), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     push!(ir.stmts, Core.Compiler.ReturnNode())
     lines = split(sprint(show, ir), '\n')
@@ -1433,5 +1444,24 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
 # issue #30303
 @test repr(Symbol("a\$")) == "Symbol(\"a\\\$\")"
 
+@test string(sin) == "sin"
+@test string(Iterators.flatten) == "flatten"
+@test Symbol(Iterators.flatten) === :flatten
+
+# printing of bools and bool arrays
+@testset "Bool" begin
+    @test repr(true) == "true"
+    @test repr(Number[true, false]) == "Number[true, false]"
+    @test repr([true, false]) == "Bool[1, 0]" == repr(BitVector([true, false]))
+    @test_repr "Bool[1, 0]"
+end
+
 # issue #30505
 @test repr(Union{Tuple{Char}, Tuple{Char, Char}}[('a','b')]) == "Union{Tuple{Char}, Tuple{Char,Char}}[('a', 'b')]"
+
+# issue #30927
+Z = Array{Float64}(undef,0,0)
+@test eval(Meta.parse(repr(Z))) == Z
+
+# issue #31065, do not print parentheses for nested dot expressions
+@test sprint(Base.show_unquoted, :(foo.x.x)) == "foo.x.x"

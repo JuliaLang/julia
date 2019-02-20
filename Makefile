@@ -324,8 +324,6 @@ ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 endif
 
-	# Copy in system image build script
-	$(INSTALL_M) $(JULIAHOME)/contrib/build_sysimg.jl $(DESTDIR)$(datarootdir)/julia/
 	# Copy in all .jl sources as well
 	cp -R -L $(build_datarootdir)/julia $(DESTDIR)$(datarootdir)/
 	# Copy documentation
@@ -343,7 +341,7 @@ endif
 	mkdir -p $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
 	$(INSTALL_F) $(JULIAHOME)/contrib/julia.svg $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
 	-touch -c $(DESTDIR)$(datarootdir)/icons/hicolor/
-	-gtk-update-icon-cache $(DESTDIR)$(datarootdir)/icons/hicolor/
+	-gtk-update-icon-cache --ignore-theme-index $(DESTDIR)$(datarootdir)/icons/hicolor/
 	mkdir -p $(DESTDIR)$(datarootdir)/applications/
 	$(INSTALL_F) $(JULIAHOME)/contrib/julia.desktop $(DESTDIR)$(datarootdir)/applications/
 	# Install appdata file
@@ -434,6 +432,8 @@ ifeq ($(OS), WINNT)
 	# compress nsis installer and combine with 7zip self-extracting header
 	cd $(BUILDROOT) && $(JULIAHOME)/dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
 	cd $(BUILDROOT) && cat $(JULIAHOME)/contrib/windows/7zS.sfx $(JULIAHOME)/contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "$(JULIA_BINARYDIST_FILENAME).exe"
+	chmod a+x "$(BUILDROOT)/$(JULIA_BINARYDIST_FILENAME).exe"
+	-rm -f $(BUILDROOT)/julia-install-$(JULIA_COMMIT)-$(ARCH).7z
 	-rm -f $(BUILDROOT)/julia-installer.exe
 else
 	cd $(BUILDROOT) && $(TAR) zcvf $(JULIA_BINARYDIST_FILENAME).tar.gz julia-$(JULIA_COMMIT)
@@ -534,7 +534,7 @@ JULIA_SYSIMG=$(build_private_libdir)/sys$(JULIA_LIBSUFFIX).$(SHLIB_EXT)
 
 testall: check-whitespace $(JULIA_BUILD_MODE)
 	cp $(JULIA_SYSIMG) $(BUILDROOT)/local.$(SHLIB_EXT)
-	$(call spawn,$(JULIA_EXECUTABLE) -J $(call cygpath_w,$(BUILDROOT)/local.$(SHLIB_EXT) -e 'true')
+	$(call spawn,$(JULIA_EXECUTABLE) -J $(call cygpath_w,$(BUILDROOT)/local.$(SHLIB_EXT)) -e 'true')
 	rm $(BUILDROOT)/local.$(SHLIB_EXT)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test all JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 

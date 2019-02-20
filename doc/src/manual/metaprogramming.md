@@ -23,7 +23,7 @@ julia> prog = "1 + 1"
 **What happens next?**
 
 The next step is to [parse](https://en.wikipedia.org/wiki/Parsing#Computer_languages) each string
-into an object called an expression, represented by the Julia type `Expr`:
+into an object called an expression, represented by the Julia type [`Expr`](@ref):
 
 ```jldoctest prog
 julia> ex1 = Meta.parse(prog)
@@ -144,7 +144,7 @@ julia> :(::)
 ### Quoting
 
 The second syntactic purpose of the `:` character is to create expression objects without using
-the explicit `Expr` constructor. This is referred to as *quoting*. The `:` character, followed
+the explicit [`Expr`](@ref) constructor. This is referred to as *quoting*. The `:` character, followed
 by paired parentheses around a single statement of Julia code, produces an `Expr` object based
 on the enclosed code. Here is example of the short form used to quote an arithmetic expression:
 
@@ -198,7 +198,7 @@ Expr
 
 ### Interpolation
 
-Direct construction of `Expr` objects with value arguments is powerful, but `Expr` constructors
+Direct construction of [`Expr`](@ref) objects with value arguments is powerful, but `Expr` constructors
 can be tedious compared to "normal" Julia syntax. As an alternative, Julia allows *interpolation* of
 literals or expressions into quoted expressions. Interpolation is indicated by a prefix `$`.
 
@@ -310,7 +310,7 @@ equivalent of `eval(eval(:x))`.
 
 ### QuoteNode
 
-The usual representation of a `quote` form in an AST is an `Expr` with head `:quote`:
+The usual representation of a `quote` form in an AST is an [`Expr`](@ref) with head `:quote`:
 
 ```jldoctest interp1
 julia> dump(Meta.parse(":(1+2)"))
@@ -415,7 +415,7 @@ value 1 and the variable `b`. Note the important distinction between the way `a`
 ### Functions on `Expr`essions
 
 As hinted above, one extremely useful feature of Julia is the capability to generate and manipulate
-Julia code within Julia itself. We have already seen one example of a function returning `Expr`
+Julia code within Julia itself. We have already seen one example of a function returning [`Expr`](@ref)
 objects: the [`parse`](@ref) function, which takes a string of Julia code and returns the corresponding
 `Expr`. A function can also take one or more `Expr` objects as arguments, and return another
 `Expr`. Here is a simple, motivating example:
@@ -511,7 +511,7 @@ this is an extremely useful tool for debugging macros):
 
 ```julia-repl sayhello2
 julia> ex = macroexpand(Main, :(@sayhello("human")) )
-:((Main.println)("Hello, ", "human"))
+:(Main.println("Hello, ", "human"))
 
 julia> typeof(ex)
 Expr
@@ -524,7 +524,7 @@ There also exists a macro [`@macroexpand`](@ref) that is perhaps a bit more conv
 
 ```jldoctest sayhello2
 julia> @macroexpand @sayhello "human"
-:((println)("Hello, ", "human"))
+:(println("Hello, ", "human"))
 ```
 
 ### Hold up: why macros?
@@ -555,7 +555,7 @@ julia> typeof(ex)
 Expr
 
 julia> ex
-:((println)("I execute at runtime. The argument is: ", $(Expr(:copyast, :($(QuoteNode(:((1, 2, 3)))))))))
+:(println("I execute at runtime. The argument is: ", $(Expr(:copyast, :($(QuoteNode(:((1, 2, 3)))))))))
 
 julia> eval(ex)
 I execute at runtime. The argument is: (1, 2, 3)
@@ -698,14 +698,14 @@ julia> @macroexpand @assert a == b
 :(if Main.a == Main.b
         Main.nothing
     else
-        (Main.throw)((Main.AssertionError)("a == b"))
+        Main.throw(Main.AssertionError("a == b"))
     end)
 
 julia> @macroexpand @assert a==b "a should equal b!"
 :(if Main.a == Main.b
         Main.nothing
     else
-        (Main.throw)((Main.AssertionError)("a should equal b!"))
+        Main.throw(Main.AssertionError("a should equal b!"))
     end)
 ```
 
@@ -837,7 +837,7 @@ This kind of manipulation of variables should be used judiciously, but is occasi
 Getting the hygiene rules correct can be a formidable challenge.
 Before using a macro, you might want to consider whether a function closure
 would be sufficient. Another useful strategy is to defer as much work as possible to runtime.
-For example, many macros simply wrap their arguments in a QuoteNode or other similar Expr.
+For example, many macros simply wrap their arguments in a `QuoteNode` or other similar [`Expr`](@ref).
 Some examples of this include `@task body` which simply returns `schedule(Task(() -> $body))`,
 and `@eval expr`, which simply returns `eval(QuoteNode(expr))`.
 

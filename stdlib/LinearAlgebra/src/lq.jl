@@ -7,7 +7,7 @@ struct LQ{T,S<:AbstractMatrix{T}} <: Factorization{T}
     τ::Vector{T}
 
     function LQ{T,S}(factors, τ) where {T,S<:AbstractMatrix{T}}
-        @assert !has_offset_axes(factors)
+        require_one_based_indexing(factors)
         new{T,S}(factors, τ)
     end
 end
@@ -104,8 +104,9 @@ Base.propertynames(F::LQ, private::Bool=false) =
 getindex(A::LQPackedQ, i::Integer, j::Integer) =
     lmul!(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]
 
-function show(io::IO, C::LQ)
+function show(io::IO, ::MIME"text/plain", C::LQ)
     println(io, typeof(C), " with factors L and Q:")
+    io = IOContext(io, :compact => true)
     show(io, C.L)
     println(io)
     show(io, C.Q)
@@ -286,7 +287,7 @@ end
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
-    @assert !has_offset_axes(B)
+    require_one_based_indexing(B)
     c2r = reshape(copy(transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = ldiv!(F, c2r)
     return reshape(copy(reinterpret(Complex{T}, copy(transpose(reshape(x, div(length(x), 2), 2))))),

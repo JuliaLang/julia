@@ -85,18 +85,11 @@ function showerror(io::IO, ex, bt; backtrace=true)
 end
 
 function showerror(io::IO, ex::LoadError, bt; backtrace=true)
-    print(io, "LoadError: ")
-    showerror(io, ex.error, bt, backtrace=backtrace)
-    print(io, "\nin expression starting at $(ex.file):$(ex.line)")
+    print(io, "Error while loading expression starting at ", ex.file, ":", ex.line)
 end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
-function showerror(io::IO, ex::InitError, bt; backtrace=true)
-    print(io, "InitError: ")
-    showerror(io, ex.error, bt, backtrace=backtrace)
-    print(io, "\nduring initialization of module ", ex.mod)
-end
-showerror(io::IO, ex::InitError) = showerror(io, ex, [])
+showerror(io::IO, ex::InitError) = print(io, "InitError during initialization of module ", ex.mod)
 
 function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     if isa(ex.val, AbstractArray)
@@ -115,12 +108,20 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
 end
 
 function showerror(io::IO, ex::SystemError)
-    if ex.extrainfo === nothing
-        print(io, "SystemError: $(ex.prefix): $(Libc.strerror(ex.errnum))")
+    if @static(Sys.iswindows() ? ex.extrainfo isa WindowsErrorInfo : false)
+        errstring = Libc.FormatMessage(ex.extrainfo.errnum)
+        extrainfo = ex.extrainfo.extrainfo
     else
-        print(io, "SystemError (with $(ex.extrainfo)): $(ex.prefix): $(Libc.strerror(ex.errnum))")
+        errstring = Libc.strerror(ex.errnum)
+        extrainfo = ex.extrainfo
+    end
+    if extrainfo === nothing
+        print(io, "SystemError: $(ex.prefix): ", errstring)
+    else
+        print(io, "SystemError (with $extrainfo): $(ex.prefix): ", errstring)
     end
 end
+
 showerror(io::IO, ::DivideError) = print(io, "DivideError: integer division error")
 showerror(io::IO, ::StackOverflowError) = print(io, "StackOverflowError:")
 showerror(io::IO, ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")
@@ -136,9 +137,9 @@ showerror(io::IO, ex::KeyError) = (print(io, "KeyError: key ");
                                    show(io, ex.key);
                                    print(io, " not found"))
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
-showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
-showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: $(ex.msg)")
-showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: $(ex.msg)")
+showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: ", ex.msg)
+showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: ", ex.msg)
+showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: ", ex.msg)
 
 showerror(io::IO, ex::UndefKeywordError) =
     print(io, "UndefKeywordError: keyword argument $(ex.var) not assigned")
@@ -390,7 +391,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 end
             end
 
-            if right_matches > 0 || length(ex.args) < 2
+            if right_matches > 0 || length(arg_types_param) < 2
                 if length(t_i) < length(sig)
                     # If the methods args is longer than input then the method
                     # arguments is printed as not a match

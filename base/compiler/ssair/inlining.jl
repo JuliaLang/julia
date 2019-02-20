@@ -56,7 +56,7 @@ end
 function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
     # Go through the function, performing simple ininlingin (e.g. replacing call by constants
     # and analyzing legality of inlining).
-    @timeit "analysis" todo = assemble_inline_todo!(ir, linetable, sv)
+    @timeit "analysis" todo = assemble_inline_todo!(ir, sv)
     isempty(todo) && return ir
     # Do the actual inlining for every call we identified
     @timeit "execution" ir = batch_inline!(todo, ir, linetable, sv)
@@ -289,7 +289,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     # Append the linetable of the inlined function to our line table
     inlined_at = Int(compact.result_lines[idx])
     for entry in item.linetable
-        push!(linetable, LineInfoNode(entry.mod, entry.method, entry.file, entry.line,
+        push!(linetable, LineInfoNode(entry.method, entry.file, entry.line,
             (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset : inlined_at)))
     end
     if item.isva
@@ -583,7 +583,8 @@ function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, at
     for i in 3:length(argexprs)
         def = argexprs[i]
         def_type = atypes[i]
-        if def_type isa PartialTuple
+        if def_type isa PartialStruct
+            # def_type.typ <: Tuple is assumed
             def_atypes = def_type.fields
         else
             def_atypes = Any[]
@@ -592,7 +593,11 @@ function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, at
                     push!(def_atypes, Const(p))
                 end
             else
-                for p in widenconst(def_type).parameters
+                ti = widenconst(def_type)
+                if ti.name === NamedTuple_typename
+                    ti = ti.parameters[2]
+                end
+                for p in ti.parameters
                     if isa(p, DataType) && isdefined(p, :instance)
                         # replace singleton types with their equivalent Const object
                         p = Const(p.instance)
@@ -698,7 +703,16 @@ function analyze_method!(idx::Int, @nospecialize(f), @nospecialize(ft), @nospeci
     end
 
     @timeit "inline IR inflation" begin
-        ir2, inline_linetable = inflate_ir(src, linfo), src.linetable
+        ir2 = inflate_ir(src, linfo)
+        # prepare inlining linetable with method instance information
+        inline_linetable = Vector{LineInfoNode}(undef, length(src.linetable))
+        for i = 1:length(src.linetable)
+            entry = src.linetable[i]
+            if entry.inlined_at === 0 && entry.method === method
+                entry = LineInfoNode(linfo, entry.file, entry.line, entry.inlined_at)
+            end
+            inline_linetable[i] = entry
+        end
     end
     #verify_ir(ir2)
 
@@ -773,17 +787,42 @@ function handle_single_case!(ir::IRCode, stmt::Expr, idx::Int, @nospecialize(cas
     nothing
 end
 
-function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
+function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
     # todo = (inline_idx, (isva, isinvoke, na), method, spvals, inline_linetable, inline_ir, lie)
     todo = Any[]
     for idx in 1:length(ir.stmts)
         stmt = ir.stmts[idx]
+
+        if isexpr(stmt, :splatnew)
+            ty = ir.types[idx]
+            nf = nfields_tfunc(ty)
+            if nf isa Const
+                eargs = stmt.args
+                tup = eargs[2]
+                tt = argextype(tup, ir, sv.sptypes)
+                tnf = nfields_tfunc(tt)
+                if tnf isa Const && tnf.val <= nf.val
+                    n = tnf.val
+                    new_argexprs = Any[eargs[1]]
+                    for j = 1:n
+                        atype = getfield_tfunc(tt, Const(j))
+                        new_call = Expr(:call, Core.getfield, tup, j)
+                        new_argexpr = insert_node!(ir, idx, atype, new_call)
+                        push!(new_argexprs, new_argexpr)
+                    end
+                    stmt.head = :new
+                    stmt.args = new_argexprs
+                end
+            end
+            continue
+        end
+
         isexpr(stmt, :call) || continue
         eargs = stmt.args
         isempty(eargs) && continue
         arg1 = eargs[1]
 
-        ft = argextype(arg1, ir, sv.sp)
+        ft = argextype(arg1, ir, sv.sptypes)
         has_free_typevars(ft) && continue
         f = singleton_type(ft)
         f === Core.Intrinsics.llvmcall && continue
@@ -793,7 +832,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         atypes[1] = ft
         ok = true
         for i = 2:length(stmt.args)
-            a = argextype(stmt.args[i], ir, sv.sp)
+            a = argextype(stmt.args[i], ir, sv.sptypes)
             (a === Bottom || isvarargtype(a)) && (ok = false; break)
             atypes[i] = a
         end
@@ -827,6 +866,12 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
                 typ = atypes[i]
                 typ = widenconst(typ)
                 # TODO: We could basically run the iteration protocol here
+                if isa(typ, DataType) && typ.name === NamedTuple_typename
+                    typ = typ.parameters[2]
+                    while isa(typ, TypeVar)
+                        typ = typ.ub
+                    end
+                end
                 if !isa(typ, DataType) || typ.name !== Tuple.name ||
                     isvatuple(typ) || length(typ.parameters) > sv.params.MAX_TUPLE_SPLAT
                     ok = false

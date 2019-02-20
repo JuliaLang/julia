@@ -115,7 +115,7 @@ and `x` is the `i`th value from the given iterator. It's useful when
 you need not only the values `x` over which you are iterating, but
 also the number of iterations so far. Note that `i` may not be valid
 for indexing `iter`; it's also possible that `x != iter[i]`, if `iter`
-has indices that do not start at 1. See the `enumerate(IndexLinear(),
+has indices that do not start at 1. See the `pairs(IndexLinear(),
 iter)` method if you want to ensure that `i` is an index.
 
 # Examples
@@ -462,6 +462,7 @@ julia> collect(Iterators.rest([1,2,3,4], 2))
 ```
 """
 rest(itr,state) = Rest(itr,state)
+rest(itr::Rest,state) = Rest(itr.itr,state)
 rest(itr) = itr
 
 """
@@ -1089,10 +1090,9 @@ end
 
 @inline peek(s::Stateful, sentinel=nothing) = s.nextvalstate !== nothing ? s.nextvalstate[1] : sentinel
 @inline iterate(s::Stateful, state=nothing) = s.nextvalstate === nothing ? nothing : (popfirst!(s), nothing)
-IteratorSize(::Type{Stateful{VS,T}} where VS) where {T} =
-    isa(IteratorSize(T), SizeUnknown) ? SizeUnknown() : HasLength()
+IteratorSize(::Type{Stateful{T,VS}}) where {T,VS} = IteratorSize(T) isa HasShape ? HasLength() : IteratorSize(T)
 eltype(::Type{Stateful{T, VS}} where VS) where {T} = eltype(T)
-IteratorEltype(::Type{Stateful{VS,T}} where VS) where {T} = IteratorEltype(T)
+IteratorEltype(::Type{Stateful{T,VS}}) where {T,VS} = IteratorEltype(T)
 length(s::Stateful) = length(s.itr) - s.taken
 
 end

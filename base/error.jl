@@ -133,6 +133,21 @@ Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `ift
 """
 systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), extrainfo)) : nothing
 
+
+## system errors from Windows API functions
+struct WindowsErrorInfo
+    errnum::UInt32
+    extrainfo
+end
+"""
+    windowserror(sysfunc, iftrue)
+
+Like [`systemerror`](@ref), but for Windows API functions that use [`GetLastError`](@ref) instead
+of setting [`errno`](@ref).
+"""
+windowserror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), WindowsErrorInfo(Libc.GetLastError(), extrainfo))) : nothing
+
+
 ## assertion macro ##
 
 
@@ -206,12 +221,15 @@ length(ebo::ExponentialBackOff) = ebo.n
 eltype(::Type{ExponentialBackOff}) = Float64
 
 """
-    retry(f::Function;  delays=ExponentialBackOff(), check=nothing) -> Function
+    retry(f;  delays=ExponentialBackOff(), check=nothing) -> Function
 
 Return an anonymous function that calls function `f`.  If an exception arises,
 `f` is repeatedly called again, each time `check` returns `true`, after waiting the
 number of seconds specified in `delays`.  `check` should input `delays`'s
 current state and the `Exception`.
+
+!!! compat "Julia 1.2"
+    Before Julia 1.2 this signature was restricted to `f::Function`.
 
 # Examples
 ```julia
@@ -222,7 +240,7 @@ retry(http_get, check=(s,e)->e.status == "503")(url)
 retry(read, check=(s,e)->isa(e, IOError))(io, 128; all=false)
 ```
 """
-function retry(f::Function;  delays=ExponentialBackOff(), check=nothing)
+function retry(f;  delays=ExponentialBackOff(), check=nothing)
     (args...; kwargs...) -> begin
         y = iterate(delays)
         while y !== nothing

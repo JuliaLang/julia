@@ -74,8 +74,10 @@ end
 end
 
 @test copy(UniformScaling(one(Float64))) == UniformScaling(one(Float64))
-@test sprint(show,UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}\n(1.0 + 0.0im)*I"
-@test sprint(show,UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}\n1.0*I"
+@test sprint(show,MIME"text/plain"(),UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}\n(1.0 + 0.0im)*I"
+@test sprint(show,MIME"text/plain"(),UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}\n1.0*I"
+@test sprint(show,UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}(1.0 + 0.0im)"
+@test sprint(show,UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}(1.0f0)"
 
 let
     λ = complex(randn(),randn())
@@ -307,6 +309,12 @@ end
     @test mul!(C, A, J) == target
     @test lmul!(J, copyto!(C, A)) == target
     @test rmul!(copyto!(C, A), J) == target
+end
+
+@testset "Construct Diagonal from UniformScaling" begin
+    @test size(I(3)) === (3,3)
+    @test I(3) isa Diagonal
+    @test I(3) == [1 0 0; 0 1 0; 0 0 1]
 end
 
 end # module TestUniformscaling

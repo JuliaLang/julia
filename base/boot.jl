@@ -90,8 +90,7 @@
 #end
 
 #struct LineInfoNode
-#    mod::Module
-#    method::Symbol
+#    method::Any
 #    file::Symbol
 #    line::Int
 #    inlined_at::Int
@@ -375,8 +374,8 @@ eval(Core, :(PiNode(val, typ) = $(Expr(:new, :PiNode, :val, :typ))))
 eval(Core, :(PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))))
 eval(Core, :(UpsilonNode(val) = $(Expr(:new, :UpsilonNode, :val))))
 eval(Core, :(UpsilonNode() = $(Expr(:new, :UpsilonNode))))
-eval(Core, :(LineInfoNode(mod::Module, method::Symbol, file::Symbol, line::Int, inlined_at::Int) =
-             $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))))
+eval(Core, :(LineInfoNode(@nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
+             $(Expr(:new, :LineInfoNode, :method, :file, :line, :inlined_at))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
@@ -548,33 +547,8 @@ NamedTuple{names}(args::Tuple) where {names} = NamedTuple{names,typeof(args)}(ar
 
 using .Intrinsics: sle_int, add_int
 
-macro generated()
-    return Expr(:generated)
-end
-
-function NamedTuple{names,T}(args::T) where {names, T <: Tuple}
-    if @generated
-        N = nfields(names)
-        flds = Array{Any,1}(undef, N)
-        i = 1
-        while sle_int(i, N)
-            arrayset(false, flds, :(getfield(args, $i)), i)
-            i = add_int(i, 1)
-        end
-        Expr(:new, :(NamedTuple{names,T}), flds...)
-    else
-        N = nfields(names)
-        NT = NamedTuple{names,T}
-        flds = Array{Any,1}(undef, N)
-        i = 1
-        while sle_int(i, N)
-            arrayset(false, flds, getfield(args, i), i)
-            i = add_int(i, 1)
-        end
-        ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), NT,
-              ccall(:jl_array_ptr, Ptr{Cvoid}, (Any,), flds), toUInt32(N))::NT
-    end
-end
+eval(Core, :(NamedTuple{names,T}(args::T) where {names, T <: Tuple} =
+             $(Expr(:splatnew, :(NamedTuple{names,T}), :args))))
 
 # constructors for built-in types
 
