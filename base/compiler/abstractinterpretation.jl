@@ -150,7 +150,7 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
 end
 
 
-function const_prop_profitable(arg)
+function const_prop_profitable(@nospecialize(arg))
     # have new information from argtypes that wasn't available from the signature
     if isa(arg, PartialStruct)
         for b in arg.fields
