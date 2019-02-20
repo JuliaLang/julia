@@ -138,6 +138,5 @@ end
     @test eigen(A')   == eigen(copy(A'))
 end
 
-end
 
 end # module TestEigen
