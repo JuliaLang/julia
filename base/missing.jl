@@ -107,16 +107,25 @@ max(::Missing, ::Any)     = missing
 max(::Any,     ::Missing) = missing
 
 # Rounding and related functions
-for f in (:(ceil), :(floor), :(round), :(trunc))
+round(::Missing, ::RoundingMode=RoundNearest; sigdigits::Integer=0, digits::Integer=0, base::Integer=0) = missing
+round(::Type{>:Missing}, ::Missing, ::RoundingMode=RoundNearest) = missing
+round(::Type{T}, ::Missing, ::RoundingMode=RoundNearest) where {T} =
+    throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
+round(::Type{T}, x::Any, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype(T), x, r)
+# to fix ambiguities
+round(::Type{T}, x::Rational, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype(T), x, r)
+round(::Type{T}, x::Rational{Bool}, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype(T), x, r)
+
+# Handle ceil, floor, and trunc separately as they have no RoundingMode argument
+for f in (:(ceil), :(floor), :(trunc))
     @eval begin
-        ($f)(::Missing, digits::Integer=0, base::Integer=0) = missing
+        ($f)(::Missing; sigdigits::Integer=0, digits::Integer=0, base::Integer=0) = missing
         ($f)(::Type{>:Missing}, ::Missing) = missing
         ($f)(::Type{T}, ::Missing) where {T} =
             throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
         ($f)(::Type{T}, x::Any) where {T>:Missing} = $f(nonmissingtype(T), x)
         # to fix ambiguities
         ($f)(::Type{T}, x::Rational) where {T>:Missing} = $f(nonmissingtype(T), x)
-        ($f)(::Type{T}, x::Rational{Bool}) where {T>:Missing} = $f(nonmissingtype(T), x)
     end
 end
 

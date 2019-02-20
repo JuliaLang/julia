@@ -1338,8 +1338,8 @@ let egal_tfunc
     @test egal_tfunc(Union{Int64, Float64}, AbstractArray) === Const(false)
 end
 
-using Core.Compiler: PartialTuple, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
-let PT = PartialTuple(Tuple{Int64,UInt64}, Any[Const(10, false), UInt64])
+using Core.Compiler: PartialStruct, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
+let PT = PartialStruct(Tuple{Int64,UInt64}, Any[Const(10, false), UInt64])
     @test sizeof_tfunc(PT) === Const(16, false)
     @test nfields_tfunc(PT) === Const(2, false)
     @test sizeof_nothrow(PT) === true
@@ -2261,3 +2261,30 @@ f_incr(x::Tuple, y::Tuple, args...) = f_incr((x, y), args...)
 f_incr(x::Tuple) = x
 @test @inferred(f_incr((), (), (), (), (), (), (), ())) ==
     ((((((((), ()), ()), ()), ()), ()), ()), ())
+
+# Test PartialStruct for closures
+@noinline use30783(x) = nothing
+function foo30783(b)
+    a = 1
+    f = ()->(use30783(b); Val(a))
+    f()
+end
+@test @inferred(foo30783(2)) == Val(1)
+
+# PartialStruct tmerge
+using Core.Compiler: PartialStruct, tmerge, Const, ⊑
+struct FooPartial
+    a::Int
+    b::Int
+    c::Int
+end
+let PT1 = PartialStruct(FooPartial, Any[Const(1), Const(2), Int]),
+    PT2 = PartialStruct(FooPartial, Any[Const(1), Int, Int]),
+    PT3 = PartialStruct(FooPartial, Any[Const(1), Int, Const(3)])
+
+    @test PT1 ⊑ PT2
+    @test !(PT1 ⊑ PT3) && !(PT2 ⊑ PT1)
+    let (==) = (a, b)->(a ⊑ b && b ⊑ a)
+        @test tmerge(PT1, PT3) == PT2
+    end
+end

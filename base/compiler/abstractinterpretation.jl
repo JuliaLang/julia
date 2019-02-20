@@ -149,6 +149,21 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
     return rettype
 end
 
+
+function const_prop_profitable(arg)
+    # have new information from argtypes that wasn't available from the signature
+    if isa(arg, PartialStruct)
+        for b in arg.fields
+            isconstType(b) && return true
+            const_prop_profitable(b) && return true
+        end
+    elseif !isa(arg, Const) || (isa(arg.val, Symbol) || isa(arg.val, Type) || (!isa(arg.val, String) && isimmutable(arg.val)))
+        # don't consider mutable values or Strings useful constants
+        return true
+    end
+    return false
+end
+
 function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecialize(f), argtypes::Vector{Any}, match::SimpleVector, sv::InferenceState)
     method = match[3]::Method
     nargs::Int = method.nargs
@@ -158,12 +173,8 @@ function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecial
     for a in argtypes
         a = widenconditional(a)
         if has_nontrivial_const_info(a)
-            # have new information from argtypes that wasn't available from the signature
-            if !isa(a, Const) || (isa(a.val, Symbol) || isa(a.val, Type) || (!isa(a.val, String) && isimmutable(a.val)))
-                # don't consider mutable values or Strings useful constants
-                haveconst = true
-                break
-            end
+            haveconst = const_prop_profitable(a)
+            haveconst && break
         end
     end
     haveconst || improvable_via_constant_propagation(rettype) || return Any
@@ -189,7 +200,7 @@ function abstract_call_method_with_const_args(@nospecialize(rettype), @nospecial
             # in this case, see if all of the arguments are constants
             for a in argtypes
                 a = widenconditional(a)
-                if !isa(a, Const) && !isconstType(a)
+                if !isa(a, Const) && !isconstType(a) && !isa(a, PartialStruct)
                     return Any
                 end
             end
@@ -384,7 +395,7 @@ end
 # Union of Tuples of the same length is converted to Tuple of Unions.
 # returns an array of types
 function precise_container_type(@nospecialize(typ), vtypes::VarTable, sv::InferenceState)
-    if isa(typ, PartialTuple)
+    if isa(typ, PartialStruct) && typ.typ.name === Tuple.name
         return typ.fields
     end
 
@@ -498,8 +509,9 @@ end
 # do apply(af, fargs...), where af is a function value
 function abstract_apply(@nospecialize(aft), aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState,
                         max_methods = sv.params.MAX_METHODS)
-    if !isa(aft, Const) && (!isType(aft) || has_free_typevars(aft))
-        if !isconcretetype(aft) || (aft <: Builtin)
+    aftw = widenconst(aft)
+    if !isa(aft, Const) && (!isType(aftw) || has_free_typevars(aftw))
+        if !isconcretetype(aftw) || (aftw <: Builtin)
             # non-constant function of unknown type: bail now,
             # since it seems unlikely that abstract_call will be able to do any better after splitting
             # this also ensures we don't call abstract_call_gf_by_type below on an IntrinsicFunction or Builtin
@@ -891,26 +903,37 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         t = instanceof_tfunc(abstract_eval(e.args[1], vtypes, sv))[1]
         if isconcretetype(t) && !t.mutable
             args = Vector{Any}(undef, length(e.args)-1)
-            isconst = true
+            ats = Vector{Any}(undef, length(e.args)-1)
+            anyconst = false
+            allconst = true
             for i = 2:length(e.args)
                 at = abstract_eval(e.args[i], vtypes, sv)
+                if !anyconst
+                    anyconst = has_nontrivial_const_info(at)
+                end
+                ats[i-1] = at
                 if at === Bottom
                     t = Bottom
-                    isconst = false
+                    allconst = anyconst = false
                     break
                 elseif at isa Const
                     if !(at.val isa fieldtype(t, i - 1))
                         t = Bottom
-                        isconst = false
+                        allconst = anyconst = false
                         break
                     end
                     args[i-1] = at.val
                 else
-                    isconst = false
+                    allconst = false
                 end
             end
-            if isconst
-                t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, args, length(args)))
+            # For now, don't allow partially initialized Const/PartialStruct
+            if t !== Bottom && fieldcount(t) == length(ats)
+                if allconst
+                    t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, args, length(args)))
+                elseif anyconst
+                    t = PartialStruct(t, ats)
+                end
             end
         end
     elseif e.head === :splatnew
@@ -1077,7 +1100,7 @@ function typeinf_local(frame::InferenceState)
             elseif hd === :return
                 pc´ = n + 1
                 rt = widenconditional(abstract_eval(stmt.args[1], s[pc], frame))
-                if !isa(rt, Const) && !isa(rt, Type) && !isa(rt, PartialTuple)
+                if !isa(rt, Const) && !isa(rt, Type) && !isa(rt, PartialStruct)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally
                     rt = widenconst(rt)
