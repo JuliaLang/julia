@@ -5,6 +5,7 @@
 
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Metadata.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
@@ -18,7 +19,7 @@ namespace jl_intrinsics {
     // intrinsics and declare new intrinsics if necessary.
     struct IntrinsicDescription final {
         // The type of function that declares an intrinsic.
-        typedef llvm::Function *(*DeclarationFunction)(llvm::Module&, const JuliaPassContext&);
+        typedef llvm::Function *(*DeclarationFunction)(const JuliaPassContext&);
 
         // Creates an intrinsic description with a particular
         // name and declaration function.
@@ -39,8 +40,6 @@ namespace jl_intrinsics {
 // from modules or add them if they're not available yet.
 // Mainly useful for building Julia-specific LLVM passes.
 struct JuliaPassContext {
-    llvm::Module *module;
-
     // Standard types.
     llvm::Type *T_size;
     llvm::Type *T_int8;
@@ -81,6 +80,12 @@ struct JuliaPassContext {
     // Also sets the current module to the given module.
     void initFunctions(llvm::Module &M);
 
+    // Gets the LLVM context for this pass context.
+    llvm::LLVMContext &getLLVMContext() const
+    {
+        return module->getContext();
+    }
+
     // Gets a call to the `julia.ptls_states` intrinisc in the entry
     // point of the given function, if there exists such a call.
     // Otherwise, `nullptr` is returned.
@@ -97,7 +102,10 @@ struct JuliaPassContext {
     // declares the intrinsic or well-known function and adds it
     // to the module.
     llvm::Function *getOrDeclare(
-        const jl_intrinsics::IntrinsicDescription &desc) const;
+        const jl_intrinsics::IntrinsicDescription &desc);
+
+private:
+    llvm::Module *module;
 };
 
 namespace jl_intrinsics {
