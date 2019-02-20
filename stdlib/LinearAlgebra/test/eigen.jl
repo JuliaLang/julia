@@ -132,4 +132,12 @@ end
     @test factstring == "$(summary(e))\neigenvalues:\n$valsstring\neigenvectors:\n$vecsstring"
 end
 
+@testset "eigen of an Adjoint" begin
+    A = randn(3,3)
+    @test eigvals(A') == eigvals(copy(A'))
+    @test eigen(A')   == eigen(copy(A'))
+end
+
+end
+
 end # module TestEigen
