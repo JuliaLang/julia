@@ -22,10 +22,8 @@ struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
 
     function SparseMatrixCSC{Tv,Ti}(m::Integer, n::Integer, colptr::Vector{Ti}, rowval::Vector{Ti},
                                     nzval::Vector{Tv}) where {Tv,Ti<:Integer}
-        @noinline throwsz(str, lbl, k) =
-            throw(ArgumentError("number of $str ($lbl) must be ≥ 0, got $k"))
-        m < 0 && throwsz("rows", 'm', m)
-        n < 0 && throwsz("columns", 'n', n)
+
+        sparse_check_Ti(m, n, Ti)
         new(Int(m), Int(n), colptr, rowval, nzval)
     end
 end
@@ -35,6 +33,17 @@ function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector,
     SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
 end
 
+function sparse_check_Ti(m::Integer, n::Integer, Ti::Type)
+        @noinline throwsz(str, lbl, k) =
+            throw(ArgumentError("number of $str ($lbl) must be ≥ 0, got $k"))
+        @noinline throwTi(str, lbl, k) =
+            throw(ArgumentError("$str ($lbl = $k) does not fit in Ti = $(Ti)"))
+        m < 0 && throwsz("rows", 'm', m)
+        n < 0 && throwsz("columns", 'n', n)
+        !isbitstype(Ti) || m ≤ typemax(Ti) || throwTi("number of rows", "m", m)
+        !isbitstype(Ti) || n ≤ typemax(Ti) || throwTi("number of columns", "n", n)
+        !isbitstype(Ti) || n*m+1 ≤ typemax(Ti) || throwTi("maximal nnz+1", "m*n+1", n*m+1)
+end
 size(S::SparseMatrixCSC) = (S.m, S.n)
 
 # Define an alias for views of a SparseMatrixCSC which include all rows and a unit range of the columns.
@@ -590,6 +599,7 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
         csccolptr::Vector{Ti}, cscrowval::Vector{Ti}, cscnzval::Vector{Tv}) where {Tv,Ti<:Integer}
 
     require_one_based_indexing(I, J, V)
+    sparse_check_Ti(m, n, Ti)
     # Compute the CSR form's row counts and store them shifted forward by one in csrrowptr
     fill!(csrrowptr, Ti(0))
     coolen = length(I)
