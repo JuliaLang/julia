@@ -11,6 +11,30 @@ set_nworkers(N) = ccall(:__cilkrts_set_param, Cint, (Cstring, Cstring), "nworker
 end_cilk() = ccall(:__cilkrts_end_cilk, Cvoid, ())
 init_cilk() = ccall(:__cilkrts_init, Cvoid, ())
 
+struct Worker
+    tail::Ptr{Cvoid}
+    head::Ptr{Cvoid}
+    exc::Ptr{Cvoid}
+    ptail::Ptr{Cvoid}
+    ltq_limit::Ptr{Cvoid}
+    self::Int32
+    g::Ptr{Cvoid}
+    l::Ptr{Cvoid}
+    # etc...
+end
+
+function launch(pw::Ptr{Worker})
+    w = unsafe_load(pw)
+    tid = (w.self) % Int16
+    ccall(:jl_, Cvoid, (Any,), tid)
+    if tid > 0 # skip root
+        ccall(:jl_extern_initthread, Cvoid, (Int16,), tid)
+    end
+    return nothing
+end
+const late_init = @cfunction(launch, Cvoid, (Ptr{Worker},))
+set_late_init() = ccall(:__cilkrts_set_late_init, Cvoid, (Ptr{Cvoid},), late_init)
+
 macro syncregion()
     Expr(:syncregion)
 end

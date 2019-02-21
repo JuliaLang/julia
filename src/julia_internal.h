@@ -140,6 +140,8 @@ STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
 extern jl_methtable_t *jl_type_type_mt JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT extern size_t jl_world_counter;
 
+JL_DLLEXPORT void jl_extern_initthread(int16_t tid);
+
 typedef void (*tracer_cb)(jl_value_t *tracee);
 void jl_call_tracer(tracer_cb callback, jl_value_t *tracee);
 

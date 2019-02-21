@@ -355,6 +355,30 @@ uint64_t *join_ns;
 
 static uv_barrier_t thread_init_done;
 
+JL_DLLEXPORT void jl_extern_initthread(int16_t tid)
+{
+    // initialize this thread (set tid, create heap, etc.)
+    jl_ptls_t ptls = jl_get_ptls_states();
+    size_t last_age = ptls->world_age;
+    ptls->world_age = 0;
+    ti_initthread(tid);
+    ptls->world_age = last_age;
+    void *stack_lo, *stack_hi;
+    jl_init_stack_limits(0, &stack_lo, &stack_hi);
+
+    // set up tasking
+    jl_init_root_task(stack_lo, stack_hi);
+
+    // do init from init.c
+    jl_ptls_t ptls2 = jl_all_tls_states[tid];
+    ptls2->root_task->tls = jl_nothing;
+    ptls2->root_task->donenotify = jl_nothing;
+    ptls2->root_task->exception = jl_nothing;
+    ptls2->root_task->result = jl_nothing;
+    return;
+}
+
+
 // thread function: used by all except the main thread
 void ti_threadfun(void *arg)
 {
@@ -611,6 +635,8 @@ void jl_start_threads(void)
     size_t nthreads = jl_n_threads;
 
     // create threads
+#ifdef USE_TAPIR
+#else
     targs = (ti_threadarg_t **)malloc((nthreads - 1) * sizeof (ti_threadarg_t *));
 
     uv_barrier_init(&thread_init_done, nthreads);
@@ -644,6 +670,7 @@ void jl_start_threads(void)
 
     // free the argument array; the threads will free their arguments
     free(targs);
+#endif
 }
 
 // TODO: is this needed? where/when/how to call it?

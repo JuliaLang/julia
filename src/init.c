@@ -851,7 +851,13 @@ static jl_value_t *core(const char *name)
 void jl_get_builtin_hooks(void)
 {
     int t;
+#ifdef USE_TAPIR
+    // only do this on thread t = o
+    {
+        t = 0;
+#else
     for (t = 0; t < jl_n_threads; t++) {
+#endif
         jl_ptls_t ptls2 = jl_all_tls_states[t];
         ptls2->root_task->tls = jl_nothing;
         ptls2->root_task->donenotify = jl_nothing;
