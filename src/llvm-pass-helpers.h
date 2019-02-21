@@ -91,15 +91,6 @@ struct JuliaPassContext {
 };
 
 namespace jl_intrinsics {
-    // `julia.new_gc_frame`: an intrinsic that creates a new GC frame.
-    extern const IntrinsicDescription newGCFrame;
-
-    // `julia.push_gc_frame`: an intrinsic that pushes a GC frame.
-    extern const IntrinsicDescription pushGCFrame;
-
-    // `julia.pop_gc_frame`: an intrinsic that pops a GC frame.
-    extern const IntrinsicDescription popGCFrame;
-
     // `julia.get_gc_frame_slot`: an intrinsic that creates a
     // pointer to a GC frame slot.
     extern const IntrinsicDescription getGCFrameSlot;
@@ -111,6 +102,18 @@ namespace jl_intrinsics {
     // the object's tag field is neither initialized nor
     // passed as an argument.
     extern const IntrinsicDescription GCAllocBytes;
+
+    // `julia.new_gc_frame`: an intrinsic that creates a new GC frame.
+    extern const IntrinsicDescription newGCFrame;
+
+    // `julia.push_gc_frame`: an intrinsic that pushes a GC frame.
+    extern const IntrinsicDescription pushGCFrame;
+
+    // `julia.pop_gc_frame`: an intrinsic that pops a GC frame.
+    extern const IntrinsicDescription popGCFrame;
+
+    // `julia.queue_gc_root`: an intrinsic that queues a GC root.
+    extern const IntrinsicDescription queueGCRoot;
 }
 
 #endif

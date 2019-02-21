@@ -321,9 +321,6 @@ protected:
     }
 
 private:
-    Function *queueroot_func;
-    Function *pool_alloc_func;
-    Function *big_alloc_func;
     CallInst *ptlsStates;
 
     void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
@@ -350,7 +347,6 @@ private:
     void PlaceGCFrameStores(State &S, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame);
     void PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
     bool doInitialization(Module &M) override;
-    bool doFinalization(Module &) override;
     bool runOnFunction(Function &F) override;
     bool CleanupIR(Function &F, State *S=nullptr);
     void NoteUseChain(State &S, BBState &BBS, User *TheUser);
@@ -1815,7 +1811,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
         auto trigTerm = SplitBlockAndInsertIfThen(chldNotMarked, mayTrigTerm, false,
                                                   MDB.createBranchWeights(Weights));
         builder.SetInsertPoint(trigTerm);
-        builder.CreateCall(queueroot_func, parent);
+        builder.CreateCall(getOrDefine(jl_intrinsics::queueGCRoot), parent);
         CI->eraseFromParent();
     }
     if (maxframeargs == 0 && Frame) {
@@ -1972,90 +1968,6 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
 bool LateLowerGCFrame::doInitialization(Module &M) {
     // Initialize platform-agnostic references.
     initAll(M);
-
-    // Initialize platform-specific references.
-    auto &ctx = M.getContext();
-    if (write_barrier_func) {
-        if (!(queueroot_func = M.getFunction("jl_gc_queue_root"))) {
-            queueroot_func = Function::Create(FunctionType::get(Type::getVoidTy(ctx),
-                                                                {T_prjlvalue}, false),
-                                              Function::ExternalLinkage, "jl_gc_queue_root", &M);
-            queueroot_func->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
-        }
-    }
-    else {
-        queueroot_func = nullptr;
-    }
-    pool_alloc_func = nullptr;
-    big_alloc_func = nullptr;
-    if (alloc_obj_func) {
-        if (!(pool_alloc_func = M.getFunction("jl_gc_pool_alloc"))) {
-            std::vector<Type*> args(0);
-            args.push_back(T_pint8);
-            args.push_back(T_int32);
-            args.push_back(T_int32);
-            pool_alloc_func = Function::Create(FunctionType::get(T_prjlvalue, args, false),
-                                               Function::ExternalLinkage, "jl_gc_pool_alloc", &M);
-            pool_alloc_func->setAttributes(AttributeList::get(M.getContext(),
-                alloc_obj_func->getAttributes().getFnAttributes(),
-                alloc_obj_func->getAttributes().getRetAttributes(),
-                None));
-        }
-        if (!(big_alloc_func = M.getFunction("jl_gc_big_alloc"))) {
-            std::vector<Type*> args(0);
-            args.push_back(T_pint8);
-            args.push_back(T_size);
-            big_alloc_func = Function::Create(FunctionType::get(T_prjlvalue, args, false),
-                                         Function::ExternalLinkage, "jl_gc_big_alloc", &M);
-            big_alloc_func->setAttributes(AttributeList::get(M.getContext(),
-                alloc_obj_func->getAttributes().getFnAttributes(),
-                alloc_obj_func->getAttributes().getRetAttributes(),
-                None));
-        }
-    }
-
-    GlobalValue *function_list[] = {queueroot_func, pool_alloc_func, big_alloc_func};
-    unsigned j = 0;
-    for (unsigned i = 0; i < sizeof(function_list) / sizeof(void*); i++) {
-        if (!function_list[i])
-            continue;
-        if (i != j)
-            function_list[j] = function_list[i];
-        j++;
-    }
-    if (j != 0)
-        appendToCompilerUsed(M, ArrayRef<GlobalValue*>(function_list, j));
-    return true;
-}
-
-bool LateLowerGCFrame::doFinalization(Module &M)
-{
-    auto used = M.getGlobalVariable("llvm.compiler.used");
-    if (!used)
-        return false;
-    GlobalValue *function_list[] = {queueroot_func, pool_alloc_func, big_alloc_func};
-    SmallPtrSet<Constant*, 16> InitAsSet(function_list,
-                                         function_list + sizeof(function_list) / sizeof(void*));
-    bool changed = false;
-    SmallVector<Constant*, 16> Init;
-    ConstantArray *CA = dyn_cast<ConstantArray>(used->getInitializer());
-    for (auto &Op : CA->operands()) {
-        Constant *C = cast_or_null<Constant>(Op);
-        if (InitAsSet.count(C->stripPointerCasts())) {
-            changed = true;
-            continue;
-        }
-        Init.push_back(C);
-    }
-    if (!changed)
-        return false;
-    used->eraseFromParent();
-    if (Init.empty())
-        return true;
-    ArrayType *ATy = ArrayType::get(T_pint8, Init.size());
-    used = new llvm::GlobalVariable(M, ATy, false, GlobalValue::AppendingLinkage,
-                                    ConstantArray::get(ATy, Init), "llvm.compiler.used");
-    used->setSection("llvm.metadata");
     return true;
 }
 

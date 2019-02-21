@@ -33,9 +33,9 @@ struct FinalLowerGC: public FunctionPass, private JuliaPassContext {
     { }
 
 private:
-    Function *queueroot_func;
-    Function *pool_alloc_func;
-    Function *big_alloc_func;
+    Function *queueRootFunc;
+    Function *poolAllocFunc;
+    Function *bigAllocFunc;
     CallInst *ptlsStates;
 
     bool doInitialization(Module &M) override;
@@ -56,6 +56,9 @@ private:
 
     // Lowers a `julia.gc_alloc_bytes` intrinsic.
     Value *lowerGCAllocBytes(CallInst *target, Function &F);
+
+    // Lowers a `julia.queue_gc_root` intrinsic.
+    Value *lowerQueueGCRoot(CallInst *target, Function &F);
 
     Instruction *getPgcstack(Instruction *ptlsStates);
 };
@@ -146,7 +149,7 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
 
 Value *FinalLowerGC::lowerGetGCFrameSlot(CallInst *target, Function &F)
 {
-    assert(target->getNumArgOperands() == 3);
+    assert(target->getNumArgOperands() == 2);
     auto gcframe = target->getArgOperand(0);
     auto index = target->getArgOperand(1);
 
@@ -161,6 +164,13 @@ Value *FinalLowerGC::lowerGetGCFrameSlot(CallInst *target, Function &F)
     auto gep = builder.CreateGEP(gcframe, index);
     gep->takeName(target);
     return gep;
+}
+
+Value *FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
+{
+    assert(target->getNumArgOperands() == 1);
+    target->setCalledFunction(queueRootFunc);
+    return target;
 }
 
 Instruction *FinalLowerGC::getPgcstack(Instruction *ptlsStates)
@@ -186,13 +196,13 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     CallInst *newI;
     if (offset < 0) {
         newI = builder.CreateCall(
-            big_alloc_func,
+            bigAllocFunc,
             { ptls, ConstantInt::get(T_size, sz + sizeof(void*)) });
     }
     else {
         auto pool_offs = ConstantInt::get(T_int32, offset);
         auto pool_osize = ConstantInt::get(T_int32, osize);
-        newI = builder.CreateCall(pool_alloc_func, { ptls, pool_offs, pool_osize });
+        newI = builder.CreateCall(poolAllocFunc, { ptls, pool_offs, pool_osize });
     }
     newI->setAttributes(newI->getCalledFunction()->getAttributes());
     newI->takeName(target);
@@ -204,51 +214,46 @@ bool FinalLowerGC::doInitialization(Module &M) {
     initAll(M);
 
     // Initialize platform-specific references.
-    if (write_barrier_func) {
-        if (!(queueroot_func = M.getFunction("jl_gc_queue_root"))) {
-            queueroot_func = Function::Create(
-                FunctionType::get(
-                    Type::getVoidTy(M.getContext()),
-                    { T_prjlvalue },
-                    false),
-                Function::ExternalLinkage,
-                "jl_gc_queue_root",
-                &M);
-            queueroot_func->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
-        }
+    if (!(queueRootFunc = M.getFunction("jl_gc_queue_root"))) {
+        queueRootFunc = Function::Create(
+            FunctionType::get(
+                Type::getVoidTy(M.getContext()),
+                { T_prjlvalue },
+                false),
+            Function::ExternalLinkage,
+            "jl_gc_queue_root",
+            &M);
+        queueRootFunc->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
     }
-    else {
-        queueroot_func = nullptr;
-    }
-    pool_alloc_func = nullptr;
-    big_alloc_func = nullptr;
+    poolAllocFunc = nullptr;
+    bigAllocFunc = nullptr;
     if (alloc_obj_func) {
-        if (!(pool_alloc_func = M.getFunction("jl_gc_pool_alloc"))) {
+        if (!(poolAllocFunc = M.getFunction("jl_gc_pool_alloc"))) {
             std::vector<Type*> args(0);
             args.push_back(T_pint8);
             args.push_back(T_int32);
             args.push_back(T_int32);
-            pool_alloc_func = Function::Create(
+            poolAllocFunc = Function::Create(
                 FunctionType::get(T_prjlvalue, args, false),
                 Function::ExternalLinkage,
                 "jl_gc_pool_alloc",
                 &M);
-            pool_alloc_func->setAttributes(
+            poolAllocFunc->setAttributes(
                 AttributeList::get(M.getContext(),
                 alloc_obj_func->getAttributes().getFnAttributes(),
                 alloc_obj_func->getAttributes().getRetAttributes(),
                 None));
         }
-        if (!(big_alloc_func = M.getFunction("jl_gc_big_alloc"))) {
+        if (!(bigAllocFunc = M.getFunction("jl_gc_big_alloc"))) {
             std::vector<Type*> args(0);
             args.push_back(T_pint8);
             args.push_back(T_size);
-            big_alloc_func = Function::Create(
+            bigAllocFunc = Function::Create(
                 FunctionType::get(T_prjlvalue, args, false),
                 Function::ExternalLinkage,
                 "jl_gc_big_alloc",
                 &M);
-            big_alloc_func->setAttributes(
+            bigAllocFunc->setAttributes(
                 AttributeList::get(M.getContext(),
                 alloc_obj_func->getAttributes().getFnAttributes(),
                 alloc_obj_func->getAttributes().getRetAttributes(),
@@ -256,17 +261,17 @@ bool FinalLowerGC::doInitialization(Module &M) {
         }
     }
 
-    GlobalValue *function_list[] = {queueroot_func, pool_alloc_func, big_alloc_func};
+    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc};
     unsigned j = 0;
-    for (unsigned i = 0; i < sizeof(function_list) / sizeof(void*); i++) {
-        if (!function_list[i])
+    for (unsigned i = 0; i < sizeof(functionList) / sizeof(void*); i++) {
+        if (!functionList[i])
             continue;
         if (i != j)
-            function_list[j] = function_list[i];
+            functionList[j] = functionList[i];
         j++;
     }
     if (j != 0)
-        appendToCompilerUsed(M, ArrayRef<GlobalValue*>(function_list, j));
+        appendToCompilerUsed(M, ArrayRef<GlobalValue*>(functionList, j));
     return true;
 }
 
@@ -275,11 +280,12 @@ bool FinalLowerGC::doFinalization(Module &M)
     auto used = M.getGlobalVariable("llvm.compiler.used");
     if (!used)
         return false;
-    GlobalValue *function_list[] = {queueroot_func, pool_alloc_func, big_alloc_func};
-    SmallPtrSet<Constant*, 16> InitAsSet(function_list,
-                                         function_list + sizeof(function_list) / sizeof(void*));
+    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc};
+    SmallPtrSet<Constant*, 16> InitAsSet(
+        functionList,
+        functionList + sizeof(functionList) / sizeof(void*));
     bool changed = false;
-    SmallVector<Constant*, 16> Init;
+    SmallVector<Constant*, 16> init;
     ConstantArray *CA = dyn_cast<ConstantArray>(used->getInitializer());
     for (auto &Op : CA->operands()) {
         Constant *C = cast_or_null<Constant>(Op);
@@ -287,18 +293,33 @@ bool FinalLowerGC::doFinalization(Module &M)
             changed = true;
             continue;
         }
-        Init.push_back(C);
+        init.push_back(C);
     }
     if (!changed)
         return false;
     used->eraseFromParent();
-    if (Init.empty())
+    if (init.empty())
         return true;
-    ArrayType *ATy = ArrayType::get(T_pint8, Init.size());
+    ArrayType *ATy = ArrayType::get(T_pint8, init.size());
     used = new GlobalVariable(M, ATy, false, GlobalValue::AppendingLinkage,
-                                    ConstantArray::get(ATy, Init), "llvm.compiler.used");
+                                    ConstantArray::get(ATy, init), "llvm.compiler.used");
     used->setSection("llvm.metadata");
     return true;
+}
+
+template<typename TIterator>
+static void replaceInstruction(
+    Instruction *oldInstruction,
+    Value *newInstruction,
+    TIterator &it)
+{
+    if (newInstruction != oldInstruction) {
+        oldInstruction->replaceAllUsesWith(newInstruction);
+        it = oldInstruction->eraseFromParent();
+    }
+    else {
+        ++it;
+    }
 }
 
 bool FinalLowerGC::runOnFunction(Function &F)
@@ -319,7 +340,8 @@ bool FinalLowerGC::runOnFunction(Function &F)
     auto pushGCFrameFunc = getOrNull(jl_intrinsics::pushGCFrame);
     auto popGCFrameFunc = getOrNull(jl_intrinsics::popGCFrame);
     auto getGCFrameSlotFunc = getOrNull(jl_intrinsics::getGCFrameSlot);
-    auto GCAllocBytes = getOrNull(jl_intrinsics::GCAllocBytes);
+    auto GCAllocBytesFunc = getOrNull(jl_intrinsics::GCAllocBytes);
+    auto queueGCRootFunc = getOrNull(jl_intrinsics::queueGCRoot);
 
     // Lower all calls to supported intrinsics.
     for (BasicBlock &BB : F) {
@@ -333,8 +355,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
             auto callee = CI->getCalledValue();
 
             if (callee == newGCFrameFunc) {
-                CI->replaceAllUsesWith(lowerNewGCFrame(CI, F));
-                it = CI->eraseFromParent();
+                replaceInstruction(CI, lowerNewGCFrame(CI, F), it);
             }
             else if (callee == pushGCFrameFunc) {
                 lowerPushGCFrame(CI, F);
@@ -345,12 +366,13 @@ bool FinalLowerGC::runOnFunction(Function &F)
                 it = CI->eraseFromParent();
             }
             else if (callee == getGCFrameSlotFunc) {
-                CI->replaceAllUsesWith(lowerGetGCFrameSlot(CI, F));
-                it = CI->eraseFromParent();
+                replaceInstruction(CI, lowerGetGCFrameSlot(CI, F), it);
             }
-            else if (callee == GCAllocBytes) {
-                CI->replaceAllUsesWith(lowerGCAllocBytes(CI, F));
-                it = CI->eraseFromParent();
+            else if (callee == GCAllocBytesFunc) {
+                replaceInstruction(CI, lowerGCAllocBytes(CI, F), it);
+            }
+            else if (callee == queueGCRootFunc) {
+                replaceInstruction(CI, lowerQueueGCRoot(CI, F), it);
             }
             else {
                 ++it;

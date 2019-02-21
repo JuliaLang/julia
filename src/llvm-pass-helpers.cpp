@@ -121,60 +121,17 @@ llvm::Function *JuliaPassContext::getOrDefine(
 }
 
 namespace jl_intrinsics {
+    static const char *GET_GC_FRAME_SLOT_NAME = "julia.get_gc_frame_slot";
+    static const char *GC_ALLOC_BYTES_NAME = "julia.gc_alloc_bytes";
     static const char *NEW_GC_FRAME_NAME = "julia.new_gc_frame";
     static const char *PUSH_GC_FRAME_NAME = "julia.push_gc_frame";
     static const char *POP_GC_FRAME_NAME = "julia.pop_gc_frame";
-    static const char *GET_GC_FRAME_SLOT_NAME = "julia.get_gc_frame_slot";
-    static const char *GC_ALLOC_BYTES_NAME = "julia.gc_alloc_bytes";
-
-    const IntrinsicDescription newGCFrame(
-        NEW_GC_FRAME_NAME,
-        [](llvm::Module &M, const JuliaPassContext &context) {
-            auto intrinsic = Function::Create(
-                FunctionType::get(PointerType::get(context.T_prjlvalue, 0), {context.T_int32}, false),
-                Function::ExternalLinkage,
-                NEW_GC_FRAME_NAME,
-                &M);
-            intrinsic->addAttribute(AttributeList::ReturnIndex, Attribute::NoAlias);
-            intrinsic->addAttribute(AttributeList::ReturnIndex, Attribute::NonNull);
-
-            return intrinsic;
-        });
-
-    const IntrinsicDescription pushGCFrame(
-        PUSH_GC_FRAME_NAME,
-        [](llvm::Module &M, const JuliaPassContext &context) {
-            auto intrinsic = Function::Create(
-                FunctionType::get(
-                    Type::getVoidTy(M.getContext()),
-                    {PointerType::get(context.T_prjlvalue, 0), context.T_int32},
-                    false),
-                Function::ExternalLinkage,
-                PUSH_GC_FRAME_NAME,
-                &M);
-
-            return intrinsic;
-        });
-
-    const IntrinsicDescription popGCFrame(
-        POP_GC_FRAME_NAME,
-        [](llvm::Module &M, const JuliaPassContext &context) {
-            auto intrinsic = Function::Create(
-                FunctionType::get(
-                    Type::getVoidTy(M.getContext()),
-                    {PointerType::get(context.T_prjlvalue, 0)},
-                    false),
-                Function::ExternalLinkage,
-                POP_GC_FRAME_NAME,
-                &M);
-
-            return intrinsic;
-        });
+    static const char *QUEUE_GC_ROOT_NAME = "julia.queue_gc_root";
 
     const IntrinsicDescription getGCFrameSlot(
         GET_GC_FRAME_SLOT_NAME,
         [](llvm::Module &M, const JuliaPassContext &context) {
-            auto intrinsic = Function::Create(
+            return Function::Create(
                 FunctionType::get(
                     PointerType::get(context.T_prjlvalue, 0),
                     {PointerType::get(context.T_prjlvalue, 0), context.T_int32},
@@ -182,8 +139,6 @@ namespace jl_intrinsics {
                 Function::ExternalLinkage,
                 GET_GC_FRAME_SLOT_NAME,
                 &M);
-
-            return intrinsic;
         });
 
     const IntrinsicDescription GCAllocBytes(
@@ -202,5 +157,58 @@ namespace jl_intrinsics {
             intrinsic->addFnAttr(Attribute::getWithAllocSizeArgs(M.getContext(), 1, None)); // returns %1 bytes
 
             return intrinsic;
+        });
+
+    const IntrinsicDescription newGCFrame(
+        NEW_GC_FRAME_NAME,
+        [](llvm::Module &M, const JuliaPassContext &context) {
+            auto intrinsic = Function::Create(
+                FunctionType::get(PointerType::get(context.T_prjlvalue, 0), {context.T_int32}, false),
+                Function::ExternalLinkage,
+                NEW_GC_FRAME_NAME,
+                &M);
+            intrinsic->addAttribute(AttributeList::ReturnIndex, Attribute::NoAlias);
+            intrinsic->addAttribute(AttributeList::ReturnIndex, Attribute::NonNull);
+
+            return intrinsic;
+        });
+
+    const IntrinsicDescription pushGCFrame(
+        PUSH_GC_FRAME_NAME,
+        [](llvm::Module &M, const JuliaPassContext &context) {
+            return Function::Create(
+                FunctionType::get(
+                    Type::getVoidTy(M.getContext()),
+                    {PointerType::get(context.T_prjlvalue, 0), context.T_int32},
+                    false),
+                Function::ExternalLinkage,
+                PUSH_GC_FRAME_NAME,
+                &M);
+        });
+
+    const IntrinsicDescription popGCFrame(
+        POP_GC_FRAME_NAME,
+        [](llvm::Module &M, const JuliaPassContext &context) {
+            return Function::Create(
+                FunctionType::get(
+                    Type::getVoidTy(M.getContext()),
+                    {PointerType::get(context.T_prjlvalue, 0)},
+                    false),
+                Function::ExternalLinkage,
+                POP_GC_FRAME_NAME,
+                &M);
+        });
+
+    const IntrinsicDescription queueGCRoot(
+        QUEUE_GC_ROOT_NAME,
+        [](llvm::Module &M, const JuliaPassContext &context) {
+            return Function::Create(
+                FunctionType::get(
+                    Type::getVoidTy(M.getContext()),
+                    { context.T_prjlvalue },
+                    false),
+                Function::ExternalLinkage,
+                QUEUE_GC_ROOT_NAME,
+                &M);
         });
 }
