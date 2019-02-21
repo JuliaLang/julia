@@ -291,6 +291,7 @@ function diagm_container(kv::Pair{<:Integer,<:BitVector}...)
     return falses(n, n)
 end
 
+diagm(v::AbstractVector) = diagm( 0 => v)
 
 function tr(A::Matrix{T}) where T
     n = checksquare(A)
