@@ -128,6 +128,8 @@ Base.mapfoldl(::Any, ::Any, ::Any)
 Base.mapfoldr(::Any, ::Any, ::Any)
 Base.first
 Base.last
+Base.front
+Base.tail
 Base.step
 Base.collect(::Any)
 Base.collect(::Type, ::Any)

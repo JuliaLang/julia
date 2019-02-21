@@ -170,7 +170,21 @@ macro eval(mod, ex)
 end
 
 argtail(x, rest...) = rest
+
+"""
+    tail(x::Tuple)::Tuple
+
+Return a `Tuple` consisting of all but the first component of `x`.
+```jldoctest
+julia> Base.tail((1,2,3))
+(2, 3)
+
+julia> Base.tail(())
+ERROR: ArgumentError: Cannot call tail on an empty tuple.
+```
+"""
 tail(x::Tuple) = argtail(x...)
+tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 
 tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T::Type{<:Tuple}, 1))
 
