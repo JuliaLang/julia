@@ -75,7 +75,7 @@ kw"abstract type"
 """
     module
 
-`module` declares a `Module`, which is a separate global variable workspace. Within a
+`module` declares a [`Module`](@ref), which is a separate global variable workspace. Within a
 module, you can control which names from other modules are visible (via importing), and
 specify which of your names are intended to be public (via exporting).
 Modules allow you to create top-level definitions without worrying about name conflicts
@@ -103,7 +103,7 @@ kw"module"
 """
     baremodule
 
-`baremodule` declares a module that does not contain `using Base`
+`baremodule` declares a [`Module`](@ref) that does not contain `using Base`
 or a definition of `eval`. It does still import `Core`.
 """
 kw"baremodule"
@@ -2013,11 +2013,6 @@ See the manual section on [Tuple Types](@ref).
 Tuple
 
 """
-The base library of Julia.
-"""
-kw"Base"
-
-"""
     typeassert(x, type)
 
 Throw a TypeError unless `x isa type`.
@@ -2102,5 +2097,37 @@ StridedMatrix
 Union type of [`StridedVector`](@ref) and [`StridedMatrix`](@ref) with elements of type `T`.
 """
 StridedVecOrMat
+
+"""
+    Module
+
+A `Module` is a separate global variable workspace. See [`module`](@ref) and the [manual section about modules](@ref modules) for details.
+"""
+Module
+
+"""
+    Core
+
+`Core` is the module that contains all identifiers considered "built in" to the language, i.e. part of the core language and not libraries. Every module implicitly specifies `using Core`, since you can't do anything without those definitions.
+"""
+kw"Core"
+
+"""
+    Main
+
+`Main` is the top-level module, and Julia starts with `Main` set as the current module.  Variables defined at the prompt go in `Main`, and `varinfo` lists variables in `Main`.
+```jldoctest
+julia> @__MODULE__
+Main
+```
+"""
+kw"Main"
+
+"""
+    `Base`
+
+The base library of Julia. `Base` is a module that contains basic functionality (the contents of `base/`). All modules implicitly contain `using Base`, since this is needed in the vast majority of cases.
+"""
+kw"Base"
 
 end
