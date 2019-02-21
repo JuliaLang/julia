@@ -317,13 +317,14 @@ julia> x[1]
 3
 
 julia> x[2]
-ERROR: MissingException: index (2,) points to a missing value
+ERROR: MissingException: the value at index (2,) is missing
 [...]
 ```
 
 This allows functions which operate on indices to work in combination with `skipmissing`.
-This is notably the case for search and find functions, which return the indices
-*in the parent array* of non-missing elements which match a condition
+This is notably the case for search and find functions, which return indices
+valid for the object returned by `skipmissing` which are also the indices of the
+matching entries *in the parent array*
 ```jldoctest skipmissing
 julia> findall(==(1), x)
 1-element Array{Int64,1}:

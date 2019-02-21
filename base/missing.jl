@@ -174,7 +174,7 @@ julia> x[1]
 1
 
 julia> x[2]
-ERROR: MissingException: index (2,) points to a missing value
+ERROR: MissingException: the value at index (2,) is missing
 [...]
 
 julia> argmax(x)
@@ -224,7 +224,7 @@ keys(itr::SkipMissing) =
     Iterators.filter(i -> @inbounds(itr.x[i]) !== missing, keys(itr.x))
 @propagate_inbounds function getindex(itr::SkipMissing, I...)
     v = itr.x[I...]
-    v === missing && throw(MissingException("index $I points to a missing value"))
+    v === missing && throw(MissingException("the value at index $I is missing"))
     v
 end
 
