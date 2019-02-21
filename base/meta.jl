@@ -275,10 +275,22 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         return Core.GotoNode(x.label + statement_offset)
     end
     if isa(x, Core.DetachNode)
-        return Core.DetachNode(x.syncregion, x.label + statement_offset, x.reattach + statement_offset)
+        syncregion = _partially_inline!(x.syncregion, slot_replacements, type_signature,
+                                        static_param_values, slot_offset,
+                                        statement_offset, boundscheck)
+        return Core.DetachNode(syncregion, x.label + statement_offset, x.reattach + statement_offset)
     end
     if isa(x, Core.ReattachNode)
-        return Core.ReattachNode(x.syncregion, x.label + statement_offset)
+        syncregion = _partially_inline!(x.syncregion, slot_replacements, type_signature,
+                                        static_param_values, slot_offset,
+                                        statement_offset, boundscheck)
+        return Core.ReattachNode(syncregion, x.label + statement_offset)
+    end
+    if isa(x, Core.SyncNode)
+        syncregion = _partially_inline!(x.syncregion, slot_replacements, type_signature,
+                                        static_param_values, slot_offset,
+                                        statement_offset, boundscheck)
+        return Core.SyncNode(syncregion)
     end
     if isa(x, Core.SlotNumber)
         id = x.id
