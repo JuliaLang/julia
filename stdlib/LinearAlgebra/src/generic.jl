@@ -756,7 +756,7 @@ Compute the rank of a matrix by counting how many singular
 values of `A` have magnitude greater than `max(atol, rtol*σ₁)` where `σ₁` is
 `A`'s largest singular value. `atol` and `rtol` are the absolute and relative
 tolerances, respectively. The default relative tolerance is `n*ϵ`, where `n`
-is the size of the smallest dimension of `A`, and `ϵ` is the [`eps`](@ref) of
+is the size of the largest dimension of `A`, and `ϵ` is the [`eps`](@ref) of
 the element type of `A`.
 
 !!! compat "Julia 1.1"
@@ -782,7 +782,7 @@ julia> rank(diagm(0 => [1, 0.001, 2]), atol=1.5)
 1
 ```
 """
-function rank(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol))
+function rank(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (max(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol))
     isempty(A) && return 0 # 0-dimensional case
     s = svdvals(A)
     tol = max(atol, rtol*s[1])
