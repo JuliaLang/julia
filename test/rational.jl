@@ -21,6 +21,7 @@ using Test
     @test_throws OverflowError -(0x01//0x0f)
     @test_throws OverflowError typemin(Int)//(-1)
     @test_throws OverflowError -1//typemin(Int)
+    @test -2 // typemin(Int) == 1//abs(typemin(Int)>>1)
     @test_throws OverflowError -(typemin(Int)//1)
     @test_throws OverflowError -(1//typemin(Int))
     @test_throws OverflowError abs(typemin(Int)//1)
