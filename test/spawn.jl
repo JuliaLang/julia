@@ -427,14 +427,14 @@ for testrun in (failing_pipeline, pipeline(failing_pipeline, failing_pipeline))
     try
         run(testrun)
     catch err
-        @test err isa ProcessExitedException
+        @test err isa ProcessFailedException
         errmsg = sprint(showerror, err)
         @test occursin(string(failing_cmd), errmsg)
     end
 end
 
 # issue #13616
-@test_throws(ProcessExitedException, collect(eachline(failing_pipeline)))
+@test_throws(ProcessFailedException, collect(eachline(failing_pipeline)))
 
 
 # make sure windows_verbatim strips quotes

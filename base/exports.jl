@@ -124,7 +124,7 @@ export
     InvalidStateException,
     KeyError,
     MissingException,
-    ProcessExitedException,
+    ProcessFailedException,
     SystemError,
     StringIndexError,
 

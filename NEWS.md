@@ -29,8 +29,8 @@ Language changes
 * `Enum` now behaves like a scalar when used in broadcasting ([#30670]).
 * If a `pipeline` is specified with `append=true` set, but no redirection, an `ArgumentError`
 is thrown, rather than a `ErrorException` ([#27900]).
-* Functions that invoke commands (e.g. `run(::Cmd)`) now throw a `ProcessExitedException`s
-rather than an `ErrorException`, if those commands fail and exit with non-zero exit code.
+* Functions that invoke commands (e.g. `run(::Cmd)`) now throw a `ProcessFailedException`
+rather than an `ErrorException`, if those commands exit with non-zero exit code.
 ([#27900]).
 
 Command-line option changes

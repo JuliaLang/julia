@@ -347,7 +347,7 @@ Base.MissingException
 Core.OutOfMemoryError
 Core.ReadOnlyMemoryError
 Core.OverflowError
-Base.ProcessExitedException
+Base.ProcessFailedException
 Core.StackOverflowError
 Base.SystemError
 Core.TypeError

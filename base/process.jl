@@ -785,20 +785,20 @@ success(cmd::AbstractCmd) = success(_spawn(cmd))
 
 
 """
-    ProcessExitedException
+    ProcessFailedException
 
 Indicates problematic exit status of a process.
 When running commands or pipelines, this is thrown to indicate
 a nonzero exit code was returned (i.e. that the invoked process failed).
 """
-struct ProcessExitedException
+struct ProcessFailedException
     procs::Vector{Process}
 
 end
-ProcessExitedException() = ProcessExitedException(nothing)
-ProcessExitedException(proc::Process) = ProcessExitedException([proc])
+ProcessFailedException() = ProcessFailedException(nothing)
+ProcessFailedException(proc::Process) = ProcessFailedException([proc])
 
-function show(io::IO, err::ProcessExitedException)
+function show(io::IO, err::ProcessFailedException)
     if length(err.procs) == 1
         proc = err.procs[1]
         println(io, "failed process: ", proc, " [", proc.exitcode, "]")
@@ -812,7 +812,7 @@ end
 
 function pipeline_error(proc::Process)
     if !proc.cmd.ignorestatus
-        throw(ProcessExitedException(proc))
+        throw(ProcessFailedException(proc))
     end
     nothing
 end
@@ -825,7 +825,7 @@ function pipeline_error(procs::ProcessChain)
         end
     end
     isempty(failed) && return nothing
-    throw(ProcessExitedException(failed))
+    throw(ProcessFailedException(failed))
 end
 
 """
