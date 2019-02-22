@@ -490,6 +490,22 @@ function show(io::IO, @nospecialize(x::Type))
         show_datatype(io, x)
         return
     elseif x isa Union
+        if x.a isa DataType && Core.Compiler.typename(x.a) === Core.Compiler.typename(DenseArray)
+            T, N = x.a.parameters
+            if x == StridedArray{T,N}
+                print(io, "StridedArray")
+                show_delim_array(io, (T,N), '{', ',', '}', false)
+                return
+            elseif x == StridedVecOrMat{T}
+                print(io, "StridedVecOrMat")
+                show_delim_array(io, (T,), '{', ',', '}', false)
+                return
+            elseif StridedArray{T,N} <: x
+                print(io, "Union")
+                show_delim_array(io, vcat(StridedArray{T,N}, uniontypes(Core.Compiler.typesubtract(x, StridedArray{T,N}))), '{', ',', '}', false)
+                return
+            end
+        end
         print(io, "Union")
         show_delim_array(io, uniontypes(x), '{', ',', '}', false)
         return

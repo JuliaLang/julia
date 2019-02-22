@@ -150,6 +150,8 @@ Standard library changes
   ambiguity.
 * `close` on a file (`IOStream`) can now throw an exception if an error occurs when trying
   to flush buffered data to disk ([#35303]).
+* The large `StridedArray` `Union` now has special printing to avoid printing out its entire
+  contents ([#31149]).
 
 #### LinearAlgebra
 * The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
