@@ -433,11 +433,6 @@ for testrun in (failing_pipeline, pipeline(failing_pipeline, failing_pipeline))
     end
 end
 
-let
-    errmsg = sprint(showerror, ProcessExitedException())
-    @test occursin("exited" , errmsg)
-end
-
 # issue #13616
 @test_throws(ProcessExitedException, collect(eachline(failing_pipeline)))
 

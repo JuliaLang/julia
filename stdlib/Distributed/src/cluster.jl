@@ -1030,6 +1030,16 @@ function _rmprocs(pids, waitfor)
 end
 
 
+struct ProcessExitedException <: Exception end
+
+"""
+    ProcessExitedException()
+
+After a client Julia process has exited, further attempts to reference the dead child will
+throw this exception.
+"""
+ProcessExitedException()
+
 worker_from_id(i) = worker_from_id(PGRP, i)
 function worker_from_id(pg::ProcessGroup, i)
     if !isempty(map_del_wrkr) && in(i, map_del_wrkr)

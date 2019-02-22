@@ -788,25 +788,18 @@ success(cmd::AbstractCmd) = success(_spawn(cmd))
     ProcessExitedException
 
 Indicates problematic exit status of a process.
-
-Usages include:
-
- - When running commands or pipelines, this is thrown to indicate
- a nonzero exit code was returned (i.e. that the invoked process failed).
- - In a [Distributed Computing](@ref) workflow, this is thrown
- when work is sent to a worker julia process that has exited.
+When running commands or pipelines, this is thrown to indicate
+a nonzero exit code was returned (i.e. that the invoked process failed).
 """
-struct ProcessExitedException <: Exception
-    procs::Union{Vector{Process},Nothing}
-    # ProcessExitedException(nothing) is allowed for Distributed stdlib compat
+struct ProcessExitedException
+    procs::Vector{Process}
+
 end
 ProcessExitedException() = ProcessExitedException(nothing)
 ProcessExitedException(proc::Process) = ProcessExitedException([proc])
 
-function showerror(io::IO, err::ProcessExitedException)
-    if err.procs === nothing
-        println(io, "The process has exited.")
-    elseif length(err.procs) == 1
+function show(io::IO, err::ProcessExitedException)
+    if length(err.procs) == 1
         proc = err.procs[1]
         println(io, "failed process: ", proc, " [", proc.exitcode, "]")
     else
