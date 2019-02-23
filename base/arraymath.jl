@@ -244,7 +244,7 @@ end
 """
     rotr90(A, k)
 
-Rotate matrix `A` right 90 degrees clock-wise an integer `k` number of times. If `k` is zero or a
+Rotate matrix `A` right 90 degrees clockwise an integer `k` number of times. If `k` is zero or a
 multiple of four, this is equivalent to a `copy`.
 
 # Examples
