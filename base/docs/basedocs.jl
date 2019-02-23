@@ -1514,6 +1514,8 @@ or a composite object and field name (as a symbol) or index.
 
 To test whether an array element is defined, use [`isassigned`](@ref) instead.
 
+See also [`@isdefined`](@ref).
+
 # Examples
 ```jldoctest
 julia> isdefined(Base, :sum)

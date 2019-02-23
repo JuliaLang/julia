@@ -245,6 +245,8 @@ isconst(m::Module, s::Symbol) =
 
 Tests whether variable `s` is defined in the current scope.
 
+See also [`isdefined`](@ref).
+
 # Examples
 ```jldoctest
 julia> function f()
