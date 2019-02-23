@@ -796,7 +796,7 @@ struct ProcessFailedException <: Exception
 end
 ProcessFailedException(proc::Process) = ProcessFailedException([proc])
 
-function show(io::IO, err::ProcessFailedException)
+function showerror(io::IO, err::ProcessFailedException)
     if length(err.procs) == 1
         proc = err.procs[1]
         println(io, "failed process: ", proc, " [", proc.exitcode, "]")
