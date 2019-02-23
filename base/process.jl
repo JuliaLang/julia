@@ -793,9 +793,7 @@ a nonzero exit code was returned (i.e. that the invoked process failed).
 """
 struct ProcessFailedException <: Exception
     procs::Vector{Process}
-
 end
-ProcessFailedException() = ProcessFailedException(nothing)
 ProcessFailedException(proc::Process) = ProcessFailedException([proc])
 
 function show(io::IO, err::ProcessFailedException)
