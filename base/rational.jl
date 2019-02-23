@@ -19,8 +19,10 @@ struct Rational{T<:Integer} <: Real
 
     function Rational{T}(num::Integer, den::Integer) where T<:BitSigned
         num == den == zero(T) && __throw_rational_argerror(T)
-        num2, den2 = (sign(den) < 0) ? divgcd(-num, -den) : divgcd(num, den)
-        num < 0 && den < 0 && (num === typemin(T) || den === typemin(T)) && __throw_rational_ovferror(num, den)
+        if (num == typemin(T) && isodd(den)) || (den == typemin(T) && isodd(num))
+		    __throw_rational_ovferror(num, den)
+		end
+        num2, den2 = divgcd(num, den)
         new(num2, den2)
     end
 end
@@ -34,8 +36,13 @@ Rational(n::Integer) = Rational(n,one(n))
 
 function divgcd(x::Integer,y::Integer)
     g = gcd(x,y)
-    div(x,g), div(y,g)
+	xg, yg = div(x,g), div(y,g)
+	if yg < 0
+	    xg, yg = -xg, -yg 
+    end
+	return xg, yg
 end
+
 
 """
     //(num, den)
