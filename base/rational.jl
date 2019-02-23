@@ -38,7 +38,7 @@ function divgcd(x::Integer,y::Integer)
     g = gcd(x,y)
 	xg, yg = div(x,g), div(y,g)
 	if yg < 0
-	    xg, yg = -xg, -yg 
+	    xg, yg = -xg, -yg
     end
 	return xg, yg
 end
