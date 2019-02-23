@@ -1751,6 +1751,13 @@ julia> Array{Float64,1}(undef, 3)
 undef
 
 """
+    Ptr{T}()
+
+Creates a null pointer to type `T`.
+"""
+Ptr{T}()
+
+"""
     +(x, y...)
 
 Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`.
