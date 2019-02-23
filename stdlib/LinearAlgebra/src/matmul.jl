@@ -325,6 +325,7 @@ function mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, transB
     B = transB.parent
     return generic_matmatmul!(C, 'C', 'T', A, B)
 end
+
 # Supporting functions for matrix multiplication
 
 # copy transposed(adjoint) of upper(lower) side-digonals. Optionally include diagonal.
