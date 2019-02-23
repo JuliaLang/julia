@@ -23,6 +23,9 @@ struct Rational{T<:Integer} <: Real
 		    __throw_rational_ovferror(num, den)
 		end
         num2, den2 = divgcd(num, den)
+        if den2 < 0
+			num2, den2 = -num2, -den2
+		end
         new(num2, den2)
     end
 end
@@ -36,11 +39,7 @@ Rational(n::Integer) = Rational(n,one(n))
 
 function divgcd(x::Integer,y::Integer)
     g = gcd(x,y)
-	xg, yg = div(x,g), div(y,g)
-	if yg < 0
-	    xg, yg = -xg, -yg
-    end
-	return xg, yg
+    div(x,g), div(y,g)
 end
 
 
