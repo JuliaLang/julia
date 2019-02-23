@@ -1020,7 +1020,7 @@ elsewhere.
 If called with the optional `stream` argument, then returns `stream` itself.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
+    `stream` must be a `TTY`, or a socket.
 """
 redirect_stdout
 
@@ -1030,7 +1030,7 @@ redirect_stdout
 Like [`redirect_stdout`](@ref), but for [`stderr`](@ref).
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
+    `stream` must be a `TTY`, or a socket.
 """
 redirect_stderr
 
@@ -1042,7 +1042,7 @@ Note that the order of the return tuple is still `(rd, wr)`,
 i.e. data to be read from [`stdin`](@ref) may be written to `wr`.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
+    `stream` must be a `TTY`, or a socket.
 """
 redirect_stdin
 
@@ -1067,7 +1067,7 @@ Run the function `f` while redirecting [`stdout`](@ref) to `stream`.
 Upon completion, [`stdout`](@ref) is restored to its prior setting.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
+    `stream` must be a `TTY`, or a socket.
 """
 redirect_stdout(f::Function, stream)
 
@@ -1078,7 +1078,7 @@ Run the function `f` while redirecting [`stderr`](@ref) to `stream`.
 Upon completion, [`stderr`](@ref) is restored to its prior setting.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
+    `stream` must be a `TTY`, or a socket.
 """
 redirect_stderr(f::Function, stream)
 
@@ -1089,7 +1089,7 @@ Run the function `f` while redirecting [`stdin`](@ref) to `stream`.
 Upon completion, [`stdin`](@ref) is restored to its prior setting.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
+    `stream` must be a `TTY`, or a socket.
 """
 redirect_stdin(f::Function, stream)
 
