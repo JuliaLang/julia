@@ -2110,7 +2110,7 @@ Module
 
 `Core` is the module that contains all identifiers considered "built in" to the language, i.e. part of the core language and not libraries. Every module implicitly specifies `using Core`, since you can't do anything without those definitions.
 """
-kw"Core"
+Core.Core
 
 """
     Main
@@ -2121,13 +2121,13 @@ julia> @__MODULE__
 Main
 ```
 """
-kw"Main"
+Main.Main
 
 """
     `Base`
 
 The base library of Julia. `Base` is a module that contains basic functionality (the contents of `base/`). All modules implicitly contain `using Base`, since this is needed in the vast majority of cases.
 """
-kw"Base"
+Base.Base
 
 end
