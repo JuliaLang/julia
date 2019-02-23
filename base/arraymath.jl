@@ -204,7 +204,7 @@ end
 """
     rotl90(A, k)
 
-Left rotate matrix `A` 90 degrees counter-clockwise an integer `k` number of times.
+Rotate matrix `A` 90 degrees counterclockwise an integer `k` number of times.
 If `k` is zero or a multiple of four, this is equivalent to a `copy`.
 
 # Examples
