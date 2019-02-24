@@ -522,9 +522,9 @@ end
 
 ## Multiplication by Q
 ### QB
-QRMatrix = Union{QRCompactWYQ{T,S}, QRPackedQ{T,S}} where {T, S}
-mul!(y::StridedVecOrMat{T}, AOrAdjA::Union{Adjoint{<:Any,<:QRMatrix}, QRMatrix}, B::StridedVecOrMat{T}) where {T, S} =
-    copy!(y, lmul!(AOrAdjA, B))
+QRCompactWYOrPackedQ = Union{QRCompactWYQ{T,S}, QRPackedQ{T,S}} where {T, S}
+mul!(C::StridedVecOrMat{T}, AOrAdjA::Union{Adjoint{<:Any,<:QRCompactWYOrPackedQ}, QRCompactWYOrPackedQ}, B::StridedVecOrMat{T}) where {T, S} =
+    lmul!(AOrAdjA, copy!(C, B))
 
 lmul!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
     LAPACK.gemqrt!('L','N',A.factors,A.T,B)
