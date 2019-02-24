@@ -179,6 +179,40 @@ end
 @test rank([1.0 0.0; 0.0 0.9],rtol=0.95) == 1
 @test rank([1.0 0.0; 0.0 0.9],atol=0.95) == 1
 @test rank([1.0 0.0; 0.0 0.9],atol=0.95,rtol=0.95)==1
+
+Id = zeros(4, 4)
+for i = 1:4
+    Id[i, i] = 1.0
+end
+
+@test rank(Id) == 4
+Id[4, 4] = 0
+@test rank(Id) == 3
+@test rank(zeros(500, 2)) == 0
+@test rank(ones(500,2)) == 1
+@test rank([1 0 0 0]) == 1
+@test rank(zeros(4,1)) == 0
+
+Id[4, 4] = 1e-8
+@test rank(Id,0.99e-8) == 4
+@test rank(Id,atol=0.99e-8) == 4
+@test rank(Id,rtol=0.99e-8) == 4
+@test rank(Id,atol=0.99e-8,rtol=0.99e-8) == 4
+@test rank(Id,1.01e-8) == 3
+@test rank(Id,atol=1.01e-8) == 3
+@test rank(Id,rtol=1.01e-8) == 3
+@test rank(Id,atol=1.01e-8,rtol=1.01e-8) == 3
+
+@testset "test_rank" begin
+    for i = 1:10
+        X = randn(40, 10)
+        X[:, 1] = X[:, 2] + X[:, 3]
+        @test rank(X) == 9
+        X[:, 6] = X[:, 8] + X[:, 9]
+        @test rank(X) == 8
+    end
+end
+
 @test qr(big.([0 1; 0 0])).R == [0 1; 0 0]
 
 @test norm([2.4e-322, 4.4e-323]) ≈ 2.47e-322
