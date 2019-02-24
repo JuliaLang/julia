@@ -2288,3 +2288,22 @@ let PT1 = PartialStruct(FooPartial, Any[Const(1), Const(2), Int]),
         @test tmerge(PT1, PT3) == PT2
     end
 end
+
+# issue 31164
+struct NoInit31164
+    a::Int
+    b::Any
+    NoInit31164(a::Int) = new(a)
+    NoInit31164(a::Int, b) = new(a, b)
+end
+
+@eval function foo31164(b, x)
+    if b
+       a = NoInit31164(1, x)
+    else
+       a = $(NoInit31164(1))
+    end
+    return a
+end
+
+@test_nowarn code_typed(foo31164, Tuple{Bool, Int}; optimize=false)
