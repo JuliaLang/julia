@@ -3,7 +3,7 @@
 # file downloading
 
 if Sys.iswindows()
-    function download(url::AbstractString, filename::AbstractString)
+    function download_powershell(url::AbstractString, filename::AbstractString)
         ps = joinpath(get(ENV, "SYSTEMROOT", "C:\\Windows"), "System32\\WindowsPowerShell\\v1.0\\powershell.exe")
         tls12 = "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12"
         client = "New-Object System.Net.Webclient"
@@ -19,29 +19,49 @@ if Sys.iswindows()
             end
             pipeline_error(proc)
         end
-        filename
-    end
-else
-    function download(url::AbstractString, filename::AbstractString)
-        if Sys.isapple() && Sys.isexecutable("/usr/bin/curl")
-            run(`/usr/bin/curl -g -L -f -o $filename $url`) # issue #30956
-        elseif Sys.which("curl") !== nothing
-            run(`curl -g -L -f -o $filename $url`)
-        elseif Sys.which("wget") !== nothing
-            try
-                run(`wget -O $filename $url`)
-            catch
-                rm(filename, force=true)  # wget always creates a file
-                rethrow()
-            end
-        elseif Sys.which("fetch") !== nothing
-            run(`fetch -f $filename $url`)
-        else
-            error("no download agent available; install curl, wget, or fetch")
-        end
-        filename
+        return filename
     end
 end
+
+function find_curl()
+    curl = if Sys.isapple() && Sys.isexecutable("/usr/bin/curl")
+        `/usr/bin/curl`
+    elseif Sys.iswindows() && Sys.isexecutable(joinpath(get(ENV, "SYSTEMROOT", "C:\\Windows"), "System32\\curl.exe"))
+        joinpath(get(ENV, "SYSTEMROOT", "C:\\Windows"), "System32\\curl.exe")
+    elseif Sys.which("curl") !== nothing
+        `curl`
+    else
+        nothing
+    end
+    return curl
+end
+
+function download_curl(curl_exe, url, filename)
+    curl_flags = `--silent --show-error --fail --globoff -Location`
+    run(`$curl_exe $curl_flags --output $filename $url`)
+end
+
+function download(url::AbstractString, filename::AbstractString)
+    curl_exe = find_curl()
+    if curl_exe !== nothing
+        download_curl(curl_exe, url, filename)
+    elseif Sys.iswindows()
+        download_powershell(url, filename)
+    elseif Sys.which("wget") !== nothing
+        try
+            run(`wget -O $filename $url`)
+        catch
+            rm(filename, force=true)  # wget always creates a file
+            rethrow()
+        end
+    elseif Sys.which("fetch") !== nothing
+        run(`fetch -f $filename $url`)
+    else
+        error("no download agent available; install curl, wget, or fetch")
+    end
+    return filename
+end
+
 function download(url::AbstractString)
     filename = tempname()
     download(url, filename)
