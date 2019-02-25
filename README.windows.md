@@ -175,7 +175,7 @@ For maximum compatibility with packages that use [WinRPM.jl](
 https://github.com/JuliaLang/WinRPM.jl) for binary dependencies on Windows, it
 is recommended that you use OpenSUSE 42.2 for cross-compiling a Windows build
 of Julia.  If you use a different Linux distribution or OS X, install
-[Vagrant](http://www.vagrantup.com/downloads) and use the following `Vagrantfile`:
+[Vagrant](https://www.vagrantup.com/downloads.html) and use the following `Vagrantfile`:
 
 ```
 # Vagrantfile for MinGW-w64 cross-compilation of Julia
