@@ -1420,3 +1420,11 @@ let U = Tuple{Union{LT, LT1},Union{R, R1},Int} where LT1<:R1 where R1<:Tuple{Int
     @test U2 == V
     @test_broken U2 == V2
 end
+
+# issue #31082 and #30741
+@testintersect(Tuple{T, Ref{T}, T} where T,
+               Tuple{Ref{S}, S, S} where S,
+               Union{})
+@testintersect(Tuple{Pair{B,C},Union{C,Pair{B,C}},Union{B,Real}} where {B,C},
+               Tuple{Pair{B,C},C,C} where {B,C},
+               Tuple{Pair{B,C},C,C} where C<:Union{Real, B} where B)
