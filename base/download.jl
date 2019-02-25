@@ -36,17 +36,16 @@ function find_curl()
 end
 
 function download_curl(curl_exe, url, filename)
-    curl_flags = `--silent --show-error --fail --globoff -Location`
-    run(`$curl_exe $curl_flags --output $filename $url`)
+    run(`$curl_exe -s -S -g -L -f -o $filename $url`)
     return filename
 end
 
 function download(url::AbstractString, filename::AbstractString)
     curl_exe = find_curl()
     if curl_exe !== nothing
-        download_curl(curl_exe, url, filename)
+        return download_curl(curl_exe, url, filename)
     elseif Sys.iswindows()
-        download_powershell(url, filename)
+        return download_powershell(url, filename)
     elseif Sys.which("wget") !== nothing
         try
             run(`wget -O $filename $url`)
@@ -57,7 +56,7 @@ function download(url::AbstractString, filename::AbstractString)
     elseif Sys.which("fetch") !== nothing
         run(`fetch -f $filename $url`)
     else
-        error("no download agent available; install curl, wget, or fetch")
+        error("No download agent available; install curl, wget, or fetch.")
     end
     return filename
 end
