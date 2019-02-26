@@ -122,7 +122,12 @@ julia> rdiv!(A, 2.0)
  1.5  2.0
 ```
 """
-rdiv!(X::AbstractArray, s::Number) = rmul!(X, inv(s))
+function rdiv!(X::AbstractArray, s::Number)
+    @simd for I in eachindex(X)
+        @inbounds X[I] /= s
+    end
+    X
+end
 
 """
     ldiv!(a::Number, B::AbstractArray)
@@ -143,7 +148,12 @@ julia> ldiv!(2.0, B)
  1.5  2.0
 ```
 """
-ldiv!(s::Number, X::AbstractArray) = lmul!(inv(s), X)
+function ldiv!(s::Number, X::AbstractArray)
+    @simd for I in eachindex(X)
+        @inbounds X[I] = s\X[I]
+    end
+    X
+end
 
 """
     cross(x, y)
