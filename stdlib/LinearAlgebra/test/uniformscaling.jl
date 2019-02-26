@@ -300,15 +300,18 @@ end
     @test_throws MethodError I .+ [1 1; 1 1]
 end
 
-@testset "in-place mul! methods" begin
+@testset "in-place mul! and div! methods" begin
     J = randn()*I
     A = randn(4, 3)
     C = similar(A)
-    target = J * A
-    @test mul!(C, J, A) == target
-    @test mul!(C, A, J) == target
-    @test lmul!(J, copyto!(C, A)) == target
-    @test rmul!(copyto!(C, A), J) == target
+    target_mul = J * A
+    target_div = A / J
+    @test mul!(C, J, A) == target_mul
+    @test mul!(C, A, J) == target_mul
+    @test lmul!(J, copyto!(C, A)) == target_mul
+    @test rmul!(copyto!(C, A), J) == target_mul
+    @test ldiv!(J, copyto!(C, A)) == target_div
+    @test rdiv!(copyto!(C, A), J) == target_div
 end
 
 @testset "Construct Diagonal from UniformScaling" begin
