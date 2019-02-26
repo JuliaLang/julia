@@ -104,6 +104,48 @@ function lmul!(s::Number, X::AbstractArray)
 end
 
 """
+    rdiv!(A::AbstractArray, b::Number)
+
+Divide each entry in an array `A` by a scalar `b` overwriting `A`
+in-place.  Use [`ldiv!`](@ref) to divide scalar from left.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2.0; 3.0 4.0]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> rdiv!(A, 2.0)
+2×2 Array{Float64,2}:
+ 0.5  1.0
+ 1.5  2.0
+```
+"""
+rdiv!(X::AbstractArray, s::Number) = rmul!(X, inv(s))
+
+"""
+    ldiv!(a::Number, B::AbstractArray)
+
+Divide each entry in an array `B` by a scalar `a` overwriting `B`
+in-place.  Use [`rdiv!`](@ref) to divide scalar from right.
+
+# Examples
+```jldoctest
+julia> B = [1.0 2.0; 3.0 4.0]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> ldiv!(2.0, B)
+2×2 Array{Float64,2}:
+ 0.5  1.0
+ 1.5  2.0
+```
+"""
+ldiv!(s::Number, X::AbstractArray) = lmul!(inv(s), X)
+
+"""
     cross(x, y)
     ×(x,y)
 
