@@ -523,6 +523,7 @@ public:
     Value *spvals_ptr = NULL;
     Value *argArray = NULL;
     Value *argCount = NULL;
+    MDNode *aliasscope = NULL;
     std::string funcName;
     int vaSlot = -1;        // name of vararg argument
     bool has_sret = false;
@@ -2521,7 +2522,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
     }
 
-    else if (f == jl_builtin_arrayref && nargs >= 3) {
+    else if ((f == jl_builtin_arrayref || f == jl_builtin_const_arrayref) && nargs >= 3) {
         const jl_cgval_t &ary = argv[2];
         bool indices_ok = true;
         for (size_t i = 3; i <= nargs; i++) {
@@ -2573,10 +2574,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     *ret = mark_julia_slot(lv, ety, ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1), tindex), tbaa_arraybuf);
                 }
                 else {
+                    MDNode *aliasscope = (f == jl_builtin_const_arrayref) ? ctx.aliasscope : nullptr;
                     *ret = typed_load(ctx,
                             emit_arrayptr(ctx, ary, ary_ex),
                             idx, ety,
-                            !isboxed ? tbaa_arraybuf : tbaa_ptrarraybuf);
+                            !isboxed ? tbaa_arraybuf : tbaa_ptrarraybuf, aliasscope);
                 }
                 return true;
             }
@@ -2677,7 +2679,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                         emit_arrayptr(ctx, ary, ary_ex, isboxed),
                                         idx, val, ety,
                                         !isboxed ? tbaa_arraybuf : tbaa_ptrarraybuf,
-                                        data_owner, 0);
+                                        ctx.aliasscope, data_owner, 0);
                         }
                     }
                     *ret = ary;
@@ -2760,7 +2762,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                 jl_true);
                         }
                         Value *ptr = maybe_decay_tracked(data_pointer(ctx, obj));
-                        *ret = typed_load(ctx, ptr, vidx, jt, obj.tbaa, false);
+                        *ret = typed_load(ctx, ptr, vidx, jt, obj.tbaa, nullptr, false);
                         return true;
                     }
                 }
@@ -3833,7 +3835,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     jl_expr_t *ex = (jl_expr_t*)expr;
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     jl_sym_t *head = ex->head;
-    if (head == meta_sym || head == inbounds_sym) {
+    if (head == meta_sym || head == inbounds_sym || head == aliasscope_sym || head == popaliasscope_sym) {
         // some expression types are metadata and can be ignored
         // in statement position
         return;
@@ -4122,6 +4124,12 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
     }
     else if (head == inbounds_sym) {
         jl_error("Expr(:inbounds) in value position");
+    }
+    else if (head == aliasscope_sym) {
+        jl_error("Expr(:aliasscope) in value position");
+    }
+    else if (head == popaliasscope_sym) {
+        jl_error("Expr(:popaliasscope) in value position");
     }
     else if (head == boundscheck_sym) {
         return mark_julia_const(bounds_check_enabled(ctx, jl_true) ? jl_true : jl_false);
@@ -5986,6 +5994,36 @@ static std::unique_ptr<Module> emit_function(
             }
         }
     }
+
+    std::vector<MDNode*> aliasscopes;
+    MDNode* current_aliasscope = nullptr;
+    std::vector<Metadata*> scope_stack;
+    std::vector<MDNode*> scope_list_stack;
+    {
+        size_t nstmts = jl_array_len(src->code);
+        aliasscopes.resize(nstmts + 1, nullptr);
+        static MDBuilder *mbuilder = new MDBuilder(jl_LLVMContext);
+        MDNode *alias_domain = mbuilder->createAliasScopeDomain(ctx.name);
+        for (i = 0; i < nstmts; i++) {
+            jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
+            jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
+            if (expr) {
+                if (expr->head == aliasscope_sym) {
+                    MDNode *scope = mbuilder->createAliasScope("aliasscope", alias_domain);
+                    scope_stack.push_back(scope);
+                    MDNode *scope_list = MDNode::get(jl_LLVMContext, ArrayRef<Metadata*>(scope_stack));
+                    scope_list_stack.push_back(scope_list);
+                    current_aliasscope = scope_list;
+                } else if (expr->head == popaliasscope_sym) {
+                    scope_stack.pop_back();
+                    scope_list_stack.pop_back();
+                    current_aliasscope = scope_list_stack.back();
+                }
+            }
+            aliasscopes[i+1] = current_aliasscope;
+        }
+    }
+
     Instruction &prologue_end = ctx.builder.GetInsertBlock()->back();
 
 
@@ -6129,6 +6167,7 @@ static std::unique_ptr<Module> emit_function(
                 ctx.builder.SetCurrentDebugLocation(linetable.at(debuginfoloc).loc);
             coverageVisitStmt(debuginfoloc);
         }
+        ctx.aliasscope = aliasscopes[cursor];
         jl_value_t *stmt = jl_array_ptr_ref(stmts, cursor);
         jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
         if (expr && expr->head == unreachable_sym) {
@@ -7107,6 +7146,7 @@ static void init_julia_llvm_env(Module *m)
     builtin_func_map[jl_f__expr] = jlcall_func_to_llvm("jl_f__expr", &jl_f__expr, m);
     builtin_func_map[jl_f__typevar] = jlcall_func_to_llvm("jl_f__typevar", &jl_f__typevar, m);
     builtin_func_map[jl_f_arrayref] = jlcall_func_to_llvm("jl_f_arrayref", &jl_f_arrayref, m);
+    builtin_func_map[jl_f_const_arrayref] = jlcall_func_to_llvm("jl_f_const_arrayref", &jl_f_arrayref, m);
     builtin_func_map[jl_f_arrayset] = jlcall_func_to_llvm("jl_f_arrayset", &jl_f_arrayset, m);
     builtin_func_map[jl_f_arraysize] = jlcall_func_to_llvm("jl_f_arraysize", &jl_f_arraysize, m);
     builtin_func_map[jl_f_apply_type] = jlcall_func_to_llvm("jl_f_apply_type", &jl_f_apply_type, m);

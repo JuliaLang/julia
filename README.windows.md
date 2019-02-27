@@ -166,10 +166,7 @@ for the former instructions for compiling using MSYS2.
 ### Cross-compiling from Unix
 
 You can also use MinGW-w64 cross compilers to build a Windows version of Julia from
-Linux, Mac, or the Windows Subsystem for Linux (WSL). Note that when compiling in
-WSL, you should use the Linux file system environment, not the `/mnt/` emulated Windows
-paths, since time stamps in `/mnt/` do not work properly as required by configure
-scripts and makefiles (see https://github.com/Microsoft/BashOnWindows/issues/1939).
+Linux, Mac, or the Windows Subsystem for Linux (WSL).
 
 For maximum compatibility with packages that use [WinRPM.jl](
 https://github.com/JuliaLang/WinRPM.jl) for binary dependencies on Windows, it

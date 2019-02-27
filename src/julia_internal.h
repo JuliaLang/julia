@@ -999,6 +999,7 @@ extern jl_sym_t *structtype_sym;   extern jl_sym_t *foreigncall_sym;
 extern jl_sym_t *global_sym; extern jl_sym_t *list_sym;
 extern jl_sym_t *dot_sym;    extern jl_sym_t *newvar_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *inbounds_sym;
+extern jl_sym_t *aliasscope_sym; extern jl_sym_t *popaliasscope_sym;
 extern jl_sym_t *copyast_sym; extern jl_sym_t *cfunction_sym;
 extern jl_sym_t *pure_sym; extern jl_sym_t *simdloop_sym;
 extern jl_sym_t *meta_sym; extern jl_sym_t *inert_sym;

@@ -334,3 +334,33 @@ mktemp() do f_22330, _
     write(f_22330, str_22330)
     @test success(`$(Base.julia_cmd()) --startup-file=no $f_22330`)
 end
+
+# Alias scope
+macro aliasscope(body)
+    sym = gensym()
+    esc(quote
+        $(Expr(:aliasscope))
+        $sym = $body
+        $(Expr(:popaliasscope))
+        $sym
+    end)
+end
+
+struct Const{T<:Array}
+    a::T
+end
+
+@eval Base.getindex(A::Const, i1::Int) = Core.const_arrayref($(Expr(:boundscheck)), A.a, i1)
+@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =  (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+
+function foo31018!(a, b)
+    @aliasscope for i in eachindex(a, b)
+        a[i] = Const(b)[i]
+    end
+end
+io = IOBuffer()
+code_llvm(io, foo31018!, Tuple{Vector{Int}, Vector{Int}}, optimize=false, raw=true, dump_module=true)
+str = String(take!(io))
+@test occursin("alias.scope", str)
+@test occursin("aliasscope", str)
+@test occursin("noalias", str)

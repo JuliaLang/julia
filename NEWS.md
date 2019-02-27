@@ -7,6 +7,11 @@ New language features
   * Argument splatting (`x...`) can now be used in calls to the `new` pseudo-function in
     constructors ([#30577]).
 
+  * Objects created by calling `skipmissing` on an array can now be indexed using indices
+    from the parent at non-missing positions. This allows functions such as
+    `findall`, `findfirst`, `argmin`/`argmax` and `findmin`/`findmax` to work with these
+    objects, returning the index of matching non-missing elements in the parent ([#31008]).
+
 Multi-threading changes
 -----------------------
 

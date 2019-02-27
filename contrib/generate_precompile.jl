@@ -90,7 +90,7 @@ function generate_precompile_statements()
         done = false
         blackhole = Sys.isunix() ? "/dev/null" : "nul"
         withenv("JULIA_HISTORY" => blackhole, "JULIA_PROJECT" => nothing,
-                "TERM" => "") do
+                "TERM" => "", "JULIA_LOAD_PATH" => Sys.iswindows() ? "@;@stdlib" : "@:@stdlib") do
             if have_repl
                 p = run(`$(julia_cmd()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
                         --compile=all --startup-file=no --color=yes

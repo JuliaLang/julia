@@ -83,6 +83,15 @@ bimg  = randn(n,2)/2
             end
         end
     end # for eltyb
+    
+@testset "Test diagm for vectors" begin
+    @test diagm(zeros(50)) == diagm(0 => zeros(50))
+    @test diagm(ones(50)) == diagm(0 => ones(50))
+    for i = 1:50 
+        v = randn(500)
+        @test diagm(v) == diagm(0 => v)
+    end
+end
 
 @testset "Test pinv (rtol, atol)" begin
     M = [1 0 0; 0 1 0; 0 0 0]

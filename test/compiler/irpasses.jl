@@ -89,3 +89,12 @@ function f(x::Vector{T}) where {T}
 end
 
 @test f([Bar29983(1.0)]).x[1].x == 2.0
+
+# Issue #31139 - Checking for correct number of arguments in getfield elim
+let nt = (a=1, b=2)
+    blah31139(x) = getfield(x)
+    # Shouldn't throw
+    @test isa(code_typed(blah31139, Tuple{typeof(nt)}), Array)
+    # Should throw
+    @test_throws ArgumentError blah31139(nt)
+end

@@ -460,6 +460,7 @@ toms(c::CompoundPeriod) = isempty(c.periods) ? 0.0 : Float64(sum(toms, c.periods
 tons(x)              = toms(x) * 1000000
 tons(x::Microsecond) = value(x) * 1000
 tons(x::Nanosecond)  = value(x)
+tons(c::CompoundPeriod) = isempty(c.periods) ? 0.0 : Float64(sum(tons, c.periods))
 days(c::Millisecond) = div(value(c), 86400000)
 days(c::Second)      = div(value(c), 86400)
 days(c::Minute)      = div(value(c), 1440)
