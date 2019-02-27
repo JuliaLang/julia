@@ -1481,7 +1481,7 @@ end
     normalize(v::AbstractVector, p::Real=2)
 
 Normalize the vector `v` so that its `p`-norm equals unity,
-i.e. `norm(v, p) == vecnorm(v, p) == 1`.
+i.e. `norm(v, p) == 1`.
 See also [`normalize!`](@ref) and [`norm`](@ref).
 
 # Examples
