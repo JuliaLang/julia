@@ -87,7 +87,14 @@ where
 =
 ```
 
-## Base Modules
+## Standard Modules
+```@docs
+Main
+Core
+Base
+```
+
+## Base Submodules
 ```@docs
 Base.Broadcast
 Base.Docs
@@ -210,6 +217,7 @@ Base.Enums.@enum
 Core.Expr
 Core.Symbol
 Core.Symbol(x...)
+Core.Module
 ```
 
 ## Generic Functions

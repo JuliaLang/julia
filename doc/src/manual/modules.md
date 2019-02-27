@@ -57,11 +57,6 @@ Once a variable is made visible via `using` or `import`, a module may not create
 with the same name. Imported variables are read-only; assigning to a global variable always affects
 a variable owned by the current module, or else raises an error.
 
-Modules are first class citizens in Julia and are represented by a `Module`.
-```@docs
-Module
-```
-
 ## Summary of module usage
 
 To load a module, two main keywords can be used: `using` and `import`. To understand their differences,
@@ -122,13 +117,10 @@ end
 
 ### Standard modules
 
-There are three important standard modules: `Main`, `Core`, and `Base`.
-
-```@docs
-Main
-Core
-Base
-```
+There are three important standard modules:
+* [`Core`](@ref) contains all functionality "built into" the language.
+* [`Base`](@ref) contains basic functionality that is useful in almost all cases.
+* [`Main`](@ref) is the top-level module and the current module, when Julia is started.
 
 ### Default top-level definitions and bare modules
 
