@@ -564,7 +564,7 @@ show_supertypes(typ::DataType) = show_supertypes(stdout, typ)
 """
     @show
 
-Show an expression and result, returning the result.
+Show an expression and result, returning the result. See also [`show`](@ref).
 """
 macro show(exs...)
     blk = Expr(:block)
