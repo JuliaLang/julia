@@ -244,3 +244,14 @@ let code = code_typed(f_pointerref, Tuple{Type{Int}})[1][1].code
     end
     @test !any_ptrref
 end
+
+f_sqrt() = sqrt(2)
+let code = code_typed(f_sqrt, Tuple{})[1][1].code
+    @test length(code) == 1
+    @test isa(code[1], Expr) && code[1].head == :return && isa(code[1].args[1], Float64)
+end
+# Make sure that the optimization doesn't apply to invalid calls
+f_sqrt_wrong() = Base.Math.sqrt_llvm(1.0, 2.0)
+let (ci, rt) = (code_typed(f_sqrt_wrong, Tuple{})[1])
+    @test rt === Union{}
+end
