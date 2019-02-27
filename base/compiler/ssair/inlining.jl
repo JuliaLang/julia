@@ -1257,6 +1257,21 @@ function ispuretopfunction(@nospecialize(f))
         istopfunction(f, :promote_type)
 end
 
+function intrinsic_tfunc_optimize(f::IntrinsicFunction, atypes::Vector{Any})
+    is_pure_intrinsic_optimize(f) || return nothing
+    args = atypes[2:end]
+    _all(@nospecialize(a) -> isa(a, Const), args) || return nothing
+    iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
+    if iidx < 0 || iidx > length(T_IFUNC)
+        # invalid intrinsic
+        return nothing
+    end
+    (min, max, _) = T_IFUNC[iidx]
+    min <= length(atypes) - 1 <= max || return nothing
+    argvals = anymap(a::Const -> a.val, atypes[2:end])
+    return f(argvals...)
+end
+
 function early_inline_special_case(ir::IRCode, s::Signature, e::Expr, params::OptimizationParams,
                                    @nospecialize(etype))
     f, ft, atypes = s.f, s.ft, s.atypes
@@ -1286,6 +1301,12 @@ function early_inline_special_case(ir::IRCode, s::Signature, e::Expr, params::Op
                     return quoted(val)
                 end
             end
+        elseif isa(f, IntrinsicFunction) && is_pure_intrinsic_optimize_only(f)
+            # If this intrinsic was not eligible for constant propagation during
+            # inference, but is now, try to do that here.
+            val = intrinsic_tfunc_optimize(f, atypes)
+            val === nothing && return nothing
+            return quoted(val)
         end
     end
 
