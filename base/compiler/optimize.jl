@@ -252,15 +252,19 @@ function optimize(opt::OptimizationState, @nospecialize(result))
     nothing
 end
 
-
-# whether `f` is pure for inference
-function is_pure_intrinsic_infer(f::IntrinsicFunction)
+# whether `f` is pure for optimization purposes
+function is_pure_intrinsic_optimize(f::IntrinsicFunction)
     return !(f === Intrinsics.pointerref || # this one is volatile
              f === Intrinsics.pointerset || # this one is never effect-free
              f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.arraylen ||   # this one is volatile
-             f === Intrinsics.sqrt_llvm ||  # this one may differ at runtime (by a few ulps)
              f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
+end
+
+# whether `f` is pure for inference
+is_pure_intrinsic_optimize_only(f) = f === Intrinsics.sqrt_llvm # this one may differ by a few ulps at runtime
+function is_pure_intrinsic_infer(f::IntrinsicFunction)
+    return is_pure_intrinsic_optimize(f) && !is_pure_intrinsic_optimize_only(f)
 end
 
 # whether `f` is effect free if nothrow
