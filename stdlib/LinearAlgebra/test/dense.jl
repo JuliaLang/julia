@@ -87,10 +87,8 @@ bimg  = randn(n,2)/2
 @testset "Test diagm for vectors" begin
     @test diagm(zeros(50)) == diagm(0 => zeros(50))
     @test diagm(ones(50)) == diagm(0 => ones(50))
-    for i = 1:50 
-        v = randn(500)
-        @test diagm(v) == diagm(0 => v)
-    end
+    v = randn(500)
+    @test diagm(v) == diagm(0 => v)
 end
 
 @testset "Test pinv (rtol, atol)" begin
