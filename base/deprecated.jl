@@ -165,7 +165,7 @@ function promote_eltype_op end
 # @deprecate one(i::CartesianIndex) oneunit(i)
 # @deprecate one(::Type{I}) where I<:CartesianIndex oneunit(I)
 
-@deprecate reindex(V, idxs, subidxs) reindex(idxs, subidxs)
+@deprecate reindex(V, idxs, subidxs) reindex(idxs, subidxs) false
 @deprecate substrides(parent::AbstractArray, strds::Tuple, I::Tuple) substrides(strds, I)
 
 # TODO: deprecate these
