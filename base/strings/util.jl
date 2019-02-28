@@ -202,8 +202,8 @@ Remove leading and trailing characters from `str`.
 The default behaviour is to remove leading whitespace and delimiters: see
 [`isspace`](@ref) for precise details.
 
-The optional `chars` argument specifies which characters to remove: it can be a single character,
-vector or set of characters, or a predicate function.
+The optional `chars` argument specifies which characters to remove: it can be a single character
+or a vector or set of characters.
 
 # Examples
 ```jldoctest
