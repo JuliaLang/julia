@@ -715,53 +715,41 @@ Dict{Symbol,Float64} with 2 entries:
 function mapdict!(f, d::Dict{K,V}) where K where V
     isempty(d) && return d
     f_return_type = typeof(f(first(d)[2]))
-    ret = _mapdict!(f_return_type,f,d)  # This function will return a DataType if it isn't typestable
+    if f_return_type == V
+        new_d=d
+    else
+        L=length(d.vals)
+        new_vals = Vector{f_return_type}(undef,L)
+        new_d = Dict{K, f_return_type}(d.slots, d.keys, new_vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe)
+    end
+    ret =  _mapdict_apply!(f, new_d,d.vals) # This function will return a Tuple if it isn't typestable
     ret isa Dict && return ret# If ret is a Dict the function complete in a typesafe way
     # If it didn't we have to broaden the type
     ret= _mapdict_unioning!(f,d,ret)
     return ret
 end
 
+
 """
     mapdict(f, dict) -> dict
 Takes the function f(value) and returns a new Dict with the values transfor with new_value=f(value).
 """
-function mapdict(f, d::Dict) where K where V
+function mapdict(f, d::Dict{K,V}) where K where V
     isempty(d) && return d
-    f_return_type = typeof(f(first(d)[2]))
 
-    ret =  _mapdict(f_return_type,f,d)
+    f_return_type = typeof(f(first(d)[2]))
+    if f_return_type == V
+        new_d=Dict(d)
+    else
+        L=length(d.vals)
+        new_vals = Vector{f_return_type}(undef,L)
+        new_d = Dict{K, f_return_type}(copy(d.slots), copy(d.keys), new_vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe)
+    end
+    ret =  _mapdict_apply!(f, new_d,d.vals)
     ret isa Dict && return ret # If ret is a Dict the function complete in a typesafe way
     # If it didn't we have to broaden the type
     ret= _mapdict_unioning!(f,d,ret)
     return ret
-end
-
-# This is the typesafe version
-function _mapdict!(::Type{V}, f, d::Dict{K,V}) where V where K
-    return _mapdict_apply!(V,f, d, d.vals)
-end
-function _mapdict(::Type{V}, f, d::Dict{K,V}) where V where K
-    new_d=Dict(d)
-    return _mapdict_apply!(f, new_d, new_d.vals)
-end
-
-# Mutating verion
-function _mapdict!(::Type{Vnew}, f, d::Dict{K,V}) where V where K where Vnew
-    L = length(d.vals)
-    new_vals = Vector{Vnew}(undef,L)
-
-    new_d = Dict{K, Vnew}(d.slots, d.keys, new_vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe)
-    return _mapdict_apply!(Vnew,f, new_d, d.vals)
-end
-function _mapdict(::Type{Vnew}, f, d::Dict{K,V}) where V where K where Vnew
-    L = length(d.vals)
-    new_vals = Vector{Vnew}(undef,L)
-
-    new_d = Dict{K, Vnew}(copy(d.slots), copy(d.keys), new_vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe)
-
-    _mapdict_apply!(Vnew,f, new_d, d.vals)
-    return new_d
 end
 
 @inline function _mapdict_apply!(f,d::Dict{K,V}, old_vals::Vector{Vold},i_start=d.idxfloor) where V where K where Vold
@@ -797,14 +785,14 @@ function _mapdict_unioning!(f, old_d::Dict{K,Vold},ret::Tuple{DataType,Dict{K,Vn
         new_type=ret[1]
         union_type=type_counter < num_types_before_any ? Union{union_type,new_type} : Any
         d = Dict{K, union_type}(d.slots, d.keys, convert(Vector{union_type}, d.vals), d.ndel, d.count, d.age, d.idxfloor, d.maxprobe)
-        ret=_mapdict_apply!(union_type,f, d, old_d.vals,ret[3])
+        ret=_mapdict_apply!(f, d, old_d.vals,ret[3])
     end
     if ret isa Dict
         return ret
     else
+        #Function should never get here because Any should catch everything
         error("mapdict could not converge on function output type")
     end
-
 end
 
 
