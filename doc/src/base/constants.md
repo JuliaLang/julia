@@ -10,6 +10,7 @@ Base.DEPOT_PATH
 Base.LOAD_PATH
 Base.Sys.BINDIR
 Base.Sys.CPU_THREADS
+Base.Sys.CPU_NAME
 Base.Sys.WORD_SIZE
 Base.Sys.KERNEL
 Base.Sys.ARCH
