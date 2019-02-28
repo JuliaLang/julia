@@ -53,6 +53,7 @@ end
     @test strip(" \u2009 hi \u2009 ") == "hi"
     @test strip("foobarfoo", ['f','o']) == "bar"
     @test strip("foobarfoo", ('f','o')) == "bar"
+    @test strip(ispunct, "¡Hola!") == "Hola"
 
     for s in ("", " ", " abc", "abc ", "  abc  "),
         f in (lstrip, rstrip, strip)

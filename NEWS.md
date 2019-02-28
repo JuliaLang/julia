@@ -44,6 +44,7 @@ Standard library changes
 * `startswith` and `endswith` now accept a `Regex` for the second argument ([#29790]).
 * `retry` supports arbitrary callable objects ([#30382]).
 * A no-argument construct to `Ptr{T}` has been added which constructs a null pointer ([#30919])
+* `strip` now accepts a function argument in the same manner as `lstrip` and `rstrip` ([#31211])
 
 #### LinearAlgebra
 
