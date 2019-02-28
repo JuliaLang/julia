@@ -191,6 +191,7 @@ for the key `x`).  Multiple arguments to `D[...]` are converted to tuples; for e
 `D[x,y]`  is equivalent to `D[(x,y)]`, i.e. it refers to the value keyed by the tuple `(x,y)`.
 
 ```@docs
+Base.AbstractDict
 Base.Dict
 Base.IdDict
 Base.WeakKeyDict
@@ -233,6 +234,7 @@ Partially implemented by:
 ## Set-Like Collections
 
 ```@docs
+Base.AbstractSet
 Base.Set
 Base.BitSet
 Base.union
