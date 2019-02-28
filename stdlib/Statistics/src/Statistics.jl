@@ -251,11 +251,14 @@ end
     varm(itr, m; dims, corrected::Bool=true)
 
 Compute the sample variance of collection `itr`, with known mean(s) `m`.
-The algorithm will return an estimator of the generative distribution's variance
-under the assumption that each entry of `v` is an IID drawn from that generative
-distribution. This computation is equivalent to calculating `sum(abs2, v - mean(v)) /
-(length(v) - 1)`. If `corrected` is `true`, then the sum is scaled with `n-1`,
-whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(v)`.
+
+The algorithm returns an estimator of the generative distribution's variance
+under the assumption that each entry of `itr` is an IID drawn from that generative
+distribution. For arrays, this computation is equivalent to calculating
+`sum((itr .- mean(itr)).^2) / (length(itr) - 1)`.
+If `corrected` is `true`, then the sum is scaled with `n-1`,
+whereas the sum is scaled with `n` if `corrected` is
+`false` with `n` the number of elements in `itr`.
 
 If `itr` is an `AbstractArray`, `dims` can be provided to compute the variance
 over dimensions, and `m` may contain means for each dimension of `itr`.
@@ -284,11 +287,16 @@ end
     var(itr; dims, corrected::Bool=true, mean=nothing)
 
 Compute the sample variance of collection `itr`.
-The algorithm will return an estimator of the generative distribution's variance
-under the assumption that each entry of `v` is an IID drawn from that generative
-distribution. This computation is equivalent to calculating `sum(abs2, v - mean(v)) /
-(length(v) - 1)`. If `corrected` is `true`, then the sum is scaled with `n-1`,
-whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(v)`.
+
+The algorithm returns an estimator of the generative distribution's variance
+under the assumption that each entry of `itr` is an IID drawn from that generative
+distribution. For arrays, this computation is equivalent to calculating
+`sum((itr .- mean(itr)).^2) / (length(itr) - 1)).
+If `corrected` is `true`, then the sum is scaled with `n-1`,
+whereas the sum is scaled with `n` if `corrected` is
+`false` with `n` the number of elements in `itr`.
+
+A pre-computed `mean` may be provided.
 
 If `itr` is an `AbstractArray`, `dims` can be provided to compute the variance
 over dimensions, and `mean` may contain means for each dimension of `itr`.
@@ -352,12 +360,16 @@ stdm(A::AbstractArray, m; corrected::Bool=true) =
     std(itr; corrected::Bool=true, mean=nothing[, dims])
 
 Compute the sample standard deviation of collection `itr`.
+
 The algorithm returns an estimator of the generative distribution's standard
-deviation under the assumption that each entry of `v` is an IID drawn from that generative
-distribution. This computation is equivalent to calculating `sqrt(sum((v - mean(v)).^2) /
-(length(v) - 1))`. A pre-computed `mean` may be provided. If `corrected` is `true`,
-then the sum is scaled with `n-1`, whereas the sum is scaled with `n` if `corrected` is
-`false` where `n = length(v)`.
+deviation under the assumption that each entry of `itr` is an IID drawn from that generative
+distribution. For arrays, this computation is equivalent to calculating
+`sqrt(sum((itr .- mean(itr)).^2) / (length(itr) - 1))`.
+If `corrected` is `true`, then the sum is scaled with `n-1`,
+whereas the sum is scaled with `n` if `corrected` is
+`false` with `n` the number of elements in `itr`.
+
+A pre-computed `mean` may be provided.
 
 If `itr` is an `AbstractArray`, `dims` can be provided to compute the standard deviation
 over dimensions, and `means` may contain means for each dimension of `itr`.
@@ -389,12 +401,16 @@ std(iterable; corrected::Bool=true, mean=nothing) =
     stdm(itr, m; corrected::Bool=true)
 
 Compute the sample standard deviation of collection `itr`, with known mean(s) `m`.
+
 The algorithm returns an estimator of the generative distribution's standard
 deviation under the assumption that each entry of `itr` is an IID drawn from that generative
-distribution. This computation is equivalent to calculating `sqrt(sum((v - mean(v)).^2) /
-(length(v) - 1))`. A pre-computed `mean` may be provided. If `corrected` is `true`,
-then the sum is scaled with `n-1`, whereas the sum is scaled with `n` if `corrected` is
-`false` where `n = length(v)`.
+distribution. For arrays, this computation is equivalent to calculating
+`sqrt(sum((itr .- mean(itr)).^2) / (length(itr) - 1))`.
+If `corrected` is `true`, then the sum is scaled with `n-1`,
+whereas the sum is scaled with `n` if `corrected` is
+`false` with `n` the number of elements in `itr`.
+
+A pre-computed `mean` may be provided.
 
 If `itr` is an `AbstractArray`, `dims` can be provided to compute the standard deviation
 over dimensions, and `m` may contain means for each dimension of `itr`.
