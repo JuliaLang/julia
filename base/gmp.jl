@@ -82,12 +82,12 @@ julia> big"313"
 BigInt(x)
 
 """
-HAS_ALLOC_OVERFLOW_FUNCTION
+    ALLOC_OVERFLOW_FUNCTION
 
-If true, julia is linked with a patched GMP that does not abort on huge allocation
-and throws OutOfMemoryError instead.
+A reference that holds a boolean, if true, indicating julia is linked with a patched GMP that
+does not abort on huge allocation and throws OutOfMemoryError instead.
 """
-global HAS_ALLOC_OVERFLOW_FUNCTION = false
+const ALLOC_OVERFLOW_FUNCTION = Ref(false)
 
 function __init__()
     try
@@ -113,7 +113,7 @@ function __init__()
         ccall((:__gmp_set_alloc_overflow_function, :libgmp), Cvoid,
               (Ptr{Cvoid},),
               cglobal(:jl_throw_out_of_memory_error))
-        global HAS_ALLOC_OVERFLOW_FUNCTION = true
+        ALLOC_OVERFLOW_FUNCTION[] = true
     catch ex
         # ErrorException("ccall: could not find function...")
         if typeof(ex) != ErrorException
