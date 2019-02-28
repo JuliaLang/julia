@@ -271,6 +271,26 @@ julia> diagm(1 => [1,2,3], -1 => [4,5])
  0  0  0  0
 ```
 """
+function diagm(kv::AbstractVector...)
+    A = diagm_container(kv...)
+    for p in kv
+        inds = diagind(A)
+        for (i, val) in enumerate(p)
+            A[inds[i]] += val
+        end
+    end
+    return A
+end
+function diagm_container(kv::AbstractVector...)
+    T = promote_type(map(x -> eltype(x), kv)...)
+    n = mapreduce(x -> length(x), max, kv)
+    return zeros(T, n, n)
+end
+function diagm_container(kv::BitVector...)
+    T = promote_type(map(x -> eltype(x), kv)...)
+    n = mapreduce(x -> length(x), max, kv)
+    return zeros(T, n, n)
+end
 function diagm(kv::Pair{<:Integer,<:AbstractVector}...)
     A = diagm_container(kv...)
     for p in kv

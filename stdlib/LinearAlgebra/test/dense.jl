@@ -134,6 +134,8 @@ end
         e = rand(eltya,n-1)
         e2 = rand(eltya,n-1)
         f = rand(eltya,n-2)
+        A = diagm(d)
+        @test factorize(A) == Diagonal(d)
         A = diagm(0 => d)
         @test factorize(A) == Diagonal(d)
         A += diagm(-1 => e)
