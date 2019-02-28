@@ -104,7 +104,7 @@ kw"module"
     baremodule
 
 `baremodule` declares a module that does not contain `using Base`
-or a definition of `eval`. It does still import `Core`.
+or a definition of [`eval`](@ref Base.eval). It does still import `Core`.
 """
 kw"baremodule"
 
@@ -133,7 +133,7 @@ kw"primitive type"
 A macro maps a sequence of argument expressions to a returned expression, and the
 resulting expression is substituted directly into the program at the point where
 the macro is invoked.
-Macros are a way to run generated code without calling `eval`, since the generated
+Macros are a way to run generated code without calling [`eval`](@ref Base.eval), since the generated
 code instead simply becomes part of the surrounding program.
 Macro arguments may include expressions, literal values, and symbols.
 
@@ -270,7 +270,7 @@ julia> push!(a, 2, 3)
  3
 
 ```
-Assigning `[]` does not eliminate elements from a collection; instead use `filter!`.
+Assigning `[]` does not eliminate elements from a collection; instead use [`filter!`](@ref).
 ```jldoctest
 julia> a = collect(1:3); a[a .<= 1] = []
 ERROR: DimensionMismatch("tried to assign 0 elements to 1 destinations")
@@ -329,7 +329,7 @@ kw"quote"
     Expr(head::Symbol, args...)
 
 A type representing compound expressions in parsed julia code (ASTs).
-Each expression consists of a `head` Symbol identifying which kind of
+Each expression consists of a `head` `Symbol` identifying which kind of
 expression it is (e.g. a call, for loop, conditional statement, etc.),
 and subexpressions (e.g. the arguments of a call).
 The subexpressions are stored in a `Vector{Any}` field called `args`.
@@ -870,7 +870,7 @@ The `where` keyword creates a type that is an iterated union of other types, ove
 values of some variable. For example `Vector{T} where T<:Real` includes all [`Vector`](@ref)s
 where the element type is some kind of `Real` number.
 
-The variable bound defaults to `Any` if it is omitted:
+The variable bound defaults to [`Any`](@ref) if it is omitted:
 
 ```julia
 Vector{T} where T    # short for `where T<:Any`
@@ -910,7 +910,7 @@ kw"ans"
     devnull
 
 Used in a stream redirect to discard all data written to it. Essentially equivalent to
-/dev/null on Unix or NUL on Windows. Usage:
+`/dev/null` on Unix or `NUL` on Windows. Usage:
 
 ```julia
 run(pipeline(`cat test.txt`, devnull))
@@ -947,6 +947,7 @@ Core.TypeofBottom
 
 Abstract type of all functions.
 
+# Examples
 ```jldoctest
 julia> isa(+, Function)
 true
@@ -972,7 +973,7 @@ ReadOnlyMemoryError
 
 Generic error type. The error message, in the `.msg` field, may provide more specific details.
 
-# Example
+# Examples
 ```jldoctest
 julia> ex = ErrorException("I've done a bad thing");
 
@@ -995,6 +996,21 @@ Core.WrappedException
     UndefRefError()
 
 The item or field is not defined for the given object.
+
+# Examples
+```jldoctest
+julia> struct MyType
+           a::Int
+       end
+
+julia> A = MyType(5)
+MyType(5)
+
+julia> getfield(A, b)
+ERROR: UndefVarError: b not defined
+Stacktrace:
+[...]
+```
 """
 UndefRefError
 
@@ -1185,6 +1201,20 @@ UndefVarError
     UndefKeywordError(var::Symbol)
 
 The required keyword argument `var` was not assigned in a function call.
+
+# Examples
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+julia> function my_func(;my_arg)
+           return my_arg + 1
+       end
+my_func (generic function with 1 method)
+
+julia> my_func()
+ERROR: UndefKeywordError: keyword argument my_arg not assigned
+Stacktrace:
+ [1] my_func() at ./REPL[1]:2
+ [2] top-level scope at REPL[2]:1
+```
 """
 UndefKeywordError
 
@@ -1881,7 +1911,7 @@ AssertionError
 """
     LoadError(file::AbstractString, line::Int, error)
 
-An error occurred while `include`ing, `require`ing, or [`using`](@ref) a file. The error specifics
+An error occurred while [`include`](@ref Base.include)ing, [`require`](@ref Base.require)ing, or [`using`](@ref) a file. The error specifics
 should be available in the `.error` field.
 """
 LoadError
@@ -2029,8 +2059,16 @@ kw"Base"
 """
     typeassert(x, type)
 
-Throw a TypeError unless `x isa type`.
+Throw a [`TypeError`](@ref) unless `x isa type`.
 The syntax `x::type` calls this function.
+
+# Examples
+```jldoctest
+julia> typeassert(2.5, Int)
+ERROR: TypeError: in typeassert, expected Int64, got Float64
+Stacktrace:
+[...]
+```
 """
 typeassert
 

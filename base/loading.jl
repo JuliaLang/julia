@@ -756,7 +756,7 @@ In a module, declare that the file specified by `path` (relative or absolute) is
 dependency for precompilation; that is, the module will need to be recompiled if this file
 changes.
 
-This is only needed if your module depends on a file that is not used via `include`. It has
+This is only needed if your module depends on a file that is not used via [`include`](@ref). It has
 no effect outside of compilation.
 """
 function include_dependency(path::AbstractString)
@@ -797,22 +797,23 @@ const modules_warned_for = Set{PkgId}()
 """
     require(into::Module, module::Symbol)
 
-This function is part of the implementation of `using` / `import`, if a module is not
+This function is part of the implementation of [`using`](@ref) / [`import`](@ref), if a module is not
 already defined in `Main`. It can also be called directly to force reloading a module,
 regardless of whether it has been loaded before (for example, when interactively developing
 libraries).
 
 Loads a source file, in the context of the `Main` module, on every active node, searching
 standard locations for files. `require` is considered a top-level operation, so it sets the
-current `include` path but does not use it to search for files (see help for `include`).
+current `include` path but does not use it to search for files (see help for [`include`](@ref)).
 This function is typically used to load library code, and is implicitly called by `using` to
 load packages.
 
 When searching for files, `require` first looks for package code in the global array
-`LOAD_PATH`. `require` is case-sensitive on all platforms, including those with
+[`LOAD_PATH`](@ref). `require` is case-sensitive on all platforms, including those with
 case-insensitive filesystems like macOS and Windows.
 
-For more details regarding code loading, see the manual.
+For more details regarding code loading, see the manual sections on [modules](@ref modules) and
+[parallel computing](@ref code-availability).
 """
 function require(into::Module, mod::Symbol)
     uuidkey = identify_package(into, String(mod))
@@ -1006,7 +1007,7 @@ end
 """
     include_string(m::Module, code::AbstractString, filename::AbstractString="string")
 
-Like `include`, except reads code from the given string rather than from a file.
+Like [`include`](@ref), except reads code from the given string rather than from a file.
 """
 include_string(m::Module, txt::String, fname::String) =
     ccall(:jl_load_file_string, Any, (Ptr{UInt8}, Csize_t, Cstring, Any),
@@ -1053,7 +1054,7 @@ end
     Base.include([m::Module,] path::AbstractString)
 
 Evaluate the contents of the input source file in the global scope of module `m`.
-Every module (except those defined with `baremodule`) has its own 1-argument
+Every module (except those defined with [`baremodule`](@ref)) has its own 1-argument
 definition of `include`, which evaluates the file in that module.
 Returns the result of the last evaluated expression of the input file. During including,
 a task-local include path is set to the directory containing the file. Nested calls to
@@ -1065,7 +1066,7 @@ Base.include # defined in sysimg.jl
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])
 
-Load the file using [`Base.include`](@ref), evaluate all expressions,
+Load the file using [`include`](@ref), evaluate all expressions,
 and return the value of the last one.
 """
 function evalfile(path::AbstractString, args::Vector{String}=String[])
