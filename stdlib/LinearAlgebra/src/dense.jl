@@ -305,7 +305,6 @@ julia> diagm([1,2,3])
  0  0  3
 ```
 """
-
 diagm(v::AbstractVector) = diagm(0 => v)
 
 function tr(A::Matrix{T}) where T
