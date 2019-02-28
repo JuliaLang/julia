@@ -712,27 +712,35 @@ Dict{Symbol,Float64} with 2 entries:
   :b => 1.0
  ```
 """
-function mapdict!(f, d::Dict)
+function mapdict!(f, d::Dict{K,V}) where K where V
     isempty(d) && return d
     f_return_type = typeof(f(first(d)[2]))
-    _mapdict!(f_return_type,f,d)
+    ret = _mapdict!(f_return_type,f,d)  # This function will return a DataType if it isn't typestable
+    ret isa Dict && return ret# If ret is a Dict the function complete in a typesafe way
+    # If it didn't we have to broaden the type
+    ret= _mapdict_unioning!(f,d,ret)
+    return ret
 end
 
 """
     mapdict(f, dict) -> dict
 Takes the function f(value) and returns a new Dict with the values transfor with new_value=f(value).
 """
-function mapdict(f, d::Dict)
+function mapdict(f, d::Dict) where K where V
     isempty(d) && return d
     f_return_type = typeof(f(first(d)[2]))
-    return _mapdict(f_return_type,f,d)
+
+    ret =  _mapdict(f_return_type,f,d)
+    ret isa Dict && return ret # If ret is a Dict the function complete in a typesafe way
+    # If it didn't we have to broaden the type
+    ret= _mapdict_unioning!(f,d,ret)
+    return ret
 end
 
 # This is the typesafe version
 function _mapdict!(::Type{V}, f, d::Dict{K,V}) where V where K
-    return _mapdict_apply!(f, d, d.vals)
+    return _mapdict_apply!(V,f, d, d.vals)
 end
-
 function _mapdict(::Type{V}, f, d::Dict{K,V}) where V where K
     new_d=Dict(d)
     return _mapdict_apply!(f, new_d, new_d.vals)
@@ -744,29 +752,59 @@ function _mapdict!(::Type{Vnew}, f, d::Dict{K,V}) where V where K where Vnew
     new_vals = Vector{Vnew}(undef,L)
 
     new_d = Dict{K, Vnew}(d.slots, d.keys, new_vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe)
-    _mapdict_apply!(f, new_d, d.vals)
-    return new_d
+    return _mapdict_apply!(Vnew,f, new_d, d.vals)
 end
-
 function _mapdict(::Type{Vnew}, f, d::Dict{K,V}) where V where K where Vnew
     L = length(d.vals)
     new_vals = Vector{Vnew}(undef,L)
 
     new_d = Dict{K, Vnew}(copy(d.slots), copy(d.keys), new_vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe)
 
-    _mapdict_apply!(f, new_d, d.vals)
+    _mapdict_apply!(Vnew,f, new_d, d.vals)
     return new_d
 end
 
-@inline function _mapdict_apply!(f,d::Dict{K,V}, old_vals::Vector{Vold}) where V where K where Vold
+@inline function _mapdict_apply!(f,d::Dict{K,V}, old_vals::Vector{Vold},i_start=d.idxfloor) where V where K where Vold
     L = length(d.vals)
-    i = d.idxfloor
+    type_test(v)=false
+    if isconcretetype(V)
+        @inline type_test(v)= typeof(v)===V
+    else
+        @inline type_test(v)= typeof(v) <: V
+    end
+
+    i = i_start
     vals = d.vals
     @inbounds while i < L
-        isslotfilled(d, i) && (vals[i] = f(old_vals[i]))
-        i += 1
+        (Base.isslotfilled(d, i) || (i+=1; continue )) && #This first line is to check the slot and iterate if it isn't used
+        (new_val = f(old_vals[i]); true) && type_test(new_val) && # This line is getting the new val checking the type
+        (vals[i] = new_val; true) && (i += 1; true) && continue #this line is finishing the iteration
+        # If anything fails above we return a tuple with the new type,dict, and the current index so we don't reapply the function
+        return (typeof(new_val),d,i)
     end
     return d
+end
+
+
+# This function will keep broadening the new type for 5 iterations then assume the output should be any
+function _mapdict_unioning!(f, old_d::Dict{K,Vold},ret::Tuple{DataType,Dict{K,Vnew},Int}) where K where Vnew where Vold
+    num_types_before_any = 5
+    type_counter=0
+    union_type=Vnew
+    d=ret[2]
+    while ret isa Tuple && type_counter <= num_types_before_any
+        type_counter+=1
+        new_type=ret[1]
+        union_type=type_counter < num_types_before_any ? Union{union_type,new_type} : Any
+        d = Dict{K, union_type}(d.slots, d.keys, convert(Vector{union_type}, d.vals), d.ndel, d.count, d.age, d.idxfloor, d.maxprobe)
+        ret=_mapdict_apply!(union_type,f, d, old_d.vals,ret[3])
+    end
+    if ret isa Dict
+        return ret
+    else
+        error("mapdict could not converge on function output type")
+    end
+
 end
 
 
