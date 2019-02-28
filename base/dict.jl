@@ -686,6 +686,90 @@ end
 
 filter!(f, d::Dict) = filter_in_one_pass!(f, d)
 
+
+"""
+    mapdict!(f, dict) -> dict
+Takes the function f(value) and transforms the stored values with essentially value=f(value).
+
+If the value returned by f(value) is of a differnet type than the input function used
+must take the for dict = map(f,dict) which will mutate dict in a memory efficent manner.
+
+# Examples
+```jldoctest
+julia> D=Dict(:a=>1,:b=>2)
+Dict{Symbol,Int64} with 2 entries:
+  :a => 1
+  :b => 2
+
+julia> mapdict!(v->v-1,D)
+Dict{Symbol,Int64} with 2 entries:
+  :a => 0
+  :b => 1
+
+julia> D=mapdict!(v->Float64(v),D)
+Dict{Symbol,Float64} with 2 entries:
+  :a => 0.0
+  :b => 1.0
+ ```
+"""
+function mapdict!(f, d::Dict)
+    isempty(d) && return d
+    f_return_type = typeof(f(first(d)[2]))
+    _mapdict!(f_return_type,f,d)
+end
+
+"""
+    mapdict(f, dict) -> dict
+Takes the function f(value) and returns a new Dict with the values transfor with new_value=f(value).
+"""
+function mapdict(f, d::Dict)
+    isempty(d) && return d
+    f_return_type = typeof(f(first(d)[2]))
+    return _mapdict(f_return_type,f,d)
+end
+
+# This is the typesafe version
+function _mapdict!(::Type{V}, f, d::Dict{K,V}) where V where K
+    return _mapdict_apply!(f, d, d.vals)
+end
+
+function _mapdict(::Type{V}, f, d::Dict{K,V}) where V where K
+    new_d=Dict(d)
+    return _mapdict_apply!(f, new_d, new_d.vals)
+end
+
+# Mutating verion
+function _mapdict!(::Type{Vnew}, f, d::Dict{K,V}) where V where K where Vnew
+    L = length(d.vals)
+    new_vals = Vector{Vnew}(undef,L)
+
+    new_d = Dict{K, Vnew}(d.slots, d.keys, new_vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe)
+    _mapdict_apply!(f, new_d, d.vals)
+    return new_d
+end
+
+function _mapdict(::Type{Vnew}, f, d::Dict{K,V}) where V where K where Vnew
+    L = length(d.vals)
+    new_vals = Vector{Vnew}(undef,L)
+
+    new_d = Dict{K, Vnew}(copy(d.slots), copy(d.keys), new_vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe)
+
+    _mapdict_apply!(f, new_d, d.vals)
+    return new_d
+end
+
+@inline function _mapdict_apply!(f,d::Dict{K,V}, old_vals::Vector{Vold}) where V where K where Vold
+    L = length(d.vals)
+    i = d.idxfloor
+    vals = d.vals
+    @inbounds while i < L
+        isslotfilled(d, i) && (vals[i] = f(old_vals[i]))
+        i += 1
+    end
+    return d
+end
+
+
 struct ImmutableDict{K,V} <: AbstractDict{K,V}
     parent::ImmutableDict{K,V}
     key::K
