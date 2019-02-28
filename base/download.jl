@@ -35,8 +35,14 @@ function find_curl()
     end
 end
 
-function download_curl(curl_exe, url, filename)
-    run(`$curl_exe -s -S -g -L -f -o $filename $url`)
+function download_curl(curl_exe::AbstractString, url::AbstractString, filename::AbstractString)
+    err = PipeBuffer()
+    process = run(pipeline(`$curl_exe -s -S -g -L -f -o $filename $url`, stderr=err), wait=false)
+    wait(process)
+    if process.exitcode != 0
+        stderr = readline(err)
+        error(stderr)
+    end
     return filename
 end
 
