@@ -291,6 +291,21 @@ function diagm_container(kv::Pair{<:Integer,<:BitVector}...)
     return falses(n, n)
 end
 
+"""
+    diagm(v::AbstractVector)
+
+Construct a square matrix with elements of the vector as diagonal elements.
+
+# Examples
+```jldoctest
+julia> diagm([1,2,3])
+3×3 Array{Int64,2}:
+ 1  0  0
+ 0  2  0
+ 0  0  3
+```
+"""
+diagm(v::AbstractVector) = diagm(0 => v)
 
 function tr(A::Matrix{T}) where T
     n = checksquare(A)
