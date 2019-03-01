@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Logging functionality, including the `@debug`, `@info`, `@warn`, `@error`, and `@logmsg` macros.
+"""
 module Logging
 
 # For now, simply import most names from Base - we don't want to fully
