@@ -523,7 +523,7 @@ firstindex(::UnitRange) = 1
 firstindex(::StepRange) = 1
 firstindex(::LinRange) = 1
 
-function length(r::StepRange{T}) where T<:Union{Int,UInt,Int64,UInt64}
+function length(r::StepRange{T}) where T<:Union{Int,UInt,Int64,UInt64,Int128,UInt128}
     isempty(r) && return zero(T)
     if r.step > 1
         return checked_add(convert(T, div(unsigned(r.stop - r.start), r.step)), one(T))
