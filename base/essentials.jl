@@ -6,7 +6,20 @@ const Callable = Union{Function,Type}
 
 const Bottom = Union{}
 
+"""
+    AbstractSet{T}
+
+Supertype for set-like types whose elements are of type `T`.
+[`Set`](@ref), [`BitSet`](@ref) and other types are subtypes of this.
+"""
 abstract type AbstractSet{T} end
+
+"""
+    AbstractDict{K, V}
+
+Supertype for dictionary-like types with keys of type `K` and values of type `V`.
+[`Dict`](@ref), [`IdDict`](@ref) and other types are subtypes of this.
+"""
 abstract type AbstractDict{K,V} end
 
 # The real @inline macro is not available until after array.jl, so this

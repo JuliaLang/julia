@@ -194,7 +194,7 @@ already of the requested type:
 convert(::Type{T}, x::T) where {T<:Number} = x
 ```
 
-Similar definitions exist for `AbstractString`, `AbstractArray`, and `AbstractDict`.
+Similar definitions exist for `AbstractString`, [`AbstractArray`](@ref), and [`AbstractDict`](@ref).
 
 ## Promotion
 
