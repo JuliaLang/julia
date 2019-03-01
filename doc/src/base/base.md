@@ -248,6 +248,7 @@ Base.@simd
 Base.@polly
 Base.@generated
 Base.@pure
+Base.@deprecate
 ```
 
 ## Missing Values
