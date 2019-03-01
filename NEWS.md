@@ -52,7 +52,7 @@ Standard library changes
 * Eigenvalues λ of general matrices are now sorted lexicographically by (Re λ, Im λ) ([#21598]).
 * `one` for structured matrices (`Diagonal`, `Bidiagonal`, `Tridiagonal`, `Symtridiagonal`) now preserves
   structure and type. ([#29777])
-* `diagm(v)` is now a shorthand for `diagm(0 => v)` (#[31125]).
+* `diagm(v)` is now a shorthand for `diagm(0 => v)`. ([#31125]).
 
 #### SparseArrays
 
