@@ -242,7 +242,7 @@ const January = 1
 """
     Jan
 
-Abrreviation for ['January'](@ref).
+Abrreviation for [`January`](@ref).
 
 # Examples
 ```jldoctest
@@ -268,7 +268,7 @@ const February = 2
 """
     Feb
 
-Abrreviation for ['February'](@ref).
+Abrreviation for [`February`](@ref).
 
 # Examples
 ```jldoctest
@@ -294,7 +294,7 @@ const March = 3
 """
     Mar
 
-Abrreviation for ['March'](@ref).
+Abrreviation for [`March`](@ref).
 
 # Examples
 ```jldoctest
@@ -320,7 +320,7 @@ const April = 4
 """
     Apr
 
-Abrreviation for ['April'](@ref).
+Abrreviation for [`April`](@ref).
 
 # Examples
 ```jldoctest
@@ -359,7 +359,7 @@ const June = 6
 """
     Jun
 
-Abrreviation for ['June'](@ref).
+Abrreviation for [`June`](@ref).
 
 # Examples
 ```jldoctest
@@ -385,7 +385,7 @@ const July = 7
 """
     Jul
 
-Abrreviation for ['July'](@ref).
+Abrreviation for [`July`](@ref).
 
 # Examples
 ```jldoctest
@@ -411,7 +411,7 @@ const August = 8
 """
     Aug
 
-Abrreviation for ['August'](@ref).
+Abrreviation for [`August`](@ref).
 
 # Examples
 ```jldoctest
@@ -437,7 +437,7 @@ const September = 9
 """
     Sep
 
-Abrreviation for ['September'](@ref).
+Abrreviation for [`September`](@ref).
 
 # Examples
 ```jldoctest
@@ -463,7 +463,7 @@ const October = 10
 """
     Oct
 
-Abrreviation for ['October'](@ref).
+Abrreviation for [`October`](@ref).
 
 # Examples
 ```jldoctest
@@ -489,7 +489,7 @@ const November = 11
 """
     Nov
 
-Abrreviation for ['November'](@ref).
+Abrreviation for [`November`](@ref).
 
 # Examples
 ```jldoctest
@@ -515,7 +515,7 @@ const December = 12
 """
     Dec
 
-Abrreviation for ['December'](@ref).
+Abrreviation for [`December`](@ref).
 
 # Examples
 ```jldoctest
