@@ -61,6 +61,7 @@ jl_sym_t *colon_sym; jl_sym_t *hygienicscope_sym;
 jl_sym_t *throw_undef_if_not_sym; jl_sym_t *getfield_undefref_sym;
 jl_sym_t *gc_preserve_begin_sym; jl_sym_t *gc_preserve_end_sym;
 jl_sym_t *escape_sym;
+jl_sym_t *aliasscope_sym; jl_sym_t *popaliasscope_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -364,6 +365,8 @@ void jl_init_frontend(void)
     throw_undef_if_not_sym = jl_symbol("throw_undef_if_not");
     getfield_undefref_sym = jl_symbol("##getfield##");
     do_sym = jl_symbol("do");
+    aliasscope_sym = jl_symbol("aliasscope");
+    popaliasscope_sym = jl_symbol("popaliasscope");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)

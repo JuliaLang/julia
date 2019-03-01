@@ -375,6 +375,50 @@ end
     @test collect(x) == [1, 2, 4]
     @test collect(x) isa Vector{Int}
 
+    @testset "indexing" begin
+        x = skipmissing([1, missing, 2, missing, missing])
+        @test collect(eachindex(x)) == collect(keys(x)) == [1, 3]
+        @test x[1] === 1
+        @test x[3] === 2
+        @test_throws MissingException x[2]
+        @test_throws BoundsError x[6]
+        @test findfirst(==(2), x) == 3
+        @test findall(==(2), x) == [3]
+        @test argmin(x) == 1
+        @test findmin(x) == (1, 1)
+        @test argmax(x) == 3
+        @test findmax(x) == (2, 3)
+
+        x = skipmissing([missing 2; 1 missing])
+        @test collect(eachindex(x)) == [2, 3]
+        @test collect(keys(x)) == [CartesianIndex(2, 1), CartesianIndex(1, 2)]
+        @test x[2] === x[2, 1] === 1
+        @test x[3] === x[1, 2] === 2
+        @test_throws MissingException x[1]
+        @test_throws MissingException x[1, 1]
+        @test_throws BoundsError x[5]
+        @test_throws BoundsError x[3, 1]
+        @test findfirst(==(2), x) == CartesianIndex(1, 2)
+        @test findall(==(2), x) == [CartesianIndex(1, 2)]
+        @test argmin(x) == CartesianIndex(2, 1)
+        @test findmin(x) == (1, CartesianIndex(2, 1))
+        @test argmax(x) == CartesianIndex(1, 2)
+        @test findmax(x) == (2, CartesianIndex(1, 2))
+
+        for x in (skipmissing([]), skipmissing([missing, missing]))
+            @test isempty(collect(eachindex(x)))
+            @test isempty(collect(keys(x)))
+            @test_throws BoundsError x[3]
+            @test_throws BoundsError x[3, 1]
+            @test findfirst(==(2), x) === nothing
+            @test isempty(findall(==(2), x))
+            @test_throws ArgumentError argmin(x)
+            @test_throws ArgumentError findmin(x)
+            @test_throws ArgumentError argmax(x)
+            @test_throws ArgumentError findmax(x)
+        end
+    end
+
     @testset "mapreduce" begin
         # Vary size to test splitting blocks with several configurations of missing values
         for T in (Int, Float64),
