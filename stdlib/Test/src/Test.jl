@@ -584,7 +584,7 @@ function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), @nosp
             if isa(exc, typeof(extype))
                 success = true
                 for fld in 1:nfields(extype)
-                    if !(getfield(extype, fld) == getfield(exc, fld))
+                    if !isequal(getfield(extype, fld), getfield(exc, fld))
                         success = false
                         break
                     end
