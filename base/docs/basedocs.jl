@@ -1000,14 +1000,15 @@ The item or field is not defined for the given object.
 # Examples
 ```jldoctest
 julia> struct MyType
-           a::Int
+           a::Vector{Int}
+           MyType() = new()
        end
 
-julia> A = MyType(5)
-MyType(5)
+julia> A = MyType()
+MyType(#undef)
 
-julia> getfield(A, b)
-ERROR: UndefVarError: b not defined
+julia> A.a
+ERROR: UndefRefError: access to undefined reference
 Stacktrace:
 [...]
 ```
