@@ -1428,3 +1428,8 @@ end
 @testintersect(Tuple{Pair{B,C},Union{C,Pair{B,C}},Union{B,Real}} where {B,C},
                Tuple{Pair{B,C},C,C} where {B,C},
                Tuple{Pair{B,C},C,C} where C<:Union{Real, B} where B)
+
+# issue #31115
+@testintersect(Tuple{Ref{Z} where Z<:(Ref{Y} where Y<:Tuple{<:B}), Int} where B,
+               Tuple{Ref{Z} where Z<:(Ref{Y} where Y<:Tuple{  B}), Any} where B<:AbstractMatrix,
+               Tuple{Ref{Z} where Z<:(Ref{Y} where Y<:Tuple{  B}), Int} where B<:AbstractMatrix)

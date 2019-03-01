@@ -1401,7 +1401,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
         return R ? intersect_aside(a, b->ub, e, 0) : intersect_aside(b->ub, a, e, 0);
-    if (bb->lb == bb->ub && jl_is_typevar(bb->lb))
+    if (bb->lb == bb->ub && jl_is_typevar(bb->lb) && bb->lb != (jl_value_t*)b)
         return intersect(a, bb->lb, e, param);
     if (!jl_is_type(a) && !jl_is_typevar(a))
         return set_var_to_const(bb, a, NULL);
@@ -1466,8 +1466,11 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     else if (bb->constraintkind == 2) {
         // TODO: removing this case fixes many test_brokens in test/subtype.jl
         // but breaks other tests.
-        if (!subtype_in_env(a, bb->ub, e))
+        if (!subtype_in_env(a, bb->ub, e)) {
+            // mark var as unsatisfiable by making it circular
+            bb->lb = (jl_value_t*)b;
             return jl_bottom_type;
+        }
         jl_value_t *lb = simple_join(bb->lb, a);
         set_bound(&bb->lb, lb, b, e);
         return a;
