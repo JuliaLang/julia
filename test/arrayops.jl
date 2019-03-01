@@ -1104,6 +1104,11 @@ end
 
     # issue #21123
     @test mapslices(nnz, sparse(1.0I, 3, 3), dims=1) == [1 1 1]
+
+    # Issue #26232
+    m = mapslices(x->sum(x) == 3 ? "one" : 1, [1 2; 3 4], dims=2)
+    @test m isa Matrix{Union{Int,String}}
+    @test m == reshape(["one", 1], (2, 1))
 end
 
 @testset "single multidimensional index" begin

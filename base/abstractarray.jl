@@ -1940,6 +1940,7 @@ function mapslices(f, A::AbstractArray; dims)
     # Apply the function to the first slice in order to determine the next steps
     Aslice = A[idx...]
     r1 = f(Aslice)
+    RT = foldl(typejoin, return_types(f, Tuple{typeof(Aslice)}))
     # In some cases, we can re-use the first slice for a dramatic performance
     # increase. The slice itself must be mutable and the result cannot contain
     # any mutable containers. The following errs on the side of being overly
@@ -1954,7 +1955,7 @@ function mapslices(f, A::AbstractArray; dims)
         # If the result of f on a single slice is a scalar then we add singleton
         # dimensions. When adding the dimensions, we have to respect the
         # index type of the input array (e.g. in the case of OffsetArrays)
-        tmp = similar(Aslice, typeof(r1), reduced_indices(Aslice, 1:ndims(Aslice)))
+        tmp = similar(Aslice, RT, reduced_indices(Aslice, 1:ndims(Aslice)))
         tmp[firstindex(tmp)] = r1
         r1 = tmp
     end
