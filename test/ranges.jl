@@ -409,10 +409,13 @@ end
     Tset = Int === Int64 ? (Int,UInt,Int128,UInt128) :
                            (Int,UInt,Int64,UInt64,Int128, UInt128)
     for T in Tset
-        @test_throws OverflowError length(0:typemax(T))
+        @test_throws OverflowError length(zero(T):typemax(T))
         @test_throws OverflowError length(typemin(T):typemax(T))
+        @test_throws OverflowError length(zero(T):one(T):typemax(T))
+        @test_throws OverflowError length(typemin(T):one(T):typemax(T))
         if T <: Signed
             @test_throws OverflowError length(-one(T):typemax(T)-one(T))
+            @test_throws OverflowError length(-one(T):one(T):typemax(T)-one(T))
         end
     end
 end
