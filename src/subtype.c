@@ -476,6 +476,21 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     return sub;
 }
 
+static int subtype_left_var(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
+{
+    if (x == y)
+        return 1;
+    if (x == jl_bottom_type && jl_is_type(y))
+        return 1;
+    if (y == (jl_value_t*)jl_any_type && jl_is_type(x))
+        return 1;
+    if (jl_is_uniontype(x) && jl_is_uniontype(y) && jl_egal(x,y))
+        return 1;
+    if (x == (jl_value_t*)jl_any_type && jl_is_datatype(y))
+        return 0;
+    return subtype(x, y, e, 0);
+}
+
 // use the current context to record where a variable occurred, for the purpose
 // of determining whether the variable is concrete.
 static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, int param) JL_NOTSAFEPOINT
@@ -508,10 +523,10 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
 {
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
-        return e->ignore_free || subtype_ccheck(b->ub, a, e);
+        return e->ignore_free || subtype_left_var(b->ub, a, e);
     record_var_occurrence(bb, e, param);
     if (!bb->right)  // check ∀b . b<:a
-        return subtype_ccheck(bb->ub, a, e);
+        return subtype_left_var(bb->ub, a, e);
     if (bb->ub == a)
         return 1;
     if (!((bb->lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(bb->lb, a, e)))
@@ -532,7 +547,7 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
         if (aa && !aa->right && in_union(bb->lb, a) && bb->depth0 != aa->depth0 && var_outside(e, b, (jl_tvar_t*)a)) {
             // an "exists" var cannot equal a "forall" var inside it unless the forall
             // var has equal bounds.
-            return subtype_ccheck(aa->ub, aa->lb, e);
+            return subtype_left_var(aa->ub, aa->lb, e);
         }
     }
     return 1;
@@ -543,10 +558,10 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
 {
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
-        return e->ignore_free || subtype_ccheck(a, b->lb, e);
+        return e->ignore_free || subtype_left_var(a, b->lb, e);
     record_var_occurrence(bb, e, param);
     if (!bb->right)  // check ∀b . b>:a
-        return subtype_ccheck(a, bb->lb, e);
+        return subtype_left_var(a, bb->lb, e);
     if (bb->lb == bb->ub) {
         if (jl_is_typevar(bb->lb) && !jl_is_type(a) && !jl_is_typevar(a))
             return var_gt((jl_tvar_t*)bb->lb, a, e, param);

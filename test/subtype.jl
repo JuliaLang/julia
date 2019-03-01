@@ -1433,3 +1433,6 @@ end
 @testintersect(Tuple{Ref{Z} where Z<:(Ref{Y} where Y<:Tuple{<:B}), Int} where B,
                Tuple{Ref{Z} where Z<:(Ref{Y} where Y<:Tuple{  B}), Any} where B<:AbstractMatrix,
                Tuple{Ref{Z} where Z<:(Ref{Y} where Y<:Tuple{  B}), Int} where B<:AbstractMatrix)
+
+# issue #31190
+@test (Tuple{T} where T <: Union{Int,Bool}) <: Union{Tuple{Int}, Tuple{Bool}}
