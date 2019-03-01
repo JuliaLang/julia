@@ -733,6 +733,33 @@ end
 """
     mapdict(f, dict) -> dict
 Takes the function f(value) and returns a new Dict with the values transfor with new_value=f(value).
+
+# Examples
+```jldoctest
+julia> D=Dict(:a=>1,:b=>2,:c=>3)
+Dict{Symbol,Int64} with 3 entries:
+  :a => 1
+  :b => 2
+  :c => 3
+
+julia> E=mapdict(v->v-1,D)
+Dict{Symbol,Int64} with 3 entries:
+  :a => 0
+  :b => 1
+  :c => 2
+
+julia> D
+Dict{Symbol,Int64} with 3 entries:
+  :a => 1
+  :b => 2
+  :c => 3
+
+julia> E=mapdict(v->float(v-1),D)
+Dict{Symbol,Float64} with 3 entries:
+  :a => 0.0
+  :b => 1.0
+  :c => 2.0
+ ```
 """
 function mapdict(f, d::Dict{K,V}) where K where V
     isempty(d) && return d
