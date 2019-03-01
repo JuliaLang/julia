@@ -255,7 +255,7 @@ Parse `str` as an IP address.
 
 # Examples
 ```jldoctest
-julia> @ip_str "127.0.0.1"
+julia> ip"127.0.0.1"
 ip"127.0.0.1"
 
 julia> @ip_str "2001:db8:0:0:0:0:2:1"
