@@ -202,7 +202,7 @@ Print a summary of information about each processor in `cpu` gathered from [`cpu
   - The number (e.g. CPU 3 on a system with 10 total)
   - The CPU model
   - The CPU speed
-  - The amounnt of time spent in `user`, `nice`, `sys`, `idle`, and `irq` modes
+  - The amount of time spent in `user`, `nice`, `sys`, `idle`, and `irq` modes
 """
 function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
     model = cpu[1].model
