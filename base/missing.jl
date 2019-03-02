@@ -329,6 +329,37 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
 end
 
 """
+    filter(f, itr::SkipMissing{<:AbstractArray})
+
+Return a vector similar to the array wrapped by the given `SkipMissing` iterator
+but with all missing elements and those for which `f` returns `false` removed.
+
+!!! compat "Julia 1.2"
+    This method requires Julia 1.2 or later.
+
+# Examples
+```jldoctest
+julia> x = [1 2; missing 4]
+2×2 Array{Union{Missing, Int64},2}:
+ 1         2
+  missing  4
+
+julia> filter(isodd, skipmissing(x))
+1-element Array{Int64,1}:
+ 1
+```
+"""
+function filter(f, itr::SkipMissing{<:AbstractArray})
+    y = similar(itr.x, eltype(itr), 0)
+    for xi in itr.x
+        if xi !== missing && f(xi)
+            push!(y, xi)
+        end
+    end
+    y
+end
+
+"""
     coalesce(x, y...)
 
 Return the first value in the arguments which is not equal to [`missing`](@ref),
