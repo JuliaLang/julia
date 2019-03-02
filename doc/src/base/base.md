@@ -290,7 +290,6 @@ Base.EnvDict
 Base.ENV
 Base.Sys.cpu_summary
 Base.Sys.cpu_info
-Base.Sys.isapple
 Base.Sys.isunix
 Base.Sys.isapple
 Base.Sys.islinux
