@@ -526,8 +526,10 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
         # Step 1: Check whether the statement we're looking at is a getfield/setfield!
         if is_known_call(stmt, setfield!, compact)
             is_setfield = true
+            4 <= length(stmt.args) <= 5 || continue
         elseif is_known_call(stmt, getfield, compact)
             is_getfield = true
+            3 <= length(stmt.args) <= 4 || continue
         elseif is_known_call(stmt, isa, compact)
             # TODO
             continue

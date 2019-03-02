@@ -34,7 +34,7 @@ extern Function *juliapersonality_func;
 typedef struct {Value *gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump_native=false);
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false);
 void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit = NULL);
 void* jl_get_globalvar(GlobalVariable *gv);
 GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M);

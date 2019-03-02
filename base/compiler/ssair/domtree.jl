@@ -177,13 +177,11 @@ begin
         parent = 0
         while !isempty(worklist)
             (parent, current_node) = pop!(worklist)
+            dfs.reverse[current_node] != 0 && continue
             dfs.reverse[current_node] = dfs_num
             dfs.numbering[dfs_num] = current_node
             dfs.parents[dfs_num] = parent
             for succ in cfg.blocks[current_node].succs
-                dfs.reverse[succ] != 0 && continue
-                # Mark things that are currently in the worklist
-                dfs.reverse[succ] = 1
                 push!(worklist, (dfs_num, succ))
             end
             dfs_num += 1
@@ -239,7 +237,7 @@ begin
         # SLT would, but never simultaneously, so we could still
         # do this.
         ancestors = D.parents
-        for w ∈ reverse(_drop(preorder(D), 1))
+        for w::DFSNumber ∈ reverse(_drop(preorder(D), 1))
             # LLVM initializes this to the parent, the paper initializes this to
             # `w`, but it doesn't really matter (the parent is a predecessor,
             # so at worst we'll discover it below). Save a memory reference here.

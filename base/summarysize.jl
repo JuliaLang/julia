@@ -11,7 +11,7 @@ end
 """
     Base.summarysize(obj; exclude=Union{...}, chargeall=Union{...}) -> Int
 
-Compute the amount of memory used by all unique objects reachable from the argument.
+Compute the amount of memory, in bytes, used by all unique objects reachable from the argument.
 
 # Keyword Arguments
 - `exclude`: specifies the types of objects to exclude from the traversal.

@@ -26,7 +26,7 @@ SUITE_SPARSE_LIB += $(RPATH_ESCAPED_ORIGIN)
 SUITESPARSE_MFLAGS := CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
 	  INSTALL_LIB="$(build_libdir)" INSTALL_INCLUDE="$(build_includedir)" LIB="$(SUITE_SPARSE_LIB)" \
 	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" SPQR_CONFIG="$(SPQR_CONFIG)" \
-	  CFOPENMP=""
+	  CFOPENMP="" CUDA=no CUDA_PATH=""
 
 $(SRCCACHE)/SuiteSparse-$(SUITESPARSE_VER).tar.gz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ http://faculty.cse.tamu.edu/davis/SuiteSparse/$(notdir $@)

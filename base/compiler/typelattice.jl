@@ -148,6 +148,7 @@ function ⊑(@nospecialize(a), @nospecialize(b))
             end
             for i in 1:nfields(a.val)
                 # XXX: let's handle varargs later
+                isdefined(a.val, i) || return false
                 ⊑(Const(getfield(a.val, i)), b.fields[i]) || return false
             end
             return true

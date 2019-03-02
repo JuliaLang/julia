@@ -15,7 +15,7 @@ For multiple collection arguments, apply `f` elementwise.
 Results are returned in order as they become available.
 
 Note that `f` must be made available to all worker processes; see
-[Code Availability and Loading Packages](@ref)
+[Code Availability and Loading Packages](@ref code-availability)
 for details.
 """
 function pgenerate(p::WorkerPool, f, c)
@@ -38,7 +38,7 @@ workers and tasks.
 For multiple collection arguments, apply `f` elementwise.
 
 Note that `f` must be made available to all worker processes; see
-[Code Availability and Loading Packages](@ref) for details.
+[Code Availability and Loading Packages](@ref code-availability) for details.
 
 If a worker pool is not specified, all available workers, i.e., the default worker pool
 is used.
