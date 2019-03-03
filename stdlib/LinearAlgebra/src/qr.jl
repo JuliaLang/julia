@@ -522,7 +522,7 @@ end
 
 ## Multiplication by Q
 ### QB
-QRCompactWYOrPackedQ = Union{QRCompactWYQ{T,S}, QRPackedQ{T,S}} where {T, S}
+QRCompactWYOrPackedQ{T,S} = Union{QRCompactWYQ{T,S}, QRPackedQ{T,S}}
 mul!(C::StridedVecOrMat{T}, AOrAdjA::Union{Adjoint{<:Any,<:QRCompactWYOrPackedQ}, QRCompactWYOrPackedQ}, B::StridedVecOrMat{T}) where {T, S} =
     lmul!(AOrAdjA, copy!(C, B))
 
