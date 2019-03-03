@@ -15,10 +15,20 @@
 # is only printed the first time for each call place.
 
 """
-    @deprecate old new
+    @deprecate old new [ex=true]
 
 The first argument `old` is the signature of the deprecated method, the second one
-`new` is the call which replaces it. @deprecate exports the function.
+`new` is the call which replaces it. `@deprecate` exports `old` unless the optional
+third argument is `false`.
+
+# Examples
+```jldoctest
+julia> @deprecate old(x) new(x)
+old (generic function with 1 method)
+
+julia> @deprecate old(x) new(x) false
+old (generic function with 1 method)
+```
 """
 macro deprecate(old, new, ex=true)
     meta = Expr(:meta, :noinline)
