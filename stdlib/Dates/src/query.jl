@@ -497,7 +497,7 @@ julia> Nov
 11
 ```
 """
-const Nov= 11
+const Nov = 11
 
 """
     December
