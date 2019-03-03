@@ -15,6 +15,13 @@ end
 @test sprint(show, complex(1, 0), context=:compact => true) == "1+0im"
 @test sprint(show, complex(true, true)) == "Complex(true,true)"
 
+@testset "unary operator on complex boolean" begin
+    @test isequal(+(complex(true)), complex(1, 0))
+    @test isequal(+(complex(false)), complex(0, 0))
+    @test isequal(-(complex(true)), complex(-1, 0))
+    @test isequal(-(complex(false)), complex(0, 0))
+end
+
 @testset "arithmetic" begin
     @testset for T in (Float16, Float32, Float64, BigFloat)
         t = true

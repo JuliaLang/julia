@@ -275,6 +275,7 @@ muladd(z::Complex, w::Complex, x::Complex) =
 # handle Bool and Complex{Bool}
 # avoid type signature ambiguity warnings
 +(x::Bool, z::Complex{Bool}) = Complex(x + real(z), imag(z))
++(z::Complex{Bool}) = Complex(+z.re , +z.im)
 +(z::Complex{Bool}, x::Bool) = Complex(real(z) + x, imag(z))
 -(x::Bool, z::Complex{Bool}) = Complex(x - real(z), - imag(z))
 -(z::Complex{Bool}, x::Bool) = Complex(real(z) - x, imag(z))
