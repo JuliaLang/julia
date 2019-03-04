@@ -2510,6 +2510,42 @@ end
     end
 end
 
+@testset "wrappers of sparse" begin
+    m = n = 10
+    A = spzeros(ComplexF64, m, n)
+    A[:,1] = 1:m
+    A[:,2] = [1 3 0 0 0 0 0 0 0 0]'
+    A[:,3] = [2 4 0 0 0 0 0 0 0 0]'
+    A[:,4] = [0 0 0 0 5 3 0 0 0 0]'
+    A[:,5] = [0 0 0 0 6 2 0 0 0 0]'
+    A[:,6] = [0 0 0 0 7 4 0 0 0 0]'
+    A[:,7:n] = rand(ComplexF64, m, n-6)
+    B = Matrix(A)
+    dowrap(wr, A) = wr(A)
+    dowrap(wr::Tuple, A) = (wr[1])(A, wr[2:end]...)
+
+    @testset "sparse($wr(A))" for wr in (
+                        Symmetric, (Symmetric, :L), Hermitian, (Hermitian, :L),
+                        Transpose, Adjoint,
+                        UpperTriangular, LowerTriangular,
+                        UnitUpperTriangular, UnitLowerTriangular,
+                        (view, 3:6, 2:5))
+
+        @test SparseMatrixCSC(dowrap(wr, A)) == Matrix(dowrap(wr, B))
+    end
+
+    @testset "sparse($at($wr))" for at = (Transpose, Adjoint), wr =
+        (UpperTriangular, LowerTriangular,
+         UnitUpperTriangular, UnitLowerTriangular)
+
+        @test SparseMatrixCSC(at(wr(A))) == Matrix(at(wr(B)))
+    end
+
+    @test sparse([1,2,3,4,5]') == SparseMatrixCSC([1 2 3 4 5])
+    @test sparse(UpperTriangular(A')) == UpperTriangular(B')
+    @test sparse(Adjoint(UpperTriangular(A'))) == Adjoint(UpperTriangular(B'))
+end
+
 @testset "Ti cannot store all potential values #31024" begin
     @test_throws ArgumentError SparseMatrixCSC(128, 1, [Int8(1), Int8(1)], Int8[], Int[])
     @test_throws ArgumentError SparseMatrixCSC(12, 12, [Int8(1), Int8(1)], Int8[], Int[])
