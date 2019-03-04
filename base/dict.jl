@@ -669,7 +669,7 @@ function skip_deleted_floor!(h::Dict)
 end
 
 @inline function _iterate(h::Dict)
-    (isempty(h) || length(h.slots)<8) && return nothing
+    isempty(h) && return nothing #always length(h.slots) >= 16
     return _iterate(h, (1, ltoh(unsafe_load(convert(Ptr{UInt64}, pointer(h.slots)),1)) & 0x0101010101010101))
 end
 
@@ -721,7 +721,7 @@ end
 function filter!(pred, h::Dict{K,V}) where {K,V}
     isempty(h) && return h
     is = _iterate(h)
-    @inbounds while s !== nothing
+    @inbounds while is !== nothing
         i, state = is
         if !pred(Pair{K,V}(h.keys[i], h.vals[i]))
             _delete!(h, i)
