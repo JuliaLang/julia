@@ -39,7 +39,7 @@ unsafe_convert(::Type{Ptr{Cvoid}}, cf::CFunction) = cf.ptr
     @cfunction(callable, ReturnType, (ArgumentTypes...,)) -> Ptr{Cvoid}
     @cfunction(\$callable, ReturnType, (ArgumentTypes...,)) -> CFunction
 
-Generate a C-callable function pointer from the Julia function `closure`
+Generate a C-callable function pointer from the Julia function `callable`
 for the given type signature.
 To pass the return value to a `ccall`, use the argument type `Ptr{Cvoid}` in the signature.
 
