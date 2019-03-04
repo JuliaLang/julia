@@ -668,23 +668,67 @@ function skip_deleted_floor!(h::Dict)
     idx
 end
 
-@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i > length(t.vals) ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i+1)
-@propagate_inbounds function iterate(t::Dict)
-    _iterate(t, skip_deleted_floor!(t))
+@inline function _iterate(h::Dict)
+    (isempty(h) || length(h.slots)<8) && return nothing
+    return _iterate(h, (1, ltoh(unsafe_load(convert(Ptr{UInt64}, pointer(h.slots)),1)) & 0x0101010101010101))
 end
-@propagate_inbounds iterate(t::Dict, i) = _iterate(t, skip_deleted(t, i))
+
+@inline function _iterate(h::Dict, s)
+    i,c = s
+    while c == 0
+        i % UInt >= (length(h.slots)>>3) && return nothing
+        i += 1
+        c = ltoh(unsafe_load(convert(Ptr{UInt64}, pointer(h.slots)),i)) & 0x0101010101010101
+    end
+    idx = 1 + (i-1)<<3 + trailing_zeros(c)>>3
+
+    return  idx, (i, _blsr(c))
+end
+
+function iterate(h::Dict{K,V}) where {K,V}
+    isempty(h) && return nothing
+    s = _iterate(h)
+    s === nothing && return nothing
+    i, state = s
+    @inbounds return Pair{K,V}(h.keys[i], h.vals[i]), state
+end
+
+function iterate(h::Dict{K,V}, state) where {K,V}
+    s = _iterate(h, state)
+    s === nothing && return nothing
+    i, state = s
+    @inbounds return Pair{K,V}(h.keys[i], h.vals[i]), state
+end
 
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-@propagate_inbounds function iterate(v::Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}},
-                                     i=v.dict.idxfloor)
-    i = skip_deleted(v.dict, i)
-    i > length(v.dict.vals) && return nothing
-    (v isa KeySet ? v.dict.keys[i] : v.dict.vals[i], i+1)
+@propagate_inbounds function iterate(v::Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}})
+    isempty(v.dict) && return nothing
+    is = _iterate(v.dict)
+    is === nothing && return nothing
+    i,s = is 
+    (v isa KeySet ? v.dict.keys[i] : v.dict.vals[i], s)
 end
 
-filter!(f, d::Dict) = filter_in_one_pass!(f, d)
+@propagate_inbounds function iterate(v::Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}, s)
+    is = _iterate(v.dict, s)
+    is === nothing && return nothing
+    i,s = is
+    (v isa KeySet ? v.dict.keys[i] : v.dict.vals[i], s)
+end
+
+function filter!(pred, h::Dict{K,V}) where {K,V}
+    isempty(h) && return h
+    s = _iterate(h)
+    @inbounds while s !== nothing
+        i, state = s
+        if !pred(Pair{K,V}(h.keys[i], h.vals[i]))
+            _delete!(h, i)
+        end
+    end
+    return h
+end
 
 struct ImmutableDict{K,V} <: AbstractDict{K,V}
     parent::ImmutableDict{K,V}
