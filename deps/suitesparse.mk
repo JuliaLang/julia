@@ -16,7 +16,7 @@ CHOLMOD_CONFIG += -DNPARTITION
 
 ifneq ($(USE_BINARYBUILDER_SUITESPARSE), 1)
 
-SUITESPARSE_PROJECTS := AMD BTF CAMD CCOLAMD COLAMD CHOLMOD LDL KLU UMFPACK RBio SPQR
+SUITESPARSE_PROJECTS := AMD CAMD CCOLAMD COLAMD CHOLMOD UMFPACK SPQR
 SUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig amd camd ccolamd colamd cholmod umfpack spqr)
 # compiled but not installed: btf ldl klu rbio
 
