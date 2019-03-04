@@ -89,9 +89,9 @@ esac
 
 # Download most recent Julia binary for dependencies
 if ! [ -e julia-installer.exe ]; then
-  f=julia-latest-win$bits.exe
+  f=julia-1.0.3-win$bits.exe
   echo "Downloading $f"
-  $curlflags -O https://julialangnightlies-s3.julialang.org/bin/winnt/x$archsuffix/$f
+  $curlflags -O https://julialang-s3.julialang.org/bin/winnt/x$archsuffix/1.0/$f
   echo "Extracting $f"
   $SEVENZIP x -y $f >> get-deps.log
 fi
