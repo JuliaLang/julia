@@ -707,7 +707,7 @@ length(t::Dict) = t.count
     isempty(v.dict) && return nothing
     is = _iterate(v.dict)
     is === nothing && return nothing
-    i,s = is 
+    i,s = is
     (v isa KeySet ? v.dict.keys[i] : v.dict.vals[i], s)
 end
 
