@@ -404,3 +404,10 @@ Base.code_lowered
 Base.code_typed
 Base.precompile
 ```
+
+## Meta
+```@docs
+Meta.quot
+Meta.isexpr
+Meta.show_sexpr
+```

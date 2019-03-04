@@ -308,7 +308,7 @@ The intuition behind this behavior is that `x` is evaluated once for each `$`:
 one `$` works similarly to `eval(:x)`, giving `x`'s value, while two `$`s do the
 equivalent of `eval(eval(:x))`.
 
-### QuoteNode
+### [QuoteNode](@id man-quote-node)
 
 The usual representation of a `quote` form in an AST is an [`Expr`](@ref) with head `:quote`:
 
