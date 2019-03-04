@@ -720,12 +720,13 @@ end
 
 function filter!(pred, h::Dict{K,V}) where {K,V}
     isempty(h) && return h
-    s = _iterate(h)
+    is = _iterate(h)
     @inbounds while s !== nothing
-        i, state = s
+        i, state = is
         if !pred(Pair{K,V}(h.keys[i], h.vals[i]))
             _delete!(h, i)
         end
+        is = _iterate(h, state)
     end
     return h
 end
