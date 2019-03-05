@@ -940,8 +940,9 @@ static void init_struct_tail(jl_datatype_t *type, jl_value_t *jv, size_t na) JL_
 JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (!jl_is_datatype(type) || type->layout == NULL)
+    if (!jl_is_datatype(type) || type->layout == NULL) {
         jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
+    }
     if (type->ninitialized > na || na > jl_datatype_nfields(type))
         jl_error("invalid struct allocation");
     for (size_t i = 0; i < na; i++) {

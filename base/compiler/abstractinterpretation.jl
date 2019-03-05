@@ -100,7 +100,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     edges = Any[]
     nonbot = 0  # the index of the only non-Bottom inference result if > 0
     seen = 0    # number of signatures actually inferred
-    istoplevel = sv.linfo.def isa Module
+    istoplevel = sv.linfo !== nothing && sv.linfo.def isa Module
     multiple_matches = napplicable > 1
 
     if f !== nothing && napplicable == 1 && is_method_pure(applicable[1]::MethodMatch)
@@ -349,7 +349,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
     sv_method2 isa Method || (sv_method2 = nothing) # Union{Method, Nothing}
     while !(infstate === nothing)
         infstate = infstate::InferenceState
-        if method === infstate.linfo.def
+        if infstate.linfo !== nothing && method === infstate.linfo.def
             if infstate.linfo.specTypes == sig
                 # avoid widening when detecting self-recursion
                 # TODO: merge call cycle and return right away
@@ -802,6 +802,10 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
             ty = typeintersect(ty, cnd.elsetype)
         end
         return tmerge(tx, ty)
+    elseif f === Core._opaque_closure
+        la >= 5 || return Union{}
+        return _opaque_closure_tfunc(argtypes[2], argtypes[3], argtypes[4],
+            argtypes[5], argtypes[6:end], sv.linfo)
     end
     rt = builtin_tfunction(interp, f, argtypes[2:end], sv)
     if f === getfield && isa(fargs, Vector{Any}) && la == 3 && isa(argtypes[3], Const) && isa(argtypes[3].val, Int) && argtypes[2] ⊑ Tuple
@@ -1015,6 +1019,28 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     return abstract_call_gf_by_type(interp, f, argtypes, atype, sv, max_methods)
 end
 
+function abstract_call_opaque_closure(interp::AbstractInterpreter, clos::PartialOpaque, argtypes::Vector{Any}, sv::InferenceState)
+    if isa(clos.ci, CodeInfo)
+        nargtypes = argtypes[2:end]
+        pushfirst!(nargtypes, clos.env)
+        result = InferenceResult(Core.OpaqueClosure, nargtypes)
+        state = InferenceState(result, copy(clos.ci), false, interp)
+        typeinf_local(interp, state)
+        finish(state, interp)
+        result.src.src.inferred = true
+        clos.ci = result.src
+        return CallMeta(result.result, false)
+    elseif isa(clos.ci, OptimizationState)
+        return CallMeta(clos.ci.src.rettype, nothing)
+    else
+        nargtypes = argtypes[2:end]
+        pushfirst!(nargtypes, Core.OpaqueClosure)
+        sig = argtypes_to_type(nargtypes)
+        rt, edge = abstract_call_method(interp, clos.ci::Method, sig, Core.svec(), false, sv)
+        return CallMeta(rt, edge)
+    end
+end
+
 # call where the function is any lattice element
 function abstract_call(interp::AbstractInterpreter, fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any},
                        sv::InferenceState, max_methods::Int = InferenceParams(interp).MAX_METHODS)
@@ -1026,6 +1052,8 @@ function abstract_call(interp::AbstractInterpreter, fargs::Union{Nothing,Vector{
         f = ft.parameters[1]
     elseif isa(ft, DataType) && isdefined(ft, :instance)
         f = ft.instance
+    elseif isa(ft, PartialOpaque)
+        return abstract_call_opaque_closure(interp, ft, argtypes, sv)
     else
         # non-constant function, but the number of arguments is known
         # and the ft is not a Builtin or IntrinsicFunction
@@ -1339,14 +1367,14 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             elseif isa(stmt, ReturnNode)
                 pc´ = n + 1
                 rt = widenconditional(abstract_eval_value(interp, stmt.val, s[pc], frame))
-                if !isa(rt, Const) && !isa(rt, Type) && !isa(rt, PartialStruct)
+                if !isa(rt, Const) && !isa(rt, Type) && !isa(rt, PartialStruct) && !isa(rt, PartialOpaque)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally
                     rt = widenconst(rt)
                 end
                 if tchanged(rt, frame.bestguess)
                     # new (wider) return type for frame
-                    frame.bestguess = tmerge(frame.bestguess, rt)
+                    frame.bestguess = frame.bestguess === NOT_FOUND ? rt : tmerge(frame.bestguess, rt)
                     for (caller, caller_pc) in frame.cycle_backedges
                         # notify backedges of updated type information
                         typeassert(caller.stmt_types[caller_pc], VarTable) # we must have visited this statement before

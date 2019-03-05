@@ -301,6 +301,9 @@ function CodeInstance(result::InferenceResult, @nospecialize(inferred_result::An
         elseif isa(result.result, PartialStruct)
             rettype_const = (result.result::PartialStruct).fields
             const_flags = 0x2
+        elseif isa(result.result, PartialOpaque)
+            rettype_const = result.result
+            const_flags = 0x2
         else
             rettype_const = nothing
             const_flags = 0x00
@@ -381,6 +384,49 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
     nothing
 end
 
+function finish_opaque_closure!(clos::PartialOpaque, mod::Module, interp::AbstractInterpreter)
+    # Infer with the most general types possible, so that optimization has
+    # access to the result.
+
+    argt = unwrap_unionall(clos.t).parameters[1]
+
+    argtypes = Any[argt.parameters...]
+    pushfirst!(argtypes, clos.env)
+    if isdispatchtuple(argt)
+        # If we don't need to track specializations, just infer this here
+        # right now.
+        result = InferenceResult(Core.OpaqueClosure, argtypes)
+        state = InferenceState(result, copy(clos.ci), false, interp)
+        typeinf_local(interp, state)
+        finish(state, interp)
+        result.src.src.inferred = true
+        clos.ci = result.src
+    else
+        # Otherwise infer via the method instance cache.
+        m = ccall(:jl_mk_opaque_closure_method, Any, (Any,), mod)::Method
+        m.nargs = Int32(length(argtypes))
+        m.source = clos.ci
+        argtypes = Any[argt.parameters...]
+        pushfirst!(argtypes, Core.OpaqueClosure)
+        m.unspecialized = specialize_method(m, argtypes_to_type(argtypes), Core.svec())
+
+        mi = m.unspecialized
+
+        lock_mi_inference(interp, mi)
+        result = InferenceResult(mi)
+        frame = InferenceState(result, #=cached=#true, interp)
+        if frame === nothing
+            # can't get the source for this, so we know nothing
+            unlock_mi_inference(interp, mi)
+            return
+        end
+        typeinf(interp, frame)
+        unlock_mi_inference(interp, mi)
+
+        clos.ci = m
+    end
+end
+
 # inference completed on `me`
 # update the MethodInstance
 function finish(me::InferenceState, interp::AbstractInterpreter)
@@ -409,10 +455,16 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     else
         # annotate fulltree with type information
         type_annotate!(me)
+        if isa(me.bestguess, PartialOpaque)
+            mod = isa(me.linfo.def, Module) ? me.linfo.def : me.linfo.def.module
+            finish_opaque_closure!(me.bestguess, mod, interp)
+        end
         me.result.src = OptimizationState(me, OptimizationParams(interp), interp)
     end
-    me.result.valid_worlds = me.valid_worlds
-    me.result.result = me.bestguess
+    if me.result !== nothing
+        me.result.valid_worlds = me.valid_worlds
+        me.result.result = me.bestguess
+    end
     nothing
 end
 
@@ -727,6 +779,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         if isdefined(code, :rettype_const)
             if isa(code.rettype_const, Vector{Any}) && !(Vector{Any} <: code.rettype)
                 return PartialStruct(code.rettype, code.rettype_const), mi
+            elseif isa(code.rettype_const, PartialOpaque) && code.rettype <: Core.OpaqueClosure
+                return code.rettype_const, mi
             else
                 return Const(code.rettype_const), mi
             end

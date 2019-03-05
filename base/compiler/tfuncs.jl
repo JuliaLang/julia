@@ -1425,6 +1425,24 @@ function array_builtin_common_nothrow(argtypes::Array{Any,1}, first_idx_idx::Int
     return false
 end
 
+function _opaque_closure_tfunc(@nospecialize(arg), @nospecialize(lb), @nospecialize(ub),
+    @nospecialize(ci), env::Vector{Any}, linfo::MethodInstance)
+    argt, argt_exact = instanceof_tfunc(arg)
+    lbt, lb_exact = instanceof_tfunc(lb)
+    if !lb_exact
+    lbt = Union{}
+    end
+
+    ubt, ub_exact = instanceof_tfunc(ub)
+
+    t = Core.OpaqueClosure{argt_exact ? argt : <:argt}
+    t = t{(lbt == ubt && ub_exact) ? ubt : T} where lbt<:T<:ubt
+
+    isa(ci, Const) || return t
+
+    PartialOpaque(t, tuple_tfunc(env), linfo, ci.val)
+end
+
 # Query whether the given builtin is guaranteed not to throw given the argtypes
 function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecialize(rt))
     if f === arrayset
