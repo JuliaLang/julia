@@ -262,8 +262,8 @@ abs2(z::Complex) = real(z)*real(z) + imag(z)*imag(z)
 inv(z::Complex)  = conj(z)/abs2(z)
 inv(z::Complex{<:Integer}) = inv(float(z))
 
--(z::Complex) = Complex(-real(z), -imag(z))
 +(z::Complex) = Complex(+real(z), +imag(z))
+-(z::Complex) = Complex(-real(z), -imag(z))
 +(z::Complex, w::Complex) = Complex(real(z) + real(w), imag(z) + imag(w))
 -(z::Complex, w::Complex) = Complex(real(z) - real(w), imag(z) - imag(w))
 *(z::Complex, w::Complex) = Complex(real(z) * real(w) - imag(z) * imag(w),
