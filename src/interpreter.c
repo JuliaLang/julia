@@ -44,9 +44,9 @@ extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 // This is necessary, because otherwise the analyzer considers this undefined
 // behavior and terminates the exploration
 #define JL_GC_PUSHFRAME(frame,n)     \
-  JL_CPPALLOCA(frame, sizeof(*frame)+((n) * sizeof(jl_value_t*)));                  \
+  JL_CPPALLOCA(frame, sizeof(*frame)+((n+3) * sizeof(jl_value_t*)));                  \
   memset(&frame[1], 0, sizeof(void*) * n); \
-  _JL_GC_PUSHARGS((jl_value_t**)&frame[1], n);
+  _JL_GC_PUSHARGS(&((void**)&frame[1])[3], n);
 
 #else
 
@@ -646,6 +646,41 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     s->continue_at = 0;
     s->mi = mi;
     JL_GC_ENABLEFRAME(s);
+    jl_value_t *r = eval_body(stmts, s, 0, 0);
+    JL_GC_POP();
+    return r;
+}
+
+jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs)
+{
+    jl_code_info_t *source = NULL;
+    jl_value_t *code = clos->code;
+    if (jl_is_method(code)) {
+        source = (jl_code_info_t*)clos->method->source;
+    }
+    else {
+        source = clos->source;
+    }
+    jl_array_t *stmts = source->code;
+    assert(jl_typeis(stmts, jl_array_any_type));
+    interpreter_state *s;
+    unsigned nroots = jl_source_nslots(source) + jl_source_nssavalues(source) + 2;
+    JL_GC_PUSHFRAME(s, nroots);
+    jl_value_t **locals = (jl_value_t**)&s[1] + 3;
+    locals[0] = (jl_value_t*)clos;
+    // The analyzer has some trouble with this
+    locals[1] = (jl_value_t*)stmts;
+    JL_GC_PROMISE_ROOTED(stmts);
+    locals[2] = (jl_value_t*)clos->env;
+    s->locals = locals + 2;
+    s->src = source;
+    s->module = NULL;
+    s->sparam_vals = NULL;
+    s->preevaluation = 0;
+    s->continue_at = 0;
+    s->mi = NULL;
+    for (int i = 0; i < nargs; ++i)
+        s->locals[1 + i] = args[i];
     jl_value_t *r = eval_body(stmts, s, 0, 0);
     JL_GC_POP();
     return r;

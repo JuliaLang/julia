@@ -1194,3 +1194,41 @@ function cfg_simplify!(ir::IRCode)
     compact.active_result_bb = length(bb_starts)
     return finish(compact)
 end
+
+function analyze_env_uses(opaque_ir)
+    uses = BitSet()
+    for idx in 1:length(opaque_ir.stmts)
+        stmt = opaque_ir.stmts[idx][:inst]
+        isexpr(stmt, :call) || continue
+        if is_known_call(stmt, getfield, opaque_ir, Any[])
+            if stmt.args[2] == Argument(1)
+                push!(uses, stmt.args[3])
+            end
+        end
+    end
+    uses
+end
+
+function opaque_closure_optim_pass!(ir::IRCode)
+    if isempty(ir.opaques)
+        return ir
+    end
+
+    # For any opaque closures being co-optimized, optimize the capture environment
+    uses = BitSet[]
+    for ir′ in ir.opaques
+        push!(uses, analyze_env_uses(ir′))
+    end
+
+    compact = IncrementalCompact(ir)
+    for ((_, idx), stmt) in compact
+        isexpr(stmt, :new_opaque_closure) || continue
+        this_opaque_closure_uses = uses[(stmt.args[5]::OpaqueClosureIdx).n]
+        if isempty(this_opaque_closure_uses)
+            resize!(stmt.args, 5)
+        end
+    end
+
+    # TODO: We could hoise code here
+    return finish(compact)
+end
