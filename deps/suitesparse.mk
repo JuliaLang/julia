@@ -19,15 +19,12 @@ ifneq ($(USE_BINARYBUILDER_SUITESPARSE), 1)
 SUITESPARSE_PROJECTS := AMD CAMD CCOLAMD COLAMD CHOLMOD UMFPACK SPQR
 SUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig amd camd ccolamd colamd cholmod umfpack spqr)
 
-SUITE_SPARSE_LIB := -lm
-ifneq ($(OS), Darwin)
-ifneq ($(OS), WINNT)
-SUITE_SPARSE_LIB += -lrt
-endif
-endif
+SUITE_SPARSE_LIB := $(LDFLAGS) -L"$(abspath $(BUILDDIR))/SuiteSparse-$(SUITESPARSE_VER)/lib"
+ifeq ($(OS), Darwin)
 SUITE_SPARSE_LIB += $(RPATH_ESCAPED_ORIGIN)
+endif
 SUITESPARSE_MFLAGS := CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
-	  LIB="$(SUITE_SPARSE_LIB)" OS="$(env_OS)" \
+	  LDFLAGS="$(SUITE_SPARSE_LIB)" OS="$(env_OS)" \
 	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" SPQR_CONFIG="$(SPQR_CONFIG)" \
 	  CFOPENMP="" CUDA=no CUDA_PATH=""
 
@@ -57,8 +54,10 @@ endif
 
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted
 	$(MAKE) -C $(dir $<)SuiteSparse_config library config $(SUITESPARSE_MFLAGS)
-	for proj in $(SUITESPARSE_PROJECTS); do \
-		$(MAKE) -C $(dir $<)$${proj} library $(SUITESPARSE_MFLAGS) || exit 1; \
+	$(INSTALL_NAME_CMD)libsuitesparseconfig.$(SHLIB_EXT) $(dir $<)lib/libsuitesparseconfig.$(SHLIB_EXT)
+	for PROJ in $(SUITESPARSE_PROJECTS); do \
+		$(MAKE) -C $(dir $<)$${PROJ} library $(SUITESPARSE_MFLAGS) || exit 1; \
+		$(INSTALL_NAME_CMD)lib`echo $${PROJ} | tr A-Z a-z`.$(SHLIB_EXT) $(dir $<)lib/lib`echo $${PROJ} | tr A-Z a-z`.$(SHLIB_EXT) || exit 1; \
 	done
 	echo 1 > $@
 
@@ -68,8 +67,8 @@ else
 SUITESPARSE_SHLIB_ENV:=LD_LIBRARY_PATH="$(build_shlibdir)"
 endif
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-checked: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled
-	for proj in $(SUITESPARSE_PROJECTS); do \
-		$(SUITESPARSE_SHLIB_ENV) $(MAKE) -C $(dir $<)$${proj} default $(SUITESPARSE_MFLAGS) || exit 1; \
+	for PROJ in $(SUITESPARSE_PROJECTS); do \
+		$(SUITESPARSE_SHLIB_ENV) $(MAKE) -C $(dir $<)$${PROJ} default $(SUITESPARSE_MFLAGS) || exit 1; \
 	done
 	echo 1 > $@
 
