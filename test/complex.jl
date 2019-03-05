@@ -16,18 +16,14 @@ end
 @test sprint(show, complex(true, true)) == "Complex(true,true)"
 
 @testset "unary operator on complex boolean" begin
-    @test isequal(+(complex(true)), complex(1, 0))
-    @test isequal(+(complex(false)), complex(0, 0))
-    @test isequal(-(complex(true)), complex(-1, 0))
-    @test isequal(-(complex(false)), complex(0, 0))
-    @test isequal(+complex(true, true), complex(1, 1))
-    @test isequal(+complex(true, false), complex(1, 0))
-    @test isequal(+complex(false, true), complex(0, 1))
-    @test isequal(+complex(false, false), complex(0, 0))
-    @test isequal(-complex(true, true), complex(-1, -1))
-    @test isequal(-complex(true, false), complex(-1, 0))
-    @test isequal(-complex(false, true), complex(0, -1))
-    @test isequal(-complex(false, false), complex(0, 0))
+    @test isequal(+Complex(true, true), complex(1, 1))
+    @test isequal(+Complex(true, false), complex(1, 0))
+    @test isequal(+Complex(false, true), complex(0, 1))
+    @test isequal(+Complex(false, false), complex(0, 0))
+    @test isequal(-Complex(true, true), complex(-1, -1))
+    @test isequal(-Complex(true, false), complex(-1, 0))
+    @test isequal(-Complex(false, true), complex(0, -1))
+    @test isequal(-Complex(false, false), complex(0, 0))
 end
 
 @testset "arithmetic" begin
