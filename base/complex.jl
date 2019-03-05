@@ -263,6 +263,7 @@ inv(z::Complex)  = conj(z)/abs2(z)
 inv(z::Complex{<:Integer}) = inv(float(z))
 
 -(z::Complex) = Complex(-real(z), -imag(z))
++(z::Complex) = Complex(+real(z), +imag(z))
 +(z::Complex, w::Complex) = Complex(real(z) + real(w), imag(z) + imag(w))
 -(z::Complex, w::Complex) = Complex(real(z) - real(w), imag(z) - imag(w))
 *(z::Complex, w::Complex) = Complex(real(z) * real(w) - imag(z) * imag(w),
@@ -275,7 +276,6 @@ muladd(z::Complex, w::Complex, x::Complex) =
 # handle Bool and Complex{Bool}
 # avoid type signature ambiguity warnings
 +(x::Bool, z::Complex{Bool}) = Complex(x + real(z), imag(z))
-+(z::Complex{Bool}) = Complex(+z.re , +z.im)
 +(z::Complex{Bool}, x::Bool) = Complex(real(z) + x, imag(z))
 -(x::Bool, z::Complex{Bool}) = Complex(x - real(z), - imag(z))
 -(z::Complex{Bool}, x::Bool) = Complex(real(z) - x, imag(z))
