@@ -351,6 +351,19 @@ struct _jl_method_instance_t {
     uint8_t inInference; // flags to tell if inference is running on this object
 };
 
+// YACK - Yet another kind of closure.
+typedef struct jl_yakc_t {
+    JL_DATA_TYPE
+    jl_value_t *env;
+    union {
+        jl_value_t *code;
+        jl_code_info_t *source;
+        jl_method_t *method;
+    };
+    jl_fptr_args_t fptr1;
+    void *fptr;
+} jl_yakc_t;
+
 // This type represents an executable operation
 typedef struct _jl_code_instance_t {
     JL_DATA_TYPE
@@ -624,6 +637,8 @@ extern JL_DLLEXPORT jl_unionall_t *jl_vararg_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_typename_t *jl_vararg_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_function_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_builtin_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_unionall_t *jl_yakc_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_typename_t *jl_yakc_typename JL_GLOBALLY_ROOTED;
 
 extern JL_DLLEXPORT jl_value_t *jl_bottom_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_method_instance_type JL_GLOBALLY_ROOTED;
@@ -1206,6 +1221,19 @@ STATIC_INLINE int jl_is_array(void *v) JL_NOTSAFEPOINT
 {
     jl_value_t *t = jl_typeof(v);
     return jl_is_array_type(t);
+}
+
+
+STATIC_INLINE int jl_is_yakc_type(void *t) JL_NOTSAFEPOINT
+{
+    return (jl_is_datatype(t) &&
+            ((jl_datatype_t*)(t))->name == jl_yakc_typename);
+}
+
+STATIC_INLINE int jl_is_yakc(void *v) JL_NOTSAFEPOINT
+{
+    jl_value_t *t = jl_typeof(v);
+    return jl_is_yakc_type(t);
 }
 
 STATIC_INLINE int jl_is_cpointer_type(jl_value_t *t) JL_NOTSAFEPOINT

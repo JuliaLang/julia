@@ -13,6 +13,7 @@ end
 function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
     code = copy_exprargs(ci.code) # TODO: this is a huge hot-spot
     cfg = compute_basic_blocks(code)
+    yakcs = IRCode[]
     for i = 1:length(code)
         stmt = code[i]
         # Translate statement edges to bb_edges
@@ -25,6 +26,8 @@ function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
         elseif isa(stmt, Expr) && stmt.head === :enter
             stmt.args[1] = block_for_inst(cfg, stmt.args[1])
             code[i] = stmt
+        elseif isa(stmt, Expr) && stmt.head == :new
+            code[i] = stmt
         else
             code[i] = stmt
         end
@@ -33,7 +36,7 @@ function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
     nstmts = length(code)
     ssavaluetypes = ci.ssavaluetypes isa Vector{Any} ? copy(ci.ssavaluetypes) : Any[ Any for i = 1:(ci.ssavaluetypes::Int) ]
     stmts = InstructionStream(code, ssavaluetypes, Any[nothing for i = 1:nstmts], copy(ci.codelocs), copy(ci.ssaflags))
-    ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable), argtypes, Any[], sptypes)
+    ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable), argtypes, Any[], sptypes, yakcs)
     return ir
 end
 
@@ -62,6 +65,12 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
             stmt = PhiNode(Int32[last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges], stmt.values)
         elseif isa(stmt, Expr) && stmt.head === :enter
             stmt.args[1] = first(ir.cfg.blocks[stmt.args[1]::Int].stmts)
+        elseif isa(stmt, Expr) && stmt.head == :new_yakc
+            ci′ = copy((ci.ssavaluetypes[i]::PartialYAKC).ci.src)
+            ir′ = ir.yakcs[(stmt.args[5]::YAKCIdx).n]
+            replace_code_newstyle!(ci′, ir′, length(ir′.argtypes)-1)
+            stmt.args[5] = ci′
+            stmt.head = :call
         end
         ci.code[i] = stmt
     end

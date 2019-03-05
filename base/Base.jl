@@ -232,6 +232,9 @@ using .Libc: getpid, gethostname, time
 
 include("env.jl")
 
+# YAKC
+include("yakc.jl")
+
 # Concurrency
 include("linked_list.jl")
 include("condition.jl")

@@ -23,7 +23,7 @@ abstract type AbstractInterpreter; end
 A type that represents the result of running type inference on a chunk of code.
 """
 mutable struct InferenceResult
-    linfo::MethodInstance
+    linfo::Union{Nothing, MethodInstance}
     argtypes::Vector{Any}
     overridden_by_const::BitVector
     result # ::Type, or InferenceState if WIP
@@ -31,6 +31,9 @@ mutable struct InferenceResult
     function InferenceResult(linfo::MethodInstance, given_argtypes = nothing)
         argtypes, overridden_by_const = matching_cache_argtypes(linfo, given_argtypes)
         return new(linfo, argtypes, overridden_by_const, Any, nothing)
+    end
+    function InferenceResult(::Type{Core.YAKC}, argtypes::Vector{Any})
+        new(nothing, argtypes, BitVector(), Any, nothing)
     end
 end
 

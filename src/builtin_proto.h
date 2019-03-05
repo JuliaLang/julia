@@ -35,6 +35,7 @@ DECLARE_BUILTIN(apply_type); DECLARE_BUILTIN(applicable);
 DECLARE_BUILTIN(invoke);     DECLARE_BUILTIN(_expr);
 DECLARE_BUILTIN(typeassert); DECLARE_BUILTIN(ifelse);
 DECLARE_BUILTIN(_typevar);   DECLARE_BUILTIN(_typebody);
+DECLARE_BUILTIN(_yakc);
 
 JL_CALLABLE(jl_f_invoke_kwsorter);
 JL_CALLABLE(jl_f__structtype);

@@ -54,6 +54,15 @@ struct PartialTypeVar
     PartialTypeVar(tv::TypeVar, lb_certain::Bool, ub_certain::Bool) = new(tv, lb_certain, ub_certain)
 end
 
+mutable struct PartialYAKC
+    t::Type
+    env::Any
+    parent::MethodInstance
+    ci::Any
+    # TODO: Where do we cache these results?
+end
+widenconst(py::PartialYAKC) = py.t
+
 # Wraps a type and represents that the value may also be undef at this point.
 # (only used in optimize, not abstractinterpret)
 struct MaybeUndef
@@ -161,6 +170,9 @@ function ⊑(@nospecialize(a), @nospecialize(b))
             return true
         end
         return false
+    end
+    if isa(a, PartialYAKC)
+        return widenconst(a) <: widenconst(b)
     end
     if isa(a, Const)
         if isa(b, Const)

@@ -34,7 +34,7 @@ struct InliningState{S <: Union{EdgeTracker, Nothing}, T <: Union{InferenceCache
 end
 
 mutable struct OptimizationState
-    linfo::MethodInstance
+    linfo::Union{MethodInstance, Nothing}
     src::CodeInfo
     stmt_info::Vector{Any}
     mod::Module
@@ -310,6 +310,13 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
             if isa(farg, GlobalRef) || isa(farg, QuoteNode) || isa(farg, IntrinsicFunction) || isexpr(farg, :static_parameter)
                 ftyp = argextype(farg, src, sptypes, slottypes)
             end
+        end
+        # Give calls to YAKCs zero cost. The plan is for these to be a single
+        # indirect call so have very little cost. On the other hand, there
+        # is enormous benefit to inlining these into a function where we can
+        # see the definition of the YAKC. Perhaps this should even be negative
+        if widenconst(ftyp) <: Core.YAKC
+            return 0
         end
         f = singleton_type(ftyp)
         if isa(f, IntrinsicFunction)

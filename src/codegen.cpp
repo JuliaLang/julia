@@ -2601,6 +2601,13 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
     return emit_box_compare(ctx, arg1, arg2, nullcheck1, nullcheck2);
 }
 
+static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
+    emit_function(
+        jl_method_instance_t *lam,
+        jl_code_info_t *src,
+        jl_value_t *jlrettype,
+        jl_codegen_params_t &params);
+
 static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                               const jl_cgval_t *argv, size_t nargs, jl_value_t *rt,
                               jl_expr_t *ex)
@@ -3207,6 +3214,78 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         return true;
     }
+
+    else if (f == jl_builtin__yakc && nargs >= 4) {
+        const jl_cgval_t &argt = argv[1];
+        const jl_cgval_t &ub = argv[3];
+        const jl_cgval_t &source = argv[4];
+        if (source.constant == NULL || argt.constant == NULL || ub.constant == NULL) {
+            // If we don't know the source, nothing we can do
+            return false;
+        }
+        if (jl_is_code_info(source.constant)) {
+            // TODO: Emit this inline and outline it late using LLVM's coroutine
+            // support.
+            jl_code_info_t *yakc_src = (jl_code_info_t *)source.constant;
+            std::unique_ptr<Module> yakc_m;
+            jl_llvm_functions_t yakc_decls;
+
+            jl_method_instance_t *li;
+            jl_value_t *yakc_t;
+            jl_tupletype_t *env_t;
+            jl_svec_t *sig_args;
+            JL_GC_PUSH4(&li, &yakc_t, &env_t, &sig_args);
+
+            li = jl_new_method_instance_uninit();
+            li->uninferred = (jl_value_t*)yakc_src;
+            jl_tupletype_t *argt_typ = (jl_tupletype_t *)argt.constant;
+
+            yakc_t = jl_apply_type2((jl_value_t*)jl_yakc_type, (jl_value_t*)argt_typ, ub.constant);
+
+            size_t nsig = 1 + jl_svec_len(argt_typ->parameters);
+            sig_args = jl_alloc_svec_uninit(nsig);
+            jl_svecset(sig_args, 0, yakc_t);
+            for (size_t i = 0; i < jl_svec_len(argt_typ->parameters); ++i) {
+                jl_svecset(sig_args, 1+i, jl_svecref(argt_typ->parameters, i));
+            }
+            li->specTypes = (jl_value_t*)jl_apply_tuple_type_v(jl_svec_data(sig_args), nsig);
+            li->def.module = ctx.module;
+            std::tie(yakc_m, yakc_decls) = emit_function(li, yakc_src,
+                ub.constant, ctx.emission_context);
+            jl_merge_module(ctx.f->getParent(), std::move(yakc_m));
+
+            jl_value_t **env_component_ts = (jl_value_t**)alloca(sizeof(jl_value_t*) * nargs-4);
+            for (size_t i = 0; i < nargs - 4; ++i) {
+                env_component_ts[i] = argv[5+i].typ;
+            }
+
+            env_t = jl_apply_tuple_type_v(env_component_ts, nargs-4);
+
+            // TODO: Inline the env at the end of the yakc and generate a descriptor for GC
+            jl_cgval_t env = emit_new_struct(ctx, (jl_value_t*)env_t, nargs-4, &argv[5]);
+
+            Function *specptr = ctx.f->getParent()->getFunction(yakc_decls.specFunctionObject);
+            jl_cgval_t fptr = mark_julia_type(ctx,
+                specptr ? (llvm::Value*)specptr : (llvm::Value*)ConstantPointerNull::get((llvm::PointerType*)T_pvoidfunc),
+                false, jl_voidpointer_type);
+            Function *jlptr = ctx.f->getParent()->getFunction(yakc_decls.functionObject);
+            jl_cgval_t jlcall_ptr = mark_julia_type(ctx,
+                jlptr ? (llvm::Value*)jlptr : (llvm::Value*)ConstantPointerNull::get((llvm::PointerType*)T_pvoidfunc),
+                false, jl_voidpointer_type);
+
+            jl_cgval_t yakc_fields[4] =  {
+                env,
+                source,
+                jlcall_ptr,
+                fptr
+            };
+
+            *ret = emit_new_struct(ctx, yakc_t, 4, yakc_fields);
+            JL_GC_POP();
+            return true;
+        }
+    }
+
     return false;
 }
 
@@ -5713,15 +5792,27 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     ctx.code = src->code;
 
     std::map<int, BasicBlock*> labels;
+    bool toplevel = false;
     ctx.module = jl_is_method(lam->def.method) ? lam->def.method->module : lam->def.module;
     ctx.linfo = lam;
+    ctx.name = name_from_method_instance(lam);
+    bool is_yakc = false;
+    if (jl_is_method(lam->def.method)) {
+        ctx.nargs = lam->def.method->nargs;
+    } else {
+        ctx.nargs = 0;
+        // This is a yakc
+        jl_datatype_t *sig = (jl_datatype_t*)lam->specTypes;
+        if (jl_svec_len(sig->parameters) > 0 && jl_is_yakc_type(jl_tparam0(sig))) {
+            ctx.nargs = 1 + jl_nparams(jl_tparam0(jl_tparam0(sig)));
+            is_yakc = true;
+        }
+    }
+    toplevel = !jl_is_method(lam->def.method);
     ctx.rettype = jlrettype;
     ctx.source = src;
-    ctx.name = name_from_method_instance(lam);
     ctx.funcName = ctx.name;
     ctx.spvals_ptr = NULL;
-    ctx.nargs = jl_is_method(lam->def.method) ? lam->def.method->nargs : 0;
-    bool toplevel = !jl_is_method(lam->def.method);
     jl_array_t *stmts = ctx.code;
     size_t stmtslen = jl_array_dim0(stmts);
 
@@ -5735,7 +5826,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
 
     StringRef dbgFuncName = ctx.name;
     int toplineno = -1;
-    if (jl_is_method(lam->def.method)) {
+    if (lam && jl_is_method(lam->def.method)) {
         toplineno = lam->def.method->line;
         ctx.file = jl_symbol_name(lam->def.method->file);
     }
@@ -5764,7 +5855,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
 
     assert(lam->specTypes); // the specTypes field should always be assigned
 
-    if (nreq > 0 && lam->def.method->isva) {
+    if (nreq > 0 && jl_is_method(lam->def.value) && lam->def.method->isva) {
         nreq--;
         va = 1;
         jl_sym_t *vn = (jl_sym_t*)jl_array_ptr_ref(src->slotnames, ctx.nargs - 1);
@@ -5791,6 +5882,14 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         if (argname == unused_sym)
             continue;
         jl_value_t *ty = jl_nth_slot_type(lam->specTypes, i);
+        // YAKC implicitly loads the env
+        if (i == 0 && is_yakc) {
+            if (jl_is_array(src->slottypes)) {
+                ty = jl_arrayref((jl_array_t*)src->slottypes, i);
+            } else {
+                ty = (jl_value_t*)jl_any_type;
+            }
+        }
         varinfo.value = mark_julia_type(ctx, (Value*)NULL, false, ty);
     }
     if (va && ctx.vaSlot != -1) {
@@ -6271,6 +6370,11 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                                         ctx.builder.GetInsertBlock());
                     }
                 }
+            }
+
+            // If this is a yakc, implicitly load the env
+            if (i == 0 && is_yakc) {
+                theArg = emit_getfield_knownidx(ctx, theArg, 0, (jl_datatype_t*)argType);
             }
 
             if (vi.boxroot == NULL) {

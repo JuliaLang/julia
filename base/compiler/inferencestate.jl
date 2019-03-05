@@ -5,7 +5,7 @@ const LineNum = Int
 mutable struct InferenceState
     params::InferenceParams
     result::InferenceResult # remember where to put the result
-    linfo::MethodInstance
+    linfo::Union{MethodInstance, Nothing}
     sptypes::Vector{Any}    # types of static parameter
     slottypes::Vector{Any}
     mod::Module
@@ -37,6 +37,8 @@ mutable struct InferenceState
     callers_in_cycle::Vector{InferenceState}
     parent::Union{Nothing, InferenceState}
 
+    has_yakcs::Bool
+
     # TODO: move these to InferenceResult / Params?
     cached::Bool
     limited::Bool
@@ -57,9 +59,23 @@ mutable struct InferenceState
                             cached::Bool, interp::AbstractInterpreter)
         linfo = result.linfo
         code = src.code::Array{Any,1}
-        toplevel = !isa(linfo.def, Method)
 
-        sp = sptypes_from_meth_instance(linfo::MethodInstance)
+        if !isa(linfo, Nothing)
+            toplevel = !isa(linfo.def, Method)
+            sp = sptypes_from_meth_instance(linfo::MethodInstance)
+            if !toplevel
+                meth = linfo.def
+                inmodule = meth.module
+            else
+                inmodule = linfo.def::Module
+            end
+        else
+            linfo = nothing
+            toplevel = true
+            inmodule = Core
+            sp = Any[]
+        end
+        code = src.code::Array{Any,1}
 
         nssavalues = src.ssavaluetypes::Int
         src.ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
@@ -93,13 +109,6 @@ mutable struct InferenceState
         W = BitSet()
         push!(W, 1) #initial pc to visit
 
-        if !toplevel
-            meth = linfo.def
-            inmodule = meth.module
-        else
-            inmodule = linfo.def::Module
-        end
-
         valid_worlds = WorldRange(src.min_world,
             src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
         frame = new(
@@ -112,7 +121,7 @@ mutable struct InferenceState
             ssavalue_uses, throw_blocks,
             Vector{Tuple{InferenceState,LineNum}}(), # cycle_backedges
             Vector{InferenceState}(), # callers_in_cycle
-            #=parent=#nothing,
+            #=parent=#nothing, #= has_yakcs =# false,
             cached, false, false, false,
             CachedMethodTable(method_table(interp)),
             interp)
@@ -242,6 +251,7 @@ end
 
 # temporarily accumulate our edges to later add as backedges in the callee
 function add_backedge!(li::MethodInstance, caller::InferenceState)
+    caller.linfo !== nothing || return # don't add backends to yakcs
     isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
     if caller.stmt_edges[caller.currpc] === nothing
         caller.stmt_edges[caller.currpc] = []

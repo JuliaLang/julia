@@ -46,6 +46,7 @@ static void *const _tags[] = {
          &jl_vararg_type, &jl_abstractarray_type,
          &jl_densearray_type, &jl_nothing_type, &jl_function_type, &jl_typeofbottom_type,
          &jl_unionall_type, &jl_typename_type, &jl_builtin_type, &jl_code_info_type,
+         &jl_yakc_type,
          &jl_task_type, &jl_uniontype_type, &jl_abstractstring_type,
          &jl_array_any_type, &jl_intrinsic_type, &jl_abstractslot_type,
          &jl_methtable_type, &jl_typemap_level_type, &jl_typemap_entry_type,
@@ -60,7 +61,7 @@ static void *const _tags[] = {
          // special typenames
          &jl_tuple_typename, &jl_pointer_typename, &jl_llvmpointer_typename, &jl_array_typename, &jl_type_typename,
          &jl_vararg_typename, &jl_namedtuple_typename,
-         &jl_vecelement_typename,
+         &jl_vecelement_typename, &jl_yakc_typename,
          // special exceptions
          &jl_errorexception_type, &jl_argumenterror_type, &jl_typeerror_type,
          &jl_methoderror_type, &jl_loaderror_type, &jl_initerror_type,
@@ -85,6 +86,7 @@ static void *const _tags[] = {
          &jl_builtin_const_arrayref, &jl_builtin_arrayset, &jl_builtin_arraysize,
          &jl_builtin_apply_type, &jl_builtin_applicable, &jl_builtin_invoke,
          &jl_builtin__expr, &jl_builtin_ifelse, &jl_builtin__typebody,
+         &jl_builtin__yakc,
          NULL };
 static jl_value_t **const*const tags = (jl_value_t**const*const)_tags;
 
@@ -125,7 +127,7 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_arrayref, &jl_f_const_arrayref, &jl_f_arrayset, &jl_f_arraysize, &jl_f_apply_type,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
     &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
-    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef,
+    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f__yakc,
     NULL };
 
 typedef struct {

@@ -2576,7 +2576,6 @@ void jl_init_serializer(void)
                      jl_box_int64(12), jl_box_int64(13), jl_box_int64(14),
                      jl_box_int64(15), jl_box_int64(16), jl_box_int64(17),
                      jl_box_int64(18), jl_box_int64(19), jl_box_int64(20),
-                     jl_box_int64(21),
 
                      jl_bool_type, jl_linenumbernode_type, jl_pinode_type,
                      jl_upsilonnode_type, jl_type_type, jl_bottom_type, jl_ref_type,
@@ -2592,6 +2591,7 @@ void jl_init_serializer(void)
                      jl_namedtuple_type, jl_array_int32_type,
                      jl_typedslot_type, jl_uint32_type, jl_uint64_type,
                      jl_type_type_mt, jl_nonfunction_mt,
+                     jl_yakc_type,
 
                      ptls->root_task,
 
@@ -2660,6 +2660,7 @@ void jl_init_serializer(void)
     arraylist_push(&builtin_typenames, jl_tuple_typename);
     arraylist_push(&builtin_typenames, jl_vararg_typename);
     arraylist_push(&builtin_typenames, jl_namedtuple_typename);
+    arraylist_push(&builtin_typenames, jl_yakc_typename);
 }
 
 #ifdef __cplusplus

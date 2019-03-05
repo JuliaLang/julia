@@ -79,3 +79,13 @@ This info is illegal on any statement that is not an `_apply_iterate` call.
 struct UnionSplitApplyCallInfo
     infos::Vector{ApplyCallInfo}
 end
+
+"""
+    struct YAKCCallInfo
+
+The call was to a YAKC of known provenance. A MethodInstance was created to
+hold the optimized code for this YAKC.
+"""
+struct YAKCCallInfo
+    mi::MethodInstance
+end

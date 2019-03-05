@@ -260,12 +260,16 @@ struct IRCode
     cfg::CFG
     new_nodes::NewNodeStream
     meta::Vector{Any}
+    # For easier reference, we store all yakcs. In general passes will want to
+    # just recurse into these. Passes that are yakc aware may do more fancy
+    # optimizations
+    yakcs::Vector{IRCode}
 
-    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Any}, sptypes::Vector{Any})
-        return new(stmts, argtypes, sptypes, linetable, cfg, NewNodeStream(), meta)
+    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Any}, sptypes::Vector{Any}, yakcs::Vector{IRCode})
+        return new(stmts, argtypes, sptypes, linetable, cfg, NewNodeStream(), meta, yakcs)
     end
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
-        return new(stmts, ir.argtypes, ir.sptypes, ir.linetable, cfg, new_nodes, ir.meta)
+        return new(stmts, ir.argtypes, ir.sptypes, ir.linetable, cfg, new_nodes, ir.meta, ir.yakcs)
     end
     global copy
     copy(ir::IRCode) = new(copy(ir.stmts), copy(ir.argtypes), copy(ir.sptypes),
@@ -305,6 +309,10 @@ end
 # be actually inserted next time (they become `new_nodes` next time)
 struct NewSSAValue
     id::Int
+end
+
+struct YAKCIdx
+    n::Int
 end
 
 const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
@@ -379,7 +387,7 @@ function getindex(x::UseRef)
 end
 
 function is_relevant_expr(e::Expr)
-    return e.head in (:call, :invoke, :new, :splatnew, :(=), :(&),
+    return e.head in (:call, :invoke, :new, :new_yakc, :splatnew, :(=), :(&),
                       :gc_preserve_begin, :gc_preserve_end,
                       :foreigncall, :isdefined, :copyast,
                       :undefcheck, :throw_undef_if_not,
