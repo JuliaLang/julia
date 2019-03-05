@@ -186,8 +186,9 @@ function optimize(opt::OptimizationState, params::OptimizationParams, @nospecial
         if length(ir.stmts) < 10
             proven_pure = true
             for i in 1:length(ir.stmts)
-                stmt = ir.stmts[i]
-                if stmt_affects_purity(stmt, ir) && !stmt_effect_free(stmt, ir.types[i], ir, ir.sptypes)
+                node = ir.stmts[i]
+                stmt = node[:inst]
+                if stmt_affects_purity(stmt, ir) && !stmt_effect_free(stmt, node[:type], ir, ir.sptypes)
                     proven_pure = false
                     break
                 end
