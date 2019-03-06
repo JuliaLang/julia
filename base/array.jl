@@ -1030,7 +1030,7 @@ Returns the allocated buffer capacity of s.
 function capacity end
 
 function capacity(a::Vector)
-    return ccall(:jl_array_capacity, Csize_t, (Any,), a)
+    return Int(ccall(:jl_array_capacity, Csize_t, (Any,), a))
 end
 
 """
