@@ -208,6 +208,11 @@ end
 
 @test isa(0170141183460469231731687303715884105728,BigInt)
 
+# GMP allocation overflow should not cause crash
+if Base.GMP.ALLOC_OVERFLOW_FUNCTION[] && sizeof(Int) > 4
+  @test_throws OutOfMemoryError BigInt(2)^(typemax(Culong))
+end
+
 # exponentiating with a negative base
 @test -3^2 == -9
 @test -9223372036854775808^2 == -(9223372036854775808^2)

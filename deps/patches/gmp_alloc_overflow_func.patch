@@ -1,0 +1,193 @@
+diff --git a/gmp-h.in b/gmp-h.in
+--- a/gmp-h.in
++++ b/gmp-h.in
+@@ -479,6 +479,13 @@ using std::FILE;
+ 				      void *(**) (void *, size_t, size_t),
+ 				      void (**) (void *, size_t)) __GMP_NOTHROW;
+ 
++#define mp_set_alloc_overflow_function __gmp_set_alloc_overflow_function
++__GMP_DECLSPEC void mp_set_alloc_overflow_function (void (*) (void)) __GMP_NOTHROW;
++
++#define mp_get_alloc_overflow_function __gmp_get_alloc_overflow_function
++__GMP_DECLSPEC void mp_get_alloc_overflow_function (void (**) (void)) __GMP_NOTHROW;
++
++
+ #define mp_bits_per_limb __gmp_bits_per_limb
+ __GMP_DECLSPEC extern const int mp_bits_per_limb;
+ 
+diff --git a/gmp-impl.h b/gmp-impl.h
+--- a/gmp-impl.h
++++ b/gmp-impl.h
+@@ -696,10 +696,12 @@ struct tmp_debug_entry_t {
+ __GMP_DECLSPEC extern void * (*__gmp_allocate_func) (size_t);
+ __GMP_DECLSPEC extern void * (*__gmp_reallocate_func) (void *, size_t, size_t);
+ __GMP_DECLSPEC extern void   (*__gmp_free_func) (void *, size_t);
++__GMP_DECLSPEC extern void   (*__gmp_alloc_overflow_func)(void);
+ 
+ __GMP_DECLSPEC void *__gmp_default_allocate (size_t);
+ __GMP_DECLSPEC void *__gmp_default_reallocate (void *, size_t, size_t);
+ __GMP_DECLSPEC void __gmp_default_free (void *, size_t);
++__GMP_DECLSPEC void __gmp_default_alloc_overflow (void);
+ 
+ #define __GMP_ALLOCATE_FUNC_TYPE(n,type) \
+   ((type *) (*__gmp_allocate_func) ((n) * sizeof (type)))
+@@ -727,6 +729,12 @@ struct tmp_debug_entry_t {
+ 	(ptr, (oldsize) * sizeof (type), (newsize) * sizeof (type));	\
+   } while (0)
+ 
++#define __GMP_ALLOC_OVERFLOW_FUNC()                              \
++  do {                                                           \
++    (*__gmp_alloc_overflow_func) ();                             \
++    fprintf (stderr, "unexpected return from alloc_overflow\n"); \
++    abort ();                                                    \
++  } while (0)
+ 
+ /* Dummy for non-gcc, code involving it will go dead. */
+ #if ! defined (__GNUC__) || __GNUC__ < 2
+diff --git a/memory.c b/memory.c
+--- a/memory.c
++++ b/memory.c
+@@ -38,6 +38,7 @@ see https://www.gnu.org/licenses/.  */
+ void * (*__gmp_allocate_func) (size_t) = __gmp_default_allocate;
+ void * (*__gmp_reallocate_func) (void *, size_t, size_t) = __gmp_default_reallocate;
+ void   (*__gmp_free_func) (void *, size_t) = __gmp_default_free;
++void   (*__gmp_alloc_overflow_func) (void) = __gmp_default_alloc_overflow;
+ 
+ 
+ /* Default allocation functions.  In case of failure to allocate/reallocate
+@@ -144,3 +145,10 @@ void
+ #endif
+   free (blk_ptr);
+ }
++
++void
++__gmp_default_alloc_overflow(void)
++{
++    fprintf (stderr, "gmp: overflow in mpz type\n");
++    abort();
++}
+diff --git a/mp_get_fns.c b/mp_get_fns.c
+--- a/mp_get_fns.c
++++ b/mp_get_fns.c
+@@ -46,3 +46,11 @@ mp_get_memory_functions (void *(**alloc_
+   if (free_func != NULL)
+     *free_func = __gmp_free_func;
+ }
++
++void
++mp_get_alloc_overflow_function(
++        void (**alloc_overflow_func) (void)) __GMP_NOTHROW
++{
++  if (alloc_overflow_func != NULL)
++    *alloc_overflow_func = __gmp_alloc_overflow_func;
++}
+diff --git a/mp_set_fns.c b/mp_set_fns.c
+--- a/mp_set_fns.c
++++ b/mp_set_fns.c
+@@ -48,3 +48,12 @@ mp_set_memory_functions (void *(*alloc_f
+   __gmp_reallocate_func = realloc_func;
+   __gmp_free_func = free_func;
+ }
++
++void
++mp_set_alloc_overflow_function(
++             void (*alloc_overflow_func) (void)) __GMP_NOTHROW
++{
++  if (alloc_overflow_func == 0)
++    alloc_overflow_func = __gmp_default_alloc_overflow;
++  __gmp_alloc_overflow_func = alloc_overflow_func;
++}
+diff --git a/mpz/init2.c b/mpz/init2.c
+--- a/mpz/init2.c
++++ b/mpz/init2.c
+@@ -45,8 +45,7 @@ mpz_init2 (mpz_ptr x, mp_bitcnt_t bits)
+     {
+       if (UNLIKELY (new_alloc > INT_MAX))
+ 	{
+-	  fprintf (stderr, "gmp: overflow in mpz type\n");
+-	  abort ();
++	  __GMP_ALLOC_OVERFLOW_FUNC ();
+ 	}
+     }
+ 
+diff --git a/mpz/realloc.c b/mpz/realloc.c
+--- a/mpz/realloc.c
++++ b/mpz/realloc.c
+@@ -45,16 +45,14 @@ void *
+     {
+       if (UNLIKELY (new_alloc > ULONG_MAX / GMP_NUMB_BITS))
+ 	{
+-	  fprintf (stderr, "gmp: overflow in mpz type\n");
+-	  abort ();
++	  __GMP_ALLOC_OVERFLOW_FUNC ();
+ 	}
+     }
+   else
+     {
+       if (UNLIKELY (new_alloc > INT_MAX))
+ 	{
+-	  fprintf (stderr, "gmp: overflow in mpz type\n");
+-	  abort ();
++	  __GMP_ALLOC_OVERFLOW_FUNC ();
+ 	}
+     }
+ 
+diff --git a/mpz/realloc2.c b/mpz/realloc2.c
+--- a/mpz/realloc2.c
++++ b/mpz/realloc2.c
+@@ -45,8 +45,7 @@ mpz_realloc2 (mpz_ptr m, mp_bitcnt_t bit
+     {
+       if (UNLIKELY (new_alloc > INT_MAX))
+ 	{
+-	  fprintf (stderr, "gmp: overflow in mpz type\n");
+-	  abort ();
++	  __GMP_ALLOC_OVERFLOW_FUNC ();
+ 	}
+     }
+ 
+diff --git a/tests/mpz/t-pow.c b/tests/mpz/t-pow.c
+--- a/tests/mpz/t-pow.c
++++ b/tests/mpz/t-pow.c
+@@ -195,6 +195,34 @@ check_random (int reps)
+   mpz_clear (want);
+ }
+ 
++jmp_buf env;
++
++void
++alloc_overflow_handler (void)
++{
++  longjmp(env, 1);
++}
++
++void
++check_overflow (void)
++{
++  mpz_t x;
++  mpz_init (x);
++  int overflow_intercepted = 0;
++  if (setjmp (env) == 0) {
++    mp_set_alloc_overflow_function (&alloc_overflow_handler);
++    mpz_ui_pow_ui (x, 3, 7625597484987LL);
++  } else {
++    ++overflow_intercepted;
++  }
++  if (overflow_intercepted != 1) {
++    printf ("overflow not intercepted\n");
++    abort ();
++  }
++  mpz_clear (x);
++}
++
++
+ int
+ main (int argc, char **argv)
+ {
+@@ -212,6 +240,7 @@ main (int argc, char **argv)
+ 
+   check_various ();
+   check_random (reps);
++  check_overflow ();
+ 
+   tests_end ();
+   exit (0);
