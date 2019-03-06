@@ -14,7 +14,7 @@ export
     isfile,
     islink,
     ismount,
-    nz,
+    ispath,
     issetgid,
     issetuid,
     issocket,
