@@ -153,7 +153,7 @@ ctime(st::StatStruct) = st.ctime
 
 Return `true` if a valid filesystem entity exists at `path`,
 otherwise returns `false`.
-This is the generalization of [isfile](@ref), [isdir](@ref) etc.
+This is the generalization of [`isfile`](@ref), [`isdir`](@ref) etc.
 """
 ispath(st::StatStruct) = filemode(st) & 0xf000 != 0x0000
 
@@ -185,7 +185,7 @@ julia> isdir("not/a/directory")
 false
 ```
 
-See also: [isfile](@ref) and [ispath](@ref).
+See also: [`isfile`](@ref) and [`ispath`](@ref).
 """
 isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
 
@@ -214,7 +214,7 @@ true
 julia> close(f); rm("test_file.txt")
 ```
 
-See also: [isdir](@ref) and [ispath](@ref).
+See also: [`isdir`](@ref) and [`ispath`](@ref).
 """
 isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000
 
