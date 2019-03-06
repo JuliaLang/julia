@@ -687,12 +687,15 @@ end
 filter!(f, d::Dict) = filter_in_one_pass!(f, d)
 
 
-"""
-    mapdict!(f, dict) -> dict
-Takes the function f(value) and transforms the stored values with essentially value=f(value).
 
-If the value returned by f(value) is of a differnet type than the input function used
-must take the for dict = map(f,dict) which will mutate dict in a memory efficent manner.
+
+
+
+
+"""
+    map!(f, values(dict))
+Takes the function f(value) and transforms values stored in the dict with the transformation value=f(value).
+
 
 # Examples
 ```jldoctest
@@ -701,126 +704,95 @@ Dict{Symbol,Int64} with 2 entries:
   :a => 1
   :b => 2
 
-julia> mapdict!(v->v-1,D)
+julia> map!(v->v-1,values(D))
 Dict{Symbol,Int64} with 2 entries:
   :a => 0
   :b => 1
 
-julia> D=mapdict!(v->Float64(v),D)
-Dict{Symbol,Float64} with 2 entries:
-  :a => 0.0
-  :b => 1.0
  ```
 """
-function mapdict!(f, d::Dict{K,V}) where K where V
-    isempty(d) && return d
-    f_return_type = typeof(f(first(d)[2]))
-    if f_return_type == V
-        new_d=d
-    else
-        L=length(d.vals)
-        new_vals = Vector{f_return_type}(undef,L)
-        new_d = Dict{K, f_return_type}(d.slots, d.keys, new_vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe)
-    end
-    ret =  _mapdict_apply!(f, new_d,d.vals) # This function will return a Tuple if it isn't typestable
-    ret isa Dict && return ret# If ret is a Dict the function complete in a typesafe way
-    # If it didn't we have to broaden the type
-    ret= _mapdict_unioning!(f,d,ret)
-    return ret
-end
+Base.map!(f, iter::Base.ValueIterator{Dict{K,V}}) where {K, V}= (_map_to!(Val(false), f, iter.dict.vals, iter, iter.dict.idxfloor); iter.dict)
 
 
-"""
-    mapdict(f, dict) -> dict
-Takes the function f(value) and returns a new Dict with the values transfor with new_value=f(value).
+"""map(f, values(dict), create_new_dict=true, value_type_change::Bool = true) -> dict
+Takes the function f(value) and creates a copy of the dict with the values transformed by value=f(value).
+Setting value_type_change=false will ensure that the values type of the input and output dicts are the same.
+create_new_dict=false will cause the map method to fallback to returning an array.
 
 # Examples
 ```jldoctest
-julia> D=Dict(:a=>1,:b=>2,:c=>3)
+julia> D=Dict(:a=>1, :b=>2, :c=>3)
 Dict{Symbol,Int64} with 3 entries:
   :a => 1
   :b => 2
   :c => 3
 
-julia> E=mapdict(v->v-1,D)
-Dict{Symbol,Int64} with 3 entries:
-  :a => 0
-  :b => 1
-  :c => 2
+julia> E=map(v->isodd(v) ? Float64(v) : string(v), values(D), create_new_dict=true)
+Dict{Symbol,Union{Float64, String}} with 3 entries:
+  :a => 1.0
+  :b => "2"
+  :c => 3.0
 
-julia> D
+julia> E=map(v->isodd(v) ? Int64(v) : UInt32(v), values(D), create_new_dict=true)
+Dict{Symbol,Union{Int64, UInt32}} with 3 entries:
+  :a => 1
+  :b => 0x00000002
+  :c => 3
+
+julia> E=map(v->isodd(v) ? Int64(v) : UInt32(v), values(D), create_new_dict=true, value_type_change = false)
 Dict{Symbol,Int64} with 3 entries:
   :a => 1
   :b => 2
   :c => 3
-
-julia> E=mapdict(v->float(v-1),D)
-Dict{Symbol,Float64} with 3 entries:
-  :a => 0.0
-  :b => 1.0
-  :c => 2.0
  ```
 """
-function mapdict(f, d::Dict{K,V}) where K where V
-    isempty(d) && return d
+function Base.map(f,iter::Base.ValueIterator{Dict{K,V}}; create_new_dict::Bool, value_type_change::Bool=true) where {K, V}
+    if create_new_dict == false
+        return  Base.map(f, iter::Base.ValueIterator{Dict{K,V}})
+    end
+    d=iter.dict
+    if value_type_change
+        gen = (f(v) for v in iter)
+        et = Base.@default_eltype(gen)
 
-    f_return_type = typeof(f(first(d)[2]))
-    if f_return_type == V
-        new_d=Dict(d)
     else
-        L=length(d.vals)
-        new_vals = Vector{f_return_type}(undef,L)
-        new_d = Dict{K, f_return_type}(copy(d.slots), copy(d.keys), new_vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe)
+        et = V
     end
-    ret =  _mapdict_apply!(f, new_d,d.vals)
-    ret isa Dict && return ret # If ret is a Dict the function complete in a typesafe way
-    # If it didn't we have to broaden the type
-    ret= _mapdict_unioning!(f,d,ret)
-    return ret
-end
+    dest=Vector{et}(undef,length(d.vals))
+    # The reasignment is required to allow for type widening
+    dest = _map_to!(Val(value_type_change), f, dest, iter, d.idxfloor)
+    return Dict{K, eltype(dest)}(copy(d.slots), copy(d.keys), dest, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe)
 
-@inline function _mapdict_apply!(f,d::Dict{K,V}, old_vals::Vector{Vold},i_start=d.idxfloor) where V where K where Vold
-    L = length(d.vals)
-    type_test(v)=false
-    if isconcretetype(V)
-        @inline type_test(v)= typeof(v)===V
-    else
-        @inline type_test(v)= typeof(v) <: V
-    end
-
-    i = i_start
-    vals = d.vals
-    @inbounds while i < L
-        (Base.isslotfilled(d, i) || (i+=1; continue )) && #This first line is to check the slot and iterate if it isn't used
-        (new_val = f(old_vals[i]); true) && type_test(new_val) && # This line is getting the new val checking the type
-        (vals[i] = new_val; true) && (i += 1; true) && continue #this line is finishing the iteration
-        # If anything fails above we return a tuple with the new type,dict, and the current index so we don't reapply the function
-        return (typeof(new_val),d,i)
-    end
-    return d
 end
 
 
-# This function will keep broadening the new type for 5 iterations then assume the output should be any
-function _mapdict_unioning!(f, old_d::Dict{K,Vold},ret::Tuple{DataType,Dict{K,Vnew},Int}) where K where Vnew where Vold
-    num_types_before_any = 5
-    type_counter=0
-    union_type=Vnew
-    d=ret[2]
-    while ret isa Tuple && type_counter <= num_types_before_any
-        type_counter+=1
-        new_type=ret[1]
-        union_type=type_counter < num_types_before_any ? Union{union_type,new_type} : Any
-        d = Dict{K, union_type}(d.slots, d.keys, convert(Vector{union_type}, d.vals), d.ndel, d.count, d.age, d.idxfloor, d.maxprobe)
-        ret=_mapdict_apply!(f, d, old_d.vals,ret[3])
+
+function _map_to!(widen::Val{W}, f,dest::AbstractArray{T}, iter::Base.ValueIterator{Dict{K,V}}, ind) where {T, K, V, W}
+    # changing widen to a bool causes a 10x slowdown
+    vals=iter.dict.vals
+    inplace=dest===vals
+    @assert( !(W && inplace) )  # This asserts that you can widen or have inplace maping but not both
+
+    len = length(vals)
+    i = ind
+
+    @inbounds while i < len
+        if !(Base.isslotfilled(iter.dict, i))
+            i += 1; continue
+        end
+        @inbounds el = f(vals[i])
+        if !W || (el isa T || typeof(el) === T)
+            @inbounds dest[i] = el
+            i += 1; continue
+        else
+            new = setindex_widen_up_to(dest, el, i)
+            return _map_to(widen,f,new, iter, i+1)
+        end
     end
-    if ret isa Dict
-        return ret
-    else
-        #Function should never get here because Any should catch everything
-        error("mapdict could not converge on function output type")
-    end
+    return dest
 end
+
+
 
 
 struct ImmutableDict{K,V} <: AbstractDict{K,V}
