@@ -1835,3 +1835,19 @@ end
 
 @test_throws UndefVarError eval(Symbol(""))
 @test_throws UndefVarError eval(:(1+$(Symbol(""))))
+
+# test a couple errors related to type declarations
+@test Meta.lower(@__MODULE__, quote
+function f()
+    local x::Int
+    local x::String
+end
+end) == Expr(:error, "multiple type declarations for \"x\"")
+@test Meta.lower(@__MODULE__, quote
+function f()
+    local x
+    function g()
+        x::String = ""
+    end
+end
+end) == Expr(:error, "type of \"x\" declared in inner scope")
