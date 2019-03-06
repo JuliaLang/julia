@@ -284,7 +284,7 @@ const SharedVector{T} = SharedArray{T,1}
 """
     SharedMatrix
 
-A one-dimensional [`SharedArray`](@ref).
+A two-dimensional [`SharedArray`](@ref).
 """
 const SharedMatrix{T} = SharedArray{T,2}
 
