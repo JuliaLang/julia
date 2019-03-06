@@ -8,6 +8,28 @@ import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, c
 # note that Adjoint and Transpose must be able to wrap not only vectors and matrices
 # but also factorizations, rotations, and other linear algebra objects, including
 # user-defined such objects. so do not restrict the wrapped type.
+"""
+    Adjoint(A)
+
+Constructs an `Adjoint` view of `A`.
+Note that [`adjoint`](@ref) is applied recursively to elements.
+
+This type is intended for linear algebra usage - for general data manipulation see
+[`permutedims`](@ref Base.permutedims).
+
+# Examples
+```jldoctest
+julia> A = [3+2im 9+2im; 8+7im  4+6im]
+2×2 Array{Complex{Int64},2}:
+ 3+2im  9+2im
+ 8+7im  4+6im
+
+julia> adjoint(A)
+2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:
+ 3-2im  8-7im
+ 9-2im  4-6im
+```
+"""
 struct Adjoint{T,S} <: AbstractMatrix{T}
     parent::S
     function Adjoint{T,S}(A::S) where {T,S}
@@ -15,6 +37,28 @@ struct Adjoint{T,S} <: AbstractMatrix{T}
         new(A)
     end
 end
+"""
+    Transpose(A)
+
+Constructs a `Transpose` view of `A`.
+Note that [`transpose`](@ref) is applied recursively to elements.
+
+This type is intended for linear algebra usage - for general data manipulation see
+[`permutedims`](@ref Base.permutedims).
+
+# Examples
+```jldoctest
+julia> A = [3+2im 9+2im; 8+7im  4+6im]
+2×2 Array{Complex{Int64},2}:
+ 3+2im  9+2im
+ 8+7im  4+6im
+
+julia> transpose(A)
+2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:
+ 3+2im  8+7im
+ 9+2im  4+6im
+```
+"""
 struct Transpose{T,S} <: AbstractMatrix{T}
     parent::S
     function Transpose{T,S}(A::S) where {T,S}
