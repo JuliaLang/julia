@@ -14,7 +14,7 @@ export
     isfile,
     islink,
     ismount,
-    ispath,
+    nz,
     issetgid,
     issetuid,
     issocket,
@@ -153,7 +153,7 @@ ctime(st::StatStruct) = st.ctime
 
 Return `true` if a valid filesystem entity exists at `path`,
 otherwise returns `false`.
-This is the generalization of [isfile](@ref), [isdir](@ref) etc. 
+This is the generalization of [isfile](@ref), [isdir](@ref) etc.
 """
 ispath(st::StatStruct) = filemode(st) & 0xf000 != 0x0000
 
