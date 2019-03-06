@@ -822,7 +822,7 @@ public:
             GlobalVariable *newGV = new GlobalVariable(*destModule,
                 GV->getType()->getElementType(),
                 GV->isConstant(),
-                GlobalVariable::ExternalLinkage,
+                GV->getLinkage(),
                 NULL,
                 GV->getName(),
                 NULL,
