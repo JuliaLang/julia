@@ -87,7 +87,7 @@ case $(uname) in
     ;;
 esac
 
-# Download most recent Julia binary for dependencies
+# Download most recent Julia binary with the same minor version for dependencies
 if ! [ -e julia-installer.exe ]; then
   f=julia-1.0.3-win$bits.exe
   echo "Downloading $f"
@@ -172,12 +172,11 @@ if ! [ -e usr/bin/busybox.exe ]; then
 fi
 chmod -R +x usr/bin usr/tools
 
-for lib in SUITESPARSE ARPACK BLAS LAPACK \
-    GMP MPFR PCRE LIBUNWIND; do
+for lib in GMP MPFR PCRE LIBUNWIND; do
   echo "USE_SYSTEM_$lib = 1" >> Make.user
 done
-echo 'override LIBLAPACK = $(LIBBLAS)' >> Make.user
-echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
+# echo 'override LIBLAPACK = $(LIBBLAS)' >> Make.user
+# echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
 
 # Remaining dependencies:
 # libuv since its static lib is no longer included in the binaries
