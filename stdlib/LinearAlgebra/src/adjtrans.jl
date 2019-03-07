@@ -11,7 +11,7 @@ import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, c
 """
     Adjoint
 
-Lazy wrapper type for a adjoint view of the underlying linear algebra object,
+Lazy wrapper type for an adjoint view of the underlying linear algebra object,
 usually an `AbstractVector`/`AbstractMatrix`, but also some `Factorization`, for instance.
 Usually, the `Adjoint` constructor should not be called directly, use [`adjoint`](@ref)
 instead. To materialize the view use [`copy`](@ref).
