@@ -34,6 +34,7 @@ New library functions
 * Added `Base.hasproperty` and `Base.hasfield` ([#28850]).
 * One argument `!=(x)`, `>(x)`, `>=(x)`, `<(x)`, `<=(x)` has been added for currying,
   similar to the existing `==(x)` and `isequal(x)` methods ([#30915]).
+* New `capacity` function to query the capacity of the underlying buffer of a `Vector`.
 
 Standard library changes
 ------------------------
