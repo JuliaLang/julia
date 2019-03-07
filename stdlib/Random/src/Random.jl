@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
+    Random
+
 Support for generating random numbers. Provides [`rand`](@ref), [`randn`](@ref),
 [`AbstractRNG`](@ref), [`MersenneTwister`](@ref), and [`RandomDevice`](@ref).
 """
