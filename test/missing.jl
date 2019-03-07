@@ -469,6 +469,15 @@ end
             @test_throws ArgumentError mapreduce(x -> x/2, +, itr)
         end
     end
+
+    @testset "filter" begin
+        allmiss = Vector{Union{Int,Missing}}(missing, 10)
+        @test isempty(filter(isodd, skipmissing(allmiss))::Vector{Int})
+        twod1 = [1.0f0 missing; 3.0f0 missing]
+        @test filter(x->x > 0, skipmissing(twod1))::Vector{Float32} == [1, 3]
+        twod2 = [1.0f0 2.0f0; 3.0f0 4.0f0]
+        @test filter(x->x > 0, skipmissing(twod2)) == reshape(twod2, (4,))
+    end
 end
 
 @testset "coalesce" begin
