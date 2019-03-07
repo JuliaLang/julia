@@ -177,7 +177,7 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     oldv = h.vals
     sz = length(olds)
     newsz = _tablesz(newsz)
-    h.age += 1 + (1<<32)
+    h.age += 1
     h.idxfloor = 1
     if h.count == 0
         resize!(h.slots, newsz)
