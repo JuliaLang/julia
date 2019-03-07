@@ -316,10 +316,9 @@ function repeat(a::AbstractVecOrMat, m::AbstractVector{<:Integer}, n::Integer=1)
         c = 1
         for (i,r) ∈ enumerate(m)
             v = a[i,:]
-            while r > 0
+            for _ ∈ 1:r
                 b[c, R] = v
                 c += 1
-                r -= 1
             end
         end
     end
@@ -335,8 +334,7 @@ function repeat(a::AbstractVecOrMat, m::Integer, n::AbstractVector{<:Integer})
         v = @view a[:,j]
         d = sumj + 1
         sumj += r
-        R = d:sumj
-        for k ∈ R
+        for k ∈ d:sumj
             for i=1:m
                c = (i-1)*o+1
                b[c:c+o-1, k] = v
@@ -361,9 +359,8 @@ function repeat(a::AbstractVecOrMat, m::AbstractVector{<:Integer}, n::AbstractVe
             c = 0
             for (i, mi) ∈ enumerate(m)
                 mv = v[i]
-                while mi > 0
+                for _ ∈ 1:mi
                     b[c+=1, k] = mv
-                    mi -= 1
                 end
             end
         end
