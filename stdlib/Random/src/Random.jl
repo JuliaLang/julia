@@ -36,7 +36,7 @@ export rand!, randn!,
 """
     AbstractRNG
 
-Supertype for random number generators. [`MersenneTwister`](@ref) and [`RandomDevice`](@ref) are subtypes of this.
+Supertype for random number generators such as [`MersenneTwister`](@ref) and [`RandomDevice`](@ref).
 """
 abstract type AbstractRNG end
 
