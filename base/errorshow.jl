@@ -127,7 +127,7 @@ showerror(io::IO, ::StackOverflowError) = print(io, "StackOverflowError:")
 showerror(io::IO, ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")
 showerror(io::IO, ::EOFError) = print(io, "EOFError: read end of file")
 function showerror(io::IO, ex::ErrorException)
-    print(io, ex.msg)
+    print(io, "ErrorException: ", ex.msg)
     if ex.msg == "type String has no field data"
         println(io)
         print(io, "Use `codeunits(str)` instead.")
