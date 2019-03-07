@@ -353,7 +353,7 @@ function repeat(a::AbstractVecOrMat, m::AbstractVector{<:Integer}, n::AbstractVe
     b = similar(a, sum(m), sum(n))
     sumj = zero(eltype(n))
     for (j, r) ∈ enumerate(n)
-        v = a[:,j]
+        v = @view a[:,j]
         d = sumj + 1
         sumj += r
         R = d:sumj
