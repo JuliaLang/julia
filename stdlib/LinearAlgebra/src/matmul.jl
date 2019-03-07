@@ -178,6 +178,8 @@ mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat) = generic_matm
     rmul!(A, B)
 
 Calculate the matrix-matrix product ``AB``, overwriting `A`, and return the result.
+Here, `B` must have triangular/diagonal structure, which is additionally encoded
+via its type.
 
 # Examples
 ```jldoctest
@@ -199,6 +201,8 @@ rmul!(A, B)
     lmul!(A, B)
 
 Calculate the matrix-matrix product ``AB``, overwriting `B`, and return the result.
+Here, `A` must have triangular/diagonal structure, which is additionally encoded
+via its type.
 
 # Examples
 ```jldoctest
