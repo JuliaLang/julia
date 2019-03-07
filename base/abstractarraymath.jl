@@ -351,7 +351,7 @@ function repeat(a::AbstractVecOrMat, m::AbstractVector{<:Integer}, n::AbstractVe
     length(n) == p || throw(ArgumentError("n must be a single Integer or an AbstractVector{<:Integer} of same dimension as a"))
     length(m) == o || throw(ArgumentError("m must be a single Integer or an AbstractVector{<:Integer} of same dimension as a"))
     b = similar(a, sum(m), sum(n))
-    sumj = 0
+    sumj = zero(eltype(n))
     for (j, r) ∈ enumerate(n)
         v = a[:,j]
         d = sumj + 1
