@@ -806,7 +806,7 @@ julia> factorial(6)
 720
 
 julia> factorial(21)
-ERROR: OverflowError: 21 is too large to look up in the table
+ERROR: OverflowError: 21 is too large to look up in the table; consider using `factorial(big(21))` instead
 Stacktrace:
 [...]
 
