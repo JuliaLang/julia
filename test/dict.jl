@@ -1021,3 +1021,28 @@ end
         end
     end
 end
+
+@testset "map!(f,values(dict))" begin
+    @testset "AbstractDict & Fallback" begin
+        mutable struct TestDict{K, V}  <: AbstractDict{K, V}
+            dict::Dict{K, V}
+            function TestDict(args...)
+                d=Dict(args...)
+                new{keytype(d), valtype(d)}(d)
+            end
+        end
+        Base.setindex!(td::TestDict, args...) = setindex!(td.dict, args...)
+        Base.getindex(td::TestDict, args...) = getindex(td.dict, args...)
+        Base.pairs(D::TestDict) = pairs(D.dict)
+        testdict = TestDict(:a=>1, :b=>2)
+        map!(v->v-1, values(testdict))
+        @test testdict[:a] == 0
+        @test testdict[:b] == 1
+    end
+    @testset "Dict" begin
+        testdict = Dict(:a=>1, :b=>2)
+        map!(v->v-1, values(testdict))
+        @test testdict[:a] == 0
+        @test testdict[:b] == 1
+    end
+end

@@ -686,114 +686,19 @@ end
 
 filter!(f, d::Dict) = filter_in_one_pass!(f, d)
 
-
-
-
-
-
-
-"""
-    map!(f, values(dict))
-Takes the function f(value) and transforms values stored in the dict with the transformation value=f(value).
-
-
-# Examples
-```jldoctest
-julia> D=Dict(:a=>1,:b=>2)
-Dict{Symbol,Int64} with 2 entries:
-  :a => 1
-  :b => 2
-
-julia> map!(v->v-1,values(D))
-Dict{Symbol,Int64} with 2 entries:
-  :a => 0
-  :b => 1
-
- ```
-"""
-Base.map!(f, iter::Base.ValueIterator{Dict{K,V}}) where {K, V}= (_map_to!(Val(false), f, iter.dict.vals, iter, iter.dict.idxfloor); iter.dict)
-
-
-"""map(f, values(dict), create_new_dict=true, value_type_change::Bool = true) -> dict
-Takes the function f(value) and creates a copy of the dict with the values transformed by value=f(value).
-Setting value_type_change=false will ensure that the values type of the input and output dicts are the same.
-create_new_dict=false will cause the map method to fallback to returning an array.
-
-# Examples
-```jldoctest
-julia> D=Dict(:a=>1, :b=>2, :c=>3)
-Dict{Symbol,Int64} with 3 entries:
-  :a => 1
-  :b => 2
-  :c => 3
-
-julia> E=map(v->isodd(v) ? Float64(v) : string(v), values(D), create_new_dict=true)
-Dict{Symbol,Union{Float64, String}} with 3 entries:
-  :a => 1.0
-  :b => "2"
-  :c => 3.0
-
-julia> E=map(v->isodd(v) ? Int64(v) : UInt32(v), values(D), create_new_dict=true)
-Dict{Symbol,Union{Int64, UInt32}} with 3 entries:
-  :a => 1
-  :b => 0x00000002
-  :c => 3
-
-julia> E=map(v->isodd(v) ? Int64(v) : UInt32(v), values(D), create_new_dict=true, value_type_change = false)
-Dict{Symbol,Int64} with 3 entries:
-  :a => 1
-  :b => 2
-  :c => 3
- ```
-"""
-function Base.map(f,iter::Base.ValueIterator{Dict{K,V}}; create_new_dict::Bool, value_type_change::Bool=true) where {K, V}
-    if create_new_dict == false
-        return  Base.map(f, iter::Base.ValueIterator{Dict{K,V}})
-    end
-    d=iter.dict
-    if value_type_change
-        gen = (f(v) for v in iter)
-        et = Base.@default_eltype(gen)
-
-    else
-        et = V
-    end
-    dest=Vector{et}(undef,length(d.vals))
-    # The reasignment is required to allow for type widening
-    dest = _map_to!(Val(value_type_change), f, dest, iter, d.idxfloor)
-    return Dict{K, eltype(dest)}(copy(d.slots), copy(d.keys), dest, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe)
-
-end
-
-
-
-function _map_to!(widen::Val{W}, f,dest::AbstractArray{T}, iter::Base.ValueIterator{Dict{K,V}}, ind) where {T, K, V, W}
-    # changing widen to a bool causes a 10x slowdown
-    vals=iter.dict.vals
-    inplace=dest===vals
-    @assert( !(W && inplace) )  # This asserts that you can widen or have inplace maping but not both
-
-    len = length(vals)
-    i = ind
-
+function map!(f, iter::ValueIterator{Dict{K,V}}) where {K, V}
+    dict = iter.dict
+    vals = dict.vals
+    i = dict.idxfloor
+    len=length(vals)
     @inbounds while i < len
-        if !(Base.isslotfilled(iter.dict, i))
+        if !(isslotfilled(dict, i))
             i += 1; continue
         end
-        @inbounds el = f(vals[i])
-        if !W || (el isa T || typeof(el) === T)
-            @inbounds dest[i] = el
-            i += 1; continue
-        else
-            new = setindex_widen_up_to(dest, el, i)
-            return _map_to(widen,f,new, iter, i+1)
-        end
+        @inbounds vals[i] = f(vals[i])
+        i += 1; continue
     end
-    return dest
 end
-
-
-
 
 struct ImmutableDict{K,V} <: AbstractDict{K,V}
     parent::ImmutableDict{K,V}

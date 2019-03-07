@@ -701,3 +701,29 @@ function iterate(s::IdSet, state...)
     ((k, _), i) = y
     return (k, i)
 end
+
+"""
+    map!(f, values(dict::AbstractDict))
+Takes the function f(value) and transforms values stored in  `dict` with the transformation value=f(value).
+
+# Examples
+```jldoctest
+julia> D=Dict(:a=>1,:b=>2)
+Dict{Symbol,Int64} with 2 entries:
+  :a => 1
+  :b => 2
+
+julia> map!(v->v-1,values(D))
+Dict{Symbol,Int64} with 2 entries:
+  :a => 0
+  :b => 1
+ ```
+"""
+function map!(f, iter::Base.ValueIterator{D}) where D <:Base.AbstractDict
+    # This is the naive fallback which requires hash evaluations
+    # Contrary to the example Dict has an implementation which does not require hash evaluations
+    dict = iter.dict
+    for (key, val) in pairs(dict)
+        dict[key] = f(val)
+    end
+end
