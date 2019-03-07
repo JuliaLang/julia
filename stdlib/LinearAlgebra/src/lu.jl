@@ -367,18 +367,6 @@ function rdiv!(A::StridedVecOrMat, B::LU{<:Any,<:StridedMatrix})
     _apply_inverse_ipiv_cols!(B, A)
 end
 
-function rdiv!(A::StridedVecOrMat, transB::Transpose{LU{<:Any,<:StridedMatrix}})
-    B = transB.parent
-    rdiv!(rdiv!(A, transpose(UpperTriangular(B.factors))), transpose(UnitLowerTriangular(B.factors)))
-    _apply_inverse_ipiv_cols!(B, A)
-end
-
-function rdiv!(A::StridedVecOrMat, adjB::Adjoint{<:Any, LU{<:Any,<:StridedMatrix}})
-    B = adjB.parent
-    rdiv!(rdiv!(A, adjoint(UpperTriangular(B.factors))), adjoint(UnitLowerTriangular(B.factors)))
-    _apply_inverse_ipiv_cols!(B, A)
-end
-
 ldiv!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.getrs!('N', A.factors, A.ipiv, B)
 
