@@ -621,7 +621,7 @@ end
 @inline function _delete_clean!(h::Dict{K,V}, index) where {K,V}
     isbitstype(K) || isbitsunion(K) || ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.keys, index-1)
     isbitstype(V) || isbitsunion(V) || ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.vals, index-1)
-    off = 3 
+    off = 3
     if (index-off -1)%UInt <= length(h.slots)-8
         p = convert(Ptr{UInt64}, pointer(h.slots, index-off))
         c = xor(ltoh(unsafe_load(p)), 0x0000000000000003<<(off*8))
