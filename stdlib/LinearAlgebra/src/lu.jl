@@ -362,7 +362,7 @@ function _swap_cols!(B::StridedMatrix, i::Integer, j::Integer)
     B
 end
 
-function rdiv!(A::StridedVecOrMat, B::LU{<:Any,<:StridedMatrix}) 
+function rdiv!(A::StridedVecOrMat, B::LU{<:Any,<:StridedMatrix})
     rdiv!(rdiv!(A, UpperTriangular(B.factors)), UnitLowerTriangular(B.factors))
     _apply_inverse_ipiv_cols!(B, A)
 end
