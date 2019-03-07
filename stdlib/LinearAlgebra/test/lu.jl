@@ -3,7 +3,7 @@
 module TestLU
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: ldiv!, BlasInt, BlasFloat
+using LinearAlgebra: ldiv!, BlasInt, BlasFloat, rdiv!
 
 n = 10
 
@@ -128,6 +128,21 @@ dimg  = randn(n)/2
                 ldiv!(c_dest, adjoint(lua), c)
                 @test norm(b_dest - lua' \ b, 1) < ε*κ*2n
                 @test norm(c_dest - lua' \ c, 1) < ε*κ*n
+                
+                rdiv!(b_dest, b, lua)
+                rdiv!(c_dest, c, lua)
+                @test norm(b_dest - b / lua, 1) < ε*κ*2n
+                @test norm(c_dest - c / lua, 1) < ε*κ*n
+
+                rdiv!(b_dest, b, transpose(lua))
+                rdiv!(c_dest, c, transpose(lua))
+                @test norm(b_dest - b / transpose(lua), 1) < ε*κ*2n
+                @test norm(c_dest - c / transpose(lua), 1) < ε*κ*n
+
+                rdiv!(b_dest, b, adjoint(lua))
+                rdiv!(c_dest, c, adjoint(lua))
+                @test norm(b_dest - b / lua', 1) < ε*κ*2n
+                @test norm(c_dest - c / lua', 1) < ε*κ*n
             end
             if eltya <: BlasFloat && eltyb <: BlasFloat
                 e = rand(eltyb,n,n)
