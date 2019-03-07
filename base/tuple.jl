@@ -111,6 +111,8 @@ safe_tail(t::Tuple{}) = ()
     front(x::Tuple)::Tuple
 
 Return a `Tuple` consisting of all but the last component of `x`.
+
+# Examples
 ```jldoctest
 julia> Base.front((1,2,3))
 (1, 2)
