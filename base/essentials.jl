@@ -175,6 +175,8 @@ argtail(x, rest...) = rest
     tail(x::Tuple)::Tuple
 
 Return a `Tuple` consisting of all but the first component of `x`.
+
+# Examples
 ```jldoctest
 julia> Base.tail((1,2,3))
 (2, 3)
