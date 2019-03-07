@@ -9,10 +9,12 @@ import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, c
 # but also factorizations, rotations, and other linear algebra objects, including
 # user-defined such objects. so do not restrict the wrapped type.
 """
-    Adjoint(A)
+    Adjoint
 
-Constructs an `Adjoint` view of `A`.
-Note that [`adjoint`](@ref) is applied recursively to elements.
+Lazy wrapper type for a adjoint view of the underlying linear algebra object,
+usually an `AbstractVector`/`AbstractMatrix`, but also some `Factorization`, for instance.
+Usually, the `Adjoint` constructor should not be called directly, use [`adjoint`](@ref)
+instead. To materialize the view use [`copy`](@ref).
 
 This type is intended for linear algebra usage - for general data manipulation see
 [`permutedims`](@ref Base.permutedims).
@@ -38,10 +40,12 @@ struct Adjoint{T,S} <: AbstractMatrix{T}
     end
 end
 """
-    Transpose(A)
+    Transpose
 
-Constructs a `Transpose` view of `A`.
-Note that [`transpose`](@ref) is applied recursively to elements.
+Lazy wrapper type for a transpose view of the underlying linear algebra object,
+usually an `AbstractVector`/`AbstractMatrix`, but also some `Factorization`, for instance.
+Usually, the `Transpose` constructor should not be called directly, use [`transpose`](@ref)
+instead. To materialize the view use [`copy`](@ref).
 
 This type is intended for linear algebra usage - for general data manipulation see
 [`permutedims`](@ref Base.permutedims).
