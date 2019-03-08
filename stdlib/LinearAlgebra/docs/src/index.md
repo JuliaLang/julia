@@ -422,8 +422,10 @@ LinearAlgebra.isdiag
 LinearAlgebra.ishermitian
 Base.transpose
 LinearAlgebra.transpose!
+LinearAlgebra.Transpose
 Base.adjoint
 LinearAlgebra.adjoint!
+LinearAlgebra.Adjoint
 Base.copy(::Union{Transpose,Adjoint})
 LinearAlgebra.stride1
 LinearAlgebra.checksquare
