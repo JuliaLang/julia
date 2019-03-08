@@ -506,8 +506,6 @@ export
     length,
     map!,
     map,
-    mapdict!,
-    mapdict,
     mapfoldl,
     mapfoldr,
     mapreduce,

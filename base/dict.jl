@@ -686,18 +686,16 @@ end
 
 filter!(f, d::Dict) = filter_in_one_pass!(f, d)
 
-function map!(f, iter::ValueIterator{Dict{K,V}}) where {K, V}
+function map!(f, iter::ValueIterator{<:Dict})
     dict = iter.dict
     vals = dict.vals
-    i = dict.idxfloor
-    len=length(vals)
-    @inbounds while i < len
-        if !(isslotfilled(dict, i))
-            i += 1; continue
+    # @inbounds is here so the it gets propigated to isslotfiled
+    @inbounds for i = dict.idxfloor:lastindex(vals)
+        if isslotfilled(dict, i)
+            vals[i] = f(vals[i])
         end
-        @inbounds vals[i] = f(vals[i])
-        i += 1; continue
     end
+    return vals
 end
 
 struct ImmutableDict{K,V} <: AbstractDict{K,V}

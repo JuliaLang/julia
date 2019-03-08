@@ -719,7 +719,7 @@ Dict{Symbol,Int64} with 2 entries:
   :b => 1
  ```
 """
-function map!(f, iter::Base.ValueIterator{D}) where D <:Base.AbstractDict
+function map!(f, iter::ValueIterator)
     # This is the naive fallback which requires hash evaluations
     # Contrary to the example Dict has an implementation which does not require hash evaluations
     dict = iter.dict
