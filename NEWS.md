@@ -27,6 +27,7 @@ Standard library changes
 
 #### LinearAlgebra
 
+* `cholesky` and `cholesky!` now work for `Adjoint` and `Transpose` matrices ([#31302]).
 
 #### SparseArrays
 

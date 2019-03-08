@@ -504,4 +504,21 @@ using .Main.OffsetArrays
     @test_throws BoundsError s[1, 4]
 end
 
+@testset "$f(::$T{<:$E})" for T in [Adjoint, Transpose],
+                              f in [cholesky, cholesky!],
+                              E in [Float32, Complex{Float32}]
+    A = (Y->Y'Y)(randn(E, 6, 6))
+    AT = T(A)
+    B = copy(A)
+    CA = f(AT)
+    @test CA isa Cholesky{E,Matrix{E}}
+    if f === cholesky!
+        @test !(A ≈ B)
+    else
+        @test A ≈ B
+    end
+    fB = f(T === Transpose ? conj(B) : B)
+    @test CA.factors ≈ fB.factors
+end
+
 end # module TestAdjointTranspose

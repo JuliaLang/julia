@@ -281,3 +281,43 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 /(u::TransposeAbsVec, A::AbstractMatrix) = transpose(transpose(A) \ u.parent)
 /(u::AdjointAbsVec, A::Transpose{<:Any,<:AbstractMatrix}) = adjoint(conj(A.parent) \ u.parent) # technically should be adjoint(copy(adjoint(copy(A))) \ u.parent)
 /(u::TransposeAbsVec, A::Adjoint{<:Any,<:AbstractMatrix}) = transpose(conj(A.parent) \ u.parent) # technically should be transpose(copy(transpose(copy(A))) \ u.parent)
+
+# The Cholesky decomposition of an Adjoint or Transpose is just the decomposition of the
+# parent array, so we'll keep the type signature reasonably lax and defer the argument and
+# keyword argument checking to the method(s) defined for the parent.
+
+const ValBool = Union{Val{true},Val{false}}
+
+"""
+    cholesky!(A::Union{Adjoint,Transpose}, pivot::Val; kwargs...)
+
+Compute the Cholesky factorization of the `Adjoint`- or `Transpose`-wrapped matrix `A`,
+overwriting the parent matrix in the process. See documentation for the `cholesky!`
+methods defined for other matrix types for further details.
+
+!!! compat "Julia 1.2"
+    This method requires Julia 1.2 or later.
+"""
+cholesky!(A::AdjOrTransAbsMat, pivot::ValBool=Val(false); kwargs...) =
+    cholesky!(parent(A), pivot; kwargs...)
+
+"""
+    cholesky(A::Union{Adjoint,Transpose}, pivot::Val; kwargs...)
+
+Compute the Cholesky factorization of the `Adjoint`- or `Transpose`-wrapped matrix `A`.
+See documentation for the `cholesky` methods defined for other matrix types for further
+details.
+
+!!! compat "Julia 1.2"
+    This method requires Julia 1.2 or later.
+"""
+cholesky(A::AdjOrTransAbsMat, pivot::ValBool=Val(false); kwargs...) =
+    cholesky(parent(A), pivot; kwargs...)
+
+# Transpose{<:Complex} needs to be handled separately, as the values need to be conjugated
+
+cholesky!(A::Transpose{<:Complex,<:AbstractMatrix}, pivot::ValBool=Val(false); kwargs...) =
+    cholesky!(conj!(parent(A)), pivot; kwargs...)
+
+cholesky(A::Transpose{<:Complex,<:AbstractMatrix}, pivot::ValBool=Val(false); kwargs...) =
+    cholesky!(conj!(cholcopy(parent(A))), pivot; kwargs...)
