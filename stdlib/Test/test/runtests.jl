@@ -903,3 +903,15 @@ end
     a = [1, 2, 3]
     @test isapprox(identity.((a, a))...)
 end
+
+@testset "treat NaN and missing in exception fields" begin
+    struct Exception31219{T}
+        value::T
+    end
+    f31219(x) = throw(Exception31219(x))
+
+    @testset "exception field '$(repr(x))'" for x in ("ok", nothing, NaN, missing)
+        @test_throws Exception31219(x) f31219(x)
+    end
+end
+
