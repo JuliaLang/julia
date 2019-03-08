@@ -270,6 +270,10 @@ mutable struct Options
     backspace_adjust::Bool
     confirm_exit::Bool # ^D must be repeated to confirm exit
     auto_indent::Bool # indent a newline like line above
+    auto_indent_tmp_off::Bool # switch auto_indent temporarily off if copy&paste
+    auto_indent_bracketed_paste::Bool # set to true if terminal knows paste mode
+    # cancel auto-indent when next character is entered within this time frame :
+    auto_indent_time_threshold::Float64
 end
 
 Options(;
@@ -283,12 +287,16 @@ Options(;
         beep_use_current = true,
         backspace_align = true, backspace_adjust = backspace_align,
         confirm_exit = false,
-        auto_indent = true) =
+        auto_indent = true,
+        auto_indent_tmp_off = false,
+        auto_indent_bracketed_paste = false,
+        auto_indent_time_threshold = 0.005) =
             Options(hascolor, extra_keymap, tabwidth,
                     kill_ring_max, region_animation_duration,
                     beep_duration, beep_blink, beep_maxduration,
                     beep_colors, beep_use_current,
-                    backspace_align, backspace_adjust, confirm_exit, auto_indent)
+                    backspace_align, backspace_adjust, confirm_exit,
+                    auto_indent, auto_indent_tmp_off, auto_indent_bracketed_paste, auto_indent_time_threshold)
 
 # for use by REPLs not having an options field
 const GlobalOptions = Options()
