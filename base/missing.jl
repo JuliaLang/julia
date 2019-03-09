@@ -83,6 +83,7 @@ for f in (:(!), :(~), :(+), :(-), :(zero), :(one), :(oneunit),
     @eval ($f)(::Missing) = missing
 end
 for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
+    @eval ($f)(::Type{Missing}) = missing
     @eval function $(f)(::Type{Union{T, Missing}}) where T
         T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
         $f(T)
