@@ -179,6 +179,10 @@ Base.one(::Type{Unit}) = 1
         @test oneunit(Union{T, Missing}) === T(1)
     end
 
+    @test zero(Missing) === missing
+    @test one(Missing) === missing
+    @test oneunit(Missing) === missing
+
     @test_throws MethodError zero(Any)
     @test_throws MethodError one(Any)
     @test_throws MethodError oneunit(Any)
