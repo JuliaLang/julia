@@ -33,6 +33,10 @@ struct ConstantCase
         new(val, method, sparams, metharg)
 end
 
+struct PureCase
+    val::Any
+end
+
 struct DynamicCase
     method::Method
     sparams::Vector{Any}
@@ -440,10 +444,16 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
                 end
             end
         end
+        pure = false
+        if isa(case, PureCase)
+            pure = true
+            case = case.val
+        end
         if isa(case, InliningTodo)
             val = ir_inline_item!(compact, idx, argexprs′, linetable, case, boundscheck, todo_bbs)
         elseif isa(case, MethodInstance)
-            val = insert_node_here!(compact, Expr(:invoke, case, argexprs′...), typ, line)
+            val = insert_node_here!(compact, Expr(:invoke, case, argexprs′...),
+                typ, line, false, pure ? IR_FLAG_EFFECT_FREE : 0x00)
         else
             case = case::ConstantCase
             val = case.val
@@ -692,7 +702,10 @@ function analyze_method!(idx::Int, @nospecialize(f), @nospecialize(ft), @nospeci
     src_inlineable = ccall(:jl_ast_flag_inlineable, Bool, (Any,), inferred)
 
     if !(src_inferred && src_inlineable)
-        return spec_lambda(atype_unlimited, sv, invoke_data)
+        src_pure = ccall(:jl_ast_flag_pure, Bool, (Any,), inferred)
+        linfo = spec_lambda(atype_unlimited, sv, invoke_data)
+        return linfo === nothing ? nothing :
+               src_pure ? PureCase(linfo) : linfo
     end
 
     # At this point we're committed to performing the inlining, add the backedge
@@ -773,6 +786,10 @@ function iterate(split::UnionSplitSignature, state::Vector{Int}...)
 end
 
 function handle_single_case!(ir::IRCode, stmt::Expr, idx::Int, @nospecialize(case), isinvoke::Bool, todo::Vector{Any}, sv::OptimizationState)
+    if isa(case, PureCase)
+        ir.flags[idx] |= IR_FLAG_EFFECT_FREE
+        case = case.val
+    end
     if isa(case, ConstantCase)
         ir[SSAValue(idx)] = case.val
     elseif isa(case, MethodInstance)

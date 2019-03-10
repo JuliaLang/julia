@@ -646,7 +646,7 @@ function insert_node!(compact::IncrementalCompact, before, @nospecialize(typ), @
     end
 end
 
-function insert_node_here!(compact::IncrementalCompact, @nospecialize(val), @nospecialize(typ), ltable_idx::Int32, reverse_affinity::Bool=false)
+function insert_node_here!(compact::IncrementalCompact, @nospecialize(val), @nospecialize(typ), ltable_idx::Int32, reverse_affinity::Bool=false, flags::UInt8=0x00)
     if compact.result_idx > length(compact.result)
         @assert compact.result_idx == length(compact.result) + 1
         resize!(compact, compact.result_idx)
@@ -659,7 +659,7 @@ function insert_node_here!(compact::IncrementalCompact, @nospecialize(val), @nos
     compact.result[compact.result_idx] = val
     compact.result_types[compact.result_idx] = typ
     compact.result_lines[compact.result_idx] = ltable_idx
-    compact.result_flags[compact.result_idx] = 0x00
+    compact.result_flags[compact.result_idx] = flags
     if count_added_node!(compact, val)
         push!(compact.late_fixup, compact.result_idx)
     end
@@ -1149,7 +1149,8 @@ function maybe_erase_unused!(extra_worklist, compact, idx, callback = x->nothing
     if compact_exprtype(compact, SSAValue(idx)) === Bottom
         effect_free = false
     else
-        effect_free = stmt_effect_free(stmt, compact.result_types[idx], compact, compact.ir.sptypes)
+        effect_free_flag = (compact.result_flags[idx] & IR_FLAG_EFFECT_FREE) != 0
+        effect_free = effect_free_flag || stmt_effect_free(stmt, compact.result_types[idx], compact, compact.ir.sptypes)
     end
     if effect_free
         for ops in userefs(stmt)
