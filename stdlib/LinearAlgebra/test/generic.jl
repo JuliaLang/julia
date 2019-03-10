@@ -239,34 +239,6 @@ end
     @test norm([typemin(Int), typemin(Int)], 1) == -2float(typemin(Int))
 end
 
-@testset "testing istriu, istril, isdiag for Diagonal" begin
-    D1 = Diagonal([[1 0; 3 4], [5 0; 7 8]])
-    D2 = Diagonal([[1 2; 3 4], [5 6; 7 8]])
-    D3 = Diagonal([[1 2; 0 4], [5 6; 0 8]])
-    D4 = Diagonal([[1 0; 0 4], [5 0; 0 8]])
-    D5 = Diagonal([1, 2])
-
-    @test istril(D1) == true
-    @test istriu(D1) == false
-    @test isdiag(D1) == false
-
-    @test istril(D2) == false
-    @test istriu(D2) == false
-    @test isdiag(D2) == false
-
-    @test istril(D3) == false
-    @test istriu(D3) == true
-    @test isdiag(D3) == false
-
-    @test istril(D4) == true
-    @test istriu(D4) == true
-    @test isdiag(D4) == true
-
-    @test istril(D5) == true
-    @test istriu(D5) == true
-    @test isdiag(D5) == true
-end
-
 @testset "potential overflow in normalize!" begin
     δ = inv(prevfloat(typemax(Float64)))
     v = [δ, -δ]

@@ -1127,7 +1127,6 @@ function istriu(A::AbstractMatrix, k::Integer = 0)
     return true
 end
 istriu(x::Number) = true
-istriu(A::Diagonal) = all(istriu, A.diag)
 
 """
     istril(A::AbstractMatrix, k::Integer = 0) -> Bool
@@ -1170,7 +1169,6 @@ function istril(A::AbstractMatrix, k::Integer = 0)
     return true
 end
 istril(x::Number) = true
-istril(A::Diagonal) = all(istril, A.diag)
 
 """
     isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) -> Bool
@@ -1231,7 +1229,6 @@ true
 """
 isdiag(A::AbstractMatrix) = isbanded(A, 0, 0)
 isdiag(x::Number) = true
-isdiag(A::Diagonal) = istril(A) && istriu(A)
 
 # BLAS-like in-place y = x*α+y function (see also the version in blas.jl
 #                                          for BlasFloat Arrays)
