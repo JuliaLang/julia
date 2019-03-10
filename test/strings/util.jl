@@ -302,6 +302,7 @@ end
     @test chomp("foo\r\n") == "foo"
     @test chomp("fo∀\r\n") == "fo∀"
     @test chomp("fo∀") == "fo∀"
+    @test chop("") == ""
     @test chop("fooε") == "foo"
     @test chop("foεo") == "foε"
     @test chop("∃∃∃∃") == "∃∃∃"
