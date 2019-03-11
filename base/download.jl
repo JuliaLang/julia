@@ -38,8 +38,7 @@ end
 function download_curl(curl_exe::AbstractString, url::AbstractString, filename::AbstractString)
     err = PipeBuffer()
     process = run(pipeline(`$curl_exe -s -S -g -L -f -o $filename $url`, stderr=err), wait=false)
-    wait(process)
-    if process.exitcode != 0
+    if !success(process)
         stderr = readline(err)
         error(stderr)
     end
