@@ -290,6 +290,34 @@ for f in sha_funcs
     nerrors += 1
 end
 
+# test proper padding for sha3_512 in case message length = - 1 mod block length
+VERBOSE && print("Testing padding on msg len = -1 mod blk len for SHA3_512")
+let
+    global nerrors
+    nerrors_old= nerrors
+    sha_func = sha3_512
+    data = repeat([0x41], 25*8-64*2-1)
+    answer = "e9e7f1016227a4d58c3a2c597adc2f58de10b6e78f17ff079624fede5eb8341bf0ebeda4f8296d5a070751ab3b7ffa48d35950f793e21f9c16c095b3b354da5e"
+    hash = try
+        bytes2hex(sha_func(data))
+    catch exc
+        exc
+    end
+    if hash != answer
+        print("\n")
+        @warn("""
+            For $(describe_hash(sha_types[sha_func])) expected:
+                $(answer)
+            Calculated:
+                $(hash)
+        """)
+        nerrors += 1
+    else
+        VERBOSE && print(".")
+    end
+    VERBOSE && println("Done! [$(nerrors - nerrors_old) errors]")
+end
+
 # Clean up the I/O mess
 rm(file)
 rm(tempdir)
