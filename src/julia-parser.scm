@@ -141,12 +141,19 @@
 
 ;; characters that can be in an operator
 (define opchar? (Set op-chars))
+(define operator? (SuffSet operators))
+
+(define dot-operators (filter (lambda (o)
+                                (and (not (eq? o '|.|))
+                                     (eqv? (string.char (string o) 0) #\.)
+                                     (not (eqv? (string.char (string o) 1) #\.))))
+                              operators))
+(define dotop? (SuffSet dot-operators))
 ;; characters that can follow . in an operator
 (define dot-opchar? (Set
                      (delete-duplicates
                       (map (lambda (op) (string.char (string op) 1))
-                           (cons `|..| (filter dotop? operators))))))
-(define operator? (SuffSet operators))
+                           (cons `|..| dot-operators)))))
 
 (define initial-reserved-words '(begin while if for try return break continue
                          function macro quote let local global const do

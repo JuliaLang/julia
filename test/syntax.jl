@@ -1835,3 +1835,11 @@ end
 
 @test_throws UndefVarError eval(Symbol(""))
 @test_throws UndefVarError eval(:(1+$(Symbol(""))))
+
+# issue #28992
+macro id28992(x) x end
+@test @id28992(1 .+ 2) == 3
+@test Meta.isexpr(Meta.lower(@__MODULE__, :(@id28992((.+)(a,b) = 0))), :error)
+@test @id28992([1] .< [2] .< [3]) == [true]
+@test @id28992(2 ^ -2) == 0.25
+@test @id28992(2 .^ -2) == 0.25

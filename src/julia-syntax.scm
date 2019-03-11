@@ -46,10 +46,10 @@
          (arg2  (if (and (pair? arg)
                          (pair? (cdddr e)))
                     (make-ssavalue) arg)))
-    (if (and (not (dotop? (cadr e)))
+    (if (and (not (dotop-named? (cadr e)))
              (length> e 5)
              (pair? (cadddr (cdr e)))
-             (dotop? (cadddr (cddr e))))
+             (dotop-named? (cadddr (cddr e))))
         ;; look ahead: if the 2nd argument of the next comparison is also
         ;; an argument to an eager (dot) op, make sure we don't skip the
         ;; initialization of its variable by short-circuiting
@@ -68,7 +68,7 @@
 (define (expand-scalar-compare e)
   (comp-accum e
               (lambda (a b) `(&& ,a ,b))
-              (lambda (x) (or (not (length> x 2)) (dotop? (cadr x))))
+              (lambda (x) (or (not (length> x 2)) (dotop-named? (cadr x))))
               compare-one))
 
 ;; convert a series of scalar and vector comparisons into & calls,
@@ -79,7 +79,7 @@
               (lambda (a b) `(call .& ,a ,b))
               (lambda (x) (not (length> x 2)))
               (lambda (e)
-                (if (dotop? (cadr e))
+                (if (dotop-named? (cadr e))
                     (compare-one e)
                     (expand-scalar-compare e)))))
 
@@ -1590,7 +1590,7 @@
     (if (and (null? splat)
              (length= expr 3) (eq? (car expr) 'call)
              (eq? (caddr expr) argname)
-             (not (dotop? (cadr expr)))
+             (not (dotop-named? (cadr expr)))
              (not (expr-contains-eq argname (cadr expr))))
         (cadr expr)  ;; eta reduce `x->f(x)` => `f`
         (let ((expr (cond ((and flat (pair? expr) (eq? (car expr) 'generator))
@@ -1661,18 +1661,18 @@
           (cond ((or (atom? x) (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
                  `(call (top getproperty) ,f ,x))
                 ((eq? (car x) 'tuple)
-                 (if (and (eq? f '^) (length= x 3) (integer? (caddr x)))
-                  (make-fuse (expand-forms '(top literal_pow))
-                    (list '^ (cadr x) (expand-forms `(call (call (core apply_type) (top Val) ,(caddr x))))))
-                  (make-fuse f (cdr x))))
+                 (if (and (eq? (identifier-name f) '^) (length= x 3) (integer? (caddr x)))
+                     (make-fuse '(top literal_pow)
+                                (list f (cadr x) (expand-forms `(call (call (core apply_type) (top Val) ,(caddr x))))))
+                     (make-fuse f (cdr x))))
                 (else
                  (error (string "invalid syntax \"" (deparse e) "\"")))))
-        (if (and (pair? e) (eq? (car e) 'call) (dotop? (cadr e)))
+        (if (and (pair? e) (eq? (car e) 'call) (dotop-named? (cadr e)))
             (let ((f (undotop (cadr e))) (x (cddr e)))
-                (if (and (eq? f '^) (length= x 2) (integer? (cadr x)))
-                 (make-fuse (expand-forms '(top literal_pow))
-                   (list '^ (car x) (expand-forms `(call (call (core apply_type) (top Val) ,(cadr x))))))
-                 (make-fuse f x)))
+              (if (and (eq? (identifier-name f) '^) (length= x 2) (integer? (cadr x)))
+                  (make-fuse '(top literal_pow)
+                             (list f (car x) (expand-forms `(call (call (core apply_type) (top Val) ,(cadr x))))))
+                  (make-fuse f x)))
             e)))
   (let ((e (dot-to-fuse rhs #t)) ; an expression '(fuse func args) if expr is a dot call
         (lhs-view (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
@@ -2027,7 +2027,7 @@
    (lambda (e)
      (if (length> e 2)
          (let ((f (cadr e)))
-           (cond ((dotop? f)
+           (cond ((dotop-named? f)
                   (expand-fuse-broadcast '() `(|.| ,(undotop f) (tuple ,@(cddr e)))))
                  ((eq? f 'ccall)
                   (if (not (length> e 4)) (error "too few arguments to ccall"))
@@ -2077,9 +2077,9 @@
                     (expand-forms
                      `(call (core _apply) ,f ,@(tuple-wrap argl '())))))
 
-                 ((and (eq? f '^) (length= e 4) (integer? (cadddr e)))
+                 ((and (eq? (identifier-name f) '^) (length= e 4) (integer? (cadddr e)))
                   (expand-forms
-                   `(call (top literal_pow) ^ ,(caddr e) (call (call (core apply_type) (top Val) ,(cadddr e))))))
+                   `(call (top literal_pow) ,f ,(caddr e) (call (call (core apply_type) (top Val) ,(cadddr e))))))
                  (else
                   (map expand-forms e))))
          (map expand-forms e)))
