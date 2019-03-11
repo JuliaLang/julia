@@ -306,6 +306,8 @@ Base.Sys.isnetbsd
 Base.Sys.isdragonfly
 Base.Sys.iswindows
 Base.Sys.windows_version
+Base.Sys.free_memory
+Base.Sys.total_memory
 Base.@static
 ```
 
