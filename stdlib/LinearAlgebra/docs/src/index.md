@@ -501,6 +501,7 @@ LinearAlgebra.BLAS.asum
 LinearAlgebra.axpy!
 LinearAlgebra.BLAS.scal!
 LinearAlgebra.BLAS.scal
+LinearAlgebra.BLAS.iamax
 LinearAlgebra.BLAS.ger!
 LinearAlgebra.BLAS.syr!
 LinearAlgebra.BLAS.syrk!
