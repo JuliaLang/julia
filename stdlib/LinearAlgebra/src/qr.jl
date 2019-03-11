@@ -737,10 +737,14 @@ function *(adjA::Adjoint{<:Any,<:StridedVecOrMat}, adjQ::Adjoint{<:Any,<:Abstrac
     return rmul!(Ac, adjoint(convert(AbstractMatrix{TAQ}, Q)))
 end
 
-ldiv!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat} =
-    (ldiv!(UpperTriangular(A.R), view(lmul!(adjoint(A.Q), b), 1:size(A, 2))); b)
-ldiv!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
-    (ldiv!(UpperTriangular(A.R), view(lmul!(adjoint(A.Q), B), 1:size(A, 2), 1:size(B, 2))); B)
+function ldiv!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat} 
+    m,n = size(A)
+    (ldiv!(UpperTriangular(view(A.factors,1:min(m,n), 1:n)), view(lmul!(adjoint(A.Q), b), 1:size(A, 2))); b)
+end
+function ldiv!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat} 
+        m,n = size(A)
+    (ldiv!(UpperTriangular(view(A.factors,1:min(m,n), 1:n)), view(lmul!(adjoint(A.Q), B), 1:size(A, 2), 1:size(B, 2))); B)
+end
 
 # Julia implementation similar to xgelsy
 function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasFloat
@@ -787,7 +791,7 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     minmn = min(m,n)
     mB, nB = size(B)
     lmul!(adjoint(A.Q), view(B, 1:m, :))
-    R = A.R
+    R = A.factors
     @inbounds begin
         if n > m # minimum norm solution
             τ = zeros(T,m)
