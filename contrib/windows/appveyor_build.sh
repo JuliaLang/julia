@@ -117,6 +117,16 @@ rm -f usr/bin/libssp-0.dll
 rm -f usr/bin/libstdc++-6.dll
 rm -f usr/bin/libccalltest.dll
 rm -f usr/bin/libpthread.dll
+rm -f usr/bin/libpthread.dll
+
+# Clear out OpenBLAS and SuiteSparse...
+rm -f usr/bin/libsuitesparse*.dll
+rm -f usr/bin/libumfpack.dll
+rm -f usr/bin/libspqr.dll
+rm -f usr/bin/lib*amd.dll
+rm -f usr/bin/libcholmod.dll
+rm -f usr/bin/libopenblas*.dll
+
 
 if [ -z "$USEMSVC" ]; then
   if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" ]; then
