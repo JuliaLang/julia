@@ -60,6 +60,10 @@ function scrub_backtrace(bt)
     return bt
 end
 
+function scrub_exc_stack(stack)
+    return Any[ (x[1], scrub_backtrace(x[2])) for x in stack ]
+end
+
 """
     Result
 
@@ -145,10 +149,10 @@ mutable struct Error <: Result
 
     function Error(test_type, orig_expr, value, bt, source)
         if test_type === :test_error
-            bt = scrub_backtrace(bt)
+            bt = scrub_exc_stack(bt)
         end
         if test_type === :test_error || test_type === :nontest_error
-            bt_str = sprint(showerror, value, bt)
+            bt_str = sprint(Base.show_exception_stack, bt)
         else
             bt_str = ""
         end
@@ -486,7 +490,7 @@ function get_test_result(ex, source)
             $testret
         catch _e
             _e isa InterruptException && rethrow()
-            Threw(_e, catch_backtrace(), $(QuoteNode(source)))
+            Threw(_e, Base.catch_stack(), $(QuoteNode(source)))
         end
     end
     Base.remove_linenums!(result)
@@ -1111,7 +1115,7 @@ function testset_beginend(args, tests, source)
             err isa InterruptException && rethrow()
             # something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
+            record(ts, Error(:nontest_error, :(), err, Base.catch_stack(), $(QuoteNode(source))))
         finally
             copy!(GLOBAL_RNG, oldrng)
         end
@@ -1184,7 +1188,7 @@ function testset_forloop(args, testloop, source)
             err isa InterruptException && rethrow()
             # Something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
+            record(ts, Error(:nontest_error, :(), err, Base.catch_stack(), $(QuoteNode(source))))
         end
     end
     quote
