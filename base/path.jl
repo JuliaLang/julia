@@ -520,11 +520,14 @@ const KF_FLAG_DEFAULT = 0x00000000
     get_known_folder_path(folderid::GUID) -> AbstractString
 
 Windows only function to retrieve the full path of a known folder identified by the folder's FOLDERID.
-The FOLDERID module contains the folderid constants available for query. 
+The FOLDERID module contains the folderid constants available for query.
 
 # Examples
 
 ```
+import Base.Filesystem: get_known_folder_path
+import Base.Filesystem.FOLDERID
+
 julia> get_known_folder_path(FOLDERID.System)
 "C:\\WINDOWS\\system32"
 
