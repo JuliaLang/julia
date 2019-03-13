@@ -729,4 +729,5 @@ function map!(f, iter::ValueIterator)
     for (key, val) in pairs(dict)
         dict[key] = f(val)
     end
+    return iter
 end
