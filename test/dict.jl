@@ -1027,7 +1027,7 @@ end
         mutable struct TestDict{K, V}  <: AbstractDict{K, V}
             dict::Dict{K, V}
             function TestDict(args...)
-                d=Dict(args...)
+                d = Dict(args...)
                 new{keytype(d), valtype(d)}(d)
             end
         end
