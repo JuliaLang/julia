@@ -888,6 +888,12 @@ next element and the new iteration state should be returned.
 """
 function iterate end
 
+"""
+    isiterable(T) -> Bool
+
+Test if type `T` is an iterable collection type or not,
+that is whether it has an `iterate` method or not.
+"""
 function isiterable(T)::Bool
     return hasmethod(iterate, Tuple{T})
 end
