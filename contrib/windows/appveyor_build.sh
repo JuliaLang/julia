@@ -43,16 +43,12 @@ if [ "$ARCH" = x86_64 ]; then
   exc=seh
   echo "override MARCH = x86-64" >> Make.user
   echo 'USE_BLAS64 = 1' >> Make.user
-  echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas64_' >> Make.user
-  echo 'LIBBLASNAME = libopenblas64_' >> Make.user
   echo 'BINARYBUILDER_TRIPLET = x86_64-w64-mingw32' >> Make.user
 else
   bits=32
   archsuffix=86
   exc=sjlj
   echo "override MARCH = pentium4" >> Make.user
-  echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas' >> Make.user
-  echo 'LIBBLASNAME = libopenblas' >> Make.user
   echo 'BINARYBUILDER_TRIPLET = i686-w64-mingw32' >> Make.user
 fi
 echo "override JULIA_CPU_TARGET=generic;native" >> Make.user
@@ -186,8 +182,6 @@ chmod -R +x usr/bin usr/tools
 for lib in GMP MPFR PCRE LIBUNWIND; do
   echo "USE_SYSTEM_$lib = 1" >> Make.user
 done
-# echo 'override LIBLAPACK = $(LIBBLAS)' >> Make.user
-# echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
 
 # Remaining dependencies:
 # libuv since its static lib is no longer included in the binaries
