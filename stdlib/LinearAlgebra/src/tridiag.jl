@@ -3,15 +3,18 @@
 #### Specialized matrix types ####
 
 ## (complex) symmetric tridiagonal matrices
-struct SymTridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
+struct SymTridiagonal{T, V<:AbstractVector{T}} <: AbstractMatrix{T}
     dv::V                        # diagonal
-    ev::V                        # subdiagonal
-    function SymTridiagonal{T,V}(dv, ev) where {T,V<:AbstractVector{T}}
+    ev::V                        # superdiagonal
+    function SymTridiagonal{T, V}(dv, ev) where {T, V<:AbstractVector{T}}
         require_one_based_indexing(dv, ev)
         if !(length(dv) - 1 <= length(ev) <= length(dv))
             throw(DimensionMismatch("subdiagonal has wrong length. Has length $(length(ev)), but should be either $(length(dv) - 1) or $(length(dv))."))
         end
-        new{T,V}(dv,ev)
+        if !all(issymmetric.(dv))
+            throw("block matrices on diagonal are not symmetric")
+        end
+        new{T,V}(symmetric.(dv, :U)::AbstractVector{symmetric_type(eltype(dv))}, ev)
     end
 end
 
@@ -22,6 +25,11 @@ Construct a symmetric tridiagonal matrix from the diagonal (`dv`) and first
 sub/super-diagonal (`ev`), respectively. The result is of type `SymTridiagonal`
 and provides efficient specialized eigensolvers, but may be converted into a
 regular matrix with [`convert(Array, _)`](@ref) (or `Array(_)` for short).
+
+For `SymTridiagonal` block matrices, the elements of `dv` are assumed to be
+symmetric, and made [`Symmetric`](@ref)) at construction. The argument `ev` is
+interpreted as the superdiagonal. Blocks from the subdiagonal are (materialized)
+transpose of the corresponding superdiagonal blocks.
 
 # Examples
 ```jldoctest
@@ -44,6 +52,23 @@ julia> SymTridiagonal(dv, ev)
  7  2  8  ⋅
  ⋅  8  3  9
  ⋅  ⋅  9  4
+
+julia> A = SymTridiagonal(fill([1 2; 2 3], 3), fill([1 2; 3 4], 2));
+
+julia> A[1,1]
+2×2 Symmetric{Int64,Array{Int64,2}}:
+1  2
+2  3
+
+julia> A[1,2]
+2×2 Array{Int64,2}:
+1  2
+3  4
+
+julia> A[2,1]
+2×2 Array{Int64,2}:
+1  3
+2  4
 ```
 """
 SymTridiagonal(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T}(dv, ev)
@@ -56,8 +81,8 @@ end
 """
     SymTridiagonal(A::AbstractMatrix)
 
-Construct a symmetric tridiagonal matrix from the diagonal and
-first sub/super-diagonal, of the symmetric matrix `A`.
+Construct a symmetric tridiagonal matrix from the diagonal and first superdiagonal
+of the symmetric matrix `A`.
 
 # Examples
 ```jldoctest
@@ -72,11 +97,18 @@ julia> SymTridiagonal(A)
  1  2  ⋅
  2  4  5
  ⋅  5  6
+
+julia> B = reshape([[1 2; 2 3], [1 2; 3 4], [1 3; 2 4], [1 2; 2 3]], 2, 2);
+
+julia> SymTridiagonal(B)
+2×2 SymTridiagonal{Array{Int64,2},Array{Array{Int64,2},1}}:
+ [1 2; 2 3]  [1 3; 2 4]
+ [1 2; 3 4]  [1 2; 2 3]
 ```
 """
 function SymTridiagonal(A::AbstractMatrix)
-    if diag(A,1) == diag(A,-1)
-        SymTridiagonal(diag(A,0), diag(A,1))
+    if (diag(A, 1) == transpose.(diag(A, -1))) && all(issymmetric.(diag(A, 0)))
+        SymTridiagonal(symmetric.(diag(A, 0), :U), diag(A, 1))
     else
         throw(ArgumentError("matrix is not symmetric; cannot convert to SymTridiagonal"))
     end
@@ -139,16 +171,32 @@ adjoint(S::SymTridiagonal) = Adjoint(S)
 Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(adjoint.(x)), (S.parent.dv, S.parent.ev))...)
 Base.copy(S::Transpose{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(transpose.(x)), (S.parent.dv, S.parent.ev))...)
 
-function diag(M::SymTridiagonal, n::Integer=0)
+function diag(M::SymTridiagonal{<:Number}, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
     absn = abs(n)
     if absn == 0
         return copyto!(similar(M.dv, length(M.dv)), M.dv)
-    elseif absn==1
+    elseif absn == 1
         return copyto!(similar(M.ev, length(M.ev)), M.ev)
     elseif absn <= size(M,1)
         return fill!(similar(M.dv, size(M,1)-absn), 0)
+    else
+        throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
+            "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
+    end
+end
+function diag(M::SymTridiagonal, n::Integer=0)
+    # every branch call similar(..., ::Int) to make sure the
+    # same vector type is returned independent of n
+    if n == 0
+        return copyto!(similar(M.dv, length(M.dv)), symmetric.(M.dv, :U))
+    elseif n == 1
+        return copyto!(similar(M.ev, length(M.ev)), M.ev)
+    elseif n == -1
+        return copyto!(similar(M.ev, length(M.ev)), transpose.(M.ev))
+    elseif n <= size(M,1)
+        throw(ArgumentError("requested diagonal contains undefined zeros of an array type"))
     else
         throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
             "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
@@ -392,7 +440,7 @@ function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
     if i == j
         return A.dv[i]
     elseif i == j + 1
-        return A.ev[j]
+        return copy(transpose(A.ev[j])) # materialized for type stability
     elseif i + 1 == j
         return A.ev[i]
     else
