@@ -716,7 +716,7 @@ Dict{Symbol,Int64} with 2 entries:
   :a => 1
   :b => 2
 
-julia> map!(v->v-1,values(D))
+julia> map!(v -> v-1, values(d))
 Dict{Symbol,Int64} with 2 entries:
   :a => 0
   :b => 1
