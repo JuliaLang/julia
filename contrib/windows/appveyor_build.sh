@@ -93,7 +93,7 @@ if ! [ -e julia-installer.exe ]; then
   echo "Downloading $f"
   $curlflags -O https://julialang-s3.julialang.org/bin/winnt/x$archsuffix/1.0/$f
   echo "Extracting $f"
-  $SEVENZIP x -y $f >> get-deps.log
+  $SEVENZIP x -y $f
 fi
 mkdir -p usr
 for i in bin/*.dll; do
@@ -126,7 +126,8 @@ rm -f usr/bin/libspqr.dll
 rm -f usr/bin/lib*amd.dll
 rm -f usr/bin/libcholmod.dll
 rm -f usr/bin/libopenblas*.dll
-
+echo "ls usr/bin"
+ls usr/bin
 
 if [ -z "$USEMSVC" ]; then
   if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" ]; then
