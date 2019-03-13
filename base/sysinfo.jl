@@ -199,7 +199,7 @@ end
     Sys.cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
 
 Print a summary of information about each processor in `cpu` gathered from [`cpu_info](@ref). This is generally:
-  - The number (e.g. CPU 3 on a system with 10 total)
+  - Its index in the `cpu` vector
   - The CPU model
   - The CPU speed
   - The amount of time spent in `user`, `nice`, `sys`, `idle`, and `irq` modes
