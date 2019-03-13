@@ -4,7 +4,7 @@
 
 if Sys.iswindows()
     function download_powershell(url::AbstractString, filename::AbstractString)
-        ps = joinpath(get(ENV, "SYSTEMROOT", "C:\\Windows"), "System32\\WindowsPowerShell\\v1.0\\powershell.exe")
+        ps = joinpath(Base.Filesystem.get_known_folder_path(Base.Filesystem.FOLDERID.System), "WindowsPowerShell\\v1.0\\powershell.exe")
         tls12 = "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12"
         client = "New-Object System.Net.Webclient"
         # in the following we escape ' with '' (see https://ss64.com/ps/syntax-esc.html)
@@ -26,8 +26,8 @@ end
 function find_curl()
     if Sys.isapple() && Sys.isexecutable("/usr/bin/curl")
         "/usr/bin/curl"
-    elseif Sys.iswindows() && Sys.isexecutable(joinpath(get(ENV, "SYSTEMROOT", "C:\\Windows"), "System32\\curl.exe"))
-        joinpath(get(ENV, "SYSTEMROOT", "C:\\Windows"), "System32\\curl.exe")
+    elseif Sys.iswindows() && Sys.isexecutable(joinpath(Base.Filesystem.get_known_folder_path(Base.Filesystem.FOLDERID.System), "curl.exe"))
+        joinpath(Base.Filesystem.get_known_folder_path(Base.Filesystem.FOLDERID.System), "curl.exe")
     elseif Sys.which("curl") !== nothing
         "curl"
     else
