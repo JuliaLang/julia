@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
+    Base64
+
 Functionality for base-64 encoded strings and IO.
 """
 module Base64
