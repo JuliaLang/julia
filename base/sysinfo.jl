@@ -67,7 +67,7 @@ CPU_THREADS = 1 # for bootstrap, changed on startup
 """
     Sys.CPU_NAME
 
-The name of the host CPU as a julia string.
+The name of the host CPU as a string.
 """
 CPU_NAME = "" # for bootstrap, changed on startup
 
