@@ -704,6 +704,7 @@ end
 
 """
     map!(f, values(dict::AbstractDict))
+
 Takes the function `f(value) and transforms values stored in `dict` with the transformation `value=f(value).
 
 # Examples
