@@ -233,8 +233,14 @@ end
 end
 
 @testset "Issue reflector of zero-length vector" begin
-    x = [2.0]
-    @test LinearAlgebra.reflector!(view(x,1:0)) == 0.0
+    a = [2.0]
+    x = view(a,1:0)
+    τ = LinearAlgebra.reflector!(view(x,1:0))
+    @test τ == 0.0
+
+    b = reshape([3.0],1,1)
+    @test isempty(LinearAlgebra.reflectorApply!(x, τ, view(b,1:0,:)))
+    @test b[1] == 3.0
 end
 
 

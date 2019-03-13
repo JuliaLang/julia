@@ -1302,6 +1302,7 @@ end
     if length(x) != m
         throw(DimensionMismatch("reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
     end
+    m == 0 && return A
     @inbounds begin
         for j = 1:n
             # dot
