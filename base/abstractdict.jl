@@ -709,7 +709,7 @@ Takes the function `f(value) and transforms values stored in `dict` with the tra
 
 # Examples
 ```jldoctest
-julia> D=Dict(:a=>1,:b=>2)
+julia> d = Dict(:a => 1, :b => 2)
 Dict{Symbol,Int64} with 2 entries:
   :a => 1
   :b => 2
