@@ -220,7 +220,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     On the other hand, the function `g(x=[1,2]) = push!(x,3)` returns `[1,2,3]` every time it is called
     as `g()`.
   * In Julia `%` is the remainder operator, whereas in Python it is the modulus.
-  * The commonly used `Int` type which corresponds to the machine integer type (`Int32` or `Int64`).
+  * The commonly used `Int` type corresponds to the machine integer type (`Int32` or `Int64`).
     This means it will overflow, such that `2^64 == 0`. If you need larger values use another appropriate type,
     such as `Int128`, [`BigInt`](@ref) or a floating point value like `Float64`.
 
