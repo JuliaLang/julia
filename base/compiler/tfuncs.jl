@@ -410,7 +410,7 @@ add_tfunc(pointerref, 3, 3,
 add_tfunc(pointerset, 4, 4, (@nospecialize(a), @nospecialize(v), @nospecialize(i), @nospecialize(align)) -> a, 5)
 
 # more accurate typeof_tfunc for vararg tuples abstract only in length
-function typeof_concrete_vararg(@nospecialize(t))
+function typeof_concrete_vararg(t::DataType)
     np = length(t.parameters)
     for i = 1:np
         p = t.parameters[i]
