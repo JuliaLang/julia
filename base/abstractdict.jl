@@ -705,7 +705,9 @@ end
 """
     map!(f, values(dict::AbstractDict))
 
-Takes the function `f(value) and transforms values stored in `dict` with the transformation `value=f(value).
+Modifies `dict` by transforming each value from `val` to `f(val)`.
+Note that the type of `dict` cannot be changed: if `f(val)` is not an instance of the key type
+of `dict` then it will be converted to the key type if possible and otherwise raise an error.
 
 # Examples
 ```jldoctest
