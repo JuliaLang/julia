@@ -695,7 +695,7 @@ function map!(f, iter::ValueIterator{<:Dict})
             vals[i] = f(vals[i])
         end
     end
-    return vals
+    return iter
 end
 
 struct ImmutableDict{K,V} <: AbstractDict{K,V}
