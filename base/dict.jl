@@ -685,18 +685,12 @@ length(t::Dict) = t.count
 end
 
 function filter!(pred, h::Dict{K,V}) where {K,V}
-    ndel = 0
+    h.count == 0 && return h
     @inbounds for i=1:length(h.slots)
         if h.slots[i] == 0x01 && !pred(Pair{K,V}(h.keys[i], h.vals[i]))
-            isbitstype(K) || isbitsunion(K) || ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.keys, i-1)
-            isbitstype(V) || isbitsunion(V) || ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.vals, i-1)
-            h.slots[i] = 0x02
-            ndel += 1
+            _delete!(h, i)
         end
     end
-    h.ndel += ndel
-    h.count -= ndel
-    h.age += ndel
     return h
 end
 
