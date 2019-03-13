@@ -232,4 +232,10 @@ end
     @test c0 == c
 end
 
+@testset "Issue reflector of zero-length vector" begin
+    x = [2.0]
+    @test LinearAlgebra.reflector!(view(x,1:0)) == 0.0
+end
+
+
 end # module TestQR

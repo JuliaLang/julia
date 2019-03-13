@@ -1274,6 +1274,7 @@ end
 @inline function reflector!(x::AbstractVector)
     require_one_based_indexing(x)
     n = length(x)
+    n == 0 && return zero(eltype(x))
     @inbounds begin
         ξ1 = x[1]
         normu = abs2(ξ1)
