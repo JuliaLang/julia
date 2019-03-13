@@ -222,7 +222,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia `%` is the remainder operator, whereas in Python it is the modulus.
   * The commonly used `Int` type corresponds to the machine integer type (`Int32` or `Int64`).
     This means it will overflow, such that `2^64 == 0`. If you need larger values use another appropriate type,
-    such as `Int128`, [`BigInt`](@ref) or a floating point value like `Float64`.
+    such as `Int128`, [`BigInt`](@ref) or a floating point type like `Float64`.
 
 ## Noteworthy differences from C/C++
 
