@@ -21,6 +21,9 @@ may trip up Julia users accustomed to MATLAB:
     point numbers. Arbitrarily large integer literals are supported. As a result, some operations
     such as `2^-1` will throw a domain error as the result is not an integer (see [the FAQ entry on domain errors](@ref faq-domain-errors)
     for details).
+  * Integer literals are of type `Int` which corresponds to the machine integer type (`Int32` or `Int64`).
+    This means it will overflow, such that `2^64 == 0`. If you need larger values use another appropriate type,
+    such as [Int128](@ref), `BigInt`(@ref) or a floating point value like [Float64](@ref).
   * In Julia, multiple values are returned and assigned as tuples, e.g. `(a, b) = (1, 2)` or `a, b = 1, 2`.
     MATLAB's `nargout`, which is often used in MATLAB to do optional work based on the number of returned
     values, does not exist in Julia. Instead, users can use optional and keyword arguments to achieve
