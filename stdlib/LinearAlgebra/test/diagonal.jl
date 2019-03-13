@@ -464,21 +464,21 @@ end
     D3 = Diagonal([[1 2; 0 4], [5 6; 0 8]])
     D4 = Diagonal([[1 0; 0 4], [5 0; 0 8]])
 
-    @test istril(D1) == true
-    @test istriu(D1) == false
-    @test isdiag(D1) == false
+    @test istril(D1)
+    @test !istriu(D1)
+    @test !isdiag(D1)
 
-    @test istril(D2) == false
-    @test istriu(D2) == false
-    @test isdiag(D2) == false
+    @test !istril(D2)
+    @test !istriu(D2)
+    @test !isdiag(D2)
 
-    @test istril(D3) == false
-    @test istriu(D3) == true
-    @test isdiag(D3) == false
+    @test !istril(D3)
+    @test istriu(D3)
+    @test !isdiag(D3)
 
-    @test istril(D4) == true
-    @test istriu(D4) == true
-    @test isdiag(D4) == true
+    @test istril(D4)
+    @test istriu(D4)
+    @test isdiag(D4)
 end
 
 @testset "multiplication of transposes of Diagonal (#22428)" begin
