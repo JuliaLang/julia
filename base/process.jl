@@ -381,7 +381,7 @@ const SpawnIOs = Vector{Any} # convenience name for readability
             h === C_NULL     ? (0x00, UInt(0)) :
             h isa OS_HANDLE  ? (0x02, UInt(cconvert(@static(Sys.iswindows() ? Ptr{Cvoid} : Cint), h))) :
             h isa Ptr{Cvoid} ? (0x04, UInt(h)) :
-            error("invalid spawn handle $h from $io") #TODO use a real error type here
+            error("invalid spawn handle $h from $io")
         end
         for io in stdio]
     handle = Libc.malloc(_sizeof_uv_process)
