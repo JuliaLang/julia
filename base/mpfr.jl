@@ -894,21 +894,32 @@ isone(x::BigFloat) = x == Clong(1)
 @eval typemax(::Type{BigFloat}) = $(BigFloat(Inf))
 @eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
 
-function nextfloat(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode),
-          z, x, ROUNDING_MODE[])
-    ccall((:mpfr_nextabove, :libmpfr), Int32, (Ref{BigFloat},), z) != 0
-    return z
+function nextfloat!(x::BigFloat, n::Integer)
+    n==0 && return x
+    signbit(n) && return prevfloat!(x, abs(n))
+    for i = 1:n
+        ccall((:mpfr_nextabove, :libmpfr), Int32, (Ref{BigFloat},), x)
+    end
+    return x
 end
 
-function prevfloat(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode),
-          z, x, ROUNDING_MODE[])
-    ccall((:mpfr_nextbelow, :libmpfr), Int32, (Ref{BigFloat},), z) != 0
-    return z
+function prevfloat!(x::BigFloat, n::Integer)
+    n==0 && return x
+    signbit(n) && return nextfloat!(x, abs(n))
+    for i = 1:n
+        ccall((:mpfr_nextbelow, :libmpfr), Int32, (Ref{BigFloat},), x)
+    end
+    return x
 end
+
+nextfloat(x::BigFloat, n::Integer) = n==0 ? x : nextfloat!(_duplicate(x), n)
+prevfloat(x::BigFloat, n::Integer) = n==0 ? x : prevfloat!(_duplicate(x), n)
+
+nextfloat!(x::BigFloat) = (ccall((:mpfr_nextabove, :libmpfr), Int32, (Ref{BigFloat},), x); x)
+nextfloat(x::BigFloat) = nextfloat!(_duplicate(x))
+
+prevfloat!(x::BigFloat) = (ccall((:mpfr_nextbelow, :libmpfr), Int32, (Ref{BigFloat},), x); x)
+prevfloat(x::BigFloat) = prevfloat!(_duplicate(x))
 
 eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
 
