@@ -191,6 +191,11 @@ function BigFloat(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::I
     end
 end
 
+function _duplicate(x::BigFloat)
+    z = BigFloat(;precision=precision(x))
+    ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Int32), z, x, 0)
+    return z
+end
 
 # convert to BigFloat
 for (fJ, fC) in ((:si,:Clong), (:ui,:Culong))
