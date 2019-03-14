@@ -154,7 +154,8 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createMultiVersioningPass());
     PM->add(createSROAPass());                 // Break up aggregate allocas
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
-    PM->add(createJumpThreadingPass());        // Thread jumps.
+    // Can inhibit SCEV
+    // PM->add(createJumpThreadingPass());        // Thread jumps.
     PM->add(createInstructionCombiningPass()); // Combine silly seq's
 
     //PM->add(createCFGSimplificationPass());    // Merge & remove BBs
@@ -187,7 +188,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createInstructionCombiningPass());
     PM->add(createIndVarSimplifyPass());       // Canonicalize indvars
     PM->add(createLoopDeletionPass());         // Delete dead loops
-    PM->add(createSimpleLoopUnrollPass());     // Unroll small loops
+    PM->add(createSimpleLoopUnrollPass(opt_level)); // Unroll small loops
     //PM->add(createLoopStrengthReducePass());   // (jwb added)
 
     // Run our own SROA on heap objects before LLVM's
