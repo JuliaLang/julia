@@ -135,6 +135,8 @@ try
 
               const x28297 = Result(missing)
 
+              const d29936a = UnionAll(Dict.var, UnionAll(Dict.body.var, Dict.body.body))
+              const d29936b = UnionAll(Dict.body.var, UnionAll(Dict.var, Dict.body.body))
 
               # issue #28998
               const x28998 = [missing, 2, missing, 6, missing,
@@ -186,6 +188,9 @@ try
         @test Foo.abigint_x::BigInt + 1 == big"125"
 
         @test Foo.x28297.result === missing
+
+        @test Foo.d29936a === Dict
+        @test Foo.d29936b === Dict{K,V} where {V,K}
 
         @test Foo.x28998[end] == 6
     end
