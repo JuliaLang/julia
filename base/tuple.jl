@@ -107,11 +107,25 @@ safe_tail(t::Tuple{}) = ()
 
 # front (the converse of tail: it skips the last entry)
 
+"""
+    front(x::Tuple)::Tuple
+
+Return a `Tuple` consisting of all but the last component of `x`.
+
+# Examples
+```jldoctest
+julia> Base.front((1,2,3))
+(1, 2)
+
+julia> Base.front(())
+ERROR: ArgumentError: Cannot call front on an empty tuple.
+```
+"""
 function front(t::Tuple)
     @_inline_meta
     _front(t...)
 end
-_front() = throw(ArgumentError("Cannot call front on an empty tuple"))
+_front() = throw(ArgumentError("Cannot call front on an empty tuple."))
 _front(v) = ()
 function _front(v, t...)
     @_inline_meta

@@ -97,6 +97,7 @@ end
     @test length((1,2)) === 2
 
     @test_throws ArgumentError Base.front(())
+    @test_throws ArgumentError Base.tail(())
     @test_throws ArgumentError first(())
 
     @test lastindex(()) === 0
