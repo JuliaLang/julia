@@ -976,15 +976,17 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         return 1;
     jl_value_t *ux = jl_unwrap_unionall(x);
     jl_value_t *uy = jl_unwrap_unionall(y);
-    if ((x != ux || y != uy) && y != (jl_value_t*)jl_any_type && jl_is_datatype(ux) && jl_is_datatype(uy)) {
+    if ((x != ux || y != uy) && y != (jl_value_t*)jl_any_type && jl_is_datatype(ux) && jl_is_datatype(uy) &&
+        !jl_is_type_type(ux)) {
         assert(ux);
+        if (uy == (jl_value_t*)jl_any_type)
+            return 1;
         jl_datatype_t *xd = (jl_datatype_t*)ux, *yd = (jl_datatype_t*)uy;
         while (xd != NULL && xd != jl_any_type && xd->name != yd->name) {
             xd = xd->super;
         }
-        if (xd == jl_any_type && !jl_is_type_type(ux)) {
+        if (xd == jl_any_type)
             return 0;
-        }
     }
     // handle forall ("left") vars first
     if (jl_is_unionall(x)) {
