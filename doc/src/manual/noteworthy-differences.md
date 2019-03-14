@@ -18,9 +18,9 @@ may trip up Julia users accustomed to MATLAB:
     which grow `Vector`s much more efficiently than MATLAB's `a(end+1) = val`.
   * The imaginary unit `sqrt(-1)` is represented in Julia as [`im`](@ref), not `i` or `j` as in MATLAB.
   * In Julia, literal numbers without a decimal point (such as `42`) create integers instead of floating
-    point numbers. Arbitrarily large integer literals are supported. As a result, some operations
-    such as `2^-1` will throw a domain error as the result is not an integer (see [the FAQ entry on domain errors](@ref faq-domain-errors)
-    for details).
+    point numbers. As a result, some operations can throw
+    a domain error if they expect a float; for example, `julia> a = -1; 2^a` throws a domain error, as the
+    result is not an integer (see [the FAQ entry on domain errors](@ref faq-domain-errors) for details).
   * In Julia, multiple values are returned and assigned as tuples, e.g. `(a, b) = (1, 2)` or `a, b = 1, 2`.
     MATLAB's `nargout`, which is often used in MATLAB to do optional work based on the number of returned
     values, does not exist in Julia. Instead, users can use optional and keyword arguments to achieve
