@@ -43,14 +43,14 @@ function iterate(itr::SkipOfType{T, <:Any}, state...) where T
     item, state
 end
 
-IndexStyle(::Type{<:SkipOfType{T}}) where {T} = IndexStyle(T)
-eachindex(itr::SkipOfType) =
-    Iterators.filter(i -> @inbounds(itr.x[i]) !== missing, eachindex(itr.x))
-keys(itr::SkipOfType) =
-    Iterators.filter(i -> @inbounds(itr.x[i]) !== missing, keys(itr.x))
-@propagate_inbounds function getindex(itr::SkipOfType, I...)
+IndexStyle(::Type{<:SkipOfType{T, A}}) where {T, A} = IndexStyle(A)
+eachindex(itr::SkipOfType{T, A}) where {T, A} =
+    Iterators.filter(i -> !isa(@inbounds(itr.x[i]), T) , eachindex(itr.x))
+keys(itr::SkipOfType{T, A}) where {T, A} =
+    Iterators.filter(i -> !isa(@inbounds(itr.x[i]) T), keys(itr.x))
+@propagate_inbounds function getindex(itr::SkipOfType{T, A}, I...) where {T, A}
     v = itr.x[I...]
-    v === missing && throw(MissingException("the value at index $I is missing"))
+    v isa T && throw(MissingException("the value at index $I is of type $T"))
     v
 end
 
