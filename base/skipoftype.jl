@@ -28,7 +28,8 @@ skipoftype(::T, itr) where T = skipoftype(T, itr)
 
 IteratorSize(::Type{<:SkipOfType}) = SizeUnknown()
 IteratorEltype(::Type{SkipOfType{T, A}}) where {T, A} = IteratorEltype(A)
-eltype(::Type{SkipOfType{T, A}}) where {T, A} = typesubtract(T, eltype(A))
+eltype(::Type{SkipOfType{T, A}}) where {T, A} =
+    Core.Compiler.typesubtract(eltype(A), T)
 
 function iterate(itr::SkipOfType{T, <:Any}, state...) where T
     y = iterate(itr.x, state...)
@@ -148,9 +149,3 @@ mapreduce_impl(f, op, A::SkipOfType, ifirst::Integer, ilast::Integer) =
         end
     end
 end
-
-_typesubtract(::Type{T}, ::Type{Union{T,S}}) where {T, S} = S
-_typesubtract(::Type{T}, ::Type{T}) where {T} = Union{}
-
-# Necessary for cases like _typesubtract(Union{A,B}, Union{A,C})
-typesubtract(::Type{T}, ::Type{S}) where {T, S} = _typesubtract(T, Union{T,S})
