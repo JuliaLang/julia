@@ -292,7 +292,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                 lifted_leaves[leaf_key] = RefValue{Any}(lifted)
                 continue
             elseif isexpr(def, :new)
-                typ = types(compact)[leaf]
+                typ = widenconst(types(compact)[leaf])
                 if isa(typ, UnionAll)
                     typ = unwrap_unionall(typ)
                 end

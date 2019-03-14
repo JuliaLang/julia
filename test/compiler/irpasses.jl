@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+using Base.Meta
 
 # Tests for domsort
 
@@ -97,4 +98,15 @@ let nt = (a=1, b=2)
     @test isa(code_typed(blah31139, Tuple{typeof(nt)}), Array)
     # Should throw
     @test_throws ArgumentError blah31139(nt)
+end
+
+# Expr(:new) annoted as PartialStruct
+struct FooPartial
+    x
+    y
+    global f_partial
+    f_partial(x) = new(x, 2).x
+end
+let ci = code_typed(f_partial, Tuple{Float64})[1].first
+    @test length(ci.code) == 1 && isexpr(ci.code[1], :return)
 end
