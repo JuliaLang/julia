@@ -1011,6 +1011,15 @@ test_properties()
 test_intersection_properties()
 
 
+let S = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [TypeVar(:T), Any], 2),
+    VS = TypeVar(:T),
+    T = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [VS, VS], 2)
+    # check (T where T) == (Any where T)
+    # these types are not normally valid, but check them just to make sure subtyping is robust
+    @test T <: S
+    @test S <: T
+end
+
 # issue #20121
 @test NTuple{170,Matrix{Int}} <: (Tuple{Vararg{Union{Array{T,1},Array{T,2},Array{T,3}}}} where T)
 
