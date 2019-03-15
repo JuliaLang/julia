@@ -702,6 +702,19 @@ function iterate(s::IdSet, state...)
     return (k, i)
 end
 
+
+"""
+    DirectStyle(::AbstractDict)
+This method should return a value of type <: DirectIteratorStyle.
+Currently the suppored styles are:
+    `NaiveDict` (default) which signifies to use the naive in place method which requires a hash evaulation
+    `SlottedDict` which is for `Dict` like `Dict`
+    `PointerDict` which returns an iterator function the provides a 0-dimmension array for access
+Please see the trait definition for requires function
+"""
+DirectStyle(::Type{<:AbstractDict}) = NaiveDict()
+
+
 """
     map!(f, values(dict::AbstractDict))
 
@@ -722,7 +735,8 @@ Dict{Symbol,Int64} with 2 entries:
   :b => 1
  ```
 """
-function map!(f, iter::ValueIterator)
+map!( f, iter::Base.ValueIterator{D}) where D<:AbstractDict = _map!( DirectStyle(D), f, iter)
+function _map!( ::NaiveDict, f, iter::Base.ValueIterator)
     # This is the naive fallback which requires hash evaluations
     # Contrary to the example Dict has an implementation which does not require hash evaluations
     dict = iter.dict
@@ -731,3 +745,73 @@ function map!(f, iter::ValueIterator)
     end
     return iter
 end
+
+
+"""
+    SlottedDict()
+This trait signifies that the AbstractDict is structured similar to `Dict`
+This means that it should have a LinearIndexable array of slots and an array of value.
+Then be able to provide a function to provide a function which indicated whether a slot is filled.
+    Required Methods:  slot_access_functions(::Type{<:AbstractDict})
+"""
+struct SlottedDict <: DirectIteratorStyle end
+# Dicts that return SlottedDicts must have the following methods
+"""
+    slot_access_functions(::Type{CustomDict})
+This function should return a tuple of three function that will be used to access values
+    (   isslotfilled(slots::AbstractArray, index)::Bool,
+        get_slots_array(dict::CustomDict)::AbstractArray,
+        get_value_array(dict::CustomDict)::AbstractArray)
+Importantly these functions do not have to be named as such they just need to take the arguments as shown
+It is important that the arrays returned are the same length
+"""
+function slot_access_functions(::Type{<:AbstractDict}) end
+
+
+function _map!(::SlottedDict, f, iter::Base.ValueIterator{D}) where D<:AbstractDict
+    (isslotfilled, get_slots, get_vals) = slot_access_functions(D)
+    slots =  get_slots(iter.dict)
+    vals = get_vals(iter.dict)
+    # @inbounds is here so the it gets propigated to isslotfiled
+    @inbounds for i = 1:length(slots)
+        if isslotfilled(slots, i)
+            vals[i] = f(vals[i])
+        end
+    end
+    return iter
+end
+
+"""
+    PointerDict()
+This trait signifies that the AbstractDict has an iterate like function which on each
+iteration provides an `AbstractArray{T,N}` which acts as a pointer to that given value
+
+    Required Methods:   `iterate_value_pointer(d::Abstract{K,V})`
+                        `iterate_value_pointer(d::Abstract{K,V}, state)`
+        Both of which should act like iterate returning either:
+                        `Nothing`  to signify the iteration is over
+                        `(value_pointer::AbstractArray{V,0},state)`
+"""
+struct PointerDict <: DirectIteratorStyle end
+
+"""
+    `iterate_value_pointer(d::Abstract{K,V})`
+    `iterate_value_pointer(d::Abstract{K,V}, state)`
+    Both of which should act like iterate returning either:
+                    `Nothing`  to signify the iteration is over
+                    `(value_pointer::AbstractArray{V,0},state)`
+Importantly these functions Do not have to be named as such they just need to take the arguments as shown
+It is important that the arrays returned are the same length
+"""
+
+function _map!(::PointerDict, f, iter::Base.ValueIterator{D}) where D<:AbstractDict
+    dict=iter.dict
+    @inbounds next = iterate_value_pointer(dict)
+    while next !== nothing
+        (v, state) = next
+        @inbounds v[] = f(v[])
+        @inbounds next = iterate_value_pointer(dict, state)
+    end
+    return iter
+end
+#---------------------

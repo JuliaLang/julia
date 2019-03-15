@@ -92,7 +92,20 @@ function getkey(wkh::WeakKeyDict{K}, kk, default) where K
     end
 end
 
-map!(f,iter::ValueIterator{<:WeakKeyDict})= map!(f, values(iter.dict.ht))
+# map!(f,iter::ValueIterator{<:WeakKeyDict})= map!(f, values(iter.dict.ht))
+# WeakKeyDict could easily be of trait SlottedDict but it is this way for example.
+DirectStyle(::Type{<:WeakKeyDict}) = PointerDict()
+function iterate_value_pointer(wd::WeakKeyDict,s::Int=wd.ht.idxfloor)
+    d=wd.ht
+    L = Base.lastindex(d.slots)
+    @inbounds while s <= lastindex(d.slots) && !Base.isslotfilled(d,s)
+        s += 1
+    end
+    s > L && return nothing
+    return (@inbounds Base.unsafe_view(d.vals,s), s+1)
+end
+
+
 get(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get(wkh.ht, key, default), wkh)
 get(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get(default, wkh.ht, key), wkh)
 function get!(wkh::WeakKeyDict{K}, key, default) where {K}
@@ -111,6 +124,7 @@ haskey(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> haskey(wkh.ht, key), wkh
 getindex(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> getindex(wkh.ht, key), wkh)
 isempty(wkh::WeakKeyDict) = isempty(wkh.ht)
 length(t::WeakKeyDict) = length(t.ht)
+
 
 function iterate(t::WeakKeyDict{K,V}) where V where K
     gc_token = Ref{Bool}(false) # no keys will be deleted via finalizers until this token is gc'd

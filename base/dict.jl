@@ -686,16 +686,33 @@ end
 
 filter!(f, d::Dict) = filter_in_one_pass!(f, d)
 
-function map!(f, iter::ValueIterator{<:Dict})
-    dict = iter.dict
-    vals = dict.vals
-    # @inbounds is here so the it gets propigated to isslotfiled
-    @inbounds for i = dict.idxfloor:lastindex(vals)
-        if isslotfilled(dict, i)
-            vals[i] = f(vals[i])
-        end
+# function map!(f, iter::ValueIterator{<:Dict})
+#     dict = iter.dict
+#     vals = dict.vals
+#     # @inbounds is here so the it gets propigated to isslotfiled
+#     @inbounds for i = dict.idxfloor:lastindex(vals)
+#         if isslotfilled(dict, i)
+#             vals[i] = f(vals[i])
+#         end
+#     end
+#     return iter
+# end
+
+DirectStyle(::Type{<:Dict}) = SlottedDict()
+@inline function slot_access_functions(::Type{<:Dict})
+    return (    ((slots, i) -> @inbounds slots[i] == 0x1), #This is the slot test function
+                dict->Base.unsafe_view(dict.slots, dict.idxfloor:lastindex(dict.vals)), # This is the function that gets the slots array
+                dict->Base.unsafe_view(dict.vals, dict.idxfloor:lastindex(dict.vals)) )  # This is the function that gets the value array
+end
+
+# This is included as an example
+function iterate_value_pointer(d::Dict,s::Int=d.idxfloor)
+    L = Base.lastindex(d.slots)
+    @inbounds while s <= lastindex(d.slots) && !Base.isslotfilled(d,s)
+        s += 1
     end
-    return iter
+    s > L && return nothing
+    return (@inbounds Base.unsafe_view(d.vals,s), s+1)
 end
 
 struct ImmutableDict{K,V} <: AbstractDict{K,V}
