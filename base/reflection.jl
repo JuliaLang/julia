@@ -1207,7 +1207,7 @@ true
 function hasmethod(@nospecialize(f), @nospecialize(t); world = typemax(UInt))
     t = to_tuple_type(t)
     t = signature_type(f, t)
-    return ccall(:jl_method_exists, Cint, (Any, Any, UInt), typeof(f).name.mt, t, world) != 0
+    return ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), t, world) !== nothing
 end
 
 function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Symbol}}; world=typemax(UInt))
