@@ -702,6 +702,9 @@ function iterate(s::IdSet, state...)
     return (k, i)
 end
 
+abstract type DirectIteratorStyle end
+# This will be the fall back that uses the naive map above
+struct NaiveDict <: DirectIteratorStyle end
 
 """
     DirectStyle(::AbstractDict)
