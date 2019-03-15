@@ -397,6 +397,7 @@ Meta.@lower
 Meta.parse(::AbstractString, ::Int)
 Meta.parse(::AbstractString)
 Meta.ParseError
+Core.QuoteNode
 Base.macroexpand
 Base.@macroexpand
 Base.@macroexpand1

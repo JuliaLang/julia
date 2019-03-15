@@ -328,9 +328,15 @@ Expr
 As we have seen, such expressions support interpolation with `$`.
 However, in some situations it is necessary to quote code *without* performing interpolation.
 This kind of quoting does not yet have syntax, but is represented internally
-as an object of type `QuoteNode`.
-The parser yields `QuoteNode`s for simple quoted items like symbols:
+as an object of type `QuoteNode`:
+```jldoctest interp1
+julia> quot(Expr(:$, :(1+2))) |> eval
+3
 
+julia> QuoteNode(Expr(:$, :(1+2))) |> eval
+:($(Expr(:$, :(1 + 2))))
+```
+The parser yields `QuoteNode`s for simple quoted items like symbols:
 ```jldoctest interp1
 julia> dump(Meta.parse(":x"))
 QuoteNode
