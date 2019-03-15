@@ -91,8 +91,8 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         rows -= 1 # Subtract the summary
 
         # determine max key width to align the output, caching the strings
-        ks = Vector{AbstractString}(undef, min(rows, length(t)))
-        vs = Vector{AbstractString}(undef, min(rows, length(t)))
+        ks = Vector{String}(undef, min(rows, length(t)))
+        vs = Vector{String}(undef, min(rows, length(t)))
         keylen = 0
         vallen = 0
         for (i, (k, v)) in enumerate(t)
