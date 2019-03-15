@@ -1187,37 +1187,11 @@
      (receive (name params super) (analyze-type-sig sig)
               (struct-def-expr name params super fields mut)))))
 
-;; the following are for expanding `try` blocks
-
-(define (find-symbolic-label-defs e tbl)
-  (if (or (not (pair? e)) (quoted? e))
-      '()
-      (if (eq? (car e) 'symboliclabel)
-          (put! tbl (cadr e) #t)
-          (for-each (lambda (x) (find-symbolic-label-defs x tbl)) e))))
-
-(define (find-symbolic-label-refs e tbl)
-  (if (or (not (pair? e)) (quoted? e))
-      '()
-      (if (eq? (car e) 'symbolicgoto)
-          (put! tbl (cadr e) #t)
-          (for-each (lambda (x) (find-symbolic-label-refs x tbl)) e))))
-
-(define (has-unmatched-symbolic-goto? e)
-  (let ((label-refs (table))
-        (label-defs (table)))
-    (find-symbolic-label-refs e label-refs)
-    (find-symbolic-label-defs e label-defs)
-    (any not (map (lambda (k) (get label-defs k #f))
-                  (table.keys label-refs)))))
-
 (define (expand-try e)
   (let ((tryb   (cadr e))
         (var    (caddr e))
         (catchb (cadddr e)))
     (cond ((length= e 5)
-           (if (has-unmatched-symbolic-goto? tryb)
-               (error "goto from a try/finally block is not permitted"))
            (let ((finalb (cadddr (cdr e))))
              (expand-forms
               `(tryfinally
@@ -4012,7 +3986,7 @@ f(x) = yt(x)
                         (error (string "label \"" lab "\" referenced but not defined")))
                     (let ((target-level (car target-nesting)))
                       (cond ((> target-level hl)
-                            (error (string "cannot goto label \"" lab "\" inside try/catch block")))
+                            (error (string "cannot goto label \"" lab "\" inside try block")))
                             ((= target-level hl)
                              (set-cdr! point (cddr point))) ;; remove empty slot
                             (else

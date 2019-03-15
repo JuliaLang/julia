@@ -87,18 +87,49 @@ end
 @test goto_test5_3()
 
 
-@test Expr(:error, "goto from a try/finally block is not permitted") ==
+function goto_test6_1()
+    x = 0
+    try
+        @goto a
+    finally
+        x = 42
+    end
+    x = 43
+    @label a
+    return x
+end
+@test goto_test6_1() == 42
+
+function goto_test6_2()
+    x = 0
+    try
+        try
+            @goto a
+        catch
+            x = 1
+        end
+        @goto b
+        @label a
+        error("ok")
+        @label b
+    catch
+        x = 2
+    end
+    return x
+end
+@test goto_test6_2() == 2
+
+@test Expr(:error, "cannot goto label \"bb\" inside try block") ==
     Meta.lower(@__MODULE__, quote
-        function goto_test6()
+        function goto_test6_3()
+            @goto bb
             try
-                @goto a
+                @label bb
+                x = 1
             finally
             end
-            @label a
-            return
         end
     end)
-
 
 function goto_test6()
     @goto a
