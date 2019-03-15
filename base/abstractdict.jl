@@ -408,6 +408,33 @@ function filter(f, d::AbstractDict)
     return df
 end
 
+"""
+    update!(combine, dict::AbstractDict, key, val)
+
+If `haskey(dict, key)`, then updates `dict[key] = combine(dict[key], val)`. Otherwise,
+sets `dict[key] = combine(val)`. The new value is returned. Many concrete implementations
+of `AbstractDict` can perform such updates in a single lookup.
+
+# Examples
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
+
+julia> update!(+, d, "a", 1)
+2
+
+julia> update!(-, d, "e", 1)
+-1
+
+julia> d
+Dict{String,Int64} with 4 entries:
+  "c" => 3
+  "e" => -1
+  "b" => 2
+  "a" => 2
+```
+"""
+update!(combine, dict::AbstractDict, key, val) = haskey(dict, key) ? dict[key] = combine(dict[key], val) : dict[val]=combine(val)
+
 function eltype(::Type{<:AbstractDict{K,V}}) where {K,V}
     if @isdefined(K)
         if @isdefined(V)

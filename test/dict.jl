@@ -52,6 +52,17 @@ end
         delete!(h, i)
     end
     @test isempty(h)
+    for i=1:2:600
+        update!(+, h, i, 1)
+    end
+    for j=0:3:600
+        update!(+, h, j, 1)
+    end
+    for i=0:600
+        @test (get(h, i, 0) == ((iseven(i) + rem(i, 3))==0))
+    end
+    empty!(h)
+
     h[77] = 100
     @test h[77] == 100
     for i=1:10000

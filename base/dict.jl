@@ -391,6 +391,21 @@ function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     return h
 end
 
+function update!(combine, h::Dict{K,V}, key, val)  where {K,V}
+    idx = ht_keyindex2!(h, key)
+    if idx > 0
+        @inbounds h.keys[idx] = convert(K, key)
+        @inbounds vold = h.vals[idx]
+        vnew = combine(vold, val)
+        @inbounds h.vals[idx] = vnew
+        return vnew
+    else
+        vnew = combine(val)
+        @inbounds _setindex!(h, vnew, key, -idx)
+        return vnew
+    end
+end
+
 """
     get!(collection, key, default)
 

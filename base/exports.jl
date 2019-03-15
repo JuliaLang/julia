@@ -525,6 +525,7 @@ export
     union,
     unique!,
     unique,
+    update!,
     values,
     valtype,
     ∈,
