@@ -859,7 +859,7 @@ end
 # against itself, the mutations won't affect the result as the indices on the
 # LHS and RHS will always match. This is not true in general, but with the `.op=`
 # syntax it's fairly common for an argument to be `===` a source.
-broadcast_unalias(dest, src) = dest === src ? src : unalias(dest, src)
+broadcast_unalias(dest, src) = dest === src ? src : constify(unalias(dest, src))
 broadcast_unalias(::Nothing, src) = src
 
 # Preprocessing a `Broadcasted` does two things:
@@ -872,6 +872,30 @@ preprocess(dest, x) = extrude(broadcast_unalias(dest, x))
 preprocess_args(dest, args::Tuple{Any}) = (preprocess(dest, args[1]),)
 preprocess_args(dest, args::Tuple{}) = ()
 
+struct Const{T,N} <: DenseArray{T,N}
+    a::Array{T,N}
+end
+Base.IndexStyle(::Type{<:Const}) = IndexLinear()
+Base.size(C::Const) = size(C.a)
+Base.axes(C::Const) = axes(C.a)
+@eval Base.getindex(A::Const, i1::Int) = Core.const_arrayref($(Expr(:boundscheck)), A.a, i1)
+@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =  (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+
+constify(A::Array) = Const(A)
+constify(V::SubArray{T,N,Array{TT,NN},I,L}) where {T,N,TT,NN,I,L} = SubArray{T,N,Const{TT,NN},I,L}(Const(V.parent), V.indices, V.offset1, V.stride1)
+constify(x) = x
+
+macro aliasscope(body)
+    sym = gensym()
+    esc(quote
+        $(Expr(:aliasscope))
+        $sym = $body
+        $(Expr(:popaliasscope))
+        $sym
+    end)
+end
+
+
 # Specialize this method if all you want to do is specialize on typeof(dest)
 @inline function copyto!(dest::AbstractArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
@@ -883,7 +907,7 @@ preprocess_args(dest, args::Tuple{}) = ()
         end
     end
     bc′ = preprocess(dest, bc)
-    @simd for I in eachindex(bc′)
+    @aliasscope @simd for I in eachindex(bc′)
         @inbounds dest[I] = bc′[I]
     end
     return dest
