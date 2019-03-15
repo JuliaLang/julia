@@ -2,6 +2,7 @@
 
 using Test
 using Base.Meta
+using Core: PhiNode, SSAValue, GotoNode, PiNode, QuoteNode
 
 # Tests for domsort
 
@@ -109,4 +110,50 @@ struct FooPartial
 end
 let ci = code_typed(f_partial, Tuple{Float64})[1].first
     @test length(ci.code) == 1 && isexpr(ci.code[1], :return)
+end
+
+# A SSAValue after the compaction line
+let m = Meta.@lower 1 + 1
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::Core.CodeInfo
+    src.code = Any[
+        # block 1
+        nothing,
+        # block 2
+        PhiNode(Any[1, 7], Any[Core.SlotNumber(2), SSAValue(9)]),
+        Expr(:call, isa, SSAValue(2), UnionAll),
+        Expr(:gotoifnot, Core.SSAValue(3), 11),
+        # block 3
+        nothing,
+        nothing,
+        PiNode(SSAValue(2), UnionAll),
+        Expr(:call, getfield, SSAValue(7), QuoteNode(:body)),
+        SSAValue(8), # <-- This SSAValue is the problem.
+                     # SROA needs to propagate the old taint when it follows
+                     # the phinode here
+        GotoNode(2),
+        # block 5
+        Expr(:return, Core.SSAValue(2)),
+    ]
+    src.ssavaluetypes = Any[
+        Nothing,
+        Any,
+        Bool,
+        Any,
+        Nothing,
+        Nothing,
+        UnionAll,
+        Any,
+        Any,
+        Any,
+        Any
+    ]
+    nstmts = length(src.code)
+    src.codelocs = fill(Int32(1), nstmts)
+    src.ssaflags = fill(Int32(0), nstmts)
+    ir = Core.Compiler.inflate_ir(src, Any[], Any[Any, Any])
+    @test Core.Compiler.verify_ir(ir) === nothing
+    domtree = Core.Compiler.construct_domtree(ir.cfg)
+    ir = @test_nowarn Core.Compiler.getfield_elim_pass!(ir, domtree)
+    @test Core.Compiler.verify_ir(ir) === nothing
 end

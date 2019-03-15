@@ -140,7 +140,11 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
             end
         elseif isa(def, AnySSAValue)
             pi_callback(def, defssa)
-            defssa = def
+            if isa(def, SSAValue) && is_old(compact, defssa)
+                defssa = OldSSAValue(def.id)
+            else
+                defssa = def
+            end
         elseif isa(def, Union{PhiNode, PhiCNode, Expr, GlobalRef})
             return defssa
         else
