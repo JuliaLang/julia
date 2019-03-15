@@ -812,3 +812,9 @@ let
     @test eltype(copy(bc)) == eltype([v for v in bc]) == eltype(collect(bc))
     @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
 end
+
+# issue #31295
+let a = rand(5), b = rand(5), c = copy(a)
+    view(identity(a), 1:3) .+= view(b, 1:3)
+    @test a == [(c+b)[1:3]; c[4:5]]
+end
