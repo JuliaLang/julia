@@ -662,7 +662,7 @@ end
 @testset "prevind and nextind" begin
     for s in Any["∀α>β:α+1>β", GenericString("∀α>β:α+1>β")]
         @test_throws BoundsError prevind(s, 0)
-        @test_throws BoundsError prevind(s, 0, 0)
+        @test prevind(s, 0, 0) == 0
         @test_throws BoundsError prevind(s, 0, 1)
         @test prevind(s, 1) == 0
         @test prevind(s, Int8(1), Int8(1)) == 0
@@ -722,7 +722,7 @@ end
         @test nextind(s, 16, 2) == 18
         @test nextind(s, 16, 3) == 19
         @test_throws BoundsError nextind(s, 17)
-        @test_throws BoundsError nextind(s, 17, 0)
+        @test nextind(s, 17, 0) == 17
         @test_throws BoundsError nextind(s, 17, 1)
 
         for x in 0:ncodeunits(s)+1
@@ -780,8 +780,8 @@ end
     for T in [String, SubString, Base.SubstitutionString, GenericString]
         e = convert(T, "")
         @test nextind(e, 0, 0) == 0
-        @test_throws BoundsError nextind(e, 1, 0)
-        @test_throws BoundsError prevind(e, 0, 0)
+        @test nextind(e, 1, 0) == 1
+        @test prevind(e, 0, 0) == 0
         @test prevind(e, 1, 0) == 1
 
         s = convert(T, "∀x∃")
@@ -793,9 +793,9 @@ end
         @test nextind(s, 5, 0) == 5
         @test_throws StringIndexError nextind(s, 6, 0)
         @test_throws StringIndexError nextind(s, 7, 0)
-        @test_throws BoundsError nextind(s, 8, 0)
+        @test nextind(s, 8, 0) == 8
 
-        @test_throws BoundsError prevind(s, 0, 0)
+        @test prevind(s, 0, 0) == 0
         @test prevind(s, 1, 0) == 1
         @test_throws StringIndexError prevind(s, 2, 0)
         @test_throws StringIndexError prevind(s, 3, 0)
