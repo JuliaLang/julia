@@ -2953,7 +2953,7 @@ f(x) = yt(x)
   (Set '(quote top core line inert local local-def unnecessary copyast
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          struct_type abstract_type primitive_type thunk with-static-parameters
-         implicit-global global globalref outerref const-if-global
+         global globalref outerref const-if-global
          const null ssavalue isdefined toplevel module lambda error
          gc_preserve_begin gc_preserve_end import using export)))
 
@@ -3887,7 +3887,6 @@ f(x) = yt(x)
             ((moved-local)
              (set-car! (lam:vinfo lam) (append (car (lam:vinfo lam)) `((,(cadr e) Any 2))))
              #f)
-            ((implicit-global) #f)
             ((const)
              (if (local-in? (cadr e) lam)
                  (error (string "unsupported `const` declaration on local variable" (format-loc current-loc)))
