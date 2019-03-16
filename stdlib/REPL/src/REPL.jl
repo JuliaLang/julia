@@ -166,8 +166,17 @@ function print_response(errio::IO, @nospecialize(response), show_value::Bool, ha
             break
         catch
             if iserr
+                println(errio) # an error during printing is likely to leave us mid-line
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
-                println(errio, catch_stack())
+                try
+                    Base.invokelatest(Base.display_error, errio, catch_stack())
+                catch e
+                    # at this point, only print the name of the type as a Symbol to
+                    # minimize the possibility of further errors.
+                    println(errio)
+                    println(errio, "SYSTEM (REPL): caught exception of type ", typeof(e).name.name,
+                            " while trying to handle a nested exception; giving up")
+                end
                 break
             end
             val = catch_stack()

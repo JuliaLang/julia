@@ -994,3 +994,20 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
+
+# issue #31352
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "struct Errs end\n")
+    readline(stdout_read)
+    readline(stdout_read)
+    write(stdin_write, "Base.show(io::IO, ::Errs) = throw(Errs())\n")
+    readline(stdout_read)
+    readline(stdout_read)
+    write(stdin_write, "Errs()\n")
+    write(stdin_write, '\x04')
+    wait(repltask)
+    @test istaskdone(repltask)
+end
