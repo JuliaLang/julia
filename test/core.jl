@@ -6865,3 +6865,21 @@ let x = SplatNew{Tuple{Int16}}((1,))
     @test x.y === (Int16(1),)
 end
 @test_throws ArgumentError SplatNew{Int8}()
+
+# Issue #31357 - Missed assignment in nested try/catch
+function foo31357(b::Bool)
+    x = nothing
+    try
+        try
+            x = 12345
+            if !b
+               throw("hi")
+            end
+        finally
+        end
+    catch
+    end
+    return x
+end
+@test foo31357(true) == 12345
+@test foo31357(false) == 12345
