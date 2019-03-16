@@ -745,8 +745,8 @@ function gettable(s::AbstractSerializer, id::Int)
             Attempt to access internal table with key $id failed.
 
             This might occur if the Serializer contexts when serializing and deserializing are inconsistent.
-            In particular, if the stream was written with multiple calls to serialize(s::AbstractSerializer, x),
-            then it should be read with multiple calls to deserialize(s::AbstractSerializer).
+            In particular, if multiple serialize calls use the same Serializer object then
+            the corresponding deserialize calls should also use the same Serializer object.
         """
         error(errmsg)
     end
