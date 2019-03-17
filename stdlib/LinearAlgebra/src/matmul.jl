@@ -178,8 +178,9 @@ mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat) = generic_matm
     rmul!(A, B)
 
 Calculate the matrix-matrix product ``AB``, overwriting `A`, and return the result.
-Here, `B` must have triangular/diagonal structure, which is additionally encoded
-via its type.
+Here, `B` must be of special matrix type, like, e.g., [`Diagonal`](@ref),
+[`UpperTriangular`](@ref) or [`LowerTriangular`](@ref), or of some orthogonal type,
+see [`QR`](@ref).
 
 # Examples
 ```jldoctest
@@ -193,6 +194,15 @@ julia> A
 2×2 Array{Int64,2}:
  0  3
  1  2
+
+julia> A = [1.0 2.0; 3.0 4.0];
+
+julia> F = qr([0 1; -1 0]);
+
+julia> rmul!(A, F.Q)
+2×2 Array{Float64,2}:
+ 2.0  1.0
+ 4.0  3.0
 ```
 """
 rmul!(A, B)
@@ -201,8 +211,9 @@ rmul!(A, B)
     lmul!(A, B)
 
 Calculate the matrix-matrix product ``AB``, overwriting `B`, and return the result.
-Here, `A` must have triangular/diagonal structure, which is additionally encoded
-via its type.
+Here, `A` must be of special matrix type, like, e.g., [`Diagonal`](@ref),
+[`UpperTriangular`](@ref) or [`LowerTriangular`](@ref), or of some orthogonal type,
+see [`QR`](@ref).
 
 # Examples
 ```jldoctest
@@ -216,6 +227,15 @@ julia> B
 2×2 Array{Int64,2}:
  2  1
  3  0
+
+julia> B = [1.0 2.0; 3.0 4.0];
+
+julia> F = qr([0 1; -1 0]);
+
+julia> lmul!(F.Q, B)
+2×2 Array{Float64,2}:
+ 3.0  4.0
+ 1.0  2.0
 ```
 """
 lmul!(A, B)
