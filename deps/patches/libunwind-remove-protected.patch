@@ -1,0 +1,2999 @@
+From a1437a3d27924e17d00021df3cc659bd998e8580 Mon Sep 17 00:00:00 2001
+From: Dave Watson <davejwatson@fb.com>
+Date: Thu, 28 Dec 2017 08:26:42 -0800
+Subject: [PATCH] Remove PROTECTED visibility
+
+This only works on bfd ld, not lld or gold.
+---
+ include/compiler.h                   | 3 ---
+ include/tdep-ia64/libunwind_i.h      | 2 +-
+ src/aarch64/Gapply_reg_state.c       | 2 +-
+ src/aarch64/Gcreate_addr_space.c     | 2 +-
+ src/aarch64/Gget_proc_info.c         | 2 +-
+ src/aarch64/Gget_save_loc.c          | 2 +-
+ src/aarch64/Ginit.c                  | 4 ++--
+ src/aarch64/Ginit_local.c            | 6 +++---
+ src/aarch64/Ginit_remote.c           | 2 +-
+ src/aarch64/Gis_signal_frame.c       | 2 +-
+ src/aarch64/Greg_states_iterate.c    | 2 +-
+ src/aarch64/Gresume.c                | 2 +-
+ src/aarch64/Gstep.c                  | 4 ++--
+ src/aarch64/is_fpreg.c               | 2 +-
+ src/aarch64/regname.c                | 2 +-
+ src/arm/Gapply_reg_state.c           | 2 +-
+ src/arm/Gcreate_addr_space.c         | 2 +-
+ src/arm/Gex_tables.c                 | 4 ++--
+ src/arm/Gget_proc_info.c             | 2 +-
+ src/arm/Gget_save_loc.c              | 2 +-
+ src/arm/Ginit.c                      | 4 ++--
+ src/arm/Ginit_local.c                | 6 +++---
+ src/arm/Ginit_remote.c               | 2 +-
+ src/arm/Gos-freebsd.c                | 4 ++--
+ src/arm/Gos-linux.c                  | 4 ++--
+ src/arm/Gos-other.c                  | 4 ++--
+ src/arm/Greg_states_iterate.c        | 2 +-
+ src/arm/Gresume.c                    | 2 +-
+ src/arm/Gstep.c                      | 2 +-
+ src/arm/is_fpreg.c                   | 2 +-
+ src/arm/regname.c                    | 2 +-
+ src/coredump/_UCD_accessors.c        | 2 +-
+ src/dwarf/Gfind_proc_info-lsb.c      | 4 ++--
+ src/hppa/Gapply_reg_state.c          | 2 +-
+ src/hppa/Gcreate_addr_space.c        | 2 +-
+ src/hppa/Gget_proc_info.c            | 2 +-
+ src/hppa/Gget_save_loc.c             | 2 +-
+ src/hppa/Ginit.c                     | 4 ++--
+ src/hppa/Ginit_local.c               | 6 +++---
+ src/hppa/Ginit_remote.c              | 2 +-
+ src/hppa/Gis_signal_frame.c          | 2 +-
+ src/hppa/Greg_states_iterate.c       | 2 +-
+ src/hppa/Gresume.c                   | 2 +-
+ src/hppa/Gstep.c                     | 2 +-
+ src/hppa/get_accessors.c             | 2 +-
+ src/hppa/regname.c                   | 2 +-
+ src/ia64/Gapply_reg_state.c          | 2 +-
+ src/ia64/Gcreate_addr_space.c        | 2 +-
+ src/ia64/Gget_proc_info.c            | 2 +-
+ src/ia64/Gget_save_loc.c             | 2 +-
+ src/ia64/Ginit.c                     | 4 ++--
+ src/ia64/Ginit_local.c               | 4 ++--
+ src/ia64/Ginit_remote.c              | 2 +-
+ src/ia64/Gis_signal_frame.c          | 2 +-
+ src/ia64/Greg_states_iterate.c       | 2 +-
+ src/ia64/Gresume.c                   | 2 +-
+ src/ia64/Gstep.c                     | 2 +-
+ src/ia64/Gtables.c                   | 6 +++---
+ src/ia64/regname.c                   | 2 +-
+ src/mi/Gdestroy_addr_space.c         | 2 +-
+ src/mi/Gget_accessors.c              | 2 +-
+ src/mi/Gget_fpreg.c                  | 2 +-
+ src/mi/Gget_proc_info_by_ip.c        | 2 +-
+ src/mi/Gget_proc_name.c              | 2 +-
+ src/mi/Gget_reg.c                    | 2 +-
+ src/mi/Gset_cache_size.c             | 2 +-
+ src/mi/Gset_caching_policy.c         | 2 +-
+ src/mi/Gset_fpreg.c                  | 2 +-
+ src/mi/Gset_reg.c                    | 2 +-
+ src/mi/dyn-info-list.c               | 2 +-
+ src/mi/flush_cache.c                 | 2 +-
+ src/mi/init.c                        | 2 +-
+ src/mips/Gapply_reg_state.c          | 2 +-
+ src/mips/Gcreate_addr_space.c        | 2 +-
+ src/mips/Gget_proc_info.c            | 2 +-
+ src/mips/Gget_save_loc.c             | 2 +-
+ src/mips/Ginit.c                     | 4 ++--
+ src/mips/Ginit_local.c               | 6 +++---
+ src/mips/Ginit_remote.c              | 2 +-
+ src/mips/Gis_signal_frame.c          | 2 +-
+ src/mips/Greg_states_iterate.c       | 2 +-
+ src/mips/Gresume.c                   | 2 +-
+ src/mips/Gstep.c                     | 4 ++--
+ src/mips/is_fpreg.c                  | 2 +-
+ src/mips/regname.c                   | 2 +-
+ src/os-freebsd.c                     | 4 ++--
+ src/os-hpux.c                        | 2 +-
+ src/os-linux.c                       | 4 ++--
+ src/os-qnx.c                         | 4 ++--
+ src/ppc/Gapply_reg_state.c           | 2 +-
+ src/ppc/Gget_proc_info.c             | 2 +-
+ src/ppc/Gget_save_loc.c              | 2 +-
+ src/ppc/Ginit_local.c                | 6 +++---
+ src/ppc/Ginit_remote.c               | 2 +-
+ src/ppc/Gis_signal_frame.c           | 2 +-
+ src/ppc/Greg_states_iterate.c        | 2 +-
+ src/ppc32/Gapply_reg_state.c         | 2 +-
+ src/ppc32/Gcreate_addr_space.c       | 2 +-
+ src/ppc32/Ginit.c                    | 4 ++--
+ src/ppc32/Greg_states_iterate.c      | 2 +-
+ src/ppc32/Gresume.c                  | 2 +-
+ src/ppc32/Gstep.c                    | 2 +-
+ src/ppc32/is_fpreg.c                 | 2 +-
+ src/ppc32/regname.c                  | 2 +-
+ src/ppc64/Gapply_reg_state.c         | 2 +-
+ src/ppc64/Gcreate_addr_space.c       | 2 +-
+ src/ppc64/Ginit.c                    | 4 ++--
+ src/ppc64/Greg_states_iterate.c      | 2 +-
+ src/ppc64/Gresume.c                  | 2 +-
+ src/ppc64/Gstep.c                    | 2 +-
+ src/ppc64/is_fpreg.c                 | 2 +-
+ src/ppc64/regname.c                  | 2 +-
+ src/ptrace/_UPT_accessors.c          | 2 +-
+ src/sh/Gapply_reg_state.c            | 2 +-
+ src/sh/Gcreate_addr_space.c          | 2 +-
+ src/sh/Gget_proc_info.c              | 2 +-
+ src/sh/Gget_save_loc.c               | 2 +-
+ src/sh/Ginit.c                       | 4 ++--
+ src/sh/Ginit_local.c                 | 6 +++---
+ src/sh/Ginit_remote.c                | 2 +-
+ src/sh/Gis_signal_frame.c            | 2 +-
+ src/sh/Greg_states_iterate.c         | 2 +-
+ src/sh/Gresume.c                     | 2 +-
+ src/sh/Gstep.c                       | 4 ++--
+ src/sh/is_fpreg.c                    | 2 +-
+ src/sh/regname.c                     | 2 +-
+ src/tilegx/Gapply_reg_state.c        | 2 +-
+ src/tilegx/Gcreate_addr_space.c      | 2 +-
+ src/tilegx/Gget_proc_info.c          | 2 +-
+ src/tilegx/Gget_save_loc.c           | 2 +-
+ src/tilegx/Ginit.c                   | 4 ++--
+ src/tilegx/Ginit_local.c             | 6 +++---
+ src/tilegx/Ginit_remote.c            | 2 +-
+ src/tilegx/Gis_signal_frame.c        | 4 ++--
+ src/tilegx/Greg_states_iterate.c     | 2 +-
+ src/tilegx/Gresume.c                 | 2 +-
+ src/tilegx/Gstep.c                   | 2 +-
+ src/tilegx/is_fpreg.c                | 2 +-
+ src/tilegx/regname.c                 | 2 +-
+ src/unwind/Backtrace.c               | 2 +-
+ src/unwind/DeleteException.c         | 2 +-
+ src/unwind/FindEnclosingFunction.c   | 2 +-
+ src/unwind/ForcedUnwind.c            | 2 +-
+ src/unwind/GetBSP.c                  | 2 +-
+ src/unwind/GetCFA.c                  | 2 +-
+ src/unwind/GetDataRelBase.c          | 2 +-
+ src/unwind/GetGR.c                   | 2 +-
+ src/unwind/GetIP.c                   | 2 +-
+ src/unwind/GetIPInfo.c               | 2 +-
+ src/unwind/GetLanguageSpecificData.c | 2 +-
+ src/unwind/GetRegionStart.c          | 2 +-
+ src/unwind/GetTextRelBase.c          | 2 +-
+ src/unwind/RaiseException.c          | 2 +-
+ src/unwind/Resume.c                  | 2 +-
+ src/unwind/Resume_or_Rethrow.c       | 2 +-
+ src/unwind/SetGR.c                   | 2 +-
+ src/unwind/SetIP.c                   | 2 +-
+ src/x86/Gapply_reg_state.c           | 2 +-
+ src/x86/Gcreate_addr_space.c         | 2 +-
+ src/x86/Gget_proc_info.c             | 2 +-
+ src/x86/Gget_save_loc.c              | 2 +-
+ src/x86/Ginit.c                      | 4 ++--
+ src/x86/Ginit_local.c                | 6 +++---
+ src/x86/Ginit_remote.c               | 2 +-
+ src/x86/Gos-freebsd.c                | 4 ++--
+ src/x86/Gos-linux.c                  | 4 ++--
+ src/x86/Greg_states_iterate.c        | 2 +-
+ src/x86/Gresume.c                    | 2 +-
+ src/x86/Gstep.c                      | 2 +-
+ src/x86/is_fpreg.c                   | 2 +-
+ src/x86/regname.c                    | 2 +-
+ src/x86_64/Gapply_reg_state.c        | 2 +-
+ src/x86_64/Gcreate_addr_space.c      | 2 +-
+ src/x86_64/Gget_proc_info.c          | 2 +-
+ src/x86_64/Gget_save_loc.c           | 2 +-
+ src/x86_64/Ginit.c                   | 4 ++--
+ src/x86_64/Ginit_local.c             | 6 +++---
+ src/x86_64/Ginit_remote.c            | 2 +-
+ src/x86_64/Gos-freebsd.c             | 4 ++--
+ src/x86_64/Gos-linux.c               | 4 ++--
+ src/x86_64/Greg_states_iterate.c     | 2 +-
+ src/x86_64/Gresume.c                 | 2 +-
+ src/x86_64/Gstep.c                   | 2 +-
+ src/x86_64/is_fpreg.c                | 2 +-
+ src/x86_64/regname.c                 | 2 +-
+ 185 files changed, 232 insertions(+), 235 deletions(-)
+
+diff --git a/include/compiler.h b/include/compiler.h
+index abd424d8a..6c5ce8ce8 100644
+--- a/include/compiler.h
++++ b/include/compiler.h
+@@ -40,11 +40,9 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ # if (__GNUC__ > 3) || (__GNUC__ == 3 && __GNUC_MINOR__ > 2)
+ #  define ALWAYS_INLINE inline __attribute__((always_inline))
+ #  define HIDDEN        __attribute__((visibility ("hidden")))
+-#  define PROTECTED     __attribute__((visibility ("protected")))
+ # else
+ #  define ALWAYS_INLINE
+ #  define HIDDEN
+-#  define PROTECTED
+ # endif
+ # define WEAK           __attribute__((weak))
+ # if (__GNUC__ >= 3)
+@@ -63,7 +61,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ # define NORETURN
+ # define ALIAS(name)
+ # define HIDDEN
+-# define PROTECTED
+ # define WEAK
+ # define likely(x)      (x)
+ # define unlikely(x)    (x)
+diff --git a/include/tdep-ia64/libunwind_i.h b/include/tdep-ia64/libunwind_i.h
+index f2cf258ef..1d9770bab 100644
+--- a/include/tdep-ia64/libunwind_i.h
++++ b/include/tdep-ia64/libunwind_i.h
+@@ -246,7 +246,7 @@ struct ia64_global_unwind_state
+ /* This can't be an UNW_ARCH_OBJ() because we need separate
+    unw.initialized flags for the local-only and generic versions of
+    the library.  Also, if we wanted to have a single, shared global
+-   data structure, we couldn't declare "unw" as HIDDEN/PROTECTED.  */
++   data structure, we couldn't declare "unw" as HIDDEN.  */
+ #define unw                             UNW_OBJ(data)
+ 
+ extern void tdep_init (void);
+diff --git a/src/aarch64/Gapply_reg_state.c b/src/aarch64/Gapply_reg_state.c
+index eec93046f..82f056da6 100644
+--- a/src/aarch64/Gapply_reg_state.c
++++ b/src/aarch64/Gapply_reg_state.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_apply_reg_state (unw_cursor_t *cursor,
+ 		     void *reg_states_data)
+ {
+diff --git a/src/aarch64/Gcreate_addr_space.c b/src/aarch64/Gcreate_addr_space.c
+index b0f2b0488..f217adc74 100644
+--- a/src/aarch64/Gcreate_addr_space.c
++++ b/src/aarch64/Gcreate_addr_space.c
+@@ -28,7 +28,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED unw_addr_space_t
++unw_addr_space_t
+ unw_create_addr_space (unw_accessors_t *a, int byte_order)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/aarch64/Gget_proc_info.c b/src/aarch64/Gget_proc_info.c
+index de9199f99..c363d2405 100644
+--- a/src/aarch64/Gget_proc_info.c
++++ b/src/aarch64/Gget_proc_info.c
+@@ -24,7 +24,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_proc_info (unw_cursor_t *cursor, unw_proc_info_t *pi)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/aarch64/Gget_save_loc.c b/src/aarch64/Gget_save_loc.c
+index 5ccf5cfdb..86bbbd03d 100644
+--- a/src/aarch64/Gget_save_loc.c
++++ b/src/aarch64/Gget_save_loc.c
+@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_save_loc (unw_cursor_t *cursor, int reg, unw_save_loc_t *sloc)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/aarch64/Ginit.c b/src/aarch64/Ginit.c
+index ab3999f30..9c4eae829 100644
+--- a/src/aarch64/Ginit.c
++++ b/src/aarch64/Ginit.c
+@@ -32,13 +32,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #ifdef UNW_REMOTE_ONLY
+ 
+ /* unw_local_addr_space is a NULL pointer in this case.  */
+-PROTECTED unw_addr_space_t unw_local_addr_space;
++unw_addr_space_t unw_local_addr_space;
+ 
+ #else /* !UNW_REMOTE_ONLY */
+ 
+ static struct unw_addr_space local_addr_space;
+ 
+-PROTECTED unw_addr_space_t unw_local_addr_space = &local_addr_space;
++unw_addr_space_t unw_local_addr_space = &local_addr_space;
+ 
+ static inline void *
+ uc_addr (ucontext_t *uc, int reg)
+diff --git a/src/aarch64/Ginit_local.c b/src/aarch64/Ginit_local.c
+index d284224a3..cd60ca840 100644
+--- a/src/aarch64/Ginit_local.c
++++ b/src/aarch64/Ginit_local.c
+@@ -28,7 +28,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #ifdef UNW_REMOTE_ONLY
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, unw_context_t *uc)
+ {
+   return -UNW_EINVAL;
+@@ -52,13 +52,13 @@ unw_init_local_common (unw_cursor_t *cursor, unw_context_t *uc, unsigned use_pre
+   return common_init (c, use_prev_instr);
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, unw_context_t *uc)
+ {
+   return unw_init_local_common(cursor, uc, 1);
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local2 (unw_cursor_t *cursor, ucontext_t *uc, int flag)
+ {
+   if (!flag)
+diff --git a/src/aarch64/Ginit_remote.c b/src/aarch64/Ginit_remote.c
+index f284e994f..9b8ba5b89 100644
+--- a/src/aarch64/Ginit_remote.c
++++ b/src/aarch64/Ginit_remote.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "init.h"
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_init_remote (unw_cursor_t *cursor, unw_addr_space_t as, void *as_arg)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/aarch64/Gis_signal_frame.c b/src/aarch64/Gis_signal_frame.c
+index 53e32de13..0cd178476 100644
+--- a/src/aarch64/Gis_signal_frame.c
++++ b/src/aarch64/Gis_signal_frame.c
+@@ -31,7 +31,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+    d4000001        svc     #0x0
+ */
+ 
+-PROTECTED int
++int
+ unw_is_signal_frame (unw_cursor_t *cursor)
+ {
+ #ifdef __linux__
+diff --git a/src/aarch64/Greg_states_iterate.c b/src/aarch64/Greg_states_iterate.c
+index a39837a17..a17dc1b56 100644
+--- a/src/aarch64/Greg_states_iterate.c
++++ b/src/aarch64/Greg_states_iterate.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_reg_states_iterate (unw_cursor_t *cursor,
+ 			unw_reg_states_callback cb, void *token)
+ {
+diff --git a/src/aarch64/Gresume.c b/src/aarch64/Gresume.c
+index 65517a252..3d8273929 100644
+--- a/src/aarch64/Gresume.c
++++ b/src/aarch64/Gresume.c
+@@ -176,7 +176,7 @@ establish_machine_state (struct cursor *c)
+     }
+ }
+ 
+-PROTECTED int
++int
+ unw_resume (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/aarch64/Gstep.c b/src/aarch64/Gstep.c
+index e38ff9794..473be7d7e 100644
+--- a/src/aarch64/Gstep.c
++++ b/src/aarch64/Gstep.c
+@@ -51,7 +51,7 @@ is_plt_entry (struct dwarf_cursor *c)
+   return ret;
+ }
+ 
+-PROTECTED int
++int
+ unw_handle_signal_frame (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+@@ -130,7 +130,7 @@ unw_handle_signal_frame (unw_cursor_t *cursor)
+   return 1;
+ }
+ 
+-PROTECTED int
++int
+ unw_step (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/aarch64/is_fpreg.c b/src/aarch64/is_fpreg.c
+index 7c3269328..2981d2752 100644
+--- a/src/aarch64/is_fpreg.c
++++ b/src/aarch64/is_fpreg.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "libunwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_is_fpreg (int regnum)
+ {
+   return (regnum >= UNW_AARCH64_V0 && regnum <= UNW_AARCH64_V31);
+diff --git a/src/aarch64/regname.c b/src/aarch64/regname.c
+index 8c9734285..0f7a8bdcf 100644
+--- a/src/aarch64/regname.c
++++ b/src/aarch64/regname.c
+@@ -96,7 +96,7 @@ static const char *const regname[] =
+     [UNW_AARCH64_FPCR] = "fpcr",
+   };
+ 
+-PROTECTED const char *
++const char *
+ unw_regname (unw_regnum_t reg)
+ {
+   if (reg < (unw_regnum_t) ARRAY_SIZE (regname) && regname[reg] != NULL)
+diff --git a/src/arm/Gapply_reg_state.c b/src/arm/Gapply_reg_state.c
+index eec93046f..82f056da6 100644
+--- a/src/arm/Gapply_reg_state.c
++++ b/src/arm/Gapply_reg_state.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_apply_reg_state (unw_cursor_t *cursor,
+ 		     void *reg_states_data)
+ {
+diff --git a/src/arm/Gcreate_addr_space.c b/src/arm/Gcreate_addr_space.c
+index 4d59a20a7..7b2d6bacf 100644
+--- a/src/arm/Gcreate_addr_space.c
++++ b/src/arm/Gcreate_addr_space.c
+@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED unw_addr_space_t
++unw_addr_space_t
+ unw_create_addr_space (unw_accessors_t *a, int byte_order)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/arm/Gex_tables.c b/src/arm/Gex_tables.c
+index 3f6b5cfcb..d6573a65e 100644
+--- a/src/arm/Gex_tables.c
++++ b/src/arm/Gex_tables.c
+@@ -381,7 +381,7 @@ arm_exidx_extract (struct dwarf_cursor *c, uint8_t *buf)
+   return nbuf;
+ }
+ 
+-PROTECTED int
++int
+ arm_search_unwind_table (unw_addr_space_t as, unw_word_t ip,
+ 			 unw_dyn_info_t *di, unw_proc_info_t *pi,
+ 			 int need_unwind_info, void *arg)
+@@ -444,7 +444,7 @@ arm_search_unwind_table (unw_addr_space_t as, unw_word_t ip,
+   return 0;
+ }
+ 
+-PROTECTED int
++int
+ tdep_search_unwind_table (unw_addr_space_t as, unw_word_t ip,
+                              unw_dyn_info_t *di, unw_proc_info_t *pi,
+                              int need_unwind_info, void *arg)
+diff --git a/src/arm/Gget_proc_info.c b/src/arm/Gget_proc_info.c
+index acb78a464..4051a1076 100644
+--- a/src/arm/Gget_proc_info.c
++++ b/src/arm/Gget_proc_info.c
+@@ -24,7 +24,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_proc_info (unw_cursor_t *cursor, unw_proc_info_t *pi)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/arm/Gget_save_loc.c b/src/arm/Gget_save_loc.c
+index 63b711d85..9fb070489 100644
+--- a/src/arm/Gget_save_loc.c
++++ b/src/arm/Gget_save_loc.c
+@@ -24,7 +24,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_save_loc (unw_cursor_t *cursor, int reg, unw_save_loc_t *sloc)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/arm/Ginit.c b/src/arm/Ginit.c
+index 2d0b2ca8d..2720d063a 100644
+--- a/src/arm/Ginit.c
++++ b/src/arm/Ginit.c
+@@ -30,13 +30,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #ifdef UNW_REMOTE_ONLY
+ 
+ /* unw_local_addr_space is a NULL pointer in this case.  */
+-PROTECTED unw_addr_space_t unw_local_addr_space;
++unw_addr_space_t unw_local_addr_space;
+ 
+ #else /* !UNW_REMOTE_ONLY */
+ 
+ static struct unw_addr_space local_addr_space;
+ 
+-PROTECTED unw_addr_space_t unw_local_addr_space = &local_addr_space;
++unw_addr_space_t unw_local_addr_space = &local_addr_space;
+ 
+ static inline void *
+ uc_addr (unw_tdep_context_t *uc, int reg)
+diff --git a/src/arm/Ginit_local.c b/src/arm/Ginit_local.c
+index 65941c369..e13519b79 100644
+--- a/src/arm/Ginit_local.c
++++ b/src/arm/Ginit_local.c
+@@ -28,7 +28,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #ifdef UNW_REMOTE_ONLY
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, unw_context_t *uc)
+ {
+   return -UNW_EINVAL;
+@@ -52,13 +52,13 @@ unw_init_local_common (unw_cursor_t *cursor, unw_context_t *uc, unsigned use_pre
+   return common_init (c, use_prev_instr);
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, unw_context_t *uc)
+ {
+   return unw_init_local_common(cursor, uc, 1);
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local2 (unw_cursor_t *cursor, unw_context_t *uc, int flag)
+ {
+   if (!flag)
+diff --git a/src/arm/Ginit_remote.c b/src/arm/Ginit_remote.c
+index f284e994f..9b8ba5b89 100644
+--- a/src/arm/Ginit_remote.c
++++ b/src/arm/Ginit_remote.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "init.h"
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_init_remote (unw_cursor_t *cursor, unw_addr_space_t as, void *as_arg)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/arm/Gos-freebsd.c b/src/arm/Gos-freebsd.c
+index 3b9d2c3eb..8efdebac9 100644
+--- a/src/arm/Gos-freebsd.c
++++ b/src/arm/Gos-freebsd.c
+@@ -34,7 +34,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "offsets.h"
+ #include "ex_tables.h"
+ 
+-PROTECTED int
++int
+ unw_handle_signal_frame (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+@@ -91,7 +91,7 @@ unw_handle_signal_frame (unw_cursor_t *cursor)
+ 
+ /* Returns 1 in case of a non-RT signal frame and 2 in case of a RT signal
+    frame. */
+-PROTECTED int
++int
+ unw_is_signal_frame (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/arm/Gos-linux.c b/src/arm/Gos-linux.c
+index 585c2014f..e14295a49 100644
+--- a/src/arm/Gos-linux.c
++++ b/src/arm/Gos-linux.c
+@@ -29,7 +29,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "unwind_i.h"
+ #include "offsets.h"
+ 
+-PROTECTED int
++int
+ unw_handle_signal_frame (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+@@ -149,7 +149,7 @@ unw_handle_signal_frame (unw_cursor_t *cursor)
+ 
+ /* Returns 1 in case of a non-RT signal frame and 2 in case of a RT signal
+    frame. */
+-PROTECTED int
++int
+ unw_is_signal_frame (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/arm/Gos-other.c b/src/arm/Gos-other.c
+index 66f38b1da..6f4e1b3d6 100644
+--- a/src/arm/Gos-other.c
++++ b/src/arm/Gos-other.c
+@@ -29,13 +29,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "unwind_i.h"
+ #include "offsets.h"
+ 
+-PROTECTED int
++int
+ unw_handle_signal_frame (unw_cursor_t *cursor)
+ {
+   return -UNW_EUNSPEC;
+ }
+ 
+-PROTECTED int
++int
+ unw_is_signal_frame (unw_cursor_t *cursor)
+ {
+ #if defined(__QNX__)
+diff --git a/src/arm/Greg_states_iterate.c b/src/arm/Greg_states_iterate.c
+index a39837a17..a17dc1b56 100644
+--- a/src/arm/Greg_states_iterate.c
++++ b/src/arm/Greg_states_iterate.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_reg_states_iterate (unw_cursor_t *cursor,
+ 			unw_reg_states_callback cb, void *token)
+ {
+diff --git a/src/arm/Gresume.c b/src/arm/Gresume.c
+index 9fe264ea2..a8288628a 100644
+--- a/src/arm/Gresume.c
++++ b/src/arm/Gresume.c
+@@ -132,7 +132,7 @@ establish_machine_state (struct cursor *c)
+     }
+ }
+ 
+-PROTECTED int
++int
+ unw_resume (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/arm/Gstep.c b/src/arm/Gstep.c
+index ae2f10f08..669af7c7a 100644
+--- a/src/arm/Gstep.c
++++ b/src/arm/Gstep.c
+@@ -82,7 +82,7 @@ arm_exidx_step (struct cursor *c)
+   return (c->dwarf.ip == 0) ? 0 : 1;
+ }
+ 
+-PROTECTED int
++int
+ unw_step (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/arm/is_fpreg.c b/src/arm/is_fpreg.c
+index 3b36a03d1..e55bcff03 100644
+--- a/src/arm/is_fpreg.c
++++ b/src/arm/is_fpreg.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ /* FIXME: I'm not sure if libunwind's GP/FP register distinction is very useful
+    on ARM.  Count all the FP or coprocessor registers we know about for now.  */
+ 
+-PROTECTED int
++int
+ unw_is_fpreg (int regnum)
+ {
+   return ((regnum >= UNW_ARM_S0 && regnum <= UNW_ARM_S31)
+diff --git a/src/arm/regname.c b/src/arm/regname.c
+index 474337a56..7cac630c1 100644
+--- a/src/arm/regname.c
++++ b/src/arm/regname.c
+@@ -80,7 +80,7 @@ static const char *regname[] =
+     "d24", "d25", "d26", "d27", "d28", "d29", "d30", "d31",
+   };
+ 
+-PROTECTED const char *
++const char *
+ unw_regname (unw_regnum_t reg)
+ {
+   if (reg < (unw_regnum_t) ARRAY_SIZE (regname))
+diff --git a/src/coredump/_UCD_accessors.c b/src/coredump/_UCD_accessors.c
+index f08118031..ae5c23d21 100644
+--- a/src/coredump/_UCD_accessors.c
++++ b/src/coredump/_UCD_accessors.c
+@@ -23,7 +23,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "_UCD_internal.h"
+ 
+-PROTECTED unw_accessors_t _UCD_accessors =
++unw_accessors_t _UCD_accessors =
+   {
+     .find_proc_info             = _UCD_find_proc_info,
+     .put_unwind_info            = _UCD_put_unwind_info,
+diff --git a/src/dwarf/Gfind_proc_info-lsb.c b/src/dwarf/Gfind_proc_info-lsb.c
+index d8cbc3e09..7a7245a19 100644
+--- a/src/dwarf/Gfind_proc_info-lsb.c
++++ b/src/dwarf/Gfind_proc_info-lsb.c
+@@ -265,7 +265,7 @@ debug_frame_tab_compare (const void *a, const void *b)
+     return 0;
+ }
+ 
+-PROTECTED int
++int
+ dwarf_find_debug_frame (int found, unw_dyn_info_t *di_debug, unw_word_t ip,
+                         unw_word_t segbase, const char* obj_name,
+                         unw_word_t start, unw_word_t end)
+@@ -796,7 +796,7 @@ static int is_remote_table(int format)
+           format == UNW_INFO_FORMAT_IP_OFFSET);
+ }
+ 
+-PROTECTED int
++int
+ dwarf_search_unwind_table (unw_addr_space_t as, unw_word_t ip,
+                            unw_dyn_info_t *di, unw_proc_info_t *pi,
+                            int need_unwind_info, void *arg)
+diff --git a/src/hppa/Gapply_reg_state.c b/src/hppa/Gapply_reg_state.c
+index eec93046f..82f056da6 100644
+--- a/src/hppa/Gapply_reg_state.c
++++ b/src/hppa/Gapply_reg_state.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_apply_reg_state (unw_cursor_t *cursor,
+ 		     void *reg_states_data)
+ {
+diff --git a/src/hppa/Gcreate_addr_space.c b/src/hppa/Gcreate_addr_space.c
+index 71186e0e7..8a6cb8b4e 100644
+--- a/src/hppa/Gcreate_addr_space.c
++++ b/src/hppa/Gcreate_addr_space.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED unw_addr_space_t
++unw_addr_space_t
+ unw_create_addr_space (unw_accessors_t *a, int byte_order)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/hppa/Gget_proc_info.c b/src/hppa/Gget_proc_info.c
+index ce7a950aa..e10efcfca 100644
+--- a/src/hppa/Gget_proc_info.c
++++ b/src/hppa/Gget_proc_info.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_proc_info (unw_cursor_t *cursor, unw_proc_info_t *pi)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/hppa/Gget_save_loc.c b/src/hppa/Gget_save_loc.c
+index 549366a83..02dfa3084 100644
+--- a/src/hppa/Gget_save_loc.c
++++ b/src/hppa/Gget_save_loc.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_save_loc (unw_cursor_t *cursor, int reg, unw_save_loc_t *sloc)
+ {
+   /* struct cursor *c = (struct cursor *) cursor; */
+diff --git a/src/hppa/Ginit.c b/src/hppa/Ginit.c
+index 28779c39b..461e4b93d 100644
+--- a/src/hppa/Ginit.c
++++ b/src/hppa/Ginit.c
+@@ -32,13 +32,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #ifdef UNW_REMOTE_ONLY
+ 
+ /* unw_local_addr_space is a NULL pointer in this case.  */
+-PROTECTED unw_addr_space_t unw_local_addr_space;
++unw_addr_space_t unw_local_addr_space;
+ 
+ #else /* !UNW_REMOTE_ONLY */
+ 
+ static struct unw_addr_space local_addr_space;
+ 
+-PROTECTED unw_addr_space_t unw_local_addr_space = &local_addr_space;
++unw_addr_space_t unw_local_addr_space = &local_addr_space;
+ 
+ static inline void *
+ uc_addr (ucontext_t *uc, int reg)
+diff --git a/src/hppa/Ginit_local.c b/src/hppa/Ginit_local.c
+index 5c59f48f8..1fdc7716f 100644
+--- a/src/hppa/Ginit_local.c
++++ b/src/hppa/Ginit_local.c
+@@ -28,7 +28,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #ifdef UNW_REMOTE_ONLY
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, ucontext_t *uc)
+ {
+   return -UNW_EINVAL;
+@@ -51,13 +51,13 @@ unw_init_local_common (unw_cursor_t *cursor, ucontext_t *uc, unsigned use_prev_i
+   return common_init (c, use_prev_instr);
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, ucontext_t *uc)
+ {
+   return unw_init_local_common(cursor, uc, 1);
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local2 (unw_cursor_t *cursor, ucontext_t *uc, int flag)
+ {
+   if (!flag)
+diff --git a/src/hppa/Ginit_remote.c b/src/hppa/Ginit_remote.c
+index a4160fd19..71096ce0e 100644
+--- a/src/hppa/Ginit_remote.c
++++ b/src/hppa/Ginit_remote.c
+@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "init.h"
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_init_remote (unw_cursor_t *cursor, unw_addr_space_t as, void *as_arg)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/hppa/Gis_signal_frame.c b/src/hppa/Gis_signal_frame.c
+index 00e40c6ac..24996172f 100644
+--- a/src/hppa/Gis_signal_frame.c
++++ b/src/hppa/Gis_signal_frame.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_is_signal_frame (unw_cursor_t *cursor)
+ {
+ #ifdef __linux__ 
+diff --git a/src/hppa/Greg_states_iterate.c b/src/hppa/Greg_states_iterate.c
+index a39837a17..a17dc1b56 100644
+--- a/src/hppa/Greg_states_iterate.c
++++ b/src/hppa/Greg_states_iterate.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_reg_states_iterate (unw_cursor_t *cursor,
+ 			unw_reg_states_callback cb, void *token)
+ {
+diff --git a/src/hppa/Gresume.c b/src/hppa/Gresume.c
+index f6bc023f5..6c11f1403 100644
+--- a/src/hppa/Gresume.c
++++ b/src/hppa/Gresume.c
+@@ -121,7 +121,7 @@ establish_machine_state (struct cursor *c)
+   return 0;
+ }
+ 
+-PROTECTED int
++int
+ unw_resume (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/hppa/Gstep.c b/src/hppa/Gstep.c
+index b9e170a2d..4fc8a8776 100644
+--- a/src/hppa/Gstep.c
++++ b/src/hppa/Gstep.c
+@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "unwind_i.h"
+ #include "offsets.h"
+ 
+-PROTECTED int
++int
+ unw_step (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/hppa/get_accessors.c b/src/hppa/get_accessors.c
+index 873a38c87..f3c7fa5fc 100644
+--- a/src/hppa/get_accessors.c
++++ b/src/hppa/get_accessors.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED unw_accessors_t *
++unw_accessors_t *
+ unw_get_accessors (unw_addr_space_t as)
+ {
+   if (!tdep_init_done)
+diff --git a/src/hppa/regname.c b/src/hppa/regname.c
+index 06dfae750..5698a58ad 100644
+--- a/src/hppa/regname.c
++++ b/src/hppa/regname.c
+@@ -40,7 +40,7 @@ static const char *regname[] =
+     "cfa"
+   };
+ 
+-PROTECTED const char *
++const char *
+ unw_regname (unw_regnum_t reg)
+ {
+   if (reg < (unw_regnum_t) ARRAY_SIZE (regname))
+diff --git a/src/ia64/Gapply_reg_state.c b/src/ia64/Gapply_reg_state.c
+index a049b57ec..b45d1b5d9 100644
+--- a/src/ia64/Gapply_reg_state.c
++++ b/src/ia64/Gapply_reg_state.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_apply_reg_state (unw_cursor_t *cursor,
+ 		     void *reg_states_data)
+ {
+diff --git a/src/ia64/Gcreate_addr_space.c b/src/ia64/Gcreate_addr_space.c
+index 20cf5d8bf..7ad29cbbd 100644
+--- a/src/ia64/Gcreate_addr_space.c
++++ b/src/ia64/Gcreate_addr_space.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED unw_addr_space_t
++unw_addr_space_t
+ unw_create_addr_space (unw_accessors_t *a, int byte_order)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/ia64/Gget_proc_info.c b/src/ia64/Gget_proc_info.c
+index 6b4722d5d..3ec82b9f8 100644
+--- a/src/ia64/Gget_proc_info.c
++++ b/src/ia64/Gget_proc_info.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_proc_info (unw_cursor_t *cursor, unw_proc_info_t *pi)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/ia64/Gget_save_loc.c b/src/ia64/Gget_save_loc.c
+index fc37ad9dc..34efe99a7 100644
+--- a/src/ia64/Gget_save_loc.c
++++ b/src/ia64/Gget_save_loc.c
+@@ -30,7 +30,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "offsets.h"
+ #include "regs.h"
+ 
+-PROTECTED int
++int
+ unw_get_save_loc (unw_cursor_t *cursor, int reg, unw_save_loc_t *sloc)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/ia64/Ginit.c b/src/ia64/Ginit.c
+index 395450ec9..b09a2ad57 100644
+--- a/src/ia64/Ginit.c
++++ b/src/ia64/Ginit.c
+@@ -33,13 +33,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #ifdef UNW_REMOTE_ONLY
+ 
+ /* unw_local_addr_space is a NULL pointer in this case.  */
+-PROTECTED unw_addr_space_t unw_local_addr_space;
++unw_addr_space_t unw_local_addr_space;
+ 
+ #else /* !UNW_REMOTE_ONLY */
+ 
+ static struct unw_addr_space local_addr_space;
+ 
+-PROTECTED unw_addr_space_t unw_local_addr_space = &local_addr_space;
++unw_addr_space_t unw_local_addr_space = &local_addr_space;
+ 
+ #ifdef HAVE_SYS_UC_ACCESS_H
+ 
+diff --git a/src/ia64/Ginit_local.c b/src/ia64/Ginit_local.c
+index 8c727e1d3..8fe1c679b 100644
+--- a/src/ia64/Ginit_local.c
++++ b/src/ia64/Ginit_local.c
+@@ -28,7 +28,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #ifdef UNW_REMOTE_ONLY
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, unw_context_t *uc)
+ {
+   return -UNW_EINVAL;
+@@ -76,7 +76,7 @@ get_initial_stack_pointers (struct cursor *c, unw_context_t *uc,
+   return 0;
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, unw_context_t *uc)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/ia64/Ginit_remote.c b/src/ia64/Ginit_remote.c
+index e26a4e4b7..b570c7eab 100644
+--- a/src/ia64/Ginit_remote.c
++++ b/src/ia64/Ginit_remote.c
+@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "init.h"
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_init_remote (unw_cursor_t *cursor, unw_addr_space_t as, void *as_arg)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/ia64/Gis_signal_frame.c b/src/ia64/Gis_signal_frame.c
+index 0b7e19cbf..e268a0629 100644
+--- a/src/ia64/Gis_signal_frame.c
++++ b/src/ia64/Gis_signal_frame.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_is_signal_frame (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/ia64/Greg_states_iterate.c b/src/ia64/Greg_states_iterate.c
+index 49908b2ca..3570740af 100644
+--- a/src/ia64/Greg_states_iterate.c
++++ b/src/ia64/Greg_states_iterate.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_reg_states_iterate (unw_cursor_t *cursor,
+ 			unw_reg_states_callback cb, void *token)
+ {
+diff --git a/src/ia64/Gresume.c b/src/ia64/Gresume.c
+index aa395b69a..68fe8a659 100644
+--- a/src/ia64/Gresume.c
++++ b/src/ia64/Gresume.c
+@@ -259,7 +259,7 @@ remote_install_cursor (struct cursor *c)
+ 
+ #endif /* !UNW_LOCAL_ONLY */
+ 
+-PROTECTED int
++int
+ unw_resume (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/ia64/Gstep.c b/src/ia64/Gstep.c
+index 0191f642a..df4ecb879 100644
+--- a/src/ia64/Gstep.c
++++ b/src/ia64/Gstep.c
+@@ -342,7 +342,7 @@ update_frame_state (struct cursor *c)
+ }
+ 
+ 
+-PROTECTED int
++int
+ unw_step (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/ia64/Gtables.c b/src/ia64/Gtables.c
+index 6959cae98..23a8011cc 100644
+--- a/src/ia64/Gtables.c
++++ b/src/ia64/Gtables.c
+@@ -136,7 +136,7 @@ tdep_put_unwind_info (unw_addr_space_t as, unw_proc_info_t *pi, void *arg)
+     }
+ }
+ 
+-PROTECTED unw_word_t
++unw_word_t
+ _Uia64_find_dyn_list (unw_addr_space_t as, unw_dyn_info_t *di, void *arg)
+ {
+   unw_word_t hdr_addr, info_addr, hdr, directives, pers, cookie, off;
+@@ -247,7 +247,7 @@ lookup (struct ia64_table_entry *table, size_t table_size, unw_word_t rel_ip)
+   return e;
+ }
+ 
+-PROTECTED int
++int
+ unw_search_ia64_unwind_table (unw_addr_space_t as, unw_word_t ip,
+                               unw_dyn_info_t *di, unw_proc_info_t *pi,
+                               int need_unwind_info, void *arg)
+@@ -440,7 +440,7 @@ get_kernel_table (unw_dyn_info_t *di)
+ #  ifndef UNW_LOCAL_ONLY
+ 
+ /* This is exported for the benefit of libunwind-ptrace.a.  */
+-PROTECTED int
++int
+ _Uia64_get_kernel_table (unw_dyn_info_t *di)
+ {
+   int ret;
+diff --git a/src/ia64/regname.c b/src/ia64/regname.c
+index 8753e5208..3636df87d 100644
+--- a/src/ia64/regname.c
++++ b/src/ia64/regname.c
+@@ -179,7 +179,7 @@ purpose.  */
+ 
+ #define NREGS   ((int) (sizeof (regname_str) - 1) / regname_len)
+ 
+-PROTECTED const char *
++const char *
+ unw_regname (unw_regnum_t reg)
+ {
+   if (reg < NREGS)
+diff --git a/src/mi/Gdestroy_addr_space.c b/src/mi/Gdestroy_addr_space.c
+index 719c051e3..504558e1a 100644
+--- a/src/mi/Gdestroy_addr_space.c
++++ b/src/mi/Gdestroy_addr_space.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "libunwind_i.h"
+ 
+-PROTECTED void
++void
+ unw_destroy_addr_space (unw_addr_space_t as)
+ {
+ #ifndef UNW_LOCAL_ONLY
+diff --git a/src/mi/Gget_accessors.c b/src/mi/Gget_accessors.c
+index 548c7636d..2d5207822 100644
+--- a/src/mi/Gget_accessors.c
++++ b/src/mi/Gget_accessors.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "libunwind_i.h"
+ 
+-PROTECTED unw_accessors_t *
++unw_accessors_t *
+ unw_get_accessors (unw_addr_space_t as)
+ {
+   if (!tdep_init_done)
+diff --git a/src/mi/Gget_fpreg.c b/src/mi/Gget_fpreg.c
+index f2f7405ec..f32b12862 100644
+--- a/src/mi/Gget_fpreg.c
++++ b/src/mi/Gget_fpreg.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "libunwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_fpreg (unw_cursor_t *cursor, int regnum, unw_fpreg_t *valp)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/mi/Gget_proc_info_by_ip.c b/src/mi/Gget_proc_info_by_ip.c
+index c39312d56..ae85fe916 100644
+--- a/src/mi/Gget_proc_info_by_ip.c
++++ b/src/mi/Gget_proc_info_by_ip.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "libunwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_proc_info_by_ip (unw_addr_space_t as, unw_word_t ip,
+                          unw_proc_info_t *pi, void *as_arg)
+ {
+diff --git a/src/mi/Gget_proc_name.c b/src/mi/Gget_proc_name.c
+index 41ed9394d..36e34e2e5 100644
+--- a/src/mi/Gget_proc_name.c
++++ b/src/mi/Gget_proc_name.c
+@@ -95,7 +95,7 @@ get_proc_name (unw_addr_space_t as, unw_word_t ip,
+   return -UNW_ENOINFO;
+ }
+ 
+-PROTECTED int
++int
+ unw_get_proc_name (unw_cursor_t *cursor, char *buf, size_t buf_len,
+                    unw_word_t *offp)
+ {
+diff --git a/src/mi/Gget_reg.c b/src/mi/Gget_reg.c
+index 7c0a5a9c0..9fc725c9c 100644
+--- a/src/mi/Gget_reg.c
++++ b/src/mi/Gget_reg.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "libunwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_reg (unw_cursor_t *cursor, int regnum, unw_word_t *valp)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/mi/Gset_cache_size.c b/src/mi/Gset_cache_size.c
+index a0d8b5bf1..07b282e2c 100644
+--- a/src/mi/Gset_cache_size.c
++++ b/src/mi/Gset_cache_size.c
+@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "libunwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_set_cache_size (unw_addr_space_t as, size_t size, int flag)
+ {
+   size_t power = 1;
+diff --git a/src/mi/Gset_caching_policy.c b/src/mi/Gset_caching_policy.c
+index 9df9eb82e..aa3d23714 100644
+--- a/src/mi/Gset_caching_policy.c
++++ b/src/mi/Gset_caching_policy.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "libunwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_set_caching_policy (unw_addr_space_t as, unw_caching_policy_t policy)
+ {
+   if (!tdep_init_done)
+diff --git a/src/mi/Gset_fpreg.c b/src/mi/Gset_fpreg.c
+index 4f2fa7be6..8c37afd22 100644
+--- a/src/mi/Gset_fpreg.c
++++ b/src/mi/Gset_fpreg.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "libunwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_set_fpreg (unw_cursor_t *cursor, int regnum, unw_fpreg_t val)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/mi/Gset_reg.c b/src/mi/Gset_reg.c
+index c9b6e6aa6..b1b177033 100644
+--- a/src/mi/Gset_reg.c
++++ b/src/mi/Gset_reg.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "libunwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_set_reg (unw_cursor_t *cursor, int regnum, unw_word_t valp)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/mi/dyn-info-list.c b/src/mi/dyn-info-list.c
+index 1a0790d36..1c7c55090 100644
+--- a/src/mi/dyn-info-list.c
++++ b/src/mi/dyn-info-list.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ HIDDEN unw_dyn_info_list_t _U_dyn_info_list;
+ 
+-PROTECTED unw_word_t
++unw_word_t
+ _U_dyn_info_list_addr (void)
+ {
+   return (unw_word_t) (uintptr_t) &_U_dyn_info_list;
+diff --git a/src/mi/flush_cache.c b/src/mi/flush_cache.c
+index 513d13564..cbd93e1a1 100644
+--- a/src/mi/flush_cache.c
++++ b/src/mi/flush_cache.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "libunwind_i.h"
+ 
+-PROTECTED void
++void
+ unw_flush_cache (unw_addr_space_t as, unw_word_t lo, unw_word_t hi)
+ {
+ #if !UNW_TARGET_IA64
+diff --git a/src/mi/init.c b/src/mi/init.c
+index 057027e0e..60a48c589 100644
+--- a/src/mi/init.c
++++ b/src/mi/init.c
+@@ -32,7 +32,7 @@ static const char rcsid[] UNUSED =
+ 
+ #if UNW_DEBUG
+ 
+-/* Must not be declared HIDDEN/PROTECTED because libunwind.so and
++/* Must not be declared HIDDEN because libunwind.so and
+    libunwind-PLATFORM.so will both define their own copies of this
+    variable and we want to use only one or the other when both
+    libraries are loaded.  */
+diff --git a/src/mips/Gapply_reg_state.c b/src/mips/Gapply_reg_state.c
+index eec93046f..82f056da6 100644
+--- a/src/mips/Gapply_reg_state.c
++++ b/src/mips/Gapply_reg_state.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_apply_reg_state (unw_cursor_t *cursor,
+ 		     void *reg_states_data)
+ {
+diff --git a/src/mips/Gcreate_addr_space.c b/src/mips/Gcreate_addr_space.c
+index 371841d90..493d03db6 100644
+--- a/src/mips/Gcreate_addr_space.c
++++ b/src/mips/Gcreate_addr_space.c
+@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED unw_addr_space_t
++unw_addr_space_t
+ unw_create_addr_space (unw_accessors_t *a, int byte_order)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/mips/Gget_proc_info.c b/src/mips/Gget_proc_info.c
+index 973ddd979..7b84be87b 100644
+--- a/src/mips/Gget_proc_info.c
++++ b/src/mips/Gget_proc_info.c
+@@ -24,7 +24,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_proc_info (unw_cursor_t *cursor, unw_proc_info_t *pi)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/mips/Gget_save_loc.c b/src/mips/Gget_save_loc.c
+index d6075b76c..c21f9b06d 100644
+--- a/src/mips/Gget_save_loc.c
++++ b/src/mips/Gget_save_loc.c
+@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ /* FIXME for MIPS.  */
+ 
+-PROTECTED int
++int
+ unw_get_save_loc (unw_cursor_t *cursor, int reg, unw_save_loc_t *sloc)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/mips/Ginit.c b/src/mips/Ginit.c
+index 077a386c6..3df170c75 100644
+--- a/src/mips/Ginit.c
++++ b/src/mips/Ginit.c
+@@ -30,13 +30,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #ifdef UNW_REMOTE_ONLY
+ 
+ /* unw_local_addr_space is a NULL pointer in this case.  */
+-PROTECTED unw_addr_space_t unw_local_addr_space;
++unw_addr_space_t unw_local_addr_space;
+ 
+ #else /* !UNW_REMOTE_ONLY */
+ 
+ static struct unw_addr_space local_addr_space;
+ 
+-PROTECTED unw_addr_space_t unw_local_addr_space = &local_addr_space;
++unw_addr_space_t unw_local_addr_space = &local_addr_space;
+ 
+ /* Return the address of the 64-bit slot in UC for REG (even for o32,
+    where registers are 32-bit, the slots are still 64-bit).  */
+diff --git a/src/mips/Ginit_local.c b/src/mips/Ginit_local.c
+index a29b6d09b..f3153b5ba 100644
+--- a/src/mips/Ginit_local.c
++++ b/src/mips/Ginit_local.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #ifdef UNW_REMOTE_ONLY
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, ucontext_t *uc)
+ {
+   return -UNW_EINVAL;
+@@ -50,13 +50,13 @@ unw_init_local_common(unw_cursor_t *cursor, ucontext_t *uc, unsigned use_prev_in
+   return common_init (c, use_prev_instr);
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local(unw_cursor_t *cursor, ucontext_t *uc)
+ {
+   return unw_init_local_common(cursor, uc, 1);
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local2 (unw_cursor_t *cursor, ucontext_t *uc, int flag)
+ {
+   if (!flag)
+diff --git a/src/mips/Ginit_remote.c b/src/mips/Ginit_remote.c
+index f284e994f..9b8ba5b89 100644
+--- a/src/mips/Ginit_remote.c
++++ b/src/mips/Ginit_remote.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "init.h"
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_init_remote (unw_cursor_t *cursor, unw_addr_space_t as, void *as_arg)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/mips/Gis_signal_frame.c b/src/mips/Gis_signal_frame.c
+index 2c9627f44..d2cd57b5c 100644
+--- a/src/mips/Gis_signal_frame.c
++++ b/src/mips/Gis_signal_frame.c
+@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "unwind_i.h"
+ #include <stdio.h>
+ 
+-PROTECTED int
++int
+ unw_is_signal_frame (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/mips/Greg_states_iterate.c b/src/mips/Greg_states_iterate.c
+index a39837a17..a17dc1b56 100644
+--- a/src/mips/Greg_states_iterate.c
++++ b/src/mips/Greg_states_iterate.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_reg_states_iterate (unw_cursor_t *cursor,
+ 			unw_reg_states_callback cb, void *token)
+ {
+diff --git a/src/mips/Gresume.c b/src/mips/Gresume.c
+index b822e24b0..cb70abc8c 100644
+--- a/src/mips/Gresume.c
++++ b/src/mips/Gresume.c
+@@ -38,7 +38,7 @@ mips_local_resume (unw_addr_space_t as, unw_cursor_t *cursor, void *arg)
+ 
+ #endif /* !UNW_REMOTE_ONLY */
+ 
+-PROTECTED int
++int
+ unw_resume (unw_cursor_t *cursor)
+ {
+   return -UNW_EINVAL;
+diff --git a/src/mips/Gstep.c b/src/mips/Gstep.c
+index 0a67492fe..d4fc690ca 100644
+--- a/src/mips/Gstep.c
++++ b/src/mips/Gstep.c
+@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "unwind_i.h"
+ #include "offsets.h"
+ 
+-PROTECTED int
++int
+ unw_handle_signal_frame (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+@@ -110,7 +110,7 @@ unw_handle_signal_frame (unw_cursor_t *cursor)
+   return 1;
+ }
+ 
+-PROTECTED int
++int
+ unw_step (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/mips/is_fpreg.c b/src/mips/is_fpreg.c
+index 3acc6967a..a92dd5ece 100644
+--- a/src/mips/is_fpreg.c
++++ b/src/mips/is_fpreg.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ /* FIXME: I'm not sure if libunwind's GP/FP register distinction is very useful
+    on MIPS.  */
+ 
+-PROTECTED int
++int
+ unw_is_fpreg (int regnum)
+ {
+   /* FIXME: Support FP.  */
+diff --git a/src/mips/regname.c b/src/mips/regname.c
+index a4a63340d..b137b972b 100644
+--- a/src/mips/regname.c
++++ b/src/mips/regname.c
+@@ -36,7 +36,7 @@ static const char *regname[] =
+     "$24",  "$25",  "$26", "$27",  "$28",  "$29",  "$30",  "$31",
+   };
+ 
+-PROTECTED const char *
++const char *
+ unw_regname (unw_regnum_t reg)
+ {
+   if (reg < (unw_regnum_t) ARRAY_SIZE (regname))
+diff --git a/src/os-freebsd.c b/src/os-freebsd.c
+index 2e59731e5..753e819df 100644
+--- a/src/os-freebsd.c
++++ b/src/os-freebsd.c
+@@ -88,7 +88,7 @@ get_pid_by_tid(int tid)
+   return (pid);
+ }
+ 
+-PROTECTED int
++int
+ tdep_get_elf_image (struct elf_image *ei, pid_t pid, unw_word_t ip,
+                     unsigned long *segbase, unsigned long *mapoff, char *path, size_t pathlen)
+ {
+@@ -146,7 +146,7 @@ tdep_get_elf_image (struct elf_image *ei, pid_t pid, unw_word_t ip,
+ 
+ #ifndef UNW_REMOTE_ONLY
+ 
+-PROTECTED void
++void
+ tdep_get_exe_image_path (char *path)
+ {
+   int mib[4], error;
+diff --git a/src/os-hpux.c b/src/os-hpux.c
+index d9435c1e6..48bfb05cf 100644
+--- a/src/os-hpux.c
++++ b/src/os-hpux.c
+@@ -68,7 +68,7 @@ tdep_get_elf_image (struct elf_image *ei, pid_t pid, unw_word_t ip,
+ 
+ #ifndef UNW_REMOTE_ONLY
+ 
+-PROTECTED void
++void
+ tdep_get_exe_image_path (char *path)
+ {
+   path[0] = 0; /* XXX */
+diff --git a/src/os-linux.c b/src/os-linux.c
+index 25fe52af4..8a00669fb 100644
+--- a/src/os-linux.c
++++ b/src/os-linux.c
+@@ -29,7 +29,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "libunwind_i.h"
+ #include "os-linux.h"
+ 
+-PROTECTED int
++int
+ tdep_get_elf_image (struct elf_image *ei, pid_t pid, unw_word_t ip,
+                     unsigned long *segbase, unsigned long *mapoff,
+                     char *path, size_t pathlen)
+@@ -64,7 +64,7 @@ tdep_get_elf_image (struct elf_image *ei, pid_t pid, unw_word_t ip,
+ 
+ #ifndef UNW_REMOTE_ONLY
+ 
+-PROTECTED void
++void
+ tdep_get_exe_image_path (char *path)
+ {
+   strcpy(path, "/proc/self/exe");
+diff --git a/src/os-qnx.c b/src/os-qnx.c
+index 479099221..4a76c7cda 100644
+--- a/src/os-qnx.c
++++ b/src/os-qnx.c
+@@ -53,7 +53,7 @@ static int callback(const struct dl_phdr_info *info, size_t size, void *data)
+   return 0;
+ }
+ 
+-PROTECTED int
++int
+ tdep_get_elf_image (struct elf_image *ei, pid_t pid, unw_word_t ip,
+                     unsigned long *segbase, unsigned long *mapoff,
+                     char *path, size_t pathlen)
+@@ -108,7 +108,7 @@ tdep_get_elf_image (struct elf_image *ei, pid_t pid, unw_word_t ip,
+ 
+ #ifndef UNW_REMOTE_ONLY
+ 
+-PROTECTED void
++void
+ tdep_get_exe_image_path (char *path)
+ {
+   path[0] = 0; /* XXX */
+diff --git a/src/ppc/Gapply_reg_state.c b/src/ppc/Gapply_reg_state.c
+index eec93046f..82f056da6 100644
+--- a/src/ppc/Gapply_reg_state.c
++++ b/src/ppc/Gapply_reg_state.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_apply_reg_state (unw_cursor_t *cursor,
+ 		     void *reg_states_data)
+ {
+diff --git a/src/ppc/Gget_proc_info.c b/src/ppc/Gget_proc_info.c
+index 29f1db552..7dfb6d4e4 100644
+--- a/src/ppc/Gget_proc_info.c
++++ b/src/ppc/Gget_proc_info.c
+@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include <libunwind_i.h>
+ 
+-PROTECTED int
++int
+ unw_get_proc_info (unw_cursor_t *cursor, unw_proc_info_t *pi)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/ppc/Gget_save_loc.c b/src/ppc/Gget_save_loc.c
+index c5beb81d7..5343fa4c7 100644
+--- a/src/ppc/Gget_save_loc.c
++++ b/src/ppc/Gget_save_loc.c
+@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include <libunwind_i.h>
+ 
+-PROTECTED int
++int
+ unw_get_save_loc (unw_cursor_t *cursor, int reg, unw_save_loc_t *sloc)
+ {
+   /* XXX: empty stub.  */
+diff --git a/src/ppc/Ginit_local.c b/src/ppc/Ginit_local.c
+index a05d4c8aa..366cf5bda 100644
+--- a/src/ppc/Ginit_local.c
++++ b/src/ppc/Ginit_local.c
+@@ -34,7 +34,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #ifdef UNW_REMOTE_ONLY
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, ucontext_t *uc)
+ {
+   /* XXX: empty stub.  */
+@@ -62,13 +62,13 @@ unw_init_local_common(unw_cursor_t *cursor, ucontext_t *uc, unsigned use_prev_in
+   #endif
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local(unw_cursor_t *cursor, ucontext_t *uc)
+ {
+   return unw_init_local_common(cursor, uc, 1);
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local2 (unw_cursor_t *cursor, ucontext_t *uc, int flag)
+ {
+   if (!flag)
+diff --git a/src/ppc/Ginit_remote.c b/src/ppc/Ginit_remote.c
+index 4ee54025a..ed85be897 100644
+--- a/src/ppc/Ginit_remote.c
++++ b/src/ppc/Ginit_remote.c
+@@ -33,7 +33,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "../ppc32/init.h"
+ #endif
+ 
+-PROTECTED int
++int
+ unw_init_remote (unw_cursor_t *cursor, unw_addr_space_t as, void *as_arg)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/ppc/Gis_signal_frame.c b/src/ppc/Gis_signal_frame.c
+index e8b691781..47b71f1d4 100644
+--- a/src/ppc/Gis_signal_frame.c
++++ b/src/ppc/Gis_signal_frame.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include <libunwind_i.h>
+ 
+-PROTECTED int
++int
+ unw_is_signal_frame (unw_cursor_t * cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/ppc/Greg_states_iterate.c b/src/ppc/Greg_states_iterate.c
+index a39837a17..a17dc1b56 100644
+--- a/src/ppc/Greg_states_iterate.c
++++ b/src/ppc/Greg_states_iterate.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_reg_states_iterate (unw_cursor_t *cursor,
+ 			unw_reg_states_callback cb, void *token)
+ {
+diff --git a/src/ppc32/Gapply_reg_state.c b/src/ppc32/Gapply_reg_state.c
+index eec93046f..82f056da6 100644
+--- a/src/ppc32/Gapply_reg_state.c
++++ b/src/ppc32/Gapply_reg_state.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_apply_reg_state (unw_cursor_t *cursor,
+ 		     void *reg_states_data)
+ {
+diff --git a/src/ppc32/Gcreate_addr_space.c b/src/ppc32/Gcreate_addr_space.c
+index f5055ecb9..aaa68bb35 100644
+--- a/src/ppc32/Gcreate_addr_space.c
++++ b/src/ppc32/Gcreate_addr_space.c
+@@ -29,7 +29,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include <libunwind_i.h>
+ 
+-PROTECTED unw_addr_space_t
++unw_addr_space_t
+ unw_create_addr_space (unw_accessors_t *a, int byte_order)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/ppc32/Ginit.c b/src/ppc32/Ginit.c
+index dc599b9d0..ba302448a 100644
+--- a/src/ppc32/Ginit.c
++++ b/src/ppc32/Ginit.c
+@@ -34,13 +34,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #ifdef UNW_REMOTE_ONLY
+ 
+ /* unw_local_addr_space is a NULL pointer in this case.  */
+-PROTECTED unw_addr_space_t unw_local_addr_space;
++unw_addr_space_t unw_local_addr_space;
+ 
+ #else /* !UNW_REMOTE_ONLY */
+ 
+ static struct unw_addr_space local_addr_space;
+ 
+-PROTECTED unw_addr_space_t unw_local_addr_space = &local_addr_space;
++unw_addr_space_t unw_local_addr_space = &local_addr_space;
+ 
+ static void *
+ uc_addr (ucontext_t *uc, int reg)
+diff --git a/src/ppc32/Greg_states_iterate.c b/src/ppc32/Greg_states_iterate.c
+index a39837a17..a17dc1b56 100644
+--- a/src/ppc32/Greg_states_iterate.c
++++ b/src/ppc32/Greg_states_iterate.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_reg_states_iterate (unw_cursor_t *cursor,
+ 			unw_reg_states_callback cb, void *token)
+ {
+diff --git a/src/ppc32/Gresume.c b/src/ppc32/Gresume.c
+index 955d061c6..c0f95837b 100644
+--- a/src/ppc32/Gresume.c
++++ b/src/ppc32/Gresume.c
+@@ -61,7 +61,7 @@ establish_machine_state (struct cursor *c)
+   return 0;
+ }
+ 
+-PROTECTED int
++int
+ unw_resume (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/ppc32/Gstep.c b/src/ppc32/Gstep.c
+index 7e0f14d4d..478d3a6c1 100644
+--- a/src/ppc32/Gstep.c
++++ b/src/ppc32/Gstep.c
+@@ -49,7 +49,7 @@ typedef struct
+ } stack_frame_t;
+ 
+ 
+-PROTECTED int
++int
+ unw_step (unw_cursor_t * cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/ppc32/is_fpreg.c b/src/ppc32/is_fpreg.c
+index cccc5112b..646ff2379 100644
+--- a/src/ppc32/is_fpreg.c
++++ b/src/ppc32/is_fpreg.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "libunwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_is_fpreg (int regnum)
+ {
+   return (regnum >= UNW_PPC32_F0 && regnum <= UNW_PPC32_F31);
+diff --git a/src/ppc32/regname.c b/src/ppc32/regname.c
+index 79ba88aa5..459b83a4e 100644
+--- a/src/ppc32/regname.c
++++ b/src/ppc32/regname.c
+@@ -102,7 +102,7 @@ static const char *regname[] =
+     [UNW_PPC32_F31]="FPR31"
+ };
+ 
+-PROTECTED const char *
++const char *
+ unw_regname (unw_regnum_t reg)
+ {
+   if (reg < (unw_regnum_t) ARRAY_SIZE (regname))
+diff --git a/src/ppc64/Gapply_reg_state.c b/src/ppc64/Gapply_reg_state.c
+index eec93046f..82f056da6 100644
+--- a/src/ppc64/Gapply_reg_state.c
++++ b/src/ppc64/Gapply_reg_state.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_apply_reg_state (unw_cursor_t *cursor,
+ 		     void *reg_states_data)
+ {
+diff --git a/src/ppc64/Gcreate_addr_space.c b/src/ppc64/Gcreate_addr_space.c
+index 686653a96..bd48555d4 100644
+--- a/src/ppc64/Gcreate_addr_space.c
++++ b/src/ppc64/Gcreate_addr_space.c
+@@ -29,7 +29,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include <libunwind_i.h>
+ 
+-PROTECTED unw_addr_space_t
++unw_addr_space_t
+ unw_create_addr_space (unw_accessors_t *a, int byte_order)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/ppc64/Ginit.c b/src/ppc64/Ginit.c
+index 287ecf492..4c88cd6e7 100644
+--- a/src/ppc64/Ginit.c
++++ b/src/ppc64/Ginit.c
+@@ -34,13 +34,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #ifdef UNW_REMOTE_ONLY
+ 
+ /* unw_local_addr_space is a NULL pointer in this case.  */
+-PROTECTED unw_addr_space_t unw_local_addr_space;
++unw_addr_space_t unw_local_addr_space;
+ 
+ #else /* !UNW_REMOTE_ONLY */
+ 
+ static struct unw_addr_space local_addr_space;
+ 
+-PROTECTED unw_addr_space_t unw_local_addr_space = &local_addr_space;
++unw_addr_space_t unw_local_addr_space = &local_addr_space;
+ 
+ static void *
+ uc_addr (ucontext_t *uc, int reg)
+diff --git a/src/ppc64/Greg_states_iterate.c b/src/ppc64/Greg_states_iterate.c
+index a39837a17..a17dc1b56 100644
+--- a/src/ppc64/Greg_states_iterate.c
++++ b/src/ppc64/Greg_states_iterate.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_reg_states_iterate (unw_cursor_t *cursor,
+ 			unw_reg_states_callback cb, void *token)
+ {
+diff --git a/src/ppc64/Gresume.c b/src/ppc64/Gresume.c
+index 3f850e937..0d832d0d9 100644
+--- a/src/ppc64/Gresume.c
++++ b/src/ppc64/Gresume.c
+@@ -95,7 +95,7 @@ establish_machine_state (struct cursor *c)
+   return 0;
+ }
+ 
+-PROTECTED int
++int
+ unw_resume (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/ppc64/Gstep.c b/src/ppc64/Gstep.c
+index 58a5ad87f..ad6c09574 100644
+--- a/src/ppc64/Gstep.c
++++ b/src/ppc64/Gstep.c
+@@ -51,7 +51,7 @@ typedef struct
+ } stack_frame_t;
+ 
+ 
+-PROTECTED int
++int
+ unw_step (unw_cursor_t * cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/ppc64/is_fpreg.c b/src/ppc64/is_fpreg.c
+index b34bf8715..653964a7d 100644
+--- a/src/ppc64/is_fpreg.c
++++ b/src/ppc64/is_fpreg.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "libunwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_is_fpreg (int regnum)
+ {
+   return (regnum >= UNW_PPC64_F0 && regnum <= UNW_PPC64_F31);
+diff --git a/src/ppc64/regname.c b/src/ppc64/regname.c
+index 3e3a14198..58c6fa6d8 100644
+--- a/src/ppc64/regname.c
++++ b/src/ppc64/regname.c
+@@ -154,7 +154,7 @@ static const char *regname[] =
+ 
+    };
+ 
+-PROTECTED const char *
++const char *
+ unw_regname (unw_regnum_t reg)
+ {
+   if (reg < (unw_regnum_t) ARRAY_SIZE (regname))
+diff --git a/src/ptrace/_UPT_accessors.c b/src/ptrace/_UPT_accessors.c
+index 3190e7894..4724360bb 100644
+--- a/src/ptrace/_UPT_accessors.c
++++ b/src/ptrace/_UPT_accessors.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "_UPT_internal.h"
+ 
+-PROTECTED unw_accessors_t _UPT_accessors =
++unw_accessors_t _UPT_accessors =
+   {
+     .find_proc_info             = _UPT_find_proc_info,
+     .put_unwind_info            = _UPT_put_unwind_info,
+diff --git a/src/sh/Gapply_reg_state.c b/src/sh/Gapply_reg_state.c
+index eec93046f..82f056da6 100644
+--- a/src/sh/Gapply_reg_state.c
++++ b/src/sh/Gapply_reg_state.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_apply_reg_state (unw_cursor_t *cursor,
+ 		     void *reg_states_data)
+ {
+diff --git a/src/sh/Gcreate_addr_space.c b/src/sh/Gcreate_addr_space.c
+index 1907d0467..6ca3a384d 100644
+--- a/src/sh/Gcreate_addr_space.c
++++ b/src/sh/Gcreate_addr_space.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED unw_addr_space_t
++unw_addr_space_t
+ unw_create_addr_space (unw_accessors_t *a, int byte_order)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/sh/Gget_proc_info.c b/src/sh/Gget_proc_info.c
+index de9199f99..c363d2405 100644
+--- a/src/sh/Gget_proc_info.c
++++ b/src/sh/Gget_proc_info.c
+@@ -24,7 +24,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_proc_info (unw_cursor_t *cursor, unw_proc_info_t *pi)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/sh/Gget_save_loc.c b/src/sh/Gget_save_loc.c
+index 7690a8087..24d9f63bc 100644
+--- a/src/sh/Gget_save_loc.c
++++ b/src/sh/Gget_save_loc.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_save_loc (unw_cursor_t *cursor, int reg, unw_save_loc_t *sloc)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/sh/Ginit.c b/src/sh/Ginit.c
+index 0bfac4907..52988a721 100644
+--- a/src/sh/Ginit.c
++++ b/src/sh/Ginit.c
+@@ -31,13 +31,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #ifdef UNW_REMOTE_ONLY
+ 
+ /* unw_local_addr_space is a NULL pointer in this case.  */
+-PROTECTED unw_addr_space_t unw_local_addr_space;
++unw_addr_space_t unw_local_addr_space;
+ 
+ #else /* !UNW_REMOTE_ONLY */
+ 
+ static struct unw_addr_space local_addr_space;
+ 
+-PROTECTED unw_addr_space_t unw_local_addr_space = &local_addr_space;
++unw_addr_space_t unw_local_addr_space = &local_addr_space;
+ 
+ static inline void *
+ uc_addr (ucontext_t *uc, int reg)
+diff --git a/src/sh/Ginit_local.c b/src/sh/Ginit_local.c
+index 36d1329b6..99ddb36fb 100644
+--- a/src/sh/Ginit_local.c
++++ b/src/sh/Ginit_local.c
+@@ -28,7 +28,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #ifdef UNW_REMOTE_ONLY
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, unw_context_t *uc)
+ {
+   return -UNW_EINVAL;
+@@ -52,13 +52,13 @@ unw_init_local (unw_cursor_t *cursor, unw_context_t *uc, unsigned use_prev_instr
+   return common_init (c, use_prev_instr);
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, unw_context_t *uc)
+ {
+   return unw_init_local_common(cursor, uc, 1);
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local2 (unw_cursor_t *cursor, ucontext_t *uc, int flag)
+ {
+   if (!flag)
+diff --git a/src/sh/Ginit_remote.c b/src/sh/Ginit_remote.c
+index f284e994f..9b8ba5b89 100644
+--- a/src/sh/Ginit_remote.c
++++ b/src/sh/Ginit_remote.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "init.h"
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_init_remote (unw_cursor_t *cursor, unw_addr_space_t as, void *as_arg)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/sh/Gis_signal_frame.c b/src/sh/Gis_signal_frame.c
+index 9719f8e08..404c78d09 100644
+--- a/src/sh/Gis_signal_frame.c
++++ b/src/sh/Gis_signal_frame.c
+@@ -63,7 +63,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+   3e:   09 00           nop
+ */
+ 
+-PROTECTED int
++int
+ unw_is_signal_frame (unw_cursor_t *cursor)
+ {
+ #ifdef __linux__
+diff --git a/src/sh/Greg_states_iterate.c b/src/sh/Greg_states_iterate.c
+index a39837a17..a17dc1b56 100644
+--- a/src/sh/Greg_states_iterate.c
++++ b/src/sh/Greg_states_iterate.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_reg_states_iterate (unw_cursor_t *cursor,
+ 			unw_reg_states_callback cb, void *token)
+ {
+diff --git a/src/sh/Gresume.c b/src/sh/Gresume.c
+index b14e419bd..a263c9271 100644
+--- a/src/sh/Gresume.c
++++ b/src/sh/Gresume.c
+@@ -143,7 +143,7 @@ establish_machine_state (struct cursor *c)
+     }
+ }
+ 
+-PROTECTED int
++int
+ unw_resume (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/sh/Gstep.c b/src/sh/Gstep.c
+index 9bbb8477f..fd91f4efd 100644
+--- a/src/sh/Gstep.c
++++ b/src/sh/Gstep.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "unwind_i.h"
+ #include "offsets.h"
+ 
+-PROTECTED int
++int
+ unw_handle_signal_frame (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+@@ -94,7 +94,7 @@ unw_handle_signal_frame (unw_cursor_t *cursor)
+   return 1;
+ }
+ 
+-PROTECTED int
++int
+ unw_step (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/sh/is_fpreg.c b/src/sh/is_fpreg.c
+index c351f81c4..de0934019 100644
+--- a/src/sh/is_fpreg.c
++++ b/src/sh/is_fpreg.c
+@@ -24,7 +24,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "libunwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_is_fpreg (int regnum)
+ {
+   /* FIXME: Support FP.  */
+diff --git a/src/sh/regname.c b/src/sh/regname.c
+index dcab24053..b52925b4d 100644
+--- a/src/sh/regname.c
++++ b/src/sh/regname.c
+@@ -46,7 +46,7 @@ static const char *const regname[] =
+     [UNW_SH_PR]  = "pr",
+   };
+ 
+-PROTECTED const char *
++const char *
+ unw_regname (unw_regnum_t reg)
+ {
+   if (reg < (unw_regnum_t) ARRAY_SIZE (regname) && regname[reg] != NULL)
+diff --git a/src/tilegx/Gapply_reg_state.c b/src/tilegx/Gapply_reg_state.c
+index eec93046f..82f056da6 100644
+--- a/src/tilegx/Gapply_reg_state.c
++++ b/src/tilegx/Gapply_reg_state.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_apply_reg_state (unw_cursor_t *cursor,
+ 		     void *reg_states_data)
+ {
+diff --git a/src/tilegx/Gcreate_addr_space.c b/src/tilegx/Gcreate_addr_space.c
+index a2821a3d3..39acdc2c3 100644
+--- a/src/tilegx/Gcreate_addr_space.c
++++ b/src/tilegx/Gcreate_addr_space.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED unw_addr_space_t
++unw_addr_space_t
+ unw_create_addr_space (unw_accessors_t *a, int byte_order)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/tilegx/Gget_proc_info.c b/src/tilegx/Gget_proc_info.c
+index f82700dd3..3a158da2d 100644
+--- a/src/tilegx/Gget_proc_info.c
++++ b/src/tilegx/Gget_proc_info.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_proc_info (unw_cursor_t *cursor, unw_proc_info_t *pi)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/tilegx/Gget_save_loc.c b/src/tilegx/Gget_save_loc.c
+index ec474e188..fcf069789 100644
+--- a/src/tilegx/Gget_save_loc.c
++++ b/src/tilegx/Gget_save_loc.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_save_loc (unw_cursor_t *cursor, int reg, unw_save_loc_t *sloc)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/tilegx/Ginit.c b/src/tilegx/Ginit.c
+index a0bb69d77..7564a558b 100644
+--- a/src/tilegx/Ginit.c
++++ b/src/tilegx/Ginit.c
+@@ -31,13 +31,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #ifdef UNW_REMOTE_ONLY
+ 
+ /* unw_local_addr_space is a NULL pointer in this case.  */
+-PROTECTED unw_addr_space_t unw_local_addr_space;
++unw_addr_space_t unw_local_addr_space;
+ 
+ #else /* !UNW_REMOTE_ONLY */
+ 
+ static struct unw_addr_space local_addr_space;
+ 
+-PROTECTED unw_addr_space_t unw_local_addr_space = &local_addr_space;
++unw_addr_space_t unw_local_addr_space = &local_addr_space;
+ 
+ /* Return the address of the 64-bit slot in UC for REG (even for o32,
+    where registers are 32-bit, the slots are still 64-bit).  */
+diff --git a/src/tilegx/Ginit_local.c b/src/tilegx/Ginit_local.c
+index 6aa679f05..31a716df3 100644
+--- a/src/tilegx/Ginit_local.c
++++ b/src/tilegx/Ginit_local.c
+@@ -28,7 +28,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #ifdef UNW_REMOTE_ONLY
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, ucontext_t *uc)
+ {
+   return -UNW_EINVAL;
+@@ -54,13 +54,13 @@ unw_init_local_common(unw_cursor_t *cursor, ucontext_t *uc, unsigned use_prev_in
+   return common_init (c, use_prev_instr);
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, ucontext_t *uc)
+ {
+   return unw_init_local_common(cursor, uc, 1);
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local2 (unw_cursor_t *cursor, ucontext_t *uc, int flag)
+ {
+   if (!flag)
+diff --git a/src/tilegx/Ginit_remote.c b/src/tilegx/Ginit_remote.c
+index c55410085..2a31b18aa 100644
+--- a/src/tilegx/Ginit_remote.c
++++ b/src/tilegx/Ginit_remote.c
+@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "init.h"
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_init_remote (unw_cursor_t *cursor, unw_addr_space_t as, void *as_arg)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/tilegx/Gis_signal_frame.c b/src/tilegx/Gis_signal_frame.c
+index 96bd34add..802fb7bf0 100644
+--- a/src/tilegx/Gis_signal_frame.c
++++ b/src/tilegx/Gis_signal_frame.c
+@@ -40,7 +40,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+     ((unsigned long)TREG_SYSCALL_NR << 31) )
+ #define  SWINT1      0x286b180051485000ULL
+ 
+-PROTECTED int
++int
+ unw_is_signal_frame (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor*) cursor;
+@@ -75,7 +75,7 @@ unw_is_signal_frame (unw_cursor_t *cursor)
+ }
+ 
+ 
+-PROTECTED int
++int
+ unw_handle_signal_frame (unw_cursor_t *cursor)
+ {
+   int i;
+diff --git a/src/tilegx/Greg_states_iterate.c b/src/tilegx/Greg_states_iterate.c
+index a39837a17..a17dc1b56 100644
+--- a/src/tilegx/Greg_states_iterate.c
++++ b/src/tilegx/Greg_states_iterate.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_reg_states_iterate (unw_cursor_t *cursor,
+ 			unw_reg_states_callback cb, void *token)
+ {
+diff --git a/src/tilegx/Gresume.c b/src/tilegx/Gresume.c
+index f532fd852..ece443a5b 100644
+--- a/src/tilegx/Gresume.c
++++ b/src/tilegx/Gresume.c
+@@ -72,7 +72,7 @@ establish_machine_state (struct cursor *c)
+     }
+ }
+ 
+-PROTECTED int
++int
+ unw_resume (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/tilegx/Gstep.c b/src/tilegx/Gstep.c
+index 1d32f9606..e416f01b9 100644
+--- a/src/tilegx/Gstep.c
++++ b/src/tilegx/Gstep.c
+@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "unwind_i.h"
+ #include "offsets.h"
+ 
+-PROTECTED int
++int
+ unw_step (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/tilegx/is_fpreg.c b/src/tilegx/is_fpreg.c
+index 118e055ef..d6d589690 100644
+--- a/src/tilegx/is_fpreg.c
++++ b/src/tilegx/is_fpreg.c
+@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ /* TILEGX has no FP. */
+ 
+-PROTECTED int
++int
+ unw_is_fpreg (int regnum)
+ {
+   return 0;
+diff --git a/src/tilegx/regname.c b/src/tilegx/regname.c
+index fd7380466..0ce47b9d6 100644
+--- a/src/tilegx/regname.c
++++ b/src/tilegx/regname.c
+@@ -45,7 +45,7 @@ static const char *regname[] =
+     "pc",  "cfa"
+   };
+ 
+-PROTECTED const char *
++const char *
+ unw_regname (unw_regnum_t reg)
+ {
+   if (reg < (unw_regnum_t) ARRAY_SIZE (regname))
+diff --git a/src/unwind/Backtrace.c b/src/unwind/Backtrace.c
+index 50f1fb613..0b14df4cb 100644
+--- a/src/unwind/Backtrace.c
++++ b/src/unwind/Backtrace.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind-internal.h"
+ 
+-PROTECTED _Unwind_Reason_Code
++_Unwind_Reason_Code
+ _Unwind_Backtrace (_Unwind_Trace_Fn trace, void *trace_parameter)
+ {
+   struct _Unwind_Context context;
+diff --git a/src/unwind/DeleteException.c b/src/unwind/DeleteException.c
+index 79be65e45..ad38eaf65 100644
+--- a/src/unwind/DeleteException.c
++++ b/src/unwind/DeleteException.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind-internal.h"
+ 
+-PROTECTED void
++void
+ _Unwind_DeleteException (struct _Unwind_Exception *exception_object)
+ {
+   _Unwind_Exception_Cleanup_Fn cleanup = exception_object->exception_cleanup;
+diff --git a/src/unwind/FindEnclosingFunction.c b/src/unwind/FindEnclosingFunction.c
+index b9873da5f..4f1066617 100644
+--- a/src/unwind/FindEnclosingFunction.c
++++ b/src/unwind/FindEnclosingFunction.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind-internal.h"
+ 
+-PROTECTED void *
++void *
+ _Unwind_FindEnclosingFunction (void *ip)
+ {
+   unw_proc_info_t pi;
+diff --git a/src/unwind/ForcedUnwind.c b/src/unwind/ForcedUnwind.c
+index da8a60e22..905b31cd8 100644
+--- a/src/unwind/ForcedUnwind.c
++++ b/src/unwind/ForcedUnwind.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind-internal.h"
+ 
+-PROTECTED _Unwind_Reason_Code
++_Unwind_Reason_Code
+ _Unwind_ForcedUnwind (struct _Unwind_Exception *exception_object,
+                       _Unwind_Stop_Fn stop, void *stop_parameter)
+ {
+diff --git a/src/unwind/GetBSP.c b/src/unwind/GetBSP.c
+index 253fde05f..d1bc84e0d 100644
+--- a/src/unwind/GetBSP.c
++++ b/src/unwind/GetBSP.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind-internal.h"
+ 
+-PROTECTED unsigned long
++unsigned long
+ _Unwind_GetBSP (struct _Unwind_Context *context)
+ {
+ #ifdef UNW_TARGET_IA64
+diff --git a/src/unwind/GetCFA.c b/src/unwind/GetCFA.c
+index 7975b1d3e..5ca63903d 100644
+--- a/src/unwind/GetCFA.c
++++ b/src/unwind/GetCFA.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind-internal.h"
+ 
+-PROTECTED unsigned long
++unsigned long
+ _Unwind_GetCFA (struct _Unwind_Context *context)
+ {
+   unw_word_t val;
+diff --git a/src/unwind/GetDataRelBase.c b/src/unwind/GetDataRelBase.c
+index 9bdd4cb0c..8e6914f4f 100644
+--- a/src/unwind/GetDataRelBase.c
++++ b/src/unwind/GetDataRelBase.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind-internal.h"
+ 
+-PROTECTED unsigned long
++unsigned long
+ _Unwind_GetDataRelBase (struct _Unwind_Context *context)
+ {
+   unw_proc_info_t pi;
+diff --git a/src/unwind/GetGR.c b/src/unwind/GetGR.c
+index b7ab05c4b..fa7094343 100644
+--- a/src/unwind/GetGR.c
++++ b/src/unwind/GetGR.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind-internal.h"
+ 
+-PROTECTED unsigned long
++unsigned long
+ _Unwind_GetGR (struct _Unwind_Context *context, int index)
+ {
+   unw_word_t val;
+diff --git a/src/unwind/GetIP.c b/src/unwind/GetIP.c
+index e93853d08..e9fc49440 100644
+--- a/src/unwind/GetIP.c
++++ b/src/unwind/GetIP.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind-internal.h"
+ 
+-PROTECTED unsigned long
++unsigned long
+ _Unwind_GetIP (struct _Unwind_Context *context)
+ {
+   unw_word_t val;
+diff --git a/src/unwind/GetIPInfo.c b/src/unwind/GetIPInfo.c
+index 9105396a2..e8ee7fd7f 100644
+--- a/src/unwind/GetIPInfo.c
++++ b/src/unwind/GetIPInfo.c
+@@ -28,7 +28,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ /* gcc/unwind-dw2.c: Retrieve the return address and flag whether that IP is
+    before or after first not yet fully executed instruction.  */
+ 
+-PROTECTED unsigned long
++unsigned long
+ _Unwind_GetIPInfo (struct _Unwind_Context *context, int *ip_before_insn)
+ {
+   unw_word_t val;
+diff --git a/src/unwind/GetLanguageSpecificData.c b/src/unwind/GetLanguageSpecificData.c
+index df52c9290..e7ca9b453 100644
+--- a/src/unwind/GetLanguageSpecificData.c
++++ b/src/unwind/GetLanguageSpecificData.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind-internal.h"
+ 
+-PROTECTED unsigned long
++unsigned long
+ _Unwind_GetLanguageSpecificData (struct _Unwind_Context *context)
+ {
+   unw_proc_info_t pi;
+diff --git a/src/unwind/GetRegionStart.c b/src/unwind/GetRegionStart.c
+index f0da34498..f4995813f 100644
+--- a/src/unwind/GetRegionStart.c
++++ b/src/unwind/GetRegionStart.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind-internal.h"
+ 
+-PROTECTED unsigned long
++unsigned long
+ _Unwind_GetRegionStart (struct _Unwind_Context *context)
+ {
+   unw_proc_info_t pi;
+diff --git a/src/unwind/GetTextRelBase.c b/src/unwind/GetTextRelBase.c
+index d0826e7f2..ce65ae93e 100644
+--- a/src/unwind/GetTextRelBase.c
++++ b/src/unwind/GetTextRelBase.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind-internal.h"
+ 
+-PROTECTED unsigned long
++unsigned long
+ _Unwind_GetTextRelBase (struct _Unwind_Context *context)
+ {
+   return 0;
+diff --git a/src/unwind/RaiseException.c b/src/unwind/RaiseException.c
+index cdf134a94..3c3ca19e9 100644
+--- a/src/unwind/RaiseException.c
++++ b/src/unwind/RaiseException.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind-internal.h"
+ 
+-PROTECTED _Unwind_Reason_Code
++_Unwind_Reason_Code
+ _Unwind_RaiseException (struct _Unwind_Exception *exception_object)
+ {
+   uint64_t exception_class = exception_object->exception_class;
+diff --git a/src/unwind/Resume.c b/src/unwind/Resume.c
+index dd0a44bc8..e23d6be27 100644
+--- a/src/unwind/Resume.c
++++ b/src/unwind/Resume.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind-internal.h"
+ 
+-PROTECTED void
++void
+ _Unwind_Resume (struct _Unwind_Exception *exception_object)
+ {
+   struct _Unwind_Context context;
+diff --git a/src/unwind/Resume_or_Rethrow.c b/src/unwind/Resume_or_Rethrow.c
+index d60e03832..9c76443b3 100644
+--- a/src/unwind/Resume_or_Rethrow.c
++++ b/src/unwind/Resume_or_Rethrow.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind-internal.h"
+ 
+-PROTECTED _Unwind_Reason_Code
++_Unwind_Reason_Code
+ _Unwind_Resume_or_Rethrow (struct _Unwind_Exception *exception_object)
+ {
+   struct _Unwind_Context context;
+diff --git a/src/unwind/SetGR.c b/src/unwind/SetGR.c
+index 143b35492..ae77a8e82 100644
+--- a/src/unwind/SetGR.c
++++ b/src/unwind/SetGR.c
+@@ -28,7 +28,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "dwarf_i.h"
+ #endif
+ 
+-PROTECTED void
++void
+ _Unwind_SetGR (struct _Unwind_Context *context, int index,
+                unsigned long new_value)
+ {
+diff --git a/src/unwind/SetIP.c b/src/unwind/SetIP.c
+index c55ab9718..fccc2f0dd 100644
+--- a/src/unwind/SetIP.c
++++ b/src/unwind/SetIP.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind-internal.h"
+ 
+-PROTECTED void
++void
+ _Unwind_SetIP (struct _Unwind_Context *context, unsigned long new_value)
+ {
+   unw_set_reg (&context->cursor, UNW_REG_IP, new_value);
+diff --git a/src/x86/Gapply_reg_state.c b/src/x86/Gapply_reg_state.c
+index eec93046f..82f056da6 100644
+--- a/src/x86/Gapply_reg_state.c
++++ b/src/x86/Gapply_reg_state.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_apply_reg_state (unw_cursor_t *cursor,
+ 		     void *reg_states_data)
+ {
+diff --git a/src/x86/Gcreate_addr_space.c b/src/x86/Gcreate_addr_space.c
+index 45fec6da8..a7e41a58f 100644
+--- a/src/x86/Gcreate_addr_space.c
++++ b/src/x86/Gcreate_addr_space.c
+@@ -31,7 +31,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #define __LITTLE_ENDIAN _LITTLE_ENDIAN
+ #endif
+ 
+-PROTECTED unw_addr_space_t
++unw_addr_space_t
+ unw_create_addr_space (unw_accessors_t *a, int byte_order)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/x86/Gget_proc_info.c b/src/x86/Gget_proc_info.c
+index 45b4cd5bc..4dc2cff36 100644
+--- a/src/x86/Gget_proc_info.c
++++ b/src/x86/Gget_proc_info.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_proc_info (unw_cursor_t *cursor, unw_proc_info_t *pi)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/x86/Gget_save_loc.c b/src/x86/Gget_save_loc.c
+index d440f9eca..e459382f6 100644
+--- a/src/x86/Gget_save_loc.c
++++ b/src/x86/Gget_save_loc.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_save_loc (unw_cursor_t *cursor, int reg, unw_save_loc_t *sloc)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/x86/Ginit.c b/src/x86/Ginit.c
+index 876990fe1..f6b8dc27d 100644
+--- a/src/x86/Ginit.c
++++ b/src/x86/Ginit.c
+@@ -36,13 +36,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #ifdef UNW_REMOTE_ONLY
+ 
+ /* unw_local_addr_space is a NULL pointer in this case.  */
+-PROTECTED unw_addr_space_t unw_local_addr_space;
++unw_addr_space_t unw_local_addr_space;
+ 
+ #else /* !UNW_REMOTE_ONLY */
+ 
+ static struct unw_addr_space local_addr_space;
+ 
+-PROTECTED unw_addr_space_t unw_local_addr_space = &local_addr_space;
++unw_addr_space_t unw_local_addr_space = &local_addr_space;
+ 
+ # ifdef UNW_LOCAL_ONLY
+ 
+diff --git a/src/x86/Ginit_local.c b/src/x86/Ginit_local.c
+index 88c52de38..bff068704 100644
+--- a/src/x86/Ginit_local.c
++++ b/src/x86/Ginit_local.c
+@@ -28,7 +28,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #ifdef UNW_REMOTE_ONLY
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, ucontext_t *uc)
+ {
+   return -UNW_EINVAL;
+@@ -53,13 +53,13 @@ unw_init_local_common(unw_cursor_t *cursor, ucontext_t *uc, unsigned use_prev_in
+   return common_init (c, use_prev_instr);
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, ucontext_t *uc)
+ {
+   return unw_init_local_common(cursor, uc, 1);
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local2 (unw_cursor_t *cursor, ucontext_t *uc, int flag)
+ {
+   if (!flag)
+diff --git a/src/x86/Ginit_remote.c b/src/x86/Ginit_remote.c
+index 16b639544..7c15096e4 100644
+--- a/src/x86/Ginit_remote.c
++++ b/src/x86/Ginit_remote.c
+@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "init.h"
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_init_remote (unw_cursor_t *cursor, unw_addr_space_t as, void *as_arg)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/x86/Gos-freebsd.c b/src/x86/Gos-freebsd.c
+index cf05f0789..ddc97cfb5 100644
+--- a/src/x86/Gos-freebsd.c
++++ b/src/x86/Gos-freebsd.c
+@@ -35,7 +35,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "unwind_i.h"
+ #include "offsets.h"
+ 
+-PROTECTED int
++int
+ unw_is_signal_frame (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+@@ -101,7 +101,7 @@ XXX
+   return (ret);
+ }
+ 
+-PROTECTED int
++int
+ unw_handle_signal_frame (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/x86/Gos-linux.c b/src/x86/Gos-linux.c
+index 9d3fdc64b..c88ea67cd 100644
+--- a/src/x86/Gos-linux.c
++++ b/src/x86/Gos-linux.c
+@@ -28,7 +28,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include <sys/syscall.h>
+ 
+-PROTECTED int
++int
+ unw_is_signal_frame (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+@@ -69,7 +69,7 @@ unw_is_signal_frame (unw_cursor_t *cursor)
+   return ret;
+ }
+ 
+-PROTECTED int
++int
+ unw_handle_signal_frame (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/x86/Greg_states_iterate.c b/src/x86/Greg_states_iterate.c
+index a39837a17..a17dc1b56 100644
+--- a/src/x86/Greg_states_iterate.c
++++ b/src/x86/Greg_states_iterate.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_reg_states_iterate (unw_cursor_t *cursor,
+ 			unw_reg_states_callback cb, void *token)
+ {
+diff --git a/src/x86/Gresume.c b/src/x86/Gresume.c
+index 77a586adb..5072c4ba0 100644
+--- a/src/x86/Gresume.c
++++ b/src/x86/Gresume.c
+@@ -75,7 +75,7 @@ establish_machine_state (struct cursor *c)
+   return 0;
+ }
+ 
+-PROTECTED int
++int
+ unw_resume (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/x86/Gstep.c b/src/x86/Gstep.c
+index 8cec72eff..7b07b4f19 100644
+--- a/src/x86/Gstep.c
++++ b/src/x86/Gstep.c
+@@ -26,7 +26,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "unwind_i.h"
+ #include "offsets.h"
+ 
+-PROTECTED int
++int
+ unw_step (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/x86/is_fpreg.c b/src/x86/is_fpreg.c
+index addf9bcaf..a3a98ac8d 100644
+--- a/src/x86/is_fpreg.c
++++ b/src/x86/is_fpreg.c
+@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "libunwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_is_fpreg (int regnum)
+ {
+   return ((regnum >= UNW_X86_ST0 && regnum <= UNW_X86_ST7)
+diff --git a/src/x86/regname.c b/src/x86/regname.c
+index 2228510a2..11f622804 100644
+--- a/src/x86/regname.c
++++ b/src/x86/regname.c
+@@ -17,7 +17,7 @@ static const char *regname[] =
+     "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
+   };
+ 
+-PROTECTED const char *
++const char *
+ unw_regname (unw_regnum_t reg)
+ {
+   if (reg < (unw_regnum_t) ARRAY_SIZE (regname))
+diff --git a/src/x86_64/Gapply_reg_state.c b/src/x86_64/Gapply_reg_state.c
+index eec93046f..82f056da6 100644
+--- a/src/x86_64/Gapply_reg_state.c
++++ b/src/x86_64/Gapply_reg_state.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_apply_reg_state (unw_cursor_t *cursor,
+ 		     void *reg_states_data)
+ {
+diff --git a/src/x86_64/Gcreate_addr_space.c b/src/x86_64/Gcreate_addr_space.c
+index 38ee5afb2..9b2db9810 100644
+--- a/src/x86_64/Gcreate_addr_space.c
++++ b/src/x86_64/Gcreate_addr_space.c
+@@ -34,7 +34,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #define __LITTLE_ENDIAN _LITTLE_ENDIAN
+ #endif
+ 
+-PROTECTED unw_addr_space_t
++unw_addr_space_t
+ unw_create_addr_space (unw_accessors_t *a, int byte_order)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/x86_64/Gget_proc_info.c b/src/x86_64/Gget_proc_info.c
+index 8def62d2a..50de1e423 100644
+--- a/src/x86_64/Gget_proc_info.c
++++ b/src/x86_64/Gget_proc_info.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_proc_info (unw_cursor_t *cursor, unw_proc_info_t *pi)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/x86_64/Gget_save_loc.c b/src/x86_64/Gget_save_loc.c
+index b48fa9184..0057c62d6 100644
+--- a/src/x86_64/Gget_save_loc.c
++++ b/src/x86_64/Gget_save_loc.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_get_save_loc (unw_cursor_t *cursor, int reg, unw_save_loc_t *sloc)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/x86_64/Ginit.c b/src/x86_64/Ginit.c
+index c66d59ba6..6281b7674 100644
+--- a/src/x86_64/Ginit.c
++++ b/src/x86_64/Ginit.c
+@@ -40,13 +40,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #ifdef UNW_REMOTE_ONLY
+ 
+ /* unw_local_addr_space is a NULL pointer in this case.  */
+-PROTECTED unw_addr_space_t unw_local_addr_space;
++unw_addr_space_t unw_local_addr_space;
+ 
+ #else /* !UNW_REMOTE_ONLY */
+ 
+ static struct unw_addr_space local_addr_space;
+ 
+-PROTECTED unw_addr_space_t unw_local_addr_space = &local_addr_space;
++unw_addr_space_t unw_local_addr_space = &local_addr_space;
+ 
+ HIDDEN unw_dyn_info_list_t _U_dyn_info_list;
+ 
+diff --git a/src/x86_64/Ginit_local.c b/src/x86_64/Ginit_local.c
+index 7696f11ca..5eaead0f8 100644
+--- a/src/x86_64/Ginit_local.c
++++ b/src/x86_64/Ginit_local.c
+@@ -30,7 +30,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #ifdef UNW_REMOTE_ONLY
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, ucontext_t *uc)
+ {
+   return -UNW_EINVAL;
+@@ -55,13 +55,13 @@ unw_init_local_common (unw_cursor_t *cursor, ucontext_t *uc, unsigned use_prev_i
+   return common_init (c, use_prev_instr);
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local (unw_cursor_t *cursor, ucontext_t *uc)
+ {
+   return unw_init_local_common(cursor, uc, 1);
+ }
+ 
+-PROTECTED int
++int
+ unw_init_local2 (unw_cursor_t *cursor, ucontext_t *uc, int flag)
+ {
+   if (!flag)
+diff --git a/src/x86_64/Ginit_remote.c b/src/x86_64/Ginit_remote.c
+index f3b7bb97c..efd61d64d 100644
+--- a/src/x86_64/Ginit_remote.c
++++ b/src/x86_64/Ginit_remote.c
+@@ -28,7 +28,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "init.h"
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_init_remote (unw_cursor_t *cursor, unw_addr_space_t as, void *as_arg)
+ {
+ #ifdef UNW_LOCAL_ONLY
+diff --git a/src/x86_64/Gos-freebsd.c b/src/x86_64/Gos-freebsd.c
+index 8701aefb9..c640ad5e9 100644
+--- a/src/x86_64/Gos-freebsd.c
++++ b/src/x86_64/Gos-freebsd.c
+@@ -33,7 +33,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ #include "unwind_i.h"
+ #include "ucontext_i.h"
+ 
+-PROTECTED int
++int
+ unw_is_signal_frame (unw_cursor_t *cursor)
+ {
+   /* XXXKIB */
+@@ -87,7 +87,7 @@ eb fd                   jmp     0b
+   return (X86_64_SCF_NONE);
+ }
+ 
+-PROTECTED int
++int
+ unw_handle_signal_frame (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/x86_64/Gos-linux.c b/src/x86_64/Gos-linux.c
+index 0a3c21221..ad91a6788 100644
+--- a/src/x86_64/Gos-linux.c
++++ b/src/x86_64/Gos-linux.c
+@@ -76,14 +76,14 @@ tdep_reuse_frame (struct dwarf_cursor *dw, int frame)
+          ? c->frame_info.cfa_reg_offset : 0));
+ }
+ 
+-PROTECTED int
++int
+ unw_is_signal_frame (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+   return c->sigcontext_format != X86_64_SCF_NONE;
+ }
+ 
+-PROTECTED int
++int
+ unw_handle_signal_frame (unw_cursor_t *cursor)
+ {
+ #if UNW_DEBUG /* To silence compiler warnings */
+diff --git a/src/x86_64/Greg_states_iterate.c b/src/x86_64/Greg_states_iterate.c
+index a39837a17..a17dc1b56 100644
+--- a/src/x86_64/Greg_states_iterate.c
++++ b/src/x86_64/Greg_states_iterate.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "unwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_reg_states_iterate (unw_cursor_t *cursor,
+ 			unw_reg_states_callback cb, void *token)
+ {
+diff --git a/src/x86_64/Gresume.c b/src/x86_64/Gresume.c
+index 3d40756e4..944cdaae1 100644
+--- a/src/x86_64/Gresume.c
++++ b/src/x86_64/Gresume.c
+@@ -107,7 +107,7 @@ establish_machine_state (struct cursor *c)
+   return 0;
+ }
+ 
+-PROTECTED int
++int
+ unw_resume (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/x86_64/Gstep.c b/src/x86_64/Gstep.c
+index 5af13e0c3..0d385f285 100644
+--- a/src/x86_64/Gstep.c
++++ b/src/x86_64/Gstep.c
+@@ -52,7 +52,7 @@ is_plt_entry (struct dwarf_cursor *c)
+   return ret;
+ }
+ 
+-PROTECTED int
++int
+ unw_step (unw_cursor_t *cursor)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+diff --git a/src/x86_64/is_fpreg.c b/src/x86_64/is_fpreg.c
+index 1188a616f..5c036137b 100644
+--- a/src/x86_64/is_fpreg.c
++++ b/src/x86_64/is_fpreg.c
+@@ -27,7 +27,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "libunwind_i.h"
+ 
+-PROTECTED int
++int
+ unw_is_fpreg (int regnum)
+ {
+ #if 0
+diff --git a/src/x86_64/regname.c b/src/x86_64/regname.c
+index 6c0e2f35e..77660af4a 100644
+--- a/src/x86_64/regname.c
++++ b/src/x86_64/regname.c
+@@ -46,7 +46,7 @@ static const char *regname[] =
+     "RIP",
+    };
+ 
+-PROTECTED const char *
++const char *
+ unw_regname (unw_regnum_t reg)
+ {
+   if (reg < (unw_regnum_t) ARRAY_SIZE (regname))
