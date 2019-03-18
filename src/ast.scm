@@ -413,8 +413,7 @@
 (define (return? e) (and (pair? e) (eq? (car e) 'return)))
 (define (complex-return? e) (and (return? e)
                                  (let ((x (cadr e)))
-                                   (not (or (simple-atom? x) (ssavalue? x)
-                                            (equal? x '(null)))))))
+                                   (not (simple-atom? x)))))
 
 (define (eq-sym? a b)
   (or (eq? a b) (and (ssavalue? a) (ssavalue? b) (eqv? (cdr a) (cdr b)))))
