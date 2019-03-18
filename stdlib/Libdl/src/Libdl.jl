@@ -225,7 +225,7 @@ if Sys.islinux()
     end
 
     # This callback function called by dl_iterate_phdr() on Linux
-    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Array{AbstractString,1})
+    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Array{String,1})
         # Skip over objects without a path (as they represent this own object)
         name = unsafe_string(di.name)
         if !isempty(name)
@@ -251,7 +251,7 @@ if Sys.isbsd() && !Sys.isapple()
         phnum::Cshort
     end
 
-    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dy_libs::Vector{AbstractString})
+    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dy_libs::Vector{String})
         name = unsafe_string(di.name)
         if !isempty(name)
             push!(dy_libs, name)
@@ -261,12 +261,12 @@ if Sys.isbsd() && !Sys.isapple()
 end # bsd family
 
 function dllist()
-    dynamic_libraries = Vector{AbstractString}()
+    dynamic_libraries = Vector{String}()
 
     @static if Sys.islinux()
         callback = @cfunction(dl_phdr_info_callback, Cint,
-                              (Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}))
-        ccall(:dl_iterate_phdr, Cint, (Ptr{Cvoid}, Ref{Vector{AbstractString}}), callback, dynamic_libraries)
+                              (Ref{dl_phdr_info}, Csize_t, Ref{Vector{String}}))
+        ccall(:dl_iterate_phdr, Cint, (Ptr{Cvoid}, Ref{Vector{String}}), callback, dynamic_libraries)
     end
 
     @static if Sys.isapple()
@@ -285,8 +285,8 @@ function dllist()
 
     @static if Sys.isbsd() && !Sys.isapple()
         callback = @cfunction(dl_phdr_info_callback, Cint,
-                              (Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}))
-        ccall(:dl_iterate_phdr, Cint, (Ptr{Cvoid}, Ref{Vector{AbstractString}}), callback, dynamic_libraries)
+                              (Ref{dl_phdr_info}, Csize_t, Ref{Vector{String}}))
+        ccall(:dl_iterate_phdr, Cint, (Ptr{Cvoid}, Ref{Vector{String}}), callback, dynamic_libraries)
         popfirst!(dynamic_libraries)
     end
 
