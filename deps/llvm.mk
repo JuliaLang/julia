@@ -431,6 +431,7 @@ endif
 $(eval $(call LLVM_PATCH,llvm-D51842-win64-byval-cc))
 $(eval $(call LLVM_PATCH,llvm-D57118-powerpc))
 $(eval $(call LLVM_PATCH,llvm-r355582-avxminmax)) # remove for 8.0
+$(eval $(call LLVM_PATCH,llvm-AMDGPU-addrspaces)) # AMDGPU
 endif # LLVM_VER
 
 # Independent to the llvm version add a JL prefix to the version map

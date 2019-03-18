@@ -5,10 +5,10 @@
 
 enum AddressSpace {
     Generic = 0,
-    Tracked = 10,
-    Derived = 11,
-    CalleeRooted = 12,
-    Loaded = 13,
+    Tracked = 100,
+    Derived = 101,
+    CalleeRooted = 102,
+    Loaded = 103,
     FirstSpecial = Tracked,
     LastSpecial = Loaded,
 };
