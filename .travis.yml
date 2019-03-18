@@ -147,7 +147,11 @@ script:
     - if [ `uname` = "Linux" ] && [ $ARCH = "x86_64" ]; then
         pushd julia && make -C doc doctest=true && popd; fi
 # uncomment the following if failures are suspected to be due to the out-of-memory killer
+
+    - dmesg
+
 #    - dmesg
 after_success:
     - if [ `uname` = "Linux" ] && [ $ARCH = "x86_64" ]; then
         cd julia && make -C doc deploy; fi
+
