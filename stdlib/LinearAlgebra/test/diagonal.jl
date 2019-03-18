@@ -185,6 +185,9 @@ Random.seed!(1)
         @test (r = transpose(Matrix(D)) * vv ; mul!(vvv, transpose(D), vv) ≈ r ≈ vvv)
 
         UUU = similar(UU)
+        @test (r = UU * Matrix(D)   ; mul!(UUU, UU, D) ≈ r ≈ UUU)
+
+        UUU = similar(UU)
         @test (r = Matrix(D) * UU   ; mul!(UUU, D, UU) ≈ r ≈ UUU)
         @test (r = Matrix(D)' * UU  ; mul!(UUU, adjoint(D), UU) ≈ r ≈ UUU)
         @test (r = transpose(Matrix(D)) * UU ; mul!(UUU, transpose(D), UU) ≈ r ≈ UUU)
