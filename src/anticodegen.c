@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #include "julia.h"
 #include "julia_internal.h"
 
@@ -7,44 +9,61 @@ int globalUnique = 0;
 
 #define UNAVAILABLE { jl_errorf("%s: not available in this build of Julia", __func__); }
 
-void jl_dump_bitcode(char *fname, const char *sysimg_data, size_t sysimg_len) UNAVAILABLE
-void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len) UNAVAILABLE
+void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len) UNAVAILABLE
 int32_t jl_get_llvm_gv(jl_value_t *p) UNAVAILABLE
 void jl_write_malloc_log(void) UNAVAILABLE
 void jl_write_coverage_data(void) UNAVAILABLE
-void jl_generate_fptr(jl_function_t *f) {
-    jl_lambda_info_t *li = f->linfo;
-    if (li->fptr == &jl_trampoline) UNAVAILABLE
-    f->fptr = li->fptr;
-}
 
 JL_DLLEXPORT void jl_clear_malloc_data(void) UNAVAILABLE
 JL_DLLEXPORT void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name) UNAVAILABLE
 JL_DLLEXPORT void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt) UNAVAILABLE
-JL_DLLEXPORT const jl_value_t *jl_dump_function_asm(void *f, int raw_mc) UNAVAILABLE
-JL_DLLEXPORT const jl_value_t *jl_dump_function_ir(void *f, uint8_t strip_ir_metadata, uint8_t dump_module) UNAVAILABLE
+JL_DLLEXPORT const jl_value_t *jl_dump_function_asm(void *f, int raw_mc, const char* asm_variant, const char *debuginfo) UNAVAILABLE
+JL_DLLEXPORT const jl_value_t *jl_dump_function_ir(void *f, uint8_t strip_ir_metadata, uint8_t dump_module, const char *debuginfo) UNAVAILABLE
+
+JL_DLLEXPORT void *jl_LLVMCreateDisasm(const char *TripleName, void *DisInfo, int TagType, void *GetOpInfo, void *SymbolLookUp) UNAVAILABLE
+JL_DLLEXPORT size_t jl_LLVMDisasmInstruction(void *DC, uint8_t *Bytes, uint64_t BytesSize, uint64_t PC, char *OutString, size_t OutStringSize) UNAVAILABLE
+
+int32_t jl_assign_functionID(const char *fname) UNAVAILABLE
 
 void jl_init_codegen(void) { }
-void jl_compile_linfo(jl_lambda_info_t *li) { }
-void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
+void jl_fptr_to_llvm(void *fptr, jl_method_instance_t *lam, int specsig) { }
+
+int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline)
 {
-    if (!specsig)
-        lam->fptr = (jl_fptr_t)fptr;
-}
-void jl_getFunctionInfo(char **name, char **filename, size_t *line,
-                        char **inlinedat_file, size_t *inlinedat_line,
-                        size_t pointer, int *fromC, int skipC, int skipInline)
-{
-    *name = NULL;
-    *line = -1;
-    *filename = NULL;
-    *inlinedat_file = NULL;
-    *inlinedat_line = -1;
-    *fromC = 0;
+    return 0;
 }
 
-jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
-                           jl_value_t *sp, jl_expr_t *ast, int sparams, int allow_alloc)
+void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *fptrs,
+                       jl_method_instance_t **linfos, size_t n)
 {
-    return NULL;
+    (void)sysimage_base; (void)fptrs; (void)linfos; (void)n;
 }
+
+jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t *src, size_t world, const jl_cgparams_t *params)
+{
+    jl_method_instance_t *li = *pli;
+    jl_llvm_functions_t decls = {};
+
+    if (jl_is_method(li->def.method)) {
+        jl_printf(JL_STDERR, "code missing for ");
+        jl_static_show(JL_STDERR, (jl_value_t*)li);
+        jl_printf(JL_STDERR, " : sysimg may not have been built with --compile=all\n");
+    }
+    else {
+        jl_printf(JL_STDERR, "top level expression cannot be compiled in this build of Julia");
+    }
+    return decls;
+}
+
+jl_value_t *jl_fptr_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs);
+jl_callptr_t jl_generate_fptr(jl_method_instance_t **pli, jl_llvm_functions_t decls, size_t world)
+{
+    return (jl_callptr_t)&jl_fptr_interpret_call;
+}
+
+JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION(void)
+{
+    return 0;
+}
+
+jl_array_t *jl_cfunction_list;

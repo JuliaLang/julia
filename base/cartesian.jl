@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Cartesian
 
@@ -6,12 +6,43 @@ export @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @nany, @ntuple, @nif
 
 ### Cartesian-specific macros
 
-# Generate nested loops
+"""
+    @nloops N itersym rangeexpr bodyexpr
+    @nloops N itersym rangeexpr preexpr bodyexpr
+    @nloops N itersym rangeexpr preexpr postexpr bodyexpr
+
+Generate `N` nested loops, using `itersym` as the prefix for the iteration variables.
+`rangeexpr` may be an anonymous-function expression, or a simple symbol `var` in which case
+the range is `axes(var, d)` for dimension `d`.
+
+Optionally, you can provide "pre" and "post" expressions. These get executed first and last,
+respectively, in the body of each loop. For example:
+
+    @nloops 2 i A d -> j_d = min(i_d, 5) begin
+        s += @nref 2 A j
+    end
+
+would generate:
+
+    for i_2 = axes(A, 2)
+        j_2 = min(i_2, 5)
+        for i_1 = axes(A, 1)
+            j_1 = min(i_1, 5)
+            s += A[j_1, j_2]
+        end
+    end
+
+If you want just a post-expression, supply [`nothing`](@ref) for the pre-expression. Using
+parentheses and semicolons, you can supply multi-statement expressions.
+"""
 macro nloops(N, itersym, rangeexpr, args...)
     _nloops(N, itersym, rangeexpr, args...)
 end
 
-_nloops(N::Int, itersym::Symbol, arraysym::Symbol, args::Expr...) = _nloops(N, itersym, :(d->1:size($arraysym,d)), args...)
+function _nloops(N::Int, itersym::Symbol, arraysym::Symbol, args::Expr...)
+    @gensym d
+    _nloops(N, itersym, :($d->Base.axes($arraysym, $d)), args...)
+end
 
 function _nloops(N::Int, itersym::Symbol, rangeexpr::Expr, args::Expr...)
     if rangeexpr.head != :->
@@ -38,90 +69,156 @@ function _nloops(N::Int, itersym::Symbol, rangeexpr::Expr, args::Expr...)
     ex
 end
 
-# Generate expression A[i1, i2, ...]
-macro nref(N, A, sym)
-    _nref(N, A, sym)
-end
+"""
+    @nref N A indexexpr
 
-function _nref(N::Int, A::Symbol, ex)
-    vars = [ inlineanonymous(ex,i) for i = 1:N ]
+Generate expressions like `A[i_1, i_2, ...]`. `indexexpr` can either be an iteration-symbol
+prefix, or an anonymous-function expression.
+
+# Examples
+```jldoctest
+julia> @macroexpand Base.Cartesian.@nref 3 A i
+:(A[i_1, i_2, i_3])
+```
+"""
+macro nref(N::Int, A::Symbol, ex)
+    vars = Any[ inlineanonymous(ex,i) for i = 1:N ]
     Expr(:escape, Expr(:ref, A, vars...))
 end
 
-# Generate f(arg1, arg2, ...)
-macro ncall(N, f, sym...)
-    _ncall(N, f, sym...)
-end
+"""
+    @ncall N f sym...
 
-function _ncall(N::Int, f, args...)
+Generate a function call expression. `sym` represents any number of function arguments, the
+last of which may be an anonymous-function expression and is expanded into `N` arguments.
+
+For example, `@ncall 3 func a` generates
+
+    func(a_1, a_2, a_3)
+
+while `@ncall 2 func a b i->c[i]` yields
+
+    func(a, b, c[1], c[2])
+
+"""
+macro ncall(N::Int, f, args...)
     pre = args[1:end-1]
     ex = args[end]
-    vars = [ inlineanonymous(ex,i) for i = 1:N ]
+    vars = Any[ inlineanonymous(ex,i) for i = 1:N ]
     Expr(:escape, Expr(:call, f, pre..., vars...))
 end
 
-# Generate N expressions
-macro nexprs(N, ex)
-    _nexprs(N, ex)
-end
+"""
+    @nexprs N expr
 
-function _nexprs(N::Int, ex::Expr)
-    exs = [ inlineanonymous(ex,i) for i = 1:N ]
+Generate `N` expressions. `expr` should be an anonymous-function expression.
+
+# Examples
+```jldoctest
+julia> @macroexpand Base.Cartesian.@nexprs 4 i -> y[i] = A[i+j]
+quote
+    y[1] = A[1 + j]
+    y[2] = A[2 + j]
+    y[3] = A[3 + j]
+    y[4] = A[4 + j]
+end
+```
+"""
+macro nexprs(N::Int, ex::Expr)
+    exs = Any[ inlineanonymous(ex,i) for i = 1:N ]
     Expr(:escape, Expr(:block, exs...))
 end
 
-# Make variables esym1, esym2, ... = isym
-macro nextract(N, esym, isym)
-    _nextract(N, esym, isym)
-end
+"""
+    @nextract N esym isym
 
-function _nextract(N::Int, esym::Symbol, isym::Symbol)
-    aexprs = [Expr(:escape, Expr(:(=), inlineanonymous(esym, i), :(($isym)[$i]))) for i = 1:N]
+Generate `N` variables `esym_1`, `esym_2`, ..., `esym_N` to extract values from `isym`.
+`isym` can be either a `Symbol` or anonymous-function expression.
+
+`@nextract 2 x y` would generate
+
+    x_1 = y[1]
+    x_2 = y[2]
+
+while `@nextract 3 x d->y[2d-1]` yields
+
+    x_1 = y[1]
+    x_2 = y[3]
+    x_3 = y[5]
+
+"""
+macro nextract(N::Int, esym::Symbol, isym::Symbol)
+    aexprs = Any[ Expr(:escape, Expr(:(=), inlineanonymous(esym, i), :(($isym)[$i]))) for i = 1:N ]
     Expr(:block, aexprs...)
 end
 
-function _nextract(N::Int, esym::Symbol, ex::Expr)
-    aexprs = [Expr(:escape, Expr(:(=), inlineanonymous(esym, i), inlineanonymous(ex,i))) for i = 1:N]
+macro nextract(N::Int, esym::Symbol, ex::Expr)
+    aexprs = Any[ Expr(:escape, Expr(:(=), inlineanonymous(esym, i), inlineanonymous(ex,i))) for i = 1:N ]
     Expr(:block, aexprs...)
 end
 
-# Check whether variables i1, i2, ... all satisfy criterion
-macro nall(N, criterion)
-    _nall(N, criterion)
-end
+"""
+    @nall N expr
 
-function _nall(N::Int, criterion::Expr)
+Check whether all of the expressions generated by the anonymous-function expression `expr`
+evaluate to `true`.
+
+`@nall 3 d->(i_d > 1)` would generate the expression `(i_1 > 1 && i_2 > 1 && i_3 > 1)`. This
+can be convenient for bounds-checking.
+"""
+macro nall(N::Int, criterion::Expr)
     if criterion.head != :->
         throw(ArgumentError("second argument must be an anonymous function expression yielding the criterion"))
     end
-    conds = [Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N]
+    conds = Any[ Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N ]
     Expr(:&&, conds...)
 end
 
-# Check whether any of variables i1, i2, ... satisfy criterion
-macro nany(N, criterion)
-    _nany(N, criterion)
-end
+"""
+    @nany N expr
 
-function _nany(N::Int, criterion::Expr)
+Check whether any of the expressions generated by the anonymous-function expression `expr`
+evaluate to `true`.
+
+`@nany 3 d->(i_d > 1)` would generate the expression `(i_1 > 1 || i_2 > 1 || i_3 > 1)`.
+"""
+macro nany(N::Int, criterion::Expr)
     if criterion.head != :->
         error("Second argument must be an anonymous function expression yielding the criterion")
     end
-    conds = [Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N]
+    conds = Any[ Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N ]
     Expr(:||, conds...)
 end
 
-macro ntuple(N, ex)
-    _ntuple(N, ex)
-end
+"""
+    @ntuple N expr
 
-function _ntuple(N::Int, ex)
-    vars = [ inlineanonymous(ex,i) for i = 1:N ]
+Generates an `N`-tuple. `@ntuple 2 i` would generate `(i_1, i_2)`, and `@ntuple 2 k->k+1`
+would generate `(2,3)`.
+"""
+macro ntuple(N::Int, ex)
+    vars = Any[ inlineanonymous(ex,i) for i = 1:N ]
     Expr(:escape, Expr(:tuple, vars...))
 end
 
-# if condition1; operation1; elseif condition2; operation2; else operation3
-# You can pass one or two operations; the second, if present, is used in the final "else"
+"""
+    @nif N conditionexpr expr
+    @nif N conditionexpr expr elseexpr
+
+Generates a sequence of `if ... elseif ... else ... end` statements. For example:
+
+    @nif 3 d->(i_d >= size(A,d)) d->(error("Dimension ", d, " too big")) d->println("All OK")
+
+would generate:
+
+    if i_1 > size(A, 1)
+        error("Dimension ", 1, " too big")
+    elseif i_2 > size(A, 2)
+        error("Dimension ", 2, " too big")
+    else
+        println("All OK")
+    end
+"""
 macro nif(N, condition, operation...)
     # Handle the final "else"
     ex = esc(inlineanonymous(length(operation) > 1 ? operation[2] : operation[1], N))
@@ -150,7 +247,7 @@ function inlineanonymous(ex::Expr, val)
 end
 
 # Given :i and 3, this generates :i_3
-inlineanonymous(base::Symbol, ext) = symbol(base,"_",string(ext))
+inlineanonymous(base::Symbol, ext) = Symbol(base,'_',ext)
 
 # Replace a symbol by a value or a "coded" symbol
 # E.g., for d = 3,
@@ -158,7 +255,7 @@ inlineanonymous(base::Symbol, ext) = symbol(base,"_",string(ext))
 #    lreplace(:i_d, :d, 3) -> :i_3
 #    lreplace(:i_{d-1}, :d, 3) -> :i_2
 # This follows LaTeX notation.
-immutable LReplace{S<:AbstractString}
+struct LReplace{S<:AbstractString}
     pat_sym::Symbol
     pat_str::S
     val::Int
@@ -169,41 +266,45 @@ lreplace(ex, sym::Symbol, val) = lreplace!(copy(ex), LReplace(sym, val))
 
 function lreplace!(sym::Symbol, r::LReplace)
     sym == r.pat_sym && return r.val
-    symbol(lreplace!(string(sym), r))
+    Symbol(lreplace!(string(sym), r))
 end
 
 function lreplace!(str::AbstractString, r::LReplace)
-    i = start(str)
+    i = firstindex(str)
     pat = r.pat_str
-    j = start(pat)
+    j = firstindex(pat)
     matching = false
-    while !done(str, i)
-        cstr, i = next(str, i)
+    local istart::Int
+    while i <= ncodeunits(str)
+        cstr = str[i]
+        i = nextind(str, i)
         if !matching
-            if cstr != '_' || done(str, i)
+            if cstr != '_' || i > ncodeunits(str)
                 continue
             end
             istart = i
-            cstr, i = next(str, i)
+            cstr = str[i]
+            i = nextind(str, i)
         end
-        if !done(pat, j)
-            cr, j = next(pat, j)
+        if j <= lastindex(pat)
+            cr = pat[j]
+            j = nextind(pat, j)
             if cstr == cr
                 matching = true
             else
                 matching = false
-                j = start(pat)
+                j = firstindex(pat)
                 i = istart
                 continue
             end
         end
-        if matching && done(pat, j)
-            if done(str, i) || next(str, i)[1] == '_'
+        if matching && j > lastindex(pat)
+            if i > lastindex(str) || str[i] == '_'
                 # We have a match
                 return string(str[1:prevind(str, istart)], r.val, lreplace!(str[i:end], r))
             end
             matching = false
-            j = start(pat)
+            j = firstindex(pat)
             i = istart
         end
     end
@@ -213,9 +314,9 @@ end
 function lreplace!(ex::Expr, r::LReplace)
     # Curly-brace notation, which acts like parentheses
     if ex.head == :curly && length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]), "_")
-        excurly = Base.Cartesian.exprresolve(lreplace!(ex.args[2], r))
+        excurly = exprresolve(lreplace!(ex.args[2], r))
         if isa(excurly, Number)
-            return symbol(ex.args[1],excurly)
+            return Symbol(ex.args[1],excurly)
         else
             ex.args[2] = excurly
             return ex
@@ -261,8 +362,8 @@ exprresolve_arith(arg) = false, 0
 
 exprresolve_conditional(b::Bool) = true, b
 function exprresolve_conditional(ex::Expr)
-    if ex.head == :comparison && isa(ex.args[1], Number) && isa(ex.args[3], Number)
-        return true, exprresolve_cond_dict[ex.args[2]](ex.args[1], ex.args[3])
+    if ex.head == :call && ex.args[1] ∈ keys(exprresolve_cond_dict) && isa(ex.args[2], Number) && isa(ex.args[3], Number)
+        return true, exprresolve_cond_dict[ex.args[1]](ex.args[2], ex.args[3])
     end
     false, false
 end
@@ -294,7 +395,7 @@ function exprresolve(ex::Expr)
     if ex.head == :if
         can_eval, tf = exprresolve_conditional(ex.args[1])
         if can_eval
-            ex = tf?ex.args[2]:ex.args[3]
+            ex = tf ? ex.args[2] : ex.args[3]
         end
     end
     ex

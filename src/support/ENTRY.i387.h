@@ -59,7 +59,7 @@ EXT(CNAME):
 _START_ENTRY
 .globl EXT(CNAME)
 .section .drectve
-.ascii " -export:" XSTR(CNAME)
+.ascii " -export:", XSTR(CNAME)
 .section .text
 .def EXT(CNAME)
 .scl 2

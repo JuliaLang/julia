@@ -1,97 +1,171 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## basic task functions and TLS
 
-# allow tasks to be constructed with arbitrary function objects
-Task(f) = Task(()->f())
-
-function show(io::IO, t::Task)
-    print(io, "Task ($(t.state)) @0x$(hex(convert(UInt, pointer_from_objref(t)), WORD_SIZE>>2))")
-end
-
 # Container for a captured exception and its backtrace. Can be serialized.
-type CapturedException
+struct CapturedException <: Exception
     ex::Any
     processed_bt::Vector{Any}
 
-    function CapturedException(ex, bt_raw)
-        # bt_raw MUST be an Array of code pointers than can be processed by jl_lookup_code_address
+    function CapturedException(ex, bt_raw::Vector)
+        # bt_raw MUST be a vector that can be processed by StackTraces.stacktrace
         # Typically the result of a catch_backtrace()
 
         # Process bt_raw so that it can be safely serialized
-        bt_lines = Any[]
-        process_func(name, file, line, inlined_file, inlined_line, n) =
-            push!(bt_lines, (name, file, line, inlined_file, inlined_line, n))
-        process_backtrace(process_func, :(:), bt_raw, 1:100) # Limiting this to 100 lines.
-
-        new(ex, bt_lines)
+        bt_lines = process_backtrace(bt_raw, 100) # Limiting this to 100 lines.
+        CapturedException(ex, bt_lines)
     end
+
+    CapturedException(ex, processed_bt::Vector{Any}) = new(ex, processed_bt)
 end
 
-showerror(io::IO, ce::CapturedException) = showerror(io, ce.ex, ce.processed_bt, backtrace=true)
+function showerror(io::IO, ce::CapturedException)
+    showerror(io, ce.ex, ce.processed_bt, backtrace=true)
+end
 
-type CompositeException <: Exception
+"""
+    CompositeException
+
+Wrap a `Vector` of exceptions thrown by a [`Task`](@ref) (e.g. generated from a remote worker over a channel
+or an asynchronously executing local I/O write or a remote worker under `pmap`) with information about the series of exceptions.
+For example, if a group of workers are executing several tasks, and multiple workers fail, the resulting `CompositeException` will
+contain a "bundle" of information from each worker indicating where and why the exception(s) occurred.
+"""
+struct CompositeException <: Exception
     exceptions::Vector{Any}
     CompositeException() = new(Any[])
+    CompositeException(exceptions) = new(exceptions)
 end
 length(c::CompositeException) = length(c.exceptions)
 push!(c::CompositeException, ex) = push!(c.exceptions, ex)
 isempty(c::CompositeException) = isempty(c.exceptions)
-start(c::CompositeException) = start(c.exceptions)
-next(c::CompositeException, state) = next(c.exceptions, state)
-done(c::CompositeException, state) = done(c.exceptions, state)
+iterate(c::CompositeException, state...) = iterate(c.exceptions, state...)
+eltype(::Type{CompositeException}) = Any
 
 function showerror(io::IO, ex::CompositeException)
     if !isempty(ex)
         showerror(io, ex.exceptions[1])
         remaining = length(ex) - 1
         if remaining > 0
-            print(io, "\n\n...and $remaining other exceptions.\n")
+            print(io, string("\n\n...and ", remaining, " more exception(s).\n"))
         end
     else
         print(io, "CompositeException()\n")
     end
 end
 
+function show(io::IO, t::Task)
+    print(io, "Task ($(t.state)) @0x$(string(convert(UInt, pointer_from_objref(t)), base = 16, pad = Sys.WORD_SIZE>>2))")
+end
 
+"""
+    @task
+
+Wrap an expression in a [`Task`](@ref) without executing it, and return the [`Task`](@ref). This only
+creates a task, and does not run it.
+
+# Examples
+```jldoctest
+julia> a1() = sum(i for i in 1:1000);
+
+julia> b = @task a1();
+
+julia> istaskstarted(b)
+false
+
+julia> schedule(b);
+
+julia> yield();
+
+julia> istaskdone(b)
+true
+```
+"""
 macro task(ex)
     :(Task(()->$(esc(ex))))
 end
 
-# schedule an expression to run asynchronously, with minimal ceremony
-macro schedule(expr)
-    expr = :(()->($expr))
-    :(enq_work(Task($(esc(expr)))))
-end
+"""
+    current_task()
 
-current_task() = ccall(:jl_get_current_task, Any, ())::Task
-istaskdone(t::Task) = ((t.state == :done) | (t.state == :failed))
+Get the currently running [`Task`](@ref).
+"""
+current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
 
 """
-    istaskstarted(task) -> Bool
+    istaskdone(t::Task) -> Bool
 
-Tell whether a task has started executing.
+Determine whether a task has exited.
+
+# Examples
+```jldoctest
+julia> a2() = sum(i for i in 1:1000);
+
+julia> b = Task(a2);
+
+julia> istaskdone(b)
+false
+
+julia> schedule(b);
+
+julia> yield();
+
+julia> istaskdone(b)
+true
+```
+"""
+istaskdone(t::Task) = ((t.state == :done) | istaskfailed(t))
+
+"""
+    istaskstarted(t::Task) -> Bool
+
+Determine whether a task has started executing.
+
+# Examples
+```jldoctest
+julia> a3() = sum(i for i in 1:1000);
+
+julia> b = Task(a3);
+
+julia> istaskstarted(b)
+false
+```
 """
 istaskstarted(t::Task) = ccall(:jl_is_task_started, Cint, (Any,), t) != 0
 
-yieldto(t::Task, x::ANY = nothing) = ccall(:jl_switchto, Any, (Any, Any), t, x)
+istaskfailed(t::Task) = (t.state == :failed)
 
-# yield to a task, throwing an exception in it
-function throwto(t::Task, exc)
-    t.exception = exc
-    yieldto(t)
-end
+task_result(t::Task) = t.result
 
 task_local_storage() = get_task_tls(current_task())
 function get_task_tls(t::Task)
-    if is(t.storage, nothing)
-        t.storage = ObjectIdDict()
+    if t.storage === nothing
+        t.storage = IdDict()
     end
-    (t.storage)::ObjectIdDict
+    (t.storage)::IdDict{Any,Any}
 end
+
+"""
+    task_local_storage(key)
+
+Look up the value of a key in the current task's task-local storage.
+"""
 task_local_storage(key) = task_local_storage()[key]
+
+"""
+    task_local_storage(key, value)
+
+Assign a value to a key in the current task's task-local storage.
+"""
 task_local_storage(key, val) = (task_local_storage()[key] = val)
 
+"""
+    task_local_storage(body, key, value)
+
+Call the function `body` with a modified task-local storage, in which `value` is assigned to
+`key`; the previous value of `key`, or lack thereof, is restored afterwards. Useful
+for emulating dynamic scoping.
+"""
 function task_local_storage(body::Function, key, val)
     tls = task_local_storage()
     hadkey = haskey(tls,key)
@@ -106,293 +180,46 @@ end
 # NOTE: you can only wait for scheduled tasks
 function wait(t::Task)
     if !istaskdone(t)
-        if is(t.donenotify, nothing)
+        if t.donenotify === nothing
             t.donenotify = Condition()
         end
     end
     while !istaskdone(t)
         wait(t.donenotify)
     end
-    if t.state == :failed
+    if istaskfailed(t)
         throw(t.exception)
     end
-    return t.result
 end
 
-suppress_excp_printing(t::Task) = isa(t.storage, ObjectIdDict) ? get(get_task_tls(t), :SUPPRESS_EXCEPTION_PRINTING, false) : false
+fetch(@nospecialize x) = x
 
-# runtime system hook called when a task finishes
-function task_done_hook(t::Task)
-    err = (t.state == :failed)
-    result = t.result
-    handled = false
-    if err
-        t.backtrace = catch_backtrace()
-    end
+"""
+    fetch(t::Task)
 
-    q = t.consumers
-    t.consumers = nothing
-
-    if isa(t.donenotify, Condition) && !isempty(t.donenotify.waitq)
-        handled = true
-        notify(t.donenotify, result, error=err)
-    end
-
-    #### un-optimized version
-    #isa(q,Condition) && notify(q, result, error=err)
-    if isa(q,Task)
-        handled = true
-        nexttask = q
-        nexttask.state = :runnable
-        if err
-            nexttask.exception = result
-        end
-        yieldto(nexttask, result) # this terminates the task
-    elseif isa(q,Condition) && !isempty(q.waitq)
-        handled = true
-        notify(q, result, error=err)
-    end
-
-    if err && !handled
-        if isa(result,InterruptException) && isdefined(Base,:active_repl_backend) &&
-            active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
-            active_repl_backend.in_eval
-            throwto(active_repl_backend.backend_task, result)
-        end
-        if !suppress_excp_printing(t)
-            let bt = t.backtrace
-                # run a new task to print the error for us
-                @schedule with_output_color(:red, STDERR) do io
-                    print(io, "ERROR (unhandled task failure): ")
-                    showerror(io, result, bt)
-                    println(io)
-                end
-            end
-        end
-    end
-    wait()
+Wait for a Task to finish, then return its result value. If the task fails with an
+exception, the exception is propagated (re-thrown in the task that called fetch).
+"""
+function fetch(t::Task)
+    wait(t)
+    task_result(t)
 end
 
 
-## produce, consume, and task iteration
+## lexically-scoped waiting for multiple items
 
-function produce(v)
-    #### un-optimized version
-    #q = current_task().consumers
-    #t = shift!(q.waitq)
-    #empty = isempty(q.waitq)
-    ct = current_task()
-    local empty, t, q
-    while true
-        q = ct.consumers
-        if isa(q,Task)
-            t = q
-            ct.consumers = nothing
-            empty = true
-            break
-        elseif isa(q,Condition) && !isempty(q.waitq)
-            t = shift!(q.waitq)
-            empty = isempty(q.waitq)
-            break
-        end
-        wait()
-    end
-
-    t.state == :runnable || throw(AssertionError("producer.consumer.state == :runnable"))
-    if empty
-        schedule_and_wait(t, v)
-        while true
-            # wait until there are more consumers
-            q = ct.consumers
-            if isa(q,Task)
-                return q.result
-            elseif isa(q,Condition) && !isempty(q.waitq)
-                return q.waitq[1].result
-            end
-            wait()
-        end
-    else
-        schedule(t, v)
-        # make sure `t` runs before us. otherwise, the producer might
-        # finish before `t` runs again, causing it to see the producer
-        # as done, causing done(::Task, _) to miss the value `v`.
-        # see issue #7727
-        yield()
-        return q.waitq[1].result
-    end
-end
-produce(v...) = produce(v)
-
-function consume(P::Task, values...)
-    if istaskdone(P)
-        return wait(P)
-    end
-
-    ct = current_task()
-    ct.result = length(values)==1 ? values[1] : values
-
-    #### un-optimized version
-    #if P.consumers === nothing
-    #    P.consumers = Condition()
-    #end
-    #push!(P.consumers.waitq, ct)
-    # optimized version that avoids the queue for 1 consumer
-    if P.consumers === nothing || (isa(P.consumers,Condition)&&isempty(P.consumers.waitq))
-        P.consumers = ct
-    else
-        if isa(P.consumers, Task)
-            t = P.consumers
-            P.consumers = Condition()
-            push!(P.consumers.waitq, t)
-        end
-        push!(P.consumers.waitq, ct)
-    end
-
-    P.state == :runnable ? schedule_and_wait(P) : wait() # don't attempt to queue it twice
-end
-
-start(t::Task) = nothing
-function done(t::Task, val)
-    t.result = consume(t)
-    istaskdone(t)
-end
-next(t::Task, val) = (t.result, nothing)
-
-isempty(::Task) = error("isempty not defined for Tasks")
-
-## condition variables
-
-type Condition
-    waitq::Vector{Any}
-
-    Condition() = new([])
-end
-
-function wait(c::Condition)
-    ct = current_task()
-
-    push!(c.waitq, ct)
-
-    try
-        return wait()
-    catch
-        filter!(x->x!==ct, c.waitq)
-        rethrow()
-    end
-end
-
-notify(c::Condition, arg::ANY=nothing; all=true, error=false) = notify(c, arg, all, error)
-function notify(c::Condition, arg, all, error)
-    if all
-        for t in c.waitq
-            schedule(t, arg, error=error)
-        end
-        empty!(c.waitq)
-    elseif !isempty(c.waitq)
-        t = shift!(c.waitq)
-        schedule(t, arg, error=error)
-    end
-    nothing
-end
-
-notify1(c::Condition, arg=nothing) = notify(c, arg, all=false)
-
-notify_error(c::Condition, err) = notify(c, err, error=true)
-notify1_error(c::Condition, err) = notify(c, err, error=true, all=false)
-
-
-## scheduler and work queue
-
-global const Workqueue = Any[]
-
-function enq_work(t::Task)
-    t.state == :runnable || error("schedule: Task not runnable")
-    ccall(:uv_stop, Void, (Ptr{Void},), eventloop())
-    push!(Workqueue, t)
-    t.state = :queued
-    t
-end
-
-schedule(t::Task) = enq_work(t)
-
-function schedule(t::Task, arg; error=false)
-    # schedule a task to be (re)started with the given value or exception
-    if error
-        t.exception = arg
-    else
-        t.result = arg
-    end
-    enq_work(t)
-end
-
-# fast version of schedule(t,v);wait()
-function schedule_and_wait(t, v=nothing)
-    t.state == :runnable || error("schedule: Task not runnable")
-    if isempty(Workqueue)
-        return yieldto(t, v)
-    else
-        t.result = v
-        push!(Workqueue, t)
-        t.state = :queued
-    end
-    wait()
-end
-
-yield() = (enq_work(current_task()); wait())
-
-function wait()
-    while true
-        if isempty(Workqueue)
-            c = process_events(true)
-            if c==0 && eventloop()!=C_NULL && isempty(Workqueue)
-                # if there are no active handles and no runnable tasks, just
-                # wait for signals.
-                pause()
-            end
-        else
-            t = shift!(Workqueue)
-            t.state == :queued || throw(AssertionError("shift!(Workqueue).state == :queued"))
-            arg = t.result
-            t.result = nothing
-            t.state = :runnable
-            result = yieldto(t, arg)
-            current_task().state == :runnable || throw(AssertionError("current_task().state == :runnable"))
-            process_events(false)
-            # return when we come out of the queue
-            return result
-        end
-    end
-    assert(false)
-end
-
-function pause()
-    @unix_only    ccall(:pause, Void, ())
-    @windows_only ccall(:Sleep,stdcall, Void, (UInt32,), 0xffffffff)
-end
-
-
-## dynamically-scoped waiting for multiple items
-sync_begin() = task_local_storage(:SPAWNS, ([], get(task_local_storage(), :SPAWNS, ())))
-
-function sync_end()
-    spawns = get(task_local_storage(), :SPAWNS, ())
-    if is(spawns,())
-        error("sync_end() without sync_begin()")
-    end
-    refs = spawns[1]
-    task_local_storage(:SPAWNS, spawns[2])
-
+function sync_end(refs)
     c_ex = CompositeException()
     for r in refs
         try
             wait(r)
-        catch ex
-            if !isa(r, Task) || (isa(r, Task) && !(r.state == :failed))
-                rethrow(ex)
+        catch
+            if !isa(r, Task) || (isa(r, Task) && !istaskfailed(r))
+                rethrow()
             end
         finally
-            if isa(r, Task) && (r.state == :failed)
-                push!(c_ex, CapturedException(r.result, r.backtrace))
+            if isa(r, Task) && istaskfailed(r)
+                push!(c_ex, CapturedException(task_result(r), r.backtrace))
             end
         end
     end
@@ -403,35 +230,129 @@ function sync_end()
     nothing
 end
 
-macro sync(block)
-    quote
-        sync_begin()
-        v = $(esc(block))
-        sync_end()
-        v
-    end
-end
+const sync_varname = gensym(:sync)
 
-function sync_add(r)
-    spawns = get(task_local_storage(), :SPAWNS, ())
-    if !is(spawns,())
-        push!(spawns[1], r)
-        if isa(r, Task)
-            tls_r = get_task_tls(r)
-            tls_r[:SUPPRESS_EXCEPTION_PRINTING] = true
+"""
+    @sync
+
+Wait until all lexically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@distributed`
+are complete. All exceptions thrown by enclosed async operations are collected and thrown as
+a `CompositeException`.
+"""
+macro sync(block)
+    var = esc(sync_varname)
+    quote
+        let $var = Any[]
+            v = $(esc(block))
+            sync_end($var)
+            v
         end
     end
-    r
 end
 
-function async_run_thunk(thunk)
-    t = Task(thunk)
-    sync_add(t)
-    enq_work(t)
+# schedule an expression to run asynchronously
+
+"""
+    @async
+
+Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
+"""
+macro async(expr)
+    thunk = esc(:(()->($expr)))
+    var = esc(sync_varname)
+    quote
+        local task = Task($thunk)
+        if $(Expr(:isdefined, var))
+            push!($var, task)
+        end
+        schedule(task)
+    end
+end
+
+
+function register_taskdone_hook(t::Task, hook)
+    tls = get_task_tls(t)
+    push!(get!(tls, :TASKDONE_HOOKS, []), hook)
     t
 end
 
-macro async(expr)
-    expr = localize_vars(:(()->($expr)), false)
-    :(async_run_thunk($(esc(expr))))
+# runtime system hook called when a task finishes
+function task_done_hook(t::Task)
+    # `finish_task` sets `sigatomic` before entering this function
+    err = istaskfailed(t)
+    result = task_result(t)
+    handled = false
+    if err
+        t.backtrace = catch_backtrace()
+    end
+
+    if isa(t.donenotify, Condition) && !isempty(t.donenotify.waitq)
+        handled = true
+        notify(t.donenotify, result, true, err)
+    end
+
+    # Execute any other hooks registered in the TLS
+    if isa(t.storage, IdDict) && haskey(t.storage, :TASKDONE_HOOKS)
+        foreach(hook -> hook(t), t.storage[:TASKDONE_HOOKS])
+        delete!(t.storage, :TASKDONE_HOOKS)
+        handled = true
+    end
+
+    if err && !handled
+        if isa(result,InterruptException) && isdefined(Base,:active_repl_backend) &&
+            active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
+            active_repl_backend.in_eval
+            throwto(active_repl_backend.backend_task, result) # this terminates the task
+        end
+    end
+    # Clear sigatomic before waiting
+    sigatomic_end()
+    try
+        wait() # this will not return
+    catch e
+        # If an InterruptException happens while blocked in the event loop, try handing
+        # the exception to the REPL task since the current task is done.
+        # issue #19467
+        if isa(e,InterruptException) && isdefined(Base,:active_repl_backend) &&
+            active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
+            active_repl_backend.in_eval
+            throwto(active_repl_backend.backend_task, e)
+        else
+            rethrow()
+        end
+    end
+end
+
+"""
+    timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+
+Waits until `testcb` returns `true` or for `secs` seconds, whichever is earlier.
+`testcb` is polled every `pollint` seconds.
+"""
+function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+    pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
+    start = time()
+    done = Channel(1)
+    timercb(aw) = begin
+        try
+            if testcb()
+                put!(done, :ok)
+            elseif (time() - start) > secs
+                put!(done, :timed_out)
+            end
+        catch e
+            put!(done, :error)
+        finally
+            isready(done) && close(aw)
+        end
+    end
+
+    if !testcb()
+        t = Timer(timercb, pollint, interval = pollint)
+        ret = fetch(done)
+        close(t)
+    else
+        ret = :ok
+    end
+    ret
 end

@@ -1,0 +1,82 @@
+commit 6a311a7a804831fea43cfb2f61322adcb407a1af
+Author: Keno Fischer <keno@juliacomputing.com>
+Date:   Thu Jan 18 15:57:05 2018 -0500
+
+    [JumpThreading] Don't restrict cast-traversal to i1
+    
+    Summary:
+    In D17663, JumpThreading learned to look trough simple cast instructions,
+    but only if the source of those cast instructions was a phi/cmp i1
+    (in an effort to limit compile time effects). I think this condition
+    is too restrictive. For switches with limited value range, InstCombine
+    will readily introduce an extra `trunc` instruction to a smaller
+    integer type (e.g. from i8 to i2), leaving us in the somewhat perverse
+    situation that jump-threading would work before running instcombine,
+    but not after. Since instcombine produces this pattern, I think we
+    need to consider it canonical and support it in JumpThreading.
+    In general, for limiting recursion, I think the existing restriction
+    to phi and cmp nodes should be sufficient to avoid looking through
+    unprofitable chains of instructions.
+    
+    Reviewers: haicheng, gberry, bmakam, mcrosier
+    
+    Subscribers: llvm-commits
+    
+    Differential Revision: https://reviews.llvm.org/D42262
+
+diff --git a/lib/Transforms/Scalar/JumpThreading.cpp b/lib/Transforms/Scalar/JumpThreading.cpp
+index 95c4650..1155e18 100644
+--- a/lib/Transforms/Scalar/JumpThreading.cpp
++++ b/lib/Transforms/Scalar/JumpThreading.cpp
+@@ -647,11 +647,9 @@ bool JumpThreadingPass::ComputeValueKnownInPredecessors(
+   }
+ 
+   // Handle Cast instructions.  Only see through Cast when the source operand is
+-  // PHI or Cmp and the source type is i1 to save the compilation time.
++  // PHI or Cmp to save the compilation time.
+   if (CastInst *CI = dyn_cast<CastInst>(I)) {
+     Value *Source = CI->getOperand(0);
+-    if (!Source->getType()->isIntegerTy(1))
+-      return false;
+     if (!isa<PHINode>(Source) && !isa<CmpInst>(Source))
+       return false;
+     ComputeValueKnownInPredecessors(Source, BB, Result, Preference, CxtI);
+diff --git a/test/Transforms/JumpThreading/basic.ll b/test/Transforms/JumpThreading/basic.ll
+index ce86cba..16e7549 100644
+--- a/test/Transforms/JumpThreading/basic.ll
++++ b/test/Transforms/JumpThreading/basic.ll
+@@ -547,6 +547,34 @@ l5:
+ ; CHECK: }
+ }
+ 
++define i1 @trunc_switch(i1 %arg) {
++; CHECK-LABEL: @trunc_switch
++top:
++; CHECK: br i1 %arg, label %exitA, label %exitB
++  br i1 %arg, label %common, label %B
++
++B:
++  br label %common
++
++common:
++  %phi = phi i8 [ 2, %B ], [ 1, %top ]
++  %trunc = trunc i8 %phi to i2
++; CHECK-NOT: switch
++  switch i2 %trunc, label %unreach [
++    i2 1, label %exitA
++    i2 -2, label %exitB
++  ]
++
++unreach:
++  unreachable
++
++exitA:
++  ret i1 true
++
++exitB:
++  ret i1 false
++}
++
+ ; CHECK-LABEL: define void @h_con(i32 %p) {
+ define void @h_con(i32 %p) {
+   %x = icmp ult i32 %p, 5

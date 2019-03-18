@@ -1,10 +1,8 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 // Windows
 
 #define sig_stack_size 131072 // 128k reserved for SEGV handling
-static BOOL (*pSetThreadStackGuarantee)(PULONG);
-
-JL_DLLEXPORT void gdblookup(ptrint_t ip);
 
 // Copied from MINGW_FLOAT_H which may not be found due to a collision with the builtin gcc float.h
 // eventually we can probably integrate this into OpenLibm.
@@ -42,8 +40,25 @@ static char *strsignal(int sig)
     return "?";
 }
 
+static void jl_try_throw_sigint(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_safepoint_enable_sigint();
+    jl_wake_libuv();
+    int force = jl_check_force_sigint();
+    if (force || (!ptls->defer_signal && ptls->io_wait)) {
+        jl_safepoint_consume_sigint();
+        if (force)
+            jl_safe_printf("WARNING: Force throwing a SIGINT\n");
+        // Force a throw
+        jl_clear_force_sigint();
+        jl_throw(jl_interrupt_exception);
+    }
+}
+
 void __cdecl crt_sig_handler(int sig, int num)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     CONTEXT Context;
     switch (sig) {
     case SIGFPE:
@@ -63,54 +78,119 @@ void __cdecl crt_sig_handler(int sig, int num)
         break;
     case SIGINT:
         signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler);
-        if (jl_defer_signal) {
-            jl_signal_pending = sig;
-        }
-        else {
-            jl_signal_pending = 0;
-            jl_sigint_action();
+        if (!jl_ignore_sigint()) {
+            if (exit_on_sigint)
+                jl_exit(130); // 128 + SIGINT
+            jl_try_throw_sigint();
         }
         break;
     default: // SIGSEGV, (SSIGTERM, IGILL)
+        if (ptls->safe_restore)
+            jl_rethrow();
         memset(&Context, 0, sizeof(Context));
         RtlCaptureContext(&Context);
-        jl_critical_error(sig, &Context, jl_bt_data, &jl_bt_size);
+        if (sig == SIGILL)
+            jl_show_sigill(&Context);
+        jl_critical_error(sig, &Context, ptls->bt_data, &ptls->bt_size);
         raise(sig);
     }
+}
+
+static jl_ucontext_t collect_backtrace_fiber;
+static jl_ucontext_t error_return_fiber;
+static PCONTEXT error_ctx;
+static int have_backtrace_fiber;
+static void JL_NORETURN start_backtrace_fiber(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    // collect the backtrace
+    ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, error_ctx);
+    // switch back to the execution fiber
+    jl_setcontext(&error_return_fiber);
+    abort();
 }
 
 void restore_signals(void)
 {
     // turn on ctrl-c handler
     SetConsoleCtrlHandler(NULL, 0);
-    // see if SetThreadStackGuarantee exists
-    pSetThreadStackGuarantee = (BOOL (*)(PULONG)) jl_dlsym_e(jl_kernel32_handle, "SetThreadStackGuarantee");
 }
 
-void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
+void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
 {
-    assert(excpt != NULL);
+    jl_ptls_t ptls = jl_get_ptls_states();
 #if defined(_CPU_X86_64_)
-    DWORD64 Rsp = (ctxThread->Rsp&(DWORD64)-16) - 8;
+    DWORD64 Rsp = (ctxThread->Rsp & (DWORD64)-16) - 8;
 #elif defined(_CPU_X86_)
-    DWORD32 Esp = (ctxThread->Esp&(DWORD32)-16) - 4;
+    DWORD32 Esp = (ctxThread->Esp & (DWORD32)-16) - 4;
 #else
 #error WIN16 not supported :P
 #endif
-    jl_bt_size = bt ? rec_backtrace_ctx(jl_bt_data, JL_MAX_BT_SIZE, ctxThread) : 0;
-    jl_exception_in_transit = excpt;
+    if (!ptls->safe_restore) {
+        assert(excpt != NULL);
+        ptls->bt_size = 0;
+        if (excpt != jl_stackovf_exception) {
+            ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread);
+        }
+        else if (have_backtrace_fiber) {
+            error_ctx = ctxThread;
+            jl_swapcontext(&error_return_fiber, &collect_backtrace_fiber);
+        }
+        ptls->sig_exception = excpt;
+    }
 #if defined(_CPU_X86_64_)
     *(DWORD64*)Rsp = 0;
     ctxThread->Rsp = Rsp;
-    ctxThread->Rip = (DWORD64)&jl_rethrow;
+    ctxThread->Rip = (DWORD64)&jl_sig_throw;
 #elif defined(_CPU_X86_)
     *(DWORD32*)Esp = 0;
     ctxThread->Esp = Esp;
-    ctxThread->Eip = (DWORD)&jl_rethrow;
+    ctxThread->Eip = (DWORD)&jl_sig_throw;
 #endif
 }
 
 HANDLE hMainThread = INVALID_HANDLE_VALUE;
+
+// Try to throw the exception in the master thread.
+static void jl_try_deliver_sigint(void)
+{
+    jl_ptls_t ptls2 = jl_all_tls_states[0];
+    jl_safepoint_enable_sigint();
+    jl_wake_libuv();
+    if ((DWORD)-1 == SuspendThread(hMainThread)) {
+        // error
+        jl_safe_printf("error: SuspendThread failed\n");
+        return;
+    }
+    int force = jl_check_force_sigint();
+    if (force || (!ptls2->defer_signal && ptls2->io_wait)) {
+        jl_safepoint_consume_sigint();
+        if (force)
+            jl_safe_printf("WARNING: Force throwing a SIGINT\n");
+        // Force a throw
+        jl_clear_force_sigint();
+        CONTEXT ctxThread;
+        memset(&ctxThread, 0, sizeof(CONTEXT));
+        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+        if (!GetThreadContext(hMainThread, &ctxThread)) {
+            // error
+            jl_safe_printf("error: GetThreadContext failed\n");
+            return;
+        }
+        jl_throw_in_ctx(jl_interrupt_exception, &ctxThread);
+        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+        if (!SetThreadContext(hMainThread, &ctxThread)) {
+            jl_safe_printf("error: SetThreadContext failed\n");
+            // error
+            return;
+        }
+    }
+    if ((DWORD)-1 == ResumeThread(hMainThread)) {
+        jl_safe_printf("error: ResumeThread failed\n");
+        // error
+        return;
+    }
+}
 
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
@@ -122,57 +202,56 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
         // etc.
         default: sig = SIGTERM; break;
     }
-    if (jl_defer_signal) {
-        jl_signal_pending = sig;
-    }
-    else {
-        jl_signal_pending = 0;
-        if (exit_on_sigint) jl_exit(130);
-        if ((DWORD)-1 == SuspendThread(hMainThread)) {
-            //error
-            jl_safe_printf("error: SuspendThread failed\n");
-            return 0;
-        }
-        CONTEXT ctxThread;
-        memset(&ctxThread,0,sizeof(CONTEXT));
-        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-        if (!GetThreadContext(hMainThread, &ctxThread)) {
-            //error
-            jl_safe_printf("error: GetThreadContext failed\n");
-            return 0;
-        }
-        jl_throw_in_ctx(jl_interrupt_exception, &ctxThread, 1);
-        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-        if (!SetThreadContext(hMainThread,&ctxThread)) {
-            jl_safe_printf("error: SetThreadContext failed\n");
-            //error
-            return 0;
-        }
-        if ((DWORD)-1 == ResumeThread(hMainThread)) {
-            jl_safe_printf("error: ResumeThread failed\n");
-            //error
-            return 0;
-        }
+    if (!jl_ignore_sigint()) {
+        if (exit_on_sigint)
+            jl_exit(128 + sig); // 128 + SIGINT
+        jl_try_deliver_sigint();
     }
     return 1;
 }
 
-static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo, int in_ctx)
+LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
             case EXCEPTION_INT_DIVIDE_BY_ZERO:
                 fpreset();
-                jl_throw_in_ctx(jl_diverror_exception, ExceptionInfo->ContextRecord,in_ctx);
+                jl_throw_in_ctx(jl_diverror_exception, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
             case EXCEPTION_STACK_OVERFLOW:
-                jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord,in_ctx&&pSetThreadStackGuarantee);
+                ptls->needs_resetstkoflw = 1;
+                jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
             case EXCEPTION_ACCESS_VIOLATION:
-                if (ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1) { // writing to read-only memory (e.g. mmap)
-                    jl_throw_in_ctx(jl_readonlymemory_exception, ExceptionInfo->ContextRecord,in_ctx);
+                if (jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1])) {
+#ifdef JULIA_ENABLE_THREADING
+                    jl_set_gc_and_wait();
+                    // Do not raise sigint on worker thread
+                    if (ptls->tid != 0)
+                        return EXCEPTION_CONTINUE_EXECUTION;
+#endif
+                    if (ptls->defer_signal) {
+                        jl_safepoint_defer_sigint();
+                    }
+                    else if (jl_safepoint_consume_sigint()) {
+                        jl_clear_force_sigint();
+                        jl_throw_in_ctx(jl_interrupt_exception, ExceptionInfo->ContextRecord);
+                    }
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
+                if (ptls->safe_restore) {
+                    jl_throw_in_ctx(NULL, ExceptionInfo->ContextRecord);
+                    return EXCEPTION_CONTINUE_EXECUTION;
+                }
+                if (ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1) { // writing to read-only memory (e.g. mmap)
+                    jl_throw_in_ctx(jl_readonlymemory_exception, ExceptionInfo->ContextRecord);
+                    return EXCEPTION_CONTINUE_EXECUTION;
+                }
+        }
+        if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION) {
+            jl_safe_printf("\n");
+            jl_show_sigill(ExceptionInfo->ContextRecord);
         }
         jl_safe_printf("\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ");
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
@@ -220,9 +299,10 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                 jl_safe_printf("UNKNOWN"); break;
         }
         jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-        gdblookup((ptrint_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+        jl_gdblookup((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
-        jl_critical_error(0, ExceptionInfo->ContextRecord, jl_bt_data, &jl_bt_size);
+        jl_critical_error(0, ExceptionInfo->ContextRecord,
+                          ptls->bt_data, &ptls->bt_size);
         static int recursion = 0;
         if (recursion++)
             exit(1);
@@ -232,39 +312,10 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
-static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
-{
-    return _exception_handler(ExceptionInfo,1);
-}
-
-#if defined(_CPU_X86_64_)
-EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext)
-{
-    EXCEPTION_POINTERS ExceptionInfo;
-    ExceptionInfo.ExceptionRecord = ExceptionRecord;
-    ExceptionInfo.ContextRecord = ContextRecord;
-
-    EXCEPTION_DISPOSITION rval;
-    switch (_exception_handler(&ExceptionInfo,1)) {
-        case EXCEPTION_CONTINUE_EXECUTION:
-            rval = ExceptionContinueExecution; break;
-        case EXCEPTION_CONTINUE_SEARCH:
-            rval = ExceptionContinueSearch; break;
-#ifndef _MSC_VER
-        case EXCEPTION_EXECUTE_HANDLER:
-            rval = ExceptionExecuteHandler; break;
-#endif
-    }
-
-    return rval;
-}
-#endif
-
 JL_DLLEXPORT void jl_install_sigint_handler(void)
 {
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 }
-
 
 volatile HANDLE hBtThread = 0;
 static DWORD WINAPI profile_bt( LPVOID lparam )
@@ -287,19 +338,21 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 break;
             }
             CONTEXT ctxThread;
-            memset(&ctxThread,0,sizeof(CONTEXT));
+            memset(&ctxThread, 0, sizeof(CONTEXT));
             ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
             if (!GetThreadContext(hMainThread, &ctxThread)) {
                 fputs("failed to get context from main thread. aborting profiling.",stderr);
                 break;
             }
             // Get backtrace data
-            bt_size_cur += rec_backtrace_ctx((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1, &ctxThread);
+            bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
+                bt_size_max - bt_size_cur - 1, &ctxThread);
             // Mark the end of this block with 0
             bt_data_prof[bt_size_cur] = 0;
             bt_size_cur++;
             if ((DWORD)-1 == ResumeThread(hMainThread)) {
                 fputs("failed to resume main thread! aborting.",stderr);
+                gc_debug_critical_error();
                 abort();
             }
         }
@@ -310,6 +363,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     hBtThread = 0;
     return 0;
 }
+
 JL_DLLEXPORT int jl_profile_start_timer(void)
 {
     running = 1;
@@ -353,17 +407,18 @@ void jl_install_default_signal_handlers(void)
     if (signal(SIGTERM, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
         jl_error("fatal error: Couldn't set SIGTERM");
     }
-    SetUnhandledExceptionFilter(exception_handler);
+    if (signal(SIGABRT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
+        jl_error("fatal error: Couldn't set SIGABRT");
+    }
+    SetUnhandledExceptionFilter(jl_exception_handler);
 }
 
-void *jl_install_thread_signal_handler(void)
+void jl_install_thread_signal_handler(jl_ptls_t ptls)
 {
-    // Ensure the stack overflow handler has enough space to collect the backtrace
-    ULONG StackSizeInBytes = sig_stack_size;
-    if (pSetThreadStackGuarantee) {
-        if (!pSetThreadStackGuarantee(&StackSizeInBytes)) {
-            pSetThreadStackGuarantee = NULL;
-        }
-    }
-    return NULL;
+    size_t ssize = sig_stack_size;
+    void *stk = jl_malloc_stack(&ssize, NULL);
+    collect_backtrace_fiber.uc_stack.ss_sp = (void*)stk;
+    collect_backtrace_fiber.uc_stack.ss_size = ssize;
+    jl_makecontext(&collect_backtrace_fiber, start_backtrace_fiber);
+    have_backtrace_fiber = 1;
 }

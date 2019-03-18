@@ -1,0 +1,9 @@
+name = "CRC32c"
+uuid = "8bf52ea8-c179-5cab-976a-9e18b702a9bc"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[targets]
+test = ["Test", "Random"]

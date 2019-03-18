@@ -3,15 +3,16 @@ JULIAHOME := $(abspath $(SRCDIR)/..)
 BUILDDIR ?= .
 include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
+include $(JULIAHOME)/deps/llvm-ver.make
 
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 override CPPFLAGS += $(JCPPFLAGS)
 
 SRCS := repl
-ifeq ($(USEMSVC), 1)
-SRCS += getopt
-endif
+
+HEADERS := $(addprefix $(JULIAHOME)/src/,julia.h julia_assert.h julia_threads.h julia_internal.h options.h) \
+	$(BUILDDIR)/../src/julia_version.h $(wildcard $(JULIAHOME)/src/support/*.h) $(LIBUV_INC)/uv.h
 
 FLAGS := -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir)
 ifneq ($(USEMSVC), 1)
@@ -22,16 +23,7 @@ OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
-ifeq ($(USE_LLVM_SHLIB),1)
-ifeq ($(LLVM_USE_CMAKE),1)
-LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM
-else
-LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(shell $(LLVM_CONFIG_HOST) --version)
-endif
-else
-LLVMLINK :=
-endif
-JLDFLAGS += $(LDFLAGS) $(NO_WHOLE_ARCHIVE) $(OSLIBS) $(LLVMLINK) $(RPATH)
+JLDFLAGS += $(LDFLAGS) $(NO_WHOLE_ARCHIVE) $(OSLIBS) $(RPATH)
 
 ifeq ($(USE_SYSTEM_LIBM),0)
 ifneq ($(UNTRUSTED_SYSTEM_LIBM),0)
@@ -47,9 +39,9 @@ default: release
 all: release debug
 release debug :  % : julia-%
 
-$(BUILDDIR)/%.o: $(SRCDIR)/%.c
+$(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@)
-$(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c
+$(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c $(HEADERS)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 ifeq ($(OS),WINNT)

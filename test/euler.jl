@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## Project Euler
 #
@@ -20,9 +20,6 @@ function euler2(n)
     return t
 end
 @test euler2(4000000) == 4613732
-
-#3: 6857
-@test maximum(keys(factor(600851475143))) == 6857
 
 #4: 906609
 function euler4(n)
@@ -47,10 +44,6 @@ end
 #6: 25164150
 @test sum(1:100)^2 - sum((1:100).^2) == 25164150
 
-#7: 104743
-euler7(n) = primes(floor(Int,n*log(n*log(n))))[n]
-@test euler7(10001) == 104743
-
 #8: 40824
 function euler8(n,m)
     d = digits(n)
@@ -68,19 +61,18 @@ function euler9(n)
 end
 @test euler9(1000) == 31875000
 
-#10: 142913828922
-@test sum(map(Int64,primes(2000000))) == 142913828922
 
 #11: 70600674
 function euler11(grid,n)
     m = typemin(eltype(grid))
+    tolinear = LinearIndices(size(grid))
     for i = n:size(grid,1)-n+1,
         j = n:size(grid,2)-n+1,
         di = -1:1, dj = -1:1
         di == dj == 0 && continue
-        idx = sub2ind(size(grid),
-                      di==0 ? fill(i,n) : range(i,di,n),
-                      dj==0 ? fill(j,n) : range(j,dj,n))
+        i_idxs = di==0 ? fill(i,n) : range(i, step=di, length=n)
+        j_idxs = dj==0 ? fill(j,n) : range(j, step=dj, length=n)
+        idx = tolinear[CartesianIndex.(i_idxs, j_idxs)]
         m = max(m,prod(grid[idx]))
     end
     return m
@@ -235,7 +227,7 @@ function euler14(m)
             d -= 1
         end
     end
-    indmax(c)
+    argmax(c)
 end
 @test euler14(999999) == 837799
 

@@ -1,322 +1,97 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Core.Intrinsics.ccall
+Core.include(Main, "Base.jl")
 
-baremodule Base
+using .Base
 
-using Core: Intrinsics, arrayref, arrayset, arraysize, _expr,
-            kwcall, _apply, typeassert, apply_type, svec
-ccall(:jl_set_istopmod, Void, (Bool,), true)
+# Ensure this file is also tracked
+pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "Base.jl")))
+pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
-include = Core.include
+# set up depot & load paths to be able to find stdlib packages
+@eval Base creating_sysimg = true
+Base.init_depot_path()
+Base.init_load_path()
 
-eval(x) = Core.eval(Base,x)
-eval(m,x) = Core.eval(m,x)
+if Base.is_primary_base_module
+# load some stdlib packages but don't put their names in Main
+let
+    # Stdlibs manually sorted in top down order
+    stdlibs = [
+            # No deps
+            :Base64,
+            :CRC32c,
+            :SHA,
+            :FileWatching,
+            :Unicode,
+            :Mmap,
+            :Serialization,
+            :Libdl,
+            :Markdown,
+            :LibGit2,
+            :Logging,
+            :Sockets,
+            :Printf,
+            :Profile,
+            :Dates,
+            :DelimitedFiles,
+            :Random,
+            :UUIDs,
+            :Future,
+            :LinearAlgebra,
+            :SparseArrays,
+            :SuiteSparse,
+            :Distributed,
+            :SharedArrays,
+            :Pkg,
+            :Test,
+            :REPL,
+            :Statistics,
+        ]
 
-include("exports.jl")
+    maxlen = maximum(textwidth.(string.(stdlibs)))
 
-if false
-    # simple print definitions for debugging. enable these if something
-    # goes wrong during bootstrap before printing code is available.
-    show(x::ANY) = ccall(:jl_static_show, Void, (Ptr{Void}, Any),
-                         Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout,Ptr{Void}),1), x)
-    print(x::ANY) = show(x)
-    println(x::ANY) = ccall(:jl_, Void, (Any,), x)
-    print(a::ANY...) = for x=a; print(x); end
-end
+    print_time = (mod, t) -> (print(rpad(string(mod) * "  ", maxlen + 3, "─")); Base.time_print(t * 10^9); println())
+    print_time(Base, (Base.end_base_include - Base.start_base_include) * 10^(-9))
 
-
-## Load essential files and libraries
-include("essentials.jl")
-include("docs/bootstrap.jl")
-include("base.jl")
-include("reflection.jl")
-include("options.jl")
-
-# core operations & types
-include("promotion.jl")
-include("tuple.jl")
-include("range.jl")
-include("expr.jl")
-include("error.jl")
-
-# core numeric operations & types
-include("bool.jl")
-include("number.jl")
-include("int.jl")
-include("operators.jl")
-include("pointer.jl")
-include("refpointer.jl")
-include("functors.jl")
-
-# array structures
-include("abstractarray.jl")
-include("subarray.jl")
-include("array.jl")
-
-# numeric operations
-include("hashing.jl")
-include("rounding.jl")
-importall .Rounding
-include("float.jl")
-include("complex.jl")
-include("rational.jl")
-include("abstractarraymath.jl")
-include("arraymath.jl")
-
-# SIMD loops
-include("simdloop.jl")
-importall .SimdLoop
-
-# map-reduce operators
-include("reduce.jl")
-
-## core structures
-include("bitarray.jl")
-include("intset.jl")
-include("dict.jl")
-include("set.jl")
-include("iterator.jl")
-
-# For OS specific stuff
-include(UTF8String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "build_h.jl".data))) # include($BUILDROOT/base/build_h.jl)
-include(UTF8String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "version_git.jl".data))) # include($BUILDROOT/base/version_git.jl)
-include("c.jl")
-include("osutils.jl")
-
-# strings & printing
-include("char.jl")
-include("ascii.jl")
-include("iobuffer.jl")
-include("string.jl")
-include("unicode.jl")
-include("parse.jl")
-include("shell.jl")
-include("regex.jl")
-include("base64.jl")
-importall .Base64
-
-# Core I/O
-include("io.jl")
-include("iostream.jl")
-
-# system & environment
-include("libc.jl")
-using .Libc: getpid, gethostname, time
-include("libdl.jl")
-using .Libdl: DL_LOAD_PATH
-include("env.jl")
-include("intfuncs.jl")
-
-# nullable types
-include("nullable.jl")
-
-# I/O
-include("task.jl")
-include("lock.jl")
-include("show.jl")
-include("stream.jl")
-include("socket.jl")
-include("filesystem.jl")
-importall .Filesystem
-include("process.jl")
-include("multimedia.jl")
-importall .Multimedia
-include("grisu.jl")
-import .Grisu.print_shortest
-include("methodshow.jl")
-
-# core math functions
-include("floatfuncs.jl")
-include("math.jl")
-importall .Math
-const (√)=sqrt
-const (∛)=cbrt
-include("float16.jl")
-
-# multidimensional arrays
-include("cartesian.jl")
-using .Cartesian
-include("multidimensional.jl")
-
-include("primes.jl")
-
-let SOURCE_PATH = ""
-    global include = function(path)
-        prev = SOURCE_PATH
-        path = joinpath(dirname(prev),path)
-        SOURCE_PATH = path
-        Core.include(path)
-        SOURCE_PATH = prev
+    Base._track_dependencies[] = true
+    Base.tot_time_stdlib[] = @elapsed for stdlib in stdlibs
+        tt = @elapsed Base.require(Base, stdlib)
+        print_time(stdlib, tt)
     end
+    for dep in Base._require_dependencies
+        dep[3] == 0.0 && continue
+        push!(Base._included_files, dep[1:2])
+    end
+    empty!(Base._require_dependencies)
+    Base._track_dependencies[] = false
+
+    print_time("Stdlibs total", Base.tot_time_stdlib[])
+end
 end
 
-# reduction along dims
-include("reducedim.jl")  # macros in this file relies on string.jl
+# Clear global state
+empty!(Core.ARGS)
+empty!(Base.ARGS)
+empty!(LOAD_PATH)
+@eval Base creating_sysimg = false
+Base.init_load_path() # want to be able to find external packages in userimg.jl
 
-# basic data structures
-include("ordering.jl")
-importall .Order
-include("collections.jl")
+let
+tot_time_userimg = @elapsed (Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
 
-# Combinatorics
-include("sort.jl")
-importall .Sort
 
-# version
-include("version.jl")
+tot_time_base = (Base.end_base_include - Base.start_base_include) * 10.0^(-9)
+tot_time = tot_time_base + Base.tot_time_stdlib[] + tot_time_userimg
 
-# BigInts and BigFloats
-include("gmp.jl")
-importall .GMP
-include("mpfr.jl")
-importall .MPFR
-big(n::Integer) = convert(BigInt,n)
-big(x::AbstractFloat) = convert(BigFloat,x)
-big(q::Rational) = big(num(q))//big(den(q))
-
-include("combinatorics.jl")
-
-# more hashing definitions
-include("hashing2.jl")
-
-# random number generation
-include("dSFMT.jl")
-include("random.jl")
-importall .Random
-
-# (s)printf macros
-include("printf.jl")
-importall .Printf
-
-# metaprogramming
-include("meta.jl")
-
-# enums
-include("Enums.jl")
-importall .Enums
-
-# concurrency and parallelism
-include("serialize.jl")
-importall .Serializer
-include("channels.jl")
-include("multi.jl")
-include("managers.jl")
-
-# code loading
-include("loading.jl")
-
-# memory-mapped and shared arrays
-include("mmap.jl")
-import .Mmap
-include("sharedarray.jl")
-
-# utilities - timing, help, edit
-include("datafmt.jl")
-importall .DataFmt
-include("deepcopy.jl")
-include("interactiveutil.jl")
-include("replutil.jl")
-include("test.jl")
-include("i18n.jl")
-using .I18n
-
-# frontend
-include("initdefs.jl")
-include("Terminals.jl")
-include("LineEdit.jl")
-include("REPLCompletions.jl")
-include("REPL.jl")
-include("client.jl")
-
-# misc useful functions & macros
-include("util.jl")
-
-# dense linear algebra
-include("linalg.jl")
-importall .LinAlg
-const ⋅ = dot
-const × = cross
-include("broadcast.jl")
-importall .Broadcast
-
-# statistics
-include("statistics.jl")
-
-# irrational mathematical constants
-include("irrationals.jl")
-
-# signal processing
-include("dft.jl")
-importall .DFT
-include("dsp.jl")
-importall .DSP
-
-# system information
-include("sysinfo.jl")
-import .Sys.CPU_CORES
-
-# Numerical integration
-include("quadgk.jl")
-importall .QuadGK
-
-# Fast math
-include("fastmath.jl")
-importall .FastMath
-
-# libgit2 support
-include("libgit2.jl")
-
-# package manager
-include("pkg.jl")
-const Git = Pkg.Git
-
-# profiler
-include("profile.jl")
-importall .Profile
-
-# dates
-include("Dates.jl")
-import .Dates: Date, DateTime, now
-
-# sparse matrices, vectors, and sparse linear algebra
-include("sparse.jl")
-importall .SparseArrays
-
-# Documentation
-
-include("markdown/Markdown.jl")
-include("docs/Docs.jl")
-using .Docs
-using .Markdown
-
-# deprecated functions
-include("deprecated.jl")
-
-# Some basic documentation
-include("docs/helpdb.jl")
-include("docs/basedocs.jl")
-
-# threads
-include("threads.jl")
-include("threadcall.jl")
-
-function __init__()
-    # Base library init
-    reinit_stdio()
-    Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
-    early_init()
-    init_load_path()
-    init_parallel()
-    init_threadcall()
+println("Sysimage built. Summary:")
+print("Total ─────── "); Base.time_print(tot_time               * 10^9); print(" \n");
+print("Base: ─────── "); Base.time_print(tot_time_base          * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_base          / tot_time) * 100); println("%")
+print("Stdlibs: ──── "); Base.time_print(Base.tot_time_stdlib[] * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (Base.tot_time_stdlib[] / tot_time) * 100); println("%")
+if isfile("userimg.jl")
+print("Userimg: ──── "); Base.time_print(tot_time_userimg       * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_userimg       / tot_time) * 100); println("%")
+end
 end
 
-include = include_from_node1
-include("precompile.jl")
-
-end # baremodule Base
-
-using Base
-importall Base.Operators
-
-Base.isfile("userimg.jl") && Base.include("userimg.jl")
+empty!(LOAD_PATH)
+empty!(DEPOT_PATH)

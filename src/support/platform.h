@@ -1,7 +1,7 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef PLATFORM_H
-#define PLATFORM_H
+#ifndef JL_PLATFORM_H
+#define JL_PLATFORM_H
 
 /*
  * This file provides convenient macros to be used to identify the platform
@@ -22,11 +22,13 @@
  *          _OS_LINUX_
  *          _OS_WINDOWS_
  *          _OS_DARWIN_
+ *          _OS_EMSCRIPTEN_
  *
  *      CPU/Architecture:
  *          _CPU_X86_
  *          _CPU_X86_64_
  *          _CPU_ARM_
+ *          _CPU_WASM_
  */
 
 /*******************************************************************************
@@ -71,6 +73,8 @@
 #define _OS_WINDOWS_
 #elif defined(__APPLE__) && defined(__MACH__)
 #define _OS_DARWIN_
+#elif defined(__EMSCRIPTEN__)
+#define _OS_EMSCRIPTEN_
 #endif
 
 /*******************************************************************************
@@ -81,12 +85,16 @@
 #define _CPU_X86_64_
 #elif defined(i386) || defined(__i386) || defined(__i386__) || defined(_M_IX86) || defined(_X86_)
 #define _CPU_X86_
+#elif defined(__aarch64__)
+#define _CPU_AARCH64_
 #elif defined(__arm__) || defined(_M_ARM)
 #define _CPU_ARM_
 #elif defined(__PPC64__)
 #define _CPU_PPC64_
 #elif defined(_ARCH_PPC)
 #define _CPU_PPC_
+#elif defined(__wasm__)
+#define _CPU_WASM_
 #endif
 
 #if defined(_CPU_X86_64_)

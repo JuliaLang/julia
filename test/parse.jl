@@ -1,316 +1,340 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function parseall(str)
-    pos = start(str)
-    exs = []
-    while !done(str, pos)
-        ex, pos = parse(str, pos)
-        push!(exs, ex)
+@testset "integer parsing" begin
+    @test parse(Int32,"0", base = 36) === Int32(0)
+    @test parse(Int32,"1", base = 36) === Int32(1)
+    @test parse(Int32,"9", base = 36) === Int32(9)
+    @test parse(Int32,"A", base = 36) === Int32(10)
+    @test parse(Int32,"a", base = 36) === Int32(10)
+    @test parse(Int32,"B", base = 36) === Int32(11)
+    @test parse(Int32,"b", base = 36) === Int32(11)
+    @test parse(Int32,"F", base = 36) === Int32(15)
+    @test parse(Int32,"f", base = 36) === Int32(15)
+    @test parse(Int32,"Z", base = 36) === Int32(35)
+    @test parse(Int32,"z", base = 36) === Int32(35)
+
+    @test parse(Int,"0") == 0
+    @test parse(Int,"-0") == 0
+    @test parse(Int,"1") == 1
+    @test parse(Int,"-1") == -1
+    @test parse(Int,"9") == 9
+    @test parse(Int,"-9") == -9
+    @test parse(Int,"10") == 10
+    @test parse(Int,"-10") == -10
+    @test parse(Int64,"3830974272") == 3830974272
+    @test parse(Int64,"-3830974272") == -3830974272
+
+    @test parse(Int,'3') == 3
+    @test parse(Int,'3', base = 8) == 3
+    @test parse(Int, 'a', base=16) == 10
+    @test_throws ArgumentError parse(Int, 'a')
+    @test_throws ArgumentError parse(Int,typemax(Char))
+end
+
+# Issue 29451
+struct Issue29451String <: AbstractString end
+Base.ncodeunits(::Issue29451String) = 12345
+Base.lastindex(::Issue29451String) = 1
+Base.isvalid(::Issue29451String, i::Integer) = i == 1
+Base.iterate(::Issue29451String, i::Integer=1) = i == 1 ? ('0', 2) : nothing
+
+@test Issue29451String() == "0"
+@test parse(Int, Issue29451String()) == 0
+
+@testset "Issue 20587, T=$T" for T in Any[BigInt, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8]
+    T === BigInt && continue # TODO: make BigInt pass this test
+    for s in ["", " ", "  "]
+        # Without a base (handles things like "0x00001111", etc)
+        result = @test_throws ArgumentError parse(T, s)
+        exception_without_base = result.value
+        if T == Bool
+            if s == ""
+                @test exception_without_base.msg == "input string is empty"
+            else
+                @test exception_without_base.msg == "input string only contains whitespace"
+            end
+        else
+            @test exception_without_base.msg == "input string is empty or only contains whitespace"
+        end
+
+        # With a base
+        result = @test_throws ArgumentError parse(T, s, base = 16)
+        exception_with_base = result.value
+        if T == Bool
+            if s == ""
+                @test exception_with_base.msg == "input string is empty"
+            else
+                @test exception_with_base.msg == "input string only contains whitespace"
+            end
+        else
+            @test exception_with_base.msg == "input string is empty or only contains whitespace"
+        end
     end
-    if length(exs) == 0
-        throw(ParseError("end of input"))
-    elseif length(exs) == 1
-        return exs[1]
-    else
-        return Expr(:block, exs...)
+
+    # Test `tryparse_internal` with part of a string
+    let b = "                   "
+        result = @test_throws ArgumentError Base.tryparse_internal(Bool, b, 7, 11, 0, true)
+        exception_bool = result.value
+        @test exception_bool.msg == "input string only contains whitespace"
+
+        result = @test_throws ArgumentError Base.tryparse_internal(Int, b, 7, 11, 0, true)
+        exception_int = result.value
+        @test exception_int.msg == "input string is empty or only contains whitespace"
+
+        result = @test_throws ArgumentError Base.tryparse_internal(UInt128, b, 7, 11, 0, true)
+        exception_uint = result.value
+        @test exception_uint.msg == "input string is empty or only contains whitespace"
+    end
+
+    # Test that the entire input string appears in error messages
+    let s = "     false    true     "
+        result = @test_throws(ArgumentError,
+            Base.tryparse_internal(Bool, s, firstindex(s), lastindex(s), 0, true))
+        @test result.value.msg == "invalid Bool representation: $(repr(s))"
+    end
+
+    # Test that leading and trailing whitespace is ignored.
+    for v in (1, 2, 3)
+        @test parse(Int, "    $v"    ) == v
+        @test parse(Int, "    $v\n"  ) == v
+        @test parse(Int, "$v    "    ) == v
+        @test parse(Int, "    $v    ") == v
+    end
+    for v in (true, false)
+        @test parse(Bool, "    $v"    ) == v
+        @test parse(Bool, "    $v\n"  ) == v
+        @test parse(Bool, "$v    "    ) == v
+        @test parse(Bool, "    $v    ") == v
+    end
+    for v in (0.05, -0.05, 2.5, -2.5)
+        @test parse(Float64, "    $v"    ) == v
+        @test parse(Float64, "    $v\n"  ) == v
+        @test parse(Float64, "$v    "    ) == v
+        @test parse(Float64, "    $v    ") == v
+    end
+    @test parse(Float64, "    .5"    ) == 0.5
+    @test parse(Float64, "    .5\n"  ) == 0.5
+    @test parse(Float64, "    .5    ") == 0.5
+    @test parse(Float64, ".5    "    ) == 0.5
+end
+
+@testset "parse as Bool, bin, hex, oct" begin
+    @test parse(Bool, "\u202f true") === true
+    @test parse(Bool, "\u202f false") === false
+
+    parsebin(s) = parse(Int,s, base = 2)
+    parseoct(s) = parse(Int,s, base = 8)
+    parsehex(s) = parse(Int,s, base = 16)
+
+    @test parsebin("0") == 0
+    @test parsebin("-0") == 0
+    @test parsebin("1") == 1
+    @test parsebin("-1") == -1
+    @test parsebin("10") == 2
+    @test parsebin("-10") == -2
+    @test parsebin("11") == 3
+    @test parsebin("-11") == -3
+    @test parsebin("1111000011110000111100001111") == 252645135
+    @test parsebin("-1111000011110000111100001111") == -252645135
+
+    @test parseoct("0") == 0
+    @test parseoct("-0") == 0
+    @test parseoct("1") == 1
+    @test parseoct("-1") == -1
+    @test parseoct("7") == 7
+    @test parseoct("-7") == -7
+    @test parseoct("10") == 8
+    @test parseoct("-10") == -8
+    @test parseoct("11") == 9
+    @test parseoct("-11") == -9
+    @test parseoct("72") == 58
+    @test parseoct("-72") == -58
+    @test parseoct("3172207320") == 434704080
+    @test parseoct("-3172207320") == -434704080
+
+    @test parsehex("0") == 0
+    @test parsehex("-0") == 0
+    @test parsehex("1") == 1
+    @test parsehex("-1") == -1
+    @test parsehex("9") == 9
+    @test parsehex("-9") == -9
+    @test parsehex("a") == 10
+    @test parsehex("-a") == -10
+    @test parsehex("f") == 15
+    @test parsehex("-f") == -15
+    @test parsehex("10") == 16
+    @test parsehex("-10") == -16
+    @test parsehex("0BADF00D") == 195948557
+    @test parsehex("-0BADF00D") == -195948557
+    @test parse(Int64,"BADCAB1E", base = 16) == 3135023902
+    @test parse(Int64,"-BADCAB1E", base = 16) == -3135023902
+    @test parse(Int64,"CafeBabe", base = 16) == 3405691582
+    @test parse(Int64,"-CafeBabe", base = 16) == -3405691582
+    @test parse(Int64,"DeadBeef", base = 16) == 3735928559
+    @test parse(Int64,"-DeadBeef", base = 16) == -3735928559
+end
+
+@testset "parse with delimiters" begin
+    @test parse(Int,"2\n") == 2
+    @test parse(Int,"   2 \n ") == 2
+    @test parse(Int," 2 ") == 2
+    @test parse(Int,"2 ") == 2
+    @test parse(Int," 2") == 2
+    @test parse(Int,"+2\n") == 2
+    @test parse(Int,"-2") == -2
+    @test_throws ArgumentError parse(Int,"   2 \n 0")
+    @test_throws ArgumentError parse(Int,"2x")
+    @test_throws ArgumentError parse(Int,"-")
+
+    # multibyte spaces
+    @test parse(Int, "3\u2003\u202F") == 3
+    @test_throws ArgumentError parse(Int, "3\u2003\u202F,")
+end
+
+@testset "parse from bin/hex/oct" begin
+    @test parse(Int,"1234") == 1234
+    @test parse(Int,"0x1234") == 0x1234
+    @test parse(Int,"0o1234") == 0o1234
+    @test parse(Int,"0b1011") == 0b1011
+    @test parse(Int,"-1234") == -1234
+    @test parse(Int,"-0x1234") == -Int(0x1234)
+    @test parse(Int,"-0o1234") == -Int(0o1234)
+    @test parse(Int,"-0b1011") == -Int(0b1011)
+end
+
+@testset "parsing extrema of Integer types" begin
+    for T in (Int8, Int16, Int32, Int64, Int128)
+        @test parse(T,string(typemin(T))) == typemin(T)
+        @test parse(T,string(typemax(T))) == typemax(T)
+        @test_throws OverflowError parse(T,string(big(typemin(T))-1))
+        @test_throws OverflowError parse(T,string(big(typemax(T))+1))
+    end
+
+    for T in (UInt8,UInt16,UInt32,UInt64,UInt128)
+        @test parse(T,string(typemin(T))) == typemin(T)
+        @test parse(T,string(typemax(T))) == typemax(T)
+        @test_throws ArgumentError parse(T,string(big(typemin(T))-1))
+        @test_throws OverflowError parse(T,string(big(typemax(T))+1))
     end
 end
 
-# issue #9684
-let
-    for (ex1, ex2) in [("5.≠x", "5.!=x"),
-                       ("5.≥x", "5.>=x"),
-                       ("5.≤x", "5.<=x")]
-        ex1 = parse(ex1); ex2 = parse(ex2)
-        @test ex1.head === :comparison && (ex1.head === ex2.head)
-        @test ex1.args[1] === 5 && ex2.args[1] === 5
-        @test is(eval(Main, ex1.args[2]), eval(Main, ex2.args[2]))
-        @test ex1.args[3] === :x && (ex1.args[3] === ex2.args[3])
+# make sure base can be any Integer
+@testset "issue #15597, T=$T" for T in (Int, BigInt)
+    let n = parse(T, "123", base = Int8(10))
+        @test n == 123
+        @test isa(n, T)
     end
 end
 
-# issue #9704
-let a = :a
-    @test :(try
-            catch $a
-            end) == :(try
-                      catch a
-                      end)
-    @test :(module $a end) == :(module a
-                                end)
+@testset "issue #17065" begin
+    @test parse(Int, "2") === 2
+    @test parse(Bool, "true") === true
+    @test parse(Bool, "false") === false
+    @test tryparse(Bool, "true") === true
+    @test tryparse(Bool, "false") === false
+    @test_throws ArgumentError parse(Int, "2", base = 1)
+    @test_throws ArgumentError parse(Int, "2", base = 63)
 end
 
-# string literals
-macro test999_str(args...); args; end
-@test test999"a"b == ("a","b")
-@test test999"""a"""b == ("a","b")
-@test test999"
-    a
-    b" == ("
-    a
-    b",)
-@test test999"""
-    a
-    b""" == ("a\nb",)
-
-# issue #5997
-@test_throws ParseError parse(": x")
-@test_throws ParseError parse("d[: 2]")
-
-# issue #6770
-@test_throws ParseError parse("x.3")
-
-# issue #8763
-@test_throws ParseError parse("sqrt(16)2")
-@test_throws ParseError parse("x' y")
-@test_throws ParseError parse("x 'y")
-@test parse("x'y") == Expr(:call, :*, Expr(symbol("'"), :x), :y)
-
-# issue #8301
-@test_throws ParseError parse("&*s")
-
-# issue #10677
-@test_throws ParseError parse("/1")
-@test_throws ParseError parse("/pi")
-@test parse("- = 2") == Expr(:(=), :(-), 2)
-@test parse("/ = 2") == Expr(:(=), :(/), 2)
-@test_throws ParseError parse("< : 2")
-@test_throws ParseError parse("+ : 2")
-@test_throws ParseError parse("< :2")
-@test parse("+ :2") == Expr(:call, :(+), QuoteNode(2))
-
-# issue #10900
-@test_throws ParseError parse("+=")
-@test_throws ParseError parse(".")
-@test_throws ParseError parse("...")
-
-# issue #10901
-@test parse("/([1], 1)[1]") == :(([1] / 1)[1])
-
-# issue #10997
-@test parse(":(x.\$f[i])") == Expr(:quote,
-                                   Expr(:ref,
-                                        Expr(symbol("."), :x,
-                                             Expr(:$, Expr(:call, TopNode(:Expr),
-                                                           QuoteNode(:quote),
-                                                           :f))),
-                                        :i))
-
-# issue #10994
-@test parse("1 + #= \0 =# 2") == :(1 + 2)
-
-# issue #10985
-@test expand(:(f(::Int...) = 1)).head == :method
-
-# issue #10910
-@test parse(":(using A)") == Expr(:quote, Expr(:using, :A))
-@test parse(":(using A.b, B)") == Expr(:quote,
-                                       Expr(:toplevel,
-                                            Expr(:using, :A, :b),
-                                            Expr(:using, :B)))
-@test parse(":(using A: b, c.d)") == Expr(:quote,
-                                          Expr(:toplevel,
-                                               Expr(:using, :A, :b),
-                                               Expr(:using, :A, :c, :d)))
-
-@test parse(":(importall A)") == Expr(:quote, Expr(:importall, :A))
-
-@test parse(":(import A)") == Expr(:quote, Expr(:import, :A))
-@test parse(":(import A.b, B)") == Expr(:quote,
-                                        Expr(:toplevel,
-                                             Expr(:import, :A, :b),
-                                             Expr(:import, :B)))
-@test parse(":(import A: b, c.d)") == Expr(:quote,
-                                           Expr(:toplevel,
-                                                Expr(:import, :A, :b),
-                                                Expr(:import, :A, :c, :d)))
-
-# issue #11332
-@test parse("export \$(symbol(\"A\"))") == :(export $(Expr(:$, :(symbol("A")))))
-@test parse("export \$A") == :(export $(Expr(:$, :A)))
-@test parse("using \$a.\$b") == Expr(:using, Expr(:$, :a), Expr(:$, :b))
-@test parse("using \$a.\$b, \$c") == Expr(:toplevel, Expr(:using, Expr(:$, :a),
-                                                          Expr(:$, :b)),
-                                          Expr(:using, Expr(:$, :c)))
-@test parse("using \$a: \$b, \$c.\$d") ==
-    Expr(:toplevel, Expr(:using, Expr(:$, :a), Expr(:$, :b)),
-         Expr(:using, Expr(:$, :a), Expr(:$, :c), Expr(:$, :d)))
-
-# fix pr #11338 and test for #11497
-@test parseall("using \$\na") == Expr(:block, Expr(:using, :$), :a)
-@test parseall("using \$,\na") == Expr(:toplevel, Expr(:using, :$),
-                                       Expr(:using, :a))
-@test parseall("using &\na") == Expr(:block, Expr(:using, :&), :a)
-
-@test parseall("a = &\nb") == Expr(:block, Expr(:(=), :a, :&), :b)
-@test parseall("a = \$\nb") == Expr(:block, Expr(:(=), :a, :$), :b)
-@test parseall(":(a = &\nb)") == Expr(:quote, Expr(:(=), :a, Expr(:&, :b)))
-@test parseall(":(a = \$\nb)") == Expr(:quote, Expr(:(=), :a, Expr(:$, :b)))
-
-# issue 11970
-@test parseall("""
-macro f(args...) end; @f ""
-""") == Expr(:toplevel,
-            Expr(:macro, Expr(:call, :f, Expr(:..., :args)), Expr(:block,)),
-            Expr(:macrocall, symbol("@f"), ""))
-
-# integer parsing
-@test is(parse(Int32,"0",36),Int32(0))
-@test is(parse(Int32,"1",36),Int32(1))
-@test is(parse(Int32,"9",36),Int32(9))
-@test is(parse(Int32,"A",36),Int32(10))
-@test is(parse(Int32,"a",36),Int32(10))
-@test is(parse(Int32,"B",36),Int32(11))
-@test is(parse(Int32,"b",36),Int32(11))
-@test is(parse(Int32,"F",36),Int32(15))
-@test is(parse(Int32,"f",36),Int32(15))
-@test is(parse(Int32,"Z",36),Int32(35))
-@test is(parse(Int32,"z",36),Int32(35))
-
-@test parse(Int,"0") == 0
-@test parse(Int,"-0") == 0
-@test parse(Int,"1") == 1
-@test parse(Int,"-1") == -1
-@test parse(Int,"9") == 9
-@test parse(Int,"-9") == -9
-@test parse(Int,"10") == 10
-@test parse(Int,"-10") == -10
-@test parse(Int64,"3830974272") == 3830974272
-@test parse(Int64,"-3830974272") == -3830974272
-@test parse(Int,'3') == 3
-@test parse(Int,'3', 8) == 3
-
-parsebin(s) = parse(Int,s,2)
-parseoct(s) = parse(Int,s,8)
-parsehex(s) = parse(Int,s,16)
-
-@test parsebin("0") == 0
-@test parsebin("-0") == 0
-@test parsebin("1") == 1
-@test parsebin("-1") == -1
-@test parsebin("10") == 2
-@test parsebin("-10") == -2
-@test parsebin("11") == 3
-@test parsebin("-11") == -3
-@test parsebin("1111000011110000111100001111") == 252645135
-@test parsebin("-1111000011110000111100001111") == -252645135
-
-@test parseoct("0") == 0
-@test parseoct("-0") == 0
-@test parseoct("1") == 1
-@test parseoct("-1") == -1
-@test parseoct("7") == 7
-@test parseoct("-7") == -7
-@test parseoct("10") == 8
-@test parseoct("-10") == -8
-@test parseoct("11") == 9
-@test parseoct("-11") == -9
-@test parseoct("72") == 58
-@test parseoct("-72") == -58
-@test parseoct("3172207320") == 434704080
-@test parseoct("-3172207320") == -434704080
-
-@test parsehex("0") == 0
-@test parsehex("-0") == 0
-@test parsehex("1") == 1
-@test parsehex("-1") == -1
-@test parsehex("9") == 9
-@test parsehex("-9") == -9
-@test parsehex("a") == 10
-@test parsehex("-a") == -10
-@test parsehex("f") == 15
-@test parsehex("-f") == -15
-@test parsehex("10") == 16
-@test parsehex("-10") == -16
-@test parsehex("0BADF00D") == 195948557
-@test parsehex("-0BADF00D") == -195948557
-@test parse(Int64,"BADCAB1E",16) == 3135023902
-@test parse(Int64,"-BADCAB1E",16) == -3135023902
-@test parse(Int64,"CafeBabe",16) == 3405691582
-@test parse(Int64,"-CafeBabe",16) == -3405691582
-@test parse(Int64,"DeadBeef",16) == 3735928559
-@test parse(Int64,"-DeadBeef",16) == -3735928559
-
-@test parse(Int,"2\n") == 2
-@test parse(Int,"   2 \n ") == 2
-@test parse(Int," 2 ") == 2
-@test parse(Int,"2 ") == 2
-@test parse(Int," 2") == 2
-@test parse(Int,"+2\n") == 2
-@test parse(Int,"-2") == -2
-@test_throws ArgumentError parse(Int,"   2 \n 0")
-@test_throws ArgumentError parse(Int,"2x")
-@test_throws ArgumentError parse(Int,"-")
-
-# multibyte spaces
-@test parse(Int, "3\u2003\u202F") == 3
-@test_throws ArgumentError parse(Int, "3\u2003\u202F,")
-
-@test parse(Int,'a') == 10
-@test_throws ArgumentError parse(Int,typemax(Char))
-
-@test parse(Int,"1234") == 1234
-@test parse(Int,"0x1234") == 0x1234
-@test parse(Int,"0o1234") == 0o1234
-@test parse(Int,"0b1011") == 0b1011
-@test parse(Int,"-1234") == -1234
-@test parse(Int,"-0x1234") == -Int(0x1234)
-@test parse(Int,"-0o1234") == -Int(0o1234)
-@test parse(Int,"-0b1011") == -Int(0b1011)
-
-## FIXME: #4905, do these tests for Int128/UInt128!
-for T in (Int8, Int16, Int32, Int64)
-    @test parse(T,string(typemin(T))) == typemin(T)
-    @test parse(T,string(typemax(T))) == typemax(T)
-    @test_throws OverflowError parse(T,string(big(typemin(T))-1))
-    @test_throws OverflowError parse(T,string(big(typemax(T))+1))
+# issue #17333: tryparse should still throw on invalid base
+for T in (Int32, BigInt), base in (0,1,100)
+    @test_throws ArgumentError tryparse(T, "0", base = base)
 end
 
-for T in (UInt8,UInt16,UInt32,UInt64)
-    @test parse(T,string(typemin(T))) == typemin(T)
-    @test parse(T,string(typemax(T))) == typemax(T)
-    @test_throws ArgumentError parse(T,string(big(typemin(T))-1))
-    @test_throws OverflowError parse(T,string(big(typemax(T))+1))
+# error throwing branch from #10560
+@test_throws ArgumentError Base.tryparse_internal(Bool, "foo", 1, 2, 10, true)
+
+# issue #16594
+@test Meta.parse("@x a + \nb") == Meta.parse("@x a +\nb")
+@test [1 +
+       1] == [2]
+@test [1 +1] == [1 1]
+
+@testset "issue #16594" begin
+    # note for the macro tests, order is important
+    # because the line number is included as part of the expression
+    # (i.e. both macros must start on the same line)
+    @test :(@test((1+1) == 2)) == :(@test 1 +
+                                          1 == 2)
+    @test :(@x 1 +1 -1) == :(@x(1, +1, -1))
+    @test :(@x 1 + 1 -1) == :(@x(1+1, -1))
+    @test :(@x 1 + 1 - 1) == :(@x(1 + 1 - 1))
+    @test :(@x(1 + 1 - 1)) == :(@x 1 +
+                                   1 -
+                                   1)
+    @test :(@x(1 + 1 + 1)) == :(@x 1 +
+                                   1 +
+                                   1)
+    @test :([x .+
+              y]) == :([x .+ y])
 end
 
-@test parse("1 == 2|>3") == Expr(:comparison, 1, :(==), Expr(:call, :(|>), 2, 3))
+# line break in : expression disallowed
+@test_throws Meta.ParseError Meta.parse("[1 :\n2] == [1:2]")
 
-# issue #12501 and pr #12502
-parse("""
-      baremodule A
-      "a" in b
-      end
-      """)
-parse("""
-      baremodule A
-      "a"
-      end
-      """)
+@test tryparse(Float64, "1.23") === 1.23
+@test tryparse(Float32, "1.23") === 1.23f0
+@test tryparse(Float16, "1.23") === Float16(1.23)
 
-# issue #12626
-@test parse("a .÷ 1") == Expr(:call, :.÷, :a, 1)
-@test parse("a .÷= 1") == Expr(:.÷=, :a, 1)
-
-# issue #12771
-@test -(3)^2 == -9
-
-# issue #13302
-let p = parse("try
-           a
-       catch
-           b, c = t
-       end")
-    @test isa(p,Expr) && p.head === :try
-    @test p.args[2] === false
-    @test p.args[3].args[end] == parse("b,c = t")
+# parsing complex numbers (#22250)
+@testset "complex parsing" begin
+    for r in (1,0,-1), i in (1,0,-1), sign in ('-','+'), Im in ("i","j","im")
+        for s1 in (""," "), s2 in (""," "), s3 in (""," "), s4 in (""," ")
+            n = Complex(r, sign == '+' ? i : -i)
+            s = string(s1, r, s2, sign, s3, i, Im, s4)
+            @test n === parse(Complex{Int}, s)
+            @test Complex(r) === parse(Complex{Int}, string(s1, r, s2))
+            @test Complex(0,i) === parse(Complex{Int}, string(s3, i, Im, s4))
+            for T in (Float64, BigFloat)
+                nT = parse(Complex{T}, s)
+                @test nT isa Complex{T}
+                @test nT == n
+                @test n == parse(Complex{T}, string(s1, r, ".0", s2, sign, s3, i, ".0", Im, s4))
+                @test n*parse(T,"1e-3") == parse(Complex{T}, string(s1, r, "e-3", s2, sign, s3, i, "e-3", Im, s4))
+            end
+        end
+    end
+    @test parse(Complex{Float16}, "3.3+4i") === Complex{Float16}(3.3+4im)
+    @test parse(Complex{Int}, SubString("xxxxxx1+2imxxxx", 7, 10)) === 1+2im
+    for T in (Int, Float64), bad in ("3 + 4*im", "3 + 4", "1+2ij", "1im-3im", "++4im")
+        @test_throws ArgumentError parse(Complex{T}, bad)
+    end
+    @test_throws ArgumentError parse(Complex{Int}, "3 + 4.2im")
 end
 
-# pr #13078
-@test parse("a in b in c") == Expr(:comparison, :a, :in, :b, :in, :c)
-@test parse("a||b→c&&d") == Expr(:call, :→,
-                                 Expr(symbol("||"), :a, :b),
-                                 Expr(symbol("&&"), :c, :d))
+# added ⟂ to operator precedence (#24404)
+@test Meta.parse("a ⟂ b ⟂ c") == Expr(:comparison, :a, :⟂, :b, :⟂, :c)
+@test Meta.parse("a ⟂ b ∥ c") == Expr(:comparison, :a, :⟂, :b, :∥, :c)
 
-# issue #11988 -- normalize \r and \r\n in literal strings to \n
-@test "foo\nbar" == parse("\"\"\"\r\nfoo\r\nbar\"\"\"") == parse("\"\"\"\nfoo\nbar\"\"\"") == parse("\"\"\"\rfoo\rbar\"\"\"") == parse("\"foo\r\nbar\"") == parse("\"foo\rbar\"") == parse("\"foo\nbar\"")
-@test '\r' == first("\r") == first("\r\n") # still allow explicit \r
+# only allow certain characters after interpolated vars (#25231)
+@test Meta.parse("\"\$x෴  \"",raise=false) == Expr(:error, "interpolated variable \$x ends with invalid character \"෴\"; use \"\$(x)\" instead.")
+@test Base.incomplete_tag(Meta.parse("\"\$foo", raise=false)) == :string
+
+@testset "parse and tryparse type inference" begin
+    @inferred parse(Int, "12")
+    @inferred parse(Float64, "12")
+    @inferred parse(Complex{Int}, "12")
+    @test eltype([parse(Int, s, base=16) for s in String[]]) == Int
+    @test eltype([parse(Float64, s) for s in String[]]) == Float64
+    @test eltype([parse(Complex{Int}, s) for s in String[]]) == Complex{Int}
+    @test eltype([tryparse(Int, s, base=16) for s in String[]]) == Union{Nothing, Int}
+    @test eltype([tryparse(Float64, s) for s in String[]]) == Union{Nothing, Float64}
+    @test eltype([tryparse(Complex{Int}, s) for s in String[]]) == Union{Nothing, Complex{Int}}
+end
+
+@testset "isssue #29980" begin
+    @test parse(Bool, "1") === true
+    @test parse(Bool, "01") === true
+    @test parse(Bool, "0") === false
+    @test parse(Bool, "000000000000000000000000000000000000000000000000001") === true
+    @test parse(Bool, "000000000000000000000000000000000000000000000000000") === false
+    @test_throws ArgumentError parse(Bool, "1000000000000000000000000000000000000000000000000000")
+    @test_throws ArgumentError parse(Bool, "2")
+    @test_throws ArgumentError parse(Bool, "02")
+end
+
+@testset "issue #30341" begin
+    @test Meta.parse("x .~ y") == Expr(:call, :.~, :x, :y)
+    # Ensure dotting binary doesn't break dotting unary
+    @test Meta.parse(".~[1,2]") == Expr(:call, :.~, Expr(:vect, 1, 2))
+end

@@ -19,6 +19,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <set>
@@ -27,9 +28,8 @@
 
 #include "llvm-version.h"
 #include <llvm/Object/ObjectFile.h>
-#include <llvm/Support/MachO.h>
-#include <llvm/Support/COFF.h>
-#include <llvm/MC/MCDisassembler.h>
+#include <llvm/BinaryFormat/MachO.h>
+#include <llvm/BinaryFormat/COFF.h>
 #include <llvm/MC/MCInst.h>
 #include <llvm/MC/MCStreamer.h>
 #include <llvm/MC/MCSubtargetInfo.h>
@@ -44,73 +44,509 @@
 #include <llvm/MC/MCExpr.h>
 #include <llvm/MC/MCInstrAnalysis.h>
 #include <llvm/MC/MCSymbol.h>
-#ifdef LLVM35
 #include <llvm/AsmParser/Parser.h>
-#include <llvm/MC/MCExternalSymbolizer.h>
-#else
-#include <llvm/Assembly/Parser.h>
-#include <llvm/ADT/OwningPtr.h>
-#endif
+#include <llvm/MC/MCDisassembler/MCDisassembler.h>
+#include <llvm/MC/MCDisassembler/MCExternalSymbolizer.h>
 #include <llvm/ADT/Triple.h>
 #include <llvm/Support/MemoryBuffer.h>
-#include <llvm/Support/MemoryObject.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetRegistry.h>
-#include <llvm/Support/Host.h>
 #include "llvm/Support/TargetSelect.h"
 #include <llvm/Support/raw_ostream.h>
 #include "llvm/Support/FormattedStream.h"
-#ifndef LLVM35
-#include <llvm/Support/system_error.h>
-#endif
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/DebugInfo/DIContext.h>
-#ifdef LLVM37
 #include "llvm/DebugInfo/DWARF/DWARFContext.h"
-#endif
-#ifdef LLVM35
 #include <llvm/IR/DebugInfo.h>
-#else
-#include <llvm/DebugInfo.h>
-#endif
-#ifndef LLVM37
-#define format_hex(v, d) format("%#0" #d "x", v)
-#endif
+#include <llvm/IR/Function.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/IntrinsicInst.h>
+#include "llvm/IR/AssemblyAnnotationWriter.h"
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "processor.h"
 
 using namespace llvm;
+#include "debuginfo.h"
+#include "julia_assert.h"
 
-extern JL_DLLEXPORT LLVMContext &jl_LLVMContext;
+// helper class for tracking inlining context while printing debug info
+class DILineInfoPrinter {
+    // internal state:
+    std::vector<DILineInfo> context;
+    uint32_t inline_depth = 0;
+    // configuration options:
+    const char* LineStart = "; ";
+    bool bracket_outer = false;
+    bool collapse_recursive = true;
 
-namespace {
-#ifdef LLVM36
-#define FuncMCView ArrayRef<uint8_t>
-#else
-class FuncMCView : public MemoryObject {
-private:
-    const char *Fptr;
-    const size_t Fsize;
+    enum {
+        output_none = 0,
+        output_source = 1,
+    } verbosity = output_source;
 public:
-    FuncMCView(const void *fptr, size_t size) : Fptr((const char*)fptr), Fsize(size) {}
-    uint64_t getBase() const { return 0; }
-    uint64_t getExtent() const { return Fsize; }
-    int readByte(uint64_t Addr, uint8_t *Byte) const {
-        if (Addr >= getExtent())
-            return -1;
-        *Byte = Fptr[Addr];
-        return 0;
+    DILineInfoPrinter(const char *LineStart, bool bracket_outer)
+        : LineStart(LineStart),
+          bracket_outer(bracket_outer) {};
+    void SetVerbosity(const char *c)
+    {
+        if (StringRef("default") == c) {
+            verbosity = output_source;
+        }
+        else if (StringRef("source") == c) {
+            verbosity = output_source;
+        }
+        else if (StringRef("none") == c) {
+            verbosity = output_none;
+        }
     }
 
-    // ArrayRef-like accessors:
-    const char operator[] (const size_t idx) const { return Fptr[idx]; }
-    uint64_t size() const { return Fsize; }
-    const uint8_t *data() const { return (const uint8_t*)Fptr; }
-    FuncMCView slice(unsigned N) const { return FuncMCView(Fptr+N, Fsize-N); }
+    void emit_finish(raw_ostream &Out);
+    void emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> &DI);
+
+    struct repeat {
+        size_t times;
+        const char *c;
+    };
+    struct repeat inlining_indent(const char *c)
+    {
+        return repeat{
+            std::max(inline_depth + bracket_outer, (uint32_t)1) - 1,
+            c };
+    }
+
+    template<class T>
+    void emit_lineinfo(std::string &Out, T &DI)
+    {
+        raw_string_ostream OS(Out);
+        emit_lineinfo(OS, DI);
+    }
+
+    void emit_lineinfo(raw_ostream &Out, DILineInfo &DI)
+    {
+        std::vector<DILineInfo> DIvec(1);
+        DIvec[0] = DI;
+        emit_lineinfo(Out, DIvec);
+    }
+
+    void emit_lineinfo(raw_ostream &Out, DIInliningInfo &DI)
+    {
+        uint32_t nframes = DI.getNumberOfFrames();
+        std::vector<DILineInfo> DIvec(nframes);
+        for (uint32_t i = 0; i < DI.getNumberOfFrames(); i++) {
+            DIvec[i] = DI.getFrame(i);
+        }
+        emit_lineinfo(Out, DIvec);
+    }
+
+    void emit_finish(std::string &Out)
+    {
+        raw_string_ostream OS(Out);
+        emit_finish(OS);
+    }
 };
+
+static raw_ostream &operator<<(raw_ostream &Out, struct DILineInfoPrinter::repeat i)
+{
+    while (i.times-- > 0)
+        Out << i.c;
+    return Out;
+}
+
+void DILineInfoPrinter::emit_finish(raw_ostream &Out)
+{
+    auto pops = inlining_indent("└");
+    if (pops.times > 0)
+        Out << LineStart << pops << '\n';
+    context.clear();
+    this->inline_depth = 0;
+}
+
+void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> &DI)
+{
+    if (verbosity == output_none)
+        return;
+    bool update_line_only = false;
+    uint32_t nframes = DI.size();
+    if (nframes == 0)
+        return; // just skip over lines with no debug info at all
+    // compute the size of the matching prefix in the inlining information stack
+    uint32_t nctx;
+    for (nctx = 0; nctx < context.size() && nctx < nframes; nctx++) {
+        const DILineInfo &CtxLine = context.at(nctx);
+        const DILineInfo &FrameLine = DI.at(nframes - 1 - nctx);
+        if (CtxLine != FrameLine) {
+            break;
+        }
+    }
+    if (collapse_recursive && 0 < nctx) {
+        // check if we're adding more frames with the same method name,
+        // if so, drop all existing calls to it from the top of the context
+        // AND check if instead the context was previously printed that way
+        // but now has removed the recursive frames
+        StringRef method = StringRef(context.at(nctx - 1).FunctionName).rtrim(';');
+        if ((nctx < nframes && StringRef(DI.at(nframes - nctx - 1).FunctionName).rtrim(';') == method) ||
+            (nctx < context.size() && StringRef(context.at(nctx).FunctionName).rtrim(';') == method)) {
+            update_line_only = true;
+            while (nctx > 0 && StringRef(context.at(nctx - 1).FunctionName).rtrim(';') == method) {
+                nctx -= 1;
+            }
+        }
+    }
+    // examine what frames we're returning from
+    if (nctx < context.size()) {
+        // compute the new inlining depth
+        uint32_t npops;
+        if (collapse_recursive) {
+            npops = 1;
+            StringRef Prev = StringRef(context.at(nctx).FunctionName).rtrim(';');
+            for (uint32_t i = nctx + 1; i < context.size(); i++) {
+                StringRef Next = StringRef(context.at(i).FunctionName).rtrim(';');
+                if (Prev != Next)
+                    npops += 1;
+                Prev = Next;
+            }
+        }
+        else {
+            npops = context.size() - nctx;
+        }
+        // look at the first non-matching element to see if we are only changing the line number
+        if (!update_line_only && nctx < nframes) {
+            const DILineInfo &CtxLine = context.at(nctx);
+            const DILineInfo &FrameLine = DI.at(nframes - 1 - nctx);
+            if (CtxLine.FileName == FrameLine.FileName &&
+                    StringRef(CtxLine.FunctionName).rtrim(';') == StringRef(FrameLine.FunctionName).rtrim(';')) {
+                update_line_only = true;
+            }
+        }
+        context.resize(nctx);
+        update_line_only && (npops -= 1);
+        if (npops > 0) {
+            this->inline_depth -= npops;
+            Out << LineStart << inlining_indent("│") << repeat{npops, "└"} << '\n';
+        }
+    }
+    // see what change we made to the outermost line number
+    if (update_line_only) {
+        const DILineInfo &frame = DI.at(nframes - 1 - nctx);
+        nctx += 1;
+        context.push_back(frame);
+        if (frame.Line != UINT_MAX && frame.Line != 0) {
+            StringRef method = StringRef(frame.FunctionName).rtrim(';');
+            Out << LineStart << inlining_indent("│")
+                << " @ " << frame.FileName
+                << ":" << frame.Line
+                << " within `" << method << "'";
+            if (collapse_recursive) {
+                while (nctx < nframes) {
+                    const DILineInfo &frame = DI.at(nframes - 1 - nctx);
+                    if (StringRef(frame.FunctionName).rtrim(';') != method)
+                        break;
+                    nctx += 1;
+                    context.push_back(frame);
+                    Out << " @ " << frame.FileName
+                        << ":" << frame.Line;
+                }
+            }
+            Out << "\n";
+        }
+    }
+    // now print the rest of the new frames
+    while (nctx < nframes) {
+        const DILineInfo &frame = DI.at(nframes - 1 - nctx);
+        Out << LineStart << inlining_indent("│");
+        nctx += 1;
+        context.push_back(frame);
+        this->inline_depth += 1;
+        if (bracket_outer || nctx != 1)
+            Out << "┌";
+        Out << " @ " << frame.FileName;
+        if (frame.Line != UINT_MAX && frame.Line != 0)
+            Out << ":" << frame.Line;
+        Out << " within `" << StringRef(frame.FunctionName).rtrim(';') << "'";
+        if (collapse_recursive) {
+            StringRef method = StringRef(frame.FunctionName).rtrim(';');
+            while (nctx < nframes) {
+                const DILineInfo &frame = DI.at(nframes - 1 - nctx);
+                if (StringRef(frame.FunctionName).rtrim(';') != method)
+                    break;
+                nctx += 1;
+                context.push_back(frame);
+                Out << " @ " << frame.FileName
+                    << ":" << frame.Line;
+            }
+        }
+        Out << "\n";
+    }
+#ifndef JL_NDEBUG
+    StringRef Prev = StringRef(context.at(0).FunctionName).rtrim(';');
+    uint32_t depth2 = 1;
+    for (uint32_t i = 1; i < nctx; i++) {
+        StringRef Next = StringRef(context.at(i).FunctionName).rtrim(';');
+        if (!collapse_recursive || Prev != Next)
+            depth2 += 1;
+        Prev = Next;
+    }
+    assert(this->inline_depth == depth2);
 #endif
+}
+
+
+// adaptor class for printing line numbers before llvm IR lines
+class LineNumberAnnotatedWriter : public AssemblyAnnotationWriter {
+    DILocation *InstrLoc = nullptr;
+    DILineInfoPrinter LinePrinter{"; ", false};
+    DenseMap<const Instruction *, DILocation *> DebugLoc;
+    DenseMap<const Function *, DISubprogram *> Subprogram;
+public:
+    LineNumberAnnotatedWriter(const char *debuginfo)
+    {
+        LinePrinter.SetVerbosity(debuginfo);
+    }
+    virtual void emitFunctionAnnot(const Function *, formatted_raw_ostream &);
+    virtual void emitInstructionAnnot(const Instruction *, formatted_raw_ostream &);
+    virtual void emitBasicBlockEndAnnot(const BasicBlock *, formatted_raw_ostream &);
+    // virtual void printInfoComment(const Value &, formatted_raw_ostream &) {}
+
+    void addSubprogram(const Function *F, DISubprogram *SP)
+    {
+        Subprogram[F] = SP;
+    }
+
+    void addDebugLoc(const Instruction *I, DILocation *Loc)
+    {
+        DebugLoc[I] = Loc;
+    }
+};
+
+void LineNumberAnnotatedWriter::emitFunctionAnnot(
+      const Function *F, formatted_raw_ostream &Out)
+{
+    InstrLoc = nullptr;
+    DISubprogram *FuncLoc = F->getSubprogram();
+    if (!FuncLoc) {
+        auto SP = Subprogram.find(F);
+        if (SP != Subprogram.end())
+            FuncLoc = SP->second;
+    }
+    if (FuncLoc) {
+        std::vector<DILineInfo> DIvec(1);
+        DILineInfo &DI = DIvec.back();
+        DI.FunctionName = FuncLoc->getName();
+        DI.FileName = FuncLoc->getFilename();
+        DI.Line = FuncLoc->getLine();
+        LinePrinter.emit_lineinfo(Out, DIvec);
+    }
+}
+
+void LineNumberAnnotatedWriter::emitInstructionAnnot(
+      const Instruction *I, formatted_raw_ostream &Out)
+{
+    DILocation *NewInstrLoc = I->getDebugLoc();
+    if (!NewInstrLoc) {
+        auto Loc = DebugLoc.find(I);
+        if (Loc != DebugLoc.end())
+            NewInstrLoc = Loc->second;
+    }
+    if (NewInstrLoc && NewInstrLoc != InstrLoc) {
+        InstrLoc = NewInstrLoc;
+        std::vector<DILineInfo> DIvec;
+        do {
+            DIvec.emplace_back();
+            DILineInfo &DI = DIvec.back();
+            DIScope *scope = NewInstrLoc->getScope();
+            if (scope)
+                DI.FunctionName = scope->getName();
+            DI.FileName = NewInstrLoc->getFilename();
+            DI.Line = NewInstrLoc->getLine();
+            NewInstrLoc = NewInstrLoc->getInlinedAt();
+        } while (NewInstrLoc);
+        LinePrinter.emit_lineinfo(Out, DIvec);
+    }
+    Out << LinePrinter.inlining_indent(" ");
+}
+
+void LineNumberAnnotatedWriter::emitBasicBlockEndAnnot(
+        const BasicBlock *BB, formatted_raw_ostream &Out)
+{
+    if (BB == &BB->getParent()->back())
+        LinePrinter.emit_finish(Out);
+}
+
+// print an llvm IR acquired from jl_get_llvmf
+// warning: this takes ownership of, and destroys, f->getParent()
+extern "C" JL_DLLEXPORT
+jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_module, const char *debuginfo)
+{
+    std::string code;
+    llvm::raw_string_ostream stream(code);
+
+    Function *llvmf = dyn_cast_or_null<Function>((Function*)f);
+    if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
+        jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
+
+    JL_LOCK(&codegen_lock); // Might GC
+    LineNumberAnnotatedWriter AAW{debuginfo};
+    if (!llvmf->getParent()) {
+        // print the function declaration as-is
+        llvmf->print(stream, &AAW);
+        delete llvmf;
+    }
+    else {
+        Module *m = llvmf->getParent();
+        if (strip_ir_metadata) {
+            // strip metadata from all instructions in all functions in the module
+            Instruction *deletelast = nullptr; // can't actually delete until the iterator advances
+            for (Function &f2 : m->functions()) {
+                AAW.addSubprogram(&f2, f2.getSubprogram());
+                for (BasicBlock &f2_bb : f2) {
+                    for (Instruction &inst : f2_bb) {
+                        if (deletelast) {
+                            deletelast->eraseFromParent();
+                            deletelast = nullptr;
+                        }
+                        // remove dbg.declare and dbg.value calls
+                        if (isa<DbgDeclareInst>(inst) || isa<DbgValueInst>(inst)) {
+                            deletelast = &inst;
+                            continue;
+                        }
+
+                        // iterate over all metadata kinds and set to NULL to remove
+                        SmallVector<std::pair<unsigned, MDNode*>, 4> MDForInst;
+                        inst.getAllMetadataOtherThanDebugLoc(MDForInst);
+                        for (const auto &md_iter : MDForInst) {
+                            inst.setMetadata(md_iter.first, NULL);
+                        }
+                        // record debug location before erasing it
+                        AAW.addDebugLoc(&inst, inst.getDebugLoc());
+                        inst.setDebugLoc(DebugLoc());
+                    }
+                    if (deletelast) {
+                        deletelast->eraseFromParent();
+                        deletelast = nullptr;
+                    }
+                }
+            }
+            for (GlobalObject &g2 : m->global_objects()) {
+                g2.clearMetadata();
+            }
+        }
+        if (dump_module) {
+            m->print(stream, &AAW);
+        }
+        else {
+            llvmf->print(stream, &AAW);
+        }
+        delete m;
+    }
+    JL_UNLOCK(&codegen_lock); // Might GC
+
+    return jl_pchar_to_string(stream.str().data(), stream.str().size());
+}
+
+static void jl_dump_asm_internal(
+        uintptr_t Fptr, size_t Fsize, int64_t slide,
+        const object::ObjectFile *object,
+        DIContext *di_ctx,
+        raw_ostream &rstream,
+        const char* asm_variant,
+        const char* debuginfo);
+
+// This isn't particularly fast, but neither is printing assembly, and they're only used for interactive mode
+static uint64_t compute_obj_symsize(const object::ObjectFile *obj, uint64_t offset)
+{
+    // Scan the object file for the closest symbols above and below offset in the .text section
+    uint64_t lo = 0;
+    uint64_t hi = 0;
+    bool setlo = false;
+    for (const object::SectionRef &Section : obj->sections()) {
+        uint64_t SAddr, SSize;
+        if (!Section.isText()) continue;
+        SAddr = Section.getAddress();
+        SSize = Section.getSize();
+        if (offset < SAddr || offset >= SAddr + SSize) continue;
+        assert(hi == 0);
+
+        // test for lower and upper symbol bounds relative to other symbols
+        hi = SAddr + SSize;
+        object::section_iterator ESection = obj->section_end();
+        for (const object::SymbolRef &Sym : obj->symbols()) {
+            uint64_t Addr;
+            object::section_iterator Sect = ESection;
+            auto SectOrError = Sym.getSection();
+            assert(SectOrError);
+            Sect = SectOrError.get();
+            if (Sect == ESection) continue;
+            if (Sect != Section) continue;
+            auto AddrOrError = Sym.getAddress();
+            assert(AddrOrError);
+            Addr = AddrOrError.get();
+            if (Addr <= offset && Addr >= lo) {
+                // test for lower bound on symbol
+                lo = Addr;
+                setlo = true;
+            }
+            if (Addr > offset && Addr < hi) {
+                // test for upper bound on symbol
+                hi = Addr;
+            }
+        }
+    }
+    if (setlo)
+        return hi - lo;
+    return 0;
+}
+
+// print a native disassembly for the function starting at fptr
+extern "C" JL_DLLEXPORT
+jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant, const char *debuginfo)
+{
+    assert(fptr != 0);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    std::string code;
+    llvm::raw_string_ostream stream(code);
+
+    // Find debug info (line numbers) to print alongside
+    uint64_t symsize = 0;
+    int64_t slide = 0, section_slide = 0;
+    llvm::DIContext *context = NULL;
+    const object::ObjectFile *object = NULL;
+    if (!jl_DI_for_fptr(fptr, &symsize, &slide, &section_slide, &object, &context)) {
+        if (!jl_dylib_DI_for_fptr(fptr, &object, &context, &slide, &section_slide, false,
+            NULL, NULL, NULL, NULL)) {
+                jl_printf(JL_STDERR, "WARNING: Unable to find function pointer\n");
+                return jl_pchar_to_string("", 0);
+        }
+    }
+    if (symsize == 0 && object != NULL)
+        symsize = compute_obj_symsize(object, fptr + slide + section_slide);
+    if (symsize == 0) {
+        jl_printf(JL_STDERR, "WARNING: Could not determine size of symbol\n");
+        return jl_pchar_to_string("", 0);
+    }
+
+    if (raw_mc) {
+        return (jl_value_t*)jl_pchar_to_array((char*)fptr, symsize);
+    }
+
+    // Dump assembly code
+    int8_t gc_state = jl_gc_safe_enter(ptls);
+    jl_dump_asm_internal(
+            fptr, symsize, slide,
+            object, context,
+            stream,
+            asm_variant,
+            debuginfo);
+    jl_gc_safe_leave(ptls, gc_state);
+
+    return jl_pchar_to_string(stream.str().data(), stream.str().size());
+}
+
+
+namespace {
+#define FuncMCView ArrayRef<uint8_t>
 
 // Look up a symbol, and return a const char* to its name when the
 // address matches. We currently just use "L<address>" as name for the
@@ -118,16 +554,17 @@ public:
 // sequentially or encoding the line number, but that doesn't seem
 // necessary.
 class SymbolTable {
-    typedef std::map<uint64_t, MCSymbol*> TableType;
+    typedef std::map<uint64_t, std::string> TableType;
     TableType Table;
-    std::string TempName;
     MCContext& Ctx;
     const FuncMCView &MemObj;
     int Pass;
+    const object::ObjectFile *object;
     uint64_t ip; // virtual instruction pointer of the current instruction
+    int64_t slide;
 public:
-    SymbolTable(MCContext &Ctx, const FuncMCView &MemObj):
-        Ctx(Ctx), MemObj(MemObj), ip(0) {}
+    SymbolTable(MCContext &Ctx, const object::ObjectFile *object, int64_t slide, const FuncMCView &MemObj):
+        Ctx(Ctx), MemObj(MemObj), object(object), ip(0), slide(slide) {}
     const FuncMCView &getMemoryObject() const { return MemObj; }
     void setPass(int Pass) { this->Pass = Pass; }
     int getPass() const { return Pass; }
@@ -136,9 +573,12 @@ public:
     void createSymbols();
     const char *lookupSymbolName(uint64_t addr);
     MCSymbol *lookupSymbol(uint64_t addr);
+    StringRef getSymbolNameAt(uint64_t offset) const;
+    const char *lookupLocalPC(size_t addr);
     void setIP(uint64_t addr);
     uint64_t getIP() const;
 };
+
 void SymbolTable::setIP(uint64_t addr)
 {
     ip = addr;
@@ -147,296 +587,253 @@ uint64_t SymbolTable::getIP() const
 {
     return ip;
 }
+
+const char *SymbolTable::lookupLocalPC(size_t addr) {
+    jl_frame_t *frame = NULL;
+    jl_getFunctionInfo(&frame,
+            addr,
+            /*skipC*/0,
+            /*noInline*/1/* the entry pointer shouldn't have inlining */);
+    char *name = frame->func_name; // TODO: free me
+    free(frame->file_name);
+    free(frame);
+    return name;
+}
+
+StringRef SymbolTable::getSymbolNameAt(uint64_t offset) const
+{
+    if (object == NULL) return StringRef();
+    object::section_iterator ESection = object->section_end();
+    for (const object::SymbolRef &Sym : object->symbols()) {
+        uint64_t Addr, SAddr;
+        object::section_iterator Sect = ESection;
+        auto SectOrError = Sym.getSection();
+        assert(SectOrError);
+        Sect = SectOrError.get();
+        if (Sect == ESection) continue;
+        SAddr = Sect->getAddress();
+        if (SAddr == 0) continue;
+        auto AddrOrError = Sym.getAddress();
+        assert(AddrOrError);
+        Addr = AddrOrError.get();
+        if (Addr == offset) {
+            auto sNameOrError = Sym.getName();
+            if (sNameOrError)
+                return sNameOrError.get();
+        }
+    }
+    return StringRef();
+}
+
 // Insert an address
 void SymbolTable::insertAddress(uint64_t addr)
 {
-    Table[addr] = NULL;
+    Table[addr] = "";
 }
-// Create a symbol
-// void SymbolTable::createSymbol(const char *name, uint64_t addr)
-// {
-//     MCSymbol *symb = Ctx.GetOrCreateSymbol(StringRef(name));
-//     symb->setVariableValue(MCConstantExpr::Create(addr, Ctx));
-// }
 // Create symbols for all addresses
 void SymbolTable::createSymbols()
 {
+    uintptr_t Fptr = (uintptr_t)MemObj.data();
+    uintptr_t Fsize = MemObj.size();
     for (TableType::iterator isymb = Table.begin(), esymb = Table.end();
          isymb != esymb; ++isymb) {
-        uint64_t addr = isymb->first - ip;
-        std::ostringstream name;
-        name << "L" << addr;
-#ifdef LLVM37
-        MCSymbol *symb = Ctx.getOrCreateSymbol(StringRef(name.str()));
-        assert(symb->isUndefined());
-#else
-        MCSymbol *symb = Ctx.GetOrCreateSymbol(StringRef(name.str()));
-        symb->setVariableValue(MCConstantExpr::Create(addr, Ctx));
-#endif
-        isymb->second = symb;
+        uintptr_t rel = isymb->first - ip;
+        uintptr_t addr = isymb->first;
+        if (Fptr <= addr && addr < Fptr + Fsize) {
+            std::ostringstream name;
+            name << "L" << rel;
+            isymb->second = name.str();
+        }
+        else {
+            const char *global = lookupLocalPC(addr);
+            if (global)
+                isymb->second = global;
+        }
     }
 }
+
 const char *SymbolTable::lookupSymbolName(uint64_t addr)
 {
-    if (!Table.count(addr)) return NULL;
-    MCSymbol *symb = Table[addr];
-    TempName = symb->getName().str();
-    return TempName.c_str();
-}
-MCSymbol *SymbolTable::lookupSymbol(uint64_t addr)
-{
-    if (!Table.count(addr)) return NULL;
-    return Table[addr];
+    TableType::iterator Sym;
+    bool insertion;
+    std::tie(Sym, insertion) = Table.insert(std::make_pair(addr, std::string()));
+    if (insertion) {
+        // First time we've seen addr: try to look it up
+        StringRef local_name = getSymbolNameAt(addr + slide);
+        if (local_name.empty()) {
+            const char *global = lookupLocalPC(addr);
+            if (global) {
+                //std::ostringstream name;
+                //name << global << "@0x" << std::hex
+                //     << std::setfill('0') << std::setw(2 * sizeof(void*))
+                //     << addr;
+                //Sym->second = name.str();
+                Sym->second = global;
+            }
+        }
+        else {
+            Sym->second = local_name;
+        }
+    }
+    return Sym->second.empty() ? NULL : Sym->second.c_str();
 }
 
-const char *SymbolLookup(void *DisInfo,
-                         uint64_t ReferenceValue,
-                         uint64_t *ReferenceType,
-                         uint64_t ReferencePC,
-                         const char **ReferenceName)
+MCSymbol *SymbolTable::lookupSymbol(uint64_t addr)
 {
+    TableType::iterator Sym = Table.find(addr);
+    if (Sym == Table.end() || Sym->second.empty())
+        return NULL;
+    MCSymbol *symb = Ctx.getOrCreateSymbol(Sym->second);
+    assert(symb->isUndefined());
+    return symb;
+}
+
+static const char *SymbolLookup(void *DisInfo, uint64_t ReferenceValue, uint64_t *ReferenceType,
+                                uint64_t ReferencePC, const char **ReferenceName)
+{
+    uint64_t RTypeIn = *ReferenceType;
     SymbolTable *SymTab = (SymbolTable*)DisInfo;
+    *ReferenceType = LLVMDisassembler_ReferenceType_InOut_None;
+    *ReferenceName = NULL;
     if (SymTab->getPass() != 0) {
-        if (*ReferenceType == LLVMDisassembler_ReferenceType_In_Branch) {
+        if (RTypeIn == LLVMDisassembler_ReferenceType_In_Branch) {
+            uint64_t addr = ReferenceValue + SymTab->getIP(); // probably pc-rel
+            const char *symbolName = SymTab->lookupSymbolName(addr);
+            return symbolName;
+        }
+        else if (RTypeIn == LLVMDisassembler_ReferenceType_In_PCrel_Load) {
             uint64_t addr = ReferenceValue + SymTab->getIP();
             const char *symbolName = SymTab->lookupSymbolName(addr);
-            *ReferenceType = LLVMDisassembler_ReferenceType_InOut_None;
-            *ReferenceName = NULL;
+            if (symbolName) {
+                *ReferenceType = LLVMDisassembler_ReferenceType_Out_LitPool_SymAddr;
+                *ReferenceName = symbolName;
+            }
+        }
+        else if (RTypeIn == LLVMDisassembler_ReferenceType_InOut_None) {
+            uint64_t addr = ReferenceValue; // probably not pc-rel
+            const char *symbolName = SymTab->lookupSymbolName(addr);
             return symbolName;
         }
     }
-    *ReferenceType = LLVMDisassembler_ReferenceType_InOut_None;
-    *ReferenceName = NULL;
     return NULL;
 }
 
-int OpInfoLookup(void *DisInfo, uint64_t PC,
-                 uint64_t Offset, uint64_t Size,
-                 int TagType, void *TagBuf)
+static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Size,
+                        int TagType, void *TagBuf)
 {
     SymbolTable *SymTab = (SymbolTable*)DisInfo;
-    PC += SymTab->getIP() - (uint64_t)(uintptr_t)SymTab->getMemoryObject().data(); // add offset from MemoryObject base
+    LLVMOpInfo1 *info = (LLVMOpInfo1*)TagBuf;
+    memset(info, 0, sizeof(*info));
     if (TagType != 1)
         return 0;               // Unknown data format
-    LLVMOpInfo1 *info = (LLVMOpInfo1*)TagBuf;
-    uint8_t *bytes = (uint8_t*) alloca(Size*sizeof(uint8_t));
-    if (PC+Offset+Size > SymTab->getMemoryObject().size())
-        return 0;              // Invalid memory location
-    for (uint64_t i=0; i<Size; ++i)
-        bytes[i] = SymTab->getMemoryObject()[PC+Offset+i];
-    size_t pointer;
-    switch (Size) {
-    case 1: { uint8_t  val; std::memcpy(&val, bytes, 1); pointer = val; break; }
-    case 2: { uint16_t val; std::memcpy(&val, bytes, 2); pointer = val; break; }
-    case 4: { uint32_t val; std::memcpy(&val, bytes, 4); pointer = val; break; }
-    case 8: { uint64_t val; std::memcpy(&val, bytes, 8); pointer = val; break; }
-    default: return 0;          // Cannot handle input address size
-    }
-    int skipC = 0;
-    char *name;
-    char *filename;
-    size_t line;
-    char *inlinedat_file;
-    size_t inlinedat_line;
-    int fromC;
-    jl_getFunctionInfo(&name, &filename, &line, &inlinedat_file, &inlinedat_line, pointer, &fromC, skipC, 1);
-    free(filename);
-    free(inlinedat_file);
-    if (!name)
-        return 0;               // Did not find symbolic information
-    // Describe the symbol
-    info->AddSymbol.Present = 1;
-    info->AddSymbol.Name = name;
-    info->AddSymbol.Value = pointer; // unused by LLVM
-    info->Value = 0;                 // offset
-    return 1;                        // Success
+    PC += SymTab->getIP() - (uint64_t)(uintptr_t)SymTab->getMemoryObject().data(); // add offset from MemoryObject base
+    // TODO: see if we knew of a relocation applied at PC
+    // info->AddSymbol.Present = 1;
+    // info->AddSymbol.Name = name;
+    // info->AddSymbol.Value = pointer; // unused by LLVM
+    // info->Value = 0;                 // offset
+    // return 1;                        // Success
+    return 0;
 }
 } // namespace
 
-#ifndef USE_MCJIT
-static void print_source_line(raw_ostream &stream, DebugLoc Loc)
+static void jl_dump_asm_internal(
+        uintptr_t Fptr, size_t Fsize, int64_t slide,
+        const object::ObjectFile *object,
+        DIContext *di_ctx,
+        raw_ostream &rstream,
+        const char* asm_variant,
+        const char* debuginfo)
 {
-    MDNode *inlinedAt = Loc.getInlinedAt(jl_LLVMContext);
-    if (inlinedAt != NULL) {
-        DebugLoc inlineloc = DebugLoc::getFromDILocation(inlinedAt);
-        stream << "Source line: " << inlineloc.getLine() << "\n";
-
-        DILexicalBlockFile innerscope = DILexicalBlockFile(Loc.getScope(jl_LLVMContext));
-        stream << "Source line: [inline] " << innerscope.getFilename().str().c_str() << ':' << Loc.getLine() << "\n";
-    }
-    else {
-        stream << "Source line: " << Loc.getLine() << "\n";
-    }
-}
-#endif
-
-extern "C"
-void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
-#ifndef USE_MCJIT
-                          std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
-#else
-                          const object::ObjectFile *objectfile,
-#endif
-#ifdef LLVM37
-                          raw_ostream &rstream
-#else
-                          formatted_raw_ostream &stream
-#endif
-                          )
-{
-    // Initialize targets and assembly printers/parsers.
-    // Avoids hard-coded targets - will generally be only host CPU anyway.
-    llvm::InitializeNativeTargetAsmParser();
-    llvm::InitializeNativeTargetDisassembler();
-
+    // GC safe
     // Get the host information
-    std::string TripleName;
-    if (TripleName.empty())
-        TripleName = sys::getDefaultTargetTriple();
-    Triple TheTriple(Triple::normalize(TripleName));
+    Triple TheTriple(sys::getProcessTriple());
 
-    std::string MCPU = sys::getHostCPUName();
-    SubtargetFeatures Features;
-    Features.getDefaultSubtargetFeatures(TheTriple);
+    const auto &target = jl_get_llvm_disasm_target();
+    const auto &cpu = target.first;
+    const auto &features = target.second;
 
     std::string err;
-    const Target* TheTarget = TargetRegistry::lookupTarget(TripleName, err);
+    const Target *TheTarget = TargetRegistry::lookupTarget(TheTriple.str(), err);
 
     // Set up required helpers and streamer
-#ifdef LLVM35
     std::unique_ptr<MCStreamer> Streamer;
-#else
-    OwningPtr<MCStreamer> Streamer;
-#endif
     SourceMgr SrcMgr;
 
-#ifdef LLVM35
-    std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TripleName),TripleName));
-#elif defined(LLVM34)
-    llvm::OwningPtr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TripleName),TripleName));
-#else
-    llvm::OwningPtr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(TripleName));
-#endif
+    std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TheTriple.str()), TheTriple.str()));
     assert(MAI && "Unable to create target asm info!");
 
-#ifdef LLVM35
-    std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TripleName));
-#else
-    llvm::OwningPtr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TripleName));
-#endif
+    std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TheTriple.str()));
     assert(MRI && "Unable to create target register info!");
 
-#ifdef LLVM35
     std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
-#else
-    OwningPtr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
-#endif
-#ifdef LLVM34
     MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr);
-#else
-    MCContext Ctx(*MAI, *MRI, MOFI.get(), &SrcMgr);
-#endif
-#ifdef LLVM37
-    MOFI->InitMCObjectFileInfo(TheTriple, Reloc::Default, CodeModel::Default, Ctx);
-#else
-    MOFI->InitMCObjectFileInfo(TripleName, Reloc::Default, CodeModel::Default, Ctx);
-#endif
+    MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false, Ctx);
 
     // Set up Subtarget and Disassembler
-#ifdef LLVM35
     std::unique_ptr<MCSubtargetInfo>
-        STI(TheTarget->createMCSubtargetInfo(TripleName, MCPU, Features.getString()));
+        STI(TheTarget->createMCSubtargetInfo(TheTriple.str(), cpu, features));
     std::unique_ptr<MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI, Ctx));
-#else
-    OwningPtr<MCSubtargetInfo>
-        STI(TheTarget->createMCSubtargetInfo(TripleName, MCPU, Features.getString()));
-    OwningPtr<MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI));
-#endif
     if (!DisAsm) {
-        jl_printf(JL_STDERR, "ERROR: no disassembler for target %s\n",
-                  TripleName.c_str());
+        rstream << "ERROR: no disassembler for target " << TheTriple.str();
         return;
     }
-
     unsigned OutputAsmVariant = 0; // ATT or Intel-style assembly
-    bool ShowEncoding = false;
-    bool ShowInst = false;
 
-#ifdef LLVM35
+    if (strcmp(asm_variant, "intel") == 0) {
+        OutputAsmVariant = 1;
+    }
+    bool ShowEncoding = false;
+
     std::unique_ptr<MCInstrInfo> MCII(TheTarget->createMCInstrInfo());
     std::unique_ptr<MCInstrAnalysis>
         MCIA(TheTarget->createMCInstrAnalysis(MCII.get()));
-#else
-    OwningPtr<MCInstrInfo> MCII(TheTarget->createMCInstrInfo());
-    OwningPtr<MCInstrAnalysis>
-        MCIA(TheTarget->createMCInstrAnalysis(MCII.get()));
-#endif
-#ifdef LLVM37
-    MCInstPrinter* IP =
+    MCInstPrinter *IP =
         TheTarget->createMCInstPrinter(TheTriple, OutputAsmVariant, *MAI, *MCII, *MRI);
-#else
-    MCInstPrinter* IP =
-        TheTarget->createMCInstPrinter(OutputAsmVariant, *MAI, *MCII, *MRI, *STI);
-#endif
+    //IP->setPrintImmHex(true); // prefer hex or decimal immediates
     MCCodeEmitter *CE = 0;
     MCAsmBackend *MAB = 0;
     if (ShowEncoding) {
-#ifdef LLVM37
         CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx);
-#else
-        CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, *STI, Ctx);
-#endif
-#ifdef LLVM34
-        MAB = TheTarget->createMCAsmBackend(*MRI, TripleName, MCPU);
-#else
-        MAB = TheTarget->createMCAsmBackend(TripleName, MCPU);
-#endif
+        MCTargetOptions Options;
+        MAB = TheTarget->createMCAsmBackend(*STI, *MRI, Options);
     }
 
-#ifdef LLVM37
     // createAsmStreamer expects a unique_ptr to a formatted stream, which means
     // it will destruct the stream when it is done. We cannot have this, so we
     // start out with a raw stream, and create formatted stream from it here.
     // LLVM will desctruct the formatted stream, and we keep the raw stream.
     auto ustream = llvm::make_unique<formatted_raw_ostream>(rstream);
     Streamer.reset(TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
-#else
-    Streamer.reset(TheTarget->createAsmStreamer(Ctx, stream, /*asmverbose*/true,
-#endif
-#ifndef LLVM35
-                                           /*useLoc*/ true,
-                                           /*useCFI*/ true,
-#endif
-                                           /*useDwarfDirectory*/ true,
-                                           IP, CE, MAB, ShowInst));
-#ifdef LLVM36
+                                                /*useDwarfDirectory*/ true,
+                                                IP, CE, MAB, /*ShowInst*/ false));
     Streamer->InitSections(true);
-#else
-    Streamer->InitSections();
-#endif
 
     // Make the MemoryObject wrapper
-#ifdef LLVM36
     ArrayRef<uint8_t> memoryObject(const_cast<uint8_t*>((const uint8_t*)Fptr),Fsize);
-#else
-    FuncMCView memoryObject((const uint8_t*)Fptr, Fsize);
-#endif
-    SymbolTable DisInfo(Ctx, memoryObject);
+    SymbolTable DisInfo(Ctx, object, slide, memoryObject);
 
-#ifdef USE_MCJIT
-    if (!objectfile) return;
-#ifdef LLVM37
-    DIContext *di_ctx = new DWARFContextInMemory(*objectfile);
-#elif LLVM36
-    DIContext *di_ctx = DIContext::getDWARFContext(*objectfile);
-#else
-    DIContext *di_ctx = DIContext::getDWARFContext(const_cast<object::ObjectFile*>(objectfile));
-#endif
-    if (di_ctx == NULL) return;
-    DILineInfoTable lineinfo = di_ctx->getLineInfoForAddressRange(Fptr-slide, Fsize);
-#else
-    typedef std::vector<JITEvent_EmittedFunctionDetails::LineStart> LInfoVec;
-#endif
+    DILineInfoTable di_lineinfo;
+    if (di_ctx)
+        di_lineinfo = di_ctx->getLineInfoForAddressRange(Fptr+slide, Fsize);
+    if (!di_lineinfo.empty()) {
+        auto cur_addr = di_lineinfo[0].first;
+        auto nlineinfo = di_lineinfo.size();
+        // filter out line infos that doesn't contain any instructions
+        unsigned j = 0;
+        for (unsigned i = 1; i < nlineinfo; i++) {
+            auto &info = di_lineinfo[i];
+            if (info.first != cur_addr)
+                j++;
+            cur_addr = info.first;
+            if (i != j) {
+                di_lineinfo[j] = std::move(info);
+            }
+        }
+        if (j + 1 < nlineinfo) {
+            di_lineinfo.resize(j + 1);
+        }
+    }
 
     // Take two passes: In the first pass we record all branch labels,
     // in the second we actually perform the output
@@ -450,70 +847,32 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
             // MCIA->evaluateBranch. (It should be possible to rewrite
             // this routine to handle this case correctly as well.)
             // Could add OpInfoLookup here
-#ifdef LLVM35
             DisAsm->setSymbolizer(std::unique_ptr<MCSymbolizer>(new MCExternalSymbolizer(
                         Ctx,
                         std::unique_ptr<MCRelocationInfo>(new MCRelocationInfo(Ctx)),
                         OpInfoLookup,
                         SymbolLookup,
                         &DisInfo)));
-#elif defined LLVM34
-            OwningPtr<MCRelocationInfo> relinfo(new MCRelocationInfo(Ctx));
-            DisAsm->setupForSymbolicDisassembly(
-                    OpInfoLookup, SymbolLookup, &DisInfo, &Ctx,
-                    relinfo);
-#else
-            DisAsm->setupForSymbolicDisassembly(
-                    OpInfoLookup, SymbolLookup, &DisInfo, &Ctx);
-#endif
         }
-
 
         uint64_t nextLineAddr = -1;
-#ifdef USE_MCJIT
-        // Set up the line info
-        DILineInfoTable::iterator lineIter = lineinfo.begin();
-        DILineInfoTable::iterator lineEnd = lineinfo.end();
-
-        if (lineIter != lineEnd) {
-            nextLineAddr = lineIter->first;
-            if (pass != 0) {
-#ifdef LLVM37
-                std::ostringstream buf;
-                buf << "Filename: " << lineIter->second.FileName << "\n";
-                Streamer->EmitRawText(buf.str());
-#elif defined LLVM35
-                stream << "Filename: " << lineIter->second.FileName << "\n";
-#else
-                stream << "Filename: " << lineIter->second.getFileName() << "\n";
-#endif
+        DILineInfoTable::iterator di_lineIter = di_lineinfo.begin();
+        DILineInfoTable::iterator di_lineEnd = di_lineinfo.end();
+        DILineInfoPrinter dbgctx{"; ", true};
+        dbgctx.SetVerbosity(debuginfo);
+        if (pass != 0) {
+            if (di_ctx && di_lineIter != di_lineEnd) {
+                // Set up the line info
+                nextLineAddr = di_lineIter->first;
+                if (nextLineAddr != (uint64_t)(Fptr + slide)) {
+                    std::string buf;
+                    dbgctx.emit_lineinfo(buf, di_lineIter->second);
+                    if (!buf.empty()) {
+                        Streamer->EmitRawText(buf);
+                    }
+                }
             }
         }
-#else
-        // Set up the line info
-        LInfoVec::iterator lineIter = lineinfo.begin();
-        LInfoVec::iterator lineEnd  = lineinfo.end();
-
-        if (lineIter != lineEnd) {
-            nextLineAddr = (*lineIter).Address;
-            if (pass != 0) {
-                DebugLoc Loc = (*lineIter).Loc;
-                MDNode *outer = Loc.getInlinedAt(jl_LLVMContext);
-                StringRef FileName;
-                if (!outer) {
-                    DISubprogram debugscope = DISubprogram(Loc.getScope(jl_LLVMContext));
-                    FileName = debugscope.getFilename();
-                }
-                else {
-                    DebugLoc inlineloc = DebugLoc::getFromDILocation(outer);
-                    DILexicalBlockFile debugscope = DILexicalBlockFile(inlineloc.getScope(jl_LLVMContext));
-                    FileName = debugscope.getFilename();
-                }
-                stream << "Filename: " << FileName << "\n";
-                print_source_line(stream, (*lineIter).Loc);
-            }
-        }
-#endif
 
         uint64_t Index = 0;
         uint64_t insSize = 0;
@@ -521,132 +880,99 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
         // Do the disassembly
         for (Index = 0; Index < Fsize; Index += insSize) {
 
-            if (nextLineAddr != (uint64_t)-1 && Index + Fptr - slide == nextLineAddr) {
-#ifdef USE_MCJIT
-#ifdef LLVM37
-                if (pass != 0) {
-                    std::ostringstream buf;
-                    buf << "Source line: " << lineIter->second.Line << "\n";
-                    Streamer->EmitRawText(buf.str());
+            if (pass != 0 && nextLineAddr != (uint64_t)-1 && Index + Fptr + slide == nextLineAddr) {
+                if (di_ctx) {
+                    std::string buf;
+                    DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::Default,
+                                                 DILineInfoSpecifier::FunctionNameKind::ShortName);
+                    DIInliningInfo dbg = di_ctx->getInliningInfoForAddress(Index + Fptr + slide, infoSpec);
+                    if (dbg.getNumberOfFrames()) {
+                        dbgctx.emit_lineinfo(buf, dbg);
+                    }
+                    else {
+                        dbgctx.emit_lineinfo(buf, di_lineIter->second);
+                    }
+                    if (!buf.empty())
+                        Streamer->EmitRawText(buf);
+                    nextLineAddr = (++di_lineIter)->first;
                 }
-#elif defined LLVM35
-                if (pass != 0)
-                    stream << "Source line: " << lineIter->second.Line << "\n";
-#else
-                if (pass != 0)
-                    stream << "Source line: " << lineIter->second.getLine() << "\n";
-#endif
-                nextLineAddr = (++lineIter)->first;
-#else
-                if (pass != 0) {
-                    print_source_line(stream, (*lineIter).Loc);
-                }
-                nextLineAddr = (*++lineIter).Address;
-#endif
             }
+
             DisInfo.setIP(Fptr+Index);
             if (pass != 0) {
                 // Uncomment this to output addresses for all instructions
                 // stream << Index << ": ";
-#ifdef LLVM37
                 MCSymbol *symbol = DisInfo.lookupSymbol(Fptr+Index);
                 if (symbol)
                     Streamer->EmitLabel(symbol);
-                    // emitInstructionAnnot
-#else
-                const char *symbolName = DisInfo.lookupSymbolName(Fptr+Index);
-                if (symbolName)
-                    stream << symbolName << ":";
-#endif
             }
 
             MCInst Inst;
             MCDisassembler::DecodeStatus S;
-#if defined(_CPU_PPC64_) && BYTE_ORDER == LITTLE_ENDIAN
-            // llvm doesn't know that POWER8 can have little-endian instruction order
-            unsigned char byte_swap_buf[4];
-            assert(memoryObject.size() >= 4);
-            byte_swap_buf[3] = memoryObject[Index+0];
-            byte_swap_buf[2] = memoryObject[Index+1];
-            byte_swap_buf[1] = memoryObject[Index+2];
-            byte_swap_buf[0] = memoryObject[Index+3];
-            FuncMCView view = FuncMCView(byte_swap_buf, 4);
-#else
             FuncMCView view = memoryObject.slice(Index);
-#endif
             S = DisAsm->getInstruction(Inst, insSize, view, 0,
-                                      /*REMOVE*/ nulls(), nulls());
+                                      /*VStream*/ nulls(),
+                                      /*CStream*/ pass != 0 ? Streamer->GetCommentOS() : nulls());
+            if (pass != 0 && Streamer->GetCommentOS().tell() > 0)
+                Streamer->GetCommentOS() << '\n';
             switch (S) {
             case MCDisassembler::Fail:
-                if (pass != 0) {
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_)
-#ifdef LLVM37
-                    std::ostringstream buf;
-                    buf << "\t.long " << format_hex(*(uint32_t*)(Fptr+Index), 10) << "\n";
-                    Streamer->EmitRawText(buf.str());
-#else
-                    stream << "\t.long " << format_hex(*(uint32_t*)(Fptr+Index), 10) << "\n";
-#endif
-#elif defined(_CPU_X86_) || defined(_CPU_X86_64_)
-                    SrcMgr.PrintMessage(SMLoc::getFromPointer((const char*)(Fptr + Index)),
-                                        SourceMgr::DK_Warning,
-                                        "invalid instruction encoding");
-#else
-#ifdef LLVM37
-                    std::ostringstream buf;
-                    buf << "\t.byte " << format_hex(*(uint8_t*)(Fptr+Index), 4) << "\n";
-                    Streamer->EmitRawText(buf.str());
-#else
-                    stream << "\t.byte " << format_hex(*(uint8_t*)(Fptr+Index), 4) << "\n";
-#endif
-#endif
                 if (insSize == 0) // skip illegible bytes
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_)
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
                     insSize = 4; // instructions are always 4 bytes
 #else
                     insSize = 1; // attempt to slide 1 byte forward
 #endif
+                if (pass != 0) {
+                    std::ostringstream buf;
+                    if (insSize == 4)
+                        buf << "\t.long\t0x" << std::hex
+                            << std::setfill('0') << std::setw(8)
+                            << *(uint32_t*)(Fptr+Index);
+                    else
+                        for (uint64_t i=0; i<insSize; ++i)
+                            buf << "\t.byte\t0x" << std::hex
+                                << std::setfill('0') << std::setw(2)
+                                << (int)*(uint8_t*)(Fptr+Index+i);
+                    Streamer->EmitRawText(StringRef(buf.str()));
                 }
                 break;
 
             case MCDisassembler::SoftFail:
-                if (pass != 0) {
-#if !defined(_CPU_X86_) || !defined(_CPU_X86_64_)
-#ifdef LLVM37
-                    std::ostringstream buf;
-                    buf << "potentially undefined instruction encoding:\n";
-                    Streamer->EmitRawText(buf.str());
-#else
-                    stream << "potentially undefined instruction encoding:\n";
-#endif
-#else
-                    SrcMgr.PrintMessage(SMLoc::getFromPointer((const char*)(Fptr + Index)),
-                                        SourceMgr::DK_Warning,
-                                        "potentially undefined instruction encoding");
-#endif
-                }
+                if (pass != 0)
+                    Streamer->EmitRawText(StringRef("potentially undefined instruction encoding:"));
                 // Fall through
 
             case MCDisassembler::Success:
                 if (pass == 0) {
-                    // Pass 0: Record all branch targets
-                    if (MCIA && MCIA->isBranch(Inst)) {
-                        uint64_t addr;
-#ifdef LLVM34
-                        if (MCIA->evaluateBranch(Inst, Fptr+Index, insSize, addr))
-#else
-                        if ((addr = MCIA->evaluateBranch(Inst, Fptr+Index, insSize)) != (uint64_t)-1)
-#endif
-                            DisInfo.insertAddress(addr);
+                    // Pass 0: Record all branch target references
+                    if (MCIA) {
+                        const MCInstrDesc &opcode = MCII->get(Inst.getOpcode());
+                        if (opcode.isBranch() || opcode.isCall()) {
+                            uint64_t addr;
+                            if (MCIA->evaluateBranch(Inst, Fptr + Index, insSize, addr))
+                                DisInfo.insertAddress(addr);
+                        }
                     }
                 }
                 else {
                     // Pass 1: Output instruction
-#ifdef LLVM35
+                    if (pass != 0) {
+                        // attempt to symbolicate any immediate operands
+                        const MCInstrDesc &opinfo = MCII->get(Inst.getOpcode());
+                        for (unsigned Op = 0; Op < opinfo.NumOperands; Op++) {
+                            const MCOperand &OpI = Inst.getOperand(Op);
+                            if (OpI.isImm()) {
+                                int64_t imm = OpI.getImm();
+                                if (opinfo.OpInfo[Op].OperandType == MCOI::OPERAND_PCREL)
+                                    imm += Fptr + Index;
+                                const char *name = DisInfo.lookupSymbolName(imm);
+                                if (name)
+                                    Streamer->AddComment(name);
+                            }
+                        }
+                    }
                     Streamer->EmitInstruction(Inst, *STI);
-#else
-                    Streamer->EmitInstruction(Inst);
-#endif
                 }
                 break;
             }
@@ -655,5 +981,29 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
         DisInfo.setIP(Fptr);
         if (pass == 0)
             DisInfo.createSymbols();
+
+        if (pass != 0 && di_ctx) {
+            std::string buf;
+            dbgctx.emit_finish(buf);
+            if (!buf.empty()) {
+                Streamer->EmitRawText(buf);
+            }
+        }
     }
+}
+
+extern "C" JL_DLLEXPORT
+LLVMDisasmContextRef jl_LLVMCreateDisasm(
+        const char *TripleName, void *DisInfo, int TagType,
+        LLVMOpInfoCallback GetOpInfo, LLVMSymbolLookupCallback SymbolLookUp)
+{
+    return LLVMCreateDisasm(TripleName, DisInfo, TagType, GetOpInfo, SymbolLookUp);
+}
+
+extern "C" JL_DLLEXPORT
+JL_DLLEXPORT size_t jl_LLVMDisasmInstruction(
+        LLVMDisasmContextRef DC, uint8_t *Bytes, uint64_t BytesSize,
+        uint64_t PC, char *OutString, size_t OutStringSize)
+{
+    return LLVMDisasmInstruction(DC, Bytes, BytesSize, PC, OutString, OutStringSize);
 }

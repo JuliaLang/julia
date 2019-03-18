@@ -1,15 +1,15 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Implementation of
 #  "Table-driven Implementation of the Logarithm Function in IEEE Floating-point Arithmetic"
 #  Tang, Ping-Tak Peter
 #  ACM Trans. Math. Softw. (1990), 16(4):378--400
-#  http://dx.doi.org/10.1145/98267.98294
+#  https://doi.org/10.1145/98267.98294
 
 # Does not currently handle floating point flags (inexact, div-by-zero, etc).
 
-import Base.unsafe_trunc
-import Base.Math.@horner
+import .Base.unsafe_trunc
+import .Base.Math.@horner
 
 # Float64 lookup table.
 # to generate values:
@@ -250,7 +250,6 @@ end
 end
 
 
-
 function log(x::Float64)
     if x > 0.0
         x == Inf && return x
@@ -283,7 +282,7 @@ function log(x::Float64)
     elseif isnan(x)
         NaN
     else
-        throw(DomainError())
+        throw_complex_domainerror(:log, x)
     end
 end
 
@@ -319,7 +318,7 @@ function log(x::Float32)
     elseif isnan(x)
         NaN32
     else
-        throw(DomainError())
+        throw_complex_domainerror(:log, x)
     end
 end
 
@@ -354,7 +353,7 @@ function log1p(x::Float64)
     elseif isnan(x)
         NaN
     else
-        throw(DomainError())
+        throw_complex_domainerror(:log1p, x)
     end
 end
 
@@ -387,13 +386,12 @@ function log1p(x::Float32)
     elseif isnan(x)
         NaN32
     else
-        throw(DomainError())
+        throw_complex_domainerror(:log1p, x)
     end
 end
 
 for f in (:log,:log1p)
     @eval begin
         ($f)(x::Real) = ($f)(float(x))
-        @vectorize_1arg Number $f
     end
 end

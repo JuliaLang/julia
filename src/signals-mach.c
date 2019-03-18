@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <mach/clock.h>
 #include <mach/clock_types.h>
@@ -13,6 +13,50 @@
 #else
 #define __need_ucontext64_t
 #include <sys/_structs.h>
+#endif
+
+#include "julia_assert.h"
+
+static void attach_exception_port(thread_port_t thread, int segv_only);
+
+#ifdef JULIA_ENABLE_THREADING
+// low 16 bits are the thread id, the next 8 bits are the original gc_state
+static arraylist_t suspended_threads;
+void jl_mach_gc_end(void)
+{
+    // Requires the safepoint lock to be held
+    for (size_t i = 0;i < suspended_threads.len;i++) {
+        uintptr_t item = (uintptr_t)suspended_threads.items[i];
+        int16_t tid = (int16_t)item;
+        int8_t gc_state = (int8_t)(item >> 8);
+        jl_ptls_t ptls2 = jl_all_tls_states[tid];
+        jl_atomic_store_release(&ptls2->gc_state, gc_state);
+        thread_resume(pthread_mach_thread_np(ptls2->system_id));
+    }
+    suspended_threads.len = 0;
+}
+
+// Suspend the thread and return `1` if the GC is running.
+// Otherwise return `0`
+static int jl_mach_gc_wait(jl_ptls_t ptls2,
+                           mach_port_t thread, int16_t tid)
+{
+    jl_mutex_lock_nogc(&safepoint_lock);
+    if (!jl_gc_running) {
+        // GC is done before we get the message or the safepoint is enabled
+        // for SIGINT.
+        jl_mutex_unlock_nogc(&safepoint_lock);
+        return 0;
+    }
+    // Otherwise, set the gc state of the thread, suspend and record it
+    int8_t gc_state = ptls2->gc_state;
+    jl_atomic_store_release(&ptls2->gc_state, JL_GC_STATE_WAITING);
+    uintptr_t item = tid | (((uintptr_t)gc_state) << 16);
+    arraylist_push(&suspended_threads, (void*)item);
+    thread_suspend(thread);
+    jl_mutex_unlock_nogc(&safepoint_lock);
+    return 1;
+}
 #endif
 
 static mach_port_t segv_port = 0;
@@ -36,6 +80,9 @@ void *mach_segv_listener(void *arg)
 
 static void allocate_segv_handler()
 {
+#ifdef JULIA_ENABLE_THREADING
+    arraylist_new(&suspended_threads, jl_n_threads);
+#endif
     pthread_t thread;
     pthread_attr_t attr;
     kern_return_t ret;
@@ -53,7 +100,9 @@ static void allocate_segv_handler()
         jl_error("pthread_create failed");
     }
     pthread_attr_destroy(&attr);
-    attach_exception_port();
+    for (int16_t tid = 0;tid < jl_n_threads;tid++) {
+        attach_exception_port(pthread_mach_thread_np(jl_all_tls_states[tid]->system_id), 0);
+    }
 }
 
 #ifdef LIBOSXUNWIND
@@ -73,29 +122,36 @@ enum x86_trap_flags {
     PAGE_PRESENT = 0x1
 };
 
-void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exception)
+static void jl_call_in_state(jl_ptls_t ptls2, x86_thread_state64_t *state,
+                             void (*fptr)(void))
 {
-    unsigned int count = MACHINE_THREAD_STATE_COUNT;
-    x86_thread_state64_t state;
-    kern_return_t ret = thread_get_state(thread, x86_THREAD_STATE64, (thread_state_t)&state, &count);
-    HANDLE_MACH_ERROR("thread_get_state", ret);
-
-    jl_all_task_states[tid].ptls->bt_size =
-        rec_backtrace_ctx(jl_all_task_states[tid].ptls->bt_data,
-                          JL_MAX_BT_SIZE, (bt_context_t)&state);
-    jl_all_task_states[tid].ptls->exception_in_transit = exception;
-
-    uint64_t rsp = (uint64_t)jl_all_task_states[tid].signal_stack + sig_stack_size;
-    rsp &= -16; // ensure 16-byte alignment
+    uint64_t rsp = (uint64_t)ptls2->signal_stack + sig_stack_size;
+    assert(rsp % 16 == 0);
 
     // push (null) $RIP onto the stack
     rsp -= sizeof(void*);
     *(void**)rsp = NULL;
 
-    state.__rsp = rsp; // set stack pointer
-    state.__rip = (uint64_t)&jl_rethrow; // "call" the function
+    state->__rsp = rsp; // set stack pointer
+    state->__rip = (uint64_t)fptr; // "call" the function
+}
 
-    ret = thread_set_state(thread, x86_THREAD_STATE64, (thread_state_t)&state, count);
+static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exception)
+{
+    unsigned int count = MACHINE_THREAD_STATE_COUNT;
+    x86_thread_state64_t state;
+    kern_return_t ret = thread_get_state(thread, x86_THREAD_STATE64, (thread_state_t)&state, &count);
+    HANDLE_MACH_ERROR("thread_get_state", ret);
+    jl_ptls_t ptls2 = jl_all_tls_states[tid];
+    if (!ptls2->safe_restore) {
+        assert(exception);
+        ptls2->bt_size = rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE,
+                                           (bt_context_t*)&state);
+        ptls2->sig_exception = exception;
+    }
+    jl_call_in_state(ptls2, &state, &jl_sig_throw);
+    ret = thread_set_state(thread, x86_THREAD_STATE64,
+                           (thread_state_t)&state, count);
     HANDLE_MACH_ERROR("thread_set_state",ret);
 }
 
@@ -117,16 +173,62 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         return profiler_segv_handler(exception_port, thread, task, exception, code, code_count);
     }
 #endif
+    int16_t tid;
+#ifdef JULIA_ENABLE_THREADING
+    jl_ptls_t ptls2 = NULL;
+    for (tid = 0;tid < jl_n_threads;tid++) {
+        jl_ptls_t _ptls2 = jl_all_tls_states[tid];
+        if (pthread_mach_thread_np(_ptls2->system_id) == thread) {
+            ptls2 = _ptls2;
+            break;
+        }
+    }
+    if (!ptls2) {
+        // We don't know about this thread, let the kernel try another handler
+        // instead. This shouldn't actually happen since we only register the
+        // handler for the threads we know about.
+        jl_safe_printf("ERROR: Exception handler triggered on unmanaged thread.\n");
+        return KERN_INVALID_ARGUMENT;
+    }
+#else
+    jl_ptls_t ptls2 = &jl_tls_states;
+    tid = 0;
+#endif
+    if (exception == EXC_ARITHMETIC) {
+        jl_throw_in_thread(tid, thread, jl_diverror_exception);
+        return KERN_SUCCESS;
+    }
+    assert(exception == EXC_BAD_ACCESS);
     kern_return_t ret = thread_get_state(thread, x86_EXCEPTION_STATE64, (thread_state_t)&exc_state, &exc_count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
+    if (jl_addr_is_safepoint(fault_addr)) {
+#ifdef JULIA_ENABLE_THREADING
+        if (jl_mach_gc_wait(ptls2, thread, tid))
+            return KERN_SUCCESS;
+        if (ptls2->tid != 0)
+            return KERN_SUCCESS;
+#endif
+        if (ptls2->defer_signal) {
+            jl_safepoint_defer_sigint();
+        }
+        else if (jl_safepoint_consume_sigint()) {
+            jl_clear_force_sigint();
+            jl_throw_in_thread(tid, thread, jl_interrupt_exception);
+        }
+        return KERN_SUCCESS;
+    }
+    if (ptls2->safe_restore) {
+        jl_throw_in_thread(tid, thread, jl_stackovf_exception);
+        return KERN_SUCCESS;
+    }
 #ifdef SEGV_EXCEPTION
     if (1) {
 #else
     if (msync((void*)(fault_addr & ~(jl_page_size - 1)), 1, MS_ASYNC) == 0) { // check if this was a valid address
 #endif
         jl_value_t *excpt;
-        if (is_addr_on_stack((void*)fault_addr)) {
+        if (is_addr_on_stack(ptls2, (void*)fault_addr)) {
             excpt = jl_stackovf_exception;
         }
 #ifdef SEGV_EXCEPTION
@@ -140,7 +242,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
                 return KERN_INVALID_ARGUMENT; // rethrow the SEGV since it wasn't an error with writing to read-only memory
             excpt = jl_readonlymemory_exception;
         }
-        jl_throw_in_thread(0, thread, excpt);
+        jl_throw_in_thread(tid, thread, excpt);
 
         return KERN_SUCCESS;
     }
@@ -148,23 +250,26 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         kern_return_t ret = thread_get_state(thread, x86_THREAD_STATE64, (thread_state_t)&state, &count);
         HANDLE_MACH_ERROR("thread_get_state", ret);
         jl_critical_error(SIGSEGV, (unw_context_t*)&state,
-                          jl_bt_data, &jl_bt_size);
+                          ptls2->bt_data, &ptls2->bt_size);
         return KERN_INVALID_ARGUMENT;
     }
 }
 
-JL_DLLEXPORT void attach_exception_port(void)
+static void attach_exception_port(thread_port_t thread, int segv_only)
 {
     kern_return_t ret;
     // http://www.opensource.apple.com/source/xnu/xnu-2782.1.97/osfmk/man/thread_set_exception_ports.html
-    ret = thread_set_exception_ports(mach_thread_self(), EXC_MASK_BAD_ACCESS, segv_port, EXCEPTION_DEFAULT, MACHINE_THREAD_STATE);
+    exception_mask_t mask = EXC_MASK_BAD_ACCESS;
+    if (!segv_only)
+        mask |= EXC_MASK_ARITHMETIC;
+    ret = thread_set_exception_ports(thread, mask, segv_port, EXCEPTION_DEFAULT, MACHINE_THREAD_STATE);
     HANDLE_MACH_ERROR("thread_set_exception_ports", ret);
 }
 
-static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx, int sig)
+static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
 {
-    (void)sig;
-    mach_port_t tid_port = pthread_mach_thread_np(jl_all_task_states[tid].system_id);
+    jl_ptls_t ptls2 = jl_all_tls_states[tid];
+    mach_port_t tid_port = pthread_mach_thread_np(ptls2->system_id);
 
     kern_return_t ret = thread_suspend(tid_port);
     HANDLE_MACH_ERROR("thread_suspend", ret);
@@ -183,20 +288,76 @@ static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx, int si
 
 static void jl_thread_resume(int tid, int sig)
 {
-    mach_port_t thread = pthread_mach_thread_np(jl_all_task_states[tid].system_id);
+    jl_ptls_t ptls2 = jl_all_tls_states[tid];
+    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
+    kern_return_t ret = thread_resume(thread);
+    HANDLE_MACH_ERROR("thread_resume", ret);
+}
 
-    if (tid == 0 && sig == SIGINT) {
-        if (jl_defer_signal) {
-            jl_signal_pending = sig;
-        }
-        else {
-            jl_signal_pending = 0;
-            jl_throw_in_thread(tid, thread, jl_interrupt_exception);
-        }
+// Throw jl_interrupt_exception if the master thread is in a signal async region
+// or if SIGINT happens too often.
+static void jl_try_deliver_sigint(void)
+{
+    jl_ptls_t ptls2 = jl_all_tls_states[0];
+    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
+
+    kern_return_t ret = thread_suspend(thread);
+    HANDLE_MACH_ERROR("thread_suspend", ret);
+
+    // This aborts `sleep` and other syscalls.
+    ret = thread_abort(thread);
+    HANDLE_MACH_ERROR("thread_abort", ret);
+
+    jl_safepoint_enable_sigint();
+    int force = jl_check_force_sigint();
+    if (force || (!ptls2->defer_signal && ptls2->io_wait)) {
+        jl_safepoint_consume_sigint();
+        if (force)
+            jl_safe_printf("WARNING: Force throwing a SIGINT\n");
+        jl_clear_force_sigint();
+        jl_throw_in_thread(0, thread, jl_interrupt_exception);
+    }
+    else {
+        jl_wake_libuv();
     }
 
-    kern_return_t ret = thread_resume(thread);
-    HANDLE_MACH_ERROR("thread_resume", ret)
+    ret = thread_resume(thread);
+    HANDLE_MACH_ERROR("thread_resume", ret);
+}
+
+static void jl_exit_thread0(int exitstate)
+{
+    jl_ptls_t ptls2 = jl_all_tls_states[0];
+    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
+    kern_return_t ret = thread_suspend(thread);
+    HANDLE_MACH_ERROR("thread_suspend", ret);
+
+    // This aborts `sleep` and other syscalls.
+    ret = thread_abort(thread);
+    HANDLE_MACH_ERROR("thread_abort", ret);
+
+    unsigned int count = MACHINE_THREAD_STATE_COUNT;
+    x86_thread_state64_t state;
+    ret = thread_get_state(thread, x86_THREAD_STATE64,
+                           (thread_state_t)&state, &count);
+
+    void (*exit_func)(int) = &_exit;
+    if (thread0_exit_count <= 1) {
+        exit_func = &jl_exit;
+    }
+    else if (thread0_exit_count == 2) {
+        exit_func = &exit;
+    }
+
+    // First integer argument. Not portable but good enough =)
+    state.__rdi = exitstate;
+    jl_call_in_state(ptls2, &state, (void (*)(void))exit_func);
+    ret = thread_set_state(thread, x86_THREAD_STATE64,
+                           (thread_state_t)&state, count);
+    HANDLE_MACH_ERROR("thread_set_state",ret);
+
+    ret = thread_resume(thread);
+    HANDLE_MACH_ERROR("thread_resume", ret);
 }
 
 static int profile_started = 0;
@@ -258,7 +419,7 @@ void *mach_profile_listener(void *arg)
     (void)arg;
     int i;
     const int max_size = 512;
-    attach_exception_port();
+    attach_exception_port(mach_thread_self(), 1);
 #ifdef LIBOSXUNWIND
     mach_profiler_thread = mach_thread_self();
 #endif
@@ -276,7 +437,7 @@ void *mach_profile_listener(void *arg)
                 break;
 
             unw_context_t *uc;
-            jl_thread_suspend_and_get_state(i, &uc, -1);
+            jl_thread_suspend_and_get_state(i, &uc);
 
 #ifdef LIBOSXUNWIND
             /*
@@ -298,10 +459,10 @@ void *mach_profile_listener(void *arg)
 
             if (forceDwarf == 0) {
                 // Save the backtrace
-                bt_size_cur += rec_backtrace_ctx((ptrint_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+                bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
             }
             else if (forceDwarf == 1) {
-                bt_size_cur += rec_backtrace_ctx_dwarf((ptrint_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+                bt_size_cur += rec_backtrace_ctx_dwarf((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
             }
             else if (forceDwarf == -1) {
                 jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
@@ -309,7 +470,7 @@ void *mach_profile_listener(void *arg)
 
             forceDwarf = -2;
 #else
-            bt_size_cur += rec_backtrace_ctx((ptrint_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+            bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
 #endif
 
             // Mark the end of this block with 0

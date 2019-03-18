@@ -1,13 +1,13 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## efficient value-based hashing of integers ##
 
 function hash_integer(n::Integer, h::UInt)
-    h = hash_uint((n % UInt) $ h) $ h
+    h ⊻= hash_uint((n % UInt) ⊻ h)
     n = abs(n)
     n >>>= sizeof(UInt) << 3
     while n != 0
-        h = hash_uint((n % UInt) $ h) $ h
+        h ⊻= hash_uint((n % UInt) ⊻ h)
         n >>>= sizeof(UInt) << 3
     end
     return h
@@ -18,9 +18,9 @@ function hash_integer(n::BigInt, h::UInt)
     s == 0 && return hash_integer(0, h)
     p = convert(Ptr{UInt}, n.d)
     b = unsafe_load(p)
-    h = hash_uint(ifelse(s < 0, -b, b) $ h) $ h
+    h ⊻= hash_uint(ifelse(s < 0, -b, b) ⊻ h)
     for k = 2:abs(s)
-        h = hash_uint(unsafe_load(p, k) $ h) $ h
+        h ⊻= hash_uint(unsafe_load(p, k) ⊻ h)
     end
     return h
 end
@@ -94,56 +94,57 @@ Special values:
 =#
 
 decompose(x::Integer) = x, 0, 1
-decompose(x::Rational) = num(x), 0, den(x)
+decompose(x::Rational) = numerator(x), 0, denominator(x)
 
-function decompose(x::Float16)
+function decompose(x::Float16)::NTuple{3,Int}
     isnan(x) && return 0, 0, 0
     isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
     n = reinterpret(UInt16, x)
     s = (n & 0x03ff) % Int16
-    e = (n & 0x7c00 >> 10) % Int
+    e = ((n & 0x7c00) >> 10) % Int
     s |= Int16(e != 0) << 10
     d = ifelse(signbit(x), -1, 1)
-    Int(s), Int(e - 25 + (e == 0)), d
+    s, e - 25 + (e == 0), d
 end
 
-function decompose(x::Float32)
+function decompose(x::Float32)::NTuple{3,Int}
     isnan(x) && return 0, 0, 0
     isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
     n = reinterpret(UInt32, x)
     s = (n & 0x007fffff) % Int32
-    e = (n & 0x7f800000 >> 23) % Int
+    e = ((n & 0x7f800000) >> 23) % Int
     s |= Int32(e != 0) << 23
     d = ifelse(signbit(x), -1, 1)
-    Int(s), Int(e - 150 + (e == 0)), d
+    s, e - 150 + (e == 0), d
 end
 
-function decompose(x::Float64)
+function decompose(x::Float64)::Tuple{Int64, Int, Int}
     isnan(x) && return 0, 0, 0
     isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
     n = reinterpret(UInt64, x)
     s = (n & 0x000fffffffffffff) % Int64
-    e = (n & 0x7ff0000000000000 >> 52) % Int
+    e = ((n & 0x7ff0000000000000) >> 52) % Int
     s |= Int64(e != 0) << 52
     d = ifelse(signbit(x), -1, 1)
-    s, Int(e - 1075 + (e == 0)), d
+    s, e - 1075 + (e == 0), d
 end
 
-function decompose(x::BigFloat)
-    isnan(x) && return big(0), 0, 0
-    isinf(x) && return big(x.sign), 0, 0
-    x == 0 && return big(0), 0, Int(x.sign)
+function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
+    isnan(x) && return 0, 0, 0
+    isinf(x) && return x.sign, 0, 0
+    x == 0 && return 0, 0, x.sign
     s = BigInt()
-    ccall((:__gmpz_realloc2, :libgmp), Void, (Ptr{BigInt}, Culong), &s, x.prec)
-    s.size = -fld(-x.prec,(sizeof(GMP.Limb)<<3))
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t), s.d, x.d, s.size*sizeof(GMP.Limb))
-    s, Int(x.exp - x.prec), Int(x.sign)
+    s.size = cld(x.prec, 8*sizeof(GMP.Limb)) # limbs
+    b = s.size * sizeof(GMP.Limb)            # bytes
+    ccall((:__gmpz_realloc2, :libgmp), Cvoid, (Ref{BigInt}, Culong), s, 8b) # bits
+    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), s.d, x.d, b) # bytes
+    s, x.exp - 8b, x.sign
 end
 
 ## streamlined hashing for smallish rational types ##
 
-function hash{T<:Integer64}(x::Rational{T}, h::UInt)
-    num, den = Base.num(x), Base.den(x)
+function hash(x::Rational{<:BitInteger64}, h::UInt)
+    num, den = Base.numerator(x), Base.denominator(x)
     den == 1 && return hash(num, h)
     den == 0 && return hash(ifelse(num > 0, Inf, -Inf), h)
     if isodd(den)
@@ -154,7 +155,7 @@ function hash{T<:Integer64}(x::Rational{T}, h::UInt)
         den >>= pow
         pow = -pow
         if den == 1 && abs(num) < 9007199254740992
-            return hash(ldexp(Float64(num),pow))
+            return hash(ldexp(Float64(num),pow),h)
         end
     end
     h = hash_integer(den, h)
@@ -172,9 +173,9 @@ hash(x::Float16, h::UInt) = hash(Float64(x), h)
 const memhash = UInt === UInt64 ? :memhash_seed : :memhash32_seed
 const memhash_seed = UInt === UInt64 ? 0x71e729fd56419c81 : 0x56419c81
 
-function hash{T<:ByteString}(s::Union{T,SubString{T}}, h::UInt)
+function hash(s::Union{String,SubString{String}}, h::UInt)
     h += memhash_seed
     # note: use pointer(s) here (see #6058).
     ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), pointer(s), sizeof(s), h % UInt32) + h
 end
-hash(s::AbstractString, h::UInt) = hash(bytestring(s), h)
+hash(s::AbstractString, h::UInt) = hash(String(s), h)

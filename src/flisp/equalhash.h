@@ -1,5 +1,5 @@
-#ifndef EQUALHASH_H
-#define EQUALHASH_H
+#ifndef JL_EQUALHASH_H
+#define JL_EQUALHASH_H
 
 #include "htable.h"
 
@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-HTPROT(equalhash)
+HTPROT_R(equalhash)
 
 #ifdef __cplusplus
 }

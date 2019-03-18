@@ -1,11 +1,12 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef DTYPES_H
-#define DTYPES_H
+#ifndef JL_DTYPES_H
+#define JL_DTYPES_H
 
 #include <stddef.h>
 #include <stddef.h> // double include of stddef.h fixes #3421
 #include <stdint.h>
+#include <string.h> // memcpy
 #if defined(_COMPILER_INTEL_)
 #include <mathimf.h>
 #else
@@ -13,6 +14,7 @@
 #endif
 
 #include "platform.h"
+#include "analyzer_annotations.h"
 
 #if !defined(_OS_WINDOWS_)
 #include <inttypes.h>
@@ -103,13 +105,10 @@
 
 #if defined(_OS_WINDOWS_) && defined(_COMPILER_INTEL_)
 #  define STATIC_INLINE static
-#  define INLINE
 #elif defined(_OS_WINDOWS_) && defined(_COMPILER_MICROSOFT_)
 #  define STATIC_INLINE static __inline
-#  define INLINE __inline
 #else
 #  define STATIC_INLINE static inline
-#  define INLINE inline
 #endif
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
@@ -146,26 +145,31 @@ typedef int64_t int_t;
 typedef uint32_t uint_t;
 typedef int32_t int_t;
 #endif
-typedef ptrdiff_t ptrint_t; // pointer-size int
-typedef size_t uptrint_t;
-typedef ptrdiff_t offset_t;
-typedef size_t index_t;
 
-typedef uint8_t  u_int8_t;
-typedef uint16_t u_int16_t;
-typedef uint32_t u_int32_t;
-typedef uint64_t u_int64_t;
-typedef uptrint_t u_ptrint_t;
+STATIC_INLINE unsigned int next_power_of_two(unsigned int val) JL_NOTSAFEPOINT
+{
+    /* this function taken from libuv src/unix/core.c */
+    val -= 1;
+    val |= val >> 1;
+    val |= val >> 2;
+    val |= val >> 4;
+    val |= val >> 8;
+    val |= val >> 16;
+    val += 1;
+    return val;
+}
 
-#define LLT_ALIGN(x, sz) (((x) + (sz-1)) & (-sz))
+#define LLT_ALIGN(x, sz) (((x) + (sz)-1) & -(sz))
 
 // branch prediction annotations
 #ifdef __GNUC__
 #define __unlikely(x) __builtin_expect(!!(x), 0)
 #define __likely(x)   __builtin_expect(!!(x), 1)
+#define JL_EXTENSION __extension__
 #else
 #define __unlikely(x) (x)
 #define __likely(x)   (x)
+#define JL_EXTENSION
 #endif
 
 #define DBL_MAXINT 9007199254740992LL
@@ -200,5 +204,54 @@ typedef enum { T_INT8, T_UINT8, T_INT16, T_UINT16, T_INT32, T_UINT32,
 # define T_PTRDIFF T_INT32
 # define T_SIZE T_UINT32
 #endif
+
+#if defined(__GNUC__) && __GNUC__ >= 7
+#define JL_FALLTHROUGH __attribute__((fallthrough))
+#elif defined(__cplusplus) && defined(__clang_major__) && \
+    defined(__clang_minor__) && (__clang_major__ > 4 || __clang_minor__ >= 5)
+// We require at least clang 3.x
+#define JL_FALLTHROUGH [[clang::fallthrough]]
+#else
+#define JL_FALLTHROUGH
+#endif
+
+#if defined(__GNUC__)
+#define JL_UNUSED __attribute__((__unused__))
+#else
+#define JL_UNUSED
+#endif
+
+STATIC_INLINE uint64_t jl_load_unaligned_i64(const void *ptr)
+{
+    uint64_t val;
+    memcpy(&val, ptr, 8);
+    return val;
+}
+STATIC_INLINE uint32_t jl_load_unaligned_i32(const void *ptr)
+{
+    uint32_t val;
+    memcpy(&val, ptr, 4);
+    return val;
+}
+STATIC_INLINE uint16_t jl_load_unaligned_i16(const void *ptr)
+{
+    uint16_t val;
+    memcpy(&val, ptr, 2);
+    return val;
+}
+
+STATIC_INLINE void jl_store_unaligned_i64(void *ptr, uint64_t val)
+{
+    memcpy(ptr, &val, 8);
+}
+STATIC_INLINE void jl_store_unaligned_i32(void *ptr, uint32_t val)
+{
+    memcpy(ptr, &val, 4);
+}
+STATIC_INLINE void jl_store_unaligned_i16(void *ptr, uint16_t val)
+{
+    memcpy(ptr, &val, 2);
+}
+
 
 #endif /* DTYPES_H */

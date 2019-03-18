@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #ifndef JL_OPTIONS_H
 #define JL_OPTIONS_H
@@ -7,7 +7,8 @@
 
 // Build-time options for debugging, tweaking, and selecting alternative
 // implementations of core features.
-//
+
+#define N_CALL_CACHE 4096
 
 // object layout options ------------------------------------------------------
 
@@ -23,6 +24,14 @@
 // with KEEP_BODIES, we keep LLVM function bodies around for later debugging
 // #define KEEP_BODIES
 
+// delete julia IR for non-inlineable functions after they're codegen'd
+#define JL_DELETE_NON_INLINEABLE 1
+
+// fill in the jl_all_methods in world-counter order
+// so that it is possible to map (in a debugger) from
+// an inferred world validity range back to the offending definition
+// #define RECORD_METHOD_ORDER
+
 // GC options -----------------------------------------------------------------
 
 // debugging options
@@ -32,13 +41,18 @@
 // catch invalid accesses.
 // #define MEMDEBUG
 
+// with MEMFENCE, the object pool headers are verified during sweep
+// to help detect corruption due to fence-post write errors
+// #define MEMFENCE
+
+
 // GC_VERIFY force a full verification gc along with every quick gc to ensure no
 // reachable memory is freed
 #ifndef GC_VERIFY
 #ifdef GC_DEBUG_ENV
 #define GC_VERIFY
 #else
-// It is recommanded to use the WITH_GC_VERIFY make option to turn on this
+// It is recommended to use the WITH_GC_VERIFY make option to turn on this
 // option. Keep the document here before a better build system is ready.
 // #define GC_VERIFY
 #endif
@@ -57,11 +71,14 @@
 // MEMPROFILE prints pool summary statistics after every GC
 //#define MEMPROFILE
 
-// GCTIME prints time taken by each phase of GC
-//#define GC_TIME
+// GC_TIME prints time taken by each phase of GC
+// #define GC_TIME
 
 // OBJPROFILE counts objects by type
-//#define OBJPROFILE
+// #define OBJPROFILE
+
+// Automatic Instrumenting Profiler
+//#define ENABLE_TIMINGS
 
 
 // method dispatch profiling --------------------------------------------------
@@ -77,17 +94,23 @@
 // sites). this generally prints too much output to be useful.
 //#define JL_TRACE
 
-// count generic (not inlined or specialized) calls to each function. recorded
-// in the `ncalls` field of jl_methtable_t.
+// profile generic (not inlined or specialized) calls to each function
 //#define JL_GF_PROFILE
 
 
 // task options ---------------------------------------------------------------
 
-// select an implementation of stack switching.
-// currently only COPY_STACKS is recommended.
-#ifndef COPY_STACKS
+// select whether to allow the COPY_STACKS stack switching implementation
 #define COPY_STACKS
+// select whether to use COPY_STACKS for new Tasks by default
+//#define ALWAYS_COPY_STACKS
+
+// When not using COPY_STACKS the task-system is less memory efficient so
+// you probably want to choose a smaller default stack size (factor of 8-10)
+#ifdef _P64
+#define JL_STACK_SIZE (4*1024*1024)
+#else
+#define JL_STACK_SIZE (2*1024*1024)
 #endif
 
 // threading options ----------------------------------------------------------
@@ -98,20 +121,40 @@
 
 // defaults for # threads
 #define NUM_THREADS_NAME                "JULIA_NUM_THREADS"
-#define DEFAULT_NUM_THREADS             4
+#ifndef JULIA_NUM_THREADS
+#  define JULIA_NUM_THREADS 1
+#endif
 
 // affinitization behavior
 #define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"
 #define DEFAULT_MACHINE_EXCLUSIVE       0
 
+
 // sanitizer defaults ---------------------------------------------------------
 
-// Automatically enable MEMDEBUG and KEEP_BODIES for the sanitizers
+// XXX: these macros are duplicated from julia_internal.h
 #if defined(__has_feature)
-#  if __has_feature(address_sanitizer) || __has_feature(memory_sanitizer)
-#  define MEMDEBUG
-#  define KEEP_BODIES
-#  endif
+#if __has_feature(address_sanitizer)
+#define JL_ASAN_ENABLED
+#endif
+#elif defined(__SANITIZE_ADDRESS__)
+#define JL_ASAN_ENABLED
+#endif
+#if defined(__has_feature)
+#if __has_feature(memory_sanitizer)
+#define JL_MSAN_ENABLED
+#endif
+#endif
+
+// Automatically enable MEMDEBUG and KEEP_BODIES for the sanitizers
+#if defined(JL_ASAN_ENABLED) || defined(JL_MSAN_ENABLED)
+#define MEMDEBUG
+#define KEEP_BODIES
+#endif
+
+// Memory sanitizer needs TLS, which llvm only supports for the small memory model
+#if defined(JL_MSAN_ENABLED)
+// todo: fix the llvm MemoryManager to work with small memory model
 #endif
 
 #endif

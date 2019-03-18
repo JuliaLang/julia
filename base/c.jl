@@ -1,71 +1,187 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # definitions related to C interface
 
-import Core.Intrinsics: cglobal, box
+import Core.Intrinsics: cglobal, bitcast
 
-const OS_NAME = ccall(:jl_get_OS_NAME, Any, ())
+"""
+    cglobal((symbol, library) [, type=Cvoid])
 
-cfunction(f::Function, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
+Obtain a pointer to a global variable in a C-exported shared library, specified exactly as
+in [`ccall`](@ref).
+Returns a `Ptr{Type}`, defaulting to `Ptr{Cvoid}` if no `Type` argument is
+supplied.
+The values can be read or written by [`unsafe_load`](@ref) or [`unsafe_store!`](@ref),
+respectively.
+"""
+cglobal
 
-if ccall(:jl_is_char_signed, Any, ())
-    typealias Cchar Int8
-else
-    typealias Cchar UInt8
+"""
+    CFunction struct
+
+Garbage-collection handle for the return value from `@cfunction`
+when the first argument is annotated with '\\\$'.
+Like all `cfunction` handles, it should be passed to `ccall` as a `Ptr{Cvoid}`,
+and will be converted automatically at the call site to the appropriate type.
+
+See [`@cfunction`](@ref).
+"""
+struct CFunction <: Ref{Cvoid}
+    ptr::Ptr{Cvoid}
+    f::Any
+    _1::Ptr{Cvoid}
+    _2::Ptr{Cvoid}
+    let constructor = false end
 end
-typealias Cuchar UInt8
-typealias Cshort Int16
-typealias Cushort UInt16
-typealias Cint Int32
-typealias Cuint UInt32
-if OS_NAME === :Windows
-    typealias Clong Int32
-    typealias Culong UInt32
-    typealias Cwchar_t UInt16
-else
-    typealias Clong Int
-    typealias Culong UInt
-    typealias Cwchar_t Int32
+unsafe_convert(::Type{Ptr{Cvoid}}, cf::CFunction) = cf.ptr
+
+"""
+    @cfunction(callable, ReturnType, (ArgumentTypes...,)) -> Ptr{Cvoid}
+    @cfunction(\$callable, ReturnType, (ArgumentTypes...,)) -> CFunction
+
+Generate a C-callable function pointer from the Julia function `callable`
+for the given type signature.
+To pass the return value to a `ccall`, use the argument type `Ptr{Cvoid}` in the signature.
+
+Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression
+(although it can include a splat expression). And that these arguments will be evaluated in global scope
+during compile-time (not deferred until runtime).
+Adding a '\\\$' in front of the function argument changes this to instead create a runtime closure
+over the local variable `callable`.
+
+See [manual section on ccall and cfunction usage](@ref Calling-C-and-Fortran-Code).
+
+# Examples
+```julia-repl
+julia> function foo(x::Int, y::Int)
+           return x + y
+       end
+
+julia> @cfunction(foo, Int, (Int, Int))
+Ptr{Cvoid} @0x000000001b82fcd0
+```
+"""
+macro cfunction(f, at, rt)
+    if !(isa(rt, Expr) && rt.head === :tuple)
+        throw(ArgumentError("@cfunction argument types must be a literal tuple"))
+    end
+    rt.head = :call
+    pushfirst!(rt.args, GlobalRef(Core, :svec))
+    if isa(f, Expr) && f.head === :$
+        fptr = f.args[1]
+        typ = CFunction
+    else
+        fptr = QuoteNode(f)
+        typ = Ptr{Cvoid}
+    end
+    cfun = Expr(:cfunction, typ, fptr, at, rt, QuoteNode(:ccall))
+    return esc(cfun)
 end
-typealias Cptrdiff_t Int
-typealias Csize_t UInt
-typealias Cssize_t Int
-typealias Cintmax_t Int64
-typealias Cuintmax_t UInt64
-typealias Clonglong Int64
-typealias Culonglong UInt64
-typealias Cfloat Float32
-typealias Cdouble Float64
 
-const sizeof_off_t = ccall(:jl_sizeof_off_t, Cint, ())
-
-if sizeof_off_t === 4
-    typealias FileOffset Int32
+if ccall(:jl_is_char_signed, Ref{Bool}, ())
+    const Cchar = Int8
 else
-    typealias FileOffset Int64
+    const Cchar = UInt8
+end
+"""
+    Cchar
+
+Equivalent to the native `char` c-type.
+"""
+Cchar
+
+# The ccall here is equivalent to Sys.iswindows(), but that's not defined yet
+@static if ccall(:jl_get_UNAME, Any, ()) === :NT
+    const Clong = Int32
+    const Culong = UInt32
+    const Cwchar_t = UInt16
+else
+    const Clong = Int
+    const Culong = UInt
+    const Cwchar_t = Int32
 end
 
-typealias Coff_t FileOffset
+"""
+    Clong
 
-# C NUL-terminated string pointers; these can be used in ccall
-# instead of Ptr{Cchar} and Ptr{Cwchar_t}, respectively, to enforce
-# a check for embedded NUL chars in the string (to avoid silent truncation).
-if Int === Int64
-    bitstype 64 Cstring
-    bitstype 64 Cwstring
-else
-    bitstype 32 Cstring
-    bitstype 32 Cwstring
+Equivalent to the native `signed long` c-type.
+"""
+Clong
+
+"""
+    Culong
+
+Equivalent to the native `unsigned long` c-type.
+"""
+Culong
+
+"""
+    Cwchar_t
+
+Equivalent to the native `wchar_t` c-type ([`Int32`](@ref)).
+"""
+Cwchar_t
+
+"""
+    Cwstring
+
+A C-style string composed of the native wide character type
+[`Cwchar_t`](@ref)s. `Cwstring`s are NUL-terminated. For
+C-style strings composed of the native character
+type, see [`Cstring`](@ref). For more information
+about string interopability with C, see the
+[manual](@ref man-bits-types).
+
+"""
+Cwstring
+
+"""
+    Cstring
+
+A C-style string composed of the native character type
+[`Cchar`](@ref)s. `Cstring`s are NUL-terminated. For
+C-style strings composed of the native wide character
+type, see [`Cwstring`](@ref). For more information
+about string interopability with C, see the
+[manual](@ref man-bits-types).
+"""
+Cstring
+
+@static if ccall(:jl_get_UNAME, Any, ()) !== :NT
+    const sizeof_mode_t = ccall(:jl_sizeof_mode_t, Cint, ())
+    if sizeof_mode_t == 2
+        const Cmode_t = Int16
+    elseif sizeof_mode_t == 4
+        const Cmode_t = Int32
+    elseif sizeof_mode_t == 8
+        const Cmode_t = Int64
+    end
 end
 
-# construction from typed pointers
-convert{T<:Union{Int8,UInt8}}(::Type{Cstring}, p::Ptr{T}) = box(Cstring, p)
-convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = box(Cwstring, p)
-convert{T<:Union{Int8,UInt8}}(::Type{Ptr{T}}, p::Cstring) = box(Ptr{T}, p)
-convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = box(Ptr{Cwchar_t}, p)
+# construction from pointers
+Cstring(p::Union{Ptr{Int8},Ptr{UInt8},Ptr{Cvoid}}) = bitcast(Cstring, p)
+Cwstring(p::Union{Ptr{Cwchar_t},Ptr{Cvoid}})       = bitcast(Cwstring, p)
+(::Type{Ptr{T}})(p::Cstring) where {T<:Union{Int8,UInt8,Cvoid}} = bitcast(Ptr{T}, p)
+(::Type{Ptr{T}})(p::Cwstring) where {T<:Union{Cwchar_t,Cvoid}}  = bitcast(Ptr{Cwchar_t}, p)
 
-# construction from untyped pointers
-convert{T<:Union{Cstring,Cwstring}}(::Type{T}, p::Ptr{Void}) = box(T, p)
+convert(::Type{Cstring}, p::Union{Ptr{Int8},Ptr{UInt8},Ptr{Cvoid}}) = Cstring(p)
+convert(::Type{Cwstring}, p::Union{Ptr{Cwchar_t},Ptr{Cvoid}}) = Cwstring(p)
+convert(::Type{Ptr{T}}, p::Cstring) where {T<:Union{Int8,UInt8,Cvoid}} = Ptr{T}(p)
+convert(::Type{Ptr{T}}, p::Cwstring) where {T<:Union{Cwchar_t,Cvoid}} = Ptr{T}(p)
+
+"""
+    pointer(array [, index])
+
+Get the native address of an array or string, optionally at a given location `index`.
+
+This function is "unsafe". Be careful to ensure that a Julia reference to
+`array` exists as long as this pointer will be used. The [`GC.@preserve`](@ref)
+macro should be used to protect the `array` argument from garbage collection
+within a given block of code.
+
+Calling [`Ref(array[, index])`](@ref Ref) is generally preferable to this function as it guarantees validity.
+"""
+function pointer end
 
 pointer(p::Cstring) = convert(Ptr{UInt8}, p)
 pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
@@ -74,26 +190,229 @@ pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
 ==(x::Union{Cstring,Cwstring}, y::Ptr) = pointer(x) == y
 ==(x::Ptr, y::Union{Cstring,Cwstring}) = x == pointer(y)
 
-# here, not in pointer.jl, to avoid bootstrapping problems in coreimg.jl
-pointer_to_string(p::Cstring, own::Bool=false) = pointer_to_string(convert(Ptr{UInt8}, p), own)
+unsafe_string(s::Cstring) = unsafe_string(convert(Ptr{UInt8}, s))
 
-# convert strings to ByteString etc. to pass as pointers
-cconvert(::Type{Cstring}, s::AbstractString) = bytestring(s)
-cconvert(::Type{Cwstring}, s::AbstractString) = wstring(s)
+# convert strings to String etc. to pass as pointers
+cconvert(::Type{Cstring}, s::String) = s
+cconvert(::Type{Cstring}, s::AbstractString) =
+    cconvert(Cstring, String(s)::String)
 
-containsnul(p::Ptr, len) = C_NULL != ccall(:memchr, Ptr{Cchar}, (Ptr{Cchar}, Cint, Csize_t), p, 0, len)
-function unsafe_convert(::Type{Cstring}, s::ByteString)
+function cconvert(::Type{Cwstring}, s::AbstractString)
+    v = transcode(Cwchar_t, String(s))
+    !isempty(v) && v[end] == 0 || push!(v, 0)
+    return v
+end
+
+eltype(::Type{Cstring}) = UInt8
+eltype(::Type{Cwstring}) = Cwchar_t
+
+containsnul(p::Ptr, len) =
+    C_NULL != ccall(:memchr, Ptr{Cchar}, (Ptr{Cchar}, Cint, Csize_t), p, 0, len)
+containsnul(s::String) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
+containsnul(s::AbstractString) = '\0' in s
+
+function unsafe_convert(::Type{Cstring}, s::Union{String,AbstractVector{UInt8}})
     p = unsafe_convert(Ptr{Cchar}, s)
-    if containsnul(p, sizeof(s))
-        throw(ArgumentError("embedded NUL chars are not allowed in C strings: $(repr(s))"))
-    end
+    containsnul(p, sizeof(s)) &&
+        throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
     return Cstring(p)
 end
 
-# symbols are guaranteed not to contain embedded NUL
-convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
+function unsafe_convert(::Type{Cwstring}, v::Vector{Cwchar_t})
+    for i = 1:length(v)-1
+        v[i] == 0 &&
+            throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(v))"))
+    end
+    v[end] == 0 ||
+        throw(ArgumentError("C string data must be NUL terminated: $(repr(v))"))
+    p = unsafe_convert(Ptr{Cwchar_t}, v)
+    return Cwstring(p)
+end
 
-# in string.jl: unsafe_convert(::Type{Cwstring}, s::WString)
+# symbols are guaranteed not to contain embedded NUL
+cconvert(::Type{Cstring}, s::Symbol) = s
+unsafe_convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
+
+@static if ccall(:jl_get_UNAME, Any, ()) === :NT
+"""
+    Base.cwstring(s)
+
+Converts a string `s` to a NUL-terminated `Vector{Cwchar_t}`, suitable for passing to C
+functions expecting a `Ptr{Cwchar_t}`. The main advantage of using this over the implicit
+conversion provided by [`Cwstring`](@ref) is if the function is called multiple times with the
+same argument.
+
+This is only available on Windows.
+"""
+function cwstring(s::AbstractString)
+    bytes = codeunits(String(s))
+    0 in bytes && throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
+    return push!(transcode(UInt16, bytes), 0)
+end
+end
+
+# transcoding between data in UTF-8 and UTF-16 for Windows APIs,
+# and also UTF-32 for APIs using Cwchar_t on other platforms.
+
+"""
+    transcode(T, src)
+
+Convert string data between Unicode encodings. `src` is either a
+`String` or a `Vector{UIntXX}` of UTF-XX code units, where
+`XX` is 8, 16, or 32. `T` indicates the encoding of the return value:
+`String` to return a (UTF-8 encoded) `String` or `UIntXX`
+to return a `Vector{UIntXX}` of UTF-`XX` data. (The alias [`Cwchar_t`](@ref)
+can also be used as the integer type, for converting `wchar_t*` strings
+used by external C libraries.)
+
+The `transcode` function succeeds as long as the input data can be
+reasonably represented in the target encoding; it always succeeds for
+conversions between UTF-XX encodings, even for invalid Unicode data.
+
+Only conversion to/from UTF-8 is currently supported.
+"""
+function transcode end
+
+transcode(::Type{T}, src::AbstractVector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
+transcode(::Type{T}, src::String) where {T<:Union{Int32,UInt32}} = T[T(c) for c in src]
+transcode(::Type{T}, src::AbstractVector{UInt8}) where {T<:Union{Int32,UInt32}} =
+    transcode(T, String(Vector(src)))
+transcode(::Type{T}, src::CodeUnits{UInt8,String}) where {T<:Union{Int32,UInt32}} =
+    transcode(T, String(src))
+
+function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
+    buf = IOBuffer()
+    for c in src
+        print(buf, Char(c))
+    end
+    take!(buf)
+end
+transcode(::Type{String}, src::String) = src
+transcode(T, src::String) = transcode(T, codeunits(src))
+transcode(::Type{String}, src) = String(transcode(UInt8, src))
+
+function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
+    require_one_based_indexing(src)
+    dst = UInt16[]
+    i, n = 1, length(src)
+    n > 0 || return dst
+    sizehint!(dst, 2n)
+    a = src[1]
+    while true
+        if i < n && -64 <= a % Int8 <= -12 # multi-byte character
+            b = src[i += 1]
+            if -64 <= (b % Int8) || a == 0xf4 && 0x8f < b
+                # invalid UTF-8 (non-continuation or too-high code point)
+                push!(dst, a)
+                a = b; continue
+            elseif a < 0xe0 # 2-byte UTF-8
+                push!(dst, xor(0x3080, UInt16(a) << 6, b))
+            elseif i < n # 3/4-byte character
+                c = src[i += 1]
+                if -64 <= (c % Int8) # invalid UTF-8 (non-continuation)
+                    push!(dst, a, b)
+                    a = c; continue
+                elseif a < 0xf0 # 3-byte UTF-8
+                    push!(dst, xor(0x2080, UInt16(a) << 12, UInt16(b) << 6, c))
+                elseif i < n
+                    d = src[i += 1]
+                    if -64 <= (d % Int8) # invalid UTF-8 (non-continuation)
+                        push!(dst, a, b, c)
+                        a = d; continue
+                    elseif a == 0xf0 && b < 0x90 # overlong encoding
+                        push!(dst, xor(0x2080, UInt16(b) << 12, UInt16(c) << 6, d))
+                    else # 4-byte UTF-8
+                        push!(dst, 0xe5b8 + (UInt16(a) << 8) + (UInt16(b) << 2) + (c >> 4),
+                                   xor(0xdc80, UInt16(c & 0xf) << 6, d))
+                    end
+                else # too short
+                    push!(dst, a, b, c)
+                    break
+                end
+            else # too short
+                push!(dst, a, b)
+                break
+            end
+        else # ASCII or invalid UTF-8 (continuation byte or too-high code point)
+            push!(dst, a)
+        end
+        i < n || break
+        a = src[i += 1]
+    end
+    return dst
+end
+
+function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
+    require_one_based_indexing(src)
+    n = length(src)
+    n == 0 && return UInt8[]
+
+    # Precompute m = sizeof(dst).   This involves annoying duplication
+    # of the loop over the src array.   However, this is not just an
+    # optimization: it is problematic for security reasons to grow
+    # dst dynamically, because Base.winprompt uses this function to
+    # convert passwords to UTF-8 and we don't want to make unintentional
+    # copies of the password data.
+    a = src[1]
+    i, m = 1, 0
+    while true
+        if a < 0x80
+            m += 1
+        elseif a < 0x800 # 2-byte UTF-8
+            m += 2
+        elseif a & 0xfc00 == 0xd800 && i < length(src)
+            b = src[i += 1]
+            if (b & 0xfc00) == 0xdc00 # 2-unit UTF-16 sequence => 4-byte UTF-8
+                m += 4
+            else
+                m += 3
+                a = b; continue
+            end
+        else
+            # 1-unit high UTF-16 or unpaired high surrogate
+            # either way, encode as 3-byte UTF-8 code point
+            m += 3
+        end
+        i < n || break
+        a = src[i += 1]
+    end
+
+    dst = StringVector(m)
+    a = src[1]
+    i, j = 1, 0
+    while true
+        if a < 0x80 # ASCII
+            dst[j += 1] = a % UInt8
+        elseif a < 0x800 # 2-byte UTF-8
+            dst[j += 1] = 0xc0 | ((a >> 6) % UInt8)
+            dst[j += 1] = 0x80 | ((a % UInt8) & 0x3f)
+        elseif a & 0xfc00 == 0xd800 && i < n
+            b = src[i += 1]
+            if (b & 0xfc00) == 0xdc00
+                # 2-unit UTF-16 sequence => 4-byte UTF-8
+                a += 0x2840
+                dst[j += 1] = 0xf0 | ((a >> 8) % UInt8)
+                dst[j += 1] = 0x80 | ((a % UInt8) >> 2)
+                dst[j += 1] = xor(0xf0, ((a % UInt8) << 4) & 0x3f, (b >> 6) % UInt8)
+                dst[j += 1] = 0x80 | ((b % UInt8) & 0x3f)
+            else
+                dst[j += 1] = 0xe0 | ((a >> 12) % UInt8)
+                dst[j += 1] = 0x80 | (((a >> 6) % UInt8) & 0x3f)
+                dst[j += 1] = 0x80 | ((a % UInt8) & 0x3f)
+                a = b; continue
+            end
+        else
+            # 1-unit high UTF-16 or unpaired high surrogate
+            # either way, encode as 3-byte UTF-8 code point
+            dst[j += 1] = 0xe0 | ((a >> 12) % UInt8)
+            dst[j += 1] = 0x80 | (((a >> 6) % UInt8) & 0x3f)
+            dst[j += 1] = 0x80 | ((a % UInt8) & 0x3f)
+        end
+        i < n || break
+        a = src[i += 1]
+    end
+    return dst
+end
 
 # deferring (or un-deferring) ctrl-c handler for external C code that
 # is not interrupt safe (see also issue #2622).  The sigatomic_begin/end
@@ -102,22 +421,64 @@ convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
 # reennable_sigint is provided so that immediate ctrl-c handling is
 # re-enabled within a sigatomic region, e.g. inside a Julia callback function
 # within a long-running C routine.
-sigatomic_begin() = ccall(:jl_sigatomic_begin, Void, ())
-sigatomic_end() = ccall(:jl_sigatomic_end, Void, ())
-disable_sigint(f::Function) = try sigatomic_begin(); f(); finally sigatomic_end(); end
-reenable_sigint(f::Function) = try sigatomic_end(); f(); finally sigatomic_begin(); end
+sigatomic_begin() = ccall(:jl_sigatomic_begin, Cvoid, ())
+sigatomic_end() = ccall(:jl_sigatomic_end, Cvoid, ())
+
+"""
+    disable_sigint(f::Function)
+
+Disable Ctrl-C handler during execution of a function on the current task,
+for calling external code that may call julia code that is not interrupt safe.
+Intended to be called using `do` block syntax as follows:
+
+    disable_sigint() do
+        # interrupt-unsafe code
+        ...
+    end
+
+This is not needed on worker threads (`Threads.threadid() != 1`) since the
+`InterruptException` will only be delivered to the master thread.
+External functions that do not call julia code or julia runtime
+automatically disable sigint during their execution.
+"""
+function disable_sigint(f::Function)
+    sigatomic_begin()
+    res = f()
+    # Exception unwind sigatomic automatically
+    sigatomic_end()
+    res
+end
+
+"""
+    reenable_sigint(f::Function)
+
+Re-enable Ctrl-C handler during execution of a function.
+Temporarily reverses the effect of [`disable_sigint`](@ref).
+"""
+function reenable_sigint(f::Function)
+    sigatomic_end()
+    res = f()
+    # Exception unwind sigatomic automatically
+    sigatomic_begin()
+    res
+end
 
 function ccallable(f::Function, rt::Type, argt::Type, name::Union{AbstractString,Symbol}=string(f))
-    ccall(:jl_extern_c, Void, (Any, Any, Any, Cstring), f, rt, argt, name)
+    ccall(:jl_extern_c, Cvoid, (Any, Any, Any, Cstring), f, rt, argt, name)
 end
 
-function ccallable(f::Function, argt::Type, name::Union{AbstractString,Symbol}=string(f))
-    ccall(:jl_extern_c, Void, (Any, Ptr{Void}, Any, Cstring), f, C_NULL, argt, name)
-end
-
-macro ccallable(def)
+function expand_ccallable(rt, def)
     if isa(def,Expr) && (def.head === :(=) || def.head === :function)
         sig = def.args[1]
+        if sig.head === :(::)
+            if rt === nothing
+                rt = sig.args[2]
+            end
+            sig = sig.args[1]
+        end
+        if rt === nothing
+            error("@ccallable requires a return type")
+        end
         if sig.head === :call
             name = sig.args[1]
             at = map(sig.args[2:end]) do a
@@ -129,9 +490,16 @@ macro ccallable(def)
             end
             return quote
                 $(esc(def))
-                ccallable($(esc(name)), $(Expr(:curly, :Tuple, map(esc, at)...)))
+                ccallable($(esc(name)), $(esc(rt)), $(Expr(:curly, :Tuple, map(esc, at)...)), $(string(name)))
             end
         end
     end
     error("expected method definition in @ccallable")
+end
+
+macro ccallable(def)
+    expand_ccallable(nothing, def)
+end
+macro ccallable(rt, def)
+    expand_ccallable(rt, def)
 end

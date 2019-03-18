@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   jlapi.c
@@ -10,11 +10,16 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
 #include "julia.h"
+#include "options.h"
+#include "julia_assert.h"
+#include "julia_internal.h"
 
 #ifdef __cplusplus
+#include <cfenv>
 extern "C" {
+#else
+#include <fenv.h>
 #endif
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
@@ -22,58 +27,95 @@ JL_DLLEXPORT char * __cdecl dirname(char *);
 #else
 #include <libgen.h>
 #endif
+#ifndef _OS_WINDOWS_
+#include <dlfcn.h>
+#endif
 
-JL_DLLEXPORT int jl_is_initialized(void) { return jl_main_module!=NULL; }
+JL_DLLEXPORT int jl_is_initialized(void)
+{
+    return jl_main_module != NULL;
+}
 
-// First argument is the usr/lib directory where libjulia is, or NULL to guess.
-// if that doesn't work, try the full path to the "lib" directory that
-// contains lib/julia/sys.ji
+// First argument is the usr/bin directory where the julia binary is, or NULL to guess.
 // Second argument is the path of a system image file (*.ji) relative to the
-// first argument path, or relative to the default julia home dir. The default
-// is something like ../lib/julia/sys.ji
-JL_DLLEXPORT void jl_init_with_image(const char *julia_home_dir,
+// first argument path, or relative to the default julia home dir.
+// The default is something like ../lib/julia/sys.ji
+JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
                                      const char *image_relative_path)
 {
-    if (jl_is_initialized()) return;
+    if (jl_is_initialized())
+        return;
     libsupport_init();
-    jl_options.julia_home = julia_home_dir;
+    jl_options.julia_bindir = julia_bindir;
     if (image_relative_path != NULL)
         jl_options.image_file = image_relative_path;
+    else
+        jl_options.image_file = jl_get_default_sysimg_path();
     julia_init(JL_IMAGE_JULIA_HOME);
     jl_exception_clear();
 }
 
-JL_DLLEXPORT void jl_init(const char *julia_home_dir)
+JL_DLLEXPORT void jl_init(void)
 {
-    jl_init_with_image(julia_home_dir, NULL);
+    char *libbindir = NULL;
+#ifdef _OS_WINDOWS_
+    void *hdl = (void*)jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 0);
+    if (hdl) {
+        char *to_free = (char*)jl_pathname_for_handle(hdl);
+        if (to_free) {
+            libbindir = strdup(dirname(to_free));
+            free(to_free);
+        }
+    }
+#else
+    Dl_info dlinfo;
+    if (dladdr((void*)jl_init, &dlinfo) != 0 && dlinfo.dli_fname) {
+        char *to_free = strdup(dlinfo.dli_fname);
+        (void)asprintf(&libbindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", dirname(to_free), "bin");
+        free(to_free);
+    }
+#endif
+    if (!libbindir) {
+        printf("jl_init unable to find libjulia!\n");
+        abort();
+    }
+    jl_init_with_image(libbindir, jl_get_default_sysimg_path());
+    free(libbindir);
 }
 
-JL_DLLEXPORT void *jl_eval_string(const char *str)
+JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
 {
     jl_value_t *r;
     JL_TRY {
-        jl_value_t *ast = jl_parse_input_line(str, strlen(str));
+        const char filename[] = "none";
+        jl_value_t *ast = jl_parse_all(str, strlen(str),
+                filename, strlen(filename));
         JL_GC_PUSH1(&ast);
-        r = jl_toplevel_eval(ast);
+        r = jl_toplevel_eval_in(jl_main_module, ast);
         JL_GC_POP();
         jl_exception_clear();
     }
     JL_CATCH {
-        //jl_show(jl_stderr_obj(), jl_exception_in_transit);
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         r = NULL;
     }
     return r;
 }
 
+JL_DLLEXPORT jl_value_t *jl_current_exception(void) JL_GLOBALLY_ROOTED
+{
+    jl_excstack_t *s = jl_get_ptls_states()->current_task->excstack;
+    return s && s->top != 0 ? jl_excstack_exception(s, s->top) : jl_nothing;
+}
+
 JL_DLLEXPORT jl_value_t *jl_exception_occurred(void)
 {
-    return jl_exception_in_transit == jl_nothing ? NULL :
-        jl_exception_in_transit;
+    return jl_get_ptls_states()->previous_exception;
 }
 
 JL_DLLEXPORT void jl_exception_clear(void)
 {
-    jl_exception_in_transit = jl_nothing;
+    jl_get_ptls_states()->previous_exception = NULL;
 }
 
 // get the name of a type as a string
@@ -105,26 +147,29 @@ JL_DLLEXPORT size_t jl_array_size(jl_value_t *a, int d)
     return jl_array_dim(a, d);
 }
 
-JL_DLLEXPORT const char *jl_bytestring_ptr(jl_value_t *s)
+JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s)
 {
     return jl_string_data(s);
 }
 
-JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args,
-                                 int32_t nargs)
+JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs)
 {
     jl_value_t *v;
     JL_TRY {
         jl_value_t **argv;
         JL_GC_PUSHARGS(argv, nargs+1);
-        argv[0] = (jl_value_t*) f;
+        argv[0] = (jl_value_t*)f;
         for(int i=1; i<nargs+1; i++)
             argv[i] = args[i-1];
-        v = jl_apply(f, args, nargs);
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
+        v = jl_apply(argv, nargs+1);
+        jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }
     JL_CATCH {
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -135,11 +180,15 @@ JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
     jl_value_t *v;
     JL_TRY {
         JL_GC_PUSH1(&f);
-        v = jl_apply(f, NULL, 0);
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
+        v = jl_apply(&f, 1);
+        jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }
     JL_CATCH {
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -149,12 +198,18 @@ JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
 {
     jl_value_t *v;
     JL_TRY {
-        JL_GC_PUSH2(&f,&a);
-        v = jl_apply(f, &a, 1);
+        jl_value_t **argv;
+        JL_GC_PUSHARGS(argv, 2);
+        argv[0] = f; argv[1] = a;
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
+        v = jl_apply(argv, 2);
+        jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }
     JL_CATCH {
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -164,13 +219,18 @@ JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b
 {
     jl_value_t *v;
     JL_TRY {
-        JL_GC_PUSH3(&f,&a,&b);
-        jl_value_t *args[2] = {a,b};
-        v = jl_apply(f, args, 2);
+        jl_value_t **argv;
+        JL_GC_PUSHARGS(argv, 3);
+        argv[0] = f; argv[1] = a; argv[2] = b;
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
+        v = jl_apply(argv, 3);
+        jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }
     JL_CATCH {
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -181,13 +241,18 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
 {
     jl_value_t *v;
     JL_TRY {
-        JL_GC_PUSH4(&f,&a,&b,&c);
-        jl_value_t *args[3] = {a,b,c};
-        v = jl_apply(f, args, 3);
+        jl_value_t **argv;
+        JL_GC_PUSHARGS(argv, 4);
+        argv[0] = f; argv[1] = a; argv[2] = b; argv[3] = c;
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
+        v = jl_apply(argv, 4);
+        jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }
     JL_CATCH {
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -198,7 +263,7 @@ JL_DLLEXPORT void jl_yield(void)
     static jl_function_t *yieldfunc = NULL;
     if (yieldfunc == NULL)
         yieldfunc = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("yield"));
-    if (yieldfunc != NULL && jl_is_func(yieldfunc))
+    if (yieldfunc != NULL)
         jl_call0(yieldfunc);
 }
 
@@ -212,6 +277,7 @@ JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld)
         jl_exception_clear();
     }
     JL_CATCH {
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -224,7 +290,8 @@ JL_DLLEXPORT void jl_sigatomic_begin(void)
 
 JL_DLLEXPORT void jl_sigatomic_end(void)
 {
-    if (jl_defer_signal == 0)
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->defer_signal == 0)
         jl_error("sigatomic_end called in non-sigatomic region");
     JL_SIGATOMIC_END();
 }
@@ -238,9 +305,17 @@ JL_DLLEXPORT int jl_is_debugbuild(void)
 #endif
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_julia_home(void)
+JL_DLLEXPORT int8_t jl_is_memdebug(void) {
+#ifdef MEMDEBUG
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_julia_bindir(void)
 {
-    return jl_cstr_to_string(jl_options.julia_home);
+    return jl_cstr_to_string(jl_options.julia_bindir);
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_julia_bin(void)
@@ -273,18 +348,19 @@ JL_DLLEXPORT int jl_ver_is_release(void)
     return JULIA_VERSION_IS_RELEASE;
 }
 
-JL_DLLEXPORT const char* jl_ver_string(void)
+JL_DLLEXPORT const char *jl_ver_string(void)
 {
    return JULIA_VERSION_STRING;
 }
 
-// return char* from ByteString field in Base.GIT_VERSION_INFO
-static const char *git_info_string(const char *fld) {
+// return char* from String field in Base.GIT_VERSION_INFO
+static const char *git_info_string(const char *fld)
+{
     static jl_value_t *GIT_VERSION_INFO = NULL;
     if (!GIT_VERSION_INFO)
         GIT_VERSION_INFO = jl_get_global(jl_base_module, jl_symbol("GIT_VERSION_INFO"));
     jl_value_t *f = jl_get_field(GIT_VERSION_INFO, fld);
-    assert(jl_is_byte_string(f));
+    assert(jl_is_string(f));
     return jl_string_data(f);
 }
 
@@ -316,6 +392,61 @@ JL_DLLEXPORT jl_value_t *(jl_valueof)(jl_taggedvalue_t *v)
 JL_DLLEXPORT jl_value_t *(jl_typeof)(jl_value_t *v)
 {
     return jl_typeof(v);
+}
+
+#ifndef __clang_analyzer__
+JL_DLLEXPORT int8_t (jl_gc_unsafe_enter)(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return jl_gc_unsafe_enter(ptls);
+}
+
+JL_DLLEXPORT void (jl_gc_unsafe_leave)(int8_t state)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_gc_unsafe_leave(ptls, state);
+}
+
+JL_DLLEXPORT int8_t (jl_gc_safe_enter)(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return jl_gc_safe_enter(ptls);
+}
+
+JL_DLLEXPORT void (jl_gc_safe_leave)(int8_t state)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_gc_safe_leave(ptls, state);
+}
+#endif
+
+JL_DLLEXPORT void (jl_gc_safepoint)(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_gc_safepoint_(ptls);
+}
+
+JL_DLLEXPORT void (jl_cpu_pause)(void)
+{
+    jl_cpu_pause();
+}
+
+JL_DLLEXPORT void (jl_cpu_wake)(void)
+{
+    jl_cpu_wake();
+}
+
+JL_DLLEXPORT void jl_get_fenv_consts(int *ret)
+{
+    ret[0] = FE_INEXACT;
+    ret[1] = FE_UNDERFLOW;
+    ret[2] = FE_OVERFLOW;
+    ret[3] = FE_DIVBYZERO;
+    ret[4] = FE_INVALID;
+    ret[5] = FE_TONEAREST;
+    ret[6] = FE_UPWARD;
+    ret[7] = FE_DOWNWARD;
+    ret[8] = FE_TOWARDZERO;
 }
 
 #ifdef __cplusplus

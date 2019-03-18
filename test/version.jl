@@ -1,4 +1,6 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
+using Random
 
 # parsing tests
 @test v"2" == VersionNumber(2)
@@ -80,22 +82,25 @@
 # show
 io = IOBuffer()
 show(io,v"4.3.2+1.a")
-@test length(takebuf_string(io)) == 12
+@test length(String(take!(io))) == 12
 
-# conversion from Int
-@test convert(VersionNumber, 2) == v"2.0.0"
+# construction from Int
+@test VersionNumber(2) == v"2.0.0"
 
-# conversion from Tuple
-@test convert(VersionNumber, (2,)) == v"2.0.0"
-@test convert(VersionNumber, (3, 2)) == v"3.2.0"
+# construction from Tuple
+@test VersionNumber((2,)) == v"2.0.0"
+@test VersionNumber((3, 2)) == v"3.2.0"
 
-# conversion from AbstractString
-@test convert(VersionNumber, "4.3.2+1.a") == v"4.3.2+1.a"
+# construction from AbstractString
+@test VersionNumber("4.3.2+1.a") == v"4.3.2+1.a"
 
 # typemin and typemax
 @test typemin(VersionNumber) == v"0-"
-@test typemax(VersionNumber) ==
-  VersionNumber(typemax(Int), typemax(Int), typemax(Int), (), ("",))
+@test typemax(VersionNumber) == v"∞"
+let ∞ = typemax(UInt32)
+    @test typemin(VersionNumber) == VersionNumber(0, 0, 0, ("",), ())
+    @test typemax(VersionNumber) == VersionNumber(∞, ∞, ∞, (), ("",))
+end
 
 # issupbuild
 import Base.issupbuild
@@ -116,6 +121,7 @@ import Base.issupbuild
 # basic comparison
 VersionNumber(2, 3, 1) == VersionNumber(Int8(2), UInt32(3), Int32(1)) == v"2.3.1"
 @test v"2.3.0" < v"2.3.1" < v"2.4.8" < v"3.7.2"
+@test v"0.6.0-" < v"0.6.0-dev" < v"0.6.0-dev.123" < v"0.6.0-dev.unknown" < v"0.6.0-pre" < v"0.6.0"
 
 #lowerbound and upperbound
 import Base: lowerbound, upperbound
@@ -203,40 +209,47 @@ end
 
 # check_new_version
 import Base.check_new_version
-@test check_new_version([v"1", v"2"], v"3") == nothing
-@test_throws AssertionError check_new_version([v"2", v"1"], v"3")
+@test check_new_version([v"1", v"2"], v"3") === nothing
+@test check_new_version([v"2", v"1"], v"3") === nothing
 @test_throws ErrorException check_new_version([v"1", v"2"], v"2")
-@test check_new_version(VersionNumber[], v"0") == nothing
-@test check_new_version(VersionNumber[], v"0.0.1") == nothing
+@test_throws ErrorException check_new_version(VersionNumber[], v"0")
+@test check_new_version(VersionNumber[], v"0.0.1") === nothing
 @test_throws ErrorException check_new_version(VersionNumber[], v"0.0.2")
-@test check_new_version(VersionNumber[], v"0.1") == nothing
+@test check_new_version(VersionNumber[], v"0.1") === nothing
 @test_throws ErrorException check_new_version(VersionNumber[], v"0.2")
-@test check_new_version(VersionNumber[], v"1") == nothing
+@test check_new_version(VersionNumber[], v"1") === nothing
 @test_throws ErrorException check_new_version(VersionNumber[], v"2")
 @test_throws ErrorException check_new_version(VersionNumber[v"1", v"2", v"3"], v"2")
 @test_throws ErrorException check_new_version([v"1", v"2"], v"4")
 @test_throws ErrorException check_new_version([v"1", v"2"], v"2-rc")
-@test check_new_version([v"1", v"2"], v"2.0.1") == nothing
-@test check_new_version([v"1", v"2"], v"2.1") == nothing
-@test check_new_version([v"1", v"2"], v"3") == nothing
+@test_throws ErrorException check_new_version([v"1", v"2"], v"0")
+@test_throws ErrorException check_new_version([v"1", v"2"], v"0.9")
+@test check_new_version([v"1", v"2"], v"2.0.1") === nothing
+@test check_new_version([v"1", v"2"], v"2.1") === nothing
+@test check_new_version([v"1", v"2"], v"3") === nothing
+
+let vers = [v"2", v"1"]
+    @test check_new_version(vers, v"3") == nothing
+    @test vers == [v"2", v"1"] # no mutation
+end
 
 # banner
 import Base.banner
 io = IOBuffer()
-@test banner(io) == nothing
-@test length(takebuf_string(io)) > 50
+@test banner(io) === nothing
+@test length(String(take!(io))) > 50
 
 # julia_version.h version test
 @test VERSION.major == ccall(:jl_ver_major, Cint, ())
 @test VERSION.minor == ccall(:jl_ver_minor, Cint, ())
 @test VERSION.patch == ccall(:jl_ver_patch, Cint, ())
 
-# test construction with non-Int and non-ASCIIString components
+# test construction with non-Int and non-String components
 @test_throws MethodError VersionNumber()
 @test VersionNumber(true) == v"1"
 @test VersionNumber(true, 0x2) == v"1.2"
 @test VersionNumber(true, 0x2, Int128(3)) == v"1.2.3"
 @test VersionNumber(true, 0x2, Int128(3)) == v"1.2.3"
-@test VersionNumber(true, 0x2, Int128(3), (UTF8String("rc"), 0x1)) == v"1.2.3-rc.1"
-@test VersionNumber(true, 0x2, Int128(3), (UTF8String("rc"), 0x1)) == v"1.2.3-rc.1"
-@test VersionNumber(true, 0x2, Int128(3), (), (UTF8String("sp"), 0x2)) == v"1.2.3+sp.2"
+@test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
+@test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
+@test VersionNumber(true, 0x2, Int128(3), (), (GenericString("sp"), 0x2)) == v"1.2.3+sp.2"
