@@ -459,6 +459,7 @@ $(eval $(call LLVM_PATCH,llvm-6.0-D63688-wasm-isLocal))
 $(eval $(call LLVM_PATCH,llvm-6.0-D64032-cmake-cross))
 $(eval $(call LLVM_PATCH,llvm-6.0-D64225-cmake-cross2))
 $(eval $(call LLVM_PATCH,llvm6-WASM-addrspaces)) # WebAssembly
+$(eval $(call LLVM_PATCH,llvm-AMDGPU-addrspaces)) # AMDGPU
 endif # LLVM_VER 6.0
 
 ifeq ($(LLVM_VER_SHORT),7.0)
