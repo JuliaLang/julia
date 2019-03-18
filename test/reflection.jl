@@ -821,6 +821,12 @@ end
 @test hasmethod(h, Tuple{}, (:a, :b, :c, :d))
 end
 
+# issue #31353
+function f31353(f, x::Array{<:Dict})
+end
+@test  hasmethod(f31353, Tuple{Any, Array{D}} where D<:Dict)
+@test !hasmethod(f31353, Tuple{Any, Array{D}} where D<:AbstractDict)
+
 # issue #26267
 module M26267
 import Test
