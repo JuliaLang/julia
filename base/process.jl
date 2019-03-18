@@ -711,8 +711,9 @@ read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))
 """
     run(command, args...; wait::Bool = true)
 
-Run a command object, constructed with backticks. Throws an error if anything goes wrong,
-including the process exiting with a non-zero status (when `wait` is true).
+Run a command object, constructed with backticks (see the [Running External Programs](@ref)
+section in the manual). Throws an error if anything goes wrong, including the process
+exiting with a non-zero status (when `wait` is true).
 
 If `wait` is false, the process runs asynchronously. You can later wait for it and check
 its exit status by calling `success` on the returned process object.
@@ -776,8 +777,9 @@ success(procs::ProcessChain) = success(procs.processes)
 """
     success(command)
 
-Run a command object, constructed with backticks, and tell whether it was successful (exited
-with a code of 0). An exception is raised if the process cannot be started.
+Run a command object, constructed with backticks (see the [Running External Programs](@ref)
+section in the manual), and tell whether it was successful (exited with a code of 0).
+An exception is raised if the process cannot be started.
 """
 success(cmd::AbstractCmd) = success(_spawn(cmd))
 
