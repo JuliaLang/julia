@@ -181,33 +181,33 @@ JL_DLLEXPORT void *jl_uv_write_handle(uv_write_t *req) { return req->handle; }
 JL_DLLEXPORT int jl_run_once(uv_loop_t *loop)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (loop) {
+    if (loop && ptls->tid == 0) {
         loop->stop_flag = 0;
         jl_gc_safepoint_(ptls);
-        return uv_run(loop,UV_RUN_ONCE);
+        return uv_run(loop, UV_RUN_ONCE);
     }
-    else return 0;
+    return 0;
 }
 
 JL_DLLEXPORT void jl_run_event_loop(uv_loop_t *loop)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (loop) {
+    if (loop && ptls->tid == 0) {
         loop->stop_flag = 0;
         jl_gc_safepoint_(ptls);
-        uv_run(loop,UV_RUN_DEFAULT);
+        uv_run(loop, UV_RUN_DEFAULT);
     }
 }
 
 JL_DLLEXPORT int jl_process_events(uv_loop_t *loop)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (loop) {
+    if (loop && ptls->tid == 0) {
         loop->stop_flag = 0;
         jl_gc_safepoint_(ptls);
-        return uv_run(loop,UV_RUN_NOWAIT);
+        return uv_run(loop, UV_RUN_NOWAIT);
     }
-    else return 0;
+    return 0;
 }
 
 static void jl_proc_exit_cleanup(uv_process_t *process, int64_t exit_status, int term_signal)
