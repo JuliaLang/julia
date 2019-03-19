@@ -4100,34 +4100,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         // parse Expr(:loopinfo, "julia.simdloop", ("llvm.loop.vectorize.width", 4))
         SmallVector<Metadata *, 8> MDs;
         for (int i = 0, ie = jl_expr_nargs(ex); i < ie; ++i) {
-            jl_value_t *arg = args[i];
-            Metadata *MD;
-            if (arg == jl_nothing)
-                continue;
-            if (jl_is_symbol(arg)) {
-                MD = MDString::get(jl_LLVMContext, jl_symbol_name((jl_sym_t*)arg));
-            } else if (jl_is_tuple(arg)) {
-                // TODO: are there loopinfo with more than one field?
-                if (jl_nfields(arg) != 2)
-                    jl_error("loopinfo: only accept 2-arg tuple");
-                jl_value_t* name  = jl_fieldref(arg, 0);
-                jl_value_t* value = jl_fieldref(arg, 1);
-                if (!jl_is_symbol(name))
-                    jl_error("loopinfo: name needs to be a symbol");
-                Metadata *MDVal;
-                if(jl_is_bool(value))
-                    MDVal = ConstantAsMetadata::get(ConstantInt::get(T_int1, jl_unbox_bool(value)));
-                if(jl_is_long(value))
-                    MDVal = ConstantAsMetadata::get(ConstantInt::get(T_int64, jl_unbox_long(value)));
-                if(!MDVal)
-                    jl_error("loopinfo: value can only be a bool or a long");
-                MD = MDNode::get(jl_LLVMContext,
-                        { MDString::get(jl_LLVMContext, jl_symbol_name((jl_sym_t*)name)), MDVal });
-            }
+            Metadata *MD = to_md_tree(args[i]);
             if (MD)
                 MDs.push_back(MD);
-            else
-                jl_error("loopinfo: argument needs to be either a symbol or a tuple of type (Symbol, Union{Int, Bool}");
         }
 
         MDNode* MD = MDNode::get(jl_LLVMContext, MDs);
