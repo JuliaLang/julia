@@ -747,7 +747,7 @@ endif
 ifneq (,$(findstring aarch64,$(ARCH)))
 OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV8
-BINARY=:64
+BINARY:=64
 endif
 
 # Set MARCH-specific flags
