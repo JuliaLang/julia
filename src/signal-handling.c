@@ -18,7 +18,7 @@ extern "C" {
 #include <threading.h>
 
 // Profiler control variables //
-static volatile intptr_t *bt_data_prof = NULL;
+static volatile uintptr_t *bt_data_prof = NULL;
 static volatile size_t bt_size_max = 0;
 static volatile size_t bt_size_cur = 0;
 static volatile uint8_t bt_overflow = 0;
@@ -255,7 +255,7 @@ JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
     nsecprof = delay_nsec;
     if (bt_data_prof != NULL)
         free((void*)bt_data_prof);
-    bt_data_prof = (intptr_t*) calloc(maxsize, sizeof(intptr_t));
+    bt_data_prof = (uintptr_t*) calloc(maxsize, sizeof(intptr_t));
     if (bt_data_prof == NULL && maxsize > 0)
         return -1;
 
