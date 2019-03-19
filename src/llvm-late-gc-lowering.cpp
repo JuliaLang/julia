@@ -325,6 +325,7 @@ protected:
 private:
     Type *T_prjlvalue;
     Type *T_ppjlvalue;
+    Type *T_void;
     Type *T_size;
     Type *T_int8;
     Type *T_int32;
@@ -345,6 +346,7 @@ private:
     Function *queueroot_func;
     Function *pool_alloc_func;
     Function *big_alloc_func;
+    Function *memprofile_set_typeof_func;
     CallInst *ptlsStates;
 
     void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
@@ -1775,6 +1777,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 auto store = builder.CreateStore(CI->getArgOperand(2),
                                                  EmitTagPtr(builder, T_prjlvalue, newI));
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
+                builder.CreateCall(memprofile_set_typeof_func, {newI, CI->getArgOperand(2)});
                 CI->replaceAllUsesWith(newI);
                 UpdatePtrNumbering(CI, newI, S);
             } else if (typeof_func && callee == typeof_func) {
@@ -2045,6 +2048,7 @@ bool LateLowerGCFrame::doInitialization(Module &M) {
     T_int8 = Type::getInt8Ty(ctx);
     T_pint8 = PointerType::get(T_int8, 0);
     T_int32 = Type::getInt32Ty(ctx);
+    T_void = Type::getVoidTy(ctx);
     if ((write_barrier_func = M.getFunction("julia.write_barrier"))) {
         T_prjlvalue = write_barrier_func->getFunctionType()->getParamType(0);
         if (!(queueroot_func = M.getFunction("jl_gc_queue_root"))) {
@@ -2059,6 +2063,7 @@ bool LateLowerGCFrame::doInitialization(Module &M) {
     }
     pool_alloc_func = nullptr;
     big_alloc_func = nullptr;
+    memprofile_set_typeof_func = nullptr;
     if ((alloc_obj_func = M.getFunction("julia.gc_alloc_obj"))) {
         T_prjlvalue = alloc_obj_func->getReturnType();
         if (!(pool_alloc_func = M.getFunction("jl_gc_pool_alloc"))) {
@@ -2079,6 +2084,17 @@ bool LateLowerGCFrame::doInitialization(Module &M) {
             args.push_back(T_size);
             big_alloc_func = Function::Create(FunctionType::get(T_prjlvalue, args, false),
                                          Function::ExternalLinkage, "jl_gc_big_alloc", &M);
+            big_alloc_func->setAttributes(AttributeList::get(M.getContext(),
+                alloc_obj_func->getAttributes().getFnAttributes(),
+                alloc_obj_func->getAttributes().getRetAttributes(),
+                None));
+        }
+        if (!(memprofile_set_typeof_func = M.getFunction("jl_memprofile_set_typeof"))) {
+            std::vector<Type *> args(0);
+            args.push_back(T_prjlvalue);
+            args.push_back(T_prjlvalue);
+            memprofile_set_typeof_func = Function::Create(FunctionType::get(T_void, args, false),
+                                         Function::ExternalLinkage, "jl_memprofile_set_typeof", &M);
             big_alloc_func->setAttributes(AttributeList::get(M.getContext(),
                 alloc_obj_func->getAttributes().getFnAttributes(),
                 alloc_obj_func->getAttributes().getRetAttributes(),
