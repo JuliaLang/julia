@@ -77,6 +77,33 @@ function _reformat_bt(bt, bt2)
     ret
 end
 
+# Same as above, but inspects a single, stacked array to parse out interepreter frames
+function _reformat_bt(bt)
+    get_ip(frame::Ptr) = UInt(frame)
+    get_ip(frame::UInt) = frame
+    get_ptr(frame::UInt) = Ptr{Cvoid}(frame)
+    get_ptr(frame::Ptr) = frame
+
+    ret = Vector{Union{InterpreterIP,Ptr{Cvoid},UInt}}()
+    i = 1
+    while i <= length(bt)
+        # Find all interpreter frames
+        if get_ip(bt[i]) == (-1)%UInt
+            push!(ret, InterpreterIP(
+                unsafe_pointer_to_objref(get_ptr(bt[i+1])),
+                bt[i+2])
+            )
+            i += 3
+        else
+            push!(ret, bt[i])
+            i += 1
+        end
+    end
+    return ret
+end
+
+
+
 function backtrace end
 
 """
