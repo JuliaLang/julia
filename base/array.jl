@@ -1604,10 +1604,11 @@ CartesianIndex(2, 1)
 function findnext(A, start)
     l = last(keys(A))
     i = start
-    while i <= l
-        if A[i]
-            return i
-        end
+    i > l && return nothing
+    while true
+        A[i] && return i
+        i == l && break
+        # nextind(A, l) can throw/overflow
         i = nextind(A, i)
     end
     return nothing
@@ -1685,10 +1686,11 @@ CartesianIndex(1, 1)
 function findnext(testf::Function, A, start)
     l = last(keys(A))
     i = start
-    while i <= l
-        if testf(A[i])
-            return i
-        end
+    i > l && return nothing
+    while true
+        testf(A[i]) && return i
+        i == l && break
+        # nextind(A, l) can throw/overflow
         i = nextind(A, i)
     end
     return nothing
@@ -1781,8 +1783,12 @@ CartesianIndex(2, 1)
 """
 function findprev(A, start)
     i = start
-    while i >= first(keys(A))
+    f = first(keys(A))
+    i < f && return nothing
+    while true
         A[i] && return i
+        i == f && break
+        # prevind(A, l) can throw/underflow
         i = prevind(A, i)
     end
     return nothing
@@ -1868,8 +1874,12 @@ CartesianIndex(2, 1)
 """
 function findprev(testf::Function, A, start)
     i = start
-    while i >= first(keys(A))
+    f = first(keys(A))
+    i < f && return nothing
+    while true
         testf(A[i]) && return i
+        i == f && break
+        # prevind(A, l) can throw/underflow
         i = prevind(A, i)
     end
     return nothing
