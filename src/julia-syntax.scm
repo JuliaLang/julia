@@ -1398,9 +1398,9 @@
                            (begin (set! a (cons `(= ,g ,(caddr x)) a))
                                   `(kw ,(cadr x) ,g)))))
                     ((eq? (car x) 'tuple)
-                     (let ((tmp (map remove-argument-side-effects (cdr x))))
-                       (set! a (revappend (apply append (map cdr tmp)) a))
-                       `(tuple ,@(map car tmp))))
+                     (let ((tmp (remove-argument-side-effects x)))
+                       (set! a (revappend (cdr tmp) a))
+                       (car tmp)))
                     (else
                      (let ((g (make-ssavalue)))
                        (begin (set! a (cons `(= ,g ,x) a))
