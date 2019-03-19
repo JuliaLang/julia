@@ -2,7 +2,7 @@
 
 using Random, Sockets
 
-const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "stdlib", "v$(VERSION.major).$(VERSION.minor)")
+const STDLIB_DIR = Sys.STDLIB
 const STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), readdir(STDLIB_DIR))
 
 """
