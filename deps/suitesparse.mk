@@ -19,12 +19,18 @@ ifneq ($(USE_BINARYBUILDER_SUITESPARSE), 1)
 SUITESPARSE_PROJECTS := AMD CAMD CCOLAMD COLAMD CHOLMOD UMFPACK SPQR
 SUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig amd camd ccolamd colamd cholmod umfpack spqr)
 
+# SuiteSparse doesn't like our value of $(OS) or $(UNAME) sometimes, so clean it up
+SUITE_SPARSE_OS := $(OS)
+ifeq ($(SUITE_SPARSE_OS), WINNT)
+	SUITE_SPARSE_OS := Windows
+endif
+
 SUITE_SPARSE_LIB := $(LDFLAGS) -L"$(abspath $(BUILDDIR))/SuiteSparse-$(SUITESPARSE_VER)/lib"
 ifeq ($(OS), Darwin)
 SUITE_SPARSE_LIB += $(RPATH_ESCAPED_ORIGIN)
 endif
 SUITESPARSE_MFLAGS := CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
-	  LDFLAGS="$(SUITE_SPARSE_LIB)" OS="$(env_OS)" \
+	  LDFLAGS="$(SUITE_SPARSE_LIB)" OS="$(SUITE_SPARSE_OS)" \
 	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" SPQR_CONFIG="$(SPQR_CONFIG)" \
 	  CFOPENMP="" CUDA=no CUDA_PATH=""
 
