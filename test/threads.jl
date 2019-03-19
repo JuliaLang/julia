@@ -4,6 +4,20 @@ using Test
 using Base.Threads
 using Base.Threads: SpinLock, Mutex
 
+# this macro tests for exceptions thrown at macro expansion
+macro test_me(ty, ex)
+    return quote
+        @test_throws $(esc(ty)) try
+            $(esc(ex))
+        catch err
+            @test err isa LoadError
+            @test err.file === $(string(__source__.file))
+            @test err.line === $(__source__.line)
+            rethrow(err.error)
+        end
+    end
+end
+
 # threading constructs
 
 # parallel loop with parallel atomic addition
@@ -517,4 +531,10 @@ let e = Event(), started = Event()
     blocked = true
     wait(@async (wait(e); blocked = false))
     @test !blocked
+end
+
+@testset "bad arguments to @threads" begin
+    @test_me ArgumentError @macroexpand(@threads 1 2) # wrong number of args
+    @test_me ArgumentError @macroexpand(@threads 1) # arg isn't an Expr
+    @test_me ArgumentError @macroexpand(@threads if true 1 end) # arg doesn't start with for
 end
