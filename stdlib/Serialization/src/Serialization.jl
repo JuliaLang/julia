@@ -738,9 +738,7 @@ function resolve_ref_immediately(s::AbstractSerializer, @nospecialize(x))
 end
 
 function gettable(s::AbstractSerializer, id::Int)
-    if haskey(s.table, id)
-        return s.table[id]
-    else
+    get(s.table, id) do
         errmsg = """Inconsistent Serializer state when deserializing.
             Attempt to access internal table with key $id failed.
 
