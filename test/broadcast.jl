@@ -791,6 +791,39 @@ end
     @test iszero.((big(0):big(2)) .- 1) == [false, true, false]
 end
 
+@testset "Issue #31392: In-place broadcasting with repeated indices" begin
+    x = [3]
+    @views x[[1,1]] .= x[[1,1]] .+ x[[1,1]]
+    @test x[] == 6
+    x[[1,1]] .+= 1
+    @test x[] == 7
+
+    x = [3]
+    @views x[[1,1]] .+= x[[1,1]]
+    @test x[] == 6
+    x[[1,1]] .+= 1
+    @test x[] == 7
+
+    for I in ([1,1], StepRangeLen(1, 0, 2))
+        x = [3]
+        @views x[I] .= x[I] .+ x[I]
+        @test x[] == 6
+
+        x = [3]
+        @views x[I] .+= x[I]
+        @test x[] == 6
+
+        for v in (view([3], I), reshape(view([3], I), 1, 2))
+            v .= v .+ v
+            @test v[1] == 6
+            v .+= v
+            @test v[1] == 12
+            v .+= 1
+            @test v[1] == 13
+        end
+    end
+end
+
 @testset "Issue #27775: Broadcast!ing over nested scalar operations" begin
     a = zeros(2)
     a .= 1 ./ (1 + 2)

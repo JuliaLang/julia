@@ -877,14 +877,33 @@ end
     end
 end
 
-# For broadcasted assignments like `broadcast!(f, A, ..., A, ...)`, where `A`
-# appears on both the LHS and the RHS of the `.=`, then we know we're only
-# going to make one pass through the array, and even though `A` is aliasing
-# against itself, the mutations won't affect the result as the indices on the
-# LHS and RHS will always match. This is not true in general, but with the `.op=`
-# syntax it's fairly common for an argument to be `===` a source.
-broadcast_unalias(dest, src) = dest === src ? src : unalias(dest, src)
+"""
+    broadcast_unalias(dest, src)
+
+`broadcast_unalias` is a simple extension of `Base.unalias` to enable an important
+performance optimization specific to the semantics of broadcasting.
+
+For broadcasted assignments like `broadcast!(f, A, ..., A, ...)`, where `A`
+appears on both the LHS and the RHS of the `.=`, then we know we're only
+going to make one pass through the array, and even though `A` is aliasing
+against itself, the mutations won't affect the result as the indices on the
+LHS and RHS will always match. As long as the indices do not repeat, the
+RHS does not need to be unaliased. This is particuclarly valuable with the `.op=`
+syntax since that makes it fairly common for an argument to be `===` a source.
+"""
+broadcast_unalias(dest, src) = dest === src && !potentially_self_aliased(dest) ? src : unalias(dest, src)
 broadcast_unalias(::Nothing, src) = src
+
+"""
+    potentially_self_aliased(A)
+
+Conservatively returns true if multiple locations in `A` might reference the same memory
+"""
+potentially_self_aliased(::DenseArray) = false
+potentially_self_aliased(A::StridedArray) = any(==(0), strides(A))
+potentially_self_aliased(A::SubArray) = any(!allunique, A.indices)
+potentially_self_aliased(A::Union{Base.ReshapedArray,Base.ReinterpretArray}) = potentially_self_aliased(A.parent)
+potentially_self_aliased(::Any) = true
 
 # Preprocessing a `Broadcasted` does two things:
 # * unaliases any arguments from `dest`
