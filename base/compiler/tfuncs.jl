@@ -450,7 +450,7 @@ function typeof_tfunc(@nospecialize(t))
         a = widenconst(typeof_tfunc(t.a))
         b = widenconst(typeof_tfunc(t.b))
         return Union{a, b}
-    elseif isa(t, TypeVar) && !(Any <: t.ub)
+    elseif isa(t, TypeVar) && !(Any === t.ub)
         return typeof_tfunc(t.ub)
     elseif isa(t, UnionAll)
         u = unwrap_unionall(t)
