@@ -43,6 +43,8 @@ include_string_test_func = include_string(@__MODULE__, "include_string_test() = 
 @test basename(@__FILE__) == "loading.jl"
 @test isabspath(@__FILE__)
 
+@test !endswith(@__DIR__, Base.Filesystem.path_separator_re)
+@test !endswith(readchomp(`$(Base.julia_cmd()) -e 'print(@__DIR__)'`), Base.Filesystem.path_separator_re)
 @test isdir(@__DIR__)
 @test @__DIR__() == dirname(@__FILE__)
 let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`,
