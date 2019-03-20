@@ -43,8 +43,7 @@ include_string_test_func = include_string(@__MODULE__, "include_string_test() = 
 @test basename(@__FILE__) == "loading.jl"
 @test isabspath(@__FILE__)
 
-@test !endswith(@__DIR__, Base.Filesystem.path_separator_re)
-@test !endswith(readchomp(`$(Base.julia_cmd()) -e 'print(@__DIR__)'`), Base.Filesystem.path_separator_re)
+@test !endswith(@__DIR__, Base.Filesystem.path_separator)
 @test isdir(@__DIR__)
 @test @__DIR__() == dirname(@__FILE__)
 let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`,
@@ -54,6 +53,7 @@ let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`,
     @test readchomp(`$exename -E "@__DIR__" -i`) == wd
     @test readchomp(`$exename -E "cd(()->eval(:(@__DIR__)), $s_dir)" -i`) == s_dir
     @test readchomp(`$exename -E "@__DIR__"`) == wd # non-interactive
+    @test !endswith(readchomp(`$exename -e "print(@__DIR__)"`), Base.Filesystem.path_separator)
 end
 
 # Issue #5789 and PR #13542:
