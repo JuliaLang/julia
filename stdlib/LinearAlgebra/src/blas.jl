@@ -73,7 +73,7 @@ import Libdl
 let lib = C_NULL
 global function determine_vendor()
     if lib == C_NULL
-        lib = Libdl.dlopen(Base.libblas_name; throw_error=false)
+        lib = something(Libdl.dlopen(Base.libblas_name; throw_error=false), C_NULL)
     end
     vend = :unknown
     if lib != C_NULL
