@@ -339,7 +339,7 @@ function realpath(path::AbstractString)
                 path, 0, 0x03, C_NULL, 3, 0x02000000, 0)
     windowserror(:realpath, h == -1)
     try
-        buf = Array{UInt16}(undef, 256)
+        buf = Vector{UInt16}(undef, 256)
         oldlen = len = length(buf)
         while len >= oldlen
             len = ccall(:GetFinalPathNameByHandleW, stdcall, UInt32, (Int, Ptr{UInt16}, UInt32, UInt32),
