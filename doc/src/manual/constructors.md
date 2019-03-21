@@ -420,7 +420,7 @@ julia> struct OurRational{T<:Integer} <: Real
                if num == 0 && den == 0
                     error("invalid rational: 0//0")
                end
-               g = sign(den) < 0 ? -gcd(num, den) : gcd(num, den)
+               g = copysign(gcd(num, den), den)
                num = div(num, g)
                den = div(den, g)
                new(num, den)
