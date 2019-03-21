@@ -600,8 +600,13 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         bool isboxed;
         Type *ptrty = julia_type_to_llvm(ety, &isboxed);
         assert(!isboxed);
-        Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-        return typed_load(ctx, thePtr, im1, ety, tbaa_data, nullptr, true, align_nb);
+        if (!type_is_ghost(ptrty)) {
+            Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+            return typed_load(ctx, thePtr, im1, ety, tbaa_data, nullptr, true, align_nb);
+        }
+        else {
+            return mark_julia_const(((jl_datatype_t*)ety)->instance);
+        }
     }
 }
 
@@ -663,8 +668,12 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         bool isboxed;
         Type *ptrty = julia_type_to_llvm(ety, &isboxed);
         assert(!isboxed);
-        thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-        typed_store(ctx, thePtr, im1, x, ety, tbaa_data, nullptr, nullptr, align_nb);
+        if (!type_is_ghost(ptrty)) {
+            thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+            typed_store(ctx, thePtr, im1, x, ety, tbaa_data, nullptr, nullptr, align_nb);
+        } else {
+          return e;
+        }
     }
     return mark_julia_type(ctx, thePtr, false, aty);
 }
