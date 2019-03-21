@@ -152,6 +152,9 @@ counted as part of the path.
 ```jldoctest
 julia> dirname("/home/myuser")
 "/home"
+
+julia> dirname("/home/myuser/")
+"/home/myuser"
 ```
 
 See also: [`basename`](@ref)
