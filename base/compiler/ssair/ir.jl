@@ -53,7 +53,7 @@ struct CFG
     index::Vector{Int} # map from instruction => basic-block number
                        # TODO: make this O(1) instead of O(log(n_blocks))?
 end
-copy(c::CFG) = CFG(copy(c.blocks), copy(c.index))
+copy(c::CFG) = CFG(BasicBlock[copy(b) for b in c.blocks], copy(c.index))
 
 function block_for_inst(index::Vector{Int}, inst::Int)
     return searchsortedfirst(index, inst, lt=(<=))
@@ -229,7 +229,7 @@ struct IRCode
         return new(stmts, types, lines, flags, ir.argtypes, ir.sptypes, ir.linetable, cfg, new_nodes, ir.meta)
     end
 end
-copy(code::IRCode) = IRCode(code, copy(code.stmts), copy(code.types),
+copy(code::IRCode) = IRCode(code, copy_exprargs(code.stmts), copy(code.types),
     copy(code.lines), copy(code.flags), copy(code.cfg), copy(code.new_nodes))
 
 function getindex(x::IRCode, s::SSAValue)

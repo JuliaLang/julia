@@ -2,6 +2,9 @@
 
 ## basic task functions and TLS
 
+const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
+Core.Task(@nospecialize(f), reserved_stack::Int=0) = Core._Task(f, reserved_stack, ThreadSynchronizer())
+
 # Container for a captured exception and its backtrace. Can be serialized.
 struct CapturedException <: Exception
     ex::Any
@@ -135,6 +138,8 @@ istaskstarted(t::Task) = ccall(:jl_is_task_started, Cint, (Any,), t) != 0
 
 istaskfailed(t::Task) = (t.state == :failed)
 
+Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
+
 task_result(t::Task) = t.result
 
 task_local_storage() = get_task_tls(current_task())
@@ -142,7 +147,7 @@ function get_task_tls(t::Task)
     if t.storage === nothing
         t.storage = IdDict()
     end
-    (t.storage)::IdDict{Any,Any}
+    return (t.storage)::IdDict{Any,Any}
 end
 
 """
@@ -168,24 +173,27 @@ for emulating dynamic scoping.
 """
 function task_local_storage(body::Function, key, val)
     tls = task_local_storage()
-    hadkey = haskey(tls,key)
-    old = get(tls,key,nothing)
+    hadkey = haskey(tls, key)
+    old = get(tls, key, nothing)
     tls[key] = val
-    try body()
+    try
+        return body()
     finally
-        hadkey ? (tls[key] = old) : delete!(tls,key)
+        hadkey ? (tls[key] = old) : delete!(tls, key)
     end
 end
 
 # NOTE: you can only wait for scheduled tasks
 function wait(t::Task)
     if !istaskdone(t)
-        if t.donenotify === nothing
-            t.donenotify = Condition()
+        lock(t.donenotify)
+        try
+            while !istaskdone(t)
+                wait(t.donenotify)
+            end
+        finally
+            unlock(t.donenotify)
         end
-    end
-    while !istaskdone(t)
-        wait(t.donenotify)
     end
     if istaskfailed(t)
         throw(t.exception)
@@ -202,7 +210,7 @@ exception, the exception is propagated (re-thrown in the task that called fetch)
 """
 function fetch(t::Task)
     wait(t)
-    task_result(t)
+    return task_result(t)
 end
 
 
@@ -266,6 +274,7 @@ macro async(expr)
             push!($var, task)
         end
         schedule(task)
+        task
     end
 end
 
@@ -273,7 +282,7 @@ end
 function register_taskdone_hook(t::Task, hook)
     tls = get_task_tls(t)
     push!(get!(tls, :TASKDONE_HOOKS, []), hook)
-    t
+    return t
 end
 
 # runtime system hook called when a task finishes
@@ -286,9 +295,17 @@ function task_done_hook(t::Task)
         t.backtrace = catch_backtrace()
     end
 
-    if isa(t.donenotify, Condition) && !isempty(t.donenotify.waitq)
-        handled = true
-        notify(t.donenotify, result, true, err)
+    donenotify = t.donenotify
+    if isa(donenotify, ThreadSynchronizer)
+        lock(donenotify)
+        try
+            if !isempty(donenotify.waitq)
+                handled = true
+                notify(donenotify, result, true, err)
+            end
+        finally
+            unlock(donenotify)
+        end
     end
 
     # Execute any other hooks registered in the TLS
@@ -298,8 +315,8 @@ function task_done_hook(t::Task)
         handled = true
     end
 
-    if err && !handled
-        if isa(result,InterruptException) && isdefined(Base,:active_repl_backend) &&
+    if err && !handled && Threads.threadid() == 1
+        if isa(result, InterruptException) && isdefined(Base, :active_repl_backend) &&
             active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
             active_repl_backend.in_eval
             throwto(active_repl_backend.backend_task, result) # this terminates the task
@@ -313,7 +330,8 @@ function task_done_hook(t::Task)
         # If an InterruptException happens while blocked in the event loop, try handing
         # the exception to the REPL task since the current task is done.
         # issue #19467
-        if isa(e,InterruptException) && isdefined(Base,:active_repl_backend) &&
+        if Threads.threadid() == 1 &&
+            isa(e, InterruptException) && isdefined(Base, :active_repl_backend) &&
             active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
             active_repl_backend.in_eval
             throwto(active_repl_backend.backend_task, e)
@@ -355,4 +373,271 @@ function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
         ret = :ok
     end
     ret
+end
+
+
+## scheduler and work queue
+
+struct InvasiveLinkedListSynchronized{T}
+    queue::InvasiveLinkedList{T}
+    lock::Threads.SpinLock
+    InvasiveLinkedListSynchronized{T}() where {T} = new(InvasiveLinkedList{T}(), Threads.SpinLock())
+end
+isempty(W::InvasiveLinkedListSynchronized) = isempty(W.queue)
+length(W::InvasiveLinkedListSynchronized) = length(W.queue)
+function push!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
+    lock(W.lock)
+    try
+        push!(W.queue, t)
+    finally
+        unlock(W.lock)
+    end
+    return W
+end
+function pushfirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
+    lock(W.lock)
+    try
+        pushfirst!(W.queue, t)
+    finally
+        unlock(W.lock)
+    end
+    return W
+end
+function pop!(W::InvasiveLinkedListSynchronized)
+    lock(W.lock)
+    try
+        return pop!(W.queue)
+    finally
+        unlock(W.lock)
+    end
+end
+function popfirst!(W::InvasiveLinkedListSynchronized)
+    lock(W.lock)
+    try
+        return popfirst!(W.queue)
+    finally
+        unlock(W.lock)
+    end
+end
+function list_deletefirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
+    lock(W.lock)
+    try
+        list_deletefirst!(W.queue, t)
+    finally
+        unlock(W.lock)
+    end
+    return W
+end
+
+const StickyWorkqueue = InvasiveLinkedListSynchronized{Task}
+global const Workqueues = [StickyWorkqueue()]
+global const Workqueue = Workqueues[1] # default work queue is thread 1
+function __preinit_threads__()
+    if length(Workqueues) < Threads.nthreads()
+        resize!(Workqueues, Threads.nthreads())
+        for i = 2:length(Workqueues)
+            Workqueues[i] = StickyWorkqueue()
+        end
+    end
+    nothing
+end
+
+function enq_work(t::Task)
+    (t.state == :runnable && t.queue === nothing) || error("schedule: Task not runnable")
+    tid = (t.sticky ? Threads.threadid(t) : 0)
+    if tid == 0
+        tid = Threads.threadid()
+    end
+    push!(Workqueues[tid], t)
+    tid == 1 && ccall(:uv_stop, Cvoid, (Ptr{Cvoid},), eventloop())
+    return t
+end
+
+schedule(t::Task) = enq_work(t)
+
+"""
+    schedule(t::Task, [val]; error=false)
+
+Add a [`Task`](@ref) to the scheduler's queue. This causes the task to run constantly when the system
+is otherwise idle, unless the task performs a blocking operation such as [`wait`](@ref).
+
+If a second argument `val` is provided, it will be passed to the task (via the return value of
+[`yieldto`](@ref)) when it runs again. If `error` is `true`, the value is raised as an exception in
+the woken task.
+
+# Examples
+```jldoctest
+julia> a5() = sum(i for i in 1:1000);
+
+julia> b = Task(a5);
+
+julia> istaskstarted(b)
+false
+
+julia> schedule(b);
+
+julia> yield();
+
+julia> istaskstarted(b)
+true
+
+julia> istaskdone(b)
+true
+```
+"""
+function schedule(t::Task, @nospecialize(arg); error=false)
+    # schedule a task to be (re)started with the given value or exception
+    t.state == :runnable || error("schedule: Task not runnable")
+    if error
+        t.queue === nothing || Base.list_deletefirst!(t.queue, t)
+        t.exception = arg
+    else
+        t.queue === nothing || error("schedule: Task not runnable")
+        t.result = arg
+    end
+    enq_work(t)
+    return t
+end
+
+# fast version of `schedule(t, arg); wait()`
+function schedule_and_wait(t::Task, @nospecialize(arg)=nothing)
+    (t.state == :runnable && t.queue === nothing) || error("schedule: Task not runnable")
+    W = Workqueues[Threads.threadid()]
+    if isempty(W)
+        return yieldto(t, arg)
+    else
+        t.result = arg
+        push!(W, t)
+    end
+    return wait()
+end
+
+"""
+    yield()
+
+Switch to the scheduler to allow another scheduled task to run. A task that calls this
+function is still runnable, and will be restarted immediately if there are no other runnable
+tasks.
+"""
+yield() = (enq_work(current_task()); wait())
+
+"""
+    yield(t::Task, arg = nothing)
+
+A fast, unfair-scheduling version of `schedule(t, arg); yield()` which
+immediately yields to `t` before calling the scheduler.
+"""
+function yield(t::Task, @nospecialize(x=nothing))
+    t.result = x
+    enq_work(current_task())
+    return try_yieldto(ensure_rescheduled, Ref(t))
+end
+
+"""
+    yieldto(t::Task, arg = nothing)
+
+Switch to the given task. The first time a task is switched to, the task's function is
+called with no arguments. On subsequent switches, `arg` is returned from the task's last
+call to `yieldto`. This is a low-level call that only switches tasks, not considering states
+or scheduling in any way. Its use is discouraged.
+"""
+function yieldto(t::Task, @nospecialize(x=nothing))
+    t.result = x
+    return try_yieldto(identity, Ref(t))
+end
+
+function try_yieldto(undo, reftask::Ref{Task})
+    try
+        ccall(:jl_switchto, Cvoid, (Any,), reftask)
+    catch
+        undo(reftask[])
+        rethrow()
+    end
+    ct = current_task()
+    exc = ct.exception
+    if exc !== nothing
+        ct.exception = nothing
+        throw(exc)
+    end
+    result = ct.result
+    ct.result = nothing
+    return result
+end
+
+# yield to a task, throwing an exception in it
+function throwto(t::Task, @nospecialize exc)
+    t.exception = exc
+    return yieldto(t)
+end
+
+function ensure_rescheduled(othertask::Task)
+    ct = current_task()
+    W = Workqueues[Threads.threadid()]
+    if ct !== othertask && othertask.state == :runnable
+        # we failed to yield to othertask
+        # return it to the head of a queue to be retried later
+        tid = Threads.threadid(othertask)
+        Wother = tid == 0 ? W : Workqueues[tid]
+        pushfirst!(Wother, othertask)
+    end
+    # if the current task was queued,
+    # also need to return it to the runnable state
+    # before throwing an error
+    list_deletefirst!(W, ct)
+    nothing
+end
+
+function trypoptask(W::StickyWorkqueue)
+    isempty(W) && return
+    t = popfirst!(W)
+    if t.state != :runnable
+        # assume this somehow got queued twice,
+        # probably broken now, but try discarding this switch and keep going
+        # can't throw here, because it's probably not the fault of the caller to wait
+        # and don't want to use print() here, because that may try to incur a task switch
+        ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
+            "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n")
+        return
+    end
+    return t
+end
+
+@noinline function poptaskref(W::StickyWorkqueue)
+    local task
+    while true
+        task = trypoptask(W)
+        task === nothing || break
+        if !Threads.in_threaded_loop[] && Threads.threadid() == 1
+            if process_events(true) == 0
+                task = trypoptask(W)
+                task === nothing || break
+                # if there are no active handles and no runnable tasks, just
+                # wait for signals.
+                pause()
+            end
+        else
+            if Threads.threadid() == 1
+                process_events(false)
+            end
+            ccall(:jl_gc_safepoint, Cvoid, ())
+            ccall(:jl_cpu_pause, Cvoid, ())
+        end
+    end
+    return Ref(task)
+end
+
+
+function wait()
+    W = Workqueues[Threads.threadid()]
+    reftask = poptaskref(W)
+    result = try_yieldto(ensure_rescheduled, reftask)
+    process_events(false)
+    # return when we come out of the queue
+    return result
+end
+
+if Sys.iswindows()
+    pause() = ccall(:Sleep, stdcall, Cvoid, (UInt32,), 0xffffffff)
+else
+    pause() = ccall(:pause, Cvoid, ())
 end

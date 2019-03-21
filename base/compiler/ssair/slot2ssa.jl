@@ -580,13 +580,13 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
         end
     end
 
-    exc_handlers = IdDict{Int, Int}()
+    exc_handlers = IdDict{Int, Tuple{Int, Int}}()
     # Record the correct exception handler for all cricitcal sections
     for (enter_block, exc) in catch_entry_blocks
-        exc_handlers[enter_block+1] = exc
+        exc_handlers[enter_block+1] = (enter_block, exc)
         # TODO: Cut off here if the terminator is a leave corresponding to this enter
         for block in dominated(domtree, enter_block+1)
-            exc_handlers[block] = exc
+            exc_handlers[block] = (enter_block, exc)
         end
     end
 
@@ -752,8 +752,9 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
                         code[idx] = nothing
                         incoming_vals[id] = undef_token
                     end
-                    if haskey(exc_handlers, item)
-                        exc = exc_handlers[item]
+                    eidx = item
+                    while haskey(exc_handlers, eidx)
+                        (eidx, exc) = exc_handlers[eidx]
                         cidx = findfirst(x->slot_id(x[1]) == id, phicnodes[exc])
                         if cidx !== nothing
                             node = UpsilonNode(incoming_vals[id])

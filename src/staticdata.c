@@ -195,9 +195,9 @@ static void jl_load_sysimg_so(void)
     }
     const char *sysimg_data;
     jl_dlsym(jl_sysimg_handle, "jl_system_image_data", (void **)&sysimg_data, 1);
-    size_t len;
-    jl_dlsym(jl_sysimg_handle, "jl_system_image_size", (void **)&len, 1);
-    jl_restore_system_image_data(sysimg_data, len);
+    size_t *plen;
+    jl_dlsym(jl_sysimg_handle, "jl_system_image_size", (void **)&plen, 1);
+    jl_restore_system_image_data(sysimg_data, *plen);
 }
 
 

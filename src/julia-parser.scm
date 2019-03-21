@@ -190,12 +190,6 @@
 
 (define current-filename 'none)
 
-(define-macro (with-normal-ops . body)
-  `(with-bindings ((range-colon-enabled #t)
-                   (space-sensitive #f)
-                   (where-enabled #t))
-                  ,@body))
-
 (define-macro (with-normal-context . body)
   `(with-bindings ((range-colon-enabled #t)
                    (space-sensitive #f)

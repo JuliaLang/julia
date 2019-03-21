@@ -193,7 +193,7 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     vals = Vector{V}(undef, newsz)
     age0 = h.age
     count = 0
-    maxprobe = h.maxprobe
+    maxprobe = 0
 
     for i = 1:sz
         @inbounds if olds[i] == 0x1
@@ -685,6 +685,18 @@ length(t::Dict) = t.count
 end
 
 filter!(f, d::Dict) = filter_in_one_pass!(f, d)
+
+function map!(f, iter::ValueIterator{<:Dict})
+    dict = iter.dict
+    vals = dict.vals
+    # @inbounds is here so the it gets propigated to isslotfiled
+    @inbounds for i = dict.idxfloor:lastindex(vals)
+        if isslotfilled(dict, i)
+            vals[i] = f(vals[i])
+        end
+    end
+    return iter
+end
 
 struct ImmutableDict{K,V} <: AbstractDict{K,V}
     parent::ImmutableDict{K,V}

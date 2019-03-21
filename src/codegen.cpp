@@ -86,9 +86,6 @@
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 
 using namespace llvm;
-namespace llvm {
-    extern bool annotateSimdLoop(BasicBlock *latch);
-}
 
 #if defined(_OS_WINDOWS_) && !defined(NOMINMAX)
 #define NOMINMAX
@@ -296,8 +293,7 @@ static Function *jlegal_func;
 static Function *jl_alloc_obj_func;
 static Function *jl_newbits_func;
 static Function *jl_typeof_func;
-static Function *jl_simdloop_marker_func;
-static Function *jl_simdivdep_marker_func;
+static Function *jl_loopinfo_marker_func;
 static Function *jl_write_barrier_func;
 static Function *jlisa_func;
 static Function *jlsubtype_func;
@@ -4100,14 +4096,18 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
                 ctx.builder.CreateCall(prepare_call(jlcopyast_func),
                     maybe_decay_untracked(boxed(ctx, ast))), true, jl_expr_type);
     }
-    else if (head == simdloop_sym) {
-        jl_value_t *ivdep = args[0];
-        assert(jl_expr_nargs(ex) == 1 && jl_is_bool(ivdep));
-        if (ivdep == jl_false) {
-            ctx.builder.CreateCall(prepare_call(jl_simdloop_marker_func));
-        } else {
-            ctx.builder.CreateCall(prepare_call(jl_simdivdep_marker_func));
+    else if (head == loopinfo_sym) {
+        // parse Expr(:loopinfo, "julia.simdloop", ("llvm.loop.vectorize.width", 4))
+        SmallVector<Metadata *, 8> MDs;
+        for (int i = 0, ie = jl_expr_nargs(ex); i < ie; ++i) {
+            Metadata *MD = to_md_tree(args[i]);
+            if (MD)
+                MDs.push_back(MD);
         }
+
+        MDNode* MD = MDNode::get(jl_LLVMContext, MDs);
+        CallInst *I = ctx.builder.CreateCall(prepare_call(jl_loopinfo_marker_func));
+        I->setMetadata("julia.loopinfo", MD);
         return jl_cgval_t();
     }
     else if (head == goto_ifnot_sym) {
@@ -7356,19 +7356,12 @@ static void init_julia_llvm_env(Module *m)
     add_return_attr(jl_newbits_func, Attribute::NonNull);
     add_named_global(jl_newbits_func, (void*)jl_new_bits);
 
-    jl_simdloop_marker_func = Function::Create(FunctionType::get(T_void, {}, false),
+    jl_loopinfo_marker_func = Function::Create(FunctionType::get(T_void, {}, false),
                                                Function::ExternalLinkage,
-                                               "julia.simdloop_marker");
-    jl_simdloop_marker_func->addFnAttr(Attribute::NoUnwind);
-    jl_simdloop_marker_func->addFnAttr(Attribute::NoRecurse);
-    jl_simdloop_marker_func->addFnAttr(Attribute::InaccessibleMemOnly);
-
-    jl_simdivdep_marker_func = Function::Create(FunctionType::get(T_void, {}, false),
-                                               Function::ExternalLinkage,
-                                               "julia.simdivdep_marker");
-    jl_simdivdep_marker_func->addFnAttr(Attribute::NoUnwind);
-    jl_simdivdep_marker_func->addFnAttr(Attribute::NoRecurse);
-    jl_simdivdep_marker_func->addFnAttr(Attribute::InaccessibleMemOnly);
+                                               "julia.loopinfo_marker");
+    jl_loopinfo_marker_func->addFnAttr(Attribute::NoUnwind);
+    jl_loopinfo_marker_func->addFnAttr(Attribute::NoRecurse);
+    jl_loopinfo_marker_func->addFnAttr(Attribute::InaccessibleMemOnly);
 
     jl_typeof_func = Function::Create(FunctionType::get(T_prjlvalue, {T_prjlvalue}, false),
                                       Function::ExternalLinkage,

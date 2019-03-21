@@ -1353,6 +1353,10 @@ using Core.Compiler: typeof_tfunc
 @test typeof_tfunc(Type{<:Array}) === DataType
 @test typeof_tfunc(Array{Int}) == Type{Array{Int,N}} where N
 @test typeof_tfunc(AbstractArray{Int}) == Type{<:AbstractArray{Int,N}} where N
+@test typeof_tfunc(Union{<:T, <:Real} where T<:Complex) == Union{Type{Complex{T}} where T<:Real, Type{<:Real}}
+
+f_typeof_tfunc(x) = typeof(x)
+@test Base.return_types(f_typeof_tfunc, (Union{<:T, Int} where T<:Complex,)) == Any[Union{Type{Int}, Type{Complex{T}} where T<:Real}]
 
 function f23024(::Type{T}, ::Int) where T
     1 + 1

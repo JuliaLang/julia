@@ -243,6 +243,7 @@ Base.evalfile
 Base.esc
 Base.@inbounds
 Base.@boundscheck
+Base.@propagate_inbounds
 Base.@inline
 Base.@noinline
 Base.@nospecialize

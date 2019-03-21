@@ -50,7 +50,7 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src, sptypes::
         elseif head === :isdefined || head === :the_exception || head === :copyast || head === :inbounds || head === :boundscheck
             return true
         else
-            # e.g. :simdloop
+            # e.g. :loopinfo
             return false
         end
     end
