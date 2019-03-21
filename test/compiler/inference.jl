@@ -2307,3 +2307,19 @@ end
 end
 
 @test_nowarn code_typed(foo31164, Tuple{Bool, Int}; optimize=false)
+
+# there are errors when these functions are defined inside the @testset
+f28762(::Type{<:AbstractArray{T}}) where {T} = T
+f28762(::Type{<:AbstractArray}) = Any
+g28762(::Type{X}) where {X} = Array{eltype(X)}(undef, 0)
+h28762(::Type{X}) where {X} = Array{f28762(X)}(undef, 0)
+
+@testset "@inferred bug from #28762" begin
+    # this works since Julia 1.1
+    @test (@inferred eltype(Array)) == Any
+    @test (@inferred f28762(Array)) == Any
+    @inferred g28762(Array{Int})
+    @inferred h28762(Array{Int})
+    @inferred g28762(Array)
+    @inferred h28762(Array)
+end
