@@ -4,11 +4,15 @@
 #undef DEBUG
 #include "llvm-version.h"
 
+#include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
+
 #include <llvm/ADT/SmallSet.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/CFG.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -1489,4 +1493,9 @@ static RegisterPass<AllocOpt> X("AllocOpt", "Promote heap allocation to stack",
 Pass *createAllocOptPass()
 {
     return new AllocOpt();
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddAllocOptPass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createAllocOptPass());
 }
