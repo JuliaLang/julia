@@ -102,4 +102,7 @@ let f = Core.Intrinsics.ashr_int
 end
 
 # issue #29929
-@test unsafe_store!(Ptr{Nothing}(C_NULL), nothing) == Ptr{Nothing}(0)
+@test unsafe_store!(Ptr{Nothing}(C_NULL), nothing) === Ptr{Nothing}(0)
+@test unsafe_load(Ptr{Nothing}(0)) === nothing
+struct GhostStruct end
+@test unsafe_load(Ptr{GhostStruct}(rand(Int))) === GhostStruct()
