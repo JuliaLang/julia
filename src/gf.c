@@ -521,20 +521,22 @@ size_t jl_typeinf_world = 0;
 JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
 {
     jl_typeinf_func = (jl_function_t*)f;
-    jl_typeinf_world = jl_get_tls_world_age();
-    ++jl_world_counter; // make type-inference the only thing in this world
-    // give type inference a chance to see all of these
-    // TODO: also reinfer if max_world != ~(size_t)0
-    jl_array_t *unspec = jl_alloc_vec_any(0);
-    JL_GC_PUSH1(&unspec);
-    jl_foreach_reachable_mtable(reset_mt_caches, (void*)unspec);
-    size_t i, l;
-    for (i = 0, l = jl_array_len(unspec); i < l; i++) {
-        jl_method_instance_t *li = (jl_method_instance_t*)jl_array_ptr_ref(unspec, i);
-        if (!jl_is_rettype_inferred(li))
-            jl_type_infer(&li, jl_world_counter, 1);
+    if (jl_typeinf_world == 0) {
+        jl_typeinf_world = jl_get_tls_world_age();
+        ++jl_world_counter; // make type-inference the only thing in this world
+        // give type inference a chance to see all of these
+        // TODO: also reinfer if max_world != ~(size_t)0
+        jl_array_t *unspec = jl_alloc_vec_any(0);
+        JL_GC_PUSH1(&unspec);
+        jl_foreach_reachable_mtable(reset_mt_caches, (void*)unspec);
+        size_t i, l;
+        for (i = 0, l = jl_array_len(unspec); i < l; i++) {
+            jl_method_instance_t *li = (jl_method_instance_t*)jl_array_ptr_ref(unspec, i);
+            if (!jl_is_rettype_inferred(li))
+                jl_type_infer(&li, jl_world_counter, 1);
+        }
+        JL_GC_POP();
     }
-    JL_GC_POP();
 }
 
 static int very_general_type(jl_value_t *t)
