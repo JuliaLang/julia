@@ -351,10 +351,10 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             # depend strongly on whether the result can be
             # inferred, so check the type of ex
             if f === Core.getfield || f === Core.tuple
-                # we might like to penalize non-inferrability, but
+                # we might like to heavily penalize non-inferrability, but
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
-                return 0
+                return 1
             elseif (f === Core.arrayref || f === Core.const_arrayref || f === Core.arrayset) && length(ex.args) >= 3
                 atyp = argextype(ex.args[3], src, sptypes, slottypes)
                 return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
@@ -424,9 +424,9 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
         # loops are generally always expensive
         # but assume that forward jumps are already counted for from
         # summing the cost of the not-taken branch
-        thiscost = dst(stmt.label) < line ? 40 : 0
+        thiscost = dst(stmt.label) < line ? 40 : 1
     elseif stmt isa GotoIfNot
-        thiscost = dst(stmt.dest) < line ? 40 : 0
+        thiscost = dst(stmt.dest) < line ? 40 : 1
     end
     return thiscost
 end
