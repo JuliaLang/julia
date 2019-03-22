@@ -10,7 +10,7 @@ Rational numbers are checked for overflow.
 struct Rational{T<:Integer} <: Real
     num::T
     den::T
-
+#=
     function Rational{T}(num::Integer, den::Integer) where T<:Integer
         num == den == zero(T) && __throw_rational_argerror(T)
         num2, den2 = (sign(den) < 0) ? divgcd(-num, -den) : divgcd(num, den)
@@ -25,6 +25,23 @@ struct Rational{T<:Integer} <: Real
         num2, den2 = divgcd(num, den)
         if den2 < 0
             num2, den2 = -num2, -den2
+        end
+        new(num2, den2)
+    end
+end
+=#
+    function Rational{T}(num::Integer, den::Integer) where T<:Integer
+        num == den == zero(T) && __throw_rational_argerror(T)
+        if !(T <: BitSigned)
+            num2, den2 = (sign(den) < 0) ? divgcd(-num, -den) : divgcd(num, den)
+        else
+            if (num == typemin(T) && signbit(den) && isodd(den)) || (den == typemin(T) && signbit(num) && isodd(num))
+                __throw_rational_ovferror(num, den)
+            end
+            num2, den2 = divgcd(num, den)
+            if den2 < 0
+                num2, den2 = -num2, -den2
+            end            
         end
         new(num2, den2)
     end
