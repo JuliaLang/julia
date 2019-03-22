@@ -36,16 +36,6 @@ extern "C" {
 
 static uv_async_t signal_async;
 
-#ifdef _OS_WINDOWS_
-// uv_async_t is buggy on windows. Initializing one breaks the sysimg build.
-void jl_wake_libuv(void)
-{
-}
-
-void jl_init_signal_async(void)
-{
-}
-#else
 static void jl_signal_async_cb(uv_async_t *hdl)
 {
     // This should abort the current loop and the julia code it returns to
@@ -59,17 +49,11 @@ void jl_wake_libuv(void)
     uv_async_send(&signal_async);
 }
 
-void jl_init_signal_async(void)
-{
-    uv_async_init(jl_io_loop, &signal_async, jl_signal_async_cb);
-}
-#endif
-
 jl_mutex_t jl_uv_mutex;
 
 void jl_init_uv(void)
 {
-    jl_init_signal_async();
+    uv_async_init(jl_io_loop, &signal_async, jl_signal_async_cb);
     JL_MUTEX_INIT(&jl_uv_mutex); // a file-scope initializer can be used instead
 }
 
