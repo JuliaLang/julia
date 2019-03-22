@@ -1214,6 +1214,29 @@ v6 = FooModEverywhere
 @test remotecall_fetch(()->v5, id_other) === FooStructEverywhere
 @test remotecall_fetch(()->v6, id_other) === FooModEverywhere
 
+# hash value same but different object instance
+v7 = ones(10)
+oid1 = objectid(v7)
+hval1 = hash(v7)
+@test v7 == @fetchfrom id_other v7
+remote_oid1 = @fetchfrom id_other objectid(v7)
+
+v7 = ones(10)
+@test oid1 != objectid(v7)
+@test hval1 == hash(v7)
+@test remote_oid1 != @fetchfrom id_other objectid(v7)
+
+
+# Github issue #31252
+v31252 = :a
+@test :a == @fetchfrom id_other v31252
+
+v31252 = :b
+@test :b == @fetchfrom id_other v31252
+
+v31252 = :a
+@test :a == @fetchfrom id_other v31252
+
 
 # Test that a global is not being repeatedly serialized when
 # a) referenced multiple times in the closure
@@ -1310,10 +1333,6 @@ global ids_func = ()->ids_cleanup
 
 clust_ser = (Distributed.worker_from_id(id_other)).w_serializer
 @test remotecall_fetch(ids_func, id_other) == ids_cleanup
-
-@test haskey(clust_ser.glbs_sent, objectid(ids_cleanup))
-finalize(ids_cleanup)
-@test !haskey(clust_ser.glbs_sent, objectid(ids_cleanup))
 
 # TODO Add test for cleanup from `clust_ser.glbs_in_tnobj`
 
