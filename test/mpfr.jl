@@ -452,10 +452,16 @@ end
         @test BigFloat(prevfloat(12.12)) == prevfloat(x)
     end
     x = BigFloat(12.12, 100)
+    @test nextfloat(x, 0) === x
+    @test prevfloat(x, 0) === x
     @test nextfloat(x).prec == x.prec
     @test prevfloat(x).prec == x.prec
+    @test nextfloat(x) == nextfloat(x, 1)
+    @test prevfloat(x) == prevfloat(x, 1)
     @test nextfloat(x, -1) == prevfloat(x, 1)
+    @test nextfloat(x, -2) == prevfloat(x, 2)
     @test prevfloat(x, -1) == nextfloat(x, 1)
+    @test prevfloat(x, -2) == nextfloat(x, 2)
     @test isnan(nextfloat(BigFloat(NaN)))
     @test isnan(prevfloat(BigFloat(NaN)))
     @test isnan(nextfloat(BigFloat(NaN), 1))
