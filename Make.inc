@@ -934,7 +934,7 @@ USE_BINARYBUILDER := 0
 endif
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
-BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2
+BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR
 $(foreach proj,$(BB_PROJECTS),$(eval USE_BINARYBUILDER_$(proj) = $(USE_BINARYBUILDER)))
 
 # Use the Assertions build
