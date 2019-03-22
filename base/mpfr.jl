@@ -930,6 +930,9 @@ It is logically equivalent to:
     setprecision(BigFloat, old)
 
 Often used as `setprecision(T, precision) do ... end`
+
+Note: `nextfloat()`, `prevfloat()` do not use the precision mentioned by
+`setprecision`
 """
 function setprecision(f::Function, ::Type{T}, prec::Integer) where T
     old_prec = precision(T)
