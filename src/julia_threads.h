@@ -4,6 +4,7 @@
 #ifndef JL_THREADS_H
 #define JL_THREADS_H
 
+#include <atomics.h>
 // threading ------------------------------------------------------------------
 
 // WARNING: Threading support is incomplete and experimental

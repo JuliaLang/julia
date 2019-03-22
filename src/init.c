@@ -157,9 +157,11 @@ static void jl_uv_exitcleanup_add(uv_handle_t *handle, struct uv_shutdown_queue 
     struct uv_shutdown_queue_item *item = (struct uv_shutdown_queue_item*)malloc(sizeof(struct uv_shutdown_queue_item));
     item->h = handle;
     item->next = NULL;
+    JL_UV_LOCK();
     if (queue->last) queue->last->next = item;
     if (!queue->first) queue->first = item;
     queue->last = item;
+    JL_UV_UNLOCK();
 }
 
 static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
@@ -259,6 +261,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     }
 
     struct uv_shutdown_queue queue = {NULL, NULL};
+    JL_UV_LOCK();
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
     struct uv_shutdown_queue_item *item = queue.first;
     if (ptls->current_task != NULL) {
@@ -288,6 +291,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 
     // force libuv to spin until everything has finished closing
     loop->stop_flag = 0;
+    JL_UV_UNLOCK();
     while (uv_run(loop, UV_RUN_DEFAULT)) { }
 
     // TODO: Destroy threads
@@ -406,23 +410,31 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         break;
     case UV_NAMED_PIPE:
         handle = malloc(sizeof(uv_pipe_t));
+        JL_UV_LOCK();
         if ((err = uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle, 0))) {
+            // JL_UV_UNLOCK() equivalent is done during unwinding
             jl_errorf("error initializing %s in uv_pipe_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
         if ((err = uv_pipe_open((uv_pipe_t*)handle, fd))) {
+            // JL_UV_UNLOCK() equivalent is done during unwinding
             jl_errorf("error initializing %s in uv_pipe_open: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
         ((uv_pipe_t*)handle)->data = NULL;
+        JL_UV_UNLOCK();
         break;
     case UV_TCP:
         handle = malloc(sizeof(uv_tcp_t));
+        JL_UV_LOCK();
         if ((err = uv_tcp_init(jl_io_loop, (uv_tcp_t*)handle))) {
+            // JL_UV_UNLOCK() equivalent is done during unwinding
             jl_errorf("error initializing %s in uv_tcp_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
         if ((err = uv_tcp_open((uv_tcp_t*)handle, (uv_os_sock_t)fd))) {
+            // JL_UV_UNLOCK() equivalent is done during unwinding
             jl_errorf("error initializing %s in uv_tcp_open: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
         ((uv_tcp_t*)handle)->data = NULL;
+        JL_UV_UNLOCK();
         break;
     }
     return handle;
@@ -658,7 +670,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     ios_set_io_wait_func = jl_set_io_wait;
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
-    jl_init_signal_async();
+    jl_init_uv();
     restore_signals();
 
     jl_resolve_sysimg_location(rel);

@@ -133,7 +133,7 @@ JL_DLLEXPORT int32_t jl_stat(const char *path, char *statbuf)
 
     // Ideally one would use the statbuf for the storage in req, but
     // it's not clear that this is possible using libuv
-    ret = uv_fs_stat(uv_default_loop(), &req, path, NULL);
+    ret = uv_fs_stat(unused_uv_loop_arg, &req, path, NULL);
     if (ret == 0)
         memcpy(statbuf, req.ptr, sizeof(uv_stat_t));
     uv_fs_req_cleanup(&req);
@@ -145,7 +145,7 @@ JL_DLLEXPORT int32_t jl_lstat(const char *path, char *statbuf)
     uv_fs_t req;
     int ret;
 
-    ret = uv_fs_lstat(uv_default_loop(), &req, path, NULL);
+    ret = uv_fs_lstat(unused_uv_loop_arg, &req, path, NULL);
     if (ret == 0)
         memcpy(statbuf, req.ptr, sizeof(uv_stat_t));
     uv_fs_req_cleanup(&req);
@@ -157,7 +157,7 @@ JL_DLLEXPORT int32_t jl_fstat(uv_os_fd_t fd, char *statbuf)
     uv_fs_t req;
     int ret;
 
-    ret = uv_fs_fstat(uv_default_loop(), &req, fd, NULL);
+    ret = uv_fs_fstat(unused_uv_loop_arg, &req, fd, NULL);
     if (ret == 0)
         memcpy(statbuf, req.ptr, sizeof(uv_stat_t));
     uv_fs_req_cleanup(&req);

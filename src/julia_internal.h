@@ -4,6 +4,7 @@
 #define JL_INTERNAL_H
 
 #include "options.h"
+#include "locks.h"
 #include <uv.h>
 #if !defined(_MSC_VER) && !defined(__MINGW32__)
 #include <unistd.h>
@@ -107,6 +108,15 @@ static inline void jl_assume_(int cond)
 #ifndef JL_USE_IFUNC
 #  define JL_USE_IFUNC 0
 #endif
+
+// If this is detected in a backtrace of segfault, it means the functions
+// that use this value must be reworked into their async form with cb arg
+// provided and with JL_UV_LOCK used around the calls
+static uv_loop_t *const unused_uv_loop_arg = (uv_loop_t *)0xBAD10;
+
+extern jl_mutex_t jl_uv_mutex;
+#define JL_UV_LOCK() JL_LOCK_NOGC(&jl_uv_mutex)
+#define JL_UV_UNLOCK() JL_UNLOCK_NOGC(&jl_uv_mutex)
 
 #ifdef __cplusplus
 extern "C" {
@@ -490,7 +500,7 @@ void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo);
 void jl_init_root_task(void *stack_lo, void *stack_hi);
 void jl_init_serializer(void);
 void jl_gc_init(void);
-void jl_init_signal_async(void);
+void jl_init_uv(void);
 void jl_init_debuginfo(void);
 void jl_init_thread_heap(jl_ptls_t ptls);
 
@@ -849,6 +859,8 @@ JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
 int jl_array_store_unboxed(jl_value_t *el_type);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);
+
+JL_DLLEXPORT void jl_uv_stop(uv_loop_t* loop);
 
 // -- synchronization utilities -- //
 
