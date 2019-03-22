@@ -41,7 +41,7 @@ end
             num2, den2 = divgcd(num, den)
             if den2 < 0
                 num2, den2 = -num2, -den2
-            end            
+            end
         end
         new(num2, den2)
     end
