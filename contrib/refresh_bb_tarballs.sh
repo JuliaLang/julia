@@ -1,5 +1,10 @@
 #!/bin/sh
 
+# Invoke this with no arguments to refresh all tarballs, or with a project name to refresh only that project.
+#
+# Example:
+#   ./refresh_bb_tarballs.sh gmp
+
 # Get this list via:
 #    using BinaryBuilder
 #    print("TRIPLETS=\"$(join(triplet.(BinaryBuilder.supported_platforms()), " "))\"")
@@ -8,6 +13,18 @@ TRIPLETS="i686-linux-gnu x86_64-linux-gnu aarch64-linux-gnu arm-linux-gnueabihf 
 # These are the projects currently using BinaryBuilder; both GCC-expanded and non-GCC-expanded:
 BB_PROJECTS=""
 BB_GCC_EXPANDED_PROJECTS="llvm openblas suitesparse openlibm"
+
+# If we've been given a project name, filter down to that one:
+if [ -n ${1} ]; then
+    case "${BB_PROJECTS}" in
+        *${1}*) BB_PROJECTS="${1}" ;;
+        *) BB_PROJECTS="" ;;
+    esac
+    case "${BB_GCC_EXPANDED_PROJECTS}" in
+        *${1}*) BB_GCC_EXPANDED_PROJECTS="${1}" ;;
+        *) BB_GCC_EXPANDED_PROJECTS="" ;;
+    esac
+fi
 
 # Get "contrib/" directory path
 CONTRIB_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
