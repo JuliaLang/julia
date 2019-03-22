@@ -598,10 +598,6 @@ A (usually temporary) container for holding lowered source code.
 
     An array of symbols giving names for each slot (argument or local variable).
 
-  * `slottypes`
-
-    An array of types for the slots (e.g. variables).
-
   * `slotflags`
 
     A `UInt8` array of slot properties, represented as bit flags:
@@ -637,6 +633,21 @@ A (usually temporary) container for holding lowered source code.
     An array of integer indices into the `linetable`, giving the location associated
     with each statement.
 
+Optional Fields:
+
+  * `slottypes`
+
+    An array of types for the slots.
+
+  * `rettype`
+
+    The inferred return type of the lowered form (IR). Default value is `Any`.
+
+  * `method_for_inference_limit_heuristics`
+
+    The `method_for_inference_heuristics` will expand the given method's generator if
+    necessary during inference.
+
   * `parent`
 
     The `MethodInstance` that "owns" this object (if applicable).
@@ -644,6 +655,7 @@ A (usually temporary) container for holding lowered source code.
   * `min_world`/`max_world`
 
     The range of world ages for which this code was valid at the time when it had been inferred.
+
 
 Boolean properties:
 
@@ -657,7 +669,7 @@ Boolean properties:
 
   * `propagate_inbounds`
 
-    Whether this should should propagate `@inbounds` when inlined, for the purpose of eliding
+    Whether this should propagate `@inbounds` when inlined for the purpose of eliding
     `@boundscheck` blocks.
 
   * `pure`
