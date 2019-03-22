@@ -28,8 +28,11 @@ clean-bb-$(1):
 	rm -f $$(build_staging)/$$($(2)_BB_BASENAME)
 	rm -f $$(BUILDDIR)/$$($(2)_BB_NAME)/build-compiled
 
+clean-bb-download-$(1):
+	rm -f $$(SRCCACHE)/$$($(2)_BB_BASENAME)
+
 clean-$(1): clean-bb-$(1)
-distclean-$(1): clean-bb-$(1)
+distclean-$(1): clean-bb-$(1) clean-bb-download-$(1)
 get-$(1): $$(SRCCACHE)/$$($(2)_BB_BASENAME)
 extract-$(1):
 configure-$(1):
