@@ -14,6 +14,7 @@ MPFR_VER = 4.0.2
 PATCHELF_VER = 0.9
 MBEDTLS_VER = 2.16.0
 MBEDTLS_BB_REL = v0.17.0
+LIBSSH2_VER = 1.8.0
 CURL_VER = 7.56.0
 
 # Specify the version of the Mozilla CA Certificate Store to obtain.
