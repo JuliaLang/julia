@@ -1662,6 +1662,8 @@ typedef struct _jl_task_t {
     // id of owning thread
     // does not need to be defined until the task runs
     int16_t tid;
+    /* for the multiqueue */
+    int16_t prio;
 #ifdef JULIA_ENABLE_THREADING
     // This is statically initialized when the task is not holding any locks
     arraylist_t locks;
