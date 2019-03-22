@@ -605,7 +605,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
             return typed_load(ctx, thePtr, im1, ety, tbaa_data, nullptr, true, align_nb);
         }
         else {
-            return mark_julia_const(((jl_datatype_t*)ety)->instance);
+            return ghostValue(ety);
         }
     }
 }
