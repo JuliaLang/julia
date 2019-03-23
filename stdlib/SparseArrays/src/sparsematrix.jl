@@ -185,10 +185,10 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
     end
 
     ioc = IOContext(io, :compact => true)
-    pad = ndigits(max(S.m, S.n))
+    pad = ndigits.(size(S))
 
     function _format_line(r, col)
-        print(ioc, "\n  [", rpad(S.rowval[r], pad), ", ", lpad(col, pad), "]  =  ")
+        print(ioc, "\n  [", rpad(S.rowval[r], pad[1]), ", ", lpad(col, pad[2]), "]  =  ")
         if isassigned(S.nzval, Int(r))
             show(ioc, S.nzval[r])
         else
