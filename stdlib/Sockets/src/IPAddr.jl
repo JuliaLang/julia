@@ -272,6 +272,7 @@ struct InetAddr{T<:IPAddr}
 end
 
 InetAddr(ip::IPAddr, port) = InetAddr{typeof(ip)}(ip, port)
+InetAddr(str::AbstractString, port) = InetAddr(parse(IPAddr, str), port)
 function show(io::IO, addr::InetAddr)
     show(io, typeof(addr))
     print(io, "(")

@@ -66,6 +66,9 @@ end
     @test inet.port == 1024
     str = "Sockets.InetAddr{$(isdefined(Main, :IPv4) ? "" : "Sockets.")IPv4}(ip\"127.0.0.1\", 1024)"
     @test sprint(show, inet) == str
+    inet = Sockets.InetAddr("127.0.0.1", 1024)
+    @test inet.host == ip"127.0.0.1"
+    @test inet.port == 1024
 end
 @testset "InetAddr invalid port" begin
     @test_throws InexactError Sockets.InetAddr(IPv4(127,0,0,1), -1)
