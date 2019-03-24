@@ -30,7 +30,6 @@ Statistics.var
 Statistics.varm
 Statistics.skewness
 Statistics.kurtosis
-Statistics.moment
 ```
 
 ## Correlation and covariance

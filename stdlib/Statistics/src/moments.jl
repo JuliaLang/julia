@@ -4,13 +4,13 @@
 
 ## var along dim
 
-function varm!(R::AbstractArray, A::AbstractArray, M::AbstractArray, w::AbstractWeights;
+function varm!(R::AbstractArray, A::AbstractArray, M::AbstractArray, w::AbstractArray;
                corrected::Bool=true)
     rmul!(centralize_sumabs2!(R, A, M, values(w)),
           varcorrection(w, corrected))
 end
 
-function var!(R::AbstractArray, A::AbstractArray, w::AbstractWeights, dims::Int;
+function var!(R::AbstractArray, A::AbstractArray, w::AbstractArray, dims::Int;
               mean=nothing, corrected::Bool=true)
     if mean == 0
         varm!(R, A, w, Base.reducedim_initarray(A, dims, 0, eltype(R)), dims;
@@ -32,211 +32,84 @@ function var!(R::AbstractArray, A::AbstractArray, w::AbstractWeights, dims::Int;
     end
 end
 
-function var(A::AbstractArray, w::AbstractWeights, dim::Int; mean=nothing,
-                  corrected::Bool=true)
+function var(A::AbstractArray, w::AbstractArray, dim::Int;
+             mean=nothing, corrected::Bool=true)
     corrected = depcheck(:var, corrected)
     var!(similar(A, Float64, Base.reduced_indices(axes(A), dim)), A, w, dim;
          mean=mean, corrected=corrected)
 end
-
-##### Fused statistics
-"""
-    mean_and_var(x; [weights::AbstractWeights,] [dims,] corrected=false) -> (mean, var)
-
-Return the mean and variance of a real-valued array `x`, optionally over dimensions
-`dims`, as a tuple. Observations in `x` can be weighted using `weights`.
-Finally, bias correction is be applied to the variance calculation if `corrected=true`.
-See [`var`](@ref) documentation for more details.
-"""
-function mean_and_var(A::AbstractArray;
-                      weights::Union{AbstractWeights, Nothing}=nothing,
-                      dims=:,
-                      corrected::Bool=true)
-    m = mean(A, weights=weights, dims=dims)
-    v = var(A, mean=m, weights=weights, dims=dims, corrected=corrected)
-    m, v
-end
-
-"""
-    mean_and_std(x; [weights::AbstractWeights], [dims,] corrected=true) -> (mean, std)
-
-Return the mean and standard deviation of a real-valued array `x`,
-optionally over dimensions `dims`, as a tuple. Observations in `x`
-can be weighted using `weights`. Finally, bias correction is be applied to the
-standard deviation calculation if `corrected=true`.
-See [`std`](@ref) documentation for more details.
-"""
-function mean_and_std(A::AbstractArray;
-                      weights::Union{AbstractWeights, Nothing}=nothing,
-                      dims=:,
-                      corrected::Bool=true)
-    m = mean(A, weights=weights, dims=dims)
-    s = std(A, mean=m, weights=weights, dims=dims, corrected=corrected)
-    m, s
-end
-
-
-
-##### General central moment
-function _moment2(A::AbstractArray, m::Real; corrected=false)
-    s = 0.0
-    for i in eachindex(A)
-        @inbounds z = A[i] - m
-        s += z * z
-    end
-    varcorrection(length(A), corrected) * s
-end
-
-function _moment2(A::AbstractArray, w::AbstractArray, m::Real; corrected=false)
-    s = 0.0
-    for i in eachindex(A, w)
-        @inbounds z = A[i] - m
-        @inbounds s += (z * z) * w[i]
-    end
-
-    varcorrection(w, corrected) * s
-end
-
-function _moment3(A::AbstractArray, m::Real)
-    s = 0.0
-    for i in eachindex(A)
-        @inbounds z = A[i] - m
-        s += z * z * z
-    end
-    s / length(A)
-end
-
-function _moment3(A::AbstractArray, w::AbstractArray, m::Real)
-    s = 0.0
-    for i in eachindex(A, w)
-        @inbounds z = A[i] - m
-        @inbounds s += (z * z * z) * w[i]
-    end
-    s / sum(w)
-end
-
-function _moment4(A::AbstractArray, m::Real)
-    s = 0.0
-    for i in eachindex(A)
-        @inbounds z = A[i] - m
-        s += abs2(z * z)
-    end
-    s / length(A)
-end
-
-function _moment4(A::AbstractArray, w::AbstractArray, m::Real)
-    s = 0.0
-    for i in eachindex(A, w)
-        @inbounds z = A[i] - m
-        @inbounds s += abs2(z * z) * w[i]
-    end
-    s / sum(w)
-end
-
-function _momentk(A::AbstractArray, k::Int, m::Real)
-    s = 0.0
-    for i = eachindex(A)
-        @inbounds z = A[i] - m
-        s += (z ^ k)
-    end
-    s / length(A)
-end
-
-function _momentk(A::AbstractArray, k::Int, w::AbstractArray, m::Real)
-    s = 0.0
-    for i in eachindex(A, w)
-        @inbounds z = A[i] - m
-        @inbounds s += (z ^ k) * w[i]
-    end
-    s / sum(w)
-end
-
-
-"""
-    moment(A, k; [weights::AbstractArray], [mean::Real])
-
-Return the `k`th order central moment of a real-valued array `A`, optionally
-specifying `weights` and `mean`.
-
-!!! compat "Julia 1.2"
-    This function requires at least Julia 1.2.
-"""
-moment(A::AbstractArray, k::Int;
-       weights::Union{AbstractWeights,Nothing}=nothing,
-       mean::Union{Real, Nothing}=nothing) =
-    _moment(A, k, weights, mean)
-
-function _moment(A::AbstractArray, k::Int, w::Nothing, m::Real)
-    k == 2 ? _moment2(A, m) :
-    k == 3 ? _moment3(A, m) :
-    k == 4 ? _moment4(A, m) :
-    _momentk(A, k, m)
-end
-_moment(A::AbstractArray, k::Int, w::Nothing, m::Nothing) =
-    _moment(A, k, nothing, mean(A))
-
-function _moment(A::AbstractArray, k::Int, w::AbstractArray, m::Real)
-    k == 2 ? _moment2(A, w, m) :
-    k == 3 ? _moment3(A, w, m) :
-    k == 4 ? _moment4(A, w, m) :
-    _momentk(A, k, w, m)
-end
-_moment(A::AbstractArray, k::Int, w::AbstractArray, m::Nothing) =
-    _moment(A, k, w, mean(A, weights=w))
-
 
 ##### Skewness and Kurtosis
 
 # Skewness
 # This is Type 1 definition according to Joanes and Gill (1998)
 """
-    skewness(A; [weights::AbstractArray], [mean::Real])
+    skewness(x; [weights::AbstractArray], [mean::Real])
 
-Compute the standardized skewness of a real-valued array `A`, optionally
-specifying `weights` and `mean`.
+Compute the standardized skewness of collection `x`, optionally
+specifying a pre-computed `mean`.
+If `x` is an `AbstractArray`, a `weights` array of the same length as `x`
+can be specified to compute the weighted skewness.
 
 !!! compat "Julia 1.2"
     This function requires at least Julia 1.2.
 """
+skewness(A; mean::Union{Real, Nothing}=nothing) = _skewness(A, nothing, mean)
+
 skewness(A::AbstractArray;
-         weights::Union{AbstractWeights,Nothing}=nothing,
+         weights::Union{AbstractArray,Nothing}=nothing,
          mean::Union{Real, Nothing}=nothing) =
     _skewness(A, weights, mean)
 
-function _skewness(A::AbstractArray, w::Nothing, m::Real)
-    n = length(A)
-    cm2 = 0.0   # empirical 2nd centered moment (variance)
-    cm3 = 0.0   # empirical 3rd centered moment
-    for i in eachindex(A)
-        @inbounds z = A[i] - m
-        z2 = z * z
+function _skewness(x, w::Nothing, m::Real)
+    y = iterate(x)
+    if y === nothing
+        T = eltype(x)
+        # Return the NaN of the type that we would get, had this collection
+        # contained any elements (this is consistent with var)
+        z0 = zero(T) - zero(m)
+        return (z0^3 + z0^3)/sqrt((z0^2+z0^2)^3)
+    end
 
+    v, s = y
+    z = v - m
+    cm2 = z * z   # empirical 2nd centered moment (variance)
+    cm3 = cm2 * z # empirical 3rd centered moment
+    n = 1
+    y = iterate(x, s)
+    while y !== nothing
+        v, s = y
+        n += 1
+
+        z = v - m
+        z2 = z * z
         cm2 += z2
         cm3 += z2 * z
+        y = iterate(x, s)
     end
     cm3 /= n
     cm2 /= n
-    return cm3 / sqrt(cm2 * cm2 * cm2)  # this is much faster than cm2^1.5
+    return cm3 / sqrt(cm2^3)
 end
 
-function _skewness(A::AbstractArray, w::AbstractArray, m::Real)
-    n = length(A)
-    length(w) == n || throw(DimensionMismatch("Inconsistent array lengths."))
-    cm2 = 0.0   # empirical 2nd centered moment (variance)
-    cm3 = 0.0   # empirical 3rd centered moment
+function _skewness(x::AbstractArray{T}, w::AbstractArray{W}, m::Real) where {T, W}
+    length(x) == length(w) ||
+        throw(ArgumentError("data and weight vectors must be the same size," *
+                            "got $(length(v)) and $(length(w))"))
+    z0 = zero(T) - zero(m)
+    cm2 = z0 * zero(W) + z0 * zero(W) # empirical 2nd centered moment (variance)
+    cm3 = cm2                         # empirical 3rd centered moment
 
-    @inbounds for i in eachindex(A, w)
-        x_i = A[i]
-        w_i = w[i]
-        z = x_i - m
-        z2w = z * z * w_i
+    @inbounds @simd for i in eachindex(x, w)
+        z = x[i] - m
+        z2w = z * z * w[i]
         cm2 += z2w
         cm3 += z2w * z
     end
     sw = sum(w)
     cm3 /= sw
     cm2 /= sw
-    return cm3 / sqrt(cm2 * cm2 * cm2)  # this is much faster than cm2^1.5
+    return cm3 / sqrt(cm2^3)
 end
 
 _skewness(A::AbstractArray, w::Union{AbstractArray, Nothing}, m::Nothing) =
@@ -245,52 +118,74 @@ _skewness(A::AbstractArray, w::Union{AbstractArray, Nothing}, m::Nothing) =
 # (excessive) Kurtosis
 # This is Type 1 definition according to Joanes and Gill (1998)
 """
-    kurtosis(A; [weights::AbstractArray], [mean::Real])
+    kurtosis(x; [weights::AbstractArray], [mean::Real])
 
-Compute the excess kurtosis of a real-valued array `A`, optionally
-specifying `weights` and `mean`.
+Compute the excess kurtosis of collection `x`, optionally
+specifying a pre-computed `mean`.
+If `x` is an `AbstractArray`, a `weights` array of the same length as `x`
+can be specified to compute the weighted kurtosis.
 
 !!! compat "Julia 1.2"
     This function requires at least Julia 1.2.
 """
+kurtosis(A; mean::Union{Real, Nothing}=nothing) = _kurtosis(A, nothing, mean)
+
 kurtosis(A::AbstractArray;
-         weights::Union{AbstractWeights,Nothing}=nothing,
+         weights::Union{AbstractArray,Nothing}=nothing,
          mean::Union{Real, Nothing}=nothing) =
     _kurtosis(A, weights, mean)
 
-function _kurtosis(A::AbstractArray, w::Nothing, m::Real)
-    n = length(A)
-    cm2 = 0.0  # empirical 2nd centered moment (variance)
-    cm4 = 0.0  # empirical 4th centered moment
-    for i in eachindex(A)
-        @inbounds z = A[i] - m
+function _kurtosis(x, w::Nothing, m::Real)
+    y = iterate(x)
+    if y === nothing
+        T = eltype(x)
+        # Return the NaN of the type that we would get, had this collection
+        # contained any elements (this is consistent with var)
+        z0 = zero(T) - zero(m)
+        return (z0^3 + z0^3)/sqrt((z0^2+z0^2)^3)
+    end
+
+    v, s = y
+    z = v - m
+    cm2 = z * z     # empirical 2nd centered moment (variance)
+    cm4 = cm2 * cm2 # empirical 4th centered moment
+
+    n = 1
+    y = iterate(x, s)
+    while y !== nothing
+        v, s = y
+        n += 1
+
+        z = v - m
         z2 = z * z
         cm2 += z2
         cm4 += z2 * z2
+        y = iterate(x, s)
     end
     cm4 /= n
     cm2 /= n
-    return (cm4 / (cm2 * cm2)) - 3.0
+    return (cm4 / (cm2 * cm2)) - 3
 end
 
-function _kurtosis(A::AbstractArray, w::AbstractWeights, m::Real)
-    length(w) == length(A) || throw(DimensionMismatch("Inconsistent array lengths."))
-    cm2 = 0.0  # empirical 2nd centered moment (variance)
-    cm4 = 0.0  # empirical 4th centered moment
+function _kurtosis(x::AbstractArray{T}, w::AbstractWeights{W}, m::Real) where {T, W}
+    length(x) == length(w) ||
+        throw(ArgumentError("data and weight vectors must be the same size," *
+                            "got $(length(v)) and $(length(w))"))
+    z0 = zero(T) - zero(m)
+    cm2 = z0 * zero(W) + z0 * zero(W) # empirical 2nd centered moment (variance)
+    cm4 = cm2                         # empirical 4rd centered moment
 
-    @inbounds for i in eachindex(A, w)
-        x_i = A[i]
-        w_i = w[i]
-        z = x_i - m
+    @inbounds @simd for i in eachindex(x, w)
+        z = x[i] - m
         z2 = z * z
-        z2w = z2 * w_i
+        z2w = z2 * w[i]
         cm2 += z2w
         cm4 += z2w * z2
     end
     sw = sum(w)
     cm4 /= sw
     cm2 /= sw
-    return (cm4 / (cm2 * cm2)) - 3.0
+    return (cm4 / (cm2 * cm2)) - 3
 end
 
 _kurtosis(A::AbstractArray, w::Union{AbstractWeights, Nothing}, m::Nothing) =
